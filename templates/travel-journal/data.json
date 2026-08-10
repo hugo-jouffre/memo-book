@@ -1,0 +1,151 @@
+{
+  "book_title": "Claire et Gus en Colombie",
+  "book_subtitle": "Un carnet de voyage raconté à l'oral",
+  "authors": "Claire et Augustin",
+  "date_range": "Janvier 2024",
+  "cover_photo": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/69170578225ecab95acf4048_C%26G%20Cover.png",
+  "brand_name": "MemoBook",
+  "year": "2025",
+  "footer_tagline": "Racontez. Revivez. Partagez.",
+  "intro_text": "Notre aventure commence ici 🌍<br><br>On y pense depuis des années. Entre deux cafés, en rêvant devant des cartes, en se disant <b>“un jour, on le fera”</b>.<br>Et puis ce jour est arrivé.<br>On a tout plaqué — ou presque —, rangé nos vies dans deux sacs à dos et pris nos billets pour une aventure sans date de retour.<br><br>Notre idée ? Faire le tour du monde. Pas pour cocher des pays sur une liste, mais pour vivre lentement, rencontrer, apprendre, respirer ailleurs. Découvrir ce qu’il y a au-delà de nos habitudes, et surtout, se redécouvrir nous deux, sur les routes, les trains, les marchés, les plages, les montagnes…<br><br>Ce carnet, c’est notre mémoire de voyage.<br>On y glissera nos émotions, nos galères, nos coups de cœur, des bribes de conversations, des photos et des petits bouts de vie cueillis ici et là. Rien de parfait, juste vrai.<br><br>Alors bienvenue à toi, lecteur curieux ou ami de passage —<br>on t’embarque avec nous, autour du monde. 🌏❤️",
+  "days": [
+    {
+      "title": "Jour 1 – Arrivée à Bogotá",
+      "date": "3 janvier 2024",
+      "city": "Bogotá",
+      "country": "Colombie",
+      "day_intro": {
+        "day_number": "01",
+        "location": "Bogotá, Colombie",
+        "date": "Mercredi 3 janvier",
+        "weather_icon": "⛅",
+        "weather_summary": "Ciel voilé",
+        "temperature": "18 °C",
+        "mood": "Encore un peu de jet lag, mais le sourire est là !"
+      },
+      "layout_story_opener": true,
+      "opener_kicker": "Escale à Manille",
+      "opener_body_html": "<p>Après 8 heures de vol depuis Abu Dhabi, on pose enfin le pied à Bogotá ! La ville s'est dévoilée sous la brume, la fatigue du voyage laisse place à l'excitation d'être, enfin, en Amérique du Sud.</p><p>On passe la nuit dans un petit Airbnb juste en haut d'une ruelle escarpée. Au programme : une balade express pour trouver nos premiers jus de mangue, et surtout le plaisir de regarder les montagnes encercler la ville.</p>",
+      "opener_photos": [
+        "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/69170578ce230d727dc3983e_Image%20placeholder%201.png",
+        "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/69170578a2165b3c4e2e180a_Image%20placeholder%202.png"
+      ],
+      "layout_hero_top": false,
+      "layout_split_left": false,
+      "layout_story_facts": false,
+      "layout_collage": false,
+      "body_html": "<p>Nous arrivons à Bogotá après un long vol de nuit. La première claque, c’est l’altitude : chaque marche semble un petit défi. On dépose les sacs, on se perd volontairement dans les rues colorées de La Candelaria.</p><p>Le soir, on se pose avec une arepa chaude et un café tinto. On réalise que le voyage commence vraiment ici.</p>",
+      "fun_facts": [
+        "Bogotá est perchée à 2 640 m d'altitude, ce qui en fait l’une des capitales les plus hautes du monde.",
+        "Le café tinto, petit café noir servi partout, est un vrai rituel du quotidien pour les Colombiens."
+      ],
+      "highlights": [
+        "Premier tinto sur une petite place animée",
+        "Street art de La Candelaria",
+        "La sensation d’être vraiment partis"
+      ],
+      "photos": [
+        "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/69170578a2165b3c4e2e180a_Image%20placeholder%202.png",
+        "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/69170578ce230d727dc3983e_Image%20placeholder%201.png"
+      ],
+      "sticker_groups": [
+        {
+          "position": "top-right",
+          "rotation": 4,
+          "stickers": [
+            { "text": "✈️", "style": "emoji" },
+            { "text": "Atterrissage", "style": "stamp" }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Jour 2 – Monserrate et vues sur la ville",
+      "date": "4 janvier 2024",
+      "city": "Bogotá",
+      "country": "Colombie",
+      "day_intro": {
+        "day_number": "02",
+        "location": "Monserrate",
+        "date": "Jeudi 4 janvier",
+        "weather_icon": "🌤",
+        "weather_summary": "Grande luminosité",
+        "temperature": "16 °C",
+        "mood": "On flotte encore sur les nuages."
+      },
+      "layout_hero_top": false,
+      "layout_split_left": true,
+      "layout_story_facts": false,
+      "layout_collage": false,
+      "layout_story_opener": false,
+      "body_html": "<p>On se lève tôt pour monter à Monserrate. Le funiculaire grimpe dans la brume avant de dévoiler toute la ville sous nos pieds.</p><p>En redescendant, on retrouve le bruit, les bus, les vendeurs de jus, avec l’impression de mieux comprendre Bogotá.</p>",
+      "fun_facts": [],
+      "highlights": [
+        "Montée en funiculaire vers Monserrate",
+        "Vue panoramique sur Bogotá"
+      ],
+      "photos": [
+        "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/69170578ce230d727dc3983e_Image%20placeholder%201.png",
+        "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/69170578a2165b3c4e2e180a_Image%20placeholder%202.png"
+      ],
+      "sticker_groups": [
+        {
+          "position": "bottom-right",
+          "stickers": [
+            { "text": "Altitude 3 000 m", "style": "tag" }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Jour 3 – Guatapé en couleurs",
+      "date": "5 janvier 2024",
+      "city": "Guatapé",
+      "country": "Colombie",
+      "day_intro": {
+        "day_number": "03",
+        "location": "Guatapé",
+        "date": "Vendredi 5 janvier",
+        "weather_icon": "🌦",
+        "weather_summary": "Soleil & averses",
+        "temperature": "24 °C",
+        "mood": "On alterne entre ponchos et lunettes de soleil."
+      },
+      "layout_hero_top": false,
+      "layout_split_left": false,
+      "layout_story_facts": false,
+      "layout_collage": true,
+      "layout_story_opener": false,
+      "body_html": "<p>Guatapé ressemble à une boîte de crayons de couleur renversée : chaque maison affiche ses zócalos.</p><p>Plus tard, la Piedra del Peñol nous essouffle, mais la vue sur le labyrinthe de lacs en contrebas vaut chaque goutte de sueur.</p>",
+      "fun_facts": [
+        "Les bas-reliefs sur les maisons racontent souvent la profession de la famille.",
+        "Le grand réservoir autour de la Piedra del Peñol est artificiel et a englouti un ancien village."
+      ],
+      "highlights": [
+        "Les façades colorées de Guatapé",
+        "Vue depuis la Piedra del Peñol"
+      ],
+      "photos": [
+        "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/69170578a2165b3c4e2e180a_Image%20placeholder%202.png",
+        "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/69170578ce230d727dc3983e_Image%20placeholder%201.png",
+        "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/69170578ce230d727dc3983e_Image%20placeholder%201.png"
+      ],
+      "sticker_groups": [
+        {
+          "position": "top-left",
+          "stickers": [
+            { "text": "Tampon Guatapé", "style": "stamp" },
+            { "text": "🛶", "style": "emoji" }
+          ]
+        }
+      ]
+    }
+  ],
+  "back_cover": {
+    "closing_text": "Merci d’avoir suivi nos aventures !",
+    "closing_subtext": "Ce livre est un test du projet MemoBook, un créateur de carnet de voyage sur-mesure à partir de messages vocaux.",
+    "cta": "Visitez www.memo-book.com pour tout savoir",
+    "image": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/691b00e81d0c45109aeb49ba_Claire%20%26%20Gus%20-%20Varanasi%20-%2023.png",
+    "logo_url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/691af5f6d5f78fd098aef055_Logo%20MemoBook%20-%20White.svg"
+  }
+}

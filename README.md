@@ -4,7 +4,18 @@
 
 🇬🇧 **MemoBook** lets you capture and preserve your memories, simply by recording your voice. Powered by artificial intelligence, your spoken stories are transcribed, enriched, and transformed into a personalized book, ready to be shared and printed!
 
-Ce repo contient le code de l'**app iOS native MemoBook**, développée en Swift avec l'aide de Claude Code.
+Ce repo contient le code de l'**app iOS native MemoBook**, développée en Swift avec l'aide de Claude Code, ainsi que le back-end et le template du carnet.
+
+## Structure du dépôt
+
+| Dossier | Rôle |
+|---|---|
+| `ios/` | L'app iOS (SwiftUI). [Documentation](ios/README.md) |
+| `backend/` | L'API et le pipeline `transcrire → structurer → imprimer`. [Documentation](backend/README.md) |
+| `templates/travel-journal/` | Le template PDF et les schémas qui décrivent le format du carnet. **Source de vérité** : le back-end les lit, il ne les duplique pas |
+| `agents/` | Configuration des agents IA et référence du design system |
+
+Clara et Paul n'ont rien à installer : tout se lit sur GitHub, et l'app se teste via TestFlight.
 
 ## Équipe
 
@@ -22,13 +33,14 @@ Le repo GitHub est la source de vérité du projet. Clara et Paul n'ont pas beso
 > Décisions d'architecture prises en Phase 2 du projet (voir [Roadmap](#roadmap) ci-dessous) — certaines sont encore en cours de validation.
 
 - **UI** : SwiftUI, architecture **MVVM** avec `@Observable`
-- **Concurrence** : Swift Concurrency (async/await)
+- **Concurrence** : Swift Concurrency (async/await), Swift 6 en concurrence stricte
 - **Cible** : iOS 17 minimum
-- **Backend** : en cours d'arbitrage entre Supabase et Firebase (auth, stockage audio, base de données, fonctions serveur pour appeler les API externes sans exposer les clés)
-- **Transcription** : API OpenAI (Whisper / gpt-4o-transcribe), potentiellement hybride avec le framework Speech d'Apple
-- **Génération de PDF** : APITemplate
-- **Paiements** : StoreKit 2 pour les biens numériques (carnet PDF, abonnement) ; Stripe possible pour les carnets imprimés livrés physiquement
-- **CI** : GitHub Actions (vérification de compilation à chaque PR)
+- **Projet Xcode** : généré par **XcodeGen** depuis `ios/project.yml`. Le `.xcodeproj` n'est pas versionné — pas de conflit Git sur le pbxproj, et la structure du projet reste lisible en revue de code
+- **Backend** : ✅ **tranché — Node/TypeScript (Fastify) + PostgreSQL**, plutôt que Supabase ou Firebase. Le pipeline enchaîne des tâches longues (transcription d'un vocal, appel LLM, génération PDF) qui demandent une vraie file d'attente avec reprise sur échec ; c'est ce qu'un BaaS rend le plus pénible. La file est adossée à Postgres (pg-boss) : rien de plus à opérer
+- **Transcription** : API OpenAI (`gpt-4o-transcribe`), langue forcée en français. Hybride avec le framework Speech d'Apple encore possible plus tard
+- **Génération de PDF** : APITemplate, sur le template de `templates/travel-journal/`
+- **Paiements** : StoreKit 2 pour les biens numériques (carnet PDF, abonnement) ; Stripe possible pour les carnets imprimés livrés physiquement — *pas encore implémenté*
+- **CI** : GitHub Actions — typecheck, lint et tests du back-end à chaque PR (`.github/workflows/ci-backend.yml`). La vérification de compilation iOS reste à ajouter (elle demande un runner macOS)
 
 Les clés API (OpenAI, APITemplate, etc.) ne vivent **jamais** dans l'app ni dans ce repo — uniquement côté serveur.
 
@@ -36,14 +48,14 @@ Les clés API (OpenAI, APITemplate, etc.) ne vivent **jamais** dans l'app ni dan
 
 Développement module par module, chaque module = une branche, une PR, un ticket, une session de QA :
 
-1. **Onboarding** — présentation du concept, demande de permission micro au bon moment
-2. **Authentification** — Sign in with Apple + email (magic link), suppression de compte
-3. **Enregistrement audio** — cœur de l'app : forme d'onde en temps réel, sauvegarde locale immédiate, reprise après crash
-4. **Gestion des souvenirs** — liste, lecture, transcription, édition, synchronisation en arrière-plan
-5. **Génération et visualisation du carnet** — composition, génération serveur, prévisualisation PDF
-6. **Partage et export** — export PDF, lien de partage, sauvegarde dans Fichiers
-7. **Paywall et achats intégrés** — StoreKit 2, achat unique et abonnement
-8. **Réglages et compte** — profil, abonnement, confidentialité, suppression de compte
+1. **Onboarding** — présentation du concept, demande de permission micro au bon moment ⏳
+2. **Authentification** — Sign in with Apple + email (magic link), suppression de compte ⏳
+3. **Enregistrement audio** — cœur de l'app : forme d'onde en temps réel, sauvegarde locale immédiate, reprise après crash — 🔄 *socle posé : capture, forme d'onde, upload. Reste la sauvegarde locale et la reprise après crash*
+4. **Gestion des souvenirs** — liste, lecture, transcription, édition, synchronisation en arrière-plan — 🔄 *socle posé : liste, transcription, statuts. Reste l'édition et la synchro en arrière-plan*
+5. **Génération et visualisation du carnet** — composition, génération serveur, prévisualisation PDF — 🔄 *socle posé, de bout en bout*
+6. **Partage et export** — export PDF, lien de partage, sauvegarde dans Fichiers — 🔄 *partage du PDF en place*
+7. **Paywall et achats intégrés** — StoreKit 2, achat unique et abonnement ⏳
+8. **Réglages et compte** — profil, abonnement, confidentialité, suppression de compte ⏳
 
 ## Roadmap
 
@@ -54,11 +66,29 @@ Développement mené en 8 phases avec Claude Code :
 | 0 · Prérequis | Environnement, repo GitHub, identifiants | ✅ Fait |
 | 1 · Cadrage et design | Specs, user stories, Figma, prototypes | 🔄 En cours |
 | 2 · Architecture | SwiftUI/MVVM, backend, transcription, paiements, modèle de données | 🔄 En cours |
-| 3 · Setup Xcode | Projet, design system, navigation, secrets, CI | ⏳ À venir |
-| 4 · Fonctionnalités | Les 8 modules de la V1 | ⏳ À venir |
-| 5 · Backend et intégrations | OpenAI, APITemplate, push, analytics | ⏳ À venir |
+| 3 · Setup Xcode | Projet, design system, navigation, secrets, CI | 🔄 En cours |
+| 4 · Fonctionnalités | Les 8 modules de la V1 | 🔄 En cours |
+| 5 · Backend et intégrations | OpenAI, APITemplate, push, analytics | 🔄 En cours |
 | 6 · Tests et TestFlight | Tests auto, QA, beta élargie | ⏳ À venir |
 | 7 · App Store | Fiche, conformité, soumission, lancement | ⏳ À venir |
+
+### Où on en est
+
+Le **cœur produit** est posé de bout en bout : on enregistre un vocal, il est transcrit,
+structuré en carnet, et le PDF est généré. C'est le chemin critique de l'app — le reste
+s'accroche autour.
+
+Ce qui **n'est pas encore là**, volontairement : l'onboarding, l'authentification (l'app
+s'enregistre pour l'instant comme un appareil anonyme), le paywall et les réglages. Ces
+écrans dépendent d'arbitrages design encore ouverts.
+
+Ce qui **attend une décision** :
+
+- **La palette.** Aucun token de l'app ne porte de couleur de marque pour l'instant — voir
+  l'avertissement dans [`ios/README.md`](ios/README.md#design-tokens). Les sources
+  existantes se contredisent et vont être remplacées ; rien n'a été figé dans le code.
+- **La CI iOS.** Pas encore de vérification de compilation à chaque PR : elle demande un
+  runner macOS, à arbitrer (coût en minutes).
 
 ## Workflow Git
 

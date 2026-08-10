@@ -1,0 +1,262 @@
+$schema: http://json-schema.org/draft-07/schema#
+title: Schema agent GPT – Upload d’images et payload MemoBook
+description: |
+  Structure à respecter par l’agent MemoBook lorsque les voyageurs envoient des images dans le chat.
+  Le bloc `image_uploads` documente chaque transfert vers Webflow et les champs `apitemplate_payload`
+  reprennent le JSON final attendu par APITemplate.io.
+type: object
+required:
+  - image_uploads
+  - apitemplate_payload
+properties:
+  image_uploads:
+    type: array
+    description: >
+      Historique des images reçues puis stockées sur Webflow. Sert de journal technique mais permet aussi de réutiliser
+      facilement les URL CDN.
+    items:
+      type: object
+      required:
+        - message_id
+        - filename
+        - source_url
+        - webflow_request
+        - webflow_response
+        - apitemplate_bindings
+      properties:
+        message_id:
+          type: string
+          description: Identifiant du message utilisateur dans la conversation GPT
+        filename:
+          type: string
+          description: "Nom de fichier propre (ex: jour03-palmier-coucher-soleil.jpg)"
+        source_url:
+          type: string
+          format: uri
+          description: URL temporaire fournie par l’API OpenAI pour télécharger l’image brute
+        webflow_request:
+          type: object
+          required: [endpoint, method, headers, body]
+          properties:
+            endpoint:
+              type: string
+              const: https://api.webflow.com/assets/upload
+              description: Endpoint REST Webflow pour stocker un asset
+            method:
+              type: string
+              const: POST
+            headers:
+              type: object
+              description: "Toujours inclure Authorization: Bearer ${WEBFLOW_API_TOKEN} et content-type application/json"
+              properties:
+                Authorization:
+                  type: string
+                  pattern: "^Bearer "
+                  description: "Ex: Bearer ${WEBFLOW_API_TOKEN} — le token vit côté serveur, jamais dans ce fichier"
+                accept:
+                  type: string
+                  const: application/json
+                content-type:
+                  type: string
+                  const: application/json
+            body:
+              type: object
+              required: [siteId, fileName, url]
+              properties:
+                siteId:
+                  type: string
+                  description: Identifiant du site Webflow memo-book.com
+                fileName:
+                  type: string
+                url:
+                  type: string
+                  format: uri
+                  description: URL temporaire téléchargée directement par Webflow
+        webflow_response:
+          type: object
+          required: [assetId, cdnUrl]
+          properties:
+            assetId:
+              type: string
+            cdnUrl:
+              type: string
+              format: uri
+              description: Lien optimisé à réutiliser dans APITemplate.io
+            fileHash:
+              type: string
+        apitemplate_bindings:
+          type: array
+          description: "Liste des chemins où cette image doit être injectée dans le JSON final (ex: days[0].photos[1])"
+          items:
+            type: string
+  apitemplate_payload:
+    type: object
+    description: Payload complet du carnet pour APITemplate.io (même structure que sample_payload.json)
+    required: [book_title, days]
+    properties:
+      book_title: { type: string }
+      book_subtitle: { type: string }
+      authors: { type: string }
+      date_range: { type: string }
+      cover_photo: { type: string, format: uri }
+      global_stats:
+        type: object
+        properties:
+          total_days: { type: integer }
+          countries: { type: integer }
+          cities: { type: integer }
+          km_total: { type: integer }
+          km_walked: { type: integer }
+          flights: { type: integer }
+          trains: { type: integer }
+          hotels: { type: integer }
+          drinks: { type: integer }
+      days:
+        type: array
+        items:
+          $ref: '#/$defs/day'
+      back_cover:
+        $ref: '#/$defs/backCover'
+$defs:
+  day:
+    type: object
+    required: [title, body_html]
+    properties:
+      title: { type: string }
+      date: { type: string }
+      city: { type: string }
+      country: { type: string }
+      day_intro:
+        type: object
+        properties:
+          day_number: { type: string }
+          location: { type: string }
+          date: { type: string }
+          weather_icon: { type: string }
+          weather_summary: { type: string }
+          temperature: { type: string }
+          mood: { type: string }
+      layout_storyboard:
+        type: boolean
+        description: >
+          Layout #1 storyboard collage (jour/date/météo + note manuscrite + 1 à 3 photos,
+          cartes et highlights). À privilégier quand on veut une vue synthétique et plusieurs
+          encarts courts.
+      layout_hero_top:
+        type: boolean
+        description: "Layout #2 : grande photo en tête puis récit."
+      layout_split_left:
+        type: boolean
+        description: "Layout #3 : texte à gauche, mosaïque de photos à droite (2-4 photos)."
+      layout_story_facts:
+        type: boolean
+        description: "Layout #4 : texte + encart fun facts, idéal pour insérer 2-4 faits marquants."
+      layout_collage:
+        type: boolean
+        description: "Layout #5 : collage libre façon scrapbook (texte + photos inclinées + fun facts)."
+      layout_story_opener:
+        type: boolean
+        description: "Layout #5bis : pleine page d'ouverture de jour avec 1-3 photos (kicker + récit)."
+      layout_modern_journal:
+        type: boolean
+        description: >
+          Layout #6 : single-page inspiré de Figma Make (badge Jour, chips lieu/date, météo,
+          texte encadré + polaroids). À choisir pour 1-4 photos + un fun fact court.
+      layout_postcard:
+        type: boolean
+        description: >
+          Layout #7 : carte postale avec photo de fond, texte manuscrit et timbre météo.
+          Très bien pour une journée courte avec 1 photo héro et 2-3 bullet points.
+      layout_bento:
+        type: boolean
+        description: >
+          Layout #8 : grille bento (récit, fun facts, moments forts, 2-3 photos).
+          Convient aux journées variées avec listes courtes.
+      layout_timeline:
+        type: boolean
+        description: >
+          Layout #9 : timeline verticale pour dérouler 3-6 étapes (utiliser timeline_events
+          ou fallback sur highlights) + 1-3 photos.
+      layout_gallery_stack:
+        type: boolean
+        description: >
+          Layout #10 : pile de polaroids pour les journées très photo-centric (3+ photos) avec
+          un court texte d'accompagnement.
+      body_html:
+        type: string
+        description: HTML propre (p, strong, em, ul/li autorisés)
+      opener_body_html: { type: string, description: "Texte spécifique au layout #5, sinon fallback body_html" }
+      opener_kicker: { type: string }
+      opener_photos:
+        type: array
+        description: "1 à 3 photos utilisées par le layout #5"
+        items: { type: string, format: uri }
+      photos:
+        type: array
+        items: { type: string, format: uri }
+      photo_captions:
+        type: array
+        description: Légendes alignées avec l'ordre des photos
+        items: { type: string }
+      storyboard_quote:
+        type: string
+        description: Petite bulle manuscrite inclinée
+      storyboard_cards:
+        type: array
+        description: Cartes adhésives à droite (icône + titre + corps)
+        items:
+          type: object
+          properties:
+            icon: { type: string }
+            title: { type: string }
+            body: { type: string }
+      fun_facts:
+        type: array
+        items: { type: string }
+      highlights:
+        type: array
+        items: { type: string }
+      timeline_events:
+        type: array
+        description: >
+          Liste chronologique pour layout_timeline : 3 à 6 étapes max.
+          Utiliser si la journée suit des moments clés (lever de soleil, balade, dîner…)
+        items:
+          type: object
+          properties:
+            time: { type: string, description: "Heure ou moment (matin, après-midi…)" }
+            title: { type: string }
+            description: { type: string }
+            icon: { type: string, description: "Emoji ou pictogramme court" }
+      sticker_line:
+        type: array
+        description: Rangée de stickers/emojis en bas du layout_modern_journal
+        items: { type: string }
+      sticker_groups:
+        type: array
+        description: Tampons/emoji groupés avec position et style
+        items:
+          type: object
+          properties:
+            position:
+              type: string
+              enum: [top-left, top-right, bottom-left, bottom-right, center]
+            rotation: { type: number }
+            stickers:
+              type: array
+              items:
+                type: object
+                required: [text]
+                properties:
+                  text: { type: string }
+                  style: { type: string, enum: [stamp, sticker, emoji, tag] }
+                  accent_color: { type: string, description: "Hex ou nom CSS" }
+  backCover:
+    type: object
+    required: [closing_text, image]
+    properties:
+      closing_text: { type: string }
+      closing_subtext: { type: string }
+      cta: { type: string }
+      image: { type: string, format: uri }
+      logo_url: { type: string, format: uri }

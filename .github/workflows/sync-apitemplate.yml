@@ -1,0 +1,51 @@
+name: Sync APITemplate template
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [ main ]
+    paths:
+      - 'templates/travel-journal/**'
+
+jobs:
+  sync-template:
+    runs-on: ubuntu-latest
+
+    # Ce dépôt n'a pas encore les secrets APITemplate (ils vivaient sur
+    # hugo-jouffre/memobook). Sans ce garde-fou, le job échouerait à chaque push
+    # touchant le template. Il s'activera tout seul dès que les secrets seront
+    # ajoutés dans Settings → Secrets and variables → Actions.
+    if: ${{ secrets.APITEMPLATE_API_KEY != '' }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Update APITemplate template
+        env:
+          APITEMPLATE_API_KEY: ${{ secrets.APITEMPLATE_API_KEY }}
+          APITEMPLATE_TEMPLATE_ID: ${{ secrets.APITEMPLATE_TEMPLATE_ID }}
+        run: |
+          set -euo pipefail
+          HTML=$(jq -Rs . < templates/travel-journal/index.html)
+          CSS=$(jq -Rs . < templates/travel-journal/style.css)
+
+          PAYLOAD=$(jq -n \
+            --arg template_id "$APITEMPLATE_TEMPLATE_ID" \
+            --argjson body "$HTML" \
+            --argjson css "$CSS" \
+            '{template_id: $template_id, body: $body, css: $css}')
+
+          RESPONSE_FILE=$(mktemp)
+          HTTP_STATUS=$(curl --show-error --silent --max-time 30 \
+            -X POST "https://rest.apitemplate.io/v2/update-template" \
+            -H "Content-Type: application/json" \
+            -H "X-API-KEY: $APITEMPLATE_API_KEY" \
+            -d "$PAYLOAD" \
+            -w "%{http_code}" \
+            -o "$RESPONSE_FILE")
+          echo "APITemplate response (HTTP ${HTTP_STATUS}):"
+          cat "$RESPONSE_FILE"
+          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
+            exit 1
+          fi

@@ -1,0 +1,197 @@
+openapi: 3.1.0
+info:
+  title: APITemplate.io BOOK Generator
+  version: 1.2.0
+servers:
+  - url: https://rest.apitemplate.io/v2
+
+paths:
+  /create-pdf:
+    post:
+      operationId: createBookPDF
+      summary: Create a travel book PDF from a BOOK template
+      description: >
+        Calls APITemplate.io to generate a MemoBook-style travel book PDF
+        from structured JSON data (cover, global stats, and days).
+      parameters:
+        - name: template_id
+          in: query
+          required: true
+          schema:
+            type: string
+            default: "60777b23ec192e26"
+          description: APITemplate BOOK template ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateBookRequest'
+      responses:
+        '200':
+          description: PDF generated successfully
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized (invalid or missing API key)
+        '403':
+          description: Forbidden (invalid key or permissions)
+        '500':
+          description: Server error on APITemplate.io side
+
+components:
+  schemas:
+    GenerateBookRequest:
+      type: object
+      description: Book data merged into the APITemplate BOOK template
+      required:
+        - book_title
+        - authors
+        - date_range
+        - cover_photo
+        - days
+      properties:
+        book_title:
+          type: string
+          description: Main title of the book, used on the cover
+        book_subtitle:
+          type: string
+          description: Optional subtitle displayed under the main title
+        authors:
+          type: string
+          description: Names of the travellers / authors
+        date_range:
+          type: string
+          description: Global date range for the trip (e.g. "Août 2024")
+        cover_photo:
+          type: string
+          format: uri
+          description: URL of the main cover photo (always provide one)
+        brand_name:
+          type: string
+          description: Brand name shown in footer (e.g. "MemoBook")
+        year:
+          type: string
+          description: Year displayed in footer
+        footer_tagline:
+          type: string
+          description: Optional short tagline in footer
+        global_stats:
+          type: object
+          description: Optional aggregated stats displayed after the cover
+          properties:
+            total_days:
+              type: integer
+            countries:
+              type: integer
+            cities:
+              type: integer
+            km_total:
+              type: integer
+            km_walked:
+              type: integer
+            flights:
+              type: integer
+            trains:
+              type: integer
+            hotels:
+              type: integer
+            drinks:
+              type: integer
+        days:
+          type: array
+          description: One object per travel day/page
+          minItems: 1
+          items:
+            type: object
+            required:
+              - title
+              - body_html
+            properties:
+              title:
+                type: string
+                description: Title of the day (used as H2)
+              date:
+                type: string
+                description: Label for the day (e.g. "Jour 1")
+              city:
+                type: string
+              country:
+                type: string
+              day_intro:
+                type: object
+                description: Bloc d'intro (jour, lieu, météo, humeur)
+                properties:
+                  day_number:
+                    type: string
+                  location:
+                    type: string
+                  date:
+                    type: string
+                  weather_icon:
+                    type: string
+                  weather_summary:
+                    type: string
+                  temperature:
+                    type: string
+                  mood:
+                    type: string
+              layout_storyboard:
+                type: boolean
+                description: Nouveau layout inspiré du carnet de la capture (jour/date/météo + collage rotatif)
+              layout_hero_top:
+                type: boolean
+                description: Hero photo on top + text below
+              layout_split_left:
+                type: boolean
+                description: Text left, photo mosaic right
+              layout_story_facts:
+                type: boolean
+                description: Story + fun facts box
+              layout_collage:
+                type: boolean
+                description: Freestyle collage layout
+              body_html:
+                type: string
+                description: Main HTML narrative for the day (paragraphs, lists, etc.)
+              storyboard_quote:
+                type: string
+                description: Petite bulle manuscrite inclinée à épingler dans le layout storyboard
+              storyboard_cards:
+                type: array
+                description: Cartes adhésives (icône + titre + corps) utilisées par le layout storyboard
+                items:
+                  type: object
+                  properties:
+                    icon:
+                      type: string
+                    title:
+                      type: string
+                    body:
+                      type: string
+              fun_facts:
+                type: array
+                description: Fun facts about the place or the day
+                items:
+                  type: string
+              highlights:
+                type: array
+                description: Key moments to display in a “Moments clés” box
+                items:
+                  type: string
+              photos:
+                type: array
+                description: Photo URLs used for this day. Ideally 1–4 per day.
+                minItems: 1
+                items:
+                  type: string
+                  format: uri
+              sticker_1:
+                type: string
+                format: uri
+                description: Optional URL of a PNG sticker to float on the page
+              sticker_2:
+                type: string
+                format: uri
+                description: Optional URL of a second PNG sticker
+      additionalProperties: true

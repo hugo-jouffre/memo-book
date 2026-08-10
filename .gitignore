@@ -40,3 +40,8 @@ Secrets.swift
 
 # macOS
 .DS_Store
+
+# Node (back-end)
+node_modules/
+dist/
+*.log

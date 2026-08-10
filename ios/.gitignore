@@ -1,0 +1,9 @@
+# Généré par XcodeGen — la source est project.yml
+MemoBook.xcodeproj/
+
+# Artefacts SwiftPM et Xcode
+Modules/.build/
+.swiftpm/
+DerivedData/
+*.xcuserstate
+xcuserdata/

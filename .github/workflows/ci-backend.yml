@@ -1,0 +1,73 @@
+name: CI back-end
+
+on:
+  push:
+    paths:
+      - 'backend/**'
+      - 'templates/travel-journal/**'
+      - '.github/workflows/ci-backend.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'templates/travel-journal/**'
+      - '.github/workflows/ci-backend.yml'
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # Le test de bout en bout du pipeline a besoin d'une vraie base : c'est elle
+    # qui porte les contraintes qu'on veut vérifier.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: memobook
+          POSTGRES_PASSWORD: memobook
+          POSTGRES_DB: memobook
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U memobook"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Aucun secret n'est nécessaire : `PIPELINE_MODE=fake` court-circuite
+      # OpenAI et APITemplate avec des implémentations déterministes, et le
+      # stockage des médias bascule en mémoire faute de configuration S3.
+      DATABASE_URL: postgresql://memobook:memobook@localhost:5432/memobook
+      PIPELINE_MODE: fake
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+
+      - run: npx prisma migrate deploy
+
+      - run: npx prisma generate
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tests
+        run: npm test
+
+      - name: Smoke du pipeline
+        run: npm run smoke
