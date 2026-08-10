@@ -1,0 +1,135 @@
+// MemoBook — modèle de données du cœur produit :
+// raconter (Entry) → transcrire → structurer → imprimer (Render).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Statut partagé par tout ce qui traverse le pipeline. C'est exactement ce que
+/// l'app iOS affiche et interroge.
+enum Status {
+  pending
+  processing
+  ready
+  failed
+}
+
+enum EntryKind {
+  audio
+  text
+  photo
+}
+
+/// Identité provisoire, le temps que la vraie authentification arrive.
+/// Un appareil s'enregistre une fois et conserve son token.
+model Device {
+  id        String   @id @default(uuid())
+  /// SHA-256 du token porteur — le token en clair n'existe que dans l'app.
+  tokenHash String   @unique
+  platform  String   @default("ios")
+  createdAt DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  memos Memo[]
+
+  @@map("devices")
+}
+
+/// Un projet de carnet : « Notre tour du monde », « La première année de Jeanne ».
+model Memo {
+  id        String    @id @default(uuid())
+  deviceId  String
+  device    Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  title     String
+  subtitle  String?
+  authors   String?
+  /// Thème narratif saisi par l'utilisateur (voyage, naissance, projet…).
+  theme     String?
+  startDate DateTime?
+  endDate   DateTime?
+  /// Photo de couverture (URL CDN publique).
+  coverPhotoUrl String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  entries Entry[]
+  renders Render[]
+
+  @@index([deviceId, createdAt])
+  @@map("memos")
+}
+
+/// Un message de l'utilisateur : un vocal, une note écrite ou une photo.
+model Entry {
+  id        String    @id @default(uuid())
+  memoId    String
+  memo      Memo      @relation(fields: [memoId], references: [id], onDelete: Cascade)
+
+  kind      EntryKind
+  status    Status    @default(pending)
+  /// Texte : saisi directement. Audio : rempli par le job `transcribe`.
+  transcript String?
+  /// Horodatage du souvenir lui-même, pas de l'upload — c'est lui qui sert à
+  /// regrouper les entries par journée lors de la structuration.
+  capturedAt DateTime  @default(now())
+  /// Lieu déclaré par l'app (nom lisible, ex. « Bogotá, Colombie »).
+  placeLabel String?
+  /// Message d'erreur du dernier échec de traitement, le cas échéant.
+  error      String?
+
+  mediaId   String?
+  media     MediaAsset? @relation(fields: [mediaId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([memoId, capturedAt])
+  @@map("entries")
+}
+
+/// Un fichier stocké. `storageKey` pointe vers S3 (audio brut, photo originale),
+/// `cdnUrl` vers Webflow une fois la photo publiée — c'est cette URL publique
+/// qu'APITemplate consomme.
+model MediaAsset {
+  id         String   @id @default(uuid())
+  storageKey String   @unique
+  mimeType   String
+  bytes      Int
+  /// Durée en secondes, pour les audios.
+  durationSeconds Float?
+  cdnUrl     String?
+  createdAt  DateTime @default(now())
+
+  entries Entry[]
+
+  @@map("media_assets")
+}
+
+/// Une génération de carnet. On en garde l'historique : chaque tentative
+/// conserve son payload, ce qui rend les régressions de mise en page traçables.
+model Render {
+  id       String  @id @default(uuid())
+  memoId   String
+  memo     Memo    @relation(fields: [memoId], references: [id], onDelete: Cascade)
+
+  status   Status  @default(pending)
+  /// Payload conforme à templates/travel-journal/gpt_image_schema.yaml.
+  payload  Json?
+  /// Identifiant de transaction renvoyé par APITemplate.io.
+  apitemplateTransactionId String?
+  pdfUrl   String?
+  error    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([memoId, createdAt])
+  @@map("renders")
+}

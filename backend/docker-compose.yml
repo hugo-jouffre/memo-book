@@ -1,0 +1,54 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: memobook-postgres
+    environment:
+      POSTGRES_USER: memobook
+      POSTGRES_PASSWORD: memobook
+      POSTGRES_DB: memobook
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U memobook -d memobook"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Stockage S3-compatible pour les audios bruts.
+  # En production : n'importe quel S3 (Scaleway, OVH, AWS). Seules les variables S3_* changent.
+  minio:
+    image: minio/minio:latest
+    container_name: memobook-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: memobook
+      MINIO_ROOT_PASSWORD: memobook-secret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Crée le bucket au démarrage pour éviter une étape manuelle.
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 memobook memobook-secret &&
+      mc mb --ignore-existing local/memobook-media &&
+      echo 'bucket memobook-media prêt'
+      "
+
+volumes:
+  postgres-data:
+  minio-data:
