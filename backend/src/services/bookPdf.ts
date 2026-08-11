@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import nunjucks from "nunjucks";
-import type { Browser, Page, Route } from "playwright-core";
+import type { Browser, BrowserContext, Page, Route } from "playwright-core";
 import {
   loadPrintSettings,
   loadTemplateCss,
@@ -159,6 +159,19 @@ async function fulfillOffline(route: Route, manifest: Record<string, string>): P
   }
 }
 
+/**
+ * Sert les hôtes injoignables depuis le bundle local.
+ *
+ * À installer sur **tout** contexte dont le rendu doit être reproductible, pas
+ * seulement celui du CLI : sans ça, une machine qui atteint le CDN Webflow et
+ * une machine qui ne l'atteint pas produisent des pages entièrement
+ * différentes, et une comparaison entre les deux ne veut plus rien dire.
+ */
+export async function installOfflineRouting(context: BrowserContext): Promise<void> {
+  const manifest = loadOfflineManifest();
+  await context.route("**/*", (route) => fulfillOffline(route, manifest));
+}
+
 // ---------------------------------------------------------------------------
 // Rendu Chromium
 // ---------------------------------------------------------------------------
@@ -273,10 +286,7 @@ export async function renderBookPdf({
   context.setDefaultTimeout(30_000);
 
   try {
-    if (offline) {
-      const manifest = loadOfflineManifest();
-      await context.route("**/*", (route) => fulfillOffline(route, manifest));
-    }
+    if (offline) await installOfflineRouting(context);
 
     const page = await context.newPage();
     // Avant `setContent` : on veut le layout d'impression dès le premier calcul.

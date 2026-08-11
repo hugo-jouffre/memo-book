@@ -5,7 +5,7 @@ import { PNG } from "pngjs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Browser, Page } from "playwright-core";
 import { loadSamplePayload } from "../../src/lib/templates.js";
-import { renderTemplateToHtml, settle } from "../../src/services/bookPdf.js";
+import { installOfflineRouting, renderTemplateToHtml, settle } from "../../src/services/bookPdf.js";
 
 /**
  * Non-régression visuelle du carnet.
@@ -70,6 +70,11 @@ describe.runIf(enabled)("rendu visuel du carnet", () => {
       colorScheme: "light",
       reducedMotion: "reduce",
     });
+    // Indispensable : sans routage hors ligne, une machine qui atteint le CDN
+    // Webflow et une machine qui ne l'atteint pas rendent des pages entièrement
+    // différentes. Les références deviendraient dépendantes du réseau.
+    await installOfflineRouting(context);
+
     page = await context.newPage();
     await page.emulateMedia({ media: "print" });
 

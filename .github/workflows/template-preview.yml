@@ -59,6 +59,9 @@ jobs:
         if: always()   # surtout utile quand le job échoue : les diffs sont dedans
         with:
           name: carnet-${{ github.event.pull_request.number || github.run_id }}
+          # `.render-out` commence par un point : sans cette option, l'action
+          # ignore le dossier et publie un artefact vide.
+          include-hidden-files: true
           path: |
             backend/.render-out/**/*.pdf
             backend/.render-out/**/*.png
