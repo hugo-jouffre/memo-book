@@ -1,0 +1,5 @@
+# Les captures de référence du test visuel sont binaires : ni diff ni fusion.
+backend/test/visual/__goldens__/**/*.png binary -diff -merge
+# Les polices embarquées sont générées, pas éditées.
+templates/travel-journal/assets/fonts/*.woff2 binary -diff -merge
+templates/travel-journal/fonts.css -diff linguist-generated=true

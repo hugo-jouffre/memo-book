@@ -45,3 +45,6 @@ Secrets.swift
 node_modules/
 dist/
 *.log
+
+# Rendu local du carnet (PDF, PNG, HTML de debug) — jamais commité
+backend/.render-out/

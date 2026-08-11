@@ -38,7 +38,7 @@ npm run db:seed               # un carnet de démonstration + un token à utilis
 ```bash
 npm run typecheck
 npm run lint
-npm test                      # 37 tests — nécessite Postgres
+npm test                      # 42 tests — nécessite Postgres
 npm run smoke                 # le parcours complet, tout simulé
 npm run smoke -- --live       # le même parcours contre OpenAI + APITemplate, affiche l'URL du PDF
 ```
@@ -46,6 +46,59 @@ npm run smoke -- --live       # le même parcours contre OpenAI + APITemplate, a
 Le test le plus important fait passer `templates/travel-journal/data.json` — le payload qui
 alimente APITemplate aujourd'hui — dans le validateur. S'il cesse d'être accepté, c'est le
 validateur qui a tort.
+
+## Travailler sur la mise en page du carnet
+
+Le template vit dans `templates/travel-journal/`. Pour l'itérer sans appeler APITemplate :
+
+```bash
+npm run template:lint                       # dialecte Jinja + invariants CSS
+npm run render:local -- --offline --png     # PDF A5 + un PNG par page, ~2 s, sans réseau
+npm run render:watch                        # re-rendu à chaque sauvegarde
+npm run render:local -- --profile print     # fond blanc imprimeur (défaut : crème d'aperçu)
+npm run test:visual                         # diff pixel contre les captures de référence
+npm run test:visual:update                  # régénère les captures après un changement voulu
+npm run fonts:build                         # régénère fonts.css depuis Google Fonts
+npm run inspector                           # inspecteur HTML : nomme chaque élément au survol
+```
+
+`npm run inspector` produit `.render-out/inspecteur.html`, une page autonome qui affiche le
+carnet rendu et, au survol de n'importe quel élément, donne son nom, son sélecteur CSS, les
+champs JSON qui l'alimentent et les variables CSS en jeu. Elle sert à formuler des demandes de
+retouche précises plutôt que « le bloc avec la pince est trop haut ». Le dictionnaire des
+composants vit dans `scripts/build-inspector.ts` : il se met à jour en même temps que le
+template, et `templates/travel-journal/samples/showcase.json` est le payload qui exerce tous
+les layouts d'un coup.
+
+Les sorties atterrissent dans `.render-out/` (ignoré par Git).
+
+**Pourquoi un rendu local alors qu'APITemplate existe.** Viser la fidélité aux maquettes Figma
+demande des dizaines d'allers-retours ; à travers une API distante, chacun coûte un push, un
+appel réseau et un téléchargement, et rien ne permet de comparer deux rendus. En local, le même
+`index.html` + `style.css` — les artefacts exacts envoyés à APITemplate — rendent en deux
+secondes et se comparent au pixel près.
+
+**Pourquoi c'est fiable.** APITemplate rend du Jinja2, le harnais local du Nunjucks. Les deux
+moteurs diffèrent sur trois points qui comptent (`[]` faux en Jinja et vrai en JS, `null`
+imprimé « None », littéraux Python). `scripts/lint-template.ts` interdit ces constructions, et
+`test/templateDialect.test.ts` exécute le **vrai Jinja2 Python** sur le même gabarit pour
+vérifier que les deux sorties sont identiques.
+
+Ce que le local ne garantit pas : la version de Chromium d'APITemplate et le réglage de papier
+de son tableau de bord. Voir `docs/apitemplate.md`, section « Calibration ».
+
+### Rendre un PDF depuis le pipeline complet
+
+`RENDERER` est un axe distinct de `PIPELINE_MODE` : le premier choisit le moteur PDF, le second
+la transcription et la structuration. La combinaison utile en développement est « transcription
+simulée, vrai PDF » :
+
+```bash
+PIPELINE_MODE=fake RENDERER=local npm run dev
+```
+
+Les PDF sont servis sur `/v1/local-renders/:file`, une route qui n'existe que dans ce mode —
+l'app iOS télécharge `pdfUrl` en HTTP simple, un chemin `file://` ne lui servirait à rien.
 
 ## L'API
 
@@ -77,7 +130,11 @@ Toutes les routes `/v1` attendent un `Authorization: Bearer <token>` d'appareil,
 | `src/services/payloadValidator.ts` | Valide le carnet — schéma **et** limites de longueur de LAYOUT_KB |
 | `src/services/structuring.ts` | Transforme les transcriptions en payload (LLM, avec repli heuristique) |
 | `src/services/transcription.ts` | Audio → texte |
-| `src/services/apitemplate.ts` | Payload → PDF |
+| `src/services/apitemplate.ts` | Payload → PDF via APITemplate, et choix du moteur de rendu |
+| `src/services/bookPdf.ts` | Payload → PDF en local (Nunjucks + Chromium) |
+| `src/services/localRenderer.ts` | Le moteur local branché sur le pipeline (`RENDERER=local`) |
+| `scripts/render-local.ts` | La commande d'itération sur la mise en page |
+| `scripts/lint-template.ts` | Empêche le gabarit de diverger entre Jinja2 et Nunjucks |
 | `src/services/webflow.ts` | Publie les photos sur le CDN (APITemplate a besoin d'URLs publiques) |
 | `src/jobs/` | Les trois étapes du pipeline, sur une file pg-boss adossée à Postgres |
 

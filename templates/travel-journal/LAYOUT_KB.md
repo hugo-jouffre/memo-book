@@ -1,76 +1,145 @@
-# Mémo – Référentiel GPT pour le carnet de voyage MemoBook
+# Contrat de mise en page — carnet `travel-journal`
 
-Ce document sert de base de connaissance pour l'agent GPT qui génère le payload APITemplate du carnet **travel-journal**.
+Base de connaissance de l'agent qui produit le JSON envoyé au moteur PDF.
 
-## Structure générale du payload
-- **book_title, book_subtitle, authors, date_range, cover_photo** : requis pour la couverture.
-- **days[]** : une entrée par journée/section. Les layouts sont exclusifs (activer 1 à 2 maximum par jour en fonction du besoin).
-- **back_cover** : texte de clôture + image pleine page.
-- Champs transverses utiles :
-  - `day_intro` : `{ day_number, location, date, weather_icon, weather_summary, temperature, mood }`
-  - `photos` : URLs optimisées (préférer CDN Webflow). `photo_captions` optionnel pour légender.
-  - `fun_facts` : liste de faits courts.
-  - `highlights` : 3–5 bullets max.
-  - `sticker_groups` : tampons/emoji positionnés (top-left/right, bottom-left/right, center). `sticker_line` : rangée simple pour le layout moderne.
+> **Règle de survie du dépôt.** Ce fichier décrit ce que `index.html` sait
+> réellement afficher. Toute modification du template doit modifier ce fichier
+> **dans le même commit**. C'est exactement ce qui avait dérivé : le KB
+> documentait onze layouts dont un seul existait, et l'agent produisait des
+> champs que personne ne lisait.
 
-## Catalogue des layouts et quand les choisir
-- **layout_storyboard** (collage éditorial) : jour/date/météo + note manuscrite + 1 à 3 photos inclinées + mini cartes. Idéal pour un résumé riche mais concis.
-- **layout_hero_top** : grande photo héro en haut, texte dessous. Pour 1 photo iconique + récit principal.
-- **layout_split_left** : texte à gauche, mosaïque à droite (2–4 photos). Quand on veut équilibrer récit détaillé et visuels variés.
-- **layout_story_facts** : récit + encart fun facts. Utiliser si 2–4 faits courts ajoutent de la valeur pédagogique.
-- **layout_collage** : mode scrapbook libre (texte + photos inclinées + facts). Bien pour une journée dense visuellement.
-- **layout_story_opener** : page d'ouverture pleine largeur (kicker + `opener_body_html` + `opener_photos`). Parfait pour introduire une étape ou un changement de région.
-- **layout_modern_journal** (inspiré Figma Make) : badge "Jour", chips lieu/date, météo, texte encadré avec scotch, 1–4 polaroids + rangée de stickers. À privilégier si 1 fun fact court et 2–4 photos fortes.
-- **layout_postcard** : photo de fond, timbre météo, message manuscrit, mini checklist. Idéal pour une journée courte ou un moment carte postale.
-- **layout_bento** : grille 2xN mêlant récit, fun facts, moments forts et 2–3 photos. Pour les journées multi-activités.
-- **layout_timeline** : frise verticale (3–6 `timeline_events` ou fallback sur `highlights`) + 1–3 photos. Choisir lorsque la journée suit une chronologie nette.
-- **layout_gallery_stack** : pile de polaroids avec légendes + petit bloc texte. Pour les journées centrées sur les images (3 photos ou plus).
+## Format
 
-### Champs spécifiques par layout
-- **storyboard** : `storyboard_cards[]` (icon, title, body), `storyboard_quote` optionnel.
-- **opener** : `opener_body_html`, `opener_kicker`, `opener_photos[]` (1–3).
-- **timeline** : `timeline_events[]` objets `{ time?, title?, description, icon? }` (3–6). Si vide, utiliser `highlights` comme texte.
-- **gallery_stack / modern_journal** : `photo_captions[]` alignées sur l'ordre des photos.
-- **modern_journal** : `sticker_line[]` (emojis ou mots courts).
+- Page **A5 : 420 × 595 pt** (1 unité Figma = 1 pt), sans fond perdu.
+  Géométrie dans `print.json`, maquette Figma `geIpjYxG3WCkGrgJFpkuVC`.
+- Marge de contenu : 30 pt. Les décors (tracé pointillé, stickers) débordent
+  volontairement.
+- Une page de carnet = un élément `.page`. Une entrée de `days[]` = une page.
+
+## Structure du payload
+
+| Champ | Type | Rôle |
+|---|---|---|
+| `book_title` | requis | Titre de couverture, sur la photo |
+| `book_subtitle` | optionnel | Bandeau blanc incliné sous le titre |
+| `authors`, `date_range` | optionnels | Signature en bas de couverture |
+| `cover_photo` | optionnel | Photo pleine page de couverture |
+| `render_profile` | `print` \| `preview` | **Fond du PDF, voir plus bas** |
+| `brand_name`, `year` | optionnels | Colophon (défauts `MemoBook` / `2026`) |
+| `intro_title`, `intro_text` | optionnels | Page d'introduction (`intro_text` en HTML) |
+| `intro_photos[]` | 0 à 2 | Photos scotchées en haut de l'introduction |
+| `days[]` | requis | Une page par entrée |
+| `back_cover` | optionnel | Quatrième de couverture |
+
+Pages toujours produites, dans l'ordre : **couverture → colophon →
+introduction (si `intro_text`) → journées → quatrième de couverture**.
+
+## Les deux profils de sortie
+
+`render_profile` décide du fond. Une seule template, deux rendus :
+
+- **`print`** — fond blanc. Destiné à l'imprimeur, dont le papier est **déjà
+  crème** : réimprimer le crème donnerait un carnet jauni.
+- **`preview`** — fond crème granulé, réplique du rendu final. C'est celui de
+  l'aperçu partageable dans l'app, en attendant la version imprimée.
+
+Défaut : `preview`. Côté back-end, la variable `RENDER_PROFILE` fait foi.
+
+## Champs d'une journée
+
+| Champ | Type | Notes |
+|---|---|---|
+| `title` | requis | Titre manuscrit en tête du récit |
+| `body_html` | requis | Récit. `<p>` par idée, `<ul>/<li>` pour les listes. Pas de `<h1>`/`<h2>` |
+| `day_intro` | optionnel | Affiche le bandeau : `{ day_number, location, date, weather_key }` |
+| `weather_key` | `sun` \| `sun-wind` \| `cloud` \| `rain` \| `snow` | Icône mise en avant ; les quatre autres restent estompées |
+| `tag` | optionnel | Étiquette manuscrite (« Top départ »). **Trois mots max**, sinon elle déborde |
+| `fun_facts[]` | optionnel | **Seul le premier est affiché** |
+| `fun_facts_title` | optionnel | Titre de la carte. Défaut « Fun fact » ; aussi « Infos », « Culture générale » |
+| `photos[]` | optionnel | Nombre utilisé selon le layout, voir ci-dessous |
+
+`highlights`, `sticker_groups`, `timeline_events`, `storyboard_cards`,
+`global_stats` restent acceptés par le schéma mais **ne sont pas rendus** :
+ne pas les produire tant qu'un layout ne les consomme pas.
+
+## Catalogue des layouts
+
+Un seul drapeau à `true` par journée. En cas de conflit, l'ordre ci-dessous
+tranche : le premier actif l'emporte.
+
+| Drapeau | Rendu | Quand le choisir | Photos |
+|---|---|---|---|
+| `layout_hero_top` | Grande photo en tête, récit dessous | Une photo iconique porte la journée | 1 |
+| `layout_split_left` | Carte info à gauche, récit en colonne à droite, puis deux photos en bas | Un fait à mettre en avant et deux belles images | 2 |
+| `layout_collage` | Récit pleine largeur puis 2 ou 3 photos inclinées en bas | Journée dense visuellement | 2–3 |
+| *(par défaut)* | Récit, puis carte info et photo flottantes en bas de page | Ouverture de journée, cas le plus courant | 0–1 |
+
+Le cas par défaut couvre aussi `layout_story_opener` et `layout_story_facts` :
+le validateur exige au moins un drapeau, n'importe lequel de ces deux convient.
+
+## Contraintes de longueur
+
+Appliquées par `backend/src/services/payloadValidator.ts` — un dépassement est
+une **erreur**, pas un avertissement :
+
+| Champ | Maximum |
+|---|---|
+| `intro_text` | 700 caractères par paragraphe, 3 paragraphes |
+| `body_html` | 420 caractères par paragraphe, 2–3 paragraphes |
+| `fun_facts[]` | 140 caractères |
+| `highlights[]` | 80 caractères |
 
 ## Règles d'images
-- Toujours fournir des URLs valides (CDN Webflow recommandé). Les images sont sécurisées par un fallback automatique (SVG) en cas d'erreur, mais ce fallback sert uniquement de secours visuel : il faut quand même viser des URLs fonctionnelles.
-- Prioriser 1200–1600 px de large pour les photos principales (hero, fond postcard). Les polaroids acceptent des images plus petites mais nettes.
-- Éviter les doublons : pas plus de 4 photos dans `layout_modern_journal`, 3 dans `layout_timeline`, 6 dans `layout_gallery_stack`.
 
-## Bonnes pratiques de génération
-- **1 layout fort par jour** : activer celui qui raconte le mieux, laisser les autres à `false`/absents.
-- **Texte HTML** : utiliser `<p>` pour chaque idée, `<ul>/<li>` pour listes courtes ; pas de titres H1/H2 dans les blocs jour.
-- **Fun facts** : 1–3 phrases, pas de pavé. Un seul suffit pour les layouts modernes/postcard.
-- **Highlights** : 3 bullets max pour les layouts qui les affichent (postcard, bento, storyboard, highlights section globale).
-- **Timeline** : si la journée suit des heures ou séquences claires, préférer `layout_timeline` et remplir `timeline_events`.
-- **Opener** : réserver aux grands basculements (nouvelle ville/région, début/fin de voyage).
+- URLs absolues et publiques (CDN Webflow). Pas de chemin relatif : le moteur
+  PDF ne reçoit que du HTML et du CSS, sans aucun fichier joint.
+- 1200–1600 px de large pour les photos de couverture et les photos héros.
+- Les photos sont recadrées en `object-fit: cover` et pivotées de quelques
+  degrés : ne pas envoyer une image dont un visage touche déjà le bord.
 
-## Sélection rapide du layout (heuristique)
-- Beaucoup de photos, peu de texte → `layout_gallery_stack`.
-- 1 photo iconique + texte moyen → `layout_hero_top` ou `layout_postcard` si vibe carte postale.
-- 2–4 photos + 1 fun fact + envie de badge jour/météo → `layout_modern_journal`.
-- Journée en étapes horaires → `layout_timeline`.
-- Mélange récit + facts + listes → `layout_bento`.
-- Intro d'étape → `layout_story_opener`.
+## Pièges à connaître
 
-## Contraintes de longueur (éviter le débordement)
-Respecter ces maximums **par paragraphe** pour garantir que le texte ne dépasse jamais de la page :
-- `intro_text` : **700 caractères max** par paragraphe (2–3 paragraphes max).
-- `body_html` (layout jour) : **420 caractères max** par paragraphe (2–3 paragraphes max).
-- `fun_facts[]` : **140 caractères max** par paragraphe.
-- `highlights[]` : **80 caractères max** par bullet.
+- **Jamais `null`.** Jinja2 imprime la chaîne littérale « None » dans le
+  carnet. Omettre la clé plutôt que de l'envoyer vide.
+- **Tableaux vides.** `[]` et l'absence du champ donnent le même rendu ; c'est
+  volontaire, mais ça veut dire qu'une carte info vide n'apparaît pas du tout.
+- **`body_html` est injecté tel quel** (`| safe`). Aucun script, aucun style
+  en ligne, aucune balise autre que `<p>`, `<br>`, `<b>`, `<i>`, `<ul>`, `<li>`.
 
-## Exemple minimal par layout
+## Exemple minimal
+
 ```json
 {
-  "layout_modern_journal": true,
-  "day_intro": {"day_number": "05", "location": "Kyoto", "date": "12 avr", "weather_icon": "⛅", "weather_summary": "Douceur"},
-  "body_html": "<p>Récit…</p>",
-  "photos": ["https://cdn.../photo1.jpg", "https://cdn.../photo2.jpg"],
-  "photo_captions": ["Temple au matin", "Matcha break"],
-  "fun_facts": ["Fun fact court"],
-  "sticker_line": ["🍵", "⛩️"]
+  "render_profile": "preview",
+  "book_title": "Philippines",
+  "authors": "Maÿlis, Claire et Augustin",
+  "date_range": "février 2026",
+  "cover_photo": "https://cdn.../cover.jpg",
+  "intro_text": "<p>Il y a des voyages qu'on prépare pendant des mois…</p>",
+  "days": [
+    {
+      "title": "36 heures plus tard, me voilà aux Philippines",
+      "day_intro": {
+        "day_number": "01",
+        "location": "De Barcelone à Cebu",
+        "date": "22-23 fev 2026",
+        "weather_key": "sun"
+      },
+      "tag": "Top départ",
+      "layout_story_opener": true,
+      "body_html": "<p>Départ de Barcelone, sac sur le dos…</p>",
+      "fun_facts": ["Les Philippines comptent plus de 7000 îles. Oui oui."],
+      "photos": ["https://cdn.../jour01.jpg"]
+    }
+  ]
 }
 ```
-Adapte l'exemple selon le layout choisi en remplissant les champs spécifiques ci-dessus.
+
+## Vérifier son rendu
+
+```bash
+cd backend
+npm run template:lint                      # dialecte Jinja + invariants CSS
+npm run render:local -- --offline --png    # PDF + un PNG par page
+npm run render:local -- --data mon.json --validate --png
+```

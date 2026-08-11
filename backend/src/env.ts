@@ -34,7 +34,23 @@ const schema = z.object({
   PIPELINE_MODE: z.enum(["auto", "live", "fake"]).default("auto"),
 
   APITEMPLATE_API_KEY: z.string().default(""),
-  APITEMPLATE_TEMPLATE_ID: z.string().default("60777b23ec192e26"),
+  APITEMPLATE_TEMPLATE_ID: z.string().default("7a177b23210099d6"),
+  // Le compte MemoBook est hébergé en région DE. Pointer sur rest.apitemplate.io
+  // renvoie une erreur d'authentification trompeuse.
+  APITEMPLATE_BASE_URL: z.string().url().default("https://rest-de.apitemplate.io/v2"),
+
+  /**
+   * Axe distinct de `PIPELINE_MODE`, volontairement.
+   *
+   * `PIPELINE_MODE` pilote `live`, qui choisit aussi le transcripteur, le
+   * structureur et Webflow. Or la boucle de travail sur la mise en page, c'est
+   * « transcription simulée + vrai PDF » : seul un axe séparé l'exprime.
+   * `auto` conserve exactement le comportement historique.
+   */
+  RENDERER: z.enum(["auto", "apitemplate", "local", "fake"]).default("auto"),
+  RENDER_OUTPUT_DIR: z.string().default(".render-out"),
+  RENDER_PUBLIC_BASE_URL: z.string().default(""),
+  RENDER_PROFILE: z.enum(["print", "preview"]).default("preview"),
 
   WEBFLOW_API_TOKEN: z.string().default(""),
   WEBFLOW_SITE_ID: z.string().default(""),
@@ -75,6 +91,10 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
       break;
     default:
       live = hasLiveKeys;
+  }
+
+  if (env.RENDERER === "apitemplate" && env.APITEMPLATE_API_KEY === "") {
+    throw new Error("RENDERER=apitemplate mais APITEMPLATE_API_KEY est vide.");
   }
 
   return { ...env, live };

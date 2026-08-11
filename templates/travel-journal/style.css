@@ -1,157 +1,647 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
-  /* Chargement des polices */
-  @font-face { font-family: webflow-icons; src: url("data:application/x-font-ttf;charset=utf-8;base64,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") format("truetype"); font-weight: 400; font-style: normal; }
-  @font-face { font-family: Playfairdisplaysc; src: url("https://cdn.prod.website-files.com/691b159061724d8c7a12037c/695f77ebebab554a36e47d78_PlayfairDisplaySC-BoldItalic.otf") format("opentype"); font-weight: 700; font-style: italic; font-display: swap; }
-  @font-face { font-family: Playfairdisplaysc; src: url("https://cdn.prod.website-files.com/691b159061724d8c7a12037c/695f77eb924a8ff16c3dcd0b_PlayfairDisplaySC-Regular.otf") format("opentype"); font-weight: 400; font-style: normal; font-display: swap; }
-  @font-face { font-family: Playfairdisplaysc; src: url("https://cdn.prod.website-files.com/691b159061724d8c7a12037c/695f77eb5463ae53647703b1_PlayfairDisplaySC-Bold.otf") format("opentype"); font-weight: 700; font-style: normal; font-display: swap; }
-  @font-face { font-family: Playfairdisplaysc; src: url("https://cdn.prod.website-files.com/691b159061724d8c7a12037c/695f77ebf764f3117ede4a2a_PlayfairDisplaySC-Italic.otf") format("opentype"); font-weight: 400; font-style: italic; font-display: swap; }
-  @font-face { font-family: Playfairdisplaysc; src: url("https://cdn.prod.website-files.com/691b159061724d8c7a12037c/695f77eba1c44f588d586a3e_PlayfairDisplaySC-Black.otf") format("opentype"); font-weight: 900; font-style: normal; font-display: swap; }
-  @font-face { font-family: Playfairdisplaysc; src: url("https://cdn.prod.website-files.com/691b159061724d8c7a12037c/695f77ebecb7890d8ba91ab4_PlayfairDisplaySC-BlackItalic.otf") format("opentype"); font-weight: 900; font-style: italic; font-display: swap; }
-  @font-face { font-family: Playfairdisplay; src: url("https://cdn.prod.website-files.com/691b159061724d8c7a12037c/695f77eb570a0ecc0153443a_PlayfairDisplay-BoldItalic.otf") format("opentype"); font-weight: 700; font-style: italic; font-display: swap; }
-  @font-face { font-family: Playfairdisplay; src: url("https://cdn.prod.website-files.com/691b159061724d8c7a12037c/695f77eb97637c8af1fc8311_PlayfairDisplay-Bold.otf") format("opentype"); font-weight: 700; font-style: normal; font-display: swap; }
-  @font-face { font-family: Playfairdisplay; src: url("https://cdn.prod.website-files.com/691b159061724d8c7a12037c/695f77ecbae1da468edf5234_PlayfairDisplay-Italic.otf") format("opentype"); font-weight: 400; font-style: italic; font-display: swap; }
-  @font-face { font-family: Playfairdisplay; src: url("https://cdn.prod.website-files.com/691b159061724d8c7a12037c/695f77ec8e76422ce95bca56_PlayfairDisplay-Black.otf") format("opentype"); font-weight: 900; font-style: normal; font-display: swap; }
-  @font-face { font-family: Playfairdisplay; src: url("https://cdn.prod.website-files.com/691b159061724d8c7a12037c/695f77eb5cee6d10ff7b77a6_PlayfairDisplay-Regular.otf") format("opentype"); font-weight: 400; font-style: normal; font-display: swap; }
-  @font-face { font-family: Playfairdisplay; src: url("https://cdn.prod.website-files.com/691b159061724d8c7a12037c/695f77ef3f27cd09da5b9d67_PlayfairDisplay-BlackItalic.otf") format("opentype"); font-weight: 900; font-style: italic; font-display: swap; }
+/* =============================================================================
+   MemoBook — carnet de voyage
+   -----------------------------------------------------------------------------
+   Format A5 : 420 × 595 pt. L'unité d'écriture est le POINT parce que
+   1 unité Figma = 1 pt : toute valeur relevée dans la maquette
+   (geIpjYxG3WCkGrgJFpkuVC) se reporte ici telle quelle, sans conversion.
 
-  /* Base */
-  html {
-    text-size-adjust: 100%;
-    height: 100%;
-  }
+   Ce fichier est envoyé verbatim à APITemplate (champ `css` de
+   /v2/update-template), précédé de `fonts.css` qui porte les @font-face
+   inlinés. Il doit donc rester un fragment HTML : <meta> puis un unique
+   <style>. Voir backend/scripts/lint-template.ts, qui vérifie cet invariant.
+   ============================================================================= */
 
-  html[data-w-dynpage] [data-w-cloak] {
-    color: rgba(0, 0, 0, 0) !important;
-  }
+:root {
+  /* --- Géométrie ---------------------------------------------------------- */
+  --mb-page-w: 420pt;
+  --mb-page-h: 595pt;
+  --mb-margin: 30pt;
 
-  body {
-    margin: 0;
-    color: #21170a;
-    min-height: 100%;
-    font-family: Playfairdisplay, "Times New Roman", sans-serif;
-    font-size: 16px; /* Typographies de tous les paragraphes */
-    line-height: 20px;
-  }
+  /* --- Couleurs ----------------------------------------------------------- */
+  --mb-ink: #0033a0;                       /* encre manuscrite bleue */
+  --mb-black: #2b231b;                     /* texte : un noir chaud, jamais #000 */
+  --mb-carrot: #f86015;                    /* accent de marque (design.md) */
+  --mb-mint: #afdcd3;                      /* bandeau de titre des cartes info */
+  --mb-label: rgba(253, 229, 209, 0.7);    /* pastilles « lieu » / « date » */
+  --mb-rule: rgba(43, 35, 27, 0.26);       /* lignes réglées du papier */
+  --mb-card-bg: rgba(255, 255, 255, 0.96);
+  --mb-card-shadow: 6pt 6pt 2pt rgba(53, 84, 193, 0.1);
+  --mb-photo-shadow: 0 3pt 4pt rgba(0, 0, 0, 0.25);
 
-  /* Typographies */
-  h1, h2, h3, h4, h5, h6 {
-    margin-top: 0;
-    margin-bottom: 10px;
-    font-weight: 700;
-    line-height: 1.2;
-  }
+  /* --- Papier ------------------------------------------------------------- */
+  /* Le crème n'est pas une couleur de fond : c'est une teinte orangée posée
+     sur du blanc, plus un grain. Le profil « print » neutralise les deux. */
+  --mb-paper-base: #ffffff;
+  --mb-paper-tint: rgba(212, 136, 59, 0.1);
+  --mb-grain-opacity: 0.3;
 
-  h1 { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif; font-size: 3.5rem; margin-top: 0; margin-bottom: 0; font-weight: 700; line-height: 1.2; }
-  h2 { font-family: Playfairdisplaysc, "Times New Roman", sans-serif; font-size: 2rem; margin-top: 0; margin-bottom: 0; font-weight: 700; line-height: 1.2; }
-  h3 { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif; font-size: 2.5rem; margin-top: 0; margin-bottom: 0; font-weight: 700; line-height: 1.2; }
-  h4 { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif; font-size: 2rem; margin-top: 0; margin-bottom: 0; font-weight: 700; line-height: 1.3; }
-  h5 { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif; font-size: 1.5rem; margin-top: 0; margin-bottom: 0; font-weight: 700; line-height: 1.4; }
-  h6 { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif; font-size: 1.25rem; margin-top: 0; margin-bottom: 0; font-weight: 700; line-height: 1.4; }
-  p { font-family: Playfairdisplay, "Times New Roman", sans-serif; margin-top: 0; margin-bottom: 10px; }
-  
-  /* Layouts */
-  
-  /* ===== COVER ===== */
-  .page-bg { gap: 2rem; font-family: Playfairdisplay, "Times New Roman", sans-serif; background-color: #f7efe7; flex-flow: column; justify-content: flex-start; align-items: center; padding-top: 4rem; padding-bottom: 4rem; font-size: 1.25rem; display: flex; }
-  .page { background-color: #f6eee6; background-image: url("https://cdn.prod.website-files.com/691b159061724d8c7a12037c/695f81b592e0b96302cb23a0_Page%20Background.avif"); background-repeat: no-repeat; background-size: cover; width: 839px; height: 1189px; box-shadow: rgba(0, 0, 0, 0.1) 0px 2px 8px; **overflow: hidden; display: block**; }
-  .page.cover { position: relative; }
-  .cover-img { z-index: 0; object-fit: cover; width: 100%; height: 100%; position: absolute; inset: 0%; }
-  .book-title { z-index: 1; font-family: Playfairdisplay, "Times New Roman", sans-serif; color: #ffffff; text-align: center; font-size: 4.5rem; }
-  .book-sub-title-div { column-gap: 7.05882px; background-color: rgba(255, 255, 255, 0.96); flex: 0 1 auto; justify-content: center; align-items: center; min-height: 28.9412px; padding: 8.47059px; text-decoration: none; display: flex; transform: rotate(-2deg); }
-  .book-sub-title { font-family: Playfairdisplay, "Times New Roman", sans-serif; color: #21170a; text-align: center; letter-spacing: 0.01em; margin-top: 0px; margin-bottom: 0px; font-size: 1.5rem; font-weight: 400; line-height: 130%; text-decoration: none; }
-  .cover-top-content { z-index: 1; gap: 1rem; flex-flow: column; justify-content: center; align-items: center; width: 75%; margin-top: 20%; display: flex; }
-  .margin-global { z-index: 1; flex-flow: column; justify-content: space-between; align-items: center; height: 100%; padding: 2.5rem 2rem; position: relative; }
-  .margin-global.vertical-spaced { display: flex; }
-  .cover-bottom-content { margin-bottom: 5%; }
-  .cover-bottom-text { z-index: 1; font-family: Playfairdisplay, "Times New Roman", sans-serif; color: #ffffff; text-align: center; font-size: 1.5rem; font-weight: 400; }
+  /* --- Typographie -------------------------------------------------------- */
+  --mb-font-display: "Playfair Display", "Times New Roman", serif;
+  --mb-font-hand: "Gloria Hallelujah", "Bradley Hand", cursive;
+  /* Hansley est propriétaire : si le .woff2 n'est pas déposé dans
+     assets/fonts/, on retombe sur la manuscrite plutôt que sur du serif. */
+  --mb-font-title: "Hansley", "Gloria Hallelujah", cursive;
 
-  /* ===== PAGE BLANCHE ===== */
-  .feuille-blanche-div { aspect-ratio: 1 / 1; flex-flow: column; justify-content: space-between; align-items: stretch; width: 100%; display: flex; }
-  ._2nd-page-bottom-text { z-index: 1; font-family: Playfairdisplay, "Times New Roman", sans-serif; text-align: center; font-weight: 400; }
-  .feuille-blanche-bottom { text-align: right; }
+  --mb-body-size: 12pt;
+  --mb-body-lh: 1.3;
+  --mb-line: calc(var(--mb-body-size) * var(--mb-body-lh));
+}
 
-  /* ===== INTRODUCTION ===== */
-   .intro-img-div { width: 300px; margin-bottom: -6rem; margin-right: -3rem; position: relative; transform: rotate(-2deg); }
-  .intro-img-div._2 { transform: rotate(8deg); }
-  .intro-img { z-index: 2; width: 100%; position: relative; transform: rotate(3deg); }
-  .intro-img._2 { transform: rotate(-2deg); }
-  .intro-img-line { gap: 0rem; justify-content: flex-end; align-items: center; margin-right: 4rem; display: flex; }
+/* --- Profils de sortie ----------------------------------------------------
+   `preview` (défaut) : papier crème granulé, pour l'aperçu partageable in-app.
+   `print`            : fond blanc, parce que le papier de l'imprimeur est déjà
+                        crème — le rendre deux fois donnerait un carnet jauni.
+   Piloté par `render_profile` dans le JSON, cf. LAYOUT_KB.md.               */
+body.profile-print {
+  --mb-paper-tint: transparent;
+  --mb-grain-opacity: 0;
+}
 
-  /* ===== NOTES DE TEXTE ===== */
-  .note-item { background-color: #ffffff; background-image: url("https://cdn.prod.website-files.com/691b159061724d8c7a12037c/695fbe767109f8ff3beb456b_Notes%20Background.png"); background-position: 0px 0px; background-repeat: no-repeat; background-size: cover; width: 100%; max-height: 700px; padding: 1.5rem; position: relative; **min-height: 0; max-height: fit-content; overflow: hidden**; }
-  .note-item.introduction { max-height: 900px; }
-  .note-content { z-index: 2; max-height: 800px; position: relative; }
-  .note-text { z-index: 1; max-height: 100%; filter: none !important; }
-  .notes-outline { z-index: 0; outline-color: #21170a; outline-offset: 0px; filter: url("#noise"); outline-width: 3px; outline-style: solid; position: absolute; inset: 0%; }
-  
-  /* ===== LAYOUTS ===== */
-  .layout2-bottom { column-gap: 2rem; flex-flow: wrap; justify-content: space-between; display: flex; }
-  
-  /* ===== FUN FACTS ===== */
-  .fun-facts { gap: 1rem; background-color: rgb(255, 255, 255); background-image: url("https://cdn.prod.website-files.com/691b159061724d8c7a12037c/695fbe767109f8ff3beb456b_Notes%20Background.png"); background-position: 0px 0px; background-repeat: no-repeat; background-size: cover; border: 3px solid rgb(0, 0, 0); border-radius: 1rem; flex-flow: column; align-self: flex-start; width: 350px; margin-right: 1rem; padding: 1.5rem; display: flex; transform: rotate(5deg); **min-height: 0; max-height: fit-content; overflow: hidden**; }
-  .fun-facts._2 { align-self: flex-end; transform: rotate(-3deg); }
-  .fun-fact-title-div { background-color: #afdcd3; border: 3px solid rgb(0, 0, 0); padding: 0.5rem; padding-bottom: 0rem; }
-  .fun-fact-title { text-align: center; border: 2px dashed rgb(0, 0, 0); padding: 1rem; font-size: 1.5rem; font-weight: 700; }
+/* --- Réinitialisation ------------------------------------------------------ */
+* { box-sizing: border-box; }
 
-  /* ===== IMAGES ===== */
-  .img-div { width: 300px; margin-top: -6px; margin-left: 2.5rem; position: relative; transform: rotate(1deg); }
-  .img-div._2 { margin-left: 3rem; transform: rotate(9deg); }
-  .scotch { z-index: 3; width: 100px; position: absolute; inset: -17px 0% auto 36%; }
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #ffffff;
+}
 
-  /* ===== ICONES ===== */
-   .clipper { z-index: 3; width: 30px; position: absolute; inset: -36px auto auto 2.3rem; }
-  .clipper-box { background-color: #d4d4ec; border: 2px solid rgb(0, 0, 0); margin-bottom: 1rem; padding: 0.5rem 1.5rem 0.7rem 3rem; display: inline-flex; position: relative; }
-  .note-arrow { color: #d4d4ec; height: 110%; margin-top: -2px; position: absolute; inset: 0% -50px 0% auto; **transform: translateY(0); position: relative**; }
-  .clipper-2 { z-index: 3; width: 70px; position: absolute; inset: -48px 0% auto 43%; }
-  .icon-bottom { position: absolute; inset: auto 0% -122px; }
-  .icon-bottom._2 { top: -154px; bottom: auto; }
-  
-  /* Reinitialisations Webflow */
-  article, aside, details, figcaption, figure, footer, header, hgroup, main, menu, nav, section, summary { display: block; }
-  audio, canvas, progress, video { vertical-align: baseline; display: inline-block; }
-  audio:not([controls]) { height: 0; display: none; }
-  [hidden], template { display: none; }
-  a { background-color: rgba(0, 0, 0, 0); color: #21170a; text-decoration: underline; }
-  a:active, a:hover { outline: 0; color: #3e844c; }
-  abbr[title] { border-bottom: 1px dotted; }
-  b, strong { font-weight: 700; }
-  dfn { font-style: italic; }
-  mark { color: #000; background: #ff0; }
-  small { font-size: 80%; }
-  sub, sup { vertical-align: baseline; font-size: 75%; line-height: 0; position: relative; }
-  sup { top: -0.5em; }
-  sub { bottom: -0.25em; }
-  img { border: 0; vertical-align: middle; max-width: 100%; display: inline-block; }
-  svg:not(:root) { overflow: hidden; }
-  hr { box-sizing: content-box; height: 0; }
-  pre { overflow: auto; }
-  code, kbd, pre, samp { font-size: 1em; }
-  button, input, optgroup, select, textarea { color: inherit; font: inherit; margin: 0; line-height: normal; }
-  button { overflow: visible; appearance: button; cursor: pointer; border: 0; }
-  button[disabled], html input[disabled] { cursor: default; }
-  input[type="checkbox"], input[type="radio"] { box-sizing: border-box; padding: 0; }
-  input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { height: auto; }
-  input[type="search"] { appearance: none; }
-  input[type="search"]::-webkit-search-cancel-button, input[type="search"]::-webkit-search-decoration { appearance: none; }
-  legend { border: 0; padding: 0; }
-  textarea { overflow: auto; }
-  optgroup { font-weight: 700; }
-  table { border-collapse: collapse; border-spacing: 0; }
-  td, th { padding: 0; }
-  blockquote { border-left: 5px solid #21170a; margin: 0 0 10px; padding: 10px 20px; font-size: 18px; line-height: 22px; }
-  figure { margin: 3rem 0; }
-  figcaption { text-align: center; margin-top: 5px; }
-  ul, ol { margin-top: 1rem; margin-bottom: 1rem; }
-  ul { padding-left: 1.25rem; }
-  ol { padding-left: 1.5rem; }
-  li { margin-top: 0.25rem; margin-bottom: 0.25rem; padding-left: 0.5rem; }
-  fieldset { border: 0; margin: 0; padding: 0; }
-  label { margin-bottom: 5px; font-weight: 500; display: block; }
+body {
+  color: var(--mb-black);
+  font-family: var(--mb-font-display);
+  font-size: var(--mb-body-size);
+  line-height: var(--mb-body-lh);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
 
-  * {
-    box-sizing: border-box;
-  }
-  
+p { margin: 0 0 var(--mb-line); }
+p:last-child { margin-bottom: 0; }
+h1, h2, h3 { margin: 0; font-weight: 900; line-height: 1; }
+img { display: block; max-width: 100%; border: 0; }
+ul { margin: 0 0 var(--mb-line); padding-left: 14pt; }
+li { margin: 0; }
+
+/* =============================================================================
+   PAGE
+   ============================================================================= */
+
+@page {
+  size: 420pt 595pt;
+  margin: 0;
+}
+
+.page {
+  position: relative;
+  width: var(--mb-page-w);
+  height: var(--mb-page-h);
+  overflow: hidden;
+  background-color: var(--mb-paper-base);
+  break-after: page;
+  page-break-after: always;          /* repli pour les moteurs plus anciens */
+}
+
+/* Sans ça, Chromium ajoute une page blanche finale. */
+.page:last-child {
+  break-after: auto;
+  page-break-after: auto;
+}
+
+/* Teinte crème du papier. */
+.page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-color: var(--mb-paper-tint);
+  pointer-events: none;
+}
+
+/* Grain du papier : bruit SVG inline, donc aucune dépendance à un CDN et un
+   rendu identique en local, en CI et chez APITemplate. */
+.page::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: var(--mb-grain-opacity);
+  mix-blend-mode: luminosity;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23g)' opacity='0.5'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
+
+.page__content {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  padding: var(--mb-margin);
+}
+
+/* Les décors (stickers, tracés pointillés) débordent volontairement des marges. */
+.page__decor {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* =============================================================================
+   COMPOSANTS
+   ============================================================================= */
+
+/* --- Bloc de texte manuscrit sur lignes réglées ---------------------------- */
+/* Dans Figma les lignes sont un SVG de taille fixe. Ici elles sont générées en
+   dégradé répété et calées sur --mb-line : le carnet étant généré
+   automatiquement, la hauteur du texte n'est jamais connue à l'avance. */
+.mb-note {
+  position: relative;
+  font-family: var(--mb-font-hand);
+  font-size: var(--mb-body-size);
+  line-height: var(--mb-body-lh);
+  letter-spacing: 0.017em;
+  color: var(--mb-ink);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(var(--mb-line) - 0.5pt),
+    var(--mb-rule) calc(var(--mb-line) - 0.5pt),
+    var(--mb-rule) var(--mb-line)
+  );
+  background-position: 0 0;
+}
+
+.mb-note p { margin: 0; }
+.mb-note strong { font-weight: 400; text-decoration: underline; }
+
+/* Titre manuscrit de section : « Intro », « 36 heures plus tard… ». */
+.mb-note__title {
+  display: block;
+  margin-bottom: var(--mb-line);
+  font-family: var(--mb-font-title);
+  font-size: 16pt;
+  line-height: var(--mb-body-lh);
+  letter-spacing: 0.01em;
+}
+
+.mb-note--ink-title .mb-note__title { color: var(--mb-ink); }
+.mb-note--black-title .mb-note__title { color: var(--mb-black); }
+
+/* --- Bandeau de journée : ruban « jour NN » + lieu + date ------------------ */
+.mb-header {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10pt;
+  height: 62pt;
+}
+
+.mb-ribbon {
+  position: relative;
+  flex: 0 0 71pt;
+  height: 93pt;
+  margin-top: -30pt;               /* le ruban part du bord haut de la page */
+  padding-top: 34pt;
+  text-align: center;
+}
+
+.mb-ribbon__shape {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.mb-ribbon__label,
+.mb-ribbon__number {
+  position: relative;
+  z-index: 1;
+  display: block;
+  font-family: var(--mb-font-display);
+  font-weight: 900;
+  color: var(--mb-black);
+  letter-spacing: 0.01em;
+  transform: rotate(-1deg);
+}
+
+.mb-ribbon__label { font-size: 10.4pt; line-height: 1; }
+.mb-ribbon__number { font-size: 27.6pt; line-height: 1.1; }
+
+/* Encart cerné à la main : deux contours légèrement désalignés. */
+.mb-field {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  margin-top: 14pt;
+  padding: 11pt 10pt;
+  text-align: center;
+}
+
+.mb-field::before,
+.mb-field::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 0.8pt solid var(--mb-black);
+  border-radius: 6pt;
+}
+
+.mb-field::before { transform: rotate(-0.5deg); }
+.mb-field::after { transform: rotate(0.45deg); opacity: 0.7; }
+
+.mb-field__value {
+  position: relative;
+  font-family: var(--mb-font-display);
+  font-weight: 900;
+  font-size: 12pt;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  color: var(--mb-black);
+}
+
+.mb-field__label {
+  position: absolute;
+  top: -4.5pt;
+  left: 50%;
+  z-index: 2;
+  transform: translateX(-50%);
+  padding: 1.5pt 3pt;
+  background-color: var(--mb-label);
+  font-family: var(--mb-font-display);
+  font-size: 6.2pt;
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+  color: var(--mb-black);
+  white-space: nowrap;
+}
+
+/* --- Rangée météo ---------------------------------------------------------- */
+.mb-weather {
+  display: flex;
+  align-items: center;
+  gap: 13pt;
+  margin: 6pt 0 0 100pt;
+}
+
+.mb-weather__caption {
+  font-family: var(--mb-font-display);
+  font-weight: 900;
+  font-size: 12pt;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  color: var(--mb-black);
+  transform: rotate(-1deg);
+}
+
+.mb-weather__icon {
+  width: 20pt;
+  height: 20pt;
+  opacity: 0.3;                    /* l'icône du jour repasse à 1 */
+  color: var(--mb-black);
+}
+
+.mb-weather__icon.is-active {
+  opacity: 1;
+  color: var(--mb-carrot);
+}
+
+/* --- Étiquette de section (« Top départ », « Paliton Beach ») -------------- */
+.mb-tag {
+  position: relative;
+  display: inline-block;
+  margin-top: 8pt;             /* dégage la rangée météo, qui la précède */
+  padding: 9pt 16pt;
+  transform: rotate(2.9deg);
+}
+
+.mb-tag__shape {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.mb-tag__text {
+  position: relative;
+  z-index: 1;
+  font-family: var(--mb-font-display);
+  font-weight: 900;
+  font-size: 12pt;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  color: var(--mb-black);
+  white-space: nowrap;
+}
+
+/* --- Carte info / fun fact -------------------------------------------------- */
+.mb-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8pt;
+  width: 173pt;
+  padding: 14pt;
+  background-color: var(--mb-card-bg);
+  border: 1pt dashed var(--mb-black);
+  border-radius: 8pt;
+  box-shadow: var(--mb-card-shadow);
+  transform: rotate(6.5deg);
+}
+
+.mb-card--left { transform: rotate(-4.5deg); }
+
+.mb-card__title {
+  width: 100%;
+  padding: 3pt;
+  background-color: var(--mb-mint);
+  border: 0.8pt solid var(--mb-black);
+  transform: rotate(-1deg);
+}
+
+.mb-card__title span {
+  display: block;
+  padding: 7pt 4pt;
+  border: 0.7pt dashed var(--mb-black);
+  font-family: var(--mb-font-display);
+  font-weight: 700;
+  font-size: 12pt;
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+  text-align: center;
+  color: var(--mb-black);
+}
+
+.mb-card__body {
+  width: 100%;
+  font-family: var(--mb-font-display);
+  font-size: 12pt;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+  color: var(--mb-black);
+}
+
+.mb-card__body p { margin: 0 0 6pt; }
+.mb-card__body p:last-child { margin-bottom: 0; }
+
+/* Pince métallique posée sur le bord haut de la carte. */
+.mb-card__clip {
+  position: absolute;
+  top: -21pt;
+  left: 12pt;
+  width: 30pt;
+  height: 26pt;
+  transform: rotate(-0.7deg);
+}
+
+/* --- Photo ------------------------------------------------------------------ */
+.mb-photo {
+  position: relative;
+  background-color: #ffffff;
+  padding: 4pt;
+  box-shadow: var(--mb-photo-shadow);
+}
+
+.mb-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mb-photo--tilt-left { transform: rotate(-6.5deg); }
+.mb-photo--tilt-right { transform: rotate(5deg); }
+.mb-photo--tilt-slight { transform: rotate(-2deg); }
+
+.mb-photo__caption {
+  margin-top: 4pt;
+  font-family: var(--mb-font-hand);
+  font-size: 8pt;
+  line-height: 1.2;
+  color: var(--mb-black);
+  text-align: center;
+}
+
+/* --- Tracé pointillé du voyage --------------------------------------------- */
+.mb-path {
+  position: absolute;
+  z-index: 1;
+  color: #d4883b;
+}
+
+.mb-path--top { top: 118pt; left: -40pt; width: 500pt; }
+.mb-path--bottom { bottom: 54pt; left: -50pt; width: 520pt; }
+
+/* --- Sticker illustré ------------------------------------------------------- */
+.mb-sticker {
+  position: absolute;
+  z-index: 3;
+}
+
+.mb-sticker img { width: 100%; height: auto; }
+
+.mb-sticker--top-left { top: 40pt; left: 24pt; width: 92pt; }
+.mb-sticker--top-right { top: 34pt; right: 22pt; width: 92pt; }
+.mb-sticker--bottom-left { bottom: 34pt; left: 24pt; width: 100pt; }
+.mb-sticker--bottom-right { bottom: 30pt; right: 22pt; width: 100pt; }
+.mb-sticker--center { bottom: 120pt; left: 50%; width: 110pt; transform: translateX(-50%); }
+
+/* =============================================================================
+   LAYOUTS
+   ============================================================================= */
+
+/* --- Couverture ------------------------------------------------------------- */
+.page--cover .mb-cover__photo {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.page--cover .mb-cover__photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.page--cover .mb-cover__head {
+  position: absolute;
+  top: 32pt;
+  left: 50%;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14pt;
+  width: 356pt;
+  transform: translateX(-50%);
+}
+
+.page--cover .mb-cover__title {
+  font-family: var(--mb-font-display);
+  font-weight: 900;
+  /* Le titre du Figma tient sur une ligne à 64 pt. Un titre plus long doit
+     rétrécir plutôt que déborder : d'où la borne haute en unités de largeur. */
+  font-size: min(64pt, 15cqw);
+  line-height: 1;
+  letter-spacing: 0.01em;
+  text-align: center;
+  color: #ffffff;
+  text-shadow: 0 1pt 6pt rgba(0, 0, 0, 0.28);
+}
+
+.page--cover .mb-cover__subtitle {
+  padding: 6pt 10pt;
+  background-color: rgba(255, 255, 255, 0.96);
+  font-size: 13pt;
+  line-height: 1.3;
+  text-align: center;
+  color: var(--mb-black);
+  transform: rotate(-2deg);
+}
+
+.page--cover .mb-cover__byline {
+  position: absolute;
+  bottom: 46pt;
+  left: 50%;
+  z-index: 2;
+  width: 330pt;
+  transform: translateX(-50%);
+  font-family: var(--mb-font-display);
+  font-size: 20.4pt;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+  text-align: center;
+  color: #ffffff;
+  text-shadow: 0 1pt 6pt rgba(0, 0, 0, 0.32);
+}
+
+/* La couverture est une photo pleine page : ni teinte ni grain par-dessus. */
+.page--cover::before,
+.page--cover::after { display: none; }
+
+/* --- Colophon ---------------------------------------------------------------- */
+.page--colophon .page__content {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.mb-colophon__opening { font-size: 12pt; }
+.mb-colophon__closing { align-self: flex-end; font-size: 12pt; }
+
+.mb-colophon__credits {
+  font-size: 10pt;
+  line-height: 1.4;
+  text-align: center;
+  color: var(--mb-black);
+}
+
+/* --- Introduction ------------------------------------------------------------ */
+.mb-intro__photos {
+  position: relative;
+  height: 178pt;
+  margin-bottom: 6pt;
+}
+
+.mb-intro__photos .mb-photo { position: absolute; }
+.mb-intro__photos .mb-photo:nth-child(1) { top: 12pt; left: 20pt; width: 209pt; height: 118pt; }
+.mb-intro__photos .mb-photo:nth-child(2) { top: 0; right: 4pt; width: 114pt; height: 153pt; }
+
+/* --- Page de journée : bloc texte + éléments flottants ----------------------- */
+.mb-day__body { margin-top: 12pt; }
+
+.mb-day__floats {
+  position: relative;
+  flex: 1 1 auto;              /* absorbe la hauteur restante de la page */
+  min-height: 175pt;
+  margin-top: 18pt;
+}
+
+.mb-day__floats .mb-card { position: absolute; bottom: 24pt; left: 4pt; }
+.mb-day__floats .mb-photo { position: absolute; bottom: 30pt; right: 0; width: 165pt; height: 162pt; }
+
+/* Texte à gauche, carte info à droite (ou l'inverse). */
+.mb-split {
+  display: flex;
+  flex: 0 0 auto;              /* le récit ne se comprime jamais : mieux vaut
+                                  une bande de photos plus basse qu'un texte
+                                  tronqué, qu'on ne verrait qu'à l'impression */
+  align-items: flex-start;
+  gap: 14pt;
+  margin-top: 12pt;
+}
+
+.mb-split__aside { flex: 0 0 173pt; padding-top: 14pt; }
+.mb-split__main { flex: 1 1 0; min-width: 0; }
+.mb-split--reverse { flex-direction: row-reverse; }
+
+/* Deux photos côte à côte, légèrement inclinées. */
+.mb-gallery {
+  display: flex;
+  flex: 0 1 auto;              /* c'est la bande de photos qui cède si la page
+                                  se remplit, pas le récit */
+  min-height: 0;
+  height: 176pt;
+  justify-content: center;
+  align-items: stretch;
+  gap: 12pt;
+  margin-top: auto;            /* poussée vers le bas de la page */
+  padding-top: 16pt;
+}
+
+.mb-gallery .mb-photo { flex: 1 1 0; height: 100%; }
+
+/* Photo héro en haut de page. */
+.mb-hero {
+  margin: 0 0 14pt;
+  height: 220pt;
+}
+
+/* --- Quatrième de couverture -------------------------------------------------- */
+.page--back .mb-back__photo {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.page--back .mb-back__photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.page--back::before,
+.page--back::after { display: none; }
+
+.page--back .mb-back__text {
+  position: absolute;
+  top: 46pt;
+  left: 50%;
+  z-index: 2;
+  width: 300pt;
+  transform: translateX(-50%);
+  font-family: var(--mb-font-display);
+  font-size: 18pt;
+  line-height: 1.3;
+  text-align: center;
+  color: #ffffff;
+}
+
+.page--back .mb-back__footer {
+  position: absolute;
+  bottom: 34pt;
+  left: 50%;
+  z-index: 2;
+  width: 320pt;
+  transform: translateX(-50%);
+  font-size: 10pt;
+  line-height: 1.4;
+  text-align: center;
+  color: #ffffff;
+}
+
+.page--back .mb-back__logo {
+  width: 78pt;
+  margin: 0 auto 8pt;
+}
 </style>

@@ -21,7 +21,8 @@
         "weather_icon": "⛅",
         "weather_summary": "Ciel voilé",
         "temperature": "18 °C",
-        "mood": "Encore un peu de jet lag, mais le sourire est là !"
+        "mood": "Encore un peu de jet lag, mais le sourire est là !",
+        "weather_key": "sun"
       },
       "layout_story_opener": true,
       "opener_kicker": "Escale à Manille",
@@ -53,11 +54,18 @@
           "position": "top-right",
           "rotation": 4,
           "stickers": [
-            { "text": "✈️", "style": "emoji" },
-            { "text": "Atterrissage", "style": "stamp" }
+            {
+              "text": "✈️",
+              "style": "emoji"
+            },
+            {
+              "text": "Atterrissage",
+              "style": "stamp"
+            }
           ]
         }
-      ]
+      ],
+      "tag": "Top départ"
     },
     {
       "title": "Jour 2 – Monserrate et vues sur la ville",
@@ -71,7 +79,8 @@
         "weather_icon": "🌤",
         "weather_summary": "Grande luminosité",
         "temperature": "16 °C",
-        "mood": "On flotte encore sur les nuages."
+        "mood": "On flotte encore sur les nuages.",
+        "weather_key": "cloud"
       },
       "layout_hero_top": false,
       "layout_split_left": true,
@@ -92,7 +101,10 @@
         {
           "position": "bottom-right",
           "stickers": [
-            { "text": "Altitude 3 000 m", "style": "tag" }
+            {
+              "text": "Altitude 3 000 m",
+              "style": "tag"
+            }
           ]
         }
       ]
@@ -109,7 +121,8 @@
         "weather_icon": "🌦",
         "weather_summary": "Soleil & averses",
         "temperature": "24 °C",
-        "mood": "On alterne entre ponchos et lunettes de soleil."
+        "mood": "On alterne entre ponchos et lunettes de soleil.",
+        "weather_key": "rain"
       },
       "layout_hero_top": false,
       "layout_split_left": false,
@@ -134,11 +147,18 @@
         {
           "position": "top-left",
           "stickers": [
-            { "text": "Tampon Guatapé", "style": "stamp" },
-            { "text": "🛶", "style": "emoji" }
+            {
+              "text": "Tampon Guatapé",
+              "style": "stamp"
+            },
+            {
+              "text": "🛶",
+              "style": "emoji"
+            }
           ]
         }
-      ]
+      ],
+      "tag": "Guatapé"
     }
   ],
   "back_cover": {
@@ -147,5 +167,6 @@
     "cta": "Visitez www.memo-book.com pour tout savoir",
     "image": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/691b00e81d0c45109aeb49ba_Claire%20%26%20Gus%20-%20Varanasi%20-%2023.png",
     "logo_url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/691af5f6d5f78fd098aef055_Logo%20MemoBook%20-%20White.svg"
-  }
+  },
+  "render_profile": "preview"
 }

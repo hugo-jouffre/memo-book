@@ -77,3 +77,47 @@ export function loadLayoutKnowledgeBase(): string {
 export function loadSamplePayload(): Record<string, unknown> {
   return JSON.parse(readTemplateFile("data.json")) as Record<string, unknown>;
 }
+
+/** Le gabarit Jinja2 consommé tel quel par APITemplate (`body`). */
+export function loadTemplateHtml(): string {
+  return readTemplateFile("index.html");
+}
+
+/**
+ * La feuille de style consommée telle quelle par APITemplate (`css`).
+ *
+ * Attention : ce n'est pas du CSS nu mais un fragment HTML (`<meta>` puis
+ * `<style>…</style>`). APITemplate l'injecte verbatim dans le document ; le
+ * rendu local doit faire exactement pareil, sans le ré-encapsuler.
+ */
+export function loadTemplateCss(): string {
+  // `fonts.css` porte les @font-face inlinés en base64 (généré par
+  // scripts/build-font-css.ts) ; il est concaténé plutôt que fusionné pour que
+  // `style.css` reste éditable à la main. Les deux consommateurs — rendu local
+  // et sync APITemplate — doivent faire cette concaténation à l'identique.
+  return `${readTemplateFile("fonts.css")}\n${readTemplateFile("style.css")}`;
+}
+
+/**
+ * Géométrie de page, en points. 1 unité Figma = 1 pt : toute valeur relevée
+ * dans la maquette se reporte telle quelle dans `style.css`.
+ */
+export interface PrintSettings {
+  format: string;
+  unit: "pt";
+  widthPt: number;
+  heightPt: number;
+  bleedPt: number;
+  marginPt: { top: number; right: number; bottom: number; left: number };
+  printBackground: boolean;
+  preferCSSPageSize: boolean;
+  scale: number;
+  expectedPageCountForSample: number;
+}
+
+let cachedPrintSettings: PrintSettings | undefined;
+
+export function loadPrintSettings(): PrintSettings {
+  cachedPrintSettings ??= JSON.parse(readTemplateFile("print.json")) as PrintSettings;
+  return cachedPrintSettings;
+}

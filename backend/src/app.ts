@@ -8,6 +8,7 @@ import { createRequireDevice, registerAuthDecorator } from "./plugins/auth.js";
 import { registerDeviceRoutes } from "./routes/devices.js";
 import { registerEntryRoutes } from "./routes/entries.js";
 import { registerHealthRoutes } from "./routes/health.js";
+import { registerLocalRenderRoutes } from "./routes/localRenders.js";
 import { registerMemoRoutes } from "./routes/memos.js";
 import { registerRenderRoutes } from "./routes/renders.js";
 
@@ -56,6 +57,9 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
 
   registerHealthRoutes(app, context);
   registerDeviceRoutes(app, context);
+
+  // Uniquement en mode de rendu local : sert les PDF produits sur le disque.
+  registerLocalRenderRoutes(app, context);
 
   // Tout le reste de /v1 exige un token d'appareil.
   await app.register(async (protectedRoutes) => {
