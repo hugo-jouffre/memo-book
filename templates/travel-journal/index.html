@@ -2,220 +2,307 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Bungee" />
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&display=swap" rel="stylesheet" />
+  <title>{{ book_title | default('Carnet MemoBook') }}</title>
 </head>
-  
-<body>
-    <!-- Cover page -->
-    <div class="page cover">
-      <div class="margin-global vertical-spaced">
-        <div class="cover-top-content">
-          <h1 class="book-title">{{ book_title }}</h1>
-          {% if book_subtitle %}
-            <div class="book-sub-title-div">
-              <h2 class="book-sub-title">{{ book_subtitle }}</h2>
-            </div>
-          {% endif %}
-        </div>
-        <div class="cover-bottom-content">
-          {% if authors or date_range %}
-            <h3 class="cover-bottom-text">
-              {% if authors %}{{ authors }}{% endif %}{% if authors and date_range %}<br />{% endif %}{% if date_range %}{{ date_range }}{% endif %}
-            </h3>
-          {% endif %}
-        </div>
-      </div>
-      {% if cover_photo %}
-        <img src="{{ cover_photo }}" loading="lazy" alt="" class="cover-img" />
-      {% endif %}
-    </div>
 
-    <!-- Colophon page -->
-    <div class="page">
-      <div class="margin-global vertical-spaced">
-        <div class="feuille-blanche-div">
-          <div class="feuille-blanche-top">Tout commence...</div>
-          <div class="feuille-blanche-bottom">...par une feuille blanche.</div>
-        </div>
-        <div class="cover-bottom-content">
-          <p class="_2nd-page-bottom-text">
-            {{ brand_name | default('MemoBook') }} © {{ year }}<br />
-            {% if authors %}Récit de {{ authors }}<br />{% endif %}
-            Edition par {{ brand_name | default('MemoBook') }} – Illustrations par OpenAI
-          </p>
-        </div>
-      </div>
-    </div>
+<!-- `render_profile` vaut « print » (fond blanc pour l'imprimeur) ou « preview »
+     (fond crème granulé pour l'aperçu in-app). Voir LAYOUT_KB.md. -->
+<body class="profile-{{ render_profile | default('preview') }}">
 
-    <!-- Optional introduction page -->
-    {% if intro_text or (intro_photos and intro_photos|length >= 1) %}
-      <div class="page">
-        <div class="margin-global">
-          <div class="intro-img-line">
-            <div class="intro-img-div">
-              {% if intro_photos and intro_photos|length >= 1 %}
-                <img src="{{ intro_photos[0] }}" loading="lazy" sizes="(max-width: 643px) 100vw, 643px" alt="" class="intro-img" />
-              {% elif days and days|length > 0 and days[0].photos and days[0].photos|length >= 1 %}
-                <img src="{{ days[0].photos[0] }}" loading="lazy" sizes="(max-width: 643px) 100vw, 643px" alt="" class="intro-img" />
-              {% endif %}
-              <div class="notes-outline">
-                <div>
-                  <svg>
-                    <defs>
-                      <filter id="noise">
-                        <feTurbulence type="fractalNoise" baseFrequency="0.01 0.05" numOctaves="2" seed="1" result="noise"></feTurbulence>
-                        <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap>
-                      </filter>
-                    </defs>
-                  </svg>
-                </div>
-              </div>
-            </div>
-            <div class="intro-img-div _2">
-              {% if intro_photos and intro_photos|length >= 2 %}
-                <img src="{{ intro_photos[1] }}" loading="lazy" alt="" class="intro-img _2" />
-              {% elif days and days|length > 0 and days[0].photos and days[0].photos|length >= 2 %}
-                <img src="{{ days[0].photos[1] }}" loading="lazy" alt="" class="intro-img _2" />
-              {% endif %}
-              <div class="notes-outline">
-                <div>
-                  <svg>
-                    <defs>
-                      <filter id="noise">
-                        <feTurbulence type="fractalNoise" baseFrequency="0.01 0.05" numOctaves="2" seed="1" result="noise"></feTurbulence>
-                        <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap>
-                      </filter>
-                    </defs>
-                  </svg>
-                </div>
-              </div>
-            </div>
-          </div>
-          {% if intro_text %}
-            <div class="note-item introduction">
-              <img src="https://cdn.prod.website-files.com/691b159061724d8c7a12037c/695fbb8b0a1268ca3f0004e9_Clipper.png" loading="lazy" alt="" class="clipper" />
-              <div class="note-content">
-                <div class="clipper-box">
-                  <h2 class="clipper-day-text">Introduction</h2>
-                  <div class="note-arrow">
-                    <svg width="100%" height="100%" viewBox="0 0 20 21" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M1.67569 0.349976H7.43749L19.4468 10.2188L7.43749 20.0876H1.55615L1.67569 0.349976Z" fill="CurrentColor" stroke="black" stroke-width="0.7"></path>
-                      <rect y="0.706299" width="3.33984" height="19.025" fill="CurrentColor"></rect>
-                    </svg>
-                  </div>
-                </div>
-                <p class="note-text">{{ intro_text | safe }}</p>
-              </div>
-              <div class="notes-outline">
-                <div>
-                  <svg>
-                    <defs>
-                      <filter id="noise">
-                        <feTurbulence type="fractalNoise" baseFrequency="0.01 0.05" numOctaves="2" seed="1" result="noise"></feTurbulence>
-                        <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap>
-                      </filter>
-                    </defs>
-                  </svg>
-                </div>
-              </div>
-            </div>
-          {% endif %}
-        </div>
+  <!-- ======================================================================
+       Bibliothèque de formes. Dessinées en SVG plutôt qu'importées : le
+       template part chez APITemplate sous forme de deux chaînes, sans aucun
+       fichier joint, et dépendre d'un CDN rendrait le rendu non reproductible.
+       ====================================================================== -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <!-- Ruban « jour NN » : un fanion à encoche, tracé légèrement irrégulier. -->
+      <symbol id="mb-ribbon" viewBox="0 0 71 93" preserveAspectRatio="none">
+        <path d="M1.4 1.2 L69.6 0.6 L70.2 91.8 L36.1 76.4 L1.1 92.6 Z"
+              fill="#fdeee2" stroke="#2b231b" stroke-width="1.1"
+              stroke-linejoin="round" />
+      </symbol>
+
+      <!-- Étiquette manuscrite : ellipse déformée à la main. -->
+      <symbol id="mb-tag-shape" viewBox="0 0 116 42" preserveAspectRatio="none">
+        <path d="M8.5 12.4 C14 4.2 33 1.4 58.5 1.8 C84 2.2 105 5.4 110.5 13.8
+                 C115.6 21.6 111 32.6 96.5 37.2 C80.4 42.3 36 42.6 19.5 38.2
+                 C5.8 34.5 3.2 20.3 8.5 12.4 Z"
+              fill="#fdeee2" stroke="#2b231b" stroke-width="1" />
+      </symbol>
+
+      <!-- Pince métallique des cartes info. -->
+      <symbol id="mb-clip" viewBox="0 0 30 26">
+        <rect x="4.5" y="0.8" width="21" height="4.4" rx="1.2"
+              fill="#8b8b8b" stroke="#2b231b" stroke-width="0.9" />
+        <path d="M2.2 5.2 H27.8 L24.4 24.6 H5.6 Z"
+              fill="#3f3a35" stroke="#2b231b" stroke-width="0.9"
+              stroke-linejoin="round" />
+        <path d="M9 5.2 L9 24.6 M21 5.2 L21 24.6"
+              stroke="#5d564e" stroke-width="0.7" />
+      </symbol>
+
+      <!-- Tracé du voyage : pointillé serpentant d'un bord à l'autre. -->
+      <symbol id="mb-path" viewBox="0 0 500 60" preserveAspectRatio="none">
+        <path d="M0 26 C60 6 118 4 168 20 C214 35 236 54 268 52
+                 C302 50 312 26 292 18 C276 11 262 26 276 38
+                 C296 55 350 56 400 44 C444 33 476 22 500 14"
+              fill="none" stroke="currentColor" stroke-width="3.4"
+              stroke-linecap="round" stroke-dasharray="13 11" />
+      </symbol>
+
+      <!-- Icônes météo, dessin au trait, 24 × 24. -->
+      <symbol id="mb-w-sun" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="4.6" fill="none" stroke="currentColor" stroke-width="1.7" />
+        <g stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+          <path d="M12 1.6v3M12 19.4v3M1.6 12h3M19.4 12h3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M19.4 4.6l-2.1 2.1M6.7 17.3l-2.1 2.1" />
+        </g>
+      </symbol>
+      <symbol id="mb-w-sun-wind" viewBox="0 0 24 24">
+        <circle cx="10" cy="9" r="4" fill="none" stroke="currentColor" stroke-width="1.7" />
+        <g stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+          <path d="M10 1.8v2.4M2.6 9h2.4M4.4 3.4l1.7 1.7M15.6 3.4l-1.7 1.7" />
+          <path d="M3 16h12.5a2.6 2.6 0 1 0-2.6-2.6M6 20h9.5a2.4 2.4 0 1 1-2.4 2.4" />
+        </g>
+      </symbol>
+      <symbol id="mb-w-cloud" viewBox="0 0 24 24">
+        <path d="M7 19h10.2a4.3 4.3 0 0 0 .5-8.6 6.2 6.2 0 0 0-12-1.3A3.9 3.9 0 0 0 7 19Z"
+              fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+      </symbol>
+      <symbol id="mb-w-rain" viewBox="0 0 24 24">
+        <path d="M7 15.4h10.2a4.3 4.3 0 0 0 .5-8.6 6.2 6.2 0 0 0-12-1.3A3.9 3.9 0 0 0 7 15.4Z"
+              fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+        <g stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+          <path d="M8.4 18.4l-1 2.6M12 18.4l-1 2.6M15.6 18.4l-1 2.6" />
+        </g>
+      </symbol>
+      <symbol id="mb-w-snow" viewBox="0 0 24 24">
+        <g stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+          <path d="M12 2v20M3.3 7l17.4 10M20.7 7L3.3 17" />
+          <path d="M9 4l3 2 3-2M9 20l3-2 3 2" />
+        </g>
+      </symbol>
+    </defs>
+  </svg>
+
+  <!-- ====================== COUVERTURE ====================== -->
+  <div class="page page--cover">
+    {% if cover_photo %}
+      <div class="mb-cover__photo">
+        <img src="{{ cover_photo }}" alt="" />
       </div>
     {% endif %}
+    <div class="mb-cover__head">
+      <h1 class="mb-cover__title">{{ book_title }}</h1>
+      {% if book_subtitle %}
+        <div class="mb-cover__subtitle">{{ book_subtitle }}</div>
+      {% endif %}
+    </div>
+    {% if authors or date_range %}
+      <div class="mb-cover__byline">
+        {% if authors %}<p>{{ authors }}</p>{% endif %}
+        {% if date_range %}<p>{{ date_range }}</p>{% endif %}
+      </div>
+    {% endif %}
+  </div>
 
-    <!-- Daily pages (layout 1 only) -->
-    {% for day in days %}
-      <div class="page">
-        <div class="margin-global">
-          <div class="layout2-bottom">
-            <div class="note-item">
-              <img src="https://cdn.prod.website-files.com/691b159061724d8c7a12037c/695fbb8b0a1268ca3f0004e9_Clipper.png" loading="lazy" alt="" class="clipper" />
-              <div class="note-content">
-                <div class="clipper-box">
-                  <h2 class="clipper-day-text">{{ day.title }}</h2>
-                  <div class="note-arrow">
-                    <svg width="100%" height="100%" viewBox="0 0 20 21" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M1.67569 0.349976H7.43749L19.4468 10.2188L7.43749 20.0876H1.55615L1.67569 0.349976Z" fill="CurrentColor" stroke="black" stroke-width="0.7"></path>
-                      <rect y="0.706299" width="3.33984" height="19.025" fill="CurrentColor"></rect>
-                    </svg>
-                  </div>
-                </div>
-                <p class="note-text">{{ day.body_html | safe }}</p>
-              </div>
-              <div class="notes-outline">
-                <div>
-                  <svg>
-                    <defs>
-                      <filter id="noise">
-                        <feTurbulence type="fractalNoise" baseFrequency="0.01 0.05" numOctaves="2" seed="1" result="noise"></feTurbulence>
-                        <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap>
-                      </filter>
-                    </defs>
-                  </svg>
-                </div>
-              </div>
+  <!-- ====================== COLOPHON ====================== -->
+  <div class="page page--colophon">
+    <div class="page__content">
+      <div class="mb-colophon__opening">Tout commence...</div>
+      <div class="mb-colophon__closing">...par une feuille blanche.</div>
+      <div class="mb-colophon__credits">
+        {{ brand_name | default('MemoBook') }} © {{ year | default('2026') }}<br />
+        {% if authors %}Récit de {{ authors }}<br />{% endif %}
+        Édition par {{ brand_name | default('MemoBook') }} — Illustrations par IA
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================== INTRODUCTION ====================== -->
+  {% if intro_text %}
+    <div class="page page--intro">
+      <div class="page__content">
+        {% if intro_photos and intro_photos | length >= 1 %}
+          <div class="mb-intro__photos">
+            <div class="mb-photo mb-photo--tilt-slight">
+              <img src="{{ intro_photos[0] }}" alt="" />
             </div>
-            {% if day.photos and day.photos|length >= 1 %}
-              <div class="img-div">
-                <div class="scotch">
-                  <svg width="100%" height="100%" viewBox="0 0 52 16" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-                    <g opacity="0.95" filter="url(#filter0_d_188_1042)">
-                      <path d="M0.837753 0.828605C2.51459 1.44365 35.2712 2.19759 50.1077 2.17348C51.0045 7.99375 49.7992 13.0391 49.0844 14.8342C48.092 15.4053 17.1827 13.7311 1.85207 12.8226C0.431509 9.53305 1.06202 4.08724 0.837753 0.828605Z" fill="white"></path>
-                      <path d="M0.837753 0.828605C2.51459 1.44365 35.2712 2.19759 50.1077 2.17348C51.0045 7.99375 49.7992 13.0391 49.0844 14.8342C48.092 15.4053 17.1827 13.7311 1.85207 12.8226C0.431509 9.53305 1.06202 4.08724 0.837753 0.828605Z" fill="url(#pattern0_188_1042)"></path>
-                      <path d="M0.837753 0.828605C2.51459 1.44365 35.2712 2.19759 50.1077 2.17348C51.0045 7.99375 49.7992 13.0391 49.0844 14.8342C48.092 15.4053 17.1827 13.7311 1.85207 12.8226C0.431509 9.53305 1.06202 4.08724 0.837753 0.828605Z" stroke="black" stroke-width="0.539794"></path>
-                    </g>
-                    <defs>
-                      <filter id="filter0_d_188_1042" x="0.000245214" y="4.96879e-05" width="51.2363" height="15.8679" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-                        <feFlood flood-opacity="0" result="BackgroundImageFix"></feFlood>
-                        <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"></feColorMatrix>
-                        <feOffset dy="0.107959"></feOffset>
-                        <feGaussianBlur stdDeviation="0.269897"></feGaussianBlur>
-                        <feComposite in2="hardAlpha" operator="out"></feComposite>
-                        <feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.4 0"></feColorMatrix>
-                        <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_188_1042"></feBlend>
-                        <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_188_1042" result="shape"></feBlend>
-                      </filter>
-                      <pattern id="pattern0_188_1042" patternUnits="userSpaceOnUse" patternTransform="matrix(-1.0012 23.5081 -10.7455 -0.457643 37.0053 -3.50109)" preserveAspectRatio="none" viewBox="8.533e-05 0 99.0674 45.2834" width="1" height="1">
-                        <use xlink:href="#pattern0_188_1042_inner" transform="translate(0 -45.2834)"></use>
-                        <g id="pattern0_188_1042_inner">
-                          <rect x="81.0909" width="27.5938" height="106.885" transform="rotate(49.3476 81.0909 0)" fill="#F7E5E1"></rect>
-                        </g>
-                      </pattern>
-                    </defs>
-                  </svg>
-                </div>
-                <img src="{{ day.photos[0] }}" loading="lazy" alt="" class="intro-img" />
-                <div class="notes-outline">
-                  <div>
-                    <svg>
-                      <defs>
-                        <filter id="noise">
-                          <feTurbulence type="fractalNoise" baseFrequency="0.01 0.05" numOctaves="2" seed="1" result="noise"></feTurbulence>
-                          <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap>
-                        </filter>
-                      </defs>
-                    </svg>
-                  </div>
-                </div>
+            {% if intro_photos | length >= 2 %}
+              <div class="mb-photo mb-photo--tilt-right">
+                <img src="{{ intro_photos[1] }}" alt="" />
               </div>
             {% endif %}
-            {% if day.fun_facts and day.fun_facts|length >= 1 %}
-              <div class="fun-facts">
-                <div class="fun-fact-title-div">
-                  <p class="fun-fact-title">Fun Facts</p>
-                </div>
-                <p>{{ day.fun_facts[0] }}</p>
-                <img src="https://cdn.prod.website-files.com/691b159061724d8c7a12037c/695fd1a8d19e9b82453044e2_Plane.png" loading="lazy" alt="" class="icon-bottom" />
-              </div>
-            {% endif %}
-            </div>
           </div>
+        {% endif %}
+        <div class="mb-note mb-note--black-title">
+          <span class="mb-note__title">{{ intro_title | default('Intro') }}</span>
+          {{ intro_text | safe }}
         </div>
       </div>
-    {% endfor %}
+    </div>
+  {% endif %}
+
+  <!-- ====================== JOURNÉES ====================== -->
+  {% for day in days %}
+    <div class="page page--day">
+      <div class="page__decor">
+        <svg class="mb-path mb-path--bottom" viewBox="0 0 500 60" preserveAspectRatio="none"
+             height="60"><use href="#mb-path" /></svg>
+      </div>
+
+      <div class="page__content">
+
+        {% if day.day_intro %}
+          <!-- Bandeau : ruban jour + lieu + date -->
+          <div class="mb-header">
+            <div class="mb-ribbon">
+              <svg class="mb-ribbon__shape" viewBox="0 0 71 93" preserveAspectRatio="none">
+                <use href="#mb-ribbon" />
+              </svg>
+              <span class="mb-ribbon__label">jour</span>
+              <span class="mb-ribbon__number">{{ day.day_intro.day_number | default('01') }}</span>
+            </div>
+
+            {% if day.day_intro.location %}
+              <div class="mb-field">
+                <span class="mb-field__label">lieu</span>
+                <span class="mb-field__value">{{ day.day_intro.location }}</span>
+              </div>
+            {% endif %}
+
+            {% if day.day_intro.date %}
+              <div class="mb-field">
+                <span class="mb-field__label">date</span>
+                <span class="mb-field__value">{{ day.day_intro.date }}</span>
+              </div>
+            {% endif %}
+          </div>
+
+          <!-- Rangée météo : une seule icône active, les autres estompées -->
+          <div class="mb-weather">
+            <span class="mb-weather__caption">Météo</span>
+            {% set weather = day.day_intro.weather_key | default('sun') %}
+            <svg class="mb-weather__icon{% if weather == 'sun' %} is-active{% endif %}"
+                 viewBox="0 0 24 24"><use href="#mb-w-sun" /></svg>
+            <svg class="mb-weather__icon{% if weather == 'sun-wind' %} is-active{% endif %}"
+                 viewBox="0 0 24 24"><use href="#mb-w-sun-wind" /></svg>
+            <svg class="mb-weather__icon{% if weather == 'cloud' %} is-active{% endif %}"
+                 viewBox="0 0 24 24"><use href="#mb-w-cloud" /></svg>
+            <svg class="mb-weather__icon{% if weather == 'rain' %} is-active{% endif %}"
+                 viewBox="0 0 24 24"><use href="#mb-w-rain" /></svg>
+            <svg class="mb-weather__icon{% if weather == 'snow' %} is-active{% endif %}"
+                 viewBox="0 0 24 24"><use href="#mb-w-snow" /></svg>
+          </div>
+        {% endif %}
+
+        {% if day.tag %}
+          <div style="text-align:right">
+            <span class="mb-tag">
+              <svg class="mb-tag__shape" viewBox="0 0 116 42" preserveAspectRatio="none">
+                <use href="#mb-tag-shape" />
+              </svg>
+              <span class="mb-tag__text">{{ day.tag }}</span>
+            </span>
+          </div>
+        {% endif %}
+
+        {# Un seul layout par journée : le premier drapeau actif l'emporte. #}
+        {% if day.layout_hero_top %}
+          {% if day.photos and day.photos | length >= 1 %}
+            <div class="mb-photo mb-photo--tilt-slight mb-hero">
+              <img src="{{ day.photos[0] }}" alt="" />
+            </div>
+          {% endif %}
+          <div class="mb-note">
+            {% if day.title %}<span class="mb-note__title">{{ day.title }}</span>{% endif %}
+            {{ day.body_html | safe }}
+          </div>
+
+        {% elif day.layout_split_left %}
+          <div class="mb-split">
+            {% if day.fun_facts and day.fun_facts | length >= 1 %}
+              <div class="mb-split__aside">
+                <div class="mb-card mb-card--left">
+                  <svg class="mb-card__clip" viewBox="0 0 30 26"><use href="#mb-clip" /></svg>
+                  <div class="mb-card__title"><span>{{ day.fun_facts_title | default('Fun fact') }}</span></div>
+                  <div class="mb-card__body"><p>{{ day.fun_facts[0] }}</p></div>
+                </div>
+              </div>
+            {% endif %}
+            <div class="mb-split__main">
+              <div class="mb-note">
+                {% if day.title %}<span class="mb-note__title">{{ day.title }}</span>{% endif %}
+                {{ day.body_html | safe }}
+              </div>
+            </div>
+          </div>
+          {% if day.photos and day.photos | length >= 2 %}
+            <div class="mb-gallery">
+              <div class="mb-photo mb-photo--tilt-left"><img src="{{ day.photos[0] }}" alt="" /></div>
+              <div class="mb-photo mb-photo--tilt-right"><img src="{{ day.photos[1] }}" alt="" /></div>
+            </div>
+          {% endif %}
+
+        {% elif day.layout_collage %}
+          <div class="mb-note">
+            {% if day.title %}<span class="mb-note__title">{{ day.title }}</span>{% endif %}
+            {{ day.body_html | safe }}
+          </div>
+          {% if day.photos and day.photos | length >= 2 %}
+            <div class="mb-gallery{% if day.photos | length >= 3 %} mb-gallery--three{% endif %}">
+              <div class="mb-photo mb-photo--tilt-left"><img src="{{ day.photos[0] }}" alt="" /></div>
+              <div class="mb-photo mb-photo--tilt-right"><img src="{{ day.photos[1] }}" alt="" /></div>
+              {% if day.photos | length >= 3 %}
+                <div class="mb-photo mb-photo--tilt-slight"><img src="{{ day.photos[2] }}" alt="" /></div>
+              {% endif %}
+            </div>
+          {% endif %}
+
+        {% else %}
+          {# story_opener / story_facts : récit puis carte info et photo flottantes #}
+          <div class="mb-note mb-day__body mb-note--ink-title">
+            {% if day.title %}<span class="mb-note__title">{{ day.title }}</span>{% endif %}
+            {{ day.body_html | safe }}
+          </div>
+          {% if (day.fun_facts and day.fun_facts | length >= 1) or (day.photos and day.photos | length >= 1) %}
+            <div class="mb-day__floats">
+              {% if day.fun_facts and day.fun_facts | length >= 1 %}
+                <div class="mb-card">
+                  <svg class="mb-card__clip" viewBox="0 0 30 26"><use href="#mb-clip" /></svg>
+                  <div class="mb-card__title"><span>{{ day.fun_facts_title | default('Fun fact') }}</span></div>
+                  <div class="mb-card__body"><p>{{ day.fun_facts[0] }}</p></div>
+                </div>
+              {% endif %}
+              {% if day.photos and day.photos | length >= 1 %}
+                <div class="mb-photo mb-photo--tilt-left">
+                  <img src="{{ day.photos[0] }}" alt="" />
+                </div>
+              {% endif %}
+            </div>
+          {% endif %}
+        {% endif %}
+
+      </div>
+    </div>
+  {% endfor %}
+
+  <!-- ====================== QUATRIÈME DE COUVERTURE ====================== -->
+  {% if back_cover %}
+    <div class="page page--back">
+      {% if back_cover.image %}
+        <div class="mb-back__photo"><img src="{{ back_cover.image }}" alt="" /></div>
+      {% endif %}
+      <div class="mb-back__text">{{ back_cover.closing_text }}</div>
+      <div class="mb-back__footer">
+        {% if back_cover.logo_url %}
+          <img class="mb-back__logo" src="{{ back_cover.logo_url }}" alt="" />
+        {% endif %}
+        {% if back_cover.closing_subtext %}<p>{{ back_cover.closing_subtext }}</p>{% endif %}
+        {% if back_cover.cta %}<p>{{ back_cover.cta }}</p>{% endif %}
+      </div>
+    </div>
+  {% endif %}
+
 </body>
 </html>

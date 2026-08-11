@@ -5,16 +5,16 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'templates/travel-journal/**'
+      - 'templates/travel-journal/index.html'
+      - 'templates/travel-journal/style.css'
+      - 'templates/travel-journal/fonts.css'
 
 jobs:
   sync-template:
     runs-on: ubuntu-latest
 
-    # Ce dépôt n'a pas encore les secrets APITemplate (ils vivaient sur
-    # hugo-jouffre/memobook). Sans ce garde-fou, le job échouerait à chaque push
-    # touchant le template. Il s'activera tout seul dès que les secrets seront
-    # ajoutés dans Settings → Secrets and variables → Actions.
+    # Le job s'active tout seul dès que les secrets sont posés dans
+    # Settings → Secrets and variables → Actions.
     if: ${{ secrets.APITEMPLATE_API_KEY != '' }}
 
     steps:
@@ -25,10 +25,21 @@ jobs:
         env:
           APITEMPLATE_API_KEY: ${{ secrets.APITEMPLATE_API_KEY }}
           APITEMPLATE_TEMPLATE_ID: ${{ secrets.APITEMPLATE_TEMPLATE_ID }}
+          # Le compte MemoBook est en région DE. Appeler rest.apitemplate.io
+          # renverrait une erreur d'authentification difficile à diagnostiquer.
+          APITEMPLATE_BASE_URL: ${{ vars.APITEMPLATE_BASE_URL || 'https://rest-de.apitemplate.io/v2' }}
         run: |
           set -euo pipefail
+
+          # `fonts.css` porte les @font-face inlinés en base64, `style.css` le
+          # reste. APITemplate ne reçoit qu'un seul champ `css` : on concatène
+          # exactement comme le fait loadTemplateCss() côté back-end, sinon le
+          # rendu de production perdrait ses polices.
+          cat templates/travel-journal/fonts.css \
+              templates/travel-journal/style.css > /tmp/memobook.css
+
           HTML=$(jq -Rs . < templates/travel-journal/index.html)
-          CSS=$(jq -Rs . < templates/travel-journal/style.css)
+          CSS=$(jq -Rs . < /tmp/memobook.css)
 
           PAYLOAD=$(jq -n \
             --arg template_id "$APITEMPLATE_TEMPLATE_ID" \
@@ -37,8 +48,8 @@ jobs:
             '{template_id: $template_id, body: $body, css: $css}')
 
           RESPONSE_FILE=$(mktemp)
-          HTTP_STATUS=$(curl --show-error --silent --max-time 30 \
-            -X POST "https://rest.apitemplate.io/v2/update-template" \
+          HTTP_STATUS=$(curl --show-error --silent --max-time 60 \
+            -X POST "${APITEMPLATE_BASE_URL}/update-template" \
             -H "Content-Type: application/json" \
             -H "X-API-KEY: $APITEMPLATE_API_KEY" \
             -d "$PAYLOAD" \

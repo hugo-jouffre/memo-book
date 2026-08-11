@@ -1,0 +1,65 @@
+name: Aperçu du carnet
+
+on:
+  pull_request:
+    paths:
+      - 'templates/travel-journal/**'
+      - 'backend/src/services/bookPdf.ts'
+      - 'backend/src/lib/templates.ts'
+      - 'backend/scripts/**'
+      - 'backend/test/visual/**'
+      - '.github/workflows/template-preview.yml'
+  workflow_dispatch: {}
+
+jobs:
+  apercu:
+    runs-on: ubuntu-latest
+
+    # L'image Playwright fige Chromium ET les polices système. C'est ce qui rend
+    # les captures de référence comparables d'un run à l'autre : sur un runner
+    # nu, une reconstruction de l'image GitHub ferait dériver le rendu du texte.
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.0-noble
+      options: --user root
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+
+      - name: poppler, pour rastériser les pages
+        run: apt-get update && apt-get install -y --no-install-recommends poppler-utils
+
+      - name: Lint du template (dialecte Jinja + invariants CSS)
+        run: npm run template:lint
+
+      # `--offline` : ni CDN Webflow ni Google Fonts. Le rendu ne peut donc pas
+      # casser parce qu'un asset distant a bougé, et il reste reproductible.
+      - name: Rendu profil imprimeur
+        run: npm run render:local -- --offline --png --profile print --out .render-out/print
+
+      - name: Rendu profil aperçu
+        run: npm run render:local -- --offline --png --profile preview --out .render-out/preview
+
+      - name: Non-régression visuelle
+        run: npm run test:visual
+
+      - name: Publier les pages en artefact
+        uses: actions/upload-artifact@v4
+        if: always()   # surtout utile quand le job échoue : les diffs sont dedans
+        with:
+          name: carnet-${{ github.event.pull_request.number || github.run_id }}
+          path: |
+            backend/.render-out/**/*.pdf
+            backend/.render-out/**/*.png
+          retention-days: 14

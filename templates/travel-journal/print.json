@@ -1,0 +1,18 @@
+{
+  "$comment": "Géométrie du carnet MemoBook, partagée par le rendu local (Chromium) et par la calibration APITemplate. L'unité de référence est le point : 1 unité Figma = 1 pt, donc toute valeur relevée dans Figma se reporte telle quelle dans style.css. 420 x 595 pt = A5 à 0,2 mm près (l'A5 exact vaut 419,53 x 595,28 pt).",
+  "format": "A5",
+  "unit": "pt",
+  "widthPt": 420,
+  "heightPt": 595,
+  "bleedPt": 0,
+  "marginPt": { "top": 0, "right": 0, "bottom": 0, "left": 0 },
+  "printBackground": true,
+  "preferCSSPageSize": true,
+  "scale": 1,
+  "expectedPageCountForSample": 8,
+  "apitemplate": {
+    "region": "rest-de.apitemplate.io",
+    "calibrated": false,
+    "$comment": "Passer à true après un create-pdf réel dont pdfinfo annonce 420 x 595 pts."
+  }
+}

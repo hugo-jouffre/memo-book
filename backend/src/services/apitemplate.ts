@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Env } from "../env.js";
+import { assertNoNullValues, type RenderProfile } from "./bookPdf.js";
+import { LocalChromiumRenderer } from "./localRenderer.js";
 import type { BookPayload } from "./structuring.js";
 
 export interface RenderedBook {
@@ -20,10 +22,15 @@ export class ApiTemplateRenderer implements BookRenderer {
   constructor(
     private readonly apiKey: string,
     private readonly templateId: string,
-    private readonly baseUrl = "https://rest.apitemplate.io/v2",
+    private readonly baseUrl = "https://rest-de.apitemplate.io/v2",
+    private readonly profile: RenderProfile = "preview",
   ) {}
 
   async render(payload: BookPayload): Promise<RenderedBook> {
+    // Jinja2 imprime `None` là où l'on attend une chaîne vide : un null qui
+    // passe ici écrirait le mot « None » dans le carnet imprimé.
+    assertNoNullValues(payload);
+
     const url = new URL(`${this.baseUrl}/create-pdf`);
     url.searchParams.set("template_id", this.templateId);
 
@@ -33,7 +40,8 @@ export class ApiTemplateRenderer implements BookRenderer {
         "content-type": "application/json",
         "X-API-KEY": this.apiKey,
       },
-      body: JSON.stringify(payload),
+      // `render_profile` décide du fond (blanc imprimeur / crème aperçu).
+      body: JSON.stringify({ render_profile: this.profile, ...payload }),
     });
 
     const body = (await response.json().catch(() => null)) as {
@@ -77,7 +85,29 @@ export class FakeBookRenderer implements BookRenderer {
   }
 }
 
+function apiTemplateRenderer(env: Env): ApiTemplateRenderer {
+  return new ApiTemplateRenderer(
+    env.APITEMPLATE_API_KEY,
+    env.APITEMPLATE_TEMPLATE_ID,
+    env.APITEMPLATE_BASE_URL,
+    env.RENDER_PROFILE,
+  );
+}
+
 export function createBookRenderer(env: Env): BookRenderer {
-  if (!env.live) return new FakeBookRenderer();
-  return new ApiTemplateRenderer(env.APITEMPLATE_API_KEY, env.APITEMPLATE_TEMPLATE_ID);
+  switch (env.RENDERER) {
+    case "fake":
+      return new FakeBookRenderer();
+    case "apitemplate":
+      return apiTemplateRenderer(env);
+    case "local":
+      return new LocalChromiumRenderer(
+        env.RENDER_OUTPUT_DIR,
+        env.RENDER_PUBLIC_BASE_URL || `http://localhost:${env.PORT}/v1/local-renders`,
+        env.RENDER_PROFILE,
+      );
+    default:
+      // `auto` : le comportement historique, piloté par PIPELINE_MODE.
+      return env.live ? apiTemplateRenderer(env) : new FakeBookRenderer();
+  }
 }

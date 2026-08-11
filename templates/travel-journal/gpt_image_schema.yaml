@@ -99,6 +99,27 @@ properties:
       authors: { type: string }
       date_range: { type: string }
       cover_photo: { type: string, format: uri }
+      render_profile:
+        type: string
+        enum: [print, preview]
+        default: preview
+        description: >
+          Fond du PDF. `print` : blanc, pour l'imprimeur — son papier est déjà crème.
+          `preview` : crème granulé, pour l'aperçu partageable dans l'app. Une seule
+          template, deux sorties : c'est ce champ qui décide.
+      brand_name: { type: string }
+      year: { type: string }
+      footer_tagline: { type: string }
+      intro_title:
+        type: string
+        description: "Titre manuscrit de la page d'introduction. Défaut « Intro »."
+      intro_text:
+        type: string
+        description: Récit d'ouverture, en HTML simple (<p>, <br>, <b>).
+      intro_photos:
+        type: array
+        maxItems: 2
+        items: { type: string, format: uri }
       global_stats:
         type: object
         properties:
@@ -126,6 +147,16 @@ $defs:
       date: { type: string }
       city: { type: string }
       country: { type: string }
+      tag:
+        type: string
+        description: >
+          Étiquette manuscrite posée en haut de page (« Top départ », « Paliton Beach »).
+          Trois mots maximum, sinon elle déborde de sa forme.
+      fun_facts_title:
+        type: string
+        description: >
+          Titre de la carte info. Défaut « Fun fact ». Autres valeurs utilisées dans la
+          maquette : « Infos », « Culture générale ».
       day_intro:
         type: object
         properties:
@@ -133,6 +164,13 @@ $defs:
           location: { type: string }
           date: { type: string }
           weather_icon: { type: string }
+          weather_key:
+            type: string
+            enum: [sun, sun-wind, cloud, rain, snow]
+            description: >
+              Icône météo mise en avant dans la rangée du bandeau de journée. Les quatre
+              autres restent estompées. `weather_icon` (emoji) n'est plus rendu : il ne
+              subsiste que pour compatibilité.
           weather_summary: { type: string }
           temperature: { type: string }
           mood: { type: string }
