@@ -1,0 +1,96 @@
+{
+  "render_profile": "preview",
+  "book_title": "Philippines",
+  "book_subtitle": "Trois semaines entre ferrys et scooters",
+  "authors": "Maÿlis, Claire et Augustin",
+  "date_range": "février 2026",
+  "cover_photo": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-cover.jpg",
+  "brand_name": "MemoBook",
+  "year": "2026",
+  "intro_title": "Intro",
+  "intro_text": "<p>Il y a des voyages qu'on prépare pendant des mois, avec un itinéraire millimétré et des réservations imprimées dans une pochette plastique. Et puis il y a ceux qui commencent par 36 heures de transport, trois avions et un scooter douteux à 1h du matin.</p><p>Ce carnet raconte trois semaines aux Philippines : plages de rêve, ferrys improbables, rencontres inattendues et réveils parfois compliqués.</p><p>Pas de guide touristique ici. Juste des souvenirs, des anecdotes et tout ce qui fait la magie d'un voyage : l'imprévu.</p>",
+  "intro_photos": [
+    "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-intro-1.jpg",
+    "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-intro-2.jpg"
+  ],
+  "days": [
+    {
+      "title": "36 heures plus tard, me voilà aux Philippines",
+      "day_intro": {
+        "day_number": "01",
+        "location": "De Barcelone à Cebu",
+        "date": "22-23 fev 2026",
+        "weather_key": "sun"
+      },
+      "tag": "Top départ",
+      "layout_story_opener": true,
+      "body_html": "<p>Départ de Barcelone, sac sur le dos, direction les Philippines pour retrouver Clairette et Gusgus qui finissent leur tour du monde. Moi je pars seule, eux sont déjà en mode aventuriers depuis des mois.</p><p>Premier vol : six heures jusqu'à Abu Dhabi. Deux heures d'escale, le temps de marcher un peu dans l'aéroport en mode semi-zombie.</p>",
+      "fun_facts": [
+        "Les Philippines comptent plus de 7000 îles. Oui oui."
+      ],
+      "photos": [
+        "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-01.jpg"
+      ]
+    },
+    {
+      "title": "Direction Paliton Beach",
+      "day_intro": {
+        "day_number": "02",
+        "location": "Île de Siquijor",
+        "date": "24 fev 2026",
+        "weather_key": "sun-wind"
+      },
+      "tag": "Paliton Beach",
+      "layout_split_left": true,
+      "body_html": "<p>Et là, carte postale vivante. Eau turquoise, sable blanc, palmiers parfaits. Des petits stands philippins vendent poissons frais et séchés qu'ils grillent au barbecue.</p><p>Un des meilleurs déjeuners de ma vie.</p>",
+      "fun_facts": [
+        "Paliton Beach est considérée comme l'une des plus belles plages de l'île, surtout au coucher du soleil."
+      ],
+      "fun_facts_title": "Fun fact",
+      "photos": [
+        "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-02a.jpg",
+        "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-02b.jpg"
+      ]
+    },
+    {
+      "title": "Une journée en mer",
+      "day_intro": {
+        "day_number": "03",
+        "location": "Coral Triangle",
+        "date": "25 fev 2026",
+        "weather_key": "cloud"
+      },
+      "layout_collage": true,
+      "body_html": "<p>En sortant, on croise Anne. Elle connaissait déjà l'endroit pour y être venue dix ans plus tôt, et elle trouve que les coraux ont un peu perdu en couleur. Nous, avec nos yeux neufs, on trouve ça absolument sublime.</p><p>Déjeuner léger ensuite : petite salade, jus frais, juste en face d'un centre de massage.</p>",
+      "fun_facts": [
+        "Les Philippines font partie du Coral Triangle, l'une des zones marines les plus riches au monde."
+      ],
+      "fun_facts_title": "Fun facts",
+      "photos": [
+        "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-03a.jpg",
+        "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-03b.jpg",
+        "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-03c.jpg"
+      ]
+    },
+    {
+      "title": "Dernier jour à Siquijor",
+      "day_intro": {
+        "day_number": "05",
+        "location": "Dernier jour à Siquijor",
+        "date": "27 fev 2026",
+        "weather_key": "rain"
+      },
+      "layout_hero_top": true,
+      "body_html": "<p>Réveil étonnamment simple. Pas trop mal, même. On prend notre temps. On commence à saturer du petit-déjeuner philippin, alors on décide de changer.</p><p>On tombe sur un endroit incroyable, avec plein de choix. Le bonheur. On reste longtemps à table à discuter de tout, de rien, de la suite, de la vie.</p>",
+      "photos": [
+        "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-05.jpg"
+      ]
+    }
+  ],
+  "back_cover": {
+    "closing_text": "Merci d'avoir suivi nos aventures !",
+    "closing_subtext": "Ce carnet a été généré automatiquement par MemoBook à partir de messages vocaux.",
+    "cta": "www.memo-book.com",
+    "image": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-back.jpg"
+  }
+}

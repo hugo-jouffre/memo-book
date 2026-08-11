@@ -26,7 +26,8 @@
     "template:lint": "tsx scripts/lint-template.ts",
     "fonts:build": "tsx scripts/build-font-css.ts",
     "test:visual": "vitest run test/visual",
-    "test:visual:update": "UPDATE_GOLDENS=1 vitest run test/visual"
+    "test:visual:update": "UPDATE_GOLDENS=1 vitest run test/visual",
+    "inspector": "tsx scripts/build-inspector.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

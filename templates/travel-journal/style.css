@@ -311,6 +311,7 @@ li { margin: 0; }
 .mb-tag {
   position: relative;
   display: inline-block;
+  margin-top: 8pt;             /* dégage la rangée météo, qui la précède */
   padding: 9pt 16pt;
   transform: rotate(2.9deg);
 }
@@ -562,6 +563,9 @@ li { margin: 0; }
 /* Texte à gauche, carte info à droite (ou l'inverse). */
 .mb-split {
   display: flex;
+  flex: 0 0 auto;              /* le récit ne se comprime jamais : mieux vaut
+                                  une bande de photos plus basse qu'un texte
+                                  tronqué, qu'on ne verrait qu'à l'impression */
   align-items: flex-start;
   gap: 14pt;
   margin-top: 12pt;
@@ -574,15 +578,18 @@ li { margin: 0; }
 /* Deux photos côte à côte, légèrement inclinées. */
 .mb-gallery {
   display: flex;
+  flex: 0 1 auto;              /* c'est la bande de photos qui cède si la page
+                                  se remplit, pas le récit */
+  min-height: 0;
+  height: 176pt;
   justify-content: center;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 12pt;
   margin-top: auto;            /* poussée vers le bas de la page */
-  padding-top: 20pt;
+  padding-top: 16pt;
 }
 
-.mb-gallery .mb-photo { flex: 1 1 0; height: 200pt; }
-.mb-gallery--three .mb-photo { height: 150pt; }
+.mb-gallery .mb-photo { flex: 1 1 0; height: 100%; }
 
 /* Photo héro en haut de page. */
 .mb-hero {

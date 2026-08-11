@@ -59,7 +59,16 @@ npm run render:local -- --profile print     # fond blanc imprimeur (défaut : cr
 npm run test:visual                         # diff pixel contre les captures de référence
 npm run test:visual:update                  # régénère les captures après un changement voulu
 npm run fonts:build                         # régénère fonts.css depuis Google Fonts
+npm run inspector                           # inspecteur HTML : nomme chaque élément au survol
 ```
+
+`npm run inspector` produit `.render-out/inspecteur.html`, une page autonome qui affiche le
+carnet rendu et, au survol de n'importe quel élément, donne son nom, son sélecteur CSS, les
+champs JSON qui l'alimentent et les variables CSS en jeu. Elle sert à formuler des demandes de
+retouche précises plutôt que « le bloc avec la pince est trop haut ». Le dictionnaire des
+composants vit dans `scripts/build-inspector.ts` : il se met à jour en même temps que le
+template, et `templates/travel-journal/samples/showcase.json` est le payload qui exerce tous
+les layouts d'un coup.
 
 Les sorties atterrissent dans `.render-out/` (ignoré par Git).
 
