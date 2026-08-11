@@ -13,15 +13,29 @@ jobs:
   sync-template:
     runs-on: ubuntu-latest
 
-    # Le job s'active tout seul dès que les secrets sont posés dans
-    # Settings → Secrets and variables → Actions.
-    if: ${{ secrets.APITEMPLATE_API_KEY != '' }}
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      # Le contexte `secrets` n'existe PAS dans un `if:` de job : GitHub refuse
+      # d'évaluer l'expression et le run échoue instantanément, sans exécuter
+      # le moindre job. La garde doit donc vivre au niveau d'une étape, où le
+      # contexte est disponible. Tant que le secret n'est pas posé, le job
+      # reste vert et la synchronisation est simplement ignorée.
+      - name: Le secret est-il posé ?
+        id: guard
+        env:
+          APITEMPLATE_API_KEY: ${{ secrets.APITEMPLATE_API_KEY }}
+        run: |
+          if [ -z "${APITEMPLATE_API_KEY}" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::APITEMPLATE_API_KEY absent, synchronisation ignorée. Pose le secret dans Settings > Secrets and variables > Actions."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Update APITemplate template
+        if: steps.guard.outputs.configured == 'true'
         env:
           APITEMPLATE_API_KEY: ${{ secrets.APITEMPLATE_API_KEY }}
           APITEMPLATE_TEMPLATE_ID: ${{ secrets.APITEMPLATE_TEMPLATE_ID }}
