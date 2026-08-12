@@ -216,7 +216,36 @@
         {% endif %}
 
         {# Un seul layout par journée : le premier drapeau actif l'emporte. #}
-        {% if day.layout_hero_top %}
+        {% if day.layout_chapter_map %}
+          {# Ouverture de chapitre : la carte de la région tient la page. #}
+          <div class="mb-chapter">
+            <div class="mb-chapter__side">
+              <div class="mb-note mb-note--ink-title">
+                {% if day.title %}<span class="mb-note__title">{{ day.title }}</span>{% endif %}
+                {{ day.body_html | safe }}
+              </div>
+              {% if day.fun_facts and day.fun_facts | length >= 1 %}
+                <div class="mb-card mb-card--left">
+                  <svg class="mb-card__clip" viewBox="0 0 30 26"><use href="#mb-clip" /></svg>
+                  <div class="mb-card__title"><span>{{ day.fun_facts_title | default('Fun fact') }}</span></div>
+                  <div class="mb-card__body"><p>{{ day.fun_facts[0] }}</p></div>
+                </div>
+              {% endif %}
+            </div>
+            {% if day.map_svg %}
+              <div class="mb-chapter__map">
+                <img src="{{ day.map_svg }}" alt="" />
+              </div>
+            {% endif %}
+          </div>
+          {% if day.photos and day.photos | length >= 2 %}
+            <div class="mb-gallery">
+              <div class="mb-photo mb-photo--tilt-left"><img src="{{ day.photos[0] }}" alt="" /></div>
+              <div class="mb-photo mb-photo--tilt-right"><img src="{{ day.photos[1] }}" alt="" /></div>
+            </div>
+          {% endif %}
+
+        {% elif day.layout_hero_top %}
           {% if day.photos and day.photos | length >= 1 %}
             <div class="mb-photo mb-photo--tilt-slight mb-hero">
               <img src="{{ day.photos[0] }}" alt="" />

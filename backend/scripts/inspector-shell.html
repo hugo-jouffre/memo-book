@@ -285,6 +285,15 @@
     <span class="eyebrow">Échelle</span>
     <input type="range" id="zoom" min="40" max="130" value="78" step="1" aria-label="Échelle d'affichage">
   </label>
+
+  <button type="button" class="btn" id="export"
+          title="Exporter le PDF au profil affiché (choisis « Enregistrer au format PDF »)"
+          aria-label="Exporter en PDF">
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+    </svg>
+  </button>
 </header>
 
 <div class="stage">
@@ -382,6 +391,30 @@
     const value = Math.round(Math.min(110, Math.max(40, (available / 560) * 100)));
     zoom.value = String(value);
   }
+
+  /**
+   * Export PDF.
+   *
+   * La page du carnet porte déjà sa règle `@page` en A5 et ses sauts de page :
+   * l'impression du navigateur produit donc exactement le PDF attendu, au
+   * profil affiché, sans serveur ni bibliothèque. Il reste à choisir
+   * « Enregistrer au format PDF » dans la boîte de dialogue.
+   */
+  document.getElementById("export").addEventListener("click", () => {
+    if (!doc || !frame.contentWindow) return;
+    try {
+      frame.contentWindow.focus();
+      frame.contentWindow.print();
+    } catch {
+      // Certains navigateurs refusent d'imprimer une iframe : on repasse par
+      // une fenêtre autonome, qui porte le même document.
+      const win = window.open("", "_blank");
+      if (!win) return;
+      win.document.write(source);
+      win.document.close();
+      win.addEventListener("load", () => { win.focus(); win.print(); });
+    }
+  });
 
   // --- Profil --------------------------------------------------------------
   const profiles = { preview: document.getElementById("p-preview"), print: document.getElementById("p-print") };

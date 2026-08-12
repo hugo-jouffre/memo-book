@@ -15,6 +15,37 @@
   ],
   "days": [
     {
+      "title": "Direction les Philippines",
+      "day_intro": {
+        "day_number": "00",
+        "location": "Philippines",
+        "date": "février 2026",
+        "weather_key": "sun"
+      },
+      "layout_chapter_map": true,
+      "body_html": "<p>Trois semaines d'archipel, de Manille aux Visayas. Ferrys improbables, scooters sur des routes perdues et des plages qu'on n'osait pas espérer.</p>",
+      "fun_facts": [
+        "Les Philippines comptent plus de 7000 îles. Oui oui."
+      ],
+      "map": {
+        "regions": [
+          "PH"
+        ],
+        "points": [
+          {
+            "label": "Manille",
+            "lat": 14.5995,
+            "lon": 120.9842
+          },
+          {
+            "label": "Visayas",
+            "lat": 10.3157,
+            "lon": 123.8854
+          }
+        ]
+      }
+    },
+    {
       "title": "36 heures plus tard, me voilà aux Philippines",
       "day_intro": {
         "day_number": "01",

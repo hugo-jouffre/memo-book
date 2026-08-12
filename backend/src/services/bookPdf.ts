@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import nunjucks from "nunjucks";
+import { expandMaps } from "./mapSvg.js";
 import type { Browser, BrowserContext, Page, Route } from "playwright-core";
 import {
   loadPrintSettings,
@@ -80,7 +81,9 @@ export function renderTemplateToHtml({ payload, profile = "preview" }: RenderHtm
 
   const environment = createTemplateEnvironment();
   const rendered = environment.renderString(loadTemplateHtml(), {
-    ...payload,
+    // L'agent décrit la carte (« Philippines, Manille, Visayas ») ; la
+    // géométrie est un calcul déterministe, elle se fait ici.
+    ...expandMaps(payload),
     render_profile: profile,
   });
 

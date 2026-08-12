@@ -194,7 +194,9 @@ li { margin: 0; }
 .mb-note__title {
   display: block;
   margin: 0;
-  padding-top: var(--mb-line);     /* la ligne vide qui précède le titre */
+  /* Le titre occupe la première ligne du bloc, suivi d'une ligne vide : c'est
+     l'emplacement laissé libre entre le titre et le récit. */
+  margin-bottom: var(--mb-line);
   font-family: var(--mb-font-title);
   font-size: 15pt;
   line-height: var(--mb-line);     /* un interligne pile, comme le corps */
@@ -633,6 +635,21 @@ li { margin: 0; }
   margin: 0 0 14pt;
   height: 220pt;
 }
+
+/* --- Ouverture de chapitre : la carte tient la page ------------------------ */
+.mb-chapter {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: flex-start;
+  gap: 12pt;
+  margin-top: 10pt;
+}
+
+.mb-chapter__side { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 10pt; }
+
+.mb-chapter__map { flex: 0 0 176pt; align-self: stretch; display: flex; align-items: center; }
+.mb-chapter__map img { width: 100%; height: auto; }
 
 /* --- Quatrième de couverture -------------------------------------------------- */
 .page--back .mb-back__photo {

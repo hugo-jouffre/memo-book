@@ -59,6 +59,12 @@ Les deux autres fichiers à connaître :
   (coordonner avec l'Agent Sélection photo si besoin)
 - Respecter les marges d'impression : le contenu reste dans les 30 pt de marge
 
+## Étapes et chapitres
+Une entrée de `days[]` est une **étape**, pas une page : une étape peut occuper
+plusieurs pages, mais deux étapes ne partagent jamais une feuille. Un chapitre
+s'ouvre sur une page `layout_chapter_map`. Les règles de découpage et le choix
+de la carte selon la forme du voyage sont dans `LAYOUT_KB.md`.
+
 ## La météo
 Un seul champ : `day_intro.weather_key`, parmi `sun`, `sun-wind`, `cloud`,
 `rain`, `snow`. Le bandeau affiche toujours les cinq icônes et met en avant
