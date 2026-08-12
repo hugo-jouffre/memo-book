@@ -25,7 +25,7 @@
   --mb-black: #2b231b;                     /* texte : un noir chaud, jamais #000 */
   --mb-carrot: #f86015;                    /* accent de marque (design.md) */
   --mb-mint: #afdcd3;                      /* bandeau de titre des cartes info */
-  --mb-label: rgba(253, 229, 209, 0.7);    /* pastilles « lieu » / « date » */
+  --mb-label-solid: #fde5d1;               /* pastilles « lieu » / « date » */
   --mb-rule: rgba(43, 35, 27, 0.26);       /* lignes réglées du papier */
   --mb-card-bg: rgba(255, 255, 255, 0.96);
   --mb-card-shadow: 6pt 6pt 2pt rgba(53, 84, 193, 0.1);
@@ -155,10 +155,16 @@ li { margin: 0; }
 
 /* --- Bloc de texte manuscrit sur lignes réglées ---------------------------- */
 /* Dans Figma les lignes sont un SVG de taille fixe. Ici elles sont générées en
-   dégradé répété et calées sur --mb-line : le carnet étant généré
-   automatiquement, la hauteur du texte n'est jamais connue à l'avance. */
+   dégradé répété : le carnet étant généré automatiquement, la hauteur du texte
+   n'est jamais connue à l'avance.
+
+   La réglure n'est juste que si TOUT ce qu'elle traverse occupe un multiple
+   entier de --mb-line. C'est pourquoi le titre pèse exactement deux lignes et
+   la marge d'un paragraphe exactement une : sinon chaque bloc décale les
+   lignes suivantes, et l'écart texte/ligne dérive le long de la page. */
 .mb-note {
   position: relative;
+  display: flow-root;          /* contient la marge du dernier paragraphe */
   font-family: var(--mb-font-hand);
   font-size: var(--mb-body-size);
   line-height: var(--mb-body-lh);
@@ -174,16 +180,23 @@ li { margin: 0; }
   background-position: 0 0;
 }
 
-.mb-note p { margin: 0; }
+/* Une ligne vide après chaque paragraphe, y compris le dernier : elle montre
+   l'emplacement resté libre dans le gabarit, comme sur un vrai carnet. */
+.mb-note p {
+  margin: 0 0 var(--mb-line);
+  line-height: var(--mb-body-lh);
+}
+
 .mb-note strong { font-weight: 400; text-decoration: underline; }
 
-/* Titre manuscrit de section : « Intro », « 36 heures plus tard… ». */
+/* Titre manuscrit de section : « Intro », « 36 heures plus tard… ».
+   Deux interlignes pile, pour ne pas rompre la réglure. */
 .mb-note__title {
   display: block;
-  margin-bottom: var(--mb-line);
+  margin: 0;
   font-family: var(--mb-font-title);
   font-size: 16pt;
-  line-height: var(--mb-body-lh);
+  line-height: calc(var(--mb-line) * 2);
   letter-spacing: 0.01em;
 }
 
@@ -202,9 +215,11 @@ li { margin: 0; }
 .mb-ribbon {
   position: relative;
   flex: 0 0 71pt;
-  height: 93pt;
-  margin-top: -30pt;               /* le ruban part du bord haut de la page */
-  padding-top: 34pt;
+  height: 111pt;
+  /* Le ruban dépasse du bord haut : `.page` étant en overflow hidden, il est
+     coupé net, comme un signet glissé dans le carnet. */
+  margin-top: -48pt;
+  padding-top: 52pt;
   text-align: center;
 }
 
@@ -239,17 +254,16 @@ li { margin: 0; }
   text-align: center;
 }
 
-.mb-field::before,
-.mb-field::after {
+/* Un seul contour. Le double trait précédent lisait comme une erreur
+   d'impression, pas comme un tracé à main levée. */
+.mb-field::before {
   content: "";
   position: absolute;
   inset: 0;
   border: 0.8pt solid var(--mb-black);
   border-radius: 6pt;
+  transform: rotate(-0.4deg);
 }
-
-.mb-field::before { transform: rotate(-0.5deg); }
-.mb-field::after { transform: rotate(0.45deg); opacity: 0.7; }
 
 .mb-field__value {
   position: relative;
@@ -261,14 +275,16 @@ li { margin: 0; }
   color: var(--mb-black);
 }
 
+/* La pastille est opaque : c'est elle qui interrompt le contour, net, sans
+   masque ni découpe — et la largeur suit le texte sans calcul. */
 .mb-field__label {
   position: absolute;
-  top: -4.5pt;
+  top: -4.8pt;
   left: 50%;
   z-index: 2;
   transform: translateX(-50%);
-  padding: 1.5pt 3pt;
-  background-color: var(--mb-label);
+  padding: 1.5pt 5pt;
+  background-color: var(--mb-label-solid);
   font-family: var(--mb-font-display);
   font-size: 6.2pt;
   line-height: 1.15;
@@ -281,8 +297,8 @@ li { margin: 0; }
 .mb-weather {
   display: flex;
   align-items: center;
-  gap: 13pt;
-  margin: 6pt 0 0 100pt;
+  gap: 7pt;
+  margin: 8pt 0 0 100pt;
 }
 
 .mb-weather__caption {
@@ -295,16 +311,32 @@ li { margin: 0; }
   transform: rotate(-1deg);
 }
 
+/* Pastille de sélection : disque carotte plein, cerné d'un halo de la même
+   teinte à 23 %. L'icône passe en blanc pour rester lisible sur le disque. */
+.mb-weather__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26pt;
+  height: 26pt;
+  border-radius: 50%;
+}
+
+.mb-weather__item.is-active {
+  background-color: var(--mb-carrot);
+  box-shadow: 0 0 0 3pt rgba(248, 96, 21, 0.23);
+}
+
 .mb-weather__icon {
-  width: 20pt;
-  height: 20pt;
+  width: 19pt;
+  height: 19pt;
   opacity: 0.3;                    /* l'icône du jour repasse à 1 */
   color: var(--mb-black);
 }
 
-.mb-weather__icon.is-active {
+.mb-weather__item.is-active .mb-weather__icon {
   opacity: 1;
-  color: var(--mb-carrot);
+  color: #ffffff;
 }
 
 /* --- Étiquette de section (« Top départ », « Paliton Beach ») -------------- */

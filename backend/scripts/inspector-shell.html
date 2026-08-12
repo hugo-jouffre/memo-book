@@ -2,14 +2,19 @@
 <style>
   /* ==========================================================================
      Chrome de l'inspecteur.
+
      Volontairement froid et sobre : les pages du carnet sont chaudes (crème,
      encre bleue, carotte). Le chrome doit se lire comme la table sur laquelle
      les feuilles sont posées, pas comme un décor concurrent.
+
+     Contrainte de forme : la page doit rester utilisable dans un panneau
+     latéral étroit. D'où une barre compacte qui ne quitte jamais l'écran, et
+     un panneau d'inspection en surcouche plutôt qu'en colonne — sur 400 px de
+     large, une colonne de plus finit toujours tout en bas.
      ========================================================================== */
 
   :root {
     --ground: #e7eaef;
-    --ground-deep: #dcdfe6;
     --surface: #ffffff;
     --surface-2: #f4f6f9;
     --ink: #161b23;
@@ -23,16 +28,16 @@
     --mint: #2f7d6d;
     --mint-soft: rgba(175, 220, 211, .38);
     --shadow: 0 1px 2px rgba(18, 24, 34, .06), 0 8px 24px rgba(18, 24, 34, .07);
-    --radius: 10px;
+    --shadow-lift: 0 -2px 10px rgba(18, 24, 34, .08), 0 -12px 40px rgba(18, 24, 34, .1);
     --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
     --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
             "Helvetica Neue", Arial, sans-serif;
+    --bar: 46px;
   }
 
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --ground: #10141b;
-      --ground-deep: #0a0d13;
       --surface: #191f29;
       --surface-2: #212936;
       --ink: #e6eaf0;
@@ -46,12 +51,12 @@
       --mint: #7dc4b4;
       --mint-soft: rgba(125, 196, 180, .14);
       --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 10px 30px rgba(0, 0, 0, .34);
+      --shadow-lift: 0 -2px 10px rgba(0, 0, 0, .35), 0 -14px 44px rgba(0, 0, 0, .45);
     }
   }
 
   :root[data-theme="dark"] {
     --ground: #10141b;
-    --ground-deep: #0a0d13;
     --surface: #191f29;
     --surface-2: #212936;
     --ink: #e6eaf0;
@@ -65,6 +70,7 @@
     --mint: #7dc4b4;
     --mint-soft: rgba(125, 196, 180, .14);
     --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 10px 30px rgba(0, 0, 0, .34);
+    --shadow-lift: 0 -2px 10px rgba(0, 0, 0, .35), 0 -14px 44px rgba(0, 0, 0, .45);
   }
 
   * { box-sizing: border-box; }
@@ -81,153 +87,162 @@
 
   .eyebrow {
     font-family: var(--mono);
-    font-size: 10px;
+    font-size: 9.5px;
     letter-spacing: .13em;
     text-transform: uppercase;
     color: var(--ink-faint);
   }
 
-  /* --- Barre supérieure ---------------------------------------------------- */
+  /* --- Barre : compacte, toujours à l'écran -------------------------------- */
   header {
     position: sticky;
     top: 0;
     z-index: 40;
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    gap: 20px;
-    padding: 14px 22px;
-    background: color-mix(in srgb, var(--ground) 88%, transparent);
+    gap: 8px;
+    height: var(--bar);
+    padding: 0 10px;
+    background: color-mix(in srgb, var(--ground) 92%, transparent);
     backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--line);
+    overflow-x: auto;
+    scrollbar-width: none;
   }
+  header::-webkit-scrollbar { display: none; }
 
-  .brand { display: flex; flex-direction: column; gap: 1px; margin-right: auto; }
-  .brand h1 { margin: 0; font-size: 15px; font-weight: 620; letter-spacing: -.01em; }
+  .mark {
+    flex: 0 0 auto;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  @media (max-width: 940px) { .mark { display: none; } }
 
-  .controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .grow { flex: 1 1 auto; min-width: 4px; }
 
-  .seg {
-    display: inline-flex;
-    padding: 2px;
-    background: var(--surface-2);
+  select, .btn {
+    height: 28px;
+    padding: 0 8px;
     border: 1px solid var(--line);
-    border-radius: 8px;
-  }
-
-  .seg button {
-    padding: 5px 11px;
-    border: 0;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--ink-soft);
+    border-radius: 7px;
+    background: var(--surface);
+    color: var(--ink);
     font: inherit;
     font-size: 12.5px;
     cursor: pointer;
-    transition: background .15s, color .15s;
   }
+  select { max-width: 190px; }
+  @media (max-width: 620px) { select { max-width: 132px; } }
+  .btn { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn:disabled { opacity: .4; cursor: default; }
+  select:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
+  .counter {
+    flex: 0 0 auto;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+  /* Sur écran étroit, le numéro est déjà dans le sélecteur et en pied de page :
+     le garder ici pousserait le sélecteur de profil hors de la barre. */
+  @media (max-width: 620px) { .counter { display: none; } }
+
+  .seg { display: inline-flex; flex: 0 0 auto; padding: 2px; background: var(--surface-2);
+         border: 1px solid var(--line); border-radius: 7px; }
+  .seg button { height: 22px; padding: 0 9px; border: 0; border-radius: 5px; background: transparent;
+                color: var(--ink-soft); font: inherit; font-size: 12px; cursor: pointer; }
   .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
   .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-  .zoom { display: flex; align-items: center; gap: 8px; color: var(--ink-soft); font-size: 12.5px; }
-  .zoom input { width: 108px; accent-color: var(--accent); }
-  .zoom output { font-family: var(--mono); font-variant-numeric: tabular-nums; min-width: 38px; }
-
-  /* --- Grille principale --------------------------------------------------- */
-  .shell {
-    display: grid;
-    grid-template-columns: 190px minmax(0, 1fr) 330px;
-    gap: 22px;
-    align-items: start;
-    padding: 22px;
-    max-width: 1560px;
-    margin: 0 auto;
-  }
-
-  /* --- Rail des pages ------------------------------------------------------ */
-  nav { position: sticky; top: 74px; display: flex; flex-direction: column; gap: 4px; }
-  nav .eyebrow { padding: 0 8px 6px; }
-
-  nav button {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 7px 9px;
-    border: 1px solid transparent;
-    border-radius: 8px;
-    background: transparent;
-    color: var(--ink-soft);
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-    transition: background .15s, border-color .15s, color .15s;
-  }
-
-  nav button:hover { background: var(--surface-2); color: var(--ink); }
-  nav button.is-current { background: var(--surface); border-color: var(--line); color: var(--ink); box-shadow: var(--shadow); }
-  nav button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-  nav .n { font-size: 13px; font-weight: 560; }
-  nav .d { font-size: 11px; color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-  .chip {
-    align-self: flex-start;
-    margin-top: 2px;
-    padding: 1px 6px;
-    border-radius: 4px;
-    background: var(--wire-soft);
-    color: var(--wire);
-    font-family: var(--mono);
-    font-size: 9.5px;
-    letter-spacing: .04em;
-  }
+  .zoom { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; }
+  .zoom input { width: 84px; accent-color: var(--accent); }
+  @media (max-width: 620px) { .zoom { display: none; } }
 
   /* --- Scène --------------------------------------------------------------- */
-  .stage { display: flex; justify-content: center; overflow-x: auto; }
+  .stage { display: flex; justify-content: center; padding: 14px 10px 0; overflow-x: auto; }
   .stage-inner { position: relative; }
   #frame { display: block; width: 560px; border: 0; transform-origin: top left; }
 
+  /* Laisse la place au panneau, qui est en surcouche. */
+  .spacer { height: 46vh; }
+  @media (min-width: 1100px) { .spacer { height: 40px; } }
+
   /* --- Panneau d'inspection ------------------------------------------------ */
-  aside {
-    position: sticky;
-    top: 74px;
+  /* Toujours en surcouche : en colonne, il tomberait sous les pages et il
+     faudrait faire défiler tout le carnet pour lire le nom d'un composant. */
+  #panel {
+    position: fixed;
+    z-index: 50;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: 46vh;
     display: flex;
     flex-direction: column;
-    gap: 14px;
-    padding: 16px;
     background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
-    max-height: calc(100vh - 96px);
-    overflow-y: auto;
+    border-top: 1px solid var(--line);
+    box-shadow: var(--shadow-lift);
   }
 
-  .panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-  .panel-head h2 { margin: 3px 0 0; font-size: 17px; font-weight: 620; letter-spacing: -.015em; text-wrap: balance; }
-
-  .kind {
-    padding: 2px 7px;
-    border-radius: 4px;
-    font-family: var(--mono);
-    font-size: 9.5px;
-    letter-spacing: .09em;
-    text-transform: uppercase;
-    white-space: nowrap;
+  @media (min-width: 1100px) {
+    .stage { padding-right: 358px; }
+    #panel {
+      left: auto;
+      top: calc(var(--bar) + 14px);
+      right: 14px;
+      bottom: 14px;
+      width: 330px;
+      max-height: none;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+    }
   }
+
+  .panel-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line);
+    cursor: pointer;
+    user-select: none;
+  }
+  @media (min-width: 1100px) { .panel-bar { cursor: default; } }
+
+  .panel-bar h2 { flex: 1 1 auto; margin: 0; font-size: 14.5px; font-weight: 620;
+                  letter-spacing: -.01em; white-space: nowrap; overflow: hidden;
+                  text-overflow: ellipsis; }
+
+  .kind { flex: 0 0 auto; padding: 2px 6px; border-radius: 4px; font-family: var(--mono);
+          font-size: 9px; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
   .kind[data-kind="page"]      { background: var(--accent-soft); color: var(--accent); }
   .kind[data-kind="composant"] { background: var(--mint-soft); color: var(--mint); }
   .kind[data-kind="structure"] { background: var(--wire-soft); color: var(--wire); }
   .kind[data-kind="decor"]     { background: var(--surface-2); color: var(--ink-faint); }
 
-  .role { margin: 0; color: var(--ink-soft); font-size: 13px; }
+  .caret { flex: 0 0 auto; color: var(--ink-faint); font-size: 11px; transition: transform .18s; }
+  #panel.is-collapsed .caret { transform: rotate(180deg); }
+  #panel.is-collapsed .panel-body { display: none; }
+  @media (min-width: 1100px) { .caret { display: none; } }
+
+  .panel-body { flex: 1 1 auto; display: flex; flex-direction: column; gap: 12px;
+                padding: 12px; overflow-y: auto; }
+
+  .role { margin: 0; color: var(--ink-soft); font-size: 12.5px; }
 
   .field { display: flex; flex-direction: column; gap: 5px; }
   .field ul { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; padding: 0; list-style: none; }
 
-  code, .sel {
+  code {
     font-family: var(--mono);
-    font-size: 11.5px;
+    font-size: 11px;
     padding: 2.5px 6px;
     border-radius: 4px;
     background: var(--surface-2);
@@ -238,99 +253,74 @@
   .field.vars code { background: var(--accent-soft); color: var(--accent); }
 
   .ancestry { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-  .ancestry button {
-    padding: 2px 6px;
-    border: 1px solid var(--line);
-    border-radius: 4px;
-    background: var(--surface-2);
-    color: var(--ink-soft);
-    font-family: var(--mono);
-    font-size: 10.5px;
-    cursor: pointer;
-  }
+  .ancestry button { padding: 2px 6px; border: 1px solid var(--line); border-radius: 4px;
+                     background: var(--surface-2); color: var(--ink-soft);
+                     font-family: var(--mono); font-size: 10px; cursor: pointer; }
   .ancestry button:hover { color: var(--accent); border-color: var(--accent); }
   .ancestry span { color: var(--ink-faint); font-size: 10px; }
 
-  .copy {
-    padding: 9px 12px;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    background: var(--surface-2);
-    color: var(--ink);
-    font: inherit;
-    font-size: 12.5px;
-    font-weight: 520;
-    cursor: pointer;
-    transition: border-color .15s, color .15s;
-  }
+  .copy { padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px;
+          background: var(--surface-2); color: var(--ink); font: inherit; font-size: 12.5px;
+          font-weight: 520; cursor: pointer; }
   .copy:hover { border-color: var(--accent); color: var(--accent); }
   .copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .copy[data-done="1"] { border-color: var(--mint); color: var(--mint); }
+  .copy[data-state="done"] { border-color: var(--mint); color: var(--mint); }
 
-  .hint { margin: 0; color: var(--ink-faint); font-size: 11.5px; }
-  .hint kbd {
-    padding: 1px 4px;
-    border: 1px solid var(--line);
-    border-bottom-width: 2px;
-    border-radius: 3px;
-    background: var(--surface-2);
-    font-family: var(--mono);
-    font-size: 10px;
+  /* Dernier recours quand le presse-papier est refusé : le texte, sélectionnable. */
+  .fallback { display: none; flex-direction: column; gap: 6px; }
+  .fallback.is-shown { display: flex; }
+  .fallback textarea {
+    width: 100%; min-height: 108px; padding: 8px; resize: vertical;
+    border: 1px solid var(--accent); border-radius: 6px;
+    background: var(--surface-2); color: var(--ink);
+    font-family: var(--mono); font-size: 11px; line-height: 1.45;
   }
 
-  .empty { display: flex; flex-direction: column; gap: 8px; padding: 6px 0 2px; }
-  .empty p { margin: 0; color: var(--ink-soft); font-size: 13px; }
+  .hint { margin: 0; color: var(--ink-faint); font-size: 11px; }
+  .hint kbd { padding: 1px 4px; border: 1px solid var(--line); border-bottom-width: 2px;
+              border-radius: 3px; background: var(--surface-2); font-family: var(--mono); font-size: 10px; }
 
   hr { height: 1px; margin: 0; border: 0; background: var(--line); }
 
-  @media (max-width: 1180px) {
-    .shell { grid-template-columns: minmax(0, 1fr); }
-    nav { position: static; flex-direction: row; flex-wrap: wrap; }
-    nav .eyebrow { width: 100%; padding: 0 0 4px; }
-    nav button { flex: 0 0 auto; }
-    aside { position: static; max-height: none; }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    * { transition: none !important; }
-  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
 <header>
-  <div class="brand">
-    <span class="eyebrow">MemoBook · carnet de voyage</span>
-    <h1>Inspecteur de mise en page</h1>
+  <span class="mark">MemoBook · inspecteur</span>
+
+  <button type="button" class="btn" id="prev" aria-label="Page précédente">‹</button>
+  <select id="pages" aria-label="Aller à une page"></select>
+  <button type="button" class="btn" id="next" aria-label="Page suivante">›</button>
+  <span class="counter" id="counter">1 / 1</span>
+
+  <span class="grow"></span>
+
+  <div class="seg" role="group" aria-label="Profil de sortie">
+    <button type="button" id="p-preview" aria-pressed="true">Aperçu</button>
+    <button type="button" id="p-print" aria-pressed="false">Imprimeur</button>
   </div>
 
-  <div class="controls">
-    <div class="seg" role="group" aria-label="Profil de sortie">
-      <button type="button" id="p-preview" aria-pressed="true">Aperçu</button>
-      <button type="button" id="p-print" aria-pressed="false">Imprimeur</button>
-    </div>
-    <label class="zoom">
-      <span>Échelle</span>
-      <input type="range" id="zoom" min="45" max="130" value="82" step="1" aria-label="Échelle d'affichage">
-      <output id="zoom-out">82 %</output>
-    </label>
-  </div>
+  <label class="zoom">
+    <span class="eyebrow">Échelle</span>
+    <input type="range" id="zoom" min="40" max="130" value="78" step="1" aria-label="Échelle d'affichage">
+  </label>
 </header>
 
-<div class="shell">
-  <nav aria-label="Pages du carnet">
-    <span class="eyebrow">Pages</span>
-    <div id="rail"></div>
-  </nav>
-
-  <div class="stage">
-    <div class="stage-inner" id="stage-inner">
-      <iframe id="frame" title="Carnet rendu" scrolling="no"></iframe>
-    </div>
+<div class="stage">
+  <div class="stage-inner" id="stage-inner">
+    <iframe id="frame" title="Carnet rendu" scrolling="no"></iframe>
   </div>
-
-  <aside aria-live="polite">
-    <div id="panel"></div>
-  </aside>
 </div>
+<div class="spacer"></div>
+
+<section id="panel" aria-live="polite">
+  <div class="panel-bar" id="panel-bar">
+    <h2 id="panel-title">Inspection</h2>
+    <span class="kind" id="panel-kind" data-kind="decor" hidden></span>
+    <span class="caret">▾</span>
+  </div>
+  <div class="panel-body" id="panel-body"></div>
+</section>
 
 <script>
   const PARTS = __PARTS__;
@@ -344,148 +334,215 @@
   const frame = document.getElementById("frame");
   const stageInner = document.getElementById("stage-inner");
   const panel = document.getElementById("panel");
-  const rail = document.getElementById("rail");
+  const panelTitle = document.getElementById("panel-title");
+  const panelKind = document.getElementById("panel-kind");
+  const body = document.getElementById("panel-body");
+  const select = document.getElementById("pages");
+  const counter = document.getElementById("counter");
   const zoom = document.getElementById("zoom");
-  const zoomOut = document.getElementById("zoom-out");
 
   /** Le document du carnet voyage en JSON : un <script> ne décode pas les entités. */
   const source = JSON.parse(document.getElementById("doc-source").textContent);
 
-  let pinned = null;
-  let hovered = null;
   let doc = null;
   let outline = null;
+  let pinned = null;
+  let hovered = null;
+  let pageEls = [];
+  let current = 0;
 
-  // --- Rail ----------------------------------------------------------------
+  // --- Navigation ----------------------------------------------------------
   PAGES.forEach((page) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.dataset.index = String(page.index);
-    button.innerHTML =
-      '<span class="n"></span><span class="d"></span><span class="chip"></span>';
-    button.querySelector(".n").textContent = page.label;
-    button.querySelector(".d").textContent = page.detail;
-    button.querySelector(".chip").textContent = page.layout;
-    button.addEventListener("click", () => goToPage(page.index));
-    rail.appendChild(button);
+    const option = document.createElement("option");
+    option.value = String(page.index);
+    option.textContent = `${page.index + 1}. ${page.label} · ${page.layout}`;
+    select.appendChild(option);
   });
 
   function goToPage(index) {
-    if (!doc) return;
-    const target = doc.querySelectorAll(".page")[index];
+    const target = pageEls[index];
     if (!target) return;
     const scale = Number(zoom.value) / 100;
     const top = stageInner.getBoundingClientRect().top + window.scrollY + target.offsetTop * scale;
-    window.scrollTo({ top: top - 84, behavior: "smooth" });
+    window.scrollTo({ top: top - 56, behavior: "smooth" });
+  }
+
+  select.addEventListener("change", () => goToPage(Number(select.value)));
+  document.getElementById("prev").addEventListener("click", () => goToPage(Math.max(0, current - 1)));
+  document.getElementById("next").addEventListener("click", () =>
+    goToPage(Math.min(PAGES.length - 1, current + 1)));
+
+  function setCurrent(index) {
+    current = index;
+    counter.textContent = `${index + 1} / ${PAGES.length}`;
+    select.value = String(index);
+    document.getElementById("prev").disabled = index === 0;
+    document.getElementById("next").disabled = index === PAGES.length - 1;
   }
 
   // --- Échelle -------------------------------------------------------------
   function applyZoom() {
     const scale = Number(zoom.value) / 100;
-    zoomOut.textContent = zoom.value + " %";
-    frame.style.transform = "scale(" + scale + ")";
-    if (doc) {
-      const height = doc.documentElement.scrollHeight;
-      frame.style.height = height + "px";
-      stageInner.style.width = 560 * scale + "px";
-      stageInner.style.height = height * scale + "px";
-    }
+    frame.style.transform = `scale(${scale})`;
+    if (!doc) return;
+    const height = doc.documentElement.scrollHeight;
+    frame.style.height = `${height}px`;
+    stageInner.style.width = `${560 * scale}px`;
+    stageInner.style.height = `${height * scale}px`;
   }
   zoom.addEventListener("input", applyZoom);
+  window.addEventListener("resize", applyZoom);
+
+  /** Sur un panneau étroit, on part à une échelle qui montre la page entière. */
+  function fitZoom() {
+    const available = document.querySelector(".stage").clientWidth - 20;
+    const value = Math.round(Math.min(110, Math.max(40, (available / 560) * 100)));
+    zoom.value = String(value);
+  }
 
   // --- Profil --------------------------------------------------------------
-  const buttons = { preview: document.getElementById("p-preview"), print: document.getElementById("p-print") };
-
+  const profiles = { preview: document.getElementById("p-preview"), print: document.getElementById("p-print") };
   function setProfile(name) {
     if (!doc) return;
     doc.body.classList.toggle("is-print", name === "print");
-    buttons.preview.setAttribute("aria-pressed", String(name === "preview"));
-    buttons.print.setAttribute("aria-pressed", String(name === "print"));
+    profiles.preview.setAttribute("aria-pressed", String(name === "preview"));
+    profiles.print.setAttribute("aria-pressed", String(name === "print"));
   }
-  buttons.preview.addEventListener("click", () => setProfile("preview"));
-  buttons.print.addEventListener("click", () => setProfile("print"));
+  profiles.preview.addEventListener("click", () => setProfile("preview"));
+  profiles.print.addEventListener("click", () => setProfile("print"));
+
+  // --- Repli du panneau sur écran étroit -----------------------------------
+  document.getElementById("panel-bar").addEventListener("click", () => {
+    if (window.innerWidth >= 1100) return;
+    panel.classList.toggle("is-collapsed");
+  });
 
   // --- Inspection ----------------------------------------------------------
-
-  /** Remonte l'arbre jusqu'au premier élément que le dictionnaire connaît. */
   function describe(element) {
     let node = element;
     while (node && node !== doc.body) {
-      for (const cls of node.classList) {
-        if (PARTS[cls]) return { node: node, key: cls, part: PARTS[cls] };
-      }
+      for (const cls of node.classList) if (PARTS[cls]) return { node, key: cls, part: PARTS[cls] };
       node = node.parentElement;
     }
     return null;
   }
 
-  /** Chaîne des composants parents, du plus large au plus précis. */
   function ancestry(node) {
     const chain = [];
-    let current = node;
-    while (current && current !== doc.body) {
-      for (const cls of current.classList) {
-        if (PARTS[cls]) { chain.unshift({ key: cls, node: current }); break; }
+    let cursor = node;
+    while (cursor && cursor !== doc.body) {
+      for (const cls of cursor.classList) {
+        if (PARTS[cls]) { chain.unshift({ key: cls, node: cursor }); break; }
       }
-      current = current.parentElement;
+      cursor = cursor.parentElement;
     }
     return chain;
+  }
+
+  /** Numéro de la page qui contient l'élément inspecté. */
+  function pageOf(node) {
+    const page = node.closest(".page");
+    const index = pageEls.indexOf(page);
+    return index === -1 ? null : index;
   }
 
   function moveOutline(node, isPinned) {
     if (!outline) return;
     const rect = node.getBoundingClientRect();
-    const scroll = doc.defaultView;
     outline.style.display = "block";
     outline.classList.toggle("is-pinned", Boolean(isPinned));
-    outline.style.left = rect.left + scroll.scrollX - 1.5 + "px";
-    outline.style.top = rect.top + scroll.scrollY - 1.5 + "px";
-    outline.style.width = rect.width + "px";
-    outline.style.height = rect.height + "px";
+    outline.style.left = `${rect.left + doc.defaultView.scrollX - 1.5}px`;
+    outline.style.top = `${rect.top + doc.defaultView.scrollY - 1.5}px`;
+    outline.style.width = `${rect.width}px`;
+    outline.style.height = `${rect.height}px`;
   }
 
-  function renderEmpty() {
-    panel.innerHTML = "";
-    const box = document.createElement("div");
-    box.className = "empty";
-    box.innerHTML =
-      '<span class="eyebrow">Inspection</span>' +
-      "<p>Survole n'importe quel élément d'une page : son nom, son sélecteur CSS et les champs JSON qui l'alimentent s'affichent ici.</p>" +
-      '<p class="hint">Clique pour épingler, <kbd>Échap</kbd> pour relâcher.</p>';
-    panel.appendChild(box);
+  /**
+   * Copie la référence.
+   *
+   * `navigator.clipboard` est refusé dans une iframe sans permission explicite,
+   * ce qui est le cas ici. On tente l'API, puis la commande historique, et en
+   * dernier recours on affiche le texte : mieux vaut deux gestes qu'un bouton
+   * qui ne fait rien.
+   */
+  function copyText(text, button, fallbackBox, fallbackArea) {
+    const done = () => {
+      button.dataset.state = "done";
+      button.textContent = "Référence copiée";
+      setTimeout(() => { button.dataset.state = ""; button.textContent = "Copier la référence"; }, 1800);
+    };
+
+    const legacy = () => {
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "");
+      area.style.cssText = "position:fixed;top:0;left:0;opacity:0;pointer-events:none";
+      document.body.appendChild(area);
+      area.select();
+      let ok = false;
+      try { ok = document.execCommand("copy"); } catch { ok = false; }
+      area.remove();
+      return ok;
+    };
+
+    const reveal = () => {
+      fallbackArea.value = text;
+      fallbackBox.classList.add("is-shown");
+      fallbackArea.focus();
+      fallbackArea.select();
+      button.textContent = "Sélectionne puis copie";
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, () => { if (legacy()) done(); else reveal(); });
+      return;
+    }
+    if (legacy()) done(); else reveal();
   }
 
   function chipList(className, label, values) {
     if (!values || values.length === 0) return "";
-    const items = values.map((v) => "<li><code>" + v + "</code></li>").join("");
-    return (
-      '<div class="field ' + className + '"><span class="eyebrow">' + label + "</span>" +
-      "<ul>" + items + "</ul></div>"
-    );
+    return `<div class="field ${className}"><span class="eyebrow">${label}</span><ul>` +
+      values.map((v) => `<li><code>${v}</code></li>`).join("") + "</ul></div>";
+  }
+
+  function renderEmpty() {
+    panelTitle.textContent = "Inspection";
+    panelKind.hidden = true;
+    body.innerHTML =
+      "<p class=\"role\">Survole n'importe quel élément d'une page : son nom, son sélecteur CSS " +
+      "et les champs JSON qui l'alimentent s'affichent ici.</p>" +
+      "<p class=\"hint\">Clique pour épingler, <kbd>Échap</kbd> pour relâcher.</p>";
   }
 
   function render(found, isPinned) {
     const part = found.part;
-    const chain = ancestry(found.node);
+    const page = pageOf(found.node);
+    const pageLabel = page === null ? "" : `page ${page + 1} · ${PAGES[page].label}`;
 
-    panel.innerHTML =
-      '<div class="panel-head"><div><span class="eyebrow">' +
-      (isPinned ? "Épinglé" : "Survol") +
-      '</span><h2></h2></div><span class="kind" data-kind="' + part.kind + '">' + part.kind + "</span></div>" +
-      '<p class="role"></p>' +
-      '<div class="field"><span class="eyebrow">Sélecteur</span><div><code class="sel">.' + found.key + "</code></div></div>" +
+    panelTitle.textContent = part.name;
+    panelKind.hidden = false;
+    panelKind.textContent = part.kind;
+    panelKind.dataset.kind = part.kind;
+
+    body.innerHTML =
+      `<span class="eyebrow">${isPinned ? "Épinglé" : "Survol"}${pageLabel ? ` · ${pageLabel}` : ""}</span>` +
+      `<p class="role"></p>` +
+      `<div class="field"><span class="eyebrow">Sélecteur</span><div><code>.${found.key}</code></div></div>` +
       chipList("json", "Champs du JSON", part.fields) +
       chipList("vars", "Variables CSS", part.vars) +
-      '<div class="field"><span class="eyebrow">Contexte</span><div class="ancestry" id="chain"></div></div>' +
-      "<hr>" +
-      '<button type="button" class="copy" id="copy">Copier la référence</button>' +
-      '<p class="hint">Colle-la dans ta demande de retouche : elle nomme le composant, son sélecteur et les champs concernés.</p>';
+      `<div class="field"><span class="eyebrow">Contexte</span><div class="ancestry" id="chain"></div></div>` +
+      `<hr>` +
+      `<button type="button" class="copy" id="copy">Copier la référence</button>` +
+      `<div class="fallback" id="fallback"><span class="eyebrow">À copier à la main</span>` +
+      `<textarea id="fallback-text" readonly></textarea></div>` +
+      `<p class="hint">Colle-la dans ta demande de retouche : elle nomme le composant, ` +
+      `sa page, son sélecteur et les champs concernés.</p>`;
 
-    panel.querySelector("h2").textContent = part.name;
-    panel.querySelector(".role").textContent = part.role;
+    body.querySelector(".role").textContent = part.role;
 
-    const chainBox = panel.querySelector("#chain");
-    chain.forEach((step, i) => {
+    const chainBox = body.querySelector("#chain");
+    ancestry(found.node).forEach((step, i) => {
       if (i > 0) {
         const sep = document.createElement("span");
         sep.textContent = "›";
@@ -502,39 +559,50 @@
       chainBox.appendChild(button);
     });
 
-    panel.querySelector("#copy").addEventListener("click", (event) => {
-      const lines = [
-        "Composant : " + part.name,
-        "Sélecteur : ." + found.key,
-        "Rôle : " + part.role,
-      ];
-      if (part.fields) lines.push("Champs JSON : " + part.fields.join(", "));
-      if (part.vars) lines.push("Variables CSS : " + part.vars.join(", "));
-      lines.push("Fichiers : templates/travel-journal/index.html + style.css");
+    const lines = [
+      `Composant : ${part.name}`,
+      pageLabel ? `Page : ${pageLabel}` : null,
+      `Sélecteur : .${found.key}`,
+      `Rôle : ${part.role}`,
+      part.fields ? `Champs JSON : ${part.fields.join(", ")}` : null,
+      part.vars ? `Variables CSS : ${part.vars.join(", ")}` : null,
+      "Fichiers : templates/travel-journal/index.html + style.css",
+    ].filter(Boolean).join("\n");
 
-      navigator.clipboard.writeText(lines.join("\\n")).then(() => {
-        const button = event.currentTarget;
-        button.dataset.done = "1";
-        button.textContent = "Référence copiée";
-        setTimeout(() => {
-          button.dataset.done = "";
-          button.textContent = "Copier la référence";
-        }, 1600);
-      });
-    });
+    const button = body.querySelector("#copy");
+    button.addEventListener("click", () =>
+      copyText(lines, button, body.querySelector("#fallback"), body.querySelector("#fallback-text")));
   }
 
-  // --- Chargement du carnet dans l'iframe -----------------------------------
+  // --- Chargement ----------------------------------------------------------
   frame.addEventListener("load", () => {
     doc = frame.contentDocument;
     outline = doc.getElementById("mb-outline");
+    pageEls = Array.from(doc.querySelectorAll(".page"));
+
+    // Numéro sur chaque feuille : posé ici, pas dans le gabarit, qui doit
+    // rester exactement ce qui part chez APITemplate.
+    const style = doc.createElement("style");
+    style.textContent =
+      ".mb-pagenum{position:absolute;z-index:9;left:0;right:0;bottom:9px;text-align:center;" +
+      "font:600 8px/1 ui-monospace,monospace;letter-spacing:.16em;color:rgba(43,35,27,.34);" +
+      "pointer-events:none}";
+    doc.head.appendChild(style);
+    pageEls.forEach((page, i) => {
+      const tag = doc.createElement("div");
+      tag.className = "mb-pagenum";
+      tag.textContent = `${i + 1} / ${pageEls.length}`;
+      page.appendChild(tag);
+    });
+
+    fitZoom();
     applyZoom();
+    setCurrent(0);
     renderEmpty();
 
     doc.addEventListener("mousemove", (event) => {
       const found = describe(event.target);
-      if (!found) return;
-      if (hovered === found.node) return;
+      if (!found || hovered === found.node) return;
       hovered = found.node;
       if (!pinned) { render(found, false); moveOutline(found.node, false); }
     });
@@ -544,6 +612,7 @@
       if (!found) return;
       event.preventDefault();
       pinned = found;
+      panel.classList.remove("is-collapsed");
       render(found, true);
       moveOutline(found.node, true);
     });
@@ -552,19 +621,15 @@
       if (!pinned && outline) outline.style.display = "none";
     });
 
-    // Suit la page visible dans le rail.
-    const pages = Array.from(doc.querySelectorAll(".page"));
-    const mark = () => {
+    const track = () => {
       const scale = Number(zoom.value) / 100;
       const origin = stageInner.getBoundingClientRect().top;
-      let current = 0;
-      pages.forEach((page, i) => {
-        if (origin + page.offsetTop * scale < 140) current = i;
-      });
-      rail.querySelectorAll("button").forEach((b, i) => b.classList.toggle("is-current", i === current));
+      let index = 0;
+      pageEls.forEach((page, i) => { if (origin + page.offsetTop * scale < 120) index = i; });
+      if (index !== current) setCurrent(index);
     };
-    window.addEventListener("scroll", mark, { passive: true });
-    mark();
+    window.addEventListener("scroll", track, { passive: true });
+    track();
   });
 
   document.addEventListener("keydown", (event) => {
@@ -574,8 +639,6 @@
       if (outline) outline.style.display = "none";
     }
   });
-
-  window.addEventListener("resize", applyZoom);
 
   frame.srcdoc = source;
 })();

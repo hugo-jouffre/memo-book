@@ -89,6 +89,17 @@ une **erreur**, pas un avertissement :
 | `fun_facts[]` | 140 caractères |
 | `highlights[]` | 80 caractères |
 
+## Réglure et rythme vertical
+
+La réglure du papier est générée, pas dessinée : elle se répète tous les
+`--mb-line`. Elle n'est juste que si **tout ce qu'elle traverse occupe un
+multiple entier de cette valeur** — le titre pèse exactement deux interlignes,
+la marge d'un paragraphe exactement un. Un bloc d'une autre hauteur décale
+toutes les lignes suivantes, et l'écart texte/ligne dérive le long de la page.
+
+Chaque paragraphe est suivi d'**une ligne vide** : elle montre l'emplacement
+resté libre dans le gabarit, comme sur un carnet où l'on n'a pas rempli la page.
+
 ## Règles d'images
 
 - URLs absolues et publiques (CDN Webflow). Pas de chemin relatif : le moteur
