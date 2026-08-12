@@ -297,6 +297,7 @@
   }
 
   #export-note-text { flex: 1 1 auto; }
+  #export-note code { font: 11px/1 var(--mono); background: rgb(0 0 0 / .06); padding: 1px 4px; border-radius: 4px; }
 
   #export-note-close {
     flex: 0 0 auto;
@@ -543,15 +544,23 @@
         return;
       }
 
-      // Encadrée, la page ne peut pas savoir si le fichier est sorti, et aucune
-      // route de repli ne tient : `window.open` sur le blob renvoie bien une
-      // fenêtre, mais la navigation y est refusée à son tour — le code croirait
-      // avoir réussi. Mesuré, pas supposé. Reste la vérité, dite simplement.
-      // Le blob n'est pas révoqué tant que la note est ouverte.
+      // Encadrée, la page ne peut pas savoir si le fichier est sorti — aucune
+      // API ne le dit — et aucune route de repli ne tient. Toutes mesurées, pas
+      // supposées : `window.open` sur le blob renvoie une fenêtre puis refuse
+      // d'y naviguer, `showSaveFilePicker` est refusé aux cadres d'une autre
+      // origine, `print()` demande `allow-modals`, `<embed>` et `<object>` ne
+      // chargent pas. Seul `allow-downloads` compte, et l'activation
+      // utilisateur n'y change rien.
+      //
+      // La note se contente donc de dire ce qui a été tenté et où trouver le
+      // fichier autrement. Elle n'affirme pas un échec qu'elle ne peut pas
+      // constater : la version précédente le faisait et se trompait dès que le
+      // téléchargement aboutissait. Le blob survit tant que la note est ouverte.
       showNote(
-        `<strong>${name}</strong> — téléchargement lancé. Rien n'est arrivé ? ` +
-          `Le panneau latéral interdit les téléchargements aux pages qu'il affiche. ` +
-          `Ouvre l'artefact en pleine page et relance l'export : il aboutit.`,
+        `<strong>${name}</strong> — export lancé, regarde tes téléchargements. ` +
+          `Si rien n'arrive, c'est que cette page est affichée dans un cadre qui ` +
+          `interdit d'écrire des fichiers : les deux PDF sont alors à récupérer ` +
+          `dans les artefacts de la CI, ou par <code>npm run render:local</code>.`,
       );
     });
   });
