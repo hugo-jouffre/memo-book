@@ -1,0 +1,10 @@
+{
+  "$comment": "Rôle dans le carnet → fichier source. Seules les icônes listées ici sont embarquées dans le gabarit par `npm run icons:build` : la librairie compte plus de 140 fichiers, les embarquer tous gonflerait le template pour rien. L'identifiant SVG est `mb-i-<rôle>`, avec les points remplacés par des tirets.",
+  "icons": {
+    "weather-sun":      "ui/Weather/sunset.svg",
+    "weather-sun-wind": "ui/Weather/sun with wind.svg",
+    "weather-cloud":    "ui/Weather/cloud.svg",
+    "weather-rain":     "ui/Weather/rainy weather.svg",
+    "weather-snow":     "ui/Weather/snowflake.svg"
+  }
+}

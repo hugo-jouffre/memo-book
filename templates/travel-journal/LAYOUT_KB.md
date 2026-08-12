@@ -28,11 +28,76 @@ Base de connaissance de l'agent qui produit le JSON envoyé au moteur PDF.
 | `brand_name`, `year` | optionnels | Colophon (défauts `MemoBook` / `2026`) |
 | `intro_title`, `intro_text` | optionnels | Page d'introduction (`intro_text` en HTML) |
 | `intro_photos[]` | 0 à 2 | Photos scotchées en haut de l'introduction |
-| `days[]` | requis | Une page par entrée |
+| `days[]` | requis | **Une entrée = un bloc de récit, pas une page** — voir ci-dessous |
 | `back_cover` | optionnel | Quatrième de couverture |
 
 Pages toujours produites, dans l'ordre : **couverture → colophon →
-introduction (si `intro_text`) → journées → quatrième de couverture**.
+introduction (si `intro_text`) → étapes → quatrième de couverture**.
+
+## Étapes, chapitres et sauts de page
+
+Une entrée de `days[]` est une **étape**, pas une page. Une étape peut être une
+journée, une semaine, un mois, un pays — ce que le récit découpe naturellement.
+
+Deux règles :
+
+- **Une nouvelle étape commence toujours une nouvelle page.** Jamais deux
+  étapes sur la même feuille.
+- **Une étape peut occuper plusieurs pages.** Le gabarit n'en produit qu'une
+  aujourd'hui : quand une étape est trop dense, il faut la scinder en plusieurs
+  entrées consécutives et ne remettre le bandeau `day_intro` que sur la
+  première. Les suivantes le laissent vide et enchaînent le récit.
+
+**Ouverture de chapitre.** Un chapitre commence par une page portant
+`layout_chapter_map` : carte de la région à droite, récit et carte info à
+gauche, photos en bas. Quand ouvrir un chapitre, et quelle carte montrer,
+dépend de la forme du voyage :
+
+| Forme du voyage | Chapitres | Carte à l'ouverture |
+|---|---|---|
+| Toujours la même ville (woofing, échange, stage) | Semaines / mois / années | Toujours la même carte de ville, enrichie de nouveaux points au fil du livre |
+| Plusieurs villes, un seul pays | Semaines / mois / villes | Carte du pays au début du livre, puis une carte par sous-chapitre : par ville si ≥ 500 000 habitants, sinon par région traversée |
+| 2 pays et plus (itinérant) | Semaines / mois / villes / pays | Carte du pays concerné à chaque ouverture de chapitre, puis cartes de villes pour certains sous-chapitres |
+| 5 pays et plus (tour du monde) | Idem itinérant | Idem itinérant |
+| Petits villages, à pied (randonnée) | Semaines / mois / villes | Zoom permanent sur le chemin, une carte à chaque chapitre **et** sous-chapitre |
+
+## Les cartes
+
+L'agent **décrit** la carte, il ne la dessine pas :
+
+```json
+"map": {
+  "regions": ["PH"],
+  "points": [
+    { "label": "Manille", "lat": 14.5995, "lon": 120.9842 },
+    { "label": "Visayas", "lat": 10.3157, "lon": 123.8854 }
+  ]
+}
+```
+
+- `regions` : codes **ISO 3166-1 alpha-2**. Le premier cadre la vue, les
+  suivants n'ajoutent que du contexte. 175 pays disponibles.
+- `points` : 6 maximum. Les coordonnées doivent être justes au dixième de
+  degré — un point mal placé se voit immédiatement quand on connaît le pays.
+
+Le back-end projette le contour et les points avec **la même** transformation
+(Mercator), puis insère le SVG dans `map_svg`. Ils ne peuvent donc pas diverger.
+Voir `backend/src/services/mapSvg.ts`.
+
+## Quand il manque des photos, ou du texte
+
+Le carnet doit rester beau dans les deux cas extrêmes. Aucun champ visuel n'est
+obligatoire :
+
+- `intro_photos` est **optionnel** : sans photo adaptée, la page d'introduction
+  n'affiche que le récit manuscrit.
+- `cover_photo` est **optionnel**. *(À construire : une couverture sans photo,
+  portée par la typographie et une illustration de la région visitée.)*
+- Un récit très court doit déclencher un layout qui respire — carte, sticker,
+  tracé pointillé — plutôt qu'une page aux trois quarts vide.
+
+*(À construire : les variantes sans photo et les variantes « peu de texte ».
+Pour l'instant, l'agent choisit le layout existant le plus proche.)*
 
 ## Les deux profils de sortie
 
@@ -69,6 +134,7 @@ tranche : le premier actif l'emporte.
 
 | Drapeau | Rendu | Quand le choisir | Photos |
 |---|---|---|---|
+| `layout_chapter_map` | Carte de la région à droite, récit et carte info à gauche, photos en bas | Ouverture d'un chapitre — voir la table plus haut | 0–2 |
 | `layout_hero_top` | Grande photo en tête, récit dessous | Une photo iconique porte la journée | 1 |
 | `layout_split_left` | Carte info à gauche, récit en colonne à droite, puis deux photos en bas | Un fait à mettre en avant et deux belles images | 2 |
 | `layout_collage` | Récit pleine largeur puis 2 ou 3 photos inclinées en bas | Journée dense visuellement | 2–3 |
@@ -132,6 +198,29 @@ resté libre dans le gabarit, comme sur un carnet où l'on n'a pas rempli la pag
 - 1200–1600 px de large pour les photos de couverture et les photos héros.
 - Les photos sont recadrées en `object-fit: cover` et pivotées de quelques
   degrés : ne pas envoyer une image dont un visage touche déjà le bord.
+
+### Deux formes acceptées pour une photo
+
+Une entrée de `photos[]` est soit une URL nue, soit un objet enrichi par
+l'analyse d'image. Les deux formes cohabitent dans le même tableau.
+
+```json
+"photos": [
+  "https://cdn.../plage.jpg",
+  { "url": "https://cdn.../marche.jpg", "tape_corner": "bottom-left", "focus": "17% 50%" }
+]
+```
+
+| Champ | Valeurs | Effet |
+|---|---|---|
+| `url` | URL absolue | La photo. Seul champ obligatoire de la forme objet |
+| `tape_corner` | `top-left`, `top-right`, `bottom-left`, `bottom-right`, `top` | Pose un scotch dans ce coin. **Absent = pas de scotch** : mieux vaut aucun scotch qu'un scotch sur un visage |
+| `focus` | deux pourcentages, ex. `17% 50%` | Point que le recadrage préserve. Absent = recadrage centré |
+
+**L'agent ne remplit pas ces deux champs à la main.** Ils sortent de
+`backend/src/services/photoAnalysis.ts`, qui mesure la photo : coin le plus
+calme pour le scotch, zone la plus détaillée pour le recadrage. Voir
+`docs/photos.md`.
 
 ## Pièges à connaître
 

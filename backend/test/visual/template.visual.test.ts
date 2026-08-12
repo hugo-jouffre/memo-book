@@ -4,7 +4,7 @@ import pixelmatch from "pixelmatch";
 import { PNG } from "pngjs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Browser, Page } from "playwright-core";
-import { loadSamplePayload } from "../../src/lib/templates.js";
+import { loadNamedPayload, loadSamplePayload } from "../../src/lib/templates.js";
 import { installOfflineRouting, renderTemplateToHtml, settle } from "../../src/services/bookPdf.js";
 
 /**
@@ -19,13 +19,23 @@ import { installOfflineRouting, renderTemplateToHtml, settle } from "../../src/s
  *   npm run test:visual:update     régénère les références
  */
 
-const GOLDEN_DIR = resolve(import.meta.dirname, "__goldens__/travel-journal");
-const OUTPUT_DIR = resolve(import.meta.dirname, "../../.render-out/visual");
-
 /** Les rotations et le grain SVG produisent un anticrénelage non identique au pixel. */
 const MAX_DIFF_RATIO = 0.004;
 
 const UPDATE = process.env["UPDATE_GOLDENS"] === "1";
+
+/**
+ * Deux jeux de données, parce qu'un seul ne suffisait pas.
+ *
+ * `data.json` n'active ni carte de chapitre, ni photo enrichie : les layouts
+ * héros et colonne n'étaient donc surveillés par personne, et une photo y est
+ * restée cassée sans qu'aucun test ne bronche. `showcase.json` exerce les
+ * layouts restants — c'est ce que rend l'inspecteur.
+ */
+const SCENARIOS = [
+  { name: "travel-journal", pages: 7, load: loadSamplePayload },
+  { name: "showcase", pages: 9, load: () => loadNamedPayload("showcase") },
+] as const;
 
 /**
  * Le test ne tourne que sur Linux avec un navigateur présent : le rendu du
@@ -44,7 +54,10 @@ async function browserAvailable(): Promise<boolean> {
 
 const enabled = await browserAvailable();
 
-describe.runIf(enabled)("rendu visuel du carnet", () => {
+describe.runIf(enabled).each(SCENARIOS)("rendu visuel — $name", ({ name, pages, load }) => {
+  const goldenDir = resolve(import.meta.dirname, "__goldens__", name);
+  const outputDir = resolve(import.meta.dirname, "../../.render-out/visual", name);
+
   let browser: Browser;
   let page: Page;
   let pageCount = 0;
@@ -80,15 +93,14 @@ describe.runIf(enabled)("rendu visuel du carnet", () => {
 
     // Profil « print » : fond blanc, donc des références légères à versionner.
     // Le profil « preview » est contrôlé à l'œil via l'artefact de CI.
-    await page.setContent(
-      renderTemplateToHtml({ payload: loadSamplePayload(), profile: "print" }),
-      { waitUntil: "load" },
-    );
+    await page.setContent(renderTemplateToHtml({ payload: load(), profile: "print" }), {
+      waitUntil: "load",
+    });
     await settle(page);
     pageCount = await page.locator(".page").count();
 
-    mkdirSync(GOLDEN_DIR, { recursive: true });
-    mkdirSync(OUTPUT_DIR, { recursive: true });
+    mkdirSync(goldenDir, { recursive: true });
+    mkdirSync(outputDir, { recursive: true });
   }, 60_000);
 
   afterAll(async () => {
@@ -96,11 +108,11 @@ describe.runIf(enabled)("rendu visuel du carnet", () => {
   });
 
   it("garde le nombre de pages attendu", () => {
-    expect(pageCount).toBe(7);
+    expect(pageCount).toBe(pages);
   });
 
   it("tourne sur le Chromium de référence", () => {
-    const metaPath = resolve(GOLDEN_DIR, "meta.json");
+    const metaPath = resolve(goldenDir, "meta.json");
 
     if (UPDATE || !existsSync(metaPath)) {
       writeFileSync(metaPath, `${JSON.stringify({ chromium: chromiumVersion }, null, 2)}\n`);
@@ -117,12 +129,12 @@ describe.runIf(enabled)("rendu visuel du carnet", () => {
     ).toBe(meta.chromium);
   });
 
-  for (let index = 0; index < 7; index += 1) {
+  for (let index = 0; index < pages; index += 1) {
     const number = String(index + 1).padStart(2, "0");
 
     it(`page ${number} est conforme à sa référence`, async () => {
       const shot = await page.locator(".page").nth(index).screenshot({ animations: "disabled" });
-      const goldenPath = resolve(GOLDEN_DIR, `page-${number}.png`);
+      const goldenPath = resolve(goldenDir, `page-${number}.png`);
 
       if (UPDATE || !existsSync(goldenPath)) {
         writeFileSync(goldenPath, shot);
@@ -142,11 +154,11 @@ describe.runIf(enabled)("rendu visuel du carnet", () => {
       const ratio = changed / (golden.width * golden.height);
 
       if (ratio > MAX_DIFF_RATIO) {
-        const diffPath = resolve(OUTPUT_DIR, `diff-page-${number}.png`);
+        const diffPath = resolve(outputDir, `diff-page-${number}.png`);
         writeFileSync(diffPath, PNG.sync.write(diff));
-        writeFileSync(resolve(OUTPUT_DIR, `actual-page-${number}.png`), shot);
+        writeFileSync(resolve(outputDir, `actual-page-${number}.png`), shot);
         expect.fail(
-          `page ${number} : ${(ratio * 100).toFixed(3)} % de pixels changés ` +
+          `${name} page ${number} : ${(ratio * 100).toFixed(3)} % de pixels changés ` +
             `(seuil ${(MAX_DIFF_RATIO * 100).toFixed(1)} %). Diff : ${diffPath}`,
         );
       }

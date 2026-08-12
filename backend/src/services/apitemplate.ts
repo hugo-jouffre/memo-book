@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Env } from "../env.js";
-import { assertNoNullValues, type RenderProfile } from "./bookPdf.js";
+import { preparePayload, type RenderProfile } from "./bookPdf.js";
 import { LocalChromiumRenderer } from "./localRenderer.js";
 import type { BookPayload } from "./structuring.js";
 
@@ -16,7 +16,7 @@ export interface BookRenderer {
 /**
  * Rendu du PDF par APITemplate.io, sur le template alimenté par
  * `templates/travel-journal/` (voir .github/workflows/sync-apitemplate.yml).
- * Le contrat est celui de `templates/travel-journal/apitemplate-openapi.yaml`.
+ * Le contrat est celui de `templates/travel-journal/gpt_image_schema.yaml`.
  */
 export class ApiTemplateRenderer implements BookRenderer {
   constructor(
@@ -27,9 +27,10 @@ export class ApiTemplateRenderer implements BookRenderer {
   ) {}
 
   async render(payload: BookPayload): Promise<RenderedBook> {
-    // Jinja2 imprime `None` là où l'on attend une chaîne vide : un null qui
-    // passe ici écrirait le mot « None » dans le carnet imprimé.
-    assertNoNullValues(payload);
+    // Exactement la même préparation que le rendu local : validation des nulls
+    // et dépliage des cartes de chapitre. Ce que l'aperçu montre est ce que
+    // l'imprimeur recevra.
+    const prepared = preparePayload(payload);
 
     const url = new URL(`${this.baseUrl}/create-pdf`);
     url.searchParams.set("template_id", this.templateId);
@@ -41,7 +42,7 @@ export class ApiTemplateRenderer implements BookRenderer {
         "X-API-KEY": this.apiKey,
       },
       // `render_profile` décide du fond (blanc imprimeur / crème aperçu).
-      body: JSON.stringify({ render_profile: this.profile, ...payload }),
+      body: JSON.stringify({ render_profile: this.profile, ...prepared }),
     });
 
     const body = (await response.json().catch(() => null)) as {

@@ -16,7 +16,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { TEMPLATE_DIR, loadTemplateCss } from "../src/lib/templates.js";
-import { renderTemplateToHtml } from "../src/services/bookPdf.js";
+import { renderBookPdf, renderTemplateToHtml, type RenderProfile } from "../src/services/bookPdf.js";
 
 const OFFLINE_DIR = resolve(import.meta.dirname, "../test/fixtures/offline");
 const OUTPUT = resolve(import.meta.dirname, "../.render-out/inspecteur.html");
@@ -92,8 +92,12 @@ const PARTS: Record<string, Part> = {
   "mb-back__footer": { kind: "composant", name: "Pied de dos", role: "Sous-texte et appel à l'action.", fields: ["back_cover.closing_subtext", "back_cover.cta"] },
   "mb-back__photo": { kind: "composant", name: "Photo de dos", role: "Pleine page.", fields: ["back_cover.image"] },
 
+  "mb-chapter": { kind: "structure", name: "Ouverture de chapitre", role: "Récit et carte info à gauche, carte de la région à droite. Le layout qui ouvre un chapitre.", fields: ["day.layout_chapter_map"] },
+  "mb-chapter__map": { kind: "composant", name: "Carte de chapitre", role: "SVG projeté en Mercator depuis Natural Earth : le contour et les épingles passent par la même transformation, ils ne peuvent pas diverger. 175 pays.", fields: ["day.map.regions", "day.map.points"] },
+  "mb-photo__tape": { kind: "composant", name: "Scotch", role: "Posé sur le coin le plus vide de l'image, choisi par l'analyse de détail — au hasard, il finirait un jour sur un visage.", fields: ["day.photos[].tape_corner"] },
+
   // --- Décor ---------------------------------------------------------------
-  "mb-path": { kind: "decor", name: "Tracé du voyage", role: "Pointillé orange qui serpente d'un bord à l'autre. Déborde volontairement des marges." },
+  "mb-path": { kind: "decor", name: "Tracé du voyage", role: "Pointillé carotte. Quatre variantes tirées selon le rang de la page, et une page sur cinq n'en porte aucune : un motif identique partout se lit comme une trame." },
 };
 
 // ---------------------------------------------------------------------------
@@ -198,9 +202,20 @@ ${loadTemplateCss()}
   const pages = describePages(payload);
   const template = readFileSync(resolve(import.meta.dirname, "inspector-shell.html"), "utf8");
 
+  // Les deux PDF voyagent avec la page. L'impression du navigateur est
+  // refusée dans une iframe d'artefact : sans les fichiers embarqués, le
+  // bouton d'export ne pourrait rien produire.
+  const pdfs: Record<RenderProfile, string> = { print: "", preview: "" };
+  for (const profile of ["print", "preview"] as RenderProfile[]) {
+    const { pdf } = await renderBookPdf({ payload, profile, offline: true });
+    pdfs[profile] = pdf.toString("base64");
+    console.log(`  ${profile} : ${(pdf.length / 1048576).toFixed(1)} Mo`);
+  }
+
   const html = template
     .replace("__PARTS__", JSON.stringify(PARTS))
     .replace("__PAGES__", JSON.stringify(pages))
+    .replace("__PDFS__", asJsonPayload(JSON.stringify(pdfs)))
     .replace("__DOCUMENT__", asJsonPayload(document));
 
   await mkdir(resolve(import.meta.dirname, "../.render-out"), { recursive: true });

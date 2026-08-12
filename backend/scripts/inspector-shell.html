@@ -162,6 +162,11 @@
 
   .zoom { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; }
   .zoom input { width: 84px; accent-color: var(--accent); }
+
+  /* État occupé de l'export : le décodage du PDF fige brièvement le rendu. */
+  .btn.is-busy svg { animation: mb-spin .7s linear infinite; }
+  @keyframes mb-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .btn.is-busy svg { animation: none; opacity: .5; } }
   @media (max-width: 620px) { .zoom { display: none; } }
 
   /* --- Scène --------------------------------------------------------------- */
@@ -263,6 +268,52 @@
 
   .hint { margin: 0; color: var(--ink-faint); font-size: 10.5px; }
 
+  /* Retour de l'export. Une iframe sans `allow-downloads` avale le
+     téléchargement sans un mot : ce bandeau est là pour que le bouton cesse
+     d'être muet quand il ne peut pas aboutir. */
+  #export-note {
+    display: none;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--line);
+    background: var(--accent-soft);
+    color: var(--ink);
+    font: 400 12px/1.45 var(--sans);
+  }
+
+  #export-note.is-open { display: flex; }
+  #export-note strong { font-weight: 620; }
+  #export-note a,
+  #export-note .note-link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    font-weight: 600;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  #export-note-text { flex: 1 1 auto; }
+  #export-note code { font: 11px/1 var(--mono); background: rgb(0 0 0 / .06); padding: 1px 4px; border-radius: 4px; }
+
+  #export-note-close {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ink-soft);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  #export-note-close:hover { background: rgb(0 0 0 / .06); color: var(--ink); }
+
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
@@ -285,7 +336,22 @@
     <span class="eyebrow">Échelle</span>
     <input type="range" id="zoom" min="40" max="130" value="78" step="1" aria-label="Échelle d'affichage">
   </label>
+
+  <button type="button" class="btn" id="export"
+          title="Exporter le PDF au profil affiché (choisis « Enregistrer au format PDF »)"
+          aria-label="Exporter en PDF">
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+    </svg>
+  </button>
 </header>
+
+<!-- Retour de l'export. Masqué tant qu'il n'y a rien à dire. -->
+<div id="export-note" role="status" aria-live="polite">
+  <span id="export-note-text"></span>
+  <button type="button" id="export-note-close" aria-label="Fermer">×</button>
+</div>
 
 <div class="stage">
   <div class="stage-inner" id="stage-inner">
@@ -310,6 +376,7 @@
   const PAGES = __PAGES__;
 </script>
 <script type="application/json" id="doc-source">__DOCUMENT__</script>
+<script type="application/json" id="pdf-source">__PDFS__</script>
 <script>
 (function () {
   "use strict";
@@ -326,6 +393,18 @@
 
   /** Le document du carnet voyage en JSON : un <script> ne décode pas les entités. */
   const source = JSON.parse(document.getElementById("doc-source").textContent);
+  /** Les deux PDF, en base64, produits au même moment que cette page. */
+  /**
+   * Les deux PDF pèsent près de 8 Mo de base64. Les analyser au chargement
+   * gelait le fil principal avant même que la première page s'affiche — sur un
+   * panneau étroit, la barre paraissait morte et le bouton d'export sans effet.
+   * On ne paie donc la lecture qu'au premier export, et une seule fois.
+   */
+  let pdfCache = null;
+  function pdfs() {
+    pdfCache ??= JSON.parse(JSON.parse(document.getElementById("pdf-source").textContent));
+    return pdfCache;
+  }
 
   let doc = null;
   let outline = null;
@@ -382,6 +461,109 @@
     const value = Math.round(Math.min(110, Math.max(40, (available / 560) * 100)));
     zoom.value = String(value);
   }
+
+  /**
+   * Export PDF.
+   *
+   * Troisième chose que l'iframe d'artefact refuse, après `print()` et le
+   * presse-papier : le téléchargement lui-même. Une iframe dont le `sandbox`
+   * ne porte pas `allow-downloads` **exécute** le clic sur `<a download>`,
+   * ne lève aucune erreur, et ne produit aucun fichier. Le bouton n'était donc
+   * pas cassé — il était muet, ce qui revient au même pour qui l'utilise.
+   *
+   * Trois routes, de la plus directe à la plus manuelle, et surtout : on dit
+   * ce qui s'est passé. Le silence était le vrai défaut.
+   *
+   *   1. `<a download>` — passe dès que la page est ouverte dans son onglet.
+   *   2. `window.open` sur le blob — la visionneuse PDF du navigateur prend
+   *      le relais, avec son propre bouton d'enregistrement.
+   *   3. À défaut, on affiche la marche à suivre au lieu de ne rien dire.
+   */
+  const exportBtn = document.getElementById("export");
+  const exportNote = document.getElementById("export-note");
+
+  /** Encadrée dans le panneau latéral, la page n'a pas le droit de télécharger. */
+  const framed = window.self !== window.top;
+
+  function currentProfile() {
+    return profiles.print.getAttribute("aria-pressed") === "true" ? "print" : "preview";
+  }
+
+  function showNote(html) {
+    document.getElementById("export-note-text").innerHTML = html;
+    exportNote.classList.add("is-open");
+  }
+
+  document.getElementById("export-note-close")?.addEventListener("click", () =>
+    exportNote.classList.remove("is-open"));
+
+  function decode(base64) {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+  }
+
+  exportBtn.addEventListener("click", () => {
+    const profile = currentProfile();
+
+    exportBtn.disabled = true;
+    exportBtn.classList.add("is-busy");
+
+    // Décoder 6 Mo de base64 fige le rendu une fraction de seconde : on rend
+    // l'état occupé visible avant de s'y mettre.
+    requestAnimationFrame(() => {
+      let url;
+      try {
+        const base64 = pdfs()[profile];
+        if (!base64) throw new Error(`aucun PDF embarqué pour le profil « ${profile} ».`);
+        url = decode(base64);
+      } catch (error) {
+        // Le bouton dit ce qui a échoué au lieu de rester inerte.
+        showNote(`<strong>Export impossible :</strong> ${error.message}`);
+        exportBtn.disabled = false;
+        exportBtn.classList.remove("is-busy");
+        return;
+      }
+
+      const name = `memobook-${profile === "print" ? "imprimeur" : "apercu"}.pdf`;
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      exportBtn.disabled = false;
+      exportBtn.classList.remove("is-busy");
+
+      // Hors cadre, le téléchargement aboutit : rien à ajouter, et le blob peut
+      // partir une fois le fichier écrit.
+      if (!framed) {
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        return;
+      }
+
+      // Encadrée, la page ne peut pas savoir si le fichier est sorti — aucune
+      // API ne le dit — et aucune route de repli ne tient. Toutes mesurées, pas
+      // supposées : `window.open` sur le blob renvoie une fenêtre puis refuse
+      // d'y naviguer, `showSaveFilePicker` est refusé aux cadres d'une autre
+      // origine, `print()` demande `allow-modals`, `<embed>` et `<object>` ne
+      // chargent pas. Seul `allow-downloads` compte, et l'activation
+      // utilisateur n'y change rien.
+      //
+      // La note se contente donc de dire ce qui a été tenté et où trouver le
+      // fichier autrement. Elle n'affirme pas un échec qu'elle ne peut pas
+      // constater : la version précédente le faisait et se trompait dès que le
+      // téléchargement aboutissait. Le blob survit tant que la note est ouverte.
+      showNote(
+        `<strong>${name}</strong> — export lancé, regarde tes téléchargements. ` +
+          `Si rien n'arrive, c'est que cette page est affichée dans un cadre qui ` +
+          `interdit d'écrire des fichiers : les deux PDF sont alors à récupérer ` +
+          `dans les artefacts de la CI, ou par <code>npm run render:local</code>.`,
+      );
+    });
+  });
 
   // --- Profil --------------------------------------------------------------
   const profiles = { preview: document.getElementById("p-preview"), print: document.getElementById("p-print") };

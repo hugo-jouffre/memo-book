@@ -15,6 +15,37 @@
   ],
   "days": [
     {
+      "title": "Direction les Philippines",
+      "day_intro": {
+        "day_number": "00",
+        "location": "Philippines",
+        "date": "février 2026",
+        "weather_key": "sun"
+      },
+      "layout_chapter_map": true,
+      "body_html": "<p>Trois semaines d'archipel, de Manille aux Visayas. Ferrys improbables, scooters sur des routes perdues et des plages qu'on n'osait pas espérer.</p>",
+      "fun_facts": [
+        "Les Philippines comptent plus de 7000 îles. Oui oui."
+      ],
+      "map": {
+        "regions": [
+          "PH"
+        ],
+        "points": [
+          {
+            "label": "Manille",
+            "lat": 14.5995,
+            "lon": 120.9842
+          },
+          {
+            "label": "Visayas",
+            "lat": 10.3157,
+            "lon": 123.8854
+          }
+        ]
+      }
+    },
+    {
       "title": "36 heures plus tard, me voilà aux Philippines",
       "day_intro": {
         "day_number": "01",
@@ -29,7 +60,11 @@
         "Les Philippines comptent plus de 7000 îles. Oui oui."
       ],
       "photos": [
-        "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-01.jpg"
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-01.jpg",
+          "tape_corner": "bottom-right",
+          "focus": "17% 17%"
+        }
       ]
     },
     {
@@ -48,8 +83,16 @@
       ],
       "fun_facts_title": "Fun fact",
       "photos": [
-        "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-02a.jpg",
-        "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-02b.jpg"
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-02a.jpg",
+          "tape_corner": "bottom-left",
+          "focus": "50% 50%"
+        },
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-02b.jpg",
+          "tape_corner": "bottom-left",
+          "focus": "17% 50%"
+        }
       ]
     },
     {
@@ -67,9 +110,21 @@
       ],
       "fun_facts_title": "Fun facts",
       "photos": [
-        "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-03a.jpg",
-        "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-03b.jpg",
-        "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-03c.jpg"
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-03a.jpg",
+          "tape_corner": "bottom-right",
+          "focus": "17% 50%"
+        },
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-03b.jpg",
+          "tape_corner": "bottom-left",
+          "focus": "50% 50%"
+        },
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-03c.jpg",
+          "tape_corner": "bottom-right",
+          "focus": "50% 50%"
+        }
       ]
     },
     {
@@ -83,7 +138,11 @@
       "layout_hero_top": true,
       "body_html": "<p>Réveil étonnamment simple. Pas trop mal, même. On prend notre temps. On commence à saturer du petit-déjeuner philippin, alors on décide de changer.</p><p>On tombe sur un endroit incroyable, avec plein de choix. Le bonheur. On reste longtemps à table à discuter de tout, de rien, de la suite, de la vie.</p>",
       "photos": [
-        "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-05.jpg"
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-05.jpg",
+          "tape_corner": "bottom-left",
+          "focus": "17% 50%"
+        }
       ]
     }
   ],

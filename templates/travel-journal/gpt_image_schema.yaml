@@ -180,6 +180,36 @@ $defs:
           Layout #1 storyboard collage (jour/date/météo + note manuscrite + 1 à 3 photos,
           cartes et highlights). À privilégier quand on veut une vue synthétique et plusieurs
           encarts courts.
+      layout_chapter_map:
+        type: boolean
+        description: >
+          Ouverture de chapitre : carte de la région à droite, récit et carte info
+          à gauche, photos en bas. Exige `map`.
+      map:
+        type: object
+        description: >
+          Décrit la carte, ne la dessine pas. Le back-end la projette et l'insère
+          dans `map_svg` avant le rendu. Voir backend/src/services/mapSvg.ts.
+        required: [regions]
+        properties:
+          regions:
+            type: array
+            minItems: 1
+            description: >
+              Codes ISO 3166-1 alpha-2. Le premier cadre la vue, les suivants
+              n'ajoutent que du contexte.
+            items: { type: string, minLength: 2, maxLength: 2 }
+          points:
+            type: array
+            maxItems: 6
+            description: Étapes à épingler. Les coordonnées viennent de l'agent.
+            items:
+              type: object
+              required: [label, lat, lon]
+              properties:
+                label: { type: string }
+                lat: { type: number, minimum: -90, maximum: 90 }
+                lon: { type: number, minimum: -180, maximum: 180 }
       layout_hero_top:
         type: boolean
         description: "Layout #2 : grande photo en tête puis récit."
@@ -231,7 +261,25 @@ $defs:
         items: { type: string, format: uri }
       photos:
         type: array
-        items: { type: string, format: uri }
+        description: >
+          Une URL, ou un objet enrichi par le back-end. L'agent n'envoie que
+          l'URL : `tape_corner` et `focus` sortent de l'analyse d'image
+          (backend/src/services/photoAnalysis.ts), pas d'un prompt.
+        items:
+          oneOf:
+            - type: string
+              format: uri
+            - type: object
+              required: [url]
+              properties:
+                url: { type: string, format: uri }
+                tape_corner:
+                  type: string
+                  enum: [top-left, top-right, bottom-left, bottom-right, top]
+                  description: Coin le plus vide de l'image, où le scotch ne masque rien.
+                focus:
+                  type: string
+                  description: "Point d'intérêt pour object-position, ex. « 62% 38% »."
       photo_captions:
         type: array
         description: Légendes alignées avec l'ordre des photos
