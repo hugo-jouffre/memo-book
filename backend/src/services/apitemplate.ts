@@ -16,7 +16,7 @@ export interface BookRenderer {
 /**
  * Rendu du PDF par APITemplate.io, sur le template alimenté par
  * `templates/travel-journal/` (voir .github/workflows/sync-apitemplate.yml).
- * Le contrat est celui de `templates/travel-journal/apitemplate-openapi.yaml`.
+ * Le contrat est celui de `templates/travel-journal/gpt_image_schema.yaml`.
  */
 export class ApiTemplateRenderer implements BookRenderer {
   constructor(

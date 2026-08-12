@@ -5,7 +5,7 @@ Ce que le dépôt utilise de l'API, et pourquoi.
 > ⚠️ **Statut de vérification.** Les sessions Claude Code sur ce dépôt ont
 > `apitemplate.io` bloqué par le proxy réseau : la documentation officielle
 > n'a pas pu être lue directement. Ce qui suit vient de
-> `templates/travel-journal/apitemplate-openapi.yaml`, du workflow de
+> `templates/travel-journal/gpt_image_schema.yaml`, du workflow de
 > synchronisation et du code du back-end. Les points marqués **À VÉRIFIER**
 > doivent être confirmés sur <https://apitemplate.io/apiv2/> depuis un poste
 > non filtré, puis corrigés ici.

@@ -261,7 +261,25 @@ $defs:
         items: { type: string, format: uri }
       photos:
         type: array
-        items: { type: string, format: uri }
+        description: >
+          Une URL, ou un objet enrichi par le back-end. L'agent n'envoie que
+          l'URL : `tape_corner` et `focus` sortent de l'analyse d'image
+          (backend/src/services/photoAnalysis.ts), pas d'un prompt.
+        items:
+          oneOf:
+            - type: string
+              format: uri
+            - type: object
+              required: [url]
+              properties:
+                url: { type: string, format: uri }
+                tape_corner:
+                  type: string
+                  enum: [top-left, top-right, bottom-left, bottom-right, top]
+                  description: Coin le plus vide de l'image, où le scotch ne masque rien.
+                focus:
+                  type: string
+                  description: "Point d'intérêt pour object-position, ex. « 62% 38% »."
       photo_captions:
         type: array
         description: Légendes alignées avec l'ordre des photos

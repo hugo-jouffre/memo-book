@@ -10,10 +10,12 @@
  *   npm run icons:build          régénère le sprite
  *   npm run icons:build -- --check   échoue si le sprite est périmé (CI)
  *
- * Convention de nommage : `weather/sun.svg` → `#mb-i-weather-sun`.
+ * `assets/icons/manifest.json` décide de ce qui est embarqué : la librairie
+ * compte plus de 140 fichiers, tous les inclure gonflerait le template pour
+ * rien. Un rôle `weather-sun` devient l'identifiant `#mb-i-weather-sun`.
  */
-import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
-import { join, relative, resolve, sep } from "node:path";
+import { readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { TEMPLATE_DIR } from "../src/lib/templates.js";
 
@@ -23,55 +25,61 @@ const TEMPLATE = resolve(TEMPLATE_DIR, "index.html");
 const START = "<!-- mb:icons:start -->";
 const END = "<!-- mb:icons:end -->";
 
-function listSvgs(dir: string, found: string[] = []): string[] {
-  for (const name of readdirSync(dir).sort()) {
-    const path = join(dir, name);
-    if (statSync(path).isDirectory()) listSvgs(path, found);
-    else if (name.endsWith(".svg")) found.push(path);
-  }
-  return found;
+interface Manifest {
+  icons: Record<string, string>;
 }
 
-/** `weather/sun.svg` → `mb-i-weather-sun` */
-function symbolId(path: string): string {
-  return `mb-i-${relative(ICONS_DIR, path).replace(/\.svg$/, "").split(sep).join("-")}`;
+function manifest(): Manifest {
+  const raw = readFileSync(resolve(ICONS_DIR, "manifest.json"), "utf8");
+  return JSON.parse(raw) as Manifest;
 }
 
-/** Extrait le contenu utile du SVG et son viewBox. */
-function toSymbol(path: string): string {
+/**
+ * Extrait le contenu utile du SVG et son viewBox.
+ *
+ * Les exports Figma sortent en `fill="black"` : on les convertit en
+ * `currentColor` plutôt que de les refuser. Exiger une retouche manuelle sur
+ * chaque icône serait une friction inutile, et l'oubli se verrait seulement à
+ * l'impression — une icône noire sur le disque carotte de la météo active.
+ */
+function toSymbol(role: string, file: string): string {
+  const path = resolve(ICONS_DIR, file);
   const source = readFileSync(path, "utf8");
 
   const viewBox = /viewBox="([^"]+)"/.exec(source)?.[1];
-  if (!viewBox) throw new Error(`${path} n'a pas de viewBox. Réexporte-le depuis Figma.`);
+  if (!viewBox) throw new Error(`${file} n'a pas de viewBox. Réexporte-le depuis Figma.`);
 
-  const inner = source
+  let inner = source
     .replace(/^[\s\S]*?<svg[^>]*>/, "")
     .replace(/<\/svg>[\s\S]*$/, "")
-    .trim();
+    .trim()
+    .replace(/(fill|stroke)="(#000000|#000|black)"/gi, '$1="currentColor"');
 
-  // Une couleur en dur rend l'icône aveugle au contexte : elle resterait noire
-  // sur le disque carotte de la météo active. Mieux vaut refuser tout de suite.
-  const hardCoded = /(?:stroke|fill)="(#[0-9a-fA-F]{3,8}|rgb\()/.exec(inner);
+  const hardCoded = /(?:fill|stroke)="(#(?!fff|ffffff)[0-9a-fA-F]{3,8}|rgb\()/.exec(inner);
   if (hardCoded) {
     throw new Error(
-      `${path} contient une couleur en dur (${hardCoded[1]}). ` +
-        `Remplace-la par currentColor — voir assets/README.md.`,
+      `${file} contient une couleur en dur (${hardCoded[1]}). ` +
+        `Seuls le noir et le blanc sont convertis — voir assets/README.md.`,
     );
   }
 
+  // Un `fill="none"` sur le <svg> racine ne survit pas à l'extraction : les
+  // tracés sans fill explicite hériteraient alors du noir du contexte.
+  inner = inner.replace(/<path (?![^>]*\b(fill|stroke)=)/g, '<path fill="currentColor" ');
+
   const indented = inner.split("\n").map((line) => `        ${line.trim()}`).join("\n");
-  return `      <symbol id="${symbolId(path)}" viewBox="${viewBox}">\n${indented}\n      </symbol>`;
+  return `      <symbol id="mb-i-${role}" viewBox="${viewBox}">\n${indented}\n      </symbol>`;
 }
 
 function main(): void {
   const { values } = parseArgs({ options: { check: { type: "boolean", default: false } } });
 
-  const files = listSvgs(ICONS_DIR);
+  const icons = Object.entries(manifest().icons).sort(([a], [b]) => a.localeCompare(b));
   const block = [
     START,
-    "      <!-- Généré par backend/scripts/build-icons.ts depuis assets/icons/.",
+    "      <!-- Généré par backend/scripts/build-icons.ts depuis assets/icons/manifest.json.",
     "           Ne pas éditer à la main : lance `npm run icons:build`. -->",
-    ...files.map(toSymbol),
+    ...icons.map(([role, file]) => toSymbol(role, file)),
     `      ${END}`,
   ].join("\n");
 
@@ -93,13 +101,13 @@ function main(): void {
       );
       process.exit(1);
     }
-    console.log(`✓ sprite à jour — ${files.length} icônes`);
+    console.log(`✓ sprite à jour — ${icons.length} icônes`);
     return;
   }
 
   writeFileSync(TEMPLATE, next);
-  console.log(`✓ ${files.length} icônes embarquées dans index.html`);
-  for (const file of files) console.log(`  #${symbolId(file)}`);
+  console.log(`✓ ${icons.length} icônes embarquées dans index.html`);
+  for (const [role, file] of icons) console.log(`  #mb-i-${role}  ←  ${file}`);
 }
 
 try {

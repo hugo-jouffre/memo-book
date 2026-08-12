@@ -133,7 +133,43 @@ function project(frame: Frame, lon: number, lat: number): [number, number] {
 // ---------------------------------------------------------------------------
 
 const OUTLINE = "#19532b"; // Forest Green, palette MemoBook
+const FILL = "rgba(25, 83, 43, 0.05)"; // à peine posé, pour donner du corps
 const PIN = "#f86015"; // Carrot
+
+/**
+ * Adoucit le contour.
+ *
+ * Natural Earth est une polyligne : tracée telle quelle, elle donne des côtes
+ * en dents de scie qui trahissent la donnée brute. On la relit en courbes de
+ * Bézier (Catmull-Rom converti), ce qui rend le trait rond, proche d'un
+ * contour tracé à la main — et ne déplace aucun sommet : les points d'origine
+ * restent sur la courbe, donc les épingles restent justes.
+ */
+const TENSION = 0.22;
+
+function smoothPath(points: [number, number][]): string {
+  const n = points.length;
+  const at = (i: number): [number, number] => points[((i % n) + n) % n]!;
+  const round = (v: number): number => Math.round(v * 10) / 10;
+
+  const start = at(0);
+  let d = `M${start[0]} ${start[1]}`;
+
+  for (let i = 0; i < n; i += 1) {
+    const p0 = at(i - 1);
+    const p1 = at(i);
+    const p2 = at(i + 1);
+    const p3 = at(i + 2);
+
+    const c1x = p1[0] + (p2[0] - p0[0]) * TENSION;
+    const c1y = p1[1] + (p2[1] - p0[1]) * TENSION;
+    const c2x = p2[0] - (p3[0] - p1[0]) * TENSION;
+    const c2y = p2[1] - (p3[1] - p1[1]) * TENSION;
+
+    d += ` C${round(c1x)} ${round(c1y)} ${round(c2x)} ${round(c2y)} ${round(p2[0])} ${round(p2[1])}`;
+  }
+  return `${d}Z`;
+}
 
 const escapeXml = (value: string): string =>
   value
@@ -177,14 +213,14 @@ export function renderMapSvg(request: MapRequest): string {
     .map(({ rings }) =>
       rings
         .map((ring) => {
-          const d = ring
-            .map(([lon, lat], i) => {
-              const [x, y] = project(frame, lon, lat);
-              return `${i === 0 ? "M" : "L"}${x} ${y}`;
-            })
-            .join(" ");
-          return `<path d="${d}Z" fill="none" stroke="${OUTLINE}" stroke-width="0.9" ` +
-            `stroke-linejoin="round" stroke-dasharray="2.4 1.6"/>`;
+          const points = ring.map(([lon, lat]) => project(frame, lon, lat));
+          // Une île réduite à trois points après simplification ne se lisse pas.
+          if (points.length < 4) return "";
+          return (
+            `<path d="${smoothPath(points)}" fill="${FILL}" stroke="${OUTLINE}" ` +
+            `stroke-width="1.1" stroke-linejoin="round" stroke-linecap="round" ` +
+            `stroke-dasharray="3.2 2.6"/>`
+          );
         })
         .join(""),
     )

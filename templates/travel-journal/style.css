@@ -139,9 +139,23 @@ li { margin: 0; }
   display: flex;
   flex-direction: column;
   padding: var(--mb-margin);
+  pointer-events: none;
 }
 
-/* Les décors (stickers, tracés pointillés) débordent volontairement des marges. */
+/* Seuls les composants interceptent le clic ; les conteneurs qui les portent le
+   laissent passer. Sans cela une zone flottante vide couvre le tracé qui passe
+   dessous et le rend impossible à désigner dans l'inspecteur. La règle est
+   écrite sur la structure plutôt que sur une liste de composants, pour qu'un
+   composant ajouté demain soit cliquable sans qu'on y pense. Les conteneurs
+   restent atteignables par le fil d'Ariane du panneau.
+   Aucun effet à l'impression. */
+.page__content > * { pointer-events: auto; }
+.mb-day__floats { pointer-events: none; }
+.mb-day__floats > * { pointer-events: auto; }
+
+/* Les décors (stickers, tracés pointillés) débordent volontairement des marges.
+   Le calque couvre toute la page : s'il captait le clic, il masquerait à lui
+   seul tout le reste. Ce sont ses enfants qui le captent, chacun sur sa boîte. */
 .page__decor {
   position: absolute;
   inset: 0;
@@ -212,17 +226,17 @@ li { margin: 0; }
   display: flex;
   align-items: flex-start;
   gap: 10pt;
-  height: 62pt;
+  height: 52pt;
 }
 
 .mb-ribbon {
   position: relative;
   flex: 0 0 71pt;
-  height: 144pt;
+  height: 128pt;
   /* Le ruban dépasse du bord haut : `.page` étant en overflow hidden, il est
      coupé net, comme un signet glissé dans le carnet. */
-  margin-top: -48pt;
-  padding-top: 66pt;
+  margin-top: -40pt;
+  padding-top: 50pt;
   text-align: center;
 }
 
@@ -303,7 +317,7 @@ li { margin: 0; }
   display: flex;
   align-items: center;
   gap: 7pt;
-  margin: 8pt 0 0 100pt;
+  margin: 4pt 0 0 100pt;
 }
 
 .mb-weather__caption {
@@ -461,15 +475,51 @@ li { margin: 0; }
   text-align: center;
 }
 
+/* --- Scotch ---------------------------------------------------------------
+   Le coin scotché est choisi par le back-end, à partir de la zone la plus
+   vide de l'image : posé au hasard, le scotch finit un jour sur un visage. */
+.mb-photo__tape {
+  position: absolute;
+  z-index: 4;
+  width: 46pt;
+  height: 13pt;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    #f7e6e2 0, #f7e6e2 4.5pt,
+    #ffffff 4.5pt, #ffffff 6pt
+  );
+  border: 0.5pt solid rgba(43, 35, 27, 0.55);
+  opacity: 0.92;
+}
+
+.mb-photo--tape-top-left .mb-photo__tape { top: -6pt; left: -12pt; transform: rotate(-38deg); }
+.mb-photo--tape-top-right .mb-photo__tape { top: -6pt; right: -12pt; transform: rotate(38deg); }
+.mb-photo--tape-bottom-left .mb-photo__tape { bottom: -6pt; left: -12pt; transform: rotate(38deg); }
+.mb-photo--tape-bottom-right .mb-photo__tape { bottom: -6pt; right: -12pt; transform: rotate(-38deg); }
+.mb-photo--tape-top .mb-photo__tape { top: -7pt; left: 50%; margin-left: -23pt; transform: rotate(-1.5deg); }
+
 /* --- Tracé pointillé du voyage --------------------------------------------- */
+/* Le tracé est enveloppé dans un bloc HTML au lieu d'être un `<svg>` nu : un
+   SVG ne reçoit le clic que sur sa géométrie peinte, et viser un pointillé de
+   3 pt d'épaisseur à la souris est impossible. Le bloc, lui, a une boîte.
+   Sans effet à l'impression. */
 .mb-path {
   position: absolute;
   z-index: 1;
+  height: 45pt;
   color: #d4883b;
+  pointer-events: auto;
 }
 
-.mb-path--top { top: 118pt; left: -40pt; width: 500pt; }
-.mb-path--bottom { bottom: 54pt; left: -50pt; width: 520pt; }
+.mb-path svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.mb-path--a { bottom: 48pt; left: -46pt; width: 516pt; }
+.mb-path--b { bottom: 96pt; left: -30pt; width: 494pt; transform: rotate(-1.5deg); }
+.mb-path--c { bottom: 24pt; left: -60pt; width: 540pt; transform: scaleY(-1); }
 
 /* --- Sticker illustré ------------------------------------------------------- */
 .mb-sticker {
