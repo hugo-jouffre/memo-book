@@ -51,37 +51,40 @@
               stroke-linecap="round" stroke-dasharray="13 11" />
       </symbol>
 
-      <!-- Icônes météo, dessin au trait, 24 × 24. -->
-      <symbol id="mb-w-sun" viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="4.6" fill="none" stroke="currentColor" stroke-width="1.7" />
-        <g stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
-          <path d="M12 1.6v3M12 19.4v3M1.6 12h3M19.4 12h3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M19.4 4.6l-2.1 2.1M6.7 17.3l-2.1 2.1" />
-        </g>
-      </symbol>
-      <symbol id="mb-w-sun-wind" viewBox="0 0 24 24">
-        <circle cx="10" cy="9" r="4" fill="none" stroke="currentColor" stroke-width="1.7" />
-        <g stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
-          <path d="M10 1.8v2.4M2.6 9h2.4M4.4 3.4l1.7 1.7M15.6 3.4l-1.7 1.7" />
-          <path d="M3 16h12.5a2.6 2.6 0 1 0-2.6-2.6M6 20h9.5a2.4 2.4 0 1 1-2.4 2.4" />
-        </g>
-      </symbol>
-      <symbol id="mb-w-cloud" viewBox="0 0 24 24">
+      <!-- mb:icons:start -->
+      <!-- Généré par backend/scripts/build-icons.ts depuis assets/icons/.
+           Ne pas éditer à la main : lance `npm run icons:build`. -->
+      <symbol id="mb-i-weather-cloud" viewBox="0 0 24 24">
         <path d="M7 19h10.2a4.3 4.3 0 0 0 .5-8.6 6.2 6.2 0 0 0-12-1.3A3.9 3.9 0 0 0 7 19Z"
-              fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+        fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
       </symbol>
-      <symbol id="mb-w-rain" viewBox="0 0 24 24">
+      <symbol id="mb-i-weather-rain" viewBox="0 0 24 24">
         <path d="M7 15.4h10.2a4.3 4.3 0 0 0 .5-8.6 6.2 6.2 0 0 0-12-1.3A3.9 3.9 0 0 0 7 15.4Z"
-              fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+        fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
         <g stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
-          <path d="M8.4 18.4l-1 2.6M12 18.4l-1 2.6M15.6 18.4l-1 2.6" />
+        <path d="M8.4 18.4l-1 2.6M12 18.4l-1 2.6M15.6 18.4l-1 2.6"/>
         </g>
       </symbol>
-      <symbol id="mb-w-snow" viewBox="0 0 24 24">
-        <g stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
-          <path d="M12 2v20M3.3 7l17.4 10M20.7 7L3.3 17" />
-          <path d="M9 4l3 2 3-2M9 20l3-2 3 2" />
+      <symbol id="mb-i-weather-snow" viewBox="0 0 24 24">
+        <g stroke="currentColor" stroke-width="1.7" stroke-linecap="round" fill="none">
+        <path d="M12 2v20M3.3 7l17.4 10M20.7 7L3.3 17"/>
+        <path d="M9 4l3 2 3-2M9 20l3-2 3 2"/>
         </g>
       </symbol>
+      <symbol id="mb-i-weather-sun-wind" viewBox="0 0 24 24">
+        <circle cx="10" cy="9" r="4" fill="none" stroke="currentColor" stroke-width="1.7"/>
+        <g stroke="currentColor" stroke-width="1.7" stroke-linecap="round" fill="none">
+        <path d="M10 1.8v2.4M2.6 9h2.4M4.4 3.4l1.7 1.7M15.6 3.4l-1.7 1.7"/>
+        <path d="M3 16h12.5a2.6 2.6 0 1 0-2.6-2.6M6 20h9.5a2.4 2.4 0 1 1-2.4 2.4"/>
+        </g>
+      </symbol>
+      <symbol id="mb-i-weather-sun" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="4.6" fill="none" stroke="currentColor" stroke-width="1.7"/>
+        <g stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+        <path d="M12 1.6v3M12 19.4v3M1.6 12h3M19.4 12h3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M19.4 4.6l-2.1 2.1M6.7 17.3l-2.1 2.1"/>
+        </g>
+      </symbol>
+      <!-- mb:icons:end -->
     </defs>
   </svg>
 
@@ -183,16 +186,21 @@
           <div class="mb-weather">
             <span class="mb-weather__caption">Météo</span>
             {% set weather = day.day_intro.weather_key | default('sun') %}
-            <svg class="mb-weather__icon{% if weather == 'sun' %} is-active{% endif %}"
-                 viewBox="0 0 24 24"><use href="#mb-w-sun" /></svg>
-            <svg class="mb-weather__icon{% if weather == 'sun-wind' %} is-active{% endif %}"
-                 viewBox="0 0 24 24"><use href="#mb-w-sun-wind" /></svg>
-            <svg class="mb-weather__icon{% if weather == 'cloud' %} is-active{% endif %}"
-                 viewBox="0 0 24 24"><use href="#mb-w-cloud" /></svg>
-            <svg class="mb-weather__icon{% if weather == 'rain' %} is-active{% endif %}"
-                 viewBox="0 0 24 24"><use href="#mb-w-rain" /></svg>
-            <svg class="mb-weather__icon{% if weather == 'snow' %} is-active{% endif %}"
-                 viewBox="0 0 24 24"><use href="#mb-w-snow" /></svg>
+            <span class="mb-weather__item{% if weather == 'sun' %} is-active{% endif %}">
+              <svg class="mb-weather__icon" viewBox="0 0 24 24"><use href="#mb-i-weather-sun" /></svg>
+            </span>
+            <span class="mb-weather__item{% if weather == 'sun-wind' %} is-active{% endif %}">
+              <svg class="mb-weather__icon" viewBox="0 0 24 24"><use href="#mb-i-weather-sun-wind" /></svg>
+            </span>
+            <span class="mb-weather__item{% if weather == 'cloud' %} is-active{% endif %}">
+              <svg class="mb-weather__icon" viewBox="0 0 24 24"><use href="#mb-i-weather-cloud" /></svg>
+            </span>
+            <span class="mb-weather__item{% if weather == 'rain' %} is-active{% endif %}">
+              <svg class="mb-weather__icon" viewBox="0 0 24 24"><use href="#mb-i-weather-rain" /></svg>
+            </span>
+            <span class="mb-weather__item{% if weather == 'snow' %} is-active{% endif %}">
+              <svg class="mb-weather__icon" viewBox="0 0 24 24"><use href="#mb-i-weather-snow" /></svg>
+            </span>
           </div>
         {% endif %}
 

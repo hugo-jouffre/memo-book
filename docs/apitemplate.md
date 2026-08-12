@@ -32,8 +32,14 @@ Jamais dans le dépôt ni dans l'app. Deux emplacements :
 
 - **GitHub** — *Settings → Secrets and variables → Actions* :
   `APITEMPLATE_API_KEY`, `APITEMPLATE_TEMPLATE_ID`. Le job de synchronisation
-  est gardé par `if: ${{ secrets.APITEMPLATE_API_KEY != '' }}` et s'activera
-  tout seul.
+  tourne à chaque `push` sur `main` touchant le template ; tant que le secret
+  est absent, une étape de garde le fait passer sans rien envoyer, en laissant
+  une notice dans le run. Il s'activera donc de lui-même dès le secret posé.
+
+  > ⚠️ Cette garde vit dans une **étape**, pas dans le `if:` du job. Le contexte
+  > `secrets` n'existe pas au niveau job : GitHub refuse d'évaluer l'expression
+  > et le run échoue instantanément, sans exécuter le moindre job. C'était le
+  > cas de ce workflow jusqu'au 11 août 2026.
 - **Back-end** — `.env`, voir `backend/.env.example`.
 
 > 🔐 Toute clé ayant transité par un chat, un ticket ou un commit est à

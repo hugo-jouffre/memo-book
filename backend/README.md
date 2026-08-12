@@ -60,6 +60,8 @@ npm run test:visual                         # diff pixel contre les captures de 
 npm run test:visual:update                  # régénère les captures après un changement voulu
 npm run fonts:build                         # régénère fonts.css depuis Google Fonts
 npm run inspector                           # inspecteur HTML : nomme chaque élément au survol
+npm run icons:build                         # embarque assets/icons/ dans index.html
+npm run icons:check                         # échoue si le sprite est périmé
 ```
 
 `npm run inspector` produit `.render-out/inspecteur.html`, une page autonome qui affiche le
@@ -135,6 +137,8 @@ Toutes les routes `/v1` attendent un `Authorization: Bearer <token>` d'appareil,
 | `src/services/localRenderer.ts` | Le moteur local branché sur le pipeline (`RENDERER=local`) |
 | `scripts/render-local.ts` | La commande d'itération sur la mise en page |
 | `scripts/lint-template.ts` | Empêche le gabarit de diverger entre Jinja2 et Nunjucks |
+| `scripts/build-icons.ts` | Embarque `assets/icons/` dans le gabarit — voir `assets/README.md` |
+| `scripts/build-inspector.ts` | L'inspecteur de mise en page, et le dictionnaire des composants |
 | `src/services/webflow.ts` | Publie les photos sur le CDN (APITemplate a besoin d'URLs publiques) |
 | `src/jobs/` | Les trois étapes du pipeline, sur une file pg-boss adossée à Postgres |
 

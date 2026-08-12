@@ -52,7 +52,7 @@ Défaut : `preview`. Côté back-end, la variable `RENDER_PROFILE` fait foi.
 | `title` | requis | Titre manuscrit en tête du récit |
 | `body_html` | requis | Récit. `<p>` par idée, `<ul>/<li>` pour les listes. Pas de `<h1>`/`<h2>` |
 | `day_intro` | optionnel | Affiche le bandeau : `{ day_number, location, date, weather_key }` |
-| `weather_key` | `sun` \| `sun-wind` \| `cloud` \| `rain` \| `snow` | Icône mise en avant ; les quatre autres restent estompées |
+| `weather_key` | 5 valeurs, voir ci-dessous | Icône mise en avant dans le bandeau |
 | `tag` | optionnel | Étiquette manuscrite (« Top départ »). **Trois mots max**, sinon elle déborde |
 | `fun_facts[]` | optionnel | **Seul le premier est affiché** |
 | `fun_facts_title` | optionnel | Titre de la carte. Défaut « Fun fact » ; aussi « Infos », « Culture générale » |
@@ -88,6 +88,42 @@ une **erreur**, pas un avertissement :
 | `body_html` | 420 caractères par paragraphe, 2–3 paragraphes |
 | `fun_facts[]` | 140 caractères |
 | `highlights[]` | 80 caractères |
+
+## La météo du jour
+
+Un seul champ à produire : `day_intro.weather_key`. Le bandeau affiche toujours
+les cinq icônes ; celle qui correspond passe en pastille carotte, les quatre
+autres restent estompées à 30 %. **Il n'y a rien d'autre à envoyer** — ni
+emoji, ni couleur, ni température.
+
+| Valeur | Icône | Quand la choisir |
+|---|---|---|
+| `sun` | soleil plein | Grand beau, ciel dégagé, forte chaleur |
+| `sun-wind` | soleil et vent | Éclaircies, ciel voilé, brise, temps changeant |
+| `cloud` | nuage | Couvert, gris, brume, sans pluie |
+| `rain` | pluie | Averses, mousson, orage |
+| `snow` | flocon | Neige, gel, froid marquant |
+
+**Comment décider.** Prendre le temps *dominant* de la journée racontée, pas le
+plus spectaculaire : une éclaircie de dix minutes dans une journée de pluie
+reste `rain`. Si le récit ne dit rien du temps, se fier au lieu et à la saison
+plutôt que d'omettre le champ — un bandeau sans icône active a l'air cassé.
+En cas d'hésitation entre deux valeurs, `sun-wind` est le repli neutre : c'est
+la seule qui ne raconte pas un temps tranché.
+
+`weather_icon` (emoji) subsiste dans le schéma pour compatibilité mais n'est
+plus rendu. Ne pas le produire.
+
+## Réglure et rythme vertical
+
+La réglure du papier est générée, pas dessinée : elle se répète tous les
+`--mb-line`. Elle n'est juste que si **tout ce qu'elle traverse occupe un
+multiple entier de cette valeur** — le titre pèse exactement deux interlignes,
+la marge d'un paragraphe exactement un. Un bloc d'une autre hauteur décale
+toutes les lignes suivantes, et l'écart texte/ligne dérive le long de la page.
+
+Chaque paragraphe est suivi d'**une ligne vide** : elle montre l'emplacement
+resté libre dans le gabarit, comme sur un carnet où l'on n'a pas rempli la page.
 
 ## Règles d'images
 

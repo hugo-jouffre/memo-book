@@ -1,0 +1,4 @@
+{
+  "$comment": "Nom logique → fichier versionné + URL publique. C'est l'URL que l'agent met dans le JSON du carnet ; le fichier sert de référence et permet de régénérer. Voir assets/README.md.",
+  "entries": {}
+}
