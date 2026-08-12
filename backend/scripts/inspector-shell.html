@@ -169,118 +169,99 @@
   .stage-inner { position: relative; }
   #frame { display: block; width: 560px; border: 0; transform-origin: top left; }
 
-  /* Laisse la place au panneau, qui est en surcouche. */
-  .spacer { height: 46vh; }
-  @media (min-width: 1100px) { .spacer { height: 40px; } }
+  .spacer { height: 24px; }
 
-  /* --- Panneau d'inspection ------------------------------------------------ */
-  /* Toujours en surcouche : en colonne, il tomberait sous les pages et il
-     faudrait faire défiler tout le carnet pour lire le nom d'un composant. */
+  /* --- Modal d'inspection --------------------------------------------------
+     Posée dans le coin bas droit, elle n'apparaît qu'au clic et reste petite :
+     l'important à l'écran, c'est la page, pas l'outil. Légèrement translucide
+     pour qu'on voie ce qu'il y a dessous. */
+  #dock { position: fixed; z-index: 50; right: 14px; bottom: 14px; display: none; }
+  #dock.is-open { display: block; }
+
   #panel {
-    position: fixed;
-    z-index: 50;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    max-height: 46vh;
+    position: relative;
+    width: 296px;
+    max-width: calc(100vw - 28px);
+    max-height: calc(100vh - 84px);
     display: flex;
     flex-direction: column;
-    background: var(--surface);
-    border-top: 1px solid var(--line);
-    box-shadow: var(--shadow-lift);
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+    backdrop-filter: blur(14px);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
   }
 
-  @media (min-width: 1100px) {
-    .stage { padding-right: 358px; }
-    #panel {
-      left: auto;
-      top: calc(var(--bar) + 14px);
-      right: 14px;
-      bottom: 14px;
-      width: 330px;
-      max-height: none;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      box-shadow: var(--shadow);
-    }
+  /* La croix vit hors de la boîte, pour ne pas manger de sa largeur utile. */
+  #close {
+    position: absolute; top: -10px; right: -10px; z-index: 51;
+    width: 22px; height: 22px; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--line); border-radius: 50%;
+    background: var(--surface); color: var(--ink-soft);
+    font: 600 12px/1 var(--sans); cursor: pointer; box-shadow: var(--shadow);
   }
+  #close:hover { color: var(--accent); border-color: var(--accent); }
+  #close:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-  .panel-bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--line);
-    cursor: pointer;
-    user-select: none;
-  }
-  @media (min-width: 1100px) { .panel-bar { cursor: default; } }
+  .panel-head { display: flex; align-items: center; gap: 7px; padding: 9px 11px 0; }
+  .panel-head h2 { flex: 1 1 auto; margin: 0; font-size: 13.5px; font-weight: 620;
+                   letter-spacing: -.01em; white-space: nowrap; overflow: hidden;
+                   text-overflow: ellipsis; }
 
-  .panel-bar h2 { flex: 1 1 auto; margin: 0; font-size: 14.5px; font-weight: 620;
-                  letter-spacing: -.01em; white-space: nowrap; overflow: hidden;
-                  text-overflow: ellipsis; }
-
-  .kind { flex: 0 0 auto; padding: 2px 6px; border-radius: 4px; font-family: var(--mono);
-          font-size: 9px; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+  .kind { flex: 0 0 auto; padding: 2px 5px; border-radius: 4px; font-family: var(--mono);
+          font-size: 8.5px; letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; }
   .kind[data-kind="page"]      { background: var(--accent-soft); color: var(--accent); }
   .kind[data-kind="composant"] { background: var(--mint-soft); color: var(--mint); }
   .kind[data-kind="structure"] { background: var(--wire-soft); color: var(--wire); }
   .kind[data-kind="decor"]     { background: var(--surface-2); color: var(--ink-faint); }
 
-  .caret { flex: 0 0 auto; color: var(--ink-faint); font-size: 11px; transition: transform .18s; }
-  #panel.is-collapsed .caret { transform: rotate(180deg); }
-  #panel.is-collapsed .panel-body { display: none; }
-  @media (min-width: 1100px) { .caret { display: none; } }
+  .panel-body { display: flex; flex-direction: column; gap: 8px; padding: 8px 11px 11px;
+                overflow-y: auto; }
 
-  .panel-body { flex: 1 1 auto; display: flex; flex-direction: column; gap: 12px;
-                padding: 12px; overflow-y: auto; }
+  .sel { display: block; width: 100%; padding: 6px 7px; border-radius: 5px;
+         background: var(--surface-2); color: var(--ink);
+         font-family: var(--mono); font-size: 10.5px; line-height: 1.4; word-break: break-all; }
 
-  .role { margin: 0; color: var(--ink-soft); font-size: 12.5px; }
+  .row { display: flex; gap: 6px; }
+  .row .copy { flex: 1 1 auto; }
 
-  .field { display: flex; flex-direction: column; gap: 5px; }
-  .field ul { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; padding: 0; list-style: none; }
+  .copy, .more { padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--surface); color: var(--ink); font: inherit; font-size: 11.5px;
+    font-weight: 520; cursor: pointer; white-space: nowrap; }
+  .copy:hover, .more:hover { border-color: var(--accent); color: var(--accent); }
+  .copy:focus-visible, .more:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .copy[data-state="done"] { border-color: var(--mint); color: var(--mint); }
 
-  code {
-    font-family: var(--mono);
-    font-size: 11px;
-    padding: 2.5px 6px;
-    border-radius: 4px;
-    background: var(--surface-2);
-    color: var(--ink);
-    word-break: break-all;
-  }
+  /* Le détail n'apparaît qu'à la demande : par défaut la modal tient en
+     quatre lignes et laisse voir la page. */
+  .detail { display: none; flex-direction: column; gap: 8px; }
+  #dock.is-expanded .detail { display: flex; }
+
+  .role { margin: 0; color: var(--ink-soft); font-size: 12px; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field ul { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
+
+  code { font-family: var(--mono); font-size: 10.5px; padding: 2px 5px; border-radius: 4px;
+         background: var(--surface-2); color: var(--ink); word-break: break-all; }
   .field.json code { background: var(--wire-soft); color: var(--wire); }
   .field.vars code { background: var(--accent-soft); color: var(--accent); }
 
-  .ancestry { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-  .ancestry button { padding: 2px 6px; border: 1px solid var(--line); border-radius: 4px;
+  .ancestry { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; }
+  .ancestry button { padding: 2px 5px; border: 1px solid var(--line); border-radius: 4px;
                      background: var(--surface-2); color: var(--ink-soft);
-                     font-family: var(--mono); font-size: 10px; cursor: pointer; }
+                     font-family: var(--mono); font-size: 9.5px; cursor: pointer; }
   .ancestry button:hover { color: var(--accent); border-color: var(--accent); }
-  .ancestry span { color: var(--ink-faint); font-size: 10px; }
+  .ancestry span { color: var(--ink-faint); font-size: 9.5px; }
 
-  .copy { padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px;
-          background: var(--surface-2); color: var(--ink); font: inherit; font-size: 12.5px;
-          font-weight: 520; cursor: pointer; }
-  .copy:hover { border-color: var(--accent); color: var(--accent); }
-  .copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .copy[data-state="done"] { border-color: var(--mint); color: var(--mint); }
+  .fallback { display: none; }
+  .fallback.is-shown { display: block; }
+  .fallback textarea { width: 100%; min-height: 48px; padding: 6px; resize: vertical;
+    border: 1px solid var(--accent); border-radius: 5px; background: var(--surface-2);
+    color: var(--ink); font-family: var(--mono); font-size: 10.5px; }
 
-  /* Dernier recours quand le presse-papier est refusé : le texte, sélectionnable. */
-  .fallback { display: none; flex-direction: column; gap: 6px; }
-  .fallback.is-shown { display: flex; }
-  .fallback textarea {
-    width: 100%; min-height: 108px; padding: 8px; resize: vertical;
-    border: 1px solid var(--accent); border-radius: 6px;
-    background: var(--surface-2); color: var(--ink);
-    font-family: var(--mono); font-size: 11px; line-height: 1.45;
-  }
-
-  .hint { margin: 0; color: var(--ink-faint); font-size: 11px; }
-  .hint kbd { padding: 1px 4px; border: 1px solid var(--line); border-bottom-width: 2px;
-              border-radius: 3px; background: var(--surface-2); font-family: var(--mono); font-size: 10px; }
-
-  hr { height: 1px; margin: 0; border: 0; background: var(--line); }
+  .hint { margin: 0; color: var(--ink-faint); font-size: 10.5px; }
 
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -313,14 +294,16 @@
 </div>
 <div class="spacer"></div>
 
-<section id="panel" aria-live="polite">
-  <div class="panel-bar" id="panel-bar">
-    <h2 id="panel-title">Inspection</h2>
-    <span class="kind" id="panel-kind" data-kind="decor" hidden></span>
-    <span class="caret">▾</span>
-  </div>
-  <div class="panel-body" id="panel-body"></div>
-</section>
+<div id="dock">
+  <button type="button" id="close" aria-label="Fermer l'inspection">×</button>
+  <section id="panel" aria-live="polite">
+    <div class="panel-head">
+      <h2 id="panel-title">Inspection</h2>
+      <span class="kind" id="panel-kind" data-kind="composant"></span>
+    </div>
+    <div class="panel-body" id="panel-body"></div>
+  </section>
+</div>
 
 <script>
   const PARTS = __PARTS__;
@@ -333,7 +316,7 @@
 
   const frame = document.getElementById("frame");
   const stageInner = document.getElementById("stage-inner");
-  const panel = document.getElementById("panel");
+  const dock = document.getElementById("dock");
   const panelTitle = document.getElementById("panel-title");
   const panelKind = document.getElementById("panel-kind");
   const body = document.getElementById("panel-body");
@@ -411,12 +394,6 @@
   profiles.preview.addEventListener("click", () => setProfile("preview"));
   profiles.print.addEventListener("click", () => setProfile("print"));
 
-  // --- Repli du panneau sur écran étroit -----------------------------------
-  document.getElementById("panel-bar").addEventListener("click", () => {
-    if (window.innerWidth >= 1100) return;
-    panel.classList.toggle("is-collapsed");
-  });
-
   // --- Inspection ----------------------------------------------------------
   function describe(element) {
     let node = element;
@@ -432,17 +409,46 @@
     let cursor = node;
     while (cursor && cursor !== doc.body) {
       for (const cls of cursor.classList) {
-        if (PARTS[cls]) { chain.unshift({ key: cls, node: cursor }); break; }
+        if (PARTS[cursor.classList.contains(cls) ? cls : cls]) { chain.unshift({ key: cls, node: cursor }); break; }
       }
       cursor = cursor.parentElement;
     }
-    return chain;
+    return chain.filter((step) => PARTS[step.key]);
   }
 
-  /** Numéro de la page qui contient l'élément inspecté. */
+  /**
+   * Sélecteur qui ne désigne qu'un seul élément du document.
+   *
+   * Une classe seule ne suffit pas : `.mb-card` apparaît sur plusieurs pages.
+   * On remonte l'arbre en ajoutant des ancêtres jusqu'à ce que la requête ne
+   * renvoie plus qu'un nœud — c'est la seule façon de nommer un élément « sans
+   * aucun doute », ce que demande une consigne de retouche.
+   */
+  function uniqueSelector(node) {
+    const parts = [];
+    let el = node;
+
+    while (el && el !== doc.body) {
+      let part = el.classList.length
+        ? "." + Array.from(el.classList).join(".")
+        : el.tagName.toLowerCase();
+
+      const parent = el.parentElement;
+      if (parent) {
+        const siblings = Array.from(parent.children).filter((c) => c.tagName === el.tagName);
+        if (siblings.length > 1) part += `:nth-of-type(${siblings.indexOf(el) + 1})`;
+      }
+
+      parts.unshift(part);
+      const selector = parts.join(" > ");
+      if (doc.querySelectorAll(selector).length === 1) return selector;
+      el = parent;
+    }
+    return parts.join(" > ");
+  }
+
   function pageOf(node) {
-    const page = node.closest(".page");
-    const index = pageEls.indexOf(page);
+    const index = pageEls.indexOf(node.closest(".page"));
     return index === -1 ? null : index;
   }
 
@@ -458,38 +464,35 @@
   }
 
   /**
-   * Copie la référence.
+   * Copie le sélecteur.
    *
-   * `navigator.clipboard` est refusé dans une iframe sans permission explicite,
-   * ce qui est le cas ici. On tente l'API, puis la commande historique, et en
-   * dernier recours on affiche le texte : mieux vaut deux gestes qu'un bouton
-   * qui ne fait rien.
+   * `navigator.clipboard` est refusé dans une iframe sans permission explicite.
+   * On tente l'API, puis la commande historique, et en dernier recours on
+   * affiche le texte : mieux vaut deux gestes qu'un bouton qui ne fait rien.
    */
-  function copyText(text, button, fallbackBox, fallbackArea) {
+  function copyText(text, button, box, area) {
     const done = () => {
       button.dataset.state = "done";
-      button.textContent = "Référence copiée";
-      setTimeout(() => { button.dataset.state = ""; button.textContent = "Copier la référence"; }, 1800);
+      button.textContent = "Copié";
+      setTimeout(() => { button.dataset.state = ""; button.textContent = "Copier le sélecteur"; }, 1600);
     };
-
     const legacy = () => {
-      const area = document.createElement("textarea");
-      area.value = text;
-      area.setAttribute("readonly", "");
-      area.style.cssText = "position:fixed;top:0;left:0;opacity:0;pointer-events:none";
-      document.body.appendChild(area);
-      area.select();
+      const t = document.createElement("textarea");
+      t.value = text;
+      t.setAttribute("readonly", "");
+      t.style.cssText = "position:fixed;top:0;left:0;opacity:0;pointer-events:none";
+      document.body.appendChild(t);
+      t.select();
       let ok = false;
       try { ok = document.execCommand("copy"); } catch { ok = false; }
-      area.remove();
+      t.remove();
       return ok;
     };
-
     const reveal = () => {
-      fallbackArea.value = text;
-      fallbackBox.classList.add("is-shown");
-      fallbackArea.focus();
-      fallbackArea.select();
+      area.value = text;
+      box.classList.add("is-shown");
+      area.focus();
+      area.select();
       button.textContent = "Sélectionne puis copie";
     };
 
@@ -506,39 +509,38 @@
       values.map((v) => `<li><code>${v}</code></li>`).join("") + "</ul></div>";
   }
 
-  function renderEmpty() {
-    panelTitle.textContent = "Inspection";
-    panelKind.hidden = true;
-    body.innerHTML =
-      "<p class=\"role\">Survole n'importe quel élément d'une page : son nom, son sélecteur CSS " +
-      "et les champs JSON qui l'alimentent s'affichent ici.</p>" +
-      "<p class=\"hint\">Clique pour épingler, <kbd>Échap</kbd> pour relâcher.</p>";
+  function close() {
+    dock.classList.remove("is-open", "is-expanded");
+    pinned = null;
+    if (outline) outline.style.display = "none";
   }
+  document.getElementById("close").addEventListener("click", close);
 
-  function render(found, isPinned) {
+  function render(found) {
     const part = found.part;
     const page = pageOf(found.node);
-    const pageLabel = page === null ? "" : `page ${page + 1} · ${PAGES[page].label}`;
+    const selector = uniqueSelector(found.node);
 
     panelTitle.textContent = part.name;
-    panelKind.hidden = false;
     panelKind.textContent = part.kind;
     panelKind.dataset.kind = part.kind;
 
     body.innerHTML =
-      `<span class="eyebrow">${isPinned ? "Épinglé" : "Survol"}${pageLabel ? ` · ${pageLabel}` : ""}</span>` +
-      `<p class="role"></p>` +
-      `<div class="field"><span class="eyebrow">Sélecteur</span><div><code>.${found.key}</code></div></div>` +
-      chipList("json", "Champs du JSON", part.fields) +
-      chipList("vars", "Variables CSS", part.vars) +
-      `<div class="field"><span class="eyebrow">Contexte</span><div class="ancestry" id="chain"></div></div>` +
-      `<hr>` +
-      `<button type="button" class="copy" id="copy">Copier la référence</button>` +
-      `<div class="fallback" id="fallback"><span class="eyebrow">À copier à la main</span>` +
-      `<textarea id="fallback-text" readonly></textarea></div>` +
-      `<p class="hint">Colle-la dans ta demande de retouche : elle nomme le composant, ` +
-      `sa page, son sélecteur et les champs concernés.</p>`;
+      `<span class="eyebrow">${page === null ? "" : `Page ${page + 1} / ${PAGES.length} · ${PAGES[page].label}`}</span>` +
+      `<code class="sel" id="sel"></code>` +
+      `<div class="row">` +
+        `<button type="button" class="copy" id="copy">Copier le sélecteur</button>` +
+        `<button type="button" class="more" id="more">Voir plus</button>` +
+      `</div>` +
+      `<div class="fallback" id="fallback"><textarea id="fallback-text" readonly></textarea></div>` +
+      `<div class="detail">` +
+        `<p class="role"></p>` +
+        chipList("json", "Champs du JSON", part.fields) +
+        chipList("vars", "Variables CSS", part.vars) +
+        `<div class="field"><span class="eyebrow">Contexte</span><div class="ancestry" id="chain"></div></div>` +
+      `</div>`;
 
+    body.querySelector("#sel").textContent = selector;
     body.querySelector(".role").textContent = part.role;
 
     const chainBox = body.querySelector("#chain");
@@ -548,30 +550,27 @@
         sep.textContent = "›";
         chainBox.appendChild(sep);
       }
-      const button = document.createElement("button");
-      button.type = "button";
-      button.textContent = PARTS[step.key].name;
-      button.addEventListener("click", () => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = PARTS[step.key].name;
+      b.addEventListener("click", () => {
         pinned = { node: step.node, key: step.key, part: PARTS[step.key] };
-        render(pinned, true);
+        render(pinned);
         moveOutline(step.node, true);
       });
-      chainBox.appendChild(button);
+      chainBox.appendChild(b);
     });
 
-    const lines = [
-      `Composant : ${part.name}`,
-      pageLabel ? `Page : ${pageLabel}` : null,
-      `Sélecteur : .${found.key}`,
-      `Rôle : ${part.role}`,
-      part.fields ? `Champs JSON : ${part.fields.join(", ")}` : null,
-      part.vars ? `Variables CSS : ${part.vars.join(", ")}` : null,
-      "Fichiers : templates/travel-journal/index.html + style.css",
-    ].filter(Boolean).join("\n");
+    const more = body.querySelector("#more");
+    more.addEventListener("click", () => {
+      dock.classList.toggle("is-expanded");
+      more.textContent = dock.classList.contains("is-expanded") ? "Voir moins" : "Voir plus";
+    });
+    more.textContent = dock.classList.contains("is-expanded") ? "Voir moins" : "Voir plus";
 
-    const button = body.querySelector("#copy");
-    button.addEventListener("click", () =>
-      copyText(lines, button, body.querySelector("#fallback"), body.querySelector("#fallback-text")));
+    const copy = body.querySelector("#copy");
+    copy.addEventListener("click", () =>
+      copyText(selector, copy, body.querySelector("#fallback"), body.querySelector("#fallback-text")));
   }
 
   // --- Chargement ----------------------------------------------------------
@@ -598,13 +597,14 @@
     fitZoom();
     applyZoom();
     setCurrent(0);
-    renderEmpty();
 
+    // Survol : contour seul. La modal ne s'ouvre qu'au clic, pour ne pas
+    // clignoter à chaque passage de souris au-dessus de la page.
     doc.addEventListener("mousemove", (event) => {
       const found = describe(event.target);
       if (!found || hovered === found.node) return;
       hovered = found.node;
-      if (!pinned) { render(found, false); moveOutline(found.node, false); }
+      if (!pinned) moveOutline(found.node, false);
     });
 
     doc.addEventListener("click", (event) => {
@@ -612,8 +612,8 @@
       if (!found) return;
       event.preventDefault();
       pinned = found;
-      panel.classList.remove("is-collapsed");
-      render(found, true);
+      dock.classList.add("is-open");
+      render(found);
       moveOutline(found.node, true);
     });
 
@@ -633,11 +633,7 @@
   });
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && pinned) {
-      pinned = null;
-      renderEmpty();
-      if (outline) outline.style.display = "none";
-    }
+    if (event.key === "Escape") close();
   });
 
   frame.srcdoc = source;

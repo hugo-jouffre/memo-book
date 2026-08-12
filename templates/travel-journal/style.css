@@ -194,9 +194,10 @@ li { margin: 0; }
 .mb-note__title {
   display: block;
   margin: 0;
+  padding-top: var(--mb-line);     /* la ligne vide qui précède le titre */
   font-family: var(--mb-font-title);
-  font-size: 16pt;
-  line-height: calc(var(--mb-line) * 2);
+  font-size: 15pt;
+  line-height: var(--mb-line);     /* un interligne pile, comme le corps */
   letter-spacing: 0.01em;
 }
 
@@ -215,11 +216,11 @@ li { margin: 0; }
 .mb-ribbon {
   position: relative;
   flex: 0 0 71pt;
-  height: 111pt;
+  height: 144pt;
   /* Le ruban dépasse du bord haut : `.page` étant en overflow hidden, il est
      coupé net, comme un signet glissé dans le carnet. */
   margin-top: -48pt;
-  padding-top: 52pt;
+  padding-top: 66pt;
   text-align: center;
 }
 
@@ -227,6 +228,8 @@ li { margin: 0; }
   position: absolute;
   inset: 0;
   z-index: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .mb-ribbon__label,
@@ -352,6 +355,8 @@ li { margin: 0; }
   position: absolute;
   inset: 0;
   z-index: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .mb-tag__text {

@@ -59,6 +59,11 @@ Les deux autres fichiers à connaître :
   (coordonner avec l'Agent Sélection photo si besoin)
 - Respecter les marges d'impression : le contenu reste dans les 30 pt de marge
 
+## La météo
+Un seul champ : `day_intro.weather_key`, parmi `sun`, `sun-wind`, `cloud`,
+`rain`, `snow`. Le bandeau affiche toujours les cinq icônes et met en avant
+celle qui correspond. Règle de choix et cas limites dans `LAYOUT_KB.md`.
+
 ## Le champ `render_profile`
 Deux sorties pour une seule template :
 - `print` — fond blanc, pour l'imprimeur, dont le papier est déjà crème
