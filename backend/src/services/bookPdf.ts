@@ -70,6 +70,25 @@ export function assertNoNullValues(value: unknown, path = "payload"): void {
   }
 }
 
+/**
+ * Tout ce que le payload subit avant de rencontrer le gabarit, quel que soit le
+ * moteur qui rendra la page.
+ *
+ * Les deux moteurs doivent partir du **même** payload, sinon l'aperçu local
+ * cesse de prédire la production — et c'est précisément ce qui était arrivé :
+ * seul le rendu local dépliait les cartes, APITemplate recevait un chapitre
+ * sans `map_svg` et sortait une page d'ouverture vide.
+ */
+export function preparePayload(payload: Record<string, unknown>): Record<string, unknown> {
+  // Jinja2 imprime `None` là où l'on attend une chaîne vide : un null qui
+  // passe ici écrirait le mot « None » dans le carnet imprimé.
+  assertNoNullValues(payload);
+
+  // L'agent décrit la carte (« Philippines, Manille, Visayas ») ; la géométrie
+  // est un calcul déterministe, elle se fait ici et pas dans un prompt.
+  return expandMaps(payload);
+}
+
 export interface RenderHtmlOptions {
   payload: Record<string, unknown>;
   profile?: RenderProfile;
@@ -77,13 +96,9 @@ export interface RenderHtmlOptions {
 
 /** Applique le payload au gabarit et injecte la feuille de style verbatim. */
 export function renderTemplateToHtml({ payload, profile = "preview" }: RenderHtmlOptions): string {
-  assertNoNullValues(payload);
-
   const environment = createTemplateEnvironment();
   const rendered = environment.renderString(loadTemplateHtml(), {
-    // L'agent décrit la carte (« Philippines, Manille, Visayas ») ; la
-    // géométrie est un calcul déterministe, elle se fait ici.
-    ...expandMaps(payload),
+    ...preparePayload(payload),
     render_profile: profile,
   });
 

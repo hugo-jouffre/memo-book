@@ -91,6 +91,13 @@
     </defs>
   </svg>
 
+  {# Une photo scotchée, définie une seule fois.
+     Les cinq emplacements du carnet répétaient la même incantation, et deux
+     d'entre eux l'avaient oubliée : la photo sortait en « [object Object] »
+     dès qu'elle arrivait enrichie par l'analyse d'image.
+     `item` accepte une URL nue ou un objet {url, tape_corner, focus}. #}
+  {% macro mb_photo(item, modifier) %}<div class="mb-photo mb-photo--{{ modifier }}{% if item.tape_corner %} mb-photo--tape-{{ item.tape_corner }}{% endif %}">{% if item.tape_corner %}<span class="mb-photo__tape"></span>{% endif %}<img src="{{ item.url | default(item) }}" alt=""{% if item.focus %} style="object-position: {{ item.focus }}"{% endif %} /></div>{% endmacro %}
+
   <!-- ====================== COUVERTURE ====================== -->
   <div class="page page--cover">
     {% if cover_photo %}
@@ -251,16 +258,14 @@
           </div>
           {% if day.photos and day.photos | length >= 2 %}
             <div class="mb-gallery">
-              <div class="mb-photo mb-photo--tilt-left{% if day.photos[0].tape_corner %} mb-photo--tape-{{ day.photos[0].tape_corner }}{% endif %}">{% if day.photos[0].tape_corner %}<span class="mb-photo__tape"></span>{% endif %}<img src="{{ day.photos[0].url | default(day.photos[0]) }}" alt=""{% if day.photos[0].focus %} style="object-position: {{ day.photos[0].focus }}"{% endif %} /></div>
-              <div class="mb-photo mb-photo--tilt-right{% if day.photos[1].tape_corner %} mb-photo--tape-{{ day.photos[1].tape_corner }}{% endif %}">{% if day.photos[1].tape_corner %}<span class="mb-photo__tape"></span>{% endif %}<img src="{{ day.photos[1].url | default(day.photos[1]) }}" alt=""{% if day.photos[1].focus %} style="object-position: {{ day.photos[1].focus }}"{% endif %} /></div>
+              {{ mb_photo(day.photos[0], 'tilt-left') }}
+              {{ mb_photo(day.photos[1], 'tilt-right') }}
             </div>
           {% endif %}
 
         {% elif day.layout_hero_top %}
           {% if day.photos and day.photos | length >= 1 %}
-            <div class="mb-photo mb-photo--tilt-slight mb-hero">
-              <img src="{{ day.photos[0] }}" alt="" />
-            </div>
+            {{ mb_photo(day.photos[0], 'tilt-slight mb-hero') }}
           {% endif %}
           <div class="mb-note">
             {% if day.title %}<span class="mb-note__title">{{ day.title }}</span>{% endif %}
@@ -287,8 +292,8 @@
           </div>
           {% if day.photos and day.photos | length >= 2 %}
             <div class="mb-gallery">
-              <div class="mb-photo mb-photo--tilt-left{% if day.photos[0].tape_corner %} mb-photo--tape-{{ day.photos[0].tape_corner }}{% endif %}">{% if day.photos[0].tape_corner %}<span class="mb-photo__tape"></span>{% endif %}<img src="{{ day.photos[0].url | default(day.photos[0]) }}" alt=""{% if day.photos[0].focus %} style="object-position: {{ day.photos[0].focus }}"{% endif %} /></div>
-              <div class="mb-photo mb-photo--tilt-right{% if day.photos[1].tape_corner %} mb-photo--tape-{{ day.photos[1].tape_corner }}{% endif %}">{% if day.photos[1].tape_corner %}<span class="mb-photo__tape"></span>{% endif %}<img src="{{ day.photos[1].url | default(day.photos[1]) }}" alt=""{% if day.photos[1].focus %} style="object-position: {{ day.photos[1].focus }}"{% endif %} /></div>
+              {{ mb_photo(day.photos[0], 'tilt-left') }}
+              {{ mb_photo(day.photos[1], 'tilt-right') }}
             </div>
           {% endif %}
 
@@ -299,10 +304,10 @@
           </div>
           {% if day.photos and day.photos | length >= 2 %}
             <div class="mb-gallery{% if day.photos | length >= 3 %} mb-gallery--three{% endif %}">
-              <div class="mb-photo mb-photo--tilt-left{% if day.photos[0].tape_corner %} mb-photo--tape-{{ day.photos[0].tape_corner }}{% endif %}">{% if day.photos[0].tape_corner %}<span class="mb-photo__tape"></span>{% endif %}<img src="{{ day.photos[0].url | default(day.photos[0]) }}" alt=""{% if day.photos[0].focus %} style="object-position: {{ day.photos[0].focus }}"{% endif %} /></div>
-              <div class="mb-photo mb-photo--tilt-right{% if day.photos[1].tape_corner %} mb-photo--tape-{{ day.photos[1].tape_corner }}{% endif %}">{% if day.photos[1].tape_corner %}<span class="mb-photo__tape"></span>{% endif %}<img src="{{ day.photos[1].url | default(day.photos[1]) }}" alt=""{% if day.photos[1].focus %} style="object-position: {{ day.photos[1].focus }}"{% endif %} /></div>
+              {{ mb_photo(day.photos[0], 'tilt-left') }}
+              {{ mb_photo(day.photos[1], 'tilt-right') }}
               {% if day.photos | length >= 3 %}
-                <div class="mb-photo mb-photo--tilt-slight{% if day.photos[2].tape_corner %} mb-photo--tape-{{ day.photos[2].tape_corner }}{% endif %}">{% if day.photos[2].tape_corner %}<span class="mb-photo__tape"></span>{% endif %}<img src="{{ day.photos[2].url | default(day.photos[2]) }}" alt=""{% if day.photos[2].focus %} style="object-position: {{ day.photos[2].focus }}"{% endif %} /></div>
+                {{ mb_photo(day.photos[2], 'tilt-slight') }}
               {% endif %}
             </div>
           {% endif %}
@@ -323,9 +328,7 @@
                 </div>
               {% endif %}
               {% if day.photos and day.photos | length >= 1 %}
-                <div class="mb-photo mb-photo--tilt-left">
-                  <img src="{{ day.photos[0] }}" alt="" />
-                </div>
+                {{ mb_photo(day.photos[0], 'tilt-left') }}
               {% endif %}
             </div>
           {% endif %}

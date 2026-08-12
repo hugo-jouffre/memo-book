@@ -78,6 +78,17 @@ export function loadSamplePayload(): Record<string, unknown> {
   return JSON.parse(readTemplateFile("data.json")) as Record<string, unknown>;
 }
 
+/**
+ * Un payload de `templates/travel-journal/samples/`.
+ *
+ * `data.json` n'exerce qu'une partie du gabarit : ni carte de chapitre, ni
+ * photo enrichie par l'analyse d'image. Les échantillons couvrent le reste, et
+ * c'est à ce titre qu'ils entrent dans la non-régression visuelle.
+ */
+export function loadNamedPayload(name: string): Record<string, unknown> {
+  return JSON.parse(readTemplateFile(`samples/${name}.json`)) as Record<string, unknown>;
+}
+
 /** Le gabarit Jinja2 consommé tel quel par APITemplate (`body`). */
 export function loadTemplateHtml(): string {
   return readTemplateFile("index.html");

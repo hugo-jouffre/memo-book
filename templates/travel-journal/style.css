@@ -226,7 +226,10 @@ li { margin: 0; }
   display: flex;
   align-items: flex-start;
   gap: 10pt;
-  height: 52pt;
+  /* Hauteur plancher et non fixe : « De Barcelone à Cebu » passe à deux lignes
+     et, à hauteur bloquée, débordait sur le bandeau météo. Le ruban garde sa
+     propre hauteur, il ne suit pas celle de l'en-tête. */
+  min-height: 52pt;
 }
 
 .mb-ribbon {

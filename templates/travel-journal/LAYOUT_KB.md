@@ -199,6 +199,29 @@ resté libre dans le gabarit, comme sur un carnet où l'on n'a pas rempli la pag
 - Les photos sont recadrées en `object-fit: cover` et pivotées de quelques
   degrés : ne pas envoyer une image dont un visage touche déjà le bord.
 
+### Deux formes acceptées pour une photo
+
+Une entrée de `photos[]` est soit une URL nue, soit un objet enrichi par
+l'analyse d'image. Les deux formes cohabitent dans le même tableau.
+
+```json
+"photos": [
+  "https://cdn.../plage.jpg",
+  { "url": "https://cdn.../marche.jpg", "tape_corner": "bottom-left", "focus": "17% 50%" }
+]
+```
+
+| Champ | Valeurs | Effet |
+|---|---|---|
+| `url` | URL absolue | La photo. Seul champ obligatoire de la forme objet |
+| `tape_corner` | `top-left`, `top-right`, `bottom-left`, `bottom-right`, `top` | Pose un scotch dans ce coin. **Absent = pas de scotch** : mieux vaut aucun scotch qu'un scotch sur un visage |
+| `focus` | deux pourcentages, ex. `17% 50%` | Point que le recadrage préserve. Absent = recadrage centré |
+
+**L'agent ne remplit pas ces deux champs à la main.** Ils sortent de
+`backend/src/services/photoAnalysis.ts`, qui mesure la photo : coin le plus
+calme pour le scotch, zone la plus détaillée pour le recadrage. Voir
+`docs/photos.md`.
+
 ## Pièges à connaître
 
 - **Jamais `null`.** Jinja2 imprime la chaîne littérale « None » dans le
