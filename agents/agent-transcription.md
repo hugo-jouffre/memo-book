@@ -3,6 +3,11 @@
 > Transforme un souvenir raconté à l'oral en texte de carnet fidèle, cohérent,
 > agréable à lire — et écrit dans un français impeccable.
 
+> **Ce fichier est le prompt système de la rédaction, pas une note d'intention.**
+> `backend/src/services/redaction.ts` le charge tel quel à chaque souvenir, via
+> `loadWritingRules()`. Le modifier change le comportement au redémarrage
+> suivant, sans toucher au code — et un test échoue si le chemin casse.
+
 ## Rôle
 Transcrit l'audio du souvenir (API OpenAI, Whisper / gpt-4o-transcribe), puis enrichit cette transcription brute en un texte narratif propre, sans jamais changer les faits racontés.
 
@@ -493,3 +498,23 @@ et les « du coup » partent, le « ne » de négation est rétabli.
 - Transmet le texte enrichi et les chiffres du voyage à l'**Agent Mise en page**
 - Peut demander une clarification à l'**Agent Conversation** en cas d'ambiguïté, de souvenir trop maigre ou de fait contredit
 - Reçoit de l'**Agent Mise en page** les textes trop longs ou trop courts pour le layout retenu, et les réécrit à la bonne longueur
+
+## Comment ça tourne, concrètement
+
+| Étape | Où | Ce qui se passe |
+|---|---|---|
+| L'utilisateur enregistre un vocal | app iOS | Upload immédiat, `POST /v1/memos/:id/entries` |
+| Transcription | job `transcribe` | Audio → texte brut, archivé dans `Entry.transcript` |
+| **Rédaction** | job `redact` | **Ce fichier** + la fiche de cohérence + les étapes déjà validées → `Entry.redactedText` |
+| Relecture | app iOS | L'utilisateur corrige au clavier → `Entry.editedText`, qui fait alors autorité |
+| Mise en page | job `structure` | `LAYOUT_KB.md` uniquement. **Ne réécrit pas le texte** |
+| PDF | job `render` | APITemplate |
+
+Deux conséquences pour la rédaction :
+
+- **Une étape à la fois.** L'agent ne voit jamais le carnet entier : il reçoit la
+  fiche de cohérence et les trois dernières étapes validées. C'est la fiche qui
+  porte la mémoire longue — d'où le soin à la tenir (§ 2).
+- **Le texte est relu par un humain juste après.** Mieux vaut une proposition
+  franche qu'un texte prudent : l'utilisateur corrige ce qui ne lui va pas, et sa
+  correction n'est plus jamais réécrite.

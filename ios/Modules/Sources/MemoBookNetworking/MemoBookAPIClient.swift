@@ -140,6 +140,14 @@ public actor MemoBookAPIClient: MemoBookAPI {
         try await send(method: "GET", path: "/v1/entries/\(id)")
     }
 
+    public func updateEntry(id: String, edit: EntryEdit) async throws -> Entry {
+        try await send(method: "PATCH", path: "/v1/entries/\(id)", encodableBody: edit)
+    }
+
+    public func retryRedaction(entryId: String) async throws -> Entry {
+        try await send(method: "POST", path: "/v1/entries/\(entryId)/redaction")
+    }
+
     // MARK: - Génération
 
     public func startRender(memoId: String) async throws -> Render {
@@ -148,6 +156,22 @@ public actor MemoBookAPIClient: MemoBookAPI {
 
     public func render(id: String) async throws -> Render {
         try await send(method: "GET", path: "/v1/renders/\(id)")
+    }
+
+    // MARK: - Impression
+
+    public func createPrintOrder(memoId: String, order: NewPrintOrder) async throws -> PrintOrder {
+        try await send(
+            method: "POST",
+            path: "/v1/memos/\(memoId)/orders",
+            encodableBody: order
+        )
+    }
+
+    public func printOrders(memoId: String) async throws -> [PrintOrder] {
+        struct Response: Decodable { let orders: [PrintOrder] }
+        let response: Response = try await send(method: "GET", path: "/v1/memos/\(memoId)/orders")
+        return response.orders
     }
 
     // MARK: - Transport

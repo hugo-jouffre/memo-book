@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppContext } from "../context.js";
-import { JOB_NAMES, type TranscribeJob } from "../jobs/index.js";
+import { JOB_NAMES, type RedactJob, type TranscribeJob } from "../jobs/index.js";
 import { HttpError } from "../lib/httpError.js";
 import { deviceIdOf } from "../plugins/auth.js";
 import { loadOwnedMemo } from "./memos.js";
@@ -15,6 +15,19 @@ const textEntryBody = z.object({
   transcript: z.string().min(1, "le texte est requis").max(20_000),
   capturedAt: z.coerce.date().optional(),
   placeLabel: z.string().max(200).optional(),
+});
+
+const WEATHER_KEYS = ["sun", "sun-wind", "cloud", "rain", "snow"] as const;
+
+/**
+ * Correction manuelle. `editedText: null` revient explicitement au texte
+ * proposé par la rédaction ; un champ absent laisse la valeur en place.
+ */
+const updateEntryBody = z.object({
+  editedText: z.string().min(1).max(20_000).nullable().optional(),
+  placeLabel: z.string().max(200).nullable().optional(),
+  suggestedTitle: z.string().max(200).nullable().optional(),
+  weatherKey: z.enum(WEATHER_KEYS).nullable().optional(),
 });
 
 /** Taille maximale d'un média. ~25 Mo couvre un vocal long et une photo pleine résolution. */
@@ -125,6 +138,94 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
 
     if (!entry) throw HttpError.notFound("Entrée introuvable.");
     return serializeEntry(entry);
+  });
+
+  /**
+   * Correction manuelle du texte, au clavier depuis l'app.
+   *
+   * Le texte corrigé est stocké **à côté** du texte rédigé, jamais à sa place :
+   * la version du modèle reste consultable, et « revenir à la version
+   * proposée » est un simple `null`. À partir de là, la mise en page reprend
+   * la correction au mot près.
+   */
+  app.patch("/v1/entries/:id", async (request) => {
+    const { id } = entryIdParams.parse(request.params);
+    const body = updateEntryBody.parse(request.body ?? {});
+
+    const entry = await context.prisma.entry.findFirst({
+      where: { id, memo: { deviceId: deviceIdOf(request) } },
+    });
+    if (!entry) throw HttpError.notFound("Entrée introuvable.");
+
+    if (entry.kind === "photo") {
+      throw HttpError.badRequest("Une photo n'a pas de texte à corriger.");
+    }
+
+    // `null` explicite = revenir au texte proposé. Champ absent = ne pas
+    // toucher au texte. Les deux se distinguent : `exactOptionalPropertyTypes`
+    // n'aiderait pas ici, c'est la sémantique JSON qui compte.
+    const clearsEdit = "editedText" in body && body.editedText === null;
+    const hasNewText = typeof body.editedText === "string";
+
+    const updated = await context.prisma.entry.update({
+      where: { id },
+      data: {
+        ...(hasNewText ? { editedText: body.editedText, editedAt: new Date() } : {}),
+        ...(clearsEdit ? { editedText: null, editedAt: null } : {}),
+        ...(body.placeLabel !== undefined ? { placeLabel: body.placeLabel } : {}),
+        ...(body.suggestedTitle !== undefined ? { suggestedTitle: body.suggestedTitle } : {}),
+        ...(body.weatherKey !== undefined ? { weatherKey: body.weatherKey } : {}),
+      },
+      include: { media: true },
+    });
+
+    return serializeEntry(updated);
+  });
+
+  /**
+   * Relance la rédaction d'un souvenir : après un échec, ou pour redemander
+   * une proposition quand le texte ne plaît pas.
+   *
+   * Une correction manuelle existante bloque la relance — la réécrire par
+   * dessus détruirait le travail de l'utilisateur sans qu'il l'ait demandé.
+   * Il doit d'abord revenir à la version proposée (`editedText: null`).
+   */
+  app.post("/v1/entries/:id/redaction", async (request, reply) => {
+    const { id } = entryIdParams.parse(request.params);
+
+    const entry = await context.prisma.entry.findFirst({
+      where: { id, memo: { deviceId: deviceIdOf(request) } },
+    });
+    if (!entry) throw HttpError.notFound("Entrée introuvable.");
+
+    if (entry.editedText) {
+      throw HttpError.badRequest(
+        "Ce souvenir a été corrigé à la main. Reviens d'abord à la version proposée " +
+          "pour relancer la rédaction.",
+        "manually_edited",
+      );
+    }
+
+    if (!entry.transcript) {
+      throw HttpError.badRequest(
+        "Ce souvenir n'a pas encore de transcription à rédiger.",
+        "not_transcribed",
+      );
+    }
+
+    if (entry.redactionStatus === "processing") {
+      return reply.code(200).send(serializeEntry(entry));
+    }
+
+    const queued = await context.prisma.entry.update({
+      where: { id },
+      data: { redactionStatus: "pending", redactionError: null },
+      include: { media: true },
+    });
+
+    await context.queue.publish<RedactJob>(JOB_NAMES.redact, { entryId: id });
+
+    return reply.code(202).send(serializeEntry(queued));
   });
 
   app.delete("/v1/entries/:id", async (request, reply) => {

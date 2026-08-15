@@ -3,6 +3,7 @@ import type { AppContext } from "../context.js";
 import { validatePayload } from "../services/payloadValidator.js";
 import type { StructuringEntry } from "../services/structuring.js";
 import { JOB_NAMES } from "./queue.js";
+import { finalTextOf } from "./redact.js";
 import type { RenderJob } from "./render.js";
 
 export interface StructureJob {
@@ -10,10 +11,13 @@ export interface StructureJob {
 }
 
 /**
- * Étape 2 : les transcriptions deviennent un payload de carnet conforme au
+ * Étape 3 : les textes validés deviennent un payload de carnet conforme au
  * schéma de `templates/travel-journal/`. Le payload est validé ici, avant
  * d'atteindre APITemplate — un payload hors limites produit un PDF qui déborde
  * de la page, ce qui ne se voit qu'à l'impression.
+ *
+ * Cette étape ne réécrit rien : elle arrange. Le texte lui arrive fini de
+ * l'étape de rédaction, éventuellement corrigé à la main par le voyageur.
  */
 export async function structureRender(
   context: AppContext,
@@ -71,7 +75,15 @@ export async function structureRender(
 
       structuringEntries.push({
         kind: entry.kind,
-        transcript: entry.transcript,
+        // `finalTextOf` fait la hiérarchie : correction manuelle, puis texte
+        // rédigé, puis transcription brute en dernier recours (rédaction
+        // échouée — mieux vaut un carnet au texte imparfait qu'un carnet vide).
+        transcript: finalTextOf(entry),
+        editedByUser: entry.editedText !== null,
+        title: entry.suggestedTitle,
+        funFact: entry.funFact,
+        funFactTitle: entry.funFactTitle,
+        weatherKey: entry.weatherKey,
         capturedAt: entry.capturedAt,
         placeLabel: entry.placeLabel,
         photoUrl,
@@ -81,6 +93,23 @@ export async function structureRender(
     if (structuringEntries.length === 0) {
       throw new Error(
         "Ce carnet ne contient encore aucune entrée : enregistre au moins un souvenir avant de le générer.",
+      );
+    }
+
+    // Un souvenir encore en cours de rédaction entrerait dans le PDF avec sa
+    // transcription brute — hésitations comprises. L'app empêche déjà ce cas ;
+    // le job le revérifie parce qu'un worker peut reprendre un job enfilé
+    // avant qu'une nouvelle entrée n'arrive.
+    const pending = memo.entries.filter(
+      (entry) =>
+        entry.kind !== "photo" &&
+        (entry.redactionStatus === "pending" || entry.redactionStatus === "processing"),
+    );
+
+    if (pending.length > 0) {
+      throw new Error(
+        `${pending.length} souvenir(s) sont encore en cours de rédaction. ` +
+          "Attends qu'ils soient prêts avant de générer le carnet.",
       );
     }
 

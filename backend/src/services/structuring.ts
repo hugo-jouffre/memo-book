@@ -7,8 +7,23 @@ import { validatePayload, type ValidationIssue } from "./payloadValidator.js";
 /** Une entrée du carnet telle que la voit l'étape de structuration. */
 export interface StructuringEntry {
   kind: "audio" | "text" | "photo";
-  /** Texte transcrit (audio) ou saisi (text). Vide pour une photo seule. */
+  /**
+   * Le texte **définitif** de l'étape : corrigé par l'utilisateur s'il l'a
+   * fait, sinon rédigé par l'agent de rédaction. Vide pour une photo seule.
+   *
+   * Ce n'est plus une transcription brute : la mise en page le reprend au mot
+   * près, elle ne le réécrit pas.
+   */
   transcript: string | null;
+  /** `true` quand l'utilisateur a corrigé le texte à la main dans l'app. */
+  editedByUser: boolean;
+  /** Titre proposé par la rédaction, à reprendre tel quel. */
+  title: string | null;
+  /** Encart déjà rédigé et déjà borné à 140 caractères. */
+  funFact: string | null;
+  funFactTitle: string | null;
+  /** Icône météo déjà choisie par la rédaction. */
+  weatherKey: string | null;
   capturedAt: Date;
   placeLabel: string | null;
   /** URL publique de la photo, quand l'entrée en porte une. */
@@ -147,13 +162,20 @@ export class HeuristicStructurer implements Structurer {
       const place =
         group.entries.find((entry) => entry.placeLabel)?.placeLabel ?? null;
 
+      // Titre, météo et encart viennent de la rédaction quand elle est passée.
+      // Le repli déterministe ne réinvente que ce qui manque.
+      const redactedTitle = group.entries.find((entry) => entry.title)?.title ?? null;
+      const weatherKey = group.entries.find((entry) => entry.weatherKey)?.weatherKey ?? null;
+      const withFunFact = group.entries.find((entry) => entry.funFact);
+
       const day: Record<string, unknown> = {
-        title: `Jour ${index + 1}${place ? ` – ${place}` : ""}`,
+        title: redactedTitle ?? `Jour ${index + 1}${place ? ` – ${place}` : ""}`,
         date: DATE_FORMATTER.format(group.date),
         day_intro: {
           day_number: String(index + 1).padStart(2, "0"),
           location: place ?? "",
           date: SHORT_DATE_FORMATTER.format(group.date),
+          ...(weatherKey ? { weather_key: weatherKey } : {}),
         },
         body_html: toBodyHtml(narrative),
         [pickLayout(photos.length, narrative.length)]: true,
@@ -161,6 +183,10 @@ export class HeuristicStructurer implements Structurer {
 
       if (place) day["city"] = place;
       if (photos.length > 0) day["photos"] = photos;
+      if (withFunFact?.funFact) {
+        day["fun_facts"] = [withFunFact.funFact];
+        if (withFunFact.funFactTitle) day["fun_facts_title"] = withFunFact.funFactTitle;
+      }
 
       return day;
     });
@@ -201,9 +227,23 @@ export class LlmStructurer implements Structurer {
 
   private buildSystemPrompt(): string {
     return [
-      "Tu es l'éditeur de MemoBook. Tu transformes des récits oraux transcrits en",
-      "un carnet imprimable. Tu écris en français, à la première personne du",
-      "narrateur, dans un ton chaleureux et concret — jamais promotionnel.",
+      "Tu es le metteur en page de MemoBook. Tu reçois des textes **déjà rédigés et",
+      "déjà validés par le voyageur**, et tu les arranges en pages de carnet.",
+      "",
+      "## Ta seule mission : arranger, jamais réécrire",
+      "",
+      "Le texte de chaque étape t'arrive fini. Une autre passe l'a écrit en suivant",
+      "les règles de rédaction de la maison, et le voyageur l'a relu et corrigé au",
+      "clavier. Le réécrire effacerait son travail.",
+      "",
+      "- Reprends `title`, le récit, `fun_facts` et `weather_key` **au mot près**.",
+      "- Tu peux **découper** un texte en `<p>` et **répartir** une étape trop dense",
+      "  sur plusieurs entrées consécutives de `days[]`. Découper n'est pas réécrire :",
+      "  aucun mot n'est ajouté, retiré ni remplacé.",
+      "- Une étape marquée « corrigée par le voyageur » est intouchable, même si elle",
+      "  te semble maladroite. Si elle dépasse les limites de longueur, scinde-la en",
+      "  plusieurs entrées plutôt que de la raccourcir.",
+      "- N'invente aucun texte : ni titre, ni encart, ni transition, ni légende.",
       "",
       "Tu réponds UNIQUEMENT par un objet JSON conforme au schéma ci-dessous.",
       "",
@@ -234,16 +274,31 @@ export class LlmStructurer implements Structurer {
       lines.push("", `### Journée ${index + 1} — ${DATE_FORMATTER.format(group.date)}`);
       for (const entry of group.entries) {
         if (entry.placeLabel) lines.push(`Lieu : ${entry.placeLabel}`);
-        if (entry.transcript) lines.push(`Récit : ${entry.transcript}`);
+        if (entry.title) lines.push(`Titre (à reprendre tel quel) : ${entry.title}`);
+        if (entry.weatherKey) lines.push(`weather_key (déjà choisi) : ${entry.weatherKey}`);
+        if (entry.funFact) {
+          lines.push(
+            `Encart « ${entry.funFactTitle ?? "Fun fact"} » (à reprendre tel quel) : ${entry.funFact}`,
+          );
+        }
+        if (entry.transcript) {
+          lines.push(
+            entry.editedByUser
+              ? `Récit — CORRIGÉ PAR LE VOYAGEUR, intouchable : ${entry.transcript}`
+              : `Récit — texte validé : ${entry.transcript}`,
+          );
+        }
         if (entry.photoUrl) lines.push(`Photo : ${entry.photoUrl}`);
       }
     }
 
     lines.push(
       "",
-      "N'invente aucun lieu, aucune date et aucune photo : n'utilise que les URLs",
-      "listées ci-dessus. Tu peux en revanche enrichir les `fun_facts` avec des",
-      "informations factuelles sur les lieux réellement mentionnés.",
+      "Rappel : ces textes sont définitifs. Tu les découpes en paragraphes et tu",
+      "choisis les layouts ; tu ne les réécris pas, tu ne les résumes pas, tu ne les",
+      "complètes pas. N'invente aucun lieu, aucune date et aucune photo : n'utilise",
+      "que les URLs listées ci-dessus. N'ajoute pas de `fun_facts` : ceux qui devaient",
+      "exister sont déjà donnés ci-dessus.",
     );
 
     return lines.join("\n");

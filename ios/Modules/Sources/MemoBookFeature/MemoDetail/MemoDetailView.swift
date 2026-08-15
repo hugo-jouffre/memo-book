@@ -11,6 +11,7 @@ public struct MemoDetailView: View {
     @State private var noteText = ""
     @State private var isWritingNote = false
     @State private var photoItem: PhotosPickerItem?
+    @State private var editedEntry: Entry?
 
     private let memoId: String
 
@@ -94,12 +95,40 @@ public struct MemoDetailView: View {
                 }
 
                 ForEach(model.entries) { entry in
-                    EntryRow(entry: entry)
+                    // Une photo n'a pas de texte à relire ; tout le reste
+                    // s'ouvre pour correction, y compris un souvenir dont la
+                    // rédaction a échoué — c'est justement là qu'on veut
+                    // pouvoir reprendre la main.
+                    if entry.kind == .photo {
+                        EntryRow(entry: entry)
+                    } else {
+                        Button {
+                            editedEntry = entry
+                        } label: {
+                            EntryRow(entry: entry)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(entry.isProcessing)
+                    }
                 }
             }
         }
         .listStyle(.insetGrouped)
         .refreshable { await model.load() }
+        .sheet(item: $editedEntry) { entry in
+            EntryEditorView(
+                entry: entry,
+                onSave: { text in
+                    Task { await model.saveEditedText(entryId: entry.id, text: text) }
+                },
+                onRevert: {
+                    Task { await model.revertToRedactedText(entryId: entry.id) }
+                },
+                onRetry: {
+                    Task { await model.retryRedaction(entryId: entry.id) }
+                }
+            )
+        }
     }
 
     /// Barre d'action du bas. La critique design relève que la barre des
@@ -208,12 +237,26 @@ private struct EntryRow: View {
         }
     }
 
+    /// Ce que la ligne dit quand il n'y a pas encore de texte à montrer.
+    ///
+    /// Les deux étapes sont nommées distinctement : « transcription » puis
+    /// « rédaction ». Un seul libellé fourre-tout donnerait l'impression que
+    /// l'app est bloquée alors qu'elle avance.
     private var placeholder: String {
-        switch entry.status {
-        case .failed: entry.error ?? "La transcription a échoué."
-        case .ready where entry.kind == .photo: "Photo ajoutée au carnet"
-        default: "Transcription en cours…"
+        if entry.kind == .photo { return "Photo ajoutée au carnet" }
+        if entry.status == .failed { return entry.error ?? "La transcription a échoué." }
+        if entry.status.isInProgress { return "Transcription en cours…" }
+        if entry.redactionStatus.isInProgress { return "Rédaction en cours…" }
+        return "Souvenir sans texte."
+    }
+
+    /// Le statut affiché est celui de l'étape en cours. Un souvenir transcrit
+    /// mais pas encore rédigé n'est pas « prêt » : son texte va changer.
+    private var displayedStatus: Status {
+        if entry.kind == .photo || entry.status.isInProgress || entry.status == .failed {
+            return entry.status
         }
+        return entry.redactionStatus
     }
 
     var body: some View {
@@ -225,18 +268,32 @@ private struct EntryRow: View {
                     .font(MemoBookFont.caption)
                     .foregroundStyle(MemoBookColor.inkSecondary)
                 Spacer()
-                StatusBadge(entry.status)
+                if entry.isEdited {
+                    Label("Corrigé", systemImage: "pencil")
+                        .font(MemoBookFont.caption)
+                        .labelStyle(.titleAndIcon)
+                        .foregroundStyle(MemoBookColor.inkSecondary)
+                        .accessibilityLabel("Corrigé à la main")
+                }
+                StatusBadge(displayedStatus)
             }
 
-            if let transcript = entry.transcript, !transcript.isEmpty {
-                Text(transcript)
+            if let title = entry.suggestedTitle, !title.isEmpty {
+                Text(title)
+                    .font(MemoBookFont.body.weight(.semibold))
+                    .foregroundStyle(MemoBookColor.ink)
+            }
+
+            if let text = entry.displayText, !text.isEmpty {
+                Text(text)
                     .font(MemoBookFont.body)
                     .foregroundStyle(MemoBookColor.ink)
+                    .lineLimit(4)
             } else {
                 Text(placeholder)
                     .font(MemoBookFont.caption)
                     .foregroundStyle(
-                        entry.status == .failed ? MemoBookColor.error : MemoBookColor.inkSecondary
+                        displayedStatus == .failed ? MemoBookColor.error : MemoBookColor.inkSecondary
                     )
             }
         }

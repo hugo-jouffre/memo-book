@@ -9,6 +9,20 @@ et du style choisi. N'écrit pas de texte, ne choisit pas de photos : il les
 arrange. Sa sortie est un **payload JSON**, pas du HTML — c'est le template qui
 met en forme.
 
+## Il ne réécrit jamais le texte
+
+Le texte lui arrive **fini** : rédigé par l'Agent Transcription, puis relu et
+parfois corrigé au clavier par le voyageur. Le réécrire effacerait ce travail.
+
+- Titre, récit, encarts et `weather_key` se reprennent **au mot près**.
+- Découper un texte en `<p>`, ou scinder une étape trop dense en plusieurs
+  entrées consécutives de `days[]`, n'est pas réécrire : aucun mot n'est ajouté,
+  retiré ni remplacé.
+- Une étape corrigée par le voyageur est intouchable, même maladroite. Trop
+  longue, elle se scinde ; elle ne se raccourcit pas.
+- Aucun `fun_facts` inventé ici : ceux qui devaient exister sont déjà produits
+  par la rédaction.
+
 ## Entrées
 - Texte enrichi de chaque souvenir (sortie de l'Agent Transcription)
 - Photos sélectionnées et leur ordre (sortie de l'Agent Sélection photo)

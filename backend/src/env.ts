@@ -31,6 +31,19 @@ const schema = z.object({
   OPENAI_API_KEY: z.string().default(""),
   OPENAI_TRANSCRIPTION_MODEL: z.string().default("gpt-4o-transcribe"),
   OPENAI_STRUCTURING_MODEL: z.string().default("gpt-4o"),
+
+  /**
+   * Rédaction du texte de carnet. Séparée d'OpenAI, qui reste sur la
+   * transcription audio et la mise en page : la rédaction est l'étape où la
+   * qualité se voit, et elle doit pouvoir changer de modèle sans toucher au
+   * reste du pipeline.
+   *
+   * Sans clé, la rédaction bascule sur `FakeRedactor` même en mode `live` —
+   * le carnet reste générable, avec un texte simplement nettoyé.
+   */
+  ANTHROPIC_API_KEY: z.string().default(""),
+  ANTHROPIC_REDACTION_MODEL: z.string().default("claude-opus-5"),
+
   PIPELINE_MODE: z.enum(["auto", "live", "fake"]).default("auto"),
 
   APITEMPLATE_API_KEY: z.string().default(""),

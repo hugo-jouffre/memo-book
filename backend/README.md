@@ -3,10 +3,23 @@
 L'API et le pipeline qui transforment des vocaux en carnet imprimable.
 
 ```
-Entry (audio) ──transcribe──▶ transcript ──structure──▶ payload ──render──▶ PDF
-                 OpenAI                    LLM + schémas      APITemplate.io
-                                           du dépôt
+Entry ──transcribe──▶ transcript ──redact──▶ texte ──structure──▶ payload ──render──▶ PDF
+         OpenAI                    Claude      ▲       LLM + schémas     APITemplate.io
+                                   + règles    │       du dépôt
+                                   du dépôt    │
+                                        correction au clavier
+                                        dans l'app (PATCH)
 ```
+
+**Deux passes de modèle, volontairement séparées.** `redact` écrit le texte d'une
+étape, une étape à la fois, en suivant `agents/agent-transcription.md` — pendant que
+l'utilisateur est là pour relire. `structure` met en page l'ensemble du carnet à la
+prévisualisation, en suivant `templates/travel-journal/LAYOUT_KB.md`, et **ne réécrit
+rien**. Les fusionner reviendrait à réécrire, à chaque aperçu PDF, un texte que
+l'utilisateur a corrigé à la main.
+
+Les deux prompts sont construits à partir des fichiers Markdown du dépôt : corriger
+une règle de rédaction est une modification de Markdown, pas de TypeScript.
 
 ## Démarrer
 
@@ -115,10 +128,15 @@ Toutes les routes `/v1` attendent un `Authorization: Bearer <token>` d'appareil,
 | `GET /v1/memos/:id` | Un carnet, ses souvenirs et ses générations |
 | `DELETE /v1/memos/:id` | Supprime un carnet |
 | `POST /v1/memos/:id/entries` | Ajoute un souvenir — JSON pour une note, multipart pour un vocal ou une photo |
-| `GET /v1/entries/:id` | Statut et transcription d'un souvenir |
+| `GET /v1/entries/:id` | Statut, transcription et texte rédigé d'un souvenir |
+| `PATCH /v1/entries/:id` | Corrige le texte à la main. `editedText: null` revient à la version proposée |
+| `POST /v1/entries/:id/redaction` | Redemande une rédaction (refusé si le texte a été corrigé) |
 | `DELETE /v1/entries/:id` | Supprime un souvenir |
 | `POST /v1/memos/:id/renders` | Lance la génération du carnet (202, résultat asynchrone) |
 | `GET /v1/renders/:id` | Suit la génération, renvoie l'URL du PDF |
+| `POST /v1/memos/:id/orders` | Commande le carnet imprimé, sur un rendu déjà généré |
+| `GET /v1/memos/:id/orders` | Les commandes d'un carnet |
+| `GET /v1/orders/:id` | Suit une commande |
 
 > **Authentification** — le token d'appareil est un provisoire assumé, le temps que les
 > comptes utilisateur arrivent. Tout est concentré dans `src/plugins/auth.ts` : c'est le
@@ -128,9 +146,10 @@ Toutes les routes `/v1` attendent un `Authorization: Bearer <token>` d'appareil,
 
 | Fichier | Ce qu'il fait |
 | --- | --- |
-| `src/lib/templates.ts` | Charge `gpt_image_schema.yaml` et `LAYOUT_KB.md` depuis `templates/` |
+| `src/lib/templates.ts` | Charge `gpt_image_schema.yaml` et `LAYOUT_KB.md` depuis `templates/`, et les règles de rédaction depuis `agents/` |
 | `src/services/payloadValidator.ts` | Valide le carnet — schéma **et** limites de longueur de LAYOUT_KB |
-| `src/services/structuring.ts` | Transforme les transcriptions en payload (LLM, avec repli heuristique) |
+| `src/services/redaction.ts` | Transcription → texte de carnet (Claude, piloté par `agents/agent-transcription.md`) |
+| `src/services/structuring.ts` | Textes validés → payload de mise en page (LLM, avec repli heuristique) |
 | `src/services/transcription.ts` | Audio → texte |
 | `src/services/apitemplate.ts` | Payload → PDF via APITemplate, et choix du moteur de rendu |
 | `src/services/bookPdf.ts` | Payload → PDF en local (Nunjucks + Chromium) |
@@ -140,7 +159,7 @@ Toutes les routes `/v1` attendent un `Authorization: Bearer <token>` d'appareil,
 | `scripts/build-icons.ts` | Embarque `assets/icons/` dans le gabarit — voir `assets/README.md` |
 | `scripts/build-inspector.ts` | L'inspecteur de mise en page, et le dictionnaire des composants |
 | `src/services/webflow.ts` | Publie les photos sur le CDN (APITemplate a besoin d'URLs publiques) |
-| `src/jobs/` | Les trois étapes du pipeline, sur une file pg-boss adossée à Postgres |
+| `src/jobs/` | Les quatre étapes du pipeline, sur une file pg-boss adossée à Postgres |
 
 ### Pourquoi valider les longueurs côté serveur
 

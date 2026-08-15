@@ -56,7 +56,7 @@ export async function createHarness(
 /** Vide les tables entre deux suites. `Device` cascade sur tout le reste. */
 export async function resetDatabase(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "renders", "entries", "media_assets", "memos", "devices" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "print_orders", "renders", "entries", "media_assets", "memos", "devices" RESTART IDENTITY CASCADE',
   );
 }
 

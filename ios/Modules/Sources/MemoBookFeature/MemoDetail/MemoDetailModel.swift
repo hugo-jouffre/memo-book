@@ -35,14 +35,40 @@ public final class MemoDetailModel {
 
     public var latestRender: Render? { memo?.latestRender }
 
-    /// `true` tant qu'une transcription ou une génération est en cours.
+    /// `true` tant qu'une transcription, une rédaction ou une génération est
+    /// en cours.
     public var hasWorkInProgress: Bool {
-        entries.contains { $0.status.isInProgress }
-            || (latestRender?.status.isInProgress ?? false)
+        entries.contains(\.isProcessing) || (latestRender?.status.isInProgress ?? false)
+    }
+
+    /// Les souvenirs encore en train d'être transcrits ou rédigés.
+    ///
+    /// Générer maintenant mettrait leur transcription brute dans le PDF —
+    /// hésitations comprises. Le bouton attend.
+    public var entriesBeingPrepared: [Entry] {
+        entries.filter(\.isProcessing)
     }
 
     public var canGenerate: Bool {
-        !entries.isEmpty && !(latestRender?.status.isInProgress ?? false)
+        !entries.isEmpty
+            && entriesBeingPrepared.isEmpty
+            && !(latestRender?.status.isInProgress ?? false)
+    }
+
+    /// Le carnet peut être commandé imprimé : un PDF a été généré, et rien
+    /// n'a bougé depuis.
+    public var orderableRender: Render? {
+        guard let render = latestRender, render.status == .ready, render.pdfUrl != nil else {
+            return nil
+        }
+        return render
+    }
+
+    /// `true` quand une étape a été ajoutée après la dernière génération —
+    /// le PDF prévisualisé n'est plus à jour.
+    public var renderIsStale: Bool {
+        guard let render = latestRender else { return false }
+        return entries.contains { $0.createdAt > render.createdAt }
     }
 
     // MARK: - Chargement
@@ -191,6 +217,48 @@ public final class MemoDetailModel {
         }
     }
 
+    // MARK: - Relecture du texte
+
+    /// Enregistre la correction saisie au clavier.
+    ///
+    /// Le texte est comparé à celui affiché : rouvrir l'éditeur, ne rien
+    /// changer et fermer ne doit pas marquer le souvenir comme « corrigé à la
+    /// main » — ce marquage bloque ensuite la relance de la rédaction.
+    public func saveEditedText(entryId: String, text: String) async {
+        guard let entry = entries.first(where: { $0.id == entryId }) else { return }
+
+        let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty, cleaned != entry.displayText else { return }
+
+        await patch(entryId: entryId, edit: .text(cleaned))
+    }
+
+    /// Revient au texte proposé par la rédaction, en abandonnant la correction.
+    public func revertToRedactedText(entryId: String) async {
+        await patch(entryId: entryId, edit: .revertToRedaction)
+    }
+
+    private func patch(entryId: String, edit: EntryEdit) async {
+        do {
+            _ = try await api.updateEntry(id: entryId, edit: edit)
+            errorMessage = nil
+            await load()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Redemande une rédaction pour ce souvenir.
+    public func retryRedaction(entryId: String) async {
+        do {
+            _ = try await api.retryRedaction(entryId: entryId)
+            errorMessage = nil
+            await load()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     // MARK: - Génération
 
     public func generateBook() async {
@@ -200,6 +268,44 @@ public final class MemoDetailModel {
             await load()
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    // MARK: - Impression
+
+    public private(set) var orders: [PrintOrder] = []
+    public private(set) var isOrdering = false
+
+    public func loadOrders() async {
+        orders = (try? await api.printOrders(memoId: memoId)) ?? []
+    }
+
+    /// Commande le carnet imprimé sur le rendu prévisualisé.
+    ///
+    /// Le `renderId` est celui que l'utilisateur a sous les yeux, pas « le
+    /// dernier en date » : entre l'aperçu et la commande il a pu enregistrer
+    /// une étape, et il doit recevoir le carnet qu'il a validé.
+    @discardableResult
+    public func orderPrintedBook(shipping: ShippingAddress, copies: Int = 1) async -> PrintOrder? {
+        guard let render = orderableRender else {
+            errorMessage = "Génère et prévisualise ton carnet avant de le commander."
+            return nil
+        }
+
+        isOrdering = true
+        defer { isOrdering = false }
+
+        do {
+            let order = try await api.createPrintOrder(
+                memoId: memoId,
+                order: NewPrintOrder(renderId: render.id, copies: copies, shipping: shipping)
+            )
+            errorMessage = nil
+            await loadOrders()
+            return order
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
         }
     }
 }

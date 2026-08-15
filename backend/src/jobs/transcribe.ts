@@ -1,13 +1,18 @@
 import type { AppContext } from "../context.js";
+import { JOB_NAMES } from "./queue.js";
+import type { RedactJob } from "./redact.js";
 
 export interface TranscribeJob {
   entryId: string;
 }
 
 /**
- * Étape 1 du pipeline : l'audio devient du texte.
+ * Étape 1 du pipeline : l'audio devient du texte brut, puis la rédaction est
+ * enfilée derrière.
+ *
  * L'entrée passe `processing` → `ready`, ou `failed` avec le message d'erreur
- * que l'app affichera.
+ * que l'app affichera. Le `ready` de `status` ne veut dire que « transcrit » :
+ * l'app attend en plus `redactionStatus` pour afficher le texte du carnet.
  */
 export async function transcribeEntry(
   context: AppContext,
@@ -26,11 +31,14 @@ export async function transcribeEntry(
   }
 
   if (entry.kind !== "audio" || !entry.media) {
-    // Texte et photo n'ont rien à transcrire : ils sont exploitables tels quels.
+    // Texte et photo n'ont rien à transcrire : ils sont exploitables tels
+    // quels. Une note écrite passe quand même par la rédaction — elle a droit
+    // aux mêmes règles de français et à la même cohérence qu'un vocal.
     await prisma.entry.update({
       where: { id: entryId },
       data: { status: "ready", error: null },
     });
+    await context.queue.publish<RedactJob>(JOB_NAMES.redact, { entryId });
     return;
   }
 
@@ -60,6 +68,8 @@ export async function transcribeEntry(
     }
 
     logger.info({ entryId, characters: result.text.length }, "Entrée transcrite");
+
+    await context.queue.publish<RedactJob>(JOB_NAMES.redact, { entryId });
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
     await prisma.entry.update({
