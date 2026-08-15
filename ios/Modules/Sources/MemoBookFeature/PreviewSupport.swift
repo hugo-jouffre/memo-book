@@ -10,6 +10,7 @@ import MemoBookNetworking
 public actor PreviewAPI: MemoBookAPI {
     private var memosById: [String: MemoDetail] = [:]
     private var rendersById: [String: Render] = [:]
+    private var ordersByMemoId: [String: [PrintOrder]] = [:]
 
     public init(seeded: Bool = true) {
         // Le jeu d'essai est construit hors de l'acteur puis affecté : un `init`
@@ -31,7 +32,14 @@ public actor PreviewAPI: MemoBookAPI {
                 kind: .audio,
                 status: .ready,
                 transcript:
+                    "euh du coup on arrive à Bogotá après un vol de nuit, et enfin la première claque c'est l'altitude quoi",
+                redactionStatus: .ready,
+                redactedText:
                     "On arrive à Bogotá après un vol de nuit. La première claque, c'est l'altitude.",
+                suggestedTitle: "Premier souffle à 2 600 mètres",
+                funFact: "Bogotá culmine à 2 640 m : la troisième capitale la plus haute d'Amérique du Sud.",
+                funFactTitle: "Fun fact",
+                weatherKey: "cloud",
                 capturedAt: now.addingTimeInterval(-86_400 * 2),
                 placeLabel: "Bogotá, Colombie",
                 error: nil,
@@ -42,8 +50,9 @@ public actor PreviewAPI: MemoBookAPI {
                 id: "entry-2",
                 memoId: memoId,
                 kind: .audio,
-                status: .processing,
-                transcript: nil,
+                status: .ready,
+                transcript: "on est montés à Monserrate en funiculaire, la vue est dingue",
+                redactionStatus: .processing,
                 capturedAt: now.addingTimeInterval(-86_400),
                 placeLabel: "Monserrate",
                 error: nil,
@@ -135,6 +144,7 @@ public actor PreviewAPI: MemoBookAPI {
             to: memoId,
             kind: .text,
             status: .ready,
+            redactionStatus: .pending,
             transcript: entry.transcript,
             capturedAt: entry.capturedAt,
             placeLabel: entry.placeLabel
@@ -153,6 +163,7 @@ public actor PreviewAPI: MemoBookAPI {
             to: memoId,
             kind: .audio,
             status: .pending,
+            redactionStatus: .pending,
             transcript: nil,
             capturedAt: capturedAt,
             placeLabel: placeLabel
@@ -171,6 +182,7 @@ public actor PreviewAPI: MemoBookAPI {
             to: memoId,
             kind: .photo,
             status: .ready,
+            redactionStatus: .ready,
             transcript: nil,
             capturedAt: capturedAt,
             placeLabel: placeLabel
@@ -181,6 +193,7 @@ public actor PreviewAPI: MemoBookAPI {
         to memoId: String,
         kind: EntryKind,
         status: Status,
+        redactionStatus: Status,
         transcript: String?,
         capturedAt: Date,
         placeLabel: String?
@@ -193,6 +206,7 @@ public actor PreviewAPI: MemoBookAPI {
             kind: kind,
             status: status,
             transcript: transcript,
+            redactionStatus: redactionStatus,
             capturedAt: capturedAt,
             placeLabel: placeLabel,
             error: nil,
@@ -209,6 +223,39 @@ public actor PreviewAPI: MemoBookAPI {
             if let entry = memo.entries.first(where: { $0.id == id }) { return entry }
         }
         throw APIError.server(statusCode: 404, code: "not_found", message: "Entrée introuvable.")
+    }
+
+    public func updateEntry(id: String, edit: EntryEdit) async throws -> Entry {
+        let current = try await entry(id: id)
+
+        // `String??` : `.some(nil)` revient au texte proposé, `nil` ne touche
+        // à rien. Le double niveau est ce qui distingue les deux.
+        let editedText: String? = edit.editedText ?? current.editedText
+        let updated = current.applying(editedText: editedText)
+
+        replace(entry: updated)
+        return updated
+    }
+
+    public func retryRedaction(entryId: String) async throws -> Entry {
+        let current = try await entry(id: entryId)
+
+        guard current.editedText == nil else {
+            throw APIError.server(
+                statusCode: 400,
+                code: "manually_edited",
+                message: "Ce souvenir a été corrigé à la main."
+            )
+        }
+
+        let queued = current.applying(redactionStatus: .pending)
+        replace(entry: queued)
+        return queued
+    }
+
+    private func replace(entry: Entry) {
+        guard let memo = memosById[entry.memoId] else { return }
+        memosById[entry.memoId] = memo.replacing(entry: entry)
     }
 
     public func startRender(memoId: String) async throws -> Render {
@@ -240,6 +287,30 @@ public actor PreviewAPI: MemoBookAPI {
         return render
     }
 
+    public func createPrintOrder(memoId: String, order: NewPrintOrder) async throws -> PrintOrder {
+        _ = try existingMemo(memoId)
+
+        let created = PrintOrder(
+            id: UUID().uuidString,
+            memoId: memoId,
+            renderId: order.renderId,
+            status: .draft,
+            copies: order.copies,
+            shipping: order.shipping,
+            trackingUrl: nil,
+            error: nil,
+            createdAt: .now,
+            updatedAt: .now
+        )
+
+        ordersByMemoId[memoId, default: []].insert(created, at: 0)
+        return created
+    }
+
+    public func printOrders(memoId: String) async throws -> [PrintOrder] {
+        ordersByMemoId[memoId] ?? []
+    }
+
     private func existingMemo(_ id: String) throws -> MemoDetail {
         guard let memo = memosById[id] else {
             throw APIError.server(statusCode: 404, code: "not_found", message: "Carnet introuvable.")
@@ -266,6 +337,23 @@ extension MemoDetail {
         )
     }
 
+    fileprivate func replacing(entry: Entry) -> MemoDetail {
+        MemoDetail(
+            id: id,
+            title: title,
+            subtitle: subtitle,
+            authors: authors,
+            theme: theme,
+            startDate: startDate,
+            endDate: endDate,
+            coverPhotoUrl: coverPhotoUrl,
+            createdAt: createdAt,
+            updatedAt: .now,
+            entries: entries.map { $0.id == entry.id ? entry : $0 },
+            renders: renders
+        )
+    }
+
     fileprivate func prepending(render: Render) -> MemoDetail {
         MemoDetail(
             id: id,
@@ -280,6 +368,43 @@ extension MemoDetail {
             updatedAt: .now,
             entries: entries,
             renders: [render] + renders
+        )
+    }
+}
+
+extension Entry {
+    /// Recopie l'entrée en changeant la correction manuelle. `displayText` est
+    /// recalculé par l'initialiseur, comme le ferait le serveur.
+    fileprivate func applying(editedText newValue: String?) -> Entry {
+        copy(editedText: newValue, editedAt: newValue == nil ? nil : .now, redactionStatus: redactionStatus)
+    }
+
+    fileprivate func applying(redactionStatus newValue: Status) -> Entry {
+        copy(editedText: editedText, editedAt: editedAt, redactionStatus: newValue)
+    }
+
+    private func copy(editedText: String?, editedAt: Date?, redactionStatus: Status) -> Entry {
+        Entry(
+            id: id,
+            memoId: memoId,
+            kind: kind,
+            status: status,
+            transcript: transcript,
+            redactionStatus: redactionStatus,
+            redactedText: redactedText,
+            redactionError: redactionError,
+            editedText: editedText,
+            editedAt: editedAt,
+            displayText: nil,
+            suggestedTitle: suggestedTitle,
+            funFact: funFact,
+            funFactTitle: funFactTitle,
+            weatherKey: weatherKey,
+            capturedAt: capturedAt,
+            placeLabel: placeLabel,
+            error: error,
+            media: media,
+            createdAt: createdAt
         )
     }
 }

@@ -11,6 +11,11 @@ function entry(overrides: Partial<StructuringEntry> = {}): StructuringEntry {
   return {
     kind: "audio",
     transcript: "On est arrivés ce matin.",
+    editedByUser: false,
+    title: null,
+    funFact: null,
+    funFactTitle: null,
+    weatherKey: null,
     capturedAt: new Date("2026-04-12T09:00:00Z"),
     placeLabel: "Kyoto",
     photoUrl: null,

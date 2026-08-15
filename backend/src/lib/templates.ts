@@ -12,17 +12,28 @@ const here = dirname(fileURLToPath(import.meta.url));
  */
 export const TEMPLATE_DIR = resolve(here, "../../../templates/travel-journal");
 
-function readTemplateFile(name: string): string {
-  const path = resolve(TEMPLATE_DIR, name);
+/**
+ * `agents/` décrit ce que chaque agent doit faire. Comme `templates/`, le
+ * back-end le lit au lieu de le recopier : corriger une règle de rédaction est
+ * une modification de Markdown, pas de TypeScript.
+ */
+export const AGENTS_DIR = resolve(here, "../../../agents");
+
+function readRepoFile(directory: string, name: string): string {
+  const path = resolve(directory, name);
   try {
     return readFileSync(path, "utf8");
   } catch (cause) {
     throw new Error(
       `Impossible de lire ${path}. Le back-end doit tourner depuis le monorepo, ` +
-        `à côté du dossier templates/.`,
+        `à côté des dossiers templates/ et agents/.`,
       { cause },
     );
   }
+}
+
+function readTemplateFile(name: string): string {
+  return readRepoFile(TEMPLATE_DIR, name);
 }
 
 export interface JsonSchema {
@@ -71,6 +82,22 @@ export function loadPayloadSchema(): JsonSchema {
 export function loadLayoutKnowledgeBase(): string {
   cachedLayoutKnowledgeBase ??= readTemplateFile("LAYOUT_KB.md");
   return cachedLayoutKnowledgeBase;
+}
+
+let cachedWritingRules: string | undefined;
+
+/**
+ * Le contrat de rédaction : fidélité, cohérence, voix du voyageur, fluidité,
+ * enrichissements, calculs, français et typographie.
+ *
+ * C'est le prompt système de la passe de rédaction. Le fichier est long et
+ * stable d'un appel à l'autre : il est mis en cache côté Anthropic (voir
+ * `redaction.ts`), ce qui rend sa longueur presque gratuite après le premier
+ * souvenir d'un carnet.
+ */
+export function loadWritingRules(): string {
+  cachedWritingRules ??= readRepoFile(AGENTS_DIR, "agent-transcription.md");
+  return cachedWritingRules;
 }
 
 /** Le payload d'exemple, utilisé comme référence de style dans les prompts. */

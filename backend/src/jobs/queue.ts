@@ -2,6 +2,7 @@ import PgBoss from "pg-boss";
 
 export const JOB_NAMES = {
   transcribe: "memobook.transcribe",
+  redact: "memobook.redact",
   structure: "memobook.structure",
   render: "memobook.render",
 } as const;

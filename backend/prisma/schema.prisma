@@ -1,5 +1,11 @@
 // MemoBook — modèle de données du cœur produit :
-// raconter (Entry) → transcrire → structurer → imprimer (Render).
+// raconter (Entry) → transcrire → rédiger → relire → structurer → imprimer.
+//
+// Deux passes de modèle, volontairement séparées :
+//   1. `redact` écrit le texte d'une étape, une étape à la fois, en suivant
+//      `agents/agent-transcription.md`. L'utilisateur relit et corrige.
+//   2. `structure` met en page le texte *validé*, en suivant
+//      `templates/travel-journal/LAYOUT_KB.md`. Il ne réécrit rien.
 
 generator client {
   provider = "prisma-client-js"
@@ -56,11 +62,21 @@ model Memo {
   /// Photo de couverture (URL CDN publique).
   coverPhotoUrl String?
 
+  /// Style de carnet retenu (voir `agents/carnet-styles/`).
+  styleKey  String?
+
+  /// Fiche de cohérence du carnet — `agents/agent-transcription.md` § 2.
+  /// Noms propres, appellations, temps du récit, « on » ou « nous », unités,
+  /// formats. L'agent de rédaction la relit avant chaque étape et la complète
+  /// après : c'est ce qui fait que la page 20 parle comme la page 2.
+  coherenceSheet Json?
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
   entries Entry[]
   renders Render[]
+  orders  PrintOrder[]
 
   @@index([deviceId, createdAt])
   @@map("memos")
@@ -74,8 +90,35 @@ model Entry {
 
   kind      EntryKind
   status    Status    @default(pending)
-  /// Texte : saisi directement. Audio : rempli par le job `transcribe`.
+  /// Transcription brute. Audio : remplie par le job `transcribe`. Texte :
+  /// saisie directement. Archivée telle quelle — c'est la source de vérité
+  /// contre laquelle se vérifie la fidélité du texte rédigé.
   transcript String?
+
+  /// Texte rédigé par le job `redact`, d'après `agents/agent-transcription.md`.
+  redactedText   String?
+  /// Statut de la passe de rédaction, suivi séparément de `status` : une
+  /// transcription réussie dont la rédaction échoue reste exploitable.
+  redactionStatus Status  @default(pending)
+  redactionError  String?
+  /// Modèle qui a rédigé, pour tracer une régression de style après un
+  /// changement de modèle.
+  redactionModel  String?
+  redactedAt      DateTime?
+
+  /// Texte corrigé au clavier par l'utilisateur dans l'app. Dès qu'il existe,
+  /// il fait autorité : la mise en page le reprend **au mot près**.
+  editedText String?
+  editedAt   DateTime?
+
+  /// Propositions de l'agent de rédaction, que la mise en page consomme.
+  suggestedTitle String?
+  /// Encart « Fun fact » — 140 caractères, voir LAYOUT_KB.
+  funFact        String?
+  funFactTitle   String?
+  /// `sun` | `sun-wind` | `cloud` | `rain` | `snow`.
+  weatherKey     String?
+
   /// Horodatage du souvenir lui-même, pas de l'upload — c'est lui qui sert à
   /// regrouper les entries par journée lors de la structuration.
   capturedAt DateTime  @default(now())
@@ -130,6 +173,52 @@ model Render {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  orders PrintOrder[]
+
   @@index([memoId, createdAt])
   @@map("renders")
+}
+
+enum PrintOrderStatus {
+  draft
+  submitted
+  in_production
+  shipped
+  cancelled
+}
+
+/// Une commande de carnet imprimé, passée sur un rendu précis.
+///
+/// Le rendu commandé est figé : réimprimer après avoir ajouté une étape crée
+/// une nouvelle commande sur un nouveau rendu, jamais une mise à jour de
+/// celle-ci. Sans quoi le carnet livré ne serait pas celui qui a été
+/// prévisualisé et payé.
+model PrintOrder {
+  id       String @id @default(uuid())
+  memoId   String
+  memo     Memo   @relation(fields: [memoId], references: [id], onDelete: Cascade)
+  renderId String
+  render   Render @relation(fields: [renderId], references: [id], onDelete: Restrict)
+
+  status PrintOrderStatus @default(draft)
+  copies Int              @default(1)
+
+  /// Adresse de livraison, telle que saisie dans l'app.
+  shippingName       String
+  shippingLine1      String
+  shippingLine2      String?
+  shippingPostalCode String
+  shippingCity       String
+  shippingCountry    String
+
+  /// Renseignés par l'imprimeur une fois la commande partie.
+  providerOrderId String?
+  trackingUrl     String?
+  error           String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([memoId, createdAt])
+  @@map("print_orders")
 }

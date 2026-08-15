@@ -35,8 +35,20 @@ public protocol MemoBookAPI: Sendable {
 
     func entry(id: String) async throws -> Entry
 
+    /// Corrige un souvenir à la main. Le texte corrigé fait ensuite autorité :
+    /// la mise en page le reprend au mot près.
+    func updateEntry(id: String, edit: EntryEdit) async throws -> Entry
+
+    /// Redemande une rédaction — après un échec, ou quand le texte proposé ne
+    /// convient pas. Refusée si le souvenir a été corrigé à la main.
+    func retryRedaction(entryId: String) async throws -> Entry
+
     /// Lance la génération du carnet. Le résultat arrive de façon asynchrone :
     /// suivre ensuite avec `render(id:)`.
     func startRender(memoId: String) async throws -> Render
     func render(id: String) async throws -> Render
+
+    /// Commande le carnet imprimé, sur un rendu déjà prévisualisé.
+    func createPrintOrder(memoId: String, order: NewPrintOrder) async throws -> PrintOrder
+    func printOrders(memoId: String) async throws -> [PrintOrder]
 }

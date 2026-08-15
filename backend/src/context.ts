@@ -3,6 +3,7 @@ import pino, { type Logger } from "pino";
 import type { Env } from "./env.js";
 import { InlineQueue, PgBossQueue, type JobQueue } from "./jobs/queue.js";
 import { createBookRenderer, type BookRenderer } from "./services/apitemplate.js";
+import { createRedactor, type Redactor } from "./services/redaction.js";
 import { createMediaStorage, type MediaStorage } from "./services/storage.js";
 import { createStructurer, type Structurer } from "./services/structuring.js";
 import { createTranscriber, type Transcriber } from "./services/transcription.js";
@@ -21,6 +22,7 @@ export interface AppContext {
   queue: JobQueue;
   storage: MediaStorage;
   transcriber: Transcriber;
+  redactor: Redactor;
   structurer: Structurer;
   publisher: AssetPublisher;
   renderer: BookRenderer;
@@ -42,6 +44,7 @@ export function createContext(env: Env, options: CreateContextOptions = {}): App
       env.NODE_ENV === "test" ? new InlineQueue() : new PgBossQueue(env.DATABASE_URL),
     storage: createMediaStorage(env),
     transcriber: createTranscriber(env),
+    redactor: createRedactor(env),
     structurer: createStructurer(env),
     publisher: createAssetPublisher(env),
     renderer: createBookRenderer(env),

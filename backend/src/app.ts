@@ -10,6 +10,7 @@ import { registerEntryRoutes } from "./routes/entries.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerLocalRenderRoutes } from "./routes/localRenders.js";
 import { registerMemoRoutes } from "./routes/memos.js";
+import { registerOrderRoutes } from "./routes/orders.js";
 import { registerRenderRoutes } from "./routes/renders.js";
 
 export async function buildApp(context: AppContext): Promise<FastifyInstance> {
@@ -67,6 +68,7 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
     registerMemoRoutes(protectedRoutes, context);
     registerEntryRoutes(protectedRoutes, context);
     registerRenderRoutes(protectedRoutes, context);
+    registerOrderRoutes(protectedRoutes, context);
   });
 
   return app;
