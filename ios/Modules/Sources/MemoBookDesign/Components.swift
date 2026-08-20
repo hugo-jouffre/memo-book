@@ -60,9 +60,9 @@ public struct PrimaryButton: View {
         Button(action: action) {
             HStack(spacing: MemoBookSpacing.xs) {
                 if isLoading { ProgressView().tint(.white) }
-                Text(title).font(.system(.body, weight: .semibold))
+                Text(title).font(MemoBookFont.button)
             }
-            .frame(maxWidth: .infinity, minHeight: MemoBookSpacing.minimumTapTarget + 6)
+            .frame(maxWidth: .infinity, minHeight: MemoBookSpacing.controlHeight)
         }
         .buttonStyle(.borderedProminent)
         .tint(MemoBookColor.action)
@@ -96,7 +96,7 @@ public struct ErrorBanner: View {
             }
         }
         .padding(MemoBookSpacing.s)
-        .background(MemoBookColor.error.opacity(0.1), in: .rect(cornerRadius: MemoBookSpacing.cornerRadius))
+        .background(MemoBookColor.errorSoft, in: .rect(cornerRadius: MemoBookSpacing.cornerRadius))
     }
 }
 

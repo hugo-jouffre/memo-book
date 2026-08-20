@@ -38,6 +38,16 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+        # Polices de marque — à activer le jour où les fichiers arrivent dans
+        # App/Resources/Fonts/ (voir « Polices » dans ios/README.md). Tant que
+        # cette clé est absente, `MemoBookFont` retombe sur la police système :
+        # la mise en page reste juste, seul le dessin des lettres diffère.
+        # UIAppFonts:
+        #   - Sora-Bold.ttf
+        #   - Sora-SemiBold.ttf
+        #   - GeneralSans-Regular.otf
+        #   - GeneralSans-Medium.otf
+        #   - GeneralSans-Semibold.otf
         # Sans ces deux descriptions, iOS refuse l'accès et l'app est rejetée
         # à la revue App Store.
         NSMicrophoneUsageDescription: >-

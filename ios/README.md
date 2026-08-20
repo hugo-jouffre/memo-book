@@ -46,36 +46,44 @@ travailler les écrans et de les tester sans back-end lancé.
 
 ## Design tokens
 
-> ### ⚠️ La palette est tranchée, le code ne l'a pas encore
->
-> Les couleurs de l'app sont désormais figées sur les variables Figma, recopiées dans
-> [`agents/design.md`](../agents/design.md) : Green `#28654B` porte l'action, Blue
-> `#AFD2F0` les accents d'onboarding, Beige `#FCF2E9` le fond, Black `#2D231A` le texte.
-> Carrot et Forest Green n'existent plus.
->
-> **Mais `MemoBookDesign/Tokens.swift` pointe encore vers des couleurs système iOS**, avec
-> un `TODO(design)` sur chaque token. L'app est donc cohérente et utilisable, mais
-> visiblement **non brandée** — impossible de confondre ces valeurs avec le design final.
->
-> **Prochaine étape** : remplacer les valeurs de ce seul fichier, plus l'asset d'accent si
-> besoin. Aucune couleur n'est codée en dur ailleurs dans l'app — c'est ce qui rend la
-> bascule triviale.
+`MemoBookDesign/Tokens.swift` porte la palette de marque, recopiée de
+[`agents/design.md`](../agents/design.md), qui recopie lui-même les variables Figma. Aucune
+couleur, aucune dimension n'est codée en dur ailleurs dans l'app.
 
-Les règles de mise en page, elles, sont posées — voir
-[`docs/ui-development.md`](../docs/ui-development.md) pour la méthode complète :
+La méthode complète est dans [`docs/ui-development.md`](../docs/ui-development.md) ; les
+règles qui touchent au code :
 
-- **toutes les dimensions s'expriment en rem** (1 rem = 16 pt), l'unité étant définie
-  dans `MemoBookDesign` puisque SwiftUI ne la connaît pas ;
-- **marge horizontale unique de 1 rem (16 pt)** sur tous les écrans — `MemoBookSpacing`
-  est encore sur 20 pt, à corriger avec les couleurs ;
-- espacements verticaux sur l'échelle de 8 pt ;
-- cibles tactiles de 44 pt minimum ;
-- **Sora** pour les titres, **General Sans** pour le reste — les deux fichiers de police
-  restent à embarquer (`UIAppFonts`) ; en attendant tout passe par les styles système, ce
-  qui donne Dynamic Type et accessibilité gratuitement ;
+- **toutes les dimensions s'expriment en rem** (1 rem = 16 pt). L'unité est définie dans
+  `Rem.swift` puisque SwiftUI ne la connaît pas, et c'est le seul fichier de l'app où un
+  point apparaît. Structure fixe : `rem(1.5)`. Contrôle qui suit le texte :
+  `@ScaledMetric(relativeTo: .body) var unit = Rem.base`, puis `unit * 3` ;
+- **marge horizontale unique de 1 rem** sur tous les écrans (`MemoBookSpacing.screenMargin`) ;
+- hauteur de bouton et de champ à 3 rem, cible tactile à 2.75 rem minimum ;
+- une seule exception au rem : les **traits** restent en points (`Rem.hairline`) — un filet
+  ne grossit pas avec le texte ;
+- **Sora** pour les titres, **General Sans** pour le reste (voir *Polices* ci-dessous) ;
 - serif pour les titres de **carnet**, jamais pour le chrome système — un carnet ne se lit
   pas comme une barre de navigation ;
 - SF Symbols en trait fin, pas de rendu 3D.
+
+> **Ce qui reste à brander** : seul `MemoDetailView` pose explicitement le fond de marque.
+> L'accueil est encore sur le fond système d'une `List` — à reprendre quand ses maquettes
+> arriveront, pas au coup par coup.
+
+## Polices
+
+Les fichiers **ne sont pas encore dans le dépôt**. Tant qu'ils manquent, `Font.custom`
+retombe silencieusement sur la police système : la mise en page reste juste, seul le dessin
+des lettres diffère.
+
+Pour les activer :
+
+1. vérifier la licence d'embarquement dans une app — Sora est sous OFL (Google Fonts),
+   General Sans vient de Fontshare et a sa propre licence, **à lire avant de publier** ;
+2. déposer les fichiers dans `App/Resources/Fonts/` ;
+3. décommenter le bloc `UIAppFonts` de `project.yml`, puis `make project` ;
+4. vérifier les noms PostScript réels (Livre des polices sur macOS) et les aligner sur
+   `MemoBookFont.Family` — un nom faux ne casse rien, il retombe simplement sur le système.
 
 ## Ce qui n'est pas encore là
 

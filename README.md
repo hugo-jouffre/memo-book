@@ -118,6 +118,8 @@ Les données vocales sont des données personnelles (RGPD) :
 
 ## Documentation
 
+- [`CLAUDE.md`](CLAUDE.md) — **la mémoire du projet** : où vit la vérité, les commandes,
+  les conventions et ce qu'on ne fait jamais. Lu au début de chaque session Claude Code
 - [`docs/ui-development.md`](docs/ui-development.md) — **règles de développement des
   écrans** : unités (tout en rem), fidélité au Figma, rituel écran par écran, fiches et
   checklist. À lire avant de toucher à un écran
