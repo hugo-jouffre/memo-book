@@ -14,6 +14,7 @@ Ce repo contient le code de l'**app iOS native MemoBook**, développée en Swift
 | `backend/` | L'API et le pipeline `transcrire → rédiger → relire → mettre en page → imprimer`. [Documentation](backend/README.md) |
 | `templates/travel-journal/` | Le template PDF et les schémas qui décrivent le format du carnet. **Source de vérité** : le back-end les lit, il ne les duplique pas |
 | `agents/` | Configuration des agents IA et référence du design system. **Source de vérité** : `agent-transcription.md` est chargé tel quel comme prompt système de la rédaction |
+| `docs/` | Documentation transverse, dont [`ui-development.md`](docs/ui-development.md) : les règles d'implémentation des écrans depuis Figma (unités, fidélité, fiches écran) |
 
 Clara et Paul n'ont rien à installer : tout se lit sur GitHub, et l'app se teste via TestFlight.
 
@@ -107,5 +108,10 @@ Les données vocales sont des données personnelles (RGPD) :
 - Une revue sécurité/RGPD par un développeur externe est recommandée avant le lancement
 
 ## Documentation
+
+- [`docs/ui-development.md`](docs/ui-development.md) — **règles de développement des
+  écrans** : unités (tout en rem), fidélité au Figma, rituel écran par écran, fiches et
+  checklist. À lire avant de toucher à un écran
+- [`agents/design.md`](agents/design.md) — le design system (palette et sémantique)
 
 La documentation technique détaillée (stack figée, conventions de code Swift, ADR, workflow Git complet) est tenue à jour dans le [Notion MemoBook](https://app.notion.com/p/MemoBook-2a3401e7bdc1805f99c7f6e8be99575e), au fil des phases du projet.
