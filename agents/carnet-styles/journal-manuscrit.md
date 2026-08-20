@@ -9,6 +9,12 @@ Sobre et personnel. Fond papier crème avec lignes fines, reliure spirale suggé
 Souvenirs introspectifs, récits courts et sincères, carnets « cadeau » discrets (naissance, deuil, journal intime, chronique familiale sobre).
 
 ## Palette
+
+> ⚠️ **Palette à réviser.** Beige Cream n'existe plus dans `design.md` et Black y a changé
+> de valeur (#2D231A). Ce style garde ses valeurs ci-dessous tant que la palette du carnet
+> n'a pas été revue : elles font foi pour ce carnet, même si `design.md` ne les contient
+> plus.
+
 - Fond : Beige Cream (#F3E8CC) ou blanc cassé proche
 - Texte : Black (#2B231B)
 - Pas de couleur d'accent forte : ce style reste volontairement monochrome

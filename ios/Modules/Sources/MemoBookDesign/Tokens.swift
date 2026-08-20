@@ -1,21 +1,19 @@
 import SwiftUI
 import UIKit
 
-// ⚠️⚠️  PALETTE PROVISOIRE — À REMPLACER  ⚠️⚠️
+// ⚠️⚠️  PALETTE PROVISOIRE — LA VRAIE EST PRÊTE, À REPORTER ICI  ⚠️⚠️
 //
-// Les couleurs de l'app et des mises en page vont changer prochainement.
-// En attendant cette nouvelle palette, aucun token ci-dessous ne porte de
-// couleur de marque : ils pointent tous vers des couleurs système iOS.
+// Aucun token ci-dessous ne porte encore de couleur de marque : ils pointent
+// tous vers des couleurs système iOS. L'app est utilisable et cohérente, mais
+// visiblement NON BRANDÉE — personne ne peut confondre ces valeurs avec le
+// design final.
 //
-// C'est délibéré. L'app est utilisable et cohérente, mais visiblement NON
-// BRANDÉE — personne ne peut confondre ces valeurs avec le design final, et on
-// ne fige pas une palette qu'on sait déjà fausse.
+// La palette, elle, N'EST PLUS EN DÉBAT : `agents/design.md` recopie désormais
+// les variables du Figma. Green #28654B porte l'action, Blue #AFD2F0 les
+// accents d'onboarding, Beige #FCF2E9 le fond, Black #2D231A le texte. Carrot
+// et Forest Green n'existent plus.
 //
-// Ce que ce fichier n'est PAS : il ne reprend ni `agents/design.md` (Carrot,
-// Forest Green, Beige…), ni `memobook-design.md` du Drive. Les deux se
-// contredisent, et les deux vont être remplacés.
-//
-// ➡️ Le jour venu : remplacer les valeurs `TODO` de ce seul fichier. Aucune
+// ➡️ Prochaine étape : remplacer les valeurs `TODO` de ce seul fichier. Aucune
 //    couleur n'est codée en dur ailleurs dans l'app — c'est ce qui rend la
 //    bascule triviale.
 
@@ -24,9 +22,8 @@ public enum MemoBookColor {
     /// Couleur d'action : boutons primaires, liens, sélection, teinte de
     /// navigation.
     ///
-    /// TODO(design) — à définir. Quelle couleur porte l'action principale ?
-    /// C'est le seul arbitrage qui compte vraiment : `agents/design.md` dit
-    /// Carrot, le doc Drive dit vert. Trancher, puis remplacer ici.
+    /// TODO(design) — remplacer par Green #28654B, la couleur des CTA dans le
+    /// Figma (`Brand Colors/Green`).
     public static let action = Color(uiColor: .systemBlue)
 
     /// État « enregistrement en cours », et rien d'autre. Jamais un lien,
@@ -67,8 +64,10 @@ public enum MemoBookColor {
 
 /// Échelle d'espacement de 8 pt, plus la marge latérale de référence.
 ///
-/// Ces valeurs-là viennent des conventions iOS (HIG) et de la critique design,
-/// pas d'un choix de marque : elles sont stables et n'attendent rien.
+/// Ces valeurs viennent des conventions iOS (HIG), pas d'un choix de marque.
+///
+/// À réécrire en rem quand les couleurs seront posées — l'unité de l'app est le
+/// rem (1 rem = 16 pt), voir `docs/ui-development.md` §2.
 public enum MemoBookSpacing {
     public static let xs: CGFloat = 8
     public static let s: CGFloat = 16
@@ -77,6 +76,10 @@ public enum MemoBookSpacing {
     public static let xl: CGFloat = 40
 
     /// Marge horizontale unique de tous les écrans.
+    ///
+    /// TODO(design) — passer à 16 (1 rem) : c'est la valeur retenue pour tous
+    /// les écrans, voir `docs/ui-development.md` §2.3. Non fait ici parce que
+    /// ça déplace les trois écrans existants — à grouper avec les couleurs.
     public static let screenMargin: CGFloat = 20
 
     /// Rayon unique des champs et des cartes.

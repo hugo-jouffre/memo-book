@@ -46,37 +46,36 @@ travailler les écrans et de les tester sans back-end lancé.
 
 ## Design tokens
 
-> ### ⚠️ La palette n'est pas encore posée
+> ### ⚠️ La palette est tranchée, le code ne l'a pas encore
 >
-> Les couleurs de l'app et des mises en page vont changer prochainement. En attendant,
-> **aucun token de `MemoBookDesign/Tokens.swift` ne porte de couleur de marque** : ils
-> pointent tous vers des couleurs système iOS, et chacun porte un `TODO(design)`.
+> Les couleurs de l'app sont désormais figées sur les variables Figma, recopiées dans
+> [`agents/design.md`](../agents/design.md) : Green `#28654B` porte l'action, Blue
+> `#AFD2F0` les accents d'onboarding, Beige `#FCF2E9` le fond, Black `#2D231A` le texte.
+> Carrot et Forest Green n'existent plus.
 >
-> C'est délibéré. L'app est cohérente et utilisable, mais visiblement **non brandée** —
-> impossible de confondre ces valeurs avec le design final, et on ne fige pas une palette
-> qu'on sait déjà fausse.
+> **Mais `MemoBookDesign/Tokens.swift` pointe encore vers des couleurs système iOS**, avec
+> un `TODO(design)` sur chaque token. L'app est donc cohérente et utilisable, mais
+> visiblement **non brandée** — impossible de confondre ces valeurs avec le design final.
 >
-> Les deux sources existantes se contredisent et sont toutes deux en sursis :
-> `agents/design.md` fait de Carrot `#F86015` la seule couleur d'accent et exclut Forest
-> Green de l'UI, là où `critique_design_memobook.md` (Drive) recommandait l'inverse. Rien
-> n'a été tranché dans le code.
->
-> **Le jour venu** : remplacer les valeurs de ce seul fichier, plus l'asset d'accent si
+> **Prochaine étape** : remplacer les valeurs de ce seul fichier, plus l'asset d'accent si
 > besoin. Aucune couleur n'est codée en dur ailleurs dans l'app — c'est ce qui rend la
 > bascule triviale.
 
-Ce qui est en revanche déjà stable, parce que ça vient des conventions iOS et non d'un
-choix de marque :
+Les règles de mise en page, elles, sont posées — voir
+[`docs/ui-development.md`](../docs/ui-development.md) pour la méthode complète :
 
-- marge horizontale unique de 20 pt, espacements verticaux sur une échelle de 8 pt ;
+- **toutes les dimensions s'expriment en rem** (1 rem = 16 pt), l'unité étant définie
+  dans `MemoBookDesign` puisque SwiftUI ne la connaît pas ;
+- **marge horizontale unique de 1 rem (16 pt)** sur tous les écrans — `MemoBookSpacing`
+  est encore sur 20 pt, à corriger avec les couleurs ;
+- espacements verticaux sur l'échelle de 8 pt ;
 - cibles tactiles de 44 pt minimum ;
+- **Sora** pour les titres, **General Sans** pour le reste — les deux fichiers de police
+  restent à embarquer (`UIAppFonts`) ; en attendant tout passe par les styles système, ce
+  qui donne Dynamic Type et accessibilité gratuitement ;
 - serif pour les titres de **carnet**, jamais pour le chrome système — un carnet ne se lit
   pas comme une barre de navigation ;
 - SF Symbols en trait fin, pas de rendu 3D.
-
-Les typographies sont elles aussi provisoires : le README du dépôt les liste comme « à
-documenter dès qu'elles sont figées en Phase 2/3 ». Tout passe pour l'instant par les
-styles système, ce qui donne Dynamic Type et accessibilité gratuitement.
 
 ## Ce qui n'est pas encore là
 

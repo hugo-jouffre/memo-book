@@ -142,13 +142,20 @@ La suppression de Carrot, Forest Green et Kiwi laisse ces références à traite
 n'a été modifiée d'office : le remplacement est un choix de design, pas une substitution
 mécanique.
 
+La question de fond, à trancher d'abord : **est-ce que ce fichier gouverne aussi le
+carnet imprimé, ou seulement l'app ?** Le carnet a sa propre identité (papier, styles,
+polices Playfair Display et Gloria Hallelujah) et n'a pas à suivre l'UI. Tant que ce n'est
+pas dit, les fichiers ci-dessous gardent leurs valeurs et le signalent en tête.
+
 | Fichier | Référence | Piste |
 |---|---|---|
-| `agents/carnet-styles/vintage-voyage.md` | Cadre et accents Carrot #F86015 | Quelle couleur d'accent pour ce style ? |
-| `agents/carnet-styles/scrapbook-colore.md` | Accent dominant Carrot (3 occurrences) | Idem |
+| `templates/travel-journal/style.css` | `--mb-carrot: #f86015` « accent de marque (design.md) », `--mb-black: #2b231b` | Le template du carnet imprimé. Le changer modifie tous les carnets rendus |
+| `agents/carnet-styles/vintage-voyage.md` | Cadre et accents Carrot, fond Beige Darker #EFDFCA | Quelle couleur d'accent pour ce style ? |
+| `agents/carnet-styles/scrapbook-colore.md` | Accent dominant Carrot (3 occurrences), fond Beige #FBF3EB | Idem |
+| `agents/carnet-styles/journal-manuscrit.md` | Fond Beige Cream #F3E8CC — nom qui n'existe plus | Style monochrome : seul le fond est à requalifier |
 | `backend/src/services/mapSvg.ts` | Tracé Forest Green #19532B, pin Carrot #F86015 | Green #28654B pour le tracé ; pin à trancher |
-| `ios/.../MemoBookDesign/Tokens.swift` | Commentaire « design.md dit Carrot » | La palette est désormais tranchée : les tokens peuvent être posés |
-| `ios/README.md` | Avertissement « palette pas encore posée » | À lever une fois les tokens posés |
+| `backend/scripts/inspector-shell.html`, `build-inspector.ts` | `--accent: #f86015` « Carotte MemoBook » | Outil de debug interne, aucun impact produit |
+| `ios/.../MemoBookDesign/Tokens.swift` | Tokens encore sur les couleurs système iOS | La palette est tranchée : les tokens peuvent être posés |
 
 ## Utilisé par
 

@@ -132,9 +132,13 @@ function project(frame: Frame, lon: number, lat: number): [number, number] {
 // Rendu
 // ---------------------------------------------------------------------------
 
-const OUTLINE = "#19532b"; // Forest Green, palette MemoBook
+// TODO(design) — ces trois valeurs viennent de l'ancienne palette : Forest Green
+// et Carrot ont été retirés de `agents/design.md`. Les changer modifie le rendu
+// des carnets déjà produits, donc on attend l'arbitrage sur la palette du carnet
+// (Green #28654B est le candidat évident pour le tracé, le pin reste à choisir).
+const OUTLINE = "#19532b"; // ex-Forest Green
 const FILL = "rgba(25, 83, 43, 0.05)"; // à peine posé, pour donner du corps
-const PIN = "#f86015"; // Carrot
+const PIN = "#f86015"; // ex-Carrot
 
 /**
  * Adoucit le contour.

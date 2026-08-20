@@ -9,6 +9,12 @@ Vivant, coloré, illustré. Grands titres avec emoji, mots-clés surlignés, pho
 Voyages actifs, journées avec beaucoup d'anecdotes et d'activités, carnets destinés à être feuilletés rapidement avec plaisir (roadtrip, entre amis, famille).
 
 ## Palette
+
+> ⚠️ **Palette à réviser.** Carrot n'existe plus dans `design.md`, et Beige et Black y ont
+> changé de valeur (#FCF2E9 et #2D231A). Tant que l'accent de remplacement n'est pas
+> choisi, ce style garde ses valeurs ci-dessous : elles font foi pour ce carnet, même
+> si `design.md` ne les contient plus.
+
 - Fond : Beige (#FBF3EB) ou blanc
 - Texte : Black (#2B231B)
 - Accent : Carrot (#F86015) pour les surlignages et soulignés

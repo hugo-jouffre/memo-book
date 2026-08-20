@@ -9,6 +9,12 @@ Nostalgique et structuré. Cadre pointillé, encart d'informations façon billet
 Carnets de voyage classiques avec beaucoup d'étapes (jour par jour), envie de garder une trace précise du parcours en plus du récit, carnets à offrir avec un esprit « collection ».
 
 ## Palette
+
+> ⚠️ **Palette à réviser.** Carrot n'existe plus dans `design.md`, et Beige Darker et Black
+> y ont changé de valeur (#CFBBAA et #2D231A). Tant que l'accent de remplacement n'est pas
+> choisi, ce style garde ses valeurs ci-dessous : elles font foi pour ce carnet, même si
+> `design.md` ne les contient plus.
+
 - Fond : papier texturé façon Beige Darker (#EFDFCA)
 - Cadre et accents : Carrot (#F86015) en pointillés
 - Texte : Black (#2B231B), avec un ton soulignement façon encre bleue pour certains passages

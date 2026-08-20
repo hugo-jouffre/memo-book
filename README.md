@@ -86,11 +86,20 @@ s'enregistre pour l'instant comme un appareil anonyme), le paywall et les régla
 
 Ce qui **attend une décision** :
 
-- **La palette.** Aucun token de l'app ne porte de couleur de marque pour l'instant — voir
-  l'avertissement dans [`ios/README.md`](ios/README.md#design-tokens). Les sources
-  existantes se contredisent et vont être remplacées ; rien n'a été figé dans le code.
+- **L'authentification.** Les maquettes montrent email + mot de passe + trois logins
+  sociaux, là où ce README annonce « Sign in with Apple + magic link ». Deux back-ends
+  différents, et aucune route d'auth n'existe encore. À trancher avant le module 2 —
+  détail dans [`docs/ui-development.md`](docs/ui-development.md#72-ce-qui-reste-ouvert).
+- **La palette du carnet.** Celle de l'app est tranchée (voir
+  [`agents/design.md`](agents/design.md)), mais Carrot et Forest Green, qui en sont
+  sortis, vivent encore dans le template imprimé, les styles de carnet et le rendu des
+  cartes. Décider si `design.md` gouverne aussi le carnet ou seulement l'app.
 - **La CI iOS.** Pas encore de vérification de compilation à chaque PR : elle demande un
   runner macOS, à arbitrer (coût en minutes).
+
+La **palette de l'app**, elle, n'attend plus : elle est figée sur les variables Figma.
+Reste à la reporter dans `MemoBookDesign/Tokens.swift`, qui pointe encore volontairement
+vers des couleurs système.
 
 ## Workflow Git
 
