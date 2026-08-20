@@ -27,7 +27,8 @@ parfois corrigé au clavier par le voyageur. Le réécrire effacerait ce travail
 - Texte enrichi de chaque souvenir (sortie de l'Agent Transcription)
 - Photos sélectionnées et leur ordre (sortie de l'Agent Sélection photo)
 - Style de carnet choisi (voir `carnet-styles/*.md`)
-- Tokens de design (`design.md`) : couleurs et usages
+- Tokens du carnet (`templates/travel-journal/DESIGN.md`) : couleurs, papier,
+  typographies. **Pas `agents/design.md`**, qui ne concerne que l'app iOS
 
 ## Sorties
 - Un payload conforme à `templates/travel-journal/gpt_image_schema.yaml`
@@ -42,7 +43,9 @@ layouts réellement implémentés, champs de chaque journée, limites de longueu
 règles d'images. Elle vit à côté du template parce qu'elle doit changer dans le
 même commit que lui.
 
-Les deux autres fichiers à connaître :
+Les trois autres fichiers à connaître :
+- `templates/travel-journal/DESIGN.md` — couleurs, papier et typographies du
+  carnet. Système à part entière : celui de l'app ne s'y applique pas
 - `templates/travel-journal/print.json` — géométrie de page (A5, 420 × 595 pt)
 - `templates/travel-journal/gpt_image_schema.yaml` — le schéma JSON qui valide
   la sortie
@@ -65,8 +68,8 @@ Les deux autres fichiers à connaître :
   proposer une page supplémentaire plutôt que de réduire la police
 
 ## Règles strictes
-- Ne jamais utiliser une couleur hors de la palette définie dans `design.md`
-  ou dans le style choisi
+- Ne jamais utiliser une couleur hors des tokens du carnet
+  (`templates/travel-journal/DESIGN.md`) ou du style choisi
 - **Ne jamais émettre `null`** : Jinja2 imprime la chaîne « None » dans le
   carnet. Omettre la clé.
 - Ne jamais recadrer une photo au point de couper un visage ou un élément clé

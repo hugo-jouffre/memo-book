@@ -39,7 +39,8 @@ une valeur d'un de ces fichiers dans un autre.
 
 | Sujet | Source unique |
 |---|---|
-| Couleurs, typographies, tokens | [`agents/design.md`](agents/design.md) — miroir des variables Figma |
+| Couleurs et typographies de **l'app** | [`agents/design.md`](agents/design.md) — miroir des variables Figma |
+| Couleurs, papier et typographies du **carnet** | [`templates/travel-journal/DESIGN.md`](templates/travel-journal/DESIGN.md) — système séparé, voir ci-dessous |
 | Règles d'implémentation des écrans | [`docs/ui-development.md`](docs/ui-development.md) — unités, fidélité, fiches écran |
 | Tokens dans le code iOS | `ios/Modules/Sources/MemoBookDesign/Tokens.swift` et `Rem.swift` |
 | Layouts du carnet, limites de longueur | `templates/travel-journal/LAYOUT_KB.md` |
@@ -47,6 +48,22 @@ une valeur d'un de ces fichiers dans un autre.
 | Prompt système de la rédaction | `agents/agent-transcription.md` — chargé tel quel |
 | Modèle de données | `backend/prisma/schema.prisma` |
 | Structure du projet Xcode | `ios/project.yml` (le `.xcodeproj` n'est pas versionné) |
+
+### Deux design systems, pas un
+
+L'app et le carnet sont **deux systèmes séparés**, et c'est délibéré : une app est une
+interface, un carnet est un objet de papier. Ils n'ont ni les mêmes polices, ni les mêmes
+contraintes, ni la même unité de mesure.
+
+| | App | Carnet |
+|---|---|---|
+| Fichier | `agents/design.md` | `templates/travel-journal/DESIGN.md` |
+| Unité | le **rem** (1 rem = 16 pt), pour suivre le Dynamic Type | le **point** (1 unité Figma = 1 pt) — une page imprimée a une taille définitive |
+| Polices | Sora, General Sans | Playfair Display, Gloria Hallelujah, Hansley |
+| Accent | Green `#28654B` | `#F86015` |
+
+Ne jamais appliquer les couleurs de l'un à l'autre, et ne jamais « harmoniser » les deux :
+qu'ils diffèrent est le sujet, pas un oubli.
 
 ## Commandes
 

@@ -132,13 +132,13 @@ function project(frame: Frame, lon: number, lat: number): [number, number] {
 // Rendu
 // ---------------------------------------------------------------------------
 
-// TODO(design) — ces trois valeurs viennent de l'ancienne palette : Forest Green
-// et Carrot ont été retirés de `agents/design.md`. Les changer modifie le rendu
-// des carnets déjà produits, donc on attend l'arbitrage sur la palette du carnet
-// (Green #28654B est le candidat évident pour le tracé, le pin reste à choisir).
-const OUTLINE = "#19532b"; // ex-Forest Green
+// TODO(design) — ces trois valeurs appartiennent au carnet, pas à l'app : la
+// palette de `agents/design.md` ne s'applique pas ici. Elles ne figurent pas
+// encore dans `templates/travel-journal/DESIGN.md` — à y rattacher la prochaine
+// fois qu'on touche à la carte.
+const OUTLINE = "#19532b";
 const FILL = "rgba(25, 83, 43, 0.05)"; // à peine posé, pour donner du corps
-const PIN = "#f86015"; // ex-Carrot
+const PIN = "#f86015";
 
 /**
  * Adoucit le contour.

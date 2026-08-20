@@ -1,5 +1,11 @@
-# Design — Tokens et variables MemoBook
+# Design de l'app — Tokens et variables
 
+> **Ce fichier ne concerne que l'application iOS.** Le carnet imprimé a son propre design
+> system, indépendant : [`templates/travel-journal/DESIGN.md`](../templates/travel-journal/DESIGN.md).
+> Une app est une interface, un carnet est un objet de papier — ils n'ont ni les mêmes
+> polices, ni les mêmes contraintes, ni la même unité de mesure. Aucune couleur d'ici ne
+> s'applique là-bas, et réciproquement.
+>
 > Miroir des **variables du fichier Figma** [MemoBook — Product](https://www.figma.com/design/kytPYFno7PvDciIKTxCujK/MemoBook---Product).
 > Figma est la source de vérité : ce fichier la recopie, il ne l'interprète pas. À tenir à
 > jour à chaque évolution des variables.
@@ -105,8 +111,9 @@ Styles observés :
 > ce sont les valeurs par défaut du template de départ, pas la typographie MemoBook. Les
 > écrans, eux, utilisent bien Sora et General Sans. À corriger dans Figma.
 >
-> Le serif des **titres de carnet** (pages du livre, pas le chrome de l'app) reste une
-> décision éditoriale à part, non couverte par ces variables.
+Les polices du **carnet** sont tout autres — Playfair Display, Gloria Hallelujah — et
+vivent dans [`templates/travel-journal/DESIGN.md`](../templates/travel-journal/DESIGN.md).
+Ne pas les mélanger.
 
 ## Règles d'usage
 
@@ -121,8 +128,9 @@ Styles observés :
 - **Beige** (#FCF2E9) est le fond des écrans ; les blocs de contenu se détachent en White
 - Les couleurs sémantiques ne servent qu'aux retours système (messages, statuts), jamais
   en décoration
-- Les fonds de carnet suivent le style choisi (`carnet-styles/`), qui peut réutiliser tout
-  ou partie de cette palette
+- **Aucune de ces couleurs ne s'applique aux pages du carnet.** L'aperçu du carnet dans
+  l'app affiche un rendu produit par le template : ce sont les tokens du carnet qui s'y
+  appliquent, pas ceux-ci
 
 ## Modes de variables — piège à connaître
 
@@ -136,34 +144,19 @@ qui font foi.
 les `Color/Neutral*`, les `Radius/*` à 0 et les styles `Heading/*` / `Text/*` en Roboto —
 tous hérités du template et jamais employés par l'app.
 
-## Fichiers encore sur l'ancienne palette
+## Ce que ce fichier ne couvre pas
 
-La suppression de Carrot, Forest Green et Kiwi laisse ces références à traiter. Aucune
-n'a été modifiée d'office : le remplacement est un choix de design, pas une substitution
-mécanique.
-
-La question de fond, à trancher d'abord : **est-ce que ce fichier gouverne aussi le
-carnet imprimé, ou seulement l'app ?** Le carnet a sa propre identité (papier, styles,
-polices Playfair Display et Gloria Hallelujah) et n'a pas à suivre l'UI. Tant que ce n'est
-pas dit, les fichiers ci-dessous gardent leurs valeurs et le signalent en tête.
-
-| Fichier | Référence | Piste |
-|---|---|---|
-| `templates/travel-journal/style.css` | `--mb-carrot: #f86015` « accent de marque (design.md) », `--mb-black: #2b231b` | Le template du carnet imprimé. Le changer modifie tous les carnets rendus |
-| `agents/carnet-styles/vintage-voyage.md` | Cadre et accents Carrot, fond Beige Darker #EFDFCA | Quelle couleur d'accent pour ce style ? |
-| `agents/carnet-styles/scrapbook-colore.md` | Accent dominant Carrot (3 occurrences), fond Beige #FBF3EB | Idem |
-| `agents/carnet-styles/journal-manuscrit.md` | Fond Beige Cream #F3E8CC — nom qui n'existe plus | Style monochrome : seul le fond est à requalifier |
-| `backend/src/services/mapSvg.ts` | Tracé Forest Green #19532B, pin Carrot #F86015 | Green #28654B pour le tracé ; pin à trancher |
-| `backend/scripts/inspector-shell.html`, `build-inspector.ts` | `--accent: #f86015` « Carotte MemoBook » | Outil de debug interne, aucun impact produit |
-| `ios/.../MemoBookDesign/Tokens.swift` | Tokens encore sur les couleurs système iOS | La palette est tranchée : les tokens peuvent être posés |
+| Sujet | Où il vit |
+|---|---|
+| Couleurs, papier et polices du **carnet imprimé** | [`templates/travel-journal/DESIGN.md`](../templates/travel-journal/DESIGN.md) |
+| Ambiances éditoriales des carnets | [`carnet-styles/`](carnet-styles/) |
+| Méthode d'implémentation des écrans (rem, fidélité, fiches) | [`docs/ui-development.md`](../docs/ui-development.md) |
+| Couleurs de l'inspecteur de rendu | `backend/scripts/inspector-shell.html` — outil de debug interne, aucun impact produit |
 
 ## Utilisé par
 
-- **App iOS** : `MemoBookDesign/Tokens.swift` — cible de la migration ci-dessus
-- **Agent Mise en page** : applique ces couleurs sur les pages du carnet, dans les limites
-  du style choisi
-- **Agent Sélection photo** : évite les retouches qui entreraient en conflit avec la
-  palette de marque
+- **App iOS** : `ios/Modules/Sources/MemoBookDesign/Tokens.swift`, qui recopie ces valeurs
+  en les nommant par leur rôle. C'est le seul endroit du code où elles apparaissent
 
 ## À faire évoluer
 

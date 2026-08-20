@@ -10,10 +10,10 @@ Voyages actifs, journées avec beaucoup d'anecdotes et d'activités, carnets des
 
 ## Palette
 
-> ⚠️ **Palette à réviser.** Carrot n'existe plus dans `design.md`, et Beige et Black y ont
-> changé de valeur (#FCF2E9 et #2D231A). Tant que l'accent de remplacement n'est pas
-> choisi, ce style garde ses valeurs ci-dessous : elles font foi pour ce carnet, même
-> si `design.md` ne les contient plus.
+> Ces valeurs sont celles de **ce style**, et elles font foi pour lui. Les tokens de base
+> du carnet sont dans [`templates/travel-journal/DESIGN.md`](../../templates/travel-journal/DESIGN.md) ;
+> un style peut s'en écarter, c'est sa raison d'être. Rien ici ne vient de la palette de
+> l'app, qui est un système séparé.
 
 - Fond : Beige (#FBF3EB) ou blanc
 - Texte : Black (#2B231B)

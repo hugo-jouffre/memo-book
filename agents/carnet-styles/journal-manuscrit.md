@@ -10,10 +10,10 @@ Souvenirs introspectifs, récits courts et sincères, carnets « cadeau » discr
 
 ## Palette
 
-> ⚠️ **Palette à réviser.** Beige Cream n'existe plus dans `design.md` et Black y a changé
-> de valeur (#2D231A). Ce style garde ses valeurs ci-dessous tant que la palette du carnet
-> n'a pas été revue : elles font foi pour ce carnet, même si `design.md` ne les contient
-> plus.
+> Ces valeurs sont celles de **ce style**, et elles font foi pour lui. Les tokens de base
+> du carnet sont dans [`templates/travel-journal/DESIGN.md`](../../templates/travel-journal/DESIGN.md) ;
+> un style peut s'en écarter, c'est sa raison d'être. Rien ici ne vient de la palette de
+> l'app, qui est un système séparé.
 
 - Fond : Beige Cream (#F3E8CC) ou blanc cassé proche
 - Texte : Black (#2B231B)

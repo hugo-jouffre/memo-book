@@ -23,7 +23,7 @@
   /* --- Couleurs ----------------------------------------------------------- */
   --mb-ink: #0033a0;                       /* encre manuscrite bleue */
   --mb-black: #2b231b;                     /* texte : un noir chaud, jamais #000 */
-  --mb-carrot: #f86015;                    /* accent de marque (design.md) */
+  --mb-carrot: #f86015;                    /* accent du carnet (DESIGN.md) */
   --mb-mint: #afdcd3;                      /* bandeau de titre des cartes info */
   --mb-label-solid: #fde5d1;               /* pastilles « lieu » / « date » */
   --mb-rule: rgba(43, 35, 27, 0.26);       /* lignes réglées du papier */

@@ -10,10 +10,10 @@ Carnets de voyage classiques avec beaucoup d'étapes (jour par jour), envie de g
 
 ## Palette
 
-> ⚠️ **Palette à réviser.** Carrot n'existe plus dans `design.md`, et Beige Darker et Black
-> y ont changé de valeur (#CFBBAA et #2D231A). Tant que l'accent de remplacement n'est pas
-> choisi, ce style garde ses valeurs ci-dessous : elles font foi pour ce carnet, même si
-> `design.md` ne les contient plus.
+> Ces valeurs sont celles de **ce style**, et elles font foi pour lui. Les tokens de base
+> du carnet sont dans [`templates/travel-journal/DESIGN.md`](../../templates/travel-journal/DESIGN.md) ;
+> un style peut s'en écarter, c'est sa raison d'être. Rien ici ne vient de la palette de
+> l'app, qui est un système séparé.
 
 - Fond : papier texturé façon Beige Darker (#EFDFCA)
 - Cadre et accents : Carrot (#F86015) en pointillés

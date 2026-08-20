@@ -1,7 +1,8 @@
 # UI & Wireframes — règles de développement des écrans
 
 > **Ce fichier n'est pas le design system.** `agents/design.md` décrit *quoi* (palette,
-> tokens, sémantique des couleurs). Ce fichier-ci décrit *comment* : la méthode, les
+> typographies, sémantique des couleurs de **l'app** — le carnet imprimé a le sien,
+> `templates/travel-journal/DESIGN.md`). Ce fichier-ci décrit *comment* : la méthode, les
 > unités, les garde-fous et la fiche à remplir pour chaque écran livré depuis Figma —
 > front-end **et** back-end.
 >
@@ -423,11 +424,12 @@ Aucune PR d'écran ne part sans que ces cases soient cochées.
 
 | # | Décision |
 |---|---|
-| D1 | **Palette.** [`agents/design.md`](../agents/design.md) recopie désormais les variables Figma réelles. Carrot, Carrot Darker, Forest Green et Kiwi **n'existent plus** ; Blue `#AFD2F0` et Lime `#E2F32B` entrent. Green `#28654B` porte le CTA, Lime est `Scheme/Accent`. Reste à faire : poser ces valeurs dans `Tokens.swift` (l'avertissement « palette pas encore posée » de `ios/README.md` peut alors tomber) et traiter les fichiers listés en fin de `design.md` |
+| D1 | **Palette.** [`agents/design.md`](../agents/design.md) recopie les variables Figma réelles, et `Tokens.swift` les porte. Carrot, Carrot Darker, Forest Green et Kiwi **n'existent plus** dans l'app ; Blue `#AFD2F0` et Lime `#E2F32B` entrent. Green `#28654B` porte le CTA, Lime est `Scheme/Accent` |
 | D2 | **Marge d'écran : 1 rem (16 pt) partout**, y compris sur *Welcome* qui était dessiné à 1.5 rem. Justification en §2.3 |
 | D3 | **Typographies : Sora** (titres, chiffres) et **General Sans** (tout le reste). Styles détaillés en §2.5. Les variables `Heading/*` et `Text/*` de Figma annoncent encore Roboto : c'est le template de départ, à nettoyer dans Figma |
 | D4 | **Cartes du *Welcome*.** L'inclinaison est **conservée telle quelle** : −1°, +1°, −1°. Les dimensions, elles, sont **uniformisées** (§8.2) |
 | D5 | **Tutoiement systématique** dans l'app — c'est la règle R9 |
+| D6 | **Deux design systems.** `agents/design.md` ne couvre que l'app. Le **carnet imprimé** a le sien, [`templates/travel-journal/DESIGN.md`](../templates/travel-journal/DESIGN.md) : ses propres couleurs, son papier, ses polices (Playfair Display, Gloria Hallelujah), et le point comme unité — une page imprimée n'a pas de Dynamic Type. On n'applique jamais l'un à l'autre, et on ne les harmonise pas |
 
 ### 7.2 Ce qui reste ouvert
 

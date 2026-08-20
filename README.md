@@ -90,16 +90,15 @@ Ce qui **attend une décision** :
   sociaux, là où ce README annonce « Sign in with Apple + magic link ». Deux back-ends
   différents, et aucune route d'auth n'existe encore. À trancher avant le module 2 —
   détail dans [`docs/ui-development.md`](docs/ui-development.md#72-ce-qui-reste-ouvert).
-- **La palette du carnet.** Celle de l'app est tranchée (voir
-  [`agents/design.md`](agents/design.md)), mais Carrot et Forest Green, qui en sont
-  sortis, vivent encore dans le template imprimé, les styles de carnet et le rendu des
-  cartes. Décider si `design.md` gouverne aussi le carnet ou seulement l'app.
 - **La CI iOS.** Pas encore de vérification de compilation à chaque PR : elle demande un
   runner macOS, à arbitrer (coût en minutes).
 
-La **palette de l'app**, elle, n'attend plus : elle est figée sur les variables Figma.
-Reste à la reporter dans `MemoBookDesign/Tokens.swift`, qui pointe encore volontairement
-vers des couleurs système.
+Les **palettes**, elles, n'attendent plus. Il y en a **deux, séparées et assumées** :
+celle de l'app dans [`agents/design.md`](agents/design.md), figée sur les variables Figma
+et reportée dans le code ; celle du carnet dans
+[`templates/travel-journal/DESIGN.md`](templates/travel-journal/DESIGN.md). Une app est
+une interface, un carnet est un objet de papier — ils ne partagent ni polices, ni
+contraintes, ni unité de mesure.
 
 ## Workflow Git
 
@@ -123,6 +122,9 @@ Les données vocales sont des données personnelles (RGPD) :
 - [`docs/ui-development.md`](docs/ui-development.md) — **règles de développement des
   écrans** : unités (tout en rem), fidélité au Figma, rituel écran par écran, fiches et
   checklist. À lire avant de toucher à un écran
-- [`agents/design.md`](agents/design.md) — le design system (palette et sémantique)
+- [`agents/design.md`](agents/design.md) — le design system de **l'app** (palette,
+  typographies, sémantique)
+- [`templates/travel-journal/DESIGN.md`](templates/travel-journal/DESIGN.md) — le design
+  system du **carnet imprimé**, indépendant du précédent
 
 La documentation technique détaillée (stack figée, conventions de code Swift, ADR, workflow Git complet) est tenue à jour dans le [Notion MemoBook](https://app.notion.com/p/MemoBook-2a3401e7bdc1805f99c7f6e8be99575e), au fil des phases du projet.
