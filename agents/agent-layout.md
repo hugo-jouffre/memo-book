@@ -55,8 +55,11 @@ Les deux autres fichiers à connaître :
   du catalogue l'emporte — ne pas compter dessus, n'en activer qu'un.
 - Respecter à la lettre le style choisi : typographie, couleurs, éléments
   graphiques décrits dans son fichier `carnet-styles/`
-- Équilibrer texte et photo sur chaque page : jamais un mur de texte, jamais
-  une page qui écrase le texte sous les photos
+- **L'image passe avant le texte.** Retour le plus constant des lecteurs :
+  « trop de texte », « les photos doivent être plus grosses ». À contenu égal,
+  choisir le layout le plus visuel, et intercaler des `layout_photo_page`
+- Jamais un mur de texte. Une page qui laisse la photo dominer est un bon
+  résultat ; l'inverse ne l'est pas
 - Toujours prévoir : une couverture, une page d'intro, les pages de contenu,
   une quatrième de couverture
 - Garder une cohérence visuelle stricte sur tout le carnet une fois un style
@@ -79,10 +82,26 @@ plusieurs pages, mais deux étapes ne partagent jamais une feuille. Un chapitre
 s'ouvre sur une page `layout_chapter_map`. Les règles de découpage et le choix
 de la carte selon la forme du voyage sont dans `LAYOUT_KB.md`.
 
+## Les fun facts
+**Environ 2 pour 3 pages, un seul « Le saviez-vous » par étape**, et la matière
+doit venir du récit plutôt que d'une encyclopédie. Sous le seuil de pertinence,
+omettre `fun_facts` : un encart de remplissage coûte plus qu'il ne rapporte.
+Barème et cas limites dans `LAYOUT_KB.md`.
+
+## Occuper les blancs
+Ni emoji ni illustration de remplissage : un `prompt` (champ à remplir) ou un
+`quiz` (réponse imprimée à l'envers). **Un seul bloc interactif par page**, et
+il remplace la zone flottante du bas.
+
+## Dire ce qui vient de l'IA
+`ai_note` s'imprime en petit gris en bas de page. À renseigner dès qu'un
+élément de la page est produit par la machine.
+
 ## La météo
-Un seul champ : `day_intro.weather_key`, parmi `sun`, `sun-wind`, `cloud`,
-`rain`, `snow`. Le bandeau affiche toujours les cinq icônes et met en avant
-celle qui correspond. Règle de choix et cas limites dans `LAYOUT_KB.md`.
+**Optionnelle, et rarement utile** : les lecteurs lui préfèrent `day_intro.stay`
+(le gîte) et `day_intro.host` (les hôtes). Sans `weather_key`, la rangée
+disparaît. Quand elle porte vraiment la journée : `sun`, `sun-wind`, `cloud`,
+`rain`, `snow`. Règle de choix dans `LAYOUT_KB.md`.
 
 ## Le champ `render_profile`
 Deux sorties pour une seule template :
