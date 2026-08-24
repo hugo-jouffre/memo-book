@@ -34,7 +34,7 @@ const UPDATE = process.env["UPDATE_GOLDENS"] === "1";
  */
 const SCENARIOS = [
   { name: "travel-journal", pages: 7, load: loadSamplePayload },
-  { name: "showcase", pages: 9, load: () => loadNamedPayload("showcase") },
+  { name: "showcase", pages: 10, load: () => loadNamedPayload("showcase") },
 ] as const;
 
 /**

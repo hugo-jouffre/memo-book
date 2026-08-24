@@ -465,25 +465,21 @@
   /**
    * Export PDF.
    *
-   * Troisième chose que l'iframe d'artefact refuse, après `print()` et le
-   * presse-papier : le téléchargement lui-même. Une iframe dont le `sandbox`
-   * ne porte pas `allow-downloads` **exécute** le clic sur `<a download>`,
-   * ne lève aucune erreur, et ne produit aucun fichier. Le bouton n'était donc
-   * pas cassé — il était muet, ce qui revient au même pour qui l'utilise.
+   * Une iframe d'artefact refuse tout ce qui écrit un fichier : `<a download>`
+   * s'exécute sans rien produire et sans lever d'erreur dès que le `sandbox`
+   * ne porte pas `allow-downloads`. Toutes les routes de contournement ont été
+   * mesurées et aucune ne tient — `window.open` sur un blob renvoie une fenêtre
+   * puis refuse d'y naviguer, `showSaveFilePicker` est refusé aux cadres d'une
+   * autre origine, `print()` réclame `allow-modals`.
    *
-   * Trois routes, de la plus directe à la plus manuelle, et surtout : on dit
-   * ce qui s'est passé. Le silence était le vrai défaut.
-   *
-   *   1. `<a download>` — passe dès que la page est ouverte dans son onglet.
-   *   2. `window.open` sur le blob — la visionneuse PDF du navigateur prend
-   *      le relais, avec son propre bouton d'enregistrement.
-   *   3. À défaut, on affiche la marche à suivre au lieu de ne rien dire.
+   * La bonne porte n'est aucune des trois : c'est la capability `downloads` du
+   * visualiseur, déclarée à la publication. `save()` demande confirmation au
+   * lecteur, puis écrit le fichier. On la prend quand elle est là ; sinon on
+   * retombe sur `<a download>`, qui suffit hors artefact — le fichier ouvert
+   * localement depuis `.render-out/`, par exemple.
    */
   const exportBtn = document.getElementById("export");
   const exportNote = document.getElementById("export-note");
-
-  /** Encadrée dans le panneau latéral, la page n'a pas le droit de télécharger. */
-  const framed = window.self !== window.top;
 
   function currentProfile() {
     return profiles.print.getAttribute("aria-pressed") === "true" ? "print" : "preview";
@@ -494,75 +490,84 @@
     exportNote.classList.add("is-open");
   }
 
-  document.getElementById("export-note-close")?.addEventListener("click", () =>
-    exportNote.classList.remove("is-open"));
+  function hideNote() {
+    exportNote.classList.remove("is-open");
+  }
 
-  function decode(base64) {
+  document.getElementById("export-note-close")?.addEventListener("click", hideNote);
+
+  function pdfBlob(profile) {
+    const base64 = pdfs()[profile];
+    if (!base64) throw new Error(`aucun PDF embarqué pour le profil « ${profile} ».`);
     const binary = atob(base64);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-    return URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+    return new Blob([bytes], { type: "application/pdf" });
   }
 
-  exportBtn.addEventListener("click", () => {
-    const profile = currentProfile();
+  /** Chaque code d'erreur mérite sa phrase : « échec » tout court n'aide personne. */
+  const SAVE_ERRORS = {
+    declined: "Enregistrement refusé. Relance l'export quand tu veux.",
+    rate_limited: "Une demande d'enregistrement est déjà ouverte. Réessaie dans un instant.",
+    too_large: "Le PDF dépasse la limite de 16 Mio du visualiseur. Récupère-le depuis les artefacts de la CI.",
+    extension_not_enabled: "Ce visualiseur n'autorise pas l'enregistrement de PDF. Récupère-le depuis les artefacts de la CI.",
+    rejected_extension: "Ce visualiseur n'autorise pas l'enregistrement de PDF. Récupère-le depuis les artefacts de la CI.",
+  };
 
+  /** Repli hors artefact : là, le navigateur écrit le fichier sans intermédiaire. */
+  function saveViaLink(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
+
+  exportBtn.addEventListener("click", async () => {
+    const profile = currentProfile();
+    const name = `memobook-${profile === "print" ? "imprimeur" : "apercu"}.pdf`;
+
+    hideNote();
     exportBtn.disabled = true;
     exportBtn.classList.add("is-busy");
 
-    // Décoder 6 Mo de base64 fige le rendu une fraction de seconde : on rend
-    // l'état occupé visible avant de s'y mettre.
-    requestAnimationFrame(() => {
-      let url;
+    try {
+      // Décoder plusieurs mégaoctets de base64 fige le rendu une fraction de
+      // seconde : on laisse l'état occupé s'afficher avant de s'y mettre.
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+
+      let blob;
       try {
-        const base64 = pdfs()[profile];
-        if (!base64) throw new Error(`aucun PDF embarqué pour le profil « ${profile} ».`);
-        url = decode(base64);
+        blob = pdfBlob(profile);
       } catch (error) {
-        // Le bouton dit ce qui a échoué au lieu de rester inerte.
         showNote(`<strong>Export impossible :</strong> ${error.message}`);
-        exportBtn.disabled = false;
-        exportBtn.classList.remove("is-busy");
         return;
       }
 
-      const name = `memobook-${profile === "print" ? "imprimeur" : "apercu"}.pdf`;
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = name;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      const downloads = window.claude?.use ? await window.claude.use("downloads") : null;
 
+      if (!downloads) {
+        saveViaLink(blob, name);
+        return;
+      }
+
+      try {
+        await downloads.save({ filename: name, data: blob });
+      } catch (error) {
+        const code = error?.code ?? "unavailable";
+        showNote(
+          SAVE_ERRORS[code] ??
+            `<strong>Enregistrement impossible</strong> (${code}). ` +
+              `Les deux PDF sont aussi joints aux artefacts de la CI.`,
+        );
+      }
+    } finally {
       exportBtn.disabled = false;
       exportBtn.classList.remove("is-busy");
-
-      // Hors cadre, le téléchargement aboutit : rien à ajouter, et le blob peut
-      // partir une fois le fichier écrit.
-      if (!framed) {
-        setTimeout(() => URL.revokeObjectURL(url), 60000);
-        return;
-      }
-
-      // Encadrée, la page ne peut pas savoir si le fichier est sorti — aucune
-      // API ne le dit — et aucune route de repli ne tient. Toutes mesurées, pas
-      // supposées : `window.open` sur le blob renvoie une fenêtre puis refuse
-      // d'y naviguer, `showSaveFilePicker` est refusé aux cadres d'une autre
-      // origine, `print()` demande `allow-modals`, `<embed>` et `<object>` ne
-      // chargent pas. Seul `allow-downloads` compte, et l'activation
-      // utilisateur n'y change rien.
-      //
-      // La note se contente donc de dire ce qui a été tenté et où trouver le
-      // fichier autrement. Elle n'affirme pas un échec qu'elle ne peut pas
-      // constater : la version précédente le faisait et se trompait dès que le
-      // téléchargement aboutissait. Le blob survit tant que la note est ouverte.
-      showNote(
-        `<strong>${name}</strong> — export lancé, regarde tes téléchargements. ` +
-          `Si rien n'arrive, c'est que cette page est affichée dans un cadre qui ` +
-          `interdit d'écrire des fichiers : les deux PDF sont alors à récupérer ` +
-          `dans les artefacts de la CI, ou par <code>npm run render:local</code>.`,
-      );
-    });
+    }
   });
 
   // --- Profil --------------------------------------------------------------

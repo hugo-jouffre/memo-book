@@ -152,6 +152,40 @@ $defs:
         description: >
           Étiquette manuscrite posée en haut de page (« Top départ », « Paliton Beach »).
           Trois mots maximum, sinon elle déborde de sa forme.
+      layout_photo_page:
+        type: boolean
+        description: >
+          Page pleine de photos : ni récit, ni bandeau, ni décor. Exige 3 à 5 entrées dans
+          `photos`. `title` devient une légende manuscrite en bas de page. C'est la
+          respiration visuelle du carnet — les lecteurs citent ces pages comme le point
+          fort du livre et demandent qu'il y en ait davantage.
+      prompt:
+        type: object
+        description: >
+          Champ à remplir à la main par le lecteur (« Ton état d'esprit ce jour-là »).
+          Occupe le blanc restant au lieu de le combler d'illustrations décoratives.
+          UN SEUL bloc interactif par page — `prompt` ou `quiz`, jamais les deux.
+        properties:
+          label: { type: string }
+      quiz:
+        type: object
+        description: >
+          Petit jeu lié au voyage. La réponse s'imprime à l'envers sous la question, comme
+          dans les pages de jeux. UN SEUL bloc interactif par page.
+        properties:
+          label: { type: string }
+          question: { type: string }
+          choices:
+            type: array
+            items: { type: string }
+            description: "2 à 4 propositions, cases à cocher vides à l'impression."
+          answer: { type: string }
+      ai_note:
+        type: string
+        description: >
+          Mention discrète en bas de page, en petit gris (« Fun fact et illustration
+          générés par IA »). À renseigner dès qu'un élément de la page est produit par la
+          machine : le dire est une demande explicite, pas une option.
       fun_facts_title:
         type: string
         description: >
@@ -168,9 +202,19 @@ $defs:
             type: string
             enum: [sun, sun-wind, cloud, rain, snow]
             description: >
-              Icône météo mise en avant dans la rangée du bandeau de journée. Les quatre
-              autres restent estompées. `weather_icon` (emoji) n'est plus rendu : il ne
-              subsiste que pour compatibilité.
+              Icône météo mise en avant dans la rangée du bandeau de journée. OPTIONNEL, et
+              rarement utile : les testeurs jugent la météo sans intérêt et préfèrent le
+              gîte et l'hôte. Sans ce champ la rangée disparaît, ce qui aère la page.
+              `weather_icon` (emoji) n'est plus rendu : il ne subsiste que pour compatibilité.
+          stay:
+            type: string
+            description: >
+              Nom du lieu où l'on a dormi (« Casa Miranda »). Remplace avantageusement la
+              météo : c'est ce qui rattache un souvenir à un endroit des années après.
+          host:
+            type: string
+            description: >
+              Prénom des hôtes rencontrés (« Lito et Bea »). Même rôle que `stay`.
           weather_summary: { type: string }
           temperature: { type: string }
           mood: { type: string }
@@ -339,10 +383,17 @@ $defs:
                   accent_color: { type: string, description: "Hex ou nom CSS" }
   backCover:
     type: object
-    required: [closing_text, image]
+    required: [closing_text]
     properties:
       closing_text: { type: string }
       closing_subtext: { type: string }
       cta: { type: string }
-      image: { type: string, format: uri }
+      image:
+        type: string
+        format: uri
+        description: >
+          OPTIONNEL, et à éviter. Sans photo, la quatrième de couverture bascule en
+          variante typographique — le papier du carnet reste visible et c'est le texte
+          qui tient la page. C'est ce que demandent les lecteurs : « une 4e de couverture
+          plus style livre, et pas que des photos », y compris la voyageuse elle-même.
       logo_url: { type: string, format: uri }

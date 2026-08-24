@@ -25,11 +25,31 @@
   --mb-black: #2b231b;                     /* texte : un noir chaud, jamais #000 */
   --mb-carrot: #f86015;                    /* accent de marque (design.md) */
   --mb-mint: #afdcd3;                      /* bandeau de titre des cartes info */
+  /* --- Aplats qui imitent le papier ---------------------------------------
+     RÈGLE : tout aplat crème dont le rôle est de « faire papier » — ruban de
+     journée, étiquettes lieu/date, étiquette de section — passe au BLANC en
+     profil imprimeur. Le papier de l'imprimeur est déjà crème : y déposer du
+     beige, c'est payer de l'encre pour assombrir une teinte qu'on a déjà. La
+     forme reste lisible par son contour, qui lui s'imprime.
+     Tout élément à venir de la même famille doit utiliser ces deux tokens
+     plutôt qu'une couleur en dur. */
+  --mb-paper-fill: #fdeee2;                /* ruban, étiquette de section */
   --mb-label-solid: #fde5d1;               /* pastilles « lieu » / « date » */
-  --mb-rule: rgba(43, 35, 27, 0.26);       /* lignes réglées du papier */
+  /* Lignes réglées : gris chaud, pointillé léger. Deux testeurs sur la même
+     remarque — « trop marqué », « tester un gris pointillé plus léger ». La
+     réglure doit se deviner sous le texte, pas se lire avant lui.
+     ⚠ Cette valeur est répétée dans la tuile SVG de `.mb-note` : un data URI
+     ne peut pas lire une variable CSS. Changer les deux ensemble. */
+  --mb-rule: #b6ada1;
   --mb-card-bg: rgba(255, 255, 255, 0.96);
-  --mb-card-shadow: 6pt 6pt 2pt rgba(53, 84, 193, 0.1);
-  --mb-photo-shadow: 0 3pt 4pt rgba(0, 0, 0, 0.25);
+  /* Ombres SANS FLOU, volontairement. Un flou n'est pas exprimable en
+     vectoriel : Chromium l'écrit en masque de transparence, et un lecteur PDF
+     qui n'applique pas les masques peint le masque en aplat gris derrière
+     l'élément. Mesuré : le flou est la seule construction du carnet qui en
+     produise. Une ombre nette est un rectangle plein — et sur un carnet de
+     papier découpé, elle est de toute façon plus juste qu'un halo. */
+  --mb-card-shadow: 6pt 6pt 0 rgba(53, 84, 193, 0.13);
+  --mb-photo-shadow: 2.5pt 2.5pt 0 rgba(43, 35, 27, 0.16);
 
   /* --- Papier ------------------------------------------------------------- */
   /* Le crème n'est pas une couleur de fond : c'est une teinte orangée posée
@@ -58,6 +78,10 @@
 body.profile-print {
   --mb-paper-tint: transparent;
   --mb-grain-opacity: 0;
+  /* Voir la règle des aplats plus haut : blanc = pas d'encre = le crème du
+     papier. C'est le rendu voulu, pas une perte. */
+  --mb-paper-fill: #ffffff;
+  --mb-label-solid: #ffffff;
 }
 
 /* --- Réinitialisation ------------------------------------------------------ */
@@ -184,15 +208,55 @@ li { margin: 0; }
   line-height: var(--mb-body-lh);
   letter-spacing: 0.017em;
   color: var(--mb-ink);
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent 0,
-    transparent calc(var(--mb-line) - 0.5pt),
-    var(--mb-rule) calc(var(--mb-line) - 0.5pt),
-    var(--mb-rule) var(--mb-line)
-  );
-  background-position: 0 0;
 }
+
+/* --- La réglure, et pourquoi elle est faite d'éléments ----------------------
+   Il faut une ligne tous les `--mb-line`, interrompue horizontalement : un
+   motif à DEUX dimensions. Or `repeating-linear-gradient` n'en fait qu'une.
+   La tentation est donc de passer par une image — tuile SVG en `data:` ou
+   `<pattern>` SVG en ligne. C'est ce qu'on avait fait, et c'est faux :
+
+   **Chromium rastérise les images de fond quand il produit le PDF.** Mesuré
+   sur le carnet : la réglure sortait cuite dans un bitmap de 861 × 1219 px,
+   soit 148 dpi pour une page A5, avec une période dérivée à 6,24 pt au lieu
+   de 6,00 et un rapport tiret/espace tombé à 50/50. À l'écran c'était juste,
+   à l'impression c'était gros et flou. Le `<pattern>` SVG subit le même sort
+   (mesuré à 63 dpi) ; seul le dégradé CSS reste vectoriel.
+
+   D'où cette construction : une pile d'éléments d'un interligne chacun, et le
+   pointillé vient d'un dégradé HORIZONTAL — une seule dimension, donc
+   vectoriel. Vérifié à 600 dpi : période 6,00 pt, aucun bitmap dans le PDF.
+
+   Le nombre d'éléments est fixe et généreux ; le conteneur écrête ce qui
+   dépasse, la hauteur du bloc n'étant pas connue à l'avance. */
+.mb-note__rules {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  /* La première ligne tombe sous la première ligne de texte, pas au-dessus. */
+  padding-top: calc(var(--mb-line) - 0.7pt);
+}
+
+/* Une bordure `dashed`, et surtout PAS un dégradé à arrêts `transparent`.
+   Le dégradé donnait la géométrie exacte, mais Chromium l'écrit en shading
+   enfermé dans un motif de pavage, masque de transparence à l'appui : mesuré,
+   la réglure faisait passer le PDF de 13 à 74 masques et de 0 à 122 shadings.
+   Un lecteur qui n'applique pas les masques perd alors les pointillés et
+   affiche les masques en aplats gris. La bordure, elle, ne produit que des
+   rectangles pleins — zéro masque, zéro shading, zéro image.
+   Le motif du tiret est celui du navigateur (≈ 2,4 pt / 1,4 pt) : il n'est pas
+   réglable, mais il est identique ici et chez APITemplate, même moteur. */
+.mb-note__rules i {
+  display: block;
+  height: 0;
+  margin-bottom: calc(var(--mb-line) - 0.7pt);
+  border-bottom: 0.7pt dashed var(--mb-rule);
+}
+
+/* Le texte passe au-dessus de la réglure. */
+.mb-note > *:not(.mb-note__rules) { position: relative; z-index: 1; }
 
 /* Une ligne vide après chaque paragraphe, y compris le dernier : elle montre
    l'emplacement resté libre dans le gabarit, comme sur un vrai carnet. */
@@ -230,7 +294,16 @@ li { margin: 0; }
      et, à hauteur bloquée, débordait sur le bandeau météo. Le ruban garde sa
      propre hauteur, il ne suit pas celle de l'en-tête. */
   min-height: 52pt;
+  /* Et surtout : jamais comprimé. `.page__content` est une colonne flex ; dès
+     qu'une page déborde, ses enfants rétrécissent, et l'en-tête retombait à son
+     plancher pendant que l'encart « lieu » gardait sa taille — les icônes météo
+     passaient alors derrière la boîte. Un en-tête qui se chevauche n'est jamais
+     acceptable : c'est au contenu du bas de céder. */
+  flex: 0 0 auto;
 }
+
+.mb-stay,
+.mb-weather { flex: 0 0 auto; }
 
 .mb-ribbon {
   position: relative;
@@ -244,6 +317,9 @@ li { margin: 0; }
 }
 
 .mb-ribbon__shape {
+  /* `currentColor` porte l'aplat : c'est ce qui permet au profil
+     imprimeur de le passer au blanc sans toucher au contour. */
+  color: var(--mb-paper-fill);
   position: absolute;
   inset: 0;
   z-index: 0;
@@ -315,6 +391,35 @@ li { margin: 0; }
   white-space: nowrap;
 }
 
+/* --- Gîte et hôte -----------------------------------------------------------
+   Ce qui rattache vraiment un souvenir à un lieu : le nom de la maison, celui
+   des gens qui vous ont ouvert la porte. Demandé explicitement en remplacement
+   de la météo, jugée sans intérêt. Discret : une ligne, pas un encart. */
+.mb-stay {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4pt 14pt;
+  margin: 5pt 0 0 100pt;
+  font-family: var(--mb-font-hand);
+  font-size: 10pt;
+  line-height: 1.2;
+  color: var(--mb-ink);
+}
+
+.mb-stay__label {
+  margin-right: 5pt;
+  padding: 1pt 4pt;
+  background-color: var(--mb-label-solid);
+  border-radius: 3pt;
+  font-family: var(--mb-font-display);
+  font-weight: 700;
+  font-size: 6.5pt;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mb-black);
+  vertical-align: 1.5pt;
+}
+
 /* --- Rangée météo ---------------------------------------------------------- */
 .mb-weather {
   display: flex;
@@ -371,6 +476,9 @@ li { margin: 0; }
 }
 
 .mb-tag__shape {
+  /* `currentColor` porte l'aplat : c'est ce qui permet au profil
+     imprimeur de le passer au blanc sans toucher au contour. */
+  color: var(--mb-paper-fill);
   position: absolute;
   inset: 0;
   z-index: 0;
@@ -390,15 +498,19 @@ li { margin: 0; }
   white-space: nowrap;
 }
 
-/* --- Carte info / fun fact -------------------------------------------------- */
+/* --- Carte info / fun fact --------------------------------------------------
+   Volontairement plus petite qu'en V1. Trois testeurs sur la même remarque :
+   « un poil trop gros », « ils sont trop mis en avant ». Un lecteur a lu tous
+   les fun facts et pas tout le récit — la carte gagnait la page. Elle reste
+   une respiration, elle ne doit plus être le premier objet que l'œil attrape. */
 .mb-card {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8pt;
-  width: 173pt;
-  padding: 14pt;
+  gap: 6pt;
+  width: 148pt;
+  padding: 10pt;
   background-color: var(--mb-card-bg);
   border: 1pt dashed var(--mb-black);
   border-radius: 8pt;
@@ -418,11 +530,11 @@ li { margin: 0; }
 
 .mb-card__title span {
   display: block;
-  padding: 7pt 4pt;
+  padding: 5pt 4pt;
   border: 0.7pt dashed var(--mb-black);
   font-family: var(--mb-font-display);
   font-weight: 700;
-  font-size: 12pt;
+  font-size: 10.5pt;
   line-height: 1.15;
   letter-spacing: 0.01em;
   text-align: center;
@@ -432,7 +544,7 @@ li { margin: 0; }
 .mb-card__body {
   width: 100%;
   font-family: var(--mb-font-display);
-  font-size: 12pt;
+  font-size: 10.5pt;
   line-height: 1.3;
   letter-spacing: 0.01em;
   color: var(--mb-black);
@@ -444,10 +556,10 @@ li { margin: 0; }
 /* Pince métallique posée sur le bord haut de la carte. */
 .mb-card__clip {
   position: absolute;
-  top: -21pt;
-  left: 12pt;
-  width: 30pt;
-  height: 26pt;
+  top: -18pt;
+  left: 11pt;
+  width: 26pt;
+  height: 22pt;
   transform: rotate(-0.7deg);
 }
 
@@ -486,13 +598,18 @@ li { margin: 0; }
   z-index: 4;
   width: 46pt;
   height: 13pt;
-  background-image: repeating-linear-gradient(
-    -45deg,
-    #f7e6e2 0, #f7e6e2 4.5pt,
-    #ffffff 4.5pt, #ffffff 6pt
-  );
-  border: 0.5pt solid rgba(43, 35, 27, 0.55);
-  opacity: 0.92;
+  /* Les rayures sont un SVG, pas un dégradé répété : Chromium écrit un
+     dégradé en `shading`, et le lecteur qui ne le rend pas laisse une bande
+     blanche à la place du scotch. Les tracés SVG, eux, passent partout.
+     L'opacité est cuite dans les couleurs plutôt que posée sur l'élément,
+     pour ne pas créer de groupe de transparence. */
+  border: 0.5pt solid rgba(43, 35, 27, 0.5);
+}
+
+.mb-photo__tape svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .mb-photo--tape-top-left .mb-photo__tape { top: -6pt; left: -12pt; transform: rotate(-38deg); }
@@ -578,7 +695,8 @@ li { margin: 0; }
   letter-spacing: 0.01em;
   text-align: center;
   color: #ffffff;
-  text-shadow: 0 1pt 6pt rgba(0, 0, 0, 0.28);
+  /* Nette, pour la même raison que les ombres portées. */
+  text-shadow: 0 1.2pt 0 rgba(0, 0, 0, 0.42);
 }
 
 .page--cover .mb-cover__subtitle {
@@ -604,7 +722,7 @@ li { margin: 0; }
   letter-spacing: 0.01em;
   text-align: center;
   color: #ffffff;
-  text-shadow: 0 1pt 6pt rgba(0, 0, 0, 0.32);
+  text-shadow: 0 1pt 0 rgba(0, 0, 0, 0.45);
 }
 
 /* La couverture est une photo pleine page : ni teinte ni grain par-dessus. */
@@ -673,20 +791,203 @@ li { margin: 0; }
   flex: 0 1 auto;              /* c'est la bande de photos qui cède si la page
                                   se remplit, pas le récit */
   min-height: 0;
-  height: 176pt;
+  height: 206pt;
   justify-content: center;
   align-items: stretch;
-  gap: 12pt;
+  gap: 10pt;
   margin-top: auto;            /* poussée vers le bas de la page */
-  padding-top: 16pt;
+  padding-top: 12pt;
 }
 
 .mb-gallery .mb-photo { flex: 1 1 0; height: 100%; }
 
 /* Photo héro en haut de page. */
 .mb-hero {
-  margin: 0 0 14pt;
-  height: 220pt;
+  margin: 0 0 12pt;
+  height: 268pt;
+}
+
+/* --- Page pleine de photos --------------------------------------------------
+   « Les pages pleines de photos c'est top », dit deux fois, et quatre testeurs
+   réclament que la photo prenne le pas sur le texte. Cette page n'a ni récit
+   ni carte : trois à cinq images occupent toute la feuille, marges comprises,
+   avec une légende manuscrite facultative. C'est la respiration visuelle du
+   carnet, et la réponse la plus directe à « moins de texte, plus d'images ». */
+/* ⚠ Flex, surtout pas grid. Une grille en `position: absolute` perd toutes ses
+   lignes au-delà de la première une fois passée dans la pagination du PDF :
+   à l'écran les quatre photos sont là, dans le fichier imprimé il n'en reste
+   que deux. Le flex, lui, fragmente correctement — c'est déjà celui de tout le
+   reste du carnet. Mesuré, pas supposé. */
+.mb-photowall {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 5pt;
+  padding: 14pt;
+}
+
+.mb-photowall__row {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  gap: 5pt;
+}
+
+/* La bande du haut respire un peu plus : deux bandes égales donneraient une
+   planche de contact, pas une page de carnet. */
+.mb-photowall__row--tall { flex: 1.35 1 0; }
+
+.mb-photowall__row .mb-photo {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  padding: 3pt;
+  box-shadow: none;
+}
+
+/* À cette densité, l'inclinaison et les ombres feraient fouillis : la bordure
+   blanche suffit à séparer les images. */
+.mb-photo--flat { transform: none; }
+
+/* Sélecteur aussi spécifique que celui de la bande, sinon il perd et les deux
+   photos ressortent à égalité — soit exactement la planche de contact qu'on
+   voulait éviter. */
+.mb-photowall__row .mb-photo--wide { flex: 1.6 1 0; }
+
+.mb-photowall__caption {
+  position: absolute;
+  right: 22pt;
+  bottom: 6pt;
+  z-index: 3;
+  font-family: var(--mb-font-hand);
+  font-size: 10pt;
+  color: var(--mb-ink);
+  transform: rotate(-1.5deg);
+}
+
+/* --- Blocs à remplir --------------------------------------------------------
+   « Exploiter les espaces vides avec des mini-jeux plutôt » qu'avec des emoji
+   et des illustrations de remplissage. Ces deux blocs sont la seule chose du
+   carnet que le lecteur peut compléter lui-même : ils transforment un objet à
+   lire en objet à habiter, et ils occupent le vide sans le décorer. */
+.mb-prompt {
+  margin-top: 14pt;
+  padding: 10pt 12pt 12pt;
+  border: 0.8pt dashed var(--mb-rule);
+  border-radius: 7pt;
+}
+
+.mb-prompt__label {
+  display: block;
+  margin-bottom: 6pt;
+  font-family: var(--mb-font-display);
+  font-weight: 700;
+  font-size: 9.5pt;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mb-black);
+}
+
+/* Les lignes à écrire : mêmes tirets que la réglure du récit, pour que le
+   lecteur reconnaisse un endroit où l'on écrit — et par la même construction,
+   pour la même raison (voir `.mb-note__rules`). */
+.mb-prompt__lines i {
+  display: block;
+  height: 0;
+  margin-bottom: calc(var(--mb-line) - 0.7pt);
+  border-bottom: 0.7pt dashed var(--mb-rule);
+}
+
+.mb-quiz {
+  margin-top: 14pt;
+  padding: 11pt 13pt;
+  background-color: var(--mb-card-bg);
+  border: 0.9pt solid var(--mb-black);
+  border-radius: 7pt;
+  transform: rotate(-0.6deg);
+}
+
+.mb-quiz__label {
+  display: block;
+  margin-bottom: 5pt;
+  font-family: var(--mb-font-display);
+  font-weight: 700;
+  font-size: 9.5pt;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mb-carrot);
+}
+
+.mb-quiz__question {
+  margin: 0 0 7pt;
+  font-family: var(--mb-font-display);
+  font-size: 11pt;
+  line-height: 1.3;
+  color: var(--mb-black);
+}
+
+.mb-quiz__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6pt 12pt;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--mb-font-hand);
+  font-size: 10pt;
+  color: var(--mb-ink);
+}
+
+/* La case à cocher fait partie du jeu : elle doit être vide à l'impression. */
+.mb-quiz__choices li::before {
+  content: "";
+  display: inline-block;
+  width: 8pt;
+  height: 8pt;
+  margin-right: 5pt;
+  vertical-align: -0.5pt;
+  border: 0.8pt solid var(--mb-black);
+  border-radius: 2pt;
+}
+
+/* Réponse à l'envers, comme dans les pages de jeux : le quiz n'a d'intérêt que
+   si la réponse ne se lit pas en même temps que la question, et retourner le
+   carnet est un geste plus juste qu'un renvoi en fin d'ouvrage — la réponse
+   reste à côté de sa question. */
+.mb-quiz__answer {
+  display: inline-block;
+  margin: 8pt 0 0;
+  transform: rotate(180deg);
+  font-family: var(--mb-font-display);
+  font-size: 8pt;
+  color: var(--mb-black);
+  opacity: 0.62;
+}
+
+/* --- Mention « généré par IA » ----------------------------------------------
+   Demandée explicitement : dire ce qui est produit par la machine, en petit,
+   sans s'en excuser ni s'en vanter. Discrète au point de ne se lire que si on
+   la cherche — mais présente partout où c'est le cas. */
+.mb-ai-note {
+  font-family: var(--mb-font-display);
+  font-size: 6.5pt;
+  font-style: italic;
+  letter-spacing: 0.04em;
+  color: var(--mb-rule);
+}
+
+.mb-card .mb-ai-note {
+  align-self: flex-end;
+  margin-top: -2pt;
+}
+
+.mb-ai-note--page {
+  position: absolute;
+  right: var(--mb-margin);
+  bottom: 12pt;
+  z-index: 3;
 }
 
 /* --- Ouverture de chapitre : la carte tient la page ------------------------ */
@@ -704,7 +1005,12 @@ li { margin: 0; }
 .mb-chapter__map { flex: 0 0 176pt; align-self: stretch; display: flex; align-items: center; }
 .mb-chapter__map img { width: 100%; height: auto; }
 
-/* --- Quatrième de couverture -------------------------------------------------- */
+/* --- Quatrième de couverture --------------------------------------------------
+   Deux variantes. La photo pleine page était la seule jusqu'ici, et personne
+   ne l'a défendue — « une 4e de couverture plus style livre, et pas que des
+   photos », y compris de la part de la voyageuse elle-même. La variante
+   typographique devient donc le défaut : elle se tient sur le papier du
+   carnet, comme le dos d'un vrai livre. */
 .page--back .mb-back__photo {
   position: absolute;
   inset: 0;
@@ -751,4 +1057,31 @@ li { margin: 0; }
   width: 78pt;
   margin: 0 auto 8pt;
 }
+
+/* Variante typographique : pas de photo, le papier du carnet reste visible et
+   c'est le texte qui tient la page. Le grain et la teinte sont rétablis, que
+   la variante photo neutralisait. */
+.page--back--text::before { display: block; }
+.page--back--text::after { display: block; }
+
+.page--back--text .mb-back__text {
+  top: 132pt;
+  width: 268pt;
+  font-size: 21pt;
+  line-height: 1.35;
+  color: var(--mb-black);
+}
+
+/* Un filet court sous le texte, comme sur un dos de livre. */
+.page--back--text .mb-back__text::after {
+  content: "";
+  display: block;
+  width: 46pt;
+  height: 0.9pt;
+  margin: 18pt auto 0;
+  background-color: var(--mb-carrot);
+}
+
+.page--back--text .mb-back__footer { color: var(--mb-black); }
+.page--back--text .mb-back__logo { filter: invert(1); }
 </style>

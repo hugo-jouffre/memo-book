@@ -19,7 +19,7 @@
       <!-- Ruban « jour NN » : un fanion à encoche, tracé légèrement irrégulier. -->
       <symbol id="mb-ribbon" viewBox="0 0 71 93" preserveAspectRatio="none">
         <path d="M1.4 1.2 L69.6 0.6 L70.2 91.8 L36.1 76.4 L1.1 92.6 Z"
-              fill="#fdeee2" stroke="#2b231b" stroke-width="1.1"
+              fill="currentColor" stroke="#2b231b" stroke-width="1.1"
               stroke-linejoin="round" />
       </symbol>
 
@@ -28,7 +28,7 @@
         <path d="M8.5 12.4 C14 4.2 33 1.4 58.5 1.8 C84 2.2 105 5.4 110.5 13.8
                  C115.6 21.6 111 32.6 96.5 37.2 C80.4 42.3 36 42.6 19.5 38.2
                  C5.8 34.5 3.2 20.3 8.5 12.4 Z"
-              fill="#fdeee2" stroke="#2b231b" stroke-width="1" />
+              fill="currentColor" stroke="#2b231b" stroke-width="1" />
       </symbol>
 
       <!-- Pince métallique des cartes info. -->
@@ -69,6 +69,19 @@
               stroke-linecap="round" stroke-dasharray="9 13" />
       </symbol>
 
+      <!-- Rayures du scotch. En SVG et non en dégradé CSS : Chromium écrit un
+           dégradé répété en `shading`, que certains lecteurs PDF ne rendent pas
+           — le scotch sortait alors en bande blanche. Un tracé passe partout. -->
+      <symbol id="mb-tape" viewBox="0 0 46 13" preserveAspectRatio="none">
+        <rect width="46" height="13" fill="#fdf6f4" />
+        <rect x="-14" y="-6" width="6.4" height="26" fill="#f6e3de" transform="rotate(38 -14 -6)" />
+        <rect x="-2" y="-6" width="6.4" height="26" fill="#f6e3de" transform="rotate(38 -2 -6)" />
+        <rect x="10" y="-6" width="6.4" height="26" fill="#f6e3de" transform="rotate(38 10 -6)" />
+        <rect x="22" y="-6" width="6.4" height="26" fill="#f6e3de" transform="rotate(38 22 -6)" />
+        <rect x="34" y="-6" width="6.4" height="26" fill="#f6e3de" transform="rotate(38 34 -6)" />
+        <rect x="46" y="-6" width="6.4" height="26" fill="#f6e3de" transform="rotate(38 46 -6)" />
+      </symbol>
+
       <!-- mb:icons:start -->
       <!-- Généré par backend/scripts/build-icons.ts depuis assets/icons/manifest.json.
            Ne pas éditer à la main : lance `npm run icons:build`. -->
@@ -96,7 +109,14 @@
      d'entre eux l'avaient oubliée : la photo sortait en « [object Object] »
      dès qu'elle arrivait enrichie par l'analyse d'image.
      `item` accepte une URL nue ou un objet {url, tape_corner, focus}. #}
-  {% macro mb_photo(item, modifier) %}<div class="mb-photo mb-photo--{{ modifier }}{% if item.tape_corner %} mb-photo--tape-{{ item.tape_corner }}{% endif %}">{% if item.tape_corner %}<span class="mb-photo__tape"></span>{% endif %}<img src="{{ item.url | default(item) }}" alt=""{% if item.focus %} style="object-position: {{ item.focus }}"{% endif %} /></div>{% endmacro %}
+  {% macro mb_photo(item, modifier) %}<div class="mb-photo mb-photo--{{ modifier }}{% if item.tape_corner %} mb-photo--tape-{{ item.tape_corner }}{% endif %}">{% if item.tape_corner %}<span class="mb-photo__tape"><svg viewBox="0 0 46 13" preserveAspectRatio="none"><use href="#mb-tape" /></svg></span>{% endif %}<img src="{{ item.url | default(item) }}" alt=""{% if item.focus %} style="object-position: {{ item.focus }}"{% endif %} /></div>{% endmacro %}
+
+
+  {# La réglure du papier, en éléments plutôt qu'en image de fond : Chromium
+     rastérise les images de fond à l'export PDF (mesuré à 148 dpi, période
+     dérivée). Un dégradé horizontal par ligne reste vectoriel. Le conteneur
+     écrête ce qui dépasse — la hauteur du bloc n'est pas connue à l'avance. #}
+  {% macro mb_rules(count) %}<span class="mb-note__rules" aria-hidden="true">{% for _ in range(count) %}<i></i>{% endfor %}</span>{% endmacro %}
 
   <!-- ====================== COUVERTURE ====================== -->
   <div class="page page--cover">
@@ -148,7 +168,7 @@
             {% endif %}
           </div>
         {% endif %}
-        <div class="mb-note mb-note--black-title">
+        <div class="mb-note mb-note--black-title">{{ mb_rules(36) }}
           <span class="mb-note__title">{{ intro_title | default('Intro') }}</span>
           {{ intro_text | safe }}
         </div>
@@ -158,11 +178,67 @@
 
   <!-- ====================== JOURNÉES ====================== -->
   {% for day in days %}
+    {% if day.layout_photo_page and day.photos and day.photos | length >= 3 %}
+      {# Page pleine de photos : ni récit, ni bandeau, ni décor. Quatre
+         testeurs demandent que l'image prenne le pas sur le texte, et les
+         pages déjà pleines de photos sont citées comme le point fort du
+         carnet. On ne met donc rien d'autre dessus.
+
+         Les bandes sont écrites en clair plutôt que calculées : `min` n'existe
+         pas dans Nunjucks, et une expression qui ne tourne que d'un côté ne se
+         verrait qu'à l'impression. #}
+      <div class="page page--day page--photos">
+        <div class="mb-photowall">
+          {% if day.photos | length >= 5 %}
+            <div class="mb-photowall__row mb-photowall__row--tall">
+              {{ mb_photo(day.photos[0], 'flat') }}
+            </div>
+            <div class="mb-photowall__row">
+              {{ mb_photo(day.photos[1], 'flat mb-photo--wide') }}
+              {{ mb_photo(day.photos[2], 'flat') }}
+            </div>
+            <div class="mb-photowall__row">
+              {{ mb_photo(day.photos[3], 'flat') }}
+              {{ mb_photo(day.photos[4], 'flat mb-photo--wide') }}
+            </div>
+          {% elif day.photos | length == 4 %}
+            <div class="mb-photowall__row mb-photowall__row--tall">
+              {{ mb_photo(day.photos[0], 'flat mb-photo--wide') }}
+              {{ mb_photo(day.photos[1], 'flat') }}
+            </div>
+            <div class="mb-photowall__row">
+              {{ mb_photo(day.photos[2], 'flat') }}
+              {{ mb_photo(day.photos[3], 'flat mb-photo--wide') }}
+            </div>
+          {% else %}
+            <div class="mb-photowall__row mb-photowall__row--tall">
+              {{ mb_photo(day.photos[0], 'flat mb-photo--wide') }}
+              {{ mb_photo(day.photos[1], 'flat') }}
+            </div>
+            <div class="mb-photowall__row">
+              {{ mb_photo(day.photos[2], 'flat') }}
+            </div>
+          {% endif %}
+        </div>
+        {% if day.title %}<span class="mb-photowall__caption">{{ day.title }}</span>{% endif %}
+      </div>
+
+    {% else %}
     <div class="page page--day">
       {# Tracé pseudo-aléatoire : variante, position, ou rien du tout. Un motif
-         identique sur chaque page se remarque immédiatement. #}
+         identique sur chaque page se remarque immédiatement.
+
+         RÈGLE DURE : le tracé ne passe que derrière des PHOTOS, jamais derrière
+         du texte, qu'il rend illisible. Il faut donc que le bas de la page soit
+         occupé par une bande de photos — ce qui exclut :
+           · `layout_hero_top`, qui met la photo en haut et le récit en bas ;
+           · les étapes à moins de deux photos, qui n'ont pas de bande ;
+           · les blocs à remplir, qui occupent eux-mêmes le bas de la page. #}
       {% set slot = (loop.index0 * 3 + 1) % 5 %}
-      {% if slot < 4 %}
+      {% set bande_photos = day.photos and day.photos | length >= 2
+                            and not day.layout_hero_top
+                            and not day.prompt and not day.quiz %}
+      {% if slot < 4 and bande_photos %}
         <div class="page__decor">
           <div class="mb-path mb-path--{{ ['a', 'b', 'c', 'a'][slot] }}">
             <svg viewBox="0 0 500 60" preserveAspectRatio="none">
@@ -200,10 +276,31 @@
             {% endif %}
           </div>
 
-          <!-- Rangée météo : une seule icône active, les autres estompées -->
+          {# Le gîte et l'hôte passent avant la météo. « La météo n'est pas
+             importante, mieux vaut la carte, le nom de l'hôtel, l'hôte » : ce
+             sont eux qui rattachent un souvenir à un lieu, des années après. #}
+          {% if day.day_intro.stay or day.day_intro.host %}
+            <div class="mb-stay">
+              {% if day.day_intro.stay %}
+                <span class="mb-stay__item">
+                  <span class="mb-stay__label">nuit</span>{{ day.day_intro.stay }}
+                </span>
+              {% endif %}
+              {% if day.day_intro.host %}
+                <span class="mb-stay__item">
+                  <span class="mb-stay__label">hôte</span>{{ day.day_intro.host }}
+                </span>
+              {% endif %}
+            </div>
+          {% endif %}
+
+          {# Rangée météo : une seule icône active, les autres estompées.
+             Désormais facultative — sans `weather_key`, la rangée disparaît au
+             lieu d'afficher un temps inventé. #}
+          {% if day.day_intro.weather_key %}
           <div class="mb-weather">
             <span class="mb-weather__caption">Météo</span>
-            {% set weather = day.day_intro.weather_key | default('sun') %}
+            {% set weather = day.day_intro.weather_key %}
             <span class="mb-weather__item{% if weather == 'sun' %} is-active{% endif %}">
               <svg class="mb-weather__icon" viewBox="0 0 24 24"><use href="#mb-i-weather-sun" /></svg>
             </span>
@@ -220,6 +317,7 @@
               <svg class="mb-weather__icon" viewBox="0 0 24 24"><use href="#mb-i-weather-snow" /></svg>
             </span>
           </div>
+          {% endif %}
         {% endif %}
 
         {% if day.tag %}
@@ -238,7 +336,7 @@
           {# Ouverture de chapitre : la carte de la région tient la page. #}
           <div class="mb-chapter">
             <div class="mb-chapter__side">
-              <div class="mb-note mb-note--ink-title">
+              <div class="mb-note mb-note--ink-title">{{ mb_rules(36) }}
                 {% if day.title %}<span class="mb-note__title">{{ day.title }}</span>{% endif %}
                 {{ day.body_html | safe }}
               </div>
@@ -267,7 +365,7 @@
           {% if day.photos and day.photos | length >= 1 %}
             {{ mb_photo(day.photos[0], 'tilt-slight mb-hero') }}
           {% endif %}
-          <div class="mb-note">
+          <div class="mb-note">{{ mb_rules(36) }}
             {% if day.title %}<span class="mb-note__title">{{ day.title }}</span>{% endif %}
             {{ day.body_html | safe }}
           </div>
@@ -284,7 +382,7 @@
               </div>
             {% endif %}
             <div class="mb-split__main">
-              <div class="mb-note">
+              <div class="mb-note">{{ mb_rules(36) }}
                 {% if day.title %}<span class="mb-note__title">{{ day.title }}</span>{% endif %}
                 {{ day.body_html | safe }}
               </div>
@@ -298,7 +396,7 @@
           {% endif %}
 
         {% elif day.layout_collage %}
-          <div class="mb-note">
+          <div class="mb-note">{{ mb_rules(36) }}
             {% if day.title %}<span class="mb-note__title">{{ day.title }}</span>{% endif %}
             {{ day.body_html | safe }}
           </div>
@@ -314,11 +412,37 @@
 
         {% else %}
           {# story_opener / story_facts : récit puis carte info et photo flottantes #}
-          <div class="mb-note mb-day__body mb-note--ink-title">
+          <div class="mb-note mb-day__body mb-note--ink-title">{{ mb_rules(36) }}
             {% if day.title %}<span class="mb-note__title">{{ day.title }}</span>{% endif %}
             {{ day.body_html | safe }}
           </div>
-          {% if (day.fun_facts and day.fun_facts | length >= 1) or (day.photos and day.photos | length >= 1) %}
+
+          {# Blocs à remplir : ils occupent le blanc restant au lieu de le
+             combler d'emoji et d'illustrations décoratives. Ils remplacent la
+             zone flottante du bas — les empiler par-dessus ferait déborder la
+             page, et une page qui déborde comprime son propre en-tête. #}
+          {% if day.prompt or day.quiz %}
+            {% if day.prompt %}
+              <div class="mb-prompt">
+                <span class="mb-prompt__label">{{ day.prompt.label | default(day.prompt) }}</span>
+                <div class="mb-prompt__lines"><i></i><i></i><i></i></div>
+              </div>
+            {% endif %}
+            {% if day.quiz %}
+              <div class="mb-quiz">
+                <span class="mb-quiz__label">{{ day.quiz.label | default('Le saviez-vous ?') }}</span>
+                <p class="mb-quiz__question">{{ day.quiz.question }}</p>
+                {% if day.quiz.choices and day.quiz.choices | length >= 2 %}
+                  <ul class="mb-quiz__choices">
+                    {% for choice in day.quiz.choices %}<li>{{ choice }}</li>{% endfor %}
+                  </ul>
+                {% endif %}
+                {% if day.quiz.answer %}
+                  <p class="mb-quiz__answer">Réponse : {{ day.quiz.answer }}</p>
+                {% endif %}
+              </div>
+            {% endif %}
+          {% elif (day.fun_facts and day.fun_facts | length >= 1) or (day.photos and day.photos | length >= 1) %}
             <div class="mb-day__floats">
               {% if day.fun_facts and day.fun_facts | length >= 1 %}
                 <div class="mb-card">
@@ -335,12 +459,20 @@
         {% endif %}
 
       </div>
+      {# Dire ce qui vient de la machine, en petit, sans s'en excuser. #}
+      {% if day.ai_note %}
+        <span class="mb-ai-note mb-ai-note--page">{{ day.ai_note }}</span>
+      {% endif %}
     </div>
+    {% endif %}
   {% endfor %}
 
   <!-- ====================== QUATRIÈME DE COUVERTURE ====================== -->
+  {# Sans photo, la variante typographique : le papier du carnet reste visible
+     et c'est le texte qui tient la page, comme le dos d'un livre. C'est le cas
+     par défaut depuis que les testeurs ont écarté la photo pleine page. #}
   {% if back_cover %}
-    <div class="page page--back">
+    <div class="page page--back{% if not back_cover.image %} page--back--text{% endif %}">
       {% if back_cover.image %}
         <div class="mb-back__photo"><img src="{{ back_cover.image }}" alt="" /></div>
       {% endif %}

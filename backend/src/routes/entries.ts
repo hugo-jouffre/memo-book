@@ -61,6 +61,15 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
           placeLabel: body.placeLabel ?? null,
         },
       });
+
+      // Un souvenir tapé au clavier n'a pas de transcription à faire, mais il a
+      // la même rédaction à subir qu'un vocal : sans cette ligne il reste à
+      // `redactionStatus: "pending"` — la valeur par défaut en base — et le
+      // carnet refuse d'être généré, définitivement. C'est le job de
+      // transcription qui enfile la rédaction pour les vocaux ; le texte n'en
+      // passant pas par là, personne ne le faisait pour lui.
+      await context.queue.publish<RedactJob>(JOB_NAMES.redact, { entryId: entry.id });
+
       return reply.code(201).send(serializeEntry(entry));
     }
 

@@ -29,7 +29,7 @@ Base de connaissance de l'agent qui produit le JSON envoyé au moteur PDF.
 | `intro_title`, `intro_text` | optionnels | Page d'introduction (`intro_text` en HTML) |
 | `intro_photos[]` | 0 à 2 | Photos scotchées en haut de l'introduction |
 | `days[]` | requis | **Une entrée = un bloc de récit, pas une page** — voir ci-dessous |
-| `back_cover` | optionnel | Quatrième de couverture |
+| `back_cover` | optionnel | Quatrième de couverture. **Sans `image`, variante typographique** — c'est le défaut souhaité |
 
 Pages toujours produites, dans l'ordre : **couverture → colophon →
 introduction (si `intro_text`) → étapes → quatrième de couverture**.
@@ -105,6 +105,14 @@ Pour l'instant, l'agent choisit le layout existant le plus proche.)*
 
 - **`print`** — fond blanc. Destiné à l'imprimeur, dont le papier est **déjà
   crème** : réimprimer le crème donnerait un carnet jauni.
+
+  La règle vaut aussi pour les **aplats** : tout fond crème dont le rôle est de
+  « faire papier » — ruban de journée, étiquettes `lieu` / `date`, étiquette de
+  section — passe au blanc en profil imprimeur. Déposer du beige sur un papier
+  déjà crème, c'est payer de l'encre pour assombrir une teinte qu'on a déjà ;
+  la forme reste lisible par son contour, qui lui s'imprime. Tout élément à
+  venir de la même famille doit utiliser les tokens `--mb-paper-fill` ou
+  `--mb-label-solid`, jamais une couleur en dur.
 - **`preview`** — fond crème granulé, réplique du rendu final. C'est celui de
   l'aperçu partageable dans l'app, en attendant la version imprimée.
 
@@ -116,12 +124,16 @@ Défaut : `preview`. Côté back-end, la variable `RENDER_PROFILE` fait foi.
 |---|---|---|
 | `title` | requis | Titre manuscrit en tête du récit |
 | `body_html` | requis | Récit. `<p>` par idée, `<ul>/<li>` pour les listes. Pas de `<h1>`/`<h2>` |
-| `day_intro` | optionnel | Affiche le bandeau : `{ day_number, location, date, weather_key }` |
-| `weather_key` | 5 valeurs, voir ci-dessous | Icône mise en avant dans le bandeau |
+| `day_intro` | optionnel | Affiche le bandeau : `{ day_number, location, date, stay, host, weather_key }` |
+| `stay`, `host` | optionnels | Nom du gîte, prénom des hôtes. **À préférer à la météo** |
+| `weather_key` | optionnel, 5 valeurs | Icône mise en avant. Sans le champ, la rangée disparaît |
 | `tag` | optionnel | Étiquette manuscrite (« Top départ »). **Trois mots max**, sinon elle déborde |
-| `fun_facts[]` | optionnel | **Seul le premier est affiché** |
+| `fun_facts[]` | optionnel | **Seul le premier est affiché.** Dosage : voir plus bas |
 | `fun_facts_title` | optionnel | Titre de la carte. Défaut « Fun fact » ; aussi « Infos », « Culture générale » |
 | `photos[]` | optionnel | Nombre utilisé selon le layout, voir ci-dessous |
+| `prompt` | optionnel | Champ à remplir à la main. **Un seul bloc interactif par page** |
+| `quiz` | optionnel | Petit jeu, réponse imprimée à l'envers. Idem : un seul par page |
+| `ai_note` | optionnel | Mention grise en bas de page dès qu'un élément vient de l'IA |
 
 `highlights`, `sticker_groups`, `timeline_events`, `storyboard_cards`,
 `global_stats` restent acceptés par le schéma mais **ne sont pas rendus** :
@@ -138,10 +150,24 @@ tranche : le premier actif l'emporte.
 | `layout_hero_top` | Grande photo en tête, récit dessous | Une photo iconique porte la journée | 1 |
 | `layout_split_left` | Carte info à gauche, récit en colonne à droite, puis deux photos en bas | Un fait à mettre en avant et deux belles images | 2 |
 | `layout_collage` | Récit pleine largeur puis 2 ou 3 photos inclinées en bas | Journée dense visuellement | 2–3 |
+| `layout_photo_page` | **Page pleine de photos**, sans récit ni bandeau. `title` devient une légende manuscrite en bas | Étape très visuelle. En placer régulièrement : c'est la page que les lecteurs préfèrent | 3–5 |
 | *(par défaut)* | Récit, puis carte info et photo flottantes en bas de page | Ouverture de journée, cas le plus courant | 0–1 |
 
 Le cas par défaut couvre aussi `layout_story_opener` et `layout_story_facts` :
 le validateur exige au moins un drapeau, n'importe lequel de ces deux convient.
+
+## Le tracé pointillé du voyage
+
+Décor de bas de page, tiré au sort parmi quatre boucles. **Il ne passe que
+derrière des photos, jamais derrière du texte**, qu'il rendrait illisible. Le
+gabarit ne le dessine donc que si le bas de la page porte une bande d'images,
+ce qui exclut :
+
+- `layout_hero_top`, qui met la photo en haut et le récit en bas ;
+- les étapes à moins de deux photos, qui n'ont pas de bande ;
+- les étapes portant un `prompt` ou un `quiz`, qui occupent eux-mêmes le bas.
+
+Rien à envoyer pour le piloter : c'est une règle du gabarit, pas un champ.
 
 ## Contraintes de longueur
 
@@ -155,12 +181,62 @@ une **erreur**, pas un avertissement :
 | `fun_facts[]` | 140 caractères |
 | `highlights[]` | 80 caractères |
 
+## Les fun facts — dosage et matière
+
+> Retour le plus unanime du panel de lecteurs : **6 sur 7** en parlent, tous
+> dans le même sens. Ce n'est pas un rejet — les fun facts sont aussi cités
+> parmi les points forts — mais un problème de **quantité** et de **nature**.
+> Un lecteur résume tout : « j'ai lu tous les fun facts, mais pas tout le
+> contenu ». La carte gagnait la page contre le récit.
+
+Quatre règles, à appliquer strictement :
+
+1. **Fréquence : environ 2 pour 3 pages.** Jamais un par page.
+2. **Un seul « Le saviez-vous » par étape**, quelle que soit la longueur.
+3. **La matière doit venir du récit.** Un fait drôle réellement vécu vaut mieux
+   qu'une donnée encyclopédique. La culture générale reste possible, mais en
+   minorité et seulement si elle éclaire ce qui est raconté.
+4. **Score de pertinence.** En dessous du seuil, **ne rien mettre** : omettre
+   `fun_facts` est toujours préférable à un encart de remplissage.
+
+| Ce fait mérite-t-il un encart ? | Verdict |
+|---|---|
+| Un épisode cocasse du récit, raconté en une phrase | Oui, c'est le meilleur cas |
+| Une info qui explique ce que le voyageur vient de vivre | Oui |
+| Une donnée vraie mais sans lien avec la journée | Non — omettre |
+| Un chiffre trouvé pour meubler une page vide | Non — utiliser `prompt` ou `quiz` |
+
+## Occuper les blancs sans les décorer
+
+Deux lecteurs reprochent aux illustrations et aux emoji de « ne servir qu'à
+combler le vide ». La réponse n'est pas d'ajouter du décor, mais de rendre la
+page **habitable** :
+
+- `prompt` — un champ à remplir à la main, sur lignes réglées :
+  « Ton état d'esprit ce jour-là ».
+- `quiz` — une question liée au voyage, cases à cocher, **réponse imprimée à
+  l'envers** sous la question, comme dans les pages de jeux.
+
+**Un seul bloc interactif par page**, et il remplace la zone flottante du bas
+(carte info + photo). Les empiler fait déborder la page.
+
+## La mention « généré par IA »
+
+`ai_note` s'imprime en petit gris, en bas de page. À renseigner **dès qu'un
+élément de la page vient de la machine** — c'est une demande explicite, pas une
+option. Exemple : « Fun fact et illustration générés par IA ».
+
 ## La météo du jour
 
-Un seul champ à produire : `day_intro.weather_key`. Le bandeau affiche toujours
-les cinq icônes ; celle qui correspond passe en pastille carotte, les quatre
-autres restent estompées à 30 %. **Il n'y a rien d'autre à envoyer** — ni
-emoji, ni couleur, ni température.
+**Champ optionnel, et rarement utile.** Les lecteurs sont explicites : la météo
+n'est pas importante, ils préfèrent la carte, le nom de l'hôtel et l'hôte.
+Sans `weather_key`, la rangée disparaît — ce qui aère la page, autre demande du
+panel. Préférer `day_intro.stay` et `day_intro.host`.
+
+Quand la météo porte vraiment la journée (mousson, tempête, premier jour de
+neige), le bandeau affiche les cinq icônes ; celle qui correspond passe en
+pastille carotte, les quatre autres restent estompées à 30 %. **Il n'y a rien
+d'autre à envoyer** — ni emoji, ni couleur, ni température.
 
 | Valeur | Icône | Quand la choisir |
 |---|---|---|
@@ -191,13 +267,37 @@ toutes les lignes suivantes, et l'écart texte/ligne dérive le long de la page.
 Chaque paragraphe est suivi d'**une ligne vide** : elle montre l'emplacement
 resté libre dans le gabarit, comme sur un carnet où l'on n'a pas rempli la page.
 
+La réglure est un **pointillé gris clair**, pas un trait plein : deux lecteurs
+la trouvaient trop marquée. Elle doit se deviner sous le texte, jamais se lire
+avant lui.
+
+**Le nombre de pages est la vraie contrainte d'un long voyage.** Un lecteur
+fixe la limite : moins de 50 pages pour 3 mois, sinon l'objet devient trop
+gros. La variable n'est pas le nombre de pages mais le taux de compression par
+étape — c'est ce qui justifie de regrouper les étapes sur les voyages longs
+(voir la table des chapitres plus haut).
+
 ## Règles d'images
+
+> **L'image passe avant le texte.** C'est le retour le plus constant du panel,
+> toutes vagues confondues : « trop de texte », « les photos doivent être plus
+> grosses », « moins de texte, chiant à lire ». À contenu égal, préférer
+> toujours le layout le plus visuel, et intercaler des `layout_photo_page`.
 
 - URLs absolues et publiques (CDN Webflow). Pas de chemin relatif : le moteur
   PDF ne reçoit que du HTML et du CSS, sans aucun fichier joint.
-- 1200–1600 px de large pour les photos de couverture et les photos héros.
+- **1750 px minimum** pour une photo pleine page (couverture, quatrième,
+  `layout_photo_page`) : à 148 mm de large, il en faut autant pour tenir les
+  300 ppi de l'imprimeur. 1200 px n'y suffisent pas — ça donne 205 ppi.
+- 1200–1600 px suffisent pour une photo héro ou une photo de galerie, qui
+  n'occupent qu'une fraction de la largeur.
 - Les photos sont recadrées en `object-fit: cover` et pivotées de quelques
   degrés : ne pas envoyer une image dont un visage touche déjà le bord.
+- **Le scotch reste l'exception.** Un lecteur ne l'aime pas du tout ; il garde
+  sa valeur tant qu'il surprend. Une photo scotchée de temps en temps, pas une
+  page entière.
+- **Pas d'illustration qui occupe une page seule.** Une photo des voyageurs
+  vaut mieux qu'un dessin de remplissage : deux lecteurs le disent séparément.
 
 ### Deux formes acceptées pour une photo
 

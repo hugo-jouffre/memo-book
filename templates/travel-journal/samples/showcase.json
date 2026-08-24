@@ -20,7 +20,8 @@
         "day_number": "00",
         "location": "Philippines",
         "date": "février 2026",
-        "weather_key": "sun"
+        "stay": "Casa Miranda",
+        "host": "Lito et Bea"
       },
       "layout_chapter_map": true,
       "body_html": "<p>Trois semaines d'archipel, de Manille aux Visayas. Ferrys improbables, scooters sur des routes perdues et des plages qu'on n'osait pas espérer.</p>",
@@ -65,7 +66,17 @@
           "tape_corner": "bottom-right",
           "focus": "17% 17%"
         }
-      ]
+      ],
+      "quiz": {
+        "question": "Combien d'îles comptent les Philippines ?",
+        "choices": [
+          "environ 700",
+          "environ 7000",
+          "environ 70 000"
+        ],
+        "answer": "environ 7641"
+      },
+      "ai_note": "Fun fact et illustration générés par IA"
     },
     {
       "title": "Direction Paliton Beach",
@@ -128,6 +139,17 @@
       ]
     },
     {
+      "title": "Siquijor, du matin au soir",
+      "layout_photo_page": true,
+      "body_html": "<p>Une journée entière en images.</p>",
+      "photos": [
+        "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-01.jpg",
+        "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-02a.jpg",
+        "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-02b.jpg",
+        "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-03a.jpg"
+      ]
+    },
+    {
       "title": "Dernier jour à Siquijor",
       "day_intro": {
         "day_number": "05",
@@ -143,13 +165,15 @@
           "tape_corner": "bottom-left",
           "focus": "17% 50%"
         }
-      ]
+      ],
+      "prompt": {
+        "label": "Ton état d'esprit ce jour-là"
+      }
     }
   ],
   "back_cover": {
     "closing_text": "Merci d'avoir suivi nos aventures !",
     "closing_subtext": "Ce carnet a été généré automatiquement par MemoBook à partir de messages vocaux.",
-    "cta": "www.memo-book.com",
-    "image": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-back.jpg"
+    "cta": "www.memo-book.com"
   }
 }
