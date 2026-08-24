@@ -220,17 +220,20 @@ li { margin: 0; }
   padding-top: calc(var(--mb-line) - 0.7pt);
 }
 
+/* Une bordure `dashed`, et surtout PAS un dégradé à arrêts `transparent`.
+   Le dégradé donnait la géométrie exacte, mais Chromium l'écrit en shading
+   enfermé dans un motif de pavage, masque de transparence à l'appui : mesuré,
+   la réglure faisait passer le PDF de 13 à 74 masques et de 0 à 122 shadings.
+   Un lecteur qui n'applique pas les masques perd alors les pointillés et
+   affiche les masques en aplats gris. La bordure, elle, ne produit que des
+   rectangles pleins — zéro masque, zéro shading, zéro image.
+   Le motif du tiret est celui du navigateur (≈ 2,4 pt / 1,4 pt) : il n'est pas
+   réglable, mais il est identique ici et chez APITemplate, même moteur. */
 .mb-note__rules i {
   display: block;
-  height: 0.7pt;
+  height: 0;
   margin-bottom: calc(var(--mb-line) - 0.7pt);
-  background-image: repeating-linear-gradient(
-    to right,
-    var(--mb-rule) 0,
-    var(--mb-rule) 3.4pt,
-    transparent 3.4pt,
-    transparent 6pt
-  );
+  border-bottom: 0.7pt dashed var(--mb-rule);
 }
 
 /* Le texte passe au-dessus de la réglure. */
@@ -861,15 +864,9 @@ li { margin: 0; }
    pour la même raison (voir `.mb-note__rules`). */
 .mb-prompt__lines i {
   display: block;
-  height: 0.7pt;
+  height: 0;
   margin-bottom: calc(var(--mb-line) - 0.7pt);
-  background-image: repeating-linear-gradient(
-    to right,
-    var(--mb-rule) 0,
-    var(--mb-rule) 3.4pt,
-    transparent 3.4pt,
-    transparent 6pt
-  );
+  border-bottom: 0.7pt dashed var(--mb-rule);
 }
 
 .mb-quiz {
