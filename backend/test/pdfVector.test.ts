@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { PNG } from "pngjs";
 import { describe, expect, it } from "vitest";
+import { loadNamedPayload } from "../src/lib/templates.js";
 import { renderBookPdf } from "../src/services/bookPdf.js";
 
 /**
@@ -24,9 +25,14 @@ import { renderBookPdf } from "../src/services/bookPdf.js";
  *    n'applique pas les masques, les pointillés disparaissaient et les masques
  *    s'affichaient en aplats gris derrière les images.
  *
- * D'où deux garde-fous : la géométrie de la réglure, et le **budget de
- * transparence** du fichier. Un carnet de texte pur ne doit contenir aucune
- * image, aucun shading, aucun masque — rien qu'un lecteur puisse rater.
+ * 3. Restaient les ombres portées floues et les rayures du scotch, faites d'un
+ *    dégradé : mêmes mécanismes, mêmes dégâts. Aplats gris derrière chaque
+ *    photo, scotch en bande blanche.
+ *
+ * D'où deux garde-fous : la géométrie de la réglure, et l'absence des deux
+ * constructions que des lecteurs PDF ratent — masques de luminosité et
+ * shadings. Le carnet complet est vérifié dans les deux profils, parce que
+ * c'est sur les photos et le scotch que le défaut s'est manifesté.
  */
 
 /** Le pas de la réglure, en points. */
@@ -75,15 +81,35 @@ async function available(): Promise<boolean> {
   }
 }
 
-/** Chromium n'utilise pas de flux d'objets : les dictionnaires sont en clair. */
-function census(pdf: Buffer): { images: number; shadings: number; masks: number } {
+/**
+ * Ce que le PDF contient de fragile. Chromium n'utilise pas de flux d'objets :
+ * les dictionnaires sont lisibles tels quels dans les octets.
+ *
+ * Deux mesures, et deux seulement, parce que ce sont les deux que des lecteurs
+ * PDF ratent en pratique :
+ *
+ * - **masques de luminosité** — un groupe de transparence servant de pochoir.
+ *   Produits par le FLOU, et par lui seul dans ce carnet : ombre portée floue
+ *   ou ombre de texte floue. Un lecteur qui ne les applique pas peint le
+ *   pochoir en aplat gris derrière l'élément.
+ * - **shadings** — les dégradés écrits en vectoriel.
+ * - **motifs de pavage** — la signature d'un fond CSS RASTÉRISÉ. C'est ce qui
+ *   est arrivé aux rayures du scotch : le dégradé diagonal ne devenait même
+ *   pas un shading, Chromium le cuisait en bitmap posé en pavage, d'où une
+ *   bande délavée à l'export. Le fichier de l'imprimeur n'en tolère aucun ;
+ *   l'aperçu en a quelques-uns, pour le grain du papier, qui est une image
+ *   par nature et ne part pas chez l'imprimeur.
+ *
+ * La couche alpha d'une image (`/SMask` sur un XObject image) n'est PAS
+ * comptée : c'est la transparence d'un PNG ordinaire, universellement gérée.
+ */
+function census(pdf: Buffer): { shadings: number; masks: number; tilings: number } {
   const raw = pdf.toString("latin1");
   const count = (needle: string): number => raw.split(needle).length - 1;
   return {
-    images: count("/Subtype /Image"),
     shadings: count("/PatternType 2"),
-    // `/SMask /None` désactive un masque : ce n'en est pas un.
-    masks: count("/SMask ") - count("/SMask /None"),
+    masks: count("/S /Luminosity"),
+    tilings: count("/PatternType 1"),
   };
 }
 
@@ -137,26 +163,25 @@ describe.runIf(await available())("PDF du carnet", () => {
       offline: true,
     });
 
-    // --- 1. Budget de transparence ------------------------------------------
-    const { shadings, masks } = census(pdf);
-    const explain =
-      "Chromium écrit les dégradés à arrêts `transparent` en shading enfermé " +
-      "dans un motif de pavage, masque de transparence à l'appui. Un lecteur " +
-      "qui n'applique pas les masques perd alors le décor et affiche les " +
-      "masques en aplats gris. Voir le commentaire de `.mb-note__rules`.";
+    // --- 1. Rien de fragile dans le fichier ---------------------------------
+    const { shadings, masks, tilings } = census(pdf);
 
-    // Rien dans ce carnet n'a besoin d'un dégradé : zéro, sans discussion.
-    // La réglure en dégradé en avait créé 122.
-    expect(shadings, `${shadings} shading(s) dans le PDF. ${explain}`).toBe(0);
-
-    // Quelques masques restent légitimes : une ombre portée est un flou, elle
-    // n'est pas exprimable en vectoriel. Le budget est là pour attraper une
-    // décoration qui en fabriquerait par pleines pages — la réglure en dégradé
-    // faisait passer le carnet complet de 13 à 74.
     expect(
       masks,
-      `${masks} masques de transparence, budget dépassé. ${explain}`,
-    ).toBeLessThanOrEqual(6);
+      `${masks} masque(s) de luminosité dans le PDF. Ils viennent du FLOU — ` +
+        "`box-shadow` ou `text-shadow` avec un rayon. Un lecteur qui ne les " +
+        "applique pas peint le masque en aplat gris derrière l'élément. " +
+        "Utiliser une ombre nette (rayon 0), qui est un simple rectangle.",
+    ).toBe(0);
+
+    expect(
+      shadings,
+      `${shadings} shading(s) dans le PDF. Ils viennent des dégradés CSS. Un ` +
+        "lecteur qui ne les rend pas laisse un vide à la place — le scotch " +
+        "sortait en bande blanche. Utiliser un tracé SVG ou un aplat.",
+    ).toBe(0);
+
+    expect(tilings, `${tilings} motif(s) de pavage : un fond CSS rastérisé`).toBe(0);
 
     // --- 2. Géométrie de la réglure -----------------------------------------
     const dir = mkdtempSync(join(tmpdir(), "mb-rule-"));
@@ -185,4 +210,33 @@ describe.runIf(await available())("PDF du carnet", () => {
     expect(median(dashes)).toBeGreaterThan(median(gaps));
     expect(median(dashes) + median(gaps)).toBeLessThan(8);
   }, 60_000);
+
+  it.each(["print", "preview"] as const)(
+    "n'emploie ni masque de luminosité ni shading — profil %s",
+    async (profile) => {
+      // Le carnet complet : photos, scotch, cartes, cartes de chapitre. C'est
+      // là que vivaient les ombres floues et le dégradé du scotch.
+      const { pdf } = await renderBookPdf({
+        payload: loadNamedPayload("showcase"),
+        profile,
+        offline: true,
+      });
+      const { shadings, masks, tilings } = census(pdf);
+
+      expect(masks, `${masks} masque(s) de luminosité (profil ${profile})`).toBe(0);
+      expect(shadings, `${shadings} shading(s) (profil ${profile})`).toBe(0);
+
+      // Le fichier de l'imprimeur n'a aucune raison de porter un fond
+      // rastérisé : seul l'aperçu en a un, le grain du papier.
+      if (profile === "print") {
+        expect(
+          tilings,
+          `${tilings} motif(s) de pavage dans le PDF imprimeur : un fond CSS ` +
+            "a été rastérisé. Le dégradé du scotch faisait exactement ça, et " +
+            "sortait en bande délavée. Utiliser un tracé SVG ou un aplat.",
+        ).toBe(0);
+      }
+    },
+    90_000,
+  );
 });

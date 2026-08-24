@@ -33,8 +33,14 @@
      ne peut pas lire une variable CSS. Changer les deux ensemble. */
   --mb-rule: #b6ada1;
   --mb-card-bg: rgba(255, 255, 255, 0.96);
-  --mb-card-shadow: 6pt 6pt 2pt rgba(53, 84, 193, 0.1);
-  --mb-photo-shadow: 0 3pt 4pt rgba(0, 0, 0, 0.25);
+  /* Ombres SANS FLOU, volontairement. Un flou n'est pas exprimable en
+     vectoriel : Chromium l'écrit en masque de transparence, et un lecteur PDF
+     qui n'applique pas les masques peint le masque en aplat gris derrière
+     l'élément. Mesuré : le flou est la seule construction du carnet qui en
+     produise. Une ombre nette est un rectangle plein — et sur un carnet de
+     papier découpé, elle est de toute façon plus juste qu'un halo. */
+  --mb-card-shadow: 6pt 6pt 0 rgba(53, 84, 193, 0.13);
+  --mb-photo-shadow: 2.5pt 2.5pt 0 rgba(43, 35, 27, 0.16);
 
   /* --- Papier ------------------------------------------------------------- */
   /* Le crème n'est pas une couleur de fond : c'est une teinte orangée posée
@@ -573,13 +579,18 @@ li { margin: 0; }
   z-index: 4;
   width: 46pt;
   height: 13pt;
-  background-image: repeating-linear-gradient(
-    -45deg,
-    #f7e6e2 0, #f7e6e2 4.5pt,
-    #ffffff 4.5pt, #ffffff 6pt
-  );
-  border: 0.5pt solid rgba(43, 35, 27, 0.55);
-  opacity: 0.92;
+  /* Les rayures sont un SVG, pas un dégradé répété : Chromium écrit un
+     dégradé en `shading`, et le lecteur qui ne le rend pas laisse une bande
+     blanche à la place du scotch. Les tracés SVG, eux, passent partout.
+     L'opacité est cuite dans les couleurs plutôt que posée sur l'élément,
+     pour ne pas créer de groupe de transparence. */
+  border: 0.5pt solid rgba(43, 35, 27, 0.5);
+}
+
+.mb-photo__tape svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .mb-photo--tape-top-left .mb-photo__tape { top: -6pt; left: -12pt; transform: rotate(-38deg); }
@@ -665,7 +676,8 @@ li { margin: 0; }
   letter-spacing: 0.01em;
   text-align: center;
   color: #ffffff;
-  text-shadow: 0 1pt 6pt rgba(0, 0, 0, 0.28);
+  /* Nette, pour la même raison que les ombres portées. */
+  text-shadow: 0 1.2pt 0 rgba(0, 0, 0, 0.42);
 }
 
 .page--cover .mb-cover__subtitle {
@@ -691,7 +703,7 @@ li { margin: 0; }
   letter-spacing: 0.01em;
   text-align: center;
   color: #ffffff;
-  text-shadow: 0 1pt 6pt rgba(0, 0, 0, 0.32);
+  text-shadow: 0 1pt 0 rgba(0, 0, 0, 0.45);
 }
 
 /* La couverture est une photo pleine page : ni teinte ni grain par-dessus. */

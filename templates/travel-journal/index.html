@@ -69,6 +69,19 @@
               stroke-linecap="round" stroke-dasharray="9 13" />
       </symbol>
 
+      <!-- Rayures du scotch. En SVG et non en dégradé CSS : Chromium écrit un
+           dégradé répété en `shading`, que certains lecteurs PDF ne rendent pas
+           — le scotch sortait alors en bande blanche. Un tracé passe partout. -->
+      <symbol id="mb-tape" viewBox="0 0 46 13" preserveAspectRatio="none">
+        <rect width="46" height="13" fill="#fdf6f4" />
+        <rect x="-14" y="-6" width="6.4" height="26" fill="#f6e3de" transform="rotate(38 -14 -6)" />
+        <rect x="-2" y="-6" width="6.4" height="26" fill="#f6e3de" transform="rotate(38 -2 -6)" />
+        <rect x="10" y="-6" width="6.4" height="26" fill="#f6e3de" transform="rotate(38 10 -6)" />
+        <rect x="22" y="-6" width="6.4" height="26" fill="#f6e3de" transform="rotate(38 22 -6)" />
+        <rect x="34" y="-6" width="6.4" height="26" fill="#f6e3de" transform="rotate(38 34 -6)" />
+        <rect x="46" y="-6" width="6.4" height="26" fill="#f6e3de" transform="rotate(38 46 -6)" />
+      </symbol>
+
       <!-- mb:icons:start -->
       <!-- Généré par backend/scripts/build-icons.ts depuis assets/icons/manifest.json.
            Ne pas éditer à la main : lance `npm run icons:build`. -->
@@ -96,7 +109,7 @@
      d'entre eux l'avaient oubliée : la photo sortait en « [object Object] »
      dès qu'elle arrivait enrichie par l'analyse d'image.
      `item` accepte une URL nue ou un objet {url, tape_corner, focus}. #}
-  {% macro mb_photo(item, modifier) %}<div class="mb-photo mb-photo--{{ modifier }}{% if item.tape_corner %} mb-photo--tape-{{ item.tape_corner }}{% endif %}">{% if item.tape_corner %}<span class="mb-photo__tape"></span>{% endif %}<img src="{{ item.url | default(item) }}" alt=""{% if item.focus %} style="object-position: {{ item.focus }}"{% endif %} /></div>{% endmacro %}
+  {% macro mb_photo(item, modifier) %}<div class="mb-photo mb-photo--{{ modifier }}{% if item.tape_corner %} mb-photo--tape-{{ item.tape_corner }}{% endif %}">{% if item.tape_corner %}<span class="mb-photo__tape"><svg viewBox="0 0 46 13" preserveAspectRatio="none"><use href="#mb-tape" /></svg></span>{% endif %}<img src="{{ item.url | default(item) }}" alt=""{% if item.focus %} style="object-position: {{ item.focus }}"{% endif %} /></div>{% endmacro %}
 
 
   {# La réglure du papier, en éléments plutôt qu'en image de fond : Chromium
