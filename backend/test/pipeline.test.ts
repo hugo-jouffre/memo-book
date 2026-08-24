@@ -184,6 +184,25 @@ describe("parcours complet : raconter → transcrire → générer", () => {
       status: "ready",
       transcript: "Petit mot écrit depuis le bus.",
     });
+
+    // ... et le carnet doit pouvoir sortir. Le test s'arrêtait à la création de
+    // l'entrée, ce qui laissait passer un cul-de-sac : une note écrite ne
+    // passait pas par le job de transcription, donc personne n'enfilait sa
+    // rédaction, donc elle restait `pending` et la génération était refusée
+    // pour toujours. Créer l'entrée n'est pas le résultat attendu — le carnet
+    // l'est. Plusieurs testeurs préfèrent écrire plutôt que dicter : ce chemin
+    // doit rester praticable de bout en bout.
+    const render = await harness.app.inject({
+      method: "POST",
+      url: `/v1/memos/${memoId}/renders`,
+      headers: { authorization },
+    });
+
+    expect(render.statusCode).toBe(202);
+    expect(render.json<{ status: string; error: string | null }>()).toMatchObject({
+      status: "ready",
+      error: null,
+    });
   });
 });
 
