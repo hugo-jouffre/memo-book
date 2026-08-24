@@ -265,7 +265,11 @@ gros. La variable n'est pas le nombre de pages mais le taux de compression par
 
 - URLs absolues et publiques (CDN Webflow). Pas de chemin relatif : le moteur
   PDF ne reçoit que du HTML et du CSS, sans aucun fichier joint.
-- 1200–1600 px de large pour les photos de couverture et les photos héros.
+- **1750 px minimum** pour une photo pleine page (couverture, quatrième,
+  `layout_photo_page`) : à 148 mm de large, il en faut autant pour tenir les
+  300 ppi de l'imprimeur. 1200 px n'y suffisent pas — ça donne 205 ppi.
+- 1200–1600 px suffisent pour une photo héro ou une photo de galerie, qui
+  n'occupent qu'une fraction de la largeur.
 - Les photos sont recadrées en `object-fit: cover` et pivotées de quelques
   degrés : ne pas envoyer une image dont un visage touche déjà le bord.
 - **Le scotch reste l'exception.** Un lecteur ne l'aime pas du tout ; il garde

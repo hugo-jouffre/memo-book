@@ -189,16 +189,52 @@ li { margin: 0; }
   line-height: var(--mb-body-lh);
   letter-spacing: 0.017em;
   color: var(--mb-ink);
-  /* Une tuile SVG plutôt qu'un dégradé : un `repeating-linear-gradient` ne
-     produit qu'un motif à une dimension, or il faut ici une ligne posée tous
-     les `--mb-line` ET interrompue horizontalement. La tuile fait 6 × 16
-     unités, le tiret occupe les 3,4 premières, en bas — répétée, elle donne un
-     pointillé régulier qui reste calé sur la réglure quelle que soit la
-     largeur du bloc. Couleur : --mb-rule, recopiée à la main (cf. token). */
-  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='16'%3E%3Crect y='15.2' width='3.4' height='0.7' fill='%23b6ada1'/%3E%3C/svg%3E");
-  background-size: 6pt var(--mb-line);
-  background-position: 0 0;
 }
+
+/* --- La réglure, et pourquoi elle est faite d'éléments ----------------------
+   Il faut une ligne tous les `--mb-line`, interrompue horizontalement : un
+   motif à DEUX dimensions. Or `repeating-linear-gradient` n'en fait qu'une.
+   La tentation est donc de passer par une image — tuile SVG en `data:` ou
+   `<pattern>` SVG en ligne. C'est ce qu'on avait fait, et c'est faux :
+
+   **Chromium rastérise les images de fond quand il produit le PDF.** Mesuré
+   sur le carnet : la réglure sortait cuite dans un bitmap de 861 × 1219 px,
+   soit 148 dpi pour une page A5, avec une période dérivée à 6,24 pt au lieu
+   de 6,00 et un rapport tiret/espace tombé à 50/50. À l'écran c'était juste,
+   à l'impression c'était gros et flou. Le `<pattern>` SVG subit le même sort
+   (mesuré à 63 dpi) ; seul le dégradé CSS reste vectoriel.
+
+   D'où cette construction : une pile d'éléments d'un interligne chacun, et le
+   pointillé vient d'un dégradé HORIZONTAL — une seule dimension, donc
+   vectoriel. Vérifié à 600 dpi : période 6,00 pt, aucun bitmap dans le PDF.
+
+   Le nombre d'éléments est fixe et généreux ; le conteneur écrête ce qui
+   dépasse, la hauteur du bloc n'étant pas connue à l'avance. */
+.mb-note__rules {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  /* La première ligne tombe sous la première ligne de texte, pas au-dessus. */
+  padding-top: calc(var(--mb-line) - 0.7pt);
+}
+
+.mb-note__rules i {
+  display: block;
+  height: 0.7pt;
+  margin-bottom: calc(var(--mb-line) - 0.7pt);
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--mb-rule) 0,
+    var(--mb-rule) 3.4pt,
+    transparent 3.4pt,
+    transparent 6pt
+  );
+}
+
+/* Le texte passe au-dessus de la réglure. */
+.mb-note > *:not(.mb-note__rules) { position: relative; z-index: 1; }
 
 /* Une ligne vide après chaque paragraphe, y compris le dernier : elle montre
    l'emplacement resté libre dans le gabarit, comme sur un vrai carnet. */
@@ -821,11 +857,19 @@ li { margin: 0; }
 }
 
 /* Les lignes à écrire : mêmes tirets que la réglure du récit, pour que le
-   lecteur reconnaisse un endroit où l'on écrit. */
-.mb-prompt__lines {
-  height: calc(var(--mb-line) * 3);
-  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='16'%3E%3Crect y='15.2' width='3.4' height='0.7' fill='%23b6ada1'/%3E%3C/svg%3E");
-  background-size: 6pt var(--mb-line);
+   lecteur reconnaisse un endroit où l'on écrit — et par la même construction,
+   pour la même raison (voir `.mb-note__rules`). */
+.mb-prompt__lines i {
+  display: block;
+  height: 0.7pt;
+  margin-bottom: calc(var(--mb-line) - 0.7pt);
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--mb-rule) 0,
+    var(--mb-rule) 3.4pt,
+    transparent 3.4pt,
+    transparent 6pt
+  );
 }
 
 .mb-quiz {
