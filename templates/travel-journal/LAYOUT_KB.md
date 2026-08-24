@@ -46,7 +46,11 @@ Deux règles :
 - **Une étape peut occuper plusieurs pages.** Le gabarit n'en produit qu'une
   aujourd'hui : quand une étape est trop dense, il faut la scinder en plusieurs
   entrées consécutives et ne remettre le bandeau `day_intro` que sur la
-  première. Les suivantes le laissent vide et enchaînent le récit.
+  première. Les suivantes ont un `title` **vide** et **pas de `day_intro`** —
+  c'est à ça que le validateur les reconnaît comme la suite de la même étape, et
+  c'est ce qui leur rend les 320 caractères que le bandeau occupait. Les tailles
+  **L** et **XL** du barème sont faites pour ce couple de pages ; voir
+  § « Longueur des textes ».
 
 **Ouverture de chapitre.** Un chapitre commence par une page portant
 `layout_chapter_map` : carte de la région à droite, récit et carte info à
@@ -93,11 +97,15 @@ obligatoire :
   n'affiche que le récit manuscrit.
 - `cover_photo` est **optionnel**. *(À construire : une couverture sans photo,
   portée par la typographie et une illustration de la région visitée.)*
-- Un récit très court doit déclencher un layout qui respire — carte, sticker,
-  tracé pointillé — plutôt qu'une page aux trois quarts vide.
+- Un récit très court doit déclencher un layout qui respire — la grande photo de
+  `layout_hero_top`, la carte de `layout_chapter_map` — plutôt qu'une page aux
+  trois quarts vide. Ce n'est plus une intention : sous le minimum de la taille
+  S, le validateur refuse un layout de récit dès qu'une photo était disponible.
+  Le barème et les deux messages destinés au voyageur sont en
+  § « Longueur des textes ».
 
-*(À construire : les variantes sans photo et les variantes « peu de texte ».
-Pour l'instant, l'agent choisit le layout existant le plus proche.)*
+*(À construire : les variantes sans photo. Pour l'instant, l'agent choisit le
+layout existant le plus proche.)*
 
 ## Les deux profils de sortie
 
@@ -144,14 +152,17 @@ ne pas les produire tant qu'un layout ne les consomme pas.
 Un seul drapeau à `true` par journée. En cas de conflit, l'ordre ci-dessous
 tranche : le premier actif l'emporte.
 
-| Drapeau | Rendu | Quand le choisir | Photos |
-|---|---|---|---|
-| `layout_chapter_map` | Carte de la région à droite, récit et carte info à gauche, photos en bas | Ouverture d'un chapitre — voir la table plus haut | 0–2 |
-| `layout_hero_top` | Grande photo en tête, récit dessous | Une photo iconique porte la journée | 1 |
-| `layout_split_left` | Carte info à gauche, récit en colonne à droite, puis deux photos en bas | Un fait à mettre en avant et deux belles images | 2 |
-| `layout_collage` | Récit pleine largeur puis 2 ou 3 photos inclinées en bas | Journée dense visuellement | 2–3 |
-| `layout_photo_page` | **Page pleine de photos**, sans récit ni bandeau. `title` devient une légende manuscrite en bas | Étape très visuelle. En placer régulièrement : c'est la page que les lecteurs préfèrent | 3–5 |
-| *(par défaut)* | Récit, puis carte info et photo flottantes en bas de page | Ouverture de journée, cas le plus courant | 0–1 |
+| Drapeau | Rendu | Quand le choisir | Photos | Tailles |
+|---|---|---|---|---|
+| `layout_chapter_map` | Carte de la région à droite, récit et carte info à gauche, photos en bas | Ouverture d'un chapitre — voir la table plus haut | 0–2 | sous S à M, **selon la carte info et les photos** |
+| `layout_hero_top` | Grande photo en tête, récit dessous | Une photo iconique porte la journée | 1 | sous S, S |
+| `layout_split_left` | Carte info à gauche, récit en colonne à droite, puis deux photos en bas | Un fait à mettre en avant et deux belles images | 2 | S, M — **S seulement avec un fun fact** |
+| `layout_collage` | Récit pleine largeur puis 2 ou 3 photos inclinées en bas | Journée dense visuellement | 2–3 | S, M |
+| `layout_photo_page` | **Page pleine de photos**, sans récit ni bandeau. `title` devient une légende manuscrite en bas | Étape très visuelle. En placer régulièrement : c'est la page que les lecteurs préfèrent | 3–5 | aucune — le récit n'est pas rendu |
+| *(par défaut)* | Récit, puis carte info et photo flottantes en bas de page | Ouverture de journée, cas le plus courant | 0–1 | S, M |
+
+Les tailles exactes, et le plafond mesuré de chaque configuration, sont en
+§ « Longueur des textes ».
 
 Le cas par défaut couvre aussi `layout_story_opener` et `layout_story_facts` :
 le validateur exige au moins un drapeau, n'importe lequel de ces deux convient.
@@ -169,17 +180,131 @@ ce qui exclut :
 
 Rien à envoyer pour le piloter : c'est une règle du gabarit, pas un champ.
 
-## Contraintes de longueur
+## Longueur des textes — le barème S / M / L / XL
 
-Appliquées par `backend/src/services/payloadValidator.ts` — un dépassement est
-une **erreur**, pas un avertissement :
+> Ce barème existe parce que les deux agents ne comptaient pas la même chose.
+> La mise en page raisonnait par layout, la rédaction écrivait librement, et une
+> étape allait de 200 à 1260 caractères sans que personne ne sache laquelle
+> tenait sur la page. **La taille se mesure désormais sur l'étape entière**, et
+> le nombre de paragraphes s'en déduit — l'inverse laissait l'ambiguïté intacte.
+
+**Ce qui se compte** : le texte brut de `body_html`, balises retirées, additionné
+sur toutes les pages de l'étape. Ni le titre, ni le bandeau, ni l'encart, ni les
+légendes — ils ont leurs propres limites.
+
+| Taille | Fourchette | Cible | Paragraphes | Pages |
+|---|---|---|---|---|
+| **S** | 200 – 379 | 290 | 1 | 1 |
+| **M** | 380 – 559 | 470 | 2 | 1 |
+| **L** | 560 – 899 | 720 | 3 | 2 |
+| **XL** | 900 – 1440 | 1150 | 4 | 2 |
+
+Le nombre de paragraphes est une **cible de rédaction**. Ce qui se vérifie, c'est
+ce que chaque *page* porte — voir ci-dessous, parce que c'est cela qui a été
+mesuré.
+
+Les fourchettes sont des **fourchettes d'acceptation**, pas des valeurs exactes :
+le voyageur retouche son texte au clavier dans l'app, et une étape ne bascule pas
+d'un cran parce qu'il a ajouté trois mots. Elles sont contiguës et couvrent
+200 → 1440 sans trou.
+
+**1440 n'est pas un chiffre rond**, c'est 560 + 880 : la capacité d'une page à
+bandeau plus celle d'une page de suite. Les deux sont mesurées — 880 garde 20
+caractères de marge sur les 900 relevés, parce que la dernière valeur qui passe
+n'est pas la première qui casse. On arrondit vers le bas.
+
+### Ce que chaque page accepte réellement
+
+Plafonds relevés par `backend/scripts/calibrate-lengths.ts`, qui rend chaque
+layout à longueur croissante et note le point où la bande de photos se comprime
+ou le texte passe sous la marge. **Ils ne se devinent pas** : les redériver, c'est
+relancer le script.
+
+| Configuration | Plafond | Tailles acceptées |
+|---|---|---|
+| `layout_photo_page` | 0 — aucun récit rendu | — |
+| `layout_chapter_map` + fun fact + ≥ 2 photos | 120 | sous S |
+| `layout_split_left` + fun fact | 240 | sous S, S partiel |
+| `layout_chapter_map` + ≥ 2 photos, sans fun fact | 320 | sous S, S partiel |
+| `layout_hero_top` | 380 | sous S, S |
+| `layout_story_*`, `layout_collage`, `layout_split_left` sans fun fact, `layout_chapter_map` sans photos | 560 | S, M |
+| `layout_story_*` portant un `prompt` | 760 | S, M |
+| **page de suite** (sans `day_intro`), tout layout de récit | 880 | complète L et XL |
+
+**Un couple, pas un nombre.** Ce n'est pas une longueur seule qui a été mesurée
+mais un couple (caractères, paragraphes) : chaque `<p>` est suivi d'une ligne
+vide, et celle de trop pousse le contenu sous la marge. 560 caractères tiennent
+en **2** paragraphes et débordent en 3 ; 880 tiennent en **4** et débordent en 5.
+D'où deux plafonds fermes :
+
+| Page | Paragraphes |
+|---|---|
+| page à bandeau (avec `day_intro`) | 2 |
+| page de suite (sans `day_intro`) | 4 |
+
+**La règle à retenir, c'est celle de la carte info.** Sur `layout_split_left` et
+`layout_chapter_map`, l'encart occupe 173 pt de large : la colonne de récit tombe
+de ~59 à ~24 caractères par ligne. **Un `fun_facts` sur ces deux layouts retire
+une taille.** C'est le seul piège du barème, et il coûte plus de la moitié de la
+page.
+
+### Les deux bornes basses
+
+Sous 200 caractères, la page reste aux trois quarts vide. Deux cas, deux
+traitements :
+
+- **une photo ou une carte est disponible** → le payload est **refusé**, et le
+  message nomme le repli : `layout_hero_top` (la grande photo tient la hauteur)
+  ou `layout_chapter_map` à une ouverture de chapitre. C'est le cas que le
+  barème vise ;
+- **ni photo ni carte** → simple **avertissement**. Aucun layout n'aurait fait
+  mieux, et refuser un carnet entier pour un souvenir court demanderait au
+  voyageur une correction qu'il ne peut pas faire. Une page trop aérée s'imprime ;
+  une page qui déborde, non.
+
+Au-dessus de 1440, refus : il faut **deux étapes**, pas une étape plus longue.
+
+### Une étape sur deux pages
+
+L et XL ne tiennent pas sur une feuille. L'étape se scinde en **deux entrées
+consécutives de `days[]`** :
+
+- la première porte `day_intro` et le `title` — elle plafonne à 560 ;
+- la seconde a un `title` **vide** et **pas de `day_intro`** : c'est ce qui lui
+  rend les 320 caractères du bandeau, et la porte à 880.
+
+C'est ce couple que le validateur reconnaît comme une étape unique : toute entrée
+sans `day_intro` prolonge la précédente.
+
+**On remplit la première page avant d'ouvrir la seconde.** Répartir 720
+caractères en 360 + 360 laisse deux pages à moitié pleines et un blanc au milieu
+de chacune ; 560 + 160 en laisse une pleine et une aérée, ce qui est le rythme
+d'un carnet. La coupe se fait sur une fin de phrase, jamais au milieu d'une idée.
+
+### Les autres champs
+
+Appliqués par `backend/src/services/payloadValidator.ts` — un dépassement est une
+**erreur**, pas un avertissement :
 
 | Champ | Maximum |
 |---|---|
 | `intro_text` | 700 caractères par paragraphe, 3 paragraphes |
-| `body_html` | 420 caractères par paragraphe, 2–3 paragraphes |
+| `body_html`, par paragraphe | 380 — la taille S. Au-delà c'est un mur de texte quelle que soit la taille de l'étape |
 | `fun_facts[]` | 140 caractères |
 | `highlights[]` | 80 caractères |
+
+### Ce que l'app dit au voyageur
+
+Pendant qu'il écrit, l'app compte les caractères de l'étape et affiche sa taille.
+Deux messages, aux deux bornes du barème, définis une seule fois dans
+`payloadValidator.ts` (`LENGTH_HINTS`) et recopiés dans `EntryEditorView.swift` :
+
+- **sous 200** — « Encore quelques lignes : sous 200 caractères, l'étape laisse
+  une page aux trois quarts vide. Raconte un détail de plus — ce que tu as vu,
+  mangé, entendu. »
+- **au-dessus de 1440** — « Ce souvenir dépasse ce qu'une étape peut contenir :
+  1440 caractères, soit deux pages de carnet. Coupe-le en deux étapes, chacune
+  aura les siennes. »
 
 ## Les fun facts — dosage et matière
 

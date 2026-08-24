@@ -55,10 +55,10 @@ struct EntryEditorView: View {
                 } header: {
                     Text("Le texte du carnet")
                 } footer: {
-                    // Le compteur n'est pas décoratif : au-delà de 420
-                    // caractères par paragraphe, la génération du PDF échoue.
-                    // Mieux vaut le dire ici qu'après coup.
-                    ParagraphLengthHint(text: draft)
+                    // Le compteur n'est pas décoratif : c'est là que le
+                    // voyageur voit si son étape tiendra sur la page, pendant
+                    // qu'il écrit plutôt qu'après coup.
+                    StepLengthHint(text: draft)
                 }
 
                 if entry.isEdited {
@@ -122,29 +122,66 @@ struct EntryEditorView: View {
 }
 
 /// Longueur du plus long paragraphe, rapportée à la limite du gabarit.
-private struct ParagraphLengthHint: View {
+/// Le barème S / M / L / XL, côté écriture.
+///
+/// Il se mesure sur **l'étape entière**, pas sur le plus long paragraphe :
+/// c'est ce que compte le validateur du back-end, et c'est ce que compte la
+/// mise en page. Les trois devaient compter la même chose — c'était tout le
+/// problème.
+///
+/// Les valeurs et les deux messages viennent de
+/// `backend/src/services/payloadValidator.ts` (`STEP_SIZES`, `LENGTH_HINTS`) :
+/// les changer ici seulement ferait mentir l'app.
+private struct StepLengthHint: View {
     let text: String
 
-    /// `LAYOUT_KB.md` § Contraintes de longueur — appliqué à la génération.
-    private static let maxCharactersPerParagraph = 420
+    private enum Size: String, CaseIterable {
+        case s = "S", m = "M", l = "L", xl = "XL"
 
-    private var longestParagraph: Int {
-        text
-            .components(separatedBy: "\n\n")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).count }
-            .max() ?? 0
+        var range: ClosedRange<Int> {
+            switch self {
+            case .s: return 200...379
+            case .m: return 380...559
+            case .l: return 560...899
+            case .xl: return 900...1440
+            }
+        }
     }
 
-    private var isOverLimit: Bool { longestParagraph > Self.maxCharactersPerParagraph }
+    /// Texte brut de l'étape : c'est l'unité du barème.
+    private var length: Int {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).count
+    }
+
+    private var size: Size? {
+        Size.allCases.first { $0.range.contains(length) }
+    }
+
+    private var isTooShort: Bool { length < Size.s.range.lowerBound }
+    private var isTooLong: Bool { length > Size.xl.range.upperBound }
+
+    private var message: String {
+        if isTooShort {
+            return "Encore quelques lignes : sous \(Size.s.range.lowerBound) caractères, "
+                + "l'étape laisse une page aux trois quarts vide. Raconte un détail de plus "
+                + "— ce que tu as vu, mangé, entendu."
+        }
+        if isTooLong {
+            return "Ce souvenir dépasse ce qu'une étape peut contenir : "
+                + "\(Size.xl.range.upperBound) caractères, soit deux pages de carnet. "
+                + "Coupe-le en deux étapes, chacune aura les siennes."
+        }
+        // Hors des deux bornes, le compteur informe sans alarmer : la taille
+        // dit au voyageur la place que son texte prendra dans le carnet.
+        return "\(length) caractères — taille \(size?.rawValue ?? "S")."
+    }
 
     var body: some View {
-        Text(
-            isOverLimit
-                ? "Paragraphe trop long : \(longestParagraph) caractères sur \(Self.maxCharactersPerParagraph). Coupe-le en deux avec une ligne vide."
-                : "\(longestParagraph)/\(Self.maxCharactersPerParagraph) caractères sur le plus long paragraphe."
-        )
-        .font(MemoBookFont.caption)
-        .foregroundStyle(isOverLimit ? MemoBookColor.error : MemoBookColor.inkSecondary)
+        Text(message)
+            .font(MemoBookFont.caption)
+            .foregroundStyle(
+                isTooShort || isTooLong ? MemoBookColor.error : MemoBookColor.inkSecondary
+            )
     }
 }
 

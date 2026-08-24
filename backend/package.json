@@ -28,6 +28,7 @@
     "test:visual": "vitest run test/visual",
     "test:visual:update": "UPDATE_GOLDENS=1 vitest run test/visual",
     "inspector": "tsx scripts/build-inspector.ts",
+    "calibrate": "tsx scripts/calibrate-lengths.ts",
     "icons:build": "tsx scripts/build-icons.ts",
     "icons:check": "tsx scripts/build-icons.ts --check"
   },

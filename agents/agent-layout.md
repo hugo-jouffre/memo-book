@@ -32,8 +32,8 @@ parfois corrigé au clavier par le voyageur. Le réécrire effacerait ce travail
 ## Sorties
 - Un payload conforme à `templates/travel-journal/gpt_image_schema.yaml`
   (propriété `apitemplate_payload`)
-- Signal des textes trop longs / trop courts pour la mise en page choisie
-  (retour à l'Agent Transcription si besoin)
+- Signal des textes trop longs / trop courts pour la mise en page choisie,
+  exprimé dans le barème S/M/L/XL (retour à l'Agent Transcription si besoin)
 
 ## Le contrat fait autorité, pas ce fichier
 
@@ -81,6 +81,59 @@ Une entrée de `days[]` est une **étape**, pas une page : une étape peut occup
 plusieurs pages, mais deux étapes ne partagent jamais une feuille. Un chapitre
 s'ouvre sur une page `layout_chapter_map`. Les règles de découpage et le choix
 de la carte selon la forme du voyage sont dans `LAYOUT_KB.md`.
+
+## La longueur : le barème S / M / L / XL
+
+**C'est ici que la mise en page et la rédaction se parlent.** L'agent ne mesure
+plus « ce que ce layout accepte » de son côté pendant que la rédaction écrit du
+sien : les deux comptent la même chose, **le récit de l'étape entière**, balises
+retirées, toutes ses pages additionnées.
+
+| Taille | Fourchette | Paragraphes | Pages |
+|---|---|---|---|
+| **S** | 200 – 379 | 1 | 1 |
+| **M** | 380 – 559 | 2 | 1 |
+| **L** | 560 – 899 | 3 | 2 |
+| **XL** | 900 – 1440 | 4 | 2 |
+
+Et deux plafonds fermes, parce que chaque `<p>` est suivi d'une ligne vide :
+**2 paragraphes** sur une page à bandeau, **4** sur une page de suite. Découper
+un texte en un `<p>` de plus n'est pas gratuit — c'est une ligne de récit en
+moins.
+
+La mise en page **reçoit** une taille, elle ne la décide pas — c'est la matière du
+vocal qui l'a fixée à la rédaction. Son travail est de **choisir un layout qui
+l'accepte** :
+
+| Le récit de la page fait | Layouts possibles |
+|---|---|
+| sous 200 | `layout_hero_top` (1 photo), `layout_chapter_map` (une carte), `layout_photo_page` (≥ 3 photos, le récit passe en légende) |
+| jusqu'à 240 | + `layout_split_left` **avec** un fun fact |
+| jusqu'à 380 | + `layout_hero_top`, `layout_chapter_map` avec deux photos |
+| jusqu'à 560 | + `layout_story_*`, `layout_collage`, `layout_split_left` sans fun fact |
+| jusqu'à 880 | uniquement une **page de suite** : `title` vide, pas de `day_intro` |
+
+**Le piège, c'est la carte info.** Sur `layout_split_left` et
+`layout_chapter_map`, l'encart occupe 173 pt : la colonne de récit tombe de ~59 à
+~24 caractères par ligne. Un `fun_facts` sur ces deux layouts **retire une
+taille**. C'est la moitié de la page qui part, et ça ne se voit qu'à
+l'impression.
+
+Trois conséquences pratiques :
+
+- **L et XL se scindent en deux entrées consécutives de `days[]`.** La première
+  porte `day_intro` et le titre, la seconde a un `title` vide et pas de bandeau —
+  c'est ce qui lui rend 320 caractères. Scinder n'est pas réécrire : aucun mot
+  n'est ajouté ni retiré.
+- **Sous 200 caractères, ne jamais garder un layout de récit s'il existe une
+  photo.** Le validateur refuse, et il a raison : la page resterait aux trois
+  quarts vide. Bascule sur `layout_hero_top`.
+- **Au-dessus de 1440, ce n'est plus une étape.** Renvoyer à la rédaction pour
+  qu'elle en fasse deux — jamais raccourcir soi-même.
+
+Les plafonds sont mesurés, pas estimés : `backend/scripts/calibrate-lengths.ts`
+rend chaque layout à longueur croissante et relève le point de rupture. La table
+complète est dans `LAYOUT_KB.md` § « Longueur des textes ».
 
 ## Les fun facts
 **Environ 2 pour 3 pages, un seul « Le saviez-vous » par étape**, et la matière

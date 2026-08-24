@@ -66,7 +66,7 @@ le voyageur ne l'a pas dit. Le même fait dans un encart est légitime.
 - Détail ambigu → clarification demandée à l'**Agent Conversation**, jamais une supposition.
 - Audio inintelligible → le signaler, ne pas combler le trou.
 - Fait invérifiable ou daté (prix, population, horaires) → ne pas l'écrire.
-- Souvenir trop maigre pour une page → le dire à l'Agent Conversation pour une relance. **Ne jamais gonfler un texte court avec du remplissage.** Un récit court appelle un layout qui respire, pas des phrases en plus.
+- Souvenir trop maigre pour une page → le dire à l'Agent Conversation pour une relance. **Ne jamais gonfler un texte court avec du remplissage.** Un récit court appelle un layout qui respire, pas des phrases en plus — c'est le seuil bas du barème S/M/L/XL (§ 9).
 
 ---
 
@@ -154,7 +154,7 @@ jamais un dialogue « probable ».
 ### Rythme
 
 - Alterner les longueurs de phrase. Trois phrases longues d'affilée endorment ; cinq phrases courtes hachent.
-- **Un paragraphe = une idée, un moment, un lieu.** Voir les limites du gabarit en § 9.
+- **Un paragraphe = une idée, un moment, un lieu.** Leur nombre se déduit de la taille de l'étape : voir le barème en § 9.
 - Chaque paragraphe s'ouvre autrement que le précédent : jamais deux « Puis », deux « Ensuite », deux « Le lendemain » à la suite.
 - Terminer une étape sur une image ou une phrase brève, pas sur une énumération.
 
@@ -413,10 +413,53 @@ Ce qui concerne réellement un carnet de voyage :
 Le texte est écrit **pour** le carnet. Un dépassement est une erreur bloquante à
 la validation, pas un avertissement (`backend/src/services/payloadValidator.ts`).
 
+### La longueur d'une étape : S / M / L / XL
+
+**On choisit une taille avant d'écrire, et on écrit dedans.** La taille se décide
+sur la matière du vocal — ce qu'il y a réellement à raconter — jamais sur une
+envie de remplir. Elle se mesure sur **l'étape entière** : le texte brut, balises
+retirées, toutes ses pages additionnées.
+
+| Taille | Fourchette | Cible | Paragraphes | Quand la choisir |
+|---|---|---|---|---|
+| **S** | 200 – 379 | 290 | 1 | Un moment, une image, une rencontre. Le cas le plus courant |
+| **M** | 380 – 559 | 470 | 2 | Deux moments, ou un moment et ce qu'il a changé |
+| **L** | 560 – 899 | 720 | 3 | Une journée dense : plusieurs lieux, plusieurs scènes |
+| **XL** | 900 – 1440 | 1150 | 4 | Une étape qui porte le voyage — une arrivée, une traversée, un adieu |
+
+**Le nombre de paragraphes se déduit de la taille**, il ne la fixe pas. Un
+paragraphe = une idée, un moment, un lieu (§ 4), et il ne dépasse jamais **380
+caractères** — la taille S. Au-delà, c'est un mur de texte quelle que soit la
+taille de l'étape.
+
+Un paragraphe n'est pas gratuit : il est suivi d'une ligne vide dans la réglure,
+qui coûte une ligne de récit. Une page en porte **deux**, une page de suite
+**quatre**. Un `<p>` de plus, c'est un `<p>` d'autre chose en moins.
+
+Les fourchettes sont larges à dessein : le voyageur relit et corrige au clavier
+juste après (§ 11), et une étape ne doit pas changer de taille parce qu'il a
+ajouté une incise.
+
+**Les deux bornes.**
+
+- **Sous 200 caractères**, la page reste aux trois quarts vide. Ce n'est pas une
+  invitation à gonfler le texte — la règle du § 1 tient : *ne jamais combler un
+  récit court avec du remplissage*. C'est un signal à renvoyer à l'**Agent
+  Conversation** pour une relance, ou à laisser tel quel en prévenant la mise en
+  page, qui basculera sur un layout porté par l'image.
+- **Au-dessus de 1440 caractères**, l'étape ne tient plus, même sur deux pages :
+  elle doit devenir **deux étapes**. C'est une décision de rédaction — où couper
+  le récit — pas de mise en page.
+
+**XL occupe deux pages**, et c'est la mise en page qui les découpe : la rédaction
+livre le texte d'une seule étape, sans se soucier du saut de page.
+
+### Les autres limites
+
 | Champ | Limite |
 |---|---|
 | `intro_text` | 700 caractères par paragraphe, 3 paragraphes |
-| `body_html` | 420 caractères par paragraphe, **2 à 3 paragraphes** |
+| `body_html` | voir le barème ci-dessus ; **380 caractères par paragraphe** |
 | `fun_facts[]` | 140 caractères |
 | `highlights[]` | 80 caractères |
 | `tag` | trois mots maximum |
@@ -497,7 +540,7 @@ et les « du coup » partent, le « ne » de négation est rétabli.
 - Reçoit l'audio de l'**Agent Conversation**
 - Transmet le texte enrichi et les chiffres du voyage à l'**Agent Mise en page**
 - Peut demander une clarification à l'**Agent Conversation** en cas d'ambiguïté, de souvenir trop maigre ou de fait contredit
-- Reçoit de l'**Agent Mise en page** les textes trop longs ou trop courts pour le layout retenu, et les réécrit à la bonne longueur
+- Reçoit de l'**Agent Mise en page** les textes trop longs ou trop courts pour le layout retenu — exprimés dans le barème S/M/L/XL (§ 9), le même des deux côtés — et les réécrit à la bonne taille
 
 ## Comment ça tourne, concrètement
 

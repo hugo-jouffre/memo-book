@@ -143,7 +143,13 @@ $defs:
     type: object
     required: [title, body_html]
     properties:
-      title: { type: string }
+      title:
+        type: string
+        description: >
+          Titre manuscrit en tête du récit. **Vide sur une page de suite** : une
+          étape qui occupe deux pages ne remet ni le titre ni `day_intro` sur la
+          seconde, et c'est à cela que le validateur la reconnaît comme la suite
+          de la même étape.
       date: { type: string }
       city: { type: string }
       country: { type: string }
@@ -228,7 +234,10 @@ $defs:
         type: boolean
         description: >
           Ouverture de chapitre : carte de la région à droite, récit et carte info
-          à gauche, photos en bas. Exige `map`.
+          à gauche, photos en bas. Exige `map`. Plafonds mesurés : 560 caractères
+          sans bande d'images, 320 avec deux photos, 120 avec deux photos ET un
+          `fun_facts` — la carte info y rétrécit la colonne comme sur
+          `layout_split_left`.
       map:
         type: object
         description: >
@@ -256,16 +265,28 @@ $defs:
                 lon: { type: number, minimum: -180, maximum: 180 }
       layout_hero_top:
         type: boolean
-        description: "Layout #2 : grande photo en tête puis récit."
+        description: >
+          Grande photo en tête (268 pt), récit dessous. Exige 1 photo. Plafond
+          mesuré : 380 caractères de récit sur une page à bandeau — c'est le
+          layout à choisir sous le minimum de la taille S, la photo tenant la
+          hauteur qu'un récit court ne remplirait pas.
       layout_split_left:
         type: boolean
-        description: "Layout #3 : texte à gauche, mosaïque de photos à droite (2-4 photos)."
+        description: >
+          Carte info à gauche, récit en colonne à droite, deux photos en bas.
+          Plafond mesuré : 560 caractères sans `fun_facts`, mais **240 seulement
+          avec** — l'encart occupe 173 pt et fait tomber la colonne de ~59 à ~24
+          caractères par ligne.
       layout_story_facts:
         type: boolean
         description: "Layout #4 : texte + encart fun facts, idéal pour insérer 2-4 faits marquants."
       layout_collage:
         type: boolean
-        description: "Layout #5 : collage libre façon scrapbook (texte + photos inclinées + fun facts)."
+        description: >
+          Récit pleine largeur puis 2 ou 3 photos inclinées en bas. Plafond
+          mesuré : 560 caractères sur une page à bandeau. Sous 290 caractères la
+          bande de photos décroche du récit et laisse un blanc au milieu de la
+          page — préférer alors `layout_hero_top`.
       layout_story_opener:
         type: boolean
         description: "Layout #5bis : pleine page d'ouverture de jour avec 1-3 photos (kicker + récit)."
@@ -296,7 +317,18 @@ $defs:
           un court texte d'accompagnement.
       body_html:
         type: string
-        description: HTML propre (p, strong, em, ul/li autorisés)
+        description: >
+          Récit de la page, en HTML simple (p, strong, em, ul/li autorisés).
+          Sa longueur suit le barème S/M/L/XL, qui se mesure sur l'ÉTAPE ENTIÈRE —
+          toutes les pages de l'étape additionnées, balises retirées :
+          S 200-379 (1 paragraphe, 1 page), M 380-559 (2 ¶, 1 page),
+          L 560-899 (3 ¶, 2 pages), XL 900-1440 (4 à 5 ¶, 2 pages).
+          Un paragraphe ne dépasse jamais 380 caractères, soit la taille S.
+          Chaque layout a son propre plafond par page : `layout_hero_top` 380,
+          les layouts de récit pleine largeur 560, une page de suite 880. Un
+          `fun_facts` sur `layout_split_left` ou `layout_chapter_map` rétrécit la
+          colonne et retire une taille. Table complète dans LAYOUT_KB.md
+          § « Longueur des textes ».
       opener_body_html: { type: string, description: "Texte spécifique au layout #5, sinon fallback body_html" }
       opener_kicker: { type: string }
       opener_photos:
