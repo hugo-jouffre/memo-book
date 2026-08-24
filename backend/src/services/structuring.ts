@@ -2,7 +2,13 @@ import OpenAI from "openai";
 import { stringify as stringifyYaml } from "yaml";
 import type { Env } from "../env.js";
 import { loadLayoutKnowledgeBase, loadPayloadSchema } from "../lib/templates.js";
-import { validatePayload, type ValidationIssue } from "./payloadValidator.js";
+import {
+  EDITORIAL_LIMITS,
+  STEP_SIZES,
+  pageCapacity,
+  validatePayload,
+  type ValidationIssue,
+} from "./payloadValidator.js";
 
 /** Une entrée du carnet telle que la voit l'étape de structuration. */
 export interface StructuringEntry {
@@ -100,7 +106,10 @@ function escapeHtml(text: string): string {
 }
 
 /** Découpe un texte long en paragraphes qui tiennent dans la page. */
-function toBodyHtml(text: string, maxCharsPerParagraph = 400): string {
+function toBodyHtml(
+  text: string,
+  maxCharsPerParagraph = EDITORIAL_LIMITS.bodyHtmlCharsPerParagraph,
+): string {
   const sentences = text
     .replace(/\s+/g, " ")
     .trim()
@@ -130,14 +139,69 @@ function toBodyHtml(text: string, maxCharsPerParagraph = 400): string {
 }
 
 /**
- * Heuristique de choix de layout, reprise de LAYOUT_KB.md § « Sélection rapide ».
- * Elle sert de secours déterministe : c'est le modèle qui décide en mode `live`.
+ * Heuristique de choix de layout, reprise du catalogue de `LAYOUT_KB.md` et du
+ * barème S/M/L/XL. Elle sert de secours déterministe : c'est le modèle qui
+ * décide en mode `live`.
+ *
+ * Deux règles la gouvernent, dans cet ordre :
+ *
+ * 1. **sous le minimum de S, c'est l'image qui porte la page** — une page de
+ *    photos si on en a de quoi la remplir, sinon la photo héro. Un récit court
+ *    sur un layout de récit laisse une page aux trois quarts vide ;
+ * 2. **au-dessus, le layout le plus visuel qui tienne le texte.** `layout_hero_top`
+ *    plafonne à 380 caractères : au-delà, il faut un layout à récit pleine
+ *    largeur.
+ *
+ * Elle ne rend que des drapeaux du catalogue : un drapeau inconnu n'échoue pas,
+ * il est silencieusement ignoré et la journée retombe sur la mise en page par
+ * défaut — exactement le genre de dérive que `LAYOUT_KB.md` interdit.
  */
 export function pickLayout(photoCount: number, textLength: number): string {
-  if (photoCount >= 3) return "layout_gallery_stack";
-  if (photoCount === 0) return "layout_story_facts";
-  if (photoCount === 1) return textLength > 400 ? "layout_hero_top" : "layout_postcard";
-  return "layout_modern_journal";
+  if (textLength < STEP_SIZES.S.min) {
+    if (photoCount >= 3) return "layout_photo_page";
+    if (photoCount >= 1) return "layout_hero_top";
+    return "layout_story_facts";
+  }
+
+  if (photoCount >= 3) return "layout_collage";
+  if (photoCount === 2) return "layout_split_left";
+  if (photoCount === 1 && textLength <= LAYOUT_CAPACITY_HERO_TOP) return "layout_hero_top";
+  return "layout_story_opener";
+}
+
+/** Plafond mesuré de `layout_hero_top` sur une page à bandeau. */
+const LAYOUT_CAPACITY_HERO_TOP = 380;
+
+/**
+ * Coupe `text` au plus près de `max` caractères, sur une fin de phrase si
+ * possible, sinon sur une espace. Couper au milieu d'un mot se verrait à
+ * l'impression, et le texte est définitif : on ne le réécrit pas, on choisit
+ * seulement où tourner la page.
+ */
+/** Nombre de pages déjà posées pour l'étape en cours de construction. */
+function pagesDeLEtape(days: Record<string, unknown>[]): number {
+  let pages = 0;
+  for (let i = days.length - 1; i >= 0; i -= 1) {
+    pages += 1;
+    if (days[i]?.["day_intro"]) break;
+  }
+  return pages;
+}
+
+function splitAt(text: string, max: number): [string, string] {
+  if (text.length <= max) return [text, ""];
+
+  const fenetre = text.slice(0, max + 1);
+  const finDePhrase = Math.max(
+    fenetre.lastIndexOf(". "),
+    fenetre.lastIndexOf("! "),
+    fenetre.lastIndexOf("? "),
+    fenetre.lastIndexOf("… "),
+  );
+  const coupe = finDePhrase > max / 2 ? finDePhrase + 1 : fenetre.lastIndexOf(" ");
+
+  if (coupe <= 0) return [text.slice(0, max), text.slice(max).trim()];
+  return [text.slice(0, coupe).trim(), text.slice(coupe).trim()];
 }
 
 /**
@@ -149,7 +213,10 @@ export class HeuristicStructurer implements Structurer {
   async structure(input: StructuringInput): Promise<BookPayload> {
     const groups = groupEntriesByDay(input.entries);
 
-    const days = groups.map((group, index) => {
+    const days: Record<string, unknown>[] = [];
+    let numero = 0;
+
+    groups.forEach((group) => {
       const photos = group.entries
         .map((entry) => entry.photoUrl)
         .filter((url): url is string => Boolean(url));
@@ -168,27 +235,53 @@ export class HeuristicStructurer implements Structurer {
       const weatherKey = group.entries.find((entry) => entry.weatherKey)?.weatherKey ?? null;
       const withFunFact = group.entries.find((entry) => entry.funFact);
 
-      const day: Record<string, unknown> = {
-        title: redactedTitle ?? `Jour ${index + 1}${place ? ` – ${place}` : ""}`,
-        date: DATE_FORMATTER.format(group.date),
-        day_intro: {
-          day_number: String(index + 1).padStart(2, "0"),
-          location: place ?? "",
-          date: SHORT_DATE_FORMATTER.format(group.date),
-          ...(weatherKey ? { weather_key: weatherKey } : {}),
-        },
-        body_html: toBodyHtml(narrative),
-        [pickLayout(photos.length, narrative.length)]: true,
-      };
+      // Le récit se déverse page après page. Une étape occupe au plus deux
+      // pages — la première porte le bandeau, la seconde enchaîne sans lui.
+      // Au-delà, c'est une nouvelle étape, pas une page de plus : c'est ce que
+      // dit le barème, et ce que le validateur vérifiera.
+      let reste = narrative;
+      let premierePage = true;
 
-      if (place) day["city"] = place;
-      if (photos.length > 0) day["photos"] = photos;
-      if (withFunFact?.funFact) {
-        day["fun_facts"] = [withFunFact.funFact];
-        if (withFunFact.funFactTitle) day["fun_facts_title"] = withFunFact.funFactTitle;
+      while (reste.length > 0 || premierePage) {
+        const ouvreEtape = premierePage || days.length === 0 || pagesDeLEtape(days) >= STEP_SIZES.XL.pages;
+
+        if (ouvreEtape) numero += 1;
+
+        const day: Record<string, unknown> = {
+          // Une page de suite n'a ni bandeau ni titre — le titre reste présent
+          // mais vide, parce que le schéma l'exige et que le gabarit ne rend
+          // que les titres non vides.
+          title: "",
+          [pickLayout(ouvreEtape ? photos.length : 0, reste.length)]: true,
+        };
+
+        if (ouvreEtape) {
+          day["title"] = redactedTitle ?? `Jour ${numero}${place ? ` – ${place}` : ""}`;
+          day["date"] = DATE_FORMATTER.format(group.date);
+          day["day_intro"] = {
+            day_number: String(numero).padStart(2, "0"),
+            location: place ?? "",
+            date: SHORT_DATE_FORMATTER.format(group.date),
+            ...(weatherKey ? { weather_key: weatherKey } : {}),
+          };
+          if (place) day["city"] = place;
+          if (photos.length > 0) day["photos"] = photos;
+          if (withFunFact?.funFact) {
+            day["fun_facts"] = [withFunFact.funFact];
+            if (withFunFact.funFactTitle) day["fun_facts_title"] = withFunFact.funFactTitle;
+          }
+        }
+
+        // La capacité se lit sur la page telle qu'elle vient d'être montée :
+        // le bandeau, la carte info et les photos la font varier du simple au
+        // quadruple.
+        const [page, suite] = splitAt(reste, pageCapacity(day));
+        day["body_html"] = toBodyHtml(page);
+
+        days.push(day);
+        reste = suite;
+        premierePage = false;
       }
-
-      return day;
     });
 
     const payload: BookPayload = {
