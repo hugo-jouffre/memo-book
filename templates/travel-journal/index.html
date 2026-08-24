@@ -124,6 +124,13 @@
       <div class="mb-cover__photo">
         <img src="{{ cover_photo }}" alt="" />
       </div>
+      {# Voile : noir 15 % en haut et en bas, transparent au centre. Le titre
+         et la signature sont en blanc sur la photo — sans lui ils disparaissent
+         dès que l'image est claire. C'est une IMAGE et non un dégradé CSS :
+         mesuré, un dégradé à alpha produit à lui seul un masque de luminosité,
+         un shading et un motif de pavage, le trio qui cassait l'export. #}
+      <img class="mb-cover__veil" alt=""
+           src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAEACAYAAAByPhyYAAAAMUlEQVR42mNgYGBQY2JgYGCAE/+xsCjhjpoyuE1hRhEb9oARNQwYsbAo4Y6aMqRMAQCmoyXOYoOl8wAAAABJRU5ErkJggg==" />
     {% endif %}
     <div class="mb-cover__head">
       <h1 class="mb-cover__title">{{ book_title }}</h1>
