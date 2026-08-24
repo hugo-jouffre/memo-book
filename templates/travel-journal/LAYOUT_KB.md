@@ -105,6 +105,14 @@ Pour l'instant, l'agent choisit le layout existant le plus proche.)*
 
 - **`print`** — fond blanc. Destiné à l'imprimeur, dont le papier est **déjà
   crème** : réimprimer le crème donnerait un carnet jauni.
+
+  La règle vaut aussi pour les **aplats** : tout fond crème dont le rôle est de
+  « faire papier » — ruban de journée, étiquettes `lieu` / `date`, étiquette de
+  section — passe au blanc en profil imprimeur. Déposer du beige sur un papier
+  déjà crème, c'est payer de l'encre pour assombrir une teinte qu'on a déjà ;
+  la forme reste lisible par son contour, qui lui s'imprime. Tout élément à
+  venir de la même famille doit utiliser les tokens `--mb-paper-fill` ou
+  `--mb-label-solid`, jamais une couleur en dur.
 - **`preview`** — fond crème granulé, réplique du rendu final. C'est celui de
   l'aperçu partageable dans l'app, en attendant la version imprimée.
 
@@ -147,6 +155,19 @@ tranche : le premier actif l'emporte.
 
 Le cas par défaut couvre aussi `layout_story_opener` et `layout_story_facts` :
 le validateur exige au moins un drapeau, n'importe lequel de ces deux convient.
+
+## Le tracé pointillé du voyage
+
+Décor de bas de page, tiré au sort parmi quatre boucles. **Il ne passe que
+derrière des photos, jamais derrière du texte**, qu'il rendrait illisible. Le
+gabarit ne le dessine donc que si le bas de la page porte une bande d'images,
+ce qui exclut :
+
+- `layout_hero_top`, qui met la photo en haut et le récit en bas ;
+- les étapes à moins de deux photos, qui n'ont pas de bande ;
+- les étapes portant un `prompt` ou un `quiz`, qui occupent eux-mêmes le bas.
+
+Rien à envoyer pour le piloter : c'est une règle du gabarit, pas un champ.
 
 ## Contraintes de longueur
 

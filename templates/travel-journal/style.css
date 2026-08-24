@@ -25,6 +25,15 @@
   --mb-black: #2b231b;                     /* texte : un noir chaud, jamais #000 */
   --mb-carrot: #f86015;                    /* accent de marque (design.md) */
   --mb-mint: #afdcd3;                      /* bandeau de titre des cartes info */
+  /* --- Aplats qui imitent le papier ---------------------------------------
+     RÈGLE : tout aplat crème dont le rôle est de « faire papier » — ruban de
+     journée, étiquettes lieu/date, étiquette de section — passe au BLANC en
+     profil imprimeur. Le papier de l'imprimeur est déjà crème : y déposer du
+     beige, c'est payer de l'encre pour assombrir une teinte qu'on a déjà. La
+     forme reste lisible par son contour, qui lui s'imprime.
+     Tout élément à venir de la même famille doit utiliser ces deux tokens
+     plutôt qu'une couleur en dur. */
+  --mb-paper-fill: #fdeee2;                /* ruban, étiquette de section */
   --mb-label-solid: #fde5d1;               /* pastilles « lieu » / « date » */
   /* Lignes réglées : gris chaud, pointillé léger. Deux testeurs sur la même
      remarque — « trop marqué », « tester un gris pointillé plus léger ». La
@@ -69,6 +78,10 @@
 body.profile-print {
   --mb-paper-tint: transparent;
   --mb-grain-opacity: 0;
+  /* Voir la règle des aplats plus haut : blanc = pas d'encre = le crème du
+     papier. C'est le rendu voulu, pas une perte. */
+  --mb-paper-fill: #ffffff;
+  --mb-label-solid: #ffffff;
 }
 
 /* --- Réinitialisation ------------------------------------------------------ */
@@ -304,6 +317,9 @@ li { margin: 0; }
 }
 
 .mb-ribbon__shape {
+  /* `currentColor` porte l'aplat : c'est ce qui permet au profil
+     imprimeur de le passer au blanc sans toucher au contour. */
+  color: var(--mb-paper-fill);
   position: absolute;
   inset: 0;
   z-index: 0;
@@ -460,6 +476,9 @@ li { margin: 0; }
 }
 
 .mb-tag__shape {
+  /* `currentColor` porte l'aplat : c'est ce qui permet au profil
+     imprimeur de le passer au blanc sans toucher au contour. */
+  color: var(--mb-paper-fill);
   position: absolute;
   inset: 0;
   z-index: 0;

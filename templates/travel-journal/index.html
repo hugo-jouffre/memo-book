@@ -19,7 +19,7 @@
       <!-- Ruban « jour NN » : un fanion à encoche, tracé légèrement irrégulier. -->
       <symbol id="mb-ribbon" viewBox="0 0 71 93" preserveAspectRatio="none">
         <path d="M1.4 1.2 L69.6 0.6 L70.2 91.8 L36.1 76.4 L1.1 92.6 Z"
-              fill="#fdeee2" stroke="#2b231b" stroke-width="1.1"
+              fill="currentColor" stroke="#2b231b" stroke-width="1.1"
               stroke-linejoin="round" />
       </symbol>
 
@@ -28,7 +28,7 @@
         <path d="M8.5 12.4 C14 4.2 33 1.4 58.5 1.8 C84 2.2 105 5.4 110.5 13.8
                  C115.6 21.6 111 32.6 96.5 37.2 C80.4 42.3 36 42.6 19.5 38.2
                  C5.8 34.5 3.2 20.3 8.5 12.4 Z"
-              fill="#fdeee2" stroke="#2b231b" stroke-width="1" />
+              fill="currentColor" stroke="#2b231b" stroke-width="1" />
       </symbol>
 
       <!-- Pince métallique des cartes info. -->
@@ -226,9 +226,19 @@
     {% else %}
     <div class="page page--day">
       {# Tracé pseudo-aléatoire : variante, position, ou rien du tout. Un motif
-         identique sur chaque page se remarque immédiatement. #}
+         identique sur chaque page se remarque immédiatement.
+
+         RÈGLE DURE : le tracé ne passe que derrière des PHOTOS, jamais derrière
+         du texte, qu'il rend illisible. Il faut donc que le bas de la page soit
+         occupé par une bande de photos — ce qui exclut :
+           · `layout_hero_top`, qui met la photo en haut et le récit en bas ;
+           · les étapes à moins de deux photos, qui n'ont pas de bande ;
+           · les blocs à remplir, qui occupent eux-mêmes le bas de la page. #}
       {% set slot = (loop.index0 * 3 + 1) % 5 %}
-      {% if slot < 4 %}
+      {% set bande_photos = day.photos and day.photos | length >= 2
+                            and not day.layout_hero_top
+                            and not day.prompt and not day.quiz %}
+      {% if slot < 4 and bande_photos %}
         <div class="page__decor">
           <div class="mb-path mb-path--{{ ['a', 'b', 'c', 'a'][slot] }}">
             <svg viewBox="0 0 500 60" preserveAspectRatio="none">
