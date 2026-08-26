@@ -368,3 +368,76 @@ npm run template:lint                      # dialecte Jinja + invariants CSS
 npm run render:local -- --offline --png    # PDF + un PNG par page
 npm run render:local -- --data mon.json --validate --png
 ```
+
+# Contraintes du template de rendu
+
+Le carnet est rendu en envoyant du HTML brut à APITemplate (`POST /v2/create-pdf-from-html`).
+Le template n'est plus hébergé chez APITemplate : ce dépôt est la seule source de vérité.
+Le rendu se fait dans un navigateur headless, sans build ni serveur de fichiers statiques.
+Toutes les ressources doivent donc être auto-portantes au moment de l'appel API.
+
+## CSS
+
+Aucune feuille de style externe. Tout le CSS vit dans une balise `<style>` du document,
+ou en attribut `style` inline sur les éléments.
+
+Interdit :
+
+```html
+<link rel="stylesheet" href="./carnet.css">
+<link rel="stylesheet" href="/assets/print.css">
+```
+
+Attendu :
+
+```html
+<style>
+  @page { size: 148mm 210mm; margin: 0; }
+  .page { break-after: page; }
+</style>
+```
+
+Le fichier CSS peut rester séparé dans le dépôt pour le confort de travail :
+le script de rendu se charge de l'inliner dans la balise `<style>` avant l'appel API.
+
+## Polices
+
+Playfair Display, Lora, Gloria Hallelujah et DM Sans doivent être chargées
+soit par URL absolue, soit encodées en base64 dans le CSS.
+Un chemin relatif vers un `.woff2` du dépôt ne sera pas résolu et la police
+retombera silencieusement sur une police système, ce qui ne se voit qu'après impression.
+
+URL absolue :
+
+```css
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Lora:ital,wght@0,400;1,400&family=Gloria+Hallelujah&family=DM+Sans:wght@400;500;700&display=swap');
+```
+
+Base64, à préférer pour la production car cela supprime la dépendance réseau
+au moment du rendu et garantit un résultat identique à chaque tirage :
+
+```css
+@font-face {
+  font-family: 'Playfair Display';
+  font-weight: 700;
+  src: url(data:font/woff2;base64,d09GMgABAAAA...) format('woff2');
+}
+```
+
+## Photos
+
+Chaque image doit être une URL publique ou une donnée base64. Pas de chemin local,
+pas de fichier joint à la requête, pas d'URL signée à durée de vie courte.
+
+```html
+<img src="https://…/souvenir-01.jpg">
+<img src="data:image/jpeg;base64,/9j/4AAQSkZJRg…">
+```
+
+En phase beta, le base64 est la voie retenue : il évite d'ouvrir un bucket Supabase
+public et de gérer les droits d'accès pour quelques carnets. Le JSON produit par
+l'atelier contient directement les images encodées.
+
+À prévoir avant la mise en production : le base64 gonfle le corps de la requête
+d'environ un tiers du poids des fichiers. Au delà d'une trentaine de photos par carnet,
+il faudra basculer sur des URLs Supabase Storage.
