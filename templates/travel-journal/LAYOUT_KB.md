@@ -284,8 +284,10 @@ gros. La variable n'est pas le nombre de pages mais le taux de compression par
 > grosses », « moins de texte, chiant à lire ». À contenu égal, préférer
 > toujours le layout le plus visuel, et intercaler des `layout_photo_page`.
 
-- URLs absolues et publiques (CDN Webflow). Pas de chemin relatif : le moteur
-  PDF ne reçoit que du HTML et du CSS, sans aucun fichier joint.
+- **URL absolue et publique, ou donnée `data:` en base64.** Jamais de chemin
+  relatif : le moteur PDF ne reçoit que du HTML et du CSS, sans aucun fichier
+  joint. En beta, c'est le base64 qui est retenu — voir « Ce que le moteur de
+  rendu reçoit » pour le détail et pour le seuil de bascule vers un CDN.
 - **1750 px minimum** pour une photo pleine page (couverture, quatrième,
   `layout_photo_page`) : à 148 mm de large, il en faut autant pour tenir les
   300 ppi de l'imprimeur. 1200 px n'y suffisent pas — ça donne 205 ppi.
@@ -301,8 +303,9 @@ gros. La variable n'est pas le nombre de pages mais le taux de compression par
 
 ### Deux formes acceptées pour une photo
 
-Une entrée de `photos[]` est soit une URL nue, soit un objet enrichi par
-l'analyse d'image. Les deux formes cohabitent dans le même tableau.
+Une entrée de `photos[]` est soit une source nue (URL ou `data:`), soit un
+objet enrichi par l'analyse d'image. Les deux formes cohabitent dans le même
+tableau.
 
 ```json
 "photos": [
@@ -313,7 +316,7 @@ l'analyse d'image. Les deux formes cohabitent dans le même tableau.
 
 | Champ | Valeurs | Effet |
 |---|---|---|
-| `url` | URL absolue | La photo. Seul champ obligatoire de la forme objet |
+| `url` | URL absolue, ou `data:image/…;base64,…` | La photo. Seul champ obligatoire de la forme objet |
 | `tape_corner` | `top-left`, `top-right`, `bottom-left`, `bottom-right`, `top` | Pose un scotch dans ce coin. **Absent = pas de scotch** : mieux vaut aucun scotch qu'un scotch sur un visage |
 | `focus` | deux pourcentages, ex. `17% 50%` | Point que le recadrage préserve. Absent = recadrage centré |
 
@@ -321,6 +324,121 @@ l'analyse d'image. Les deux formes cohabitent dans le même tableau.
 `backend/src/services/photoAnalysis.ts`, qui mesure la photo : coin le plus
 calme pour le scotch, zone la plus détaillée pour le recadrage. Voir
 `docs/photos.md`.
+
+## Ce que le moteur de rendu reçoit
+
+Le PDF sort d'un navigateur headless nourri de **deux chaînes** : le HTML du
+gabarit et le CSS. Pas de build, pas de serveur de fichiers statiques, aucun
+fichier joint à la requête. Ce dépôt est la seule source de vérité du template,
+et ce qui n'entre pas dans ces deux chaînes n'existe pas au moment du rendu.
+
+D'où la règle dont tout le reste découle — **le payload doit être
+auto-portant** — et la raison de la tenir : une ressource non résolue
+**n'échoue pas**. La police retombe sur une police système, l'image laisse un
+cadre vide, l'API répond `success`. Ça ne se voit qu'à l'impression.
+
+### CSS — aucune feuille externe
+
+Tout le CSS voyage dans une balise `<style>` du document, ou en attribut
+`style` sur l'élément. Ces deux lignes ne seront jamais résolues :
+
+```html
+<link rel="stylesheet" href="./carnet.css">
+<link rel="stylesheet" href="/assets/print.css">
+```
+
+Ce que le moteur doit recevoir :
+
+```html
+<style>
+  @page { size: 420pt 595pt; margin: 0; }
+  .page { break-after: page; }
+</style>
+```
+
+Le CSS reste **découpé en deux fichiers dans le dépôt**, pour rester éditable :
+`fonts.css` (généré) puis `style.css` (écrit à la main). C'est
+`loadTemplateCss()` qui les concatène dans cet ordre, et les deux consommateurs
+— rendu local et appel à APITemplate — font exactement la même concaténation.
+Envoyer `style.css` seul ferait perdre toutes les polices sans une seule
+erreur.
+
+Conséquence sur `style.css` : ce n'est pas du CSS nu mais un **fragment HTML**
+— un `<meta name="viewport">` puis exactement une paire `<style>…</style>`, le
+tout injecté verbatim. `npm run template:lint` refuse toute autre forme.
+
+### Polices — déjà inlinées, ne rien ajouter
+
+`fonts.css` porte les `@font-face` en **base64**, générés par
+`npm run fonts:build` (`backend/scripts/build-font-css.ts`) depuis les `.woff2`
+versionnés dans `templates/travel-journal/assets/fonts/`. C'est la forme
+retenue en production : elle supprime la dépendance réseau au moment du rendu
+et garantit le même tirage à chaque impression.
+
+Deux familles sont réellement embarquées : **Playfair Display** (400/700/900)
+et **Gloria Hallelujah** (400). Rien d'autre. `--mb-font-title` nomme encore
+`Hansley`, dont aucun `.woff2` n'est versionné : le titre retombe donc
+aujourd'hui sur Gloria Hallelujah — exemple exact du défaut silencieux décrit
+plus haut. Déposer le fichier dans `templates/travel-journal/assets/fonts/`
+et relancer `fonts:build` suffit à le corriger.
+
+Un `@import` Google Fonts fonctionne aussi :
+
+```css
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Gloria+Hallelujah&display=swap');
+```
+
+mais il est réservé à un essai jetable : il rend le rendu dépendant du réseau,
+intestable hors ligne, et ne doit pas être committé. Un chemin relatif vers un
+`.woff2` du dépôt, lui, ne marche dans aucun cas.
+
+### Images — URL publique ou base64
+
+Chaque `src` est soit une URL absolue et publique, soit une donnée `data:` :
+
+```html
+<img src="https://…/souvenir-01.jpg">
+<img src="data:image/jpeg;base64,/9j/4AAQSkZJRg…">
+```
+
+Pas de chemin local, pas de fichier joint, **pas d'URL signée à durée de vie
+courte** : le moteur télécharge l'image quand il rend la page, parfois bien
+après l'appel, et une signature expirée donne une page trouée sans message
+d'erreur.
+
+En beta, la voie retenue est le **base64** : elle évite d'ouvrir un bucket
+public et d'en gérer les droits pour quelques carnets. Le JSON produit par
+l'atelier porte alors directement les images encodées.
+
+Deux limites à garder en tête avant la production :
+
+- Le base64 gonfle la charge d'environ **un tiers**. Avec la règle des 1750 px
+  (voir « Règles d'images »), une photo pèse ~0,6 à 1,2 Mo, donc ~0,8 à 1,6 Mo
+  encodée : une trentaine de photos suffisent à porter le corps de requête à
+  plusieurs dizaines de mégaoctets.
+- **À VÉRIFIER** : la taille maximale de corps acceptée par APITemplate n'a
+  jamais été mesurée. Tant qu'elle est inconnue, un carnet dense reste un pari.
+
+Au delà d'une trentaine de photos, basculer sur des URLs publiques et durables
+— Supabase Storage, ou le CDN Webflow que `WebflowAssetPublisher`
+(`backend/src/services/webflow.ts`) alimente déjà.
+
+### La bascule vers `create-pdf-from-html` — pas encore faite
+
+La cible est d'envoyer le HTML brut à `POST /v2/create-pdf-from-html`, sans
+template hébergé : une seule source de vérité, ce dépôt.
+
+Ce n'est pas ce que fait le code aujourd'hui. `ApiTemplateRenderer`
+(`backend/src/services/apitemplate.ts`) appelle
+`POST /v2/create-pdf?template_id=…`, et `.github/workflows/sync-apitemplate.yml`
+pousse le couple `body` / `css` par `POST /v2/update-template` à chaque `push`
+sur `main`. Tant que les deux coexistent, le template vit à deux endroits — et
+un rendu peut sortir d'une version que personne n'a relue.
+
+**À faire** : porter le renderer sur `create-pdf-from-html`, retirer le
+workflow de synchronisation, mettre `docs/apitemplate.md` d'accord. Aucune des
+règles ci-dessus ne change au passage : elles valent déjà pour les deux
+appels.
 
 ## Pièges à connaître
 
@@ -368,76 +486,3 @@ npm run template:lint                      # dialecte Jinja + invariants CSS
 npm run render:local -- --offline --png    # PDF + un PNG par page
 npm run render:local -- --data mon.json --validate --png
 ```
-
-# Contraintes du template de rendu
-
-Le carnet est rendu en envoyant du HTML brut à APITemplate (`POST /v2/create-pdf-from-html`).
-Le template n'est plus hébergé chez APITemplate : ce dépôt est la seule source de vérité.
-Le rendu se fait dans un navigateur headless, sans build ni serveur de fichiers statiques.
-Toutes les ressources doivent donc être auto-portantes au moment de l'appel API.
-
-## CSS
-
-Aucune feuille de style externe. Tout le CSS vit dans une balise `<style>` du document,
-ou en attribut `style` inline sur les éléments.
-
-Interdit :
-
-```html
-<link rel="stylesheet" href="./carnet.css">
-<link rel="stylesheet" href="/assets/print.css">
-```
-
-Attendu :
-
-```html
-<style>
-  @page { size: 148mm 210mm; margin: 0; }
-  .page { break-after: page; }
-</style>
-```
-
-Le fichier CSS peut rester séparé dans le dépôt pour le confort de travail :
-le script de rendu se charge de l'inliner dans la balise `<style>` avant l'appel API.
-
-## Polices
-
-Playfair Display, Lora, Gloria Hallelujah et DM Sans doivent être chargées
-soit par URL absolue, soit encodées en base64 dans le CSS.
-Un chemin relatif vers un `.woff2` du dépôt ne sera pas résolu et la police
-retombera silencieusement sur une police système, ce qui ne se voit qu'après impression.
-
-URL absolue :
-
-```css
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Lora:ital,wght@0,400;1,400&family=Gloria+Hallelujah&family=DM+Sans:wght@400;500;700&display=swap');
-```
-
-Base64, à préférer pour la production car cela supprime la dépendance réseau
-au moment du rendu et garantit un résultat identique à chaque tirage :
-
-```css
-@font-face {
-  font-family: 'Playfair Display';
-  font-weight: 700;
-  src: url(data:font/woff2;base64,d09GMgABAAAA...) format('woff2');
-}
-```
-
-## Photos
-
-Chaque image doit être une URL publique ou une donnée base64. Pas de chemin local,
-pas de fichier joint à la requête, pas d'URL signée à durée de vie courte.
-
-```html
-<img src="https://…/souvenir-01.jpg">
-<img src="data:image/jpeg;base64,/9j/4AAQSkZJRg…">
-```
-
-En phase beta, le base64 est la voie retenue : il évite d'ouvrir un bucket Supabase
-public et de gérer les droits d'accès pour quelques carnets. Le JSON produit par
-l'atelier contient directement les images encodées.
-
-À prévoir avant la mise en production : le base64 gonfle le corps de la requête
-d'environ un tiers du poids des fichiers. Au delà d'une trentaine de photos par carnet,
-il faudra basculer sur des URLs Supabase Storage.
