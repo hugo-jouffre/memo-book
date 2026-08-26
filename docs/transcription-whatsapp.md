@@ -9,7 +9,19 @@ export OPENAI_API_KEY=sk-…
 ./scripts/transcribe-whatsapp.sh ~/Downloads/vocaux
 ```
 
-Le script écrit deux choses :
+Un **seul** vocal, sans toucher au reste du dossier :
+
+```bash
+./scripts/transcribe-whatsapp.sh ~/Downloads/"Voice message.ogg.oga"
+```
+
+C'est la forme à préférer pour un essai. Viser un dossier fourre-tout comme
+`~/Downloads` transcrirait **tous** ses audios et vidéos — le `.mp4` des
+vacances compris. En cas de doute, `--dry-run` liste ce qui partirait sans rien
+envoyer.
+
+Sur un fichier unique, le script écrit la transcription nue à côté du vocal.
+Sur un dossier, il écrit deux choses :
 
 - `~/Downloads/vocaux/transcriptions/<nom du vocal>.txt` — une pièce par vocal ;
 - `~/Downloads/vocaux/transcription.txt` — tout recollé dans l'ordre, avec un
@@ -62,7 +74,7 @@ ffmpeg -i long.oga -f segment -segment_time 1800 -c copy partie-%02d.oga
 | Option | Effet |
 |---|---|
 | `-o, --out FICHIER` | Chemin du fichier groupé (défaut `DOSSIER/transcription.txt`) |
-| `-m, --model MODÈLE` | Défaut `gpt-4o-transcribe`. `whisper-1` pour obtenir des sous-titres horodatés |
+| `-m, --model MODÈLE` | Défaut `gpt-4o-transcribe`. `gpt-4o-mini-transcribe` pour le moins cher, `whisper-1` pour des sous-titres horodatés |
 | `-l, --language CODE` | Défaut `fr`. **À garder** : sur un vocal court truffé de noms étrangers, la détection automatique bascule régulièrement en anglais |
 | `-p, --prompt TEXTE` | Vocabulaire soufflé au modèle : prénoms, noms de lieux, mots locaux |
 | `--sort time\|name` | Ordre des fichiers. Défaut `time` |
@@ -91,9 +103,14 @@ pas les 17 premiers une deuxième fois. Les erreurs de débit (`429`) et les
 erreurs serveur sont réessayées trois fois, avec un délai qui double.
 
 Ordre de grandeur du coût : quelques dixièmes de centime par minute d'audio —
-une heure de vocaux reste sous le prix d'un café. Le tarif exact est sur
-<https://openai.com/api/pricing/>, il n'est pas recopié ici pour ne pas
-vieillir.
+une heure de vocaux reste sous le prix d'un café. `gpt-4o-mini-transcribe`
+coûte environ moitié moins que `gpt-4o-transcribe` et suffit largement pour un
+essai. Le tarif exact est sur <https://openai.com/api/pricing/>, il n'est pas
+recopié ici pour ne pas vieillir.
+
+`OPENAI_API_BASE` remplace le point d'entrée (défaut
+`https://api.openai.com/v1`), pour un proxy d'entreprise — ou pour rejouer le
+script contre un faux serveur sans rien dépenser.
 
 ## L'alternative gratuite
 

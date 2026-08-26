@@ -3,25 +3,28 @@
 # Transcription en lot des vocaux WhatsApp, via l'API OpenAI.
 #
 #   ./scripts/transcribe-whatsapp.sh ~/Downloads/vocaux
+#   ./scripts/transcribe-whatsapp.sh "~/Downloads/Voice message.ogg.oga"
 #
 # Dépose les .ogg.oga dans un dossier, lance la commande : chaque vocal devient
 # un .txt, et l'ensemble est recollé dans un seul fichier prêt à passer à
-# l'étape de découpage en étapes du carnet.
+# l'étape de découpage en étapes du carnet. Un seul fichier en argument ne
+# transcrit que celui-là.
 #
 # Seule dépendance : curl. Rien à installer, rien à builder.
 #
 set -euo pipefail
 
-readonly API_URL="https://api.openai.com/v1/audio/transcriptions"
+readonly API_URL="${OPENAI_API_BASE:-https://api.openai.com/v1}/audio/transcriptions"
 # Limite de l'API. Un vocal WhatsApp d'une heure pèse ~30 Mo : au delà, il faut
 # découper le fichier (voir docs/transcription-whatsapp.md).
 readonly MAX_BYTES=26214400
 
 usage() {
   cat <<'USAGE'
-Usage : transcribe-whatsapp.sh [DOSSIER] [options]
+Usage : transcribe-whatsapp.sh [DOSSIER|FICHIER] [options]
 
   DOSSIER              dossier contenant les audios (défaut : le dossier courant)
+  FICHIER              un seul audio : lui seul est transcrit
 
 Options :
   -o, --out FICHIER    fichier de sortie groupé (défaut : DOSSIER/transcription.txt)
@@ -34,6 +37,7 @@ Options :
   -h, --help           cette aide
 
 Clé d'API : $OPENAI_API_KEY, sinon lue dans ./.env ou ./backend/.env.
+Point d'entrée : $OPENAI_API_BASE (défaut https://api.openai.com/v1).
 USAGE
 }
 
@@ -66,7 +70,14 @@ while [ $# -gt 0 ]; do
 done
 
 dir="${dir:-.}"
-[ -d "$dir" ] || { echo "Dossier introuvable : $dir" >&2; exit 1; }
+single_file=""
+if [ -f "$dir" ]; then
+  single_file="$dir"
+  dir=$(dirname "$dir")
+elif [ ! -d "$dir" ]; then
+  echo "Ni dossier ni fichier : $dir" >&2
+  exit 1
+fi
 dir="${dir%/}"
 
 case "$sort_by" in
@@ -74,7 +85,11 @@ case "$sort_by" in
   *) echo "--sort attend « time » ou « name », pas « $sort_by »." >&2; exit 2 ;;
 esac
 
-out="${out:-$dir/transcription.txt}"
+if [ -n "$single_file" ]; then
+  out="${out:-$dir/$(basename "$single_file").txt}"
+else
+  out="${out:-$dir/transcription.txt}"
+fi
 readonly parts_dir="$dir/transcriptions"
 
 # --- Clé d'API -------------------------------------------------------------
@@ -141,13 +156,17 @@ while IFS= read -r -d '' path; do
       continue ;;
   esac
   printf '%s\t%s\n' "$(file_mtime "$path")" "$path" >> "$index_file"
-done < <(find "$dir" -maxdepth 1 -type f \
+done < <(if [ -n "$single_file" ]; then
+  printf '%s\0' "$single_file"
+else
+  find "$dir" -maxdepth 1 -type f \
   \( -iname '*.oga' -o -iname '*.ogg' -o -iname '*.opus' -o -iname '*.m4a' \
      -o -iname '*.mp3' -o -iname '*.mp4' -o -iname '*.mpga' -o -iname '*.mpeg' \
-     -o -iname '*.wav' -o -iname '*.webm' -o -iname '*.flac' \) -print0)
+     -o -iname '*.wav' -o -iname '*.webm' -o -iname '*.flac' \) -print0
+fi)
 
 if [ ! -s "$index_file" ]; then
-  echo "Aucun fichier audio dans $dir" >&2
+  echo "Aucun fichier audio à transcrire dans $dir" >&2
   exit 1
 fi
 
@@ -160,7 +179,11 @@ else
 fi
 
 total=$(wc -l < "$sorted" | tr -d ' ')
-echo "$total fichier(s) audio dans $dir — modèle $model, langue $language, tri par $sort_by"
+if [ -n "$single_file" ]; then
+  echo "1 fichier — modèle $model, langue $language"
+else
+  echo "$total fichier(s) audio dans $dir — modèle $model, langue $language, tri par $sort_by"
+fi
 
 # --- Transcription ---------------------------------------------------------
 
@@ -263,6 +286,21 @@ if [ "$dry_run" -eq 1 ]; then
 fi
 
 # --- Fichier groupé --------------------------------------------------------
+
+# Un seul fichier demandé : le texte nu, sans cérémonie de lot.
+if [ -n "$single_file" ]; then
+  part="$parts_dir/$(basename "$single_file").txt"
+  if [ -s "$part" ]; then
+    cp "$part" "$out"
+    echo
+    echo "Transcription : $out"
+    echo
+    cat "$out"
+    exit 0
+  fi
+  echo "Rien à écrire : la transcription a échoué." >&2
+  exit 1
+fi
 
 # Reconstruit toujours depuis les .txt : le résultat est le même qu'on ait
 # transcrit tout le lot ou repris une seule pièce manquante.
