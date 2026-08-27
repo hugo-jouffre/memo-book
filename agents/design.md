@@ -4,7 +4,9 @@
 > Figma est la source de vérité : ce fichier la recopie, il ne l'interprète pas. À tenir à
 > jour à chaque évolution des variables.
 >
-> Relevé le 20/08/2026 sur la page *Design System* et sur les écrans du lot 1.
+> Relevé le 20/08/2026 sur la page *Design System* et sur les écrans du lot 1, complété le
+> 27/08/2026 au `get_design_context` sur *Sign Up*, *Login*, *Mdp oublié* et *Mdp oublié -
+> compte inexistant*.
 > Pour la **méthode** d'implémentation (unités, fidélité, fiches écran), voir
 > [`docs/ui-development.md`](../docs/ui-development.md).
 
@@ -30,7 +32,7 @@
 | Beige Darker | #CFBBAA | — |
 | Black | #2D231A | Texte principal |
 | White | #FFFCF8 | Surfaces (cartes, champs) — un blanc chaud, jamais #FFFFFF |
-| Grey | #C8C8C8 | Bordures neutres, champs au repos |
+| Grey | #C8C8C8 | Bordures neutres, et **fond d'un CTA désactivé** (relevé sur *Sign Up* et *Login*) |
 
 > **Carrot, Carrot Darker, Forest Green et Kiwi n'existent plus.** Blue et Lime les
 > remplacent. Les fichiers qui les citent encore sont listés plus bas.
@@ -112,7 +114,11 @@ Styles observés :
 
 - Le texte principal utilise toujours **Black** (#2D231A), jamais un noir pur (#000000)
 - Les surfaces utilisent **White** (#FFFCF8), jamais un blanc pur (#FFFFFF)
-- **Green** (#28654B) porte l'action principale : boutons primaires et CTA
+- **Green** (#28654B) porte l'action principale : boutons primaires et CTA. Un CTA actif
+  porte en plus une ombre **interne** basse — `inset 0 −4 20 rgba(0,0,0,.25)`, relevée sur
+  *Mdp oublié*. Un CTA désactivé passe en **Grey** (#C8C8C8)
+- **Green à 50 %** marque la bordure d'un champ actif ou rempli ; au repos, un champ n'a
+  pas de bordure du tout, juste son fond White
 - **Lime** (#E2F32B) est l'accent du scheme. Très saturé : il sert à mettre en valeur
   ponctuellement (surlignage, sélection, badge), jamais à porter du texte sombre sur
   grande surface, et jamais comme fond de CTA sans contraste vérifié
@@ -147,12 +153,14 @@ mécanique.
 | `agents/carnet-styles/vintage-voyage.md` | Cadre et accents Carrot #F86015 | Quelle couleur d'accent pour ce style ? |
 | `agents/carnet-styles/scrapbook-colore.md` | Accent dominant Carrot (3 occurrences) | Idem |
 | `backend/src/services/mapSvg.ts` | Tracé Forest Green #19532B, pin Carrot #F86015 | Green #28654B pour le tracé ; pin à trancher |
-| `ios/.../MemoBookDesign/Tokens.swift` | Commentaire « design.md dit Carrot » | La palette est désormais tranchée : les tokens peuvent être posés |
-| `ios/README.md` | Avertissement « palette pas encore posée » | À lever une fois les tokens posés |
+| ~~`ios/.../MemoBookDesign/Tokens.swift`~~ | — | ✅ Fait : les tokens portent les valeurs ci-dessus |
+| ~~`ios/README.md`~~ | — | ✅ Fait : l'avertissement est levé |
 
 ## Utilisé par
 
-- **App iOS** : `MemoBookDesign/Tokens.swift` — cible de la migration ci-dessus
+- **App iOS** : `MemoBookDesign/Tokens.swift` — à jour. `MemoBookBrand` recopie les
+  variables `Brand Colors/*`, `MemoBookColor` les distribue par rôle, et aucune vue ne
+  porte de couleur en dur
 - **Agent Mise en page** : applique ces couleurs sur les pages du carnet, dans les limites
   du style choisi
 - **Agent Sélection photo** : évite les retouches qui entreraient en conflit avec la
@@ -161,6 +169,11 @@ mécanique.
 ## À faire évoluer
 
 - Rayons : les variables `Radius/*` sont à 0 (héritage du template) alors que les écrans
-  utilisent 20 (cartes), 16 (boutons) et 13 (fonds d'icônes). À poser en variables
+  utilisent **20** (cartes et pastilles), **14** (boutons, champs, sélecteur), **13**
+  (fonds d'icônes) et **10** (segment actif du sélecteur). À poser en variables.
+
+  > Relevé au `get_design_context` sur *Sign Up*, *Login* et *Mdp oublié* : le rayon des
+  > boutons et des champs est bien **14**, et non 16 comme l'annonçait un premier relevé.
+  > C'est la décision D7 de `docs/ui-development.md`.
 - Ombres : une page *Shadows* existe dans Figma, aucune valeur n'est encore documentée ici
 - Mode sombre : `Scheme/Background Dark` existe, mais aucun écran ne le décline encore

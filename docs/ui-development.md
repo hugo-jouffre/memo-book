@@ -334,8 +334,8 @@ section « À trancher » recopiée pour Clara.
 
 | Lot | Écrans | Statut |
 |---|---|---|
-| **1 · Entrée dans l'app** | Splash Screen, Welcome Screen, Sign Up | 📐 Spec figée (§8) — *Sign Up* attend T4 pour son back-end |
-| 2 · Compte | Sign In, mot de passe oublié, suppression de compte | ⏳ En attente de maquettes |
+| **1 · Entrée dans l'app** | Splash Screen, Welcome Screen, Sign Up | ✅ Implémenté (§8) — reste les exports Figma |
+| **2 · Compte** | Login, Mdp oublié, Mdp oublié - compte inexistant, Mdp oublié - config, Complète tes informations | ✅ Implémenté (§8) — suppression de compte à venir avec les Réglages |
 | 3 · Carnets & enregistrement | Liste, détail, enregistrement | 🔄 Existe en version non brandée |
 | 4 · Carnet & partage | Génération, aperçu PDF, partage | 🔄 Existe en version non brandée |
 | 5 · Paywall & réglages | Achat, abonnement, profil | ⏳ En attente de maquettes |
@@ -428,6 +428,10 @@ Aucune PR d'écran ne part sans que ces cases soient cochées.
 | D3 | **Typographies : Sora** (titres, chiffres) et **General Sans** (tout le reste). Styles détaillés en §2.5. Les variables `Heading/*` et `Text/*` de Figma annoncent encore Roboto : c'est le template de départ, à nettoyer dans Figma |
 | D4 | **Cartes du *Welcome*.** L'inclinaison est **conservée telle quelle** : −1°, +1°, −1°. Les dimensions, elles, sont **uniformisées** (§8.2) |
 | D5 | **Tutoiement systématique** dans l'app — c'est la règle R9 |
+| D6 | **T4 est tranché** par le détail fonctionnel Notion : **email + mot de passe**, plus Apple, Google et Facebook. Pas de magic link, pas d'écran de vérification d'email. Le back-end est écrit (`backend/src/routes/auth.ts`), Sign in with Apple est bien du lot (App Store 4.8) |
+| D7 | **Rayon des champs, boutons et sélecteur : 0.875 rem (14).** Relevé au `get_design_context` sur *Sign Up*, *Login* et *Mdp oublié*, qui portent tous 14. Le §2.3 annonçait 1 rem d'après un relevé plus ancien : par R4, la valeur lue sur le nœud gagne. Les **cartes** restent à 1.25 rem (20) |
+| D8 | **T6 est sans objet.** Le *Splash* ne porte plus le trait de 7 : la maquette courante instancie un `Loader` de 195 × 46 (`2804:12741`) et masque l'ancien. L'implémentation garde une barre indéterminée de 12.5 × 0.25 rem, à revoir quand le nouveau loader sera exporté |
+| D9 | **États d'un CTA.** Actif : fond Green + ombre interne basse (`inset 0 −4 20 rgba(0,0,0,.25)`, relevée sur *Mdp oublié*). Inactif : fond Grey `#C8C8C8`, relevé sur *Sign Up* et *Login*, dont le formulaire est vide |
 
 ### 7.2 Ce qui reste ouvert
 
@@ -436,20 +440,30 @@ n'harmonise rien de sa propre initiative.
 
 | # | Sujet | État |
 |---|---|---|
-| T4 | **Modèle d'authentification.** Le *Sign Up* Figma montre email + mot de passe + confirmation + trois fournisseurs sociaux. Le README annonce « Sign in with Apple + email (magic link) ». Ce sont deux back-ends différents, et la règle App Store 4.8 impose Sign in with Apple dès qu'un login social tiers est proposé | 🔴 Bloquant pour le back-end du lot 1 |
-| T6 | **Loader du Splash** dessiné à 7 de haut ; la convention iOS est 4. Barre custom assumée ou arrondi R2 ? | 🟢 Mineur |
+| T10 | **Copie de la carte 2 du *Welcome*.** Figma dit « Vos photos misent en page » / « Vos photos concernées sont ajoutées rapidement depuis la galerie ou Instagram ». Le détail fonctionnel Notion dit « Photos et stickers instantanés ». Par R3 c'est Figma qui est implémenté ; en plus, « misent » est une faute pour « mises » — R8 : elle se signale, elle ne se corrige pas | 🟠 En attente de la copie arbitrée |
+| T11 | **Critères du mot de passe.** Le détail fonctionnel dit « respectant les critères de sécurité définis » sans les définir. Retenu, et écrit deux fois (`MemoBookCore/FormValidation.swift` et `backend/src/lib/password.ts`) : 8 caractères minimum, au moins une lettre et un chiffre | 🟠 À confirmer |
+| T12 | **Teinte de la modale d'erreur du *Login*.** La maquette met « Réessayer » en bleu et « Annuler » en rouge — le bleu est l'accent système. L'app est teintée en Green : le bouton par défaut d'une alerte système sort donc vert, pas bleu | 🟢 Mineur |
+| T13 | **Troisième fournisseur social.** Figma nomme les logos `image 697`, `image 698`, `image 701` : l'affectation Apple / Google / Facebook se lit à l'œil, elle n'est écrite nulle part. Le détail fonctionnel, lui, nomme bien les trois | 🟠 À vérifier à l'export |
+| T14 | **Un compte est désormais obligatoire pour atteindre les carnets.** C'est ce que dit `routeFromSplash`, mais l'app savait jusqu'ici fonctionner en appareil anonyme. Le rattachement d'appareil est en place côté back-end, donc rien n'est perdu — mais plus personne ne peut enregistrer un vocal sans compte | 🟠 À confirmer produit |
 | T7 | **Rôle de Lime.** `Scheme/Accent` vaut Lime `#E2F32B`, mais aucun des trois écrans ne l'emploie : c'est Green qui porte le CTA. Accent réservé à plus tard, ou accent qui n'a pas encore été appliqué ? | 🟠 À clarifier avant de poser les tokens |
 | T8 | **Vouvoiement dans le Figma.** Les cartes 2 et 3 du *Welcome* vouvoient (« Parlez simplement », « Ajoutez vos photos ») alors que le reste de l'app tutoie. Par R9 c'est une coquille de maquette : à réécrire dans Figma, pas dans le code | 🟠 En attente de la copie corrigée |
-| T9 | **États non maquettés.** Aucune maquette d'erreur, de chargement ni d'état vide sur le *Sign Up*, qui en a besoin (validation, email déjà pris, réseau) | 🟠 Bloquant pour finir l'écran |
+| T9 | **États non maquettés.** Aucune maquette d'erreur ni de chargement sur *Sign Up*. Implémentés faute de mieux : erreur **en inline sous le champ** (le détail fonctionnel l'impose : « jamais en pop-up »), CTA en `ProgressView` pendant l'appel. Le CTA désactivé, lui, **est** maquetté — c'est le fond Grey `#C8C8C8` des deux écrans | 🟠 À valider par Clara |
 
 ---
 
-## 8. Lot 1 — Entrée dans l'app
+## 8. Lots 1 et 2 — Entrée dans l'app et compte
 
-Trois écrans, tous en 390 × 844. *Welcome* a été relevé au `get_design_context` : ses
-valeurs sont fines et fiables. *Splash* et *Sign Up* n'ont pour l'instant que le
-`get_metadata` et les variables — **leurs couleurs par nœud, ombres et rayons restent à
-confirmer par `get_design_context` au moment d'implémenter**.
+Huit écrans, tous en 390 × 844, tous implémentés. Ils forment un seul parcours et ont été
+développés ensemble : le détail fonctionnel de l'onboarding
+([Notion](https://app.notion.com/p/3bf401e7bdc18028a62fd686961c2686)) les décrit d'un
+bloc, et *Sign Up* et *Login* sont littéralement le même écran.
+
+*Welcome*, *Sign Up*, *Login*, *Mdp oublié* et *Mdp oublié - compte inexistant* ont été
+relevés au `get_design_context` : leurs valeurs sont fines et fiables. *Splash*,
+*Mdp oublié - config* et *Complète tes informations* n'ont que le `get_metadata` et le
+gabarit de leurs voisins — la limite d'appels du plan Figma a été atteinte en cours de
+session. **Leurs couleurs par nœud, ombres et rayons restent à confirmer par
+`get_design_context`.**
 
 ### 8.1 Splash Screen
 
@@ -490,9 +504,14 @@ l'appareil n'est pas encore enregistré ; sinon aucun appel. Une fois T4 tranch�
 **Accessibilité** : `accessibilityLabel` « MemoBook, chargement en cours » sur le bloc ;
 loader en `accessibilityHidden`.
 
-**À trancher** : T6 (hauteur du loader), durées ci-dessus. Le fond suit D1
-(`Scheme/Background Light` = Beige `#FCF2E9`), la teinte du loader reste à lire sur le
-nœud.
+**Implémenté** : `MemoBookFeature/Onboarding/SplashView.swift`. Plancher 0.8 s, plafond
+5 s, `LoaderBar` indéterminée. Le fond décoratif `M 01` (`2788:11553`), ajouté à la
+maquette après le premier relevé, est en place via `BackgroundRoute`.
+
+**À trancher** : D8 solde T6 — la maquette instancie désormais un `Loader` de 195 × 46
+(`2804:12741`) et masque le trait de 7. L'implémentation garde une barre de
+12.5 × 0.25 rem en attendant l'export du nouveau composant. Le fond suit D1
+(`Scheme/Background Light` = Beige `#FCF2E9`).
 
 ---
 
@@ -567,11 +586,21 @@ icône `arrow_right_alt` 1.5 rem **à gauche** du libellé, ensemble centré) ·
   MemoBook les met en forme »
 - Carte 1 : « Assistant vocal & écrit » / « Parlez simplement durant la journée, Memo
   retranscrit vos anecdotes »
-- Carte 2 : « Photos & stickers instantanés » / « Ajoutez vos photos depuis la galerie,
-  Instagram ou créez vos stickers personnalisés »
+- Carte 2 : « Vos photos misent en page » / « Vos photos concernées sont ajoutées
+  rapidement depuis la galerie ou Instagram »
 - Carte 3 : « Carnet imprimé d’exception » / « Mise en page automatique élégante et
   livraison chez vous de votre véritable carnet papier »
 - CTA : « Découvre MemoBook »
+
+> ⚠️ **La carte 2 a changé depuis le premier relevé** (20/08). Elle disait « Photos &
+> stickers instantanés » / « Ajoutez vos photos depuis la galerie, Instagram ou créez vos
+> stickers personnalisés » — c'est encore ce que dit le détail fonctionnel Notion. La
+> maquette courante (`2552:27407`) dit ce qui est écrit ci-dessus : c'est elle qui fait
+> foi (R3), et l'écart est remonté (T10).
+>
+> ⚠️ **« misent » est une faute** pour « mises ». Elle est recopiée telle quelle (R8) et
+> signalée, pas corrigée. Le sous-titre a aussi changé : « les met en page » et non plus
+> « les met en forme ».
 
 > ⚠️ **Deux phrases vouvoient** (« Parlez simplement », « Ajoutez vos photos ») alors que
 > l'app tutoie partout ailleurs — R9. Ce sont des coquilles de maquette (T8) : à réécrire
@@ -591,8 +620,13 @@ rotation est décorative : elle ne doit pas être annoncée, et le texte reste l
 l'horizontale. AX3 : les cartes grandissent en hauteur, jamais de troncature — vérifier
 que le débord de la pastille ne recouvre pas le titre quand la carte s'allonge.
 
-**À trancher** : T8 (les deux phrases qui vouvoient), présence ou non d'un « passer » ou
-d'un indicateur de progression. La marge (D2), la palette (D1), les polices (D3) et
+**Implémenté** : `MemoBookFeature/Onboarding/WelcomeView.swift` et `BenefitCard.swift`.
+Le fond décoratif `M 01` a été ajouté à la maquette après le premier relevé : il est en
+place. L'écran est dans un `ScrollView` (`.basedOnSize`) pour tenir en AX3 sur iPhone SE
+sans rien tronquer.
+
+**À trancher** : T8 (les phrases qui vouvoient), T10 (la copie de la carte 2 et sa faute),
+présence ou non d'un « passer ». La marge (D2), la palette (D1), les polices (D3) et
 l'inclinaison (D4) sont tranchées.
 
 ---
@@ -652,23 +686,36 @@ L'écran tutoie de bout en bout ✅ (R9) — les messages d'erreur à écrire de
 - **Chargement** : CTA en attente pendant l'appel réseau. Non maquetté.
 - **Erreur serveur** : email déjà pris, réseau indisponible. Non maquetté.
 
-**Contrat back-end** — ⚠️ **rien de tout cela n'existe aujourd'hui.**
-`backend/src/routes/` ne contient que `devices`, `memos`, `entries`, `renders`, `orders`,
-`health` : l'app s'enregistre comme appareil anonyme. Cet écran demande, une fois **T4**
-tranché :
+**Contrat back-end** — ✅ **écrit** (`backend/src/routes/auth.ts`), T4 étant tranché par
+le détail fonctionnel (D6).
 
-| Besoin | Route à créer | Remarques |
+| Besoin | Route | Remarques |
 |---|---|---|
-| Création de compte | `POST /v1/auth/signup` | prénom, nom, email, mot de passe. Hash Argon2id, jamais en clair |
-| Connexion | `POST /v1/auth/login` | pour l'écran *Sign In* du lot 2 |
-| Login tiers | `POST /v1/auth/oauth/:provider` | Apple / Google / le troisième, à identifier |
-| Rattachement | migration | relier l'appareil anonyme existant au compte créé, sans perdre les carnets déjà enregistrés |
-| Modèle | `prisma/schema.prisma` | table `User`, relation avec `Device` |
+| Création de compte | `POST /v1/auth/signup` | prénom, nom, email, mot de passe. Argon2id, jamais en clair. 409 `conflict` si l'email est pris |
+| Connexion | `POST /v1/auth/login` | 401 générique : ni l'email ni le mot de passe ne sont désignés |
+| Login tiers | `POST /v1/auth/social/:provider` | renvoie une session, ou `profile_required` + le profil à confirmer |
+| Profil tiers | `POST /v1/auth/social/complete` | nommé comme dans le détail fonctionnel |
+| Session | `GET /v1/auth/me`, `POST /v1/auth/logout` | `me` est ce que le *Splash* interroge |
+| Rattachement | `services/accounts.ts` | l'appareil anonyme cède ses carnets à l'appareil principal du compte |
+| Modèle | `prisma/schema.prisma` | `User`, `Session`, `SocialIdentity`, `PasswordReset`, plus `Device.userId` |
 
-Trois contraintes à ne pas oublier : **Sign in with Apple obligatoire** dès qu'un login
-social tiers est proposé (App Store 4.8) · **suppression de compte obligatoire**
-(guideline 5.1.1) · mot de passe **jamais** stocké ni journalisé en clair, et pas de
-message d'erreur qui révèle si un email existe déjà.
+> ⚠️ Le nom de la route de login tiers diverge de la ligne « `POST /v1/auth/oauth/:provider` »
+> écrite ici lors du cadrage : `social/` a été retenu pour que l'échange et la complétion
+> forment une seule famille, `complete` étant nommé ainsi dans le détail fonctionnel.
+
+Trois contraintes tenues : **Sign in with Apple obligatoire** dès qu'un login social
+tiers est proposé (App Store 4.8) — les trois boutons vont ensemble · mot de passe
+**jamais** stocké ni journalisé en clair · aucun message qui révèle si un email existe,
+**sauf** sur `forgot-password`, où le détail fonctionnel le demande explicitement (c'est
+ce qui fait exister l'écran *Mdp oublié - compte inexistant*).
+
+La **suppression de compte** (guideline 5.1.1) reste à écrire : elle appartient au lot
+Réglages, pas à celui-ci. À ne pas oublier avant la soumission App Store.
+
+**Implémenté** : `MemoBookFeature/Onboarding/CredentialsView.swift` +
+`CredentialsModel.swift`, partagés avec *Login* (§8.4). Les trois boutons sociaux
+répondent qu'ils ne sont pas disponibles tant que les SDK ne sont pas intégrés
+(`SocialSignInBroker`) — un bouton qui ne marche pas doit le dire.
 
 **Assets** : trois logos de fournisseurs (`image 701`, `image 697`, `image 698` — à
 identifier au moment de l'export ; probablement Apple, Google et un troisième).
@@ -679,11 +726,249 @@ de passe fort · `submitLabel` et enchaînement au clavier · le contenu remonte
 l'ouverture du clavier (R7) · contraste des placeholders `#8E8E93` sur `#fcf2e9` à
 vérifier (probablement sous 4.5:1).
 
-**À trancher** : **T4 (bloquant)**, T9 (états non maquettés), identité du troisième
-fournisseur social, présence de CGU / politique de confidentialité à cocher — absente de
-la maquette mais généralement exigée à la création de compte.
+**À trancher** : T9 (états non maquettés), T11 (critères du mot de passe), T13 (identité
+des trois logos sociaux), et la présence de CGU / politique de confidentialité à cocher —
+absente de la maquette, mais généralement exigée à la création de compte. T4 est soldé
+par D6.
 
 ---
+
+---
+
+### 8.4 Login
+
+- **Nœud Figma** : `2720:21779` (nominal) et `2553:27577` (avec la modale d'erreur) —
+  [ouvrir](https://www.figma.com/design/kytPYFno7PvDciIKTxCujK/MemoBook---Product?node-id=2720-21779)
+- **Vue** : `MemoBookFeature/Onboarding/CredentialsView.swift`, onglet `.signIn`
+- **Rôle** : authentifier quelqu'un qui a déjà un compte.
+- **Entrée / sortie** : depuis *Splash* (onboarding déjà vu), depuis l'onglet de *Sign
+  Up*, ou au retour de *Mot de passe oublié* → carnets, *Sign Up*, ou *Mot de passe
+  oublié*.
+
+**Le même écran que *Sign Up*.** Le détail fonctionnel le dit : « idéalement en changement
+d'état d'un même composant plutôt qu'en navigation complète ». C'est ce qui est
+implémenté — une seule vue, un seul modèle, l'onglet est un état.
+
+**Structure (en rem)** — identique à *Sign Up* (§8.3) pour le conteneur, le sélecteur, le
+CTA et le bloc social. Ce qui change :
+
+| Élément | Figma | rem | Note |
+|---|---|---|---|
+| Titre | « Ravi de te revoir ! » | 2 | Sora SemiBold, comme *Sign Up* |
+| Champs | Email, Mot de passe | × 3 chacun | Deux au lieu de cinq |
+| Lien « Mot de passe oublié ? » | 12, Green, centré | 0.75 | General Sans **Bold** sur le nœud ; implémenté en Medium, faute de graisse Bold dans les styles relevés — à confirmer |
+| CTA | fond Grey `#C8C8C8` | × 3 | État désactivé : le formulaire est vide (D9) |
+
+**Copie** (verbatim) : « S’inscrire » · « Se connecter » · « Ravi de te revoir ! » ·
+« connecte toi » · « Email » · « Mot de passe » · « Mot de passe oublié ? » ·
+« Continuer » · « Ou continue avec ».
+
+> ⚠️ « connecte toi » s'écrit sans trait d'union sur la maquette. Recopié tel quel (R8),
+> signalé : « connecte-toi ».
+
+**États**
+- **Nominal** : formulaire vide, CTA désactivé.
+- **Validation** : email vide ou mal formé, mot de passe vide → inline sous le champ.
+- **Chargement** : CTA en `ProgressView`.
+- **Erreur d'authentification** : **modale**, et c'est la seule du flow. Texte « Une
+  erreur s'est produite lors de votre tentative de connexion », bouton « Réessayer » qui
+  ferme et remet le focus sur le mot de passe **sans effacer l'email**, bouton « Annuler »
+  qui ferme. Le message reste générique : dire lequel des deux champs est faux, c'est
+  confirmer qu'une adresse a un compte.
+
+**Contrat back-end** : `POST /v1/auth/login` → `200 { userId, sessionToken,
+hasSeenOnboarding }` · `401 invalid_credentials`.
+
+**Accessibilité** : `textContentType` `.emailAddress` et `.password` pour le trousseau ·
+enchaînement au clavier `.next` puis `.go` · le lien « Mot de passe oublié ? » porte une
+cible de 2.75 rem alors que son texte fait 0.75 rem.
+
+**À trancher** : T12 (la modale de la maquette met « Réessayer » en bleu ; l'app est
+teintée en Green, donc le bouton par défaut d'une alerte système sort vert) · le
+vouvoiement du texte de la modale (« votre tentative ») contre R9 — recopié, signalé ·
+la graisse du lien.
+
+---
+
+### 8.5 Mot de passe oublié
+
+- **Nœud Figma** : `2707:9275` —
+  [ouvrir](https://www.figma.com/design/kytPYFno7PvDciIKTxCujK/MemoBook---Product?node-id=2707-9275)
+- **Vue** : `MemoBookFeature/Onboarding/ForgotPasswordView.swift`
+- **Rôle** : confirmer l'adresse, puis déclencher l'envoi du lien.
+- **Entrée / sortie** : depuis le lien de *Login* → *Connection* si un compte existe,
+  *Mdp oublié - compte inexistant* sinon.
+
+**Structure (en rem)**
+
+| Élément | Figma | rem | Note |
+|---|---|---|---|
+| Espacement entre blocs | 28 | 1.75 | Écart R2 conservé et signalé : 28 n'est pas sur l'échelle §2.2 |
+| Pastille cadenas | 66, icône 44 (tracé 30 × 38.8) | 4.125 / 2.75 | |
+| Colonne de contenu | 358, gap 32 | 22.375, gap 2 | |
+| Titre | 348 de large | 21.75 | Sora SemiBold 2 rem |
+| Texte explicatif | pleine largeur | — | General Sans Regular 1 rem, **Black** et non gris |
+| Champ email + crayon | 47, r 14, px 24 | × 3, r 0.875 | Le crayon fait 44 → cible tactile déjà conforme |
+| CTA | 358 × 48, Green + ombre interne | × 3 | État **actif** (D9) |
+
+**Copie** (verbatim) : « Mot de passe oublié » · « Un email pour reconfigurer ton mot de
+passe va t’être envoyé à l’adresse suivante : » · « Continuer ». L'écran tutoie ✅.
+
+**Comportement** — le détail fonctionnel est explicite : **l'app n'attend pas la
+confirmation d'envoi.** Elle repart sur *Connection* dès que le serveur confirme qu'un
+compte existe, et l'envoi part en parallèle côté serveur. Faire porter à quelqu'un la
+latence d'un SMTP pour afficher un écran n'aurait aucun intérêt.
+
+**Contrat back-end** : `POST /v1/auth/forgot-password` → `200 { message: "email_sent" }` ·
+`404 account_not_found`. Le lien envoyé est un deep link
+`memobook://reset-password?token=…`, valable 45 minutes (`PASSWORD_RESET_TTL_MINUTES`) et
+à usage unique.
+
+> ⚠️ **Aucun fournisseur d'email n'est choisi.** `backend/src/services/mailer.ts` écrit le
+> message dans les logs : le flow est complet et testable, mais personne ne reçoit rien.
+> C'est la dernière dépendance de cet écran.
+
+**États** : nominal (adresse pré-remplie, en lecture seule) · édition (le crayon ouvre le
+champ) · validation inline · chargement sur le CTA · erreur réseau en bandeau. Seul le
+nominal est maquetté.
+
+**Accessibilité** : le crayon porte « Modifier l’adresse email » · l'adresse est tronquée
+en son milieu plutôt qu'à la fin, pour garder le domaine lisible.
+
+**À trancher** : le champ est-il modifiable d'emblée quand aucune adresse n'arrive de
+*Connection* ? Implémenté ainsi (sinon l'écran serait sans issue). Non maquetté.
+
+---
+
+### 8.6 Mdp oublié - compte inexistant
+
+- **Nœud Figma** : `2820:18513` —
+  [ouvrir](https://www.figma.com/design/kytPYFno7PvDciIKTxCujK/MemoBook---Product?node-id=2820-18513)
+- **Vue** : `MemoBookFeature/Onboarding/ForgotPasswordView.swift`,
+  `ForgotPasswordNoAccountView`
+- **Rôle** : dire qu'aucun compte n'existe pour cette adresse, et proposer d'en créer un.
+- **Entrée / sortie** : depuis *Mot de passe oublié* → *Sign Up*, **et rien d'autre**.
+
+**Structure** : la même que §8.5, moins le champ et moins le CTA.
+
+**Copie** (verbatim) : « Mot de passe oublié » · « Il n’existe aucun compte associé à
+l’adresse <email> » · « Tu peux en créer un  » · « en cliquant ici » (souligné, Green).
+
+> ⚠️ « Tu peux en créer un » est suivi de **deux espaces** sur le nœud, avant le lien.
+> Un seul est implémenté : deux espaces consécutifs ne sont pas une intention de mise en
+> page, c'est le rendu d'un `HStack` avec une gouttière. Signalé.
+
+**Cet écran n'a pas de CTA.** Le lien est la seule sortie, et il n'y a **pas de chemin de
+retour** vers *Mot de passe oublié* ni vers *Connection* : c'est le dessin de la maquette,
+et le détail fonctionnel le confirme mot pour mot.
+
+**Contrat back-end** : aucun. L'information vient du 404 de l'écran précédent.
+
+**À trancher** : l'absence de retour. Quelqu'un qui s'est trompé d'un caractère dans son
+adresse n'a d'autre choix que de créer un compte ou de tuer l'app. À valider par Clara —
+implémenté conforme à la maquette, comme le veut R3.
+
+---
+
+### 8.7 Mdp oublié - config
+
+- **Nœud Figma** : `2707:9539` —
+  [ouvrir](https://www.figma.com/design/kytPYFno7PvDciIKTxCujK/MemoBook---Product?node-id=2707-9539)
+- **Vue** : `MemoBookFeature/Onboarding/ForgotPasswordView.swift`, `ResetPasswordView`
+- **Rôle** : poser le nouveau mot de passe.
+- **Entrée / sortie** : **uniquement** par le deep link reçu par email → *Connection*.
+
+**Structure (en rem)** — même gabarit que §8.5.
+
+| Élément | Figma | rem | Note |
+|---|---|---|---|
+| Pastille cadenas | 66, à y 75 | 4.125 | |
+| Titre | 348 × 105 | 21.75, 3 lignes | « Configure ton nouveau mot de passe » |
+| Champs | 47 chacun, gouttière 24 | × 3, gouttière 1 | Gouttière 24 → 1 rem par R2 (écart de 8 : **signalé**, la maquette dessine 71 − 47 = 24) |
+| CTA | 358 × 48 | × 3 | |
+
+**Copie** (verbatim) : « Configure ton nouveau mot de passe » · « Mot de passe » ·
+« Confirme ton nouveau mot de passe » · « Continuer ».
+
+**Contrat back-end** : `POST /v1/auth/reset-password` → `200 { message:
+"password_updated" }` · `400 invalid_or_expired_token`. Le succès **ferme toutes les
+sessions ouvertes** du compte et invalide les autres demandes en cours : si quelqu'un
+d'autre était connecté, il ne l'est plus.
+
+**États** : validation inline sur les deux champs · **lien mort** (périmé, déjà utilisé,
+invalide) → message clair **avec une sortie vers l'écran de connexion**. On ne laisse
+jamais quelqu'un devant un formulaire qui ne servira à rien. Non maquetté.
+
+**Sécurité** : le jeton vaut 45 minutes et une seule utilisation. L'écran n'est
+atteignable par aucune navigation interne — `OnboardingModel.open(deepLink:)` est le seul
+chemin, et il refuse tout ce qui n'est pas `memobook://reset-password?token=…` non vide.
+
+**À trancher** : le « message de confirmation discret » évoqué par le détail fonctionnel
+au retour sur *Connection* n'est pas maquetté et n'est pas implémenté.
+
+---
+
+### 8.8 Complète tes informations
+
+- **Nœud Figma** : `2707:9456` (« Social login - compléments ») —
+  [ouvrir](https://www.figma.com/design/kytPYFno7PvDciIKTxCujK/MemoBook---Product?node-id=2707-9456)
+- **Vue** : `MemoBookFeature/Onboarding/CompleteProfileView.swift`
+- **Rôle** : confirmer ou corriger ce qu'un fournisseur tiers a transmis, avant de créer
+  le compte.
+- **Entrée / sortie** : depuis *Sign Up* ou *Login*, après une connexion tierce sur une
+  identité inconnue → carnets.
+
+**Structure (en rem)** — conteneur à x 16, y 80.4, largeur 358, comme *Sign Up*.
+
+| Élément | Figma | rem | Note |
+|---|---|---|---|
+| Titre | 348 × 70 | 21.75, 2 lignes | |
+| Sous-titre | 288 × 42 | 18 | |
+| Espace titre → champs | 32 | 2 | ✅ |
+| Ligne Prénom / Nom | 171 + 16 + 171 | 10.7 + 1 + 10.7 | Deux colonnes égales |
+| Gouttière verticale | 63 − 47 = 16 | 1 | ✅ |
+| Champ Email | 358 × 47 | × 3 | |
+| Espace champs → CTA | 286 − 254 = 32 | 2 | ✅ |
+
+**Copie** (verbatim) : « Complète tes informations » · « nous avons récupéré les
+informations suivantes, vérifie leur validité » · « Prénom » · « Nom » · « Email » ·
+« Continuer ». Les champs sont montrés **pré-remplis** sur la maquette (« cla »,
+« thioll », « cla.thioll@gmail.com ») : ce sont des données d'exemple, pas des libellés.
+
+**Le cas Apple.** Apple peut renvoyer un relais `xxxx@privaterelay.appleid.com` plutôt
+qu'une adresse personnelle. Il est **accepté tel quel** — Apple fait suivre le courrier
+tant que l'accès n'est pas révoqué, et on ne réclame pas une « vraie » adresse à quelqu'un
+qui a justement choisi de la masquer. Une mention discrète le dit sous le champ ; elle
+n'est **pas maquettée** et est à valider.
+
+**Contrat back-end** : `POST /v1/auth/social/complete` → `201 { userId, sessionToken,
+hasSeenOnboarding }` · `409 conflict` si l'adresse est déjà prise par un autre compte,
+auquel cas on reste sur l'écran, message sous le champ Email.
+
+**États** : nominal (pré-rempli) · champs vides si le fournisseur n'a rien transmis ·
+validation inline · chargement sur le CTA · 409 sous le champ. Seul le nominal est
+maquetté.
+
+**À trancher** : la mention sur le relais Apple · que faire si le fournisseur n'a transmis
+**aucun** email — le champ est vide et bloquant, ce qui est le comportement implémenté,
+mais l'écran ne l'explique pas.
+
+---
+
+### 8.9 Ce que le lot 1+2 laisse ouvert
+
+Trois dépendances externes, listées ici parce qu'elles ne sont pas du code à écrire :
+
+| Dépendance | État | Conséquence aujourd'hui |
+|---|---|---|
+| **Exports Figma** | ❌ | Les icônes, le logo et les logos sociaux laissent une réserve neutre. Liste et procédure : [`figma-assets.md`](figma-assets.md) |
+| **Polices Sora et General Sans** | ❌ | `Font.custom` retombe sur la police système. Les tailles, graisses et approches sont déjà justes |
+| **SDK Apple / Google / Facebook** | ❌ | Les trois boutons répondent qu'ils ne sont pas disponibles. Il leur faut les client IDs des trois fournisseurs |
+| **Fournisseur d'email** | ❌ | Le lien de réinitialisation part dans les logs du serveur |
+
+Et une vérification qui n'a pas pu être faite : **la comparaison capture / maquette**
+(§6, étape 6). Elle demande un Mac avec Xcode ; la session de développement n'en avait
+pas. `make build`, `make test` et les captures comparées restent à passer avant la PR.
 
 ## 9. Ce qu'on ne fait jamais
 
