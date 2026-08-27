@@ -117,12 +117,22 @@ l'app iOS télécharge `pdfUrl` en HTTP simple, un chemin `file://` ne lui servi
 
 ## L'API
 
-Toutes les routes `/v1` attendent un `Authorization: Bearer <token>` d'appareil, sauf
-`POST /v1/devices` qui le délivre.
+Toutes les routes `/v1` attendent un `Authorization: Bearer <token>`, sauf `POST
+/v1/devices` et les routes `/v1/auth/*` qui délivrent justement ces jetons. Deux jetons
+sont acceptés, et ils ne s'excluent pas : celui de l'**appareil** (identité anonyme du
+premier lancement) et celui d'une **session** (compte connecté).
 
 | Route | Rôle |
 | --- | --- |
 | `POST /v1/devices` | Enregistre l'appareil, renvoie son token (une seule fois, en clair) |
+| `POST /v1/auth/signup` | Crée un compte, ouvre une session (409 si l'email est déjà pris) |
+| `POST /v1/auth/login` | Ouvre une session (401 générique : ni l'email ni le mot de passe ne sont désignés) |
+| `POST /v1/auth/forgot-password` | Envoie le lien de réinitialisation (404 quand l'adresse n'a pas de compte) |
+| `POST /v1/auth/reset-password` | Pose le nouveau mot de passe à partir du jeton du lien |
+| `POST /v1/auth/social/:provider` | Connexion Apple / Google / Facebook. Renvoie une session, ou `profile_required` |
+| `POST /v1/auth/social/complete` | Termine la création d'un compte tiers avec le profil confirmé |
+| `GET /v1/auth/me` | Le compte de la session — c'est ce que le Splash interroge |
+| `POST /v1/auth/logout` | Ferme la session courante |
 | `GET /v1/memos` | Les carnets de l'appareil |
 | `POST /v1/memos` | Crée un carnet |
 | `GET /v1/memos/:id` | Un carnet, ses souvenirs et ses générations |
@@ -138,9 +148,24 @@ Toutes les routes `/v1` attendent un `Authorization: Bearer <token>` d'appareil,
 | `GET /v1/memos/:id/orders` | Les commandes d'un carnet |
 | `GET /v1/orders/:id` | Suit une commande |
 
-> **Authentification** — le token d'appareil est un provisoire assumé, le temps que les
-> comptes utilisateur arrivent. Tout est concentré dans `src/plugins/auth.ts` : c'est le
-> seul fichier à remplacer, les routes ne connaissent que `request.deviceId`.
+> **Authentification** — `src/plugins/auth.ts` reste le seul fichier qui sait comment un
+> appelant est identifié. Il résout d'abord une session, sinon un appareil, et pose dans
+> les deux cas `request.deviceId` : les routes et les jobs n'ont pas bougé.
+>
+> Les carnets appartiennent toujours à un `Device`. Quand un appareil rejoint un compte,
+> il cède ses carnets à l'**appareil principal** du compte (`User.primaryDeviceId`), et
+> c'est cet appareil-là qu'une session désigne. Résultat : les trois étapes racontées en
+> anonyme survivent à l'inscription, et un deuxième téléphone retrouve la même liste.
+>
+> Mots de passe en **Argon2id** (`src/lib/password.ts`), jamais en clair ni dans un log.
+> Les jetons de session et de réinitialisation sont 32 octets d'aléa dont le serveur ne
+> garde qu'une empreinte SHA-256.
+
+> **Ce qui n'est pas encore branché** — la vérification des jetons Apple / Google /
+> Facebook (`src/services/socialLogin.ts`) demande les client IDs des trois fournisseurs,
+> qui n'existent pas encore : hors mode `fake`, la route répond 503 plutôt que de faire
+> confiance à un jeton non vérifié. L'envoi d'email (`src/services/mailer.ts`) part dans
+> les logs tant qu'aucun fournisseur n'est choisi.
 
 ## Où regarder
 

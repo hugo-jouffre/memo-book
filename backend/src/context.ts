@@ -3,6 +3,8 @@ import pino, { type Logger } from "pino";
 import type { Env } from "./env.js";
 import { InlineQueue, PgBossQueue, type JobQueue } from "./jobs/queue.js";
 import { createBookRenderer, type BookRenderer } from "./services/apitemplate.js";
+import { createMailer, type Mailer } from "./services/mailer.js";
+import { createSocialVerifier, type SocialVerifier } from "./services/socialLogin.js";
 import { createRedactor, type Redactor } from "./services/redaction.js";
 import { createMediaStorage, type MediaStorage } from "./services/storage.js";
 import { createStructurer, type Structurer } from "./services/structuring.js";
@@ -26,6 +28,8 @@ export interface AppContext {
   structurer: Structurer;
   publisher: AssetPublisher;
   renderer: BookRenderer;
+  mailer: Mailer;
+  socialVerifier: SocialVerifier;
 }
 
 export interface CreateContextOptions {
@@ -48,6 +52,8 @@ export function createContext(env: Env, options: CreateContextOptions = {}): App
     structurer: createStructurer(env),
     publisher: createAssetPublisher(env),
     renderer: createBookRenderer(env),
+    mailer: createMailer(env, logger),
+    socialVerifier: createSocialVerifier(env),
   };
 
   return { ...base, ...options.overrides };

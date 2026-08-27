@@ -67,6 +67,17 @@ const schema = z.object({
 
   WEBFLOW_API_TOKEN: z.string().default(""),
   WEBFLOW_SITE_ID: z.string().default(""),
+
+  /** Durée de vie d'une session. 90 jours : on ne redemande pas un mot de
+   *  passe à quelqu'un qui raconte son voyage tous les soirs. */
+  SESSION_TTL_DAYS: z.coerce.number().int().positive().default(90),
+
+  /** Durée de vie du lien de réinitialisation, en minutes. Le détail
+   *  fonctionnel demande 30 à 60 minutes ; le jeton est en plus à usage unique. */
+  PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().positive().max(60).default(45),
+
+  /** Schéma du deep link de l'app : `memobook://reset-password?token=…`. */
+  APP_DEEP_LINK_SCHEME: z.string().min(1).default("memobook"),
 });
 
 export type Env = z.infer<typeof schema> & {

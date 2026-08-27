@@ -4,7 +4,8 @@ import { ZodError } from "zod";
 import type { AppContext } from "./context.js";
 import { registerJobs } from "./jobs/index.js";
 import { HttpError } from "./lib/httpError.js";
-import { createRequireDevice, registerAuthDecorator } from "./plugins/auth.js";
+import { createRequireCaller, registerAuthDecorator } from "./plugins/auth.js";
+import { registerAccountRoutes, registerAuthRoutes } from "./routes/auth.js";
 import { registerDeviceRoutes } from "./routes/devices.js";
 import { registerEntryRoutes } from "./routes/entries.js";
 import { registerHealthRoutes } from "./routes/health.js";
@@ -59,12 +60,16 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
   registerHealthRoutes(app, context);
   registerDeviceRoutes(app, context);
 
+  // Créer un compte ou le récupérer se fait forcément sans être authentifié.
+  registerAuthRoutes(app, context);
+
   // Uniquement en mode de rendu local : sert les PDF produits sur le disque.
   registerLocalRenderRoutes(app, context);
 
-  // Tout le reste de /v1 exige un token d'appareil.
+  // Tout le reste de /v1 exige un jeton de session ou d'appareil.
   await app.register(async (protectedRoutes) => {
-    protectedRoutes.addHook("preHandler", createRequireDevice(context));
+    protectedRoutes.addHook("preHandler", createRequireCaller(context));
+    registerAccountRoutes(protectedRoutes, context);
     registerMemoRoutes(protectedRoutes, context);
     registerEntryRoutes(protectedRoutes, context);
     registerRenderRoutes(protectedRoutes, context);

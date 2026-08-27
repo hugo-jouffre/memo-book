@@ -31,8 +31,100 @@ enum EntryKind {
   photo
 }
 
-/// Identité provisoire, le temps que la vraie authentification arrive.
-/// Un appareil s'enregistre une fois et conserve son token.
+/// Un compte MemoBook. Créé par email + mot de passe, ou par un fournisseur
+/// social (Apple, Google, Facebook) via `SocialIdentity`.
+model User {
+  id        String  @id @default(uuid())
+  /// Toujours stocké en minuscules : l'unicité d'un email ne dépend pas de la
+  /// casse, et deux comptes « Cla@… » et « cla@… » seraient le même compte.
+  email     String  @unique
+  /// Argon2id. `null` pour un compte créé par un fournisseur social et qui n'a
+  /// jamais posé de mot de passe.
+  passwordHash String?
+  firstName String
+  lastName  String
+
+  /// Le Welcome Screen a déjà été vu par cette personne. Restauré à la
+  /// connexion pour qu'une réinstallation ne le repropose pas — c'est ce que
+  /// demande le détail fonctionnel de l'onboarding.
+  hasSeenOnboarding Boolean @default(false)
+
+  /// L'appareil qui porte les carnets du compte. Les autres appareils reliés
+  /// au compte s'y rattachent : c'est ce qui fait qu'une personne connectée
+  /// sur un deuxième téléphone retrouve ses carnets, sans que la propriété des
+  /// carnets ait à quitter `Device`.
+  primaryDeviceId String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  devices        Device[]
+  sessions       Session[]
+  identities     SocialIdentity[]
+  passwordResets PasswordReset[]
+
+  @@map("users")
+}
+
+/// Une session ouverte sur un appareil. Le token en clair n'existe que dans le
+/// trousseau de l'app ; le serveur n'en garde qu'une empreinte.
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tokenHash String   @unique
+  /// Renseigné quand la session a été ouverte depuis un appareil connu.
+  deviceId  String?
+
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  expiresAt  DateTime
+
+  @@index([userId, createdAt])
+  @@map("sessions")
+}
+
+/// Le lien entre un compte et un fournisseur tiers. `subject` est
+/// l'identifiant stable renvoyé par le fournisseur — jamais l'email, qu'Apple
+/// peut masquer derrière un relais.
+model SocialIdentity {
+  id       String @id @default(uuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  provider String
+  subject  String
+  /// Email transmis par le fournisseur, relais Apple compris. Conservé tel
+  /// quel : Apple fait suivre le courrier tant que l'accès n'est pas révoqué.
+  email    String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([provider, subject])
+  @@map("social_identities")
+}
+
+/// Une demande de réinitialisation de mot de passe. Le token voyage dans le
+/// lien envoyé par email, n'est valable qu'une fois, et expire vite.
+model PasswordReset {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("password_resets")
+}
+
+/// L'identité de l'appareil. Elle survit à l'arrivée des comptes : un appareil
+/// s'enregistre au premier lancement, avant toute inscription, et ses carnets
+/// le suivent quand il se rattache à un compte.
 model Device {
   id        String   @id @default(uuid())
   /// SHA-256 du token porteur — le token en clair n'existe que dans l'app.
@@ -41,8 +133,13 @@ model Device {
   createdAt DateTime @default(now())
   lastSeenAt DateTime @default(now())
 
+  /// `null` tant que l'appareil n'a pas été relié à un compte.
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
   memos Memo[]
 
+  @@index([userId])
   @@map("devices")
 }
 

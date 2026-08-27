@@ -1,18 +1,21 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
 /**
- * Authentification provisoire par appareil, le temps que les comptes
- * utilisateur arrivent. L'app s'enregistre une fois et conserve son token ;
- * le serveur n'en garde qu'une empreinte.
+ * Les jetons porteurs du back-end. Trois familles, un seul mécanisme : 32
+ * octets aléatoires côté client, une empreinte SHA-256 côté serveur.
  *
- * Quand l'auth réelle arrivera, seul `resolveDevice` (src/plugins/auth.ts) est
- * à remplacer — routes et jobs ne connaissent que `request.deviceId`.
+ *   - **appareil** — l'identité anonyme du premier lancement, avant tout compte
+ *   - **session** — une connexion ouverte sur un compte (`POST /v1/auth/login`)
+ *   - **réinitialisation** — le jeton porté par le lien reçu par email
+ *
+ * SHA-256 et non Argon2 : ces jetons sont déjà 256 bits d'aléa, il n'y a pas de
+ * dictionnaire à ralentir. Un mot de passe, lui, passe par `lib/password.ts`.
  */
-export function generateDeviceToken(): string {
+export function generateToken(): string {
   return randomBytes(32).toString("base64url");
 }
 
-export function hashDeviceToken(token: string): string {
+export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
@@ -29,4 +32,13 @@ export function parseBearerToken(header: string | undefined): string | null {
   if (!header) return null;
   const match = /^Bearer\s+(.+)$/i.exec(header.trim());
   return match?.[1]?.trim() || null;
+}
+
+/**
+ * Forme canonique d'une adresse email : minuscules, sans espaces autour. C'est
+ * elle qui est stockée et comparée — sans quoi « Cla@… » et « cla@… » seraient
+ * deux comptes.
+ */
+export function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
 }

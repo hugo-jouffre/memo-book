@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { generateDeviceToken, hashDeviceToken } from "../src/lib/auth.js";
+import { generateToken, hashToken } from "../src/lib/auth.js";
 
 /**
  * Jeu de données de développement : un appareil, un carnet et trois souvenirs
@@ -30,10 +30,10 @@ const SOUVENIRS = [
 ];
 
 async function main(): Promise<void> {
-  const token = generateDeviceToken();
+  const token = generateToken();
 
   const device = await prisma.device.create({
-    data: { tokenHash: hashDeviceToken(token), platform: "ios" },
+    data: { tokenHash: hashToken(token), platform: "ios" },
   });
 
   const memo = await prisma.memo.create({
