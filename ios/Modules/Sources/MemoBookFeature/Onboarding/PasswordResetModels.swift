@@ -106,7 +106,7 @@ public final class ResetPasswordModel {
             try await api.resetPassword(token: token, newPassword: password)
             onboarding.returnToSignIn()
         } catch let error as APIError {
-            if case .server(400, "invalid_or_expired_token", _) = error {
+            if case .server(400, let code, _) = error, code == "invalid_or_expired_token" {
                 linkError =
                     "Ce lien n'est plus valable. Relance « Mot de passe oublié » depuis l'écran de connexion."
             } else {
@@ -155,8 +155,7 @@ public final class CompleteProfileModel {
     }
 
     public var canSubmit: Bool {
-        !isSubmitting
-            && ![firstName, lastName, email].contains { $0.trimmed.isEmpty }
+        !isSubmitting && [firstName, lastName, email].allSatisfy { !$0.trimmed.isEmpty }
     }
 
     public func submit() async {

@@ -59,8 +59,8 @@ public final class CredentialsModel {
         let filled = [email, password].allSatisfy { !$0.trimmed.isEmpty }
         guard tab == .signUp else { return filled }
 
-        return filled
-            && ![firstName, lastName, passwordConfirmation].contains { $0.trimmed.isEmpty }
+        let signUpFields = [firstName, lastName, passwordConfirmation]
+        return filled && signUpFields.allSatisfy { !$0.trimmed.isEmpty }
     }
 
     public func select(tab newTab: AuthTab) {
@@ -184,10 +184,10 @@ public final class CredentialsModel {
     /// Les codes de la politique de mot de passe côté serveur, renvoyés tels
     /// quels par `backend/src/lib/password.ts`.
     private func passwordField(for code: String?) -> Field? {
-        switch code {
-        case "too_short", "too_long", "needs_letter_and_digit": .password
-        default: nil
-        }
+        guard let code else { return nil }
+        return ["too_short", "too_long", "needs_letter_and_digit"].contains(code)
+            ? .password
+            : nil
     }
 }
 

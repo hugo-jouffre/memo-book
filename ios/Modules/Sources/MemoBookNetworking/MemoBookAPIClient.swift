@@ -188,14 +188,16 @@ public actor MemoBookAPIClient: MemoBookAPI {
         path: String,
         body: Body
     ) async throws -> AuthenticatedSession {
-        let session: AuthenticatedSession = try await send(
+        // Nommé `opened` et non `session` : l'acteur a déjà une `session`,
+        // qui est son `URLSession`.
+        let opened: AuthenticatedSession = try await send(
             method: "POST",
             path: path,
             encodableBody: body,
             authenticated: false
         )
-        adopt(session)
-        return session
+        adopt(opened)
+        return opened
     }
 
     /// À partir d'ici, toutes les requêtes `/v1` parlent au nom du compte.
