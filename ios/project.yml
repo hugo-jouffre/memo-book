@@ -48,6 +48,22 @@ targets:
         # publication, quand le back-end est derrière HTTPS.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+        # Le lien « mot de passe oublié » reçu par email ouvre l'app sur
+        # l'écran de nouveau mot de passe : memobook://reset-password?token=…
+        CFBundleURLTypes:
+          - CFBundleURLName: com.memobook.app
+            CFBundleURLSchemes:
+              - memobook
+        # ⚠️ Sora et General Sans ne sont pas encore embarquées. Le jour où les
+        # fichiers entrent dans App/Fonts/, les déclarer ici :
+        #   UIAppFonts:
+        #     - Sora-Bold.otf
+        #     - Sora-SemiBold.otf
+        #     - GeneralSans-Regular.otf
+        #     - GeneralSans-Medium.otf
+        #     - GeneralSans-Semibold.otf
+        # En attendant, Font.custom retombe sur la police système : les écrans
+        # restent lisibles, la marque arrive sans toucher au code.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.memobook.app

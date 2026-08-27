@@ -6,6 +6,7 @@ public actor MemoBookAPIClient: MemoBookAPI {
     private let configuration: APIConfiguration
     private let session: URLSession
     private let tokenStore: any TokenStore
+    private let sessionStore: any SessionStore
     private let decoder = JSONDecoder.memoBook
     private let encoder = JSONEncoder.memoBook
 
@@ -16,11 +17,13 @@ public actor MemoBookAPIClient: MemoBookAPI {
     public init(
         configuration: APIConfiguration = .localDevelopment,
         session: URLSession = .shared,
-        tokenStore: any TokenStore = KeychainTokenStore()
+        tokenStore: any TokenStore = KeychainTokenStore(),
+        sessionStore: any SessionStore = KeychainSessionStore()
     ) {
         self.configuration = configuration
         self.session = session
         self.tokenStore = tokenStore
+        self.sessionStore = sessionStore
     }
 
     // MARK: - Identité
@@ -45,6 +48,160 @@ public actor MemoBookAPIClient: MemoBookAPI {
         registrationTask = task
         defer { registrationTask = nil }
         try await task.value
+    }
+
+    // MARK: - Compte
+
+    public func currentAccount() async throws -> Account {
+        struct Response: Decodable { let user: Account }
+        let response: Response = try await send(method: "GET", path: "/v1/auth/me")
+        return response.user
+    }
+
+    public func signUp(_ account: NewAccount) async throws -> AuthenticatedSession {
+        try await openSession(
+            path: "/v1/auth/signup",
+            body: SignUpBody(
+                firstName: account.firstName,
+                lastName: account.lastName,
+                email: account.email,
+                password: account.password,
+                deviceToken: tokenStore.read(),
+                hasSeenOnboarding: sessionStore.hasSeenOnboarding
+            )
+        )
+    }
+
+    public func signIn(email: String, password: String) async throws -> AuthenticatedSession {
+        try await openSession(
+            path: "/v1/auth/login",
+            body: SignInBody(
+                email: email,
+                password: password,
+                deviceToken: tokenStore.read(),
+                hasSeenOnboarding: sessionStore.hasSeenOnboarding
+            )
+        )
+    }
+
+    public func signOut() async {
+        // Le serveur d'abord, le trousseau ensuite : si l'appel échoue, la
+        // session locale part quand même. Rester connecté malgré une demande
+        // explicite de déconnexion serait le pire des deux comportements.
+        if let request = try? makeRequest(method: "POST", path: "/v1/auth/logout") {
+            _ = try? await performRaw(request)
+        }
+        sessionStore.clearSession()
+    }
+
+    public func signIn(
+        with provider: SocialProvider,
+        credential: String
+    ) async throws -> SocialSignInOutcome {
+        let response: SocialSignInResponse = try await send(
+            method: "POST",
+            path: "/v1/auth/social/\(provider.rawValue)",
+            encodableBody: SocialSignInBody(
+                credential: credential,
+                deviceToken: tokenStore.read(),
+                hasSeenOnboarding: sessionStore.hasSeenOnboarding
+            ),
+            authenticated: false
+        )
+
+        switch response.status {
+        case .signedIn:
+            guard let userId = response.userId, let token = response.sessionToken else {
+                throw APIError.server(
+                    statusCode: 200,
+                    code: "malformed_session",
+                    message: "Réponse de connexion incomplète."
+                )
+            }
+            let session = AuthenticatedSession(
+                userId: userId,
+                sessionToken: token,
+                hasSeenOnboarding: response.hasSeenOnboarding ?? false
+            )
+            adopt(session)
+            return .signedIn(session)
+
+        case .profileRequired:
+            guard let socialToken = response.socialToken else {
+                throw APIError.server(
+                    statusCode: 200,
+                    code: "malformed_session",
+                    message: "Réponse de connexion incomplète."
+                )
+            }
+            return .profileRequired(
+                SocialProfileDraft(
+                    socialToken: socialToken,
+                    provider: response.provider ?? provider,
+                    firstName: response.firstName,
+                    lastName: response.lastName,
+                    email: response.email
+                )
+            )
+        }
+    }
+
+    public func completeSocialProfile(
+        _ profile: CompletedSocialProfile
+    ) async throws -> AuthenticatedSession {
+        try await openSession(
+            path: "/v1/auth/social/complete",
+            body: SocialCompleteBody(
+                socialToken: profile.socialToken,
+                firstName: profile.firstName,
+                lastName: profile.lastName,
+                email: profile.email,
+                deviceToken: tokenStore.read(),
+                hasSeenOnboarding: sessionStore.hasSeenOnboarding
+            )
+        )
+    }
+
+    public func requestPasswordReset(email: String) async throws {
+        struct Response: Decodable { let message: String }
+        let _: Response = try await send(
+            method: "POST",
+            path: "/v1/auth/forgot-password",
+            encodableBody: ForgotPasswordBody(email: email),
+            authenticated: false
+        )
+    }
+
+    public func resetPassword(token: String, newPassword: String) async throws {
+        struct Response: Decodable { let message: String }
+        let _: Response = try await send(
+            method: "POST",
+            path: "/v1/auth/reset-password",
+            encodableBody: ResetPasswordBody(token: token, newPassword: newPassword),
+            authenticated: false
+        )
+    }
+
+    /// Ouvre une session et la mémorise. Les quatre routes qui en ouvrent une
+    /// renvoient exactement le même corps.
+    private func openSession<Body: Encodable>(
+        path: String,
+        body: Body
+    ) async throws -> AuthenticatedSession {
+        let session: AuthenticatedSession = try await send(
+            method: "POST",
+            path: path,
+            encodableBody: body,
+            authenticated: false
+        )
+        adopt(session)
+        return session
+    }
+
+    /// À partir d'ici, toutes les requêtes `/v1` parlent au nom du compte.
+    private func adopt(_ session: AuthenticatedSession) {
+        sessionStore.saveSession(token: session.sessionToken)
+        if session.hasSeenOnboarding { sessionStore.markOnboardingSeen() }
     }
 
     // MARK: - Carnets
@@ -189,8 +346,13 @@ public actor MemoBookAPIClient: MemoBookAPI {
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
+        // Le jeton de session prime : dès qu'un compte est connecté, c'est lui
+        // qui parle. Sans session, l'appareil anonyme prend le relais — c'est ce
+        // qui laisse raconter une étape avant de s'être inscrit.
         if authenticated {
-            guard let token = tokenStore.read() else { throw APIError.notAuthenticated }
+            guard let token = sessionStore.sessionToken ?? tokenStore.read() else {
+                throw APIError.notAuthenticated
+            }
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
 
@@ -216,9 +378,14 @@ public actor MemoBookAPIClient: MemoBookAPI {
     private func send<Body: Encodable, Response: Decodable>(
         method: String,
         path: String,
-        encodableBody: Body
+        encodableBody: Body,
+        authenticated: Bool = true
     ) async throws -> Response {
-        var request = try makeRequest(method: method, path: path)
+        var request = try makeRequest(
+            method: method,
+            path: path,
+            authenticated: authenticated
+        )
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(encodableBody)
         return try await perform(request)
@@ -256,10 +423,15 @@ public actor MemoBookAPIClient: MemoBookAPI {
         guard (200..<300).contains(http.statusCode) else {
             let body = try? JSONDecoder().decode(APIErrorBody.self, from: data)
 
-            // Un token refusé signifie que l'appareil a été supprimé côté
-            // serveur : on repart d'une identité propre au prochain lancement.
+            // Un jeton refusé ne vaut plus rien : session expirée côté serveur,
+            // ou appareil supprimé. On repart d'une identité propre au prochain
+            // lancement plutôt que de rejouer un 401 à chaque écran.
             if http.statusCode == 401 {
-                tokenStore.clear()
+                if sessionStore.sessionToken != nil {
+                    sessionStore.clearSession()
+                } else {
+                    tokenStore.clear()
+                }
             }
 
             throw APIError.server(
@@ -271,4 +443,68 @@ public actor MemoBookAPIClient: MemoBookAPI {
 
         return data
     }
+}
+
+
+// MARK: - Corps de requête
+
+/// Le jeton de l'appareil anonyme accompagne chaque ouverture de session : c'est
+/// lui qui fait suivre les carnets déjà racontés dans le compte.
+private struct SignUpBody: Encodable {
+    let firstName: String
+    let lastName: String
+    let email: String
+    let password: String
+    let deviceToken: String?
+    let hasSeenOnboarding: Bool
+}
+
+private struct SignInBody: Encodable {
+    let email: String
+    let password: String
+    let deviceToken: String?
+    let hasSeenOnboarding: Bool
+}
+
+private struct SocialSignInBody: Encodable {
+    let credential: String
+    let deviceToken: String?
+    let hasSeenOnboarding: Bool
+}
+
+private struct SocialCompleteBody: Encodable {
+    let socialToken: String
+    let firstName: String
+    let lastName: String
+    let email: String
+    let deviceToken: String?
+    let hasSeenOnboarding: Bool
+}
+
+private struct ForgotPasswordBody: Encodable {
+    let email: String
+}
+
+private struct ResetPasswordBody: Encodable {
+    let token: String
+    let newPassword: String
+}
+
+/// `POST /v1/auth/social/:provider` renvoie l'un ou l'autre : une session
+/// ouverte, ou le profil à compléter. Un seul corps, discriminé par `status`.
+private struct SocialSignInResponse: Decodable {
+    enum Status: String, Decodable {
+        case signedIn = "signed_in"
+        case profileRequired = "profile_required"
+    }
+
+    let status: Status
+    let userId: String?
+    let sessionToken: String?
+    let hasSeenOnboarding: Bool?
+    let socialToken: String?
+    let provider: SocialProvider?
+    let firstName: String?
+    let lastName: String?
+    let email: String?
 }

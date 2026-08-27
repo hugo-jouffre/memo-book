@@ -43,8 +43,11 @@ public struct StatusBadge: View {
     }
 }
 
-/// Bouton d'action principal, pleine largeur — la convention iOS que la
-/// critique design relève comme déjà bien réglée dans les maquettes.
+/// Bouton d'action principal, pleine largeur.
+///
+/// Alias historique de `MemoBookButton`, qui porte désormais le dessin exact du
+/// composant `Button` de Figma. Les écrans du cœur produit l'appellent encore
+/// sous ce nom ; il n'y a qu'un seul bouton dans l'app.
 public struct PrimaryButton: View {
     private let title: String
     private let isLoading: Bool
@@ -57,16 +60,7 @@ public struct PrimaryButton: View {
     }
 
     public var body: some View {
-        Button(action: action) {
-            HStack(spacing: MemoBookSpacing.xs) {
-                if isLoading { ProgressView().tint(.white) }
-                Text(title).font(.system(.body, weight: .semibold))
-            }
-            .frame(maxWidth: .infinity, minHeight: MemoBookSpacing.minimumTapTarget + 6)
-        }
-        .buttonStyle(.borderedProminent)
-        .tint(MemoBookColor.action)
-        .disabled(isLoading)
+        MemoBookButton(title, isLoading: isLoading, action: action)
     }
 }
 
@@ -115,7 +109,10 @@ public struct EmptyStateView: View {
     public var body: some View {
         VStack(spacing: MemoBookSpacing.xs) {
             Image(systemName: systemImage)
-                .font(.system(size: 34, weight: .light))
+                // `imageScale` plutôt qu'une taille en points : l'icône suit la
+                // taille de texte de l'utilisateur (R7).
+                .font(.title.weight(.light))
+                .imageScale(.large)
                 .foregroundStyle(MemoBookColor.action)
             Text(title).font(MemoBookFont.sectionTitle)
             Text(message)

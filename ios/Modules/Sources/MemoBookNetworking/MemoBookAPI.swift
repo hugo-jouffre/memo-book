@@ -8,6 +8,37 @@ public protocol MemoBookAPI: Sendable {
     /// Enregistre l'appareil si nécessaire et mémorise son token.
     func ensureDeviceRegistered() async throws
 
+    // MARK: - Compte
+
+    /// Le compte de la session en cours. Lève `APIError.notAuthenticated`
+    /// quand aucune session n'est ouverte, et un 401 quand elle a expiré :
+    /// c'est ce que le *Splash* interroge pour choisir sa destination.
+    func currentAccount() async throws -> Account
+
+    func signUp(_ account: NewAccount) async throws -> AuthenticatedSession
+    func signIn(email: String, password: String) async throws -> AuthenticatedSession
+
+    /// Ferme la session côté serveur et oublie le jeton. Ne lève pas : se
+    /// déconnecter doit toujours aboutir, réseau ou pas.
+    func signOut() async
+
+    /// Ouvre le flow d'un fournisseur tiers. Renvoie soit une session, soit le
+    /// profil à confirmer sur *Complète tes informations*.
+    func signIn(with provider: SocialProvider, credential: String) async throws
+        -> SocialSignInOutcome
+
+    func completeSocialProfile(_ profile: CompletedSocialProfile) async throws
+        -> AuthenticatedSession
+
+    /// Demande l'envoi du lien de réinitialisation.
+    /// Lève un `APIError.server(statusCode: 404, code: "not_found", …)` quand
+    /// aucun compte n'est associé à l'adresse — c'est ce qui fait basculer sur
+    /// *Mdp oublié - compte inexistant*.
+    func requestPasswordReset(email: String) async throws
+
+    /// Pose le nouveau mot de passe à partir du jeton porté par le deep link.
+    func resetPassword(token: String, newPassword: String) async throws
+
     func memos() async throws -> [MemoSummary]
     func createMemo(_ memo: NewMemo) async throws -> Memo
     func memo(id: String) async throws -> MemoDetail

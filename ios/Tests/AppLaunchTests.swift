@@ -7,17 +7,82 @@ import XCTest
 /// (`ios/Modules/Tests`) ; ici on vérifie l'assemblage.
 @MainActor
 final class AppLaunchTests: XCTestCase {
-    func testPrepareMarksDependenciesReady() async {
-        let dependencies = AppDependencies(api: PreviewAPI(seeded: false))
+    /// Sans compte, le lancement s'arrête sur le Welcome Screen — c'est le
+    /// routage décrit par le détail fonctionnel de l'onboarding.
+    func testLaunchWithoutAnAccountLandsOnWelcome() async {
+        let dependencies = AppDependencies(
+            api: PreviewAPI(seeded: false),
+            sessions: InMemorySessionStore()
+        )
 
-        await dependencies.prepare()
+        await dependencies.onboarding.start()
 
-        XCTAssertTrue(dependencies.isReady)
-        XCTAssertNil(dependencies.startupError)
+        XCTAssertEqual(dependencies.onboarding.step, .welcome)
+    }
+
+    /// Quelqu'un qui a déjà vu le Welcome ne le revoit pas : il repart sur la
+    /// connexion, même après une désinstallation.
+    func testLaunchAfterOnboardingLandsOnSignIn() async {
+        let dependencies = AppDependencies(
+            api: PreviewAPI(seeded: false),
+            sessions: InMemorySessionStore(hasSeenOnboarding: true)
+        )
+
+        await dependencies.onboarding.start()
+
+        XCTAssertEqual(dependencies.onboarding.step, .credentials(.signIn))
+    }
+
+    /// Une session valide court-circuite tout le flow.
+    func testLaunchWithAValidSessionGoesStraightHome() async {
+        let api = PreviewAPI(seeded: false)
+        _ = try? await api.signUp(
+            NewAccount(
+                firstName: "Cla",
+                lastName: "Thioll",
+                email: "cla.thioll@gmail.com",
+                password: "carnet2026"
+            )
+        )
+
+        let dependencies = AppDependencies(api: api, sessions: InMemorySessionStore())
+        await dependencies.onboarding.start()
+
+        XCTAssertEqual(dependencies.onboarding.step, .home)
+    }
+
+    /// Le lien reçu par email est le seul chemin vers l'écran de nouveau mot
+    /// de passe, et il porte le jeton.
+    func testResetPasswordDeepLinkCarriesItsToken() {
+        let dependencies = AppDependencies(
+            api: PreviewAPI(seeded: false),
+            sessions: InMemorySessionStore()
+        )
+
+        let handled = dependencies.onboarding.open(
+            deepLink: URL(string: "memobook://reset-password?token=abc123")!
+        )
+
+        XCTAssertTrue(handled)
+        XCTAssertEqual(dependencies.onboarding.step, .resetPassword(token: "abc123"))
+    }
+
+    func testUnknownDeepLinkIsIgnored() {
+        let dependencies = AppDependencies(
+            api: PreviewAPI(seeded: false),
+            sessions: InMemorySessionStore()
+        )
+
+        XCTAssertFalse(
+            dependencies.onboarding.open(deepLink: URL(string: "memobook://autre-chose")!)
+        )
+        XCTAssertFalse(
+            dependencies.onboarding.open(deepLink: URL(string: "memobook://reset-password")!)
+        )
     }
 
     func testMemoListLoadsAndCreates() async {
-        let dependencies = AppDependencies(api: PreviewAPI())
+        let dependencies = AppDependencies(api: PreviewAPI(), sessions: InMemorySessionStore())
         let model = MemoListModel(api: dependencies.api)
 
         await model.load()

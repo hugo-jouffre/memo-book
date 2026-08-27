@@ -1,111 +1,166 @@
 import SwiftUI
-import UIKit
 
-// ⚠️⚠️  PALETTE PROVISOIRE — À REMPLACER  ⚠️⚠️
+// La palette est tranchée (décision D1 de `docs/ui-development.md` §7.1). Les
+// valeurs ci-dessous recopient les variables du fichier Figma
+// « MemoBook — Product », telles que les écrans les résolvent — pas telles que
+// la page *Design System* les affiche, qui est encore sur le mode par défaut du
+// template acheté.
 //
-// Les couleurs de l'app et des mises en page vont changer prochainement.
-// En attendant cette nouvelle palette, aucun token ci-dessous ne porte de
-// couleur de marque : ils pointent tous vers des couleurs système iOS.
+// Carrot, Carrot Darker, Forest Green et Kiwi n'existent plus.
 //
-// C'est délibéré. L'app est utilisable et cohérente, mais visiblement NON
-// BRANDÉE — personne ne peut confondre ces valeurs avec le design final, et on
-// ne fige pas une palette qu'on sait déjà fausse.
-//
-// Ce que ce fichier n'est PAS : il ne reprend ni `agents/design.md` (Carrot,
-// Forest Green, Beige…), ni `memobook-design.md` du Drive. Les deux se
-// contredisent, et les deux vont être remplacés.
-//
-// ➡️ Le jour venu : remplacer les valeurs `TODO` de ce seul fichier. Aucune
-//    couleur n'est codée en dur ailleurs dans l'app — c'est ce qui rend la
-//    bascule triviale.
+// ⚠️ Aucune couleur en dur ailleurs dans l'app. Si un token manque, il s'ajoute
+//    ici d'abord, et la vue s'écrit ensuite.
 
-/// Couleurs de l'app. **Toutes provisoires**, voir l'avertissement ci-dessus.
+/// Les couleurs de marque, recopiées des variables Figma `Brand Colors/*`.
+public enum MemoBookBrand {
+    /// #28654B — l'action principale : CTA, bordure et texte de la tagline.
+    public static let green = Color(hex: 0x28654B)
+
+    /// #E2F32B — `Scheme/Accent`. Très saturé : mise en valeur ponctuelle
+    /// (surlignage, sélection, badge), jamais du texte sur grande surface.
+    public static let lime = Color(hex: 0xE2F32B)
+
+    /// #AFD2F0 — l'accent illustratif de l'onboarding : bordures de cartes,
+    /// pastilles numérotées, fonds d'icônes (à 30 %).
+    public static let blue = Color(hex: 0xAFD2F0)
+
+    /// #FCF2E9 — le fond des écrans.
+    public static let beige = Color(hex: 0xFCF2E9)
+
+    /// #CFBBAA
+    public static let beigeDarker = Color(hex: 0xCFBBAA)
+
+    /// #2D231A — le texte principal. Un noir chaud, jamais #000000.
+    public static let black = Color(hex: 0x2D231A)
+
+    /// #FFFCF8 — les surfaces : cartes, champs. Un blanc chaud, jamais #FFFFFF.
+    public static let white = Color(hex: 0xFFFCF8)
+
+    /// #C8C8C8 — bordures neutres, et le fond d'un CTA désactivé.
+    public static let grey = Color(hex: 0xC8C8C8)
+
+    /// #8E8E93 — `Grays/Gray`, le gris système iOS : texte secondaire et
+    /// placeholders.
+    public static let gray = Color(hex: 0x8E8E93)
+}
+
+/// Couleurs de l'app, par rôle. C'est cette table que les vues emploient —
+/// jamais `MemoBookBrand` directement, sauf quand le rôle *est* la couleur
+/// (l'accent illustratif de l'onboarding, par exemple).
 public enum MemoBookColor {
     /// Couleur d'action : boutons primaires, liens, sélection, teinte de
     /// navigation.
-    ///
-    /// TODO(design) — à définir. Quelle couleur porte l'action principale ?
-    /// C'est le seul arbitrage qui compte vraiment : `agents/design.md` dit
-    /// Carrot, le doc Drive dit vert. Trancher, puis remplacer ici.
-    public static let action = Color(uiColor: .systemBlue)
+    public static let action = MemoBookBrand.green
+
+    /// Action indisponible : le CTA reste visible mais ne promet rien.
+    public static let actionDisabled = MemoBookBrand.grey
 
     /// État « enregistrement en cours », et rien d'autre. Jamais un lien,
     /// jamais un CTA — c'est le voyant du micro qui s'allume.
     ///
-    /// TODO(design) — à définir. Le rouge système est la convention iOS
-    /// (Dictaphone) : c'est un placeholder qui a du sens, pas un choix figé.
-    public static let recording = Color(uiColor: .systemRed)
+    /// La palette de marque n'a pas de rouge : c'est `Semantic/Danger`, la seule
+    /// couleur sémantique dont le rôle soit ici visuel plutôt que système.
+    public static let recording = MemoBookColor.error
 
-    /// Texte principal. TODO(design) — à définir (un noir chaud, jamais `#000`).
-    public static let ink = Color(uiColor: .label)
+    /// Texte principal.
+    public static let ink = MemoBookBrand.black
 
-    /// Texte secondaire, légendes. TODO(design) — à définir.
-    public static let inkSecondary = Color(uiColor: .secondaryLabel)
+    /// Texte secondaire, légendes, placeholders.
+    public static let inkSecondary = MemoBookBrand.gray
 
-    /// Fond des écrans. TODO(design) — à définir.
-    public static let background = Color(uiColor: .systemGroupedBackground)
+    /// Texte posé sur une surface d'action.
+    public static let onAction = MemoBookBrand.white
 
-    /// Cartes et zones de contenu. TODO(design) — à définir.
-    public static let surface = Color(uiColor: .secondarySystemGroupedBackground)
+    /// Fond des écrans.
+    public static let background = MemoBookBrand.beige
 
-    public static let separator = Color(uiColor: .separator)
+    /// Cartes, champs et zones de contenu.
+    public static let surface = MemoBookBrand.white
+
+    /// `Scheme/Borders` — le noir de marque à 10 %.
+    public static let separator = MemoBookBrand.black.opacity(0.1)
+
+    /// Bordure d'un champ au repos.
+    public static let fieldBorder = MemoBookBrand.grey
+
+    /// Bordure d'un champ actif : le vert d'action, adouci.
+    public static let fieldBorderFocused = MemoBookBrand.green.opacity(0.5)
+
+    /// L'accent illustratif de l'onboarding : bordures des cartes bénéfices et
+    /// pastilles numérotées.
+    public static let illustration = MemoBookBrand.blue
+
+    /// Fond des pastilles d'icône des cartes bénéfices.
+    public static let illustrationSoft = MemoBookBrand.blue.opacity(0.3)
 
     /// Surfaces « carnet » : aperçu du livre, cartes de couverture.
-    /// C'est ici que viendra le fond papier de la marque.
-    ///
-    /// TODO(design) — à définir.
-    public static let paper = Color(uiColor: .tertiarySystemGroupedBackground)
+    public static let paper = MemoBookBrand.beige
 
     // Couleurs sémantiques — retours système uniquement (statuts, messages),
-    // jamais de la décoration.
-    //
-    // TODO(design) — à définir.
-    public static let valid = Color(uiColor: .systemGreen)
-    public static let warning = Color(uiColor: .systemOrange)
-    public static let error = Color(uiColor: .systemRed)
+    // jamais de la décoration. Recopiées de `agents/design.md` § Semantic.
+
+    public static let info = Color(hex: 0x435AD8)
+    public static let infoSoft = Color(hex: 0xD9DEF7)
+    public static let valid = Color(hex: 0x27AE60)
+    public static let validSoft = Color(hex: 0xBEE7CF)
+    public static let warning = Color(hex: 0xFFBC39)
+    public static let warningSoft = Color(hex: 0xFFF2D7)
+    public static let error = Color(hex: 0xEB5757)
+    public static let errorSoft = Color(hex: 0xFBDDDD)
 }
 
-/// Échelle d'espacement de 8 pt, plus la marge latérale de référence.
+/// Échelle d'espacement, en rem (`docs/ui-development.md` §2.2).
 ///
-/// Ces valeurs-là viennent des conventions iOS (HIG) et de la critique design,
-/// pas d'un choix de marque : elles sont stables et n'attendent rien.
+/// Ces valeurs viennent des variables Figma `Size/*` et des conventions iOS —
+/// elles ne bougeront plus.
 public enum MemoBookSpacing {
-    public static let xs: CGFloat = 8
-    public static let s: CGFloat = 16
-    public static let m: CGFloat = 24
-    public static let l: CGFloat = 32
-    public static let xl: CGFloat = 40
+    /// 0.5 rem — espacement interne serré (titre ↔ sous-titre).
+    public static let xs = rem(0.5)
+    /// 1 rem — l'unité de base : marge d'écran, gouttière entre champs.
+    public static let s = rem(1)
+    /// 1.5 rem — gouttière entre blocs.
+    public static let m = rem(1.5)
+    /// 2 rem — espacement entre blocs (`Size/xlarge`).
+    public static let l = rem(2)
+    /// 2.5 rem — grand espacement vertical.
+    public static let xl = rem(2.5)
 
-    /// Marge horizontale unique de tous les écrans.
-    public static let screenMargin: CGFloat = 20
+    /// **La marge horizontale de tous les écrans, sans exception** — 1 rem.
+    /// Décision D2 : les maquettes divergeaient (1 rem sur *Sign Up*, 1.5 rem
+    /// sur *Welcome*), c'est la marge standard du mobile qui l'emporte.
+    public static let screenMargin = rem(1)
 
-    /// Rayon unique des champs et des cartes.
-    public static let cornerRadius: CGFloat = 14
+    /// Rayon des champs, des boutons et du sélecteur — 0.875 rem (14).
+    ///
+    /// Relevé au `get_design_context` sur *Sign Up*, *Login* et *Mdp oublié* :
+    /// les trois portent 14. Le §2.3 de `ui-development.md` annonçait 1 rem
+    /// d'après un relevé plus ancien ; par R4, la valeur lue sur le nœud gagne.
+    public static let cornerRadius = rem(0.875)
 
-    /// Taille minimale d'une cible tactile.
-    public static let minimumTapTarget: CGFloat = 44
+    /// Rayon des cartes et des pastilles — 1.25 rem (20).
+    public static let cardCornerRadius = rem(1.25)
+
+    /// Rayon d'un fond d'icône — 0.75 rem (Figma dessine 13 → arrondi R2).
+    public static let iconCornerRadius = rem(0.75)
+
+    /// Taille minimale d'une cible tactile — 2.75 rem (44), HIG.
+    public static let minimumTapTarget = rem(2.75)
 }
 
-/// Typographies. **Provisoires elles aussi** : le README du dépôt les liste
-/// comme « à documenter dès qu'elles sont figées en Phase 2/3 ».
-///
-/// En attendant, tout passe par les styles système (SF), qui donnent le Dynamic
-/// Type et l'accessibilité gratuitement. Seule distinction conservée : les
-/// titres de **carnet** utilisent un serif, parce que c'est une décision
-/// éditoriale déjà actée — un carnet ne se lit pas comme du chrome système.
-public enum MemoBookFont {
-    /// Titres de **carnet** uniquement, jamais les titres d'écran système.
+extension Color {
+    /// Construit une couleur depuis un hexadécimal RVB, comme Figma l'écrit.
     ///
-    /// TODO(design) — remplacer le serif système par la police de marque.
-    public static func bookTitle(_ size: CGFloat = 28) -> Font {
-        .system(size: size, weight: .semibold, design: .serif)
+    /// Les couleurs de marque sont **fixes** : elles ne se déclinent pas encore
+    /// en mode sombre. `Scheme/Background Dark` existe dans Figma, mais aucun
+    /// écran ne le décline — le jour où Clara les dessine, c'est ici que la
+    /// bascule s'écrira.
+    init(hex: UInt32) {
+        self.init(
+            .sRGB,
+            red: Double((hex >> 16) & 0xFF) / 255,
+            green: Double((hex >> 8) & 0xFF) / 255,
+            blue: Double(hex & 0xFF) / 255,
+            opacity: 1
+        )
     }
-
-    public static let screenTitle = Font.system(.largeTitle, weight: .bold)
-    public static let sectionTitle = Font.system(.headline)
-    public static let body = Font.system(.body)
-    public static let caption = Font.system(.footnote)
-
-    /// Transcription brute : le monospace signale « pas encore mis en forme ».
-    public static let transcript = Font.system(.callout, design: .monospaced)
 }

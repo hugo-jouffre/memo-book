@@ -20,7 +20,11 @@ let package = Package(
         .target(name: "MemoBookCore"),
 
         // Design tokens et composants transverses.
-        .target(name: "MemoBookDesign", dependencies: ["MemoBookCore"]),
+        .target(
+            name: "MemoBookDesign",
+            dependencies: ["MemoBookCore"],
+            resources: [.process("Resources")]
+        ),
 
         // Client de l'API MemoBook.
         .target(name: "MemoBookNetworking", dependencies: ["MemoBookCore"]),
@@ -43,6 +47,10 @@ let package = Package(
         .testTarget(
             name: "MemoBookNetworkingTests",
             dependencies: ["MemoBookNetworking", "MemoBookCore"]
+        ),
+        .testTarget(
+            name: "MemoBookFeatureTests",
+            dependencies: ["MemoBookFeature", "MemoBookNetworking", "MemoBookCore"]
         ),
     ]
 )

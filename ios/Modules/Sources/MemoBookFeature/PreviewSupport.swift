@@ -79,6 +79,136 @@ public actor PreviewAPI: MemoBookAPI {
 
     public func ensureDeviceRegistered() async throws {}
 
+    // MARK: - Compte
+
+    /// Le compte simulé. Les écrans d'onboarding s'y branchent sans back-end :
+    /// l'inscription crée vraiment un compte, la connexion le retrouve, et le
+    /// lien de réinitialisation est lisible dans `lastResetToken`.
+    private var accountsByEmail: [String: (account: Account, password: String?)] = [:]
+    private var currentUserId: String?
+    private var socialIdentities: [String: String] = [:]
+    public private(set) var lastResetToken: String?
+
+    public func currentAccount() async throws -> Account {
+        guard let currentUserId,
+            let match = accountsByEmail.values.first(where: { $0.account.id == currentUserId })
+        else {
+            throw APIError.notAuthenticated
+        }
+        return match.account
+    }
+
+    public func signUp(_ account: NewAccount) async throws -> AuthenticatedSession {
+        let email = EmailValidation.normalize(account.email)
+        guard accountsByEmail[email] == nil else {
+            throw APIError.server(
+                statusCode: 409,
+                code: "conflict",
+                message: "Un compte existe déjà avec cette adresse."
+            )
+        }
+
+        let created = Account(
+            id: UUID().uuidString,
+            email: email,
+            firstName: account.firstName,
+            lastName: account.lastName,
+            hasSeenOnboarding: true
+        )
+        accountsByEmail[email] = (created, account.password)
+        return open(created)
+    }
+
+    public func signIn(email: String, password: String) async throws -> AuthenticatedSession {
+        let match = accountsByEmail[EmailValidation.normalize(email)]
+        guard let match, match.password == password else {
+            throw APIError.server(
+                statusCode: 401,
+                code: "invalid_credentials",
+                message: "Email ou mot de passe incorrect."
+            )
+        }
+        return open(match.account)
+    }
+
+    public func signOut() async {
+        currentUserId = nil
+    }
+
+    public func signIn(
+        with provider: SocialProvider,
+        credential: String
+    ) async throws -> SocialSignInOutcome {
+        if let email = socialIdentities[credential], let match = accountsByEmail[email] {
+            return .signedIn(open(match.account))
+        }
+
+        return .profileRequired(
+            SocialProfileDraft(
+                socialToken: credential,
+                provider: provider,
+                firstName: "Cla",
+                lastName: "Thioll",
+                email: provider == .apple ? "xk29fj@privaterelay.appleid.com" : nil
+            )
+        )
+    }
+
+    public func completeSocialProfile(
+        _ profile: CompletedSocialProfile
+    ) async throws -> AuthenticatedSession {
+        let email = EmailValidation.normalize(profile.email)
+        guard accountsByEmail[email] == nil else {
+            throw APIError.server(
+                statusCode: 409,
+                code: "conflict",
+                message: "Un compte existe déjà avec cette adresse."
+            )
+        }
+
+        let created = Account(
+            id: UUID().uuidString,
+            email: email,
+            firstName: profile.firstName,
+            lastName: profile.lastName,
+            hasSeenOnboarding: true
+        )
+        accountsByEmail[email] = (created, nil)
+        socialIdentities[profile.socialToken] = email
+        return open(created)
+    }
+
+    public func requestPasswordReset(email: String) async throws {
+        guard accountsByEmail[EmailValidation.normalize(email)] != nil else {
+            throw APIError.server(
+                statusCode: 404,
+                code: "not_found",
+                message: "Aucun compte n'est associé à cette adresse."
+            )
+        }
+        lastResetToken = UUID().uuidString
+    }
+
+    public func resetPassword(token: String, newPassword: String) async throws {
+        guard token == lastResetToken else {
+            throw APIError.server(
+                statusCode: 400,
+                code: "invalid_or_expired_token",
+                message: "Ce lien n'est plus valable."
+            )
+        }
+        lastResetToken = nil
+    }
+
+    private func open(_ account: Account) -> AuthenticatedSession {
+        currentUserId = account.id
+        return AuthenticatedSession(
+            userId: account.id,
+            sessionToken: "preview-session",
+            hasSeenOnboarding: account.hasSeenOnboarding
+        )
+    }
+
     public func memos() async throws -> [MemoSummary] {
         memosById.values
             .sorted { $0.createdAt > $1.createdAt }
