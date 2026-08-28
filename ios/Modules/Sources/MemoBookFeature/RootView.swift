@@ -1,4 +1,5 @@
 import MemoBookDesign
+import MemoBookNetworking
 import SwiftUI
 
 /// Point d'entrée de l'interface.
@@ -32,4 +33,32 @@ public struct RootView: View {
             _ = dependencies.onboarding.open(deepLink: url)
         }
     }
+}
+
+// MARK: - Aperçus
+
+// Ces deux aperçus montent **tout le flow**, branché sur `PreviewAPI` : on
+// parcourt les écrans au clic, on crée un compte, on se trompe de mot de passe.
+// Rien ne sort de la machine, aucun back-end n'a besoin de tourner.
+
+#Preview("Le flow, au premier lancement") {
+    RootView()
+        .environment(
+            AppDependencies(
+                api: PreviewAPI(seeded: false),
+                sessions: InMemorySessionStore(),
+                social: PreviewSocialSignInBroker()
+            )
+        )
+}
+
+#Preview("Le flow, onboarding déjà vu") {
+    RootView()
+        .environment(
+            AppDependencies(
+                api: PreviewAPI(seeded: false),
+                sessions: InMemorySessionStore(hasSeenOnboarding: true),
+                social: PreviewSocialSignInBroker()
+            )
+        )
 }

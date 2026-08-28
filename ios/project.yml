@@ -44,6 +44,14 @@ targets:
           MemoBook enregistre votre voix pour transformer vos souvenirs en carnet.
         NSPhotoLibraryUsageDescription: >-
           MemoBook ajoute vos photos aux pages de votre carnet.
+        # L'adresse du back-end.
+        #
+        # ⚠️ Pour tester sur un **vrai iPhone**, remplacer `localhost` par
+        # l'adresse de ton Mac sur le réseau local — `ipconfig getifaddr en0`
+        # la donne, par exemple http://192.168.1.42:3000. Depuis l'appareil,
+        # `localhost` désigne le téléphone lui-même : rien ne répondrait.
+        # Sur simulateur, `localhost` marche tel quel.
+        MemoBookAPIBaseURL: http://localhost:3000
         # L'API tourne en HTTP en développement local ; à retirer avant
         # publication, quand le back-end est derrière HTTPS.
         NSAppTransportSecurity:
