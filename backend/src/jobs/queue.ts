@@ -1,4 +1,5 @@
 import PgBoss from "pg-boss";
+import { pgConnectionFrom } from "../lib/pgConnection.js";
 
 export const JOB_NAMES = {
   transcribe: "memobook.transcribe",
@@ -29,9 +30,11 @@ export class PgBossQueue implements JobQueue {
   private readonly handlers = new Map<JobName, JobHandler<never>>();
   private started = false;
 
-  constructor(connectionString: string) {
+  constructor(databaseUrl: string) {
     this.boss = new PgBoss({
-      connectionString,
+      // `DATABASE_URL` est écrit pour Prisma ; node-postgres, que pg-boss
+      // utilise, ne lit pas les mêmes paramètres TLS. Voir lib/pgConnection.ts.
+      ...pgConnectionFrom(databaseUrl),
       retryLimit: 3,
       retryDelay: 30,
       retryBackoff: true,

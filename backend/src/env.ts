@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { databaseSslMode } from "./lib/pgConnection.js";
 
 /**
  * Toute la configuration passe par ici. Le serveur refuse de démarrer si une
@@ -108,6 +109,22 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
 
   if (env.RENDERER === "apitemplate" && env.APITEMPLATE_API_KEY === "") {
     throw new Error("RENDERER=apitemplate mais APITEMPLATE_API_KEY est vide.");
+  }
+
+  // La base managée est jointe par l'internet public : sans TLS, les vocaux
+  // transcrits — des données personnelles — passeraient en clair. Une URL sans
+  // `sslmode` est une erreur de configuration silencieuse, exactement comme un
+  // stockage S3 absent : on refuse de démarrer plutôt que de la découvrir une
+  // fois en production. Voir docs/database.md.
+  if (env.NODE_ENV === "production") {
+    const sslmode = databaseSslMode(env.DATABASE_URL);
+    if (sslmode === undefined || sslmode === "disable") {
+      throw new Error(
+        "En production, DATABASE_URL doit demander TLS : ajoute au minimum " +
+          "`?sslmode=require&sslcert=<PEM de l'autorité>&sslaccept=strict` " +
+          "(voir docs/database.md).",
+      );
+    }
   }
 
   return { ...env, live };

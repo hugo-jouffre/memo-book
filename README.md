@@ -38,6 +38,7 @@ Le repo GitHub est la source de vérité du projet. Clara et Paul n'ont pas beso
 - **Cible** : iOS 17 minimum
 - **Projet Xcode** : généré par **XcodeGen** depuis `ios/project.yml`. Le `.xcodeproj` n'est pas versionné — pas de conflit Git sur le pbxproj, et la structure du projet reste lisible en revue de code
 - **Backend** : ✅ **tranché — Node/TypeScript (Fastify) + PostgreSQL**, plutôt que Supabase ou Firebase. Le pipeline enchaîne des tâches longues (transcription d'un vocal, appel LLM, génération PDF) qui demandent une vraie file d'attente avec reprise sur échec ; c'est ce qu'un BaaS rend le plus pénible. La file est adossée à Postgres (pg-boss) : rien de plus à opérer
+- **Base de données** : **PostgreSQL 16 managé chez Scaleway, région `fr-par` (Paris)**. Les vocaux sont des données personnelles : les transcriptions et le texte rédigé restent en France, sauvegardes comprises. L'instance se crée en une commande — voir [`docs/database.md`](docs/database.md)
 - **Transcription** : API OpenAI (`gpt-4o-transcribe`), langue forcée en français. Hybride avec le framework Speech d'Apple encore possible plus tard
 - **Rédaction** : API Anthropic (`claude-opus-5`), pilotée par `agents/agent-transcription.md`. Passe distincte de la mise en page : le texte est écrit souvenir par souvenir et relu par l'utilisateur avant d'entrer dans le carnet
 - **Génération de PDF** : APITemplate, sur le template de `templates/travel-journal/`
@@ -113,6 +114,9 @@ Les données vocales sont des données personnelles (RGPD) :
   écrans** : unités (tout en rem), fidélité au Figma, rituel écran par écran, fiches et
   checklist. À lire avant de toucher à un écran
 - [`agents/design.md`](agents/design.md) — le design system (palette et sémantique)
+- [`docs/database.md`](docs/database.md) — la base PostgreSQL managée : création de
+  l'instance Scaleway, connexion TLS, migrations, sauvegardes
+  (`scripts/provision-db-scaleway.sh`)
 - [`docs/transcription-whatsapp.md`](docs/transcription-whatsapp.md) — transcrire un
   dossier de vocaux WhatsApp en un fichier texte, depuis le terminal
   (`scripts/transcribe-whatsapp.sh`)

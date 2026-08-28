@@ -160,6 +160,7 @@ Toutes les routes `/v1` attendent un `Authorization: Bearer <token>` d'appareil,
 | `scripts/build-inspector.ts` | L'inspecteur de mise en page, et le dictionnaire des composants |
 | `src/services/webflow.ts` | Publie les photos sur le CDN (APITemplate a besoin d'URLs publiques) |
 | `src/jobs/` | Les quatre étapes du pipeline, sur une file pg-boss adossée à Postgres |
+| `src/lib/pgConnection.ts` | Traduit le `DATABASE_URL` (dialecte Prisma) pour node-postgres — le TLS de la base managée |
 
 ### Pourquoi valider les longueurs côté serveur
 
@@ -172,3 +173,13 @@ avant l'appel à APITemplate, et la structuration par LLM reçoit les erreurs po
 
 Deux process : `npm start` (API) et `npm run worker` (pipeline). En développement, `npm run dev`
 porte les deux pour n'avoir qu'une commande à lancer.
+
+La base est un **PostgreSQL 16 managé Scaleway, région `fr-par`** : création de l'instance,
+`DATABASE_URL`, TLS, migrations et sauvegardes sont dans [`docs/database.md`](../docs/database.md).
+Deux points à connaître avant de toucher à la configuration :
+
+- les paramètres TLS du `DATABASE_URL` sont écrits dans le dialecte **Prisma**, le seul que
+  `prisma migrate deploy` sache lire ; `src/lib/pgConnection.ts` les traduit pour pg-boss, qui
+  passe par node-postgres et interpréterait `sslcert` comme un certificat *client* ;
+- en production, un `DATABASE_URL` sans `sslmode` empêche le démarrage. La base est jointe par
+  l'internet public : une connexion en clair y ferait passer des transcriptions de vocaux.

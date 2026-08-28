@@ -38,6 +38,9 @@ Secrets.swift
 .env
 .env.local
 
+# Certificats et sorties de provisioning (scripts/provision-db-scaleway.sh)
+secrets/
+
 # macOS
 .DS_Store
 
