@@ -440,7 +440,7 @@ n'harmonise rien de sa propre initiative.
 
 | # | Sujet | État |
 |---|---|---|
-| T10 | **Copie de la carte 2 du *Welcome*.** Figma dit « Vos photos misent en page » / « Vos photos concernées sont ajoutées rapidement depuis la galerie ou Instagram ». Le détail fonctionnel Notion dit « Photos et stickers instantanés ». Par R3 c'est Figma qui est implémenté ; en plus, « misent » est une faute pour « mises » — R8 : elle se signale, elle ne se corrige pas | 🟠 En attente de la copie arbitrée |
+| T10 | **Copie de la carte 2 du *Welcome*.** Figma dit « Vos photos misent en page » / « Vos photos concernées sont ajoutées rapidement depuis la galerie ou Instagram ». Le détail fonctionnel Notion dit « Photos et stickers instantanés ». Par R3 c'est Figma qui est implémenté. La faute « misent » est corrigée en « mises » sur arbitrage de Hugo : **à répercuter dans Figma**. Le titre lui-même reste à arbitrer entre les deux sources | 🟠 Correction faite, titre en attente |
 | T11 | **Critères du mot de passe.** Le détail fonctionnel dit « respectant les critères de sécurité définis » sans les définir. Retenu, et écrit deux fois (`MemoBookCore/FormValidation.swift` et `backend/src/lib/password.ts`) : 8 caractères minimum, au moins une lettre et un chiffre | 🟠 À confirmer |
 | T12 | **Teinte de la modale d'erreur du *Login*.** La maquette met « Réessayer » en bleu et « Annuler » en rouge — le bleu est l'accent système. L'app est teintée en Green : le bouton par défaut d'une alerte système sort donc vert, pas bleu | 🟢 Mineur |
 | T13 | **Troisième fournisseur social.** Figma nomme les logos `image 697`, `image 698`, `image 701` : l'affectation Apple / Google / Facebook se lit à l'œil, elle n'est écrite nulle part. Le détail fonctionnel, lui, nomme bien les trois | 🟠 À vérifier à l'export |
@@ -586,7 +586,7 @@ icône `arrow_right_alt` 1.5 rem **à gauche** du libellé, ensemble centré) ·
   MemoBook les met en forme »
 - Carte 1 : « Assistant vocal & écrit » / « Parlez simplement durant la journée, Memo
   retranscrit vos anecdotes »
-- Carte 2 : « Vos photos misent en page » / « Vos photos concernées sont ajoutées
+- Carte 2 : « Vos photos mises en page » / « Vos photos concernées sont ajoutées
   rapidement depuis la galerie ou Instagram »
 - Carte 3 : « Carnet imprimé d’exception » / « Mise en page automatique élégante et
   livraison chez vous de votre véritable carnet papier »
@@ -598,9 +598,11 @@ icône `arrow_right_alt` 1.5 rem **à gauche** du libellé, ensemble centré) ·
 > maquette courante (`2552:27407`) dit ce qui est écrit ci-dessus : c'est elle qui fait
 > foi (R3), et l'écart est remonté (T10).
 >
-> ⚠️ **« misent » est une faute** pour « mises ». Elle est recopiée telle quelle (R8) et
-> signalée, pas corrigée. Le sous-titre a aussi changé : « les met en page » et non plus
-> « les met en forme ».
+> ⚠️ **La maquette écrit « misent »**, pour « mises ». Hugo a arbitré la correction : le
+> code porte « mises ». **Reste à la répercuter dans Figma**, sinon le prochain relevé
+> réintroduira la faute — R8 vaut dans les deux sens, la maquette et le code ne doivent pas
+> diverger. Le sous-titre a aussi changé : « les met en page » et non plus « les met en
+> forme ».
 
 > ⚠️ **Deux phrases vouvoient** (« Parlez simplement », « Ajoutez vos photos ») alors que
 > l'app tutoie partout ailleurs — R9. Ce sont des coquilles de maquette (T8) : à réécrire

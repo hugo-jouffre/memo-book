@@ -54,13 +54,14 @@ struct WelcomeView: View {
 /// La copie du *Welcome*, recopiée du nœud Figma **au caractère près** (R8),
 /// apostrophes typographiques comprises.
 ///
-/// ⚠️ Deux remontées pour Clara, signalées et non corrigées :
+/// ⚠️ Deux écarts avec la maquette :
 ///
 ///   1. **Les cartes 1 et 2 vouvoient** (« Parlez simplement », « Vos photos
 ///      concernées sont ajoutées ») alors que l'app tutoie partout ailleurs
 ///      (R9). C'est le point T8, toujours ouvert.
-///   2. **« Vos photos misent en page »** — « misent » pour « mises ». Une
-///      faute ne se corrige pas sans retour de Clara (R8), elle se signale.
+///   2. **« Vos photos mises en page »** — la maquette écrit « misent ». Hugo a
+///      arbitré la correction ; il reste à la répercuter dans Figma, sinon les
+///      deux sources divergeront au prochain relevé.
 ///
 /// Le détail fonctionnel Notion nomme la carte 2 « Photos et stickers
 /// instantanés », ce que Figma disait dans une version précédente. La maquette
@@ -84,7 +85,7 @@ enum WelcomeCopy {
         Benefit(
             number: 2,
             icon: .benefitPhoto,
-            title: "Vos photos misent en page",
+            title: "Vos photos mises en page",
             description:
                 "Vos photos concernées sont ajoutées rapidement depuis la galerie ou Instagram",
             tilt: 1
