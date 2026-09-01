@@ -2,15 +2,15 @@
 #
 # Ouvre l'atelier carnet : le serveur local, puis le navigateur.
 #
-#   ./scripts/atelier.sh
-#   ./scripts/atelier.sh --port 4300
+#   "./MemoBook Generator/atelier.sh"
+#   "./MemoBook Generator/atelier.sh" --port 4300
 #
 # Rien à installer : Node suffit, et la transcription passe par
-# scripts/transcribe-whatsapp.sh, qui ne demande que curl.
+# transcribe-whatsapp.sh, qui ne demande que curl.
 #
 set -euo pipefail
 
-racine=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+ici=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 port=4173
 ouvrir=1
 
@@ -41,4 +41,4 @@ if [ "$ouvrir" -eq 1 ]; then
   ) &
 fi
 
-exec node "$racine/tools/atelier/server.mjs" "--port=$port"
+exec node "$ici/server.mjs" "--port=$port"

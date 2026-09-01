@@ -2,8 +2,8 @@
 #
 # Transcription en lot des vocaux WhatsApp, via l'API OpenAI.
 #
-#   ./scripts/transcribe-whatsapp.sh ~/Downloads/vocaux
-#   ./scripts/transcribe-whatsapp.sh "~/Downloads/Voice message.ogg.oga"
+#   "./MemoBook Generator/transcribe-whatsapp.sh" ~/Downloads/vocaux
+#   "./MemoBook Generator/transcribe-whatsapp.sh" "~/Downloads/Voice message.ogg.oga"
 #
 # Dépose les .ogg.oga dans un dossier, lance la commande : chaque vocal devient
 # un .txt, et l'ensemble est recollé dans un seul fichier prêt à passer à

@@ -204,6 +204,9 @@ const REGLAGES_DEFAUT = {
   fournisseurDecoupage: "openai",
   modeleDecoupage: "gpt-4o",
   dossierDisque: "",
+  cleApitemplate: "",
+  templateApitemplate: "7a177b23210099d6",
+  baseApitemplate: "https://rest-de.apitemplate.io/v2",
 };
 
 function chargerReglages() {
@@ -226,6 +229,7 @@ function sauverReglages() {
   if (!aGarder.retenirCles) {
     aGarder.cleOpenai = "";
     aGarder.cleAnthropic = "";
+    aGarder.cleApitemplate = "";
   }
   try {
     localStorage.setItem("atelier-reglages", JSON.stringify(aGarder));
@@ -249,6 +253,8 @@ const etat = {
   carnetDeduit: {},
   /** Prénoms croisés en chemin, cumulés vocal après vocal. */
   rencontres: [],
+  /** Dernier PDF rendu par APITemplate, pour garder le lien sous la main. */
+  pdf: null,
   etapes: [],
   /** Vocaux déposés mais pas encore transcrits — ils vivent dans leur boîte. */
   vocauxAttente: [],
@@ -950,6 +956,27 @@ function supprimerEtape(id) {
   apresChangement();
 }
 
+/**
+ * Copie une étape juste en dessous. Souvenirs et photos sont recopiés avec de
+ * nouveaux identifiants : sans ça, modifier la copie modifierait l'original,
+ * et un glisser-déposer déplacerait les deux à la fois.
+ */
+function dupliquerEtape(id) {
+  const index = etat.etapes.findIndex((e) => e.id === id);
+  if (index < 0) return;
+  const source = etat.etapes[index];
+  const copie = {
+    ...source,
+    id: uid(),
+    titre: source.titre ? `${source.titre} (copie)` : "",
+    manuel: { ...(source.manuel || {}) },
+    souvenirs: source.souvenirs.map((s) => ({ ...s, id: uid() })),
+    photos: source.photos.map((p) => ({ ...p, id: uid() })),
+  };
+  etat.etapes.splice(index + 1, 0, copie);
+  apresChangement();
+}
+
 function deplacerEtape(id, sens) {
   const i = etat.etapes.findIndex((e) => e.id === id);
   const j = i + sens;
@@ -1222,6 +1249,60 @@ function construireJson() {
   );
 }
 
+/** Petites icônes au trait, pour les boutons qui n'ont pas la place d'un mot. */
+const TRACES = {
+  sauvegarder: "M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2",
+  ouvrir: "M12 21V9m0 0 4 4m-4-4-4 4M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2",
+  dupliquer: "M9 9h10v10a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V9Zm-2 6H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2",
+};
+
+function icone(nom) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "1.8");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("aria-hidden", "true");
+  const trace = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  trace.setAttribute("d", TRACES[nom]);
+  svg.append(trace);
+  return svg;
+}
+
+/**
+ * Propose une vraie fenêtre « Enregistrer sous » quand le navigateur la
+ * connaît, et retombe sur un téléchargement classique sinon. Chrome et Edge
+ * ouvrent le sélecteur ; Firefox et Safari déposent dans les téléchargements.
+ *
+ * Rend `false` si la personne a annulé — pour ne pas annoncer un enregistrement
+ * qui n'a pas eu lieu.
+ */
+async function enregistrerFichier(contenu, nom, type, description) {
+  const extension = `.${nom.split(".").pop()}`;
+  if (window.showSaveFilePicker) {
+    let poignee;
+    try {
+      poignee = await window.showSaveFilePicker({
+        suggestedName: nom,
+        types: [{ description, accept: { [type]: [extension] } }],
+      });
+    } catch (erreur) {
+      if (erreur.name === "AbortError") return false;
+      poignee = null; // navigateur qui refuse le sélecteur : on retombe
+    }
+    if (poignee) {
+      const flux = await poignee.createWritable();
+      await flux.write(new Blob([contenu], { type }));
+      await flux.close();
+      return true;
+    }
+  }
+  telecharger(contenu, nom, type);
+  return true;
+}
+
 function telecharger(contenu, nom, type) {
   const blob = new Blob([contenu], { type });
   const url = URL.createObjectURL(blob);
@@ -1234,6 +1315,321 @@ function telecharger(contenu, nom, type) {
 
 const nomDeFichier = (extension) =>
   `carnet-${(etat.carnet.destination || "beta").toLowerCase().replace(/\s+/g, "-")}.${extension}`;
+
+/* ------------------------------------------- génération du JSON et du PDF --- */
+
+/**
+ * Le bouton reste dans son état « en cours » jusqu'à ce que la fenêtre
+ * d'enregistrement se soit ouverte et refermée : c'est le seul moment où l'on
+ * sait que le fichier est bien parti.
+ */
+async function genererJson(bouton) {
+  if (bouton.disabled) return;
+  const libelle = bouton.textContent;
+  bouton.disabled = true;
+  bouton.textContent = "Génération en cours…";
+  try {
+    const json = construireJson();
+    const enregistre = await enregistrerFichier(
+      json,
+      nomDeFichier("json"),
+      "application/json",
+      "JSON du carnet",
+    );
+    // On montre ce qui vient d'être écrit, plutôt que de laisser un doute.
+    if (enregistre) {
+      etat.montrerExport = true;
+      rendreExport();
+    }
+  } catch (erreur) {
+    etat.erreur = `L'enregistrement a échoué : ${erreur.message}`;
+    rendreColonne();
+  } finally {
+    bouton.disabled = false;
+    bouton.textContent = libelle;
+  }
+}
+
+/** Découpe un récit en paragraphes qui tiennent dans une page du carnet. */
+function enParagraphes(texte, maxSignes = 400) {
+  const phrases = String(texte || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(/(?<=[.!?…])\s+/)
+    .filter(Boolean);
+  const paragraphes = [];
+  let courant = "";
+  for (const phrase of phrases) {
+    if (!courant) courant = phrase;
+    else if (courant.length + 1 + phrase.length <= maxSignes) courant += ` ${phrase}`;
+    else {
+      paragraphes.push(courant);
+      courant = phrase;
+    }
+  }
+  if (courant) paragraphes.push(courant);
+  return paragraphes;
+}
+
+const echapperHtml = (t) =>
+  String(t || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+const enHtml = (texte) =>
+  enParagraphes(texte)
+    .map((t) => `<p>${echapperHtml(t)}</p>`)
+    .join("");
+
+/**
+ * Choix de la mise en page, repris de la table de
+ * `templates/travel-journal/LAYOUT_KB.md` : c'est elle qui dit combien de
+ * photos chaque gabarit sait tenir.
+ */
+function layoutPour(nbPhotos, premiere) {
+  if (premiere) return "layout_story_opener";
+  if (nbPhotos === 0) return "layout_story_facts";
+  if (nbPhotos === 1) return "layout_hero_top";
+  if (nbPhotos === 2) return "layout_split_left";
+  if (nbPhotos === 3) return "layout_collage";
+  return "layout_photo_page";
+}
+
+const MOIS = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
+
+function dateLongue(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
+  return m ? `${Number(m[3])} ${MOIS[Number(m[2]) - 1]} ${m[1]}` : "";
+}
+
+/**
+ * Traduit l'état de l'atelier vers le contrat attendu par le template, décrit
+ * par `templates/travel-journal/data.json`. Conversion **mécanique** : elle
+ * n'écrit pas à la place du voyageur, elle habille son texte.
+ */
+function construirePayloadCarnet() {
+  const toutesPhotos = etat.etapes.flatMap((e) => e.photos.map((p) => p.data).filter(Boolean));
+  const dates = etat.etapes.flatMap((e) => [e.dateDebut, e.dateFin]).filter(Boolean).sort();
+  const premiere = dates[0];
+  const derniere = dates[dates.length - 1];
+
+  return {
+    render_profile: "preview",
+    book_title: etat.carnet.titre || "Carnet de voyage",
+    book_subtitle: "Un carnet de voyage raconté à l'oral",
+    authors: listeVoyageurs().join(" et "),
+    date_range:
+      premiere && derniere && premiere !== derniere
+        ? `${dateLongue(premiere)} – ${dateLongue(derniere)}`
+        : dateLongue(premiere) || "",
+    cover_photo: toutesPhotos[0] || "",
+    brand_name: "MemoBook",
+    year: String(new Date().getFullYear()),
+    footer_tagline: "Racontez. Revivez. Partagez.",
+    intro_text: "",
+    days: etat.etapes.map((etape, index) => {
+      const photos = etape.photos.map((p) => p.data).filter(Boolean);
+      const recit = etape.souvenirs.map((s) => s.texte.trim()).filter(Boolean).join(" ");
+      const layout = layoutPour(photos.length, index === 0);
+      return {
+        title: etape.titre || `Étape ${index + 1}`,
+        date: dateLongue(etape.dateDebut),
+        city: etape.lieu || "",
+        country: etat.carnet.destination || "",
+        day_intro: {
+          day_number: String(index + 1).padStart(2, "0"),
+          location: [etape.lieu, etat.carnet.destination].filter(Boolean).join(", "),
+          date: dateLongue(etape.dateDebut),
+          weather_key: "sun",
+        },
+        // Un seul gabarit est vrai à la fois : le template lit des booléens.
+        layout_story_opener: layout === "layout_story_opener",
+        layout_story_facts: layout === "layout_story_facts",
+        layout_hero_top: layout === "layout_hero_top",
+        layout_split_left: layout === "layout_split_left",
+        layout_collage: layout === "layout_collage",
+        layout_photo_page: layout === "layout_photo_page",
+        opener_kicker: index === 0 ? etape.lieu || "" : "",
+        opener_body_html: index === 0 ? enHtml(recit) : "",
+        opener_photos: index === 0 ? photos.slice(0, 2) : [],
+        body_html: enHtml(recit),
+        fun_facts: [],
+        highlights: etape.photos.map((p) => p.legende).filter(Boolean).slice(0, 3),
+        photos,
+        tag: etape.lieu || "",
+      };
+    }),
+    back_cover: {
+      closing_text: "À suivre.",
+      closing_subtext: `Carnet composé avec MemoBook Generator${
+        etat.rencontres.length
+          ? `, ${etat.rencontres.length} rencontre${etat.rencontres.length > 1 ? "s" : ""} en chemin`
+          : ""
+      }.`,
+      cta: "memobook.fr",
+      logo_url: "",
+    },
+  };
+}
+
+/**
+ * Envoie le carnet à APITemplate et ouvre le PDF.
+ *
+ * Beta assumée : la conversion vers le contrat du template est mécanique, et
+ * les photos partent en base64 dans la requête — au-delà de quelques dizaines,
+ * APITemplate refusera la charge. Le pipeline du back-end reste la voie
+ * sérieuse ; ceci sert à voir tout de suite à quoi le carnet ressemble.
+ */
+async function genererCarnet(bouton) {
+  if (bouton.disabled) return;
+  if (!etat.etapes.length) {
+    etat.erreur = "Aucune étape : il n'y a rien à mettre en page.";
+    rendreColonne();
+    return;
+  }
+  const cle = (etat.reglages.cleApitemplate || "").trim();
+  if (!cle) {
+    etat.erreur = "Aucune clé APITemplate : colle-la dans « Clés et réglages » pour générer le PDF.";
+    etat.boites.reglages = true;
+    rendreColonne();
+    return;
+  }
+
+  const contenu = [...bouton.childNodes];
+  bouton.disabled = true;
+  bouton.textContent = "Génération en cours…";
+  etat.erreur = "";
+  etat.pdf = null;
+
+  try {
+    const payload = construirePayloadCarnet();
+    const poids = JSON.stringify(payload).length;
+    if (poids > 20 * 1024 * 1024) {
+      throw new Error(
+        `la charge fait ${(poids / 1024 / 1024).toFixed(1)} Mo, trop de photos en base64 pour un envoi direct`,
+      );
+    }
+
+    const url = new URL(
+      `${etat.reglages.baseApitemplate || "https://rest-de.apitemplate.io/v2"}/create-pdf`,
+    );
+    url.searchParams.set("template_id", etat.reglages.templateApitemplate || "7a177b23210099d6");
+
+    const reponse = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", "X-API-KEY": cle },
+      body: JSON.stringify(payload),
+    });
+    const donnees = await reponse.json().catch(() => null);
+
+    if (!reponse.ok || donnees?.status !== "success") {
+      throw new Error(donnees?.message || `APITemplate a refusé le rendu (HTTP ${reponse.status})`);
+    }
+    if (!donnees.download_url) {
+      throw new Error("APITemplate a répondu « success » sans lien de téléchargement");
+    }
+
+    etat.pdf = { url: donnees.download_url, quand: new Date() };
+    window.open(donnees.download_url, "_blank", "noopener");
+  } catch (erreur) {
+    etat.erreur = `Le carnet n'a pas pu être généré : ${erreur.message}`;
+  } finally {
+    bouton.disabled = false;
+    bouton.replaceChildren(...contenu);
+    rendreResultatPdf();
+    rendreColonne();
+  }
+}
+
+/** Le lien vers le dernier PDF rendu, sous les boutons de l'en-tête. */
+function rendreResultatPdf() {
+  let zone = $("resultat-carnet");
+  if (!zone) {
+    zone = h("p", { class: "resultat-carnet", id: "resultat-carnet" });
+    $("champs-carnet").before(zone);
+  }
+  zone.replaceChildren();
+  zone.hidden = !etat.pdf;
+  if (!etat.pdf) return;
+  zone.append(
+    "Carnet généré à ",
+    etat.pdf.quand.toLocaleTimeString("fr-FR"),
+    " — ",
+    h("a", { href: etat.pdf.url, target: "_blank", rel: "noopener" }, "ouvrir le PDF"),
+  );
+}
+
+/* ---------------------------------------- sauvegarde et reprise du travail --- */
+
+/**
+ * Tout ce qu'il faut pour reprendre exactement où on en était. Les clés d'API
+ * en sont **volontairement absentes** : ce fichier a vocation à circuler, pas
+ * elles. Les vocaux non plus — seul leur texte compte à ce stade, et les
+ * embarquer ferait un fichier de plusieurs dizaines de mégaoctets.
+ */
+function construireAvancement() {
+  return JSON.stringify(
+    {
+      format: "memobook-generator",
+      version: 1,
+      enregistreLe: new Date().toISOString(),
+      carnet: etat.carnet,
+      carnetManuel: etat.carnetManuel,
+      carnetDeduit: etat.carnetDeduit,
+      rencontres: etat.rencontres,
+      texteGroupe: etat.texteGroupe,
+      etapes: etat.etapes.map((e) => ({
+        ...e,
+        souvenirs: e.souvenirs.map(({ audioUrl, fichier, ...reste }) => reste),
+      })),
+    },
+    null,
+    2,
+  );
+}
+
+async function sauvegarderAvancement(bouton) {
+  bouton.disabled = true;
+  try {
+    await enregistrerFichier(
+      construireAvancement(),
+      nomDeFichier("memobook.json"),
+      "application/json",
+      "Avancement MemoBook",
+    );
+  } catch (erreur) {
+    etat.erreur = `La sauvegarde a échoué : ${erreur.message}`;
+    rendreColonne();
+  } finally {
+    bouton.disabled = false;
+  }
+}
+
+async function ouvrirAvancement(fichier) {
+  if (!fichier) return;
+  try {
+    const lu = JSON.parse(await fichier.text());
+    if (lu.format !== "memobook-generator") {
+      throw new Error("ce fichier n'est pas un avancement MemoBook");
+    }
+    etat.carnet = { ...etat.carnet, ...(lu.carnet || {}) };
+    etat.carnetManuel = lu.carnetManuel || {};
+    etat.carnetDeduit = lu.carnetDeduit || {};
+    etat.rencontres = lu.rencontres || [];
+    etat.texteGroupe = lu.texteGroupe || "";
+    etat.etapes = (lu.etapes || []).map((e) => ({
+      ...e,
+      souvenirs: (e.souvenirs || []).map((s) => ({ ...s, audioUrl: null, fichier: null })),
+      photos: e.photos || [],
+    }));
+    etat.erreur = "";
+    etat.info = `Avancement repris : ${etat.etapes.length} étape(s). Le texte est là ; les vocaux ne sont plus écoutables.`;
+    rendreChampsCarnet();
+    rendreGroupe();
+    apresChangement();
+  } catch (erreur) {
+    etat.erreur = `Fichier illisible : ${erreur.message}`;
+    rendreColonne();
+  }
+}
 
 /* ------------------------------------------------------- glisser-déposer --- */
 
@@ -1299,6 +1695,7 @@ function champ({ label, valeur, surSaisie, placeholder, type = "text", puce }) {
 function bouton(texte, options = {}) {
   const classes = ["btn"];
   if (options.petit) classes.push("btn-petit");
+  if (options.icone) classes.push("btn-icone");
   if (options.ton === "solide") classes.push("btn-solide");
   if (options.ton === "lime") classes.push("btn-lime");
   if (options.ton === "danger") classes.push("btn-danger");
@@ -1513,6 +1910,15 @@ function rendreReglages() {
     },
   });
 
+  const champCleApitemplate = h("input", {
+    type: "password",
+    value: r.cleApitemplate,
+    placeholder: "clé APITemplate",
+    autocomplete: "off",
+    spellcheck: false,
+    oninput: enregistrer("cleApitemplate"),
+  });
+
   const champCleAnthropic = h("input", {
     type: "password",
     value: r.cleAnthropic,
@@ -1573,6 +1979,7 @@ function rendreReglages() {
           const cache = champCle.type === "password";
           champCle.type = cache ? "text" : "password";
           champCleAnthropic.type = cache ? "text" : "password";
+          champCleApitemplate.type = cache ? "text" : "password";
           ev.target.textContent = cache ? "Masquer" : "Afficher";
         },
       }),
@@ -1623,6 +2030,26 @@ function rendreReglages() {
     h("label", { class: "champ" }, h("span", {}, "Découpage en étapes"), selectFournisseur),
     blocAnthropic,
     h("label", { class: "champ" }, h("span", {}, "Modèle de découpage"), champModele),
+    h(
+      "label",
+      { class: "champ", style: { marginTop: "0.75rem" } },
+      h("span", {}, "Clé API APITemplate"),
+      champCleApitemplate,
+    ),
+    champ({
+      label: "Identifiant du template",
+      valeur: r.templateApitemplate,
+      placeholder: "7a177b23210099d6",
+      surSaisie: (v) => {
+        r.templateApitemplate = v;
+        sauverReglages();
+      },
+    }),
+    h(
+      "p",
+      { class: "aide" },
+      "Servent au bouton « Générer le carnet ». Le template par défaut est celui de templates/travel-journal.",
+    ),
   );
 }
 
@@ -1943,6 +2370,12 @@ function rendreEtapes() {
           { class: "etape-outils" },
           bouton("↑", { petit: true, titre: "Monter", surClic: () => deplacerEtape(e.id, -1) }),
           bouton("↓", { petit: true, titre: "Descendre", surClic: () => deplacerEtape(e.id, 1) }),
+          bouton(icone("dupliquer"), {
+            petit: true,
+            icone: true,
+            titre: "Dupliquer cette étape, juste en dessous",
+            surClic: () => dupliquerEtape(e.id),
+          }),
           bouton("×", {
             petit: true,
             ton: "danger",
@@ -1960,6 +2393,16 @@ function rendreEtapes() {
     );
     zone.append(zoneDepot(section, e.id));
   });
+
+  // Le bouton a quitté l'en-tête pour laisser la place à « Générer le carnet »,
+  // mais poser une étape à la main reste utile.
+  zone.append(
+    h(
+      "div",
+      { class: "ajout-etape" },
+      bouton("+ Ajouter une étape", { petit: true, surClic: ajouterEtape }),
+    ),
+  );
 }
 
 /** Le texte groupé n'est plus à jour : on le signale sans écraser une relecture. */
@@ -2120,14 +2563,26 @@ function apresChangement() {
 /* -------------------------------------------------------------- démarrage --- */
 
 document.addEventListener("click", (ev) => {
-  const action = ev.target.closest("[data-action]")?.dataset.action;
+  const bouton = ev.target.closest("[data-action]");
+  const action = bouton?.dataset.action;
   if (action === "ajouter-etape") ajouterEtape();
-  if (action === "basculer-export") {
-    etat.montrerExport = !etat.montrerExport;
-    ev.target.textContent = etat.montrerExport ? "Masquer le JSON" : "Générer le JSON";
-    rendreExport();
-  }
+  if (action === "generer-json") genererJson(bouton);
+  if (action === "generer-carnet") genererCarnet(bouton);
+  if (action === "sauvegarder") sauvegarderAvancement(bouton);
+  if (action === "ouvrir") $("fichier-avancement").click();
 });
+
+/** Les boutons à icône de l'en-tête, garnis une fois le DOM prêt. */
+function garnirEntete() {
+  document.querySelector('[data-action="sauvegarder"]').append(icone("sauvegarder"));
+  document.querySelector('[data-action="ouvrir"]').append(icone("ouvrir"));
+  $("fichier-avancement").addEventListener("change", (ev) => {
+    ouvrirAvancement(ev.target.files?.[0]);
+    // Remis à zéro : réouvrir le même fichier doit redéclencher l'événement.
+    ev.target.value = "";
+  });
+  rendreResultatPdf();
+}
 
 async function demarrer() {
   // Un serveur local répond ; un hébergement statique renvoie une 404. C'est
@@ -2139,6 +2594,7 @@ async function demarrer() {
     etat.config = null;
   }
   etat.mode = etat.config ? "local" : "navigateur";
+  garnirEntete();
   rendreColonne();
   apresChangement();
 }

@@ -2,14 +2,14 @@
 /**
  * Atelier carnet — serveur local.
  *
- *   node tools/atelier/server.mjs            puis http://127.0.0.1:4173
- *   ./scripts/atelier.sh                     idem, et ouvre le navigateur
+ *   node "MemoBook Generator/server.mjs"     puis http://127.0.0.1:4173
+ *   "./MemoBook Generator/atelier.sh"        idem, et ouvre le navigateur
  *
  * Ce serveur existe pour trois choses que la page ne peut pas faire seule :
  *
  *  1. appeler l'API OpenAI sans exposer la clé au CORS ni au cache du
  *     navigateur ;
- *  2. écrire les vocaux sur le disque pour que `scripts/transcribe-whatsapp.sh`
+ *  2. écrire les vocaux sur le disque pour que `transcribe-whatsapp.sh`
  *     les transcrive — c'est bien le script du dépôt qui travaille, pas une
  *     seconde implémentation qui divergerait de lui ;
  *  3. relayer l'appel de découpage vers OpenAI ou Anthropic.
@@ -33,8 +33,8 @@ const { normaliserNomAudio, decouperTexteGroupe, extraireJson, consigneDecoupage
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = join(ICI, "public");
-const RACINE = resolve(ICI, "..", "..");
-const SCRIPT = join(RACINE, "scripts", "transcribe-whatsapp.sh");
+const RACINE = resolve(ICI, "..");
+const SCRIPT = join(ICI, "transcribe-whatsapp.sh");
 const TRAVAIL = join(RACINE, ".atelier");
 
 const DEFAUTS = {
@@ -220,7 +220,7 @@ async function deposerVocal(req, res, session) {
 }
 
 /**
- * Lance `scripts/transcribe-whatsapp.sh` et renvoie sa sortie au fil de l'eau.
+ * Lance `transcribe-whatsapp.sh` et renvoie sa sortie au fil de l'eau.
  *
  * Le script gère déjà le cache par vocal, les reprises, les 429 et la limite de
  * 25 Mo. Le réécrire en JavaScript aurait donné deux comportements à maintenir
@@ -267,7 +267,7 @@ async function transcrire(req, res) {
   });
   const envoyer = (objet) => res.write(`${JSON.stringify(objet)}\n`);
 
-  envoyer({ type: "debut", dossier: cible, cle: source, script: "scripts/transcribe-whatsapp.sh" });
+  envoyer({ type: "debut", dossier: cible, cle: source, script: "transcribe-whatsapp.sh" });
 
   // `spawn` sans shell : un dossier nommé « ; rm -rf ~ » reste un dossier.
   const enfant = spawn("bash", args, {
@@ -398,7 +398,7 @@ async function router(req, res) {
     const anthropic = await cleServeur("ANTHROPIC_API_KEY");
     return repondreJson(res, 200, {
       racine: RACINE,
-      script: existsSync(SCRIPT) ? "scripts/transcribe-whatsapp.sh" : null,
+      script: existsSync(SCRIPT) ? "transcribe-whatsapp.sh" : null,
       defauts: DEFAUTS,
       cleServeur: {
         openai: openai.source,

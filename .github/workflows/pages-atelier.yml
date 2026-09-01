@@ -1,6 +1,6 @@
 # Publie l'atelier carnet sur GitHub Pages.
 #
-# Le dossier `tools/atelier/public/` est un site statique complet : sans
+# Le dossier `MemoBook Generator/public/` est un site statique complet : sans
 # serveur, la page appelle les APIs directement avec la clé du visiteur. Il n'y
 # a donc rien à construire, et aucun secret dans ce workflow — il n'en faut
 # aucun, et il ne faut surtout pas en ajouter.
@@ -10,7 +10,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "tools/atelier/public/**"
+      - "MemoBook Generator/public/**"
       - ".github/workflows/pages-atelier.yml"
   workflow_dispatch:
 
@@ -35,14 +35,14 @@ jobs:
 
       - name: Vérifier la syntaxe des scripts publiés
         run: |
-          for fichier in tools/atelier/public/*.js; do
+          for fichier in "MemoBook Generator"/public/*.js; do
             node --check "$fichier"
           done
 
       - name: Refuser de publier une clé
         # Un `sk-…` commité partirait en ligne sans que personne le voie.
         run: |
-          if grep -rInE 'sk-[A-Za-z0-9_-]{20,}' tools/atelier/public/; then
+          if grep -rInE 'sk-[A-Za-z0-9_-]{20,}' "MemoBook Generator/public/"; then
             echo "Une clé d'API traîne dans le dossier publié." >&2
             exit 1
           fi
@@ -51,7 +51,7 @@ jobs:
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: tools/atelier/public
+          path: MemoBook Generator/public
 
       - id: deploiement
         uses: actions/deploy-pages@v4

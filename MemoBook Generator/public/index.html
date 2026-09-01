@@ -16,8 +16,13 @@
           <span class="stats" id="stats"></span>
         </div>
         <div class="entete-actions">
-          <button class="btn" data-action="ajouter-etape">Ajouter une étape</button>
-          <button class="btn btn-lime" data-action="basculer-export">Générer le JSON</button>
+          <button class="btn btn-icone" data-action="sauvegarder" title="Sauvegarder l'avancement dans un fichier"></button>
+          <button class="btn btn-icone" data-action="ouvrir" title="Reprendre un avancement sauvegardé"></button>
+          <button class="btn" data-action="generer-json" id="btn-json">Générer le JSON</button>
+          <button class="btn btn-lime" data-action="generer-carnet" id="btn-carnet">
+            Générer le carnet<span class="beta">Beta</span>
+          </button>
+          <input type="file" id="fichier-avancement" accept=".json,application/json" hidden />
         </div>
       </div>
       <div class="grille-champs" id="champs-carnet"></div>

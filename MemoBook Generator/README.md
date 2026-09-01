@@ -1,17 +1,32 @@
-# Atelier carnet
+# MemoBook Generator
 
-L'outil d'établi qui transforme un dossier de vocaux WhatsApp en carnet
-découpé en étapes. C'est la version locale de l'artefact `atelier-carnet.jsx`,
-sans ses limites : ici la transcription tourne pour de vrai, le découpage
-aussi, et les téléchargements aboutissent.
+L'outil d'établi qui compose un carnet **à la main, en attendant l'app** : on
+dépose un dossier de vocaux WhatsApp, ils sont transcrits, le récit est découpé
+en étapes, et il en sort le JSON du carnet — voire le PDF.
 
 ```bash
-./scripts/atelier.sh
+"./MemoBook Generator/atelier.sh"
 ```
 
 Le navigateur s'ouvre sur <http://127.0.0.1:4173>. Rien à installer : Node
-suffit, et la transcription passe par `scripts/transcribe-whatsapp.sh`, qui ne
-demande que `curl`.
+suffit, et la transcription passe par `transcribe-whatsapp.sh`, qui ne demande
+que `curl`.
+
+Il tourne aussi **sans rien installer du tout**, sur
+<https://hugo-jouffre.github.io/memo-book/> — voir « Deux façons de le faire
+tourner » plus bas.
+
+## Ce qu'il y a dans ce dossier
+
+| Fichier | Rôle |
+|---|---|
+| `atelier.sh` | Lance le serveur local et ouvre le navigateur |
+| `transcribe-whatsapp.sh` | La transcription, en ligne de commande. **C'est lui qui travaille**, même quand l'appel vient de la page |
+| `server.mjs` | Le serveur local : sert la page, lance le script, relaie les appels de modèle |
+| `public/` | La page elle-même — c'est ce dossier qui est publié en ligne |
+| `public/partage.js` | Ce qui doit rester identique en local et en ligne : renommage, format du fichier groupé, consigne de découpage |
+| `public/moteur-navigateur.js` | La transcription sans serveur, pour la version hébergée |
+| `TRANSCRIPTION.md` | Le script en ligne de commande : options, coût, alternative gratuite en local |
 
 ## La boucle de travail
 
@@ -38,8 +53,31 @@ demande que `curl`.
    `[Voice message.ogg]` rattachent chaque texte à son vocal ; garde-les, ainsi
    que les lignes `## …`, pour que les corrections retournent au bon endroit.
    **Redécouper avec l'IA** refait le découpage complet.
-6. **Ajuste à la main** — glisser-déposer entre étapes, réordonner, corriger —
-   puis **Génère le JSON**.
+6. **Ajuste à la main** — glisser-déposer entre étapes, réordonner, corriger.
+   Chaque étape porte quatre outils : monter, descendre, **dupliquer** et
+   supprimer. La duplication recopie souvenirs et photos avec de nouveaux
+   identifiants : modifier la copie ne touche pas l'original.
+7. **Génère le JSON** — le bouton passe à « Génération en cours… », puis la
+   fenêtre d'enregistrement s'ouvre. Le panneau du bas montre ensuite ce qui
+   vient d'être écrit.
+8. **Génère le carnet** *(Beta)* — le JSON part chez APITemplate, sur le
+   template de `templates/travel-journal/`, et le PDF s'ouvre dans un onglet.
+
+### Sauvegarder et reprendre
+
+Les deux petites icônes de l'en-tête enregistrent l'avancement dans un fichier
+`…memobook.json`, et le relisent pour reprendre exactement où on en était :
+étapes, textes, photos, titres, dates, voyageurs, rencontres.
+
+Deux choses n'y sont **pas**, volontairement :
+
+- **les clés d'API** — ce fichier a vocation à circuler, pas elles ;
+- **les vocaux** — seul leur texte compte à ce stade, et les embarquer ferait
+  un fichier de plusieurs dizaines de mégaoctets. Au retour, les enregistrements
+  ne sont plus écoutables ; tout le texte est là.
+
+C'est le seul moyen de survivre à un rechargement de page : l'état vit en
+mémoire, il n'y a pas de base de données.
 
 Le bandeau de statistiques au-dessus suit le voyage au fur et à mesure :
 étapes, jours couverts, lieux, personnes rencontrées, vocaux, temps de voix,
@@ -96,9 +134,9 @@ quels ; les photos suivent leur étape.
 
 ## Deux façons de le faire tourner
 
-| | En local (`./scripts/atelier.sh`) | En ligne (GitHub Pages) |
+| | En local (`./atelier.sh`) | En ligne (GitHub Pages) |
 |---|---|---|
-| Transcription | `scripts/transcribe-whatsapp.sh` | La page appelle OpenAI directement |
+| Transcription | `transcribe-whatsapp.sh` | La page appelle OpenAI directement |
 | Cache des transcriptions | Sur le disque, survit à tout | En mémoire, perdu au rechargement |
 | Dossier du disque | Oui | Non — il faut déposer les fichiers |
 | Clé d'API | Champ, ou `.env` de la machine | Champ uniquement |
@@ -135,11 +173,11 @@ sert trois choses que la page ne peut pas faire seule quand elle tourne en local
 | Route | Rôle |
 |---|---|
 | `POST /api/vocaux/<session>` | Écrit un vocal dans `.atelier/vocaux/<session>/`, sous son nom normalisé, en reposant sa date de fichier |
-| `POST /api/transcrire` | Lance `scripts/transcribe-whatsapp.sh` et renvoie sa sortie au fil de l'eau (NDJSON) |
+| `POST /api/transcrire` | Lance `transcribe-whatsapp.sh` et renvoie sa sortie au fil de l'eau (NDJSON) |
 | `POST /api/decouper` | Relaie l'appel de découpage vers OpenAI ou Anthropic |
 
 **La transcription n'est pas réimplémentée.** C'est bien
-`scripts/transcribe-whatsapp.sh` qui travaille : le cache par vocal, les
+`transcribe-whatsapp.sh` qui travaille : le cache par vocal, les
 reprises après coupure, les `429` réessayés et la limite de 25 Mo viennent de
 lui. Deux implémentations auraient donné deux comportements à maintenir et
 deux factures à débuguer. Corollaire utile : relancer une transcription ne
@@ -168,7 +206,7 @@ est dans `.gitignore` : rien de tout ça n'a vocation à être commité. Il peut
 Par défaut le découpage passe par **OpenAI**, avec la clé déjà saisie : une
 seule clé suffit pour que l'outil soit complet. Le sélecteur « Découpage en
 étapes » bascule sur **Anthropic** — c'est ce que fait le pipeline pour la
-rédaction (`backend/src/services/structuring.ts`), et le champ de clé
+rédaction (`../backend/src/services/structuring.ts`), et le champ de clé
 correspondant apparaît alors.
 
 Les modèles par défaut sont ceux de `backend/src/env.ts` — `gpt-4o` et
@@ -203,10 +241,44 @@ courant, avec son italique). Ils sont servis par le serveur local — **aucune
 requête ne part chez Google Fonts**, et l'atelier fonctionne hors ligne une
 fois la page chargée.
 
+## Générer le carnet, et pourquoi c'est Beta
+
+Le bouton « Générer le carnet » traduit l'état de l'atelier vers le contrat du
+template — celui décrit par `templates/travel-journal/data.json` — et l'envoie à
+APITemplate. Il faut pour cela une **clé APITemplate** dans les réglages ;
+l'identifiant du template est prérempli avec celui du dépôt.
+
+Le choix du gabarit de chaque étape suit la table de
+[`LAYOUT_KB.md`](../templates/travel-journal/LAYOUT_KB.md), qui dit combien de
+photos chacun sait tenir :
+
+| Photos dans l'étape | Gabarit |
+|---|---|
+| première étape | `layout_story_opener` |
+| 0 | `layout_story_facts` |
+| 1 | `layout_hero_top` |
+| 2 | `layout_split_left` |
+| 3 | `layout_collage` |
+| 4 et plus | `layout_photo_page` |
+
+Trois raisons de l'appeler Beta, et de ne pas s'y fier pour un tirage :
+
+1. **La conversion est mécanique.** Elle habille le texte du voyageur, elle ne
+   l'écrit pas : pas de `fun_facts`, pas de météo réelle, pas de stickers. Le
+   pipeline du back-end fait ce travail-là bien mieux.
+2. **Les photos partent en base64** dans la requête. Au-delà de quelques
+   dizaines, APITemplate refusera la charge ; l'outil s'arrête au-dessus de
+   20 Mo plutôt que d'attendre une erreur illisible.
+3. **Rien n'est validé** contre `payloadValidator.ts`. Un champ manquant se
+   verra sur le PDF, pas avant.
+
+C'est fait pour voir tout de suite à quoi le carnet ressemble. Pour un vrai
+rendu, le chemin reste le pipeline.
+
 ## Limites connues
 
-- La page ne survit pas à un rechargement : l'état vit en mémoire. Génère le
-  JSON avant de fermer.
+- La page ne survit pas à un rechargement : l'état vit en mémoire. Sauvegarde
+  l'avancement (l'icône de l'en-tête) avant de fermer.
 - Deux vocaux **différents** portant le même nom et la même taille sont
   considérés comme le même fichier. En pratique WhatsApp numérote les doublons,
   donc le cas ne se présente pas.
@@ -219,8 +291,8 @@ fois la page chargée.
 
 ## Voir aussi
 
-- [`docs/transcription-whatsapp.md`](../../docs/transcription-whatsapp.md) —
+- [`TRANSCRIPTION.md`](TRANSCRIPTION.md) —
   le script en ligne de commande, ses options, son coût, et l'alternative
   gratuite en local (`whisper-cpp`)
-- [`templates/travel-journal/LAYOUT_KB.md`](../../templates/travel-journal/LAYOUT_KB.md) —
+- [`templates/travel-journal/LAYOUT_KB.md`](../templates/travel-journal/LAYOUT_KB.md) —
   ce que la mise en page attend du carnet

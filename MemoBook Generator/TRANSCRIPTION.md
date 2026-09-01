@@ -6,13 +6,13 @@ photos, payload du carnet).
 
 ```bash
 export OPENAI_API_KEY=sk-…
-./scripts/transcribe-whatsapp.sh ~/Downloads/vocaux
+./transcribe-whatsapp.sh ~/Downloads/vocaux
 ```
 
 Un **seul** vocal, sans toucher au reste du dossier :
 
 ```bash
-./scripts/transcribe-whatsapp.sh ~/Downloads/"Voice message.ogg.oga"
+./transcribe-whatsapp.sh ~/Downloads/"Voice message.ogg.oga"
 ```
 
 C'est la forme à préférer pour un essai. Viser un dossier fourre-tout comme
@@ -31,14 +31,14 @@ Seule dépendance : `curl`. Rien à installer, rien à builder.
 
 ## La même chose, mais dans un navigateur
 
-`./scripts/atelier.sh` ouvre l'**atelier carnet** : on y dépose les vocaux, on
+`./atelier.sh` ouvre l'**atelier carnet** : on y dépose les vocaux, on
 colle sa clé dans un champ, on relit la transcription groupée dans une seule
 zone de texte, et on valide pour que le récit soit découpé en étapes.
 
 C'est **ce script-ci** qui transcrit dans les deux cas — l'atelier ne fait que
 l'appeler. Le cache, les reprises et le coût sont donc identiques, et un
 dossier transcrit par l'un se relance sans frais par l'autre.
-[`tools/atelier/README.md`](../tools/atelier/README.md) détaille la boucle.
+[`README.md`](README.md) détaille la boucle.
 
 ## Le bon point d'entrée de l'API
 
@@ -102,7 +102,7 @@ survit pas à une copie de dossier.
 Le `--prompt` vaut le détour dès qu'un voyage a son vocabulaire propre :
 
 ```bash
-./scripts/transcribe-whatsapp.sh ~/Downloads/vocaux \
+./transcribe-whatsapp.sh ~/Downloads/vocaux \
   -p "Voyage aux Philippines : Cebu, Moalboal, Siquijor, Maÿlis, Augustin, jeepney, barangay"
 ```
 
@@ -151,7 +151,7 @@ un flux quotidien.
 
 Le pipeline MemoBook transcrit déjà les vocaux enregistrés dans l'app, par le
 même endpoint et le même modèle
-(`backend/src/services/transcription.ts`, variable `OPENAI_TRANSCRIPTION_MODEL`).
+(`../backend/src/services/transcription.ts`, variable `OPENAI_TRANSCRIPTION_MODEL`).
 Ce script est la porte d'entrée **hors app** : il ne remplace pas le pipeline,
 il alimente à la main la même étape, quand les souvenirs sont arrivés par
 WhatsApp plutôt que par le micro de l'app.
