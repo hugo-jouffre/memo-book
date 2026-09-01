@@ -173,6 +173,14 @@ h2 {
   gap: 0.75rem;
 }
 
+/* Les étapes sont des blocs de récit : elles ont besoin d'air entre elles pour
+   qu'on voie d'un coup d'œil où l'une finit et où la suivante commence. */
+#zone-etapes {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
 .principal {
   flex: 1;
   width: 100%;
@@ -646,8 +654,8 @@ textarea {
 
 .etape-tete {
   display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
+  align-items: flex-end;
+  gap: 0.5rem;
   margin-bottom: 0.75rem;
 }
 
@@ -666,18 +674,49 @@ textarea {
   font-size: 0.8125rem;
 }
 
+/* Le titre prend la place qu'il reste, le lieu la moitié, les dates leur
+   largeur naturelle : tout tient sur une ligne, outils compris. */
 .etape-champs {
   flex: 1;
   min-width: 0;
   display: grid;
-  gap: 0.5rem;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.375rem;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto auto;
+  align-items: end;
+}
+
+.etape-champs .champ > span {
+  font-size: 0.5625rem;
+  letter-spacing: 0.06em;
+}
+
+.etape-champs input {
+  padding: 0.375rem 0.5rem;
+  font-size: 0.8125rem;
+}
+
+.etape-champs input[type="date"] {
+  padding-right: 0.25rem;
+}
+
+/* Sous 900 px, la ligne unique deviendrait illisible : on repasse en grille. */
+@media (max-width: 900px) {
+  .etape-champs {
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  }
 }
 
 .etape-outils {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 0.25rem;
+  flex-shrink: 0;
+  padding-bottom: 0.125rem;
+}
+
+.etape-outils .btn {
+  padding: 0.375rem 0.4375rem;
+  line-height: 1;
 }
 
 .vide-etapes {
@@ -707,6 +746,31 @@ textarea {
   margin-left: auto;
   display: flex;
   gap: 0.5rem;
+}
+
+/* Ce bloc n'est pas une carte parmi d'autres : c'est le carnet entier, relu
+   d'un seul tenant. Il se démarque par un liseré et un fond plus soutenu. */
+#carte-groupe {
+  background: var(--paper);
+  border: 1px solid var(--forest);
+  border-left-width: 4px;
+  box-shadow: 0 1px 3px rgba(45, 35, 26, 0.06);
+}
+
+#carte-groupe .groupe-tete h2 {
+  font-family: var(--titre);
+  font-size: 1.0625rem;
+}
+
+#carte-groupe .groupe-tete h2::before {
+  content: "";
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.5rem;
+  border-radius: 999px;
+  background: var(--forest);
+  vertical-align: 0.1em;
 }
 
 #texte-groupe {
