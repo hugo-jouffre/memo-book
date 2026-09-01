@@ -29,6 +29,17 @@ Sur un dossier, il écrit deux choses :
 
 Seule dépendance : `curl`. Rien à installer, rien à builder.
 
+## La même chose, mais dans un navigateur
+
+`./scripts/atelier.sh` ouvre l'**atelier carnet** : on y dépose les vocaux, on
+colle sa clé dans un champ, on relit la transcription groupée dans une seule
+zone de texte, et on valide pour que le récit soit découpé en étapes.
+
+C'est **ce script-ci** qui transcrit dans les deux cas — l'atelier ne fait que
+l'appeler. Le cache, les reprises et le coût sont donc identiques, et un
+dossier transcrit par l'un se relance sans frais par l'autre.
+[`tools/atelier/README.md`](../tools/atelier/README.md) détaille la boucle.
+
 ## Le bon point d'entrée de l'API
 
 L'extrait fourni par le tableau de bord OpenAI

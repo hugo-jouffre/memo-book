@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Atelier carnet — MemoBook</title>
+    <link rel="icon" href="./logo-memobook.svg" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="entete">
+      <div class="entete-haut">
+        <img class="logo" src="./logo-memobook.svg" alt="MemoBook" />
+        <div class="titre-bloc">
+          <h1>Atelier carnet</h1>
+          <span class="stats" id="stats"></span>
+        </div>
+        <div class="entete-actions">
+          <button class="btn" data-action="ajouter-etape">Ajouter une étape</button>
+          <button class="btn btn-lime" data-action="basculer-export">Générer le JSON</button>
+        </div>
+      </div>
+      <div class="grille-champs" id="champs-carnet"></div>
+    </header>
+
+    <div class="corps">
+      <aside class="colonne" id="colonne"></aside>
+
+      <main class="principal">
+        <section class="bandeau-stats" id="bandeau-stats" hidden></section>
+        <section class="carte" id="carte-groupe" hidden></section>
+        <div id="zone-etapes"></div>
+      </main>
+    </div>
+
+    <section class="export" id="carte-export" hidden></section>
+
+    <script src="./partage.js"></script>
+    <script src="./moteur-navigateur.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

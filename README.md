@@ -14,6 +14,7 @@ Ce repo contient le code de l'**app iOS native MemoBook**, développée en Swift
 | `backend/` | L'API et le pipeline `transcrire → rédiger → relire → mettre en page → imprimer`. [Documentation](backend/README.md) |
 | `templates/travel-journal/` | Le template PDF et les schémas qui décrivent le format du carnet. **Source de vérité** : le back-end les lit, il ne les duplique pas |
 | `agents/` | Configuration des agents IA et référence du design system. **Source de vérité** : `agent-transcription.md` est chargé tel quel comme prompt système de la rédaction |
+| `tools/atelier/` | L'atelier carnet : outil local de composition des carnets beta — vocaux WhatsApp transcrits, récit découpé en étapes. [Documentation](tools/atelier/README.md) |
 | `docs/` | Documentation transverse, dont [`ui-development.md`](docs/ui-development.md) : les règles d'implémentation des écrans depuis Figma (unités, fidélité, fiches écran) |
 
 Clara et Paul n'ont rien à installer : tout se lit sur GitHub, et l'app se teste via TestFlight.
