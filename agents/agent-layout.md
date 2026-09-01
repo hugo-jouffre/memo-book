@@ -55,13 +55,17 @@ Les deux autres fichiers à connaître :
   du catalogue l'emporte — ne pas compter dessus, n'en activer qu'un.
 - Respecter à la lettre le style choisi : typographie, couleurs, éléments
   graphiques décrits dans son fichier `carnet-styles/`
-- **L'image passe avant le texte.** Retour le plus constant des lecteurs :
-  « trop de texte », « les photos doivent être plus grosses ». À contenu égal,
-  choisir le layout le plus visuel, et intercaler des `layout_photo_page`
+- **L'image passe avant le texte.** Retour le plus constant des lecteurs, et le
+  seul que les trois retours de la deuxième vague formulent dans les mêmes mots :
+  « plus de photos ». À contenu égal, choisir le layout le plus visuel.
+  Deux repères : **une `layout_photo_page` toutes les cinq pages au moins**, et
+  une photo sur toute page de récit qui en a une de disponible. Une page de
+  texte seul doit être un choix, jamais un défaut de matière
 - Jamais un mur de texte. Une page qui laisse la photo dominer est un bon
   résultat ; l'inverse ne l'est pas
 - Toujours prévoir : une couverture, une page d'intro, les pages de contenu,
-  une quatrième de couverture
+  une quatrième de couverture. Les **pages libres de fin** et la **carte postale**
+  sont demandées par le panel mais ne sont pas encore rendues (voir plus bas)
 - Garder une cohérence visuelle stricte sur tout le carnet une fois un style
   choisi (pas de mélange de styles)
 - Gérer les débordements : si un texte dépasse les limites de `LAYOUT_KB.md`,
@@ -74,6 +78,10 @@ Les deux autres fichiers à connaître :
   carnet. Omettre la clé.
 - Ne jamais recadrer une photo au point de couper un visage ou un élément clé
   (coordonner avec l'Agent Sélection photo si besoin)
+- **Ne jamais faire porter une information par la couleur seule.** Le nom de la
+  couleur s'écrit (« en bleu », « à l'orange ») : consignes de coloriage,
+  légendes, renvois à la carte. Une photocopie, une impression en noir et blanc
+  ou un lecteur daltonien ne doivent rien perdre
 - Respecter les marges d'impression : le contenu reste dans les 30 pt de marge
 
 ## Étapes et chapitres
@@ -88,10 +96,47 @@ doit venir du récit plutôt que d'une encyclopédie. Sous le seuil de pertinenc
 omettre `fun_facts` : un encart de remplissage coûte plus qu'il ne rapporte.
 Barème et cas limites dans `LAYOUT_KB.md`.
 
+L'agent ne les écrit pas, mais **il est le dernier à les voir côte à côte**.
+Deux encarts identiques, ou deux encarts du même registre à quelques pages
+d'écart (deux étymologies, deux superficies, deux dates), n'arrivent pas jusqu'à
+l'impression : il en omet un et le signale à la rédaction, qui tient le registre
+des encarts déjà écrits.
+
 ## Occuper les blancs
 Ni emoji ni illustration de remplissage : un `prompt` (champ à remplir) ou un
 `quiz` (réponse imprimée à l'envers). **Un seul bloc interactif par page**, et
 il remplace la zone flottante du bas.
+
+## Le dosage du décor
+
+Le panel se partage exactement là-dessus : un lecteur demande « moins de
+stickers », un couple demande « un bon ratio ». Personne n'en demande plus. La
+lecture à en faire : le décor se remarque quand il est rare et se subit quand il
+devient régulier.
+
+- **Les stickers ne sont pas rendus aujourd'hui.** `sticker_groups` n'est
+  consommé par aucun layout : ne pas le produire.
+- Les deux seuls décors réellement imprimés sont le **scotch**
+  (`photos[].tape_corner`) et le **tracé pointillé** de bas de page.
+- **Scotch : une photo sur quatre au maximum, jamais deux sur la même page.** Il
+  perd tout dès qu'il devient la règle, et un lecteur ne l'aime pas du tout.
+- Jamais de décor pour combler un vide : un blanc se remplit par un `prompt` ou
+  un `quiz`, sinon il reste blanc. Une page qui respire n'est pas une page ratée.
+- Le jour où les stickers seront rendus, le même barème s'appliquera : **un par
+  page au maximum, et pas plus d'une page sur trois.**
+
+## La typographie ne se panache pas
+
+Un lecteur du panel ne supporte pas le serif ; un autre choisit
+`journal-manuscrit` justement pour ses titres serif. C'est un goût, pas une
+erreur de mise en page : il se règle au moment du choix du style, jamais page
+par page.
+
+- L'agent applique la typographie du style retenu, **sans substitution**, même
+  s'il juge une page trop dense.
+- Il ne mélange jamais deux styles dans un carnet.
+- Une demande de typographie différente remonte à l'Agent Conversation, qui
+  change de style. Elle ne se traite pas dans le JSON.
 
 ## Dire ce qui vient de l'IA
 `ai_note` s'imprime en petit gris en bas de page. À renseigner dès qu'un
@@ -109,6 +154,54 @@ Deux sorties pour une seule template :
 - `preview` — fond crème granulé, pour l'aperçu partageable dans l'app
 
 L'agent renseigne le profil demandé ; à défaut, `preview`.
+
+## Demandes du panel non encore rendues
+
+Elles reviennent assez souvent pour être écrites ici, mais **aucune n'est
+implémentée**. La règle de survie du dépôt s'applique : un drapeau absent de
+`LAYOUT_KB.md` est ignoré en silence, et la page retombe sur la mise en page par
+défaut. Tant que le catalogue ne les décrit pas, **l'agent ne les produit pas**.
+
+| Demande | Ce que ça suppose côté gabarit |
+|---|---|
+| **Carte postale automatique** — deux retours sur trois, les plus enthousiastes | Un layout recto-verso : photo pleine page d'un côté ; message manuscrit, timbre et adresse de l'autre. Posée en fin de chapitre ou en fin de voyage |
+| **Pages libres en fin de carnet** — deux retours | Des pages réglées ou blanches après la quatrième de couverture, pour écrire, coller, dessiner. Le nombre doit revenir au voyageur |
+| **Zones de dessin** — deux retours | Un cadre vide légendé. À traiter comme un bloc interactif de plus : un seul par page, il remplace la zone flottante du bas |
+| **Podiums par catégorie** (activité, hébergement, lieu, transport) | Faisable dès aujourd'hui, voir ci-dessous |
+| **Rose, épine, graine** | Faisable dès aujourd'hui, voir ci-dessous |
+| **Mots croisés du voyage** | Une grille et ses définitions. Rien dans le gabarit ; la rédaction tient déjà la liste des mots en attendant |
+
+**Ce qui est faisable tout de suite.** Le podium et la rose/épine/graine passent
+par `prompt`, dont les **trois lignes réglées** tombent juste : trois places, ou
+la rose, l'épine et la graine. Le texte est écrit par l'Agent Transcription ;
+la mise en page ne fait que le placer, et la règle du **bloc interactif unique
+par page** reste absolue.
+
+## Le carnet sera rephotographié
+
+Une lectrice veut photographier son carnet rempli à la main et en récupérer une
+version numérique fidèle. Ce n'est pas une fonction de mise en page, mais elle
+en dépend :
+
+- Tout bloc à remplir reste **dans les 30 pt de marge** et porte des lignes ou
+  un cadre visibles : c'est ce qui permettra de le retrouver et de le recadrer.
+- **Aucun décor sous une zone d'écriture** : ni scotch, ni tracé pointillé, ni
+  photo. Le fond reste uni là où le voyageur écrit à la main.
+- Deux blocs à remplir ne se touchent jamais, et il n'y en a qu'un par page.
+
+## Goûts divergents, à ne pas trancher seul
+
+Le panel n'est pas d'accord sur trois points. Aucun ne se tranche dans le JSON :
+ils appartiennent au voyageur et ont vocation à devenir des réglages de l'app.
+
+| Point | Ce qui divise | En attendant |
+|---|---|---|
+| Typographie serif | Un lecteur la rejette, un autre la choisit | Le style retenu fait foi (`carnet-styles/`) |
+| Densité de décor | « Moins de stickers » contre « un bon ratio » | Le barème ci-dessus, volontairement bas |
+| Dessin | Un lecteur veut des zones de dessin ; un autre ne dessine pas mais aimerait s'y mettre | Aucune zone de dessin tant que le gabarit n'en a pas — et jamais imposée quand il en aura |
+
+Tout le reste — plus de photos, moins de texte, pas de doublon d'encart — fait
+l'unanimité. Ce ne sont pas des options, ce sont des règles.
 
 ## Ce qu'il ne fait pas
 - N'écrit ni ne reformule aucun texte

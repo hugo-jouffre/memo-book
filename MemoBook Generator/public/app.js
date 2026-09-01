@@ -1254,6 +1254,9 @@ const TRACES = {
   sauvegarder: "M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2",
   ouvrir: "M12 21V9m0 0 4 4m-4-4-4 4M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2",
   dupliquer: "M9 9h10v10a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V9Zm-2 6H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2",
+  monter: "m6 15 6-6 6 6",
+  descendre: "m6 9 6 6 6-6",
+  supprimer: "M4 7h16M10 11v6m4-6v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3",
 };
 
 function icone(nom) {
@@ -1971,6 +1974,21 @@ function rendreReglages() {
     boiteReglages.contenu,
     h("label", { class: "champ" }, h("span", {}, "Clé API OpenAI"), champCle),
     h(
+      "label",
+      { class: "champ", style: { marginTop: "0.5rem" } },
+      h("span", {}, "Clé API APITemplate"),
+      champCleApitemplate,
+    ),
+    champ({
+      label: "Identifiant du template",
+      valeur: r.templateApitemplate,
+      placeholder: "7a177b23210099d6",
+      surSaisie: (v) => {
+        r.templateApitemplate = v;
+        sauverReglages();
+      },
+    }),
+    h(
       "div",
       { class: "rangee" },
       bouton("Afficher", {
@@ -2030,26 +2048,6 @@ function rendreReglages() {
     h("label", { class: "champ" }, h("span", {}, "Découpage en étapes"), selectFournisseur),
     blocAnthropic,
     h("label", { class: "champ" }, h("span", {}, "Modèle de découpage"), champModele),
-    h(
-      "label",
-      { class: "champ", style: { marginTop: "0.75rem" } },
-      h("span", {}, "Clé API APITemplate"),
-      champCleApitemplate,
-    ),
-    champ({
-      label: "Identifiant du template",
-      valeur: r.templateApitemplate,
-      placeholder: "7a177b23210099d6",
-      surSaisie: (v) => {
-        r.templateApitemplate = v;
-        sauverReglages();
-      },
-    }),
-    h(
-      "p",
-      { class: "aide" },
-      "Servent au bouton « Générer le carnet ». Le template par défaut est celui de templates/travel-journal.",
-    ),
   );
 }
 
@@ -2368,16 +2366,27 @@ function rendreEtapes() {
         h(
           "div",
           { class: "etape-outils" },
-          bouton("↑", { petit: true, titre: "Monter", surClic: () => deplacerEtape(e.id, -1) }),
-          bouton("↓", { petit: true, titre: "Descendre", surClic: () => deplacerEtape(e.id, 1) }),
+          bouton(icone("monter"), {
+            petit: true,
+            icone: true,
+            titre: "Monter cette étape",
+            surClic: () => deplacerEtape(e.id, -1),
+          }),
+          bouton(icone("descendre"), {
+            petit: true,
+            icone: true,
+            titre: "Descendre cette étape",
+            surClic: () => deplacerEtape(e.id, 1),
+          }),
           bouton(icone("dupliquer"), {
             petit: true,
             icone: true,
             titre: "Dupliquer cette étape, juste en dessous",
             surClic: () => dupliquerEtape(e.id),
           }),
-          bouton("×", {
+          bouton(icone("supprimer"), {
             petit: true,
+            icone: true,
             ton: "danger",
             titre: "Supprimer l'étape ; ses photos retournent en attente",
             surClic: () => supprimerEtape(e.id),

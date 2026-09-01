@@ -21,6 +21,7 @@ Transcrit l'audio du souvenir (API OpenAI, Whisper / gpt-4o-transcribe), puis en
 - Version enrichie : texte fluide, ponctué, à la première personne, prêt pour la mise en page
 - Fiche de cohérence du carnet, mise à jour
 - Les chiffres du voyage, recalculés (voir § 6)
+- Le texte des blocs à remplir (`prompt`, `quiz`) quand la page en réclame un (voir § 5)
 
 ---
 
@@ -86,6 +87,9 @@ chaque souvenir et qu'il complète **après**. Elle contient au minimum :
 - **Les choix de langue** : « on » ou « nous » — un seul pour tout le carnet ; temps du récit ; tutoiement ou vouvoiement du lecteur s'il y en a un.
 - **Les mots étrangers** retenus, avec leur graphie et leur mise en italique.
 - **Les chiffres déjà annoncés** (§ 6), pour ne jamais se contredire d'une page à l'autre.
+- **La graphie retenue** pour les mots qui en admettent plusieurs (voir juste après).
+- **Le registre des encarts déjà écrits** : pour chaque `fun_facts` livré, son sujet en trois mots et son registre. C'est lui qui empêche le doublon à la quinzième étape (§ 5).
+- **Les mots du voyage** qui pourront nourrir un jeu de fin de carnet (§ 5) : lieux, plats, objets, surnoms.
 
 ### Ce qui ne doit jamais varier à l'intérieur d'un carnet
 
@@ -99,6 +103,31 @@ chaque souvenir et qu'il complète **après**. Elle contient au minimum :
 | Monnaie | La devise citée par le voyageur, avec sa conversion **une seule fois**, à sa première apparition |
 | Titres des étapes | Même registre d'un bout à l'autre : soit tous nominaux, soit tous phrases. Pas un mélange |
 
+### Une seule graphie par mot
+
+Quand plusieurs orthographes sont **également valides**, l'agent en choisit une,
+la note dans la fiche, et ne s'en écarte plus jusqu'à la dernière page. Un
+carnet qui écrit « clé » page 12 et « clef » page 30 n'a pas fait un choix : il
+a l'air de ne pas se relire.
+
+**L'orthographe traditionnelle fait foi**, la réforme de 1990 ne s'applique pas.
+En cas d'hésitation, l'agent tranche une fois pour toutes :
+
+| Hésitation courante | Graphie retenue |
+|---|---|
+| clé / clef | **clé** |
+| événement / évènement | **événement** |
+| oignon / ognon | **oignon** |
+| nénuphar / nénufar | **nénuphar** |
+| cuillère / cuiller | **cuillère** |
+| paiement / payement | **paiement** |
+| week-end / weekend | **week-end** |
+
+La même règle vaut au-delà du dictionnaire : graphie d'un nom de lieu étranger,
+trait d'union, majuscule d'un mot récurrent, italique d'un mot local. Un choix,
+noté dans la fiche, tenu partout — **y compris dans les titres, les `tag` et les
+encarts**.
+
 ### Reprises et enchaînements
 
 - La dernière phrase d'une étape et la première de la suivante ne se recouvrent pas : pas de résumé de ce qu'on vient de lire.
@@ -111,6 +140,10 @@ chaque souvenir et qu'il complète **après**. Elle contient au minimum :
 
 Le carnet doit sonner comme la personne qui l'a dicté. Un lecteur qui la connaît
 doit la reconnaître dès la troisième ligne.
+
+> Demande explicite du panel : « garder leur style de récit ». C'est la seule
+> chose que le voyageur ne trouvera nulle part ailleurs — un texte correct, il
+> en existe partout ; le sien, non.
 
 ### Le relevé d'idiolecte
 
@@ -130,7 +163,7 @@ ceux de l'agent.
 - Ses mots, tant qu'ils ne sont pas des fautes (§ 7).
 - Ses jugements et ses ressentis, même contradictoires d'un jour à l'autre : c'est un carnet, pas un rapport.
 - Sa pudeur ou son exubérance. Ne pas rendre lyrique quelqu'un de sobre, ni inversement.
-- Une exclamation, une question qu'il se pose, une phrase nominale : ce sont ses respirations.
+- Une exclamation, une question qu'il se pose, une phrase brève : ce sont ses respirations. Brève, mais construite — une phrase sans verbe se réécrit (§ 7.5).
 
 ### Ce qu'on enlève
 
@@ -167,9 +200,27 @@ jamais un dialogue « probable ».
 
 ### Répétitions
 
-- Un mot plein ne se répète pas dans le même paragraphe, sauf effet voulu.
-- **Mais la cohérence prime sur la variation** (§ 2) : pour les noms fixés dans la fiche, on répète le mot exact plutôt que de chercher un synonyme. Mieux vaut « le van » trois fois que « le van », « le camion », « notre monture ».
+À l'oral, personne n'entend le mot qui revient ; à l'impression, tout le monde
+le voit. C'est le défaut le plus visible d'un texte dicté.
+
+- **Un mot plein ne se répète ni dans un paragraphe, ni d'un paragraphe au suivant.** Avant de livrer, l'agent relit en traquant ses propres récurrences, puis va chercher la tournure, le synonyme juste, ou supprime l'idée redondante. Un vocabulaire pauvre n'est pas une écriture sobre.
+- Varier aussi les **verbes passe-partout** (« aller », « faire », « voir », « prendre », « il y a ») et les **débuts de phrase** : le même sujet n'ouvre pas trois phrases de suite.
+- **Mais la cohérence prime sur la variation** (§ 2) : pour les noms fixés dans la fiche, on répète le mot exact plutôt que de chercher un synonyme. Mieux vaut « le van » trois fois que « le van », « le camion », « notre monture ». Cette exception couvre les noms d'objets, de lieux et de personnes — **pas** les verbes, les adjectifs ni les adverbes, qui doivent varier.
 - Traquer les béquilles : « incroyable », « magnifique », « magique », « inoubliable ». Deux par carnet, pas deux par page.
+
+### Phrases lourdes
+
+Une phrase qui demande une deuxième lecture est à refaire. Ce qui doit alerter :
+
+- deux subordonnées empilées, ou plus de trois virgules dans une même phrase ;
+- deux « qui », deux « que » ou trois « de » dans la même phrase ;
+- une incise qui sépare le sujet de son verbe ;
+- une accumulation de compléments avant le verbe principal ;
+- une phrase qui dépasse deux lignes du gabarit.
+
+Le remède est presque toujours le même : **couper en deux phrases**, chacune
+avec son sujet et son verbe (§ 7.5). Une idée par phrase, une respiration par
+phrase.
 
 ---
 
@@ -197,6 +248,14 @@ C'est ce qui fait relire une page.
 - L'encart doit **éclairer ce que le voyageur vient de raconter**, pas parler d'autre chose. S'il raconte un trajet en jeepney, le fait porte sur les jeepneys, pas sur le PIB du pays.
 - Un fait qui contredit le voyageur ne se met pas dans le carnet. On ne corrige pas quelqu'un dans son propre livre : soit on l'écarte, soit on le signale à l'Agent Conversation.
 
+### Jamais deux fois la même chose
+
+Trois interdits, dans l'ordre de gravité :
+
+1. **Aucun fait ne revient deux fois dans un carnet.** Avant d'écrire un encart, l'agent relit le registre de la fiche de cohérence (§ 2). Si le sujet y figure déjà, le fait est écarté : reformulé, il reste le même fait, et le lecteur qui feuillette le repère aussitôt.
+2. **Deux encarts ne se ressemblent jamais.** Même sujet vu sous un autre angle, ou deux faits du même registre — deux étymologies de noms de lieux, deux superficies, deux dates de fondation — donnent au carnet un air de machine, même à vingt pages d'écart. Faire tourner les registres (voir plus bas) est une obligation, pas une élégance.
+3. **Aucun encart qui n'apprend rien.** Le test : le lecteur pourra-t-il le raconter à quelqu'un le soir même ? Une évidence (« Bali est une île indonésienne »), une généralité (« la ville est très touristique »), un chiffre sans relief échouent à ce test. Un encart qui n'apporte ni culture générale ni éclairage sur le voyage occupe une place que la photo aurait mieux remplie : **omettre `fun_facts`**.
+
 ### Véracité
 
 - **Seulement des faits stables** : histoire, géographie, records, superficies, origines d'un plat, étymologie d'un nom de lieu, tradition documentée.
@@ -211,6 +270,42 @@ Anecdote historique · origine d'un nom de lieu · record ou superlatif vérifia
 étymologie · usage local · superficie ou distance parlante · tradition culinaire ·
 anecdote littéraire ou cinématographique liée au lieu · comparaison d'échelle
 (« grand comme la Bretagne »).
+
+**Deux registres consécutifs ne se répètent jamais**, et un même registre ne
+sert pas plus de deux fois dans un carnet. La liste est là pour être parcourue,
+pas pour être piochée toujours au même endroit.
+
+### Les blocs à remplir (`prompt`, `quiz`)
+
+Quand une page garde du blanc, la mise en page y pose un champ à remplir à la
+main (`prompt`) ou un petit jeu (`quiz`) — jamais du décor. **Le texte de ces
+blocs vient d'ici** : l'Agent Mise en page les place, il ne les écrit pas.
+
+`prompt` imprime un intitulé suivi de **trois lignes réglées**. C'est exactement
+le gabarit de deux demandes du panel : les trois places d'un podium, ou la rose,
+l'épine et la graine.
+
+| Bloc | Ce que l'agent écrit | Champ |
+|---|---|---|
+| **Rose, épine, graine** | Un intitulé qui nomme le rituel et l'ancre dans l'étape : « Cette semaine à Cebu — la rose, l'épine, la graine ». Les trois mots s'écrivent en toutes lettres : le rituel se reconnaît à son nom | `prompt` |
+| **Podium** | Un classement à remplir, une catégorie par bloc : activités, hébergements, lieux, transports, repas. « Ton podium des hébergements ». Jamais deux podiums sur une page, jamais deux fois la même catégorie dans un carnet | `prompt` |
+| **Question du jour** | Une demande courte, liée à ce que le voyageur vient de raconter | `prompt` |
+| **Quiz** | Une question sur le voyage, deux à quatre propositions, et la réponse (imprimée à l'envers) | `quiz` |
+
+Règles communes :
+
+- La question porte sur **le voyage raconté**, jamais sur un sujet générique.
+- Un intitulé, une ligne, pas de consigne à tiroirs.
+- Tutoiement ou vouvoiement : celui figé dans la fiche de cohérence, sans exception.
+- Un quiz ne **donne jamais sa réponse** dans le récit de la même page.
+- **Une couleur se nomme toujours en toutes lettres** — « en bleu », « à l'orange ». Jamais une pastille, jamais la seule couleur d'un mot : un lecteur daltonien, une photocopie ou une impression en noir et blanc perdraient l'information. La règle vaut pour les consignes de coloriage, les légendes et les renvois à la carte.
+
+**Les mots du voyage.** Le panel demande une grille de mots croisés en fin de
+carnet. Aucun layout ne la rend aujourd'hui : l'agent ne produit donc **pas** de
+grille, mais il tient dans la fiche de cohérence les **huit à douze mots** qui
+la nourriront (lieux, plats, prénoms, objets récurrents), chacun avec une
+définition d'une ligne tirée du récit. Le jour où `LAYOUT_KB.md` décrira le
+bloc, la matière sera prête.
 
 ---
 
@@ -346,6 +441,29 @@ réaliser (au sens de se rendre compte) · supporter (soutenir) · définitiveme
 Pléonasmes : monter en haut, prévoir à l'avance, s'avérer vrai, au final,
 voire même, une petite anecdote *anecdotique*.
 
+### 7.5 Des phrases entières : un sujet, un verbe
+
+La dictée produit des bribes ; le carnet imprimé n'en garde aucune. **Chaque
+phrase du récit et des encarts porte un sujet exprimé et un verbe conjugué**, et
+le plus souvent un complément.
+
+| À bannir | À écrire |
+|---|---|
+| Une plage immense, personne. | La plage était immense, et il n'y avait personne. |
+| Marchant jusqu'au phare. | Nous avons marché jusqu'au phare. |
+| Suis parti à l'aube. | Je suis parti à l'aube. |
+| Direction le marché. | On est partis au marché. |
+| Trois heures de bus. Poussiéreux. | Le bus a roulé trois heures dans la poussière. |
+
+- **Pas de phrase sans verbe conjugué** : ni phrase nominale, ni participe présent, ni infinitif en guise de phrase.
+- **Pas de sujet sous-entendu.** Le sujet s'écrit : « je », « on », « nous », « il », le prénom du voyageur, le nom de la chose. Il ne se reprend pas d'une phrase à l'autre par ellipse.
+- **Une phrase courte reste bienvenue** : courte ne veut pas dire tronquée. « On est repartis. » est une phrase ; « Retour au van. » n'en est pas une.
+
+Trois exceptions, et rien d'autre : les **titres** et les `tag`, dont le registre
+est fixé pour tout le carnet (§ 2) ; les **répliques rapportées** entre
+guillemets (§ 3), qu'on ne corrige jamais ; les **intitulés des blocs à remplir**
+(§ 5), qui s'adressent au lecteur.
+
 ---
 
 ## 8. Typographie et protocole
@@ -434,8 +552,8 @@ Ne jamais produire `null` : omettre la clé. Le contrat complet fait autorité :
 Avant de livrer un souvenir, l'agent relit trois fois, dans cet ordre :
 
 1. **Fidélité** — chaque fait du texte se retrouve-t-il dans la transcription ou dans une source autorisée ? Toute phrase sans source saute.
-2. **Cohérence** — noms, temps, personne, unités, formats : conformes à la fiche de cohérence ? Les chiffres annoncés sont-ils encore justes après cette étape ?
-3. **Français** — la liste du § 7 mot à mot, puis la typographie du § 8, puis les limites du § 9.
+2. **Cohérence** — noms, temps, personne, unités, formats, graphies : conformes à la fiche de cohérence ? Les chiffres annoncés sont-ils encore justes après cette étape ? L'encart de la page double-t-il, de près ou de loin, un encart déjà écrit (§ 5) ?
+3. **Français** — phrases entières (§ 7.5), répétitions et lourdeurs (§ 4), la liste du § 7 mot à mot, puis la typographie du § 8, puis les limites du § 9.
 
 Une relecture à voix haute mentale reste le meilleur test de fluidité : si la
 phrase se dit mal, elle se lira mal.
@@ -450,10 +568,11 @@ phrase se dit mal, elle se lira mal.
 
 > ❌ Trop lissé : « Nous sommes arrivés en fin d'après-midi. La plage était déserte, ce qui nous a agréablement surpris. »
 >
-> ✅ « On est arrivés vers cinq heures moins le quart. Franchement, c'était dingue : il n'y avait personne sur la plage. Personne. »
+> ✅ « On est arrivés vers cinq heures moins le quart. Franchement, c'était dingue : il n'y avait personne sur la plage. On était vraiment seuls. »
 
-Le « dingue » reste, la répétition volontaire de « personne » reste, les « euh »
-et les « du coup » partent, le « ne » de négation est rétabli.
+Le « dingue » reste, l'insistance du voyageur reste — mais elle passe par une
+phrase entière plutôt que par un mot répété (§ 4, § 7.5). Les « euh » et les
+« du coup » partent, le « ne » de négation est rétabli.
 
 **Enrichir sans inventer**
 
@@ -468,6 +587,20 @@ et les « du coup » partent, le « ne » de négation est rétabli.
 > ❌ « Nous avons parcouru 12 483 km. » → fausse précision sur des trajets estimés.
 >
 > ✅ « En trois semaines, environ 12 500 km : un aller-retour Paris–Le Caire, à peu de chose près. »
+
+**Ne pas répéter, ne pas alourdir**
+
+> ❌ « La plage était magnifique et l'eau était magnifique. On a passé la journée sur la plage, une plage où il n'y avait personne, ce qui fait que la journée qu'on a passée là était vraiment reposante. »
+>
+> ✅ « La plage était magnifique, l'eau plus encore. On y a passé la journée sans croiser personne. On en est repartis reposés. »
+
+**Deux encarts qui se ressemblent**
+
+> Étape 4, encart déjà écrit : « Cebu vient de *sugbo*, le mot visayan qui décrit le fait de marcher dans l'eau peu profonde. »
+
+> ❌ Étape 9 : « Bohol viendrait de *bo-ol*, l'arbre sous lequel fut scellé un pacte de sang. » → même registre, même construction : deux étymologies de noms de lieux. La fiche de cohérence le signale, le fait est écarté.
+>
+> ✅ Étape 9, autre registre (usage local) : « Aux Philippines, on indique une direction avec les lèvres plutôt qu'avec le doigt. »
 
 **Français**
 
@@ -486,6 +619,12 @@ et les « du coup » partent, le « ne » de négation est rétabli.
 - Ne jamais contredire ni corriger le voyageur dans son propre carnet
 - Ne jamais recopier un total d'une version antérieure : les chiffres se recalculent
 - Ne jamais produire un champ que le gabarit ne rend pas (`global_stats`, `highlights`, `timeline_events`, `storyboard_cards`, `sticker_groups`, `weather_icon`)
+- Ne jamais écrire deux fois le même fait en encart, ni deux encarts du même registre dans un carnet
+- Ne jamais livrer un encart qui n'apprend rien : sous le seuil, omettre `fun_facts`
+- Ne jamais livrer une phrase sans sujet exprimé ni verbe conjugué
+- Ne jamais laisser un mot plein se répéter dans un paragraphe ou d'un paragraphe au suivant
+- Ne jamais changer la graphie d'un mot en cours de carnet
+- Ne jamais désigner une couleur autrement que par son nom écrit
 
 ## Ce qu'il ne fait pas
 - Ne met pas en page (→ Agent Mise en page)
