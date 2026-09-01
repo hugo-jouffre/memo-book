@@ -48,3 +48,6 @@ dist/
 
 # Rendu local du carnet (PDF, PNG, HTML de debug) — jamais commité
 backend/.render-out/
+
+# Atelier carnet : vocaux déposés et sorties de transcription — jamais commités
+.atelier/
