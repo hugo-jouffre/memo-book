@@ -16,7 +16,9 @@ settings:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
     ENABLE_USER_SCRIPT_SANDBOXING: YES
-    DEVELOPMENT_TEAM: ""
+    # Team ID Apple Developer de Hugo (compte hugo.jouffre@hotmail.fr).
+    # Nécessaire pour installer sur iPhone et publier sur TestFlight.
+    DEVELOPMENT_TEAM: AB46433XZF
     CODE_SIGN_STYLE: Automatic
 
 packages:
@@ -29,13 +31,24 @@ targets:
     platform: iOS
     sources:
       - path: App
+      # L'icône est un document Icon Composer : Xcode 26 en dérive lui-même
+      # les variantes claire, sombre, teintée et le rendu « verre ». On la
+      # déclare en fichier, sinon XcodeGen la traite comme un dossier de code.
+      - path: App/AppIcon.icon
+        type: file
+        buildPhase: resources
     info:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: MemoBook
         CFBundleShortVersionString: "0.1.0"
         CFBundleVersion: "1"
-        UILaunchScreen: {}
+        # Écran de lancement : le logo sur le crème de la marque. Cette clé
+        # n'accepte qu'une seule image et ne sait pas la décaler — pour un
+        # motif de fond ou un logo hors centre, il faudra un storyboard.
+        UILaunchScreen:
+          UIColorName: LaunchBackgroundColor
+          UIImageName: LaunchLogo
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         # Sans ces deux descriptions, iOS refuse l'accès et l'app est rejetée
@@ -51,6 +64,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.memobook.app
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     dependencies:
       - package: MemoBookKit
         product: MemoBookFeature

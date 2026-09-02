@@ -37,6 +37,7 @@ Le repo GitHub est la source de vérité du projet. Clara et Paul n'ont pas beso
 - **UI** : SwiftUI, architecture **MVVM** avec `@Observable`
 - **Concurrence** : Swift Concurrency (async/await), Swift 6 en concurrence stricte
 - **Cible** : iOS 17 minimum
+- **Xcode** : **26.6**, version de référence partagée par toute l'équipe. En changer se décide ensemble : une autre toolchain modifie les règles de concurrence stricte et casse le build d'une machine à l'autre
 - **Projet Xcode** : généré par **XcodeGen** depuis `ios/project.yml`. Le `.xcodeproj` n'est pas versionné — pas de conflit Git sur le pbxproj, et la structure du projet reste lisible en revue de code
 - **Backend** : ✅ **tranché — Node/TypeScript (Fastify) + PostgreSQL**, plutôt que Supabase ou Firebase. Le pipeline enchaîne des tâches longues (transcription d'un vocal, appel LLM, génération PDF) qui demandent une vraie file d'attente avec reprise sur échec ; c'est ce qu'un BaaS rend le plus pénible. La file est adossée à Postgres (pg-boss) : rien de plus à opérer
 - **Transcription** : API OpenAI (`gpt-4o-transcribe`), langue forcée en français. Hybride avec le framework Speech d'Apple encore possible plus tard

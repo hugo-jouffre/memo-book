@@ -1,4 +1,4 @@
-SIMULATOR ?= iPhone 16
+SIMULATOR ?= iPhone 17
 
 .PHONY: project test build clean
 
