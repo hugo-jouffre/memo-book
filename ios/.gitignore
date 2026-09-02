@@ -1,5 +1,6 @@
 # Généré par XcodeGen — la source est project.yml
 MemoBook.xcodeproj/
+App/Info.plist
 
 # Artefacts SwiftPM et Xcode
 Modules/.build/

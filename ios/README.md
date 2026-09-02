@@ -4,6 +4,11 @@ SwiftUI, iOS 17+, Swift 6 en concurrence stricte.
 
 ## Démarrer
 
+**Xcode 26.6** — la version de référence du projet. Toute l'équipe reste dessus : une
+toolchain plus ancienne ou plus récente change les règles de concurrence stricte, et le
+code cesse de compiler chez l'un sans que l'autre s'en aperçoive. On en change ensemble,
+en mettant cette ligne à jour.
+
 ```bash
 brew install xcodegen     # une seule fois
 make project              # génère MemoBook.xcodeproj depuis project.yml

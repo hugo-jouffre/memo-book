@@ -18,7 +18,7 @@ final class StubURLProtocol: URLProtocol {
         Self.lastBody = request.httpBody ?? request.httpBodyStream.map(Self.readAll)
 
         guard let handler = Self.handler else {
-            client?.didFailWithError(URLError(.badServerResponse))
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
             return
         }
 

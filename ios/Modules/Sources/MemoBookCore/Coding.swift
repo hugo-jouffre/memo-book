@@ -38,13 +38,17 @@ extension JSONEncoder {
 }
 
 extension ISO8601DateFormatter {
-    private static let withFractionalSeconds: ISO8601DateFormatter = {
+    // `nonisolated(unsafe)` : ces formatters sont configurés une fois à
+    // l'initialisation puis uniquement lus. `ISO8601DateFormatter` n'est pas
+    // `Sendable`, mais Apple documente le formatage et le parsing comme
+    // thread-safe tant que les options ne changent plus — ce qui est le cas ici.
+    nonisolated(unsafe) private static let withFractionalSeconds: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter
     }()
 
-    private static let withoutFractionalSeconds: ISO8601DateFormatter = {
+    nonisolated(unsafe) private static let withoutFractionalSeconds: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
         return formatter
