@@ -48,7 +48,7 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
 | **Pointillés** | ON / OFF | ON | Gabarit (`.mb-note__rules`) | À construire : un booléen dans le payload |
 | **Décorations & stickers** | 0 · 1 · 2 · 3 · 4 par paragraphe ou par image | 2 | Mise en page | Partiel : seul le scotch est rendu, les stickers ne le sont pas |
 | **Typographie des titres** | Liste fermée | Playfair | Gabarit — `--mb-font-display` | À construire |
-| **Typographie des sous-titres** | Liste fermée | Hansley | Gabarit — `--mb-font-title` | À construire, et le `.woff2` de Hansley reste à déposer |
+| **Typographie des sous-titres** | Liste fermée | Hansley | Gabarit — `--mb-font-title` | À construire. `Hansley.otf` est versionné, mais pas encore inliné : le titre retombe sur Gloria Hallelujah |
 | **Typographie des textes** | Liste fermée | Gloria Hallelujah | Gabarit — `--mb-font-hand` | À construire |
 | **Typographie des fun facts** | Liste fermée | Playfair | Gabarit — pas de token dédié aujourd'hui | À construire : ajouter `--mb-font-facts` |
 | **Quiz intégrés à l'histoire** | ON / OFF | ON | Rédaction les écrit, mise en page les place | Rendu (`quiz`) |
@@ -105,8 +105,10 @@ au voyageur d'arbitrer un défaut qu'il n'a pas produit.
 1. **Un objet de réglages dans le payload**, décrit dans `LAYOUT_KB.md` et validé
    par `gpt_image_schema.yaml`, puis lu par le gabarit : pointillés, quatre
    polices, quota de décor.
-2. **Les polices** : déposer les `.woff2` des faces offertes dans la liste, les
-   inliner comme les deux existantes, et ajouter le token `--mb-font-facts`.
+2. **Les polices** : inliner Hansley — le fichier est versionné, mais
+   `build-font-css.ts` ne connaît que les deux familles Google et ne lit que des
+   `.woff2` — puis faire de même pour toute face ajoutée à la liste, et créer le
+   token `--mb-font-facts`.
 3. **Les zones libres** : bloc de fin d'étape, et pages blanches de fin de carnet.
 4. **Le mot fléché** : grille générée à la commande à partir des mots du voyage.
 5. **La carte postale automatique** : repoussée, mais toujours demandée par deux

@@ -134,7 +134,7 @@ faire aujourd'hui.
 | Pointillés | ON | La **réglure** du papier, `.mb-note__rules` | **À construire** |
 | Décorations & stickers | 2 | Quota par paragraphe ou par image ; le scotch y est compté | **Partiel** : le scotch est rendu, les stickers non |
 | Typographie des titres | Playfair | `--mb-font-display` | **À construire** |
-| Typographie des sous-titres | Hansley | `--mb-font-title` | **À construire** — `.woff2` non déposé, repli sur la manuscrite |
+| Typographie des sous-titres | Hansley | `--mb-font-title` | **À construire** — `Hansley.otf` versionné mais pas inliné, repli sur la manuscrite |
 | Typographie des textes | Gloria Hallelujah | `--mb-font-hand` | **À construire** |
 | Typographie des fun facts | Playfair | Pas de token dédié : partage `--mb-font-display` | **À construire** — créer `--mb-font-facts` |
 | Zones libres | ON | Zone blanche en fin d'étape + trois pages blanches en fin de carnet | **À construire** |
@@ -421,11 +421,19 @@ retenue en production : elle supprime la dépendance réseau au moment du rendu
 et garantit le même tirage à chaque impression.
 
 Deux familles sont réellement embarquées : **Playfair Display** (400/700/900)
-et **Gloria Hallelujah** (400). Rien d'autre. `--mb-font-title` nomme encore
-`Hansley`, dont aucun `.woff2` n'est versionné : le titre retombe donc
-aujourd'hui sur Gloria Hallelujah — exemple exact du défaut silencieux décrit
-plus haut. Déposer le fichier dans `templates/travel-journal/assets/fonts/`
-et relancer `fonts:build` suffit à le corriger.
+et **Gloria Hallelujah** (400). Rien d'autre — et c'est là qu'est le piège.
+
+`--mb-font-title` nomme `Hansley`, et `assets/fonts/Hansley.otf` est désormais
+versionné. **Le titre retombe pourtant toujours sur Gloria Hallelujah** :
+déposer le fichier ne suffit pas. `build-font-css.ts` part d'une liste de deux
+familles Google, télécharge leurs sous-ensembles et ne lit que des `.woff2` —
+un `.otf` posé à côté n'est jamais regardé. Exemple exact du défaut silencieux
+décrit plus haut : rien n'échoue, la police est simplement absente du PDF.
+
+Pour la brancher : déclarer Hansley comme face **locale** dans le générateur
+(sans sous-ensemble ni `unicode-range`, puisqu'elle ne vient pas de Google),
+la convertir en `.woff2` — l'`.otf` s'inline aussi, en `format("opentype")`,
+au prix de quelques dizaines de kilo-octets — puis relancer `fonts:build`.
 
 Un `@import` Google Fonts fonctionne aussi :
 

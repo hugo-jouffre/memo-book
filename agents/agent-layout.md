@@ -175,7 +175,7 @@ produit pas** — et l'app ne devrait pas les proposer.
 | Réglage | Ce que ça suppose côté gabarit |
 |---|---|
 | **Pointillés** (ON/OFF, ON par défaut) | Un booléen dans le payload, qui éteint la réglure `.mb-note__rules`. Le rythme vertical, lui, ne change pas |
-| **Quatre typographies** | Un champ par axe, branché sur `--mb-font-display`, `--mb-font-title`, `--mb-font-hand`, et un token d'encart à créer. Le `.woff2` de Hansley reste à déposer |
+| **Quatre typographies** | Un champ par axe, branché sur `--mb-font-display`, `--mb-font-title`, `--mb-font-hand`, et un token d'encart à créer. Hansley est versionnée mais pas encore inlinée : le titre retombe sur la manuscrite |
 | **Zones libres** (ON/OFF, ON par défaut) | Une zone blanche en fin de chaque étape, pour écrire ou dessiner à la main, et trois pages blanches en fin de carnet |
 | **Mot fléché** (ON/OFF, ON par défaut) | Une grille générée au moment de la commande, à partir des mots que la rédaction tient déjà, et posée en fin de carnet |
 | **Quantité de décor** au-delà du scotch | Le rendu des stickers, absent de `index.html` malgré les classes CSS |
