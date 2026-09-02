@@ -38,7 +38,7 @@ public final class MemoDetailModel {
     /// `true` tant qu'une transcription, une rédaction ou une génération est
     /// en cours.
     public var hasWorkInProgress: Bool {
-        entries.contains(\.isProcessing) || (latestRender?.status.isInProgress ?? false)
+        entries.contains(where: \.isProcessing) || (latestRender?.status.isInProgress ?? false)
     }
 
     /// Les souvenirs encore en train d'être transcrits ou rédigés.
