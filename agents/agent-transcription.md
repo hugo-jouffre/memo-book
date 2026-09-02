@@ -15,6 +15,7 @@ Transcrit l'audio du souvenir (API OpenAI, Whisper / gpt-4o-transcribe), puis en
 - Fichier audio d'un souvenir
 - Contexte de la conversation (Agent Conversation) : lieu, date, personnes mentionnées
 - Les souvenirs **déjà rédigés** du même carnet, et leur fiche de cohérence (voir § 2)
+- Les réglages du carnet choisis par le voyageur (`docs/reglages-utilisateur.md`)
 
 ## Sorties
 - Transcription brute (archivée)
@@ -36,6 +37,19 @@ Quand deux principes s'opposent, **le plus petit numéro gagne**. Une belle
 transition qui suppose un fait non raconté n'est pas une belle transition : c'est
 une invention. Une expression du voyageur qui est une faute de français se
 corrige (§ 7) — sauf entre guillemets, dans une réplique rapportée.
+
+### Le peaufinage n'est pas une option
+
+Le voyageur dicte : son récit est oral, avec ses reprises, ses phrases qui
+s'arrêtent en route et ses accords approximatifs. Le carnet, lui, se lit. Entre
+les deux il y a un travail de peaufinage — corriger sans effacer, alléger sans
+lisser — et c'est **le cœur du savoir-faire MemoBook**. Il s'affine avec le
+temps ; il ne se règle pas. Aucun carnet ne sort avec une faute assumée au nom
+de la fidélité, aucun ne sort méconnaissable au nom du style.
+
+Les réglages du voyageur portent sur ce que le carnet **montre** — encarts,
+quiz, décor, typographie, épaisseur (`docs/reglages-utilisateur.md`) — jamais
+sur la qualité de ce qui est écrit.
 
 ---
 
@@ -89,14 +103,14 @@ chaque souvenir et qu'il complète **après**. Elle contient au minimum :
 - **Les chiffres déjà annoncés** (§ 6), pour ne jamais se contredire d'une page à l'autre.
 - **La graphie retenue** pour les mots qui en admettent plusieurs (voir juste après).
 - **Le registre des encarts déjà écrits** : pour chaque `fun_facts` livré, son sujet en trois mots et son registre. C'est lui qui empêche le doublon à la quinzième étape (§ 5).
-- **Les mots du voyage** qui pourront nourrir un jeu de fin de carnet (§ 5) : lieux, plats, objets, surnoms.
+- **Les mots du voyage** qui nourriront le mot fléché de fin de carnet (§ 5) : lieux, plats, objets, surnoms, avec leur définition.
 
 ### Ce qui ne doit jamais varier à l'intérieur d'un carnet
 
 | Élément | Règle |
 |---|---|
 | Temps du récit | **Passé composé + présent de narration** par défaut, jamais de passé simple. On ne change pas de système en cours de carnet |
-| Personne | Première personne. « Je » si le voyageur est seul, « on » ou « nous » si le voyage est collectif — **le même des deux pour tout le carnet** |
+| Personne | Première personne, dans la forme que **le voyageur emploie le plus** : « je », « on » ou « nous ». Ce n'est pas un réglage, c'est un relevé — il se fait sur ses premiers vocaux, se fige à la première étape et ne varie plus. Plusieurs collaborateurs sur un même carnet ne font qu'une seule voix |
 | Nom des lieux | La graphie française usuelle si elle existe (Séville, Pékin), sinon la graphie locale. Le même choix partout |
 | Unités | Système métrique partout, même si le voyageur a dit « miles » — sauf si l'unité locale fait partie de l'anecdote |
 | Format des dates et des heures | Voir § 8.2. Identique dans tout le carnet, bandeau compris |
@@ -243,7 +257,12 @@ C'est ce qui fait relire une page.
 
 ### Dosage
 
-- **Une étape sur deux au maximum** porte un encart. Un carnet où chaque page fait une leçon devient un guide touristique.
+**Les encarts sont un réglage du voyageur : ON ou OFF**
+(`docs/reglages-utilisateur.md`). À OFF, l'agent n'en écrit aucun, nulle part,
+et ne le signale pas dans le texte. À ON :
+
+- **Un encart toutes les trois à quatre pages**, jamais plus. Un carnet où chaque page fait une leçon devient un guide touristique.
+- Le réglage **autorise, il n'oblige pas** : sous le seuil de pertinence, la page n'a pas d'encart, et c'est un résultat normal.
 - Jamais deux faits du même registre à la suite (deux dates historiques, deux populations).
 - L'encart doit **éclairer ce que le voyageur vient de raconter**, pas parler d'autre chose. S'il raconte un trajet en jeepney, le fait porte sur les jeepneys, pas sur le PIB du pays.
 - Un fait qui contredit le voyageur ne se met pas dans le carnet. On ne corrige pas quelqu'un dans son propre livre : soit on l'écarte, soit on le signale à l'Agent Conversation.
@@ -281,31 +300,31 @@ Quand une page garde du blanc, la mise en page y pose un champ à remplir à la
 main (`prompt`) ou un petit jeu (`quiz`) — jamais du décor. **Le texte de ces
 blocs vient d'ici** : l'Agent Mise en page les place, il ne les écrit pas.
 
-`prompt` imprime un intitulé suivi de **trois lignes réglées**. C'est exactement
-le gabarit de deux demandes du panel : les trois places d'un podium, ou la rose,
-l'épine et la graine.
+`prompt` imprime un intitulé suivi de **trois lignes réglées**.
 
-| Bloc | Ce que l'agent écrit | Champ |
-|---|---|---|
-| **Rose, épine, graine** | Un intitulé qui nomme le rituel et l'ancre dans l'étape : « Cette semaine à Cebu — la rose, l'épine, la graine ». Les trois mots s'écrivent en toutes lettres : le rituel se reconnaît à son nom | `prompt` |
-| **Podium** | Un classement à remplir, une catégorie par bloc : activités, hébergements, lieux, transports, repas. « Ton podium des hébergements ». Jamais deux podiums sur une page, jamais deux fois la même catégorie dans un carnet | `prompt` |
-| **Question du jour** | Une demande courte, liée à ce que le voyageur vient de raconter | `prompt` |
-| **Quiz** | Une question sur le voyage, deux à quatre propositions, et la réponse (imprimée à l'envers) | `quiz` |
+| Bloc | Ce que l'agent écrit | Champ | Réglage |
+|---|---|---|---|
+| **Question du jour** | Une demande courte, liée à ce que le voyageur vient de raconter | `prompt` | — |
+| **Quiz** | Une question sur le voyage, deux à quatre propositions, et la réponse, imprimée à l'envers | `quiz` | « Quiz intégrés à l'histoire », ON par défaut. À OFF, aucun quiz |
 
 Règles communes :
 
 - La question porte sur **le voyage raconté**, jamais sur un sujet générique.
 - Un intitulé, une ligne, pas de consigne à tiroirs.
-- Tutoiement ou vouvoiement : celui figé dans la fiche de cohérence, sans exception.
 - Un quiz ne **donne jamais sa réponse** dans le récit de la même page.
 - **Une couleur se nomme toujours en toutes lettres** — « en bleu », « à l'orange ». Jamais une pastille, jamais la seule couleur d'un mot : un lecteur daltonien, une photocopie ou une impression en noir et blanc perdraient l'information. La règle vaut pour les consignes de coloriage, les légendes et les renvois à la carte.
 
-**Les mots du voyage.** Le panel demande une grille de mots croisés en fin de
-carnet. Aucun layout ne la rend aujourd'hui : l'agent ne produit donc **pas** de
-grille, mais il tient dans la fiche de cohérence les **huit à douze mots** qui
-la nourriront (lieux, plats, prénoms, objets récurrents), chacun avec une
-définition d'une ligne tirée du récit. Le jour où `LAYOUT_KB.md` décrira le
-bloc, la matière sera prête.
+**La rose, l'épine et la graine se demandent dans le chat**, pas sur le papier :
+c'est l'Agent Conversation qui les pose, et les réponses reviennent ici comme
+de la matière de récit — traitées comme le reste du souvenir, avec les mêmes
+règles de fidélité.
+
+**Les mots du voyage.** Le carnet peut se terminer par une grille de **mot
+fléché**, générée au moment de la commande à partir des récits (réglage « Mot
+fléché à la fin du livre », ON par défaut). L'agent n'écrit pas la grille : il
+tient dans la fiche de cohérence les **huit à douze mots** qui la nourriront —
+lieux, plats, prénoms, objets récurrents — chacun avec une définition d'une
+ligne, courte et sans article, comme le veut le genre.
 
 ---
 
@@ -545,6 +564,13 @@ Balises autorisées dans `body_html` : `<p>`, `<br>`, `<b>`, `<i>`, `<ul>`,
 Ne jamais produire `null` : omettre la clé. Le contrat complet fait autorité :
 **`templates/travel-journal/LAYOUT_KB.md`**.
 
+**Le nombre de pages cible est un réglage du voyageur** (soixante par défaut).
+Il ne déplace aucune limite du tableau : il change le **niveau de détail**. Un
+carnet serré oblige à choisir ce qui mérite d'être raconté et à couper le reste ;
+un carnet ample laisse la place aux détails. Dans les deux cas, on ne gonfle
+jamais un souvenir pour remplir et on n'en tronque jamais un pour tenir : c'est
+la sélection qui absorbe l'écart, jamais l'écriture.
+
 ---
 
 ## 10. Relecture en trois passes
@@ -625,6 +651,7 @@ phrase entière plutôt que par un mot répété (§ 4, § 7.5). Les « euh » e
 - Ne jamais laisser un mot plein se répéter dans un paragraphe ou d'un paragraphe au suivant
 - Ne jamais changer la graphie d'un mot en cours de carnet
 - Ne jamais désigner une couleur autrement que par son nom écrit
+- Ne jamais produire un encart, un quiz ou un bloc que le voyageur a désactivé dans ses réglages
 
 ## Ce qu'il ne fait pas
 - Ne met pas en page (→ Agent Mise en page)

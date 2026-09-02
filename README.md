@@ -15,7 +15,7 @@ Ce repo contient le code de l'**app iOS native MemoBook**, développée en Swift
 | `templates/travel-journal/` | Le template PDF et les schémas qui décrivent le format du carnet. **Source de vérité** : le back-end les lit, il ne les duplique pas |
 | `agents/` | Configuration des agents IA et référence du design system. **Source de vérité** : `agent-transcription.md` est chargé tel quel comme prompt système de la rédaction |
 | `MemoBook Generator/` | Le générateur de carnets : l'outil de composition à la main, en attendant l'app. Vocaux WhatsApp transcrits, récit découpé en étapes, JSON et PDF générés. [Documentation](MemoBook%20Generator/README.md) |
-| `docs/` | Documentation transverse, dont [`ui-development.md`](docs/ui-development.md) : les règles d'implémentation des écrans depuis Figma (unités, fidélité, fiches écran) |
+| `docs/` | Documentation transverse : [`ui-development.md`](docs/ui-development.md) pour les règles d'implémentation des écrans depuis Figma, [`reglages-utilisateur.md`](docs/reglages-utilisateur.md) pour ce que le voyageur peut régler dans son carnet et qui l'applique |
 
 Clara et Paul n'ont rien à installer : tout se lit sur GitHub, et l'app se teste via TestFlight.
 
