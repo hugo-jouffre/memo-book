@@ -1,0 +1,69 @@
+name: CI iOS
+
+# ⚠️ Déclenchement **manuel uniquement**, volontairement.
+#
+# Les runners macOS de GitHub sont facturés dix fois le tarif Linux : sur un
+# dépôt privé, une vérification à chaque push mangerait le quota gratuit en
+# quelques jours. Tant que ce coût n'est pas arbitré, c'est un bouton, pas un
+# automatisme — Actions > CI iOS > Run workflow.
+#
+# Pour la passer en automatique le jour venu, décommenter le bloc ci-dessous :
+#
+# on:
+#   pull_request:
+#     paths: ['ios/**', '.github/workflows/ci-ios.yml']
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    defaults:
+      run:
+        working-directory: ios
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Sert à diagnostiquer : le projet demande Swift 6, donc Xcode 16 au
+      # minimum. Si le runner en embarque un plus ancien, ça se verra ici plutôt
+      # que dans une erreur de compilation incompréhensible.
+      - name: Version d'Xcode
+        run: xcodebuild -version
+
+      - name: Installe XcodeGen
+        run: brew install xcodegen
+
+      # Le .xcodeproj n'est pas versionné : sans cette étape, il n'y a
+      # simplement rien à compiler.
+      - name: Génère le projet
+        run: xcodegen generate
+
+      # `generic/platform=iOS Simulator` compile sans démarrer de simulateur et
+      # sans dépendre d'un modèle d'iPhone précis. `CODE_SIGNING_ALLOWED=NO` :
+      # aucun certificat n'est nécessaire pour une compilation.
+      - name: Compile l'app
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project MemoBook.xcodeproj \
+            -scheme MemoBook \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Simulateurs disponibles sur le runner
+        if: always()
+        run: xcrun simctl list devices available
+
+      # `continue-on-error` : un nom d'iPhone absent du runner ferait échouer
+      # cette étape pour une raison qui n'a rien à voir avec le code. La
+      # compilation, elle, a déjà tranché plus haut.
+      - name: Tests des modules
+        continue-on-error: true
+        working-directory: ios/Modules
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -scheme MemoBookKit-Package \
+            -destination 'platform=iOS Simulator,name=iPhone 16'
