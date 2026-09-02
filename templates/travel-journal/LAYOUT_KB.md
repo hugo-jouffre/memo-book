@@ -118,6 +118,38 @@ Pour l'instant, l'agent choisit le layout existant le plus proche.)*
 
 Défaut : `preview`. Côté back-end, la variable `RENDER_PROFILE` fait foi.
 
+## Les réglages du voyageur
+
+Le voyageur règle une partie de ce que la page montre, depuis l'écran
+*Personnalisations* de l'app. Le détail, les libellés et les défauts sont dans
+**`docs/reglages-utilisateur.md`** ; ici, seulement ce que le gabarit sait en
+faire aujourd'hui.
+
+| Réglage | Défaut | Où ça agit | État |
+|---|---|---|---|
+| Ratio photo / texte | 50/50 | Choix des layouts par l'agent | Rendu |
+| Nombre de page cible | 60 | Niveau de détail des textes, regroupement des étapes | Rendu |
+| Fun facts | ON | `fun_facts` — voir le dosage plus bas | Rendu |
+| Quiz | ON | `quiz` | Rendu |
+| Pointillés | ON | La **réglure** du papier, `.mb-note__rules` | **À construire** |
+| Décorations & stickers | 2 | Quota par paragraphe ou par image ; le scotch y est compté | **Partiel** : le scotch est rendu, les stickers non |
+| Typographie des titres | Playfair | `--mb-font-display` | **À construire** |
+| Typographie des sous-titres | Hansley | `--mb-font-title` | **À construire** — `Hansley.otf` versionné mais pas inliné, repli sur la manuscrite |
+| Typographie des textes | Gloria Hallelujah | `--mb-font-hand` | **À construire** |
+| Typographie des fun facts | Playfair | Pas de token dédié : partage `--mb-font-display` | **À construire** — créer `--mb-font-facts` |
+| Zones libres | ON | Zone blanche en fin d'étape + trois pages blanches en fin de carnet | **À construire** |
+| Mot fléché | ON | Grille générée à la commande, posée en fin de carnet | **À construire** |
+
+**Deux « pointillés » à ne pas confondre.** Le réglage porte sur la **réglure**
+— les lignes en pointillé sous le texte. Le **tracé pointillé du voyage** (voir
+plus bas) est un décor de bas de page : il relève du quota de décorations, pas
+de ce booléen.
+
+**Rien de tout cela n'est encore dans le payload.** Les réglages marqués « à
+construire » demandent un champ au schéma, une lecture par le gabarit, et cette
+table mise à jour dans le même commit. Tant que ce n'est pas fait, l'agent ne
+produit rien pour eux et l'app ne devrait pas les proposer.
+
 ## Champs d'une journée
 
 | Champ | Type | Notes |
@@ -189,9 +221,13 @@ une **erreur**, pas un avertissement :
 > Un lecteur résume tout : « j'ai lu tous les fun facts, mais pas tout le
 > contenu ». La carte gagnait la page contre le récit.
 
+**Les encarts sont un réglage du voyageur, ON ou OFF.** À OFF, aucun `fun_facts`
+n'est produit. Les règles ci-dessous valent à ON.
+
 Quatre règles, à appliquer strictement :
 
-1. **Fréquence : environ 2 pour 3 pages.** Jamais un par page.
+1. **Fréquence : un encart toutes les trois à quatre pages**, selon la
+   pertinence des faits disponibles. Jamais un par page.
 2. **Un seul « Le saviez-vous » par étape**, quelle que soit la longueur.
 3. **La matière doit venir du récit.** Un fait drôle réellement vécu vaut mieux
    qu'une donnée encyclopédique. La culture générale reste possible, mais en
@@ -219,6 +255,9 @@ page **habitable** :
 
 **Un seul bloc interactif par page**, et il remplace la zone flottante du bas
 (carte info + photo). Les empiler fait déborder la page.
+
+Le `quiz` est **réglable par le voyageur**, ON par défaut : à OFF, aucun n'est
+produit, et le blanc se remplit par un `prompt` ou reste blanc.
 
 ## La mention « généré par IA »
 
@@ -271,6 +310,12 @@ La réglure est un **pointillé gris clair**, pas un trait plein : deux lecteurs
 la trouvaient trop marquée. Elle doit se deviner sous le texte, jamais se lire
 avant lui.
 
+C'est elle que gouverne le réglage **« Pointillés »**, ON par défaut. À OFF, les
+`<i>` de `.mb-note__rules` ne sont pas émis : la page reste blanche sous le
+récit, **et le rythme vertical ne bouge pas** — les hauteurs restent des
+multiples de `--mb-line`, sans quoi la page se décalerait selon un réglage
+d'affichage.
+
 **Le nombre de pages est la vraie contrainte d'un long voyage.** Un lecteur
 fixe la limite : moins de 50 pages pour 3 mois, sinon l'objet devient trop
 gros. La variable n'est pas le nombre de pages mais le taux de compression par
@@ -295,9 +340,9 @@ gros. La variable n'est pas le nombre de pages mais le taux de compression par
   n'occupent qu'une fraction de la largeur.
 - Les photos sont recadrées en `object-fit: cover` et pivotées de quelques
   degrés : ne pas envoyer une image dont un visage touche déjà le bord.
-- **Le scotch reste l'exception.** Un lecteur ne l'aime pas du tout ; il garde
-  sa valeur tant qu'il surprend. Une photo scotchée de temps en temps, pas une
-  page entière.
+- **Le scotch entre dans le quota de décorations** réglé par le voyageur (0 à 4
+  par paragraphe ou par image, 2 par défaut). À 0, aucun `tape_corner`. Le quota
+  est un plafond : une photo qui n'a pas besoin de son scotch s'en passe.
 - **Pas d'illustration qui occupe une page seule.** Une photo des voyageurs
   vaut mieux qu'un dessin de remplissage : deux lecteurs le disent séparément.
 
@@ -376,11 +421,19 @@ retenue en production : elle supprime la dépendance réseau au moment du rendu
 et garantit le même tirage à chaque impression.
 
 Deux familles sont réellement embarquées : **Playfair Display** (400/700/900)
-et **Gloria Hallelujah** (400). Rien d'autre. `--mb-font-title` nomme encore
-`Hansley`, dont aucun `.woff2` n'est versionné : le titre retombe donc
-aujourd'hui sur Gloria Hallelujah — exemple exact du défaut silencieux décrit
-plus haut. Déposer le fichier dans `templates/travel-journal/assets/fonts/`
-et relancer `fonts:build` suffit à le corriger.
+et **Gloria Hallelujah** (400). Rien d'autre — et c'est là qu'est le piège.
+
+`--mb-font-title` nomme `Hansley`, et `assets/fonts/Hansley.otf` est désormais
+versionné. **Le titre retombe pourtant toujours sur Gloria Hallelujah** :
+déposer le fichier ne suffit pas. `build-font-css.ts` part d'une liste de deux
+familles Google, télécharge leurs sous-ensembles et ne lit que des `.woff2` —
+un `.otf` posé à côté n'est jamais regardé. Exemple exact du défaut silencieux
+décrit plus haut : rien n'échoue, la police est simplement absente du PDF.
+
+Pour la brancher : déclarer Hansley comme face **locale** dans le générateur
+(sans sous-ensemble ni `unicode-range`, puisqu'elle ne vient pas de Google),
+la convertir en `.woff2` — l'`.otf` s'inline aussi, en `format("opentype")`,
+au prix de quelques dizaines de kilo-octets — puis relancer `fonts:build`.
 
 Un `@import` Google Fonts fonctionne aussi :
 
