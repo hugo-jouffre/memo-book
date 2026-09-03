@@ -7,18 +7,18 @@ import XCTest
 /// (`ios/Modules/Tests`) ; ici on vérifie l'assemblage.
 @MainActor
 final class AppLaunchTests: XCTestCase {
-    func testPrepareMarksDependenciesReady() async {
+    /// L'enregistrement de l'appareil est paresseux : il ne bloque plus le
+    /// démarrage, et un deuxième appel ne relance pas de requête.
+    func testDeviceRegistrationIsLazyAndIdempotent() async throws {
         let dependencies = AppDependencies(api: PreviewAPI(seeded: false))
 
-        await dependencies.prepare()
-
-        XCTAssertTrue(dependencies.isReady)
-        XCTAssertNil(dependencies.startupError)
+        try await dependencies.ensureRegistered()
+        try await dependencies.ensureRegistered()
     }
 
     func testMemoListLoadsAndCreates() async {
         let dependencies = AppDependencies(api: PreviewAPI())
-        let model = MemoListModel(api: dependencies.api)
+        let model = MemoListModel(dependencies: dependencies)
 
         await model.load()
         XCTAssertEqual(model.memos.count, 1)
@@ -29,7 +29,7 @@ final class AppLaunchTests: XCTestCase {
     }
 
     func testMemoListRefusesAnEmptyTitle() async {
-        let model = MemoListModel(api: PreviewAPI(seeded: false))
+        let model = MemoListModel(dependencies: AppDependencies(api: PreviewAPI(seeded: false)))
 
         let created = await model.createMemo(title: "   ", theme: nil)
 
@@ -47,15 +47,18 @@ final class AppLaunchTests: XCTestCase {
         XCTAssertFalse(model.canGenerate, "Un carnet sans souvenir ne doit pas être générable.")
     }
 
-    func testGenerationBecomesAvailableOnceASouvenirExists() async {
+    /// Le jeu d'essai contient un souvenir dont la rédaction tourne encore.
+    /// Générer maintenant mettrait sa transcription brute dans le PDF : le
+    /// bouton doit attendre, même s'il y a déjà des souvenirs prêts.
+    func testGenerationWaitsWhileASouvenirIsStillBeingPrepared() async {
         let api = PreviewAPI()
         let model = MemoDetailModel(memoId: "preview-memo", api: api)
 
         await model.load()
 
-        XCTAssertTrue(model.canGenerate)
-        // Le jeu d'essai contient un vocal encore en transcription.
+        XCTAssertFalse(model.entries.isEmpty)
         XCTAssertTrue(model.hasWorkInProgress)
+        XCTAssertFalse(model.canGenerate, "Un souvenir en cours de rédaction bloque la génération.")
 
         model.stopPolling()
     }

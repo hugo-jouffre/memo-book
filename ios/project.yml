@@ -81,6 +81,10 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.memobook.app.tests
+        # Sans ça la cible ne signe pas et `xcodebuild test` refuse de démarrer.
+        # Un bundle de tests n'a pas d'Info.plist à écrire à la main : on laisse
+        # Xcode le générer.
+        GENERATE_INFOPLIST_FILE: YES
 
 schemes:
   MemoBook:
@@ -89,6 +93,13 @@ schemes:
         MemoBook: all
     run:
       config: Debug
+      # Décocher/cocher dans Product ▸ Scheme ▸ Edit Scheme ▸ Run ▸ Arguments.
+      # Coché, l'app repart à son tout premier démarrage — c'est ce qui permet
+      # de revoir l'écran d'accueil, qu'un ⌘R ne réinitialise pas (Xcode
+      # réinstalle par-dessus sans toucher au conteneur). Voir
+      # `OnboardingStorage`.
+      commandLineArguments:
+        "-resetOnboarding": false
     test:
       config: Debug
       targets:

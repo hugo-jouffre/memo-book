@@ -43,33 +43,6 @@ public struct StatusBadge: View {
     }
 }
 
-/// Bouton d'action principal, pleine largeur — la convention iOS que la
-/// critique design relève comme déjà bien réglée dans les maquettes.
-public struct PrimaryButton: View {
-    private let title: String
-    private let isLoading: Bool
-    private let action: () -> Void
-
-    public init(_ title: String, isLoading: Bool = false, action: @escaping () -> Void) {
-        self.title = title
-        self.isLoading = isLoading
-        self.action = action
-    }
-
-    public var body: some View {
-        Button(action: action) {
-            HStack(spacing: MemoBookSpacing.xs) {
-                if isLoading { ProgressView().tint(.white) }
-                Text(title).font(.system(.body, weight: .semibold))
-            }
-            .frame(maxWidth: .infinity, minHeight: MemoBookSpacing.minimumTapTarget + 6)
-        }
-        .buttonStyle(.borderedProminent)
-        .tint(MemoBookColor.action)
-        .disabled(isLoading)
-    }
-}
-
 /// Message d'erreur avec possibilité de réessayer, plutôt qu'une alerte
 /// modale : l'utilisateur garde le contexte de l'écran.
 public struct ErrorBanner: View {

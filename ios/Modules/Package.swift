@@ -19,8 +19,14 @@ let package = Package(
         // le tester sur n'importe quelle plateforme.
         .target(name: "MemoBookCore"),
 
-        // Design tokens et composants transverses.
-        .target(name: "MemoBookDesign", dependencies: ["MemoBookCore"]),
+        // Design tokens, composants transverses, et les ressources de la
+        // marque (polices, icônes). Les ressources vivent ici plutôt que dans
+        // la cible app pour que les aperçus Xcode du module les voient aussi.
+        .target(
+            name: "MemoBookDesign",
+            dependencies: ["MemoBookCore"],
+            resources: [.process("Resources")]
+        ),
 
         // Client de l'API MemoBook.
         .target(name: "MemoBookNetworking", dependencies: ["MemoBookCore"]),

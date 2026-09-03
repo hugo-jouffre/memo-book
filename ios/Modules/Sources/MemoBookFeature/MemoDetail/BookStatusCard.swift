@@ -30,7 +30,7 @@ struct BookStatusCard: View {
             case .ready:
                 if let urlString = render?.pdfUrl, let url = URL(string: urlString) {
                     VStack(spacing: MemoBookSpacing.xs) {
-                        PrimaryButton("Ouvrir mon carnet") { isPreviewing = true }
+                        BrandButton("Ouvrir mon carnet", fillsWidth: true) { isPreviewing = true }
                         ShareLink(item: url) {
                             Text("Partager le PDF").font(MemoBookFont.caption)
                         }
@@ -54,7 +54,7 @@ struct BookStatusCard: View {
                     Text(render?.error ?? "La génération a échoué.")
                         .font(MemoBookFont.caption)
                         .foregroundStyle(MemoBookColor.error)
-                    PrimaryButton("Réessayer", action: onGenerate)
+                    BrandButton("Réessayer", fillsWidth: true, action: onGenerate)
                 }
 
             case .none:
@@ -62,7 +62,7 @@ struct BookStatusCard: View {
                     Text("Quand tu as raconté assez de souvenirs, génère ton carnet.")
                         .font(MemoBookFont.caption)
                         .foregroundStyle(MemoBookColor.inkSecondary)
-                    PrimaryButton("Générer mon carnet", action: onGenerate)
+                    BrandButton("Générer mon carnet", fillsWidth: true, action: onGenerate)
                         .disabled(!canGenerate)
                         .opacity(canGenerate ? 1 : 0.5)
                 }

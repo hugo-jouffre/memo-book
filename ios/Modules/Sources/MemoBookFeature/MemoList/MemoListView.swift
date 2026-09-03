@@ -35,7 +35,7 @@ public struct MemoListView: View {
             }
         }
         .task {
-            if model == nil { model = MemoListModel(api: dependencies.api) }
+            if model == nil { model = MemoListModel(dependencies: dependencies) }
             await model?.load()
         }
         .sheet(isPresented: $isCreating) {
