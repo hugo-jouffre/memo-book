@@ -6,8 +6,17 @@ public actor MemoBookAPIClient: MemoBookAPI {
     private let configuration: APIConfiguration
     private let session: URLSession
     private let tokenStore: any TokenStore
+    private let sessionStore: any TokenStore
     private let decoder = JSONDecoder.memoBook
     private let encoder = JSONEncoder.memoBook
+
+    /// Qui parle. Les deux identifications cohabitent : les carnets appartiennent
+    /// encore à l'appareil, le compte n'a pour l'instant que ses propres routes.
+    private enum Credential {
+        case none
+        case device
+        case session
+    }
 
     /// Enregistrement en cours, partagé : deux écrans qui démarrent en même
     /// temps ne doivent pas créer deux appareils.
@@ -16,11 +25,13 @@ public actor MemoBookAPIClient: MemoBookAPI {
     public init(
         configuration: APIConfiguration = .localDevelopment,
         session: URLSession = .shared,
-        tokenStore: any TokenStore = KeychainTokenStore()
+        tokenStore: any TokenStore = KeychainTokenStore(),
+        sessionStore: any TokenStore = KeychainTokenStore(account: "session-token")
     ) {
         self.configuration = configuration
         self.session = session
         self.tokenStore = tokenStore
+        self.sessionStore = sessionStore
     }
 
     // MARK: - Identité
@@ -37,7 +48,7 @@ public actor MemoBookAPIClient: MemoBookAPI {
                 method: "POST",
                 path: "/v1/devices",
                 body: ["platform": "ios"],
-                authenticated: false
+                credential: .none
             )
             tokenStore.write(registration.token)
         }
@@ -45,6 +56,81 @@ public actor MemoBookAPIClient: MemoBookAPI {
         registrationTask = task
         defer { registrationTask = nil }
         try await task.value
+    }
+
+    // MARK: - Compte
+
+    public func hasStoredSession() -> Bool {
+        sessionStore.read() != nil
+    }
+
+    public func signUp(
+        email: String,
+        password: String,
+        firstName: String?,
+        lastName: String?
+    ) async throws -> AuthSession {
+        var body = ["email": email, "password": password]
+        // Champs facultatifs : les envoyer vides ferait échouer la validation
+        // du serveur, qui exige au moins un caractère quand ils sont présents.
+        if let firstName, !firstName.isEmpty { body["firstName"] = firstName }
+        if let lastName, !lastName.isEmpty { body["lastName"] = lastName }
+        return try await openSession(path: "/v1/auth/signup", body: body)
+    }
+
+    public func signIn(email: String, password: String) async throws -> AuthSession {
+        try await openSession(
+            path: "/v1/auth/signin",
+            body: ["email": email, "password": password]
+        )
+    }
+
+    public func signIn(with credential: SocialSignIn) async throws -> AuthSession {
+        var body = ["identityToken": credential.identityToken]
+        if let nonce = credential.nonce { body["nonce"] = nonce }
+        if let firstName = credential.firstName, !firstName.isEmpty {
+            body["firstName"] = firstName
+        }
+        if let lastName = credential.lastName, !lastName.isEmpty {
+            body["lastName"] = lastName
+        }
+        return try await openSession(
+            path: "/v1/auth/\(credential.provider.rawValue)",
+            body: body
+        )
+    }
+
+    public func currentAccount() async throws -> Account {
+        struct Response: Decodable { let account: Account }
+        let response: Response = try await send(
+            method: "GET",
+            path: "/v1/auth/me",
+            credential: .session
+        )
+        return response.account
+    }
+
+    public func signOut() async {
+        // Le trousseau est vidé quoi qu'il arrive : quelqu'un qui se déconnecte
+        // dans un train sans réseau ne doit pas rester connecté sur son écran.
+        // La session côté serveur expirera d'elle-même.
+        defer { sessionStore.clear() }
+        try? await sendIgnoringResponse(
+            method: "POST",
+            path: "/v1/auth/signout",
+            credential: .session
+        )
+    }
+
+    private func openSession(path: String, body: [String: String]) async throws -> AuthSession {
+        let session: AuthSession = try await send(
+            method: "POST",
+            path: path,
+            body: body,
+            credential: .none
+        )
+        sessionStore.write(session.token)
+        return session
     }
 
     // MARK: - Carnets
@@ -133,7 +219,7 @@ public actor MemoBookAPIClient: MemoBookAPI {
         request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         request.httpBody = form.finalized()
 
-        return try await perform(request)
+        return try await perform(request, credential: .device)
     }
 
     public func entry(id: String) async throws -> Entry {
@@ -176,10 +262,20 @@ public actor MemoBookAPIClient: MemoBookAPI {
 
     // MARK: - Transport
 
+    /// Le magasin qui porte un type de jeton donné, ou `nil` pour un appel qui
+    /// n'en présente aucun.
+    private func store(for credential: Credential) -> (any TokenStore)? {
+        switch credential {
+        case .none: nil
+        case .device: tokenStore
+        case .session: sessionStore
+        }
+    }
+
     private func makeRequest(
         method: String,
         path: String,
-        authenticated: Bool = true
+        credential: Credential = .device
     ) throws -> URLRequest {
         guard let url = URL(string: path, relativeTo: configuration.baseURL) else {
             throw APIError.server(statusCode: 0, code: nil, message: "Chemin d'API invalide : \(path)")
@@ -189,8 +285,8 @@ public actor MemoBookAPIClient: MemoBookAPI {
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        if authenticated {
-            guard let token = tokenStore.read() else { throw APIError.notAuthenticated }
+        if let store = store(for: credential) {
+            guard let token = store.read() else { throw APIError.notAuthenticated }
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
 
@@ -201,16 +297,16 @@ public actor MemoBookAPIClient: MemoBookAPI {
         method: String,
         path: String,
         body: [String: String]? = nil,
-        authenticated: Bool = true
+        credential: Credential = .device
     ) async throws -> Response {
-        var request = try makeRequest(method: method, path: path, authenticated: authenticated)
+        var request = try makeRequest(method: method, path: path, credential: credential)
 
         if let body {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
         }
 
-        return try await perform(request)
+        return try await perform(request, credential: credential)
     }
 
     private func send<Body: Encodable, Response: Decodable>(
@@ -221,16 +317,23 @@ public actor MemoBookAPIClient: MemoBookAPI {
         var request = try makeRequest(method: method, path: path)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(encodableBody)
-        return try await perform(request)
+        return try await perform(request, credential: .device)
     }
 
-    private func sendIgnoringResponse(method: String, path: String) async throws {
-        let request = try makeRequest(method: method, path: path)
-        _ = try await performRaw(request)
+    private func sendIgnoringResponse(
+        method: String,
+        path: String,
+        credential: Credential = .device
+    ) async throws {
+        let request = try makeRequest(method: method, path: path, credential: credential)
+        _ = try await performRaw(request, credential: credential)
     }
 
-    private func perform<Response: Decodable>(_ request: URLRequest) async throws -> Response {
-        let data = try await performRaw(request)
+    private func perform<Response: Decodable>(
+        _ request: URLRequest,
+        credential: Credential
+    ) async throws -> Response {
+        let data = try await performRaw(request, credential: credential)
         do {
             return try decoder.decode(Response.self, from: data)
         } catch {
@@ -239,7 +342,10 @@ public actor MemoBookAPIClient: MemoBookAPI {
     }
 
     /// Exécute la requête et traduit tout ce qui n'est pas un 2xx en `APIError`.
-    private func performRaw(_ request: URLRequest) async throws -> Data {
+    private func performRaw(
+        _ request: URLRequest,
+        credential: Credential
+    ) async throws -> Data {
         let data: Data
         let response: URLResponse
 
@@ -256,10 +362,12 @@ public actor MemoBookAPIClient: MemoBookAPI {
         guard (200..<300).contains(http.statusCode) else {
             let body = try? JSONDecoder().decode(APIErrorBody.self, from: data)
 
-            // Un token refusé signifie que l'appareil a été supprimé côté
-            // serveur : on repart d'une identité propre au prochain lancement.
+            // Un jeton refusé ne vaudra pas mieux au prochain essai : on efface
+            // **celui qui a été présenté**, et lui seul. Effacer le jeton
+            // d'appareil parce qu'une session a expiré ferait perdre les
+            // carnets, qui lui appartiennent encore.
             if http.statusCode == 401 {
-                tokenStore.clear()
+                store(for: credential)?.clear()
             }
 
             throw APIError.server(

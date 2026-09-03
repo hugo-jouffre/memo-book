@@ -31,6 +31,81 @@ enum EntryKind {
   photo
 }
 
+/// Les fournisseurs d'identité tiers acceptés.
+enum AuthProvider {
+  apple
+  google
+}
+
+/// Une personne. C'est ce qui possédera les carnets quand la propriété passera
+/// de l'appareil au compte.
+///
+/// L'email est unique mais facultatif : une personne entrée par Apple avec
+/// l'adresse masquée n'en a pas d'utilisable, et on ne veut pas lui inventer
+/// une identité pour satisfaire une contrainte.
+model Account {
+  id           String    @id @default(uuid())
+  email        String?   @unique
+  /// Renseigné quand un fournisseur nous a certifié l'adresse, ou après un
+  /// lien de confirmation. C'est la condition du rattachement automatique
+  /// entre deux fournisseurs : voir `findOrCreateAccount`.
+  emailVerifiedAt DateTime?
+  firstName    String?
+  lastName     String?
+  /// `scrypt` — voir `lib/password.ts`. Nul pour un compte qui n'entre que par
+  /// Apple ou Google.
+  passwordHash String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  identities Identity[]
+  sessions   Session[]
+  devices    Device[]
+
+  @@map("accounts")
+}
+
+/// Le lien entre un compte et un fournisseur tiers. Un compte peut en avoir
+/// plusieurs : la même personne entrée par Apple puis par Google.
+model Identity {
+  id        String       @id @default(uuid())
+  accountId String
+  account   Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  provider  AuthProvider
+  /// Le `sub` du jeton. Stable, propre à notre app, et jamais réattribué.
+  subject   String
+  /// L'adresse telle que le fournisseur l'a donnée au moment du lien. Gardée
+  /// pour le support : celle du compte peut diverger.
+  email     String?
+
+  createdAt DateTime @default(now())
+
+  /// Deux comptes ne peuvent pas revendiquer le même `sub` chez un fournisseur.
+  @@unique([provider, subject])
+  @@index([accountId])
+  @@map("identities")
+}
+
+/// Une session ouverte. Le token est opaque et haché, comme celui des
+/// appareils : révoquer, c'est supprimer une ligne — pas attendre l'expiration
+/// d'un JWT qu'on ne contrôle plus une fois émis.
+model Session {
+  id        String   @id @default(uuid())
+  accountId String
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  /// SHA-256 du token porteur — le token en clair n'existe que dans l'app.
+  tokenHash String   @unique
+  createdAt DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([accountId])
+  @@map("sessions")
+}
+
 /// Identité provisoire, le temps que la vraie authentification arrive.
 /// Un appareil s'enregistre une fois et conserve son token.
 model Device {
@@ -41,8 +116,16 @@ model Device {
   createdAt DateTime @default(now())
   lastSeenAt DateTime @default(now())
 
+  /// Le compte auquel cet appareil s'est rattaché, une fois son porteur
+  /// identifié. Nul tant qu'il n'y a pas eu de connexion — c'est ce qui permet
+  /// de faire cohabiter les deux systèmes le temps que la propriété des
+  /// carnets passe de l'appareil au compte.
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
   memos Memo[]
 
+  @@index([accountId])
   @@map("devices")
 }
 

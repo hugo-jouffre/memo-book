@@ -100,9 +100,19 @@ public enum MemoBookSpacing {
     /// Taille minimale d'une cible tactile.
     public static let minimumTapTarget: CGFloat = 44
 
-    /// Hauteur d'un champ de saisie. Plus haute qu'un bouton (48) : le champ
-    /// doit loger son étiquette flottante en plus de son texte.
-    public static let fieldHeight: CGFloat = 56
+    /// **La** hauteur d'un appel à l'action. Tous les CTA de l'app la
+    /// partagent — « Continuer », « Continuer avec Apple », « Continuer avec
+    /// Google » — pour qu'une pile de boutons se lise comme une pile et non
+    /// comme trois contrôles différents.
+    ///
+    /// Valeur intermédiaire assumée : au-dessus des 48 pt que donnent le
+    /// libellé et ses marges dans le design system, en dessous des 72 pt
+    /// qu'atteignaient les boutons des fournisseurs tiers.
+    public static let controlHeight: CGFloat = 56
+
+    /// Hauteur d'un champ de saisie, alignée sur celle des CTA : formulaire et
+    /// boutons forment une seule colonne de contrôles de même gabarit.
+    public static let fieldHeight: CGFloat = controlHeight
 }
 
 /// Typographies de la marque : Sora pour les titres, General Sans pour tout le
@@ -120,6 +130,10 @@ public enum MemoBookFont {
 
     /// Pastille d'accroche. — Figma `App/pastille notes` (General Sans Semibold 14).
     public static let tagline = Font.custom(BrandFonts.generalSansSemibold, size: 14, relativeTo: .subheadline)
+
+    /// Même accroche, en graisse courante : pour les intitulés qui séparent
+    /// deux blocs sans devoir peser autant qu'un titre (« Ou continue avec »).
+    public static let taglineRegular = Font.custom(BrandFonts.generalSansRegular, size: 14, relativeTo: .subheadline)
 
     /// Corps de texte accentué. — Figma `App/body semibold` (General Sans Semibold 16).
     public static let bodySemibold = Font.custom(BrandFonts.generalSansSemibold, size: 16, relativeTo: .body)

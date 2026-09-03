@@ -22,6 +22,24 @@ import SwiftUI
 /// BrandTextField("Email", text: $email, field: .email, focus: $focus)
 ///     .textContentType(.emailAddress)
 /// ```
+/// Métriques verticales de General Sans, lues dans ses tables `hhea` et
+/// `OS/2` et ramenées à la taille de police (em) : montante 1,010,
+/// interligne 0,050, hauteur de capitale 0,718.
+///
+/// Elles servent à poser l'étiquette flottante sur le contour du champ. Le
+/// cadre d'un `Text` n'est pas centré sur ses lettres : il réserve au-dessus
+/// l'interligne, en dessous la place du jambage descendant. Aligner les cadres
+/// laisserait donc l'étiquette visiblement basse. On vise le milieu des
+/// capitales, seul repère que l'œil voit.
+private enum GeneralSansMetrics {
+    static let ascender: CGFloat = 1.010
+    static let lineGap: CGFloat = 0.050
+    static let capHeight: CGFloat = 0.718
+
+    /// Du haut du cadre d'un `Text` au milieu de ses capitales.
+    static let capCenterFromTop = ascender + lineGap - capHeight / 2
+}
+
 public struct BrandTextField<Field: Hashable>: View {
     private let label: String
     @Binding private var text: String
@@ -55,6 +73,10 @@ public struct BrandTextField<Field: Hashable>: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .body) private var height = MemoBookSpacing.fieldHeight
+
+    /// Taille de l'étiquette flottante. Suivie à la trace parce que le
+    /// décalage qui la pose sur le contour s'exprime en fraction de police.
+    @ScaledMetric(relativeTo: .caption) private var labelSize: CGFloat = 12
 
     private var isFocused: Bool { focus.wrappedValue == field }
     private var isActive: Bool { isFocused || !text.isEmpty }
@@ -143,7 +165,12 @@ public struct BrandTextField<Field: Hashable>: View {
                 .padding(.horizontal, 6)
                 .background(MemoBookColor.background)
                 .padding(.leading, 14)
-                .alignmentGuide(.top) { $0[VerticalAlignment.center] }
+                // Un `alignmentGuide(.top)` serait le geste idiomatique, mais
+                // il reste sans effet sur le contenu d'un `overlay` : l'étiquette
+                // se posait sous le trait au lieu de le chevaucher. Un décalage
+                // explicite fait le travail, et reste exact au Dynamic Type
+                // puisqu'il se calcule sur la taille réelle de l'étiquette.
+                .offset(y: -labelSize * GeneralSansMetrics.capCenterFromTop)
                 .accessibilityHidden(true)
                 .transition(.opacity.combined(with: .offset(y: 6)))
         }

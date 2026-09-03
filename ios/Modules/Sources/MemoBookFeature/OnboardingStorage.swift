@@ -1,4 +1,5 @@
 import Foundation
+import MemoBookNetworking
 
 /// Où l'app note l'étape franchie par l'utilisateur, et comment revenir en
 /// arrière pendant le développement.
@@ -11,9 +12,6 @@ import Foundation
 public enum OnboardingStorage {
     /// L'écran d'accueil a été vu au moins une fois.
     public static let hasSeenWelcome = "hasSeenWelcome"
-
-    /// Session locale provisoire, en attendant une vraie authentification.
-    public static let isSignedIn = "isSignedIn"
 
     /// Argument de lancement qui remet l'app à son tout premier démarrage.
     ///
@@ -33,9 +31,14 @@ public enum OnboardingStorage {
     public static func resetIfRequested() {
         #if DEBUG
             guard ProcessInfo.processInfo.arguments.contains(resetArgument) else { return }
-            let defaults = UserDefaults.standard
-            defaults.removeObject(forKey: hasSeenWelcome)
-            defaults.removeObject(forKey: isSignedIn)
+            UserDefaults.standard.removeObject(forKey: hasSeenWelcome)
+
+            // La session n'est pas dans les réglages mais au trousseau, qui
+            // survit à une désinstallation. Sans cette ligne, on reverrait
+            // l'accueil puis on atterrirait directement dans l'app, sans jamais
+            // repasser par l'écran d'entrée. Le jeton d'appareil, lui, reste :
+            // c'est encore lui qui porte les carnets.
+            KeychainTokenStore(account: "session-token").clear()
         #endif
     }
 }

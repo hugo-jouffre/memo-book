@@ -14,6 +14,13 @@ let package = Package(
         .library(name: "MemoBookRecording", targets: ["MemoBookRecording"]),
         .library(name: "MemoBookFeature", targets: ["MemoBookFeature"]),
     ],
+    // Le SDK Google doit être déclaré **ici** et non dans `project.yml` : un
+    // package listé là-bas n'est visible que de la cible app, alors que
+    // l'écran d'entrée vit dans `MemoBookFeature`. La cible app y accède quand
+    // même, par transitivité.
+    dependencies: [
+        .package(url: "https://github.com/google/GoogleSignIn-iOS", from: "9.0.0"),
+    ],
     targets: [
         // Modèles et types partagés. Aucune dépendance : c'est ce qui permet de
         // le tester sur n'importe quelle plateforme.
@@ -42,6 +49,9 @@ let package = Package(
                 "MemoBookDesign",
                 "MemoBookNetworking",
                 "MemoBookRecording",
+                // Seul `GoogleSignIn` est utile : `GoogleSignInSwift` n'apporte
+                // que son bouton, et le nôtre est déjà dessiné.
+                .product(name: "GoogleSignIn", package: "GoogleSignIn-iOS"),
             ]
         ),
 

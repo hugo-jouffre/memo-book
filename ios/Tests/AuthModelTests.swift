@@ -1,12 +1,16 @@
 @testable import MemoBookFeature
+import MemoBookNetworking
 import XCTest
 
 /// Les règles qui décident si « Continuer » s'allume. Elles vivent dans le
 /// modèle précisément pour être vérifiables ici, sans simulateur.
 @MainActor
 final class AuthModelTests: XCTestCase {
+    /// Ces règles sont purement locales : elles décident si « Continuer »
+    /// s'allume, avant tout appel. L'API n'est là que parce que le modèle en
+    /// exige une.
     private func model(_ configure: (AuthModel) -> Void) -> AuthModel {
-        let model = AuthModel()
+        let model = AuthModel(api: PreviewAPI(seeded: false))
         configure(model)
         return model
     }
@@ -109,6 +113,28 @@ final class AuthModelTests: XCTestCase {
 
         model.mode = .signIn
         XCTAssertTrue(model.canSubmit, "L'email et le mot de passe suffisent en connexion.")
+    }
+
+    // MARK: - Estompage des fournisseurs tiers
+
+    func testTheSocialSectionOnlyFadesOnceSomethingIsTyped() {
+        let fresh = model { $0.mode = .signUp }
+        XCTAssertFalse(fresh.hasStartedFilling, "Formulaire vierge : les trois chemins se valent.")
+
+        for keystroke in [\AuthModel.firstName, \.lastName, \.email, \.password, \.passwordConfirmation] {
+            let model = model { $0[keyPath: keystroke] = "x" }
+            XCTAssertTrue(model.hasStartedFilling, "N'importe quel champ suffit à faire un choix.")
+        }
+    }
+
+    func testTheNamesTypedInSignUpDoNotFadeTheSignInScreen() {
+        // Le prénom et le nom n'ont pas de champ en connexion : ce qui y a été
+        // tapé ne doit pas estomper un écran où il ne se voit plus.
+        let model = model {
+            $0.firstName = "Hugo"
+            $0.mode = .signIn
+        }
+        XCTAssertFalse(model.hasStartedFilling)
     }
 
     // MARK: - Enchaînement du clavier

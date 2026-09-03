@@ -21,7 +21,10 @@ export function testEnv() {
   return loadEnv({
     NODE_ENV: "test",
     LOG_LEVEL: "silent",
+    // `TEST_DATABASE_URL` d'abord : la suite vide les tables à chaque fichier,
+    // elle ne doit jamais tomber sur la base de développement. Voir `.env`.
     DATABASE_URL:
+      process.env["TEST_DATABASE_URL"] ??
       process.env["DATABASE_URL"] ??
       "postgresql://memobook:memobook@localhost:5432/memobook",
     S3_ENDPOINT: "http://localhost:9000",
@@ -56,7 +59,7 @@ export async function createHarness(
 /** Vide les tables entre deux suites. `Device` cascade sur tout le reste. */
 export async function resetDatabase(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "print_orders", "renders", "entries", "media_assets", "memos", "devices" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "print_orders", "renders", "entries", "media_assets", "memos", "devices", "sessions", "identities", "accounts" RESTART IDENTITY CASCADE',
   );
 }
 

@@ -79,6 +79,71 @@ public actor PreviewAPI: MemoBookAPI {
 
     public func ensureDeviceRegistered() async throws {}
 
+    // MARK: - Compte
+    //
+    // L'aperçu accepte tout le monde : ce qu'on travaille dans un aperçu, c'est
+    // l'écran, pas la validation du serveur. Les refus se vérifient en test.
+
+    private var account: Account?
+
+    private static let previewAccount = Account(
+        id: "preview-account",
+        email: "hugo@memobook.app",
+        firstName: "Hugo",
+        createdAt: .now
+    )
+
+    public func hasStoredSession() async -> Bool { account != nil }
+
+    public func signUp(
+        email: String,
+        password: String,
+        firstName: String?,
+        lastName: String?
+    ) async throws -> AuthSession {
+        open(
+            Account(
+                id: "preview-account",
+                email: email,
+                firstName: firstName,
+                lastName: lastName,
+                createdAt: .now
+            )
+        )
+    }
+
+    public func signIn(email: String, password: String) async throws -> AuthSession {
+        open(Self.previewAccount)
+    }
+
+    public func signIn(with credential: SocialSignIn) async throws -> AuthSession {
+        open(
+            Account(
+                id: "preview-account",
+                email: Self.previewAccount.email,
+                firstName: credential.firstName ?? Self.previewAccount.firstName,
+                lastName: credential.lastName,
+                createdAt: .now
+            )
+        )
+    }
+
+    public func currentAccount() async throws -> Account {
+        guard let account else { throw APIError.notAuthenticated }
+        return account
+    }
+
+    public func signOut() async { account = nil }
+
+    private func open(_ account: Account) -> AuthSession {
+        self.account = account
+        return AuthSession(
+            token: "preview-session",
+            expiresAt: .now.addingTimeInterval(90 * 86_400),
+            account: account
+        )
+    }
+
     public func memos() async throws -> [MemoSummary] {
         memosById.values
             .sorted { $0.createdAt > $1.createdAt }
