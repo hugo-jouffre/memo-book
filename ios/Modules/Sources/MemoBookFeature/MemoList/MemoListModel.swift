@@ -10,10 +10,11 @@ public final class MemoListModel {
     public private(set) var isLoading = false
     public private(set) var errorMessage: String?
 
-    private let api: any MemoBookAPI
+    private let dependencies: AppDependencies
+    private var api: any MemoBookAPI { dependencies.api }
 
-    public init(api: any MemoBookAPI) {
-        self.api = api
+    public init(dependencies: AppDependencies) {
+        self.dependencies = dependencies
     }
 
     public func load() async {
@@ -21,6 +22,9 @@ public final class MemoListModel {
         defer { isLoading = false }
 
         do {
+            // Premier écran qui a vraiment besoin du réseau : c'est ici que
+            // l'appareil s'enregistre, pas au lancement de l'app.
+            try await dependencies.ensureRegistered()
             memos = try await api.memos()
             errorMessage = nil
         } catch {
@@ -37,6 +41,7 @@ public final class MemoListModel {
         }
 
         do {
+            try await dependencies.ensureRegistered()
             let memo = try await api.createMemo(
                 NewMemo(title: cleanedTitle, theme: theme.flatMap(\.nilIfBlank))
             )
@@ -51,6 +56,7 @@ public final class MemoListModel {
 
     public func delete(_ memo: MemoSummary) async {
         do {
+            try await dependencies.ensureRegistered()
             try await api.deleteMemo(id: memo.id)
             memos.removeAll { $0.id == memo.id }
         } catch {
