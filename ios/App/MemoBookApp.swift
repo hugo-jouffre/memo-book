@@ -11,6 +11,10 @@ struct MemoBookApp: App {
         // Sora et General Sans sont des ressources du module design : c'est du
         // code, pas `UIAppFonts`, qui les déclare à iOS. Voir `BrandFonts`.
         BrandFonts.registerIfNeeded()
+
+        // Avant tout, pour que `RootView` lise des réglages déjà remis à zéro
+        // si on le lui a demandé. Sans effet en release.
+        OnboardingStorage.resetIfRequested()
     }
 
     var body: some Scene {

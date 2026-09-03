@@ -13,8 +13,26 @@ make test      # modules + cible app
 ```
 
 Lancer dans le simulateur : construire, puis `xcrun simctl install <device> <.app>`
-et `xcrun simctl launch <device> com.memobook.app`. Pour retomber sur l'écran
-d'accueil, `xcrun simctl uninstall` d'abord — il est gardé par un `@AppStorage`.
+et `xcrun simctl launch <device> com.memobook.app`.
+
+### Revoir l'écran d'accueil
+
+Un ⌘R réinstalle **par-dessus** sans toucher au conteneur : l'écran d'accueil,
+gardé par un `@AppStorage`, ne revient donc pas tout seul. Pour repartir du
+premier démarrage, cocher `-resetOnboarding` dans *Product ▸ Scheme ▸ Edit
+Scheme ▸ Run ▸ Arguments*, ou :
+
+```bash
+xcrun simctl launch <device> com.memobook.app -resetOnboarding
+```
+
+Voir `OnboardingStorage`. Sans effet en release.
+
+⚠️ Ne **jamais** poser un réglage de test avec
+`xcrun simctl spawn <device> defaults write com.memobook.app …` : ça écrit dans
+un domaine au niveau de l'appareil que l'app lit aussi, mais que son propre
+`UserDefaults` ne peut pas effacer. On croit alors à un bug de l'app. Passer par
+l'interface, ou par `-resetOnboarding`.
 
 ## Modules
 

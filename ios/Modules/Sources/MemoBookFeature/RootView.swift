@@ -9,12 +9,12 @@ import SwiftUI
 /// appartiennent à l'écran qui fait l'appel — voir ``AppDependencies``.
 public struct RootView: View {
     /// L'écran d'accueil ne se montre qu'au premier lancement.
-    @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
+    @AppStorage(OnboardingStorage.hasSeenWelcome) private var hasSeenWelcome = false
 
     /// Provisoire : il n'y a pas encore d'authentification côté serveur, donc
     /// pas de session à restaurer. Ce drapeau tient lieu de session locale et
     /// devra céder la place à un vrai jeton. Voir ``AuthModel``.
-    @AppStorage("isSignedIn") private var isSignedIn = false
+    @AppStorage(OnboardingStorage.isSignedIn) private var isSignedIn = false
 
     public init() {}
 
