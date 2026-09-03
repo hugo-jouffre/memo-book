@@ -1,33 +1,37 @@
 import MemoBookDesign
 import SwiftUI
 
-/// Point d'entrée de l'interface. Toute la navigation part d'ici : une seule
-/// `NavigationStack`, comme le veut la structure d'une app iOS classique.
+/// Point d'entrée de l'interface, et le seul endroit qui décide de l'étape où
+/// se trouve l'utilisateur : accueil au tout premier lancement, puis entrée
+/// dans le compte, puis l'app.
+///
+/// Rien n'est mis derrière un écran d'attente réseau : les erreurs
+/// appartiennent à l'écran qui fait l'appel — voir ``AppDependencies``.
 public struct RootView: View {
-    @Environment(AppDependencies.self) private var dependencies
+    /// L'écran d'accueil ne se montre qu'au premier lancement.
+    @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
+
+    /// Provisoire : il n'y a pas encore d'authentification côté serveur, donc
+    /// pas de session à restaurer. Ce drapeau tient lieu de session locale et
+    /// devra céder la place à un vrai jeton. Voir ``AuthModel``.
+    @AppStorage("isSignedIn") private var isSignedIn = false
 
     public init() {}
 
     public var body: some View {
-        NavigationStack {
-            if dependencies.isReady {
-                MemoListView()
-            } else if let startupError = dependencies.startupError {
-                ContentUnavailableView {
-                    Label("Connexion impossible", systemImage: "wifi.exclamationmark")
-                } description: {
-                    Text(startupError)
-                } actions: {
-                    Button("Réessayer") {
-                        Task { await dependencies.prepare() }
-                    }
-                    .tint(MemoBookColor.action)
-                }
+        Group {
+            if !hasSeenWelcome {
+                WelcomeView { hasSeenWelcome = true }
+            } else if !isSignedIn {
+                AuthView { isSignedIn = true }
             } else {
-                ProgressView("Préparation…")
+                NavigationStack {
+                    MemoListView()
+                }
+                .tint(MemoBookColor.action)
             }
         }
-        .tint(MemoBookColor.action)
-        .task { await dependencies.prepare() }
+        .animation(.snappy, value: hasSeenWelcome)
+        .animation(.snappy, value: isSignedIn)
     }
 }
