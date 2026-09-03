@@ -68,10 +68,24 @@ public enum MemoBookColor {
     public static let onAction = Color(hex: 0xFFFCF8)
 
     // Couleurs sémantiques — retours système uniquement (statuts, messages),
-    // jamais de la décoration.
-    public static let valid = Color(hex: 0x28654B)
-    public static let warning = Color(uiColor: .systemOrange)
-    public static let error = Color(uiColor: .systemRed)
+    // jamais de la décoration. Reprises des variables Figma.
+    //
+    // Elles ne viennent plus des couleurs système d'iOS : celles-ci s'adaptent
+    // au thème et à l'appareil, alors que la palette de la marque est fixe. Un
+    // rouge système sur le crème de MemoBook ne tombait pas juste.
+
+    /// Réussite. — Figma `Success`. Volontairement distinct du vert d'action :
+    /// « c'est fait » n'est pas « c'est ici qu'on appuie ».
+    public static let valid = Color(hex: 0x3FA673)
+
+    /// Avertissement. — Figma `Warning`.
+    public static let warning = Color(hex: 0xFF682C)
+
+    /// Échec. — Figma `Error`.
+    public static let error = Color(hex: 0xDE2B2E)
+
+    /// Information neutre, sans jugement. — Figma `Information`.
+    public static let information = Color(hex: 0x4A8FE0)
 }
 
 /// Échelle d'espacement de 8 pt, plus les marges de référence.
@@ -105,14 +119,26 @@ public enum MemoBookSpacing {
     /// Google » — pour qu'une pile de boutons se lise comme une pile et non
     /// comme trois contrôles différents.
     ///
-    /// Valeur intermédiaire assumée : au-dessus des 48 pt que donnent le
-    /// libellé et ses marges dans le design system, en dessous des 72 pt
-    /// qu'atteignaient les boutons des fournisseurs tiers.
-    public static let controlHeight: CGFloat = 56
+    /// La valeur est un compromis avec Apple. `SignInWithAppleButton` ne laisse
+    /// choisir ni la taille de son libellé ni celle de sa pomme : il déduit les
+    /// deux de la hauteur du bouton — environ 0,35 × pour le texte, 0,29 × pour
+    /// le logo. Tout se tient donc à cette seule valeur.
+    ///
+    /// À 56 pt le texte d'Apple dépassait le nôtre de 40 %. À 44 pt les textes
+    /// s'accordaient, mais sa pomme tombait à 12,7 pt contre 19 pour le logo
+    /// Google. Amener la pomme à 19 pt demanderait un bouton de 66 pt, où le
+    /// texte repartirait à 23 pt.
+    ///
+    /// 50 pt est le point d'équilibre : assez épais pour un appel à l'action,
+    /// et c'est ``MemoBookFont/button`` et ``markSide`` qui viennent s'aligner
+    /// dessus plutôt que l'inverse.
+    public static let controlHeight: CGFloat = 50
 
-    /// Hauteur d'un champ de saisie, alignée sur celle des CTA : formulaire et
-    /// boutons forment une seule colonne de contrôles de même gabarit.
-    public static let fieldHeight: CGFloat = controlHeight
+    /// Hauteur d'un champ de saisie. Plus haute qu'un bouton, et découplée de
+    /// lui : la hauteur des CTA est contrainte par le bouton d'Apple, dont on
+    /// ne choisit pas la typographie. Un champ n'a pas à payer cette contrainte
+    /// — il doit respirer autour de son texte et de son étiquette flottante.
+    public static let fieldHeight: CGFloat = 56
 }
 
 /// Typographies de la marque : Sora pour les titres, General Sans pour tout le
@@ -144,11 +170,19 @@ public enum MemoBookFont {
     /// Texte secondaire des cartes (General Sans Regular 12).
     public static let caption = Font.custom(BrandFonts.generalSansRegular, size: 12, relativeTo: .caption)
 
-    /// Libellé des boutons. Le composant versionné du design system dit Sora
-    /// SemiBold 16, interligne 1,5 — ce sont ces 24 pt de ligne qui donnent au
-    /// bouton sa hauteur de 48. L'écran d'accueil, lui, surcharge son instance
-    /// en General Sans Medium : c'est la définition du composant qui fait foi.
-    public static let button = Font.custom(BrandFonts.soraSemiBold, size: 16, relativeTo: .body)
+    /// Messages adressés à l'utilisateur : erreurs, réussites, avertissements.
+    /// Ils ont la taille du corps de texte et non celle d'une légende — une
+    /// notification qu'on doit chercher pour la lire a raté son travail.
+    public static let notification = body
+
+    /// Libellé des boutons. Le design system dit Sora SemiBold 16 ; on est à 18.
+    ///
+    /// L'écart vient du bouton d'Apple, dont la typographie n'est pas
+    /// négociable : à la hauteur d'appel à l'action de l'app, son libellé fait
+    /// 17,4 pt d'encre. Rester à 16 laissait un écart d'un quart entre deux
+    /// boutons empilés, qu'on lisait immédiatement. C'est la seule valeur du
+    /// design system qu'une contrainte extérieure nous fait bouger.
+    public static let button = Font.custom(BrandFonts.soraSemiBold, size: 18, relativeTo: .body)
 
     /// Titres de section dans les écrans système.
     public static let sectionTitle = Font.custom(BrandFonts.generalSansSemibold, size: 17, relativeTo: .headline)

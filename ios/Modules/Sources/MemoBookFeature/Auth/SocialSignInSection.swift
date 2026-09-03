@@ -24,7 +24,10 @@ struct SocialSignInSection: View {
     /// ``BrandButton`` — Apple et Google imposent chacun leur dessin — mais ils
     /// partagent son gabarit, sans quoi la pile se lirait de travers.
     @ScaledMetric(relativeTo: .body) private var height = MemoBookSpacing.controlHeight
-    @ScaledMetric(relativeTo: .body) private var markSide: CGFloat = 20
+    /// Taille du logo Google, calée sur la pomme d'Apple — 14,4 pt à la hauteur
+    /// d'appel à l'action de l'app. C'est le seul des deux qu'on peut régler :
+    /// Apple dessine le sien à partir de la hauteur du bouton, et rien d'autre.
+    @ScaledMetric(relativeTo: .body) private var markSide: CGFloat = 15
 
     /// Renouvelé à chaque appui : un nonce ne vaut que pour une tentative.
     @State private var nonce = SignInNonce()
@@ -101,7 +104,9 @@ struct SocialSignInSection: View {
                 .frame(width: markSide, height: markSide)
                 .accessibilityHidden(true)
             Text(title)
-                .font(MemoBookFont.bodySemibold)
+                // La police des boutons, comme « Continuer » : ces trois-là
+                // sont le même appel à l'action, ils doivent se lire pareil.
+                .font(MemoBookFont.button)
         }
         .frame(maxWidth: .infinity)
         .frame(minHeight: height)

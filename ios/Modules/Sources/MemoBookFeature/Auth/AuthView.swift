@@ -58,7 +58,7 @@ public struct AuthView: View {
 
                 if let errorMessage = model.errorMessage {
                     Text(errorMessage)
-                        .font(MemoBookFont.caption)
+                        .font(MemoBookFont.notification)
                         .foregroundStyle(MemoBookColor.error)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .transition(.opacity)
