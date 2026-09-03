@@ -81,6 +81,10 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.memobook.app.tests
+        # Sans ça la cible ne signe pas et `xcodebuild test` refuse de démarrer.
+        # Un bundle de tests n'a pas d'Info.plist à écrire à la main : on laisse
+        # Xcode le générer.
+        GENERATE_INFOPLIST_FILE: YES
 
 schemes:
   MemoBook:
