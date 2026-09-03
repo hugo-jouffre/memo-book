@@ -8,6 +8,33 @@ public protocol MemoBookAPI: Sendable {
     /// Enregistre l'appareil si nécessaire et mémorise son token.
     func ensureDeviceRegistered() async throws
 
+    // MARK: - Compte
+
+    /// Une session est-elle déjà en trousseau ? Ne dit pas si elle est encore
+    /// valide — seul le serveur le sait, via ``currentAccount()``.
+    func hasStoredSession() async -> Bool
+
+    func signUp(
+        email: String,
+        password: String,
+        firstName: String?,
+        lastName: String?
+    ) async throws -> AuthSession
+
+    func signIn(email: String, password: String) async throws -> AuthSession
+
+    /// Échange un jeton d'identité Apple ou Google contre une session. Le
+    /// serveur vérifie le jeton auprès du fournisseur avant de répondre.
+    func signIn(with credential: SocialSignIn) async throws -> AuthSession
+
+    /// Le compte de la session en cours. Sert aussi à savoir, au lancement, si
+    /// la session gardée au trousseau vaut encore quelque chose.
+    func currentAccount() async throws -> Account
+
+    /// Ferme la session courante, et elle seule. Oublie le jeton local même si
+    /// le serveur est injoignable : l'utilisateur a demandé à sortir.
+    func signOut() async
+
     func memos() async throws -> [MemoSummary]
     func createMemo(_ memo: NewMemo) async throws -> Memo
     func memo(id: String) async throws -> MemoDetail

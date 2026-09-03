@@ -117,8 +117,42 @@ l'app iOS télécharge `pdfUrl` en HTTP simple, un chemin `file://` ne lui servi
 
 ## L'API
 
-Toutes les routes `/v1` attendent un `Authorization: Bearer <token>` d'appareil, sauf
-`POST /v1/devices` qui le délivre.
+Deux identifications cohabitent, le temps que la propriété des carnets passe de
+l'appareil au compte :
+
+- **appareil** — `POST /v1/devices` délivre le token, et tout le reste de `/v1`
+  l'attend en `Authorization: Bearer <token>`. C'est ce qui porte les carnets
+  aujourd'hui.
+- **compte** — les routes `/v1/auth/*` délivrent un token de session, que
+  `/v1/auth/me` et `/v1/auth/signout` attendent de la même façon.
+
+### Comptes
+
+Les quatre premières routes ne sont pas authentifiées : ce sont elles qui
+délivrent le token.
+
+| Route | Rôle |
+| --- | --- |
+| `POST /v1/auth/signup` | Crée un compte par email et mot de passe (8 caractères, 1 lettre, 1 chiffre) |
+| `POST /v1/auth/signin` | Ouvre une session sur un compte existant |
+| `POST /v1/auth/apple` | Entre par Apple. Attend `identityToken` **et** `nonce` |
+| `POST /v1/auth/google` | Entre par Google. Attend `identityToken` |
+| `GET /v1/auth/me` | Le compte de la session en cours |
+| `POST /v1/auth/signout` | Ferme la session présentée, et elle seule |
+
+Le jeton d'identité envoyé par l'app n'est **jamais** cru sur parole : il est
+vérifié contre les clés publiques du fournisseur — signature, émetteur,
+audience, expiration, plus le nonce côté Apple. Voir
+`services/socialIdentity.ts`. Les audiences attendues se règlent par
+`APPLE_BUNDLE_ID`, `GOOGLE_IOS_CLIENT_ID` et `GOOGLE_WEB_CLIENT_ID` ; sans
+elles, la route concernée refuse de fonctionner plutôt que d'accepter n'importe
+quel jeton.
+
+Les tokens de session sont opaques et stockés hachés, comme ceux des appareils :
+révoquer, c'est supprimer une ligne. Un JWT resterait valable jusqu'à son
+expiration même après un mot de passe changé ou un téléphone perdu.
+
+### Appareils et carnets
 
 | Route | Rôle |
 | --- | --- |

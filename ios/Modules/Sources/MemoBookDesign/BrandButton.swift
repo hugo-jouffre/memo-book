@@ -78,10 +78,15 @@ public struct BrandButton: View {
         self.action = action
     }
 
-    /// Hauteur de la ligne de texte : 1,5 × 16 pt dans le design system. C'est
-    /// elle qui donne au bouton ses 48 pt (24 + deux fois 12 de marge), et elle
+    /// Hauteur de la ligne de texte : 1,5 × 16 pt dans le design system. Elle
     /// suit le Dynamic Type pour que le libellé ne soit jamais rogné.
     @ScaledMetric(relativeTo: .body) private var lineBox: CGFloat = 24
+
+    /// La hauteur d'appel à l'action de l'app. Le libellé et ses marges ne
+    /// donnent que 48 pt ; ce plancher porte le bouton à la hauteur commune à
+    /// tous les CTA, y compris ceux des fournisseurs tiers, qui ne passent pas
+    /// par ce composant. Il grandit avec le Dynamic Type comme le reste.
+    @ScaledMetric(relativeTo: .body) private var controlHeight = MemoBookSpacing.controlHeight
 
     /// Les icônes du design system font 24 pt.
     @ScaledMetric(relativeTo: .body) private var iconSide: CGFloat = 24
@@ -96,6 +101,7 @@ public struct BrandButton: View {
                 .frame(minHeight: lineBox)
                 .padding(.horizontal, horizontalPadding)
                 .padding(.vertical, verticalPadding)
+                .frame(minHeight: minimumHeight)
                 .frame(maxWidth: fillsWidth ? .infinity : nil)
                 .background(background)
                 .overlay(border)
@@ -156,6 +162,16 @@ public struct BrandButton: View {
         case (_, .regular, false): 24
         case (_, .small, true): 8
         case (_, .small, false): 20
+        }
+    }
+
+    /// Seuls les boutons pleine taille portent la hauteur des CTA. Un `small`
+    /// est un bouton d'appoint, et un `link` n'est qu'un mot dans une phrase :
+    /// leur imposer 56 pt les transformerait en blocs.
+    private var minimumHeight: CGFloat? {
+        switch (style, size) {
+        case (.link, _), (_, .small): nil
+        case (_, .regular): controlHeight
         }
     }
 
