@@ -1,3 +1,4 @@
+import MemoBookDesign
 import MemoBookFeature
 import MemoBookNetworking
 import SwiftUI
@@ -5,6 +6,12 @@ import SwiftUI
 @main
 struct MemoBookApp: App {
     @State private var dependencies = AppDependencies(configuration: .fromBuildConfiguration)
+
+    init() {
+        // Sora et General Sans sont des ressources du module design : c'est du
+        // code, pas `UIAppFonts`, qui les déclare à iOS. Voir `BrandFonts`.
+        BrandFonts.registerIfNeeded()
+    }
 
     var body: some Scene {
         WindowGroup {
