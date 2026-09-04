@@ -21,9 +21,18 @@ settings:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
     ENABLE_USER_SCRIPT_SANDBOXING: YES
-    # Team ID Apple Developer de Hugo (compte hugo.jouffre@hotmail.fr).
-    # Nécessaire pour installer sur iPhone et publier sur TestFlight.
-    DEVELOPMENT_TEAM: AB46433XZF
+    # Team ID Apple Developer de Hugo. Nécessaire pour installer sur iPhone et
+    # publier sur TestFlight.
+    #
+    # ⚠️ Ce n'est **pas** le nombre entre parenthèses du certificat
+    # (« Apple Development: Hugo Jouffre (AB46433XZF) ») : celui-là identifie le
+    # développeur. Le Team ID est l'unité d'organisation du certificat, et c'est
+    # lui que Xcode attend — sinon la case Team affiche « Unknown name » et
+    # « No Account for Team ». Pour le relire :
+    #
+    #   security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject
+    #   # → /UID=…/CN=Apple Development: … /OU=HP2A94889S/…   ← l'OU
+    DEVELOPMENT_TEAM: HP2A94889S
     CODE_SIGN_STYLE: Automatic
 
 packages:
@@ -50,6 +59,20 @@ targets:
           - fr
         CFBundleShortVersionString: "0.1.0"
         CFBundleVersion: "1"
+        # L'app ne parle que français. Sans ces deux clés, iOS la considère
+        # anglaise et `Locale.current` suit la langue de l'appareil : sur un
+        # iPhone réglé en anglais, l'écran d'accueil affichait « 26 Aug–15 Sep »
+        # au milieu d'une interface entièrement française. Les dates, les
+        # nombres et les unités passent par `FormatStyle` : c'est cette locale
+        # qu'ils lisent. La **région**, elle, reste celle de l'utilisateur —
+        # un lecteur aux États-Unis lit bien des miles.
+        CFBundleDevelopmentRegion: fr
+        CFBundleLocalizations:
+          - fr
+        # Catégorie App Store, celle que Xcode montre dans Identity ▸ App
+        # Category. Elle vit ici et pas dans l'UI : la régler dans Xcode la
+        # perdrait au prochain `make project`.
+        LSApplicationCategoryType: public.app-category.travel
         # Écran de lancement : le logo sur le crème de la marque. Cette clé
         # n'accepte qu'une seule image et ne sait pas la décaler — pour un
         # motif de fond ou un logo hors centre, il faudra un storyboard.
@@ -103,6 +126,17 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.memobook.app
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # La catégorie App Store est déclarée **deux fois**, et c'est voulu :
+        #
+        # - `LSApplicationCategoryType` dans l'Info.plist ci-dessus est ce qui
+        #   part réellement dans le bundle signé ;
+        # - ce réglage-ci est ce que lit l'onglet *General ▸ Identity* de Xcode.
+        #   Sans lui l'UI affiche « None » même quand le plist est correct, et
+        #   la corriger à la main dans Xcode la reperdrait au prochain
+        #   `make project`.
+        #
+        # Les deux valeurs doivent rester identiques.
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.travel
     dependencies:
       - package: MemoBookKit
         product: MemoBookFeature

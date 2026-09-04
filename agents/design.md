@@ -31,6 +31,18 @@
 | Black | #2D231A | Texte principal |
 | White | #FFFCF8 | Surfaces (cartes, champs) — un blanc chaud, jamais #FFFFFF |
 | Grey | #C8C8C8 | Bordures neutres, champs au repos |
+| **Grey Typo** | **#2B231B80** | **Texte secondaire de l'accueil** — le noir de la marque à 50 %, pas un gris neutre |
+| **Green Lighter** | **#3D9A6F** | **Signaux discrets** — le point « en ce moment » de l'accueil |
+
+> **Grey Typo et Green Lighter** ont été relevés le 04/09/2026 par
+> `get_variable_defs` sur le nœud de l'accueil (`3116:30733`). Ils ne
+> figuraient pas dans le relevé du 20/08 : ce miroir avait un train de retard.
+>
+> **Grey Typo n'est pas `Grays/Gray`.** Le gris système #8E8E93 est neutre et
+> refroidit le crème ; Grey Typo est tiré du noir chaud de la marque et s'y
+> pose. Les deux coexistent dans le code (`inkSecondary` et `inkMuted`) parce
+> que les écrans du lot 1 emploient bien le gris système : à trancher avec
+> Clara si l'un doit remplacer l'autre partout.
 
 > **Carrot, Carrot Darker, Forest Green et Kiwi n'existent plus.** Blue et Lime les
 > remplacent. Les fichiers qui les citent encore sont listés plus bas.
