@@ -1,4 +1,18 @@
+import { existsSync } from "node:fs";
 import { z } from "zod";
+
+/**
+ * Variable facultative. Dans un `.env`, `MA_VARIABLE=` veut dire « pas
+ * configurée » — pas « chaîne vide ». Sans cette nuance, une ligne laissée en
+ * attente empêche le serveur de démarrer avec un message qui accuse le format
+ * plutôt que l'absence.
+ */
+function optional<T extends z.ZodTypeAny>(inner: T) {
+  return z.preprocess((value) => (value === "" ? undefined : value), inner.optional());
+}
+
+/** Toujours résolu depuis la racine du back-end, pas du dossier courant. */
+const ENV_FILE = new URL("../.env", import.meta.url).pathname;
 
 /**
  * Toute la configuration passe par ici. Le serveur refuse de démarrer si une
@@ -18,15 +32,29 @@ const schema = z.object({
   // mémoire : exiger un bucket pour lancer les tests serait une friction
   // gratuite, et un défaut silencieux masquerait une erreur de configuration
   // en production.
-  S3_ENDPOINT: z.string().url().optional(),
+  S3_ENDPOINT: optional(z.string().url()),
   S3_REGION: z.string().default("us-east-1"),
-  S3_BUCKET: z.string().min(1).optional(),
-  S3_ACCESS_KEY_ID: z.string().min(1).optional(),
-  S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  S3_BUCKET: optional(z.string().min(1)),
+  S3_ACCESS_KEY_ID: optional(z.string().min(1)),
+  S3_SECRET_ACCESS_KEY: optional(z.string().min(1)),
   S3_FORCE_PATH_STYLE: z
     .enum(["true", "false"])
     .default("true")
     .transform((value) => value === "true"),
+
+  /**
+   * Audiences attendues dans les jetons d'identité. Un jeton signé par Apple
+   * mais émis pour une autre app ne doit pas ouvrir de compte ici : c'est le
+   * `aud` qui le dit, et il n'a de sens que comparé à ces valeurs.
+   *
+   * Vides en dehors de la production : les tests passent un vérificateur
+   * simulé, et exiger ces variables pour lancer la suite serait une friction
+   * gratuite. Les routes concernées échouent clairement si elles manquent.
+   */
+  APPLE_BUNDLE_ID: z.string().default(""),
+  GOOGLE_IOS_CLIENT_ID: z.string().default(""),
+  /** Le client web, si un jour l'app tourne aussi dans un navigateur. */
+  GOOGLE_WEB_CLIENT_ID: z.string().default(""),
 
   OPENAI_API_KEY: z.string().default(""),
   OPENAI_TRANSCRIPTION_MODEL: z.string().default("gpt-4o-transcribe"),
@@ -75,6 +103,15 @@ export type Env = z.infer<typeof schema> & {
 };
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
+  // Charge `.env` quand on lit l'environnement réel. `process.loadEnvFile` est
+  // natif depuis Node 20.12 : pas de `dotenv` à installer, et les variables
+  // déjà posées dans l'environnement (Docker, CI, hébergeur) l'emportent.
+  //
+  // Un appelant qui fournit sa propre source — les tests — n'est pas concerné.
+  if (source === process.env && existsSync(ENV_FILE)) {
+    process.loadEnvFile(ENV_FILE);
+  }
+
   const parsed = schema.safeParse(source);
 
   if (!parsed.success) {

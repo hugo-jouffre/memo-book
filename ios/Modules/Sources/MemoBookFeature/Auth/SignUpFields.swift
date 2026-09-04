@@ -45,7 +45,7 @@ struct SignUpFields: View {
 
             if let error = model.passwordConfirmationError {
                 Text(error)
-                    .font(MemoBookFont.caption)
+                    .font(MemoBookFont.notification)
                     .foregroundStyle(MemoBookColor.error)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 20)

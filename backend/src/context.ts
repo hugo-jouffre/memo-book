@@ -4,6 +4,7 @@ import type { Env } from "./env.js";
 import { InlineQueue, PgBossQueue, type JobQueue } from "./jobs/queue.js";
 import { createBookRenderer, type BookRenderer } from "./services/apitemplate.js";
 import { createRedactor, type Redactor } from "./services/redaction.js";
+import { createSocialVerifier, type SocialVerifier } from "./services/socialIdentity.js";
 import { createMediaStorage, type MediaStorage } from "./services/storage.js";
 import { createStructurer, type Structurer } from "./services/structuring.js";
 import { createTranscriber, type Transcriber } from "./services/transcription.js";
@@ -21,6 +22,8 @@ export interface AppContext {
   prisma: PrismaClient;
   queue: JobQueue;
   storage: MediaStorage;
+  /** Vérifie les jetons d'identité Apple et Google. */
+  socialVerifier: SocialVerifier;
   transcriber: Transcriber;
   redactor: Redactor;
   structurer: Structurer;
@@ -43,6 +46,7 @@ export function createContext(env: Env, options: CreateContextOptions = {}): App
     queue:
       env.NODE_ENV === "test" ? new InlineQueue() : new PgBossQueue(env.DATABASE_URL),
     storage: createMediaStorage(env),
+    socialVerifier: createSocialVerifier(env),
     transcriber: createTranscriber(env),
     redactor: createRedactor(env),
     structurer: createStructurer(env),

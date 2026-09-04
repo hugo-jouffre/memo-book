@@ -17,7 +17,10 @@ export class HttpError extends Error {
     return new HttpError(400, message, code);
   }
 
-  static unauthorized(message = "Token d'appareil manquant ou invalide."): HttpError {
+  // Message neutre : deux identifications cohabitent — l'appareil et le compte
+  // — et parler du « token d'appareil » sur une route de compte envoie le
+  // lecteur chercher au mauvais endroit.
+  static unauthorized(message = "Token manquant ou invalide."): HttpError {
     return new HttpError(401, message, "unauthorized");
   }
 

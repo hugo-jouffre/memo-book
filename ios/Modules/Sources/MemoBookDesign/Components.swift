@@ -59,12 +59,12 @@ public struct ErrorBanner: View {
             Image(systemName: "exclamationmark.triangle")
                 .foregroundStyle(MemoBookColor.error)
             Text(message)
-                .font(MemoBookFont.caption)
+                .font(MemoBookFont.notification)
                 .foregroundStyle(MemoBookColor.ink)
             Spacer(minLength: 0)
             if let retry {
                 Button("Réessayer", action: retry)
-                    .font(MemoBookFont.caption)
+                    .font(MemoBookFont.notification)
                     .tint(MemoBookColor.action)
             }
         }

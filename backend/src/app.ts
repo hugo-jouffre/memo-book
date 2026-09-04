@@ -4,7 +4,12 @@ import { ZodError } from "zod";
 import type { AppContext } from "./context.js";
 import { registerJobs } from "./jobs/index.js";
 import { HttpError } from "./lib/httpError.js";
-import { createRequireDevice, registerAuthDecorator } from "./plugins/auth.js";
+import {
+  createRequireAccount,
+  createRequireDevice,
+  registerAuthDecorator,
+} from "./plugins/auth.js";
+import { registerAuthRoutes, registerSessionRoutes } from "./routes/auth.js";
 import { registerDeviceRoutes } from "./routes/devices.js";
 import { registerEntryRoutes } from "./routes/entries.js";
 import { registerHealthRoutes } from "./routes/health.js";
@@ -58,6 +63,18 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
 
   registerHealthRoutes(app, context);
   registerDeviceRoutes(app, context);
+
+  // Entrée dans un compte : ce sont ces routes qui délivrent le token, elles ne
+  // peuvent donc pas en exiger un.
+  registerAuthRoutes(app, context);
+
+  // Ce qui appartient au compte connecté. Séparé du bloc « appareil »
+  // ci-dessous : les deux identifications coexistent le temps que la propriété
+  // des carnets passe de l'un à l'autre.
+  await app.register(async (accountRoutes) => {
+    accountRoutes.addHook("preHandler", createRequireAccount(context));
+    registerSessionRoutes(accountRoutes, context);
+  });
 
   // Uniquement en mode de rendu local : sert les PDF produits sur le disque.
   registerLocalRenderRoutes(app, context);

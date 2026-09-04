@@ -6,6 +6,11 @@ name: MemoBook
 
 options:
   bundleIdPrefix: com.memobook
+  # L'app est en français, et c'est elle qui le dit. Sans cette langue de
+  # développement, les libellés que le système écrit lui-même — au premier chef
+  # « Continuer avec Apple », dont Apple interdit qu'on touche au texte —
+  # s'affichent en anglais au milieu d'un écran français.
+  developmentLanguage: fr
   deploymentTarget:
     iOS: "17.0"
   createIntermediateGroups: true
@@ -50,6 +55,8 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: MemoBook
+        CFBundleLocalizations:
+          - fr
         CFBundleShortVersionString: "0.1.0"
         CFBundleVersion: "1"
         # L'app ne parle que français. Sans ces deux clés, iOS la considère
@@ -84,10 +91,32 @@ targets:
         # publication, quand le back-end est derrière HTTPS.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
-    # Capacités de l'app. Comme l'Info.plist, le fichier est **généré** depuis
-    # ce bloc : c'est ce qui garantit qu'une capacité cochée dans Xcode ne
-    # disparaisse pas à la régénération du projet. Une capacité s'ajoute ici,
-    # jamais dans l'onglet Signing & Capabilities.
+        # Client OAuth **iOS** de Google. Les deux valeurs se lisent dans le
+        # `GoogleService-Info.plist` téléchargé depuis la console Google Cloud :
+        # `CLIENT_ID` ici, `REVERSED_CLIENT_ID` dans le schéma d'URL.
+        #
+        # Ce ne sont pas des secrets : elles partent dans chaque binaire livré.
+        # Le *client secret*, lui, est celui du client **web** et n'entre jamais
+        # dans l'app — il n'appartient qu'au serveur, qui vérifie les jetons.
+        # ⚠️ Ce doit être le client **iOS**, jamais le client web. Un client web
+        # refuse les schémas d'URL personnalisés — Google répond alors « Custom
+        # scheme URIs are not allowed for WEB client type ». Le client iOS se
+        # reconnaît dans la console : type « iOS », un Bundle ID, et *aucun*
+        # client secret.
+        GIDClientID: 1022603657545-ehn9lik23bgu7m9h28a01b271lft0u2h.apps.googleusercontent.com
+        CFBundleURLTypes:
+          # Google renvoie sa réponse à cette adresse : sans ce schéma, la
+          # feuille s'ouvre et ne revient jamais.
+          - CFBundleURLSchemes:
+              - com.googleusercontent.apps.1022603657545-ehn9lik23bgu7m9h28a01b271lft0u2h
+    # Sign in with Apple. La capability cochée dans Xcode ne survit pas au
+    # prochain `make project` : le .xcodeproj est régénéré depuis ce fichier,
+    # c'est donc ici qu'elle doit être déclarée pour de bon. XcodeGen écrit le
+    # fichier d'entitlements et le branche sur la cible.
+    #
+    # Côté portail Apple Developer, la capability doit être activée sur l'App
+    # ID `com.memobook.app` — sinon la signature automatique échoue avec
+    # « profile doesn't include the com.apple.developer.applesignin entitlement ».
     entitlements:
       path: App/MemoBook.entitlements
       properties:
