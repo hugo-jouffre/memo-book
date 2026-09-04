@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Une pile de lignes réunies dans une même carte, séparées par un filet : le
 /// motif des écrans de réglages de MemoBook.
@@ -70,6 +71,16 @@ public struct BrandRow: View, Identifiable {
         case disclosure
         /// L'interrupteur : la ligne **est** le réglage.
         case toggle(Binding<Bool>)
+        /// Le crayon : la valeur se corrige **sur place**, sans quitter l'écran.
+        case editable(Editable)
+    }
+
+    /// Ce qu'il faut pour rendre une valeur modifiable en ligne.
+    public struct Editable {
+        let text: Binding<String>
+        let placeholder: String?
+        let keyboardType: UIKeyboardType
+        let textContentType: UITextContentType?
     }
 
     /// Où se pose la valeur par rapport à l'intitulé.
@@ -117,6 +128,39 @@ public struct BrandRow: View, Identifiable {
         self.action = action
     }
 
+    /// Une ligne dont la valeur se corrige **sur place**.
+    ///
+    /// Le clavier s'ouvre sur cet écran, sans feuille ni écran intermédiaire, et
+    /// la valeur est enregistrée quand le champ perd le focus — clavier refermé,
+    /// défilement, passage à un autre champ, ou sortie de l'écran. C'est le
+    /// comportement des Réglages d'iOS : on corrige une ligne, on ne « valide »
+    /// pas un formulaire.
+    ///
+    /// La valeur du modèle n'est touchée qu'**à la sortie du champ**, pas à
+    /// chaque frappe : le jour où il y aura un serveur, c'est un appel réseau
+    /// par correction et non un par caractère.
+    public init(
+        _ title: String,
+        text: Binding<String>,
+        placeholder: String? = nil,
+        keyboardType: UIKeyboardType = .default,
+        textContentType: UITextContentType? = nil
+    ) {
+        self.title = title
+        self.value = nil
+        self.valuePlacement = .trailing
+        self.isValueProminent = false
+        self.accessory = .editable(
+            Editable(
+                text: text,
+                placeholder: placeholder,
+                keyboardType: keyboardType,
+                textContentType: textContentType
+            )
+        )
+        self.action = nil
+    }
+
     /// Une ligne qui porte un interrupteur. Elle n'a pas d'action : c'est
     /// l'interrupteur qui agit, et lui seul.
     public init(_ title: String, isOn: Binding<Bool>) {
@@ -131,9 +175,18 @@ public struct BrandRow: View, Identifiable {
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .body) private var minimumHeight = MemoBookSpacing.minimumTapTarget
     @ScaledMetric(relativeTo: .body) private var chevronSide: CGFloat = 14
+    @ScaledMetric(relativeTo: .body) private var pencilSide: CGFloat = 16
+
+    /// Ce qu'on est en train de taper. La valeur du modèle ne bouge qu'à la
+    /// sortie du champ ; entre les deux, c'est ce brouillon qui vit.
+    @State private var draft = ""
+    @FocusState private var isEditing: Bool
 
     public var body: some View {
         switch accessory {
+        case .editable(let field):
+            editableRow(field)
+
         case .toggle(let isOn):
             // Un vrai `Toggle` et non un dessin : c'est lui qui apporte le
             // geste de balayage, l'annonce « activé / désactivé » et le
@@ -156,6 +209,81 @@ public struct BrandRow: View, Identifiable {
                     .accessibilityElement(children: .combine)
             }
         }
+    }
+
+    /// Une ligne qu'on corrige sur place.
+    private func editableRow(_ field: Editable) -> some View {
+        HStack(spacing: MemoBookSpacing.xs) {
+            titleAndEditor(field)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            pencil
+        }
+        .padding(.horizontal, MemoBookSpacing.s)
+        .padding(.vertical, MemoBookSpacing.xs + 4)
+        .frame(minHeight: minimumHeight)
+        .background(isEditing ? MemoBookColor.background : Color.clear)
+        .contentShape(.rect)
+        // Toute la ligne ouvre le champ, pas seulement les quelques caractères
+        // de la valeur — et une ligne vide s'ouvre aussi.
+        .onTapGesture { isEditing = true }
+        .onAppear { draft = field.text.wrappedValue }
+        // La valeur peut changer sous le champ (un rechargement) : on la reprend
+        // tant qu'on n'est pas en train de taper dedans.
+        .onChange(of: field.text.wrappedValue) { _, value in
+            if !isEditing { draft = value }
+        }
+        // **L'enregistrement.** Sortir du champ suffit : refermer le clavier,
+        // faire défiler la page (`scrollDismissesKeyboard`), toucher un autre
+        // champ. Rien à valider.
+        .onChange(of: isEditing) { _, editing in
+            if !editing { field.text.wrappedValue = draft }
+        }
+        // Quitter l'écran clavier ouvert compte aussi comme une sortie.
+        .onDisappear {
+            if isEditing { field.text.wrappedValue = draft }
+        }
+        .animation(.easeOut(duration: 0.15), value: isEditing)
+    }
+
+    @ViewBuilder
+    private func titleAndEditor(_ field: Editable) -> some View {
+        let editor = TextField(field.placeholder ?? "", text: $draft)
+            .font(MemoBookFont.body)
+            .foregroundStyle(MemoBookColor.ink)
+            .tint(MemoBookColor.action)
+            .focused($isEditing)
+            .keyboardType(field.keyboardType)
+            .textContentType(field.textContentType)
+            .textInputAutocapitalization(field.keyboardType == .emailAddress ? .never : .sentences)
+            .autocorrectionDisabled(field.keyboardType == .emailAddress)
+            .submitLabel(.done)
+            .onSubmit { isEditing = false }
+            .accessibilityLabel(title)
+
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 2) {
+                titleText
+                editor.multilineTextAlignment(.leading)
+            }
+        } else {
+            HStack(alignment: .firstTextBaseline, spacing: MemoBookSpacing.s) {
+                titleText
+                editor.multilineTextAlignment(.trailing)
+            }
+        }
+    }
+
+    /// Le crayon : sans lui, rien ne dit qu'une ligne se corrige. La maquette
+    /// ne le montre pas sur ces lignes-là — c'est le prix d'une valeur qu'on
+    /// peut toucher, et il est signalé dans la fiche écran.
+    private var pencil: some View {
+        Image(brand: "IconPen")
+            .resizable()
+            .renderingMode(.template)
+            .scaledToFit()
+            .frame(width: pencilSide, height: pencilSide)
+            .foregroundStyle(isEditing ? MemoBookColor.action : MemoBookColor.inkMuted)
+            .accessibilityHidden(true)
     }
 
     private var content: some View {
