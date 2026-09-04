@@ -79,6 +79,26 @@ public struct AuthView: View {
                         reduceMotion ? .none : .easeInOut(duration: 0.25),
                         value: model.hasStartedFilling
                     )
+
+                // ⚠️ PROVISOIRE — à retirer dès que le back-end tourne pour
+                // tout le monde. Entre dans l'app sans compte ni réseau, pour
+                // pouvoir travailler les écrans qui vivent derrière l'entrée.
+                // Absent de la version livrée : `#if DEBUG` ne compile pas en
+                // release.
+                #if DEBUG
+                    Button {
+                        onAuthenticated(Account(id: "debug", firstName: "Camille", createdAt: .now))
+                    } label: {
+                        // Volontairement effacé : c'est un outil de chantier, pas
+                        // une troisième façon d'entrer dans l'app.
+                        Text("Testing mode →")
+                            .font(MemoBookFont.caption)
+                            .foregroundStyle(MemoBookColor.inkMuted)
+                            .frame(maxWidth: .infinity, minHeight: MemoBookSpacing.minimumTapTarget)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                #endif
             }
             .padding(.horizontal, MemoBookSpacing.screenMargin)
             .padding(.vertical, MemoBookSpacing.m)
@@ -89,15 +109,9 @@ public struct AuthView: View {
         // La barre d'accessoires du clavier : c'est **la** réponse iOS au
         // « comment je referme ça ». Elle ne prend aucune place dans l'écran,
         // n'apparaît que clavier ouvert, et se pose au même endroit dans toutes
-        // les apps du système — donc là où le pouce la cherche déjà.
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("OK") { focus = nil }
-                    .font(MemoBookFont.bodySemibold)
-                    .tint(MemoBookColor.action)
-            }
-        }
+        // les apps du système — donc là où le pouce la cherche déjà. Le dessin
+        // est celui du design system, partagé avec le profil.
+        .brandKeyboardDismissBar()
         // `simultaneousGesture` et non `gesture` : le défilement vertical doit
         // continuer de fonctionner pendant qu'on guette un balayage latéral.
         .simultaneousGesture(

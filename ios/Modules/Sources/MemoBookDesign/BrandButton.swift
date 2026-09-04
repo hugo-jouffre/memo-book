@@ -164,7 +164,7 @@ public struct BrandButton: View {
     /// grand nombre fini, pas `.infinity`, qui donnerait des NaN au tracé.
     private var cornerRadius: CGFloat {
         if isRound { return 9999 }
-        return style == .link ? 0 : 16
+        return style == .link ? 0 : MemoBookSpacing.controlCornerRadius
     }
 
     private var gap: CGFloat { style == .link ? 8 : 12 }
