@@ -49,13 +49,7 @@ extension TravellerProfile {
         wantsNewsletter: false,
         walletBalance: 0,
         connectors: Connector.fixtures.map {
-            Connector(
-                id: $0.id,
-                name: $0.name,
-                promise: $0.promise,
-                isEnabled: false,
-                logoAssetName: $0.logoAssetName
-            )
+            Connector(id: $0.id, name: $0.name, promise: $0.promise, isEnabled: false)
         },
         subscription: Subscription(weeklyPrice: 1.99)
     )
@@ -69,48 +63,42 @@ extension Connector {
             name: "Strava",
             promise:
                 "MemoBook pourra déduire tes étapes et t’aider à raconter des souvenirs à partir de tes runs",
-            isEnabled: true,
-            logoAssetName: "ConnectorStrava"
+            isEnabled: true
         ),
         Connector(
             id: "alltrails",
             name: "All Trails",
             promise:
                 "MemoBook pourra récupérer tes sentiers parcourus et t’aider à raconter des souvenirs de tes randonnées",
-            isEnabled: true,
-            logoAssetName: "ConnectorAllTrails"
+            isEnabled: true
         ),
         Connector(
             id: "garmin",
             name: "Garmin",
             promise:
                 "MemoBook pourra récupérer tes activités enregistrées et t’aider à situer tes étapes sur le trajet",
-            isEnabled: true,
-            logoAssetName: "ConnectorGarmin"
+            isEnabled: true
         ),
         Connector(
             id: "polarsteps",
             name: "PolarSteps",
             promise:
                 "MemoBook pourra récupérer tes récits PolarSteps et t’aider à compléter ton carnet",
-            isEnabled: true,
-            logoAssetName: "ConnectorPolarSteps"
+            isEnabled: true
         ),
         Connector(
             id: "airbnb",
             name: "Airbnb",
             promise:
                 "MemoBook pourra déduire tes étapes et t’aider à raconter des souvenirs à partir de tes réservations",
-            isEnabled: true,
-            logoAssetName: "ConnectorAirbnb"
+            isEnabled: true
         ),
         Connector(
             id: "booking",
             name: "Booking",
             promise:
                 "MemoBook pourra déduire tes étapes et t’aider à raconter des souvenirs à partir de tes réservations",
-            isEnabled: true,
-            logoAssetName: "ConnectorBooking"
+            isEnabled: true
         ),
     ]
 }

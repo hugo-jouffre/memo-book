@@ -33,9 +33,6 @@ public struct RootView: View {
     /// La pile de navigation de l'app, une fois entré.
     @State private var path: [HomeRoute] = []
 
-    /// Un écran de la pile a ouvert une feuille modale.
-    @State private var isPresentingSheet = false
-
     public init() {}
 
     public var body: some View {
@@ -73,14 +70,6 @@ public struct RootView: View {
                             .navigationDestination(for: HomeRoute.self, destination: destination)
                     }
                     .tint(MemoBookColor.action)
-                    // L'app entière recule pendant qu'une feuille est ouverte,
-                    // comme dans les Réglages. C'est ici que ça se joue et non
-                    // dans l'écran qui présente : le recul doit emporter la
-                    // pile de navigation avec lui, et c'est aussi le seul
-                    // niveau qui occupe vraiment tout l'écran, safe areas
-                    // comprises — plus bas, les coins arrondis couperaient le
-                    // fond au ras de la barre d'état.
-                    .brandSheetPresenter(isPresented: isPresentingSheet)
                 }
             }
         }
@@ -171,7 +160,7 @@ public struct RootView: View {
     private func destination(for route: HomeRoute) -> some View {
         switch route {
         case .profile:
-            ProfileView(isPresentingSheet: $isPresentingSheet, onSignOut: signOut)
+            ProfileView(onSignOut: signOut)
         case .trip(let id):
             MemoDetailView(memoId: id)
         case .memos:

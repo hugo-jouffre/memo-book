@@ -86,39 +86,26 @@ private struct ConnectorCard: View {
 
 /// Le logo d'une app tierce.
 ///
-/// Ce sont des marques qui ne nous appartiennent pas : elles gardent leurs
-/// couleurs — donc **pas** de `renderingMode(.template)` — et ne sont jamais
-/// remplacées par une icône du jeu MemoBook, qui induirait en erreur. La
-/// pastille à initiale reste le repli quand un connecteur arrive sans logo.
+/// ⚠️ **Les six logos ne sont pas encore dans le dépôt** : ils appartiennent à
+/// leurs marques, et le quota MCP n'a pas permis de les exporter du nœud Figma.
+/// En attendant, une pastille aux couleurs de MemoBook portant l'initiale — un
+/// carré vide serait pire, et remplacer un logo de marque par une icône du jeu
+/// MemoBook induirait en erreur.
 private struct ConnectorLogo: View {
     let connector: Connector
 
     @ScaledMetric(relativeTo: .body) private var side: CGFloat = 40
 
-    private var shape: RoundedRectangle {
-        .rect(cornerRadius: MemoBookSpacing.cornerRadius - 2)
-    }
-
     var body: some View {
-        Group {
-            if let name = connector.logoAssetName {
-                Image(brand: name)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                Text(connector.name.prefix(1).uppercased())
-                    .font(MemoBookFont.bodySemibold)
-                    .foregroundStyle(MemoBookColor.ink)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(MemoBookColor.outline)
-            }
-        }
-        .frame(width: side, height: side)
-        .clipShape(shape)
-        // Un filet très clair : plusieurs de ces logos sont blancs sur blanc et
-        // se dissoudraient dans la carte sans lui.
-        .overlay { shape.strokeBorder(MemoBookColor.hairline, lineWidth: 1) }
-        .accessibilityHidden(true)
+        Text(connector.name.prefix(1).uppercased())
+            .font(MemoBookFont.bodySemibold)
+            .foregroundStyle(MemoBookColor.ink)
+            .frame(width: side, height: side)
+            .background(
+                MemoBookColor.outline,
+                in: .rect(cornerRadius: MemoBookSpacing.cornerRadius - 2)
+            )
+            .accessibilityHidden(true)
     }
 }
 

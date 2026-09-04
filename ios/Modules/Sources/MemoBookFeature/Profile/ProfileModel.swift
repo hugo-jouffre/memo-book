@@ -45,25 +45,6 @@ public final class ProfileModel {
     // pas pouvoir remplacer un profil entier par mégarde, et c'est ici que
     // viendront se brancher les appels réseau — un seul endroit à modifier.
 
-    /// Les trois champs d'identité, corrigés depuis les lignes de l'écran.
-    /// Un champ vidé redevient `nil` plutôt que de rester une chaîne vide :
-    /// « pas de téléphone » et « un téléphone vide » ne sont pas la même chose.
-
-    public func setFullName(_ name: String) {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Le nom, lui, ne peut pas disparaître : c'est le titre de l'écran.
-        guard !trimmed.isEmpty else { return }
-        mutate { $0.fullName = trimmed }
-    }
-
-    public func setEmail(_ email: String) {
-        mutate { $0.email = email.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty }
-    }
-
-    public func setPhoneNumber(_ phoneNumber: String) {
-        mutate { $0.phoneNumber = phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty }
-    }
-
     public func setNewsletter(_ isOn: Bool) {
         mutate { $0.wantsNewsletter = isOn }
     }
@@ -113,8 +94,4 @@ public final class ProfileModel {
         change(&profile)
         self.profile = profile
     }
-}
-
-private extension String {
-    var nilIfEmpty: String? { isEmpty ? nil : self }
 }
