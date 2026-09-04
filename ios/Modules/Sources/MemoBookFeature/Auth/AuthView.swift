@@ -79,6 +79,18 @@ public struct AuthView: View {
                         reduceMotion ? .none : .easeInOut(duration: 0.25),
                         value: model.hasStartedFilling
                     )
+
+                // ⚠️ PROVISOIRE — à retirer dès que le back-end tourne pour
+                // tout le monde. Entre dans l'app sans compte ni réseau, pour
+                // pouvoir travailler les écrans qui vivent derrière l'entrée.
+                // Absent de la version livrée : `#if DEBUG` ne compile pas en
+                // release.
+                #if DEBUG
+                    BrandButton("test", style: .link) {
+                        onAuthenticated(Account(id: "debug", firstName: "Camille", createdAt: .now))
+                    }
+                    .frame(maxWidth: .infinity)
+                #endif
             }
             .padding(.horizontal, MemoBookSpacing.screenMargin)
             .padding(.vertical, MemoBookSpacing.m)
