@@ -65,11 +65,26 @@ public struct Connector: Codable, Sendable, Hashable, Identifiable {
     public let promise: String
     public var isEnabled: Bool
 
-    public init(id: String, name: String, promise: String, isEnabled: Bool = false) {
+    /// Nom de l'asset embarqué qui porte le logo de la marque.
+    ///
+    /// Provisoire : le jour où l'API sert les connecteurs, elle enverra une URL
+    /// et ce champ disparaîtra. En attendant, les six logos vivent dans
+    /// `MemoBookAssets.xcassets` — ce sont des marques tierces, elles ne se
+    /// teintent pas et ne se remplacent pas par une icône MemoBook.
+    public let logoAssetName: String?
+
+    public init(
+        id: String,
+        name: String,
+        promise: String,
+        isEnabled: Bool = false,
+        logoAssetName: String? = nil
+    ) {
         self.id = id
         self.name = name
         self.promise = promise
         self.isEnabled = isEnabled
+        self.logoAssetName = logoAssetName
     }
 }
 

@@ -57,6 +57,15 @@ public struct ProfileView: View {
             .padding(.bottom, MemoBookSpacing.l)
         }
         .scrollIndicators(.hidden)
+        // Faire défiler referme le clavier — et refermer le clavier enregistre
+        // la ligne qu'on était en train de corriger. C'est la moitié du contrat
+        // des lignes modifiables ; l'autre moitié est dans `BrandRow`.
+        //
+        // `.immediately` et non `.interactively` : le mode interactif n'obéit
+        // qu'à un glissé *sur* le clavier, et une ligne corrigée resterait en
+        // attente pendant qu'on lit le bas de l'écran.
+        .scrollDismissesKeyboard(.immediately)
+        .brandKeyboardDismissBar()
         .background(MemoBookColor.background.ignoresSafeArea())
         // L'écran dessine son propre en-tête, comme la maquette : la flèche et
         // le titre partagent une ligne, à la marge de la colonne. Une barre de
@@ -92,12 +101,17 @@ public struct ProfileView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: MemoBookSpacing.m, height: MemoBookSpacing.m)
+                    // La cible tactile est alignée à gauche sur la marge de la
+                    // colonne, et le dessin est centré dedans. Elle débordait de
+                    // la colonne ; la moitié gauche des touches tombait alors à
+                    // côté, et le retour ne marchait qu'une fois sur deux.
+                    .frame(
+                        width: MemoBookSpacing.minimumTapTarget,
+                        height: MemoBookSpacing.minimumTapTarget
+                    )
+                    .contentShape(.rect)
             }
-            .frame(
-                minWidth: MemoBookSpacing.minimumTapTarget,
-                minHeight: MemoBookSpacing.minimumTapTarget
-            )
-            .contentShape(.rect)
+            .buttonStyle(.plain)
             .accessibilityLabel("Retour")
 
             Text("Profile")
@@ -108,9 +122,6 @@ public struct ProfileView: View {
 
             Spacer(minLength: 0)
         }
-        // La flèche s'aligne sur le bord de l'écran comme le reste de la
-        // colonne : c'est sa zone tactile qui déborde, pas son dessin.
-        .padding(.leading, -MemoBookSpacing.xs - 2)
     }
 
     /// Le glissé depuis le bord gauche : il doit partir du bord, aller
@@ -129,23 +140,29 @@ public struct ProfileView: View {
     private func identity(_ profile: TravellerProfile) -> some View {
         VStack(spacing: MemoBookSpacing.s) {
             ProfileAvatar(profile: profile)
-
-            Text(profile.fullName)
-                .font(MemoBookFont.h2)
-                .foregroundStyle(MemoBookColor.ink)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+            EditableName(name: profile.fullName) { model.setFullName($0) }
         }
         .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Les groupes de lignes
 
     private func contactGroup(_ profile: TravellerProfile) -> some View {
         BrandRowGroup {
-            BrandRow("E-mail", value: profile.email)
-            BrandRow("Téléphone", value: profile.phoneNumber)
+            BrandRow(
+                "E-mail",
+                text: emailBinding,
+                placeholder: "prenom@exemple.com",
+                keyboardType: .emailAddress,
+                textContentType: .emailAddress
+            )
+            BrandRow(
+                "Téléphone",
+                text: phoneBinding,
+                placeholder: "+33 6 00 00 00 00",
+                keyboardType: .phonePad,
+                textContentType: .telephoneNumber
+            )
             BrandRow("Adresse postale", value: profile.address.singleLine) {
                 sheet = .postalAddress
             }
@@ -250,6 +267,22 @@ public struct ProfileView: View {
         )
     }
 
+    /// Une adresse absente est `nil` dans le modèle et une chaîne vide dans le
+    /// champ : la conversion se fait ici, pas dans la vue de la ligne.
+    private var emailBinding: Binding<String> {
+        Binding(
+            get: { model.profile?.email ?? "" },
+            set: { model.setEmail($0) }
+        )
+    }
+
+    private var phoneBinding: Binding<String> {
+        Binding(
+            get: { model.profile?.phoneNumber ?? "" },
+            set: { model.setPhoneNumber($0) }
+        )
+    }
+
     /// Les lignes dont l'écran n'est pas encore dessiné.
     ///
     /// Elles gardent leur chevron parce que la maquette le montre, et ne mènent
@@ -271,6 +304,65 @@ enum ProfileSheet: String, Identifiable, CaseIterable {
 }
 
 // MARK: - Morceaux de l'écran
+
+/// Le nom du voyageur, corrigeable sur place.
+///
+/// C'est toujours un champ de saisie, jamais un texte qu'on remplace par un
+/// champ : le dessin est le même dans les deux états, et le crayon n'a pas à
+/// faire apparaître quoi que ce soit — il donne juste le focus. Sans lui, rien
+/// ne dirait que ce nom se corrige.
+private struct EditableName: View {
+    let name: String
+    let onCommit: (String) -> Void
+
+    @State private var draft = ""
+    @FocusState private var isEditing: Bool
+
+    @ScaledMetric(relativeTo: .body) private var pencilSide: CGFloat = 18
+
+    var body: some View {
+        HStack(spacing: MemoBookSpacing.xs) {
+            TextField("", text: $draft)
+                .font(MemoBookFont.h2)
+                .foregroundStyle(MemoBookColor.ink)
+                .tint(MemoBookColor.action)
+                .multilineTextAlignment(.center)
+                .textContentType(.name)
+                .submitLabel(.done)
+                .focused($isEditing)
+                .fixedSize(horizontal: true, vertical: false)
+                .onSubmit { isEditing = false }
+                .accessibilityLabel("Ton nom")
+
+            Button { isEditing = true } label: {
+                Image(brand: "IconPen")
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .frame(width: pencilSide, height: pencilSide)
+                    .foregroundStyle(isEditing ? MemoBookColor.action : MemoBookColor.inkMuted)
+                    .frame(
+                        width: MemoBookSpacing.minimumTapTarget,
+                        height: MemoBookSpacing.minimumTapTarget
+                    )
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Modifier ton nom")
+        }
+        .onAppear { draft = name }
+        .onChange(of: name) { _, value in
+            if !isEditing { draft = value }
+        }
+        // Même contrat que les lignes : sortir du champ enregistre.
+        .onChange(of: isEditing) { _, editing in
+            if !editing { onCommit(draft) }
+        }
+        .onDisappear {
+            if isEditing { onCommit(draft) }
+        }
+    }
+}
 
 /// La photo du voyageur, ou ses initiales. Jamais un rond gris vide : un profil
 /// sans photo reste un profil.

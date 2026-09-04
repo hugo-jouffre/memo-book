@@ -694,6 +694,14 @@ la maquette mais généralement exigée à la création de compte.
 > carte, translucide — on voit le bord au travers, c'est ce qui trahit un adhésif — et de
 > travers. Décidé par Hugo le 04/09/2026.
 
+> **Quand le M s'écrit** (décidé le 04/09/2026). Le tracé n'est pas une marque
+> d'ouverture, c'est **l'attente de l'accueil** : il ne s'écrit qu'en allant vers
+> l'accueil, et pendant que celui-ci se charge. Quelqu'un qui n'a pas encore de
+> compte arrive donc directement sur l'écran d'entrée, sans animation devant, et
+> l'écran d'accueil du tout premier démarrage n'en a pas non plus. Un seul chemin
+> le déclenche, `RootView.enterApp(as:)`, qu'on vienne d'une session restaurée ou
+> d'un formulaire tout juste envoyé.
+
 ### 9.1 Écran de lancement (le M qui s'écrit)
 
 - **Source** : `Animated Cutout.svg` (Brand & Com ▸ Logo MemoBook ▸ 🎨 Branding) + la
@@ -954,11 +962,45 @@ resservira :
 | `BrandOptionGroup` + `BrandOptionRow` | Le choix unique en lignes encadrées (moyen de paiement aujourd'hui, style de carnet et typographies demain) |
 | `BrandSheet` | La feuille modale : poignée, grand titre Sora, rond de fermeture, et **cran de hauteur calé sur le contenu** |
 | `BrandTextField` gagne `labelPlacement` | `.floating` (l'écran d'entrée) et `.above` (les feuilles, où l'intitulé reste lisible pendant la saisie et le texte indicatif montre un exemple de valeur). **Un seul champ**, deux mises en page — CLAUDE.md interdit d'en écrire un second |
+| `DeviceScreen` | Le rayon des coins de l'écran, déduit du format de la dalle. Aucune API publique ne le donne, et la clé privée qui le porte n'a rien à faire dans un binaire envoyé à l'App Store |
+| `View.brandSheetPresenter(isPresented:)` + `BrandSheetPresentation` | Le recul de l'app derrière une feuille, et le compteur qui le déclenche |
+| `View.brandKeyboardDismissBar()` | La barre d'accessoires du clavier, partagée par le profil et l'écran d'entrée |
 
 Spécifiques à l'écran : `ProfileAvatar`, `ConnectorsCallout`, `ProfileExitAction`,
 `ApplePayRow`, `ConnectorCard`, `ConnectorLogo`, `OrderCard`.
 
-**La feuille modale** — le **geste** est celui d'iOS, le **dessin** est le nôtre.
+**La feuille modale flotte** — elle ne monte pas du bord. Le fond que le système
+lui donne est effacé (`presentationBackground(.clear)`) et on dessine à
+l'intérieur une carte détachée de 0.5 rem sur ses trois côtés. Ses coins valent
+le rayon de la dalle **moins ce retrait** : concentriques à ceux du téléphone,
+ils suivent la courbe du verre au lieu de la couper, et ne la touchent jamais.
+Sur un écran à angles droits (SE), on retombe sur le rayon de feuille de la
+marque plutôt que sur zéro. Le cran de hauteur inclut le retrait, si bien que le
+bas de la carte est exactement à la même distance du bord que ses côtés.
+
+**L'app recule derrière — toujours, et pour toutes les feuilles.** L'écran du
+dessous rapetisse (0,92), prend les coins du téléphone, et du noir apparaît tout
+autour. Trois pièges, tous rencontrés :
+
+1. *Le système ne le fait pas pour nous.* Il ne recule que la vue racine d'une
+   fenêtre ; une feuille présentée depuis un écran poussé dans une pile ne
+   déclenche rien.
+2. *Il faut l'appliquer tout en haut*, sur
+   [`RootView`](../ios/Modules/Sources/MemoBookFeature/RootView.swift) : c'est le
+   seul niveau qui occupe vraiment l'écran, safe areas comprises.
+3. *Le découpage des coins ne peut pas être un `clipShape`.* Le cadre d'une vue
+   s'arrête au bord de la safe area, donc `clipShape` rognait le fond de l'app au
+   ras de la barre d'état et laissait **deux bandes noires**, y compris quand
+   aucune feuille n'était ouverte. C'est un `mask` dont la forme
+   `ignoresSafeArea` : une couche de rendu, qui déborde comme le fond.
+
+Et pour que ce soit vrai de **toutes** les feuilles sans qu'aucun écran ait à y
+penser, ce n'est pas l'écran qui l'annonce mais la feuille : chaque
+``BrandSheet`` s'inscrit en apparaissant dans un compteur partagé
+(``BrandSheetPresentation``), que `RootView` observe. Une feuille ouverte
+par-dessus une autre les fait reculer toutes les deux.
+
+**Le reste de la feuille** — le **geste** est celui d'iOS, le **dessin** est le nôtre.
 On s'appuie sur la présentation modale du système : elle seule donne le glissé
 élastique, le repli de l'écran du dessous, le retour arrière de VoiceOver et le
 redimensionnement au clavier. Tout ce qui se voit est repris de la maquette :
@@ -969,6 +1011,33 @@ un cran sur la hauteur naturelle du contenu, donc on la lit dans un
 `GeometryReader` posé en fond et on en fait un `.height()` sur mesure. Un contenu
 plus haut que l'écran (les six connecteurs) est ramené par le système à la
 hauteur maximale et se met à défiler.
+
+**Les lignes qui se corrigent sur place** — nom, e-mail et téléphone s'éditent
+**sans quitter l'écran** : on touche la ligne, le clavier s'ouvre, la valeur est
+enregistrée dès que le champ perd le focus — clavier refermé, défilement
+(`scrollDismissesKeyboard(.immediately)`), passage à un autre champ, ou sortie de
+l'écran. Rien à valider, comme dans les Réglages d'iOS.
+
+**La ligne ne change pas d'apparence en se corrigeant** : ni cadre, ni aplat, ni
+déplacement. Seul le curseur apparaît. Une ligne qui se transforme en champ de
+saisie fait sursauter la page entière pour une information qu'on a déjà — le
+clavier vient de s'ouvrir.
+
+La valeur du modèle n'est touchée qu'**à la sortie du champ** et non à chaque
+frappe : le jour où il y aura un serveur, c'est un appel réseau par correction et
+non un par caractère.
+
+Un **crayon** (`IconPen`) accompagne le nom et chaque ligne modifiable, à la
+place qu'occupe le chevron ailleurs : les deux disent « cette ligne se touche »,
+l'un mène ailleurs, l'autre ouvre le clavier ici. Il ne figure pas sur la
+maquette — T24.
+
+**La barre du clavier** — un chevron, pas un « OK ». « OK » laisse croire qu'on
+valide quelque chose alors qu'on ne fait que ranger le clavier, et sur un écran
+où l'enregistrement se fait tout seul à la sortie du champ, ce faux bouton de
+validation est un contresens. Il flotte au-dessus des touches plutôt que d'y être
+collé : au ras du clavier, on l'atteint en visant entre deux rangées et on tape un
+caractère une fois sur trois. Même barre sur le profil et sur l'écran d'entrée.
 
 **Le retour arrière** — l'en-tête est dessiné dans la page, pas dans une barre de
 navigation : la maquette met la flèche et le titre sur une même ligne, et sur
@@ -1051,14 +1120,22 @@ mémoire, le temps de la session — un seul endroit à brancher.
 
 - Employés : `IconArrowDuo` (retour), `IconCross` (fermeture, suppression de
   compte), `IconExport`, `IconExit`, `IconPlus`, `IconQuestion`.
+- Les **six logos de connecteurs** (`ConnectorStrava`, `ConnectorAllTrails`,
+  `ConnectorGarmin`, `ConnectorPolarSteps`, `ConnectorAirbnb`,
+  `ConnectorBooking`) viennent de `assets/logos/connectors`, en 120 px déclarés
+  en **3×** — la définition exacte d'une pastille de 2.5 rem. Ce sont des marques
+  tierces : elles gardent leurs couleurs, **jamais** de
+  `renderingMode(.template)`, et ne se remplacent pas par une icône du jeu
+  MemoBook. Un filet très clair les entoure, sans quoi les logos blancs se
+  dissoudraient dans la carte.
+- `IconChevronDown` (repris de `assets/icons/ui/Arrows/down chevron.svg`) ferme le
+  clavier. ⚠️ Icône **provisoire** : le chemin de l'icône « clavier bas »
+  demandée n'a pas été transmis — T27.
 - **Manquants**, faute de quota MCP pour les exporter du nœud :
-  1. les **six logos** des connecteurs (Strava, All Trails, Garmin, PolarSteps,
-     Airbnb, Booking) — remplacés par une pastille de marque portant l'initiale.
-     Y substituer une icône du jeu MemoBook induirait en erreur (R10) ;
-  2. le **logo Mastercard** du champ « Numéro de carte » ;
-  3. le **logotype Apple Pay** — remplacé par le symbole système `applelogo`
+  1. le **logo Mastercard** du champ « Numéro de carte » ;
+  2. le **logotype Apple Pay** — remplacé par le symbole système `applelogo`
      suivi de « Pay », qui en est la composition officielle ;
-  4. la **photo de couverture** de la commande en cours.
+  3. la **photo de couverture** de la commande en cours.
 - Le **chevron** des lignes n'existe pas dans le jeu de marque (dont la flèche est
   un tracé dessiné, bien trop présent en bout de ligne) : il reste sur
   `chevron.right`, isolé dans `BrandRow`, un seul endroit à changer. Même
@@ -1097,3 +1174,6 @@ l'accueil, et il se voit en **un seul endroit** (`ProfileView.notYetRouted`).
 | T21 | **Bouton « Ajouter une carte ».** La maquette écarte le libellé et le « + » aux deux extrémités du bouton ; `BrandButton` les groupe au centre. Faut-il un axe « contenu écarté » sur le composant, ou le dessin groupé convient-il ? |
 | T22 | **États non maquettés** : compte sans adresse, sans carte, sans commande ; erreur de chargement. Écrits ici, à valider |
 | T23 | **Suppression de compte** : obligatoire (App Store 5.1.1), aucune maquette, aucune confirmation dessinée. À maquetter avant la soumission |
+| T24 | **Le crayon des lignes modifiables** n'est pas dans la maquette. Sans lui, rien ne dit qu'une ligne se corrige ; avec lui, trois crayons apparaissent sur le premier groupe. À arbitrer |
+| T26 | **Rayon des coins de l'écran** déduit d'une table de formats (``DeviceScreen``), aucune API publique ne le donnant. À relire à chaque nouveau format d'iPhone |
+| T27 | **L'icône « clavier bas »** : le chemin n'a pas été transmis. On est parti du double chevron de `assets/icons/ui/Arrows`, à remplacer |

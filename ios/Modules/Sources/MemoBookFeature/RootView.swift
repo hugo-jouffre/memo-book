@@ -28,7 +28,16 @@ public struct RootView: View {
     }
 
     /// Le M est en train de s'écrire par-dessus tout le reste.
-    @State private var isLaunching = true
+    ///
+    /// **Faux au démarrage.** Le tracé n'est pas une marque d'ouverture, c'est
+    /// l'attente de l'accueil : il ne s'écrit que lorsqu'on va vers l'accueil,
+    /// et pendant que celui-ci se charge. Quelqu'un qui n'a pas encore de compte
+    /// arrive donc directement sur l'écran d'entrée, sans animation devant.
+    @State private var isLaunching = false
+
+    /// Les feuilles modales ouvertes dans l'app. C'est ce compteur qui fait
+    /// reculer l'écran du dessous — voir ``BrandSheetPresentation``.
+    @State private var sheets = BrandSheetPresentation()
 
     /// La pile de navigation de l'app, une fois entré.
     @State private var path: [HomeRoute] = []
@@ -37,20 +46,22 @@ public struct RootView: View {
 
     public var body: some View {
         ZStack {
+            // **Pas** de fondu sur le contenu entier. C'est l'écran de
+            // lancement qui s'efface par-dessus, et chaque bloc de l'accueil qui
+            // monte à son tour — un fondu global les recouvrirait tous et la
+            // cascade ne se verrait plus.
+            content
+
             if isLaunching {
                 LaunchView { endLaunch() }
                     // Le signe grandit d'un cheveu en s'effaçant : il s'éloigne
                     // au lieu de s'éteindre.
                     .transition(.opacity.combined(with: .scale(scale: 1.06)))
-            } else {
-                // **Pas** de fondu sur le contenu entier. C'est l'écran de
-                // lancement qui s'efface par-dessus, et chaque bloc de
-                // l'accueil qui monte à son tour — un fondu global les
-                // recouvrirait tous et la cascade ne se verrait plus.
-                content
-                    .transition(.identity)
             }
         }
+        // Le compteur de feuilles descend à tous les écrans **et à toutes les
+        // feuilles** : c'est lui qui les relie.
+        .environment(\.brandSheetPresentation, sheets)
     }
 
     @ViewBuilder
@@ -63,7 +74,7 @@ public struct RootView: View {
                 case .restoring:
                     restoring
                 case .signedOut:
-                    AuthView { stage = .signedIn($0) }
+                    AuthView { enterApp(as: $0) }
                 case .signedIn:
                     NavigationStack(path: $path) {
                         HomeView(onIntent: handle)
@@ -75,6 +86,13 @@ public struct RootView: View {
         }
         .animation(.snappy, value: hasSeenWelcome)
         .animation(.snappy, value: stage)
+        // L'app entière recule pendant qu'une feuille est ouverte, comme dans
+        // les Réglages. C'est ici que ça se joue et non dans l'écran qui
+        // présente : le recul doit emporter la pile de navigation avec lui, et
+        // c'est le seul niveau qui occupe vraiment tout l'écran, safe areas
+        // comprises — plus bas, les coins arrondis couperaient le fond au ras de
+        // la barre d'état.
+        .brandSheetPresenter(isPresented: sheets.isPresenting)
         .task { await restore() }
     }
 
@@ -97,16 +115,33 @@ public struct RootView: View {
     private func restore() async {
         guard stage == .restoring else { return }
 
+        // Pas de jeton en trousseau : la décision est immédiate, on ouvre
+        // l'écran d'entrée. **Pas de tracé du M** — il n'y a rien à attendre, et
+        // une animation devant un formulaire ne fait que retarder la saisie.
         guard await dependencies.api.hasStoredSession() else {
             stage = .signedOut
             return
         }
 
         do {
-            stage = .signedIn(try await dependencies.api.currentAccount())
+            let account = try await dependencies.api.currentAccount()
+            enterApp(as: account)
         } catch {
             stage = .signedOut
         }
+    }
+
+    /// Entrer dans l'app, d'où qu'on vienne — session restaurée au lancement, ou
+    /// formulaire tout juste envoyé.
+    ///
+    /// C'est **le seul chemin** vers l'accueil, et c'est pour ça que le tracé du
+    /// M est ici : il couvre le chargement de l'accueil, qui est la seule chose
+    /// qu'il ait jamais eu à couvrir. L'écran d'accueil du tout premier
+    /// démarrage, lui, ne passe pas par là et n'a donc pas d'animation devant.
+    private func enterApp(as account: Account) {
+        stage = .signedIn(account)
+        guard hasSeenWelcome else { return }
+        isLaunching = true
     }
 
     private func endLaunch() {
