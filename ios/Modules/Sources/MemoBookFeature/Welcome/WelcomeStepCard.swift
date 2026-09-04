@@ -12,11 +12,15 @@ struct WelcomeStepCard: View {
         /// portent leur aplat bleu dans le SVG lui-même.
         var needsBackplate: Bool { self == .book }
 
+        /// Ces trois-là ne sont **pas** des icônes du système d'icônes de la
+        /// marque (`Icon…`) : ce sont des illustrations dessinées pour ces
+        /// cartes, avec leurs proportions propres et leur aplat bleu déjà dans
+        /// le SVG. D'où le préfixe qui les tient à part.
         var assetName: String {
             switch self {
-            case .mic: "IconMic"
-            case .photo: "IconPhoto"
-            case .book: "IconBook"
+            case .mic: "WelcomeMic"
+            case .photo: "WelcomePhoto"
+            case .book: "WelcomeBook"
             }
         }
 
