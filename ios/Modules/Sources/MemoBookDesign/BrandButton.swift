@@ -26,6 +26,9 @@ public struct BrandButton: View {
         case secondary
         /// Ni fond ni contour, mais garde les marges d'un bouton.
         case tertiary
+        /// Aplat crème sans contour : les actions posées **dans** une carte
+        /// blanche, où un contour vert ferait concurrence au CTA de l'écran.
+        case soft
         /// Texte seul, sans marges : à poser dans une phrase ou une barre.
         case link
     }
@@ -45,6 +48,7 @@ public struct BrandButton: View {
     private let iconPlacement: IconPlacement
     private let style: Style
     private let size: Size
+    private let isRound: Bool
     private let alternate: Bool
     private let isLoading: Bool
     private let fillsWidth: Bool
@@ -54,6 +58,8 @@ public struct BrandButton: View {
     ///   - title: `nil` donne la variante « Icon only » du design system.
     ///   - icon: teintée par la couleur du bouton, quelles que soient les
     ///     couleurs du fichier source.
+    ///   - isRound: la variante ronde, pour un bouton sans libellé. Le rayon
+    ///     devient un demi-cercle et les marges s'égalisent.
     ///   - alternate: à activer quand le bouton est posé sur un fond sombre.
     ///   - fillsWidth: pour les appels à l'action pleine largeur en bas d'écran.
     public init(
@@ -62,6 +68,7 @@ public struct BrandButton: View {
         iconPlacement: IconPlacement = .leading,
         style: Style = .primary,
         size: Size = .regular,
+        isRound: Bool = false,
         alternate: Bool = false,
         isLoading: Bool = false,
         fillsWidth: Bool = false,
@@ -72,6 +79,7 @@ public struct BrandButton: View {
         self.iconPlacement = iconPlacement
         self.style = style
         self.size = size
+        self.isRound = isRound
         self.alternate = alternate
         self.isLoading = isLoading
         self.fillsWidth = fillsWidth
@@ -145,12 +153,21 @@ public struct BrandButton: View {
 
     private var isIconOnly: Bool { title == nil }
 
-    private var cornerRadius: CGFloat { style == .link ? 0 : 16 }
+    /// `RoundedRectangle` ramène tout seul un rayon trop grand à la moitié du
+    /// plus petit côté : un carré devient un rond, sans changer de forme. Un
+    /// grand nombre fini, pas `.infinity`, qui donnerait des NaN au tracé.
+    private var cornerRadius: CGFloat {
+        if isRound { return 9999 }
+        return style == .link ? 0 : 16
+    }
 
     private var gap: CGFloat { style == .link ? 8 : 12 }
 
     private var horizontalPadding: CGFloat {
-        switch (style, size, isIconOnly) {
+        // Un bouton rond n'a qu'une marge, la même partout : c'est elle qui
+        // fait le cercle plutôt qu'un ovale.
+        if isRound { return verticalPadding }
+        return switch (style, size, isIconOnly) {
         case (.link, _, _): 0
         case (_, .regular, true): 12
         case (_, .regular, false): 24
@@ -182,8 +199,8 @@ public struct BrandButton: View {
         case (.primary, true): MemoBookColor.ink
         case (.secondary, false): MemoBookColor.action
         case (.secondary, true): MemoBookColor.onAction
-        case (.tertiary, false), (.link, false): MemoBookColor.ink
-        case (.tertiary, true), (.link, true): MemoBookColor.onAction
+        case (.tertiary, false), (.link, false), (.soft, false): MemoBookColor.ink
+        case (.tertiary, true), (.link, true), (.soft, true): MemoBookColor.onAction
         }
     }
 
@@ -201,6 +218,10 @@ public struct BrandButton: View {
             // et reste transparent en `alternate` pour laisser voir le fond.
             case (.secondary, false):
                 shape.fill(MemoBookColor.surface)
+            case (.soft, false):
+                shape.fill(MemoBookColor.background)
+            case (.soft, true):
+                shape.fill(MemoBookColor.onAction.opacity(0.15))
             case (.secondary, true), (.tertiary, _), (.link, _):
                 Color.clear
             }
@@ -217,7 +238,7 @@ public struct BrandButton: View {
                 shape.strokeBorder(MemoBookColor.action, lineWidth: 1)
             case (.primary, true), (.secondary, true):
                 shape.strokeBorder(MemoBookColor.onAction, lineWidth: 1)
-            case (.tertiary, _), (.link, _):
+            case (.tertiary, _), (.link, _), (.soft, _):
                 EmptyView()
             }
         }
@@ -257,6 +278,14 @@ public struct BrandButton: View {
                 BrandButton(icon: arrow) {}
                 BrandButton("Chargement", isLoading: true) {}
             }
+            HStack {
+                BrandButton("Soft", style: .soft) {}
+                BrandButton(icon: arrow, style: .soft, isRound: true) {}
+                BrandButton(icon: arrow, style: .soft, size: .small, isRound: true) {}
+                BrandButton(icon: arrow, style: .secondary, isRound: true) {}
+            }
+            .padding(MemoBookSpacing.s)
+            .background(MemoBookColor.surface, in: .rect(cornerRadius: MemoBookSpacing.largeCornerRadius))
         }
         .padding(MemoBookSpacing.screenMargin)
     }

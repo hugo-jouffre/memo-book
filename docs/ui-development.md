@@ -336,7 +336,7 @@ section « À trancher » recopiée pour Clara.
 |---|---|---|
 | **1 · Entrée dans l'app** | Splash Screen, Welcome Screen, Sign Up | 📐 Spec figée (§8) — *Sign Up* attend T4 pour son back-end |
 | 2 · Compte | Sign In, mot de passe oublié, suppression de compte | ⏳ En attente de maquettes |
-| 3 · Carnets & enregistrement | Liste, détail, enregistrement | 🔄 Existe en version non brandée |
+| 3 · Carnets & enregistrement | **Accueil**, liste, détail, enregistrement | 🟢 *Accueil* + écran de lancement livrés (§9), sur jeu d'essai — le reste existe en version non brandée |
 | 4 · Carnet & partage | Génération, aperçu PDF, partage | 🔄 Existe en version non brandée |
 | 5 · Paywall & réglages | Achat, abonnement, profil | ⏳ En attente de maquettes |
 
@@ -685,7 +685,213 @@ la maquette mais généralement exigée à la création de compte.
 
 ---
 
-## 9. Ce qu'on ne fait jamais
+---
+
+## 9. Lot 3 — Accueil
+
+> **Scotch** (ex-T14) : l'élément qui dépasse en haut de la carte du voyage en cours est
+> un **bout de scotch**, pas un onglet de pile. Il est donc dessiné **par-dessus** la
+> carte, translucide — on voit le bord au travers, c'est ce qui trahit un adhésif — et de
+> travers. Décidé par Hugo le 04/09/2026.
+
+### 9.1 Écran de lancement (le M qui s'écrit)
+
+- **Source** : `Animated Cutout.svg` (Brand & Com ▸ Logo MemoBook ▸ 🎨 Branding) + la
+  maquette d'accueil fournie par Hugo. **Pas de nœud Figma** : cet écran n'est pas dans
+  le fichier *Product*, il remplace le *Splash Screen* de §8.1.
+- **Vues** : `MemoBookFeature/Onboarding/LaunchView.swift`,
+  `MemoBookDesign/BrandMark.swift`.
+- **Rôle** : couvrir le démarrage. Le M s'écrit d'un trait par-dessus le squelette de
+  l'accueil, puis s'efface en fondu pendant que le contenu se pose.
+
+**Structure**
+
+| Élément | Valeur | Note |
+|---|---|---|
+| Fond | `Scheme/Background Light` | |
+| Signe | 2 × la largeur de l'écran | Décalé de +0.15 en largeur, +0.09 en hauteur, en fractions d'écran |
+| Trait | 164.949 / 1850 de la largeur du signe | Le rapport du SVG, conservé à toutes les tailles |
+| Couleur | `Brand Colors/Blue` à 90 % | `opacity="0.9"` du SVG |
+| Squelette | barre 196 × 26, rond 40 | Aux coordonnées exactes de l'en-tête de l'accueil (`HomeMetrics`) |
+
+**Animation** — le tracé dure **0,95 s** sur la courbe du fichier de marque,
+`cubic-bezier(0.884, 0.01, 0.302, 0.99)`. Le signe arrive à 97 % et se détend jusqu'à 100
+% (`.smooth`, 1,2 s). La sortie est un fondu + montée à 1,06 sur 0,6 s, pendant que
+l'accueil entre en fondu et que ses blocs montent de 14 pt en cascade (0,55 s, 0,07 s de
+décalage par bloc).
+
+**Le tracé n'est pas une image.** Le `d` du SVG est recopié courbe par courbe dans
+`BrandMark`, un `Shape` : c'est la seule façon de le faire s'écrire avec `.trim(to:)`.
+Une image vectorielle sait s'afficher, pas se tracer. Le `transform` du SVG
+(`rotate(-5.54°)` puis `translate`) est appliqué tel quel, et le cadrage tient compte du
+débord de la moitié de l'épaisseur du trait.
+
+**États** : nominal uniquement. Aucune attente réseau — l'écran ne dure que le temps de
+son animation, il ne peut donc pas rester bloqué.
+
+**Contrat back-end** : aucun.
+
+**Accessibilité** : `accessibilityLabel` « MemoBook, chargement en cours » sur le bloc,
+squelette et signe masqués. **Reduce Motion** : pas de tracé, le signe est posé entier
+pendant 0,4 s.
+
+**À trancher** — l'`UILaunchScreen` d'iOS affiche encore le logotype vert (`LaunchLogo`)
+avant cet écran : on voit donc **deux marques à la suite**, le mot MemoBook puis le M. La
+maquette ne montre que le M. Vider `UIImageName` pour ne garder que le crème rendrait
+l'enchaînement continu — décision de marque, pas de code.
+
+---
+
+### 9.2 Accueil
+
+- **Nœud Figma** : `3116:30733` —
+  [ouvrir](https://www.figma.com/design/kytPYFno7PvDciIKTxCujK/MemoBook---Product?node-id=3116-30733).
+  Seul `get_variable_defs` a pu être appelé (quota Starter épuisé à l'appel
+  suivant) : les **couleurs** viennent donc du nœud, les **mesures** restent
+  relevées sur l'image et à confirmer.
+- **Vues** : `MemoBookFeature/Home/` — `HomeView`, `TripCards`, `TripCover`,
+  `HomeSections`, `HomeModel`, `TripFormatting`, `HomeFixtures`.
+- **Rôle** : où en sont tes voyages, et le micro toujours à portée de pouce.
+- **Entrée / sortie** : depuis le lancement (session valide) → détail d'un voyage,
+  profil, impression, exemples de carnet.
+
+**Structure (en rem)**
+
+| Élément | rem | Note |
+|---|---|---|
+| Marge d'écran | 1.5 | `screenMargin`, valeur actuelle du code (D2 dit 1 — voir « À trancher ») |
+| Espacement entre sections | 2 | |
+| Espacement entre cartes | 1 | |
+| Rayon de carte | 1.25 | `largeCornerRadius` |
+| Rayon d'une couverture | 0.875 | `cornerRadius` |
+| Retrait de la couverture dans la carte | 0.5 | |
+| Marges du bloc de texte | 1 | |
+| Couverture, voyage en cours | 16:9 | |
+| Couverture, voyage passé | 5:2 | Bande plus basse : hiérarchie entre en cours et terminé |
+| Avatar de profil | 2.5 | Cible tactile portée à 2.75 |
+| Pastille de compagnon | 2.125, figée | Décoration masquée à VoiceOver, comme la pastille de `WelcomeStepCard` |
+
+**Tokens ajoutés** — `MemoBookColor.accent` (`Scheme/Accent`, Lime #E2F32B, pastille de
+comptage) · `MemoBookColor.hairline` (`Scheme/Borders`, #2B231B à 10 %, filets et
+squelette) · `MemoBookColor.inkMuted` (`Brand Colors/Grey Typo`, #2B231B à 50 %, **tout
+le texte secondaire de cet écran**) · `MemoBookColor.actionLight`
+(`Brand Colors/Green Lighter`, #3D9A6F, le point « en ce moment ») ·
+`MemoBookFont.greeting` (**General Sans Regular** 24) · `.heading` (Sora SemiBold 20) ·
+`.label` (General Sans Medium 14) · `.overline` (General Sans Semibold 12).
+
+Les deux couleurs viennent du nœud et sont désormais recopiées dans
+[`agents/design.md`](../agents/design.md) (R4).
+
+**Composants** — `BrandButton` gagne deux axes plutôt qu'un deuxième bouton :
+le style `soft` (aplat crème sans contour, pour les actions posées dans une carte) et
+`isRound` (variante ronde). Spécifiques à l'écran : `FeaturedTripCard`,
+`CompactTripCard`, `PastTripCard`, `ShowcaseCard`, `HomeSectionHeading`, `CountBadge`,
+`StageBadge`, `DestinationLabel`, `TripStatsRow`, `TripCover`, `CompanionStack`.
+
+**Copie** (verbatim, hors données)
+
+- Salutation : « Bienvenue {prénom} 👋 » — espace insécable avant la main
+- Sections : « Tes voyages en cours » · « Tes voyages précédents »
+- Pastille d'état : « EN COURS »
+- CTA : « Commencer à enregistrer »
+- Découverte : « Voir des exemples de carnet » / « Découvre à quoi ressemble un carnet
+  MemoBook terminé »
+- État vide : « Ton premier carnet commence ici » / « Raconte ta journée à la voix :
+  MemoBook s'occupe du reste. »
+
+**États** — les quatre sont traités. *Chargement* : l'écran de lancement (§9.1).
+*Vide* : `HomeEmptyState`, non maquetté, écrit ici. *Erreur* : `ErrorBanner` en ligne
+au-dessus des sections, avec « Réessayer ». *Nominal* : la maquette.
+
+**Contrat back-end** — **aucun appel**. L'écran lit un `HomeFeed` fourni par une closure
+passée à `HomeModel` ; c'est aujourd'hui `HomeFeed.fixture`. Les modèles
+(`Trip`, `Destination`, `TripStats`, `Companion`, `Traveller`, `Showcase`, `HomeFeed`)
+sont dans `MemoBookCore` et déjà `Codable`, taillés pour la réponse à venir. La route
+reste à écrire : un `GET /v1/home` qui rend ce `HomeFeed` d'un coup, ou la composition
+de `GET /v1/trips` + le profil. Le drapeau se **dérive** du code ISO, il ne se stocke
+pas.
+
+**Assets** — l'écran emploie le **jeu d'icônes de marque**
+(`assets/icons/brand-icons`, importé par `ios/Tools/import-brand-icons.py`, documenté
+dans son README) : `IconUser` (profil), `IconPrinter` (impression), `IconPictureFrame`
+(compteur de photos), `IconMic` (CTA). Deux pictogrammes n'existent pas dans le jeu et
+restent sur un symbole système : **calendrier** (durée) et **tracé d'itinéraire**
+(distance). Ils sont isolés dans `TripStatItem.Kind.icon`, un seul endroit à changer.
+
+Les couvertures sans photo tombent sur un aplat de marque (`TripCoverPlaceholder`), pas
+sur un rectangle gris. **Manque** : l'image du carnet d'exemple pour la carte bleue —
+elle est dans le nœud Figma, que le quota n'a pas permis d'exporter.
+
+> Les illustrations du *Welcome* ont été renommées `WelcomeMic` / `WelcomePhoto` /
+> `WelcomeBook`. Elles ne font pas partie du jeu d'icônes : proportions libres, aplat
+> bleu dans le SVG, pas de teinte. Le renommage libère les noms canoniques `IconMic`
+> et `IconBook` pour le jeu.
+
+**Accessibilité** — chaque carte est un seul élément VoiceOver, avec le trait
+`isButton` · en-têtes marqués `isHeader` · décorations (onglet de page, pastilles de
+compagnons, filigrane) masquées · en taille accessible, l'en-tête, la ligne
+pays/état, les compteurs, la légende d'un carnet et la carte de découverte passent tous
+en colonne · le CTA suit le Dynamic Type mais **s'arrête à AX1** : une barre ancrée en
+bas prenait la moitié de l'écran au-delà. Vérifié sur SE 3 (375 × 667), iPhone 17
+(402 × 874), 17 Pro Max (440 × 956) et en AX3.
+
+**Localisation** — l'app déclare `CFBundleDevelopmentRegion: fr` et
+`CFBundleLocalizations: [fr]`. Sans ça, `Locale.current` suivait la langue de l'appareil
+et l'accueil affichait « 26 Aug–15 Sep 2026 » au milieu d'une interface française. Dates
+et distances passent par `FormatStyle` : la **région** de l'utilisateur reste respectée
+(un lecteur aux États-Unis lit des miles).
+
+**L'arrivée du contenu** — chaque élément monte de 40 pt en fondu, l'un après l'autre,
+0,06 s d'écart (`HomeRise`). Le rang n'est pas écrit en dur : il se calcule à partir du
+contenu, si bien qu'ajouter un voyage décale tout ce qui suit. Le retard est plafonné au
+dixième élément — au-delà, attendre n'ajoute rien et retarde ce qu'on voulait voir. Le
+drapeau `homeContentHasAppeared` descend par l'environnement (`@Entry`), pour qu'un rang
+suffise sur le lieu d'appel et qu'aucun élément ne puisse être oublié hors de la cascade.
+Sans effet si Reduce Motion est actif.
+
+L'écran ne dessine **rien** tant que le contenu n'est pas chargé : sans ce garde-fou, le
+premier rendu affichait « Bienvenue 👋 » sans prénom avant de le remplacer, et la cascade
+rendait le fondu croisé des deux textes bien visible. L'écran de lancement couvre cette
+attente.
+
+> ⚠️ **Deux pièges rendaient cette cascade invisible**, et ils se cumulaient.
+>
+> 1. `animation(_:value:)` n'anime qu'un **changement**. Le jeu d'essai revient sans
+>    jamais suspendre : le contenu était monté et le drapeau levé dans la même passe de
+>    rendu, donc chaque bloc naissait déjà en place. Il faut laisser passer une frame
+>    (`Task.sleep` de 16 ms) entre le chargement et le drapeau.
+> 2. `RootView` fondait **tout** le contenu par-dessus. Un fondu global recouvre la
+>    cascade : les blocs montent bien, mais on ne voit que le fondu. Le contenu entre
+>    donc en `.transition(.identity)`, et c'est l'écran de lancement qui s'efface
+>    par-dessus (0,45 s) pendant que l'accueil se pose.
+
+**Ce que porte le fond** — le M du lancement ne disparaît pas : ``BrandMarkBackdrop``
+est la **même vue** pour les deux écrans, si bien qu'au passage le signe ne bouge pas
+d'un pixel — seule son opacité descend de 50 % à 20 %. Il est posé **derrière** la zone
+de défilement, donc il ne défile pas : c'est un décor, pas un élément de la page.
+
+**Le voile du CTA** — 200 pt de haut, pleine largeur, `Background Light` opaque au ras du
+bas et transparent en haut. Il vaut une note d'implémentation : posé en fond du bouton ou
+en overlay de la `ScrollView`, il s'arrête au-dessus de l'indicateur d'accueil — la bande
+où le texte restait justement lisible. Il faut l'ancrer au bas d'un cadre qui prend
+**tout l'écran** (`frame(maxHeight: .infinity, alignment: .bottom)` puis
+`ignoresSafeArea()`), sans quoi l'alignement `.bottom` de la pile le repince sur la safe
+area et `ignoresSafeArea` l'étire vers le haut.
+
+**À trancher**
+
+| # | Sujet |
+|---|---|
+| T10 | **Mesures non confirmées.** Les couleurs viennent du nœud ; les espacements, rayons et tailles sont relevés sur l'image. À confirmer au premier `get_design_context` disponible |
+| T11 | **Marge d'écran.** Le code est à 1.5 rem (24) et D2 tranche à 1 rem (16). Le changement touche *Welcome* et *Sign Up* : à faire en une fois, pas au fil des écrans |
+| T12 | **Bleu de texte absent des variables.** La carte de découverte écrit son titre dans un bleu moyen qui n'est pas dans la palette — `Brand Colors/Blue` posé en texte sur son propre fond tombe à 1,3:1. Deux valeurs ont été **dérivées** en gardant la teinte du bleu de marque (209°) : `blueText` #4780B3 (5,1:1) et `blueTextSoft` #74A6D0 (3,1:1). À faire entrer dans les variables Figma sous le nom que choisira Clara |
+| T13 | **Compteurs en anglais** dans la maquette (« 10 days »). Traduits (« 10 jours ») — R9 s'applique, mais à confirmer |
+| T15 | **Pastille de comptage** : elle compte les voyages de la liste. La maquette montre « x8 » avec une seule carte visible — total ou nombre affiché ? |
+| T16 | ~~Image du carnet d'exemple~~ **Réglé** : `assets/illustrations/Carnets Example Homepage.png`, embarquée sous `ShowcaseCarnets`. Elle est **livrée avec l'app** — c'est une image de marque, pas une donnée ; `Showcase.imageUrl` la remplacera le jour où une campagne veut la sienne. Source en 330 × 252, un peu juste pour du @3x : à réexporter en 2× si elle paraît molle |
+| T17 | **`Green Lighter` sur le point « en ce moment »** : la couleur est bien celle du nœud, son emploi est une déduction. À confirmer |
+| T18 | **Deux gris coexistent** — `Grays/Gray` sur les écrans du lot 1, `Grey Typo` sur l'accueil. Voulu, ou l'un doit-il remplacer l'autre partout ? |
+
+## 10. Ce qu'on ne fait jamais
 
 - Coder une valeur numérique dans une vue au lieu d'un token
 - Écrire une taille de police fixe (casse Dynamic Type)

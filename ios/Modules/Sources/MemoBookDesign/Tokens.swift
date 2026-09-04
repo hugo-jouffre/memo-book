@@ -29,6 +29,11 @@ public enum MemoBookColor {
     /// navigation. — Figma `Brand Colors/Green`.
     public static let action = Color(hex: 0x28654B)
 
+    /// Vert clair de la marque : les signaux discrets, là où le vert du CTA
+    /// serait trop appuyé. — Figma `Brand Colors/Green Lighter`, relevé sur le
+    /// nœud de l'accueil.
+    public static let actionLight = Color(hex: 0x3D9A6F)
+
     /// État « enregistrement en cours », et rien d'autre. Jamais un lien,
     /// jamais un CTA — c'est le voyant du micro qui s'allume. La convention
     /// iOS (Dictaphone) l'emporte ici sur la palette de marque.
@@ -39,7 +44,16 @@ public enum MemoBookColor {
     public static let ink = Color(hex: 0x2D231A)
 
     /// Texte secondaire, légendes. — Figma `Grays/Gray`.
+    ///
+    /// Le gris **système** d'iOS. Il tient sur les écrans d'entrée dans l'app,
+    /// mais ce n'est pas le gris de la marque : voir ``inkMuted``.
     public static let inkSecondary = Color(hex: 0x8E8E93)
+
+    /// Texte secondaire de la marque : l'encre à 50 %, pas un gris neutre. Un
+    /// gris tiré du noir chaud se pose sur le crème sans le refroidir, ce que
+    /// le gris système fait. — Figma `Brand Colors/Grey Typo` (`#2B231B80`),
+    /// relevé sur le nœud de l'accueil.
+    public static let inkMuted = Color(hex: 0x2B231B).opacity(0.5)
 
     /// Fond des écrans, le crème de la marque. — Figma
     /// `Scheme/Background Light`.
@@ -51,6 +65,27 @@ public enum MemoBookColor {
     /// Bordures des cartes et pastilles numérotées. — Figma
     /// `Brand Colors/Blue`.
     public static let outline = Color(hex: 0xAFD2F0)
+
+    /// Accent du scheme, très saturé. Il souligne un chiffre ou une pastille —
+    /// jamais un aplat large, jamais un fond de bouton. — Figma
+    /// `Scheme/Accent` (Lime).
+    public static let accent = Color(hex: 0xE2F32B)
+
+    /// Le filet qui sépare deux blocs dans une même carte : le noir de la
+    /// marque à 10 %, pas un gris. — Figma `Scheme/Borders`.
+    public static let hairline = Color(hex: 0x2B231B).opacity(0.1)
+
+    /// Bleu assez soutenu pour porter du texte sur un aplat bleu clair.
+    ///
+    /// ⚠️ **Ce n'est pas encore une variable Figma.** `Brand Colors/Blue`
+    /// (#AFD2F0) est un bleu d'aplat : posé en texte sur son propre fond clair,
+    /// il tombe à 1,3:1 et devient illisible. Ces deux valeurs gardent sa
+    /// teinte (209°) en montant la saturation et en baissant la clarté, ce qui
+    /// donne 5,1:1 et 3,1:1 sur le fond de la carte de découverte. À faire
+    /// entrer dans les variables Figma sous le nom qu'aura choisi Clara —
+    /// voir T12 dans `docs/ui-development.md`.
+    public static let blueText = Color(hex: 0x4780B3)
+    public static let blueTextSoft = Color(hex: 0x74A6D0)
 
     /// Beige soutenu, pour les séparateurs et les aplats discrets. — Figma
     /// `Brand Colors/Beige Darker`.
@@ -138,6 +173,25 @@ public enum MemoBookFont {
 
     /// Titres de section dans les écrans système.
     public static let sectionTitle = Font.custom(BrandFonts.generalSansSemibold, size: 17, relativeTo: .headline)
+
+    /// Salutation de l'accueil : « Bienvenue Camille ». Plus petite qu'un
+    /// titre d'écran, parce qu'elle partage sa ligne avec l'avatar. —
+    /// `Heading 5` (24).
+    ///
+    /// General Sans **Regular** et non Sora : la salutation s'adresse, elle ne
+    /// titre pas. Sora reste aux titres de section et de carte.
+    public static let greeting = Font.custom(BrandFonts.generalSansRegular, size: 24, relativeTo: .title2)
+
+    /// Titre d'une section de l'accueil, et titre d'une carte de voyage. —
+    /// `Heading 6` / `Text Large` (20).
+    public static let heading = Font.custom(BrandFonts.soraSemiBold, size: 20, relativeTo: .title3)
+
+    /// Ligne de métadonnées : dates, compteurs, sous-titres de carte. —
+    /// `Text Small` (14).
+    public static let label = Font.custom(BrandFonts.generalSansMedium, size: 14, relativeTo: .subheadline)
+
+    /// Surtitre en capitales et pastilles d'état. — `Text Tiny` (12).
+    public static let overline = Font.custom(BrandFonts.generalSansSemibold, size: 12, relativeTo: .caption)
 
     /// Titres de **carnet** uniquement, jamais les titres d'écran système.
     public static func bookTitle(_ size: CGFloat = 28) -> Font {
