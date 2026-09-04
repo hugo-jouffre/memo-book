@@ -993,6 +993,17 @@ autour. Trois pièges, tous rencontrés :
    ras de la barre d'état et laissait **deux bandes noires**, y compris quand
    aucune feuille n'était ouverte. C'est un `mask` dont la forme
    `ignoresSafeArea` : une couche de rendu, qui déborde comme le fond.
+4. *Le masque vient **avant** la réduction.* Posé après, il arrondissait les
+   coins de l'écran — que la carte réduite ne touche plus — et celle-ci gardait
+   des angles droits.
+5. *Une feuille ne monte jamais jusqu'en haut.* Son cran est plafonné pour
+   laisser voir 2.75 rem de la carte de l'app au-dessus d'elle
+   (``BrandSheetMetrics/appReveal``). Sans ce plafond, la feuille des six
+   connecteurs venait affleurer le bord de la carte et il ne restait plus rien à
+   voir de l'écran qu'on venait de quitter. La bande se compte **depuis la
+   carte** et non depuis le bord de la dalle, dont la barre d'état fait 20 pt sur
+   un SE et 59 sur un modèle à Dynamic Island : c'est ce qui donne le même écran
+   d'un iPhone à l'autre.
 
 Et pour que ce soit vrai de **toutes** les feuilles sans qu'aucun écran ait à y
 penser, ce n'est pas l'écran qui l'annonce mais la feuille : chaque

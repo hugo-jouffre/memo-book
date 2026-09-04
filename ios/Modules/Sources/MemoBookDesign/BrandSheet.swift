@@ -70,6 +70,16 @@ public struct BrandSheet<Content: View>: View {
     /// se déplie ensuite.
     private static var minimumHeight: CGFloat { 240 }
 
+    /// La hauteur maximale d'une feuille : celle qui laisse voir, au-dessus
+    /// d'elle, la bande d'app décrite par ``BrandSheetMetrics/appReveal``.
+    @MainActor
+    private static var ceilingHeight: CGFloat {
+        DeviceScreen.height
+            - DeviceScreen.topSafeInset
+            - BrandSheetMetrics.recoilDrop
+            - BrandSheetMetrics.appReveal
+    }
+
     /// Le niveau d'empilement de cette feuille, et le compteur partagé qui dit
     /// combien de feuilles sont ouvertes. Ensemble, ils permettent à une feuille
     /// de savoir qu'une autre s'est ouverte par-dessus elle.
@@ -131,7 +141,11 @@ public struct BrandSheet<Content: View>: View {
         // Le retrait décolle la carte du bord ; la marge qui s'y ajoute passe le
         // dernier élément au-dessus de l'indicateur d'accueil, dont la feuille
         // ne connaît pas la hauteur d'avance.
-        return bodyHeight + Self.handleBlockHeight + MemoBookSpacing.s + Self.inset
+        let wanted = bodyHeight + Self.handleBlockHeight + MemoBookSpacing.s + Self.inset
+
+        // Un contenu trop haut ne pousse pas la feuille jusqu'en haut : il
+        // défile. C'est le cas des six connecteurs.
+        return min(wanted, Self.ceilingHeight)
     }
 
     private var handle: some View {
@@ -275,33 +289,56 @@ extension View {
     }
 }
 
+/// Les mesures que la feuille et l'écran qui recule doivent partager.
+///
+/// Elles sont ici, ensemble, parce qu'une feuille ne peut décider de sa hauteur
+/// maximale qu'en sachant où le haut de la carte de l'app est allé se poser.
+/// Séparées, elles dérivaient : la feuille arrivait pile sur le bord de la
+/// carte, et il ne restait rien à voir de l'app au-dessus.
+enum BrandSheetMetrics {
+    /// Le rapport de réduction d'iOS : la carte perd de chaque côté à peu près
+    /// la marge d'écran.
+    static let recoilScale: CGFloat = 0.92
+
+    /// Ce dont la carte redescend, pour que son haut se pose sous la barre
+    /// d'état au lieu de flotter au milieu du noir.
+    static let recoilDrop: CGFloat = 12
+
+    /// Ce qu'on voit de la carte de l'app **au-dessus** de toute feuille, même
+    /// quand son contenu déborde.
+    ///
+    /// C'est ce qui fait qu'une feuille reste une feuille : on voit le haut de
+    /// l'écran qu'on a quitté, donc on sait qu'on va y revenir et qu'on peut la
+    /// refermer. Une feuille qui monte jusqu'en haut n'est plus une feuille,
+    /// c'est un écran — et personne ne pense à la faire glisser vers le bas.
+    ///
+    /// La bande est **la même sur tous les iPhone** : elle se compte depuis la
+    /// carte, pas depuis le bord de la dalle, dont la barre d'état fait 20 pt
+    /// sur un SE et 59 sur un modèle à Dynamic Island.
+    static let appReveal: CGFloat = 44
+}
+
 /// Le recul de l'écran qui présente une feuille.
 private struct BrandSheetPresenter: ViewModifier {
     let isPresented: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// Le rapport de réduction d'iOS : la carte perd de chaque côté à peu près
-    /// la marge d'écran.
-    private static let scale: CGFloat = 0.92
-
-    /// Ce dont la carte redescend, pour que son haut se pose sous la barre
-    /// d'état au lieu de flotter au milieu du noir.
-    private static let drop: CGFloat = 12
-
     func body(content: Content) -> some View {
         content
             // Le fond de l'app, posé en couche débordante : c'est lui qui
             // remplit les safe areas, que le cadre de la vue n'atteint pas.
             .background(MemoBookColor.background.ignoresSafeArea())
-            .scaleEffect(isPresented ? Self.scale : 1, anchor: .top)
-            .offset(y: isPresented ? Self.drop : 0)
             // Un **masque** et non un `clipShape` : le découpage doit couvrir
             // tout l'écran, safe areas comprises, et le cadre de la vue s'arrête
             // à leur bord. Un `clipShape` posé ici rognait le fond au ras de la
             // barre d'état et laissait deux bandes noires, y compris quand
             // aucune feuille n'était ouverte. Le masque, lui, est une couche de
             // rendu : il déborde comme le fond.
+            //
+            // Et il vient **avant** la réduction, pas après : appliqué ensuite,
+            // il arrondissait les coins de l'écran — que la carte réduite ne
+            // touche plus — et celle-ci gardait des angles droits.
             .mask {
                 RoundedRectangle(
                     cornerRadius: isPresented ? DeviceScreen.cornerRadius : 0,
@@ -309,6 +346,8 @@ private struct BrandSheetPresenter: ViewModifier {
                 )
                 .ignoresSafeArea()
             }
+            .scaleEffect(isPresented ? BrandSheetMetrics.recoilScale : 1, anchor: .top)
+            .offset(y: isPresented ? BrandSheetMetrics.recoilDrop : 0)
             // `scaleEffect` est une transformation de rendu : elle ne touche pas
             // au cadre. Le noir posé ici reste donc à la taille de l'écran, et
             // c'est lui qu'on découvre autour de la carte.

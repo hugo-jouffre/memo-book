@@ -37,6 +37,33 @@ public enum DeviceScreen {
         }
     }
 
+    /// Hauteur de la dalle, en points. Sert à borner une feuille modale pour
+    /// qu'elle ne monte jamais jusqu'en haut.
+    @MainActor
+    public static var height: CGFloat {
+        let size = screenSize
+        return max(size.width, size.height)
+    }
+
+    /// Ce que la barre d'état et l'encoche prennent en haut de l'écran.
+    ///
+    /// C'est la seule mesure qui change vraiment d'un iPhone à l'autre — 20 pt
+    /// sur un SE, 59 sur un modèle à Dynamic Island. Tout ce qui doit se poser
+    /// « juste sous le haut » s'y réfère, sans quoi le même code donne deux
+    /// écrans différents selon le téléphone.
+    @MainActor
+    public static var topSafeInset: CGFloat {
+        keyWindow?.safeAreaInsets.top ?? 0
+    }
+
+    @MainActor
+    private static var keyWindow: UIWindow? {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first { $0.isKeyWindow }
+    }
+
     /// La dalle de la scène affichée, et non `UIScreen.main` — dépréciée, et
     /// fausse dès qu'une app tourne dans plusieurs fenêtres.
     @MainActor
