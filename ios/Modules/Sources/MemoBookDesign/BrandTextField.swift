@@ -41,11 +41,34 @@ private enum GeneralSansMetrics {
 }
 
 public struct BrandTextField<Field: Hashable>: View {
+    /// Où se pose l'intitulé du champ. Un seul champ, deux mises en page —
+    /// pas deux composants.
+    public enum LabelPlacement {
+        /// L'intitulé **est** le texte indicatif, et monte sur le contour dès
+        /// que le champ sert. C'est le formulaire d'entrée dans l'app : une
+        /// colonne de champs qu'on remplit d'affilée, où chaque étiquette au
+        /// repos serait une ligne de plus à lire.
+        case floating
+
+        /// L'intitulé est écrit **au-dessus** du champ, en gras, et reste
+        /// lisible pendant la saisie. C'est le dessin des feuilles modales :
+        /// des champs peu nombreux, souvent préremplis, où le texte indicatif
+        /// montre un **exemple de valeur** (« 7 rue Simon Fryd ») et non le nom
+        /// du champ.
+        case above
+    }
+
     private let label: String
     @Binding private var text: String
     private let field: Field
     private let focus: FocusState<Field?>.Binding
     private let isSecure: Bool
+    private let labelPlacement: LabelPlacement
+
+    /// Exemple de valeur affiché tant que le champ est vide. N'a de sens qu'en
+    /// ``LabelPlacement/above`` : en `floating`, c'est l'intitulé qui tient ce
+    /// rôle, et un second texte le recouvrirait.
+    private let placeholder: String?
 
     /// Texte d'aide affiché sous le champ. Contrairement à un indice glissé
     /// dans le texte indicatif, il ne disparaît pas quand on tape.
@@ -57,6 +80,8 @@ public struct BrandTextField<Field: Hashable>: View {
         field: Field,
         focus: FocusState<Field?>.Binding,
         isSecure: Bool = false,
+        labelPlacement: LabelPlacement = .floating,
+        placeholder: String? = nil,
         hint: String? = nil
     ) {
         self.label = label
@@ -64,6 +89,8 @@ public struct BrandTextField<Field: Hashable>: View {
         self.field = field
         self.focus = focus
         self.isSecure = isSecure
+        self.labelPlacement = labelPlacement
+        self.placeholder = placeholder
         self.hint = hint
     }
 
@@ -81,37 +108,70 @@ public struct BrandTextField<Field: Hashable>: View {
     private var isFocused: Bool { focus.wrappedValue == field }
     private var isActive: Bool { isFocused || !text.isEmpty }
 
-    public var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            input
-                .frame(height: height)
-                .padding(.horizontal, 20)
-                .background(isActive ? Color.clear : MemoBookColor.surface, in: shape)
-                .overlay {
-                    shape.strokeBorder(
-                        isFocused ? MemoBookColor.action : MemoBookColor.separator,
-                        lineWidth: isActive ? 1 : 0
-                    )
-                }
-                .overlay(alignment: .topLeading) { floatingLabel }
-                .contentShape(shape)
-                .onTapGesture { focus.wrappedValue = field }
-                .accessibilityElement(children: .contain)
-                .accessibilityLabel(label)
-                .animation(reduceMotion ? .none : .snappy(duration: 0.22), value: isActive)
-                .animation(reduceMotion ? .none : .snappy(duration: 0.22), value: isFocused)
+    /// L'aplat blanc du repos n'appartient qu'à l'étiquette flottante : c'est
+    /// lui qui fait exister le champ avant qu'on le touche. Étiquette au-dessus,
+    /// c'est le mot qui remplit ce rôle, et le contour suffit.
+    private var isOutlined: Bool { labelPlacement == .above || isActive }
 
-            if let hint {
-                Text(hint)
-                    .font(MemoBookFont.caption)
-                    .foregroundStyle(MemoBookColor.inkSecondary)
+    private var showsPlaceholder: Bool {
+        switch labelPlacement {
+        case .floating: !isActive
+        case .above: text.isEmpty
+        }
+    }
+
+    /// L'intitulé sert de texte indicatif en `floating`. En `above`, le texte
+    /// indicatif est un exemple de valeur — et l'intitulé, s'il n'y en a pas.
+    private var placeholderText: String {
+        switch labelPlacement {
+        case .floating: label
+        case .above: placeholder ?? label
+        }
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
+            if labelPlacement == .above {
+                Text(label)
+                    .font(MemoBookFont.bodySemibold)
+                    .foregroundStyle(MemoBookColor.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    // Le champ porte déjà ce mot comme `accessibilityLabel` :
+                    // le laisser lisible ferait entendre l'intitulé deux fois.
+                    .accessibilityHidden(true)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                input
+                    .frame(height: height)
                     .padding(.horizontal, 20)
+                    .background(isOutlined ? Color.clear : MemoBookColor.surface, in: shape)
+                    .overlay {
+                        shape.strokeBorder(
+                            isFocused ? MemoBookColor.action : MemoBookColor.separator,
+                            lineWidth: isOutlined ? 1 : 0
+                        )
+                    }
+                    .overlay(alignment: .topLeading) { floatingLabel }
+                    .contentShape(shape)
+                    .onTapGesture { focus.wrappedValue = field }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel(label)
+                    .animation(reduceMotion ? .none : .snappy(duration: 0.22), value: isActive)
+                    .animation(reduceMotion ? .none : .snappy(duration: 0.22), value: isFocused)
+
+                if let hint {
+                    Text(hint)
+                        .font(MemoBookFont.caption)
+                        .foregroundStyle(MemoBookColor.inkSecondary)
+                        .padding(.horizontal, 20)
+                }
             }
         }
     }
 
     private var shape: RoundedRectangle {
-        .rect(cornerRadius: 16)
+        .rect(cornerRadius: MemoBookSpacing.controlCornerRadius)
     }
 
     @ViewBuilder
@@ -120,8 +180,8 @@ public struct BrandTextField<Field: Hashable>: View {
             ZStack(alignment: .leading) {
                 // Texte indicatif dessiné à la main : le `prompt` de SwiftUI ne
                 // se met pas à la typographie de la marque.
-                if !isActive {
-                    Text(label)
+                if showsPlaceholder {
+                    Text(placeholderText)
                         .font(MemoBookFont.bodySemibold)
                         .foregroundStyle(MemoBookColor.inkSecondary)
                         .accessibilityHidden(true)
@@ -156,7 +216,7 @@ public struct BrandTextField<Field: Hashable>: View {
 
     @ViewBuilder
     private var floatingLabel: some View {
-        if isActive {
+        if labelPlacement == .floating, isActive {
             Text(label)
                 .font(MemoBookFont.caption)
                 .foregroundStyle(isFocused ? MemoBookColor.action : MemoBookColor.inkSecondary)

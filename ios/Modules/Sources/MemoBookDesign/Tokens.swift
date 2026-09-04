@@ -174,6 +174,15 @@ public enum MemoBookSpacing {
     /// ne choisit pas la typographie. Un champ n'a pas à payer cette contrainte
     /// — il doit respirer autour de son texte et de son étiquette flottante.
     public static let fieldHeight: CGFloat = 56
+
+    /// **Le** rayon des contrôles : boutons et champs de saisie. Les deux le
+    /// partagent depuis toujours — cette constante ne fait que lui donner un
+    /// nom, pour qu'un troisième contrôle ne parte pas sur une autre valeur.
+    public static let controlCornerRadius: CGFloat = 16
+
+    /// Rayon du haut d'une feuille modale. Plus grand que celui d'une carte :
+    /// c'est un écran qui monte par-dessus, pas un bloc posé dedans.
+    public static let sheetCornerRadius: CGFloat = 28
 }
 
 /// Typographies de la marque : Sora pour les titres, General Sans pour tout le
@@ -188,6 +197,15 @@ public enum MemoBookFont {
 
     /// Titre d'écran. — Figma `App/h1` (Sora SemiBold 32).
     public static let h1 = Font.custom(BrandFonts.soraSemiBold, size: 32, relativeTo: .largeTitle)
+
+    /// Titre d'un écran secondaire, et nom propre affiché comme un titre. Plus
+    /// petit qu'un ``h1`` : le profil, les réglages, une feuille modale
+    /// s'annoncent, ils n'ouvrent pas l'app.
+    ///
+    /// ⚠️ **Pas encore une variable Figma** : relevé sur la maquette du profil
+    /// (Sora SemiBold 24), entre `App/h1` (32) et `Heading 6` (20). À faire
+    /// entrer dans les variables sous le nom que choisira Clara.
+    public static let h2 = Font.custom(BrandFonts.soraSemiBold, size: 24, relativeTo: .title)
 
     /// Pastille d'accroche. — Figma `App/pastille notes` (General Sans Semibold 14).
     public static let tagline = Font.custom(BrandFonts.generalSansSemibold, size: 14, relativeTo: .subheadline)

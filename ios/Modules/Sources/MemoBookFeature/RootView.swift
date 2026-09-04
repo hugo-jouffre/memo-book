@@ -65,8 +65,9 @@ public struct RootView: View {
                 case .signedOut:
                     AuthView { stage = .signedIn($0) }
                 case .signedIn:
-                    NavigationStack {
-                        MemoListView()
+                    NavigationStack(path: $path) {
+                        HomeView(onIntent: handle)
+                            .navigationDestination(for: HomeRoute.self, destination: destination)
                     }
                     .tint(MemoBookColor.action)
                 }
@@ -114,6 +115,21 @@ public struct RootView: View {
         withAnimation(.smooth(duration: 0.45)) { isLaunching = false }
     }
 
+    /// Ferme la session.
+    ///
+    /// L'ordre compte : on vide d'abord la pile de navigation, sinon l'écran de
+    /// profil resterait poussé au-dessus de l'écran d'entrée le temps de
+    /// l'animation. ``MemoBookAPI/signOut()`` ne peut pas échouer — il oublie le
+    /// jeton local même si le serveur est injoignable — donc rien à rattraper
+    /// ici : quelqu'un qui demande à sortir sort.
+    private func signOut() {
+        Task {
+            await dependencies.api.signOut()
+            path.removeAll()
+            stage = .signedOut
+        }
+    }
+
     /// Où mène chaque intention de l'accueil.
     ///
     /// **Câblage provisoire.** Les voyages ne sont pas encore une ressource du
@@ -123,24 +139,39 @@ public struct RootView: View {
     /// que les deux ne sont pas les mêmes. C'est la bonne destination, pas
     /// encore la bonne donnée.
     ///
-    /// Le profil, l'impression et la carte de découverte n'ont pas d'écran
-    /// dessiné : ils ne mènent nulle part, et c'est ici que ça se voit.
+    /// L'impression et la carte de découverte n'ont pas d'écran dessiné : elles
+    /// ne mènent nulle part, et c'est ici que ça se voit.
     private func handle(_ intent: HomeIntent) {
         switch intent {
+        case .openProfile:
+            path.append(.profile)
         case .openTrip(let id):
             path.append(.trip(id: id))
         case .startRecording:
             // Enregistrer suppose un carnet ouvert : on passe par la liste
             // tant que l'accueil ne sait pas créer un voyage lui-même.
             path.append(.memos)
-        case .openProfile, .orderPrint, .openShowcase:
+        case .orderPrint, .openShowcase:
             break
+        }
+    }
+
+    @ViewBuilder
+    private func destination(for route: HomeRoute) -> some View {
+        switch route {
+        case .profile:
+            ProfileView(onSignOut: signOut)
+        case .trip(let id):
+            MemoDetailView(memoId: id)
+        case .memos:
+            MemoListView()
         }
     }
 }
 
 /// Les destinations que l'accueil peut pousser.
 enum HomeRoute: Hashable {
+    case profile
     case trip(id: String)
     case memos
 }

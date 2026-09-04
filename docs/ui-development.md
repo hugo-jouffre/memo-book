@@ -338,7 +338,7 @@ section « À trancher » recopiée pour Clara.
 | 2 · Compte | Sign In, mot de passe oublié, suppression de compte | ⏳ En attente de maquettes |
 | 3 · Carnets & enregistrement | **Accueil**, liste, détail, enregistrement | 🟢 *Accueil* + écran de lancement livrés (§9), sur jeu d'essai — le reste existe en version non brandée |
 | 4 · Carnet & partage | Génération, aperçu PDF, partage | 🔄 Existe en version non brandée |
-| 5 · Paywall & réglages | Achat, abonnement, profil | ⏳ En attente de maquettes |
+| 5 · Paywall & réglages | Achat, abonnement, **profil** | 🟢 *Profil* et ses six feuilles livrés (§10), sur jeu d'essai — seule la déconnexion agit vraiment |
 
 ---
 
@@ -902,3 +902,198 @@ area et `ignoresSafeArea` l'étire vers le haut.
 - Corriger une faute de français sans retour de Clara
 - Harmoniser deux écrans qui divergent, au lieu de le signaler
 - Fermer une PR d'écran sans la capture comparée à Figma
+
+---
+
+## 10. Lot 5 — Profil
+
+### 10.1 Profil
+
+- **Nœud Figma** : `2370:4991` —
+  [ouvrir](https://www.figma.com/design/kytPYFno7PvDciIKTxCujK/MemoBook---Product?node-id=2370-4991).
+  ⚠️ **Aucun appel MCP n'a pu aboutir** : le quota Starter était déjà épuisé au
+  premier `get_variable_defs`. Couleurs, espacements et tailles sont donc
+  **relevés sur les captures** fournies par Hugo, et tous passent par des tokens
+  existants — voir « À trancher », T16.
+- **Vues** : `MemoBookFeature/Profile/` — `ProfileView`, `ProfileModel`,
+  `ProfileFormatting`, `ProfileFixtures`, `PostalAddressSheet`,
+  `PaymentSheets`, `SubscriptionSheet`, `ConnectorsSheet`,
+  `OrderTrackingSheet`.
+- **Rôle** : qui tu es pour MemoBook, ce que tu lui as confié, et par où on sort.
+- **Entrée / sortie** : depuis l'**avatar bleu en haut à droite de l'accueil**
+  (`HomeIntent.openProfile`, poussé par `RootView` sur `HomeRoute.profile`) →
+  retour à l'accueil, ou sortie de session vers l'écran d'entrée.
+
+**Structure (en rem)**
+
+| Élément | rem | Note |
+|---|---|---|
+| Marge d'écran | 1.5 | `screenMargin`, comme l'accueil (D2 dit 1 — voir T11) |
+| Espacement entre groupes | 1.5 | |
+| Avatar | 5, **figé** | Comme celui de l'accueil : une photo n'est pas du texte, la faire grandir en AX3 lui faisait prendre la moitié de l'écran |
+| Hauteur d'une ligne | 2.75 minimum | Cible tactile ; grandit avec le Dynamic Type |
+| Marges d'une ligne | 1 horizontal, 0.75 vertical | |
+| Rayon d'un groupe | 1.25 | `largeCornerRadius` |
+| Rayon d'un champ et d'un bouton | 1 | `controlCornerRadius` (nouveau token) |
+| Hauteur d'un champ | 3.5 | `fieldHeight` — **identique à l'écran d'entrée** |
+| Hauteur d'un CTA | 3.125 | `controlHeight` — **identique à l'écran d'entrée** |
+| Rayon du haut d'une feuille | 1.75 | `sheetCornerRadius` (nouveau token) |
+
+**Tokens ajoutés** — `MemoBookFont.h2` (Sora SemiBold 24 : titre d'écran
+secondaire et nom propre ; **pas encore une variable Figma**, relevé entre
+`App/h1` 32 et `Heading 6` 20) · `MemoBookSpacing.controlCornerRadius` (16, le
+rayon que `BrandButton` et `BrandTextField` codaient déjà en dur chacun de son
+côté) · `MemoBookSpacing.sheetCornerRadius` (28).
+
+**Composants** — trois entrent dans le design system, parce que le motif
+resservira :
+
+| Composant | Ce qu'il fait |
+|---|---|
+| `BrandRowGroup` + `BrandRow` | **Les lignes empilées et groupées** demandées par Hugo. Une ligne se **décrit** (intitulé, valeur, chevron ou interrupteur), elle ne se dessine pas : c'est ce qui garantit qu'aucun écran n'invente sa propre hauteur de ligne ni son propre chevron. Un `@resultBuilder` permet les `if` |
+| `BrandOptionGroup` + `BrandOptionRow` | Le choix unique en lignes encadrées (moyen de paiement aujourd'hui, style de carnet et typographies demain) |
+| `BrandSheet` | La feuille modale : poignée, grand titre Sora, rond de fermeture, et **cran de hauteur calé sur le contenu** |
+| `BrandTextField` gagne `labelPlacement` | `.floating` (l'écran d'entrée) et `.above` (les feuilles, où l'intitulé reste lisible pendant la saisie et le texte indicatif montre un exemple de valeur). **Un seul champ**, deux mises en page — CLAUDE.md interdit d'en écrire un second |
+
+Spécifiques à l'écran : `ProfileAvatar`, `ConnectorsCallout`, `ProfileExitAction`,
+`ApplePayRow`, `ConnectorCard`, `ConnectorLogo`, `OrderCard`.
+
+**La feuille modale** — le **geste** est celui d'iOS, le **dessin** est le nôtre.
+On s'appuie sur la présentation modale du système : elle seule donne le glissé
+élastique, le repli de l'écran du dessous, le retour arrière de VoiceOver et le
+redimensionnement au clavier. Tout ce qui se voit est repris de la maquette :
+poignée dessinée à la main (`presentationDragIndicator(.hidden)`), titre `h2`
+Sora, rond de fermeture, crème de la marque (`presentationBackground`), rayon 28
+(`presentationCornerRadius`). La hauteur est **mesurée** : iOS ne sait pas caler
+un cran sur la hauteur naturelle du contenu, donc on la lit dans un
+`GeometryReader` posé en fond et on en fait un `.height()` sur mesure. Un contenu
+plus haut que l'écran (les six connecteurs) est ramené par le système à la
+hauteur maximale et se met à défiler.
+
+**Le retour arrière** — l'en-tête est dessiné dans la page, pas dans une barre de
+navigation : la maquette met la flèche et le titre sur une même ligne, et sur
+iOS 26 un élément personnalisé de barre est enfermé d'office dans une pastille de
+verre qui avale le titre (essayé, capture à l'appui). Mais masquer la barre
+emporte avec elle le **glissé de retour depuis le bord**, que le système attache
+à son bouton. Il est donc rendu à la main, en `simultaneousGesture` pour ne pas
+casser le défilement — même montage que le balayage entre inscription et
+connexion de l'écran d'entrée.
+
+**Copie** (verbatim, hors données)
+
+- Titre : « Profile »
+- Groupe 1 : « E-mail » · « Téléphone » · « Adresse postale » ·
+  « Newsletter mensuelle MemoBook »
+- Groupe 2 : « Ma cagnotte » · « Mon abonnement » · « Suivi des commandes » ·
+  « Confidentialité »
+- Groupe 3 : « Carte bancaire enregistrée »
+- Groupe 4 : « Confidentialité » · « Conditions d’utilisation »
+- Carte bleue : « Ajouter des connecteurs » / « Connecter MemoBook a des
+  applications externes vous permets d’étoffer vos aventures de manière
+  intelligente. »
+- Pied : « Exporter mes données » · « Me déconnecter » · « Supprimer mon compte »
+- *Adresse postale* : « Ajoute l’adresse où tu souhaites recevoir ton carnet. » ·
+  « Adresse » · « Code postal » · « Ville » · « Pays » · « Valider »
+- *Mode de paiement* : « Ajoutes-en un ou choisis parmi tes cartes déjà
+  enregistrées. » · « ApplePay » « disponible » · « Ajouter une carte »
+- *Ajoutr une carte* : « Numéro de carte » · « Date d’expiration » · « CVV » ·
+  « Nom sur la carte » · « Ajouter une carte »
+- *Mon Abonnement* : « Poursuis l’enregistrement de tes souvenirs de voyage sans
+  aucune interruption. » · « / semaine (sans engagement) » · « 100% de la somme
+  versée est déduite du prix final de ton carnet imprimé ! » · « En savoir
+  plus » · « Activer mon abonnement (1,99 €) » · « Plus tard (consulter les
+  souvenirs existants) »
+- *Suivi des commandes* : « Livraison » · « Dans 5 à 7 jours » ·
+  « 2 exemplaires - 50 pages »
+
+> ⚠️ **Quatre coquilles de maquette, recopiées telles quelles (R8) et à
+> reprendre dans Figma par Clara** — voir T17 :
+> 1. Titre de la feuille d'ajout de carte : « **Ajoutr** une carte ».
+> 2. Carte des connecteurs : « Connecter MemoBook **a** des applications » (« à »).
+> 3. Même phrase : « vous **permets** » (« permet »), et surtout elle **vouvoie**
+>    alors que R9 impose le tutoiement partout. Les six promesses de connecteurs,
+>    elles, tutoient correctement.
+> 4. Titre de l'écran : « **Profile** », orthographe anglaise au milieu d'une
+>    interface française.
+>
+> ⚠️ **« Confidentialité » apparaît deux fois**, dans le groupe 2 et dans le
+> groupe 4. Implémenté tel quel (R3) — T18.
+
+**États** — les quatre sont traités. *Chargement* : l'écran ne dessine rien tant
+que le profil n'est pas là, même garde-fou que l'accueil. *Vide* : compte sans
+adresse, sans carte, sans commande — non maquetté, écrit ici
+(`TravellerProfile.emptyFixture`, « Aucune carte enregistrée », état vide du suivi
+des commandes). *Erreur* : `ErrorBanner` en ligne avec « Réessayer ».
+*Nominal* : la maquette.
+
+**Contrat back-end** — **aucun appel**, sauf la déconnexion. L'écran lit un
+`TravellerProfile` fourni par une closure passée à `ProfileModel` ; c'est
+aujourd'hui `TravellerProfile.fixture`. Les modèles (`TravellerProfile`,
+`PostalAddress`, `PaymentCard`, `Connector`, `Subscription`, `OrderTracking`)
+sont dans `MemoBookCore` et déjà `Codable`, taillés pour la réponse à venir.
+
+| Besoin | Route à créer |
+|---|---|
+| Lire le profil | `GET /v1/me/profile` — ou composition de `currentAccount()` et des ressources ci-dessous |
+| Adresse, newsletter | `PATCH /v1/me/profile` |
+| Cartes | `GET`/`POST`/`DELETE /v1/me/payment-methods` — **côté prestataire**, l'app n'envoie jamais un numéro complet à notre back-end |
+| Connecteurs | `GET /v1/me/connectors` + OAuth par fournisseur |
+| Abonnement | achat in-app (StoreKit), pas une route à nous |
+| Commandes | `printOrders(memoId:)` existe, mais par carnet : il faudra un `GET /v1/me/orders` |
+| Export des données | `POST /v1/me/export` (RGPD) |
+| Suppression de compte | `DELETE /v1/me` — **obligatoire App Store 5.1.1** |
+
+`signOut()` existe déjà et est branché : c'est la seule action de cet écran qui
+agit vraiment. Les interrupteurs et le choix de carte agissent sur le modèle, en
+mémoire, le temps de la session — un seul endroit à brancher.
+
+**Assets**
+
+- Employés : `IconArrowDuo` (retour), `IconCross` (fermeture, suppression de
+  compte), `IconExport`, `IconExit`, `IconPlus`, `IconQuestion`.
+- **Manquants**, faute de quota MCP pour les exporter du nœud :
+  1. les **six logos** des connecteurs (Strava, All Trails, Garmin, PolarSteps,
+     Airbnb, Booking) — remplacés par une pastille de marque portant l'initiale.
+     Y substituer une icône du jeu MemoBook induirait en erreur (R10) ;
+  2. le **logo Mastercard** du champ « Numéro de carte » ;
+  3. le **logotype Apple Pay** — remplacé par le symbole système `applelogo`
+     suivi de « Pay », qui en est la composition officielle ;
+  4. la **photo de couverture** de la commande en cours.
+- Le **chevron** des lignes n'existe pas dans le jeu de marque (dont la flèche est
+  un tracé dessiné, bien trop présent en bout de ligne) : il reste sur
+  `chevron.right`, isolé dans `BrandRow`, un seul endroit à changer. Même
+  précédent que le calendrier et l'itinéraire de l'accueil.
+
+**Accessibilité** — chaque ligne est **un seul élément** VoiceOver
+(« E-mail, maylis.garde@icloud.com ») avec le trait `isButton` quand elle mène
+quelque part · les lignes à interrupteur sont de **vrais `Toggle`**, dont
+l'étiquette est le libellé : le geste de balayage, l'annonce « activé /
+désactivé » et le rôle viennent du système · une carte de connecteur est un
+`Toggle` entier, promesse comprise · le rond de fermeture d'une feuille porte
+« Fermer » · les décorations (chevrons, poignée, ronds de sélection, avatar,
+logos) sont masquées · en taille accessible, la valeur d'une ligne passe **sous**
+son intitulé, les colonnes code postal / ville et date / CVV passent en colonne
+unique, et le logo d'un connecteur passe au-dessus de sa promesse · l'avatar est
+figé, seules ses initiales suivent le texte (et se réduisent plutôt que de
+déborder). Vérifié sur **iPhone SE 3 (375 × 667)**, **iPhone 17 (402 × 874)**,
+**17 Pro Max** et en **AX3** : rien de tronqué, rien de superposé.
+
+**Ce qui est délibérément inerte** — « Ma cagnotte », les deux
+« Confidentialité », « Conditions d’utilisation », « En savoir plus »,
+« Exporter mes données » et « Supprimer mon compte » gardent leur chevron parce
+que la maquette le montre, et ne mènent nulle part parce qu'aucun écran n'est
+dessiné derrière. C'est le même parti pris que les intentions non routées de
+l'accueil, et il se voit en **un seul endroit** (`ProfileView.notYetRouted`).
+
+**À trancher**
+
+| # | Sujet |
+|---|---|
+| T16 | **Mesures non confirmées.** Aucun appel MCP n'a abouti : tout est relevé sur les captures. À confirmer au premier `get_design_context` disponible — au minimum le rayon des groupes, la taille du titre (24 supposé), la présence ou non d'un filet autour des cartes blanches (implémenté avec, par cohérence avec `homeCard()`), et la teinte de l'icône « Exporter mes données » (implémentée en `warning`) |
+| T17 | **Quatre coquilles de copie** : « Ajoutr », « a » pour « à », « permets » pour « permet », et le vouvoiement de la carte des connecteurs (R9). Plus « Profile » pour « Profil » |
+| T18 | **« Confidentialité » en double**, groupes 2 et 4. Doublon, ou deux destinations différentes ? |
+| T19 | **Couleur de la sélection.** `Tokens.swift` réserve le vert d'action à la sélection ; la maquette du mode de paiement sélectionne en **bleu**. Implémenté en bleu (R3) |
+| T20 | **Format du montant.** La maquette écrit « 67,88€ » collé ; on passe par le formateur du système, qui écrit « 67,88 € » en français et respecte la région d'un lecteur étranger. Écart assumé |
+| T21 | **Bouton « Ajouter une carte ».** La maquette écarte le libellé et le « + » aux deux extrémités du bouton ; `BrandButton` les groupe au centre. Faut-il un axe « contenu écarté » sur le composant, ou le dessin groupé convient-il ? |
+| T22 | **États non maquettés** : compte sans adresse, sans carte, sans commande ; erreur de chargement. Écrits ici, à valider |
+| T23 | **Suppression de compte** : obligatoire (App Store 5.1.1), aucune maquette, aucune confirmation dessinée. À maquetter avant la soumission |
