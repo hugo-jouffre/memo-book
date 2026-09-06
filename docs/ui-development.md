@@ -969,14 +969,18 @@ resservira :
 Spécifiques à l'écran : `ProfileAvatar`, `ConnectorsCallout`, `ProfileExitAction`,
 `ApplePayRow`, `ConnectorCard`, `ConnectorLogo`, `OrderCard`.
 
-**La feuille modale flotte** — elle ne monte pas du bord. Le fond que le système
-lui donne est effacé (`presentationBackground(.clear)`) et on dessine à
-l'intérieur une carte détachée de 0.5 rem sur ses trois côtés. Ses coins valent
-le rayon de la dalle **moins ce retrait** : concentriques à ceux du téléphone,
-ils suivent la courbe du verre au lieu de la couper, et ne la touchent jamais.
-Sur un écran à angles droits (SE), on retombe sur le rayon de feuille de la
-marque plutôt que sur zéro. Le cran de hauteur inclut le retrait, si bien que le
-bas de la carte est exactement à la même distance du bord que ses côtés.
+**La feuille modale est posée au bas de l'écran**, comme toute feuille iOS. Le
+système porte son fond (`presentationBackground`) et sa forme
+(`presentationCornerRadius`) ; à nous la poignée, le grand titre Sora, le rond de
+fermeture, le crème et la hauteur calée sur le contenu.
+
+> ⚠️ **Elle a flotté, détachée des bords, et c'était une erreur sur trois plans à
+> la fois.** Le système dessine une ombre autour du conteneur d'une feuille :
+> détachée, la carte en héritait d'un **liseré gris**. Le conteneur ne portant
+> plus la forme, plus rien ne **rognait le contenu**, qui passait par-dessus les
+> coins arrondis dès qu'on faisait défiler. Et le bas décroché laissait voir une
+> **bande d'écran sous la feuille**. Les trois défauts n'en faisaient qu'un :
+> avoir pris au système ce qu'il faisait bien. À ne pas retenter.
 
 **L'app recule derrière — toujours, et pour toutes les feuilles.** L'écran du
 dessous rapetisse (0,92), prend les coins du téléphone, et du noir apparaît tout
@@ -996,7 +1000,14 @@ autour. Trois pièges, tous rencontrés :
 4. *Le masque vient **avant** la réduction.* Posé après, il arrondissait les
    coins de l'écran — que la carte réduite ne touche plus — et celle-ci gardait
    des angles droits.
-5. *Une feuille ne monte jamais jusqu'en haut.* Son cran est plafonné pour
+5. *Le relâchement se lit sur la liaison, pas sur la feuille.* Branché sur
+   l'apparition et la disparition de la feuille — qui **encadrent** l'animation
+   au lieu de l'accompagner — le recul ne se relâchait qu'une fois la feuille
+   entièrement descendue, et l'app se remettait à l'échelle d'un coup sec après
+   coup. D'où ``SwiftUI/View/brandSheet(item:content:)``, **à employer partout à
+   la place de `sheet(item:)`** : la liaison bascule à l'instant où la fermeture
+   commence, et l'app regrandit pendant que la feuille descend.
+6. *Une feuille ne monte jamais jusqu'en haut.* Son cran est plafonné pour
    laisser voir 2.75 rem de la carte de l'app au-dessus d'elle
    (``BrandSheetMetrics/appReveal``). Sans ce plafond, la feuille des six
    connecteurs venait affleurer le bord de la carte et il ne restait plus rien à
@@ -1166,6 +1177,28 @@ figé, seules ses initiales suivent le texte (et se réduisent plutôt que de
 déborder). Vérifié sur **iPhone SE 3 (375 × 667)**, **iPhone 17 (402 × 874)**,
 **17 Pro Max** et en **AX3** : rien de tronqué, rien de superposé.
 
+**L'adresse email** — elle se corrige sur place comme le nom et le téléphone,
+avec deux règles de plus. Une adresse qui ne tient pas debout est **gardée** et
+signalée sous la ligne (« Vérifie ton adresse email. ») plutôt qu'effacée sous
+les doigts de celui qui vient de la taper. Et une adresse venue d'**Apple ou de
+Google** ne s'ouvre pas du tout : elle appartient au compte tiers, et la changer
+ici ne ferait que la désaccorder de celle qui ouvre la session. La ligne le dit —
+« Gérée par ton compte Apple » — au lieu de laisser quelqu'un buter dessus.
+
+La règle de validation vit dans `MemoBookCore` (`EmailAddress`) parce que **deux
+écrans la posent** : l'entrée dans l'app et le profil. Deux copies auraient fini
+par diverger, et un formulaire aurait accepté ce que l'autre refuse.
+
+**Le nom** — au repos c'est un `Text` qui se coupe en points de suspension à la
+largeur disponible ; le champ de saisie n'apparaît que pendant l'édition. Un
+champ qui reste posé refuse de se comprimer et poussait le crayon hors de
+l'écran dès que le nom était long.
+
+**La cascade de l'accueil** — elle attend **deux** conditions : le contenu
+chargé, et le tracé du M effacé. Depuis que l'accueil se monte *derrière* le
+voile plutôt qu'après lui, la seconde manquait et la cascade se jouait en entier
+avant qu'on puisse la voir.
+
 **Ce qui est délibérément inerte** — « Ma cagnotte », les deux
 « Confidentialité », « Conditions d’utilisation », « En savoir plus »,
 « Exporter mes données » et « Supprimer mon compte » gardent leur chevron parce
@@ -1187,4 +1220,6 @@ l'accueil, et il se voit en **un seul endroit** (`ProfileView.notYetRouted`).
 | T23 | **Suppression de compte** : obligatoire (App Store 5.1.1), aucune maquette, aucune confirmation dessinée. À maquetter avant la soumission |
 | T24 | **Le crayon des lignes modifiables** n'est pas dans la maquette. Sans lui, rien ne dit qu'une ligne se corrige ; avec lui, trois crayons apparaissent sur le premier groupe. À arbitrer |
 | T26 | **Rayon des coins de l'écran** déduit d'une table de formats (``DeviceScreen``), aucune API publique ne le donnant. À relire à chaque nouveau format d'iPhone |
+| T27 | **Le libellé « Gérée par ton compte Apple »** n'est pas maquetté. Il explique pourquoi l'adresse ne s'ouvre pas ; sans lui on bute dessus sans comprendre |
+| T28 | **`signInProvider` n'existe pas encore côté back-end.** L'écran le lit sur le profil, le jeu d'essai le fournit ; il faudra que `GET /v1/me/profile` le renvoie, sans quoi une adresse Apple restera modifiable |
 | T27 | **L'icône « clavier bas »** : le chemin n'a pas été transmis. On est parti du double chevron de `assets/icons/ui/Arrows`, à remplacer |
