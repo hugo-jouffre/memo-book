@@ -336,7 +336,7 @@ section « À trancher » recopiée pour Clara.
 |---|---|---|
 | **1 · Entrée dans l'app** | Splash Screen, Welcome Screen, Sign Up | 📐 Spec figée (§8) — *Sign Up* attend T4 pour son back-end |
 | 2 · Compte | Sign In, mot de passe oublié, suppression de compte | ⏳ En attente de maquettes |
-| 3 · Carnets & enregistrement | **Accueil**, liste, détail, enregistrement | 🟢 *Accueil* + écran de lancement livrés (§9), sur jeu d'essai — le reste existe en version non brandée |
+| 3 · Carnets & enregistrement | **Accueil**, **accueil d'un voyage**, liste, détail, enregistrement | 🟢 *Accueil* + écran de lancement (§9) et *accueil d'un voyage* (§11) livrés, sur jeu d'essai — le reste existe en version non brandée |
 | 4 · Carnet & partage | Génération, aperçu PDF, partage | 🔄 Existe en version non brandée |
 | 5 · Paywall & réglages | Achat, abonnement, **profil** | 🟢 *Profil* et ses six feuilles livrés (§10), sur jeu d'essai — seule la déconnexion agit vraiment |
 
@@ -1223,3 +1223,116 @@ l'accueil, et il se voit en **un seul endroit** (`ProfileView.notYetRouted`).
 | T27 | **Le libellé « Gérée par ton compte Apple »** n'est pas maquetté. Il explique pourquoi l'adresse ne s'ouvre pas ; sans lui on bute dessus sans comprendre |
 | T28 | **`signInProvider` n'existe pas encore côté back-end.** L'écran le lit sur le profil, le jeu d'essai le fournit ; il faudra que `GET /v1/me/profile` le renvoie, sans quoi une adresse Apple restera modifiable |
 | T27 | **L'icône « clavier bas »** : le chemin n'a pas été transmis. On est parti du double chevron de `assets/icons/ui/Arrows`, à remplacer |
+
+---
+
+## 11. Lot 3 — Accueil d'un voyage
+
+### 11.1 Accueil d'un voyage
+
+- **Maquette** : capture fournie par Hugo. ⚠️ **Pas de nœud Figma** : les
+  mesures sont relevées sur l'image, comme celles du profil, et tout passe par
+  des tokens existants — voir T29.
+- **Vues** : `MemoBookFeature/Trip/` — `TripHomeView`, `TripHomeModel`,
+  `TripHeader`, `TripStepsSection`, `TripFixtures`.
+- **Rôle** : où en est *ce* voyage, et la relance de MemoBook juste au-dessus du
+  micro.
+- **Entrée / sortie** : depuis **n'importe quelle carte de voyage de l'accueil**
+  (`HomeIntent.openTrip`, poussé par `RootView` sur `HomeRoute.trip`) → retour à
+  l'accueil.
+
+**Structure** — deux couches, et une seule qui défile.
+
+| Élément | Valeur | Note |
+|---|---|---|
+| Photo de couverture | rapport 390/440, en **plancher** | Un rapport et non une hauteur : la couverture garde ses proportions du SE au Pro Max. Un **plancher** et non une hauteur figée — voir l'encadré ci-dessous |
+| Commandes | 3 ronds de 2.75 rem | Retour, impression, réglages. Posés sous la barre d'état, dont la hauteur vient de `DeviceScreen` |
+| Panneau crème | rayon 2.5 rem (`overlayCornerRadius`) | Il **mord** de 1.5 rem sur la photo : c'est ce chevauchement qui le fait recouvrir l'image au lieu d'être posé dessous |
+| Pastilles de filtre | hauteur 2.75 rem, capsule | `BrandFilterChip`, dans une bande qui défile |
+| Vignette d'étape | 4.75 rem | Avec le drapeau du pays dans le coin |
+
+> ⚠️ **La hauteur de la couverture est un plancher, pas une hauteur.** Figée,
+> elle rognait tout en taille de texte accessible : les compteurs, qui s'empilent
+> alors les uns sous les autres, débordaient par le haut et venaient se poser sur
+> la flèche de retour. L'en-tête est donc une **pile** dont le contenu décide de
+> la hauteur, la photo passant en fond — rien ne peut en sortir.
+
+**Tokens ajoutés** — `MemoBookSpacing.overlayCornerRadius` (40) ·
+`DeviceScreen.width` (hauteur minimale d'une bannière pleine largeur, sans
+`GeometryReader`).
+
+**Composants**
+
+| Composant | Ce qu'il fait |
+|---|---|
+| `BrandFilterChip` | **La** pastille de filtre. Elle ne porte pas l'action : elle sert d'étiquette à un `Menu`, qui apporte la liste, les coches et VoiceOver. Deux états seulement — au repos un contour, active le vert de la marque : un filtre posé doit se voir de loin, sinon on cherche pourquoi la liste est courte |
+| `View.brandHiddenNavigationBar()` | Masque la barre **et rend le glissé de retour** qu'elle emporte. Extrait du profil, qui le portait seul, à sa deuxième occurrence |
+| `TripStatsRow` (étendu) | Le même composant qu'à l'accueil, avec deux emplois : réparti sur une carte, ou serré et teinté de blanc sur une photo. Les règles qui comptent — pluriels, unités, empilement en AX — restent partagées |
+| `CompanionStack` (étendu) | Gagne un nombre de pastilles visibles et un **total**, pour afficher « +24 » sans que le serveur envoie vingt-quatre visages |
+
+**Le texte blanc sur une photo qu'on ne choisit pas** — c'est le seul endroit de
+l'app où le contraste ne se calcule pas d'avance : une couverture claire rendrait
+le titre illisible. Deux voiles dégradés le garantissent, un en haut pour les
+commandes, un en bas pour le titre, et le milieu de la photo reste net. Ils sont
+donc du **dessin**, pas de la décoration.
+
+**Les filtres** — Pays, Étapes et Transports se **combinent** : choisir un pays
+*et* un transport ne garde que ce qui satisfait les deux. C'est ce qu'on attend
+d'une barre de filtres, et ça évite d'avoir à expliquer une règle de priorité.
+Chacun est un `Menu` portant un `Picker`. ⚠️ **L'intention de « Étapes » est
+supposée** : filtrer la liste sur une étape. C'est la lecture littérale d'un
+filtre, mais elle mérite confirmation — T30.
+
+**Copie** (verbatim, hors données) — « Continuer à enregistrer » · « Pays » ·
+« Étapes » · « Transports » · « Etape n°1 » · « avec … »
+
+> ⚠️ **« Etape n°1 » sans accent** sur le E : c'est la copie de la maquette,
+> recopiée telle quelle (R8). À reprendre dans Figma — T29.
+>
+> ⚠️ Les compteurs de la maquette sont en **anglais** et sans unité (« 10 days »,
+> « 37km », « 24 »). L'écran emploie le formateur de l'accueil — « 10 jours »,
+> « 37 km », « 24 photos » — qui connaît les pluriels et les unités du lecteur.
+> Écart assumé, comme celui du montant en euros (T20).
+
+**États** — les quatre sont traités. *Chargement* : l'écran ne dessine rien tant
+que le voyage n'est pas là. *Vide* : deux vides très différents, un voyage sans
+étape (« Le voyage commence ici ») et un filtre qui ne laisse rien passer
+(« Aucune étape ne correspond », avec « Tout afficher ») — **aucun n'est
+maquetté**. *Erreur* : `ErrorBanner` en ligne. *Nominal* : la maquette.
+
+**Contrat back-end** — **aucun appel**. L'écran lit un `TripDetail` fourni par
+une closure passée à `TripHomeModel` ; c'est aujourd'hui `TripDetail.fixture(id:)`,
+qui **reprend le voyage de l'accueil** plutôt que d'en réinventer un — ouvrir une
+carte doit mener à ce qu'elle montrait. Les modèles (`TripDetail`, `TripStep`,
+`TripTransport`) sont dans `MemoBookCore` et déjà `Codable`.
+
+| Besoin | Route à créer |
+|---|---|
+| Le voyage ouvert | `GET /v1/trips/:id` — voyage, relance, étapes, abonnés |
+| Les étapes | comprises dans la réponse ci-dessus, ou `GET /v1/trips/:id/steps` si elles se paginent |
+| La relance | calculée côté serveur à partir des récits déjà envoyés |
+| Inviter | `POST /v1/trips/:id/companions` |
+| Impression, réglages du voyage | écrans non dessinés — voir `docs/reglages-utilisateur.md` |
+
+**Accessibilité** — les compteurs, le titre et chaque groupe de personnes sont
+des éléments VoiceOver uniques · les trois ronds de commande portent leur nom
+(« Retour », « Imprimer ce carnet », « Paramètres du voyage ») · la photo, les
+voiles, les pastilles et les drapeaux sont masqués · en taille accessible, les
+compteurs s'empilent, les deux groupes de personnes passent l'un sous l'autre, et
+la vignette d'une étape passe au-dessus de son texte · le libellé du CTA s'arrête
+à AX1, où « enregistrer » devient plus large que le bouton entier. Vérifié sur
+iPhone 17 et en **AX3**.
+
+**Ce qui est délibérément inerte** — impression, réglages du voyage, invitation,
+micro et ouverture d'une étape. Même parti pris que l'accueil et le profil, et il
+se voit en un seul endroit (`TripHomeView.notYetRouted`).
+
+**À trancher**
+
+| # | Sujet |
+|---|---|
+| T29 | **« Etape n°1 » sans accent**, et mesures relevées sur une capture faute de nœud Figma |
+| T30 | **L'intention du filtre « Étapes »** : filtrer la liste sur une étape, ou sauter à celle-ci ? Implémenté en filtre, par symétrie avec les deux autres |
+| T31 | **Les deux groupes de personnes** de l'en-tête sont lus comme « compagnons » (avec un `+` pour inviter) et « abonnés » (avec le décompte). À confirmer |
+| T32 | **Icônes manquantes** au jeu de marque : le drapeau, la valise et l'itinéraire des trois filtres restent sur des symboles système, comme le calendrier et le tracé de l'accueil |
+| T33 | **La carte d'étape** est plus sombre que le crème sur la maquette ; elle emploie ici la carte blanche de l'app (`homeCard()`), pour rester cohérente avec l'accueil et le profil |

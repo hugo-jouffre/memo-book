@@ -96,8 +96,14 @@ struct CompanionStack: View {
     let companions: [Companion]
 
     /// Au-delà de trois, les visages ne se distinguent plus : la pastille
-    /// suivante compte le reste.
-    private static let visibleLimit = 3
+    /// suivante compte le reste. L'en-tête d'un voyage en montre moins, parce
+    /// qu'il aligne deux groupes sur la même ligne.
+    var visibleLimit = 3
+
+    /// Combien ils sont **en tout**, quand la liste n'en porte que les
+    /// premiers. C'est ce qui permet à un en-tête d'afficher « +22 » sans que
+    /// le serveur ait à envoyer vingt-deux visages qu'on ne dessinera pas.
+    var totalCount: Int?
 
     /// Taille figée, contrairement au reste de l'écran — même raison que la
     /// pastille numérotée de `WelcomeStepCard`. Ces ronds sont une décoration
@@ -107,8 +113,8 @@ struct CompanionStack: View {
     private let diameter: CGFloat = 34
 
     var body: some View {
-        let shown = companions.prefix(Self.visibleLimit)
-        let overflow = companions.count - shown.count
+        let shown = companions.prefix(visibleLimit)
+        let overflow = max(totalCount ?? companions.count, companions.count) - shown.count
 
         // Un cinquième de recouvrement, pas un tiers : la pastille de droite
         // mangeait la deuxième initiale de celle de gauche.

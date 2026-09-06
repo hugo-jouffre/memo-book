@@ -45,6 +45,14 @@ public enum DeviceScreen {
         return max(size.width, size.height)
     }
 
+    /// Largeur de la dalle, en points. Sert à donner sa hauteur minimale à une
+    /// bannière pleine largeur sans passer par un `GeometryReader`.
+    @MainActor
+    public static var width: CGFloat {
+        let size = screenSize
+        return min(size.width, size.height)
+    }
+
     /// Ce que l'indicateur d'accueil prend en bas de l'écran. Zéro sur un
     /// appareil à bouton.
     @MainActor

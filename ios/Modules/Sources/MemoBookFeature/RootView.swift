@@ -172,11 +172,10 @@ public struct RootView: View {
     /// Où mène chaque intention de l'accueil.
     ///
     /// **Câblage provisoire.** Les voyages ne sont pas encore une ressource du
-    /// back-end : l'accueil montre un jeu d'essai, et un identifiant de voyage
-    /// n'est pas encore un identifiant de carnet. Ouvrir un voyage mène donc au
-    /// détail du carnet, qui affichera son bandeau « Carnet introuvable » tant
-    /// que les deux ne sont pas les mêmes. C'est la bonne destination, pas
-    /// encore la bonne donnée.
+    /// back-end : l'accueil et l'écran d'un voyage montrent tous deux un jeu
+    /// d'essai, relié par l'identifiant du voyage. Ouvrir une carte mène donc
+    /// bien au voyage qu'elle montrait — mais aucune de ses étapes ne mène
+    /// encore au carnet, faute d'un identifiant commun.
     ///
     /// L'impression et la carte de découverte n'ont pas d'écran dessiné : elles
     /// ne mènent nulle part, et c'est ici que ça se voit.
@@ -201,7 +200,7 @@ public struct RootView: View {
         case .profile:
             ProfileView(onSignOut: signOut)
         case .trip(let id):
-            MemoDetailView(memoId: id)
+            TripHomeView(tripId: id)
         case .memos:
             MemoListView()
         }

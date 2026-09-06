@@ -282,9 +282,21 @@ struct DestinationLabel: View {
     }
 }
 
-/// Durée, distance, photos — répartis sur la largeur de la carte.
+/// Durée, distance, photos.
+///
+/// Deux emplois, un seul composant : réparti sur la largeur d'une carte de
+/// l'accueil, ou serré à gauche et teinté de blanc sur la photo d'un voyage.
+/// Les règles qui comptent — pluriels, unités, empilement en taille accessible
+/// — sont les mêmes des deux côtés, et c'est bien pour ça qu'il n'y en a qu'un.
 struct TripStatsRow: View {
     let stats: TripStats
+
+    /// Teinte unique de l'icône **et** du texte. `nil` garde le deux-tons de la
+    /// carte : icône estompée, texte en encre pleine.
+    var tint: Color?
+
+    /// Répartis sur toute la largeur, ou serrés les uns contre les autres.
+    var isSpread = true
 
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .footnote) private var iconSide: CGFloat = 16
@@ -300,13 +312,13 @@ struct TripStatsRow: View {
                     ForEach(items) { item($0) }
                 }
             } else {
-                HStack(spacing: MemoBookSpacing.xs) {
+                HStack(spacing: isSpread ? MemoBookSpacing.xs : MemoBookSpacing.s) {
                     ForEach(items) { value in
                         item(value)
                         // Un ressort entre chaque compteur, pas après le
                         // dernier : les trois se répartissent sur la largeur
                         // de la carte au lieu de se tasser à gauche.
-                        if value.id != items.last?.id { Spacer(minLength: 0) }
+                        if isSpread, value.id != items.last?.id { Spacer(minLength: 0) }
                     }
                 }
             }
@@ -317,10 +329,10 @@ struct TripStatsRow: View {
         HStack(spacing: 5) {
             item.kind.icon
                 .frame(width: iconSide, height: iconSide)
-                .foregroundStyle(MemoBookColor.inkMuted)
+                .foregroundStyle(tint ?? MemoBookColor.inkMuted)
             Text(item.text)
                 .font(MemoBookFont.label)
-                .foregroundStyle(MemoBookColor.ink)
+                .foregroundStyle(tint ?? MemoBookColor.ink)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(item.text)

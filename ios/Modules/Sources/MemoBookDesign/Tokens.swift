@@ -180,6 +180,12 @@ public enum MemoBookSpacing {
     /// nom, pour qu'un troisième contrôle ne parte pas sur une autre valeur.
     public static let controlCornerRadius: CGFloat = 16
 
+    /// Rayon du panneau qui remonte par-dessus une photo pleine largeur, comme
+    /// l'accueil d'un voyage. Plus grand que celui d'une feuille : il doit se
+    /// lire comme une page qui recouvre l'image, pas comme une carte posée
+    /// dessus.
+    public static let overlayCornerRadius: CGFloat = 40
+
     /// Rayon du haut d'une feuille modale. Plus grand que celui d'une carte :
     /// c'est un écran qui monte par-dessus, pas un bloc posé dedans.
     public static let sheetCornerRadius: CGFloat = 28

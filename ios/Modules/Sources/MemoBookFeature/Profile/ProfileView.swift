@@ -71,16 +71,7 @@ public struct ProfileView: View {
         // le titre partagent une ligne, à la marge de la colonne. Une barre de
         // navigation ne sait pas faire ça — sur iOS 26 elle enferme d'office un
         // élément personnalisé dans une pastille de verre, qui avale le titre.
-        .toolbar(.hidden, for: .navigationBar)
-        // Masquer la barre emporte avec elle le glissé de retour depuis le
-        // bord, que le système attache à son bouton. On le rend donc à la main,
-        // et `simultaneous` pour que le défilement vertical continue de
-        // fonctionner pendant qu'on guette le geste — même montage que le
-        // balayage entre inscription et connexion de l'écran d'entrée.
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 20, coordinateSpace: .global)
-                .onEnded(handleEdgeSwipe)
-        )
+        .brandHiddenNavigationBar()
         // Le crème de la marque ne se retourne pas en sombre — voir
         // `MemoBookColor`.
         .environment(\.colorScheme, .light)
@@ -122,19 +113,6 @@ public struct ProfileView: View {
 
             Spacer(minLength: 0)
         }
-    }
-
-    /// Le glissé depuis le bord gauche : il doit partir du bord, aller
-    /// franchement vers la droite, et rester horizontal. Sans ces trois
-    /// conditions, un défilement un peu de travers refermerait l'écran au
-    /// milieu de la lecture.
-    private func handleEdgeSwipe(_ drag: DragGesture.Value) {
-        let horizontal = drag.translation.width
-        guard drag.startLocation.x < MemoBookSpacing.m,
-            horizontal > 80,
-            horizontal > abs(drag.translation.height) * 1.5
-        else { return }
-        dismiss()
     }
 
     private func identity(_ profile: TravellerProfile) -> some View {

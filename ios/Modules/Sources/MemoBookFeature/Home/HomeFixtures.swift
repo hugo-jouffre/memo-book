@@ -86,8 +86,9 @@ extension HomeFeed {
 
 extension Date {
     /// Une date de jeu d'essai, à midi UTC pour qu'aucun fuseau ne la fasse
-    /// changer de jour à l'affichage.
-    fileprivate static func fixture(_ day: Int, _ month: Int, _ year: Int) -> Date {
+    /// changer de jour à l'affichage. Partagée avec le jeu d'essai des voyages,
+    /// qui doit tomber sur les mêmes dates que l'accueil.
+    static func fixture(_ day: Int, _ month: Int, _ year: Int) -> Date {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
 
