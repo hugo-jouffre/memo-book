@@ -12,10 +12,27 @@ public struct Traveller: Codable, Sendable, Hashable, Identifiable {
     public let firstName: String
     public let avatarUrl: URL?
 
-    public init(id: String, firstName: String, avatarUrl: URL? = nil) {
+    /// Les étapes offertes à l'ouverture du compte, et celles qui restent.
+    ///
+    /// Les deux, et non un seul : c'est leur **écart** qui change le message.
+    /// Rien de consommé, on annonce un cadeau (« 3 étapes offertes ») ; une
+    /// fois entamé, on annonce un solde (« 2 étapes restantes »). `nil` quand
+    /// le compte n'a pas de quota — un abonné, par exemple.
+    public let offeredSteps: Int?
+    public let remainingSteps: Int?
+
+    public init(
+        id: String,
+        firstName: String,
+        avatarUrl: URL? = nil,
+        offeredSteps: Int? = nil,
+        remainingSteps: Int? = nil
+    ) {
         self.id = id
         self.firstName = firstName
         self.avatarUrl = avatarUrl
+        self.offeredSteps = offeredSteps
+        self.remainingSteps = remainingSteps
     }
 }
 
@@ -97,11 +114,20 @@ public struct TripStats: Codable, Sendable, Hashable {
 /// traité comme « en cours » : mieux vaut un voyage visible en haut de l'écran
 /// qu'un voyage qui disparaît.
 public enum TripStage: Sendable, Hashable {
+    /// Prévu, pas encore commencé. Il n'a rien à raconter : il se planifie.
+    case upcoming
     case ongoing
     case past
     case unknown(String)
 
-    public var isOngoing: Bool { self != .past }
+    /// Un état inconnu du serveur est traité comme « en cours » : mieux vaut un
+    /// voyage visible en haut de l'écran qu'un voyage qui disparaît.
+    public var isOngoing: Bool {
+        switch self {
+        case .ongoing, .unknown: true
+        case .upcoming, .past: false
+        }
+    }
 }
 
 extension TripStage: Codable {
@@ -109,6 +135,7 @@ extension TripStage: Codable {
         let raw = try decoder.singleValueContainer().decode(String.self)
         self =
             switch raw {
+            case "upcoming": .upcoming
             case "ongoing": .ongoing
             case "past": .past
             default: .unknown(raw)
@@ -122,10 +149,37 @@ extension TripStage: Codable {
 
     public var rawValue: String {
         switch self {
+        case .upcoming: "upcoming"
         case .ongoing: "ongoing"
         case .past: "past"
         case .unknown(let raw): raw
         }
+    }
+}
+
+/// Où en est le carnet : ce qui a été raconté, et ce que ça remplit.
+///
+/// Deux compteurs et une cible, pas un pourcentage : « 2/80 pages » se lit,
+/// « 2,5 % » ne dit rien. La fraction n'en est que la traduction pour la barre.
+public struct TripProgress: Codable, Sendable, Hashable {
+    public let memoryCount: Int
+    public let pageCount: Int
+
+    /// Le nombre de pages visé pour ce carnet — réglable par le voyageur, voir
+    /// `docs/reglages-utilisateur.md`.
+    public let targetPageCount: Int
+
+    public init(memoryCount: Int, pageCount: Int, targetPageCount: Int) {
+        self.memoryCount = memoryCount
+        self.pageCount = pageCount
+        self.targetPageCount = targetPageCount
+    }
+
+    /// De 0 à 1. Bornée des deux côtés : un carnet qui dépasse sa cible ne fait
+    /// pas déborder sa barre.
+    public var fraction: Double {
+        guard targetPageCount > 0 else { return 0 }
+        return min(max(Double(pageCount) / Double(targetPageCount), 0), 1)
     }
 }
 
@@ -145,6 +199,10 @@ public struct Trip: Codable, Sendable, Hashable, Identifiable {
     public let stats: TripStats
     public let companions: [Companion]
 
+    /// Où en est le carnet. `nil` pour un voyage à venir, qui n'a rien à
+    /// remplir encore.
+    public let progress: TripProgress?
+
     /// Le carnet est généré et peut partir à l'impression — c'est ce qui
     /// allume le bouton imprimante sur les voyages passés.
     public let isPrintable: Bool
@@ -159,6 +217,7 @@ public struct Trip: Codable, Sendable, Hashable, Identifiable {
         coverPhotoUrl: URL? = nil,
         stats: TripStats = TripStats(),
         companions: [Companion] = [],
+        progress: TripProgress? = nil,
         isPrintable: Bool = false
     ) {
         self.id = id
@@ -170,6 +229,7 @@ public struct Trip: Codable, Sendable, Hashable, Identifiable {
         self.coverPhotoUrl = coverPhotoUrl
         self.stats = stats
         self.companions = companions
+        self.progress = progress
         self.isPrintable = isPrintable
     }
 }
@@ -215,9 +275,19 @@ public struct HomeFeed: Codable, Sendable, Hashable {
         trips.filter(\.stage.isOngoing).sorted { ($0.startDate ?? .distantPast) > ($1.startDate ?? .distantPast) }
     }
 
+    /// Les voyages prévus, le plus proche d'abord.
+    public var upcomingTrips: [Trip] {
+        trips.filter { $0.stage == .upcoming }
+            .sorted { ($0.startDate ?? .distantFuture) < ($1.startDate ?? .distantFuture) }
+    }
+
     /// Les voyages terminés, du plus récent au plus ancien.
+    ///
+    /// `== .past`, et non « tout ce qui n'est pas en cours » : depuis qu'un
+    /// voyage peut être **à venir**, la négation le rangeait parmi les carnets
+    /// terminés — un voyage qui n'a pas commencé affiché comme fini.
     public var pastTrips: [Trip] {
-        trips.filter { !$0.stage.isOngoing }
+        trips.filter { $0.stage == .past }
             .sorted { ($0.endDate ?? $0.startDate ?? .distantPast) > ($1.endDate ?? $1.startDate ?? .distantPast) }
     }
 }

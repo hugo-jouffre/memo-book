@@ -51,6 +51,7 @@ public struct BrandButton: View {
     private let isRound: Bool
     private let alternate: Bool
     private let isLoading: Bool
+    private let isSubdued: Bool
     private let fillsWidth: Bool
     private let action: () -> Void
 
@@ -61,6 +62,11 @@ public struct BrandButton: View {
     ///   - isRound: la variante ronde, pour un bouton sans libellé. Le rayon
     ///     devient un demi-cercle et les marges s'égalisent.
     ///   - alternate: à activer quand le bouton est posé sur un fond sombre.
+    ///   - isSubdued: pour un lien qui n'appelle à rien — « Besoin d'aide ? »
+    ///     en bas d'un écran. Il prend alors la taille et le gris du texte
+    ///     secondaire au lieu de la typographie des boutons. N'a de sens qu'avec
+    ///     ``Style/link`` : partout ailleurs, un bouton qui n'attire pas l'œil
+    ///     est un bouton raté.
     ///   - fillsWidth: pour les appels à l'action pleine largeur en bas d'écran.
     public init(
         _ title: String? = nil,
@@ -71,6 +77,7 @@ public struct BrandButton: View {
         isRound: Bool = false,
         alternate: Bool = false,
         isLoading: Bool = false,
+        isSubdued: Bool = false,
         fillsWidth: Bool = false,
         action: @escaping () -> Void
     ) {
@@ -82,6 +89,7 @@ public struct BrandButton: View {
         self.isRound = isRound
         self.alternate = alternate
         self.isLoading = isLoading
+        self.isSubdued = isSubdued
         self.fillsWidth = fillsWidth
         self.action = action
     }
@@ -129,7 +137,7 @@ public struct BrandButton: View {
             if iconPlacement == .leading { leadingAccessory }
             if let title {
                 Text(title)
-                    .font(MemoBookFont.button)
+                    .font(isSubdued ? MemoBookFont.label : MemoBookFont.button)
                     .lineLimit(fillsWidth ? nil : 1)
             }
             if iconPlacement == .trailing { leadingAccessory }
@@ -207,6 +215,8 @@ public struct BrandButton: View {
     // les autres écrans, et l'écart est invisible à l'œil sur un aplat vert.
 
     private var foreground: Color {
+        if isSubdued, isEnabled { return MemoBookColor.inkMuted }
+
         guard isEnabled else {
             return style == .primary ? MemoBookColor.surface : MemoBookColor.disabled
         }

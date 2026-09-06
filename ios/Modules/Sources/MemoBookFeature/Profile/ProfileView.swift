@@ -318,11 +318,21 @@ private struct EditableName: View {
 
     var body: some View {
         HStack(spacing: MemoBookSpacing.xs) {
+            // Un contrepoids invisible, de la largeur exacte du crayon.
+            //
+            // Sans lui, c'est la paire « nom + crayon » qui se centre, et le nom
+            // se retrouve donc décalé vers la gauche de la moitié du crayon.
+            // Avec lui, **le nom est centré** et le crayon déborde à droite —
+            // c'est le décentrage voulu.
+            Color.clear
+                .frame(width: MemoBookSpacing.minimumTapTarget, height: 0)
+
             if isEditing {
                 editor
             } else {
                 label
             }
+
             pencil
         }
         // La colonne du nom ne prend jamais plus que la largeur de l'écran,

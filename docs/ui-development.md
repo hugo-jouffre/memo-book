@@ -1336,3 +1336,80 @@ se voit en un seul endroit (`TripHomeView.notYetRouted`).
 | T31 | **Les deux groupes de personnes** de l'en-tête sont lus comme « compagnons » (avec un `+` pour inviter) et « abonnés » (avec le décompte). À confirmer |
 | T32 | **Icônes manquantes** au jeu de marque : le drapeau, la valise et l'itinéraire des trois filtres restent sur des symboles système, comme le calendrier et le tracé de l'accueil |
 | T33 | **La carte d'étape** est plus sombre que le crème sur la maquette ; elle emploie ici la carte blanche de l'app (`homeCard()`), pour rester cohérente avec l'accueil et le profil |
+
+---
+
+## 12. Lot 3 — Les états de l'accueil
+
+Quatre maquettes fournies par Hugo, plus les états qu'elles impliquent. Elles
+**changent la copie et la structure** de §9 : ce qui suit fait foi.
+
+**Ce qui change de nom** — « Tes voyages en cours » devient **« Ton voyage »**
+(au singulier, point vert conservé) et « Tes voyages précédents » devient
+**« Voyages précédents »**.
+
+**La section « Voyage à venir »** apparaît quand il y a un voyage prévu, ou
+quand il n'y en a **aucun en cours** — l'invitation à en préparer un n'a de sens
+que dans ce second cas. Vide, elle porte un cadre en pointillés : « Commence à
+planifier ton prochain voyage » / « Clique ici pour voir le carnets de la
+communauté ».
+
+**La section « Voyages précédents » est toujours là**, même vide : c'est une
+promesse, et son cadre en pointillés le dit — « Tes voyages passés s'afficheront
+ici ».
+
+**L'appel à l'action change avec l'état** : « Commencer à enregistrer » avec le
+micro tant qu'un voyage est en cours, « Créer un nouveau voyage » sinon. Un micro
+devant quelqu'un qui n'a aucun carnet ouvert ne mène nulle part.
+
+**L'avancement du carnet** — « 5 souvenirs et 2/80 pages » et sa jauge, sur la
+carte du moment comme sur les cartes compactes. Deux compteurs et une cible dans
+le modèle (`TripProgress`), pas un pourcentage : « 2/80 pages » se lit, « 2,5 % »
+ne dit rien. La fraction n'en est que la traduction pour la barre, bornée des
+deux côtés — un carnet qui dépasse sa cible ne fait pas déborder sa jauge.
+
+**Les pastilles**, mises à jour et réunies dans **un seul composant**
+(`BrandTagPill`). Elles étaient trois dessins écrits chacun de son côté, qui
+divergeaient déjà sur le rayon et la graisse. Trois tons, et trois seulement :
+
+| Ton | Dessin | Emploi |
+|---|---|---|
+| `accent` | aplat lime | un décompte, un cadeau — « ×3 », « 3 étapes offertes » |
+| `outlined` | contour vert | un état — « EN COURS » |
+| `info` | contour bleu | une précision — « À VENIR » |
+
+**Le solde d'étapes offertes** se pose sur l'avatar, en débordant par le haut :
+c'est ce chevauchement qui la rattache à lui plutôt que de la faire flotter dans
+le coin. Deux messages pour un seul compteur — tant que rien n'est consommé on
+annonce un cadeau (« 3 étapes offertes »), ensuite un solde (« 2 étapes
+restantes »). C'est le même chiffre, mais pas la même nouvelle.
+
+**Le bac à sable** — un panneau en pointillés, tout en bas de l'accueil, pour
+voir chaque état sans back-end : tout effacer, ajouter un voyage en cours / à
+venir / passé (rejouable, destinations tirées au sort), basculer les étapes
+offertes, montrer l'erreur, revenir au jeu d'essai. **Absent de l'app livrée** :
+le fichier entier est sous `#if DEBUG`, et les méthodes qu'il appelle aussi. Elles
+vivent dans `HomeModel.swift` et non à côté du panneau parce que les listes sont
+en `private(set)` — le bac à sable peut ranger le contenu, une vue ne le peut pas.
+
+> ⚠️ **Un bug attrapé au passage.** `pastTrips` filtrait sur « tout ce qui n'est
+> pas en cours ». Depuis qu'un voyage peut être **à venir**, cette négation le
+> rangeait parmi les carnets terminés — un voyage qui n'a pas commencé affiché
+> comme fini. Le filtre est maintenant explicite (`== .past`), et un test le
+> tient.
+
+**Copie** (verbatim) — « Ton voyage » · « Voyage à venir » · « Voyages
+précédents » · « Commence à planifier ton prochain voyage » · « Clique ici pour
+voir le carnets de la communauté » · « Tes voyages passés s'afficheront ici » ·
+« Créer un nouveau voyage » · « Besoin d'aide ? » · « 3 étapes offertes » /
+« 2 étapes restantes »
+
+**À trancher**
+
+| # | Sujet |
+|---|---|
+| T34 | **« le carnets »** dans l'invitation à planifier : coquille de maquette, recopiée telle quelle (R8) |
+| T35 | **« Ton voyage » au singulier** alors que la section peut en porter plusieurs — c'est le cas du jeu d'essai. Titre au pluriel dès le deuxième, ou singulier assumé ? |
+| T36 | **La pastille « ×1 »** est lime sur une maquette et bleue à contour sur une autre. Implémentée en lime, comme le compteur existant |
+| T37 | **L'illustration de l'invitation** (passeport + carnet ouvert) n'est pas exportée : le livre du *Welcome* tient la place |
+| T38 | **Le seuil d'un voyage « à venir »** est une donnée du serveur (`stage`), pas une comparaison de dates côté app. À confirmer : un voyage dont la date de début est passée mais sans souvenir reste-t-il « à venir » ? |

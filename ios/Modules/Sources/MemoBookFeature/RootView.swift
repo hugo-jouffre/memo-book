@@ -189,7 +189,7 @@ public struct RootView: View {
             // Enregistrer suppose un carnet ouvert : on passe par la liste
             // tant que l'accueil ne sait pas créer un voyage lui-même.
             path.append(.memos)
-        case .orderPrint, .openShowcase:
+        case .orderPrint, .openShowcase, .createTrip, .browseCommunity, .openHelp:
             break
         }
     }

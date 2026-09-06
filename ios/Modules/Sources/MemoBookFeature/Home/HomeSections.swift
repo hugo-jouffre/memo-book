@@ -56,13 +56,7 @@ struct CountBadge: View {
     let count: Int
 
     var body: some View {
-        Text("×\(count)")
-            .font(MemoBookFont.overline)
-            .foregroundStyle(MemoBookColor.ink)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(MemoBookColor.accent, in: .rect(cornerRadius: MemoBookSpacing.xs))
-            .fixedSize()
+        BrandTagPill("×\(count)")
             .accessibilityLabel("\(count) au total")
     }
 }
@@ -95,13 +89,7 @@ struct ShowcaseCard: View {
         .background(MemoBookColor.outline.opacity(0.22), in: shape)
         // L'image touche les bords : c'est la carte qui la rogne.
         .clipShape(shape)
-        .overlay {
-            shape.strokeBorder(
-                MemoBookColor.outline,
-                style: StrokeStyle(lineWidth: 1, dash: [6, 4])
-            )
-        }
-        .contentShape(shape)
+        .brandDashedCard(color: MemoBookColor.outline)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
     }
@@ -184,27 +172,72 @@ struct ShowcaseCard: View {
     }
 }
 
-/// L'accueil d'un compte tout neuf : aucun voyage, et une seule chose à faire.
-struct HomeEmptyState: View {
+/// L'invitation à préparer le prochain voyage, quand il n'y en a aucun en
+/// cours.
+///
+/// Un **pointillé** et non une carte pleine : ce cadre n'est pas un contenu,
+/// c'est une place qui attend d'être remplie. C'est la même grammaire que le
+/// bloc des voyages passés vides, et elle ne sert qu'à ça dans l'app.
+struct UpcomingTripInvite: View {
+    let onOpen: () -> Void
+
     var body: some View {
-        VStack(spacing: MemoBookSpacing.xs) {
-            BrandMarkDrawing(progress: 1, color: MemoBookColor.outline)
-                .frame(width: 120, height: BrandMark.height(forWidth: 120))
-                .padding(.bottom, MemoBookSpacing.xs)
+        Button(action: onOpen) {
+            VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
+                artwork
 
-            Text("Ton premier carnet commence ici")
-                .font(MemoBookFont.bodySemibold)
-                .foregroundStyle(MemoBookColor.ink)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Commence à planifier ton prochain voyage")
+                        .font(MemoBookFont.bodySemibold)
+                        .foregroundStyle(MemoBookColor.ink)
 
-            Text("Raconte ta journée à la voix : MemoBook s’occupe du reste.")
-                .font(MemoBookFont.label)
-                .foregroundStyle(MemoBookColor.inkMuted)
-                .multilineTextAlignment(.center)
+                    // ⚠️ « le carnets » : coquille de la maquette, recopiée
+                    // telle quelle (R8) et signalée dans la fiche écran.
+                    Text("Clique ici pour voir le carnets de la communauté")
+                        .font(MemoBookFont.label)
+                        .foregroundStyle(MemoBookColor.inkMuted)
+                }
+                .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(MemoBookSpacing.s)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, MemoBookSpacing.l)
-        .padding(.horizontal, MemoBookSpacing.s)
-        .homeCard()
+        .buttonStyle(CardPressStyle())
+        .brandDashedCard(color: MemoBookColor.action)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+    }
+
+    /// ⚠️ **Illustration provisoire.** La maquette montre un passeport et un
+    /// carnet ouvert ; l'asset n'est pas encore exporté. Le livre du *Welcome*
+    /// tient la place — voir la fiche écran.
+    private var artwork: some View {
+        Image(brand: "WelcomeBook")
+            .resizable()
+            .scaledToFit()
+            .frame(maxHeight: 96)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, MemoBookSpacing.s)
+            .background(
+                MemoBookColor.outline.opacity(0.25),
+                in: .rect(cornerRadius: MemoBookSpacing.cornerRadius)
+            )
+            .accessibilityHidden(true)
+    }
+}
+
+/// La place que prendront les carnets terminés.
+struct PastTripsPlaceholder: View {
+    var body: some View {
+        Text("Tes voyages passés s’afficheront ici")
+            .font(MemoBookFont.body)
+            .foregroundStyle(MemoBookColor.inkMuted)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(MemoBookSpacing.s)
+            .padding(.vertical, MemoBookSpacing.s)
+            .brandDashedCard()
     }
 }
