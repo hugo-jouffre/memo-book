@@ -55,4 +55,12 @@ public struct AuthSession: Codable, Sendable, Hashable {
 public enum AuthProvider: String, Codable, Sendable, Hashable {
     case apple
     case google
+
+    /// Le nom de la marque, tel qu'on l'écrit à l'utilisateur.
+    public var displayName: String {
+        switch self {
+        case .apple: "Apple"
+        case .google: "Google"
+        }
+    }
 }

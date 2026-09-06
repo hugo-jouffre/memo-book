@@ -56,8 +56,24 @@ public final class ProfileModel {
         mutate { $0.fullName = trimmed }
     }
 
+    /// Ce qui ne va pas dans l'adresse saisie, ou `nil`. La ligne l'affiche
+    /// sous elle.
+    public private(set) var emailError: String?
+
+    /// Corrige l'adresse, et dit si elle tient debout.
+    ///
+    /// La valeur saisie est **gardée même si elle est invalide** : l'effacer
+    /// sous les doigts de quelqu'un qui vient de la taper serait plus brutal
+    /// que de la lui montrer avec le reproche à côté. C'est l'envoi au serveur
+    /// qui refusera, le jour où il y en aura un.
     public func setEmail(_ email: String) {
-        mutate { $0.email = email.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty }
+        // Une adresse venue d'Apple ou de Google n'est pas à nous : la changer
+        // ici ne ferait que la désaccorder de celle qui ouvre la session.
+        guard profile?.isEmailManagedByProvider != true else { return }
+
+        let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        mutate { $0.email = trimmed.nilIfEmpty }
+        emailError = EmailAddress.isValid(trimmed) ? nil : "Vérifie ton adresse email."
     }
 
     public func setPhoneNumber(_ phoneNumber: String) {

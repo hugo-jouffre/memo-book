@@ -30,6 +30,11 @@ public struct HomeView: View {
     /// depuis l'écran de lancement ne saute pas.
     @State private var markOpacity = BrandMarkBackdrop.drawingOpacity
 
+    /// Le contenu est arrivé. Ce n'est pas encore le signal de la cascade : il
+    /// faut aussi que le tracé du M se soit effacé.
+    @State private var isLoaded = false
+
+    @Environment(\.launchOverlayIsVisible) private var isCoveredByLaunch
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -65,13 +70,31 @@ public struct HomeView: View {
         .environment(\.colorScheme, .light)
         .task {
             await model.load()
+            isLoaded = true
+        }
+        // Deux conditions, dans n'importe quel ordre : le contenu est là, et le
+        // tracé du M ne couvre plus l'écran. C'est la seconde qui manquait —
+        // l'accueil étant désormais monté **sous** le voile, sa cascade se
+        // jouait en entier avant qu'on puisse la voir.
+        .onChange(of: isReadyToRise) { _, ready in
+            if ready { rise() }
+        }
+        .onAppear {
+            if isReadyToRise { rise() }
+        }
+    }
 
+    /// Le contenu est chargé et plus rien ne le cache.
+    private var isReadyToRise: Bool { isLoaded && !isCoveredByLaunch }
+
+    /// Lance la cascade : chaque bloc monte à son tour, et le M passe derrière.
+    private func rise() {
+        guard !hasAppeared else { return }
+
+        Task {
             // Une passe de rendu avant de lever le drapeau, sinon rien ne
-            // bouge : `animation(_:value:)` n'anime qu'un **changement**, et
-            // le contenu qui vient d'être posé naîtrait déjà en place. Le jeu
-            // d'essai revient sans jamais suspendre, donc rien ne s'était
-            // affiché entre-temps. Cette attente-là est la seule chose qui
-            // sépare l'état « en bas, transparent » de l'état final.
+            // bouge : `animation(_:value:)` n'anime qu'un **changement**, et un
+            // contenu posé en même temps que le drapeau naîtrait déjà en place.
             try? await Task.sleep(for: .milliseconds(16))
 
             hasAppeared = true

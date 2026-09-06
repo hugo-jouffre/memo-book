@@ -16,21 +16,27 @@ import SwiftUI
 /// cran sur mesure. Un contenu plus haut que l'écran est ramené par le système
 /// à la hauteur maximale, et se met alors à défiler.
 ///
-/// **La feuille flotte.** Elle ne touche jamais le bord du téléphone : le fond
-/// que le système lui donne est effacé (`presentationBackground(.clear)`) et on
-/// dessine à l'intérieur une carte détachée de quelques points, en bas comme sur
-/// les côtés. Ses coins valent le rayon de la dalle **moins ce retrait** — voir
-/// ``DeviceScreen`` — donc ils sont concentriques à ceux du téléphone et suivent
-/// la courbe du verre au lieu de la couper.
+/// **Elle est posée au bas de l'écran, comme toute feuille iOS.** On a essayé
+/// de la faire flotter, détachée des bords : c'était une erreur sur trois plans
+/// à la fois. Le système dessine une ombre autour de son conteneur, qui débordait
+/// de la carte en un liseré gris ; le conteneur n'étant plus celui qui porte la
+/// forme, plus rien ne rognait le contenu, qui débordait des coins arrondis au
+/// défilement ; et le bas décroché laissait voir une bande d'écran sous la
+/// feuille. On laisse donc le système porter le fond
+/// (`presentationBackground`) et la forme (`presentationCornerRadius`) : ses
+/// coins du bas rejoignent alors ceux de la dalle, son ombre tombe derrière
+/// elle, et le rognage vient gratuitement.
 ///
-/// **Elle fait reculer l'app.** Toute feuille de MemoBook demande à l'écran du
-/// dessous de rapetisser — voir ``SwiftUI/View/brandSheetPresenter(isPresented:)``.
-/// C'est la feuille elle-même qui le déclenche, par
-/// ``SwiftUI/EnvironmentValues/brandSheetDepth`` : aucune ne peut l'oublier, et
-/// une feuille ouverte par-dessus une autre les fait reculer toutes les deux.
+/// **Elle fait reculer l'app.** Le recul est déclenché par
+/// ``SwiftUI/View/brandSheet(item:content:)``, qui présente la feuille **et**
+/// l'annonce au compteur. Il faut passer par lui : le compteur doit basculer au
+/// moment où la liaison change, c'est-à-dire quand la fermeture *commence*.
+/// Branché sur l'apparition et la disparition de la feuille, il ne basculait
+/// qu'une fois celle-ci entièrement descendue, et l'app se remettait à
+/// l'échelle d'un coup sec après coup.
 ///
 /// ```swift
-/// .sheet(isPresented: $isEditingAddress) {
+/// .brandSheet(item: $sheet) { destination in
 ///     BrandSheet("Adresse postale", subtitle: "Ajoute l’adresse où tu souhaites recevoir ton carnet.") {
 ///         // les champs, puis le CTA
 ///     }
@@ -59,11 +65,6 @@ public struct BrandSheet<Content: View>: View {
 
     /// Hauteur du bandeau de la poignée : ses marges et son trait.
     private static var handleBlockHeight: CGFloat { MemoBookSpacing.xs * 2 + 5 }
-
-    /// Ce qui sépare la carte du bord du téléphone, sur ses trois côtés. Assez
-    /// pour qu'on voie l'écran du dessous tout autour, assez peu pour que la
-    /// feuille reste une feuille et non une boîte de dialogue.
-    private static var inset: CGFloat { MemoBookSpacing.xs }
 
     /// Tant que rien n'est mesuré, une feuille de départ plutôt qu'une feuille
     /// plate : le premier rendu ne doit pas laisser voir un ruban de 0 pt qui
@@ -97,19 +98,16 @@ public struct BrandSheet<Content: View>: View {
             handle
             scrollingBody
         }
-        // La carte occupe tout le cran, moins le retrait : c'est ce qui met son
-        // bas exactement à la même distance du bord que ses côtés.
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(MemoBookColor.surface, in: .rect(cornerRadius: cardCornerRadius))
-        .padding(.horizontal, Self.inset)
-        .padding(.bottom, Self.inset)
         .presentationDetents([.height(detentHeight)])
         // On dessine la nôtre : celle du système est posée par-dessus le
         // contenu et ne suit pas la palette de la marque.
         .presentationDragIndicator(.hidden)
-        // Le fond du système est effacé : c'est la carte ci-dessus qui porte la
-        // couleur et la forme, et c'est ce qui lui permet de flotter.
-        .presentationBackground(.clear)
+        // Le fond **et** la forme appartiennent au système : c'est lui qui rogne
+        // le contenu au bord de la feuille, et son ombre tombe alors derrière
+        // elle au lieu de faire un liseré.
+        .presentationBackground(MemoBookColor.surface)
+        .presentationCornerRadius(MemoBookSpacing.sheetCornerRadius)
         // Le crème de la marque ne se retourne pas en sombre — voir
         // `MemoBookColor`.
         .environment(\.colorScheme, .light)
@@ -123,25 +121,17 @@ public struct BrandSheet<Content: View>: View {
             reduceMotion ? .none : .smooth(duration: 0.35),
             value: isCoveredByAnotherSheet
         )
-        // S'annoncer au compteur : c'est ce qui fait reculer l'app **quelle que
-        // soit** la feuille, sans qu'aucun écran ait à y penser.
-        .onAppear { presentation?.open() }
-        .onDisappear { presentation?.close() }
-    }
-
-    /// Concentrique aux coins du téléphone : le rayon de la dalle, moins le
-    /// retrait. Sur un écran à angles droits (SE), on retombe sur le rayon de
-    /// feuille de la marque plutôt que sur zéro.
-    private var cardCornerRadius: CGFloat {
-        max(DeviceScreen.cornerRadius - Self.inset, MemoBookSpacing.sheetCornerRadius)
     }
 
     private var detentHeight: CGFloat {
         guard bodyHeight > 0 else { return Self.minimumHeight }
-        // Le retrait décolle la carte du bord ; la marge qui s'y ajoute passe le
-        // dernier élément au-dessus de l'indicateur d'accueil, dont la feuille
-        // ne connaît pas la hauteur d'avance.
-        let wanted = bodyHeight + Self.handleBlockHeight + MemoBookSpacing.s + Self.inset
+        // La feuille descend jusqu'au bord : c'est à elle de garder son dernier
+        // élément au-dessus de l'indicateur d'accueil.
+        let wanted =
+            bodyHeight
+            + Self.handleBlockHeight
+            + MemoBookSpacing.s
+            + DeviceScreen.bottomSafeInset
 
         // Un contenu trop haut ne pousse pas la feuille jusqu'en haut : il
         // défile. C'est le cas des six connecteurs.
@@ -356,5 +346,70 @@ private struct BrandSheetPresenter: ViewModifier {
                 reduceMotion ? .none : .smooth(duration: 0.35),
                 value: isPresented
             )
+    }
+}
+
+
+// MARK: - Présenter une feuille
+
+extension View {
+    /// Présente une ``BrandSheet`` pilotée par une valeur optionnelle, et
+    /// annonce son ouverture au compteur qui fait reculer l'app.
+    ///
+    /// **À employer partout à la place de `sheet(item:)`.** C'est le passage par
+    /// ici qui garantit que le recul se relâche au bon moment : la liaison
+    /// bascule quand la fermeture *commence*, si bien que l'app regrandit
+    /// pendant que la feuille descend, d'un même mouvement.
+    public func brandSheet<Item: Identifiable, SheetContent: View>(
+        item: Binding<Item?>,
+        @ViewBuilder content: @escaping (Item) -> SheetContent
+    ) -> some View {
+        sheet(item: item, content: content)
+            .modifier(BrandSheetPresentationReporter(isShowing: item.wrappedValue != nil))
+    }
+
+    /// La même chose, pilotée par un booléen — pour une feuille qui n'a qu'un
+    /// seul état, comme l'ajout d'une carte.
+    public func brandSheet<SheetContent: View>(
+        isPresented: Binding<Bool>,
+        @ViewBuilder content: @escaping () -> SheetContent
+    ) -> some View {
+        sheet(isPresented: isPresented, content: content)
+            .modifier(BrandSheetPresentationReporter(isShowing: isPresented.wrappedValue))
+    }
+}
+
+/// Tient à jour le compteur de feuilles ouvertes.
+///
+/// Il ne peut pas être tenu par la feuille elle-même : `onAppear` et
+/// `onDisappear` **encadrent** l'animation de présentation au lieu de
+/// l'accompagner. La sortie n'arrivait donc qu'une fois la feuille entièrement
+/// descendue, et l'app se remettait à l'échelle d'un coup sec après coup. Lu
+/// depuis la liaison, l'état bascule à l'instant où la fermeture commence.
+private struct BrandSheetPresentationReporter: ViewModifier {
+    let isShowing: Bool
+
+    @Environment(\.brandSheetPresentation) private var presentation
+
+    /// Ce qu'on a effectivement annoncé. Sans ce garde-fou, quitter l'écran
+    /// feuille ouverte laisserait l'app reculée pour toujours, et un rendu de
+    /// plus compterait deux fois la même feuille.
+    @State private var hasReported = false
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear { report(isShowing) }
+            .onChange(of: isShowing) { _, showing in report(showing) }
+            .onDisappear { report(false) }
+    }
+
+    private func report(_ showing: Bool) {
+        guard showing != hasReported else { return }
+        hasReported = showing
+        if showing {
+            presentation?.open()
+        } else {
+            presentation?.close()
+        }
     }
 }

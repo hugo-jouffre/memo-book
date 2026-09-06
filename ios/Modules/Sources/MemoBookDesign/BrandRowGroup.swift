@@ -83,6 +83,15 @@ public struct BrandRow: View, Identifiable {
         let textContentType: UITextContentType?
     }
 
+    /// Une ligne de plus, sous la ligne : soit une précision, soit un reproche.
+    public enum Footnote {
+        /// Une précision neutre — pourquoi la ligne ne se corrige pas, d'où
+        /// vient sa valeur.
+        case note(String)
+        /// Ce qui ne va pas dans ce qui vient d'être saisi.
+        case problem(String)
+    }
+
     /// Où se pose la valeur par rapport à l'intitulé.
     public enum ValuePlacement {
         /// Sur la même ligne, poussée à droite. Le cas courant.
@@ -97,6 +106,7 @@ public struct BrandRow: View, Identifiable {
     private let valuePlacement: ValuePlacement
     private let isValueProminent: Bool
     private let accessory: Accessory
+    private let footnote: Footnote?
     private let action: (() -> Void)?
 
     /// `nonisolated` : ``BrandRow`` est une `View`, donc isolée sur l'acteur
@@ -113,11 +123,15 @@ public struct BrandRow: View, Identifiable {
     ///     ce qu'on vient chercher du regard — un solde, un total.
     ///   - action: `nil` fait une ligne de lecture, sans chevron ni retour
     ///     tactile.
+    ///   - note: une précision affichée sous la ligne, en petit. Pour dire ce
+    ///     que la ligne ne dira pas d'elle-même — qu'une valeur vient d'ailleurs
+    ///     et ne se corrige pas ici, par exemple.
     public init(
         _ title: String,
         value: String? = nil,
         valuePlacement: ValuePlacement = .trailing,
         isValueProminent: Bool = false,
+        note: String? = nil,
         action: (() -> Void)? = nil
     ) {
         self.title = title
@@ -125,6 +139,7 @@ public struct BrandRow: View, Identifiable {
         self.valuePlacement = valuePlacement
         self.isValueProminent = isValueProminent
         self.accessory = action == nil ? .none : .disclosure
+        self.footnote = note.map(Footnote.note)
         self.action = action
     }
 
@@ -148,6 +163,7 @@ public struct BrandRow: View, Identifiable {
         _ title: String,
         text: Binding<String>,
         placeholder: String? = nil,
+        error: String? = nil,
         keyboardType: UIKeyboardType = .default,
         textContentType: UITextContentType? = nil
     ) {
@@ -155,6 +171,7 @@ public struct BrandRow: View, Identifiable {
         self.value = nil
         self.valuePlacement = .trailing
         self.isValueProminent = false
+        self.footnote = error.map(Footnote.problem)
         self.accessory = .editable(
             Editable(
                 text: text,
@@ -174,6 +191,7 @@ public struct BrandRow: View, Identifiable {
         self.valuePlacement = .trailing
         self.isValueProminent = false
         self.accessory = .toggle(isOn)
+        self.footnote = nil
         self.action = nil
     }
 
@@ -188,6 +206,14 @@ public struct BrandRow: View, Identifiable {
     @FocusState private var isEditing: Bool
 
     public var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            row
+            footnoteLine
+        }
+    }
+
+    @ViewBuilder
+    private var row: some View {
         switch accessory {
         case .editable(let field):
             editableRow(field)
@@ -213,6 +239,29 @@ public struct BrandRow: View, Identifiable {
                 content
                     .accessibilityElement(children: .combine)
             }
+        }
+    }
+
+    /// La ligne de dessous. Elle occupe les mêmes marges que la ligne, pour se
+    /// lire comme sa suite et non comme un bloc à part.
+    @ViewBuilder
+    private var footnoteLine: some View {
+        if let footnote {
+            let (text, tint): (String, Color) = switch footnote {
+            case .note(let message): (message, MemoBookColor.inkMuted)
+            case .problem(let message): (message, MemoBookColor.error)
+            }
+
+            Text(text)
+                .font(MemoBookFont.caption)
+                .foregroundStyle(tint)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, MemoBookSpacing.s)
+                .padding(.bottom, MemoBookSpacing.xs + 4)
+                // Elle appartient à la ligne du dessus : VoiceOver la lit à la
+                // suite plutôt que comme un élément isolé.
+                .accessibilityHidden(false)
         }
     }
 

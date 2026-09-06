@@ -93,6 +93,10 @@ public struct RootView: View {
         // comprises — plus bas, les coins arrondis couperaient le fond au ras de
         // la barre d'état.
         .brandSheetPresenter(isPresented: sheets.isPresenting)
+        // L'accueil se pose **derrière** le tracé du M, pas après lui : sans
+        // cette information, sa cascade se jouait entièrement sous le voile et
+        // l'écran apparaissait déjà en place.
+        .environment(\.launchOverlayIsVisible, isLaunching)
         .task { await restore() }
     }
 
@@ -202,6 +206,15 @@ public struct RootView: View {
             MemoListView()
         }
     }
+}
+
+extension EnvironmentValues {
+    /// Le tracé du M couvre encore l'écran.
+    ///
+    /// Il descend jusqu'à l'accueil pour que celui-ci retarde sa cascade
+    /// d'apparition : elle doit **prolonger** le tracé, donc commencer quand le
+    /// voile se lève, et non pendant qu'il cache tout.
+    @Entry var launchOverlayIsVisible: Bool = false
 }
 
 /// Les destinations que l'accueil peut pousser.

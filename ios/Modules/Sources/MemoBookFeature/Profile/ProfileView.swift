@@ -85,7 +85,7 @@ public struct ProfileView: View {
         // `MemoBookColor`.
         .environment(\.colorScheme, .light)
         .task { await model.load() }
-        .sheet(item: $sheet) { destination in
+        .brandSheet(item: $sheet) { destination in
             sheetContent(destination)
         }
     }
@@ -149,13 +149,24 @@ public struct ProfileView: View {
 
     private func contactGroup(_ profile: TravellerProfile) -> some View {
         BrandRowGroup {
-            BrandRow(
-                "E-mail",
-                text: emailBinding,
-                placeholder: "prenom@exemple.com",
-                keyboardType: .emailAddress,
-                textContentType: .emailAddress
-            )
+            if let provider = profile.signInProvider {
+                // L'adresse appartient au compte tiers : on la montre, on dit
+                // d'où elle vient, et on ne propose pas de la corriger.
+                BrandRow(
+                    "E-mail",
+                    value: profile.email,
+                    note: "Gérée par ton compte \(provider.displayName)"
+                )
+            } else {
+                BrandRow(
+                    "E-mail",
+                    text: emailBinding,
+                    placeholder: "prenom@exemple.com",
+                    error: model.emailError,
+                    keyboardType: .emailAddress,
+                    textContentType: .emailAddress
+                )
+            }
             BrandRow(
                 "Téléphone",
                 text: phoneBinding,
@@ -315,52 +326,104 @@ private struct EditableName: View {
     let name: String
     let onCommit: (String) -> Void
 
+    /// Ce qu'on est en train de taper. Le modèle ne change qu'à la sortie du
+    /// champ.
     @State private var draft = ""
-    @FocusState private var isEditing: Bool
+
+    /// Deux états distincts, et non un seul : le champ n'existe que pendant
+    /// l'édition, donc on ne peut pas lui donner le focus avant de l'avoir
+    /// posé. Le premier ouvre l'édition, le second suit le clavier.
+    @State private var isEditing = false
+    @FocusState private var isFocused: Bool
 
     @ScaledMetric(relativeTo: .body) private var pencilSide: CGFloat = 18
 
     var body: some View {
         HStack(spacing: MemoBookSpacing.xs) {
-            TextField("", text: $draft)
-                .font(MemoBookFont.h2)
-                .foregroundStyle(MemoBookColor.ink)
-                .tint(MemoBookColor.action)
-                .multilineTextAlignment(.center)
-                .textContentType(.name)
-                .submitLabel(.done)
-                .focused($isEditing)
-                .fixedSize(horizontal: true, vertical: false)
-                .onSubmit { isEditing = false }
-                .accessibilityLabel("Ton nom")
-
-            Button { isEditing = true } label: {
-                Image(brand: "IconPen")
-                    .resizable()
-                    .renderingMode(.template)
-                    .scaledToFit()
-                    .frame(width: pencilSide, height: pencilSide)
-                    .foregroundStyle(isEditing ? MemoBookColor.action : MemoBookColor.inkMuted)
-                    .frame(
-                        width: MemoBookSpacing.minimumTapTarget,
-                        height: MemoBookSpacing.minimumTapTarget
-                    )
-                    .contentShape(.rect)
+            if isEditing {
+                editor
+            } else {
+                label
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Modifier ton nom")
+            pencil
         }
+        // La colonne du nom ne prend jamais plus que la largeur de l'écran,
+        // marges comprises : c'est cette limite qui déclenche la coupure du
+        // texte au lieu de le laisser filer sous le crayon.
+        .frame(maxWidth: .infinity)
         .onAppear { draft = name }
         .onChange(of: name) { _, value in
             if !isEditing { draft = value }
         }
         // Même contrat que les lignes : sortir du champ enregistre.
-        .onChange(of: isEditing) { _, editing in
-            if !editing { onCommit(draft) }
+        .onChange(of: isFocused) { _, focused in
+            if !focused { endEditing() }
         }
         .onDisappear {
-            if isEditing { onCommit(draft) }
+            if isEditing { endEditing() }
         }
+    }
+
+    /// Le nom au repos. **Aucune limite de caractères** : c'est la largeur
+    /// disponible qui décide, et un nom trop long se termine par des points de
+    /// suspension plutôt que de pousser le crayon hors de l'écran.
+    private var label: some View {
+        Text(name)
+            .font(MemoBookFont.h2)
+            .foregroundStyle(MemoBookColor.ink)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .contentShape(.rect)
+            .onTapGesture(perform: beginEditing)
+            .accessibilityLabel("Ton nom, \(name)")
+    }
+
+    /// Pendant l'édition, le champ prend toute la place restante : on doit
+    /// pouvoir lire ce qu'on tape, y compris au-delà de ce que la vue au repos
+    /// montrait.
+    private var editor: some View {
+        TextField("", text: $draft)
+            .font(MemoBookFont.h2)
+            .foregroundStyle(MemoBookColor.ink)
+            .tint(MemoBookColor.action)
+            .multilineTextAlignment(.center)
+            .textContentType(.name)
+            .submitLabel(.done)
+            .focused($isFocused)
+            .onSubmit { isFocused = false }
+            .accessibilityLabel("Ton nom")
+    }
+
+    private var pencil: some View {
+        Button(action: beginEditing) {
+            Image(brand: "IconPen")
+                .resizable()
+                .renderingMode(.template)
+                .scaledToFit()
+                .frame(width: pencilSide, height: pencilSide)
+                .foregroundStyle(isEditing ? MemoBookColor.action : MemoBookColor.inkMuted)
+                .frame(
+                    width: MemoBookSpacing.minimumTapTarget,
+                    height: MemoBookSpacing.minimumTapTarget
+                )
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Modifier ton nom")
+    }
+
+    private func beginEditing() {
+        guard !isEditing else { return }
+        draft = name
+        isEditing = true
+        // Le champ n'est posé qu'au rendu suivant : lui donner le focus tout de
+        // suite ne toucherait rien.
+        Task { isFocused = true }
+    }
+
+    private func endEditing() {
+        isEditing = false
+        onCommit(draft)
     }
 }
 
@@ -508,6 +571,12 @@ private struct ProfileExitAction: View {
 #Preview("Profil") {
     NavigationStack {
         ProfileView {}
+    }
+}
+
+#Preview("Profil — entré par Apple") {
+    NavigationStack {
+        ProfileView(model: ProfileModel { .appleFixture }) {}
     }
 }
 

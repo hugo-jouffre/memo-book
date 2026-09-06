@@ -45,6 +45,13 @@ public enum DeviceScreen {
         return max(size.width, size.height)
     }
 
+    /// Ce que l'indicateur d'accueil prend en bas de l'écran. Zéro sur un
+    /// appareil à bouton.
+    @MainActor
+    public static var bottomSafeInset: CGFloat {
+        keyWindow?.safeAreaInsets.bottom ?? 0
+    }
+
     /// Ce que la barre d'état et l'encoche prennent en haut de l'écran.
     ///
     /// C'est la seule mesure qui change vraiment d'un iPhone à l'autre — 20 pt

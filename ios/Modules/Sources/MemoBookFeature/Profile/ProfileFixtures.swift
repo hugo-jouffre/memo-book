@@ -41,6 +41,14 @@ extension TravellerProfile {
         ]
     )
 
+    /// Le même profil, mais entré par Apple : l'adresse vient du compte tiers et
+    /// ne se corrige pas depuis l'app.
+    public static var appleFixture: TravellerProfile {
+        var profile = fixture
+        profile.signInProvider = .apple
+        return profile
+    }
+
     /// Un compte tout neuf : ni adresse, ni carte, ni commande. C'est l'état
     /// que la maquette ne montre pas, et que l'écran doit pourtant tenir.
     public static let emptyFixture = TravellerProfile(

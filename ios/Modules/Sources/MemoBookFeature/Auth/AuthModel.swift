@@ -38,14 +38,9 @@ final class AuthModel {
             && password.contains(where: \.isNumber)
     }
 
-    var isEmailValid: Bool {
-        // Volontairement permissif : un email n'est vraiment validé que par
-        // l'envoi. On écarte les fautes de frappe grossières, rien de plus.
-        let parts = email.split(separator: "@", omittingEmptySubsequences: false)
-        guard parts.count == 2, !parts[0].isEmpty else { return false }
-        let host = parts[1]
-        return host.contains(".") && !host.hasPrefix(".") && !host.hasSuffix(".")
-    }
+    /// La règle vit dans ``EmailAddress`` : le profil la pose aussi, et deux
+    /// copies auraient fini par diverger.
+    var isEmailValid: Bool { EmailAddress.isValid(email) }
 
     var passwordsMatch: Bool {
         password == passwordConfirmation

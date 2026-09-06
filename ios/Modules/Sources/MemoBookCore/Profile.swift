@@ -131,6 +131,14 @@ public struct OrderTracking: Codable, Sendable, Hashable, Identifiable {
 public struct TravellerProfile: Codable, Sendable, Hashable {
     public var fullName: String
     public var email: String?
+
+    /// Par quel fournisseur la session a été ouverte, quand ce n'est pas par
+    /// mot de passe.
+    ///
+    /// Il décide d'une chose et d'une seule : **l'adresse ne se corrige pas**.
+    /// Elle appartient au compte Apple ou Google, et la changer ici ne ferait
+    /// que la désaccorder de celle avec laquelle on se reconnecte.
+    public var signInProvider: AuthProvider?
     public var phoneNumber: String?
     public var avatarUrl: URL?
     public var address: PostalAddress
@@ -146,6 +154,7 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
     public init(
         fullName: String,
         email: String? = nil,
+        signInProvider: AuthProvider? = nil,
         phoneNumber: String? = nil,
         avatarUrl: URL? = nil,
         address: PostalAddress = PostalAddress(),
@@ -159,6 +168,7 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
     ) {
         self.fullName = fullName
         self.email = email
+        self.signInProvider = signInProvider
         self.phoneNumber = phoneNumber
         self.avatarUrl = avatarUrl
         self.address = address
@@ -177,6 +187,10 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
     public var selectedCard: PaymentCard? {
         cards.first { $0.id == selectedCardId } ?? cards.first
     }
+
+    /// `true` quand l'adresse vient d'un fournisseur tiers et ne peut donc pas
+    /// être corrigée depuis l'app.
+    public var isEmailManagedByProvider: Bool { signInProvider != nil }
 
     /// Une ou deux initiales, quand la photo manque. Même règle que
     /// ``Companion``.

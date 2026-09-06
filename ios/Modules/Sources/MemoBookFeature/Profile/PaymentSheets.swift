@@ -42,7 +42,7 @@ struct PaymentMethodSheet: View {
                 }
             }
         }
-        .sheet(isPresented: $isAddingCard) {
+        .brandSheet(isPresented: $isAddingCard) {
             AddCardSheet { number, name in
                 model.addCard(number: number, label: name)
             }
