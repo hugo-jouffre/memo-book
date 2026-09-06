@@ -191,9 +191,10 @@ struct UpcomingTripInvite: View {
                         .font(MemoBookFont.bodySemibold)
                         .foregroundStyle(MemoBookColor.ink)
 
-                    // ⚠️ « le carnets » : coquille de la maquette, recopiée
-                    // telle quelle (R8) et signalée dans la fiche écran.
-                    Text("Clique ici pour voir le carnets de la communauté")
+                    // « les carnets » : la maquette écrit « le carnets ».
+                    // Coquille confirmée par Hugo le 06/09/2026, corrigée ici et
+                    // à reprendre dans Figma.
+                    Text("Clique ici pour voir les carnets de la communauté")
                         .font(MemoBookFont.label)
                         .foregroundStyle(MemoBookColor.inkMuted)
                 }

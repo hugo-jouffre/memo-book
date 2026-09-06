@@ -100,11 +100,6 @@ struct CompanionStack: View {
     /// qu'il aligne deux groupes sur la même ligne.
     var visibleLimit = 3
 
-    /// Combien ils sont **en tout**, quand la liste n'en porte que les
-    /// premiers. C'est ce qui permet à un en-tête d'afficher « +22 » sans que
-    /// le serveur ait à envoyer vingt-deux visages qu'on ne dessinera pas.
-    var totalCount: Int?
-
     /// Taille figée, contrairement au reste de l'écran — même raison que la
     /// pastille numérotée de `WelcomeStepCard`. Ces ronds sont une décoration
     /// posée sur une photo au format fixe, masquée à VoiceOver : les faire
@@ -114,7 +109,7 @@ struct CompanionStack: View {
 
     var body: some View {
         let shown = companions.prefix(visibleLimit)
-        let overflow = max(totalCount ?? companions.count, companions.count) - shown.count
+        let overflow = companions.count - shown.count
 
         // Un cinquième de recouvrement, pas un tiers : la pastille de droite
         // mangeait la deuxième initiale de celle de gauche.

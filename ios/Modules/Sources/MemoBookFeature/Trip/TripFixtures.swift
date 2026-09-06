@@ -18,13 +18,7 @@ extension TripDetail {
     public static func fixture(id: String) -> TripDetail {
         let trip = HomeFeed.fixture.trips.first { $0.id == id } ?? fallbackTrip
 
-        return TripDetail(
-            trip: trip,
-            prompt: prompt(for: trip),
-            steps: steps(for: trip),
-            followers: followers,
-            followerCount: 26
-        )
+        return TripDetail(trip: trip, prompt: prompt(for: trip), steps: steps(for: trip))
     }
 
     /// Un identifiant inconnu ne doit pas donner un écran vide : le carnet de
@@ -38,15 +32,6 @@ extension TripDetail {
     private static func prompt(for trip: Trip) -> String? {
         guard let place = steps(for: trip).last?.placeName else { return nil }
         return "Comment ça se passe à \(place) ?"
-    }
-
-    private static var followers: [Companion] {
-        [
-            Companion(id: "f-1", name: "Anaïs Perrin"),
-            Companion(id: "f-2", name: "Hugo Vasseur"),
-            Companion(id: "f-3", name: "Sofia Renard"),
-            Companion(id: "f-4", name: "Malik Benali"),
-        ]
     }
 
     /// Quatre étapes, avec des pays et des transports **différents** : sans ça,

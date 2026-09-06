@@ -278,8 +278,14 @@ public struct HomeView: View {
 
         if !trips.isEmpty {
             VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
-                HomeSectionHeading(title: "Ton voyage", showsLiveDot: true)
-                    .rising(ongoingHeadingOrder)
+                // Le titre suit le nombre : un seul voyage, « Ton voyage » ;
+                // plusieurs, « Tes voyages ». Le singulier figé sonnait faux dès
+                // le deuxième carnet ouvert.
+                HomeSectionHeading(
+                    title: trips.count > 1 ? "Tes voyages" : "Ton voyage",
+                    showsLiveDot: true
+                )
+                .rising(ongoingHeadingOrder)
 
                 // Le voyage le plus récent porte sa couverture ; les autres
                 // tiennent sur une ligne. Une seule photo par écran, celle qui

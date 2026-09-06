@@ -119,28 +119,12 @@ public struct TripDetail: Codable, Sendable, Hashable, Identifiable {
 
     public let steps: [TripStep]
 
-    /// Ceux qui suivent le voyage sans y participer. Les **compagnons**, eux,
-    /// sont sur ``Trip/companions``.
-    public let followers: [Companion]
-
-    /// Combien ils sont en tout. La liste ci-dessus n'en porte que les
-    /// premiers ; c'est ce total qui donne le « +22 ».
-    public let followerCount: Int
-
     public var id: String { trip.id }
 
-    public init(
-        trip: Trip,
-        prompt: String? = nil,
-        steps: [TripStep] = [],
-        followers: [Companion] = [],
-        followerCount: Int = 0
-    ) {
+    public init(trip: Trip, prompt: String? = nil, steps: [TripStep] = []) {
         self.trip = trip
         self.prompt = prompt
         self.steps = steps
-        self.followers = followers
-        self.followerCount = followerCount
     }
 
     /// Les pays traversés, sans doublon, dans l'ordre des étapes. C'est la

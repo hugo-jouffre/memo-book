@@ -18,8 +18,6 @@ struct TripHeader: View {
     let onSettings: () -> Void
     let onInvite: () -> Void
 
-    @Environment(\.dynamicTypeSize) private var typeSize
-
     /// Le rapport de la maquette : la photo occupe un peu plus d'un carré. Un
     /// rapport plutôt qu'une hauteur en points, pour que la couverture garde
     /// ses proportions du SE au Pro Max.
@@ -116,32 +114,18 @@ struct TripHeader: View {
         .padding(.bottom, MemoBookSpacing.l)
     }
 
-    /// Deux groupes : ceux qui racontent le voyage, et ceux qui le suivent. En
-    /// taille de texte accessible ils passent l'un sous l'autre — six pastilles
-    /// et deux pictogrammes sur une ligne ne tiennent plus.
-    @ViewBuilder
+    /// Les **collaborateurs** : ceux qui peuvent ajouter des étapes au voyage.
+    ///
+    /// La maquette montre un second groupe à côté — les visages croisés en
+    /// chemin. Il attend la v2, et n'est donc dessiné nulle part : un groupe
+    /// qu'on ne peut ni remplir ni comprendre vaut moins que son absence.
     private var people: some View {
-        if typeSize.isAccessibilitySize {
-            VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
-                travellers
-                followers
-            }
-        } else {
-            HStack(spacing: MemoBookSpacing.s) {
-                travellers
-                followers
-                Spacer(minLength: 0)
-            }
-        }
-    }
-
-    private var travellers: some View {
         HStack(spacing: MemoBookSpacing.xs) {
             marker("IconUser")
 
             CompanionStack(companions: trip.companions, visibleLimit: 2)
                 .accessibilityElement()
-                .accessibilityLabel(travellersLabel)
+                .accessibilityLabel(collaboratorsLabel)
 
             Button(action: onInvite) {
                 Image(brand: "IconPlus")
@@ -158,27 +142,9 @@ struct TripHeader: View {
                 minHeight: MemoBookSpacing.minimumTapTarget
             )
             .contentShape(.circle)
-            .accessibilityLabel("Inviter quelqu’un à ce voyage")
-        }
-    }
+            .accessibilityLabel("Inviter quelqu’un à raconter ce voyage")
 
-    @ViewBuilder
-    private var followers: some View {
-        if !detail.followers.isEmpty {
-            HStack(spacing: MemoBookSpacing.xs) {
-                // L'œil, et non la bichrome du jeu : une icône « duo » porte
-                // ses propres couleurs, et la teinter en blanc la réduit à une
-                // silhouette pleine — c'est un rond blanc qui apparaissait.
-                marker("IconView")
-
-                CompanionStack(
-                    companions: detail.followers,
-                    visibleLimit: 2,
-                    totalCount: detail.followerCount
-                )
-            }
-            .accessibilityElement()
-            .accessibilityLabel("\(detail.followerCount) personnes suivent ce voyage")
+            Spacer(minLength: 0)
         }
     }
 
@@ -192,9 +158,10 @@ struct TripHeader: View {
             .accessibilityHidden(true)
     }
 
-    private var travellersLabel: String {
+    private var collaboratorsLabel: String {
+        guard !trip.companions.isEmpty else { return "Tu racontes ce voyage seul" }
         let names = trip.companions.map(\.name).formatted(.list(type: .and))
-        return trip.companions.isEmpty ? "Personne d’autre pour l’instant" : "Avec \(names)"
+        return "Racontent aussi ce voyage : \(names)"
     }
 }
 

@@ -428,6 +428,12 @@ Aucune PR d'écran ne part sans que ces cases soient cochées.
 | D3 | **Typographies : Sora** (titres, chiffres) et **General Sans** (tout le reste). Styles détaillés en §2.5. Les variables `Heading/*` et `Text/*` de Figma annoncent encore Roboto : c'est le template de départ, à nettoyer dans Figma |
 | D4 | **Cartes du *Welcome*.** L'inclinaison est **conservée telle quelle** : −1°, +1°, −1°. Les dimensions, elles, sont **uniformisées** (§8.2) |
 | D5 | **Tutoiement systématique** dans l'app — c'est la règle R9 |
+| D6 | **Tous les points T16 → T38 sont arbitrés** — Hugo, 06/09/2026. Ceux qui ne figurent pas ci-dessous sont validés **tels qu'implémentés** : la fiche de chaque écran les décrit, et ils n'ont plus à être rouverts |
+| D7 | **« Etape n°1 » garde son E sans accent**, et les compteurs restent en français avec leurs unités (« 10 jours », « 37 km ») plutôt qu'en anglais comme la maquette. Clôt T29 et l'écart signalé en §11 |
+| D8 | **Le second groupe de personnes d'un voyage attend la v2.** Le premier, lui, est celui des **collaborateurs** : ceux qui peuvent ajouter des étapes, et qu'on invitera. Le second réunira les visages croisés en chemin — il est retiré du modèle et de l'écran en attendant, plutôt que dessiné à moitié. Clôt T31 |
+| D9 | **« les carnets de la communauté »** — la coquille de la maquette est corrigée dans le code, et à reprendre dans Figma. Clôt T34 |
+| D10 | **Le titre de la section suit le nombre** : « Ton voyage » pour un seul, « Tes voyages » dès le deuxième. Clôt T35 |
+| D11 | **Un voyage sans souvenir dont les dates disent « en cours » est en cours.** C'est même l'intérêt : c'est là qu'il faut inciter à raconter la première étape. Le `stage` reste calculé par le serveur. Clôt T38 |
 
 ### 7.2 Ce qui reste ouvert
 
@@ -1308,13 +1314,14 @@ carte doit mener à ce qu'elle montrait. Les modèles (`TripDetail`, `TripStep`,
 
 | Besoin | Route à créer |
 |---|---|
-| Le voyage ouvert | `GET /v1/trips/:id` — voyage, relance, étapes, abonnés |
+| Le voyage ouvert | `GET /v1/trips/:id` — voyage, relance, étapes, collaborateurs |
 | Les étapes | comprises dans la réponse ci-dessus, ou `GET /v1/trips/:id/steps` si elles se paginent |
 | La relance | calculée côté serveur à partir des récits déjà envoyés |
-| Inviter | `POST /v1/trips/:id/companions` |
+| Inviter un collaborateur | `POST /v1/trips/:id/companions` |
+| Les visages croisés en chemin | **v2** — voir D8 |
 | Impression, réglages du voyage | écrans non dessinés — voir `docs/reglages-utilisateur.md` |
 
-**Accessibilité** — les compteurs, le titre et chaque groupe de personnes sont
+**Accessibilité** — les compteurs, le titre et le groupe de collaborateurs sont
 des éléments VoiceOver uniques · les trois ronds de commande portent leur nom
 (« Retour », « Imprimer ce carnet », « Paramètres du voyage ») · la photo, les
 voiles, les pastilles et les drapeaux sont masqués · en taille accessible, les
@@ -1331,9 +1338,9 @@ se voit en un seul endroit (`TripHomeView.notYetRouted`).
 
 | # | Sujet |
 |---|---|
-| T29 | **« Etape n°1 » sans accent**, et mesures relevées sur une capture faute de nœud Figma |
+| T29 | ✅ **Tranché (D7)** — le E sans accent et les compteurs en français sont validés. Restent les mesures relevées sur une capture, faute de nœud Figma |
 | T30 | **L'intention du filtre « Étapes »** : filtrer la liste sur une étape, ou sauter à celle-ci ? Implémenté en filtre, par symétrie avec les deux autres |
-| T31 | **Les deux groupes de personnes** de l'en-tête sont lus comme « compagnons » (avec un `+` pour inviter) et « abonnés » (avec le décompte). À confirmer |
+| T31 | ✅ **Tranché (D8)** — le premier groupe est celui des **collaborateurs**, qui ajoutent des étapes ; le second, les visages croisés en chemin, passe en v2 et est retiré |
 | T32 | **Icônes manquantes** au jeu de marque : le drapeau, la valise et l'itinéraire des trois filtres restent sur des symboles système, comme le calendrier et le tracé de l'accueil |
 | T33 | **La carte d'étape** est plus sombre que le crème sur la maquette ; elle emploie ici la carte blanche de l'app (`homeCard()`), pour rester cohérente avec l'accueil et le profil |
 
@@ -1408,8 +1415,8 @@ voir le carnets de la communauté » · « Tes voyages passés s'afficheront ici
 
 | # | Sujet |
 |---|---|
-| T34 | **« le carnets »** dans l'invitation à planifier : coquille de maquette, recopiée telle quelle (R8) |
-| T35 | **« Ton voyage » au singulier** alors que la section peut en porter plusieurs — c'est le cas du jeu d'essai. Titre au pluriel dès le deuxième, ou singulier assumé ? |
+| T34 | ✅ **Tranché (D9)** — coquille confirmée, corrigée dans le code, à reprendre dans Figma |
+| T35 | ✅ **Tranché (D10)** — « Ton voyage » pour un seul, « Tes voyages » dès le deuxième |
 | T36 | **La pastille « ×1 »** est lime sur une maquette et bleue à contour sur une autre. Implémentée en lime, comme le compteur existant |
-| T37 | **L'illustration de l'invitation** (passeport + carnet ouvert) n'est pas exportée : le livre du *Welcome* tient la place |
-| T38 | **Le seuil d'un voyage « à venir »** est une donnée du serveur (`stage`), pas une comparaison de dates côté app. À confirmer : un voyage dont la date de début est passée mais sans souvenir reste-t-il « à venir » ? |
+| T37 | 🟠 **Asset attendu** — Hugo fournira l'illustration (passeport + carnet ouvert). Le livre du *Welcome* tient la place d'ici là |
+| T38 | ✅ **Tranché (D11)** — dès que les dates le disent en cours, il est en cours, même sans souvenir : c'est là qu'il faut inciter à raconter la première étape |
