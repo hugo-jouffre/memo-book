@@ -30,6 +30,11 @@ public struct HomeView: View {
     /// depuis l'écran de lancement ne saute pas.
     @State private var markOpacity = BrandMarkBackdrop.drawingOpacity
 
+    /// Le contenu est arrivé. Ce n'est pas encore le signal de la cascade : il
+    /// faut aussi que le tracé du M se soit effacé.
+    @State private var isLoaded = false
+
+    @Environment(\.launchOverlayIsVisible) private var isCoveredByLaunch
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -65,13 +70,31 @@ public struct HomeView: View {
         .environment(\.colorScheme, .light)
         .task {
             await model.load()
+            isLoaded = true
+        }
+        // Deux conditions, dans n'importe quel ordre : le contenu est là, et le
+        // tracé du M ne couvre plus l'écran. C'est la seconde qui manquait —
+        // l'accueil étant désormais monté **sous** le voile, sa cascade se
+        // jouait en entier avant qu'on puisse la voir.
+        .onChange(of: isReadyToRise) { _, ready in
+            if ready { rise() }
+        }
+        .onAppear {
+            if isReadyToRise { rise() }
+        }
+    }
 
+    /// Le contenu est chargé et plus rien ne le cache.
+    private var isReadyToRise: Bool { isLoaded && !isCoveredByLaunch }
+
+    /// Lance la cascade : chaque bloc monte à son tour, et le M passe derrière.
+    private func rise() {
+        guard !hasAppeared else { return }
+
+        Task {
             // Une passe de rendu avant de lever le drapeau, sinon rien ne
-            // bouge : `animation(_:value:)` n'anime qu'un **changement**, et
-            // le contenu qui vient d'être posé naîtrait déjà en place. Le jeu
-            // d'essai revient sans jamais suspendre, donc rien ne s'était
-            // affiché entre-temps. Cette attente-là est la seule chose qui
-            // sépare l'état « en bas, transparent » de l'état final.
+            // bouge : `animation(_:value:)` n'anime qu'un **changement**, et un
+            // contenu posé en même temps que le drapeau naîtrait déjà en place.
             try? await Task.sleep(for: .milliseconds(16))
 
             hasAppeared = true
@@ -113,21 +136,23 @@ public struct HomeView: View {
         Group {
             greeting.rising(0)
 
-                if let message = model.errorMessage {
-                    ErrorBanner(message: message) {
-                        Task { await model.load() }
-                    }
-                    .rising(1)
+            if let message = model.errorMessage {
+                ErrorBanner(message: message) {
+                    Task { await model.load() }
                 }
+                .rising(1)
+            }
 
-                if model.isEmpty {
-                    HomeEmptyState().rising(1)
-                } else {
-                    ongoingSection
-                    pastSection
-                }
+            ongoingSection
+            upcomingSection
+            pastSection
 
             showcaseSection.rising(showcaseOrder)
+            helpLink.rising(showcaseOrder + 1)
+
+            #if DEBUG
+                HomeDebugPanel(model: model).rising(showcaseOrder + 2)
+            #endif
         }
     }
 
@@ -179,6 +204,10 @@ public struct HomeView: View {
             .frame(width: HomeMetrics.avatarSide, height: HomeMetrics.avatarSide)
             .background(MemoBookColor.outline, in: .circle)
             .clipShape(.circle)
+            // La pastille déborde de l'avatar par le haut : c'est ce
+            // chevauchement qui la rattache à lui plutôt que de la faire flotter
+            // dans le coin de l'écran.
+            .overlay(alignment: .topTrailing) { freeStepsPill }
         }
         .frame(
             minWidth: MemoBookSpacing.minimumTapTarget,
@@ -186,6 +215,32 @@ public struct HomeView: View {
         )
         .contentShape(.circle)
         .accessibilityLabel("Ton profil")
+    }
+
+    /// Le solde d'étapes offertes.
+    ///
+    /// Deux messages pour un seul compteur : tant que rien n'est consommé on
+    /// annonce un cadeau, ensuite un solde. C'est le même chiffre, mais pas la
+    /// même nouvelle.
+    @ViewBuilder
+    private var freeStepsPill: some View {
+        if let traveller = model.feed?.traveller,
+            let offered = traveller.offeredSteps,
+            let remaining = traveller.remainingSteps,
+            remaining > 0
+        {
+            let label = remaining == offered
+                ? "\(offered) étapes offertes"
+                : "\(remaining) étapes restantes"
+
+            BrandTagPill(label)
+                .fixedSize()
+                // Le bord droit de la pastille s'aligne sur celui de l'avatar,
+                // qui touche déjà la marge de l'écran : la décaler encore la
+                // ferait sortir de la page.
+                .offset(y: -MemoBookSpacing.s - 4)
+                .allowsHitTesting(false)
+        }
     }
 
     // MARK: - Les voyages
@@ -197,8 +252,25 @@ public struct HomeView: View {
     // automatiquement tout ce qui le suit.
 
     private var ongoingHeadingOrder: Int { 1 }
-    private var pastHeadingOrder: Int { ongoingHeadingOrder + 1 + model.ongoingTrips.count }
-    private var showcaseOrder: Int { pastHeadingOrder + 1 + model.pastTrips.count }
+
+    private var upcomingHeadingOrder: Int {
+        ongoingHeadingOrder + (model.ongoingTrips.isEmpty ? 0 : 1 + model.ongoingTrips.count)
+    }
+
+    private var pastHeadingOrder: Int {
+        upcomingHeadingOrder + (showsUpcomingSection ? 1 + max(model.upcomingTrips.count, 1) : 0)
+    }
+
+    private var showcaseOrder: Int {
+        pastHeadingOrder + 1 + max(model.pastTrips.count, 1)
+    }
+
+    /// La section « à venir » n'apparaît pas toujours : elle sert soit à
+    /// montrer un voyage déjà prévu, soit à inviter à en préparer un — et cette
+    /// invitation n'a de sens que si rien n'est en cours.
+    private var showsUpcomingSection: Bool {
+        !model.upcomingTrips.isEmpty || model.ongoingTrips.isEmpty
+    }
 
     @ViewBuilder
     private var ongoingSection: some View {
@@ -206,8 +278,14 @@ public struct HomeView: View {
 
         if !trips.isEmpty {
             VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
-                HomeSectionHeading(title: "Tes voyages en cours", showsLiveDot: true)
-                    .rising(ongoingHeadingOrder)
+                // Le titre suit le nombre : un seul voyage, « Ton voyage » ;
+                // plusieurs, « Tes voyages ». Le singulier figé sonnait faux dès
+                // le deuxième carnet ouvert.
+                HomeSectionHeading(
+                    title: trips.count > 1 ? "Tes voyages" : "Ton voyage",
+                    showsLiveDot: true
+                )
+                .rising(ongoingHeadingOrder)
 
                 // Le voyage le plus récent porte sa couverture ; les autres
                 // tiennent sur une ligne. Une seule photo par écran, celle qui
@@ -226,14 +304,40 @@ public struct HomeView: View {
     }
 
     @ViewBuilder
+    private var upcomingSection: some View {
+        if showsUpcomingSection {
+            let trips = model.upcomingTrips
+
+            VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
+                HomeSectionHeading(title: "Voyage à venir")
+                    .rising(upcomingHeadingOrder)
+
+                if trips.isEmpty {
+                    UpcomingTripInvite { onIntent(.browseCommunity) }
+                        .rising(upcomingHeadingOrder + 1)
+                } else {
+                    ForEach(Array(trips.enumerated()), id: \.element.id) { index, trip in
+                        CompactTripCard(trip: trip) { onIntent(.openTrip(id: trip.id)) }
+                            .rising(upcomingHeadingOrder + 1 + index)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Toujours là, même vide : c'est une promesse — les carnets terminés
+    /// viendront se ranger ici.
     private var pastSection: some View {
         let trips = model.pastTrips
 
-        if !trips.isEmpty {
-            VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
-                HomeSectionHeading(title: "Tes voyages précédents", count: trips.count)
-                    .rising(pastHeadingOrder)
+        return VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
+            HomeSectionHeading(title: "Voyages précédents", count: trips.count)
+                .rising(pastHeadingOrder)
 
+            if trips.isEmpty {
+                PastTripsPlaceholder()
+                    .rising(pastHeadingOrder + 1)
+            } else {
                 LazyVStack(spacing: MemoBookSpacing.s) {
                     ForEach(Array(trips.enumerated()), id: \.element.id) { index, trip in
                         PastTripCard(trip: trip) {
@@ -246,6 +350,13 @@ public struct HomeView: View {
                 }
             }
         }
+    }
+
+    private var helpLink: some View {
+        BrandButton("Besoin d’aide ?", style: .link, isSubdued: true) {
+            onIntent(.openHelp)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder
@@ -285,16 +396,21 @@ public struct HomeView: View {
         .accessibilityHidden(true)
     }
 
+    /// Ce que le bouton propose dépend de ce qu'il y a à faire : raconter un
+    /// voyage en cours, ou en créer un. Un micro devant quelqu'un qui n'a aucun
+    /// carnet ouvert ne mène nulle part.
+    private var hasOngoingTrip: Bool { !model.ongoingTrips.isEmpty }
+
     private var recordCallToAction: some View {
         BrandButton(
-            "Commencer à enregistrer",
+            hasOngoingTrip ? "Commencer à enregistrer" : "Créer un nouveau voyage",
             // Le micro du jeu d'icônes de la marque, pas l'illustration du
             // Welcome : `BrandButton` teinte l'icône, il lui faut un tracé
             // plein d'une seule couleur.
-            icon: Image(brand: "IconMic"),
+            icon: hasOngoingTrip ? Image(brand: "IconMic") : nil,
             fillsWidth: true
         ) {
-            onIntent(.startRecording)
+            onIntent(hasOngoingTrip ? .startRecording : .createTrip)
         }
         // Le libellé suit le Dynamic Type, mais s'arrête à AX1. Au-delà, une
         // barre ancrée en bas prend la moitié de l'écran et cache ce qu'elle

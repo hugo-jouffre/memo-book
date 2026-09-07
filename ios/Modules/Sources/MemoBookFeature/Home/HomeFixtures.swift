@@ -13,7 +13,12 @@ import MemoBookCore
 extension HomeFeed {
     /// Le contenu de la maquette d'accueil.
     public static let fixture = HomeFeed(
-        traveller: Traveller(id: "traveller-1", firstName: "Camille"),
+        traveller: Traveller(
+            id: "traveller-1",
+            firstName: "Camille",
+            offeredSteps: 3,
+            remainingSteps: 2
+        ),
         trips: [
             Trip(
                 id: "trip-rome",
@@ -26,14 +31,16 @@ extension HomeFeed {
                 companions: [
                     Companion(id: "c-1", name: "Léa Marchand"),
                     Companion(id: "c-2", name: "Tom Marchand"),
-                ]
+                ],
+                progress: TripProgress(memoryCount: 5, pageCount: 2, targetPageCount: 80)
             ),
             Trip(
                 id: "trip-tour-du-monde",
                 title: "Mon tour du monde",
                 stage: .ongoing,
                 startDate: .fixture(2, 6, 2026),
-                stats: TripStats(dayCount: 10, distanceKilometres: 37, photoCount: 24)
+                stats: TripStats(dayCount: 10, distanceKilometres: 37, photoCount: 24),
+                progress: TripProgress(memoryCount: 12, pageCount: 18, targetPageCount: 60)
             ),
             Trip(
                 id: "trip-philippines",
@@ -78,7 +85,12 @@ extension HomeFeed {
 
     /// Le tout premier lancement : un compte, aucun voyage.
     public static let emptyFixture = HomeFeed(
-        traveller: Traveller(id: "traveller-1", firstName: "Camille"),
+        traveller: Traveller(
+            id: "traveller-1",
+            firstName: "Camille",
+            offeredSteps: 3,
+            remainingSteps: 2
+        ),
         trips: [],
         showcase: fixture.showcase
     )
@@ -86,8 +98,9 @@ extension HomeFeed {
 
 extension Date {
     /// Une date de jeu d'essai, à midi UTC pour qu'aucun fuseau ne la fasse
-    /// changer de jour à l'affichage.
-    fileprivate static func fixture(_ day: Int, _ month: Int, _ year: Int) -> Date {
+    /// changer de jour à l'affichage. Partagée avec le jeu d'essai des voyages,
+    /// qui doit tomber sur les mêmes dates que l'accueil.
+    static func fixture(_ day: Int, _ month: Int, _ year: Int) -> Date {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
 
@@ -97,3 +110,64 @@ extension Date {
         return calendar.date(from: components) ?? .now
     }
 }
+
+
+// MARK: - Bac à sable
+
+#if DEBUG
+
+    extension Trip {
+        /// Un voyage tiré au sort, pour le panneau d'essai de l'accueil.
+        ///
+        /// Les destinations viennent d'une petite banque plutôt que d'un
+        /// générateur : on veut des carnets **plausibles**, avec un drapeau et
+        /// un titre qui se lisent, pas du lorem ipsum.
+        static func debugRandom(stage: TripStage, index: Int) -> Trip {
+            let sample = destinations.randomElement() ?? destinations[0]
+            let id = "debug-\(stage.rawValue)-\(index)-\(UUID().uuidString.prefix(4))"
+
+            // Un voyage à venir commence dans quelques semaines ; un voyage
+            // passé s'est terminé il y a quelques mois. C'est ce décalage qui
+            // les range dans la bonne section.
+            let offset = stage == .upcoming ? Int.random(in: 20...200) : Int.random(in: -900 ... -30)
+            let start = Calendar(identifier: .gregorian)
+                .date(byAdding: .day, value: offset, to: .now) ?? .now
+            let length = Int.random(in: 4...25)
+            let end = Calendar(identifier: .gregorian)
+                .date(byAdding: .day, value: length, to: start) ?? start
+
+            return Trip(
+                id: id,
+                title: sample.title,
+                destination: sample.destination,
+                stage: stage,
+                startDate: start,
+                endDate: stage == .ongoing ? nil : end,
+                stats: TripStats(
+                    dayCount: length,
+                    distanceKilometres: Double(Int.random(in: 20...2_400)),
+                    photoCount: Int.random(in: 5...320)
+                ),
+                progress: stage == .upcoming
+                    ? nil
+                    : TripProgress(
+                        memoryCount: Int.random(in: 1...40),
+                        pageCount: Int.random(in: 0...70),
+                        targetPageCount: 80
+                    ),
+                isPrintable: stage == .past
+            )
+        }
+
+        private static let destinations: [(title: String, destination: Destination)] = [
+            ("Road trip en Écosse", Destination(name: "Écosse", countryCode: "GB")),
+            ("Les Lofoten en hiver", Destination(name: "Norvège", countryCode: "NO")),
+            ("Kyoto au printemps", Destination(name: "Japon", countryCode: "JP")),
+            ("Traversée du Chili", Destination(name: "Chili", countryCode: "CL")),
+            ("Week-end à Porto", Destination(name: "Portugal", countryCode: "PT")),
+            ("Sur les routes du Kerala", Destination(name: "Inde", countryCode: "IN")),
+            ("Cap sur l’Islande", Destination(name: "Islande", countryCode: "IS")),
+        ]
+    }
+
+#endif

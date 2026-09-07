@@ -57,8 +57,15 @@ police ou marge codée en dur ailleurs.
 - `BrandButton` est **le** bouton (styles primary / secondary / tertiary / link,
   tailles regular / small, `alternate` pour les fonds sombres). Ne pas en
   écrire d'autre.
-- `BrandTextField` est **le** champ de saisie, `BrandSegmentedPicker` **le**
-  sélecteur à segments, `BrandBackdrop` le motif de fond. Même règle.
+- `BrandTextField` est **le** champ de saisie (deux mises en page :
+  `labelPlacement: .floating` pour les formulaires d'entrée, `.above` pour les
+  feuilles), `BrandSegmentedPicker` **le** sélecteur à segments, `BrandBackdrop`
+  le motif de fond. Même règle.
+- `BrandRowGroup` est **le** motif « lignes empilées et groupées » des écrans de
+  réglages : une ligne se *décrit* (`BrandRow`), elle ne se dessine pas.
+  `BrandOptionGroup` est **le** choix unique en lignes encadrées, et `BrandSheet`
+  **la** feuille modale — geste du système, dessin de la marque, hauteur calée
+  sur le contenu.
 - Le focus appartient à l'écran, pas au champ : un `@FocusState` sur une énum
   passé aux `BrandTextField`, pour que le clavier enchaîne les champs.
 

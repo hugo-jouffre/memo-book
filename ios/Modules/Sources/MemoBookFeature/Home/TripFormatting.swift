@@ -29,6 +29,15 @@ extension Trip {
     }
 }
 
+extension TripProgress {
+    /// « 5 souvenirs et 2/80 pages ». Deux compteurs, pas un pourcentage : on
+    /// veut savoir ce qu'on a raconté et ce qu'il reste de carnet à remplir.
+    var summary: String {
+        let memories = memoryCount <= 1 ? "\(memoryCount) souvenir" : "\(memoryCount) souvenirs"
+        return "\(memories) et \(pageCount)/\(targetPageCount) pages"
+    }
+}
+
 extension TripStats {
     /// Les compteurs, dans l'ordre de la maquette. Seuls ceux que le serveur a
     /// renvoyés apparaissent.

@@ -96,8 +96,46 @@ final class TripTests: XCTestCase {
     /// Même raison que `Status.unknown` : une étape ajoutée côté serveur ne
     /// doit pas faire échouer le décodage d'une app déjà installée.
     func testAStageAddedByTheServerDecodesAsUnknown() throws {
-        let data = Data(#""upcoming""#.utf8)
-        XCTAssertEqual(try JSONDecoder().decode(TripStage.self, from: data), .unknown("upcoming"))
+        // « upcoming » a été un état inconnu jusqu'à ce qu'il devienne un vrai
+        // cas : c'est justement ce que ce test protège, un serveur qui prend de
+        // l'avance sur l'app.
+        let data = Data(#""cancelled""#.utf8)
+        XCTAssertEqual(try JSONDecoder().decode(TripStage.self, from: data), .unknown("cancelled"))
+    }
+
+    func testTheThreeKnownStagesDecodeAsThemselves() throws {
+        let decoder = JSONDecoder()
+
+        XCTAssertEqual(try decoder.decode(TripStage.self, from: Data(#""upcoming""#.utf8)), .upcoming)
+        XCTAssertEqual(try decoder.decode(TripStage.self, from: Data(#""ongoing""#.utf8)), .ongoing)
+        XCTAssertEqual(try decoder.decode(TripStage.self, from: Data(#""past""#.utf8)), .past)
+    }
+
+    /// Un voyage à venir n'est **pas** un voyage en cours : il n'a rien à
+    /// raconter, et il ne doit donc pas remonter dans la section du haut.
+    func testAnUpcomingTripIsNeitherOngoingNorPast() {
+        let feed = makeFeed([
+            trip("à-venir", .upcoming, start: day(30)),
+            trip("en-cours", .ongoing, start: day(-2)),
+            trip("passé", .past, start: day(-60), end: day(-50)),
+        ])
+
+        XCTAssertEqual(feed.upcomingTrips.map(\.id), ["à-venir"])
+        XCTAssertEqual(feed.ongoingTrips.map(\.id), ["en-cours"])
+        XCTAssertEqual(feed.pastTrips.map(\.id), ["passé"])
+    }
+
+    // MARK: - Avancement
+
+    func testProgressIsBoundedAtBothEnds() {
+        XCTAssertEqual(TripProgress(memoryCount: 0, pageCount: 0, targetPageCount: 80).fraction, 0)
+        XCTAssertEqual(TripProgress(memoryCount: 9, pageCount: 40, targetPageCount: 80).fraction, 0.5)
+
+        // Un carnet qui dépasse sa cible ne fait pas déborder sa barre.
+        XCTAssertEqual(TripProgress(memoryCount: 9, pageCount: 120, targetPageCount: 80).fraction, 1)
+
+        // Et une cible absente ne divise pas par zéro.
+        XCTAssertEqual(TripProgress(memoryCount: 9, pageCount: 12, targetPageCount: 0).fraction, 0)
     }
 
     // MARK: - Fabriques

@@ -21,6 +21,7 @@ public final class HomeModel {
     /// réception du contenu, pas à chaque passage dans `body` : trier dans une
     /// vue, c'est trier à chaque image d'animation.
     public private(set) var ongoingTrips: [Trip] = []
+    public private(set) var upcomingTrips: [Trip] = []
     public private(set) var pastTrips: [Trip] = []
 
     private let source: () async throws -> HomeFeed
@@ -39,15 +40,22 @@ public final class HomeModel {
     /// Aucun voyage du tout : l'utilisateur vient d'arriver.
     public var isEmpty: Bool { feed?.trips.isEmpty == true }
 
+    /// Range le contenu reçu. Les trois listes sont triées **une fois**, ici, et
+    /// pas à chaque passage dans `body` : trier dans une vue, c'est trier à
+    /// chaque image d'animation.
+    private func apply(_ loaded: HomeFeed) {
+        feed = loaded
+        ongoingTrips = loaded.ongoingTrips
+        upcomingTrips = loaded.upcomingTrips
+        pastTrips = loaded.pastTrips
+    }
+
     public func load() async {
         isLoading = true
         defer { isLoading = false }
 
         do {
-            let loaded = try await source()
-            feed = loaded
-            ongoingTrips = loaded.ongoingTrips
-            pastTrips = loaded.pastTrips
+            apply(try await source())
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -65,4 +73,84 @@ public enum HomeIntent: Sendable, Hashable {
     case orderPrint(tripId: String)
     case openShowcase(url: URL?)
     case startRecording
+    /// Créer un voyage — l'appel à l'action quand aucun n'est en cours.
+    case createTrip
+    /// Aller voir les carnets de la communauté, depuis l'invitation à préparer
+    /// le prochain voyage.
+    case browseCommunity
+    case openHelp
 }
+
+#if DEBUG
+
+    // MARK: - Bac à sable
+    //
+    // De quoi voir les états de l'accueil sans back-end : un voyage en cours, un
+    // voyage à venir, des carnets passés, ou rien du tout. Ces méthodes
+    // n'existent **pas** dans l'app livrée — `#if DEBUG` ne compile pas en
+    // release — et le panneau qui les appelle non plus.
+    //
+    // Elles vivent dans ce fichier et non à côté du panneau parce que les trois
+    // listes sont en `private(set)` : Swift n'ouvre cet accès qu'au fichier qui
+    // les déclare. C'est exactement ce qu'on veut — le bac à sable peut ranger
+    // le contenu, une vue ne le peut pas.
+
+    extension HomeModel {
+        /// Repart du jeu d'essai complet.
+        public func debugReset() {
+            errorMessage = nil
+            apply(.fixture)
+        }
+
+        /// Un compte tout neuf : aucun voyage.
+        public func debugRemoveAllTrips() {
+            errorMessage = nil
+            apply(HomeFeed(traveller: debugTraveller, trips: [], showcase: feed?.showcase))
+        }
+
+        /// Ajoute un voyage à l'étape voulue. Rejouable : chaque appel en pose un
+        /// nouveau, tiré dans une petite banque de destinations.
+        public func debugAddTrip(stage: TripStage) {
+            errorMessage = nil
+            let existing = feed?.trips ?? []
+
+            apply(
+                HomeFeed(
+                    traveller: debugTraveller,
+                    trips: existing + [.debugRandom(stage: stage, index: existing.count)],
+                    showcase: feed?.showcase
+                )
+            )
+        }
+
+        /// Retire le quota d'étapes offertes, ou le remet.
+        public func debugToggleFreeSteps() {
+            let current = debugTraveller
+            let isStripped = current.offeredSteps == nil
+
+            apply(
+                HomeFeed(
+                    traveller: Traveller(
+                        id: current.id,
+                        firstName: current.firstName,
+                        avatarUrl: current.avatarUrl,
+                        offeredSteps: isStripped ? 3 : nil,
+                        remainingSteps: isStripped ? 2 : nil
+                    ),
+                    trips: feed?.trips ?? [],
+                    showcase: feed?.showcase
+                )
+            )
+        }
+
+        /// Montre l'état d'erreur, sans toucher au contenu.
+        public func debugShowError() {
+            errorMessage = URLError(.notConnectedToInternet).localizedDescription
+        }
+
+        private var debugTraveller: Traveller {
+            feed?.traveller ?? HomeFeed.fixture.traveller
+        }
+    }
+
+#endif

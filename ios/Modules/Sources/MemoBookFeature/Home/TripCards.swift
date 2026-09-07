@@ -49,6 +49,11 @@ struct FeaturedTripCard: View {
                         .fill(MemoBookColor.hairline)
                         .frame(height: 1)
                     TripStatsRow(stats: trip.stats)
+
+                    if let progress = trip.progress {
+                        BrandProgressBar(fraction: progress.fraction, label: progress.summary)
+                            .padding(.top, MemoBookSpacing.xs / 2)
+                    }
                 }
                 .padding(.horizontal, MemoBookSpacing.s)
                 .padding(.bottom, MemoBookSpacing.s)
@@ -89,11 +94,8 @@ struct FeaturedTripCard: View {
         }
     }
 
-    @ViewBuilder
     private var stageBadge: some View {
-        if trip.stage.isOngoing {
-            StageBadge()
-        }
+        StageBadge(stage: trip.stage)
     }
 
     private var titleAndDates: some View {
@@ -121,7 +123,23 @@ struct CompactTripCard: View {
 
     var body: some View {
         Button(action: onOpen) {
-            HStack(spacing: MemoBookSpacing.s) {
+            VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
+                line
+
+                if let progress = trip.progress {
+                    BrandProgressBar(fraction: progress.fraction)
+                }
+            }
+            .padding(MemoBookSpacing.s)
+        }
+        .buttonStyle(CardPressStyle())
+        .homeCard()
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+    }
+
+    private var line: some View {
+        HStack(spacing: MemoBookSpacing.s) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(trip.title)
                         .font(MemoBookFont.bodySemibold)
@@ -129,8 +147,8 @@ struct CompactTripCard: View {
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    if let summary = trip.stats.inlineSummary {
-                        Text(summary)
+                    if let dates = trip.dateRangeLabel {
+                        Text(dates)
                             .font(MemoBookFont.label)
                             .foregroundStyle(MemoBookColor.inkMuted)
                             .fixedSize(horizontal: false, vertical: true)
@@ -147,12 +165,6 @@ struct CompactTripCard: View {
                     .padding(MemoBookSpacing.xs + 2)
                     .background(MemoBookColor.background, in: .circle)
             }
-            .padding(MemoBookSpacing.s)
-        }
-        .buttonStyle(CardPressStyle())
-        .homeCard()
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
     }
 }
 
@@ -242,22 +254,19 @@ struct PastTripCard: View {
 
 // MARK: - Pièces communes
 
-/// La pastille d'état d'un voyage en cours.
+/// La pastille d'état d'un voyage.
 struct StageBadge: View {
-    private var shape: RoundedRectangle {
-        .rect(cornerRadius: MemoBookSpacing.largeCornerRadius)
-    }
+    let stage: TripStage
 
     var body: some View {
-        Text("EN COURS")
-            .font(MemoBookFont.overline)
-            .tracking(MemoBookFont.tracking(12))
-            .foregroundStyle(MemoBookColor.action)
-            .padding(.horizontal, MemoBookSpacing.xs)
-            .padding(.vertical, 3)
-            .background(MemoBookColor.surface, in: shape)
-            .overlay { shape.strokeBorder(MemoBookColor.action, lineWidth: 1) }
-            .fixedSize()
+        switch stage {
+        case .ongoing, .unknown:
+            BrandTagPill("En cours", tone: .outlined, isUppercased: true)
+        case .upcoming:
+            BrandTagPill("À venir", tone: .info, isUppercased: true)
+        case .past:
+            EmptyView()
+        }
     }
 }
 
@@ -282,9 +291,21 @@ struct DestinationLabel: View {
     }
 }
 
-/// Durée, distance, photos — répartis sur la largeur de la carte.
+/// Durée, distance, photos.
+///
+/// Deux emplois, un seul composant : réparti sur la largeur d'une carte de
+/// l'accueil, ou serré à gauche et teinté de blanc sur la photo d'un voyage.
+/// Les règles qui comptent — pluriels, unités, empilement en taille accessible
+/// — sont les mêmes des deux côtés, et c'est bien pour ça qu'il n'y en a qu'un.
 struct TripStatsRow: View {
     let stats: TripStats
+
+    /// Teinte unique de l'icône **et** du texte. `nil` garde le deux-tons de la
+    /// carte : icône estompée, texte en encre pleine.
+    var tint: Color?
+
+    /// Répartis sur toute la largeur, ou serrés les uns contre les autres.
+    var isSpread = true
 
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .footnote) private var iconSide: CGFloat = 16
@@ -300,13 +321,13 @@ struct TripStatsRow: View {
                     ForEach(items) { item($0) }
                 }
             } else {
-                HStack(spacing: MemoBookSpacing.xs) {
+                HStack(spacing: isSpread ? MemoBookSpacing.xs : MemoBookSpacing.s) {
                     ForEach(items) { value in
                         item(value)
                         // Un ressort entre chaque compteur, pas après le
                         // dernier : les trois se répartissent sur la largeur
                         // de la carte au lieu de se tasser à gauche.
-                        if value.id != items.last?.id { Spacer(minLength: 0) }
+                        if isSpread, value.id != items.last?.id { Spacer(minLength: 0) }
                     }
                 }
             }
@@ -317,10 +338,10 @@ struct TripStatsRow: View {
         HStack(spacing: 5) {
             item.kind.icon
                 .frame(width: iconSide, height: iconSide)
-                .foregroundStyle(MemoBookColor.inkMuted)
+                .foregroundStyle(tint ?? MemoBookColor.inkMuted)
             Text(item.text)
                 .font(MemoBookFont.label)
-                .foregroundStyle(MemoBookColor.ink)
+                .foregroundStyle(tint ?? MemoBookColor.ink)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(item.text)

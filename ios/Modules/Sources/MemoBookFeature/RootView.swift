@@ -28,7 +28,16 @@ public struct RootView: View {
     }
 
     /// Le M est en train de s'écrire par-dessus tout le reste.
-    @State private var isLaunching = true
+    ///
+    /// **Faux au démarrage.** Le tracé n'est pas une marque d'ouverture, c'est
+    /// l'attente de l'accueil : il ne s'écrit que lorsqu'on va vers l'accueil,
+    /// et pendant que celui-ci se charge. Quelqu'un qui n'a pas encore de compte
+    /// arrive donc directement sur l'écran d'entrée, sans animation devant.
+    @State private var isLaunching = false
+
+    /// Les feuilles modales ouvertes dans l'app. C'est ce compteur qui fait
+    /// reculer l'écran du dessous — voir ``BrandSheetPresentation``.
+    @State private var sheets = BrandSheetPresentation()
 
     /// La pile de navigation de l'app, une fois entré.
     @State private var path: [HomeRoute] = []
@@ -37,20 +46,22 @@ public struct RootView: View {
 
     public var body: some View {
         ZStack {
+            // **Pas** de fondu sur le contenu entier. C'est l'écran de
+            // lancement qui s'efface par-dessus, et chaque bloc de l'accueil qui
+            // monte à son tour — un fondu global les recouvrirait tous et la
+            // cascade ne se verrait plus.
+            content
+
             if isLaunching {
                 LaunchView { endLaunch() }
                     // Le signe grandit d'un cheveu en s'effaçant : il s'éloigne
                     // au lieu de s'éteindre.
                     .transition(.opacity.combined(with: .scale(scale: 1.06)))
-            } else {
-                // **Pas** de fondu sur le contenu entier. C'est l'écran de
-                // lancement qui s'efface par-dessus, et chaque bloc de
-                // l'accueil qui monte à son tour — un fondu global les
-                // recouvrirait tous et la cascade ne se verrait plus.
-                content
-                    .transition(.identity)
             }
         }
+        // Le compteur de feuilles descend à tous les écrans **et à toutes les
+        // feuilles** : c'est lui qui les relie.
+        .environment(\.brandSheetPresentation, sheets)
     }
 
     @ViewBuilder
@@ -63,10 +74,11 @@ public struct RootView: View {
                 case .restoring:
                     restoring
                 case .signedOut:
-                    AuthView { stage = .signedIn($0) }
+                    AuthView { enterApp(as: $0) }
                 case .signedIn:
-                    NavigationStack {
-                        MemoListView()
+                    NavigationStack(path: $path) {
+                        HomeView(onIntent: handle)
+                            .navigationDestination(for: HomeRoute.self, destination: destination)
                     }
                     .tint(MemoBookColor.action)
                 }
@@ -74,6 +86,17 @@ public struct RootView: View {
         }
         .animation(.snappy, value: hasSeenWelcome)
         .animation(.snappy, value: stage)
+        // L'app entière recule pendant qu'une feuille est ouverte, comme dans
+        // les Réglages. C'est ici que ça se joue et non dans l'écran qui
+        // présente : le recul doit emporter la pile de navigation avec lui, et
+        // c'est le seul niveau qui occupe vraiment tout l'écran, safe areas
+        // comprises — plus bas, les coins arrondis couperaient le fond au ras de
+        // la barre d'état.
+        .brandSheetPresenter(isPresented: sheets.isPresenting)
+        // L'accueil se pose **derrière** le tracé du M, pas après lui : sans
+        // cette information, sa cascade se jouait entièrement sous le voile et
+        // l'écran apparaissait déjà en place.
+        .environment(\.launchOverlayIsVisible, isLaunching)
         .task { await restore() }
     }
 
@@ -96,16 +119,33 @@ public struct RootView: View {
     private func restore() async {
         guard stage == .restoring else { return }
 
+        // Pas de jeton en trousseau : la décision est immédiate, on ouvre
+        // l'écran d'entrée. **Pas de tracé du M** — il n'y a rien à attendre, et
+        // une animation devant un formulaire ne fait que retarder la saisie.
         guard await dependencies.api.hasStoredSession() else {
             stage = .signedOut
             return
         }
 
         do {
-            stage = .signedIn(try await dependencies.api.currentAccount())
+            let account = try await dependencies.api.currentAccount()
+            enterApp(as: account)
         } catch {
             stage = .signedOut
         }
+    }
+
+    /// Entrer dans l'app, d'où qu'on vienne — session restaurée au lancement, ou
+    /// formulaire tout juste envoyé.
+    ///
+    /// C'est **le seul chemin** vers l'accueil, et c'est pour ça que le tracé du
+    /// M est ici : il couvre le chargement de l'accueil, qui est la seule chose
+    /// qu'il ait jamais eu à couvrir. L'écran d'accueil du tout premier
+    /// démarrage, lui, ne passe pas par là et n'a donc pas d'animation devant.
+    private func enterApp(as account: Account) {
+        stage = .signedIn(account)
+        guard hasSeenWelcome else { return }
+        isLaunching = true
     }
 
     private func endLaunch() {
@@ -114,33 +154,71 @@ public struct RootView: View {
         withAnimation(.smooth(duration: 0.45)) { isLaunching = false }
     }
 
+    /// Ferme la session.
+    ///
+    /// L'ordre compte : on vide d'abord la pile de navigation, sinon l'écran de
+    /// profil resterait poussé au-dessus de l'écran d'entrée le temps de
+    /// l'animation. ``MemoBookAPI/signOut()`` ne peut pas échouer — il oublie le
+    /// jeton local même si le serveur est injoignable — donc rien à rattraper
+    /// ici : quelqu'un qui demande à sortir sort.
+    private func signOut() {
+        Task {
+            await dependencies.api.signOut()
+            path.removeAll()
+            stage = .signedOut
+        }
+    }
+
     /// Où mène chaque intention de l'accueil.
     ///
     /// **Câblage provisoire.** Les voyages ne sont pas encore une ressource du
-    /// back-end : l'accueil montre un jeu d'essai, et un identifiant de voyage
-    /// n'est pas encore un identifiant de carnet. Ouvrir un voyage mène donc au
-    /// détail du carnet, qui affichera son bandeau « Carnet introuvable » tant
-    /// que les deux ne sont pas les mêmes. C'est la bonne destination, pas
-    /// encore la bonne donnée.
+    /// back-end : l'accueil et l'écran d'un voyage montrent tous deux un jeu
+    /// d'essai, relié par l'identifiant du voyage. Ouvrir une carte mène donc
+    /// bien au voyage qu'elle montrait — mais aucune de ses étapes ne mène
+    /// encore au carnet, faute d'un identifiant commun.
     ///
-    /// Le profil, l'impression et la carte de découverte n'ont pas d'écran
-    /// dessiné : ils ne mènent nulle part, et c'est ici que ça se voit.
+    /// L'impression et la carte de découverte n'ont pas d'écran dessiné : elles
+    /// ne mènent nulle part, et c'est ici que ça se voit.
     private func handle(_ intent: HomeIntent) {
         switch intent {
+        case .openProfile:
+            path.append(.profile)
         case .openTrip(let id):
             path.append(.trip(id: id))
         case .startRecording:
             // Enregistrer suppose un carnet ouvert : on passe par la liste
             // tant que l'accueil ne sait pas créer un voyage lui-même.
             path.append(.memos)
-        case .openProfile, .orderPrint, .openShowcase:
+        case .orderPrint, .openShowcase, .createTrip, .browseCommunity, .openHelp:
             break
+        }
+    }
+
+    @ViewBuilder
+    private func destination(for route: HomeRoute) -> some View {
+        switch route {
+        case .profile:
+            ProfileView(onSignOut: signOut)
+        case .trip(let id):
+            TripHomeView(tripId: id)
+        case .memos:
+            MemoListView()
         }
     }
 }
 
+extension EnvironmentValues {
+    /// Le tracé du M couvre encore l'écran.
+    ///
+    /// Il descend jusqu'à l'accueil pour que celui-ci retarde sa cascade
+    /// d'apparition : elle doit **prolonger** le tracé, donc commencer quand le
+    /// voile se lève, et non pendant qu'il cache tout.
+    @Entry var launchOverlayIsVisible: Bool = false
+}
+
 /// Les destinations que l'accueil peut pousser.
 enum HomeRoute: Hashable {
+    case profile
     case trip(id: String)
     case memos
 }
