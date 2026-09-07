@@ -152,6 +152,29 @@ Les tokens de session sont opaques et stockés hachés, comme ceux des appareils
 révoquer, c'est supprimer une ligne. Un JWT resterait valable jusqu'à son
 expiration même après un mot de passe changé ou un téléphone perdu.
 
+### Les écrans
+
+Une réponse par écran, et non une par bloc : l'accueil et le profil s'affichent
+d'un seul tenant, et les découper ferait apparaître leurs morceaux les uns après
+les autres au lancement. La forme suit les modèles Swift de `MemoBookCore` au
+champ près — `test/screens.test.ts` est ce qui les tient ensemble.
+
+| Route | Rôle |
+| --- | --- |
+| `GET /v1/home` | Le voyageur, ses voyages et ceux où il est invité, la carte de découverte |
+| `GET /v1/trips/:id` | Un voyage ouvert : sa couverture, la relance, ses étapes |
+| `GET /v1/profile` | Identité, adresse, cagnotte, cartes, connecteurs, abonnement, commandes |
+| `PATCH /v1/profile` | Corrige le profil. Un champ absent n'est pas touché, un champ à `null` est effacé |
+| `PUT /v1/profile/connectors/:key` | Branche ou débranche un connecteur |
+| `POST /v1/profile/link-device` | Rattache l'appareil au compte et lui transfère ses carnets |
+| `GET /v1/showcases/welcome` | Les mises en avant de l'écran de bienvenue. **Non authentifiée** |
+
+`link-device` mérite un mot : un carnet créé avant l'inscription appartient à
+l'appareil, pas au compte, et n'apparaîtrait donc jamais sur l'accueil. L'app
+appelle cette route juste après une connexion réussie. Elle ne prend que les
+carnets **sans propriétaire** — un téléphone prêté ne transfère pas les carnets
+de son porteur précédent.
+
 ### Appareils et carnets
 
 | Route | Rôle |
@@ -180,6 +203,10 @@ expiration même après un mot de passe changé ou un téléphone perdu.
 
 | Fichier | Ce qu'il fait |
 | --- | --- |
+| `prisma/README.md` | **La base** : ce qu'elle porte et pourquoi chaque table est là |
+| `../docs/supabase.md` | **L'hébergement** : configurer Supabase, brancher l'app, et en partir |
+| `scripts/setup-supabase.ts` | `npm run supabase:setup` — applique et vérifie tout l'hébergement |
+| `src/routes/appSerializers.ts` | La frontière avec les modèles Swift des trois écrans |
 | `src/lib/templates.ts` | Charge `gpt_image_schema.yaml` et `LAYOUT_KB.md` depuis `templates/`, et les règles de rédaction depuis `agents/` |
 | `src/services/payloadValidator.ts` | Valide le carnet — schéma **et** limites de longueur de LAYOUT_KB |
 | `src/services/redaction.ts` | Transcription → texte de carnet (Claude, piloté par `agents/agent-transcription.md`) |

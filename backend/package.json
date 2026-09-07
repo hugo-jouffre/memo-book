@@ -20,6 +20,8 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
+    "supabase:setup": "tsx scripts/setup-supabase.ts",
+    "supabase:check": "tsx scripts/setup-supabase.ts --check",
     "render:local": "tsx scripts/render-local.ts",
     "render:offline": "tsx scripts/render-local.ts --offline --png",
     "render:watch": "tsx scripts/render-local.ts --watch --png",

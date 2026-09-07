@@ -133,6 +133,70 @@ public actor MemoBookAPIClient: MemoBookAPI {
         return session
     }
 
+    // MARK: - Les écrans
+
+    public func homeFeed() async throws -> HomeFeed {
+        try await send(method: "GET", path: "/v1/home", credential: .session)
+    }
+
+    public func tripDetail(id: String) async throws -> TripDetail {
+        try await send(method: "GET", path: "/v1/trips/\(id)", credential: .session)
+    }
+
+    public func welcomeShowcases() async throws -> [Showcase] {
+        struct Response: Decodable { let showcases: [Showcase] }
+        let response: Response = try await send(
+            method: "GET",
+            path: "/v1/showcases/welcome",
+            credential: .none
+        )
+        return response.showcases
+    }
+
+    public func profile() async throws -> TravellerProfile {
+        try await send(method: "GET", path: "/v1/profile", credential: .session)
+    }
+
+    public func updateProfile(_ edit: ProfileEdit) async throws -> TravellerProfile {
+        try await send(
+            method: "PATCH",
+            path: "/v1/profile",
+            encodableBody: edit,
+            credential: .session
+        )
+    }
+
+    public func setConnector(key: String, isEnabled: Bool) async throws {
+        struct Body: Encodable { let isEnabled: Bool }
+        struct Response: Decodable { let key: String }
+        let _: Response = try await send(
+            method: "PUT",
+            path: "/v1/profile/connectors/\(key)",
+            encodableBody: Body(isEnabled: isEnabled),
+            credential: .session
+        )
+    }
+
+    @discardableResult
+    public func linkCurrentDevice() async throws -> Int {
+        // Les deux jetons dans la même requête, et c'est voulu : celui du
+        // compte dans l'en-tête prouve qui reçoit, celui de l'appareil dans le
+        // corps prouve ce qui est donné.
+        try await ensureDeviceRegistered()
+        guard let deviceToken = tokenStore.read() else { throw APIError.notAuthenticated }
+
+        struct Body: Encodable { let deviceToken: String }
+        struct Response: Decodable { let claimedMemos: Int }
+
+        let response: Response = try await send(
+            method: "POST",
+            path: "/v1/profile/link-device",
+            encodableBody: Body(deviceToken: deviceToken),
+            credential: .session
+        )
+        return response.claimedMemos
+    }
+
     // MARK: - Carnets
 
     public func memos() async throws -> [MemoSummary] {
@@ -312,12 +376,13 @@ public actor MemoBookAPIClient: MemoBookAPI {
     private func send<Body: Encodable, Response: Decodable>(
         method: String,
         path: String,
-        encodableBody: Body
+        encodableBody: Body,
+        credential: Credential = .device
     ) async throws -> Response {
-        var request = try makeRequest(method: method, path: path)
+        var request = try makeRequest(method: method, path: path, credential: credential)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(encodableBody)
-        return try await perform(request, credential: .device)
+        return try await perform(request, credential: credential)
     }
 
     private func sendIgnoringResponse(

@@ -203,3 +203,46 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
 private extension String {
     var trimmed: String { trimmingCharacters(in: .whitespacesAndNewlines) }
 }
+
+/// Ce qu'on corrige depuis l'écran de profil, envoyé en `PATCH`.
+///
+/// Même construction que ``EntryEdit``, et pour la même raison : le double
+/// optionnel distingue trois cas que le serveur traite différemment. Une
+/// valeur remplace, `.some(nil)` efface, et l'absence de clé ne touche à rien.
+/// « Pas de téléphone » et « un téléphone vide » ne sont pas la même chose.
+public struct ProfileEdit: Encodable, Sendable, Hashable {
+    public var firstName: String??
+    public var lastName: String??
+    public var phoneNumber: String??
+    public var wantsNewsletter: Bool?
+    public var address: PostalAddress?
+
+    public init(
+        firstName: String?? = nil,
+        lastName: String?? = nil,
+        phoneNumber: String?? = nil,
+        wantsNewsletter: Bool? = nil,
+        address: PostalAddress? = nil
+    ) {
+        self.firstName = firstName
+        self.lastName = lastName
+        self.phoneNumber = phoneNumber
+        self.wantsNewsletter = wantsNewsletter
+        self.address = address
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case firstName, lastName, phoneNumber, wantsNewsletter, address
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        if let firstName { try container.encode(firstName, forKey: .firstName) }
+        if let lastName { try container.encode(lastName, forKey: .lastName) }
+        if let phoneNumber { try container.encode(phoneNumber, forKey: .phoneNumber) }
+        if let wantsNewsletter {
+            try container.encode(wantsNewsletter, forKey: .wantsNewsletter)
+        }
+        if let address { try container.encode(address, forKey: .address) }
+    }
+}

@@ -37,6 +37,105 @@ enum AuthProvider {
   google
 }
 
+/// Le lien d'une personne à un voyage. Le propriétaire est celui qui l'a créé
+/// et qui le facture ; un invité y raconte, sans pouvoir le supprimer ni le
+/// commander.
+enum MemoRole {
+  owner
+  guest
+}
+
+/// Où en est une invitation. `invited` couvre le cas d'une adresse conviée
+/// avant que la personne n'ait de compte : `accountId` est alors nul.
+enum MemoMemberStatus {
+  invited
+  active
+  removed
+}
+
+/// Où en est le voyage. C'est cette valeur, et non l'ordre de la liste, qui
+/// range un voyage dans « à venir », « en cours » ou « précédents ».
+enum TripStage {
+  upcoming
+  ongoing
+  past
+}
+
+/// Comment on est allé d'une étape à la suivante.
+enum TripTransport {
+  walk
+  bike
+  car
+  bus
+  train
+  boat
+  plane
+}
+
+/// Verdict du contrôle qualité d'une photo — `docs/photos.md` § 1.
+/// Jamais un simple rejet : une photo écartée n'est pas supprimée, elle est
+/// déplacée vers un emplacement plus petit ou signalée à l'utilisateur.
+enum PhotoVerdict {
+  ok
+  upscale
+  downgrade
+  reject
+}
+
+/// Le coin où poser le scotch, choisi par la détection de visages plutôt qu'au
+/// hasard — sans quoi il finit un jour sur un visage.
+enum TapeCorner {
+  top_left
+  top_right
+  bottom_left
+  bottom_right
+}
+
+/// La nature d'une écriture de cagnotte. Il n'y a pas d'état « en attente » :
+/// une écriture n'existe qu'une fois l'argent réellement mouvementé.
+enum WalletEntryKind {
+  /// Rechargement, encaissé par Stripe.
+  topup
+  /// Remboursement d'une commande.
+  refund
+  /// Paiement d'une commande d'impression.
+  order_payment
+  /// Crédit offert par MemoBook (geste commercial, parrainage).
+  gift
+  /// Correction manuelle du support. Toujours motivée par `label`.
+  adjustment
+}
+
+enum SubscriptionProvider {
+  storekit
+  stripe
+}
+
+enum SubscriptionStatus {
+  trialing
+  active
+  past_due
+  cancelled
+  expired
+}
+
+enum ExpenseSource {
+  manual
+  tricount
+}
+
+/// La forme d'une question de la modale d'avis — voir `feedback_campaigns`.
+enum FeedbackQuestionKind {
+  /// Zone de texte libre.
+  text
+  /// Liste d'options, une seule réponse.
+  choice
+  /// Curseur gradué entre deux bornes.
+  slider
+  /// Note en étoiles.
+  rating
+}
+
 /// Une personne. C'est ce qui possédera les carnets quand la propriété passera
 /// de l'appareil au compte.
 ///
@@ -44,17 +143,54 @@ enum AuthProvider {
 /// l'adresse masquée n'en a pas d'utilisable, et on ne veut pas lui inventer
 /// une identité pour satisfaire une contrainte.
 model Account {
-  id           String    @id @default(uuid())
-  email        String?   @unique
+  id              String    @id @default(uuid())
+  email           String?   @unique
   /// Renseigné quand un fournisseur nous a certifié l'adresse, ou après un
   /// lien de confirmation. C'est la condition du rattachement automatique
   /// entre deux fournisseurs : voir `findOrCreateAccount`.
   emailVerifiedAt DateTime?
-  firstName    String?
-  lastName     String?
+  firstName       String?
+  lastName        String?
   /// `scrypt` — voir `lib/password.ts`. Nul pour un compte qui n'entre que par
   /// Apple ou Google.
-  passwordHash String?
+  passwordHash    String?
+
+  phoneNumber String?
+  avatarUrl   String?
+
+  wantsNewsletter Boolean @default(false)
+
+  /// L'écran de bienvenue ne se montre qu'une fois. Le retenir ici plutôt que
+  /// dans l'app le fait survivre à une réinstallation.
+  welcomeScreenSeenAt DateTime?
+
+  /// Adresse de livraison par défaut, celle que le profil affiche et corrige.
+  /// Elle **pré-remplit** une commande, elle ne la remplace pas : `print_orders`
+  /// garde sa propre copie, figée le jour de l'envoi. Corriger son adresse ne
+  /// doit pas réécrire celle d'un colis déjà parti.
+  addressLine1      String?
+  addressLine2      String?
+  addressPostalCode String?
+  addressCity       String?
+  addressCountry    String?
+
+  /// Le client Stripe correspondant. C'est lui qui porte les moyens de paiement
+  /// et les abonnements ; rien de sensible ne descend jusqu'ici.
+  stripeCustomerId String? @unique
+
+  /// Solde de la cagnotte, **en centimes**, et jamais en flottant.
+  ///
+  /// C'est un cache : la vérité est la somme de `wallet_entries`. Il est
+  /// recalculé dans la même transaction que l'écriture qui le déplace, et
+  /// `WalletEntry.balanceAfterCents` permet de vérifier à tout moment qu'il n'a
+  /// pas dérivé.
+  walletBalanceCents Int @default(0)
+
+  /// Les étapes offertes à l'ouverture du compte, et celles qui restent.
+  /// Les deux, et non un seul : c'est leur écart qui change le message de
+  /// l'accueil. Nuls pour un compte sans quota, un abonné par exemple.
+  offeredSteps   Int?
+  remainingSteps Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -63,22 +199,30 @@ model Account {
   sessions   Session[]
   devices    Device[]
 
+  ownedMemos        Memo[]             @relation("MemoOwner")
+  memberships       MemoMember[]
+  walletEntries     WalletEntry[]
+  cards             PaymentCard[]
+  subscriptions     Subscription[]
+  connectors        AccountConnector[]
+  feedbackResponses FeedbackResponse[]
+
   @@map("accounts")
 }
 
 /// Le lien entre un compte et un fournisseur tiers. Un compte peut en avoir
 /// plusieurs : la même personne entrée par Apple puis par Google.
 model Identity {
-  id        String       @id @default(uuid())
+  id        String  @id @default(uuid())
   accountId String
-  account   Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
-  provider  AuthProvider
+  provider AuthProvider
   /// Le `sub` du jeton. Stable, propre à notre app, et jamais réattribué.
-  subject   String
+  subject  String
   /// L'adresse telle que le fournisseur l'a donnée au moment du lien. Gardée
   /// pour le support : celle du compte peut diverger.
-  email     String?
+  email    String?
 
   createdAt DateTime @default(now())
 
@@ -92,15 +236,15 @@ model Identity {
 /// appareils : révoquer, c'est supprimer une ligne — pas attendre l'expiration
 /// d'un JWT qu'on ne contrôle plus une fois émis.
 model Session {
-  id        String   @id @default(uuid())
+  id        String  @id @default(uuid())
   accountId String
-  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   /// SHA-256 du token porteur — le token en clair n'existe que dans l'app.
-  tokenHash String   @unique
-  createdAt DateTime @default(now())
+  tokenHash  String   @unique
+  createdAt  DateTime @default(now())
   lastSeenAt DateTime @default(now())
-  expiresAt DateTime
+  expiresAt  DateTime
 
   @@index([accountId])
   @@map("sessions")
@@ -109,11 +253,11 @@ model Session {
 /// Identité provisoire, le temps que la vraie authentification arrive.
 /// Un appareil s'enregistre une fois et conserve son token.
 model Device {
-  id        String   @id @default(uuid())
+  id         String   @id @default(uuid())
   /// SHA-256 du token porteur — le token en clair n'existe que dans l'app.
-  tokenHash String   @unique
-  platform  String   @default("ios")
-  createdAt DateTime @default(now())
+  tokenHash  String   @unique
+  platform   String   @default("ios")
+  createdAt  DateTime @default(now())
   lastSeenAt DateTime @default(now())
 
   /// Le compte auquel cet appareil s'est rattaché, une fois son porteur
@@ -130,23 +274,36 @@ model Device {
 }
 
 /// Un projet de carnet : « Notre tour du monde », « La première année de Jeanne ».
+/// C'est ce que l'app appelle un **voyage**.
 model Memo {
-  id        String    @id @default(uuid())
-  deviceId  String
-  device    Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  id       String @id @default(uuid())
+  deviceId String
+  device   Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
 
-  title     String
-  subtitle  String?
-  authors   String?
+  /// Le compte propriétaire. Nul le temps que les carnets existants soient
+  /// rattachés : `deviceId` reste la propriété de repli, et les deux cohabitent
+  /// jusqu'à ce que plus aucun carnet n'ait de propriétaire nul.
+  ///
+  /// Dénormalisé volontairement : le propriétaire a **aussi** sa ligne dans
+  /// `memo_members`, mais toutes les routes vérifient la propriété à chaque
+  /// requête, et une jointure de plus sur ce chemin ne se justifie pas.
+  ownerAccountId String?
+  owner          Account? @relation("MemoOwner", fields: [ownerAccountId], references: [id], onDelete: SetNull)
+
+  title         String
+  subtitle      String?
+  /// Ligne d'auteurs telle qu'elle s'imprime en couverture. Ce n'est **pas** la
+  /// liste des participants : celle-là vit dans `memo_members`.
+  authors       String?
   /// Thème narratif saisi par l'utilisateur (voyage, naissance, projet…).
-  theme     String?
-  startDate DateTime?
-  endDate   DateTime?
+  theme         String?
+  startDate     DateTime?
+  endDate       DateTime?
   /// Photo de couverture (URL CDN publique).
   coverPhotoUrl String?
 
   /// Style de carnet retenu (voir `agents/carnet-styles/`).
-  styleKey  String?
+  styleKey String?
 
   /// Fiche de cohérence du carnet — `agents/agent-transcription.md` § 2.
   /// Noms propres, appellations, temps du récit, « on » ou « nous », unités,
@@ -154,35 +311,248 @@ model Memo {
   /// après : c'est ce qui fait que la page 20 parle comme la page 2.
   coherenceSheet Json?
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  // --- Le voyage tel que l'accueil le montre -------------------------------
 
-  entries Entry[]
-  renders Render[]
-  orders  PrintOrder[]
+  /// Rangé par cette valeur, pas par l'ordre de la liste.
+  stage TripStage @default(ongoing)
+
+  /// Le pays. Le drapeau se **dérive** du code ISO 3166-1 alpha-2 : aucun emoji
+  /// n'est stocké.
+  destinationName        String?
+  destinationCountryCode String?
+
+  /// Compteurs affichés sous le titre. Entretenus à l'écriture plutôt que
+  /// recalculés à chaque ouverture de l'accueil, qui les demande tous d'un coup
+  /// pour tous les voyages.
+  dayCount           Int?
+  distanceKilometres Float?
+  photoCount         Int?
+
+  /// La barre de progression : deux compteurs et une cible, jamais un
+  /// pourcentage. « 2 / 80 pages » se lit, « 2,5 % » ne dit rien.
+  memoryCount Int @default(0)
+  pageCount   Int @default(0)
+
+  /// Le carnet est généré et peut partir à l'impression.
+  isPrintable Boolean @default(false)
+
+  /// La relance de MemoBook — « Comment ça se passe à Trastevere ? ». Écrite à
+  /// partir de ce qui a déjà été raconté, donc en base et pas dans l'app.
+  prompt String?
+
+  /// Rythme du récit, « tous les 2 jours ». Cadence les relances.
+  narrationPace String?
+
+  /// Partager sur la galerie. Un carnet public passe une modération plus
+  /// stricte avant d'y entrer.
+  isPublicGallery Boolean @default(false)
+
+  // --- Personnalisations — `docs/reglages-utilisateur.md` -------------------
+  //
+  // Réglages du carnet, portés par le carnet lui-même : il y en a exactement un
+  // jeu par voyage, ils se lisent toujours avec lui, et aucune requête ne les
+  // interroge seuls. Une table à part n'aurait ajouté qu'une jointure et un cas
+  // « pas encore de réglages » à traiter partout.
+  //
+  // Règle de survie du document : aucun réglage n'est exposé dans l'app avant
+  // d'exister dans `templates/travel-journal/LAYOUT_KB.md`. Une colonne que le
+  // gabarit ignore ferait croire à l'utilisateur qu'il a réglé quelque chose.
+
+  /// Nombre de pages visé. Pilote le niveau de détail de la rédaction et le
+  /// regroupement des étapes.
+  targetPageCount Int @default(60)
+
+  /// Part de photo dans la page, en pourcentage. 50 = l'équilibre de la
+  /// maquette. Pilote le choix des layouts et la fréquence des pages photo.
+  photoTextRatio Int @default(50)
+
+  /// Le réglage **autorise**, il n'oblige pas : à ON, un encart toutes les
+  /// trois à quatre pages, et seulement si le fait passe le seuil de
+  /// pertinence.
+  funFactsEnabled Boolean @default(true)
+
+  /// Un seul bloc interactif par page, et il remplace la zone flottante du bas.
+  quizEnabled Boolean @default(true)
+
+  /// La réglure du papier, sous le texte. À OFF la page reste blanche sous le
+  /// récit ; le rythme vertical, lui, ne change pas.
+  rulesEnabled Boolean @default(true)
+
+  /// Une zone blanche à la fin de chaque étape, et trois pages blanches à la
+  /// fin du carnet.
+  freeZonesEnabled Boolean @default(true)
+
+  /// Mot fléché en fin de carnet, généré à la commande à partir des mots du
+  /// voyage tenus dans la fiche de cohérence.
+  crosswordEnabled Boolean @default(true)
+
+  /// Décorations et stickers par paragraphe ou par image, de 0 à 4. **Le scotch
+  /// des photos compte dans le quota.** À 0, aucun décor.
+  decorationQuota Int @default(2)
+
+  /// Les quatre axes typographiques, indépendants. Des chaînes et non une
+  /// énumération : la liste est fermée, mais elle est fermée par ce que
+  /// `templates/travel-journal/assets/fonts/` embarque réellement, et ajouter
+  /// une police ne doit pas demander une migration.
+  fontDisplay String @default("Playfair Display")
+  fontTitle   String @default("Hansley")
+  fontHand    String @default("Gloria Hallelujah")
+  fontFacts   String @default("Playfair Display")
+
+  /// Première et quatrième de couverture personnalisées. Structure libre le
+  /// temps que l'éditeur de couverture existe et fixe la sienne.
+  coverFront Json?
+  coverBack  Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entries  Entry[]
+  renders  Render[]
+  orders   PrintOrder[]
+  members  MemoMember[]
+  steps    MemoStep[]
+  expenses Expense[]
 
   @@index([deviceId, createdAt])
+  @@index([ownerAccountId, createdAt])
   @@map("memos")
+}
+
+/// Qui participe à un voyage. Un compte peut être propriétaire du sien et
+/// invité dans plusieurs autres.
+///
+/// Il n'y a pas de table de compagnons à part : un participant **est** un
+/// compte. Le seul cas où il n'en a pas encore un est l'invitation en attente,
+/// portée par `invitedEmail` jusqu'à ce que la personne s'inscrive — sans quoi
+/// on ne pourrait inviter que des gens déjà sur MemoBook.
+///
+/// Le propriétaire a sa propre ligne, avec `role = owner` : « qui est sur ce
+/// voyage » est alors une seule requête, et « tous les voyages où j'apparais »
+/// aussi.
+model MemoMember {
+  id     String @id @default(uuid())
+  memoId String
+  memo   Memo   @relation(fields: [memoId], references: [id], onDelete: Cascade)
+
+  /// Nul tant que l'invitation n'a pas trouvé son compte.
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  /// L'adresse conviée. Renseignée à l'invitation, conservée ensuite pour
+  /// savoir par quelle adresse la personne est entrée.
+  invitedEmail String?
+
+  role   MemoRole         @default(guest)
+  status MemoMemberStatus @default(invited)
+
+  /// Nom affiché sur la pastille tant que le compte n'existe pas, ou si la
+  /// personne veut apparaître autrement sur ce voyage-là.
+  displayName String?
+  /// Le « @clara_prn » de la maquette.
+  handle      String?
+
+  invitedByAccountId String?
+
+  invitedAt  DateTime  @default(now())
+  acceptedAt DateTime?
+
+  /// Une personne n'apparaît qu'une fois par voyage.
+  @@unique([memoId, accountId])
+  @@unique([memoId, invitedEmail])
+  @@index([accountId, invitedAt])
+  @@map("memo_members")
+}
+
+/// Une étape du voyage : un lieu, des dates, ceux qui y étaient.
+///
+/// Une étape **regroupe** des souvenirs, elle n'en est pas un. Jusqu'ici le
+/// regroupement se refaisait à chaque génération à partir de `capturedAt` et
+/// disparaissait ensuite ; il devient une donnée que l'utilisateur peut
+/// corriger.
+model MemoStep {
+  id     String @id @default(uuid())
+  memoId String
+  memo   Memo   @relation(fields: [memoId], references: [id], onDelete: Cascade)
+
+  /// Son rang dans le voyage. C'est lui qui nomme l'étape tant qu'elle n'a pas
+  /// de titre.
+  number Int
+
+  /// Le lieu tel qu'on le dirait : « Trastevere ».
+  placeName String?
+
+  destinationName        String?
+  destinationCountryCode String?
+
+  startDate DateTime?
+  endDate   DateTime?
+
+  /// La vignette de l'étape (URL CDN publique).
+  photoUrl String?
+
+  /// Comment on est arrivé jusqu'ici.
+  transport TripTransport?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entries Entry[]
+
+  @@unique([memoId, number])
+  @@index([memoId, startDate])
+  @@map("memo_steps")
+}
+
+/// Une dépense du voyage.
+///
+/// Une dépense est une **métadonnée vérifiable** : elle situe une date et un
+/// lieu. Elle ne raconte rien — le souvenir doit venir du voyageur.
+model Expense {
+  id     String @id @default(uuid())
+  memoId String
+  memo   Memo   @relation(fields: [memoId], references: [id], onDelete: Cascade)
+
+  /// En centimes, comme tout montant de ce schéma.
+  amountCents Int
+  currency    String @default("EUR")
+
+  label      String?
+  /// L'horodatage de la dépense, pas de sa saisie : c'est lui qui la rattache à
+  /// une journée du récit.
+  occurredAt DateTime
+  placeLabel String?
+
+  source     ExpenseSource @default(manual)
+  /// L'identifiant chez la source, quand elle en donne un. Empêche d'importer
+  /// deux fois la même ligne Tricount.
+  externalId String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([source, externalId])
+  @@index([memoId, occurredAt])
+  @@map("expenses")
 }
 
 /// Un message de l'utilisateur : un vocal, une note écrite ou une photo.
 model Entry {
-  id        String    @id @default(uuid())
-  memoId    String
-  memo      Memo      @relation(fields: [memoId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  memoId String
+  memo   Memo   @relation(fields: [memoId], references: [id], onDelete: Cascade)
 
-  kind      EntryKind
-  status    Status    @default(pending)
+  kind       EntryKind
+  status     Status    @default(pending)
   /// Transcription brute. Audio : remplie par le job `transcribe`. Texte :
   /// saisie directement. Archivée telle quelle — c'est la source de vérité
   /// contre laquelle se vérifie la fidélité du texte rédigé.
   transcript String?
 
   /// Texte rédigé par le job `redact`, d'après `agents/agent-transcription.md`.
-  redactedText   String?
+  redactedText    String?
   /// Statut de la passe de rédaction, suivi séparément de `status` : une
   /// transcription réussie dont la rédaction échoue reste exploitable.
-  redactionStatus Status  @default(pending)
+  redactionStatus Status    @default(pending)
   redactionError  String?
   /// Modèle qui a rédigé, pour tracer une régression de style après un
   /// changement de modèle.
@@ -202,21 +572,66 @@ model Entry {
   /// `sun` | `sun-wind` | `cloud` | `rain` | `snow`.
   weatherKey     String?
 
+  /// Le quiz proposé pour ce souvenir. Il vit ici et non dans le payload du
+  /// rendu, sinon il serait réécrit à chaque aperçu : c'est du texte que
+  /// l'agent de rédaction produit une fois, au même titre que le fun fact.
+  /// `quizAnswers` est un tableau de chaînes, `quizAnswerIndex` désigne la
+  /// bonne dedans.
+  quizQuestion    String?
+  quizAnswers     Json?
+  quizAnswerIndex Int?
+
+  // --- Analyse de la photo — `docs/photos.md` ------------------------------
+  //
+  // Portée par le souvenir et non par le fichier : `tapeCorner` et le point de
+  // focus sont des décisions de mise en page prises pour *cette* photo dans
+  // *ce* carnet, pas des propriétés de l'objet stocké sur S3. Le fichier, lui,
+  // ne connaît que sa clé et son poids.
+
+  photoWidthPx  Int?
+  photoHeightPx Int?
+
+  /// Le contrôle arrive **avant** la mise en page : une photo de 73 dpi est
+  /// irrattrapable une fois le livre imprimé.
+  photoVerdict PhotoVerdict?
+
+  /// Variance du laplacien, et part de pixels dans les extrêmes de
+  /// l'histogramme. Seuils à calibrer sur un lot réel.
+  photoSharpness Float?
+  photoExposure  Float?
+
+  /// Où poser le scotch, et où recadrer. Sans ces champs, le gabarit retombe
+  /// sur un centrage neutre et un scotch en haut à gauche : jamais une erreur,
+  /// seulement un rendu moins fin.
+  tapeCorner TapeCorner?
+  focusX     Float?
+  focusY     Float?
+
+  /// Posé par le job `memobook.enhance` après un agrandissement réussi.
+  enhancedAt DateTime?
+
   /// Horodatage du souvenir lui-même, pas de l'upload — c'est lui qui sert à
   /// regrouper les entries par journée lors de la structuration.
-  capturedAt DateTime  @default(now())
+  capturedAt DateTime @default(now())
   /// Lieu déclaré par l'app (nom lisible, ex. « Bogotá, Colombie »).
   placeLabel String?
   /// Message d'erreur du dernier échec de traitement, le cas échéant.
   error      String?
 
-  mediaId   String?
-  media     MediaAsset? @relation(fields: [mediaId], references: [id], onDelete: SetNull)
+  mediaId String?
+  media   MediaAsset? @relation(fields: [mediaId], references: [id], onDelete: SetNull)
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  /// L'étape à laquelle ce souvenir se rattache. Nulle tant que les étapes ne
+  /// sont pas posées : le regroupement par journée reste alors celui de
+  /// `capturedAt`.
+  stepId String?
+  step   MemoStep? @relation(fields: [stepId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([memoId, capturedAt])
+  @@index([stepId])
   @@map("entries")
 }
 
@@ -224,14 +639,24 @@ model Entry {
 /// `cdnUrl` vers Webflow une fois la photo publiée — c'est cette URL publique
 /// qu'APITemplate consomme.
 model MediaAsset {
-  id         String   @id @default(uuid())
-  storageKey String   @unique
-  mimeType   String
-  bytes      Int
+  id              String  @id @default(uuid())
+  storageKey      String  @unique
+  mimeType        String
+  bytes           Int
   /// Durée en secondes, pour les audios.
   durationSeconds Float?
-  cdnUrl     String?
-  createdAt  DateTime @default(now())
+  cdnUrl          String?
+
+  /// La clé de l'original, quand `storageKey` pointe vers une version
+  /// agrandie. L'original est toujours conservé : un agrandissement raté doit
+  /// pouvoir être annulé.
+  ///
+  /// Le seul champ de l'agrandissement qui reste ici : c'est un fait sur
+  /// l'objet stocké, pas sur le souvenir. Tout le reste de l'analyse photo vit
+  /// sur `entries`.
+  originalStorageKey String?
+
+  createdAt DateTime @default(now())
 
   entries Entry[]
 
@@ -241,17 +666,17 @@ model MediaAsset {
 /// Une génération de carnet. On en garde l'historique : chaque tentative
 /// conserve son payload, ce qui rend les régressions de mise en page traçables.
 model Render {
-  id       String  @id @default(uuid())
-  memoId   String
-  memo     Memo    @relation(fields: [memoId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  memoId String
+  memo   Memo   @relation(fields: [memoId], references: [id], onDelete: Cascade)
 
-  status   Status  @default(pending)
+  status                   Status  @default(pending)
   /// Payload conforme à templates/travel-journal/gpt_image_schema.yaml.
-  payload  Json?
+  payload                  Json?
   /// Identifiant de transaction renvoyé par APITemplate.io.
   apitemplateTransactionId String?
-  pdfUrl   String?
-  error    String?
+  pdfUrl                   String?
+  error                    String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -294,14 +719,363 @@ model PrintOrder {
   shippingCity       String
   shippingCountry    String
 
+  /// Ce que la feuille de suivi montre du carnet commandé. Figé comme le
+  /// rendu : c'est le livre qui part à l'impression, pas celui d'aujourd'hui.
+  pageCount     Int?
+  coverImageUrl String?
+
+  /// Deux bornes plutôt qu'une date : un imprimeur annonce un délai, pas un
+  /// rendez-vous.
+  estimatedMinDays Int?
+  estimatedMaxDays Int?
+
   /// Renseignés par l'imprimeur une fois la commande partie.
   providerOrderId String?
+  carrier         String?
   trackingUrl     String?
   error           String?
+
+  /// Les dates du suivi. Chacune n'est posée qu'une fois, à l'événement qu'elle
+  /// nomme : elles racontent l'acheminement mieux que `status`, qui n'en garde
+  /// que le dernier état.
+  submittedAt DateTime?
+  shippedAt   DateTime?
+  deliveredAt DateTime?
+
+  /// Ce que la commande a coûté, en centimes, et le paiement Stripe
+  /// correspondant. L'unicité de l'intention est ce qui empêche qu'un webhook
+  /// rejoué fasse payer deux fois.
+  amountCents           Int?
+  stripePaymentIntentId String? @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  walletEntries WalletEntry[]
+
   @@index([memoId, createdAt])
   @@map("print_orders")
+}
+
+/// Une écriture de cagnotte. **Registre en ajout seul** : on n'y met jamais à
+/// jour ni ne supprime une ligne. Se tromper se corrige par une écriture
+/// inverse, comme dans un livre de comptes — c'est ce qui rend l'historique
+/// opposable.
+///
+/// Le solde d'un compte est la somme des `amountCents` de ses écritures.
+/// `Account.walletBalanceCents` n'en est qu'un cache, déplacé dans la même
+/// transaction que l'insertion.
+///
+/// Trois règles tiennent la sécurité de l'ensemble :
+///
+/// 1. **Des centimes entiers.** Aucun montant en flottant, nulle part.
+/// 2. **Une écriture par mouvement réellement encaissé.** Il n'y a pas d'état
+///    « en attente » : tant que Stripe n'a pas confirmé, rien n'est écrit.
+/// 3. **`stripeEventId` unique.** Un webhook rejoué — Stripe les rejoue —
+///    échoue sur la contrainte au lieu de créditer deux fois. C'est la base de
+///    données qui garantit l'idempotence, pas le code applicatif.
+model WalletEntry {
+  id        String  @id @default(uuid())
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  /// Signé : positif au crédit, négatif au débit.
+  amountCents Int
+
+  /// Le solde du compte après cette écriture. Redondant avec la somme, et c'est
+  /// exactement l'intérêt : une dérive entre les deux se voit sans rejouer tout
+  /// l'historique.
+  balanceAfterCents Int
+
+  kind WalletEntryKind
+
+  /// Motif lisible, affiché dans l'historique de la cagnotte. Obligatoire dans
+  /// les faits pour un `adjustment` : une correction sans motif est
+  /// invérifiable.
+  label String?
+
+  /// L'événement Stripe qui a produit cette écriture. Nul pour un geste
+  /// commercial ou une correction, qui ne viennent pas de Stripe.
+  stripeEventId String? @unique
+
+  /// La commande que cette écriture paie ou rembourse, le cas échéant.
+  printOrderId String?
+  printOrder   PrintOrder? @relation(fields: [printOrderId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([accountId, createdAt])
+  @@map("wallet_entries")
+}
+
+/// Une carte enregistrée. **Le numéro complet n'entre jamais ici** : Stripe le
+/// détient, cette table n'en garde que de quoi reconnaître la carte à l'écran.
+model PaymentCard {
+  id        String  @id @default(uuid())
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  /// Le nom que l'utilisateur donne à sa carte : « Carte perso ».
+  label    String?
+  /// Les quatre derniers chiffres, la marque et l'échéance : tout ce qu'il faut
+  /// pour l'afficher, rien de ce qu'il faudrait pour s'en servir.
+  last4    String
+  brand    String?
+  expMonth Int?
+  expYear  Int?
+
+  /// Le moyen de paiement chez Stripe. C'est lui, et lui seul, qui permet de
+  /// débiter.
+  stripePaymentMethodId String @unique
+
+  /// La carte proposée par défaut. Remplace le `selectedCardId` que l'app tient
+  /// aujourd'hui de son côté.
+  isDefault Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([accountId])
+  @@map("payment_cards")
+}
+
+/// L'abonnement, tel que la feuille du profil le présente.
+model Subscription {
+  id        String  @id @default(uuid())
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  provider SubscriptionProvider
+  status   SubscriptionStatus   @default(active)
+
+  /// En centimes, et la devise à côté : un abonnement se vend aussi hors de la
+  /// zone euro, contrairement à la cagnotte.
+  priceCents Int
+  currency   String @default("EUR")
+  /// Le pas de facturation, « week » ou « month ».
+  interval   String @default("week")
+
+  /// La référence chez le fournisseur : abonnement Stripe, ou transaction
+  /// d'origine StoreKit.
+  providerSubscriptionId String? @unique
+
+  startedAt   DateTime  @default(now())
+  renewsAt    DateTime?
+  cancelledAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([accountId, status])
+  @@map("subscriptions")
+}
+
+/// Une application tierce que MemoBook peut interroger pour enrichir un carnet.
+model AccountConnector {
+  id        String  @id @default(uuid())
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  /// L'identifiant du service. Une chaîne et non une énumération : brancher un
+  /// connecteur de plus ne doit pas demander une migration.
+  connectorKey String
+
+  isEnabled Boolean @default(false)
+
+  /// Le jeton d'accès, **chiffré au repos**, jamais en clair. C'est la colonne
+  /// la plus sensible du schéma : elle ouvre le compte de quelqu'un chez un
+  /// tiers. Elle ne sort d'ici que vers l'appel qui l'utilise, jamais vers
+  /// l'app.
+  accessToken          String?
+  refreshToken         String?
+  tokenExpiresAt       DateTime?
+  /// Le compte tel que le service tiers le nomme, pour l'afficher sans avoir à
+  /// l'interroger.
+  externalAccountLabel String?
+
+  connectedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  /// Un compte ne branche qu'une fois le même service.
+  @@unique([accountId, connectorKey])
+  @@map("account_connectors")
+}
+
+/// Un carnet de la galerie mis en avant. Le contenu vient du serveur pour
+/// qu'une campagne se change **sans mise à jour de l'app**.
+model Showcase {
+  id       String  @id @default(uuid())
+  title    String
+  subtitle String?
+
+  imageUrl       String?
+  destinationUrl String?
+
+  /// Le carnet de la galerie que cette carte met en avant, quand il y en a un.
+  memoId String?
+
+  /// Visible sur la carte de découverte, en bas de l'accueil.
+  isActive Boolean @default(false)
+
+  /// Montré sur l'écran de bienvenue, celui qui n'apparaît qu'une fois au
+  /// premier lancement. Deux drapeaux distincts et non un seul : un carnet
+  /// peut mériter l'accueil sans être ce qu'on montre à quelqu'un qui découvre
+  /// l'app, et l'inverse aussi. Ils se basculent depuis la base, sans livrer
+  /// de version.
+  showOnWelcomeScreen Boolean @default(false)
+
+  /// Ordre d'affichage, du plus petit au plus grand.
+  position Int @default(0)
+
+  /// Fenêtre de diffusion. Nulle des deux côtés, la carte est diffusée tant que
+  /// son drapeau est levé.
+  startsAt DateTime?
+  endsAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, position])
+  @@index([showOnWelcomeScreen, position])
+  @@map("showcases")
+}
+
+/// Une demande d'avis, poussée dans l'app **sans livrer de version**.
+///
+/// L'app ne connaît que les formes de question (`FeedbackQuestionKind`) et sait
+/// les dessiner ; le texte, l'ordre, le nombre de questions et le moment de
+/// l'affichage viennent d'ici. Ajouter une campagne est une insertion, pas une
+/// release.
+model FeedbackCampaign {
+  id String @id @default(uuid())
+
+  /// Identifiant lisible, celui qu'on cite dans une analyse : `avis-v1`,
+  /// `nps-septembre`.
+  key String @unique
+
+  /// L'en-tête de la modale.
+  title       String
+  subtitle    String?
+  /// Le libellé du bouton d'envoi.
+  submitLabel String  @default("Envoyer")
+
+  isActive Boolean @default(false)
+
+  /// Fenêtre de diffusion.
+  startsAt DateTime?
+  endsAt   DateTime?
+
+  /// Combien de fois au maximum la proposer à quelqu'un qui l'a écartée. À 1,
+  /// une modale fermée ne revient jamais.
+  maxDisplays Int @default(1)
+
+  /// Filtre d'audience, évalué côté serveur. Structure libre le temps que les
+  /// critères se stabilisent : « a déjà commandé », « inscrit depuis 7 jours ».
+  audience Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  questions FeedbackQuestion[]
+  responses FeedbackResponse[]
+
+  @@index([isActive, startsAt])
+  @@map("feedback_campaigns")
+}
+
+/// Une question d'une campagne.
+model FeedbackQuestion {
+  id         String           @id @default(uuid())
+  campaignId String
+  campaign   FeedbackCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  /// Rang dans la modale, de haut en bas.
+  position Int
+
+  kind FeedbackQuestionKind
+
+  /// L'intitulé affiché au-dessus du champ. Vide pour une zone de commentaire
+  /// qui se contente de son texte d'invite.
+  prompt      String?
+  /// Le texte grisé d'un champ libre : « Ton commentaire… ».
+  placeholder String?
+
+  isRequired Boolean @default(false)
+
+  /// Ce que la forme demande en plus, et rien d'autre :
+  ///
+  /// - `choice` — `{ "options": [{ "key": "a", "label": "…", "hint": "…" }] }`
+  /// - `slider` — `{ "min": 0, "max": 4, "step": 1, "minLabel": "…", "maxLabel": "…" }`
+  /// - `rating` — `{ "max": 5 }`
+  /// - `text`   — rien.
+  ///
+  /// Du JSON parce que chaque forme a ses propres réglages : des colonnes
+  /// séparées seraient nulles pour toutes les questions sauf une.
+  config Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  answers FeedbackAnswer[]
+
+  @@unique([campaignId, position])
+  @@map("feedback_questions")
+}
+
+/// Ce qu'une personne a fait de la modale : elle l'a remplie, ou elle l'a
+/// fermée. Les deux comptent — savoir qu'on écarte une question est un résultat.
+model FeedbackResponse {
+  id         String           @id @default(uuid())
+  campaignId String
+  campaign   FeedbackCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  /// Nul pour un avis laissé avant la connexion.
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  /// Combien de fois la modale a été montrée à cette personne pour cette
+  /// campagne. C'est ce compteur que `maxDisplays` borne.
+  displayCount Int @default(1)
+
+  shownAt     DateTime  @default(now())
+  submittedAt DateTime?
+  dismissedAt DateTime?
+
+  /// La version de l'app qui a affiché la modale : un avis se lit autrement
+  /// selon ce que la personne avait sous les yeux.
+  appVersion String?
+
+  answers FeedbackAnswer[]
+
+  /// Une ligne par campagne et par personne : la relancer met à jour le
+  /// compteur, elle ne crée pas une deuxième ligne.
+  @@unique([campaignId, accountId])
+  @@index([campaignId, submittedAt])
+  @@map("feedback_responses")
+}
+
+/// Une réponse à une question.
+///
+/// Une colonne par type plutôt qu'un JSON fourre-tout : c'est ce qui permet de
+/// faire la moyenne d'un curseur ou de compter les choix en SQL, sans
+/// désérialiser quoi que ce soit.
+model FeedbackAnswer {
+  id         String           @id @default(uuid())
+  responseId String
+  response   FeedbackResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  questionId String
+  question   FeedbackQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  /// Rempli pour `text`.
+  textValue   String?
+  /// Rempli pour `slider` et `rating`.
+  numberValue Float?
+  /// Rempli pour `choice` : la clé de l'option retenue.
+  choiceKey   String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([responseId, questionId])
+  @@index([questionId])
+  @@map("feedback_answers")
 }

@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { AppContext } from "../context.js";
 import { HttpError } from "../lib/httpError.js";
 import { deviceIdOf } from "../plugins/auth.js";
+import { accountOfDevice, createOwnedMemo } from "../services/memoOwnership.js";
 import { serializeEntry, serializeMemo, serializeRender } from "./serializers.js";
 
 const createBody = z.object({
@@ -57,9 +58,15 @@ export function registerMemoRoutes(app: FastifyInstance, context: AppContext): v
       throw HttpError.badRequest("La date de fin précède la date de début.");
     }
 
-    const memo = await context.prisma.memo.create({
-      data: { ...body, deviceId: deviceIdOf(request) },
-    });
+    // Un carnet créé par un appareil déjà rattaché à un compte désigne ce
+    // compte comme propriétaire, et lui pose sa ligne de participant. Sans ça
+    // il n'apparaîtrait jamais sur l'accueil, qui lit `memo_members`.
+    const deviceId = deviceIdOf(request);
+    const memo = await createOwnedMemo(
+      context.prisma,
+      { ...body, deviceId },
+      await accountOfDevice(context.prisma, deviceId),
+    );
 
     return reply.code(201).send(serializeMemo(memo));
   });

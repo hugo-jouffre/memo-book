@@ -1,4 +1,5 @@
 import Foundation
+import MemoBookCore
 import MemoBookNetworking
 import Observation
 
@@ -46,5 +47,43 @@ public final class AppDependencies {
         let task = Task { try await api.ensureDeviceRegistered() }
         registration = task
         try await task.value
+    }
+
+    // MARK: - Les modèles branchés sur l'API
+    //
+    // Chaque écran reçoit une **source**, une fonction qui rend son contenu.
+    // Par défaut c'est le jeu d'essai, ce qui laisse les aperçus SwiftUI
+    // fonctionner sans serveur. Ces trois fabriques rendent le même modèle,
+    // branché sur le réseau.
+    //
+    // Passer l'app en données réelles, c'est donc remplacer dans `RootView` :
+    //
+    //     HomeView(onIntent: handle)
+    //     ProfileView(onSignOut: signOut)
+    //     TripHomeView(tripId: id)
+    //
+    // par :
+    //
+    //     HomeView(model: dependencies.homeModel(), onIntent: handle)
+    //     ProfileView(model: dependencies.profileModel(), onSignOut: signOut)
+    //     TripHomeView(tripId: id, model: dependencies.tripModel(id: id))
+    //
+    // Rien d'autre ne bouge : ni les vues, ni les modèles, ni les aperçus.
+
+    /// L'accueil, servi par `GET /v1/home`. Exige une session ouverte.
+    public func homeModel() -> HomeModel {
+        HomeModel { [api] in try await api.homeFeed() }
+    }
+
+    /// Le profil, servi par `GET /v1/profile`.
+    public func profileModel() -> ProfileModel {
+        ProfileModel { [api] in try await api.profile() }
+    }
+
+    /// Un voyage ouvert, servi par `GET /v1/trips/:id`.
+    public func tripModel(id: String) -> TripHomeModel {
+        TripHomeModel(tripId: id) { [api] identifier in
+            try await api.tripDetail(id: identifier)
+        }
     }
 }
