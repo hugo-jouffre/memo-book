@@ -180,6 +180,7 @@ expiration même après un mot de passe changé ou un téléphone perdu.
 
 | Fichier | Ce qu'il fait |
 | --- | --- |
+| `prisma/README.md` | **La base** : ce qu'elle porte, comment elle arrive dans Supabase, et pourquoi chaque table est là |
 | `src/lib/templates.ts` | Charge `gpt_image_schema.yaml` et `LAYOUT_KB.md` depuis `templates/`, et les règles de rédaction depuis `agents/` |
 | `src/services/payloadValidator.ts` | Valide le carnet — schéma **et** limites de longueur de LAYOUT_KB |
 | `src/services/redaction.ts` | Transcription → texte de carnet (Claude, piloté par `agents/agent-transcription.md`) |
