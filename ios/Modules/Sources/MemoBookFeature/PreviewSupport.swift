@@ -11,6 +11,8 @@ public actor PreviewAPI: MemoBookAPI {
     private var memosById: [String: MemoDetail] = [:]
     private var rendersById: [String: Render] = [:]
     private var ordersByMemoId: [String: [PrintOrder]] = [:]
+    /// Nul tant que rien n'a été corrigé : le profil est alors le jeu d'essai.
+    private var editedProfile: TravellerProfile?
 
     public init(seeded: Bool = true) {
         // Le jeu d'essai est construit hors de l'acteur puis affecté : un `init`
@@ -143,6 +145,49 @@ public actor PreviewAPI: MemoBookAPI {
             account: account
         )
     }
+
+    // MARK: - Les écrans
+    //
+    // Les jeux d'essai déjà écrits pour les aperçus font l'affaire : le double
+    // n'a pas à réinventer un contenu que `HomeFeed.fixture` porte déjà.
+
+    public func homeFeed() async throws -> HomeFeed { .fixture }
+
+    public func tripDetail(id: String) async throws -> TripDetail { .fixture(id: id) }
+
+    public func welcomeShowcases() async throws -> [Showcase] {
+        HomeFeed.fixture.showcase.map { [$0] } ?? []
+    }
+
+    public func profile() async throws -> TravellerProfile { editedProfile ?? .fixture }
+
+    public func updateProfile(_ edit: ProfileEdit) async throws -> TravellerProfile {
+        // Le double garde ce qu'on lui écrit : un aperçu où l'on corrige son
+        // prénom doit montrer le prénom corrigé, pas retomber sur le jeu
+        // d'essai au rechargement suivant.
+        var profile = editedProfile ?? .fixture
+        if case .some(let value) = edit.phoneNumber { profile.phoneNumber = value }
+        if let wantsNewsletter = edit.wantsNewsletter { profile.wantsNewsletter = wantsNewsletter }
+        if let address = edit.address { profile.address = address }
+        editedProfile = profile
+        return profile
+    }
+
+    public func setConnector(key: String, isEnabled: Bool) async throws {
+        var profile = editedProfile ?? .fixture
+        profile.connectors = profile.connectors.map { connector in
+            guard connector.id == key else { return connector }
+            var updated = connector
+            updated.isEnabled = isEnabled
+            return updated
+        }
+        editedProfile = profile
+    }
+
+    @discardableResult
+    public func linkCurrentDevice() async throws -> Int { 0 }
+
+    // MARK: - Carnets
 
     public func memos() async throws -> [MemoSummary] {
         memosById.values

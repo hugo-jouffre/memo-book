@@ -56,11 +56,59 @@ export async function createHarness(
   };
 }
 
-/** Vide les tables entre deux suites. `Device` cascade sur tout le reste. */
+/**
+ * Vide les tables entre deux suites.
+ *
+ * Les tables sont nommées **une par une** plutôt que de compter sur les
+ * cascades : `showcases` et `feedback_campaigns` ne dépendent de rien, et
+ * seraient restées d'une suite à l'autre. Une table oubliée ici, c'est un test
+ * qui passe seul et échoue en série.
+ */
 export async function resetDatabase(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "print_orders", "renders", "entries", "media_assets", "memos", "devices", "sessions", "identities", "accounts" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE ' +
+      [
+        "feedback_answers",
+        "feedback_responses",
+        "feedback_questions",
+        "feedback_campaigns",
+        "showcases",
+        "wallet_entries",
+        "payment_cards",
+        "subscriptions",
+        "account_connectors",
+        "print_orders",
+        "renders",
+        "entries",
+        "media_assets",
+        "expenses",
+        "memo_steps",
+        "memo_members",
+        "memos",
+        "devices",
+        "sessions",
+        "identities",
+        "accounts",
+      ]
+        .map((table) => `"${table}"`)
+        .join(", ") +
+      " RESTART IDENTITY CASCADE",
   );
+}
+
+/** Ouvre un compte et renvoie l'en-tête d'autorisation de sa session. */
+export async function registerAccount(
+  app: FastifyInstance,
+  email = "voyageur@memobook.app",
+): Promise<{ accountId: string; authorization: string }> {
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/auth/signup",
+    payload: { email, password: "carnet2026", firstName: "Hugo" },
+  });
+
+  const body = response.json<{ token: string; account: { id: string } }>();
+  return { accountId: body.account.id, authorization: `Bearer ${body.token}` };
 }
 
 /** Enregistre un appareil et renvoie l'en-tête d'autorisation à réutiliser. */

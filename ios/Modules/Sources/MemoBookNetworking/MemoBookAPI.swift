@@ -35,6 +35,42 @@ public protocol MemoBookAPI: Sendable {
     /// le serveur est injoignable : l'utilisateur a demandé à sortir.
     func signOut() async
 
+    // MARK: - Les écrans
+    //
+    // Une réponse par écran, et non une par bloc : l'accueil et le profil
+    // s'affichent d'un seul tenant, et les découper ferait apparaître leurs
+    // morceaux les uns après les autres au lancement.
+
+    /// Tout ce qu'il faut pour dessiner l'accueil : le voyageur, ses voyages et
+    /// ceux où il est invité, la carte de découverte.
+    func homeFeed() async throws -> HomeFeed
+
+    /// Un voyage ouvert : sa couverture, la relance et ses étapes.
+    func tripDetail(id: String) async throws -> TripDetail
+
+    /// Les carnets mis en avant sur l'écran de bienvenue. Seul appel du
+    /// contrat qui ne demande **aucune** identification : cet écran s'affiche
+    /// avant l'entrée dans un compte.
+    func welcomeShowcases() async throws -> [Showcase]
+
+    func profile() async throws -> TravellerProfile
+
+    /// Corrige le profil. Renvoie la version enregistrée par le serveur, qui
+    /// fait ensuite autorité sur ce que l'écran affiche.
+    func updateProfile(_ edit: ProfileEdit) async throws -> TravellerProfile
+
+    /// Branche ou débranche un connecteur.
+    func setConnector(key: String, isEnabled: Bool) async throws
+
+    /// Rattache l'appareil courant au compte connecté et lui transfère les
+    /// carnets qu'il portait seul. À appeler juste après une connexion :
+    /// quelqu'un qui a raconté trois étapes avant de s'inscrire doit les
+    /// retrouver. Renvoie le nombre de carnets récupérés.
+    @discardableResult
+    func linkCurrentDevice() async throws -> Int
+
+    // MARK: - Carnets
+
     func memos() async throws -> [MemoSummary]
     func createMemo(_ memo: NewMemo) async throws -> Memo
     func memo(id: String) async throws -> MemoDetail

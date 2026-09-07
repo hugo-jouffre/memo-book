@@ -13,9 +13,11 @@ import { registerAuthRoutes, registerSessionRoutes } from "./routes/auth.js";
 import { registerDeviceRoutes } from "./routes/devices.js";
 import { registerEntryRoutes } from "./routes/entries.js";
 import { registerHealthRoutes } from "./routes/health.js";
+import { registerHomeRoutes, registerWelcomeRoutes } from "./routes/home.js";
 import { registerLocalRenderRoutes } from "./routes/localRenders.js";
 import { registerMemoRoutes } from "./routes/memos.js";
 import { registerOrderRoutes } from "./routes/orders.js";
+import { registerProfileRoutes } from "./routes/profile.js";
 import { registerRenderRoutes } from "./routes/renders.js";
 
 export async function buildApp(context: AppContext): Promise<FastifyInstance> {
@@ -64,6 +66,10 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
   registerHealthRoutes(app, context);
   registerDeviceRoutes(app, context);
 
+  // L'écran de bienvenue s'affiche avant toute connexion : sa route ne peut pas
+  // en exiger une.
+  registerWelcomeRoutes(app, context);
+
   // Entrée dans un compte : ce sont ces routes qui délivrent le token, elles ne
   // peuvent donc pas en exiger un.
   registerAuthRoutes(app, context);
@@ -74,6 +80,10 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
   await app.register(async (accountRoutes) => {
     accountRoutes.addHook("preHandler", createRequireAccount(context));
     registerSessionRoutes(accountRoutes, context);
+    // L'accueil, un voyage et le profil parlent d'une personne : ils n'ont de
+    // sens que sous une session de compte.
+    registerHomeRoutes(accountRoutes, context);
+    registerProfileRoutes(accountRoutes, context);
   });
 
   // Uniquement en mode de rendu local : sert les PDF produits sur le disque.
