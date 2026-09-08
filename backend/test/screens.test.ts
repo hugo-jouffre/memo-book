@@ -586,7 +586,7 @@ describe("la suppression d'un compte", () => {
     const owner = await registerAccount(harness.app, "seul@memobook.app");
     const invited = await registerAccount(harness.app, "convie@memobook.app");
 
-    const alone = await seedTrip(owner.accountId, { title: "Voyage en solitaire" });
+    await seedTrip(owner.accountId, { title: "Voyage en solitaire" });
     // Une invitation encore en attente ne désigne personne qui puisse hériter.
     const pending = await seedTrip(owner.accountId, { title: "Invitation en attente" });
     await harness.prisma.memoMember.create({
