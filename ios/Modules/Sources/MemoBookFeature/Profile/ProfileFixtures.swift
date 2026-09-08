@@ -38,7 +38,15 @@ extension TravellerProfile {
                 copies: 2,
                 pageCount: 50
             )
-        ]
+        ],
+        offeredSteps: 3,
+        remainingSteps: 2,
+        tripCount: 5,
+        currentTrip: CurrentTrip(
+            id: "trip-rome",
+            startDate: .fixture(10, 12, 2026),
+            endDate: .fixture(2, 1, 2027)
+        )
     )
 
     /// Le même profil, mais entré par Apple : l'adresse vient du compte tiers et
@@ -46,6 +54,20 @@ extension TravellerProfile {
     public static var appleFixture: TravellerProfile {
         var profile = fixture
         profile.signInProvider = .apple
+        return profile
+    }
+
+    /// Le profil de quelqu'un qui paie : plus de quota d'étapes, la carte de
+    /// chiffres ouverte, et la ligne « Mon abonnement » dans les services.
+    ///
+    /// Le quota repasse à `nil` **et** l'abonnement à actif : les deux ensemble,
+    /// parce que c'est ce que le serveur écrit le jour d'une souscription. Un
+    /// abonné qui garderait ses étapes offertes n'existe pas.
+    public static var subscriberFixture: TravellerProfile {
+        var profile = fixture
+        profile.subscription.isActive = true
+        profile.offeredSteps = nil
+        profile.remainingSteps = nil
         return profile
     }
 

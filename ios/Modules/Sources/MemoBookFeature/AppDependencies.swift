@@ -56,28 +56,30 @@ public final class AppDependencies {
     // fonctionner sans serveur. Ces trois fabriques rendent le même modèle,
     // branché sur le réseau.
     //
-    // Passer l'app en données réelles, c'est donc remplacer dans `RootView` :
-    //
-    //     HomeView(onIntent: handle)
-    //     ProfileView(onSignOut: signOut)
-    //     TripHomeView(tripId: id)
-    //
-    // par :
-    //
-    //     HomeView(model: dependencies.homeModel(), onIntent: handle)
-    //     ProfileView(model: dependencies.profileModel(), onSignOut: signOut)
-    //     TripHomeView(tripId: id, model: dependencies.tripModel(id: id))
-    //
-    // Rien d'autre ne bouge : ni les vues, ni les modèles, ni les aperçus.
+    // C'est ce que `RootView` passe aux trois écrans : l'app tourne donc sur
+    // les données du serveur, et les aperçus SwiftUI sur le jeu d'essai, sans
+    // qu'aucune vue ni aucun modèle ait à savoir lequel des deux le sert.
 
     /// L'accueil, servi par `GET /v1/home`. Exige une session ouverte.
     public func homeModel() -> HomeModel {
         HomeModel { [api] in try await api.homeFeed() }
     }
 
-    /// Le profil, servi par `GET /v1/profile`.
+    /// Le profil, servi par `GET /v1/profile` — et corrigé par `PATCH`.
+    ///
+    /// Les deux ensemble, et pas seulement la lecture : une ligne du profil
+    /// s'enregistre en perdant le focus, sans bouton pour valider. Sans la
+    /// seconde fonction, corriger son numéro de téléphone ne changeait rien
+    /// ailleurs que sur l'écran, jusqu'au prochain chargement qui le remettait
+    /// comme avant.
     public func profileModel() -> ProfileModel {
-        ProfileModel { [api] in try await api.profile() }
+        ProfileModel(
+            source: { [api] in try await api.profile() },
+            persist: { [api] edit in try await api.updateProfile(edit) },
+            // La troisième, et la seule sans retour : elle supprime le compte
+            // et tout ce qui est à lui. L'écran demande confirmation avant.
+            remove: { [api] in try await api.deleteAccount() }
+        )
     }
 
     /// Un voyage ouvert, servi par `GET /v1/trips/:id`.

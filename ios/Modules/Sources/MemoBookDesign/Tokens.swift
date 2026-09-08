@@ -55,6 +55,13 @@ public enum MemoBookColor {
     /// relevé sur le nœud de l'accueil.
     public static let inkMuted = Color(hex: 0x2B231B).opacity(0.5)
 
+    /// La même encre, encore plus effacée : **les mentions**, celles qu'on lit
+    /// une fois et jamais plus — la version de l'app, le droit d'auteur. Assez
+    /// claire pour se fondre dans le crème, assez présente pour rester lisible.
+    /// Ne jamais y poser autre chose : un texte qu'on doit lire n'est pas une
+    /// mention.
+    public static let inkFaint = Color(hex: 0x2B231B).opacity(0.3)
+
     /// Fond des écrans, le crème de la marque. — Figma
     /// `Scheme/Background Light`.
     public static let background = Color(hex: 0xFCF2E9)
@@ -90,6 +97,12 @@ public enum MemoBookColor {
     /// Beige soutenu, pour les séparateurs et les aplats discrets. — Figma
     /// `Brand Colors/Beige Darker`.
     public static let separator = Color(hex: 0xCFBBAA)
+
+    /// Beige clair : **l'aplat sur lequel se pose une illustration de marque**,
+    /// et rien d'autre. Plus chaud et plus soutenu que le crème du fond, juste
+    /// assez pour que la plaque se détache sans devenir une carte. — Figma
+    /// `Brand Colors/Beige`.
+    public static let beige = Color(hex: 0xF9E6D6)
 
     /// Aplat d'un contrôle désactivé. Volontairement gris et non teinté :
     /// « indisponible » ne doit pas ressembler à une couleur de marque.
@@ -228,6 +241,11 @@ public enum MemoBookFont {
 
     /// Texte secondaire des cartes (General Sans Regular 12).
     public static let caption = Font.custom(BrandFonts.generalSansRegular, size: 12, relativeTo: .caption)
+
+    /// Les mentions de bas de page : version de l'app, droit d'auteur. Le plus
+    /// petit corps de la marque, et le seul en dessous de la légende — il ne
+    /// porte jamais rien qu'on demande de lire.
+    public static let mention = Font.custom(BrandFonts.generalSansRegular, size: 11, relativeTo: .caption2)
 
     /// Messages adressés à l'utilisateur : erreurs, réussites, avertissements.
     /// Ils ont la taille du corps de texte et non celle d'une légende — une

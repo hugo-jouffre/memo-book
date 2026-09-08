@@ -1,0 +1,90 @@
+name: CI iOS
+
+# Le .xcodeproj n'est pas versionné : la CI le régénère depuis `project.yml`,
+# exactement comme une machine fraîchement clonée. C'est ce qui fait de ce
+# workflow un test du dépôt, et pas seulement du code.
+
+on:
+  push:
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ci-ios.yml'
+  pull_request:
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ci-ios.yml'
+
+jobs:
+  build:
+    # **Xcode 26 au minimum.** Le design system utilise `glassEffect`, une API
+    # iOS 26 : sur l'image `macos-15` et son Xcode 16.4, `BrandSegmentedPicker`
+    # ne compile pas. L'erreur est parlante — « has no member 'glassEffect' » —
+    # mais elle n'a rien à voir avec le code de la PR, et c'est le genre de
+    # rouge qu'on met une heure à comprendre.
+    runs-on: macos-26
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Le Xcode le plus récent de l'image, sans le nommer : une version en dur
+      # casse la CI le jour où GitHub met l'image à jour.
+      - name: Sélectionner Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          echo "Xcode retenu : $XCODE"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      # Un secret réel commité est une fuite : il ne se rattrape pas en le
+      # retirant, seulement en le révoquant. Le vérifier coûte une seconde.
+      - name: Aucun fichier de secrets dans Git
+        run: |
+          if git ls-files --error-unmatch ios/Config/Secrets.xcconfig >/dev/null 2>&1; then
+            echo "::error::ios/Config/Secrets.xcconfig est versionné. Il doit rester local (voir .gitignore) ; seul Secrets.example.xcconfig se commite."
+            exit 1
+          fi
+
+      - name: XcodeGen
+        run: brew install xcodegen
+
+      - name: Générer le projet
+        working-directory: ios
+        run: make project
+
+      # `generic/platform=iOS Simulator` évite de dépendre d'un modèle
+      # d'iPhone précis : la liste des simulateurs d'un runner change sans
+      # prévenir, et un nom en dur casserait la CI un matin sans raison.
+      # Pas de signature : rien n'est installé sur un appareil ici.
+      - name: Compiler l'app
+        working-directory: ios
+        run: |
+          xcodebuild build \
+            -project MemoBook.xcodeproj \
+            -scheme MemoBook \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO
+
+      # Les tests, eux, ont besoin d'un simulateur qui démarre : on prend le
+      # premier iPhone disponible sur le runner, quel qu'il soit.
+      - name: Choisir un simulateur
+        id: simulator
+        run: |
+          UDID=$(xcrun simctl list devices available --json \
+            | python3 -c "import json,sys; print(next(d['udid'] for runtime in json.load(sys.stdin)['devices'].values() for d in runtime if d['name'].startswith('iPhone')))")
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Tests des modules
+        working-directory: ios/Modules
+        run: |
+          xcodebuild test \
+            -scheme MemoBookKit-Package \
+            -destination 'id=${{ steps.simulator.outputs.udid }}'
+
+      - name: Tests de la cible app
+        working-directory: ios
+        run: |
+          xcodebuild test \
+            -project MemoBook.xcodeproj \
+            -scheme MemoBook \
+            -destination 'id=${{ steps.simulator.outputs.udid }}' \
+            CODE_SIGNING_ALLOWED=NO

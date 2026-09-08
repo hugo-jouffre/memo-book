@@ -43,6 +43,12 @@ targets:
   MemoBook:
     type: application
     platform: iOS
+    # Ce qui change d'un environnement à l'autre vit dans `Config/*.xcconfig`,
+    # pas ici : l'URL de l'API et le client Google. Voir `Config/Base.xcconfig`,
+    # qui explique aussi le piège des `//` dans une URL.
+    configFiles:
+      Debug: Config/Debug.xcconfig
+      Release: Config/Release.xcconfig
     sources:
       - path: App
       # L'icône est un document Icon Composer : Xcode 26 en dérive lui-même
@@ -58,7 +64,7 @@ targets:
         CFBundleLocalizations:
           - fr
         CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "2"
+        CFBundleVersion: "4"
         # L'app ne parle que français. Sans ces deux clés, iOS la considère
         # anglaise et `Locale.current` suit la langue de l'appareil : sur un
         # iPhone réglé en anglais, l'écran d'accueil affichait « 26 Aug–15 Sep »
@@ -73,6 +79,16 @@ targets:
         # Category. Elle vit ici et pas dans l'UI : la régler dans Xcode la
         # perdrait au prochain `make project`.
         LSApplicationCategoryType: public.app-category.travel
+        # Conformité à l'export (chiffrement). Sans cette clé, chaque build
+        # arrive sur App Store Connect en « Informations manquantes » et reste
+        # grisé jusqu'à ce qu'on réponde à la main au questionnaire.
+        #
+        # `false` = l'app n'utilise aucun chiffrement **non exempté**. MemoBook
+        # ne chiffre rien elle-même : elle parle HTTPS/TLS aux API système
+        # (Supabase, Google, Sign in with Apple), ce qui relève de l'exemption
+        # standard. À rouvrir le jour où l'app embarquerait sa propre crypto —
+        # chiffrement local des carnets, par exemple.
+        ITSAppUsesNonExemptEncryption: false
         # Écran de lancement : le logo sur le crème de la marque. Cette clé
         # n'accepte qu'une seule image et ne sait pas la décaler — pour un
         # motif de fond ou un logo hors centre, il faudra un storyboard.
@@ -87,13 +103,16 @@ targets:
           MemoBook enregistre votre voix pour transformer vos souvenirs en carnet.
         NSPhotoLibraryUsageDescription: >-
           MemoBook ajoute vos photos aux pages de votre carnet.
-        # L'API tourne en HTTP en développement local ; à retirer avant
-        # publication, quand le back-end est derrière HTTPS.
+        # L'API tourne en HTTP en développement local. `NSAllowsLocalNetworking`
+        # n'ouvre que le réseau local (`localhost`, `.local`, IP privées) : un
+        # build Release qui parle à `https://api.memo-book.com` n'en dépend pas,
+        # cette clé peut donc rester.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
-        # Client OAuth **iOS** de Google. Les deux valeurs se lisent dans le
-        # `GoogleService-Info.plist` téléchargé depuis la console Google Cloud :
-        # `CLIENT_ID` ici, `REVERSED_CLIENT_ID` dans le schéma d'URL.
+        # Client OAuth **iOS** de Google, posé par `Config/Base.xcconfig`. Les
+        # deux valeurs se lisent dans le `GoogleService-Info.plist` téléchargé
+        # depuis la console Google Cloud : `CLIENT_ID` pour `GIDClientID`,
+        # `REVERSED_CLIENT_ID` pour le schéma d'URL.
         #
         # Ce ne sont pas des secrets : elles partent dans chaque binaire livré.
         # Le *client secret*, lui, est celui du client **web** et n'entre jamais
@@ -103,12 +122,16 @@ targets:
         # scheme URIs are not allowed for WEB client type ». Le client iOS se
         # reconnaît dans la console : type « iOS », un Bundle ID, et *aucun*
         # client secret.
-        GIDClientID: 1022603657545-ehn9lik23bgu7m9h28a01b271lft0u2h.apps.googleusercontent.com
+        GIDClientID: $(GOOGLE_IOS_CLIENT_ID)
         CFBundleURLTypes:
           # Google renvoie sa réponse à cette adresse : sans ce schéma, la
           # feuille s'ouvre et ne revient jamais.
           - CFBundleURLSchemes:
-              - com.googleusercontent.apps.1022603657545-ehn9lik23bgu7m9h28a01b271lft0u2h
+              - $(GOOGLE_IOS_URL_SCHEME)
+        # L'adresse de l'API, posée par la configuration de build. C'est le
+        # seul chemin par lequel une valeur d'`.xcconfig` devient lisible à
+        # l'exécution — voir `APIConfiguration.fromBuildConfiguration`.
+        MemoBookAPIBaseURL: $(MEMOBOOK_API_BASE_URL)
     # Sign in with Apple. La capability cochée dans Xcode ne survit pas au
     # prochain `make project` : le .xcodeproj est régénéré depuis ce fichier,
     # c'est donc ici qu'elle doit être déclarée pour de bon. XcodeGen écrit le
@@ -126,6 +149,14 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.memobook.app
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # iPhone uniquement (1 = iPhone, 2 = iPad). Sans ce réglage, Xcode
+        # construit aussi pour iPad, et App Store Connect rejette alors le
+        # binaire (erreur 90474) : une app iPad doit déclarer les **quatre**
+        # orientations pour le multitâche, alors que MemoBook est verrouillée
+        # en portrait. Le jour où l'iPad est visé, il faudra ajouter « 2 » ici
+        # *et* une clé `UISupportedInterfaceOrientations~ipad` avec les quatre
+        # orientations — les écrans devront tenir en paysage.
+        TARGETED_DEVICE_FAMILY: "1"
         # La catégorie App Store est déclarée **deux fois**, et c'est voulu :
         #
         # - `LSApplicationCategoryType` dans l'Info.plist ci-dessus est ce qui

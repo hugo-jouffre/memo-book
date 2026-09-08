@@ -53,13 +53,20 @@ async function main(): Promise<void> {
   step(`Mode : ${env.live ? "LIVE (appels réels)" : "FAKE (aucun appel réseau)"}`);
 
   try {
-    const device = await app.inject({
+    // Un compte, et non un appareil : un carnet a toujours un propriétaire, et
+    // ce propriétaire est un compte. L'adresse porte l'horodatage pour que le
+    // script puisse être rejoué sur une base qui n'a pas été vidée.
+    const account = await app.inject({
       method: "POST",
-      url: "/v1/devices",
-      payload: { platform: "ios" },
+      url: "/v1/auth/signup",
+      payload: {
+        email: `smoke-${Date.now()}@memobook.app`,
+        password: "carnet2026",
+        firstName: "Claire",
+      },
     });
-    const authorization = `Bearer ${device.json<{ token: string }>().token}`;
-    step("Appareil enregistré");
+    const authorization = `Bearer ${account.json<{ token: string }>().token}`;
+    step("Compte ouvert");
 
     const memo = await app.inject({
       method: "POST",

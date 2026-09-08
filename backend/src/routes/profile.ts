@@ -1,11 +1,12 @@
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppContext } from "../context.js";
 import { HttpError } from "../lib/httpError.js";
+import { accountIdOf } from "../plugins/auth.js";
 import { connectorByKey } from "../services/connectorCatalog.js";
 import { linkDeviceToAccount, visibleToAccount } from "../services/memoOwnership.js";
 import { hashDeviceToken } from "../lib/auth.js";
-import { serializeProfile } from "./appSerializers.js";
+import { serializeProfile, type TripForProfileStats } from "./appSerializers.js";
 
 /**
  * L'écran de profil : ce qu'il montre, et ce qu'on y change.
@@ -14,11 +15,6 @@ import { serializeProfile } from "./appSerializers.js";
  * connecteurs, abonnement, commandes en cours — parce que l'écran les affiche
  * ensemble. Sept appels feraient apparaître ses lignes une à une.
  */
-
-function accountIdOf(request: FastifyRequest): string {
-  if (!request.accountId) throw HttpError.unauthorized();
-  return request.accountId;
-}
 
 /**
  * Un champ absent n'est pas touché ; un champ à `null` est effacé. « Pas de
@@ -46,6 +42,64 @@ const connectorBody = z.object({ isEnabled: z.boolean() });
 const connectorParams = z.object({ key: z.string().min(1).max(64) });
 const linkDeviceBody = z.object({ deviceToken: z.string().min(1) });
 
+/**
+ * Les voyages du compte, réduits à ce que la carte de chiffres du profil
+ * regarde : combien il y en a, et lequel est en cours. Rien de plus — c'est un
+ * comptage, pas une seconde liste d'accueil.
+ */
+function profileTrips(context: AppContext, accountId: string): Promise<TripForProfileStats[]> {
+  return context.prisma.memo.findMany({
+    where: visibleToAccount(accountId),
+    select: { id: true, stage: true, startDate: true, endDate: true },
+  });
+}
+
+/** Ce que `serializeProfile` attend du compte, et rien de plus. */
+const profileInclude = {
+  cards: { orderBy: [{ isDefault: "desc" as const }, { createdAt: "asc" as const }] },
+  connectors: true,
+  // Un seul abonnement compte : le vivant. Les résiliés restent en base pour
+  // l'historique de facturation, ils n'ont rien à faire à l'écran.
+  subscriptions: {
+    where: { status: { in: ["active" as const, "trialing" as const, "past_due" as const] } },
+    orderBy: { startedAt: "desc" as const },
+    take: 1,
+  },
+  identities: { orderBy: { createdAt: "asc" as const }, take: 1 },
+};
+
+/**
+ * Le profil entier, tel que les deux routes le rendent.
+ *
+ * **Un seul chemin de lecture, appelé aussi après une écriture.** La réponse
+ * d'un `PATCH` est ce que l'app garde à l'écran : si elle ne portait qu'une
+ * partie du profil — ce qui était le cas des commandes et l'aurait été des
+ * chiffres — corriger un numéro de téléphone effacerait le reste de la page.
+ */
+async function readProfile(context: AppContext, accountId: string) {
+  const [account, orders, trips] = await Promise.all([
+    context.prisma.account.findUniqueOrThrow({
+      where: { id: accountId },
+      include: profileInclude,
+    }),
+
+    // Les commandes en cours d'acheminement, et elles seules : une commande
+    // livrée il y a six mois n'a plus rien à suivre.
+    context.prisma.printOrder.findMany({
+      where: {
+        status: { in: ["submitted", "in_production", "shipped"] },
+        memo: visibleToAccount(accountId),
+      },
+      orderBy: { createdAt: "desc" },
+      include: { memo: { select: { coverPhotoUrl: true } } },
+    }),
+
+    profileTrips(context, accountId),
+  ]);
+
+  return serializeProfile(account, orders, trips);
+}
+
 /** Une chaîne vidée redevient `null` : la base ne stocke pas de champ « présent mais vide ». */
 function orNull(value: string | null | undefined): string | null | undefined {
   if (value === undefined) return undefined;
@@ -53,40 +107,7 @@ function orNull(value: string | null | undefined): string | null | undefined {
 }
 
 export function registerProfileRoutes(app: FastifyInstance, context: AppContext): void {
-  app.get("/v1/profile", async (request) => {
-    const accountId = accountIdOf(request);
-
-    const [account, orders] = await Promise.all([
-      context.prisma.account.findUniqueOrThrow({
-        where: { id: accountId },
-        include: {
-          cards: { orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }] },
-          connectors: true,
-          // Un seul abonnement compte : le vivant. Les résiliés restent en base
-          // pour l'historique de facturation, ils n'ont rien à faire à l'écran.
-          subscriptions: {
-            where: { status: { in: ["active", "trialing", "past_due"] } },
-            orderBy: { startedAt: "desc" },
-            take: 1,
-          },
-          identities: { orderBy: { createdAt: "asc" }, take: 1 },
-        },
-      }),
-
-      // Les commandes en cours d'acheminement, et elles seules : une commande
-      // livrée il y a six mois n'a plus rien à suivre.
-      context.prisma.printOrder.findMany({
-        where: {
-          status: { in: ["submitted", "in_production", "shipped"] },
-          memo: visibleToAccount(accountId),
-        },
-        orderBy: { createdAt: "desc" },
-        include: { memo: { select: { coverPhotoUrl: true } } },
-      }),
-    ]);
-
-    return serializeProfile(account, orders);
-  });
+  app.get("/v1/profile", async (request) => readProfile(context, accountIdOf(request)));
 
   app.patch("/v1/profile", async (request) => {
     const accountId = accountIdOf(request);
@@ -97,7 +118,7 @@ export function registerProfileRoutes(app: FastifyInstance, context: AppContext)
     // ne ferait que la désaccorder de celle avec laquelle on se reconnecte.
     // C'est aussi la règle appliquée par l'app.
 
-    const account = await context.prisma.account.update({
+    await context.prisma.account.update({
       where: { id: accountId },
       data: {
         firstName: orNull(body.firstName),
@@ -115,19 +136,12 @@ export function registerProfileRoutes(app: FastifyInstance, context: AppContext)
             }
           : {}),
       },
-      include: {
-        cards: { orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }] },
-        connectors: true,
-        subscriptions: {
-          where: { status: { in: ["active", "trialing", "past_due"] } },
-          orderBy: { startedAt: "desc" },
-          take: 1,
-        },
-        identities: { orderBy: { createdAt: "asc" }, take: 1 },
-      },
     });
 
-    return serializeProfile(account, []);
+    // On relit par le **même chemin** que le `GET` : la réponse d'un `PATCH`
+    // est ce que l'app garde à l'écran, et un profil amputé de ses commandes ou
+    // de ses chiffres les effacerait de la page à chaque correction.
+    return readProfile(context, accountId);
   });
 
   /**
@@ -165,16 +179,16 @@ export function registerProfileRoutes(app: FastifyInstance, context: AppContext)
   });
 
   /**
-   * Rattache l'appareil courant au compte connecté, et lui transfère les
-   * carnets qu'il portait seul.
+   * Rattache l'appareil courant au compte connecté.
    *
-   * Sans cette route, quelqu'un qui a raconté trois étapes avant de se créer un
-   * compte les perdrait de vue au moment même où il s'inscrit. L'app l'appelle
-   * juste après une connexion réussie, avec son token d'appareil.
+   * Il n'y a plus de carnets à réclamer au passage : un carnet naît avec son
+   * propriétaire, et l'appareil n'en possède aucun. Ce lien dit désormais une
+   * seule chose — sur quelles installations ce compte est ouvert — et c'est ce
+   * qui les fait disparaître avec lui.
    *
    * Deux jetons dans la même requête, et c'est voulu : celui du compte dans
    * l'en-tête prouve qui reçoit, celui de l'appareil dans le corps prouve ce
-   * qui est donné. Un seul des deux ne suffirait à rien démontrer.
+   * qui est rattaché. Un seul des deux ne suffirait à rien démontrer.
    */
   app.post("/v1/profile/link-device", async (request) => {
     const accountId = accountIdOf(request);
@@ -194,8 +208,8 @@ export function registerProfileRoutes(app: FastifyInstance, context: AppContext)
       throw HttpError.conflict("Cet appareil est déjà rattaché à un autre compte.");
     }
 
-    const { claimed } = await linkDeviceToAccount(context.prisma, device.id, accountId);
+    await linkDeviceToAccount(context.prisma, device.id, accountId);
 
-    return { deviceId: device.id, claimedMemos: claimed };
+    return { deviceId: device.id };
   });
 }

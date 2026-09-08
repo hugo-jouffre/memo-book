@@ -185,7 +185,8 @@ public actor PreviewAPI: MemoBookAPI {
     }
 
     @discardableResult
-    public func linkCurrentDevice() async throws -> Int { 0 }
+    public func linkCurrentDevice() async throws {}
+    public func deleteAccount() async throws {}
 
     // MARK: - Carnets
 

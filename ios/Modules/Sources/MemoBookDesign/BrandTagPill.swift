@@ -28,13 +28,26 @@ public struct BrandTagPill: View {
     private let title: String
     private let tone: Tone
     private let isUppercased: Bool
+    private let shrinksToFit: Bool
 
-    /// - Parameter isUppercased: les **états** se crient en capitales
-    ///   (« EN COURS ») ; les décomptes et les soldes, non.
-    public init(_ title: String, tone: Tone = .accent, isUppercased: Bool = false) {
+    /// - Parameters:
+    ///   - isUppercased: les **états** se crient en capitales (« EN COURS ») ;
+    ///     les décomptes et les soldes, non.
+    ///   - shrinksToFit: la pastille se resserre plutôt que de pousser ce qui
+    ///     partage sa ligne. Une pastille tient normalement à sa largeur
+    ///     naturelle — c'est une étiquette, pas un bloc de texte — mais posée à
+    ///     côté d'un titre d'écran, une phrase entière le renvoyait à la ligne.
+    ///     Elle cède alors sur sa taille, jamais sur ses mots.
+    public init(
+        _ title: String,
+        tone: Tone = .accent,
+        isUppercased: Bool = false,
+        shrinksToFit: Bool = false
+    ) {
         self.title = title
         self.tone = tone
         self.isUppercased = isUppercased
+        self.shrinksToFit = shrinksToFit
     }
 
     private var shape: Capsule { Capsule() }
@@ -52,7 +65,11 @@ public struct BrandTagPill: View {
                     shape.strokeBorder(border, lineWidth: 1)
                 }
             }
-            .fixedSize()
+            .lineLimit(shrinksToFit ? 1 : nil)
+            // 80 % : en dessous, le libellé passe sous les 10 pt et n'est plus
+            // une étiquette qu'on lit d'un coup d'œil.
+            .minimumScaleFactor(shrinksToFit ? 0.8 : 1)
+            .fixedSize(horizontal: !shrinksToFit, vertical: true)
     }
 
     private var foreground: Color {

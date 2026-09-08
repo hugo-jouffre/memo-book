@@ -31,7 +31,9 @@
                     action("+ voyage en cours") { model.debugAddTrip(stage: .ongoing) }
                     action("+ voyage à venir") { model.debugAddTrip(stage: .upcoming) }
                     action("+ voyage passé") { model.debugAddTrip(stage: .past) }
-                    action("Étapes offertes", model.debugToggleFreeSteps)
+                    action("Devenir un abonné", model.debugBecomeSubscriber)
+                    action("Première connexion", model.debugFirstConnection)
+                    action("Limite atteinte", model.debugReachFreeLimit)
                     action("Erreur", model.debugShowError)
                     action("Jeu d’essai", model.debugReset)
                 }

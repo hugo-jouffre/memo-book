@@ -29,6 +29,12 @@ public struct BrandButton: View {
         /// Aplat crème sans contour : les actions posées **dans** une carte
         /// blanche, où un contour vert ferait concurrence au CTA de l'écran.
         case soft
+        /// Aplat lime cerclé de vert. **La seule exception** à la règle qui
+        /// réserve l'accent aux petites surfaces : c'est le bouton de
+        /// l'abonnement, et il n'y en a qu'un par écran. Le lime dit « ce n'est
+        /// pas l'action ordinaire de l'écran, c'est celle qui débloque » — le
+        /// vert plein, lui, reste au CTA du parcours normal.
+        case accent
         /// Texte seul, sans marges : à poser dans une phrase ou une barre.
         case link
     }
@@ -167,6 +173,10 @@ public struct BrandButton: View {
 
     private var isIconOnly: Bool { title == nil }
 
+    /// Les styles qui posent un aplat plein. Désactivés, ils gardent leur pavé
+    /// et passent au gris ; les autres n'ont qu'un texte à éteindre.
+    private var isFilled: Bool { style == .primary || style == .accent }
+
     /// `RoundedRectangle` ramène tout seul un rayon trop grand à la moitié du
     /// plus petit côté : un carré devient un rond, sans changer de forme. Un
     /// grand nombre fini, pas `.infinity`, qui donnerait des NaN au tracé.
@@ -218,7 +228,7 @@ public struct BrandButton: View {
         if isSubdued, isEnabled { return MemoBookColor.inkMuted }
 
         guard isEnabled else {
-            return style == .primary ? MemoBookColor.surface : MemoBookColor.disabled
+            return isFilled ? MemoBookColor.surface : MemoBookColor.disabled
         }
         return switch (style, alternate) {
         case (.primary, false): MemoBookColor.onAction
@@ -227,13 +237,16 @@ public struct BrandButton: View {
         case (.secondary, true): MemoBookColor.onAction
         case (.tertiary, false), (.link, false), (.soft, false): MemoBookColor.ink
         case (.tertiary, true), (.link, true), (.soft, true): MemoBookColor.onAction
+        // Le lime est une couleur claire : c'est l'encre qui se pose dessus,
+        // dans les deux cas. Un libellé blanc y tomberait à 1,1:1.
+        case (.accent, _): MemoBookColor.ink
         }
     }
 
     @ViewBuilder
     private var background: some View {
         if !isEnabled {
-            shape.fill(style == .primary ? MemoBookColor.disabled : Color.clear)
+            shape.fill(isFilled ? MemoBookColor.disabled : Color.clear)
         } else {
             switch (style, alternate) {
             case (.primary, false):
@@ -248,6 +261,8 @@ public struct BrandButton: View {
                 shape.fill(MemoBookColor.background)
             case (.soft, true):
                 shape.fill(MemoBookColor.onAction.opacity(0.15))
+            case (.accent, _):
+                shape.fill(MemoBookColor.accent)
             case (.secondary, true), (.tertiary, _), (.link, _):
                 Color.clear
             }
@@ -260,7 +275,7 @@ public struct BrandButton: View {
             EmptyView()
         } else {
             switch (style, alternate) {
-            case (.primary, false), (.secondary, false):
+            case (.primary, false), (.secondary, false), (.accent, _):
                 shape.strokeBorder(MemoBookColor.action, lineWidth: 1)
             case (.primary, true), (.secondary, true):
                 shape.strokeBorder(MemoBookColor.onAction, lineWidth: 1)
@@ -304,6 +319,14 @@ public struct BrandButton: View {
                 BrandButton(icon: arrow) {}
                 BrandButton("Chargement", isLoading: true) {}
             }
+            BrandButton(
+                "Découvrir l’abonnement",
+                icon: arrow,
+                iconPlacement: .trailing,
+                style: .accent,
+                fillsWidth: true
+            ) {}
+
             HStack {
                 BrandButton("Soft", style: .soft) {}
                 BrandButton(icon: arrow, style: .soft, isRound: true) {}

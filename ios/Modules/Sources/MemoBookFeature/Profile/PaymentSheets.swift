@@ -126,7 +126,7 @@ struct AddCardSheet: View {
     }
 
     var body: some View {
-        BrandSheet("Ajoutr une carte") {
+        BrandSheet("Ajouter une carte") {
             VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
                 VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
                     BrandTextField(
@@ -188,7 +188,12 @@ struct AddCardSheet: View {
             labelPlacement: .above,
             placeholder: "00/00"
         )
-        .keyboardType(.numbersAndPunctuation)
+        // Un pavé **numérique** : la barre oblique est posée par le champ, elle
+        // n'a pas à être cherchée sur un clavier de ponctuation.
+        .keyboardType(.numberPad)
+        .onChange(of: expiry) { _, value in
+            expiry = PaymentCard.formattedExpiry(value)
+        }
 
         let codeField = BrandTextField(
             "CVV",

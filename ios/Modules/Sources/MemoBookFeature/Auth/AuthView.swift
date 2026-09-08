@@ -81,13 +81,14 @@ public struct AuthView: View {
                     )
 
                 // ⚠️ PROVISOIRE — à retirer dès que le back-end tourne pour
-                // tout le monde. Entre dans l'app sans compte ni réseau, pour
-                // pouvoir travailler les écrans qui vivent derrière l'entrée.
-                // Absent de la version livrée : `#if DEBUG` ne compile pas en
-                // release.
+                // tout le monde. Entre dans l'app par le **compte de test**,
+                // celui que le seed pose, pour pouvoir travailler les écrans qui
+                // vivent derrière l'entrée sans retaper une adresse à chaque
+                // lancement. Absent de la version livrée : `#if DEBUG` ne
+                // compile pas en release.
                 #if DEBUG
                     Button {
-                        onAuthenticated(Account(id: "debug", firstName: "Camille", createdAt: .now))
+                        enterAsTestAccount(model)
                     } label: {
                         // Volontairement effacé : c'est un outil de chantier, pas
                         // une troisième façon d'entrer dans l'app.
@@ -206,6 +207,22 @@ public struct AuthView: View {
             onAuthenticated(account)
         }
     }
+
+    #if DEBUG
+
+        /// Le bouton de chantier. Il passe par le même chemin que « Continuer »
+        /// : un échec s'affiche donc au même endroit, sous le formulaire, au
+        /// lieu de ne rien faire du tout — c'est ce qui dit que le back-end
+        /// n'est pas lancé, plutôt que de laisser croire à un bouton mort.
+        private func enterAsTestAccount(_ model: AuthModel) {
+            focus = nil
+            Task {
+                guard let account = await model.signInAsTestAccount() else { return }
+                onAuthenticated(account)
+            }
+        }
+
+    #endif
 
     private func recoverPassword() {
         // TODO(auth) — écran de récupération, pas encore maquetté.

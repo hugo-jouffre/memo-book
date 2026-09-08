@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  DeleteObjectsCommand,
   GetObjectCommand,
   PutObjectCommand,
   S3Client,
@@ -69,6 +70,26 @@ export class MediaStorage {
       { expiresIn: expiresInSeconds },
     );
   }
+
+  /**
+   * Efface des objets. Utilisé par la suppression de compte : effacer les
+   * lignes en laissant les fichiers, ce serait garder les vocaux de quelqu'un
+   * qui a demandé à disparaître.
+   *
+   * Par paquets de 1000, la limite d'un `DeleteObjects` S3.
+   */
+  async remove(storageKeys: readonly string[]): Promise<void> {
+    for (let index = 0; index < storageKeys.length; index += 1000) {
+      const batch = storageKeys.slice(index, index + 1000);
+
+      await this.client.send(
+        new DeleteObjectsCommand({
+          Bucket: this.bucket,
+          Delete: { Objects: batch.map((Key) => ({ Key })) },
+        }),
+      );
+    }
+  }
 }
 
 /**
@@ -102,6 +123,15 @@ export class InMemoryMediaStorage extends MediaStorage {
 
   override async signedReadUrl(storageKey: string): Promise<string> {
     return `memory://${storageKey}`;
+  }
+
+  override async remove(storageKeys: readonly string[]): Promise<void> {
+    for (const key of storageKeys) this.objects.delete(key);
+  }
+
+  /** Ce qui reste en stockage. Sert aux tests de suppression. */
+  get storedKeys(): string[] {
+    return [...this.objects.keys()];
   }
 }
 

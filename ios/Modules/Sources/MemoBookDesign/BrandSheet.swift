@@ -125,13 +125,16 @@ public struct BrandSheet<Content: View>: View {
 
     private var detentHeight: CGFloat {
         guard bodyHeight > 0 else { return Self.minimumHeight }
-        // La feuille descend jusqu'au bord : c'est à elle de garder son dernier
-        // élément au-dessus de l'indicateur d'accueil.
-        let wanted =
-            bodyHeight
-            + Self.handleBlockHeight
-            + MemoBookSpacing.s
-            + DeviceScreen.bottomSafeInset
+        // La hauteur voulue, c'est **exactement** ce que le contenu mesure,
+        // plus le bandeau de la poignée.
+        //
+        // Ni marge ni bande d'accueil en plus : le `ScrollView` qui porte le
+        // contenu reçoit déjà du système l'encart de la zone sûre, et la marge
+        // basse est déjà dans `bodyHeight`. Le cran les ajoutait une seconde
+        // fois — l'indicateur d'accueil comptait double — et le dernier bouton
+        // se retrouvait à 89 pt du bas au lieu de 50. Trois marges pour une
+        // seule intention.
+        let wanted = bodyHeight + Self.handleBlockHeight
 
         // Un contenu trop haut ne pousse pas la feuille jusqu'en haut : il
         // défile. C'est le cas des six connecteurs.

@@ -22,14 +22,44 @@ import UIKit
 /// la hauteur minimale de cible tactile, le passage en colonne aux tailles de
 /// texte accessibles, et la manière dont VoiceOver lit chaque ligne.
 public struct BrandRowGroup: View {
-    private let rows: [BrandRow]
-
-    public init(@BrandRowBuilder _ rows: () -> [BrandRow]) {
-        self.rows = rows()
+    /// Comment le groupe se cerne.
+    public enum Tone {
+        /// Le filet discret du motif courant : le groupe range des lignes, il
+        /// ne les met pas en avant.
+        case plain
+        /// Le contour vert. Pour **un** groupe par écran, celui qu'on vient
+        /// chercher du regard — les chiffres du profil. Deux groupes cerclés
+        /// sur le même écran ne mettraient plus rien en avant.
+        case highlighted
     }
 
-    public init(_ rows: [BrandRow]) {
+    private let rows: [BrandRow]
+    private let tone: Tone
+
+    public init(tone: Tone = .plain, @BrandRowBuilder _ rows: () -> [BrandRow]) {
+        self.rows = rows()
+        self.tone = tone
+    }
+
+    public init(_ rows: [BrandRow], tone: Tone = .plain) {
         self.rows = rows
+        self.tone = tone
+    }
+
+    /// Le filet qui sépare deux lignes suit le contour du groupe : un trait
+    /// gris dans un cadre vert se lirait comme un oubli.
+    private var separator: Color {
+        switch tone {
+        case .plain: MemoBookColor.hairline
+        case .highlighted: MemoBookColor.action
+        }
+    }
+
+    private var borderWidth: CGFloat {
+        switch tone {
+        case .plain: 1
+        case .highlighted: 1.5
+        }
     }
 
     public var body: some View {
@@ -41,7 +71,7 @@ public struct BrandRowGroup: View {
                     // Le filet sépare, il n'encadre pas : il vit entre deux
                     // lignes et s'arrête aux marges du texte.
                     Rectangle()
-                        .fill(MemoBookColor.hairline)
+                        .fill(separator)
                         .frame(height: 1)
                         .padding(.horizontal, MemoBookSpacing.s)
                         .accessibilityHidden(true)
@@ -50,7 +80,7 @@ public struct BrandRowGroup: View {
             }
         }
         .background(MemoBookColor.surface, in: shape)
-        .overlay { shape.strokeBorder(MemoBookColor.hairline, lineWidth: 1) }
+        .overlay { shape.strokeBorder(separator, lineWidth: borderWidth) }
         // Le rognage garde les coins arrondis sous une ligne pressée, dont
         // l'aplat de sélection déborderait sinon en haut et en bas du groupe.
         .clipShape(shape)
@@ -81,6 +111,9 @@ public struct BrandRow: View, Identifiable {
         let placeholder: String?
         let keyboardType: UIKeyboardType
         let textContentType: UITextContentType?
+        /// La correction vient d'être **enregistrée par le serveur**. Le crayon
+        /// laisse alors la place à une coche verte, le temps qu'on la voie.
+        let isConfirmed: Bool
     }
 
     /// Une ligne de plus, sous la ligne : soit une précision, soit un reproche.
@@ -90,6 +123,16 @@ public struct BrandRow: View, Identifiable {
         case note(String)
         /// Ce qui ne va pas dans ce qui vient d'être saisi.
         case problem(String)
+    }
+
+    /// Comment l'intitulé s'écrit.
+    public enum TitleTone {
+        /// Le corps de texte : l'intitulé nomme une valeur qu'on lit à côté.
+        case plain
+        /// Le surtitre vert en capitales : l'intitulé **est** le sujet de la
+        /// ligne, et la valeur n'en est que le chiffre. Réservé aux groupes
+        /// ``BrandRowGroup/Tone/highlighted``, dont il reprend la couleur.
+        case accent
     }
 
     /// Où se pose la valeur par rapport à l'intitulé.
@@ -105,6 +148,13 @@ public struct BrandRow: View, Identifiable {
     private let value: String?
     private let valuePlacement: ValuePlacement
     private let isValueProminent: Bool
+    private let titleTone: TitleTone
+    /// La valeur n'est pas encore arrivée : c'est une barre d'attente qui tient
+    /// sa place, pas un vide. Voir ``BrandSkeleton``.
+    private let isValueLoading: Bool
+    /// La pastille posée en bout de ligne, après la valeur. Un mot, pas une
+    /// phrase : « LOCKED », « BIENTÔT ».
+    private let badge: String?
     private let accessory: Accessory
     private let footnote: Footnote?
     private let action: (() -> Void)?
@@ -126,11 +176,20 @@ public struct BrandRow: View, Identifiable {
     ///   - note: une précision affichée sous la ligne, en petit. Pour dire ce
     ///     que la ligne ne dira pas d'elle-même — qu'une valeur vient d'ailleurs
     ///     et ne se corrige pas ici, par exemple.
+    ///   - titleTone: ``TitleTone/accent`` pour les lignes d'un groupe cerclé
+    ///     de vert, dont l'intitulé se lit comme un surtitre.
+    ///   - badge: une pastille en bout de ligne, pour dire d'un mot ce que la
+    ///     valeur ne dit pas — qu'elle est sous clé, par exemple.
+    ///   - isValueLoading: la valeur est encore en route. **L'intitulé, lui,
+    ///     s'affiche tout de suite** : il appartient à l'app, pas au serveur.
     public init(
         _ title: String,
         value: String? = nil,
         valuePlacement: ValuePlacement = .trailing,
         isValueProminent: Bool = false,
+        titleTone: TitleTone = .plain,
+        badge: String? = nil,
+        isValueLoading: Bool = false,
         note: String? = nil,
         action: (() -> Void)? = nil
     ) {
@@ -138,6 +197,9 @@ public struct BrandRow: View, Identifiable {
         self.value = value
         self.valuePlacement = valuePlacement
         self.isValueProminent = isValueProminent
+        self.titleTone = titleTone
+        self.badge = badge
+        self.isValueLoading = isValueLoading
         self.accessory = action == nil ? .none : .disclosure
         self.footnote = note.map(Footnote.note)
         self.action = action
@@ -159,25 +221,36 @@ public struct BrandRow: View, Identifiable {
     /// La valeur du modèle n'est touchée qu'**à la sortie du champ**, pas à
     /// chaque frappe : le jour où il y aura un serveur, c'est un appel réseau
     /// par correction et non un par caractère.
+    ///
+    /// - Parameter isConfirmed: la correction est **enregistrée côté serveur**.
+    ///   Le crayon devient une coche verte le temps qu'on la voie. C'est le seul
+    ///   accusé de réception d'une ligne qui s'enregistre toute seule : sans
+    ///   lui, rien ne distingue « c'est parti » de « ça n'est jamais parti ».
     public init(
         _ title: String,
         text: Binding<String>,
         placeholder: String? = nil,
         error: String? = nil,
         keyboardType: UIKeyboardType = .default,
-        textContentType: UITextContentType? = nil
+        textContentType: UITextContentType? = nil,
+        isValueLoading: Bool = false,
+        isConfirmed: Bool = false
     ) {
         self.title = title
         self.value = nil
         self.valuePlacement = .trailing
         self.isValueProminent = false
+        self.titleTone = .plain
+        self.badge = nil
+        self.isValueLoading = isValueLoading
         self.footnote = error.map(Footnote.problem)
         self.accessory = .editable(
             Editable(
                 text: text,
                 placeholder: placeholder,
                 keyboardType: keyboardType,
-                textContentType: textContentType
+                textContentType: textContentType,
+                isConfirmed: isConfirmed
             )
         )
         self.action = nil
@@ -190,6 +263,9 @@ public struct BrandRow: View, Identifiable {
         self.value = nil
         self.valuePlacement = .trailing
         self.isValueProminent = false
+        self.titleTone = .plain
+        self.badge = nil
+        self.isValueLoading = false
         self.accessory = .toggle(isOn)
         self.footnote = nil
         self.action = nil
@@ -222,8 +298,21 @@ public struct BrandRow: View, Identifiable {
             // Un vrai `Toggle` et non un dessin : c'est lui qui apporte le
             // geste de balayage, l'annonce « activé / désactivé » et le
             // comportement attendu par VoiceOver.
-            Toggle(isOn: isOn) { titleText }
-                .toggleStyle(.switch)
+            //
+            // **Toute la ligne bascule le réglage**, et pas seulement
+            // l'interrupteur. C'est le comportement des Réglages d'iOS, et
+            // c'est aussi une question de taille de cible : viser un rail de
+            // 51 pt en bout de ligne, ou viser la ligne entière, ce n'est pas
+            // le même geste. Le tapotis est posé sur l'étiquette, qui occupe
+            // toute la largeur restante — pas sur la ligne entière, où il
+            // ferait basculer deux fois un tapotis sur l'interrupteur lui-même.
+            Toggle(isOn: isOn) {
+                titleText
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(.rect)
+                    .onTapGesture { isOn.wrappedValue.toggle() }
+            }
+            .toggleStyle(.switch)
                 .tint(MemoBookColor.action)
                 .padding(.horizontal, MemoBookSpacing.s)
                 .padding(.vertical, MemoBookSpacing.xs + 4)
@@ -272,15 +361,20 @@ public struct BrandRow: View, Identifiable {
         HStack(spacing: MemoBookSpacing.xs) {
             titleAndEditor(field)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            pencil
+            trailingMark(field)
         }
+        // La coche remplace le crayon en fondu : apparue net, elle ressemblerait
+        // à un changement d'icône plutôt qu'à une confirmation.
+        .animation(.snappy(duration: 0.25), value: field.isConfirmed)
         .padding(.horizontal, MemoBookSpacing.s)
         .padding(.vertical, MemoBookSpacing.xs + 4)
         .frame(minHeight: minimumHeight)
         .contentShape(.rect)
         // Toute la ligne ouvre le champ, pas seulement les quelques caractères
-        // de la valeur — et une ligne vide s'ouvre aussi.
-        .onTapGesture { isEditing = true }
+        // de la valeur — et une ligne vide s'ouvre aussi. Tant que la valeur
+        // n'est pas arrivée, en revanche, il n'y a rien à corriger : ouvrir le
+        // clavier sur un champ vide écraserait ce qui est encore en route.
+        .onTapGesture { if !isValueLoading { isEditing = true } }
         .onAppear { draft = field.text.wrappedValue }
         // La valeur peut changer sous le champ (un rechargement) : on la reprend
         // tant qu'on n'est pas en train de taper dedans.
@@ -315,7 +409,13 @@ public struct BrandRow: View, Identifiable {
             .onSubmit { isEditing = false }
             .accessibilityLabel(title)
 
-        if typeSize.isAccessibilitySize {
+        if isValueLoading {
+            HStack(alignment: .firstTextBaseline, spacing: MemoBookSpacing.s) {
+                titleText
+                Spacer(minLength: 0)
+                BrandSkeleton(width: 120)
+            }
+        } else if typeSize.isAccessibilitySize {
             VStack(alignment: .leading, spacing: 2) {
                 titleText
                 editor.multilineTextAlignment(.leading)
@@ -328,9 +428,30 @@ public struct BrandRow: View, Identifiable {
         }
     }
 
+    /// Le crayon, ou la coche qui le remplace le temps d'un accusé de
+    /// réception.
+    ///
     /// Le crayon : sans lui, rien ne dirait qu'une ligne se corrige. Il prend la
     /// place du chevron, à la même distance du bord — les deux disent « cette
     /// ligne se touche », l'un mène ailleurs, l'autre ouvre le clavier ici.
+    ///
+    /// La coche : une ligne qui s'enregistre en perdant le focus ne dit rien de
+    /// ce qui s'est passé. Le symbole système et non le jeu de marque, qui n'a
+    /// pas de coche — même parti pris que le chevron, un seul endroit à changer
+    /// le jour où elle arrive.
+    @ViewBuilder
+    private func trailingMark(_ field: Editable) -> some View {
+        if field.isConfirmed {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: pencilSide, weight: .semibold))
+                .foregroundStyle(MemoBookColor.valid)
+                .transition(.opacity.combined(with: .scale(scale: 0.7)))
+                .accessibilityLabel("Enregistré")
+        } else {
+            pencil
+        }
+    }
+
     private var pencil: some View {
         Image(brand: "IconPen")
             .resizable()
@@ -345,6 +466,7 @@ public struct BrandRow: View, Identifiable {
         HStack(spacing: MemoBookSpacing.xs) {
             labelAndValue
                 .frame(maxWidth: .infinity, alignment: .leading)
+            badgeView
             if case .disclosure = accessory { chevron }
         }
         .padding(.horizontal, MemoBookSpacing.s)
@@ -373,23 +495,60 @@ public struct BrandRow: View, Identifiable {
         }
     }
 
+    @ViewBuilder
     private var titleText: some View {
-        Text(title)
-            .font(MemoBookFont.body)
-            .foregroundStyle(MemoBookColor.ink)
-            .fixedSize(horizontal: false, vertical: true)
+        switch titleTone {
+        case .plain:
+            Text(title)
+                .font(MemoBookFont.body)
+                .foregroundStyle(MemoBookColor.ink)
+                .fixedSize(horizontal: false, vertical: true)
+        case .accent:
+            Text(title.uppercased())
+                .font(MemoBookFont.overline)
+                .tracking(MemoBookFont.tracking(12))
+                .foregroundStyle(MemoBookColor.action)
+                .fixedSize(horizontal: false, vertical: true)
+                // Les capitales sont un dessin, pas une manière de crier :
+                // VoiceOver lit l'intitulé tel qu'il est écrit.
+                .accessibilityLabel(title)
+        }
+    }
+
+    /// La pastille de bout de ligne. Elle passe **après** la valeur : c'est un
+    /// commentaire sur elle, pas un second intitulé.
+    @ViewBuilder
+    private var badgeView: some View {
+        if let badge {
+            BrandTagPill(badge, isUppercased: true)
+        }
     }
 
     @ViewBuilder
     private var valueText: some View {
-        if let value {
+        if isValueLoading {
+            // Une barre de la largeur d'une valeur courante, pas de la ligne
+            // entière : elle doit se lire comme « la valeur arrive », pas comme
+            // « la ligne est vide ».
+            BrandSkeleton(width: valuePlacement == .below ? 180 : 120)
+                .frame(maxWidth: valuePlacement == .below ? .infinity : nil, alignment: .leading)
+        } else if let value {
             Text(value)
                 .font(isValueProminent ? MemoBookFont.bodySemibold : MemoBookFont.body)
                 .foregroundStyle(isValueProminent ? MemoBookColor.ink : MemoBookColor.inkMuted)
-                // Une valeur trop longue s'abrège par le milieu quand elle est
-                // en bout de ligne — la fin d'une adresse ou d'un numéro en dit
-                // autant que son début.
+                // Une valeur trop longue s'abrège par la fin quand elle est en
+                // bout de ligne — la fin d'une adresse en dit autant que son
+                // début.
+                //
+                // **Elle ne rapetisse que dans un groupe mis en avant.** Une
+                // adresse écrite un poil plus petit que le téléphone au-dessus
+                // se remarque immédiatement, et se lit comme un défaut : dans
+                // une pile de lignes, la régularité prime sur le mot qui
+                // manque. Les chiffres d'un groupe cerclé, eux, sont le sujet
+                // de la ligne et doivent se lire entiers : une fourchette de
+                // dates coupée au milieu ne dit plus rien.
                 .lineLimit(valuePlacement == .trailing && !typeSize.isAccessibilitySize ? 1 : nil)
+                .minimumScaleFactor(titleTone == .accent ? 0.85 : 1)
                 .truncationMode(.tail)
                 .fixedSize(horizontal: false, vertical: true)
         }
