@@ -16,10 +16,24 @@ on:
 
 jobs:
   build:
-    runs-on: macos-15
+    # **Xcode 26 au minimum.** Le design system utilise `glassEffect`, une API
+    # iOS 26 : sur l'image `macos-15` et son Xcode 16.4, `BrandSegmentedPicker`
+    # ne compile pas. L'erreur est parlante — « has no member 'glassEffect' » —
+    # mais elle n'a rien à voir avec le code de la PR, et c'est le genre de
+    # rouge qu'on met une heure à comprendre.
+    runs-on: macos-26
 
     steps:
       - uses: actions/checkout@v4
+
+      # Le Xcode le plus récent de l'image, sans le nommer : une version en dur
+      # casse la CI le jour où GitHub met l'image à jour.
+      - name: Sélectionner Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          echo "Xcode retenu : $XCODE"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
 
       # Un secret réel commité est une fuite : il ne se rattrape pas en le
       # retirant, seulement en le révoquant. Le vérifier coûte une seconde.
