@@ -6,9 +6,9 @@ import Observation
 /// ses étapes.
 ///
 /// Même construction que ``HomeModel`` et ``ProfileModel`` : le modèle ne
-/// connaît pas l'API, il reçoit **une source**. Aujourd'hui le jeu d'essai,
-/// demain `api.trip(id:)` — une seule ligne à changer, et les aperçus
-/// continuent de montrer les quatre états sans serveur.
+/// connaît pas l'API, il reçoit **une source**. L'app y branche
+/// `api.tripDetail(id:)` (voir ``AppDependencies/tripModel(id:)``), les aperçus
+/// n'en fournissent aucune et montrent les quatre états sur le jeu d'essai.
 @MainActor
 @Observable
 public final class TripHomeModel {

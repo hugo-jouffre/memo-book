@@ -63,7 +63,7 @@ interface ProfileBody {
 }
 
 interface LinkBody {
-  claimedMemos: number;
+  deviceId: string;
 }
 
 interface WelcomeBody {
@@ -81,11 +81,15 @@ afterAll(async () => {
   await harness?.close();
 });
 
-/** Un voyage complet, tel que l'accueil doit le montrer. */
-async function seedTrip(accountId: string, deviceId: string, overrides = {}) {
+/**
+ * Un voyage complet, tel que l'accueil doit le montrer.
+ *
+ * Un compte suffit à en créer un : la propriété tient dans `ownerAccountId`,
+ * sans appareil ni ligne de participant pour le propriétaire.
+ */
+async function seedTrip(accountId: string, overrides = {}) {
   return harness.prisma.memo.create({
     data: {
-      deviceId,
       ownerAccountId: accountId,
       title: "Rome 2026",
       stage: "ongoing",
@@ -93,9 +97,6 @@ async function seedTrip(accountId: string, deviceId: string, overrides = {}) {
       destinationCountryCode: "IT",
       memoryCount: 4,
       pageCount: 9,
-      members: {
-        create: [{ accountId, role: "owner", status: "active", acceptedAt: new Date() }],
-      },
       ...overrides,
     },
   });
@@ -104,8 +105,7 @@ async function seedTrip(accountId: string, deviceId: string, overrides = {}) {
 describe("l'accueil", () => {
   it("rend le voyageur, ses voyages et rien d'autre", async () => {
     const account = await registerAccount(harness.app);
-    const device = await registerDevice(harness.app);
-    await seedTrip(account.accountId, device.deviceId);
+    await seedTrip(account.accountId);
 
     const response = await harness.app.inject({
       method: "GET",
@@ -136,8 +136,7 @@ describe("l'accueil", () => {
 
   it("ne donne pas de progression à un voyage qui n'a pas commencé", async () => {
     const account = await registerAccount(harness.app);
-    const device = await registerDevice(harness.app);
-    await seedTrip(account.accountId, device.deviceId, { stage: "upcoming" });
+    await seedTrip(account.accountId, { stage: "upcoming" });
 
     const response = await harness.app.inject({
       method: "GET",
@@ -153,8 +152,7 @@ describe("l'accueil", () => {
   it("ne montre pas les voyages des autres", async () => {
     const owner = await registerAccount(harness.app, "proprietaire@memobook.app");
     const stranger = await registerAccount(harness.app, "inconnu@memobook.app");
-    const device = await registerDevice(harness.app);
-    const memo = await seedTrip(owner.accountId, device.deviceId);
+    const memo = await seedTrip(owner.accountId);
 
     const home = await harness.app.inject({
       method: "GET",
@@ -175,14 +173,12 @@ describe("l'accueil", () => {
   it("montre à un invité le voyage où il est invité", async () => {
     const owner = await registerAccount(harness.app, "proprietaire@memobook.app");
     const guest = await registerAccount(harness.app, "invitee@memobook.app");
-    const device = await registerDevice(harness.app);
-    const memo = await seedTrip(owner.accountId, device.deviceId);
+    const memo = await seedTrip(owner.accountId);
 
     await harness.prisma.memoMember.create({
       data: {
         memoId: memo.id,
         accountId: guest.accountId,
-        role: "guest",
         status: "active",
         acceptedAt: new Date(),
       },
@@ -209,11 +205,10 @@ describe("l'accueil", () => {
   it("retire ses voyages à un invité qu'on a sorti", async () => {
     const owner = await registerAccount(harness.app, "proprietaire@memobook.app");
     const guest = await registerAccount(harness.app, "invitee@memobook.app");
-    const device = await registerDevice(harness.app);
-    const memo = await seedTrip(owner.accountId, device.deviceId);
+    const memo = await seedTrip(owner.accountId);
 
     await harness.prisma.memoMember.create({
-      data: { memoId: memo.id, accountId: guest.accountId, role: "guest", status: "removed" },
+      data: { memoId: memo.id, accountId: guest.accountId, status: "removed" },
     });
 
     const home = await harness.app.inject({
@@ -228,8 +223,7 @@ describe("l'accueil", () => {
 describe("un voyage", () => {
   it("rend ses étapes dans l'ordre, avec un transport que Swift sait décoder", async () => {
     const account = await registerAccount(harness.app);
-    const device = await registerDevice(harness.app);
-    const memo = await seedTrip(account.accountId, device.deviceId, {
+    const memo = await seedTrip(account.accountId, {
       prompt: "Comment ça se passe à Trastevere ?",
     });
 
@@ -340,25 +334,9 @@ describe("le profil", () => {
 });
 
 describe("le rattachement d'un appareil", () => {
-  it("transfère au compte les carnets racontés avant l'inscription", async () => {
+  it("rattache l'appareil au compte, sans lui transférer quoi que ce soit", async () => {
     const device = await registerDevice(harness.app);
-
-    const created = await harness.app.inject({
-      method: "POST",
-      url: "/v1/memos",
-      headers: { authorization: device.authorization },
-      payload: { title: "Week-end improvisé" },
-    });
-    expect(created.statusCode).toBe(201);
-
     const account = await registerAccount(harness.app);
-
-    const before = await harness.app.inject({
-      method: "GET",
-      url: "/v1/home",
-      headers: { authorization: account.authorization },
-    });
-    expect(before.json<HomeBody>().trips).toEqual([]);
 
     const link = await harness.app.inject({
       method: "POST",
@@ -366,46 +344,29 @@ describe("le rattachement d'un appareil", () => {
       headers: { authorization: account.authorization },
       payload: { deviceToken: device.authorization.replace("Bearer ", "") },
     });
-    expect(link.json<LinkBody>().claimedMemos).toBe(1);
 
-    const after = await harness.app.inject({
-      method: "GET",
-      url: "/v1/home",
-      headers: { authorization: account.authorization },
-    });
-    expect(after.json<HomeBody>().trips).toHaveLength(1);
+    expect(link.statusCode).toBe(200);
+    expect(link.json<LinkBody>().deviceId).toBe(device.deviceId);
+    expect(
+      (await harness.prisma.device.findUniqueOrThrow({ where: { id: device.deviceId } }))
+        .accountId,
+    ).toBe(account.accountId);
   });
 
-  it("est rejouable sans rien dupliquer", async () => {
+  it("est rejouable", async () => {
     const device = await registerDevice(harness.app);
-    await harness.app.inject({
-      method: "POST",
-      url: "/v1/memos",
-      headers: { authorization: device.authorization },
-      payload: { title: "Week-end improvisé" },
-    });
-
     const account = await registerAccount(harness.app);
     const token = device.authorization.replace("Bearer ", "");
 
-    await harness.app.inject({
-      method: "POST",
-      url: "/v1/profile/link-device",
-      headers: { authorization: account.authorization },
-      payload: { deviceToken: token },
-    });
-
-    const second = await harness.app.inject({
-      method: "POST",
-      url: "/v1/profile/link-device",
-      headers: { authorization: account.authorization },
-      payload: { deviceToken: token },
-    });
-
-    expect(second.json<LinkBody>().claimedMemos).toBe(0);
-    expect(
-      await harness.prisma.memoMember.count({ where: { accountId: account.accountId } }),
-    ).toBe(1);
+    for (const _ of [1, 2]) {
+      const link = await harness.app.inject({
+        method: "POST",
+        url: "/v1/profile/link-device",
+        headers: { authorization: account.authorization },
+        payload: { deviceToken: token },
+      });
+      expect(link.statusCode).toBe(200);
+    }
   });
 
   it("refuse de reprendre l'appareil de quelqu'un d'autre", async () => {
@@ -420,8 +381,8 @@ describe("le rattachement d'un appareil", () => {
       payload: { deviceToken: token },
     });
 
-    // Sans ce refus, emprunter le téléphone de quelqu'un suffirait à
-    // s'approprier ses carnets.
+    // Sans ce refus, emprunter le téléphone de quelqu'un suffirait à se
+    // rattacher à son installation.
     const second = await registerAccount(harness.app, "second@memobook.app");
     const stolen = await harness.app.inject({
       method: "POST",
@@ -433,32 +394,237 @@ describe("le rattachement d'un appareil", () => {
     expect(stolen.statusCode).toBe(409);
   });
 
-  it("ne prend pas les carnets déjà possédés par un autre compte", async () => {
+  it("ne donne plus accès aux carnets : un token d'appareil n'ouvre rien", async () => {
     const device = await registerDevice(harness.app);
-    const previous = await registerAccount(harness.app, "ancien@memobook.app");
-    await seedTrip(previous.accountId, device.deviceId);
 
-    // L'appareil est libre — il n'a jamais été rattaché — mais son carnet a
-    // déjà un propriétaire.
-    const newcomer = await registerAccount(harness.app, "nouveau@memobook.app");
-    const link = await harness.app.inject({
+    // Un carnet a toujours un propriétaire, et un propriétaire est un compte :
+    // il n'existe plus de chemin pour en créer un sans session.
+    const created = await harness.app.inject({
       method: "POST",
-      url: "/v1/profile/link-device",
-      headers: { authorization: newcomer.authorization },
-      payload: { deviceToken: device.authorization.replace("Bearer ", "") },
+      url: "/v1/memos",
+      headers: { authorization: device.authorization },
+      payload: { title: "Week-end improvisé" },
     });
 
-    expect(link.json<LinkBody>().claimedMemos).toBe(0);
-
-    const home = await harness.app.inject({
-      method: "GET",
-      url: "/v1/home",
-      headers: { authorization: newcomer.authorization },
-    });
-    expect(home.json<HomeBody>().trips).toEqual([]);
+    expect(created.statusCode).toBe(401);
   });
 });
 
+describe("un co-voyageur", () => {
+  /** Le voyage de quelqu'un d'autre, sur lequel on est co-voyageur actif. */
+  async function sharedTrip(ownerId: string, coTravellerId: string) {
+    const memo = await seedTrip(ownerId);
+    await harness.prisma.memoMember.create({
+      data: {
+        memoId: memo.id,
+        accountId: coTravellerId,
+        status: "active",
+        acceptedAt: new Date(),
+      },
+    });
+    return memo;
+  }
+
+  it("raconte, génère et commande comme le propriétaire", async () => {
+    const owner = await registerAccount(harness.app, "proprietaire@memobook.app");
+    const coTraveller = await registerAccount(harness.app, "covoyageur@memobook.app");
+    const memo = await sharedTrip(owner.accountId, coTraveller.accountId);
+
+    // Raconter.
+    const told = await harness.app.inject({
+      method: "POST",
+      url: `/v1/memos/${memo.id}/entries`,
+      headers: { authorization: coTraveller.authorization },
+      payload: { kind: "text", transcript: "On est montés au Colisée à l'aube." },
+    });
+    expect(told.statusCode).toBe(201);
+
+    // Générer.
+    const generated = await harness.app.inject({
+      method: "POST",
+      url: `/v1/memos/${memo.id}/renders`,
+      headers: { authorization: coTraveller.authorization },
+    });
+    expect([200, 202]).toContain(generated.statusCode);
+
+    // Commander — et la commande retient que c'est lui, pas le propriétaire :
+    // chacun a sa cagnotte.
+    const render = await harness.prisma.render.create({
+      data: { memoId: memo.id, status: "ready", pdfUrl: "https://pdf.test/rome.pdf" },
+    });
+    const ordered = await harness.app.inject({
+      method: "POST",
+      url: `/v1/memos/${memo.id}/orders`,
+      headers: { authorization: coTraveller.authorization },
+      payload: {
+        renderId: render.id,
+        shipping: {
+          name: "Clara",
+          line1: "2 rue des Voyages",
+          postalCode: "75011",
+          city: "Paris",
+          country: "FR",
+        },
+      },
+    });
+
+    expect(ordered.statusCode).toBe(201);
+    expect(
+      (
+        await harness.prisma.printOrder.findFirstOrThrow({ where: { memoId: memo.id } })
+      ).orderedByAccountId,
+    ).toBe(coTraveller.accountId);
+  });
+
+  it("ne peut pas supprimer le voyage : c'est le seul geste du propriétaire", async () => {
+    const owner = await registerAccount(harness.app, "proprietaire@memobook.app");
+    const coTraveller = await registerAccount(harness.app, "covoyageur@memobook.app");
+    const memo = await sharedTrip(owner.accountId, coTraveller.accountId);
+
+    const refused = await harness.app.inject({
+      method: "DELETE",
+      url: `/v1/memos/${memo.id}`,
+      headers: { authorization: coTraveller.authorization },
+    });
+
+    expect(refused.statusCode).toBe(404);
+    expect(await harness.prisma.memo.findUnique({ where: { id: memo.id } })).not.toBeNull();
+  });
+});
+
+describe("la suppression d'un compte", () => {
+  it("emporte ses carnets, ses souvenirs, ses médias et ses commandes", async () => {
+    const account = await registerAccount(harness.app);
+    const memo = await seedTrip(account.accountId);
+
+    const media = await harness.prisma.mediaAsset.create({
+      data: { storageKey: "audio/souvenir.m4a", mimeType: "audio/mp4", bytes: 12 },
+    });
+    await harness.prisma.entry.create({
+      data: { memoId: memo.id, kind: "audio", status: "ready", mediaId: media.id },
+    });
+
+    const render = await harness.prisma.render.create({
+      data: { memoId: memo.id, status: "ready", pdfUrl: "https://pdf.test/carnet.pdf" },
+    });
+    // La commande est le cas piégeux : sa clé vers le rendu est en RESTRICT, et
+    // la cascade seule échouerait.
+    await harness.prisma.printOrder.create({
+      data: {
+        memoId: memo.id,
+        renderId: render.id,
+        shippingName: "Hugo",
+        shippingLine1: "1 rue du Carnet",
+        shippingPostalCode: "75011",
+        shippingCity: "Paris",
+        shippingCountry: "FR",
+      },
+    });
+
+    const response = await harness.app.inject({
+      method: "DELETE",
+      url: "/v1/accounts/me",
+      headers: { authorization: account.authorization },
+    });
+
+    expect(response.statusCode).toBe(204);
+
+    expect(await harness.prisma.account.count()).toBe(0);
+    expect(await harness.prisma.memo.count()).toBe(0);
+    expect(await harness.prisma.entry.count()).toBe(0);
+    expect(await harness.prisma.render.count()).toBe(0);
+    expect(await harness.prisma.printOrder.count()).toBe(0);
+    expect(await harness.prisma.session.count()).toBe(0);
+    // Rien ne référence `media_assets` : sans passe dédiée, la ligne resterait.
+    expect(await harness.prisma.mediaAsset.count()).toBe(0);
+  });
+
+  it("passe le voyage partagé au co-voyageur au lieu de l'effacer", async () => {
+    const owner = await registerAccount(harness.app, "proprietaire@memobook.app");
+    const coTraveller = await registerAccount(harness.app, "covoyageur@memobook.app");
+
+    const shared = await seedTrip(owner.accountId);
+    await harness.prisma.memoMember.create({
+      data: {
+        memoId: shared.id,
+        accountId: coTraveller.accountId,
+        status: "active",
+        acceptedAt: new Date(),
+      },
+    });
+    // Un souvenir raconté par celui qui s'en va : il appartient au récit, pas à
+    // son auteur, et il reste.
+    await harness.prisma.entry.create({
+      data: { memoId: shared.id, kind: "text", status: "ready", transcript: "Le Colisée." },
+    });
+    const own = await seedTrip(coTraveller.accountId, { title: "Son voyage à elle" });
+
+    await harness.app.inject({
+      method: "DELETE",
+      url: "/v1/accounts/me",
+      headers: { authorization: owner.authorization },
+    });
+
+    const after = await harness.prisma.memo.findUnique({ where: { id: shared.id } });
+    expect(after?.ownerAccountId).toBe(coTraveller.accountId);
+    // Le nouveau propriétaire n'est plus un co-voyageur : il ne peut pas être
+    // le compagnon de lui-même.
+    expect(await harness.prisma.memoMember.count({ where: { memoId: shared.id } })).toBe(0);
+    expect(await harness.prisma.entry.count({ where: { memoId: shared.id } })).toBe(1);
+    expect(await harness.prisma.memo.findUnique({ where: { id: own.id } })).not.toBeNull();
+
+    // Et l'écran le montre toujours, désormais comme le sien.
+    const home = await harness.app.inject({
+      method: "GET",
+      url: "/v1/home",
+      headers: { authorization: coTraveller.authorization },
+    });
+    expect(home.json<HomeBody>().trips).toHaveLength(2);
+  });
+
+  it("efface le voyage dont personne d'autre ne fait partie", async () => {
+    const owner = await registerAccount(harness.app, "seul@memobook.app");
+    const invited = await registerAccount(harness.app, "convie@memobook.app");
+
+    const alone = await seedTrip(owner.accountId, { title: "Voyage en solitaire" });
+    // Une invitation encore en attente ne désigne personne qui puisse hériter.
+    const pending = await seedTrip(owner.accountId, { title: "Invitation en attente" });
+    await harness.prisma.memoMember.create({
+      data: { memoId: pending.id, invitedEmail: "quelquun@memobook.app", status: "invited" },
+    });
+    // Et un co-voyageur qu'on a sorti n'hérite pas non plus.
+    const removed = await seedTrip(owner.accountId, { title: "Co-voyageur sorti" });
+    await harness.prisma.memoMember.create({
+      data: { memoId: removed.id, accountId: invited.accountId, status: "removed" },
+    });
+
+    await harness.app.inject({
+      method: "DELETE",
+      url: "/v1/accounts/me",
+      headers: { authorization: owner.authorization },
+    });
+
+    expect(await harness.prisma.memo.count()).toBe(0);
+  });
+
+  it("ferme la session : le token ne vaut plus rien", async () => {
+    const account = await registerAccount(harness.app);
+
+    await harness.app.inject({
+      method: "DELETE",
+      url: "/v1/accounts/me",
+      headers: { authorization: account.authorization },
+    });
+
+    const after = await harness.app.inject({
+      method: "GET",
+      url: "/v1/home",
+      headers: { authorization: account.authorization },
+    });
+
+    expect(after.statusCode).toBe(401);
+  });
+});
 describe("l'écran de bienvenue", () => {
   it("sert les mises en avant sans exiger de compte", async () => {
     await harness.prisma.showcase.createMany({

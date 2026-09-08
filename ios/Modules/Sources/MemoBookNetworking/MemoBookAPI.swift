@@ -42,7 +42,7 @@ public protocol MemoBookAPI: Sendable {
     // morceaux les uns après les autres au lancement.
 
     /// Tout ce qu'il faut pour dessiner l'accueil : le voyageur, ses voyages et
-    /// ceux où il est invité, la carte de découverte.
+    /// ceux où il est co-voyageur, la carte de découverte.
     func homeFeed() async throws -> HomeFeed
 
     /// Un voyage ouvert : sa couverture, la relance et ses étapes.
@@ -62,12 +62,24 @@ public protocol MemoBookAPI: Sendable {
     /// Branche ou débranche un connecteur.
     func setConnector(key: String, isEnabled: Bool) async throws
 
-    /// Rattache l'appareil courant au compte connecté et lui transfère les
-    /// carnets qu'il portait seul. À appeler juste après une connexion :
-    /// quelqu'un qui a raconté trois étapes avant de s'inscrire doit les
-    /// retrouver. Renvoie le nombre de carnets récupérés.
-    @discardableResult
-    func linkCurrentDevice() async throws -> Int
+    /// Rattache l'appareil courant au compte connecté. À appeler juste après
+    /// une connexion.
+    ///
+    /// Il n'y a rien à transférer au passage : un carnet naît avec son
+    /// propriétaire, et l'appareil n'en possède aucun. Ce lien dit seulement sur
+    /// quelles installations le compte est ouvert.
+    func linkCurrentDevice() async throws
+
+    /// Supprime le compte et **tout** ce qui est à lui : ses carnets, leurs
+    /// souvenirs et leurs médias, ses commandes, sa cagnotte, ses moyens de
+    /// paiement, ses connecteurs et ses appareils.
+    ///
+    /// Définitif et sans retour. **Un voyage partagé, lui, n'est pas supprimé :
+    /// il passe à son co-voyageur le plus ancien** — un récit écrit à plusieurs
+    /// ne s'efface pas parce que l'un s'en va. Seuls partent les voyages dont
+    /// personne d'autre ne fait partie. L'écran qui l'appelle doit avoir
+    /// demandé confirmation.
+    func deleteAccount() async throws
 
     // MARK: - Carnets
 

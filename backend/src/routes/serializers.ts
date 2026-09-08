@@ -76,6 +76,7 @@ export function serializePrintOrder(order: PrintOrder) {
     id: order.id,
     memoId: order.memoId,
     renderId: order.renderId,
+    orderedByAccountId: order.orderedByAccountId,
     status: order.status,
     copies: order.copies,
     shipping: {

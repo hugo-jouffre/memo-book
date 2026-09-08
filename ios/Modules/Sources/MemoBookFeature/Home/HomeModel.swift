@@ -6,10 +6,10 @@ import Observation
 /// il est.
 ///
 /// Le modèle ne connaît pas l'API. Il reçoit **une source**, une fonction qui
-/// rend un ``HomeFeed`` — aujourd'hui le jeu d'essai, demain
-/// `api.homeFeed()`. C'est la seule ligne à changer le jour où le back-end
-/// existe, et c'est ce qui permet aux aperçus de montrer les quatre états sans
-/// serveur ni protocole simulé.
+/// rend un ``HomeFeed`` : l'app y branche `api.homeFeed()` (voir
+/// ``AppDependencies/homeModel()``), les aperçus n'en fournissent aucune et
+/// tombent sur le jeu d'essai. C'est ce qui permet de montrer les quatre états
+/// de l'écran sans serveur ni protocole simulé.
 @MainActor
 @Observable
 public final class HomeModel {
@@ -55,7 +55,18 @@ public final class HomeModel {
         defer { isLoading = false }
 
         do {
-            apply(try await source())
+            let loaded = try await source()
+
+            #if DEBUG
+                // Le personnage du bac à sable survit à un rechargement : sans
+                // ça, tirer sur la liste pour la rafraîchir remettait le palier
+                // du serveur et le profil, lui, gardait le sien. Deux écrans qui
+                // ne racontaient plus la même histoire. Absent de l'app livrée.
+                apply(SandboxPersona.current?.applied(to: loaded) ?? loaded)
+            #else
+                apply(loaded)
+            #endif
+
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -96,8 +107,9 @@ public enum HomeIntent: Sendable, Hashable {
     // le contenu, une vue ne le peut pas.
 
     extension HomeModel {
-        /// Repart du jeu d'essai complet.
+        /// Repart du jeu d'essai complet, personnage compris.
         public func debugReset() {
+            SandboxPersona.current = nil
             errorMessage = nil
             apply(.fixture)
         }
@@ -123,20 +135,40 @@ public enum HomeIntent: Sendable, Hashable {
             )
         }
 
-        /// Retire le quota d'étapes offertes, ou le remet.
-        public func debugToggleFreeSteps() {
-            let current = debugTraveller
-            let isStripped = current.offeredSteps == nil
+        /// Devenir un abonné : plus de quota d'étapes, donc plus de pastille sur
+        /// l'avatar ni de lime sur le CTA — et, dans le profil, la carte de
+        /// chiffres ouverte et la ligne « Mon abonnement ».
+        public func debugBecomeSubscriber() {
+            debugPlay(.subscriber)
+        }
+
+        /// Première connexion : le quota d'étapes au complet. La pastille
+        /// annonce ce qui reste, le CTA passe au lime et au cadenas, et le
+        /// profil repropose l'abonnement.
+        ///
+        /// Les trois étapes sont **le quota d'ouverture d'un compte**, pas un
+        /// chiffre d'interface : c'est le serveur qui le pose, et il descend
+        /// ensuite d'une unité par étape racontée.
+        public func debugFirstConnection() {
+            debugPlay(.freeTrial(remainingSteps: 3))
+        }
+
+        /// Le mur : plus une seule étape offerte. La pastille passe à
+        /// « Abonne-toi », le CTA au lime et au cadenas, et le profil garde son
+        /// bouton d'abonnement — c'est le seul état qui bloque quelque chose.
+        public func debugReachFreeLimit() {
+            debugPlay(.freeTrial(remainingSteps: 0))
+        }
+
+        /// Fait jouer un personnage à l'app entière — l'accueil tout de suite,
+        /// le profil à la prochaine ouverture. Voir ``SandboxPersona``.
+        private func debugPlay(_ persona: SandboxPersona) {
+            SandboxPersona.current = persona
+            errorMessage = nil
 
             apply(
                 HomeFeed(
-                    traveller: Traveller(
-                        id: current.id,
-                        firstName: current.firstName,
-                        avatarUrl: current.avatarUrl,
-                        offeredSteps: isStripped ? 3 : nil,
-                        remainingSteps: isStripped ? 2 : nil
-                    ),
+                    traveller: persona.applied(to: debugTraveller),
                     trips: feed?.trips ?? [],
                     showcase: feed?.showcase
                 )

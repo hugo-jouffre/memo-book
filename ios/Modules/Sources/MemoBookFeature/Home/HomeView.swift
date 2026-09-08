@@ -6,7 +6,7 @@ import SwiftUI
 /// pouce.
 ///
 /// **L'écran ne contient aucun contenu.** Titres, pays, dates, compteurs,
-/// compagnons, carte de découverte : tout vient du ``HomeFeed`` que porte
+/// co-voyageurs, carte de découverte : tout vient du ``HomeFeed`` que porte
 /// ``HomeModel``. Ce qui est écrit ici, ce sont les seuls libellés qui
 /// appartiennent à l'interface — les titres de section et l'appel à l'action.
 ///
@@ -217,28 +217,31 @@ public struct HomeView: View {
         .accessibilityLabel("Ton profil")
     }
 
-    /// Le solde d'étapes offertes.
+    /// Le palier du compte. `nil` tant que l'accueil n'a rien reçu : on ne
+    /// décide alors de rien, et surtout pas de peindre le CTA en lime.
+    private var status: FreemiumStatus? { model.feed?.traveller.freemiumStatus }
+
+    /// Le solde d'étapes offertes, et l'invitation qui le remplace quand il
+    /// tombe à zéro.
     ///
-    /// Deux messages pour un seul compteur : tant que rien n'est consommé on
-    /// annonce un cadeau, ensuite un solde. C'est le même chiffre, mais pas la
-    /// même nouvelle.
+    /// **Un seul message, un décompte** : « 3 étapes restantes », qui descend à
+    /// chaque étape racontée, puis « Abonne-toi » quand il n'en reste plus. La
+    /// pastille annonçait un cadeau (« 3 étapes offertes ») tant que rien
+    /// n'était consommé ; deux formulations pour un même chiffre faisaient
+    /// hésiter sur ce qu'il fallait lire. Arbitrage de Hugo, 07/09/2026.
     @ViewBuilder
     private var freeStepsPill: some View {
-        if let traveller = model.feed?.traveller,
-            let offered = traveller.offeredSteps,
-            let remaining = traveller.remainingSteps,
-            remaining > 0
-        {
-            let label = remaining == offered
-                ? "\(offered) étapes offertes"
-                : "\(remaining) étapes restantes"
-
+        if let label = status?.homePillLabel {
             BrandTagPill(label)
                 .fixedSize()
-                // Le bord droit de la pastille s'aligne sur celui de l'avatar,
-                // qui touche déjà la marge de l'écran : la décaler encore la
-                // ferait sortir de la page.
-                .offset(y: -MemoBookSpacing.s - 4)
+                // De travers, comme le scotch des cartes : c'est une étiquette
+                // collée sur l'avatar, pas un libellé d'interface.
+                .rotationEffect(.degrees(-5))
+                // Elle glisse vers le bord droit, au-delà de la marge de la
+                // colonne. Alignée sur l'avatar, elle poussait sa moitié gauche
+                // sous la Dynamic Island, où la fin du décompte devenait
+                // illisible ; à droite, elle passe dessous et non dedans.
+                .offset(x: MemoBookSpacing.s, y: -MemoBookSpacing.s - 4)
                 .allowsHitTesting(false)
         }
     }
@@ -401,13 +404,23 @@ public struct HomeView: View {
     /// carnet ouvert ne mène nulle part.
     private var hasOngoingTrip: Bool { !model.ongoingTrips.isEmpty }
 
+    /// Le CTA change de couleur, pas de place ni de taille.
+    ///
+    /// Il passe au lime et prend le cadenas **quand, et seulement quand, les
+    /// étapes offertes sont épuisées** : la couleur dit « c'est fini, il faut
+    /// s'abonner », la même que le bouton d'abonnement du profil. Tant qu'il
+    /// reste des étapes, il n'y a rien de bloqué et le parcours est celui de
+    /// tout le monde — vert plein, et le micro.
+    private var isBlocked: Bool { status?.isBlocked == true }
+
     private var recordCallToAction: some View {
         BrandButton(
             hasOngoingTrip ? "Commencer à enregistrer" : "Créer un nouveau voyage",
-            // Le micro du jeu d'icônes de la marque, pas l'illustration du
-            // Welcome : `BrandButton` teinte l'icône, il lui faut un tracé
-            // plein d'une seule couleur.
-            icon: hasOngoingTrip ? Image(brand: "IconMic") : nil,
+            // Le micro et le cadenas du jeu d'icônes de la marque, pas
+            // l'illustration du Welcome : `BrandButton` teinte l'icône, il lui
+            // faut un tracé plein d'une seule couleur.
+            icon: callToActionIcon,
+            style: isBlocked ? .accent : .primary,
             fillsWidth: true
         ) {
             onIntent(hasOngoingTrip ? .startRecording : .createTrip)
@@ -420,6 +433,11 @@ public struct HomeView: View {
         .padding(.horizontal, MemoBookSpacing.screenMargin)
         .padding(.top, MemoBookSpacing.s)
         .padding(.bottom, MemoBookSpacing.xs)
+    }
+
+    private var callToActionIcon: Image? {
+        if isBlocked { return Image(brand: "IconLocker") }
+        return hasOngoingTrip ? Image(brand: "IconMic") : nil
     }
 }
 

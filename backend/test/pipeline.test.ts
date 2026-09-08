@@ -4,7 +4,7 @@ import { validatePayload } from "../src/services/payloadValidator.js";
 import {
   createHarness,
   multipartBody,
-  registerDevice,
+  registerAccount,
   resetDatabase,
   type TestHarness,
 } from "./helpers.js";
@@ -37,7 +37,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await resetDatabase(harness.prisma);
-  ({ authorization } = await registerDevice(harness.app));
+  ({ authorization } = await registerAccount(harness.app));
 });
 
 async function createMemo(title = "Claire et Gus en Colombie"): Promise<string> {
@@ -275,10 +275,10 @@ describe("garde-fous de l'API", () => {
   });
 });
 
-describe("cloisonnement entre appareils", () => {
-  it("cache les carnets d'un autre appareil", async () => {
+describe("cloisonnement entre comptes", () => {
+  it("cache les carnets d'un autre compte", async () => {
     const memoId = await createMemo();
-    const other = await registerDevice(harness.app);
+    const other = await registerAccount(harness.app, "quelquun.dautre@memobook.app");
 
     const read = await harness.app.inject({
       method: "GET",

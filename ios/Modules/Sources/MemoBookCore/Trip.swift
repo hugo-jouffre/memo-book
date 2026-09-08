@@ -67,7 +67,15 @@ public struct Destination: Codable, Sendable, Hashable {
     }
 }
 
-/// Un compagnon de voyage, tel qu'il apparaît en pastille sur la couverture.
+/// Un **co-voyageur**, tel qu'il apparaît en pastille sur la couverture.
+///
+/// Sur le voyage, il fait tout ce que fait le propriétaire : raconter, régler,
+/// générer le carnet, le commander. Seule la suppression du voyage reste au
+/// propriétaire. Ce qu'il ne partage pas non plus, c'est l'argent : chacun a sa
+/// cagnotte et son abonnement.
+///
+/// Le nom de type garde le mot du contrat d'API (`companions`), qui n'a pas
+/// bougé — c'est le vocabulaire *produit* qui a changé.
 public struct Companion: Codable, Sendable, Hashable, Identifiable {
     public let id: String
     public let name: String

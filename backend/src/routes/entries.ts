@@ -3,8 +3,9 @@ import { z } from "zod";
 import type { AppContext } from "../context.js";
 import { JOB_NAMES, type RedactJob, type TranscribeJob } from "../jobs/index.js";
 import { HttpError } from "../lib/httpError.js";
-import { deviceIdOf } from "../plugins/auth.js";
-import { loadOwnedMemo } from "./memos.js";
+import { accountIdOf } from "../plugins/auth.js";
+import { visibleToAccount } from "../services/memoOwnership.js";
+import { loadVisibleMemo } from "./memos.js";
 import { serializeEntry } from "./serializers.js";
 
 const memoIdParams = z.object({ id: z.string().uuid() });
@@ -47,7 +48,7 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
    */
   app.post("/v1/memos/:id/entries", async (request, reply) => {
     const { id: memoId } = memoIdParams.parse(request.params);
-    await loadOwnedMemo(context, request, memoId);
+    await loadVisibleMemo(context, request, memoId);
 
     if (!request.isMultipart()) {
       const body = textEntryBody.parse(request.body ?? {});
@@ -141,7 +142,7 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
     const { id } = entryIdParams.parse(request.params);
 
     const entry = await context.prisma.entry.findFirst({
-      where: { id, memo: { deviceId: deviceIdOf(request) } },
+      where: { id, memo: visibleToAccount(accountIdOf(request)) },
       include: { media: true },
     });
 
@@ -162,7 +163,7 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
     const body = updateEntryBody.parse(request.body ?? {});
 
     const entry = await context.prisma.entry.findFirst({
-      where: { id, memo: { deviceId: deviceIdOf(request) } },
+      where: { id, memo: visibleToAccount(accountIdOf(request)) },
     });
     if (!entry) throw HttpError.notFound("Entrée introuvable.");
 
@@ -203,7 +204,7 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
     const { id } = entryIdParams.parse(request.params);
 
     const entry = await context.prisma.entry.findFirst({
-      where: { id, memo: { deviceId: deviceIdOf(request) } },
+      where: { id, memo: visibleToAccount(accountIdOf(request)) },
     });
     if (!entry) throw HttpError.notFound("Entrée introuvable.");
 
@@ -241,7 +242,7 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
     const { id } = entryIdParams.parse(request.params);
 
     const entry = await context.prisma.entry.findFirst({
-      where: { id, memo: { deviceId: deviceIdOf(request) } },
+      where: { id, memo: visibleToAccount(accountIdOf(request)) },
       select: { id: true },
     });
 

@@ -4,11 +4,8 @@ import { ZodError } from "zod";
 import type { AppContext } from "./context.js";
 import { registerJobs } from "./jobs/index.js";
 import { HttpError } from "./lib/httpError.js";
-import {
-  createRequireAccount,
-  createRequireDevice,
-  registerAuthDecorator,
-} from "./plugins/auth.js";
+import { createRequireAccount, registerAuthDecorator } from "./plugins/auth.js";
+import { registerAccountRoutes } from "./routes/accounts.js";
 import { registerAuthRoutes, registerSessionRoutes } from "./routes/auth.js";
 import { registerDeviceRoutes } from "./routes/devices.js";
 import { registerEntryRoutes } from "./routes/entries.js";
@@ -74,29 +71,23 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
   // peuvent donc pas en exiger un.
   registerAuthRoutes(app, context);
 
-  // Ce qui appartient au compte connecté. Séparé du bloc « appareil »
-  // ci-dessous : les deux identifications coexistent le temps que la propriété
-  // des carnets passe de l'un à l'autre.
+  // Tout ce qui appartient à quelqu'un, sous **une seule** identification : la
+  // session de compte. Le token d'appareil n'ouvre plus rien — un carnet a
+  // toujours un propriétaire, et c'est un compte.
   await app.register(async (accountRoutes) => {
     accountRoutes.addHook("preHandler", createRequireAccount(context));
     registerSessionRoutes(accountRoutes, context);
-    // L'accueil, un voyage et le profil parlent d'une personne : ils n'ont de
-    // sens que sous une session de compte.
+    registerAccountRoutes(accountRoutes, context);
     registerHomeRoutes(accountRoutes, context);
     registerProfileRoutes(accountRoutes, context);
+    registerMemoRoutes(accountRoutes, context);
+    registerEntryRoutes(accountRoutes, context);
+    registerRenderRoutes(accountRoutes, context);
+    registerOrderRoutes(accountRoutes, context);
   });
 
   // Uniquement en mode de rendu local : sert les PDF produits sur le disque.
   registerLocalRenderRoutes(app, context);
-
-  // Tout le reste de /v1 exige un token d'appareil.
-  await app.register(async (protectedRoutes) => {
-    protectedRoutes.addHook("preHandler", createRequireDevice(context));
-    registerMemoRoutes(protectedRoutes, context);
-    registerEntryRoutes(protectedRoutes, context);
-    registerRenderRoutes(protectedRoutes, context);
-    registerOrderRoutes(protectedRoutes, context);
-  });
 
   return app;
 }

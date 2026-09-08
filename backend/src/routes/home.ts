@@ -1,7 +1,8 @@
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppContext } from "../context.js";
 import { HttpError } from "../lib/httpError.js";
+import { accountIdOf } from "../plugins/auth.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
 import {
   serializeShowcase,
@@ -22,12 +23,19 @@ import {
  * parlent d'une personne, de ses voyages et de ceux où elle est invitée.
  */
 
-const idParams = z.object({ id: z.string().uuid() });
+/**
+ * L'identifiant d'un voyage.
+ *
+ * Il n'est **pas** validé par Zod, et c'est voulu : une chaîne qui n'est pas un
+ * UUID faisait remonter un 400 « Requête invalide. » jusqu'à l'écran du voyage,
+ * qui l'affichait tel quel. Or du point de vue de l'appelant, un identifiant
+ * mal formé et un identifiant inconnu disent la même chose — ce voyage n'existe
+ * pas — et c'est déjà ce que cette route répond à quelqu'un qui n'y participe
+ * pas. Un seul message, donc, et un seul code.
+ */
+const idParams = z.object({ id: z.string().min(1).max(64) });
 
-function accountIdOf(request: FastifyRequest): string {
-  if (!request.accountId) throw HttpError.unauthorized();
-  return request.accountId;
-}
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Ce dont `serializeTrip` a besoin, et rien de plus. */
 const tripInclude = {
@@ -89,6 +97,10 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
   app.get("/v1/trips/:id", async (request) => {
     const accountId = accountIdOf(request);
     const { id } = idParams.parse(request.params);
+
+    // Postgres refuse de comparer une colonne `uuid` à une chaîne qui n'en est
+    // pas une : sans ce garde-fou, la requête lève au lieu de ne rien trouver.
+    if (!UUID_PATTERN.test(id)) throw HttpError.notFound("Voyage introuvable.");
 
     const memo = await context.prisma.memo.findFirst({
       where: { id, ...visibleToAccount(accountId) },

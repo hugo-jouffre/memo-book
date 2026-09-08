@@ -1,0 +1,29 @@
+// Réglages communs à toutes les configurations.
+//
+// Ce qui vit dans un .xcconfig plutôt que dans `project.yml` : ce qui **change
+// d'un environnement à l'autre**. Le reste — team, bundle id, capabilities —
+// reste dans `project.yml`, qui est la description du projet.
+//
+// ⚠️ Deux barres obliques ouvrent un commentaire, y compris au milieu d'une
+// URL. `https://exemple.fr` devient `https:` dès la lecture du fichier. On
+// coupe donc la séquence avec `$()`, qui vaut la chaîne vide à l'évaluation :
+//
+//     MEMOBOOK_API_BASE_URL = https:/$()/api.exemple.fr
+//
+// C'est le piège numéro un des xcconfig, et il ne se voit qu'à l'exécution.
+
+// Aucun secret ici. L'app iOS n'en a aucun à connaître : les clés OpenAI,
+// Anthropic, APITemplate et Stripe n'existent que côté serveur. Voir
+// `Secrets.example.xcconfig`.
+
+// Le client OAuth **iOS** de Google et le schéma d'URL de retour ne sont pas
+// des secrets — ils partent dans chaque binaire livré — mais ce sont bien des
+// valeurs d'environnement : un projet Google Cloud de test et un de production
+// n'ont pas le même. Ils vivent donc ici.
+GOOGLE_IOS_CLIENT_ID = 1022603657545-ehn9lik23bgu7m9h28a01b271lft0u2h.apps.googleusercontent.com
+GOOGLE_IOS_URL_SCHEME = com.googleusercontent.apps.1022603657545-ehn9lik23bgu7m9h28a01b271lft0u2h
+
+// Un fichier de secrets local, s'il existe un jour. `#include?` — avec le point
+// d'interrogation — n'échoue pas quand le fichier est absent, ce qui est le cas
+// sur une machine fraîchement clonée et en CI.
+#include? "Secrets.xcconfig"

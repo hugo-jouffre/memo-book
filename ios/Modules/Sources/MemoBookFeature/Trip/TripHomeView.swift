@@ -5,7 +5,7 @@ import SwiftUI
 /// L'accueil d'un voyage : où on en est de celui-ci, et la relance de MemoBook
 /// juste au-dessus du micro.
 ///
-/// **L'écran ne contient aucun contenu.** Titre, compteurs, compagnons, pays,
+/// **L'écran ne contient aucun contenu.** Titre, compteurs, co-voyageurs, pays,
 /// relance, étapes : tout vient du ``TripDetail`` que porte ``TripHomeModel``.
 /// Ce qui est écrit ici, ce sont les seuls libellés qui appartiennent à
 /// l'interface.
@@ -20,8 +20,14 @@ public struct TripHomeView: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    public init(tripId: String) {
-        _model = State(initialValue: TripHomeModel(tripId: tripId))
+    /// - Parameters:
+    ///   - tripId: le voyage à ouvrir. Il ne sert qu'à construire le modèle par
+    ///     défaut, celui du jeu d'essai.
+    ///   - model: le modèle qui sert l'écran. Fourni, il fait autorité : c'est
+    ///     lui qui porte déjà l'identifiant, et c'est par là que l'app branche
+    ///     l'écran sur le réseau — voir ``AppDependencies/tripModel(id:)``.
+    public init(tripId: String, model: TripHomeModel? = nil) {
+        _model = State(initialValue: model ?? TripHomeModel(tripId: tripId))
     }
 
     /// Pour les aperçus et les tests, qui fournissent leur propre source.
@@ -32,6 +38,12 @@ public struct TripHomeView: View {
     public var body: some View {
         ScrollView {
             VStack(spacing: 0) {
+                // **L'en-tête est là dès la première image, chargé ou non.**
+                // Sans lui, l'écran s'ouvrait sur un aplat crème vide : pas de
+                // photo, pas de titre, et surtout pas de flèche de retour — on
+                // ne pouvait que subir l'attente. Le remplaçant a la même
+                // hauteur et porte la même flèche ; seules la photo et les mots
+                // arrivent après.
                 if let detail = model.detail {
                     TripHeader(
                         detail: detail,
@@ -40,10 +52,13 @@ public struct TripHomeView: View {
                         onSettings: notYetRouted,
                         onInvite: notYetRouted
                     )
+                } else {
+                    TripHeaderPlaceholder(onBack: { dismiss() })
                 }
 
                 canopy
             }
+            .animation(.snappy(duration: 0.25), value: model.detail == nil)
         }
         .scrollIndicators(.hidden)
         // La photo monte jusqu'au bord haut de la dalle ; ce sont les commandes
@@ -73,6 +88,11 @@ public struct TripHomeView: View {
                     .padding(.horizontal, MemoBookSpacing.screenMargin)
 
                 TripStepsSection(model: model, onOpenStep: { _ in notYetRouted() })
+            } else if model.errorMessage == nil {
+                loadingHeader
+                    .padding(.horizontal, MemoBookSpacing.screenMargin)
+
+                TripStepsPlaceholder()
             }
         }
         .padding(.top, MemoBookSpacing.l)
@@ -87,7 +107,41 @@ public struct TripHomeView: View {
         )
         // Le panneau mord sur la photo : c'est ce chevauchement qui fait qu'il
         // la recouvre au lieu d'être posé en dessous.
-        .padding(.top, -MemoBookSpacing.m)
+        //
+        // **Il mord d'exactement son rayon, pas moins.** À 24 pt pour un rayon
+        // de 40, les 16 derniers points de l'arrondi tombaient sous le bas de la
+        // photo : la courbe se posait alors sur le crème de la page, du crème
+        // sur du crème, et le coin se lisait comme tranché à plat. Le lien entre
+        // les deux valeurs n'est donc pas un réglage, c'est une contrainte —
+        // d'où la constante et non un nombre.
+        .padding(.top, -MemoBookSpacing.overlayCornerRadius)
+    }
+
+    /// Le haut du panneau pendant l'attente : la place du pays, celle de la
+    /// relance, et **le vrai bouton**, désactivé.
+    ///
+    /// Le bouton n'est pas un squelette parce qu'il n'en est pas un : son
+    /// libellé n'a jamais dépendu du serveur. Le montrer tout de suite dit ce
+    /// que l'écran va proposer ; le remplacer par une barre grise ferait douter
+    /// qu'il y en ait un.
+    private var loadingHeader: some View {
+        VStack(spacing: MemoBookSpacing.s) {
+            BrandSkeleton(width: 96)
+
+            VStack(spacing: MemoBookSpacing.xs) {
+                BrandSkeleton(width: 260)
+                BrandSkeleton(width: 190)
+            }
+            // La relance est un titre : ses deux barres tiennent la hauteur
+            // qu'il prendra, pour que le bouton ne saute pas en arrivant.
+            .frame(height: MemoBookSpacing.xl + MemoBookSpacing.xs)
+
+            BrandButton("Continuer à enregistrer", icon: Image(brand: "IconMic"), fillsWidth: true) {}
+                .disabled(true)
+                .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+                .padding(.top, MemoBookSpacing.xs)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     /// Le pays, la relance, et le micro. Trois blocs qui se lisent d'un trait :
