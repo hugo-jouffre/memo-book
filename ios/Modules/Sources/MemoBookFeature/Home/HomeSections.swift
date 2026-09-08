@@ -83,7 +83,7 @@ struct ShowcaseCard: View {
         Button(action: onOpen) {
             content
                 .frame(minHeight: minimumHeight)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .homeCardHitArea()
         }
         .buttonStyle(CardPressStyle())
         .background(MemoBookColor.outline.opacity(0.22), in: shape)
@@ -203,27 +203,52 @@ struct UpcomingTripInvite: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(MemoBookSpacing.s)
+            .homeCardHitArea()
         }
         .buttonStyle(CardPressStyle())
         .brandDashedCard(color: MemoBookColor.action)
+        .overlay(alignment: .topTrailing) { tape }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
     }
 
-    /// ⚠️ **Illustration provisoire.** La maquette montre un passeport et un
-    /// carnet ouvert ; l'asset n'est pas encore exporté. Le livre du *Welcome*
-    /// tient la place — voir la fiche écran.
+    /// Le carnet MemoBook fini, posé sur sa plaque beige.
+    ///
+    /// La plaque est **plus étroite que la carte** et l'illustration la remplit
+    /// jusqu'aux bords : c'est ce qui la fait lire comme une photo posée dans
+    /// le cadre, et non comme un fond de carte de plus. Le beige, lui, ne sert
+    /// qu'à ça — voir ``MemoBookColor/beige``.
     private var artwork: some View {
-        Image(brand: "WelcomeBook")
+        Image(brand: "EmptyTripIllustration")
             .resizable()
             .scaledToFit()
-            .frame(maxHeight: 96)
             .frame(maxWidth: .infinity)
+            .padding(.horizontal, MemoBookSpacing.xs)
             .padding(.vertical, MemoBookSpacing.s)
+            .frame(maxWidth: .infinity)
             .background(
-                MemoBookColor.outline.opacity(0.25),
+                MemoBookColor.beige,
                 in: .rect(cornerRadius: MemoBookSpacing.cornerRadius)
             )
+            .accessibilityHidden(true)
+    }
+
+    /// Le bout de scotch qui déborde en haut du cadre.
+    ///
+    /// Même grammaire que celui de ``FeaturedTripCard`` : par-dessus la carte,
+    /// translucide — on voit le pointillé au travers — et de travers. C'est ce
+    /// débordement qui rattache le cadre à la page au lieu de le laisser flotter
+    /// dedans.
+    private var tape: some View {
+        RoundedRectangle(cornerRadius: 2)
+            .fill(MemoBookColor.action.opacity(0.18))
+            .frame(width: 72, height: 26)
+            .rotationEffect(.degrees(-4))
+            // Une moitié sur la carte, une moitié dans le vide, et à distance du
+            // coin arrondi — posé dessus, il se lirait comme une étiquette.
+            .offset(y: -11)
+            .padding(.trailing, MemoBookSpacing.l)
+            .allowsHitTesting(false)
             .accessibilityHidden(true)
     }
 }

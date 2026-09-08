@@ -42,6 +42,11 @@ public struct RootView: View {
     /// La pile de navigation de l'app, une fois entré.
     @State private var path: [HomeRoute] = []
 
+    /// Ce qui empêche d'aller là où on vient de demander à aller. Une alerte
+    /// **sur l'accueil**, et non un écran poussé qui ne montrerait qu'une
+    /// erreur : quand la destination n'existe pas, on ne quitte pas la page.
+    @State private var routingProblem: String?
+
     public init() {}
 
     public var body: some View {
@@ -77,7 +82,7 @@ public struct RootView: View {
                     AuthView { enterApp(as: $0) }
                 case .signedIn:
                     NavigationStack(path: $path) {
-                        HomeView(onIntent: handle)
+                        HomeView(model: dependencies.homeModel(), onIntent: handle)
                             .navigationDestination(for: HomeRoute.self, destination: destination)
                     }
                     .tint(MemoBookColor.action)
@@ -97,6 +102,18 @@ public struct RootView: View {
         // cette information, sa cascade se jouait entièrement sous le voile et
         // l'écran apparaissait déjà en place.
         .environment(\.launchOverlayIsVisible, isLaunching)
+        .alert(
+            "Impossible d’ouvrir ce voyage",
+            isPresented: .init(
+                get: { routingProblem != nil },
+                set: { if !$0 { routingProblem = nil } }
+            ),
+            presenting: routingProblem
+        ) { _ in
+            Button("D’accord", role: .cancel) { routingProblem = nil }
+        } message: { message in
+            Text(message)
+        }
         .task { await restore() }
     }
 
@@ -171,10 +188,10 @@ public struct RootView: View {
 
     /// Où mène chaque intention de l'accueil.
     ///
-    /// **Câblage provisoire.** Les voyages ne sont pas encore une ressource du
-    /// back-end : l'accueil et l'écran d'un voyage montrent tous deux un jeu
-    /// d'essai, relié par l'identifiant du voyage. Ouvrir une carte mène donc
-    /// bien au voyage qu'elle montrait — mais aucune de ses étapes ne mène
+    /// Les voyages sont désormais une ressource du back-end : l'accueil vient
+    /// de `GET /v1/home`, l'écran d'un voyage de `GET /v1/trips/:id`, et
+    /// l'identifiant qui les relie est celui du serveur. Ouvrir une carte mène
+    /// donc au voyage qu'elle montrait — mais aucune de ses étapes ne mène
     /// encore au carnet, faute d'un identifiant commun.
     ///
     /// L'impression et la carte de découverte n'ont pas d'écran dessiné : elles
@@ -184,6 +201,17 @@ public struct RootView: View {
         case .openProfile:
             path.append(.profile)
         case .openTrip(let id):
+            // **On n'ouvre pas un voyage dont l'identifiant n'est pas celui
+            // d'une ressource.** Les voyages du bac à sable n'existent que dans
+            // l'app : les pousser quand même ouvrait un écran vide sur
+            // « Requête invalide. » — le 400 que le serveur renvoie à un
+            // identifiant qui n'est pas un UUID, et qui n'a rien à dire à
+            // l'utilisateur. On reste sur l'accueil, et on le dit.
+            guard UUID(uuidString: id) != nil else {
+                routingProblem =
+                    "Ce voyage n’existe pas encore sur ton compte : il n’y a rien à ouvrir."
+                return
+            }
             path.append(.trip(id: id))
         case .startRecording:
             // Enregistrer suppose un carnet ouvert : on passe par la liste
@@ -198,9 +226,9 @@ public struct RootView: View {
     private func destination(for route: HomeRoute) -> some View {
         switch route {
         case .profile:
-            ProfileView(onSignOut: signOut)
+            ProfileView(model: dependencies.profileModel(), onSignOut: signOut)
         case .trip(let id):
-            TripHomeView(tripId: id)
+            TripHomeView(tripId: id, model: dependencies.tripModel(id: id))
         case .memos:
             MemoListView()
         }

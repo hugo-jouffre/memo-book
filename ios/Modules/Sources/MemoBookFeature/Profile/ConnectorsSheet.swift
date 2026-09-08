@@ -39,7 +39,13 @@ private struct ConnectorCard: View {
         // son étiquette, et VoiceOver lit « Strava, MemoBook pourra…, activé,
         // bouton interrupteur » d'un seul tenant.
         Toggle(isOn: $isEnabled) {
+            // Toute la carte accorde ou retire l'accès, pas seulement le rail
+            // de l'interrupteur — même règle que les lignes du profil. Le
+            // tapotis est posé sur l'étiquette et non sur la carte, pour ne pas
+            // doubler celui qui tombe sur l'interrupteur.
             content
+                .contentShape(.rect)
+                .onTapGesture { isEnabled.toggle() }
         }
         .toggleStyle(.switch)
         .tint(MemoBookColor.action)
