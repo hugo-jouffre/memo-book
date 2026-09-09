@@ -67,8 +67,8 @@ public struct ProfileView: View {
                     }
                 }
 
-                exitActions
                 helpLink
+                exitActions
                 legalMention
             }
             .animation(.snappy(duration: 0.25), value: model.profile == nil)
@@ -134,7 +134,10 @@ public struct ProfileView: View {
                 Image(brand: "IconArrowDuo")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: MemoBookSpacing.m, height: MemoBookSpacing.m)
+                    .frame(
+                        width: MemoBookSpacing.navigationIcon,
+                        height: MemoBookSpacing.navigationIcon
+                    )
                     // La cible tactile est alignée à gauche sur la marge de la
                     // colonne, et le dessin est centré dedans. Elle débordait de
                     // la colonne ; la moitié gauche des touches tombait alors à
@@ -197,7 +200,7 @@ public struct ProfileView: View {
         if model.profile?.freemiumStatus.wantsSubscription == true {
             BrandButton(
                 "Découvrir l’abonnement",
-                icon: Image(systemName: "chevron.right"),
+                icon: Image(brand: "IconChevron"),
                 iconPlacement: .trailing,
                 style: .accent,
                 fillsWidth: true
@@ -406,9 +409,13 @@ public struct ProfileView: View {
             .padding(.top, MemoBookSpacing.s)
     }
 
-    /// Le même lien qu'en bas de l'accueil, au même endroit et dans le même
-    /// dessin : c'est la sortie de secours de l'app, elle se trouve toujours
-    /// au même endroit. Aucune destination pour l'instant.
+    /// Le même lien qu'en bas de l'accueil, dans le même dessin : c'est la
+    /// sortie de secours de l'app. Aucune destination pour l'instant.
+    ///
+    /// Il passe **avant** les actions de sortie, et pas après : demander de
+    /// l'aide n'est pas quitter. Le laisser sous « Supprimer mon compte » le
+    /// rangeait avec les portes de sortie, alors qu'il est là pour éviter d'en
+    /// prendre une.
     private var helpLink: some View {
         BrandButton("Besoin d’aide ?", style: .link, isSubdued: true) {
             notYetRouted()

@@ -107,8 +107,14 @@ formes, dans cet ordre de préférence :
 **Il n'y a pas de couche `Repository`, et c'est voulu.** Le protocole
 `MemoBookAPI` *est* le contrat qu'on double en test et en aperçu. Une seconde
 interface au-dessus serait à réécrire à chaque champ ajouté pour le même
-service. Elle se justifiera le jour d'un cache local ou d'un mode hors-ligne,
-pas avant.
+service.
+
+Le mode hors-ligne est arrivé — c'était le cas qui devait la justifier — et il
+ne l'a pas demandée : le cache **enveloppe la fonction-source** au lieu de
+s'intercaler sous le protocole (`AppDependencies.homeModel()` recopie ce qui
+arrive et relit ce qu'il a en cas de panne de transport), et la file des vocaux
+est un objet à part, qui reçoit une fonction d'envoi. Ni l'écran ni le client
+d'API n'ont bougé. Voir § Hors ligne.
 
 **Les erreurs appartiennent à l'écran qui les provoque.** `APIError` et
 `RecordingError` portent des messages déjà destinés à l'utilisateur — le
@@ -133,15 +139,16 @@ police ou marge codée en dur ailleurs.
 - `BrandButton` est **le** bouton (styles primary / secondary / tertiary / link,
   tailles regular / small, `alternate` pour les fonds sombres). Ne pas en
   écrire d'autre.
-- `BrandTextField` est **le** champ de saisie (deux mises en page :
+- `BrandTextField` est **le** champ de saisie (trois mises en page :
   `labelPlacement: .floating` pour les formulaires d'entrée, `.above` pour les
-  feuilles), `BrandSegmentedPicker` **le** sélecteur à segments, `BrandBackdrop`
-  le motif de fond. Même règle.
+  feuilles, `.hidden` pour le champ unique d'une feuille dont le sous-titre dit
+  déjà quoi saisir), `BrandSegmentedPicker` **le** sélecteur à segments,
+  `BrandBackdrop` le motif de fond. Même règle.
 - `BrandRowGroup` est **le** motif « lignes empilées et groupées » des écrans de
   réglages : une ligne se *décrit* (`BrandRow`), elle ne se dessine pas.
   `BrandOptionGroup` est **le** choix unique en lignes encadrées, et `BrandSheet`
   **la** feuille modale — geste du système, dessin de la marque, hauteur calée
-  sur le contenu.
+  sur le contenu, titre à gauche ou centré (`titleAlignment`).
 - Le focus appartient à l'écran, pas au champ : un `@FocusState` sur une énum
   passé aux `BrandTextField`, pour que le clavier enchaîne les champs.
 
@@ -177,6 +184,22 @@ serré que la police ne peut pas se rattraper côté code.
 SVG dans `MemoBookDesign/Resources/MemoBookAssets.xcassets`, avec
 `preserves-vector-representation`. On y accède par `Image(brand: "NomAsset")`.
 Retirer `preserveAspectRatio="none"` des exports Figma, sinon Xcode déforme.
+
+Le catalogue n'est **jamais rempli à la main** : deux scripts l'alimentent depuis
+`assets/`, et ils sont idempotents.
+
+```bash
+python3 ios/Tools/import-brand-icons.py     # assets/icons/brand-icons
+python3 ios/Tools/import-lucide-icons.py    # assets/icons/lucide-icons
+```
+
+Le second sert les **remplaçants** : les pictogrammes que le jeu de marque n'a
+pas — les catégories de la galerie, le train du filtre « Transports ». Ils
+viennent de Lucide et non de Figma, la seule exception à la règle « les assets
+viennent de Figma », nommée dans `docs/ui-development.md` §13. Leur clé est
+résolue par `MemoBookDesign/LucideIcon.swift`, qui retombe sur une boussole pour
+une clé inconnue : ajouter une catégorie en base ne demande pas de livrer une
+version.
 
 ## Un choix de design ne s'arrête pas au dessin
 
@@ -286,6 +309,48 @@ stockage S3 qui ne participe pas à la transaction).
 paresseux : `AppDependencies.ensureRegistered()` est appelé par le modèle qui en
 a besoin, et son échec est l'erreur de cet écran-là (un `ErrorBanner` en ligne),
 jamais un mur devant l'app.
+
+## Hors ligne
+
+**L'app marche sans réseau, et le dit.** Trois pièces, chacune avec une seule
+responsabilité :
+
+| Pièce | Où | Ce qu'elle fait |
+|---|---|---|
+| `Connectivity` | `Networking` | une **valeur** — une fonction qui rend un flux « en ligne / hors ligne », `NWPathMonitor` derrière. Un test en fabrique une qu'il pilote |
+| `PendingRecordingStore` | `Recording` | la file des vocaux **sur le disque**, un acteur |
+| `RecordingOutbox` | `Feature` | décide d'envoyer ou de garder, et vide la file au retour du réseau |
+
+`AppDependencies` monte la file au démarrage (`outbox.start()`), pas à
+l'ouverture d'un écran : c'est ce qui permet de savoir qu'on est hors ligne
+**avant** de dessiner l'accueil, et de repartir avec ce qu'un lancement
+précédent avait laissé en attente. Un envoi commencé continue quand on quitte
+l'accueil.
+
+Trois règles portent tout le reste :
+
+1. **Ce qui n'existe nulle part ailleurs va dans `Application Support`, jamais
+   dans `Caches`.** Un vocal en attente est le récit de quelqu'un et rien ne le
+   régénère ; iOS vide les caches sous pression disque. Le dernier accueil reçu,
+   lui, est une copie de ce que le serveur sait — il est dans `Caches`, et il
+   s'efface à la déconnexion (`AppDependencies.forgetAccountContent()`).
+2. **« En ligne » ne veut pas dire « l'API répond ».** `NWPathMonitor` dit
+   qu'une interface est montée : un portail captif se déclare satisfait. Un
+   envoi qui échoue au **transport** retourne donc dans la file, même en ligne.
+3. **Un refus du serveur n'est pas une panne.** Un 4xx sort le vocal de la file
+   et s'affiche : garder un souvenir que le serveur refusera à chaque fois, ce
+   serait promettre une arrivée qui n'aura jamais lieu. Une réponse illisible
+   (décodage) compte au contraire comme **arrivée** — l'appel a abouti, le
+   renvoyer mettrait le souvenir deux fois dans le carnet.
+
+Ce que l'écran en montre — une boîte, quatre états, et les boutons de bac à
+sable qui les rejouent — est dans `docs/ui-development.md` §9.3.
+
+⚠️ **Un envoi ne survit pas encore à la mise en arrière-plan.** `URLSession` en
+tâche de fond serait la réponse complète, et demande un envoi par fichier et une
+délégation — donc une autre forme de client d'API. En attendant, ce qui n'a pas
+eu le temps de partir reste dans la file et repart au retour dans l'app : rien
+n'est perdu, c'est plus tard.
 
 ## Figma
 

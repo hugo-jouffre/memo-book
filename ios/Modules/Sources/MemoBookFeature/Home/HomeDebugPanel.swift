@@ -35,6 +35,18 @@
                     action("Première connexion", model.debugFirstConnection)
                     action("Limite atteinte", model.debugReachFreeLimit)
                     action("Erreur", model.debugShowError)
+
+                    // Le hors-ligne coupe **vraiment** le réseau de l'app, et le
+                    // vocal mis en file part **vraiment** sur le disque : c'est
+                    // le seul moyen de vérifier que la promesse écrite dans la
+                    // boîte est tenue. Les deux derniers, eux, ne font que poser
+                    // un état passager qu'on n'aurait sinon le temps de voir
+                    // qu'avec un très mauvais réseau.
+                    action(model.isOffline ? "Repasser en ligne" : "Passer hors ligne", model.debugToggleOffline)
+                    action("+ vocal en attente") { Task { await model.debugQueueRecording() } }
+                    action("Envoi en cours", model.debugShowSending)
+                    action("Vocal envoyé", model.debugShowDelivered)
+
                     action("Jeu d’essai", model.debugReset)
                 }
             }

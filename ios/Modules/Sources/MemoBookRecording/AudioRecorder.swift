@@ -9,6 +9,23 @@ public struct RecordedAudio: Sendable, Hashable {
     public let mimeType: String
     public let duration: TimeInterval
     public let recordedAt: Date
+
+    /// L'initialiseur est **public** parce que le vocal ne naît plus seulement
+    /// du micro : il se relit aussi de la file d'attente, quand il a passé la
+    /// nuit sur le disque en attendant le réseau. Voir ``PendingRecordingStore``.
+    public init(
+        data: Data,
+        filename: String,
+        mimeType: String,
+        duration: TimeInterval,
+        recordedAt: Date
+    ) {
+        self.data = data
+        self.filename = filename
+        self.mimeType = mimeType
+        self.duration = duration
+        self.recordedAt = recordedAt
+    }
 }
 
 public enum RecordingError: Error, LocalizedError {
@@ -39,13 +56,31 @@ public enum RecordingError: Error, LocalizedError {
 @MainActor
 @Observable
 public final class AudioRecorder {
+    /// Un enregistrement est **ouvert** : il tourne, ou il est en pause. Ce
+    /// n'est pas la même chose que « le micro capte » — voir ``isCapturing``.
     public private(set) var isRecording = false
+
+    /// L'enregistrement est ouvert mais suspendu. Le fichier est conservé, la
+    /// reprise écrit à la suite.
+    public private(set) var isPaused = false
+
     /// Niveau normalisé entre 0 et 1, pour la waveform.
     public private(set) var level: Double = 0
     public private(set) var elapsed: TimeInterval = 0
 
+    /// Le micro capte en ce moment : ni arrêté, ni en pause. C'est ce que
+    /// l'interface anime.
+    public var isCapturing: Bool { isRecording && !isPaused }
+
     private var recorder: AVAudioRecorder?
+
+    /// Début du **segment** en cours. Une pause le remet à zéro et verse sa
+    /// durée dans ``accumulated`` : sans ça, le temps continuait de courir
+    /// pendant la pause.
     private var startedAt: Date?
+    private var accumulated: TimeInterval = 0
+    private var openedAt: Date?
+
     private var meterTask: Task<Void, Never>?
     private var fileURL: URL?
 
@@ -86,22 +121,60 @@ public final class AudioRecorder {
 
         fileURL = url
         startedAt = .now
+        openedAt = .now
+        accumulated = 0
         isRecording = true
+        isPaused = false
         elapsed = 0
         startMetering()
     }
 
+    /// Suspend la capture sans rien perdre : le fichier reste ouvert et
+    /// ``resume()`` écrit à la suite. C'est le geste du bouton « pause » de la
+    /// feuille d'enregistrement — on reprend son souffle, on ne s'arrête pas.
+    public func pause() {
+        guard isRecording, !isPaused else { return }
+
+        recorder?.pause()
+        stopMetering()
+        accumulated += elapsedInCurrentSegment
+        startedAt = nil
+        isPaused = true
+        // Le niveau retombe : une waveform figée à mi-hauteur laisserait croire
+        // que le micro entend encore quelque chose.
+        level = 0
+    }
+
+    public func resume() {
+        guard isRecording, isPaused else { return }
+
+        recorder?.record()
+        startedAt = .now
+        isPaused = false
+        startMetering()
+    }
+
+    private var elapsedInCurrentSegment: TimeInterval {
+        guard let startedAt else { return 0 }
+        return Date.now.timeIntervalSince(startedAt)
+    }
+
     /// Arrête et renvoie le vocal. `nil` si aucun enregistrement n'était en cours.
     public func stop() throws -> RecordedAudio? {
-        guard let recorder, let url = fileURL, let startedAt else { return nil }
+        guard let recorder, let url = fileURL, let openedAt else { return nil }
+
+        let duration = accumulated + elapsedInCurrentSegment
 
         recorder.stop()
         stopMetering()
 
         self.recorder = nil
         fileURL = nil
-        self.startedAt = nil
+        startedAt = nil
+        self.openedAt = nil
+        accumulated = 0
         isRecording = false
+        isPaused = false
         level = 0
 
         // La session est relâchée pour rendre la main aux autres apps audio ;
@@ -117,8 +190,10 @@ public final class AudioRecorder {
             data: data,
             filename: url.lastPathComponent,
             mimeType: "audio/mp4",
-            duration: Date.now.timeIntervalSince(startedAt),
-            recordedAt: startedAt
+            // La durée **enregistrée**, pauses déduites : c'est celle du
+            // fichier, et c'est elle que le serveur retrouvera.
+            duration: duration,
+            recordedAt: openedAt
         )
     }
 
@@ -130,7 +205,10 @@ public final class AudioRecorder {
         recorder = nil
         fileURL = nil
         startedAt = nil
+        openedAt = nil
+        accumulated = 0
         isRecording = false
+        isPaused = false
         level = 0
         elapsed = 0
     }
@@ -143,9 +221,7 @@ public final class AudioRecorder {
 
                 recorder.updateMeters()
                 self.level = Self.normalize(decibels: recorder.averagePower(forChannel: 0))
-                if let startedAt = self.startedAt {
-                    self.elapsed = Date.now.timeIntervalSince(startedAt)
-                }
+                self.elapsed = self.accumulated + self.elapsedInCurrentSegment
             }
         }
     }

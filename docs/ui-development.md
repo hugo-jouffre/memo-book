@@ -336,7 +336,7 @@ section « À trancher » recopiée pour Clara.
 |---|---|---|
 | **1 · Entrée dans l'app** | Splash Screen, Welcome Screen, Sign Up | 📐 Spec figée (§8) — *Sign Up* attend T4 pour son back-end |
 | 2 · Compte | Sign In, mot de passe oublié, suppression de compte | ⏳ En attente de maquettes |
-| 3 · Carnets & enregistrement | **Accueil**, **accueil d'un voyage**, liste, détail, enregistrement | 🟢 *Accueil* + écran de lancement (§9) et *accueil d'un voyage* (§11) livrés, sur jeu d'essai — le reste existe en version non brandée |
+| 3 · Carnets & enregistrement | **Accueil**, **accueil d'un voyage**, **exemples de carnets**, liste, détail, enregistrement | 🟢 *Accueil* + écran de lancement (§9), *accueil d'un voyage* (§11) et *exemples de carnets* (§13, branché sur `GET /v1/gallery`) livrés — le reste existe en version non brandée |
 | 4 · Carnet & partage | Génération, aperçu PDF, partage | 🔄 Existe en version non brandée |
 | 5 · Paywall & réglages | Achat, abonnement, **profil** | 🟢 *Profil* et ses six feuilles livrés (§10), sur jeu d'essai — seule la déconnexion agit vraiment |
 
@@ -905,6 +905,81 @@ area et `ignoresSafeArea` l'étire vers le haut.
 | T17 | **`Green Lighter` sur le point « en ce moment »** : la couleur est bien celle du nœud, son emploi est une déduction. À confirmer |
 | T18 | **Deux gris coexistent** — `Grays/Gray` sur les écrans du lot 1, `Grey Typo` sur l'accueil. Voulu, ou l'un doit-il remplacer l'autre partout ? |
 
+### 9.3 La boîte d'information de l'accueil
+
+- **Nœud Figma** : aucun. La boîte vient d'une capture annotée par Hugo (09/09/2026) ;
+  le dessin est celui de la capture, la copie est verbatim. **À faire entrer dans la
+  maquette**, et à faire relire par Clara pour les trois états qu'elle n'écrivait pas.
+- **Vues** : `MemoBookDesign/BrandNotice` (le bloc), `MemoBookFeature/Home/HomeNotice`
+  (ce qu'il dit), `HomeView.noticeBox` (où il est).
+- **Rôle** : dire où on en est de la connexion et des vocaux, sans rien demander.
+
+**Ce n'est ni une erreur ni une alerte**, et c'est pourquoi ça ne ressemble à aucune des
+deux : pas de rouge, pas de pictogramme, pas de bouton. `ErrorBanner` dit « ça a raté,
+voilà pour réessayer » ; la boîte dit « voilà où on en est, tu peux continuer ». Elle
+disparaît d'elle-même quand la situation change.
+
+**Une seule boîte, quatre états, toujours au même endroit** — sous la salutation, avant
+les voyages. Une bande d'état qui change de place se cherche ; deux bandes empilées ne
+se lisent plus. L'ordre de priorité est celui de l'utilité, pas de la gravité :
+
+| # | État | Message (le gras est celui de la boîte) |
+|---|---|---|
+| 1 | Envoi en cours | « **Ton vocal est en cours d'envoi.** Encore un instant. » |
+| 2 | En attente de réseau | « **Tes vocaux enregistrés hors ligne sont bien conservés.** Ils seront envoyés dès ta reconnexion. » |
+| 3 | Vocal arrivé (4 s) | « **Ton vocal est bien arrivé.** Il sera retranscrit dans quelques instants. » |
+| 4 | Hors ligne | « Tu sembles hors ligne. **Tu peux consulter tes récits et enregistrer des étapes**, qui seront retranscrites plus tard. » |
+
+Quelqu'un qui a trois vocaux en attente sait déjà qu'il est hors ligne : ce qu'il veut
+savoir, c'est qu'ils ne sont pas perdus. D'où l'attente **avant** l'absence de réseau.
+Chaque état a son singulier et son pluriel — « Tes 1 vocaux » est le genre de phrase qui
+fait douter de tout le reste de l'app.
+
+**Tokens** — fond `Brand Colors/Beige Darker` (`MemoBookColor.separator`, le seul aplat
+discret de la palette), texte `Scheme/Text` sur 7,6:1, rayon `largeCornerRadius`, marge
+intérieure `s`. Le gras est **une autre police** (General Sans Semibold) et non un
+épaississement : les instances embarquées sont des familles distinctes, un `.bold()`
+donnerait un faux gras. D'où le balisage `**…**`, résolu à la construction de la vue et
+jamais dans un `body`.
+
+**Ce que la boîte engage côté code** — une phrase affichée est une promesse tenue, sinon
+l'écran ment :
+
+- « tu peux consulter tes récits » ⟶ `HomeFeedCache`, le dernier accueil reçu relu depuis
+  le disque quand l'appel échoue **au transport** (un 500 reste une erreur : le cacher
+  derrière un contenu périmé masquerait une panne du serveur) ;
+- « enregistrer des étapes » ⟶ le micro et la feuille d'enregistrement ne dépendent de
+  rien du réseau ;
+- « ils seront envoyés dès ta reconnexion » ⟶ `RecordingOutbox` + `PendingRecordingStore`,
+  file sur disque dans `Application Support` (pas dans `Caches` : iOS les purge, et un
+  vocal en attente n'existe nulle part ailleurs), vidée automatiquement au retour de
+  `NWPathMonitor`.
+
+**États limites** — un refus **définitif** du serveur (4xx) sort le vocal de la file et
+s'affiche en `ErrorBanner` : garder un souvenir que le serveur refusera à chaque fois,
+c'est promettre une arrivée qui n'aura jamais lieu. Une réponse illisible (décodage)
+compte au contraire comme **arrivée** — l'appel a abouti, et le renvoyer mettrait le
+souvenir deux fois dans le carnet. Hors ligne **avec** du contenu à l'écran, le bandeau
+d'erreur de chargement se tait : la boîte dit déjà pourquoi rien ne bouge.
+
+**Accessibilité** — la boîte est un seul élément, et chaque changement d'état est
+**annoncé** (`AccessibilityNotification.Announcement`) : une coupure de réseau ne se voit
+pas quand on ne regarde pas l'écran. Le texte se replie sur plusieurs lignes et suit le
+Dynamic Type sans plafond.
+
+**Bac à sable** — « Passer hors ligne » coupe **vraiment** le réseau de l'app (le vocal
+suivant part sur le disque, le retour en ligne le fait vraiment repartir), « + vocal en
+attente » met un vocal en file sans passer par le micro, « Envoi en cours » et « Vocal
+envoyé » posent l'état passager qu'on n'aurait sinon le temps de voir qu'avec un très
+mauvais réseau.
+
+**À trancher**
+
+| # | Sujet |
+|---|---|
+| T19 | **Copie des trois états ajoutés.** « Hors ligne » et « vocaux conservés » viennent de Hugo ; « envoi en cours », « vocal arrivé » et les singuliers sont écrits ici. À relire par Clara |
+| T20 | **Le beige de la boîte** n'a pas de variable dédiée : on emploie `Beige Darker`, prévu pour « les séparateurs et les aplats discrets ». À confirmer, ou à nommer |
+
 ## 10. Ce qu'on ne fait jamais
 
 - Coder une valeur numérique dans une vue au lieu d'un token
@@ -1156,18 +1231,20 @@ mémoire, le temps de la session — un seul endroit à brancher.
   `renderingMode(.template)`, et ne se remplacent pas par une icône du jeu
   MemoBook. Un filet très clair les entoure, sans quoi les logos blancs se
   dissoudraient dans la carte.
-- `IconChevronDown` (repris de `assets/icons/ui/Arrows/down chevron.svg`) ferme le
-  clavier. ⚠️ Icône **provisoire** : le chemin de l'icône « clavier bas »
-  demandée n'a pas été transmis — T27.
+- `IconKeyboardDown` ferme le clavier. Elle vient de `assets/icons/brand-icons`
+  (livrée le 08/09/2026) et **remplace** le double chevron provisoire
+  `IconChevronDown`, qui a été retiré du catalogue — T27 est close.
 - **Manquants**, faute de quota MCP pour les exporter du nœud :
   1. le **logo Mastercard** du champ « Numéro de carte » ;
   2. le **logotype Apple Pay** — remplacé par le symbole système `applelogo`
      suivi de « Pay », qui en est la composition officielle ;
   3. la **photo de couverture** de la commande en cours.
-- Le **chevron** des lignes n'existe pas dans le jeu de marque (dont la flèche est
-  un tracé dessiné, bien trop présent en bout de ligne) : il reste sur
-  `chevron.right`, isolé dans `BrandRow`, un seul endroit à changer. Même
-  précédent que le calendrier et l'itinéraire de l'accueil.
+- Le **chevron** des lignes est `IconChevron`, arrivé le 08/09/2026 dans le jeu
+  de marque à la place du `chevron.right` système. Il n'y en a qu'un dessin, posé
+  dans `BrandRow` : gris sur une ligne, vert sur le bouton d'abonnement.
+  ⚠️ Comme toutes les icônes du jeu, le trait n'occupe que le tiers de sa boîte
+  de 24 — c'est la boîte qu'on dimensionne, et elle se pose donc un peu plus en
+  retrait du bord que ne le faisait le symbole système.
 
 **Accessibilité** — chaque ligne est **un seul élément** VoiceOver
 (« E-mail, maylis.garde@icloud.com ») avec le trait `isButton` quand elle mène
@@ -1228,7 +1305,7 @@ l'accueil, et il se voit en **un seul endroit** (`ProfileView.notYetRouted`).
 | T26 | **Rayon des coins de l'écran** déduit d'une table de formats (``DeviceScreen``), aucune API publique ne le donnant. À relire à chaque nouveau format d'iPhone |
 | T27 | **Le libellé « Gérée par ton compte Apple »** n'est pas maquetté. Il explique pourquoi l'adresse ne s'ouvre pas ; sans lui on bute dessus sans comprendre |
 | T28 | **`signInProvider` n'existe pas encore côté back-end.** L'écran le lit sur le profil, le jeu d'essai le fournit ; il faudra que `GET /v1/me/profile` le renvoie, sans quoi une adresse Apple restera modifiable |
-| T27 | **L'icône « clavier bas »** : le chemin n'a pas été transmis. On est parti du double chevron de `assets/icons/ui/Arrows`, à remplacer |
+| T27 | ~~**L'icône « clavier bas »**~~ — close le 08/09/2026 : `IconKeyboardDown` est livrée, le double chevron provisoire est retiré |
 
 ---
 
@@ -1288,6 +1365,18 @@ d'une barre de filtres, et ça évite d'avoir à expliquer une règle de priorit
 Chacun est un `Menu` portant un `Picker`. ⚠️ **L'intention de « Étapes » est
 supposée** : filtrer la liste sur une étape. C'est la lecture littérale d'un
 filtre, mais elle mérite confirmation — T30.
+
+Deux corrections après relecture en simulateur (Hugo, 09/09/2026) :
+
+- **« Transports » n'avait pas de pictogramme.** Le symbole système qui tenait
+  la place (`arrow.triangle.turn.up.right.diagonal`) ne se dessinait tout
+  simplement pas, et la pastille gardait un trou à gauche de son libellé. C'est
+  un **train** de Lucide qui le remplace — aucune icône de transport dans le jeu
+  de marque, voir §13 et `MemoBookDesign/LucideIcon.swift`.
+- **La bande se comporte comme celle de la galerie** : `contentMargins` au lieu
+  d'un `padding` sous `scrollClipDisabled`, et un fondu à ses deux bords. Une
+  pastille verte qui sortait par la gauche se retrouvait tranchée à la verticale
+  contre le bord de l'écran ; elle s'y efface maintenant.
 
 **Copie** (verbatim, hors données) — « Continuer à enregistrer » · « Pays » ·
 « Étapes » · « Transports » · « Etape n°1 » · « avec … »
@@ -1420,3 +1509,139 @@ voir le carnets de la communauté » · « Tes voyages passés s'afficheront ici
 | T36 | **La pastille « ×1 »** est lime sur une maquette et bleue à contour sur une autre. Implémentée en lime, comme le compteur existant |
 | T37 | 🟠 **Asset attendu** — Hugo fournira l'illustration (passeport + carnet ouvert). Le livre du *Welcome* tient la place d'ici là |
 | T38 | ✅ **Tranché (D11)** — dès que les dates le disent en cours, il est en cours, même sans souvenir : c'est là qu'il faut inciter à raconter la première étape |
+
+---
+
+## 13. Lot 3 — Les carnets de la communauté
+
+### 13.1 Exemples de carnets
+
+- **Maquette** : capture fournie par Hugo. ⚠️ **Pas de nœud Figma** : les mesures
+  sont relevées sur l'image, comme celles du profil et de l'accueil d'un voyage.
+- **Vues** : `MemoBookFeature/Gallery/` — `GalleryView`, `GalleryModel`,
+  `GalleryCards`, `GalleryFixtures`.
+- **Rôle** : montrer à quoi ressemble un carnet MemoBook terminé, à quelqu'un
+  qui n'en a pas encore.
+- **Entrée / sortie** : depuis **la carte bleue de découverte** en bas de
+  l'accueil (`HomeIntent.openGallery`, poussé par `RootView` sur
+  `HomeRoute.gallery`) → retour à l'accueil. Le bouton du bas ressort par une
+  intention : le voyage en cours, ou la feuille « Nouveau carnet ».
+
+**La carte de découverte change de destination.** Elle portait une URL
+(`Showcase.destinationUrl`) et ne menait nulle part ; elle ouvre désormais cet
+écran. Sa copie vient de la base et dit maintenant « Voir des exemples de
+carnet » / « Découvre à quoi ressemble un carnet MemoBook terminé » —
+`prisma/seed.ts`, pas le code. Le champ `destinationUrl` reste au contrat pour
+une campagne qui pointerait ailleurs.
+
+**Structure**
+
+| Élément | Valeur | Note |
+|---|---|---|
+| En-tête | flèche 1.5 rem dans une cible de 2.75 rem + `h2` | Le même que le profil : l'écran dessine son en-tête, il n'emploie pas la barre système |
+| Barre de filtres | `IconFilter` 1.25 rem + pastilles 2.75 rem | Fixée en haut (`safeAreaInset`) : c'est elle qui commande la grille, elle ne part pas avec |
+| Pastille | `BrandFilterChip`, variante `.toggle` | Sans chevron : elle **est** le choix, rien ne se déroule |
+| Voile du haut | 1.5 rem, sous la barre | Les vignettes s'y **dissolvent** au lieu d'être coupées sur un trait |
+| Vignette | rayon **1.5 rem** (`galleryCornerRadius`) | Nouveau token — voir « À trancher » |
+| Gouttière | 0.75 rem, verticale et horizontale | |
+| Colonnes | 2, **1 en taille accessible** | |
+| CTA | 3.125 rem, pleine largeur, fixe | Même voile de 12.5 rem que l'accueil |
+
+**La bande de filtres défile d'un seul tenant, et s'efface à ses bords.**
+`IconFilter` est **dans** la bande, pas à côté : posé dehors, il restait planté
+à la marge pendant que les pastilles lui passaient dessus. Et la bande prend
+toute la largeur de l'écran — c'est `contentMargins(for: .scrollContent)` qui
+aligne son contenu sur la colonne, **pas** un `padding` sous un
+`scrollClipDisabled` : celui-là laissait une pastille sortie du cadre continuer
+d'être dessinée par-dessus tout ce qui traînait là. Ce qui sort par un bord y
+fond (``brandHorizontalFade``), au lieu d'être tranché à la verticale — une
+pastille pleine coupée net contre le bord de l'écran se lit comme un défaut de
+rendu. Les deux règles valent aussi pour les filtres d'un voyage (§11).
+
+**La mosaïque.** Les vignettes n'ont pas toutes la même hauteur : quatre formats
+(0.78, 0.86, 1.0, 1.12 en largeur/hauteur) tirés d'une empreinte stable de
+l'identifiant du voyage — la même que celle des aplats de couverture, pour
+qu'une carte garde sa forme d'un lancement à l'autre. Chaque carnet va dans la
+**colonne la plus courte** : en alternant simplement, deux vignettes hautes de
+suite creusaient cent points de vide dans l'autre colonne. Le rangement se fait
+dans `GalleryModel`, une fois par filtre, jamais dans un `body`.
+
+**L'image est en `scaledToFill`, jamais rognée de travers**, et un voile
+(transparent au tiers, noir à 68 % en bas) rend le titre lisible sur n'importe
+quelle photo. Tant qu'aucune photo ne remonte du serveur, c'est l'aplat de marque
+de `TripCoverPlaceholder` qui tient la place.
+
+**Le drapeau, ou le globe.** Un seul pays → son drapeau, dérivé du code ISO. Deux
+ou plus → **`IconGlobeDuo`**. Choisir un drapeau parmi dix désignerait le premier
+pays comme *le* pays du voyage, ce qu'un tour du monde n'a pas ; un pays sans
+code exploitable prend le globe aussi, plutôt qu'un carré blanc.
+
+**Le CTA suit ce que la personne a déjà.** « Continuer mon voyage » +
+`IconArrowRight` quand elle a un voyage en cours ou à venir, « Créer mon
+voyage » + `IconPlus` sinon. C'est **le serveur** qui répond à cette question
+(`Gallery.resumableTripId`), avec la même règle que `HomeModel.resumableTrip` :
+deux écrans qui répondraient différemment seraient un bug qu'on ne verrait qu'en
+passant de l'un à l'autre.
+
+**Aux tailles accessibles**, la vignette se retourne : l'image en haut à son
+format, le titre **en dessous** sur le papier, en encre pleine. Posé sur l'image,
+un titre en AX3 débordait par le bas, recouvrait le drapeau et mordait sur la
+carte voisine. Une seule colonne, aussi : à 165 points de large, « De Nantes à
+Saint-Malo à vélo » fait dix lignes d'un mot.
+
+**Contrat back-end** — `GET /v1/gallery`, session obligatoire.
+
+| Donnée | Origine |
+|---|---|
+| Les carnets | `memos` où `isPublicGallery` est vrai — **le seul critère** |
+| Titre | `memos.title` |
+| Sous-titre | `memos.gallerySummary` — **nouvelle colonne**, qu'un agent déduira du contenu du voyage. `null` : la carte n'affiche que son titre |
+| Pays | **dérivé** de `memos.destination*` + `memo_steps.destination*`, sans doublon. Rien n'est stocké |
+| Catégories | `gallery_categories` (actives, triées par `position`) et `memo_gallery_categories` |
+| Bouton du bas | `resumableTripId` — le voyage en cours du lecteur, sinon son prochain départ |
+
+**Les catégories sont une table, pas une énumération** : en ajouter une, la
+renommer, changer son pictogramme ou la retirer de la barre est une écriture en
+base, pas une livraison d'app. Un carnet peut tenir dans **plusieurs** (un tour
+du monde à pied est aussi une randonnée) ; la barre, elle, n'en coche qu'une à la
+fois. `npm run db:seed` en pose neuf et neuf carnets publics, sur un compte à
+part (`communaute@memo-book.com`) pour qu'ils n'encombrent pas l'accueil des
+comptes de test.
+
+**Assets** — ⚠️ **Exception assumée à R10.** Les pictogrammes de catégorie
+viennent de [Lucide](https://lucide.dev) (licence ISC) et non de Figma : le jeu
+de marque compte trente-cinq icônes, aucune ne représente un *type de voyage*.
+Voir `assets/icons/lucide-icons/README.md` et
+`ios/Tools/import-lucide-icons.py`. La clé est celle de la base
+(`iconKey` = nom du fichier), résolue par `MemoBookDesign/LucideIcon.swift`,
+qui retombe sur une boussole pour une clé inconnue — une catégorie ajoutée en
+base s'affiche donc avant la prochaine version de l'app. `IconFilter` et
+`IconFilterDuo`, eux, viennent bien du jeu de marque et sont importés au passage.
+
+**États** — les quatre sont gérés. *Chargement* : la grille se dessine tout de
+suite à sa forme définitive, avec six vignettes vides. *Erreur* : `ErrorBanner`
+en ligne au-dessus de la grille. *Vide* : deux textes différents selon qu'aucun
+carnet public n'existe encore ou que la catégorie cochée n'en range aucun — **ni
+l'un ni l'autre n'est maquetté**.
+
+**Accessibilité** — la flèche de retour a sa cible de 2.75 rem et son libellé
+« Retour » ; les pastilles portent `.isButton` et `.isSelected` ; une vignette est
+lue d'un bloc, et **nomme le pays** plutôt que de laisser VoiceOver annoncer un
+emoji de drapeau. L'icône de filtre est décorative et masquée.
+
+**Copie** (verbatim) — « Exemples de carnets » · « Tout » · « Continuer mon
+voyage » · « Créer mon voyage » · « Les premiers carnets arrivent » · « Reviens
+bientôt : la communauté partage ses carnets terminés ici. » · « Aucun carnet dans
+cette catégorie » · « Choisis « Tout » pour revoir tous les carnets. » · « Tout
+afficher »
+
+**À trancher**
+
+| # | Sujet |
+|---|---|
+| T39 | ✅ **Tranché** — l'icône de filtre est **décorative**, et rien d'autre. Hugo, 09/09/2026. Elle ouvre la ligne et défile avec elle ; elle ne se laisse pas toucher et reste masquée à VoiceOver |
+| T40 | ✅ **Tranché** — le rayon 1.5 rem (24) reste tel quel. Hugo, 09/09/2026 : « c'est ok pour l'instant ». Cinquième valeur de rayon de l'app, à reprendre le jour où Clara passe sur l'échelle |
+| T41 | **Les vignettes ne s'ouvrent pas** — confirmé par Hugo, c'est normal pour l'instant. Il n'y a donc ni bouton, ni flèche, ni retour au doigt : rien ne promet un geste qui ne se passerait pas |
+| T42 | **Les pictogrammes de catégorie sont ceux de Lucide**, tracés, là où le jeu de marque est plein. L'écart se voit dans la barre. À reprendre le jour où Clara dessine la série |
+| T43 | **Aucune photo de couverture** ne remonte encore : toutes les vignettes portent l'aplat dégradé. Les formats de la mosaïque sont donc à revoir sur de vraies images |
+| T44 | **Un glissé vertical parti de la bande de filtres fait défiler la page.** C'est le verrou directionnel d'iOS — un glissé franchement horizontal ne bouge que les pastilles, un glissé vertical prend la page, exactement comme les rayons de l'App Store. Le rendre horizontal seul veut dire refuser le défilement depuis cette bande de 2.75 rem, ce qui demande de passer par UIKit. À trancher : est-ce gênant, ou est-ce l'attendu ? |

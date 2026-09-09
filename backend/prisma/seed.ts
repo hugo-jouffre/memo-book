@@ -195,6 +195,9 @@ async function seedTraveller(
     data: {
       ownerAccountId: account.id,
       title: "Rome 2026",
+      // Des codes lisibles et stables, pour pouvoir essayer « Rejoins une
+      // aventure » sans aller les lire en base.
+      accessCode: "ROME26",
       subtitle: "Dix jours à marcher et à manger",
       authors: "Hugo et Clara",
       theme: "City trip & découvertes",
@@ -259,6 +262,7 @@ async function seedTraveller(
     data: {
       ownerAccountId: account.id,
       title: "Lisbonne entre filles",
+      accessCode: "LISB26",
       theme: "voyage",
       stage: "past",
       destinationName: "Portugal",
@@ -282,6 +286,7 @@ async function seedTraveller(
     data: {
       ownerAccountId: account.id,
       title: "Islande cet hiver",
+      accessCode: "ISLA26",
       theme: "voyage",
       stage: "upcoming",
       destinationName: "Islande",
@@ -362,6 +367,195 @@ async function seedTraveller(
   return { token, balance };
 }
 
+/**
+ * Les catégories de la galerie, et le pictogramme de chacune.
+ *
+ * `iconKey` est le **nom du fichier source** de `assets/icons/lucide-icons`,
+ * pas un nom d'asset iOS : l'app le résout, et retombe sur une boussole pour
+ * une clé qu'elle ne connaît pas encore. Ajouter une catégorie ici n'oblige
+ * donc pas à livrer une version.
+ */
+const GALLERY_CATEGORIES = [
+  { slug: "tour-du-monde", name: "Tour du monde", iconKey: "globe" },
+  { slug: "randonnee", name: "Randonnée", iconKey: "footprints" },
+  { slug: "road-trip", name: "Road trip", iconKey: "car-front" },
+  { slug: "city-trip", name: "City trip", iconKey: "building-2" },
+  { slug: "plage-et-iles", name: "Plage & îles", iconKey: "palmtree" },
+  { slug: "montagne", name: "Montagne", iconKey: "mountain-snow" },
+  { slug: "en-famille", name: "En famille", iconKey: "users" },
+  { slug: "velo", name: "Vélo", iconKey: "bike" },
+  { slug: "voile", name: "Voile & mer", iconKey: "sailboat" },
+];
+
+/**
+ * Les carnets de la galerie de la communauté.
+ *
+ * `summary` est ce que l'agent écrira un jour à partir du contenu du voyage —
+ * ici, à la main, pour que l'écran se regarde. `countries` porte le carnet en
+ * premier puis ses étapes : c'est le **nombre de pays** qui décide du
+ * pictogramme de la carte, un drapeau pour un seul, le globe au-delà.
+ */
+const GALLERY_TRIPS = [
+  {
+    title: "Bali entre amis",
+    summary: "2 semaines de trek",
+    countries: [["Indonésie", "ID"]],
+    categories: ["randonnee", "plage-et-iles"],
+    startDate: "2026-05-02",
+  },
+  {
+    title: "Philippines avec Claire & Gus",
+    summary: "2 mois de tour du monde",
+    countries: [
+      ["Philippines", "PH"],
+      ["Vietnam", "VN"],
+      ["Thaïlande", "TH"],
+    ],
+    categories: ["tour-du-monde", "plage-et-iles"],
+    startDate: "2026-03-14",
+  },
+  {
+    title: "TDM 2025",
+    summary: "Un couple autour du monde",
+    countries: [
+      ["Argentine", "AR"],
+      ["Chili", "CL"],
+      ["Pérou", "PE"],
+      ["Nouvelle-Zélande", "NZ"],
+    ],
+    categories: ["tour-du-monde"],
+    startDate: "2025-09-08",
+  },
+  {
+    title: "La traversée des Alpes",
+    summary: "12 jours de refuge en refuge",
+    countries: [
+      ["France", "FR"],
+      ["Suisse", "CH"],
+      ["Italie", "IT"],
+    ],
+    categories: ["randonnee", "montagne"],
+    startDate: "2025-07-19",
+  },
+  {
+    title: "Road trip en Islande",
+    summary: "1 400 km sur la ring road",
+    countries: [["Islande", "IS"]],
+    categories: ["road-trip"],
+    startDate: "2025-06-21",
+  },
+  {
+    title: "Lisbonne en famille",
+    summary: "5 jours à quatre, sans voiture",
+    countries: [["Portugal", "PT"]],
+    categories: ["city-trip", "en-famille"],
+    startDate: "2025-04-12",
+  },
+  {
+    title: "De Nantes à Saint-Malo à vélo",
+    summary: "8 jours sur la Vélodyssée",
+    countries: [["France", "FR"]],
+    categories: ["velo"],
+    startDate: "2024-08-03",
+  },
+  {
+    title: "Les Cyclades à la voile",
+    summary: "3 semaines d’île en île",
+    countries: [["Grèce", "GR"]],
+    categories: ["voile", "plage-et-iles"],
+    startDate: "2024-06-15",
+  },
+  {
+    // Volontairement **sans résumé** : l'agent n'a pas encore écrit le sien, et
+    // la carte doit alors n'afficher que son titre plutôt qu'un trou ou une
+    // phrase inventée. C'est le cas que le simulateur doit montrer.
+    title: "Kyoto au printemps",
+    summary: null,
+    countries: [["Japon", "JP"]],
+    categories: ["city-trip"],
+    startDate: "2024-03-28",
+  },
+];
+
+/**
+ * Pose la galerie de la communauté : ses catégories, et les carnets publics
+ * qu'elle range.
+ *
+ * Ils appartiennent à un **compte à part**, et non aux deux comptes de test :
+ * la galerie doit montrer les carnets *des autres*, et les rattacher à
+ * `demo@memo-book.com` les ferait apparaître sur son accueil comme neuf voyages
+ * de plus.
+ */
+async function seedGallery(): Promise<number> {
+  const community = await prisma.account.upsert({
+    where: { email: "communaute@memo-book.com" },
+    update: {},
+    create: {
+      email: "communaute@memo-book.com",
+      firstName: "La communauté",
+      lastName: "MemoBook",
+    },
+  });
+
+  const categories = new Map<string, string>();
+  for (const [position, category] of GALLERY_CATEGORIES.entries()) {
+    const created = await prisma.galleryCategory.upsert({
+      where: { slug: category.slug },
+      update: { ...category, position, isActive: true },
+      create: { ...category, position },
+    });
+    categories.set(category.slug, created.id);
+  }
+
+  // Refaits à neuf, comme les carnets des comptes de test : un seed rejoué ne
+  // doit pas empiler deux fois la même galerie.
+  await prisma.memo.deleteMany({ where: { ownerAccountId: community.id } });
+
+  for (const [index, trip] of GALLERY_TRIPS.entries()) {
+    const [first, ...rest] = trip.countries;
+
+    const memo = await prisma.memo.create({
+      data: {
+        ownerAccountId: community.id,
+        title: trip.title,
+        // Les carnets de la galerie ne se rejoignent pas, mais la colonne est
+        // obligatoire : un code de rang suffit, et reste unique.
+        accessCode: `GAL${String(index + 1).padStart(3, "0")}`,
+        theme: "voyage",
+        stage: "past",
+        isPublicGallery: true,
+        gallerySummary: trip.summary,
+        destinationName: first?.[0],
+        destinationCountryCode: first?.[1],
+        startDate: new Date(`${trip.startDate}T00:00:00Z`),
+        isPrintable: true,
+        categories: {
+          create: trip.categories.map((slug) => ({
+            // Les slugs viennent de la liste juste au-dessus : une clé absente
+            // est une faute de frappe, et vaut mieux qu'elle éclate ici.
+            categoryId: categories.get(slug) ?? "",
+          })),
+        },
+      },
+    });
+
+    // Les pays suivants deviennent des étapes : c'est de là que la carte tire
+    // son globe plutôt qu'un drapeau.
+    for (const [index, [name, code]] of rest.entries()) {
+      await prisma.memoStep.create({
+        data: {
+          memoId: memo.id,
+          number: index + 1,
+          destinationName: name,
+          destinationCountryCode: code,
+        },
+      });
+    }
+  }
+
+  return GALLERY_TRIPS.length;
+}
+
 async function main(): Promise<void> {
   // Une amie invitée sur les voyages : c'est elle qui fait apparaître les
   // pastilles de compagnons sur les couvertures. Un seul exemplaire, partagé
@@ -385,27 +579,37 @@ async function main(): Promise<void> {
   // Ce qui se pilote depuis la base
   // ---------------------------------------------------------------------
 
+  const galleryTripCount = await seedGallery();
+
   await prisma.showcase.deleteMany({});
   await prisma.showcase.createMany({
     data: [
       {
+        // La carte bleue du bas de l'accueil. Elle n'annonce plus un carnet
+        // précis : elle ouvre la **galerie**, et sa phrase dit ce qu'on y
+        // trouve. C'est la seule active, donc la seule que l'accueil sert.
+        title: "Voir des exemples de carnet",
+        subtitle: "Découvre à quoi ressemble un carnet MemoBook terminé",
+        isActive: true,
+        position: 0,
+      },
+      {
         title: "Le tour de l'Islande de Marion",
         subtitle: "72 pages, 11 jours, 1 400 km",
-        isActive: true,
         showOnWelcomeScreen: true,
-        position: 0,
+        position: 1,
       },
       {
         title: "La première année de Jeanne",
         subtitle: "Un carnet de naissance, mois après mois",
         showOnWelcomeScreen: true,
-        position: 1,
+        position: 2,
       },
       {
         title: "Six mois en Amérique du Sud",
         subtitle: "Le carnet le plus épais qu'on ait imprimé",
         showOnWelcomeScreen: true,
-        position: 2,
+        position: 3,
       },
     ],
   });
@@ -459,6 +663,10 @@ async function main(): Promise<void> {
       "  Chacun a trois voyages : un en cours (3 étapes, 4 souvenirs), un",
       "  terminé et imprimable, un à venir. Plus une commande en production et",
       "  la modale d'avis de la maquette.",
+      "",
+      `  Galerie de la communauté : ${GALLERY_CATEGORIES.length} catégories et`,
+      `  ${galleryTripCount} carnets publics, sur un compte à part`,
+      "  (communaute@memo-book.com) pour qu'ils n'encombrent pas l'accueil.",
       "",
       "  Essai rapide :",
       "    TOKEN=$(curl -s localhost:3000/v1/auth/signin -H 'content-type: application/json' \\",

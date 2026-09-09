@@ -15,35 +15,56 @@ import SwiftUI
 /// sous « Réduire les animations », où la barre reste sagement grise.
 public struct BrandSkeleton: View {
     private let width: CGFloat?
+    private let fixedHeight: CGFloat?
+    private let cornerRadius: CGFloat?
     private let onDark: Bool
 
     /// - Parameters:
     ///   - width: la largeur de la barre. `nil` la laisse prendre toute la
     ///     place disponible — pour une valeur posée sous son intitulé.
+    ///   - height: la hauteur, quand la place à tenir n'est pas une ligne de
+    ///     texte mais un bloc — une illustration, un bouton. `nil` garde le
+    ///     corps de texte, qui est le cas courant.
+    ///   - cornerRadius: le rayon, pour ces mêmes blocs. `nil` garde la
+    ///     capsule : à hauteur de texte, les deux se confondent, mais un bloc
+    ///     haut deviendrait un stade.
     ///   - onDark: la barre est posée sur une photo ou un aplat sombre, comme
     ///     la couverture d'un voyage. Elle passe alors en clair : l'encre à 9 %
     ///     y disparaîtrait complètement.
-    public init(width: CGFloat? = nil, onDark: Bool = false) {
+    public init(
+        width: CGFloat? = nil,
+        height: CGFloat? = nil,
+        cornerRadius: CGFloat? = nil,
+        onDark: Bool = false
+    ) {
         self.width = width
+        self.fixedHeight = height
+        self.cornerRadius = cornerRadius
         self.onDark = onDark
     }
 
     /// La hauteur suit le corps de texte : la barre tient exactement la place
     /// que la valeur prendra, et la ligne ne saute pas en se remplissant.
-    @ScaledMetric(relativeTo: .body) private var height: CGFloat = 14
+    @ScaledMetric(relativeTo: .body) private var textHeight: CGFloat = 14
+
+    /// La forme dessinée : une capsule par défaut, un rectangle arrondi dès
+    /// qu'on donne un rayon.
+    private var shape: AnyShape {
+        cornerRadius.map { AnyShape(RoundedRectangle(cornerRadius: $0)) } ?? AnyShape(.capsule)
+    }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isSweeping = false
 
     public var body: some View {
-        Capsule()
+        shape
             // Le noir de la marque à peine posé, pas un gris système : la barre
             // doit rester dans le crème de la page. Sur un fond sombre, c'est
             // le blanc de la marque qui joue le même rôle.
             .fill(onDark ? MemoBookColor.onAction.opacity(0.22) : MemoBookColor.ink.opacity(0.09))
-            .frame(width: width, height: height)
+            .frame(width: width, height: fixedHeight ?? textHeight)
             .overlay { sheen }
-            .clipShape(.capsule)
+            .clipShape(shape)
             .accessibilityHidden(true)
             .onAppear { isSweeping = true }
     }

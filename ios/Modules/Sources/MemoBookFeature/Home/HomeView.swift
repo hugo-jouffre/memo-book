@@ -34,6 +34,18 @@ public struct HomeView: View {
     /// faut aussi que le tracé du M se soit effacé.
     @State private var isLoaded = false
 
+    /// La feuille d'enregistrement est ouverte. Même raison que celle du
+    /// carnet : une feuille propose, elle ne navigue pas.
+    @State private var isRecording = false
+
+    /// La feuille « Nouveau carnet » est ouverte.
+    ///
+    /// C'est la **seule** chose que l'accueil présente lui-même, et ce n'est pas
+    /// une entorse à la règle qui veut qu'il ne navigue pas : une feuille ne
+    /// mène nulle part, elle propose. Ce qu'on y choisit, en revanche, redevient
+    /// une ``HomeIntent`` que `RootView` route.
+    @State private var isCreatingNotebook = false
+
     @Environment(\.launchOverlayIsVisible) private var isCoveredByLaunch
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -65,6 +77,17 @@ public struct HomeView: View {
             .ignoresSafeArea()
         }
         .environment(\.homeContentHasAppeared, hasAppeared)
+        .brandSheet(isPresented: $isCreatingNotebook) {
+            NewNotebookSheet(resumableTrip: model.resumableTrip, onIntent: onIntent)
+        }
+        .brandSheet(isPresented: $isRecording) {
+            // Le vocal ne remonte pas à `RootView` : il n'y a rien à router, il
+            // y a un appel réseau à faire. C'est le modèle de l'écran qui le
+            // fait, comme il fait son chargement.
+            RecordingSheet { audio in
+                Task { await model.upload(audio) }
+            }
+        }
         // Le crème de la marque ne se retourne pas en sombre — voir
         // `MemoBookColor`.
         .environment(\.colorScheme, .light)
@@ -81,6 +104,13 @@ public struct HomeView: View {
         }
         .onAppear {
             if isReadyToRise { rise() }
+        }
+        // Le réseau qui tombe ou qui revient ne se voit pas quand on ne regarde
+        // pas l'écran. VoiceOver l'annonce donc, une fois, à chaque changement :
+        // c'est exactement ce que la boîte fait pour quelqu'un qui voit.
+        .onChange(of: model.notice) { _, notice in
+            guard let notice else { return }
+            AccessibilityNotification.Announcement(notice.spokenMessage).post()
         }
     }
 
@@ -136,9 +166,18 @@ public struct HomeView: View {
         Group {
             greeting.rising(0)
 
+            noticeBox
+                // La boîte apparaît et disparaît **pendant** qu'on regarde
+                // l'écran — une coupure de réseau ne prévient pas. Elle se pose
+                // donc au lieu de surgir, et l'animation vit ici plutôt que
+                // dans le composant : c'est l'écran qui sait que sa valeur a
+                // changé.
+                .animation(.smooth(duration: 0.35), value: model.notice)
+                .rising(1)
+
             if let message = model.errorMessage {
                 ErrorBanner(message: message) {
-                    Task { await model.load() }
+                    Task { await model.retry() }
                 }
                 .rising(1)
             }
@@ -153,6 +192,24 @@ public struct HomeView: View {
             #if DEBUG
                 HomeDebugPanel(model: model).rising(showcaseOrder + 2)
             #endif
+        }
+    }
+
+    // MARK: - L'état de la connexion
+
+    /// La boîte d'information : hors ligne, vocaux en attente, envoi en cours,
+    /// vocaux arrivés.
+    ///
+    /// Elle est **sous la salutation et au-dessus des voyages**, et elle y
+    /// reste : une bande d'état qui change de place selon le message se
+    /// cherche à chaque fois. Le contenu, lui, vient de ``HomeNotice`` — la vue
+    /// n'écrit pas un mot de ces phrases, comme elle n'écrit pas les titres de
+    /// voyages.
+    @ViewBuilder
+    private var noticeBox: some View {
+        if let notice = model.notice {
+            BrandNotice(notice.message)
+                .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
         }
     }
 
@@ -316,7 +373,7 @@ public struct HomeView: View {
                     .rising(upcomingHeadingOrder)
 
                 if trips.isEmpty {
-                    UpcomingTripInvite { onIntent(.browseCommunity) }
+                    UpcomingTripInvite { isCreatingNotebook = true }
                         .rising(upcomingHeadingOrder + 1)
                 } else {
                     ForEach(Array(trips.enumerated()), id: \.element.id) { index, trip in
@@ -366,7 +423,7 @@ public struct HomeView: View {
     private var showcaseSection: some View {
         if let showcase = model.feed?.showcase {
             ShowcaseCard(showcase: showcase) {
-                onIntent(.openShowcase(url: showcase.destinationUrl))
+                onIntent(.openGallery)
             }
         }
     }
@@ -423,7 +480,13 @@ public struct HomeView: View {
             style: isBlocked ? .accent : .primary,
             fillsWidth: true
         ) {
-            onIntent(hasOngoingTrip ? .startRecording : .createTrip)
+            // Un voyage ouvert : on raconte. Aucun : il faut d'abord un carnet,
+            // et c'est la feuille qui demande lequel.
+            if hasOngoingTrip {
+                isRecording = true
+            } else {
+                isCreatingNotebook = true
+            }
         }
         // Le libellé suit le Dynamic Type, mais s'arrête à AX1. Au-delà, une
         // barre ancrée en bas prend la moitié de l'écran et cache ce qu'elle

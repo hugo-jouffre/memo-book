@@ -70,6 +70,18 @@ interface WelcomeBody {
   showcases: { title: string }[];
 }
 
+interface GalleryBody {
+  categories: { id: string; slug: string; name: string; iconKey: string }[];
+  trips: {
+    id: string;
+    title: string;
+    subtitle: string | null;
+    destinations: { name: string; countryCode: string | null }[];
+    categoryIds: string[];
+  }[];
+  resumableTripId: string | null;
+}
+
 let harness: TestHarness;
 
 beforeEach(async () => {
@@ -87,11 +99,15 @@ afterAll(async () => {
  * Un compte suffit à en créer un : la propriété tient dans `ownerAccountId`,
  * sans appareil ni ligne de participant pour le propriétaire.
  */
+let accessCodeCounter = 0;
+
 async function seedTrip(accountId: string, overrides = {}) {
+  accessCodeCounter += 1;
   return harness.prisma.memo.create({
     data: {
       ownerAccountId: accountId,
       title: "Rome 2026",
+      accessCode: `TST${String(accessCodeCounter).padStart(3, "0")}`,
       stage: "ongoing",
       destinationName: "Italie",
       destinationCountryCode: "IT",
@@ -660,5 +676,129 @@ describe("l'écran de bienvenue", () => {
       url: "/v1/showcases/welcome",
     });
     expect(response.json<WelcomeBody>().showcases).toEqual([]);
+  });
+});
+
+describe("la galerie de la communauté", () => {
+  async function seedCategory(slug: string, overrides = {}) {
+    return harness.prisma.galleryCategory.create({
+      data: { slug, name: slug, iconKey: "globe", ...overrides },
+    });
+  }
+
+  it("ne montre que les carnets cochés « galerie », d'où qu'ils viennent", async () => {
+    const reader = await registerAccount(harness.app, "lecteur@memobook.app");
+    const other = await registerAccount(harness.app, "autre@memobook.app");
+
+    await seedTrip(other.accountId, { title: "Public", isPublicGallery: true });
+    await seedTrip(other.accountId, { title: "Privé" });
+
+    const response = await harness.app.inject({
+      method: "GET",
+      url: "/v1/gallery",
+      headers: { authorization: reader.authorization },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json<GalleryBody>();
+
+    // Le voyage de quelqu'un d'autre est visible **parce qu'il est public**,
+    // et celui qui ne l'est pas reste invisible même dans la galerie.
+    expect(body.trips.map((trip) => trip.title)).toEqual(["Public"]);
+  });
+
+  it("range les pays du carnet et de ses étapes, sans doublon", async () => {
+    const account = await registerAccount(harness.app);
+    const memo = await seedTrip(account.accountId, {
+      title: "Tour du monde",
+      isPublicGallery: true,
+      gallerySummary: "2 mois de TDM",
+    });
+
+    await harness.prisma.memoStep.createMany({
+      data: [
+        { memoId: memo.id, number: 1, destinationName: "Italie", destinationCountryCode: "IT" },
+        { memoId: memo.id, number: 2, destinationName: "Grèce", destinationCountryCode: "GR" },
+      ],
+    });
+
+    const response = await harness.app.inject({
+      method: "GET",
+      url: "/v1/gallery",
+      headers: { authorization: account.authorization },
+    });
+
+    const trip = response.json<GalleryBody>().trips[0];
+    if (!trip) throw new Error("la galerie n'a rendu aucun carnet");
+
+    expect(trip.subtitle).toBe("2 mois de TDM");
+    // L'Italie est celle du carnet **et** celle de la première étape : elle ne
+    // compte qu'une fois. C'est ce décompte qui décide du drapeau ou du globe.
+    expect(trip.destinations).toEqual([
+      { name: "Italie", countryCode: "IT" },
+      { name: "Grèce", countryCode: "GR" },
+    ]);
+  });
+
+  it("sert les catégories actives dans l'ordre, et les rattachements", async () => {
+    const account = await registerAccount(harness.app);
+    const monde = await seedCategory("tour-du-monde", { position: 0 });
+    const rando = await seedCategory("randonnee", { position: 1 });
+    await seedCategory("retiree", { position: 2, isActive: false });
+
+    const memo = await seedTrip(account.accountId, { isPublicGallery: true });
+    await harness.prisma.memoGalleryCategory.createMany({
+      data: [
+        { memoId: memo.id, categoryId: monde.id },
+        { memoId: memo.id, categoryId: rando.id },
+      ],
+    });
+
+    const response = await harness.app.inject({
+      method: "GET",
+      url: "/v1/gallery",
+      headers: { authorization: account.authorization },
+    });
+
+    const body = response.json<GalleryBody>();
+    expect(body.categories.map((category) => category.slug)).toEqual([
+      "tour-du-monde",
+      "randonnee",
+    ]);
+    // Un carnet peut tenir dans deux catégories : il apparaît sous chacune.
+    expect(body.trips[0]?.categoryIds.sort()).toEqual([monde.id, rando.id].sort());
+  });
+
+  it("propose de reprendre le voyage en cours, sinon le prochain, sinon rien", async () => {
+    const account = await registerAccount(harness.app);
+
+    const ask = async () =>
+      (
+        await harness.app.inject({
+          method: "GET",
+          url: "/v1/gallery",
+          headers: { authorization: account.authorization },
+        })
+      ).json<GalleryBody>().resumableTripId;
+
+    // Aucun voyage : le bouton dira « Créer mon voyage ».
+    expect(await ask()).toBeNull();
+
+    const islande = await seedTrip(account.accountId, {
+      title: "Islande",
+      stage: "upcoming",
+      startDate: new Date("2027-01-01T00:00:00Z"),
+    });
+    expect(await ask()).toBe(islande.id);
+
+    // Un voyage en cours passe devant un voyage prévu, quelles que soient les
+    // dates : c'est celui-là qu'on est en train de raconter.
+    const rome = await seedTrip(account.accountId, { title: "Rome", stage: "ongoing" });
+    expect(await ask()).toBe(rome.id);
+  });
+
+  it("exige une session", async () => {
+    const response = await harness.app.inject({ method: "GET", url: "/v1/gallery" });
+    expect(response.statusCode).toBe(401);
   });
 });

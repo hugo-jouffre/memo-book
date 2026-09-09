@@ -43,6 +43,13 @@ public enum APIError: Error, LocalizedError, Sendable {
         }
     }
 
+    /// L'appel n'a **pas quitté l'appareil** — ou n'est jamais revenu. C'est
+    /// la seule erreur qui vaille un repli sur ce qu'on avait déjà : un 500 ou
+    /// un 404 sont des réponses, et une réponse mérite qu'on la montre.
+    public var isTransport: Bool {
+        if case .transport = self { true } else { false }
+    }
+
     /// `true` quand réessayer a une chance d'aboutir.
     public var isRetryable: Bool {
         switch self {

@@ -64,7 +64,7 @@ targets:
         CFBundleLocalizations:
           - fr
         CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "4"
+        CFBundleVersion: "5"
         # L'app ne parle que français. Sans ces deux clés, iOS la considère
         # anglaise et `Locale.current` suit la langue de l'appareil : sur un
         # iPhone réglé en anglais, l'écran d'accueil affichait « 26 Aug–15 Sep »
@@ -103,6 +103,11 @@ targets:
           MemoBook enregistre votre voix pour transformer vos souvenirs en carnet.
         NSPhotoLibraryUsageDescription: >-
           MemoBook ajoute vos photos aux pages de votre carnet.
+        # La reconnaissance vocale sert **uniquement** à écrire le texte à
+        # l'écran pendant qu'on parle, pour qu'on voie que le micro entend.
+        # C'est le serveur qui transcrit le vocal pour de bon.
+        NSSpeechRecognitionUsageDescription: >-
+          MemoBook affiche vos mots à l'écran pendant que vous enregistrez.
         # L'API tourne en HTTP en développement local. `NSAllowsLocalNetworking`
         # n'ouvre que le réseau local (`localhost`, `.local`, IP privées) : un
         # build Release qui parle à `https://api.memo-book.com` n'en dépend pas,

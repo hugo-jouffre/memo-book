@@ -56,6 +56,11 @@ let package = Package(
         ),
 
         .testTarget(name: "MemoBookCoreTests", dependencies: ["MemoBookCore"]),
+        // Ce que le design system décide **hors d'une vue** : aujourd'hui, la
+        // résolution d'un pictogramme de catégorie vers son asset. Le catalogue
+        // est une ressource de ce module, donc c'est ici qu'on peut vérifier
+        // qu'une image existe vraiment.
+        .testTarget(name: "MemoBookDesignTests", dependencies: ["MemoBookDesign"]),
         .testTarget(
             name: "MemoBookNetworkingTests",
             dependencies: ["MemoBookNetworking", "MemoBookCore"]

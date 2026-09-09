@@ -147,6 +147,23 @@ public actor MemoBookAPIClient: MemoBookAPI {
         try await send(method: "GET", path: "/v1/trips/\(id)", credential: .session)
     }
 
+    public func createTrip(_ draft: TripDraft) async throws -> CreatedTrip {
+        try await send(method: "POST", path: "/v1/trips", encodableBody: draft, credential: .session)
+    }
+
+    public func updateTrip(id: String, draft: TripDraft) async throws -> CreatedTrip {
+        try await send(
+            method: "PATCH",
+            path: "/v1/trips/\(id)",
+            encodableBody: draft,
+            credential: .session
+        )
+    }
+
+    public func gallery() async throws -> Gallery {
+        try await send(method: "GET", path: "/v1/gallery", credential: .session)
+    }
+
     public func welcomeShowcases() async throws -> [Showcase] {
         struct Response: Decodable { let showcases: [Showcase] }
         let response: Response = try await send(

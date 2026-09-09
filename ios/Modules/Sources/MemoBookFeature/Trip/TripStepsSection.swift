@@ -37,13 +37,23 @@ struct TripStepsSection: View {
                         .font(MemoBookFont.label)
                 }
             }
-            .padding(.horizontal, MemoBookSpacing.screenMargin)
         }
         .scrollIndicators(.hidden)
-        // La bande prend toute la largeur de l'écran ; ce sont ses pastilles qui
-        // s'alignent sur la colonne, pour que la dernière puisse sortir par le
-        // bord au lieu de buter sur une marge.
-        .scrollClipDisabled()
+        // La bande prend toute la largeur de l'écran et ses pastilles s'alignent
+        // sur la colonne : la dernière peut donc sortir par le bord au lieu de
+        // buter sur une marge.
+        //
+        // ⚠️ **Une marge de contenu, pas un `padding` sous un
+        // `scrollClipDisabled`.** C'est ce que faisait cette bande, et une
+        // pastille qui sortait par la gauche continuait d'être dessinée
+        // **au-delà du bord** : le vert d'un filtre posé bavait jusqu'à
+        // l'extrême bord de la dalle et par-dessus tout ce qui traînait là.
+        // `contentMargins` place le contenu au même endroit, mais ce qui sort
+        // de la bande est **rogné**.
+        .contentMargins(.horizontal, MemoBookSpacing.screenMargin, for: .scrollContent)
+        // Et ce qui sort par un bord s'y **efface** au lieu d'être tranché à la
+        // verticale — voir ``brandHorizontalFade``.
+        .brandHorizontalFade()
     }
 
     @ViewBuilder
@@ -103,7 +113,12 @@ struct TripStepsSection: View {
         } label: {
             BrandFilterChip(
                 model.transport?.displayName ?? "Transports",
-                icon: Image(systemName: "arrow.triangle.turn.up.right.diagonal"),
+                // Un train, et non le symbole système « bifurcation » qui
+                // tenait la place : celui-ci ne se dessinait tout simplement
+                // pas, et la pastille gardait un trou à gauche de son libellé.
+                // Aucune icône de transport dans le jeu de marque — voir
+                // ``LucideIcon``.
+                icon: LucideIcon.image("train-front"),
                 isActive: model.transport != nil
             )
         }
