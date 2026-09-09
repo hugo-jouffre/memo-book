@@ -98,6 +98,17 @@ public enum MemoBookColor {
     /// `Brand Colors/Beige Darker`.
     public static let separator = Color(hex: 0xCFBBAA)
 
+    /// Bleu clair : **le fond des écrans où l'app écoute**. Aujourd'hui la
+    /// feuille d'enregistrement, et rien d'autre. Le crème est le papier du
+    /// carnet, celui sur lequel on lit ; ce bleu dit qu'on est passé de l'autre
+    /// côté, en train de parler.
+    ///
+    /// ⚠️ **Pas encore une variable Figma** : relevé sur la maquette de
+    /// l'enregistrement. C'est `Brand Colors/Blue` (#AFD2F0) éclairci — il doit
+    /// porter du texte encre et une waveform verte, ce que le bleu d'aplat ne
+    /// fait pas assez confortablement. À nommer par Clara.
+    public static let listeningBackground = Color(hex: 0xC9DDF0)
+
     /// Beige clair : **l'aplat sur lequel se pose une illustration de marque**,
     /// et rien d'autre. Plus chaud et plus soutenu que le crème du fond, juste
     /// assez pour que la plaque se détache sans devenir une carte. — Figma
@@ -159,8 +170,30 @@ public enum MemoBookSpacing {
     /// Rayon des cartes de la page d'accueil et du bouton principal.
     public static let largeCornerRadius: CGFloat = 20
 
+    /// Rayon d'une vignette de la galerie — 1.5 rem.
+    ///
+    /// Entre la carte de l'accueil (20) et la feuille modale (28), et
+    /// volontairement distinct des deux : les cartes de la galerie sont des
+    /// **images pleines**, sans marge intérieure ni fond. Un coin plus rond y
+    /// est ce qui les empêche de se lire comme des photos collées bord à bord.
+    public static let galleryCornerRadius: CGFloat = 24
+
     /// Taille minimale d'une cible tactile.
     public static let minimumTapTarget: CGFloat = 44
+
+    /// **La** taille d'une icône d'en-tête : la flèche de retour d'abord, et
+    /// les boutons qui l'accompagnent en tête d'un écran.
+    ///
+    /// Elle existe pour une seule raison : la flèche de retour est le même
+    /// geste sur tous les écrans, elle doit donc y avoir la même taille. Elle
+    /// valait ``m`` (24) à trois endroits et se redessinait à la main au
+    /// quatrième ; il suffisait d'un écran écrit un jour différent pour que la
+    /// sortie change de taille en cours de route.
+    ///
+    /// Plus grande que les icônes de contenu (24) : c'est une **sortie**, elle
+    /// se vise sans regarder. La cible tactile, elle, reste
+    /// ``minimumTapTarget`` — l'icône grandit dedans, pas à sa place.
+    public static let navigationIcon: CGFloat = 28
 
     /// **La** hauteur d'un appel à l'action. Tous les CTA de l'app la
     /// partagent — « Continuer », « Continuer avec Apple », « Continuer avec

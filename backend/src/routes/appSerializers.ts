@@ -1,6 +1,7 @@
 import type {
   Account,
   AccountConnector,
+  GalleryCategory,
   Memo,
   MemoMember,
   MemoStep,
@@ -98,6 +99,79 @@ export function serializeTrip(memo: MemoForTrip) {
             targetPageCount: memo.targetPageCount,
           },
     isPrintable: memo.isPrintable,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// La galerie de la communauté
+// ---------------------------------------------------------------------------
+
+type MemoForGallery = Memo & {
+  steps?: Pick<MemoStep, "destinationName" | "destinationCountryCode">[];
+  categories?: { categoryId: string }[];
+};
+
+/**
+ * Les pays d'un voyage, sans doublon, celui du carnet d'abord puis ceux de ses
+ * étapes dans l'ordre.
+ *
+ * **Rien n'est stocké** : c'est `memos.destination*` et `memo_steps.destination*`
+ * relus ensemble, donc une vérité de moins à tenir d'accord. C'est cette liste
+ * qui décide du pictogramme de la carte — un seul pays donne son drapeau,
+ * plusieurs donnent le globe.
+ */
+function galleryDestinations(memo: MemoForGallery) {
+  const all = [
+    { name: memo.destinationName, countryCode: memo.destinationCountryCode },
+    ...(memo.steps ?? []).map((step) => ({
+      name: step.destinationName,
+      countryCode: step.destinationCountryCode,
+    })),
+  ];
+
+  const seen = new Set<string>();
+  const destinations: { name: string; countryCode: string | null }[] = [];
+
+  for (const place of all) {
+    if (!place.name) continue;
+    // Le code pays fait foi quand il existe : « Italie » et « Italy » sont le
+    // même pays, `IT` et `IT` aussi.
+    const key = place.countryCode?.toUpperCase() ?? place.name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    destinations.push({ name: place.name, countryCode: place.countryCode });
+  }
+
+  return destinations;
+}
+
+/**
+ * Une carte de l'écran « Exemples de carnets ».
+ *
+ * Volontairement **plus maigre** que `serializeTrip` : la galerie ne montre ni
+ * compteurs, ni progression, ni co-voyageurs, et ses cartes ne s'ouvrent pas
+ * encore. Servir un `Trip` complet exposerait le contenu de carnets qui ne sont
+ * pas à celui qui regarde, pour des champs que l'écran n'affiche pas.
+ */
+export function serializeGalleryTrip(memo: MemoForGallery) {
+  return {
+    id: memo.id,
+    title: memo.title,
+    // La phrase déduite du voyage. `null` tant qu'aucun agent ne l'a écrite :
+    // la carte n'affiche alors que son titre.
+    subtitle: memo.gallerySummary,
+    destinations: galleryDestinations(memo),
+    coverPhotoUrl: memo.coverPhotoUrl,
+    categoryIds: (memo.categories ?? []).map((link) => link.categoryId),
+  };
+}
+
+export function serializeGalleryCategory(category: GalleryCategory) {
+  return {
+    id: category.id,
+    slug: category.slug,
+    name: category.name,
+    iconKey: category.iconKey,
   };
 }
 

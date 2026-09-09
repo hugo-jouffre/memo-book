@@ -213,7 +213,13 @@ private struct TripHeaderButton: View {
                 .resizable()
                 .renderingMode(.template)
                 .scaledToFit()
-                .frame(width: MemoBookSpacing.m, height: MemoBookSpacing.m)
+                // Les trois ronds de l'en-tête partagent la taille de la
+                // flèche : elle est l'un d'eux, et un seul plus gros casserait
+                // la rangée.
+                .frame(
+                    width: MemoBookSpacing.navigationIcon,
+                    height: MemoBookSpacing.navigationIcon
+                )
                 .foregroundStyle(MemoBookColor.onAction)
                 .frame(
                     width: MemoBookSpacing.minimumTapTarget,

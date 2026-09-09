@@ -100,3 +100,31 @@ public struct EmptyStateView: View {
         .padding(.vertical, MemoBookSpacing.xl)
     }
 }
+
+extension View {
+    /// Fait **fondre** une bande qui défile sur ses deux bords, au lieu de la
+    /// trancher net.
+    ///
+    /// Une rangée de pastilles prend toute la largeur de l'écran pour que la
+    /// dernière puisse sortir par le bord — c'est ce qui dit « ça continue ».
+    /// Mais ce qui sort est coupé à la verticale, et une pastille **pleine**
+    /// devient alors une dalle de couleur plaquée contre le bord de l'écran :
+    /// on la lit comme un défaut de rendu, pas comme un débordement. Le fondu
+    /// rend le geste lisible — la pastille s'efface en sortant.
+    ///
+    /// Le voile ne mord que sur les bords : posé sur une bande dont le contenu
+    /// commence à la marge d'écran, il ne touche rien tant que rien n'a défilé.
+    ///
+    /// - Parameter width: la largeur du fondu, de chaque côté.
+    public func brandHorizontalFade(_ width: CGFloat = MemoBookSpacing.s) -> some View {
+        mask {
+            HStack(spacing: 0) {
+                LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing)
+                    .frame(width: width)
+                Rectangle().fill(.black)
+                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                    .frame(width: width)
+            }
+        }
+    }
+}

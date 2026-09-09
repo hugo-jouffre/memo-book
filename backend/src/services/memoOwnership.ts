@@ -1,4 +1,6 @@
-import type { Prisma, PrismaClient } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
+import { makeAccessCode } from "../lib/accessCode.js";
 
 /**
  * Qui possède un carnet, et qui a le droit d'y toucher.
@@ -13,13 +15,33 @@ import type { Prisma, PrismaClient } from "@prisma/client";
  * carnet de quelqu'un d'autre.
  */
 
-/** Crée un carnet pour un compte. Le propriétaire n'est jamais optionnel. */
+/**
+ * Crée un carnet pour un compte. Le propriétaire n'est jamais optionnel, et le
+ * **code d'accès** non plus : il est tiré ici, pour qu'aucun appelant ne puisse
+ * fabriquer un carnet qu'on ne saurait pas partager.
+ *
+ * La boucle n'est pas de la superstition. L'unicité du code est tenue par un
+ * index, donc par la base, et c'est elle qui a le dernier mot. Deux tirages qui
+ * se télescopent sur un milliard de codes n'arriveront jamais — mais le jour où
+ * ça arrive, on retire au sort plutôt que de rendre une erreur à quelqu'un qui
+ * n'y peut rien.
+ */
 export async function createMemoFor(
   prisma: PrismaClient,
   ownerAccountId: string,
-  data: Omit<Prisma.MemoUncheckedCreateInput, "ownerAccountId">,
+  data: Omit<Prisma.MemoUncheckedCreateInput, "ownerAccountId" | "accessCode">,
 ) {
-  return prisma.memo.create({ data: { ...data, ownerAccountId } });
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await prisma.memo.create({
+        data: { ...data, ownerAccountId, accessCode: makeAccessCode() },
+      });
+    } catch (error) {
+      const isCollision =
+        error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+      if (!isCollision || attempt >= 4) throw error;
+    }
+  }
 }
 
 /**

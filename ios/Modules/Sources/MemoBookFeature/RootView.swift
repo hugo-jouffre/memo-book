@@ -181,6 +181,10 @@ public struct RootView: View {
     private func signOut() {
         Task {
             await dependencies.api.signOut()
+            // Et ce que l'app gardait de ce compte : le dernier accueil reçu
+            // dort sur le disque pour être relu hors ligne, il ne doit pas
+            // attendre la personne suivante sur ce téléphone.
+            await dependencies.forgetAccountContent()
             path.removeAll()
             stage = .signedOut
         }
@@ -194,8 +198,13 @@ public struct RootView: View {
     /// donc au voyage qu'elle montrait — mais aucune de ses étapes ne mène
     /// encore au carnet, faute d'un identifiant commun.
     ///
-    /// L'impression et la carte de découverte n'ont pas d'écran dessiné : elles
-    /// ne mènent nulle part, et c'est ici que ça se voit.
+    /// L'impression n'a pas d'écran dessiné : elle ne mène nulle part, et c'est
+    /// ici que ça se voit. La carte de découverte, elle, ouvre désormais la
+    /// galerie des carnets de la communauté.
+    ///
+    /// L'enregistrement, lui, ne passe pas par ici : la feuille rend son vocal
+    /// à ``HomeModel/upload(_:)``, qui l'envoie aux carnets en cours. Il n'y a
+    /// pas d'écran au bout, donc rien à router.
     private func handle(_ intent: HomeIntent) {
         switch intent {
         case .openProfile:
@@ -212,12 +221,18 @@ public struct RootView: View {
                     "Ce voyage n’existe pas encore sur ton compte : il n’y a rien à ouvrir."
                 return
             }
+            // Sortir de la création **remplace** l'étape au lieu de s'empiler
+            // dessus : la flèche de retour du voyage doit ramener à l'accueil,
+            // et non au formulaire qu'on vient de finir. Les deux écritures
+            // n'en font qu'une, ce qui évite la page blanche qu'un `dismiss()`
+            // suivi d'un empilement laissait derrière lui.
+            if path.last == .tripCreation { path.removeLast() }
             path.append(.trip(id: id))
-        case .startRecording:
-            // Enregistrer suppose un carnet ouvert : on passe par la liste
-            // tant que l'accueil ne sait pas créer un voyage lui-même.
-            path.append(.memos)
-        case .orderPrint, .openShowcase, .createTrip, .browseCommunity, .openHelp:
+        case .openGallery:
+            path.append(.gallery)
+        case .createTrip:
+            path.append(.tripCreation)
+        case .orderPrint, .joinTrip, .importFromPolarsteps, .openHelp:
             break
         }
     }
@@ -229,6 +244,16 @@ public struct RootView: View {
             ProfileView(model: dependencies.profileModel(), onSignOut: signOut)
         case .trip(let id):
             TripHomeView(tripId: id, model: dependencies.tripModel(id: id))
+        case .gallery:
+            // La galerie **réémet** des intentions : son bouton du bas crée un
+            // carnet ou ramène au voyage en cours. Elles repassent donc par le
+            // même routeur que celles de l'accueil, et non par un second.
+            GalleryView(model: dependencies.galleryModel(), onIntent: handle)
+        case .tripCreation:
+            // Elle **réémet** une intention, comme la galerie : « Commencer ! »
+            // ouvre le voyage qui vient d'être créé, et c'est encore ce
+            // routeur-ci qui le pousse.
+            TripCreationView(model: dependencies.tripCreationModel(), onIntent: handle)
         case .memos:
             MemoListView()
         }
@@ -248,5 +273,9 @@ extension EnvironmentValues {
 enum HomeRoute: Hashable {
     case profile
     case trip(id: String)
+    /// Les carnets de la communauté, ouverts par la carte de découverte.
+    case gallery
+    /// Les six étapes de « Créer un voyage ».
+    case tripCreation
     case memos
 }

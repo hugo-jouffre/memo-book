@@ -331,6 +331,19 @@ model Memo {
   /// Le carnet est généré et peut partir à l'impression.
   isPrintable Boolean @default(false)
 
+  /// Le code d'accès du voyage : celui qu'on lit à voix haute, qu'on colle dans
+  /// un message, et qui fait entrer quelqu'un dans le carnet — la dernière
+  /// étape de la création ne montre que lui.
+  ///
+  /// Six caractères d'un alphabet **sans ambiguïté** : ni O ni 0, ni I ni 1.
+  /// Un code se recopie à la main, et « JHKFDA » ne doit avoir qu'une seule
+  /// lecture possible.
+  ///
+  /// Unique et obligatoire : c'est lui, et non l'identifiant, qui désigne le
+  /// voyage qu'on rejoint. Un voyage sans code serait un voyage qu'on ne peut
+  /// pas partager, or tous peuvent l'être.
+  accessCode String @unique
+
   /// La relance de MemoBook — « Comment ça se passe à Trastevere ? ». Écrite à
   /// partir de ce qui a déjà été raconté, donc en base et pas dans l'app.
   prompt String?
@@ -340,7 +353,21 @@ model Memo {
 
   /// Partager sur la galerie. Un carnet public passe une modération plus
   /// stricte avant d'y entrer.
+  ///
+  /// C'est **le seul** critère d'entrée dans l'écran « Exemples de carnets » :
+  /// `GET /v1/gallery` ne sert que des carnets qui portent ce drapeau.
   isPublicGallery Boolean @default(false)
+
+  /// La phrase sous le titre, sur la carte de la galerie : « 2 semaines de
+  /// trek », « Un couple autour du monde ».
+  ///
+  /// Elle **ne se saisit pas** : elle sera déduite du contenu du voyage par un
+  /// agent, comme `prompt` et `coherenceSheet` le sont déjà. La colonne existe
+  /// avant l'agent parce que la carte, elle, la montre dès aujourd'hui —
+  /// l'écran s'en passe (`null` : seul le titre s'affiche), il ne l'invente
+  /// pas. Distincte de `subtitle`, qui est le sous-titre **imprimé en
+  /// couverture** du carnet : deux textes, deux lecteurs, deux longueurs.
+  gallerySummary String?
 
   // --- Personnalisations — `docs/reglages-utilisateur.md` -------------------
   //
@@ -402,15 +429,81 @@ model Memo {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  entries  Entry[]
-  renders  Render[]
-  orders   PrintOrder[]
-  members  MemoMember[]
-  steps    MemoStep[]
-  expenses Expense[]
+  entries    Entry[]
+  renders    Render[]
+  orders     PrintOrder[]
+  members    MemoMember[]
+  steps      MemoStep[]
+  expenses   Expense[]
+  categories MemoGalleryCategory[]
 
   @@index([ownerAccountId, createdAt])
+  /// La galerie lit **tous** les carnets publics, quel qu'en soit le
+  /// propriétaire : c'est la seule requête de l'app qui ne part pas d'un
+  /// compte, et sans cet index elle balaierait la table entière.
+  @@index([isPublicGallery, startDate])
   @@map("memos")
+}
+
+/// Une catégorie de la galerie de la communauté : « Tour du monde »,
+/// « Randonnée », « Road trip ».
+///
+/// **Une table et non une énumération.** Ajouter une catégorie, la renommer,
+/// changer son pictogramme ou la retirer de la barre de filtres est une
+/// écriture en base, pas une livraison d'app : c'est exactement le parti pris
+/// de `Showcase` et de `FeedbackCampaign`, et pour la même raison — le contenu
+/// éditorial bouge plus vite que le binaire.
+model GalleryCategory {
+  id String @id @default(uuid())
+
+  /// L'identifiant stable, celui qu'on écrit dans un script ou une requête.
+  /// `name` peut changer, `slug` non.
+  slug String @unique
+
+  /// Le libellé de la pastille de filtre, tel qu'il s'affiche.
+  name String
+
+  /// La clé du pictogramme, résolue par l'app — voir
+  /// `MemoBookDesign/LucideIcon.swift` et
+  /// `assets/icons/lucide-icons/README.md`. Ce n'est **pas** un nom d'asset
+  /// iOS : c'est le nom du fichier source, pour qu'une clé inconnue de l'app
+  /// retombe sur une boussole au lieu de casser la barre de filtres.
+  iconKey String
+
+  /// Ordre dans la barre de filtres, du plus petit au plus grand.
+  position Int @default(0)
+
+  /// Retirée de la barre sans être supprimée : les carnets qu'elle range
+  /// gardent leur rattachement, et la rallumer les remet d'un coup.
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memos MemoGalleryCategory[]
+
+  @@index([isActive, position])
+  @@map("gallery_categories")
+}
+
+/// Le rattachement d'un carnet à une catégorie de la galerie.
+///
+/// **Plusieurs par carnet**, et c'est voulu : un tour du monde à pied est aussi
+/// une randonnée, et devoir choisir le rangerait mal dans l'un des deux
+/// filtres. La barre, elle, ne laisse cocher qu'une catégorie à la fois — un
+/// carnet apparaît alors sous chacune des siennes.
+model MemoGalleryCategory {
+  memoId String
+  memo   Memo   @relation(fields: [memoId], references: [id], onDelete: Cascade)
+
+  categoryId String
+  category   GalleryCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@id([memoId, categoryId])
+  @@index([categoryId])
+  @@map("memo_gallery_categories")
 }
 
 /// Les **co-voyageurs** d'un voyage — jamais son propriétaire, qui est

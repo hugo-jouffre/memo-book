@@ -273,7 +273,7 @@ public struct BrandRow: View, Identifiable {
 
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .body) private var minimumHeight = MemoBookSpacing.minimumTapTarget
-    @ScaledMetric(relativeTo: .body) private var chevronSide: CGFloat = 14
+    @ScaledMetric(relativeTo: .body) private var chevronSide: CGFloat = 22
     @ScaledMetric(relativeTo: .body) private var pencilSide: CGFloat = 16
 
     /// Ce qu'on est en train de taper. La valeur du modèle ne bouge qu'à la
@@ -554,14 +554,19 @@ public struct BrandRow: View, Identifiable {
         }
     }
 
-    /// Le chevron n'existe pas dans le jeu d'icônes de la marque, dont la
-    /// flèche est un tracé dessiné, bien trop présent en bout de ligne. On
-    /// reste donc sur le symbole système — comme le calendrier et l'itinéraire
-    /// de l'accueil, et pour la même raison. Un seul endroit à changer le jour
-    /// où le jeu en gagne un.
+    /// Le chevron du jeu de marque. Il a longtemps été le symbole système,
+    /// faute d'en avoir un de dessiné ; `IconChevron` a comblé le trou et c'est
+    /// ce seul endroit qui a changé.
+    ///
+    /// Le cadre est plus grand que le trait qu'on voit : comme toutes les
+    /// icônes du jeu, le chevron est dessiné au milieu d'une boîte de 24 et n'en
+    /// occupe que le tiers. C'est cette boîte qu'on dimensionne, pas le trait.
     private var chevron: some View {
-        Image(systemName: "chevron.right")
-            .font(.system(size: chevronSide, weight: .medium))
+        Image(brand: "IconChevron")
+            .resizable()
+            .renderingMode(.template)
+            .scaledToFit()
+            .frame(width: chevronSide, height: chevronSide)
             .foregroundStyle(MemoBookColor.inkMuted)
             .accessibilityHidden(true)
     }

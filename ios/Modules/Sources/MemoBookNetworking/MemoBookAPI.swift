@@ -48,6 +48,19 @@ public protocol MemoBookAPI: Sendable {
     /// Un voyage ouvert : sa couverture, la relance et ses étapes.
     func tripDetail(id: String) async throws -> TripDetail
 
+    /// Crée un voyage à partir des six étapes de « Créer un voyage ». Rend le
+    /// voyage **et son code d'accès**, que la dernière étape affiche.
+    func createTrip(_ draft: TripDraft) async throws -> CreatedTrip
+
+    /// Corrige un voyage avec les mêmes six champs. Sert à la flèche de retour
+    /// de la création : revenir sur les dates après avoir vu le code d'accès ne
+    /// doit pas créer un second voyage.
+    func updateTrip(id: String, draft: TripDraft) async throws -> CreatedTrip
+
+    /// La galerie des carnets de la communauté : ses catégories, les carnets
+    /// publics, et le voyage que celui qui regarde peut reprendre.
+    func gallery() async throws -> Gallery
+
     /// Les carnets mis en avant sur l'écran de bienvenue. Seul appel du
     /// contrat qui ne demande **aucune** identification : cet écran s'affiche
     /// avant l'entrée dans un compte.

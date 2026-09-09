@@ -239,7 +239,9 @@ public struct BrandButton: View {
         case (.tertiary, true), (.link, true), (.soft, true): MemoBookColor.onAction
         // Le lime est une couleur claire : c'est l'encre qui se pose dessus,
         // dans les deux cas. Un libellé blanc y tomberait à 1,1:1.
-        case (.accent, _): MemoBookColor.ink
+        // Le vert du contour, pas l'encre : sur un aplat lime, le noir chaud
+        // se lit comme un texte posé là, le vert comme le bouton lui-même.
+        case (.accent, _): MemoBookColor.action
         }
     }
 

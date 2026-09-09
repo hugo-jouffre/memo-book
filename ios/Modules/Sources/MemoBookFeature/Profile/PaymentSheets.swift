@@ -54,10 +54,15 @@ struct PaymentMethodSheet: View {
 /// à choisir tant que le paiement n'existe pas, et le cadre noir de la maquette
 /// est la façon dont Apple veut qu'on présente sa marque.
 ///
-/// ⚠️ **Marque provisoire.** Le vrai logotype Apple Pay est un asset à exporter
-/// du nœud Figma — le quota MCP ne l'a pas permis. En attendant, le symbole
-/// système `applelogo` et le mot « Pay », qui en est la composition officielle.
+/// Le logotype est celui d'Apple, posé tel quel : **jamais** de
+/// `renderingMode(.template)`, jamais recoloré, jamais recomposé à partir du
+/// symbole système et du mot « Pay » — c'est ce qu'on faisait faute d'asset, et
+/// les règles de marque d'Apple l'interdisent.
 private struct ApplePayRow: View {
+    /// La hauteur du logotype suit le corps de texte : il se lit comme un mot
+    /// de la ligne, pas comme une image posée dedans.
+    @ScaledMetric(relativeTo: .body) private var markHeight: CGFloat = 22
+
     private var shape: RoundedRectangle {
         .rect(cornerRadius: MemoBookSpacing.controlCornerRadius)
     }
@@ -82,13 +87,13 @@ private struct ApplePayRow: View {
     }
 
     private var mark: some View {
-        HStack(spacing: 1) {
-            Image(systemName: "applelogo")
-            Text("Pay")
-        }
-        .font(MemoBookFont.bodySemibold)
-        .foregroundStyle(MemoBookColor.ink)
-        .accessibilityHidden(true)
+        Image(brand: "LogoApplePay")
+            .resizable()
+            .scaledToFit()
+            // Le rapport du fichier est 48 × 24 : on ne fixe que la hauteur,
+            // la largeur suit. Une marque déformée n'est plus la marque.
+            .frame(height: markHeight)
+            .accessibilityHidden(true)
     }
 }
 

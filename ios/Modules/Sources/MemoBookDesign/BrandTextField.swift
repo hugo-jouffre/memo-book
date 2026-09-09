@@ -56,6 +56,17 @@ public struct BrandTextField<Field: Hashable>: View {
         /// montre un **exemple de valeur** (« 7 rue Simon Fryd ») et non le nom
         /// du champ.
         case above
+
+        /// Aucun intitulé écrit : le cadre, et l'exemple de valeur dedans.
+        ///
+        /// Pour le champ **unique** d'une feuille dont le titre et le
+        /// sous-titre disent déjà ce qu'on attend — « Rejoindre » / « Colle ici
+        /// le code d'accès d'un voyage existant ». Écrire « Code d'accès » une
+        /// troisième fois au-dessus du cadre ne ferait que le répéter.
+        ///
+        /// L'intitulé reste donné à VoiceOver, qui n'a que lui : un champ dont
+        /// on n'entend que le texte indicatif ne se remplit pas.
+        case hidden
     }
 
     private let label: String
@@ -111,12 +122,12 @@ public struct BrandTextField<Field: Hashable>: View {
     /// L'aplat blanc du repos n'appartient qu'à l'étiquette flottante : c'est
     /// lui qui fait exister le champ avant qu'on le touche. Étiquette au-dessus,
     /// c'est le mot qui remplit ce rôle, et le contour suffit.
-    private var isOutlined: Bool { labelPlacement == .above || isActive }
+    private var isOutlined: Bool { labelPlacement != .floating || isActive }
 
     private var showsPlaceholder: Bool {
         switch labelPlacement {
         case .floating: !isActive
-        case .above: text.isEmpty
+        case .above, .hidden: text.isEmpty
         }
     }
 
@@ -125,7 +136,7 @@ public struct BrandTextField<Field: Hashable>: View {
     private var placeholderText: String {
         switch labelPlacement {
         case .floating: label
-        case .above: placeholder ?? label
+        case .above, .hidden: placeholder ?? label
         }
     }
 

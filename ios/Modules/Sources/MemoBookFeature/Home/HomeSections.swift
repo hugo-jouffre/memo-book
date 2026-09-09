@@ -191,10 +191,11 @@ struct UpcomingTripInvite: View {
                         .font(MemoBookFont.bodySemibold)
                         .foregroundStyle(MemoBookColor.ink)
 
-                    // « les carnets » : la maquette écrit « le carnets ».
-                    // Coquille confirmée par Hugo le 06/09/2026, corrigée ici et
-                    // à reprendre dans Figma.
-                    Text("Clique ici pour voir les carnets de la communauté")
+                    // La carte menait aux carnets de la communauté ; elle
+                    // ouvre désormais la feuille « Nouveau carnet ». La phrase
+                    // suit la destination : elle dit ce que le doigt déclenche,
+                    // et rien d'autre. À reprendre dans Figma.
+                    Text("Clique ici pour ouvrir ton prochain carnet")
                         .font(MemoBookFont.label)
                         .foregroundStyle(MemoBookColor.inkMuted)
                 }
@@ -224,7 +225,10 @@ struct UpcomingTripInvite: View {
             .scaledToFit()
             .frame(maxWidth: .infinity)
             .padding(.horizontal, MemoBookSpacing.xs)
-            .padding(.vertical, MemoBookSpacing.s)
+            // De l'air au-dessus, rien en dessous : le carnet **pose** sur le
+            // bas de la plaque au lieu de flotter au milieu. La plaque se règle
+            // donc sur la hauteur de l'illustration, elle ne la centre pas.
+            .padding(.top, MemoBookSpacing.s)
             .frame(maxWidth: .infinity)
             .background(
                 MemoBookColor.beige,
