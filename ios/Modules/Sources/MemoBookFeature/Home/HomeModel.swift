@@ -279,6 +279,12 @@ public enum HomeIntent: Sendable, Hashable {
             debugPlay(.freeTrial(remainingSteps: 0))
         }
 
+        /// Un quota déjà entamé : c'est l'état où la pastille **décompte**, et
+        /// il ne se voit ni à la première connexion ni au mur.
+        public func debugStartedQuota() {
+            debugPlay(.freeTrial(remainingSteps: 2))
+        }
+
         /// Fait jouer un personnage à l'app entière — l'accueil tout de suite,
         /// le profil à la prochaine ouverture. Voir ``SandboxPersona``.
         private func debugPlay(_ persona: SandboxPersona) {

@@ -23,7 +23,7 @@ extension HomeFeed {
             Trip(
                 id: "trip-rome",
                 title: "Rome entre frère et sœur",
-                destination: Destination(name: "Italie", countryCode: "IT"),
+                destination: Destination(name: "Italie", countryCode: "IT", city: "Rome"),
                 stage: .ongoing,
                 startDate: .fixture(26, 8, 2026),
                 endDate: .fixture(15, 9, 2026),
@@ -45,7 +45,7 @@ extension HomeFeed {
             Trip(
                 id: "trip-philippines",
                 title: "Philippines avec Claire & Gus",
-                destination: Destination(name: "Philippines", countryCode: "PH"),
+                destination: Destination(name: "Philippines", countryCode: "PH", city: "Palawan"),
                 stage: .past,
                 startDate: .fixture(26, 8, 2025),
                 endDate: .fixture(15, 9, 2025),
@@ -59,7 +59,7 @@ extension HomeFeed {
             Trip(
                 id: "trip-colombie",
                 title: "Claire et Gus en Colombie",
-                destination: Destination(name: "Colombie", countryCode: "CO"),
+                destination: Destination(name: "Colombie", countryCode: "CO", city: "Bogotá"),
                 stage: .past,
                 startDate: .fixture(3, 2, 2025),
                 endDate: .fixture(24, 2, 2025),
@@ -69,7 +69,7 @@ extension HomeFeed {
             Trip(
                 id: "trip-lisbonne",
                 title: "Un week-end à Lisbonne",
-                destination: Destination(name: "Portugal", countryCode: "PT"),
+                destination: Destination(name: "Portugal", countryCode: "PT", city: "Lisbonne"),
                 stage: .past,
                 startDate: .fixture(11, 10, 2024),
                 endDate: .fixture(14, 10, 2024),
@@ -160,13 +160,13 @@ extension Date {
         }
 
         private static let destinations: [(title: String, destination: Destination)] = [
-            ("Road trip en Écosse", Destination(name: "Écosse", countryCode: "GB")),
-            ("Les Lofoten en hiver", Destination(name: "Norvège", countryCode: "NO")),
-            ("Kyoto au printemps", Destination(name: "Japon", countryCode: "JP")),
-            ("Traversée du Chili", Destination(name: "Chili", countryCode: "CL")),
-            ("Week-end à Porto", Destination(name: "Portugal", countryCode: "PT")),
-            ("Sur les routes du Kerala", Destination(name: "Inde", countryCode: "IN")),
-            ("Cap sur l’Islande", Destination(name: "Islande", countryCode: "IS")),
+            ("Road trip en Écosse", Destination(name: "Écosse", countryCode: "GB", city: "Édimbourg")),
+            ("Les Lofoten en hiver", Destination(name: "Norvège", countryCode: "NO", city: "Svolvær")),
+            ("Kyoto au printemps", Destination(name: "Japon", countryCode: "JP", city: "Kyoto")),
+            ("Traversée du Chili", Destination(name: "Chili", countryCode: "CL", city: "Santiago")),
+            ("Week-end à Porto", Destination(name: "Portugal", countryCode: "PT", city: "Porto")),
+            ("Sur les routes du Kerala", Destination(name: "Inde", countryCode: "IN", city: "Kochi")),
+            ("Cap sur l’Islande", Destination(name: "Islande", countryCode: "IS", city: "Reykjavik")),
         ]
     }
 

@@ -49,7 +49,7 @@ struct RecordingSheet: View {
                 }
 
                 elapsed
-                BrandWaveform(levels: model.levels, isDimmed: model.isPaused)
+                BrandWaveform(live: model.levels, isDimmed: model.isPaused)
                 transcript
                 secondaryControls
             }

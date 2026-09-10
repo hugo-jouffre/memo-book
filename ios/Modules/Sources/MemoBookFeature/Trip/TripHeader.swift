@@ -129,56 +129,17 @@ struct TripHeader: View {
             marker("IconUser")
                 .padding(.trailing, MemoBookSpacing.xs)
 
-            CompanionStack(companions: trip.companions, visibleLimit: 2)
-                .accessibilityElement()
-                .accessibilityLabel(collaboratorsLabel)
-
-            inviteButton
-                .padding(.leading, inviteOffset)
+            // Le « + » est **dans** la pile, pas à côté : c'est elle qui tient
+            // le recouvrement des visages, et il doit être le même pour lui.
+            CompanionStack(
+                companions: trip.companions,
+                visibleLimit: 2,
+                onAdd: onInvite,
+                facesLabel: collaboratorsLabel
+            )
 
             Spacer(minLength: 0)
         }
-    }
-
-    /// De combien le « + » recule pour venir **sur** la dernière pastille.
-    ///
-    /// Il fait partie du groupe, il ne le suit pas : posé à côté, il se lisait
-    /// comme un troisième bouton de la ligne. À demi dessus, il dit « ajoute
-    /// quelqu'un **ici** ». C'est ce que montre la maquette, et c'est aussi ce
-    /// qui le sépare du second groupe qui viendra à sa droite.
-    ///
-    /// Deux termes, et pas un nombre choisi à l'œil : la moitié d'une pastille,
-    /// plus la marge transparente que sa cible tactile ajoute autour du rond
-    /// dessiné. Sans le second, le chevauchement se réduisait de cinq points à
-    /// chaque fois qu'on retouchait la taille minimale d'une cible.
-    ///
-    /// Nul quand il n'y a personne : il n'y a alors rien à chevaucher, et le
-    /// bouton viendrait mordre sur le pictogramme.
-    private var inviteOffset: CGFloat {
-        guard !trip.companions.isEmpty else { return 0 }
-        let tapInset = (MemoBookSpacing.minimumTapTarget - CompanionStack.diameter) / 2
-        return -(CompanionStack.diameter / 2 + tapInset)
-    }
-
-    /// Le rond blanc qui invite. Même diamètre que les pastilles qu'il
-    /// chevauche : c'est ce qui le fait lire comme le dernier de la file.
-    private var inviteButton: some View {
-        Button(action: onInvite) {
-            Image(brand: "IconPlus")
-                .resizable()
-                .renderingMode(.template)
-                .scaledToFit()
-                .frame(width: MemoBookSpacing.s, height: MemoBookSpacing.s)
-                .foregroundStyle(MemoBookColor.ink)
-                .frame(width: CompanionStack.diameter, height: CompanionStack.diameter)
-                .background(MemoBookColor.surface, in: .circle)
-        }
-        .frame(
-            minWidth: MemoBookSpacing.minimumTapTarget,
-            minHeight: MemoBookSpacing.minimumTapTarget
-        )
-        .contentShape(.circle)
-        .accessibilityLabel("Inviter quelqu’un à raconter ce voyage")
     }
 
     private func marker(_ name: String) -> some View {

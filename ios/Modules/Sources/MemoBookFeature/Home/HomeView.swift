@@ -34,6 +34,8 @@ public struct HomeView: View {
     /// faut aussi que le tracé du M se soit effacé.
     @State private var isLoaded = false
 
+    @Environment(\.subscriptionSession) private var subscriptionSession
+
     /// La feuille d'enregistrement est ouverte. Même raison que celle du
     /// carnet : une feuille propose, elle ne navigue pas.
     @State private var isRecording = false
@@ -276,7 +278,13 @@ public struct HomeView: View {
 
     /// Le palier du compte. `nil` tant que l'accueil n'a rien reçu : on ne
     /// décide alors de rien, et surtout pas de peindre le CTA en lime.
-    private var status: FreemiumStatus? { model.feed?.traveller.freemiumStatus }
+    ///
+    /// La session prime sur ce que le serveur a rendu : elle a pu voir une
+    /// résiliation qu'aucune route ne sait encore écrire. Voir
+    /// ``SubscriptionSession``.
+    private var status: FreemiumStatus? {
+        model.feed?.traveller.freemiumStatus(override: subscriptionSession?.override)
+    }
 
     /// Le solde d'étapes offertes, et l'invitation qui le remplace quand il
     /// tombe à zéro.
@@ -459,7 +467,11 @@ public struct HomeView: View {
     /// Ce que le bouton propose dépend de ce qu'il y a à faire : raconter un
     /// voyage en cours, ou en créer un. Un micro devant quelqu'un qui n'a aucun
     /// carnet ouvert ne mène nulle part.
-    private var hasOngoingTrip: Bool { !model.ongoingTrips.isEmpty }
+    private var hasOngoingTrip: Bool { ongoingTripId != nil }
+
+    /// Le voyage que le bouton fait raconter : le premier en cours, celui que
+    /// l'accueil montre en haut.
+    private var ongoingTripId: String? { model.ongoingTrips.first?.id }
 
     /// Le CTA change de couleur, pas de place ni de taille.
     ///
@@ -508,7 +520,10 @@ public struct HomeView: View {
 /// que le squelette et l'écran réel tombent au même endroit que le passage de
 /// l'un à l'autre ne saute pas.
 enum HomeMetrics {
-    static let avatarSide: CGFloat = 40
+    /// L'avatar est **le** diamètre du design system : le chat pose le même
+    /// devant son titre, et c'est à sa deuxième occurrence qu'il est monté dans
+    /// `MemoBookSpacing`.
+    static let avatarSide = MemoBookSpacing.avatarSide
     /// Hauteur du voile posé derrière le CTA fixe.
     static let callToActionScrimHeight: CGFloat = 200
 

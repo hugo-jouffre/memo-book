@@ -29,7 +29,17 @@ extension TravellerProfile {
         ],
         selectedCardId: "card-perso",
         connectors: Connector.fixtures,
-        subscription: Subscription(weeklyPrice: 1.99),
+        // Abonnée, sur le voyage de la maquette : c'est l'état que montrent la
+        // feuille « Mon Abonnement » et les trois feuilles de résiliation. Le
+        // compte neuf, lui, n'est pas abonné et ouvre la feuille du mode
+        // d'emploi.
+        subscription: Subscription(
+            weeklyPrice: 1.99,
+            isActive: true,
+            tripDestination: "Rome",
+            tripTitle: "Rome entre amis",
+            endsOn: Calendar.current.date(byAdding: .day, value: 21, to: .now)
+        ),
         orders: [
             OrderTracking(
                 id: "order-rome",

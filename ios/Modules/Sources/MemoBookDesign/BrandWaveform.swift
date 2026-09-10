@@ -1,50 +1,175 @@
 import SwiftUI
 
-/// La frise du son : une barre par échantillon, la plus récente à droite.
+/// La forme d'onde de MemoBook, sous ses deux emplois : ce qu'on est en train
+/// de dire, et ce qu'on a déjà dit.
 ///
-/// Ce n'est pas une visualisation du fichier — c'est le **retour du micro**.
-/// Elle sert à une seule chose : montrer que ce qu'on dit arrive. D'où le
-/// parti pris de la maquette, des barres pleines et espacées plutôt qu'une
-/// courbe : on lit le rythme de la voix d'un coup d'œil, pas sa forme d'onde.
+/// Ce n'est jamais une visualisation du fichier — c'est le **retour du micro**,
+/// puis la trace de ce retour. D'où le parti pris de la maquette, des barres
+/// pleines et espacées plutôt qu'une courbe : on lit le rythme de la voix d'un
+/// coup d'œil, pas sa forme d'onde.
 ///
-/// La frise **avance** : tant qu'il y a moins d'échantillons que de barres,
-/// elle se remplit depuis la gauche ; ensuite chaque nouvel échantillon pousse
-/// les autres. Comme les barres gardent leur identité de position, c'est leur
-/// hauteur qui s'anime, et le tout glisse au lieu de sauter.
+/// | Emploi | Ce qu'on passe | Ce qu'on voit |
+/// |---|---|---|
+/// | **En direct**, pendant qu'on parle | ``init(live:size:capacity:isDimmed:tint:)`` | une frise qui **glisse** : la voix arrive par la droite et pousse le reste |
+/// | **Un vocal terminé** | ``init(levels:progress:tint:playedTint:)`` | les niveaux relevés, la partie jouée teintée |
+///
+/// **Les deux ne se dessinent pas de la même façon, et c'est nécessaire.** Un
+/// vocal terminé peut compter des centaines d'échantillons : il passe par un
+/// `Canvas`, qui les rééchantillonne et n'a qu'une vue à mesurer. La frise en
+/// direct, elle, est une pile de `Capsule` — une par **position** —, parce que
+/// c'est cette identité de position qui fait que seule la *hauteur* s'anime et
+/// que le tout glisse au lieu de sauter. Un `Canvas` redessinerait tout d'un
+/// coup, et la frise sauterait d'un cran à chaque échantillon.
+///
+/// **Les niveaux d'un vocal terminé ne s'inventent pas.** ``AudioRecorder`` ne
+/// publie qu'un niveau instantané : c'est au modèle de l'écran de les
+/// accumuler pendant l'enregistrement. Un relevé vide donne une ligne plate, et
+/// c'est honnête — une forme d'onde décorative, identique pour tous les vocaux,
+/// dirait quelque chose de faux sur ce qui a été dit.
 public struct BrandWaveform: View {
-    /// Les niveaux, de 0 à 1, du plus ancien au plus récent. Seuls les
-    /// ``capacity`` derniers sont dessinés.
-    private let levels: [Double]
-    private let isDimmed: Bool
-
-    /// Combien de barres tiennent à l'écran. C'est **la** constante qui règle
-    /// la vitesse apparente de la frise : avec un échantillon toutes les 80 ms,
-    /// 34 barres font défiler un peu moins de trois secondes de voix.
-    public static let capacity = 34
-
-    /// - Parameter isDimmed: la capture est en pause. Les barres restent en
-    ///   place — on n'efface pas ce qui a été dit — mais s'éteignent, pour qu'on
-    ///   ne les lise pas comme du son qui continue d'arriver.
-    public init(levels: [Double], isDimmed: Bool = false) {
-        self.levels = levels
-        self.isDimmed = isDimmed
+    /// Où la frise est posée, ce qui décide de sa taille.
+    ///
+    /// Deux emplacements, et un seul jeu de mesures pour chacun : la grande
+    /// feuille d'enregistrement, où la frise **est** le contenu de l'écran, et
+    /// la barre d'envoi du chat, où elle tient dans la place d'un bouton.
+    public enum Size {
+        /// La feuille d'enregistrement : des barres larges, hautes, et qui
+        /// grandissent avec le corps de texte — c'est la seule chose que cet
+        /// écran montre, elle doit suivre les réglages d'accessibilité.
+        case sheet
+        /// Une barre d'outils ou une bulle du fil. Mesures **fixes** : à cette
+        /// échelle, une forme d'onde est un dessin et non un mot, et la grossir
+        /// avec le corps de texte la transformerait en histogramme — en
+        /// poussant au passage le chronomètre et le micro hors de la barre.
+        case bar
     }
 
-    @ScaledMetric(relativeTo: .body) private var maximumHeight: CGFloat = 56
-    @ScaledMetric(relativeTo: .body) private var barWidth: CGFloat = 4
-    @ScaledMetric(relativeTo: .body) private var spacing: CGFloat = 5
+    /// Les barres à dessiner, entre 0 et 1.
+    private let levels: [Double]
 
-    /// La barre d'un silence. Pas zéro : une frise qui disparaît par endroits
-    /// se lit comme un trou dans l'enregistrement, alors que se taire une
-    /// seconde est normal.
-    private var minimumHeight: CGFloat { barWidth }
+    /// De 0 à 1 : jusqu'où la lecture est arrivée. `nil` pour l'emploi en
+    /// direct, où il n'y a rien de « déjà joué ».
+    private let progress: Double?
 
+    private let size: Size
+    private let tint: Color
+    private let playedTint: Color
+
+    /// La forme d'onde d'un vocal terminé.
+    ///
+    /// - Parameters:
+    ///   - levels: les niveaux relevés pendant l'enregistrement, dans l'ordre du
+    ///     temps. Vide donne une ligne plate.
+    ///   - progress: de 0 à 1, la position de lecture. Les barres avant elle
+    ///     prennent ``playedTint``.
+    public init(
+        levels: [Double],
+        progress: Double = 0,
+        tint: Color = MemoBookColor.inkMuted,
+        playedTint: Color = MemoBookColor.ink
+    ) {
+        self.levels = levels
+        self.live = nil
+        self.size = .bar
+        self.capacity = 0
+        self.isDimmed = false
+        self.progress = min(max(progress, 0), 1)
+        self.tint = tint
+        self.playedTint = playedTint
+    }
+
+    /// Les niveaux d'une capture en cours. `nil` pour un vocal terminé.
+    private let live: [Double]?
+    private let capacity: Int
+    private let isDimmed: Bool
+
+    /// La frise du micro pendant qu'on parle.
+    ///
+    /// Elle **avance** : tant qu'il y a moins d'échantillons que de barres, elle
+    /// se remplit depuis la gauche ; ensuite chaque nouvel échantillon pousse
+    /// les autres. C'est le même geste dans la grande feuille d'enregistrement
+    /// et dans la barre d'envoi du chat, et c'est ce qui fait qu'on voit sa voix
+    /// *arriver* plutôt que clignoter.
+    ///
+    /// - Parameters:
+    ///   - live: tous les niveaux relevés depuis le début, du plus ancien au
+    ///     plus récent. Seuls les ``capacity`` derniers sont dessinés.
+    ///   - size: où la frise est posée. Voir ``Size``.
+    ///   - capacity: combien de barres tiennent dans la place. C'est **la**
+    ///     constante qui règle la vitesse apparente de la frise : avec un
+    ///     échantillon toutes les 80 ms, 34 barres font défiler un peu moins de
+    ///     trois secondes de voix.
+    ///   - isDimmed: la capture est en pause. Les barres restent en place — on
+    ///     n'efface pas ce qui a été dit — mais s'éteignent, pour qu'on ne les
+    ///     lise pas comme du son qui continue d'arriver.
+    public init(
+        live levels: [Double],
+        size: Size = .sheet,
+        capacity: Int = BrandWaveform.capacity,
+        isDimmed: Bool = false,
+        tint: Color = MemoBookColor.action
+    ) {
+        self.levels = levels
+        self.live = levels
+        self.size = size
+        self.capacity = max(1, capacity)
+        self.isDimmed = isDimmed
+        self.progress = nil
+        self.tint = tint
+        self.playedTint = tint
+    }
+
+    /// Combien de barres tient la grande feuille. Défaut de l'emploi en direct ;
+    /// une barre d'outils en tient bien moins et le dit.
+    public static let capacity = 34
+
+    /// Les mesures d'une frise de barre d'outils ou de bulle. Fixes, à dessein :
+    /// voir ``Size/bar``.
+    private enum Bar {
+        static let width: CGFloat = 3
+        static let spacing: CGFloat = 2
+        /// Le plancher d'une barre. Sans lui, un silence disparaît complètement
+        /// et la forme d'onde a l'air rognée.
+        static let minimumHeight: CGFloat = 3
+        /// La maquette dessine 22,6 pt ; on prend le cran de l'échelle juste
+        /// au-dessus (§2.2 de `docs/ui-development.md`).
+        static let height = MemoBookSpacing.m
+    }
+
+    @ScaledMetric(relativeTo: .body) private var sheetHeight: CGFloat = 56
+    @ScaledMetric(relativeTo: .body) private var sheetBarWidth: CGFloat = 4
+    @ScaledMetric(relativeTo: .body) private var sheetSpacing: CGFloat = 5
+
+    private var barWidth: CGFloat { size == .sheet ? sheetBarWidth : Bar.width }
+    private var barSpacing: CGFloat { size == .sheet ? sheetSpacing : Bar.spacing }
+    private var maximumHeight: CGFloat { size == .sheet ? sheetHeight : Bar.height }
+
+    /// La barre d'un silence. Pas zéro : une frise qui disparaît par endroits se
+    /// lit comme un trou dans l'enregistrement, alors que se taire une seconde
+    /// est normal.
+    private var minimumBarHeight: CGFloat {
+        size == .sheet ? sheetBarWidth : Bar.minimumHeight
+    }
+
+    @ViewBuilder
     public var body: some View {
-        HStack(alignment: .center, spacing: spacing) {
+        if live != nil {
+            frieze
+        } else {
+            recorded
+        }
+    }
+
+    /// La frise en direct : une `Capsule` par position, la plus récente à
+    /// droite.
+    private var frieze: some View {
+        let shown = (live ?? []).suffix(capacity)
+
+        return HStack(alignment: .center, spacing: barSpacing) {
             ForEach(Array(shown.enumerated()), id: \.offset) { _, level in
                 Capsule()
-                    .fill(MemoBookColor.action)
-                    .frame(width: barWidth, height: height(for: level))
+                    .fill(tint)
+                    .frame(width: barWidth, height: barHeight(for: level))
             }
             // La frise pousse depuis la gauche tant qu'elle n'est pas pleine.
             Spacer(minLength: 0)
@@ -56,29 +181,106 @@ public struct BrandWaveform: View {
         // échantillons se rejoignent au lieu de clignoter.
         .animation(.linear(duration: 0.09), value: levels)
         .animation(.easeOut(duration: 0.25), value: isDimmed)
+        // La frise ne dit rien de plus que « ça enregistre », déjà annoncé par
+        // le bouton et le chronomètre qui l'entourent.
         .accessibilityHidden(true)
     }
 
-    private var shown: [Double] { levels.suffix(Self.capacity) }
-
-    private func height(for level: Double) -> CGFloat {
+    private func barHeight(for level: Double) -> CGFloat {
         let clamped = min(max(level, 0), 1)
-        return minimumHeight + (maximumHeight - minimumHeight) * clamped
+        return minimumBarHeight + (maximumHeight - minimumBarHeight) * clamped
+    }
+
+    private var recorded: some View {
+        // `Canvas` plutôt qu'une pile de `Capsule` : une bulle vocale peut
+        // porter une centaine de barres, et autant de vues à mesurer feraient
+        // ramer le défilement du fil.
+        Canvas { context, size in
+            let bars = Self.resample(levels, toFit: size.width)
+            let played = Int((self.progress ?? 0) * Double(bars.count))
+
+            for (index, level) in bars.enumerated() {
+                let height = max(Bar.minimumHeight, size.height * level)
+                let rect = CGRect(
+                    x: CGFloat(index) * (Bar.width + Bar.spacing),
+                    y: (size.height - height) / 2,
+                    width: Bar.width,
+                    height: height
+                )
+                context.fill(
+                    Path(roundedRect: rect, cornerRadius: Bar.width / 2),
+                    with: .color(self.progress != nil && index < played ? self.playedTint : self.tint)
+                )
+            }
+        }
+        .frame(height: Bar.height)
+        // Le dessin ne dit rien de plus que la durée, déjà annoncée par la bulle
+        // qui le porte.
+        .accessibilityHidden(true)
+    }
+
+    /// Ramène un relevé au nombre de barres que la largeur peut tenir.
+    ///
+    /// C'est **la largeur disponible qui commande**, pas la donnée : un vocal de
+    /// trois minutes a des centaines d'échantillons, et les entasser donnerait
+    /// un aplat gris. Chaque barre dessinée prend le **maximum** de sa tranche,
+    /// et non la moyenne — une moyenne aplatit les pics, c'est-à-dire tout ce
+    /// qu'une forme d'onde a à montrer.
+    static func resample(_ levels: [Double], toFit width: CGFloat) -> [CGFloat] {
+        let capacity = max(1, Int((width + Bar.spacing) / (Bar.width + Bar.spacing)))
+        guard !levels.isEmpty else { return [0] }
+        guard levels.count > capacity else {
+            return levels.map { CGFloat(min(max($0, 0), 1)) }
+        }
+
+        return (0..<capacity).map { slot in
+            let start = slot * levels.count / capacity
+            let end = max(start + 1, (slot + 1) * levels.count / capacity)
+            let peak = levels[start..<min(end, levels.count)].max() ?? 0
+            return CGFloat(min(max(peak, 0), 1))
+        }
     }
 }
 
-#Preview("Frise") {
-    let levels = (0..<40).map { index in
-        (sin(Double(index) / 2.2) * 0.4 + 0.5) * (index > 30 ? 0.4 : 1)
-    }
+// MARK: - Aperçus
 
-    return VStack(spacing: MemoBookSpacing.l) {
-        BrandWaveform(levels: levels)
-        BrandWaveform(levels: levels, isDimmed: true)
-        BrandWaveform(levels: Array(levels.prefix(8)))
+#Preview("Formes d’onde") {
+    VStack(alignment: .leading, spacing: MemoBookSpacing.m) {
+        BrandWaveform(levels: BrandWaveform.sampleLevels, progress: 0.35)
+        BrandWaveform(levels: [])
+        BrandWaveform(live: BrandWaveform.sampleLevels, size: .bar, capacity: 19)
+        BrandWaveform(live: Array(BrandWaveform.sampleLevels.prefix(6)), size: .bar, capacity: 19)
+        BrandWaveform(live: BrandWaveform.sampleLevels, size: .bar, capacity: 19, isDimmed: true)
+    }
+    .padding(MemoBookSpacing.screenMargin)
+    .frame(maxWidth: .infinity)
+    .background(MemoBookColor.background)
+    .environment(\.colorScheme, .light)
+}
+
+#Preview("Frise de la feuille") {
+    VStack(spacing: MemoBookSpacing.l) {
+        BrandWaveform(live: BrandWaveform.sampleLevels)
+        BrandWaveform(live: BrandWaveform.sampleLevels, isDimmed: true)
+        BrandWaveform(live: Array(BrandWaveform.sampleLevels.prefix(8)))
     }
     .padding(MemoBookSpacing.screenMargin)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(MemoBookColor.listeningBackground)
     .environment(\.colorScheme, .light)
+}
+
+extension BrandWaveform {
+    /// Un relevé d'exemple pour les aperçus. Une sinusoïde bruitée
+    /// **déterministe** : pas de `random`, sinon deux captures d'un même aperçu
+    /// ne se superposent plus.
+    ///
+    /// `nonisolated` parce qu'une `View` est isolée à l'acteur principal, et que
+    /// les jeux d'essai qui s'en servent, eux, ne le sont pas. Un tableau de
+    /// `Double` constant n'a rien à protéger.
+    public nonisolated static let sampleLevels: [Double] = (0..<64).map { index in
+        let base = sin(Double(index) / 3.1) * 0.35 + 0.5
+        let grain = sin(Double(index) * 1.7) * 0.15
+        return min(max(base + grain, 0.08), 1)
+    }
 }

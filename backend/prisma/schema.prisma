@@ -316,6 +316,12 @@ model Memo {
   destinationName        String?
   destinationCountryCode String?
 
+  /// La ville — « Rome ». Distincte du pays et du titre du carnet : c'est elle
+  /// qu'on emploie pour s'adresser au voyageur (« Nouveau voyage à Rome ! »),
+  /// là où le pays donnerait « à Italie » et le titre une phrase entière.
+  /// Nulle pour un carnet qui n'est pas situé dans une ville.
+  destinationCity        String?
+
   /// Compteurs affichés sous le titre. Entretenus à l'écriture plutôt que
   /// recalculés à chaque ouverture de l'accueil, qui les demande tous d'un coup
   /// pour tous les voyages.

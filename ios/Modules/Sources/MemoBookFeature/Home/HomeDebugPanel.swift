@@ -17,6 +17,12 @@
     struct HomeDebugPanel: View {
         let model: HomeModel
 
+        /// Ce que la feuille d'abonnement a imposé à la session. Le panneau ne
+        /// s'en sert que pour l'**effacer** : c'est ``SandboxPersona`` qui fait
+        /// jouer un palier aux deux écrans, et une résiliation restée dans la
+        /// session prendrait le pas sur lui.
+        @Environment(\.subscriptionSession) private var session
+
         var body: some View {
             VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
                 Text("Bac à sable — absent de l’app livrée")
@@ -31,9 +37,11 @@
                     action("+ voyage en cours") { model.debugAddTrip(stage: .ongoing) }
                     action("+ voyage à venir") { model.debugAddTrip(stage: .upcoming) }
                     action("+ voyage passé") { model.debugAddTrip(stage: .past) }
-                    action("Devenir un abonné", model.debugBecomeSubscriber)
-                    action("Première connexion", model.debugFirstConnection)
-                    action("Limite atteinte", model.debugReachFreeLimit)
+
+                    action("Devenir un abonné") { play(model.debugBecomeSubscriber) }
+                    action("Première connexion") { play(model.debugFirstConnection) }
+                    action("Quota entamé") { play(model.debugStartedQuota) }
+                    action("Limite atteinte") { play(model.debugReachFreeLimit) }
                     action("Erreur", model.debugShowError)
 
                     // Le hors-ligne coupe **vraiment** le réseau de l'app, et le
@@ -47,12 +55,25 @@
                     action("Envoi en cours", model.debugShowSending)
                     action("Vocal envoyé", model.debugShowDelivered)
 
-                    action("Jeu d’essai", model.debugReset)
+                    action("Jeu d’essai") {
+                        session?.play(nil)
+                        model.debugReset()
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(MemoBookSpacing.s)
             .brandDashedCard(color: MemoBookColor.separator)
+        }
+
+        /// Fait jouer un personnage — et **efface d'abord ce que la session
+        /// impose**. Sans ça, une résiliation faite dans la feuille
+        /// d'abonnement primait sur le personnage (voir
+        /// ``Traveller/freemiumStatus(override:)``), et les boutons du bac à
+        /// sable n'avaient plus l'air de marcher.
+        private func play(_ persona: () -> Void) {
+            session?.play(nil)
+            persona()
         }
 
         private func action(_ title: String, _ perform: @escaping () -> Void) -> some View {

@@ -23,6 +23,34 @@ public enum OnboardingStorage {
     /// ```
     public static let resetArgument = "-resetOnboarding"
 
+    /// Argument de lancement qui **saute l'entrée dans le compte** et ouvre
+    /// l'app directement sur l'accueil, avec le jeu d'essai.
+    ///
+    /// Il existe pour une raison précise : vérifier un écran en simulateur
+    /// demande une session, la session vit dans le trousseau, et le trousseau
+    /// part avec le conteneur dès qu'on réinstalle l'app. Sans cet interrupteur,
+    /// une réinstallation coûte un back-end debout et une connexion à refaire —
+    /// pour regarder un coin arrondi.
+    ///
+    /// ```bash
+    /// xcrun simctl launch <device> com.memobook.app -previewSignedIn
+    /// ```
+    ///
+    /// Il n'ouvre **aucun accès** : le compte est un jeu d'essai local, aucun
+    /// jeton n'est écrit, et tout appel réseau échouera comme il le doit. Sans
+    /// effet en release — voir ``isPreviewingSignedIn``.
+    public static let previewSignedInArgument = "-previewSignedIn"
+
+    /// `true` quand l'app a été lancée avec ``previewSignedInArgument``.
+    /// Toujours `false` en release.
+    public static var isPreviewingSignedIn: Bool {
+        #if DEBUG
+            ProcessInfo.processInfo.arguments.contains(previewSignedInArgument)
+        #else
+            false
+        #endif
+    }
+
     /// À appeler au démarrage, avant toute lecture des réglages.
     ///
     /// Ne fait rien en release : cet interrupteur ne doit pas exister dans

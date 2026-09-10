@@ -14,7 +14,9 @@ import SwiftUI
 /// n'expose pas les instances nommées d'une police variable : sans cela,
 /// demander un semi-gras donnerait un faux gras synthétique.
 public enum BrandFonts {
-    /// Sora SemiBold — titres.
+    /// Sora — titres. Deux graisses : le paywall écrit ses titres en **deux
+    /// temps**, la moitié courante en Regular et la chute en SemiBold.
+    public static let soraRegular = "Sora-Regular"
     public static let soraSemiBold = "Sora-SemiBold"
 
     /// General Sans — corps de texte, dans les trois graisses de la maquette.

@@ -39,6 +39,10 @@ public struct RootView: View {
     /// reculer l'écran du dessous — voir ``BrandSheetPresentation``.
     @State private var sheets = BrandSheetPresentation()
 
+    /// Ce que la session sait de l'abonnement. Elle vit ici parce que le profil
+    /// l'écrit et que l'accueil le lit — voir ``SubscriptionSession``.
+    @State private var subscription = SubscriptionSession()
+
     /// La pile de navigation de l'app, une fois entré.
     @State private var path: [HomeRoute] = []
 
@@ -67,6 +71,7 @@ public struct RootView: View {
         // Le compteur de feuilles descend à tous les écrans **et à toutes les
         // feuilles** : c'est lui qui les relie.
         .environment(\.brandSheetPresentation, sheets)
+        .environment(\.subscriptionSession, subscription)
     }
 
     @ViewBuilder
@@ -135,6 +140,14 @@ public struct RootView: View {
     /// issue.
     private func restore() async {
         guard stage == .restoring else { return }
+
+        // Le raccourci de vérification en simulateur — sans effet en release.
+        // Voir ``OnboardingStorage/previewSignedInArgument``.
+        if OnboardingStorage.isPreviewingSignedIn {
+            hasSeenWelcome = true
+            enterApp(as: Account(id: "preview", firstName: "Camille", createdAt: .now))
+            return
+        }
 
         // Pas de jeton en trousseau : la décision est immédiate, on ouvre
         // l'écran d'entrée. **Pas de tracé du M** — il n'y a rien à attendre, et
@@ -237,13 +250,34 @@ public struct RootView: View {
         }
     }
 
+    /// Où mène chaque intention de l'accueil d'un voyage.
+    ///
+    /// Les deux mènent au **même** écran : raconter la suite et ouvrir une
+    /// étape sont la même conversation, posée à deux endroits différents du
+    /// voyage. C'est ce qui évite un deuxième écran de saisie qui aurait dit la
+    /// même chose.
+    private func handle(_ intent: TripIntent) {
+        switch intent {
+        case .tellMore(let tripId):
+            path.append(.chat(tripId: tripId, stepId: nil))
+        case .openStep(let tripId, let stepId):
+            path.append(.chat(tripId: tripId, stepId: stepId))
+        }
+    }
+
     @ViewBuilder
     private func destination(for route: HomeRoute) -> some View {
         switch route {
         case .profile:
             ProfileView(model: dependencies.profileModel(), onSignOut: signOut)
         case .trip(let id):
-            TripHomeView(tripId: id, model: dependencies.tripModel(id: id))
+            TripHomeView(
+                tripId: id,
+                model: dependencies.tripModel(id: id),
+                onIntent: handle
+            )
+        case .chat(let tripId, let stepId):
+            ChatView(tripId: tripId, stepId: stepId)
         case .gallery:
             // La galerie **réémet** des intentions : son bouton du bas crée un
             // carnet ou ramène au voyage en cours. Elles repassent donc par le
@@ -273,6 +307,9 @@ extension EnvironmentValues {
 enum HomeRoute: Hashable {
     case profile
     case trip(id: String)
+    /// La conversation avec MEMO. `stepId` la pose sur une étape précise ;
+    /// `nil` la pose sur le voyage entier.
+    case chat(tripId: String, stepId: String?)
     /// Les carnets de la communauté, ouverts par la carte de découverte.
     case gallery
     /// Les six étapes de « Créer un voyage ».

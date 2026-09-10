@@ -32,6 +32,7 @@ LINE_HEIGHT = {"Sora": 35 / 32, "General Sans": 1.30}
 
 # (fichier source, graisse, famille, style)
 INSTANCES = [
+    ("Sora-Variable.ttf", 400, "Sora", "Regular"),
     ("Sora-Variable.ttf", 600, "Sora", "SemiBold"),
     ("GeneralSans-Variable.ttf", 400, "General Sans", "Regular"),
     ("GeneralSans-Variable.ttf", 500, "General Sans", "Medium"),

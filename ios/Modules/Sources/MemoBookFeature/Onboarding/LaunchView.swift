@@ -108,8 +108,9 @@ struct HomeSkeleton: View {
 
 extension Duration {
     /// La même durée en secondes, pour les API SwiftUI qui prennent encore un
-    /// `TimeInterval`.
-    fileprivate var seconds: Double {
+    /// `TimeInterval`. Partagée avec le paywall, dont la barre de stories se
+    /// remplit sur la même durée que celle de son minuteur.
+    var seconds: Double {
         Double(components.seconds) + Double(components.attoseconds) * 1e-18
     }
 }

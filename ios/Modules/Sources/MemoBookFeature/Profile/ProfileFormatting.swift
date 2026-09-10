@@ -17,6 +17,22 @@ extension Decimal {
     }
 }
 
+extension Date {
+    /// Le temps qui nous sépare de cette date, écrit comme on le dit :
+    /// « dans 3 semaines ».
+    ///
+    /// **La préposition fait partie de la chaîne** — c'est le formateur du
+    /// système qui la choisit, et elle change avec la langue de l'appareil. La
+    /// phrase de la feuille se termine donc par le délai, elle ne l'encadre pas.
+    ///
+    /// Le formateur choisit aussi l'unité : trois semaines s'écrivent
+    /// « dans 3 semaines », trois jours « dans 3 jours ». La maquette ne montre
+    /// que le premier cas ; le second sort tout seul, sans rien à écrire ici.
+    var relativeDelay: String {
+        formatted(.relative(presentation: .numeric))
+    }
+}
+
 extension CurrentTrip {
     /// « 10/12/2026 - 02/01/2027 », la ligne du voyage en cours dans la carte
     /// de chiffres du profil.
@@ -47,11 +63,4 @@ extension TravellerProfile {
     var tripCountLabel: String {
         tripCount <= 1 ? "\(tripCount) voyage" : "\(tripCount) voyages"
     }
-
-    /// La pastille du haut de l'écran.
-    ///
-    /// Contrairement à celle de l'accueil, elle est **toujours là** : le profil
-    /// est l'endroit où l'on vient voir ce que vaut son compte, et un abonné y
-    /// a le droit de lire qu'il est abonné. Voir ``FreemiumStatus``.
-    var statusPill: String { freemiumStatus.pillLabel }
 }

@@ -166,6 +166,30 @@ public final class AppDependencies {
         }
     }
 
+    /// La conversation avec MEMO.
+    ///
+    /// **Le seul modèle de l'app qui reçoive deux sources** : celle qui rend le
+    /// fil, et celle qui répond à la place de MEMO. Les deux sont encore
+    /// locales, et pour deux raisons différentes — il n'existe ni route de chat
+    /// (`GET /v1/trips/:id/chat`) ni agent de conversation côté serveur, alors
+    /// que `agents/agent-conversation.md` en écrit déjà le contrat.
+    ///
+    /// Le jour où les deux existent, cette fabrique devient :
+    ///
+    /// ```swift
+    /// ChatModel(
+    ///     source: { [api] in try await api.chatThread(tripId: tripId, stepId: stepId) },
+    ///     responder: RemoteMemoResponder(api: api)
+    /// )
+    /// ```
+    ///
+    /// Rien d'autre ne bouge : ni la vue, ni le modèle, ni les aperçus. Voir la
+    /// fiche du chat dans `docs/ui-development.md` pour le contrat des deux
+    /// routes.
+    public func chatModel(tripId: String, stepId: String? = nil) -> ChatModel {
+        ChatModel(tripId: tripId, focusStepId: stepId)
+    }
+
     /// La galerie des carnets de la communauté, servie par `GET /v1/gallery`.
     public func galleryModel() -> GalleryModel {
         GalleryModel { [api] in try await api.gallery() }

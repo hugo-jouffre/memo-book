@@ -103,6 +103,8 @@ targets:
           MemoBook enregistre votre voix pour transformer vos souvenirs en carnet.
         NSPhotoLibraryUsageDescription: >-
           MemoBook ajoute vos photos aux pages de votre carnet.
+        NSCameraUsageDescription: >-
+          MemoBook prend vos photos de voyage pour les ranger dans votre carnet.
         # La reconnaissance vocale sert **uniquement** à écrire le texte à
         # l'écran pendant qu'on parle, pour qu'on voie que le micro entend.
         # C'est le serveur qui transcrit le vocal pour de bon.

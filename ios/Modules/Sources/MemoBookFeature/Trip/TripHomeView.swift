@@ -18,6 +18,10 @@ import SwiftUI
 public struct TripHomeView: View {
     @State private var model: TripHomeModel
 
+    /// Ce que l'écran demande à l'app de faire. Il ne navigue pas lui-même —
+    /// voir ``TripIntent``.
+    private let onIntent: (TripIntent) -> Void
+
     @Environment(\.dismiss) private var dismiss
 
     /// - Parameters:
@@ -26,13 +30,19 @@ public struct TripHomeView: View {
     ///   - model: le modèle qui sert l'écran. Fourni, il fait autorité : c'est
     ///     lui qui porte déjà l'identifiant, et c'est par là que l'app branche
     ///     l'écran sur le réseau — voir ``AppDependencies/tripModel(id:)``.
-    public init(tripId: String, model: TripHomeModel? = nil) {
+    public init(
+        tripId: String,
+        model: TripHomeModel? = nil,
+        onIntent: @escaping (TripIntent) -> Void = { _ in }
+    ) {
         _model = State(initialValue: model ?? TripHomeModel(tripId: tripId))
+        self.onIntent = onIntent
     }
 
     /// Pour les aperçus et les tests, qui fournissent leur propre source.
-    init(model: TripHomeModel) {
+    init(model: TripHomeModel, onIntent: @escaping (TripIntent) -> Void = { _ in }) {
         _model = State(initialValue: model)
+        self.onIntent = onIntent
     }
 
     public var body: some View {
@@ -87,7 +97,12 @@ public struct TripHomeView: View {
                 header(detail)
                     .padding(.horizontal, MemoBookSpacing.screenMargin)
 
-                TripStepsSection(model: model, onOpenStep: { _ in notYetRouted() })
+                TripStepsSection(
+                    model: model,
+                    onOpenStep: { step in
+                        onIntent(.openStep(tripId: detail.trip.id, stepId: step.id))
+                    }
+                )
             } else if model.errorMessage == nil {
                 loadingHeader
                     .padding(.horizontal, MemoBookSpacing.screenMargin)
@@ -166,7 +181,7 @@ public struct TripHomeView: View {
                 "Continuer à enregistrer",
                 icon: Image(brand: "IconMic"),
                 fillsWidth: true,
-                action: notYetRouted
+                action: { onIntent(.tellMore(tripId: detail.trip.id)) }
             )
             // Le libellé suit le Dynamic Type, mais s'arrête à AX1 : au-delà,
             // « enregistrer » est plus large que le bouton entier et se coupe
@@ -193,12 +208,14 @@ public struct TripHomeView: View {
         .accessibilityLabel(destination.name)
     }
 
-    /// Les commandes dont l'écran n'est pas encore dessiné.
+    /// Les commandes dont l'écran n'est pas encore dessiné : l'impression, les
+    /// réglages du voyage et l'invitation.
     ///
     /// Elles gardent leur bouton parce que la maquette les montre, et ne mènent
     /// nulle part parce que rien n'existe derrière — même parti pris que les
     /// intentions non routées de l'accueil et du profil, et il se voit ici, en
-    /// un seul endroit.
+    /// un seul endroit. Le micro et l'ouverture d'une étape, eux, mènent
+    /// désormais à la conversation avec MEMO.
     private func notYetRouted() {}
 }
 

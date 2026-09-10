@@ -76,7 +76,11 @@ export function serializeTrip(memo: MemoForTrip) {
     id: memo.id,
     title: memo.title,
     destination: memo.destinationName
-      ? { name: memo.destinationName, countryCode: memo.destinationCountryCode }
+      ? {
+          name: memo.destinationName,
+          countryCode: memo.destinationCountryCode,
+          city: memo.destinationCity ?? null,
+        }
       : null,
     stage: memo.stage,
     startDate: iso(memo.startDate),

@@ -207,16 +207,41 @@ public final class ProfileModel {
         }
     }
 
-    /// Souscrire, et **cesser d'être un compte à quota dans le même geste**.
+    /// Souscrire, ou re-souscrire après une résiliation — et **cesser d'être un
+    /// compte à quota dans le même geste**.
     ///
     /// Les deux ensemble parce que c'est ce que le serveur écrira le jour d'une
     /// vraie souscription : un abonné n'a plus d'étapes offertes à compter, et
     /// laisser la pastille se vider derrière lui serait un décompte sans objet.
+    ///
+    /// ⚠️ **Aucun achat n'a lieu.** Le jour où StoreKit sera branché, c'est ici
+    /// que se posera la transaction, et le reste de la feuille ne bougera pas.
     public func activateSubscription() {
         mutate { profile in
             profile.subscription.isActive = true
+            profile.subscription.cancelledAt = nil
             profile.offeredSteps = nil
             profile.remainingSteps = nil
+        }
+    }
+
+    /// Résilier, au bout des trois confirmations.
+    ///
+    /// L'abonnement **s'éteint le jour même** — « L'abonnement s'arrête
+    /// aujourd'hui », dit la dernière feuille — et non à la fin de la période
+    /// payée. C'est ce que la maquette écrit, et c'est la seule lecture qui
+    /// s'accorde avec l'écran précédent, qui propose justement d'*attendre* la
+    /// résiliation automatique si on veut garder ses derniers jours.
+    ///
+    /// ⚠️ **Rien ne part au serveur**, comme le reste de cet écran : la base
+    /// sait dire `cancelled` et `cancelledAt` (`schema.prisma`), mais aucune
+    /// route ne les écrit encore et l'achat lui-même n'existe pas. La raison
+    /// invoquée est perdue ici — elle attend son compteur côté serveur.
+    public func cancelSubscription(reason: SubscriptionCancellationReason?) {
+        _ = reason
+        mutate {
+            $0.subscription.isActive = false
+            $0.subscription.cancelledAt = .now
         }
     }
 
