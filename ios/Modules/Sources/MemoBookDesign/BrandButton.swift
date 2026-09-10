@@ -29,6 +29,28 @@ public struct BrandButton: View {
         /// Aplat crème sans contour : les actions posées **dans** une carte
         /// blanche, où un contour vert ferait concurrence au CTA de l'écran.
         case soft
+        /// Pavé blanc sans contour, qui tient par son ombre.
+        ///
+        /// C'est le bouton de la barre d'envoi du chat qui n'appelle à rien —
+        /// « passer au clavier », posé entre l'appareil photo et le micro, qui
+        /// portent eux le contour vert de ``secondary``. Sans contour parce
+        /// qu'il ne réclame pas l'attention, et blanc pour se détacher du crème
+        /// sans se cercler : c'est l'ombre (``MemoBookShadow/raised``) qui le
+        /// pose au-dessus de la page.
+        case raised
+        /// Aplat lime, libellé et filet verts. C'est la seule façon dont
+        /// l'accent porte un fond de bouton — voir ``MemoBookColor/accent`` :
+        /// le lime est trop clair pour porter autre chose que du vert.
+        case accent
+        /// Aplat bleu de la marque, libellé à l'encre. L'action qui fait
+        /// simplement **avancer** — « Continuer », d'un écran de paywall au
+        /// suivant : elle ne vend rien, elle tourne la page.
+        case blue
+        /// Texte rouge, sans fond ni contour, mais aux marges d'un bouton :
+        /// l'action qui défait quelque chose — « Résilier mon abonnement »,
+        /// « Confirmer ma résiliation ». Ce n'est pas un ``link`` : elle occupe
+        /// toute la largeur et se pose sous le bouton qu'elle contredit.
+        case destructive
         /// Texte seul, sans marges : à poser dans une phrase ou une barre.
         case link
     }
@@ -225,8 +247,15 @@ public struct BrandButton: View {
         case (.primary, true): MemoBookColor.ink
         case (.secondary, false): MemoBookColor.action
         case (.secondary, true): MemoBookColor.onAction
-        case (.tertiary, false), (.link, false), (.soft, false): MemoBookColor.ink
-        case (.tertiary, true), (.link, true), (.soft, true): MemoBookColor.onAction
+        case (.tertiary, false), (.link, false), (.soft, false), (.raised, false):
+            MemoBookColor.ink
+        case (.tertiary, true), (.link, true), (.soft, true), (.raised, true):
+            MemoBookColor.onAction
+        case (.accent, _): MemoBookColor.action
+        case (.blue, _): MemoBookColor.ink
+        // Le rouge ne s'inverse pas sur fond sombre : c'est un signal, pas une
+        // couleur de marque.
+        case (.destructive, _): MemoBookColor.error
         }
     }
 
@@ -246,9 +275,15 @@ public struct BrandButton: View {
                 shape.fill(MemoBookColor.surface)
             case (.soft, false):
                 shape.fill(MemoBookColor.background)
-            case (.soft, true):
+            case (.soft, true), (.raised, true):
                 shape.fill(MemoBookColor.onAction.opacity(0.15))
-            case (.secondary, true), (.tertiary, _), (.link, _):
+            case (.raised, false):
+                shape.fill(MemoBookColor.surface)
+            case (.accent, _):
+                shape.fill(MemoBookColor.accent)
+            case (.blue, _):
+                shape.fill(MemoBookColor.outline)
+            case (.secondary, true), (.tertiary, _), (.link, _), (.destructive, _):
                 Color.clear
             }
         }
@@ -264,7 +299,10 @@ public struct BrandButton: View {
                 shape.strokeBorder(MemoBookColor.action, lineWidth: 1)
             case (.primary, true), (.secondary, true):
                 shape.strokeBorder(MemoBookColor.onAction, lineWidth: 1)
-            case (.tertiary, _), (.link, _), (.soft, _):
+            case (.accent, _):
+                shape.strokeBorder(MemoBookColor.action, lineWidth: 1)
+            case (.tertiary, _), (.link, _), (.soft, _), (.raised, _), (.destructive, _),
+                (.blue, _):
                 EmptyView()
             }
         }
@@ -304,6 +342,9 @@ public struct BrandButton: View {
                 BrandButton(icon: arrow) {}
                 BrandButton("Chargement", isLoading: true) {}
             }
+            BrandButton("S’inscrire à nouveau", style: .accent, fillsWidth: true) {}
+            BrandButton("Continuer", style: .blue, fillsWidth: true) {}
+            BrandButton("Résilier mon abonnement", style: .destructive, fillsWidth: true) {}
             HStack {
                 BrandButton("Soft", style: .soft) {}
                 BrandButton(icon: arrow, style: .soft, isRound: true) {}

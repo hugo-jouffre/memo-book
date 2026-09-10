@@ -19,8 +19,14 @@ public struct ProfileView: View {
     @State private var model: ProfileModel
     @State private var sheet: ProfileSheet?
 
+    /// Le paywall se présente **par-dessus tout**, feuille comprise : c'est un
+    /// écran entier, pas une feuille de plus. La feuille qui l'a ouvert se
+    /// referme donc d'abord, sans quoi on la retrouverait dessous en sortant.
+    @State private var showsPaywall = false
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.subscriptionSession) private var subscriptionSession
 
     public init(
         model: ProfileModel = ProfileModel(),
@@ -37,6 +43,7 @@ public struct ProfileView: View {
 
                 if let profile = model.profile {
                     identity(profile)
+                    subscriptionCallToAction
                     contactGroup(profile)
                     servicesGroup(profile)
                     paymentGroup(profile)
@@ -79,6 +86,32 @@ public struct ProfileView: View {
         .brandSheet(item: $sheet) { destination in
             sheetContent(destination)
         }
+        .fullScreenCover(isPresented: $showsPaywall) {
+            PaywallView(subscription: effectiveSubscription) {
+                model.activateSubscription()
+                subscriptionSession?.record(isSubscribed: true)
+                showsPaywall = false
+            }
+        }
+    }
+
+    // MARK: - L'abonnement, tel qu'il faut le lire ici
+
+    /// L'abonnement du profil, **corrigé par la session**.
+    ///
+    /// ``ProfileModel`` est un `@State` : l'écran se reconstruit à chaque fois
+    /// qu'on y revient, et repartirait donc du jeu d'essai — abonnement
+    /// rétabli, résiliation oubliée. Tant que rien n'est persisté, c'est la
+    /// session qui a le dernier mot, ici comme sur l'accueil.
+    private var effectiveSubscription: Subscription? {
+        guard var subscription = model.profile?.subscription else { return nil }
+        subscription.isActive = freemiumStatus == .subscriber
+        return subscription
+    }
+
+    /// Le palier du compte, lu sur le modèle **et** sur la session.
+    private var freemiumStatus: FreemiumStatus {
+        model.profile?.freemiumStatus(override: subscriptionSession?.override) ?? .subscriber
     }
 
     // MARK: - En-tête
@@ -112,6 +145,67 @@ public struct ProfileView: View {
                 .accessibilityAddTraits(.isHeader)
 
             Spacer(minLength: 0)
+
+            statusPill
+        }
+    }
+
+    /// Ce que vaut le compte, dit en un mot sur la ligne du titre.
+    ///
+    /// **Elle partage la ligne du titre et ne flotte pas dans le coin** : c'est
+    /// une étiquette posée sur l'écran, pas un badge accroché à un élément.
+    /// Contrairement à celle de l'accueil, elle annonce **aussi** l'abonné :
+    /// c'est ici qu'un statut a une raison d'être, là-bas ce n'était qu'un
+    /// décompte.
+    @ViewBuilder
+    private var statusPill: some View {
+        if model.profile != nil {
+            let pill = BrandTagPill(
+                freemiumStatus.profilePillLabel,
+                tone: .accentOutlined,
+                isUppercased: true
+            )
+            // Le lime cerclé de vert, comme la pastille « ABONNÉE » de la
+            // feuille d'abonnement : un aplat lime ne porte que du vert (D13).
+            .layoutPriority(-1)
+
+            // **« ABONNE-TOI » se touche.** Tant qu'il y a quelque chose à
+            // vendre, la pastille ouvre la même feuille que le gros bouton lime
+            // juste en dessous : c'est la même proposition, et quelqu'un qui
+            // vise le mot y a autant droit que celui qui vise le bouton.
+            // « ABONNÉ », lui, est un constat — il ne mène nulle part.
+            if freemiumStatus.wantsSubscription {
+                Button { sheet = .subscription } label: { pill }
+                    .buttonStyle(.plain)
+                    .frame(minHeight: MemoBookSpacing.minimumTapTarget)
+                    .contentShape(.rect)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityHint("Découvrir l’abonnement")
+            } else {
+                pill
+            }
+        }
+    }
+
+    /// Le gros bouton lime, et **rien d'autre au-dessus** : pour quelqu'un qui
+    /// n'a pas d'abonnement, c'est la première chose de l'écran après son nom.
+    ///
+    /// Il disparaît une fois abonné, où la ligne « Mon abonnement » des services
+    /// suffit : on ne revend pas ce qui est déjà acheté. C'est aussi ce qui fait
+    /// que **résilier le fait revenir** — la feuille se referme sur un profil
+    /// qui n'a plus d'abonnement, et l'offre reprend sa place.
+    @ViewBuilder
+    private var subscriptionCallToAction: some View {
+        if freemiumStatus.wantsSubscription {
+            BrandButton(
+                "Découvrir l’abonnement",
+                icon: Image(brand: "IconArrowForward"),
+                iconPlacement: .trailing,
+                style: .accent,
+                fillsWidth: true
+            ) {
+                sheet = .subscription
+            }
         }
     }
 
@@ -167,7 +261,12 @@ public struct ProfileView: View {
                 isValueProminent: true,
                 action: notYetRouted
             )
-            BrandRow("Mon abonnement") { sheet = .subscription }
+            // Elle ne s'affiche qu'une fois abonné : sans abonnement, c'est le
+            // bouton lime du haut qui porte la proposition, et deux entrées vers
+            // la même feuille sur un même écran se marcheraient dessus.
+            if freemiumStatus == .subscriber {
+                BrandRow("Mon abonnement") { sheet = .subscription }
+            }
             BrandRow("Suivi des commandes") { sheet = .orderTracking }
             BrandRow("Confidentialité", action: notYetRouted)
         }
@@ -235,9 +334,21 @@ public struct ProfileView: View {
         case .paymentMethod:
             PaymentMethodSheet(model: model)
         case .subscription:
-            SubscriptionSheet(subscription: model.profile?.subscription) {
-                model.activateSubscription()
-            }
+            SubscriptionSheet(
+                subscription: effectiveSubscription,
+                onActivate: {
+                    model.activateSubscription()
+                    subscriptionSession?.record(isSubscribed: true)
+                },
+                onCancel: {
+                    model.cancelSubscription(reason: $0)
+                    subscriptionSession?.record(isSubscribed: false)
+                },
+                onLearnMore: {
+                    sheet = nil
+                    showsPaywall = true
+                }
+            )
         case .connectors:
             ConnectorsSheet(model: model)
         case .orderTracking:

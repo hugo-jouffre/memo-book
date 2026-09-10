@@ -73,3 +73,19 @@ public final class TripHomeModel {
         transport = nil
     }
 }
+
+/// Ce que l'accueil d'un voyage peut demander à l'app de faire.
+///
+/// L'écran ne navigue pas lui-même : il annonce une intention, et `RootView`
+/// décide où elle mène. Même contrat que ``HomeIntent`` — c'est sa deuxième
+/// occurrence, et le motif se tient donc désormais sur deux écrans.
+public enum TripIntent: Sendable, Hashable {
+    /// Raconter la suite du voyage. C'est le CTA « Continuer à enregistrer »,
+    /// et il ouvre la conversation avec MEMO.
+    case tellMore(tripId: String)
+
+    /// Ouvrir une étape. Elle ouvre la **même** conversation, mais posée sur
+    /// cette étape-là : c'est ce qui permet à MEMO de savoir de quelle journée
+    /// on parle sans avoir à le demander.
+    case openStep(tripId: String, stepId: String)
+}

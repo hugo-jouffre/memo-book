@@ -88,14 +88,75 @@ public struct Connector: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
-/// L'abonnement hebdomadaire, tel que la feuille le présente.
+/// L'abonnement hebdomadaire, tel que les feuilles le présentent.
+///
+/// **Il ne se résilie pas d'un coup : il s'éteint tout seul.** C'est la promesse
+/// que trois des cinq feuilles répètent, et c'est pour ça que ce modèle porte le
+/// voyage autant que le prix — sans le voyage, « résiliation automatique à la
+/// fin de ton voyage à Rome » n'a rien à écrire.
 public struct Subscription: Codable, Sendable, Hashable {
     public let weeklyPrice: Decimal
     public var isActive: Bool
 
-    public init(weeklyPrice: Decimal, isActive: Bool = false) {
+    /// Le voyage qui porte l'abonnement, sous ses deux noms — les feuilles
+    /// emploient les deux et ce ne sont pas les mêmes mots.
+    ///
+    /// La destination se glisse dans une phrase (« à la fin de ton voyage à
+    /// **Rome** »), le titre se cite entre guillemets (« ton voyage “**Rome
+    /// entre amis**” »). Écrire l'un à la place de l'autre donnerait « à la fin
+    /// de ton voyage à Rome entre amis ».
+    public var tripDestination: String?
+    public var tripTitle: String?
+
+    /// Le jour où l'abonnement s'arrête de lui-même : la fin du voyage.
+    ///
+    /// C'est de lui que sort le « dans 3 semaines » de la feuille — jamais d'un
+    /// nombre écrit à la main quelque part dans une vue.
+    public var endsOn: Date?
+
+    /// Le jour où il a été résilié à la main, s'il l'a été.
+    public var cancelledAt: Date?
+
+    public init(
+        weeklyPrice: Decimal,
+        isActive: Bool = false,
+        tripDestination: String? = nil,
+        tripTitle: String? = nil,
+        endsOn: Date? = nil,
+        cancelledAt: Date? = nil
+    ) {
         self.weeklyPrice = weeklyPrice
         self.isActive = isActive
+        self.tripDestination = tripDestination
+        self.tripTitle = tripTitle
+        self.endsOn = endsOn
+        self.cancelledAt = cancelledAt
+    }
+}
+
+/// Pourquoi on s'en va. Les quatre raisons de la maquette, dans son ordre.
+///
+/// Une énumération et non une chaîne libre : la réponse part vers un compteur
+/// côté serveur, et un compteur ne sait rien faire de quatre orthographes de la
+/// même raison.
+public enum SubscriptionCancellationReason: String, Codable, Sendable, Hashable, CaseIterable, Identifiable {
+    case unused
+    case tooExpensive
+    case storiesFinished
+    case wasTesting
+
+    public var id: String { rawValue }
+
+    /// Figma les saisit avec l'apostrophe droite, alors que le reste de l'app
+    /// emploie la typographique ; elles sont corrigées ici comme le reste de la
+    /// copie de l'abonnement (D12, T39).
+    public var label: String {
+        switch self {
+        case .unused: "Je ne l’utilise plus"
+        case .tooExpensive: "C’est un peu cher"
+        case .storiesFinished: "J’ai fini mes récits"
+        case .wasTesting: "C’était pour tester"
+        }
     }
 }
 

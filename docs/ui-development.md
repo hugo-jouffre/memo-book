@@ -336,9 +336,9 @@ section « À trancher » recopiée pour Clara.
 |---|---|---|
 | **1 · Entrée dans l'app** | Splash Screen, Welcome Screen, Sign Up | 📐 Spec figée (§8) — *Sign Up* attend T4 pour son back-end |
 | 2 · Compte | Sign In, mot de passe oublié, suppression de compte | ⏳ En attente de maquettes |
-| 3 · Carnets & enregistrement | **Accueil**, **accueil d'un voyage**, liste, détail, enregistrement | 🟢 *Accueil* + écran de lancement (§9) et *accueil d'un voyage* (§11) livrés, sur jeu d'essai — le reste existe en version non brandée |
+| 3 · Carnets & enregistrement | **Accueil**, **accueil d'un voyage**, **chat**, liste, détail, enregistrement | 🟢 *Accueil* + écran de lancement (§9), *accueil d'un voyage* (§11) et la **conversation avec MEMO** (§14) livrés, sur jeu d'essai — le chat répond pour de vrai, avec un moteur local (§14.1) ; le reste existe en version non brandée |
 | 4 · Carnet & partage | Génération, aperçu PDF, partage | 🔄 Existe en version non brandée |
-| 5 · Paywall & réglages | Achat, abonnement, **profil** | 🟢 *Profil* et ses six feuilles livrés (§10), sur jeu d'essai — seule la déconnexion agit vraiment |
+| 5 · Paywall & réglages | Achat, abonnement, **profil** | 🟢 *Profil* et ses six feuilles livrés (§10), les **cinq feuilles de l'abonnement** et la résiliation en trois temps (§13), le **palier freemium** partagé accueil ↔ profil (§13.2) et les **trois écrans du paywall** (§13.3), sur jeu d'essai — seule la déconnexion agit vraiment. Restent les trois feuilles du paywall |
 
 ---
 
@@ -932,7 +932,8 @@ area et `ignoresSafeArea` l'étire vers le haut.
 - **Vues** : `MemoBookFeature/Profile/` — `ProfileView`, `ProfileModel`,
   `ProfileFormatting`, `ProfileFixtures`, `PostalAddressSheet`,
   `PaymentSheets`, `SubscriptionSheet`, `ConnectorsSheet`,
-  `OrderTrackingSheet`.
+  `OrderTrackingSheet`. ⚠️ `SubscriptionSheet` a depuis été **entièrement
+  réécrite** sur un nœud plus récent — voir §13.
 - **Rôle** : qui tu es pour MemoBook, ce que tu lui as confié, et par où on sort.
 - **Entrée / sortie** : depuis l'**avatar bleu en haut à droite de l'accueil**
   (`HomeIntent.openProfile`, poussé par `RootView` sur `HomeRoute.profile`) →
@@ -980,6 +981,13 @@ système porte son fond (`presentationBackground`) et sa forme
 (`presentationCornerRadius`) ; à nous la poignée, le grand titre Sora, le rond de
 fermeture, le crème et la hauteur calée sur le contenu.
 
+> ⚠️ **La safe area compte déjà dans la marge basse.** Le défilement réserve
+> l'indicateur d'accueil sous le contenu — 34 pt sur un iPhone récent — et la
+> marge d'écran s'y ajoutait : 58 pt de vide en bas de **chaque** feuille, soit
+> deux fois ce qu'il fallait. On ne pose donc que ce qui *manque* pour atteindre
+> la marge d'écran, et rien du tout là où l'indicateur la donne déjà. Un appareil
+> à bouton d'accueil, qui n'a pas de safe area, reçoit les 24 pt entiers.
+
 > ⚠️ **Elle a flotté, détachée des bords, et c'était une erreur sur trois plans à
 > la fois.** Le système dessine une ombre autour du conteneur d'une feuille :
 > détachée, la carte en héritait d'un **liseré gris**. Le conteneur ne portant
@@ -1006,7 +1014,14 @@ autour. Trois pièges, tous rencontrés :
 4. *Le masque vient **avant** la réduction.* Posé après, il arrondissait les
    coins de l'écran — que la carte réduite ne touche plus — et celle-ci gardait
    des angles droits.
-5. *Le relâchement se lit sur la liaison, pas sur la feuille.* Branché sur
+6. *Le noir doit s'effacer avec le recul.* Posé en dur, il restait derrière la
+   carte pendant qu'elle regrandissait : refermer une feuille laissait une
+   **bande noire en haut et en bas** le temps du retour à l'échelle — les deux
+   bandes du piège 3, revenues par une autre porte. Il est donc en opacité, il a
+   le **crème de l'app** sous lui — jamais la fenêtre, qui est noire —, et le
+   recul se relâche plus vite (0,2 s) qu'il ne s'installe (0,35 s) : la carte a
+   retrouvé sa taille avant que la feuille ait fini de descendre.
+7. *Le relâchement se lit sur la liaison, pas sur la feuille.* Branché sur
    l'apparition et la disparition de la feuille — qui **encadrent** l'animation
    au lieu de l'accompagner — le recul ne se relâchait qu'une fois la feuille
    entièrement descendue, et l'app se remettait à l'échelle d'un coup sec après
@@ -1095,11 +1110,12 @@ connexion de l'écran d'entrée.
   enregistrées. » · « ApplePay » « disponible » · « Ajouter une carte »
 - *Ajoutr une carte* : « Numéro de carte » · « Date d’expiration » · « CVV » ·
   « Nom sur la carte » · « Ajouter une carte »
-- *Mon Abonnement* : « Poursuis l’enregistrement de tes souvenirs de voyage sans
-  aucune interruption. » · « / semaine (sans engagement) » · « 100% de la somme
-  versée est déduite du prix final de ton carnet imprimé ! » · « En savoir
-  plus » · « Activer mon abonnement (1,99 €) » · « Plus tard (consulter les
-  souvenirs existants) »
+- *Mon Abonnement* : ⚠️ **remplacée** — cette feuille a été entièrement
+  redessinée et se lit désormais en §13. Sa copie d'origine (« Poursuis
+  l’enregistrement de tes souvenirs de voyage sans aucune interruption. »,
+  « / semaine (sans engagement) », « 100% de la somme versée est déduite du prix
+  final de ton carnet imprimé ! », « Activer mon abonnement (1,99 €) », « Plus
+  tard (consulter les souvenirs existants) ») n'est plus dans le code
 - *Suivi des commandes* : « Livraison » · « Dans 5 à 7 jours » ·
   « 2 exemplaires - 50 pages »
 
@@ -1253,9 +1269,17 @@ l'accueil, et il se voit en **un seul endroit** (`ProfileView.notYetRouted`).
 |---|---|---|
 | Photo de couverture | rapport 390/440, en **plancher** | Un rapport et non une hauteur : la couverture garde ses proportions du SE au Pro Max. Un **plancher** et non une hauteur figée — voir l'encadré ci-dessous |
 | Commandes | 3 ronds de 2.75 rem | Retour, impression, réglages. Posés sous la barre d'état, dont la hauteur vient de `DeviceScreen` |
-| Panneau crème | rayon 2.5 rem (`overlayCornerRadius`) | Il **mord** de 1.5 rem sur la photo : c'est ce chevauchement qui le fait recouvrir l'image au lieu d'être posé dessous |
+| Panneau crème | rayon 2.5 rem (`overlayCornerRadius`) | Il **mord de son propre rayon** sur la photo — 2.5 rem, pas 1.5. Voir l'encadré ci-dessous |
 | Pastilles de filtre | hauteur 2.75 rem, capsule | `BrandFilterChip`, dans une bande qui défile |
 | Vignette d'étape | 4.75 rem | Avec le drapeau du pays dans le coin |
+
+> ⚠️ **Le panneau mord d'exactement son rayon.** À 1.5 rem de chevauchement
+> contre un rayon de 2.5, l'arc de chaque coin dépassait de 16 pt sous le bas de
+> la photo : sa moitié haute découpait l'image, sa moitié basse découpait le
+> crème du fond — invisible —, et la frontière entre les deux laissait une
+> **encoche sombre à angle droit** dans le coin. Un coin n'a l'air d'un coin que
+> si toute sa courbe tombe sur la photo. C'est revenu une fois ; la valeur est
+> maintenant tirée du rayon lui-même, plus d'un cran de l'échelle.
 
 > ⚠️ **La hauteur de la couverture est un plancher, pas une hauteur.** Figée,
 > elle rognait tout en taille de texte accessible : les compteurs, qui s'empilent
@@ -1274,7 +1298,7 @@ l'accueil, et il se voit en **un seul endroit** (`ProfileView.notYetRouted`).
 | `BrandFilterChip` | **La** pastille de filtre. Elle ne porte pas l'action : elle sert d'étiquette à un `Menu`, qui apporte la liste, les coches et VoiceOver. Deux états seulement — au repos un contour, active le vert de la marque : un filtre posé doit se voir de loin, sinon on cherche pourquoi la liste est courte |
 | `View.brandHiddenNavigationBar()` | Masque la barre **et rend le glissé de retour** qu'elle emporte. Extrait du profil, qui le portait seul, à sa deuxième occurrence |
 | `TripStatsRow` (étendu) | Le même composant qu'à l'accueil, avec deux emplois : réparti sur une carte, ou serré et teinté de blanc sur une photo. Les règles qui comptent — pluriels, unités, empilement en AX — restent partagées |
-| `CompanionStack` (étendu) | Gagne un nombre de pastilles visibles et un **total**, pour afficher « +24 » sans que le serveur envoie vingt-quatre visages |
+| `CompanionStack` (étendu) | Gagne un nombre de pastilles visibles et un **total**, pour afficher « +24 » sans que le serveur envoie vingt-quatre visages. Puis un slot `onAdd` : le « + » d'invitation vit **dans** la pile, pas à côté — posé en frère dans la rangée, il se retrouvait espacé de 0.5 rem quand les visages se recouvrent d'un cinquième, et flottait à côté du groupe au lieu d'en faire partie. Sa cible tactile reste à 2.75 rem, les cinq points de marge repris en négatif pour que le recouvrement soit celui des visages |
 
 **Le texte blanc sur une photo qu'on ne choisit pas** — c'est le seul endroit de
 l'app où le contraste ne se calcule pas d'avance : une couverture claire rendrait
@@ -1420,3 +1444,668 @@ voir le carnets de la communauté » · « Tes voyages passés s'afficheront ici
 | T36 | **La pastille « ×1 »** est lime sur une maquette et bleue à contour sur une autre. Implémentée en lime, comme le compteur existant |
 | T37 | 🟠 **Asset attendu** — Hugo fournira l'illustration (passeport + carnet ouvert). Le livre du *Welcome* tient la place d'ici là |
 | T38 | ✅ **Tranché (D11)** — dès que les dates le disent en cours, il est en cours, même sans souvenir : c'est là qu'il faut inciter à raconter la première étape |
+
+---
+
+## 13. Lot 5 — Les cinq feuilles de l'abonnement
+
+### 13.1 Abonnement : mode d'emploi, état, et résiliation en trois temps
+
+- **Nœud Figma** : `3268:26957` —
+  [ouvrir](https://www.figma.com/design/kytPYFno7PvDciIKTxCujK/MemoBook---Product?node-id=3268-26957).
+  Cinq frames : `Modale – Profile Non Abonné` (`3290:19693`),
+  `Modale – Profile Abonné` (`3290:19751`), `Modale – Résiliation 1`
+  (`3290:19777`), `Modale – Résiliation 2` (`3290:19793`),
+  `Modale – Résiliation 3` (`3290:19823`).
+  ✅ Contrairement au lot Profil (T16), **tous les appels MCP ont abouti** :
+  `get_metadata`, `get_design_context` sur les cinq frames, `get_variable_defs`
+  et `download_assets`. Les mesures ci-dessous sont lues sur le nœud, pas
+  relevées sur une capture.
+- **Vue** : `MemoBookFeature/Profile/SubscriptionSheet.swift` — elle remplace
+  entièrement l'ancienne feuille « Mon Abonnement » du lot Profil (§10.1).
+- **Rôle** : ce que l'abonnement coûte, ce qu'il rend, et les trois portes qu'il
+  faut pousser pour en sortir.
+- **Entrée / sortie** : ligne « Mon abonnement » du profil → retour au profil.
+
+**Le chemin**
+
+```
+                   ┌─ pas abonné ─→ .pitch     « Comment ça fonctionne ? »
+« Mon abonnement » ┤
+                   └─ abonné ─────→ .current   « Mon Abonnement »
+                                       │ Résilier mon abonnement
+                                       ▼
+                                    .keepGoing « Ton voyage continue »
+                                       │ Résilier
+                                       ▼
+                                    .reason    « Pourquoi nous quittes-tu ? »
+                                       │ Confirmer ma résiliation
+                                       ▼
+                                    .done      « C'est validé »
+```
+
+À chaque étape, le **bouton vert garde** l'abonnement et le **bouton rouge
+avance** vers la sortie. La maquette le répète trois fois ; c'est la seule chose
+qu'on n'a pas eu à décider.
+
+> **Les cinq feuilles n'en font qu'une.** Une seule `brandSheet` est présentée,
+> et c'est son contenu qui change. Empiler cinq feuilles aurait fait reculer
+> l'app cinq fois — chaque `BrandSheet` recule celle du dessous (§10.1) — et une
+> confirmation en trois temps se serait lue comme un empilement de fenêtres au
+> lieu d'un chemin. Le cran de hauteur, lui, est remesuré à chaque étape et
+> s'anime.
+
+**Structure (en rem)** — mesures Figma converties, arrondis R2 signalés.
+
+| Élément | Figma | rem | Note |
+|---|---|---|---|
+| Marge de la feuille | 24 | 1.5 | `screenMargin` |
+| Écart entre blocs | 24 | 1.5 | `m` |
+| Écart entre les 3 temps du rail | 21 | 1.25 | **R2** → `sectionGap` (nouveau token) |
+| Écart rail ↔ texte | 18 | 1 | **R2** → `s` |
+| Largeur du rail | 18,71 | 1.25 | **R2** → suit le Dynamic Type |
+| Icône du rail | 16 | 1 | |
+| Écart titre ↔ détail | 8 | 0.5 | `xs` |
+| Écart entre les deux lignes d'un encadré | 4 | 0.25 | `xs / 2` |
+| Carte « Comment résilier ? » | px 12 / py 16 | 0.75 / 1 | `snug` (nouveau token) / `s` |
+| Encadré « Résiliation automatique » | px 16 / py 24 | 1 / 1.5 | `s` / `m` |
+| Rayon des deux cartes | 16 | 1 | `controlCornerRadius` |
+| Aplat des deux cartes | `Blue` à 50 % | | `outline.opacity(0.5)` — 0.35 ailleurs, 0.5 ici (R3) |
+| Écart entre deux boutons | 16 | 1 | `s` |
+| Hauteur d'un bouton | 48 | 3 | **R2** → `controlHeight` (50), la hauteur commune des CTA |
+| Cartes d'options | radius 8, padding 14, gap 12 | | `BrandOptionGroup` — voir T42 |
+
+**Tokens ajoutés** — `MemoBookSpacing.sectionGap` (20, le cran de 1.25 rem qui
+manquait à l'échelle §2.2) · `MemoBookSpacing.snug` (12, le cran de 0.75 rem) ·
+`MemoBookFont.cardTitle` (Sora SemiBold 16) · `MemoBookFont.calloutTitle`
+(General Sans Semibold 20). Les deux polices **ne sont pas encore des variables
+Figma** — même statut que `h2` (T16).
+
+**Composants** — trois entrent dans le design system, parce que le motif
+resservira :
+
+| Composant | Ce qui change |
+|---|---|
+| `BrandButton` | Deux styles de plus : **`destructive`** (rouge sémantique, ni fond ni contour, mais les marges d'un bouton pleine largeur) vu **trois fois** dans ce lot, et **`accent`** (aplat lime cerclé de vert) pour « S'inscrire à nouveau » |
+| `BrandTagPill` | Un ton de plus : **`accentOutlined`** (lime plein cerclé de vert, texte vert), vu deux fois — la pastille « ABONNÉE » et « VOIR UN APERÇU DE TON CARNET → » |
+| `BrandSheet` | L'en-tête accepte une **pastille** (`badge:`) entre le titre et le chapeau, et un chapeau en **plusieurs paragraphes** (`paragraphs:`) — trois des cinq feuilles en ont |
+
+Spécifiques à l'écran : `SubscriptionTimeline`, `HowToCancelCard`,
+`SubscriptionCallout`, et `SubscriptionCopy` qui porte toute la copie.
+
+**Le rail qui s'éteint** — le fil vertical des trois temps est **un fond, pas
+une colonne d'icônes** : posé en `background(alignment: .topLeading)` derrière la
+pile entière, il en prend la hauteur exacte sans que personne ait à la mesurer,
+et les icônes tombent d'elles-mêmes en face de leur titre. Figma le dessine en
+deux couches (un dégradé lime qui s'efface à partir de 69,5 %, recouvert d'une
+capsule verte sur 81,3 % de la hauteur) ; on le rend en **un seul dégradé** —
+vert plein jusqu'à 81,3 %, puis le lime repris à l'opacité qu'il avait déjà à cet
+endroit (61,3 %) et qui finit de s'effacer sur le crème. Même image, une couche
+de moins, et aucune hauteur en dur.
+
+**Assets** — R10 respecté, et **un seul fichier nouveau** :
+
+| Maquette | Ce qu'on emploie |
+|---|---|
+| « + » du rail | `IconPlus` — même tracé, à l'échelle 1,5 exactement |
+| Bulle du rail | **`IconBubble`** — nouveau. Exporté du nœud, remis à l'échelle du gabarit 24 du jeu de marque, et **le miroir vertical de la maquette est cuit dans le fichier** plutôt que posé en transformation dans la vue |
+| Cadenas du rail | `IconLockerOutlined` — même tracé (vérifié en rendu côte à côte) |
+| Flèche « En savoir plus » / « Résilier » | **`IconArrowForward`** — nouveau, mais c'est l'export Figma tel quel : la flèche de marque pointe à gauche (`IconArrow`, employé pour « Retour »), la maquette la retourne. Baguer un asset plutôt que transformer une `Image` dans la vue, que SwiftUI ne sait pas faire proprement |
+| ⊗ de « Confirmer ma résiliation » | `IconCross` — même tracé |
+| × de fermeture | Voir T43 |
+
+**Copie** (verbatim, R8) — toute dans `SubscriptionCopy`.
+
+- *Comment ça fonctionne ?* : « Création du voyage » / « Configure ton voyage et
+  attend le jour du du départ pour commencer » · « Raconte tes 3 première
+  étapes » / « Une étape c'est une journée, une semaine, un lot d'ajouts à ton
+  voyage (vocaux + photos) » · « Tu atteins la limite gratuite » / « Préparer ton
+  carnet demande de l'energie, l'abonnement fait donc vivre notre
+  application » · « Envoie illimité d'étape et mise en page illimité de tes
+  souvenirs pour 1,99€/semaine » · « Résiliation automatique à la fin du
+  voyage » · « Voir un aperçu de ton carnet → » · « Comment résilier ? » ·
+  « L'abonnement est sans engagement. Tu l'annules quand tu veux sans perdre tes
+  créations. » · « Surtout, il s'arrête tout seul à la fin de ton voyage ! » ·
+  « En savoir plus »
+- *Mon Abonnement* : « Abonnée » · « Tu as déjà souscrit à ton abonnement
+  MemoBook, tu peux mettre en page tes récits de manière illimité. » ·
+  « Résiliation automatique à la fin de ton voyage à Rome. » · « Parce que l'on
+  sait que tu n'as pas besoin de notre application en dehors de tes voyages, ton
+  abonnement sera résilié automatiquement dans 3 semaines. » · « Voir ma
+  cagnotte » · « Résilier mon abonnement »
+- *Ton voyage continue* : « Il te reste encore quelques jours dans ton voyage
+  “Rome entre amis”. » · « Si tu coupes maintenant tu ne pourras plus dicter tes
+  derniers souvenirs. » · « Pour rappel, ton abonnement sera résilier
+  automatiquement à ton retour. » · « Attendre la résiliation automatique » ·
+  « Résilier »
+- *Pourquoi nous quittes-tu ?* : « Aide nous à faire évoluer l'application. » ·
+  « Choisis la raison principale. » · « Je ne l'utilise plus » · « C'est un peu
+  cher » · « J'ai fini mes récits » · « C'était pour tester » · « Rester abonné
+  encore quelques jours » · « Confirmer ma résiliation »
+- *C'est validé* : « L'abonnement s'arrête aujourd'hui. » · « Tu ne pourras plus
+  dicter tes souvenirs, mais tu gardes accès à ton carnet de bord pour le relire
+  quand tu veux. » · « Revenir à l'accueil » · « S'inscrire à nouveau »
+
+> ✅ **Neuf fautes de maquette, corrigées dans le code (D12)** — c'est l'un des
+> rares endroits où l'on s'écarte volontairement de R8, sur arbitrage de Hugo.
+> À reprendre **dans Figma** par Clara, sans quoi l'écart reparaîtra à la
+> prochaine relecture :
+> 1. « attend le jour **du du** départ » → « attends le jour du départ » (mot
+>    doublé, et impératif à la 2ᵉ personne).
+> 2. « tes 3 **première** étapes » → « premières ».
+> 3. « demande de **l'energie** » → « l'énergie ».
+> 4. « **Envoie** illimité d'**étape** et mise en page **illimité** » → « Envoi
+>    illimité d'étapes et mise en page illimitée » (le nom, pas le verbe ; le
+>    pluriel ; l'accord).
+> 5. « de manière **illimité** » → « illimitée ».
+> 6. « Si tu coupes maintenant tu ne pourras plus » → virgule de subordonnée.
+> 7. « sera **résilier** automatiquement » → « résilié ».
+> 8. « **Aide nous** à faire évoluer » → « Aide-nous » (impératif + pronom).
+> 9. L'**apostrophe** est uniformisée en typographique (’) : Figma emploie la
+>    droite (') dans les trois feuilles de résiliation et les quatre raisons, et
+>    la typographique ailleurs.
+
+**Le prix est écrit une seule fois** et vient de l'abonnement, pas d'une chaîne :
+`SubscriptionCopy.offerHeadline(price:)`. La maquette le colle au symbole
+(« 1,99€ ») ; on passe par le formateur du système comme à la ligne « Ma
+cagnotte » — même écart assumé qu'en T20.
+
+**Le voyage est une donnée, pas un décor.** « à Rome », « “Rome entre amis” » et
+« dans 3 semaines » viennent de `Subscription` (`tripDestination`, `tripTitle`,
+`endsOn`). Le délai passe par `Date.relativeDelay`, qui écrit « dans 3 semaines »
+ou « dans 3 jours » selon ce qui reste — et change de langue avec l'appareil.
+
+**États** — les quatre sont traités. *Nominal* : la maquette. *Chargement* : la
+feuille ne s'ouvre que depuis un profil déjà chargé. *Erreur* : aucune, rien ne
+part au réseau. *Vide* : **non maquetté, écrit ici** — sans destination, sans
+titre de voyage ou sans date de fin, chaque phrase se replie sur une formulation
+qui ne promet pas de chiffre (« à la fin de ton voyage »). C'est l'état que
+produit aujourd'hui le vrai back-end — T44.
+
+**Contrat back-end** — **aucun appel**, comme le reste du profil. La résiliation
+agit sur `ProfileModel`, en mémoire, le temps de la session.
+
+| Besoin | État |
+|---|---|
+| Lire l'abonnement | `GET /v1/profile` existe, mais `serializeProfile` aplatit l'abonnement à `{ weeklyPrice, isActive }` — ni `renewsAt`, ni `cancelledAt`, ni le voyage |
+| Souscrire | Achat in-app StoreKit — rien n'existe |
+| Résilier | Aucune route. `schema.prisma` sait pourtant dire `status: cancelled` et `cancelledAt` |
+| Rattacher un abonnement à un voyage | **Le modèle Prisma ne le prévoit pas** : `Subscription` n'a pas de lien vers `Memo`. C'est ce qui manque pour que « à la fin de ton voyage à Rome » ait quelque chose à écrire |
+| Compter les raisons de départ | Aucune table. `SubscriptionCancellationReason` part dans le vide côté app |
+
+**Accessibilité** — chaque temps du rail est **un seul élément** VoiceOver
+(titre + détail), les icônes du rail et le rail lui-même sont masqués · les deux
+encadrés bleus sont un seul élément chacun · les cartes de raison sont des
+`BrandOptionRow`, qui portent déjà `isSelected` · le rond de fermeture porte
+« Fermer » · le rail et ses icônes grandissent avec le texte, ensemble : un rail
+figé derrière des lignes deux fois plus hautes ne relierait plus rien.
+
+> **Une pastille longue peut désormais se replier.** `BrandTagPill` imposait sa
+> largeur (`fixedSize()`) pour ne pas se faire écraser dans une rangée ; « VOIR
+> UN APERÇU DE TON CARNET → » doublait de largeur en AX3 et sortait de l'écran.
+> Passé les tailles accessibles, la pastille se replie sur plusieurs lignes.
+
+**Vérifié** — iPhone 17 (402 × 874) aux cinq étapes, et en **AX3** sur les deux
+feuilles les plus hautes : rien de tronqué, rien de superposé, la feuille passe
+en défilement. ⚠️ **iPhone SE 3 (375 × 667) non vérifié** — ce simulateur n'a pas
+de session ouverte et le jeton vit dans le trousseau, qui ne se recopie pas d'un
+simulateur à l'autre. À reprendre à la prochaine session sur un SE connecté.
+
+**À trancher**
+
+| # | Sujet |
+|---|---|
+| T39 | ✅ **Tranché (D12)** — les neuf fautes et les deux formes d'apostrophe sont corrigées dans le code. À reprendre dans Figma |
+| T40 | **Le rayon de la pastille.** La maquette dessine 6 ; `BrandTagPill` est une capsule pour tous ses tons. Un quatrième rayon rouvrirait le problème que ce composant a été écrit pour fermer — implémenté en capsule |
+| T41 | ✅ **Tranché (D13)** — le lime **peut** porter un fond de bouton, à une condition qui n'est pas négociable : le libellé et le filet sont alors verts, jamais l'encre. `Tokens.swift` porte désormais la règle, et `BrandButton.accent` comme `BrandTagPill.accentOutlined` l'appliquent |
+| T42 | **Les cartes d'options divergent d'un écran à l'autre.** Rayon 8 / padding 14 / gouttière 12 ici, contre 16 / 8 / 8 sur la feuille du moyen de paiement (§10.1), pour le même motif. `BrandOptionGroup` est réemployé tel quel ; à harmoniser dans Figma |
+| T43 | ✅ **Tranché (D14)** — on garde le rond de fermeture existant, partout. `BrandSheet` n'est pas touché, et les cinq nouvelles feuilles emploient le même que les six du lot Profil. L'écart avec la maquette (× simple contre × cerclé) est à reprendre dans Figma |
+| T44 | **Le voyage n'est pas rattachable à un abonnement** côté base. Sans lui, trois phrases sur cinq feuilles perdent leur donnée et se replient sur une formulation vague. À trancher avec le modèle de données avant de brancher StoreKit |
+| T45 | **La raison de départ n'a pas de compteur.** Les quatre réponses sont modélisées côté app et jetées à l'envoi. Où doivent-elles atterrir ? |
+| T46 | **Aucune raison n'est pré-cochée**, alors que la maquette montre « C'est un peu cher » sélectionnée. Lu comme la démonstration d'un état, pas comme une réponse par défaut : en pré-cocher une fausserait le compteur |
+| T47 | **« Voir un aperçu de ton carnet → », « En savoir plus » et « Voir ma cagnotte » ne mènent nulle part** — aucun écran n'est dessiné derrière. Même parti pris que les intentions non routées du profil |
+| T48 | ✅ **Tranché (D15)** — résiliation immédiate, dès maintenant. ⚠️ **StoreKit s'y opposera** : voir §13.2 |
+| T49 | **« Abonné » ou « Abonnée » ?** La feuille écrit « Abonnée » (la maquette montre un compte féminin) ; la pastille du profil, elle, s'en tient à la forme non marquée parce que l'app ne sait pas à qui elle s'adresse. Les deux se contredisent à l'écran. Forme non marquée, doublet (« Abonné·e »), ou donnée de genre au compte ? |
+| T50 | **Le profil ne connaît pas le quota.** `GET /v1/profile` ne rend pas `offeredSteps` / `remainingSteps`, que seul l'accueil reçoit : le profil ne sait donc pas distinguer un compte neuf d'un compte épuisé, et leur montre la même invitation. Faut-il que le profil porte le quota, ou lui suffit-il de savoir qu'il n'y a pas d'abonnement ? |
+
+---
+
+## 14. Lot 3 — La conversation avec MEMO
+
+### 14.1 Chat
+
+- **Nœud Figma** : `3292:20278` (section « Chat »), quatre frames de 390 × 844 —
+  `3292:19915` squelette, `3292:19896` conversation neuve, `3292:19870`
+  conversation avec le rail de suggestions, `3292:19851` « modif à l'oral ».
+- **Vues** : `MemoBookFeature/Chat/` — `ChatView`, `ChatModel`, `ChatHeader`,
+  `ChatBubbles`, `ChatComposer`, `ChatSkeleton`, `ChatFormatting`,
+  `ChatFixtures`.
+- **Modèles et moteur** : `MemoBookCore/` — `Chat`, `ChatCopy`, `ChatAnalysis`,
+  `MemoResponder`, `LocalMemoResponder`.
+- **Rôle** : le voyageur raconte, MEMO écoute et relance, le carnet se remplit
+  pendant ce temps-là.
+- **Entrée / sortie** : depuis l'accueil d'un voyage — le CTA « Continuer à
+  enregistrer » (`TripIntent.tellMore`) ou **n'importe quelle carte d'étape**
+  (`TripIntent.openStep`), poussés par `RootView` sur `HomeRoute.chat`. Retour au
+  voyage.
+
+**Deux entrées, une seule conversation.** Raconter la suite et ouvrir une étape
+mènent au même écran, posé à deux endroits différents du voyage : `stepId` change
+le titre de l'en-tête et le lieu que MEMO connaît, rien d'autre. Un second écran
+de saisie aurait dit la même chose.
+
+**Structure** — trois couches, une seule qui défile.
+
+| Élément | Valeur | Note |
+|---|---|---|
+| En-tête | `safeAreaInset(.top)`, matériau `.ultraThin` | Le fil passe **dessous** et se laisse deviner : c'est ce qui dit qu'il continue au-delà du bord |
+| Avatar de l'en-tête | 2.5 rem (`avatarSide`), **fixe** | Une photo n'est pas du texte ; un avatar qui grandit pousse le titre hors de sa ligne |
+| Commandes de l'en-tête | 3 × 2.75 rem, icône 1.5 rem | Sans disque, contrairement à celles de l'accueil d'un voyage : ici le fond est le crème, pas une photo |
+| Bannière d'aperçu | rayon 1.25 rem, bordure 1 pt verte, fond bleu | `largeCornerRadius` ; Figma dessine 20 |
+| Bulle | rayon 0.75 rem (`bubbleCornerRadius`) + queue | Figma dessine 11 → R2 ramène à 12. Plus serré qu'une carte : une bulle est une réplique |
+| Queue de bulle | 7 pt de large, 3 pt de descente, **comptée dans le cadre** | Un tracé qui déborde de son rectangle se fait rogner en `clipShape` et fausse les marges |
+| Largeur d'une bulle | `écran − gouttières − 2 cibles − respiration` | Déduite de ce qui l'entoure, jamais une fraction ronde : sinon les deux commandes sortent de l'écran sur un SE |
+| Forme d'onde | hauteur 1.5 rem, barres de 3 pt | Figma dessine 22,6 → cran au-dessus |
+| Rail de suggestions | hauteur = 1 ligne + 1 rem, jamais moins que 2.75 rem | **Hauteur explicite obligatoire** — voir l'encadré |
+| Barre d'envoi | `safeAreaInset(.bottom)`, même matériau | Trois capsules à égalité de largeur au repos |
+
+> ⚠️ **Une `ScrollView` doit se voir imposer sa hauteur dans une barre.** Elle
+> est gourmande sur ses deux axes : posée dans la barre du bas, le rail de
+> suggestions se faisait attribuer une hauteur plus courte que ses puces. Avec
+> `scrollClipDisabled()`, elles restaient **dessinées** mais tombaient hors de sa
+> zone tactile — on les voyait, et taper dessus ne faisait rien. Même piège pour
+> la pastille « Retourner en bas », d'abord posée en `overlay` décalé au-dessus
+> du cadre de la barre : dessinée, jamais tapable. Elle occupe désormais sa
+> propre bande.
+
+**Tokens ajoutés** — `MemoBookColor.bubbleTraveller` / `.bubbleMemo` (alias
+sémantiques des styles Figma `Chat Bubble` et `Neutral/100`) ·
+`MemoBookSpacing.avatarSide` (40, monté depuis `HomeMetrics` à sa deuxième
+occurrence) · `MemoBookSpacing.bubbleCornerRadius` (12) · `MemoBookFont.bubble`
+(General Sans Regular 17) et `.bubbleAction` (Medium 17) · `MemoBookShadow`
+(`.soft` = `medium shadow`, `.raised` = `Elevation-200`) et
+`View.brandShadow(_:)`.
+
+**Composants entrés au design system**
+
+| Composant | Ce qu'il fait |
+|---|---|
+| `BrandBubbleShape` | La forme d'une bulle : rectangle arrondi + queue, la queue comptée **dans** le cadre |
+| `BrandChatBubble` | **La** bulle : fond, queue, marges, largeur maximale. Quatre contenus la portent — texte de MEMO, texte du voyageur, vocal, fiche |
+| `BrandWaveform` | La forme d'onde, dans ses deux emplois : le micro en direct, et un vocal terminé avec sa position de lecture. **Promue** depuis `RecordingIndicator`, qui était privée à `MemoDetailView` |
+| `BrandSkeleton` + `brandSkeletonShimmer()` | Les blocs gris du chargement, et **un seul** lustre qui les traverse en phase — autant d'animations indépendantes se désynchronisent en quelques secondes |
+| `BrandButton.Style.raised` | Le pavé blanc **sans contour** qui tient par son ombre : le bouton « clavier » de la barre d'envoi |
+| `AudioNotePlayer` (Recording) | La lecture d'un vocal. Un seul à la fois, sans délégué — `AVAudioPlayerDelegate` n'est pas `Sendable` |
+| `SpeechReader` (Recording) | La lecture à voix haute d'un message, voix française forcée |
+| `VoiceNoteFile` (Recording) | Où vit un vocal le temps qu'on le réécoute. ⚠️ `AudioRecorder.stop()` **efface** son fichier temporaire et ne rend que des octets |
+
+**Le moteur de réponse** — `MemoResponder`, et `LocalMemoResponder` par défaut.
+
+**Aucune bulle blanche ne s'écrit à la main** : chacune est produite par
+l'analyse du message bleu qui la précède. Trois propriétés font la différence
+entre un assistant et un décor :
+
+1. **Une priorité stricte, pas une addition de scores.** Refus → question →
+   vocal → émotion négative → message trop court → lieu → date → personne →
+   chiffre → message long → émotion positive → rotation neutre. Un refus ne
+   reçoit jamais une question, et une question ne reçoit jamais une relance.
+2. **Aucun état mutable, aucun aléatoire, aucune horloge.** La mémoire du moteur
+   est l'historique du fil : il écarte toute phrase déjà dite et descend d'un
+   cran plutôt que de se répéter. Le même tour rend toujours la même réponse —
+   c'est ce qui le rend testable.
+3. **Le rythme est une donnée.** `MemoBeat.pauseMilliseconds` se calcule sur la
+   matière : `900 + 22 ms/caractère` après un texte, `1200 + 45 ms/seconde`
+   d'audio, plancher de 450 ms appliqué par le modèle. Une latence nulle — ou
+   constante — est le premier signe qu'il n'y a personne en face.
+
+L'analyse (`ChatAnalysis`) cherche des **marqueurs**, pas un dictionnaire : une
+préposition devant un mot capitalisé, une unité derrière un nombre, un point
+d'interrogation final. Deux règles valent d'être connues, parce que les tests les
+ont attrapées :
+
+- un nom de lieu générique ne compte que derrière un **déterminant** — « le
+  marché » est un endroit, « on a marché » est un verbe ;
+- « de » ne désigne un lieu que **derrière un nom de lieu générique** — « le
+  marché de Testaccio » oui, « l'appartement de Camille » non.
+
+**Copie** (verbatim) — la bulle d'ouverture entière · « Aperçu en direct » ·
+« Votre Carnet prend forme » · « 5 Souvenirs - 10 pages composées » ·
+« Retranscription du contexte » · « Voir plus » · « Ça me convient » ·
+« J'aimerais faire des modifications à la main » / « … à l'oral » ·
+« Retourner en bas » · « Record ». Tout le reste — les relances de MEMO, ses
+réponses, les autres puces — est **écrit pour ce lot** et vit dans `ChatCopy`.
+
+**États** — les quatre sont traités. *Chargement* : le squelette de la maquette.
+*Vide* : l'accueil de la maquette (signe de la marque, titre, paragraphe), centré,
+avec les trois puces d'ouverture. *Erreur* : `ErrorBanner` en ligne — plus un
+bandeau dédié au **micro refusé**, qui mène aux Réglages ; `MemoDetailModel`
+calculait déjà cet état sans qu'aucune vue le lise. *Nominal* : la maquette.
+
+**Contrat back-end** — **aucun appel**. L'écran lit un `ChatThread` fourni par une
+closure, et fait répondre un `MemoResponder` local. Les deux se remplacent d'une
+ligne chacun dans `AppDependencies.chatModel(tripId:stepId:)`.
+
+| Besoin | Route à créer |
+|---|---|
+| Le fil, repris d'un autre appareil | `GET /v1/trips/:id/chat` — messages, suggestions, contexte. Demande un modèle Prisma `ChatMessage`, adossé à `Memo` et à `Entry` : c'est le seul vrai travail de schéma |
+| Un tour de parole | `POST /v1/trips/:id/chat` — JSON pour un texte, multipart pour un vocal, **comme `POST /v1/memos/:id/entries` le fait déjà**. La route crée l'`Entry`, enfile le job `transcribe`, appelle le répondeur serveur, et met à jour `Memo.prompt` avec la relance émise |
+| La transcription | **Elle existe déjà** (`transcribeEntry`, OpenAI, français forcé) mais c'est un job : la route répondra `text: null`, et l'app appelle `awaitTranscript(of:)` — prévu pour ça dès maintenant |
+| L'agent de conversation | Côté serveur, sur le motif `Transcriber` / `Redactor` : `HeuristicResponder` (le portage de ces mêmes règles) et `AnthropicResponder` (prompt système = `agents/agent-conversation.md`) |
+| Le nombre de pages composées | `serializeRender` retient volontairement le payload de mise en page. **Le compteur est aujourd'hui déduit** (deux pages par souvenir) — c'est un ordre de grandeur, pas une mesure |
+
+**Assets** — onze icônes **Lucide** (licence ISC), faute d'équivalent dans le jeu
+de marque : haut-parleur, presse-papiers, appareil photo, clavier, calendrier,
+étincelle, lecture, pause, arrêt, flèche bas, flèche haut. Vendues dans
+`assets/icons/lucide/`, importées par `ios/Tools/import-lucide-icons.py`, et
+préfixées **`IconLucide…`** exprès : à la lecture d'une vue, on voit ce qui est de
+la marque et ce qui est provisoire. Écart assumé à R10 — voir T53.
+
+**Accessibilité** — chaque bulle est un élément VoiceOver unique · les commandes
+sans libellé visible en portent un, en français et en tutoiement · la forme
+d'onde, les queues, le motif de fond et les emojis de puce sont masqués · un
+vocal s'annonce « Vocal de 37 secondes » et se joue par action VoiceOver · le
+point d'attente s'annonce « MEMO réfléchit » · les animations passent toutes par
+`accessibilityReduceMotion`, lustre du squelette compris.
+
+**Vérifié** — iPhone 17 (402 × 874), en taille standard et en **AX3**, sur les
+sept états : squelette, accueil vide, ouverture, texte, vocal, fiche de
+retranscription, micro armé et enregistrement en cours. En AX3, les commandes
+d'un message passent **sous** la bulle, le menu burger disparaît, le champ se
+limite à trois lignes, et le rail garde une seule ligne par puce et défile.
+⚠️ **iPhone SE 3 (375 × 667) non vérifié** — même raison qu'au lot précédent : ce
+simulateur n'a pas de session ouverte et le jeton vit dans le trousseau.
+
+**Ce qui est délibérément inerte** — le menu burger, l'appareil photo et
+« Importer des photos », les réglages du voyage, le globe, et l'aperçu du carnet.
+Aucune bulle de photo n'est dessinée dans la maquette, et R3 interdit d'en
+inventer une : les commandes gardent leur bouton et ne mènent nulle part, en un
+seul endroit (`ChatView.notYetRouted`).
+
+**À trancher**
+
+| # | Sujet |
+|---|---|
+| T49 | **Deux coquilles dans la bulle d'ouverture** : « pourrais tu » sans trait d'union, et « tous le long » pour « tout le long ». Recopiées telles quelles (R8) |
+| T50 | ✅ **Tranché (D9)** — l'accueil tutoie : « Comment souhaites-tu commencer aujourd'hui ? ». R9 ne souffre pas d'exception, et la phrase se contredisait elle-même. À reprendre dans Figma |
+| T51 | **« Record » est en anglais** au milieu d'une app française. Recopié tel quel |
+| T52 | ✅ **Tranché (D10)** — la ville est **entrée dans le modèle** : `Destination.city` côté app, `memos.destinationCity` en base (migration `20260910120000_ville_du_voyage`), sérialisée par `serializeTrip`, et posée sur chaque voyage du jeu d'essai. L'accueil écrit donc « Nouveau voyage à Rome ! » comme la maquette. Nulle pour un voyage sans ville — un tour du monde —, où la phrase se replie |
+| T53 | **Onze icônes Lucide** remplacent des dessins que le jeu de marque n'a pas. Lesquelles Clara veut-elle dessiner, et lesquelles restent empruntées ? |
+| T54 | **La police manuscrite manque.** « Retranscription du contexte » est en Gloria Hallelujah dans la maquette ; elle n'est pas dans le bundle et doit passer par `make-brand-fonts.py`. Rendu en surtitre General Sans vert en attendant |
+| T55 | **La pastille « Aperçu en direct » est en 10 pt** dans la maquette. L'app n'est jamais descendue sous 12 et emploie `overline` ici |
+| T56 | **Le blanc des bulles.** La maquette dit `Neutral/100` (#FFFFFF), l'app pose son blanc crème `surface` (#FFFCF8). Écart invisible sur le fond crème, et deux blancs presque identiques coûtent plus cher que lui |
+| T57 | ✅ **Accepté en l'état (D11)** — on garde le repli tant que la transcription n'est pas branchée. **Le trio de validation suit une fiche qui porte du vrai texte.** Tant que la transcription n'est pas branchée, une fiche sans récit propose « Je te le réécris ici / Je réenregistre / Plus tard ». En debug, une petite banque déterministe remplit la fiche et la marque `isSimulated` ; en release, elle reste vide — une fiche qui prétend restituer un vocal que personne n'a écouté est un fait inventé |
+| T58 | **Une puce s'affiche en bulle bleue dans le fil**, comme la maquette le montre (frame 4). Est-ce voulu pour « J'aimerais faire des modifications à la main », qui se lit alors comme une phrase adressée à MEMO ? |
+| T59 | **Le bleu du bouton d'envoi** (`chat/toolbar/input-btn-active`, #5D6CF5) n'est pas dans la palette de marque : c'est un bleu-violet emprunté au kit de messagerie. Gardé parce qu'un envoi est un geste de système, pas une action de marque — le vert sert déjà à « c'est ici qu'on appuie » partout ailleurs. À faire entrer dans les variables, ou à remplacer |
+| T60 | **La bulle de photos n'est pas dessinée.** La maquette propose l'ajout de photos (une puce, un bouton) sans montrer ce que ça produit dans le fil. Écrite ici — une grande vignette seule, une grille de deux colonnes sinon, `+n` au-delà de quatre — pour que le bouton mène quelque part. À faire dessiner |
+| T61 | **La grande feuille d'enregistrement n'est pas dans `main`.** `RecordingSheet` + `RecordingModel` (le disque, la frise pleine largeur, la transcription en direct par `SpeechTranscriber`) vivent sur la branche `proprietaire-unique-et-secrets`, jamais fusionnée — c'est pour ça que « Commencer à enregistrer » ne l'ouvrait plus. En attendant, le bouton mène à la **conversation** du voyage en cours, qui sait enregistrer. À reprendre au moment de fusionner cette branche : la frise du chat reprend déjà son geste, et `BrandWaveform` porte les deux rendus |
+
+### 14.2 La barre d'envoi, état par état
+
+- **Nœud Figma** : `3293:20279` — variante `Sending Bar`, treize valeurs de
+  `property1`.
+- **Vue** : `MemoBookFeature/Chat/ChatComposer.swift` — `ChatSendingBar`.
+
+**Treize variantes Figma, quatre dispositions dans le code.** Les treize se
+ramènent à quatre mises en page croisées avec deux axes — le micro est-il
+disponible, et enregistre-t-on ? — plus l'état de brouillon. Écrire treize
+branches aurait donné treize dessins à tenir cohérents.
+
+| Nœud Figma | Ce que le code en fait |
+|---|---|
+| `start` | ``.tools``, micro disponible |
+| `start sans micro` | ``.tools``, `microphoneIsDenied` |
+| `Default` | ``.speaking`` — « Record » s'étire |
+| `Default snas micro` | ``.speaking`` **replié sur** ``.writing`` : sans micro, « Record » ne propose rien |
+| `Start Typing` / `Finish Typing` | ``.writing``, l'avion gris ou bleu selon `canSendDraft` |
+| `… sans micro` | les mêmes, cerne du micro en gris et icône barrée |
+| `Start Recording` | `recorder.isRecording` — pause, frise, chrono, micro allumé, envoyer |
+| `Finish Recording` | `recorder.isPaused` — corbeille, frise éteinte, chrono figé, envoyer |
+| `Modifying transcription` | ``.writing`` avec un long brouillon : le champ s'étire tout seul, il n'y avait pas de cinquième disposition à écrire |
+| `skeleton` | `ChatSkeleton`, qui dessine déjà la barre en blocs gris |
+
+**Tokens ajoutés** — `MemoBookColor.send` (#5D6CF5, `chat/toolbar/input-btn-active`) ·
+`MemoBookColor.disabledOutline` (#C8C8C8, `Brand Colors/Grey`) ·
+`MemoBookFont.composer` (General Sans Regular 21).
+
+**La croix, ajoutée à la maquette.** Ses états de saisie n'ont aucune commande à
+gauche ; sur demande de Hugo, le burger devient une **croix** dès qu'un outil est
+ouvert, et la tape ramène la barre à ses trois boutons. Elle jette un
+enregistrement en cours : c'est le seul geste de la barre qui puisse perdre
+quelque chose, et c'est ce qu'on attend d'une croix. En taille de texte
+accessible, le burger disparaît faute de place et la croix reste — d'elle on ne
+peut pas se passer.
+
+**Le micro refusé garde sa place.** Il perd son cerne vert, porte un micro barré,
+et mène aux Réglages. Un bouton qui disparaît laisse croire à un bug ; celui-là a
+quelque chose à dire. `RecordingPermission.current` est relu **à chaque
+ouverture** de l'écran : l'accès peut avoir été retiré pendant que l'app était en
+arrière-plan.
+
+**La frise glisse.** ``BrandWaveform`` a désormais deux rendus, et il en faut
+deux :
+
+| Emploi | Rendu | Pourquoi |
+|---|---|---|
+| Un vocal terminé | `Canvas`, niveaux rééchantillonnés | des centaines d'échantillons, une seule vue à mesurer |
+| La capture en cours | une `Capsule` par **position** | c'est cette identité de position qui fait que seule la hauteur s'anime, et que la frise **glisse** au lieu de sauter d'un cran |
+
+Elle se remplit depuis la gauche, puis chaque nouvel échantillon pousse les
+autres — dix-neuf barres dans la barre d'envoi, un relevé toutes les 90 ms, donc
+un peu moins de deux secondes de voix à l'écran. C'est le geste de la grande
+feuille d'enregistrement de la branche `proprietaire-unique-et-secrets`, reprise
+ici pour que les deux se comportent pareil (T61).
+
+**La pause est entrée dans l'enregistreur.** `AudioRecorder` gagne
+`pause()` / `resume()` / `isPaused`. `AVAudioRecorder` sait reprendre là où il
+s'est arrêté, mais **la durée ne peut plus se lire comme « maintenant moins le
+début »** : `recordedBeforePause` porte le temps réellement capturé, et
+`startedAt` ne date plus que la reprise.
+
+**Tout bouge au ressort.** `.spring(response: 0.34, dampingFraction: 0.62)`,
+sous-amorti exprès : la barre dépasse d'un cheveu puis revient. Les dispositions
+ne se remplacent pas, elles s'échangent — ce qui part rétrécit, ce qui arrive
+grandit. Le chrono passe par `.contentTransition(.numericText())`, l'avion en
+papier grossit en devenant bleu. Tout s'annule sous « Réduire les animations ».
+
+### 14.3 Ajouter une photo
+
+**Le geste suit iOS, pas MemoBook.** Une tape sur l'appareil photo demande
+d'abord l'accès à la photothèque — c'est là qu'iOS propose « Autoriser l'accès
+complet » ou « Limiter l'accès… », et cette décision ne nous appartient pas —,
+puis pose la question en français : **Prendre une photo · Choisir dans la
+galerie · Annuler**. L'appareil photo a sa propre autorisation, demandée au
+moment où on le choisit.
+
+`NSCameraUsageDescription` entre dans `project.yml` ; `NSPhotoLibraryUsageDescription`
+y était déjà. « Prendre une photo » n'apparaît pas là où il n'y a pas d'appareil
+photo — un simulateur —, parce que le proposer ouvrirait un écran noir.
+
+Un refus n'est pas une impasse silencieuse : iOS ne redemande jamais, donc
+l'écran affiche un `ErrorBanner` qui mène aux Réglages.
+
+Les images sont écrites dans les **caches** avant d'entrer dans le fil, comme les
+vocaux : une bulle qui garderait ses octets ferait grossir la conversation à
+chaque photo, et les perdrait au premier retour d'arrière-plan.
+
+### 14.4 Une conversation par voyage, ouverte sur une étape
+
+**Un seul fil, et des messages qui portent leur étape.** C'était l'inverse :
+un fil par étape. Un carnet se relit d'un bout à l'autre, et couper le récit en
+autant de fils qu'il y a d'étapes obligeait à changer de fil pour relire la
+veille. `ChatMessage.stepId` remplace ce découpage, et l'en-tête affiche
+désormais le **voyage**.
+
+Ouvrir une carte d'étape se pose donc sur le **dernier** message de cette
+journée-là — `ChatThread.lastMessage(about:)` : on ne rouvre pas une journée pour
+relire son début, on la rouvre pour voir où on en était. Ce qu'on raconte ensuite
+se rattache à l'étape ouverte, ou à défaut à celle où le voyage en est.
+
+> ⚠️ **Trois tentatives pour se poser.** Le fil s'ouvre ancré en bas dans une
+> `LazyVStack` : les rangées du haut n'existent pas encore, et un `scrollTo` vers
+> l'une d'elles ne fait alors **rien du tout** — sans erreur, sans rien. Chaque
+> tentative en matérialise une partie et la suivante va plus loin. C'est laid, et
+> c'est le prix d'un défilement paresseux qu'on veut ouvrir ailleurs qu'à son
+> ancre.
+
+**Le jeu d'essai arrive rempli** — une journée par étape terminée : un vocal, la
+fiche que MEMO en a tirée, sa relance, la validation. Sans cet historique, ouvrir
+une étape tombait sur une conversation vide, et « montre-moi où j'en étais »
+n'avait rien à montrer.
+
+### 14.5 Copier un message
+
+Une tape sur le presse-papiers **remplace l'icône par une coche verte** pendant
+une seconde, avec un petit sursaut de ressort. Elle remplace, elle ne s'ajoute
+pas : c'est la même commande qui répond, et rien ne bouge autour. Une seconde,
+parce que c'est le temps de la voir sans qu'elle devienne un état — au-delà, on
+se demande si elle attend un second geste. VoiceOver, lui, l'annonce en
+`accessibilityValue` : il n'a pas de coche à regarder.
+
+### 13.2 Le palier freemium, et ce que la résiliation change ailleurs
+
+- **Vues** : `MemoBookFeature/FreemiumStatus.swift` (dans `MemoBookCore`),
+  `MemoBookFeature/SubscriptionSession.swift`, plus les reprises de
+  `ProfileView` et `HomeView`.
+- **Rôle** : résilier depuis la feuille d'abonnement doit se voir **partout
+  ailleurs dans l'app**, tout de suite.
+
+**Un seul vocabulaire pour deux écrans.** L'accueil et le profil montrent le même
+parcours vu de deux endroits, et chacun le déduisait de son propre modèle : deux
+calculs, donc deux occasions de diverger. ``FreemiumStatus`` porte les trois
+états et **les libellés qui vont avec** ; aucune vue n'écrit plus « étapes
+restantes » ni « Abonne-toi » de son côté.
+
+| État | Pastille de l'accueil | Pastille du profil | Gros bouton lime |
+|---|---|---|---|
+| `subscriber` | *aucune* | « ABONNÉ » | non |
+| `freeSteps` (rien consommé) | « 3 étapes offertes » | « 3 ÉTAPES GRATUITES RESTANTES » | oui |
+| `freeSteps` (entamé) | « 2 étapes restantes » | idem | oui |
+| `limitReached` | « Abonne-toi » | « ABONNE-TOI » | oui |
+
+Un abonné n'a **pas** de pastille sur l'accueil : là-bas c'est un décompte, et
+quelqu'un qui n'a plus rien à décompter n'a pas besoin qu'on le lui rappelle à
+chaque ouverture. Son statut se lit dans le profil, où il a une raison d'être.
+
+**Résilier ne rend pas de crédit.** Le serveur croit encore l'accueil abonné et
+lui a laissé son ancien quota ; le lui rendre ferait repartir un décompte
+(« 2 étapes restantes ») au lieu de proposer l'offre. Un ancien abonné passe donc
+directement à `limitReached`. Un test le tient
+(`FreemiumStatusTests.cancellingNeverRestoresACredit`).
+
+**Comment l'information circule.** Les deux écrans ont chacun leur modèle,
+alimenté par un appel distinct, et **rien n'est persisté** : l'accueil ne peut
+pas apprendre du serveur qu'on vient de résilier. ``SubscriptionSession`` porte
+donc l'information à l'envers de l'environnement, du profil vers l'accueil —
+exactement comme ``BrandSheetPresentation`` porte le recul des feuilles. `nil`
+tant que rien n'a été touché de la session : c'est alors la parole du serveur qui
+vaut.
+
+> ⚠️ **Le profil se reconstruit à chaque fois qu'on y revient.** Son modèle est
+> un `@State` : sans la session, il repartirait du jeu d'essai — abonnement
+> rétabli, résiliation oubliée dès qu'on quitte l'écran. C'est le piège qui s'est
+> vu en simulateur et pas en test : la pastille du profil basculait bien, puis
+> revenait toute seule. La session a donc le dernier mot **des deux côtés**, pas
+> seulement sur l'accueil.
+
+**Ce que StoreKit dira (T48).** La résiliation est immédiate aujourd'hui, et
+c'est ce que la maquette écrit (« L'abonnement s'arrête aujourd'hui »). Le jour
+où l'achat existe, **trois choses s'y opposeront** :
+
+1. **L'app ne peut pas résilier.** Il n'existe aucune API pour annuler un
+   abonnement auto-renouvelable à la place de la personne : on ne peut que
+   l'emmener à la page d'Apple (`AppStore.showManageSubscriptions(in:)`), où
+   elle annule elle-même. La feuille « Pourquoi nous quittes-tu ? » devra donc
+   se poser **avant** ce renvoi, pas après.
+2. **L'accès court jusqu'à l'échéance.** Après annulation, Apple continue de
+   rendre l'abonnement comme actif jusqu'à `expirationDate` — c'est sa règle,
+   pas la nôtre. Couper l'accès le jour même ferait perdre des jours déjà payés,
+   sans remboursement : c'est un motif de rejet en revue autant qu'un mauvais
+   traitement.
+3. **StoreKit ne prévient pas.** L'app n'est notifiée de rien à l'annulation ;
+   elle ne le découvre qu'en relisant ses transactions au lancement suivant.
+
+Deux issues, à trancher avec Clara le moment venu : ou la copie change (« ton
+abonnement s'arrêtera le … »), ou l'app coupe volontairement l'accès plus tôt
+qu'Apple — ce qui n'est pas recommandé. **En attendant, l'immédiat est ce qui est
+implémenté**, sur le modèle en mémoire, et c'est cohérent avec la feuille
+précédente qui propose justement d'*attendre* la résiliation automatique.
+
+**Contrat back-end** — inchangé, et c'est le nœud : ni souscription, ni
+résiliation, ni lien voyage ↔ abonnement (T44). ``SubscriptionSession`` est le
+pansement qui tient jusque-là, et **disparaît** le jour où `GET /v1/profile` et
+`GET /v1/home` s'accordent d'eux-mêmes.
+
+**Vérifié** — iPhone 17, parcours complet : profil abonné (pastille « ABONNÉ »,
+pas de bouton lime, ligne « Mon abonnement » présente) → résiliation en trois
+temps → profil résilié (pastille « ABONNE-TOI », bouton lime revenu, ligne
+disparue) → retour à l'accueil, pastille « Abonne-toi » et plus aucun décompte.
+Huit tests unitaires tiennent les règles sans écran
+(`MemoBookCoreTests/FreemiumStatusTests.swift`).
+
+### 13.3 Le paywall — trois écrans qui se suivent comme des stories
+
+- **Nœud Figma** : `3297:20771` (section « Paywall ») —
+  [ouvrir](https://www.figma.com/design/kytPYFno7PvDciIKTxCujK/MemoBook---Product?node-id=3297-20771).
+  Trois écrans (`3297:20609`, `3297:20637`, `3297:20440`) et trois feuilles
+  (`Paiement`, `Prévisualisation`, `Estimation`).
+- **Vues** : `MemoBookFeature/Paywall/` — `PaywallView`, `PaywallPages`.
+- **Entrée** : « En savoir plus », au bas de la feuille « Comment ça
+  fonctionne ». Le paywall se présente en `fullScreenCover` **par-dessus la
+  feuille, qui se referme d'abord** : c'est un écran entier, pas une feuille de
+  plus, et on ne veut pas la retrouver dessous en sortant.
+
+**Le temps passe tout seul, mais on peut le doubler.** La barre du haut se
+remplit en 6 s et tourne la page ; un tapotis à droite avance, à gauche revient,
+et à gauche depuis le premier écran on sort. **Le dernier écran ne s'en va
+pas** : c'est celui qui porte l'offre, il attend qu'on décide.
+
+> **Toute la minuterie tient dans le `task(id: page)`.** L'attente est
+> structurée : changer de page annule la tâche en cours et SwiftUI en relance
+> une. Une `Task` détachée gardée dans un `@State` pour l'annuler à la main a été
+> essayée d'abord — elle enchaînait **deux écrans d'un coup**, parce que le
+> minuteur qu'on annulait n'était déjà plus celui qui courait. Vu en simulateur,
+> invisible en relecture.
+
+**Les traits bleus sont des `Shape`, pas des images.** Figma décrit sur ces
+nœuds une animation `path-trim` : le trait ne paraît pas, il **s'écrit**. Un SVG
+posé dans un `Image` ne sait pas faire ça ; une `Shape`, si — `trim(from:to:)`
+suffit. Les courbes sont donc reprises telles quelles de l'export dans
+`MemoBookDesign/BrandStrokes.swift` (`BrandSquiggleDown`, `BrandSquiggleUp`,
+`BrandUnderline`), rapportées au cadre reçu pour suivre la largeur de l'écran.
+Les durées viennent des images-clés du nœud : **0,117 s d'attente puis 0,79 s de
+tracé qui ralentit**.
+
+**Rien ne bouge en Reduce Motion** : barres remplies d'avance, traits déjà
+tracés, aucune page qui tourne toute seule. Une page qui se dérobe est
+exactement ce que ce réglage demande d'éteindre.
+
+**Tokens ajoutés** — `MemoBookFont.h1Light` (Sora **Regular** 32 : les titres du
+paywall s'écrivent en deux temps, la moitié courante en Regular et la chute en
+SemiBold) · `MemoBookFont.eyebrow` (Sora Regular 16) · `MemoBookFont.h3` (Sora
+Regular 14, `App/h3`) · `BrandButton.Style.blue` (aplat `Brand Colors/Blue`,
+libellé à l'encre — l'action qui fait simplement avancer).
+
+> ⚠️ **Sora Regular n'était pas embarquée.** Le module ne livrait que le
+> SemiBold ; l'instance 400 a été générée par
+> `python3 ios/Tools/make-brand-fonts.py`, dont la table `INSTANCES` la
+> mentionne désormais. Ne pas éditer les `.ttf` à la main — voir `ios/CLAUDE.md`.
+
+**Assets** — `IconMoneyBag` est le seul fichier nouveau ; `IconPictureFrame`,
+`IconPrinter` et `IconLockerChecked` existaient déjà et portent le bon tracé.
+
+**Ce qui n'est pas fait**
+
+| Manque | Détail |
+|---|---|
+| Les **trois feuilles** du nœud | `Modale - Paiement` (`3297:20490`), `Modale - Paywall Previsualisation` (`3297:20517`), `Modale - Paywall Estimation` (`3297:20574`). Les deux pastilles qui y mènent — « Voir un aperçu → » et « Voir une estimation → » — sont dessinées et **inertes**, même parti pris que les intentions non routées du profil |
+| Le **cercle tracé autour du « 3 »** de l'écran 1 | Décor positionné à la main sur la maquette ; non reproduit |
+| Le **cadrage du M** | `BrandMarkBackdrop` garde le cadrage du design system ; la maquette du paywall le tourne d'un quart de tour — T53 |
+
+**À trancher (suite)**
+
+| # | Sujet |
+|---|---|
+| T51 | **Le hors-ligne du bac à sable est partiel.** La branche `proprietaire-unique-et-secrets` coupait vraiment le réseau et faisait partir les vocaux sur le disque, via une file d'envoi (`outbox`) absente d'ici. Le drapeau restauré fait échouer le chargement des deux écrans — on voit l'état d'erreur, rien n'est mis en file. Faut-il porter la file, ou la refaire avec le chat ? |
+| T52 | **La marge du paywall est 16**, là où le reste de l'app marge à `screenMargin` (24). Deuxième écran à s'en écarter après ceux de D2 — à raccrocher à T11 |
+| T53 | **Le M de fond** : cadrage du design system contre quart de tour de la maquette du paywall. Uniformiser le cadrage, ou ouvrir un axe de rotation sur `BrandMarkBackdrop` ? |
+| T54 | **Durée d'un écran de story : 6 s**, choisie ici — la maquette ne la donne pas (seul le tracé du trait est animé dans Figma). À valider à l'usage |

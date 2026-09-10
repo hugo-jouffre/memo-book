@@ -54,6 +54,15 @@ public final class HomeModel {
         isLoading = true
         defer { isLoading = false }
 
+        #if DEBUG
+            // Le bac à sable a coupé le réseau : l'écran échoue comme sous un
+            // tunnel, avant même de demander sa source.
+            if SandboxNetwork.isOffline {
+                errorMessage = SandboxNetwork.failure
+                return
+            }
+        #endif
+
         do {
             apply(try await source())
             errorMessage = nil
@@ -72,7 +81,10 @@ public enum HomeIntent: Sendable, Hashable {
     case openTrip(id: String)
     case orderPrint(tripId: String)
     case openShowcase(url: URL?)
-    case startRecording
+    /// Raconter la suite d'un voyage en cours. L'identifiant est porté par
+    /// l'intention parce que c'est **l'écran** qui sait quel voyage il montre :
+    /// `RootView` n'a pas de `HomeModel` à interroger.
+    case startRecording(tripId: String)
     /// Créer un voyage — l'appel à l'action quand aucun n'est en cours.
     case createTrip
     /// Aller voir les carnets de la communauté, depuis l'invitation à préparer
@@ -96,8 +108,9 @@ public enum HomeIntent: Sendable, Hashable {
     // le contenu, une vue ne le peut pas.
 
     extension HomeModel {
-        /// Repart du jeu d'essai complet.
+        /// Repart du jeu d'essai complet : contenu, palier et réseau.
         public func debugReset() {
+            SandboxNetwork.isOffline = false
             errorMessage = nil
             apply(.fixture)
         }
@@ -125,8 +138,45 @@ public enum HomeIntent: Sendable, Hashable {
 
         /// Retire le quota d'étapes offertes, ou le remet.
         public func debugToggleFreeSteps() {
+            let isStripped = debugTraveller.offeredSteps == nil
+            debugSetQuota(isStripped ? (offered: 3, remaining: 2) : nil)
+        }
+
+        /// Devenir un abonné : plus de quota d'étapes, donc plus de pastille sur
+        /// l'avatar — et, dans le profil, la ligne « Mon abonnement » à la place
+        /// du gros bouton lime.
+        public func debugBecomeSubscriber() {
+            debugSetQuota(nil)
+        }
+
+        /// Première connexion : le quota d'ouverture au complet.
+        ///
+        /// Les trois étapes sont **le quota d'ouverture d'un compte**, pas un
+        /// chiffre d'interface : c'est le serveur qui le pose, et il descend
+        /// ensuite d'une unité par étape racontée. Rien n'étant consommé, la
+        /// pastille annonce un cadeau et non un solde.
+        public func debugFirstConnection() {
+            debugSetQuota((offered: 3, remaining: 3))
+        }
+
+        /// Le mur : plus une seule étape offerte. La pastille passe à
+        /// « Abonne-toi » — c'est le seul état qui bloque quelque chose.
+        public func debugReachFreeLimit() {
+            debugSetQuota((offered: 3, remaining: 0))
+        }
+
+        /// Le palier que ce quota décrit, pour que la session le fasse suivre au
+        /// profil. `nil` veut dire « abonné ».
+        public func debugStatus(for quota: (offered: Int, remaining: Int)?) -> FreemiumStatus {
+            guard let quota else { return .subscriber }
+            return quota.remaining > 0
+                ? .freeSteps(remaining: quota.remaining, offered: quota.offered)
+                : .limitReached
+        }
+
+        private func debugSetQuota(_ quota: (offered: Int, remaining: Int)?) {
             let current = debugTraveller
-            let isStripped = current.offeredSteps == nil
+            errorMessage = nil
 
             apply(
                 HomeFeed(
@@ -134,13 +184,23 @@ public enum HomeIntent: Sendable, Hashable {
                         id: current.id,
                         firstName: current.firstName,
                         avatarUrl: current.avatarUrl,
-                        offeredSteps: isStripped ? 3 : nil,
-                        remainingSteps: isStripped ? 2 : nil
+                        offeredSteps: quota?.offered,
+                        remainingSteps: quota?.remaining
                     ),
                     trips: feed?.trips ?? [],
                     showcase: feed?.showcase
                 )
             )
+        }
+
+        /// `true` quand le bac à sable a coupé le réseau.
+        public var isOffline: Bool { SandboxNetwork.isOffline }
+
+        /// Coupe le réseau, ou le rétablit — et recharge, pour que l'écran
+        /// tombe (ou se relève) tout de suite.
+        public func debugToggleOffline() async {
+            SandboxNetwork.isOffline.toggle()
+            await load()
         }
 
         /// Montre l'état d'erreur, sans toucher au contenu.

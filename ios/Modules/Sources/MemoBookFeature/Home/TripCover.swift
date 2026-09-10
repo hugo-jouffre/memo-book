@@ -100,6 +100,23 @@ struct CompanionStack: View {
     /// qu'il aligne deux groupes sur la même ligne.
     var visibleLimit = 3
 
+    /// Inviter quelqu'un. Fournie, elle ferme la pile d'une pastille « + ».
+    ///
+    /// Elle vit **ici** et non à côté du composant : posée en frère dans la
+    /// rangée de l'en-tête, elle se retrouvait espacée de 0.5 rem alors que les
+    /// visages se recouvrent d'un cinquième — elle flottait à côté du groupe au
+    /// lieu d'en faire partie. Dans la pile, elle prend le même recouvrement, et
+    /// se dessine par-dessus le dernier visage puisqu'elle vient en dernier.
+    var onAdd: (() -> Void)?
+
+    /// Ce que VoiceOver annonce pour le **groupe de visages**.
+    ///
+    /// Posé sur les visages seuls, et non sur la pile entière : celle-ci
+    /// contient désormais un bouton, et un `accessibilityElement(children:
+    /// .combine)` à ce niveau-là l'aurait avalé — la seule commande de la
+    /// rangée aurait disparu du curseur VoiceOver.
+    var facesLabel: String?
+
     /// Taille figée, contrairement au reste de l'écran — même raison que la
     /// pastille numérotée de `WelcomeStepCard`. Ces ronds sont une décoration
     /// posée sur une photo au format fixe, masquée à VoiceOver : les faire
@@ -107,13 +124,25 @@ struct CompanionStack: View {
     /// la couverture entière.
     private let diameter: CGFloat = 34
 
+    /// Un cinquième de recouvrement, pas un tiers : la pastille de droite
+    /// mangeait la deuxième initiale de celle de gauche.
+    private var overlap: CGFloat { -diameter / 5 }
+
     var body: some View {
         let shown = companions.prefix(visibleLimit)
         let overflow = companions.count - shown.count
 
-        // Un cinquième de recouvrement, pas un tiers : la pastille de droite
-        // mangeait la deuxième initiale de celle de gauche.
-        HStack(spacing: -diameter / 5) {
+        HStack(spacing: overlap) {
+            faces(shown: Array(shown), overflow: overflow)
+            if let onAdd {
+                addButton(onAdd)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func faces(shown: [Companion], overflow: Int) -> some View {
+        let group = HStack(spacing: overlap) {
             ForEach(shown) { companion in
                 bubble { initials(companion) }
                     .overlay { avatar(companion) }
@@ -122,14 +151,51 @@ struct CompanionStack: View {
                 bubble { Text("+\(overflow)") }
             }
         }
+
+        if let facesLabel {
+            group
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(facesLabel)
+        } else {
+            group
+        }
     }
 
-    private func bubble(@ViewBuilder content: () -> some View) -> some View {
+    /// La pastille « + », au bout de la pile et par-dessus elle.
+    ///
+    /// **La cible tactile fait 2.75 rem, la pastille 34.** Les cinq points de
+    /// chaque côté sont donc reprises en négatif du côté gauche : sans ça, le
+    /// cadre du bouton repoussait la pastille de cinq points et le
+    /// recouvrement tombait à rien. Le dessin suit les visages, la cible reste
+    /// réglementaire.
+    private func addButton(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            bubble(fill: MemoBookColor.surface) {
+                Image(brand: "IconPlus")
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .frame(width: MemoBookSpacing.s, height: MemoBookSpacing.s)
+            }
+        }
+        .frame(
+            width: MemoBookSpacing.minimumTapTarget,
+            height: MemoBookSpacing.minimumTapTarget
+        )
+        .padding(.leading, -(MemoBookSpacing.minimumTapTarget - diameter) / 2)
+        .contentShape(.circle)
+        .accessibilityLabel("Inviter quelqu’un à raconter ce voyage")
+    }
+
+    private func bubble(
+        fill: Color = MemoBookColor.outline,
+        @ViewBuilder content: () -> some View
+    ) -> some View {
         content()
             .font(.custom(BrandFonts.generalSansSemibold, fixedSize: 12))
             .foregroundStyle(MemoBookColor.ink)
             .frame(width: diameter, height: diameter)
-            .background(MemoBookColor.outline, in: .circle)
+            .background(fill, in: .circle)
             .overlay { Circle().strokeBorder(MemoBookColor.surface, lineWidth: 2) }
     }
 

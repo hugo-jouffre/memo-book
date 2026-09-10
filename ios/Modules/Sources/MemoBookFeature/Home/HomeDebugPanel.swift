@@ -17,6 +17,11 @@
     struct HomeDebugPanel: View {
         let model: HomeModel
 
+        /// Le palier se joue sur **les deux écrans** : le modèle de l'accueil
+        /// porte le quota, la session le fait suivre au profil, qui n'est
+        /// construit qu'au moment où on l'ouvre.
+        @Environment(\.subscriptionSession) private var session
+
         var body: some View {
             VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
                 Text("Bac à sable — absent de l’app livrée")
@@ -31,14 +36,33 @@
                     action("+ voyage en cours") { model.debugAddTrip(stage: .ongoing) }
                     action("+ voyage à venir") { model.debugAddTrip(stage: .upcoming) }
                     action("+ voyage passé") { model.debugAddTrip(stage: .past) }
+
+                    action("Devenir un abonné") { play(model.debugBecomeSubscriber, .subscriber) }
+                    action("Première connexion") {
+                        play(model.debugFirstConnection, .freeSteps(remaining: 3, offered: 3))
+                    }
+                    action("Limite atteinte") { play(model.debugReachFreeLimit, .limitReached) }
+                    action(model.isOffline ? "Repasser en ligne" : "Passer hors ligne") {
+                        Task { await model.debugToggleOffline() }
+                    }
                     action("Étapes offertes", model.debugToggleFreeSteps)
                     action("Erreur", model.debugShowError)
-                    action("Jeu d’essai", model.debugReset)
+                    action("Jeu d’essai") {
+                        session?.play(nil)
+                        model.debugReset()
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(MemoBookSpacing.s)
             .brandDashedCard(color: MemoBookColor.separator)
+        }
+
+        /// Applique un palier des deux côtés d'un coup : le quota sur
+        /// l'accueil, le palier sur la session pour le profil.
+        private func play(_ onHome: () -> Void, _ status: FreemiumStatus) {
+            onHome()
+            session?.play(status)
         }
 
         private func action(_ title: String, _ perform: @escaping () -> Void) -> some View {

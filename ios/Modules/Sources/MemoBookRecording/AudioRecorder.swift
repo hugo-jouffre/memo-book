@@ -40,6 +40,11 @@ public enum RecordingError: Error, LocalizedError {
 @Observable
 public final class AudioRecorder {
     public private(set) var isRecording = false
+
+    /// La capture est suspendue. `isRecording` reste **vrai** : le vocal
+    /// existe, il n'avance simplement plus. C'est ce qui permet à l'interface de
+    /// montrer une pause plutôt qu'un retour au repos.
+    public private(set) var isPaused = false
     /// Niveau normalisé entre 0 et 1, pour la waveform.
     public private(set) var level: Double = 0
     public private(set) var elapsed: TimeInterval = 0
@@ -48,6 +53,13 @@ public final class AudioRecorder {
     private var startedAt: Date?
     private var meterTask: Task<Void, Never>?
     private var fileURL: URL?
+
+    /// Ce qui a déjà été enregistré avant la pause en cours.
+    ///
+    /// La durée ne peut plus se lire comme « maintenant moins le début » dès
+    /// qu'on a suspendu : ce compteur porte le temps **réellement** capturé, et
+    /// `startedAt` ne date plus que la reprise.
+    private var recordedBeforePause: TimeInterval = 0
 
     /// AAC dans un conteneur MPEG-4 : lu tel quel par l'API de transcription,
     /// et bien plus léger qu'un WAV pour l'upload en itinérance.
@@ -87,21 +99,62 @@ public final class AudioRecorder {
         fileURL = url
         startedAt = .now
         isRecording = true
+        isPaused = false
+        recordedBeforePause = 0
         elapsed = 0
         startMetering()
     }
 
+    /// Suspend la capture, sans rien perdre.
+    ///
+    /// `AVAudioRecorder` sait reprendre là où il s'est arrêté — un simple
+    /// `record()` suffit — donc rien à recoller à la main. Le compteur de temps,
+    /// lui, doit être figé : voir ``recordedBeforePause``.
+    public func pause() {
+        guard isRecording, !isPaused, let recorder else { return }
+        recorder.pause()
+        stopMetering()
+        recordedBeforePause = capturedDuration
+        startedAt = nil
+        isPaused = true
+        level = 0
+    }
+
+    public func resume() {
+        guard isRecording, isPaused, let recorder else { return }
+        recorder.record()
+        startedAt = .now
+        isPaused = false
+        startMetering()
+    }
+
+    /// Le temps réellement capturé : ce qui précède la pause en cours, plus ce
+    /// qui court depuis la reprise.
+    private var capturedDuration: TimeInterval {
+        guard let startedAt else { return recordedBeforePause }
+        return recordedBeforePause + Date.now.timeIntervalSince(startedAt)
+    }
+
     /// Arrête et renvoie le vocal. `nil` si aucun enregistrement n'était en cours.
     public func stop() throws -> RecordedAudio? {
-        guard let recorder, let url = fileURL, let startedAt else { return nil }
+        // `startedAt` est nul pendant une pause — c'est `recordedBeforePause`
+        // qui porte alors la durée. On ne peut donc pas le déballer ici, mais
+        // il faut une date de capture : celle de la reprise, ou celle du début
+        // moins ce qui a déjà été enregistré.
+        guard let recorder, let url = fileURL, isRecording else { return nil }
+        let startedAt = self.startedAt ?? Date.now.addingTimeInterval(-recordedBeforePause)
 
         recorder.stop()
         stopMetering()
 
+        let duration = capturedDuration
+
         self.recorder = nil
         fileURL = nil
         self.startedAt = nil
+        recordedBeforePause = 0
         isRecording = false
+        isPaused = false
         level = 0
 
         // La session est relâchée pour rendre la main aux autres apps audio ;
@@ -117,7 +170,7 @@ public final class AudioRecorder {
             data: data,
             filename: url.lastPathComponent,
             mimeType: "audio/mp4",
-            duration: Date.now.timeIntervalSince(startedAt),
+            duration: duration,
             recordedAt: startedAt
         )
     }
@@ -130,7 +183,9 @@ public final class AudioRecorder {
         recorder = nil
         fileURL = nil
         startedAt = nil
+        recordedBeforePause = 0
         isRecording = false
+        isPaused = false
         level = 0
         elapsed = 0
     }
@@ -143,9 +198,7 @@ public final class AudioRecorder {
 
                 recorder.updateMeters()
                 self.level = Self.normalize(decibels: recorder.averagePower(forChannel: 0))
-                if let startedAt = self.startedAt {
-                    self.elapsed = Date.now.timeIntervalSince(startedAt)
-                }
+                self.elapsed = self.capturedDuration
             }
         }
     }

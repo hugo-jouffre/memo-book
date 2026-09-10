@@ -123,26 +123,14 @@ struct TripHeader: View {
         HStack(spacing: MemoBookSpacing.xs) {
             marker("IconUser")
 
-            CompanionStack(companions: trip.companions, visibleLimit: 2)
-                .accessibilityElement()
-                .accessibilityLabel(collaboratorsLabel)
-
-            Button(action: onInvite) {
-                Image(brand: "IconPlus")
-                    .resizable()
-                    .renderingMode(.template)
-                    .scaledToFit()
-                    .frame(width: MemoBookSpacing.s, height: MemoBookSpacing.s)
-                    .foregroundStyle(MemoBookColor.ink)
-                    .frame(width: 34, height: 34)
-                    .background(MemoBookColor.surface, in: .circle)
-            }
-            .frame(
-                minWidth: MemoBookSpacing.minimumTapTarget,
-                minHeight: MemoBookSpacing.minimumTapTarget
+            // Le « + » est **dans** la pile, pas à côté : c'est elle qui tient
+            // le recouvrement des visages, et il doit être le même pour lui.
+            CompanionStack(
+                companions: trip.companions,
+                visibleLimit: 2,
+                onAdd: onInvite,
+                facesLabel: collaboratorsLabel
             )
-            .contentShape(.circle)
-            .accessibilityLabel("Inviter quelqu’un à raconter ce voyage")
 
             Spacer(minLength: 0)
         }

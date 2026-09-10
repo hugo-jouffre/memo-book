@@ -45,9 +45,21 @@ public struct Destination: Codable, Sendable, Hashable {
     /// Code ISO 3166-1 alpha-2. Ex. « IT ».
     public let countryCode: String?
 
-    public init(name: String, countryCode: String? = nil) {
+    /// La ville. Ex. « Rome ».
+    ///
+    /// Distincte du pays **et** du titre du carnet, parce que c'est la seule
+    /// des trois avec laquelle on peut s'adresser au voyageur : « Nouveau
+    /// voyage à Rome ! ». Le pays donnerait « à Italie », qui n'est pas du
+    /// français, et le titre (« Rome entre frère et sœur ») une phrase entière.
+    ///
+    /// `nil` pour un voyage qui n'est pas situé dans une ville — un tour du
+    /// monde, une randonnée. La phrase se replie alors, voir ``ChatCopy``.
+    public let city: String?
+
+    public init(name: String, countryCode: String? = nil, city: String? = nil) {
         self.name = name
         self.countryCode = countryCode
+        self.city = city
     }
 
     /// Le drapeau du pays, composé des deux indicateurs régionaux Unicode.

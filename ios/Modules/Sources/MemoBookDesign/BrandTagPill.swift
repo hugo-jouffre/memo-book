@@ -7,13 +7,22 @@ import SwiftUI
 /// de son côté — l'état d'un voyage, le compteur d'une section, le solde
 /// d'étapes de l'accueil — qui divergeaient déjà sur le rayon et la graisse.
 ///
-/// Trois tons, et trois seulement :
+/// Quatre tons, et quatre seulement :
 ///
 /// | Ton | Dessin | Ce qu'il dit |
 /// |---|---|---|
 /// | ``Tone/accent`` | aplat lime | un décompte, un cadeau — ce qu'on gagne |
 /// | ``Tone/outlined`` | contour vert | un état — ce que le voyage fait en ce moment |
 /// | ``Tone/info`` | contour bleu | une précision — ce qu'il y a à savoir |
+/// | ``Tone/accentOutlined`` | lime cerclé de vert | un état qu'on veut voir de loin |
+///
+/// > Le rayon reste celui d'une capsule pour **tous** les tons, y compris
+/// > ``Tone/accentOutlined``, que la maquette des modales d'abonnement dessine
+/// > à 6. Un quatrième rayon rouvrirait exactement le problème que ce composant
+/// > a été écrit pour fermer. Signalé à Clara (T40).
+/// >
+/// > ``Tone/accentOutlined`` applique la règle du lime (``MemoBookColor/accent``,
+/// > D13) : aplat lime, encre et filet verts.
 public struct BrandTagPill: View {
     public enum Tone {
         /// Lime plein. L'accent du scheme : petites surfaces uniquement, ce qui
@@ -23,6 +32,9 @@ public struct BrandTagPill: View {
         case outlined
         /// Contour bleu sur blanc.
         case info
+        /// Lime plein **et** cerclé de vert, texte vert : la pastille qui doit
+        /// s'attraper de loin — « ABONNÉE », « VOIR UN APERÇU DE TON CARNET ».
+        case accentOutlined
     }
 
     private let title: String
@@ -39,6 +51,17 @@ public struct BrandTagPill: View {
 
     private var shape: Capsule { Capsule() }
 
+    /// Aux tailles de texte accessibles, une pastille cesse d'imposer sa
+    /// largeur.
+    ///
+    /// ``fixedSize()`` est là pour qu'une pastille courte ne se fasse pas
+    /// écraser dans une rangée. Mais « VOIR UN APERÇU DE TON CARNET → » double
+    /// de largeur en AX3 et sortait alors de l'écran, que rien ne pouvait plus
+    /// rattraper. Passé cette taille, on la laisse donc se replier sur deux
+    /// lignes — la règle des écrans relus en AX3 prime sur le confort de mise
+    /// en rangée, qui n'a plus cours à ces tailles-là.
+    @Environment(\.dynamicTypeSize) private var typeSize
+
     public var body: some View {
         Text(isUppercased ? title.uppercased() : title)
             .font(MemoBookFont.overline)
@@ -52,20 +75,20 @@ public struct BrandTagPill: View {
                     shape.strokeBorder(border, lineWidth: 1)
                 }
             }
-            .fixedSize()
+            .fixedSize(horizontal: !typeSize.isAccessibilitySize, vertical: true)
     }
 
     private var foreground: Color {
         switch tone {
         case .accent: MemoBookColor.ink
-        case .outlined: MemoBookColor.action
+        case .outlined, .accentOutlined: MemoBookColor.action
         case .info: MemoBookColor.blueText
         }
     }
 
     private var background: Color {
         switch tone {
-        case .accent: MemoBookColor.accent
+        case .accent, .accentOutlined: MemoBookColor.accent
         case .outlined, .info: MemoBookColor.surface
         }
     }
@@ -73,7 +96,7 @@ public struct BrandTagPill: View {
     private var border: Color? {
         switch tone {
         case .accent: nil
-        case .outlined: MemoBookColor.action
+        case .outlined, .accentOutlined: MemoBookColor.action
         case .info: MemoBookColor.blueText
         }
     }
@@ -150,6 +173,7 @@ extension View {
             BrandTagPill("×1")
             BrandTagPill("En cours", tone: .outlined, isUppercased: true)
             BrandTagPill("Bientôt", tone: .info)
+            BrandTagPill("Abonnée", tone: .accentOutlined, isUppercased: true)
         }
 
         BrandProgressBar(fraction: 0.025, label: "5 souvenirs et 2/80 pages")

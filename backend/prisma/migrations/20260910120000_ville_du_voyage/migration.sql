@@ -1,0 +1,13 @@
+-- La ville du voyage.
+--
+-- `destinationName` porte le **pays** (« Italie ») et `destinationCountryCode`
+-- son code ISO, dont se dérive le drapeau. Il manquait la ville : « Rome ».
+--
+-- Sans elle, l'écran de conversation ne pouvait pas écrire « Nouveau voyage à
+-- Rome ! » comme la maquette le demande — un voyage ne portait qu'un titre
+-- (« Rome entre frère et sœur ») et un pays, et « à Italie » n'est pas du
+-- français.
+--
+-- Nullable : les carnets existants n'en ont pas, et un carnet n'est pas tenu
+-- d'être situé dans une ville (un tour du monde, une randonnée).
+ALTER TABLE "memos" ADD COLUMN "destinationCity" TEXT;

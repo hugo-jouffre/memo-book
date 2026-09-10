@@ -66,9 +66,33 @@ public enum MemoBookColor {
     /// `Brand Colors/Blue`.
     public static let outline = Color(hex: 0xAFD2F0)
 
-    /// Accent du scheme, très saturé. Il souligne un chiffre ou une pastille —
-    /// jamais un aplat large, jamais un fond de bouton. — Figma
-    /// `Scheme/Accent` (Lime).
+    /// Le fond d'une bulle du voyageur, dans le chat. — Figma `Chat Bubble`.
+    ///
+    /// Le style Figma vaut exactement ``outline``, et l'alias existe quand même :
+    /// une bulle de conversation n'est pas un contour de carte, et le jour où
+    /// Clara sépare les deux, il n'y a qu'ici à changer. C'est aussi le rappel
+    /// que ce bleu est un **aplat** : le texte qu'il porte est ``ink``, jamais du
+    /// bleu — voir l'avertissement de ``blueText``.
+    public static let bubbleTraveller = outline
+
+    /// Le fond d'une bulle de MEMO. — Figma `Neutral/100` (#FFFFFF).
+    ///
+    /// La maquette dit le blanc pur ; l'app pose son blanc crème (``surface``,
+    /// #FFFCF8). L'écart vaut trois points sur deux canaux, invisible sur le
+    /// fond crème, et le blanc pur viendrait d'un kit iOS et non des variables
+    /// de la marque : deux blancs presque identiques dans la même app coûtent
+    /// plus cher que cet écart-là. Signalé — voir la fiche du chat.
+    public static let bubbleMemo = surface
+
+    /// Accent du scheme, très saturé. Il souligne un chiffre, une pastille, et
+    /// **il peut porter un fond de bouton** — mais à une condition, qui n'est
+    /// pas négociable : le libellé et le filet sont alors ``action``, jamais
+    /// l'encre. Le lime est trop clair pour porter du noir sans virer au
+    /// surligneur, et trop clair pour porter du blanc tout court.
+    ///
+    /// C'est la règle qu'appliquent ``BrandButton/Style/accent`` et
+    /// ``BrandTagPill/Tone/accentOutlined`` ; aucun autre emploi en aplat large
+    /// n'est prévu. — Figma `Scheme/Accent` (Lime). Arbitrage D13 (T41).
     public static let accent = Color(hex: 0xE2F32B)
 
     /// Le filet qui sépare deux blocs dans une même carte : le noir de la
@@ -94,6 +118,26 @@ public enum MemoBookColor {
     /// Aplat d'un contrôle désactivé. Volontairement gris et non teinté :
     /// « indisponible » ne doit pas ressembler à une couleur de marque.
     public static let disabled = Color(hex: 0xC3C3C7)
+
+    /// Le contour d'un contrôle **indisponible** qui garde sa place — le bouton
+    /// micro quand l'accès est refusé. — Figma `Brand Colors/Grey`.
+    ///
+    /// Distinct de ``disabled``, qui est un aplat : ici le pavé reste blanc et
+    /// c'est son cerne qui perd le vert. Un bouton grisé en entier se lirait
+    /// comme absent, alors qu'il a quelque chose à dire — d'où l'icône barrée
+    /// qu'il porte.
+    public static let disabledOutline = Color(hex: 0xC8C8C8)
+
+    /// Le bleu du bouton d'envoi, une fois qu'il y a quelque chose à envoyer.
+    /// — Figma `chat/toolbar/input-btn-active`.
+    ///
+    /// ⚠️ **Il n'est pas dans la palette de marque** : c'est un bleu-violet
+    /// emprunté au kit de messagerie de la maquette. Il tient parce qu'un envoi
+    /// n'est pas une action de marque mais un geste de système — le même que la
+    /// flèche bleue d'iMessage —, et parce que le vert de MemoBook sert déjà à
+    /// « c'est ici qu'on appuie » partout ailleurs. À faire entrer dans les
+    /// variables sous le nom que choisira Clara — voir T59.
+    public static let send = Color(hex: 0x5D6CF5)
 
     /// Surfaces « carnet » : aperçu du livre, cartes de couverture.
     public static let paper = Color(hex: 0xFFFCF8)
@@ -140,6 +184,17 @@ public enum MemoBookSpacing {
     /// marge latérale.
     public static let screenMargin: CGFloat = 24
 
+    /// Espacement interne serré — le cran de 0.75 rem de l'échelle de
+    /// `docs/ui-development.md` (§2.2), entre ``xs`` et ``s``. Les marges d'une
+    /// carte de texte posée dans une feuille.
+    public static let snug: CGFloat = 12
+
+    /// L'espacement entre deux entrées d'une même liste — les trois temps du
+    /// mode d'emploi de l'abonnement, par exemple. Le cran de 1.25 rem de
+    /// l'échelle de `docs/ui-development.md` (§2.2, « espacement de section
+    /// court »), qui manquait entre ``s`` et ``m``.
+    public static let sectionGap: CGFloat = 20
+
     /// Rayon des champs et des cartes.
     public static let cornerRadius: CGFloat = 14
 
@@ -148,6 +203,23 @@ public enum MemoBookSpacing {
 
     /// Taille minimale d'une cible tactile.
     public static let minimumTapTarget: CGFloat = 44
+
+    /// **Le** diamètre d'un avatar posé sur une ligne de titre — la vignette de
+    /// l'accueil, celle de l'en-tête du chat.
+    ///
+    /// Volontairement **fixe**, hors Dynamic Type : une photo n'est pas du
+    /// texte, et un avatar qui grandit avec le corps pousse le titre hors de sa
+    /// ligne au lieu de l'accompagner.
+    public static let avatarSide: CGFloat = 40
+
+    /// Le rayon d'une bulle de conversation. — Figma dessine 11 ; R2 arrondit au
+    /// cran de l'échelle (§2.2 de `docs/ui-development.md`).
+    ///
+    /// Plus serré que ``cornerRadius`` (14) et que ``largeCornerRadius`` (20),
+    /// et c'est voulu : une bulle est une réplique, pas une carte. C'est ce
+    /// rayon court qui fait qu'une suite de bulles se lit comme une
+    /// conversation.
+    public static let bubbleCornerRadius: CGFloat = 12
 
     /// **La** hauteur d'un appel à l'action. Tous les CTA de l'app la
     /// partagent — « Continuer », « Continuer avec Apple », « Continuer avec
@@ -204,6 +276,19 @@ public enum MemoBookFont {
     /// Titre d'écran. — Figma `App/h1` (Sora SemiBold 32).
     public static let h1 = Font.custom(BrandFonts.soraSemiBold, size: 32, relativeTo: .largeTitle)
 
+    /// La moitié courante d'un titre du paywall — même corps que ``h1``, en
+    /// Regular. La phrase se termine en SemiBold, et c'est ce contraste qui
+    /// porte la chute (« Ton carnet comptera environ **40 pages !** »).
+    public static let h1Light = Font.custom(BrandFonts.soraRegular, size: 32, relativeTo: .largeTitle)
+
+    /// Le surtitre d'un écran du paywall : une ligne de Sora au-dessus du
+    /// titre, qui annonce sans peser. — Sora Regular 16.
+    public static let eyebrow = Font.custom(BrandFonts.soraRegular, size: 16, relativeTo: .body)
+
+    /// Le lien discret d'une barre de navigation — « Besoin d'aide ? ». —
+    /// Figma `App/h3` (Sora Regular 14).
+    public static let h3 = Font.custom(BrandFonts.soraRegular, size: 14, relativeTo: .subheadline)
+
     /// Titre d'un écran secondaire, et nom propre affiché comme un titre. Plus
     /// petit qu'un ``h1`` : le profil, les réglages, une feuille modale
     /// s'annoncent, ils n'ouvrent pas l'app.
@@ -228,6 +313,34 @@ public enum MemoBookFont {
 
     /// Texte secondaire des cartes (General Sans Regular 12).
     public static let caption = Font.custom(BrandFonts.generalSansRegular, size: 12, relativeTo: .caption)
+
+    /// Le texte d'une bulle de conversation (General Sans Regular 17).
+    ///
+    /// Un point de plus que ``body``, et l'écart est du dessin, pas un
+    /// arrondi : la maquette du chat reprend la taille de message d'iOS, qui
+    /// est celle qu'on lit en tenant son téléphone d'une main dans un train.
+    /// Un fil entier en 16 se lit moins bien qu'un paragraphe de carte en 16.
+    ///
+    /// ⚠️ **Pas encore une variable Figma** : relevé sur les nœuds du chat
+    /// (General Sans Regular 17). À faire entrer dans les variables sous le nom
+    /// que choisira Clara.
+    public static let bubble = Font.custom(BrandFonts.generalSansRegular, size: 17, relativeTo: .body)
+
+    /// L'action posée **dans** une bulle — « Voir plus ». Même taille que
+    /// ``bubble``, une graisse au-dessus : elle se distingue du récit sans
+    /// changer de corps, donc sans casser la ligne.
+    public static let bubbleAction = Font.custom(BrandFonts.generalSansMedium, size: 17, relativeTo: .body)
+
+    /// Ce qu'on tape dans la barre d'envoi, et le libellé « Record » à côté.
+    /// (General Sans Regular 21.)
+    ///
+    /// Plus gros que le texte des bulles, et c'est voulu : on écrit d'une main,
+    /// souvent en marchant, et c'est la seule ligne de l'app qu'on relit
+    /// pendant qu'on la produit.
+    ///
+    /// ⚠️ **Pas encore une variable Figma** : relevé sur le nœud des états de
+    /// la barre d'envoi (General Sans Regular 21).
+    public static let composer = Font.custom(BrandFonts.generalSansRegular, size: 21, relativeTo: .body)
 
     /// Messages adressés à l'utilisateur : erreurs, réussites, avertissements.
     /// Ils ont la taille du corps de texte et non celle d'une légende — une
@@ -258,6 +371,23 @@ public enum MemoBookFont {
     /// `Heading 6` / `Text Large` (20).
     public static let heading = Font.custom(BrandFonts.soraSemiBold, size: 20, relativeTo: .title3)
 
+    /// Titre d'une carte posée **dans** une feuille — « Comment résilier ? ».
+    /// Sora, comme les titres, mais à la taille du corps de texte : la carte
+    /// s'annonce sans concurrencer le titre de la feuille.
+    ///
+    /// ⚠️ **Pas encore une variable Figma** : relevé sur le nœud des modales
+    /// d'abonnement (Sora SemiBold 16).
+    public static let cardTitle = Font.custom(BrandFonts.soraSemiBold, size: 16, relativeTo: .body)
+
+    /// Titre d'un encadré de texte — « Résiliation automatique à la fin de ton
+    /// voyage à Rome. » General Sans et non Sora : c'est une phrase qu'on lit,
+    /// pas un intitulé de section. C'est ce qui le distingue de ``heading``,
+    /// qui a la même taille en Sora.
+    ///
+    /// ⚠️ **Pas encore une variable Figma** : relevé sur le nœud des modales
+    /// d'abonnement (General Sans Semibold 20).
+    public static let calloutTitle = Font.custom(BrandFonts.generalSansSemibold, size: 20, relativeTo: .title3)
+
     /// Ligne de métadonnées : dates, compteurs, sous-titres de carte. —
     /// `Text Small` (14).
     public static let label = Font.custom(BrandFonts.generalSansMedium, size: 14, relativeTo: .subheadline)
@@ -274,4 +404,48 @@ public enum MemoBookFont {
 
     /// Transcription brute : le monospace signale « pas encore mis en forme ».
     public static let transcript = Font.system(.callout, design: .monospaced)
+}
+
+/// Les deux ombres de la marque, reprises des effets nommés du fichier Figma.
+///
+/// Deux, et pas plus. Une app qui empile cinq élévations perd la seule chose
+/// qu'une ombre sait dire : ce qui est posé sur la page, et ce qui flotte
+/// au-dessus d'elle.
+public enum MemoBookShadow {
+    /// Ce qui est posé sur la page : une pastille, un pavé de barre d'outils.
+    /// — Figma `medium shadow` (0, 1, rayon 2, noir à 10 %).
+    case soft
+
+    /// Ce qui flotte au-dessus de la page : les commandes de la barre d'envoi
+    /// du chat, qui doivent se détacher du fil qui défile dessous.
+    /// — Figma `Elevation-200` (0, 4, rayon 12, noir à 15 %).
+    case raised
+
+    fileprivate var color: Color {
+        switch self {
+        case .soft: .black.opacity(0.1)
+        case .raised: .black.opacity(0.15)
+        }
+    }
+
+    fileprivate var radius: CGFloat {
+        switch self {
+        case .soft: 2
+        case .raised: 12
+        }
+    }
+
+    fileprivate var offset: CGFloat {
+        switch self {
+        case .soft: 1
+        case .raised: 4
+        }
+    }
+}
+
+extension View {
+    /// Pose l'une des deux ombres de la marque. — voir ``MemoBookShadow``.
+    public func brandShadow(_ level: MemoBookShadow) -> some View {
+        shadow(color: level.color, radius: level.radius, y: level.offset)
+    }
 }

@@ -34,6 +34,7 @@ public struct HomeView: View {
     /// faut aussi que le tracé du M se soit effacé.
     @State private var isLoaded = false
 
+    @Environment(\.subscriptionSession) private var subscriptionSession
     @Environment(\.launchOverlayIsVisible) private var isCoveredByLaunch
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -217,22 +218,20 @@ public struct HomeView: View {
         .accessibilityLabel("Ton profil")
     }
 
-    /// Le solde d'étapes offertes.
+    /// Le palier du compte, posé sur l'avatar.
     ///
-    /// Deux messages pour un seul compteur : tant que rien n'est consommé on
-    /// annonce un cadeau, ensuite un solde. C'est le même chiffre, mais pas la
-    /// même nouvelle.
+    /// Trois messages pour un seul compteur : tant que rien n'est consommé on
+    /// annonce un cadeau, ensuite un solde, et une fois le quota épuisé — ou
+    /// l'abonnement résilié — on propose de s'abonner. C'est le même chiffre,
+    /// mais pas la même nouvelle. Un abonné, lui, n'a rien à décompter et
+    /// n'a donc pas de pastille du tout.
     @ViewBuilder
     private var freeStepsPill: some View {
         if let traveller = model.feed?.traveller,
-            let offered = traveller.offeredSteps,
-            let remaining = traveller.remainingSteps,
-            remaining > 0
+            let label = traveller
+                .freemiumStatus(override: subscriptionSession?.override)
+                .homePillLabel
         {
-            let label = remaining == offered
-                ? "\(offered) étapes offertes"
-                : "\(remaining) étapes restantes"
-
             BrandTagPill(label)
                 .fixedSize()
                 // Le bord droit de la pastille s'aligne sur celui de l'avatar,
@@ -399,7 +398,11 @@ public struct HomeView: View {
     /// Ce que le bouton propose dépend de ce qu'il y a à faire : raconter un
     /// voyage en cours, ou en créer un. Un micro devant quelqu'un qui n'a aucun
     /// carnet ouvert ne mène nulle part.
-    private var hasOngoingTrip: Bool { !model.ongoingTrips.isEmpty }
+    private var hasOngoingTrip: Bool { ongoingTripId != nil }
+
+    /// Le voyage que le bouton fait raconter : le premier en cours, celui que
+    /// l'accueil montre en haut.
+    private var ongoingTripId: String? { model.ongoingTrips.first?.id }
 
     private var recordCallToAction: some View {
         BrandButton(
@@ -410,7 +413,11 @@ public struct HomeView: View {
             icon: hasOngoingTrip ? Image(brand: "IconMic") : nil,
             fillsWidth: true
         ) {
-            onIntent(hasOngoingTrip ? .startRecording : .createTrip)
+            if let ongoingTripId {
+                onIntent(.startRecording(tripId: ongoingTripId))
+            } else {
+                onIntent(.createTrip)
+            }
         }
         // Le libellé suit le Dynamic Type, mais s'arrête à AX1. Au-delà, une
         // barre ancrée en bas prend la moitié de l'écran et cache ce qu'elle
@@ -427,7 +434,10 @@ public struct HomeView: View {
 /// que le squelette et l'écran réel tombent au même endroit que le passage de
 /// l'un à l'autre ne saute pas.
 enum HomeMetrics {
-    static let avatarSide: CGFloat = 40
+    /// L'avatar est **le** diamètre du design system : le chat pose le même
+    /// devant son titre, et c'est à sa deuxième occurrence qu'il est monté dans
+    /// `MemoBookSpacing`.
+    static let avatarSide = MemoBookSpacing.avatarSide
     /// Hauteur du voile posé derrière le CTA fixe.
     static let callToActionScrimHeight: CGFloat = 200
 

@@ -44,16 +44,40 @@ import SwiftUI
 /// ```
 public struct BrandSheet<Content: View>: View {
     private let title: String
-    private let subtitle: String?
+    private let badge: String?
+    private let paragraphs: [String]
     private let content: Content
 
+    /// - Parameter badge: la pastille qui se glisse **entre** le titre et le
+    ///   sous-titre — « ABONNÉE » sur la feuille d'abonnement. Elle qualifie le
+    ///   titre, donc elle appartient à l'en-tête et non au contenu : mise dans
+    ///   le contenu, elle se serait retrouvée sous le sous-titre qui la
+    ///   commente.
     public init(
         _ title: String,
+        badge: String? = nil,
         subtitle: String? = nil,
         @ViewBuilder content: () -> Content
     ) {
+        self.init(title, badge: badge, paragraphs: subtitle.map { [$0] } ?? [], content: content)
+    }
+
+    /// Le même en-tête, mais dont le chapeau tient en **plusieurs paragraphes**
+    /// séparés par un blanc — c'est ainsi que les trois feuilles de résiliation
+    /// le dessinent.
+    ///
+    /// Une liste et non une chaîne à retours à la ligne : `\n\n` donnerait une
+    /// ligne vide entière là où la maquette ne veut que l'écart d'un
+    /// paragraphe, et une ligne vide ne se lit pas à VoiceOver.
+    public init(
+        _ title: String,
+        badge: String? = nil,
+        paragraphs: [String],
+        @ViewBuilder content: () -> Content
+    ) {
         self.title = title
-        self.subtitle = subtitle
+        self.badge = badge
+        self.paragraphs = paragraphs
         self.content = content()
     }
 
@@ -125,13 +149,15 @@ public struct BrandSheet<Content: View>: View {
 
     private var detentHeight: CGFloat {
         guard bodyHeight > 0 else { return Self.minimumHeight }
-        // La feuille descend jusqu'au bord : c'est à elle de garder son dernier
-        // élément au-dessus de l'indicateur d'accueil.
-        let wanted =
-            bodyHeight
-            + Self.handleBlockHeight
-            + MemoBookSpacing.s
-            + DeviceScreen.bottomSafeInset
+
+        // **La place de l'indicateur d'accueil se réserve une fois, pas deux.**
+        // Le défilement insère déjà la safe area sous son contenu ; on
+        // l'ajoutait ici en plus, et chaque feuille traînait donc une bande
+        // morte de la hauteur de l'indicateur *plus* une gouttière — 96 pt sous
+        // le dernier bouton de la feuille d'abonnement, là où la maquette en
+        // demande 53. La marge basse de la feuille, elle, vit avec le contenu
+        // (`scrollingBody`), comme les marges latérales.
+        let wanted = bodyHeight + Self.handleBlockHeight
 
         // Un contenu trop haut ne pousse pas la feuille jusqu'en haut : il
         // défile. C'est le cas des six connecteurs.
@@ -154,7 +180,15 @@ public struct BrandSheet<Content: View>: View {
                 content
             }
             .padding(.horizontal, MemoBookSpacing.screenMargin)
-            .padding(.bottom, MemoBookSpacing.s)
+            // ⚠️ **La safe area compte déjà dans cette marge.** Le défilement
+            // réserve l'indicateur d'accueil sous le contenu — 34 pt sur un
+            // iPhone récent — et la marge d'écran s'y ajoutait : 58 pt de vide
+            // en bas de chaque feuille, soit deux fois ce qu'il fallait. On ne
+            // pose donc que ce qui **manque** pour atteindre la marge d'écran,
+            // et rien du tout là où l'indicateur la donne déjà. Un appareil à
+            // bouton d'accueil, lui, n'a pas de safe area et reçoit les 24 pt
+            // entiers.
+            .padding(.bottom, max(0, MemoBookSpacing.screenMargin - DeviceScreen.bottomSafeInset))
             .frame(maxWidth: .infinity, alignment: .leading)
             .background { heightReader }
         }
@@ -187,8 +221,12 @@ public struct BrandSheet<Content: View>: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
 
-                if let subtitle {
-                    Text(subtitle)
+                if let badge {
+                    BrandTagPill(badge, tone: .accentOutlined, isUppercased: true)
+                }
+
+                ForEach(paragraphs, id: \.self) { paragraph in
+                    Text(paragraph)
                         .font(MemoBookFont.body)
                         .foregroundStyle(MemoBookColor.inkMuted)
                         .fixedSize(horizontal: false, vertical: true)
@@ -341,9 +379,27 @@ private struct BrandSheetPresenter: ViewModifier {
             // `scaleEffect` est une transformation de rendu : elle ne touche pas
             // au cadre. Le noir posé ici reste donc à la taille de l'écran, et
             // c'est lui qu'on découvre autour de la carte.
-            .background(Color.black.ignoresSafeArea())
+            //
+            // ⚠️ **Il s'efface avec le recul, et c'est indispensable.** Posé en
+            // dur, il restait derrière la carte pendant qu'elle regrandissait :
+            // une feuille refermée laissait une **bande noire en haut et en bas**
+            // le temps du retour à l'échelle. En opacité, il n'existe plus dès
+            // que la feuille part.
+            .background(Color.black.opacity(isPresented ? 1 : 0).ignoresSafeArea())
+            // Et sous le noir, le crème de l'app — jamais la fenêtre, qui est
+            // noire. C'est lui qu'on découvre si le relâchement prend une image
+            // d'avance sur l'effacement du noir : un liseré de la couleur du
+            // fond ne se voit pas.
+            .background(MemoBookColor.background.ignoresSafeArea())
+            // **Deux courbes, pas une.** Le recul s'installe posément derrière
+            // la feuille qui monte, et se relâche plus vite qu'elle ne descend :
+            // la carte a retrouvé sa taille avant que la feuille ait fini de
+            // partir, donc il n'y a plus d'instant où l'on voit une carte
+            // réduite sans feuille par-dessus.
             .animation(
-                reduceMotion ? .none : .smooth(duration: 0.35),
+                reduceMotion
+                    ? .none
+                    : .smooth(duration: isPresented ? 0.35 : 0.2),
                 value: isPresented
             )
     }
