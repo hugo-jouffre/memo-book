@@ -9,10 +9,12 @@
  * ce que la personne lit avant d'ouvrir son compte à quelqu'un d'autre. Une
  * phrase, au présent, qui dit ce qu'on va chercher et rien de plus.
  *
- * `logoAssetName` désigne un visuel embarqué dans l'app — ce sont des marques
- * tierces, elles ne se teintent pas et ne se remplacent pas par une icône
- * MemoBook. Le jour où les logos seront servis en URL, ce champ disparaîtra au
- * profit de `account_connectors.logoUrl`.
+ * `logoAssetName` nomme un `imageset` de `MemoBookAssets.xcassets` — ce sont
+ * des marques tierces, elles ne se teintent pas et ne se remplacent pas par une
+ * icône MemoBook. **Le nom doit exister côté app** : rien ici ne le vérifie, et
+ * une clé sans fichier en face rend une pastille à initiale. Le jour où les
+ * logos seront servis en URL, ce champ disparaîtra au profit de
+ * `account_connectors.logoUrl`.
  */
 export interface ConnectorDefinition {
   key: string;
@@ -21,42 +23,60 @@ export interface ConnectorDefinition {
   logoAssetName: string;
 }
 
+/**
+ * Les six de la maquette, **et les six qui ont un logo**.
+ *
+ * Les deux vont ensemble : `logoAssetName` doit nommer un `imageset` réellement
+ * embarqué dans `MemoBookAssets.xcassets`, sinon l'app affiche une pastille à
+ * initiale à la place d'une marque. Le catalogue a longtemps servi six autres
+ * services — Google Photos, Photos, Google Maps, Tricount, Spotify — avec des
+ * noms d'asset qui n'existaient nulle part : la feuille arrivait alors sans un
+ * seul logo.
+ *
+ * Les cinq écartés restent les prochains candidats. Il leur manque un export :
+ * ajouter la clé ici sans le fichier en face rejouerait exactement le même bug.
+ */
 export const CONNECTOR_CATALOG: readonly ConnectorDefinition[] = [
-  {
-    key: "google-photos",
-    name: "Google Photos",
-    promise: "Retrouve les photos prises pendant les dates du voyage.",
-    logoAssetName: "connector-google-photos",
-  },
-  {
-    key: "apple-photos",
-    name: "Photos",
-    promise: "Retrouve les photos prises pendant les dates du voyage.",
-    logoAssetName: "connector-apple-photos",
-  },
-  {
-    key: "google-maps",
-    name: "Google Maps",
-    promise: "Relit l'historique des lieux pour situer les étapes.",
-    logoAssetName: "connector-google-maps",
-  },
-  {
-    key: "tricount",
-    name: "Tricount",
-    promise: "Importe les dépenses pour dater et situer les étapes.",
-    logoAssetName: "connector-tricount",
-  },
   {
     key: "strava",
     name: "Strava",
-    promise: "Récupère les trajets pour calculer les distances parcourues.",
-    logoAssetName: "connector-strava",
+    promise:
+      "MemoBook pourra déduire tes étapes et t'aider à raconter des souvenirs à partir de tes runs",
+    logoAssetName: "ConnectorStrava",
   },
   {
-    key: "spotify",
-    name: "Spotify",
-    promise: "Note ce que tu écoutais, pour l'ambiance du carnet.",
-    logoAssetName: "connector-spotify",
+    key: "alltrails",
+    name: "All Trails",
+    promise:
+      "MemoBook pourra récupérer tes sentiers parcourus et t'aider à raconter des souvenirs de tes randonnées",
+    logoAssetName: "ConnectorAllTrails",
+  },
+  {
+    key: "garmin",
+    name: "Garmin",
+    promise:
+      "MemoBook pourra récupérer tes activités enregistrées et t'aider à situer tes étapes sur le trajet",
+    logoAssetName: "ConnectorGarmin",
+  },
+  {
+    key: "polarsteps",
+    name: "PolarSteps",
+    promise: "MemoBook pourra récupérer tes récits PolarSteps et t'aider à compléter ton carnet",
+    logoAssetName: "ConnectorPolarSteps",
+  },
+  {
+    key: "airbnb",
+    name: "Airbnb",
+    promise:
+      "MemoBook pourra déduire tes étapes et t'aider à raconter des souvenirs à partir de tes réservations",
+    logoAssetName: "ConnectorAirbnb",
+  },
+  {
+    key: "booking",
+    name: "Booking",
+    promise:
+      "MemoBook pourra déduire tes étapes et t'aider à raconter des souvenirs à partir de tes réservations",
+    logoAssetName: "ConnectorBooking",
   },
 ] as const;
 

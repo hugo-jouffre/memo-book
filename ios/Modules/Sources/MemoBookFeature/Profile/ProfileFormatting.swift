@@ -1,4 +1,5 @@
 import Foundation
+import MemoBookCore
 
 // Mise en forme des valeurs du profil. Les règles vivent ici, pas dans les
 // vues : un montant s'écrit pareil dans la ligne « Ma cagnotte » et dans le
@@ -29,5 +30,37 @@ extension Date {
     /// que le premier cas ; le second sort tout seul, sans rien à écrire ici.
     var relativeDelay: String {
         formatted(.relative(presentation: .numeric))
+    }
+}
+
+extension CurrentTrip {
+    /// « 10/12/2026 - 02/01/2027 », la ligne du voyage en cours dans la carte
+    /// de chiffres du profil.
+    ///
+    /// Des dates **numériques** ici, alors que les cartes de l'accueil écrivent
+    /// « 26 août – 15 sept. 2026 » : la ligne est courte, poussée à droite d'un
+    /// intitulé, et deux mois abrégés n'y tiendraient pas. Le format reste celui
+    /// de la région de l'utilisateur — c'est `FormatStyle` qui met le jour avant
+    /// le mois en France et l'inverse ailleurs.
+    var dateRangeLabel: String? {
+        // `.twoDigits` des deux côtés : sans ça, `month()` rend le mois en
+        // toutes lettres en français — « 26 août 2026 » — et deux bornes comme
+        // celles-là ne tiennent pas en bout de ligne. L'ordre des composants,
+        // lui, reste celui de la région.
+        let numeric = Date.FormatStyle.dateTime.day(.twoDigits).month(.twoDigits).year()
+
+        return switch (startDate, endDate) {
+        case let (start?, end?): "\(start.formatted(numeric)) - \(end.formatted(numeric))"
+        case let (start?, nil): start.formatted(numeric)
+        case let (nil, end?): end.formatted(numeric)
+        case (nil, nil): nil
+        }
+    }
+}
+
+extension TravellerProfile {
+    /// « 5 voyages ». Le chiffre de la carte, accordé.
+    var tripCountLabel: String {
+        tripCount <= 1 ? "\(tripCount) voyage" : "\(tripCount) voyages"
     }
 }

@@ -7,20 +7,66 @@ import { hashPassword } from "../src/lib/password.js";
  *
  * Il ne sert pas qu'à faire du `curl` : c'est ce qui permet de **brancher
  * l'app sur de vraies données** sans attendre d'avoir raconté un voyage. Il
- * pose donc un compte avec un mot de passe connu, et de quoi remplir les trois
+ * pose donc des comptes au mot de passe connu, et de quoi remplir les trois
  * écrans — accueil, voyage, profil — dans chacun de leurs états.
  *
- * Idempotent : relancé, il repart du même compte plutôt que d'en empiler un
- * deuxième. Les carnets, eux, sont refaits à neuf.
+ * Idempotent : relancé, il repart des mêmes comptes plutôt que d'en empiler
+ * d'autres. Les carnets, eux, sont refaits à neuf.
+ *
+ * **Deux comptes, parce que le produit a deux paliers.** Le parcours freemium
+ * ne se lit pas sur un seul profil : la pastille d'étapes offertes, le CTA lime
+ * de l'accueil et le bouton d'abonnement n'existent que sur un compte à quota,
+ * et la carte de statistiques ne s'ouvre que pour un abonné. Les avoir tous les
+ * deux en base évite de croire qu'un écran est cassé alors qu'il montre l'autre
+ * palier.
  */
 const prisma = new PrismaClient();
 
-const DEMO = {
-  email: "demo@memobook.app",
-  password: "memobook2026",
-  firstName: "Hugo",
-  lastName: "Jouffre",
-} as const;
+/**
+ * Le mot de passe des comptes de développement. **Ce n'est pas un secret** :
+ * il est écrit ici, dans `docs/supabase.md`, et l'app s'en sert pour son bouton
+ * « Testing mode ». Il n'ouvre que des comptes de démonstration.
+ *
+ * Le seed le **réécrit** à chaque passage, y compris sur un compte créé à la
+ * main depuis l'app : c'est ce qui garantit que « Testing mode » entre, et
+ * c'est la raison d'être de ces adresses.
+ */
+const TEST_PASSWORD = "memobook2026";
+
+/** Le palier d'un compte : ce qui le fait payer, ou compter ses étapes. */
+type Plan = "freeTrial" | "subscriber";
+
+type TravellerSeed = {
+  email: string;
+  firstName: string;
+  lastName: string;
+  plan: Plan;
+  /** Ce que le seed en dit à la fin, pour qu'on sache lequel ouvrir. */
+  purpose: string;
+};
+
+/**
+ * **Le compte de test de l'app.** C'est celui où mène « Testing mode », et
+ * celui sur lequel les écrans se vérifient au quotidien.
+ */
+const TEST_ACCOUNT_EMAIL = "demo@memo-book.com";
+
+const TRAVELLERS: TravellerSeed[] = [
+  {
+    email: TEST_ACCOUNT_EMAIL,
+    firstName: "Hugo",
+    lastName: "Jouffre",
+    plan: "freeTrial",
+    purpose: "compte de test de l'app — palier gratuit, celui de « Testing mode »",
+  },
+  {
+    email: "demo@memobook.app",
+    firstName: "Hugo",
+    lastName: "Jouffre",
+    plan: "subscriber",
+    purpose: "le même contenu, vu par un abonné",
+  },
+];
 
 const ROME_STEPS = [
   {
@@ -72,29 +118,55 @@ const ROME_STEPS = [
   },
 ];
 
-async function main(): Promise<void> {
+/**
+ * Pose un compte et tout ce qui pend après lui : ses voyages, ses étapes, ses
+ * souvenirs, sa cagnotte, son abonnement et sa commande en cours.
+ *
+ * @param clara L'amie invitée sur les voyages. Elle est partagée entre les
+ *   comptes plutôt que dupliquée : c'est elle qui fait apparaître les pastilles
+ *   de compagnons, et deux Clara en base rendraient le jeu d'essai moins
+ *   ressemblant que ce qu'il imite.
+ */
+async function seedTraveller(
+  seed: TravellerSeed,
+  clara: { id: string },
+): Promise<{ token: string; balance: number }> {
   // ---------------------------------------------------------------------
   // Le compte, et l'appareil qui lui est rattaché
   // ---------------------------------------------------------------------
 
+  // Le quota d'étapes et l'abonnement sont **les deux faces d'une seule
+  // question** : un abonné n'a rien à décompter, un compte gratuit n'a rien à
+  // facturer. Ils se posent donc ensemble, jamais l'un sans l'autre.
+  const isSubscriber = seed.plan === "subscriber";
+  // Trois offertes, trois restantes : le compte de test s'ouvre sur une
+  // **première connexion**, rien de consommé. C'est l'état par lequel tout le
+  // monde passe, et donc celui qu'on doit voir sans rien faire ; le bac à sable
+  // de l'accueil rejoue les autres sans changer de compte.
+  const quota = isSubscriber
+    ? { offeredSteps: null, remainingSteps: null }
+    : { offeredSteps: 3, remainingSteps: 3 };
+
+  const identity = {
+    emailVerifiedAt: new Date(),
+    firstName: seed.firstName,
+    lastName: seed.lastName,
+    // Réécrit à chaque passage, sur un compte neuf comme sur un compte créé
+    // depuis l'app : sans ça, « Testing mode » ne peut pas entrer.
+    passwordHash: await hashPassword(TEST_PASSWORD),
+    phoneNumber: "+33 6 12 34 56 78",
+    addressLine1: "7 rue Simon Fryd",
+    addressPostalCode: "69002",
+    addressCity: "Lyon",
+    addressCountry: "France",
+    wantsNewsletter: true,
+    ...quota,
+  };
+
   const account = await prisma.account.upsert({
-    where: { email: DEMO.email },
-    update: {},
-    create: {
-      email: DEMO.email,
-      emailVerifiedAt: new Date(),
-      firstName: DEMO.firstName,
-      lastName: DEMO.lastName,
-      passwordHash: await hashPassword(DEMO.password),
-      phoneNumber: "+33 6 12 34 56 78",
-      addressLine1: "7 rue Simon Fryd",
-      addressPostalCode: "69002",
-      addressCity: "Lyon",
-      addressCountry: "France",
-      wantsNewsletter: true,
-      offeredSteps: 3,
-      remainingSteps: 2,
-    },
+    where: { email: seed.email },
+    update: identity,
+    create: { email: seed.email, ...identity },
   });
 
   // On repart d'une ardoise propre côté carnets : un seed rejoué ne doit pas
@@ -102,22 +174,14 @@ async function main(): Promise<void> {
   await prisma.memo.deleteMany({ where: { ownerAccountId: account.id } });
 
   const token = generateDeviceToken();
-  const device = await prisma.device.create({
+  await prisma.device.create({
     data: { tokenHash: hashDeviceToken(token), platform: "ios", accountId: account.id },
   });
 
-  // Une amie invitée sur les voyages : c'est elle qui fait apparaître les
-  // pastilles de compagnons sur les couvertures.
-  const clara = await prisma.account.upsert({
-    where: { email: "clara@memobook.app" },
-    update: {},
-    create: { email: "clara@memobook.app", firstName: "Clara", lastName: "Perrin" },
-  });
-
-  const owner = { accountId: account.id, role: "owner" as const, status: "active" as const };
+  // Le propriétaire n'a pas de ligne de participant : `memos.ownerAccountId`
+  // le dit, et `memo_members` ne porte que les invités.
   const guest = {
     accountId: clara.id,
-    role: "guest" as const,
     status: "active" as const,
     handle: "@clara_prn",
     acceptedAt: new Date(),
@@ -129,9 +193,11 @@ async function main(): Promise<void> {
 
   const rome = await prisma.memo.create({
     data: {
-      deviceId: device.id,
       ownerAccountId: account.id,
       title: "Rome 2026",
+      // Des codes lisibles et stables, pour pouvoir essayer « Rejoins une
+      // aventure » sans aller les lire en base.
+      accessCode: "ROME26",
       subtitle: "Dix jours à marcher et à manger",
       authors: "Hugo et Clara",
       theme: "City trip & découvertes",
@@ -145,7 +211,7 @@ async function main(): Promise<void> {
       distanceKilometres: 87.4,
       narrationPace: "Tous les 2 jours",
       prompt: "Comment ça se passe à Trastevere ?",
-      members: { create: [owner, guest] },
+      members: { create: [guest] },
     },
   });
 
@@ -195,9 +261,9 @@ async function main(): Promise<void> {
 
   const lisbonne = await prisma.memo.create({
     data: {
-      deviceId: device.id,
       ownerAccountId: account.id,
       title: "Lisbonne entre filles",
+      accessCode: "LISB26",
       theme: "voyage",
       stage: "past",
       destinationName: "Portugal",
@@ -211,7 +277,7 @@ async function main(): Promise<void> {
       memoryCount: 22,
       pageCount: 58,
       isPrintable: true,
-      members: { create: [owner, guest] },
+      members: { create: [guest] },
       renders: {
         create: [{ status: "ready", pdfUrl: "https://pdf.example.test/lisbonne.pdf" }],
       },
@@ -220,9 +286,9 @@ async function main(): Promise<void> {
 
   await prisma.memo.create({
     data: {
-      deviceId: device.id,
       ownerAccountId: account.id,
       title: "Islande cet hiver",
+      accessCode: "ISLA26",
       theme: "voyage",
       stage: "upcoming",
       destinationName: "Islande",
@@ -230,7 +296,6 @@ async function main(): Promise<void> {
       destinationCity: "Reykjavik",
       startDate: new Date("2026-12-20T00:00:00Z"),
       endDate: new Date("2026-12-30T00:00:00Z"),
-      members: { create: [owner] },
     },
   });
 
@@ -247,6 +312,10 @@ async function main(): Promise<void> {
     { amountCents: -1212, kind: "order_payment" as const, label: "Carnet Lisbonne" },
   ];
 
+  // Le registre est refait à neuf : sans ça, un seed rejoué empilerait trois
+  // mouvements de plus et le solde tripleraient à chaque passage.
+  await prisma.walletEntry.deleteMany({ where: { accountId: account.id } });
+
   let balance = 0;
   for (const movement of movements) {
     balance += movement.amountCents;
@@ -261,16 +330,22 @@ async function main(): Promise<void> {
   });
 
   await prisma.subscription.deleteMany({ where: { accountId: account.id } });
-  await prisma.subscription.create({
-    data: {
-      accountId: account.id,
-      provider: "stripe",
-      status: "active",
-      priceCents: 299,
-      interval: "week",
-      renewsAt: new Date(Date.now() + 7 * 86_400_000),
-    },
-  });
+
+  // Un abonnement **seulement** pour le compte abonné. Le compte gratuit n'en a
+  // pas du tout : c'est l'absence de ligne, et non un statut « résilié », qui
+  // fait que l'app lui repropose l'offre.
+  if (isSubscriber) {
+    await prisma.subscription.create({
+      data: {
+        accountId: account.id,
+        provider: "stripe",
+        status: "active",
+        priceCents: 299,
+        interval: "week",
+        renewsAt: new Date(Date.now() + 7 * 86_400_000),
+      },
+    });
+  }
 
   const render = await prisma.render.findFirstOrThrow({ where: { memoId: lisbonne.id } });
   await prisma.printOrder.create({
@@ -282,7 +357,7 @@ async function main(): Promise<void> {
       pageCount: 58,
       estimatedMinDays: 5,
       estimatedMaxDays: 10,
-      shippingName: `${DEMO.firstName} ${DEMO.lastName}`,
+      shippingName: `${seed.firstName} ${seed.lastName}`,
       shippingLine1: "7 rue Simon Fryd",
       shippingPostalCode: "69002",
       shippingCity: "Lyon",
@@ -292,31 +367,252 @@ async function main(): Promise<void> {
     },
   });
 
+  return { token, balance };
+}
+
+/**
+ * Les catégories de la galerie, et le pictogramme de chacune.
+ *
+ * `iconKey` est le **nom du fichier source** de `assets/icons/lucide-icons`,
+ * pas un nom d'asset iOS : l'app le résout, et retombe sur une boussole pour
+ * une clé qu'elle ne connaît pas encore. Ajouter une catégorie ici n'oblige
+ * donc pas à livrer une version.
+ */
+const GALLERY_CATEGORIES = [
+  { slug: "tour-du-monde", name: "Tour du monde", iconKey: "globe" },
+  { slug: "randonnee", name: "Randonnée", iconKey: "footprints" },
+  { slug: "road-trip", name: "Road trip", iconKey: "car-front" },
+  { slug: "city-trip", name: "City trip", iconKey: "building-2" },
+  { slug: "plage-et-iles", name: "Plage & îles", iconKey: "palmtree" },
+  { slug: "montagne", name: "Montagne", iconKey: "mountain-snow" },
+  { slug: "en-famille", name: "En famille", iconKey: "users" },
+  { slug: "velo", name: "Vélo", iconKey: "bike" },
+  { slug: "voile", name: "Voile & mer", iconKey: "sailboat" },
+];
+
+/**
+ * Les carnets de la galerie de la communauté.
+ *
+ * `summary` est ce que l'agent écrira un jour à partir du contenu du voyage —
+ * ici, à la main, pour que l'écran se regarde. `countries` porte le carnet en
+ * premier puis ses étapes : c'est le **nombre de pays** qui décide du
+ * pictogramme de la carte, un drapeau pour un seul, le globe au-delà.
+ */
+const GALLERY_TRIPS = [
+  {
+    title: "Bali entre amis",
+    summary: "2 semaines de trek",
+    countries: [["Indonésie", "ID"]],
+    categories: ["randonnee", "plage-et-iles"],
+    startDate: "2026-05-02",
+  },
+  {
+    title: "Philippines avec Claire & Gus",
+    summary: "2 mois de tour du monde",
+    countries: [
+      ["Philippines", "PH"],
+      ["Vietnam", "VN"],
+      ["Thaïlande", "TH"],
+    ],
+    categories: ["tour-du-monde", "plage-et-iles"],
+    startDate: "2026-03-14",
+  },
+  {
+    title: "TDM 2025",
+    summary: "Un couple autour du monde",
+    countries: [
+      ["Argentine", "AR"],
+      ["Chili", "CL"],
+      ["Pérou", "PE"],
+      ["Nouvelle-Zélande", "NZ"],
+    ],
+    categories: ["tour-du-monde"],
+    startDate: "2025-09-08",
+  },
+  {
+    title: "La traversée des Alpes",
+    summary: "12 jours de refuge en refuge",
+    countries: [
+      ["France", "FR"],
+      ["Suisse", "CH"],
+      ["Italie", "IT"],
+    ],
+    categories: ["randonnee", "montagne"],
+    startDate: "2025-07-19",
+  },
+  {
+    title: "Road trip en Islande",
+    summary: "1 400 km sur la ring road",
+    countries: [["Islande", "IS"]],
+    categories: ["road-trip"],
+    startDate: "2025-06-21",
+  },
+  {
+    title: "Lisbonne en famille",
+    summary: "5 jours à quatre, sans voiture",
+    countries: [["Portugal", "PT"]],
+    categories: ["city-trip", "en-famille"],
+    startDate: "2025-04-12",
+  },
+  {
+    title: "De Nantes à Saint-Malo à vélo",
+    summary: "8 jours sur la Vélodyssée",
+    countries: [["France", "FR"]],
+    categories: ["velo"],
+    startDate: "2024-08-03",
+  },
+  {
+    title: "Les Cyclades à la voile",
+    summary: "3 semaines d’île en île",
+    countries: [["Grèce", "GR"]],
+    categories: ["voile", "plage-et-iles"],
+    startDate: "2024-06-15",
+  },
+  {
+    // Volontairement **sans résumé** : l'agent n'a pas encore écrit le sien, et
+    // la carte doit alors n'afficher que son titre plutôt qu'un trou ou une
+    // phrase inventée. C'est le cas que le simulateur doit montrer.
+    title: "Kyoto au printemps",
+    summary: null,
+    countries: [["Japon", "JP"]],
+    categories: ["city-trip"],
+    startDate: "2024-03-28",
+  },
+];
+
+/**
+ * Pose la galerie de la communauté : ses catégories, et les carnets publics
+ * qu'elle range.
+ *
+ * Ils appartiennent à un **compte à part**, et non aux deux comptes de test :
+ * la galerie doit montrer les carnets *des autres*, et les rattacher à
+ * `demo@memo-book.com` les ferait apparaître sur son accueil comme neuf voyages
+ * de plus.
+ */
+async function seedGallery(): Promise<number> {
+  const community = await prisma.account.upsert({
+    where: { email: "communaute@memo-book.com" },
+    update: {},
+    create: {
+      email: "communaute@memo-book.com",
+      firstName: "La communauté",
+      lastName: "MemoBook",
+    },
+  });
+
+  const categories = new Map<string, string>();
+  for (const [position, category] of GALLERY_CATEGORIES.entries()) {
+    const created = await prisma.galleryCategory.upsert({
+      where: { slug: category.slug },
+      update: { ...category, position, isActive: true },
+      create: { ...category, position },
+    });
+    categories.set(category.slug, created.id);
+  }
+
+  // Refaits à neuf, comme les carnets des comptes de test : un seed rejoué ne
+  // doit pas empiler deux fois la même galerie.
+  await prisma.memo.deleteMany({ where: { ownerAccountId: community.id } });
+
+  for (const [index, trip] of GALLERY_TRIPS.entries()) {
+    const [first, ...rest] = trip.countries;
+
+    const memo = await prisma.memo.create({
+      data: {
+        ownerAccountId: community.id,
+        title: trip.title,
+        // Les carnets de la galerie ne se rejoignent pas, mais la colonne est
+        // obligatoire : un code de rang suffit, et reste unique.
+        accessCode: `GAL${String(index + 1).padStart(3, "0")}`,
+        theme: "voyage",
+        stage: "past",
+        isPublicGallery: true,
+        gallerySummary: trip.summary,
+        destinationName: first?.[0],
+        destinationCountryCode: first?.[1],
+        startDate: new Date(`${trip.startDate}T00:00:00Z`),
+        isPrintable: true,
+        categories: {
+          create: trip.categories.map((slug) => ({
+            // Les slugs viennent de la liste juste au-dessus : une clé absente
+            // est une faute de frappe, et vaut mieux qu'elle éclate ici.
+            categoryId: categories.get(slug) ?? "",
+          })),
+        },
+      },
+    });
+
+    // Les pays suivants deviennent des étapes : c'est de là que la carte tire
+    // son globe plutôt qu'un drapeau.
+    for (const [index, [name, code]] of rest.entries()) {
+      await prisma.memoStep.create({
+        data: {
+          memoId: memo.id,
+          number: index + 1,
+          destinationName: name,
+          destinationCountryCode: code,
+        },
+      });
+    }
+  }
+
+  return GALLERY_TRIPS.length;
+}
+
+async function main(): Promise<void> {
+  // Une amie invitée sur les voyages : c'est elle qui fait apparaître les
+  // pastilles de compagnons sur les couvertures. Un seul exemplaire, partagé
+  // par les comptes.
+  const clara = await prisma.account.upsert({
+    where: { email: "clara@memobook.app" },
+    update: {},
+    create: { email: "clara@memobook.app", firstName: "Clara", lastName: "Perrin" },
+  });
+
+  const seeded: { seed: TravellerSeed; token: string; balance: number }[] = [];
+
+  // En série et non en parallèle : les deux comptes écrivent dans les mêmes
+  // tables, et le pooler de session ne gagnerait rien à les entrelacer.
+  for (const traveller of TRAVELLERS) {
+    const result = await seedTraveller(traveller, clara);
+    seeded.push({ seed: traveller, ...result });
+  }
+
   // ---------------------------------------------------------------------
   // Ce qui se pilote depuis la base
   // ---------------------------------------------------------------------
+
+  const galleryTripCount = await seedGallery();
 
   await prisma.showcase.deleteMany({});
   await prisma.showcase.createMany({
     data: [
       {
+        // La carte bleue du bas de l'accueil. Elle n'annonce plus un carnet
+        // précis : elle ouvre la **galerie**, et sa phrase dit ce qu'on y
+        // trouve. C'est la seule active, donc la seule que l'accueil sert.
+        title: "Voir des exemples de carnet",
+        subtitle: "Découvre à quoi ressemble un carnet MemoBook terminé",
+        isActive: true,
+        position: 0,
+      },
+      {
         title: "Le tour de l'Islande de Marion",
         subtitle: "72 pages, 11 jours, 1 400 km",
-        isActive: true,
         showOnWelcomeScreen: true,
-        position: 0,
+        position: 1,
       },
       {
         title: "La première année de Jeanne",
         subtitle: "Un carnet de naissance, mois après mois",
         showOnWelcomeScreen: true,
-        position: 1,
+        position: 2,
       },
       {
         title: "Six mois en Amérique du Sud",
         subtitle: "Le carnet le plus épais qu'on ait imprimé",
         showOnWelcomeScreen: true,
-        position: 2,
+        position: 3,
       },
     ],
   });
@@ -360,19 +656,24 @@ async function main(): Promise<void> {
       "",
       "\x1b[1mJeu de données créé.\x1b[0m",
       "",
-      "  Connecte l'app avec ce compte :",
-      `    adresse      ${DEMO.email}`,
-      `    mot de passe ${DEMO.password}`,
+      `  Mot de passe des deux comptes : ${TEST_PASSWORD}`,
       "",
-      "  Trois voyages : un en cours (3 étapes, 4 souvenirs), un terminé et",
-      "  imprimable, un à venir. Une commande en production, une cagnotte à",
-      `  ${(balance / 100).toFixed(2)} €, et la modale d'avis de la maquette.`,
+      ...seeded.flatMap(({ seed, token, balance }) => [
+        `  \x1b[1m${seed.email}\x1b[0m — ${seed.purpose}`,
+        `      cagnotte ${(balance / 100).toFixed(2)} €, token d'appareil ${token}`,
+      ]),
       "",
-      `  Token d'appareil : ${token}`,
+      "  Chacun a trois voyages : un en cours (3 étapes, 4 souvenirs), un",
+      "  terminé et imprimable, un à venir. Plus une commande en production et",
+      "  la modale d'avis de la maquette.",
+      "",
+      `  Galerie de la communauté : ${GALLERY_CATEGORIES.length} catégories et`,
+      `  ${galleryTripCount} carnets publics, sur un compte à part`,
+      "  (communaute@memo-book.com) pour qu'ils n'encombrent pas l'accueil.",
       "",
       "  Essai rapide :",
       "    TOKEN=$(curl -s localhost:3000/v1/auth/signin -H 'content-type: application/json' \\",
-      `      -d '{"email":"${DEMO.email}","password":"${DEMO.password}"}' | jq -r .token)`,
+      `      -d '{"email":"${TEST_ACCOUNT_EMAIL}","password":"${TEST_PASSWORD}"}' | jq -r .token)`,
       '    curl -H "Authorization: Bearer $TOKEN" localhost:3000/v1/home | jq',
       '    curl -H "Authorization: Bearer $TOKEN" localhost:3000/v1/profile | jq',
       "",

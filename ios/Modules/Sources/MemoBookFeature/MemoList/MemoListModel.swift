@@ -3,6 +3,12 @@ import MemoBookCore
 import MemoBookNetworking
 import Observation
 
+/// La liste des carnets du compte connecté.
+///
+/// Elle n'enregistre plus l'appareil avant d'appeler : les carnets appartiennent
+/// à un **compte**, et c'est la session qui les ouvre. Attendre un
+/// enregistrement d'appareil ici, c'était refuser d'afficher une liste que le
+/// serveur aurait très bien servie.
 @MainActor
 @Observable
 public final class MemoListModel {
@@ -22,9 +28,6 @@ public final class MemoListModel {
         defer { isLoading = false }
 
         do {
-            // Premier écran qui a vraiment besoin du réseau : c'est ici que
-            // l'appareil s'enregistre, pas au lancement de l'app.
-            try await dependencies.ensureRegistered()
             memos = try await api.memos()
             errorMessage = nil
         } catch {
@@ -41,7 +44,6 @@ public final class MemoListModel {
         }
 
         do {
-            try await dependencies.ensureRegistered()
             let memo = try await api.createMemo(
                 NewMemo(title: cleanedTitle, theme: theme.flatMap(\.nilIfBlank))
             )
@@ -56,7 +58,6 @@ public final class MemoListModel {
 
     public func delete(_ memo: MemoSummary) async {
         do {
-            try await dependencies.ensureRegistered()
             try await api.deleteMemo(id: memo.id)
             memos.removeAll { $0.id == memo.id }
         } catch {

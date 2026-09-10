@@ -10,11 +10,15 @@ public actor MemoBookAPIClient: MemoBookAPI {
     private let decoder = JSONDecoder.memoBook
     private let encoder = JSONEncoder.memoBook
 
-    /// Qui parle. Les deux identifications cohabitent : les carnets appartiennent
-    /// encore à l'appareil, le compte n'a pour l'instant que ses propres routes.
+    /// Qui parle.
+    ///
+    /// **La session de compte, pour tout ce qui appartient à quelqu'un.** Le
+    /// jeton d'appareil n'ouvre plus rien : depuis qu'un carnet a toujours un
+    /// propriétaire, et que ce propriétaire est un compte, il ne sert qu'à
+    /// s'enregistrer et à se rattacher — et il voyage alors dans le corps de la
+    /// requête, pas dans son en-tête.
     private enum Credential {
         case none
-        case device
         case session
     }
 
@@ -143,6 +147,23 @@ public actor MemoBookAPIClient: MemoBookAPI {
         try await send(method: "GET", path: "/v1/trips/\(id)", credential: .session)
     }
 
+    public func createTrip(_ draft: TripDraft) async throws -> CreatedTrip {
+        try await send(method: "POST", path: "/v1/trips", encodableBody: draft, credential: .session)
+    }
+
+    public func updateTrip(id: String, draft: TripDraft) async throws -> CreatedTrip {
+        try await send(
+            method: "PATCH",
+            path: "/v1/trips/\(id)",
+            encodableBody: draft,
+            credential: .session
+        )
+    }
+
+    public func gallery() async throws -> Gallery {
+        try await send(method: "GET", path: "/v1/gallery", credential: .session)
+    }
+
     public func welcomeShowcases() async throws -> [Showcase] {
         struct Response: Decodable { let showcases: [Showcase] }
         let response: Response = try await send(
@@ -177,24 +198,38 @@ public actor MemoBookAPIClient: MemoBookAPI {
         )
     }
 
-    @discardableResult
-    public func linkCurrentDevice() async throws -> Int {
+    public func linkCurrentDevice() async throws {
         // Les deux jetons dans la même requête, et c'est voulu : celui du
         // compte dans l'en-tête prouve qui reçoit, celui de l'appareil dans le
-        // corps prouve ce qui est donné.
+        // corps prouve ce qui est rattaché.
         try await ensureDeviceRegistered()
         guard let deviceToken = tokenStore.read() else { throw APIError.notAuthenticated }
 
         struct Body: Encodable { let deviceToken: String }
-        struct Response: Decodable { let claimedMemos: Int }
+        struct Response: Decodable { let deviceId: String }
 
-        let response: Response = try await send(
+        let _: Response = try await send(
             method: "POST",
             path: "/v1/profile/link-device",
             encodableBody: Body(deviceToken: deviceToken),
             credential: .session
         )
-        return response.claimedMemos
+    }
+
+    public func deleteAccount() async throws {
+        try await sendIgnoringResponse(
+            method: "DELETE",
+            path: "/v1/accounts/me",
+            credential: .session
+        )
+
+        // Les deux jetons partent, et pas seulement celui de la session : le
+        // compte n'existe plus, et son appareil a disparu avec lui côté
+        // serveur. Garder un jeton d'appareil périmé, ce serait rendre l'app
+        // muette au prochain lancement, avec des 401 qu'elle ne saurait pas
+        // expliquer.
+        sessionStore.clear()
+        tokenStore.clear()
     }
 
     // MARK: - Carnets
@@ -283,7 +318,7 @@ public actor MemoBookAPIClient: MemoBookAPI {
         request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         request.httpBody = form.finalized()
 
-        return try await perform(request, credential: .device)
+        return try await perform(request, credential: .session)
     }
 
     public func entry(id: String) async throws -> Entry {
@@ -331,7 +366,6 @@ public actor MemoBookAPIClient: MemoBookAPI {
     private func store(for credential: Credential) -> (any TokenStore)? {
         switch credential {
         case .none: nil
-        case .device: tokenStore
         case .session: sessionStore
         }
     }
@@ -339,7 +373,7 @@ public actor MemoBookAPIClient: MemoBookAPI {
     private func makeRequest(
         method: String,
         path: String,
-        credential: Credential = .device
+        credential: Credential = .session
     ) throws -> URLRequest {
         guard let url = URL(string: path, relativeTo: configuration.baseURL) else {
             throw APIError.server(statusCode: 0, code: nil, message: "Chemin d'API invalide : \(path)")
@@ -361,7 +395,7 @@ public actor MemoBookAPIClient: MemoBookAPI {
         method: String,
         path: String,
         body: [String: String]? = nil,
-        credential: Credential = .device
+        credential: Credential = .session
     ) async throws -> Response {
         var request = try makeRequest(method: method, path: path, credential: credential)
 
@@ -377,7 +411,7 @@ public actor MemoBookAPIClient: MemoBookAPI {
         method: String,
         path: String,
         encodableBody: Body,
-        credential: Credential = .device
+        credential: Credential = .session
     ) async throws -> Response {
         var request = try makeRequest(method: method, path: path, credential: credential)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -388,7 +422,7 @@ public actor MemoBookAPIClient: MemoBookAPI {
     private func sendIgnoringResponse(
         method: String,
         path: String,
-        credential: Credential = .device
+        credential: Credential = .session
     ) async throws {
         let request = try makeRequest(method: method, path: path, credential: credential)
         _ = try await performRaw(request, credential: credential)
@@ -414,23 +448,32 @@ public actor MemoBookAPIClient: MemoBookAPI {
         let data: Data
         let response: URLResponse
 
+        #if DEBUG
+            let started = NetworkLog.start(request)
+        #endif
+
         do {
             (data, response) = try await session.data(for: request)
         } catch {
-            throw APIError.transport(error)
+            #if DEBUG
+                NetworkLog.fail(request, error: error, since: started)
+            #endif
+            throw APIError.transport(error, url: request.url)
         }
 
         guard let http = response as? HTTPURLResponse else {
             throw APIError.server(statusCode: 0, code: nil, message: "Réponse non HTTP.")
         }
 
+        #if DEBUG
+            NetworkLog.finish(request, statusCode: http.statusCode, since: started)
+        #endif
+
         guard (200..<300).contains(http.statusCode) else {
             let body = try? JSONDecoder().decode(APIErrorBody.self, from: data)
 
             // Un jeton refusé ne vaudra pas mieux au prochain essai : on efface
-            // **celui qui a été présenté**, et lui seul. Effacer le jeton
-            // d'appareil parce qu'une session a expiré ferait perdre les
-            // carnets, qui lui appartiennent encore.
+            // celui qui a été présenté.
             if http.statusCode == 401 {
                 store(for: credential)?.clear()
             }

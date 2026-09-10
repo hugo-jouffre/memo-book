@@ -14,9 +14,9 @@ public enum FreemiumStatus: Equatable {
     case subscriber
     /// Il reste des étapes offertes. Le parcours est celui de tout le monde.
     ///
-    /// Les deux nombres, et non le seul solde : c'est leur **écart** qui change
-    /// le message. Rien de consommé, on annonce un cadeau ; une fois entamé, un
-    /// solde. C'est le même chiffre, mais pas la même nouvelle.
+    /// Les deux nombres, et non le seul solde : la pastille n'écrit que le
+    /// solde (voir ``homePillLabel``), mais le total est ce qui permettra d'en
+    /// faire une proportion — « 2 sur 3 » — sans repasser par le serveur.
     case freeSteps(remaining: Int, offered: Int)
     /// Les étapes offertes sont épuisées — ou l'abonnement vient d'être
     /// résilié. C'est le seul état qui appelle une offre.
@@ -27,7 +27,7 @@ public enum FreemiumStatus: Equatable {
         switch self {
         // La maquette de la feuille écrit « Abonnée ». Ici l'app ne sait pas à
         // qui elle s'adresse : elle s'en tient à la forme non marquée plutôt
-        // que de deviner. Signalé (T49).
+        // que de deviner. Signalé (T76).
         case .subscriber: "Abonné"
         case .freeSteps(let remaining, _): "\(remaining) étapes gratuites restantes"
         case .limitReached: "Abonne-toi"
@@ -40,18 +40,29 @@ public enum FreemiumStatus: Equatable {
     /// quelqu'un qui n'a plus rien à décompter n'a pas besoin qu'on le lui
     /// rappelle à chaque ouverture. Son statut se lit dans le profil, là où il a
     /// une raison d'être.
+    ///
+    /// **Un seul message, un décompte** : « 3 étapes restantes », qui descend à
+    /// chaque étape racontée, puis « Abonne-toi » quand il n'en reste plus. La
+    /// pastille annonçait un cadeau (« 3 étapes offertes ») tant que rien
+    /// n'était consommé ; deux formulations pour un même chiffre faisaient
+    /// hésiter sur ce qu'il fallait lire. Arbitrage de Hugo, 07/09/2026.
+    ///
+    /// Le nombre offert reste dans le cas, même si la pastille ne l'écrit plus :
+    /// c'est lui qui dira « 2 sur 3 » le jour où une jauge le montrera.
     public var homePillLabel: String? {
         switch self {
         case .subscriber: nil
         // Plus court qu'au profil : la pastille est posée sur l'avatar, entre
         // la salutation et le bord de l'écran, et n'a pas la ligne pour elle.
-        case .freeSteps(let remaining, let offered):
-            remaining == offered
-                ? "\(offered) étapes offertes"
-                : "\(remaining) étapes restantes"
+        case .freeSteps(let remaining, _): "\(remaining) étapes restantes"
         case .limitReached: profilePillLabel
         }
     }
+
+    /// Le lime et le cadenas, sur le CTA de l'accueil comme sur le gros bouton
+    /// du profil. **Uniquement quand le quota est épuisé** : la couleur dit
+    /// « c'est fini, il faut s'abonner », pas « il te reste des étapes ».
+    public var isBlocked: Bool { self == .limitReached }
 
     /// Il y a encore quelque chose à vendre : le profil pose alors son gros
     /// bouton lime, et garde pour lui la ligne « Mon abonnement ».
@@ -86,10 +97,10 @@ extension TravellerProfile {
     /// quota. Un ancien abonné qui a résilié n'a ni abonnement ni étapes
     /// offertes — il faut lui reproposer l'offre, pas lui inventer un crédit.
     ///
-    /// ⚠️ Il ne sait pas distinguer ``FreemiumStatus/freeSteps(remaining:)`` de
+    /// ⚠️ Il ne sait pas distinguer ``FreemiumStatus/freeSteps(remaining:offered:)`` de
     /// ``FreemiumStatus/limitReached`` : `GET /v1/profile` ne rend pas le quota
     /// d'étapes, que seul l'accueil reçoit. Un compte neuf voit donc la même
-    /// invitation qu'un compte épuisé — signalé (T50).
+    /// invitation qu'un compte épuisé — signalé (T77).
     public func freemiumStatus(override: FreemiumStatus?) -> FreemiumStatus {
         override ?? (subscription.isActive ? .subscriber : .limitReached)
     }

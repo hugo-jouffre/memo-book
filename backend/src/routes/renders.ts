@@ -3,8 +3,9 @@ import { z } from "zod";
 import type { AppContext } from "../context.js";
 import { JOB_NAMES, type StructureJob } from "../jobs/index.js";
 import { HttpError } from "../lib/httpError.js";
-import { deviceIdOf } from "../plugins/auth.js";
-import { loadOwnedMemo } from "./memos.js";
+import { accountIdOf } from "../plugins/auth.js";
+import { visibleToAccount } from "../services/memoOwnership.js";
+import { loadVisibleMemo } from "./memos.js";
 import { serializeRender } from "./serializers.js";
 
 const memoIdParams = z.object({ id: z.string().uuid() });
@@ -14,7 +15,7 @@ export function registerRenderRoutes(app: FastifyInstance, context: AppContext):
   /** Déclenche la génération du carnet : structuration puis rendu PDF. */
   app.post("/v1/memos/:id/renders", async (request, reply) => {
     const { id: memoId } = memoIdParams.parse(request.params);
-    await loadOwnedMemo(context, request, memoId);
+    await loadVisibleMemo(context, request, memoId);
 
     const entryCount = await context.prisma.entry.count({ where: { memoId } });
     if (entryCount === 0) {
@@ -52,7 +53,7 @@ export function registerRenderRoutes(app: FastifyInstance, context: AppContext):
     const { id } = renderIdParams.parse(request.params);
 
     const render = await context.prisma.render.findFirst({
-      where: { id, memo: { deviceId: deviceIdOf(request) } },
+      where: { id, memo: visibleToAccount(accountIdOf(request)) },
     });
 
     if (!render) throw HttpError.notFound("Génération introuvable.");

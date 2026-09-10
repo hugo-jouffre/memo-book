@@ -17,9 +17,10 @@
     struct HomeDebugPanel: View {
         let model: HomeModel
 
-        /// Le palier se joue sur **les deux écrans** : le modèle de l'accueil
-        /// porte le quota, la session le fait suivre au profil, qui n'est
-        /// construit qu'au moment où on l'ouvre.
+        /// Ce que la feuille d'abonnement a imposé à la session. Le panneau ne
+        /// s'en sert que pour l'**effacer** : c'est ``SandboxPersona`` qui fait
+        /// jouer un palier aux deux écrans, et une résiliation restée dans la
+        /// session prendrait le pas sur lui.
         @Environment(\.subscriptionSession) private var session
 
         var body: some View {
@@ -37,16 +38,23 @@
                     action("+ voyage à venir") { model.debugAddTrip(stage: .upcoming) }
                     action("+ voyage passé") { model.debugAddTrip(stage: .past) }
 
-                    action("Devenir un abonné") { play(model.debugBecomeSubscriber, .subscriber) }
-                    action("Première connexion") {
-                        play(model.debugFirstConnection, .freeSteps(remaining: 3, offered: 3))
-                    }
-                    action("Limite atteinte") { play(model.debugReachFreeLimit, .limitReached) }
-                    action(model.isOffline ? "Repasser en ligne" : "Passer hors ligne") {
-                        Task { await model.debugToggleOffline() }
-                    }
-                    action("Étapes offertes", model.debugToggleFreeSteps)
+                    action("Devenir un abonné") { play(model.debugBecomeSubscriber) }
+                    action("Première connexion") { play(model.debugFirstConnection) }
+                    action("Quota entamé") { play(model.debugStartedQuota) }
+                    action("Limite atteinte") { play(model.debugReachFreeLimit) }
                     action("Erreur", model.debugShowError)
+
+                    // Le hors-ligne coupe **vraiment** le réseau de l'app, et le
+                    // vocal mis en file part **vraiment** sur le disque : c'est
+                    // le seul moyen de vérifier que la promesse écrite dans la
+                    // boîte est tenue. Les deux derniers, eux, ne font que poser
+                    // un état passager qu'on n'aurait sinon le temps de voir
+                    // qu'avec un très mauvais réseau.
+                    action(model.isOffline ? "Repasser en ligne" : "Passer hors ligne", model.debugToggleOffline)
+                    action("+ vocal en attente") { Task { await model.debugQueueRecording() } }
+                    action("Envoi en cours", model.debugShowSending)
+                    action("Vocal envoyé", model.debugShowDelivered)
+
                     action("Jeu d’essai") {
                         session?.play(nil)
                         model.debugReset()
@@ -58,11 +66,14 @@
             .brandDashedCard(color: MemoBookColor.separator)
         }
 
-        /// Applique un palier des deux côtés d'un coup : le quota sur
-        /// l'accueil, le palier sur la session pour le profil.
-        private func play(_ onHome: () -> Void, _ status: FreemiumStatus) {
-            onHome()
-            session?.play(status)
+        /// Fait jouer un personnage — et **efface d'abord ce que la session
+        /// impose**. Sans ça, une résiliation faite dans la feuille
+        /// d'abonnement primait sur le personnage (voir
+        /// ``Traveller/freemiumStatus(override:)``), et les boutons du bac à
+        /// sable n'avaient plus l'air de marcher.
+        private func play(_ persona: () -> Void) {
+            session?.play(nil)
+            persona()
         }
 
         private func action(_ title: String, _ perform: @escaping () -> Void) -> some View {

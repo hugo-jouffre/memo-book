@@ -1,6 +1,7 @@
 import type {
   Account,
   AccountConnector,
+  GalleryCategory,
   Memo,
   MemoMember,
   MemoStep,
@@ -49,7 +50,7 @@ type MemoForTrip = Memo & {
   members?: (MemoMember & { account?: Account | null })[];
 };
 
-/** Une pastille de compagnon. Le nom affiché prime sur celui du compte : quelqu'un peut vouloir apparaître autrement sur un voyage donné. */
+/** Une pastille de co-voyageur. Le nom affiché prime sur celui du compte : quelqu'un peut vouloir apparaître autrement sur un voyage donné. */
 function serializeCompanion(member: MemoMember & { account?: Account | null }) {
   const account = member.account;
   const fromAccount = [account?.firstName, account?.lastName]
@@ -58,16 +59,17 @@ function serializeCompanion(member: MemoMember & { account?: Account | null }) {
 
   return {
     id: member.id,
-    name: member.displayName?.trim() || fromAccount || member.invitedEmail || "Invité",
+    name: member.displayName?.trim() || fromAccount || member.invitedEmail || "Co-voyageur",
     avatarUrl: account?.avatarUrl ?? null,
   };
 }
 
 export function serializeTrip(memo: MemoForTrip) {
-  // Les compagnons sont les *autres* : le propriétaire est déjà le titulaire de
-  // l'écran, sa pastille sur sa propre couverture n'apprend rien.
+  // Les co-voyageurs sont les *autres* : le propriétaire est déjà le titulaire
+  // de l'écran, sa pastille sur sa propre couverture n'apprend rien. Il n'a
+  // d'ailleurs pas de ligne dans `memo_members`, qui ne porte que les autres.
   const companions = (memo.members ?? [])
-    .filter((member) => member.role !== "owner" && member.status !== "removed")
+    .filter((member) => member.status !== "removed")
     .map(serializeCompanion);
 
   return {
@@ -101,6 +103,79 @@ export function serializeTrip(memo: MemoForTrip) {
             targetPageCount: memo.targetPageCount,
           },
     isPrintable: memo.isPrintable,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// La galerie de la communauté
+// ---------------------------------------------------------------------------
+
+type MemoForGallery = Memo & {
+  steps?: Pick<MemoStep, "destinationName" | "destinationCountryCode">[];
+  categories?: { categoryId: string }[];
+};
+
+/**
+ * Les pays d'un voyage, sans doublon, celui du carnet d'abord puis ceux de ses
+ * étapes dans l'ordre.
+ *
+ * **Rien n'est stocké** : c'est `memos.destination*` et `memo_steps.destination*`
+ * relus ensemble, donc une vérité de moins à tenir d'accord. C'est cette liste
+ * qui décide du pictogramme de la carte — un seul pays donne son drapeau,
+ * plusieurs donnent le globe.
+ */
+function galleryDestinations(memo: MemoForGallery) {
+  const all = [
+    { name: memo.destinationName, countryCode: memo.destinationCountryCode },
+    ...(memo.steps ?? []).map((step) => ({
+      name: step.destinationName,
+      countryCode: step.destinationCountryCode,
+    })),
+  ];
+
+  const seen = new Set<string>();
+  const destinations: { name: string; countryCode: string | null }[] = [];
+
+  for (const place of all) {
+    if (!place.name) continue;
+    // Le code pays fait foi quand il existe : « Italie » et « Italy » sont le
+    // même pays, `IT` et `IT` aussi.
+    const key = place.countryCode?.toUpperCase() ?? place.name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    destinations.push({ name: place.name, countryCode: place.countryCode });
+  }
+
+  return destinations;
+}
+
+/**
+ * Une carte de l'écran « Exemples de carnets ».
+ *
+ * Volontairement **plus maigre** que `serializeTrip` : la galerie ne montre ni
+ * compteurs, ni progression, ni co-voyageurs, et ses cartes ne s'ouvrent pas
+ * encore. Servir un `Trip` complet exposerait le contenu de carnets qui ne sont
+ * pas à celui qui regarde, pour des champs que l'écran n'affiche pas.
+ */
+export function serializeGalleryTrip(memo: MemoForGallery) {
+  return {
+    id: memo.id,
+    title: memo.title,
+    // La phrase déduite du voyage. `null` tant qu'aucun agent ne l'a écrite :
+    // la carte n'affiche alors que son titre.
+    subtitle: memo.gallerySummary,
+    destinations: galleryDestinations(memo),
+    coverPhotoUrl: memo.coverPhotoUrl,
+    categoryIds: (memo.categories ?? []).map((link) => link.categoryId),
+  };
+}
+
+export function serializeGalleryCategory(category: GalleryCategory) {
+  return {
+    id: category.id,
+    slug: category.slug,
+    name: category.name,
+    iconKey: category.iconKey,
   };
 }
 
@@ -168,6 +243,41 @@ type AccountForProfile = Account & {
 
 type OrderForTracking = PrintOrder & { memo?: { coverPhotoUrl: string | null } | null };
 
+/**
+ * Les voyages du compte, réduits à ce que la carte de chiffres du profil
+ * regarde. Le profil n'a pas besoin des couvertures ni des compagnons.
+ */
+export type TripForProfileStats = {
+  id: string;
+  stage: string;
+  startDate: Date | null;
+  endDate: Date | null;
+};
+
+/**
+ * Combien de voyages, et lequel est en cours.
+ *
+ * **Rien de tout ça n'est stocké** : les deux se déduisent des carnets visibles
+ * par le compte, à chaque lecture du profil. Une colonne `tripCount` serait une
+ * seconde vérité à tenir d'accord avec `memos` à chaque création, suppression
+ * ou invitation — pour un chiffre que seul cet écran affiche.
+ *
+ * Le voyage « en cours » est le plus récemment commencé de ceux qui le sont :
+ * la même règle que l'accueil, qui met ce voyage-là en tête.
+ */
+function serializeProfileStats(trips: TripForProfileStats[]) {
+  const ongoing = trips
+    .filter((trip) => trip.stage === "ongoing")
+    .sort((a, b) => (b.startDate?.getTime() ?? 0) - (a.startDate?.getTime() ?? 0))[0];
+
+  return {
+    tripCount: trips.length,
+    currentTrip: ongoing
+      ? { id: ongoing.id, startDate: iso(ongoing.startDate), endDate: iso(ongoing.endDate) }
+      : null,
+  };
+}
+
 /** Fourchette de livraison par défaut, quand l'imprimeur n'a rien annoncé. */
 const DEFAULT_DELIVERY_DAYS = { min: 5, max: 10 } as const;
 
@@ -208,7 +318,11 @@ function serializeConnectors(linked: AccountConnector[]) {
   }));
 }
 
-export function serializeProfile(account: AccountForProfile, orders: OrderForTracking[]) {
+export function serializeProfile(
+  account: AccountForProfile,
+  orders: OrderForTracking[],
+  trips: TripForProfileStats[] = [],
+) {
   const fullName =
     [account.firstName, account.lastName]
       .filter((part): part is string => Boolean(part?.trim()))
@@ -243,5 +357,11 @@ export function serializeProfile(account: AccountForProfile, orders: OrderForTra
       isActive: subscription?.status === "active" || subscription?.status === "trialing",
     },
     orders: orders.map(serializeOrderTracking),
+    // Le quota d'étapes offertes est **le même couple que sur l'accueil**, et
+    // pour la même raison : c'est lui qui porte la pastille des deux écrans.
+    // Nul pour un abonné, qui n'a rien à décompter.
+    offeredSteps: account.offeredSteps,
+    remainingSteps: account.remainingSteps,
+    ...serializeProfileStats(trips),
   };
 }

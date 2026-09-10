@@ -155,6 +155,18 @@ public actor PreviewAPI: MemoBookAPI {
 
     public func tripDetail(id: String) async throws -> TripDetail { .fixture(id: id) }
 
+    public func gallery() async throws -> Gallery { .fixture }
+
+    /// La création rend un voyage qui ressemble au brouillon, et le code
+    /// d'accès de la maquette : de quoi traverser les six étapes sans serveur.
+    public func createTrip(_ draft: TripDraft) async throws -> CreatedTrip {
+        .fixture(draft)
+    }
+
+    public func updateTrip(id: String, draft: TripDraft) async throws -> CreatedTrip {
+        .fixture(draft, id: id)
+    }
+
     public func welcomeShowcases() async throws -> [Showcase] {
         HomeFeed.fixture.showcase.map { [$0] } ?? []
     }
@@ -184,8 +196,8 @@ public actor PreviewAPI: MemoBookAPI {
         editedProfile = profile
     }
 
-    @discardableResult
-    public func linkCurrentDevice() async throws -> Int { 0 }
+    public func linkCurrentDevice() async throws {}
+    public func deleteAccount() async throws {}
 
     // MARK: - Carnets
 

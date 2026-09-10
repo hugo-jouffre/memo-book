@@ -37,14 +37,6 @@ enum AuthProvider {
   google
 }
 
-/// Le lien d'une personne à un voyage. Le propriétaire est celui qui l'a créé
-/// et qui le facture ; un invité y raconte, sans pouvoir le supprimer ni le
-/// commander.
-enum MemoRole {
-  owner
-  guest
-}
-
 /// Où en est une invitation. `invited` couvre le cas d'une adresse conviée
 /// avant que la personne n'ait de compte : `accountId` est alors nul.
 enum MemoMemberStatus {
@@ -200,6 +192,7 @@ model Account {
   devices    Device[]
 
   ownedMemos        Memo[]             @relation("MemoOwner")
+  printOrders       PrintOrder[]       @relation("PrintOrderBuyer")
   memberships       MemoMember[]
   walletEntries     WalletEntry[]
   cards             PaymentCard[]
@@ -261,13 +254,14 @@ model Device {
   lastSeenAt DateTime @default(now())
 
   /// Le compte auquel cet appareil s'est rattaché, une fois son porteur
-  /// identifié. Nul tant qu'il n'y a pas eu de connexion — c'est ce qui permet
-  /// de faire cohabiter les deux systèmes le temps que la propriété des
-  /// carnets passe de l'appareil au compte.
+  /// identifié. Nul tant qu'il n'y a pas eu de connexion.
+  ///
+  /// Un appareil ne **possède** plus rien : c'est une trace d'installation, pas
+  /// un propriétaire. Il disparaît avec le compte auquel il est rattaché — un
+  /// compte supprimé ne laisse pas derrière lui un jeton qui ouvrirait encore
+  /// quelque chose.
   accountId String?
-  account   Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
-
-  memos Memo[]
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@index([accountId])
   @@map("devices")
@@ -276,19 +270,20 @@ model Device {
 /// Un projet de carnet : « Notre tour du monde », « La première année de Jeanne ».
 /// C'est ce que l'app appelle un **voyage**.
 model Memo {
-  id       String @id @default(uuid())
-  deviceId String
-  device   Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  id String @id @default(uuid())
 
-  /// Le compte propriétaire. Nul le temps que les carnets existants soient
-  /// rattachés : `deviceId` reste la propriété de repli, et les deux cohabitent
-  /// jusqu'à ce que plus aucun carnet n'ait de propriétaire nul.
+  /// **Le** propriétaire, et la seule vérité sur la propriété.
   ///
-  /// Dénormalisé volontairement : le propriétaire a **aussi** sa ligne dans
-  /// `memo_members`, mais toutes les routes vérifient la propriété à chaque
-  /// requête, et une jointure de plus sur ce chemin ne se justifie pas.
-  ownerAccountId String?
-  owner          Account? @relation("MemoOwner", fields: [ownerAccountId], references: [id], onDelete: SetNull)
+  /// Obligatoire : un carnet sans propriétaire principal n'existe pas. C'est ce
+  /// qui a fait disparaître les deux autres façons de dire à qui était un
+  /// carnet — un `deviceId` hérité de l'époque sans comptes, et une ligne
+  /// `memo_members` de rôle `owner`. Trois vérités pour un même fait, dont deux
+  /// pouvaient diverger en silence.
+  ///
+  /// En cascade : supprimer un compte supprime ses carnets, et tout ce qui y
+  /// pend (souvenirs, médias, étapes, dépenses, rendus, invitations).
+  ownerAccountId String
+  owner          Account @relation("MemoOwner", fields: [ownerAccountId], references: [id], onDelete: Cascade)
 
   title         String
   subtitle      String?
@@ -342,6 +337,19 @@ model Memo {
   /// Le carnet est généré et peut partir à l'impression.
   isPrintable Boolean @default(false)
 
+  /// Le code d'accès du voyage : celui qu'on lit à voix haute, qu'on colle dans
+  /// un message, et qui fait entrer quelqu'un dans le carnet — la dernière
+  /// étape de la création ne montre que lui.
+  ///
+  /// Six caractères d'un alphabet **sans ambiguïté** : ni O ni 0, ni I ni 1.
+  /// Un code se recopie à la main, et « JHKFDA » ne doit avoir qu'une seule
+  /// lecture possible.
+  ///
+  /// Unique et obligatoire : c'est lui, et non l'identifiant, qui désigne le
+  /// voyage qu'on rejoint. Un voyage sans code serait un voyage qu'on ne peut
+  /// pas partager, or tous peuvent l'être.
+  accessCode String @unique
+
   /// La relance de MemoBook — « Comment ça se passe à Trastevere ? ». Écrite à
   /// partir de ce qui a déjà été raconté, donc en base et pas dans l'app.
   prompt String?
@@ -351,7 +359,21 @@ model Memo {
 
   /// Partager sur la galerie. Un carnet public passe une modération plus
   /// stricte avant d'y entrer.
+  ///
+  /// C'est **le seul** critère d'entrée dans l'écran « Exemples de carnets » :
+  /// `GET /v1/gallery` ne sert que des carnets qui portent ce drapeau.
   isPublicGallery Boolean @default(false)
+
+  /// La phrase sous le titre, sur la carte de la galerie : « 2 semaines de
+  /// trek », « Un couple autour du monde ».
+  ///
+  /// Elle **ne se saisit pas** : elle sera déduite du contenu du voyage par un
+  /// agent, comme `prompt` et `coherenceSheet` le sont déjà. La colonne existe
+  /// avant l'agent parce que la carte, elle, la montre dès aujourd'hui —
+  /// l'écran s'en passe (`null` : seul le titre s'affiche), il ne l'invente
+  /// pas. Distincte de `subtitle`, qui est le sous-titre **imprimé en
+  /// couverture** du carnet : deux textes, deux lecteurs, deux longueurs.
+  gallerySummary String?
 
   // --- Personnalisations — `docs/reglages-utilisateur.md` -------------------
   //
@@ -413,29 +435,107 @@ model Memo {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  entries  Entry[]
-  renders  Render[]
-  orders   PrintOrder[]
-  members  MemoMember[]
-  steps    MemoStep[]
-  expenses Expense[]
+  entries    Entry[]
+  renders    Render[]
+  orders     PrintOrder[]
+  members    MemoMember[]
+  steps      MemoStep[]
+  expenses   Expense[]
+  categories MemoGalleryCategory[]
 
-  @@index([deviceId, createdAt])
   @@index([ownerAccountId, createdAt])
+  /// La galerie lit **tous** les carnets publics, quel qu'en soit le
+  /// propriétaire : c'est la seule requête de l'app qui ne part pas d'un
+  /// compte, et sans cet index elle balaierait la table entière.
+  @@index([isPublicGallery, startDate])
   @@map("memos")
 }
 
-/// Qui participe à un voyage. Un compte peut être propriétaire du sien et
-/// invité dans plusieurs autres.
+/// Une catégorie de la galerie de la communauté : « Tour du monde »,
+/// « Randonnée », « Road trip ».
 ///
-/// Il n'y a pas de table de compagnons à part : un participant **est** un
+/// **Une table et non une énumération.** Ajouter une catégorie, la renommer,
+/// changer son pictogramme ou la retirer de la barre de filtres est une
+/// écriture en base, pas une livraison d'app : c'est exactement le parti pris
+/// de `Showcase` et de `FeedbackCampaign`, et pour la même raison — le contenu
+/// éditorial bouge plus vite que le binaire.
+model GalleryCategory {
+  id String @id @default(uuid())
+
+  /// L'identifiant stable, celui qu'on écrit dans un script ou une requête.
+  /// `name` peut changer, `slug` non.
+  slug String @unique
+
+  /// Le libellé de la pastille de filtre, tel qu'il s'affiche.
+  name String
+
+  /// La clé du pictogramme, résolue par l'app — voir
+  /// `MemoBookDesign/LucideIcon.swift` et
+  /// `assets/icons/lucide-icons/README.md`. Ce n'est **pas** un nom d'asset
+  /// iOS : c'est le nom du fichier source, pour qu'une clé inconnue de l'app
+  /// retombe sur une boussole au lieu de casser la barre de filtres.
+  iconKey String
+
+  /// Ordre dans la barre de filtres, du plus petit au plus grand.
+  position Int @default(0)
+
+  /// Retirée de la barre sans être supprimée : les carnets qu'elle range
+  /// gardent leur rattachement, et la rallumer les remet d'un coup.
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memos MemoGalleryCategory[]
+
+  @@index([isActive, position])
+  @@map("gallery_categories")
+}
+
+/// Le rattachement d'un carnet à une catégorie de la galerie.
+///
+/// **Plusieurs par carnet**, et c'est voulu : un tour du monde à pied est aussi
+/// une randonnée, et devoir choisir le rangerait mal dans l'un des deux
+/// filtres. La barre, elle, ne laisse cocher qu'une catégorie à la fois — un
+/// carnet apparaît alors sous chacune des siennes.
+model MemoGalleryCategory {
+  memoId String
+  memo   Memo   @relation(fields: [memoId], references: [id], onDelete: Cascade)
+
+  categoryId String
+  category   GalleryCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@id([memoId, categoryId])
+  @@index([categoryId])
+  @@map("memo_gallery_categories")
+}
+
+/// Les **co-voyageurs** d'un voyage — jamais son propriétaire, qui est
+/// `memos.ownerAccountId` et rien d'autre.
+///
+/// Co-voyageur et non « invité de moindre droit » : sur le voyage, **il fait
+/// tout ce que fait le propriétaire** — raconter, envoyer des vocaux, changer
+/// les réglages, générer le carnet, le commander. La seule chose qui reste au
+/// propriétaire est de **supprimer** le voyage : il n'y a qu'un propriétaire
+/// principal, et détruire le récit de tout le monde n'est pas un geste qui se
+/// partage.
+///
+/// Ce que le lien ne partage **pas** non plus : l'argent. Cagnotte
+/// (`wallet_entries`) et abonnement (`subscriptions`) pendent d'un compte, pas
+/// d'un voyage — chacun a les siens, et une commande retient qui l'a passée
+/// (`print_orders.orderedByAccountId`).
+///
+/// Il n'y a pas de table de co-voyageurs à part : un participant **est** un
 /// compte. Le seul cas où il n'en a pas encore un est l'invitation en attente,
 /// portée par `invitedEmail` jusqu'à ce que la personne s'inscrive — sans quoi
-/// on ne pourrait inviter que des gens déjà sur MemoBook.
+/// on ne pourrait convier que des gens déjà sur MemoBook.
 ///
-/// Le propriétaire a sa propre ligne, avec `role = owner` : « qui est sur ce
-/// voyage » est alors une seule requête, et « tous les voyages où j'apparais »
-/// aussi.
+/// Le propriétaire n'y a **pas** de ligne : il en avait une, de rôle `owner`,
+/// et c'était une seconde vérité sur la propriété — celle que rien n'empêchait
+/// de contredire la colonne. « Qui est sur ce voyage » se lit donc en deux
+/// morceaux assumés : le propriétaire, puis ses co-voyageurs.
 model MemoMember {
   id     String @id @default(uuid())
   memoId String
@@ -449,7 +549,6 @@ model MemoMember {
   /// savoir par quelle adresse la personne est entrée.
   invitedEmail String?
 
-  role   MemoRole         @default(guest)
   status MemoMemberStatus @default(invited)
 
   /// Nom affiché sur la pastille tant que le compte n'existe pas, ou si la
@@ -714,6 +813,18 @@ model PrintOrder {
   renderId String
   render   Render @relation(fields: [renderId], references: [id], onDelete: Restrict)
 
+  /// **Qui a commandé.** Le propriétaire ou l'un de ses co-voyageurs : les deux
+  /// peuvent commander le carnet, et ce n'est donc pas déductible du voyage.
+  ///
+  /// C'est aussi la colonne qui dira **quelle cagnotte payer** le jour où la
+  /// commande sera encaissée : chacun a la sienne, et celle du propriétaire n'a
+  /// pas à régler l'exemplaire d'un autre.
+  ///
+  /// En `SetNull` : un compte supprimé ne doit pas emporter avec lui une
+  /// commande d'un voyage qui, lui, appartient à quelqu'un d'autre.
+  orderedByAccountId String?
+  orderedBy          Account? @relation("PrintOrderBuyer", fields: [orderedByAccountId], references: [id], onDelete: SetNull)
+
   status PrintOrderStatus @default(draft)
   copies Int              @default(1)
 
@@ -760,6 +871,7 @@ model PrintOrder {
   walletEntries WalletEntry[]
 
   @@index([memoId, createdAt])
+  @@index([orderedByAccountId, createdAt])
   @@map("print_orders")
 }
 
@@ -1036,8 +1148,12 @@ model FeedbackResponse {
   campaign   FeedbackCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
   /// Nul pour un avis laissé avant la connexion.
+  ///
+  /// En cascade, et non anonymisé : un avis est **la donnée de la personne qui
+  /// l'a écrit**. Supprimer son compte l'emporte avec le reste, quitte à perdre
+  /// une ligne de statistique.
   accountId String?
-  account   Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   /// Combien de fois la modale a été montrée à cette personne pour cette
   /// campagne. C'est ce compteur que `maxDisplays` borne.

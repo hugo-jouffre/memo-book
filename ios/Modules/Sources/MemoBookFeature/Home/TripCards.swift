@@ -58,6 +58,7 @@ struct FeaturedTripCard: View {
                 .padding(.horizontal, MemoBookSpacing.s)
                 .padding(.bottom, MemoBookSpacing.s)
             }
+            .homeCardHitArea()
         }
         .buttonStyle(CardPressStyle())
         .homeCard()
@@ -131,6 +132,7 @@ struct CompactTripCard: View {
                 }
             }
             .padding(MemoBookSpacing.s)
+            .homeCardHitArea()
         }
         .buttonStyle(CardPressStyle())
         .homeCard()
@@ -187,6 +189,7 @@ struct PastTripCard: View {
                         .padding(.horizontal, MemoBookSpacing.s)
                         .padding(.bottom, trip.isPrintable ? 0 : MemoBookSpacing.s)
                 }
+                .homeCardHitArea()
             }
             .buttonStyle(CardPressStyle())
             .accessibilityElement(children: .combine)
@@ -351,6 +354,24 @@ struct TripStatsRow: View {
 // MARK: - Coque et retour tactile
 
 extension View {
+    /// **Toute la carte répond au doigt**, y compris là où elle ne dessine
+    /// rien.
+    ///
+    /// À poser sur le contenu d'un `Button`, *dedans*. Sans ça, le label d'un
+    /// bouton n'est touchable qu'aux endroits où il a réellement quelque chose
+    /// de dessiné : le vide à droite d'un titre aligné à gauche, la gouttière
+    /// entre deux compteurs, la marge sous une barre de progression ne
+    /// répondent pas. Une carte de voyage se retrouve alors à moitié morte —
+    /// on ouvre le voyage en touchant sa photo, mais pas en touchant son titre,
+    /// et on croit que l'app ne marche pas.
+    ///
+    /// Le `contentShape` de ``homeCard()`` ne suffit pas : il est posé **à
+    /// l'extérieur** du bouton, et ne décrit donc que la forme du parent.
+    func homeCardHitArea() -> some View {
+        frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(.rect(cornerRadius: MemoBookSpacing.largeCornerRadius))
+    }
+
     /// La carte de l'accueil : surface blanche, rayon 20, un filet pour la
     /// décoller du crème du fond.
     func homeCard() -> some View {

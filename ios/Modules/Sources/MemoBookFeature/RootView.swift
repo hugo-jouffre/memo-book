@@ -46,6 +46,11 @@ public struct RootView: View {
     /// La pile de navigation de l'app, une fois entré.
     @State private var path: [HomeRoute] = []
 
+    /// Ce qui empêche d'aller là où on vient de demander à aller. Une alerte
+    /// **sur l'accueil**, et non un écran poussé qui ne montrerait qu'une
+    /// erreur : quand la destination n'existe pas, on ne quitte pas la page.
+    @State private var routingProblem: String?
+
     public init() {}
 
     public var body: some View {
@@ -82,7 +87,7 @@ public struct RootView: View {
                     AuthView { enterApp(as: $0) }
                 case .signedIn:
                     NavigationStack(path: $path) {
-                        HomeView(onIntent: handle)
+                        HomeView(model: dependencies.homeModel(), onIntent: handle)
                             .navigationDestination(for: HomeRoute.self, destination: destination)
                     }
                     .tint(MemoBookColor.action)
@@ -102,6 +107,18 @@ public struct RootView: View {
         // cette information, sa cascade se jouait entièrement sous le voile et
         // l'écran apparaissait déjà en place.
         .environment(\.launchOverlayIsVisible, isLaunching)
+        .alert(
+            "Impossible d’ouvrir ce voyage",
+            isPresented: .init(
+                get: { routingProblem != nil },
+                set: { if !$0 { routingProblem = nil } }
+            ),
+            presenting: routingProblem
+        ) { _ in
+            Button("D’accord", role: .cancel) { routingProblem = nil }
+        } message: { message in
+            Text(message)
+        }
         .task { await restore() }
     }
 
@@ -177,6 +194,10 @@ public struct RootView: View {
     private func signOut() {
         Task {
             await dependencies.api.signOut()
+            // Et ce que l'app gardait de ce compte : le dernier accueil reçu
+            // dort sur le disque pour être relu hors ligne, il ne doit pas
+            // attendre la personne suivante sur ce téléphone.
+            await dependencies.forgetAccountContent()
             path.removeAll()
             stage = .signedOut
         }
@@ -184,33 +205,47 @@ public struct RootView: View {
 
     /// Où mène chaque intention de l'accueil.
     ///
-    /// **Câblage provisoire.** Les voyages ne sont pas encore une ressource du
-    /// back-end : l'accueil et l'écran d'un voyage montrent tous deux un jeu
-    /// d'essai, relié par l'identifiant du voyage. Ouvrir une carte mène donc
-    /// bien au voyage qu'elle montrait — mais aucune de ses étapes ne mène
+    /// Les voyages sont désormais une ressource du back-end : l'accueil vient
+    /// de `GET /v1/home`, l'écran d'un voyage de `GET /v1/trips/:id`, et
+    /// l'identifiant qui les relie est celui du serveur. Ouvrir une carte mène
+    /// donc au voyage qu'elle montrait — mais aucune de ses étapes ne mène
     /// encore au carnet, faute d'un identifiant commun.
     ///
-    /// L'impression et la carte de découverte n'ont pas d'écran dessiné : elles
-    /// ne mènent nulle part, et c'est ici que ça se voit.
+    /// L'impression n'a pas d'écran dessiné : elle ne mène nulle part, et c'est
+    /// ici que ça se voit. La carte de découverte, elle, ouvre désormais la
+    /// galerie des carnets de la communauté.
+    ///
+    /// L'enregistrement, lui, ne passe pas par ici : la feuille rend son vocal
+    /// à ``HomeModel/upload(_:)``, qui l'envoie aux carnets en cours. Il n'y a
+    /// pas d'écran au bout, donc rien à router.
     private func handle(_ intent: HomeIntent) {
         switch intent {
         case .openProfile:
             path.append(.profile)
         case .openTrip(let id):
+            // **On n'ouvre pas un voyage dont l'identifiant n'est pas celui
+            // d'une ressource.** Les voyages du bac à sable n'existent que dans
+            // l'app : les pousser quand même ouvrait un écran vide sur
+            // « Requête invalide. » — le 400 que le serveur renvoie à un
+            // identifiant qui n'est pas un UUID, et qui n'a rien à dire à
+            // l'utilisateur. On reste sur l'accueil, et on le dit.
+            guard UUID(uuidString: id) != nil else {
+                routingProblem =
+                    "Ce voyage n’existe pas encore sur ton compte : il n’y a rien à ouvrir."
+                return
+            }
+            // Sortir de la création **remplace** l'étape au lieu de s'empiler
+            // dessus : la flèche de retour du voyage doit ramener à l'accueil,
+            // et non au formulaire qu'on vient de finir. Les deux écritures
+            // n'en font qu'une, ce qui évite la page blanche qu'un `dismiss()`
+            // suivi d'un empilement laissait derrière lui.
+            if path.last == .tripCreation { path.removeLast() }
             path.append(.trip(id: id))
-        case .startRecording(let tripId):
-            // Raconter suppose un voyage ouvert. L'accueil n'appelle cette
-            // intention que s'il y en a un — voir `HomeView.hasOngoingTrip` —,
-            // et c'est la conversation avec MEMO qui l'accueille : c'est
-            // désormais là que vivent le micro, la frise et la transcription.
-            //
-            // ⚠️ Il existe une **grande feuille d'enregistrement** (le disque,
-            // la frise pleine largeur, la transcription en direct) sur la
-            // branche `proprietaire-unique-et-secrets`, jamais fusionnée dans
-            // `main` : c'est pour ça qu'elle ne s'ouvrait plus ici. À reprendre
-            // au moment de fusionner cette branche — voir T61.
-            path.append(.chat(tripId: tripId, stepId: nil))
-        case .orderPrint, .openShowcase, .createTrip, .browseCommunity, .openHelp:
+        case .openGallery:
+            path.append(.gallery)
+        case .createTrip:
+            path.append(.tripCreation)
+        case .orderPrint, .joinTrip, .importFromPolarsteps, .openHelp:
             break
         }
     }
@@ -234,11 +269,25 @@ public struct RootView: View {
     private func destination(for route: HomeRoute) -> some View {
         switch route {
         case .profile:
-            ProfileView(onSignOut: signOut)
+            ProfileView(model: dependencies.profileModel(), onSignOut: signOut)
         case .trip(let id):
-            TripHomeView(tripId: id, onIntent: handle)
+            TripHomeView(
+                tripId: id,
+                model: dependencies.tripModel(id: id),
+                onIntent: handle
+            )
         case .chat(let tripId, let stepId):
             ChatView(tripId: tripId, stepId: stepId)
+        case .gallery:
+            // La galerie **réémet** des intentions : son bouton du bas crée un
+            // carnet ou ramène au voyage en cours. Elles repassent donc par le
+            // même routeur que celles de l'accueil, et non par un second.
+            GalleryView(model: dependencies.galleryModel(), onIntent: handle)
+        case .tripCreation:
+            // Elle **réémet** une intention, comme la galerie : « Commencer ! »
+            // ouvre le voyage qui vient d'être créé, et c'est encore ce
+            // routeur-ci qui le pousse.
+            TripCreationView(model: dependencies.tripCreationModel(), onIntent: handle)
         case .memos:
             MemoListView()
         }
@@ -261,5 +310,9 @@ enum HomeRoute: Hashable {
     /// La conversation avec MEMO. `stepId` la pose sur une étape précise ;
     /// `nil` la pose sur le voyage entier.
     case chat(tripId: String, stepId: String?)
+    /// Les carnets de la communauté, ouverts par la carte de découverte.
+    case gallery
+    /// Les six étapes de « Créer un voyage ».
+    case tripCreation
     case memos
 }

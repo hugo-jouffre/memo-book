@@ -5,11 +5,12 @@ extension View {
     /// Pose **la** barre d'accessoires du clavier de MemoBook : un seul bouton,
     /// à droite, qui referme le clavier.
     ///
-    /// Un chevron plutôt qu'un mot. « OK » laisse croire qu'on valide quelque
+    /// Une icône plutôt qu'un mot. « OK » laisse croire qu'on valide quelque
     /// chose, alors qu'on ne fait que ranger le clavier — et sur un écran où
     /// l'enregistrement se fait tout seul à la sortie du champ, ce faux bouton
-    /// de validation est un contresens. Le chevron dit ce qu'il fait :
-    /// ça descend.
+    /// de validation est un contresens. `IconKeyboardDown` dit ce qu'il fait :
+    /// le clavier descend. C'est l'icône dessinée pour ça, arrivée dans le jeu
+    /// de marque à la place du double chevron provisoire (T27).
     ///
     /// Il flotte un peu au-dessus du clavier plutôt que d'y être collé : posé au
     /// ras des touches, on l'atteint en visant entre deux rangées, et on tape un
@@ -21,7 +22,7 @@ extension View {
                 Button {
                     KeyboardDismissal.resignFirstResponder()
                 } label: {
-                    Image(brand: "IconChevronDown")
+                    Image(brand: "IconKeyboardDown")
                         .resizable()
                         .renderingMode(.template)
                         .scaledToFit()

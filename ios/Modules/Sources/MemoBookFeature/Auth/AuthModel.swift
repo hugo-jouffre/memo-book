@@ -140,6 +140,34 @@ final class AuthModel {
         errorMessage = authErrorMessage(for: error)
     }
 
+    #if DEBUG
+
+        /// Le compte de test de l'app, celui que `backend/prisma/seed.ts` pose
+        /// et tient à jour.
+        ///
+        /// **Le mot de passe n'est pas un secret** : il n'ouvre qu'un compte de
+        /// démonstration, il est écrit dans le seed et dans `docs/supabase.md`,
+        /// et ce bloc ne compile pas en release.
+        static let testAccount = (email: "demo@memo-book.com", password: "memobook2026")
+
+        /// Entre dans l'app par le compte de test — **une vraie connexion**, pas
+        /// un compte inventé.
+        ///
+        /// Le bouton fabriquait jusqu'ici un `Account` de toutes pièces. Il
+        /// ouvrait bien l'accueil, mais sans session : chaque écran derrière
+        /// tombait alors sur un 401, et on croyait à un bug d'écran. Ici, la
+        /// session est celle du serveur, avec les voyages et le profil du seed.
+        func signInAsTestAccount() async -> Account? {
+            await run {
+                try await self.api.signIn(
+                    email: Self.testAccount.email,
+                    password: Self.testAccount.password
+                )
+            }
+        }
+
+    #endif
+
     /// Le même enrobage pour les trois chemins d'entrée : un seul appel à la
     /// fois, l'erreur précédente effacée, et le message traduit en cas d'échec.
     private func run(_ work: @escaping () async throws -> AuthSession) async -> Account? {

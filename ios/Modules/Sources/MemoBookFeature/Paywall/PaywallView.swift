@@ -43,7 +43,7 @@ struct PaywallView: View {
             // écran entier de texte**, et à l'opacité de repos il se lisait
             // à travers les titres. ⚠️ Le cadrage reste celui du design
             // system ; la maquette du paywall, elle, tourne le M d'un quart de
-            // tour — signalé (T53).
+            // tour — signalé (T63).
             BrandMarkBackdrop(progress: 1, opacity: Self.backdropOpacity)
                 .ignoresSafeArea()
 
@@ -164,7 +164,7 @@ struct PaywallView: View {
 
 enum PaywallMetrics {
     /// ⚠️ La maquette du paywall marge à 16, là où le reste de l'app marge à
-    /// `screenMargin` (24) — voir T11 et T52. Suivi tel quel (R3).
+    /// `screenMargin` (24) — voir T11 et T62. Suivi tel quel (R3).
     static let margin: CGFloat = MemoBookSpacing.s
 
     /// La bande basse que les zones de tapotis laissent tranquille : le bouton

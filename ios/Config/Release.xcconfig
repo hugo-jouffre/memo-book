@@ -1,0 +1,11 @@
+#include "Base.xcconfig"
+
+// L'API de production.
+//
+// ⚠️ **Elle n'est pas encore déployée.** Cette valeur est un emplacement, pas
+// une adresse qui répond : le jour du déploiement, c'est la seule ligne à
+// changer pour qu'un build TestFlight parle au bon serveur — et la seule à ne
+// pas oublier. Tant qu'elle n'existe pas, un build Release ne peut pas
+// fonctionner, et c'est mieux ainsi : il échoue au premier appel plutôt que de
+// parler silencieusement à `localhost`, ce qu'il faisait avant ce fichier.
+MEMOBOOK_API_BASE_URL = https:/$()/api.memo-book.com

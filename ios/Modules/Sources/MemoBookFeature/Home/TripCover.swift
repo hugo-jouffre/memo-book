@@ -2,7 +2,7 @@ import MemoBookCore
 import MemoBookDesign
 import SwiftUI
 
-/// La photo de couverture d'un voyage, et les compagnons posés dessus.
+/// La photo de couverture d'un voyage, et les co-voyageurs posés dessus.
 ///
 /// Tant qu'il n'y a pas d'URL — c'est le cas de tout le jeu d'essai, et ce sera
 /// le cas d'un voyage sans photo — la couverture n'est pas un rectangle gris :
@@ -91,7 +91,7 @@ struct TripCoverPlaceholder: View {
     }
 }
 
-/// Les compagnons de voyage, en pastilles qui se chevauchent.
+/// Les co-voyageurs, en pastilles qui se chevauchent.
 struct CompanionStack: View {
     let companions: [Companion]
 
@@ -122,7 +122,13 @@ struct CompanionStack: View {
     /// posée sur une photo au format fixe, masquée à VoiceOver : les faire
     /// grandir avec le texte ne rend rien de plus lisible et finit par couvrir
     /// la couverture entière.
-    private let diameter: CGFloat = 34
+    ///
+    /// **Partagée**, parce que d'autres ronds viennent se poser sur cette
+    /// file — le « + » qui invite, dans l'en-tête d'un voyage. Un second 34
+    /// écrit à côté, et les deux auraient fini par diverger.
+    static let diameter: CGFloat = 34
+
+    private var diameter: CGFloat { Self.diameter }
 
     /// Un cinquième de recouvrement, pas un tiers : la pastille de droite
     /// mangeait la deuxième initiale de celle de gauche.

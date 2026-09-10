@@ -2,8 +2,8 @@ import Testing
 
 @testable import MemoBookCore
 
-// Le palier freemium vit dans `MemoBookFeature`, mais ce qu'il décide se teste
-// sans écran : ce sont trois règles de lecture, et elles se cassent en silence.
+// Ce que le palier décide se teste sans écran : ce sont trois règles de
+// lecture, et elles se cassent en silence.
 
 @Suite("Palier freemium")
 struct FreemiumStatusTests {
@@ -16,10 +16,14 @@ struct FreemiumStatusTests {
         #expect(traveller.freemiumStatus(override: nil).homePillLabel == nil)
     }
 
-    @Test("Rien de consommé : on annonce un cadeau, pas un solde")
-    func untouchedQuotaAnnouncesAGift() {
+    /// Un seul message, un décompte, quoi qu'il reste — arbitrage de Hugo du
+    /// 07/09/2026. La pastille disait « 3 étapes offertes » tant que rien
+    /// n'était consommé, et deux formulations pour un même chiffre faisaient
+    /// hésiter sur ce qu'il fallait lire.
+    @Test("Rien de consommé : c'est déjà un solde, pas un cadeau")
+    func untouchedQuotaStillAnnouncesABalance() {
         let traveller = Traveller(id: "t", firstName: "Camille", offeredSteps: 3, remainingSteps: 3)
-        #expect(traveller.freemiumStatus(override: nil).homePillLabel == "3 étapes offertes")
+        #expect(traveller.freemiumStatus(override: nil).homePillLabel == "3 étapes restantes")
     }
 
     @Test("Quota entamé : on annonce un solde")

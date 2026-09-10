@@ -24,6 +24,12 @@ public struct ProfileView: View {
     /// referme donc d'abord, sans quoi on la retrouverait dessous en sortant.
     @State private var showsPaywall = false
 
+    /// L'alerte de suppression du compte. Une alerte du système, et non une
+    /// feuille de la marque : c'est le seul geste de l'app qui ne se rattrape
+    /// pas, et il doit ressembler à ce que l'utilisateur a déjà appris à
+    /// craindre ailleurs.
+    @State private var isConfirmingDeletion = false
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.subscriptionSession) private var subscriptionSession
@@ -38,18 +44,28 @@ public struct ProfileView: View {
 
     public var body: some View {
         ScrollView {
+            // **L'écran se dessine tout de suite, entier.** Il n'attendait
+            // rien de tout ça : ses intitulés, ses groupes, ses boutons et ses
+            // actions de sortie appartiennent à l'app, pas au serveur. Seules
+            // les valeurs viennent du réseau, et elles seules portent une barre
+            // d'attente — voir ``BrandSkeleton``.
+            //
+            // Trois blocs font exception et n'apparaissent qu'une fois le
+            // profil connu, parce qu'ils **existent ou non** selon le palier du
+            // compte : la pastille d'état, le bouton d'abonnement et la ligne
+            // « Mon abonnement ». Les montrer par défaut puis les retirer
+            // serait pire que de les voir arriver.
             VStack(alignment: .leading, spacing: MemoBookSpacing.m) {
                 header
 
-                if let profile = model.profile {
-                    identity(profile)
-                    subscriptionCallToAction
-                    contactGroup(profile)
-                    servicesGroup(profile)
-                    paymentGroup(profile)
-                    legalGroup
-                    ConnectorsCallout { sheet = .connectors }
-                }
+                identity
+                subscriptionCallToAction
+                statsGroup
+                contactGroup
+                servicesGroup
+                paymentGroup
+                legalGroup
+                ConnectorsCallout { sheet = .connectors }
 
                 if let message = model.errorMessage {
                     ErrorBanner(message: message) {
@@ -57,8 +73,11 @@ public struct ProfileView: View {
                     }
                 }
 
+                helpLink
                 exitActions
+                legalMention
             }
+            .animation(.snappy(duration: 0.25), value: model.profile == nil)
             .padding(.horizontal, MemoBookSpacing.screenMargin)
             .padding(.top, MemoBookSpacing.xs)
             .padding(.bottom, MemoBookSpacing.l)
@@ -93,6 +112,29 @@ public struct ProfileView: View {
                 showsPaywall = false
             }
         }
+        .alert("Supprimer mon compte ?", isPresented: $isConfirmingDeletion) {
+            Button("Annuler", role: .cancel) {}
+            Button("Supprimer", role: .destructive) {
+                Task {
+                    // La sortie est la même que la déconnexion : le compte
+                    // n'existe plus, l'app ne peut que revenir à l'entrée.
+                    if await model.deleteAccount() { onSignOut() }
+                }
+            }
+        } message: {
+            // Le même texte que la modale dessinée dans Figma, resserré : une
+            // alerte du système ne tient pas un paragraphe. Ce qu'elle ne perd
+            // jamais, c'est ce qui disparaît pour **les autres**.
+            Text(
+                """
+                Tes voyages, tes souvenirs et tes carnets seront effacés, ainsi \
+                que tes commandes. Les voyages que tu partages restent à tes \
+                co-voyageurs. Ta cagnotte et ton abonnement sont clos.
+
+                C'est immédiat et sans retour.
+                """
+            )
+        }
     }
 
     // MARK: - L'abonnement, tel qu'il faut le lire ici
@@ -124,7 +166,10 @@ public struct ProfileView: View {
                 Image(brand: "IconArrowDuo")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: MemoBookSpacing.m, height: MemoBookSpacing.m)
+                    .frame(
+                        width: MemoBookSpacing.navigationIcon,
+                        height: MemoBookSpacing.navigationIcon
+                    )
                     // La cible tactile est alignée à gauche sur la marge de la
                     // colonne, et le dessin est centré dedans. Elle débordait de
                     // la colonne ; la moitié gauche des touches tombait alors à
@@ -153,21 +198,27 @@ public struct ProfileView: View {
     /// Ce que vaut le compte, dit en un mot sur la ligne du titre.
     ///
     /// **Elle partage la ligne du titre et ne flotte pas dans le coin** : c'est
-    /// une étiquette posée sur l'écran, pas un badge accroché à un élément.
-    /// Contrairement à celle de l'accueil, elle annonce **aussi** l'abonné :
-    /// c'est ici qu'un statut a une raison d'être, là-bas ce n'était qu'un
-    /// décompte.
+    /// une étiquette posée sur l'écran. Droite, contrairement à celle de
+    /// l'accueil : celle-ci est alignée sur un titre, et un libellé de travers
+    /// à côté d'un mot horizontal se lit comme un défaut de rendu, pas comme un
+    /// geste. L'accueil, lui, la pose sur un avatar, où rien n'impose
+    /// l'horizontale.
     @ViewBuilder
     private var statusPill: some View {
         if model.profile != nil {
             let pill = BrandTagPill(
                 freemiumStatus.profilePillLabel,
                 tone: .accentOutlined,
-                isUppercased: true
+                isUppercased: true,
+                // « 3 ÉTAPES GRATUITES RESTANTES » est plus large que ce que la
+                // ligne lui laisse : elle se resserre plutôt que de renvoyer
+                // « Profile » à la ligne.
+                shrinksToFit: true
             )
-            // Le lime cerclé de vert, comme la pastille « ABONNÉE » de la
-            // feuille d'abonnement : un aplat lime ne porte que du vert (D13).
-            .layoutPriority(-1)
+            // Le libellé du palier gratuit est long : à partir d'AX1 il prendrait
+            // la ligne entière et pousserait le titre hors de l'écran. Il garde
+            // alors sa taille, et lui seul.
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
 
             // **« ABONNE-TOI » se touche.** Tant qu'il y a quelque chose à
             // vendre, la pastille ouvre la même feuille que le gros bouton lime
@@ -187,8 +238,9 @@ public struct ProfileView: View {
         }
     }
 
-    /// Le gros bouton lime, et **rien d'autre au-dessus** : pour quelqu'un qui
-    /// n'a pas d'abonnement, c'est la première chose de l'écran après son nom.
+    /// Le gros bouton lime de la maquette, et **rien d'autre au-dessus** : pour
+    /// quelqu'un qui n'a pas d'abonnement, c'est la première chose de l'écran
+    /// après son nom.
     ///
     /// Il disparaît une fois abonné, où la ligne « Mon abonnement » des services
     /// suffit : on ne revend pas ce qui est déjà acheté. C'est aussi ce qui fait
@@ -209,56 +261,125 @@ public struct ProfileView: View {
         }
     }
 
-    private func identity(_ profile: TravellerProfile) -> some View {
+    /// Les chiffres du compte : combien de voyages, et lequel est en cours.
+    ///
+    /// **Le seul groupe cerclé de vert de l'écran.** C'est ce qu'on vient
+    /// chercher du regard en ouvrant son profil ; tout le reste se range.
+    /// Sans abonnement, la première ligne dit qu'elle est sous clé plutôt que
+    /// de disparaître : une case vide n'explique pas ce qu'on gagnerait.
+    private var statsGroup: some View {
+        let profile = model.profile
+        let isLoading = profile == nil
+
+        // Les valeurs sont préparées ici plutôt que dans les appels : trois
+        // ternaires imbriqués dans une liste de lignes, et l'inférence de type
+        // de Swift rend les armes sans rien dire d'utile.
+        let isSubscriber = freemiumStatus == .subscriber
+        let statistics: String? = profile.map {
+            isSubscriber ? $0.tripCountLabel : "Réservé aux abonnés"
+        }
+        let lockBadge: String? = profile != nil && !isSubscriber ? "Locked" : nil
+        let currentTrip: String? = profile.map {
+            $0.currentTrip?.dateRangeLabel ?? "Aucun pour l’instant"
+        }
+
+        // Sous clé — ou sans voyage en cours — la ligne ne mène nulle part : un
+        // chevron promettrait un écran qu'on n'a pas le droit d'ouvrir.
+        let openStatistics: (() -> Void)? = isSubscriber ? { notYetRouted() } : nil
+        let openCurrentTrip: (() -> Void)? = profile?.currentTrip == nil ? nil : { notYetRouted() }
+
+        return BrandRowGroup(tone: .highlighted) {
+            BrandRow(
+                "Statistiques",
+                value: statistics,
+                titleTone: .accent,
+                badge: lockBadge,
+                isValueLoading: isLoading,
+                action: openStatistics
+            )
+
+            // La ligne reste, même sans voyage en cours : sa disparition ferait
+            // sauter la carte d'une hauteur de ligne à chaque chargement. Elle
+            // dit alors qu'il n'y en a pas.
+            BrandRow(
+                "Voyage en cours",
+                value: currentTrip,
+                titleTone: .accent,
+                isValueLoading: isLoading,
+                action: openCurrentTrip
+            )
+        }
+    }
+
+    private var identity: some View {
         VStack(spacing: MemoBookSpacing.s) {
-            ProfileAvatar(profile: profile)
-            EditableName(name: profile.fullName) { model.setFullName($0) }
+            ProfileAvatar(profile: model.profile)
+
+            if let profile = model.profile {
+                EditableName(name: profile.fullName) { model.setFullName($0) }
+            } else {
+                // Le nom est un titre : sa barre d'attente est plus large et
+                // centrée comme lui, pour que la page ne se recompose pas
+                // quand il arrive.
+                BrandSkeleton(width: 180)
+                    .frame(height: MemoBookSpacing.m)
+            }
         }
         .frame(maxWidth: .infinity)
     }
 
     // MARK: - Les groupes de lignes
 
-    private func contactGroup(_ profile: TravellerProfile) -> some View {
-        BrandRowGroup {
-            if let provider = profile.signInProvider {
-                // L'adresse appartient au compte tiers : on la montre, on dit
-                // d'où elle vient, et on ne propose pas de la corriger.
-                BrandRow(
-                    "E-mail",
-                    value: profile.email,
-                    note: "Gérée par ton compte \(provider.displayName)"
-                )
-            } else {
-                BrandRow(
-                    "E-mail",
-                    text: emailBinding,
-                    placeholder: "prenom@exemple.com",
-                    error: model.emailError,
-                    keyboardType: .emailAddress,
-                    textContentType: .emailAddress
-                )
-            }
+    private var contactGroup: some View {
+        let profile = model.profile
+
+        return BrandRowGroup {
+            // **L'adresse se lit, elle ne se corrige pas.** Elle n'est pas un
+            // champ de plus : c'est l'identifiant de connexion. En changer
+            // demande de vérifier la nouvelle, de refuser celles déjà prises et
+            // de décider du sort de la session ouverte avec l'ancienne — un
+            // écran à part entière, que cette ligne ne peut pas tenir. La note
+            // dit d'où elle vient quand c'est un compte tiers qui la porte.
+            BrandRow(
+                "E-mail",
+                value: profile?.email,
+                isValueLoading: profile == nil,
+                note: profile?.signInProvider.map { "Gérée par ton compte \($0.displayName)" }
+            )
             BrandRow(
                 "Téléphone",
                 text: phoneBinding,
                 placeholder: "+33 6 00 00 00 00",
                 keyboardType: .phonePad,
-                textContentType: .telephoneNumber
+                textContentType: .telephoneNumber,
+                isValueLoading: profile == nil,
+                isConfirmed: model.justSaved == .phoneNumber
             )
-            BrandRow("Adresse postale", value: profile.address.singleLine) {
+            BrandRow(
+                "Adresse postale",
+                value: profile?.address.singleLine,
+                isValueLoading: profile == nil
+            ) {
                 sheet = .postalAddress
             }
             BrandRow("Newsletter mensuelle MemoBook", isOn: newsletterBinding)
         }
+        // L'interrupteur est le seul contrôle du groupe qui **agit** avant que
+        // la valeur soit là : le basculer sur un profil pas encore chargé
+        // enverrait un réglage qu'on n'a pas lu. Le groupe entier attend, ce
+        // qui ne coûte rien — les autres lignes ne font qu'ouvrir des feuilles.
+        .disabled(model.profile == nil)
     }
 
-    private func servicesGroup(_ profile: TravellerProfile) -> some View {
-        BrandRowGroup {
+    private var servicesGroup: some View {
+        let profile = model.profile
+
+        return BrandRowGroup {
             BrandRow(
                 "Ma cagnotte",
-                value: profile.walletBalance.euros,
+                value: profile?.walletBalance.euros,
                 isValueProminent: true,
+                isValueLoading: profile == nil,
                 action: notYetRouted
             )
             // Elle ne s'affiche qu'une fois abonné : sans abonnement, c'est le
@@ -272,15 +393,17 @@ public struct ProfileView: View {
         }
     }
 
-    @ViewBuilder
-    private func paymentGroup(_ profile: TravellerProfile) -> some View {
-        BrandRowGroup {
+    private var paymentGroup: some View {
+        let profile = model.profile
+
+        return BrandRowGroup {
             BrandRow(
                 "Carte bancaire enregistrée",
                 // Aucune carte enregistrée : la ligne le dit plutôt que de
                 // montrer un gabarit vide. État non maquetté.
-                value: profile.selectedCard?.maskedNumber ?? "Aucune carte enregistrée",
-                valuePlacement: .below
+                value: profile.map { $0.selectedCard?.maskedNumber ?? "Aucune carte enregistrée" },
+                valuePlacement: .below,
+                isValueLoading: profile == nil
             ) {
                 sheet = .paymentMethod
             }
@@ -314,12 +437,41 @@ public struct ProfileView: View {
                 icon: Image(brand: "IconCross"),
                 title: "Supprimer mon compte",
                 tint: MemoBookColor.error,
-                isDestructive: true,
-                action: notYetRouted
-            )
+                isDestructive: true
+            ) {
+                // La confirmation est ici, pas dans le modèle : après elle, il
+                // n'y a plus rien à annuler.
+                isConfirmingDeletion = true
+            }
+            .disabled(model.isDeletingAccount)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, MemoBookSpacing.xs)
+    }
+
+    /// La mention de bas de page. **Du texte, et rien d'autre** : ni bouton, ni
+    /// lien, ni cible tactile — on la lit une fois, on n'appuie jamais dessus.
+    /// Elle ferme l'écran, sous le dernier bouton.
+    private var legalMention: some View {
+        Text("MemoBook v1.0 | Tous droits réservés")
+            .font(MemoBookFont.mention)
+            .foregroundStyle(MemoBookColor.inkFaint)
+            .frame(maxWidth: .infinity)
+            .padding(.top, MemoBookSpacing.s)
+    }
+
+    /// Le même lien qu'en bas de l'accueil, dans le même dessin : c'est la
+    /// sortie de secours de l'app. Aucune destination pour l'instant.
+    ///
+    /// Il passe **avant** les actions de sortie, et pas après : demander de
+    /// l'aide n'est pas quitter. Le laisser sous « Supprimer mon compte » le
+    /// rangeait avec les portes de sortie, alors qu'il est là pour éviter d'en
+    /// prendre une.
+    private var helpLink: some View {
+        BrandButton("Besoin d’aide ?", style: .link, isSubdued: true) {
+            notYetRouted()
+        }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Feuilles
@@ -367,15 +519,8 @@ public struct ProfileView: View {
         )
     }
 
-    /// Une adresse absente est `nil` dans le modèle et une chaîne vide dans le
+    /// Un numéro absent est `nil` dans le modèle et une chaîne vide dans le
     /// champ : la conversion se fait ici, pas dans la vue de la ligne.
-    private var emailBinding: Binding<String> {
-        Binding(
-            get: { model.profile?.email ?? "" },
-            set: { model.setEmail($0) }
-        )
-    }
-
     private var phoneBinding: Binding<String> {
         Binding(
             get: { model.profile?.phoneNumber ?? "" },
@@ -528,8 +673,13 @@ private struct EditableName: View {
 
 /// La photo du voyageur, ou ses initiales. Jamais un rond gris vide : un profil
 /// sans photo reste un profil.
+///
+/// Tant que le profil n'est pas arrivé, le rond est là quand même, vide : c'est
+/// **la seule valeur de l'écran qui n'a pas besoin de barre d'attente**, parce
+/// qu'un rond vide est déjà exactement ce qu'on verra si la personne n'a pas de
+/// photo. Rien ne bouge quand elle arrive.
 private struct ProfileAvatar: View {
-    let profile: TravellerProfile
+    let profile: TravellerProfile?
 
     /// Taille **fixe**, comme l'avatar de l'accueil. Une photo n'est pas du
     /// texte : la faire grandir avec le Dynamic Type lui faisait prendre la
@@ -537,11 +687,11 @@ private struct ProfileAvatar: View {
     private static let side: CGFloat = 80
 
     var body: some View {
-        AsyncImage(url: profile.avatarUrl) { phase in
+        AsyncImage(url: profile?.avatarUrl) { phase in
             if let image = phase.image {
                 image.resizable().scaledToFill()
             } else {
-                Text(profile.initials)
+                Text(profile?.initials ?? "")
                     .font(MemoBookFont.h2)
                     .foregroundStyle(MemoBookColor.ink)
                     // Les initiales, elles, suivent le texte — mais dans un
@@ -651,8 +801,11 @@ private struct ProfileExitAction: View {
                     .scaledToFit()
                     .frame(width: MemoBookSpacing.m, height: MemoBookSpacing.m)
                     .foregroundStyle(tint)
+                // Sora, comme les libellés de bouton de la marque : ce sont
+                // des boutons, pas des lignes de réglage. Voir
+                // ``MemoBookFont/button``.
                 Text(title)
-                    .font(MemoBookFont.body)
+                    .font(MemoBookFont.button)
                     .foregroundStyle(isDestructive ? MemoBookColor.error : MemoBookColor.ink)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -670,6 +823,12 @@ private struct ProfileExitAction: View {
 #Preview("Profil") {
     NavigationStack {
         ProfileView {}
+    }
+}
+
+#Preview("Profil — abonné") {
+    NavigationStack {
+        ProfileView(model: ProfileModel { .subscriberFixture }) {}
     }
 }
 

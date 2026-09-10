@@ -1,116 +1,124 @@
 import SwiftUI
 
-/// Une forme grise qui tient la place d'un contenu pas encore arrivé.
+/// La place d'une valeur qui n'est pas encore arrivée.
 ///
-/// **Toujours un rectangle arrondi**, parce qu'un squelette ne dessine que des
-/// blocs : dès qu'il essaie de reproduire une carte, une icône ou un avatar, il
-/// promet un contenu qu'il ne connaît pas encore.
+/// **Elle ne remplace jamais un écran, seulement une valeur.** Un écran de
+/// MemoBook est fait à 90 % de choses que l'app connaît déjà — ses intitulés,
+/// ses groupes, ses boutons : les cacher derrière un chargement parce qu'un
+/// numéro de téléphone met 200 ms à venir fait apparaître la page en deux
+/// temps, et donne l'impression que tout est lent. La page se dessine donc
+/// tout de suite, et seules les valeurs qui viennent du serveur portent cette
+/// barre.
 ///
-/// ```swift
-/// VStack(spacing: MemoBookSpacing.xs) {
-///     BrandSkeleton().frame(height: 14)
-///     BrandSkeleton().frame(width: 120, height: 14)
-/// }
-/// .brandSkeletonShimmer()
-/// ```
-///
-/// Le lustre ne s'anime pas tout seul : il est piloté par
-/// ``SwiftUI/View/brandSkeletonShimmer()``, posé **une fois** sur le conteneur.
-/// C'est ce qui fait passer la lumière sur tous les blocs **en même temps** —
-/// autant d'animations indépendantes se désynchroniseraient en quelques
-/// secondes, et un squelette qui scintille en désordre attire l'œil au lieu de
-/// se faire oublier.
+/// Le reflet balaie la barre en boucle. C'est ce mouvement qui la distingue
+/// d'un aplat gris, qu'on lirait comme un champ désactivé — mais il s'arrête
+/// sous « Réduire les animations », où la barre reste sagement grise.
 public struct BrandSkeleton: View {
-    private let cornerRadius: CGFloat
+    private let width: CGFloat?
+    private let fixedHeight: CGFloat?
+    private let cornerRadius: CGFloat?
+    private let onDark: Bool
 
-    /// - Parameter cornerRadius: par défaut celui d'une ligne de texte. Passer
-    ///   ``MemoBookSpacing/bubbleCornerRadius`` pour un bloc de bulle, ou une
-    ///   grande valeur pour un rond.
-    public init(cornerRadius: CGFloat = MemoBookSpacing.xs / 2) {
+    /// - Parameters:
+    ///   - width: la largeur de la barre. `nil` la laisse prendre toute la
+    ///     place disponible — pour une valeur posée sous son intitulé.
+    ///   - height: la hauteur, quand la place à tenir n'est pas une ligne de
+    ///     texte mais un bloc — une illustration, un bouton. `nil` garde le
+    ///     corps de texte, qui est le cas courant.
+    ///   - cornerRadius: le rayon, pour ces mêmes blocs. `nil` garde la
+    ///     capsule : à hauteur de texte, les deux se confondent, mais un bloc
+    ///     haut deviendrait un stade.
+    ///   - onDark: la barre est posée sur une photo ou un aplat sombre, comme
+    ///     la couverture d'un voyage. Elle passe alors en clair : l'encre à 9 %
+    ///     y disparaîtrait complètement.
+    public init(
+        width: CGFloat? = nil,
+        height: CGFloat? = nil,
+        cornerRadius: CGFloat? = nil,
+        onDark: Bool = false
+    ) {
+        self.width = width
+        self.fixedHeight = height
         self.cornerRadius = cornerRadius
+        self.onDark = onDark
     }
 
-    @Environment(\.brandSkeletonPhase) private var phase
+    /// La hauteur suit le corps de texte : la barre tient exactement la place
+    /// que la valeur prendra, et la ligne ne saute pas en se remplissant.
+    @ScaledMetric(relativeTo: .body) private var textHeight: CGFloat = 14
 
-    /// Le gris d'un squelette : le filet de la marque, un peu appuyé. Assez
-    /// visible pour dire « il y aura quelque chose ici », assez discret pour
-    /// qu'on n'essaie pas de le lire.
-    private static let fill = MemoBookColor.hairline
+    /// La forme dessinée : une capsule par défaut, un rectangle arrondi dès
+    /// qu'on donne un rayon.
+    private var shape: AnyShape {
+        cornerRadius.map { AnyShape(RoundedRectangle(cornerRadius: $0)) } ?? AnyShape(.capsule)
+    }
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isSweeping = false
 
     public var body: some View {
-        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-
         shape
-            .fill(Self.fill)
-            .overlay {
-                GeometryReader { proxy in
-                    LinearGradient(
-                        colors: [
-                            .clear,
-                            MemoBookColor.surface.opacity(0.7),
-                            .clear,
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .frame(width: proxy.size.width * 0.55)
-                    // De hors-cadre à gauche à hors-cadre à droite.
-                    .offset(x: proxy.size.width * (phase * 1.6 - 0.55))
-                }
-                .clipShape(shape)
-                .allowsHitTesting(false)
-            }
+            // Le noir de la marque à peine posé, pas un gris système : la barre
+            // doit rester dans le crème de la page. Sur un fond sombre, c'est
+            // le blanc de la marque qui joue le même rôle.
+            .fill(onDark ? MemoBookColor.onAction.opacity(0.22) : MemoBookColor.ink.opacity(0.09))
+            .frame(width: width, height: fixedHeight ?? textHeight)
+            .overlay { sheen }
+            .clipShape(shape)
             .accessibilityHidden(true)
+            .onAppear { isSweeping = true }
     }
-}
 
-extension View {
-    /// Anime le lustre de tous les ``BrandSkeleton`` posés en dessous, **en
-    /// phase**.
+    /// Le reflet : une bande claire qui traverse la barre.
     ///
-    /// À poser une seule fois, sur le conteneur du squelette. Sans effet quand
-    /// « Réduire les animations » est activé : le squelette reste alors un gris
-    /// immobile, ce qui dit exactement la même chose sans rien faire bouger.
-    public func brandSkeletonShimmer() -> some View {
-        modifier(BrandSkeletonShimmer())
-    }
-}
-
-private struct BrandSkeletonShimmer: ViewModifier {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var phase: CGFloat = 0
-
-    func body(content: Content) -> some View {
-        content
-            .environment(\.brandSkeletonPhase, phase)
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) {
-                    phase = 1
-                }
+    /// Il est **masqué par la barre elle-même** plutôt que dessiné à sa
+    /// largeur — c'est ce qui lui permet de sortir des deux côtés au lieu de
+    /// s'allumer et de s'éteindre sur place.
+    @ViewBuilder
+    private var sheen: some View {
+        if !reduceMotion {
+            GeometryReader { proxy in
+                LinearGradient(
+                    colors: [
+                        .clear,
+                        onDark
+                            ? MemoBookColor.onAction.opacity(0.35)
+                            : MemoBookColor.surface.opacity(0.9),
+                        .clear,
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: proxy.size.width * 0.6)
+                .offset(x: isSweeping ? proxy.size.width : -proxy.size.width * 0.6)
+                .animation(
+                    // Une pause entre deux passages : un reflet continu
+                    // clignote, un reflet qui repasse *de temps en temps* dit
+                    // « ça travaille » sans occuper l'œil.
+                    .easeInOut(duration: 1.1).repeatForever(autoreverses: false).delay(0.2),
+                    value: isSweeping
+                )
             }
+        }
     }
 }
 
-extension EnvironmentValues {
-    /// De 0 à 1 : où en est le lustre du squelette. Il descend par
-    /// l'environnement pour que tous les blocs s'éclairent ensemble.
-    @Entry var brandSkeletonPhase: CGFloat = 0
-}
+#Preview("Barres d’attente") {
+    VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
+        BrandSkeleton(width: 120)
+        BrandSkeleton(width: 180)
+        BrandSkeleton()
 
-// MARK: - Aperçus
-
-#Preview("Squelette") {
-    VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
-        BrandSkeleton(cornerRadius: MemoBookSpacing.largeCornerRadius)
-            .frame(height: 88)
-        BrandSkeleton().frame(height: 14)
-        BrandSkeleton().frame(height: 14)
-        BrandSkeleton().frame(width: 140, height: 14)
+        VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
+            BrandSkeleton(width: 120, onDark: true)
+            BrandSkeleton(width: 180, onDark: true)
+        }
+        .padding(MemoBookSpacing.s)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(MemoBookColor.ink, in: .rect(cornerRadius: MemoBookSpacing.cornerRadius))
     }
-    .brandSkeletonShimmer()
     .padding(MemoBookSpacing.screenMargin)
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    .frame(maxWidth: .infinity, alignment: .leading)
     .background(MemoBookColor.background)
     .environment(\.colorScheme, .light)
 }

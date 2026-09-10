@@ -35,6 +35,9 @@ fastlane/test_output
 # Secrets — les clés API ne doivent jamais être commitées
 *.xcconfig.local
 Secrets.swift
+# Le fichier de secrets local de l'app iOS. Son modèle documenté, lui, est
+# versionné : ios/Config/Secrets.example.xcconfig
+ios/Config/Secrets.xcconfig
 .env
 .env.local
 

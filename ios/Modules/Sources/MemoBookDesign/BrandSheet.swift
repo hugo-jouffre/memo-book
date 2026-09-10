@@ -43,9 +43,34 @@ import SwiftUI
 /// }
 /// ```
 public struct BrandSheet<Content: View>: View {
+    /// Comment le titre se pose en tête de la feuille.
+    public enum TitleAlignment {
+        /// À gauche, le rond de fermeture au bout de sa ligne. Le dessin
+        /// courant : une feuille qui prolonge l'écran qu'elle recouvre, et dont
+        /// le titre s'aligne sur la colonne comme n'importe quel autre.
+        case leading
+
+        /// Centré. Pour les feuilles qui **ouvrent un choix** plutôt qu'elles
+        /// ne poursuivent l'écran du dessous — « Nouveau carnet » et ses trois
+        /// portes. Le titre s'annonce alors au milieu, comme une couverture.
+        case centered
+    }
+
+    /// L'aplat de la feuille.
+    public enum Surface {
+        /// Le papier de la marque. Toutes les feuilles, sauf une.
+        case paper
+        /// Le bleu de l'écoute — voir ``MemoBookColor/listeningBackground``.
+        /// La feuille d'enregistrement, et elle seule : c'est ce changement
+        /// d'aplat qui dit que l'app est passée en écoute.
+        case listening
+    }
+
     private let title: String
     private let badge: String?
     private let paragraphs: [String]
+    private let titleAlignment: TitleAlignment
+    private let surface: Surface
     private let content: Content
 
     /// - Parameter badge: la pastille qui se glisse **entre** le titre et le
@@ -57,9 +82,18 @@ public struct BrandSheet<Content: View>: View {
         _ title: String,
         badge: String? = nil,
         subtitle: String? = nil,
+        titleAlignment: TitleAlignment = .leading,
+        surface: Surface = .paper,
         @ViewBuilder content: () -> Content
     ) {
-        self.init(title, badge: badge, paragraphs: subtitle.map { [$0] } ?? [], content: content)
+        self.init(
+            title,
+            badge: badge,
+            paragraphs: subtitle.map { [$0] } ?? [],
+            titleAlignment: titleAlignment,
+            surface: surface,
+            content: content
+        )
     }
 
     /// Le même en-tête, mais dont le chapeau tient en **plusieurs paragraphes**
@@ -73,12 +107,23 @@ public struct BrandSheet<Content: View>: View {
         _ title: String,
         badge: String? = nil,
         paragraphs: [String],
+        titleAlignment: TitleAlignment = .leading,
+        surface: Surface = .paper,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
         self.badge = badge
         self.paragraphs = paragraphs
+        self.titleAlignment = titleAlignment
+        self.surface = surface
         self.content = content()
+    }
+
+    private var surfaceColor: Color {
+        switch surface {
+        case .paper: MemoBookColor.surface
+        case .listening: MemoBookColor.listeningBackground
+        }
     }
 
     @Environment(\.dismiss) private var dismiss
@@ -111,6 +156,7 @@ public struct BrandSheet<Content: View>: View {
     @Environment(\.brandSheetDepth) private var depth
     @Environment(\.brandSheetPresentation) private var presentation
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     /// `true` quand une feuille est ouverte par-dessus celle-ci.
     private var isCoveredByAnotherSheet: Bool {
@@ -130,7 +176,7 @@ public struct BrandSheet<Content: View>: View {
         // Le fond **et** la forme appartiennent au système : c'est lui qui rogne
         // le contenu au bord de la feuille, et son ombre tombe alors derrière
         // elle au lieu de faire un liseré.
-        .presentationBackground(MemoBookColor.surface)
+        .presentationBackground(surfaceColor)
         .presentationCornerRadius(MemoBookSpacing.sheetCornerRadius)
         // Le crème de la marque ne se retourne pas en sombre — voir
         // `MemoBookColor`.
@@ -149,14 +195,15 @@ public struct BrandSheet<Content: View>: View {
 
     private var detentHeight: CGFloat {
         guard bodyHeight > 0 else { return Self.minimumHeight }
-
-        // **La place de l'indicateur d'accueil se réserve une fois, pas deux.**
-        // Le défilement insère déjà la safe area sous son contenu ; on
-        // l'ajoutait ici en plus, et chaque feuille traînait donc une bande
-        // morte de la hauteur de l'indicateur *plus* une gouttière — 96 pt sous
-        // le dernier bouton de la feuille d'abonnement, là où la maquette en
-        // demande 53. La marge basse de la feuille, elle, vit avec le contenu
-        // (`scrollingBody`), comme les marges latérales.
+        // La hauteur voulue, c'est **exactement** ce que le contenu mesure,
+        // plus le bandeau de la poignée.
+        //
+        // Ni marge ni bande d'accueil en plus : le `ScrollView` qui porte le
+        // contenu reçoit déjà du système l'encart de la zone sûre, et la marge
+        // basse est déjà dans `bodyHeight`. Le cran les ajoutait une seconde
+        // fois — l'indicateur d'accueil comptait double — et le dernier bouton
+        // se retrouvait à 89 pt du bas au lieu de 50. Trois marges pour une
+        // seule intention.
         let wanted = bodyHeight + Self.handleBlockHeight
 
         // Un contenu trop haut ne pousse pas la feuille jusqu'en haut : il
@@ -211,33 +258,74 @@ public struct BrandSheet<Content: View>: View {
         }
     }
 
+    @ViewBuilder
     private var header: some View {
-        HStack(alignment: .top, spacing: MemoBookSpacing.s) {
-            VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
-                Text(title)
-                    .font(MemoBookFont.h1)
-                    .tracking(-0.41)
-                    .foregroundStyle(MemoBookColor.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityAddTraits(.isHeader)
+        switch titleAlignment {
+        case .leading:
+            HStack(alignment: .top, spacing: MemoBookSpacing.s) {
+                titleBlock(alignment: .leading)
+                Spacer(minLength: 0)
+                closeButton
+            }
+            .padding(.top, MemoBookSpacing.xs)
 
-                if let badge {
-                    BrandTagPill(badge, tone: .accentOutlined, isUppercased: true)
+        case .centered where typeSize.isAccessibilitySize:
+            // En taille accessible, le rond prend sa propre ligne. Le titre a
+            // alors besoin de toute la largeur : lui réserver deux fois 44 pt
+            // ne lui laissait plus de quoi écrire « Rejoindre » d'un seul tenant,
+            // et le mot se coupait au milieu.
+            VStack(spacing: MemoBookSpacing.xs) {
+                HStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    closeButton
                 }
+                titleBlock(alignment: .center)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
 
-                ForEach(paragraphs, id: \.self) { paragraph in
-                    Text(paragraph)
-                        .font(MemoBookFont.body)
-                        .foregroundStyle(MemoBookColor.inkMuted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+        case .centered:
+            // Le rond reste au coin, **posé par-dessus** et non dans la ligne :
+            // pris dans une `HStack`, il déporterait le titre d'une demi-largeur
+            // de bouton et le centre ne serait plus celui de la feuille.
+            //
+            // C'est donc au titre de garder sa distance : il se réserve de
+            // chaque côté la place d'un rond, et ne peut plus passer dessous.
+            // Le sous-titre, lui, garde toute la largeur : c'est la ligne
+            // longue, et rien ne la menace à cette hauteur.
+            titleBlock(alignment: .center, titleInset: MemoBookSpacing.minimumTapTarget)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .padding(.top, MemoBookSpacing.xs)
+                .overlay(alignment: .topTrailing) { closeButton }
+        }
+    }
+
+    private func titleBlock(
+        alignment: HorizontalAlignment,
+        titleInset: CGFloat = 0
+    ) -> some View {
+        VStack(alignment: alignment, spacing: MemoBookSpacing.xs) {
+            Text(title)
+                .font(MemoBookFont.h1)
+                .tracking(-0.41)
+                .foregroundStyle(MemoBookColor.ink)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: Alignment(horizontal: alignment, vertical: .center))
+                .padding(.horizontal, titleInset)
+                .accessibilityAddTraits(.isHeader)
+
+            if let badge {
+                BrandTagPill(badge, tone: .accentOutlined, isUppercased: true)
             }
 
-            Spacer(minLength: 0)
-
-            closeButton
+            ForEach(paragraphs, id: \.self) { paragraph in
+                Text(paragraph)
+                    .font(MemoBookFont.body)
+                    .foregroundStyle(MemoBookColor.inkMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .padding(.top, MemoBookSpacing.xs)
     }
 
     /// Le rond de fermeture. La feuille se referme aussi au glissé et au tapotis

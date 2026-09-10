@@ -1,0 +1,7 @@
+#include "Base.xcconfig"
+
+// Le back-end lancé en local (`npm run dev` dans `backend/`), vu depuis le
+// simulateur. Sur un iPhone physique, `localhost` désigne le téléphone :
+// remplacer par l'IP du Mac dans un `Secrets.xcconfig` local plutôt que de
+// modifier ce fichier, qui est versionné.
+MEMOBOOK_API_BASE_URL = http:/$()/localhost:3000

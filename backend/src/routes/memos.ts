@@ -2,8 +2,9 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { AppContext } from "../context.js";
 import { HttpError } from "../lib/httpError.js";
-import { deviceIdOf } from "../plugins/auth.js";
-import { accountOfDevice, createOwnedMemo } from "../services/memoOwnership.js";
+import { accountIdOf } from "../plugins/auth.js";
+import { deleteMemoAndData } from "../services/deletion.js";
+import { createMemoFor, ownedByAccount, visibleToAccount } from "../services/memoOwnership.js";
 import { serializeEntry, serializeMemo, serializeRender } from "./serializers.js";
 
 const createBody = z.object({
@@ -18,14 +19,38 @@ const createBody = z.object({
 
 const idParams = z.object({ id: z.string().uuid() });
 
-/** Charge un carnet en vérifiant qu'il appartient bien à l'appelant. */
+/**
+ * Charge un carnet où l'appelant est : le sien, ou un voyage dont il est
+ * co-voyageur. C'est ce que demandent presque toutes les routes — lire,
+ * raconter, régler, générer, commander.
+ *
+ * Un voyage auquel on ne participe pas répond 404 et non 403 : un 403
+ * confirmerait son existence.
+ */
+export async function loadVisibleMemo(
+  context: AppContext,
+  request: FastifyRequest,
+  memoId: string,
+) {
+  const memo = await context.prisma.memo.findFirst({
+    where: { id: memoId, ...visibleToAccount(accountIdOf(request)) },
+  });
+  if (!memo) throw HttpError.notFound("Carnet introuvable.");
+  return memo;
+}
+
+/**
+ * Charge un carnet dont l'appelant est **le propriétaire**. Réservé au seul
+ * geste qui ne se partage pas : supprimer le voyage, et donc le récit de tous
+ * ceux qui y ont raconté.
+ */
 export async function loadOwnedMemo(
   context: AppContext,
   request: FastifyRequest,
   memoId: string,
 ) {
   const memo = await context.prisma.memo.findFirst({
-    where: { id: memoId, deviceId: deviceIdOf(request) },
+    where: { id: memoId, ...ownedByAccount(accountIdOf(request)) },
   });
   if (!memo) throw HttpError.notFound("Carnet introuvable.");
   return memo;
@@ -34,7 +59,7 @@ export async function loadOwnedMemo(
 export function registerMemoRoutes(app: FastifyInstance, context: AppContext): void {
   app.get("/v1/memos", async (request) => {
     const memos = await context.prisma.memo.findMany({
-      where: { deviceId: deviceIdOf(request) },
+      where: visibleToAccount(accountIdOf(request)),
       orderBy: { createdAt: "desc" },
       include: {
         _count: { select: { entries: true } },
@@ -58,22 +83,16 @@ export function registerMemoRoutes(app: FastifyInstance, context: AppContext): v
       throw HttpError.badRequest("La date de fin précède la date de début.");
     }
 
-    // Un carnet créé par un appareil déjà rattaché à un compte désigne ce
-    // compte comme propriétaire, et lui pose sa ligne de participant. Sans ça
-    // il n'apparaîtrait jamais sur l'accueil, qui lit `memo_members`.
-    const deviceId = deviceIdOf(request);
-    const memo = await createOwnedMemo(
-      context.prisma,
-      { ...body, deviceId },
-      await accountOfDevice(context.prisma, deviceId),
-    );
+    // Le compte qui crée le carnet en est le propriétaire, tout de suite et
+    // sans condition : il n'existe pas de carnet sans propriétaire principal.
+    const memo = await createMemoFor(context.prisma, accountIdOf(request), body);
 
     return reply.code(201).send(serializeMemo(memo));
   });
 
   app.get("/v1/memos/:id", async (request) => {
     const { id } = idParams.parse(request.params);
-    await loadOwnedMemo(context, request, id);
+    await loadVisibleMemo(context, request, id);
 
     const memo = await context.prisma.memo.findUniqueOrThrow({
       where: { id },
@@ -90,10 +109,16 @@ export function registerMemoRoutes(app: FastifyInstance, context: AppContext): v
     };
   });
 
+  /**
+   * Supprime un carnet — **son propriétaire seul**, jamais un co-voyageur.
+   *
+   * Emporte ses souvenirs, ses médias (lignes et fichiers) et ses commandes :
+   * voir `services/deletion.ts`.
+   */
   app.delete("/v1/memos/:id", async (request, reply) => {
     const { id } = idParams.parse(request.params);
     await loadOwnedMemo(context, request, id);
-    await context.prisma.memo.delete({ where: { id } });
+    await deleteMemoAndData(context, id);
     return reply.code(204).send();
   });
 }

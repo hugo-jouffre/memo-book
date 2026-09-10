@@ -38,9 +38,11 @@ public struct BrandButton: View {
         /// sans se cercler : c'est l'ombre (``MemoBookShadow/raised``) qui le
         /// pose au-dessus de la page.
         case raised
-        /// Aplat lime, libellé et filet verts. C'est la seule façon dont
-        /// l'accent porte un fond de bouton — voir ``MemoBookColor/accent`` :
-        /// le lime est trop clair pour porter autre chose que du vert.
+        /// Aplat lime cerclé de vert. **La seule exception** à la règle qui
+        /// réserve l'accent aux petites surfaces : c'est le bouton de
+        /// l'abonnement, et il n'y en a qu'un par écran. Le lime dit « ce n'est
+        /// pas l'action ordinaire de l'écran, c'est celle qui débloque » — le
+        /// vert plein, lui, reste au CTA du parcours normal.
         case accent
         /// Aplat bleu de la marque, libellé à l'encre. L'action qui fait
         /// simplement **avancer** — « Continuer », d'un écran de paywall au
@@ -189,6 +191,10 @@ public struct BrandButton: View {
 
     private var isIconOnly: Bool { title == nil }
 
+    /// Les styles qui posent un aplat plein. Désactivés, ils gardent leur pavé
+    /// et passent au gris ; les autres n'ont qu'un texte à éteindre.
+    private var isFilled: Bool { style == .primary || style == .accent }
+
     /// `RoundedRectangle` ramène tout seul un rayon trop grand à la moitié du
     /// plus petit côté : un carré devient un rond, sans changer de forme. Un
     /// grand nombre fini, pas `.infinity`, qui donnerait des NaN au tracé.
@@ -240,7 +246,7 @@ public struct BrandButton: View {
         if isSubdued, isEnabled { return MemoBookColor.inkMuted }
 
         guard isEnabled else {
-            return style == .primary ? MemoBookColor.surface : MemoBookColor.disabled
+            return isFilled ? MemoBookColor.surface : MemoBookColor.disabled
         }
         return switch (style, alternate) {
         case (.primary, false): MemoBookColor.onAction
@@ -251,6 +257,10 @@ public struct BrandButton: View {
             MemoBookColor.ink
         case (.tertiary, true), (.link, true), (.soft, true), (.raised, true):
             MemoBookColor.onAction
+        // Le lime est une couleur claire : c'est l'encre qui se pose dessus,
+        // dans les deux cas — un libellé blanc y tomberait à 1,1:1. Et le vert
+        // du contour plutôt que l'encre : sur un aplat lime, le noir chaud se
+        // lit comme un texte posé là, le vert comme le bouton lui-même.
         case (.accent, _): MemoBookColor.action
         case (.blue, _): MemoBookColor.ink
         // Le rouge ne s'inverse pas sur fond sombre : c'est un signal, pas une
@@ -262,7 +272,7 @@ public struct BrandButton: View {
     @ViewBuilder
     private var background: some View {
         if !isEnabled {
-            shape.fill(style == .primary ? MemoBookColor.disabled : Color.clear)
+            shape.fill(isFilled ? MemoBookColor.disabled : Color.clear)
         } else {
             switch (style, alternate) {
             case (.primary, false):
@@ -295,12 +305,10 @@ public struct BrandButton: View {
             EmptyView()
         } else {
             switch (style, alternate) {
-            case (.primary, false), (.secondary, false):
+            case (.primary, false), (.secondary, false), (.accent, _):
                 shape.strokeBorder(MemoBookColor.action, lineWidth: 1)
             case (.primary, true), (.secondary, true):
                 shape.strokeBorder(MemoBookColor.onAction, lineWidth: 1)
-            case (.accent, _):
-                shape.strokeBorder(MemoBookColor.action, lineWidth: 1)
             case (.tertiary, _), (.link, _), (.soft, _), (.raised, _), (.destructive, _),
                 (.blue, _):
                 EmptyView()
@@ -342,9 +350,17 @@ public struct BrandButton: View {
                 BrandButton(icon: arrow) {}
                 BrandButton("Chargement", isLoading: true) {}
             }
+            BrandButton(
+                "Découvrir l’abonnement",
+                icon: arrow,
+                iconPlacement: .trailing,
+                style: .accent,
+                fillsWidth: true
+            ) {}
             BrandButton("S’inscrire à nouveau", style: .accent, fillsWidth: true) {}
             BrandButton("Continuer", style: .blue, fillsWidth: true) {}
             BrandButton("Résilier mon abonnement", style: .destructive, fillsWidth: true) {}
+
             HStack {
                 BrandButton("Soft", style: .soft) {}
                 BrandButton(icon: arrow, style: .soft, isRound: true) {}

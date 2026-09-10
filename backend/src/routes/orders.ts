@@ -2,8 +2,9 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppContext } from "../context.js";
 import { HttpError } from "../lib/httpError.js";
-import { deviceIdOf } from "../plugins/auth.js";
-import { loadOwnedMemo } from "./memos.js";
+import { accountIdOf } from "../plugins/auth.js";
+import { visibleToAccount } from "../services/memoOwnership.js";
+import { loadVisibleMemo } from "./memos.js";
 import { serializePrintOrder } from "./serializers.js";
 
 const memoIdParams = z.object({ id: z.string().uuid() });
@@ -32,6 +33,11 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
   /**
    * Commande d'un carnet imprimé, à partir d'un rendu déjà prévisualisé.
    *
+   * **Ouverte aux co-voyageurs autant qu'au propriétaire** : chacun commande
+   * son exemplaire du carnet qu'ils ont écrit ensemble. La commande retient
+   * donc qui l'a passée — c'est ce qui dira quelle cagnotte débiter, chacun
+   * ayant la sienne.
+   *
    * La commande est créée en `draft` : l'envoi effectif à l'imprimeur suppose
    * un paiement encaissé, qui n'existe pas encore (StoreKit / Stripe, voir la
    * roadmap). Cette route pose le contrat côté app et rend la commande
@@ -39,7 +45,7 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
    */
   app.post("/v1/memos/:id/orders", async (request, reply) => {
     const { id: memoId } = memoIdParams.parse(request.params);
-    await loadOwnedMemo(context, request, memoId);
+    await loadVisibleMemo(context, request, memoId);
 
     const body = createOrderBody.parse(request.body ?? {});
 
@@ -62,6 +68,7 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
       data: {
         memoId,
         renderId: render.id,
+        orderedByAccountId: accountIdOf(request),
         copies: body.copies,
         shippingName: body.shipping.name,
         shippingLine1: body.shipping.line1,
@@ -73,7 +80,13 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
     });
 
     context.logger.info(
-      { orderId: order.id, memoId, renderId: render.id, copies: order.copies },
+      {
+        orderId: order.id,
+        memoId,
+        renderId: render.id,
+        copies: order.copies,
+        orderedBy: order.orderedByAccountId,
+      },
       "Commande d'impression créée",
     );
 
@@ -82,7 +95,7 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
 
   app.get("/v1/memos/:id/orders", async (request) => {
     const { id: memoId } = memoIdParams.parse(request.params);
-    await loadOwnedMemo(context, request, memoId);
+    await loadVisibleMemo(context, request, memoId);
 
     const orders = await context.prisma.printOrder.findMany({
       where: { memoId },
@@ -96,7 +109,7 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
     const { id } = orderIdParams.parse(request.params);
 
     const order = await context.prisma.printOrder.findFirst({
-      where: { id, memo: { deviceId: deviceIdOf(request) } },
+      where: { id, memo: visibleToAccount(accountIdOf(request)) },
     });
 
     if (!order) throw HttpError.notFound("Commande introuvable.");

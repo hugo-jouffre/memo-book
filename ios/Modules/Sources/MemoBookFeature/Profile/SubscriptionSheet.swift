@@ -387,7 +387,7 @@ private struct SubscriptionCallout: View {
 /// Tous les libellés des cinq feuilles, en un seul endroit.
 ///
 /// La maquette porte neuf fautes de français et deux formes d'apostrophe ; **Hugo
-/// a tranché de toutes les corriger** (D12, T39) plutôt que de les recopier
+/// a tranché de toutes les corriger** (D12, T66) plutôt que de les recopier
 /// comme R8 le veut par défaut. C'est donc l'un des rares endroits où le code
 /// s'écarte volontairement de Figma, et la liste des écarts vit dans la fiche
 /// écran pour que Clara les reprenne à la source.

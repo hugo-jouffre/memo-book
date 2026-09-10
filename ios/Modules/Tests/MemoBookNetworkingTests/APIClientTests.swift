@@ -65,11 +65,18 @@ final class APIClientTests: XCTestCase {
         StubURLProtocol.lastBody = nil
     }
 
-    private func makeClient(token: String? = "jeton") -> MemoBookAPIClient {
+    /// Un client identifié par une **session de compte** : c'est ce que
+    /// présentent toutes les routes qui touchent à quelque chose de quelqu'un.
+    /// Le jeton d'appareil ne sert plus qu'à l'enregistrement.
+    private func makeClient(
+        sessionToken: String? = "jeton-de-session",
+        deviceToken: String? = "jeton-d-appareil"
+    ) -> MemoBookAPIClient {
         MemoBookAPIClient(
             configuration: APIConfiguration(baseURL: baseURL),
             session: session,
-            tokenStore: InMemoryTokenStore(token: token)
+            tokenStore: InMemoryTokenStore(token: deviceToken),
+            sessionStore: InMemoryTokenStore(token: sessionToken)
         )
     }
 
@@ -90,7 +97,8 @@ final class APIClientTests: XCTestCase {
         let client = MemoBookAPIClient(
             configuration: APIConfiguration(baseURL: baseURL),
             session: session,
-            tokenStore: store
+            tokenStore: store,
+            sessionStore: InMemoryTokenStore()
         )
 
         respond(status: 201, json: #"{"deviceId":"d1","token":"secret"}"#)
@@ -100,7 +108,7 @@ final class APIClientTests: XCTestCase {
     }
 
     func testRegisteredDeviceIsNotRegisteredTwice() async throws {
-        let client = makeClient(token: "déjà-là")
+        let client = makeClient(deviceToken: "déjà-là")
         StubURLProtocol.handler = { _ in
             XCTFail("Aucune requête ne devait partir : l'appareil a déjà un token.")
             throw URLError(.badServerResponse)
@@ -109,20 +117,22 @@ final class APIClientTests: XCTestCase {
         try await client.ensureDeviceRegistered()
     }
 
-    func testAuthorizationHeaderIsSent() async throws {
-        let client = makeClient(token: "mon-jeton")
+    /// Les carnets appartiennent à un compte : c'est le jeton de session qui
+    /// part, jamais celui de l'appareil.
+    func testAuthorizationHeaderCarriesTheSessionToken() async throws {
+        let client = makeClient(sessionToken: "ma-session", deviceToken: "mon-appareil")
         respond(status: 200, json: #"{"memos":[]}"#)
 
         _ = try await client.memos()
 
         XCTAssertEqual(
             StubURLProtocol.lastRequest?.value(forHTTPHeaderField: "Authorization"),
-            "Bearer mon-jeton"
+            "Bearer ma-session"
         )
     }
 
     func testMissingTokenFailsBeforeAnyRequest() async {
-        let client = makeClient(token: nil)
+        let client = makeClient(sessionToken: nil)
 
         do {
             _ = try await client.memos()
@@ -160,17 +170,44 @@ final class APIClientTests: XCTestCase {
     }
 
     func testUnauthorizedClearsStoredToken() async {
-        let store = InMemoryTokenStore(token: "périmé")
+        let sessionStore = InMemoryTokenStore(token: "périmé")
+        let deviceStore = InMemoryTokenStore(token: "appareil")
         let client = MemoBookAPIClient(
             configuration: APIConfiguration(baseURL: baseURL),
             session: session,
-            tokenStore: store
+            tokenStore: deviceStore,
+            sessionStore: sessionStore
         )
         respond(status: 401, json: #"{"error":"unauthorized","message":"Token invalide."}"#)
 
         _ = try? await client.memos()
 
-        XCTAssertNil(store.read(), "Un token refusé doit être oublié.")
+        XCTAssertNil(sessionStore.read(), "Un token refusé doit être oublié.")
+        XCTAssertNotNil(
+            deviceStore.read(),
+            "Seul le jeton présenté est effacé : celui de l'appareil n'a rien à voir avec un 401 de session."
+        )
+    }
+
+    /// Supprimer son compte vide **les deux** trousseaux : le compte n'existe
+    /// plus, et son appareil a disparu avec lui côté serveur.
+    func testDeleteAccountClearsBothTokens() async throws {
+        let sessionStore = InMemoryTokenStore(token: "ma-session")
+        let deviceStore = InMemoryTokenStore(token: "mon-appareil")
+        let client = MemoBookAPIClient(
+            configuration: APIConfiguration(baseURL: baseURL),
+            session: session,
+            tokenStore: deviceStore,
+            sessionStore: sessionStore
+        )
+        respond(status: 204, json: "")
+
+        try await client.deleteAccount()
+
+        XCTAssertEqual(StubURLProtocol.lastRequest?.httpMethod, "DELETE")
+        XCTAssertEqual(StubURLProtocol.lastRequest?.url?.path, "/v1/accounts/me")
+        XCTAssertNil(sessionStore.read())
+        XCTAssertNil(deviceStore.read())
     }
 
     func testServerErrorIsRetryable() async {

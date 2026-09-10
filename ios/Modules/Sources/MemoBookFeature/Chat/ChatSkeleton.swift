@@ -35,30 +35,41 @@ struct ChatSkeleton: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(BrandBackdrop())
-        .brandSkeletonShimmer()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Chargement de la conversation")
     }
 
     private var header: some View {
         HStack(spacing: MemoBookSpacing.snug) {
-            BrandSkeleton(cornerRadius: ChatMetrics.control)
-                .frame(width: MemoBookSpacing.m, height: MemoBookSpacing.m)
+            icon
             Spacer(minLength: 0)
-            BrandSkeleton(cornerRadius: MemoBookSpacing.avatarSide)
-                .frame(width: MemoBookSpacing.l, height: MemoBookSpacing.l)
-            BrandSkeleton(cornerRadius: MemoBookSpacing.s)
-                .frame(width: 84, height: MemoBookSpacing.sectionGap)
+            BrandSkeleton(
+                width: MemoBookSpacing.l,
+                height: MemoBookSpacing.l,
+                cornerRadius: MemoBookSpacing.avatarSide
+            )
+            BrandSkeleton(
+                width: 84,
+                height: MemoBookSpacing.sectionGap,
+                cornerRadius: MemoBookSpacing.s
+            )
             Spacer(minLength: 0)
-            BrandSkeleton(cornerRadius: ChatMetrics.control)
-                .frame(width: MemoBookSpacing.m, height: MemoBookSpacing.m)
-            BrandSkeleton(cornerRadius: ChatMetrics.control)
-                .frame(width: MemoBookSpacing.m, height: MemoBookSpacing.m)
+            icon
+            icon
         }
         .padding(.horizontal, MemoBookSpacing.s)
         .padding(.top, DeviceScreen.topSafeInset + MemoBookSpacing.xs)
         .padding(.bottom, MemoBookSpacing.snug)
         .background(ChatMetrics.barMaterial)
+    }
+
+    /// Une des quatre pastilles carrées de l'en-tête.
+    private var icon: some View {
+        BrandSkeleton(
+            width: MemoBookSpacing.m,
+            height: MemoBookSpacing.m,
+            cornerRadius: ChatMetrics.control
+        )
     }
 
     private var content: some View {
@@ -73,17 +84,23 @@ struct ChatSkeleton: View {
     /// La bannière d'aperçu : sa pastille d'icône, ses trois lignes, sa flèche.
     private var banner: some View {
         HStack(spacing: MemoBookSpacing.snug) {
-            BrandSkeleton(cornerRadius: MemoBookSpacing.snug)
-                .frame(width: MemoBookSpacing.xl, height: MemoBookSpacing.xl)
+            BrandSkeleton(
+                width: MemoBookSpacing.xl,
+                height: MemoBookSpacing.xl,
+                cornerRadius: MemoBookSpacing.snug
+            )
 
             VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
-                BrandSkeleton().frame(width: 96, height: Self.lineHeight)
-                BrandSkeleton().frame(maxWidth: .infinity).frame(height: Self.lineHeight)
-                BrandSkeleton().frame(maxWidth: .infinity).frame(height: Self.lineHeight)
+                BrandSkeleton(width: 96, height: Self.lineHeight)
+                BrandSkeleton(height: Self.lineHeight)
+                BrandSkeleton(height: Self.lineHeight)
             }
 
-            BrandSkeleton(cornerRadius: MemoBookSpacing.s)
-                .frame(width: MemoBookSpacing.sectionGap, height: MemoBookSpacing.sectionGap)
+            BrandSkeleton(
+                width: MemoBookSpacing.sectionGap,
+                height: MemoBookSpacing.sectionGap,
+                cornerRadius: MemoBookSpacing.s
+            )
         }
         .padding(MemoBookSpacing.s)
         .background(
@@ -98,8 +115,7 @@ struct ChatSkeleton: View {
             ForEach(Array(Self.paragraphs.enumerated()), id: \.offset) { _, lines in
                 VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
                     ForEach(Array(lines.enumerated()), id: \.offset) { _, fraction in
-                        BrandSkeleton()
-                            .frame(height: Self.lineHeight)
+                        BrandSkeleton(height: Self.lineHeight)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .scaleEffect(x: fraction, anchor: .leading)
                     }
@@ -117,11 +133,16 @@ struct ChatSkeleton: View {
     /// Les trois commandes de la barre d'envoi.
     private var bar: some View {
         HStack(spacing: MemoBookSpacing.snug) {
-            BrandSkeleton(cornerRadius: MemoBookSpacing.xs)
-                .frame(width: MemoBookSpacing.sectionGap, height: MemoBookSpacing.snug)
+            BrandSkeleton(
+                width: MemoBookSpacing.sectionGap,
+                height: MemoBookSpacing.snug,
+                cornerRadius: MemoBookSpacing.xs
+            )
             ForEach(0..<3, id: \.self) { _ in
-                BrandSkeleton(cornerRadius: MemoBookSpacing.m)
-                    .frame(height: MemoBookSpacing.xl + MemoBookSpacing.xs)
+                BrandSkeleton(
+                    height: MemoBookSpacing.xl + MemoBookSpacing.xs,
+                    cornerRadius: MemoBookSpacing.m
+                )
             }
         }
         .padding(.horizontal, MemoBookSpacing.snug)

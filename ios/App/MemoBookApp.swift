@@ -26,13 +26,27 @@ struct MemoBookApp: App {
 }
 
 extension APIConfiguration {
-    /// En debug, l'app parle au back-end lancé en local (`npm run dev`).
-    /// L'URL de production sera injectée ici quand l'API sera déployée.
+    /// L'adresse de l'API, telle que la configuration de build l'a posée :
+    /// `Config/Debug.xcconfig` pour le back-end local, `Config/Release.xcconfig`
+    /// pour la production, en passant par la clé `MemoBookAPIBaseURL` de
+    /// l'Info.plist.
+    ///
+    /// **Aucune URL n'est écrite dans le code**, et un build Release ne peut
+    /// plus retomber en silence sur `localhost` — c'est exactement ce qu'il
+    /// faisait avant, et ça n'aurait sauté qu'une fois l'app sur un téléphone.
+    ///
+    /// Si la clé manque, le projet a été construit de travers : en debug on
+    /// repart du back-end local, en release on s'arrête net plutôt que de
+    /// laisser une app livrée parler dans le vide.
     static var fromBuildConfiguration: APIConfiguration {
+        if let configured = APIConfiguration.fromBundle() { return configured }
+
         #if DEBUG
-            .localDevelopment
+            return .localDevelopment
         #else
-            .localDevelopment
+            preconditionFailure(
+                "MemoBookAPIBaseURL absente de l'Info.plist : le build ne sait pas à quelle API parler. Voir ios/Config/Release.xcconfig."
+            )
         #endif
     }
 }

@@ -3,15 +3,15 @@ import SwiftUI
 /// La forme d'onde de MemoBook, sous ses deux emplois : ce qu'on est en train
 /// de dire, et ce qu'on a déjà dit.
 ///
-/// Elle existait déjà, dessinée dans `MemoDetailView` et privée à ce fichier —
-/// donc invisible du chat, qui en a besoin dans chaque bulle vocale. C'est sa
-/// deuxième occurrence : elle monte dans le design system, et les deux écrans
-/// dessinent enfin la même chose.
+/// Ce n'est jamais une visualisation du fichier — c'est le **retour du micro**,
+/// puis la trace de ce retour. D'où le parti pris de la maquette, des barres
+/// pleines et espacées plutôt qu'une courbe : on lit le rythme de la voix d'un
+/// coup d'œil, pas sa forme d'onde.
 ///
 /// | Emploi | Ce qu'on passe | Ce qu'on voit |
 /// |---|---|---|
-/// | **En direct**, pendant qu'on parle | ``init(live:capacity:isDimmed:tint:)`` | une frise qui **glisse** : la voix arrive par la droite et pousse le reste |
-/// | **Un vocal terminé** | ``init(levels:progress:)`` | les niveaux relevés, la partie jouée teintée |
+/// | **En direct**, pendant qu'on parle | ``init(live:size:capacity:isDimmed:tint:)`` | une frise qui **glisse** : la voix arrive par la droite et pousse le reste |
+/// | **Un vocal terminé** | ``init(levels:progress:tint:playedTint:)`` | les niveaux relevés, la partie jouée teintée |
 ///
 /// **Les deux ne se dessinent pas de la même façon, et c'est nécessaire.** Un
 /// vocal terminé peut compter des centaines d'échantillons : il passe par un
@@ -27,6 +27,23 @@ import SwiftUI
 /// c'est honnête — une forme d'onde décorative, identique pour tous les vocaux,
 /// dirait quelque chose de faux sur ce qui a été dit.
 public struct BrandWaveform: View {
+    /// Où la frise est posée, ce qui décide de sa taille.
+    ///
+    /// Deux emplacements, et un seul jeu de mesures pour chacun : la grande
+    /// feuille d'enregistrement, où la frise **est** le contenu de l'écran, et
+    /// la barre d'envoi du chat, où elle tient dans la place d'un bouton.
+    public enum Size {
+        /// La feuille d'enregistrement : des barres larges, hautes, et qui
+        /// grandissent avec le corps de texte — c'est la seule chose que cet
+        /// écran montre, elle doit suivre les réglages d'accessibilité.
+        case sheet
+        /// Une barre d'outils ou une bulle du fil. Mesures **fixes** : à cette
+        /// échelle, une forme d'onde est un dessin et non un mot, et la grossir
+        /// avec le corps de texte la transformerait en histogramme — en
+        /// poussant au passage le chronomètre et le micro hors de la barre.
+        case bar
+    }
+
     /// Les barres à dessiner, entre 0 et 1.
     private let levels: [Double]
 
@@ -34,6 +51,7 @@ public struct BrandWaveform: View {
     /// direct, où il n'y a rien de « déjà joué ».
     private let progress: Double?
 
+    private let size: Size
     private let tint: Color
     private let playedTint: Color
 
@@ -52,6 +70,7 @@ public struct BrandWaveform: View {
     ) {
         self.levels = levels
         self.live = nil
+        self.size = .bar
         self.capacity = 0
         self.isDimmed = false
         self.progress = min(max(progress, 0), 1)
@@ -68,25 +87,31 @@ public struct BrandWaveform: View {
     ///
     /// Elle **avance** : tant qu'il y a moins d'échantillons que de barres, elle
     /// se remplit depuis la gauche ; ensuite chaque nouvel échantillon pousse
-    /// les autres. C'est le même geste que la grande feuille d'enregistrement,
-    /// et c'est ce qui fait qu'on voit sa voix *arriver* plutôt que clignoter.
+    /// les autres. C'est le même geste dans la grande feuille d'enregistrement
+    /// et dans la barre d'envoi du chat, et c'est ce qui fait qu'on voit sa voix
+    /// *arriver* plutôt que clignoter.
     ///
     /// - Parameters:
     ///   - live: tous les niveaux relevés depuis le début, du plus ancien au
     ///     plus récent. Seuls les ``capacity`` derniers sont dessinés.
+    ///   - size: où la frise est posée. Voir ``Size``.
     ///   - capacity: combien de barres tiennent dans la place. C'est **la**
-    ///     constante qui règle la vitesse apparente de la frise.
+    ///     constante qui règle la vitesse apparente de la frise : avec un
+    ///     échantillon toutes les 80 ms, 34 barres font défiler un peu moins de
+    ///     trois secondes de voix.
     ///   - isDimmed: la capture est en pause. Les barres restent en place — on
     ///     n'efface pas ce qui a été dit — mais s'éteignent, pour qu'on ne les
     ///     lise pas comme du son qui continue d'arriver.
     public init(
         live levels: [Double],
-        capacity: Int = 34,
+        size: Size = .sheet,
+        capacity: Int = BrandWaveform.capacity,
         isDimmed: Bool = false,
         tint: Color = MemoBookColor.action
     ) {
         self.levels = levels
         self.live = levels
+        self.size = size
         self.capacity = max(1, capacity)
         self.isDimmed = isDimmed
         self.progress = nil
@@ -94,15 +119,37 @@ public struct BrandWaveform: View {
         self.playedTint = tint
     }
 
-    /// L'épaisseur d'une barre et l'air entre deux. Fixes, et non mises à
-    /// l'échelle du texte : une forme d'onde est un dessin, pas un mot — la
-    /// grossir avec le corps de texte la transformerait en histogramme.
-    private static let barWidth: CGFloat = 3
-    private static let barSpacing: CGFloat = 2
+    /// Combien de barres tient la grande feuille. Défaut de l'emploi en direct ;
+    /// une barre d'outils en tient bien moins et le dit.
+    public static let capacity = 34
 
-    /// Le plancher d'une barre. Sans lui, un silence disparaît complètement et
-    /// la forme d'onde a l'air rognée.
-    private static let minimumBarHeight: CGFloat = 3
+    /// Les mesures d'une frise de barre d'outils ou de bulle. Fixes, à dessein :
+    /// voir ``Size/bar``.
+    private enum Bar {
+        static let width: CGFloat = 3
+        static let spacing: CGFloat = 2
+        /// Le plancher d'une barre. Sans lui, un silence disparaît complètement
+        /// et la forme d'onde a l'air rognée.
+        static let minimumHeight: CGFloat = 3
+        /// La maquette dessine 22,6 pt ; on prend le cran de l'échelle juste
+        /// au-dessus (§2.2 de `docs/ui-development.md`).
+        static let height = MemoBookSpacing.m
+    }
+
+    @ScaledMetric(relativeTo: .body) private var sheetHeight: CGFloat = 56
+    @ScaledMetric(relativeTo: .body) private var sheetBarWidth: CGFloat = 4
+    @ScaledMetric(relativeTo: .body) private var sheetSpacing: CGFloat = 5
+
+    private var barWidth: CGFloat { size == .sheet ? sheetBarWidth : Bar.width }
+    private var barSpacing: CGFloat { size == .sheet ? sheetSpacing : Bar.spacing }
+    private var maximumHeight: CGFloat { size == .sheet ? sheetHeight : Bar.height }
+
+    /// La barre d'un silence. Pas zéro : une frise qui disparaît par endroits se
+    /// lit comme un trou dans l'enregistrement, alors que se taire une seconde
+    /// est normal.
+    private var minimumBarHeight: CGFloat {
+        size == .sheet ? sheetBarWidth : Bar.minimumHeight
+    }
 
     @ViewBuilder
     public var body: some View {
@@ -118,28 +165,30 @@ public struct BrandWaveform: View {
     private var frieze: some View {
         let shown = (live ?? []).suffix(capacity)
 
-        return HStack(alignment: .center, spacing: Self.barSpacing) {
+        return HStack(alignment: .center, spacing: barSpacing) {
             ForEach(Array(shown.enumerated()), id: \.offset) { _, level in
                 Capsule()
                     .fill(tint)
-                    .frame(width: Self.barWidth, height: barHeight(for: level))
+                    .frame(width: barWidth, height: barHeight(for: level))
             }
             // La frise pousse depuis la gauche tant qu'elle n'est pas pleine.
             Spacer(minLength: 0)
         }
         .opacity(isDimmed ? 0.35 : 1)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: Self.height)
+        .frame(height: maximumHeight)
         // Assez court pour suivre la voix, assez long pour que deux
         // échantillons se rejoignent au lieu de clignoter.
         .animation(.linear(duration: 0.09), value: levels)
         .animation(.easeOut(duration: 0.25), value: isDimmed)
+        // La frise ne dit rien de plus que « ça enregistre », déjà annoncé par
+        // le bouton et le chronomètre qui l'entourent.
         .accessibilityHidden(true)
     }
 
     private func barHeight(for level: Double) -> CGFloat {
         let clamped = min(max(level, 0), 1)
-        return Self.minimumBarHeight + (Self.height - Self.minimumBarHeight) * clamped
+        return minimumBarHeight + (maximumHeight - minimumBarHeight) * clamped
     }
 
     private var recorded: some View {
@@ -151,28 +200,24 @@ public struct BrandWaveform: View {
             let played = Int((self.progress ?? 0) * Double(bars.count))
 
             for (index, level) in bars.enumerated() {
-                let height = max(Self.minimumBarHeight, size.height * level)
+                let height = max(Bar.minimumHeight, size.height * level)
                 let rect = CGRect(
-                    x: CGFloat(index) * (Self.barWidth + Self.barSpacing),
+                    x: CGFloat(index) * (Bar.width + Bar.spacing),
                     y: (size.height - height) / 2,
-                    width: Self.barWidth,
+                    width: Bar.width,
                     height: height
                 )
                 context.fill(
-                    Path(roundedRect: rect, cornerRadius: Self.barWidth / 2),
+                    Path(roundedRect: rect, cornerRadius: Bar.width / 2),
                     with: .color(self.progress != nil && index < played ? self.playedTint : self.tint)
                 )
             }
         }
-        .frame(height: Self.height)
+        .frame(height: Bar.height)
         // Le dessin ne dit rien de plus que la durée, déjà annoncée par la bulle
         // qui le porte.
         .accessibilityHidden(true)
     }
-
-    /// La hauteur de la bande. La maquette dessine 22,6 pt ; on prend le cran de
-    /// l'échelle juste au-dessus (§2.2 de `docs/ui-development.md`).
-    public static let height = MemoBookSpacing.m
 
     /// Ramène un relevé au nombre de barres que la largeur peut tenir.
     ///
@@ -182,7 +227,7 @@ public struct BrandWaveform: View {
     /// et non la moyenne — une moyenne aplatit les pics, c'est-à-dire tout ce
     /// qu'une forme d'onde a à montrer.
     static func resample(_ levels: [Double], toFit width: CGFloat) -> [CGFloat] {
-        let capacity = max(1, Int((width + barSpacing) / (barWidth + barSpacing)))
+        let capacity = max(1, Int((width + Bar.spacing) / (Bar.width + Bar.spacing)))
         guard !levels.isEmpty else { return [0] }
         guard levels.count > capacity else {
             return levels.map { CGFloat(min(max($0, 0), 1)) }
@@ -203,13 +248,25 @@ public struct BrandWaveform: View {
     VStack(alignment: .leading, spacing: MemoBookSpacing.m) {
         BrandWaveform(levels: BrandWaveform.sampleLevels, progress: 0.35)
         BrandWaveform(levels: [])
-        BrandWaveform(live: BrandWaveform.sampleLevels, capacity: 19)
-        BrandWaveform(live: Array(BrandWaveform.sampleLevels.prefix(6)), capacity: 19)
-        BrandWaveform(live: BrandWaveform.sampleLevels, capacity: 19, isDimmed: true)
+        BrandWaveform(live: BrandWaveform.sampleLevels, size: .bar, capacity: 19)
+        BrandWaveform(live: Array(BrandWaveform.sampleLevels.prefix(6)), size: .bar, capacity: 19)
+        BrandWaveform(live: BrandWaveform.sampleLevels, size: .bar, capacity: 19, isDimmed: true)
     }
     .padding(MemoBookSpacing.screenMargin)
     .frame(maxWidth: .infinity)
     .background(MemoBookColor.background)
+    .environment(\.colorScheme, .light)
+}
+
+#Preview("Frise de la feuille") {
+    VStack(spacing: MemoBookSpacing.l) {
+        BrandWaveform(live: BrandWaveform.sampleLevels)
+        BrandWaveform(live: BrandWaveform.sampleLevels, isDimmed: true)
+        BrandWaveform(live: Array(BrandWaveform.sampleLevels.prefix(8)))
+    }
+    .padding(MemoBookSpacing.screenMargin)
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(MemoBookColor.listeningBackground)
     .environment(\.colorScheme, .light)
 }
 

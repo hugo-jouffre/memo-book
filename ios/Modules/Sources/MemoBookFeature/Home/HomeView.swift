@@ -6,7 +6,7 @@ import SwiftUI
 /// pouce.
 ///
 /// **L'écran ne contient aucun contenu.** Titres, pays, dates, compteurs,
-/// compagnons, carte de découverte : tout vient du ``HomeFeed`` que porte
+/// co-voyageurs, carte de découverte : tout vient du ``HomeFeed`` que porte
 /// ``HomeModel``. Ce qui est écrit ici, ce sont les seuls libellés qui
 /// appartiennent à l'interface — les titres de section et l'appel à l'action.
 ///
@@ -35,6 +35,19 @@ public struct HomeView: View {
     @State private var isLoaded = false
 
     @Environment(\.subscriptionSession) private var subscriptionSession
+
+    /// La feuille d'enregistrement est ouverte. Même raison que celle du
+    /// carnet : une feuille propose, elle ne navigue pas.
+    @State private var isRecording = false
+
+    /// La feuille « Nouveau carnet » est ouverte.
+    ///
+    /// C'est la **seule** chose que l'accueil présente lui-même, et ce n'est pas
+    /// une entorse à la règle qui veut qu'il ne navigue pas : une feuille ne
+    /// mène nulle part, elle propose. Ce qu'on y choisit, en revanche, redevient
+    /// une ``HomeIntent`` que `RootView` route.
+    @State private var isCreatingNotebook = false
+
     @Environment(\.launchOverlayIsVisible) private var isCoveredByLaunch
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -66,6 +79,17 @@ public struct HomeView: View {
             .ignoresSafeArea()
         }
         .environment(\.homeContentHasAppeared, hasAppeared)
+        .brandSheet(isPresented: $isCreatingNotebook) {
+            NewNotebookSheet(resumableTrip: model.resumableTrip, onIntent: onIntent)
+        }
+        .brandSheet(isPresented: $isRecording) {
+            // Le vocal ne remonte pas à `RootView` : il n'y a rien à router, il
+            // y a un appel réseau à faire. C'est le modèle de l'écran qui le
+            // fait, comme il fait son chargement.
+            RecordingSheet { audio in
+                Task { await model.upload(audio) }
+            }
+        }
         // Le crème de la marque ne se retourne pas en sombre — voir
         // `MemoBookColor`.
         .environment(\.colorScheme, .light)
@@ -82,6 +106,13 @@ public struct HomeView: View {
         }
         .onAppear {
             if isReadyToRise { rise() }
+        }
+        // Le réseau qui tombe ou qui revient ne se voit pas quand on ne regarde
+        // pas l'écran. VoiceOver l'annonce donc, une fois, à chaque changement :
+        // c'est exactement ce que la boîte fait pour quelqu'un qui voit.
+        .onChange(of: model.notice) { _, notice in
+            guard let notice else { return }
+            AccessibilityNotification.Announcement(notice.spokenMessage).post()
         }
     }
 
@@ -137,9 +168,18 @@ public struct HomeView: View {
         Group {
             greeting.rising(0)
 
+            noticeBox
+                // La boîte apparaît et disparaît **pendant** qu'on regarde
+                // l'écran — une coupure de réseau ne prévient pas. Elle se pose
+                // donc au lieu de surgir, et l'animation vit ici plutôt que
+                // dans le composant : c'est l'écran qui sait que sa valeur a
+                // changé.
+                .animation(.smooth(duration: 0.35), value: model.notice)
+                .rising(1)
+
             if let message = model.errorMessage {
                 ErrorBanner(message: message) {
-                    Task { await model.load() }
+                    Task { await model.retry() }
                 }
                 .rising(1)
             }
@@ -154,6 +194,24 @@ public struct HomeView: View {
             #if DEBUG
                 HomeDebugPanel(model: model).rising(showcaseOrder + 2)
             #endif
+        }
+    }
+
+    // MARK: - L'état de la connexion
+
+    /// La boîte d'information : hors ligne, vocaux en attente, envoi en cours,
+    /// vocaux arrivés.
+    ///
+    /// Elle est **sous la salutation et au-dessus des voyages**, et elle y
+    /// reste : une bande d'état qui change de place selon le message se
+    /// cherche à chaque fois. Le contenu, lui, vient de ``HomeNotice`` — la vue
+    /// n'écrit pas un mot de ces phrases, comme elle n'écrit pas les titres de
+    /// voyages.
+    @ViewBuilder
+    private var noticeBox: some View {
+        if let notice = model.notice {
+            BrandNotice(notice.message)
+                .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
         }
     }
 
@@ -218,26 +276,37 @@ public struct HomeView: View {
         .accessibilityLabel("Ton profil")
     }
 
-    /// Le palier du compte, posé sur l'avatar.
+    /// Le palier du compte. `nil` tant que l'accueil n'a rien reçu : on ne
+    /// décide alors de rien, et surtout pas de peindre le CTA en lime.
     ///
-    /// Trois messages pour un seul compteur : tant que rien n'est consommé on
-    /// annonce un cadeau, ensuite un solde, et une fois le quota épuisé — ou
-    /// l'abonnement résilié — on propose de s'abonner. C'est le même chiffre,
-    /// mais pas la même nouvelle. Un abonné, lui, n'a rien à décompter et
-    /// n'a donc pas de pastille du tout.
+    /// La session prime sur ce que le serveur a rendu : elle a pu voir une
+    /// résiliation qu'aucune route ne sait encore écrire. Voir
+    /// ``SubscriptionSession``.
+    private var status: FreemiumStatus? {
+        model.feed?.traveller.freemiumStatus(override: subscriptionSession?.override)
+    }
+
+    /// Le solde d'étapes offertes, et l'invitation qui le remplace quand il
+    /// tombe à zéro.
+    ///
+    /// **Un seul message, un décompte** : « 3 étapes restantes », qui descend à
+    /// chaque étape racontée, puis « Abonne-toi » quand il n'en reste plus. La
+    /// pastille annonçait un cadeau (« 3 étapes offertes ») tant que rien
+    /// n'était consommé ; deux formulations pour un même chiffre faisaient
+    /// hésiter sur ce qu'il fallait lire. Arbitrage de Hugo, 07/09/2026.
     @ViewBuilder
     private var freeStepsPill: some View {
-        if let traveller = model.feed?.traveller,
-            let label = traveller
-                .freemiumStatus(override: subscriptionSession?.override)
-                .homePillLabel
-        {
+        if let label = status?.homePillLabel {
             BrandTagPill(label)
                 .fixedSize()
-                // Le bord droit de la pastille s'aligne sur celui de l'avatar,
-                // qui touche déjà la marge de l'écran : la décaler encore la
-                // ferait sortir de la page.
-                .offset(y: -MemoBookSpacing.s - 4)
+                // De travers, comme le scotch des cartes : c'est une étiquette
+                // collée sur l'avatar, pas un libellé d'interface.
+                .rotationEffect(.degrees(-5))
+                // Elle glisse vers le bord droit, au-delà de la marge de la
+                // colonne. Alignée sur l'avatar, elle poussait sa moitié gauche
+                // sous la Dynamic Island, où la fin du décompte devenait
+                // illisible ; à droite, elle passe dessous et non dedans.
+                .offset(x: MemoBookSpacing.s, y: -MemoBookSpacing.s - 4)
                 .allowsHitTesting(false)
         }
     }
@@ -312,7 +381,7 @@ public struct HomeView: View {
                     .rising(upcomingHeadingOrder)
 
                 if trips.isEmpty {
-                    UpcomingTripInvite { onIntent(.browseCommunity) }
+                    UpcomingTripInvite { isCreatingNotebook = true }
                         .rising(upcomingHeadingOrder + 1)
                 } else {
                     ForEach(Array(trips.enumerated()), id: \.element.id) { index, trip in
@@ -362,7 +431,7 @@ public struct HomeView: View {
     private var showcaseSection: some View {
         if let showcase = model.feed?.showcase {
             ShowcaseCard(showcase: showcase) {
-                onIntent(.openShowcase(url: showcase.destinationUrl))
+                onIntent(.openGallery)
             }
         }
     }
@@ -404,19 +473,31 @@ public struct HomeView: View {
     /// l'accueil montre en haut.
     private var ongoingTripId: String? { model.ongoingTrips.first?.id }
 
+    /// Le CTA change de couleur, pas de place ni de taille.
+    ///
+    /// Il passe au lime et prend le cadenas **quand, et seulement quand, les
+    /// étapes offertes sont épuisées** : la couleur dit « c'est fini, il faut
+    /// s'abonner », la même que le bouton d'abonnement du profil. Tant qu'il
+    /// reste des étapes, il n'y a rien de bloqué et le parcours est celui de
+    /// tout le monde — vert plein, et le micro.
+    private var isBlocked: Bool { status?.isBlocked == true }
+
     private var recordCallToAction: some View {
         BrandButton(
             hasOngoingTrip ? "Commencer à enregistrer" : "Créer un nouveau voyage",
-            // Le micro du jeu d'icônes de la marque, pas l'illustration du
-            // Welcome : `BrandButton` teinte l'icône, il lui faut un tracé
-            // plein d'une seule couleur.
-            icon: hasOngoingTrip ? Image(brand: "IconMic") : nil,
+            // Le micro et le cadenas du jeu d'icônes de la marque, pas
+            // l'illustration du Welcome : `BrandButton` teinte l'icône, il lui
+            // faut un tracé plein d'une seule couleur.
+            icon: callToActionIcon,
+            style: isBlocked ? .accent : .primary,
             fillsWidth: true
         ) {
-            if let ongoingTripId {
-                onIntent(.startRecording(tripId: ongoingTripId))
+            // Un voyage ouvert : on raconte. Aucun : il faut d'abord un carnet,
+            // et c'est la feuille qui demande lequel.
+            if hasOngoingTrip {
+                isRecording = true
             } else {
-                onIntent(.createTrip)
+                isCreatingNotebook = true
             }
         }
         // Le libellé suit le Dynamic Type, mais s'arrête à AX1. Au-delà, une
@@ -427,6 +508,11 @@ public struct HomeView: View {
         .padding(.horizontal, MemoBookSpacing.screenMargin)
         .padding(.top, MemoBookSpacing.s)
         .padding(.bottom, MemoBookSpacing.xs)
+    }
+
+    private var callToActionIcon: Image? {
+        if isBlocked { return Image(brand: "IconLocker") }
+        return hasOngoingTrip ? Image(brand: "IconMic") : nil
     }
 }
 

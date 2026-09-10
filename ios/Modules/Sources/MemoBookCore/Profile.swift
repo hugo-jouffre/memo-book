@@ -54,6 +54,27 @@ public struct PaymentCard: Codable, Sendable, Hashable, Identifiable {
     /// Le numéro masqué de la maquette. Les X sont ceux du dessin, pas des
     /// puces : c'est un gabarit de carte, pas un mot de passe.
     public var maskedNumber: String { "XXXX XXXX XXXX \(last4)" }
+
+    /// « MM/AA », composé au fil de la frappe.
+    ///
+    /// Le champ ne garde que des chiffres et pose la barre lui-même : on tape
+    /// quatre chiffres, on obtient une date. C'est ce qui permet un pavé
+    /// **numérique** — un clavier qui porterait la barre oblique porte aussi
+    /// tout le reste de la ponctuation, et laisse écrire « 1-2/3 ».
+    ///
+    /// **La barre s'efface avec le chiffre qui la précède** : elle n'est pas
+    /// saisie, elle est déduite des deux premiers chiffres. Effacer le
+    /// troisième chiffre la fait donc disparaître toute seule, plutôt que
+    /// d'obliger à un second retour arrière sur un caractère qu'on n'a jamais
+    /// tapé.
+    ///
+    /// Elle vit ici, et non dans la feuille qui l'affiche : c'est une règle,
+    /// elle se teste sans simulateur.
+    public static func formattedExpiry(_ raw: String) -> String {
+        let digits = String(raw.filter(\.isNumber).prefix(4))
+        guard digits.count > 2 else { return digits }
+        return "\(digits.prefix(2))/\(digits.dropFirst(2))"
+    }
 }
 
 /// Une application tierce que MemoBook peut interroger pour enrichir un carnet.
@@ -149,7 +170,7 @@ public enum SubscriptionCancellationReason: String, Codable, Sendable, Hashable,
 
     /// Figma les saisit avec l'apostrophe droite, alors que le reste de l'app
     /// emploie la typographique ; elles sont corrigées ici comme le reste de la
-    /// copie de l'abonnement (D12, T39).
+    /// copie de l'abonnement (D12, T66).
     public var label: String {
         switch self {
         case .unused: "Je ne l’utilise plus"
@@ -188,6 +209,24 @@ public struct OrderTracking: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
+/// Le voyage en cours, tel que la carte de chiffres du profil le montre : un
+/// identifiant pour y aller, et ses bornes pour l'annoncer.
+///
+/// **Il n'est pas stocké.** Le serveur le déduit des voyages du compte — voir
+/// `serializeProfileStats`. C'est un résumé, pas une seconde vérité à tenir à
+/// jour à côté de ``Trip``.
+public struct CurrentTrip: Codable, Sendable, Hashable, Identifiable {
+    public let id: String
+    public let startDate: Date?
+    public let endDate: Date?
+
+    public init(id: String, startDate: Date? = nil, endDate: Date? = nil) {
+        self.id = id
+        self.startDate = startDate
+        self.endDate = endDate
+    }
+}
+
 /// Tout ce que l'écran de profil montre, d'un seul tenant.
 public struct TravellerProfile: Codable, Sendable, Hashable {
     public var fullName: String
@@ -212,6 +251,21 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
     public var subscription: Subscription
     public var orders: [OrderTracking]
 
+    /// Les étapes offertes à l'ouverture du compte, et celles qui restent.
+    ///
+    /// Le même couple que ``Traveller``, et la même règle : `nil` quand le
+    /// compte n'a pas de quota — un abonné. C'est lui qui porte la pastille du
+    /// haut de l'écran, comme il porte celle de l'accueil.
+    public var offeredSteps: Int?
+    public var remainingSteps: Int?
+
+    /// Combien de voyages en tout. La carte de chiffres l'affiche, et c'est
+    /// tout ce qu'elle en fait.
+    public var tripCount: Int
+
+    /// Le voyage du moment, s'il y en a un.
+    public var currentTrip: CurrentTrip?
+
     public init(
         fullName: String,
         email: String? = nil,
@@ -225,7 +279,11 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         selectedCardId: String? = nil,
         connectors: [Connector] = [],
         subscription: Subscription = Subscription(weeklyPrice: 0),
-        orders: [OrderTracking] = []
+        orders: [OrderTracking] = [],
+        offeredSteps: Int? = nil,
+        remainingSteps: Int? = nil,
+        tripCount: Int = 0,
+        currentTrip: CurrentTrip? = nil
     ) {
         self.fullName = fullName
         self.email = email
@@ -240,6 +298,38 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         self.connectors = connectors
         self.subscription = subscription
         self.orders = orders
+        self.offeredSteps = offeredSteps
+        self.remainingSteps = remainingSteps
+        self.tripCount = tripCount
+        self.currentTrip = currentTrip
+    }
+
+    /// Décodage tolérant sur les quatre champs de l'abonnement freemium.
+    ///
+    /// Même raison que ``Entry`` : une app déjà installée ne doit pas cesser
+    /// d'afficher un profil parce qu'un serveur plus ancien ne connaît pas
+    /// encore `tripCount`. Le reste garde la synthèse.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        fullName = try container.decode(String.self, forKey: .fullName)
+        email = try container.decodeIfPresent(String.self, forKey: .email)
+        signInProvider = try container.decodeIfPresent(AuthProvider.self, forKey: .signInProvider)
+        phoneNumber = try container.decodeIfPresent(String.self, forKey: .phoneNumber)
+        avatarUrl = try container.decodeIfPresent(URL.self, forKey: .avatarUrl)
+        address = try container.decode(PostalAddress.self, forKey: .address)
+        wantsNewsletter = try container.decode(Bool.self, forKey: .wantsNewsletter)
+        walletBalance = try container.decode(Decimal.self, forKey: .walletBalance)
+        cards = try container.decode([PaymentCard].self, forKey: .cards)
+        selectedCardId = try container.decodeIfPresent(String.self, forKey: .selectedCardId)
+        connectors = try container.decode([Connector].self, forKey: .connectors)
+        subscription = try container.decode(Subscription.self, forKey: .subscription)
+        orders = try container.decode([OrderTracking].self, forKey: .orders)
+
+        offeredSteps = try container.decodeIfPresent(Int.self, forKey: .offeredSteps)
+        remainingSteps = try container.decodeIfPresent(Int.self, forKey: .remainingSteps)
+        tripCount = try container.decodeIfPresent(Int.self, forKey: .tripCount) ?? 0
+        currentTrip = try container.decodeIfPresent(CurrentTrip.self, forKey: .currentTrip)
     }
 
     /// La carte affichée sur la ligne « Carte bancaire enregistrée ». Celle qui
@@ -252,6 +342,15 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
     /// `true` quand l'adresse vient d'un fournisseur tiers et ne peut donc pas
     /// être corrigée depuis l'app.
     public var isEmailManagedByProvider: Bool { signInProvider != nil }
+
+    /// **La** question qui départage les deux profils de la maquette : celui
+    /// qui paie, et celui qui use ses étapes offertes.
+    ///
+    /// Elle se lit sur l'abonnement et non sur le quota d'étapes : un compte
+    /// peut très bien n'avoir ni l'un ni l'autre — un ancien abonné qui a
+    /// résilié — et il faut alors lui reproposer l'abonnement, pas lui
+    /// inventer des étapes.
+    public var isSubscriber: Bool { subscription.isActive }
 
     /// Une ou deux initiales, quand la photo manque. Même règle que
     /// ``Companion``.
