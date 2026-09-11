@@ -221,11 +221,26 @@ struct PaywallView: View {
             return
         }
 
-        // Sans `withAnimation` : la transition du contenu est déclarée sur le
-        // contenu lui-même (`.animation(_:value:)`), et les barres du haut
-        // doivent basculer **net** — celle qu'on quitte pleine, celle qu'on
-        // ouvre vide.
-        page = next
+        // **Le remplissage en cours est coupé net, et la page change avec.**
+        //
+        // Les deux dans la *même* transaction, et cette transaction sans
+        // animation : c'est ce qui manquait. Le remplissage est une animation
+        // linéaire de six secondes posée sur `progress` ; appuyer sur
+        // « Continuer » au bout de deux la laissait courir. La barre qu'on
+        // ouvrait héritait alors des quatre secondes restantes et se remplissait
+        // **en même temps** que celle qu'on venait de quitter finissait la
+        // sienne — exactement les deux traits qui avancent ensemble.
+        //
+        // Remettre `progress` à zéro sans animation remplace l'animation en vol
+        // au lieu de l'attendre ; la faire dans la même passe que `page` évite
+        // l'image intermédiaire où la nouvelle barre montrerait l'avancement de
+        // l'ancienne.
+        var immediate = Transaction()
+        immediate.disablesAnimations = true
+        withTransaction(immediate) {
+            progress = 0
+            page = next
+        }
     }
 }
 

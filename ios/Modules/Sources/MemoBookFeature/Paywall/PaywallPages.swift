@@ -56,9 +56,17 @@ struct PaywallSquiggle<S: Shape>: View {
     private static var delay: Duration { .milliseconds(117) }
     private static var duration: Double { 0.79 }
 
+    /// De combien le trait dépasse **de chaque côté**, en part de sa largeur.
+    ///
+    /// Un trait qui s'arrête pile au bord de l'écran montre ses deux bouts
+    /// arrondis, et se lit alors comme un objet posé là plutôt que comme un
+    /// geste qui traverse la page. Douze pour cent de chaque côté suffisent à
+    /// les sortir du cadre sur tous les formats, y compris le SE.
+    private static var bleed: CGFloat { 0.12 }
+
     var body: some View {
         GeometryReader { proxy in
-            shape
+            BleedingShape(base: shape, bleed: Self.bleed)
                 .trim(from: 0, to: drawn)
                 .stroke(
                     MemoBookColor.outline,
@@ -78,6 +86,29 @@ struct PaywallSquiggle<S: Shape>: View {
             try? await Task.sleep(for: Self.delay)
             withAnimation(.easeOut(duration: Self.duration)) { drawn = 1 }
         }
+    }
+}
+
+/// Un tracé dessiné **plus large que la place qu'on lui donne**, pour que ses
+/// deux bouts tombent hors de l'écran.
+///
+/// Le débordement se fait dans le **chemin** et non par un `scaleEffect` : la
+/// mise à l'échelle non uniforme d'un trait déjà tracé en écrase l'épaisseur
+/// d'un côté et ovalise ses bouts ronds. Ici le chemin est construit dans un
+/// cadre élargi, puis tracé normalement — l'épaisseur reste constante d'un bout
+/// à l'autre.
+///
+/// La vue, elle, ne change pas de taille : c'est du dessin qui sort de son
+/// cadre, pas une vue plus grande. Le `trim` de l'animation porte donc sur le
+/// tracé entier, ce qui fait entrer le trait **par le hors-champ** — le geste
+/// commence avant le bord de l'écran, exactement comme un trait à la main.
+private struct BleedingShape<Base: Shape>: Shape {
+    let base: Base
+    /// Part de la largeur ajoutée de chaque côté.
+    let bleed: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        base.path(in: rect.insetBy(dx: -rect.width * bleed, dy: 0))
     }
 }
 
@@ -240,6 +271,14 @@ struct PaywallOffer: View {
                     PaywallArgumentCard(argument: argument)
                 }
             }
+            // Les quatre cartes sont du décor, pastille « Voir une estimation »
+            // comprise : elles ne portent aucune action. Sans ça, elles
+            // avaleraient le tapotis de retour sur presque tout l'écran — c'est
+            // la contrepartie d'avoir mis les zones de tapotis dessous.
+            //
+            // ⚠️ Le jour où la pastille mènera quelque part, elle devra sortir
+            // de ce bloc, comme celle de l'écran 2.
+            .paywallProse()
 
             Spacer(minLength: 0)
 
