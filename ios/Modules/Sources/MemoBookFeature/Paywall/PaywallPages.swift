@@ -81,6 +81,18 @@ struct PaywallSquiggle<S: Shape>: View {
     }
 }
 
+/// Ce qui, dans une page de paywall, **ne prend pas le doigt**.
+///
+/// Un `Text` de SwiftUI est touchable par défaut, même quand il n'a aucune
+/// action : posé au-dessus des zones de tapotis, il les empêche de recevoir le
+/// geste, et la story ne défile plus là où il y a du texte — c'est-à-dire
+/// partout. Ce modificateur dit en un mot que ce bloc est du décor.
+///
+/// Les **contrôles** ne le portent jamais : ce sont eux qui doivent gagner.
+extension View {
+    func paywallProse() -> some View { allowsHitTesting(false) }
+}
+
 // MARK: - Écran 1 — « Bravo ! »
 
 struct PaywallCongratulations: View {
@@ -100,6 +112,7 @@ struct PaywallCongratulations: View {
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            .paywallProse()
 
             PaywallSquiggle(
                 shape: BrandSquiggleDown(),
@@ -107,6 +120,7 @@ struct PaywallCongratulations: View {
                 aspectRatio: BrandSquiggleDown.size.width / BrandSquiggleDown.size.height
             )
             .padding(.horizontal, -PaywallMetrics.margin)
+            .paywallProse()
 
             Spacer(minLength: 0)
 
@@ -119,18 +133,25 @@ struct PaywallCongratulations: View {
 
 struct PaywallEstimate: View {
     let onContinue: () -> Void
+    /// Ouvre la feuille « Prévisualisation ». L'écran ne la présente pas
+    /// lui-même : elle doit se poser **par-dessus le paywall entier**, et c'est
+    /// ``PaywallView`` qui l'occupe.
+    let onPreview: () -> Void
 
     var body: some View {
         VStack(spacing: MemoBookSpacing.l) {
             Spacer(minLength: 0)
 
             VStack(spacing: MemoBookSpacing.s) {
-                PaywallEyebrow(PaywallCopy.estimateEyebrow)
-                PaywallTitle(
-                    lead: PaywallCopy.estimateTitleLead,
-                    strong: PaywallCopy.estimateTitleStrong,
-                    isUnderlined: true
-                )
+                Group {
+                    PaywallEyebrow(PaywallCopy.estimateEyebrow)
+                    PaywallTitle(
+                        lead: PaywallCopy.estimateTitleLead,
+                        strong: PaywallCopy.estimateTitleStrong,
+                        isUnderlined: true
+                    )
+                }
+                .paywallProse()
 
                 VStack(spacing: MemoBookSpacing.xs) {
                     ForEach(PaywallCopy.estimateBody, id: \.self) { line in
@@ -139,11 +160,27 @@ struct PaywallEstimate: View {
                             .foregroundStyle(MemoBookColor.ink)
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
+                            .paywallProse()
                     }
 
-                    // ⚠️ Inerte : la feuille « Prévisualisation » du nœud n'est
-                    // pas encore écrite — fiche écran.
-                    BrandTagPill(PaywallCopy.previewPill, tone: .accentOutlined, isUppercased: true)
+                    // La pastille **ouvre** désormais la feuille du nœud
+                    // « Modale - Paywall Previsualisation ». Elle garde son
+                    // dessin de pastille, comme la maquette : c'est une
+                    // proposition posée dans une phrase, pas l'appel à l'action
+                    // de l'écran — celui-là est le bouton bleu du bas.
+                    Button(action: onPreview) {
+                        BrandTagPill(
+                            PaywallCopy.previewPill,
+                            tone: .accentOutlined,
+                            isUppercased: true
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    // La cible tactile monte à 2.75 rem même si la pastille est
+                    // plus courte : le dessin est plus petit que le geste (R7).
+                    .frame(minHeight: MemoBookSpacing.minimumTapTarget)
+                    .contentShape(.rect)
+                    .accessibilityAddTraits(.isButton)
                 }
             }
 
@@ -153,6 +190,7 @@ struct PaywallEstimate: View {
                 aspectRatio: BrandSquiggleUp.size.width / BrandSquiggleUp.size.height
             )
             .padding(.horizontal, -PaywallMetrics.margin)
+            .paywallProse()
 
             Spacer(minLength: 0)
 
@@ -166,6 +204,7 @@ struct PaywallEstimate: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
+                .paywallProse()
 
                 BrandButton(PaywallCopy.cont, style: .blue, fillsWidth: true, action: onContinue)
             }
@@ -191,6 +230,7 @@ struct PaywallOffer: View {
                     isUnderlined: true
                 )
             }
+            .paywallProse()
 
             // Les quatre cartes se chevauchent de 4 pt et penchent chacune de
             // son côté : c'est une pile de papiers posés à la main, pas une

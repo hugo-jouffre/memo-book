@@ -2490,6 +2490,49 @@ vu juste. ⚠️ L'app est encore branchée sur le jeu d'essai.
 tes proches » · « grace à ton abonnement » · « Si je n'utilise pas toute ma
 cagnotte ? » · « Prévisualiser mon carnet »
 
+### 16.8 Personnalisations du carnet
+
+`3348:11485` → `TripSettings/BookCustomisationView.swift`
+
+Ouvert par la ligne « Style du carnet » des paramètres. L'écran le plus long de
+l'app, rangé en **cinq paquets** plutôt qu'en une liste : les couvertures, la
+forme de la page, les décors, les typographies, et les extras. On ne règle pas
+une typographie en même temps qu'un nombre de pages.
+
+Les **extras** sont les seuls à porter un interrupteur, et c'est ce que dessine
+la maquette : ils *ajoutent* quelque chose au carnet — un quiz, des pages
+blanches, une grille de mots fléchés — là où les autres lignes choisissent entre
+des valeurs. Un interrupteur répond à « est-ce que j'en veux », une ligne à
+« lequel ».
+
+Toutes les valeurs existent déjà en base depuis M4 (`memos.photoTextRatio`,
+`targetPageCount`, `funFactsEnabled`, `rulesEnabled`, `decorationQuota`,
+`font*`, `quizEnabled`, `freeZonesEnabled`, `crosswordEnabled`) et sont
+désormais servies **avec les réglages** — un jeu par voyage, lu avec lui.
+
+⚠️ **Seuls les trois extras s'enregistrent.** Les onze autres lignes montrent
+leur valeur et ne mènent nulle part : leurs écrans de choix ne sont pas
+dessinés, et on ne les invente pas (R3).
+
+### 16.9 La feuille « Prévisualisation »
+
+`3348:11671` → `BookPreview/BookPreviewSheet.swift`
+
+Ce qu'ouvrent les deux pastilles « Voir un aperçu » du parcours d'abonnement.
+Une **feuille** et non un écran poussé : quelqu'un à qui l'on propose un
+abonnement veut voir ce qu'il achète, puis *revenir à l'offre*.
+
+Elle réutilise les pièces de l'aperçu — ``BookPageStage``, ``BookSheetView``,
+``BookPageStepper``, et la cascade de composition — plutôt que d'en redessiner
+de plus petites : deux aperçus à tenir d'accord, et celui de la feuille
+vieillirait le premier.
+
+Deux formes, selon d'où elle vient. Depuis le **paywall**, c'est une feuille
+posée par-dessus, et le minuteur des stories s'arrête pendant ce temps-là (voir
+`PageTimer`). Depuis la **feuille d'abonnement**, c'est une **étape** de cette
+feuille-là — la règle du design system interdit d'empiler deux feuilles — avec
+un bouton « Revenir à l'offre ».
+
 ### 16.7 À trancher
 
 | # | Sujet |
@@ -2505,4 +2548,11 @@ cagnotte ? » · « Prévisualiser mon carnet »
 | T74 | **« La carte » montre l'illustration `IllustrationMaps`** et non le tracé du voyage : `backend/src/services/mapSvg.ts` le produit pour le carnet, pas pour l'écran. La ligne ne mène d'ailleurs nulle part |
 | T75 | **Le coût d'impression est une constante** (1,798 € la page, soit les 89,90 € des 50 pages de la maquette). Les frais fixes de fabrication et de port sont dedans, donc un carnet de dix pages ne coûte pas un cinquième d'un carnet de cinquante. À trancher avec l'imprimeur **avant** d'encaisser quoi que ce soit |
 | T76 | **Dix lignes de réglages n'ouvrent rien** — dates, rythme, notifications, co-voyageurs, thème, style, Tricount, carte, commande, aide. Les feuilles ne sont pas dessinées ; les lignes sont inertes plutôt que branchées sur un écran inventé (R3) |
+| T78 | ✅ **Réglé** — le profil lisait « Abonne-toi » à quelqu'un à qui l'accueil annonçait « 2 étapes restantes ». Il ne regardait que l'abonnement, jamais le quota, alors que `GET /v1/profile` rend `offeredSteps` et `remainingSteps` depuis toujours. Les deux écrans partagent désormais le même calcul, et les deux pastilles s'accordent au singulier |
+| T79 | ✅ **Réglé** — les trois barres du paywall se remplissaient ensemble. Deux causes : la remise à zéro et le remplissage tombaient dans la même passe (SwiftUI n'y voyait qu'une écriture, de 1 vers 1), et le `withAnimation` autour de `page` emportait les barres avec le contenu. La remise à zéro est explicitement sans animation, et la transition vit sur le contenu |
+| T80 | **Les zones de tapotis du paywall passent sous le contenu.** Posées au-dessus, elles avalaient tout contrôle hors de la bande basse épargnée — c'est ce qui est arrivé à la pastille « Voir un aperçu ». Le texte des pages porte donc `paywallProse()`, qui le rend non touchable. Chaque nouveau bloc de texte du paywall devra le porter aussi, sinon la story ne défilera plus dessous |
+| T81 | **La barre de la story finit de se remplir derrière la feuille d'aperçu.** Le minuteur, lui, est bien à l'arrêt — la page ne tourne pas, et on la retrouve entière en refermant. C'est l'animation SwiftUI déjà lancée qui va au bout : l'arrêter demanderait de lire l'avancement en cours, ce que SwiftUI n'expose pas |
+| T82 | **Les onze lignes de personnalisation ne mènent nulle part** — ratio, nombre de pages, fun facts, pointillés, décorations, quatre typographies, couvertures. Leurs écrans de choix ne sont pas dessinés. Seuls les trois extras s'enregistrent |
+| T83 | **Les deux plats de la ligne « Couvertures » sont dessinés en SwiftUI**, là où la maquette pose un rendu 3D de deux livres. Un rendu importé serait une image figée qui mentirait dès que le voyageur change sa couverture ; ces deux plats-là afficheront sa photo le jour où elle existe |
+| T84 | **« Ajuster les différents options… vous ressemble »** — l'intro des personnalisations vouvoie *et* porte deux fautes (infinitif au lieu de l'impératif, accord manquant). Recopiée telle quelle (R8) et remontée, comme T66 |
 | T77 | **La barre de progression est à 6 pt**, ce que dessinent la cagnotte comme les cartes de l'accueil. Le § 2.3 annonce encore 0.25 rem (4) au motif que Figma dessinait 7 : c'est **le document** qui est en retard, pas la valeur |

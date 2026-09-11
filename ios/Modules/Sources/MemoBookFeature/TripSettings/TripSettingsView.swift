@@ -152,7 +152,7 @@ public struct TripSettingsView: View {
                     BookCopy.Settings.style,
                     value: settings?.styleSummary ?? BookCopy.Settings.noValue,
                     isValueLoading: isLoading,
-                    action: { onIntent(.editStyle) }
+                    action: { onIntent(.openCustomisation) }
                 )
             }
 
@@ -171,8 +171,6 @@ public struct TripSettingsView: View {
 
         return VStack(alignment: .leading, spacing: MemoBookSpacing.snug) {
             sectionTitle(BookCopy.Settings.quickAccessSection)
-
-            MapPreviewRow { onIntent(.openMap) }
 
             PdfPreviewRow(
                 coverUrl: settings?.previewCoverUrl,
@@ -239,9 +237,9 @@ public enum TripSettingsIntent: Sendable, Hashable {
     case manageNotifications
     case editCompanions
     case editTheme
-    case editStyle
+    /// « Style du carnet » — les personnalisations de la mise en page.
+    case openCustomisation
     case connectTricount
-    case openMap
     case openBookPreview
     case orderBook
     case openHelp
@@ -327,51 +325,6 @@ private struct TricountCallout: View {
         }
         .multilineTextAlignment(.leading)
         .fixedSize(horizontal: false, vertical: true)
-    }
-}
-
-/// La ligne « La carte » : un aperçu du tracé, et le chevron.
-///
-/// La carte n'est pas encore dessinée côté app — `backend/src/services/mapSvg.ts`
-/// la produit pour le carnet, pas pour l'écran. La ligne montre donc une plaque
-/// en attente plutôt qu'une fausse carte : le pointillé dit « il y aura quelque
-/// chose ici », ce qu'un aplat gris ne dit pas.
-private struct MapPreviewRow: View {
-    let action: () -> Void
-
-    @ScaledMetric(relativeTo: .body) private var plateHeight: CGFloat = 64
-
-    var body: some View {
-        let shape = RoundedRectangle(cornerRadius: MemoBookSpacing.largeCornerRadius)
-
-        return Button(action: action) {
-            HStack(spacing: MemoBookSpacing.snug) {
-                Text(BookCopy.Settings.map)
-                    .font(MemoBookFont.body)
-                    .foregroundStyle(MemoBookColor.ink)
-
-                Spacer(minLength: MemoBookSpacing.xs)
-
-                Image(brand: "IllustrationMaps")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(height: min(plateHeight, 96))
-                    .clipShape(.rect(cornerRadius: MemoBookSpacing.xs))
-                    .accessibilityHidden(true)
-
-                BrandChevron()
-            }
-            .padding(.horizontal, MemoBookSpacing.s)
-            .padding(.vertical, MemoBookSpacing.snug)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(MemoBookColor.surface, in: shape)
-            .overlay { shape.strokeBorder(MemoBookColor.hairline, lineWidth: 1) }
-            .contentShape(shape)
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityLabel(BookCopy.Settings.map)
     }
 }
 

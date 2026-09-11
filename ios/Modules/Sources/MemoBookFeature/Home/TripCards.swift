@@ -250,7 +250,7 @@ struct PastTripCard: View {
                 size: .small,
                 action: onOrderPrint
             )
-            .accessibilityLabel("Commander l’impression de « \(trip.title) »")
+            .accessibilityLabel("Prévisualiser et commander « \(trip.title) »")
         }
     }
 }

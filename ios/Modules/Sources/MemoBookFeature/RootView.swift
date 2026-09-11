@@ -245,7 +245,18 @@ public struct RootView: View {
             path.append(.gallery)
         case .createTrip:
             path.append(.tripCreation)
-        case .orderPrint, .joinTrip, .importFromPolarsteps, .openHelp:
+        case .orderPrint(let tripId):
+            // **L'imprimante ouvre l'aperçu**, et non un tunnel de commande.
+            // On ne commande pas un carnet qu'on n'a pas vu : l'aperçu porte
+            // « Commander ce carnet » en bas de page, donc rien n'est perdu —
+            // on ajoute seulement l'étape qui manquait.
+            guard UUID(uuidString: tripId) != nil else {
+                routingProblem =
+                    "Ce voyage n’existe pas encore sur ton compte : il n’y a rien à prévisualiser."
+                return
+            }
+            path.append(.bookPreview(memoId: tripId))
+        case .joinTrip, .importFromPolarsteps, .openHelp:
             break
         }
     }
@@ -264,6 +275,8 @@ public struct RootView: View {
             path.append(.chat(tripId: tripId, stepId: stepId))
         case .openSettings(let tripId):
             path.append(.tripSettings(id: tripId))
+        case .openBookPreview(let tripId):
+            path.append(.bookPreview(memoId: tripId))
         }
     }
 
@@ -306,8 +319,22 @@ public struct RootView: View {
             // existera dans le produit — un voyage pourra donner deux carnets.
             guard let tripId = currentTripId else { return }
             path.append(.bookPreview(memoId: tripId))
+        case .openCustomisation:
+            guard let tripId = currentTripId else { return }
+            path.append(.bookCustomisation(tripId: tripId))
         case .renameTrip, .editDates, .editPace, .manageNotifications, .editCompanions,
-            .editTheme, .editStyle, .connectTricount, .openMap, .orderBook, .openHelp:
+            .editTheme, .connectTricount, .orderBook, .openHelp:
+            break
+        }
+    }
+
+    /// Où mène l'unique intention des personnalisations.
+    ///
+    /// Les couvertures n'ont pas d'écran dessiné : la ligne est inerte plutôt
+    /// que branchée sur un écran inventé (R3).
+    private func handle(_ intent: BookCustomisationIntent) {
+        switch intent {
+        case .openCovers:
             break
         }
     }
@@ -352,7 +379,8 @@ public struct RootView: View {
     private var currentTripId: String? {
         for route in path.reversed() {
             switch route {
-            case .trip(let id), .tripSettings(let id), .bookPreview(let id):
+            case .trip(let id), .tripSettings(let id), .bookPreview(let id),
+                .bookCustomisation(let id):
                 return id
             case .chat(let tripId, _):
                 return tripId
@@ -396,6 +424,11 @@ public struct RootView: View {
             BookPreviewFlowView(model: dependencies.bookPreviewModel(memoId: memoId), onIntent: handle)
         case .wallet(let tripId):
             WalletView(model: dependencies.walletModel(tripId: tripId), onIntent: handle)
+        case .bookCustomisation(let tripId):
+            BookCustomisationView(
+                model: dependencies.bookCustomisationModel(tripId: tripId),
+                onIntent: handle
+            )
         }
     }
 }
@@ -433,4 +466,6 @@ enum HomeRoute: Hashable {
     /// par compte — mais **quel carnet on finance**, pour l'estimation de pages
     /// et de coût. `nil` quand on arrive du profil.
     case wallet(tripId: String?)
+    /// Les personnalisations du carnet, ouvertes par « Style du carnet ».
+    case bookCustomisation(tripId: String)
 }

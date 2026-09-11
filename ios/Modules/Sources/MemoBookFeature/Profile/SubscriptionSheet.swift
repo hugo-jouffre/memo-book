@@ -39,6 +39,10 @@ struct SubscriptionSheet: View {
     /// en entier, là où la feuille n'en donne que le principe.
     let onLearnMore: () -> Void
 
+    /// Le carnet que l'aperçu montre. `nil` — un compte sans voyage en cours —
+    /// ouvre le jeu d'essai : l'aperçu est là pour montrer à quoi ça ressemble.
+    var previewMemoId: String?
+
     /// Où on en est du chemin. `nil` tant qu'on n'a rien poussé : l'étape de
     /// départ se **déduit** alors de l'abonnement, pour qu'elle suive le profil
     /// s'il arrive après l'ouverture de la feuille. Dès qu'un bouton est
@@ -57,6 +61,14 @@ struct SubscriptionSheet: View {
     enum Step: Hashable {
         case pitch
         case current
+        /// L'aperçu du carnet, ouvert par la pastille « Voir un aperçu ».
+        ///
+        /// **Une étape de la feuille, et non une feuille par-dessus.** C'est la
+        /// règle du design system : une feuille ouverte sur une autre fait
+        /// reculer celle du dessous, et deux reculs se lisent comme un
+        /// empilement de fenêtres. Le contenu change, la feuille reste — comme
+        /// pour les trois temps de la résiliation.
+        case preview
         case keepGoing
         case reason
         case done
@@ -73,6 +85,7 @@ struct SubscriptionSheet: View {
             switch currentStep {
             case .pitch: pitch
             case .current: current
+            case .preview: preview
             case .keepGoing: keepGoing
             case .reason: reasons
             case .done: done
@@ -118,11 +131,34 @@ struct SubscriptionSheet: View {
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityElement(children: .combine)
 
-            // Dessinée comme une pastille et non comme un bouton, exactement
-            // comme la maquette : rien n'est routé derrière — fiche écran.
-            BrandTagPill(SubscriptionCopy.previewPill, tone: .accentOutlined, isUppercased: true)
+            // Elle garde son dessin de pastille, comme la maquette, mais elle
+            // **ouvre** désormais l'aperçu : c'est une proposition posée dans
+            // une phrase, pas l'appel à l'action de la feuille.
+            Button { step = .preview } label: {
+                BrandTagPill(
+                    SubscriptionCopy.previewPill,
+                    tone: .accentOutlined,
+                    isUppercased: true
+                )
+            }
+            .buttonStyle(.plain)
+            // La cible tactile monte à 2.75 rem même si la pastille est plus
+            // courte : le dessin est plus petit que le geste (R7).
+            .frame(minHeight: MemoBookSpacing.minimumTapTarget)
+            .contentShape(.rect)
+            .accessibilityAddTraits(.isButton)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - L'aperçu du carnet
+
+    /// Le carnet qu'on feuillette sans quitter l'offre.
+    ///
+    /// Le bouton du bas ramène au principe de l'abonnement : on est venu voir
+    /// ce qu'on achète, on doit repartir d'où l'on venait.
+    private var preview: some View {
+        BookPreviewSheet(memoId: previewMemoId) { step = .pitch }
     }
 
     // MARK: - « Mon Abonnement » — déjà abonné

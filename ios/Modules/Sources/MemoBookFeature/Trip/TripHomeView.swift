@@ -58,7 +58,7 @@ public struct TripHomeView: View {
                     TripHeader(
                         detail: detail,
                         onBack: { dismiss() },
-                        onPrint: notYetRouted,
+                        onPrint: { onIntent(.openBookPreview(tripId: detail.trip.id)) },
                         // L'identifiant vient du voyage **chargé** et non de
                         // celui passé à l'écran : c'est le même, et celui-là
                         // est déjà en portée. En garder une copie dans la vue

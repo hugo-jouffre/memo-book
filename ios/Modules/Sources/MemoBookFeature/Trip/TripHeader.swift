@@ -86,7 +86,11 @@ struct TripHeader: View {
         HStack(spacing: MemoBookSpacing.xs + 2) {
             TripHeaderButton(icon: "IconArrow", label: "Retour", action: onBack)
             Spacer(minLength: 0)
-            TripHeaderButton(icon: "IconPrinter", label: "Imprimer ce carnet", action: onPrint)
+            TripHeaderButton(
+                icon: "IconPrinter",
+                label: "Prévisualiser et commander ce carnet",
+                action: onPrint
+            )
             TripHeaderButton(icon: "IconSettings", label: "Paramètres du voyage", action: onSettings)
         }
         .padding(.horizontal, MemoBookSpacing.screenMargin)

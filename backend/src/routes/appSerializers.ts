@@ -412,6 +412,34 @@ export function serializeTripSettings(memo: MemoForSettings, walletBalanceCents:
     // coûterait un rendu de plus pour une vignette de 56 pt.
     previewCoverUrl: memo.coverPhotoUrl,
     isPrintable: memo.isPrintable,
+    customisation: serializeBookCustomisation(memo),
+  };
+}
+
+/**
+ * Les personnalisations du carnet — l'écran « Style du carnet ».
+ *
+ * Elles voyagent **avec les réglages** et non sur une route à elles : il y en a
+ * un jeu par voyage, elles se lisent toujours avec lui, et un second appel ne
+ * ferait qu'afficher l'écran en deux temps.
+ */
+export function serializeBookCustomisation(memo: Memo) {
+  return {
+    photoTextRatio: memo.photoTextRatio,
+    targetPageCount: memo.targetPageCount,
+    funFactsEnabled: memo.funFactsEnabled,
+    rulesEnabled: memo.rulesEnabled,
+    decorationQuota: memo.decorationQuota,
+    fontTitle: memo.fontTitle,
+    fontDisplay: memo.fontDisplay,
+    fontHand: memo.fontHand,
+    fontFacts: memo.fontFacts,
+    quizEnabled: memo.quizEnabled,
+    freeZonesEnabled: memo.freeZonesEnabled,
+    crosswordEnabled: memo.crosswordEnabled,
+    // Dérivé plutôt que stocké : une troisième vérité à tenir d'accord avec
+    // `coverFront` et `coverBack` finirait par diverger.
+    hasConfiguredCovers: memo.coverFront !== null && memo.coverBack !== null,
   };
 }
 

@@ -23,13 +23,22 @@ public enum FreemiumStatus: Equatable {
     case limitReached
 
     /// Ce que la pastille du profil annonce.
+    ///
+    /// **Le même message que l'accueil, en plus explicite** : là-bas la pastille
+    /// est posée sur l'avatar et n'a pas la ligne pour elle, ici elle a la
+    /// place de dire « gratuites ». Les deux comptent la même chose, et c'est
+    /// ce qui compte : voir deux formulations pour un même solde fait douter
+    /// qu'il s'agisse du même.
     public var profilePillLabel: String {
         switch self {
         // La maquette de la feuille écrit « Abonnée ». Ici l'app ne sait pas à
         // qui elle s'adresse : elle s'en tient à la forme non marquée plutôt
         // que de deviner. Signalé (T76).
         case .subscriber: "Abonné"
-        case .freeSteps(let remaining, _): "\(remaining) étapes gratuites restantes"
+        case .freeSteps(let remaining, _):
+            remaining == 1
+                ? "1 étape gratuite restante"
+                : "\(remaining) étapes gratuites restantes"
         case .limitReached: "Abonne-toi"
         }
     }
@@ -54,7 +63,8 @@ public enum FreemiumStatus: Equatable {
         case .subscriber: nil
         // Plus court qu'au profil : la pastille est posée sur l'avatar, entre
         // la salutation et le bord de l'écran, et n'a pas la ligne pour elle.
-        case .freeSteps(let remaining, _): "\(remaining) étapes restantes"
+        case .freeSteps(let remaining, _):
+            remaining == 1 ? "1 étape restante" : "\(remaining) étapes restantes"
         case .limitReached: profilePillLabel
         }
     }
@@ -93,15 +103,25 @@ extension Traveller {
 extension TravellerProfile {
     /// Le palier du compte, tel que le profil peut le lire.
     ///
-    /// Le profil, lui, a l'abonnement sous la main : il s'y fie plutôt qu'au
-    /// quota. Un ancien abonné qui a résilié n'a ni abonnement ni étapes
-    /// offertes — il faut lui reproposer l'offre, pas lui inventer un crédit.
+    /// **Le même calcul que celui de l'accueil**, et c'est tout l'intérêt : les
+    /// deux écrans montrent le même parcours vu de deux endroits, et ils
+    /// doivent donc en être au même point. Le profil disait « Abonne-toi » à
+    /// quelqu'un à qui l'accueil annonçait « 2 étapes restantes » — il ne
+    /// regardait que l'abonnement, jamais le quota, alors que
+    /// `GET /v1/profile` le rend depuis toujours (`offeredSteps`,
+    /// `remainingSteps`). C'était T77, et c'est réglé.
     ///
-    /// ⚠️ Il ne sait pas distinguer ``FreemiumStatus/freeSteps(remaining:offered:)`` de
-    /// ``FreemiumStatus/limitReached`` : `GET /v1/profile` ne rend pas le quota
-    /// d'étapes, que seul l'accueil reçoit. Un compte neuf voit donc la même
-    /// invitation qu'un compte épuisé — signalé (T77).
+    /// L'abonnement garde le dernier mot **dans un seul sens** : il suffit
+    /// d'être abonné pour n'avoir plus de quota à lire. À l'inverse, un ancien
+    /// abonné qui a résilié n'a ni abonnement ni étapes offertes, et retombe
+    /// donc sur ``FreemiumStatus/limitReached`` — l'offre, pas un crédit
+    /// inventé.
     public func freemiumStatus(override: FreemiumStatus?) -> FreemiumStatus {
-        override ?? (subscription.isActive ? .subscriber : .limitReached)
+        if let override { return override }
+        if subscription.isActive { return .subscriber }
+
+        guard let offered = offeredSteps else { return .limitReached }
+        let remaining = remainingSteps ?? 0
+        return remaining > 0 ? .freeSteps(remaining: remaining, offered: offered) : .limitReached
     }
 }

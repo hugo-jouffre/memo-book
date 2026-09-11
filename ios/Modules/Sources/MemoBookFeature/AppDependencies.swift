@@ -225,6 +225,16 @@ public final class AppDependencies {
         TripSettingsModel(tripId: tripId)
     }
 
+    /// Les personnalisations du carnet.
+    ///
+    /// ⚠️ **Sur le jeu d'essai**, comme les réglages du voyage : les valeurs
+    /// existent toutes en base (`memos`, M4) et sont déjà servies par
+    /// `GET /v1/trips/:id/settings`, mais la route qui les **écrit** reste à
+    /// ouvrir. Trois interrupteurs seulement sont branchés côté écran.
+    public func bookCustomisationModel(tripId: String) -> BookCustomisationModel {
+        BookCustomisationModel(tripId: tripId)
+    }
+
     /// L'aperçu du carnet.
     ///
     /// ⚠️ **Sur le jeu d'essai** : `GET /v1/memos/:id/preview` et

@@ -44,8 +44,6 @@ public enum BookCopy {
         public static let tricountMessage =
             "MemoBook pourra déduire tes étapes et t’aider à raconter des souvenirs à partir de tes dépenses"
 
-        public static let map = "La carte"
-
         /// ⚠️ « Prévisulation » est la coquille de la maquette (R8).
         public static let pdfPreview = "Prévisulation PDF"
         public static let pdfPreviewDetail = "Aperçu et partage"
@@ -53,10 +51,64 @@ public enum BookCopy {
         public static let order = "Commander le carnet"
         public static let help = "Besoin d’aide ?"
 
+        // MARK: Personnalisations du carnet
+
         /// La valeur d'une ligne dont le voyage n'a rien à dire. Un tiret cadratin
         /// et non une chaîne vide : une ligne sans valeur se lirait comme une
         /// valeur qui n'a pas chargé.
         public static let noValue = "—"
+    }
+
+    // MARK: - Personnalisations du carnet
+
+    public enum Customisation {
+        public static let title = "Personnalisations du carnet"
+
+        /// ⚠️ **Cette phrase vouvoie**, et elle est recopiée telle quelle (R8) :
+        /// R9 dit que l'app tutoie sans exception. Signalée — à réécrire dans
+        /// Figma en « Ajuste les différentes options de MemoBook pour que ton
+        /// carnet te ressemble de plus en plus ». La maquette écrit aussi
+        /// « Ajuster les différents options » : un infinitif là où il faut un
+        /// impératif, et un accord manquant.
+        public static let intro =
+            "Ajuster les différents options de MemoBook pour que votre carnet vous ressemble de plus en plus"
+
+        public static let covers = "Couvertures (1re & 4e)"
+        public static let coversDetail = "Aperçu et personnalisation"
+
+        public static let photoTextRatio = "Ratio photo / texte"
+        public static let targetPageCount = "Nombre de page cible"
+
+        public static let funFacts = "Fun facts"
+        public static let rules = "Pointillés"
+        public static let decorations = "Décorations & stickers"
+
+        public static let fontTitle = "Typographie des titres"
+        public static let fontDisplay = "Typographie des sous-titres"
+        public static let fontHand = "Typographie des textes"
+        public static let fontFacts = "Typographie des fun facts"
+
+        /// L'état d'un décor qu'on active ou non. Deux mots, pas un
+        /// interrupteur : la maquette en fait une ligne qui **mène** à un choix,
+        /// et le réglage aura plus de deux valeurs le jour où le gabarit les
+        /// acceptera.
+        public static func toggleValue(_ isOn: Bool) -> String {
+            isOn ? "Activé" : "Désactivé"
+        }
+
+        public static let extrasSection = "Extras"
+
+        public static let quizTitle = "Quiz intégrés à l’histoire"
+        public static let quizDetail =
+            "MemoBook génère des mini quiz au fur et à mesure du récit. Découvre-les et répond lors de la réception de ton carnet."
+
+        public static let freeZonesTitle = "Zones libres"
+        public static let freeZonesDetail =
+            "Ajoute 1 zone blanche à la fin de chaque étape et 3 pages blanches à la fin du carnet"
+
+        public static let crosswordTitle = "Mot fléché à la fin du livre"
+        public static let crosswordDetail =
+            "MemoBook génère une grille de mot fléché automatiquement à partir de tes récits, au moment de commander ton livre et la place à la fin du carnet."
     }
 
     // MARK: - On compose ton Carnet
@@ -76,6 +128,19 @@ public enum BookCopy {
 
     public enum Preview {
         public static let title = "Aperçu PDF"
+
+        /// Le titre de la **feuille** d'aperçu, celle qu'ouvrent les deux
+        /// pastilles « Voir un aperçu » du parcours d'abonnement.
+        ///
+        /// Différent de ``title``, et c'est la maquette qui le veut : l'écran
+        /// annonce un format (« Aperçu PDF »), la feuille annonce un geste
+        /// (« Prévisualisation »). On ne vend pas un PDF, on montre un carnet.
+        public static let sheetTitle = "Prévisualisation"
+
+        /// Le retour, quand l'aperçu est une **étape** d'une autre feuille — la
+        /// feuille d'abonnement. On est venu voir ce qu'on achète, on repart
+        /// d'où l'on venait.
+        public static let backToOffer = "Revenir à l’offre"
 
         /// « Rome et la Dolce Vita - 10 pages composées ».
         ///

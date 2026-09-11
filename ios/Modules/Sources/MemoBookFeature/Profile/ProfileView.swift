@@ -109,7 +109,10 @@ public struct ProfileView: View {
             sheetContent(destination)
         }
         .fullScreenCover(isPresented: $showsPaywall) {
-            PaywallView(subscription: effectiveSubscription) {
+            PaywallView(
+                subscription: effectiveSubscription,
+                previewMemoId: model.profile?.currentTrip?.id
+            ) {
                 model.activateSubscription()
                 subscriptionSession?.record(isSubscribed: true)
                 showsPaywall = false
@@ -502,7 +505,8 @@ public struct ProfileView: View {
                 onLearnMore: {
                     sheet = nil
                     showsPaywall = true
-                }
+                },
+                previewMemoId: model.profile?.currentTrip?.id
             )
         case .connectors:
             ConnectorsSheet(model: model)

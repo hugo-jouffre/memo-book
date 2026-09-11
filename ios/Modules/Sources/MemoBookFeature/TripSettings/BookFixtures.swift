@@ -30,7 +30,8 @@ extension TripSettings {
             theme: "City trip & découvertes",
             isPublicGallery: false,
             styleSummary: "Pointillés, cadres, etc.",
-            isPrintable: true
+            isPrintable: true,
+            customisation: .fixture
         )
     }
 
@@ -39,6 +40,29 @@ extension TripSettings {
     fileprivate static func day(_ day: Int, _ month: Int, _ year: Int) -> Date {
         Calendar(identifier: .gregorian)
             .date(from: DateComponents(year: year, month: month, day: day)) ?? .now
+    }
+}
+
+extension BookCustomisation {
+    /// Les valeurs de la maquette « Personnalisations du carnet — Mise en
+    /// page ». Ce sont aussi les défauts de la base (`memos`, M4) : les deux
+    /// disent la même chose, et c'est voulu — un carnet neuf ressemble à ce que
+    /// la maquette montre.
+    public static var fixture: BookCustomisation {
+        BookCustomisation(
+            photoTextRatio: 50,
+            targetPageCount: 60,
+            funFactsEnabled: true,
+            rulesEnabled: true,
+            decorationQuota: 2,
+            fontTitle: "Hansley",
+            fontDisplay: "Playfair",
+            fontHand: "Gloria Hallelujah",
+            fontFacts: "Playfair",
+            quizEnabled: true,
+            freeZonesEnabled: true,
+            crosswordEnabled: true
+        )
     }
 }
 

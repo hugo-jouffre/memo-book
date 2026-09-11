@@ -16,12 +16,17 @@ import SwiftUI
 /// dérobe toute seule est exactement ce que ce réglage demande d'éteindre.
 struct PaywallView: View {
     let subscription: Subscription?
+    /// Le carnet que la feuille « Prévisualisation » montre. `nil` — un compte
+    /// sans voyage en cours — ouvre le jeu d'essai : la feuille est là pour
+    /// montrer à quoi ça ressemble, et un aperçu vide ne vendrait rien.
+    var previewMemoId: String?
     let onSubscribe: () -> Void
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var page = 0
+    @State private var showsPreview = false
     /// Part de l'écran courant déjà écoulée, de 0 à 1. C'est **elle** qui remplit
     /// la barre, et c'est son arrivée à 1 qui tourne la page.
     @State private var progress: Double = 0
@@ -47,6 +52,17 @@ struct PaywallView: View {
             BrandMarkBackdrop(progress: 1, opacity: Self.backdropOpacity)
                 .ignoresSafeArea()
 
+            // **Les zones de tapotis sont sous le contenu**, et non par-dessus.
+            // Posées au-dessus, elles avalaient tout contrôle qui ne tombait
+            // pas dans la bande basse épargnée — c'est exactement ce qui est
+            // arrivé à la pastille « Voir un aperçu » : le tapotis tournait la
+            // page au lieu d'ouvrir la feuille.
+            //
+            // Dessous, les boutons et les pastilles reçoivent le doigt les
+            // premiers, et le texte des pages — qui ne fait rien du sien — le
+            // laisse traverser (voir `PaywallProse`).
+            tapZones
+
             VStack(spacing: 0) {
                 header
                 PaywallStoriesBar(pageCount: Self.pageCount, page: page, progress: progress)
@@ -55,7 +71,11 @@ struct PaywallView: View {
                 Group {
                     switch page {
                     case 0: PaywallCongratulations { turn(+1) }
-                    case 1: PaywallEstimate { turn(+1) }
+                    case 1:
+                        PaywallEstimate(
+                            onContinue: { turn(+1) },
+                            onPreview: { showsPreview = true }
+                        )
                     default: PaywallOffer(price: price, onSubscribe: onSubscribe)
                     }
                 }
@@ -65,18 +85,44 @@ struct PaywallView: View {
                 // par-dessus un fond immobile se lit comme un défaut.
                 .transition(.opacity)
                 .id(page)
+                // **L'animation du changement de page vit ici, et nulle part
+                // ailleurs.** Elle était portée par un `withAnimation` autour de
+                // `page`, qui emportait aussi les barres du haut : à chaque
+                // tour, la barre qu'on venait de finir et celle qui commençait
+                // se remplissaient **ensemble** sur 0,25 s, et on ne lisait plus
+                // les trois écrans comme une suite. Posée ici, elle ne concerne
+                // que ce qu'elle doit concerner : le contenu.
+                .animation(.smooth(duration: 0.25), value: page)
             }
             .padding(.horizontal, PaywallMetrics.margin)
             .padding(.bottom, MemoBookSpacing.l)
 
-            // Les deux moitiés d'écran qui font défiler les stories. Posées
-            // **derrière** rien du tout : elles sont au-dessus du décor mais
-            // sous les boutons, qui gardent la priorité.
-            tapZones
         }
         .background(MemoBookColor.background)
         .environment(\.colorScheme, .light)
-        .task(id: page) { await runPage() }
+        // **Un seul minuteur, et il est structuré.** L'identité porte la page
+        // *et* l'état de la feuille : ouvrir l'aperçu annule la tâche en cours,
+        // le refermer en démarre une neuve. Un `onChange` qui relançait
+        // `runPage()` à la fermeture a été essayé — il faisait cohabiter deux
+        // minuteurs, et les écrans défilaient deux fois plus vite.
+        .task(id: PageTimer(page: page, isPaused: showsPreview)) { await runPage() }
+        // La feuille se pose **par-dessus le paywall entier**, et non dans une
+        // page : on doit pouvoir la refermer et retrouver l'offre exactement où
+        // on l'avait laissée.
+        .brandSheet(isPresented: $showsPreview) {
+            BookPreviewSheet(memoId: previewMemoId)
+        }
+    }
+
+    /// Ce qui décide de relancer le minuteur : la page qu'on regarde, et le fait
+    /// qu'une feuille soit ouverte par-dessus.
+    ///
+    /// Les deux ensemble, dans une seule identité, parce que `task(id:)` n'en
+    /// accepte qu'une — et parce que c'est exactement la règle : le temps ne
+    /// passe que si l'on regarde l'offre.
+    private struct PageTimer: Equatable {
+        let page: Int
+        let isPaused: Bool
     }
 
     // MARK: - Chrome
@@ -130,6 +176,11 @@ struct PaywallView: View {
     /// essayée — elle enchaînait deux écrans d'un coup, parce que le minuteur
     /// qu'on annulait n'était déjà plus celui qui courait.
     private func runPage() async {
+        // Une feuille est ouverte par-dessus : le temps s'arrête, et la barre
+        // reste où elle en était. Une page qui tourne derrière un aperçu fait
+        // retrouver un autre écran en le refermant.
+        guard !showsPreview else { return }
+
         // Le dernier écran porte l'offre : il ne s'en va pas tout seul, et sa
         // barre reste donc pleine plutôt que de se remplir dans le vide. En
         // Reduce Motion, aucune page ne tourne toute seule — on remplit la
@@ -139,7 +190,21 @@ struct PaywallView: View {
             return
         }
 
-        progress = 0
+        // **Deux temps, et deux images.** Remettre la barre à zéro puis lancer
+        // son remplissage dans la même passe ne donne qu'une seule écriture à
+        // SwiftUI : il interpole alors depuis la valeur déjà à l'écran — 1,
+        // laissée par l'écran précédent — vers 1, c'est-à-dire rien. La barre
+        // se posait pleine d'un coup au lieu de se remplir.
+        //
+        // La remise à zéro est donc explicitement **sans animation**, et on
+        // rend la main le temps d'une image avant de lancer le remplissage.
+        var reset = Transaction()
+        reset.disablesAnimations = true
+        withTransaction(reset) { progress = 0 }
+
+        await Task.yield()
+        guard !Task.isCancelled else { return }
+
         withAnimation(.linear(duration: Self.pageDuration.seconds)) { progress = 1 }
 
         do { try await Task.sleep(for: Self.pageDuration) } catch { return }
@@ -156,7 +221,11 @@ struct PaywallView: View {
             return
         }
 
-        withAnimation(.smooth(duration: 0.25)) { page = next }
+        // Sans `withAnimation` : la transition du contenu est déclarée sur le
+        // contenu lui-même (`.animation(_:value:)`), et les barres du haut
+        // doivent basculer **net** — celle qu'on quitte pleine, celle qu'on
+        // ouvre vide.
+        page = next
     }
 }
 

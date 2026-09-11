@@ -121,6 +121,14 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
     /// imprimer.
     public var isPrintable: Bool
 
+    /// Les personnalisations de la mise en page — l'écran « Style du carnet ».
+    ///
+    /// Elles voyagent **avec** les réglages et non sur une requête à elles : il
+    /// y en a un jeu par voyage, elles se lisent toujours avec lui, et
+    /// `styleSummary` en est le résumé d'une ligne. Optionnel le temps que la
+    /// route les serve à tous les carnets.
+    public var customisation: BookCustomisation?
+
     public init(
         tripId: String,
         name: String,
@@ -135,7 +143,8 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
         styleSummary: String? = nil,
         tricountLabel: String? = nil,
         previewCoverUrl: URL? = nil,
-        isPrintable: Bool = false
+        isPrintable: Bool = false,
+        customisation: BookCustomisation? = nil
     ) {
         self.tripId = tripId
         self.name = name
@@ -151,6 +160,7 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
         self.tricountLabel = tricountLabel
         self.previewCoverUrl = previewCoverUrl
         self.isPrintable = isPrintable
+        self.customisation = customisation
     }
 
     /// « @clara_prn, @ana.prn » — les co-voyageurs en bout de ligne.

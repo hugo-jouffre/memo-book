@@ -314,10 +314,14 @@ private struct BookReaderView: View {
 
 /// La scène où la page se pose : elle garde le rapport du carnet et se centre.
 ///
+/// Partagée avec la feuille « Prévisualisation » du paywall : c'est la même
+/// page, regardée depuis deux endroits, et elle doit y avoir exactement la même
+/// boîte.
+///
 /// Elle existe pour une raison unique et vaut d'être un composant : la page en
 /// composition et la page du PDF doivent occuper **exactement** la même boîte,
 /// sinon le passage de l'une à l'autre décale tout l'écran de quelques points.
-private struct BookPageStage<Content: View>: View {
+struct BookPageStage<Content: View>: View {
     @ViewBuilder let content: Content
 
     /// Le rapport de la maquette : 252 × 357, soit l'A5 du carnet.
@@ -341,9 +345,13 @@ private struct BookPageStage<Content: View>: View {
 }
 
 /// La page regardée, avec ses deux commandes posées dessus.
-private struct BookSheetView: View {
+struct BookSheetView: View {
     let model: BookPreviewModel
-    let onExpand: () -> Void
+    /// `nil` retire la commande de plein écran. C'est le cas de la feuille du
+    /// paywall : il faudrait en sortir pour entrer en plein écran, et on ne
+    /// reviendrait pas à l'offre. Retirée, et non désactivée — un bouton qui ne
+    /// fait rien est pire que pas de bouton.
+    let onExpand: (() -> Void)?
     let onConfigureCovers: () -> Void
 
     @Environment(\.displayScale) private var displayScale
@@ -370,8 +378,14 @@ private struct BookSheetView: View {
                     .transition(.opacity)
             }
 
-            BookScreenModeButton(icon: "IconFullScreen", label: BookCopy.Preview.Voice.enterFullScreen, action: onExpand)
+            if let onExpand {
+                BookScreenModeButton(
+                    icon: "IconFullScreen",
+                    label: BookCopy.Preview.Voice.enterFullScreen,
+                    action: onExpand
+                )
                 .padding(MemoBookSpacing.xs)
+            }
         }
         .animation(.easeInOut(duration: 0.2), value: model.isOnConfigurableCover)
         .task(id: model.sheetIndex) {
@@ -416,7 +430,7 @@ private struct CoverInvitation: View {
 }
 
 /// « ‹ Page 4 / 10 › » — de quoi tourner les pages.
-private struct BookPageStepper: View {
+struct BookPageStepper: View {
     let model: BookPreviewModel
 
     var body: some View {
