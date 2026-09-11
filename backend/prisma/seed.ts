@@ -306,9 +306,20 @@ async function seedTraveller(
   // La cagnotte se remplit par le registre, jamais en écrivant le solde à la
   // main — même dans un seed. C'est la seule façon de vérifier que le cache et
   // les écritures disent la même chose.
+  // Les mouvements de la maquette « Cagnotte », et pas trois lignes
+  // symboliques : l'écran montre deux natures d'écriture — un don porte un nom
+  // de personne et une pastille bleue, un versement d'abonnement porte
+  // l'engrenage et la pastille lime — et on ne voit qu'elles se distinguent
+  // qu'avec les deux à l'écran. Le dernier mouvement est un débit : il vérifie
+  // que le registre compte aussi ce qui sort.
   const movements = [
-    { amountCents: 5000, kind: "topup" as const, label: "Rechargement" },
-    { amountCents: 1000, kind: "gift" as const, label: "Parrainage de Clara" },
+    { amountCents: 199, kind: "topup" as const, label: "Abonnement MB" },
+    { amountCents: 3000, kind: "gift" as const, label: "Julie et Tom" },
+    { amountCents: 199, kind: "topup" as const, label: "Abonnement MB" },
+    { amountCents: 2000, kind: "gift" as const, label: "Bruno Dupont" },
+    { amountCents: 199, kind: "topup" as const, label: "Abonnement MB" },
+    { amountCents: 1000, kind: "gift" as const, label: "Marie D." },
+    { amountCents: 199, kind: "topup" as const, label: "Abonnement MB" },
     { amountCents: -1212, kind: "order_payment" as const, label: "Carnet Lisbonne" },
   ];
 

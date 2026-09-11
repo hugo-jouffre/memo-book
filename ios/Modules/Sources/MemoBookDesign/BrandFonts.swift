@@ -24,6 +24,19 @@ public enum BrandFonts {
     public static let generalSansMedium = "GeneralSans-Medium"
     public static let generalSansSemibold = "GeneralSans-Semibold"
 
+    /// Gloria Hallelujah — **l'écriture à la main du carnet**, et rien d'autre
+    /// dans l'app.
+    ///
+    /// C'est déjà la police manuscrite du template d'impression
+    /// (`memos.fontHand`), livrée en `woff2` dans
+    /// `templates/travel-journal/assets/fonts/`. CoreText ne sait pas lire le
+    /// woff2 : le fichier embarqué ici est le **même** dessin converti en TTF,
+    /// pas une seconde police.
+    ///
+    /// Le nom est celui du PostScript, sans tiret — c'est celui que
+    /// `Font.custom` attend, et il diffère du nom de fichier.
+    public static let gloriaHallelujah = "GloriaHallelujah"
+
     private static let register: Void = {
         let fonts =
             (Bundle.module.urls(forResourcesWithExtension: "ttf", subdirectory: "Fonts") ?? [])

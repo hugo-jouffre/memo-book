@@ -88,4 +88,18 @@ public enum TripIntent: Sendable, Hashable {
     /// cette étape-là : c'est ce qui permet à MEMO de savoir de quelle journée
     /// on parle sans avoir à le demander.
     case openStep(tripId: String, stepId: String)
+
+    /// La roue crantée de l'en-tête : les réglages du voyage.
+    ///
+    /// Elle est posée au **même endroit** que sur la conversation, et elle mène
+    /// au même écran : les réglages appartiennent au voyage, pas à l'écran
+    /// depuis lequel on les ouvre.
+    case openSettings(tripId: String)
+
+    /// L'imprimante de l'en-tête : l'aperçu du carnet.
+    ///
+    /// Elle ouvre l'**aperçu** et non un tunnel de commande, pour la même
+    /// raison que celle des cartes de l'accueil : on ne commande pas un carnet
+    /// qu'on n'a pas vu. « Commander ce carnet » attend en bas de l'aperçu.
+    case openBookPreview(tripId: String)
 }

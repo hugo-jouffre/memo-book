@@ -13,6 +13,15 @@ public enum OnboardingStorage {
     /// L'écran d'accueil a été vu au moins une fois.
     public static let hasSeenWelcome = "hasSeenWelcome"
 
+    /// Le mot des fondateurs a été lu au moins une fois.
+    ///
+    /// Il s'ouvre **tout seul** au premier aperçu d'un carnet, sans qu'on
+    /// l'ait demandé — c'est ce qui fait sa valeur, et c'est aussi ce qui le
+    /// rendrait insupportable s'il revenait à chaque fois. Une fois lu, il ne
+    /// revient plus : la feuille reste ouvrable à la main, elle ne s'invite
+    /// plus.
+    public static let hasSeenFoundersNote = "hasSeenFoundersNote"
+
     /// Argument de lancement qui remet l'app à son tout premier démarrage.
     ///
     /// Il se coche dans Xcode — *Product ▸ Scheme ▸ Edit Scheme ▸ Run ▸
@@ -60,6 +69,7 @@ public enum OnboardingStorage {
         #if DEBUG
             guard ProcessInfo.processInfo.arguments.contains(resetArgument) else { return }
             UserDefaults.standard.removeObject(forKey: hasSeenWelcome)
+            UserDefaults.standard.removeObject(forKey: hasSeenFoundersNote)
 
             // La session n'est pas dans les réglages mais au trousseau, qui
             // survit à une désinstallation. Sans cette ligne, on reverrait

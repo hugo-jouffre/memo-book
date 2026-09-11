@@ -23,6 +23,11 @@ from fontTools.varLib import instancer
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCES = ROOT / "MemoBook Generator" / "public" / "fonts"
+
+# La police manuscrite du carnet n'est pas variable : elle est livrée en woff2
+# avec le template d'impression. CoreText ne sait pas lire le woff2, d'où la
+# conversion — c'est le **même** dessin, pas une seconde police.
+WOFF2_SOURCES = ROOT / "templates" / "travel-journal" / "assets" / "fonts"
 DESTINATION = ROOT / "ios" / "Modules" / "Sources" / "MemoBookDesign" / "Resources" / "Fonts"
 
 # Interlignes des styles Figma, en multiple de la taille du corps.
@@ -37,6 +42,16 @@ INSTANCES = [
     ("GeneralSans-Variable.ttf", 400, "General Sans", "Regular"),
     ("GeneralSans-Variable.ttf", 500, "General Sans", "Medium"),
     ("GeneralSans-Variable.ttf", 600, "General Sans", "Semibold"),
+]
+
+# (fichier woff2 source, nom PostScript de sortie)
+#
+# Ces polices-là sont recopiées telles quelles : pas d'instanciation à faire, et
+# **pas de recalage d'interligne** — une écriture à la main n'a pas de style
+# Figma qui lui impose une hauteur de ligne, et lui en imposer une casserait
+# justement ce qui la rend manuscrite.
+STATIC_WOFF2 = [
+    ("gloria-hallelujah-400-latin.woff2", "GloriaHallelujah"),
 ]
 
 
@@ -93,6 +108,20 @@ def build(source: str, weight: int, family: str, style: str) -> None:
     print(f"{postscript}.ttf — graisse {weight}, interligne ×{height:.4f}")
 
 
+def convert(source: str, postscript: str) -> None:
+    """Dé-compresse un woff2 en TTF, sans rien changer d'autre."""
+    font = TTFont(WOFF2_SOURCES / source)
+    font.flavor = None  # woff2 → sfnt brut
+
+    DESTINATION.mkdir(parents=True, exist_ok=True)
+    font.save(DESTINATION / f"{postscript}.ttf")
+
+    family = font["name"].getDebugName(1)
+    print(f"{postscript}.ttf — {family}, converti depuis woff2")
+
+
 if __name__ == "__main__":
     for instance in INSTANCES:
         build(*instance)
+    for conversion in STATIC_WOFF2:
+        convert(*conversion)

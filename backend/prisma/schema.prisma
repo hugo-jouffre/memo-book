@@ -357,6 +357,33 @@ model Memo {
   /// Rythme du récit, « tous les 2 jours ». Cadence les relances.
   narrationPace String?
 
+  /// Le titre que le **récit** se donne — « Rome et la Dolce Vita ».
+  ///
+  /// Distinct de `title`, qui est le nom du voyage (« Rome 2026 ») : le
+  /// premier est une couverture de carnet, le second une entrée de liste. Nul
+  /// tant que le récit ne s'est pas nommé ; l'aperçu retombe alors sur `title`.
+  bookTitle String?
+
+  /// Les relances de **ce voyage-ci**.
+  ///
+  /// Rien à voir avec l'autorisation système, qui est globale et vit dans iOS :
+  /// couper ici n'enlève aucune permission, ça arrête les relances de ce
+  /// carnet. C'est pour ça que l'écran de réglages porte les deux lignes,
+  /// l'interrupteur et « Gérer mes notifications ».
+  notificationsEnabled Boolean @default(true)
+
+  /// Le lien de prévisualisation publique, celui qu'on envoie à ses proches.
+  ///
+  /// **Nul par défaut, et c'est le point** : c'est un lien public, il ne se
+  /// crée pas à la création d'un voyage. Il n'existe qu'à partir du moment où
+  /// quelqu'un a demandé à partager, depuis la feuille « Partager ton
+  /// MemoBook ». Unique, parce que c'est lui — et non l'identifiant — qui
+  /// désigne le carnet à quelqu'un qui n'a pas de compte.
+  ///
+  /// Distinct d'`accessCode`, qui fait **entrer** dans le voyage : celui-ci ne
+  /// donne qu'à lire l'aperçu.
+  shareSlug String? @unique
+
   /// Partager sur la galerie. Un carnet public passe une modération plus
   /// stricte avant d'y entrer.
   ///

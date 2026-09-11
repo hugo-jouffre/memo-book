@@ -204,4 +204,59 @@ public final class AppDependencies {
             update: { [api] id, draft in try await api.updateTrip(id: id, draft: draft) }
         )
     }
+
+    /// Les réglages d'un voyage.
+    ///
+    /// ⚠️ **Sur le jeu d'essai**, comme le chat : `GET /v1/trips/:id/settings`
+    /// et son `PATCH` n'existent pas encore côté serveur. Le jour où ils
+    /// existent, cette fabrique devient :
+    ///
+    /// ```swift
+    /// TripSettingsModel(
+    ///     tripId: tripId,
+    ///     source: { [api] id in try await api.tripSettings(id: id) },
+    ///     persist: { [api] id, edit in try await api.updateTripSettings(id: id, edit: edit) }
+    /// )
+    /// ```
+    ///
+    /// Rien d'autre ne bouge : ni la vue, ni le modèle, ni les aperçus. Voir la
+    /// fiche des paramètres du voyage dans `docs/ui-development.md`.
+    public func tripSettingsModel(tripId: String) -> TripSettingsModel {
+        TripSettingsModel(tripId: tripId)
+    }
+
+    /// Les personnalisations du carnet.
+    ///
+    /// ⚠️ **Sur le jeu d'essai**, comme les réglages du voyage : les valeurs
+    /// existent toutes en base (`memos`, M4) et sont déjà servies par
+    /// `GET /v1/trips/:id/settings`, mais la route qui les **écrit** reste à
+    /// ouvrir. Trois interrupteurs seulement sont branchés côté écran.
+    public func bookCustomisationModel(tripId: String) -> BookCustomisationModel {
+        BookCustomisationModel(tripId: tripId)
+    }
+
+    /// L'aperçu du carnet.
+    ///
+    /// ⚠️ **Sur le jeu d'essai** : `GET /v1/memos/:id/preview` et
+    /// `POST /v1/memos/:id/share-link` restent à écrire. Les routes de rendu
+    /// (`POST /v1/memos/:id/renders`, `GET /v1/renders/:id`) existent, elles,
+    /// mais rendent un ``Render`` et non un ``BookPreview`` — il manque le
+    /// titre du carnet, l'extrait et l'état des couvertures, que l'écran
+    /// affiche tous les trois.
+    public func bookPreviewModel(memoId: String) -> BookPreviewModel {
+        BookPreviewModel(memoId: memoId)
+    }
+
+    /// Ma cagnotte.
+    ///
+    /// ⚠️ **Sur le jeu d'essai** : `GET /v1/wallet` reste à écrire. Le solde,
+    /// lui, arrive déjà dans `GET /v1/profile` (`walletBalance`) — c'est
+    /// l'**historique** qui manque, et c'est tout l'écran.
+    ///
+    /// `topUp` reste `nil` tant que Stripe n'est pas branché : l'écran le lit
+    /// pour dire pourquoi « Ajouter » n'aboutit pas, au lieu d'ouvrir un écran
+    /// qui n'existe pas.
+    public func walletModel(tripId: String?) -> WalletModel {
+        WalletModel(tripId: tripId)
+    }
 }

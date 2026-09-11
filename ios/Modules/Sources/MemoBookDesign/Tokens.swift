@@ -307,6 +307,35 @@ public enum MemoBookSpacing {
     /// Rayon du haut d'une feuille modale. Plus grand que celui d'une carte :
     /// c'est un écran qui monte par-dessus, pas un bloc posé dedans.
     public static let sheetCornerRadius: CGFloat = 28
+
+    /// **Le** diamètre d'une pastille d'initiale : le contributeur d'une ligne
+    /// de cagnotte.
+    ///
+    /// Fixe, hors Dynamic Type, pour la même raison qu'``avatarSide`` : une
+    /// pastille qui grandit avec le corps pousse le nom hors de sa ligne. Plus
+    /// petite qu'un avatar de titre (40) parce qu'elle accompagne une ligne de
+    /// liste et non un en-tête.
+    public static let initialsSide: CGFloat = 36
+
+    /// L'épaisseur d'une barre de progression.
+    ///
+    /// 6 pt : c'est ce que dessine la maquette de la cagnotte, et c'est déjà ce
+    /// que ``BrandProgressBar`` posait sur les cartes de l'accueil. Les deux
+    /// tombent au même endroit, la constante ne fait que leur donner un nom.
+    ///
+    /// ⚠️ Le § 2.3 de `docs/ui-development.md` annonce 0.25 rem (4 pt) pour ce
+    /// cran, au motif que Figma dessinait alors 7. Les maquettes disent 6
+    /// depuis, et le code aussi : c'est **le document** qui est en retard, pas
+    /// la valeur. Signalé plutôt que corrigé des deux côtés à la fois.
+    public static let progressBarHeight: CGFloat = 6
+
+    /// Le rayon d'une vignette de page de carnet dans l'aperçu — Figma
+    /// `Size/small`.
+    ///
+    /// Volontairement le plus petit rayon de l'app : une page de carnet est une
+    /// feuille de papier, et du papier n'a pas de coins ronds. Ces 8 pt ne sont
+    /// là que pour que la vignette ne se lise pas comme un rectangle collé.
+    public static let pageCornerRadius: CGFloat = 8
 }
 
 /// Typographies de la marque : Sora pour les titres, General Sans pour tout le
@@ -407,6 +436,18 @@ public enum MemoBookFont {
     /// design system qu'une contrainte extérieure nous fait bouger.
     public static let button = Font.custom(BrandFonts.soraSemiBold, size: 18, relativeTo: .body)
 
+    /// Libellé d'un bouton **d'appoint** — la taille `small` du design system.
+    ///
+    /// Sora SemiBold 16, soit exactement ce que dit le composant Figma
+    /// `Button` (`Text Sizes/Text Regular`). Le 18 de ``button`` est une
+    /// **exception**, et son motif ne vaut que pour les appels à l'action
+    /// pleine largeur : c'est la typographie du bouton d'Apple, qu'on ne
+    /// choisit pas, qui a fait monter la nôtre. Un bouton d'appoint posé dans
+    /// une carte ne côtoie aucun bouton d'Apple, il n'a donc pas à payer cette
+    /// contrainte — et à 18 pt, « Partager ma cagnotte » ne tient pas à côté de
+    /// « Voir ma cagnotte ».
+    public static let buttonSmall = Font.custom(BrandFonts.soraSemiBold, size: 16, relativeTo: .body)
+
     /// Titres de section dans les écrans système.
     public static let sectionTitle = Font.custom(BrandFonts.generalSansSemibold, size: 17, relativeTo: .headline)
 
@@ -445,6 +486,45 @@ public enum MemoBookFont {
 
     /// Surtitre en capitales et pastilles d'état. — `Text Tiny` (12).
     public static let overline = Font.custom(BrandFonts.generalSansSemibold, size: 12, relativeTo: .caption)
+
+    /// **Un montant qu'on vient chercher du regard** : le solde de la cagnotte,
+    /// et rien d'autre. Sora SemiBold 48.
+    ///
+    /// C'est le seul corps de l'app au-dessus du titre d'écran, et c'est voulu :
+    /// l'écran de la cagnotte n'a qu'une chose à dire, et c'est ce nombre-là.
+    /// La maquette l'écrit en Inter Extra Bold ; l'app pose son Sora, qui est la
+    /// police des chiffres de la marque (`agents/design.md`) — Inter vient du
+    /// kit iOS de la maquette, pas des variables.
+    public static let balance = Font.custom(BrandFonts.soraSemiBold, size: 48, relativeTo: .largeTitle)
+
+    /// Le chiffre d'une pastille de synthèse — « 60 € offerts par tes
+    /// proches ». Assez gros pour se lire d'un coup d'œil, assez petit pour
+    /// tenir à deux par ligne.
+    public static let figure = Font.custom(BrandFonts.soraSemiBold, size: 24, relativeTo: .title2)
+
+    /// Le surtitre en capitales d'une carte ou d'une section — « MONTANT
+    /// DISPONIBLE », « HISTORIQUE DES CONTRIBUTIONS ».
+    ///
+    /// Même corps qu'``overline`` (12) mais en Sora et non en General Sans :
+    /// il annonce un bloc, il ne qualifie pas une valeur.
+    public static let sectionOverline = Font.custom(BrandFonts.soraSemiBold, size: 12, relativeTo: .caption)
+
+    /// La pastille minuscule qui qualifie une écriture de cagnotte — « DON »,
+    /// « ABONNEMENT ».
+    ///
+    /// ⚠️ La maquette descend à 9 pt. L'app ne va pas sous 11
+    /// (``mention``) : à 9 pt le mot n'est plus lisible, et il porte pourtant
+    /// la seule information qui distingue deux lignes de l'historique. Écart
+    /// assumé et signalé — voir la fiche de la cagnotte.
+    public static let microBadge = Font.custom(BrandFonts.generalSansSemibold, size: 11, relativeTo: .caption2)
+
+    /// Une ligne écrite **à la main dans le carnet**, reprise dans l'app : la
+    /// phrase verte du mot des fondateurs.
+    ///
+    /// Elle n'a qu'un emploi, et il est délibérément rare. La manuscrite dit
+    /// « ceci n'est pas de l'interface, c'est quelqu'un qui te parle » — en
+    /// mettre deux dans l'app lui retirerait exactement ça.
+    public static let handwriting = Font.custom(BrandFonts.gloriaHallelujah, size: 16, relativeTo: .body)
 
     /// Titres de **carnet** uniquement, jamais les titres d'écran système.
     public static func bookTitle(_ size: CGFloat = 28) -> Font {

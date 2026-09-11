@@ -15,6 +15,7 @@ import SwiftUI
 /// de l'app entière et remonte donc à ``RootView``.
 public struct ProfileView: View {
     private let onSignOut: () -> Void
+    private let onIntent: (ProfileIntent) -> Void
 
     @State private var model: ProfileModel
     @State private var sheet: ProfileSheet?
@@ -36,10 +37,12 @@ public struct ProfileView: View {
 
     public init(
         model: ProfileModel = ProfileModel(),
-        onSignOut: @escaping () -> Void
+        onSignOut: @escaping () -> Void,
+        onIntent: @escaping (ProfileIntent) -> Void = { _ in }
     ) {
         _model = State(initialValue: model)
         self.onSignOut = onSignOut
+        self.onIntent = onIntent
     }
 
     public var body: some View {
@@ -106,7 +109,10 @@ public struct ProfileView: View {
             sheetContent(destination)
         }
         .fullScreenCover(isPresented: $showsPaywall) {
-            PaywallView(subscription: effectiveSubscription) {
+            PaywallView(
+                subscription: effectiveSubscription,
+                previewMemoId: model.profile?.currentTrip?.id
+            ) {
                 model.activateSubscription()
                 subscriptionSession?.record(isSubscribed: true)
                 showsPaywall = false
@@ -380,7 +386,7 @@ public struct ProfileView: View {
                 value: profile?.walletBalance.euros,
                 isValueProminent: true,
                 isValueLoading: profile == nil,
-                action: notYetRouted
+                action: { onIntent(.openWallet) }
             )
             // Elle ne s'affiche qu'une fois abonné : sans abonnement, c'est le
             // bouton lime du haut qui porte la proposition, et deux entrées vers
@@ -499,7 +505,8 @@ public struct ProfileView: View {
                 onLearnMore: {
                     sheet = nil
                     showsPaywall = true
-                }
+                },
+                previewMemoId: model.profile?.currentTrip?.id
             )
         case .connectors:
             ConnectorsSheet(model: model)
@@ -855,4 +862,14 @@ private struct ProfileExitAction: View {
         ProfileView {}
     }
     .environment(\.dynamicTypeSize, .accessibility3)
+}
+
+/// Ce que le profil demande à l'app d'ouvrir.
+///
+/// Une seule destination pour l'instant, et c'est la cagnotte : toutes les
+/// autres lignes de l'écran ouvrent des feuilles, qui vivent dans l'écran. La
+/// cagnotte, elle, est un écran entier — et le **même** que celui qu'ouvrent
+/// les paramètres d'un voyage, parce que c'est la même somme.
+public enum ProfileIntent: Sendable, Hashable {
+    case openWallet
 }

@@ -56,9 +56,17 @@ struct PaywallSquiggle<S: Shape>: View {
     private static var delay: Duration { .milliseconds(117) }
     private static var duration: Double { 0.79 }
 
+    /// De combien le trait dépasse **de chaque côté**, en part de sa largeur.
+    ///
+    /// Un trait qui s'arrête pile au bord de l'écran montre ses deux bouts
+    /// arrondis, et se lit alors comme un objet posé là plutôt que comme un
+    /// geste qui traverse la page. Douze pour cent de chaque côté suffisent à
+    /// les sortir du cadre sur tous les formats, y compris le SE.
+    private static var bleed: CGFloat { 0.12 }
+
     var body: some View {
         GeometryReader { proxy in
-            shape
+            BleedingShape(base: shape, bleed: Self.bleed)
                 .trim(from: 0, to: drawn)
                 .stroke(
                     MemoBookColor.outline,
@@ -81,6 +89,41 @@ struct PaywallSquiggle<S: Shape>: View {
     }
 }
 
+/// Un tracé dessiné **plus large que la place qu'on lui donne**, pour que ses
+/// deux bouts tombent hors de l'écran.
+///
+/// Le débordement se fait dans le **chemin** et non par un `scaleEffect` : la
+/// mise à l'échelle non uniforme d'un trait déjà tracé en écrase l'épaisseur
+/// d'un côté et ovalise ses bouts ronds. Ici le chemin est construit dans un
+/// cadre élargi, puis tracé normalement — l'épaisseur reste constante d'un bout
+/// à l'autre.
+///
+/// La vue, elle, ne change pas de taille : c'est du dessin qui sort de son
+/// cadre, pas une vue plus grande. Le `trim` de l'animation porte donc sur le
+/// tracé entier, ce qui fait entrer le trait **par le hors-champ** — le geste
+/// commence avant le bord de l'écran, exactement comme un trait à la main.
+private struct BleedingShape<Base: Shape>: Shape {
+    let base: Base
+    /// Part de la largeur ajoutée de chaque côté.
+    let bleed: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        base.path(in: rect.insetBy(dx: -rect.width * bleed, dy: 0))
+    }
+}
+
+/// Ce qui, dans une page de paywall, **ne prend pas le doigt**.
+///
+/// Un `Text` de SwiftUI est touchable par défaut, même quand il n'a aucune
+/// action : posé au-dessus des zones de tapotis, il les empêche de recevoir le
+/// geste, et la story ne défile plus là où il y a du texte — c'est-à-dire
+/// partout. Ce modificateur dit en un mot que ce bloc est du décor.
+///
+/// Les **contrôles** ne le portent jamais : ce sont eux qui doivent gagner.
+extension View {
+    func paywallProse() -> some View { allowsHitTesting(false) }
+}
+
 // MARK: - Écran 1 — « Bravo ! »
 
 struct PaywallCongratulations: View {
@@ -100,6 +143,7 @@ struct PaywallCongratulations: View {
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            .paywallProse()
 
             PaywallSquiggle(
                 shape: BrandSquiggleDown(),
@@ -107,6 +151,7 @@ struct PaywallCongratulations: View {
                 aspectRatio: BrandSquiggleDown.size.width / BrandSquiggleDown.size.height
             )
             .padding(.horizontal, -PaywallMetrics.margin)
+            .paywallProse()
 
             Spacer(minLength: 0)
 
@@ -119,18 +164,25 @@ struct PaywallCongratulations: View {
 
 struct PaywallEstimate: View {
     let onContinue: () -> Void
+    /// Ouvre la feuille « Prévisualisation ». L'écran ne la présente pas
+    /// lui-même : elle doit se poser **par-dessus le paywall entier**, et c'est
+    /// ``PaywallView`` qui l'occupe.
+    let onPreview: () -> Void
 
     var body: some View {
         VStack(spacing: MemoBookSpacing.l) {
             Spacer(minLength: 0)
 
             VStack(spacing: MemoBookSpacing.s) {
-                PaywallEyebrow(PaywallCopy.estimateEyebrow)
-                PaywallTitle(
-                    lead: PaywallCopy.estimateTitleLead,
-                    strong: PaywallCopy.estimateTitleStrong,
-                    isUnderlined: true
-                )
+                Group {
+                    PaywallEyebrow(PaywallCopy.estimateEyebrow)
+                    PaywallTitle(
+                        lead: PaywallCopy.estimateTitleLead,
+                        strong: PaywallCopy.estimateTitleStrong,
+                        isUnderlined: true
+                    )
+                }
+                .paywallProse()
 
                 VStack(spacing: MemoBookSpacing.xs) {
                     ForEach(PaywallCopy.estimateBody, id: \.self) { line in
@@ -139,11 +191,27 @@ struct PaywallEstimate: View {
                             .foregroundStyle(MemoBookColor.ink)
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
+                            .paywallProse()
                     }
 
-                    // ⚠️ Inerte : la feuille « Prévisualisation » du nœud n'est
-                    // pas encore écrite — fiche écran.
-                    BrandTagPill(PaywallCopy.previewPill, tone: .accentOutlined, isUppercased: true)
+                    // La pastille **ouvre** désormais la feuille du nœud
+                    // « Modale - Paywall Previsualisation ». Elle garde son
+                    // dessin de pastille, comme la maquette : c'est une
+                    // proposition posée dans une phrase, pas l'appel à l'action
+                    // de l'écran — celui-là est le bouton bleu du bas.
+                    Button(action: onPreview) {
+                        BrandTagPill(
+                            PaywallCopy.previewPill,
+                            tone: .accentOutlined,
+                            isUppercased: true
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    // La cible tactile monte à 2.75 rem même si la pastille est
+                    // plus courte : le dessin est plus petit que le geste (R7).
+                    .frame(minHeight: MemoBookSpacing.minimumTapTarget)
+                    .contentShape(.rect)
+                    .accessibilityAddTraits(.isButton)
                 }
             }
 
@@ -153,6 +221,7 @@ struct PaywallEstimate: View {
                 aspectRatio: BrandSquiggleUp.size.width / BrandSquiggleUp.size.height
             )
             .padding(.horizontal, -PaywallMetrics.margin)
+            .paywallProse()
 
             Spacer(minLength: 0)
 
@@ -166,6 +235,7 @@ struct PaywallEstimate: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
+                .paywallProse()
 
                 BrandButton(PaywallCopy.cont, style: .blue, fillsWidth: true, action: onContinue)
             }
@@ -191,6 +261,7 @@ struct PaywallOffer: View {
                     isUnderlined: true
                 )
             }
+            .paywallProse()
 
             // Les quatre cartes se chevauchent de 4 pt et penchent chacune de
             // son côté : c'est une pile de papiers posés à la main, pas une
@@ -200,6 +271,14 @@ struct PaywallOffer: View {
                     PaywallArgumentCard(argument: argument)
                 }
             }
+            // Les quatre cartes sont du décor, pastille « Voir une estimation »
+            // comprise : elles ne portent aucune action. Sans ça, elles
+            // avaleraient le tapotis de retour sur presque tout l'écran — c'est
+            // la contrepartie d'avoir mis les zones de tapotis dessous.
+            //
+            // ⚠️ Le jour où la pastille mènera quelque part, elle devra sortir
+            // de ce bloc, comme celle de l'écran 2.
+            .paywallProse()
 
             Spacer(minLength: 0)
 

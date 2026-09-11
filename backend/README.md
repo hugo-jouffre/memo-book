@@ -167,7 +167,22 @@ champ près — `test/screens.test.ts` est ce qui les tient ensemble.
 | `PATCH /v1/profile` | Corrige le profil. Un champ absent n'est pas touché, un champ à `null` est effacé |
 | `PUT /v1/profile/connectors/:key` | Branche ou débranche un connecteur |
 | `POST /v1/profile/link-device` | Rattache l'appareil au compte et lui transfère ses carnets |
+| `GET /v1/trips/:id/settings` | Les réglages d'un voyage : nom, dates, rythme, co-voyageurs, solde, style, aperçu |
+| `PATCH /v1/trips/:id/settings` | Corrige un réglage. Même sémantique que `PATCH /v1/profile` |
+| `GET /v1/wallet` | La cagnotte du **compte** et son historique. `?tripId=` ajoute l'estimation du carnet |
+| `GET /v1/memos/:id/preview` | L'aperçu du carnet : état de composition, PDF, extrait, couvertures |
+| `POST /v1/memos/:id/share-link` | Crée le lien public de prévisualisation, ou rend celui qui existe |
 | `GET /v1/showcases/welcome` | Les mises en avant de l'écran de bienvenue. **Non authentifiée** |
+
+`GET /v1/wallet` en mérite un aussi : la cagnotte appartient au **compte**, pas
+au voyage. Le `tripId` facultatif ne dit pas *quelle* cagnotte lire — il n'y en a
+qu'une — mais **quel carnet on finance**, ce qui ne change que l'estimation de
+pages et de coût. C'est pour ça que la même route sert la ligne « Ma cagnotte »
+du profil, où il n'y a aucun voyage à nommer.
+
+`POST /v1/memos/:id/share-link` est **idempotente** : repartager deux fois ne
+crée pas deux liens. Un lien parti dans une conversation WhatsApp ne se rattrape
+pas — celui d'hier doit marcher demain.
 
 `link-device` mérite un mot : un carnet créé avant l'inscription appartient à
 l'appareil, pas au compte, et n'apparaîtrait donc jamais sur l'accueil. L'app

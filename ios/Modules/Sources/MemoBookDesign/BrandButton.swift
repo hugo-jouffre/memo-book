@@ -161,8 +161,18 @@ public struct BrandButton: View {
             if iconPlacement == .leading { leadingAccessory }
             if let title {
                 Text(title)
-                    .font(isSubdued ? MemoBookFont.label : MemoBookFont.button)
-                    .lineLimit(fillsWidth ? nil : 1)
+                    .font(titleFont)
+                    // Un appel à l'action pleine largeur a le droit de passer à
+                    // la ligne — « Continuer à découvrir mon carnet » y tient
+                    // sur deux lignes en taille accessible. Un bouton
+                    // **d'appoint**, non : il tient sur une ligne ou il se
+                    // rétrécit, mais il ne se coupe pas en deux au milieu d'un
+                    // mot.
+                    .lineLimit(fillsWidth && size != .small ? nil : 1)
+                    // Plutôt rétrécir d'un cheveu que rogner : sur un iPhone SE,
+                    // deux boutons d'appoint côte à côte gagnent les deux ou
+                    // trois points qui leur manquaient.
+                    .minimumScaleFactor(size == .small ? 0.85 : 1)
             }
             if iconPlacement == .trailing { leadingAccessory }
         }
@@ -189,6 +199,17 @@ public struct BrandButton: View {
 
     // MARK: - Métriques
 
+    /// Le corps du libellé.
+    ///
+    /// Trois cas, et chacun a sa raison : un lien effacé prend la taille du
+    /// texte secondaire (``MemoBookFont/label``), un bouton d'appoint celle du
+    /// design system (``MemoBookFont/buttonSmall``, 16), et un appel à l'action
+    /// pleine taille le 18 imposé par le bouton d'Apple (``MemoBookFont/button``).
+    private var titleFont: Font {
+        if isSubdued { return MemoBookFont.label }
+        return size == .small ? MemoBookFont.buttonSmall : MemoBookFont.button
+    }
+
     private var isIconOnly: Bool { title == nil }
 
     /// Les styles qui posent un aplat plein. Désactivés, ils gardent leur pavé
@@ -209,6 +230,14 @@ public struct BrandButton: View {
         // Un bouton rond n'a qu'une marge, la même partout : c'est elle qui
         // fait le cercle plutôt qu'un ovale.
         if isRound { return verticalPadding }
+
+        // Un bouton d'appoint qui **remplit** sa colonne n'a pas besoin de la
+        // marge qui le fait respirer autour de son texte : la colonne s'en
+        // charge. Ces 20 pt de chaque côté lui coûtaient 40 pt de libellé, et
+        // deux boutons d'appoint côte à côte — « Ajouter » et « Partager » de
+        // la cagnotte — y perdaient une syllabe chacun.
+        if fillsWidth, size == .small { return MemoBookSpacing.snug }
+
         return switch (style, size, isIconOnly) {
         case (.link, _, _): 0
         case (_, .regular, true): 12
