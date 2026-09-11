@@ -55,7 +55,7 @@ struct ChatHeader: View {
     let thread: ChatThread
     let onBack: () -> Void
     let onSettings: () -> Void
-    let onMap: () -> Void
+    let onBook: () -> Void
 
     var body: some View {
         HStack(spacing: 0) {
@@ -72,7 +72,12 @@ struct ChatHeader: View {
                 label: ChatCopy.Voice.settings,
                 action: onSettings
             )
-            ChatHeaderButton(icon: "IconGlobe", label: ChatCopy.Voice.map, action: onMap)
+            // Le carnet, et non plus le globe. La carte du voyage n'avait pas
+            // d'écran derrière elle ; l'aperçu du carnet, lui, en a un — et
+            // c'est **la** chose qu'on vient chercher depuis une conversation :
+            // voir ce que ce qu'on raconte est en train de produire. C'est le
+            // même écran que la bannière bleue du fil ouvre.
+            ChatHeaderButton(icon: "IconBookSimple", label: ChatCopy.Voice.openPreview, action: onBook)
         }
         .padding(.horizontal, MemoBookSpacing.xs)
         .padding(.bottom, MemoBookSpacing.xs)

@@ -16,6 +16,9 @@ import { registerMemoRoutes } from "./routes/memos.js";
 import { registerOrderRoutes } from "./routes/orders.js";
 import { registerProfileRoutes } from "./routes/profile.js";
 import { registerRenderRoutes } from "./routes/renders.js";
+import { registerBookPreviewRoutes } from "./routes/bookPreview.js";
+import { registerTripSettingsRoutes } from "./routes/tripSettings.js";
+import { registerWalletRoutes } from "./routes/wallet.js";
 
 export async function buildApp(context: AppContext): Promise<FastifyInstance> {
   // Fastify construit son propre logger de requêtes ; `context.logger` reste le
@@ -84,6 +87,9 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
     registerEntryRoutes(accountRoutes, context);
     registerRenderRoutes(accountRoutes, context);
     registerOrderRoutes(accountRoutes, context);
+    registerTripSettingsRoutes(accountRoutes, context);
+    registerBookPreviewRoutes(accountRoutes, context);
+    registerWalletRoutes(accountRoutes, context);
   });
 
   // Uniquement en mode de rendu local : sert les PDF produits sur le disque.

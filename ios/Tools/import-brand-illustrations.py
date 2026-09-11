@@ -38,6 +38,8 @@ NAMES = {
     "maps": "Maps",
     "passport": "Passport",
     "sapin": "Sapin",
+    # Le paraphe des fondateurs, pour le mot qui s'ouvre au premier aperçu.
+    "signature": "Signature",
     "tag": "Tag",
     "valise": "Valise",
 }

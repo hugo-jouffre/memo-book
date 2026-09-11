@@ -59,7 +59,11 @@ public struct TripHomeView: View {
                         detail: detail,
                         onBack: { dismiss() },
                         onPrint: notYetRouted,
-                        onSettings: notYetRouted,
+                        // L'identifiant vient du voyage **chargé** et non de
+                        // celui passé à l'écran : c'est le même, et celui-là
+                        // est déjà en portée. En garder une copie dans la vue
+                        // aurait fait deux vérités pour la même valeur.
+                        onSettings: { onIntent(.openSettings(tripId: detail.trip.id)) },
                         onInvite: notYetRouted
                     )
                 } else {

@@ -125,6 +125,59 @@ public struct BrandTagPill: View {
     }
 }
 
+/// **La** jauge de l'app : un rail, et ce qui est rempli dedans.
+///
+/// Elle ne porte ni intitulé ni annonce VoiceOver — c'est délibéré. Les deux
+/// écrans qui l'emploient ne disposent pas leur légende de la même façon
+/// (au-dessus sur les cartes de l'accueil, en deux colonnes sur la cagnotte),
+/// et c'est l'appelant qui sait ce que la barre veut dire. Voir
+/// ``BrandProgressBar`` pour la version qui écrit sa légende toute seule.
+public struct BrandProgressTrack: View {
+    /// Comment le rail se colore.
+    public enum Tone {
+        /// Le filet de la marque : la jauge est posée **sur le crème**, sous une
+        /// carte de voyage, et n'est qu'une information de coin d'œil.
+        case subtle
+        /// Le vert d'action à 15 % : la jauge est **dans** une carte blanche
+        /// dont elle est le sujet — le solde de la cagnotte face au coût du
+        /// carnet. Le rail y est déjà de la couleur de ce qui le remplit.
+        case tinted
+    }
+
+    private let fraction: Double
+    private let tone: Tone
+
+    /// - Parameter fraction: de 0 à 1. Bornée ici aussi, au cas où.
+    public init(fraction: Double, tone: Tone = .subtle) {
+        self.fraction = min(max(fraction, 0), 1)
+        self.tone = tone
+    }
+
+    private var railColor: Color {
+        switch tone {
+        case .subtle: MemoBookColor.hairline
+        case .tinted: MemoBookColor.action.opacity(0.15)
+        }
+    }
+
+    public var body: some View {
+        GeometryReader { proxy in
+            Capsule()
+                .fill(railColor)
+                .overlay(alignment: .leading) {
+                    Capsule()
+                        .fill(MemoBookColor.action)
+                        // `max(_:0)` plutôt que la fraction brute : une largeur
+                        // négative n'existe pas, et une jauge à zéro doit
+                        // disparaître, pas dessiner un point.
+                        .frame(width: max(proxy.size.width * fraction, 0))
+                }
+        }
+        .frame(height: MemoBookSpacing.progressBarHeight)
+        .accessibilityHidden(true)
+    }
+}
+
 /// L'avancement d'un carnet : ce qui est rempli, et ce qui reste.
 ///
 /// Un filet et non une jauge épaisse : c'est une information de coin d'œil,
@@ -142,8 +195,6 @@ public struct BrandProgressBar: View {
         self.label = label
     }
 
-    private static let height: CGFloat = 6
-
     public var body: some View {
         VStack(spacing: MemoBookSpacing.xs) {
             if let label {
@@ -152,16 +203,7 @@ public struct BrandProgressBar: View {
                     .foregroundStyle(MemoBookColor.inkMuted)
             }
 
-            GeometryReader { proxy in
-                Capsule()
-                    .fill(MemoBookColor.hairline)
-                    .overlay(alignment: .leading) {
-                        Capsule()
-                            .fill(MemoBookColor.action)
-                            .frame(width: proxy.size.width * fraction)
-                    }
-            }
-            .frame(height: Self.height)
+            BrandProgressTrack(fraction: fraction)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label ?? "Avancement du carnet")

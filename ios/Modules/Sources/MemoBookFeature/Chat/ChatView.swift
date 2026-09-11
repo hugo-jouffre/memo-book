@@ -21,6 +21,12 @@ import UIKit
 /// translucide. La conversation passe donc dessous et se laisse deviner — c'est
 /// ce qui dit qu'elle continue au-delà des deux bords.
 public struct ChatView: View {
+    /// Le voyage dont on parle. Gardé pour les deux commandes de l'en-tête, qui
+    /// mènent aux réglages du voyage et à l'aperçu de son carnet.
+    private let tripId: String
+
+    private let onIntent: (ChatIntent) -> Void
+
     @State private var model: ChatModel
 
     @Environment(\.dismiss) private var dismiss
@@ -47,13 +53,26 @@ public struct ChatView: View {
     /// suite.
     @State private var pendingFocus: String?
 
-    public init(tripId: String, stepId: String? = nil) {
+    public init(
+        tripId: String,
+        stepId: String? = nil,
+        onIntent: @escaping (ChatIntent) -> Void = { _ in }
+    ) {
+        self.tripId = tripId
+        self.onIntent = onIntent
         _model = State(initialValue: ChatModel(tripId: tripId, focusStepId: stepId))
         _pendingFocus = State(initialValue: stepId)
     }
 
     /// Pour les aperçus et les tests, qui fournissent leur propre source.
-    init(model: ChatModel, stepId: String? = nil) {
+    init(
+        model: ChatModel,
+        stepId: String? = nil,
+        tripId: String = "preview",
+        onIntent: @escaping (ChatIntent) -> Void = { _ in }
+    ) {
+        self.tripId = tripId
+        self.onIntent = onIntent
         _model = State(initialValue: model)
         _pendingFocus = State(initialValue: stepId)
     }
@@ -97,7 +116,7 @@ public struct ChatView: View {
                     notices
 
                     if let preview = thread.preview {
-                        ChatPreviewBanner(preview: preview, onOpen: notYetRouted)
+                        ChatPreviewBanner(preview: preview) { onIntent(.openBookPreview(memoId: tripId)) }
                             .padding(.bottom, MemoBookSpacing.snug)
                     }
 
@@ -154,8 +173,8 @@ public struct ChatView: View {
         ChatHeader(
             thread: thread,
             onBack: { dismiss() },
-            onSettings: notYetRouted,
-            onMap: notYetRouted
+            onSettings: { onIntent(.openSettings(tripId: tripId)) },
+            onBook: { onIntent(.openBookPreview(memoId: tripId)) }
         )
     }
 
@@ -302,7 +321,6 @@ public struct ChatView: View {
     /// nulle part parce que rien n'existe derrière — même parti pris que les
     /// intentions non routées de l'accueil, du profil et de l'accueil d'un
     /// voyage, et il se voit ici, en un seul endroit.
-    private func notYetRouted() {}
 }
 
 /// Le message d'un micro refusé, recopié de ``RecordingError`` pour que l'écran
@@ -370,4 +388,18 @@ private enum RecordingErrorCopy {
         )
     }
     .environment(\.dynamicTypeSize, .accessibility3)
+}
+
+/// Ce que la conversation demande à l'app d'ouvrir.
+///
+/// Deux destinations, et elles sortent toutes les deux de l'en-tête : les
+/// réglages du voyage, et l'aperçu de son carnet. Comme partout, ``RootView``
+/// seul tient la pile de navigation.
+public enum ChatIntent: Sendable, Hashable {
+    case openSettings(tripId: String)
+    /// L'aperçu du carnet. Ouvert de **deux** endroits du même écran — la
+    /// bannière bleue du fil et l'icône de carnet de l'en-tête — et c'est
+    /// voulu : la bannière se voit quand on lit le fil, l'icône quand on ne
+    /// l'a pas sous les yeux.
+    case openBookPreview(memoId: String)
 }

@@ -2328,3 +2328,181 @@ afficher »
 | T42 | **Les pictogrammes de catégorie sont ceux de Lucide**, tracés, là où le jeu de marque est plein. L'écart se voit dans la barre. À reprendre le jour où Clara dessine la série |
 | T43 | **Aucune photo de couverture** ne remonte encore : toutes les vignettes portent l'aplat dégradé. Les formats de la mosaïque sont donc à revoir sur de vraies images |
 | T44 | **Un glissé vertical parti de la bande de filtres fait défiler la page.** C'est le verrou directionnel d'iOS — un glissé franchement horizontal ne bouge que les pastilles, un glissé vertical prend la page, exactement comme les rayons de l'App Store. Le rendre horizontal seul veut dire refuser le défilement depuis cette bande de 2.75 rem, ce qui demande de passer par UIKit. À trancher : est-ce gênant, ou est-ce l'attendu ? |
+
+---
+
+## 16. Lot 4 — Le carnet : réglages, aperçu, partage et cagnotte
+
+Cinq écrans et deux feuilles, livrés ensemble parce qu'ils forment **un seul
+parcours** : on règle son voyage, on regarde le carnet qu'il produit, on le
+partage, et on le fait financer. Nœud Figma :
+[`🤖 Claude Import`](https://www.figma.com/design/kytPYFno7PvDciIKTxCujK/MemoBook---Product?node-id=3268-26957).
+
+Trois des douze frames de la page **ne sont pas implémentées**, et c'est
+délibéré : `Modale - Partager son MB - 2`, `- 5` et `Partager son MB sur WA`
+dessinent la **feuille de partage du système** et l'écran de WhatsApp. On
+présente `UIActivityViewController` ; en redessiner une ne donnerait qu'une
+liste plus courte, qui ignorerait les apps installées, les AirDrop à portée et
+les raccourcis de l'utilisateur.
+
+### 16.1 Paramètres du voyage
+
+`3335:9819` → `TripSettings/TripSettingsView.swift`
+
+**On y arrive par la roue crantée**, posée au même endroit sur l'accueil d'un
+voyage et sur la conversation : les réglages appartiennent au voyage, pas à
+l'écran qui les ouvre.
+
+L'écran est un empilement de `BrandRowGroup`, et n'a donc presque rien de
+propre. Trois blocs ne sont pas des lignes de réglage et sont écrits à la main —
+le Tricount, « La carte » et « Prévisulation PDF » — parce qu'ils portent une
+explication ou une vignette, pas une valeur.
+
+| Mesure | Figma | Retenu |
+|---|---|---|
+| Marge d'écran | 16 | `screenMargin` (1.5 rem) — règle du § 2.3 |
+| Groupe de lignes | rayon 20 | `largeCornerRadius` |
+| Filet entre deux lignes | 1 pt | `hairline`, posé **entre** les lignes |
+| Vignette de l'aperçu | 45 × 64 | 3.5 rem de large, rapport A5 |
+
+**Chargement** — l'écran se dessine entier tout de suite ; seules les valeurs
+portent une `BrandSkeleton`. Les deux groupes qui contiennent un interrupteur
+sont `.disabled` tant que les réglages ne sont pas lus : basculer avant
+enverrait un état qu'on n'a pas.
+
+**Back-end** — `GET /v1/trips/:id/settings` et `PATCH` (écrits dans cette PR).
+Un réglage part seul, à la bascule, sans bouton pour valider. ⚠️ L'app est
+encore branchée sur le **jeu d'essai** : `AppDependencies.tripSettingsModel`
+documente la bascule, qui est de quatre lignes.
+
+### 16.2 On compose ton Carnet
+
+`3335:10193` → `BookPreview/BookCompositionPage.swift`
+
+L'attente de la composition, occupée par **une page de carnet qui se monte**.
+Treize morceaux — un signet, deux bandeaux, six pictogrammes, huit lignes de
+texte, une carte, une photo, un tampon — arrivent chacun d'un bord et se posent
+à leur place, dans l'ordre où l'on monte vraiment une page : la structure, puis
+le texte, puis ce qu'on colle.
+
+Les positions sont des **fractions de la page**, jamais des points : la
+chorégraphie tient dans une seule liste (`BookCompositionPiece.all`), et régler
+le rythme de l'écran c'est changer des nombres, pas du code.
+
+**2,6 s, et c'est aussi le plancher de l'attente.** Même si le serveur répond en
+300 ms, l'écran les tient : une page qui se monte et disparaît avant d'être
+finie donne l'impression d'un bogue. Les deux attentes — la cascade et le
+serveur — sont menées en parallèle, et c'est la plus longue qui décide.
+
+Sous « Réduire les animations », les morceaux ne voyagent plus : ils se révèlent
+sur place. La promesse tient sans mouvement.
+
+### 16.3 Aperçu PDF, et son plein écran
+
+`3335:10090`, `3335:10159`, `3335:10306` → `BookPreview/BookPreviewFlowView.swift`,
+`BookFullScreenView.swift`
+
+**L'app ne redessine pas le carnet : elle affiche le PDF.** Les pages sont
+rendues par PDFKit depuis le document composé (`BookPageRenderer`), mises en
+cache par (page, largeur), et la page voisine est préparée pendant qu'on lit la
+courante — tourner ne coûte alors rien. C'est la seule façon d'être sûr que
+l'aperçu montre ce qui sortira de l'imprimante.
+
+Le plein écran n'est **pas un écran de plus** mais un mode : la flèche de retour
+doit ramener au voyage, pas à la version réduite. C'est le rond `normal_screen`
+qui revient en arrière. C'est aussi le seul endroit de l'app où quelque chose
+déborde la marge d'écran, et c'est ce débordement qui fait le plein écran.
+
+La première et la dernière page portent l'invitation à choisir ses couvertures
+(`Prévisualisation PDF - 2`) — mais **seulement quand il y a une page dessous** :
+posée sur un aplat vide, elle promettait une couverture qu'on ne voyait pas.
+
+### 16.4 Le mot des fondateurs
+
+`3335:10957` → `BookPreview/FoundersNoteSheet.swift`
+
+**Elle s'ouvre toute seule**, une fois par compte, douze secondes après le
+premier aperçu — la maquette dit « 10 à 15 », et il faut laisser le temps de
+tourner deux ou trois pages avant d'interrompre. Jamais par-dessus le partage
+ni le plein écran : elle s'invite, elle n'interrompt pas.
+`OnboardingStorage.hasSeenFoundersNote` la retient.
+
+Trois choses la distinguent de toutes les autres feuilles, et aucune n'est
+décorative : la photo dépasse en haut et **flotte** (2 pt, 3 s, arrêtée sous
+« Réduire les animations »), une ligne est écrite **à la main** en vert, et la
+signature est un **dessin** — un nom tapé sous un mot manuscrit annulerait tout
+ce qui précède.
+
+La manuscrite est **Gloria Hallelujah**, déjà la police du carnet
+(`memos.fontHand`). Elle était livrée en woff2, que CoreText ne lit pas :
+`ios/Tools/make-brand-fonts.py` la convertit désormais en TTF. C'est le même
+dessin, pas une seconde police.
+
+### 16.5 Partager ton MemoBook
+
+`3335:10879` → `BookPreview/ShareBookSheet.swift`
+
+Deux façons de partager, et elles ne disent pas la même chose : le **PDF** est
+le carnet tel qu'il est aujourd'hui (hors connexion, imprimable, figé), le
+**lien** est le carnet tel qu'il sera (il suit la conversation, ce qui est
+exactement ce qu'il faut pour donner envie d'aider à le financer).
+
+La carte du haut n'est pas décorative : c'est **l'aperçu de ce que le
+destinataire verra**. Le lien portera des métadonnées Open Graph, et c'est cette
+vignette-là qui apparaîtra dans WhatsApp.
+
+Les deux options ouvrent la feuille du système avec le message déjà écrit
+(`BookCopy.Share.invitation`), et le lien de cagnotte accompagne **les deux** :
+c'est le message qui demande un coup de main, pas la pièce jointe.
+
+### 16.6 Ma cagnotte
+
+`3335:11159` (pleine) et `3335:11379` (vide) → `Wallet/WalletView.swift`
+
+**Un seul écran pour les deux maquettes.** Elles ne diffèrent que par un bloc —
+l'historique d'un côté, la carte d'invitation de l'autre — et tout le reste est
+identique, carte de solde comprise.
+
+Le solde est **vert dès qu'il y a quelque chose dessus, gris à zéro** : c'est
+l'écart que dessinent les deux maquettes, et il porte tout — une cagnotte vide
+ne doit pas avoir l'air d'une réussite. Il s'anime chiffre par chiffre quand une
+contribution arrive.
+
+Deux natures d'écriture, distinguées sans lire : **bleu** pour un don (une
+initiale, une pastille « DON »), **lime** pour l'abonnement (un engrenage, une
+pastille « ABONNEMENT »).
+
+**Bac à sable** (`WalletDebugPanel`, sous `#if DEBUG`) — demandé explicitement,
+et nécessaire : sans encaissement, il n'existe aucun chemin depuis l'app vers un
+solde non nul, et c'est l'écran qui a le plus de choses à montrer. « + 10 € »
+ajoute une contribution **par-dessus ce qui est là**, ce qui est le seul moyen de
+vérifier l'animation du solde et l'arrivée d'une ligne en tête d'historique.
+
+**Back-end** — `GET /v1/wallet` (écrite dans cette PR). Rien de neuf en base :
+`wallet_entries` (M4) porte déjà le montant, la nature, le motif et la date, et
+`accounts.walletBalanceCents` le cache du solde. Le registre en ajout seul avait
+vu juste. ⚠️ L'app est encore branchée sur le jeu d'essai.
+
+**Copie** (verbatim) — « Ma Cagnotte » · « Finance ton carnet de Rome » ·
+« Montant disponible » · « A ce rythme, ton carnet fera probablement 50 pages » ·
+« coût estimé » · « Ajouter » · « Partager » · « Historique des contributions » ·
+« Aucune contribution pour le moment » · « Inviter des proches » · « offerts par
+tes proches » · « grace à ton abonnement » · « Si je n'utilise pas toute ma
+cagnotte ? » · « Prévisualiser mon carnet »
+
+### 16.7 À trancher
+
+| # | Sujet |
+|---|---|
+| T66 | **`Wallet.emptyMessage` vouvoie** — « Partagez votre cagnotte avec vos proches pour recevoir vos premières contributions ! ». R9 ne souffre aucune exception : la phrase est recopiée telle quelle (R8) et remontée. À réécrire dans Figma en « Partage ta cagnotte avec tes proches pour recevoir tes premières contributions ! » |
+| T67 | **Trois coquilles recopiées** (R8 interdit de corriger en silence) : « grace » sans accent circonflexe sur la pastille de synthèse, « Prévisulation PDF » pour « Prévisualisation » dans les réglages, et « Défini maintenant » pour « Définis » sur la couverture à configurer |
+| T68 | **Les deux boutons de la feuille de partage portent la même icône** — un cube Relume, visiblement un reste de composant : « Partager le fichier pdf » et « Partager le lien de prévisualisation » ne veulent pas dire la même chose et se ressemblent trait pour trait. Implémenté tel quel (R3, R10). Le jeu de marque a `IconPDF` et `IconLink`, qui diraient exactement ce qu'il faut |
+| T69 | **Le libellé d'un bouton `small` passe à 16**, la valeur du composant Figma `Button`. Le 18 de `MemoBookFont.button` reste, mais il redevient ce qu'il est : une exception due au bouton d'Apple, qui n'a de sens que sur un appel à l'action pleine largeur. À 18, « Partager ma cagnotte » perdait le mot « cagnotte » |
+| T70 | **Les deux boutons de la carte de solde sont en taille `small`** (44 pt) là où la maquette les dessine à 48. Quatre points au-dessus du seuil de R2, et assumé : c'est la **typographie** qui décide — à 18 pt, « Partager » et son icône demandent 152 pt dans une moitié de carte qui en offre 133 sur un iPhone SE. Soit la maquette descend son libellé de taille pleine à 16, soit ces deux boutons montent à 48 |
+| T71 | **Le montant s'écrit toujours à deux décimales**, là où la maquette alterne « +30€ » et « +10,00€ » dans la même liste. Deux formats de montant côte à côte se lisent comme une erreur de saisie |
+| T72 | **La pastille « DON » est à 11 pt** et non aux 9 de la maquette : l'app n'est jamais descendue sous 11, et ce mot-là porte la seule information qui distingue deux lignes de l'historique |
+| T73 | **Le logo Tricount est écrit en toutes lettres** (« tt » dans le bleu de la marque) faute d'asset : c'est le logo d'un service tiers, il n'a pas à entrer dans le catalogue de MemoBook. À récupérer auprès de Tricount, ou à remplacer par un pictogramme neutre |
+| T74 | **« La carte » montre l'illustration `IllustrationMaps`** et non le tracé du voyage : `backend/src/services/mapSvg.ts` le produit pour le carnet, pas pour l'écran. La ligne ne mène d'ailleurs nulle part |
+| T75 | **Le coût d'impression est une constante** (1,798 € la page, soit les 89,90 € des 50 pages de la maquette). Les frais fixes de fabrication et de port sont dedans, donc un carnet de dix pages ne coûte pas un cinquième d'un carnet de cinquante. À trancher avec l'imprimeur **avant** d'encaisser quoi que ce soit |
+| T76 | **Dix lignes de réglages n'ouvrent rien** — dates, rythme, notifications, co-voyageurs, thème, style, Tricount, carte, commande, aide. Les feuilles ne sont pas dessinées ; les lignes sont inertes plutôt que branchées sur un écran inventé (R3) |
+| T77 | **La barre de progression est à 6 pt**, ce que dessinent la cagnotte comme les cartes de l'accueil. Le § 2.3 annonce encore 0.25 rem (4) au motif que Figma dessinait 7 : c'est **le document** qui est en retard, pas la valeur |

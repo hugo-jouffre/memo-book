@@ -93,6 +93,16 @@ const schema = z.object({
   RENDER_PUBLIC_BASE_URL: z.string().default(""),
   RENDER_PROFILE: z.enum(["print", "preview"]).default("preview"),
 
+  /**
+   * La racine des liens de prévisualisation publics — « https://memo-book.com ».
+   *
+   * C'est elle qui préfixe `/c/<slug>`, le lien qu'on envoie à ses proches pour
+   * qu'ils suivent le carnet en direct. La page derrière n'existe pas encore ;
+   * le lien, lui, doit déjà être stable, parce qu'il part dans des
+   * conversations WhatsApp qu'on ne rattrape pas.
+   */
+  SHARE_PUBLIC_BASE_URL: z.string().default("https://memo-book.com"),
+
   WEBFLOW_API_TOKEN: z.string().default(""),
   WEBFLOW_SITE_ID: z.string().default(""),
 });
