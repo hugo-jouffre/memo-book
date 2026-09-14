@@ -219,6 +219,7 @@ de son porteur précédent.
 | Fichier | Ce qu'il fait |
 | --- | --- |
 | `prisma/README.md` | **La base** : ce qu'elle porte et pourquoi chaque table est là |
+| `../docs/deploiement.md` | **La mise en ligne** : Railway, Postgres, Supabase Storage, et le build iOS qui pointe dessus |
 | `../docs/supabase.md` | **L'hébergement** : configurer Supabase, brancher l'app, et en partir |
 | `scripts/setup-supabase.ts` | `npm run supabase:setup` — applique et vérifie tout l'hébergement |
 | `src/routes/appSerializers.ts` | La frontière avec les modèles Swift des trois écrans |
@@ -248,3 +249,8 @@ avant l'appel à APITemplate, et la structuration par LLM reçoit les erreurs po
 
 Deux process : `npm start` (API) et `npm run worker` (pipeline). En développement, `npm run dev`
 porte les deux pour n'avoir qu'une commande à lancer.
+
+La marche à suivre complète (Railway, Postgres, Supabase Storage, variables, puis le build iOS
+qui pointe dessus) est dans `../docs/deploiement.md`. Tant que l'API n'est pas en ligne, **aucun
+build TestFlight ne peut fonctionner, sur aucun iPhone** : l'adresse de l'API part dans le
+binaire au moment du build, et un serveur lancé en local n'est joignable par aucun téléphone.

@@ -1,7 +1,18 @@
-#include "Base.xcconfig"
-
 // Le back-end lancé en local (`npm run dev` dans `backend/`), vu depuis le
 // simulateur. Sur un iPhone physique, `localhost` désigne le téléphone :
-// remplacer par l'IP du Mac dans un `Secrets.xcconfig` local plutôt que de
-// modifier ce fichier, qui est versionné.
+// mettre l'IP du Mac dans un `Secrets.xcconfig` local plutôt que de modifier ce
+// fichier, qui est versionné.
+//
+// ⚠️ L'affectation est **avant** l'inclusion, et ce n'est pas cosmétique. Un
+// `.xcconfig` s'évalue de haut en bas et la dernière affectation gagne ; or
+// `Base.xcconfig` inclut `Secrets.xcconfig` à sa fin. Affecter après l'aurait
+// écrasé, et l'override documenté ci-dessus n'aurait jamais rien fait : l'app
+// aurait continué de parler à `localhost` depuis un téléphone, c'est-à-dire à
+// elle-même.
+//
+// En Release, c'est l'inverse qui est voulu : l'affectation reste après
+// l'inclusion, pour qu'un `Secrets.xcconfig` traîné sur une machine ne puisse
+// pas envoyer un build TestFlight parler à une IP de réseau local.
 MEMOBOOK_API_BASE_URL = http:/$()/localhost:3000
+
+#include "Base.xcconfig"

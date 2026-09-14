@@ -183,6 +183,23 @@ export function createMediaStorage(env: Env): MediaStorage {
       accessKeyId: S3_ACCESS_KEY_ID,
       secretAccessKey: S3_SECRET_ACCESS_KEY,
     },
+    // Depuis la version 3.729, le SDK AWS pose de lui-même un
+    // `x-amz-checksum-crc32` sur chaque écriture. C'est du S3 non standard :
+    // seul le vrai S3 le comprend, et plusieurs fournisseurs compatibles le
+    // rejettent avec une erreur qui n'en dit rien (« Unsupported header »,
+    // « InvalidRequest »). Backblaze B2 est le cas le plus connu, et c'est la
+    // destination envisagée après Supabase.
+    //
+    // `WHEN_REQUIRED` rend le comportement d'avant : la somme de contrôle n'est
+    // envoyée que là où le protocole l'exige — `DeleteObjects`, notamment, qui
+    // continue donc de la recevoir. On ne perd aucune garantie d'intégrité :
+    // SigV4 signe déjà l'empreinte du corps (`x-amz-content-sha256`), et tout
+    // passe en TLS.
+    //
+    // Vérifiable : un serveur HTTP local qui journalise les en-têtes montre
+    // `x-amz-checksum-crc32` sans ces deux lignes, et plus rien avec.
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
   });
 
   return new MediaStorage(client, S3_BUCKET);
