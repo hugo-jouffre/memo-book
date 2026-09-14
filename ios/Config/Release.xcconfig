@@ -1,20 +1,20 @@
 #include "Base.xcconfig"
 
-// L'API de production.
+// L'API de production, déployée sur Railway.
 //
-// ⚠️ **Elle n'est pas encore déployée.** Cette valeur est un emplacement, pas
-// une adresse qui répond : `api.memo-book.com` n'a aujourd'hui aucun
-// enregistrement DNS. Tant que c'est le cas, un build TestFlight s'ouvre sur
-// « Connexion impossible. Vérifie ton réseau et réessaie. » sur n'importe quel
-// iPhone, et aucun serveur lancé en local n'y changera quoi que ce soit :
-// l'adresse part dans l'Info.plist du binaire au moment du build.
+// ⚠️ Les deux barres obliques ouvrent un commentaire dans un `.xcconfig`, y
+// compris au milieu d'une URL : `https://exemple.fr` devient `https:` dès la
+// lecture du fichier. Le `$()` coupe la séquence et vaut la chaîne vide à
+// l'évaluation. C'est le piège numéro un du format, et il ne se voit qu'à
+// l'exécution.
 //
-// Le jour du déploiement, c'est la seule ligne à changer pour qu'un build parle
-// au bon serveur, et la seule à ne pas oublier. La marche à suivre complète est
-// dans `docs/deploiement.md`.
+// C'est le domaine que Railway génère. Le jour où `api.memo-book.com` pointera
+// dessus, cette ligne est la seule à changer — suivie d'un nouveau build, car
+// l'adresse part dans l'Info.plist au moment de la compilation : un build déjà
+// installé ne se répare jamais. Voir `docs/deploiement.md`.
 //
 // L'affectation est **après** l'inclusion, volontairement : elle écrase un
 // éventuel `Secrets.xcconfig` local, pour qu'une machine qui en traîne un ne
 // puisse pas envoyer un build TestFlight parler à une IP de réseau local.
 // `Debug.xcconfig` fait l'inverse, et explique pourquoi.
-MEMOBOOK_API_BASE_URL = https:/$()/api.memo-book.com
+MEMOBOOK_API_BASE_URL = https:/$()/api-production-9f35a.up.railway.app

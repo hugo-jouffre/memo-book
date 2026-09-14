@@ -64,7 +64,7 @@ targets:
         CFBundleLocalizations:
           - fr
         CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "5"
+        CFBundleVersion: "6"
         # L'app ne parle que français. Sans ces deux clés, iOS la considère
         # anglaise et `Locale.current` suit la langue de l'appareil : sur un
         # iPhone réglé en anglais, l'écran d'accueil affichait « 26 Aug–15 Sep »

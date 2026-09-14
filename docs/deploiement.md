@@ -6,12 +6,24 @@ sur aucun iPhone**. L'adresse est figée dans le binaire au moment du build
 sur le Mac, ou dans un conteneur de développement, n'est joignable par aucun
 téléphone, même le sien.
 
-C'est la seule raison de « Connexion impossible. Vérifie ton réseau et réessaie. »
-sur un build TestFlight : l'app appelle `https://api.memo-book.com`, un nom de
-domaine qui n'a aujourd'hui aucun enregistrement DNS.
+C'était la seule raison de « Connexion impossible. Vérifie ton réseau et
+réessaie. » sur les builds TestFlight jusqu'à la version 5 : l'app appelait
+`https://api.memo-book.com`, un nom de domaine sans aucun enregistrement DNS.
 
-Cible retenue : **Railway** pour l'API, le worker et Postgres, **Supabase
-Storage** pour les médias.
+**Répartition retenue : Railway ne porte que le calcul, Supabase porte l'état.**
+
+| Où | Quoi |
+| --- | --- |
+| Railway | le service `api` (HTTP) et le service `worker` (pipeline) |
+| Supabase | Postgres (base **et** file pg-boss) et le bucket privé des médias |
+
+Garder l'état au même endroit tient en trois points : le schéma et les données y
+étaient déjà, `npm run supabase:setup` vérifie la base et le stockage d'un seul
+coup, et il n'y a qu'une facture à suivre. Railway redevient ce qu'il fait de
+mieux ici, exécuter deux conteneurs sans état.
+
+État actuel : `https://api-production-9f35a.up.railway.app`, branché dans
+`ios/Config/Release.xcconfig` depuis la version 6 du build.
 
 ## 1. Le projet Railway
 
@@ -28,22 +40,39 @@ broncher et tomberait au premier carnet.
    `memo-book-production.up.railway.app`. **C'est déjà assez pour un TestFlight
    qui marche** : le domaine personnalisé peut attendre.
 
-## 2. Postgres
+## 2. Postgres, chez Supabase
 
-New ▸ Database ▸ Add PostgreSQL, dans le même projet. Railway expose
-`DATABASE_URL` par référence :
+Pas de base sur Railway. `DATABASE_URL` reçoit, sur **les deux** services, la
+chaîne Supabase, celle qui est déjà dans le `.env` local.
 
-    DATABASE_URL = ${{Postgres.DATABASE_URL}}
+> ⚠️ **Prendre la chaîne « Session pooler », port 5432.** Pas le « Transaction
+> pooler » (port 6543) : il rend chaque requête à une session différente, et
+> trois choses cassent alors sans prévenir — les migrations Prisma, qui posent
+> un verrou le temps de s'appliquer ; pg-boss, qui s'appuie sur des verrous de
+> session pour ne pas traiter un job deux fois ; et les requêtes préparées. Le
+> symptôme arrive des semaines plus tard, sous la forme d'un vocal transcrit
+> deux fois. `npm run supabase:setup` le vérifie activement et refuse de
+> continuer sur le mauvais port.
 
 Les migrations ne tournent pas au démarrage : l'image d'exécution est construite
 avec `npm ci --omit=dev`, elle n'embarque donc pas le CLI Prisma. On les applique
-depuis le Mac, contre la base de production :
+depuis le Mac, `.env` rempli :
 
     cd backend
-    DATABASE_URL="<l'URL publique du Postgres Railway>" npm run db:deploy
+    npm run supabase:setup
 
-À refaire **à chaque fois qu'une migration est ajoutée**, avant de déployer le
+Il vérifie la connexion, applique les migrations en attente, contrôle l'absence
+de dérive entre `schema.prisma` et la base, crée le bucket s'il manque et fait
+un aller-retour complet dessus (écriture, lecture, URL signée, suppression),
+puis mesure ce qui est consommé face au plan gratuit. Idempotent, il ne supprime
+jamais rien. `npm run supabase:check` fait les vérifications sans rien changer.
+
+À relancer **à chaque fois qu'une migration est ajoutée**, avant de déployer le
 code qui en dépend.
+
+Le plan gratuit met le projet en pause après 7 jours sans requête, et le réveil
+prend quelques minutes. Tant que le `worker` tourne, la pause ne se déclenche
+pas : il interroge la base en continu pour récupérer ses jobs.
 
 ## 3. Le worker
 
@@ -83,7 +112,7 @@ Sur les deux services, API et worker. La liste commentée est dans
 | --- | --- | --- |
 | `NODE_ENV` | `production` | |
 | `PORT` | `3000` | Railway l'injecte aussi, la valeur explicite évite l'ambiguïté. |
-| `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` | |
+| `DATABASE_URL` | la chaîne Supabase **Session pooler** (port 5432) | Jamais le Transaction pooler, voir l'étape 2. |
 | `S3_*` | voir ci-dessus | Sans elles, le serveur ne démarre pas en production. |
 | `APPLE_BUNDLE_ID` | `com.memobook.app` | Sans elle, « Continuer avec Apple » échoue. |
 | `GOOGLE_IOS_CLIENT_ID` | le client iOS, voir `ios/Config/Base.xcconfig` | Sans elle, « Continuer avec Google » échoue. |
