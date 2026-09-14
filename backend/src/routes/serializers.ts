@@ -1,4 +1,20 @@
-import type { Entry, MediaAsset, Memo, PrintOrder, Render } from "@prisma/client";
+import type {
+  Entry,
+  MediaAsset,
+  Memo,
+  PrintOrder,
+  PrintOrderCopy,
+  Render,
+} from "@prisma/client";
+import type { PrintQuote } from "../services/printPricing.js";
+
+/** Une commande et, quand elles ont été chargées, les options de ses exemplaires. */
+type PrintOrderWithCopies = PrintOrder & { copyOptions?: PrintOrderCopy[] };
+
+/** Les montants voyagent en euros, arrondis au centime. La base ne connaît que des centimes entiers. */
+function euros(cents: number): number {
+  return Number((cents / 100).toFixed(2));
+}
 
 /**
  * Frontière explicite entre le modèle de base et ce que l'app reçoit.
@@ -71,7 +87,7 @@ export function serializeRender(render: Render) {
   };
 }
 
-export function serializePrintOrder(order: PrintOrder) {
+export function serializePrintOrder(order: PrintOrderWithCopies) {
   return {
     id: order.id,
     memoId: order.memoId,
@@ -79,6 +95,7 @@ export function serializePrintOrder(order: PrintOrder) {
     orderedByAccountId: order.orderedByAccountId,
     status: order.status,
     copies: order.copies,
+    shippingSpeed: order.shippingSpeed,
     shipping: {
       name: order.shippingName,
       line1: order.shippingLine1,
@@ -87,9 +104,80 @@ export function serializePrintOrder(order: PrintOrder) {
       city: order.shippingCity,
       country: order.shippingCountry,
     },
+    // Ce que l'écran de confirmation annonce. Les bornes viennent du palier
+    // choisi tant que l'imprimeur n'a pas dit mieux.
+    pageCount: order.pageCount,
+    coverImageUrl: order.coverImageUrl,
+    estimatedMinDays: order.estimatedMinDays,
+    estimatedMaxDays: order.estimatedMaxDays,
+    // Le prix figé, tel qu'il a été accepté. `null` sur les commandes d'avant
+    // la tarification — l'app le lit comme « pas de montant à afficher »
+    // plutôt que comme zéro.
+    total: order.amountCents === null ? null : euros(order.amountCents),
+    copyOptions: (order.copyOptions ?? [])
+      .slice()
+      .sort((a, b) => a.position - b.position)
+      .map((copy) => ({
+        position: copy.position,
+        decorationsEnabled: copy.decorationsEnabled,
+        quizEnabled: copy.quizEnabled,
+        freeZonesEnabled: copy.freeZonesEnabled,
+        crosswordEnabled: copy.crosswordEnabled,
+      })),
     trackingUrl: order.trackingUrl,
     error: order.error,
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
+  };
+}
+
+/**
+ * Le récapitulatif de l'étape 5, tel que l'app le dessine : deux groupes qui
+ * portent chacun leur sous-total, les déductions, puis le net à payer.
+ *
+ * **L'app n'additionne rien.** Elle reçoit des montants déjà calculés et les
+ * met en page — voir `services/printPricing.ts`.
+ */
+export function serializeOrderQuote(quote: PrintQuote) {
+  return {
+    bookTitle: quote.bookTitle,
+    pageCount: quote.pageCount,
+    copies: quote.copies,
+    shippingSpeed: quote.speed,
+    unitPrice: euros(quote.unitCents),
+    book: {
+      lines: quote.lines.map((line) => ({
+        id: line.id,
+        label: line.label,
+        amount: euros(line.amountCents),
+      })),
+      subtotal: euros(quote.unitCents),
+    },
+    fulfilment: {
+      lines: [
+        {
+          id: "copies",
+          label: "Exemplaires",
+          detail: `x${quote.copies}`,
+          amount: euros(quote.itemsCents),
+        },
+        {
+          id: "shipping",
+          label: quote.speed === "express" ? "Livraison Express" : "Livraison Standard",
+          detail: null,
+          amount: euros(quote.shippingCents),
+        },
+      ],
+      subtotal: euros(quote.dueCents),
+    },
+    deductions: quote.deductions.map((deduction) => ({
+      id: deduction.id,
+      label: deduction.label,
+      // Positif : c'est l'app qui pose le signe moins, comme elle pose l'euro.
+      amount: euros(deduction.amountCents),
+    })),
+    total: euros(quote.totalCents),
+    estimatedMinDays: quote.estimatedDays.min,
+    estimatedMaxDays: quote.estimatedDays.max,
   };
 }

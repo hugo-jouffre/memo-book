@@ -42,6 +42,16 @@ xcrun simctl launch <device> com.memobook.app -previewSignedIn
 Il n'ouvre **aucun accès** : le compte est local, aucun jeton n'est écrit, et
 tout appel réseau échoue comme il le doit. Sans effet en release.
 
+Le tunnel de commande est à cinq écrans de l'accueil — voyage, aperçu,
+composition. Un second interrupteur l'ouvre directement, sur son jeu d'essai :
+
+```bash
+xcrun simctl launch <device> com.memobook.app -previewSignedIn -openOrder
+```
+
+Combiné à `-previewSignedIn`, le tunnel travaille **en mémoire** : c'est ce qui
+permet de traverser ses sept étapes sans back-end. Sans effet en release.
+
 ⚠️ Ne **jamais** poser un réglage de test avec
 `xcrun simctl spawn <device> defaults write com.memobook.app …` : ça écrit dans
 un domaine au niveau de l'appareil que l'app lit aussi, mais que son propre

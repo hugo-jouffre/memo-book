@@ -189,6 +189,16 @@ public struct RootView: View {
     /// démarrage, lui, ne passe pas par là et n'a donc pas d'animation devant.
     private func enterApp(as account: Account) {
         stage = .signedIn(account)
+
+        // Le raccourci qui ouvre le tunnel de commande — sans effet en release.
+        // Voir ``OnboardingStorage/openOrderArgument``.
+        #if DEBUG
+            if OnboardingStorage.isOpeningOrder {
+                // Le carnet du jeu d'essai du tunnel — voir ``OrderContext/fixture``.
+                path = [.order(memoId: "trip-rome")]
+            }
+        #endif
+
         guard hasSeenWelcome else { return }
         isLaunching = true
     }
@@ -398,11 +408,34 @@ public struct RootView: View {
             // C'est le chemin le plus important vers les couvertures : c'est en
             // feuilletant son carnet qu'on s'aperçoit qu'il n'en a pas.
             openCovers()
-        case .order, .shareFeedback:
-            // La commande d'impression n'a pas d'écran dessiné. Le mot des
-            // fondateurs, lui, ouvre un courrier — la feuille s'en occupe
+        case .order:
+            // « Commander ce carnet » ouvre le tunnel en sept étapes. On y
+            // arrive **d'ici et de nulle part ailleurs** : l'imprimante de
+            // l'accueil mène à l'aperçu, et l'aperçu mène ici. On ne commande
+            // pas un carnet qu'on n'a pas vu.
+            guard let memoId = currentTripId else { return }
+            path.append(.order(memoId: memoId))
+        case .shareFeedback:
+            // Le mot des fondateurs ouvre un courrier — la feuille s'en occupe
             // elle-même.
             break
+        }
+    }
+
+    /// Où mène chaque intention du tunnel de commande.
+    ///
+    /// Le partage n'y est pas : c'est la feuille du système, que la vue
+    /// présente elle-même — voir ``OrderView``.
+    private func handle(_ intent: OrderIntent) {
+        switch intent {
+        case .openHelp:
+            path.append(.support)
+        case .finish:
+            // « Retour à l'accueil » **vide la pile** au lieu de reculer d'un
+            // écran : derrière la commande il y a l'aperçu, les réglages, le
+            // voyage — reculer les rejouerait un par un, et le premier
+            // ramènerait sur le paiement d'une commande déjà passée.
+            path.removeAll()
         }
     }
 
@@ -422,6 +455,30 @@ public struct RootView: View {
         }
     }
 
+    /// Le modèle du tunnel de commande.
+    ///
+    /// Sous `-previewSignedIn` il travaille **en mémoire** : aucun appel réseau
+    /// n'aboutirait — c'est la règle de cet interrupteur — et un écran d'erreur
+    /// ne montre pas la maquette qu'on cherche à vérifier. Partout ailleurs,
+    /// les trois routes du serveur.
+    private func orderModel(memoId: String) -> OrderModel {
+        #if DEBUG
+            if OnboardingStorage.isPreviewingSignedIn {
+                return OrderModel(memoId: memoId, email: accountEmail)
+            }
+        #endif
+        return dependencies.orderModel(memoId: memoId, email: accountEmail)
+    }
+
+    /// L'adresse du compte connecté. Elle ne sert qu'à une phrase — celle qui
+    /// annonce où partira l'email de confirmation d'une commande. `nil` pour un
+    /// compte entré par Apple sans adresse relayée : la phrase s'abrège alors
+    /// plutôt que de promettre un envoi sans destinataire.
+    private var accountEmail: String? {
+        guard case .signedIn(let account) = stage else { return nil }
+        return account.email
+    }
+
     /// Le voyage ouvert, s'il y en a un dans la pile.
     ///
     /// Il se lit **dans le chemin** plutôt que d'être porté par chaque écran :
@@ -433,8 +490,8 @@ public struct RootView: View {
         for route in path.reversed() {
             switch route {
             case .trip(let id), .tripSettings(let id), .bookPreview(let id),
-                .bookCustomisation(let id), .covers(let id), .coverStyle(let id),
-                .coverPhoto(let id), .coverTexts(let id):
+                .order(let id), .bookCustomisation(let id), .covers(let id),
+                .coverStyle(let id), .coverPhoto(let id), .coverTexts(let id):
                 return id
             case .chat(let tripId, _):
                 return tripId
@@ -476,6 +533,8 @@ public struct RootView: View {
             TripSettingsView(model: dependencies.tripSettingsModel(tripId: id), onIntent: handle)
         case .bookPreview(let memoId):
             BookPreviewFlowView(model: dependencies.bookPreviewModel(memoId: memoId), onIntent: handle)
+        case .order(let memoId):
+            OrderView(model: orderModel(memoId: memoId), onIntent: handle)
         case .wallet(let tripId):
             WalletView(model: dependencies.walletModel(tripId: tripId), onIntent: handle)
         case .bookCustomisation(let tripId):
@@ -551,6 +610,11 @@ enum HomeRoute: Hashable {
     /// L'identifiant est celui du **carnet** et non du voyage : c'est le carnet
     /// qu'on compose, et `memos` est la ressource qui le porte.
     case bookPreview(memoId: String)
+    /// Les sept étapes de « Commander mon Carnet ».
+    ///
+    /// On n'y arrive **que par l'aperçu** : on ne commande pas un carnet qu'on
+    /// n'a pas vu. L'identifiant est celui du carnet, comme pour l'aperçu.
+    case order(memoId: String)
     /// Ma cagnotte. `tripId` ne dit pas *quelle* cagnotte — il n'y en a qu'une
     /// par compte — mais **quel carnet on finance**, pour l'estimation de pages
     /// et de coût. `nil` quand on arrive du profil.

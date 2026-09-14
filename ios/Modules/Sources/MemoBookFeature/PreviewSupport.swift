@@ -409,7 +409,28 @@ public actor PreviewAPI: MemoBookAPI {
         return render
     }
 
-    public func createPrintOrder(memoId: String, order: NewPrintOrder) async throws -> PrintOrder {
+    public func bookShareLink(memoId: String) async throws -> URL {
+        _ = try existingMemo(memoId)
+        // Un lien d'aperçu, stable d'un appel à l'autre comme le vrai.
+        return URL(string: "https://memo-book.com/c/\(memoId)")!
+    }
+
+    public func orderContext(memoId: String) async throws -> OrderContext {
+        .fixture
+    }
+
+    public func orderQuote(
+        memoId: String,
+        copies: Int,
+        shippingSpeed: ShippingSpeed
+    ) async throws -> OrderQuote {
+        .fixture(copies: copies, speed: shippingSpeed)
+    }
+
+    public func createPrintOrder(
+        memoId: String,
+        order: NewPrintOrderRequest
+    ) async throws -> PrintOrder {
         _ = try existingMemo(memoId)
 
         let created = PrintOrder(

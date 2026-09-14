@@ -272,4 +272,35 @@ public final class AppDependencies {
     public func walletModel(tripId: String?) -> WalletModel {
         WalletModel(tripId: tripId)
     }
+
+    /// Le tunnel de commande, **entièrement servi par le serveur** — c'est ce
+    /// qui le distingue des quatre écrans ci-dessus.
+    ///
+    /// Trois routes, et pas une de plus : `GET /v1/memos/:id/order-context`
+    /// ouvre les sept étapes d'un seul appel,
+    /// `POST /v1/memos/:id/orders/quote` compte le récapitulatif, et
+    /// `POST /v1/memos/:id/orders` enregistre.
+    ///
+    /// ⚠️ **Rien n'est encaissé.** La commande naît en `draft` : le débit et le
+    /// passage en `submitted` viendront du webhook du prestataire. L'écran de
+    /// paiement le dit dans son propre commentaire, et rien n'y prétend le
+    /// contraire.
+    ///
+    /// - Parameter email: l'adresse à laquelle la confirmation partira, pour
+    ///   la dernière phrase de l'écran de confirmation. `nil` quand le compte
+    ///   n'en a pas — la phrase s'abrège alors au lieu de promettre un envoi
+    ///   sans destinataire.
+    public func orderModel(memoId: String, email: String? = nil) -> OrderModel {
+        OrderModel(
+            memoId: memoId,
+            email: email,
+            context: { [api] id in try await api.orderContext(memoId: id) },
+            quote: { [api] id, copies, speed in
+                try await api.orderQuote(memoId: id, copies: copies, shippingSpeed: speed)
+            },
+            submit: { [api] id, request in
+                try await api.createPrintOrder(memoId: id, order: request)
+            }
+        )
+    }
 }

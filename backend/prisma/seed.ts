@@ -41,6 +41,15 @@ type TravellerSeed = {
   firstName: string;
   lastName: string;
   plan: Plan;
+  /**
+   * Ce qui distingue les codes d'accès de ce voyageur de ceux de l'autre.
+   *
+   * `memos.accessCode` est unique **dans toute la base**, pas par compte : deux
+   * voyageurs qui posent tous les deux « ROME26 » ne peuvent pas coexister, et
+   * c'est le second qui échouait — donc le compte abonné, donc la moitié des
+   * écrans qu'on croyait vérifier.
+   */
+  codeSuffix: string;
   /** Ce que le seed en dit à la fin, pour qu'on sache lequel ouvrir. */
   purpose: string;
 };
@@ -57,6 +66,7 @@ const TRAVELLERS: TravellerSeed[] = [
     firstName: "Hugo",
     lastName: "Jouffre",
     plan: "freeTrial",
+    codeSuffix: "",
     purpose: "compte de test de l'app — palier gratuit, celui de « Testing mode »",
   },
   {
@@ -64,6 +74,7 @@ const TRAVELLERS: TravellerSeed[] = [
     firstName: "Hugo",
     lastName: "Jouffre",
     plan: "subscriber",
+    codeSuffix: "B",
     purpose: "le même contenu, vu par un abonné",
   },
 ];
@@ -197,7 +208,7 @@ async function seedTraveller(
       title: "Rome 2026",
       // Des codes lisibles et stables, pour pouvoir essayer « Rejoins une
       // aventure » sans aller les lire en base.
-      accessCode: "ROME26",
+      accessCode: `ROME26${seed.codeSuffix}`,
       subtitle: "Dix jours à marcher et à manger",
       authors: "Hugo et Clara",
       theme: "City trip & découvertes",
@@ -263,7 +274,7 @@ async function seedTraveller(
     data: {
       ownerAccountId: account.id,
       title: "Lisbonne entre filles",
-      accessCode: "LISB26",
+      accessCode: `LISB26${seed.codeSuffix}`,
       theme: "voyage",
       stage: "past",
       destinationName: "Portugal",
@@ -288,7 +299,7 @@ async function seedTraveller(
     data: {
       ownerAccountId: account.id,
       title: "Islande cet hiver",
-      accessCode: "ISLA26",
+      accessCode: `ISLA26${seed.codeSuffix}`,
       theme: "voyage",
       stage: "upcoming",
       destinationName: "Islande",
@@ -340,6 +351,36 @@ async function seedTraveller(
     data: { walletBalanceCents: balance },
   });
 
+  // Les deux cartes de la maquette « Choisis ton mode de paiement ». Elles
+  // n'ouvrent rien : `stripePaymentMethodId` est un identifiant d'essai, et
+  // seul Stripe pourrait débiter. Ce qu'elles servent, c'est l'écran — une
+  // liste de moyens de paiement vide ne montre pas la sélection par défaut.
+  await prisma.paymentCard.deleteMany({ where: { accountId: account.id } });
+  await prisma.paymentCard.createMany({
+    data: [
+      {
+        accountId: account.id,
+        label: "Carte business",
+        last4: "3246",
+        brand: "visa",
+        expMonth: 4,
+        expYear: 2029,
+        stripePaymentMethodId: `pm_test_business_${account.id}`,
+        isDefault: false,
+      },
+      {
+        accountId: account.id,
+        label: "Carte perso",
+        last4: "1820",
+        brand: "mastercard",
+        expMonth: 11,
+        expYear: 2028,
+        stripePaymentMethodId: `pm_test_perso_${account.id}`,
+        isDefault: true,
+      },
+    ],
+  });
+
   await prisma.subscription.deleteMany({ where: { accountId: account.id } });
 
   // Un abonnement **seulement** pour le compte abonné. Le compte gratuit n'en a
@@ -372,9 +413,26 @@ async function seedTraveller(
       shippingLine1: "7 rue Simon Fryd",
       shippingPostalCode: "69002",
       shippingCity: "Lyon",
-      shippingCountry: "France",
+      // Le code ISO, et non « France » : c'est ce que l'imprimeur lit, et ce
+      // que la route de commande valide.
+      shippingCountry: "FR",
+      shippingSpeed: "standard",
+      // La décomposition, figée comme le reste. 58 pages à deux exemplaires,
+      // moins ce que la cagnotte avait couvert — les mêmes centimes que
+      // l'écriture `order_payment` du registre ci-dessus.
+      itemsCents: 2 * (58 * 132 + 1_490 + 900),
+      shippingCents: 0,
+      walletAppliedCents: 2 * (58 * 132 + 1_490 + 900) - 1212,
       amountCents: 1212,
       submittedAt: new Date(),
+      copyOptions: {
+        create: [
+          { position: 1 },
+          // Le 2e exemplaire est celui qu'on offre : même carnet, sans les
+          // quiz ni le mot fléché. C'est l'état que l'étape 3 sait produire.
+          { position: 2, quizEnabled: false, crosswordEnabled: false },
+        ],
+      },
     },
   });
 

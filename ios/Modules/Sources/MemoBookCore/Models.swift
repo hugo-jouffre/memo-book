@@ -357,7 +357,23 @@ public struct PrintOrder: Codable, Sendable, Hashable, Identifiable {
     public let renderId: String
     public let status: PrintOrderStatus
     public let copies: Int
+    public let shippingSpeed: ShippingSpeed
     public let shipping: ShippingAddress
+
+    /// Ce que l'écran de confirmation annonce. Figés avec la commande : c'est
+    /// le livre qui est parti à l'impression, pas celui d'aujourd'hui.
+    public let pageCount: Int?
+    public let coverImageUrl: URL?
+    public let estimatedMinDays: Int?
+    public let estimatedMaxDays: Int?
+
+    /// Le net payé. `nil` sur les commandes d'avant la tarification — à lire
+    /// comme « pas de montant à afficher », jamais comme zéro.
+    public let total: Decimal?
+
+    /// Les options, exemplaire par exemplaire, dans l'ordre des rangs.
+    public let copyOptions: [PrintedCopyOptions]
+
     public let trackingUrl: String?
     public let error: String?
     public let createdAt: Date
@@ -369,7 +385,14 @@ public struct PrintOrder: Codable, Sendable, Hashable, Identifiable {
         renderId: String,
         status: PrintOrderStatus,
         copies: Int,
+        shippingSpeed: ShippingSpeed = .standard,
         shipping: ShippingAddress,
+        pageCount: Int? = nil,
+        coverImageUrl: URL? = nil,
+        estimatedMinDays: Int? = nil,
+        estimatedMaxDays: Int? = nil,
+        total: Decimal? = nil,
+        copyOptions: [PrintedCopyOptions] = [],
         trackingUrl: String? = nil,
         error: String? = nil,
         createdAt: Date,
@@ -380,24 +403,24 @@ public struct PrintOrder: Codable, Sendable, Hashable, Identifiable {
         self.renderId = renderId
         self.status = status
         self.copies = copies
+        self.shippingSpeed = shippingSpeed
         self.shipping = shipping
+        self.pageCount = pageCount
+        self.coverImageUrl = coverImageUrl
+        self.estimatedMinDays = estimatedMinDays
+        self.estimatedMaxDays = estimatedMaxDays
+        self.total = total
+        self.copyOptions = copyOptions
         self.trackingUrl = trackingUrl
         self.error = error
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
-}
 
-/// Paramètres d'une commande d'impression.
-public struct NewPrintOrder: Encodable, Sendable, Hashable {
-    public var renderId: String
-    public var copies: Int
-    public var shipping: ShippingAddress
-
-    public init(renderId: String, copies: Int = 1, shipping: ShippingAddress) {
-        self.renderId = renderId
-        self.copies = copies
-        self.shipping = shipping
+    /// Le délai annoncé, quand l'imprimeur en a donné un.
+    public var estimatedDays: DayRange? {
+        guard let estimatedMinDays, let estimatedMaxDays else { return nil }
+        return DayRange(min: estimatedMinDays, max: estimatedMaxDays)
     }
 }
 

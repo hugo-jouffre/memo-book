@@ -345,7 +345,39 @@ public actor MemoBookAPIClient: MemoBookAPI {
 
     // MARK: - Impression
 
-    public func createPrintOrder(memoId: String, order: NewPrintOrder) async throws -> PrintOrder {
+    public func orderContext(memoId: String) async throws -> OrderContext {
+        try await send(method: "GET", path: "/v1/memos/\(memoId)/order-context")
+    }
+
+    public func orderQuote(
+        memoId: String,
+        copies: Int,
+        shippingSpeed: ShippingSpeed
+    ) async throws -> OrderQuote {
+        struct Body: Encodable {
+            let copies: Int
+            let shippingSpeed: ShippingSpeed
+        }
+        return try await send(
+            method: "POST",
+            path: "/v1/memos/\(memoId)/orders/quote",
+            encodableBody: Body(copies: copies, shippingSpeed: shippingSpeed)
+        )
+    }
+
+    public func bookShareLink(memoId: String) async throws -> URL {
+        struct Response: Decodable { let url: URL }
+        let response: Response = try await send(
+            method: "POST",
+            path: "/v1/memos/\(memoId)/share-link"
+        )
+        return response.url
+    }
+
+    public func createPrintOrder(
+        memoId: String,
+        order: NewPrintOrderRequest
+    ) async throws -> PrintOrder {
         try await send(
             method: "POST",
             path: "/v1/memos/\(memoId)/orders",
