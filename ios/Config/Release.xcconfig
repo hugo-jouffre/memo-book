@@ -3,9 +3,18 @@
 // L'API de production.
 //
 // ⚠️ **Elle n'est pas encore déployée.** Cette valeur est un emplacement, pas
-// une adresse qui répond : le jour du déploiement, c'est la seule ligne à
-// changer pour qu'un build TestFlight parle au bon serveur — et la seule à ne
-// pas oublier. Tant qu'elle n'existe pas, un build Release ne peut pas
-// fonctionner, et c'est mieux ainsi : il échoue au premier appel plutôt que de
-// parler silencieusement à `localhost`, ce qu'il faisait avant ce fichier.
+// une adresse qui répond : `api.memo-book.com` n'a aujourd'hui aucun
+// enregistrement DNS. Tant que c'est le cas, un build TestFlight s'ouvre sur
+// « Connexion impossible. Vérifie ton réseau et réessaie. » sur n'importe quel
+// iPhone, et aucun serveur lancé en local n'y changera quoi que ce soit :
+// l'adresse part dans l'Info.plist du binaire au moment du build.
+//
+// Le jour du déploiement, c'est la seule ligne à changer pour qu'un build parle
+// au bon serveur, et la seule à ne pas oublier. La marche à suivre complète est
+// dans `docs/deploiement.md`.
+//
+// L'affectation est **après** l'inclusion, volontairement : elle écrase un
+// éventuel `Secrets.xcconfig` local, pour qu'une machine qui en traîne un ne
+// puisse pas envoyer un build TestFlight parler à une IP de réseau local.
+// `Debug.xcconfig` fait l'inverse, et explique pourquoi.
 MEMOBOOK_API_BASE_URL = https:/$()/api.memo-book.com
