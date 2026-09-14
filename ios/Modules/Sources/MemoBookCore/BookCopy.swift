@@ -111,6 +111,79 @@ public enum BookCopy {
             "MemoBook génère une grille de mot fléché automatiquement à partir de tes récits, au moment de commander ton livre et la place à la fin du carnet."
     }
 
+    // MARK: - Les couvertures
+
+    /// Ce qu'écrit le parcours des deux plats : le choix, le style, la photo,
+    /// les textes et les chiffres du dos.
+    ///
+    /// ⚠️ **Deux écarts de la maquette sont recopiés tels quels** (R8) :
+    ///   - ``matchedStyle`` **vouvoie** — « Assortie à votre 1e de couverture ».
+    ///     R9 ne souffre aucune exception dans l'app : la phrase est recopiée et
+    ///     signalée, pas réécrite. À reprendre dans Figma en « Assortie à ta 1re
+    ///     de couverture ».
+    ///   - La même phrase écrit « 1e » là où l'ordinal abrégé français s'écrit
+    ///     « 1re » — c'est d'ailleurs ce que les onglets du même écran écrivent
+    ///     deux centimètres plus haut.
+    public enum Covers {
+        public static let title = "Couvertures"
+
+        /// Le sous-titre de l'en-tête, différent à chaque étape : il dit ce
+        /// qu'on est en train de changer.
+        public static let styleSubtitle = "Changer le style graphique"
+        public static let photoSubtitle = "Changer la photo de couverture"
+        public static let textsSubtitle = "Modifier le titre et sous-titre"
+
+        /// Les trois lignes de l'écran d'accueil des couvertures. La première
+        /// dit « Changer **de** style », la ligne de l'en-tête « Changer **le**
+        /// style » : c'est la maquette, et les deux se lisent bien.
+        public static let changeStyle = "Changer de style graphique"
+        public static let changePhoto = "Changer la photo de couverture"
+        public static let editTexts = "Modifier les textes"
+
+        public static let validate = "Valider"
+        public static let choosePhoto = "Choisir la photo"
+        public static let importPhoto = "Importer ma photo"
+
+        /// ⚠️ Vouvoiement et « 1e » : coquilles de la maquette (R8).
+        public static let matchedStyle = "Assortie à votre 1e de couverture"
+
+        /// La photo choisie n'a pas pu être lue. Aucune maquette ne dessine cet
+        /// état ; la phrase dit ce qui s'est passé et ce qu'on peut faire,
+        /// plutôt que de laisser le carrousel inchangé sans explication.
+        public static let importFailed =
+            "Cette photo n’a pas pu être ouverte. Choisis-en une autre."
+
+        /// Le titre par défaut d'une première de couverture qu'on n'a pas encore
+        /// écrite. Le nom du voyage, et non un texte d'invite : un plat vide se
+        /// lirait comme un carnet raté.
+        public static func defaultTitle(trip: String) -> String { trip }
+
+        public enum Voice {
+            public static let carousel = "Couvertures proposées"
+            public static let selected = "Couverture sélectionnée"
+            public static let photo = "Photo de couverture"
+            public static func style(_ name: String) -> String { "Style \(name)" }
+            public static let editTitle = "Modifier le titre"
+            public static let editSubtitle = "Modifier le sous-titre"
+            public static let editStats = "Modifier les chiffres du voyage"
+            public static let previousCover = "Couverture précédente"
+            public static let nextCover = "Couverture suivante"
+        }
+
+        // MARK: Les chiffres du dos
+
+        public enum Stats {
+            public static let title = "Choix des statistiques"
+
+            /// « Choisis-en 3 ou 4 ». Les deux bornes viennent du gabarit —
+            /// voir ``BookCovers/statRange``.
+            public static let message = "Choisis-en 3 ou 4"
+
+            /// Ce qui s'imprime au-dessus des chiffres, sur le plat.
+            public static let heading = "Mon voyage en quelques chiffres"
+        }
+    }
+
     // MARK: - On compose ton Carnet
 
     public enum Composition {

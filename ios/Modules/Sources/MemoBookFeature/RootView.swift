@@ -43,6 +43,15 @@ public struct RootView: View {
     /// l'écrit et que l'accueil le lit — voir ``SubscriptionSession``.
     @State private var subscription = SubscriptionSession()
 
+    /// Les deux plats du carnet en cours de réglage, partagés par les quatre
+    /// écrans du parcours — voir ``covers(for:)``.
+    @State private var coversModel: CoversModel?
+
+    /// Le support. **Un seul pour la session**, et non un par ouverture : les
+    /// votes « Est-ce utile ? » déjà donnés ne doivent pas se redemander parce
+    /// qu'on a refermé l'écran entre-temps.
+    @State private var support = SupportModel()
+
     /// La pile de navigation de l'app, une fois entré.
     @State private var path: [HomeRoute] = []
 
@@ -85,12 +94,18 @@ public struct RootView: View {
                     restoring
                 case .signedOut:
                     AuthView { enterApp(as: $0) }
-                case .signedIn:
+                case .signedIn(let account):
                     NavigationStack(path: $path) {
                         HomeView(model: dependencies.homeModel(), onIntent: handle)
                             .navigationDestination(for: HomeRoute.self, destination: destination)
                     }
                     .tint(MemoBookColor.action)
+                    // Le prénom du compte, pour les deux écrans qui s'adressent
+                    // à la personne : le mot des fondateurs et le support. Il
+                    // était déclaré depuis le mot des fondateurs mais **jamais
+                    // posé** — celui-ci écrivait donc « Hello, » à tout le monde
+                    // en dehors des aperçus.
+                    .environment(\.travellerFirstName, account.firstName)
                 }
             }
         }
@@ -256,7 +271,9 @@ public struct RootView: View {
                 return
             }
             path.append(.bookPreview(memoId: tripId))
-        case .joinTrip, .importFromPolarsteps, .openHelp:
+        case .openHelp:
+            path.append(.support)
+        case .joinTrip, .importFromPolarsteps:
             break
         }
     }
@@ -289,6 +306,8 @@ public struct RootView: View {
         switch intent {
         case .openWallet:
             path.append(.wallet(tripId: nil))
+        case .openHelp:
+            path.append(.support)
         }
     }
 
@@ -322,21 +341,48 @@ public struct RootView: View {
         case .openCustomisation:
             guard let tripId = currentTripId else { return }
             path.append(.bookCustomisation(tripId: tripId))
+        case .openHelp:
+            path.append(.support)
         case .renameTrip, .editDates, .editPace, .manageNotifications, .editCompanions,
-            .editTheme, .connectTricount, .orderBook, .openHelp:
+            .editTheme, .connectTricount, .orderBook:
             break
         }
     }
 
     /// Où mène l'unique intention des personnalisations.
-    ///
-    /// Les couvertures n'ont pas d'écran dessiné : la ligne est inerte plutôt
-    /// que branchée sur un écran inventé (R3).
     private func handle(_ intent: BookCustomisationIntent) {
         switch intent {
         case .openCovers:
-            break
+            openCovers()
         }
+    }
+
+    /// Où mène chaque intention du parcours des couvertures.
+    ///
+    /// Les trois écrans se poussent sur la pile plutôt que de remplacer le choix
+    /// des couvertures : c'est ce qui rend la flèche de retour — et le glissé
+    /// depuis le bord — juste sans rien écrire.
+    private func handle(_ intent: CoversIntent) {
+        guard let tripId = currentTripId else { return }
+
+        switch intent {
+        case .openStyle: path.append(.coverStyle(tripId: tripId))
+        case .openPhoto: path.append(.coverPhoto(tripId: tripId))
+        case .openTexts: path.append(.coverTexts(tripId: tripId))
+        }
+    }
+
+    /// Ouvre le parcours des couvertures, en posant d'abord le modèle que ses
+    /// quatre écrans partagent.
+    private func openCovers() {
+        guard let tripId = currentTripId else { return }
+
+        // Un nouveau voyage demande un nouveau modèle ; le même voyage garde le
+        // sien, avec l'onglet et le plat qu'on regardait.
+        if coversModel?.tripId != tripId {
+            coversModel = dependencies.coversModel(tripId: tripId)
+        }
+        path.append(.covers(tripId: tripId))
     }
 
     /// Où mène chaque intention de l'aperçu du carnet.
@@ -347,10 +393,15 @@ public struct RootView: View {
         case .customise:
             guard let tripId = currentTripId else { return }
             path.append(.tripSettings(id: tripId))
-        case .order, .configureCovers, .shareFeedback:
-            // La commande d'impression et le choix des couvertures n'ont pas
-            // d'écran dessiné. Le mot des fondateurs, lui, ouvre un courrier
-            // — la feuille s'en occupe elle-même.
+        case .configureCovers:
+            // « Défini maintenant ta 1ère et 4ème de couverture » → « Configurer ».
+            // C'est le chemin le plus important vers les couvertures : c'est en
+            // feuilletant son carnet qu'on s'aperçoit qu'il n'en a pas.
+            openCovers()
+        case .order, .shareFeedback:
+            // La commande d'impression n'a pas d'écran dessiné. Le mot des
+            // fondateurs, lui, ouvre un courrier — la feuille s'en occupe
+            // elle-même.
             break
         }
     }
@@ -361,7 +412,9 @@ public struct RootView: View {
         case .openBookPreview:
             guard let tripId = currentTripId else { return }
             path.append(.bookPreview(memoId: tripId))
-        case .shareWallet, .inviteFriends, .addFunds, .topUpUnavailable, .openHelp:
+        case .openHelp:
+            path.append(.support)
+        case .shareWallet, .inviteFriends, .addFunds, .topUpUnavailable:
             // Le partage de la cagnotte passe par la feuille du système, que la
             // vue présente elle-même. Recharger attend Stripe, et l'écran le
             // dit — voir ``BookCopy/Wallet/addUnavailable``.
@@ -380,13 +433,14 @@ public struct RootView: View {
         for route in path.reversed() {
             switch route {
             case .trip(let id), .tripSettings(let id), .bookPreview(let id),
-                .bookCustomisation(let id):
+                .bookCustomisation(let id), .covers(let id), .coverStyle(let id),
+                .coverPhoto(let id), .coverTexts(let id):
                 return id
             case .chat(let tripId, _):
                 return tripId
             case .wallet(let tripId):
                 if let tripId { return tripId }
-            case .profile, .gallery, .tripCreation, .memos:
+            case .profile, .gallery, .tripCreation, .memos, .support:
                 continue
             }
         }
@@ -429,7 +483,42 @@ public struct RootView: View {
                 model: dependencies.bookCustomisationModel(tripId: tripId),
                 onIntent: handle
             )
+        case .covers(let tripId):
+            CoversView(model: covers(for: tripId), onIntent: handle)
+        case .coverStyle(let tripId):
+            CoverCarouselView(kind: .style, model: covers(for: tripId))
+        case .coverPhoto(let tripId):
+            CoverCarouselView(kind: .photo, model: covers(for: tripId))
+        case .coverTexts(let tripId):
+            CoverTextsView(model: covers(for: tripId))
+        case .support:
+            SupportView(model: support)
         }
+    }
+
+    /// Le modèle des couvertures, **partagé par les quatre écrans du parcours**.
+    ///
+    /// Il vit ici et non dans chaque écran pour la même raison que
+    /// ``SubscriptionSession`` : plusieurs destinations lisent et écrivent le
+    /// même état. On passe du choix au style, puis à la photo, puis aux textes
+    /// sans jamais quitter les mêmes deux plats — et l'onglet « 1re / 4e » doit
+    /// suivre. Quatre modèles auraient rechargé à chaque pas et perdu l'onglet.
+    ///
+    /// Il est posé par ``openCovers()``, l'intention qui ouvre le parcours. Le
+    /// repli ne sert qu'à une pile restaurée sans elle — et il **garde** ce
+    /// qu'il fabrique.
+    ///
+    /// ⚠️ Sans cette mise de côté, le repli rendait un modèle neuf **à chaque
+    /// rendu** : l'écran repartait à vide au premier redessin, l'onglet
+    /// revenait sur la première de couverture et la feuille des chiffres
+    /// s'ouvrait sur une grille vide. Un modèle ne se fabrique pas dans un
+    /// `body` ; l'écriture est donc renvoyée après le rendu en cours.
+    private func covers(for tripId: String) -> CoversModel {
+        if let coversModel, coversModel.tripId == tripId { return coversModel }
+
+        let model = dependencies.coversModel(tripId: tripId)
+        Task { @MainActor in coversModel = model }
+        return model
     }
 }
 
@@ -468,4 +557,24 @@ enum HomeRoute: Hashable {
     case wallet(tripId: String?)
     /// Les personnalisations du carnet, ouvertes par « Style du carnet ».
     case bookCustomisation(tripId: String)
+
+    /// Les deux plats du carnet. On y arrive par la ligne « Couvertures » des
+    /// personnalisations, et par la pastille « Configurer » posée sur la
+    /// première et la dernière page de l'aperçu PDF.
+    case covers(tripId: String)
+    /// Les trois écrans qui changent un plat. **Trois destinations et non trois
+    /// états d'une même vue** : le geste de retour d'iOS — la flèche comme le
+    /// glissé depuis le bord — doit ramener au choix des couvertures, pas
+    /// quitter le parcours. Elles partagent le modèle que ``RootView`` tient
+    /// pour elles.
+    case coverStyle(tripId: String)
+    case coverPhoto(tripId: String)
+    case coverTexts(tripId: String)
+
+    /// Le support, ouvert par tous les « Besoin d'aide ? » de l'app.
+    ///
+    /// Sans identifiant : l'aide n'appartient à aucun voyage. C'est aussi ce qui
+    /// fait qu'on y arrive de l'accueil, du profil et du paywall, où il n'y a
+    /// pas de voyage ouvert.
+    case support
 }
