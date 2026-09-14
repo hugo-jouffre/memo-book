@@ -42,17 +42,29 @@ struct FoundersNoteSheet: View {
     /// pousserait hors de l'écran.
     private static let photoSide: CGFloat = 112
 
+    /// Ce que la feuille réserve au-dessus de son aplat.
+    ///
+    /// La moitié de la photo — c'est la part qui dépasse — plus huit points
+    /// pour l'inclinaison et l'ombre portée, qui débordent du cercle.
+    private static var overflow: CGFloat { photoSide / 2 + 8 }
+
     var body: some View {
-        BrandSheet(BookCopy.Founders.title) {
+        // La feuille réserve de quoi laisser dépasser la photo : la moitié de
+        // son diamètre, plus le peu que l'inclinaison et l'ombre ajoutent.
+        BrandSheet(BookCopy.Founders.title, topOverflow: Self.overflow) {
             VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
                 letter
                 signature
                 actions
             }
         }
-        // La photo est posée **par-dessus** la feuille et dépasse en haut. Elle
-        // est dans un `overlay` de la feuille et non dans son contenu : dedans,
-        // elle aurait été rognée par les coins arrondis.
+        // La photo est posée **par-dessus** la feuille et dépasse en haut.
+        //
+        // Un `overlay` ne suffisait pas : la feuille du système rogne à ses
+        // propres bords, et la moitié haute de la photo disparaissait — quelle
+        // que soit sa place dans la hiérarchie. C'est ``BrandSheet/topOverflow``
+        // qui règle ça, en ouvrant une bande transparente **dans** la
+        // présentation ; la photo y tient entière.
         .overlay(alignment: .top) { photo }
         .onAppear { isFloating = true }
     }
@@ -78,9 +90,15 @@ struct FoundersNoteSheet: View {
                 y: 4
             )
             .rotationEffect(.degrees(7.1))
+            // L'alignement `.top` la pose au sommet de la **présentation**,
+            // c'est-à-dire en haut de la bande réservée. Il ne reste qu'à la
+            // descendre des huit points de marge : son centre tombe alors
+            // exactement sur le bord de l'aplat, et elle le chevauche de moitié
+            // comme la maquette le dessine.
             .offset(
                 x: Self.photoSide * 0.55,
-                y: -Self.photoSide * 0.5 + (isFloating && !reduceMotion ? -2 : 2)
+                y: Self.overflow - Self.photoSide / 2
+                    + (isFloating && !reduceMotion ? -2 : 2)
             )
             .animation(
                 reduceMotion
