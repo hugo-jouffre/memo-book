@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { generateDeviceToken, hashDeviceToken } from "../src/lib/auth.js";
 import { hashPassword } from "../src/lib/password.js";
+import { seedTripThemes } from "./tripThemes.js";
 
 /**
  * Jeu de données de développement.
@@ -571,6 +572,11 @@ async function seedGallery(): Promise<number> {
 }
 
 async function main(): Promise<void> {
+  // Les thèmes de « Contexte de ton voyage » : une table de référence, posée
+  // par un module à part pour qu'on puisse la remettre d'équerre sans refaire
+  // les carnets des comptes de test (`npm run db:seed:themes`).
+  await seedTripThemes(prisma);
+
   // Une amie invitée sur les voyages : c'est elle qui fait apparaître les
   // pastilles de compagnons sur les couvertures. Un seul exemplaire, partagé
   // par les comptes.

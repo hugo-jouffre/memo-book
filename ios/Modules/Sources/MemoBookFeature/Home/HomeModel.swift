@@ -207,6 +207,10 @@ public enum HomeIntent: Sendable, Hashable {
     /// Reprendre un voyage déjà enregistré dans Polarsteps, avec ses étapes.
     case importFromPolarsteps
     case openHelp
+    /// Le vocal qu'on vient d'enregistrer depuis l'accueil, à retrouver **dans
+    /// la conversation** du voyage en cours. L'envoi au serveur ne passe pas
+    /// par là — il est déjà parti par la file —, seul l'affichage voyage.
+    case openConversation(tripId: String, handoff: RecordingHandoff)
 }
 
 #if DEBUG

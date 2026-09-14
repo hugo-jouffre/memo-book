@@ -84,7 +84,12 @@ struct TripHeader: View {
         // Les commandes gardent leur place quelle que soit la taille du texte :
         // ce sont trois ronds de 44, pas des libellés.
         HStack(spacing: MemoBookSpacing.xs + 2) {
-            TripHeaderButton(icon: "IconArrow", label: "Retour", action: onBack)
+            TripHeaderButton(
+                icon: "IconArrow",
+                iconSide: MemoBookSpacing.navigationIcon,
+                label: "Retour",
+                action: onBack
+            )
             Spacer(minLength: 0)
             TripHeaderButton(
                 icon: "IconPrinter",
@@ -151,7 +156,7 @@ struct TripHeader: View {
             .resizable()
             .renderingMode(.template)
             .scaledToFit()
-            .frame(width: MemoBookSpacing.s + 2, height: MemoBookSpacing.s + 2)
+            .frame(width: MemoBookSpacing.m, height: MemoBookSpacing.m)
             .foregroundStyle(MemoBookColor.onAction)
             .accessibilityHidden(true)
     }
@@ -169,6 +174,13 @@ struct TripHeader: View {
 /// une icône blanche sur une couverture claire disparaîtrait sans lui.
 private struct TripHeaderButton: View {
     let icon: String
+    /// La boîte du dessin. Les trois ronds font la même taille ; ce qui est
+    /// dessiné dedans, non : la flèche de retour garde
+    /// ``MemoBookSpacing/navigationIcon``, validée telle quelle, et les deux
+    /// commandes prennent ``MemoBookSpacing/contentIcon`` — leurs glyphes
+    /// (l'imprimante, la roue des réglages) n'occupent qu'une part de leur
+    /// boîte et se lisaient à peine à 28.
+    var iconSide: CGFloat = MemoBookSpacing.contentIcon
     let label: String
     let action: () -> Void
 
@@ -178,13 +190,7 @@ private struct TripHeaderButton: View {
                 .resizable()
                 .renderingMode(.template)
                 .scaledToFit()
-                // Les trois ronds de l'en-tête partagent la taille de la
-                // flèche : elle est l'un d'eux, et un seul plus gros casserait
-                // la rangée.
-                .frame(
-                    width: MemoBookSpacing.navigationIcon,
-                    height: MemoBookSpacing.navigationIcon
-                )
+                .frame(width: iconSide, height: iconSide)
                 .foregroundStyle(MemoBookColor.onAction)
                 .frame(
                     width: MemoBookSpacing.minimumTapTarget,
@@ -251,7 +257,7 @@ struct TripHeaderPlaceholder: View {
     }
 }
 
-/// La place des étapes, le temps qu'elles arrivent : les trois filtres, éteints,
+/// La place des étapes, le temps qu'elles arrivent : les deux filtres, éteints,
 /// et trois cartes vides.
 ///
 /// Trois et pas une : c'est le nombre courant, et une seule carte laisserait
@@ -264,7 +270,6 @@ struct TripStepsPlaceholder: View {
             // retrouvait avec deux chevrons et un libellé coupé.
             HStack(spacing: MemoBookSpacing.xs) {
                 chip("Pays", "flag")
-                chip("Étapes", "bag")
                 chip("Transports", "arrow.triangle.turn.up.right.diagonal")
             }
             .padding(.horizontal, MemoBookSpacing.screenMargin)

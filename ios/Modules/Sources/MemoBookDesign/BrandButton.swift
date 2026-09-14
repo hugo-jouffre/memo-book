@@ -128,8 +128,18 @@ public struct BrandButton: View {
     /// par ce composant. Il grandit avec le Dynamic Type comme le reste.
     @ScaledMetric(relativeTo: .body) private var controlHeight = MemoBookSpacing.controlHeight
 
-    /// Les icônes du design system font 24 pt.
+    /// La **boîte** de l'icône dans la mise en page : la hauteur de ligne du
+    /// design system, pour que le bouton garde la sienne.
     @ScaledMetric(relativeTo: .body) private var iconSide: CGFloat = 24
+
+    /// Ce que l'icône **dessine** : plus grand que sa boîte, et qui en déborde.
+    ///
+    /// Les glyphes du jeu de marque n'occupent qu'une part de leur carré de
+    /// 24 — voir ``MemoBookSpacing/contentIcon``. À 24 pt le micro du CTA
+    /// faisait 17 pt d'encre, la flèche 14. Agrandir la boîte aurait fait
+    /// grandir tous les boutons de 4 pt ; on agrandit donc le dessin, et la
+    /// boîte reste ce qu'elle est.
+    @ScaledMetric(relativeTo: .body) private var iconGlyphSide: CGFloat = 28
 
     /// Un bouton désactivé garde sa place et sa forme, mais passe au gris :
     /// c'est l'état « Continuer » tant que le formulaire est incomplet.
@@ -173,6 +183,12 @@ public struct BrandButton: View {
                     // deux boutons d'appoint côte à côte gagnent les deux ou
                     // trois points qui leur manquaient.
                     .minimumScaleFactor(size == .small ? 0.85 : 1)
+                    // Un libellé qui passe à la ligne se **centre**, comme le
+                    // bouton entier : aligné à gauche, « Continuer à découvrir
+                    // mon carnet » sur deux lignes se lisait comme un
+                    // paragraphe collé au bord (Hugo, 14/09/2026, mot des
+                    // fondateurs).
+                    .multilineTextAlignment(.center)
             }
             if iconPlacement == .trailing { leadingAccessory }
         }
@@ -193,6 +209,10 @@ public struct BrandButton: View {
                 // figée ; c'est le bouton qui décide de leur teinte.
                 .renderingMode(.template)
                 .scaledToFit()
+                .frame(width: iconGlyphSide, height: iconGlyphSide)
+                // La boîte de mise en page, plus petite que le dessin : c'est
+                // elle que la rangée mesure. Le dessin déborde dessus sans la
+                // pousser.
                 .frame(width: iconSide, height: iconSide)
         }
     }

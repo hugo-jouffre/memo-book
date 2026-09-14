@@ -291,3 +291,28 @@ faut le savoir avant de les écrire :
 - **Les sauvegardes.** Le plan gratuit n'en fait aucune que tu contrôles. Un
   `pg_dump` quotidien vers un stockage à toi est le minimum dès qu'il y a un
   vrai utilisateur.
+
+---
+
+## Dépannage : « Erreur interne du serveur » sur tous les écrans
+
+Si l'app affiche « Le serveur est momentanément saturé » (ou, sur un back-end
+antérieur, « Erreur interne du serveur ») dès l'accueil alors que `/health`
+répond, c'est presque toujours le **Session pooler qui a atteint ses 15
+clients** :
+
+```
+FATAL: (EMAXCONNSESSION) max clients reached in session mode - max clients are limited to pool_size: 15
+```
+
+Chaque process du back-end ouvre `DATABASE_POOL_SIZE` connexions (5 par défaut,
+réparties entre Prisma et pg-boss). Pour retrouver de la marge :
+
+1. Repère les doublons — plusieurs `npm run dev` oubliés dans des terminaux, un
+   `prisma studio`, un `npm test` qui n'a pas rendu la main :
+   ```bash
+   ps -eo pid,lstart,command | grep -E "tsx watch|prisma" | grep -v grep
+   ```
+2. Arrête ceux qui ne servent plus. Le pooler libère leurs sessions aussitôt.
+3. Si une seule machine doit vraiment faire tourner plus de processus, baisse
+   `DATABASE_POOL_SIZE` plutôt que d'augmenter le pool côté Supabase.

@@ -48,46 +48,17 @@ public enum TripCreationStep: Int, CaseIterable, Sendable, Hashable {
         self == .companions ? "Commencer !" : "Valider"
     }
 
+    /// L'étape a un « Passer ». Toutes, sauf la dernière : le voyage existe
+    /// déjà, et il n'y a rien à éviter sur un écran qui ne fait que montrer son
+    /// code d'accès — Hugo, 14/09/2026.
+    var canBeSkipped: Bool { self != .companions }
+
     /// L'étape après laquelle le voyage **existe**.
     ///
     /// La création ne se fait pas au « Commencer ! » de la fin : la dernière
     /// étape ne montre que le code d'accès, et un code d'accès désigne un
     /// voyage. Le carnet part donc à la validation de l'avant-dernière.
     static var lastBeforeSave: TripCreationStep { .ratio }
-}
-
-/// Les thèmes proposés par la première étape.
-///
-/// ⚠️ **Les libellés ne viennent pas de la maquette**, qui ne montre que les
-/// émojis et le seul mot « Autre », affiché sous celui qui est choisi. Ils sont
-/// écrits ici parce que `memos.theme` est du texte lu par l'agent de rédaction
-/// (`agents/agent-transcription.md`) : un émoji seul ne lui apprendrait rien.
-/// À confirmer avec Clara, comme la copie vouvoyée de `NewNotebookSheet`.
-public struct TripTheme: Sendable, Hashable, Identifiable {
-    public let emoji: String
-    public let label: String
-
-    public var id: String { emoji }
-
-    /// Le thème libre : il ne s'enregistre pas tel quel, il ouvre un champ.
-    /// C'est celui que la maquette montre sélectionné.
-    public static let other = TripTheme(emoji: "💬", label: "Autre")
-
-    /// Le thème du milieu de la rangée. Ce n'est pas un choix, c'est un
-    /// **cadrage** : c'est là que le carrousel s'ouvre, pour qu'on voie des
-    /// thèmes de part et d'autre.
-    public static var middle: TripTheme { all[all.count / 2] }
-
-    /// Dans l'ordre de la maquette, « Autre » au milieu.
-    public static let all: [TripTheme] = [
-        TripTheme(emoji: "🍷", label: "Gastronomie"),
-        TripTheme(emoji: "☀️", label: "Vacances au soleil"),
-        TripTheme(emoji: "🎉", label: "Fête"),
-        .other,
-        TripTheme(emoji: "💼", label: "Voyage d’affaires"),
-        TripTheme(emoji: "🌍", label: "Tour du monde"),
-        TripTheme(emoji: "🏔️", label: "Montagne"),
-    ]
 }
 
 /// Ce que sait faire la création d'un voyage : garder le brouillon des six
@@ -107,10 +78,23 @@ public final class TripCreationModel {
     /// remonter donneraient six façons de le laisser à moitié écrit.
     public var draft = TripDraft()
 
+    /// Les thèmes de la rangée, **tels que le serveur les sert** — « Autre » en
+    /// dernier. Vides le temps de la lecture ; la rangée montre alors une barre
+    /// d'attente et non sept émojis inventés. Voir ``loadThemes()``.
+    public private(set) var themes: [TripTheme] = []
+
+    /// La lecture des thèmes a échoué. L'étape reste traversable : « Passer »
+    /// et « Autre » n'ont besoin d'aucune liste.
+    public private(set) var themesFailure: String?
+
     /// Le thème choisi dans la rangée d'émojis. `nil` tant qu'on n'a rien
     /// touché, ce qui n'est pas la même chose qu'« Autre » : passer l'étape
     /// laisse `theme` vide, choisir « Autre » ouvre un champ.
     public var selectedTheme: TripTheme?
+
+    /// « Autre » est choisi : le champ libre est ouvert et c'est lui qui
+    /// compte.
+    public var isFreeThemeChosen: Bool { selectedTheme?.isOther == true }
 
     /// Le texte de « Autre ». Gardé à part de ``draft`` pour qu'un aller-retour
     /// sur l'étape ne l'efface pas quand on repasse par un émoji.
@@ -126,15 +110,35 @@ public final class TripCreationModel {
 
     private let create: @Sendable (TripDraft) async throws -> CreatedTrip
     private let update: @Sendable (String, TripDraft) async throws -> CreatedTrip
+    private let readThemes: @Sendable () async throws -> [TripTheme]
 
+    /// - Parameter themes: d'où viennent les thèmes de la première étape. Par
+    ///   défaut la liste du jeu d'essai, pour les aperçus ; l'app y branche
+    ///   `GET /v1/trip-themes`.
     public init(
         create: @escaping @Sendable (TripDraft) async throws -> CreatedTrip = { .fixture($0) },
         update: @escaping @Sendable (String, TripDraft) async throws -> CreatedTrip = { id, draft in
             .fixture(draft, id: id)
-        }
+        },
+        themes: @escaping @Sendable () async throws -> [TripTheme] = { TripTheme.fixtures }
     ) {
         self.create = create
         self.update = update
+        self.readThemes = themes
+    }
+
+    /// Lit les thèmes. À appeler à l'ouverture de l'écran ; relire ne fait pas
+    /// de mal, la rangée garde son choix tant que le thème existe encore.
+    public func loadThemes() async {
+        do {
+            themes = try await readThemes()
+            themesFailure = nil
+            if let chosen = selectedTheme, !themes.contains(chosen) {
+                selectedTheme = nil
+            }
+        } catch {
+            themesFailure = error.localizedDescription
+        }
     }
 
     // MARK: - Ce que l'étape courante autorise
@@ -147,7 +151,7 @@ public final class TripCreationModel {
     public var canValidate: Bool {
         switch step {
         case .name: !draft.title.trimmed.isEmpty
-        case .theme: selectedTheme != .other || !freeTheme.trimmed.isEmpty
+        case .theme: !isFreeThemeChosen || !freeTheme.trimmed.isEmpty
         default: true
         }
     }
@@ -160,7 +164,7 @@ public final class TripCreationModel {
     /// Valide l'étape courante et passe à la suivante.
     public func validate() async {
         if step == .theme {
-            draft.theme = selectedTheme == .other ? freeTheme.trimmed : selectedTheme?.label
+            draft.theme = isFreeThemeChosen ? freeTheme.trimmed : selectedTheme?.label
         }
         await advance()
     }

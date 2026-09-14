@@ -154,7 +154,13 @@ police ou marge codée en dur ailleurs.
   raised / accent / blue / destructive / link, tailles regular / small,
   `alternate` pour les fonds sombres). Ne pas en écrire d'autre. `destructive`
   porte le rouge sémantique sans fond ni contour — c'est l'action qui défait,
-  jamais un `link` ; `accent` est le seul aplat large que porte le lime.
+  jamais un `link` ; `accent` est le seul aplat large que porte le lime, et **le
+  lime ne dit que l'abonnement** (T7) — l'accent de tout le reste est le bleu
+  `outline`.
+- Une icône de contenu du jeu de marque se dessine à `MemoBookSpacing.contentIcon`
+  (2 rem), pas à 24 : les glyphes n'occupent qu'une part de leur boîte, et à 24 pt
+  ils faisaient 9 à 12 pt d'encre. La flèche de retour (`navigationIcon`), le
+  chevron d'une ligne et le disque d'enregistrement gardent leur taille.
 - `BrandTextField` est **le** champ de saisie (trois mises en page :
   `labelPlacement: .floating` pour les formulaires d'entrée, `.above` pour les
   feuilles, `.hidden` pour le champ unique d'une feuille dont le sous-titre dit

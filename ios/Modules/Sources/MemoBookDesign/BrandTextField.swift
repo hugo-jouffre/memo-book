@@ -174,7 +174,7 @@ public struct BrandTextField<Field: Hashable>: View {
                 if let hint {
                     Text(hint)
                         .font(MemoBookFont.caption)
-                        .foregroundStyle(MemoBookColor.inkSecondary)
+                        .foregroundStyle(MemoBookColor.inkMuted)
                         .padding(.horizontal, 20)
                 }
             }
@@ -194,7 +194,7 @@ public struct BrandTextField<Field: Hashable>: View {
                 if showsPlaceholder {
                     Text(placeholderText)
                         .font(MemoBookFont.bodySemibold)
-                        .foregroundStyle(MemoBookColor.inkSecondary)
+                        .foregroundStyle(MemoBookColor.inkMuted)
                         .accessibilityHidden(true)
                 }
 
@@ -218,7 +218,7 @@ public struct BrandTextField<Field: Hashable>: View {
                     focus.wrappedValue = field
                 } label: {
                     Image(systemName: isRevealed ? "eye.slash" : "eye")
-                        .foregroundStyle(MemoBookColor.inkSecondary)
+                        .foregroundStyle(MemoBookColor.inkMuted)
                 }
                 .accessibilityLabel(isRevealed ? "Masquer le mot de passe" : "Afficher le mot de passe")
             }
@@ -230,7 +230,7 @@ public struct BrandTextField<Field: Hashable>: View {
         if labelPlacement == .floating, isActive {
             Text(label)
                 .font(MemoBookFont.caption)
-                .foregroundStyle(isFocused ? MemoBookColor.action : MemoBookColor.inkSecondary)
+                .foregroundStyle(isFocused ? MemoBookColor.action : MemoBookColor.inkMuted)
                 // La pastille prend la couleur du fond d'écran : c'est elle qui
                 // « coupe » le contour pour laisser passer l'étiquette.
                 .padding(.horizontal, 6)

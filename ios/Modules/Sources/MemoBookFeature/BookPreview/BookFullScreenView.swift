@@ -47,7 +47,7 @@ struct BookFullScreenView: View {
             )
         ) {
             BrandHeaderAction(
-                icon: "IconTeleverser",
+                icon: "IconShareSystem",
                 label: BookCopy.Preview.Voice.share,
                 action: onShare
             )
@@ -112,7 +112,7 @@ struct BookFullScreenView: View {
 
             Text(BookCopy.Preview.sheetIndicator(model.sheetIndex + 1, of: max(model.sheetCount, 1)))
                 .font(MemoBookFont.bodySemibold)
-                .foregroundStyle(MemoBookColor.inkSecondary)
+                .foregroundStyle(MemoBookColor.inkMuted)
                 .monospacedDigit()
                 .padding(.horizontal, MemoBookSpacing.xs)
                 .padding(.vertical, MemoBookSpacing.xs / 2)

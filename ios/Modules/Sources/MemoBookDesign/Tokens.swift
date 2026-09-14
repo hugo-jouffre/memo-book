@@ -43,11 +43,15 @@ public enum MemoBookColor {
     /// aussi `Scheme/Text`.
     public static let ink = Color(hex: 0x2D231A)
 
-    /// Texte secondaire, légendes. — Figma `Grays/Gray`.
+    /// Le gris **système** d'iOS. — Figma `Grays/Gray`.
     ///
-    /// Le gris **système** d'iOS. Il tient sur les écrans d'entrée dans l'app,
-    /// mais ce n'est pas le gris de la marque : voir ``inkMuted``.
-    public static let inkSecondary = Color(hex: 0x8E8E93)
+    /// **Un aplat, jamais du texte.** Arbitrage de Hugo, 14/09/2026 (T18) :
+    /// `Grays/Gray` ne sert qu'aux aplats de couleur ; tout texte secondaire
+    /// prend ``inkMuted``, le gris de la marque. Il a longtemps porté les
+    /// légendes des écrans d'entrée sous le nom `inkSecondary` — un gris neutre
+    /// qui refroidissait le crème. Le token reste pour le jour où un aplat en a
+    /// besoin ; aucune vue ne l'emploie aujourd'hui.
+    public static let gray = Color(hex: 0x8E8E93)
 
     /// Texte secondaire de la marque : l'encre à 50 %, pas un gris neutre. Un
     /// gris tiré du noir chaud se pose sur le crème sans le refroidir, ce que
@@ -69,8 +73,14 @@ public enum MemoBookColor {
     /// Cartes et zones de contenu. — Figma `Brand Colors/White`.
     public static let surface = Color(hex: 0xFFFCF8)
 
-    /// Bordures des cartes et pastilles numérotées. — Figma
+    /// Bordures des cartes et pastilles numérotées — et **la couleur d'accent
+    /// de l'app**, partout où il ne s'agit pas de l'abonnement. — Figma
     /// `Brand Colors/Blue`.
+    ///
+    /// Arbitrage de Hugo, 14/09/2026 (T7) : le lime (``accent``) ne dit qu'une
+    /// chose, l'abonnement. Tout ce qui doit être souligné en dehors — un rond
+    /// de confirmation, une pastille de compte, une plaque d'icône — l'est en
+    /// bleu.
     public static let outline = Color(hex: 0xAFD2F0)
 
     /// Le fond d'une bulle du voyageur, dans le chat. — Figma `Chat Bubble`.
@@ -91,32 +101,44 @@ public enum MemoBookColor {
     /// plus cher que cet écart-là. Signalé — voir la fiche du chat.
     public static let bubbleMemo = surface
 
-    /// Accent du scheme, très saturé. Il souligne un chiffre, une pastille, et
-    /// **il peut porter un fond de bouton** — mais à une condition, qui n'est
-    /// pas négociable : le libellé et le filet sont alors ``action``, jamais
-    /// l'encre. Le lime est trop clair pour porter du noir sans virer au
-    /// surligneur, et trop clair pour porter du blanc tout court.
+    /// Le lime : **la couleur de l'abonnement, et de rien d'autre.** — Figma
+    /// `Scheme/Accent`.
     ///
-    /// C'est la règle qu'appliquent ``BrandButton/Style/accent`` et
-    /// ``BrandTagPill/Tone/accentOutlined`` ; aucun autre emploi en aplat large
-    /// n'est prévu. — Figma `Scheme/Accent` (Lime). Arbitrage D13 (T68).
+    /// Arbitrage de Hugo, 14/09/2026 (T7) : tout ce qui touche à l'abonnement
+    /// est en lime — le bouton qui y invite, la pastille « Abonné », le solde
+    /// d'étapes offertes, l'écriture « ABONNEMENT » de la cagnotte — et le
+    /// reste de l'app n'y touche pas. Sa couleur d'accent, c'est le bleu
+    /// (``outline``). Quand on hésite, la question est : « est-ce que ça parle
+    /// de l'abonnement ? » Si non, c'est bleu.
+    ///
+    /// Il **peut porter un fond de bouton**, à une condition qui n'est pas
+    /// négociable : le libellé et le filet sont alors ``action``, jamais
+    /// l'encre. Le lime est trop clair pour porter du noir sans virer au
+    /// surligneur, et trop clair pour porter du blanc tout court. C'est la
+    /// règle qu'appliquent ``BrandButton/Style/accent`` et
+    /// ``BrandTagPill/Tone/accentOutlined``. Arbitrage D13 (T68).
     public static let accent = Color(hex: 0xE2F32B)
 
     /// Le filet qui sépare deux blocs dans une même carte : le noir de la
     /// marque à 10 %, pas un gris. — Figma `Scheme/Borders`.
     public static let hairline = Color(hex: 0x2B231B).opacity(0.1)
 
-    /// Bleu assez soutenu pour porter du texte sur un aplat bleu clair.
+    /// **Le bleu du texte** : le troisième et dernier bleu de la palette, à côté
+    /// de `Brand Colors/Blue` (``outline``, un aplat) et de `Information`
+    /// (``information``, un retour système).
     ///
-    /// ⚠️ **Ce n'est pas encore une variable Figma.** `Brand Colors/Blue`
-    /// (#AFD2F0) est un bleu d'aplat : posé en texte sur son propre fond clair,
-    /// il tombe à 1,3:1 et devient illisible. Ces deux valeurs gardent sa
-    /// teinte (209°) en montant la saturation et en baissant la clarté, ce qui
-    /// donne 5,1:1 et 3,1:1 sur le fond de la carte de découverte. À faire
-    /// entrer dans les variables Figma sous le nom qu'aura choisi Clara —
-    /// voir T12 dans `docs/ui-development.md`.
-    public static let blueText = Color(hex: 0x4780B3)
-    public static let blueTextSoft = Color(hex: 0x74A6D0)
+    /// Arbitrage de Hugo, 14/09/2026 (T12) : `Brand Colors/Blue` (#AFD2F0) est
+    /// un bleu d'aplat — posé en texte sur son propre fond clair, il tombe à
+    /// 1,3:1. Ce bleu-ci est celui qui **s'écrit** : le titre de la carte de
+    /// découverte, le contour et le chiffre d'une pastille d'information, la
+    /// coche d'une option. Il n'y a pas de quatrième bleu, ni de variante
+    /// « douce » : une hiérarchie se fait avec la graisse et le corps, pas avec
+    /// une teinte de plus. Nom de la variable Figma à poser par Clara.
+    ///
+    /// ⚠️ 3,7:1 sur le blanc de la marque — sous les 4,5:1 qu'un texte courant
+    /// demande. Il tient sur un libellé court ou en demi-gras ; un paragraphe
+    /// entier reste à l'encre.
+    public static let blueText = Color(hex: 0x4088C6)
 
     /// Beige soutenu, pour les séparateurs et les aplats discrets. — Figma
     /// `Brand Colors/Beige Darker`.
@@ -206,7 +228,12 @@ public enum MemoBookSpacing {
     ///
     /// La changer ici la change partout. Aucun écran ne doit coder sa propre
     /// marge latérale.
-    public static let screenMargin: CGFloat = 24
+    ///
+    /// **1 rem (16 pt)**, sur tous les écrans — Hugo, 14/09/2026 (T11, D2).
+    /// Elle a valu 1.5 rem (24) le temps des premiers lots, ce qui laissait le
+    /// paywall et les écrans d'entrée, dessinés à 16, se donner leur propre
+    /// marge : c'est fini, ils reprennent celle-ci.
+    public static let screenMargin: CGFloat = 16
 
     /// Espacement interne serré — le cran de 0.75 rem de l'échelle de
     /// `docs/ui-development.md` (§2.2), entre ``xs`` et ``s``. Les marges d'une
@@ -266,6 +293,24 @@ public enum MemoBookSpacing {
     /// se vise sans regarder. La cible tactile, elle, reste
     /// ``minimumTapTarget`` — l'icône grandit dedans, pas à sa place.
     public static let navigationIcon: CGFloat = 28
+
+    /// **La** taille d'une icône de contenu du jeu de marque : celle qu'on pose
+    /// à côté d'un libellé, dans un rond de commande ou sur une plaque —
+    /// 2 rem.
+    ///
+    /// Plus grande que la boîte de 24 des icônes de Figma, et c'est voulu. Les
+    /// glyphes du jeu de marque **n'occupent pas leur boîte** : le trait d'une
+    /// icône courante s'étend sur 14 à 17 des 24 unités (le stylo 17, la
+    /// flèche 14, le plus 13, la roue des réglages 10). Dessinés à 24 pt, ils
+    /// faisaient 9 à 12 pt d'encre — « beaucoup trop petites », Hugo,
+    /// 14/09/2026 — là où un symbole système de la même boîte en fait 20. À
+    /// 32, un glyphe courant retrouve ses 19 pt, la taille optique d'une icône
+    /// de 24 qui remplit sa boîte.
+    ///
+    /// Trois dessins ne passent pas par ici, parce qu'ils sont validés tels
+    /// quels : la flèche de retour (``navigationIcon``), le chevron d'une ligne
+    /// (dimensionné dans ``BrandRow``) et le disque du bouton d'enregistrement.
+    public static let contentIcon: CGFloat = 32
 
     /// **La** hauteur d'un appel à l'action. Tous les CTA de l'app la
     /// partagent — « Continuer », « Continuer avec Apple », « Continuer avec
@@ -486,6 +531,17 @@ public enum MemoBookFont {
 
     /// Surtitre en capitales et pastilles d'état. — `Text Tiny` (12).
     public static let overline = Font.custom(BrandFonts.generalSansSemibold, size: 12, relativeTo: .caption)
+
+    /// **La valeur d'une ligne qui invite à agir** — « Ajouter une adresse »,
+    /// « Ajouter une carte » à la place d'une valeur qui manque. General Sans
+    /// Regular 13, en vert d'action.
+    ///
+    /// Hugo, 14/09/2026 (T22) : « Inter, Regular, 13, Brand Color Green ». Inter
+    /// vient du kit iOS de la maquette et n'est pas une police de la marque
+    /// (même règle que ``balance``) : General Sans la porte. Le corps de 13 est
+    /// gardé — c'est le `footnote` d'iOS, un cran sous la légende, et c'est ce
+    /// qui distingue une invitation d'une valeur lue.
+    public static let rowAction = Font.custom(BrandFonts.generalSansRegular, size: 13, relativeTo: .footnote)
 
     /// **Un montant qu'on vient chercher du regard** : le solde de la cagnotte,
     /// et rien d'autre. Sora SemiBold 48.

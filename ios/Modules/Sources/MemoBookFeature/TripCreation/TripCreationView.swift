@@ -37,6 +37,15 @@ public struct TripCreationView: View {
     /// qui crée le voyage entre l'avant-dernière étape et la dernière.
     @State private var hasSettled = false
 
+    /// Le sens du dernier mouvement : en avant sur « Valider » et « Passer »,
+    /// en arrière sur la flèche. C'est lui qui décide d'où l'illustration
+    /// arrive et par où elle repart — voir ``illustrationTransition``.
+    @State private var direction: Direction = .forward
+
+    private enum Direction { case forward, backward }
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     private var showsSkeleton: Bool { !hasSettled || model.isSaving }
 
     public var body: some View {
@@ -58,6 +67,9 @@ public struct TripCreationView: View {
             try? await Task.sleep(for: .milliseconds(350))
             withAnimation(.smooth(duration: 0.3)) { hasSettled = true }
         }
+        // Les thèmes de la première étape viennent du serveur, et se lisent
+        // **en même temps** que la charpente se pose — pas après.
+        .task { await model.loadThemes() }
     }
 
     // MARK: - L'en-tête
@@ -89,9 +101,18 @@ public struct TripCreationView: View {
 
             Spacer()
 
-            Button("Passer") { Task { await model.skip() } }
-                .font(MemoBookFont.body)
-                .foregroundStyle(MemoBookColor.inkSecondary)
+            // La dernière étape n'a rien à passer : le voyage est créé, le code
+            // d'accès est là, il n'y a plus que « Commencer ! » — Hugo,
+            // 14/09/2026. Un « Passer » à côté laissait croire qu'on pouvait
+            // encore éviter quelque chose.
+            if model.step.canBeSkipped {
+                Button("Passer") {
+                    direction = .forward
+                    Task { await model.skip() }
+                }
+                    .font(MemoBookFont.body)
+                    .foregroundStyle(MemoBookColor.inkMuted)
+            }
         }
         .buttonStyle(.plain)
         .disabled(showsSkeleton)
@@ -123,12 +144,26 @@ public struct TripCreationView: View {
     private var step: some View {
         ScrollView {
             VStack(spacing: 0) {
+                // **Un sticker**, pas une image posée : l'ombre portée le
+                // décolle de la page — Hugo, 14/09/2026. L'ombre suit le
+                // détourage du dessin, ce qui fait le sticker ; c'est l'une des
+                // deux ombres de la marque, il n'y en a pas de troisième.
+                //
+                // Et **il glisse** : celui de l'étape suivante arrive par la
+                // droite pendant que celui-ci sort par la gauche, comme des
+                // cartes qu'on fait défiler — le sens s'inverse sur la flèche
+                // de retour. Le reste de l'étape, lui, se fond : deux
+                // mouvements en même temps se lisent comme un écran qui change,
+                // un seul comme une question qui suit l'autre.
                 Image(brand: model.step.illustration)
                     .resizable()
                     .scaledToFit()
                     .frame(maxWidth: 180, maxHeight: 150)
+                    .brandShadow(.raised)
                     .padding(.top, MemoBookSpacing.m)
                     .accessibilityHidden(true)
+                    .id("illustration-\(model.step.rawValue)")
+                    .transition(illustrationTransition)
 
                 TripCreationProgress(current: model.progress)
                     .padding(.top, MemoBookSpacing.m)
@@ -142,11 +177,15 @@ public struct TripCreationView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, MemoBookSpacing.s)
                     .padding(.horizontal, MemoBookSpacing.screenMargin)
+                    .id("title-\(model.step.rawValue)")
+                    .transition(.opacity)
 
                 TripCreationStepContent(model: model, focus: $focus)
                     .padding(.horizontal, MemoBookSpacing.screenMargin)
                     .padding(.top, MemoBookSpacing.m)
                     .padding(.bottom, MemoBookSpacing.s)
+                    .id("content-\(model.step.rawValue)")
+                    .transition(.opacity)
             }
         }
         .scrollBounceBehavior(.basedOnSize)
@@ -172,11 +211,12 @@ public struct TripCreationView: View {
                 .allowsHitTesting(false)
             }
         }
-        // L'étape change, pas l'écran : une transition croisée, pour que la
-        // charpente reste immobile pendant que son contenu se remplace.
-        .id(model.step)
-        .transition(.opacity)
-        .animation(.smooth(duration: 0.28), value: model.step)
+        // L'étape change, pas l'écran : la charpente reste immobile — la
+        // frise, le bouton — pendant que l'illustration glisse et que le titre
+        // et le contenu se remplacent en fondu. Chaque morceau porte sa propre
+        // identité pour avoir sa propre transition ; un seul `id` sur l'écran
+        // entier ne saurait faire que du fondu.
+        .animation(reduceMotion ? nil : .smooth(duration: 0.4), value: model.step)
     }
 
     private var callToAction: some View {
@@ -185,9 +225,25 @@ public struct TripCreationView: View {
                 finish()
                 return
             }
+            direction = .forward
             Task { await model.validate() }
         }
         .disabled(!model.canValidate)
+    }
+
+    /// D'où l'illustration arrive, par où elle repart — de la largeur de
+    /// l'écran, pour venir du bord et non de sa propre boîte. En « Reduce
+    /// Motion », un fondu : un dessin qui traverse l'écran est exactement le
+    /// genre de déplacement que ce réglage demande d'éteindre.
+    private var illustrationTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        let travel = DeviceScreen.width
+        let (enterFrom, exitTo): (CGFloat, CGFloat) =
+            direction == .forward ? (travel, -travel) : (-travel, travel)
+        return .asymmetric(
+            insertion: .offset(x: enterFrom).combined(with: .opacity),
+            removal: .offset(x: exitTo).combined(with: .opacity)
+        )
     }
 
     // MARK: - Les deux sorties
@@ -197,6 +253,7 @@ public struct TripCreationView: View {
     /// sa place.
     private func goBack() {
         focus = nil
+        direction = .backward
         if !model.goBack() { dismiss() }
     }
 
@@ -226,26 +283,50 @@ public struct TripCreationView: View {
 /// Elle reprend le dessin de ``BrandWaveform`` — des capsules fines et
 /// espacées — et ce n'est pas un hasard de maquette : MemoBook se remplit à la
 /// voix, et remplir un formulaire y ressemble à parler. La barre en cours est
-/// plus haute, comme une syllabe qu'on prononce.
+/// plus haute, comme une syllabe qu'on prononce, et **ses deux voisines la
+/// suivent d'un cran** : c'est le mouvement d'une barre à l'autre qu'on voit,
+/// pas une position (Hugo, 14/09/2026). Aux deux bouts il n'y a qu'une
+/// voisine, et c'est elle seule qui monte.
+///
+/// Le passage d'une étape à l'autre est une **onde** : chaque barre se met à sa
+/// hauteur avec un ressort, et un léger retard proportionnel à sa distance à la
+/// barre verte — la vague part d'elle et se propage. En « Reduce Motion », les
+/// hauteurs se posent sans mouvement.
 struct TripCreationProgress: View {
     let current: Int
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @ScaledMetric(relativeTo: .caption) private var barWidth: CGFloat = 3
     @ScaledMetric(relativeTo: .caption) private var restingHeight: CGFloat = 12
+    @ScaledMetric(relativeTo: .caption) private var neighbourHeight: CGFloat = 15
     @ScaledMetric(relativeTo: .caption) private var activeHeight: CGFloat = 18
 
     var body: some View {
         HStack(alignment: .center, spacing: 5) {
             ForEach(TripCreationStep.allCases, id: \.rawValue) { step in
-                let isCurrent = step.rawValue == current
+                let distance = abs(step.rawValue - current)
                 Capsule()
-                    .fill(isCurrent ? MemoBookColor.action : MemoBookColor.inkFaint)
-                    .frame(width: barWidth, height: isCurrent ? activeHeight : restingHeight)
+                    .fill(distance == 0 ? MemoBookColor.action : MemoBookColor.inkFaint)
+                    .frame(width: barWidth, height: height(atDistance: distance))
+                    .animation(
+                        reduceMotion
+                            ? nil
+                            : .spring(duration: 0.55, bounce: 0.35).delay(Double(distance) * 0.05),
+                        value: current
+                    )
             }
         }
-        .animation(.smooth(duration: 0.28), value: current)
         .accessibilityElement()
         .accessibilityLabel("Étape \(current + 1) sur \(TripCreationStep.allCases.count)")
+    }
+
+    private func height(atDistance distance: Int) -> CGFloat {
+        switch distance {
+        case 0: activeHeight
+        case 1: neighbourHeight
+        default: restingHeight
+        }
     }
 }
 

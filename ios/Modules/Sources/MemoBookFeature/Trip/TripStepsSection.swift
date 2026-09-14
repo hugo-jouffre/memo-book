@@ -2,34 +2,46 @@ import MemoBookCore
 import MemoBookDesign
 import SwiftUI
 
-/// Les étapes du voyage, et les trois filtres qui les trient.
+/// Les étapes du voyage, et les deux filtres qui les trient.
 ///
 /// Chaque filtre est un `Menu` portant un `Picker` : la liste déroulante, les
 /// coches, le retour tactile et l'annonce VoiceOver viennent du système. La
 /// pastille n'en est que l'étiquette — voir ``BrandFilterChip``.
+///
+/// **Deux filtres, pas trois.** Il y a eu un filtre « Étapes », lu comme le
+/// filtre littéral qu'il annonçait : ne garder qu'une étape de la liste.
+/// Retiré par Hugo, 14/09/2026 (T30) — « pour le moment » : filtrer une liste
+/// sur un seul de ses éléments n'a pas trouvé son sens.
 struct TripStepsSection: View {
     @Bindable var model: TripHomeModel
     let onOpenStep: (TripStep) -> Void
 
     private var detail: TripDetail? { model.detail }
 
+    /// Le voyage a au moins une étape. **Sans étape, pas de filtres** : deux
+    /// pastilles présentes mais inertes disaient « appuie ici » à quelqu'un qui
+    /// n'avait rien à trier — logique, et désagréable (Hugo, 14/09/2026). Elles
+    /// arrivent avec la première étape.
+    private var hasSteps: Bool { !(detail?.steps ?? []).isEmpty }
+
     var body: some View {
         VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
-            filters
+            if hasSteps {
+                filters
+            }
             steps
         }
     }
 
     // MARK: - Filtres
 
-    /// Une bande qui défile : sur un petit écran, trois pastilles et leurs
-    /// chevrons ne tiennent pas sur une ligne, et les serrer les rendrait
-    /// illisibles.
+    /// Une bande qui défile : sur un petit écran, deux pastilles, leurs
+    /// chevrons et « Tout afficher » ne tiennent pas toujours sur une ligne, et
+    /// les serrer les rendrait illisibles.
     private var filters: some View {
         ScrollView(.horizontal) {
             HStack(spacing: MemoBookSpacing.xs) {
                 countryFilter
-                stepFilter
                 transportFilter
 
                 if model.hasActiveFilter {
@@ -79,27 +91,6 @@ struct TripStepsSection: View {
     }
 
     @ViewBuilder
-    private var stepFilter: some View {
-        let steps = detail?.steps ?? []
-
-        Menu {
-            Picker("Étapes", selection: $model.stepId) {
-                Text("Toutes les étapes").tag(String?.none)
-                ForEach(steps) { step in
-                    Text(step.menuLabel).tag(String?.some(step.id))
-                }
-            }
-        } label: {
-            BrandFilterChip(
-                selectedStepLabel ?? "Étapes",
-                icon: Image(systemName: "bag"),
-                isActive: model.stepId != nil
-            )
-        }
-        .disabled(steps.isEmpty)
-    }
-
-    @ViewBuilder
     private var transportFilter: some View {
         let transports = detail?.transports ?? []
 
@@ -124,13 +115,6 @@ struct TripStepsSection: View {
         }
         .disabled(transports.isEmpty)
     }
-
-    private var selectedStepLabel: String? {
-        guard let stepId else { return nil }
-        return detail?.steps.first { $0.id == stepId }?.title
-    }
-
-    private var stepId: String? { model.stepId }
 
     // MARK: - La liste
 
@@ -262,7 +246,7 @@ struct TripStepCard: View {
             .resizable()
             .renderingMode(.template)
             .scaledToFit()
-            .frame(width: MemoBookSpacing.s + 2, height: MemoBookSpacing.s + 2)
+            .frame(width: MemoBookSpacing.m, height: MemoBookSpacing.m)
             .foregroundStyle(MemoBookColor.ink)
             .padding(MemoBookSpacing.xs + 2)
             .background(MemoBookColor.background, in: .circle)
@@ -310,11 +294,6 @@ extension TripStep {
     /// ⚠️ Sans accent sur le E : c'est la copie de la maquette, recopiée telle
     /// quelle (R8). Signalée dans la fiche écran.
     var title: String { "Etape n°\(number)" }
-
-    /// « Etape n°1 — Trastevere » : dans un menu, le rang seul ne dit rien.
-    var menuLabel: String {
-        placeName.map { "\(title) — \($0)" } ?? title
-    }
 
     /// Les dates de l'étape, avec l'année écrite une seule fois. Même règle que
     /// celles d'un voyage.

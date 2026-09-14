@@ -157,6 +157,8 @@ public actor PreviewAPI: MemoBookAPI {
 
     public func gallery() async throws -> Gallery { .fixture }
 
+    public func tripThemes() async throws -> [TripTheme] { TripTheme.fixtures }
+
     /// La création rend un voyage qui ressemble au brouillon, et le code
     /// d'accès de la maquette : de quoi traverser les six étapes sans serveur.
     public func createTrip(_ draft: TripDraft) async throws -> CreatedTrip {

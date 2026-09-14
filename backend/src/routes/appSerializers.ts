@@ -9,6 +9,7 @@ import type {
   PrintOrder,
   Showcase,
   Subscription,
+  TripTheme,
 } from "@prisma/client";
 import { CONNECTOR_CATALOG } from "../services/connectorCatalog.js";
 
@@ -176,6 +177,17 @@ export function serializeGalleryCategory(category: GalleryCategory) {
     slug: category.slug,
     name: category.name,
     iconKey: category.iconKey,
+  };
+}
+
+/** Un thème de « Contexte de ton voyage » — au nom près de `TripTheme` côté Swift. */
+export function serializeTripTheme(theme: TripTheme) {
+  return {
+    id: theme.id,
+    slug: theme.slug,
+    emoji: theme.emoji,
+    name: theme.name,
+    isOther: theme.isOther,
   };
 }
 
