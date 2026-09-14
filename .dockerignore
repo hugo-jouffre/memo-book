@@ -1,0 +1,29 @@
+# Le contexte de build est la racine du dépôt — voir `backend/Dockerfile`.
+# Ce fichier est donc ce qui empêche d'y embarquer l'app iOS et les secrets.
+
+# ⚠️ Les secrets d'abord. Un `.env` copié dans une image y reste, en clair,
+# lisible par quiconque tire l'image. La configuration de production se pose
+# par variables d'environnement chez l'hébergeur, jamais par un fichier.
+**/.env
+**/.env.*
+!**/.env.example
+
+.git
+.github
+**/node_modules
+**/dist
+**/.build
+**/*.log
+
+# L'app iOS n'a rien à faire dans une image de serveur. Pas de guillemets
+# autour du nom à espace : `.dockerignore` les prendrait au pied de la lettre.
+ios
+MemoBook Generator
+
+# Sorties de rendu local et d'outillage.
+backend/.render-out
+backend/test
+backend/scripts
+**/.DS_Store
+docs
+tools

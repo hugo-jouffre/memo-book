@@ -235,6 +235,19 @@ public final class AppDependencies {
         BookCustomisationModel(tripId: tripId)
     }
 
+    /// Les deux plats du carnet.
+    ///
+    /// ⚠️ **Sur le jeu d'essai**, et plus complètement que les autres écrans du
+    /// carnet : `GET` et `PATCH /v1/trips/:id/covers` n'existent ni l'un ni
+    /// l'autre, et la base n'a aujourd'hui qu'un booléen sur le sujet
+    /// (`memos.hasConfiguredCovers`). Il manque le style, la photo retenue, les
+    /// deux textes et les chiffres choisis — cinq colonnes, une route, un
+    /// sérialiseur. Tant qu'ils ne sont pas là, choisir une couverture ne
+    /// survit pas à la fermeture de l'écran, et c'est écrit dans la fiche.
+    public func coversModel(tripId: String) -> CoversModel {
+        CoversModel(tripId: tripId)
+    }
+
     /// L'aperçu du carnet.
     ///
     /// ⚠️ **Sur le jeu d'essai** : `GET /v1/memos/:id/preview` et

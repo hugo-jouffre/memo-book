@@ -111,12 +111,20 @@ public struct ProfileView: View {
         .fullScreenCover(isPresented: $showsPaywall) {
             PaywallView(
                 subscription: effectiveSubscription,
-                previewMemoId: model.profile?.currentTrip?.id
-            ) {
-                model.activateSubscription()
-                subscriptionSession?.record(isSubscribed: true)
-                showsPaywall = false
-            }
+                previewMemoId: model.profile?.currentTrip?.id,
+                onSubscribe: {
+                    model.activateSubscription()
+                    subscriptionSession?.record(isSubscribed: true)
+                    showsPaywall = false
+                },
+                // Le paywall se referme **avant** que le support s'ouvre :
+                // celui-ci est un écran poussé sur la pile du profil, et il ne
+                // peut pas apparaître sous une couverture plein écran.
+                onHelp: {
+                    showsPaywall = false
+                    onIntent(.openHelp)
+                }
+            )
         }
         .alert("Supprimer mon compte ?", isPresented: $isConfirmingDeletion) {
             Button("Annuler", role: .cancel) {}
@@ -467,7 +475,7 @@ public struct ProfileView: View {
     }
 
     /// Le même lien qu'en bas de l'accueil, dans le même dessin : c'est la
-    /// sortie de secours de l'app. Aucune destination pour l'instant.
+    /// sortie de secours de l'app, et il mène désormais au support.
     ///
     /// Il passe **avant** les actions de sortie, et pas après : demander de
     /// l'aide n'est pas quitter. Le laisser sous « Supprimer mon compte » le
@@ -475,7 +483,7 @@ public struct ProfileView: View {
     /// prendre une.
     private var helpLink: some View {
         BrandButton("Besoin d’aide ?", style: .link, isSubdued: true) {
-            notYetRouted()
+            onIntent(.openHelp)
         }
         .frame(maxWidth: .infinity)
     }
@@ -872,4 +880,7 @@ private struct ProfileExitAction: View {
 /// les paramètres d'un voyage, parce que c'est la même somme.
 public enum ProfileIntent: Sendable, Hashable {
     case openWallet
+    /// « Besoin d'aide ? », depuis le bas du profil comme depuis la barre du
+    /// paywall. La même destination dans les deux cas : le support.
+    case openHelp
 }

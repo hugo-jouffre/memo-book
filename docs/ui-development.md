@@ -2510,9 +2510,10 @@ Toutes les valeurs existent déjà en base depuis M4 (`memos.photoTextRatio`,
 `font*`, `quizEnabled`, `freeZonesEnabled`, `crosswordEnabled`) et sont
 désormais servies **avec les réglages** — un jeu par voyage, lu avec lui.
 
-⚠️ **Seuls les trois extras s'enregistrent.** Les onze autres lignes montrent
-leur valeur et ne mènent nulle part : leurs écrans de choix ne sont pas
-dessinés, et on ne les invente pas (R3).
+⚠️ **Seuls les trois extras s'enregistrent.** Dix des onze autres lignes
+montrent leur valeur et ne mènent nulle part : leurs écrans de choix ne sont pas
+dessinés, et on ne les invente pas (R3). La onzième — **les couvertures**, en
+tête de l'écran — ouvre depuis le lot 6 le parcours du § 17.1.
 
 ### 16.9 La feuille « Prévisualisation »
 
@@ -2547,14 +2548,194 @@ un bouton « Revenir à l'offre ».
 | T73 | **Le logo Tricount est écrit en toutes lettres** (« tt » dans le bleu de la marque) faute d'asset : c'est le logo d'un service tiers, il n'a pas à entrer dans le catalogue de MemoBook. À récupérer auprès de Tricount, ou à remplacer par un pictogramme neutre |
 | T74 | **« La carte » montre l'illustration `IllustrationMaps`** et non le tracé du voyage : `backend/src/services/mapSvg.ts` le produit pour le carnet, pas pour l'écran. La ligne ne mène d'ailleurs nulle part |
 | T75 | **Le coût d'impression est une constante** (1,798 € la page, soit les 89,90 € des 50 pages de la maquette). Les frais fixes de fabrication et de port sont dedans, donc un carnet de dix pages ne coûte pas un cinquième d'un carnet de cinquante. À trancher avec l'imprimeur **avant** d'encaisser quoi que ce soit |
-| T76 | **Dix lignes de réglages n'ouvrent rien** — dates, rythme, notifications, co-voyageurs, thème, style, Tricount, carte, commande, aide. Les feuilles ne sont pas dessinées ; les lignes sont inertes plutôt que branchées sur un écran inventé (R3) |
+| T76 | **Neuf lignes de réglages n'ouvrent rien** — dates, rythme, notifications, co-voyageurs, thème, style, Tricount, carte, commande. ✅ « Besoin d'aide ? » mène désormais au support (§ 17.5). Les feuilles ne sont pas dessinées ; les lignes sont inertes plutôt que branchées sur un écran inventé (R3) |
 | T78 | ✅ **Réglé** — le profil lisait « Abonne-toi » à quelqu'un à qui l'accueil annonçait « 2 étapes restantes ». Il ne regardait que l'abonnement, jamais le quota, alors que `GET /v1/profile` rend `offeredSteps` et `remainingSteps` depuis toujours. Les deux écrans partagent désormais le même calcul, et les deux pastilles s'accordent au singulier |
 | T79 | ✅ **Réglé** — les trois barres du paywall se remplissaient ensemble. Deux causes : la remise à zéro et le remplissage tombaient dans la même passe (SwiftUI n'y voyait qu'une écriture, de 1 vers 1), et le `withAnimation` autour de `page` emportait les barres avec le contenu. La remise à zéro est explicitement sans animation, et la transition vit sur le contenu |
 | T85 | ✅ **Réglé** — appuyer sur « Continuer » en cours de remplissage faisait avancer **deux** barres ensemble. Le remplissage est une animation linéaire de six secondes posée sur `progress` ; tourner la page la laissait courir, et la barre qui s'ouvrait héritait des secondes restantes. `turn(_:)` remet désormais `progress` à zéro **et** change de page dans une seule transaction sans animation : l'animation en vol est remplacée au lieu d'être attendue |
 | T86 | ✅ **Réglé** — les traits s'arrêtaient pile au bord de l'écran et montraient leurs deux bouts arrondis. Ils débordent maintenant de 12 % de leur largeur de chaque côté, par le **chemin** (`BleedingShape`) et non par un `scaleEffect` : une mise à l'échelle non uniforme aurait ovalisé l'épaisseur du trait. Le `trim` de l'animation porte sur le tracé entier, si bien que le geste entre par le hors-champ |
 | T80 | **Les zones de tapotis du paywall passent sous le contenu.** Posées au-dessus, elles avalaient tout contrôle hors de la bande basse épargnée — c'est ce qui est arrivé à la pastille « Voir un aperçu ». Le texte des pages porte donc `paywallProse()`, qui le rend non touchable. Chaque nouveau bloc de texte du paywall devra le porter aussi, sinon la story ne défilera plus dessous. Les quatre cartes de l'écran 3 le portent également — pastille « Voir une estimation » comprise, qui est inerte : le jour où elle mènera quelque part, elle devra en sortir |
 | T81 | **La barre de la story finit de se remplir derrière la feuille d'aperçu.** Le minuteur, lui, est bien à l'arrêt — la page ne tourne pas, et on la retrouve entière en refermant. C'est l'animation SwiftUI déjà lancée qui va au bout : l'arrêter demanderait de lire l'avancement en cours, ce que SwiftUI n'expose pas |
-| T82 | **Les onze lignes de personnalisation ne mènent nulle part** — ratio, nombre de pages, fun facts, pointillés, décorations, quatre typographies, couvertures. Leurs écrans de choix ne sont pas dessinés. Seuls les trois extras s'enregistrent |
+| T82 | **Dix lignes de personnalisation ne mènent nulle part** — ratio, nombre de pages, fun facts, pointillés, décorations, quatre typographies. Leurs écrans de choix ne sont pas dessinés. ✅ La onzième, **les couvertures**, a le sien depuis le lot 6 (§ 17.1) |
 | T83 | **Les deux plats de la ligne « Couvertures » sont dessinés en SwiftUI**, là où la maquette pose un rendu 3D de deux livres. Un rendu importé serait une image figée qui mentirait dès que le voyageur change sa couverture ; ces deux plats-là afficheront sa photo le jour où elle existe |
 | T84 | **« Ajuster les différents options… vous ressemble »** — l'intro des personnalisations vouvoie *et* porte deux fautes (infinitif au lieu de l'impératif, accord manquant). Recopiée telle quelle (R8) et remontée, comme T66 |
 | T77 | **La barre de progression est à 6 pt**, ce que dessinent la cagnotte comme les cartes de l'accueil. Le § 2.3 annonce encore 0.25 rem (4) au motif que Figma dessinait 7 : c'est **le document** qui est en retard, pas la valeur |
+
+---
+
+## 17. Lot 6 — Les couvertures, et le support
+
+Quatorze frames livrées ensemble, et deux parcours qui n'ont rien à voir l'un
+avec l'autre : **les deux plats du carnet**, et **l'aide**. Nœud Figma :
+[`🤖 Claude Import`](https://www.figma.com/design/kytPYFno7PvDciIKTxCujK/MemoBook---Product?node-id=3268-26957).
+
+Une seule des quatorze n'est pas implémentée : `Modale - Statistiques v1`, la
+première version du choix des chiffres. La v2 la remplace — arbitrage de Hugo,
+14/09/2026. C'est la seule qui reprenne la composition du bandeau imprimé (le
+chiffre en gros au-dessus de son libellé) ; choisir ce qui va sur un plat en
+lisant une liste de réglages, c'est choisir à l'aveugle.
+
+### 17.1 Couvertures — le choix
+
+`3365:12242` → `Covers/CoversView.swift`
+
+**Deux chemins y mènent**, et le second est le plus important : la ligne
+« Couvertures (1re & 4e) » en tête des personnalisations, et la pastille
+« Défini maintenant ta 1ère et 4ème de couverture » → « Configurer », posée sur
+la première et la dernière page de l'aperçu PDF. C'est en feuilletant son carnet
+qu'on s'aperçoit qu'il n'a pas de couverture. Clôt la partie « couvertures » de
+T82, et le `configureCovers` resté inerte du § 16.3.
+
+⚠️ **« Personnaliser mon carnet » garde sa route vers les paramètres du
+voyage** — arbitrage de Hugo, 14/09/2026 : ce CTA ouvre tout le réglage du
+carnet, pas seulement ses plats.
+
+L'écran ne fait presque rien : le plat en grand, et trois lignes qui mènent aux
+trois écrans qui le changent. C'est son rôle — **voir avant de régler**.
+
+| Mesure | Figma | Retenu |
+|---|---|---|
+| Plat | 300 × 469,5 | 300 de large, plafonné à la largeur utile, **rapport A5** |
+| Ligne d'action | rayon 12, marge 12 | `cornerRadius` (14) par R2, `snug` |
+| Onglets | rayon 100, segment 34 | `BrandSegmentedPicker` en taille `compact` |
+| Filet | `#E6DAD0` | `hairline` — trois points d'écart sur un canal (§ 16.8) |
+
+### 17.2 Couvertures — style et photo
+
+`3365:12314`, `3365:12407`, `3365:12269`, `3365:13002`, `3365:13091`
+→ `Covers/CoverCarouselView.swift`
+
+**Un seul écran pour les cinq frames.** Elles ne diffèrent que par ce qu'on fait
+défiler — des plats dessinés d'un côté, des photos et une case d'import de
+l'autre — et par le sous-titre. Deux écrans auraient eu à rester d'accord sur le
+rythme du défilement, et le second aurait vieilli le premier.
+
+**Ce qui est au centre est ce qui est choisi.** La maquette agrandit le plat du
+milieu et le coiffe d'une coche : il n'y a donc pas de sélection au tapotis
+séparée du défilement. Toucher un plat voisin l'amène au centre, ce qui revient
+au même geste.
+
+⚠️ **L'agrandissement est un `scaleEffect`, pas une largeur** — et ça vaut d'être
+dit, parce que l'inverse paraît plus naturel et ne marche pas. Faire dépendre la
+largeur de la case du plat sélectionné rend la mise en page circulaire : le plat
+choisi grandit, ce qui décale la file, ce qui change le plat au centre. Le
+carrousel se calait alors une case à côté, sans jamais cocher personne. Même
+raison pour `contentMargins` plutôt que `padding` : une marge posée **dans** le
+contenu compte comme du contenu, et `viewAligned` s'y cale.
+
+**Le choix ne part qu'à « Valider ».** C'est la seule différence avec les lignes
+de réglage de l'app, où un réglage part seul à la bascule : ici le choix est
+visuel, et faire défiler sept plats ne doit pas écrire sept fois au serveur.
+
+### 17.3 Couvertures — les textes
+
+`3365:13180`, `3365:13208` → `Covers/CoverTextsView.swift`
+
+Le plat reste la pièce principale, et les crayons se posent dessus : on modifie
+ce qu'on regarde. Un titre de couverture ne se juge pas dans un champ.
+
+⚠️ **La maquette ne dessine pas l'état « en train d'écrire ».** Elle pose les
+crayons et s'arrête là. Plutôt que d'inventer une feuille (R3), le crayon ouvre
+le champ **sous le plat** et lui donne le focus ; le plat se met à jour à mesure
+qu'on tape. Signalé (T89).
+
+Le titre est une **valeur** (`BrandTextField`), le sous-titre un **texte**
+(`BrandTextBox`, nouveau — voir §17.6).
+
+### 17.4 Choix des statistiques
+
+`3365:13716` → `Covers/CoverStatsSheet.swift`
+
+Ouverte par le crayon du bandeau « Mon voyage en quelques chiffres » de la
+quatrième de couverture. Trois ou quatre chiffres, jamais moins, jamais plus :
+la contrainte vient du gabarit — sous trois, le bandeau imprimé a des colonnes
+vides ; au-delà de quatre, les chiffres ne se lisent plus à la taille imprimée.
+
+Une carte qu'on ne peut plus cocher **reste lisible** et devient inactive :
+la masquer ferait disparaître la moitié de la grille à la quatrième coche.
+L'ordre de sélection est celui qui s'imprime, de gauche à droite.
+
+### 17.5 Support et retours
+
+`3365:12123`, `3365:13695`, `3365:13779`, `3365:13796`
+→ `Support/SupportView.swift`, `Support/SupportSheet.swift`
+
+**On y arrive de partout où l'app écrit « Besoin d'aide ? »** — le bas de
+l'accueil, le bas du profil, la barre du paywall, la dernière ligne des
+paramètres d'un voyage et celle de la cagnotte. C'est la raison d'être de
+l'écran : cinq liens qui ne menaient nulle part mènent au même endroit. Clôt la
+partie « aide » de T76 et l'avertissement du § 13.3.
+
+Depuis le paywall, le lien **referme l'offre** avant d'ouvrir le support : celui-ci
+est un écran poussé, il ne peut pas apparaître sous une couverture plein écran —
+et quelqu'un qui va chercher de l'aide devant un prix ne revient pas à la story
+qu'il regardait.
+
+**Le contenu vient de la page Notion**
+[« FAQ in-app MemoBook »](https://app.notion.com/p/FAQ-3d7401e7bdc1803cac95c800f34a71db),
+version 1.0, recopiée dans `MemoBookCore/Faq.swift` : dix paquets,
+quarante-cinq questions. La maquette, elle, ne dessine que le motif — deux
+sections de quatre lignes de remplissage (« Typographie des titres », en Inter,
+qui n'est pas une police de la marque). C'est donc le **motif** qui est
+implémenté, répété pour les neuf paquets de sujets courants, et le dixième
+— « Aide et contact » — qui devient la section « Nous contacter ».
+
+Cinq règles de la page Notion tiennent dans le code, et `FaqTests` les garde :
+
+| Règle | Où |
+|---|---|
+| Identifiant `faq.categorie.slug` immuable | `FaqEntry.id`, testé unique et bien formé |
+| Prix, délais et seuils en variables `{{…}}` | `FaqVariables`, résolues à l'affichage |
+| Tutoiement, et le vocabulaire Carnet / souvenirs / voyageurs | testé sur les 45 réponses |
+| « Est-ce utile ? » mesuré **par identifiant** | `SupportModel.vote(_:on:)` |
+| Un écran peut pointer une question précise | `Faq.entry(id:)` |
+
+⚠️ **Trois points de la page Notion ne sont pas tenus**, et c'est dit plutôt
+qu'oublié : le contenu n'est pas encore servi depuis une source distante (il
+arrive par une fonction, donc le branchement fera quatre lignes), il n'y a pas
+de champ mots-clés faute d'écran de recherche dessiné, et l'app est en français
+seul.
+
+**Les trois feuilles n'en font qu'une.** « J'ai encore une question » mène au
+formulaire, et le formulaire à la confirmation : ce sont trois **temps** d'une
+même `BrandSheet`, parce que le design system interdit d'en empiler deux. La
+feuille garde donc son identité, sa hauteur s'anime au lieu de sauter, et
+VoiceOver n'a qu'un retour arrière.
+
+### 17.6 Ce qui entre dans le design system
+
+- **`BrandTextBox`** — le champ de plusieurs lignes, à côté de `BrandTextField`.
+  La frontière est nette : un `BrandTextField` reçoit une **valeur** (un e-mail,
+  un code), un `BrandTextBox` un **texte**. Deux écrans l'emploient — le message
+  au support et le texte de quatrième —, et c'est ce qui l'a fait entrer.
+- **`BrandSegmentedPicker` gagne une taille `compact`** — 34 pt de segment,
+  libellé en `tagline`, filet discret. C'est le rail que dessinent les
+  couvertures, posé *dans* un écran plutôt qu'au-dessus de lui.
+- **Trois pictogrammes** exportés du nœud : `IconLayers`, `IconThumbUp`,
+  `IconThumbDown`, entrés par `assets/icons/brand-icons` et le script d'import.
+
+### 17.7 Contrat back-end
+
+⚠️ **Les deux parcours sont sur le jeu d'essai, et les couvertures plus
+complètement que le reste.**
+
+| Écran | Ce qui manque |
+|---|---|
+| Couvertures | `GET`/`PATCH /v1/trips/:id/covers` n'existent pas, et la base n'a qu'un booléen (`memos.hasConfiguredCovers`). Il manque le style, la photo retenue, les deux textes et les chiffres choisis — cinq colonnes, une route, un sérialiseur |
+| Support | Aucune route. Le contenu est statique, l'envoi d'un message simulé, le vote « Est-ce utile ? » perdu à la fermeture |
+
+Conséquence à dire à Clara et Paul : **choisir une couverture ne survit pas à la
+fermeture de l'écran**, et un message écrit au support n'arrive nulle part.
+
+### 17.8 À trancher
+
+| # | Sujet |
+|---|---|
+| T87 | **Le plat est au rapport A5 (1,414)**, là où la maquette dessine 233 × 339 (1,455) — neuf points d'écart sur la hauteur. C'est le format du papier qui tranche, pas l'artboard, et c'est déjà le choix du § 16.1 pour la vignette des réglages |
+| T88 | **Une photo importée ne part nulle part.** Elle est enregistrée dans les caches de l'appareil, comme les photos du chat, et se perd à la fermeture de l'écran. C'est la route des couvertures qui manque (T-back-end ci-dessus), pas l'écran |
+| T89 | **L'état « en train d'écrire » n'est pas dessiné** sur l'écran des textes. Le champ s'ouvre sous le plat, faute de maquette. À dessiner, ou à valider tel quel |
+| T90 | **Le texte de quatrième n'a pas de crayon** — la maquette n'en pose qu'un, sur le bandeau des chiffres. Mais la FAQ promet « titre, visuel et **texte de dos** », et rien ne permet aujourd'hui de réécrire celui-ci. Incohérence entre deux sources, à arbitrer |
+| T91 | **« Assortie à votre 1e de couverture » vouvoie**, et écrit « 1e » là où l'ordinal abrégé s'écrit « 1re » — que les onglets du même écran écrivent correctement deux centimètres plus haut. Recopié tel quel (R8) et remonté, comme T66 et T84 |
+| T92 | **Trois coquilles du support**, recopiées telles quelles (R8) : « Tu auras la possibilité de nous écrire si tu ne trouve pas de réponse » (il manque le `s`), « **Ecris** à notre équipe » (E sans accent), et « dans les plus **bref** délais par **whatsapp** » (accord manquant, capitale manquante) |
+| T93 | **Les lignes de questions emploient `BrandRowGroup`** (rayon 20, titre à l'encre), là où la maquette dessine un groupe à rayon 12 dont les libellés sont en **Inter 13 gris** — une police qui n'est pas de la marque, et un gris qui se lit comme un texte désactivé sur une ligne qu'on doit toucher. C'est manifestement un bloc de remplissage copié d'un autre écran ; le composant du design system l'emporte. À reprendre dans Figma |
+| T94 | **La typographie du plat ne suit pas le Dynamic Type**, seule entorse de l'app à la règle « aucune taille de police fixe ». C'est l'image d'un objet imprimé : à AX3, le titre débordait du plat et donnait à voir une couverture ratée. Même parti pris que `CoverStack` et les pastilles de co-voyageurs |
+| T95 | **Les voyages du bac à sable restent inouvrables** — leurs identifiants ne sont pas des UUID, et `RootView` refuse d'ouvrir ce qui n'en est pas un. Sans rapport avec ce lot, mais c'est ce qui a empêché de vérifier les couvertures par leur chemin normal : il a fallu ouvrir l'app directement dessus. À corriger dans les fixtures |

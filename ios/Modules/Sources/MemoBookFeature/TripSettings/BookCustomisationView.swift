@@ -223,13 +223,18 @@ public struct BookCustomisationView: View {
     /// Une vue ne doit pas pouvoir poser une valeur sans qu'elle parte au
     /// serveur — d'où le passage par une méthode plutôt que par un `customisation`
     /// ouvert en écriture.
+    ///
+    /// `@MainActor` sur la méthode **et** sur `set` : `Binding` veut des
+    /// fermetures `@Sendable`, et une méthode du modèle — isolée au menu
+    /// principal — ne s'y glisse que si cette isolation est dite ici aussi.
+    @MainActor
     private func binding(
         _ keyPath: KeyPath<BookCustomisation, Bool>,
-        _ set: @escaping (Bool) -> Void
+        _ set: @escaping @MainActor (Bool) -> Void
     ) -> Binding<Bool> {
         Binding(
             get: { model.customisation?[keyPath: keyPath] ?? false },
-            set: set
+            set: { isOn in set(isOn) }
         )
     }
 }

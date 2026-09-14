@@ -22,6 +22,13 @@ struct PaywallView: View {
     var previewMemoId: String?
     let onSubscribe: () -> Void
 
+    /// « Besoin d'aide ? ». Elle **referme le paywall** avant d'ouvrir le
+    /// support, et c'est l'écran qui présente celui-ci qui s'en charge : le
+    /// support est un écran poussé, pas une couche de plus au-dessus d'une
+    /// offre. Quelqu'un qui va chercher de l'aide devant un prix ne revient pas
+    /// à la story qu'il regardait.
+    var onHelp: (() -> Void)?
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -147,10 +154,20 @@ struct PaywallView: View {
 
             Spacer(minLength: 0)
 
-            // ⚠️ Aucune destination n'est dessinée derrière « Besoin d'aide ? ».
-            Text(PaywallCopy.help)
-                .font(MemoBookFont.h3)
-                .foregroundStyle(MemoBookColor.ink)
+            Button {
+                onHelp?()
+            } label: {
+                Text(PaywallCopy.help)
+                    .font(MemoBookFont.h3)
+                    .foregroundStyle(MemoBookColor.ink)
+                    // La cible tactile déborde du texte jusqu'au seuil de R7 :
+                    // « Besoin d'aide ? » à 14 pt fait 15 pt de haut, et c'est
+                    // le seul recours de quelqu'un qui bute ici.
+                    .frame(minHeight: MemoBookSpacing.minimumTapTarget)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .disabled(onHelp == nil)
         }
     }
 
