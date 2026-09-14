@@ -68,7 +68,7 @@ targets:
         # fois le même numéro. Ici et nulle part ailleurs — le régler dans
         # Xcode le perdrait au prochain `make project`, qui régénère le
         # .xcodeproj depuis ce fichier.
-        CFBundleVersion: "7"
+        CFBundleVersion: "8"
         # L'app ne parle que français. Sans ces deux clés, iOS la considère
         # anglaise et `Locale.current` suit la langue de l'appareil : sur un
         # iPhone réglé en anglais, l'écran d'accueil affichait « 26 Aug–15 Sep »
