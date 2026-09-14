@@ -298,7 +298,16 @@ public final class MemoDetailModel {
         do {
             let order = try await api.createPrintOrder(
                 memoId: memoId,
-                order: NewPrintOrder(renderId: render.id, copies: copies, shipping: shipping)
+                order: NewPrintOrderRequest(
+                    renderId: render.id,
+                    copies: copies,
+                    shippingSpeed: .standard,
+                    shipping: shipping,
+                    // Pas d'options par exemplaire ici : cet écran commande à
+                    // l'identique du style du carnet, et le serveur les remplit.
+                    copyOptions: [],
+                    paymentCardId: nil
+                )
             )
             errorMessage = nil
             await loadOrders()

@@ -71,6 +71,7 @@ public struct BrandSheet<Content: View>: View {
     private let paragraphs: [String]
     private let titleAlignment: TitleAlignment
     private let surface: Surface
+    private let topOverflow: CGFloat
     private let content: Content
 
     /// - Parameter badge: la pastille qui se glisse **entre** le titre et le
@@ -84,6 +85,7 @@ public struct BrandSheet<Content: View>: View {
         subtitle: String? = nil,
         titleAlignment: TitleAlignment = .leading,
         surface: Surface = .paper,
+        topOverflow: CGFloat = 0,
         @ViewBuilder content: () -> Content
     ) {
         self.init(
@@ -92,6 +94,7 @@ public struct BrandSheet<Content: View>: View {
             paragraphs: subtitle.map { [$0] } ?? [],
             titleAlignment: titleAlignment,
             surface: surface,
+            topOverflow: topOverflow,
             content: content
         )
     }
@@ -103,12 +106,28 @@ public struct BrandSheet<Content: View>: View {
     /// Une liste et non une chaîne à retours à la ligne : `\n\n` donnerait une
     /// ligne vide entière là où la maquette ne veut que l'écart d'un
     /// paragraphe, et une ligne vide ne se lit pas à VoiceOver.
+    /// - Parameter topOverflow: la hauteur **réservée au-dessus** de l'aplat de
+    ///   la feuille, pour ce qui doit la dépasser par le haut.
+    ///
+    ///   Zéro partout sauf au mot des fondateurs, dont la photo est collée à
+    ///   cheval sur le bord. Elle n'y arrivait pas : la feuille du système
+    ///   **rogne son contenu à ses propres bords** — c'est le prix de
+    ///   `presentationBackground`, qui lui confie le fond et la forme — et un
+    ///   `overlay` posé par-dessus la feuille se faisait couper au ras du bord
+    ///   supérieur, quelle que soit sa profondeur dans la hiérarchie.
+    ///
+    ///   Avec une réserve, la feuille rend son fond au système (`.clear`) et
+    ///   dessine le sien un peu plus bas : la bande du haut devient un espace
+    ///   transparent **à l'intérieur** de la présentation, où ce qui dépasse
+    ///   tient sans être rogné. Le cran s'agrandit d'autant, pour que la
+    ///   feuille ne monte pas d'un pouce à l'écran.
     public init(
         _ title: String,
         badge: String? = nil,
         paragraphs: [String],
         titleAlignment: TitleAlignment = .leading,
         surface: Surface = .paper,
+        topOverflow: CGFloat = 0,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
@@ -116,6 +135,7 @@ public struct BrandSheet<Content: View>: View {
         self.paragraphs = paragraphs
         self.titleAlignment = titleAlignment
         self.surface = surface
+        self.topOverflow = topOverflow
         self.content = content()
     }
 
@@ -169,14 +189,21 @@ public struct BrandSheet<Content: View>: View {
             scrollingBody
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // La réserve du haut : un espace transparent **dans** la présentation,
+        // sous lequel l'aplat commence. Zéro par défaut, et la feuille est
+        // alors exactement celle d'avant.
+        .padding(.top, topOverflow)
+        .background { drawnSurface }
         .presentationDetents([.height(detentHeight)])
         // On dessine la nôtre : celle du système est posée par-dessus le
         // contenu et ne suit pas la palette de la marque.
         .presentationDragIndicator(.hidden)
-        // Le fond **et** la forme appartiennent au système : c'est lui qui rogne
-        // le contenu au bord de la feuille, et son ombre tombe alors derrière
-        // elle au lieu de faire un liseré.
-        .presentationBackground(surfaceColor)
+        // Sans réserve, le fond **et** la forme appartiennent au système : c'est
+        // lui qui rogne le contenu au bord de la feuille, et son ombre tombe
+        // alors derrière elle au lieu de faire un liseré. Avec une réserve, on
+        // lui rend un fond transparent et on dessine le nôtre — sans quoi il
+        // peindrait aussi la bande où quelque chose doit dépasser.
+        .presentationBackground(topOverflow > 0 ? AnyShapeStyle(.clear) : AnyShapeStyle(surfaceColor))
         .presentationCornerRadius(MemoBookSpacing.sheetCornerRadius)
         // Le crème de la marque ne se retourne pas en sombre — voir
         // `MemoBookColor`.
@@ -204,11 +231,35 @@ public struct BrandSheet<Content: View>: View {
         // fois — l'indicateur d'accueil comptait double — et le dernier bouton
         // se retrouvait à 89 pt du bas au lieu de 50. Trois marges pour une
         // seule intention.
-        let wanted = bodyHeight + Self.handleBlockHeight
+        // La réserve s'ajoute : sans elle, la feuille remonterait de sa hauteur
+        // et le contenu se retrouverait décalé vers le bas de son propre cran.
+        let wanted = bodyHeight + Self.handleBlockHeight + topOverflow
 
         // Un contenu trop haut ne pousse pas la feuille jusqu'en haut : il
         // défile. C'est le cas des six connecteurs.
         return min(wanted, Self.ceilingHeight)
+    }
+
+    /// L'aplat de la feuille, dessiné par nous quand une réserve existe.
+    ///
+    /// `EmptyView` sinon : le système garde alors la main sur le fond, la forme
+    /// et l'ombre, ce qui reste le meilleur dessin pour une feuille ordinaire.
+    @ViewBuilder
+    private var drawnSurface: some View {
+        if topOverflow > 0 {
+            UnevenRoundedRectangle(
+                topLeadingRadius: MemoBookSpacing.sheetCornerRadius,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: MemoBookSpacing.sheetCornerRadius
+            )
+            .fill(surfaceColor)
+            // L'ombre du système part avec son fond : on repose la nôtre, sans
+            // quoi la feuille flotterait sans se détacher de l'écran.
+            .brandShadow(.raised)
+            .padding(.top, topOverflow)
+            .ignoresSafeArea(edges: .bottom)
+        }
     }
 
     private var handle: some View {

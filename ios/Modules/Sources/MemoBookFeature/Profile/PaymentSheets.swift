@@ -29,7 +29,7 @@ struct PaymentMethodSheet: View {
                         }
                     }
 
-                    ApplePayRow()
+                    BrandApplePayRow()
                 }
 
                 // Le dessin groupé du bouton convient, et le « + » passe
@@ -50,53 +50,6 @@ struct PaymentMethodSheet: View {
                 model.addCard(number: number, label: name)
             }
         }
-    }
-}
-
-/// La ligne Apple Pay. Elle n'est pas une option comme les autres : rien n'est
-/// à choisir tant que le paiement n'existe pas, et le cadre noir de la maquette
-/// est la façon dont Apple veut qu'on présente sa marque.
-///
-/// Le logotype est celui d'Apple, posé tel quel : **jamais** de
-/// `renderingMode(.template)`, jamais recoloré, jamais recomposé à partir du
-/// symbole système et du mot « Pay » — c'est ce qu'on faisait faute d'asset, et
-/// les règles de marque d'Apple l'interdisent.
-private struct ApplePayRow: View {
-    /// La hauteur du logotype suit le corps de texte : il se lit comme un mot
-    /// de la ligne, pas comme une image posée dedans.
-    @ScaledMetric(relativeTo: .body) private var markHeight: CGFloat = 22
-
-    private var shape: RoundedRectangle {
-        .rect(cornerRadius: MemoBookSpacing.controlCornerRadius)
-    }
-
-    var body: some View {
-        HStack(spacing: MemoBookSpacing.xs) {
-            Text("ApplePay")
-                .font(MemoBookFont.bodySemibold)
-                .foregroundStyle(MemoBookColor.ink)
-            Text("disponible")
-                .font(MemoBookFont.body)
-                .foregroundStyle(MemoBookColor.inkMuted)
-            Spacer(minLength: MemoBookSpacing.xs)
-            mark
-        }
-        .padding(.horizontal, MemoBookSpacing.s)
-        .padding(.vertical, MemoBookSpacing.s - 2)
-        .frame(minHeight: MemoBookSpacing.minimumTapTarget)
-        .overlay { shape.strokeBorder(MemoBookColor.ink, lineWidth: 2) }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Apple Pay, disponible")
-    }
-
-    private var mark: some View {
-        Image(brand: "LogoApplePay")
-            .resizable()
-            .scaledToFit()
-            // Le rapport du fichier est 48 × 24 : on ne fixe que la hauteur,
-            // la largeur suit. Une marque déformée n'est plus la marque.
-            .frame(height: markHeight)
-            .accessibilityHidden(true)
     }
 }
 

@@ -1,0 +1,22 @@
+-- Le suivi par WhatsApp, proposé sur l'écran de confirmation de commande.
+--
+-- Deux colonnes et pas une : l'accord **et** le numéro à prévenir.
+--
+-- Le numéro est recopié sur la commande plutôt que relu sur le compte au
+-- moment d'envoyer. C'est le même parti pris que l'adresse de livraison, et
+-- pour la même raison : c'est le numéro qu'on a promis de prévenir pour *cette*
+-- commande-là. Changer de téléphone dans son profil trois semaines plus tard ne
+-- doit pas dérouter « ton carnet est parti » vers quelqu'un qui n'a rien
+-- demandé.
+--
+-- `accounts.phoneNumber` reste la source : c'est lui qu'on propose, lui que
+-- l'écran d'accueil du compte renseignera, et lui qu'on met à jour quand
+-- quelqu'un saisit un numéro depuis la confirmation. Il n'y avait donc rien à
+-- ajouter de ce côté.
+--
+-- ⚠️ `notifyByWhatsApp = true` avec `whatsappPhone` nul ne doit jamais exister :
+-- ce serait une promesse sans destinataire. C'est la route qui le garantit —
+-- elle refuse l'accord sans numéro — plutôt qu'une contrainte, pour que le
+-- message d'erreur soit lisible côté app.
+ALTER TABLE "print_orders" ADD COLUMN     "notifyByWhatsApp" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "whatsappPhone" TEXT;

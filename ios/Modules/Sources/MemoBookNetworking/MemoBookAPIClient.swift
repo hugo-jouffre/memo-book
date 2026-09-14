@@ -350,7 +350,90 @@ public actor MemoBookAPIClient: MemoBookAPI {
 
     // MARK: - Impression
 
-    public func createPrintOrder(memoId: String, order: NewPrintOrder) async throws -> PrintOrder {
+    public func orderContext(memoId: String) async throws -> OrderContext {
+        try await send(method: "GET", path: "/v1/memos/\(memoId)/order-context")
+    }
+
+    public func orderQuote(
+        memoId: String,
+        copies: Int,
+        shippingSpeed: ShippingSpeed
+    ) async throws -> OrderQuote {
+        struct Body: Encodable {
+            let copies: Int
+            let shippingSpeed: ShippingSpeed
+        }
+        return try await send(
+            method: "POST",
+            path: "/v1/memos/\(memoId)/orders/quote",
+            encodableBody: Body(copies: copies, shippingSpeed: shippingSpeed)
+        )
+    }
+
+    public func wallet(tripId: String?) async throws -> Wallet {
+        let path = tripId.map { "/v1/wallet?tripId=\($0)" } ?? "/v1/wallet"
+        return try await send(method: "GET", path: path)
+    }
+
+    public func addWalletSandboxEntry(
+        amount: Decimal,
+        kind: WalletEntryKind,
+        label: String
+    ) async throws -> Decimal {
+        struct Body: Encodable {
+            let amount: Decimal
+            let kind: String
+            let label: String
+        }
+        struct Response: Decodable { let balance: Decimal }
+
+        let response: Response = try await send(
+            method: "POST",
+            path: "/v1/wallet/debug-entry",
+            encodableBody: Body(amount: amount, kind: kind.rawValue, label: label)
+        )
+        return response.balance
+    }
+
+    public func setOrderWhatsApp(orderId: String, phone: String?) async throws -> PrintOrder {
+        // Le corps porte **l'accord et le numéro ensemble** : le serveur refuse
+        // l'un sans l'autre, et les séparer côté client laisserait composer une
+        // requête qu'il rejettera.
+        struct Enabled: Encodable {
+            let enabled = true
+            let phone: String
+        }
+        struct Disabled: Encodable {
+            let enabled = false
+        }
+
+        if let phone {
+            return try await send(
+                method: "POST",
+                path: "/v1/orders/\(orderId)/whatsapp",
+                encodableBody: Enabled(phone: phone)
+            )
+        }
+        return try await send(
+            method: "POST",
+            path: "/v1/orders/\(orderId)/whatsapp",
+            encodableBody: Disabled()
+        )
+    }
+
+    public func bookShareLink(memoId: String) async throws -> URL {
+        struct Response: Decodable { let url: URL }
+        let response: Response = try await send(
+            method: "POST",
+            path: "/v1/memos/\(memoId)/share-link"
+        )
+        return response.url
+    }
+
+    public func createPrintOrder(
+        memoId: String,
+        order: NewPrintOrderRequest
+    ) async throws -> PrintOrder {
         try await send(
             method: "POST",
             path: "/v1/memos/\(memoId)/orders",

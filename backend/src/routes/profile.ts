@@ -85,10 +85,21 @@ async function readProfile(context: AppContext, accountId: string) {
 
     // Les commandes en cours d'acheminement, et elles seules : une commande
     // livrée il y a six mois n'a plus rien à suivre.
+    //
+    // **`draft` en fait partie.** Une commande qui vient d'être passée depuis
+    // le tunnel naît en brouillon — l'encaissement n'existe pas encore — et
+    // l'exclure faisait disparaître de « Suivi des commandes » la seule que
+    // l'app sache créer : on commandait, et le suivi restait vide.
+    //
+    // **Filtré sur l'acheteur, pas sur le voyage visible.** Un co-voyageur
+    // commande son propre exemplaire, à sa propre adresse, avec sa propre
+    // cagnotte : son colis n'a rien à faire dans le suivi de quelqu'un d'autre.
+    // C'est `orderedByAccountId` qui dit à qui appartient la commande — la
+    // même colonne qui dira quelle cagnotte débiter.
     context.prisma.printOrder.findMany({
       where: {
-        status: { in: ["submitted", "in_production", "shipped"] },
-        memo: visibleToAccount(accountId),
+        status: { in: ["draft", "submitted", "in_production", "shipped"] },
+        orderedByAccountId: accountId,
       },
       orderBy: { createdAt: "desc" },
       include: { memo: { select: { coverPhotoUrl: true } } },

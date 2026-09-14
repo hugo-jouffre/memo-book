@@ -15,15 +15,23 @@ import SwiftUI
 /// est ce qu'on fait plusieurs fois, « Commander » est ce qu'on fait une fois.
 /// Le geste répété se pose donc sous le pouce en premier.
 struct BookActionsBlock: View {
-    /// Faux tant qu'il n'y a pas de carnet : les deux boutons gardent leur
-    /// place et passent au gris. Les cacher ferait remonter la carte de
-    /// cagnotte de 112 pt à l'arrivée de l'aperçu.
-    let isEnabled: Bool
+    /// Le carnet est composé et peut partir à l'impression.
+    ///
+    /// **Il ne dit plus « le PDF est rasterisé ».** Les deux boutons étaient
+    /// gris tant que `renderer.sheetCount` valait zéro — c'est-à-dire tant que
+    /// l'app n'avait pas fini de dessiner les pages, et *pour toujours* quand
+    /// le PDF ne se chargeait pas. On ne pouvait alors ni commander un carnet
+    /// que le serveur déclarait prêt, ni même aller changer son style, ce qui
+    /// ne demande rien du tout.
+    let isComposed: Bool
     let onCustomise: () -> Void
     let onOrder: () -> Void
 
     var body: some View {
         VStack(spacing: MemoBookSpacing.s) {
+            // **Toujours actif.** Personnaliser son carnet ne demande ni rendu,
+            // ni PDF, ni réseau : c'est un écran de réglages, et c'est souvent
+            // en attendant la composition qu'on a envie d'y aller.
             BrandButton(
                 BookCopy.Preview.customise,
                 style: .secondary,
@@ -31,6 +39,8 @@ struct BookActionsBlock: View {
                 action: onCustomise
             )
 
+            // Commander demande, lui, un carnet composé : on ne fait pas
+            // imprimer ce qui n'existe pas encore.
             BrandButton(
                 BookCopy.Preview.order,
                 icon: Image(brand: "IconDeliver"),
@@ -38,8 +48,8 @@ struct BookActionsBlock: View {
                 fillsWidth: true,
                 action: onOrder
             )
+            .disabled(!isComposed)
         }
-        .disabled(!isEnabled)
     }
 }
 

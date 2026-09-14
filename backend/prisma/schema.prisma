@@ -320,7 +320,7 @@ model Memo {
   /// qu'on emploie pour s'adresser au voyageur (« Nouveau voyage à Rome ! »),
   /// là où le pays donnerait « à Italie » et le titre une phrase entière.
   /// Nulle pour un carnet qui n'est pas situé dans une ville.
-  destinationCity        String?
+  destinationCity String?
 
   /// Compteurs affichés sous le titre. Entretenus à l'écriture plutôt que
   /// recalculés à chaque ouverture de l'accueil, qui les demande tous d'un coup
@@ -819,6 +819,16 @@ model Render {
   @@map("renders")
 }
 
+/// La rapidité d'acheminement choisie à l'étape 4.
+///
+/// Deux paliers et non un délai en jours : c'est ce que l'imprimeur vend, et
+/// c'est aussi ce que l'écran propose. Les bornes réelles (`estimatedMinDays`,
+/// `estimatedMaxDays`) sont posées par l'imprimeur au moment de l'expédition.
+enum ShippingSpeed {
+  standard
+  express
+}
+
 enum PrintOrderStatus {
   draft
   submitted
@@ -855,6 +865,29 @@ model PrintOrder {
   status PrintOrderStatus @default(draft)
   copies Int              @default(1)
 
+  /// Le palier d'acheminement facturé. `standard` est inclus dans le prix du
+  /// carnet, `express` porte le supplément qu'on lit dans `shippingCents`.
+  shippingSpeed ShippingSpeed @default(standard)
+
+  /// La carte présentée au moment de payer. **Nullable et en `SetNull`** : une
+  /// carte supprimée du profil ne doit pas emporter la commande qu'elle a
+  /// réglée, et une commande passée par Apple Pay n'en a aucune.
+  paymentCardId String?
+  paymentCard   PaymentCard? @relation(fields: [paymentCardId], references: [id], onDelete: SetNull)
+
+  /// Le suivi par WhatsApp, demandé depuis l'écran de confirmation.
+  ///
+  /// Le numéro est **recopié ici** plutôt que lu sur le compte à l'envoi :
+  /// c'est celui qu'on a promis de prévenir pour *cette* commande, et changer
+  /// de numéro dans son profil trois semaines plus tard ne doit pas dérouter le
+  /// message vers un téléphone qui n'a rien demandé. Même parti pris que
+  /// l'adresse de livraison, figée elle aussi.
+  ///
+  /// `notifyByWhatsApp` sans `whatsappPhone` ne doit jamais exister : la route
+  /// refuse l'un sans l'autre.
+  notifyByWhatsApp Boolean @default(false)
+  whatsappPhone    String?
+
   /// Adresse de livraison, telle que saisie dans l'app.
   shippingName       String
   shippingLine1      String
@@ -889,6 +922,15 @@ model PrintOrder {
   /// Ce que la commande a coûté, en centimes, et le paiement Stripe
   /// correspondant. L'unicité de l'intention est ce qui empêche qu'un webhook
   /// rejoué fasse payer deux fois.
+  ///
+  /// `amountCents` est **le net à payer** : les trois colonnes au-dessus s'y
+  /// résument par `itemsCents + shippingCents - walletAppliedCents`. On les
+  /// garde figées plutôt que recalculables, parce qu'un tarif qui change ne
+  /// doit pas réécrire le récapitulatif d'une commande déjà passée.
+  itemsCents         Int?
+  shippingCents      Int?
+  walletAppliedCents Int?
+
   amountCents           Int?
   stripePaymentIntentId String? @unique
 
@@ -896,10 +938,38 @@ model PrintOrder {
   updatedAt DateTime @updatedAt
 
   walletEntries WalletEntry[]
+  copyOptions   PrintOrderCopy[]
 
   @@index([memoId, createdAt])
   @@index([orderedByAccountId, createdAt])
   @@map("print_orders")
+}
+
+/// Les options d'**un** exemplaire d'une commande.
+///
+/// Une table et non quatre colonnes sur la commande : l'écran des exemplaires
+/// laisse offrir le 2e carnet dans une autre version que le 1er, donc les
+/// options pendent de l'exemplaire, pas de la commande. C'est aussi ce que
+/// l'imprimeur lira — une ligne par livre à fabriquer.
+///
+/// Les quatre options sont celles de `BookCustomisation`, et elles s'en
+/// copient à la commande : changer le style du carnet après coup ne doit pas
+/// changer un livre déjà parti à l'impression.
+model PrintOrderCopy {
+  id      String     @id @default(uuid())
+  orderId String
+  order   PrintOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  /// Le rang de l'exemplaire, à partir de 1 — « 1er Carnet », « 2e Carnet ».
+  position Int
+
+  decorationsEnabled Boolean @default(true)
+  quizEnabled        Boolean @default(true)
+  freeZonesEnabled   Boolean @default(true)
+  crosswordEnabled   Boolean @default(true)
+
+  @@unique([orderId, position])
+  @@map("print_order_copies")
 }
 
 /// Une écriture de cagnotte. **Registre en ajout seul** : on n'y met jamais à
@@ -978,6 +1048,10 @@ model PaymentCard {
   isDefault Boolean @default(false)
 
   createdAt DateTime @default(now())
+
+  /// Les commandes réglées avec cette carte. En `SetNull` de l'autre côté :
+  /// retirer une carte du profil n'efface pas ce qu'elle a payé.
+  printOrders PrintOrder[]
 
   @@index([accountId])
   @@map("payment_cards")

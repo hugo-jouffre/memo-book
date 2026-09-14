@@ -140,7 +140,60 @@ public protocol MemoBookAPI: Sendable {
     func startRender(memoId: String) async throws -> Render
     func render(id: String) async throws -> Render
 
+    /// Tout ce que le tunnel de commande a besoin de savoir pour s'ouvrir :
+    /// la carte du voyage, la cagnotte, les prix, l'adresse proposée et les
+    /// moyens de paiement.
+    ///
+    /// **Une réponse pour les sept étapes.** Le parcours est une seule
+    /// destination, et le découper ferait apparaître une attente à chaque
+    /// « Continuer ».
+    func orderContext(memoId: String) async throws -> OrderContext
+
+    /// Le récapitulatif de l'étape 5, compté **par le serveur**. L'app
+    /// n'additionne aucun montant : deux calculs finissent par diverger, et
+    /// c'est le client qui a tort devant la personne qui paie.
+    func orderQuote(
+        memoId: String,
+        copies: Int,
+        shippingSpeed: ShippingSpeed
+    ) async throws -> OrderQuote
+
+    /// La cagnotte du compte : son solde, son historique, et l'estimation du
+    /// carnet qu'on finance.
+    ///
+    /// `tripId` ne dit pas *quelle* cagnotte — il n'y en a qu'une par compte —
+    /// mais **quel carnet on finance**, pour l'estimation de pages et de coût.
+    /// `nil` quand on arrive du profil.
+    func wallet(tripId: String?) async throws -> Wallet
+
+    /// Pose une écriture de cagnotte à la main. **Réservée au développement** :
+    /// le serveur ferme la route en production.
+    ///
+    /// Elle existe parce que sans encaissement branché, il n'y a aucun chemin
+    /// depuis l'app vers un solde non nul — donc aucun moyen de voir les
+    /// déductions du tunnel de commande, que le serveur calcule.
+    func addWalletSandboxEntry(
+        amount: Decimal,
+        kind: WalletEntryKind,
+        label: String
+    ) async throws -> Decimal
+
+    /// Accepte — ou refuse — d'être prévenu par WhatsApp de l'acheminement.
+    /// Le numéro remonte sur le compte quand celui-ci n'en a pas encore.
+    func setOrderWhatsApp(
+        orderId: String,
+        phone: String?
+    ) async throws -> PrintOrder
+
+    /// Le lien public de prévisualisation du carnet, créé au premier appel et
+    /// rendu tel quel ensuite.
+    ///
+    /// **Idempotente côté serveur** : repartager deux fois ne donne pas deux
+    /// liens, et celui qu'on a envoyé hier marche encore aujourd'hui — un lien
+    /// parti dans une conversation ne se rattrape pas.
+    func bookShareLink(memoId: String) async throws -> URL
+
     /// Commande le carnet imprimé, sur un rendu déjà prévisualisé.
-    func createPrintOrder(memoId: String, order: NewPrintOrder) async throws -> PrintOrder
+    func createPrintOrder(memoId: String, order: NewPrintOrderRequest) async throws -> PrintOrder
     func printOrders(memoId: String) async throws -> [PrintOrder]
 }

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppContext } from "../context.js";
+import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
 import { serializeWallet } from "./appSerializers.js";
@@ -22,6 +23,16 @@ import { serializeWallet } from "./appSerializers.js";
  */
 
 const query = z.object({ tripId: z.string().uuid().optional() });
+
+/**
+ * Ce qu'on pose à la main depuis le bac à sable : un montant **signé** en euros,
+ * sa nature, et le motif lisible que l'historique affichera.
+ */
+const debugEntryBody = z.object({
+  amount: z.number().finite().min(-10_000).max(10_000),
+  kind: z.enum(["gift", "topup", "refund", "adjustment"]),
+  label: z.string().trim().min(1).max(120).optional(),
+});
 
 /**
  * Combien d'écritures l'historique rend.
@@ -67,5 +78,77 @@ export function registerWalletRoutes(app: FastifyInstance, context: AppContext) 
     ]);
 
     return serializeWallet(account?.walletBalanceCents ?? 0, entries, trip);
+  });
+
+  /**
+   * Pose une écriture de cagnotte **à la main**, pour le développement.
+   *
+   * Pourquoi cette route existe : sans encaissement branché, il n'y a aucun
+   * chemin depuis l'app vers un solde non nul. L'écran de la cagnotte pleine,
+   * les deux natures de pastille, et surtout **les déductions du tunnel de
+   * commande** ne se voient donc jamais. Le bac à sable de l'écran mutait un
+   * objet en mémoire : le solde montait à l'écran mais le serveur n'en savait
+   * rien, et le récapitulatif de commande — qui, lui, demande au serveur —
+   * continuait d'annoncer un total sans déduction.
+   *
+   * Elle écrit une **vraie** écriture, dans la même transaction que le cache du
+   * solde, exactement comme le fera le webhook de paiement. C'est donc aussi ce
+   * qui vérifie que `balanceAfterCents` ne dérive pas.
+   *
+   * ⚠️ **Fermée en production**, comme les interrupteurs de l'app sont fermés
+   * en release : c'est une route qui crée de l'argent.
+   */
+  app.post("/v1/wallet/debug-entry", async (request, reply) => {
+    if (context.env.NODE_ENV === "production") {
+      throw HttpError.notFound("Route inconnue.");
+    }
+
+    const accountId = accountIdOf(request);
+    const body = debugEntryBody.parse(request.body ?? {});
+    const amountCents = Math.round(body.amount * 100);
+
+    if (amountCents === 0) {
+      throw HttpError.badRequest("Une écriture de zéro ne dit rien.", "empty_entry");
+    }
+
+    const wallet = await context.prisma.$transaction(async (tx) => {
+      const account = await tx.account.findUniqueOrThrow({
+        where: { id: accountId },
+        select: { walletBalanceCents: true },
+      });
+
+      // La cagnotte ne descend pas sous zéro : un débit plus grand que le solde
+      // serait un découvert, ce que le registre ne sait pas représenter.
+      const balanceAfter = account.walletBalanceCents + amountCents;
+      if (balanceAfter < 0) {
+        throw HttpError.badRequest("La cagnotte n'a pas de découvert.", "insufficient_funds");
+      }
+
+      await tx.walletEntry.create({
+        data: {
+          accountId,
+          amountCents,
+          balanceAfterCents: balanceAfter,
+          kind: body.kind,
+          label: body.label ?? null,
+        },
+      });
+
+      // Le cache, **dans la même transaction** que l'écriture : c'est la règle
+      // qui empêche les deux de diverger.
+      await tx.account.update({
+        where: { id: accountId },
+        data: { walletBalanceCents: balanceAfter },
+      });
+
+      return balanceAfter;
+    });
+
+    context.logger.warn(
+      { accountId, amountCents, kind: body.kind, balanceAfterCents: wallet },
+      "Écriture de cagnotte posée à la main (bac à sable)",
+    );
+
+    return reply.code(201).send({ balance: Number((wallet / 100).toFixed(2)) });
   });
 }

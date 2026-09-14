@@ -12,6 +12,7 @@ import type {
   TripTheme,
 } from "@prisma/client";
 import { CONNECTOR_CATALOG } from "../services/connectorCatalog.js";
+import { unitPriceCents } from "../services/printPricing.js";
 
 /**
  * Ce que les trois écrans « produit » reçoivent : l'accueil, un voyage, le
@@ -477,21 +478,6 @@ function styleSummaryOf(memo: Memo): string {
 }
 
 /**
- * Ce que coûte une page imprimée, en centimes.
- *
- * **Une constante et non une colonne** : c'est un prix catalogue, le même pour
- * tout le monde, et il n'a rien à faire dupliqué sur chaque carnet. Le jour où
- * il varie — par format, par pays — il deviendra une table de tarifs, pas une
- * colonne de `memos`.
- *
- * 89,90 € pour les 50 pages de la maquette, soit 1,798 € la page. Les frais
- * fixes de fabrication et de port sont dedans : un carnet de dix pages ne
- * coûte pas un cinquième d'un carnet de cinquante, et c'est un sujet à trancher
- * avec l'imprimeur avant d'encaisser quoi que ce soit. Signalé.
- */
-const CENTS_PER_PAGE = 179.8;
-
-/**
  * Les trois états du texte d'un souvenir. Le corrigé à la main d'abord, le
  * rédigé ensuite, la transcription brute en dernier — c'est l'ordre de
  * préférence de tout le pipeline.
@@ -552,10 +538,15 @@ export function serializeWallet(
  * demandé par le voyageur (`targetPageCount`), pas ce qui est déjà composé —
  * annoncer le coût des deux pages actuelles ferait une promesse qu'on ne
  * tiendra pas.
+ *
+ * Le montant vient de `printPricing`, **comme celui du tunnel de commande**.
+ * C'était un taux à la page défini ici ; deux tarifs pour un même carnet — l'un
+ * dans la cagnotte, l'autre au moment de payer — se seraient contredits au
+ * premier réglage de prix.
  */
 function serializeWalletEstimate(trip: Pick<Memo, "targetPageCount" | "pageCount">) {
   const pages = Math.max(trip.targetPageCount, trip.pageCount);
-  return { pageCount: pages, cost: euros(Math.round(pages * CENTS_PER_PAGE)) };
+  return { pageCount: pages, cost: euros(unitPriceCents(pages)) };
 }
 
 type MemoForPreview = Memo & {
