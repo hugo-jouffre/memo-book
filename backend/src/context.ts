@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import pino, { type Logger } from "pino";
 import type { Env } from "./env.js";
 import { InlineQueue, PgBossQueue, type JobQueue } from "./jobs/queue.js";
+import { splitPoolBudget, withConnectionLimit } from "./lib/databasePool.js";
 import { createBookRenderer, type BookRenderer } from "./services/apitemplate.js";
 import { createRedactor, type Redactor } from "./services/redaction.js";
 import { createSocialVerifier, type SocialVerifier } from "./services/socialIdentity.js";
@@ -38,13 +39,18 @@ export interface CreateContextOptions {
 
 export function createContext(env: Env, options: CreateContextOptions = {}): AppContext {
   const logger = pino({ level: env.LOG_LEVEL });
+  const pool = splitPoolBudget(env.DATABASE_POOL_SIZE);
 
   const base: AppContext = {
     env,
     logger,
-    prisma: new PrismaClient({ datasourceUrl: env.DATABASE_URL }),
+    prisma: new PrismaClient({
+      datasourceUrl: withConnectionLimit(env.DATABASE_URL, pool.prisma),
+    }),
     queue:
-      env.NODE_ENV === "test" ? new InlineQueue() : new PgBossQueue(env.DATABASE_URL),
+      env.NODE_ENV === "test"
+        ? new InlineQueue()
+        : new PgBossQueue(env.DATABASE_URL, { maxConnections: pool.boss }),
     storage: createMediaStorage(env),
     socialVerifier: createSocialVerifier(env),
     transcriber: createTranscriber(env),

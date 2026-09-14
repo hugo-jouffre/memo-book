@@ -11,10 +11,14 @@ import SwiftUI
 ///
 /// | Ton | Dessin | Ce qu'il dit |
 /// |---|---|---|
-/// | ``Tone/accent`` | aplat lime | un décompte, un cadeau — ce qu'on gagne |
+/// | ``Tone/accent`` | aplat lime | **l'abonnement** — le solde d'étapes offertes, ce qu'il reste à raconter avant de s'abonner |
 /// | ``Tone/outlined`` | contour vert | un état — ce que le voyage fait en ce moment |
-/// | ``Tone/info`` | contour bleu | une précision — ce qu'il y a à savoir |
-/// | ``Tone/accentOutlined`` | lime cerclé de vert | un état qu'on veut voir de loin |
+/// | ``Tone/info`` | contour bleu | un décompte, une précision — « ×3 », « À VENIR » |
+/// | ``Tone/accentOutlined`` | lime cerclé de vert | l'abonnement, quand il doit se voir de loin |
+///
+/// > Le lime ne parle que de l'abonnement (``MemoBookColor/accent``, T7). Le
+/// > compteur d'une section, qui était lime, est passé au contour bleu :
+/// > arbitrage de Hugo, 14/09/2026 (T36).
 ///
 /// > Le rayon reste celui d'une capsule pour **tous** les tons, y compris
 /// > ``Tone/accentOutlined``, que la maquette des modales d'abonnement dessine
@@ -25,12 +29,12 @@ import SwiftUI
 /// > D13) : aplat lime, encre et filet verts.
 public struct BrandTagPill: View {
     public enum Tone {
-        /// Lime plein. L'accent du scheme : petites surfaces uniquement, ce qui
-        /// est exactement la taille d'une pastille.
+        /// Lime plein : **l'abonnement**, et rien d'autre — voir
+        /// ``MemoBookColor/accent``.
         case accent
         /// Contour vert sur blanc.
         case outlined
-        /// Contour bleu sur blanc.
+        /// Contour bleu sur blanc : un décompte, une précision.
         case info
         /// Lime plein **et** cerclé de vert, texte vert : la pastille qui doit
         /// s'attraper de loin — « ABONNÉE », « VOIR UN APERÇU DE TON CARNET ».

@@ -89,6 +89,34 @@ describe("inscription et connexion par mot de passe", () => {
     expect(session).not.toBeNull();
   });
 
+  it("offre trois étapes à tout compte qui s'ouvre", async () => {
+    // Par mot de passe…
+    await harness.app.inject({
+      method: "POST",
+      url: "/v1/auth/signup",
+      payload: { email: "hugo@memobook.app", password: "carnet2026" },
+    });
+    const byPassword = await harness.prisma.account.findUniqueOrThrow({
+      where: { email: "hugo@memobook.app" },
+    });
+    expect(byPassword.offeredSteps).toBe(3);
+    expect(byPassword.remainingSteps).toBe(3);
+
+    // … comme par un fournisseur : c'est l'ouverture du compte qui offre les
+    // étapes, pas la façon d'entrer.
+    await boot(fakeVerifier({ email: "clara@memobook.app" }));
+    await harness.app.inject({
+      method: "POST",
+      url: "/v1/auth/google",
+      payload: { identityToken: "google-token" },
+    });
+    const bySocial = await harness.prisma.account.findUniqueOrThrow({
+      where: { email: "clara@memobook.app" },
+    });
+    expect(bySocial.offeredSteps).toBe(3);
+    expect(bySocial.remainingSteps).toBe(3);
+  });
+
   it("ne stocke jamais le mot de passe en clair", async () => {
     await harness.app.inject({
       method: "POST",

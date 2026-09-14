@@ -20,9 +20,11 @@ import SwiftUI
 /// - les **deux barres** suspendent, pour reprendre son souffle ;
 /// - le **rond de fermeture** de la feuille abandonne tout.
 struct RecordingSheet: View {
-    /// Le vocal, une fois terminé. La feuille ne l'envoie nulle part : elle le
-    /// rend, et c'est l'écran qui l'a présentée qui décide de son sort.
-    let onFinish: (RecordedAudio) -> Void
+    /// Le vocal, une fois terminé, et les niveaux relevés pendant qu'on
+    /// parlait. La feuille ne l'envoie nulle part : elle le rend, et c'est
+    /// l'écran qui l'a présentée qui décide de son sort — l'envoyer, et
+    /// l'emporter dans la conversation (``RecordingHandoff``).
+    let onFinish: (RecordedAudio, [Double]) -> Void
 
     @State private var model = RecordingModel()
     @Environment(\.dismiss) private var dismiss
@@ -73,8 +75,11 @@ struct RecordingSheet: View {
 
     private func toggle() async {
         guard let audio = await model.toggle() else { return }
+        // Les niveaux sont lus **avant** de refermer : la feuille les efface en
+        // disparaissant (`discard()`), et la bulle du fil en a besoin.
+        let levels = model.levels
         dismiss()
-        onFinish(audio)
+        onFinish(audio, levels)
     }
 
     /// Le chrono. Il n'apparaît qu'une fois qu'il y a quelque chose à compter :
@@ -221,6 +226,6 @@ struct RecordingSheet: View {
     Color.clear
         .background(MemoBookColor.background)
         .sheet(isPresented: .constant(true)) {
-            RecordingSheet { _ in }
+            RecordingSheet { _, _ in }
         }
 }

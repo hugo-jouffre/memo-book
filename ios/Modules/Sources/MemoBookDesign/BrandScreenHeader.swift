@@ -57,6 +57,10 @@ public struct BrandScreenHeader<Trailing: View>: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
 
+    /// La hauteur d'une ligne du titre (``MemoBookFont/heading``, Sora 20),
+    /// pour poser la flèche **en face** de cette ligne — voir ``text``.
+    @ScaledMetric(relativeTo: .title3) private var titleLineHeight: CGFloat = 26
+
     public var body: some View {
         HStack(alignment: .top, spacing: MemoBookSpacing.xs) {
             backButton
@@ -125,7 +129,15 @@ public struct BrandScreenHeader<Trailing: View>: View {
         // La ligne du haut aligne la flèche sur le **titre** et non sur le bloc
         // entier : avec un sous-titre de trois lignes, un centrage vertical
         // faisait descendre la sortie au milieu du texte.
-        .padding(.top, typeSize.isAccessibilitySize ? 0 : MemoBookSpacing.xs / 2)
+        //
+        // Et **en face de sa première ligne**, pas de son bord haut : la flèche
+        // est dessinée au centre d'une cible de 2.75 rem, le titre fait une
+        // ligne de 26 — posés bord à bord, la flèche tombait 5 pt sous le
+        // milieu du titre, ce qui se voyait sur les paramètres du voyage (Hugo,
+        // 14/09/2026, T103). La marge du titre vaut donc la moitié de l'écart
+        // entre les deux, et suit le corps du texte. En taille accessible le
+        // titre dépasse la cible : plus rien à rattraper.
+        .padding(.top, typeSize.isAccessibilitySize ? 0 : max(0, (MemoBookSpacing.minimumTapTarget - titleLineHeight) / 2))
     }
 }
 
@@ -206,7 +218,7 @@ public struct BrandHeaderAction: View {
             title: "Aperçu PDF",
             subtitle: "Rome et la Dolce Vita - 10 pages composées"
         ) {
-            BrandHeaderAction(icon: "IconTeleverser", label: "Partager mon carnet") {}
+            BrandHeaderAction(icon: "IconShareSystem", label: "Partager mon carnet") {}
         }
 
         BrandScreenHeader(title: "Aperçu PDF", subtitle: nil, isSubtitleLoading: true)

@@ -40,16 +40,30 @@ struct TripCreationStepContent: View {
     /// croire qu'on peut donner les deux.
     private var theme: some View {
         VStack(spacing: MemoBookSpacing.m) {
-            TripThemePicker(selection: $model.selectedTheme) { theme in
-                if theme != .other { focus.wrappedValue = nil }
+            if model.themes.isEmpty {
+                // Les thèmes viennent du serveur : le temps qu'ils arrivent, la
+                // rangée tient sa place — une barre d'attente, pas des émojis
+                // inventés. Si la lecture a échoué, on le dit, et « Passer »
+                // reste là.
+                if let failure = model.themesFailure {
+                    ErrorBanner(message: failure) {
+                        Task { await model.loadThemes() }
+                    }
+                } else {
+                    TripThemePickerPlaceholder()
+                }
+            } else {
+                TripThemePicker(themes: model.themes, selection: $model.selectedTheme) { theme in
+                    if !theme.isOther { focus.wrappedValue = nil }
+                }
+                // La rangée va **jusqu'aux bords de l'écran**, contrairement au
+                // reste de l'étape : c'est ce qui permet à la première et à la
+                // dernière pastille d'atteindre le milieu, et au défilement de
+                // sortir de la colonne de texte au lieu de s'y arrêter.
+                .padding(.horizontal, -MemoBookSpacing.screenMargin)
             }
-            // La rangée va **jusqu'aux bords de l'écran**, contrairement au
-            // reste de l'étape : c'est ce qui permet à la première et à la
-            // dernière pastille d'atteindre le milieu, et au défilement de
-            // sortir de la colonne de texte au lieu de s'y arrêter.
-            .padding(.horizontal, -MemoBookSpacing.screenMargin)
 
-            if model.selectedTheme == .other {
+            if model.isFreeThemeChosen {
                 // Il **arrive**, il n'apparaît pas : le champ se déplie sous la
                 // rangée en même temps que « Autre » grossit, et repart de même.
                 // Sans transition, il claque à l'écran au milieu d'un mouvement.
@@ -163,7 +177,7 @@ struct TripCreationStepContent: View {
             // Les deux bornes disent ce que le curseur fait : elles se lisent
             // d'un coup d'œil, pas en s'approchant de l'écran.
             .font(MemoBookFont.body)
-            .foregroundStyle(MemoBookColor.inkSecondary)
+            .foregroundStyle(MemoBookColor.inkMuted)
         }
     }
 
@@ -181,21 +195,30 @@ struct TripCreationStepContent: View {
 
 // MARK: - Le carrousel des thèmes
 
-/// Les sept thèmes, en rangée qui défile, celui qui est choisi au milieu et
-/// bien plus gros que les autres.
+/// Les thèmes, en rangée qui défile : celui du milieu est **celui qu'on
+/// choisit**, plus gros et à pleine encre ; ses voisins s'effacent à 60 %.
 ///
 /// **C'est un carrousel et non une barre de pastilles**, et c'est ce que dit la
-/// maquette : sept thèmes ne tiennent pas côte à côte à une taille lisible, et
-/// celui qui est choisi y est deux fois plus grand que ses voisins. La rangée se
-/// fait donc glisser, et le choix se pose au centre — d'où les marges latérales,
-/// qui valent la moitié de ce qui reste : sans elles, ni le premier ni le
-/// dernier thème ne pourraient atteindre le milieu.
+/// maquette : les thèmes ne tiennent pas côte à côte à une taille lisible, et
+/// celui qui est choisi y est presque deux fois plus grand que ses voisins. La
+/// rangée se fait donc glisser, et le choix se pose au centre — d'où les marges
+/// latérales, qui valent la moitié de ce qui reste : sans elles, ni le premier
+/// ni le dernier thème ne pourraient atteindre le milieu.
 ///
-/// **Glisser ne choisit pas.** On promène la rangée pour voir ce qu'il y a, on
-/// touche pour choisir — et ce qu'on touche vient alors au centre. Un carrousel
-/// qui choisirait en passant remplirait `memos.theme` de tout ce qu'on a
-/// survolé, et rendrait « Passer » impossible à atteindre.
+/// **Glisser choisit.** La rangée s'arrête d'elle-même sur un thème
+/// (`viewAligned`), et celui qui s'arrête au centre est le choix — Hugo,
+/// 14/09/2026 : « l'émoji qui se retrouve au centre est celui sélectionné ».
+/// Toucher un thème l'amène au centre, ce qui revient au même. La rangée a
+/// d'abord été écrite pour ne choisir qu'au toucher, de peur qu'un survol ne
+/// remplisse `memos.theme` de tout ce qu'on avait dépassé : ce n'est pas ce qui
+/// se passe, la position ne se pose qu'à l'arrêt.
+///
+/// **Le nom du thème s'écrit sous la rangée**, en entier et centré, et non sous
+/// chaque émoji : dans la boîte d'un émoji, « Vacances au soleil » et « Voyage
+/// d'affaires » se faisaient rogner (Hugo, 14/09/2026).
 struct TripThemePicker: View {
+    /// Les thèmes, dans l'ordre du serveur — « Autre » en dernier.
+    let themes: [TripTheme]
     @Binding var selection: TripTheme?
 
     /// Prévenu du thème choisi, pour que l'étape range son clavier quand le
@@ -207,67 +230,135 @@ struct TripThemePicker: View {
     /// pastille est au milieu.
     @ScaledMetric(relativeTo: .title) private var itemWidth: CGFloat = 72
 
-    /// La hauteur réservée : l'émoji au plus gros, et la ligne du libellé. Elle
-    /// ne bouge pas avec la sélection, sinon toute l'étape sauterait à chaque
-    /// choix.
-    @ScaledMetric(relativeTo: .title) private var rowHeight: CGFloat = 74
+    /// La hauteur de la rangée : l'émoji au plus gros. Elle ne bouge pas avec
+    /// la sélection, sinon toute l'étape sauterait à chaque glissé.
+    @ScaledMetric(relativeTo: .title) private var rowHeight: CGFloat = 54
+
+    /// La boîte du nom, réservée qu'il soit écrit ou non : le libellé arrive
+    /// et repart sans décaler ce qui est dessous.
+    @ScaledMetric(relativeTo: .subheadline) private var labelBox: CGFloat = 20
+
+    /// Le thème arrêté au centre de la rangée. C'est la position de défilement
+    /// elle-même, que SwiftUI pose à l'arrêt ; ``selection`` la suit.
+    @State private var centered: TripTheme.ID?
 
     var body: some View {
-        GeometryReader { proxy in
-            // Ce qu'il faut de chaque côté pour qu'une pastille de bord puisse
-            // venir au milieu.
-            let inset = max(0, (proxy.size.width - itemWidth) / 2)
+        VStack(spacing: MemoBookSpacing.xs) {
+            GeometryReader { proxy in
+                // Ce qu'il faut de chaque côté pour qu'une pastille de bord
+                // puisse venir au milieu.
+                let inset = max(0, (proxy.size.width - itemWidth) / 2)
 
-            ScrollViewReader { scroll in
                 ScrollView(.horizontal) {
                     HStack(spacing: 0) {
-                        ForEach(TripTheme.all) { theme in
-                            TripThemeButton(
-                                theme: theme,
-                                isSelected: selection == theme
-                            ) {
-                                choose(theme, scroll: scroll)
+                        ForEach(themes) { theme in
+                            TripThemeButton(theme: theme, isSelected: selection == theme) {
+                                choose(theme)
                             }
                             .frame(width: itemWidth)
                             .id(theme.id)
                         }
                     }
+                    .scrollTargetLayout()
                 }
                 .scrollIndicators(.hidden)
-                .safeAreaPadding(.horizontal, inset)
-                // Le thème choisi revient au centre quand on repasse par
-                // l'étape — la flèche de retour, par exemple. Sans choix, la
-                // rangée s'ouvre sur son **milieu** et non sur son début :
-                // c'est le cadrage de la maquette, et le seul qui montre des
-                // thèmes des deux côtés au lieu d'une moitié d'écran vide.
-                .onAppear {
-                    scroll.scrollTo(selection?.id ?? TripTheme.middle.id, anchor: .center)
-                }
+                // Une marge de contenu et non un `padding` : c'est elle que
+                // l'alignement sur les pastilles prend en compte pour poser la
+                // première et la dernière au centre.
+                .contentMargins(.horizontal, inset, for: .scrollContent)
+                .scrollTargetBehavior(.viewAligned)
+                .scrollPosition(id: $centered, anchor: .center)
             }
+            .frame(height: rowHeight)
+
+            Text(selection?.label ?? " ")
+                // Le corps des intitulés (14) et non celui des légendes (12) :
+                // c'est le seul mot qui nomme ce qu'on vient de choisir, il se
+                // lit sans se pencher.
+                .font(MemoBookFont.label)
+                .foregroundStyle(MemoBookColor.inkMuted)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity)
+                .frame(height: labelBox)
+                .contentTransition(.opacity)
+                .animation(.smooth(duration: 0.3), value: selection)
+                .accessibilityHidden(true)
         }
-        .frame(height: rowHeight)
+        // La rangée s'ouvre sur le thème choisi, ou sur son **milieu** — c'est
+        // le cadrage de la maquette, celui qui montre des thèmes des deux côtés
+        // au lieu d'une moitié d'écran vide — et ce qui est au milieu devient
+        // le choix, comme pour n'importe quel glissé. « Autre » étant dernier,
+        // le milieu est toujours un thème précis.
+        .onAppear { centered = (selection ?? middle)?.id }
+        .onChange(of: centered) { _, id in
+            guard let theme = themes.first(where: { $0.id == id }), theme != selection else { return }
+            select(theme)
+        }
+        // La sélection peut changer sans la rangée — revenir sur l'étape après
+        // « Passer », par exemple : la rangée la rejoint.
+        .onChange(of: selection) { _, theme in
+            guard let theme, centered != theme.id else { return }
+            withAnimation(.smooth(duration: 0.3)) { centered = theme.id }
+        }
     }
 
-    private func choose(_ theme: TripTheme, scroll: ScrollViewProxy) {
+    /// Le thème du milieu de la rangée. Ce n'est pas un choix, c'est un
+    /// **cadrage** : c'est là que le carrousel s'ouvre.
+    private var middle: TripTheme? {
+        themes.isEmpty ? nil : themes[themes.count / 2]
+    }
+
+    /// Toucher un thème l'amène au centre ; c'est l'arrêt au centre qui choisit,
+    /// le même chemin que le glissé.
+    private func choose(_ theme: TripTheme) {
+        withAnimation(.smooth(duration: 0.3)) { centered = theme.id }
+        select(theme)
+    }
+
+    private func select(_ theme: TripTheme) {
         onSelect(theme)
-        // Un seul bloc animé : la pastille grossit, la rangée se recentre et le
-        // champ libre se déplie **du même mouvement**. Écrits séparément, les
-        // trois se décalaient les uns des autres.
+        // Un seul bloc animé : la pastille grossit et le champ libre se déplie
+        // **du même mouvement**. Écrits séparément, les deux se décalaient.
         withAnimation(.smooth(duration: 0.3)) {
             selection = theme
-            scroll.scrollTo(theme.id, anchor: .center)
         }
+    }
+}
+
+/// La rangée, le temps que les thèmes arrivent : cinq ronds effacés à la place
+/// des émojis, et une barre à la place du nom. Les mêmes hauteurs que la vraie
+/// rangée, pour que rien ne saute quand elle se remplit.
+struct TripThemePickerPlaceholder: View {
+    @ScaledMetric(relativeTo: .title) private var rowHeight: CGFloat = 54
+    @ScaledMetric(relativeTo: .title) private var dot: CGFloat = 25
+    @ScaledMetric(relativeTo: .subheadline) private var labelBox: CGFloat = 20
+
+    var body: some View {
+        VStack(spacing: MemoBookSpacing.xs) {
+            HStack(spacing: MemoBookSpacing.l) {
+                ForEach(0..<5, id: \.self) { index in
+                    Circle()
+                        .fill(MemoBookColor.ink.opacity(index == 2 ? 0.12 : 0.07))
+                        .frame(width: index == 2 ? dot * 1.7 : dot, height: index == 2 ? dot * 1.7 : dot)
+                }
+            }
+            .frame(height: rowHeight)
+
+            BrandSkeleton(width: 120)
+                .frame(height: labelBox)
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement()
+        .accessibilityLabel("Chargement des thèmes")
     }
 }
 
 // MARK: - Un émoji de thème
 
-/// Un thème : son émoji, et son nom seulement quand il est choisi.
-///
-/// C'est le dessin de la maquette, et il tient debout : sept libellés côte à
-/// côte formeraient un mur de texte, alors qu'un seul dit ce qu'on vient de
-/// choisir. VoiceOver, lui, entend toujours le nom — sans quoi la rangée serait
-/// sept boutons sans étiquette.
+/// Un thème : son émoji, gros et à pleine encre quand il est choisi, plus petit
+/// et effacé sinon. Son nom, lui, s'écrit sous la rangée — voir
+/// ``TripThemePicker``. VoiceOver, en revanche, entend toujours le nom : sans
+/// quoi la rangée serait sept boutons sans étiquette.
 ///
 /// L'agrandissement est un `scaleEffect` et non un changement de corps : une
 /// taille de police ne s'anime pas, elle saute d'une valeur à l'autre.
@@ -277,9 +368,13 @@ struct TripThemeButton: View {
     let action: () -> Void
 
     /// Le rapport entre le thème choisi et ses voisins. Il est franc — presque
-    /// du simple au double — parce que c'est **la seule** chose qui dit lequel
+    /// du simple au double — parce que c'est, avec l'opacité, ce qui dit lequel
     /// est choisi : il n'y a ni pastille, ni contour, ni coche.
     private static let selectedScale: CGFloat = 1.7
+
+    /// L'opacité des voisins : 60 %, la valeur de la maquette (Hugo,
+    /// 14/09/2026). Le choisi est à 100 %.
+    private static let unselectedOpacity: Double = 0.6
 
     @ScaledMetric(relativeTo: .title) private var side: CGFloat = 25
 
@@ -287,35 +382,19 @@ struct TripThemeButton: View {
     /// hauteur de ligne que les polices d'émoji ajoutent autour du dessin.
     @ScaledMetric(relativeTo: .title) private var emojiBox: CGFloat = 46
 
-    /// La boîte du libellé, réservée qu'il soit écrit ou non.
-    @ScaledMetric(relativeTo: .subheadline) private var labelBox: CGFloat = 20
-
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 6) {
-                Text(theme.emoji)
-                    .font(.system(size: side))
-                    .scaleEffect(isSelected ? Self.selectedScale : 1)
-                    // La place du plus gros, toujours, et **la même pour
-                    // tous** : c'est cette boîte, et non la hauteur du glyphe,
-                    // qui pose la ligne médiane de la rangée. Sans elle, un
-                    // émoji haut comme la bulle remontait ses voisins.
-                    .frame(height: emojiBox)
-
-                Text(isSelected ? theme.label : " ")
-                    // Le corps des intitulés (14) et non celui des légendes
-                    // (12) : c'est le seul mot qui nomme ce qu'on vient de
-                    // choisir, il se lit sans se pencher.
-                    .font(MemoBookFont.label)
-                    .foregroundStyle(MemoBookColor.inkSecondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                    // Réservé pour tous, comme la boîte au-dessus : le libellé
-                    // du thème choisi ne doit pas décaler la rangée.
-                    .frame(height: labelBox)
-            }
-            .frame(maxWidth: .infinity)
-            .contentShape(.rect)
+            Text(theme.emoji)
+                .font(.system(size: side))
+                .scaleEffect(isSelected ? Self.selectedScale : 1)
+                .opacity(isSelected ? 1 : Self.unselectedOpacity)
+                // La place du plus gros, toujours, et **la même pour tous** :
+                // c'est cette boîte, et non la hauteur du glyphe, qui pose la
+                // ligne médiane de la rangée. Sans elle, un émoji haut comme la
+                // bulle remontait ses voisins.
+                .frame(height: emojiBox)
+                .frame(maxWidth: .infinity)
+                .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .animation(.smooth(duration: 0.3), value: isSelected)
@@ -405,7 +484,7 @@ struct TripDateRow: View {
 
                     Text(text)
                         .font(MemoBookFont.body)
-                        .foregroundStyle(date == nil ? MemoBookColor.inkSecondary : MemoBookColor.ink)
+                        .foregroundStyle(date == nil ? MemoBookColor.inkMuted : MemoBookColor.ink)
 
                     Spacer(minLength: 0)
 
@@ -418,7 +497,7 @@ struct TripDateRow: View {
                                 .resizable()
                                 .scaledToFit()
                                 .frame(width: 14, height: 14)
-                                .foregroundStyle(MemoBookColor.inkSecondary)
+                                .foregroundStyle(MemoBookColor.inkMuted)
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Effacer \(label)")
@@ -476,11 +555,11 @@ struct TripAccessCode: View {
                 HStack(spacing: MemoBookSpacing.xs) {
                     Text("Code d’accès : \(code)")
                         .font(MemoBookFont.body)
-                        .foregroundStyle(MemoBookColor.inkSecondary)
+                        .foregroundStyle(MemoBookColor.inkMuted)
 
                     Image(systemName: hasCopied ? "checkmark" : "doc.on.doc")
                         .font(.system(size: 15))
-                        .foregroundStyle(hasCopied ? MemoBookColor.valid : MemoBookColor.inkSecondary)
+                        .foregroundStyle(hasCopied ? MemoBookColor.valid : MemoBookColor.inkMuted)
                 }
                 .contentShape(.rect)
             }

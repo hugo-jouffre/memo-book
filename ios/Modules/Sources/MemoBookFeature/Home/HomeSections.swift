@@ -50,13 +50,18 @@ struct HomeSectionHeading: View {
     }
 }
 
-/// La pastille lime qui compte les carnets d'une section. Lime est l'accent du
-/// scheme : il ne sert qu'à ça, ponctuellement, jamais en aplat large.
+/// La pastille qui compte les carnets d'une section.
+///
+/// **Bleue à contour**, et non lime : la maquette montrait les deux, et Hugo a
+/// tranché (14/09/2026, T36) — le lime ne parle que de l'abonnement, un compte
+/// de voyages n'en parle pas. Elle compte les voyages **de la liste** qu'elle
+/// coiffe, dont toutes les cartes sont visibles ; le « ×8 » d'une maquette à
+/// carte unique était une erreur (T15).
 struct CountBadge: View {
     let count: Int
 
     var body: some View {
-        BrandTagPill("×\(count)")
+        BrandTagPill("×\(count)", tone: .info)
             .accessibilityLabel("\(count) au total")
     }
 }
@@ -126,7 +131,10 @@ struct ShowcaseCard: View {
                 .foregroundStyle(MemoBookColor.blueText)
             Text(showcase.subtitle)
                 .font(MemoBookFont.label)
-                .foregroundStyle(MemoBookColor.blueTextSoft)
+                // Le même bleu que le titre, un cran plus petit et plus léger :
+                // la hiérarchie se fait au corps et à la graisse, pas avec un
+                // second bleu — il n'y en a que trois dans la palette (T12).
+                .foregroundStyle(MemoBookColor.blueText)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .multilineTextAlignment(.leading)
@@ -163,9 +171,11 @@ struct ShowcaseCard: View {
             .resizable()
             .renderingMode(.template)
             .scaledToFit()
-            .frame(width: MemoBookSpacing.m, height: MemoBookSpacing.m)
+            .frame(width: MemoBookSpacing.contentIcon, height: MemoBookSpacing.contentIcon)
             .foregroundStyle(MemoBookColor.blueText)
-            .padding(MemoBookSpacing.xs)
+            // Le rond garde ses 40 pt : c'est le dessin qui grandit dedans, pas
+            // le rond — voir ``MemoBookSpacing/contentIcon``.
+            .padding(MemoBookSpacing.xs / 2)
             .background(MemoBookColor.surface, in: .circle)
             .overlay { Circle().strokeBorder(MemoBookColor.blueText, lineWidth: 1.5) }
             .accessibilityHidden(true)
@@ -181,6 +191,11 @@ struct ShowcaseCard: View {
 struct UpcomingTripInvite: View {
     let onOpen: () -> Void
 
+    /// La seconde ligne : ce que le doigt déclenche. Elle change avec l'endroit
+    /// où la carte est posée — ouvrir un carnet depuis l'accueil, voir les
+    /// carnets de la communauté depuis la feuille des commandes.
+    var subtitle = "Clique ici pour ouvrir ton prochain carnet"
+
     var body: some View {
         Button(action: onOpen) {
             VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
@@ -191,11 +206,11 @@ struct UpcomingTripInvite: View {
                         .font(MemoBookFont.bodySemibold)
                         .foregroundStyle(MemoBookColor.ink)
 
-                    // La carte menait aux carnets de la communauté ; elle
-                    // ouvre désormais la feuille « Nouveau carnet ». La phrase
-                    // suit la destination : elle dit ce que le doigt déclenche,
-                    // et rien d'autre. À reprendre dans Figma.
-                    Text("Clique ici pour ouvrir ton prochain carnet")
+                    // La phrase suit la destination : elle dit ce que le doigt
+                    // déclenche, et rien d'autre. Sur l'accueil, la carte
+                    // menait aux carnets de la communauté et ouvre désormais la
+                    // feuille « Nouveau carnet » — à reprendre dans Figma.
+                    Text(subtitle)
                         .font(MemoBookFont.label)
                         .foregroundStyle(MemoBookColor.inkMuted)
                 }

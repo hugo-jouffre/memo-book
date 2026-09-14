@@ -201,7 +201,8 @@ public final class AppDependencies {
     public func tripCreationModel() -> TripCreationModel {
         TripCreationModel(
             create: { [api] draft in try await api.createTrip(draft) },
-            update: { [api] id, draft in try await api.updateTrip(id: id, draft: draft) }
+            update: { [api] id, draft in try await api.updateTrip(id: id, draft: draft) },
+            themes: { [api] in try await api.tripThemes() }
         )
     }
 

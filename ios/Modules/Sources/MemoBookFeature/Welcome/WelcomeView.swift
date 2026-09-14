@@ -115,7 +115,7 @@ public struct WelcomeView: View {
         }
         .font(MemoBookFont.body)
         .tracking(MemoBookFont.tracking(16))
-        .foregroundStyle(MemoBookColor.inkSecondary)
+        .foregroundStyle(MemoBookColor.inkMuted)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, MemoBookSpacing.screenMargin)
     }

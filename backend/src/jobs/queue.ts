@@ -29,9 +29,13 @@ export class PgBossQueue implements JobQueue {
   private readonly handlers = new Map<JobName, JobHandler<never>>();
   private started = false;
 
-  constructor(connectionString: string) {
+  constructor(connectionString: string, options: { maxConnections?: number } = {}) {
     this.boss = new PgBoss({
       connectionString,
+      // Sans plafond, pg-boss ouvre jusqu'à 10 connexions : sur le pooler
+      // Supabase (15 clients), c'est les deux tiers du budget pour une file
+      // qui traite quelques jobs par jour.
+      max: options.maxConnections ?? 2,
       retryLimit: 3,
       retryDelay: 30,
       retryBackoff: true,

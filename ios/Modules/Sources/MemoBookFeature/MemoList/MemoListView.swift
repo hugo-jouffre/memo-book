@@ -108,7 +108,7 @@ private struct MemoRow: View {
             HStack(spacing: MemoBookSpacing.xs) {
                 Text(subtitle)
                     .font(MemoBookFont.caption)
-                    .foregroundStyle(MemoBookColor.inkSecondary)
+                    .foregroundStyle(MemoBookColor.inkMuted)
 
                 if let render = memo.latestRender {
                     StatusBadge(render.status)

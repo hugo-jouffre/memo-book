@@ -34,6 +34,17 @@ export async function openSession(
   return { token, expiresAt, account };
 }
 
+/**
+ * Les étapes offertes à l'ouverture d'un compte — **trois**, dès la création,
+ * quel que soit le chemin d'entrée (Hugo, 14/09/2026).
+ *
+ * C'est ce que l'accueil annonce (« 3 étapes offertes ») et ce que le paywall
+ * décompte. Un compte créé sans quota naissait avec `null`, que l'app lisait
+ * comme un compte sans limite : l'abonné et le nouvel arrivant se
+ * ressemblaient.
+ */
+export const OFFERED_STEPS_ON_SIGNUP = 3;
+
 export async function signUpWithPassword(
   prisma: PrismaClient,
   input: { email: string; password: string; firstName?: string; lastName?: string },
@@ -55,6 +66,8 @@ export async function signUpWithPassword(
       firstName: input.firstName?.trim() || null,
       lastName: input.lastName?.trim() || null,
       passwordHash: await hashPassword(input.password),
+      offeredSteps: OFFERED_STEPS_ON_SIGNUP,
+      remainingSteps: OFFERED_STEPS_ON_SIGNUP,
     },
   });
 
@@ -140,6 +153,8 @@ export async function signInWithIdentity(
         emailVerifiedAt: verifiedEmail ? new Date() : null,
         firstName: profile.firstName?.trim() || null,
         lastName: profile.lastName?.trim() || null,
+        offeredSteps: OFFERED_STEPS_ON_SIGNUP,
+        remainingSteps: OFFERED_STEPS_ON_SIGNUP,
       },
     }));
 

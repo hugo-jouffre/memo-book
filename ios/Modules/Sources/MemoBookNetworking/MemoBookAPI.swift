@@ -57,6 +57,10 @@ public protocol MemoBookAPI: Sendable {
     /// doit pas créer un second voyage.
     func updateTrip(id: String, draft: TripDraft) async throws -> CreatedTrip
 
+    /// Les thèmes de « Contexte de ton voyage », dans l'ordre du serveur —
+    /// « Autre » en dernier. Une table de référence, pas une liste dans l'app.
+    func tripThemes() async throws -> [TripTheme]
+
     /// La galerie des carnets de la communauté : ses catégories, les carnets
     /// publics, et le voyage que celui qui regarde peut reprendre.
     func gallery() async throws -> Gallery

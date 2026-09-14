@@ -1289,3 +1289,42 @@ model FeedbackAnswer {
   @@index([questionId])
   @@map("feedback_answers")
 }
+
+/// Les thèmes proposés à la première étape de « Créer un voyage » — « Contexte
+/// de ton voyage ».
+///
+/// **Une table et non une liste dans l'app** : en ajouter, en renommer ou en
+/// éteindre un ne demande pas de livrer une version. Arrêtés par Hugo le
+/// 14/09/2026, posés par `prisma/tripThemes.ts`.
+///
+/// Le libellé part **tel quel** dans `memos.theme` : c'est du texte lu par
+/// l'agent de rédaction, pas une clé.
+model TripTheme {
+  id String @id @default(uuid())
+
+  /// L'identifiant stable, celui qu'on écrit dans un script. `name` peut
+  /// changer, `slug` non.
+  slug String @unique
+
+  /// L'émoji de la rangée, et le nom écrit dessous.
+  emoji String
+  name  String
+
+  /// « Autre » : le thème qui n'en est pas un et ouvre un champ libre. La route
+  /// le sert toujours **en dernier**, quelle que soit sa position — on préfère
+  /// un thème précis.
+  isOther Boolean @default(false)
+
+  /// Ordre dans la rangée, du plus petit au plus grand.
+  position Int @default(0)
+
+  /// Retiré de la rangée sans être supprimé : les voyages qui le citent
+  /// gardent un texte qui existe quelque part.
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, position])
+  @@map("trip_themes")
+}
