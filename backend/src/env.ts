@@ -26,6 +26,13 @@ const schema = z.object({
     .default("info"),
 
   DATABASE_URL: z.string().min(1),
+  /**
+   * Connexions Postgres qu'un process peut ouvrir, Prisma et pg-boss compris.
+   * Le Session pooler de Supabase n'en accepte que 15 pour tout le projet :
+   * ce budget laisse tourner un serveur, un worker et un `prisma studio` sans
+   * que le 16ᵉ client soit refusé. Voir `lib/databasePool.ts`.
+   */
+  DATABASE_POOL_SIZE: z.coerce.number().int().min(2).max(50).default(5),
 
   // Optionnels ici, vérifiés au moment de construire le client dans
   // `createMediaStorage`. En test et pendant le smoke, le stockage est en
