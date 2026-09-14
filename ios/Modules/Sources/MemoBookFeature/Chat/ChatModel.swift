@@ -548,28 +548,31 @@ public final class ChatModel {
     }
 }
 
-// MARK: - Débogage
+// MARK: - Aperçus
 
-#if DEBUG
-    extension ChatModel {
-        /// Une conversation déjà remplie, pour les aperçus. Dans une extension
-        /// `#if DEBUG` du fichier du modèle, parce que `private(set)` ne s'ouvre
-        /// qu'ici.
-        static func preview(
-            thread: ChatThread,
-            turn: ChatTurnState = .idle,
-            composer: ChatComposerMode = .tools,
-            draft: String = "",
-            microphoneIsDenied: Bool = false,
-            focusStepId: String? = nil
-        ) -> ChatModel {
-            let model = ChatModel(source: { thread }, focusStepId: focusStepId)
-            model.thread = thread
-            model.turn = turn
-            model.composer = composer
-            model.draft = draft
-            model.microphoneIsDenied = microphoneIsDenied
-            return model
-        }
+extension ChatModel {
+    /// Une conversation déjà remplie, pour les aperçus. Dans une extension du
+    /// fichier du modèle, parce que `private(set)` ne s'ouvre qu'ici.
+    ///
+    /// Pas de `#if DEBUG` : un `#Preview` se compile **aussi** en release, donc
+    /// ce que l'aperçu appelle doit exister en release. Sinon l'archive casse,
+    /// alors que la compilation de debug passait. C'est la règle du paquet —
+    /// les jeux d'essai des aperçus (`ChatThread.fixture`, `HomeFeed.emptyFixture`)
+    /// se compilent partout ; seuls les panneaux du bac à sable sont en `#if DEBUG`.
+    static func preview(
+        thread: ChatThread,
+        turn: ChatTurnState = .idle,
+        composer: ChatComposerMode = .tools,
+        draft: String = "",
+        microphoneIsDenied: Bool = false,
+        focusStepId: String? = nil
+    ) -> ChatModel {
+        let model = ChatModel(source: { thread }, focusStepId: focusStepId)
+        model.thread = thread
+        model.turn = turn
+        model.composer = composer
+        model.draft = draft
+        model.microphoneIsDenied = microphoneIsDenied
+        return model
     }
-#endif
+}
