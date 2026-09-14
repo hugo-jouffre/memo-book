@@ -82,7 +82,7 @@ struct EntryEditorView: View {
                         DisclosureGroup("Ce que tu as raconté", isExpanded: $showsTranscript) {
                             Text(transcript)
                                 .font(MemoBookFont.caption)
-                                .foregroundStyle(MemoBookColor.inkSecondary)
+                                .foregroundStyle(MemoBookColor.inkMuted)
                                 .textSelection(.enabled)
                         }
                     } footer: {
@@ -144,7 +144,7 @@ private struct ParagraphLengthHint: View {
                 : "\(longestParagraph)/\(Self.maxCharactersPerParagraph) caractères sur le plus long paragraphe."
         )
         .font(MemoBookFont.caption)
-        .foregroundStyle(isOverLimit ? MemoBookColor.error : MemoBookColor.inkSecondary)
+        .foregroundStyle(isOverLimit ? MemoBookColor.error : MemoBookColor.inkMuted)
     }
 }
 
@@ -160,7 +160,7 @@ private struct RedactionFailureNotice: View {
 
             Text(message ?? "Le texte affiché est ta transcription brute. Tu peux la corriger à la main ou réessayer.")
                 .font(MemoBookFont.caption)
-                .foregroundStyle(MemoBookColor.inkSecondary)
+                .foregroundStyle(MemoBookColor.inkMuted)
 
             Button("Réessayer", action: onRetry)
                 .buttonStyle(.bordered)

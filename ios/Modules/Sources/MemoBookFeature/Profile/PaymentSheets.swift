@@ -32,10 +32,13 @@ struct PaymentMethodSheet: View {
                     ApplePayRow()
                 }
 
+                // Le dessin groupé du bouton convient, et le « + » passe
+                // **devant** le libellé — Hugo, 14/09/2026 (T21). La maquette
+                // écartait les deux aux extrémités ; ce n'est plus ce qu'on
+                // veut.
                 BrandButton(
                     "Ajouter une carte",
                     icon: Image(brand: "IconPlus"),
-                    iconPlacement: .trailing,
                     fillsWidth: true
                 ) {
                     isAddingCard = true

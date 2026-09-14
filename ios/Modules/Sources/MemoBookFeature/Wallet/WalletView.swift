@@ -460,7 +460,7 @@ private struct WalletEntryRow: View {
                         .resizable()
                         .renderingMode(.template)
                         .scaledToFit()
-                        .frame(width: MemoBookSpacing.snug + 2, height: MemoBookSpacing.snug + 2)
+                        .frame(width: MemoBookSpacing.m, height: MemoBookSpacing.m)
                         .foregroundStyle(MemoBookColor.ink)
                 }
             }
@@ -606,7 +606,9 @@ private struct WalletEmptyCard: View {
             Text(verbatim: "🎁")
                 .font(.system(size: MemoBookSpacing.m))
                 .frame(width: min(markSide, 72), height: min(markSide, 72))
-                .background(MemoBookColor.accent.opacity(0.5), in: .circle)
+                // Bleu et non lime : la cagnotte n'est pas l'abonnement, et le
+                // lime ne parle que de lui — voir ``MemoBookColor/accent`` (T7).
+                .background(MemoBookColor.outline.opacity(0.5), in: .circle)
                 .accessibilityHidden(true)
 
             VStack(spacing: MemoBookSpacing.xs / 2 + 2) {

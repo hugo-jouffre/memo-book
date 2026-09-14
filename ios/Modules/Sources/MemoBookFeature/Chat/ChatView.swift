@@ -48,19 +48,29 @@ public struct ChatView: View {
     /// photothèque ou appareil photo. Voir ``ChatPhotoFlow``.
     @State private var photos = ChatPhotoFlow()
 
+    /// Le paywall, ouvert par le micro quand les étapes offertes sont épuisées
+    /// — le même verrou que sur l'accueil et sur un voyage.
+    @State private var showsPaywall = false
+    @Environment(\.subscriptionSession) private var subscriptionSession
+
     /// L'étape sur laquelle il reste à se poser en arrivant. Consommée **une
     /// fois** : se replacer à chaque nouveau message empêcherait de lire la
     /// suite.
     @State private var pendingFocus: String?
 
+    /// - Parameter handoff: le vocal enregistré depuis l'accueil, à poser dans
+    ///   le fil dès qu'il est chargé — voir ``RecordingHandoff``.
     public init(
         tripId: String,
         stepId: String? = nil,
+        handoff: RecordingHandoff? = nil,
         onIntent: @escaping (ChatIntent) -> Void = { _ in }
     ) {
         self.tripId = tripId
         self.onIntent = onIntent
-        _model = State(initialValue: ChatModel(tripId: tripId, focusStepId: stepId))
+        let model = ChatModel(tripId: tripId, focusStepId: stepId)
+        if let handoff { model.expect(handoff) }
+        _model = State(initialValue: model)
         _pendingFocus = State(initialValue: stepId)
     }
 
@@ -105,6 +115,22 @@ public struct ChatView: View {
         .task { await model.load() }
         // Un écran de chat laissé derrière soi ne doit ni parler ni enregistrer.
         .onDisappear { model.teardown() }
+        // Le verrou des étapes offertes : le micro mène au paywall au lieu de
+        // s'ouvrir, tant qu'on n'est pas abonné (Hugo, 14/09/2026).
+        .onAppear { model.onRecordingLocked = { showsPaywall = true } }
+        .onChange(of: subscriptionSession?.isBlocked, initial: true) { _, blocked in
+            model.isRecordingLocked = blocked == true
+        }
+        .fullScreenCover(isPresented: $showsPaywall) {
+            PaywallView(
+                subscription: .offer,
+                previewMemoId: tripId,
+                onSubscribe: {
+                    subscriptionSession?.record(isSubscribed: true)
+                    showsPaywall = false
+                }
+            )
+        }
     }
 
     // MARK: - Le fil

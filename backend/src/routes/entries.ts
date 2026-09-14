@@ -5,6 +5,7 @@ import { JOB_NAMES, type RedactJob, type TranscribeJob } from "../jobs/index.js"
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
+import { assertCanRecord } from "../services/quota.js";
 import { loadVisibleMemo } from "./memos.js";
 import { serializeEntry } from "./serializers.js";
 
@@ -49,6 +50,10 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
   app.post("/v1/memos/:id/entries", async (request, reply) => {
     const { id: memoId } = memoIdParams.parse(request.params);
     await loadVisibleMemo(context, request, memoId);
+
+    // Le verrou des étapes offertes, **avant** de lire le fichier : à quota
+    // épuisé et sans abonnement, rien n'entre — voir `services/quota.ts`.
+    await assertCanRecord(context.prisma, accountIdOf(request));
 
     if (!request.isMultipart()) {
       const body = textEntryBody.parse(request.body ?? {});

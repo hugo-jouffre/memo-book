@@ -192,7 +192,7 @@ private struct BookCompositionView: View {
                     subtitle: BookCopy.Composition.message
                 ) {
                     BrandHeaderAction(
-                        icon: "IconTeleverser",
+                        icon: "IconShareSystem",
                         label: BookCopy.Preview.Voice.share,
                         action: onShare
                     )
@@ -267,7 +267,7 @@ private struct BookReaderView: View {
                     isSubtitleLoading: model.preview == nil
                 ) {
                     BrandHeaderAction(
-                        icon: "IconTeleverser",
+                        icon: "IconShareSystem",
                         label: BookCopy.Preview.Voice.share,
                         action: onShare
                     )

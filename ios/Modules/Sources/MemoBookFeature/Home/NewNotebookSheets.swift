@@ -169,7 +169,9 @@ struct NewNotebookOptionCard: View {
     /// Voir « Fond d'icône » dans `docs/ui-development.md`.
     @ScaledMetric(relativeTo: .body) private var plateWidth: CGFloat = 44
     @ScaledMetric(relativeTo: .body) private var plateHeight: CGFloat = 40
-    @ScaledMetric(relativeTo: .body) private var glyphSide: CGFloat = 20
+    /// Le glyphe remplit presque la plaque : dessiné à 20, il n'en faisait que
+    /// la moitié — voir ``MemoBookSpacing/contentIcon``.
+    @ScaledMetric(relativeTo: .body) private var glyphSide: CGFloat = 28
     @ScaledMetric(relativeTo: .body) private var arrowSide: CGFloat = 24
 
     private var shape: RoundedRectangle {

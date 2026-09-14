@@ -148,7 +148,7 @@ private struct CoverActionRow: View {
     let title: String
     let action: () -> Void
 
-    @ScaledMetric(relativeTo: .body) private var iconSide: CGFloat = 24
+    @ScaledMetric(relativeTo: .body) private var iconSide: CGFloat = MemoBookSpacing.contentIcon
     @ScaledMetric(relativeTo: .body) private var chevronSide: CGFloat = 14
 
     var body: some View {

@@ -23,6 +23,13 @@ public struct TripHomeView: View {
     private let onIntent: (TripIntent) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.subscriptionSession) private var subscriptionSession
+
+    /// Le paywall, ouvert par le micro quand les étapes offertes sont épuisées
+    /// — le même verrou que sur l'accueil, voir ``SubscriptionSession/isBlocked``.
+    @State private var showsPaywall = false
+
+    private var isBlocked: Bool { subscriptionSession?.isBlocked == true }
 
     /// - Parameters:
     ///   - tripId: le voyage à ouvrir. Il ne sert qu'à construire le modèle par
@@ -85,6 +92,20 @@ public struct TripHomeView: View {
         .environment(\.colorScheme, .light)
         .task { await model.load() }
         .refreshable { await model.load() }
+        .fullScreenCover(isPresented: $showsPaywall) {
+            PaywallView(
+                subscription: .offer,
+                previewMemoId: model.detail?.trip.id,
+                onSubscribe: {
+                    subscriptionSession?.record(isSubscribed: true)
+                    showsPaywall = false
+                },
+                onHelp: {
+                    showsPaywall = false
+                    onIntent(.openHelp)
+                }
+            )
+        }
     }
 
     /// Le panneau crème qui recouvre le bas de la photo.
@@ -181,11 +202,21 @@ public struct TripHomeView: View {
                     .accessibilityAddTraits(.isHeader)
             }
 
+            // Verrouillé, le bouton passe au lime et au cadenas, et ouvre le
+            // paywall au lieu de la conversation — exactement comme le CTA de
+            // l'accueil (Hugo, 14/09/2026).
             BrandButton(
                 "Continuer à enregistrer",
-                icon: Image(brand: "IconMic"),
+                icon: Image(brand: isBlocked ? "IconLocker" : "IconMic"),
+                style: isBlocked ? .accent : .primary,
                 fillsWidth: true,
-                action: { onIntent(.tellMore(tripId: detail.trip.id)) }
+                action: {
+                    if isBlocked {
+                        showsPaywall = true
+                    } else {
+                        onIntent(.tellMore(tripId: detail.trip.id))
+                    }
+                }
             )
             // Le libellé suit le Dynamic Type, mais s'arrête à AX1 : au-delà,
             // « enregistrer » est plus large que le bouton entier et se coupe

@@ -32,7 +32,28 @@ final class SubscriptionSession {
     /// données reçues.
     private(set) var override: FreemiumStatus?
 
+    /// Le dernier palier **lu du serveur**, tel que l'accueil l'a reçu. C'est
+    /// ce qui permet aux écrans qui n'ont pas de quota dans leur réponse — un
+    /// voyage, la conversation — de savoir s'ils ont le droit d'enregistrer.
+    private(set) var known: FreemiumStatus?
+
     init() {}
+
+    /// L'accueil vient de lire son contenu : il dit à la session ce que le
+    /// serveur sait du palier.
+    func learn(_ status: FreemiumStatus) {
+        known = status
+    }
+
+    /// Le palier tel que l'app le tient pour vrai : ce que la session a imposé
+    /// d'abord, sinon ce que le serveur a dit. `nil` tant qu'on ne sait rien.
+    var current: FreemiumStatus? { override ?? known }
+
+    /// **Le verrou.** Les étapes offertes sont épuisées et rien n'a été
+    /// souscrit : plus aucun micro ne s'ouvre, tous mènent au paywall — l'accueil,
+    /// un voyage, la conversation. Hugo, 14/09/2026. Le serveur refuse de son
+    /// côté (`quota_exhausted`) : ceci n'est que la porte, pas la serrure.
+    var isBlocked: Bool { current?.isBlocked == true }
 
     /// Souscrire ou résilier depuis la feuille d'abonnement.
     ///

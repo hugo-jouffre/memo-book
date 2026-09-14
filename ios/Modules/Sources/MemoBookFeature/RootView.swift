@@ -58,6 +58,11 @@ public struct RootView: View {
     /// Ce qui empêche d'aller là où on vient de demander à aller. Une alerte
     /// **sur l'accueil**, et non un écran poussé qui ne montrerait qu'une
     /// erreur : quand la destination n'existe pas, on ne quitte pas la page.
+    /// Le vocal enregistré depuis l'accueil, le temps d'ouvrir la conversation
+    /// qui va le montrer. Il ne survit pas à la fermeture de celle-ci : rouvrir
+    /// un fil ne doit pas y reposer un vocal déjà posé.
+    @State private var recordingHandoff: RecordingHandoff?
+
     @State private var routingProblem: String?
 
     public init() {}
@@ -100,6 +105,12 @@ public struct RootView: View {
                             .navigationDestination(for: HomeRoute.self, destination: destination)
                     }
                     .tint(MemoBookColor.action)
+                    // Le vocal en route vers la conversation ne vit que le temps
+                    // de celle-ci : refermer le fil le jette.
+                    .onChange(of: path) { _, routes in
+                        let isChatting = routes.contains { if case .chat = $0 { true } else { false } }
+                        if !isChatting { recordingHandoff = nil }
+                    }
                     // Le prénom du compte, pour les deux écrans qui s'adressent
                     // à la personne : le mot des fondateurs et le support. Il
                     // était déclaré depuis le mot des fondateurs mais **jamais
@@ -230,9 +241,10 @@ public struct RootView: View {
     /// ici que ça se voit. La carte de découverte, elle, ouvre désormais la
     /// galerie des carnets de la communauté.
     ///
-    /// L'enregistrement, lui, ne passe pas par ici : la feuille rend son vocal
-    /// à ``HomeModel/upload(_:)``, qui l'envoie aux carnets en cours. Il n'y a
-    /// pas d'écran au bout, donc rien à router.
+    /// L'envoi d'un vocal, lui, ne passe pas par ici : la feuille le rend à
+    /// ``HomeModel/upload(_:)``, qui l'envoie aux carnets en cours. Ce qui
+    /// passe par ici, c'est **la suite** — on arrive dans la conversation du
+    /// voyage, le vocal déjà posé dans le fil (``RecordingHandoff``).
     private func handle(_ intent: HomeIntent) {
         switch intent {
         case .openProfile:
@@ -273,6 +285,11 @@ public struct RootView: View {
             path.append(.bookPreview(memoId: tripId))
         case .openHelp:
             path.append(.support)
+        case .openConversation(let tripId, let handoff):
+            // Le paquet est posé **avant** la destination : c'est en se
+            // construisant que la conversation le lit.
+            recordingHandoff = handoff
+            path.append(.chat(tripId: tripId, stepId: nil))
         case .joinTrip, .importFromPolarsteps:
             break
         }
@@ -294,6 +311,8 @@ public struct RootView: View {
             path.append(.tripSettings(id: tripId))
         case .openBookPreview(let tripId):
             path.append(.bookPreview(memoId: tripId))
+        case .openHelp:
+            path.append(.support)
         }
     }
 
@@ -306,6 +325,8 @@ public struct RootView: View {
         switch intent {
         case .openWallet:
             path.append(.wallet(tripId: nil))
+        case .openGallery:
+            path.append(.gallery)
         case .openHelp:
             path.append(.support)
         }
@@ -459,7 +480,7 @@ public struct RootView: View {
                 onIntent: handle
             )
         case .chat(let tripId, let stepId):
-            ChatView(tripId: tripId, stepId: stepId, onIntent: handle)
+            ChatView(tripId: tripId, stepId: stepId, handoff: recordingHandoff, onIntent: handle)
         case .gallery:
             // La galerie **réémet** des intentions : son bouton du bas crée un
             // carnet ou ramène au voyage en cours. Elles repassent donc par le

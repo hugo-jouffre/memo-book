@@ -160,6 +160,11 @@ public actor MemoBookAPIClient: MemoBookAPI {
         )
     }
 
+    public func tripThemes() async throws -> [TripTheme] {
+        let response: TripThemes = try await send(method: "GET", path: "/v1/trip-themes", credential: .session)
+        return response.themes
+    }
+
     public func gallery() async throws -> Gallery {
         try await send(method: "GET", path: "/v1/gallery", credential: .session)
     }

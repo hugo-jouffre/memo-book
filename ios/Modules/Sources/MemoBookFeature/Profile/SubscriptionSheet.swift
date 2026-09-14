@@ -243,6 +243,11 @@ struct SubscriptionSheet: View {
                         onCancel(reason)
                         step = .done
                     }
+                    // Grisé tant qu'aucune raison n'est cochée — Hugo,
+                    // 14/09/2026. La question est posée pour être répondue :
+                    // confirmer sans raison passait à côté du seul retour que
+                    // cette feuille rapporte.
+                    .disabled(reason == nil)
                 }
             }
         }

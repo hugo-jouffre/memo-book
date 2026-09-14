@@ -170,6 +170,13 @@ public final class ChatModel {
             // Relu à chaque ouverture : l'accès peut avoir été retiré depuis
             // les Réglages pendant que l'app était en arrière-plan.
             microphoneIsDenied = RecordingPermission.current == .denied
+
+            // Le vocal de l'accueil, s'il y en a un, se pose maintenant — il
+            // fallait un fil pour l'y poser. Une fois, et une seule.
+            if let handoff = pendingHandoff {
+                pendingHandoff = nil
+                receive(handoff)
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -370,7 +377,52 @@ public final class ChatModel {
 
     // MARK: - Le vocal
 
+    /// Le vocal enregistré depuis l'accueil, en attendant que le fil soit là
+    /// pour le recevoir. Voir ``RecordingHandoff``.
+    private var pendingHandoff: RecordingHandoff?
+
+    /// Annonce un vocal venu de l'accueil. Il sera posé dans le fil au
+    /// chargement, exactement comme s'il avait été dit ici : même bulle, même
+    /// forme d'onde, même réponse de MEMO.
+    public func expect(_ handoff: RecordingHandoff) {
+        pendingHandoff = handoff
+    }
+
+    /// Pose un vocal déjà enregistré. Le même chemin que ``finishRecording()``,
+    /// moins le micro : le fichier est gardé pour la réécoute, et la bulle
+    /// part comme un message du voyageur.
+    private func receive(_ handoff: RecordingHandoff) {
+        let id = "voice-\(messages.count)"
+        let url = try? VoiceNoteFile.save(handoff.audio, id: id)
+
+        send(
+            .voice(
+                VoiceNote(
+                    id: id,
+                    duration: handoff.audio.duration,
+                    levels: handoff.levels,
+                    localUrl: url
+                )
+            )
+        )
+    }
+
+    /// Les étapes offertes sont épuisées : le micro ne s'ouvre plus, il mène au
+    /// paywall — voir ``SubscriptionSession/isBlocked``. Posé par l'écran, qui
+    /// seul connaît la session.
+    public var isRecordingLocked = false
+
+    /// Ce que fait le micro quand il est verrouillé : l'écran y ouvre le
+    /// paywall.
+    public var onRecordingLocked: (() -> Void)?
+
     public func startRecording() {
+        // Le verrou passe avant tout : ni micro, ni niveaux, ni permission
+        // demandée pour rien.
+        if isRecordingLocked {
+            onRecordingLocked?()
+            return
+        }
         guard !recorder.isRecording else { return }
 
         Task {

@@ -134,8 +134,12 @@ struct SupportSheet: View {
 
     // MARK: - La confirmation
 
-    /// Le rond lime et sa coche. Rien d'autre : la feuille a déjà dit ce qu'il
+    /// Le rond bleu et sa coche. Rien d'autre : la feuille a déjà dit ce qu'il
     /// fallait dire dans son titre.
+    ///
+    /// La maquette le dessine en lime ; il est bleu parce que le lime ne parle
+    /// que de l'abonnement (Hugo, 14/09/2026, T7) et qu'un message envoyé au
+    /// support n'en parle pas. Le bleu est l'accent de tout le reste.
     private var confirmation: some View {
         Image(brand: "IconLucideCheck")
             .resizable()
@@ -144,9 +148,9 @@ struct SupportSheet: View {
             .frame(width: Self.checkSide, height: Self.checkSide)
             .foregroundStyle(MemoBookColor.ink)
             .frame(width: Self.confirmationSide, height: Self.confirmationSide)
-            // Le lime à moitié, comme la maquette : à pleine intensité, le rond
+            // À moitié, comme la maquette : à pleine intensité, le rond
             // crierait plus fort que le message qu'il confirme.
-            .background(MemoBookColor.accent.opacity(0.5), in: .circle)
+            .background(MemoBookColor.outline.opacity(0.5), in: .circle)
             .frame(maxWidth: .infinity)
             .accessibilityLabel(SupportCopy.Contact.confirmationVoice)
     }

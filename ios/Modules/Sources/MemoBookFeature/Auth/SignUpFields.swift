@@ -21,6 +21,18 @@ struct SignUpFields: View {
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
 
+            // Ce que le serveur reproche à l'adresse, **sous son champ** : c'est
+            // là que la maquette le pose (`3394:10929`), et c'est la ligne à
+            // changer. Le reste des échecs reste sous le bouton.
+            if let error = model.emailError {
+                Text(error)
+                    .font(MemoBookFont.notification)
+                    .foregroundStyle(MemoBookColor.error)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .transition(.opacity)
+            }
+
             BrandTextField(
                 "Mot de passe",
                 text: $model.password,
@@ -53,6 +65,7 @@ struct SignUpFields: View {
             }
         }
         .animation(.snappy(duration: 0.2), value: model.passwordConfirmationError)
+        .animation(.snappy(duration: 0.2), value: model.emailError)
     }
 
     @ViewBuilder

@@ -29,7 +29,14 @@ public struct AuthView: View {
         // Le modèle a besoin de l'API, qui arrive par l'environnement : il ne
         // peut plus naître dans un initialiseur de propriété.
         if let model {
-            content(model)
+            // Entré par Apple ou Google, on vérifie d'abord ce que le
+            // fournisseur a donné — voir ``SocialCompletionView``.
+            if model.completing != nil {
+                SocialCompletionView(model: model, focus: $focus) { onAuthenticated($0) }
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else {
+                content(model)
+            }
         } else {
             Color.clear.onAppear { model = AuthModel(api: dependencies.api) }
         }
@@ -142,7 +149,7 @@ public struct AuthView: View {
             Text(model.mode.subtitle)
                 .font(MemoBookFont.body)
                 .tracking(MemoBookFont.tracking(16))
-                .foregroundStyle(MemoBookColor.inkSecondary)
+                .foregroundStyle(MemoBookColor.inkMuted)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         // Le titre change de texte, pas de rôle : sans identité stable, SwiftUI
@@ -232,7 +239,15 @@ public struct AuthView: View {
         focus = nil
         Task {
             guard let account = await model.accept(credential) else { return }
-            onAuthenticated(account)
+            // Un compte neuf, ou auquel il manque un nom, passe par la page
+            // de compléments avant d'entrer (Hugo, 14/09/2026).
+            if model.needsCompletion(account) {
+                withAnimation(reduceMotion ? .none : .snappy(duration: 0.35)) {
+                    model.beginCompletion(account)
+                }
+            } else {
+                onAuthenticated(account)
+            }
         }
     }
 
