@@ -92,6 +92,16 @@ extension BookCopy {
 
             /// « Carnet - Rome et la Dolce Vita ».
             public static func book(_ title: String) -> String { "Carnet - \(title)" }
+
+            /// Ce qui coiffe la description du produit, posée sous son prix.
+            /// Elle ne se choisit pas : c'est une fabrication et une seule.
+            public static let specifications = "Ton carnet, en un seul format"
+            public static let pricedByPages = "Le prix ne dépend que du nombre de pages."
+
+            /// « Carnet · 80 pages », quand le serveur n'a pas donné de libellé.
+            public static func bookLine(pages: Int) -> String {
+                pages <= 1 ? "Carnet · \(pages) page" : "Carnet · \(pages) pages"
+            }
         }
 
         // MARK: Étape 6 — Paiement
@@ -127,7 +137,26 @@ extension BookCopy {
         public enum Confirmation {
             public static let title = "Ton Carnet prend la route"
             public static let delivery = "Livraison"
+
+            // MARK: Le suivi par WhatsApp
+
             public static let whatsapp = "Être informé par whatsapp"
+            public static let whatsappOn = "Tu seras informé par whatsapp"
+            public static let whatsappStop = "Ne plus être informé"
+
+            public static let whatsappSheetTitle = "Ton numéro WhatsApp"
+            public static let whatsappSheetSubtitle =
+                "On te préviendra quand ton carnet part à l’impression, puis quand il prend la route."
+            public static let whatsappField = "Numéro de téléphone"
+            public static let whatsappPlaceholder = "+33 6 12 34 56 78"
+            public static let whatsappConfirm = "Me prévenir"
+
+            /// ⚠️ Ce que l'écran **ne promet pas**. Aucun message n'est encore
+            /// envoyé : la commande retient qui prévenir, l'envoi viendra avec
+            /// le suivi de l'imprimeur. Le dire, plutôt que de laisser croire
+            /// qu'un message arrive demain.
+            public static let whatsappNotLiveYet =
+                "On garde ton numéro pour ce carnet. Les messages partiront dès que l’imprimeur nous donnera le suivi."
 
             public static let giftTitle = "Envie de l’offrir ?"
             public static let giftDetail =

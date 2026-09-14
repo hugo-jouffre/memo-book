@@ -315,71 +315,21 @@ async function seedTraveller(
   // Le profil : cagnotte, abonnement, commande en cours
   // ---------------------------------------------------------------------
 
-  // La cagnotte se remplit par le registre, jamais en écrivant le solde à la
-  // main — même dans un seed. C'est la seule façon de vérifier que le cache et
-  // les écritures disent la même chose.
-  // Les mouvements de la maquette « Cagnotte », et pas trois lignes
-  // symboliques : l'écran montre deux natures d'écriture — un don porte un nom
-  // de personne et une pastille bleue, un versement d'abonnement porte
-  // l'engrenage et la pastille lime — et on ne voit qu'elles se distinguent
-  // qu'avec les deux à l'écran. Le dernier mouvement est un débit : il vérifie
-  // que le registre compte aussi ce qui sort.
-  const movements = [
-    { amountCents: 199, kind: "topup" as const, label: "Abonnement MB" },
-    { amountCents: 3000, kind: "gift" as const, label: "Julie et Tom" },
-    { amountCents: 199, kind: "topup" as const, label: "Abonnement MB" },
-    { amountCents: 2000, kind: "gift" as const, label: "Bruno Dupont" },
-    { amountCents: 199, kind: "topup" as const, label: "Abonnement MB" },
-    { amountCents: 1000, kind: "gift" as const, label: "Marie D." },
-    { amountCents: 199, kind: "topup" as const, label: "Abonnement MB" },
-    { amountCents: -1212, kind: "order_payment" as const, label: "Carnet Lisbonne" },
-  ];
-
-  // Le registre est refait à neuf : sans ça, un seed rejoué empilerait trois
-  // mouvements de plus et le solde tripleraient à chaque passage.
+  // **La cagnotte part vide, et c'est l'état par défaut du produit.**
+  //
+  // Elle se remplissait ici de sept mouvements, ce qui donnait un solde
+  // différent de celui des jeux d'essai de l'app — d'où trois chiffres pour une
+  // même cagnotte selon l'écran regardé. Le solde n'a qu'une source : le
+  // registre, et son cache `accounts.walletBalanceCents`. Un compte neuf n'a
+  // rien reçu, donc zéro.
+  //
+  // Pour voir l'écran garni — et surtout les **déductions du tunnel de
+  // commande**, qui sont calculées par le serveur —, le bac à sable de l'écran
+  // Cagnotte pose de vraies écritures via `POST /v1/wallet/debug-entry`.
   await prisma.walletEntry.deleteMany({ where: { accountId: account.id } });
-
-  let balance = 0;
-  for (const movement of movements) {
-    balance += movement.amountCents;
-    await prisma.walletEntry.create({
-      data: { accountId: account.id, ...movement, balanceAfterCents: balance },
-    });
-  }
-
   await prisma.account.update({
     where: { id: account.id },
-    data: { walletBalanceCents: balance },
-  });
-
-  // Les deux cartes de la maquette « Choisis ton mode de paiement ». Elles
-  // n'ouvrent rien : `stripePaymentMethodId` est un identifiant d'essai, et
-  // seul Stripe pourrait débiter. Ce qu'elles servent, c'est l'écran — une
-  // liste de moyens de paiement vide ne montre pas la sélection par défaut.
-  await prisma.paymentCard.deleteMany({ where: { accountId: account.id } });
-  await prisma.paymentCard.createMany({
-    data: [
-      {
-        accountId: account.id,
-        label: "Carte business",
-        last4: "3246",
-        brand: "visa",
-        expMonth: 4,
-        expYear: 2029,
-        stripePaymentMethodId: `pm_test_business_${account.id}`,
-        isDefault: false,
-      },
-      {
-        accountId: account.id,
-        label: "Carte perso",
-        last4: "1820",
-        brand: "mastercard",
-        expMonth: 11,
-        expYear: 2028,
-        stripePaymentMethodId: `pm_test_perso_${account.id}`,
-        isDefault: true,
-      },
-    ],
+    data: { walletBalanceCents: 0 },
   });
 
   await prisma.subscription.deleteMany({ where: { accountId: account.id } });
@@ -405,6 +355,11 @@ async function seedTraveller(
     data: {
       memoId: lisbonne.id,
       renderId: render.id,
+      // **Qui a commandé.** Sans elle, la commande n'appartient à personne et
+      // n'apparaît donc dans le suivi de personne : le profil filtre sur
+      // l'acheteur, parce que le colis d'un co-voyageur part à son adresse à
+      // lui. Voir `readProfile`.
+      orderedByAccountId: account.id,
       status: "in_production",
       copies: 2,
       pageCount: 58,
@@ -418,13 +373,14 @@ async function seedTraveller(
       // que la route de commande valide.
       shippingCountry: "FR",
       shippingSpeed: "standard",
-      // La décomposition, figée comme le reste. 58 pages à deux exemplaires,
-      // moins ce que la cagnotte avait couvert — les mêmes centimes que
-      // l'écriture `order_payment` du registre ci-dessus.
+      // La décomposition, figée comme le reste : 58 pages à deux exemplaires,
+      // en livraison standard. **Rien n'est déduit** — la cagnotte d'un compte
+      // neuf est vide, et une commande qui prétendrait le contraire ne
+      // correspondrait à aucune écriture du registre.
       itemsCents: 2 * (58 * 132 + 1_490 + 900),
       shippingCents: 0,
-      walletAppliedCents: 2 * (58 * 132 + 1_490 + 900) - 1212,
-      amountCents: 1212,
+      walletAppliedCents: 0,
+      amountCents: 2 * (58 * 132 + 1_490 + 900),
       submittedAt: new Date(),
       copyOptions: {
         create: [
@@ -437,7 +393,9 @@ async function seedTraveller(
     },
   });
 
-  return { token, balance };
+  // Zéro : la cagnotte d'un compte neuf n'a rien reçu. Le résumé du seed
+  // l'affiche pour qu'on sache d'où on part.
+  return { token, balance: 0 };
 }
 
 /**

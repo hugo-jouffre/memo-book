@@ -158,6 +158,33 @@ public protocol MemoBookAPI: Sendable {
         shippingSpeed: ShippingSpeed
     ) async throws -> OrderQuote
 
+    /// La cagnotte du compte : son solde, son historique, et l'estimation du
+    /// carnet qu'on finance.
+    ///
+    /// `tripId` ne dit pas *quelle* cagnotte — il n'y en a qu'une par compte —
+    /// mais **quel carnet on finance**, pour l'estimation de pages et de coût.
+    /// `nil` quand on arrive du profil.
+    func wallet(tripId: String?) async throws -> Wallet
+
+    /// Pose une écriture de cagnotte à la main. **Réservée au développement** :
+    /// le serveur ferme la route en production.
+    ///
+    /// Elle existe parce que sans encaissement branché, il n'y a aucun chemin
+    /// depuis l'app vers un solde non nul — donc aucun moyen de voir les
+    /// déductions du tunnel de commande, que le serveur calcule.
+    func addWalletSandboxEntry(
+        amount: Decimal,
+        kind: WalletEntryKind,
+        label: String
+    ) async throws -> Decimal
+
+    /// Accepte — ou refuse — d'être prévenu par WhatsApp de l'acheminement.
+    /// Le numéro remonte sur le compte quand celui-ci n'en a pas encore.
+    func setOrderWhatsApp(
+        orderId: String,
+        phone: String?
+    ) async throws -> PrintOrder
+
     /// Le lien public de prévisualisation du carnet, créé au premier appel et
     /// rendu tel quel ensuite.
     ///

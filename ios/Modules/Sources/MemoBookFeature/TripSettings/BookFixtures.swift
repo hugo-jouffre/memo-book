@@ -18,7 +18,10 @@ extension TripSettings {
             // Le même solde que ``TravellerProfile/fixture`` : la cagnotte
             // appartient au compte, les deux écrans lisent la même somme. Les
             // désaccorder ici ferait croire à un bogue quand il n'y en a pas.
-            walletBalance: 67.88,
+            // Zéro, comme ``Wallet/fixture`` et ``TravellerProfile/fixture`` :
+            // la cagnotte appartient au compte, les trois écrans lisent la même
+            // somme. Les désaccorder ferait croire à un bogue.
+            walletBalance: 0,
             startDate: Self.day(26, 8, 2026),
             endDate: Self.day(15, 9, 2026),
             narrationPace: .everyTwoDays,
@@ -67,8 +70,20 @@ extension BookCustomisation {
 }
 
 extension Wallet {
-    /// La cagnotte de la maquette : cinq contributions, deux natures.
-    public static var fixture: Wallet {
+    /// **La cagnotte par défaut est vide, et c'est l'état du produit.**
+    ///
+    /// Une cagnotte ne se remplit que par des dons et des versements
+    /// d'abonnement : un compte neuf n'a rien reçu. Ce jeu d'essai portait un
+    /// solde garni, et ``TripSettings/fixture`` un autre — d'où trois chiffres
+    /// pour une même cagnotte selon l'écran regardé. Le solde n'a qu'une
+    /// source, le registre du serveur ; à défaut de serveur, c'est zéro.
+    ///
+    /// ``filledFixture`` reste disponible pour l'écran garni, que le bac à
+    /// sable pose à la demande.
+    public static var fixture: Wallet { emptyFixture }
+
+    /// La cagnotte garnie de la maquette : cinq contributions, deux natures.
+    public static var filledFixture: Wallet {
         Wallet(
             balance: 65.97,
             entries: [

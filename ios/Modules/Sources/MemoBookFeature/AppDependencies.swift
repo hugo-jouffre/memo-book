@@ -261,17 +261,34 @@ public final class AppDependencies {
         BookPreviewModel(memoId: memoId)
     }
 
-    /// Ma cagnotte.
+    /// Ma cagnotte, servie par `GET /v1/wallet`.
     ///
-    /// ⚠️ **Sur le jeu d'essai** : `GET /v1/wallet` reste à écrire. Le solde,
-    /// lui, arrive déjà dans `GET /v1/profile` (`walletBalance`) — c'est
-    /// l'**historique** qui manque, et c'est tout l'écran.
+    /// La route existait déjà ; c'est l'app qui ne l'appelait pas, et chaque
+    /// écran affichait donc son propre jeu d'essai — 65,97 € ici, 67,88 € dans
+    /// les réglages du voyage, autre chose ailleurs. Une seule source
+    /// maintenant : le registre du serveur.
     ///
     /// `topUp` reste `nil` tant que Stripe n'est pas branché : l'écran le lit
     /// pour dire pourquoi « Ajouter » n'aboutit pas, au lieu d'ouvrir un écran
     /// qui n'existe pas.
+    ///
+    /// `sandbox` n'existe qu'en debug, et écrit une **vraie** écriture : c'est
+    /// ce qui permet de voir les déductions du tunnel de commande, que le
+    /// serveur calcule et qu'une addition locale ne pouvait pas atteindre.
     public func walletModel(tripId: String?) -> WalletModel {
-        WalletModel(tripId: tripId)
+        WalletModel(
+            tripId: tripId,
+            source: { [api] trip in try await api.wallet(tripId: trip) },
+            sandbox: {
+                #if DEBUG
+                    { [api] amount, kind, label in
+                        try await api.addWalletSandboxEntry(amount: amount, kind: kind, label: label)
+                    }
+                #else
+                    nil
+                #endif
+            }()
+        )
     }
 
     /// Le tunnel de commande, **entièrement servi par le serveur** — c'est ce

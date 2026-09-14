@@ -61,6 +61,11 @@ public final class OrderModel {
     private let loadQuote: (String, Int, ShippingSpeed) async throws -> OrderQuote
     private let submit: (String, NewPrintOrderRequest) async throws -> PrintOrder
     private let requestShareLink: (String) async throws -> URL
+    private let setWhatsApp: (String, String?) async throws -> PrintOrder
+
+    /// L'accord de suivi est en train de partir. Le bouton tourne plutôt que de
+    /// basculer avant que le serveur ait confirmé.
+    public private(set) var isSavingWhatsApp = false
 
     /// Le lien de prévisualisation, une fois demandé. Gardé : la route est
     /// idempotente côté serveur, mais un aller-retour de moins est un
@@ -89,6 +94,9 @@ public final class OrderModel {
         },
         shareLink: @escaping (String) async throws -> URL = { memoId in
             URL(string: "https://memo-book.com/c/\(memoId)")!
+        },
+        setWhatsApp: @escaping (String, String?) async throws -> PrintOrder = { _, _ in
+            .fixture(memoId: "preview", request: .previewRequest)
         }
     ) {
         self.memoId = memoId
@@ -97,6 +105,7 @@ public final class OrderModel {
         self.loadQuote = quote
         self.submit = submit
         self.requestShareLink = shareLink
+        self.setWhatsApp = setWhatsApp
         self.draft = PrintOrderDraft(shipping: .empty)
     }
 
@@ -278,10 +287,38 @@ public final class OrderModel {
         paymentError = nil
     }
 
+    /// Les cartes enregistrées **plus celles ajoutées pendant le parcours**.
+    ///
+    /// Une carte saisie ici ne descend pas en base : aucune route ne crée un
+    /// moyen de paiement, et il n'en existera pas avant Stripe — c'est lui qui
+    /// détiendra le numéro. Elle vaut donc pour cette commande, exactement
+    /// comme celle qu'on ajoute depuis le profil. **Les quatre derniers
+    /// chiffres et rien d'autre** — voir ``PaymentCard``.
+    public var cards: [PaymentCard] { (context?.cards ?? []) + addedCards }
+
+    private var addedCards: [PaymentCard] = []
+
+    /// Enregistre une carte saisie dans la feuille du profil, et la choisit.
+    ///
+    /// Le numéro complet, la date et le cryptogramme ne sont ni gardés ni
+    /// journalisés : seuls les quatre derniers chiffres entrent dans le modèle.
+    public func addCard(number: String, label: String) {
+        let digits = number.filter(\.isNumber)
+        guard digits.count >= 4 else { return }
+
+        let card = PaymentCard(
+            id: UUID().uuidString,
+            label: label.trimmingCharacters(in: .whitespaces).isEmpty ? "Carte" : label,
+            last4: String(digits.suffix(4))
+        )
+        addedCards.append(card)
+        select(cardId: card.id)
+    }
+
     /// La carte présentée à l'étape 6.
     public var selectedCard: PaymentCard? {
         guard !draft.usesApplePay, let id = draft.paymentCardId else { return nil }
-        return context?.cards.first { $0.id == id }
+        return cards.first { $0.id == id }
     }
 
     /// Passe la commande, puis ouvre la confirmation.
@@ -337,6 +374,35 @@ public final class OrderModel {
         } catch {
             errorMessage = error.localizedDescription
             return nil
+        }
+    }
+
+    // MARK: Le suivi par WhatsApp
+
+    /// Le numéro qu'on proposera : celui déjà connu du compte. `nil` quand il
+    /// n'y en a pas — l'écran le demande alors au lieu de le supposer.
+    public var suggestedPhoneNumber: String? { context?.phoneNumber }
+
+    /// Le suivi est-il accepté ? C'est **la commande** qui le dit, pas un état
+    /// d'écran : ce qui compte est ce que le serveur a enregistré.
+    public var wantsWhatsApp: Bool { order?.notifyByWhatsApp ?? false }
+
+    /// Accepte le suivi avec ce numéro, ou le refuse en passant `nil`.
+    ///
+    /// Le numéro **remonte sur le compte** quand celui-ci n'en a pas : c'est la
+    /// seule fois où on le demande aujourd'hui, et le redemander à la commande
+    /// suivante serait une question déjà posée.
+    public func setWhatsAppTracking(phone: String?) async {
+        guard let orderId = order?.id, !isSavingWhatsApp else { return }
+
+        isSavingWhatsApp = true
+        defer { isSavingWhatsApp = false }
+
+        do {
+            order = try await setWhatsApp(orderId, phone)
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 

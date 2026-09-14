@@ -422,8 +422,12 @@ public struct RootView: View {
         case .openWallet:
             path.append(.wallet(tripId: currentTripId))
         case .customise:
+            // « Personnaliser mon carnet » mène aux **personnalisations du
+            // carnet**, et non aux réglages du voyage : c'est le style du
+            // livre qu'on vient régler en le feuilletant — les pointillés, les
+            // quiz, les couvertures —, pas ses dates ni ses co-voyageurs.
             guard let tripId = currentTripId else { return }
-            path.append(.tripSettings(id: tripId))
+            path.append(.bookCustomisation(tripId: tripId))
         case .configureCovers:
             // « Défini maintenant ta 1ère et 4ème de couverture » → « Configurer ».
             // C'est le chemin le plus important vers les couvertures : c'est en

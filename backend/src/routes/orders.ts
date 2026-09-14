@@ -10,7 +10,7 @@ import {
   SHIPPING_COUNTRY_CODES,
   toShippingCountryCode,
 } from "../services/shippingCountries.js";
-import { serializeTrip } from "./appSerializers.js";
+import { serializeTrip, serializeWallet } from "./appSerializers.js";
 import { loadVisibleMemo } from "./memos.js";
 import { serializeOrderQuote, serializePrintOrder } from "./serializers.js";
 
@@ -74,6 +74,21 @@ const createOrderBody = z.object({
 });
 
 /**
+ * Le suivi par WhatsApp, accepté ou refusé depuis l'écran de confirmation.
+ *
+ * Le numéro est **exigé avec l'accord** : `notifyByWhatsApp` sans destinataire
+ * serait une promesse que personne ne peut tenir. Refuser, en revanche, n'en
+ * demande aucun.
+ */
+const whatsappBody = z.discriminatedUnion("enabled", [
+  z.object({
+    enabled: z.literal(true),
+    phone: z.string().trim().min(6).max(40),
+  }),
+  z.object({ enabled: z.literal(false) }),
+]);
+
+/**
  * Le nombre de pages qui fait foi pour le prix : celui que le voyageur vise,
  * ou celui déjà composé s'il est plus grand. Même règle que l'estimation de la
  * cagnotte — les deux doivent annoncer le même chiffre.
@@ -125,7 +140,7 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
     const { id: memoId } = memoIdParams.parse(request.params);
     const accountId = accountIdOf(request);
 
-    const [memo, account, wallet] = await Promise.all([
+    const [memo, account, wallet, walletEntries] = await Promise.all([
       context.prisma.memo.findFirst({
         where: { id: memoId, ...visibleToAccount(accountId) },
         include: {
@@ -146,6 +161,7 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
         select: {
           firstName: true,
           lastName: true,
+          phoneNumber: true,
           addressLine1: true,
           addressLine2: true,
           addressPostalCode: true,
@@ -157,6 +173,19 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
         },
       }),
       walletOf(context, accountId),
+      // L'historique **fait partie du contrat** : ``Wallet`` le porte, et un
+      // champ non optionnel absent de la réponse fait échouer le décodage de
+      // tout l'écran, pas seulement de la ligne concernée. Servir un objet
+      // partiel « parce que le tunnel n'affiche pas l'historique » a coûté
+      // exactement ça — l'étape 1 restait en squelette sur une erreur de
+      // décodage. Voir `CLAUDE.md`, § Un choix de design ne s'arrête pas au
+      // dessin.
+      context.prisma.walletEntry.findMany({
+        where: { accountId },
+        orderBy: { createdAt: "desc" as const },
+        take: 50,
+        select: { id: true, amountCents: true, kind: true, label: true, createdAt: true },
+      }),
     ]);
 
     if (!memo) throw HttpError.notFound("Carnet introuvable.");
@@ -186,10 +215,10 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
       bookTitle: memo.bookTitle?.trim() || memo.title,
       pageCount: pages,
       trip: serializeTrip(memo),
-      wallet: {
-        balance: Number((wallet.balanceCents / 100).toFixed(2)),
-        estimate: { pageCount: pages, cost: Number((unitPriceCents(pages) / 100).toFixed(2)) },
-      },
+      // Le **même** sérialiseur que `GET /v1/wallet` : un seul endroit décide
+      // de la forme d'une cagnotte, et elle ne peut donc pas diverger d'un
+      // écran à l'autre.
+      wallet: serializeWallet(wallet.balanceCents, walletEntries, memo),
       // Les deux prix que les étapes 3 et 4 affichent sans rien recalculer.
       unitPrice: Number((unitPriceCents(pages) / 100).toFixed(2)),
       expressPrice: Number((shippingCents("express") / 100).toFixed(2)),
@@ -214,8 +243,17 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
         isDefault: card.isDefault,
       })),
       selectedCardId: defaultCard?.id ?? null,
+      // Le numéro qu'on proposera pour le suivi WhatsApp. `null` tant que le
+      // compte n'en a pas : l'écran le demande alors au lieu de le supposer.
+      phoneNumber: account?.phoneNumber?.trim() || null,
       // Le style du carnet, que chaque exemplaire reprend par défaut.
+      //
+      // `position: 1` n'est pas décoratif : côté app c'est un
+      // ``PrintedCopyOptions``, qui porte toujours un rang — celui du premier
+      // carnet, puisque c'est de lui que les autres se copient. L'omettre
+      // faisait échouer le décodage de **tout** le contexte.
       options: {
+        position: 1,
         decorationsEnabled: memo.decorationQuota > 0,
         quizEnabled: memo.quizEnabled,
         freeZonesEnabled: memo.freeZonesEnabled,
@@ -378,6 +416,55 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
     );
 
     return reply.code(201).send(serializePrintOrder(order));
+  });
+
+  /**
+   * Accepter — ou refuser — d'être prévenu par WhatsApp de l'acheminement.
+   *
+   * Le numéro **remonte aussi sur le compte** quand celui-ci n'en a pas : c'est
+   * la seule fois où on le demande aujourd'hui, et le redemander à la commande
+   * suivante serait une question déjà posée. Le jour où l'accueil du compte le
+   * collecte, cette route n'aura plus qu'à le lire.
+   *
+   * ⚠️ Rien n'est envoyé : aucun WhatsApp Business n'est branché. La commande
+   * retient qui prévenir, l'envoi viendra avec le suivi de l'imprimeur.
+   */
+  app.post("/v1/orders/:id/whatsapp", async (request) => {
+    const { id } = orderIdParams.parse(request.params);
+    const accountId = accountIdOf(request);
+    const body = whatsappBody.parse(request.body ?? {});
+
+    // **La commande de celui qui demande**, et pas seulement une commande
+    // visible : c'est son numéro de téléphone qu'on y attache.
+    const order = await context.prisma.printOrder.findFirst({
+      where: { id, orderedByAccountId: accountId },
+      select: { id: true },
+    });
+    if (!order) throw HttpError.notFound("Commande introuvable.");
+
+    const phone = body.enabled ? body.phone : null;
+
+    const updated = await context.prisma.$transaction(async (tx) => {
+      if (phone) {
+        const account = await tx.account.findUnique({
+          where: { id: accountId },
+          select: { phoneNumber: true },
+        });
+        // On ne réécrit pas un numéro déjà connu : il appartient au profil, et
+        // c'est là qu'il se corrige.
+        if (!account?.phoneNumber?.trim()) {
+          await tx.account.update({ where: { id: accountId }, data: { phoneNumber: phone } });
+        }
+      }
+
+      return tx.printOrder.update({
+        where: { id },
+        data: { notifyByWhatsApp: body.enabled, whatsappPhone: phone },
+        include: { copyOptions: true },
+      });
+    });
+
+    return serializePrintOrder(updated);
   });
 
   app.get("/v1/memos/:id/orders", async (request) => {

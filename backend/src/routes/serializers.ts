@@ -124,6 +124,8 @@ export function serializePrintOrder(order: PrintOrderWithCopies) {
         freeZonesEnabled: copy.freeZonesEnabled,
         crosswordEnabled: copy.crosswordEnabled,
       })),
+    notifyByWhatsApp: order.notifyByWhatsApp,
+    whatsappPhone: order.whatsappPhone,
     trackingUrl: order.trackingUrl,
     error: order.error,
     createdAt: order.createdAt.toISOString(),
@@ -146,13 +148,21 @@ export function serializeOrderQuote(quote: PrintQuote) {
     shippingSpeed: quote.speed,
     unitPrice: euros(quote.unitCents),
     book: {
-      lines: quote.lines.map((line) => ({
-        id: line.id,
-        label: line.label,
-        amount: euros(line.amountCents),
-      })),
+      // **Une seule ligne, et le prix ne dépend que des pages.** Les trois
+      // lignes de matière d'avant laissaient croire à trois options ; elles
+      // descendent dans `specifications`, sous le prix, où elles décrivent le
+      // produit au lieu de le facturer.
+      lines: [
+        {
+          id: "book",
+          label: `Carnet · ${quote.pageCount} pages`,
+          detail: null,
+          amount: euros(quote.unitCents),
+        },
+      ],
       subtotal: euros(quote.unitCents),
     },
+    specifications: quote.specifications,
     fulfilment: {
       lines: [
         {

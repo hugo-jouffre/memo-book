@@ -875,6 +875,19 @@ model PrintOrder {
   paymentCardId String?
   paymentCard   PaymentCard? @relation(fields: [paymentCardId], references: [id], onDelete: SetNull)
 
+  /// Le suivi par WhatsApp, demandé depuis l'écran de confirmation.
+  ///
+  /// Le numéro est **recopié ici** plutôt que lu sur le compte à l'envoi :
+  /// c'est celui qu'on a promis de prévenir pour *cette* commande, et changer
+  /// de numéro dans son profil trois semaines plus tard ne doit pas dérouter le
+  /// message vers un téléphone qui n'a rien demandé. Même parti pris que
+  /// l'adresse de livraison, figée elle aussi.
+  ///
+  /// `notifyByWhatsApp` sans `whatsappPhone` ne doit jamais exister : la route
+  /// refuse l'un sans l'autre.
+  notifyByWhatsApp Boolean @default(false)
+  whatsappPhone    String?
+
   /// Adresse de livraison, telle que saisie dans l'app.
   shippingName       String
   shippingLine1      String

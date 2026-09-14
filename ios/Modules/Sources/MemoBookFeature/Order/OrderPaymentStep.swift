@@ -184,6 +184,11 @@ struct OrderPaymentSheet: View {
     let model: OrderModel
     let onConfirm: () -> Void
 
+    /// La feuille d'ajout, présentée **par-dessus** celle-ci — comme dans le
+    /// profil, dont elle réutilise le formulaire : on revient sur son choix
+    /// après avoir enregistré une carte, sans quitter le tunnel.
+    @State private var isAddingCard = false
+
     var body: some View {
         BrandSheet(
             BookCopy.Order.Payment.sheetTitle,
@@ -195,7 +200,7 @@ struct OrderPaymentSheet: View {
                 }
 
                 BrandOptionGroup {
-                    ForEach(model.context?.cards ?? []) { card in
+                    ForEach(model.cards) { card in
                         BrandOptionRow(
                             card.label,
                             subtitle: card.maskedNumber,
@@ -214,17 +219,32 @@ struct OrderPaymentSheet: View {
                     }
                 }
 
-                // ⚠️ **Pas de formulaire de carte ici.** Enregistrer un moyen
-                // de paiement passe par le profil, où la feuille existe déjà :
-                // en ouvrir une seconde depuis le tunnel ferait reculer deux
-                // écrans d'affilée, et surtout dupliquerait le seul endroit de
-                // l'app qui touche à un numéro de carte.
+                // **La feuille du profil, pas une seconde.** C'est le seul
+                // endroit de l'app qui touche à un numéro de carte, et il n'en
+                // existera pas deux : ``AddCardSheet`` est réutilisée telle
+                // quelle. Rien du numéro ne sort d'elle sinon les quatre
+                // derniers chiffres — voir ``OrderModel/addCard(number:label:)``.
+                BrandButton(
+                    BookCopy.Order.Payment.addCard,
+                    icon: Image(brand: "IconPlus"),
+                    iconPlacement: .trailing,
+                    style: .secondary,
+                    fillsWidth: true
+                ) {
+                    isAddingCard = true
+                }
+
                 BrandButton(
                     BookCopy.Order.Payment.confirm,
                     fillsWidth: true,
                     action: onConfirm
                 )
                 .disabled(!model.draft.hasPaymentMethod)
+            }
+        }
+        .brandSheet(isPresented: $isAddingCard) {
+            AddCardSheet { number, name in
+                model.addCard(number: number, label: name)
             }
         }
     }

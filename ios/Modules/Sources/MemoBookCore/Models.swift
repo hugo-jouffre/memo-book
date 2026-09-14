@@ -374,6 +374,12 @@ public struct PrintOrder: Codable, Sendable, Hashable, Identifiable {
     /// Les options, exemplaire par exemplaire, dans l'ordre des rangs.
     public let copyOptions: [PrintedCopyOptions]
 
+    /// Le suivi par WhatsApp, et le numéro à prévenir. Le second ne vaut jamais
+    /// `nil` quand le premier est vrai : une promesse sans destinataire n'a pas
+    /// de sens, et c'est le serveur qui le garantit.
+    public let notifyByWhatsApp: Bool
+    public let whatsappPhone: String?
+
     public let trackingUrl: String?
     public let error: String?
     public let createdAt: Date
@@ -393,6 +399,8 @@ public struct PrintOrder: Codable, Sendable, Hashable, Identifiable {
         estimatedMaxDays: Int? = nil,
         total: Decimal? = nil,
         copyOptions: [PrintedCopyOptions] = [],
+        notifyByWhatsApp: Bool = false,
+        whatsappPhone: String? = nil,
         trackingUrl: String? = nil,
         error: String? = nil,
         createdAt: Date,
@@ -411,6 +419,8 @@ public struct PrintOrder: Codable, Sendable, Hashable, Identifiable {
         self.estimatedMaxDays = estimatedMaxDays
         self.total = total
         self.copyOptions = copyOptions
+        self.notifyByWhatsApp = notifyByWhatsApp
+        self.whatsappPhone = whatsappPhone
         self.trackingUrl = trackingUrl
         self.error = error
         self.createdAt = createdAt

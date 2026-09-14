@@ -22,7 +22,7 @@ extension TravellerProfile {
             country: "France"
         ),
         wantsNewsletter: true,
-        walletBalance: 67.88,
+        walletBalance: 0,
         cards: [
             PaymentCard(id: "card-business", label: "Carte business", last4: "3246"),
             PaymentCard(id: "card-perso", label: "Carte perso", last4: "1820"),

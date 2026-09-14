@@ -29,29 +29,59 @@
                     .font(MemoBookFont.caption)
                     .foregroundStyle(MemoBookColor.inkMuted)
 
+                Text(
+                    model.isSandboxLive
+                        ? "Les contributions écrivent dans le registre du serveur : le prix d’une commande en tient compte."
+                        : "Aperçu sans serveur : les contributions restent à l’écran."
+                )
+                .font(MemoBookFont.caption)
+                .foregroundStyle(MemoBookColor.inkMuted)
+                .fixedSize(horizontal: false, vertical: true)
+
                 FlowLayout(spacing: MemoBookSpacing.xs) {
-                    action("Cagnotte garnie", model.debugFill)
-                    action("Cagnotte vide", model.debugEmpty)
+                    action("+ 1,99 € · abonnement") {
+                        await model.debugContribute(1.99, from: "Abonnement MB", kind: .topup)
+                    }
+                    action("+ 9,95 € · 5 semaines") {
+                        await model.debugContribute(9.95, from: "Abonnement MB", kind: .topup)
+                    }
 
                     action("+ 10 € · Marie D.") {
-                        model.debugContribute(10, from: "Marie D.")
+                        await model.debugContribute(10, from: "Marie D.")
                     }
                     action("+ 20 € · Bruno Dupont") {
-                        model.debugContribute(20, from: "Bruno Dupont")
+                        await model.debugContribute(20, from: "Bruno Dupont")
                     }
-                    action("+ 50 € · Anonyme") {
-                        model.debugContribute(50, from: "Un proche")
-                    }
-                    action("+ 1,99 € · abonnement") {
-                        model.debugContribute(1.99, from: "Abonnement MB", kind: .topup)
+                    action("+ 50 € · Un proche") {
+                        await model.debugContribute(50, from: "Un proche")
                     }
 
-                    action("Recharger") { Task { await model.load() } }
+                    // Un débit, pour revenir en arrière sans repartir du seed :
+                    // le registre est en ajout seul, on annule par l'inverse.
+                    action("− 10 € · correction") {
+                        await model.debugContribute(-10, from: "Correction", kind: .adjustment)
+                    }
+
+                    action("Cagnotte garnie (écran)", model.debugFill)
+                    action("Cagnotte vide (écran)", model.debugEmpty)
+                    action("Recharger") { await model.load() }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(MemoBookSpacing.s)
             .brandDashedCard(color: MemoBookColor.separator)
+        }
+
+        /// Les écritures partent au serveur : les boutons sont donc
+        /// asynchrones, et le panneau les enveloppe une fois pour toutes.
+        private func action(
+            _ title: String,
+            _ perform: @escaping () async -> Void
+        ) -> some View {
+            Button(title) { Task { await perform() } }
+                .font(MemoBookFont.caption)
+                .buttonStyle(.bordered)
+                .tint(MemoBookColor.action)
         }
 
         private func action(_ title: String, _ perform: @escaping () -> Void) -> some View {

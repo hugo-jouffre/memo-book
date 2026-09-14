@@ -11,6 +11,10 @@ public actor PreviewAPI: MemoBookAPI {
     private var memosById: [String: MemoDetail] = [:]
     private var rendersById: [String: Render] = [:]
     private var ordersByMemoId: [String: [PrintOrder]] = [:]
+
+    /// La cagnotte du double, **vide au départ** comme celle d'un compte neuf.
+    /// Les écritures du bac à sable la font monter, ici comme sur le serveur.
+    private var walletSandbox: Wallet = .fixture
     /// Nul tant que rien n'a été corrigé : le profil est alors le jeu d'essai.
     private var editedProfile: TravellerProfile?
 
@@ -409,6 +413,59 @@ public actor PreviewAPI: MemoBookAPI {
             )
         }
         return render
+    }
+
+    public func wallet(tripId: String?) async throws -> Wallet {
+        walletSandbox
+    }
+
+    public func addWalletSandboxEntry(
+        amount: Decimal,
+        kind: WalletEntryKind,
+        label: String
+    ) async throws -> Decimal {
+        // Le double tient un registre, comme le serveur : c'est ce qui permet
+        // aux aperçus de voir le solde monter et l'historique s'allonger.
+        let entry = WalletEntry(id: UUID().uuidString, amount: amount, kind: kind, label: label, date: .now)
+        walletSandbox = Wallet(
+            balance: walletSandbox.balance + amount,
+            entries: [entry] + walletSandbox.entries,
+            tripTitle: walletSandbox.tripTitle,
+            estimate: walletSandbox.estimate
+        )
+        return walletSandbox.balance
+    }
+
+    public func setOrderWhatsApp(orderId: String, phone: String?) async throws -> PrintOrder {
+        for (memoId, orders) in ordersByMemoId {
+            guard let position = orders.firstIndex(where: { $0.id == orderId }) else { continue }
+            let order = orders[position]
+            let updated = PrintOrder(
+                id: order.id,
+                memoId: order.memoId,
+                renderId: order.renderId,
+                status: order.status,
+                copies: order.copies,
+                shippingSpeed: order.shippingSpeed,
+                shipping: order.shipping,
+                pageCount: order.pageCount,
+                coverImageUrl: order.coverImageUrl,
+                estimatedMinDays: order.estimatedMinDays,
+                estimatedMaxDays: order.estimatedMaxDays,
+                total: order.total,
+                copyOptions: order.copyOptions,
+                notifyByWhatsApp: phone != nil,
+                whatsappPhone: phone,
+                trackingUrl: order.trackingUrl,
+                error: order.error,
+                createdAt: order.createdAt,
+                updatedAt: .now
+            )
+            ordersByMemoId[memoId]?[position] = updated
+            return updated
+        }
+
+        throw APIError.server(statusCode: 404, code: "not_found", message: "Commande introuvable.")
     }
 
     public func bookShareLink(memoId: String) async throws -> URL {

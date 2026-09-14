@@ -49,6 +49,13 @@ public final class BookPreviewModel {
 
     public private(set) var isFullScreen = false
 
+    /// Le carnet est composé côté serveur, donc imprimable.
+    ///
+    /// C'est ce qui allume « Commander ce carnet ». Volontairement indépendant
+    /// de ``BookPageRenderer`` : le rendu des pages est un confort d'écran, et
+    /// son échec ne doit pas interdire une commande.
+    public var isComposed: Bool { preview?.status == .ready }
+
     /// Le lien de prévisualisation, une fois demandé.
     public private(set) var shareLink: URL?
     public private(set) var isPreparingLink = false

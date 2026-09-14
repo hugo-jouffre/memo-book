@@ -3,9 +3,11 @@ import MemoBookCore
 
 // Jeu d'essai du tunnel de commande.
 //
-// Il porte les **mêmes chiffres que la maquette** — 65,97 € de cagnotte,
-// 80 pages estimées — pour que les aperçus SwiftUI soient comparables à Figma
-// sans serveur. Les montants du récapitulatif, eux, se recomposent à partir du
+// Il porte les chiffres de la maquette — 80 pages estimées — pour que les
+// aperçus SwiftUI soient comparables à Figma sans serveur. La cagnotte, elle,
+// part **vide** : c'est l'état d'un compte neuf, et un jeu d'essai qui
+// annoncerait une déduction que le registre n'a pas donnerait un total faux dès
+// qu'on le compare au serveur. Les montants du récapitulatif, eux, se recomposent à partir du
 // même barème que le serveur : un jeu d'essai qui annoncerait d'autres totaux
 // ne montrerait pas l'écran qu'on livre.
 
@@ -117,7 +119,10 @@ extension OrderQuote {
         copies: Int,
         speed: ShippingSpeed,
         pageCount: Int = 80,
-        walletBalance: Decimal = 65.97
+        // Vide par défaut, comme ``Wallet/fixture`` : un récapitulatif qui
+        // annoncerait une déduction que la cagnotte n'a pas serait un total
+        // faux dès qu'on le compare au serveur.
+        walletBalance: Decimal = 0
     ) -> OrderQuote {
         let unit = OrderPricing.unitPrice(pages: pageCount)
         let items = unit * Decimal(copies)
@@ -140,19 +145,18 @@ extension OrderQuote {
             book: OrderQuoteGroup(
                 lines: [
                     OrderQuoteLine(
-                        id: "paper",
-                        label: "80g. non couché ivoire",
-                        amount: Decimal(pageCount) * OrderPricing.paperPerPage
-                    ),
-                    OrderQuoteLine(
-                        id: "cover",
-                        label: "Couverture rigide & matte",
-                        amount: OrderPricing.cover
-                    ),
-                    OrderQuoteLine(id: "binding", label: "Livre broché", amount: OrderPricing.binding),
+                        id: "book",
+                        label: BookCopy.Order.Summary.bookLine(pages: pageCount),
+                        amount: unit
+                    )
                 ],
                 subtotal: unit
             ),
+            specifications: [
+                "80g. non couché ivoire",
+                "Couverture rigide & matte",
+                "Livre broché",
+            ],
             fulfilment: OrderQuoteGroup(
                 lines: [
                     OrderQuoteLine(
@@ -191,6 +195,20 @@ extension OrderQuote {
     /// carte, elle fait valider.
     public static var fullyCoveredFixture: OrderQuote {
         fixture(copies: 1, speed: .standard, pageCount: 4, walletBalance: 500)
+    }
+}
+
+extension NewPrintOrderRequest {
+    /// De quoi fabriquer une commande d'aperçu, quand aucune n'a été passée.
+    public static var previewRequest: NewPrintOrderRequest {
+        NewPrintOrderRequest(
+            renderId: "render-rome",
+            copies: 1,
+            shippingSpeed: .standard,
+            shipping: OrderContext.fixture.shipping,
+            copyOptions: [PrintedCopyOptions(position: 1)],
+            paymentCardId: nil
+        )
     }
 }
 

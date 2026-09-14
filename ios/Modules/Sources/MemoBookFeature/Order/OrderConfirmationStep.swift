@@ -18,6 +18,9 @@ struct OrderConfirmationStep: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hasLanded = false
 
+    /// La feuille qui demande le numéro, quand le compte n'en a pas encore.
+    @State private var isAskingPhone = false
+
     var body: some View {
         OrderStepLayout {
             VStack(alignment: .leading, spacing: MemoBookSpacing.m) {
@@ -45,6 +48,15 @@ struct OrderConfirmationStep: View {
                 style: .secondary,
                 fillsWidth: true,
                 action: onFinish
+            )
+        }
+        .brandSheet(isPresented: $isAskingPhone) {
+            OrderWhatsAppSheet(
+                suggested: model.suggestedPhoneNumber,
+                onConfirm: { phone in
+                    isAskingPhone = false
+                    Task { await model.setWhatsAppTracking(phone: phone) }
+                }
             )
         }
         .task {
@@ -115,6 +127,9 @@ struct OrderConfirmationStep: View {
                     .font(MemoBookFont.label)
                     .foregroundStyle(MemoBookColor.inkMuted)
                     .fixedSize(horizontal: false, vertical: true)
+
+                whatsappButton
+                    .padding(.top, MemoBookSpacing.xs / 2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -129,6 +144,48 @@ struct OrderConfirmationStep: View {
                 .strokeBorder(MemoBookColor.hairline, lineWidth: 1)
         }
         .accessibilityElement(children: .combine)
+    }
+
+    /// « Être informé par WhatsApp ».
+    ///
+    /// Il **bascule** : accepter puis se raviser doit être possible sans
+    /// quitter l'écran. Un compte qui a déjà son numéro accepte d'un seul
+    /// geste ; les autres passent par la feuille, qui enregistre le numéro sur
+    /// le compte au passage.
+    @ViewBuilder
+    private var whatsappButton: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            BrandButton(
+                model.wantsWhatsApp
+                    ? BookCopy.Order.Confirmation.whatsappStop
+                    : BookCopy.Order.Confirmation.whatsapp,
+                icon: Image(brand: "IconRingtone"),
+                style: .link,
+                size: .small,
+                isLoading: model.isSavingWhatsApp
+            ) {
+                guard !model.isSavingWhatsApp else { return }
+
+                if model.wantsWhatsApp {
+                    Task { await model.setWhatsAppTracking(phone: nil) }
+                } else if let known = model.suggestedPhoneNumber {
+                    Task { await model.setWhatsAppTracking(phone: known) }
+                } else {
+                    isAskingPhone = true
+                }
+            }
+
+            // ⚠️ Ce que l'écran ne promet pas : rien ne part encore. Le dire
+            // une fois accepté, plutôt que de laisser attendre un message.
+            if model.wantsWhatsApp {
+                Text(BookCopy.Order.Confirmation.whatsappNotLiveYet)
+                    .font(MemoBookFont.caption)
+                    .foregroundStyle(MemoBookColor.inkMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.smooth(duration: 0.25), value: model.wantsWhatsApp)
     }
 
     /// La couverture du carnet commandé — celle que le serveur a figée avec la

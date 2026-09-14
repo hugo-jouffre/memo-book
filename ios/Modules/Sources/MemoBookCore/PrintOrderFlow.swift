@@ -177,6 +177,10 @@ public struct OrderContext: Codable, Sendable, Hashable {
     public let cards: [PaymentCard]
     public let selectedCardId: String?
 
+    /// Le numéro qu'on proposera pour le suivi WhatsApp. `nil` tant que le
+    /// compte n'en a pas : l'écran le demande alors au lieu de le supposer.
+    public let phoneNumber: String?
+
     /// Le style du carnet, que chaque exemplaire reprend par défaut.
     public let options: PrintedCopyOptions
 
@@ -195,6 +199,7 @@ public struct OrderContext: Codable, Sendable, Hashable {
         countries: [ShippingCountry],
         cards: [PaymentCard],
         selectedCardId: String?,
+        phoneNumber: String? = nil,
         options: PrintedCopyOptions
     ) {
         self.memoId = memoId
@@ -211,6 +216,7 @@ public struct OrderContext: Codable, Sendable, Hashable {
         self.countries = countries
         self.cards = cards
         self.selectedCardId = selectedCardId
+        self.phoneNumber = phoneNumber
         self.options = options
     }
 
@@ -303,8 +309,19 @@ public struct OrderQuote: Codable, Sendable, Hashable {
     public let shippingSpeed: ShippingSpeed
     public let unitPrice: Decimal
 
-    /// Ce que coûte **un** carnet : papier, couverture, reliure.
+    /// Ce que coûte **un** carnet : une seule ligne, dont le prix ne dépend que
+    /// du nombre de pages.
     public let book: OrderQuoteGroup
+
+    /// Ce que le carnet **est**, et qui ne se choisit pas : le papier, la
+    /// couverture, la reliure.
+    ///
+    /// C'étaient trois lignes facturées dans le récapitulatif, ce qui laissait
+    /// croire à trois options alors qu'on ne peut en changer aucune. Elles
+    /// décrivent désormais le produit, sous son prix, et le serveur les sert
+    /// plutôt que l'app ne les écrive — le jour où le papier change, l'app n'a
+    /// pas à sortir une version.
+    public let specifications: [String]
     /// Les exemplaires et l'acheminement.
     public let fulfilment: OrderQuoteGroup
 
@@ -321,6 +338,7 @@ public struct OrderQuote: Codable, Sendable, Hashable {
         shippingSpeed: ShippingSpeed,
         unitPrice: Decimal,
         book: OrderQuoteGroup,
+        specifications: [String] = [],
         fulfilment: OrderQuoteGroup,
         deductions: [OrderDeduction],
         total: Decimal,
@@ -333,6 +351,7 @@ public struct OrderQuote: Codable, Sendable, Hashable {
         self.shippingSpeed = shippingSpeed
         self.unitPrice = unitPrice
         self.book = book
+        self.specifications = specifications
         self.fulfilment = fulfilment
         self.deductions = deductions
         self.total = total

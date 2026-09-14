@@ -39,22 +39,32 @@ export const SHIPPING_DAYS: Record<ShippingSpeed, { min: number; max: number }> 
   express: { min: 2, max: 3 },
 };
 
-/** Ce qu'un exemplaire coûte, ligne à ligne. */
-export function bookLines(pageCount: number) {
-  const pages = Math.max(pageCount, 1);
-  return [
-    { id: "paper", label: "80g. non couché ivoire", amountCents: pages * PAPER_CENTS_PER_PAGE },
-    { id: "cover", label: "Couverture rigide & matte", amountCents: COVER_CENTS },
-    { id: "binding", label: "Livre broché", amountCents: BINDING_CENTS },
-  ];
-}
+/**
+ * Ce que le carnet est, et qui ne se choisit pas.
+ *
+ * **Une fabrication et une seule** : un papier, une couverture, une reliure.
+ * Ces trois lignes ont d'abord été facturées séparément dans le récapitulatif,
+ * ce qui laissait croire à trois options — alors qu'on ne peut en changer
+ * aucune. Elles sont devenues ce qu'elles sont vraiment : la description du
+ * produit, posée sous son prix. **Le prix, lui, ne dépend que du nombre de
+ * pages.**
+ */
+export const BOOK_SPECIFICATIONS = [
+  "80g. non couché ivoire",
+  "Couverture rigide & matte",
+  "Livre broché",
+] as const;
 
 /**
  * Le prix d'**un** carnet. C'est aussi ce que l'étape 3 affiche en « prix
  * unitaire », et ce que la cagnotte estime.
+ *
+ * La décomposition reste interne : une part qui suit les pages, deux frais
+ * fixes. Elle ne sort plus vers l'app — voir ``BOOK_SPECIFICATIONS``.
  */
 export function unitPriceCents(pageCount: number): number {
-  return bookLines(pageCount).reduce((total, line) => total + line.amountCents, 0);
+  const pages = Math.max(pageCount, 1);
+  return pages * PAPER_CENTS_PER_PAGE + COVER_CENTS + BINDING_CENTS;
 }
 
 export function shippingCents(speed: ShippingSpeed): number {
@@ -108,9 +118,7 @@ export function quote(input: QuoteInput) {
   const pages = Math.max(input.pageCount, 1);
   const copies = Math.max(input.copies, 1);
 
-  const lines = bookLines(pages);
-  const unitCents = lines.reduce((total, line) => total + line.amountCents, 0);
-
+  const unitCents = unitPriceCents(pages);
   const itemsCents = unitCents * copies;
   const shipCents = shippingCents(input.speed);
   const dueCents = itemsCents + shipCents;
@@ -139,7 +147,7 @@ export function quote(input: QuoteInput) {
     copies,
     speed: input.speed,
     unitCents,
-    lines,
+    specifications: BOOK_SPECIFICATIONS,
     itemsCents,
     shippingCents: shipCents,
     dueCents,

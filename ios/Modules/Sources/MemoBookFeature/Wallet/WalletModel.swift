@@ -31,14 +31,20 @@ public final class WalletModel {
     /// L'écran le lit pour le dire plutôt que d'ouvrir un écran vide.
     private let topUp: ((String?, Decimal) async throws -> Wallet)?
 
+    /// L'écriture de bac à sable, en développement seulement. `nil` dans les
+    /// aperçus, qui n'ont pas de serveur à qui écrire.
+    private let sandbox: ((Decimal, WalletEntryKind, String) async throws -> Decimal)?
+
     public init(
         tripId: String? = nil,
         source: @escaping (String?) async throws -> Wallet = { _ in .fixture },
-        topUp: ((String?, Decimal) async throws -> Wallet)? = nil
+        topUp: ((String?, Decimal) async throws -> Wallet)? = nil,
+        sandbox: ((Decimal, WalletEntryKind, String) async throws -> Decimal)? = nil
     ) {
         self.tripId = tripId
         self.source = source
         self.topUp = topUp
+        self.sandbox = sandbox
     }
 
     /// `true` tant qu'on n'a pas de valeurs. L'écran se dessine quand même :
@@ -77,26 +83,56 @@ public final class WalletModel {
     }
 
     #if DEBUG
-        /// Pose une cagnotte garnie, sans serveur ni Stripe. Absent de l'app
-        /// livrée — voir ``WalletDebugPanel``.
+        /// Pose une cagnotte garnie **en mémoire**, sans serveur.
+        ///
+        /// ⚠️ Elle ne change que l'écran : le tunnel de commande demande ses
+        /// déductions au serveur, qui n'en saura rien. Pour agir sur le prix
+        /// d'une commande, c'est ``debugContribute(_:from:kind:)`` qu'il faut —
+        /// elle écrit pour de vrai.
         func debugFill() {
-            wallet = .fixture
+            wallet = .filledFixture
             errorMessage = nil
         }
 
-        /// La vide, pour revoir l'écran « Cagnotte Vide ».
+        /// La vide **à l'écran**, pour revoir « Cagnotte vide ». Même réserve
+        /// que ci-dessus : le registre du serveur n'est pas touché.
         func debugEmpty() {
             wallet = .emptyFixture
             errorMessage = nil
         }
 
-        /// Ajoute une contribution **par-dessus ce qui est là**, comme un
-        /// virement qui arriverait pendant qu'on regarde l'écran.
+        /// Ajoute une contribution, **dans le registre du serveur**.
         ///
-        /// C'est le bouton qui sert le plus : il montre l'animation du solde,
-        /// celle de la barre, et l'arrivée d'une ligne dans l'historique — les
-        /// trois choses qu'on ne peut pas vérifier sur un jeu d'essai figé.
-        func debugContribute(_ amount: Decimal, from name: String, kind: WalletEntryKind = .gift) {
+        /// C'est le bouton qui sert le plus, et il a changé de nature : il
+        /// mutait un objet en mémoire, si bien que le solde montait à l'écran
+        /// pendant que le serveur continuait d'ignorer la somme — et le
+        /// récapitulatif de commande, qui lui demande au serveur, annonçait un
+        /// total sans déduction. Il pose maintenant une vraie écriture, puis
+        /// relit la cagnotte.
+        ///
+        /// Sans fonction d'écriture branchée — les aperçus SwiftUI —, il
+        /// retombe sur une addition locale, qui suffit à voir l'animation.
+        func debugContribute(
+            _ amount: Decimal,
+            from name: String,
+            kind: WalletEntryKind = .gift
+        ) async {
+            guard let sandbox else {
+                addLocally(amount, from: name, kind: kind)
+                return
+            }
+
+            do {
+                _ = try await sandbox(amount, kind, name)
+                // On relit plutôt que d'additionner : le serveur fait autorité
+                // sur le solde **et** sur l'ordre de l'historique.
+                await load()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+
+        private func addLocally(_ amount: Decimal, from name: String, kind: WalletEntryKind) {
             let current = wallet ?? .emptyFixture
             let entry = WalletEntry(
                 id: UUID().uuidString,
@@ -116,5 +152,9 @@ public final class WalletModel {
             )
             errorMessage = nil
         }
+
+        /// Le bac à sable écrit-il vraiment ? L'écran le dit, pour qu'on sache
+        /// si ce qu'on ajoute comptera au moment de commander.
+        var isSandboxLive: Bool { sandbox != nil }
     #endif
 }
