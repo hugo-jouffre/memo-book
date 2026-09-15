@@ -7,6 +7,7 @@ import { createBookRenderer, type BookRenderer } from "./services/apitemplate.js
 import { createRedactor, type Redactor } from "./services/redaction.js";
 import { createSocialVerifier, type SocialVerifier } from "./services/socialIdentity.js";
 import { createMailer, type Mailer } from "./services/mailer.js";
+import { createPaymentGateway, type PaymentGateway } from "./services/payments.js";
 import { createMediaStorage, type MediaStorage } from "./services/storage.js";
 import { createStructurer, type Structurer } from "./services/structuring.js";
 import { createTranscriber, type Transcriber } from "./services/transcription.js";
@@ -33,6 +34,8 @@ export interface AppContext {
   structurer: Structurer;
   publisher: AssetPublisher;
   renderer: BookRenderer;
+  /** Encaissement Stripe : carnets imprimés et cagnotte. Jamais l'abonnement. */
+  payments: PaymentGateway;
 }
 
 export interface CreateContextOptions {
@@ -72,6 +75,7 @@ export function createContext(env: Env, options: CreateContextOptions = {}): App
     structurer: createStructurer(env),
     publisher: createAssetPublisher(env),
     renderer: createBookRenderer(env),
+    payments: createPaymentGateway(env),
   };
 
   return { ...base, ...options.overrides };

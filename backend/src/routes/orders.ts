@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { AppContext } from "../context.js";
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
+import { PAYMENT_KIND, ensureStripeCustomer } from "../services/billing.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
 import { quote as computeQuote, shippingCents, SHIPPING_DAYS, unitPriceCents } from "../services/printPricing.js";
 import {
@@ -10,6 +11,7 @@ import {
   SHIPPING_COUNTRY_CODES,
   toShippingCountryCode,
 } from "../services/shippingCountries.js";
+import { writeLedgerEntry } from "../services/walletLedger.js";
 import { serializeTrip, serializeWallet } from "./appSerializers.js";
 import { loadVisibleMemo } from "./memos.js";
 import { serializeOrderQuote, serializePrintOrder } from "./serializers.js";
@@ -415,7 +417,90 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
       "Commande d'impression créée",
     );
 
-    return reply.code(201).send(serializePrintOrder(order));
+    // --- L'encaissement ------------------------------------------------
+    //
+    // Deux mouvements possibles, et ils ne s'excluent pas : la cagnotte couvre
+    // ce qu'elle peut, la carte paie le reste. `priced` a déjà fait le partage.
+
+    if (priced.walletAppliedCents > 0) {
+      const debit = await writeLedgerEntry(context.prisma, {
+        accountId,
+        amountCents: -priced.walletAppliedCents,
+        kind: "order_payment",
+        label: `Carnet « ${memo.bookTitle?.trim() || memo.title} »`,
+        printOrderId: order.id,
+      });
+
+      if (debit.outcome === "insufficient") {
+        // Le solde a bougé entre le devis et le débit — une seconde commande
+        // partie en parallèle. La commande vient d'être créée, personne ne l'a
+        // vue, et elle porte un `walletAppliedCents` que le registre dément :
+        // la laisser serait garder une ligne qui ment. On la retire.
+        await context.prisma.printOrder.delete({ where: { id: order.id } });
+        throw HttpError.badRequest(
+          `Il manque ${(debit.missingCents / 100).toFixed(2)} € sur ta cagnotte.`,
+          "wallet_insufficient",
+        );
+      }
+    }
+
+    // La cagnotte a tout couvert : aucun aller-retour de paiement, le débit
+    // **est** l'encaissement.
+    if (priced.totalCents === 0) {
+      const paid = await context.prisma.printOrder.update({
+        where: { id: order.id },
+        data: { status: "submitted", submittedAt: new Date() },
+        include: { copyOptions: true },
+      });
+
+      context.logger.info(
+        { orderId: order.id, memoId, walletCents: priced.walletAppliedCents, paidFrom: "wallet" },
+        "Commande payée par la cagnotte",
+      );
+
+      return reply.code(201).send({
+        ...serializePrintOrder(paid),
+        payment: { paidFromWallet: true, amountCents: 0, currency: "eur" },
+      });
+    }
+
+    // Reste à payer : Stripe prend la main. L'intention est créée **après** la
+    // commande — sa clé d'idempotence est l'identifiant de celle-ci, donc elle
+    // doit exister. Un échec ici laisse une commande en `draft`, ce qui est le
+    // bon état à laisser derrière soi : l'app la reprend.
+    const customerId = await ensureStripeCustomer(context, accountId);
+
+    const intent = await context.payments.createIntent({
+      idempotencyKey: `order:${order.id}`,
+      amountCents: priced.totalCents,
+      currency: "eur",
+      customerId,
+      metadata: {
+        kind: PAYMENT_KIND.bookOrder,
+        orderId: order.id,
+        memoId,
+        renderId: render.id,
+        accountId,
+      },
+    });
+
+    await context.prisma.printOrder.update({
+      where: { id: order.id },
+      data: { stripePaymentIntentId: intent.intentId },
+    });
+
+    return reply.code(201).send({
+      ...serializePrintOrder(order),
+      // Ce que la feuille de paiement consomme. `clientSecret` n'ouvre que
+      // cette intention-là, mais il n'entre jamais dans un journal.
+      payment: {
+        paidFromWallet: false,
+        clientSecret: intent.clientSecret,
+        amountCents: priced.totalCents,
+        currency: "eur",
+        publishableKey: context.env.STRIPE_PUBLISHABLE_KEY,
+      },
+    });
   });
 
   /**

@@ -528,6 +528,20 @@ public actor PreviewAPI: MemoBookAPI {
         ordersByMemoId[memoId] ?? []
     }
 
+    /// Une recharge qui n'appelle personne.
+    ///
+    /// Le `clientSecret` fabriqué ne monte **aucune** feuille de paiement, et
+    /// c'est voulu : un aperçu ne doit pas pouvoir ouvrir Stripe, même par
+    /// accident.
+    public func startWalletTopUp(amountCents: Int) async throws -> PaymentIntentTicket {
+        PaymentIntentTicket(
+            clientSecret: "pi_preview_secret",
+            publishableKey: "pk_test_preview",
+            amountCents: amountCents,
+            currency: "eur"
+        )
+    }
+
     // MARK: - La cagnotte
 
 

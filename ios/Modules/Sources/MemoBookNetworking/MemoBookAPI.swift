@@ -210,6 +210,14 @@ public protocol MemoBookAPI: Sendable {
     func createPrintOrder(memoId: String, order: NewPrintOrderRequest) async throws -> PrintOrder
     func printOrders(memoId: String) async throws -> [PrintOrder]
 
+    /// Ouvre une recharge de cagnotte.
+    ///
+    /// **Ne crédite rien.** Elle rend de quoi présenter une feuille de
+    /// paiement ; le solde ne bougera qu'une fois l'argent encaissé, sur retour
+    /// de Stripe au serveur. D'où le fait qu'elle rende un ticket et non une
+    /// ``Wallet`` : l'appelant doit relire la cagnotte après le paiement.
+    func startWalletTopUp(amountCents: Int) async throws -> PaymentIntentTicket
+
     // MARK: - Les réglages d'un voyage
 
     /// Les réglages d'un voyage : nom, dates, rythme, alertes, co-voyageurs,
