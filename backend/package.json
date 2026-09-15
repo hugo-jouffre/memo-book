@@ -21,6 +21,7 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
+    "db:sessions": "tsx --env-file=.env scripts/db-sessions.ts",
     "supabase:setup": "tsx scripts/setup-supabase.ts",
     "supabase:check": "tsx scripts/setup-supabase.ts --check",
     "render:local": "tsx scripts/render-local.ts",

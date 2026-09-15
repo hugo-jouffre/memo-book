@@ -230,13 +230,15 @@ public struct WelcomeView: View {
 
     @ScaledMetric(relativeTo: .body) private var featureIconSide: CGFloat = MemoBookSpacing.xl
 
+    /// ⚠️ **Sans `renderingMode(.template)`**, contrairement aux icônes de
+    /// barre : ces trois-là sont bichromes, et le mode gabarit les aplatirait
+    /// en une seule couleur — c'est-à-dire qu'il effacerait exactement le bleu
+    /// pour lequel on les a choisies.
     private func featureIcon(_ feature: WelcomeCopy.Feature) -> some View {
         Image(brand: feature.icon)
             .resizable()
-            .renderingMode(.template)
             .scaledToFit()
             .frame(width: featureIconSide, height: featureIconSide)
-            .foregroundStyle(MemoBookColor.ink)
             .accessibilityHidden(true)
     }
 

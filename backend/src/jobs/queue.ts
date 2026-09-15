@@ -58,17 +58,24 @@ export class PgBossQueue implements JobQueue {
        * Le `connection_limit` posé sur l'URL ne le concerne pas : il vaut pour
        * le client Prisma, pas pour cette bibliothèque, qui prend 10 connexions
        * par défaut. Or le pooler Supabase en **mode session** n'en accorde que
-       * **15 au total** — et il les compte par serveur, pas par pool.
+       * **15 au total**, pour tout ce qui parle à cette base.
        *
-       * 5 (Prisma) + 10 (ici) = pile la limite : le premier script lancé à côté
-       * fait basculer tout le serveur en « Erreur interne du serveur », et la
-       * cause est invisible depuis la route qui échoue. Quatre laisse de la
-       * place au worker et aux scripts de vérification.
+       * Et ce « tout » compte trois process, pas un : l'API déployée, son
+       * worker, et le serveur de développement. À quatre connexions chacun,
+       * pg-boss seul en prenait douze — la production remplissait la limite à
+       * elle seule, et le serveur local ne trouvait plus une place. Relevé le
+       * 15/09/2026 : 15 sessions sur 15, dont 8 pg-boss, aucun process local
+       * lancé.
        *
-       * C'est bas parce que la file est peu chargée : les jobs sont longs
-       * (transcription, rédaction, PDF) et rares, pas courts et nombreux.
+       * **Deux suffisent** : les jobs sont longs (transcription, rédaction,
+       * PDF) et rares, et ce que pg-boss fait avec ces connexions — interroger
+       * sa file toutes les deux secondes — tient en quelques millisecondes.
+       *
+       * Pour de bon, il faudrait cesser de partager une base entre la
+       * production et le développement, ou relever le *Pool Size* du pooler
+       * dans la console Supabase. Voir `docs/debogage.md`.
        */
-      max: 4,
+      max: 2,
     });
 
     // ⚠️ **Sans ce gestionnaire, une panne de la file tue le serveur.**
@@ -98,6 +105,14 @@ export class PgBossQueue implements JobQueue {
   }
 
   async publish<T extends object>(name: JobName, payload: T): Promise<void> {
+    // Dit ce qui se passe plutôt que de laisser remonter l'erreur interne de
+    // pg-boss : la file peut être encore en train de naître (voir
+    // `startQueueWhenPossible`), et c'est un état d'attente, pas une panne.
+    if (!this.started) {
+      throw new Error(
+        "La file de travaux n'a pas encore démarré. Réessaie dans un instant.",
+      );
+    }
     await this.boss.send(name, payload);
   }
 
@@ -151,6 +166,90 @@ export class PgBossQueue implements JobQueue {
       return false;
     }
   }
+}
+
+/** De quoi journaliser, sans dépendre du contexte — qui, lui, dépend d'ici. */
+interface QueueLogger {
+  info(details: object, message: string): void;
+  error(details: object, message: string): void;
+}
+
+/**
+ * Démarre la file **sans jamais faire tomber l'appelant**, et retente tant que
+ * Postgres la refuse.
+ *
+ * ⚠️ **C'est ce qui empêche une base indisponible d'emporter l'API.** Le
+ * serveur attendait `queue.start()` *avant* d'ouvrir son port : un pooler plein
+ * — quinze sessions, et un `prisma studio` oublié suffit — remontait jusqu'à
+ * `main().catch`, qui sortait en code 1. `tsx watch`, lui, ne relance pas un
+ * process mort : il attend une modification de fichier. Le serveur de
+ * développement restait donc éteint **en silence**, et on le découvrait depuis
+ * l'app, sur un « Connexion impossible » qui accusait le réseau.
+ *
+ * Or les routes n'ont pas besoin de la file : elles y *publient*, au plus. Le
+ * port s'ouvre donc d'abord, la file se branche quand elle peut, et l'attente
+ * se voit dans les logs comme dans `/health`.
+ *
+ * L'attente double à chaque échec, jusqu'à trente secondes : un pooler plein se
+ * libère en minutes, pas en millisecondes, et marteler la base ne fait
+ * qu'occuper la connexion qu'on attend.
+ */
+export function startQueueWhenPossible(
+  queue: JobQueue,
+  logger: QueueLogger,
+): { cancel: () => void } {
+  let cancelled = false;
+  let delay = 2_000;
+
+  const attempt = async (): Promise<void> => {
+    if (cancelled) return;
+
+    try {
+      await queue.start();
+      if (!cancelled) logger.info({}, "File de travaux démarrée.");
+    } catch (error) {
+      if (cancelled) return;
+
+      logger.error(
+        { err: error, nouvelEssaiDans: `${delay / 1_000} s`, cause: diagnose(error) },
+        "La file de travaux n'a pas démarré — l'API répond quand même.",
+      );
+
+      // `unref` : ce minuteur ne doit pas retenir le process au moment de
+      // s'arrêter. Il retente si le serveur est encore là, rien de plus.
+      setTimeout(() => void attempt(), delay).unref();
+      delay = Math.min(delay * 2, 30_000);
+    }
+  };
+
+  void attempt();
+
+  return {
+    cancel: () => {
+      cancelled = true;
+    },
+  };
+}
+
+/**
+ * Traduit la panne en geste, dans la langue des logs. Même intention que
+ * `APIError.developerDiagnosis` côté iOS : on ne devine pas une panne, on lit
+ * une ligne qui dit quoi faire.
+ */
+function diagnose(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (message.includes("EMAXCONNSESSION") || message.includes("max clients reached")) {
+    return (
+      "Le pooler Supabase est plein — 15 sessions au total en mode session. " +
+      "Un second serveur, un `prisma studio`, un script laissé ouvert : ferme " +
+      "ce qui traîne, ou attends que les sessions expirent."
+    );
+  }
+  if (message.includes("ECONNREFUSED") || message.includes("ENOTFOUND")) {
+    return "Postgres est injoignable : vérifie DATABASE_URL, et que la base est debout.";
+  }
+  return "Postgres a refusé la file.";
 }
 
 /**

@@ -241,7 +241,20 @@ Le catalogue n'est **jamais rempli à la main** : deux scripts l'alimentent depu
 ```bash
 python3 ios/Tools/import-brand-icons.py     # assets/icons/brand-icons
 python3 ios/Tools/import-lucide-icons.py    # assets/icons/lucide-icons
+python3 ios/Tools/import-brand-logos.py     # assets/logos
 ```
+
+Les icônes de marque viennent par **paires** : `Printer.svg` donne
+`IconPrinter`, monochrome et destiné à `renderingMode(.template)` ;
+`Printer 2.svg` donne `IconPrinterDuo`, bichrome — encre et bleu d'aplat —, à
+poser **sans** mode gabarit, qui l'aplatirait justement en une couleur.
+
+⚠️ Deux formes de SVG cohabitent dans `assets/logos`, et
+`import-brand-logos.py` les distingue tout seul. Un vrai vectoriel est recopié
+tel quel ; un **export d'image** de Figma — la planche entière en base64 dans un
+`<pattern>`, dont le nœud ne montre qu'une découpe par la matrice d'un `<use>` —
+est décodé, découpé, et écrit en PNG. Xcode ne rend pas les images incrustées
+dans un SVG, et les embarquer recopierait toute la planche dans chaque icône.
 
 Le second sert les **remplaçants** : les pictogrammes que le jeu de marque n'a
 pas — les catégories de la galerie, le train du filtre « Transports ». Ils

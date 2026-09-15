@@ -2770,6 +2770,31 @@ l'écran des paramètres, qui tournait sur un jeu d'essai depuis sa livraison.
 soit `largeCornerRadius` + `s`), marge de carte 1.5, gouttière de blocs 2,
 boutons de fournisseur 3.25 (52) à rayon 1, note communauté à rayon 0.75.
 
+**Les deux boutons de fournisseur portent le même habillage**, écrit une seule
+fois (`providerChrome`) : même aplat `surface`, même filet `Beige Darker`, même
+rayon de contrôle. Celui d'Apple reste **son** bouton — son libellé, sa
+typographie, sa pomme —, mais en style `.white` plutôt que `.whiteOutline` : le
+filet d'`.whiteOutline` est à l'encre, il suit *son* rayon et coupait les angles
+en travers de l'arrondi. Sans contour, découpé à notre forme, le beige se pose
+dessus comme sur l'autre. Et `colorMultiply(surface)` rattrape le blanc pur
+d'Apple sans toucher au noir de la pomme ni du texte — multiplier par 0 ne donne
+que 0. Mesuré : les deux aplats rendent (255, 252, 248).
+
+**Les trois icônes des étapes sont bichromes** (`IconMicDuo`,
+`IconPictureFrameDuo`, `IconPrinterFilledDuo`), sans `renderingMode(.template)`
+— qui les aplatirait en une couleur, c'est-à-dire effacerait exactement le bleu
+pour lequel on les a choisies. L'imprimante est la version **pleine** :
+`IconPrinterDuo` n'est qu'un contour, et elle paraissait vide entre deux voisines
+pleines.
+
+**Les logos Apple et Google** sont ceux de la marque, dessinés à la main et
+cernés du même bleu (`assets/logos/*.svg`, importés par
+`ios/Tools/import-brand-logos.py`). ⚠️ Figma les exporte en **bitmap incrusté** —
+la planche entière en base64 dans un `<pattern>`, dont le nœud ne montre qu'une
+découpe. Xcode ne sait pas rendre ça, et l'embarquer voudrait dire recopier
+160 ko de planche par icône de 24 pt : le script décode, découpe, et écrit un
+PNG à la résolution native (131 × 139 et 139 × 150). Voir T106.
+
 **Ce qui a changé ailleurs** — `AuthView` perd ses deux boutons de fournisseur
 et son entrée de chantier, gagne une flèche « Retour », et devient un écran
 poussé (`SignedOutRoute.email`). `WelcomeStepCard` et `SocialSignInSection`
@@ -2779,7 +2804,7 @@ plus rien.
 **Contrat back-end** — aucun appel. Les deux entrées passent par
 `POST /v1/auth/social`, déjà en place.
 
-**À trancher** — T96, T97, T98.
+**À trancher** — T96, T98, T107. La pomme du bouton Apple est tranchée (T106).
 
 ### 18.2 Paywall de retour — deux écrans au lieu de trois
 
@@ -2903,7 +2928,7 @@ booléens d'alerte sur `memos`, et `memo_members.role`.
 | # | Point |
 |---|---|
 | T96 | **Deux phrases de l'accueil vouvoient** — « Nous allons t'accompagner… » tutoie, mais la mention légale écrit « **vous** acceptez nos Conditions d'utilisation ». Recopiées telles quelles (R8), à réécrire dans Figma (R9) |
-| T97 | **Le bouton Apple ne se cercle pas de `Beige Darker`.** `.whiteOutline` est le style clair d'Apple et son filet est le sien ; on ne retouche pas son bouton, c'est un motif de refus en revue |
+| T97 | ~~**Le bouton Apple ne se cercle pas de `Beige Darker`**~~ — **réglé** : style `.white` (donc sans filet à lui), découpe à notre forme, et le beige posé par-dessus. Son libellé et sa pomme restent les siens, ce qui reste la règle |
 | T98 | **La photo d'accueil fait 587 × 360 px** — moins de 1× sur l'écran, donc visiblement molle. Il faut un export haute résolution du nœud `hero-container` |
 | T99 | **L'arrêt automatique de l'abonnement ne parle pas à Apple.** Le jour où StoreKit sera branché, c'est le webhook App Store qui devra fermer la ligne `subscriptions`, et cette tâche deviendra le filet plutôt que la règle |
 | T100 | **Les pages du carnet ne flottent pas hors de la modale.** La maquette les pose presque entièrement au-dessus de la carte (9 pt de recouvrement sur 281) ; une feuille du système **rogne tout ce qui déborde d'elle** — trois géométries essayées en simulateur, aucune ne passe. Elles prennent donc leur place dans la feuille, au-dessus du titre, et gardent tout le reste du dessin. Seul un écran custom le permettrait, au prix du glissé, du repli et du redimensionnement au clavier que `BrandSheet` tient du système |
@@ -2912,3 +2937,5 @@ booléens d'alerte sur `memos`, et `memo_members.role`.
 | T103 | **Trois ajouts que la maquette ne dessine pas**, tous signalés plutôt qu'inventés en silence : la phrase « Glisse une ligne vers la gauche pour la retirer. » (sans elle, les deux actions sont introuvables), l'état vide de la liste de co-voyageurs, et la phrase qui dit que l'interrupteur maître des notifications est baissé |
 | T104 | **Le logo WhatsApp manque**, comme à la création du voyage : la bulle du système en attendant. Et l'icône « Renvoyer » emprunte `IconTeleverser` faute d'un envoi dans le jeu de marque |
 | T105 | **`TripCreationStepContent.paces` reste sur trois libellés libres** (« Tous les jours », « Toutes les semaines », « Tous les mois ») là où les réglages en proposent désormais cinq, tirés de `NarrationPace`. Les deux écrans devraient parler la même langue — à reprendre dans Figma d'abord |
+| T106 | ~~**La pomme du bouton Apple reste celle d'Apple, pas celle de la marque**~~ — **tranché le 15/09/2026 : on garde celle d'Apple.** Un bouton « Se connecter avec Apple » qui porte une pomme redessinée sort de ce qu'Apple autorise — ses règles demandent **son** logo — et un refus en revue coûte une semaine, là où l'écart se voit à peine : le filet, l'aplat et l'arrondi sont déjà les mêmes des deux côtés. `LogoApple` reste dans le catalogue, disponible ailleurs. Le « G » de Google, lui, est bien celui de la marque : Google demande aussi le sien, mais sans porte d'entrée à l'App Store pour le faire respecter |
+| T107 | **La planche de logos est un bitmap, pas un vectoriel.** Les découpes tombent à 131 × 139 et 139 × 150 px pour un affichage de 24 pt — au-dessus du @3x, donc net aujourd'hui, mais sans marge pour un usage plus grand. Un export vectoriel des trois autocollants (Apple, Google, Facebook) réglerait la question |
