@@ -480,21 +480,31 @@ ou *Réglages ▸ Confidentialité et sécurité ▸ Suivi*, éteindre puis rall
 « Autoriser les apps à demander de vous suivre » — ce qui remet **toutes** les
 apps à zéro.
 
-### ⚠️ L'app ne suit personne
+### ⚠️ Cette branche dort, et voici pourquoi
 
-Au 15/09/2026, MemoBook n'embarque **aucun** SDK publicitaire ou d'analytique,
-et ne partage rien avec un courtier en données : ni côté iOS, ni côté back-end.
-Ce panneau ne rend donc `granted` à personne — il ne sert qu'à mettre le
-binaire d'accord avec les étiquettes de confidentialité d'App Store Connect,
-qui déclarent, elles, un suivi (nom et e-mail).
+**Elle n'est pas destinée à être fusionnée telle quelle.** Au 15/09/2026,
+MemoBook n'embarque **aucun** SDK publicitaire ou d'analytique, et ne partage
+rien avec un courtier en données : ni côté iOS, ni côté back-end. Ce panneau ne
+rend donc `granted` à personne — il demande une permission que rien n'utilise.
 
-**C'est cette contradiction qu'il faut trancher, et elle se tranche dans App
-Store Connect, pas ici.** Si les étiquettes sont fausses — c'est ce que dit le
-code — les corriger est la vraie réponse au rejet 5.1.2(i), et ce panneau
-devient une question posée pour rien. S'il naît un jour un vrai suivi, alors
-c'est `NSUserTrackingUsageDescription` qui doit être réécrite pour le décrire,
-et le SDK qui doit lire `TrackingAuthorization.current()` avant de collecter
-quoi que ce soit.
+Livrer ça aujourd'hui coûterait une question à chaque nouvel utilisateur pour
+zéro donnée collectée. Le rejet 5.1.2(i) qui l'a fait naître ne se règle pas
+ici : il vient d'étiquettes de confidentialité d'App Store Connect qui
+déclarent un suivi (nom et e-mail) que le code ne fait pas. **Corriger les
+étiquettes est la vraie réponse au rejet** — c'est un décochage, sans nouveau
+binaire.
+
+La branche est donc gardée au frais (`icebox/transparence-du-suivi`) jusqu'au
+jour où un vrai suivi arrive — décision de Hugo, 15/09/2026, pour comprendre
+les parcours utilisateurs. Ce jour-là, trois choses, et dans cet ordre :
+
+1. **Réécrire `NSUserTrackingUsageDescription`** (`ios/project.yml`) pour
+   décrire ce que le SDK fait vraiment. La phrase actuelle parle de mesurer
+   d'où viennent les nouveaux voyageurs : elle ne vaut que si c'est vrai.
+2. **Faire lire `TrackingAuthorization.current()` au SDK** avant qu'il
+   collecte quoi que ce soit — un refus doit vraiment arrêter la collecte, et
+   c'est ce que ce lot ne fait pas encore, faute de SDK à brancher.
+3. **Remettre les étiquettes d'accord** avec ce qui est devenu vrai.
 
 ## Figma
 
