@@ -139,6 +139,12 @@ targets:
           # feuille s'ouvre et ne revient jamais.
           - CFBundleURLSchemes:
               - $(GOOGLE_IOS_URL_SCHEME)
+          # Les liens qui ouvrent l'app depuis un e-mail — « Réinitialiser mon
+          # mot de passe ». Le back-end les écrit (`APP_LINK_BASE_URL`),
+          # `PasswordResetLink` les lit. Un schéma privé en attendant le lien
+          # universel, qui demande un fichier servi par memo-book.com.
+          - CFBundleURLSchemes:
+              - memobook
         # L'adresse de l'API, posée par la configuration de build. C'est le
         # seul chemin par lequel une valeur d'`.xcconfig` devient lisible à
         # l'exécution — voir `APIConfiguration.fromBuildConfiguration`.

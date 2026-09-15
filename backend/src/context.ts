@@ -2,9 +2,11 @@ import { PrismaClient } from "@prisma/client";
 import pino, { type Logger } from "pino";
 import type { Env } from "./env.js";
 import { InlineQueue, PgBossQueue, type JobQueue } from "./jobs/queue.js";
+import { splitPoolBudget, withConnectionLimit } from "./lib/databasePool.js";
 import { createBookRenderer, type BookRenderer } from "./services/apitemplate.js";
 import { createRedactor, type Redactor } from "./services/redaction.js";
 import { createSocialVerifier, type SocialVerifier } from "./services/socialIdentity.js";
+import { createMailer, type Mailer } from "./services/mailer.js";
 import { createPaymentGateway, type PaymentGateway } from "./services/payments.js";
 import { createMediaStorage, type MediaStorage } from "./services/storage.js";
 import { createStructurer, type Structurer } from "./services/structuring.js";
@@ -25,6 +27,8 @@ export interface AppContext {
   storage: MediaStorage;
   /** Vérifie les jetons d'identité Apple et Google. */
   socialVerifier: SocialVerifier;
+  /** Envoie les e-mails de l'app — aujourd'hui, celui du mot de passe oublié. */
+  mailer: Mailer;
   transcriber: Transcriber;
   redactor: Redactor;
   structurer: Structurer;
@@ -41,9 +45,12 @@ export interface CreateContextOptions {
 
 export function createContext(env: Env, options: CreateContextOptions = {}): AppContext {
   const logger = pino({ level: env.LOG_LEVEL });
+  const pool = splitPoolBudget(env.DATABASE_POOL_SIZE);
 
   const queue =
-    env.NODE_ENV === "test" ? new InlineQueue() : new PgBossQueue(env.DATABASE_URL);
+    env.NODE_ENV === "test"
+      ? new InlineQueue()
+      : new PgBossQueue(env.DATABASE_URL, { maxConnections: pool.boss });
 
   // Les pannes de la file vont dans les logs du serveur — et nulle part
   // ailleurs. Sans écouteur, Node relancerait l'événement `error` d'un
@@ -56,10 +63,13 @@ export function createContext(env: Env, options: CreateContextOptions = {}): App
   const base: AppContext = {
     env,
     logger,
-    prisma: new PrismaClient({ datasourceUrl: env.DATABASE_URL }),
+    prisma: new PrismaClient({
+      datasourceUrl: withConnectionLimit(env.DATABASE_URL, pool.prisma),
+    }),
     queue,
     storage: createMediaStorage(env),
     socialVerifier: createSocialVerifier(env),
+    mailer: createMailer(env, logger),
     transcriber: createTranscriber(env),
     redactor: createRedactor(env),
     structurer: createStructurer(env),

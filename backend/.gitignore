@@ -4,3 +4,4 @@ dist/
 .env.local
 *.log
 .render-out/
+.mail-out/

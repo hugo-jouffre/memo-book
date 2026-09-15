@@ -229,12 +229,12 @@ struct BookToggleSheet: View {
     let isEnabled: Bool
     /// La place réservée aux deux pages du carnet, quand il y en a un à
     /// montrer — voir ``BookPagesPeek``.
-    var topInset: CGFloat = 0
+    var topOverflow: CGFloat = 0
 
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        BrandSheet(title, topInset: topInset) {
+        BrandSheet(title, topOverflow: topOverflow) {
             VStack(spacing: MemoBookSpacing.m) {
                 BrandToggleCard(title: toggleTitle, detail: detail, isOn: isOn)
                 BrandButton(BookCopy.FunFacts.validate, fillsWidth: true) { dismiss() }
@@ -249,7 +249,7 @@ struct BookToggleSheet: View {
 /// « Titres du carnet » — trois familles, une seule choisie.
 struct BookFontsSheet: View {
     let model: BookCustomisationModel
-    var topInset: CGFloat = 0
+    var topOverflow: CGFloat = 0
 
     @Environment(\.dismiss) private var dismiss
 
@@ -257,7 +257,7 @@ struct BookFontsSheet: View {
         BrandSheet(
             BookCopy.Fonts.title,
             subtitle: BookCopy.Fonts.subtitle,
-            topInset: topInset
+            topOverflow: topOverflow
         ) {
             VStack(spacing: MemoBookSpacing.m) {
                 BrandOptionGroup {
@@ -284,7 +284,7 @@ struct BookFontsSheet: View {
 /// « Décorations & stickers » — de zéro à quatre par paragraphe.
 struct BookDecorationsSheet: View {
     let model: BookCustomisationModel
-    var topInset: CGFloat = 0
+    var topOverflow: CGFloat = 0
 
     @Environment(\.dismiss) private var dismiss
 
@@ -292,7 +292,7 @@ struct BookDecorationsSheet: View {
         BrandSheet(
             BookCopy.Decorations.title,
             subtitle: BookCopy.Decorations.subtitle,
-            topInset: topInset
+            topOverflow: topOverflow
         ) {
             VStack(spacing: MemoBookSpacing.m) {
                 BrandSlider(

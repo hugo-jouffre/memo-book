@@ -367,7 +367,9 @@ struct PaywallArgumentCard: View {
     let argument: PaywallCopy.Argument
 
     @ScaledMetric(relativeTo: .body) private var badgeSide: CGFloat = 34
-    @ScaledMetric(relativeTo: .body) private var iconSide: CGFloat = 24
+    /// Presque la plaque entière : le glyphe du jeu de marque n'occupe qu'une
+    /// part de sa boîte — voir ``MemoBookSpacing/contentIcon``.
+    @ScaledMetric(relativeTo: .body) private var iconSide: CGFloat = 28
 
     private var shape: RoundedRectangle {
         .rect(cornerRadius: MemoBookSpacing.largeCornerRadius)

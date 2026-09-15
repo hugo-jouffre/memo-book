@@ -67,11 +67,12 @@ public struct BrandSheet<Content: View>: View {
     }
 
     private let title: String
+    private let icon: String?
     private let badge: String?
     private let paragraphs: [String]
     private let titleAlignment: TitleAlignment
     private let surface: Surface
-    private let topInset: CGFloat
+    private let topOverflow: CGFloat
     private let content: Content
 
     /// - Parameter badge: la pastille qui se glisse **entre** le titre et le
@@ -79,31 +80,29 @@ public struct BrandSheet<Content: View>: View {
     ///   titre, donc elle appartient à l'en-tête et non au contenu : mise dans
     ///   le contenu, elle se serait retrouvée sous le sous-titre qui la
     ///   commente.
-    /// - Parameter topInset: la place **réservée au-dessus du titre**, pour un
-    ///   objet posé en `overlay` qui déborde par le haut — les deux pages du
-    ///   carnet au-dessus des feuilles de personnalisation.
-    ///
-    ///   ⚠️ **Une feuille du système ne laisse voir qu'une vingtaine de points
-    ///   hors d'elle.** Ce qu'on offre à un `overlay` débordant s'arrête là :
-    ///   au-delà, tout est rogné. Un objet qui doit se voir en entier prend
-    ///   donc sa place *dans* la feuille, et ne dépasse que du bord — c'est ce
-    ///   que cette réserve permet, sans que l'objet vienne couvrir le titre.
+    /// - Parameter icon: le pictogramme de marque posé **au-dessus** du titre,
+    ///   dans un disque bleu — le cadenas de « Mot de passe oublié ». Il
+    ///   annonce le sujet de la feuille avant qu'on la lise, comme une
+    ///   vignette de couverture ; il n'a de sens que centré, et c'est ainsi
+    ///   qu'il se dessine quelle que soit l'alignement du titre.
     public init(
         _ title: String,
+        icon: String? = nil,
         badge: String? = nil,
         subtitle: String? = nil,
         titleAlignment: TitleAlignment = .leading,
         surface: Surface = .paper,
-        topInset: CGFloat = 0,
+        topOverflow: CGFloat = 0,
         @ViewBuilder content: () -> Content
     ) {
         self.init(
             title,
+            icon: icon,
             badge: badge,
             paragraphs: subtitle.map { [$0] } ?? [],
             titleAlignment: titleAlignment,
             surface: surface,
-            topInset: topInset,
+            topOverflow: topOverflow,
             content: content
         )
     }
@@ -115,21 +114,38 @@ public struct BrandSheet<Content: View>: View {
     /// Une liste et non une chaîne à retours à la ligne : `\n\n` donnerait une
     /// ligne vide entière là où la maquette ne veut que l'écart d'un
     /// paragraphe, et une ligne vide ne se lit pas à VoiceOver.
+    /// - Parameter topOverflow: la hauteur **réservée au-dessus** de l'aplat de
+    ///   la feuille, pour ce qui doit la dépasser par le haut.
+    ///
+    ///   Zéro partout sauf au mot des fondateurs, dont la photo est collée à
+    ///   cheval sur le bord. Elle n'y arrivait pas : la feuille du système
+    ///   **rogne son contenu à ses propres bords** — c'est le prix de
+    ///   `presentationBackground`, qui lui confie le fond et la forme — et un
+    ///   `overlay` posé par-dessus la feuille se faisait couper au ras du bord
+    ///   supérieur, quelle que soit sa profondeur dans la hiérarchie.
+    ///
+    ///   Avec une réserve, la feuille rend son fond au système (`.clear`) et
+    ///   dessine le sien un peu plus bas : la bande du haut devient un espace
+    ///   transparent **à l'intérieur** de la présentation, où ce qui dépasse
+    ///   tient sans être rogné. Le cran s'agrandit d'autant, pour que la
+    ///   feuille ne monte pas d'un pouce à l'écran.
     public init(
         _ title: String,
+        icon: String? = nil,
         badge: String? = nil,
         paragraphs: [String],
         titleAlignment: TitleAlignment = .leading,
         surface: Surface = .paper,
-        topInset: CGFloat = 0,
+        topOverflow: CGFloat = 0,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
+        self.icon = icon
         self.badge = badge
         self.paragraphs = paragraphs
         self.titleAlignment = titleAlignment
         self.surface = surface
-        self.topInset = topInset
+        self.topOverflow = topOverflow
         self.content = content()
     }
 
@@ -183,14 +199,21 @@ public struct BrandSheet<Content: View>: View {
             scrollingBody
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // La réserve du haut : un espace transparent **dans** la présentation,
+        // sous lequel l'aplat commence. Zéro par défaut, et la feuille est
+        // alors exactement celle d'avant.
+        .padding(.top, topOverflow)
+        .background { drawnSurface }
         .presentationDetents([.height(detentHeight)])
         // On dessine la nôtre : celle du système est posée par-dessus le
         // contenu et ne suit pas la palette de la marque.
         .presentationDragIndicator(.hidden)
-        // Le fond **et** la forme appartiennent au système : c'est lui qui rogne
-        // le contenu au bord de la feuille, et son ombre tombe alors derrière
-        // elle au lieu de faire un liseré.
-        .presentationBackground(surfaceColor)
+        // Sans réserve, le fond **et** la forme appartiennent au système : c'est
+        // lui qui rogne le contenu au bord de la feuille, et son ombre tombe
+        // alors derrière elle au lieu de faire un liseré. Avec une réserve, on
+        // lui rend un fond transparent et on dessine le nôtre — sans quoi il
+        // peindrait aussi la bande où quelque chose doit dépasser.
+        .presentationBackground(topOverflow > 0 ? AnyShapeStyle(.clear) : AnyShapeStyle(surfaceColor))
         .presentationCornerRadius(MemoBookSpacing.sheetCornerRadius)
         // Le crème de la marque ne se retourne pas en sombre — voir
         // `MemoBookColor`.
@@ -218,11 +241,35 @@ public struct BrandSheet<Content: View>: View {
         // fois — l'indicateur d'accueil comptait double — et le dernier bouton
         // se retrouvait à 89 pt du bas au lieu de 50. Trois marges pour une
         // seule intention.
-        let wanted = bodyHeight + Self.handleBlockHeight
+        // La réserve s'ajoute : sans elle, la feuille remonterait de sa hauteur
+        // et le contenu se retrouverait décalé vers le bas de son propre cran.
+        let wanted = bodyHeight + Self.handleBlockHeight + topOverflow
 
         // Un contenu trop haut ne pousse pas la feuille jusqu'en haut : il
         // défile. C'est le cas des six connecteurs.
         return min(wanted, Self.ceilingHeight)
+    }
+
+    /// L'aplat de la feuille, dessiné par nous quand une réserve existe.
+    ///
+    /// `EmptyView` sinon : le système garde alors la main sur le fond, la forme
+    /// et l'ombre, ce qui reste le meilleur dessin pour une feuille ordinaire.
+    @ViewBuilder
+    private var drawnSurface: some View {
+        if topOverflow > 0 {
+            UnevenRoundedRectangle(
+                topLeadingRadius: MemoBookSpacing.sheetCornerRadius,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: MemoBookSpacing.sheetCornerRadius
+            )
+            .fill(surfaceColor)
+            // L'ombre du système part avec son fond : on repose la nôtre, sans
+            // quoi la feuille flotterait sans se détacher de l'écran.
+            .brandShadow(.raised)
+            .padding(.top, topOverflow)
+            .ignoresSafeArea(edges: .bottom)
+        }
     }
 
     private var handle: some View {
@@ -240,7 +287,6 @@ public struct BrandSheet<Content: View>: View {
                 header
                 content
             }
-            .padding(.top, topInset)
             .padding(.horizontal, MemoBookSpacing.screenMargin)
             // ⚠️ **La safe area compte déjà dans cette marge.** Le défilement
             // réserve l'indicateur d'accueil sous le contenu — 34 pt sur un
@@ -321,6 +367,12 @@ public struct BrandSheet<Content: View>: View {
         titleInset: CGFloat = 0
     ) -> some View {
         VStack(alignment: alignment, spacing: MemoBookSpacing.xs) {
+            if let icon {
+                BrandIconBadge(icon)
+                    .frame(maxWidth: .infinity)
+                    .padding(.bottom, MemoBookSpacing.xs)
+            }
+
             Text(title)
                 .font(MemoBookFont.h1)
                 .tracking(-0.41)

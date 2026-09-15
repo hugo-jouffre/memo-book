@@ -20,14 +20,11 @@ import SwiftUI
 /// - les **deux barres** suspendent, pour reprendre son souffle ;
 /// - le **rond de fermeture** de la feuille abandonne tout.
 struct RecordingSheet: View {
-    /// Le vocal, une fois terminé, et la forme d'onde de ce qui a été dit. La
-    /// feuille ne l'envoie nulle part : elle le rend, et c'est l'écran qui l'a
-    /// présentée qui décide de son sort.
-    ///
-    /// Les niveaux voyagent avec lui parce qu'ils ne se retrouvent pas après
-    /// coup : `AudioRecorder` ne publie qu'un niveau instantané, et personne
-    /// d'autre que cette feuille n'était là pendant qu'on parlait.
-    let onFinish: (RecordedAudio, _ levels: [Double]) -> Void
+    /// Le vocal, une fois terminé, et les niveaux relevés pendant qu'on
+    /// parlait. La feuille ne l'envoie nulle part : elle le rend, et c'est
+    /// l'écran qui l'a présentée qui décide de son sort — l'envoyer, et
+    /// l'emporter dans la conversation (``RecordingHandoff``).
+    let onFinish: (RecordedAudio, [Double]) -> Void
 
     @State private var model = RecordingModel()
     @Environment(\.dismiss) private var dismiss
@@ -77,8 +74,14 @@ struct RecordingSheet: View {
     }
 
     private func toggle() async {
-        // Relevé **avant** la fermeture : `discard()` part avec `onDisappear` et
-        // vide la frise. Lu après, on ne rendrait qu'un tableau vide.
+        // Le relevé **entier**, et non la frise : `levels` ne garde que les
+        // quarante dernières barres, celles qui défilent sous le micro. La
+        // bulle du fil, elle, dessine tout le vocal — cadrée sur la frise, un
+        // vocal de deux minutes aurait la silhouette de ses trois dernières
+        // secondes.
+        //
+        // Et lu **avant** de refermer : la feuille l'efface en disparaissant
+        // (`discard()`).
         let levels = model.capturedLevels
         guard let audio = await model.toggle() else { return }
         dismiss()

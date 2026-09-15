@@ -105,7 +105,7 @@ public struct TripSettingsView: View {
                 BrandRow(
                     BookCopy.Settings.name,
                     value: settings?.name,
-                    isValueProminent: true,
+                    valueTone: .prominent,
                     isValueLoading: isLoading,
                     action: { onIntent(.renameTrip) }
                 )
@@ -115,7 +115,7 @@ public struct TripSettingsView: View {
                 BrandRow(
                     BookCopy.Settings.wallet,
                     value: settings?.walletBalance.euros,
-                    isValueProminent: true,
+                    valueTone: .prominent,
                     isValueLoading: isLoading,
                     action: { onIntent(.openWallet) }
                 )

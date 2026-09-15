@@ -24,6 +24,7 @@ public struct BrandScreenHeader<Trailing: View>: View {
     private let title: String
     private let subtitle: String?
     private let isSubtitleLoading: Bool
+    private let onBack: (() -> Void)?
     private let trailing: Trailing
 
     /// - Parameters:
@@ -32,22 +33,33 @@ public struct BrandScreenHeader<Trailing: View>: View {
     ///   - isSubtitleLoading: le sous-titre vient du serveur et n'est pas encore
     ///     là. Le **titre**, lui, s'affiche toujours tout de suite : il
     ///     appartient à l'app. Voir ``BrandSkeleton``.
+    ///   - onBack: ce que fait la flèche. `nil` referme l'écran, ce qui est le
+    ///     cas courant. Un **parcours en étapes** la détourne pour revenir à
+    ///     l'étape précédente : la flèche reste alors le même geste au même
+    ///     endroit, et c'est bien pour ça qu'elle vit ici et non dans chaque
+    ///     écran.
     ///   - trailing: l'action de bout de ligne, au plus une. Deux commandes en
     ///     tête d'un écran poussé et on ne sait plus laquelle est la sortie.
     public init(
         title: String,
         subtitle: String? = nil,
         isSubtitleLoading: Bool = false,
+        onBack: (() -> Void)? = nil,
         @ViewBuilder trailing: () -> Trailing
     ) {
         self.title = title
         self.subtitle = subtitle
         self.isSubtitleLoading = isSubtitleLoading
+        self.onBack = onBack
         self.trailing = trailing()
     }
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
+
+    /// La hauteur d'une ligne du titre (``MemoBookFont/heading``, Sora 20),
+    /// pour poser la flèche **en face** de cette ligne — voir ``text``.
+    @ScaledMetric(relativeTo: .title3) private var titleLineHeight: CGFloat = 26
 
     public var body: some View {
         HStack(alignment: .top, spacing: MemoBookSpacing.xs) {
@@ -70,7 +82,7 @@ public struct BrandScreenHeader<Trailing: View>: View {
     /// le dessin centré dedans : centrée sur l'icône, elle débordait de la
     /// colonne et la moitié gauche des touches tombait à côté.
     private var backButton: some View {
-        Button { dismiss() } label: {
+        Button { onBack?() ?? dismiss() } label: {
             Image(brand: "IconArrowDuo")
                 .resizable()
                 .scaledToFit()
@@ -101,6 +113,12 @@ public struct BrandScreenHeader<Trailing: View>: View {
                 Text(subtitle)
                     .font(MemoBookFont.h3)
                     .foregroundStyle(MemoBookColor.ink)
+                    // Le sous-titre d'un parcours en étapes change à chaque
+                    // « Continuer » — « Étape 2/7 », « Étape 3/7 ». Il se
+                    // remplace en fondu plutôt que d'un coup sec, sans quoi
+                    // c'est la seule chose de l'en-tête qui saute.
+                    .contentTransition(.numericText())
+                    .animation(.smooth(duration: 0.25), value: subtitle)
             }
         }
         // Les deux lignes s'enroulent plutôt que de se faire rogner : en taille
@@ -111,17 +129,31 @@ public struct BrandScreenHeader<Trailing: View>: View {
         // La ligne du haut aligne la flèche sur le **titre** et non sur le bloc
         // entier : avec un sous-titre de trois lignes, un centrage vertical
         // faisait descendre la sortie au milieu du texte.
-        .padding(.top, typeSize.isAccessibilitySize ? 0 : MemoBookSpacing.xs / 2)
+        //
+        // Et **en face de sa première ligne**, pas de son bord haut : la flèche
+        // est dessinée au centre d'une cible de 2.75 rem, le titre fait une
+        // ligne de 26 — posés bord à bord, la flèche tombait 5 pt sous le
+        // milieu du titre, ce qui se voyait sur les paramètres du voyage (Hugo,
+        // 14/09/2026, T103). La marge du titre vaut donc la moitié de l'écart
+        // entre les deux, et suit le corps du texte. En taille accessible le
+        // titre dépasse la cible : plus rien à rattraper.
+        .padding(.top, typeSize.isAccessibilitySize ? 0 : max(0, (MemoBookSpacing.minimumTapTarget - titleLineHeight) / 2))
     }
 }
 
 extension BrandScreenHeader where Trailing == EmptyView {
     /// L'en-tête sans action de bout de ligne — le cas courant.
-    public init(title: String, subtitle: String? = nil, isSubtitleLoading: Bool = false) {
+    public init(
+        title: String,
+        subtitle: String? = nil,
+        isSubtitleLoading: Bool = false,
+        onBack: (() -> Void)? = nil
+    ) {
         self.init(
             title: title,
             subtitle: subtitle,
             isSubtitleLoading: isSubtitleLoading,
+            onBack: onBack,
             trailing: { EmptyView() }
         )
     }
@@ -186,7 +218,7 @@ public struct BrandHeaderAction: View {
             title: "Aperçu PDF",
             subtitle: "Rome et la Dolce Vita - 10 pages composées"
         ) {
-            BrandHeaderAction(icon: "IconTeleverser", label: "Partager mon carnet") {}
+            BrandHeaderAction(icon: "IconShareSystem", label: "Partager mon carnet") {}
         }
 
         BrandScreenHeader(title: "Aperçu PDF", subtitle: nil, isSubtitleLoading: true)

@@ -211,7 +211,7 @@ private struct RecordingIndicator: View {
 
             Text(formattedElapsed)
                 .font(.system(.footnote, design: .monospaced))
-                .foregroundStyle(MemoBookColor.inkSecondary)
+                .foregroundStyle(MemoBookColor.inkMuted)
                 .monospacedDigit()
         }
         .accessibilityLabel("Enregistrement en cours, \(formattedElapsed)")
@@ -266,13 +266,13 @@ private struct EntryRow: View {
                     .foregroundStyle(MemoBookColor.action)
                 Text(entry.capturedAt, format: .dateTime.day().month().hour().minute())
                     .font(MemoBookFont.caption)
-                    .foregroundStyle(MemoBookColor.inkSecondary)
+                    .foregroundStyle(MemoBookColor.inkMuted)
                 Spacer()
                 if entry.isEdited {
                     Label("Corrigé", systemImage: "pencil")
                         .font(MemoBookFont.caption)
                         .labelStyle(.titleAndIcon)
-                        .foregroundStyle(MemoBookColor.inkSecondary)
+                        .foregroundStyle(MemoBookColor.inkMuted)
                         .accessibilityLabel("Corrigé à la main")
                 }
                 StatusBadge(displayedStatus)
@@ -293,7 +293,7 @@ private struct EntryRow: View {
                 Text(placeholder)
                     .font(MemoBookFont.caption)
                     .foregroundStyle(
-                        displayedStatus == .failed ? MemoBookColor.error : MemoBookColor.inkSecondary
+                        displayedStatus == .failed ? MemoBookColor.error : MemoBookColor.inkMuted
                     )
             }
         }

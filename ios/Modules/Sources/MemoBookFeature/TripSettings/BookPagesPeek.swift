@@ -16,7 +16,7 @@ import SwiftUI
 ///
 /// Les pages prennent donc leur place **dans** la feuille, au-dessus du titre,
 /// dans la réserve que celle-ci ouvre pour elles
-/// (``BrandSheet/init(_:badge:subtitle:titleAlignment:surface:topInset:content:)``).
+/// (``BrandSheet/init(_:badge:subtitle:titleAlignment:surface:topOverflow:content:)``).
 /// Elles gardent tout le reste du dessin : les deux inclinaisons, le liseré
 /// blanc, l'ombre portée, le flottement lent. Écart **signalé** — à arbitrer
 /// avec Clara, voir la fiche écran.
@@ -116,7 +116,7 @@ struct BookPagesPeek: View {
 extension View {
     /// Pose les deux pages du carnet en tête d'une feuille de réglage.
     ///
-    /// À appliquer **sur la ``BrandSheet``**, et toujours avec le `topInset`
+    /// À appliquer **sur la ``BrandSheet``**, et toujours avec le `topOverflow`
     /// que celle-ci doit réserver (``BookPagesPeek/sheetInset``) : sans lui, les
     /// pages couvriraient le titre. Sans PDF, la feuille reste seule — deux
     /// rectangles de papier vide ne montrent rien, et prendraient la place du

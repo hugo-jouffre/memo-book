@@ -9,16 +9,27 @@ import SwiftUI
 struct OrderTrackingSheet: View {
     let orders: [OrderTracking]
 
+    /// Ce que fait la carte de l'état vide : aller voir les carnets de la
+    /// communauté, comme la maquette l'écrit dessus.
+    let onPlanTrip: () -> Void
+
     var body: some View {
         BrandSheet("Suivi des commandes") {
             VStack(spacing: MemoBookSpacing.s) {
                 if orders.isEmpty {
-                    // État non maquetté : une phrase qui dit ce qui manque,
-                    // plutôt qu'une feuille vide.
-                    EmptyStateView(
-                        systemImage: "shippingbox",
-                        title: "Aucune commande en cours",
-                        message: "Tes carnets imprimés apparaîtront ici dès que tu en auras commandé un."
+                    // **La maquette existe** — `Modale – Profile PAS de
+                    // commande`, `3162:34917` : la même carte en pointillés que
+                    // l'accueil sans voyage à venir, « Commence à planifier ton
+                    // prochain voyage », avec son bout de scotch. Rien à
+                    // inventer, donc : c'est la carte de l'accueil, dont seule
+                    // la seconde ligne change avec la destination (T22).
+                    //
+                    // ⚠️ Le titre de la maquette n'a pas pu être lu (quota MCP) :
+                    // celui de la ligne reste. Sa seconde ligne écrit « le
+                    // carnets » ; c'est une coquille, corrigée ici.
+                    UpcomingTripInvite(
+                        onOpen: onPlanTrip,
+                        subtitle: "Clique ici pour voir les carnets de la communauté"
                     )
                 } else {
                     ForEach(orders) { order in
@@ -111,7 +122,7 @@ private struct OrderCard: View {
     Color.clear
         .background(MemoBookColor.background)
         .sheet(isPresented: .constant(true)) {
-            OrderTrackingSheet(orders: TravellerProfile.fixture.orders)
+            OrderTrackingSheet(orders: TravellerProfile.fixture.orders) {}
         }
 }
 
@@ -119,6 +130,6 @@ private struct OrderCard: View {
     Color.clear
         .background(MemoBookColor.background)
         .sheet(isPresented: .constant(true)) {
-            OrderTrackingSheet(orders: [])
+            OrderTrackingSheet(orders: []) {}
         }
 }

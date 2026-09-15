@@ -136,6 +136,20 @@ public struct BrandRow: View, Identifiable {
     }
 
     /// Où se pose la valeur par rapport à l'intitulé.
+    /// Comment la valeur se lit.
+    public enum ValueTone {
+        /// Le gris de la marque : une valeur qu'on lit.
+        case plain
+        /// Gras et encre pleine : ce qu'on vient chercher du regard — un solde,
+        /// un total.
+        case prominent
+        /// **La valeur manque, et la ligne propose de la donner** — « Ajouter
+        /// une adresse », « Ajouter une carte ». En vert d'action et un cran
+        /// plus petit (``MemoBookFont/rowAction``) : c'est une invitation, pas
+        /// une donnée. Arbitrage de Hugo, 14/09/2026 (T22).
+        case invitation
+    }
+
     public enum ValuePlacement {
         /// Sur la même ligne, poussée à droite. Le cas courant.
         case trailing
@@ -147,7 +161,7 @@ public struct BrandRow: View, Identifiable {
     private let title: String
     private let value: String?
     private let valuePlacement: ValuePlacement
-    private let isValueProminent: Bool
+    private let valueTone: ValueTone
     private let titleTone: TitleTone
     /// La valeur n'est pas encore arrivée : c'est une barre d'attente qui tient
     /// sa place, pas un vide. Voir ``BrandSkeleton``.
@@ -169,8 +183,7 @@ public struct BrandRow: View, Identifiable {
     ///
     /// - Parameters:
     ///   - value: `nil` quand la ligne n'a qu'un intitulé.
-    ///   - isValueProminent: la valeur passe en gras et en encre pleine. Pour
-    ///     ce qu'on vient chercher du regard — un solde, un total.
+    ///   - valueTone: comment la valeur se lit — voir ``ValueTone``.
     ///   - action: `nil` fait une ligne de lecture, sans chevron ni retour
     ///     tactile.
     ///   - note: une précision affichée sous la ligne, en petit. Pour dire ce
@@ -186,7 +199,7 @@ public struct BrandRow: View, Identifiable {
         _ title: String,
         value: String? = nil,
         valuePlacement: ValuePlacement = .trailing,
-        isValueProminent: Bool = false,
+        valueTone: ValueTone = .plain,
         titleTone: TitleTone = .plain,
         badge: String? = nil,
         isValueLoading: Bool = false,
@@ -196,7 +209,7 @@ public struct BrandRow: View, Identifiable {
         self.title = title
         self.value = value
         self.valuePlacement = valuePlacement
-        self.isValueProminent = isValueProminent
+        self.valueTone = valueTone
         self.titleTone = titleTone
         self.badge = badge
         self.isValueLoading = isValueLoading
@@ -239,7 +252,7 @@ public struct BrandRow: View, Identifiable {
         self.title = title
         self.value = nil
         self.valuePlacement = .trailing
-        self.isValueProminent = false
+        self.valueTone = .plain
         self.titleTone = .plain
         self.badge = nil
         self.isValueLoading = isValueLoading
@@ -262,7 +275,7 @@ public struct BrandRow: View, Identifiable {
         self.title = title
         self.value = nil
         self.valuePlacement = .trailing
-        self.isValueProminent = false
+        self.valueTone = .plain
         self.titleTone = .plain
         self.badge = nil
         self.isValueLoading = false
@@ -534,8 +547,8 @@ public struct BrandRow: View, Identifiable {
                 .frame(maxWidth: valuePlacement == .below ? .infinity : nil, alignment: .leading)
         } else if let value {
             Text(value)
-                .font(isValueProminent ? MemoBookFont.bodySemibold : MemoBookFont.body)
-                .foregroundStyle(isValueProminent ? MemoBookColor.ink : MemoBookColor.inkMuted)
+                .font(valueFont)
+                .foregroundStyle(valueColor)
                 // Une valeur trop longue s'abrège par la fin quand elle est en
                 // bout de ligne — la fin d'une adresse en dit autant que son
                 // début.
@@ -551,6 +564,22 @@ public struct BrandRow: View, Identifiable {
                 .minimumScaleFactor(titleTone == .accent ? 0.85 : 1)
                 .truncationMode(.tail)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var valueFont: Font {
+        switch valueTone {
+        case .plain: MemoBookFont.body
+        case .prominent: MemoBookFont.bodySemibold
+        case .invitation: MemoBookFont.rowAction
+        }
+    }
+
+    private var valueColor: Color {
+        switch valueTone {
+        case .plain: MemoBookColor.inkMuted
+        case .prominent: MemoBookColor.ink
+        case .invitation: MemoBookColor.action
         }
     }
 
@@ -610,7 +639,8 @@ public enum BrandRowBuilder {
             }
 
             BrandRowGroup {
-                BrandRow("Ma cagnotte", value: "67,88 €", isValueProminent: true) {}
+                BrandRow("Ma cagnotte", value: "67,88 €", valueTone: .prominent) {}
+                BrandRow("Adresse postale", value: "Ajouter une adresse", valueTone: .invitation) {}
                 BrandRow("Mon abonnement") {}
                 BrandRow("Partager sur la galerie", isOn: .constant(false))
             }

@@ -202,20 +202,22 @@ struct TripThemeSheet: View {
 
     init(model: TripSettingsModel) {
         self.model = model
-        let current = model.settings?.theme ?? ""
-        _text = State(initialValue: current)
-        _selection = State(initialValue: TripTheme.all.first { $0.label == current })
+        _text = State(initialValue: model.settings?.theme ?? "")
     }
 
     var body: some View {
         BrandSheet(BookCopy.Theme.title, subtitle: BookCopy.Theme.subtitle) {
             VStack(spacing: MemoBookSpacing.s) {
-                TripThemePicker(selection: $selection) { theme in
-                    // Le carrousel **écrit dans le champ** au lieu de le
-                    // remplacer : « Autre » ouvre la saisie libre, les six
-                    // autres posent leur nom, et on garde la main dessus.
-                    text = theme == .other ? "" : theme.label
-                    focus = theme == .other ? .theme : nil
+                if model.themes.isEmpty {
+                    TripThemePickerPlaceholder()
+                } else {
+                    TripThemePicker(themes: model.themes, selection: $selection) { theme in
+                        // Le carrousel **écrit dans le champ** au lieu de le
+                        // remplacer : « Autre » ouvre la saisie libre, les
+                        // autres posent leur nom, et on garde la main dessus.
+                        text = theme.isOther ? "" : theme.name
+                        focus = theme.isOther ? .theme : nil
+                    }
                 }
 
                 BrandTextField(
@@ -232,6 +234,12 @@ struct TripThemeSheet: View {
                 BrandButton(BookCopy.Theme.validate, fillsWidth: true, action: validate)
                     .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
+        }
+        // Les thèmes viennent du serveur, et la rangée montre sa barre
+        // d'attente le temps qu'ils arrivent. Sans effet s'ils sont déjà là.
+        .task {
+            await model.loadThemes()
+            selection = model.themes.first { $0.name == text }
         }
     }
 

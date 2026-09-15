@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { hashSessionToken } from "../src/lib/auth.js";
 import { hashPassword, verifyPassword } from "../src/lib/password.js";
+import { passwordResetUrl, type Mailer, type PasswordResetMail } from "../src/services/mailer.js";
 import type { SocialVerifier, VerifiedIdentity } from "../src/services/socialIdentity.js";
 import { createHarness, resetDatabase, type TestHarness } from "./helpers.js";
 
@@ -28,11 +29,24 @@ function fakeVerifier(identity: Partial<VerifiedIdentity> = {}): SocialVerifier 
   };
 }
 
+/** Un expéditeur qui garde ce qu'il aurait envoyé, pour le lire dans le test. */
+function fakeMailer(): Mailer & { sent: PasswordResetMail[] } {
+  const sent: PasswordResetMail[] = [];
+  return {
+    sent,
+    async sendPasswordReset(message) {
+      sent.push(message);
+    },
+  };
+}
+
 let harness: TestHarness;
+let mailer = fakeMailer();
 
 async function boot(verifier: SocialVerifier = fakeVerifier()): Promise<TestHarness> {
   if (harness) await harness.close();
-  harness = await createHarness({ socialVerifier: verifier });
+  mailer = fakeMailer();
+  harness = await createHarness({ socialVerifier: verifier, mailer });
   await resetDatabase(harness.prisma);
   return harness;
 }
@@ -87,6 +101,34 @@ describe("inscription et connexion par mot de passe", () => {
       where: { tokenHash: hashSessionToken(body.token) },
     });
     expect(session).not.toBeNull();
+  });
+
+  it("offre trois étapes à tout compte qui s'ouvre", async () => {
+    // Par mot de passe…
+    await harness.app.inject({
+      method: "POST",
+      url: "/v1/auth/signup",
+      payload: { email: "hugo@memobook.app", password: "carnet2026" },
+    });
+    const byPassword = await harness.prisma.account.findUniqueOrThrow({
+      where: { email: "hugo@memobook.app" },
+    });
+    expect(byPassword.offeredSteps).toBe(3);
+    expect(byPassword.remainingSteps).toBe(3);
+
+    // … comme par un fournisseur : c'est l'ouverture du compte qui offre les
+    // étapes, pas la façon d'entrer.
+    await boot(fakeVerifier({ email: "clara@memobook.app" }));
+    await harness.app.inject({
+      method: "POST",
+      url: "/v1/auth/google",
+      payload: { identityToken: "google-token" },
+    });
+    const bySocial = await harness.prisma.account.findUniqueOrThrow({
+      where: { email: "clara@memobook.app" },
+    });
+    expect(bySocial.offeredSteps).toBe(3);
+    expect(bySocial.remainingSteps).toBe(3);
   });
 
   it("ne stocke jamais le mot de passe en clair", async () => {
@@ -165,6 +207,213 @@ describe("inscription et connexion par mot de passe", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json<{ token: string }>().token).toBeTruthy();
+  });
+});
+
+describe("mot de passe oublié", () => {
+  beforeEach(async () => {
+    await boot();
+    await harness.app.inject({
+      method: "POST",
+      url: "/v1/auth/signup",
+      payload: { email: "hugo@memobook.app", password: "carnet2026", firstName: "Hugo" },
+    });
+  });
+
+  it("envoie un secret, et n'en garde que l'empreinte", async () => {
+    const response = await harness.app.inject({
+      method: "POST",
+      url: "/v1/auth/password/forgot",
+      payload: { email: "Hugo@MemoBook.app" },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(mailer.sent).toHaveLength(1);
+    const [mail] = mailer.sent;
+    expect(mail?.to).toBe("hugo@memobook.app");
+    expect(mail?.firstName).toBe("Hugo");
+
+    const resets = await harness.prisma.passwordReset.findMany();
+    expect(resets).toHaveLength(1);
+    expect(resets[0]?.tokenHash).toBe(hashSessionToken(mail!.token));
+    expect(resets[0]?.tokenHash).not.toBe(mail!.token);
+    expect(resets[0]?.expiresAt.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it("dit qu'une adresse inconnue n'a pas de compte, sans rien envoyer", async () => {
+    const response = await harness.app.inject({
+      method: "POST",
+      url: "/v1/auth/password/forgot",
+      payload: { email: "Personne@MemoBook.app" },
+    });
+
+    expect(response.statusCode).toBe(404);
+    const body = response.json<{ error: string; message: string }>();
+    expect(body.error).toBe("unknown_account");
+    // L'adresse est reprise **normalisée** dans la phrase : c'est celle que
+    // l'app affiche en rouge, et elle doit être celle qu'on a cherchée.
+    expect(body.message).toContain("personne@memobook.app");
+    expect(mailer.sent).toHaveLength(0);
+    expect(await harness.prisma.passwordReset.count()).toBe(0);
+  });
+
+  it("ne garde qu'un secret valable : le dernier envoyé", async () => {
+    for (let i = 0; i < 2; i += 1) {
+      await harness.app.inject({
+        method: "POST",
+        url: "/v1/auth/password/forgot",
+        payload: { email: "hugo@memobook.app" },
+      });
+    }
+
+    expect(mailer.sent).toHaveLength(2);
+    const resets = await harness.prisma.passwordReset.findMany();
+    expect(resets).toHaveLength(1);
+    expect(resets[0]?.tokenHash).toBe(hashSessionToken(mailer.sent[1]!.token));
+  });
+
+  it("refuse une adresse mal formée", async () => {
+    const response = await harness.app.inject({
+      method: "POST",
+      url: "/v1/auth/password/forgot",
+      payload: { email: "pas-une-adresse" },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(mailer.sent).toHaveLength(0);
+  });
+
+  it("écrit un lien qui ouvre l'app, avec le secret dedans", () => {
+    const url = passwordResetUrl(harness.context.env, "a+b/c");
+    expect(url).toBe("memobook://password/reset?token=a%2Bb%2Fc");
+
+    // Le jour du lien universel, le même chemin derrière un domaine.
+    const universal = passwordResetUrl(
+      { ...harness.context.env, APP_LINK_BASE_URL: "https://memo-book.com/app/" },
+      "t",
+    );
+    expect(universal).toBe("https://memo-book.com/app/password/reset?token=t");
+  });
+
+  async function requestReset(): Promise<string> {
+    await harness.app.inject({
+      method: "POST",
+      url: "/v1/auth/password/forgot",
+      payload: { email: "hugo@memobook.app" },
+    });
+    return mailer.sent.at(-1)!.token;
+  }
+
+  it("change le mot de passe, ouvre une session, et ferme les autres", async () => {
+    const before = await harness.app.inject({
+      method: "POST",
+      url: "/v1/auth/signin",
+      payload: { email: "hugo@memobook.app", password: "carnet2026" },
+    });
+    const oldAuthorization = `Bearer ${before.json<{ token: string }>().token}`;
+
+    const token = await requestReset();
+    const response = await harness.app.inject({
+      method: "POST",
+      url: "/v1/auth/password/reset",
+      payload: { token, password: "nouveau2027" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json<{ token: string; account: { email: string } }>();
+    expect(body.account.email).toBe("hugo@memobook.app");
+
+    // La session neuve marche, l'ancienne est dehors.
+    const me = await harness.app.inject({
+      method: "GET",
+      url: "/v1/auth/me",
+      headers: { authorization: `Bearer ${body.token}` },
+    });
+    expect(me.statusCode).toBe(200);
+    const old = await harness.app.inject({
+      method: "GET",
+      url: "/v1/auth/me",
+      headers: { authorization: oldAuthorization },
+    });
+    expect(old.statusCode).toBe(401);
+
+    // Le nouveau mot de passe ouvre, l'ancien ne peut plus.
+    const withNew = await harness.app.inject({
+      method: "POST",
+      url: "/v1/auth/signin",
+      payload: { email: "hugo@memobook.app", password: "nouveau2027" },
+    });
+    expect(withNew.statusCode).toBe(200);
+    const withOld = await harness.app.inject({
+      method: "POST",
+      url: "/v1/auth/signin",
+      payload: { email: "hugo@memobook.app", password: "carnet2026" },
+    });
+    expect(withOld.statusCode).toBe(401);
+
+    // Ouvrir le lien a prouvé qu'on lit la boîte.
+    const account = await harness.prisma.account.findUniqueOrThrow({
+      where: { email: "hugo@memobook.app" },
+    });
+    expect(account.emailVerifiedAt).not.toBeNull();
+  });
+
+  it("ne sert qu'une fois", async () => {
+    const token = await requestReset();
+    await harness.app.inject({
+      method: "POST",
+      url: "/v1/auth/password/reset",
+      payload: { token, password: "nouveau2027" },
+    });
+    const again = await harness.app.inject({
+      method: "POST",
+      url: "/v1/auth/password/reset",
+      payload: { token, password: "encore2028" },
+    });
+
+    expect(again.statusCode).toBe(400);
+    expect(again.json<{ error: string }>().error).toBe("invalid_reset_token");
+  });
+
+  it("refuse un secret expiré ou inventé", async () => {
+    const token = await requestReset();
+    await harness.prisma.passwordReset.updateMany({
+      data: { expiresAt: new Date(Date.now() - 1_000) },
+    });
+
+    const expired = await harness.app.inject({
+      method: "POST",
+      url: "/v1/auth/password/reset",
+      payload: { token, password: "nouveau2027" },
+    });
+    expect(expired.statusCode).toBe(400);
+
+    const invented = await harness.app.inject({
+      method: "POST",
+      url: "/v1/auth/password/reset",
+      payload: { token: "n-importe-quoi", password: "nouveau2027" },
+    });
+    expect(invented.statusCode).toBe(400);
+    expect(invented.json<{ error: string }>().error).toBe("invalid_reset_token");
+  });
+
+  it("applique la règle du mot de passe au nouveau", async () => {
+    const token = await requestReset();
+    const response = await harness.app.inject({
+      method: "POST",
+      url: "/v1/auth/password/reset",
+      payload: { token, password: "court" },
+    });
+
+    expect(response.statusCode).toBe(400);
+    // Le secret n'est pas consommé par un essai refusé : on corrige et on
+    // renvoie, sans redemander un e-mail.
+    const retry = await harness.app.inject({
+      method: "POST",
+      url: "/v1/auth/password/reset",
+      payload: { token, password: "nouveau2027" },
+    });
+    expect(retry.statusCode).toBe(200);
   });
 });
 

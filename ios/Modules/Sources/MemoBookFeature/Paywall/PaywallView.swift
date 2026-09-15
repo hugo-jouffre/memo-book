@@ -161,7 +161,9 @@ struct PaywallView: View {
                     .resizable()
                     .renderingMode(.template)
                     .scaledToFit()
-                    .frame(width: MemoBookSpacing.m, height: MemoBookSpacing.m)
+                    // La même flèche, à la même taille, que sur tous les écrans
+                    // poussés — voir ``MemoBookSpacing/navigationIcon``.
+                    .frame(width: MemoBookSpacing.navigationIcon, height: MemoBookSpacing.navigationIcon)
                     .foregroundStyle(MemoBookColor.action)
                     .frame(
                         width: MemoBookSpacing.minimumTapTarget,
@@ -320,9 +322,12 @@ enum PaywallVariant: Sendable, Hashable {
 // MARK: - Mesures et copie
 
 enum PaywallMetrics {
-    /// ⚠️ La maquette du paywall marge à 16, là où le reste de l'app marge à
-    /// `screenMargin` (24) — voir T11 et T62. Suivi tel quel (R3).
-    static let margin: CGFloat = MemoBookSpacing.s
+    /// La marge de l'écran — **celle de l'app**. Le paywall s'en était donné
+    /// une à lui (16, celle de sa maquette) quand le reste marchait à 24 ; la
+    /// marge commune est passée à 1 rem le 14/09/2026 (T11, D2), et l'écart
+    /// avec lui (T62) s'est refermé tout seul. L'alias reste parce que les
+    /// pages le lisent en négatif pour déborder de la colonne.
+    static let margin: CGFloat = MemoBookSpacing.screenMargin
 
     /// La bande basse que les zones de tapotis laissent tranquille : le bouton
     /// d'abonnement et les pastilles y vivent, et un tapotis qui tourne la page

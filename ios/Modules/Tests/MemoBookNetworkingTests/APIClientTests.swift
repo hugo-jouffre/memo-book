@@ -210,6 +210,47 @@ final class APIClientTests: XCTestCase {
         XCTAssertNil(deviceStore.read())
     }
 
+    /// « Mot de passe oublié » part **sans** jeton : c'est parce qu'on ne peut
+    /// pas entrer qu'on l'appelle. Un client sans aucune session doit donc
+    /// pouvoir l'envoyer, et l'adresse voyage dans le corps.
+    func testPasswordResetRequestNeedsNoSession() async throws {
+        let client = makeClient(sessionToken: nil, deviceToken: nil)
+        respond(status: 202, json: "")
+
+        try await client.requestPasswordReset(email: "hugo@memobook.app")
+
+        let request = try XCTUnwrap(StubURLProtocol.lastRequest)
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.url?.path, "/v1/auth/password/forgot")
+        XCTAssertNil(request.value(forHTTPHeaderField: "Authorization"))
+        let body = try JSONSerialization.jsonObject(with: XCTUnwrap(StubURLProtocol.lastBody))
+        XCTAssertEqual(body as? [String: String], ["email": "hugo@memobook.app"])
+    }
+
+    /// Le nouveau mot de passe répond comme une connexion : la session rendue
+    /// est **gardée**, pour que l'app entre sans rien retaper.
+    func testResetPasswordStoresTheNewSession() async throws {
+        let sessionStore = InMemoryTokenStore(token: nil)
+        let client = MemoBookAPIClient(
+            configuration: APIConfiguration(baseURL: baseURL),
+            session: session,
+            tokenStore: InMemoryTokenStore(token: nil),
+            sessionStore: sessionStore
+        )
+        respond(
+            status: 200,
+            json: #"{"token":"session-neuve","expiresAt":"2027-01-01T00:00:00.000Z","account":{"id":"a1","email":"hugo@memobook.app","createdAt":"2026-01-01T00:00:00.000Z"}}"#
+        )
+
+        let opened = try await client.resetPassword(token: "secret", password: "nouveau2027")
+
+        XCTAssertEqual(StubURLProtocol.lastRequest?.url?.path, "/v1/auth/password/reset")
+        let body = try JSONSerialization.jsonObject(with: XCTUnwrap(StubURLProtocol.lastBody))
+        XCTAssertEqual(body as? [String: String], ["token": "secret", "password": "nouveau2027"])
+        XCTAssertEqual(opened.account.email, "hugo@memobook.app")
+        XCTAssertEqual(sessionStore.read(), "session-neuve")
+    }
+
     func testServerErrorIsRetryable() async {
         let client = makeClient()
         respond(status: 503, json: #"{"error":"unavailable","message":"Service indisponible."}"#)

@@ -46,7 +46,7 @@ struct BookStatusCard: View {
                     ProgressView()
                     Text("Ton carnet est en train de s'écrire…")
                         .font(MemoBookFont.caption)
-                        .foregroundStyle(MemoBookColor.inkSecondary)
+                        .foregroundStyle(MemoBookColor.inkMuted)
                 }
 
             case .failed:
@@ -61,7 +61,7 @@ struct BookStatusCard: View {
                 VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
                     Text("Quand tu as raconté assez de souvenirs, génère ton carnet.")
                         .font(MemoBookFont.caption)
-                        .foregroundStyle(MemoBookColor.inkSecondary)
+                        .foregroundStyle(MemoBookColor.inkMuted)
                     BrandButton("Générer mon carnet", fillsWidth: true, action: onGenerate)
                         .disabled(!canGenerate)
                         .opacity(canGenerate ? 1 : 0.5)

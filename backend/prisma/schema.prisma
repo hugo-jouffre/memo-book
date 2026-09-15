@@ -187,9 +187,10 @@ model Account {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  identities Identity[]
-  sessions   Session[]
-  devices    Device[]
+  identities     Identity[]
+  sessions       Session[]
+  devices        Device[]
+  passwordResets PasswordReset[]
 
   ownedMemos        Memo[]             @relation("MemoOwner")
   printOrders       PrintOrder[]       @relation("PrintOrderBuyer")
@@ -201,6 +202,28 @@ model Account {
   feedbackResponses FeedbackResponse[]
 
   @@map("accounts")
+}
+
+/// Une demande de « mot de passe oublié » : le secret envoyé par e-mail, haché
+/// comme un token de session, et qui ne vaut qu'une fois et qu'un moment.
+///
+/// Une ligne par demande, jamais mise à jour en place : redemander l'e-mail
+/// crée une nouvelle ligne et **retire** les précédentes, si bien qu'un seul
+/// secret est valable à la fois. `usedAt` reste pour l'audit — on veut pouvoir
+/// dire « ce mot de passe a été changé par ce chemin, à cette heure ».
+model PasswordReset {
+  id        String  @id @default(uuid())
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  /// SHA-256 du secret envoyé — le secret en clair n'existe que dans l'e-mail.
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([accountId])
+  @@map("password_resets")
 }
 
 /// Le lien entre un compte et un fournisseur tiers. Un compte peut en avoir
@@ -320,7 +343,7 @@ model Memo {
   /// qu'on emploie pour s'adresser au voyageur (« Nouveau voyage à Rome ! »),
   /// là où le pays donnerait « à Italie » et le titre une phrase entière.
   /// Nulle pour un carnet qui n'est pas situé dans une ville.
-  destinationCity        String?
+  destinationCity String?
 
   /// Compteurs affichés sous le titre. Entretenus à l'écriture plutôt que
   /// recalculés à chaque ouverture de l'accueil, qui les demande tous d'un coup
@@ -845,6 +868,16 @@ model Render {
   @@map("renders")
 }
 
+/// La rapidité d'acheminement choisie à l'étape 4.
+///
+/// Deux paliers et non un délai en jours : c'est ce que l'imprimeur vend, et
+/// c'est aussi ce que l'écran propose. Les bornes réelles (`estimatedMinDays`,
+/// `estimatedMaxDays`) sont posées par l'imprimeur au moment de l'expédition.
+enum ShippingSpeed {
+  standard
+  express
+}
+
 enum PrintOrderStatus {
   draft
   submitted
@@ -881,6 +914,29 @@ model PrintOrder {
   status PrintOrderStatus @default(draft)
   copies Int              @default(1)
 
+  /// Le palier d'acheminement facturé. `standard` est inclus dans le prix du
+  /// carnet, `express` porte le supplément qu'on lit dans `shippingCents`.
+  shippingSpeed ShippingSpeed @default(standard)
+
+  /// La carte présentée au moment de payer. **Nullable et en `SetNull`** : une
+  /// carte supprimée du profil ne doit pas emporter la commande qu'elle a
+  /// réglée, et une commande passée par Apple Pay n'en a aucune.
+  paymentCardId String?
+  paymentCard   PaymentCard? @relation(fields: [paymentCardId], references: [id], onDelete: SetNull)
+
+  /// Le suivi par WhatsApp, demandé depuis l'écran de confirmation.
+  ///
+  /// Le numéro est **recopié ici** plutôt que lu sur le compte à l'envoi :
+  /// c'est celui qu'on a promis de prévenir pour *cette* commande, et changer
+  /// de numéro dans son profil trois semaines plus tard ne doit pas dérouter le
+  /// message vers un téléphone qui n'a rien demandé. Même parti pris que
+  /// l'adresse de livraison, figée elle aussi.
+  ///
+  /// `notifyByWhatsApp` sans `whatsappPhone` ne doit jamais exister : la route
+  /// refuse l'un sans l'autre.
+  notifyByWhatsApp Boolean @default(false)
+  whatsappPhone    String?
+
   /// Adresse de livraison, telle que saisie dans l'app.
   shippingName       String
   shippingLine1      String
@@ -915,6 +971,15 @@ model PrintOrder {
   /// Ce que la commande a coûté, en centimes, et le paiement Stripe
   /// correspondant. L'unicité de l'intention est ce qui empêche qu'un webhook
   /// rejoué fasse payer deux fois.
+  ///
+  /// `amountCents` est **le net à payer** : les trois colonnes au-dessus s'y
+  /// résument par `itemsCents + shippingCents - walletAppliedCents`. On les
+  /// garde figées plutôt que recalculables, parce qu'un tarif qui change ne
+  /// doit pas réécrire le récapitulatif d'une commande déjà passée.
+  itemsCents         Int?
+  shippingCents      Int?
+  walletAppliedCents Int?
+
   amountCents           Int?
   stripePaymentIntentId String? @unique
 
@@ -922,10 +987,38 @@ model PrintOrder {
   updatedAt DateTime @updatedAt
 
   walletEntries WalletEntry[]
+  copyOptions   PrintOrderCopy[]
 
   @@index([memoId, createdAt])
   @@index([orderedByAccountId, createdAt])
   @@map("print_orders")
+}
+
+/// Les options d'**un** exemplaire d'une commande.
+///
+/// Une table et non quatre colonnes sur la commande : l'écran des exemplaires
+/// laisse offrir le 2e carnet dans une autre version que le 1er, donc les
+/// options pendent de l'exemplaire, pas de la commande. C'est aussi ce que
+/// l'imprimeur lira — une ligne par livre à fabriquer.
+///
+/// Les quatre options sont celles de `BookCustomisation`, et elles s'en
+/// copient à la commande : changer le style du carnet après coup ne doit pas
+/// changer un livre déjà parti à l'impression.
+model PrintOrderCopy {
+  id      String     @id @default(uuid())
+  orderId String
+  order   PrintOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  /// Le rang de l'exemplaire, à partir de 1 — « 1er Carnet », « 2e Carnet ».
+  position Int
+
+  decorationsEnabled Boolean @default(true)
+  quizEnabled        Boolean @default(true)
+  freeZonesEnabled   Boolean @default(true)
+  crosswordEnabled   Boolean @default(true)
+
+  @@unique([orderId, position])
+  @@map("print_order_copies")
 }
 
 /// Une écriture de cagnotte. **Registre en ajout seul** : on n'y met jamais à
@@ -1004,6 +1097,10 @@ model PaymentCard {
   isDefault Boolean @default(false)
 
   createdAt DateTime @default(now())
+
+  /// Les commandes réglées avec cette carte. En `SetNull` de l'autre côté :
+  /// retirer une carte du profil n'efface pas ce qu'elle a payé.
+  printOrders PrintOrder[]
 
   @@index([accountId])
   @@map("payment_cards")
@@ -1253,4 +1350,43 @@ model FeedbackAnswer {
   @@unique([responseId, questionId])
   @@index([questionId])
   @@map("feedback_answers")
+}
+
+/// Les thèmes proposés à la première étape de « Créer un voyage » — « Contexte
+/// de ton voyage ».
+///
+/// **Une table et non une liste dans l'app** : en ajouter, en renommer ou en
+/// éteindre un ne demande pas de livrer une version. Arrêtés par Hugo le
+/// 14/09/2026, posés par `prisma/tripThemes.ts`.
+///
+/// Le libellé part **tel quel** dans `memos.theme` : c'est du texte lu par
+/// l'agent de rédaction, pas une clé.
+model TripTheme {
+  id String @id @default(uuid())
+
+  /// L'identifiant stable, celui qu'on écrit dans un script. `name` peut
+  /// changer, `slug` non.
+  slug String @unique
+
+  /// L'émoji de la rangée, et le nom écrit dessous.
+  emoji String
+  name  String
+
+  /// « Autre » : le thème qui n'en est pas un et ouvre un champ libre. La route
+  /// le sert toujours **en dernier**, quelle que soit sa position — on préfère
+  /// un thème précis.
+  isOther Boolean @default(false)
+
+  /// Ordre dans la rangée, du plus petit au plus grand.
+  position Int @default(0)
+
+  /// Retiré de la rangée sans être supprimé : les voyages qui le citent
+  /// gardent un texte qui existe quelque part.
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, position])
+  @@map("trip_themes")
 }

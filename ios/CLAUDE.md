@@ -44,6 +44,30 @@ xcrun simctl launch <device> com.memobook.app -previewSignedIn
 Il n'ouvre **aucun accès** : le compte est local, aucun jeton n'est écrit, et
 tout appel réseau échoue comme il le doit. Sans effet en release.
 
+Le tunnel de commande est à cinq écrans de l'accueil — voyage, aperçu,
+composition. Un second interrupteur l'ouvre directement, sur son jeu d'essai :
+
+```bash
+xcrun simctl launch <device> com.memobook.app -previewSignedIn -openOrder
+```
+
+Combiné à `-previewSignedIn`, le tunnel travaille **en mémoire** : c'est ce qui
+permet de traverser ses sept étapes sans back-end. Sans effet en release.
+
+### Rejouer le lien de l'e-mail « Mot de passe oublié »
+
+Le back-end local n'envoie rien : il journalise le lien et écrit l'e-mail dans
+`backend/.mail-out/`. Ouvrir ce lien dans le simulateur, c'est appuyer sur le
+bouton de l'e-mail :
+
+```bash
+xcrun simctl openurl <device> 'memobook://password/reset?token=…'
+```
+
+L'app doit être **déconnectée** : déjà entré, le lien ne fait rien (voir
+`RootView.onOpenURL`). Le simulateur garde le trousseau à la désinstallation —
+pour sortir, passer par Profil ▸ Me déconnecter.
+
 ⚠️ Ne **jamais** poser un réglage de test avec
 `xcrun simctl spawn <device> defaults write com.memobook.app …` : ça écrit dans
 un domaine au niveau de l'appareil que l'app lit aussi, mais que son propre
@@ -156,7 +180,13 @@ police ou marge codée en dur ailleurs.
   raised / accent / blue / destructive / link, tailles regular / small,
   `alternate` pour les fonds sombres). Ne pas en écrire d'autre. `destructive`
   porte le rouge sémantique sans fond ni contour — c'est l'action qui défait,
-  jamais un `link` ; `accent` est le seul aplat large que porte le lime.
+  jamais un `link` ; `accent` est le seul aplat large que porte le lime, et **le
+  lime ne dit que l'abonnement** (T7) — l'accent de tout le reste est le bleu
+  `outline`.
+- Une icône de contenu du jeu de marque se dessine à `MemoBookSpacing.contentIcon`
+  (2 rem), pas à 24 : les glyphes n'occupent qu'une part de leur boîte, et à 24 pt
+  ils faisaient 9 à 12 pt d'encre. La flèche de retour (`navigationIcon`), le
+  chevron d'une ligne et le disque d'enregistrement gardent leur taille.
 - `BrandTextField` est **le** champ de saisie (trois mises en page :
   `labelPlacement: .floating` pour les formulaires d'entrée, `.above` pour les
   feuilles, `.hidden` pour le champ unique d'une feuille dont le sous-titre dit

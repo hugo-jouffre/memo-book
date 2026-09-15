@@ -11,6 +11,10 @@ public actor PreviewAPI: MemoBookAPI {
     private var memosById: [String: MemoDetail] = [:]
     private var rendersById: [String: Render] = [:]
     private var ordersByMemoId: [String: [PrintOrder]] = [:]
+
+    /// La cagnotte du double, **vide au départ** comme celle d'un compte neuf.
+    /// Les écritures du bac à sable la font monter, ici comme sur le serveur.
+    private var walletSandbox: Wallet = .fixture
     /// Nul tant que rien n'a été corrigé : le profil est alors le jeu d'essai.
     private var editedProfile: TravellerProfile?
 
@@ -137,6 +141,13 @@ public actor PreviewAPI: MemoBookAPI {
 
     public func signOut() async { account = nil }
 
+    /// Rien à envoyer en aperçu : la feuille passe simplement à l'étape suivante.
+    public func requestPasswordReset(email: String) async throws {}
+
+    public func resetPassword(token: String, password: String) async throws -> AuthSession {
+        open(Self.previewAccount)
+    }
+
     private func open(_ account: Account) -> AuthSession {
         self.account = account
         return AuthSession(
@@ -156,6 +167,8 @@ public actor PreviewAPI: MemoBookAPI {
     public func tripDetail(id: String) async throws -> TripDetail { .fixture(id: id) }
 
     public func gallery() async throws -> Gallery { .fixture }
+
+    public func tripThemes() async throws -> [TripTheme] { TripTheme.fixtures }
 
     /// La création rend un voyage qui ressemble au brouillon, et le code
     /// d'accès de la maquette : de quoi traverser les six étapes sans serveur.
@@ -417,7 +430,81 @@ public actor PreviewAPI: MemoBookAPI {
         return render
     }
 
-    public func createPrintOrder(memoId: String, order: NewPrintOrder) async throws -> PrintOrder {
+    public func wallet(tripId: String?) async throws -> Wallet {
+        walletSandbox
+    }
+
+    public func addWalletSandboxEntry(
+        amount: Decimal,
+        kind: WalletEntryKind,
+        label: String
+    ) async throws -> Decimal {
+        // Le double tient un registre, comme le serveur : c'est ce qui permet
+        // aux aperçus de voir le solde monter et l'historique s'allonger.
+        let entry = WalletEntry(id: UUID().uuidString, amount: amount, kind: kind, label: label, date: .now)
+        walletSandbox = Wallet(
+            balance: walletSandbox.balance + amount,
+            entries: [entry] + walletSandbox.entries,
+            tripTitle: walletSandbox.tripTitle,
+            estimate: walletSandbox.estimate
+        )
+        return walletSandbox.balance
+    }
+
+    public func setOrderWhatsApp(orderId: String, phone: String?) async throws -> PrintOrder {
+        for (memoId, orders) in ordersByMemoId {
+            guard let position = orders.firstIndex(where: { $0.id == orderId }) else { continue }
+            let order = orders[position]
+            let updated = PrintOrder(
+                id: order.id,
+                memoId: order.memoId,
+                renderId: order.renderId,
+                status: order.status,
+                copies: order.copies,
+                shippingSpeed: order.shippingSpeed,
+                shipping: order.shipping,
+                pageCount: order.pageCount,
+                coverImageUrl: order.coverImageUrl,
+                estimatedMinDays: order.estimatedMinDays,
+                estimatedMaxDays: order.estimatedMaxDays,
+                total: order.total,
+                copyOptions: order.copyOptions,
+                notifyByWhatsApp: phone != nil,
+                whatsappPhone: phone,
+                trackingUrl: order.trackingUrl,
+                error: order.error,
+                createdAt: order.createdAt,
+                updatedAt: .now
+            )
+            ordersByMemoId[memoId]?[position] = updated
+            return updated
+        }
+
+        throw APIError.server(statusCode: 404, code: "not_found", message: "Commande introuvable.")
+    }
+
+    public func bookShareLink(memoId: String) async throws -> URL {
+        _ = try existingMemo(memoId)
+        // Un lien d'aperçu, stable d'un appel à l'autre comme le vrai.
+        return URL(string: "https://memo-book.com/c/\(memoId)")!
+    }
+
+    public func orderContext(memoId: String) async throws -> OrderContext {
+        .fixture
+    }
+
+    public func orderQuote(
+        memoId: String,
+        copies: Int,
+        shippingSpeed: ShippingSpeed
+    ) async throws -> OrderQuote {
+        .fixture(copies: copies, speed: shippingSpeed)
+    }
+
+    public func createPrintOrder(
+        memoId: String,
+        order: NewPrintOrderRequest
+    ) async throws -> PrintOrder {
         _ = try existingMemo(memoId)
 
         let created = PrintOrder(
@@ -443,24 +530,6 @@ public actor PreviewAPI: MemoBookAPI {
 
     // MARK: - La cagnotte
 
-    public func wallet(tripId: String?) async throws -> Wallet {
-        .fixture
-    }
-
-    /// Une recharge qui n'appelle personne.
-    ///
-    /// Le `clientSecret` fabriqué ne monte **aucune** feuille de paiement, et
-    /// c'est voulu : un aperçu ne doit pas pouvoir ouvrir Stripe, même par
-    /// accident. La feuille des aperçus est ``StubPaymentPresenter``, qui rend
-    /// son résultat sans regarder ce ticket.
-    public func startWalletTopUp(amountCents: Int) async throws -> PaymentIntentTicket {
-        PaymentIntentTicket(
-            clientSecret: "pi_preview_secret",
-            publishableKey: "pk_test_preview",
-            amountCents: amountCents,
-            currency: "eur"
-        )
-    }
 
     // MARK: - Les réglages d'un voyage
 

@@ -192,7 +192,7 @@ private struct BookCompositionView: View {
                     subtitle: BookCopy.Composition.message
                 ) {
                     BrandHeaderAction(
-                        icon: "IconTeleverser",
+                        icon: "IconShareSystem",
                         label: BookCopy.Preview.Voice.share,
                         action: onShare
                     )
@@ -214,7 +214,9 @@ private struct BookCompositionView: View {
                     .padding(.vertical, MemoBookSpacing.snug)
 
                 BookActionsBlock(
-                    isEnabled: false,
+                    // La composition est en cours : il n'y a rien à commander
+                    // encore, mais on peut déjà aller régler son style.
+                    isComposed: false,
                     onCustomise: { onIntent(.customise) },
                     onOrder: { onIntent(.order) }
                 )
@@ -267,7 +269,7 @@ private struct BookReaderView: View {
                     isSubtitleLoading: model.preview == nil
                 ) {
                     BrandHeaderAction(
-                        icon: "IconTeleverser",
+                        icon: "IconShareSystem",
                         label: BookCopy.Preview.Voice.share,
                         action: onShare
                     )
@@ -284,7 +286,11 @@ private struct BookReaderView: View {
                 BookPageStepper(model: model)
 
                 BookActionsBlock(
-                    isEnabled: model.renderer.sheetCount > 0,
+                    // Ce que **le serveur** dit du carnet, et non ce que l'app
+                    // a réussi à dessiner : un PDF qui ne se charge pas est un
+                    // problème d'affichage, pas une raison de refuser une
+                    // commande que l'imprimeur, lui, peut honorer.
+                    isComposed: model.isComposed,
                     onCustomise: { onIntent(.customise) },
                     onOrder: { onIntent(.order) }
                 )

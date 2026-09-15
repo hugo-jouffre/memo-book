@@ -66,3 +66,66 @@ public struct CreatedTrip: Codable, Sendable, Hashable {
         self.accessCode = accessCode
     }
 }
+
+/// Un thème de « Contexte de ton voyage », la première étape de la création.
+///
+/// **Il vient de la base** (`GET /v1/trip-themes`, table `trip_themes`) et non
+/// d'une liste dans l'app : en ajouter, en renommer ou en éteindre un ne
+/// demande pas de livrer une version — Hugo, 14/09/2026. Au nom près de
+/// `serializeTripTheme` côté serveur.
+public struct TripTheme: Codable, Sendable, Hashable, Identifiable {
+    public let id: String
+
+    /// L'identifiant stable, celui qu'on écrit dans un script. `name` peut
+    /// changer, `slug` non.
+    public let slug: String
+
+    /// L'émoji de la rangée, et le nom écrit dessous.
+    public let emoji: String
+    public let name: String
+
+    /// « Autre » : le thème qui n'en est pas un et ouvre un champ libre. Le
+    /// serveur le sert toujours en dernier — on préfère un thème précis.
+    public let isOther: Bool
+
+    public init(id: String, slug: String, emoji: String, name: String, isOther: Bool = false) {
+        self.id = id
+        self.slug = slug
+        self.emoji = emoji
+        self.name = name
+        self.isOther = isOther
+    }
+
+    /// Le libellé, tel qu'il part dans ``TripDraft/theme`` et tel qu'il s'écrit
+    /// sous la rangée.
+    public var label: String { name }
+}
+
+extension TripTheme {
+    /// La liste arrêtée par Hugo le 14/09/2026, telle que `prisma/tripThemes.ts`
+    /// la pose. Pour les aperçus et les tests — l'app, elle, la demande au
+    /// serveur.
+    public static let fixtures: [TripTheme] = [
+        TripTheme(id: "nature-aventure", slug: "nature-aventure", emoji: "🏔️", name: "Nature & aventure"),
+        TripTheme(id: "grands-voyages", slug: "grands-voyages", emoji: "🌍", name: "Grands voyages / exploration"),
+        TripTheme(id: "a-deux", slug: "a-deux", emoji: "❤️", name: "Voyages à deux"),
+        TripTheme(id: "en-famille", slug: "en-famille", emoji: "👨‍👩‍👧‍👦", name: "Voyages en famille"),
+        TripTheme(id: "entre-amis", slug: "entre-amis", emoji: "👯", name: "Voyages entre amis"),
+        TripTheme(id: "city-trips", slug: "city-trips", emoji: "🏙️", name: "City trips & découverte"),
+        TripTheme(id: "gastronomie", slug: "gastronomie", emoji: "🍷", name: "Gastronomie & art de vivre"),
+        TripTheme(id: "vacances-detente", slug: "vacances-detente", emoji: "☀️", name: "Vacances & détente"),
+        TripTheme(id: "evenementiels", slug: "evenementiels", emoji: "🎉", name: "Voyages événementiels"),
+        TripTheme(id: "etudes-travail", slug: "etudes-travail", emoji: "💼", name: "Études / Travail"),
+        TripTheme(id: "autre", slug: "autre", emoji: "💬", name: "Autre", isOther: true),
+    ]
+}
+
+/// Ce que `GET /v1/trip-themes` rend : la liste, dans une enveloppe, comme la
+/// galerie.
+public struct TripThemes: Codable, Sendable, Hashable {
+    public let themes: [TripTheme]
+
+    public init(themes: [TripTheme]) {
+        self.themes = themes
+    }
+}

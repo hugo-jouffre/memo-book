@@ -162,9 +162,10 @@ struct CompactTripCard: View {
                     .resizable()
                     .renderingMode(.template)
                     .scaledToFit()
-                    .frame(width: MemoBookSpacing.m, height: MemoBookSpacing.m)
+                    .frame(width: MemoBookSpacing.contentIcon, height: MemoBookSpacing.contentIcon)
                     .foregroundStyle(MemoBookColor.ink)
-                    .padding(MemoBookSpacing.xs + 2)
+                    // Le rond reste à 44 : le dessin grandit, pas la cible.
+                    .padding(MemoBookSpacing.xs - 2)
                     .background(MemoBookColor.background, in: .circle)
             }
     }

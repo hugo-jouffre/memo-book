@@ -62,7 +62,18 @@ public struct RootView: View {
     /// Ce qui empêche d'aller là où on vient de demander à aller. Une alerte
     /// **sur l'accueil**, et non un écran poussé qui ne montrerait qu'une
     /// erreur : quand la destination n'existe pas, on ne quitte pas la page.
+    /// Le vocal enregistré depuis l'accueil, le temps d'ouvrir la conversation
+    /// qui va le montrer. Il ne survit pas à la fermeture de celle-ci : rouvrir
+    /// un fil ne doit pas y reposer un vocal déjà posé.
+    @State private var recordingHandoff: RecordingHandoff?
+
     @State private var routingProblem: String?
+
+    /// Le secret d'un lien « Réinitialiser mon mot de passe » ouvert depuis
+    /// l'e-mail, en attendant que l'écran d'entrée le consomme. Reçu ici, au
+    /// seul niveau qui existe toujours : un lien ouvert à froid arrive avant
+    /// que ``AuthView`` soit là, et se perdrait s'il l'attendait.
+    @State private var pendingResetToken: String?
 
     public init() {}
 
@@ -85,6 +96,18 @@ public struct RootView: View {
         // feuilles** : c'est lui qui les relie.
         .environment(\.brandSheetPresentation, sheets)
         .environment(\.subscriptionSession, subscription)
+        .onOpenURL { url in
+            guard let token = PasswordResetLink.token(from: url) else { return }
+            // Déjà entré : le mot de passe se change depuis le profil, et un
+            // lien reçu pour un compte où l'on est déjà n'a rien à ouvrir.
+            if case .signedIn = stage { return }
+            pendingResetToken = token
+        }
+        // Un lien reçu pendant qu'on restaurait la session, et la session a
+        // tenu : il ne doit pas ressortir à la prochaine déconnexion.
+        .onChange(of: stage) { _, stage in
+            if case .signedIn = stage { pendingResetToken = nil }
+        }
     }
 
     @ViewBuilder
@@ -101,6 +124,12 @@ public struct RootView: View {
                         .navigationDestination(for: HomeRoute.self, destination: destination)
                 }
                 .tint(MemoBookColor.action)
+                // Le vocal en route vers la conversation ne vit que le temps
+                // de celle-ci : refermer le fil le jette.
+                .onChange(of: path) { _, routes in
+                    let isChatting = routes.contains { if case .chat = $0 { true } else { false } }
+                    if !isChatting { recordingHandoff = nil }
+                }
                 // Le prénom du compte, pour les deux écrans qui s'adressent
                 // à la personne : le mot des fondateurs et le support. Il
                 // était déclaré depuis le mot des fondateurs mais **jamais
@@ -214,6 +243,15 @@ public struct RootView: View {
         // La pile de l'entrée est vidée : quelqu'un qui se déconnecte doit
         // retrouver l'accueil, pas le formulaire qu'il venait d'envoyer.
         signedOutPath.removeAll()
+
+        // Le raccourci qui ouvre le tunnel de commande — sans effet en release.
+        // Voir ``OnboardingStorage/openOrderArgument``.
+        #if DEBUG
+            if OnboardingStorage.isOpeningOrder {
+                // Le carnet du jeu d'essai du tunnel — voir ``OrderContext/fixture``.
+                path = [.order(memoId: "trip-rome")]
+            }
+        #endif
         isLaunching = true
     }
 
@@ -254,9 +292,10 @@ public struct RootView: View {
     /// ici que ça se voit. La carte de découverte, elle, ouvre désormais la
     /// galerie des carnets de la communauté.
     ///
-    /// L'enregistrement, lui, ne passe pas par ici : la feuille rend son vocal
-    /// à ``HomeModel/upload(_:)``, qui l'envoie aux carnets en cours. Il n'y a
-    /// pas d'écran au bout, donc rien à router.
+    /// L'envoi d'un vocal, lui, ne passe pas par ici : la feuille le rend à
+    /// ``HomeModel/upload(_:)``, qui l'envoie aux carnets en cours. Ce qui
+    /// passe par ici, c'est **la suite** — on arrive dans la conversation du
+    /// voyage, le vocal déjà posé dans le fil (``RecordingHandoff``).
     private func handle(_ intent: HomeIntent) {
         switch intent {
         case .openProfile:
@@ -297,15 +336,10 @@ public struct RootView: View {
             path.append(.bookPreview(memoId: tripId))
         case .openHelp:
             path.append(.support)
-        case .tellStory(let tripId):
-            // Le vocal est déjà parti — la file s'en charge, et elle vit
-            // au-dessus de cet écran. Ici il n'y a qu'une chose à faire :
-            // ouvrir la conversation où il va se poser.
-            //
-            // Même garde-fou que ci-dessus : un voyage du bac à sable n'a pas
-            // de conversation à ouvrir côté serveur. On reste sur l'accueil,
-            // qui montre déjà l'envoi dans sa boîte d'information.
-            guard UUID(uuidString: tripId) != nil else { return }
+        case .openConversation(let tripId, let handoff):
+            // Le paquet est posé **avant** la destination : c'est en se
+            // construisant que la conversation le lit.
+            recordingHandoff = handoff
             path.append(.chat(tripId: tripId, stepId: nil))
         case .joinTrip, .importFromPolarsteps:
             break
@@ -328,6 +362,8 @@ public struct RootView: View {
             path.append(.tripSettings(id: tripId))
         case .openBookPreview(let tripId):
             path.append(.bookPreview(memoId: tripId))
+        case .openHelp:
+            path.append(.support)
         }
     }
 
@@ -340,6 +376,8 @@ public struct RootView: View {
         switch intent {
         case .openWallet:
             path.append(.wallet(tripId: nil))
+        case .openGallery:
+            path.append(.gallery)
         case .openHelp:
             path.append(.support)
         }
@@ -425,18 +463,45 @@ public struct RootView: View {
         case .openWallet:
             path.append(.wallet(tripId: currentTripId))
         case .customise:
+            // « Personnaliser mon carnet » mène aux **personnalisations du
+            // carnet**, et non aux réglages du voyage : c'est le style du
+            // livre qu'on vient régler en le feuilletant — les pointillés, les
+            // quiz, les couvertures —, pas ses dates ni ses co-voyageurs.
             guard let tripId = currentTripId else { return }
-            path.append(.tripSettings(id: tripId))
+            path.append(.bookCustomisation(tripId: tripId))
         case .configureCovers:
             // « Défini maintenant ta 1ère et 4ème de couverture » → « Configurer ».
             // C'est le chemin le plus important vers les couvertures : c'est en
             // feuilletant son carnet qu'on s'aperçoit qu'il n'en a pas.
             openCovers()
-        case .order, .shareFeedback:
-            // La commande d'impression n'a pas d'écran dessiné. Le mot des
-            // fondateurs, lui, ouvre un courrier — la feuille s'en occupe
+        case .order:
+            // « Commander ce carnet » ouvre le tunnel en sept étapes. On y
+            // arrive **d'ici et de nulle part ailleurs** : l'imprimante de
+            // l'accueil mène à l'aperçu, et l'aperçu mène ici. On ne commande
+            // pas un carnet qu'on n'a pas vu.
+            guard let memoId = currentTripId else { return }
+            path.append(.order(memoId: memoId))
+        case .shareFeedback:
+            // Le mot des fondateurs ouvre un courrier — la feuille s'en occupe
             // elle-même.
             break
+        }
+    }
+
+    /// Où mène chaque intention du tunnel de commande.
+    ///
+    /// Le partage n'y est pas : c'est la feuille du système, que la vue
+    /// présente elle-même — voir ``OrderView``.
+    private func handle(_ intent: OrderIntent) {
+        switch intent {
+        case .openHelp:
+            path.append(.support)
+        case .finish:
+            // « Retour à l'accueil » **vide la pile** au lieu de reculer d'un
+            // écran : derrière la commande il y a l'aperçu, les réglages, le
+            // voyage — reculer les rejouerait un par un, et le premier
+            // ramènerait sur le paiement d'une commande déjà passée.
+            path.removeAll()
         }
     }
 
@@ -456,6 +521,30 @@ public struct RootView: View {
         }
     }
 
+    /// Le modèle du tunnel de commande.
+    ///
+    /// Sous `-previewSignedIn` il travaille **en mémoire** : aucun appel réseau
+    /// n'aboutirait — c'est la règle de cet interrupteur — et un écran d'erreur
+    /// ne montre pas la maquette qu'on cherche à vérifier. Partout ailleurs,
+    /// les trois routes du serveur.
+    private func orderModel(memoId: String) -> OrderModel {
+        #if DEBUG
+            if OnboardingStorage.isPreviewingSignedIn {
+                return OrderModel(memoId: memoId, email: accountEmail)
+            }
+        #endif
+        return dependencies.orderModel(memoId: memoId, email: accountEmail)
+    }
+
+    /// L'adresse du compte connecté. Elle ne sert qu'à une phrase — celle qui
+    /// annonce où partira l'email de confirmation d'une commande. `nil` pour un
+    /// compte entré par Apple sans adresse relayée : la phrase s'abrège alors
+    /// plutôt que de promettre un envoi sans destinataire.
+    private var accountEmail: String? {
+        guard case .signedIn(let account) = stage else { return nil }
+        return account.email
+    }
+
     /// Le voyage ouvert, s'il y en a un dans la pile.
     ///
     /// Il se lit **dans le chemin** plutôt que d'être porté par chaque écran :
@@ -467,8 +556,8 @@ public struct RootView: View {
         for route in path.reversed() {
             switch route {
             case .trip(let id), .tripSettings(let id), .bookPreview(let id),
-                .bookCustomisation(let id), .covers(let id), .coverStyle(let id),
-                .coverPhoto(let id), .coverTexts(let id):
+                .order(let id), .bookCustomisation(let id), .covers(let id),
+                .coverStyle(let id), .coverPhoto(let id), .coverTexts(let id):
                 return id
             case .chat(let tripId, _):
                 return tripId
@@ -494,11 +583,12 @@ public struct RootView: View {
             )
         case .chat(let tripId, let stepId):
             // La file passe par ici parce que c'est par ici qu'on arrive après
-            // un enregistrement rapide : le vocal est déjà parti, et la
-            // conversation le reprend pour le montrer.
+            // un enregistrement rapide : le vocal est déjà parti, et la bulle
+            // doit suivre son sort au lieu de l'inventer.
             ChatView(
                 tripId: tripId,
                 stepId: stepId,
+                handoff: recordingHandoff,
                 outbox: dependencies.outbox,
                 onIntent: handle
             )
@@ -518,6 +608,8 @@ public struct RootView: View {
             TripSettingsView(model: dependencies.tripSettingsModel(tripId: id), onIntent: handle)
         case .bookPreview(let memoId):
             BookPreviewFlowView(model: dependencies.bookPreviewModel(memoId: memoId), onIntent: handle)
+        case .order(let memoId):
+            OrderView(model: orderModel(memoId: memoId), onIntent: handle)
         case .wallet(let tripId):
             WalletView(model: dependencies.walletModel(tripId: tripId), onIntent: handle)
         case .bookCustomisation(let tripId):
@@ -600,6 +692,11 @@ enum HomeRoute: Hashable {
     /// L'identifiant est celui du **carnet** et non du voyage : c'est le carnet
     /// qu'on compose, et `memos` est la ressource qui le porte.
     case bookPreview(memoId: String)
+    /// Les sept étapes de « Commander mon Carnet ».
+    ///
+    /// On n'y arrive **que par l'aperçu** : on ne commande pas un carnet qu'on
+    /// n'a pas vu. L'identifiant est celui du carnet, comme pour l'aperçu.
+    case order(memoId: String)
     /// Ma cagnotte. `tripId` ne dit pas *quelle* cagnotte — il n'y en a qu'une
     /// par compte — mais **quel carnet on finance**, pour l'estimation de pages
     /// et de coût. `nil` quand on arrive du profil.

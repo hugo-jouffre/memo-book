@@ -29,10 +29,10 @@ public struct ChatView: View {
 
     /// La file des vocaux, quand l'écran est ouvert par l'app.
     ///
-    /// C'est par elle qu'arrive le souvenir raconté depuis l'accueil, et l'état
-    /// de son envoi — voir ``ChatModel/adopt(_:)``. `nil` en aperçu et en test :
-    /// la conversation s'ouvre alors par la porte ordinaire, sans rien à
-    /// reprendre.
+    /// Elle n'est là que pour **une** chose : dire où en est l'envoi du vocal
+    /// venu de l'accueil. La bulle est posée par ``RecordingHandoff``, mais son
+    /// état d'envoi ne lui appartient pas — voir ``ChatModel/markHandoff(_:)``.
+    /// `nil` en aperçu et en test, où rien n'a été enregistré ailleurs.
     private let outbox: RecordingOutbox?
 
     @State private var model: ChatModel
@@ -56,21 +56,33 @@ public struct ChatView: View {
     /// photothèque ou appareil photo. Voir ``ChatPhotoFlow``.
     @State private var photos = ChatPhotoFlow()
 
+    /// Le paywall, ouvert par le micro quand les étapes offertes sont épuisées
+    /// — le même verrou que sur l'accueil et sur un voyage.
+    @State private var showsPaywall = false
+    @Environment(\.subscriptionSession) private var subscriptionSession
+
     /// L'étape sur laquelle il reste à se poser en arrivant. Consommée **une
     /// fois** : se replacer à chaque nouveau message empêcherait de lire la
     /// suite.
     @State private var pendingFocus: String?
 
+    /// - Parameter handoff: le vocal enregistré depuis l'accueil, à poser dans
+    ///   le fil dès qu'il est chargé — voir ``RecordingHandoff``.
+    /// - Parameter outbox: la file qui l'envoie, pour que la bulle suive son
+    ///   sort au lieu de l'inventer.
     public init(
         tripId: String,
         stepId: String? = nil,
+        handoff: RecordingHandoff? = nil,
         outbox: RecordingOutbox? = nil,
         onIntent: @escaping (ChatIntent) -> Void = { _ in }
     ) {
         self.tripId = tripId
         self.outbox = outbox
         self.onIntent = onIntent
-        _model = State(initialValue: ChatModel(tripId: tripId, focusStepId: stepId))
+        let model = ChatModel(tripId: tripId, focusStepId: stepId)
+        if let handoff { model.expect(handoff) }
+        _model = State(initialValue: model)
         _pendingFocus = State(initialValue: stepId)
     }
 
@@ -113,28 +125,33 @@ public struct ChatView: View {
         // Le crème de la marque ne se retourne pas en sombre — voir
         // `MemoBookColor`.
         .environment(\.colorScheme, .light)
-        .task {
-            await model.load()
-            await adoptQuickRecording()
-        }
+        .task { await model.load() }
         // L'envoi du vocal venu de l'accueil se joue **ailleurs** — dans la
         // file, qui vit au-dessus des écrans et continue pendant qu'on navigue.
-        // La bulle ne fait que suivre ce qu'elle en dit.
-        .onChange(of: outbox?.handover?.delivery) { _, delivery in
-            guard let delivery else { return }
-            model.markHandover(delivery)
+        // La bulle ne fait que suivre ce qu'elle en dit, et `initial: true`
+        // parce qu'il peut être arrivé avant que cet écran ne soit dessiné.
+        .onChange(of: outbox?.handoffDelivery?.state, initial: true) { _, state in
+            guard let state else { return }
+            model.markHandoff(state)
         }
         // Un écran de chat laissé derrière soi ne doit ni parler ni enregistrer.
         .onDisappear { model.teardown() }
-    }
-
-    /// Reprend le souvenir raconté depuis l'accueil, s'il y en a un pour ce
-    /// voyage. Il n'est marqué repris **qu'une fois posé** : un écran refermé
-    /// pendant la pause d'arrivée le laisse à reprendre, et on le retrouve en
-    /// revenant.
-    private func adoptQuickRecording() async {
-        guard let outbox, let handover = outbox.pendingHandover(for: tripId) else { return }
-        if await model.adopt(handover) { outbox.markHandoverAdopted() }
+        // Le verrou des étapes offertes : le micro mène au paywall au lieu de
+        // s'ouvrir, tant qu'on n'est pas abonné (Hugo, 14/09/2026).
+        .onAppear { model.onRecordingLocked = { showsPaywall = true } }
+        .onChange(of: subscriptionSession?.isBlocked, initial: true) { _, blocked in
+            model.isRecordingLocked = blocked == true
+        }
+        .fullScreenCover(isPresented: $showsPaywall) {
+            PaywallView(
+                subscription: .offer,
+                previewMemoId: tripId,
+                onSubscribe: {
+                    subscriptionSession?.record(isSubscribed: true)
+                    showsPaywall = false
+                }
+            )
+        }
     }
 
     // MARK: - Le fil

@@ -26,6 +26,13 @@ const schema = z.object({
     .default("info"),
 
   DATABASE_URL: z.string().min(1),
+  /**
+   * Connexions Postgres qu'un process peut ouvrir, Prisma et pg-boss compris.
+   * Le Session pooler de Supabase n'en accepte que 15 pour tout le projet :
+   * ce budget laisse tourner un serveur, un worker et un `prisma studio` sans
+   * que le 16ᵉ client soit refusé. Voir `lib/databasePool.ts`.
+   */
+  DATABASE_POOL_SIZE: z.coerce.number().int().min(2).max(50).default(5),
 
   // Optionnels ici, vérifiés au moment de construire le client dans
   // `createMediaStorage`. En test et pendant le smoke, le stockage est en
@@ -107,21 +114,43 @@ const schema = z.object({
   WEBFLOW_SITE_ID: z.string().default(""),
 
   /**
+   * L'envoi d'e-mails passe par Resend, en HTTP — pas de SMTP, pas de
+   * dépendance. Sans clé, les messages sont **journalisés et écrits sur le
+   * disque** (`MAIL_OUTPUT_DIR`) au lieu de partir : c'est ce qui permet de
+   * lire l'e-mail de « mot de passe oublié » en développement. Refusé en
+   * production — voir `services/mailer.ts`.
+   */
+  RESEND_API_KEY: z.string().default(""),
+  MAIL_FROM: z.string().default("MemoBook <bonjour@memo-book.com>"),
+  MAIL_OUTPUT_DIR: z.string().default(".mail-out"),
+
+  /**
+   * La racine des liens qui **ouvrent l'app** — celui du bouton « Réinitialiser
+   * mon mot de passe » dans l'e-mail.
+   *
+   * Un schéma d'app pour l'instant (`memobook://`), déclaré dans
+   * `ios/project.yml`. Le jour où memo-book.com sert un fichier
+   * `apple-app-site-association`, ce sera `https://memo-book.com/app` et les
+   * mêmes liens deviendront universels sans toucher au code : le chemin
+   * derrière est le même.
+   */
+  APP_LINK_BASE_URL: z.string().default("memobook://"),
+
+  /**
    * Stripe — encaissement des carnets imprimés et des recharges de cagnotte.
    *
    * **Jamais l'abonnement.** Celui-là est un service numérique : Apple impose
-   * StoreKit, et faire passer un abonnement par Stripe depuis l'app ferait
-   * rejeter le binaire. Voir `Subscription.provider`, qui porte les deux.
+   * StoreKit, et le faire passer par Stripe depuis l'app ferait rejeter le
+   * binaire. Voir `Subscription.provider`, qui porte les deux.
    *
-   * Les trois clés vont par trois, et elles ne viennent pas du même endroit :
+   * Les trois clés ne viennent pas du même endroit :
    * - `STRIPE_SECRET_KEY` — *Développeurs ▸ Clés API*. **Secrète.**
    * - `STRIPE_PUBLISHABLE_KEY` — même écran, publique par construction : elle
-   *   part dans l'app, comme `GOOGLE_IOS_CLIENT_ID`. Elle est ici pour que
-   *   l'app la reçoive du serveur plutôt que de la porter en dur, ce qui
-   *   permet de changer de compte Stripe sans livrer une version.
+   *   part dans l'app, comme `GOOGLE_IOS_CLIENT_ID`. Servie par le serveur
+   *   plutôt que codée en dur, pour changer de compte sans livrer l'app.
    * - `STRIPE_WEBHOOK_SECRET` — *Développeurs ▸ Webhooks*, propre à **chaque**
    *   point de terminaison. Celui de `stripe listen` en local n'est pas celui
-   *   du webhook de production.
+   *   de la production.
    *
    * Vides, les routes de paiement échouent explicitement plutôt que de laisser
    * croire qu'une commande est payée.
@@ -140,8 +169,7 @@ export type Env = z.infer<typeof schema> & {
    *
    * Déduit du préfixe de la clé, jamais d'une variable à part : une variable
    * `STRIPE_MODE` pourrait mentir sur la clé posée à côté d'elle, le préfixe
-   * non. C'est ce drapeau que les journaux affichent au démarrage — « payer
-   * pour de vrai » ne doit pas être une information qu'il faut aller chercher.
+   * non.
    */
   stripeLive: boolean;
 };

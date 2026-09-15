@@ -9,11 +9,10 @@ import type {
   PrintOrder,
   Showcase,
   Subscription,
+  TripTheme,
 } from "@prisma/client";
-// Le prix vit dans `lib/pricing.ts` : l'estimation affichée ici et le montant
-// réellement débité à la commande doivent sortir de la même formule.
-import { billablePageCount, bookPriceCents } from "../lib/pricing.js";
 import { CONNECTOR_CATALOG } from "../services/connectorCatalog.js";
+import { unitPriceCents } from "../services/printPricing.js";
 
 /**
  * Ce que les trois écrans « produit » reçoivent : l'accueil, un voyage, le
@@ -219,6 +218,17 @@ export function serializeGalleryCategory(category: GalleryCategory) {
     slug: category.slug,
     name: category.name,
     iconKey: category.iconKey,
+  };
+}
+
+/** Un thème de « Contexte de ton voyage » — au nom près de `TripTheme` côté Swift. */
+export function serializeTripTheme(theme: TripTheme) {
+  return {
+    id: theme.id,
+    slug: theme.slug,
+    emoji: theme.emoji,
+    name: theme.name,
+    isOther: theme.isOther,
   };
 }
 
@@ -604,10 +614,8 @@ export function serializeWallet(
  * tiendra pas.
  */
 function serializeWalletEstimate(trip: Pick<Memo, "targetPageCount" | "pageCount">) {
-  // Le **même** calcul que celui qui débite à la commande : c'est ce qui
-  // garantit que le montant lu ici est celui qui sera prélevé.
-  const pages = billablePageCount(trip);
-  return { pageCount: pages, cost: euros(bookPriceCents(pages, 1)) };
+  const pages = Math.max(trip.targetPageCount, trip.pageCount);
+  return { pageCount: pages, cost: euros(unitPriceCents(pages)) };
 }
 
 type MemoForPreview = Memo & {

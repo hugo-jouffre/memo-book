@@ -24,8 +24,9 @@
 | Nom | Hex | Rôle observé sur les écrans |
 |---|---|---|
 | Green | #28654B | CTA primaire, bordure de la tagline |
-| Lime | #E2F32B | Accent du scheme — pas encore employé sur le lot 1 |
-| Blue | #AFD2F0 | Bordure des cartes, pastilles numérotées, fonds d'icônes (à 30 %) |
+| Lime | #E2F32B | Accent du scheme — **l'abonnement, et rien d'autre** (Hugo, 14/09/2026, T7) |
+| Blue | #AFD2F0 | Bordure des cartes, pastilles numérotées, fonds d'icônes (à 30 %) — et **la couleur d'accent de l'app** hors abonnement. Le bleu le plus employé des trois |
+| **Blue Text** | **#4088C6** | **Le bleu du texte** — titre de la carte de découverte, contour et chiffre d'une pastille d'information, coche d'une option. Troisième et dernier bleu, défini par Hugo le 14/09/2026 (T12) ; nom de variable Figma à poser. Sous 4,5:1 sur le blanc : libellés courts ou demi-gras seulement |
 | Beige | #FCF2E9 | Fond d'écran |
 | Beige Darker | #CFBBAA | — |
 | Black | #2D231A | Texte principal |
@@ -40,9 +41,9 @@
 >
 > **Grey Typo n'est pas `Grays/Gray`.** Le gris système #8E8E93 est neutre et
 > refroidit le crème ; Grey Typo est tiré du noir chaud de la marque et s'y
-> pose. Les deux coexistent dans le code (`inkSecondary` et `inkMuted`) parce
-> que les écrans du lot 1 emploient bien le gris système : à trancher avec
-> Clara si l'un doit remplacer l'autre partout.
+> pose. **Tranché le 14/09/2026 (T18)** : `Grays/Gray` ne sert qu'aux aplats de
+> couleur, et tout texte secondaire est en Grey Typo (`inkMuted`), écrans du
+> lot 1 compris. Le token `gray` reste pour un aplat qui en aurait besoin.
 
 > **Carrot, Carrot Darker, Forest Green et Kiwi n'existent plus.** Blue et Lime les
 > remplacent. Les fichiers qui les citent encore sont listés plus bas.
@@ -51,7 +52,7 @@
 
 | Nom | Hex | Usage |
 |---|---|---|
-| `Grays/Gray` | #8E8E93 | Texte secondaire, placeholders (gris système iOS) |
+| `Grays/Gray` | #8E8E93 | **Aplats de couleur uniquement** — jamais du texte, jamais un placeholder (T18, 14/09/2026) |
 
 ## Semantic
 
@@ -125,11 +126,16 @@ Styles observés :
 - Le texte principal utilise toujours **Black** (#2D231A), jamais un noir pur (#000000)
 - Les surfaces utilisent **White** (#FFFCF8), jamais un blanc pur (#FFFFFF)
 - **Green** (#28654B) porte l'action principale : boutons primaires et CTA
-- **Lime** (#E2F32B) est l'accent du scheme. Très saturé : il sert à mettre en valeur
-  ponctuellement (surlignage, sélection, badge), jamais à porter du texte sombre sur
-  grande surface, et jamais comme fond de CTA sans contraste vérifié
-- **Blue** (#AFD2F0) est l'accent illustratif de l'onboarding : bordures de cartes,
-  pastilles numérotées, fonds d'icônes à 30 % d'opacité
+- **Lime** (#E2F32B) est la couleur de **l'abonnement, et de rien d'autre** : le bouton
+  qui y invite, la pastille « Abonné », le solde d'étapes offertes, l'écriture
+  « ABONNEMENT » de la cagnotte. Quand on hésite : « est-ce que ça parle de
+  l'abonnement ? » Si non, c'est bleu. En aplat de bouton, le libellé et le filet sont
+  verts, jamais l'encre (D13)
+- **Blue** (#AFD2F0) est **la couleur d'accent de l'app** : bordures de cartes, pastilles
+  numérotées, fonds d'icônes à 30 %, ronds de confirmation, pastilles de compte. C'est
+  un aplat : le texte qu'il porte est Black, jamais du bleu
+- **Blue Text** (#4088C6) est le bleu qui **s'écrit** — et le seul. Pas de variante
+  douce : une hiérarchie se fait au corps et à la graisse
 - **Beige** (#FCF2E9) est le fond des écrans ; les blocs de contenu se détachent en White
 - Les couleurs sémantiques ne servent qu'aux retours système (messages, statuts), jamais
   en décoration

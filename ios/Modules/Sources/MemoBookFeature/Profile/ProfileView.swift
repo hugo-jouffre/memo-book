@@ -127,27 +127,25 @@ public struct ProfileView: View {
                 }
             )
         }
-        .alert("Supprimer mon compte ?", isPresented: $isConfirmingDeletion) {
-            Button("Annuler", role: .cancel) {}
-            Button("Supprimer", role: .destructive) {
-                Task {
-                    // La sortie est la même que la déconnexion : le compte
-                    // n'existe plus, l'app ne peut que revenir à l'entrée.
-                    if await model.deleteAccount() { onSignOut() }
+        // Les deux modales dessinées dans Figma (`3203:21809` sans voyage en
+        // cours, `3206:21854` avec) remplacent l'alerte du système qui tenait
+        // la place — Hugo, 14/09/2026 (T23). C'est une feuille de l'app, avec
+        // le paragraphe entier : une alerte n'en tenait qu'un résumé.
+        .brandSheet(isPresented: $isConfirmingDeletion) {
+            DeleteAccountSheet(
+                hasOngoingTrip: model.profile?.currentTrip != nil,
+                isDeleting: model.isDeletingAccount,
+                onKeep: { isConfirmingDeletion = false },
+                onDelete: {
+                    Task {
+                        // La sortie est la même que la déconnexion : le compte
+                        // n'existe plus, l'app ne peut que revenir à l'entrée.
+                        if await model.deleteAccount() {
+                            isConfirmingDeletion = false
+                            onSignOut()
+                        }
+                    }
                 }
-            }
-        } message: {
-            // Le même texte que la modale dessinée dans Figma, resserré : une
-            // alerte du système ne tient pas un paragraphe. Ce qu'elle ne perd
-            // jamais, c'est ce qui disparaît pour **les autres**.
-            Text(
-                """
-                Tes voyages, tes souvenirs et tes carnets seront effacés, ainsi \
-                que tes commandes. Les voyages que tu partages restent à tes \
-                co-voyageurs. Ta cagnotte et ton abonnement sont clos.
-
-                C'est immédiat et sans retour.
-                """
             )
         }
     }
@@ -207,7 +205,9 @@ public struct ProfileView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Retour")
 
-            Text("Profile")
+            // « Profil », en français : la maquette écrivait « Profile », et
+            // Clara l'a corrigée (14/09/2026, T17).
+            Text("Profil")
                 .font(MemoBookFont.h2)
                 .foregroundStyle(MemoBookColor.ink)
                 .fixedSize(horizontal: false, vertical: true)
@@ -379,9 +379,14 @@ public struct ProfileView: View {
                 isValueLoading: profile == nil,
                 isConfirmed: model.justSaved == .phoneNumber
             )
+            // Sans adresse, la ligne **invite** à en donner une, en vert et un
+            // cran plus petit — Hugo, 14/09/2026 (T22). Une valeur vide se
+            // lisait comme une ligne cassée.
+            let hasAddress = !(profile?.address.singleLine.isEmpty ?? true)
             BrandRow(
                 "Adresse postale",
-                value: profile?.address.singleLine,
+                value: profile.map { hasAddress ? $0.address.singleLine : "Ajouter une adresse" },
+                valueTone: hasAddress ? .plain : .invitation,
                 isValueLoading: profile == nil
             ) {
                 sheet = .postalAddress
@@ -402,7 +407,7 @@ public struct ProfileView: View {
             BrandRow(
                 "Ma cagnotte",
                 value: profile?.walletBalance.euros,
-                isValueProminent: true,
+                valueTone: .prominent,
                 isValueLoading: profile == nil,
                 action: { onIntent(.openWallet) }
             )
@@ -413,20 +418,25 @@ public struct ProfileView: View {
                 BrandRow("Mon abonnement") { sheet = .subscription }
             }
             BrandRow("Suivi des commandes") { sheet = .orderTracking }
-            BrandRow("Confidentialité", action: notYetRouted)
+            // « Confidentialité » n'est plus ici : la maquette la montrait dans
+            // ce groupe **et** dans celui des conditions d'utilisation, et c'est
+            // une erreur — elle ne vit que là-bas (Hugo, 14/09/2026, T18).
         }
     }
 
     private var paymentGroup: some View {
         let profile = model.profile
 
+        // Sans carte, la ligne **invite** à en ajouter une, comme celle de
+        // l'adresse — Hugo, 14/09/2026 (T22).
+        let hasCard = profile?.selectedCard != nil
+
         return BrandRowGroup {
             BrandRow(
                 "Carte bancaire enregistrée",
-                // Aucune carte enregistrée : la ligne le dit plutôt que de
-                // montrer un gabarit vide. État non maquetté.
-                value: profile.map { $0.selectedCard?.maskedNumber ?? "Aucune carte enregistrée" },
+                value: profile.map { $0.selectedCard?.maskedNumber ?? "Ajouter une carte" },
                 valuePlacement: .below,
+                valueTone: hasCard ? .plain : .invitation,
                 isValueLoading: profile == nil
             ) {
                 sheet = .paymentMethod
@@ -529,7 +539,13 @@ public struct ProfileView: View {
         case .connectors:
             ConnectorsSheet(model: model)
         case .orderTracking:
-            OrderTrackingSheet(orders: model.profile?.orders ?? [])
+            OrderTrackingSheet(orders: model.profile?.orders ?? []) {
+                // La feuille se referme **avant** que la galerie s'ouvre : c'est
+                // un écran poussé sur la pile du profil, pas une feuille de
+                // plus.
+                sheet = nil
+                onIntent(.openGallery)
+            }
         }
     }
 
@@ -595,31 +611,27 @@ private struct EditableName: View {
     @State private var isEditing = false
     @FocusState private var isFocused: Bool
 
-    @ScaledMetric(relativeTo: .body) private var pencilSide: CGFloat = 18
+    /// **Petit**, comme celui des lignes (``BrandRow``) : 1 rem de dessin, sans
+    /// cerne ni fond, dans une cible de 2.75 rem — Hugo, 14/09/2026 (T24).
+    @ScaledMetric(relativeTo: .body) private var pencilSide: CGFloat = 16
 
     var body: some View {
-        HStack(spacing: MemoBookSpacing.xs) {
-            // Un contrepoids invisible, de la largeur exacte du crayon.
-            //
-            // Sans lui, c'est la paire « nom + crayon » qui se centre, et le nom
-            // se retrouve donc décalé vers la gauche de la moitié du crayon.
-            // Avec lui, **le nom est centré** et le crayon déborde à droite —
-            // c'est le décentrage voulu.
-            Color.clear
-                .frame(width: MemoBookSpacing.minimumTapTarget, height: 0)
-
+        Group {
             if isEditing {
                 editor
             } else {
                 label
             }
-
-            pencil
         }
-        // La colonne du nom ne prend jamais plus que la largeur de l'écran,
-        // marges comprises : c'est cette limite qui déclenche la coupure du
-        // texte au lieu de le laisser filer sous le crayon.
+        // Le nom se centre dans la colonne entière, et laisse de chaque côté la
+        // place du crayon : c'est cette limite qui déclenche la coupure du
+        // texte au lieu de le laisser filer dessous.
+        .padding(.horizontal, MemoBookSpacing.minimumTapTarget)
         .frame(maxWidth: .infinity)
+        // Le crayon est **au bord droit de la colonne**, à l'aplomb des
+        // chevrons et des crayons des lignes du dessous — pas collé au nom, qui
+        // se décalerait avec lui à chaque lettre (T24).
+        .overlay(alignment: .trailing) { pencil }
         .onAppear { draft = name }
         .onChange(of: name) { _, value in
             if !isEditing { draft = value }
@@ -753,7 +765,7 @@ private struct ConnectorsCallout: View {
                 title
                 Text(ConnectorsCopy.promise)
                     .font(MemoBookFont.body)
-                    .foregroundStyle(MemoBookColor.blueTextSoft)
+                    .foregroundStyle(MemoBookColor.blueText)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -778,7 +790,7 @@ private struct ConnectorsCallout: View {
             .resizable()
             .renderingMode(.template)
             .scaledToFit()
-            .frame(width: MemoBookSpacing.m, height: MemoBookSpacing.m)
+            .frame(width: MemoBookSpacing.contentIcon, height: MemoBookSpacing.contentIcon)
             .foregroundStyle(MemoBookColor.ink)
             .accessibilityHidden(true)
 
@@ -801,11 +813,11 @@ private struct ConnectorsCallout: View {
 enum ConnectorsCopy {
     static let title = "Ajouter des connecteurs"
 
-    /// ⚠️ Copie recopiée telle quelle de la maquette (R8). Elle porte trois
-    /// coquilles — « a » pour « à », « permets » pour « permet », et un
-    /// vouvoiement contraire à R9 — signalées à Clara dans la fiche écran.
+    /// La copie corrigée dans Figma le 14/09/2026 (T17) : « à », « permet »,
+    /// et le tutoiement de R9. Elle a longtemps été recopiée avec ses trois
+    /// coquilles, parce que R8 interdit de corriger en silence.
     static let promise =
-        "Connecter MemoBook a des applications externes vous permets d’étoffer vos aventures de manière intelligente."
+        "Connecter MemoBook à des applications externes te permet d’étoffer tes aventures de manière intelligente."
 }
 
 /// Une action de sortie : une icône, un mot, centrés. Ni carte ni bouton plein —
@@ -824,7 +836,7 @@ private struct ProfileExitAction: View {
                     .resizable()
                     .renderingMode(.template)
                     .scaledToFit()
-                    .frame(width: MemoBookSpacing.m, height: MemoBookSpacing.m)
+                    .frame(width: MemoBookSpacing.contentIcon, height: MemoBookSpacing.contentIcon)
                     .foregroundStyle(tint)
                 // Sora, comme les libellés de bouton de la marque : ce sont
                 // des boutons, pas des lignes de réglage. Voir
@@ -890,6 +902,9 @@ private struct ProfileExitAction: View {
 /// les paramètres d'un voyage, parce que c'est la même somme.
 public enum ProfileIntent: Sendable, Hashable {
     case openWallet
+    /// Les carnets de la communauté, depuis la feuille des commandes quand il
+    /// n'y en a aucune : c'est là que la maquette envoie (`3162:34917`).
+    case openGallery
     /// « Besoin d'aide ? », depuis le bas du profil comme depuis la barre du
     /// paywall. La même destination dans les deux cas : le support.
     case openHelp

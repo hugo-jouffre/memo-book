@@ -15,10 +15,10 @@ public final class TripHomeModel {
     public private(set) var detail: TripDetail?
     public private(set) var errorMessage: String?
 
-    // Les trois filtres. `nil` veut dire « tous » : c'est l'état d'ouverture de
-    // l'écran, et celui vers lequel « Tout afficher » ramène.
+    // Les deux filtres. `nil` veut dire « tous » : c'est l'état d'ouverture de
+    // l'écran, et celui vers lequel « Tout afficher » ramène. Il y en a eu un
+    // troisième, sur une étape — retiré, voir ``TripStepsSection`` (T30).
     public var country: String?
-    public var stepId: String?
     public var transport: TripTransport?
 
     private let tripId: String
@@ -49,7 +49,7 @@ public final class TripHomeModel {
 
     /// Les étapes qui restent une fois les filtres posés.
     ///
-    /// Les trois se combinent : choisir un pays **et** un transport ne garde
+    /// Les deux se combinent : choisir un pays **et** un transport ne garde
     /// que ce qui satisfait les deux. C'est ce qu'on attend d'une barre de
     /// filtres, et ça évite d'avoir à expliquer une règle de priorité.
     public var visibleSteps: [TripStep] {
@@ -57,19 +57,17 @@ public final class TripHomeModel {
 
         return steps.filter { step in
             if let country, step.destination?.name != country { return false }
-            if let stepId, step.id != stepId { return false }
             if let transport, step.transport != transport { return false }
             return true
         }
     }
 
     public var hasActiveFilter: Bool {
-        country != nil || stepId != nil || transport != nil
+        country != nil || transport != nil
     }
 
     public func clearFilters() {
         country = nil
-        stepId = nil
         transport = nil
     }
 }
@@ -88,6 +86,10 @@ public enum TripIntent: Sendable, Hashable {
     /// cette étape-là : c'est ce qui permet à MEMO de savoir de quelle journée
     /// on parle sans avoir à le demander.
     case openStep(tripId: String, stepId: String)
+
+    /// « Besoin d'aide ? » depuis le paywall qu'ouvre un micro verrouillé :
+    /// le support, la même destination que depuis l'accueil et le profil.
+    case openHelp
 
     /// La roue crantée de l'en-tête : les réglages du voyage.
     ///

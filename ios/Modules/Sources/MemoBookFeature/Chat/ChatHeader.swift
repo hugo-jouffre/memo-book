@@ -12,8 +12,8 @@ enum ChatMetrics {
     /// La hauteur d'une commande ronde de l'en-tête, et sa cible tactile.
     static let control = MemoBookSpacing.minimumTapTarget
 
-    /// L'icône posée dans cette commande.
-    static let controlIcon = MemoBookSpacing.m
+    /// L'icône posée dans cette commande — voir ``MemoBookSpacing/contentIcon``.
+    static let controlIcon = MemoBookSpacing.contentIcon
 
     /// Le fond des barres qui flottent au-dessus du fil — en-tête, rail de
     /// suggestions, barre d'envoi.
@@ -113,7 +113,7 @@ struct ChatHeader: View {
                     .resizable()
                     .renderingMode(.template)
                     .scaledToFit()
-                    .frame(width: MemoBookSpacing.s, height: MemoBookSpacing.s)
+                    .frame(width: MemoBookSpacing.m, height: MemoBookSpacing.m)
                     .foregroundStyle(MemoBookColor.ink)
             }
         }
@@ -124,7 +124,7 @@ struct ChatHeader: View {
     }
 }
 
-/// Une commande ronde de l'en-tête : une icône de 1.5 rem au centre d'une cible
+/// Une commande ronde de l'en-tête : une icône de 2 rem au centre d'une cible
 /// de 2.75 rem.
 ///
 /// Sans fond, contrairement à celles de l'accueil d'un voyage : là-bas elles
@@ -160,7 +160,7 @@ struct ChatPreviewBanner: View {
     let onOpen: () -> Void
 
     @Environment(\.dynamicTypeSize) private var typeSize
-    @ScaledMetric(relativeTo: .body) private var iconSide: CGFloat = MemoBookSpacing.m
+    @ScaledMetric(relativeTo: .body) private var iconSide: CGFloat = MemoBookSpacing.contentIcon
 
     private var shape: RoundedRectangle {
         .rect(cornerRadius: MemoBookSpacing.largeCornerRadius)

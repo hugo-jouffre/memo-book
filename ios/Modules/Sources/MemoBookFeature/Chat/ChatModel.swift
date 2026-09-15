@@ -100,12 +100,12 @@ public final class ChatModel {
     /// souvenir dans le carnet.
     private var pending: ChatMessage?
 
-    /// La bulle reprise de l'accueil, s'il y en a une — voir ``adopt(_:)``.
+    /// La bulle venue de l'accueil, s'il y en a une — voir ``expect(_:)``.
     ///
     /// Son état d'envoi ne se décide **pas** ici : ce vocal est parti avant que
     /// cet écran n'existe, et c'est la file qui sait s'il est arrivé. Le modèle
     /// retient son identifiant pour ne rien écrire par-dessus.
-    private var adoptedId: String?
+    private var handoffId: String?
 
     /// - Parameters:
     ///   - source: ce qui rend la conversation. Par défaut le jeu d'essai, ce
@@ -177,6 +177,13 @@ public final class ChatModel {
             // Relu à chaque ouverture : l'accès peut avoir été retiré depuis
             // les Réglages pendant que l'app était en arrière-plan.
             microphoneIsDenied = RecordingPermission.current == .denied
+
+            // Le vocal de l'accueil, s'il y en a un, se pose maintenant — il
+            // fallait un fil pour l'y poser. Une fois, et une seule.
+            if let handoff = pendingHandoff {
+                pendingHandoff = nil
+                receive(handoff)
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -272,13 +279,16 @@ public final class ChatModel {
         }
     }
 
-    private func send(_ body: ChatMessageBody) {
+    /// - Parameter id: l'identifiant de la bulle, quand il vient d'ailleurs —
+    ///   le vocal de l'accueil porte le sien, celui par lequel la file dira où
+    ///   en est son envoi. Voir ``receive(_:)``.
+    private func send(_ body: ChatMessageBody, id: String? = nil) {
         guard thread != nil else { return }
 
         ensureOpening()
 
         let message = ChatMessage(
-            id: "traveller-\(messages.count)",
+            id: id ?? "traveller-\(messages.count)",
             author: .traveller,
             body: body,
             sentAt: .now,
@@ -309,66 +319,6 @@ public final class ChatModel {
         start(pending)
     }
 
-    // MARK: - Le vocal venu de l'accueil
-
-    /// Pose dans le fil le vocal qu'on vient de dire depuis l'accueil.
-    ///
-    /// **C'est la continuité du geste** : on a raconté, on arrive ici, et le
-    /// souvenir se pose devant soi au lieu d'avoir disparu sur l'écran d'avant.
-    /// MEMO le reçoit ensuite comme n'importe quel vocal — même déroulé, mêmes
-    /// temps, mêmes suggestions : ce qui change, c'est par quelle porte il est
-    /// entré, et ça ne regarde pas la conversation.
-    ///
-    /// ⚠️ **L'état d'envoi ne lui appartient pas.** Le vocal est parti avant
-    /// que cet écran n'existe, et il peut très bien attendre le réseau sur le
-    /// disque : c'est la file qui le dit, par ``markHandover(_:)``. Une bulle
-    /// qui se déclarerait « envoyée » parce que MEMO a répondu mentirait à
-    /// chaque fois qu'on raconte dans le métro.
-    ///
-    /// Une seule fois par écran : revenir sur la conversation ne repose pas le
-    /// même souvenir.
-    ///
-    /// - Returns: `true` si la bulle a bien été posée. `false` quand l'écran
-    ///   s'est refermé pendant la pause d'arrivée — le vocal reste alors à
-    ///   reprendre, et on le retrouve en revenant.
-    @discardableResult
-    public func adopt(_ handover: RecordingOutbox.Handover) async -> Bool {
-        guard thread != nil, adoptedId == nil else { return false }
-
-        // Le temps que l'écran finisse d'arriver. La bulle doit se poser
-        // **devant** le voyageur — la voir déjà là en découvrant la
-        // conversation, ce serait retrouver un souvenir, pas l'envoyer.
-        try? await Task.sleep(for: Self.arrivalBeat)
-        guard !Task.isCancelled, thread != nil else { return false }
-
-        adoptedId = handover.id
-        ensureOpening()
-
-        let message = ChatMessage(
-            id: handover.id,
-            author: .traveller,
-            body: .voice(handover.note),
-            sentAt: handover.recordedAt,
-            stepId: activeStepId,
-            delivery: handover.delivery
-        )
-        append(message)
-        start(message)
-        return true
-    }
-
-    /// Ce que la file dit de la bulle venue de l'accueil. Sans effet s'il n'y en
-    /// a pas : l'écran peut être ouvert par la porte ordinaire.
-    public func markHandover(_ delivery: ChatDelivery) {
-        guard let adoptedId else { return }
-        mark(adoptedId, as: delivery)
-    }
-
-    /// Le temps qu'on laisse à l'écran avant de poser le vocal. À peu près la
-    /// durée d'une poussée de navigation : la bulle arrive quand la
-    /// conversation est en place, pas pendant qu'elle glisse.
-    private static let arrivalBeat = Duration.milliseconds(400)
-
     // MARK: - Le tour de parole
 
     private func start(_ message: ChatMessage) {
@@ -394,8 +344,8 @@ public final class ChatModel {
 
             // Sauf pour la bulle venue de l'accueil : la réponse de MEMO ne dit
             // rien de son envoi, et l'écrire « envoyée » ici couvrirait un vocal
-            // encore en attente de réseau. Voir ``adopt(_:)``.
-            if message.id != adoptedId { mark(message.id, as: .sent) }
+            // encore en attente de réseau. Voir ``expect(_:)``.
+            if message.id != handoffId { mark(message.id, as: .sent) }
 
             for beat in reply.beats {
                 turn = .thinking
@@ -414,7 +364,7 @@ public final class ChatModel {
             // Même règle qu'à la réussite : c'est **la réponse** qui a échoué,
             // pas l'envoi du vocal de l'accueil. Marquer la bulle « non
             // envoyée » ferait croire qu'un souvenir déjà arrivé s'est perdu.
-            if message.id != adoptedId {
+            if message.id != handoffId {
                 mark(message.id, as: .failed(error.localizedDescription))
             }
             turn = .failed(messageId: message.id, message: error.localizedDescription)
@@ -445,7 +395,67 @@ public final class ChatModel {
 
     // MARK: - Le vocal
 
+    /// Le vocal enregistré depuis l'accueil, en attendant que le fil soit là
+    /// pour le recevoir. Voir ``RecordingHandoff``.
+    private var pendingHandoff: RecordingHandoff?
+
+    /// Annonce un vocal venu de l'accueil. Il sera posé dans le fil au
+    /// chargement, exactement comme s'il avait été dit ici : même bulle, même
+    /// forme d'onde, même réponse de MEMO.
+    public func expect(_ handoff: RecordingHandoff) {
+        pendingHandoff = handoff
+    }
+
+    /// Pose un vocal déjà enregistré. Le même chemin que ``finishRecording()``,
+    /// moins le micro : le fichier est gardé pour la réécoute, et la bulle
+    /// part comme un message du voyageur.
+    ///
+    /// ⚠️ **Son état d'envoi ne se décide pas ici.** Ce vocal est parti avant
+    /// que cet écran n'existe, et il peut très bien attendre le réseau sur le
+    /// disque : le marquer « envoyé » parce que MEMO a répondu mentirait à
+    /// chaque fois qu'on raconte dans le métro. La bulle garde donc
+    /// l'identifiant du relais, et c'est la file qui l'écrit — par
+    /// ``markHandoff(_:)``.
+    private func receive(_ handoff: RecordingHandoff) {
+        let url = try? VoiceNoteFile.save(handoff.audio, id: handoff.id)
+        handoffId = handoff.id
+
+        send(
+            .voice(
+                VoiceNote(
+                    id: handoff.id,
+                    duration: handoff.audio.duration,
+                    levels: handoff.levels,
+                    localUrl: url
+                )
+            ),
+            id: handoff.id
+        )
+    }
+
+    /// Ce que la file dit de la bulle venue de l'accueil. Sans effet s'il n'y en
+    /// a pas : l'écran s'ouvre le plus souvent par la porte ordinaire.
+    public func markHandoff(_ delivery: ChatDelivery) {
+        guard let handoffId else { return }
+        mark(handoffId, as: delivery)
+    }
+
+    /// Les étapes offertes sont épuisées : le micro ne s'ouvre plus, il mène au
+    /// paywall — voir ``SubscriptionSession/isBlocked``. Posé par l'écran, qui
+    /// seul connaît la session.
+    public var isRecordingLocked = false
+
+    /// Ce que fait le micro quand il est verrouillé : l'écran y ouvre le
+    /// paywall.
+    public var onRecordingLocked: (() -> Void)?
+
     public func startRecording() {
+        // Le verrou passe avant tout : ni micro, ni niveaux, ni permission
+        // demandée pour rien.
+        if isRecordingLocked {
+            onRecordingLocked?()
+            return
+        }
         guard !recorder.isRecording else { return }
 
         Task {

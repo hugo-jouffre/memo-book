@@ -3,6 +3,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import type { AppContext } from "./context.js";
 import { registerJobs } from "./jobs/index.js";
+import { isDatabaseUnavailable } from "./lib/databasePool.js";
 import { HttpError } from "./lib/httpError.js";
 import { createRequireAccount, registerAuthDecorator } from "./plugins/auth.js";
 import { registerAccountRoutes } from "./routes/accounts.js";
@@ -58,6 +59,17 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
         .send({ error: error.code ?? "bad_request", message: error.message });
     }
 
+    // La base n'est pas joignable — pool saturé, serveur absent. Ce n'est pas
+    // un bug : un 503 le dit à l'app, qui sait qu'un nouvel essai a du sens,
+    // et le message ne parle pas d'« erreur interne » pour une panne passagère.
+    if (isDatabaseUnavailable(error)) {
+      request.log.error({ err: error }, "Base de données indisponible");
+      return reply.code(503).send({
+        error: "database_unavailable",
+        message: "Le serveur est momentanément saturé, réessaie dans un instant.",
+      });
+    }
+
     request.log.error({ err: error }, "Erreur non gérée");
     return reply
       .code(500)
@@ -65,12 +77,16 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
   });
 
   registerHealthRoutes(app, context);
-  registerDeviceRoutes(app, context);
 
   // Stripe n'a pas de compte MemoBook : son webhook ne peut pas passer par
   // l'identification. C'est la signature de l'en-tête `stripe-signature` qui
   // l'authentifie, et elle vaut mieux qu'un jeton — elle porte sur le corps.
   await registerStripeWebhookRoutes(app, context);
+  registerDeviceRoutes(app, context);
+
+  // Stripe n'a pas de compte MemoBook : son webhook ne peut pas passer par
+  // l'identification. C'est la signature de l'en-tête `stripe-signature` qui
+  // l'authentifie, et elle vaut mieux qu'un jeton — elle porte sur le corps.
 
   // L'écran de bienvenue s'affiche avant toute connexion : sa route ne peut pas
   // en exiger une.

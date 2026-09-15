@@ -39,17 +39,23 @@ public struct BrandOptionGroup<Content: View>: View {
 public struct BrandOptionRow: View {
     private let title: String
     private let subtitle: String?
+    private let value: String?
     private let isSelected: Bool
     private let action: () -> Void
 
+    /// - Parameter value: ce que l'option coûte, ou son état — « Inclus »,
+    ///   « 9,90 € », « disponible ». Posé **avant** la pastille de sélection :
+    ///   on lit ce qu'on choisit, puis ce que ça change, puis ce qui est coché.
     public init(
         _ title: String,
         subtitle: String? = nil,
+        value: String? = nil,
         isSelected: Bool,
         action: @escaping () -> Void
     ) {
         self.title = title
         self.subtitle = subtitle
+        self.value = value
         self.isSelected = isSelected
         self.action = action
     }
@@ -82,6 +88,16 @@ public struct BrandOptionRow: View {
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
+
+                if let value {
+                    Text(value)
+                        .font(MemoBookFont.label)
+                        .foregroundStyle(MemoBookColor.inkMuted)
+                        .monospacedDigit()
+                        // Le prix ne s'enroule pas et ne se rogne pas : il
+                        // cède la largeur au libellé, qui sait s'enrouler.
+                        .fixedSize()
+                }
 
                 mark
             }

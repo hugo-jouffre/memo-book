@@ -1,7 +1,6 @@
 import Foundation
 import MemoBookCore
 import MemoBookNetworking
-import MemoBookPayments
 import MemoBookRecording
 import Observation
 
@@ -30,7 +29,6 @@ public final class AppDependencies {
     /// Une dépendance injectée et non un appel direct au SDK : les aperçus
     /// Xcode et les tests en fournissent une qui n'appelle personne, et l'écran
     /// de cagnotte se relit sans compte Stripe.
-    public let payments: any PaymentPresenter
 
     /// Le dernier accueil reçu, pour pouvoir le relire hors ligne.
     private let homeFeed = HomeFeedCache()
@@ -48,14 +46,12 @@ public final class AppDependencies {
         api: any MemoBookAPI,
         connectivity: Connectivity = .system,
         pendingRecordings: PendingRecordingStore = .inLibrary(),
-        payments: (any PaymentPresenter)? = nil
     ) {
         self.api = api
         // La vraie feuille Stripe par défaut ; un aperçu passe la sienne.
         // `applePayMerchantId` reste nul tant que le certificat Apple Pay n'est
         // pas posé : la feuille montre alors les cartes seules, au lieu d'un
         // bouton Apple Pay qui échouerait au moment de payer.
-        self.payments = payments ?? StripePaymentSheetPresenter()
         outbox = RecordingOutbox(store: pendingRecordings, connectivity: connectivity) { audio, tripId in
             _ = try await api.uploadAudio(
                 memoId: tripId,
@@ -215,7 +211,8 @@ public final class AppDependencies {
     public func tripCreationModel() -> TripCreationModel {
         TripCreationModel(
             create: { [api] draft in try await api.createTrip(draft) },
-            update: { [api] id, draft in try await api.updateTrip(id: id, draft: draft) }
+            update: { [api] id, draft in try await api.updateTrip(id: id, draft: draft) },
+            themes: { [api] in try await api.tripThemes() }
         )
     }
 
@@ -236,7 +233,8 @@ public final class AppDependencies {
             },
             resendInvitation: { [api] id, companionId in
                 try await api.resendInvitation(tripId: id, companionId: companionId)
-            }
+            },
+            themes: { [api] in try await api.tripThemes() }
         )
     }
 
@@ -287,76 +285,62 @@ public final class AppDependencies {
 
     /// Ma cagnotte, servie par `GET /v1/wallet`.
     ///
-    /// **`topUp` ne rend pas la cagnotte que le paiement vient de créditer**,
-    /// et c'est la subtilité de tout l'écran : le solde ne bouge pas quand la
-    /// feuille se ferme, il bouge quand Stripe prévient le serveur. Entre les
-    /// deux il y a quelques centaines de millisecondes, parfois deux secondes.
-    /// Relire tout de suite afficherait l'ancien solde et donnerait à croire
-    /// que le paiement n'a rien fait — d'où l'attente ci-dessous.
+    /// La route existait déjà ; c'est l'app qui ne l'appelait pas, et chaque
+    /// écran affichait donc son propre jeu d'essai — 65,97 € ici, 67,88 € dans
+    /// les réglages du voyage, autre chose ailleurs. Une seule source
+    /// maintenant : le registre du serveur.
+    ///
+    /// `topUp` reste `nil` tant que Stripe n'est pas branché : l'écran le lit
+    /// pour dire pourquoi « Ajouter » n'aboutit pas, au lieu d'ouvrir un écran
+    /// qui n'existe pas.
+    ///
+    /// `sandbox` n'existe qu'en debug, et écrit une **vraie** écriture : c'est
+    /// ce qui permet de voir les déductions du tunnel de commande, que le
+    /// serveur calcule et qu'une addition locale ne pouvait pas atteindre.
     public func walletModel(tripId: String?) -> WalletModel {
         WalletModel(
             tripId: tripId,
             source: { [api] trip in try await api.wallet(tripId: trip) },
-            topUp: { [api, payments] trip, euros in
-                let before = try await api.wallet(tripId: trip)
-
-                // Les euros de l'écran deviennent les centimes du serveur.
-                // `NSDecimalNumber` et pas `Double` : 20,10 € n'a pas
-                // d'écriture binaire exacte, et un centime perdu sur un
-                // paiement est un centime que personne ne retrouve.
-                let cents = NSDecimalNumber(decimal: euros * 100).intValue
-                let ticket = try await api.startWalletTopUp(amountCents: cents)
-
-                switch await payments.present(ticket) {
-                case .cancelled:
-                    // Fermer la feuille n'est pas une erreur : on rend la
-                    // cagnotte telle qu'elle était, sans message.
-                    return before
-                case .failed(let message):
-                    throw WalletTopUpError.refused(message)
-                case .succeeded:
-                    return try await Self.walletOnceCredited(
-                        api: api,
-                        tripId: trip,
-                        previousBalance: before.balance
-                    )
-                }
-            }
+            sandbox: {
+                #if DEBUG
+                    { [api] amount, kind, label in
+                        try await api.addWalletSandboxEntry(amount: amount, kind: kind, label: label)
+                    }
+                #else
+                    nil
+                #endif
+            }()
         )
     }
 
-    /// Attend que le webhook ait crédité, puis rend la cagnotte à jour.
+    /// Le tunnel de commande, **entièrement servi par le serveur** — c'est ce
+    /// qui le distingue des quatre écrans ci-dessus.
     ///
-    /// **Une attente bornée, et un repli qui ne ment pas** : au bout du délai on
-    /// rend quand même ce que le serveur dit. Un solde en retard d'une seconde
-    /// se corrige au prochain affichage ; une erreur affichée sur un paiement
-    /// qui a réussi, elle, inquiète pour rien.
-    private static func walletOnceCredited(
-        api: any MemoBookAPI,
-        tripId: String?,
-        previousBalance: Decimal
-    ) async throws -> Wallet {
-        var latest = try await api.wallet(tripId: tripId)
-
-        for _ in 0..<10 where latest.balance == previousBalance {
-            try? await Task.sleep(for: .milliseconds(500))
-            latest = try await api.wallet(tripId: tripId)
-        }
-
-        return latest
-    }
-}
-
-/// Ce qui peut rater pendant une recharge, du point de vue de l'écran.
-///
-/// Distinct d'`APIError` : un paiement refusé n'est pas une panne de réseau, et
-/// le message vient de Stripe — il est déjà écrit pour être lu.
-enum WalletTopUpError: LocalizedError {
-    case refused(String)
-
-    var errorDescription: String? {
-        switch self {
-        case .refused(let message): message
-        }
+    /// Trois routes, et pas une de plus : `GET /v1/memos/:id/order-context`
+    /// ouvre les sept étapes d'un seul appel,
+    /// `POST /v1/memos/:id/orders/quote` compte le récapitulatif, et
+    /// `POST /v1/memos/:id/orders` enregistre.
+    ///
+    /// ⚠️ **Rien n'est encaissé.** La commande naît en `draft` : le débit et le
+    /// passage en `submitted` viendront du webhook du prestataire. L'écran de
+    /// paiement le dit dans son propre commentaire, et rien n'y prétend le
+    /// contraire.
+    ///
+    /// - Parameter email: l'adresse à laquelle la confirmation partira, pour
+    ///   la dernière phrase de l'écran de confirmation. `nil` quand le compte
+    ///   n'en a pas — la phrase s'abrège alors au lieu de promettre un envoi
+    ///   sans destinataire.
+    public func orderModel(memoId: String, email: String? = nil) -> OrderModel {
+        OrderModel(
+            memoId: memoId,
+            email: email,
+            context: { [api] id in try await api.orderContext(memoId: id) },
+            quote: { [api] id, copies, speed in
+                try await api.orderQuote(memoId: id, copies: copies, shippingSpeed: speed)
+            },
+            submit: { [api] id, request in
+                try await api.createPrintOrder(memoId: id, order: request)
+            }
+        )
     }
 }

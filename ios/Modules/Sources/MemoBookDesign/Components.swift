@@ -23,7 +23,7 @@ public struct StatusBadge: View {
         switch status {
         case .ready: MemoBookColor.valid
         case .failed: MemoBookColor.error
-        case .pending, .processing, .unknown: MemoBookColor.inkSecondary
+        case .pending, .processing, .unknown: MemoBookColor.inkMuted
         }
     }
 
@@ -93,7 +93,7 @@ public struct EmptyStateView: View {
             Text(title).font(MemoBookFont.sectionTitle)
             Text(message)
                 .font(MemoBookFont.caption)
-                .foregroundStyle(MemoBookColor.inkSecondary)
+                .foregroundStyle(MemoBookColor.inkMuted)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)

@@ -46,36 +46,33 @@ export class PgBossQueue implements JobQueue {
   private readonly handlers = new Map<JobName, JobHandler<never>>();
   private started = false;
 
-  constructor(connectionString: string) {
+  constructor(connectionString: string, options: { maxConnections?: number } = {}) {
     this.boss = new PgBoss({
       connectionString,
-      retryLimit: 3,
-      retryDelay: 30,
-      retryBackoff: true,
       /**
        * ⚠️ **pg-boss ouvre son propre pool, en plus de celui de Prisma.**
        *
        * Le `connection_limit` posé sur l'URL ne le concerne pas : il vaut pour
-       * le client Prisma, pas pour cette bibliothèque, qui prend 10 connexions
-       * par défaut. Or le pooler Supabase en **mode session** n'en accorde que
-       * **15 au total**, pour tout ce qui parle à cette base.
+       * le client Prisma, pas pour cette bibliothèque, qui prend **10**
+       * connexions par défaut. Sur le pooler Supabase en mode session, c'est
+       * les deux tiers du budget pour une file qui traite quelques jobs par
+       * jour — `splitPoolBudget` en donne donc une part, et c'est elle qui
+       * arrive ici.
        *
-       * Et ce « tout » compte trois process, pas un : l'API déployée, son
-       * worker, et le serveur de développement. À quatre connexions chacun,
-       * pg-boss seul en prenait douze — la production remplissait la limite à
-       * elle seule, et le serveur local ne trouvait plus une place. Relevé le
-       * 15/09/2026 : 15 sessions sur 15, dont 8 pg-boss, aucun process local
-       * lancé.
+       * Ce budget se compte pour **trois** process, pas un : l'API déployée,
+       * son worker, et le serveur de développement. Relevé le 15/09/2026, avant
+       * que ce plafond n'existe : 15 sessions sur 15 prises, dont 8 par
+       * pg-boss, aucun process local lancé — la production remplissait la
+       * limite à elle seule.
        *
-       * **Deux suffisent** : les jobs sont longs (transcription, rédaction,
-       * PDF) et rares, et ce que pg-boss fait avec ces connexions — interroger
-       * sa file toutes les deux secondes — tient en quelques millisecondes.
-       *
-       * Pour de bon, il faudrait cesser de partager une base entre la
-       * production et le développement, ou relever le *Pool Size* du pooler
-       * dans la console Supabase. Voir `docs/debogage.md`.
+       * Deux suffisent : les jobs sont longs (transcription, rédaction, PDF) et
+       * rares, et interroger la file toutes les deux secondes tient en quelques
+       * millisecondes. Voir `docs/debogage.md` § 4.
        */
-      max: 2,
+      max: options.maxConnections ?? 2,
+      retryLimit: 3,
+      retryDelay: 30,
+      retryBackoff: true,
     });
 
     // ⚠️ **Sans ce gestionnaire, une panne de la file tue le serveur.**

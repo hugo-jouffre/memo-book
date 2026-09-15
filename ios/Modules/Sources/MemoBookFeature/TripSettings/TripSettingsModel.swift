@@ -41,18 +41,39 @@ public final class TripSettingsModel {
     /// il n'y a rien à confirmer.
     public private(set) var confirmation: String?
 
+    /// Les thèmes de voyage, dans l'ordre du serveur — « Autre » en dernier.
+    ///
+    /// **La même source qu'à la création du voyage**, et c'est la note du nœud
+    /// qui l'exige : « les thèmes doivent venir de la même base de données que
+    /// lors de la création ». Un second jeu ici ferait dériver `memos.theme`,
+    /// que l'agent de rédaction lit tel quel.
+    public private(set) var themes: [TripTheme] = []
+
+    private let readThemes: @Sendable () async throws -> [TripTheme]
+
     public init(
         tripId: String,
         source: @escaping (String) async throws -> TripSettings = { _ in .fixture },
         persist: ((String, TripSettingsEdit) async throws -> TripSettings)? = nil,
         removeCompanion: ((String, String) async throws -> TripSettings)? = nil,
-        resendInvitation: ((String, String) async throws -> Void)? = nil
+        resendInvitation: ((String, String) async throws -> Void)? = nil,
+        themes: @escaping @Sendable () async throws -> [TripTheme] = { TripTheme.fixtures }
     ) {
         self.tripId = tripId
         self.source = source
         self.persist = persist
         self.removeCompanion = removeCompanion
         self.resendInvitation = resendInvitation
+        self.readThemes = themes
+    }
+
+    /// Les thèmes, chargés à l'ouverture de leur feuille et pas avant : c'est
+    /// un appel de plus, et la plupart des visites de cet écran ne changent pas
+    /// de thème. Un échec laisse la rangée vide et le champ libre ouvert — on
+    /// peut toujours écrire son thème à la main.
+    public func loadThemes() async {
+        guard themes.isEmpty else { return }
+        themes = (try? await readThemes()) ?? []
     }
 
     /// `true` tant qu'on n'a pas de valeurs. L'écran se dessine quand même :

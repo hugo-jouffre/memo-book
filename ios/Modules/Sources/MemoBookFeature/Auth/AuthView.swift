@@ -18,13 +18,29 @@ import SwiftUI
 public struct AuthView: View {
     private let onAuthenticated: (Account) -> Void
 
-    public init(onAuthenticated: @escaping (Account) -> Void) {
+    /// Le secret d'un lien « Réinitialiser mon mot de passe » ouvert pendant
+    /// qu'on est dehors. Posé par ``RootView``, qui reçoit les liens ; consommé
+    /// ici, où la feuille peut s'ouvrir. Une liaison et non une valeur : le
+    /// lien peut arriver avant que cet écran existe (lancement à froid) comme
+    /// pendant qu'il est là, et il ne doit servir qu'une fois.
+    @Binding private var resetToken: String?
+
+    public init(resetToken: Binding<String?> = .constant(nil), onAuthenticated: @escaping (Account) -> Void) {
+        self._resetToken = resetToken
         self.onAuthenticated = onAuthenticated
     }
 
     @Environment(AppDependencies.self) private var dependencies
     @Environment(\.dismiss) private var dismiss
     @State private var model: AuthModel?
+    /// La feuille « Mot de passe oublié », quand elle est ouverte. Un modèle
+    /// neuf à chaque ouverture : c'est lui qui la présente.
+    @State private var recovery: PasswordRecoveryModel?
+
+    /// La page du nouveau mot de passe, ouverte par le lien de l'e-mail. Elle
+    /// **remplace** l'écran d'entrée le temps de choisir, comme la page de
+    /// compléments après Apple ou Google — voir ``PasswordResetView``.
+    @State private var reset: PasswordRecoveryModel?
     @FocusState private var focus: AuthField?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -36,7 +52,32 @@ public struct AuthView: View {
         // Le modèle a besoin de l'API, qui arrive par l'environnement : il ne
         // peut plus naître dans un initialiseur de propriété.
         if let model {
-            content(model)
+            // Entré par Apple ou Google, on vérifie d'abord ce que le
+            // fournisseur a donné — voir ``SocialCompletionView``.
+            if model.completing != nil {
+                SocialCompletionView(model: model, focus: $focus) { onAuthenticated($0) }
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else if let reset {
+                PasswordResetView(
+                    model: reset,
+                    onAuthenticated: { account in
+                        self.reset = nil
+                        onAuthenticated(account)
+                    },
+                    onRequestAgain: {
+                        // La page se retire et la feuille de l'adresse monte
+                        // à sa place, dans le même mouvement.
+                        withAnimation(reduceMotion ? .none : .snappy(duration: 0.35)) { self.reset = nil }
+                        recovery = PasswordRecoveryModel(api: dependencies.api, email: model.email)
+                    },
+                    onCancel: {
+                        withAnimation(reduceMotion ? .none : .snappy(duration: 0.35)) { self.reset = nil }
+                    }
+                )
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else {
+                content(model)
+            }
         } else {
             Color.clear.onAppear { model = AuthModel(api: dependencies.api) }
         }
@@ -103,6 +144,42 @@ public struct AuthView: View {
         // Le petit « clic » d'un sélecteur iOS, que le geste vienne du
         // balayage ou du sélecteur lui-même.
         .sensoryFeedback(.selection, trigger: model.mode)
+        // Le retour de la feuille Google passe par une adresse au schéma de
+        // l'app, déclaré dans `project.yml`.
+        .onOpenURL { GoogleSignInService.handle($0) }
+        .brandSheet(item: $recovery) { recovery in
+            PasswordRecoverySheet(
+                model: recovery,
+                onClose: { email in
+                    // L'adresse corrigée dans la feuille revient dans le
+                    // formulaire : c'est celle avec laquelle on va se reconnecter.
+                    if !email.isEmpty { model.email = email }
+                },
+                onSignUp: { email in
+                    // La feuille descend et le sélecteur glisse vers
+                    // « Inscription » dans le même mouvement, l'adresse déjà
+                    // en place : il ne reste que le prénom et le mot de passe.
+                    self.recovery = nil
+                    model.email = email
+                    model.mode = .signUp
+                }
+            )
+        }
+        .onAppear { openResetIfLinked() }
+        .onChange(of: resetToken) { openResetIfLinked() }
+    }
+
+    /// Un lien de l'e-mail est arrivé : la page du nouveau mot de passe prend
+    /// la place de l'écran, et le secret est consommé pour qu'un second rendu
+    /// ne la rouvre pas. Une feuille encore ouverte se referme d'abord.
+    private func openResetIfLinked() {
+        guard let token = resetToken else { return }
+        resetToken = nil
+        focus = nil
+        recovery = nil
+        withAnimation(reduceMotion ? .none : .snappy(duration: 0.35)) {
+            reset = PasswordRecoveryModel(api: dependencies.api, resetToken: token)
+        }
     }
 
     // MARK: - Morceaux
@@ -142,7 +219,7 @@ public struct AuthView: View {
             Text(model.mode.subtitle)
                 .font(MemoBookFont.body)
                 .tracking(MemoBookFont.tracking(16))
-                .foregroundStyle(MemoBookColor.inkSecondary)
+                .foregroundStyle(MemoBookColor.inkMuted)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         // Le titre change de texte, pas de rôle : sans identité stable, SwiftUI
@@ -208,9 +285,14 @@ public struct AuthView: View {
         }
     }
 
+
+    /// Ouvre « Mot de passe oublié » sur l'adresse déjà tapée, s'il y en a une.
     private func recoverPassword() {
-        // TODO(auth) — écran de récupération, pas encore maquetté.
+        guard let model else { return }
+        focus = nil
+        recovery = PasswordRecoveryModel(api: dependencies.api, email: model.email)
     }
+
 }
 
 #Preview("Entrée par e-mail") {

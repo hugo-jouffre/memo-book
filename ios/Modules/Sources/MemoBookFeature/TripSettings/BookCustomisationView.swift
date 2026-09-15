@@ -99,7 +99,7 @@ public struct BookCustomisationView: View {
                     detail: BookCopy.FunFacts.detail,
                     isOn: binding(\.funFactsEnabled, model.setFunFacts),
                     isEnabled: model.customisation != nil,
-                    topInset: inset
+                    topOverflow: inset
                 )
             case .rules:
                 BookToggleSheet(
@@ -108,12 +108,12 @@ public struct BookCustomisationView: View {
                     detail: BookCopy.Rules.detail,
                     isOn: binding(\.rulesEnabled, model.setRules),
                     isEnabled: model.customisation != nil,
-                    topInset: inset
+                    topOverflow: inset
                 )
             case .fonts:
-                BookFontsSheet(model: model, topInset: inset)
+                BookFontsSheet(model: model, topOverflow: inset)
             case .decorations:
-                BookDecorationsSheet(model: model, topInset: inset)
+                BookDecorationsSheet(model: model, topOverflow: inset)
             }
         }
         // Les deux pages ne se posent que s'il y a un carnet à montrer. Sans

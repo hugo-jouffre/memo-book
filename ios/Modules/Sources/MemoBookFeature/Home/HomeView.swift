@@ -40,6 +40,10 @@ public struct HomeView: View {
     /// carnet : une feuille propose, elle ne navigue pas.
     @State private var isRecording = false
 
+    /// Le paywall est ouvert — par le CTA verrouillé, quand les étapes offertes
+    /// sont épuisées. Plein écran, comme depuis le profil.
+    @State private var showsPaywall = false
+
     /// La feuille « Nouveau carnet » est ouverte.
     ///
     /// C'est la **seule** chose que l'accueil présente lui-même, et ce n'est pas
@@ -83,16 +87,47 @@ public struct HomeView: View {
             NewNotebookSheet(resumableTrip: model.resumableTrip, onIntent: onIntent)
         }
         .brandSheet(isPresented: $isRecording) {
-            // **On ne reste pas là.** Le vocal est confié à la file — qui vit
-            // au-dessus des écrans, et continue donc pendant la navigation — et
-            // l'accueil demande aussitôt la conversation du voyage. C'est là
-            // qu'on verra le souvenir se poser : on raconte, on arrive, et la
-            // bulle part sous nos yeux. Sans ça, l'enregistrement s'achevait
-            // sur l'écran qu'on venait de quitter du regard.
+            // Deux choses, et les deux : l'envoi est l'affaire du modèle de
+            // l'écran, comme son chargement — la file décide d'envoyer ou de
+            // garder. Et **on arrive dans la conversation, le vocal déjà
+            // posé** (Hugo, 14/09/2026) : c'est ça qui se route.
             RecordingSheet { audio, levels in
-                guard let tripId = model.tellStory(audio, levels: levels) else { return }
-                onIntent(.tellStory(tripId: tripId))
+                // Un seul identifiant pour les deux : la bulle le porte, et la
+                // file s'en sert pour dire où en est **cet** envoi-là. Sans
+                // lui, la conversation devrait deviner — et elle devinerait
+                // « envoyé » dès que MEMO répond, même sur un vocal qui attend
+                // encore le réseau.
+                let handoff = RecordingHandoff(audio: audio, levels: levels)
+                Task { await model.upload(audio, handoffId: handoff.id) }
+                if let tripId = ongoingTripId {
+                    onIntent(.openConversation(tripId: tripId, handoff: handoff))
+                }
             }
+        }
+        // **Le paywall, à la place du micro**, quand les étapes offertes sont
+        // épuisées : on s'abonne avant de continuer — Hugo, 14/09/2026. Le
+        // même écran que celui du profil, ouvert sur « Tu as enregistré tes
+        // 3 premières étapes ».
+        .fullScreenCover(isPresented: $showsPaywall) {
+            PaywallView(
+                subscription: .offer,
+                previewMemoId: ongoingTripId,
+                onSubscribe: {
+                    subscriptionSession?.record(isSubscribed: true)
+                    showsPaywall = false
+                },
+                onHelp: {
+                    showsPaywall = false
+                    onIntent(.openHelp)
+                }
+            )
+        }
+        // Ce que le serveur dit du palier, la session le retient : c'est ce qui
+        // permet à un voyage ou à la conversation — qui n'ont pas de quota dans
+        // leur réponse — de verrouiller leur micro aussi.
+        .onChange(of: model.feed, initial: true) { _, feed in
+            guard let feed else { return }
+            subscriptionSession?.learn(feed.traveller.freemiumStatus(override: nil))
         }
         // Le crème de la marque ne se retourne pas en sombre — voir
         // `MemoBookColor`.
@@ -110,10 +145,6 @@ public struct HomeView: View {
         }
         .onAppear {
             if isReadyToRise { rise() }
-            // De retour d'une conversation où l'on vient de raconter : les
-            // compteurs et la jauge du carnet ont vieilli pendant ce temps-là.
-            // Sans effet si rien n'est arrivé entre-temps.
-            Task { await model.refreshAfterStories() }
         }
         // Le réseau qui tombe ou qui revient ne se voit pas quand on ne regarde
         // pas l'écran. VoiceOver l'annonce donc, une fois, à chaque changement :
@@ -264,7 +295,7 @@ public struct HomeView: View {
                         .resizable()
                         .renderingMode(.template)
                         .scaledToFit()
-                        .frame(width: MemoBookSpacing.m, height: MemoBookSpacing.m)
+                        .frame(width: MemoBookSpacing.contentIcon, height: MemoBookSpacing.contentIcon)
                         .foregroundStyle(MemoBookColor.ink)
                 }
             }
@@ -481,13 +512,18 @@ public struct HomeView: View {
     /// l'accueil montre en haut.
     private var ongoingTripId: String? { model.ongoingTrips.first?.id }
 
-    /// Le CTA change de couleur, pas de place ni de taille.
+    /// Le CTA change de couleur et de destination, pas de place ni de taille.
     ///
     /// Il passe au lime et prend le cadenas **quand, et seulement quand, les
     /// étapes offertes sont épuisées** : la couleur dit « c'est fini, il faut
-    /// s'abonner », la même que le bouton d'abonnement du profil. Tant qu'il
+    /// s'abonner », la même que le bouton d'abonnement du profil — et il ouvre
+    /// alors **le paywall, jamais le micro** (Hugo, 14/09/2026). Tant qu'il
     /// reste des étapes, il n'y a rien de bloqué et le parcours est celui de
     /// tout le monde — vert plein, et le micro.
+    ///
+    /// La feuille d'enregistrement ne s'ouvre donc **que** par ce chemin, et ce
+    /// chemin vérifie le verrou : il n'y a pas de seconde porte. Le serveur
+    /// referme la sienne de son côté (`quota_exhausted`).
     private var isBlocked: Bool { status?.isBlocked == true }
 
     private var recordCallToAction: some View {
@@ -500,9 +536,12 @@ public struct HomeView: View {
             style: isBlocked ? .accent : .primary,
             fillsWidth: true
         ) {
-            // Un voyage ouvert : on raconte. Aucun : il faut d'abord un carnet,
-            // et c'est la feuille qui demande lequel.
-            if hasOngoingTrip {
+            // Verrouillé : le paywall, et rien d'autre. Sinon, un voyage
+            // ouvert : on raconte. Aucun : il faut d'abord un carnet, et c'est
+            // la feuille qui demande lequel.
+            if isBlocked {
+                showsPaywall = true
+            } else if hasOngoingTrip {
                 isRecording = true
             } else {
                 isCreatingNotebook = true

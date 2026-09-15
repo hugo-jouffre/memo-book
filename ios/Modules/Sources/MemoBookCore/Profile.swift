@@ -182,6 +182,17 @@ public struct Subscription: Codable, Sendable, Hashable {
         cancelledAt = try container.decodeIfPresent(Date.self, forKey: .cancelledAt)
         hasEndedBefore = try container.decodeIfPresent(Bool.self, forKey: .hasEndedBefore) ?? false
     }
+
+    /// **L'offre**, telle que le paywall la présente à quelqu'un qui n'a pas
+    /// encore d'abonnement : 1,99 € par semaine, le prix de la maquette et du
+    /// seed.
+    ///
+    /// ⚠️ Le serveur ne sert pas encore de catalogue : `GET /v1/profile` rend un
+    /// prix à zéro à qui n'est pas abonné, et l'accueil, un voyage ou la
+    /// conversation — qui ouvrent le paywall depuis le 14/09/2026 — n'ont
+    /// aucun abonnement à lire. C'est ce prix-ci qu'ils montrent, en attendant
+    /// StoreKit, qui aura le dernier mot.
+    public static let offer = Subscription(weeklyPrice: 1.99)
 }
 
 /// Pourquoi on s'en va. Les quatre raisons de la maquette, dans son ordre.

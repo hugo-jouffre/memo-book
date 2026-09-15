@@ -11,6 +11,7 @@ import {
   serializeTraveller,
   serializeTrip,
   serializeTripStep,
+  serializeTripTheme,
 } from "./appSerializers.js";
 
 /**
@@ -254,6 +255,24 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
    * sans aller-retour réseau, et la liste ne peut pas se retrouver en avance
    * sur ses filtres.
    */
+  /**
+   * Les thèmes de la première étape de « Créer un voyage ».
+   *
+   * Rangés par la base, « Autre » **toujours en dernier** — c'est le tri qui le
+   * garantit, pas la discipline de celui qui remplit la table : on préfère un
+   * thème précis, le champ libre est la porte de sortie. Une session est
+   * exigée comme pour tout le parcours de création, bien que la liste n'ait
+   * rien de personnel : elle ne s'affiche qu'à quelqu'un qui est entré.
+   */
+  app.get("/v1/trip-themes", async () => {
+    const themes = await context.prisma.tripTheme.findMany({
+      where: { isActive: true },
+      orderBy: [{ isOther: "asc" }, { position: "asc" }],
+    });
+
+    return { themes: themes.map(serializeTripTheme) };
+  });
+
   app.get("/v1/gallery", async (request) => {
     const accountId = accountIdOf(request);
 

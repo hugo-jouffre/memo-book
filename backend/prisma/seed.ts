@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { generateDeviceToken, hashDeviceToken } from "../src/lib/auth.js";
 import { hashPassword } from "../src/lib/password.js";
+import { seedTripThemes } from "./tripThemes.js";
 
 /**
  * Jeu de données de développement.
@@ -41,6 +42,15 @@ type TravellerSeed = {
   firstName: string;
   lastName: string;
   plan: Plan;
+  /**
+   * Ce qui distingue les codes d'accès de ce voyageur de ceux de l'autre.
+   *
+   * `memos.accessCode` est unique **dans toute la base**, pas par compte : deux
+   * voyageurs qui posent tous les deux « ROME26 » ne peuvent pas coexister, et
+   * c'est le second qui échouait — donc le compte abonné, donc la moitié des
+   * écrans qu'on croyait vérifier.
+   */
+  codeSuffix: string;
   /** Ce que le seed en dit à la fin, pour qu'on sache lequel ouvrir. */
   purpose: string;
 };
@@ -57,6 +67,7 @@ const TRAVELLERS: TravellerSeed[] = [
     firstName: "Hugo",
     lastName: "Jouffre",
     plan: "freeTrial",
+    codeSuffix: "",
     purpose: "compte de test de l'app — palier gratuit, celui de « Testing mode »",
   },
   {
@@ -64,6 +75,7 @@ const TRAVELLERS: TravellerSeed[] = [
     firstName: "Hugo",
     lastName: "Jouffre",
     plan: "subscriber",
+    codeSuffix: "B",
     purpose: "le même contenu, vu par un abonné",
   },
 ];
@@ -127,21 +139,6 @@ const ROME_STEPS = [
  *   de compagnons, et deux Clara en base rendraient le jeu d'essai moins
  *   ressemblant que ce qu'il imite.
  */
-/**
- * Le code d'accès d'un voyage du seed.
- *
- * ⚠️ **Il doit être unique sur toute la base**, pas seulement par compte :
- * `memos.accessCode` porte un index unique, parce que c'est lui — et non
- * l'identifiant — qui désigne le voyage qu'on rejoint. Les trois codes étaient
- * écrits en dur (« ROME26 »…), et le second voyageur butait donc sur ceux du
- * premier : `npm run db:seed` s'arrêtait sur un `P2002` après n'avoir posé
- * qu'un compte sur deux. Le palier suffit à les distinguer, et ils restent
- * lisibles — c'est tout ce qu'on leur demande.
- */
-function seedAccessCode(seed: TravellerSeed, trip: string): string {
-  return seed.plan === "subscriber" ? `${trip}S` : trip;
-}
-
 async function seedTraveller(
   seed: TravellerSeed,
   clara: { id: string },
@@ -199,21 +196,7 @@ async function seedTraveller(
     accountId: clara.id,
     status: "active" as const,
     handle: "@clara_prn",
-    // Déduit par l'agent au bout de quelques récits — personne ne le saisit.
-    // Il est posé ici pour que la feuille « Inviter un proche » montre la
-    // seconde ligne de sa maquette au lieu d'un nom seul.
-    role: "Ta sœur de voyage",
     acceptedAt: new Date(),
-  };
-
-  // Une invitation **partie et jamais acceptée**. C'est elle qui fait exister
-  // l'action « Renvoyer » de la feuille : sans quelqu'un dans cet état, la
-  // moitié du glissé ne se voit jamais en simulateur.
-  const pendingGuest = {
-    invitedEmail: "tom.john@example.test",
-    status: "invited" as const,
-    displayName: "Tom John",
-    invitedAt: new Date(Date.now() - 3 * 86_400_000),
   };
 
   // ---------------------------------------------------------------------
@@ -226,7 +209,7 @@ async function seedTraveller(
       title: "Rome 2026",
       // Des codes lisibles et stables, pour pouvoir essayer « Rejoins une
       // aventure » sans aller les lire en base.
-      accessCode: seedAccessCode(seed, "ROME26"),
+      accessCode: `ROME26${seed.codeSuffix}`,
       subtitle: "Dix jours à marcher et à manger",
       authors: "Hugo et Clara",
       theme: "City trip & découvertes",
@@ -240,7 +223,7 @@ async function seedTraveller(
       distanceKilometres: 87.4,
       narrationPace: "Tous les 2 jours",
       prompt: "Comment ça se passe à Trastevere ?",
-      members: { create: [guest, pendingGuest] },
+      members: { create: [guest] },
     },
   });
 
@@ -292,7 +275,7 @@ async function seedTraveller(
     data: {
       ownerAccountId: account.id,
       title: "Lisbonne entre filles",
-      accessCode: seedAccessCode(seed, "LISB26"),
+      accessCode: `LISB26${seed.codeSuffix}`,
       theme: "voyage",
       stage: "past",
       destinationName: "Portugal",
@@ -317,7 +300,7 @@ async function seedTraveller(
     data: {
       ownerAccountId: account.id,
       title: "Islande cet hiver",
-      accessCode: seedAccessCode(seed, "ISLA26"),
+      accessCode: `ISLA26${seed.codeSuffix}`,
       theme: "voyage",
       stage: "upcoming",
       destinationName: "Islande",
@@ -332,41 +315,21 @@ async function seedTraveller(
   // Le profil : cagnotte, abonnement, commande en cours
   // ---------------------------------------------------------------------
 
-  // La cagnotte se remplit par le registre, jamais en écrivant le solde à la
-  // main — même dans un seed. C'est la seule façon de vérifier que le cache et
-  // les écritures disent la même chose.
-  // Les mouvements de la maquette « Cagnotte », et pas trois lignes
-  // symboliques : l'écran montre deux natures d'écriture — un don porte un nom
-  // de personne et une pastille bleue, un versement d'abonnement porte
-  // l'engrenage et la pastille lime — et on ne voit qu'elles se distinguent
-  // qu'avec les deux à l'écran. Le dernier mouvement est un débit : il vérifie
-  // que le registre compte aussi ce qui sort.
-  const movements = [
-    { amountCents: 199, kind: "topup" as const, label: "Abonnement MB" },
-    { amountCents: 3000, kind: "gift" as const, label: "Julie et Tom" },
-    { amountCents: 199, kind: "topup" as const, label: "Abonnement MB" },
-    { amountCents: 2000, kind: "gift" as const, label: "Bruno Dupont" },
-    { amountCents: 199, kind: "topup" as const, label: "Abonnement MB" },
-    { amountCents: 1000, kind: "gift" as const, label: "Marie D." },
-    { amountCents: 199, kind: "topup" as const, label: "Abonnement MB" },
-    { amountCents: -1212, kind: "order_payment" as const, label: "Carnet Lisbonne" },
-  ];
-
-  // Le registre est refait à neuf : sans ça, un seed rejoué empilerait trois
-  // mouvements de plus et le solde tripleraient à chaque passage.
+  // **La cagnotte part vide, et c'est l'état par défaut du produit.**
+  //
+  // Elle se remplissait ici de sept mouvements, ce qui donnait un solde
+  // différent de celui des jeux d'essai de l'app — d'où trois chiffres pour une
+  // même cagnotte selon l'écran regardé. Le solde n'a qu'une source : le
+  // registre, et son cache `accounts.walletBalanceCents`. Un compte neuf n'a
+  // rien reçu, donc zéro.
+  //
+  // Pour voir l'écran garni — et surtout les **déductions du tunnel de
+  // commande**, qui sont calculées par le serveur —, le bac à sable de l'écran
+  // Cagnotte pose de vraies écritures via `POST /v1/wallet/debug-entry`.
   await prisma.walletEntry.deleteMany({ where: { accountId: account.id } });
-
-  let balance = 0;
-  for (const movement of movements) {
-    balance += movement.amountCents;
-    await prisma.walletEntry.create({
-      data: { accountId: account.id, ...movement, balanceAfterCents: balance },
-    });
-  }
-
   await prisma.account.update({
     where: { id: account.id },
-    data: { walletBalanceCents: balance },
+    data: { walletBalanceCents: 0 },
   });
 
   await prisma.subscription.deleteMany({ where: { accountId: account.id } });
@@ -385,24 +348,6 @@ async function seedTraveller(
         renewsAt: new Date(Date.now() + 7 * 86_400_000),
       },
     });
-  } else {
-    // Le compte gratuit porte un abonnement **terminé**, et c'est ce qui le
-    // rend utile à vérifier : il voit le paywall de **retour** — deux écrans au
-    // lieu de trois — parce qu'il a déjà été abonné et que son voyage d'alors
-    // s'est fini. C'est l'état ordinaire de quelqu'un entre deux voyages, pas
-    // celui d'un mécontent : l'abonnement s'éteint tout seul à la fin du
-    // voyage (voir `services/subscriptions.ts`).
-    await prisma.subscription.create({
-      data: {
-        accountId: account.id,
-        provider: "stripe",
-        status: "expired",
-        priceCents: 299,
-        interval: "week",
-        startedAt: new Date(Date.now() - 120 * 86_400_000),
-        cancelledAt: new Date(Date.now() - 60 * 86_400_000),
-      },
-    });
   }
 
   const render = await prisma.render.findFirstOrThrow({ where: { memoId: lisbonne.id } });
@@ -410,6 +355,11 @@ async function seedTraveller(
     data: {
       memoId: lisbonne.id,
       renderId: render.id,
+      // **Qui a commandé.** Sans elle, la commande n'appartient à personne et
+      // n'apparaît donc dans le suivi de personne : le profil filtre sur
+      // l'acheteur, parce que le colis d'un co-voyageur part à son adresse à
+      // lui. Voir `readProfile`.
+      orderedByAccountId: account.id,
       status: "in_production",
       copies: 2,
       pageCount: 58,
@@ -419,13 +369,33 @@ async function seedTraveller(
       shippingLine1: "7 rue Simon Fryd",
       shippingPostalCode: "69002",
       shippingCity: "Lyon",
-      shippingCountry: "France",
-      amountCents: 1212,
+      // Le code ISO, et non « France » : c'est ce que l'imprimeur lit, et ce
+      // que la route de commande valide.
+      shippingCountry: "FR",
+      shippingSpeed: "standard",
+      // La décomposition, figée comme le reste : 58 pages à deux exemplaires,
+      // en livraison standard. **Rien n'est déduit** — la cagnotte d'un compte
+      // neuf est vide, et une commande qui prétendrait le contraire ne
+      // correspondrait à aucune écriture du registre.
+      itemsCents: 2 * (58 * 132 + 1_490 + 900),
+      shippingCents: 0,
+      walletAppliedCents: 0,
+      amountCents: 2 * (58 * 132 + 1_490 + 900),
       submittedAt: new Date(),
+      copyOptions: {
+        create: [
+          { position: 1 },
+          // Le 2e exemplaire est celui qu'on offre : même carnet, sans les
+          // quiz ni le mot fléché. C'est l'état que l'étape 3 sait produire.
+          { position: 2, quizEnabled: false, crosswordEnabled: false },
+        ],
+      },
     },
   });
 
-  return { token, balance };
+  // Zéro : la cagnotte d'un compte neuf n'a rien reçu. Le résumé du seed
+  // l'affiche pour qu'on sache d'où on part.
+  return { token, balance: 0 };
 }
 
 /**
@@ -618,6 +588,11 @@ async function seedGallery(): Promise<number> {
 }
 
 async function main(): Promise<void> {
+  // Les thèmes de « Contexte de ton voyage » : une table de référence, posée
+  // par un module à part pour qu'on puisse la remettre d'équerre sans refaire
+  // les carnets des comptes de test (`npm run db:seed:themes`).
+  await seedTripThemes(prisma);
+
   // Une amie invitée sur les voyages : c'est elle qui fait apparaître les
   // pastilles de compagnons sur les couvertures. Un seul exemplaire, partagé
   // par les comptes.

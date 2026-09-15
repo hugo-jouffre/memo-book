@@ -52,6 +52,31 @@ public enum OnboardingStorage {
     /// effet en release — voir ``isPreviewingSignedIn``.
     public static let previewSignedInArgument = "-previewSignedIn"
 
+    /// Argument de lancement qui **ouvre le tunnel de commande** par-dessus
+    /// l'accueil, sur le carnet du jeu d'essai.
+    ///
+    /// Il existe pour la même raison que le précédent : les sept étapes de
+    /// « Commander mon Carnet » sont à cinq écrans de l'accueil — voyage,
+    /// aperçu, composition — et les revoir après chaque retouche coûtait plus
+    /// cher que la retouche. Avec `-previewSignedIn`, le tunnel s'ouvre sur son
+    /// jeu d'essai et se traverse sans back-end.
+    ///
+    /// ```bash
+    /// xcrun simctl launch <device> com.memobook.app -previewSignedIn -openOrder
+    /// ```
+    ///
+    /// Sans effet en release.
+    public static let openOrderArgument = "-openOrder"
+
+    /// `true` quand l'app a été lancée avec ``openOrderArgument``.
+    public static var isOpeningOrder: Bool {
+        #if DEBUG
+            ProcessInfo.processInfo.arguments.contains(openOrderArgument)
+        #else
+            false
+        #endif
+    }
+
     /// `true` quand l'app a été lancée avec ``previewSignedInArgument``.
     /// Toujours `false` en release.
     public static var isPreviewingSignedIn: Bool {
