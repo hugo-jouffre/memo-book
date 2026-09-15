@@ -305,16 +305,46 @@ describe("la cagnotte déduite d'une commande", () => {
     // De quoi couvrir **une** commande entière, pas deux.
     await creditWallet(expectedTotal(60, 1));
 
-    const [a, b] = await Promise.all([
+    const responses = await Promise.all([
       placeOrder(memo.id, renderId),
       placeOrder(memo.id, renderId),
     ]);
 
-    // L'une est payée par la cagnotte, l'autre trouve le solde à zéro et part
-    // à la carte : c'est le verrou de ligne qui les a rangées. Sans lui, les
-    // deux liraient le même solde et la cagnotte passerait en négatif.
-    const statuses = [a.json<OrderBody>().status, b.json<OrderBody>().status].sort();
-    expect(statuses).toEqual(["draft", "submitted"]);
+    // **Deux dénouements, tous deux corrects**, et lequel survient n'est pas
+    // décidable — c'est l'entrelacement du devis et du débit qui tranche :
+    //
+    //   · la perdante a fait son devis *avant* que la gagnante ne débite. Elle
+    //     croit la cagnotte pleine, son débit trouve le solde à zéro, et
+    //     `routes/orders.ts` supprime la commande plutôt que de garder une
+    //     ligne portant un `walletAppliedCents` que le registre dément → 400 ;
+    //   · la perdante a fait son devis *après*. Elle voit zéro, ne débite rien,
+    //     et part à la carte pour le total → 201 « draft ».
+    //
+    // Fixer l'un des deux rend le test vert une fois sur deux : c'est ce qui
+    // l'a fait échouer dans les deux sens sur la CI. On vérifie donc ce qui est
+    // vrai dans les deux cas.
+    const outcomes = responses
+      .map((response) => {
+        const body = response.json<OrderBody & { error?: string }>();
+        return response.statusCode === 201
+          ? `201 ${body.status}`
+          : `${response.statusCode} ${body.error}`;
+      })
+      .sort();
+
+    expect([
+      ["201 draft", "201 submitted"],
+      ["201 submitted", "400 wallet_insufficient"],
+    ]).toContainEqual(outcomes);
+
+    // Ce que le verrou garantit vraiment, et dans les deux cas : une seule
+    // commande est payée par la cagnotte, une seule écriture la débite, et le
+    // solde s'arrête à zéro. Sans lui, les deux liraient le même solde et la
+    // cagnotte passerait en négatif.
+    expect(outcomes.filter((outcome) => outcome === "201 submitted")).toHaveLength(1);
     expect(await balance()).toBe(0);
+    expect(
+      await harness.prisma.walletEntry.count({ where: { accountId, kind: "order_payment" } }),
+    ).toBe(1);
   });
 });

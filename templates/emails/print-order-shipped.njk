@@ -13,7 +13,7 @@
 
 {% block subject %}Ton carnet « {{ order.memoTitle }} » est en route{% endblock %}
 
-{% block preheader %}Parti de l'imprimerie {{ order.shippedOn }}. Livraison estimée entre le {{ order.estimatedFrom }} et le {{ order.estimatedTo }}.{% endblock %}
+{% block preheader %}Parti de l'imprimerie {{ order.shippedOn }}. Livraison estimée {{ order.estimatedRange }}.{% endblock %}
 
 {% block content %}
 
@@ -31,7 +31,7 @@
       </tr>
       <tr>
         <td align="center" style="padding:11px 13px 13px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12px; line-height:16px; color:#8A7F73; letter-spacing:0.3px;">
-          {{ order.memoTitle }} · {{ order.pageCount }} pages
+          {{ order.coverCaption }}
         </td>
       </tr>
     </table>
@@ -45,7 +45,7 @@
       Ton carnet est en route
     </h1>
     <p style="margin:0 0 8px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:16px; line-height:25px; color:#2D231A;">
-      {{ recipient.firstName }}, « {{ order.memoTitle }} » a quitté l'imprimerie {{ order.shippedOn }}. Le colis voyage maintenant vers {{ order.shipping.city }}.
+      {{ recipient.greeting }}« {{ order.memoTitle }} » a quitté l'imprimerie {{ order.shippedOn }}. Le colis voyage maintenant vers {{ order.shipping.city }}.
     </p>
   </td>
 </tr>
@@ -119,12 +119,12 @@
             </tr>
             <tr>
               <td class="mb-stack" style="padding:5px 0; color:#8A7F73;">Livraison estimée</td>
-              <td class="mb-stack mb-stack-value" align="right" style="padding:5px 0;">entre le {{ order.estimatedFrom }} et le {{ order.estimatedTo }}</td>
+              <td class="mb-stack mb-stack-value" align="right" style="padding:5px 0;">{{ order.estimatedRange }}</td>
             </tr>
             <tr>
               <td class="mb-stack" valign="top" style="padding:5px 0; color:#8A7F73;">Adresse</td>
               <td class="mb-stack mb-stack-value" align="right" valign="top" style="padding:5px 0;">
-                {{ order.shipping.name }}<br />{{ order.shipping.line1 }}<br />{{ order.shipping.postalCode }} {{ order.shipping.city }}
+                {{ order.shipping.name }}<br />{{ order.shipping.line1 }}<br />{{ order.shipping.cityLine }}
               </td>
             </tr>
           </table>

@@ -327,6 +327,31 @@ pas, et corriger un texte n'est pas une modification de TypeScript.
 
 Nunjucks est déjà une dépendance du back-end : rien à installer.
 
+### Et chez Resend, en gabarits hébergés
+
+Le dépôt n'est pas le seul endroit où ils vivent. `npm run emails:sync`
+(`backend/scripts/resend-templates.ts`) les pousse aussi dans le compte Resend
+en *templates* (`POST /templates`, puis `publish`), sous un alias stable :
+`print-order-shipped` et `password-reset`.
+
+C'est ce qui rend le niveau 2 réel plutôt que théorique. L'envoi devient
+`template: { id: "<alias>", variables: { … } }` : le déclencheur reste dans
+l'API, la copie et la mise en forme passent dans un outil où quelqu'un qui
+n'écrit pas de TypeScript peut les reprendre.
+
+**Le gabarit hébergé est dérivé du `.njk`, jamais saisi à la main** — rendu avec
+des marqueurs `{{{VARIABLE}}}` à la place des données, puis téléversé. Les deux
+ne peuvent donc pas diverger, et la synchronisation écrase ce qui aurait été
+modifié dans l'interface. Le jour où le CRM prend vraiment la main sur un
+gabarit, on le retire de la liste du script : c'est ce geste-là, et lui seul, qui
+transfère la propriété.
+
+Un gabarit Resend ne sait faire qu'une substitution — ni condition, ni boucle.
+C'est la contrainte qui décide de la forme des variables (une chaîne composée
+par le back-end dès qu'une valeur peut manquer) et qui impose **un gabarit par
+état** : « expédié » et « livré » sont deux gabarits, pas un avec un drapeau.
+Voir `templates/emails/README.md`.
+
 **Le rendu suit ce que fait déjà `templates/travel-journal/`** — mêmes tokens
 que `agents/design.md`, et des tests visuels sur le modèle de
 `backend/test/visual/` : chaque gabarit rendu avec ses données d'exemple,

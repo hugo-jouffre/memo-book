@@ -36,8 +36,21 @@ function escapeHtml(value: string): string {
 }
 
 /**
- * « Réinitialisation de votre mot de passe » — les mots de la maquette
- * (Hugo, 15/09/2026), au tutoiement près dans le corps, qu'elle tutoie déjà.
+ * L'objet, en un seul endroit — il apparaît aussi dans le `<title>`, que
+ * certaines boîtes affichent à la place.
+ *
+ * **Il doit rester identique à celui du gabarit Resend `password-reset`**
+ * (`backend/scripts/resend-templates.ts`). Les deux coexistent le temps que le
+ * gabarit hébergé soit publié et que `mailer.ts` bascule dessus — voir
+ * `docs/emails.md` § 9. Deux objets différents pour le même e-mail, c'est un
+ * support qui ne retrouve pas le message dont on lui parle.
+ */
+const PASSWORD_RESET_SUBJECT = "Réinitialise ton mot de passe MemoBook";
+
+/**
+ * « Réinitialise ton mot de passe MemoBook » — les mots de la maquette
+ * (Hugo, 15/09/2026), passés au tutoiement d'un bout à l'autre : le corps
+ * tutoyait déjà, seul le titre vouvoyait encore.
  */
 export function renderPasswordResetMail(
   message: PasswordResetMail,
@@ -51,7 +64,7 @@ export function renderPasswordResetMail(
   const text = [
     "MemoBook",
     "",
-    "Réinitialisation de votre mot de passe",
+    PASSWORD_RESET_SUBJECT,
     "",
     greeting,
     "",
@@ -73,7 +86,7 @@ export function renderPasswordResetMail(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Réinitialisation de votre mot de passe</title>
+<title>${escapeHtml(PASSWORD_RESET_SUBJECT)}</title>
 </head>
 <body style="margin:0;padding:0;background:${COLORS.background};">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:${COLORS.background};">
@@ -86,7 +99,7 @@ export function renderPasswordResetMail(
 </tr>
 <tr>
 <td style="padding:32px 24px 8px;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Helvetica,Arial,sans-serif;color:${COLORS.ink};">
-<h1 style="margin:0 0 24px;font-size:22px;line-height:28px;font-weight:700;">Réinitialisation de votre mot de passe</h1>
+<h1 style="margin:0 0 24px;font-size:22px;line-height:28px;font-weight:700;">Réinitialise ton mot de passe</h1>
 <p style="margin:0 0 16px;font-size:15px;line-height:22px;">${escapeHtml(greeting)}</p>
 <p style="margin:0 0 16px;font-size:15px;line-height:22px;">Tu as demandé à réinitialiser ton mot de passe.</p>
 <p style="margin:0 0 24px;font-size:15px;line-height:22px;">Si tu es à l’origine de cette demande, clique sur le bouton ci-dessous pour choisir un nouveau mot de passe :</p>
@@ -110,5 +123,5 @@ export function renderPasswordResetMail(
 </body>
 </html>`;
 
-  return { subject: "Réinitialisation de votre mot de passe", html, text };
+  return { subject: PASSWORD_RESET_SUBJECT, html, text };
 }
