@@ -111,6 +111,7 @@ public struct ProfileView: View {
         .fullScreenCover(isPresented: $showsPaywall) {
             PaywallView(
                 subscription: effectiveSubscription,
+                variant: paywallVariant,
                 previewMemoId: model.profile?.currentTrip?.id,
                 onSubscribe: {
                     model.activateSubscription()
@@ -166,6 +167,15 @@ public struct ProfileView: View {
     /// Le palier du compte, lu sur le modèle **et** sur la session.
     private var freemiumStatus: FreemiumStatus {
         model.profile?.freemiumStatus(override: subscriptionSession?.override) ?? .subscriber
+    }
+
+    /// Quelle version du paywall montrer.
+    ///
+    /// Un ancien abonné revoit **deux** écrans au lieu de trois : il connaît
+    /// déjà le produit, et l'abonnement s'arrête tout seul à la fin de chaque
+    /// voyage — repasser par là est donc le cas ordinaire, pas l'exception.
+    private var paywallVariant: PaywallVariant {
+        (model.profile?.subscription.hasEndedBefore ?? false) ? .returning : .firstTime
     }
 
     // MARK: - En-tête

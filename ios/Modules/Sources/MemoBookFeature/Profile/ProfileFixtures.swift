@@ -97,7 +97,12 @@ extension TravellerProfile {
                 logoAssetName: $0.logoAssetName
             )
         },
-        subscription: Subscription(weeklyPrice: 1.99)
+        // **Ancien abonné, entre deux voyages.** C'est l'état le plus courant
+        // après un premier carnet — l'abonnement s'éteint tout seul à la fin du
+        // voyage —, et c'est lui qui fait voir le paywall de **retour**, deux
+        // écrans au lieu de trois. Le seed pose le même état sur le compte de
+        // test gratuit.
+        subscription: Subscription(weeklyPrice: 1.99, hasEndedBefore: true)
     )
 }
 

@@ -74,10 +74,16 @@ struct RecordingSheet: View {
     }
 
     private func toggle() async {
+        // Le relevé **entier**, et non la frise : `levels` ne garde que les
+        // quarante dernières barres, celles qui défilent sous le micro. La
+        // bulle du fil, elle, dessine tout le vocal — cadrée sur la frise, un
+        // vocal de deux minutes aurait la silhouette de ses trois dernières
+        // secondes.
+        //
+        // Et lu **avant** de refermer : la feuille l'efface en disparaissant
+        // (`discard()`).
+        let levels = model.capturedLevels
         guard let audio = await model.toggle() else { return }
-        // Les niveaux sont lus **avant** de refermer : la feuille les efface en
-        // disparaissant (`discard()`), et la bulle du fil en a besoin.
-        let levels = model.levels
         dismiss()
         onFinish(audio, levels)
     }

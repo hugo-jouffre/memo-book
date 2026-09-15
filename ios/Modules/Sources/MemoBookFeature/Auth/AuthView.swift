@@ -2,7 +2,13 @@ import MemoBookCore
 import MemoBookDesign
 import SwiftUI
 
-/// Écran d'entrée : inscription et connexion sous un même sélecteur.
+/// L'entrée **par e-mail** : inscription et connexion sous un même sélecteur.
+///
+/// **Ce n'est plus la porte de l'app.** Apple et Google vivent désormais sur
+/// l'écran d'accueil (``WelcomeView``), qui pousse celui-ci quand on choisit
+/// « S'inscrire avec un e-mail ». D'où la flèche de retour en tête : c'est un
+/// écran poussé comme un autre, et on doit pouvoir revenir aux deux entrées
+/// rapides sans quitter l'app.
 ///
 /// Le passage d'un mode à l'autre est une seule animation : la pastille du
 /// sélecteur glisse (`matchedGeometryEffect`), et le formulaire se décale dans
@@ -25,6 +31,7 @@ public struct AuthView: View {
     }
 
     @Environment(AppDependencies.self) private var dependencies
+    @Environment(\.dismiss) private var dismiss
     @State private var model: AuthModel?
     /// La feuille « Mot de passe oublié », quand elle est ouverte. Un modèle
     /// neuf à chaque ouverture : c'est lui qui la présente.
@@ -81,6 +88,8 @@ public struct AuthView: View {
 
         return ScrollView {
             VStack(alignment: .leading, spacing: MemoBookSpacing.m) {
+                backButton
+
                 BrandSegmentedPicker(AuthMode.allCases, selection: $model.mode, title: \.segmentTitle)
 
                 header(model)
@@ -105,42 +114,6 @@ public struct AuthView: View {
                         .transition(.opacity)
                 }
 
-                // Estompée, pas désactivée : l'opacité ne touche pas au test
-                // de toucher, et celui qui change d'avis en cours de saisie
-                // trouve les deux boutons exactement là où il les a laissés.
-                SocialSignInSection(
-                    onCredential: { acceptCredential($0, model) },
-                    onFailure: model.report,
-                    onGoogle: { signInWithGoogle(model) }
-                )
-                    .opacity(model.hasStartedFilling ? 0.5 : 1)
-                    // Pendant un appel, un seul chemin doit rester actif.
-                    .disabled(model.isWorking)
-                    .animation(
-                        reduceMotion ? .none : .easeInOut(duration: 0.25),
-                        value: model.hasStartedFilling
-                    )
-
-                // ⚠️ PROVISOIRE — à retirer dès que le back-end tourne pour
-                // tout le monde. Entre dans l'app par le **compte de test**,
-                // celui que le seed pose, pour pouvoir travailler les écrans qui
-                // vivent derrière l'entrée sans retaper une adresse à chaque
-                // lancement. Absent de la version livrée : `#if DEBUG` ne
-                // compile pas en release.
-                #if DEBUG
-                    Button {
-                        enterAsTestAccount(model)
-                    } label: {
-                        // Volontairement effacé : c'est un outil de chantier, pas
-                        // une troisième façon d'entrer dans l'app.
-                        Text("Testing mode →")
-                            .font(MemoBookFont.caption)
-                            .foregroundStyle(MemoBookColor.inkMuted)
-                            .frame(maxWidth: .infinity, minHeight: MemoBookSpacing.minimumTapTarget)
-                            .contentShape(.rect)
-                    }
-                    .buttonStyle(.plain)
-                #endif
             }
             .padding(.horizontal, MemoBookSpacing.screenMargin)
             .padding(.vertical, MemoBookSpacing.m)
@@ -161,6 +134,10 @@ public struct AuthView: View {
         )
         .background(BrandBackdrop())
         .environment(\.colorScheme, .light)
+        // L'écran dessine sa propre sortie — la flèche et « Retour » sur une
+        // ligne, à la marge de la colonne —, et récupère au passage le glissé
+        // depuis le bord que la barre masquée emportait.
+        .brandHiddenNavigationBar()
         .animation(reduceMotion ? .none : .snappy(duration: 0.35, extraBounce: 0.1), value: model.mode)
         .animation(.snappy(duration: 0.2), value: model.errorMessage)
         .onChange(of: model.mode) { focus = nil }
@@ -206,6 +183,32 @@ public struct AuthView: View {
     }
 
     // MARK: - Morceaux
+
+    /// La sortie : on revient à l'accueil, et à ses deux entrées rapides.
+    ///
+    /// Elle porte son mot, contrairement aux autres écrans poussés de l'app :
+    /// ici on quitte un formulaire à moitié rempli, et une flèche seule ne dit
+    /// pas assez clairement qu'on ne perd que ça.
+    private var backButton: some View {
+        Button { dismiss() } label: {
+            HStack(spacing: MemoBookSpacing.xs / 2) {
+                Image(brand: "IconArrowDuo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(
+                        width: MemoBookSpacing.navigationIcon,
+                        height: MemoBookSpacing.navigationIcon
+                    )
+                Text(WelcomeCopy.back)
+                    .font(MemoBookFont.tagline)
+                    .foregroundStyle(MemoBookColor.ink)
+            }
+            .frame(minHeight: MemoBookSpacing.minimumTapTarget, alignment: .leading)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(WelcomeCopy.back)
+    }
 
     private func header(_ model: AuthModel) -> some View {
         VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
@@ -282,21 +285,6 @@ public struct AuthView: View {
         }
     }
 
-    #if DEBUG
-
-        /// Le bouton de chantier. Il passe par le même chemin que « Continuer »
-        /// : un échec s'affiche donc au même endroit, sous le formulaire, au
-        /// lieu de ne rien faire du tout — c'est ce qui dit que le back-end
-        /// n'est pas lancé, plutôt que de laisser croire à un bouton mort.
-        private func enterAsTestAccount(_ model: AuthModel) {
-            focus = nil
-            Task {
-                guard let account = await model.signInAsTestAccount() else { return }
-                onAuthenticated(account)
-            }
-        }
-
-    #endif
 
     /// Ouvre « Mot de passe oublié » sur l'adresse déjà tapée, s'il y en a une.
     private func recoverPassword() {
@@ -305,37 +293,11 @@ public struct AuthView: View {
         recovery = PasswordRecoveryModel(api: dependencies.api, email: model.email)
     }
 
-    private func acceptCredential(_ credential: SocialCredential, _ model: AuthModel) {
-        focus = nil
-        Task {
-            guard let account = await model.accept(credential) else { return }
-            // Un compte neuf, ou auquel il manque un nom, passe par la page
-            // de compléments avant d'entrer (Hugo, 14/09/2026).
-            if model.needsCompletion(account) {
-                withAnimation(reduceMotion ? .none : .snappy(duration: 0.35)) {
-                    model.beginCompletion(account)
-                }
-            } else {
-                onAuthenticated(account)
-            }
-        }
-    }
-
-    private func signInWithGoogle(_ model: AuthModel) {
-        focus = nil
-        Task {
-            do {
-                // `nil` : l'utilisateur a refermé la feuille. Rien à dire.
-                guard let credential = try await GoogleSignInService.signIn() else { return }
-                acceptCredential(credential, model)
-            } catch {
-                model.report(error)
-            }
-        }
-    }
 }
 
-#Preview("Entrée") {
-    AuthView { _ in }
-        .environment(AppDependencies(api: PreviewAPI()))
+#Preview("Entrée par e-mail") {
+    NavigationStack {
+        AuthView { _ in }
+    }
+    .environment(AppDependencies(api: PreviewAPI()))
 }

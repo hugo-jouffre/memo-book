@@ -55,12 +55,25 @@ curl -s -o /dev/null -w "%{http_code}\n" localhost:3000/v1/showcases/welcome
 | `statusCode: 400` | corps de requête refusé par Zod ; la ligne dit quel champ |
 | `statusCode: 500` | vraie erreur serveur ; la pile est juste au-dessus |
 | `PrismaClientKnownRequestError` | la base a refusé. Migration manquante, ou `DATABASE_URL` qui pointe ailleurs |
+| `EMAXCONNSESSION` / « max clients reached » | le pooler est plein. La ligne dit quoi faire — voir § 4 |
+| « La file de travaux n'a pas démarré » | l'API répond, mais rien ne se transcrit ni ne se génère. Même cause |
 | plus rien du tout | il est mort. La **dernière ligne** avant le silence est la cause |
 
-> Le redémarrage de `tsx watch` envoie un `SIGTERM` **sans attendre la sortie**
-> du process précédent : le nouveau pouvait tomber sur un `EADDRINUSE` et tuer
-> le serveur. `src/server.ts` réessaie maintenant pendant 5 s en développement.
-> Si tu vois « Port encore occupé », c'est ce garde-fou qui travaille.
+> **Deux garde-fous travaillent dans cette sortie, et leurs messages ne sont pas
+> des pannes.**
+>
+> « Port encore occupé » : le redémarrage de `tsx watch` envoie un `SIGTERM`
+> **sans attendre la sortie** du process précédent, et le nouveau tombait sur un
+> `EADDRINUSE` qui tuait le serveur. `src/server.ts` réessaie pendant 5 s en
+> développement.
+>
+> « La file de travaux n'a pas démarré — l'API répond quand même » : le port
+> s'ouvre désormais **avant** la file, et la file se rebranche toute seule quand
+> la base la laisse passer. Avant, une base indisponible remontait jusqu'en haut
+> et sortait en code 1 — et comme `tsx watch` ne relance pas un process mort, le
+> serveur restait éteint **en silence** jusqu'à la prochaine sauvegarde de
+> fichier. On le découvrait depuis l'app, sur un « Connexion impossible » qui
+> accusait le réseau.
 
 ---
 
@@ -136,6 +149,30 @@ Le seed pose les deux comptes de test et leurs voyages. Après un `db:seed`, les
 identifiants des voyages changent : une page de voyage ouverte avant renverra un
 404, ce qui est normal.
 
+### « Erreur interne du serveur » partout : les quinze connexions
+
+Le pooler Supabase, en **mode session** (port 5432), n'accorde que **15 clients
+au total** — pour tout ce qui parle à cette base, l'API déployée comprise. Quand
+il n'en reste plus, *tout* échoue d'un coup et rien ne dit pourquoi : les routes
+répondent 500, et la cause est deux étages plus bas.
+
+```bash
+cd backend && npm run db:sessions          # qui les tient, et depuis quand
+npm run db:sessions -- --reap              # ferme celles que plus personne ne tient
+```
+
+Le compte est vite fait : un serveur prend **quatre** connexions pour Prisma
+(`connection_limit` sur l'URL) et **deux** pour pg-boss. Trois process — l'API
+déployée, son worker, le serveur local — et la limite est atteinte. Un
+`prisma studio` ou un script laissé ouvert suffit alors à faire basculer le
+reste.
+
+⚠️ **La production et le développement partagent la même base.** C'est ce qui
+rend la limite si serrée, et `--reap` ne peut rien contre un serveur déployé qui
+tient légitimement ses connexions — il ne ferme que l'inactif. Les deux vraies
+sorties sont de relever le *Pool Size* du pooler dans la console Supabase, ou de
+donner au développement sa propre base.
+
 ---
 
 ## 5. Les trois commandes qui répondent le plus vite
@@ -149,6 +186,12 @@ Le serveur répond-il ?
 lsof -nP -iTCP:3000 -sTCP:LISTEN
 ```
 Qui tient le port ?
+
+```bash
+cd backend && npm run db:sessions
+```
+Reste-t-il des connexions à la base ? Zéro place libre, et tout tombe en même
+temps sans que rien ne le dise.
 
 ```bash
 curl -s localhost:3000/v1/auth/signin -H 'content-type: application/json' \

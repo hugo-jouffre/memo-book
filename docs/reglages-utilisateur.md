@@ -18,6 +18,13 @@
 `templates/travel-journal/LAYOUT_KB.md`. Un drapeau que le gabarit ne connaît
 pas est ignoré en silence : l'utilisateur croirait avoir réglé quelque chose.
 
+⚠️ **« Exister » n'est pas « être rendu ».** Les onze modales du lot 7 rendent
+*réglables* des valeurs que la table ci-dessous marque encore « à construire » —
+pointillés, typographies, zones libres, mot fléché. Elles sont bien dans le
+gabarit et bien enregistrées en base ; c'est leur **effet sur la page** qui
+manque. L'app tient donc sa moitié du contrat, et la colonne « État » de la
+table du gabarit reste la seule à dire ce qui se voit vraiment dans le carnet.
+
 ---
 
 ## Écran « Paramètres du voyage »
@@ -28,8 +35,9 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
 |---|---|---|
 | **Nom de l'aventure** | « Rome 2026 » | `book_title` en couverture |
 | **Dates du voyage** | 26 août – 15 sept 2026 | `date_range`, bandeaux de journée, calculs du § 6 de la rédaction |
-| **Rythme du récit** | Tous les 2 jours | La cadence des relances, donc la granularité naturelle des étapes |
-| **Collaborateurs** | @clara_prn, @ana.prn | Plusieurs voix entrent dans le même carnet : la fiche de cohérence doit les unifier en une seule (§ 2 de la rédaction) |
+| **Rythme du récit** | Tous les 2 jours | La cadence des relances, donc la granularité naturelle des étapes. Cinq valeurs depuis le lot 7 (`NarrationPace`) : tous les jours, tous les 2 jours, tous les 3 jours, une fois par semaine, personnalisé |
+| **Notifications** (les quatre alertes) | Toutes actives | Rien pour les agents — ce sont des relances, pas du contenu. Réglées une par une depuis « Gérer mes notifications » (`memos.notify*`), sous l'interrupteur maître du voyage |
+| **Collaborateurs** | @clara_prn, @ana.prn | Plusieurs voix entrent dans le même carnet : la fiche de cohérence doit les unifier en une seule (§ 2 de la rédaction). Le **rôle** de chacun (« Ton pote d'enfance ») est déduit par la rédaction au bout de quelques récits et posé sur `memo_members.role` — personne ne le saisit |
 | **Thème de l'aventure** | City trip & découvertes | Oriente le registre des encarts et le vocabulaire du carnet |
 | **Style du carnet** | Pointillés, cadres, etc. | Le fichier de `agents/carnet-styles/` appliqué de bout en bout |
 | **Partager sur la galerie** | Désactivé | Un carnet public passe une modération plus stricte (→ Agent Modération) |

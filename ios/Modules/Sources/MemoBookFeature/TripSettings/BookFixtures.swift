@@ -26,13 +26,26 @@ extension TripSettings {
             endDate: Self.day(15, 9, 2026),
             narrationPace: .everyTwoDays,
             wantsNotifications: true,
+            // Le propriétaire **est dans la liste** : c'est ce que montre la
+            // feuille « Inviter un proche », et c'est ce qui fait lire la liste
+            // comme celle du voyage entier. Il en est retiré là où l'on compte
+            // les autres — voir ``TripSettings/guests``.
             companions: [
-                Companion(id: "clara", name: "@clara_prn"),
-                Companion(id: "ana", name: "@ana.prn"),
+                Companion(id: "margaux", name: "Margaux Dupont", isOwner: true),
+                Companion(id: "tom", name: "Tom John", role: "Ton pote d’enfance"),
+                // Le troisième n'est jamais entré : c'est lui qui montre
+                // l'action « Renvoyer » du glissé.
+                Companion(id: "ana", name: "@ana.prn", isPending: true),
             ],
+            accessCode: "JHKFDA",
             theme: "City trip & découvertes",
             isPublicGallery: false,
             styleSummary: "Pointillés, cadres, etc.",
+            // **Pas de PDF** : un jeu d'essai n'a pas de carnet composé, et c'est
+            // très bien — c'est l'état que R11 réclame et que la maquette ne
+            // dessine pas. Les feuilles de personnalisation s'ouvrent alors sans
+            // les deux pages au-dessus d'elles (voir `BookPagesPeek`). Pour les
+            // voir en simulateur, poser ici l'URL d'un PDF de carnet.
             isPrintable: true,
             customisation: .fixture
         )

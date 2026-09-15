@@ -100,6 +100,13 @@ public final class ChatModel {
     /// souvenir dans le carnet.
     private var pending: ChatMessage?
 
+    /// La bulle venue de l'accueil, s'il y en a une — voir ``expect(_:)``.
+    ///
+    /// Son état d'envoi ne se décide **pas** ici : ce vocal est parti avant que
+    /// cet écran n'existe, et c'est la file qui sait s'il est arrivé. Le modèle
+    /// retient son identifiant pour ne rien écrire par-dessus.
+    private var handoffId: String?
+
     /// - Parameters:
     ///   - source: ce qui rend la conversation. Par défaut le jeu d'essai, ce
     ///     qui laisse les aperçus montrer les quatre états sans serveur.
@@ -272,13 +279,16 @@ public final class ChatModel {
         }
     }
 
-    private func send(_ body: ChatMessageBody) {
+    /// - Parameter id: l'identifiant de la bulle, quand il vient d'ailleurs —
+    ///   le vocal de l'accueil porte le sien, celui par lequel la file dira où
+    ///   en est son envoi. Voir ``receive(_:)``.
+    private func send(_ body: ChatMessageBody, id: String? = nil) {
         guard thread != nil else { return }
 
         ensureOpening()
 
         let message = ChatMessage(
-            id: "traveller-\(messages.count)",
+            id: id ?? "traveller-\(messages.count)",
             author: .traveller,
             body: body,
             sentAt: .now,
@@ -332,7 +342,10 @@ public final class ChatModel {
                 to: ChatTurn(message: message, history: history, context: thread.context)
             )
 
-            mark(message.id, as: .sent)
+            // Sauf pour la bulle venue de l'accueil : la réponse de MEMO ne dit
+            // rien de son envoi, et l'écrire « envoyée » ici couvrirait un vocal
+            // encore en attente de réseau. Voir ``expect(_:)``.
+            if message.id != handoffId { mark(message.id, as: .sent) }
 
             for beat in reply.beats {
                 turn = .thinking
@@ -348,7 +361,12 @@ public final class ChatModel {
             // L'écran s'est refermé, ou un nouveau tour a démarré. Rien à dire.
             turn = .idle
         } catch {
-            mark(message.id, as: .failed(error.localizedDescription))
+            // Même règle qu'à la réussite : c'est **la réponse** qui a échoué,
+            // pas l'envoi du vocal de l'accueil. Marquer la bulle « non
+            // envoyée » ferait croire qu'un souvenir déjà arrivé s'est perdu.
+            if message.id != handoffId {
+                mark(message.id, as: .failed(error.localizedDescription))
+            }
             turn = .failed(messageId: message.id, message: error.localizedDescription)
         }
     }
@@ -391,20 +409,35 @@ public final class ChatModel {
     /// Pose un vocal déjà enregistré. Le même chemin que ``finishRecording()``,
     /// moins le micro : le fichier est gardé pour la réécoute, et la bulle
     /// part comme un message du voyageur.
+    ///
+    /// ⚠️ **Son état d'envoi ne se décide pas ici.** Ce vocal est parti avant
+    /// que cet écran n'existe, et il peut très bien attendre le réseau sur le
+    /// disque : le marquer « envoyé » parce que MEMO a répondu mentirait à
+    /// chaque fois qu'on raconte dans le métro. La bulle garde donc
+    /// l'identifiant du relais, et c'est la file qui l'écrit — par
+    /// ``markHandoff(_:)``.
     private func receive(_ handoff: RecordingHandoff) {
-        let id = "voice-\(messages.count)"
-        let url = try? VoiceNoteFile.save(handoff.audio, id: id)
+        let url = try? VoiceNoteFile.save(handoff.audio, id: handoff.id)
+        handoffId = handoff.id
 
         send(
             .voice(
                 VoiceNote(
-                    id: id,
+                    id: handoff.id,
                     duration: handoff.audio.duration,
                     levels: handoff.levels,
                     localUrl: url
                 )
-            )
+            ),
+            id: handoff.id
         )
+    }
+
+    /// Ce que la file dit de la bulle venue de l'accueil. Sans effet s'il n'y en
+    /// a pas : l'écran s'ouvre le plus souvent par la porte ordinaire.
+    public func markHandoff(_ delivery: ChatDelivery) {
+        guard let handoffId else { return }
+        mark(handoffId, as: delivery)
     }
 
     /// Les étapes offertes sont épuisées : le micro ne s'ouvre plus, il mène au

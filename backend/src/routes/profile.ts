@@ -60,10 +60,13 @@ const profileInclude = {
   connectors: true,
   // Un seul abonnement compte : le vivant. Les résiliés restent en base pour
   // l'historique de facturation, ils n'ont rien à faire à l'écran.
+  // **Tout l'historique récent, pas seulement l'abonnement en cours.** Le
+  // paywall de retour se déduit d'un abonnement *terminé* : filtrer sur les
+  // seuls actifs revenait à ne jamais pouvoir le montrer. Cinq suffisent — au
+  // delà, on ne lit plus rien de neuf.
   subscriptions: {
-    where: { status: { in: ["active" as const, "trialing" as const, "past_due" as const] } },
     orderBy: { startedAt: "desc" as const },
-    take: 1,
+    take: 5,
   },
   identities: { orderBy: { createdAt: "asc" as const }, take: 1 },
 };

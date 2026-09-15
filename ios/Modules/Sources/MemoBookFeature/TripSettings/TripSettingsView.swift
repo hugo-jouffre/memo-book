@@ -21,6 +21,11 @@ public struct TripSettingsView: View {
 
     @State private var model: TripSettingsModel
 
+    /// La feuille ouverte, s'il y en a une. Cinq des dix lignes de l'écran en
+    /// ouvrent une désormais ; les autres remontent toujours une intention à
+    /// ``RootView``, qui seul tient la pile.
+    @State private var sheet: TripSettingsSheet?
+
     @Environment(\.dismiss) private var dismiss
 
     public init(
@@ -71,6 +76,15 @@ public struct TripSettingsView: View {
         // `MemoBookColor`.
         .environment(\.colorScheme, .light)
         .task { await model.load() }
+        .brandSheet(item: $sheet) { destination in
+            switch destination {
+            case .dates: TripDatesSheet(model: model)
+            case .pace: TripPaceSheet(model: model)
+            case .notifications: TripNotificationsSheet(model: model)
+            case .theme: TripThemeSheet(model: model)
+            case .companions: TripInviteSheet(model: model)
+            }
+        }
     }
 
     // MARK: - Gère ton aventure
@@ -112,21 +126,21 @@ public struct TripSettingsView: View {
                     BookCopy.Settings.dates,
                     value: settings?.dateRangeLabel ?? BookCopy.Settings.noValue,
                     isValueLoading: isLoading,
-                    action: { onIntent(.editDates) }
+                    action: { sheet = .dates }
                 )
                 BrandRow(
                     BookCopy.Settings.pace,
                     value: settings?.narrationPace?.displayName ?? BookCopy.Settings.noValue,
                     isValueLoading: isLoading,
-                    action: { onIntent(.editPace) }
+                    action: { sheet = .pace }
                 )
                 BrandRow(BookCopy.Settings.notifications, isOn: notificationsBinding)
-                BrandRow(BookCopy.Settings.manageNotifications) { onIntent(.manageNotifications) }
+                BrandRow(BookCopy.Settings.manageNotifications) { sheet = .notifications }
                 BrandRow(
                     BookCopy.Settings.companions,
                     value: settings?.companionsLabel ?? BookCopy.Settings.noValue,
                     isValueLoading: isLoading,
-                    action: { onIntent(.editCompanions) }
+                    action: { sheet = .companions }
                 )
             }
             // Les interrupteurs sont les seuls contrôles du groupe qui
@@ -141,7 +155,7 @@ public struct TripSettingsView: View {
                     BookCopy.Settings.theme,
                     value: settings?.theme ?? BookCopy.Settings.noValue,
                     isValueLoading: isLoading,
-                    action: { onIntent(.editTheme) }
+                    action: { sheet = .theme }
                 )
                 BrandRow(BookCopy.Settings.publicGallery, isOn: galleryBinding)
             }
@@ -225,18 +239,18 @@ public struct TripSettingsView: View {
     }
 }
 
-/// Ce que les paramètres d'un voyage demandent à l'app d'ouvrir.
+/// Ce que les paramètres d'un voyage demandent à l'app d'**ouvrir ailleurs**.
 ///
 /// L'écran ne pousse rien lui-même : ``RootView`` seul tient la pile de
 /// navigation, comme pour l'accueil et le voyage.
+///
+/// Cinq intentions ont disparu de cette liste — dates, rythme, notifications,
+/// co-voyageurs, thème — parce qu'elles ne mènent plus ailleurs : elles ouvrent
+/// une feuille **sur** cet écran (``TripSettingsSheet``). Une intention qui
+/// remonte pour redescendre aussitôt n'apprend rien à personne.
 public enum TripSettingsIntent: Sendable, Hashable {
     case renameTrip
     case openWallet
-    case editDates
-    case editPace
-    case manageNotifications
-    case editCompanions
-    case editTheme
     /// « Style du carnet » — les personnalisations de la mise en page.
     case openCustomisation
     case connectTricount

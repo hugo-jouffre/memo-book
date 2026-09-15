@@ -74,8 +74,14 @@ public struct BrandOptionRow: View {
                         .font(MemoBookFont.bodySemibold)
                         .foregroundStyle(MemoBookColor.ink)
                     if let subtitle {
+                        // 0.75 rem, pas 1 : la précision se lit **sous** le
+                        // titre, elle ne le double pas. Les deux étaient au même
+                        // corps, ce qui faisait lire deux titres par option —
+                        // relevé sur les `option-card` des feuilles du carnet
+                        // (`3443:9853`), qui sont le même composant Figma que
+                        // celles du moyen de paiement.
                         Text(subtitle)
-                            .font(MemoBookFont.body)
+                            .font(MemoBookFont.caption)
                             .foregroundStyle(MemoBookColor.inkMuted)
                     }
                 }

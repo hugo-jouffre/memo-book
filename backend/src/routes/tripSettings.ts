@@ -4,6 +4,7 @@ import type { AppContext } from "../context.js";
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
+import { endSubscriptionsWithoutRunningTrip } from "../services/subscriptions.js";
 import { serializeTripSettings } from "./appSerializers.js";
 
 /**
@@ -38,18 +39,58 @@ const updateBody = z.object({
   endDate: z.coerce.date().nullable().optional(),
   narrationPace: z.string().trim().max(40).nullable().optional(),
   notificationsEnabled: z.boolean().optional(),
+  /**
+   * Les quatre alertes, d'un bloc — la seule exception à la règle du réglage
+   * unique, et elle se justifie : elles vivent sur la même feuille, personne
+   * d'autre ne les touche, et les envoyer une par une ferait quatre requêtes
+   * pour quatre bascules qu'on enchaîne au doigt.
+   */
+  notifications: z
+    .object({
+      writingReminder: z.boolean(),
+      newStory: z.boolean(),
+      weeklyDigest: z.boolean(),
+      tripEndReminder: z.boolean(),
+    })
+    .optional(),
   theme: z.string().trim().max(120).nullable().optional(),
   isPublicGallery: z.boolean().optional(),
+
+  /**
+   * Les personnalisations du carnet passent par **la même route**, et c'est le
+   * corollaire de leur lecture : elles voyagent avec les réglages parce qu'il y
+   * en a un jeu par voyage. Une seconde route aurait doublé le contrôle
+   * d'appartenance pour écrire dans la même ligne.
+   *
+   * Les bornes ne sont pas décoratives : un ratio hors 0–100 ou un carnet de
+   * 4 000 pages n'a pas de sens pour le gabarit, et c'est ici qu'on le refuse —
+   * pas dans l'app, qui n'est qu'un client parmi d'autres.
+   */
+  photoTextRatio: z.number().int().min(0).max(100).optional(),
+  targetPageCount: z.number().int().min(10).max(400).optional(),
+  funFactsEnabled: z.boolean().optional(),
+  rulesEnabled: z.boolean().optional(),
+  decorationQuota: z.number().int().min(0).max(4).optional(),
+  fontDisplay: z.string().trim().min(1).max(60).optional(),
+  quizEnabled: z.boolean().optional(),
+  freeZonesEnabled: z.boolean().optional(),
+  crosswordEnabled: z.boolean().optional(),
 });
 
 /** Ce que `serializeTripSettings` attend du carnet, et rien de plus. */
 const settingsInclude = {
   members: {
-    // Le propriétaire n'est pas un co-voyageur de sa propre ligne : l'écran
-    // liste ceux qui l'accompagnent, pas lui-même.
-    where: { status: "active" as const, role: "guest" as const },
+    // **Les invitations en attente aussi**, désormais : la feuille « Inviter un
+    // proche » les montre — c'est à elles que s'adresse l'action « Renvoyer » —
+    // et les cacher faisait disparaître quelqu'un qu'on venait d'inviter.
+    // Seuls les retirés restent hors de la liste.
+    where: { status: { in: ["active" as const, "invited" as const] } },
     orderBy: { invitedAt: "asc" as const },
+    include: { account: true },
   },
+  // Le propriétaire n'a pas de ligne dans `memo_members` : il se lit ici, et le
+  // sérialiseur le pose en tête de la liste.
+  owner: true,
   renders: {
     where: { status: "ready" as const },
     orderBy: { createdAt: "desc" as const },
@@ -106,14 +147,124 @@ export function registerTripSettingsRoutes(app: FastifyInstance, context: AppCon
         ...(body.notificationsEnabled !== undefined
           ? { notificationsEnabled: body.notificationsEnabled }
           : {}),
+        ...(body.notifications
+          ? {
+              notifyWritingReminder: body.notifications.writingReminder,
+              notifyNewStory: body.notifications.newStory,
+              notifyWeeklyDigest: body.notifications.weeklyDigest,
+              notifyTripEnd: body.notifications.tripEndReminder,
+            }
+          : {}),
         ...(body.theme !== undefined ? { theme: body.theme } : {}),
         ...(body.isPublicGallery !== undefined ? { isPublicGallery: body.isPublicGallery } : {}),
+        ...(body.photoTextRatio !== undefined ? { photoTextRatio: body.photoTextRatio } : {}),
+        ...(body.targetPageCount !== undefined ? { targetPageCount: body.targetPageCount } : {}),
+        ...(body.funFactsEnabled !== undefined ? { funFactsEnabled: body.funFactsEnabled } : {}),
+        ...(body.rulesEnabled !== undefined ? { rulesEnabled: body.rulesEnabled } : {}),
+        ...(body.decorationQuota !== undefined ? { decorationQuota: body.decorationQuota } : {}),
+        ...(body.fontDisplay !== undefined ? { fontDisplay: body.fontDisplay } : {}),
+        ...(body.quizEnabled !== undefined ? { quizEnabled: body.quizEnabled } : {}),
+        ...(body.freeZonesEnabled !== undefined ? { freeZonesEnabled: body.freeZonesEnabled } : {}),
+        ...(body.crosswordEnabled !== undefined
+          ? { crosswordEnabled: body.crosswordEnabled }
+          : {}),
       },
     });
+
+    // Une date de fin qui recule dans le passé **ferme le voyage**, et un
+    // compte sans voyage en cours n'a plus d'abonnement à payer. C'est la
+    // promesse de l'offre — « Arrêt automatique de l'abonnement » —, et c'est
+    // ici qu'elle se tient le plus tôt : au moment où la dernière date bouge.
+    if (body.endDate !== undefined) {
+      await endSubscriptionsWithoutRunningTrip(context, accountId);
+    }
 
     // On relit tout plutôt que de rendre ce qu'on vient d'écrire : la réponse
     // est ce que l'app garde à l'écran, et une réponse partielle effacerait le
     // reste de la page. Même règle que `PATCH /v1/profile`.
     return readSettings(context, accountId, id);
   });
+
+  /**
+   * Retire un co-voyageur du voyage.
+   *
+   * **Ses souvenirs restent.** Ils appartiennent au récit, pas à la personne —
+   * c'est déjà pour ça qu'`entries` n'a pas de colonne d'auteur. On ne retire
+   * qu'un droit d'écrire, jamais du texte écrit.
+   *
+   * `status: "removed"` plutôt qu'une suppression de ligne : la contrainte
+   * d'unicité `(memoId, invitedEmail)` doit continuer d'empêcher qu'on réinvite
+   * deux fois la même adresse, et l'historique d'un voyage partagé se lit.
+   */
+  app.delete("/v1/trips/:id/members/:memberId", async (request) => {
+    const { id, memberId } = memberParams.parse(request.params);
+    const accountId = accountIdOf(request);
+
+    await assertVisible(context, accountId, id);
+
+    const member = await context.prisma.memoMember.findFirst({
+      where: { id: memberId, memoId: id },
+      select: { id: true },
+    });
+    if (!member) throw new HttpError(404, "Ce co-voyageur n’est pas sur ce voyage.");
+
+    // Le propriétaire n'a pas de ligne dans `memo_members` : il ne peut donc
+    // pas être visé ici, et c'est le garde-fou le plus sûr qui soit — il n'y a
+    // rien à supprimer, pas même par erreur.
+    await context.prisma.memoMember.update({
+      where: { id: memberId },
+      data: { status: "removed" },
+    });
+
+    return readSettings(context, accountId, id);
+  });
+
+  /**
+   * Renvoie son lien d'invitation à quelqu'un qui n'est jamais entré.
+   *
+   * ⚠️ **Rien ne part encore.** `services/mailer.ts` ne sait écrire qu'un seul
+   * message, celui du mot de passe oublié : la route vérifie l'appartenance,
+   * repousse la
+   * date d'invitation — ce qui fait repartir tout compteur d'expiration qu'on
+   * posera dessus — et rend 204. C'est volontairement peu : mieux vaut une
+   * route honnête qu'un bouton qui prétend avoir envoyé.
+   */
+  app.post("/v1/trips/:id/members/:memberId/invitation", async (request, reply) => {
+    const { id, memberId } = memberParams.parse(request.params);
+    const accountId = accountIdOf(request);
+
+    await assertVisible(context, accountId, id);
+
+    const member = await context.prisma.memoMember.findFirst({
+      where: { id: memberId, memoId: id, status: "invited" },
+      select: { id: true },
+    });
+    if (!member) {
+      throw new HttpError(404, "Cette invitation n’existe pas, ou elle a déjà été acceptée.");
+    }
+
+    await context.prisma.memoMember.update({
+      where: { id: memberId },
+      data: { invitedAt: new Date() },
+    });
+
+    return reply.code(204).send();
+  });
+}
+
+const memberParams = z.object({ id: z.string().uuid(), memberId: z.string().uuid() });
+
+/**
+ * Le voyage existe et ce compte y a sa place.
+ *
+ * Vérifié **avant** l'écriture, et pas seulement par le `where` de l'update :
+ * un `updateMany` qui ne touche aucune ligne réussit silencieusement, et l'app
+ * croirait son geste enregistré.
+ */
+async function assertVisible(context: AppContext, accountId: string, memoId: string) {
+  const visible = await context.prisma.memo.findFirst({
+    where: { id: memoId, ...visibleToAccount(accountId) },
+    select: { id: true },
+  });
+  if (!visible) throw new HttpError(404, "Ce voyage n’existe pas.");
 }

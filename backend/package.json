@@ -21,6 +21,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:themes": "tsx prisma/seed-trip-themes.ts",
+    "db:sessions": "tsx --env-file=.env scripts/db-sessions.ts",
     "supabase:setup": "tsx scripts/setup-supabase.ts",
     "supabase:check": "tsx scripts/setup-supabase.ts --check",
     "render:local": "tsx scripts/render-local.ts",
@@ -52,6 +53,7 @@
     "openai": "^4.77.0",
     "pg-boss": "^10.1.5",
     "pino": "^9.5.0",
+    "stripe": "^22.6.2",
     "yaml": "^2.6.1",
     "zod": "^3.24.1"
   },

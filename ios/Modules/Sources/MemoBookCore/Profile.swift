@@ -138,13 +138,27 @@ public struct Subscription: Codable, Sendable, Hashable {
     /// Le jour où il a été résilié à la main, s'il l'a été.
     public var cancelledAt: Date?
 
+    /// Ce compte a **déjà** été abonné, et ne l'est plus.
+    ///
+    /// C'est ce qui décide de la version du paywall : quelqu'un qui revient pour
+    /// un nouveau voyage a déjà vu les trois écrans de découverte, et on lui en
+    /// montre deux — voir `PaywallVariant`. Il se lit sur l'existence d'un
+    /// abonnement terminé, pas sur une colonne de plus : le serveur garde
+    /// l'historique des abonnements d'un compte (`subscriptions`).
+    ///
+    /// **L'abonnement s'arrête tout seul à la fin du voyage**, c'est la
+    /// troisième promesse de l'offre. Ce drapeau est donc l'état normal de
+    /// n'importe qui entre deux voyages, pas celui d'un mécontent.
+    public var hasEndedBefore: Bool
+
     public init(
         weeklyPrice: Decimal,
         isActive: Bool = false,
         tripDestination: String? = nil,
         tripTitle: String? = nil,
         endsOn: Date? = nil,
-        cancelledAt: Date? = nil
+        cancelledAt: Date? = nil,
+        hasEndedBefore: Bool = false
     ) {
         self.weeklyPrice = weeklyPrice
         self.isActive = isActive
@@ -152,6 +166,21 @@ public struct Subscription: Codable, Sendable, Hashable {
         self.tripTitle = tripTitle
         self.endsOn = endsOn
         self.cancelledAt = cancelledAt
+        self.hasEndedBefore = hasEndedBefore
+    }
+
+    /// Décodage tolérant sur le drapeau ajouté avec le paywall de retour : un
+    /// serveur qui ne le sert pas encore fait voir la version de découverte,
+    /// jamais un écran vide.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        weeklyPrice = try container.decode(Decimal.self, forKey: .weeklyPrice)
+        isActive = try container.decode(Bool.self, forKey: .isActive)
+        tripDestination = try container.decodeIfPresent(String.self, forKey: .tripDestination)
+        tripTitle = try container.decodeIfPresent(String.self, forKey: .tripTitle)
+        endsOn = try container.decodeIfPresent(Date.self, forKey: .endsOn)
+        cancelledAt = try container.decodeIfPresent(Date.self, forKey: .cancelledAt)
+        hasEndedBefore = try container.decodeIfPresent(Bool.self, forKey: .hasEndedBefore) ?? false
     }
 
     /// **L'offre**, telle que le paywall la présente à quelqu'un qui n'a pas

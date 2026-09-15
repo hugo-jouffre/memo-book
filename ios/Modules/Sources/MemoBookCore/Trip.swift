@@ -93,10 +93,60 @@ public struct Companion: Codable, Sendable, Hashable, Identifiable {
     public let name: String
     public let avatarUrl: URL?
 
-    public init(id: String, name: String, avatarUrl: URL? = nil) {
+    /// Ce que cette personne est pour le voyageur — « Ton pote d’enfance ».
+    ///
+    /// **Personne ne le saisit.** Il est déduit par l'agent de rédaction au bout
+    /// de quelques récits, comme `prompt` et `gallerySummary` le sont déjà —
+    /// c'est la note « Logique IA 🤖 » de la maquette. Nul tant qu'il n'y a pas
+    /// eu assez de récit pour le deviner : la ligne se contente alors du nom,
+    /// et c'est ce que dessine la première des deux variantes de la feuille.
+    public let role: String?
+
+    /// Le propriétaire du voyage. Il n'a pas de ligne dans `memo_members` — il
+    /// est ajouté en tête de la liste par le sérialiseur — et **il ne se
+    /// supprime pas** : c'est la seconde phrase de la note « Logique » de la
+    /// maquette.
+    public let isOwner: Bool
+
+    /// L'invitation est partie, la personne n'est pas encore entrée.
+    ///
+    /// C'est ce qui distingue les deux actions au balayage : on **renvoie** un
+    /// lien à quelqu'un qui n'est jamais venu, on ne le renvoie pas à quelqu'un
+    /// qui raconte déjà.
+    public let isPending: Bool
+
+    public init(
+        id: String,
+        name: String,
+        avatarUrl: URL? = nil,
+        role: String? = nil,
+        isOwner: Bool = false,
+        isPending: Bool = false
+    ) {
         self.id = id
         self.name = name
         self.avatarUrl = avatarUrl
+        self.role = role
+        self.isOwner = isOwner
+        self.isPending = isPending
+    }
+
+    /// Décodage tolérant sur les trois champs ajoutés avec la feuille
+    /// « Inviter un proche ».
+    ///
+    /// `decodeIfPresent` et non un champ obligatoire : la pastille de
+    /// co-voyageur de l'accueil est servie par trois routes différentes
+    /// (`/v1/home`, `/v1/trips/:id`, `/v1/trips/:id/settings`), et un serveur
+    /// qui n'aurait pas encore la dernière ferait échouer **tout l'écran**, pas
+    /// seulement la ligne — voir la règle du décodeur dans `ios/CLAUDE.md`.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        avatarUrl = try container.decodeIfPresent(URL.self, forKey: .avatarUrl)
+        role = try container.decodeIfPresent(String.self, forKey: .role)
+        isOwner = try container.decodeIfPresent(Bool.self, forKey: .isOwner) ?? false
+        isPending = try container.decodeIfPresent(Bool.self, forKey: .isPending) ?? false
     }
 
     /// Repli quand la photo manque : une ou deux initiales, jamais plus.

@@ -24,6 +24,12 @@ public final class AppDependencies {
     /// n'est jamais revenu sur l'accueil depuis.
     public let outbox: RecordingOutbox
 
+    /// Qui ouvre une feuille de paiement.
+    ///
+    /// Une dépendance injectée et non un appel direct au SDK : les aperçus
+    /// Xcode et les tests en fournissent une qui n'appelle personne, et l'écran
+    /// de cagnotte se relit sans compte Stripe.
+
     /// Le dernier accueil reçu, pour pouvoir le relire hors ligne.
     private let homeFeed = HomeFeedCache()
 
@@ -39,9 +45,13 @@ public final class AppDependencies {
     public init(
         api: any MemoBookAPI,
         connectivity: Connectivity = .system,
-        pendingRecordings: PendingRecordingStore = .inLibrary()
+        pendingRecordings: PendingRecordingStore = .inLibrary(),
     ) {
         self.api = api
+        // La vraie feuille Stripe par défaut ; un aperçu passe la sienne.
+        // `applePayMerchantId` reste nul tant que le certificat Apple Pay n'est
+        // pas posé : la feuille montre alors les cartes seules, au lieu d'un
+        // bouton Apple Pay qui échouerait au moment de payer.
         outbox = RecordingOutbox(store: pendingRecordings, connectivity: connectivity) { audio, tripId in
             _ = try await api.uploadAudio(
                 memoId: tripId,
@@ -206,34 +216,46 @@ public final class AppDependencies {
         )
     }
 
-    /// Les réglages d'un voyage.
+    /// Les réglages d'un voyage, servis par `GET /v1/trips/:id/settings` — et
+    /// corrigés par son `PATCH`.
     ///
-    /// ⚠️ **Sur le jeu d'essai**, comme le chat : `GET /v1/trips/:id/settings`
-    /// et son `PATCH` n'existent pas encore côté serveur. Le jour où ils
-    /// existent, cette fabrique devient :
-    ///
-    /// ```swift
-    /// TripSettingsModel(
-    ///     tripId: tripId,
-    ///     source: { [api] id in try await api.tripSettings(id: id) },
-    ///     persist: { [api] id, edit in try await api.updateTripSettings(id: id, edit: edit) }
-    /// )
-    /// ```
-    ///
-    /// Rien d'autre ne bouge : ni la vue, ni le modèle, ni les aperçus. Voir la
-    /// fiche des paramètres du voyage dans `docs/ui-development.md`.
+    /// Deux fonctions de plus que les autres écrans, et elles ne pouvaient pas
+    /// passer par le `PATCH` : retirer un co-voyageur et lui renvoyer son lien
+    /// touchent `memo_members`, pas `memos`. Elles ont donc leur route, et le
+    /// modèle les reçoit comme le reste.
     public func tripSettingsModel(tripId: String) -> TripSettingsModel {
-        TripSettingsModel(tripId: tripId)
+        TripSettingsModel(
+            tripId: tripId,
+            source: { [api] id in try await api.tripSettings(id: id) },
+            persist: { [api] id, edit in try await api.updateTripSettings(id: id, edit: edit) },
+            removeCompanion: { [api] id, companionId in
+                try await api.removeCompanion(tripId: id, companionId: companionId)
+            },
+            resendInvitation: { [api] id, companionId in
+                try await api.resendInvitation(tripId: id, companionId: companionId)
+            },
+            themes: { [api] in try await api.tripThemes() }
+        )
     }
 
     /// Les personnalisations du carnet.
     ///
-    /// ⚠️ **Sur le jeu d'essai**, comme les réglages du voyage : les valeurs
-    /// existent toutes en base (`memos`, M4) et sont déjà servies par
-    /// `GET /v1/trips/:id/settings`, mais la route qui les **écrit** reste à
-    /// ouvrir. Trois interrupteurs seulement sont branchés côté écran.
+    /// **La même route que les réglages**, et c'est voulu : les
+    /// personnalisations voyagent avec eux — il y en a un jeu par voyage, et
+    /// les feuilles ont besoin des **dates** pour projeter leurs paliers de
+    /// pages.
+    ///
+    /// ⚠️ L'aperçu du carnet, lui, reste à écrire : `GET /v1/memos/:id/preview`
+    /// n'existe pas. Les deux pages qui flottent au-dessus des feuilles restent
+    /// donc en papier nu tant qu'elle n'est pas là — voir ``BookPagesPeek``.
     public func bookCustomisationModel(tripId: String) -> BookCustomisationModel {
-        BookCustomisationModel(tripId: tripId)
+        BookCustomisationModel(
+            tripId: tripId,
+            source: { [api] id in try await api.tripSettings(id: id) },
+            persist: { [api] id, edit in
+                try await api.updateBookCustomisation(tripId: id, edit: edit)
+            }
+        )
     }
 
     /// Les deux plats du carnet.

@@ -243,10 +243,70 @@ struct PaywallEstimate: View {
     }
 }
 
+// MARK: - Le mot de retour
+
+/// L'écran qui ouvre le paywall d'un ancien abonné.
+///
+/// **Il remplace deux écrans à lui seul.** La version de découverte félicite
+/// (« Tu as enregistré tes 3 premières étapes ! ») puis projette un nombre de
+/// pages ; celui-ci ne fait ni l'un ni l'autre, et le dit : « on ne t'embête pas
+/// plus ». C'est le seul écran de l'app dont la raison d'être est d'en économiser
+/// un autre.
+struct PaywallReturning: View {
+    let onContinue: () -> Void
+
+    var body: some View {
+        VStack(spacing: MemoBookSpacing.l) {
+            Spacer(minLength: 0)
+
+            VStack(spacing: MemoBookSpacing.s) {
+                Group {
+                    PaywallEyebrow(PaywallCopy.returnEyebrow)
+                    PaywallTitle(
+                        lead: PaywallCopy.returnTitleLead,
+                        strong: PaywallCopy.returnTitleStrong,
+                        isUnderlined: true
+                    )
+                }
+                .paywallProse()
+
+                VStack(spacing: MemoBookSpacing.xs / 2) {
+                    ForEach(PaywallCopy.returnBody, id: \.self) { line in
+                        Text(line)
+                            .font(MemoBookFont.taglineRegular)
+                            .foregroundStyle(MemoBookColor.ink)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .paywallProse()
+            }
+
+            PaywallSquiggle(
+                shape: BrandSquiggleDown(),
+                lineWidthRatio: BrandSquiggleDown.lineWidthRatio,
+                aspectRatio: BrandSquiggleDown.size.width / BrandSquiggleDown.size.height
+            )
+            .padding(.horizontal, -PaywallMetrics.margin)
+            .paywallProse()
+
+            Spacer(minLength: 0)
+
+            BrandButton(PaywallCopy.cont, style: .blue, fillsWidth: true, action: onContinue)
+        }
+    }
+}
+
 // MARK: - Écran 3 — l'offre
 
 struct PaywallOffer: View {
     let price: String
+    /// Le titre, qui change avec la version — voir ``PaywallVariant/offerTitle``.
+    /// Le surtitre, les quatre arguments et le bouton, eux, sont les mêmes :
+    /// c'est la **même offre**, pas une seconde.
+    var title: (lead: String, strong: String) = (
+        PaywallCopy.offerTitleLead, PaywallCopy.offerTitleStrong
+    )
     let onSubscribe: () -> Void
 
     var body: some View {
@@ -255,11 +315,7 @@ struct PaywallOffer: View {
 
             VStack(spacing: MemoBookSpacing.s) {
                 PaywallEyebrow(PaywallCopy.offerEyebrow)
-                PaywallTitle(
-                    lead: PaywallCopy.offerTitleLead,
-                    strong: PaywallCopy.offerTitleStrong,
-                    isUnderlined: true
-                )
+                PaywallTitle(lead: title.lead, strong: title.strong, isUnderlined: true)
             }
             .paywallProse()
 

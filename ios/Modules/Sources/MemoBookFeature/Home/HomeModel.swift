@@ -125,11 +125,16 @@ public final class HomeModel {
     ///
     /// Sans aucun carnet en cours, il n'y a rien à faire : la feuille ne
     /// s'ouvre pas depuis un accueil sans voyage ouvert.
-    public func upload(_ audio: RecordedAudio) async {
+    ///
+    /// `handoffId` est l'identifiant de la bulle qui va s'afficher dans la
+    /// conversation : la file s'en sert pour dire **où en est cet envoi-là**,
+    /// et c'est ce qui permet à la bulle de ne pas se déclarer arrivée avant de
+    /// l'être. Voir ``RecordingOutbox/handoffDelivery``.
+    public func upload(_ audio: RecordedAudio, handoffId: String? = nil) async {
         let trips = ongoingTrips.map(\.id)
         guard !trips.isEmpty else { return }
 
-        switch await outbox.submit(audio, to: trips) {
+        switch await outbox.submit(audio, to: trips, handoffId: handoffId) {
         case .delivered:
             loadFailure = nil
             // Le carnet vient de grossir : ses compteurs et sa jauge sont

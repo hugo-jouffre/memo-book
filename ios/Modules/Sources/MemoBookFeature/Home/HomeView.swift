@@ -92,14 +92,15 @@ public struct HomeView: View {
             // garder. Et **on arrive dans la conversation, le vocal déjà
             // posé** (Hugo, 14/09/2026) : c'est ça qui se route.
             RecordingSheet { audio, levels in
-                Task { await model.upload(audio) }
+                // Un seul identifiant pour les deux : la bulle le porte, et la
+                // file s'en sert pour dire où en est **cet** envoi-là. Sans
+                // lui, la conversation devrait deviner — et elle devinerait
+                // « envoyé » dès que MEMO répond, même sur un vocal qui attend
+                // encore le réseau.
+                let handoff = RecordingHandoff(audio: audio, levels: levels)
+                Task { await model.upload(audio, handoffId: handoff.id) }
                 if let tripId = ongoingTripId {
-                    onIntent(
-                        .openConversation(
-                            tripId: tripId,
-                            handoff: RecordingHandoff(audio: audio, levels: levels)
-                        )
-                    )
+                    onIntent(.openConversation(tripId: tripId, handoff: handoff))
                 }
             }
         }

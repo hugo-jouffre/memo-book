@@ -58,8 +58,21 @@ interface ProfileBody {
   walletBalance: number;
   address: { street: string; postalCode: string; city: string; country: string };
   connectors: { id: string; isEnabled: boolean }[];
-  subscription: { weeklyPrice: number; isActive: boolean };
+  subscription: { weeklyPrice: number; isActive: boolean; hasEndedBefore: boolean };
   orders: unknown[];
+}
+
+/** Ce que les tests des réglages d'un voyage lisent de la réponse. */
+interface TripSettingsBody {
+  accessCode: string;
+  notifications: {
+    writingReminder: boolean;
+    newStory: boolean;
+    weeklyDigest: boolean;
+    tripEndReminder: boolean;
+  };
+  companions: { id: string; name: string; isOwner: boolean; isPending: boolean }[];
+  customisation: { photoTextRatio: number; decorationQuota: number; fontDisplay: string };
 }
 
 interface LinkBody {
@@ -301,7 +314,14 @@ describe("le profil", () => {
     // pouvoir proposer les six.
     expect(body.connectors.length).toBeGreaterThan(0);
     expect(body.connectors.every((connector) => !connector.isEnabled)).toBe(true);
-    expect(body.subscription).toEqual({ weeklyPrice: 0, isActive: false });
+    // `hasEndedBefore` dit que le compte a **déjà** été abonné : il décide de la
+    // version du paywall — deux écrans au lieu de trois. Faux ici, ce compte
+    // vient d'être créé.
+    expect(body.subscription).toEqual({
+      weeklyPrice: 0,
+      isActive: false,
+      hasEndedBefore: false,
+    });
     expect(body.orders).toEqual([]);
   });
 
@@ -506,6 +526,226 @@ describe("un co-voyageur", () => {
     expect(refused.statusCode).toBe(404);
     expect(await harness.prisma.memo.findUnique({ where: { id: memo.id } })).not.toBeNull();
   });
+});
+
+describe("les réglages d'un voyage", () => {
+  it("rend les alertes, le code d'accès et le propriétaire en tête de liste", async () => {
+    const owner = await registerAccount(harness.app, "reglages@memobook.app");
+    const memo = await seedTrip(owner.accountId);
+    await harness.prisma.memoMember.create({
+      data: {
+        memoId: memo.id,
+        invitedEmail: "tom@memobook.app",
+        displayName: "Tom John",
+        status: "invited",
+      },
+    });
+
+    const response = await harness.app.inject({
+      method: "GET",
+      url: `/v1/trips/${memo.id}/settings`,
+      headers: { authorization: owner.authorization },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json<TripSettingsBody>();
+
+    // Les quatre alertes arrivent **toujours**, et toutes vraies par défaut :
+    // un champ non optionnel absent ferait échouer tout l'écran côté app, pas
+    // seulement la feuille.
+    expect(body.notifications).toEqual({
+      writingReminder: true,
+      newStory: true,
+      weeklyDigest: true,
+      tripEndReminder: true,
+    });
+
+    expect(body.accessCode).toBe(memo.accessCode);
+
+    // Le propriétaire ouvre la liste, l'invité suit. Et l'invitation en attente
+    // se voit : c'est à elle que s'adresse « Renvoyer ».
+    expect(body.companions).toHaveLength(2);
+    expect(body.companions[0]).toMatchObject({ isOwner: true, isPending: false });
+    expect(body.companions[1]).toMatchObject({
+      name: "Tom John",
+      isOwner: false,
+      isPending: true,
+    });
+  });
+
+  it("enregistre les alertes et les personnalisations par la même route", async () => {
+    const owner = await registerAccount(harness.app, "perso@memobook.app");
+    const memo = await seedTrip(owner.accountId);
+
+    const alerts = await harness.app.inject({
+      method: "PATCH",
+      url: `/v1/trips/${memo.id}/settings`,
+      headers: { authorization: owner.authorization },
+      payload: {
+        notifications: {
+          writingReminder: false,
+          newStory: true,
+          weeklyDigest: false,
+          tripEndReminder: true,
+        },
+      },
+    });
+    expect(alerts.statusCode).toBe(200);
+    expect(alerts.json<TripSettingsBody>().notifications).toEqual({
+      writingReminder: false,
+      newStory: true,
+      weeklyDigest: false,
+      tripEndReminder: true,
+    });
+
+    const style = await harness.app.inject({
+      method: "PATCH",
+      url: `/v1/trips/${memo.id}/settings`,
+      headers: { authorization: owner.authorization },
+      payload: { photoTextRatio: 75, decorationQuota: 0, fontDisplay: "Montserrat" },
+    });
+    expect(style.statusCode).toBe(200);
+    expect(style.json<TripSettingsBody>().customisation).toMatchObject({
+      photoTextRatio: 75,
+      decorationQuota: 0,
+      fontDisplay: "Montserrat",
+    });
+
+    // Et un réglage envoyé seul ne touche pas les autres : c'est toute la
+    // raison d'un `PATCH` à un champ.
+    expect(style.json<TripSettingsBody>().notifications.writingReminder).toBe(false);
+  });
+
+  it("refuse un réglage hors des bornes du gabarit", async () => {
+    const owner = await registerAccount(harness.app, "bornes@memobook.app");
+    const memo = await seedTrip(owner.accountId);
+
+    const response = await harness.app.inject({
+      method: "PATCH",
+      url: `/v1/trips/${memo.id}/settings`,
+      headers: { authorization: owner.authorization },
+      payload: { decorationQuota: 9 },
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+
+  it("retire un co-voyageur sans effacer ses souvenirs, et renvoie une invitation", async () => {
+    const owner = await registerAccount(harness.app, "hote@memobook.app");
+    const memo = await seedTrip(owner.accountId);
+    const member = await harness.prisma.memoMember.create({
+      data: {
+        memoId: memo.id,
+        invitedEmail: "parti@memobook.app",
+        displayName: "Ana",
+        status: "invited",
+      },
+    });
+
+    const resent = await harness.app.inject({
+      method: "POST",
+      url: `/v1/trips/${memo.id}/members/${member.id}/invitation`,
+      headers: { authorization: owner.authorization },
+    });
+    expect(resent.statusCode).toBe(204);
+
+    const removed = await harness.app.inject({
+      method: "DELETE",
+      url: `/v1/trips/${memo.id}/members/${member.id}`,
+      headers: { authorization: owner.authorization },
+    });
+    expect(removed.statusCode).toBe(200);
+    // La réponse est le voyage relu : plus que le propriétaire dans la liste.
+    expect(removed.json<TripSettingsBody>().companions).toHaveLength(1);
+
+    // La ligne existe encore, marquée retirée : la contrainte d'unicité sur
+    // l'adresse doit continuer d'empêcher qu'on réinvite deux fois la même.
+    const kept = await harness.prisma.memoMember.findUnique({ where: { id: member.id } });
+    expect(kept?.status).toBe("removed");
+
+    // Et renvoyer une invitation déjà retirée n'a plus de sens.
+    const again = await harness.app.inject({
+      method: "POST",
+      url: `/v1/trips/${memo.id}/members/${member.id}/invitation`,
+      headers: { authorization: owner.authorization },
+    });
+    expect(again.statusCode).toBe(404);
+  });
+});
+
+describe("l'arrêt automatique de l'abonnement", () => {
+  /** Un abonnement en cours sur ce compte. */
+  async function subscribe(accountId: string) {
+    return harness.prisma.subscription.create({
+      data: { accountId, provider: "stripe", status: "active", priceCents: 299 },
+    });
+  }
+
+  it("s'éteint quand la dernière date de fin passe, et fait voir le paywall de retour", async () => {
+    const account = await registerAccount(harness.app, "retour@memobook.app");
+    await subscribe(account.accountId);
+    const memo = await seedTrip(account.accountId, {
+      endDate: new Date(Date.now() + 30 * 86_400_000),
+    });
+
+    // Tant que le voyage court, l'abonnement tient.
+    await harness.app.inject({
+      method: "PATCH",
+      url: `/v1/trips/${memo.id}/settings`,
+      headers: { authorization: account.authorization },
+      payload: { endDate: new Date(Date.now() + 10 * 86_400_000).toISOString() },
+    });
+    expect(await activeCount(account.accountId)).toBe(1);
+
+    // La date de fin recule dans le passé : il n'y a plus de voyage à raconter.
+    const closed = await harness.app.inject({
+      method: "PATCH",
+      url: `/v1/trips/${memo.id}/settings`,
+      headers: { authorization: account.authorization },
+      payload: { endDate: new Date(Date.now() - 86_400_000).toISOString() },
+    });
+    expect(closed.statusCode).toBe(200);
+    expect(await activeCount(account.accountId)).toBe(0);
+
+    // Et le profil le dit, ce qui fait basculer le paywall sur sa version
+    // courte au voyage suivant.
+    const profile = await harness.app.inject({
+      method: "GET",
+      url: "/v1/profile",
+      headers: { authorization: account.authorization },
+    });
+    expect(profile.json<ProfileBody>().subscription).toMatchObject({
+      isActive: false,
+      hasEndedBefore: true,
+    });
+  });
+
+  it("laisse tranquille un voyage sans date de fin", async () => {
+    const account = await registerAccount(harness.app, "sansfin@memobook.app");
+    await subscribe(account.accountId);
+    const open = await seedTrip(account.accountId, { endDate: null });
+    const closed = await seedTrip(account.accountId, {
+      endDate: new Date(Date.now() - 86_400_000),
+    });
+
+    // Fermer le second ne doit rien couper : le premier court toujours.
+    // Quelqu'un qui part sans savoir quand il rentre reste un abonné.
+    await harness.app.inject({
+      method: "PATCH",
+      url: `/v1/trips/${closed.id}/settings`,
+      headers: { authorization: account.authorization },
+      payload: { endDate: new Date(Date.now() - 2 * 86_400_000).toISOString() },
+    });
+
+    expect(open.endDate).toBeNull();
+    expect(await activeCount(account.accountId)).toBe(1);
+  });
+
+  async function activeCount(accountId: string) {
+    return harness.prisma.subscription.count({
+      where: { accountId, status: { in: ["active", "trialing"] } },
+    });
+  }
 });
 
 describe("la suppression d'un compte", () => {

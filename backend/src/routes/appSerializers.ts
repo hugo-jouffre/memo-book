@@ -52,17 +52,57 @@ type MemoForTrip = Memo & {
   members?: (MemoMember & { account?: Account | null })[];
 };
 
-/** Une pastille de co-voyageur. Le nom affiché prime sur celui du compte : quelqu'un peut vouloir apparaître autrement sur un voyage donné. */
-function serializeCompanion(member: MemoMember & { account?: Account | null }) {
+/** Le nom affiché prime sur celui du compte : quelqu'un peut vouloir apparaître autrement sur un voyage donné. */
+function companionName(member: MemoMember & { account?: Account | null }) {
   const account = member.account;
   const fromAccount = [account?.firstName, account?.lastName]
     .filter((part): part is string => Boolean(part?.trim()))
     .join(" ");
 
+  return member.displayName?.trim() || fromAccount || member.invitedEmail || "Co-voyageur";
+}
+
+/**
+ * Une pastille de co-voyageur.
+ *
+ * `role`, `isOwner` et `isPending` sont arrivés avec la feuille « Inviter un
+ * proche » : elle liste le voyage entier, propriétaire compris, et ses deux
+ * actions au balayage dépendent de l'état — on ne retire pas le propriétaire, on
+ * ne renvoie pas de lien à quelqu'un qui raconte déjà.
+ */
+function serializeCompanion(member: MemoMember & { account?: Account | null }) {
   return {
     id: member.id,
-    name: member.displayName?.trim() || fromAccount || member.invitedEmail || "Co-voyageur",
-    avatarUrl: account?.avatarUrl ?? null,
+    name: companionName(member),
+    avatarUrl: member.account?.avatarUrl ?? null,
+    role: member.role ?? null,
+    isOwner: false,
+    // `invited` : le lien est parti, personne n'est entré. `active` veut dire
+    // que le compte a rejoint le voyage.
+    isPending: member.status === "invited",
+  };
+}
+
+/**
+ * La ligne du propriétaire, en tête de la liste des co-voyageurs.
+ *
+ * **Il n'a pas de ligne dans `memo_members`** — cette table ne porte que les
+ * autres —, donc il se fabrique ici. La feuille le montre parce que c'est ce
+ * qui fait lire la liste comme celle du voyage entier ; l'app le retire là où
+ * elle compte les invités (`TripSettings.guests`).
+ */
+function serializeOwner(owner: Account) {
+  const fullName = [owner.firstName, owner.lastName]
+    .filter((part): part is string => Boolean(part?.trim()))
+    .join(" ");
+
+  return {
+    id: owner.id,
+    name: fullName || owner.email || "Moi",
+    avatarUrl: owner.avatarUrl ?? null,
+    role: null,
+    isOwner: true,
+    isPending: false,
   };
 }
 
@@ -343,7 +383,14 @@ export function serializeProfile(
     account.email ||
     "Voyageur";
 
-  const subscription = account.subscriptions?.[0];
+  // L'abonnement en cours s'il y en a un, le plus récent sinon : c'est lui qui
+  // porte le prix affiché, et un ancien abonné doit revoir le sien.
+  const subscriptions = account.subscriptions ?? [];
+  const active = subscriptions.find(
+    (entry) => entry.status === "active" || entry.status === "trialing",
+  );
+  const subscription = active ?? subscriptions[0];
+  const isSubscribed = active !== undefined;
   const defaultCard = account.cards?.find((card) => card.isDefault);
 
   return {
@@ -367,7 +414,15 @@ export function serializeProfile(
     connectors: serializeConnectors(account.connectors ?? []),
     subscription: {
       weeklyPrice: subscription ? euros(subscription.priceCents) : 0,
-      isActive: subscription?.status === "active" || subscription?.status === "trialing",
+      isActive: isSubscribed,
+      // **Déduit, pas stocké** : un abonnement terminé dans l'historique du
+      // compte, et aucun en cours. C'est ce qui fait voir le paywall de retour
+      // — deux écrans au lieu de trois — à quelqu'un qui repart en voyage.
+      hasEndedBefore:
+        !isSubscribed &&
+        (account.subscriptions ?? []).some(
+          (entry) => entry.status === "cancelled" || entry.status === "expired",
+        ),
     },
     orders: orders.map(serializeOrderTracking),
     // Le quota d'étapes offertes est **le même couple que sur l'accueil**, et
@@ -390,6 +445,7 @@ export function serializeProfile(
 type MemoForSettings = Memo & {
   members?: (MemoMember & { account?: Account | null })[];
   renders?: { id: string; pdfUrl?: string | null }[];
+  owner?: Account | null;
 };
 
 /**
@@ -408,7 +464,21 @@ export function serializeTripSettings(memo: MemoForSettings, walletBalanceCents:
     endDate: iso(memo.endDate),
     narrationPace: memo.narrationPace,
     wantsNotifications: memo.notificationsEnabled,
-    companions: (memo.members ?? []).map(serializeCompanion),
+    notifications: {
+      writingReminder: memo.notifyWritingReminder,
+      newStory: memo.notifyNewStory,
+      weeklyDigest: memo.notifyWeeklyDigest,
+      tripEndReminder: memo.notifyTripEnd,
+    },
+    // Le propriétaire **d'abord**, puis les invités dans l'ordre où ils ont été
+    // conviés. C'est l'ordre de la feuille, et il n'est pas décoratif : la
+    // première ligne dit qui tient le voyage.
+    companions: [
+      ...(memo.owner ? [serializeOwner(memo.owner)] : []),
+      ...(memo.members ?? []).map(serializeCompanion),
+    ],
+    // Le code qu'on colle dans un message pour faire entrer quelqu'un.
+    accessCode: memo.accessCode,
     theme: memo.theme,
     isPublicGallery: memo.isPublicGallery,
     // Le style se **résume** plutôt qu'il ne se détaille : la ligne dit
@@ -424,6 +494,10 @@ export function serializeTripSettings(memo: MemoForSettings, walletBalanceCents:
     // qu'un PDF, et fabriquer une image de sa première page côté serveur
     // coûterait un rendu de plus pour une vignette de 56 pt.
     previewCoverUrl: memo.coverPhotoUrl,
+    // Le PDF du dernier rendu prêt — celui que `settingsInclude` va déjà
+    // chercher. C'est lui que les feuilles de personnalisation feuillettent
+    // au-dessus d'elles ; nul tant qu'aucun carnet n'a été composé.
+    bookPdfUrl: memo.renders?.[0]?.pdfUrl ?? null,
     isPrintable: memo.isPrintable,
     customisation: serializeBookCustomisation(memo),
   };
@@ -538,11 +612,6 @@ export function serializeWallet(
  * demandé par le voyageur (`targetPageCount`), pas ce qui est déjà composé —
  * annoncer le coût des deux pages actuelles ferait une promesse qu'on ne
  * tiendra pas.
- *
- * Le montant vient de `printPricing`, **comme celui du tunnel de commande**.
- * C'était un taux à la page défini ici ; deux tarifs pour un même carnet — l'un
- * dans la cagnotte, l'autre au moment de payer — se seraient contredits au
- * premier réglage de prix.
  */
 function serializeWalletEstimate(trip: Pick<Memo, "targetPageCount" | "pageCount">) {
   const pages = Math.max(trip.targetPageCount, trip.pageCount);

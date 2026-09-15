@@ -1,4 +1,5 @@
 import Foundation
+import MemoBookCore
 import MemoBookNetworking
 import MemoBookRecording
 import Observation
@@ -60,6 +61,22 @@ public final class RecordingOutbox {
     /// Un refus **définitif** du serveur, à montrer à l'utilisateur. Ce qui
     /// tient au réseau n'arrive jamais ici : ça retourne dans la file.
     public private(set) var rejection: String?
+
+    /// Où en est le vocal qu'on vient de raconter depuis l'accueil.
+    ///
+    /// Il s'affiche **dans la conversation**, sur un écran que la file ne
+    /// connaît pas — et il peut très bien attendre le réseau sur le disque. La
+    /// bulle lit donc cet état-ci au lieu de décider elle-même : une bulle qui
+    /// se déclarerait envoyée parce que MEMO a répondu mentirait à chaque fois
+    /// qu'on raconte dans le métro. Voir ``RecordingHandoff``.
+    public private(set) var handoffDelivery: HandoffDelivery?
+
+    /// L'envoi d'une bulle précise, suivi de bout en bout. Un seul à la fois :
+    /// c'est toujours le dernier vocal dit.
+    public struct HandoffDelivery: Sendable, Equatable {
+        public let id: String
+        public internal(set) var state: ChatDelivery
+    }
 
     private let store: PendingRecordingStore
     private let connectivity: Connectivity
@@ -130,10 +147,21 @@ public final class RecordingOutbox {
     /// file** : le moniteur dit qu'une interface est montée, pas que l'API
     /// répond.
     @discardableResult
-    public func submit(_ audio: RecordedAudio, to tripIds: [String]) async -> Delivery {
+    public func submit(
+        _ audio: RecordedAudio,
+        to tripIds: [String],
+        handoffId: String? = nil
+    ) async -> Delivery {
         guard !tripIds.isEmpty else { return .delivered }
         rejection = nil
+        if let handoffId { handoffDelivery = HandoffDelivery(id: handoffId, state: .sending) }
 
+        let outcome = await deliverOrQueue(audio, to: tripIds)
+        if let handoffId { note(outcome, of: handoffId) }
+        return outcome
+    }
+
+    private func deliverOrQueue(_ audio: RecordedAudio, to tripIds: [String]) async -> Delivery {
         guard isOnline else { return await queue(audio, for: tripIds) }
 
         sending += 1
@@ -154,6 +182,22 @@ public final class RecordingOutbox {
 
         noteDelivery(of: 1)
         return .delivered
+    }
+
+    /// Ce que la bulle de la conversation doit montrer.
+    ///
+    /// ⚠️ `.queued` **n'est pas un échec, et n'est pas une arrivée** : le vocal
+    /// attend le réseau sur le disque, et la bulle reste donc sur « envoi en
+    /// cours ». C'est ``resolveHandoffIfQueueIsEmpty()`` qui la terminera, au
+    /// retour de la connexion.
+    private func note(_ outcome: Delivery, of handoffId: String) {
+        guard handoffDelivery?.id == handoffId else { return }
+
+        switch outcome {
+        case .delivered: handoffDelivery?.state = .sent
+        case .queued: break
+        case .rejected(let message): handoffDelivery?.state = .failed(message)
+        }
     }
 
     /// Vide la file. Sans effet hors ligne, et un seul vidage à la fois : deux
@@ -220,6 +264,21 @@ public final class RecordingOutbox {
 
         pending = await store.count()
         if delivered > 0 { noteDelivery(of: delivered) }
+        resolveHandoffIfQueueIsEmpty()
+    }
+
+    /// La file est vide et quelque chose est parti : le vocal qu'on suivait en
+    /// faisait partie.
+    ///
+    /// C'est un raccourci, et il est assumé : la file ne rend pas l'identifiant
+    /// du vocal qu'elle vient d'envoyer, et lui en donner un pour cette seule
+    /// bulle demanderait de le porter jusqu'au disque. Le suivi porte toujours
+    /// le **dernier** vocal dit ; quand la file s'est vidée sans rien laisser
+    /// derrière, il est parti avec. Sans ça, la bulle resterait sur « envoi en
+    /// cours » alors que le souvenir est dans le carnet.
+    private func resolveHandoffIfQueueIsEmpty() {
+        guard pending == 0, handoffDelivery?.state == .sending else { return }
+        handoffDelivery?.state = .sent
     }
 
     /// Un vocal, plusieurs carnets, **en même temps** : deux carnets ne font

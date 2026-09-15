@@ -27,6 +27,14 @@ public struct ChatView: View {
 
     private let onIntent: (ChatIntent) -> Void
 
+    /// La file des vocaux, quand l'écran est ouvert par l'app.
+    ///
+    /// Elle n'est là que pour **une** chose : dire où en est l'envoi du vocal
+    /// venu de l'accueil. La bulle est posée par ``RecordingHandoff``, mais son
+    /// état d'envoi ne lui appartient pas — voir ``ChatModel/markHandoff(_:)``.
+    /// `nil` en aperçu et en test, où rien n'a été enregistré ailleurs.
+    private let outbox: RecordingOutbox?
+
     @State private var model: ChatModel
 
     @Environment(\.dismiss) private var dismiss
@@ -60,13 +68,17 @@ public struct ChatView: View {
 
     /// - Parameter handoff: le vocal enregistré depuis l'accueil, à poser dans
     ///   le fil dès qu'il est chargé — voir ``RecordingHandoff``.
+    /// - Parameter outbox: la file qui l'envoie, pour que la bulle suive son
+    ///   sort au lieu de l'inventer.
     public init(
         tripId: String,
         stepId: String? = nil,
         handoff: RecordingHandoff? = nil,
+        outbox: RecordingOutbox? = nil,
         onIntent: @escaping (ChatIntent) -> Void = { _ in }
     ) {
         self.tripId = tripId
+        self.outbox = outbox
         self.onIntent = onIntent
         let model = ChatModel(tripId: tripId, focusStepId: stepId)
         if let handoff { model.expect(handoff) }
@@ -82,6 +94,7 @@ public struct ChatView: View {
         onIntent: @escaping (ChatIntent) -> Void = { _ in }
     ) {
         self.tripId = tripId
+        self.outbox = nil
         self.onIntent = onIntent
         _model = State(initialValue: model)
         _pendingFocus = State(initialValue: stepId)
@@ -113,6 +126,14 @@ public struct ChatView: View {
         // `MemoBookColor`.
         .environment(\.colorScheme, .light)
         .task { await model.load() }
+        // L'envoi du vocal venu de l'accueil se joue **ailleurs** — dans la
+        // file, qui vit au-dessus des écrans et continue pendant qu'on navigue.
+        // La bulle ne fait que suivre ce qu'elle en dit, et `initial: true`
+        // parce qu'il peut être arrivé avant que cet écran ne soit dessiné.
+        .onChange(of: outbox?.handoffDelivery?.state, initial: true) { _, state in
+            guard let state else { return }
+            model.markHandoff(state)
+        }
         // Un écran de chat laissé derrière soi ne doit ni parler ni enregistrer.
         .onDisappear { model.teardown() }
         // Le verrou des étapes offertes : le micro mène au paywall au lieu de

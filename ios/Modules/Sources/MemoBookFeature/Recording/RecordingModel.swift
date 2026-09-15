@@ -22,6 +22,18 @@ public final class RecordingModel {
     /// doit pas faire grossir un tableau qu'on ne dessinera jamais.
     public private(set) var levels: [Double] = []
 
+    /// Le relevé **entier**, lui, sert à la bulle du vocal une fois qu'il est
+    /// dit : c'est la forme d'onde du souvenir, et elle doit dessiner tout ce
+    /// qui a été raconté.
+    ///
+    /// Deux tableaux et non un seul parce qu'ils ne répondent pas à la même
+    /// question. ``levels`` dit « qu'est-ce qui passe sous le micro en ce
+    /// moment » — les quarante dernières barres, qui défilent. Celui-ci dit
+    /// « à quoi ressemble ce vocal » — du premier mot au dernier. Réduire le
+    /// second au premier donnerait à un vocal de deux minutes la silhouette de
+    /// ses trois dernières secondes.
+    public private(set) var capturedLevels: [Double] = []
+
     /// Ce qui a empêché d'enregistrer, dit à l'utilisateur. Le micro refusé,
     /// surtout : c'est le seul cas où il y a quelque chose à faire.
     public private(set) var errorMessage: String?
@@ -88,6 +100,7 @@ public final class RecordingModel {
 
         errorMessage = nil
         levels = []
+        capturedLevels = []
         startSampling()
 
         // La reconnaissance vocale démarre **après**, et son échec ne remonte
@@ -120,6 +133,7 @@ public final class RecordingModel {
         transcriber.reset()
         stopSampling()
         levels = []
+        capturedLevels = []
         errorMessage = nil
         await start()
     }
@@ -144,6 +158,7 @@ public final class RecordingModel {
         transcriber.reset()
         recorder.cancel()
         levels = []
+        capturedLevels = []
     }
 
     // MARK: - La frise
@@ -155,6 +170,7 @@ public final class RecordingModel {
                 try? await Task.sleep(for: Self.samplingInterval)
                 guard let self, self.isCapturing else { return }
                 self.levels.append(self.level)
+                self.capturedLevels.append(self.level)
                 // On ne garde que ce que la frise peut montrer, plus une
                 // poignée de barres d'avance pour que le défilé reste continu.
                 if self.levels.count > BrandWaveformCapacity.maximum {

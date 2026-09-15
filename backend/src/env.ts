@@ -135,11 +135,43 @@ const schema = z.object({
    * derrière est le même.
    */
   APP_LINK_BASE_URL: z.string().default("memobook://"),
+
+  /**
+   * Stripe — encaissement des carnets imprimés et des recharges de cagnotte.
+   *
+   * **Jamais l'abonnement.** Celui-là est un service numérique : Apple impose
+   * StoreKit, et le faire passer par Stripe depuis l'app ferait rejeter le
+   * binaire. Voir `Subscription.provider`, qui porte les deux.
+   *
+   * Les trois clés ne viennent pas du même endroit :
+   * - `STRIPE_SECRET_KEY` — *Développeurs ▸ Clés API*. **Secrète.**
+   * - `STRIPE_PUBLISHABLE_KEY` — même écran, publique par construction : elle
+   *   part dans l'app, comme `GOOGLE_IOS_CLIENT_ID`. Servie par le serveur
+   *   plutôt que codée en dur, pour changer de compte sans livrer l'app.
+   * - `STRIPE_WEBHOOK_SECRET` — *Développeurs ▸ Webhooks*, propre à **chaque**
+   *   point de terminaison. Celui de `stripe listen` en local n'est pas celui
+   *   de la production.
+   *
+   * Vides, les routes de paiement échouent explicitement plutôt que de laisser
+   * croire qu'une commande est payée.
+   */
+  STRIPE_SECRET_KEY: z.string().default(""),
+  STRIPE_PUBLISHABLE_KEY: z.string().default(""),
+  STRIPE_WEBHOOK_SECRET: z.string().default(""),
 });
 
 export type Env = z.infer<typeof schema> & {
   /** `true` quand le pipeline doit appeler les APIs externes pour de vrai. */
   live: boolean;
+
+  /**
+   * `true` quand Stripe encaisse de l'argent réel.
+   *
+   * Déduit du préfixe de la clé, jamais d'une variable à part : une variable
+   * `STRIPE_MODE` pourrait mentir sur la clé posée à côté d'elle, le préfixe
+   * non.
+   */
+  stripeLive: boolean;
 };
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
@@ -187,5 +219,23 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     throw new Error("RENDERER=apitemplate mais APITEMPLATE_API_KEY est vide.");
   }
 
-  return { ...env, live };
+  // Une clé secrète de test avec une clé publique de production — ou l'inverse
+  // — est l'erreur de configuration la plus coûteuse qu'on puisse faire ici :
+  // l'app monte une feuille de paiement sur un compte, le serveur encaisse sur
+  // l'autre, et le paiement échoue *après* que l'utilisateur a validé Face ID.
+  // Le préfixe le dit, donc on refuse de démarrer.
+  const secretLive = env.STRIPE_SECRET_KEY.startsWith("sk_live_");
+  const publishableLive = env.STRIPE_PUBLISHABLE_KEY.startsWith("pk_live_");
+
+  if (env.STRIPE_SECRET_KEY !== "" && env.STRIPE_PUBLISHABLE_KEY !== "") {
+    if (secretLive !== publishableLive) {
+      throw new Error(
+        "Les deux clés Stripe ne sont pas du même mode : " +
+          `secrète=${secretLive ? "live" : "test"}, publique=${publishableLive ? "live" : "test"}. ` +
+          "Reprends les deux sur le même écran du tableau de bord.",
+      );
+    }
+  }
+
+  return { ...env, live, stripeLive: secretLive };
 }

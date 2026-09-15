@@ -209,4 +209,47 @@ public protocol MemoBookAPI: Sendable {
     /// Commande le carnet imprimé, sur un rendu déjà prévisualisé.
     func createPrintOrder(memoId: String, order: NewPrintOrderRequest) async throws -> PrintOrder
     func printOrders(memoId: String) async throws -> [PrintOrder]
+
+    /// Ouvre une recharge de cagnotte.
+    ///
+    /// **Ne crédite rien.** Elle rend de quoi présenter une feuille de
+    /// paiement ; le solde ne bougera qu'une fois l'argent encaissé, sur retour
+    /// de Stripe au serveur. D'où le fait qu'elle rende un ticket et non une
+    /// ``Wallet`` : l'appelant doit relire la cagnotte après le paiement.
+    func startWalletTopUp(amountCents: Int) async throws -> PaymentIntentTicket
+
+    // MARK: - Les réglages d'un voyage
+
+    /// Les réglages d'un voyage : nom, dates, rythme, alertes, co-voyageurs,
+    /// solde, code d'accès — **et les personnalisations du carnet**.
+    ///
+    /// Tout arrive en une réponse parce que l'écran les affiche ensemble : sept
+    /// appels feraient apparaître ses lignes une à une. Les personnalisations
+    /// voyagent avec, parce qu'il y en a un jeu par voyage et qu'aucune requête
+    /// ne les interroge seules.
+    func tripSettings(id: String) async throws -> TripSettings
+
+    /// Change **un** réglage, et relit tout.
+    ///
+    /// Un à la fois, et non la structure entière : un co-voyageur peut régler le
+    /// même voyage au même moment, et renvoyer l'objet complet écraserait ce
+    /// qu'il vient de poser. La réponse est le voyage relu, ce que l'écran garde
+    /// à l'affichage.
+    func updateTripSettings(id: String, edit: TripSettingsEdit) async throws -> TripSettings
+
+    /// Change une personnalisation du carnet. Même route, même règle.
+    func updateBookCustomisation(
+        tripId: String,
+        edit: BookCustomisationEdit
+    ) async throws -> TripSettings
+
+    /// Retire un co-voyageur du voyage, et relit les réglages.
+    ///
+    /// **Le propriétaire ne se retire pas** : le serveur refuse, et l'app ne le
+    /// propose pas. Les souvenirs de la personne retirée restent dans le
+    /// carnet — ils appartiennent au récit.
+    func removeCompanion(tripId: String, companionId: String) async throws -> TripSettings
+
+    /// Renvoie son lien d'invitation à quelqu'un qui n'est jamais entré.
+    func resendInvitation(tripId: String, companionId: String) async throws
 }

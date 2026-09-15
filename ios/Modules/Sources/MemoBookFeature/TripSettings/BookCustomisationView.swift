@@ -16,13 +16,21 @@ import SwiftUI
 /// choisir entre des valeurs. Un interrupteur répond à « est-ce que j'en veux »,
 /// une ligne à « lequel ».
 ///
-/// ⚠️ **Seuls les trois extras s'enregistrent** aujourd'hui. Les onze autres
-/// lignes montrent leur valeur et ne mènent nulle part : leurs écrans de choix
-/// ne sont pas dessinés, et on ne les invente pas (R3). Signalé (T78).
+/// **Six lignes ouvrent désormais leur feuille** — ratio média, nombre de
+/// pages, fun facts, pointillés, décorations, typographie des titres — et
+/// quatre d'entre elles portent les deux pages du carnet au-dessus d'elles, pour
+/// qu'on règle en regardant ce qu'on règle (``BookPagesPeek``).
+///
+/// ⚠️ **Trois lignes restent inertes** : les typographies des sous-titres, des
+/// textes et des fun facts. Leur feuille n'est pas dessinée — seule celle des
+/// **titres** l'est —, et on ne l'invente pas (R3). Signalé (T78).
 public struct BookCustomisationView: View {
     private let onIntent: (BookCustomisationIntent) -> Void
 
     @State private var model: BookCustomisationModel
+
+    /// La feuille ouverte, s'il y en a une.
+    @State private var sheet: BookCustomisationSheet?
 
     public init(
         model: BookCustomisationModel,
@@ -67,6 +75,57 @@ public struct BookCustomisationView: View {
         // `MemoBookColor`.
         .environment(\.colorScheme, .light)
         .task { await model.load() }
+        .brandSheet(item: $sheet, content: sheetContent)
+    }
+
+    /// Les six feuilles, et les deux pages que quatre d'entre elles portent.
+    @ViewBuilder
+    private func sheetContent(_ destination: BookCustomisationSheet) -> some View {
+        // La réserve n'existe que s'il y a un carnet à montrer : sans PDF, la
+        // feuille garde sa hauteur normale plutôt qu'un blanc de 130 pt au-dessus
+        // de son titre.
+        let inset = showsPages(destination) ? BookPagesPeek.sheetInset : 0
+
+        Group {
+            switch destination {
+            case .ratio:
+                BookRatioSheet(model: model)
+            case .pages:
+                BookPagesSheet(model: model)
+            case .funFacts:
+                BookToggleSheet(
+                    title: BookCopy.FunFacts.title,
+                    toggleTitle: BookCopy.FunFacts.toggle,
+                    detail: BookCopy.FunFacts.detail,
+                    isOn: binding(\.funFactsEnabled, model.setFunFacts),
+                    isEnabled: model.customisation != nil,
+                    topOverflow: inset
+                )
+            case .rules:
+                BookToggleSheet(
+                    title: BookCopy.Rules.title,
+                    toggleTitle: BookCopy.Rules.toggle,
+                    detail: BookCopy.Rules.detail,
+                    isOn: binding(\.rulesEnabled, model.setRules),
+                    isEnabled: model.customisation != nil,
+                    topOverflow: inset
+                )
+            case .fonts:
+                BookFontsSheet(model: model, topOverflow: inset)
+            case .decorations:
+                BookDecorationsSheet(model: model, topOverflow: inset)
+            }
+        }
+        // Les deux pages ne se posent que s'il y a un carnet à montrer. Sans
+        // PDF, deux rectangles blancs au-dessus de la feuille se liraient comme
+        // un rendu qui a échoué — et non comme « il n'y a rien encore ».
+        .bookPagesPeek(pdfUrl: model.bookPdfUrl, isVisible: destination.showsBookPages)
+    }
+
+    /// Cette feuille montre-t-elle les pages du carnet ? Les deux conditions,
+    /// ensemble : la feuille les prévoit, et il y a un carnet.
+    private func showsPages(_ destination: BookCustomisationSheet) -> Bool {
+        destination.showsBookPages && model.bookPdfUrl != nil
     }
 
     // MARK: - Les couvertures
@@ -120,14 +179,17 @@ public struct BookCustomisationView: View {
             BrandRow(
                 BookCopy.Customisation.photoTextRatio,
                 value: customisation?.photoTextLabel ?? BookCopy.Settings.noValue,
-                isValueLoading: model.isLoading
+                isValueLoading: model.isLoading,
+                action: { sheet = .ratio }
             )
             BrandRow(
                 BookCopy.Customisation.targetPageCount,
                 value: customisation?.targetPageLabel ?? BookCopy.Settings.noValue,
-                isValueLoading: model.isLoading
+                isValueLoading: model.isLoading,
+                action: { sheet = .pages }
             )
         }
+        .disabled(customisation == nil)
     }
 
     private var decorGroup: some View {
@@ -138,20 +200,24 @@ public struct BookCustomisationView: View {
                 BookCopy.Customisation.funFacts,
                 value: customisation.map { BookCopy.Customisation.toggleValue($0.funFactsEnabled) }
                     ?? BookCopy.Settings.noValue,
-                isValueLoading: model.isLoading
+                isValueLoading: model.isLoading,
+                action: { sheet = .funFacts }
             )
             BrandRow(
                 BookCopy.Customisation.rules,
                 value: customisation.map { BookCopy.Customisation.toggleValue($0.rulesEnabled) }
                     ?? BookCopy.Settings.noValue,
-                isValueLoading: model.isLoading
+                isValueLoading: model.isLoading,
+                action: { sheet = .rules }
             )
             BrandRow(
                 BookCopy.Customisation.decorations,
                 value: customisation?.decorationLabel ?? BookCopy.Settings.noValue,
-                isValueLoading: model.isLoading
+                isValueLoading: model.isLoading,
+                action: { sheet = .decorations }
             )
         }
+        .disabled(customisation == nil)
     }
 
     /// Les quatre familles du carnet.
@@ -164,10 +230,18 @@ public struct BookCustomisationView: View {
         let customisation = model.customisation
 
         return BrandRowGroup {
+            // Seule la typographie des **titres** a sa feuille : c'est la
+            // seule que la maquette dessine (`3443:10073`). Les trois autres
+            // montrent leur valeur et attendent la leur.
             BrandRow(
                 BookCopy.Customisation.fontTitle,
+                // `fontDisplay` et non `fontTitle`, et le croisement est
+                // volontaire : « Typographie des titres » nomme le token
+                // `--mb-font-display` du gabarit, « des sous-titres » nomme
+                // `--mb-font-title`. Voir la table de `LAYOUT_KB.md`.
                 value: customisation?.fontDisplay ?? BookCopy.Settings.noValue,
-                isValueLoading: model.isLoading
+                isValueLoading: model.isLoading,
+                action: { sheet = .fonts }
             )
             BrandRow(
                 BookCopy.Customisation.fontDisplay,
@@ -197,17 +271,17 @@ public struct BookCustomisationView: View {
                 .textCase(.uppercase)
                 .accessibilityAddTraits(.isHeader)
 
-            CustomisationToggleCard(
+            BrandToggleCard(
                 title: BookCopy.Customisation.quizTitle,
                 detail: BookCopy.Customisation.quizDetail,
                 isOn: binding(\.quizEnabled, model.setQuiz)
             )
-            CustomisationToggleCard(
+            BrandToggleCard(
                 title: BookCopy.Customisation.freeZonesTitle,
                 detail: BookCopy.Customisation.freeZonesDetail,
                 isOn: binding(\.freeZonesEnabled, model.setFreeZones)
             )
-            CustomisationToggleCard(
+            BrandToggleCard(
                 title: BookCopy.Customisation.crosswordTitle,
                 detail: BookCopy.Customisation.crosswordDetail,
                 isOn: binding(\.crosswordEnabled, model.setCrossword)
@@ -289,76 +363,6 @@ private struct CoverStack: View {
             }
             .clipShape(.rect(cornerRadius: 3))
             .brandShadow(.soft)
-    }
-}
-
-/// Une carte d'extra : ce que l'option ajoute, et son interrupteur.
-///
-/// Ce n'est pas une ``BrandRow`` parce que son texte fait trois lignes et
-/// **explique** au lieu de nommer une valeur. Une ligne de réglage qui explique
-/// n'est plus une ligne de réglage — c'est déjà l'argument du Tricount sur
-/// l'écran précédent.
-private struct CustomisationToggleCard: View {
-    let title: String
-    let detail: String
-    @Binding var isOn: Bool
-
-    @Environment(\.dynamicTypeSize) private var typeSize
-
-    var body: some View {
-        let shape = RoundedRectangle(cornerRadius: MemoBookSpacing.snug)
-
-        return content
-            .padding(MemoBookSpacing.s)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(MemoBookColor.surface, in: shape)
-            // Figma dessine #E6DAD0, un beige ; `hairline` est l'encre à 10 %,
-            // qui tombe à #E6DFD8 sur le crème. Trois points d'écart sur un
-            // canal : on garde le token plutôt qu'une sixième valeur de filet.
-            .overlay { shape.strokeBorder(MemoBookColor.hairline, lineWidth: 1) }
-    }
-
-    /// En taille accessible, l'interrupteur passe **sous** le texte : à côté
-    /// d'un paragraphe de trois lignes, il ne laisse plus que deux mots par
-    /// ligne.
-    @ViewBuilder
-    private var content: some View {
-        if typeSize.isAccessibilitySize {
-            VStack(alignment: .leading, spacing: MemoBookSpacing.snug) {
-                text
-                toggle
-            }
-        } else {
-            HStack(alignment: .center, spacing: MemoBookSpacing.s) {
-                text
-                toggle
-            }
-        }
-    }
-
-    private var text: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(MemoBookFont.bodySemibold)
-                .foregroundStyle(MemoBookColor.ink)
-            Text(detail)
-                .font(MemoBookFont.h3)
-                .foregroundStyle(MemoBookColor.inkMuted)
-        }
-        .multilineTextAlignment(.leading)
-        .fixedSize(horizontal: false, vertical: true)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    /// Un vrai `Toggle` et non un dessin : c'est lui qui apporte le geste de
-    /// balayage, l'annonce « activé / désactivé » et le comportement attendu par
-    /// VoiceOver — même parti pris que ``BrandRowGroup``.
-    private var toggle: some View {
-        Toggle(title, isOn: $isOn)
-            .labelsHidden()
-            .tint(MemoBookColor.action)
-            .accessibilityLabel(title)
-            .accessibilityHint(detail)
     }
 }
 
