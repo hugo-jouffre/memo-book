@@ -1,0 +1,137 @@
+{#
+  Le gabarit commun à tous les e-mails MemoBook.
+
+  Un seul fichier porte l'en-tête, le pied, les couleurs et les règles de
+  compatibilité. Un e-mail particulier ne redéfinit que `content` : c'est ce qui
+  garantit qu'un mot de passe oublié et une newsletter sortent de la même marque,
+  et qu'une correction de pied de page les corrige tous les deux.
+
+  **Tables, et rien d'autre.** Pas de flex, pas de grid, pas de SVG, pas de
+  `position`. Outlook rend le HTML avec le moteur de Word : tout ce qui n'est pas
+  une table y tombe à plat. Les seules exceptions tolérées sont les `border-radius`
+  (ignorés, donc carrés chez Outlook) et les media queries (ignorées, donc
+  600 px fixes).
+
+  Variables attendues — voir `README.md` :
+    brand.assetsBaseUrl, brand.address, brand.supportEmail
+    message.class ("transactional" | "marketing"), message.reason, message.preheader
+    links.preferences, links.unsubscribe, links.web
+#}
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="fr" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  {# Le mode sombre de Gmail et d'Outlook inverse les couleurs qu'on ne revendique
+     pas. Le crème de la marque y virerait au gris sale : on déclare donc la
+     palette claire, et on l'assume sur tous les clients. #}
+  <meta name="color-scheme" content="light" />
+  <meta name="supported-color-schemes" content="light" />
+  <title>{% block subject %}MemoBook{% endblock %}</title>
+  <!--[if mso]>
+  <noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript>
+  <![endif]-->
+  {# Sora est la police de titre de la marque. Apple Mail et Mail iOS la chargent —
+     c'est-à-dire la quasi-totalité de nos lecteurs ; Gmail et Outlook ne chargent
+     aucune police distante et retombent sur la pile système. Le corps de texte ne
+     tente même pas : General Sans n'est pas distribuée par Google Fonts, et un
+     e-mail n'est pas l'endroit où parier sur un chargement de police. #}
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&amp;display=swap" rel="stylesheet" />
+  <style>
+    /* Réinitialisations obligatoires, client par client. */
+    body { margin: 0 !important; padding: 0 !important; width: 100% !important; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    table { border-collapse: collapse !important; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+    img { border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; display: block; }
+    a { text-decoration: none; }
+    /* iOS transforme dates, adresses et numéros en liens bleus. On les reprend. */
+    a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !important; font-size: inherit !important; font-family: inherit !important; font-weight: inherit !important; line-height: inherit !important; }
+
+    @media only screen and (max-width: 620px) {
+      .mb-wrap { width: 100% !important; }
+      .mb-pad { padding-left: 22px !important; padding-right: 22px !important; }
+      .mb-h1 { font-size: 26px !important; line-height: 32px !important; }
+      .mb-hero { padding: 26px 18px !important; }
+      .mb-btn { display: block !important; width: auto !important; }
+      .mb-stack { display: block !important; width: 100% !important; }
+      .mb-stack-value { text-align: left !important; padding-top: 2px !important; padding-bottom: 12px !important; }
+    }
+  </style>
+</head>
+<body style="margin:0; padding:0; background-color:#FCF2E9;">
+
+  {# Le texte d'aperçu : la ligne que la boîte de réception montre après l'objet.
+     Sans lui, elle affiche le premier texte du corps — « Voir cet e-mail dans
+     votre navigateur ». Les caractères invisibles qui suivent empêchent le client
+     d'aller piocher la suite. #}
+  <div style="display:none; font-size:1px; color:#FCF2E9; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden; mso-hide:all;">
+    {% block preheader %}{{ message.preheader }}{% endblock %}
+    &#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;
+  </div>
+
+  <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color:#FCF2E9;">
+    <tr>
+      <td align="center" style="padding:24px 12px 8px;">
+
+        <table role="presentation" class="mb-wrap" width="600" border="0" cellpadding="0" cellspacing="0" style="width:600px; max-width:600px;">
+
+          <!-- 1 · Bandeau de marque -->
+          <tr>
+            <td align="center" bgcolor="#2D231A" style="background-color:#2D231A; padding:26px 24px; border-radius:18px 18px 0 0;">
+              <a href="{{ links.web }}">
+                <img src="{{ brand.assetsBaseUrl }}/logo.png" width="118" height="88" alt="MemoBook" style="display:block; width:118px; height:auto; border:0;" />
+              </a>
+            </td>
+          </tr>
+
+          {% block content %}{% endblock %}
+
+          <!-- Dernier bloc de la carte : on ferme les coins ici -->
+          <tr>
+            <td bgcolor="#FFFCF8" style="background-color:#FFFCF8; border-radius:0 0 18px 18px; border-top:0; height:8px; line-height:8px; font-size:0;">&nbsp;</td>
+          </tr>
+        </table>
+
+        <!-- 2 · Pied de page, hors de la carte -->
+        <table role="presentation" class="mb-wrap" width="600" border="0" cellpadding="0" cellspacing="0" style="width:600px; max-width:600px;">
+          <tr>
+            <td class="mb-pad" align="center" style="padding:26px 32px 40px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12px; line-height:19px; color:#8A7F73;">
+
+              {#
+                La seule différence légale entre un e-mail de service et une
+                campagne tient dans ces six lignes.
+
+                Un e-mail transactionnel part même si la personne s'est désabonnée
+                de la newsletter : elle a droit à son mot de passe et au suivi de
+                son colis. Il dit donc *pourquoi* il arrive, et ne propose pas de
+                désinscription — proposer d'arrêter les mots de passe oubliés
+                n'aurait aucun sens.
+
+                Une campagne, elle, exige le lien de désinscription, et l'en-tête
+                `List-Unsubscribe` posé par l'expéditeur (voir `docs/emails.md`).
+              #}
+              {% if message.class == "marketing" %}
+                <p style="margin:0 0 10px;">Tu reçois cet e-mail parce que tu as accepté de recevoir les nouvelles de MemoBook.</p>
+                <p style="margin:0 0 16px;">
+                  <a href="{{ links.unsubscribe }}" style="color:#28654B; text-decoration:underline;">Me désabonner</a>
+                  &nbsp;·&nbsp;
+                  <a href="{{ links.preferences }}" style="color:#28654B; text-decoration:underline;">Choisir ce que je reçois</a>
+                </p>
+              {% else %}
+                <p style="margin:0 0 10px;">Tu reçois cet e-mail parce que {{ message.reason }}.</p>
+                <p style="margin:0 0 16px;">
+                  <a href="{{ links.preferences }}" style="color:#28654B; text-decoration:underline;">Gérer mes e-mails</a>
+                </p>
+              {% endif %}
+
+              <p style="margin:0 0 4px; color:#A3988C;">MemoBook — {{ brand.address }}</p>
+              <p style="margin:0; color:#A3988C;">Une question&nbsp;? Réponds à cet e-mail, on lit tout.</p>
+            </td>
+          </tr>
+        </table>
+
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

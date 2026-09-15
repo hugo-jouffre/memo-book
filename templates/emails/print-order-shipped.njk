@@ -1,0 +1,146 @@
+{#
+  « Ton carnet est en route » — `print_order.shipped`.
+
+  Déclenché par le passage de `print_orders.status` à `shipped`, c'est-à-dire par
+  le webhook de l'imprimeur qui renseigne `carrier` et `trackingUrl`. C'est un
+  e-mail de service : il part même à quelqu'un qui a refusé la newsletter.
+
+  Il sert aussi de démonstration du gabarit — tous les blocs réutilisables sont
+  ici, et les autres e-mails y piochent :
+    héros photo · titre · texte · suivi d'étapes · bouton · récapitulatif · aide
+#}
+{% extends "layout.njk" %}
+
+{% block subject %}Ton carnet « {{ order.memoTitle }} » est en route{% endblock %}
+
+{% block preheader %}Parti de l'imprimerie {{ order.shippedOn }}. Livraison estimée entre le {{ order.estimatedFrom }} et le {{ order.estimatedTo }}.{% endblock %}
+
+{% block content %}
+
+<!-- Héros · la couverture du carnet, dans son cadre -->
+<tr>
+  <td class="mb-hero" align="center" bgcolor="#AFD2F0" style="background-color:#AFD2F0; padding:34px 24px 30px;">
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="background-color:#FFFCF8; border:1px solid #E6DCD1; border-radius:4px;">
+      <tr>
+        <td style="padding:13px 13px 0;">
+          {# En production, `coverImageUrl` est la vraie couverture du carnet
+             commandé, figée avec le rendu. Elle est déjà en base — le client ne
+             reçoit donc jamais l'image d'un carnet qu'il n'a pas commandé. #}
+          <img src="{{ order.coverImageUrl }}" width="212" height="274" alt="Couverture du carnet {{ order.memoTitle }}" style="display:block; width:212px; height:auto; border:0;" />
+        </td>
+      </tr>
+      <tr>
+        <td align="center" style="padding:11px 13px 13px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12px; line-height:16px; color:#8A7F73; letter-spacing:0.3px;">
+          {{ order.memoTitle }} · {{ order.pageCount }} pages
+        </td>
+      </tr>
+    </table>
+  </td>
+</tr>
+
+<!-- Titre et message -->
+<tr>
+  <td class="mb-pad" bgcolor="#FFFCF8" style="background-color:#FFFCF8; padding:34px 36px 0;">
+    <h1 class="mb-h1" style="margin:0 0 14px; font-family:'Sora',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif; font-size:30px; line-height:36px; font-weight:700; color:#2D231A; letter-spacing:-0.4px;">
+      Ton carnet est en route
+    </h1>
+    <p style="margin:0 0 8px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:16px; line-height:25px; color:#2D231A;">
+      {{ recipient.firstName }}, « {{ order.memoTitle }} » a quitté l'imprimerie {{ order.shippedOn }}. Le colis voyage maintenant vers {{ order.shipping.city }}.
+    </p>
+  </td>
+</tr>
+
+<!-- Suivi · l'état réel de la commande, pas une illustration -->
+<tr>
+  <td class="mb-pad" bgcolor="#FFFCF8" style="background-color:#FFFCF8; padding:24px 36px 6px;">
+    <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">
+      {% for step in order.tracking %}
+      <tr>
+        <!-- Pastille et trait de liaison -->
+        <td width="30" valign="top" style="width:30px; padding:0;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0">
+            <tr>
+              <td width="14" height="14" bgcolor="{% if step.state == 'todo' %}#E3D9CE{% elif step.state == 'current' %}#28654B{% else %}#8FBFA8{% endif %}" style="width:14px; height:14px; line-height:14px; font-size:0; border-radius:14px;">&nbsp;</td>
+            </tr>
+            {% if not loop.last %}
+            <tr>
+              <td style="padding:2px 0 2px 6px;">
+                <table role="presentation" width="2" border="0" cellpadding="0" cellspacing="0">
+                  <tr><td width="2" height="24" bgcolor="#E3D9CE" style="width:2px; height:24px; line-height:24px; font-size:0;">&nbsp;</td></tr>
+                </table>
+              </td>
+            </tr>
+            {% endif %}
+          </table>
+        </td>
+        <!-- Libellé -->
+        <td valign="top" style="padding:0 0 {% if loop.last %}0{% else %}14{% endif %}px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+          <div style="font-size:15px; line-height:18px; color:{% if step.state == 'todo' %}#A3988C{% else %}#2D231A{% endif %}; font-weight:{% if step.state == 'current' %}600{% else %}400{% endif %};">{{ step.label }}</div>
+          <div style="font-size:13px; line-height:18px; color:#A3988C;">{{ step.detail }}</div>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </td>
+</tr>
+
+<!-- Bouton principal -->
+<tr>
+  <td class="mb-pad" align="center" bgcolor="#FFFCF8" style="background-color:#FFFCF8; padding:26px 36px 8px;">
+    <!--[if mso]>
+    <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{{ order.trackingUrl }}" style="height:50px; v-text-anchor:middle; width:300px;" arcsize="24%" strokecolor="#28654B" fillcolor="#28654B">
+      <w:anchorlock/><center style="color:#FFFCF8; font-family:Arial,sans-serif; font-size:16px; font-weight:bold;">Suivre mon colis</center>
+    </v:roundrect>
+    <![endif]-->
+    <!--[if !mso]><!-- -->
+    <a class="mb-btn" href="{{ order.trackingUrl }}" style="display:inline-block; background-color:#28654B; color:#FFFCF8; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:16px; font-weight:600; line-height:20px; padding:15px 38px; border-radius:12px; text-decoration:none;">Suivre mon colis</a>
+    <!--<![endif]-->
+    <p style="margin:14px 0 0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; line-height:18px; color:#8A7F73;">
+      Suivi {{ order.carrier }} · <a href="{{ links.orderInApp }}" style="color:#28654B; text-decoration:underline;">voir la commande dans l'app</a>
+    </p>
+  </td>
+</tr>
+
+<!-- Récapitulatif -->
+<tr>
+  <td class="mb-pad" bgcolor="#FFFCF8" style="background-color:#FFFCF8; padding:28px 36px 10px;">
+    <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#FCF2E9" style="background-color:#FCF2E9; border-radius:14px;">
+      <tr>
+        <td style="padding:20px 22px 6px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:11px; line-height:14px; letter-spacing:1.2px; text-transform:uppercase; color:#8A7F73;">
+          Commande {{ order.reference }}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:6px 22px 20px;">
+          <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; line-height:21px; color:#2D231A;">
+            <tr>
+              <td class="mb-stack" width="42%" style="padding:5px 0; color:#8A7F73;">Exemplaires</td>
+              <td class="mb-stack mb-stack-value" align="right" style="padding:5px 0;">{{ order.copies }}</td>
+            </tr>
+            <tr>
+              <td class="mb-stack" style="padding:5px 0; color:#8A7F73;">Livraison estimée</td>
+              <td class="mb-stack mb-stack-value" align="right" style="padding:5px 0;">entre le {{ order.estimatedFrom }} et le {{ order.estimatedTo }}</td>
+            </tr>
+            <tr>
+              <td class="mb-stack" valign="top" style="padding:5px 0; color:#8A7F73;">Adresse</td>
+              <td class="mb-stack mb-stack-value" align="right" valign="top" style="padding:5px 0;">
+                {{ order.shipping.name }}<br />{{ order.shipping.line1 }}<br />{{ order.shipping.postalCode }} {{ order.shipping.city }}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </td>
+</tr>
+
+<!-- Aide -->
+<tr>
+  <td class="mb-pad" bgcolor="#FFFCF8" style="background-color:#FFFCF8; padding:14px 36px 30px;">
+    <p style="margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; line-height:22px; color:#8A7F73;">
+      L'adresse n'est pas la bonne, ou le colis n'arrive pas&nbsp;? Réponds à cet e-mail avant la livraison, on rattrape ce qui peut l'être.
+    </p>
+  </td>
+</tr>
+
+{% endblock %}

@@ -1,7 +1,10 @@
+import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppContext } from "../context.js";
+import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
+import { PAYMENT_KIND, ensureStripeCustomer } from "../services/billing.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
 import { serializeWallet } from "./appSerializers.js";
 
@@ -32,6 +35,21 @@ const query = z.object({ tripId: z.string().uuid().optional() });
  * d'écran avant d'être un sujet de route.
  */
 const HISTORY_LIMIT = 50;
+
+/**
+ * Les bornes d'une recharge, en centimes.
+ *
+ * Le plancher écarte les recharges qui coûteraient plus cher en frais Stripe
+ * (0,25 € fixe) qu'elles ne rapportent. Le plafond est un garde-fou : une
+ * cagnotte n'est pas un compte en banque, et une recharge à quatre chiffres est
+ * plus probablement une erreur de saisie qu'une intention.
+ */
+const TOPUP_MIN_CENTS = 500;
+const TOPUP_MAX_CENTS = 50_000;
+
+const topupBody = z.object({
+  amountCents: z.number().int().min(TOPUP_MIN_CENTS).max(TOPUP_MAX_CENTS),
+});
 
 export function registerWalletRoutes(app: FastifyInstance, context: AppContext) {
   app.get("/v1/wallet", async (request) => {
@@ -67,5 +85,51 @@ export function registerWalletRoutes(app: FastifyInstance, context: AppContext) 
     ]);
 
     return serializeWallet(account?.walletBalanceCents ?? 0, entries, trip);
+  });
+
+  /**
+   * Recharger sa cagnotte.
+   *
+   * Ouvre une intention de paiement, et **rien d'autre** : le solde ne bouge
+   * pas ici. C'est le webhook qui écrit au registre, une fois l'argent
+   * réellement encaissé — le schéma le dit, « il n'y a pas d'état en attente :
+   * une écriture n'existe qu'une fois l'argent réellement mouvementé ».
+   *
+   * La clé d'idempotence est tirée à chaque appel, contrairement à celle d'une
+   * commande : recharger deux fois 20 € est une intention parfaitement
+   * légitime, et deux appels doivent donner deux paiements.
+   */
+  app.post("/v1/wallet/topup", async (request, reply) => {
+    const { amountCents } = topupBody.parse(request.body ?? {});
+    const accountId = accountIdOf(request);
+
+    if (context.env.STRIPE_SECRET_KEY === "" && context.env.NODE_ENV === "production") {
+      throw HttpError.badRequest(
+        "L'encaissement n'est pas configuré sur ce serveur.",
+        "payments_unavailable",
+      );
+    }
+
+    const customerId = await ensureStripeCustomer(context, accountId);
+
+    const intent = await context.payments.createIntent({
+      idempotencyKey: `topup:${randomUUID()}`,
+      amountCents,
+      currency: "eur",
+      customerId,
+      metadata: { kind: PAYMENT_KIND.walletTopup, accountId },
+    });
+
+    context.logger.info(
+      { accountId, amountCents, intentId: intent.intentId },
+      "Recharge de cagnotte ouverte",
+    );
+
+    return reply.code(201).send({
+      clientSecret: intent.clientSecret,
+      amountCents,
+      currency: "eur",
+      publishableKey: context.env.STRIPE_PUBLISHABLE_KEY,
+    });
   });
 }

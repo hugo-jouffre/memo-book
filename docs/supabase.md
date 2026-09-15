@@ -291,3 +291,74 @@ faut le savoir avant de les écrire :
 - **Les sauvegardes.** Le plan gratuit n'en fait aucune que tu contrôles. Un
   `pg_dump` quotidien vers un stockage à toi est le minimum dès qu'il y a un
   vrai utilisateur.
+
+## Le budget de connexions — 15, et ils sont partagés
+
+> ⚠️ **Le pooler Supabase en mode session n'accorde que 15 clients**, et ce
+> plafond est celui du **projet**, pas d'une machine. Dépassé, il ne dégrade
+> rien progressivement : il refuse, et **toutes** les routes répondent alors
+> « Erreur interne du serveur ». Le message utile
+> (`FATAL: (EMAXCONNSESSION) max clients reached in session mode`) n'apparaît
+> que dans les journaux du serveur, jamais dans la réponse.
+
+### Qui consomme ces 15
+
+Trois consommateurs, et le piège est qu'ils ne sont pas sur la même machine —
+`docs/deploiement.md` §2 le dit : **`DATABASE_URL` reçoit la même chaîne
+Supabase sur les deux services Railway et dans le `.env` local.**
+
+| Consommateur | Pool | Réglé par |
+|---|---|---|
+| API Railway | Prisma | `connection_limit` dans l'URL, **variable Railway** |
+| Worker Railway | Prisma + pg-boss | idem, plus `max` dans `PgBossQueue` |
+| Dev local | Prisma + pg-boss | `connection_limit` dans `backend/.env` |
+| Tests (`npm test`) | Prisma | `TEST_DATABASE_URL` |
+| Scripts de vérification | Prisma | leur propre URL |
+
+**Prisma ouvre `cœurs × 2 + 1` connexions par défaut** — une vingtaine sur une
+machine moderne, pour un seul processus. **pg-boss en ouvre 10 de plus, et il
+ignore le `connection_limit` de l'URL** : c'est une autre bibliothèque, avec son
+propre pool. Un seul service non plafonné mange donc tout le budget des autres.
+
+### Le symptôme, vu d'en bas
+
+Le développement local cesse de fonctionner **sans que rien n'ait changé en
+local** : c'est un déploiement Railway qui a pris les créneaux. Le signe qui ne
+trompe pas — compter les connexions réellement ouvertes depuis la machine :
+
+```bash
+lsof -nP -iTCP -sTCP:ESTABLISHED | grep -c pooler
+```
+
+Trois ou quatre en local et la base qui refuse quand même : les autres sont
+ailleurs, et c'est Railway.
+
+### Le réglage
+
+Plafonner **partout**, y compris sur Railway. Sur les deux services, ajouter à
+la variable `DATABASE_URL` :
+
+```
+?connection_limit=2&pool_timeout=20
+```
+
+(ou `&` si l'URL porte déjà un `?`). Puis redéployer — une variable
+d'environnement seule ne relance pas le service.
+
+Répartition qui tient dans 15 :
+
+| Qui | Prisma | pg-boss | Total |
+|---|---|---|---|
+| API Railway | 2 | — | 2 |
+| Worker Railway | 2 | 4 | 6 |
+| Dev local | 4 | 4 | 8 *(ne pas faire tourner en même temps que les tests)* |
+| Tests | 2 | — | 2 |
+
+### Ce qui est déjà en place dans le dépôt
+
+- `backend/.env` — `connection_limit` sur `DATABASE_URL` et `TEST_DATABASE_URL`
+- `backend/src/jobs/queue.ts` — `max: 4` sur pg-boss, qui se déploie avec le code
+- `backend/scripts/stripe-e2e.ts` — une seule connexion, explicitement
+
+**Ce qui reste à faire à la main : les variables Railway.** Elles ne sont pas
+dans le dépôt, donc aucun commit ne les corrigera.
