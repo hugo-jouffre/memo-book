@@ -222,8 +222,9 @@ export function registerTripSettingsRoutes(app: FastifyInstance, context: AppCon
   /**
    * Renvoie son lien d'invitation à quelqu'un qui n'est jamais entré.
    *
-   * ⚠️ **Rien ne part encore.** L'envoi d'e-mails transactionnels n'est pas
-   * branché (`docs/emails.md`) : la route vérifie l'appartenance, repousse la
+   * ⚠️ **Rien ne part encore.** `services/mailer.ts` ne sait écrire qu'un seul
+   * message, celui du mot de passe oublié : la route vérifie l'appartenance,
+   * repousse la
    * date d'invitation — ce qui fait repartir tout compteur d'expiration qu'on
    * posera dessus — et rend 204. C'est volontairement peu : mieux vaut une
    * route honnête qu'un bouton qui prétend avoir envoyé.
