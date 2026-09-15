@@ -34,6 +34,19 @@ public struct HomeView: View {
     /// faut aussi que le tracé du M se soit effacé.
     @State private var isLoaded = false
 
+    /// La question du suivi publicitaire a déjà été posée pendant cette
+    /// session-ci.
+    ///
+    /// Ce n'est **pas** la mémoire de la réponse — le système la garde tout
+    /// seul, et ne réaffiche jamais son panneau une fois répondu. Ce drapeau ne
+    /// sert qu'à ne pas relancer la demande à chaque retour sur l'accueil,
+    /// c'est-à-dire à chaque fois qu'on referme un voyage.
+    @State private var hasAskedAboutTracking = false
+
+    @Environment(\.trackingAuthorization) private var trackingAuthorization
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.homeIsFrontmost) private var isFrontmost
+
     @Environment(\.subscriptionSession) private var subscriptionSession
 
     /// La feuille d'enregistrement est ouverte. Même raison que celle du
@@ -146,6 +159,12 @@ public struct HomeView: View {
         .onAppear {
             if isReadyToRise { rise() }
         }
+        // Le panneau du suivi publicitaire, à l'arrivée sur l'accueil — et
+        // nulle part ailleurs. Voir ``askAboutTracking()``.
+        .onChange(of: canAskAboutTracking, initial: true) { _, canAsk in
+            guard canAsk else { return }
+            Task { await askAboutTracking() }
+        }
         // Le réseau qui tombe ou qui revient ne se voit pas quand on ne regarde
         // pas l'écran. VoiceOver l'annonce donc, une fois, à chaque changement :
         // c'est exactement ce que la boîte fait pour quelqu'un qui voit.
@@ -157,6 +176,61 @@ public struct HomeView: View {
 
     /// Le contenu est chargé et plus rien ne le cache.
     private var isReadyToRise: Bool { isLoaded && !isCoveredByLaunch }
+
+    // MARK: - Suivi publicitaire
+
+    /// Le temps qu'on laisse à la cascade avant de poser la question.
+    ///
+    /// Les blocs montent sur 0,5 s chacun, décalés de 0,06 s et plafonnés au
+    /// dixième : l'écran finit de se poser un peu après la seconde. Un panneau
+    /// du système qui surgit avant recouvre précisément ce qu'il interrompt, et
+    /// on répond alors à une question posée devant un écran qu'on n'a pas vu.
+    private static let trackingPromptDelay = Duration.milliseconds(1200)
+
+    /// Ce qu'il faut réunir pour poser la question.
+    ///
+    /// L'app doit être **active** : appelé pendant que l'écran de lancement
+    /// couvre encore tout, ou juste après un retour d'arrière-plan,
+    /// `requestTrackingAuthorization` rend la main sans rien afficher, et la
+    /// question est perdue pour cette session. `scenePhase` est ce qui le dit.
+    ///
+    /// Et l'accueil doit être **l'écran du dessus** : un voyage ouvert entre
+    /// temps laisse l'accueil monté dessous, actif et chargé — la question
+    /// s'ouvrirait alors par-dessus un écran qui n'a rien demandé.
+    private var canAskAboutTracking: Bool {
+        isLoaded && !isCoveredByLaunch && scenePhase == .active && isFrontmost
+    }
+
+    /// Demande l'autorisation de suivi, une seule fois, l'accueil une fois posé.
+    ///
+    /// **C'est le seul endroit de l'app qui la demande**, et c'est voulu :
+    /// Apple veut que la question arrive dans un écran qui a du sens, pas
+    /// devant la porte. L'accueil est le premier écran de quelqu'un qui a un
+    /// compte, et celui d'où part tout le reste.
+    @MainActor
+    private func askAboutTracking() async {
+        guard !hasAskedAboutTracking else { return }
+        // Déjà répondu — accepté, refusé, ou interdit par les Réglages : le
+        // système ne remontrerait rien de toute façon. On s'épargne l'appel.
+        guard trackingAuthorization.current() == .notDetermined else { return }
+
+        // Le drapeau se lève **avant le premier `await`**. Sans ça, le
+        // `onChange` et son `initial: true` lancent deux tâches qui franchissent
+        // toutes les deux le garde-fou avant que l'une l'ait refermé.
+        hasAskedAboutTracking = true
+
+        try? await Task.sleep(for: Self.trackingPromptDelay)
+
+        // Entre-temps, l'app a pu passer en arrière-plan, ou un voyage s'ouvrir
+        // par-dessus. Poser la question là, c'est la perdre ou la mal poser —
+        // on repassera au prochain retour sur l'accueil.
+        guard canAskAboutTracking else {
+            hasAskedAboutTracking = false
+            return
+        }
+
+        _ = await trackingAuthorization.request()
+    }
 
     /// Lance la cascade : chaque bloc monte à son tour, et le M passe derrière.
     private func rise() {

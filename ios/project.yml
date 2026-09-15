@@ -114,6 +114,20 @@ targets:
         # C'est le serveur qui transcrit le vocal pour de bon.
         NSSpeechRecognitionUsageDescription: >-
           MemoBook affiche vos mots à l'écran pendant que vous enregistrez.
+        # App Tracking Transparency. Sans cette clé, `requestTrackingAuthorization`
+        # ne montre **rien** — et le binaire est rejeté (guideline 5.1.2(i)) si
+        # la fiche App Store Connect déclare, elle, un suivi.
+        #
+        # ⚠️ Cette phrase doit décrire ce que l'app fait **vraiment** du suivi.
+        # Au 15/09/2026, MemoBook n'embarque aucun SDK publicitaire et ne
+        # partage rien avec un courtier en données : ce panneau ne sert donc
+        # qu'à mettre le binaire d'accord avec les étiquettes de confidentialité
+        # d'App Store Connect. Le jour où l'une des deux bouge — un SDK qui
+        # arrive, ou les étiquettes qu'on corrige — cette phrase bouge avec.
+        NSUserTrackingUsageDescription: >-
+          MemoBook s'en sert pour mesurer d'où viennent ses nouveaux voyageurs
+          et faire connaître l'app. Vos carnets, vos photos et vos
+          enregistrements n'en font jamais partie.
         # L'API tourne en HTTP en développement local. `NSAllowsLocalNetworking`
         # n'ouvre que le réseau local (`localhost`, `.local`, IP privées) : un
         # build Release qui parle à `https://api.memo-book.com` n'en dépend pas,

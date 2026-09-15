@@ -445,6 +445,57 @@ délégation — donc une autre forme de client d'API. En attendant, ce qui n'a 
 eu le temps de partir reste dans la file et repart au retour dans l'app : rien
 n'est perdu, c'est plus tard.
 
+## Suivi publicitaire (ATT)
+
+L'app demande l'autorisation de suivi **sur l'accueil**, une fois le contenu
+posé — `HomeView.askAboutTracking()`, la valeur est `TrackingAuthorization`,
+montée par `AppDependencies` et descendue par `RootView` une fois la session
+ouverte. C'est le seul endroit qui la demande.
+
+Trois pièges, tous silencieux :
+
+1. **Sans `NSUserTrackingUsageDescription` dans l'Info.plist, rien ne
+   s'affiche.** Pas d'erreur, pas de log : la demande rend la main et l'app
+   croit avoir demandé. La clé vit dans `ios/project.yml`, comme les autres, et
+   `TrackingAuthorizationTests` vérifie qu'elle arrive bien dans le bundle.
+2. **Le panneau ne s'ouvre que si l'app est active.** Appelé pendant que le
+   tracé du M couvre encore l'écran, ou juste après un retour d'arrière-plan,
+   il ne montre rien et la question est perdue pour cette session. D'où les
+   trois conditions de `canAskAboutTracking` — chargé, découvert, `.active`.
+3. **Le système ne demande qu'une fois par installation.** Un second appel rend
+   la réponse déjà stockée sans rien afficher.
+
+### Revoir le panneau
+
+`xcrun simctl privacy` ne connaît **pas** de service `tracking` : la commande
+habituelle ne sert à rien ici. Et un ⌘R ne suffit pas non plus — Xcode
+réinstalle par-dessus sans vider le conteneur, comme pour le mot des fondateurs.
+Deux chemins :
+
+```bash
+xcrun simctl uninstall <device> com.memobook.app   # le conteneur part, la réponse avec
+```
+
+ou *Réglages ▸ Confidentialité et sécurité ▸ Suivi*, éteindre puis rallumer
+« Autoriser les apps à demander de vous suivre » — ce qui remet **toutes** les
+apps à zéro.
+
+### ⚠️ L'app ne suit personne
+
+Au 15/09/2026, MemoBook n'embarque **aucun** SDK publicitaire ou d'analytique,
+et ne partage rien avec un courtier en données : ni côté iOS, ni côté back-end.
+Ce panneau ne rend donc `granted` à personne — il ne sert qu'à mettre le
+binaire d'accord avec les étiquettes de confidentialité d'App Store Connect,
+qui déclarent, elles, un suivi (nom et e-mail).
+
+**C'est cette contradiction qu'il faut trancher, et elle se tranche dans App
+Store Connect, pas ici.** Si les étiquettes sont fausses — c'est ce que dit le
+code — les corriger est la vraie réponse au rejet 5.1.2(i), et ce panneau
+devient une question posée pour rien. S'il naît un jour un vrai suivi, alors
+c'est `NSUserTrackingUsageDescription` qui doit être réécrite pour le décrire,
+et le SDK qui doit lire `TrackingAuthorization.current()` avant de collecter
+quoi que ce soit.
+
 ## Figma
 
 Le MCP Figma est **cher et rationné** (quota atteint en ~3 appels sur le plan

@@ -24,6 +24,14 @@ public final class AppDependencies {
     /// n'est jamais revenu sur l'accueil depuis.
     public let outbox: RecordingOutbox
 
+    /// Le panneau « Autoriser à suivre votre activité ? ».
+    ///
+    /// Il est monté **ici** et non appelé depuis la vue pour la raison
+    /// habituelle : un écran ne parle pas directement à un framework système,
+    /// il reçoit de quoi le faire. C'est aussi ce qui permet à un test de
+    /// vérifier qu'on ne demande qu'une fois, sans panneau à l'écran.
+    public let trackingAuthorization: TrackingAuthorization
+
     /// Qui ouvre une feuille de paiement.
     ///
     /// Une dépendance injectée et non un appel direct au SDK : les aperçus
@@ -42,12 +50,17 @@ public final class AppDependencies {
     ///   - connectivity: d'où l'app apprend qu'elle a du réseau. Le vrai
     ///     moniteur par défaut ; un test en fournit un qu'il pilote.
     ///   - pendingRecordings: où dorment les vocaux qui n'ont pas pu partir.
+    ///   - trackingAuthorization: qui pose la question du suivi publicitaire.
+    ///     Le vrai panneau du système par défaut ; un test en fournit un qui
+    ///     répond sans rien afficher.
     public init(
         api: any MemoBookAPI,
         connectivity: Connectivity = .system,
         pendingRecordings: PendingRecordingStore = .inLibrary(),
+        trackingAuthorization: TrackingAuthorization = .system,
     ) {
         self.api = api
+        self.trackingAuthorization = trackingAuthorization
         // La vraie feuille Stripe par défaut ; un aperçu passe la sienne.
         // `applePayMerchantId` reste nul tant que le certificat Apple Pay n'est
         // pas posé : la feuille montre alors les cartes seules, au lieu d'un

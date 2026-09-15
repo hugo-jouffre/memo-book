@@ -136,6 +136,19 @@ public struct RootView: View {
                 // posé** — celui-ci écrivait donc « Hello, » à tout le monde
                 // en dehors des aperçus.
                 .environment(\.travellerFirstName, account.firstName)
+                // La question du suivi ne se pose qu'une fois entré : elle
+                // appartient à l'accueil, et l'accueil n'existe qu'avec une
+                // session. Un visiteur qui n'a pas de compte n'a donc aucun
+                // panneau devant l'écran d'entrée — ce qui est aussi ce
+                // qu'Apple attend : la demande arrive **dans** l'app, pas
+                // devant sa porte.
+                .environment(\.trackingAuthorization, dependencies.trackingAuthorization)
+                // L'accueil est-il encore l'écran du dessus ? Un `push` ne le
+                // fait pas disparaître — il reste monté sous la destination,
+                // `scenePhase` toujours actif. Sans cette information, une
+                // question posée à retardement s'ouvrirait par-dessus le
+                // voyage qu'on vient d'ouvrir.
+                .environment(\.homeIsFrontmost, path.isEmpty)
             }
         }
         .animation(.snappy, value: stage)
@@ -663,6 +676,12 @@ extension EnvironmentValues {
     /// d'apparition : elle doit **prolonger** le tracé, donc commencer quand le
     /// voile se lève, et non pendant qu'il cache tout.
     @Entry var launchOverlayIsVisible: Bool = false
+
+    /// Rien n'est poussé par-dessus l'accueil.
+    ///
+    /// `true` par défaut : un aperçu isolé de l'accueil n'a pas de pile, et il
+    /// *est* son écran du dessus.
+    @Entry var homeIsFrontmost: Bool = true
 }
 
 /// Ce que l'écran d'entrée peut pousser. Une seule destination, et c'est très
