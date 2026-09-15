@@ -51,6 +51,27 @@ public enum BookCopy {
         public static let order = "Commander le carnet"
         public static let help = "Besoin d’aide ?"
 
+        /// Le lien rouge tout en bas de l'écran, sous « Besoin d'aide ? » —
+        /// le même dessin que « Supprimer mon compte » sur le profil.
+        public static let delete = "Supprimer ce voyage"
+
+        /// La feuille de confirmation, sur le modèle de celle du compte : ce
+        /// que la suppression emporte, et les deux issues.
+        public enum Delete {
+            public static let title = "Tu es sûr de vouloir supprimer ce voyage ?"
+
+            /// Ce qui part, dit avant plutôt qu'après. Les commandes passées
+            /// pour ce carnet partent avec lui — c'est ce que fait
+            /// `services/deletion.ts` — ; la cagnotte, elle, appartient au
+            /// compte et ne bouge pas.
+            public static func body(trip: String) -> String {
+                "« \(trip) » sera effacé pour toi comme pour tes co-voyageurs : ses souvenirs, ses photos, son carnet et les commandes passées pour lui. Ta cagnotte, elle, reste sur ton compte. C’est immédiat et sans retour."
+            }
+
+            public static let keep = "Garder ce voyage"
+            public static let confirm = "Supprimer définitivement ce voyage"
+        }
+
         // MARK: Personnalisations du carnet
 
         /// La valeur d'une ligne dont le voyage n'a rien à dire. Un tiret cadratin

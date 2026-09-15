@@ -3,25 +3,57 @@ import SwiftUI
 
 // Les trois écrans du paywall, et la barre qui les compte.
 
+/// Où en est la barre de l'écran courant.
+///
+/// **Une date de départ, pas une animation.** La barre se remplissait par un
+/// `withAnimation(.linear(6 s))` posé sur un `progress` : une animation de six
+/// secondes en vol, qu'un changement de page devait couper — et qui, sur
+/// l'iPhone de Hugo, survivait et remplissait deux segments à la fois
+/// (15/09/2026), malgré la transaction sans animation qui devait la remplacer.
+/// Ici rien n'est en vol : à chaque image, le segment lit l'heure et calcule sa
+/// part. Tourner la page ne coupe rien, il n'y a rien à couper.
+enum PaywallFill: Equatable {
+    /// Elle se remplit depuis cette date, sur la durée d'un écran.
+    case running(since: Date)
+    /// Elle est arrêtée à cette valeur — pleine sur le dernier écran, figée
+    /// pendant qu'une feuille est ouverte, à zéro l'instant d'un changement de
+    /// page.
+    case held(Double)
+
+    var isRunning: Bool {
+        if case .running = self { true } else { false }
+    }
+
+    /// La part remplie, de 0 à 1, à cet instant.
+    func value(at date: Date, duration: TimeInterval) -> Double {
+        switch self {
+        case .running(let since): Self.fraction(since: since, at: date, duration: duration)
+        case .held(let value): value
+        }
+    }
+
+    static func fraction(since: Date, at date: Date, duration: TimeInterval) -> Double {
+        guard duration > 0 else { return 1 }
+        return min(1, max(0, date.timeIntervalSince(since) / duration))
+    }
+}
+
 /// La barre de stories : un segment par écran, celui du moment se remplit.
 struct PaywallStoriesBar: View {
     let pageCount: Int
     let page: Int
-    let progress: Double
+    let fill: PaywallFill
+    /// Ce que dure un écran — la même valeur que le minuteur qui tourne la page.
+    let duration: TimeInterval
 
     var body: some View {
-        HStack(spacing: MemoBookSpacing.xs) {
-            ForEach(0..<pageCount, id: \.self) { index in
-                Capsule()
-                    .fill(MemoBookColor.outline)
-                    .overlay(alignment: .leading) {
-                        GeometryReader { proxy in
-                            Capsule()
-                                .fill(MemoBookColor.action)
-                                .frame(width: proxy.size.width * fill(of: index))
-                        }
-                    }
-                    .frame(height: PaywallMetrics.storyBarHeight)
+        // La barre se redessine à chaque image **tant qu'elle se remplit**, et
+        // plus du tout ensuite : figée ou pleine, elle ne coûte rien.
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: !fill.isRunning)) { context in
+            HStack(spacing: MemoBookSpacing.xs) {
+                ForEach(0..<pageCount, id: \.self) { index in
+                    PaywallStorySegment(share: share(of: index, at: context.date))
+                }
             }
         }
         .accessibilityElement(children: .ignore)
@@ -30,10 +62,36 @@ struct PaywallStoriesBar: View {
 
     /// Un écran déjà passé est plein, celui du moment se remplit, les suivants
     /// sont vides.
-    private func fill(of index: Int) -> Double {
+    private func share(of index: Int, at date: Date) -> Double {
         if index < page { return 1 }
         if index > page { return 0 }
-        return progress
+        return fill.value(at: date, duration: duration)
+    }
+}
+
+/// Un segment de la barre.
+///
+/// **Les sauts s'animent, le remplissage non.** En avançant, la barre qu'on
+/// quitte passe de sa part à 1 : elle *finit* de se remplir, en un tiers de
+/// seconde, au lieu de sauter. En revenant, celle qu'on rouvre retombe à 0 de la
+/// même façon, puis repart de zéro. Le remplissage continu, lui, est piloté
+/// image par image par la barre et n'a rien à lisser — l'animer lui ferait
+/// prendre du retard sur le minuteur.
+private struct PaywallStorySegment: View {
+    let share: Double
+
+    var body: some View {
+        Capsule()
+            .fill(MemoBookColor.outline)
+            .overlay(alignment: .leading) {
+                GeometryReader { proxy in
+                    Capsule()
+                        .fill(MemoBookColor.action)
+                        .frame(width: proxy.size.width * share)
+                }
+            }
+            .frame(height: PaywallMetrics.storyBarHeight)
+            .animation(share == 0 || share == 1 ? .easeOut(duration: 0.3) : nil, value: share)
     }
 }
 
@@ -307,57 +365,122 @@ struct PaywallOffer: View {
     var title: (lead: String, strong: String) = (
         PaywallCopy.offerTitleLead, PaywallCopy.offerTitleStrong
     )
+    /// « Voir une estimation → », sur la quatrième carte : la feuille qui
+    /// détaille le calcul. L'écran ne la présente pas lui-même — elle se pose
+    /// **par-dessus le paywall entier**, comme l'aperçu.
+    let onEstimate: () -> Void
+    /// « Choisis ton mode de paiement » : la feuille de paiement, présentée par
+    /// le paywall pour la même raison.
     let onSubscribe: () -> Void
 
+    /// La hauteur du pied, mesurée : c'est elle qu'il faut retirer de la page
+    /// pour centrer le contenu dans ce qu'on **voit**. Le `GeometryReader`
+    /// mesure la page entière, pied compris ; centré sur cette hauteur-là, le
+    /// contenu laissait un vide en haut et cachait sa dernière carte sous le
+    /// pied.
+    @State private var footerHeight: CGFloat = 0
+
     var body: some View {
-        VStack(spacing: MemoBookSpacing.l) {
-            Spacer(minLength: 0)
+        // **Une `ScrollView`, et non une pile qui répartit l'espace.** Quatre
+        // cartes, un titre de deux lignes et le pied ne tiennent pas sur un
+        // iPhone SE — ni sur un grand écran en taille de texte agrandie —, et
+        // la pile faisait remonter le tout **sous** la barre de stories, jusque
+        // sur « Besoin d'aide ? » (Hugo, 15/09/2026). Le pied — la mention et le
+        // bouton — reste posé en bas sur le voile de la marque, et les cartes
+        // défilent dessous.
+        GeometryReader { proxy in
+            ScrollView {
+                VStack(spacing: MemoBookSpacing.l) {
+                    Spacer(minLength: 0)
 
-            VStack(spacing: MemoBookSpacing.s) {
-                PaywallEyebrow(PaywallCopy.offerEyebrow)
-                PaywallTitle(lead: title.lead, strong: title.strong, isUnderlined: true)
-            }
-            .paywallProse()
-
-            // Les quatre cartes se chevauchent de 4 pt et penchent chacune de
-            // son côté : c'est une pile de papiers posés à la main, pas une
-            // liste.
-            VStack(spacing: -4) {
-                ForEach(Array(PaywallCopy.arguments.enumerated()), id: \.offset) { _, argument in
-                    PaywallArgumentCard(argument: argument)
-                }
-            }
-            // Les quatre cartes sont du décor, pastille « Voir une estimation »
-            // comprise : elles ne portent aucune action. Sans ça, elles
-            // avaleraient le tapotis de retour sur presque tout l'écran — c'est
-            // la contrepartie d'avoir mis les zones de tapotis dessous.
-            //
-            // ⚠️ Le jour où la pastille mènera quelque part, elle devra sortir
-            // de ce bloc, comme celle de l'écran 2.
-            .paywallProse()
-
-            Spacer(minLength: 0)
-
-            VStack(spacing: MemoBookSpacing.s) {
-                VStack(spacing: MemoBookSpacing.xs / 2) {
-                    ForEach(PaywallCopy.offerFootnote(price: price), id: \.self) { line in
-                        Text(line)
-                            .font(MemoBookFont.taglineRegular)
-                            .foregroundStyle(MemoBookColor.ink)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
+                    VStack(spacing: MemoBookSpacing.s) {
+                        PaywallEyebrow(PaywallCopy.offerEyebrow)
+                        PaywallTitle(lead: title.lead, strong: title.strong, isUnderlined: true)
                     }
-                }
+                    .paywallProse()
 
-                BrandButton(
-                    PaywallCopy.offerCallToAction,
-                    icon: Image(brand: "IconArrowForward"),
-                    iconPlacement: .trailing,
-                    fillsWidth: true,
-                    action: onSubscribe
+                    // Les quatre cartes se chevauchent de 4 pt et penchent
+                    // chacune de son côté : c'est une pile de papiers posés à la
+                    // main, pas une liste. La quatrième porte la seule action du
+                    // bloc, la pastille « Voir une estimation ».
+                    VStack(spacing: -4) {
+                        ForEach(Array(PaywallCopy.arguments.enumerated()), id: \.offset) { _, argument in
+                            PaywallArgumentCard(
+                                argument: argument,
+                                onPill: argument.pill == nil ? nil : onEstimate
+                            )
+                        }
+                    }
+
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, PaywallMetrics.margin)
+                .padding(.top, MemoBookSpacing.s)
+                .frame(maxWidth: .infinity)
+                // Assez haut pour que les deux ressorts centrent le contenu
+                // dans la zone visible quand il y tient ; au-delà, il défile.
+                .frame(minHeight: max(0, proxy.size.height - footerHeight))
+            }
+            .scrollIndicators(.hidden)
+            .scrollBounceBehavior(.basedOnSize)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                footer
+                    .onGeometryChange(for: CGFloat.self, of: \.size.height) { footerHeight = $0 }
+            }
+            // Le voile du haut : ce qui remonte sous la barre de stories s'y
+            // **dissout** au lieu d'être tranché net au ras de la barre — le
+            // même geste que la galerie sous sa barre de filtres. Court, pour
+            // ne toucher que ce qui défile, jamais le surtitre au repos.
+            .overlay(alignment: .top) {
+                LinearGradient(
+                    colors: [MemoBookColor.background, MemoBookColor.background.opacity(0)],
+                    startPoint: .top,
+                    endPoint: .bottom
                 )
+                .frame(height: MemoBookSpacing.s)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
             }
         }
+        // La page sort des marges de l'écran, pour que le voile du pied aille
+        // d'un bord à l'autre et jusqu'au bas de la dalle ; elle remet la marge
+        // sur son propre contenu. Et elle laisse un souffle sous la barre de
+        // stories, que le contenu ne vient pas toucher.
+        .padding(.top, MemoBookSpacing.xs)
+        .padding(.horizontal, -PaywallMetrics.margin)
+        .padding(.bottom, -MemoBookSpacing.l)
+    }
+
+    /// La mention de renouvellement et le bouton, sur le voile — voir
+    /// ``BrandFooterScrim`` : ce qui défile dessous s'y dissout, et les deux
+    /// restent lisibles.
+    private var footer: some View {
+        VStack(spacing: MemoBookSpacing.s) {
+            VStack(spacing: MemoBookSpacing.xs / 2) {
+                ForEach(PaywallCopy.offerFootnote(price: price), id: \.self) { line in
+                    Text(line)
+                        .font(MemoBookFont.taglineRegular)
+                        .foregroundStyle(MemoBookColor.ink)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            BrandButton(
+                PaywallCopy.offerCallToAction,
+                icon: Image(brand: "IconArrowForward"),
+                iconPlacement: .trailing,
+                fillsWidth: true,
+                action: onSubscribe
+            )
+            // Même limite que les CTA de l'accueil et du voyage : au-delà
+            // d'AX1, une barre ancrée en bas prend la moitié de l'écran.
+            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+        }
+        .padding(.horizontal, PaywallMetrics.margin)
+        .padding(.top, MemoBookSpacing.s)
+        .padding(.bottom, MemoBookSpacing.xs)
+        .brandFooterScrim()
     }
 }
 
@@ -365,6 +488,10 @@ struct PaywallOffer: View {
 /// parfois un lien.
 struct PaywallArgumentCard: View {
     let argument: PaywallCopy.Argument
+
+    /// Ce que la pastille ouvre, quand la carte en porte une. `nil` la laisse
+    /// muette — une carte de décor.
+    var onPill: (() -> Void)? = nil
 
     @ScaledMetric(relativeTo: .body) private var badgeSide: CGFloat = 34
     /// Presque la plaque entière : le glyphe du jeu de marque n'occupe qu'une
@@ -399,10 +526,27 @@ struct PaywallArgumentCard: View {
                     .font(MemoBookFont.caption)
 
                 if let pill = argument.pill {
-                    // ⚠️ Inerte : la feuille « Estimation » du nœud n'est pas
-                    // encore écrite — fiche écran.
-                    BrandTagPill(pill, tone: .accentOutlined, isUppercased: true)
+                    if let onPill {
+                        // La pastille **ouvre** la feuille « Estimation »
+                        // (`3469:14105`). Elle garde son dessin de pastille,
+                        // comme celle de l'écran 2 : une proposition posée
+                        // dans une phrase, pas l'appel à l'action de l'écran.
+                        Button(action: onPill) {
+                            BrandTagPill(pill, tone: .accentOutlined, isUppercased: true)
+                        }
+                        .buttonStyle(.plain)
+                        // La cible monte au seuil de R7 sans que la carte
+                        // grandisse : la marge négative rend à la mise en page
+                        // ce que le cadre a pris.
+                        .frame(minHeight: MemoBookSpacing.minimumTapTarget)
+                        .padding(.vertical, -(MemoBookSpacing.minimumTapTarget - 24) / 2)
+                        .contentShape(.rect)
+                        .accessibilityAddTraits(.isButton)
                         .padding(.top, MemoBookSpacing.xs / 2)
+                    } else {
+                        BrandTagPill(pill, tone: .accentOutlined, isUppercased: true)
+                            .padding(.top, MemoBookSpacing.xs / 2)
+                    }
                 }
             }
             .foregroundStyle(MemoBookColor.ink)
@@ -415,7 +559,9 @@ struct PaywallArgumentCard: View {
         .background(MemoBookColor.background, in: shape)
         .overlay { shape.strokeBorder(MemoBookColor.outline, lineWidth: 1) }
         .rotationEffect(.degrees(argument.tilt))
-        .accessibilityElement(children: .combine)
+        // Une carte qui porte un bouton garde ses enfants pour VoiceOver : les
+        // fondre avalerait la pastille.
+        .accessibilityElement(children: onPill == nil ? .combine : .contain)
     }
 }
 

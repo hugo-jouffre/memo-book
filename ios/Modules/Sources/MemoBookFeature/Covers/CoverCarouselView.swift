@@ -225,9 +225,14 @@ struct CoverCarouselView: View {
             // permanence, il ferait concurrence à « Valider » sur les cinq
             // autres plats, où il n'y a rien à choisir.
             if kind == .photo, centred == CoverCarouselItem.importSlot.id {
+                // `IconImport` — la flèche qui entre dans le plateau —, et non
+                // `IconTeleverser` : celui-là est bleu, plein, hors de la grille
+                // de 24 (T101), et se lisait comme un partage (Hugo,
+                // 15/09/2026). Importer une photo, c'est ce mot-là, et la case
+                // du carrousel dit déjà « Importer ma photo ».
                 BrandButton(
                     BookCopy.Covers.choosePhoto,
-                    icon: Image(brand: "IconTeleverser"),
+                    icon: Image(brand: "IconImport"),
                     style: .secondary,
                     fillsWidth: true
                 ) {
@@ -303,8 +308,13 @@ struct CoverCarouselView: View {
     /// La hauteur réservée à la file. Celle du plat **agrandi**, plus l'air que
     /// la pastille cochée prend en débordant du coin haut : sans lui, elle
     /// serait rognée par le bord du défilement.
+    ///
+    /// Une gouttière **de chaque côté**, et non une pour les deux : la file
+    /// centre le plat, donc la moitié seulement de l'air va au-dessus de lui —
+    /// 12 pt, quand l'agrandissement en mange déjà 17 et que la pastille en
+    /// déborde de 13. Le haut du rond coché était tranché (Hugo, 15/09/2026).
     private static var rowHeight: CGFloat {
-        plateWidth / CoverPlate.ratio * selectedScale + MemoBookSpacing.m
+        plateWidth / CoverPlate.ratio * selectedScale + 2 * MemoBookSpacing.m
     }
 }
 

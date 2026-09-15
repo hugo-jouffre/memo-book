@@ -126,7 +126,8 @@ réseau » : elle nomme la panne et donne la commande. Voir
 
 | À l'écran | Cause | Geste |
 |---|---|---|
-| « Rien n'écoute sur localhost:3000 » | serveur arrêté | `cd backend && npm run dev` |
+| « Rien n'écoute sur localhost:3000 » | serveur arrêté (simulateur) | `cd backend && npm run dev` |
+| « Ce build parle à localhost:3000 depuis un iPhone » | un build de téléphone vise une boucle locale — les deux garde-fous de `Debug.xcconfig` et `APIConfiguration.effective` ont sauté | `make project`, rebuild ; ou l'IP du Mac dans `Secrets.xcconfig` avec `[sdk=iphoneos*]` |
 | « La connexion s'est coupée en cours de route » | serveur mort **pendant** l'appel | lire la fin de sa sortie |
 | « n'a pas répondu à temps » | serveur bloqué, souvent sur la base | vérifier `DATABASE_URL` |
 | « Pas de réseau » | là, c'est vraiment le wifi | — |
@@ -149,7 +150,7 @@ Le seed pose les deux comptes de test et leurs voyages. Après un `db:seed`, les
 identifiants des voyages changent : une page de voyage ouverte avant renverra un
 404, ce qui est normal.
 
-### « Erreur interne du serveur » partout : les quinze connexions
+### « Notre serveur a rencontré un problème inattendu » partout : les quinze connexions
 
 Le pooler Supabase, en **mode session** (port 5432), n'accorde que **15 clients
 au total** — pour tout ce qui parle à cette base, l'API déployée comprise. Quand

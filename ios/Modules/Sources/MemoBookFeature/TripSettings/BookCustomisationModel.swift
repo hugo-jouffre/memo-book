@@ -1,5 +1,6 @@
 import Foundation
 import MemoBookCore
+import MemoBookNetworking
 import Observation
 
 /// Ce que l'écran des personnalisations sait faire : les lire, et enregistrer
@@ -26,6 +27,9 @@ import Observation
 public final class BookCustomisationModel {
     public private(set) var settings: TripSettings?
     public private(set) var errorMessage: String?
+
+    /// Ce qu'on peut **faire** de l'erreur — voir `APIError.recoveryAdvice`.
+    public private(set) var errorAdvice: String?
 
     private let tripId: String
     private let source: (String) async throws -> TripSettings
@@ -65,10 +69,22 @@ public final class BookCustomisationModel {
     public func load() async {
         do {
             settings = try await source(tripId)
-            errorMessage = nil
+            clearError()
         } catch {
-            errorMessage = error.localizedDescription
+            report(error)
         }
+    }
+
+    /// Pose l'erreur **et son conseil** : la phrase dit ce qui s'est passé, le
+    /// conseil ce qu'on peut faire (Hugo, 15/09/2026).
+    private func report(_ error: any Error) {
+        errorMessage = error.localizedDescription
+        errorAdvice = (error as? APIError)?.recoveryAdvice
+    }
+
+    private func clearError() {
+        errorMessage = nil
+        errorAdvice = nil
     }
 
     /// Le PDF du carnet composé, pour les deux pages qui flottent au-dessus des
@@ -133,10 +149,10 @@ public final class BookCustomisationModel {
                 let updated = try await persist(tripId, change)
                 guard !Task.isCancelled else { return }
                 settings = updated
-                errorMessage = nil
+                clearError()
             } catch {
                 guard !Task.isCancelled else { return }
-                errorMessage = error.localizedDescription
+                report(error)
                 await load()
             }
         }

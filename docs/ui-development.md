@@ -3011,3 +3011,119 @@ booléens d'alerte sur `memos`, et `memo_members.role`.
 | T122 | **`TripCreationStepContent.paces` reste sur trois libellés libres** (« Tous les jours », « Toutes les semaines », « Tous les mois ») là où les réglages en proposent désormais cinq, tirés de `NarrationPace`. Les deux écrans devraient parler la même langue — à reprendre dans Figma d'abord |
 | T123 | ~~**La pomme du bouton Apple reste celle d'Apple, pas celle de la marque**~~ — **tranché le 15/09/2026 : on garde celle d'Apple.** Un bouton « Se connecter avec Apple » qui porte une pomme redessinée sort de ce qu'Apple autorise — ses règles demandent **son** logo — et un refus en revue coûte une semaine, là où l'écart se voit à peine : le filet, l'aplat et l'arrondi sont déjà les mêmes des deux côtés. `LogoApple` reste dans le catalogue, disponible ailleurs. Le « G » de Google, lui, est bien celui de la marque : Google demande aussi le sien, mais sans porte d'entrée à l'App Store pour le faire respecter |
 | T124 | **La planche de logos est un bitmap, pas un vectoriel.** Les découpes tombent à 131 × 139 et 139 × 150 px pour un affichage de 24 pt — au-dessus du @3x, donc net aujourd'hui, mais sans marge pour un usage plus grand. Un export vectoriel des trois autocollants (Apple, Google, Facebook) réglerait la question |
+
+---
+
+## 20. Retouches du 15/09/2026 — la relecture de Hugo, écran par écran
+
+Dix-neuf retours de Hugo sur l'app en main, un seul lot (branche
+`retouches-du-15-septembre`). Aucun nouvel écran : des corrections, deux
+feuilles de plus sur le paywall, et **un composant** qui remplace quatre
+dessins du même voile.
+
+> Le MCP Figma n'a servi que deux fois : la métadonnée puis la capture du nœud
+> `3469:14105` (la feuille « Estimation »). Tout le reste est décrit en français
+> dans la demande, et appliqué directement (`ios/CLAUDE.md`, § Figma).
+
+### 20.1 Le 500 des paramètres du voyage
+
+« Erreur interne du serveur » en bas des paramètres, sur le compte
+`hugo.jouffre.freelance@gmail.com` — et rien de cliquable au-dessus. **Le
+voyage n'y est pour rien** : ses deux carnets (« Japon », « Test Hugo 1 ») sont
+bien formés en base. La cause est dans les journaux de l'API déployée
+(Railway, service `api`) :
+
+```
+PrismaClientValidationError — Unknown argument `role`
+  include: { members: { where: { status: "active", role: "guest" } } }
+```
+
+L'API en production est le commit `eba4dc6` (PR #27, déployé le 15/09 à
+10 h 06 UTC) : son `tripSettings.ts` filtrait déjà les co-voyageurs sur `role`,
+mais son `schema.prisma` ne connaissait pas encore la colonne — elle est
+arrivée avec la PR #28, fusionnée à 12 h 51 UTC, **qui n'a déclenché aucun
+déploiement**. Le code de `main` est cohérent depuis ; il suffit de le
+déployer. Les lignes inertes étaient la conséquence : les groupes de lignes se
+désactivaient tant que `settings` était nul, donc aussi après un échec.
+
+Ce que le lot change autour de ça, pour que la prochaine panne ne soit pas un
+mur :
+
+| Où | Avant | Après |
+|---|---|---|
+| Le serveur (`app.ts`) | « Erreur interne du serveur. » | « Notre serveur a rencontré un problème inattendu. Ce n'est pas de ton fait : réessaie dans un instant, et si ça continue, écris-nous depuis « Besoin d'aide ? ». » |
+| L'app (`APIError.recoveryAdvice`) | rien | un conseil par famille d'erreur — 5xx, 404, 401, transport, décodage — et la vieille phrase d'un serveur pas encore redéployé est réécrite |
+| `ErrorBanner` | une ligne, « Réessayer » | le constat, le conseil dessous, et « Réessayer » + « Besoin d'aide ? » — sur les paramètres du voyage et les personnalisations |
+| Les groupes de lignes | `.disabled(settings == nil)` | `.disabled(model.isLoading)` : ils attendent la lecture, pas son échec |
+
+### 20.2 Ce qui a changé, écran par écran
+
+| Écran | Retour de Hugo | Ce qui a été fait |
+|---|---|---|
+| Accueil | « Commencer à enregistrer » fait disparaître l'app sur son iPhone, pas sur celui de Clara | `SpeechTranscriber` posait sa prise avec `inputFormat(forBus:)`, périmé dès qu'un casque Bluetooth change la fréquence de la session : `installTap` lève alors une exception Objective-C, que Swift ne rattrape pas. La prise lit désormais `outputFormat(forBus:)` et **renonce** si la fréquence du nœud et celle de la session divergent. C'est le seul écran de l'app qui transcrit en direct — le chat n'a que l'`AudioRecorder`, et il ne plantait pas. Voir T129 |
+| Accueil | un « + » pour créer un voyage, à droite de « Ton voyage » (ou de « Voyage à venir » sans voyage en cours) | `HomeSectionHeading(onAdd:)` et `HomeAddButton` : le rond du « + » des co-voyageurs, cerné de bleu sur le crème. Il ouvre la feuille « Nouveau carnet » — créer, rejoindre, importer |
+| Accueil d'un voyage | la roue des réglages plus petite que l'imprimante, et à droite d'elle | `Settings.svg` et `Settings 2.svg` **recadrés** (`viewBox="4.5 4.5 15 15"`) : le glyphe occupait 42 % de sa boîte, l'imprimante 68 % ; ils font désormais la même taille optique partout — chat compris. Et l'ordre de la conversation : réglages, puis imprimante |
+| Accueil d'un voyage | le CTA vert dit « Accéder au chat », flèche de la marque en fin de libellé | `IconArrowRight`, `iconPlacement: .trailing` ; le cadenas reste devant quand le quota est épuisé |
+| Paramètres du voyage | un lien rouge « Supprimer ce voyage » tout en bas, avec une feuille de confirmation comme celle du compte, puis retour à l'accueil | `DeleteTripSheet` (ce qui part, « Garder ce voyage », « Supprimer définitivement ce voyage »), `TripSettingsModel.delete()` sur `DELETE /v1/memos/:id`, `TripSettingsIntent.tripDeleted` → `RootView` vide la pile, et l'accueil **se relit en réapparaissant** (`onAppear`). Le serveur réserve la route au propriétaire ; un co-voyageur lit son refus dans la feuille (T128) |
+| Paramètres du voyage | le logo Tricount déposé dans `assets/logos` | `import-brand-logos.py` accepte désormais un PNG (`LogoTricount`) ; le « tt » de secours disparaît. Clôt T73 |
+| Paramètres du voyage | « Commander le carnet » ouvre le tunnel de commande | `TripSettingsIntent.orderBook` → `HomeRoute.order`. La ligne n'attend plus `isPrintable`, que l'écran ne pouvait pas lire derrière un 500 : c'est le tunnel qui dit s'il n'y a rien à imprimer (T130) |
+| Personnalisations du carnet | aucune modale ne s'ouvre, sauf « Typographie des titres » | même cause, même correction que les paramètres : `.disabled(model.isLoading)`. La ligne des titres était la seule hors d'un groupe désactivé, ce qui confirmait le diagnostic |
+| Personnalisations du carnet | les trois interrupteurs du bas doivent écrire en base | ils l'étaient déjà — `BookCustomisationModel.setQuiz/setFreeZones/setCrossword` → `PATCH /v1/trips/:id/settings` (`quizEnabled`, `freeZonesEnabled`, `crosswordEnabled`) — et ne le pouvaient pas derrière le 500. Rien à changer côté chaîne ; vérifié de bout en bout sur le code de `main` |
+| Couvertures — photo | « Choisir la photo » porte une vilaine icône de partage | `IconImport` (la flèche qui entre dans le plateau) à la place d'`IconTeleverser`, bleu, plein et hors grille (T101) |
+| Couvertures — carrousels | le rond coché est tranché en haut | la file réserve une gouttière **de chaque côté** (`2 × m`) : elle centre le plat, donc la moitié seulement de l'air allait au-dessus — 12 pt, quand l'agrandissement en mange 17 et la pastille 13 |
+| Couvertures — textes | des crayons ne font rien, pas de clavier | le crayon posait `focus = .title` alors que le champ n'existe **que** lorsqu'il a le focus : SwiftUI ne peut pas focaliser une vue absente, remettait `nil`, et rien n'apparaissait. Un état `editing` ouvre le champ d'abord ; le champ prend le focus en apparaissant |
+| Partout | le voile sous les CTA est tantôt trop appuyé, tantôt s'arrête trop tôt | `BrandFooterScrim` — un fondu de 56 pt puis un aplat à 90 %, jusqu'au bord de la dalle — remplace les quatre voiles de l'accueil, de la galerie, de la commande et de la création d'un voyage ; l'offre du paywall le reçoit aussi |
+| Paywall | les barres se remplissent à plusieurs sur « Continuer » ; retour doit repartir de zéro | la barre ne porte plus d'animation de six secondes : `PaywallFill` retient une **date de départ**, `TimelineView` calcule la part à chaque image, et le segment n'anime que les sauts — à 1 pour la barre qu'on quitte, à 0 pour celle où l'on revient. Voir la fiche § 13.3 |
+| Paywall — offre | trop haut, « Besoin d'aide ? » se voit derrière ; gradient sous le CTA et la mention | `PaywallOffer` défile ; la mention et le bouton sont un pied sur `BrandFooterScrim` |
+| Paywall — offre | la dernière icône a de vilains bords | `IconMoneyBag` était la bichrome — cerne bleu de 2 pt, bande crème —, rendue en gabarit : le cerne devenait de l'encre. `Money Bag.svg` entre dans `assets/icons/brand-icons` en **monochrome** (un seul tracé pair-impair, la bande crème devient un vide), et le script d'import régénère l'asset |
+| Paywall — offre | « Voir une estimation » doit ouvrir la feuille du calcul (`3469:14105`) | `PaywallEstimationSheet` : durée et dates, prix du carnet et pages, cumul des abonnements cerclé, filet, montant final, cartouche « -20 % ». Sur les chiffres de la maquette (T127) |
+| Paywall — offre | « Envoyer des vocaux en illimité » devient « Choisis ton mode de paiement », et ouvre la feuille de paiement avant de revenir à l'accueil | `PaywallPaymentSheet` sur un `ProfileModel` — cartes du compte, Apple Pay, « Ajouter une carte », « Payer 1,99 € » —, fabriqué par `RootView` (`profileModelFactory`) parce que le paywall se présente depuis trois écrans sans dépendances. « Payer » pose l'abonnement et referme le paywall. ⚠️ Rien n'est encaissé (T126) |
+| Support et retours | moins d'air au-dessus de la photo, intro plus grande | 1 rem entre le titre et la photo au lieu de 2 ; l'intro passe au corps de texte (16) |
+| Accueil — 1ère connexion | la nouvelle photo (`assets/photos/Welcome Background.png`), plein écran, jamais de blanc derrière la carte | `PhotoWelcomeHero.jpg` refait depuis le PNG (1080 × 1920, en 2x) ; la photo couvre la dalle entière, sous la carte comprise — tirer la carte vers le bas découvre la photo, plus le crème. Le voile d'encre à 40 % part avec l'ancienne image (T125) |
+
+### 20.3 Ce qui entre dans le design system
+
+| Pièce | Ce qu'elle porte |
+|---|---|
+| `BrandFooterScrim` / `.brandFooterScrim()` | **Le** voile d'un pied d'écran : fondu de `fadeHeight` (56) au-dessus, aplat crème à 90 % dessous, jusqu'au bord de la dalle. Cinq écrans le partagent |
+| `ErrorBanner(message:advice:retry:help:)` | le constat, un conseil, et deux gestes. Sans conseil ni aide, le dessin d'origine |
+| `APIError.recoveryAdvice`, `isServerSide` | le conseil par famille d'erreur, dans le module réseau |
+| `LogoTricount` | le logo d'un tiers, en PNG tel quel — `import-brand-logos.py` sait désormais copier un bitmap |
+| `IconMoneyBag` | monochrome, depuis `assets/icons/brand-icons/Money Bag.svg` |
+| `IconSettings`, `IconSettingsDuo` | recadrés à la taille optique du reste du jeu |
+
+### 20.4 À trancher
+
+| # | Point |
+|---|---|
+| T125 | **La photo d'accueil n'a plus de voile.** L'ancienne portait un aplat d'encre à 40 % pour un texte blanc qui n'existe plus ; la nouvelle image est montrée telle quelle, sous le seul dégradé de la barre d'état. Si Clara veut l'assombrir sous la carte, c'est une ligne |
+| T126 | **« Payer » n'encaisse rien.** La feuille de paiement du paywall pose l'abonnement comme le bouton le faisait avant elle (`ProfileModel.activateSubscription`, `SubscriptionSession.record`). StoreKit reste à brancher, ici comme sur la feuille d'abonnement du profil. Et la feuille d'ajout de carte se présente **par-dessus**, comme dans le profil et la commande — trois occurrences du même écart à la règle des feuilles enchaînées, à régler ensemble |
+| T127 | **La feuille « Estimation » calcule sur les chiffres de la maquette** — trois semaines à partir d'aujourd'hui, 50 pages, 60 € — et seul le prix hebdomadaire vient de l'offre. `GET /v1/wallet` connaît déjà l'estimation d'un carnet ; la lire depuis le paywall demande de savoir quel voyage on finance (`previewMemoId`) et un appel de plus |
+| T128 | **Le lien « Supprimer ce voyage » s'affiche aussi aux co-voyageurs**, à qui le serveur refuse la suppression : `TripSettings` ne dit pas si le compte qui regarde est le propriétaire. Une ligne `isOwner` sur le voyageur courant — ou `companions` marqué « moi » — permettrait de ne le montrer qu'à lui |
+| T129 | **Le plantage de l'enregistrement rapide n'est pas reproduit.** Le diagnostic — la prise audio de la transcription en direct, sur un iPhone où la fréquence de la session a changé (casque Bluetooth, montre) — est le seul point du code qui lève une exception non rattrapable, et le seul écran où il existe. À confirmer avec le rapport de plantage de l'iPhone de Hugo (Réglages ▸ Confidentialité ▸ Analyse) : la première ligne dira `AVAudioIONodeImpl.mm` si c'est bien lui |
+| T130 | **« Commander le carnet » ouvre toujours le tunnel**, même sans carnet composé : c'est `GET /v1/memos/:id/order-context` qui répond alors, et son message. À vérifier sur un voyage sans rendu |
+| T131 | **Railway n'a pas déployé la fusion de la PR #28.** L'API sert `eba4dc6` depuis le 15/09 à 10 h 06 UTC, et le 500 des paramètres vient de là. Cette PR doit déclencher un déploiement ; si elle ne le fait pas, le déclencher à la main (`redeploy`) |
+| T132 | **Le paywall ne réagit plus au tapotis « retour » sur l'écran d'offre**, qui défile désormais : une `ScrollView` prend le doigt avant les zones posées dessous. La flèche du haut ferme, les deux premiers écrans gardent leurs zones. À décider si l'offre doit encore reculer d'un tapotis |
+
+### 20.5 « Testing mode » et l'erreur `localhost`, pour la dernière fois
+
+Un build Debug posé par ⌘R sur un iPhone embarquait `http://localhost:3000` —
+sur le téléphone, c'est le téléphone —, et « Testing mode » répondait « Rien
+n'écoute sur localhost:3000 ». La parade documentée (`Secrets.xcconfig` avec
+l'IP du Mac) reposait sur une action à ne pas oublier ; elle a été oubliée deux
+fois. Le build ne peut plus l'embarquer :
+
+| Garde-fou | Où | Ce qu'il fait |
+|---|---|---|
+| Le SDK décide de l'adresse | `Config/Debug.xcconfig` | `[sdk=iphonesimulator*]` → `localhost`, `[sdk=iphoneos*]` → la production, écrite une seule fois dans `Base.xcconfig` |
+| La production voyage toujours | `project.yml` → `MemoBookProductionAPIBaseURL` | une seconde clé de l'Info.plist, dans tous les builds |
+| L'app refuse une boucle locale hors simulateur | `APIConfiguration.effective(configured:productionFallback:runsInSimulator:)`, `APIConfigurationTests` | remet la production à la place ; sans production ni simulateur, l'app s'arrête net au lieu de parler dans le vide |
+| Le message dit la vraie cause | `APIError.developerDiagnosis` | sur un appareil, « Ce build parle à localhost depuis un iPhone » au lieu de « lance `npm run dev` » |
+
+Vérifié par `xcodebuild -showBuildSettings` sur les deux SDK, par un build
+Debug pour appareil (`generic/platform=iOS`) dont l'Info.plist porte la
+production, et par les six tests de `APIConfigurationTests`. Pour viser le Mac
+depuis un iPhone, `Secrets.xcconfig` pose l'IP avec la condition
+`[sdk=iphoneos*]` — la dernière affectation l'emporte, conditionnée ou non ;
+sans condition, le simulateur perd `localhost` aussi. Voir `docs/deploiement.md`.
+

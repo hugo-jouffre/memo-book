@@ -18,7 +18,9 @@ open MemoBook.xcodeproj
 Le `.xcodeproj` **n'est pas versionné** : `project.yml` en est la source. Ça évite les
 conflits Git sur le pbxproj et rend la structure du projet lisible en revue de code.
 
-L'app parle par défaut à `http://localhost:3000` — lance `cd ../backend && npm run dev` avant.
+Dans le simulateur, l'app parle à `http://localhost:3000` — lance `cd ../backend && npm run dev` avant.
+Sur un iPhone branché, un build Debug parle à la **production** : `localhost` y serait le téléphone
+(voir `Config/Debug.xcconfig`, et `docs/deploiement.md` pour viser le Mac à la place).
 
 ```bash
 make test                 # tests des modules, sur simulateur

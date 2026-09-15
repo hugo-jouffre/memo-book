@@ -10,6 +10,13 @@ struct HomeSectionHeading: View {
     var showsLiveDot = false
     var count: Int?
 
+    /// Ouvrir un nouveau carnet. Fournie, elle pose un « + » au bout de la
+    /// ligne — sur « Ton voyage », ou sur « Voyage à venir » quand rien n'est en
+    /// cours (Hugo, 15/09/2026). C'était la seule chose qui manquait à quelqu'un
+    /// qui a déjà un voyage ouvert : le CTA du bas parle alors du micro, et la
+    /// carte pointillée qui ouvrait la feuille n'apparaît que sans voyage.
+    var onAdd: (() -> Void)?
+
     @ScaledMetric(relativeTo: .title3) private var dotSide: CGFloat = 9
 
     var body: some View {
@@ -44,9 +51,53 @@ struct HomeSectionHeading: View {
             }
 
             Spacer(minLength: 0)
+
+            if let onAdd {
+                HomeAddButton(action: onAdd)
+                    // Le rond fait 2.75 rem de cible, le titre une ligne de 26 :
+                    // la marge négative le centre sur la ligne sans que la
+                    // section grandisse de sa moitié.
+                    .padding(.vertical, -(MemoBookSpacing.minimumTapTarget - 26) / 2)
+            }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
+        // Avec un « + », la ligne garde ses deux éléments pour VoiceOver : le
+        // titre en entête, et le bouton — les fondre l'aurait fait disparaître
+        // du curseur.
+        .accessibilityElement(children: onAdd == nil ? .combine : .contain)
+        .accessibilityAddTraits(onAdd == nil ? .isHeader : [])
+    }
+}
+
+/// Le « + » d'une section de voyages : ouvrir un nouveau carnet.
+///
+/// Le même rond que celui qui invite un co-voyageur en tête d'un voyage
+/// (``CompanionStack``) — 34 de dessin, 2.75 rem de cible —, cerné de bleu ici
+/// parce qu'il se pose sur le crème et non sur une photo : blanc sur crème sans
+/// filet, il n'aurait pas l'air d'un bouton.
+struct HomeAddButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(brand: "IconPlus")
+                .resizable()
+                .renderingMode(.template)
+                .scaledToFit()
+                // Le glyphe n'occupe que la moitié de sa boîte — voir
+                // ``MemoBookSpacing/contentIcon`` : 22 de boîte font 12 d'encre.
+                .frame(width: MemoBookSpacing.s + 6, height: MemoBookSpacing.s + 6)
+                .foregroundStyle(MemoBookColor.ink)
+                .frame(width: CompanionStack.diameter, height: CompanionStack.diameter)
+                .background(MemoBookColor.surface, in: .circle)
+                .overlay { Circle().strokeBorder(MemoBookColor.outline, lineWidth: 1.5) }
+                .frame(
+                    width: MemoBookSpacing.minimumTapTarget,
+                    height: MemoBookSpacing.minimumTapTarget
+                )
+                .contentShape(.circle)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Ouvrir un nouveau carnet")
     }
 }
 

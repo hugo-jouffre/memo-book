@@ -58,9 +58,14 @@ public struct BookCustomisationView: View {
                 extras
 
                 if let message = model.errorMessage {
-                    ErrorBanner(message: message) {
-                        Task { await model.load() }
-                    }
+                    // Le constat, le conseil, et les deux gestes — comme sur
+                    // les paramètres du voyage (Hugo, 15/09/2026).
+                    ErrorBanner(
+                        message: message,
+                        advice: model.errorAdvice,
+                        retry: { Task { await model.load() } },
+                        help: { onIntent(.openHelp) }
+                    )
                 }
             }
             .animation(.snappy(duration: 0.25), value: model.customisation == nil)
@@ -189,7 +194,11 @@ public struct BookCustomisationView: View {
                 action: { sheet = .pages }
             )
         }
-        .disabled(customisation == nil)
+        // Le temps de la lecture, et pas au-delà : une lecture qui a échoué
+        // ne doit pas geler les lignes — elles ouvraient encore leurs
+        // feuilles, elles ne le pouvaient plus derrière un 500 (Hugo,
+        // 15/09/2026). Les feuilles, elles, savent attendre des valeurs.
+        .disabled(model.isLoading)
     }
 
     private var decorGroup: some View {
@@ -217,7 +226,7 @@ public struct BookCustomisationView: View {
                 action: { sheet = .decorations }
             )
         }
-        .disabled(customisation == nil)
+        .disabled(model.isLoading)
     }
 
     /// Les quatre familles du carnet.
@@ -317,6 +326,8 @@ public struct BookCustomisationView: View {
 public enum BookCustomisationIntent: Sendable, Hashable {
     /// L'aperçu et la personnalisation des deux couvertures.
     case openCovers
+    /// Le support, depuis le bandeau d'erreur : quand réessayer ne suffit pas.
+    case openHelp
 }
 
 // MARK: - Les deux blocs propres à l'écran

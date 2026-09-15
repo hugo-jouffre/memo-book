@@ -18,11 +18,22 @@ import SwiftUI
 struct CoverTextsView: View {
     @Bindable var model: CoversModel
 
-    /// Le champ ouvert, s'il y en a un.
+    /// Le champ **ouvert** par un crayon, s'il y en a un.
+    ///
+    /// ⚠️ **Distinct du focus, et c'est ce qui manquait.** Le crayon posait
+    /// directement `focus = .title` ; or le champ n'existe à l'écran *que*
+    /// lorsqu'il est ouvert. SwiftUI ne peut pas donner le focus à une vue qui
+    /// n'est pas là : il remettait la valeur à `nil` dans la même passe, le
+    /// champ n'apparaissait jamais, et aucun clavier ne montait — un crayon sur
+    /// deux ne faisait rien (Hugo, 15/09/2026). On ouvre donc le champ d'abord,
+    /// et c'est lui qui prend le focus en apparaissant.
+    @State private var editing: Field?
+
+    /// Le focus du champ du titre. Il suit ``editing``, il ne le décide pas.
     @FocusState private var focus: Field?
 
     /// Le focus du cadre de texte, qui ne connaît qu'un booléen. Tenu d'accord
-    /// avec ``focus`` — voir ``fields``.
+    /// avec ``editing`` — voir ``fields``.
     @FocusState private var isWritingSubtitle: Bool
 
     private enum Field: Hashable { case title, subtitle }
@@ -70,7 +81,7 @@ struct CoverTextsView: View {
         .onChange(of: model.face) { _, _ in
             // Changer de plat ferme le champ ouvert : le titre du devant et le
             // texte du dos ne se corrigent pas dans le même champ.
-            focus = nil
+            close()
             readTexts()
         }
         .onAppear(perform: readTexts)
@@ -98,7 +109,7 @@ struct CoverTextsView: View {
                         stats: model.face == .back ? model.covers?.statSelection ?? [] : [],
                         width: width,
                         titleBadge: model.face == .front
-                            ? AnyView(pencil(BookCopy.Covers.Voice.editTitle) { focus = .title })
+                            ? AnyView(pencil(BookCopy.Covers.Voice.editTitle) { open(.title) })
                             : nil,
                         // ⚠️ **Le texte de dos n'a pas de crayon**, et c'est la
                         // maquette : « 4 - cover textes verso » n'en pose qu'un,
@@ -109,7 +120,7 @@ struct CoverTextsView: View {
                         // réécrire celui-ci.
                         subtitleBadge: model.face == .front
                             ? AnyView(
-                                pencil(BookCopy.Covers.Voice.editSubtitle) { focus = .subtitle }
+                                pencil(BookCopy.Covers.Voice.editSubtitle) { open(.subtitle) }
                             )
                             : nil,
                         statsBadge: model.face == .back
@@ -177,7 +188,7 @@ struct CoverTextsView: View {
     @ViewBuilder
     private var fields: some View {
         VStack(spacing: MemoBookSpacing.snug) {
-            switch focus {
+            switch editing {
             case .title:
                 BrandTextField(
                     BookCopy.Covers.Voice.editTitle,
@@ -186,6 +197,10 @@ struct CoverTextsView: View {
                     focus: $focus,
                     labelPlacement: .above
                 )
+                // Le clavier monte **une fois le champ à l'écran** — d'où le
+                // passage par `editing`. Une image plus tard, pour que la vue
+                // soit bien dans la hiérarchie quand le focus la cherche.
+                .onAppear { focusSoon { focus = .title } }
 
             case .subtitle:
                 BrandTextBox(
@@ -198,21 +213,52 @@ struct CoverTextsView: View {
                     minimumHeight: model.face == .front ? 72 : 133,
                     lineSpan: model.face == .front ? 2...4 : 4...10
                 )
+                .onAppear { focusSoon { isWritingSubtitle = true } }
 
             case nil:
                 EmptyView()
             }
         }
-        .animation(.snappy(duration: 0.25), value: focus)
-        // Les deux focus sont tenus d'accord : `BrandTextBox` porte un booléen
-        // là où le reste de l'écran travaille sur l'énumération des champs.
-        // Refermer le clavier doit refermer le cadre, sinon il reste ouvert et
-        // vide sous le plat.
-        .onChange(of: isWritingSubtitle) { _, isWriting in
-            if !isWriting, focus == .subtitle { focus = nil }
-        }
+        .animation(.snappy(duration: 0.25), value: editing)
+        // Refermer le clavier referme le champ, sinon il reste ouvert et vide
+        // sous le plat. Chaque champ ne referme que **le sien** : quand on passe
+        // du titre à la signature, le focus du premier retombe à `nil` pendant
+        // que le second s'ouvre, et ce n'est pas une fermeture.
         .onChange(of: focus) { _, field in
-            isWritingSubtitle = field == .subtitle
+            if field == nil, editing == .title { editing = nil }
+        }
+        .onChange(of: isWritingSubtitle) { _, isWriting in
+            if !isWriting, editing == .subtitle { editing = nil }
+        }
+    }
+
+    /// Ouvre le champ d'un crayon. Un second appui sur le même crayon rend le
+    /// focus au champ déjà ouvert plutôt que de le refermer et le rouvrir.
+    private func open(_ field: Field) {
+        guard editing != field else {
+            focusSoon {
+                switch field {
+                case .title: focus = .title
+                case .subtitle: isWritingSubtitle = true
+                }
+            }
+            return
+        }
+        editing = field
+    }
+
+    private func close() {
+        focus = nil
+        isWritingSubtitle = false
+        editing = nil
+    }
+
+    /// Donne le focus **après** la passe de rendu en cours : une vue qui vient
+    /// d'être insérée ne le prend pas dans la même passe.
+    private func focusSoon(_ apply: @escaping @MainActor () -> Void) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(60))
+            apply()
         }
     }
 
