@@ -11,6 +11,7 @@ let package = Package(
         .library(name: "MemoBookCore", targets: ["MemoBookCore"]),
         .library(name: "MemoBookDesign", targets: ["MemoBookDesign"]),
         .library(name: "MemoBookNetworking", targets: ["MemoBookNetworking"]),
+        .library(name: "MemoBookPayments", targets: ["MemoBookPayments"]),
         .library(name: "MemoBookRecording", targets: ["MemoBookRecording"]),
         .library(name: "MemoBookFeature", targets: ["MemoBookFeature"]),
     ],
@@ -20,6 +21,11 @@ let package = Package(
     // même, par transitivité.
     dependencies: [
         .package(url: "https://github.com/google/GoogleSignIn-iOS", from: "9.0.0"),
+        // Stripe, pour la feuille de paiement du carnet imprimé et de la
+        // cagnotte. **Jamais pour l'abonnement** : Apple impose l'achat intégré
+        // pour un service numérique, et l'encaisser ici ferait rejeter le
+        // binaire. Voir `MemoBookPayments`.
+        .package(url: "https://github.com/stripe/stripe-ios", from: "24.0.0"),
     ],
     targets: [
         // Modèles et types partagés. Aucune dépendance : c'est ce qui permet de
@@ -38,6 +44,21 @@ let package = Package(
         // Client de l'API MemoBook.
         .target(name: "MemoBookNetworking", dependencies: ["MemoBookCore"]),
 
+        // La feuille de paiement Stripe, isolée dans son module.
+        //
+        // À part, et pas dans `MemoBookFeature`, pour une raison précise : le
+        // SDK Stripe est la seule dépendance de l'app qui touche à de l'argent.
+        // L'isoler rend visible, à la lecture du graphe, **tout** ce qui peut
+        // déclencher un paiement — et garantit qu'aucun écran ne l'appelle
+        // sans passer par la façade qu'on contrôle.
+        .target(
+            name: "MemoBookPayments",
+            dependencies: [
+                "MemoBookCore",
+                .product(name: "StripePaymentSheet", package: "stripe-ios"),
+            ]
+        ),
+
         // Capture audio (AVFoundation) et permissions.
         .target(name: "MemoBookRecording", dependencies: ["MemoBookCore"]),
 
@@ -48,6 +69,7 @@ let package = Package(
                 "MemoBookCore",
                 "MemoBookDesign",
                 "MemoBookNetworking",
+                "MemoBookPayments",
                 "MemoBookRecording",
                 // Seul `GoogleSignIn` est utile : `GoogleSignInSwift` n'apporte
                 // que son bouton, et le nôtre est déjà dessiné.

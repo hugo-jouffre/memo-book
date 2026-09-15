@@ -587,6 +587,21 @@ public actor MemoBookAPIClient: MemoBookAPI {
         }
     }
 
+    /// Le corps de la recharge. Une structure locale plutôt qu'un dictionnaire :
+    /// `send(method:path:body:)` ne prend que des `String`, et un montant est un
+    /// entier de centimes — le passer en texte le rendrait arrondissable.
+    private struct TopUpBody: Encodable {
+        let amountCents: Int
+    }
+
+    public func startWalletTopUp(amountCents: Int) async throws -> PaymentIntentTicket {
+        try await send(
+            method: "POST",
+            path: "/v1/wallet/topup",
+            encodableBody: TopUpBody(amountCents: amountCents)
+        )
+    }
+
     public func printOrders(memoId: String) async throws -> [PrintOrder] {
         struct Response: Decodable { let orders: [PrintOrder] }
         let response: Response = try await send(method: "GET", path: "/v1/memos/\(memoId)/orders")
