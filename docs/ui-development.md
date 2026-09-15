@@ -3105,3 +3105,25 @@ mur :
 | T131 | **Railway n'a pas déployé la fusion de la PR #28.** L'API sert `eba4dc6` depuis le 15/09 à 10 h 06 UTC, et le 500 des paramètres vient de là. Cette PR doit déclencher un déploiement ; si elle ne le fait pas, le déclencher à la main (`redeploy`) |
 | T132 | **Le paywall ne réagit plus au tapotis « retour » sur l'écran d'offre**, qui défile désormais : une `ScrollView` prend le doigt avant les zones posées dessous. La flèche du haut ferme, les deux premiers écrans gardent leurs zones. À décider si l'offre doit encore reculer d'un tapotis |
 
+### 20.5 « Testing mode » et l'erreur `localhost`, pour la dernière fois
+
+Un build Debug posé par ⌘R sur un iPhone embarquait `http://localhost:3000` —
+sur le téléphone, c'est le téléphone —, et « Testing mode » répondait « Rien
+n'écoute sur localhost:3000 ». La parade documentée (`Secrets.xcconfig` avec
+l'IP du Mac) reposait sur une action à ne pas oublier ; elle a été oubliée deux
+fois. Le build ne peut plus l'embarquer :
+
+| Garde-fou | Où | Ce qu'il fait |
+|---|---|---|
+| Le SDK décide de l'adresse | `Config/Debug.xcconfig` | `[sdk=iphonesimulator*]` → `localhost`, `[sdk=iphoneos*]` → la production, écrite une seule fois dans `Base.xcconfig` |
+| La production voyage toujours | `project.yml` → `MemoBookProductionAPIBaseURL` | une seconde clé de l'Info.plist, dans tous les builds |
+| L'app refuse une boucle locale hors simulateur | `APIConfiguration.effective(configured:productionFallback:runsInSimulator:)`, `APIConfigurationTests` | remet la production à la place ; sans production ni simulateur, l'app s'arrête net au lieu de parler dans le vide |
+| Le message dit la vraie cause | `APIError.developerDiagnosis` | sur un appareil, « Ce build parle à localhost depuis un iPhone » au lieu de « lance `npm run dev` » |
+
+Vérifié par `xcodebuild -showBuildSettings` sur les deux SDK, par un build
+Debug pour appareil (`generic/platform=iOS`) dont l'Info.plist porte la
+production, et par les six tests de `APIConfigurationTests`. Pour viser le Mac
+depuis un iPhone, `Secrets.xcconfig` pose l'IP avec la condition
+`[sdk=iphoneos*]` — la dernière affectation l'emporte, conditionnée ou non ;
+sans condition, le simulateur perd `localhost` aussi. Voir `docs/deploiement.md`.
+

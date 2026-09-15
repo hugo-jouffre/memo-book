@@ -149,6 +149,10 @@ targets:
         # seul chemin par lequel une valeur d'`.xcconfig` devient lisible à
         # l'exécution — voir `APIConfiguration.fromBuildConfiguration`.
         MemoBookAPIBaseURL: $(MEMOBOOK_API_BASE_URL)
+        # Et la production, toujours, sous sa propre clé : le filet qu'un
+        # appareil prend si l'adresse ci-dessus désigne une boucle locale —
+        # voir `APIConfiguration.effective(...)`.
+        MemoBookProductionAPIBaseURL: $(MEMOBOOK_PRODUCTION_API_URL)
     # Sign in with Apple. La capability cochée dans Xcode ne survit pas au
     # prochain `make project` : le .xcodeproj est régénéré depuis ce fichier,
     # c'est donc ici qu'elle doit être déclarée pour de bon. XcodeGen écrit le

@@ -118,20 +118,41 @@ public enum APIError: Error, LocalizedError, Sendable {
                 return "L'appel vers \(target) a échoué.\n\n\(error)"
             }
 
+            #if targetEnvironment(simulator)
+                let runsInSimulator = true
+            #else
+                let runsInSimulator = false
+            #endif
+
             return switch urlError.code {
             case .cannotConnectToHost, .cannotFindHost:
-                isLocal
+                // Sur un iPhone, `localhost` est le téléphone : ce n'est pas le
+                // back-end qui manque, c'est l'adresse qui est fausse — et
+                // relancer `npm run dev` n'y changerait rien. Le build ne doit
+                // plus pouvoir l'embarquer (`Debug.xcconfig`,
+                // `APIConfiguration.effective`) ; si cette phrase s'affiche
+                // quand même, c'est l'un des deux garde-fous qui a sauté.
+                isLocal && !runsInSimulator
                     ? """
-                    Rien n'écoute sur \(target).
+                    Ce build parle à \(target) depuis un iPhone — c'est-à-dire \
+                    au téléphone lui-même.
 
-                    Le back-end n'est pas lancé :
-                        cd backend && npm run dev
-
-                    Pour vérifier, dans un autre terminal :
-                        curl -s -o /dev/null -w "%{http_code}\\n" \
-                          localhost:3000/v1/showcases/welcome
+                    Un appareil doit viser la production, ou l'IP du Mac \
+                    dans Config/Secrets.xcconfig (avec la condition \
+                    [sdk=iphoneos*]). Voir ios/Config/Debug.xcconfig.
                     """
-                    : "Impossible de joindre \(target)."
+                    : isLocal
+                        ? """
+                        Rien n'écoute sur \(target).
+
+                        Le back-end n'est pas lancé :
+                            cd backend && npm run dev
+
+                        Pour vérifier, dans un autre terminal :
+                            curl -s -o /dev/null -w "%{http_code}\\n" \
+                              localhost:3000/v1/showcases/welcome
+                        """
+                        : "Impossible de joindre \(target)."
 
             case .networkConnectionLost:
                 """

@@ -78,13 +78,35 @@ l'interface, ou par `-resetOnboarding`.
 
 Ce qui change d'un environnement à l'autre vit dans `Config/*.xcconfig`, jamais
 dans le code : l'URL de l'API et le client OAuth Google. `Base.xcconfig` porte
-le commun, `Debug` le back-end local, `Release` la production.
+le commun — dont **l'adresse de production, écrite une seule fois** —, `Debug`
+le back-end local, `Release` la production.
 
-Les valeurs traversent par l'**Info.plist** (`MemoBookAPIBaseURL`), seul chemin
-par lequel un réglage de build devient lisible à l'exécution. Côté Swift,
-`APIConfiguration.fromBundle()` la lit et `fromBuildConfiguration` décide de
-l'absence : repli local en debug, arrêt net en release — un build livré ne doit
-pas parler à `localhost` en silence, ce qu'il faisait avant.
+**Un iPhone ne parle jamais à `localhost`.** Sur le téléphone, `localhost` est
+le téléphone : un build Debug posé par ⌘R y répondait « Rien n'écoute sur
+localhost:3000 » à « Testing mode », deux fois (15/09/2026). Deux garde-fous,
+et il faut les deux :
+
+1. `Debug.xcconfig` **conditionne l'adresse au SDK** : `[sdk=iphonesimulator*]`
+   reçoit `localhost`, `[sdk=iphoneos*]` reçoit la production. Un build de
+   téléphone ne peut plus embarquer une boucle locale.
+2. L'app embarque aussi la production sous sa propre clé
+   (`MemoBookProductionAPIBaseURL`), et
+   `APIConfiguration.effective(configured:productionFallback:runsInSimulator:)`
+   — une fonction pure, testée — la remet à la place d'une boucle locale hors
+   simulateur si la première ceinture avait sauté.
+
+Pour viser le back-end du Mac depuis un iPhone, `Secrets.xcconfig` pose l'IP
+avec la même condition (`MEMOBOOK_API_BASE_URL[sdk=iphoneos*] = …`). Vérifié
+à `-showBuildSettings` : la **dernière** affectation l'emporte, conditionnée ou
+non — une ligne sans condition marche donc aussi, mais elle emporte le
+simulateur avec elle, qui perd `localhost`. Release, lui, réaffecte après
+l'inclusion et ignore ce fichier.
+
+Les valeurs traversent par l'**Info.plist**, seul chemin par lequel un réglage
+de build devient lisible à l'exécution. Côté Swift, `APIConfiguration.fromBundle()`
+les lit et `fromBuildConfiguration` décide de l'absence : repli local dans le
+simulateur seulement, arrêt net partout ailleurs — un build livré ne doit pas
+parler dans le vide en silence.
 
 ⚠️ Dans un `.xcconfig`, `//` ouvre un commentaire **au milieu d'une URL aussi**.
 On coupe la séquence avec `$()` : `https:/$()/api.memo-book.com`. Le piège ne se
