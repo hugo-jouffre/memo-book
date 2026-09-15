@@ -18,12 +18,24 @@
  * « Qui écrit quoi » dans `templates/emails/README.md`.
  */
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import nunjucks from "nunjucks";
 
 const here = dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Le `.env` du back-end, comme le serveur le lit — `env.ts` fait exactement
+ * cela. Sans cette ligne, `RESEND_API_KEY` posée dans le fichier serait
+ * ignorée, et le script annoncerait une clé manquante devant une clé présente.
+ *
+ * Les variables déjà dans l'environnement l'emportent : c'est ce qui permet
+ * `RESEND_API_KEY=… npm run emails:sync` depuis un worktree, qui n'a pas de
+ * `.env` à lui.
+ */
+const ENV_FILE = resolve(here, "../.env");
+if (existsSync(ENV_FILE)) process.loadEnvFile(ENV_FILE);
 const EMAILS_DIR = resolve(here, "../../templates/emails");
 const OUT_DIR = resolve(here, "../.mail-out/resend");
 
