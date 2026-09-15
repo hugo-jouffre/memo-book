@@ -112,6 +112,29 @@ const schema = z.object({
 
   WEBFLOW_API_TOKEN: z.string().default(""),
   WEBFLOW_SITE_ID: z.string().default(""),
+
+  /**
+   * L'envoi d'e-mails passe par Resend, en HTTP — pas de SMTP, pas de
+   * dépendance. Sans clé, les messages sont **journalisés et écrits sur le
+   * disque** (`MAIL_OUTPUT_DIR`) au lieu de partir : c'est ce qui permet de
+   * lire l'e-mail de « mot de passe oublié » en développement. Refusé en
+   * production — voir `services/mailer.ts`.
+   */
+  RESEND_API_KEY: z.string().default(""),
+  MAIL_FROM: z.string().default("MemoBook <bonjour@memo-book.com>"),
+  MAIL_OUTPUT_DIR: z.string().default(".mail-out"),
+
+  /**
+   * La racine des liens qui **ouvrent l'app** — celui du bouton « Réinitialiser
+   * mon mot de passe » dans l'e-mail.
+   *
+   * Un schéma d'app pour l'instant (`memobook://`), déclaré dans
+   * `ios/project.yml`. Le jour où memo-book.com sert un fichier
+   * `apple-app-site-association`, ce sera `https://memo-book.com/app` et les
+   * mêmes liens deviendront universels sans toucher au code : le chemin
+   * derrière est le même.
+   */
+  APP_LINK_BASE_URL: z.string().default("memobook://"),
 });
 
 export type Env = z.infer<typeof schema> & {

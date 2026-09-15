@@ -35,6 +35,19 @@ public protocol MemoBookAPI: Sendable {
     /// le serveur est injoignable : l'utilisateur a demandé à sortir.
     func signOut() async
 
+    /// Demande l'e-mail qui permet de choisir un nouveau mot de passe.
+    ///
+    /// Sans session : c'est précisément parce qu'on ne peut pas entrer qu'on
+    /// l'appelle. Le serveur répond **la même chose** que l'adresse existe ou
+    /// non — on ne renseigne pas un inconnu sur qui a un compte —, si bien que
+    /// la réussite ici veut dire « si cette adresse est la tienne, regarde ta
+    /// boîte », jamais « ce compte existe ».
+    func requestPasswordReset(email: String) async throws
+
+    /// Le nouveau mot de passe, avec le secret reçu par e-mail. Répond comme
+    /// ``signIn(email:password:)`` : la session est ouverte, l'app entre.
+    func resetPassword(token: String, password: String) async throws -> AuthSession
+
     // MARK: - Les écrans
     //
     // Une réponse par écran, et non une par bloc : l'accueil et le profil

@@ -6,6 +6,7 @@ import { splitPoolBudget, withConnectionLimit } from "./lib/databasePool.js";
 import { createBookRenderer, type BookRenderer } from "./services/apitemplate.js";
 import { createRedactor, type Redactor } from "./services/redaction.js";
 import { createSocialVerifier, type SocialVerifier } from "./services/socialIdentity.js";
+import { createMailer, type Mailer } from "./services/mailer.js";
 import { createMediaStorage, type MediaStorage } from "./services/storage.js";
 import { createStructurer, type Structurer } from "./services/structuring.js";
 import { createTranscriber, type Transcriber } from "./services/transcription.js";
@@ -25,6 +26,8 @@ export interface AppContext {
   storage: MediaStorage;
   /** Vérifie les jetons d'identité Apple et Google. */
   socialVerifier: SocialVerifier;
+  /** Envoie les e-mails de l'app — aujourd'hui, celui du mot de passe oublié. */
+  mailer: Mailer;
   transcriber: Transcriber;
   redactor: Redactor;
   structurer: Structurer;
@@ -53,6 +56,7 @@ export function createContext(env: Env, options: CreateContextOptions = {}): App
         : new PgBossQueue(env.DATABASE_URL, { maxConnections: pool.boss }),
     storage: createMediaStorage(env),
     socialVerifier: createSocialVerifier(env),
+    mailer: createMailer(env, logger),
     transcriber: createTranscriber(env),
     redactor: createRedactor(env),
     structurer: createStructurer(env),

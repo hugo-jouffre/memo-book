@@ -52,6 +52,20 @@ xcrun simctl launch <device> com.memobook.app -previewSignedIn -openOrder
 Combiné à `-previewSignedIn`, le tunnel travaille **en mémoire** : c'est ce qui
 permet de traverser ses sept étapes sans back-end. Sans effet en release.
 
+### Rejouer le lien de l'e-mail « Mot de passe oublié »
+
+Le back-end local n'envoie rien : il journalise le lien et écrit l'e-mail dans
+`backend/.mail-out/`. Ouvrir ce lien dans le simulateur, c'est appuyer sur le
+bouton de l'e-mail :
+
+```bash
+xcrun simctl openurl <device> 'memobook://password/reset?token=…'
+```
+
+L'app doit être **déconnectée** : déjà entré, le lien ne fait rien (voir
+`RootView.onOpenURL`). Le simulateur garde le trousseau à la désinstallation —
+pour sortir, passer par Profil ▸ Me déconnecter.
+
 ⚠️ Ne **jamais** poser un réglage de test avec
 `xcrun simctl spawn <device> defaults write com.memobook.app …` : ça écrit dans
 un domaine au niveau de l'appareil que l'app lit aussi, mais que son propre

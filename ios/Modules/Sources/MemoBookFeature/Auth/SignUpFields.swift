@@ -1,3 +1,4 @@
+import MemoBookCore
 import MemoBookDesign
 import SwiftUI
 
@@ -39,7 +40,7 @@ struct SignUpFields: View {
                 field: .password,
                 focus: focus,
                 isSecure: true,
-                hint: AuthModel.passwordRule
+                hint: PasswordRule.hint
             )
             // `newPassword` déclenche la proposition de mot de passe fort du
             // trousseau ; sans les règles, iOS en propose un que notre

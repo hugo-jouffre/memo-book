@@ -187,9 +187,10 @@ model Account {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  identities Identity[]
-  sessions   Session[]
-  devices    Device[]
+  identities     Identity[]
+  sessions       Session[]
+  devices        Device[]
+  passwordResets PasswordReset[]
 
   ownedMemos        Memo[]             @relation("MemoOwner")
   printOrders       PrintOrder[]       @relation("PrintOrderBuyer")
@@ -201,6 +202,28 @@ model Account {
   feedbackResponses FeedbackResponse[]
 
   @@map("accounts")
+}
+
+/// Une demande de « mot de passe oublié » : le secret envoyé par e-mail, haché
+/// comme un token de session, et qui ne vaut qu'une fois et qu'un moment.
+///
+/// Une ligne par demande, jamais mise à jour en place : redemander l'e-mail
+/// crée une nouvelle ligne et **retire** les précédentes, si bien qu'un seul
+/// secret est valable à la fois. `usedAt` reste pour l'audit — on veut pouvoir
+/// dire « ce mot de passe a été changé par ce chemin, à cette heure ».
+model PasswordReset {
+  id        String  @id @default(uuid())
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  /// SHA-256 du secret envoyé — le secret en clair n'existe que dans l'e-mail.
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([accountId])
+  @@map("password_resets")
 }
 
 /// Le lien entre un compte et un fournisseur tiers. Un compte peut en avoir

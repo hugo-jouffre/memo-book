@@ -126,6 +126,22 @@ public actor MemoBookAPIClient: MemoBookAPI {
         )
     }
 
+    public func requestPasswordReset(email: String) async throws {
+        try await sendIgnoringResponse(
+            method: "POST",
+            path: "/v1/auth/password/forgot",
+            body: ["email": email],
+            credential: .none
+        )
+    }
+
+    public func resetPassword(token: String, password: String) async throws -> AuthSession {
+        try await openSession(
+            path: "/v1/auth/password/reset",
+            body: ["token": token, "password": password]
+        )
+    }
+
     private func openSession(path: String, body: [String: String]) async throws -> AuthSession {
         let session: AuthSession = try await send(
             method: "POST",
@@ -510,9 +526,16 @@ public actor MemoBookAPIClient: MemoBookAPI {
     private func sendIgnoringResponse(
         method: String,
         path: String,
+        body: [String: String]? = nil,
         credential: Credential = .session
     ) async throws {
-        let request = try makeRequest(method: method, path: path, credential: credential)
+        var request = try makeRequest(method: method, path: path, credential: credential)
+
+        if let body {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
+
         _ = try await performRaw(request, credential: credential)
     }
 
