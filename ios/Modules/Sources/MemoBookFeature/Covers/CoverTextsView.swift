@@ -45,50 +45,72 @@ struct CoverTextsView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: MemoBookSpacing.s) {
-                BrandScreenHeader(
-                    title: BookCopy.Covers.title,
-                    subtitle: BookCopy.Covers.textsSubtitle
-                )
-                .frame(maxWidth: .infinity, alignment: .leading)
+        ScrollViewReader { scroller in
+            ScrollView {
+                VStack(spacing: MemoBookSpacing.s) {
+                    BrandScreenHeader(
+                        title: BookCopy.Covers.title,
+                        subtitle: BookCopy.Covers.textsSubtitle
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-                CoverFaceTabs(face: $model.face)
+                    CoverFaceTabs(face: $model.face)
 
-                plate
+                    plate
 
-                fields
+                    fields
+                        .id(Self.fieldsAnchor)
 
-                BrandButton(BookCopy.Covers.validate, fillsWidth: true) {
-                    commit()
-                    dismiss()
+                    BrandButton(BookCopy.Covers.validate, fillsWidth: true) {
+                        commit()
+                        dismiss()
+                    }
+                    .disabled(model.covers == nil)
                 }
-                .disabled(model.covers == nil)
+                .padding(.horizontal, MemoBookSpacing.screenMargin)
+                .padding(.top, MemoBookSpacing.xs)
+                .padding(.bottom, MemoBookSpacing.l)
             }
-            .padding(.horizontal, MemoBookSpacing.screenMargin)
-            .padding(.top, MemoBookSpacing.xs)
-            .padding(.bottom, MemoBookSpacing.l)
-        }
-        .scrollIndicators(.hidden)
-        .scrollDismissesKeyboard(.interactively)
-        .background(MemoBookColor.background.ignoresSafeArea())
-        .brandHiddenNavigationBar()
-        // Le crème de la marque ne se retourne pas en sombre — voir
-        // `MemoBookColor`.
-        .environment(\.colorScheme, .light)
-        .task { await model.load() }
-        .onChange(of: model.cover?.title) { _, _ in readTexts() }
-        .onChange(of: model.face) { _, _ in
-            // Changer de plat ferme le champ ouvert : le titre du devant et le
-            // texte du dos ne se corrigent pas dans le même champ.
-            close()
-            readTexts()
-        }
-        .onAppear(perform: readTexts)
-        .brandSheet(isPresented: $isChoosingStats) {
-            CoverStatsSheet(model: model)
+            .scrollIndicators(.hidden)
+            .scrollDismissesKeyboard(.interactively)
+            .background(MemoBookColor.background.ignoresSafeArea())
+            .brandHiddenNavigationBar()
+            // Le crème de la marque ne se retourne pas en sombre — voir
+            // `MemoBookColor`.
+            .environment(\.colorScheme, .light)
+            .task { await model.load() }
+            .onChange(of: model.cover?.title) { _, _ in readTexts() }
+            .onChange(of: model.face) { _, _ in
+                // Changer de plat ferme le champ ouvert : le titre du devant et
+                // le texte du dos ne se corrigent pas dans le même champ.
+                close()
+                readTexts()
+            }
+            .onAppear(perform: readTexts)
+            .brandSheet(isPresented: $isChoosingStats) {
+                CoverStatsSheet(model: model)
+            }
+            // **Ce qu'on tape ne passe jamais sous le clavier.** Le champ
+            // s'ouvre sous le plat, tout en bas de l'écran : sans ça, le
+            // clavier montait par-dessus et on écrivait à l'aveugle (Hugo,
+            // 16/09/2026). Le défilement automatique du système ne suffit pas
+            // ici, parce que le champ n'existe pas encore quand le focus le
+            // cherche — il apparaît, puis le prend. On attend donc que le
+            // clavier soit monté, et on amène le champ juste au-dessus de lui.
+            .onChange(of: editing) { _, field in
+                guard field != nil else { return }
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(350))
+                    withAnimation(.snappy(duration: 0.3)) {
+                        scroller.scrollTo(Self.fieldsAnchor, anchor: .bottom)
+                    }
+                }
+            }
         }
     }
+
+    /// L'identité du bloc des champs, pour l'amener au-dessus du clavier.
+    private static let fieldsAnchor = "cover-texts-fields"
 
     // MARK: - Le plat, et ses crayons
 

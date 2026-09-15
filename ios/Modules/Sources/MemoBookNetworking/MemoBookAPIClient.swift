@@ -527,6 +527,9 @@ public actor MemoBookAPIClient: MemoBookAPI {
         var rulesEnabled: Bool?
         var decorationQuota: Int?
         var fontDisplay: String?
+        var fontTitle: String?
+        var fontHand: String?
+        var fontFacts: String?
         var quizEnabled: Bool?
         var freeZonesEnabled: Bool?
         var crosswordEnabled: Bool?
@@ -554,6 +557,9 @@ public actor MemoBookAPIClient: MemoBookAPI {
             case .rules(let isOn): rulesEnabled = isOn
             case .decorationQuota(let value): decorationQuota = value
             case .fontDisplay(let value): fontDisplay = value
+            case .fontTitle(let value): fontTitle = value
+            case .fontHand(let value): fontHand = value
+            case .fontFacts(let value): fontFacts = value
             case .quiz(let isOn): quizEnabled = isOn
             case .freeZones(let isOn): freeZonesEnabled = isOn
             case .crossword(let isOn): crosswordEnabled = isOn
@@ -564,7 +570,8 @@ public actor MemoBookAPIClient: MemoBookAPI {
             case name, startDate, endDate, narrationPace, notificationsEnabled, notifications
             case theme, isPublicGallery
             case photoTextRatio, targetPageCount, funFactsEnabled, rulesEnabled, decorationQuota
-            case fontDisplay, quizEnabled, freeZonesEnabled, crosswordEnabled
+            case fontDisplay, fontTitle, fontHand, fontFacts
+            case quizEnabled, freeZonesEnabled, crosswordEnabled
         }
 
         func encode(to encoder: any Encoder) throws {
@@ -588,6 +595,9 @@ public actor MemoBookAPIClient: MemoBookAPI {
             try container.encodeIfPresent(rulesEnabled, forKey: .rulesEnabled)
             try container.encodeIfPresent(decorationQuota, forKey: .decorationQuota)
             try container.encodeIfPresent(fontDisplay, forKey: .fontDisplay)
+            try container.encodeIfPresent(fontTitle, forKey: .fontTitle)
+            try container.encodeIfPresent(fontHand, forKey: .fontHand)
+            try container.encodeIfPresent(fontFacts, forKey: .fontFacts)
             try container.encodeIfPresent(quizEnabled, forKey: .quizEnabled)
             try container.encodeIfPresent(freeZonesEnabled, forKey: .freeZonesEnabled)
             try container.encodeIfPresent(crosswordEnabled, forKey: .crosswordEnabled)

@@ -360,7 +360,6 @@ public enum ChatCopy {
         public static let copy = "Copier ce message"
         public static let copied = "Message copié"
         public static let edit = "Modifier ce message"
-        public static let menu = "Plus d’actions"
         public static let collapse = "Revenir aux trois boutons"
         public static let camera = "Ajouter une photo"
         public static let keyboard = "Écrire au clavier"

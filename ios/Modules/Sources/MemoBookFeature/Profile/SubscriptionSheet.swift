@@ -56,19 +56,23 @@ struct SubscriptionSheet: View {
     /// fausserait le compteur qu'elle alimentera.
     @State private var reason: SubscriptionCancellationReason?
 
+    /// L'aperçu du carnet, ouvert par la pastille « Voir un aperçu ».
+    ///
+    /// **Une feuille par-dessus celle-ci, et non une étape** — l'exception
+    /// voulue à la règle des feuilles enchaînées (Hugo, 16/09/2026). L'aperçu
+    /// était une étape : on y allait, et « Comment ça fonctionne » disparaissait
+    /// derrière lui ; le refermer ramenait au profil. Posé par-dessus, il fait
+    /// reculer l'offre d'un cran — le petit zoom que fait toute feuille de
+    /// l'app — et la rend telle qu'on l'a laissée quand on le referme. C'est
+    /// exactement le geste attendu : on est venu voir ce qu'on achète, on
+    /// repart d'où l'on venait.
+    @State private var showsPreview = false
+
     @Environment(\.dismiss) private var dismiss
 
     enum Step: Hashable {
         case pitch
         case current
-        /// L'aperçu du carnet, ouvert par la pastille « Voir un aperçu ».
-        ///
-        /// **Une étape de la feuille, et non une feuille par-dessus.** C'est la
-        /// règle du design system : une feuille ouverte sur une autre fait
-        /// reculer celle du dessous, et deux reculs se lisent comme un
-        /// empilement de fenêtres. Le contenu change, la feuille reste — comme
-        /// pour les trois temps de la résiliation.
-        case preview
         case keepGoing
         case reason
         case done
@@ -85,13 +89,16 @@ struct SubscriptionSheet: View {
             switch currentStep {
             case .pitch: pitch
             case .current: current
-            case .preview: preview
             case .keepGoing: keepGoing
             case .reason: reasons
             case .done: done
             }
         }
         .animation(.smooth(duration: 0.3), value: currentStep)
+        // L'aperçu se pose **sur** l'offre : voir ``showsPreview``.
+        .brandSheet(isPresented: $showsPreview) {
+            BookPreviewSheet(memoId: previewMemoId)
+        }
     }
 
     // MARK: - « Comment ça fonctionne ? » — pas encore abonné
@@ -134,7 +141,7 @@ struct SubscriptionSheet: View {
             // Elle garde son dessin de pastille, comme la maquette, mais elle
             // **ouvre** désormais l'aperçu : c'est une proposition posée dans
             // une phrase, pas l'appel à l'action de la feuille.
-            Button { step = .preview } label: {
+            Button { showsPreview = true } label: {
                 BrandTagPill(
                     SubscriptionCopy.previewPill,
                     tone: .accentOutlined,
@@ -149,16 +156,6 @@ struct SubscriptionSheet: View {
             .accessibilityAddTraits(.isButton)
         }
         .frame(maxWidth: .infinity)
-    }
-
-    // MARK: - L'aperçu du carnet
-
-    /// Le carnet qu'on feuillette sans quitter l'offre.
-    ///
-    /// Le bouton du bas ramène au principe de l'abonnement : on est venu voir
-    /// ce qu'on achète, on doit repartir d'où l'on venait.
-    private var preview: some View {
-        BookPreviewSheet(memoId: previewMemoId) { step = .pitch }
     }
 
     // MARK: - « Mon Abonnement » — déjà abonné

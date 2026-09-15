@@ -563,7 +563,9 @@ private extension CGFloat {
 /// cet écran qu'on supprime : la porte de sortie d'un voyage est au bout de ses
 /// réglages, comme celle d'un compte est au bout du profil (Hugo, 15/09/2026).
 struct DeleteTripSheet: View {
-    let tripName: String
+    /// Le nom du voyage, s'il est arrivé : les réglages peuvent ne pas avoir
+    /// chargé, et la feuille doit se lire quand même.
+    let tripName: String?
 
     /// La suppression est partie. Le bouton rouge tourne et plus rien ne se
     /// touche : la demande est définitive, elle ne part pas deux fois.

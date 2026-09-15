@@ -204,7 +204,11 @@ struct PaywallView: View {
 
     private var header: some View {
         HStack(spacing: 0) {
-            Button { dismiss() } label: {
+            // La flèche **recule d'un écran**, comme le tapotis à gauche ; elle
+            // ne referme le paywall que depuis le premier (Hugo, 16/09/2026).
+            // Elle refermait tout, d'où qu'on soit : depuis l'offre, on
+            // retombait sur le profil au lieu de revoir l'estimation.
+            Button { turn(-1) } label: {
                 Image(brand: "IconArrow")
                     .resizable()
                     .renderingMode(.template)
@@ -220,7 +224,7 @@ struct PaywallView: View {
                     .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Fermer")
+            .accessibilityLabel(page == 0 ? "Fermer" : "Retour")
 
             Spacer(minLength: 0)
 

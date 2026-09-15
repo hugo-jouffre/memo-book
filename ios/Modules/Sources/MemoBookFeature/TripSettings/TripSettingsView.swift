@@ -99,7 +99,7 @@ public struct TripSettingsView: View {
         }
         .brandSheet(isPresented: $isConfirmingDeletion) {
             DeleteTripSheet(
-                tripName: model.settings?.name ?? "",
+                tripName: model.settings?.name,
                 isDeleting: model.isDeleting,
                 errorMessage: model.errorMessage,
                 onKeep: { isConfirmingDeletion = false },

@@ -20,8 +20,8 @@ pas est ignoré en silence : l'utilisateur croirait avoir réglé quelque chose.
 
 ⚠️ **« Exister » n'est pas « être rendu ».** Les onze modales du lot 7 rendent
 *réglables* des valeurs que la table ci-dessous marque encore « à construire » —
-pointillés, typographies, zones libres, mot fléché. Elles sont bien dans le
-gabarit et bien enregistrées en base ; c'est leur **effet sur la page** qui
+pointillés, typographies — les quatre, chacune sa feuille depuis le 16/09/2026 —,
+zones libres, mot fléché. Elles sont bien dans le gabarit et bien enregistrées en base ; c'est leur **effet sur la page** qui
 manque. L'app tient donc sa moitié du contrat, et la colonne « État » de la
 table du gabarit reste la seule à dire ce qui se voit vraiment dans le carnet.
 

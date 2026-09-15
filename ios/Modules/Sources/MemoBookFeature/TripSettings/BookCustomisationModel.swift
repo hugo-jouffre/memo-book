@@ -111,10 +111,10 @@ public final class BookCustomisationModel {
         edit(.decorationQuota(quota)) { $0.decorationQuota = quota }
     }
 
-    /// La typographie des titres — `fontDisplay`, pas `fontTitle`. Voir le
-    /// commentaire de ``BookCustomisationEdit/fontDisplay(_:)``.
-    public func setTitleFont(_ name: String) {
-        edit(.fontDisplay(name)) { $0.fontDisplay = name }
+    /// Une des quatre typographies. C'est le rôle qui sait quelle colonne il
+    /// écrit — et « des titres » n'écrit pas `fontTitle`, voir ``BookFontRole``.
+    public func setFont(_ role: BookFontRole, _ name: String) {
+        edit(role.edit(name)) { $0[keyPath: role.keyPath] = name }
     }
 
     public func setQuiz(_ isOn: Bool) { edit(.quiz(isOn)) { $0.quizEnabled = isOn } }

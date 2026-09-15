@@ -8,6 +8,10 @@
 > À lire **en entier avant de toucher au premier pixel** d'un nouvel écran, à chaque
 > session. Fichier Figma de référence :
 > [MemoBook — Product](https://www.figma.com/design/kytPYFno7PvDciIKTxCujK/MemoBook---Product).
+>
+> Les mots qu'on emploie ici et dans le code — écran, feuille, étape, parcours,
+> tunnel, fonctionnalité, lot, fiche, T-numéro — sont fixés dans
+> [`vocabulaire.md`](vocabulaire.md). Un mot nouveau s'y ajoute avant de servir.
 
 ---
 
@@ -2539,11 +2543,14 @@ Elle réutilise les pièces de l'aperçu — ``BookPageStage``, ``BookSheetView`
 de plus petites : deux aperçus à tenir d'accord, et celui de la feuille
 vieillirait le premier.
 
-Deux formes, selon d'où elle vient. Depuis le **paywall**, c'est une feuille
-posée par-dessus, et le minuteur des stories s'arrête pendant ce temps-là (voir
-`PageTimer`). Depuis la **feuille d'abonnement**, c'est une **étape** de cette
-feuille-là — la règle du design system interdit d'empiler deux feuilles — avec
-un bouton « Revenir à l'offre ».
+Une seule forme, d'où qu'elle vienne : une feuille **posée par-dessus** ce qui
+l'a ouverte. Depuis le **paywall**, le minuteur des stories s'arrête pendant ce
+temps-là (voir `PageTimer`). Depuis la **feuille d'abonnement**, elle se pose
+sur « Comment ça fonctionne », qui recule d'un cran — le petit zoom de toute
+feuille de l'app — et revient tel quel quand on la referme. C'est **l'exception
+voulue** à la règle des feuilles enchaînées (Hugo, 16/09/2026 ; § 21, T133) :
+l'aperçu a d'abord été une *étape* de la feuille d'abonnement, et le refermer
+ramenait alors au profil au lieu de l'offre.
 
 ### 16.7 À trancher
 
@@ -2923,6 +2930,9 @@ invitation jamais acceptée.
 | **Fun Facts** | `3443:10105` | `funFactsEnabled` | oui |
 | **Pointillés** | `3443:10126` | `rulesEnabled` | oui |
 | **Titres du carnet** | `3443:10073` | `fontDisplay` | oui |
+| **Sous-titres du carnet** | — (sur le modèle des titres, § 21, T136) | `fontTitle` | oui |
+| **Textes du carnet** | — (idem) | `fontHand` | oui |
+| **Fun facts du carnet** | — (idem) | `fontFacts` | oui |
 | **Décorations & stickers** | `3443:10147` | `decorationQuota`, 0 à 4 | oui |
 
 **Les paliers de pages sont calculés, pas écrits.** La maquette annonce
@@ -3062,7 +3072,7 @@ mur :
 |---|---|---|
 | Accueil | « Commencer à enregistrer » fait disparaître l'app sur son iPhone, pas sur celui de Clara | `SpeechTranscriber` posait sa prise avec `inputFormat(forBus:)`, périmé dès qu'un casque Bluetooth change la fréquence de la session : `installTap` lève alors une exception Objective-C, que Swift ne rattrape pas. La prise lit désormais `outputFormat(forBus:)` et **renonce** si la fréquence du nœud et celle de la session divergent. C'est le seul écran de l'app qui transcrit en direct — le chat n'a que l'`AudioRecorder`, et il ne plantait pas. Voir T129 |
 | Accueil | un « + » pour créer un voyage, à droite de « Ton voyage » (ou de « Voyage à venir » sans voyage en cours) | `HomeSectionHeading(onAdd:)` et `HomeAddButton` : le rond du « + » des co-voyageurs, cerné de bleu sur le crème. Il ouvre la feuille « Nouveau carnet » — créer, rejoindre, importer |
-| Accueil d'un voyage | la roue des réglages plus petite que l'imprimante, et à droite d'elle | `Settings.svg` et `Settings 2.svg` **recadrés** (`viewBox="4.5 4.5 15 15"`) : le glyphe occupait 42 % de sa boîte, l'imprimante 68 % ; ils font désormais la même taille optique partout — chat compris. Et l'ordre de la conversation : réglages, puis imprimante |
+| Accueil d'un voyage | la roue des réglages plus petite que l'imprimante, et à droite d'elle | `Settings.svg` et `Settings 2.svg` **recadrés** (`viewBox="4.5 4.5 15 15"`) : le glyphe occupait 42 % de sa boîte, l'imprimante 68 % ; ils font désormais la même taille optique partout — chat compris. Et l'ordre de la conversation : réglages, puis imprimante. Recadrage repris le lendemain à `3.5 3.5 17 17` (§ 21) : à 15 unités, la roue paraissait cette fois plus grosse |
 | Accueil d'un voyage | le CTA vert dit « Accéder au chat », flèche de la marque en fin de libellé | `IconArrowRight`, `iconPlacement: .trailing` ; le cadenas reste devant quand le quota est épuisé |
 | Paramètres du voyage | un lien rouge « Supprimer ce voyage » tout en bas, avec une feuille de confirmation comme celle du compte, puis retour à l'accueil | `DeleteTripSheet` (ce qui part, « Garder ce voyage », « Supprimer définitivement ce voyage »), `TripSettingsModel.delete()` sur `DELETE /v1/memos/:id`, `TripSettingsIntent.tripDeleted` → `RootView` vide la pile, et l'accueil **se relit en réapparaissant** (`onAppear`). Le serveur réserve la route au propriétaire ; un co-voyageur lit son refus dans la feuille (T128) |
 | Paramètres du voyage | le logo Tricount déposé dans `assets/logos` | `import-brand-logos.py` accepte désormais un PNG (`LogoTricount`) ; le « tt » de secours disparaît. Clôt T73 |
@@ -3128,3 +3138,45 @@ depuis un iPhone, `Secrets.xcconfig` pose l'IP avec la condition
 `[sdk=iphoneos*]` — la dernière affectation l'emporte, conditionnée ou non ;
 sans condition, le simulateur perd `localhost` aussi. Voir `docs/deploiement.md`.
 
+
+---
+
+## 21. Retouches du 16/09/2026 — la seconde relecture, et les mots
+
+Neuf retours de Hugo sur la branche de la veille, traités dans la même PR
+(#31). Pas de nouvel écran : trois comportements corrigés, une feuille qui sert
+quatre fois, et **un lexique** — `docs/vocabulaire.md` — pour que les mots des
+maquettes, des fiches, du code et des conversations soient les mêmes.
+
+### 21.1 Ce qui a changé, écran par écran
+
+| Écran | Retour de Hugo | Ce qui a été fait |
+|---|---|---|
+| Feuille d'abonnement | « Voir un aperçu » quittait « Comment ça fonctionne » ; refermer l'aperçu doit y ramener, avec le petit zoom | L'aperçu redevient une **feuille posée sur** la feuille d'abonnement (`SubscriptionSheet.showsPreview`), et non une étape : l'offre recule d'un cran et revient telle quelle. C'est l'exception voulue à « un enchaînement de feuilles ne s'empile pas » — § 16.9, `ios/CLAUDE.md`, T133 |
+| Paywall | la flèche doit reculer d'un écran, pas fermer sur le profil | `turn(-1)` ; elle ne ferme que depuis le premier écran, et son libellé VoiceOver le dit — « Retour », puis « Fermer ». Répond pour moitié à T132 (voir T135) |
+| Conversation | les trois petites lignes à gauche des trois boutons ne servent à rien | Le burger part, et `ChatCopy.Voice.menu` avec lui : il ne restait que par fidélité à la maquette et ne menait nulle part. La croix seule, dès qu'un outil est ouvert — comme déjà en taille de texte accessible (T134) |
+| Accueil d'un voyage, conversation | la roue des réglages trop grosse face à l'imprimante | `Settings.svg` et `Settings 2.svg` recadrés à `viewBox="3.5 3.5 17 17"` (15 la veille) : un rond plein de la largeur d'une imprimante à traits fins pèse plus qu'elle. Le script d'import a régénéré `IconSettings` et `IconSettingsDuo` |
+| Personnalisations du carnet | aucune modale ne marche ; les quatre typographies doivent se comporter pareil, données branchées | Sur le code de `main`, les six feuilles marchent : c'est la production qui sert encore un serveur d'avant (T131 → T137). Les typographies : **une** feuille pour les quatre rôles (`BookFontsSheet(role:)`, `BookFontRole`), chacune écrit sa colonne — `fontDisplay`, `fontTitle`, `fontHand`, `fontFacts` —, le client encode les trois éditions nouvelles, le bac à sable les rejoue, le `PATCH /v1/trips/:id/settings` les accepte et `screens.test.ts` les couvre. Chaque liste : le défaut du rôle, puis les trois familles de la maquette (T136). Les lignes affichent le libellé de la maquette (« Playfair ») là où la base dit « Playfair Display » |
+| Personnalisations du carnet | « le serveur a l'air éteint » | Il ne l'est pas : il sert toujours `eba4dc6`, dont `GET …/settings` répond 500 (§ 20.1). Le déploiement de `main` depuis cette session a été **refusé par son garde-fou** (« Production Deploy ») ; à lancer depuis le tableau de bord Railway — T137 |
+| Partout — le clavier | ce qu'on tape ne doit jamais passer sous le clavier ; l'icône centrée dans la bulle ou sur la ligne, quel que soit l'iOS | `KeyboardDismissBar` ne se soulève plus : ses 8 pt la sortaient du centre de la bulle d'iOS 26, et de la ligne avant. Les textes des couvertures : le champ qui s'ouvre sous le plat, tout en bas, est amené au-dessus du clavier une fois celui-ci monté (`ScrollViewReader`, T138). Les autres formulaires laissent le système faire — leurs champs existent avant d'avoir le focus, et une `ScrollView` les remonte d'elle-même |
+| Paramètres du voyage | « Tu es sûr de vouloir supprimer ce voyage » sans le nom du voyage | Sur l'iPhone de Hugo, le nom manquait parce que les réglages n'arrivaient pas (le 500). La phrase ne s'ouvre plus sur des guillemets vides : sans nom, « Ce voyage sera effacé… » (`BookCopy.Settings.Delete.body(trip: String?)`) |
+
+### 21.2 Ce qui entre dans le code partagé
+
+| Pièce | Ce qu'elle porte |
+|---|---|
+| `BookFontRole`, `BookFontOption` (`MemoBookCore`) | les quatre rôles — titres, sous-titres, textes, fun facts —, la colonne que chacun écrit, son édition, ses familles, et le libellé de la maquette face au nom que le gabarit résout |
+| `BookCustomisationEdit.fontTitle / fontHand / fontFacts` | trois éditions de plus, portées par `MemoBookAPIClient`, `PreviewAPI` et `routes/tripSettings.ts` |
+| `BookCopy.Fonts.sheetTitle(for:)`, `sheetSubtitle(for:)` | le titre et le chapeau des trois feuilles que la maquette ne dessine pas, au tutoiement (R9) |
+| `docs/vocabulaire.md` | le lexique — lié depuis le README, `ios/CLAUDE.md` et l'en-tête de ce fichier |
+
+### 21.3 À trancher
+
+| # | Point |
+|---|---|
+| T133 | **L'aperçu se pose sur la feuille d'abonnement** : première exception assumée à « un enchaînement de feuilles ne s'empile pas ». Les trois empilements de T126 (la feuille d'ajout de carte) restent à régler ; si Clara les accepte aussi, la règle devient « une feuille ne s'empile que pour aller voir et revenir » |
+| T134 | **Le burger de la conversation a quitté l'app, pas la maquette.** Le nœud du chat le dessine encore à gauche des trois boutons ; à retirer dans Figma, ou à lui donner un menu |
+| T135 | **La flèche du paywall recule ; le tapotis « retour » sur l'écran d'offre, lui, reste pris par le défilement** (T132). Si les deux gestes doivent reculer, l'écran d'offre a besoin d'une zone de retour hors de sa `ScrollView` |
+| T136 | **Trois feuilles de typographie sans maquette.** « Sous-titres du carnet », « Textes du carnet », « Fun facts du carnet » sont écrites sur le modèle de « Titres du carnet » (`3443:10073`), au tutoiement ; leurs familles — Hansley ou Gloria Hallelujah d'abord, puis Playfair, Alegreya, Montserrat — et leurs phrases sont à valider ou à dessiner. « La recommandations de nos équipes » reste tel quel sur la feuille des titres (R8) ; les défauts des autres disent « Le choix de nos équipes ». Remplace T78 |
+| T137 | **La production sert toujours `eba4dc6`.** Railway n'a déployé ni la PR #28 ni la #30, et `railway up` depuis cette session a été refusé par son garde-fou. À faire depuis le tableau de bord (*Deploy* sur `api` **et** `worker`), ou depuis un terminal à la racine d'un checkout propre de `main` : `railway up --detach -s api`, puis `-s worker`. Les migrations de `main` sont déjà appliquées en base. Tant que ce n'est pas fait, les paramètres du voyage et les personnalisations répondent 500 sur les téléphones — et la feuille de suppression n'a pas de nom à afficher |
+| T138 | **Le champ des textes de couverture remonte après 350 ms**, le temps que le clavier monte — une durée choisie, pas mesurée. Sur un iPhone lent, le premier caractère peut encore se taper sous le clavier ; la parade propre est d'écouter sa hauteur (`keyboardLayoutGuide`), ce qui touche au design system |

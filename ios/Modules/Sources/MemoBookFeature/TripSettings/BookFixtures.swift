@@ -72,9 +72,9 @@ extension BookCustomisation {
             rulesEnabled: true,
             decorationQuota: 2,
             fontTitle: "Hansley",
-            fontDisplay: "Playfair",
+            fontDisplay: "Playfair Display",
             fontHand: "Gloria Hallelujah",
-            fontFacts: "Playfair",
+            fontFacts: "Playfair Display",
             quizEnabled: true,
             freeZonesEnabled: true,
             crosswordEnabled: true

@@ -185,7 +185,9 @@ private struct TripHeaderButton: View {
     /// boîte et se lisaient à peine à 28. La roue, elle, restait plus petite
     /// que l'imprimante dans la même boîte (42 % contre 68 %) : c'est son
     /// fichier qui a été recadré (`Settings.svg`, `viewBox` resserrée), pas le
-    /// code — les deux ont désormais la même taille optique.
+    /// code. Recadrée à 15 unités elle paraissait cette fois **plus grosse** —
+    /// un rond plein de la largeur d'une imprimante à traits fins pèse plus
+    /// qu'elle —, 17 unités la posent à sa hauteur (Hugo, 16/09/2026).
     var iconSide: CGFloat = MemoBookSpacing.contentIcon
     let label: String
     let action: () -> Void

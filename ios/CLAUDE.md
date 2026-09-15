@@ -148,6 +148,12 @@ MVVM avec `@Observable`, `async/await` partout, aucun singleton. Le document
 complet est dans Notion (« Document d'architecture SwiftUI + MVVM ») ; voici ce
 qui engage le code.
 
+**Les mots sont fixés.** Écran, feuille, étape, parcours, tunnel,
+fonctionnalité, intention, route, modèle, copie, jeu d'essai :
+`docs/vocabulaire.md` dit ce que chacun désigne, et le suffixe Swift qui va
+avec (`…View`, `…Sheet`, `…Model`, `…Intent`, `…Copy`). On les emploie tels
+quels dans le code, les commentaires, les fiches et les PR.
+
 **La dépendance ne remonte jamais.** `MemoBookCore` ne dépend de rien.
 `Networking`, `Recording` et `Design` ne dépendent que de `Core`. `Feature`
 dépend des quatre. Une vue ne construit jamais un client d'API et ne fabrique
@@ -234,7 +240,10 @@ police ou marge codée en dur ailleurs.
   temps se fait dans **une seule** `BrandSheet` dont le contenu change (voir
   `SubscriptionSheet`) : chaque feuille ouverte par-dessus une autre fait
   reculer celle du dessous, et trois reculs de suite se lisent comme un
-  empilement de fenêtres au lieu d'un chemin.
+  empilement de fenêtres au lieu d'un chemin. **Une exception, voulue** :
+  l'aperçu du carnet se pose *sur* la feuille d'abonnement (`BookPreviewSheet`
+  depuis `SubscriptionSheet`), parce qu'on y va voir et qu'on revient — un seul
+  recul, pas un chemin (Hugo, 16/09/2026 ; `docs/ui-development.md` § 16.9).
 - Le focus appartient à l'écran, pas au champ : un `@FocusState` sur une énum
   passé aux `BrandTextField`, pour que le clavier enchaîne les champs.
 - `BrandChatBubble` est **la** bulle de conversation (fond, queue, marges,
