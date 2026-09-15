@@ -42,13 +42,19 @@ Le gabarit d'exemple. Tout vient de `print_orders`, déjà en base.
 | `order.reference` | `id`, raccourci | Ce que le support demandera |
 | `order.memoTitle` | `memos.title` | |
 | `order.coverImageUrl` | `print_orders.coverImageUrl` | Figée avec le rendu : c'est le carnet commandé, pas celui d'aujourd'hui |
-| `order.pageCount` | `print_orders.pageCount` | |
+| `order.coverCaption` | `memos.title` + `pageCount` | « Rome 2026 · 68 pages », **composée par le back-end**. `pageCount` est facultatif en base : le gabarit ne saurait pas quoi faire d'un « · pages » orphelin |
 | `order.copies` | `print_orders.copies` | |
 | `order.carrier` · `order.trackingUrl` | Renseignés par l'imprimeur | **Sans `trackingUrl`, l'e-mail ne part pas** : un suivi sans lien ne sert à rien |
 | `order.shippedOn` | `shippedAt`, formaté | Texte, pas une date : « ce matin » vaut mieux qu'un horodatage |
-| `order.estimatedFrom` · `order.estimatedTo` | `estimatedMinDays` / `MaxDays` | Deux bornes, jamais un rendez-vous |
-| `order.shipping.*` | `shippingName`, `shippingLine1`, `shippingPostalCode`, `shippingCity` | La copie figée de la commande, pas l'adresse du profil |
+| `order.estimatedRange` | `estimatedMinDays` / `MaxDays` | « entre le 22 et le 24 septembre ». Deux bornes, jamais un rendez-vous — et une seule chaîne, parce que les deux peuvent manquer |
+| `order.shipping.name` · `.line1` · `.cityLine` · `.city` | `shippingName`, `shippingLine1` (+ `line2` replié dedans), `shippingPostalCode` + `shippingCity` | La copie figée de la commande, pas l'adresse du profil. Trois lignes distinctes, et non un bloc d'adresse déjà balisé : une adresse vient de l'utilisateur, elle n'a pas à pouvoir injecter du HTML |
 | `order.tracking[]` | Calculé | `{ label, detail, state }`, `state` ∈ `done` \| `current` \| `todo`. La machine à états reste dans le code ; le gabarit ne fait qu'afficher |
+
+> **`recipient.greeting`, et non `recipient.firstName`.** Le prénom est
+> facultatif — un compte ouvert par Apple n'en a pas toujours — et le gabarit
+> hébergé chez Resend ne sait pas écrire de condition. Le back-end compose donc
+> « Clara, » ou la chaîne vide, et le gabarit ne fait que la poser. Même raison
+> pour `coverCaption` et `estimatedRange`.
 
 ## Ce qu'un client d'e-mail sait faire, et ne sait pas faire
 
@@ -82,9 +88,64 @@ marque y vire au gris sale.
 ## Rendre un gabarit pour le relire
 
 ```bash
-node scripts/render-email.mjs print-order-shipped
+npm run emails:preview   # rend avec de vraies valeurs, dans backend/.mail-out/resend/
 ```
 
-*(Script à écrire — voir l'étape 4 de `docs/emails.md`. Il rend le gabarit avec
-un jeu de données d'exemple et ouvre le résultat, sur le modèle de
-`backend/scripts/render-local.ts`.)*
+`emails:render` fait la même chose en gardant les marqueurs Resend — utile pour
+vérifier ce qui sera poussé, illisible pour juger d'un texte.
+
+---
+
+## Les gabarits chez Resend
+
+Les deux gabarits vivent **aussi** dans le compte Resend, en tant que
+*templates* hébergés (`POST /templates`). L'envoi ne transporte alors que des
+variables, et la copie devient modifiable sans déploiement — c'est le niveau 2
+de [`docs/emails.md`](../../docs/emails.md).
+
+| Alias Resend | Fichier | Objet |
+|---|---|---|
+| `print-order-shipped` | `print-order-shipped.njk` | Ton carnet « … » est en route |
+| `password-reset` | `password-reset.njk` | Réinitialise ton mot de passe MemoBook |
+
+```bash
+npm run emails:sync      # crée ou met à jour, puis publie. Exige RESEND_API_KEY
+```
+
+L'alias est la clé d'envoi : `POST /emails` accepte `template: { id: "password-reset", variables: { … } }`.
+**Un gabarit non publié n'est pas envoyable** — d'où le `publish` que le script
+enchaîne systématiquement.
+
+### Ce que la syntaxe Resend change
+
+Un gabarit Resend ne sait faire **qu'une substitution** : `{{{VARIABLE}}}`, en
+triple accolade. Ni condition, ni boucle, ni filtre. Trois conséquences, et
+elles expliquent la forme des variables ci-dessus :
+
+1. **Tout ce qui peut manquer est composé côté back-end**, en une seule chaîne
+   (`greeting`, `coverCaption`, `estimatedRange`).
+2. **Un état = un gabarit.** Le suivi de `print-order-shipped` a ses quatre
+   étapes figées — deux faites, une en cours, une à venir — parce que c'est ce
+   que « expédié » veut dire. La livraison sera `print-order-delivered`, pas une
+   condition dans celui-ci.
+3. **Le pied de page est figé au moment de la synchronisation.** Les deux
+   gabarits sont transactionnels : ni lien de désinscription, ni en-tête
+   `List-Unsubscribe`. Une campagne passera par un gabarit à part.
+
+### Qui écrit quoi
+
+Le gabarit Resend est **dérivé**, jamais écrit à la main : `emails:sync` le rend
+depuis le `.njk` et l'écrase. Une modification faite dans l'interface Resend
+survit donc jusqu'à la prochaine synchronisation, et pas plus.
+
+C'est voulu tant que ces deux e-mails sont de niveau 1 et 2 avec la copie au
+dépôt. Le jour où une équipe CRM prend la main sur `print-order-shipped`, c'est
+ce fichier-ci qu'il faudra retirer de la liste de `resend-templates.ts` — sans
+quoi la première synchronisation effacera son travail.
+
+### Les images
+
+`ASSETS_BASE_URL` par défaut : `https://memo-book.com/emails`. Le logo
+(`assets/emails/logo.png`) doit y être déposé et servi publiquement — sans quoi
+il manquera dans l'aperçu Resend comme dans la boîte du destinataire. Ni URL S3
+signée, qui périme, ni pièce jointe.
