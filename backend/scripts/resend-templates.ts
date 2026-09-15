@@ -18,7 +18,7 @@
  * « Qui écrit quoi » dans `templates/emails/README.md`.
  */
 
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import nunjucks from "nunjucks";
@@ -37,6 +37,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ENV_FILE = resolve(here, "../.env");
 if (existsSync(ENV_FILE)) process.loadEnvFile(ENV_FILE);
 const EMAILS_DIR = resolve(here, "../../templates/emails");
+const ASSETS_DIR = resolve(here, "../../assets/emails");
 const OUT_DIR = resolve(here, "../.mail-out/resend");
 
 const API = "https://api.resend.com";
@@ -372,6 +373,14 @@ async function main() {
 
   if (dryRun || apiKey === "") {
     mkdirSync(OUT_DIR, { recursive: true });
+    // Les aperçus pointent sur `./logo.png` : sans les images à côté du HTML,
+    // on relirait un e-mail à l'en-tête cassé et on chercherait le défaut dans
+    // le gabarit. En production, ces fichiers viennent d'ASSETS_BASE_URL.
+    if (preview && existsSync(ASSETS_DIR)) {
+      for (const asset of readdirSync(ASSETS_DIR)) {
+        copyFileSync(resolve(ASSETS_DIR, asset), resolve(OUT_DIR, asset));
+      }
+    }
     for (const { definition, subject, html } of rendered) {
       const path = resolve(OUT_DIR, `${definition.alias}.html`);
       const sample = definition.sample;
