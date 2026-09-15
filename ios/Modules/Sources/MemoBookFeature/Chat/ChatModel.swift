@@ -100,6 +100,13 @@ public final class ChatModel {
     /// souvenir dans le carnet.
     private var pending: ChatMessage?
 
+    /// La bulle reprise de l'accueil, s'il y en a une — voir ``adopt(_:)``.
+    ///
+    /// Son état d'envoi ne se décide **pas** ici : ce vocal est parti avant que
+    /// cet écran n'existe, et c'est la file qui sait s'il est arrivé. Le modèle
+    /// retient son identifiant pour ne rien écrire par-dessus.
+    private var adoptedId: String?
+
     /// - Parameters:
     ///   - source: ce qui rend la conversation. Par défaut le jeu d'essai, ce
     ///     qui laisse les aperçus montrer les quatre états sans serveur.
@@ -302,6 +309,66 @@ public final class ChatModel {
         start(pending)
     }
 
+    // MARK: - Le vocal venu de l'accueil
+
+    /// Pose dans le fil le vocal qu'on vient de dire depuis l'accueil.
+    ///
+    /// **C'est la continuité du geste** : on a raconté, on arrive ici, et le
+    /// souvenir se pose devant soi au lieu d'avoir disparu sur l'écran d'avant.
+    /// MEMO le reçoit ensuite comme n'importe quel vocal — même déroulé, mêmes
+    /// temps, mêmes suggestions : ce qui change, c'est par quelle porte il est
+    /// entré, et ça ne regarde pas la conversation.
+    ///
+    /// ⚠️ **L'état d'envoi ne lui appartient pas.** Le vocal est parti avant
+    /// que cet écran n'existe, et il peut très bien attendre le réseau sur le
+    /// disque : c'est la file qui le dit, par ``markHandover(_:)``. Une bulle
+    /// qui se déclarerait « envoyée » parce que MEMO a répondu mentirait à
+    /// chaque fois qu'on raconte dans le métro.
+    ///
+    /// Une seule fois par écran : revenir sur la conversation ne repose pas le
+    /// même souvenir.
+    ///
+    /// - Returns: `true` si la bulle a bien été posée. `false` quand l'écran
+    ///   s'est refermé pendant la pause d'arrivée — le vocal reste alors à
+    ///   reprendre, et on le retrouve en revenant.
+    @discardableResult
+    public func adopt(_ handover: RecordingOutbox.Handover) async -> Bool {
+        guard thread != nil, adoptedId == nil else { return false }
+
+        // Le temps que l'écran finisse d'arriver. La bulle doit se poser
+        // **devant** le voyageur — la voir déjà là en découvrant la
+        // conversation, ce serait retrouver un souvenir, pas l'envoyer.
+        try? await Task.sleep(for: Self.arrivalBeat)
+        guard !Task.isCancelled, thread != nil else { return false }
+
+        adoptedId = handover.id
+        ensureOpening()
+
+        let message = ChatMessage(
+            id: handover.id,
+            author: .traveller,
+            body: .voice(handover.note),
+            sentAt: handover.recordedAt,
+            stepId: activeStepId,
+            delivery: handover.delivery
+        )
+        append(message)
+        start(message)
+        return true
+    }
+
+    /// Ce que la file dit de la bulle venue de l'accueil. Sans effet s'il n'y en
+    /// a pas : l'écran peut être ouvert par la porte ordinaire.
+    public func markHandover(_ delivery: ChatDelivery) {
+        guard let adoptedId else { return }
+        mark(adoptedId, as: delivery)
+    }
+
+    /// Le temps qu'on laisse à l'écran avant de poser le vocal. À peu près la
+    /// durée d'une poussée de navigation : la bulle arrive quand la
+    /// conversation est en place, pas pendant qu'elle glisse.
+    private static let arrivalBeat = Duration.milliseconds(400)
+
     // MARK: - Le tour de parole
 
     private func start(_ message: ChatMessage) {
@@ -325,7 +392,10 @@ public final class ChatModel {
                 to: ChatTurn(message: message, history: history, context: thread.context)
             )
 
-            mark(message.id, as: .sent)
+            // Sauf pour la bulle venue de l'accueil : la réponse de MEMO ne dit
+            // rien de son envoi, et l'écrire « envoyée » ici couvrirait un vocal
+            // encore en attente de réseau. Voir ``adopt(_:)``.
+            if message.id != adoptedId { mark(message.id, as: .sent) }
 
             for beat in reply.beats {
                 turn = .thinking
@@ -341,7 +411,12 @@ public final class ChatModel {
             // L'écran s'est refermé, ou un nouveau tour a démarré. Rien à dire.
             turn = .idle
         } catch {
-            mark(message.id, as: .failed(error.localizedDescription))
+            // Même règle qu'à la réussite : c'est **la réponse** qui a échoué,
+            // pas l'envoi du vocal de l'accueil. Marquer la bulle « non
+            // envoyée » ferait croire qu'un souvenir déjà arrivé s'est perdu.
+            if message.id != adoptedId {
+                mark(message.id, as: .failed(error.localizedDescription))
+            }
             turn = .failed(messageId: message.id, message: error.localizedDescription)
         }
     }

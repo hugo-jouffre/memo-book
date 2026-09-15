@@ -1,4 +1,5 @@
 import Foundation
+import MemoBookCore
 import MemoBookNetworking
 import MemoBookRecording
 import Observation
@@ -60,6 +61,10 @@ public final class RecordingOutbox {
     /// Un refus **définitif** du serveur, à montrer à l'utilisateur. Ce qui
     /// tient au réseau n'arrive jamais ici : ça retourne dans la file.
     public private(set) var rejection: String?
+
+    /// Le vocal qu'on vient de raconter depuis l'accueil, et où en est son
+    /// envoi — voir ``handOver(_:levels:to:)``.
+    public private(set) var handover: Handover?
 
     private let store: PendingRecordingStore
     private let connectivity: Connectivity
@@ -156,6 +161,93 @@ public final class RecordingOutbox {
         return .delivered
     }
 
+    // MARK: - Le relais vers la conversation
+
+    /// Le vocal qui vient d'être dit, le temps qu'il rejoigne la conversation.
+    ///
+    /// **Il vit dans la file et non dans un écran** pour la même raison que
+    /// l'envoi lui-même : il traverse une navigation. L'accueil le confie,
+    /// pousse la conversation du voyage, et c'est elle qui le pose dans le fil —
+    /// deux écrans, un seul objet, et un état d'envoi qui ne se dédouble pas.
+    public struct Handover: Sendable, Identifiable, Equatable {
+        public let id: String
+        /// Le voyage dont la conversation va s'ouvrir. Un enregistrement rapide
+        /// part vers **tous** les voyages en cours (voir la FAQ) ; c'est
+        /// celui-ci qu'on montre, le premier, celui qu'on est en train de vivre.
+        public let tripId: String
+        public let note: VoiceNote
+        public let recordedAt: Date
+
+        /// Où en est l'envoi. C'est la file qui l'écrit, la bulle qui le lit :
+        /// une bulle qui déciderait elle-même d'afficher « envoyé » finirait par
+        /// le dire d'un vocal encore sur le disque.
+        public internal(set) var delivery: ChatDelivery
+
+        /// La conversation l'a déjà posé dans son fil. Sans ce drapeau, revenir
+        /// sur l'écran le reposterait une seconde fois.
+        public internal(set) var isAdopted = false
+    }
+
+    /// Confie un vocal raconté depuis l'accueil, **et le tient à disposition de
+    /// la conversation** qui va s'ouvrir.
+    ///
+    /// Ne rend rien et n'attend rien : l'écran qui appelle doit pouvoir pousser
+    /// la conversation dans la foulée, sans attendre le réseau. C'est tout
+    /// l'objet — on part en ayant vu son vocal partir, pas en ayant attendu
+    /// qu'il arrive.
+    public func handOver(_ audio: RecordedAudio, levels: [Double], to tripIds: [String]) {
+        guard let opening = tripIds.first else { return }
+
+        let id = "handover-\(UUID().uuidString)"
+        // `AudioRecorder.stop()` a déjà effacé son fichier temporaire : sans
+        // cette écriture, la bulle n'aurait rien à rejouer.
+        let url = try? VoiceNoteFile.save(audio, id: id)
+
+        handover = Handover(
+            id: id,
+            tripId: opening,
+            note: VoiceNote(id: id, duration: audio.duration, levels: levels, localUrl: url),
+            recordedAt: audio.recordedAt,
+            delivery: .sending
+        )
+
+        Task { await submitHandover(audio, to: tripIds) }
+    }
+
+    /// Le vocal qui attend d'être repris par la conversation de ce voyage.
+    public func pendingHandover(for tripId: String) -> Handover? {
+        guard let handover, handover.tripId == tripId, !handover.isAdopted else { return nil }
+        return handover
+    }
+
+    /// La conversation l'a posé dans son fil : il ne s'y reposera plus.
+    ///
+    /// En deux temps, et non en un seul appel qui rendrait *et* consommerait :
+    /// entre les deux il y a une pause d'arrivée, et un écran qu'on referme
+    /// pendant celle-ci ne doit pas emporter le vocal avec lui. Marqué **après**
+    /// avoir été posé, il reste donc disponible tant qu'on ne l'a pas vu.
+    ///
+    /// Le relais, lui, **reste** dans la file : c'est par lui que l'état
+    /// d'envoi continue d'arriver à la bulle. Il ne s'efface qu'au vocal
+    /// suivant.
+    public func markHandoverAdopted() {
+        handover?.isAdopted = true
+    }
+
+    private func submitHandover(_ audio: RecordedAudio, to tripIds: [String]) async {
+        switch await submit(audio, to: tripIds) {
+        case .delivered:
+            handover?.delivery = .sent
+        case .queued:
+            // Il attend le réseau, sur le disque. La bulle reste donc sur
+            // « envoi en cours » : ce n'est pas un échec, et ce n'est pas fini
+            // non plus. ``drain()`` la résoudra au retour de la connexion.
+            break
+        case .rejected(let message):
+            handover?.delivery = .failed(message)
+        }
+    }
+
     /// Vide la file. Sans effet hors ligne, et un seul vidage à la fois : deux
     /// déclencheurs simultanés — le retour du réseau et le retour dans l'app —
     /// ne doivent pas envoyer deux fois le même souvenir.
@@ -220,6 +312,21 @@ public final class RecordingOutbox {
 
         pending = await store.count()
         if delivered > 0 { noteDelivery(of: delivered) }
+        resolveHandoverIfQueueIsEmpty()
+    }
+
+    /// La file est vide et quelque chose est parti : le vocal qu'on suivait en
+    /// faisait partie.
+    ///
+    /// C'est un raccourci, et il est assumé : la file ne rend pas l'identifiant
+    /// du vocal qu'elle vient d'envoyer, et lui en donner un pour cette seule
+    /// bulle demanderait de le porter jusqu'au disque. Le relais est toujours le
+    /// **dernier** vocal dit ; quand la file s'est vidée sans rien laisser
+    /// derrière, il est parti avec. Sans ça, la bulle resterait sur « envoi en
+    /// cours » alors que le souvenir est dans le carnet.
+    private func resolveHandoverIfQueueIsEmpty() {
+        guard pending == 0, handover?.delivery == .sending else { return }
+        handover?.delivery = .sent
     }
 
     /// Un vocal, plusieurs carnets, **en même temps** : deux carnets ne font

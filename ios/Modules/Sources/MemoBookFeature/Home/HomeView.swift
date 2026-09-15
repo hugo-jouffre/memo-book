@@ -83,11 +83,15 @@ public struct HomeView: View {
             NewNotebookSheet(resumableTrip: model.resumableTrip, onIntent: onIntent)
         }
         .brandSheet(isPresented: $isRecording) {
-            // Le vocal ne remonte pas à `RootView` : il n'y a rien à router, il
-            // y a un appel réseau à faire. C'est le modèle de l'écran qui le
-            // fait, comme il fait son chargement.
-            RecordingSheet { audio in
-                Task { await model.upload(audio) }
+            // **On ne reste pas là.** Le vocal est confié à la file — qui vit
+            // au-dessus des écrans, et continue donc pendant la navigation — et
+            // l'accueil demande aussitôt la conversation du voyage. C'est là
+            // qu'on verra le souvenir se poser : on raconte, on arrive, et la
+            // bulle part sous nos yeux. Sans ça, l'enregistrement s'achevait
+            // sur l'écran qu'on venait de quitter du regard.
+            RecordingSheet { audio, levels in
+                guard let tripId = model.tellStory(audio, levels: levels) else { return }
+                onIntent(.tellStory(tripId: tripId))
             }
         }
         // Le crème de la marque ne se retourne pas en sombre — voir
@@ -106,6 +110,10 @@ public struct HomeView: View {
         }
         .onAppear {
             if isReadyToRise { rise() }
+            // De retour d'une conversation où l'on vient de raconter : les
+            // compteurs et la jauge du carnet ont vieilli pendant ce temps-là.
+            // Sans effet si rien n'est arrivé entre-temps.
+            Task { await model.refreshAfterStories() }
         }
         // Le réseau qui tombe ou qui revient ne se voit pas quand on ne regarde
         // pas l'écran. VoiceOver l'annonce donc, une fois, à chaque changement :

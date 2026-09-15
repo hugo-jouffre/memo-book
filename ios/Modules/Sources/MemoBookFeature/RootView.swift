@@ -297,6 +297,16 @@ public struct RootView: View {
             path.append(.bookPreview(memoId: tripId))
         case .openHelp:
             path.append(.support)
+        case .tellStory(let tripId):
+            // Le vocal est déjà parti — la file s'en charge, et elle vit
+            // au-dessus de cet écran. Ici il n'y a qu'une chose à faire :
+            // ouvrir la conversation où il va se poser.
+            //
+            // Même garde-fou que ci-dessus : un voyage du bac à sable n'a pas
+            // de conversation à ouvrir côté serveur. On reste sur l'accueil,
+            // qui montre déjà l'envoi dans sa boîte d'information.
+            guard UUID(uuidString: tripId) != nil else { return }
+            path.append(.chat(tripId: tripId, stepId: nil))
         case .joinTrip, .importFromPolarsteps:
             break
         }
@@ -483,7 +493,15 @@ public struct RootView: View {
                 onIntent: handle
             )
         case .chat(let tripId, let stepId):
-            ChatView(tripId: tripId, stepId: stepId, onIntent: handle)
+            // La file passe par ici parce que c'est par ici qu'on arrive après
+            // un enregistrement rapide : le vocal est déjà parti, et la
+            // conversation le reprend pour le montrer.
+            ChatView(
+                tripId: tripId,
+                stepId: stepId,
+                outbox: dependencies.outbox,
+                onIntent: handle
+            )
         case .gallery:
             // La galerie **réémet** des intentions : son bouton du bas crée un
             // carnet ou ramène au voyage en cours. Elles repassent donc par le

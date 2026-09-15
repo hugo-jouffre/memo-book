@@ -27,6 +27,14 @@ public struct ChatView: View {
 
     private let onIntent: (ChatIntent) -> Void
 
+    /// La file des vocaux, quand l'écran est ouvert par l'app.
+    ///
+    /// C'est par elle qu'arrive le souvenir raconté depuis l'accueil, et l'état
+    /// de son envoi — voir ``ChatModel/adopt(_:)``. `nil` en aperçu et en test :
+    /// la conversation s'ouvre alors par la porte ordinaire, sans rien à
+    /// reprendre.
+    private let outbox: RecordingOutbox?
+
     @State private var model: ChatModel
 
     @Environment(\.dismiss) private var dismiss
@@ -56,9 +64,11 @@ public struct ChatView: View {
     public init(
         tripId: String,
         stepId: String? = nil,
+        outbox: RecordingOutbox? = nil,
         onIntent: @escaping (ChatIntent) -> Void = { _ in }
     ) {
         self.tripId = tripId
+        self.outbox = outbox
         self.onIntent = onIntent
         _model = State(initialValue: ChatModel(tripId: tripId, focusStepId: stepId))
         _pendingFocus = State(initialValue: stepId)
@@ -72,6 +82,7 @@ public struct ChatView: View {
         onIntent: @escaping (ChatIntent) -> Void = { _ in }
     ) {
         self.tripId = tripId
+        self.outbox = nil
         self.onIntent = onIntent
         _model = State(initialValue: model)
         _pendingFocus = State(initialValue: stepId)
@@ -102,9 +113,28 @@ public struct ChatView: View {
         // Le crème de la marque ne se retourne pas en sombre — voir
         // `MemoBookColor`.
         .environment(\.colorScheme, .light)
-        .task { await model.load() }
+        .task {
+            await model.load()
+            await adoptQuickRecording()
+        }
+        // L'envoi du vocal venu de l'accueil se joue **ailleurs** — dans la
+        // file, qui vit au-dessus des écrans et continue pendant qu'on navigue.
+        // La bulle ne fait que suivre ce qu'elle en dit.
+        .onChange(of: outbox?.handover?.delivery) { _, delivery in
+            guard let delivery else { return }
+            model.markHandover(delivery)
+        }
         // Un écran de chat laissé derrière soi ne doit ni parler ni enregistrer.
         .onDisappear { model.teardown() }
+    }
+
+    /// Reprend le souvenir raconté depuis l'accueil, s'il y en a un pour ce
+    /// voyage. Il n'est marqué repris **qu'une fois posé** : un écran refermé
+    /// pendant la pause d'arrivée le laisse à reprendre, et on le retrouve en
+    /// revenant.
+    private func adoptQuickRecording() async {
+        guard let outbox, let handover = outbox.pendingHandover(for: tripId) else { return }
+        if await model.adopt(handover) { outbox.markHandoverAdopted() }
     }
 
     // MARK: - Le fil

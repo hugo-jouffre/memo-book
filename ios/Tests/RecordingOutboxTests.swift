@@ -118,8 +118,10 @@ final class RecordingOutboxTests: XCTestCase {
 
         // Un vocal enregistré hors ligne : la boîte cesse de parler du réseau
         // pour parler de ce qui attend, qui est l'inquiétude du moment.
-        await model.upload(.debugSilence)
-        XCTAssertEqual(model.notice, .waitingForConnection(count: 1))
+        model.tellStory(.debugSilence, levels: [])
+        try await until("le vocal entre dans la file") {
+            model.notice == .waitingForConnection(count: 1)
+        }
 
         outbox.debugSetOffline(false)
         try await until("le vocal arrive") { model.notice == .delivered(count: 1) }
@@ -163,6 +165,114 @@ final class RecordingOutboxTests: XCTestCase {
         XCTAssertTrue(HomeNotice.waitingForConnection(count: 2).message.contains("Tes vocaux"))
         XCTAssertTrue(HomeNotice.delivered(count: 1).message.contains("Ton vocal"))
         XCTAssertTrue(HomeNotice.delivered(count: 5).message.contains("Tes 5 vocaux"))
+    }
+
+    // MARK: - La continuité : on raconte, et on voit son vocal partir
+
+    /// L'accueil rend l'identifiant du voyage **sans attendre le réseau** : la
+    /// conversation s'ouvre pendant que le vocal part, c'est tout l'objet.
+    func testTellingAStoryOpensTheConversationWithoutWaitingForTheNetwork() async throws {
+        let outbox = outbox(sender: Sender())
+        let model = HomeModel(source: { .fixture }, outbox: outbox)
+        await model.load()
+        outbox.debugSetOffline(true)
+
+        let opening = model.tellStory(.debugSilence, levels: [0.4, 0.8])
+
+        XCTAssertEqual(opening, model.ongoingTrips.first?.id)
+        XCTAssertNotNil(
+            outbox.pendingHandover(for: opening ?? ""),
+            "Le vocal doit attendre la conversation, même hors ligne."
+        )
+    }
+
+    /// La bulle suit **la file**, pas l'écran : hors ligne elle reste sur
+    /// « envoi en cours », et c'est la reconnexion qui la termine.
+    func testTheBubbleSaysSentOnlyOnceTheVocalHasReallyLeft() async throws {
+        let sender = Sender()
+        let network = AsyncStream.makeStream(of: Bool.self)
+        let outbox = outbox(sender: sender, connectivity: Connectivity { network.stream })
+        outbox.start()
+        let model = HomeModel(source: { .fixture }, outbox: outbox)
+        await model.load()
+
+        network.continuation.yield(false)
+        try await until("la file se sait hors ligne") { !outbox.isOnline }
+
+        model.tellStory(.debugSilence, levels: [])
+        try await until("le vocal attend sur le disque") { outbox.pending == 1 }
+        XCTAssertEqual(
+            outbox.handover?.delivery,
+            .sending,
+            "Un vocal encore sur le disque n'est pas un vocal envoyé."
+        )
+
+        network.continuation.yield(true)
+        try await until("le vocal part") { outbox.handover?.delivery == .sent }
+    }
+
+    /// Un refus du serveur se lit sur la bulle, avec le mot du serveur.
+    func testARefusalShowsOnTheBubble() async throws {
+        let sender = Sender()
+        let outbox = outbox(sender: sender)
+        let model = HomeModel(source: { .fixture }, outbox: outbox)
+        await model.load()
+
+        await sender.setRefusing(model.ongoingTrips.map(\.id))
+        model.tellStory(.debugSilence, levels: [])
+
+        try await until("le refus arrive à la bulle") {
+            outbox.handover?.delivery.hasFailed == true
+        }
+    }
+
+    /// La conversation pose la bulle, et **ne décide pas** de son envoi : c'est
+    /// la file qui le dit, même quand MEMO a déjà répondu.
+    func testTheConversationAdoptsTheVocalWithoutOwningItsDelivery() async throws {
+        let outbox = outbox(sender: Sender())
+        let model = HomeModel(source: { .fixture }, outbox: outbox)
+        await model.load()
+        outbox.debugSetOffline(true)
+
+        let tripId = try XCTUnwrap(model.tellStory(.debugSilence, levels: []))
+        let handover = try XCTUnwrap(outbox.pendingHandover(for: tripId))
+
+        let chat = ChatModel(tripId: tripId)
+        await chat.load()
+        let adopted = await chat.adopt(handover)
+
+        XCTAssertTrue(adopted)
+        let bubble = try XCTUnwrap(chat.messages.first { $0.id == handover.id })
+        XCTAssertEqual(bubble.author, .traveller)
+        XCTAssertEqual(
+            bubble.delivery,
+            .sending,
+            "Le vocal attend le réseau : la bulle ne peut pas dire autre chose."
+        )
+
+        // Même une fois MEMO passé, la bulle reste sur l'état que la file donne.
+        try await until("MEMO a répondu") { chat.messages.count > 1 && chat.turn == .idle }
+        XCTAssertEqual(chat.messages.first { $0.id == handover.id }?.delivery, .sending)
+
+        // C'est la file, et elle seule, qui la termine.
+        chat.markHandover(.sent)
+        XCTAssertEqual(chat.messages.first { $0.id == handover.id }?.delivery, .sent)
+    }
+
+    /// Une conversation rouverte ne repose pas le même souvenir.
+    func testAVocalIsPostedOnlyOnce() async throws {
+        let outbox = outbox(sender: Sender())
+        let model = HomeModel(source: { .fixture }, outbox: outbox)
+        await model.load()
+
+        let tripId = try XCTUnwrap(model.tellStory(.debugSilence, levels: []))
+        XCTAssertNotNil(outbox.pendingHandover(for: tripId))
+
+        outbox.markHandoverAdopted()
+        XCTAssertNil(
+            outbox.pendingHandover(for: tripId),
+            "Repris une fois, le vocal ne se repose plus."
+        )
     }
 
     // MARK: - Le contenu relu hors ligne

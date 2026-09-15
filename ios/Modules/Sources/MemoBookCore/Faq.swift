@@ -193,7 +193,7 @@ public enum Faq {
                 question: "Comment j’enregistre un souvenir ?",
                 answer: [
                     "Dans la conversation, tu appuies sur le micro et tu parles.",
-                    "Tu peux aussi lancer un enregistrement rapide depuis l’écran d’accueil, sans ouvrir la conversation.",
+                    "Tu peux aussi lancer un enregistrement rapide depuis l’écran d’accueil : la conversation de ton voyage s’ouvre ensuite toute seule, et ton vocal s’y pose sous tes yeux.",
                     "Ton récit est transcrit automatiquement, puis mis en forme.",
                     "Tu peux relire, corriger et même supprimer une étape enregistrée dans un récit à tout moment.",
                 ]
@@ -203,7 +203,7 @@ public enum Faq {
                 question: "Où va un enregistrement rapide si j’ai plusieurs récits en cours ?",
                 answer: [
                     "Le plus souvent tu n’as qu’un seul récit en cours, et ton souvenir y est ajouté directement.",
-                    "Si tu en as plusieurs, l’enregistrement est ajouté à chacun d’eux.",
+                    "Si tu en as plusieurs, l’enregistrement est ajouté à chacun d’eux, et c’est la conversation du premier qui s’ouvre.",
                     "Tu ouvres ensuite les étapes de chaque récit et tu supprimes celle qui n’a rien à y faire, en une touche.",
                     "Pour éviter ce tri, lance l’enregistrement depuis la conversation du récit concerné : il n’est alors ajouté qu’à celui-ci.",
                 ]

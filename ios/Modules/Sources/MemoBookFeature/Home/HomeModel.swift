@@ -125,26 +125,45 @@ public final class HomeModel {
     ///
     /// Sans aucun carnet en cours, il n'y a rien à faire : la feuille ne
     /// s'ouvre pas depuis un accueil sans voyage ouvert.
-    public func upload(_ audio: RecordedAudio) async {
+    /// Confie le vocal qu'on vient de dire, et rend le voyage dont il faut
+    /// ouvrir la conversation.
+    ///
+    /// **Il rend son identifiant tout de suite**, sans rien attendre : c'est
+    /// exactement ce qu'on veut donner à voir. On raconte, on arrive dans la
+    /// conversation, et le vocal s'y pose **sous nos yeux** — il part pendant
+    /// qu'on le regarde, au lieu d'être déjà parti sur un écran qu'on a quitté.
+    /// Attendre le réseau pour naviguer aurait rendu ce moment invisible, et
+    /// hors ligne il n'aurait jamais eu lieu.
+    ///
+    /// Le vocal va dans **tous** les voyages en cours, comme avant — c'est ce
+    /// que la FAQ promet. On ouvre celui qu'on est en train de vivre, le
+    /// premier de la liste : les autres gardent leur copie, et rien ne se perd.
+    ///
+    /// `nil` quand aucun voyage n'est en cours. Le CTA de l'accueil propose
+    /// alors « Créer un nouveau voyage » et la feuille ne s'ouvre pas ; c'est le
+    /// garde-fou de ce qui ne devrait pas arriver.
+    @discardableResult
+    public func tellStory(_ audio: RecordedAudio, levels: [Double]) -> String? {
         let trips = ongoingTrips.map(\.id)
-        guard !trips.isEmpty else { return }
+        guard let opening = trips.first else { return nil }
 
-        switch await outbox.submit(audio, to: trips) {
-        case .delivered:
-            loadFailure = nil
-            // Le carnet vient de grossir : ses compteurs et sa jauge sont
-            // périmés. On recharge plutôt que de les corriger à la main ici —
-            // c'est le serveur qui sait ce que le souvenir a produit.
-            await load()
-        case .queued:
-            // Rien à dire de plus : la boîte d'information le dit déjà, et
-            // mieux qu'un bandeau d'erreur — il ne s'est rien passé de mal.
-            loadFailure = nil
-        case .rejected:
-            // Le message est déjà posé par la file, ``errorMessage`` le lit.
-            break
-        }
+        loadFailure = nil
+        outbox.handOver(audio, levels: levels, to: trips)
+        return opening
     }
+
+    /// Le carnet a grossi : ses compteurs et sa jauge ont vieilli.
+    ///
+    /// Séparé de l'envoi parce qu'il n'a plus lieu au même moment : le vocal
+    /// part depuis la conversation, et l'accueil ne se recharge qu'au retour.
+    public func refreshAfterStories() async {
+        guard outbox.deliveries != knownDeliveries else { return }
+        knownDeliveries = outbox.deliveries
+        await load()
+    }
+
+    /// Combien de vocaux étaient arrivés la dernière fois qu'on a rechargé.
+    private var knownDeliveries = 0
 
     /// Ce que fait « Réessayer » du bandeau d'erreur : oublier le refus, et
     /// redemander le contenu. Les deux, parce qu'un seul bouton ne peut pas
@@ -207,6 +226,9 @@ public enum HomeIntent: Sendable, Hashable {
     /// Reprendre un voyage déjà enregistré dans Polarsteps, avec ses étapes.
     case importFromPolarsteps
     case openHelp
+    /// Un enregistrement rapide vient d'être confié : on part le voir arriver
+    /// dans la conversation du voyage. Voir ``HomeModel/tellStory(_:levels:)``.
+    case tellStory(tripId: String)
 }
 
 #if DEBUG

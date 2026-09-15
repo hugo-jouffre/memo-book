@@ -311,6 +311,14 @@ public actor PreviewAPI: MemoBookAPI {
         )
     }
 
+    /// ⚠️ **Un souvenir déposé sur un carnet inconnu ouvre ce carnet**, au lieu
+    /// de rendre un 404.
+    ///
+    /// Le bac à sable ne sème qu'un seul carnet, alors que l'accueil en montre
+    /// quatre : un vocal enregistré depuis l'accueil retombait donc sur
+    /// « Carnet introuvable », et la bulle s'affichait « Non envoyé » dans une
+    /// app où rien n'avait échoué. Un bac à sable qui refuse ce que l'app
+    /// permet n'apprend rien — il fait chercher un bug là où il n'y en a pas.
     private func append(
         to memoId: String,
         kind: EntryKind,
@@ -320,7 +328,7 @@ public actor PreviewAPI: MemoBookAPI {
         capturedAt: Date,
         placeLabel: String?
     ) throws -> Entry {
-        let memo = try existingMemo(memoId)
+        let memo = memosById[memoId] ?? Self.emptyMemo(id: memoId)
 
         let entry = Entry(
             id: UUID().uuidString,
@@ -512,6 +520,25 @@ public actor PreviewAPI: MemoBookAPI {
     }
 
     public func resendInvitation(tripId: String, companionId: String) async throws {}
+
+    /// Un carnet vide, ouvert au vol pour accueillir un souvenir déposé sur un
+    /// identifiant que le bac à sable ne sème pas.
+    private static func emptyMemo(id: String) -> MemoDetail {
+        MemoDetail(
+            id: id,
+            title: "Carnet du bac à sable",
+            subtitle: nil,
+            authors: nil,
+            theme: nil,
+            startDate: nil,
+            endDate: nil,
+            coverPhotoUrl: nil,
+            createdAt: .now,
+            updatedAt: .now,
+            entries: [],
+            renders: []
+        )
+    }
 
     private func existingMemo(_ id: String) throws -> MemoDetail {
         guard let memo = memosById[id] else {

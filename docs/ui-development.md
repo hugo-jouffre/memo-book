@@ -2910,7 +2910,44 @@ permet.
 sur les `option-card` de ce lot, qui sont le même composant Figma que celles du
 moyen de paiement.
 
-### 18.6 Contrat back-end
+### 18.6 L'enregistrement rapide mène à la conversation
+
+- **Vues** : `Home/HomeView.swift`, `Recording/RecordingSheet.swift`,
+  `Chat/ChatView.swift` · **Relais** : `RecordingOutbox.Handover`
+
+**Le geste ne s'arrête plus sur l'accueil.** On appuie sur « Commencer à
+enregistrer », on raconte, et la conversation du voyage s'ouvre : le vocal s'y
+pose **devant soi**, part, et MEMO le reçoit comme n'importe quel autre. Avant,
+la feuille se refermait sur l'écran d'où l'on venait et le souvenir disparaissait
+dans une ligne d'information — on racontait dans le vide.
+
+**Trois décisions portent tout le reste :**
+
+1. **On navigue sans attendre le réseau.** `HomeModel.tellStory(_:levels:)` rend
+   l'identifiant du voyage tout de suite et confie le vocal à la file. Attendre
+   l'envoi aurait rendu ce moment invisible — et hors ligne, il n'aurait jamais
+   eu lieu.
+2. **L'état d'envoi appartient à la file, pas à la bulle.** Le vocal est parti
+   avant que l'écran n'existe, et il peut attendre le réseau sur le disque :
+   `ChatModel` ne marque **jamais** cette bulle « envoyée », même quand MEMO a
+   répondu. C'est `RecordingOutbox.handover.delivery` qui le dit. Sans cette
+   règle, un vocal encore sur le disque s'affichait arrivé dès que MEMO parlait.
+3. **La bulle se pose après l'écran.** 400 ms — à peu près une poussée de
+   navigation. La voir déjà là en découvrant la conversation, ce serait
+   retrouver un souvenir, pas l'envoyer.
+
+**Où va le vocal** — dans **tous** les voyages en cours, comme avant : c'est ce
+que la FAQ promet. On ouvre la conversation du premier, celui qu'on est en train
+de vivre ; les autres gardent leur copie.
+
+**Le relais** vit dans la file et non dans un écran, pour la même raison que
+l'envoi : il traverse une navigation. Il est marqué repris **après** avoir été
+posé — un écran refermé pendant la pause d'arrivée ne doit pas emporter le vocal
+avec lui.
+
+`HomeModel.upload(_:)` disparaît : plus rien ne l'appelait.
+
+### 18.7 Contrat back-end
 
 | Route | État |
 |---|---|
@@ -2923,7 +2960,7 @@ moyen de paiement.
 Migration `20260915120000_alertes_du_voyage_et_role_du_co_voyageur` : quatre
 booléens d'alerte sur `memos`, et `memo_members.role`.
 
-### 18.7 À trancher
+### 18.8 À trancher
 
 | # | Point |
 |---|---|
