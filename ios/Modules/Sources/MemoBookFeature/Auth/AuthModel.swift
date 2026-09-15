@@ -32,15 +32,9 @@ final class AuthModel {
     var password = ""
     var passwordConfirmation = ""
 
-    /// Règle affichée sous le champ, et vérifiée ici : au moins 8 caractères,
-    /// une lettre et un chiffre.
-    static let passwordRule = "8 caractères, 1 lettre, 1 chiffre"
-
-    var isPasswordValid: Bool {
-        password.count >= 8
-            && password.contains(where: \.isLetter)
-            && password.contains(where: \.isNumber)
-    }
+    /// La règle vit dans ``PasswordRule`` : le nouveau mot de passe après
+    /// « Mot de passe oublié » la pose aussi.
+    var isPasswordValid: Bool { PasswordRule.isValid(password) }
 
     /// La règle vit dans ``EmailAddress`` : le profil la pose aussi, et deux
     /// copies auraient fini par diverger.
@@ -84,8 +78,11 @@ final class AuthModel {
     /// souffre pas d'exception — voir T9.
     var passwordConfirmationError: String? {
         guard !passwordConfirmation.isEmpty, !passwordsMatch else { return nil }
-        return "Les deux mots de passe sont différents. Vérifie ta saisie."
+        return Self.passwordMismatchMessage
     }
+
+    /// Partagé avec le nouveau mot de passe de « Mot de passe oublié ».
+    static let passwordMismatchMessage = "Les deux mots de passe sont différents. Vérifie ta saisie."
 
     /// Ce que le serveur reproche à **l'adresse**, affiché sous son champ et
     /// non sous le bouton : c'est la ligne qu'il faut changer. Aujourd'hui un

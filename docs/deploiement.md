@@ -179,9 +179,21 @@ faut retirer l'autorisation côté téléphone :
     Réglages ▸ [son nom] ▸ Connexion et sécurité ▸ Se connecter avec Apple
     ▸ MemoBook ▸ Ne plus utiliser
 
-À prévoir plus tard, quand l'app enverra des emails : une adresse Apple peut
-être un relais `@privaterelay.appleid.com`, et il faut alors déclarer le domaine
-d'envoi chez Apple pour que le courrier arrive.
+L'app envoie des e-mails depuis « Mot de passe oublié » (15/09/2026), par
+**Resend** : `RESEND_API_KEY` et `MAIL_FROM` dans l'environnement du serveur,
+avec le domaine d'envoi vérifié chez Resend. Sans clé, le serveur **refuse de
+démarrer en production** — en développement, il écrit les messages dans
+`backend/.mail-out/` et journalise le lien. Une adresse Apple peut être un
+relais `@privaterelay.appleid.com` : il faut alors déclarer le domaine d'envoi
+chez Apple pour que le courrier arrive.
+
+Le bouton de l'e-mail ouvre l'app par `memobook://password/reset?token=…`
+(`APP_LINK_BASE_URL`). Un schéma privé : les clients mail le proposent avec une
+confirmation (« Ouvrir dans MemoBook ? »), et Gmail sur iOS peut le bloquer.
+Le lien universel — `https://memo-book.com/app/…` — demande de servir un
+`apple-app-site-association` depuis memo-book.com et d'ajouter l'*Associated
+Domain* dans `project.yml` ; le jour venu, changer `APP_LINK_BASE_URL` suffit
+côté serveur, `PasswordResetLink` lit le même chemin.
 
 ### Côté Google Cloud
 

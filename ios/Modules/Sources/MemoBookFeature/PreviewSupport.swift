@@ -141,6 +141,13 @@ public actor PreviewAPI: MemoBookAPI {
 
     public func signOut() async { account = nil }
 
+    /// Rien à envoyer en aperçu : la feuille passe simplement à l'étape suivante.
+    public func requestPasswordReset(email: String) async throws {}
+
+    public func resetPassword(token: String, password: String) async throws -> AuthSession {
+        open(Self.previewAccount)
+    }
+
     private func open(_ account: Account) -> AuthSession {
         self.account = account
         return AuthSession(

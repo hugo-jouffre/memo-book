@@ -10,13 +10,14 @@ import {
   signUpWithPassword,
   type IssuedSession,
 } from "../services/accounts.js";
+import { requestPasswordReset, resetPassword } from "../services/passwordReset.js";
 
 /**
  * Entrée dans un compte. Ces routes ne sont pas authentifiées — ce sont elles
  * qui délivrent le token — sauf `/me` et `/signout`, qui exigent une session.
  */
 
-/** Mêmes règles que l'app iOS (`AuthModel.passwordRule`). */
+/** Mêmes règles que l'app iOS (`PasswordRule`, dans `MemoBookCore`). */
 const password = z
   .string()
   .min(8, "8 caractères minimum.")
@@ -35,6 +36,15 @@ const signInBody = z.object({
   // Volontairement sans règle de complexité : les mots de passe déjà en base
   // n'ont pas à passer la validation d'aujourd'hui pour pouvoir se connecter.
   password: z.string().min(1),
+});
+
+const forgotPasswordBody = z.object({
+  email: z.string().email(),
+});
+
+const resetPasswordBody = z.object({
+  token: z.string().min(1),
+  password,
 });
 
 const appleBody = z.object({
@@ -58,6 +68,27 @@ export function registerAuthRoutes(app: FastifyInstance, context: AppContext): v
   app.post("/v1/auth/signin", async (request, reply) => {
     const body = signInBody.parse(request.body ?? {});
     const session = await signInWithPassword(context.prisma, body);
+    return reply.send(serialize(session));
+  });
+
+  /**
+   * « Mot de passe oublié ». 202 et non 204 : l'e-mail est accepté, pas
+   * encore arrivé. Une adresse sans compte fait un 404 `unknown_account` —
+   * voir `services/passwordReset.ts` pour pourquoi on le dit.
+   */
+  app.post("/v1/auth/password/forgot", async (request, reply) => {
+    const body = forgotPasswordBody.parse(request.body ?? {});
+    await requestPasswordReset(context.prisma, context.mailer, body.email);
+    return reply.code(202).send();
+  });
+
+  /**
+   * Le nouveau mot de passe, avec le secret reçu par e-mail. Répond comme
+   * `/signin` : la session est ouverte, l'app entre directement.
+   */
+  app.post("/v1/auth/password/reset", async (request, reply) => {
+    const body = resetPasswordBody.parse(request.body ?? {});
+    const session = await resetPassword(context.prisma, body);
     return reply.send(serialize(session));
   });
 

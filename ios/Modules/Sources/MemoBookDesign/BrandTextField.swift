@@ -85,6 +85,13 @@ public struct BrandTextField<Field: Hashable>: View {
     /// dans le texte indicatif, il ne disparaît pas quand on tape.
     private let hint: String?
 
+    /// Un pictogramme de marque posé au bout du champ — le crayon de « Mot de
+    /// passe oublié », qui dit qu'une valeur **préremplie** se corrige. Il ne
+    /// fait rien de plus que le champ lui-même : le toucher donne le focus,
+    /// comme partout ailleurs dans le cadre. Ignoré sur un champ secret, dont
+    /// le bout appartient déjà à l'œil.
+    private let trailingIcon: String?
+
     public init(
         _ label: String,
         text: Binding<String>,
@@ -93,7 +100,8 @@ public struct BrandTextField<Field: Hashable>: View {
         isSecure: Bool = false,
         labelPlacement: LabelPlacement = .floating,
         placeholder: String? = nil,
-        hint: String? = nil
+        hint: String? = nil,
+        trailingIcon: String? = nil
     ) {
         self.label = label
         self._text = text
@@ -103,6 +111,7 @@ public struct BrandTextField<Field: Hashable>: View {
         self.labelPlacement = labelPlacement
         self.placeholder = placeholder
         self.hint = hint
+        self.trailingIcon = trailingIcon
     }
 
     /// Le mot de passe se dévoile à la demande. Sans ça, corriger une faute de
@@ -204,6 +213,12 @@ public struct BrandTextField<Field: Hashable>: View {
                 } else {
                     TextField("", text: $text)
                         .focused(focus, equals: field)
+                        // Un mot de passe dévoilé reste un mot de passe : sans
+                        // ça, le champ en clair prend la majuscule de début de
+                        // phrase et la correction du système, et ce qu'on lit
+                        // n'est plus ce qui sera envoyé.
+                        .textInputAutocapitalization(isSecure ? .never : nil)
+                        .autocorrectionDisabled(isSecure)
                 }
             }
             .font(MemoBookFont.body)
@@ -221,9 +236,21 @@ public struct BrandTextField<Field: Hashable>: View {
                         .foregroundStyle(MemoBookColor.inkMuted)
                 }
                 .accessibilityLabel(isRevealed ? "Masquer le mot de passe" : "Afficher le mot de passe")
+            } else if let trailingIcon {
+                Image(brand: trailingIcon)
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .frame(width: trailingIconSide, height: trailingIconSide)
+                    .foregroundStyle(isFocused ? MemoBookColor.action : MemoBookColor.inkMuted)
+                    .accessibilityHidden(true)
             }
         }
     }
+
+    /// Le crayon suit le corps du texte, pas la hauteur du champ : à 20 pt il
+    /// pèse autant que l'œil du mot de passe, et grandit avec la police.
+    @ScaledMetric(relativeTo: .body) private var trailingIconSide: CGFloat = 20
 
     @ViewBuilder
     private var floatingLabel: some View {

@@ -65,6 +65,12 @@ public struct RootView: View {
 
     @State private var routingProblem: String?
 
+    /// Le secret d'un lien « Réinitialiser mon mot de passe » ouvert depuis
+    /// l'e-mail, en attendant que l'écran d'entrée le consomme. Reçu ici, au
+    /// seul niveau qui existe toujours : un lien ouvert à froid arrive avant
+    /// que ``AuthView`` soit là, et se perdrait s'il l'attendait.
+    @State private var pendingResetToken: String?
+
     public init() {}
 
     public var body: some View {
@@ -86,6 +92,18 @@ public struct RootView: View {
         // feuilles** : c'est lui qui les relie.
         .environment(\.brandSheetPresentation, sheets)
         .environment(\.subscriptionSession, subscription)
+        .onOpenURL { url in
+            guard let token = PasswordResetLink.token(from: url) else { return }
+            // Déjà entré : le mot de passe se change depuis le profil, et un
+            // lien reçu pour un compte où l'on est déjà n'a rien à ouvrir.
+            if case .signedIn = stage { return }
+            pendingResetToken = token
+        }
+        // Un lien reçu pendant qu'on restaurait la session, et la session a
+        // tenu : il ne doit pas ressortir à la prochaine déconnexion.
+        .onChange(of: stage) { _, stage in
+            if case .signedIn = stage { pendingResetToken = nil }
+        }
     }
 
     @ViewBuilder
@@ -98,7 +116,7 @@ public struct RootView: View {
                 case .restoring:
                     restoring
                 case .signedOut:
-                    AuthView { enterApp(as: $0) }
+                    AuthView(resetToken: $pendingResetToken) { enterApp(as: $0) }
                 case .signedIn(let account):
                     NavigationStack(path: $path) {
                         HomeView(model: dependencies.homeModel(), onIntent: handle)

@@ -67,6 +67,7 @@ public struct BrandSheet<Content: View>: View {
     }
 
     private let title: String
+    private let icon: String?
     private let badge: String?
     private let paragraphs: [String]
     private let titleAlignment: TitleAlignment
@@ -79,8 +80,14 @@ public struct BrandSheet<Content: View>: View {
     ///   titre, donc elle appartient à l'en-tête et non au contenu : mise dans
     ///   le contenu, elle se serait retrouvée sous le sous-titre qui la
     ///   commente.
+    /// - Parameter icon: le pictogramme de marque posé **au-dessus** du titre,
+    ///   dans un disque bleu — le cadenas de « Mot de passe oublié ». Il
+    ///   annonce le sujet de la feuille avant qu'on la lise, comme une
+    ///   vignette de couverture ; il n'a de sens que centré, et c'est ainsi
+    ///   qu'il se dessine quelle que soit l'alignement du titre.
     public init(
         _ title: String,
+        icon: String? = nil,
         badge: String? = nil,
         subtitle: String? = nil,
         titleAlignment: TitleAlignment = .leading,
@@ -90,6 +97,7 @@ public struct BrandSheet<Content: View>: View {
     ) {
         self.init(
             title,
+            icon: icon,
             badge: badge,
             paragraphs: subtitle.map { [$0] } ?? [],
             titleAlignment: titleAlignment,
@@ -123,6 +131,7 @@ public struct BrandSheet<Content: View>: View {
     ///   feuille ne monte pas d'un pouce à l'écran.
     public init(
         _ title: String,
+        icon: String? = nil,
         badge: String? = nil,
         paragraphs: [String],
         titleAlignment: TitleAlignment = .leading,
@@ -131,6 +140,7 @@ public struct BrandSheet<Content: View>: View {
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
+        self.icon = icon
         self.badge = badge
         self.paragraphs = paragraphs
         self.titleAlignment = titleAlignment
@@ -357,6 +367,12 @@ public struct BrandSheet<Content: View>: View {
         titleInset: CGFloat = 0
     ) -> some View {
         VStack(alignment: alignment, spacing: MemoBookSpacing.xs) {
+            if let icon {
+                BrandIconBadge(icon)
+                    .frame(maxWidth: .infinity)
+                    .padding(.bottom, MemoBookSpacing.xs)
+            }
+
             Text(title)
                 .font(MemoBookFont.h1)
                 .tracking(-0.41)
