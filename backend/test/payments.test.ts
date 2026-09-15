@@ -310,30 +310,41 @@ describe("la cagnotte déduite d'une commande", () => {
       placeOrder(memo.id, renderId),
     ]);
 
-    // Laquelle des deux gagne n'est pas décidable : c'est le verrou de ligne
-    // qui tranche, et l'ordre de `Promise.all` ne dit rien de l'ordre d'arrivée
-    // en base. On range donc sur le code de retour, jamais sur la position.
+    // **Deux dénouements, tous deux corrects**, et lequel survient n'est pas
+    // décidable — c'est l'entrelacement du devis et du débit qui tranche :
+    //
+    //   · la perdante a fait son devis *avant* que la gagnante ne débite. Elle
+    //     croit la cagnotte pleine, son débit trouve le solde à zéro, et
+    //     `routes/orders.ts` supprime la commande plutôt que de garder une
+    //     ligne portant un `walletAppliedCents` que le registre dément → 400 ;
+    //   · la perdante a fait son devis *après*. Elle voit zéro, ne débite rien,
+    //     et part à la carte pour le total → 201 « draft ».
+    //
+    // Fixer l'un des deux rend le test vert une fois sur deux : c'est ce qui
+    // l'a fait échouer dans les deux sens sur la CI. On vérifie donc ce qui est
+    // vrai dans les deux cas.
     const outcomes = responses
-      .map((response) => ({
-        code: response.statusCode,
-        body: response.json<OrderBody & { error?: string }>(),
-      }))
-      .sort((left, right) => left.code - right.code);
+      .map((response) => {
+        const body = response.json<OrderBody & { error?: string }>();
+        return response.statusCode === 201
+          ? `201 ${body.status}`
+          : `${response.statusCode} ${body.error}`;
+      })
+      .sort();
 
-    expect(outcomes.map((outcome) => outcome.code)).toEqual([201, 400]);
+    expect([
+      ["201 draft", "201 submitted"],
+      ["201 submitted", "400 wallet_insufficient"],
+    ]).toContainEqual(outcomes);
 
-    // L'une est payée par la cagnotte…
-    expect(outcomes[0]?.body.status).toBe("submitted");
-
-    // …l'autre trouve le solde déjà consommé et repart les mains vides. Elle ne
-    // bascule pas sur la carte : la commande créée en même temps portait un
-    // `walletAppliedCents` que le registre dément, et `routes/orders.ts` la
-    // supprime plutôt que de garder une ligne qui ment.
-    expect(outcomes[1]?.body.error).toBe("wallet_insufficient");
-
-    // Ce que le verrou protège réellement : sans lui, les deux liraient le même
-    // solde et la cagnotte passerait en négatif.
+    // Ce que le verrou garantit vraiment, et dans les deux cas : une seule
+    // commande est payée par la cagnotte, une seule écriture la débite, et le
+    // solde s'arrête à zéro. Sans lui, les deux liraient le même solde et la
+    // cagnotte passerait en négatif.
+    expect(outcomes.filter((outcome) => outcome === "201 submitted")).toHaveLength(1);
     expect(await balance()).toBe(0);
-    expect(await harness.prisma.printOrder.count({ where: { memoId: memo.id } })).toBe(1);
+    expect(
+      await harness.prisma.walletEntry.count({ where: { accountId, kind: "order_payment" } }),
+    ).toBe(1);
   });
 });
