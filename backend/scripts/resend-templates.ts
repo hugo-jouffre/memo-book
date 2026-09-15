@@ -404,6 +404,17 @@ async function main() {
     return;
   }
 
+  // Une clé collée depuis un exemple — « re_… », avec de vrais points de
+  // suspension — casse `fetch` au moment de fabriquer l'en-tête, sur une erreur
+  // de ByteString qui ne nomme ni Resend ni la clé. Autant le dire ici.
+  if (!/^re_[A-Za-z0-9_-]+$/.test(apiKey)) {
+    throw new Error(
+      "RESEND_API_KEY ne ressemble pas à une clé Resend (« re_ » puis des " +
+        "lettres, chiffres, tirets). Vérifie qu'il ne s'agit pas d'un exemple " +
+        "recopié : https://resend.com/api-keys",
+    );
+  }
+
   console.log(`Synchronisation de ${rendered.length} gabarits chez Resend…`);
   for (const template of rendered) await sync(template, apiKey);
 }
