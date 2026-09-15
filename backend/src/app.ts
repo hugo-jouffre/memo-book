@@ -17,7 +17,6 @@ import { registerMemoRoutes } from "./routes/memos.js";
 import { registerOrderRoutes } from "./routes/orders.js";
 import { registerProfileRoutes } from "./routes/profile.js";
 import { registerRenderRoutes } from "./routes/renders.js";
-import { registerStripeWebhookRoutes } from "./routes/stripeWebhook.js";
 import { registerBookPreviewRoutes } from "./routes/bookPreview.js";
 import { registerTripSettingsRoutes } from "./routes/tripSettings.js";
 import { registerWalletRoutes } from "./routes/wallet.js";
@@ -81,7 +80,6 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
   // Stripe n'a pas de compte MemoBook : son webhook ne peut pas passer par
   // l'identification. C'est la signature de l'en-tête `stripe-signature` qui
   // l'authentifie, et elle vaut mieux qu'un jeton — elle porte sur le corps.
-  await registerStripeWebhookRoutes(app, context);
   registerDeviceRoutes(app, context);
 
   // Stripe n'a pas de compte MemoBook : son webhook ne peut pas passer par
