@@ -89,7 +89,14 @@ const BRAND = {
   web: "https://memo-book.com",
 };
 
-const ASSETS_FALLBACK = "https://memo-book.com/emails";
+/**
+ * La racine des images, telle qu'elle sera figée dans le gabarit Resend.
+ *
+ * `npm run emails:assets` la publie et l'affiche. Elle n'a pas de valeur par
+ * défaut utile : `memo-book.com` ne sert rien aujourd'hui, et une racine fausse
+ * ne se voit qu'une fois l'e-mail arrivé, en-tête cassée.
+ */
+const ASSETS_FALLBACK = process.env.MAIL_ASSETS_BASE_URL ?? "https://memo-book.com/emails";
 
 const COMMON_VARIABLES: TemplateVariable[] = [
   { key: "ASSETS_BASE_URL", type: "string", fallback_value: ASSETS_FALLBACK },
@@ -372,6 +379,10 @@ async function main() {
   const rendered = TEMPLATES.map(render);
 
   if (dryRun || apiKey === "") {
+    // La racine des images ne se lit pas dans le HTML — elle n'y est qu'en
+    // valeur de repli de `ASSETS_BASE_URL`. L'afficher évite de pousser une
+    // racine périmée en croyant l'avoir changée.
+    console.log(`  racine des images : ${ASSETS_FALLBACK}\n`);
     mkdirSync(OUT_DIR, { recursive: true });
     // Les aperçus pointent sur `./logo.png` : sans les images à côté du HTML,
     // on relirait un e-mail à l'en-tête cassé et on chercherait le défaut dans
@@ -412,6 +423,22 @@ async function main() {
       "RESEND_API_KEY ne ressemble pas à une clé Resend (« re_ » puis des " +
         "lettres, chiffres, tirets). Vérifie qu'il ne s'agit pas d'un exemple " +
         "recopié : https://resend.com/api-keys",
+    );
+  }
+
+  // Les images sont la seule chose qu'un gabarit publié ne peut pas rattraper :
+  // elles sont chargées depuis la boîte du destinataire, des mois plus tard, et
+  // une racine fausse ne se voit qu'à ce moment-là. On la vérifie ici plutôt
+  // que de découvrir l'en-tête cassée dans l'aperçu Resend.
+  const probe = `${ASSETS_FALLBACK}/logo.png`;
+  const reachable = await fetch(probe, { method: "HEAD" })
+    .then((response) => response.ok)
+    .catch(() => false);
+  if (!reachable) {
+    throw new Error(
+      `${probe} ne répond pas : les gabarits partiraient avec une en-tête cassée.\n` +
+        "Publie les images avec « npm run emails:assets », puis pose la racine " +
+        "qu'il affiche dans MAIL_ASSETS_BASE_URL.",
     );
   }
 

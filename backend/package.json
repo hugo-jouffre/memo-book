@@ -28,6 +28,7 @@
     "render:offline": "tsx scripts/render-local.ts --offline --png",
     "render:watch": "tsx scripts/render-local.ts --watch --png",
     "template:lint": "tsx scripts/lint-template.ts",
+    "emails:assets": "tsx scripts/publish-email-assets.ts",
     "emails:sync": "tsx scripts/resend-templates.ts",
     "emails:render": "tsx scripts/resend-templates.ts --dry-run",
     "emails:preview": "tsx scripts/resend-templates.ts --preview",

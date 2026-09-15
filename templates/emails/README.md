@@ -145,7 +145,21 @@ quoi la première synchronisation effacera son travail.
 
 ### Les images
 
-`ASSETS_BASE_URL` par défaut : `https://memo-book.com/emails`. Le logo
-(`assets/emails/logo.png`) doit y être déposé et servi publiquement — sans quoi
-il manquera dans l'aperçu Resend comme dans la boîte du destinataire. Ni URL S3
-signée, qui périme, ni pièce jointe.
+```bash
+npm run emails:assets    # publie assets/emails/ et affiche la racine publique
+```
+
+Les images vivent sur **`memobook-public`**, un bucket Supabase distinct de
+`memobook-media`. Celui-ci est privé et doit le rester : il contient les vocaux
+et les photos des voyageurs, qui ne sortent que par une URL signée. Une image
+d'e-mail a le besoin exactement inverse — une URL publique, stable, qui ne
+périme jamais : une boîte de réception la charge des mois après l'envoi, sans
+session, et la moitié d'entre elles la re-téléchargent par un proxy.
+
+La racine se pose dans `MAIL_ASSETS_BASE_URL`, et **elle est figée dans le
+gabarit au moment du `emails:sync`**. `emails:sync` refuse donc de pousser si
+`<racine>/logo.png` ne répond pas : une en-tête cassée ne se rattrape pas, le
+message est déjà parti.
+
+Ni URL S3 signée, qui périme, ni pièce jointe. Et changer le dessin du logo veut
+dire **changer le nom du fichier** : il est servi avec un cache d'un an.
