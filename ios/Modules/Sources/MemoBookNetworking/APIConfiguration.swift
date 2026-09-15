@@ -5,9 +5,20 @@ public struct APIConfiguration: Sendable, Hashable {
     /// Au-delà, l'upload d'un vocal long sur un réseau lent échouerait pour rien.
     public var timeout: TimeInterval
 
-    public init(baseURL: URL, timeout: TimeInterval = 60) {
+    /// L'adresse de **secours**, si ``baseURL`` ne répond pas — porte close,
+    /// hôte introuvable. Le client y bascule au premier appel refusé, pour la
+    /// durée de la session.
+    ///
+    /// Posée par ``effective(configured:productionFallback:runsInSimulator:)``
+    /// dans le simulateur, et là seulement : `localhost` d'abord, la production
+    /// si rien n'écoute sur le Mac. « Testing mode » marche alors que le
+    /// back-end local tourne ou non (Hugo, 16/09/2026). `nil` partout ailleurs.
+    public var fallbackBaseURL: URL?
+
+    public init(baseURL: URL, timeout: TimeInterval = 60, fallbackBaseURL: URL? = nil) {
         self.baseURL = baseURL
         self.timeout = timeout
+        self.fallbackBaseURL = fallbackBaseURL
     }
 
     /// Back-end lancé en local (`npm run dev`), vu depuis le simulateur.
@@ -62,6 +73,11 @@ public struct APIConfiguration: Sendable, Hashable {
     /// revenue deux fois : un build Debug posé par ⌘R sur un iPhone répondait
     /// « Rien n'écoute sur localhost:3000 » (Hugo, 15/09/2026).
     ///
+    /// **Dans le simulateur**, une boucle locale reste la première adresse — le
+    /// back-end du Mac, quand il tourne — et la production devient son
+    /// **secours** (``fallbackBaseURL``) : rien n'écoute, le client bascule au
+    /// premier appel. Le simulateur marche donc toujours, back-end lancé ou non.
+    ///
     /// Une fonction pure, testée sans appareil : ce qu'elle décide ne dépend
     /// que de ses trois arguments.
     public static func effective(
@@ -70,9 +86,11 @@ public struct APIConfiguration: Sendable, Hashable {
         runsInSimulator: Bool
     ) -> APIConfiguration? {
         guard let configured else { return productionFallback }
-        if configured.isLoopback, !runsInSimulator {
-            return productionFallback ?? configured
-        }
-        return configured
+        guard configured.isLoopback else { return configured }
+        guard runsInSimulator else { return productionFallback ?? configured }
+
+        var withFallback = configured
+        withFallback.fallbackBaseURL = configured.fallbackBaseURL ?? productionFallback?.baseURL
+        return withFallback
     }
 }

@@ -95,6 +95,15 @@ et il faut les deux :
    — une fonction pure, testée — la remet à la place d'une boucle locale hors
    simulateur si la première ceinture avait sauté.
 
+**Et le simulateur marche toujours, back-end lancé ou non.** Il vise
+`localhost` d'abord ; si rien n'y écoute, la production est son **secours**
+(`APIConfiguration.fallbackBaseURL`) : le client y bascule au premier appel
+refusé et y reste pour la session — une ligne « ↪︎ » dans la trace réseau le
+dit. « Testing mode » entre donc dans les deux cas. Un délai dépassé ne bascule
+pas : un serveur local qui rame n'est pas un serveur absent. ⚠️ Le simulateur
+écrit alors dans la base de production, qui est aussi celle du développement
+(`docs/debogage.md`, § 4) : rien de nouveau, mais autant le savoir.
+
 Pour viser le back-end du Mac depuis un iPhone, `Secrets.xcconfig` pose l'IP
 avec la même condition (`MEMOBOOK_API_BASE_URL[sdk=iphoneos*] = …`). Vérifié
 à `-showBuildSettings` : la **dernière** affectation l'emporte, conditionnée ou

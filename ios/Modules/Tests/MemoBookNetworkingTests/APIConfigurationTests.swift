@@ -21,11 +21,32 @@ final class APIConfigurationTests: XCTestCase {
         XCTAssertFalse(production.isLoopback)
     }
 
-    func testSimulatorKeepsLocalhost() {
+    func testSimulatorKeepsLocalhostWithProductionAsFallback() {
         let resolved = APIConfiguration.effective(
             configured: local, productionFallback: production, runsInSimulator: true
         )
-        XCTAssertEqual(resolved, local)
+        XCTAssertEqual(resolved?.baseURL, local.baseURL)
+        // La production n'est pas remplacée, elle est **derrière** : le client
+        // y bascule si rien n'écoute sur le Mac.
+        XCTAssertEqual(resolved?.fallbackBaseURL, production.baseURL)
+    }
+
+    func testSimulatorWithoutProductionKeepsLocalhostAlone() {
+        let resolved = APIConfiguration.effective(
+            configured: local, productionFallback: nil, runsInSimulator: true
+        )
+        XCTAssertEqual(resolved?.baseURL, local.baseURL)
+        XCTAssertNil(resolved?.fallbackBaseURL)
+    }
+
+    func testRemoteAddressNeverGetsAFallback() {
+        // La production, ou l'IP du Mac : une adresse distante qui ne répond pas
+        // est une vraie panne, pas un back-end qu'on a oublié de lancer.
+        let resolved = APIConfiguration.effective(
+            configured: lan, productionFallback: production, runsInSimulator: true
+        )
+        XCTAssertEqual(resolved, lan)
+        XCTAssertNil(resolved?.fallbackBaseURL)
     }
 
     func testDeviceNeverKeepsLocalhost() {

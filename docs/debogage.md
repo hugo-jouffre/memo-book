@@ -126,7 +126,7 @@ réseau » : elle nomme la panne et donne la commande. Voir
 
 | À l'écran | Cause | Geste |
 |---|---|---|
-| « Rien n'écoute sur localhost:3000 » | serveur arrêté (simulateur) | `cd backend && npm run dev` |
+| « Rien n'écoute sur localhost:3000 » | serveur arrêté **et** pas de secours — un build sans clé de production. Depuis le 16/09/2026, le simulateur bascule sur la production au premier appel refusé (ligne « ↪︎ » dans la trace) au lieu d'afficher cette phrase | `cd backend && npm run dev`, ou `make project` si la clé manque |
 | « Ce build parle à localhost:3000 depuis un iPhone » | un build de téléphone vise une boucle locale — les deux garde-fous de `Debug.xcconfig` et `APIConfiguration.effective` ont sauté | `make project`, rebuild ; ou l'IP du Mac dans `Secrets.xcconfig` avec `[sdk=iphoneos*]` |
 | « La connexion s'est coupée en cours de route » | serveur mort **pendant** l'appel | lire la fin de sa sortie |
 | « n'a pas répondu à temps » | serveur bloqué, souvent sur la base | vérifier `DATABASE_URL` |

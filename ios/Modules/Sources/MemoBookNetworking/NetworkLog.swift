@@ -65,6 +65,19 @@
             )
         }
 
+        /// La bascule sur l'adresse de secours : une ligne, une fois par
+        /// session, pour qu'on sache **à qui** l'app parle désormais. Sans elle,
+        /// un simulateur qui écrit dans la base de production en croyant parler
+        /// au Mac serait exactement le genre de chose qu'on découvre trop tard.
+        static func fallback(from: URL?, to: URL?) {
+            logger.notice(
+                """
+                ↪︎ rien n'écoute sur \(from?.host() ?? "?", privacy: .public) : \
+                bascule sur \(to?.host() ?? "?", privacy: .public) pour la suite de la session
+                """
+            )
+        }
+
         private static func label(_ request: URLRequest) -> String {
             let method = request.httpMethod ?? "?"
             let path = request.url?.path ?? request.url?.absoluteString ?? "?"

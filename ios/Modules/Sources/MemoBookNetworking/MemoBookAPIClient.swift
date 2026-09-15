@@ -26,6 +26,12 @@ public actor MemoBookAPIClient: MemoBookAPI {
     /// temps ne doivent pas créer deux appareils.
     private var registrationTask: Task<Void, any Error>?
 
+    /// L'adresse à laquelle les requêtes partent **en ce moment** : la
+    /// configurée, jusqu'à ce qu'elle refuse la connexion et qu'un secours
+    /// existe — voir ``rebasedOnFallback(_:after:)``. Une bascule tient pour
+    /// toute la session du client.
+    private var activeBaseURL: URL
+
     public init(
         configuration: APIConfiguration = .localDevelopment,
         session: URLSession = .shared,
@@ -36,6 +42,7 @@ public actor MemoBookAPIClient: MemoBookAPI {
         self.session = session
         self.tokenStore = tokenStore
         self.sessionStore = sessionStore
+        self.activeBaseURL = configuration.baseURL
     }
 
     // MARK: - Identité
@@ -624,7 +631,7 @@ public actor MemoBookAPIClient: MemoBookAPI {
         path: String,
         credential: Credential = .session
     ) throws -> URLRequest {
-        guard let url = URL(string: path, relativeTo: configuration.baseURL) else {
+        guard let url = URL(string: path, relativeTo: activeBaseURL) else {
             throw APIError.server(statusCode: 0, code: nil, message: "Chemin d'API invalide : \(path)")
         }
 
@@ -714,6 +721,16 @@ public actor MemoBookAPIClient: MemoBookAPI {
             #if DEBUG
                 NetworkLog.fail(request, error: error, since: started)
             #endif
+            // Porte close sur l'adresse configurée, et un secours : on y
+            // bascule et on rejoue **la même** requête, une fois. Le secours
+            // qui échoue à son tour remonte son erreur comme n'importe quelle
+            // autre.
+            if let retried = rebasedOnFallback(request, after: error) {
+                #if DEBUG
+                    NetworkLog.fallback(from: request.url, to: retried.url)
+                #endif
+                return try await performRaw(retried, credential: credential)
+            }
             throw APIError.transport(error, url: request.url)
         }
 
@@ -742,5 +759,42 @@ public actor MemoBookAPIClient: MemoBookAPI {
         }
 
         return data
+    }
+
+    /// La même requête, réécrite sur l'adresse de secours — ou `nil` quand il
+    /// n'y a pas lieu de basculer.
+    ///
+    /// **Le simulateur, et lui seul, a un secours** : c'est là que la
+    /// configuration vise `localhost` avec la production derrière
+    /// (``APIConfiguration/effective(configured:productionFallback:runsInSimulator:)``).
+    /// Le premier appel qui trouve porte close — connexion refusée, hôte
+    /// introuvable — bascule le client entier sur le secours pour la durée de
+    /// la session ; les suivants y vont tout droit. « Testing mode » marche
+    /// donc que le back-end du Mac tourne ou non (Hugo, 16/09/2026).
+    ///
+    /// Un délai dépassé ne bascule pas : un serveur local qui rame n'est pas un
+    /// serveur absent, et changer d'avis au bout de soixante secondes serait
+    /// pire que l'erreur. Et on ne bascule qu'une fois : une adresse de secours
+    /// qui refuse aussi ne fait pas repartir vers la première.
+    private func rebasedOnFallback(_ request: URLRequest, after error: any Error) -> URLRequest? {
+        guard
+            let fallback = configuration.fallbackBaseURL,
+            activeBaseURL == configuration.baseURL,
+            let code = (error as? URLError)?.code,
+            code == .cannotConnectToHost || code == .cannotFindHost,
+            let url = request.url,
+            var components = URLComponents(url: url, resolvingAgainstBaseURL: true),
+            let target = URLComponents(url: fallback, resolvingAgainstBaseURL: true)
+        else { return nil }
+
+        components.scheme = target.scheme
+        components.host = target.host
+        components.port = target.port
+        guard let rebased = components.url else { return nil }
+
+        activeBaseURL = fallback
+        var retried = request
+        retried.url = rebased
+        return retried
     }
 }

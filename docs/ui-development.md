@@ -3119,6 +3119,7 @@ fois. Le build ne peut plus l'embarquer :
 | La production voyage toujours | `project.yml` → `MemoBookProductionAPIBaseURL` | une seconde clé de l'Info.plist, dans tous les builds |
 | L'app refuse une boucle locale hors simulateur | `APIConfiguration.effective(configured:productionFallback:runsInSimulator:)`, `APIConfigurationTests` | remet la production à la place ; sans production ni simulateur, l'app s'arrête net au lieu de parler dans le vide |
 | Le message dit la vraie cause | `APIError.developerDiagnosis` | sur un appareil, « Ce build parle à localhost depuis un iPhone » au lieu de « lance `npm run dev` » |
+| Le simulateur marche sans back-end | `APIConfiguration.fallbackBaseURL`, `MemoBookAPIClient.rebasedOnFallback` | `localhost` d'abord, la production au premier appel refusé, pour la session ; un délai dépassé ne bascule pas. Trois tests dans `APIClientTests` |
 
 Vérifié par `xcodebuild -showBuildSettings` sur les deux SDK, par un build
 Debug pour appareil (`generic/platform=iOS`) dont l'Info.plist porte la
