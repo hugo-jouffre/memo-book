@@ -23,6 +23,19 @@
 GOOGLE_IOS_CLIENT_ID = 1022603657545-ehn9lik23bgu7m9h28a01b271lft0u2h.apps.googleusercontent.com
 GOOGLE_IOS_URL_SCHEME = com.googleusercontent.apps.1022603657545-ehn9lik23bgu7m9h28a01b271lft0u2h
 
+// L'API de production, déployée sur Railway — **écrite une seule fois, ici**.
+// `Release.xcconfig` la prend telle quelle ; `Debug.xcconfig` la donne aux
+// iPhone physiques, où `localhost` désignerait le téléphone ; et l'app
+// l'embarque aussi sous sa propre clé (`MemoBookProductionAPIBaseURL`), comme
+// filet : un build qui se retrouverait quand même à viser une boucle locale
+// depuis un appareil retombe dessus au lieu de parler dans le vide.
+//
+// C'est le domaine que Railway génère. Le jour où `api.memo-book.com` pointera
+// dessus, cette ligne est la seule à changer — suivie d'un nouveau build, car
+// l'adresse part dans l'Info.plist au moment de la compilation : un build déjà
+// installé ne se répare jamais. Voir `docs/deploiement.md`.
+MEMOBOOK_PRODUCTION_API_URL = https:/$()/api-production-9f35a.up.railway.app
+
 // Un fichier de secrets local, s'il existe un jour. `#include?` — avec le point
 // d'interrogation — n'échoue pas quand le fichier est absent, ce qui est le cas
 // sur une machine fraîchement clonée et en CI.

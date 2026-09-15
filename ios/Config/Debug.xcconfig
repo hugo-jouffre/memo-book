@@ -1,18 +1,31 @@
 // Le back-end lancé en local (`npm run dev` dans `backend/`), vu depuis le
-// simulateur. Sur un iPhone physique, `localhost` désigne le téléphone :
-// mettre l'IP du Mac dans un `Secrets.xcconfig` local plutôt que de modifier ce
-// fichier, qui est versionné.
+// **simulateur** — et lui seul.
 //
-// ⚠️ L'affectation est **avant** l'inclusion, et ce n'est pas cosmétique. Un
-// `.xcconfig` s'évalue de haut en bas et la dernière affectation gagne ; or
+// ⚠️ **Un iPhone physique ne reçoit jamais `localhost`.** Sur le téléphone,
+// `localhost` désigne le téléphone : un build Debug installé par ⌘R y parlait à
+// lui-même, et « Testing mode » répondait « Rien n'écoute sur localhost:3000 »
+// (Hugo, 15/09/2026 — et ce n'était pas la première fois). L'adresse est donc
+// **conditionnée au SDK** : le simulateur vise le Mac, l'appareil vise la
+// production. Un build de téléphone ne peut plus embarquer une boucle locale,
+// quoi qu'on oublie de configurer.
+//
+// Pour viser le back-end du Mac depuis un iPhone, poser l'IP du Mac dans un
+// `Secrets.xcconfig` local, avec la même condition — voir
+// `Secrets.example.xcconfig`. Vérifié à `xcodebuild -showBuildSettings` : une
+// affectation posée **plus tard** l'emporte, conditionnée ou non, donc une
+// ligne sans condition marche aussi — mais elle emporte le simulateur avec,
+// qui perd alors `localhost`. Et si ce fichier remet une boucle locale à un
+// appareil, l'app la refuse à l'exécution (`APIConfiguration.effective`).
+//
+// ⚠️ Les affectations sont **avant** l'inclusion, et ce n'est pas cosmétique.
+// Un `.xcconfig` s'évalue de haut en bas et la dernière affectation gagne ; or
 // `Base.xcconfig` inclut `Secrets.xcconfig` à sa fin. Affecter après l'aurait
-// écrasé, et l'override documenté ci-dessus n'aurait jamais rien fait : l'app
-// aurait continué de parler à `localhost` depuis un téléphone, c'est-à-dire à
-// elle-même.
+// écrasé, et l'override documenté ci-dessus n'aurait jamais rien fait.
 //
 // En Release, c'est l'inverse qui est voulu : l'affectation reste après
 // l'inclusion, pour qu'un `Secrets.xcconfig` traîné sur une machine ne puisse
 // pas envoyer un build TestFlight parler à une IP de réseau local.
-MEMOBOOK_API_BASE_URL = http:/$()/localhost:3000
+MEMOBOOK_API_BASE_URL[sdk=iphonesimulator*] = http:/$()/localhost:3000
+MEMOBOOK_API_BASE_URL[sdk=iphoneos*] = $(MEMOBOOK_PRODUCTION_API_URL)
 
 #include "Base.xcconfig"

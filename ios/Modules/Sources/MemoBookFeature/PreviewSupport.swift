@@ -588,6 +588,9 @@ public actor PreviewAPI: MemoBookAPI {
             case .rules(let isOn): customisation.rulesEnabled = isOn
             case .decorationQuota(let value): customisation.decorationQuota = value
             case .fontDisplay(let value): customisation.fontDisplay = value
+            case .fontTitle(let value): customisation.fontTitle = value
+            case .fontHand(let value): customisation.fontHand = value
+            case .fontFacts(let value): customisation.fontFacts = value
             case .quiz(let isOn): customisation.quizEnabled = isOn
             case .freeZones(let isOn): customisation.freeZonesEnabled = isOn
             case .crossword(let isOn): customisation.crosswordEnabled = isOn

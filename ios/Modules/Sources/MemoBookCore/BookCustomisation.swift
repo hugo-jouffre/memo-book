@@ -113,8 +113,15 @@ public enum BookCustomisationEdit: Sendable, Hashable {
     case decorationQuota(Int)
     /// La typographie des **titres** du carnet, qui vit dans `fontDisplay` :
     /// c'est le token `--mb-font-display` du gabarit. Voir la table de
-    /// `templates/travel-journal/LAYOUT_KB.md`.
+    /// `templates/travel-journal/LAYOUT_KB.md`, et ``BookFontRole`` pour le
+    /// croisement des noms.
     case fontDisplay(String)
+    /// Celle des **sous-titres** — `fontTitle`, token `--mb-font-title`.
+    case fontTitle(String)
+    /// Celle des **textes** — `fontHand`, la manuscrite du récit.
+    case fontHand(String)
+    /// Celle des **fun facts** — `fontFacts`.
+    case fontFacts(String)
     case quiz(Bool)
     case freeZones(Bool)
     case crossword(Bool)
@@ -122,34 +129,108 @@ public enum BookCustomisationEdit: Sendable, Hashable {
 
 // MARK: - Les typographies proposées
 
-/// Une police de titre proposée par la feuille « Titres du carnet ».
+/// Une police proposée par une feuille de typographie.
 ///
-/// Un **nom** et une phrase, pas un identifiant : `memos.fontTitle` porte le
-/// nom de la famille, que le gabarit d'impression résout
-/// (`templates/travel-journal/`). L'app ne fait que le montrer et le renvoyer.
-public struct BookTitleFont: Sendable, Hashable, Identifiable {
+/// Un **nom de famille**, celui que `memos.font*` porte et que le gabarit
+/// d'impression résout (`templates/travel-journal/`) ; un **libellé**, celui
+/// que la maquette écrit — « Playfair » pour Playfair Display — ; et une
+/// phrase. L'app ne fait que montrer le libellé et renvoyer le nom.
+public struct BookFontOption: Sendable, Hashable, Identifiable {
     public let name: String
+    public let label: String
     public let detail: String
 
     public var id: String { name }
 
-    public init(name: String, detail: String) {
+    public init(name: String, label: String? = nil, detail: String) {
         self.name = name
+        self.label = label ?? name
         self.detail = detail
     }
 
-    /// Les trois familles de la maquette, dans son ordre.
-    ///
-    /// ⚠️ **Elles ne sont pas rendues dans leur propre dessin.** Figma écrit
-    /// chaque nom dans sa police ; les embarquer demanderait trois familles de
-    /// plus dans le binaire pour trois bouts de ligne, et le dépôt n'a que
-    /// Playfair Display, en woff2 — un format que CoreText ne lit pas. Écart
-    /// signalé dans la fiche écran.
-    public static let all: [BookTitleFont] = [
-        BookTitleFont(name: "Playfair", detail: "La recommandations de nos équipes"),
-        BookTitleFont(name: "Alegreya", detail: "Pour des livres plus fun"),
-        BookTitleFont(name: "Montserrat", detail: "La plus classique"),
-    ]
+    /// Cette option est-elle celle qu'un carnet porte ? Le nom entier d'abord ;
+    /// le libellé aussi, parce que la base a longtemps reçu « Playfair » là où
+    /// le gabarit dit « Playfair Display ».
+    public func matches(_ stored: String) -> Bool {
+        stored == name || stored == label
+    }
+
+    // Les trois familles de la maquette (`3443:10073`), dans son ordre.
+    //
+    // ⚠️ **Elles ne sont pas rendues dans leur propre dessin.** Figma écrit
+    // chaque nom dans sa police ; les embarquer demanderait trois familles de
+    // plus dans le binaire pour trois bouts de ligne, et le dépôt n'a que
+    // Playfair Display, en woff2 — un format que CoreText ne lit pas. Écart
+    // signalé dans la fiche écran.
+    static let playfairRecommended = BookFontOption(
+        name: "Playfair Display", label: "Playfair", detail: "La recommandations de nos équipes"
+    )
+    static let playfair = BookFontOption(
+        name: "Playfair Display", label: "Playfair", detail: "L’élégante, celle des titres"
+    )
+    static let alegreya = BookFontOption(name: "Alegreya", detail: "Pour des livres plus fun")
+    static let montserrat = BookFontOption(name: "Montserrat", detail: "La plus classique")
+    static let hansley = BookFontOption(name: "Hansley", detail: "Le choix de nos équipes")
+    static let gloria = BookFontOption(name: "Gloria Hallelujah", detail: "Le choix de nos équipes")
+}
+
+/// Les quatre typographies du carnet, dans l'ordre de l'écran.
+///
+/// **Une feuille pour les quatre, qui se comporte pareil** (Hugo, 16/09/2026) :
+/// la maquette n'en dessine qu'une — « Titres du carnet » —, et l'écran
+/// laissait les trois autres lignes inertes (T78, désormais T136). Chaque rôle
+/// sait quelle colonne il écrit, quelle édition il envoie, et quelles familles
+/// il propose : son défaut d'abord, puis les trois de la maquette.
+///
+/// ⚠️ **Le croisement des noms est volontaire.** « Typographie des titres »
+/// écrit `fontDisplay` — le token `--mb-font-display` du gabarit —, et « des
+/// sous-titres » écrit `fontTitle` (`--mb-font-title`). Voir la table de
+/// `templates/travel-journal/LAYOUT_KB.md`.
+public enum BookFontRole: String, Sendable, Hashable, CaseIterable, Identifiable {
+    case titles
+    case subtitles
+    case texts
+    case funFacts
+
+    public var id: String { rawValue }
+
+    /// La colonne du carnet que ce rôle lit et écrit.
+    public var keyPath: WritableKeyPath<BookCustomisation, String> {
+        switch self {
+        case .titles: \.fontDisplay
+        case .subtitles: \.fontTitle
+        case .texts: \.fontHand
+        case .funFacts: \.fontFacts
+        }
+    }
+
+    /// L'édition qui porte ce nom au serveur.
+    public func edit(_ name: String) -> BookCustomisationEdit {
+        switch self {
+        case .titles: .fontDisplay(name)
+        case .subtitles: .fontTitle(name)
+        case .texts: .fontHand(name)
+        case .funFacts: .fontFacts(name)
+        }
+    }
+
+    /// Les familles proposées, la première étant le défaut du carnet.
+    public var options: [BookFontOption] {
+        switch self {
+        case .titles: [.playfairRecommended, .alegreya, .montserrat]
+        case .subtitles: [.hansley, .playfair, .alegreya, .montserrat]
+        case .texts: [.gloria, .playfair, .alegreya, .montserrat]
+        case .funFacts: [.playfairRecommended, .alegreya, .montserrat]
+        }
+    }
+
+    /// Ce que la ligne de l'écran affiche : le libellé de la maquette quand le
+    /// nom est une des options, le nom tel quel sinon — une famille posée par
+    /// un autre client ne doit pas disparaître de l'écran.
+    public func label(in customisation: BookCustomisation) -> String {
+        let name = customisation[keyPath: keyPath]
+        return options.first { $0.matches(name) }?.label ?? name
+    }
 }
 
 // MARK: - Le nombre de pages

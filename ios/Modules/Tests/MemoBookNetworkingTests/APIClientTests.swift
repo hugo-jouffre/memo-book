@@ -92,6 +92,106 @@ final class APIClientTests: XCTestCase {
         }
     }
 
+    // MARK: - L'adresse de secours
+
+    /// Compte les requêtes par hôte, depuis la fermeture `@Sendable` du stub.
+    private final class HostTally: @unchecked Sendable {
+        private let lock = NSLock()
+        private var counts: [String: Int] = [:]
+
+        func record(_ host: String?) {
+            lock.withLock { counts[host ?? "?", default: 0] += 1 }
+        }
+
+        func count(_ host: String) -> Int {
+            lock.withLock { counts[host] ?? 0 }
+        }
+    }
+
+    private func makeClientWithFallback() -> MemoBookAPIClient {
+        MemoBookAPIClient(
+            configuration: APIConfiguration(
+                baseURL: URL(string: "http://localhost:3000")!,
+                fallbackBaseURL: URL(string: "https://api.production.test")!
+            ),
+            session: session,
+            tokenStore: InMemoryTokenStore(token: "jeton-d-appareil"),
+            sessionStore: InMemoryTokenStore(token: "jeton-de-session")
+        )
+    }
+
+    private static let accountJSON =
+        #"{"account":{"id":"a1","email":"demo@memo-book.com","firstName":"Camille","lastName":null,"createdAt":"2026-09-01T10:00:00.000Z"}}"#
+
+    /// Rien n'écoute sur `localhost` : le client bascule sur le secours, rejoue
+    /// la requête, et **y reste** pour la suite de la session.
+    func testFallsBackWhenLocalhostRefusesAndStaysThere() async throws {
+        let client = makeClientWithFallback()
+        let tally = HostTally()
+
+        StubURLProtocol.handler = { request in
+            let host = request.url?.host()
+            tally.record(host)
+            guard host != "localhost" else { throw URLError(.cannotConnectToHost) }
+            let response = HTTPURLResponse(
+                url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil
+            )!
+            return (response, Data(Self.accountJSON.utf8))
+        }
+
+        let account = try await client.currentAccount()
+        XCTAssertEqual(account.id, "a1")
+        XCTAssertEqual(StubURLProtocol.lastRequest?.url?.host(), "api.production.test")
+        XCTAssertEqual(StubURLProtocol.lastRequest?.url?.path(), "/v1/auth/me")
+        // Le jeton de session voyage avec la requête rejouée.
+        XCTAssertEqual(
+            StubURLProtocol.lastRequest?.value(forHTTPHeaderField: "Authorization"),
+            "Bearer jeton-de-session"
+        )
+
+        _ = try await client.currentAccount()
+        XCTAssertEqual(tally.count("localhost"), 1, "une seule tentative sur localhost par session")
+        XCTAssertEqual(tally.count("api.production.test"), 2)
+    }
+
+    /// Un délai dépassé n'est pas une porte close : on ne bascule pas.
+    func testTimeoutDoesNotFallBack() async {
+        let client = makeClientWithFallback()
+        let tally = HostTally()
+
+        StubURLProtocol.handler = { request in
+            tally.record(request.url?.host())
+            throw URLError(.timedOut)
+        }
+
+        do {
+            _ = try await client.currentAccount()
+            XCTFail("L'appel devait échouer.")
+        } catch let error as APIError {
+            XCTAssertTrue(error.isTransport)
+        } catch {
+            XCTFail("Erreur inattendue : \(error)")
+        }
+        XCTAssertEqual(tally.count("localhost"), 1)
+        XCTAssertEqual(tally.count("api.production.test"), 0)
+    }
+
+    /// Sans secours configuré — un appareil, la production —, une porte close
+    /// reste une erreur de transport, comme avant.
+    func testNoFallbackWithoutFallbackAddress() async {
+        let client = makeClient()
+        StubURLProtocol.handler = { _ in throw URLError(.cannotConnectToHost) }
+
+        do {
+            _ = try await client.currentAccount()
+            XCTFail("L'appel devait échouer.")
+        } catch let error as APIError {
+            XCTAssertTrue(error.isTransport)
+        } catch {
+            XCTFail("Erreur inattendue : \(error)")
+        }
+    }
+
     func testRegisterDeviceStoresToken() async throws {
         let store = InMemoryTokenStore()
         let client = MemoBookAPIClient(

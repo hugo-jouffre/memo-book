@@ -553,6 +553,81 @@ private extension CGFloat {
     }
 }
 
+// MARK: - Supprimer le voyage
+
+/// La confirmation avant de supprimer un voyage — **une feuille de l'app**, sur
+/// le modèle de ``DeleteAccountSheet`` : le bouton plein garde, le rouge
+/// supprime, et le paragraphe dit ce qui part avant qu'on appuie.
+///
+/// Elle vit ici, avec les cinq autres feuilles des réglages, parce que c'est de
+/// cet écran qu'on supprime : la porte de sortie d'un voyage est au bout de ses
+/// réglages, comme celle d'un compte est au bout du profil (Hugo, 15/09/2026).
+struct DeleteTripSheet: View {
+    /// Le nom du voyage, s'il est arrivé : les réglages peuvent ne pas avoir
+    /// chargé, et la feuille doit se lire quand même.
+    let tripName: String?
+
+    /// La suppression est partie. Le bouton rouge tourne et plus rien ne se
+    /// touche : la demande est définitive, elle ne part pas deux fois.
+    let isDeleting: Bool
+
+    /// Ce que le serveur a répondu si la suppression a échoué — un co-voyageur
+    /// qui essaie, par exemple : seul le propriétaire y a droit. Il se lit
+    /// **dans** la feuille : la fermer pour lire pourquoi obligerait à la
+    /// rouvrir.
+    let errorMessage: String?
+
+    let onKeep: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        BrandSheet(BookCopy.Settings.Delete.title) {
+            VStack(alignment: .leading, spacing: MemoBookSpacing.m) {
+                Text(BookCopy.Settings.Delete.body(trip: tripName))
+                    .font(MemoBookFont.body)
+                    .foregroundStyle(MemoBookColor.ink)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                if let errorMessage {
+                    ErrorBanner(message: errorMessage)
+                }
+
+                VStack(spacing: MemoBookSpacing.s) {
+                    // Le bouton plein est celui qui **ne détruit rien** : sur
+                    // une feuille dont l'autre issue est sans retour, l'action
+                    // la plus visible doit être la plus sûre.
+                    BrandButton(BookCopy.Settings.Delete.keep, fillsWidth: true, action: onKeep)
+                        .disabled(isDeleting)
+
+                    BrandButton(
+                        BookCopy.Settings.Delete.confirm,
+                        style: .destructive,
+                        isLoading: isDeleting,
+                        fillsWidth: true,
+                        action: onDelete
+                    )
+                }
+            }
+        }
+        .interactiveDismissDisabled(isDeleting)
+    }
+}
+
+#Preview("Supprimer le voyage") {
+    Color.clear
+        .brandSheet(isPresented: .constant(true)) {
+            DeleteTripSheet(
+                tripName: "Rome entre amis",
+                isDeleting: false,
+                errorMessage: nil,
+                onKeep: {},
+                onDelete: {}
+            )
+        }
+}
+
 #Preview("Feuilles des réglages") {
     @Previewable @State var sheet: TripSettingsSheet? = .companions
     let model = TripSettingsModel(tripId: "preview")

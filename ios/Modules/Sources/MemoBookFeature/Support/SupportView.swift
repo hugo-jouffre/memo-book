@@ -34,9 +34,14 @@ public struct SupportView: View {
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: MemoBookSpacing.l) {
-                BrandScreenHeader(title: SupportCopy.title)
+                // La photo se rapproche du titre : un écart de section entre
+                // les deux les faisait lire comme deux blocs, alors que le
+                // bonjour **suit** le titre (Hugo, 15/09/2026).
+                VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
+                    BrandScreenHeader(title: SupportCopy.title)
+                    greeting
+                }
 
-                greeting
                 topics
                 contact
                 legal
@@ -77,7 +82,9 @@ public struct SupportView: View {
                     Text(paragraph)
                 }
             }
-            .font(MemoBookFont.taglineRegular)
+            // Le corps de texte, et non l'accroche de 14 : ce sont deux
+            // paragraphes qu'on lit, pas une légende (Hugo, 15/09/2026).
+            .font(MemoBookFont.body)
             .foregroundStyle(MemoBookColor.ink)
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)

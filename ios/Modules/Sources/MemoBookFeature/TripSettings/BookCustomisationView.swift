@@ -16,14 +16,15 @@ import SwiftUI
 /// choisir entre des valeurs. Un interrupteur répond à « est-ce que j'en veux »,
 /// une ligne à « lequel ».
 ///
-/// **Six lignes ouvrent désormais leur feuille** — ratio média, nombre de
-/// pages, fun facts, pointillés, décorations, typographie des titres — et
-/// quatre d'entre elles portent les deux pages du carnet au-dessus d'elles, pour
+/// **Neuf lignes ouvrent leur feuille** — ratio média, nombre de pages, fun
+/// facts, pointillés, décorations, et les quatre typographies — et sept
+/// d'entre elles portent les deux pages du carnet au-dessus d'elles, pour
 /// qu'on règle en regardant ce qu'on règle (``BookPagesPeek``).
 ///
-/// ⚠️ **Trois lignes restent inertes** : les typographies des sous-titres, des
-/// textes et des fun facts. Leur feuille n'est pas dessinée — seule celle des
-/// **titres** l'est —, et on ne l'invente pas (R3). Signalé (T78).
+/// Les quatre typographies partagent **une** feuille (``BookFontsSheet``), que
+/// la maquette ne dessine que pour les titres : Hugo a tranché le 16/09/2026
+/// que les trois autres se comportent pareil plutôt que de rester inertes
+/// (T78 → T136). Ce qu'elles proposent vient de ``BookFontRole``.
 public struct BookCustomisationView: View {
     private let onIntent: (BookCustomisationIntent) -> Void
 
@@ -58,9 +59,14 @@ public struct BookCustomisationView: View {
                 extras
 
                 if let message = model.errorMessage {
-                    ErrorBanner(message: message) {
-                        Task { await model.load() }
-                    }
+                    // Le constat, le conseil, et les deux gestes — comme sur
+                    // les paramètres du voyage (Hugo, 15/09/2026).
+                    ErrorBanner(
+                        message: message,
+                        advice: model.errorAdvice,
+                        retry: { Task { await model.load() } },
+                        help: { onIntent(.openHelp) }
+                    )
                 }
             }
             .animation(.snappy(duration: 0.25), value: model.customisation == nil)
@@ -78,7 +84,7 @@ public struct BookCustomisationView: View {
         .brandSheet(item: $sheet, content: sheetContent)
     }
 
-    /// Les six feuilles, et les deux pages que quatre d'entre elles portent.
+    /// Les neuf feuilles, et les deux pages que sept d'entre elles portent.
     @ViewBuilder
     private func sheetContent(_ destination: BookCustomisationSheet) -> some View {
         // La réserve n'existe que s'il y a un carnet à montrer : sans PDF, la
@@ -110,8 +116,8 @@ public struct BookCustomisationView: View {
                     isEnabled: model.customisation != nil,
                     topOverflow: inset
                 )
-            case .fonts:
-                BookFontsSheet(model: model, topOverflow: inset)
+            case .font(let role):
+                BookFontsSheet(model: model, role: role, topOverflow: inset)
             case .decorations:
                 BookDecorationsSheet(model: model, topOverflow: inset)
             }
@@ -189,7 +195,11 @@ public struct BookCustomisationView: View {
                 action: { sheet = .pages }
             )
         }
-        .disabled(customisation == nil)
+        // Le temps de la lecture, et pas au-delà : une lecture qui a échoué
+        // ne doit pas geler les lignes — elles ouvraient encore leurs
+        // feuilles, elles ne le pouvaient plus derrière un 500 (Hugo,
+        // 15/09/2026). Les feuilles, elles, savent attendre des valeurs.
+        .disabled(model.isLoading)
     }
 
     private var decorGroup: some View {
@@ -217,48 +227,55 @@ public struct BookCustomisationView: View {
                 action: { sheet = .decorations }
             )
         }
-        .disabled(customisation == nil)
+        .disabled(model.isLoading)
     }
 
     /// Les quatre familles du carnet.
     ///
-    /// Les valeurs sont des **noms de police**, affichés tels quels : c'est le
-    /// gabarit d'impression qui les résout, et les rendre dans leur propre
+    /// Les valeurs sont des **noms de police**, affichés tels quels — au
+    /// libellé de la maquette près, « Playfair » pour Playfair Display : c'est
+    /// le gabarit d'impression qui les résout, et les rendre dans leur propre
     /// dessin demanderait d'embarquer quatre polices de plus dans l'app pour
     /// quatre bouts de ligne.
+    ///
+    /// Les quatre lignes ouvrent la même feuille, chacune sur son rôle. Le
+    /// croisement des colonnes — « des titres » écrit `fontDisplay`, « des
+    /// sous-titres » écrit `fontTitle` — est porté par ``BookFontRole``, pas
+    /// par l'écran.
     private var typographyGroup: some View {
-        let customisation = model.customisation
-
-        return BrandRowGroup {
-            // Seule la typographie des **titres** a sa feuille : c'est la
-            // seule que la maquette dessine (`3443:10073`). Les trois autres
-            // montrent leur valeur et attendent la leur.
+        BrandRowGroup {
             BrandRow(
                 BookCopy.Customisation.fontTitle,
-                // `fontDisplay` et non `fontTitle`, et le croisement est
-                // volontaire : « Typographie des titres » nomme le token
-                // `--mb-font-display` du gabarit, « des sous-titres » nomme
-                // `--mb-font-title`. Voir la table de `LAYOUT_KB.md`.
-                value: customisation?.fontDisplay ?? BookCopy.Settings.noValue,
+                value: fontValue(.titles),
                 isValueLoading: model.isLoading,
-                action: { sheet = .fonts }
+                action: { sheet = .font(.titles) }
             )
             BrandRow(
                 BookCopy.Customisation.fontDisplay,
-                value: customisation?.fontTitle ?? BookCopy.Settings.noValue,
-                isValueLoading: model.isLoading
+                value: fontValue(.subtitles),
+                isValueLoading: model.isLoading,
+                action: { sheet = .font(.subtitles) }
             )
             BrandRow(
                 BookCopy.Customisation.fontHand,
-                value: customisation?.fontHand ?? BookCopy.Settings.noValue,
-                isValueLoading: model.isLoading
+                value: fontValue(.texts),
+                isValueLoading: model.isLoading,
+                action: { sheet = .font(.texts) }
             )
             BrandRow(
                 BookCopy.Customisation.fontFacts,
-                value: customisation?.fontFacts ?? BookCopy.Settings.noValue,
-                isValueLoading: model.isLoading
+                value: fontValue(.funFacts),
+                isValueLoading: model.isLoading,
+                action: { sheet = .font(.funFacts) }
             )
         }
+        // Même règle que les autres groupes : les lignes attendent la
+        // lecture, pas son échec.
+        .disabled(model.isLoading)
+    }
+
+    private func fontValue(_ role: BookFontRole) -> String {
+        model.customisation.map { role.label(in: $0) } ?? BookCopy.Settings.noValue
     }
 
     // MARK: - Les extras
@@ -317,6 +334,8 @@ public struct BookCustomisationView: View {
 public enum BookCustomisationIntent: Sendable, Hashable {
     /// L'aperçu et la personnalisation des deux couvertures.
     case openCovers
+    /// Le support, depuis le bandeau d'erreur : quand réessayer ne suffit pas.
+    case openHelp
 }
 
 // MARK: - Les deux blocs propres à l'écran

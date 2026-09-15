@@ -181,32 +181,21 @@ struct ChatSendingBar: View {
 
     // MARK: La commande de gauche
 
-    /// Le burger au repos, une croix partout ailleurs.
+    /// La croix, dès qu'un outil est ouvert — et rien au repos.
     ///
     /// C'est **la** sortie de secours : quel que soit l'outil ouvert — clavier,
     /// micro armé, enregistrement en cours —, une tape ramène la barre à ses
     /// trois boutons. Sans elle, il fallait deviner quel autre bouton allait
     /// refermer celui-ci.
+    ///
+    /// Le burger de la maquette, qui tenait cette place au repos, est parti :
+    /// rien n'était dessiné derrière, et un bouton qui ne mène nulle part est
+    /// une question posée à chaque ouverture du fil (Hugo, 16/09/2026). Les
+    /// trois pavés prennent la largeur, comme ils le faisaient déjà en taille
+    /// de texte accessible.
     @ViewBuilder
     private var leadingControl: some View {
-        if typeSize.isAccessibilitySize {
-            // À ce corps-là, la barre n'a plus la largeur pour une quatrième
-            // colonne : le burger disparaît, et la croix reste — d'elle, on ne
-            // peut pas se passer.
-            if !isAtRest { closeButton }
-        } else if isAtRest {
-            menuButton
-        } else {
-            closeButton
-        }
-    }
-
-    /// Le menu de la maquette. ⚠️ Rien n'est dessiné derrière : il garde son
-    /// bouton parce que la maquette le montre, et ne mène nulle part — même
-    /// parti pris que les intentions non routées de l'accueil et du profil.
-    private var menuButton: some View {
-        barGlyph("IconMenuBurger", label: ChatCopy.Voice.menu, tint: MemoBookColor.ink) {}
-            .transition(.scale(scale: 0.6).combined(with: .opacity))
+        if !isAtRest { closeButton }
     }
 
     private var closeButton: some View {

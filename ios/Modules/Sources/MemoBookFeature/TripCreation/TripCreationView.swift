@@ -199,17 +199,10 @@ public struct TripCreationView: View {
             .padding(.horizontal, MemoBookSpacing.screenMargin)
             .padding(.top, MemoBookSpacing.xs)
             .padding(.bottom, MemoBookSpacing.s)
-            // Le contenu défile sous le bouton : ce dégradé l'en décolle sans
-            // poser un bandeau opaque sur le motif de fond.
-            .background {
-                LinearGradient(
-                    colors: [MemoBookColor.background.opacity(0), MemoBookColor.background],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .padding(.top, -MemoBookSpacing.l)
-                .allowsHitTesting(false)
-            }
+            // Le contenu défile sous le bouton : le voile de la marque l'en
+            // décolle sans poser un bandeau opaque sur le motif de fond, et
+            // descend jusqu'au bord de la dalle — voir ``BrandFooterScrim``.
+            .brandFooterScrim()
         }
         // L'étape change, pas l'écran : la charpente reste immobile — la
         // frise, le bouton — pendant que l'illustration glisse et que le titre

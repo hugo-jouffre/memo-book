@@ -47,29 +47,98 @@ public struct StatusBadge: View {
 /// modale : l'utilisateur garde le contexte de l'écran.
 public struct ErrorBanner: View {
     private let message: String
+    private let advice: String?
     private let retry: (() -> Void)?
+    private let help: (() -> Void)?
 
-    public init(message: String, retry: (() -> Void)? = nil) {
+    /// - Parameters:
+    ///   - message: ce qui s'est passé, en une phrase.
+    ///   - advice: ce qu'on peut **faire** — la phrase qui suit le constat.
+    ///     « Erreur interne du serveur » laissait le voyageur chercher ce qu'il
+    ///     avait mal fait ; dire à qui est la panne et quel geste tenter est ce
+    ///     qui transforme un mur en message (Hugo, 15/09/2026). Voir
+    ///     `APIError.recoveryAdvice`.
+    ///   - retry: relance ce qui a échoué.
+    ///   - help: ouvre le support — la porte de sortie quand réessayer ne
+    ///     suffit pas.
+    public init(
+        message: String,
+        advice: String? = nil,
+        retry: (() -> Void)? = nil,
+        help: (() -> Void)? = nil
+    ) {
         self.message = message
+        self.advice = advice
         self.retry = retry
+        self.help = help
     }
 
     public var body: some View {
+        Group {
+            if advice == nil, help == nil {
+                compact
+            } else {
+                detailed
+            }
+        }
+        .padding(MemoBookSpacing.s)
+        .background(MemoBookColor.error.opacity(0.1), in: .rect(cornerRadius: MemoBookSpacing.cornerRadius))
+    }
+
+    /// Une ligne : le constat, et « Réessayer » au bout. Le dessin d'origine,
+    /// pour les écrans qui n'ont rien de plus à dire.
+    private var compact: some View {
         HStack(alignment: .firstTextBaseline, spacing: MemoBookSpacing.xs) {
-            Image(systemName: "exclamationmark.triangle")
-                .foregroundStyle(MemoBookColor.error)
+            mark
             Text(message)
                 .font(MemoBookFont.notification)
                 .foregroundStyle(MemoBookColor.ink)
             Spacer(minLength: 0)
             if let retry {
-                Button("Réessayer", action: retry)
-                    .font(MemoBookFont.notification)
-                    .tint(MemoBookColor.action)
+                link("Réessayer", action: retry)
             }
         }
-        .padding(MemoBookSpacing.s)
-        .background(MemoBookColor.error.opacity(0.1), in: .rect(cornerRadius: MemoBookSpacing.cornerRadius))
+    }
+
+    /// Le constat, le conseil dessous, et les gestes possibles sur leur propre
+    /// ligne : une phrase de conseil ne tient pas au bout d'une ligne.
+    private var detailed: some View {
+        VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
+            HStack(alignment: .firstTextBaseline, spacing: MemoBookSpacing.xs) {
+                mark
+                Text(message)
+                    .font(MemoBookFont.notification)
+                    .foregroundStyle(MemoBookColor.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+
+            if let advice {
+                Text(advice)
+                    .font(MemoBookFont.caption)
+                    .foregroundStyle(MemoBookColor.inkMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if retry != nil || help != nil {
+                HStack(spacing: MemoBookSpacing.s) {
+                    if let retry { link("Réessayer", action: retry) }
+                    if let help { link("Besoin d’aide ?", action: help) }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var mark: some View {
+        Image(systemName: "exclamationmark.triangle")
+            .foregroundStyle(MemoBookColor.error)
+    }
+
+    private func link(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .font(MemoBookFont.notification)
+            .tint(MemoBookColor.action)
     }
 }
 

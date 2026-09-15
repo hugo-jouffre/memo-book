@@ -2,9 +2,10 @@ import MemoBookCore
 import MemoBookDesign
 import SwiftUI
 
-/// Les six feuilles de la personnalisation du carnet.
+/// Les neuf feuilles de la personnalisation du carnet — six dessins, la
+/// typographie servant quatre fois.
 ///
-/// **Quatre d'entre elles portent deux pages du carnet au-dessus d'elles**, et
+/// **Sept d'entre elles portent deux pages du carnet au-dessus d'elles**, et
 /// ce n'est pas un ornement : on ne règle pas des pointillés ou une quantité de
 /// stickers dans l'abstrait, on les règle en regardant la page. Les deux qui ne
 /// les portent pas — le ratio média et le nombre de pages — changent quelque
@@ -19,20 +20,30 @@ import SwiftUI
 /// faire.
 
 /// Ce que les personnalisations du carnet ouvrent en feuille.
-enum BookCustomisationSheet: String, Identifiable, Hashable {
+enum BookCustomisationSheet: Identifiable, Hashable {
     case ratio
     case pages
     case funFacts
     case rules
-    case fonts
+    /// La typographie d'un rôle — la même feuille pour les quatre.
+    case font(BookFontRole)
     case decorations
 
-    var id: String { rawValue }
+    var id: String {
+        switch self {
+        case .ratio: "ratio"
+        case .pages: "pages"
+        case .funFacts: "funFacts"
+        case .rules: "rules"
+        case .font(let role): "font-\(role.rawValue)"
+        case .decorations: "decorations"
+        }
+    }
 
-    /// Les quatre qui montrent les pages du carnet.
+    /// Celles qui montrent les pages du carnet.
     var showsBookPages: Bool {
         switch self {
-        case .funFacts, .rules, .fonts, .decorations: true
+        case .funFacts, .rules, .font, .decorations: true
         case .ratio, .pages: false
         }
     }
@@ -244,30 +255,38 @@ struct BookToggleSheet: View {
     }
 }
 
-// MARK: - Titres du carnet
+// MARK: - Les typographies
 
-/// « Titres du carnet » — trois familles, une seule choisie.
+/// « Titres du carnet », et ses trois sœurs — quelques familles, une seule
+/// choisie.
+///
+/// **Une vue pour les quatre rôles**, parce qu'ils doivent se comporter pareil
+/// (Hugo, 16/09/2026) : même liste encadrée, même « Valider » qui ne fait que
+/// fermer, même pages du carnet au-dessus. Ce qui change — le titre, le
+/// chapeau, les familles proposées et la colonne écrite — appartient au rôle
+/// (``BookFontRole``), pas à la feuille.
 struct BookFontsSheet: View {
     let model: BookCustomisationModel
+    let role: BookFontRole
     var topOverflow: CGFloat = 0
 
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         BrandSheet(
-            BookCopy.Fonts.title,
-            subtitle: BookCopy.Fonts.subtitle,
+            BookCopy.Fonts.sheetTitle(for: role),
+            subtitle: BookCopy.Fonts.sheetSubtitle(for: role),
             topOverflow: topOverflow
         ) {
             VStack(spacing: MemoBookSpacing.m) {
                 BrandOptionGroup {
-                    ForEach(BookTitleFont.all) { font in
+                    ForEach(role.options) { font in
                         BrandOptionRow(
-                            font.name,
+                            font.label,
                             subtitle: font.detail,
-                            isSelected: model.customisation?.fontDisplay == font.name
+                            isSelected: isSelected(font)
                         ) {
-                            model.setTitleFont(font.name)
+                            model.setFont(role, font.name)
                         }
                     }
                 }
@@ -276,6 +295,11 @@ struct BookFontsSheet: View {
             }
             .disabled(model.customisation == nil)
         }
+    }
+
+    private func isSelected(_ font: BookFontOption) -> Bool {
+        guard let customisation = model.customisation else { return false }
+        return font.matches(customisation[keyPath: role.keyPath])
     }
 }
 
@@ -329,7 +353,7 @@ struct BookDecorationsSheet: View {
             switch destination {
             case .ratio: BookRatioSheet(model: model)
             case .pages: BookPagesSheet(model: model)
-            case .fonts: BookFontsSheet(model: model)
+            case .font(let role): BookFontsSheet(model: model, role: role)
             case .decorations: BookDecorationsSheet(model: model)
             case .funFacts, .rules: EmptyView()
             }

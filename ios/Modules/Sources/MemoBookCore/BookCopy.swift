@@ -51,6 +51,33 @@ public enum BookCopy {
         public static let order = "Commander le carnet"
         public static let help = "Besoin d’aide ?"
 
+        /// Le lien rouge tout en bas de l'écran, sous « Besoin d'aide ? » —
+        /// le même dessin que « Supprimer mon compte » sur le profil.
+        public static let delete = "Supprimer ce voyage"
+
+        /// La feuille de confirmation, sur le modèle de celle du compte : ce
+        /// que la suppression emporte, et les deux issues.
+        public enum Delete {
+            public static let title = "Tu es sûr de vouloir supprimer ce voyage ?"
+
+            /// Ce qui part, dit avant plutôt qu'après. Les commandes passées
+            /// pour ce carnet partent avec lui — c'est ce que fait
+            /// `services/deletion.ts` — ; la cagnotte, elle, appartient au
+            /// compte et ne bouge pas.
+            ///
+            /// Sans nom — les réglages n'ont pas chargé, ou le voyage n'en a
+            /// pas —, la phrase dit « Ce voyage » plutôt que d'ouvrir des
+            /// guillemets sur du vide, ce qu'elle faisait (Hugo, 16/09/2026).
+            public static func body(trip: String?) -> String {
+                let trimmed = trip?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                let subject = trimmed.isEmpty ? "Ce voyage" : "« \(trimmed) »"
+                return "\(subject) sera effacé pour toi comme pour tes co-voyageurs : ses souvenirs, ses photos, son carnet et les commandes passées pour lui. Ta cagnotte, elle, reste sur ton compte. C’est immédiat et sans retour."
+            }
+
+            public static let keep = "Garder ce voyage"
+            public static let confirm = "Supprimer définitivement ce voyage"
+        }
+
         // MARK: Personnalisations du carnet
 
         /// La valeur d'une ligne dont le voyage n'a rien à dire. Un tiret cadratin
@@ -582,6 +609,27 @@ public enum BookCopy {
         /// ⚠️ **Vouvoie**, et recopié tel quel (R8). Signalé.
         public static let subtitle = "Déterminez la typographie de vos titres"
         public static let validate = "Valider"
+
+        /// Le titre de la feuille d'un rôle. Seule celle des titres vient de la
+        /// maquette ; les trois autres sont écrites sur son modèle, au
+        /// tutoiement (R9), et signalées (T136).
+        public static func sheetTitle(for role: BookFontRole) -> String {
+            switch role {
+            case .titles: title
+            case .subtitles: "Sous-titres du carnet"
+            case .texts: "Textes du carnet"
+            case .funFacts: "Fun facts du carnet"
+            }
+        }
+
+        public static func sheetSubtitle(for role: BookFontRole) -> String {
+            switch role {
+            case .titles: subtitle
+            case .subtitles: "Détermine la typographie de tes sous-titres"
+            case .texts: "Détermine la typographie de tes textes"
+            case .funFacts: "Détermine la typographie de tes fun facts"
+            }
+        }
     }
 
     /// « Décorations & stickers » — `3443:10147`.

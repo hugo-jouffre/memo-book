@@ -56,18 +56,36 @@ extension APIConfiguration {
     /// plus retomber en silence sur `localhost` — c'est exactement ce qu'il
     /// faisait avant, et ça n'aurait sauté qu'une fois l'app sur un téléphone.
     ///
-    /// Si la clé manque, le projet a été construit de travers : en debug on
-    /// repart du back-end local, en release on s'arrête net plutôt que de
-    /// laisser une app livrée parler dans le vide.
+    /// **Un iPhone ne parle jamais à `localhost`.** `Debug.xcconfig` ne donne
+    /// plus la boucle locale qu'au simulateur, et
+    /// ``APIConfiguration/effective(configured:productionFallback:runsInSimulator:)``
+    /// remet la production à la place si elle passait quand même — deux
+    /// garde-fous, parce que la panne est revenue deux fois (Hugo, 15/09/2026).
+    ///
+    /// Si les clés manquent, le projet a été construit de travers : dans le
+    /// simulateur on repart du back-end local ; sur un appareil, en debug comme
+    /// en release, on s'arrête net plutôt que de laisser l'app parler dans le
+    /// vide — `localhost` y serait exactement ça.
     static var fromBuildConfiguration: APIConfiguration {
-        if let configured = APIConfiguration.fromBundle() { return configured }
+        #if targetEnvironment(simulator)
+            let runsInSimulator = true
+        #else
+            let runsInSimulator = false
+        #endif
+
+        if let resolved = APIConfiguration.effective(
+            configured: APIConfiguration.fromBundle(),
+            productionFallback: APIConfiguration.fromBundle(key: .productionBaseURL),
+            runsInSimulator: runsInSimulator
+        ) {
+            return resolved
+        }
 
         #if DEBUG
-            return .localDevelopment
-        #else
-            preconditionFailure(
-                "MemoBookAPIBaseURL absente de l'Info.plist : le build ne sait pas à quelle API parler. Voir ios/Config/Release.xcconfig."
-            )
+            if runsInSimulator { return .localDevelopment }
         #endif
+        preconditionFailure(
+            "MemoBookAPIBaseURL et MemoBookProductionAPIBaseURL absentes de l'Info.plist : le build ne sait pas à quelle API parler. Voir ios/Config/Base.xcconfig."
+        )
     }
 }

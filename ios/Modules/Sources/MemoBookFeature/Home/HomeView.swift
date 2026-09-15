@@ -65,15 +65,13 @@ public struct HomeView: View {
     }
 
     public var body: some View {
-        // Trois couches, chacune une seule responsabilité : le contenu qui
-        // défile, le voile qui l'efface en bas, le bouton qui reste. Le voile
-        // ne peut pas vivre dans le `safeAreaInset` du bouton — un
-        // `ignoresSafeArea` posé là ne descend pas sous l'indicateur d'accueil,
-        // et c'est justement la bande où le texte restait lisible.
+        // Deux couches : le contenu qui défile, et le bouton qui reste — avec,
+        // en fond, le voile de la marque qui dissout ce qui passe dessous
+        // (``BrandFooterScrim``). Il descend jusqu'au bord de la dalle, sous
+        // l'indicateur d'accueil, où le texte restait lisible.
         ZStack(alignment: .bottom) {
             scrollingContent
-            callToActionScrim
-            recordCallToAction
+            recordCallToAction.brandFooterScrim()
         }
         .background {
             ZStack {
@@ -145,6 +143,11 @@ public struct HomeView: View {
         }
         .onAppear {
             if isReadyToRise { rise() }
+            // On revient d'un écran poussé — un voyage, ses réglages, sa
+            // suppression : l'accueil se relit, sans cascade ni écran vide,
+            // pour que ce qui a changé là-bas se voie ici. Au premier passage,
+            // rien n'est encore chargé et c'est `.task` qui s'en charge.
+            if isLoaded { Task { await model.load() } }
         }
         // Le réseau qui tombe ou qui revient ne se voit pas quand on ne regarde
         // pas l'écran. VoiceOver l'annonce donc, une fois, à chaque changement :
@@ -390,7 +393,8 @@ public struct HomeView: View {
                 // le deuxième carnet ouvert.
                 HomeSectionHeading(
                     title: trips.count > 1 ? "Tes voyages" : "Ton voyage",
-                    showsLiveDot: true
+                    showsLiveDot: true,
+                    onAdd: { isCreatingNotebook = true }
                 )
                 .rising(ongoingHeadingOrder)
 
@@ -415,8 +419,14 @@ public struct HomeView: View {
         if showsUpcomingSection {
             let trips = model.upcomingTrips
 
+            // Le « + » ne se pose ici que si aucun voyage n'est en cours :
+            // sinon il est déjà sur « Ton voyage », et deux ronds pour la même
+            // porte se lisent comme deux portes.
+            let addAction: (() -> Void)? =
+                model.ongoingTrips.isEmpty ? { isCreatingNotebook = true } : nil
+
             VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
-                HomeSectionHeading(title: "Voyage à venir")
+                HomeSectionHeading(title: "Voyage à venir", onAdd: addAction)
                     .rising(upcomingHeadingOrder)
 
                 if trips.isEmpty {
@@ -476,32 +486,6 @@ public struct HomeView: View {
     }
 
     // MARK: - Action
-
-    /// Le voile qui protège la lisibilité du CTA : 200 pt de haut, pleine
-    /// largeur, opaque au ras du bas et transparent en haut. Le contenu qui
-    /// défile s'y dissout au lieu de buter sur un bandeau.
-    ///
-    private var callToActionScrim: some View {
-        LinearGradient(
-            colors: [
-                MemoBookColor.background.opacity(0),
-                MemoBookColor.background,
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .frame(height: HomeMetrics.callToActionScrimHeight)
-        // Le dégradé est ancré au bas d'un cadre qui prend tout l'écran, safe
-        // area comprise. Le poser directement dans la pile ne suffisait pas :
-        // l'alignement `.bottom` le repinçait sur le bord de la safe area, et
-        // `ignoresSafeArea` l'étirait alors vers le haut au lieu de le faire
-        // descendre — la bande de l'indicateur d'accueil restait à découvert,
-        // et c'est exactement là que le texte se lisait encore.
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
 
     /// Ce que le bouton propose dépend de ce qu'il y a à faire : raconter un
     /// voyage en cours, ou en créer un. Un micro devant quelqu'un qui n'a aucun
@@ -571,8 +555,6 @@ enum HomeMetrics {
     /// devant son titre, et c'est à sa deuxième occurrence qu'il est monté dans
     /// `MemoBookSpacing`.
     static let avatarSide = MemoBookSpacing.avatarSide
-    /// Hauteur du voile posé derrière le CTA fixe.
-    static let callToActionScrimHeight: CGFloat = 200
 
     /// Largeur de la barre qui tient la place de la salutation.
     static let greetingPlaceholderWidth: CGFloat = 196

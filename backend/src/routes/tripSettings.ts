@@ -71,7 +71,13 @@ const updateBody = z.object({
   funFactsEnabled: z.boolean().optional(),
   rulesEnabled: z.boolean().optional(),
   decorationQuota: z.number().int().min(0).max(4).optional(),
+  // Les quatre typographies : des noms de famille, que le gabarit résout.
+  // « Titres » écrit `fontDisplay` et « sous-titres » `fontTitle` — c'est le
+  // croisement des tokens du gabarit, voir `LAYOUT_KB.md`.
   fontDisplay: z.string().trim().min(1).max(60).optional(),
+  fontTitle: z.string().trim().min(1).max(60).optional(),
+  fontHand: z.string().trim().min(1).max(60).optional(),
+  fontFacts: z.string().trim().min(1).max(60).optional(),
   quizEnabled: z.boolean().optional(),
   freeZonesEnabled: z.boolean().optional(),
   crosswordEnabled: z.boolean().optional(),
@@ -163,6 +169,9 @@ export function registerTripSettingsRoutes(app: FastifyInstance, context: AppCon
         ...(body.rulesEnabled !== undefined ? { rulesEnabled: body.rulesEnabled } : {}),
         ...(body.decorationQuota !== undefined ? { decorationQuota: body.decorationQuota } : {}),
         ...(body.fontDisplay !== undefined ? { fontDisplay: body.fontDisplay } : {}),
+        ...(body.fontTitle !== undefined ? { fontTitle: body.fontTitle } : {}),
+        ...(body.fontHand !== undefined ? { fontHand: body.fontHand } : {}),
+        ...(body.fontFacts !== undefined ? { fontFacts: body.fontFacts } : {}),
         ...(body.quizEnabled !== undefined ? { quizEnabled: body.quizEnabled } : {}),
         ...(body.freeZonesEnabled !== undefined ? { freeZonesEnabled: body.freeZonesEnabled } : {}),
         ...(body.crosswordEnabled !== undefined

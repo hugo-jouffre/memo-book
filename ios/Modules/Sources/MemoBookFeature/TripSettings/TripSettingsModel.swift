@@ -1,5 +1,6 @@
 import Foundation
 import MemoBookCore
+import MemoBookNetworking
 import Observation
 
 /// Ce que l'écran des paramètres d'un voyage sait faire : les charger, et
@@ -21,9 +22,23 @@ public final class TripSettingsModel {
     public private(set) var settings: TripSettings?
     public private(set) var errorMessage: String?
 
+    /// Ce qu'on peut **faire** de l'erreur, sous sa phrase — voir
+    /// `APIError.recoveryAdvice`. « Erreur interne du serveur » seul laissait
+    /// chercher ce qu'on avait mal fait (Hugo, 15/09/2026).
+    public private(set) var errorAdvice: String?
+
     private let tripId: String
     private let source: (String) async throws -> TripSettings
     private let persist: ((String, TripSettingsEdit) async throws -> TripSettings)?
+
+    /// Supprimer le voyage — **le propriétaire seul**, et le serveur le
+    /// vérifie. `nil` en aperçu : on ne supprime pas un voyage depuis une
+    /// maquette.
+    private let remove: ((String) async throws -> Void)?
+
+    /// `true` pendant la suppression. L'écran verrouille alors la feuille : la
+    /// demande est définitive, elle ne doit pas partir deux fois.
+    public private(set) var isDeleting = false
 
     /// L'envoi en cours. Le garder permet d'annuler celui d'avant quand deux
     /// bascules s'enchaînent : c'est la dernière qui compte, et la réponse
@@ -57,6 +72,7 @@ public final class TripSettingsModel {
         persist: ((String, TripSettingsEdit) async throws -> TripSettings)? = nil,
         removeCompanion: ((String, String) async throws -> TripSettings)? = nil,
         resendInvitation: ((String, String) async throws -> Void)? = nil,
+        delete: ((String) async throws -> Void)? = nil,
         themes: @escaping @Sendable () async throws -> [TripTheme] = { TripTheme.fixtures }
     ) {
         self.tripId = tripId
@@ -64,6 +80,7 @@ public final class TripSettingsModel {
         self.persist = persist
         self.removeCompanion = removeCompanion
         self.resendInvitation = resendInvitation
+        self.remove = delete
         self.readThemes = themes
     }
 
@@ -85,10 +102,47 @@ public final class TripSettingsModel {
     public func load() async {
         do {
             settings = try await source(tripId)
-            errorMessage = nil
+            clearError()
         } catch {
-            errorMessage = error.localizedDescription
+            report(error)
         }
+    }
+
+    // MARK: - Supprimer le voyage
+
+    /// Supprime le voyage et tout ce qui est à lui. Renvoie `true` quand c'est
+    /// fait — c'est le signal qui ramène l'app à l'accueil.
+    ///
+    /// L'écran a déjà demandé confirmation : ce n'est pas au modèle de la
+    /// redemander, et il n'y a rien à annuler après. Un refus du serveur — un
+    /// co-voyageur qui essaie, le propriétaire seul y a droit — reste à
+    /// l'écran, dans la feuille.
+    public func delete() async -> Bool {
+        guard let remove else { return false }
+
+        isDeleting = true
+        defer { isDeleting = false }
+
+        do {
+            try await remove(tripId)
+            clearError()
+            return true
+        } catch {
+            report(error)
+            return false
+        }
+    }
+
+    /// Pose l'erreur **et son conseil** : la phrase dit ce qui s'est passé, le
+    /// conseil ce qu'on peut faire.
+    private func report(_ error: any Error) {
+        errorMessage = error.localizedDescription
+        errorAdvice = (error as? APIError)?.recoveryAdvice
+    }
+
+    private func clearError() {
+        errorMessage = nil
+        errorAdvice = nil
     }
 
     // MARK: - Ce qu'on change depuis l'écran
@@ -167,7 +221,7 @@ public final class TripSettingsModel {
                 errorMessage = nil
             } catch {
                 guard !Task.isCancelled else { return }
-                errorMessage = error.localizedDescription
+                report(error)
                 await load()
             }
         }
@@ -182,7 +236,7 @@ public final class TripSettingsModel {
                 try await resendInvitation(tripId, companion.id)
                 confirm(BookCopy.Invite.resent(companion.name))
             } catch {
-                errorMessage = error.localizedDescription
+                report(error)
             }
         }
     }
@@ -213,10 +267,10 @@ public final class TripSettingsModel {
                 let updated = try await persist(tripId, edit)
                 guard !Task.isCancelled else { return }
                 settings = updated
-                errorMessage = nil
+                clearError()
             } catch {
                 guard !Task.isCancelled else { return }
-                errorMessage = error.localizedDescription
+                report(error)
                 // Remettre ce que le serveur a vraiment : sans ça,
                 // l'interrupteur resterait sur une valeur que personne n'a
                 // enregistrée.
@@ -230,7 +284,7 @@ public final class TripSettingsModel {
         /// livrée.
         func debugShowSkeleton() {
             settings = nil
-            errorMessage = nil
+            clearError()
         }
     #endif
 }

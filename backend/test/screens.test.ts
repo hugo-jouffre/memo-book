@@ -72,7 +72,14 @@ interface TripSettingsBody {
     tripEndReminder: boolean;
   };
   companions: { id: string; name: string; isOwner: boolean; isPending: boolean }[];
-  customisation: { photoTextRatio: number; decorationQuota: number; fontDisplay: string };
+  customisation: {
+    photoTextRatio: number;
+    decorationQuota: number;
+    fontDisplay: string;
+    fontTitle: string;
+    fontHand: string;
+    fontFacts: string;
+  };
 }
 
 interface LinkBody {
@@ -609,6 +616,22 @@ describe("les réglages d'un voyage", () => {
       photoTextRatio: 75,
       decorationQuota: 0,
       fontDisplay: "Montserrat",
+    });
+
+    // Les trois autres typographies s'écrivent de la même façon, chacune dans
+    // sa colonne — et « des titres » n'a pas touché `fontTitle`.
+    const fonts = await harness.app.inject({
+      method: "PATCH",
+      url: `/v1/trips/${memo.id}/settings`,
+      headers: { authorization: owner.authorization },
+      payload: { fontTitle: "Alegreya", fontHand: "Montserrat", fontFacts: "Alegreya" },
+    });
+    expect(fonts.statusCode).toBe(200);
+    expect(fonts.json<TripSettingsBody>().customisation).toMatchObject({
+      fontDisplay: "Montserrat",
+      fontTitle: "Alegreya",
+      fontHand: "Montserrat",
+      fontFacts: "Alegreya",
     });
 
     // Et un réglage envoyé seul ne touche pas les autres : c'est toute la

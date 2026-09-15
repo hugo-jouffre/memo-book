@@ -46,11 +46,14 @@ public struct WelcomeView: View {
     /// de s'étirer — même règle que partout ailleurs dans l'app.
     private static let contentWidth: CGFloat = 390
 
-    /// Hauteur de la photo, et part de l'écran qu'elle garde pour elle sous la
-    /// carte. La maquette dessine 380 de photo dont 201 restent visibles
-    /// (390 × 844) : les deux se suivent proportionnellement pour qu'un écran
-    /// plus court ne réduise pas la photo à un bandeau.
-    private static let heroHeight: CGFloat = 380
+    /// La part de l'écran que la photo garde pour elle au-dessus de la carte.
+    /// La maquette en laisse voir 201 sur 844 : la proportion suit l'écran pour
+    /// qu'un modèle plus court ne réduise pas la photo à un bandeau.
+    ///
+    /// La photo elle-même, en revanche, ne fait plus 380 de haut : elle
+    /// **couvre la dalle entière**, sous la carte comprise (Hugo, 15/09/2026).
+    /// Sur un petit écran la carte défile, et tirer dessus la fait glisser vers
+    /// le bas — ce qui apparaît alors est la photo, jamais le crème du fond.
     private static let heroRevealRatio: CGFloat = 201 / 844
 
     public var body: some View {
@@ -101,29 +104,29 @@ public struct WelcomeView: View {
 
     // MARK: - La photo
 
-    /// Elle déborde sous la barre d'état et monte jusqu'au bord de la dalle :
-    /// c'est une photo de couverture, pas une illustration posée dans une page.
+    /// Elle couvre la dalle entière — sous la barre d'état, sous la carte,
+    /// jusqu'à l'indicateur d'accueil : c'est un fond d'écran, pas une
+    /// illustration posée dans une page. La carte crème ne recouvre que ce
+    /// qu'elle a besoin de recouvrir.
     private var hero: some View {
         // ⚠️ **La photo est posée en `overlay` d'un cadre vide**, et non
         // dimensionnée elle-même. `scaledToFill` ne se laisse pas contraindre en
-        // largeur : une `Image` ainsi cadrée rend une taille de mise en page de
-        // 620 pt de large sur un cadre de 380 de haut, la `ZStack` prend cette
-        // largeur, et **tout l'écran déborde vers la droite** — le titre sortait
-        // par le bord. Un cadre vide, lui, accepte la largeur proposée ; la
-        // photo le remplit et `clipped()` coupe ce qui dépasse.
+        // largeur : une `Image` ainsi cadrée rend une taille de mise en page à
+        // son propre rapport, la `ZStack` prend cette largeur, et **tout
+        // l'écran déborde vers la droite** — le titre sortait par le bord. Un
+        // cadre vide, lui, accepte la taille proposée ; la photo le remplit et
+        // `clipped()` coupe ce qui dépasse.
         Color.clear
-            .frame(maxWidth: .infinity)
-            .frame(height: Self.heroHeight)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay {
                 Image(brand: "PhotoWelcomeHero")
                     .resizable()
                     .scaledToFill()
             }
-            // Le voile de la maquette : la photo passe sous du texte blanc en
-            // haut, et sous la carte en bas.
-            .overlay(MemoBookColor.ink.opacity(0.4))
-            // Et le dégradé qui protège l'heure et la batterie, sans poser un
-            // bandeau opaque sur l'image.
+            // Le dégradé qui protège l'heure et la batterie, sans poser un
+            // bandeau opaque sur l'image. Le voile d'encre à 40 % de l'ancienne
+            // photo est parti avec elle : il servait un texte blanc que la
+            // nouvelle image ne porte plus, et l'assombrissait pour rien.
             .overlay(alignment: .top) {
                 LinearGradient(
                     colors: [MemoBookColor.ink.opacity(0.25), MemoBookColor.ink.opacity(0)],
@@ -133,8 +136,7 @@ public struct WelcomeView: View {
                 .frame(height: MemoBookSpacing.l + MemoBookSpacing.m)
             }
             .clipped()
-            .frame(maxWidth: .infinity, alignment: .top)
-            .ignoresSafeArea(edges: .top)
+            .ignoresSafeArea()
             .accessibilityLabel(WelcomeCopy.Voice.hero)
     }
 

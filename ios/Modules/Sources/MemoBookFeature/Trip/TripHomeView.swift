@@ -31,6 +31,10 @@ public struct TripHomeView: View {
 
     private var isBlocked: Bool { subscriptionSession?.isBlocked == true }
 
+    /// Le libellé du bouton vert. « Continuer à enregistrer » disait le micro ;
+    /// le bouton ouvre la conversation — Hugo a changé d'avis le 15/09/2026.
+    private static let callToAction = "Accéder au chat"
+
     /// - Parameters:
     ///   - tripId: le voyage à ouvrir. Il ne sert qu'à construire le modèle par
     ///     défaut, celui du jeu d'essai.
@@ -176,8 +180,13 @@ public struct TripHomeView: View {
             // qu'il prendra, pour que le bouton ne saute pas en arrivant.
             .frame(height: MemoBookSpacing.xl + MemoBookSpacing.xs)
 
-            BrandButton("Continuer à enregistrer", icon: Image(brand: "IconMic"), fillsWidth: true) {}
-                .disabled(true)
+            BrandButton(
+                Self.callToAction,
+                icon: Image(brand: "IconArrowRight"),
+                iconPlacement: .trailing,
+                fillsWidth: true
+            ) {}
+            .disabled(true)
                 .dynamicTypeSize(...DynamicTypeSize.accessibility1)
                 .padding(.top, MemoBookSpacing.xs)
         }
@@ -202,12 +211,16 @@ public struct TripHomeView: View {
                     .accessibilityAddTraits(.isHeader)
             }
 
-            // Verrouillé, le bouton passe au lime et au cadenas, et ouvre le
-            // paywall au lieu de la conversation — exactement comme le CTA de
-            // l'accueil (Hugo, 14/09/2026).
+            // **« Accéder au chat »**, avec la flèche de la marque en fin de
+            // libellé : le bouton mène à la conversation, il n'ouvre pas le
+            // micro — c'est là-bas qu'on enregistre (Hugo, 15/09/2026).
+            // Verrouillé, il passe au lime et au cadenas, et ouvre le paywall
+            // au lieu de la conversation — exactement comme le CTA de l'accueil
+            // (Hugo, 14/09/2026).
             BrandButton(
-                "Continuer à enregistrer",
-                icon: Image(brand: isBlocked ? "IconLocker" : "IconMic"),
+                Self.callToAction,
+                icon: Image(brand: isBlocked ? "IconLocker" : "IconArrowRight"),
+                iconPlacement: isBlocked ? .leading : .trailing,
                 style: isBlocked ? .accent : .primary,
                 fillsWidth: true,
                 action: {

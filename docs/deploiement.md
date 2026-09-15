@@ -253,12 +253,20 @@ Utile pour vérifier une correction tout de suite. Ça ne concerne qu'un build
 lancé depuis Xcode sur un iPhone branché au Mac, **pas un build TestFlight**, et
 les deux doivent être sur le même wifi.
 
+**Sans rien configurer, un build Debug sur un iPhone parle à la production**
+(depuis le 15/09/2026) : `localhost` y désignait le téléphone, et « Testing
+mode » répondait « Rien n'écoute sur localhost:3000 ». Le simulateur, lui,
+garde le back-end local. Voir `ios/Config/Debug.xcconfig`.
+
+Pour viser le back-end du Mac depuis le téléphone :
+
     cp ios/Config/Secrets.example.xcconfig ios/Config/Secrets.xcconfig
 
 Y mettre l'IP du Mac sur le réseau local (Réglages ▸ Wi-Fi ▸ le réseau ▸
-Adresse IP) :
+Adresse IP), avec la condition de SDK — sans elle, le simulateur perd aussi
+`localhost` au profit de cette IP :
 
-    MEMOBOOK_API_BASE_URL = http:/$()/192.168.1.20:3000
+    MEMOBOOK_API_BASE_URL[sdk=iphoneos*] = http:/$()/192.168.1.20:3000
 
 `Secrets.xcconfig` est ignoré par Git. Le back-end doit tourner sur le Mac
 (`cd backend && npm run dev`), et le HTTP en clair passe grâce à

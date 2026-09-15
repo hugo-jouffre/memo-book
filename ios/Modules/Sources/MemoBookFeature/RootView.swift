@@ -96,6 +96,9 @@ public struct RootView: View {
         // feuilles** : c'est lui qui les relie.
         .environment(\.brandSheetPresentation, sheets)
         .environment(\.subscriptionSession, subscription)
+        // Le profil, à portée du paywall — voir
+        // ``SwiftUI/EnvironmentValues/profileModelFactory``.
+        .environment(\.profileModelFactory, { dependencies.profileModel() })
         .onOpenURL { url in
             guard let token = PasswordResetLink.token(from: url) else { return }
             // Déjà entré : le mot de passe se change depuis le profil, et un
@@ -395,11 +398,12 @@ public struct RootView: View {
 
     /// Où mène chaque intention des paramètres d'un voyage.
     ///
-    /// Quatre destinations : la cagnotte, l'aperçu du carnet, les
-    /// personnalisations, le support. Cinq lignes de plus ouvrent désormais
-    /// leur **feuille** sans passer par ici (``TripSettingsSheet``). Restent
-    /// trois lignes inertes — renommer, relier un Tricount, commander —, et
-    /// elles le sont toujours faute de maquette, pas faute de branchement.
+    /// Cinq destinations : la cagnotte, l'aperçu du carnet, les
+    /// personnalisations, le tunnel de commande, le support — et une sortie,
+    /// quand le voyage vient d'être supprimé. Cinq lignes de plus ouvrent leur
+    /// **feuille** sans passer par ici (``TripSettingsSheet``). Restent deux
+    /// lignes inertes — renommer, relier un Tricount —, et elles le sont
+    /// toujours faute de maquette, pas faute de branchement.
     private func handle(_ intent: TripSettingsIntent) {
         switch intent {
         case .openWallet:
@@ -416,16 +420,30 @@ public struct RootView: View {
             path.append(.bookCustomisation(tripId: tripId))
         case .openHelp:
             path.append(.support)
-        case .renameTrip, .connectTricount, .orderBook:
+        case .orderBook:
+            // « Commander le carnet » ouvre le tunnel de commande, comme le
+            // bouton de l'aperçu (Hugo, 15/09/2026). Le tunnel lit son propre
+            // contexte et dit lui-même s'il n'y a rien à imprimer.
+            guard let memoId = currentTripId else { return }
+            path.append(.order(memoId: memoId))
+        case .tripDeleted:
+            // Le voyage n'existe plus : derrière les réglages il y avait le
+            // voyage lui-même, ou sa conversation — reculer d'un cran
+            // rouvrirait un écran sur un 404. On revient à l'accueil, qui se
+            // relit en réapparaissant.
+            path.removeAll()
+        case .renameTrip, .connectTricount:
             break
         }
     }
 
-    /// Où mène l'unique intention des personnalisations.
+    /// Où mènent les deux intentions des personnalisations.
     private func handle(_ intent: BookCustomisationIntent) {
         switch intent {
         case .openCovers:
             openCovers()
+        case .openHelp:
+            path.append(.support)
         }
     }
 

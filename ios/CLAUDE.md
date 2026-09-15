@@ -78,13 +78,44 @@ l'interface, ou par `-resetOnboarding`.
 
 Ce qui change d'un environnement à l'autre vit dans `Config/*.xcconfig`, jamais
 dans le code : l'URL de l'API et le client OAuth Google. `Base.xcconfig` porte
-le commun, `Debug` le back-end local, `Release` la production.
+le commun — dont **l'adresse de production, écrite une seule fois** —, `Debug`
+le back-end local, `Release` la production.
 
-Les valeurs traversent par l'**Info.plist** (`MemoBookAPIBaseURL`), seul chemin
-par lequel un réglage de build devient lisible à l'exécution. Côté Swift,
-`APIConfiguration.fromBundle()` la lit et `fromBuildConfiguration` décide de
-l'absence : repli local en debug, arrêt net en release — un build livré ne doit
-pas parler à `localhost` en silence, ce qu'il faisait avant.
+**Un iPhone ne parle jamais à `localhost`.** Sur le téléphone, `localhost` est
+le téléphone : un build Debug posé par ⌘R y répondait « Rien n'écoute sur
+localhost:3000 » à « Testing mode », deux fois (15/09/2026). Deux garde-fous,
+et il faut les deux :
+
+1. `Debug.xcconfig` **conditionne l'adresse au SDK** : `[sdk=iphonesimulator*]`
+   reçoit `localhost`, `[sdk=iphoneos*]` reçoit la production. Un build de
+   téléphone ne peut plus embarquer une boucle locale.
+2. L'app embarque aussi la production sous sa propre clé
+   (`MemoBookProductionAPIBaseURL`), et
+   `APIConfiguration.effective(configured:productionFallback:runsInSimulator:)`
+   — une fonction pure, testée — la remet à la place d'une boucle locale hors
+   simulateur si la première ceinture avait sauté.
+
+**Et le simulateur marche toujours, back-end lancé ou non.** Il vise
+`localhost` d'abord ; si rien n'y écoute, la production est son **secours**
+(`APIConfiguration.fallbackBaseURL`) : le client y bascule au premier appel
+refusé et y reste pour la session — une ligne « ↪︎ » dans la trace réseau le
+dit. « Testing mode » entre donc dans les deux cas. Un délai dépassé ne bascule
+pas : un serveur local qui rame n'est pas un serveur absent. ⚠️ Le simulateur
+écrit alors dans la base de production, qui est aussi celle du développement
+(`docs/debogage.md`, § 4) : rien de nouveau, mais autant le savoir.
+
+Pour viser le back-end du Mac depuis un iPhone, `Secrets.xcconfig` pose l'IP
+avec la même condition (`MEMOBOOK_API_BASE_URL[sdk=iphoneos*] = …`). Vérifié
+à `-showBuildSettings` : la **dernière** affectation l'emporte, conditionnée ou
+non — une ligne sans condition marche donc aussi, mais elle emporte le
+simulateur avec elle, qui perd `localhost`. Release, lui, réaffecte après
+l'inclusion et ignore ce fichier.
+
+Les valeurs traversent par l'**Info.plist**, seul chemin par lequel un réglage
+de build devient lisible à l'exécution. Côté Swift, `APIConfiguration.fromBundle()`
+les lit et `fromBuildConfiguration` décide de l'absence : repli local dans le
+simulateur seulement, arrêt net partout ailleurs — un build livré ne doit pas
+parler dans le vide en silence.
 
 ⚠️ Dans un `.xcconfig`, `//` ouvre un commentaire **au milieu d'une URL aussi**.
 On coupe la séquence avec `$()` : `https:/$()/api.memo-book.com`. Le piège ne se
@@ -116,6 +147,12 @@ versionné.
 MVVM avec `@Observable`, `async/await` partout, aucun singleton. Le document
 complet est dans Notion (« Document d'architecture SwiftUI + MVVM ») ; voici ce
 qui engage le code.
+
+**Les mots sont fixés.** Écran, feuille, étape, parcours, tunnel,
+fonctionnalité, intention, route, modèle, copie, jeu d'essai :
+`docs/vocabulaire.md` dit ce que chacun désigne, et le suffixe Swift qui va
+avec (`…View`, `…Sheet`, `…Model`, `…Intent`, `…Copy`). On les emploie tels
+quels dans le code, les commentaires, les fiches et les PR.
 
 **La dépendance ne remonte jamais.** `MemoBookCore` ne dépend de rien.
 `Networking`, `Recording` et `Design` ne dépendent que de `Core`. `Feature`
@@ -203,7 +240,10 @@ police ou marge codée en dur ailleurs.
   temps se fait dans **une seule** `BrandSheet` dont le contenu change (voir
   `SubscriptionSheet`) : chaque feuille ouverte par-dessus une autre fait
   reculer celle du dessous, et trois reculs de suite se lisent comme un
-  empilement de fenêtres au lieu d'un chemin.
+  empilement de fenêtres au lieu d'un chemin. **Une exception, voulue** :
+  l'aperçu du carnet se pose *sur* la feuille d'abonnement (`BookPreviewSheet`
+  depuis `SubscriptionSheet`), parce qu'on y va voir et qu'on revient — un seul
+  recul, pas un chemin (Hugo, 16/09/2026 ; `docs/ui-development.md` § 16.9).
 - Le focus appartient à l'écran, pas au champ : un `@FocusState` sur une énum
   passé aux `BrandTextField`, pour que le clavier enchaîne les champs.
 - `BrandChatBubble` est **la** bulle de conversation (fond, queue, marges,
@@ -214,6 +254,13 @@ police ou marge codée en dur ailleurs.
   remplace jamais un écran, seulement une valeur : la page se dessine tout de
   suite. `brandShadow(_:)` pose l'une des deux ombres nommées de la marque, et
   il n'y en aura pas de troisième.
+- `BrandFooterScrim` (`.brandFooterScrim()`) est **le** voile sous un pied
+  d'écran — CTA, mention : un fondu au-dessus, un aplat crème à 90 % dessous,
+  jusqu'au bord de la dalle. Aucun écran ne redessine son dégradé.
+- `ErrorBanner` porte un conseil (`advice:`) et une porte vers le support
+  (`help:`) en plus de « Réessayer » : `APIError.recoveryAdvice` donne le
+  conseil par famille d'erreur. Un bandeau qui ne propose rien laisse chercher
+  ce qu'on a mal fait.
 
 ### Une `ScrollView` dans une barre doit se voir imposer sa hauteur
 

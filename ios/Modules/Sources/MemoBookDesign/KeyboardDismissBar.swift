@@ -12,9 +12,12 @@ extension View {
     /// le clavier descend. C'est l'icône dessinée pour ça, arrivée dans le jeu
     /// de marque à la place du double chevron provisoire (T27).
     ///
-    /// Il flotte un peu au-dessus du clavier plutôt que d'y être collé : posé au
-    /// ras des touches, on l'atteint en visant entre deux rangées, et on tape un
-    /// caractère une fois sur trois.
+    /// Il est **centré sur la barre, quel que soit l'iOS** (Hugo, 16/09/2026).
+    /// Il flottait de 8 pt au-dessus des touches — pour qu'on ne le vise pas
+    /// entre deux rangées —, et ce décalage le sortait du milieu : de la ligne
+    /// plate avant iOS 26, et de la **bulle de verre** que la barre
+    /// d'accessoires dessine autour de chaque bouton depuis. La cible de 44 pt
+    /// suffit à l'atteindre sans le soulever.
     public func brandKeyboardDismissBar() -> some View {
         toolbar {
             ToolbarItemGroup(placement: .keyboard) {
@@ -34,7 +37,6 @@ extension View {
                         )
                         .contentShape(.rect)
                 }
-                .padding(.bottom, MemoBookSpacing.xs)
                 .accessibilityLabel("Masquer le clavier")
             }
         }

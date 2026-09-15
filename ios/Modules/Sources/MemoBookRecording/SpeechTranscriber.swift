@@ -114,7 +114,13 @@ public final class SpeechTranscriber {
             recognizer.supportsOnDeviceRecognition && !hasFallenBackToServer
 
         let input = engine.inputNode
-        let format = input.inputFormat(forBus: 0)
+        // Le format de **sortie** du nœud d'entrée — celui dans lequel il livre
+        // ses tampons, et celui qu'Apple pose sur la prise dans « SpokenWord ».
+        // `inputFormat(forBus:)` disait le format du matériel *tel que le nœud
+        // l'avait lu la dernière fois* : avec des AirPods ou une montre
+        // connectés, la session venait de changer de fréquence, et les deux ne
+        // concordaient plus.
+        let format = input.outputFormat(forBus: 0)
         // ⚠️ **Le garde-fou le plus important du fichier.** `installTap` ne
         // renvoie pas d'erreur quand le format ne correspond pas au matériel :
         // il lève une exception Objective-C, que Swift ne peut pas rattraper —
@@ -124,6 +130,17 @@ public final class SpeechTranscriber {
         // poser la prise. On abandonne alors la transcription, jamais
         // l'enregistrement.
         guard format.channelCount > 0, format.sampleRate > 0 else { return }
+
+        // Et si le nœud et la session ne sont **pas d'accord** sur la fréquence,
+        // on n'insiste pas non plus : c'est l'autre exception de `installTap`
+        // (« format.sampleRate == hwFormat.sampleRate »), et elle ne se produit
+        // que sur certains appareils — un casque Bluetooth branché, une sortie
+        // qui vient de changer. « Commencer à enregistrer » faisait disparaître
+        // l'app sur un iPhone et pas sur l'autre (Hugo, 15/09/2026). Mieux vaut
+        // un vocal sans texte qu'un vocal sans app : la reconnaissance
+        // repartira au prochain enregistrement.
+        let hardwareRate = AVAudioSession.sharedInstance().sampleRate
+        guard hardwareRate == 0 || abs(format.sampleRate - hardwareRate) < 1 else { return }
 
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
             request.append(buffer)
