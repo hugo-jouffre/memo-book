@@ -40,8 +40,10 @@ public struct GalleryView: View {
     public var body: some View {
         ZStack(alignment: .bottom) {
             scrollingContent
-            callToActionScrim
-            callToAction
+            // Le même voile que sous le CTA de l'accueil, et pour la même
+            // raison : deux écrans qui portent le même bouton au même endroit
+            // ne peuvent pas se dissoudre différemment — voir ``BrandFooterScrim``.
+            callToAction.brandFooterScrim()
         }
         .background(MemoBookColor.background.ignoresSafeArea())
         // L'écran dessine son propre en-tête, comme le profil : la flèche et le
@@ -328,25 +330,6 @@ public struct GalleryView: View {
     }
 
     private var topScrimHeight: CGFloat { MemoBookSpacing.m }
-
-    /// Le voile qui protège la lisibilité du bouton. Repris de l'accueil au
-    /// point près : ce sont deux écrans qui portent le même bouton au même
-    /// endroit, ils ne peuvent pas se dissoudre différemment.
-    private var callToActionScrim: some View {
-        LinearGradient(
-            colors: [
-                MemoBookColor.background.opacity(0),
-                MemoBookColor.background,
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .frame(height: HomeMetrics.callToActionScrimHeight)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
 
     /// Ce que le bouton propose dépend de ce qu'il y a à faire.
     ///

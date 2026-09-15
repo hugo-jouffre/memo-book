@@ -71,9 +71,14 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
     }
 
     request.log.error({ err: error }, "Erreur non gérée");
-    return reply
-      .code(500)
-      .send({ error: "internal_error", message: "Erreur interne du serveur." });
+    // Une phrase qui dit **à qui** est la panne et **quoi faire**, pas un code.
+    // « Erreur interne du serveur » laissait le voyageur devant un mur : il
+    // cherchait ce qu'il avait mal fait, alors que c'est nous (Hugo, 15/09/2026).
+    return reply.code(500).send({
+      error: "internal_error",
+      message:
+        "Notre serveur a rencontré un problème inattendu. Ce n’est pas de ton fait : réessaie dans un instant, et si ça continue, écris-nous depuis « Besoin d’aide ? ».",
+    });
   });
 
   registerHealthRoutes(app, context);

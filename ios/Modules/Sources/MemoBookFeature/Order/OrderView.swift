@@ -231,29 +231,13 @@ struct OrderStepLayout<Content: View, Actions: View>: View {
             .padding(.horizontal, MemoBookSpacing.screenMargin)
             .padding(.top, MemoBookSpacing.xs)
             .padding(.bottom, MemoBookSpacing.s)
-            // **Un aplat opaque sous les commandes, un dégradé au-dessus.**
-            //
-            // Le dégradé seul ne suffisait pas : il s'étend sur toute la hauteur
-            // de la barre, et celle-ci passe de 80 pt à près de 400 pt en taille
-            // de texte accessible, où le libellé du bouton tient sur trois
-            // lignes. Le contenu se lisait alors **à travers** le bouton — un
-            // « Besoin d'aide ? » posé en travers de la carte de cagnotte. On
-            // garde donc le fondu, qui efface le contenu à l'approche, et on
-            // pose un fond plein sous les commandes elles-mêmes.
-            .background {
-                VStack(spacing: 0) {
-                    LinearGradient(
-                        colors: [MemoBookColor.background.opacity(0), MemoBookColor.background],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: MemoBookSpacing.l)
-
-                    MemoBookColor.background
-                }
-                .padding(.top, -MemoBookSpacing.l)
-                .allowsHitTesting(false)
-            }
+            // Le voile de la marque : un fondu au-dessus des commandes, et un
+            // aplat **translucide** dessous — le même que sous tous les pieds
+            // d'écran de l'app, voir ``BrandFooterScrim``. Il tient aussi en
+            // taille de texte accessible, où la barre passe de 80 à près de
+            // 400 pt : le contenu ne se lit plus à travers le bouton, il se
+            // devine.
+            .brandFooterScrim()
         }
     }
 }

@@ -45,9 +45,24 @@ struct PaywallView: View {
 
     @State private var page = 0
     @State private var showsPreview = false
-    /// Part de l'écran courant déjà écoulée, de 0 à 1. C'est **elle** qui remplit
-    /// la barre, et c'est son arrivée à 1 qui tourne la page.
-    @State private var progress: Double = 0
+
+    /// La feuille « Estimation », ouverte par la pastille de la quatrième carte
+    /// de l'offre.
+    @State private var showsEstimation = false
+
+    /// La feuille « Choisis ton mode de paiement », ouverte par le bouton de
+    /// l'offre — et le modèle du profil qu'elle pilote, fabriqué à l'ouverture.
+    @State private var showsPayment = false
+    @State private var paymentModel: ProfileModel?
+
+    /// Où en est la barre de l'écran courant — voir ``PaywallFill``. C'est elle
+    /// que le segment lit à chaque image ; le minuteur de ``runPage()`` tourne
+    /// la page sur la même date de départ.
+    @State private var fill: PaywallFill = .held(0)
+
+    /// Le profil, pour la feuille de paiement — posé par `RootView`, absent en
+    /// aperçu, où le jeu d'essai le remplace.
+    @Environment(\.profileModelFactory) private var makeProfileModel
 
     private var pageCount: Int { variant.pageCount }
 
@@ -84,8 +99,13 @@ struct PaywallView: View {
 
             VStack(spacing: 0) {
                 header
-                PaywallStoriesBar(pageCount: pageCount, page: page, progress: progress)
-                    .padding(.top, MemoBookSpacing.s)
+                PaywallStoriesBar(
+                    pageCount: pageCount,
+                    page: page,
+                    fill: fill,
+                    duration: Self.pageDuration.seconds
+                )
+                .padding(.top, MemoBookSpacing.s)
 
                 Group {
                     switch (variant, page) {
@@ -102,7 +122,8 @@ struct PaywallView: View {
                         PaywallOffer(
                             price: price,
                             title: variant.offerTitle,
-                            onSubscribe: onSubscribe
+                            onEstimate: { showsEstimation = true },
+                            onSubscribe: openPayment
                         )
                     }
                 }
@@ -139,6 +160,33 @@ struct PaywallView: View {
         .brandSheet(isPresented: $showsPreview) {
             BookPreviewSheet(memoId: previewMemoId)
         }
+        // Les deux feuilles de l'offre, par-dessus le paywall entier elles
+        // aussi : on les referme et on retrouve l'offre.
+        .brandSheet(isPresented: $showsEstimation) {
+            PaywallEstimationSheet(
+                estimation: .example(weeklyPrice: subscription?.weeklyPrice ?? 0)
+            )
+        }
+        .brandSheet(isPresented: $showsPayment) {
+            if let paymentModel {
+                PaywallPaymentSheet(model: paymentModel, price: price) {
+                    // Payé : la feuille se referme, l'abonnement est posé, et
+                    // c'est l'écran qui a présenté le paywall qui le referme —
+                    // on revient là d'où l'on venait, l'accueil le plus souvent.
+                    showsPayment = false
+                    onSubscribe()
+                }
+            }
+        }
+    }
+
+    /// Ouvre la feuille de paiement, sur un modèle du profil fabriqué par l'app
+    /// — ou sur le jeu d'essai, en aperçu.
+    private func openPayment() {
+        if paymentModel == nil {
+            paymentModel = makeProfileModel?() ?? ProfileModel()
+        }
+        showsPayment = true
     }
 
     /// Ce qui décide de relancer le minuteur : la page qu'on regarde, et le fait
@@ -207,46 +255,52 @@ struct PaywallView: View {
 
     // MARK: - Le temps qui passe
 
-    /// Remplit la barre de l'écran courant, puis tourne la page.
+    /// Lance le remplissage de la barre de l'écran courant, puis tourne la page.
     ///
     /// **Tout tient dans le `task(id:)`.** L'attente est structurée : changer de
     /// page annule cette tâche-ci, et SwiftUI en relance une pour la suivante.
     /// Une tâche détachée qu'on garderait pour l'annuler à la main a été
     /// essayée — elle enchaînait deux écrans d'un coup, parce que le minuteur
     /// qu'on annulait n'était déjà plus celui qui courait.
+    ///
+    /// **La barre et le minuteur lisent la même date de départ**, et rien
+    /// d'autre : la barre calcule sa part à chaque image (``PaywallFill``), le
+    /// minuteur dort le temps qui reste. Il n'y a plus d'animation de six
+    /// secondes en vol à couper au changement de page — c'était elle qui,
+    /// coupée trop tard, remplissait deux barres à la fois.
     private func runPage() async {
         // Une feuille est ouverte par-dessus : le temps s'arrête, et la barre
-        // reste où elle en était. Une page qui tourne derrière un aperçu fait
-        // retrouver un autre écran en le refermant.
-        guard !showsPreview else { return }
+        // se **fige** là où elle en était. Une page qui tourne derrière un
+        // aperçu fait retrouver un autre écran en le refermant.
+        guard !showsPreview else {
+            if case .running(let since) = fill {
+                fill = .held(
+                    PaywallFill.fraction(since: since, at: .now, duration: Self.pageDuration.seconds)
+                )
+            }
+            return
+        }
 
         // Le dernier écran porte l'offre : il ne s'en va pas tout seul, et sa
         // barre reste donc pleine plutôt que de se remplir dans le vide. En
         // Reduce Motion, aucune page ne tourne toute seule — on remplit la
         // barre pour dire où on en est, et c'est le doigt qui avance.
         guard page < pageCount - 1, !reduceMotion else {
-            progress = 1
+            fill = .held(1)
             return
         }
 
-        // **Deux temps, et deux images.** Remettre la barre à zéro puis lancer
-        // son remplissage dans la même passe ne donne qu'une seule écriture à
-        // SwiftUI : il interpole alors depuis la valeur déjà à l'écran — 1,
-        // laissée par l'écran précédent — vers 1, c'est-à-dire rien. La barre
-        // se posait pleine d'un coup au lieu de se remplir.
-        //
-        // La remise à zéro est donc explicitement **sans animation**, et on
-        // rend la main le temps d'une image avant de lancer le remplissage.
-        var reset = Transaction()
-        reset.disablesAnimations = true
-        withTransaction(reset) { progress = 0 }
+        // La barre repart d'où elle s'était figée — un aperçu refermé reprend
+        // le décompte, il ne le recommence pas — et de zéro partout ailleurs.
+        let seconds = Self.pageDuration.seconds
+        var since = Date.now
+        if case .held(let value) = fill, value > 0, value < 1 {
+            since = since.addingTimeInterval(-value * seconds)
+        }
+        fill = .running(since: since)
 
-        await Task.yield()
-        guard !Task.isCancelled else { return }
-
-        withAnimation(.linear(duration: Self.pageDuration.seconds)) { progress = 1 }
-
-        do { try await Task.sleep(for: Self.pageDuration) } catch { return }
+        let remaining = max(0, seconds - Date.now.timeIntervalSince(since))
+        do { try await Task.sleep(for: .seconds(remaining)) } catch { return }
         guard !Task.isCancelled else { return }
 
         turn(+1)
@@ -260,26 +314,15 @@ struct PaywallView: View {
             return
         }
 
-        // **Le remplissage en cours est coupé net, et la page change avec.**
-        //
-        // Les deux dans la *même* transaction, et cette transaction sans
-        // animation : c'est ce qui manquait. Le remplissage est une animation
-        // linéaire de six secondes posée sur `progress` ; appuyer sur
-        // « Continuer » au bout de deux la laissait courir. La barre qu'on
-        // ouvrait héritait alors des quatre secondes restantes et se remplissait
-        // **en même temps** que celle qu'on venait de quitter finissait la
-        // sienne — exactement les deux traits qui avancent ensemble.
-        //
-        // Remettre `progress` à zéro sans animation remplace l'animation en vol
-        // au lieu de l'attendre ; la faire dans la même passe que `page` évite
-        // l'image intermédiaire où la nouvelle barre montrerait l'avancement de
-        // l'ancienne.
-        var immediate = Transaction()
-        immediate.disablesAnimations = true
-        withTransaction(immediate) {
-            progress = 0
-            page = next
-        }
+        // **La barre qu'on quitte se finit, celle qu'on ouvre part de zéro** —
+        // et c'est le segment qui s'en charge, pas une transaction posée ici :
+        // chaque barre lit sa part dans l'état, et anime elle-même le saut à 1
+        // (en avançant) ou à 0 (en revenant). La barre courante est posée à
+        // zéro dans la même passe que la page, pour qu'aucune image ne montre
+        // le nouvel écran avec l'avancement de l'ancien ; le minuteur relancé
+        // par `task(id:)` la fait repartir aussitôt.
+        fill = .held(0)
+        page = next
     }
 }
 
@@ -389,7 +432,33 @@ enum PaywallCopy {
             "résilie à tout moment ou automatiquement à la fin du voyage",
         ]
     }
-    static let offerCallToAction = "Envoyer des vocaux en illimité"
+    /// Le bouton de l'offre ouvre la feuille de paiement, et le dit — Hugo,
+    /// 15/09/2026. « Envoyer des vocaux en illimité » promettait le résultat
+    /// sans nommer le geste.
+    static let offerCallToAction = "Choisis ton mode de paiement"
+
+    // — La feuille « Estimation » (`3469:14105`)
+    enum Estimation {
+        static let title = "Estimation"
+        static func duration(weeks: Int) -> String {
+            weeks == 1 ? "1 semaine de voyage" : "\(weeks) semaines de voyage"
+        }
+        static let bookPrice = "Prix final du carnet estimé"
+        static func pages(_ count: Int) -> String { "Environ \(count) pages" }
+        static let subscriptions = "Cumul de tes abonnements"
+        static func subscriptionDetail(weeks: Int, weeklyPrice: String) -> String {
+            "\(weeks) x \(weeklyPrice)"
+        }
+        static let total = "Montant final à payer lors de la commande du carnet"
+        static let extraCopiesLead = "-20%"
+        static let extraCopies = "pour chaque carnet supplémentaire"
+        static func perCopy(_ price: String) -> String { "\(price)/carnet" }
+    }
+
+    // — La feuille de paiement, ouverte par le bouton de l'offre
+    enum Payment {
+        static func pay(_ price: String) -> String { "Payer \(price)" }
+    }
 
     struct Argument {
         let icon: String

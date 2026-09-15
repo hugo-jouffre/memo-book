@@ -3,6 +3,7 @@ import MemoBookCore
 import MemoBookNetworking
 import MemoBookRecording
 import Observation
+import SwiftUI
 
 /// Les dépendances que les écrans partagent. Un seul point d'assemblage :
 /// l'app en construit une instance réelle, les aperçus SwiftUI une simulée.
@@ -234,6 +235,9 @@ public final class AppDependencies {
             resendInvitation: { [api] id, companionId in
                 try await api.resendInvitation(tripId: id, companionId: companionId)
             },
+            // La seule sans retour : `DELETE /v1/memos/:id`, que le serveur
+            // réserve au propriétaire. L'écran demande confirmation avant.
+            delete: { [api] id in try await api.deleteMemo(id: id) },
             themes: { [api] in try await api.tripThemes() }
         )
     }
@@ -316,6 +320,10 @@ public final class AppDependencies {
     /// Le tunnel de commande, **entièrement servi par le serveur** — c'est ce
     /// qui le distingue des quatre écrans ci-dessus.
     ///
+    /// Voir aussi ``SwiftUI/EnvironmentValues/profileModelFactory`` : le paywall
+    /// a besoin du profil pour sa feuille de paiement, et il se présente depuis
+    /// des écrans qui ne tiennent pas de dépendances.
+    ///
     /// Trois routes, et pas une de plus : `GET /v1/memos/:id/order-context`
     /// ouvre les sept étapes d'un seul appel,
     /// `POST /v1/memos/:id/orders/quote` compte le récapitulatif, et
@@ -343,4 +351,17 @@ public final class AppDependencies {
             }
         )
     }
+}
+
+extension EnvironmentValues {
+    /// Fabrique le modèle du profil, pour un écran qui n'a pas d'accès aux
+    /// dépendances et en a pourtant besoin d'un.
+    ///
+    /// Le paywall est présenté par l'accueil, par un voyage et par le profil ;
+    /// sa feuille « Choisis ton mode de paiement » lit et écrit les cartes du
+    /// compte, ce que seul ``ProfileModel`` sait faire. Plutôt que de faire
+    /// remonter `AppDependencies` dans trois écrans, `RootView` pose ici la
+    /// fabrique branchée sur l'API ; un aperçu n'en pose aucune et le paywall
+    /// retombe sur le jeu d'essai.
+    @Entry public var profileModelFactory: (@MainActor () -> ProfileModel)?
 }

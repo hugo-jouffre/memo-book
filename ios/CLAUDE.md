@@ -214,6 +214,13 @@ police ou marge codée en dur ailleurs.
   remplace jamais un écran, seulement une valeur : la page se dessine tout de
   suite. `brandShadow(_:)` pose l'une des deux ombres nommées de la marque, et
   il n'y en aura pas de troisième.
+- `BrandFooterScrim` (`.brandFooterScrim()`) est **le** voile sous un pied
+  d'écran — CTA, mention : un fondu au-dessus, un aplat crème à 90 % dessous,
+  jusqu'au bord de la dalle. Aucun écran ne redessine son dégradé.
+- `ErrorBanner` porte un conseil (`advice:`) et une porte vers le support
+  (`help:`) en plus de « Réessayer » : `APIError.recoveryAdvice` donne le
+  conseil par famille d'erreur. Un bandeau qui ne propose rien laisse chercher
+  ce qu'on a mal fait.
 
 ### Une `ScrollView` dans une barre doit se voir imposer sa hauteur
 

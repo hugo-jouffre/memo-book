@@ -149,7 +149,7 @@ Le seed pose les deux comptes de test et leurs voyages. Après un `db:seed`, les
 identifiants des voyages changent : une page de voyage ouverte avant renverra un
 404, ce qui est normal.
 
-### « Erreur interne du serveur » partout : les quinze connexions
+### « Notre serveur a rencontré un problème inattendu » partout : les quinze connexions
 
 Le pooler Supabase, en **mode session** (port 5432), n'accorde que **15 clients
 au total** — pour tout ce qui parle à cette base, l'API déployée comprise. Quand

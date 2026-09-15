@@ -91,12 +91,15 @@ struct TripHeader: View {
                 action: onBack
             )
             Spacer(minLength: 0)
+            // Les réglages **avant** l'imprimante : c'est l'ordre de l'en-tête
+            // de la conversation, et les deux écrans du voyage doivent poser
+            // la roue au même endroit (Hugo, 15/09/2026).
+            TripHeaderButton(icon: "IconSettings", label: "Paramètres du voyage", action: onSettings)
             TripHeaderButton(
                 icon: "IconPrinter",
                 label: "Prévisualiser et commander ce carnet",
                 action: onPrint
             )
-            TripHeaderButton(icon: "IconSettings", label: "Paramètres du voyage", action: onSettings)
         }
         .padding(.horizontal, MemoBookSpacing.screenMargin)
         // La photo passe sous la barre d'état ; les commandes, elles, se posent
@@ -179,7 +182,10 @@ private struct TripHeaderButton: View {
     /// ``MemoBookSpacing/navigationIcon``, validée telle quelle, et les deux
     /// commandes prennent ``MemoBookSpacing/contentIcon`` — leurs glyphes
     /// (l'imprimante, la roue des réglages) n'occupent qu'une part de leur
-    /// boîte et se lisaient à peine à 28.
+    /// boîte et se lisaient à peine à 28. La roue, elle, restait plus petite
+    /// que l'imprimante dans la même boîte (42 % contre 68 %) : c'est son
+    /// fichier qui a été recadré (`Settings.svg`, `viewBox` resserrée), pas le
+    /// code — les deux ont désormais la même taille optique.
     var iconSide: CGFloat = MemoBookSpacing.contentIcon
     let label: String
     let action: () -> Void

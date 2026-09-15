@@ -9,8 +9,9 @@ Même principe que ``import-brand-icons.py`` — le catalogue ne se remplit jama
 sont importés : un logo qui n'y figure pas reste dans ``assets/`` sans entrer
 dans le binaire.
 
-    Apple Icon.svg → LogoApple.imageset
-    Apple Pay.svg  → LogoApplePay.imageset
+    Apple Icon.svg    → LogoApple.imageset
+    Apple Pay.svg     → LogoApplePay.imageset
+    Tricount Icon.png → LogoTricount.imageset  (un PNG entre tel quel)
 
 ⚠️ **Deux formes de SVG cohabitent dans ce dossier**, et elles ne s'importent
 pas pareil :
@@ -48,6 +49,9 @@ NAMES = {
     "Google Icon": "LogoGoogle",
     "Apple Pay": "LogoApplePay",
     "Memobook Creme": "LogoMemobookCreme",
+    # Le logo d'un service tiers, fourni par lui en PNG (361 × 361) : il
+    # entre tel quel, sans passer par un SVG (T73).
+    "Tricount Icon": "LogoTricount",
 }
 
 DATA_URI = re.compile(r'xlink:href="data:image/png;base64,([^"]+)"')
@@ -106,8 +110,9 @@ def main() -> int:
 
     for stem, name in sorted(NAMES.items()):
         svg = SOURCE / f"{stem}.svg"
-        if not svg.is_file():
-            print(f"⚠️  {svg.name} manquant — ignoré")
+        png = SOURCE / f"{stem}.png"
+        if not svg.is_file() and not png.is_file():
+            print(f"⚠️  {stem} manquant (ni .svg ni .png) — ignoré")
             continue
 
         folder = CATALOG / f"{name}.imageset"
@@ -116,6 +121,15 @@ def main() -> int:
         # l'ancien fichier derrière lui, et le catalogue en montrerait deux.
         for stale in folder.glob("*"):
             stale.unlink()
+
+        # Un logo livré **en PNG** est recopié tel quel, à sa résolution
+        # native : c'est un bitmap, il n'y a rien à découper ni à vectoriser.
+        if not svg.is_file():
+            shutil.copyfile(png, folder / f"{name}.png")
+            write_contents(folder, f"{name}.png", vector=False)
+            rasters += 1
+            print(f"{png.name} → {name} (PNG tel quel)")
+            continue
 
         cropped = crop_of(svg.read_text(errors="ignore"))
 

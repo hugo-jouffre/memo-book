@@ -26,6 +26,11 @@ public struct TripSettingsView: View {
     /// ``RootView``, qui seul tient la pile.
     @State private var sheet: TripSettingsSheet?
 
+    /// La feuille qui confirme la suppression du voyage — une feuille de
+    /// l'app, comme celle du compte, et non une alerte : le paragraphe qui dit
+    /// ce qui part mérite sa place.
+    @State private var isConfirmingDeletion = false
+
     @Environment(\.dismiss) private var dismiss
 
     public init(
@@ -49,12 +54,19 @@ public struct TripSettingsView: View {
                 quickAccessSection
 
                 if let message = model.errorMessage {
-                    ErrorBanner(message: message) {
-                        Task { await model.load() }
-                    }
+                    // Le constat, le conseil, et les deux gestes : réessayer,
+                    // ou nous écrire. Un 500 nu disait « Erreur interne du
+                    // serveur » et rien d'autre (Hugo, 15/09/2026).
+                    ErrorBanner(
+                        message: message,
+                        advice: model.errorAdvice,
+                        retry: { Task { await model.load() } },
+                        help: { onIntent(.openHelp) }
+                    )
                 }
 
                 helpLink
+                deleteLink
 
                 #if DEBUG
                     TripSettingsDebugPanel(model: model)
@@ -84,6 +96,24 @@ public struct TripSettingsView: View {
             case .theme: TripThemeSheet(model: model)
             case .companions: TripInviteSheet(model: model)
             }
+        }
+        .brandSheet(isPresented: $isConfirmingDeletion) {
+            DeleteTripSheet(
+                tripName: model.settings?.name ?? "",
+                isDeleting: model.isDeleting,
+                errorMessage: model.errorMessage,
+                onKeep: { isConfirmingDeletion = false },
+                onDelete: {
+                    Task {
+                        // Le voyage n'existe plus : l'app ne peut que revenir
+                        // à l'accueil, et c'est `RootView` qui vide la pile.
+                        if await model.delete() {
+                            isConfirmingDeletion = false
+                            onIntent(.tripDeleted)
+                        }
+                    }
+                }
+            )
         }
     }
 
@@ -143,12 +173,14 @@ public struct TripSettingsView: View {
                     action: { sheet = .companions }
                 )
             }
-            // Les interrupteurs sont les seuls contrôles du groupe qui
-            // **agissent** avant que la valeur soit là : les basculer sur des
-            // réglages pas encore lus enverrait un état qu'on n'a pas. Le
-            // groupe entier attend, ce qui ne coûte rien — les autres lignes ne
-            // font qu'ouvrir des feuilles.
-            .disabled(settings == nil)
+            // Le groupe attend **le temps de la lecture**, et pas plus : les
+            // interrupteurs agissent, et les basculer sur des réglages pas
+            // encore lus enverrait un état qu'on n'a pas. Mais une lecture qui a
+            // échoué ne doit pas geler l'écran — les lignes rouvraient leurs
+            // feuilles quand même, elles ne le pouvaient plus derrière un 500
+            // (Hugo, 15/09/2026) ; une bascule sans réglages, elle, reste sans
+            // effet (le modèle la refuse).
+            .disabled(model.isLoading)
 
             BrandRowGroup {
                 BrandRow(
@@ -159,7 +191,7 @@ public struct TripSettingsView: View {
                 )
                 BrandRow(BookCopy.Settings.publicGallery, isOn: galleryBinding)
             }
-            .disabled(settings == nil)
+            .disabled(model.isLoading)
 
             BrandRowGroup {
                 BrandRow(
@@ -192,12 +224,14 @@ public struct TripSettingsView: View {
                 action: { onIntent(.openBookPreview) }
             )
 
+            // « Commander le carnet » ouvre le tunnel de commande, toujours :
+            // c'est lui qui sait dire s'il y a un carnet à imprimer, et une
+            // ligne qui ne mène nulle part se lit comme une ligne cassée (Hugo,
+            // 15/09/2026). Elle attendait un `isPrintable` que l'écran ne peut
+            // pas lire quand les réglages ne chargent pas.
             BrandRowGroup {
                 BrandRow(BookCopy.Settings.order) { onIntent(.orderBook) }
             }
-            // Rien à imprimer tant que le carnet n'a pas été composé. La ligne
-            // reste lisible — elle dit ce qui viendra — mais ne mène nulle part.
-            .disabled(!(settings?.isPrintable ?? false))
         }
     }
 
@@ -218,6 +252,35 @@ public struct TripSettingsView: View {
         ) {
             onIntent(.openHelp)
         }
+    }
+
+    /// « Supprimer ce voyage », tout en bas — le même dessin que « Supprimer
+    /// mon compte » sur le profil : une croix rouge et un mot, centrés, sans
+    /// carte ni bouton plein. On ne met pas en avant la porte de sortie, mais
+    /// elle existe (Hugo, 15/09/2026). La confirmation est dans la feuille ;
+    /// après elle, il n'y a plus rien à annuler.
+    private var deleteLink: some View {
+        Button {
+            isConfirmingDeletion = true
+        } label: {
+            HStack(spacing: MemoBookSpacing.xs) {
+                Image(brand: "IconCross")
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .frame(width: MemoBookSpacing.contentIcon, height: MemoBookSpacing.contentIcon)
+                Text(BookCopy.Settings.delete)
+                    .font(MemoBookFont.button)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .foregroundStyle(MemoBookColor.error)
+            .frame(maxWidth: .infinity, minHeight: MemoBookSpacing.minimumTapTarget)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .disabled(model.isDeleting)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
     }
 
     // MARK: - Les deux interrupteurs
@@ -255,8 +318,12 @@ public enum TripSettingsIntent: Sendable, Hashable {
     case openCustomisation
     case connectTricount
     case openBookPreview
+    /// « Commander le carnet » — le tunnel de commande, en sept étapes.
     case orderBook
     case openHelp
+    /// Le voyage vient d'être supprimé : il n'y a plus rien à afficher ici, et
+    /// l'app revient à l'accueil.
+    case tripDeleted
 }
 
 // MARK: - Les blocs qui ne sont pas des lignes
@@ -310,16 +377,17 @@ private struct TricountCallout: View {
         }
     }
 
-    /// Le « tt » de Tricount n'est pas une icône de la marque et n'a pas à
-    /// entrer dans son catalogue : c'est le logo d'un service tiers, dessiné
-    /// par lui. En attendant l'asset officiel, ses deux lettres dans le bleu de
-    /// MemoBook — écart signalé dans la fiche écran.
+    /// Le logo de Tricount, tel que Tricount le dessine (`assets/logos/Tricount
+    /// Icon.png`, importé par `import-brand-logos.py`). Il a longtemps été un
+    /// « tt » dans le bleu de la marque, faute d'asset — Hugo l'a déposé le
+    /// 15/09/2026, ce qui clôt T73. Jamais en `renderingMode(.template)` : c'est
+    /// la marque d'un tiers, elle garde ses couleurs.
     private var mark: some View {
-        Text("tt")
-            .font(MemoBookFont.bodySemibold)
-            .foregroundStyle(MemoBookColor.blueText)
+        Image(brand: "LogoTricount")
+            .resizable()
+            .scaledToFit()
             .frame(width: markSide, height: markSide)
-            .background(MemoBookColor.outline.opacity(0.35), in: .rect(cornerRadius: MemoBookSpacing.xs))
+            .clipShape(.rect(cornerRadius: MemoBookSpacing.xs))
             .accessibilityHidden(true)
     }
 
