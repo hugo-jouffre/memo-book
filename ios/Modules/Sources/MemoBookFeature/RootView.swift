@@ -14,9 +14,6 @@ import SwiftUI
 /// soit. Elle est bornée par le délai du client d'API, et son échec ouvre
 /// simplement l'écran d'entrée plutôt qu'un mur d'erreur.
 public struct RootView: View {
-    /// L'écran d'accueil ne se montre qu'au premier lancement.
-    @AppStorage(OnboardingStorage.hasSeenWelcome) private var hasSeenWelcome = false
-
     @Environment(AppDependencies.self) private var dependencies
     @State private var stage: Stage = .restoring
 
@@ -34,6 +31,13 @@ public struct RootView: View {
     /// et pendant que celui-ci se charge. Quelqu'un qui n'a pas encore de compte
     /// arrive donc directement sur l'écran d'entrée, sans animation devant.
     @State private var isLaunching = false
+
+    /// La pile de l'écran d'entrée : vide sur l'accueil, un cran quand on ouvre
+    /// le formulaire par e-mail.
+    ///
+    /// Une pile et non un booléen : c'est elle qui donne la flèche de retour, le
+    /// glissé depuis le bord et la transition latérale d'iOS, sans rien écrire.
+    @State private var signedOutPath: [SignedOutRoute] = []
 
     /// Les feuilles modales ouvertes dans l'app. C'est ce compteur qui fait
     /// reculer l'écran du dessous — voir ``BrandSheetPresentation``.
@@ -86,30 +90,25 @@ public struct RootView: View {
     @ViewBuilder
     private var content: some View {
         Group {
-            if !hasSeenWelcome {
-                WelcomeView { hasSeenWelcome = true }
-            } else {
-                switch stage {
-                case .restoring:
-                    restoring
-                case .signedOut:
-                    AuthView { enterApp(as: $0) }
-                case .signedIn(let account):
-                    NavigationStack(path: $path) {
-                        HomeView(model: dependencies.homeModel(), onIntent: handle)
-                            .navigationDestination(for: HomeRoute.self, destination: destination)
-                    }
-                    .tint(MemoBookColor.action)
-                    // Le prénom du compte, pour les deux écrans qui s'adressent
-                    // à la personne : le mot des fondateurs et le support. Il
-                    // était déclaré depuis le mot des fondateurs mais **jamais
-                    // posé** — celui-ci écrivait donc « Hello, » à tout le monde
-                    // en dehors des aperçus.
-                    .environment(\.travellerFirstName, account.firstName)
+            switch stage {
+            case .restoring:
+                restoring
+            case .signedOut:
+                signedOut
+            case .signedIn(let account):
+                NavigationStack(path: $path) {
+                    HomeView(model: dependencies.homeModel(), onIntent: handle)
+                        .navigationDestination(for: HomeRoute.self, destination: destination)
                 }
+                .tint(MemoBookColor.action)
+                // Le prénom du compte, pour les deux écrans qui s'adressent
+                // à la personne : le mot des fondateurs et le support. Il
+                // était déclaré depuis le mot des fondateurs mais **jamais
+                // posé** — celui-ci écrivait donc « Hello, » à tout le monde
+                // en dehors des aperçus.
+                .environment(\.travellerFirstName, account.firstName)
             }
         }
-        .animation(.snappy, value: hasSeenWelcome)
         .animation(.snappy, value: stage)
         // L'app entière recule pendant qu'une feuille est ouverte, comme dans
         // les Réglages. C'est ici que ça se joue et non dans l'écran qui
@@ -137,6 +136,30 @@ public struct RootView: View {
         .task { await restore() }
     }
 
+    // MARK: - Hors session
+
+    /// L'accueil, et le formulaire par e-mail qu'il pousse.
+    ///
+    /// **Deux écrans et non deux états d'une vue** : le retour — la flèche comme
+    /// le glissé depuis le bord — doit ramener à l'accueil et à ses deux entrées
+    /// rapides, et c'est exactement ce qu'une pile de navigation sait faire sans
+    /// qu'on écrive une ligne d'animation.
+    private var signedOut: some View {
+        NavigationStack(path: $signedOutPath) {
+            WelcomeView(
+                onAuthenticated: { enterApp(as: $0) },
+                onEmail: { signedOutPath.append(.email) }
+            )
+            .navigationDestination(for: SignedOutRoute.self) { route in
+                switch route {
+                case .email:
+                    AuthView { enterApp(as: $0) }
+                }
+            }
+        }
+        .tint(MemoBookColor.action)
+    }
+
     /// Volontairement muet : sans jeton en trousseau, la décision est immédiate
     /// et cet écran n'apparaît pas. Avec un jeton, il dure le temps d'un
     /// aller-retour — y afficher « Connexion… » ferait clignoter un mot.
@@ -159,7 +182,6 @@ public struct RootView: View {
         // Le raccourci de vérification en simulateur — sans effet en release.
         // Voir ``OnboardingStorage/previewSignedInArgument``.
         if OnboardingStorage.isPreviewingSignedIn {
-            hasSeenWelcome = true
             enterApp(as: Account(id: "preview", firstName: "Camille", createdAt: .now))
             return
         }
@@ -189,7 +211,9 @@ public struct RootView: View {
     /// démarrage, lui, ne passe pas par là et n'a donc pas d'animation devant.
     private func enterApp(as account: Account) {
         stage = .signedIn(account)
-        guard hasSeenWelcome else { return }
+        // La pile de l'entrée est vidée : quelqu'un qui se déconnecte doit
+        // retrouver l'accueil, pas le formulaire qu'il venait d'envoyer.
+        signedOutPath.removeAll()
         isLaunching = true
     }
 
@@ -323,10 +347,11 @@ public struct RootView: View {
 
     /// Où mène chaque intention des paramètres d'un voyage.
     ///
-    /// Trois destinations existent — la cagnotte, l'aperçu du carnet, et rien
-    /// d'autre. Les dix lignes de réglage qui restent ouvriront des feuilles
-    /// que les maquettes ne dessinent pas encore : elles sont **inertes et
-    /// signalées**, plutôt que branchées sur un écran inventé (R3).
+    /// Quatre destinations : la cagnotte, l'aperçu du carnet, les
+    /// personnalisations, le support. Cinq lignes de plus ouvrent désormais
+    /// leur **feuille** sans passer par ici (``TripSettingsSheet``). Restent
+    /// trois lignes inertes — renommer, relier un Tricount, commander —, et
+    /// elles le sont toujours faute de maquette, pas faute de branchement.
     private func handle(_ intent: TripSettingsIntent) {
         switch intent {
         case .openWallet:
@@ -343,8 +368,7 @@ public struct RootView: View {
             path.append(.bookCustomisation(tripId: tripId))
         case .openHelp:
             path.append(.support)
-        case .renameTrip, .editDates, .editPace, .manageNotifications, .editCompanions,
-            .editTheme, .connectTricount, .orderBook:
+        case .renameTrip, .connectTricount, .orderBook:
             break
         }
     }
@@ -529,6 +553,13 @@ extension EnvironmentValues {
     /// d'apparition : elle doit **prolonger** le tracé, donc commencer quand le
     /// voile se lève, et non pendant qu'il cache tout.
     @Entry var launchOverlayIsVisible: Bool = false
+}
+
+/// Ce que l'écran d'entrée peut pousser. Une seule destination, et c'est très
+/// bien : Apple et Google se règlent **sur** l'accueil, sans quitter l'écran.
+enum SignedOutRoute: Hashable {
+    /// Inscription et connexion par e-mail, sous leur sélecteur.
+    case email
 }
 
 /// Les destinations que l'accueil peut pousser.

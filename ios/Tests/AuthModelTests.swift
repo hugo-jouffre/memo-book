@@ -115,28 +115,6 @@ final class AuthModelTests: XCTestCase {
         XCTAssertTrue(model.canSubmit, "L'email et le mot de passe suffisent en connexion.")
     }
 
-    // MARK: - Estompage des fournisseurs tiers
-
-    func testTheSocialSectionOnlyFadesOnceSomethingIsTyped() {
-        let fresh = model { $0.mode = .signUp }
-        XCTAssertFalse(fresh.hasStartedFilling, "Formulaire vierge : les trois chemins se valent.")
-
-        for keystroke in [\AuthModel.firstName, \.lastName, \.email, \.password, \.passwordConfirmation] {
-            let model = model { $0[keyPath: keystroke] = "x" }
-            XCTAssertTrue(model.hasStartedFilling, "N'importe quel champ suffit à faire un choix.")
-        }
-    }
-
-    func testTheNamesTypedInSignUpDoNotFadeTheSignInScreen() {
-        // Le prénom et le nom n'ont pas de champ en connexion : ce qui y a été
-        // tapé ne doit pas estomper un écran où il ne se voit plus.
-        let model = model {
-            $0.firstName = "Hugo"
-            $0.mode = .signIn
-        }
-        XCTAssertFalse(model.hasStartedFilling)
-    }
-
     // MARK: - Enchaînement du clavier
 
     func testKeyboardChainsThroughTheVisibleFieldsOnly() {

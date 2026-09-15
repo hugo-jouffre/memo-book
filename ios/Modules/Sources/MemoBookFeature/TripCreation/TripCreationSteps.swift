@@ -464,6 +464,14 @@ struct TripAccessCode: View {
     let code: String
     let tripTitle: String
 
+    /// Le second bouton, « Partager », qui ouvre le sélecteur du système.
+    ///
+    /// Absent de la dernière étape de la création — la maquette n'y met que
+    /// WhatsApp —, présent sur la feuille « Inviter un proche », qui les pose
+    /// tous les deux. Le même bloc sert les deux écrans : c'est le même code
+    /// d'accès, le même presse-papiers et la même invitation.
+    var showsSystemShare = false
+
     @State private var hasCopied = false
 
     private var invitation: String {
@@ -487,13 +495,28 @@ struct TripAccessCode: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Copier le code d’accès \(code)")
 
-            BrandButton(
-                "Partager via Whatsapp",
-                icon: Image(systemName: "message"),
-                style: .secondary,
-                fillsWidth: true,
-                action: share
-            )
+            VStack(spacing: MemoBookSpacing.s) {
+                BrandButton(
+                    "Partager via Whatsapp",
+                    // ⚠️ Le logo WhatsApp n'est pas un asset de la marque et n'a
+                    // pas à entrer dans son catalogue : c'est la marque d'un
+                    // tiers. La bulle du système en attendant — écart signalé.
+                    icon: Image(systemName: "message"),
+                    style: showsSystemShare ? .primary : .secondary,
+                    fillsWidth: true,
+                    action: share
+                )
+
+                if showsSystemShare {
+                    BrandButton(
+                        "Partager",
+                        icon: Image(brand: "IconShareSystem"),
+                        style: .secondary,
+                        fillsWidth: true,
+                        action: presentSystemShare
+                    )
+                }
+            }
         }
     }
 
@@ -522,10 +545,19 @@ struct TripAccessCode: View {
             .compactMap { $0 as? UIWindowScene }
             .first { $0.activationState == .foregroundActive }
 
-        guard let root = scene?.keyWindow?.rootViewController else { return }
+        guard var presenter = scene?.keyWindow?.rootViewController else { return }
+
+        // **On présente depuis le contrôleur le plus haut**, pas depuis la
+        // racine. Ce bloc vit aussi dans la feuille « Inviter un proche », qui
+        // est elle-même une feuille présentée : demander à la racine de
+        // présenter pendant qu'elle présente déjà ne fait rien du tout, et la
+        // console dit seulement « which is already presenting ».
+        while let presented = presenter.presentedViewController, !presented.isBeingDismissed {
+            presenter = presented
+        }
 
         let sheet = UIActivityViewController(activityItems: [invitation], applicationActivities: nil)
-        sheet.popoverPresentationController?.sourceView = root.view
-        root.present(sheet, animated: true)
+        sheet.popoverPresentationController?.sourceView = presenter.view
+        presenter.present(sheet, animated: true)
     }
 }

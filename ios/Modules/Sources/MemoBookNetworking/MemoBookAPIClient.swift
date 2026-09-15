@@ -353,6 +353,156 @@ public actor MemoBookAPIClient: MemoBookAPI {
         )
     }
 
+    // MARK: - La cagnotte
+
+    public func wallet(tripId: String?) async throws -> Wallet {
+        let path = tripId.map { "/v1/wallet?tripId=\($0)" } ?? "/v1/wallet"
+        return try await send(method: "GET", path: path)
+    }
+
+    /// Le corps de la recharge. Une structure locale plutôt qu'un dictionnaire :
+    /// `send(method:path:body:)` ne prend que des `String`, et un montant est un
+    /// entier de centimes — le passer en texte le rendrait arrondissable.
+    private struct TopUpBody: Encodable {
+        let amountCents: Int
+    }
+
+    public func startWalletTopUp(amountCents: Int) async throws -> PaymentIntentTicket {
+        try await send(
+            method: "POST",
+            path: "/v1/wallet/topup",
+            encodableBody: TopUpBody(amountCents: amountCents)
+        )
+    }
+
+    // MARK: - Les réglages d'un voyage
+
+    public func tripSettings(id: String) async throws -> TripSettings {
+        try await send(method: "GET", path: "/v1/trips/\(id)/settings")
+    }
+
+    public func updateTripSettings(id: String, edit: TripSettingsEdit) async throws -> TripSettings {
+        try await send(
+            method: "PATCH",
+            path: "/v1/trips/\(id)/settings",
+            encodableBody: TripSettingsPatch(edit)
+        )
+    }
+
+    public func updateBookCustomisation(
+        tripId: String,
+        edit: BookCustomisationEdit
+    ) async throws -> TripSettings {
+        try await send(
+            method: "PATCH",
+            path: "/v1/trips/\(tripId)/settings",
+            encodableBody: TripSettingsPatch(edit)
+        )
+    }
+
+    public func removeCompanion(tripId: String, companionId: String) async throws -> TripSettings {
+        try await send(method: "DELETE", path: "/v1/trips/\(tripId)/members/\(companionId)")
+    }
+
+    public func resendInvitation(tripId: String, companionId: String) async throws {
+        try await sendIgnoringResponse(
+            method: "POST",
+            path: "/v1/trips/\(tripId)/members/\(companionId)/invitation"
+        )
+    }
+
+    /// Le corps du `PATCH` des réglages : **un seul champ rempli à la fois**.
+    ///
+    /// Tous optionnels, et l'encodeur ne pose que ceux qui valent quelque chose
+    /// (`encodeIfPresent`) : le serveur ne touche qu'aux champs présents, et
+    /// n'efface que ceux posés explicitement à `null`. C'est ce qui distingue
+    /// « je n'ai pas parlé de la date de fin » de « il n'y a plus de date de
+    /// fin » — et c'est pour ça que les dates portent, en plus, leur propre
+    /// drapeau de présence.
+    private struct TripSettingsPatch: Encodable {
+        var name: String?
+        var startDate: Date?
+        var endDate: Date?
+        var editsDates = false
+        var narrationPace: String?
+        var notificationsEnabled: Bool?
+        var notifications: TripNotificationPreferences?
+        var theme: String?
+        var isPublicGallery: Bool?
+
+        var photoTextRatio: Int?
+        var targetPageCount: Int?
+        var funFactsEnabled: Bool?
+        var rulesEnabled: Bool?
+        var decorationQuota: Int?
+        var fontDisplay: String?
+        var quizEnabled: Bool?
+        var freeZonesEnabled: Bool?
+        var crosswordEnabled: Bool?
+
+        init(_ edit: TripSettingsEdit) {
+            switch edit {
+            case .name(let value): name = value
+            case .dates(let start, let end):
+                startDate = start
+                endDate = end
+                editsDates = true
+            case .narrationPace(let pace): narrationPace = pace.rawValue
+            case .notifications(let isOn): notificationsEnabled = isOn
+            case .notificationPreferences(let preferences): notifications = preferences
+            case .theme(let value): theme = value
+            case .publicGallery(let isOn): isPublicGallery = isOn
+            }
+        }
+
+        init(_ edit: BookCustomisationEdit) {
+            switch edit {
+            case .photoTextRatio(let value): photoTextRatio = value
+            case .targetPageCount(let value): targetPageCount = value
+            case .funFacts(let isOn): funFactsEnabled = isOn
+            case .rules(let isOn): rulesEnabled = isOn
+            case .decorationQuota(let value): decorationQuota = value
+            case .fontDisplay(let value): fontDisplay = value
+            case .quiz(let isOn): quizEnabled = isOn
+            case .freeZones(let isOn): freeZonesEnabled = isOn
+            case .crossword(let isOn): crosswordEnabled = isOn
+            }
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case name, startDate, endDate, narrationPace, notificationsEnabled, notifications
+            case theme, isPublicGallery
+            case photoTextRatio, targetPageCount, funFactsEnabled, rulesEnabled, decorationQuota
+            case fontDisplay, quizEnabled, freeZonesEnabled, crosswordEnabled
+        }
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encodeIfPresent(name, forKey: .name)
+            // Les deux dates s'écrivent **ensemble ou pas du tout**, `null`
+            // compris : effacer une date de fin, c'est envoyer `endDate: null`,
+            // et `encodeIfPresent` ne l'écrirait jamais.
+            if editsDates {
+                try container.encode(startDate, forKey: .startDate)
+                try container.encode(endDate, forKey: .endDate)
+            }
+            try container.encodeIfPresent(narrationPace, forKey: .narrationPace)
+            try container.encodeIfPresent(notificationsEnabled, forKey: .notificationsEnabled)
+            try container.encodeIfPresent(notifications, forKey: .notifications)
+            try container.encodeIfPresent(theme, forKey: .theme)
+            try container.encodeIfPresent(isPublicGallery, forKey: .isPublicGallery)
+            try container.encodeIfPresent(photoTextRatio, forKey: .photoTextRatio)
+            try container.encodeIfPresent(targetPageCount, forKey: .targetPageCount)
+            try container.encodeIfPresent(funFactsEnabled, forKey: .funFactsEnabled)
+            try container.encodeIfPresent(rulesEnabled, forKey: .rulesEnabled)
+            try container.encodeIfPresent(decorationQuota, forKey: .decorationQuota)
+            try container.encodeIfPresent(fontDisplay, forKey: .fontDisplay)
+            try container.encodeIfPresent(quizEnabled, forKey: .quizEnabled)
+            try container.encodeIfPresent(freeZonesEnabled, forKey: .freeZonesEnabled)
+            try container.encodeIfPresent(crosswordEnabled, forKey: .crosswordEnabled)
+        }
+    }
+
     public func printOrders(memoId: String) async throws -> [PrintOrder] {
         struct Response: Decodable { let orders: [PrintOrder] }
         let response: Response = try await send(method: "GET", path: "/v1/memos/\(memoId)/orders")

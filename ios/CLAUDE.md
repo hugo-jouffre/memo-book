@@ -15,12 +15,14 @@ make test      # modules + cible app
 Lancer dans le simulateur : construire, puis `xcrun simctl install <device> <.app>`
 et `xcrun simctl launch <device> com.memobook.app`.
 
-### Revoir l'écran d'accueil
+### Repartir du premier démarrage
 
-Un ⌘R réinstalle **par-dessus** sans toucher au conteneur : l'écran d'accueil,
-gardé par un `@AppStorage`, ne revient donc pas tout seul. Pour repartir du
-premier démarrage, cocher `-resetOnboarding` dans *Product ▸ Scheme ▸ Edit
-Scheme ▸ Run ▸ Arguments*, ou :
+L'écran d'accueil, lui, revient tout seul : il porte les entrées Apple et
+Google, c'est donc l'écran de quiconque n'a pas de session, et il n'est gardé
+par aucun réglage. Ce qui ne revient pas tout seul, c'est le **mot des
+fondateurs** — gardé par un `@AppStorage` qu'un ⌘R ne touche pas, puisqu'il
+réinstalle par-dessus sans vider le conteneur. Pour tout remettre à zéro, cocher
+`-resetOnboarding` dans *Product ▸ Scheme ▸ Edit Scheme ▸ Run ▸ Arguments*, ou :
 
 ```bash
 xcrun simctl launch <device> com.memobook.app -resetOnboarding
@@ -210,7 +212,7 @@ motif est toujours le même :
 // puis : if typeSize.isAccessibilitySize { VStack … } else { HStack … }
 ```
 
-C'est déjà le cas de `BrandSegmentedPicker`, `WelcomeStepCard` et des champs
+C’est déjà le cas de `BrandSegmentedPicker`, `WelcomeView` et des champs
 prénom/nom. Chaque nouveau composant en colonnes doit le faire aussi.
 
 ### Polices

@@ -21,7 +21,7 @@ func authErrorMessage(for error: any Error) -> String {
         return "Connecte-toi à ton compte Apple dans les Réglages, puis réessaie."
     case .canceled:
         // Ne devrait jamais s'afficher : renoncer n'est pas un échec, et
-        // ``SocialSignInSection`` filtre ce cas en amont.
+        // ``WelcomeSocialButtons`` filtre ce cas en amont.
         return "Connexion avec Apple abandonnée."
     case .notHandled, .notInteractive:
         return "Apple n'a pas pu traiter la demande. Réessaie dans un instant."

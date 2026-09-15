@@ -2738,4 +2738,177 @@ fermeture de l'écran**, et un message écrit au support n'arrive nulle part.
 | T92 | **Trois coquilles du support**, recopiées telles quelles (R8) : « Tu auras la possibilité de nous écrire si tu ne trouve pas de réponse » (il manque le `s`), « **Ecris** à notre équipe » (E sans accent), et « dans les plus **bref** délais par **whatsapp** » (accord manquant, capitale manquante) |
 | T93 | **Les lignes de questions emploient `BrandRowGroup`** (rayon 20, titre à l'encre), là où la maquette dessine un groupe à rayon 12 dont les libellés sont en **Inter 13 gris** — une police qui n'est pas de la marque, et un gris qui se lit comme un texte désactivé sur une ligne qu'on doit toucher. C'est manifestement un bloc de remplissage copié d'un autre écran ; le composant du design system l'emporte. À reprendre dans Figma |
 | T94 | **La typographie du plat ne suit pas le Dynamic Type**, seule entorse de l'app à la règle « aucune taille de police fixe ». C'est l'image d'un objet imprimé : à AX3, le titre débordait du plat et donnait à voir une couverture ratée. Même parti pris que `CoverStack` et les pastilles de co-voyageurs |
-| T95 | **Les voyages du bac à sable restent inouvrables** — leurs identifiants ne sont pas des UUID, et `RootView` refuse d'ouvrir ce qui n'en est pas un. Sans rapport avec ce lot, mais c'est ce qui a empêché de vérifier les couvertures par leur chemin normal : il a fallu ouvrir l'app directement dessus. À corriger dans les fixtures |
+| T95 | ~~**Les voyages du bac à sable restent inouvrables**~~ — **réglé au lot 7** : `FixtureTripId` leur donne de vrais UUID fixes, et `-previewSignedIn` monte désormais ``PreviewAPI`` au lieu du vrai client. Le bac à sable se traverse en entier sans back-end |
+
+---
+
+## 18. Lot 7 — L'entrée dans l'app, le paywall de retour, et les onze modales
+
+> Nœuds : page **« 🤖 Claude Import »** (`3268:26957`) du fichier Figma —
+> *Accueil - 1ère Connexion* (`3420:10409`), *Paywall Recurrent 1 & 2*
+> (`3443:9675`, `3443:9626`), section **Trip settings** (`3443:10523`) et
+> section **Book personnalisation** (`3443:10525`).
+
+Trois blocs, un seul lot : ils se tiennent par la donnée. Les modales de
+réglages ne valaient rien tant que `GET /v1/trips/:id/settings` n'était pas
+branché côté app — et c'est ce branchement qui a, au passage, rendu vrai tout
+l'écran des paramètres, qui tournait sur un jeu d'essai depuis sa livraison.
+
+### 18.1 Accueil — 1ère connexion
+
+- **Nœud** : `3420:10409`
+- **Vue** : `MemoBookFeature/Welcome/WelcomeView.swift`, copie dans
+  `WelcomeCopy.swift`, boutons dans `WelcomeSocialButtons.swift`
+- **Rôle** : la porte de l'app. Ce que MemoBook fait, en trois mots, et les deux
+  entrées qui ne demandent rien à taper.
+- **Entrée / sortie** : c'est l'écran de **quiconque n'a pas de session** — il
+  n'est plus gardé par un `@AppStorage`, et il revient donc à chaque
+  déconnexion. Apple et Google entrent directement ; « S'inscrire avec un
+  e-mail » pousse `AuthView`, qui en revient par « Retour ».
+
+**Structure (en rem)** — photo 23.75 (380), carte à coins hauts de 2.25 (36,
+soit `largeCornerRadius` + `s`), marge de carte 1.5, gouttière de blocs 2,
+boutons de fournisseur 3.25 (52) à rayon 1, note communauté à rayon 0.75.
+
+**Ce qui a changé ailleurs** — `AuthView` perd ses deux boutons de fournisseur
+et son entrée de chantier, gagne une flèche « Retour », et devient un écran
+poussé (`SignedOutRoute.email`). `WelcomeStepCard` et `SocialSignInSection`
+sont supprimés. `OnboardingStorage.hasSeenWelcome` disparaît : il ne gardait
+plus rien.
+
+**Contrat back-end** — aucun appel. Les deux entrées passent par
+`POST /v1/auth/social`, déjà en place.
+
+**À trancher** — T96, T97, T98.
+
+### 18.2 Paywall de retour — deux écrans au lieu de trois
+
+- **Nœuds** : `3443:9675` et `3443:9626`
+- **Vues** : `PaywallVariant` dans `Paywall/PaywallView.swift`, écran d'ouverture
+  dans `Paywall/PaywallPages.swift` (`PaywallReturning`)
+
+**Le mécanisme est celui du paywall de découverte**, sans une ligne de
+différence : même minuteur de 6 s, mêmes zones de tapotis, même barre de
+stories — qui compte deux segments au lieu de trois —, même dernier écran qui
+ne s'en va pas tout seul. Seuls changent le nombre d'écrans et deux titres.
+
+**Qui le voit** : un compte qui a **déjà** été abonné et ne l'est plus —
+`subscription.hasEndedBefore`. Ce n'est pas l'état d'un mécontent, c'est l'état
+ordinaire entre deux voyages, parce que l'abonnement s'arrête tout seul.
+
+**L'arrêt automatique**, côté serveur et sans StoreKit :
+`services/subscriptions.ts`. Un compte sans voyage **encore en cours** (date de
+fin passée, ou pas de voyage du tout) voit ses abonnements passer à `expired`.
+Deux déclencheurs : le `PATCH` des réglages quand une date de fin bouge, et une
+tâche quotidienne à 3 h 10 UTC (`JOB_NAMES.endSubscriptions`), parce qu'un
+voyage se termine par le calendrier et que personne n'ouvre l'app ce jour-là.
+Un voyage **sans date de fin** compte comme en cours : partir sans savoir quand
+on rentre ne doit pas couper l'abonnement.
+
+⚠️ **Rien n'est annulé chez Apple**, et ça ne peut pas l'être : StoreKit n'est
+pas branché, et même branché, Apple ne laisse aucune app résilier à la place de
+son client. Ce qui s'éteint ici est la ligne `subscriptions` — ce que l'app lit
+pour savoir s'il faut remontrer l'offre. Voir T99.
+
+### 18.3 Les cinq modales des paramètres du voyage
+
+`TripSettings/TripSettingsSheets.swift`. Toutes sont des ``BrandSheet`` : geste
+du système, dessin de la marque, hauteur calée sur le contenu, recul de l'écran
+du dessous.
+
+| Modale | Nœud | Ce qu'elle règle | Enregistrement |
+|---|---|---|---|
+| **Dates** | `3443:9881` | `startDate`, `endDate` | au choix d'une date |
+| **Rythme du récit** | `3443:9841` | `narrationPace` | au choix, puis se ferme |
+| **Notifications** | `3443:9895` | les quatre alertes | à chaque bascule |
+| **Thème de l'aventure** | `3443:9937` | `theme` | au « Valider » — c'est un champ de saisie |
+| **Inviter un proche** | `3443:9805` | la liste, le code d'accès | au geste |
+
+**Le sélecteur de date est celui du système**, et il **monte du bas, par-dessus
+la feuille** (`BrandDateField`). Il se dépliait auparavant *dans* la ligne,
+comme à la création d'un voyage : une feuille de réglages fait déjà sa hauteur,
+et un calendrier de 320 pt qui s'y ajoute repousse le reste hors de l'écran. Il se
+referme **dès qu'une date est choisie** — `.graphical` et non `.wheel`, parce
+que c'est le seul des deux où choisir est un geste unique.
+
+**Le carrousel de thèmes est celui de la création du voyage**, à la lettre :
+c'est la note « Logique » du nœud. Un second jeu de thèmes ferait dériver
+`memos.theme`, que l'agent de rédaction lit tel quel.
+
+**Retirer un co-voyageur, renvoyer son lien** : glissé vers la gauche **et**
+appui long (menu contextuel), plus les actions du rotor VoiceOver. Le
+propriétaire ne se retire pas — il n'a pas de ligne dans `memo_members`, donc
+il n'y a rien à supprimer, pas même par erreur. On ne renvoie un lien qu'à une
+invitation jamais acceptée.
+
+### 18.4 Les six modales de la personnalisation du carnet
+
+`TripSettings/BookCustomisationSheets.swift`.
+
+| Modale | Nœud | Ce qu'elle règle | Pages du carnet |
+|---|---|---|---|
+| **Ratio média** | `3443:10212` | `photoTextRatio`, pas de 25 | non |
+| **Nombre de page** | `3443:10177` | `targetPageCount` | non |
+| **Fun Facts** | `3443:10105` | `funFactsEnabled` | oui |
+| **Pointillés** | `3443:10126` | `rulesEnabled` | oui |
+| **Titres du carnet** | `3443:10073` | `fontDisplay` | oui |
+| **Décorations & stickers** | `3443:10147` | `decorationQuota`, 0 à 4 | oui |
+
+**Les paliers de pages sont calculés, pas écrits.** La maquette annonce
+30 / 60 / 90 en précisant « Estimations pour un voyage de 2 mois » : ce sont des
+projections. `BookPageTarget.pageCount(forTripDays:)` les recalcule sur la durée
+du voyage qu'on regarde — une page par jour au palier courant, arrondie à la
+dizaine, bornée entre 30 et 180 —, ce qui rend bien 30 / 60 / 90 sur deux mois.
+C'est la note « Logique » du nœud `3443:10070`.
+
+**« Typographie des titres » écrit `fontDisplay`, pas `fontTitle`**, et le
+croisement est volontaire : c'est le token `--mb-font-display` du gabarit. Voir
+la table de `templates/travel-journal/LAYOUT_KB.md`.
+
+**Les deux pages du carnet** (`BookPagesPeek`) sont les **vraies** : rendues du
+PDF du dernier carnet composé, servi avec les réglages (`bookPdfUrl`). Pas de
+carnet, pas de pages. Voir T100 pour ce que la maquette voulait et ce qu'iOS
+permet.
+
+### 18.5 Ce qui entre dans le design system
+
+| Composant | Ce qu'il porte |
+|---|---|
+| `BrandSlider` | Le curseur à crans nommés : rail, poignée crème à point bleu, valeurs sous le rail, celle du moment en gras. Ajustable pour VoiceOver |
+| `BrandToggleCard` | La carte à interrupteur — montée depuis `BookCustomisationView`, désormais partagée par les extras, les quatre alertes et deux feuilles |
+| `BrandDateField` | Une date, et le sélecteur du système qui monte du bas |
+| `BrandAvatar` | Le portrait de quelqu'un, ou ses initiales |
+| `BrandSheet(topInset:)` | La réserve haute d'une feuille, pour un objet posé en tête |
+
+`BrandOptionRow` change sur un point : son sous-titre passe de 1 rem à 0.75. Il
+était au corps du titre, ce qui faisait lire deux titres par option — relevé
+sur les `option-card` de ce lot, qui sont le même composant Figma que celles du
+moyen de paiement.
+
+### 18.6 Contrat back-end
+
+| Route | État |
+|---|---|
+| `GET /v1/trips/:id/settings` | Existait ; **branchée côté app** (elle tournait sur un jeu d'essai) |
+| `PATCH /v1/trips/:id/settings` | Étendue : les quatre alertes, et les neuf personnalisations du carnet |
+| `DELETE /v1/trips/:id/members/:memberId` | **Nouvelle** — `status: removed`, jamais une suppression de ligne |
+| `POST /v1/trips/:id/members/:memberId/invitation` | **Nouvelle** — repousse `invitedAt`, rend 204. ⚠️ **N'envoie rien** : les e-mails transactionnels ne sont pas branchés |
+| `GET /v1/profile` | `subscription.hasEndedBefore` |
+
+Migration `20260915120000_alertes_du_voyage_et_role_du_co_voyageur` : quatre
+booléens d'alerte sur `memos`, et `memo_members.role`.
+
+### 18.7 À trancher
+
+| # | Point |
+|---|---|
+| T96 | **Deux phrases de l'accueil vouvoient** — « Nous allons t'accompagner… » tutoie, mais la mention légale écrit « **vous** acceptez nos Conditions d'utilisation ». Recopiées telles quelles (R8), à réécrire dans Figma (R9) |
+| T97 | **Le bouton Apple ne se cercle pas de `Beige Darker`.** `.whiteOutline` est le style clair d'Apple et son filet est le sien ; on ne retouche pas son bouton, c'est un motif de refus en revue |
+| T98 | **La photo d'accueil fait 587 × 360 px** — moins de 1× sur l'écran, donc visiblement molle. Il faut un export haute résolution du nœud `hero-container` |
+| T99 | **L'arrêt automatique de l'abonnement ne parle pas à Apple.** Le jour où StoreKit sera branché, c'est le webhook App Store qui devra fermer la ligne `subscriptions`, et cette tâche deviendra le filet plutôt que la règle |
+| T100 | **Les pages du carnet ne flottent pas hors de la modale.** La maquette les pose presque entièrement au-dessus de la carte (9 pt de recouvrement sur 281) ; une feuille du système **rogne tout ce qui déborde d'elle** — trois géométries essayées en simulateur, aucune ne passe. Elles prennent donc leur place dans la feuille, au-dessus du titre, et gardent tout le reste du dessin. Seul un écran custom le permettrait, au prix du glissé, du repli et du redimensionnement au clavier que `BrandSheet` tient du système |
+| T101 | **Les trois polices de titre ne sont pas rendues dans leur dessin.** Figma écrit « Playfair » en Playfair, « Alegreya » en Alegreya : il faudrait embarquer trois familles de plus pour trois bouts de ligne, et le dépôt n'a que Playfair Display, en woff2 — que CoreText ne lit pas |
+| T102 | **Le rythme « Personnalisé » n'a pas d'écran de réglage.** La maquette propose « Définissez vos propres alertes » sans dessiner ce qui suit : le choix s'enregistre, et rien d'autre ne se passe |
+| T103 | **Trois ajouts que la maquette ne dessine pas**, tous signalés plutôt qu'inventés en silence : la phrase « Glisse une ligne vers la gauche pour la retirer. » (sans elle, les deux actions sont introuvables), l'état vide de la liste de co-voyageurs, et la phrase qui dit que l'interrupteur maître des notifications est baissé |
+| T104 | **Le logo WhatsApp manque**, comme à la création du voyage : la bulle du système en attendant. Et l'icône « Renvoyer » emprunte `IconTeleverser` faute d'un envoi dans le jeu de marque |
+| T105 | **`TripCreationStepContent.paces` reste sur trois libellés libres** (« Tous les jours », « Toutes les semaines », « Tous les mois ») là où les réglages en proposent désormais cinq, tirés de `NarrationPace`. Les deux écrans devraient parler la même langue — à reprendre dans Figma d'abord |

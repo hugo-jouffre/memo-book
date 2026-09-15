@@ -10,6 +10,26 @@ import MemoBookCore
 // Les dates sont figées, pas relatives à aujourd'hui : une maquette qui change
 // de texte selon le jour où on la regarde n'est pas comparable à Figma.
 
+/// Les identifiants des voyages du jeu d'essai.
+///
+/// ⚠️ **Ce sont de vrais UUID, et c'est indispensable.** ``RootView`` refuse
+/// d'ouvrir un voyage dont l'identifiant n'en est pas un — le serveur répond
+/// 400 à tout le reste, et on ne pousse pas un écran sur une erreur. Avec des
+/// identifiants lisibles (« trip-rome »), **aucun voyage du bac à sable ne
+/// s'ouvrait** : le raccourci `-previewSignedIn` montrait l'accueil et rien
+/// derrière, alors qu'il existe précisément pour vérifier ce qu'il y a derrière.
+///
+/// Ils sont **fixes** : deux captures prises à une semaine d'écart doivent se
+/// superposer, et un modèle mis de côté par voyage (les couvertures, par
+/// exemple) doit se retrouver d'un lancement à l'autre.
+enum FixtureTripId {
+    static let rome = "1CE0FEED-0000-4000-A000-000000000001"
+    static let tourDuMonde = "1CE0FEED-0000-4000-A000-000000000002"
+    static let philippines = "1CE0FEED-0000-4000-A000-000000000003"
+    static let colombie = "1CE0FEED-0000-4000-A000-000000000004"
+    static let lisbonne = "1CE0FEED-0000-4000-A000-000000000005"
+}
+
 extension HomeFeed {
     /// Le contenu de la maquette d'accueil.
     public static let fixture = HomeFeed(
@@ -21,7 +41,7 @@ extension HomeFeed {
         ),
         trips: [
             Trip(
-                id: "trip-rome",
+                id: FixtureTripId.rome,
                 title: "Rome entre frère et sœur",
                 destination: Destination(name: "Italie", countryCode: "IT", city: "Rome"),
                 stage: .ongoing,
@@ -35,7 +55,7 @@ extension HomeFeed {
                 progress: TripProgress(memoryCount: 5, pageCount: 2, targetPageCount: 80)
             ),
             Trip(
-                id: "trip-tour-du-monde",
+                id: FixtureTripId.tourDuMonde,
                 title: "Mon tour du monde",
                 stage: .ongoing,
                 startDate: .fixture(2, 6, 2026),
@@ -43,7 +63,7 @@ extension HomeFeed {
                 progress: TripProgress(memoryCount: 12, pageCount: 18, targetPageCount: 60)
             ),
             Trip(
-                id: "trip-philippines",
+                id: FixtureTripId.philippines,
                 title: "Philippines avec Claire & Gus",
                 destination: Destination(name: "Philippines", countryCode: "PH", city: "Palawan"),
                 stage: .past,
@@ -57,7 +77,7 @@ extension HomeFeed {
                 isPrintable: true
             ),
             Trip(
-                id: "trip-colombie",
+                id: FixtureTripId.colombie,
                 title: "Claire et Gus en Colombie",
                 destination: Destination(name: "Colombie", countryCode: "CO", city: "Bogotá"),
                 stage: .past,
@@ -67,7 +87,7 @@ extension HomeFeed {
                 isPrintable: true
             ),
             Trip(
-                id: "trip-lisbonne",
+                id: FixtureTripId.lisbonne,
                 title: "Un week-end à Lisbonne",
                 destination: Destination(name: "Portugal", countryCode: "PT", city: "Lisbonne"),
                 stage: .past,

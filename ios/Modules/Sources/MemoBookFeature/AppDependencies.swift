@@ -1,6 +1,7 @@
 import Foundation
 import MemoBookCore
 import MemoBookNetworking
+import MemoBookPayments
 import MemoBookRecording
 import Observation
 
@@ -24,6 +25,13 @@ public final class AppDependencies {
     /// n'est jamais revenu sur l'accueil depuis.
     public let outbox: RecordingOutbox
 
+    /// Qui ouvre une feuille de paiement.
+    ///
+    /// Une dépendance injectée et non un appel direct au SDK : les aperçus
+    /// Xcode et les tests en fournissent une qui n'appelle personne, et l'écran
+    /// de cagnotte se relit sans compte Stripe.
+    public let payments: any PaymentPresenter
+
     /// Le dernier accueil reçu, pour pouvoir le relire hors ligne.
     private let homeFeed = HomeFeedCache()
 
@@ -39,9 +47,15 @@ public final class AppDependencies {
     public init(
         api: any MemoBookAPI,
         connectivity: Connectivity = .system,
-        pendingRecordings: PendingRecordingStore = .inLibrary()
+        pendingRecordings: PendingRecordingStore = .inLibrary(),
+        payments: (any PaymentPresenter)? = nil
     ) {
         self.api = api
+        // La vraie feuille Stripe par défaut ; un aperçu passe la sienne.
+        // `applePayMerchantId` reste nul tant que le certificat Apple Pay n'est
+        // pas posé : la feuille montre alors les cartes seules, au lieu d'un
+        // bouton Apple Pay qui échouerait au moment de payer.
+        self.payments = payments ?? StripePaymentSheetPresenter()
         outbox = RecordingOutbox(store: pendingRecordings, connectivity: connectivity) { audio, tripId in
             _ = try await api.uploadAudio(
                 memoId: tripId,
@@ -205,34 +219,45 @@ public final class AppDependencies {
         )
     }
 
-    /// Les réglages d'un voyage.
+    /// Les réglages d'un voyage, servis par `GET /v1/trips/:id/settings` — et
+    /// corrigés par son `PATCH`.
     ///
-    /// ⚠️ **Sur le jeu d'essai**, comme le chat : `GET /v1/trips/:id/settings`
-    /// et son `PATCH` n'existent pas encore côté serveur. Le jour où ils
-    /// existent, cette fabrique devient :
-    ///
-    /// ```swift
-    /// TripSettingsModel(
-    ///     tripId: tripId,
-    ///     source: { [api] id in try await api.tripSettings(id: id) },
-    ///     persist: { [api] id, edit in try await api.updateTripSettings(id: id, edit: edit) }
-    /// )
-    /// ```
-    ///
-    /// Rien d'autre ne bouge : ni la vue, ni le modèle, ni les aperçus. Voir la
-    /// fiche des paramètres du voyage dans `docs/ui-development.md`.
+    /// Deux fonctions de plus que les autres écrans, et elles ne pouvaient pas
+    /// passer par le `PATCH` : retirer un co-voyageur et lui renvoyer son lien
+    /// touchent `memo_members`, pas `memos`. Elles ont donc leur route, et le
+    /// modèle les reçoit comme le reste.
     public func tripSettingsModel(tripId: String) -> TripSettingsModel {
-        TripSettingsModel(tripId: tripId)
+        TripSettingsModel(
+            tripId: tripId,
+            source: { [api] id in try await api.tripSettings(id: id) },
+            persist: { [api] id, edit in try await api.updateTripSettings(id: id, edit: edit) },
+            removeCompanion: { [api] id, companionId in
+                try await api.removeCompanion(tripId: id, companionId: companionId)
+            },
+            resendInvitation: { [api] id, companionId in
+                try await api.resendInvitation(tripId: id, companionId: companionId)
+            }
+        )
     }
 
     /// Les personnalisations du carnet.
     ///
-    /// ⚠️ **Sur le jeu d'essai**, comme les réglages du voyage : les valeurs
-    /// existent toutes en base (`memos`, M4) et sont déjà servies par
-    /// `GET /v1/trips/:id/settings`, mais la route qui les **écrit** reste à
-    /// ouvrir. Trois interrupteurs seulement sont branchés côté écran.
+    /// **La même route que les réglages**, et c'est voulu : les
+    /// personnalisations voyagent avec eux — il y en a un jeu par voyage, et
+    /// les feuilles ont besoin des **dates** pour projeter leurs paliers de
+    /// pages.
+    ///
+    /// ⚠️ L'aperçu du carnet, lui, reste à écrire : `GET /v1/memos/:id/preview`
+    /// n'existe pas. Les deux pages qui flottent au-dessus des feuilles restent
+    /// donc en papier nu tant qu'elle n'est pas là — voir ``BookPagesPeek``.
     public func bookCustomisationModel(tripId: String) -> BookCustomisationModel {
-        BookCustomisationModel(tripId: tripId)
+        BookCustomisationModel(
+            tripId: tripId,
+            source: { [api] id in try await api.tripSettings(id: id) },
+            persist: { [api] id, edit in
+                try await api.updateBookCustomisation(tripId: id, edit: edit)
+            }
+        )
     }
 
     /// Les deux plats du carnet.
@@ -260,16 +285,78 @@ public final class AppDependencies {
         BookPreviewModel(memoId: memoId)
     }
 
-    /// Ma cagnotte.
+    /// Ma cagnotte, servie par `GET /v1/wallet`.
     ///
-    /// ⚠️ **Sur le jeu d'essai** : `GET /v1/wallet` reste à écrire. Le solde,
-    /// lui, arrive déjà dans `GET /v1/profile` (`walletBalance`) — c'est
-    /// l'**historique** qui manque, et c'est tout l'écran.
-    ///
-    /// `topUp` reste `nil` tant que Stripe n'est pas branché : l'écran le lit
-    /// pour dire pourquoi « Ajouter » n'aboutit pas, au lieu d'ouvrir un écran
-    /// qui n'existe pas.
+    /// **`topUp` ne rend pas la cagnotte que le paiement vient de créditer**,
+    /// et c'est la subtilité de tout l'écran : le solde ne bouge pas quand la
+    /// feuille se ferme, il bouge quand Stripe prévient le serveur. Entre les
+    /// deux il y a quelques centaines de millisecondes, parfois deux secondes.
+    /// Relire tout de suite afficherait l'ancien solde et donnerait à croire
+    /// que le paiement n'a rien fait — d'où l'attente ci-dessous.
     public func walletModel(tripId: String?) -> WalletModel {
-        WalletModel(tripId: tripId)
+        WalletModel(
+            tripId: tripId,
+            source: { [api] trip in try await api.wallet(tripId: trip) },
+            topUp: { [api, payments] trip, euros in
+                let before = try await api.wallet(tripId: trip)
+
+                // Les euros de l'écran deviennent les centimes du serveur.
+                // `NSDecimalNumber` et pas `Double` : 20,10 € n'a pas
+                // d'écriture binaire exacte, et un centime perdu sur un
+                // paiement est un centime que personne ne retrouve.
+                let cents = NSDecimalNumber(decimal: euros * 100).intValue
+                let ticket = try await api.startWalletTopUp(amountCents: cents)
+
+                switch await payments.present(ticket) {
+                case .cancelled:
+                    // Fermer la feuille n'est pas une erreur : on rend la
+                    // cagnotte telle qu'elle était, sans message.
+                    return before
+                case .failed(let message):
+                    throw WalletTopUpError.refused(message)
+                case .succeeded:
+                    return try await Self.walletOnceCredited(
+                        api: api,
+                        tripId: trip,
+                        previousBalance: before.balance
+                    )
+                }
+            }
+        )
+    }
+
+    /// Attend que le webhook ait crédité, puis rend la cagnotte à jour.
+    ///
+    /// **Une attente bornée, et un repli qui ne ment pas** : au bout du délai on
+    /// rend quand même ce que le serveur dit. Un solde en retard d'une seconde
+    /// se corrige au prochain affichage ; une erreur affichée sur un paiement
+    /// qui a réussi, elle, inquiète pour rien.
+    private static func walletOnceCredited(
+        api: any MemoBookAPI,
+        tripId: String?,
+        previousBalance: Decimal
+    ) async throws -> Wallet {
+        var latest = try await api.wallet(tripId: tripId)
+
+        for _ in 0..<10 where latest.balance == previousBalance {
+            try? await Task.sleep(for: .milliseconds(500))
+            latest = try await api.wallet(tripId: tripId)
+        }
+
+        return latest
+    }
+}
+
+/// Ce qui peut rater pendant une recharge, du point de vue de l'écran.
+///
+/// Distinct d'`APIError` : un paiement refusé n'est pas une panne de réseau, et
+/// le message vient de Stripe — il est déjà écrit pour être lu.
+enum WalletTopUpError: LocalizedError {
+    case refused(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .refused(let message): message
+        }
     }
 }

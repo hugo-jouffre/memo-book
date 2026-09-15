@@ -433,6 +433,86 @@ public actor PreviewAPI: MemoBookAPI {
         ordersByMemoId[memoId] ?? []
     }
 
+    // MARK: - La cagnotte
+
+    public func wallet(tripId: String?) async throws -> Wallet {
+        .fixture
+    }
+
+    /// Une recharge qui n'appelle personne.
+    ///
+    /// Le `clientSecret` fabriqué ne monte **aucune** feuille de paiement, et
+    /// c'est voulu : un aperçu ne doit pas pouvoir ouvrir Stripe, même par
+    /// accident. La feuille des aperçus est ``StubPaymentPresenter``, qui rend
+    /// son résultat sans regarder ce ticket.
+    public func startWalletTopUp(amountCents: Int) async throws -> PaymentIntentTicket {
+        PaymentIntentTicket(
+            clientSecret: "pi_preview_secret",
+            publishableKey: "pk_test_preview",
+            amountCents: amountCents,
+            currency: "eur"
+        )
+    }
+
+    // MARK: - Les réglages d'un voyage
+
+    /// Les réglages **tenus en mémoire** le temps de l'aperçu.
+    ///
+    /// Un aperçu doit pouvoir pousser un curseur et voir la valeur rester : une
+    /// source qui rendrait le jeu d'essai à chaque lecture annulerait le geste
+    /// à la première relecture, et on croirait l'écran cassé. C'est la même
+    /// mécanique que `memosById` pour les carnets.
+    private static let settingsBox = SettingsBox()
+
+    public func tripSettings(id: String) async throws -> TripSettings {
+        await Self.settingsBox.read()
+    }
+
+    public func updateTripSettings(id: String, edit: TripSettingsEdit) async throws -> TripSettings {
+        await Self.settingsBox.apply { settings in
+            switch edit {
+            case .name(let value): settings.name = value
+            case .dates(let start, let end):
+                settings.startDate = start
+                settings.endDate = end
+            case .narrationPace(let pace): settings.narrationPace = pace
+            case .notifications(let isOn): settings.wantsNotifications = isOn
+            case .notificationPreferences(let preferences): settings.notifications = preferences
+            case .theme(let value): settings.theme = value
+            case .publicGallery(let isOn): settings.isPublicGallery = isOn
+            }
+        }
+    }
+
+    public func updateBookCustomisation(
+        tripId: String,
+        edit: BookCustomisationEdit
+    ) async throws -> TripSettings {
+        await Self.settingsBox.apply { settings in
+            var customisation = settings.customisation ?? .fixture
+            switch edit {
+            case .photoTextRatio(let value): customisation.photoTextRatio = value
+            case .targetPageCount(let value): customisation.targetPageCount = value
+            case .funFacts(let isOn): customisation.funFactsEnabled = isOn
+            case .rules(let isOn): customisation.rulesEnabled = isOn
+            case .decorationQuota(let value): customisation.decorationQuota = value
+            case .fontDisplay(let value): customisation.fontDisplay = value
+            case .quiz(let isOn): customisation.quizEnabled = isOn
+            case .freeZones(let isOn): customisation.freeZonesEnabled = isOn
+            case .crossword(let isOn): customisation.crosswordEnabled = isOn
+            }
+            settings.customisation = customisation
+        }
+    }
+
+    public func removeCompanion(tripId: String, companionId: String) async throws -> TripSettings {
+        await Self.settingsBox.apply { settings in
+            settings.companions.removeAll { $0.id == companionId && !$0.isOwner }
+        }
+    }
+
+    public func resendInvitation(tripId: String, companionId: String) async throws {}
+
     private func existingMemo(_ id: String) throws -> MemoDetail {
         guard let memo = memosById[id] else {
             throw APIError.server(statusCode: 404, code: "not_found", message: "Carnet introuvable.")
@@ -528,5 +608,21 @@ extension Entry {
             media: media,
             createdAt: createdAt
         )
+    }
+}
+
+
+/// Les réglages d'un voyage, gardés le temps d'un aperçu.
+///
+/// Un acteur et non une variable statique : `PreviewAPI` est `Sendable`, et une
+/// boîte mutable partagée entre deux aperçus ne peut l'être qu'isolée.
+private actor SettingsBox {
+    private var settings: TripSettings = .fixture
+
+    func read() -> TripSettings { settings }
+
+    func apply(_ change: (inout TripSettings) -> Void) -> TripSettings {
+        change(&settings)
+        return settings
     }
 }

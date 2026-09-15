@@ -60,19 +60,6 @@ final class AuthModel {
         }
     }
 
-    /// Vrai dès que l'utilisateur a posé le premier caractère dans le
-    /// formulaire. L'écran s'en sert pour estomper les entrées par fournisseur
-    /// tiers : le choix est fait, autant ne plus le mettre en concurrence avec
-    /// « Continuer ».
-    var hasStartedFilling: Bool {
-        switch mode {
-        case .signUp:
-            ![firstName, lastName, email, password, passwordConfirmation].allSatisfy(\.isEmpty)
-        case .signIn:
-            !email.isEmpty || !password.isEmpty
-        }
-    }
-
     /// Message affiché sous la confirmation, une fois qu'il y a de quoi juger.
     var passwordConfirmationError: String? {
         guard !passwordConfirmation.isEmpty, !passwordsMatch else { return nil }

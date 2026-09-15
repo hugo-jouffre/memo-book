@@ -372,6 +372,23 @@ model Memo {
   /// l'interrupteur et « Gérer mes notifications ».
   notificationsEnabled Boolean @default(true)
 
+  // --- Le détail des alertes — feuille « Notifications » ---------------------
+  //
+  // Quatre drapeaux, et non un seul : `notificationsEnabled` coupe tout d'un
+  // coup depuis la ligne des réglages, ceux-ci disent *quoi* recevoir quand il
+  // est levé. Sans eux, la feuille « Gérer mes notifications » proposait un
+  // réglage fin que rien ne retenait — exactement ce que
+  // `docs/reglages-utilisateur.md` interdit.
+
+  /// « Rappel d'écriture » — la relance calée sur `narrationPace`.
+  notifyWritingReminder Boolean @default(true)
+  /// « Nouveau récit » — un co-voyageur a alimenté le carnet.
+  notifyNewStory        Boolean @default(true)
+  /// « Résumé hebdomadaire » — un point sur les souvenirs capturés.
+  notifyWeeklyDigest    Boolean @default(true)
+  /// « Rappel de fin de voyage » — l'alerte qui dit de valider l'impression.
+  notifyTripEnd         Boolean @default(true)
+
   /// Le lien de prévisualisation publique, celui qu'on envoie à ses proches.
   ///
   /// **Nul par défaut, et c'est le point** : c'est un lien public, il ne se
@@ -583,6 +600,15 @@ model MemoMember {
   displayName String?
   /// Le « @clara_prn » de la maquette.
   handle      String?
+
+  /// Ce que cette personne est pour le propriétaire — « Ton pote d'enfance ».
+  ///
+  /// **Personne ne le saisit.** Il est déduit par l'agent de rédaction au bout
+  /// de quelques récits, comme `memos.prompt` et `memos.gallerySummary` le sont
+  /// déjà : c'est la note « Logique IA 🤖 » de la maquette d'invitation. Nul
+  /// tant qu'il n'y a pas eu assez de récit pour le deviner — la ligne se
+  /// contente alors du nom.
+  role        String?
 
   invitedByAccountId String?
 

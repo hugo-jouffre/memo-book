@@ -404,4 +404,193 @@ public enum BookCopy {
         public static let addUnavailable =
             "Recharger ta cagnotte arrive bientôt : le paiement n’est pas encore branché."
     }
+
+    // MARK: - Les feuilles des réglages du voyage
+    //
+    // Copie recopiée des nœuds de la page « 🤖 Claude Import » (section « Trip
+    // settings »), au caractère près — R8. Les phrases qui **vouvoient** sont
+    // signalées une à une : R9 veut le tutoiement partout dans l'app, et on
+    // remonte la coquille à Clara au lieu de la corriger soi-même.
+
+    /// « Dates » — `3443:9881`.
+    public enum Dates {
+        public static let title = "Dates"
+        public static let start = "Date de début"
+        public static let end = "Date de fin (optionnel)"
+    }
+
+    /// « Rythme du récit » — `3443:9841`.
+    public enum Pace {
+        public static let title = "Rythme du récit"
+
+        /// ⚠️ **Vouvoie**, et recopié tel quel (R8). Signalé.
+        public static let subtitle =
+            "Ajustez le style de narration généré par l'IA pour refléter au mieux vos émotions et votre personnalité."
+    }
+
+    /// « Notifications » — `3443:9895`.
+    public enum Notifications {
+        public static let title = "Notifications"
+
+        /// ⚠️ **Vouvoie**, et recopié tel quel (R8). Le nom du voyage est
+        /// glissé dedans : la maquette écrit « Rome » en dur, l'app met celui
+        /// qu'on regarde.
+        public static func subtitle(trip: String) -> String {
+            "Activez ou désactivez les alertes d'écriture du voyage à '\(trip)' pour ne rien rater sans être dérangé non plus."
+        }
+
+        public static let writingReminder = "Rappel d’écriture"
+        public static let writingReminderDetail = "Alerte selon le rythme du récit choisi"
+        public static let newStory = "Nouveau récit"
+        public static let newStoryDetail = "Lorsqu’un proche alimente le carnet"
+        public static let weeklyDigest = "Résumé hebdomadaire"
+        public static let weeklyDigestDetail = "Un point sur les souvenirs capturés"
+        public static let tripEnd = "Rappel de fin de voyage"
+        public static let tripEndDetail = "Alerte pour valider l’impression finale"
+
+        /// Ce que la feuille dit quand l'interrupteur maître est baissé : les
+        /// quatre alertes restent lisibles, mais aucune ne partira.
+        public static let mutedNotice =
+            "Les notifications de ce voyage sont coupées : ces alertes reprendront quand tu les rallumeras."
+    }
+
+    /// « Thème de l’aventure » — `3443:9937`.
+    public enum Theme {
+        public static let title = "Thème de l’aventure"
+
+        /// ⚠️ **Vouvoie**, et recopié tel quel (R8). Signalé.
+        public static let subtitle =
+            "Le thème ajuste le vocabulaire de l'IA et l'agencement graphique de vos souvenirs imprimés."
+
+        public static let placeholder = "Trek entre amis"
+        public static let validate = "Valider"
+    }
+
+    /// « Inviter un proche » — `3443:9805`.
+    public enum Invite {
+        public static let title = "Inviter un proche"
+
+        /// ⚠️ **Vouvoie**, et recopié tel quel (R8). Signalé.
+        public static let subtitle =
+            "Invitez vos proches à participer au récit, ajouter leurs médias et co-valider les étapes."
+
+        public static let listTitle = "Co-voyageur(s) actuels"
+        public static let me = "Moi"
+        public static let owner = "Propriétaire\ndu voyage"
+        public static let pending = "Invitation envoyée"
+
+        public static func accessCode(_ code: String) -> String { "Code d’accès : \(code)" }
+        public static let copied = "Code copié"
+        public static let whatsapp = "Partager via Whatsapp"
+        public static let share = "Partager"
+
+        public static let remove = "Retirer"
+        public static let resend = "Renvoyer"
+        public static func resent(_ name: String) -> String { "Invitation renvoyée à \(name)." }
+
+        /// Ce que la liste dit quand on voyage seul. La maquette ne le dessine
+        /// pas — écart signalé, et une liste vide sous un titre se lirait comme
+        /// un chargement qui n'a pas abouti.
+        public static let empty = "Tu racontes ce voyage seul pour l’instant."
+
+        public static func removeConfirmation(_ name: String) -> String {
+            "Retirer \(name) de ce voyage ?"
+        }
+        public static let removeMessage =
+            "Cette personne ne pourra plus raconter ni ajouter de photos. Ses souvenirs, eux, restent dans le carnet."
+        public static let cancel = "Annuler"
+
+        /// Le geste que la note « Logique » décrit : maintenir ou glisser vers
+        /// la gauche ouvre les deux actions.
+        public static let gestureHint = "Glisse une ligne vers la gauche pour la retirer."
+    }
+
+    // MARK: - Les feuilles de la personnalisation du carnet
+
+    /// « Ratio média » — `3443:10212`.
+    public enum Ratio {
+        public static let title = "Ratio média"
+
+        /// ⚠️ **Vouvoie**, et recopié tel quel (R8). Signalé.
+        public static let subtitle =
+            "Déterminez l'importance visuelle des images par rapport aux textes générés au sein des chapitres."
+
+        public static let more = "Plus de photos"
+        public static let less = "Plus de texte"
+        public static let validate = "Valider"
+
+        /// « 50 / 50 », la valeur en grand au-dessus du curseur.
+        public static func value(_ photos: Int) -> String { "\(photos) / \(100 - photos)" }
+
+        /// La ligne bleue sous la valeur. Elle **qualifie** l'équilibre choisi
+        /// plutôt que de le répéter en chiffres.
+        public static func quality(_ photos: Int) -> String {
+            switch photos {
+            case ..<25: "Le récit avant tout"
+            case 25..<50: "Surtout du texte"
+            case 50: "Équilibre parfait"
+            case 51...75: "Surtout des photos"
+            default: "Un album avant tout"
+            }
+        }
+    }
+
+    /// « Nombre de page » — `3443:10177`.
+    public enum Pages {
+        public static let title = "Nombre de page"
+
+        /// ⚠️ **Vouvoie**, et recopié tel quel (R8). Signalé.
+        public static let subtitle =
+            "Gérez le niveau de détails de votre carnet en permettant à notre outil d’utiliser plus de page."
+
+        /// La ligne verte sous le chapeau. Elle dit **sur quoi** les
+        /// projections sont faites — la maquette écrit « 2 mois » en dur, l'app
+        /// met la durée du voyage qu'on regarde.
+        public static func estimates(for duration: String) -> String {
+            "Estimations pour un voyage de \(duration)"
+        }
+
+        public static let customTitle = "Nombre de pages cible"
+        public static let validate = "Valider"
+    }
+
+    /// « Fun Facts » — `3443:10105`.
+    public enum FunFacts {
+        public static let title = "Fun Facts"
+        public static let toggle = "Insérer des Fun facts"
+
+        /// ⚠️ **Vouvoie**, et recopié tel quel (R8). Signalé.
+        public static let detail =
+            "Encarts de culture générale toutes les 3 pages pour agrémenter vos récits."
+        public static let validate = "Valider"
+    }
+
+    /// « Pointillés » — `3443:10126`.
+    public enum Rules {
+        public static let title = "Pointillés"
+        public static let toggle = "Pointillés"
+
+        /// ⚠️ **Vouvoie**, et recopié tel quel (R8). Signalé.
+        public static let detail = "Lignes en pointillé sous le texte dans votre carnet"
+        public static let validate = "Valider"
+    }
+
+    /// « Titres du carnet » — `3443:10073`.
+    public enum Fonts {
+        public static let title = "Titres du carnet"
+
+        /// ⚠️ **Vouvoie**, et recopié tel quel (R8). Signalé.
+        public static let subtitle = "Déterminez la typographie de vos titres"
+        public static let validate = "Valider"
+    }
+
+    /// « Décorations & stickers » — `3443:10147`.
+    public enum Decorations {
+        public static let title = "Décorations\n& stickers "
+
+        /// ⚠️ **Vouvoie**, et recopié tel quel (R8). Signalé.
+        public static let subtitle = "Déterminez la quantité de décorations dans vos pages"
+        public static let sliderLabel = "Quantité de décorations par paragraphe ou image"
+        public static let validate = "Valider"
+    }
 }

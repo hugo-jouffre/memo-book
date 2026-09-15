@@ -118,7 +118,7 @@ struct CompanionStack: View {
     var facesLabel: String?
 
     /// Taille figée, contrairement au reste de l'écran — même raison que la
-    /// pastille numérotée de `WelcomeStepCard`. Ces ronds sont une décoration
+    /// pastille numérotée de l’ancien accueil. Ces ronds sont une décoration
     /// posée sur une photo au format fixe, masquée à VoiceOver : les faire
     /// grandir avec le texte ne rend rien de plus lisible et finit par couvrir
     /// la couverture entière.

@@ -6,13 +6,14 @@ import MemoBookNetworking
 ///
 /// Ces réglages survivent à une réinstallation depuis Xcode : un ⌘R pose la
 /// nouvelle app **par-dessus** l'ancienne sans toucher à son conteneur. Sans
-/// ce qui suit, l'écran d'accueil devient impossible à revoir une fois passé —
+/// ce qui suit, le mot des fondateurs devient impossible à revoir une fois lu —
 /// ce qui est exactement ce qu'on veut pour l'utilisateur, et exactement ce
 /// qu'on ne veut pas quand on est en train de le dessiner.
+///
+/// ⚠️ **L'écran d'accueil n'est plus gardé par un réglage.** Il porte désormais
+/// les deux entrées par fournisseur tiers : c'est l'écran de quiconque n'a pas
+/// de session ouverte, et il revient donc à chaque déconnexion, sans mémoire.
 public enum OnboardingStorage {
-    /// L'écran d'accueil a été vu au moins une fois.
-    public static let hasSeenWelcome = "hasSeenWelcome"
-
     /// Le mot des fondateurs a été lu au moins une fois.
     ///
     /// Il s'ouvre **tout seul** au premier aperçu d'un carnet, sans qu'on
@@ -22,7 +23,8 @@ public enum OnboardingStorage {
     /// plus.
     public static let hasSeenFoundersNote = "hasSeenFoundersNote"
 
-    /// Argument de lancement qui remet l'app à son tout premier démarrage.
+    /// Argument de lancement qui remet l'app à son tout premier démarrage :
+    /// il oublie le mot des fondateurs **et** la session du trousseau.
     ///
     /// Il se coche dans Xcode — *Product ▸ Scheme ▸ Edit Scheme ▸ Run ▸
     /// Arguments* — ou se passe en ligne de commande :
@@ -68,7 +70,6 @@ public enum OnboardingStorage {
     public static func resetIfRequested() {
         #if DEBUG
             guard ProcessInfo.processInfo.arguments.contains(resetArgument) else { return }
-            UserDefaults.standard.removeObject(forKey: hasSeenWelcome)
             UserDefaults.standard.removeObject(forKey: hasSeenFoundersNote)
 
             // La session n'est pas dans les réglages mais au trousseau, qui

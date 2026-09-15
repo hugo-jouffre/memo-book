@@ -127,6 +127,21 @@ const ROME_STEPS = [
  *   de compagnons, et deux Clara en base rendraient le jeu d'essai moins
  *   ressemblant que ce qu'il imite.
  */
+/**
+ * Le code d'accès d'un voyage du seed.
+ *
+ * ⚠️ **Il doit être unique sur toute la base**, pas seulement par compte :
+ * `memos.accessCode` porte un index unique, parce que c'est lui — et non
+ * l'identifiant — qui désigne le voyage qu'on rejoint. Les trois codes étaient
+ * écrits en dur (« ROME26 »…), et le second voyageur butait donc sur ceux du
+ * premier : `npm run db:seed` s'arrêtait sur un `P2002` après n'avoir posé
+ * qu'un compte sur deux. Le palier suffit à les distinguer, et ils restent
+ * lisibles — c'est tout ce qu'on leur demande.
+ */
+function seedAccessCode(seed: TravellerSeed, trip: string): string {
+  return seed.plan === "subscriber" ? `${trip}S` : trip;
+}
+
 async function seedTraveller(
   seed: TravellerSeed,
   clara: { id: string },
@@ -184,7 +199,21 @@ async function seedTraveller(
     accountId: clara.id,
     status: "active" as const,
     handle: "@clara_prn",
+    // Déduit par l'agent au bout de quelques récits — personne ne le saisit.
+    // Il est posé ici pour que la feuille « Inviter un proche » montre la
+    // seconde ligne de sa maquette au lieu d'un nom seul.
+    role: "Ta sœur de voyage",
     acceptedAt: new Date(),
+  };
+
+  // Une invitation **partie et jamais acceptée**. C'est elle qui fait exister
+  // l'action « Renvoyer » de la feuille : sans quelqu'un dans cet état, la
+  // moitié du glissé ne se voit jamais en simulateur.
+  const pendingGuest = {
+    invitedEmail: "tom.john@example.test",
+    status: "invited" as const,
+    displayName: "Tom John",
+    invitedAt: new Date(Date.now() - 3 * 86_400_000),
   };
 
   // ---------------------------------------------------------------------
@@ -197,7 +226,7 @@ async function seedTraveller(
       title: "Rome 2026",
       // Des codes lisibles et stables, pour pouvoir essayer « Rejoins une
       // aventure » sans aller les lire en base.
-      accessCode: "ROME26",
+      accessCode: seedAccessCode(seed, "ROME26"),
       subtitle: "Dix jours à marcher et à manger",
       authors: "Hugo et Clara",
       theme: "City trip & découvertes",
@@ -211,7 +240,7 @@ async function seedTraveller(
       distanceKilometres: 87.4,
       narrationPace: "Tous les 2 jours",
       prompt: "Comment ça se passe à Trastevere ?",
-      members: { create: [guest] },
+      members: { create: [guest, pendingGuest] },
     },
   });
 
@@ -263,7 +292,7 @@ async function seedTraveller(
     data: {
       ownerAccountId: account.id,
       title: "Lisbonne entre filles",
-      accessCode: "LISB26",
+      accessCode: seedAccessCode(seed, "LISB26"),
       theme: "voyage",
       stage: "past",
       destinationName: "Portugal",
@@ -288,7 +317,7 @@ async function seedTraveller(
     data: {
       ownerAccountId: account.id,
       title: "Islande cet hiver",
-      accessCode: "ISLA26",
+      accessCode: seedAccessCode(seed, "ISLA26"),
       theme: "voyage",
       stage: "upcoming",
       destinationName: "Islande",
@@ -354,6 +383,24 @@ async function seedTraveller(
         priceCents: 299,
         interval: "week",
         renewsAt: new Date(Date.now() + 7 * 86_400_000),
+      },
+    });
+  } else {
+    // Le compte gratuit porte un abonnement **terminé**, et c'est ce qui le
+    // rend utile à vérifier : il voit le paywall de **retour** — deux écrans au
+    // lieu de trois — parce qu'il a déjà été abonné et que son voyage d'alors
+    // s'est fini. C'est l'état ordinaire de quelqu'un entre deux voyages, pas
+    // celui d'un mécontent : l'abonnement s'éteint tout seul à la fin du
+    // voyage (voir `services/subscriptions.ts`).
+    await prisma.subscription.create({
+      data: {
+        accountId: account.id,
+        provider: "stripe",
+        status: "expired",
+        priceCents: 299,
+        interval: "week",
+        startedAt: new Date(Date.now() - 120 * 86_400_000),
+        cancelledAt: new Date(Date.now() - 60 * 86_400_000),
       },
     });
   }

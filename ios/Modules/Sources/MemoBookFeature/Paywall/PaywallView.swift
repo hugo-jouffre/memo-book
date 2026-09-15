@@ -2,7 +2,14 @@ import MemoBookCore
 import MemoBookDesign
 import SwiftUI
 
-/// Le paywall : trois écrans qui se suivent tout seuls, comme des stories.
+/// Le paywall : des écrans qui se suivent tout seuls, comme des stories.
+///
+/// **Deux versions, un seul mécanisme.** Celle qu'on voit la première fois
+/// compte trois écrans et explique tout ; celle qu'on revoit en revenant pour un
+/// nouveau voyage en compte deux et ne réexplique rien — « Tu connais déjà bien
+/// le fonctionnement, on ne t'embête pas plus... ». Le minuteur, les zones de
+/// tapotis, la barre du haut et le comportement du dernier écran sont les mêmes :
+/// c'est ``PaywallVariant`` qui dit lesquels, et rien d'autre ne change.
 ///
 /// **Le temps passe tout seul, mais on peut le doubler.** La barre du haut se
 /// remplit à vue d'œil et fait passer à la suite quand elle est pleine ; un
@@ -16,6 +23,10 @@ import SwiftUI
 /// dérobe toute seule est exactement ce que ce réglage demande d'éteindre.
 struct PaywallView: View {
     let subscription: Subscription?
+
+    /// Première visite, ou retour d'un ancien abonné.
+    var variant: PaywallVariant = .firstTime
+
     /// Le carnet que la feuille « Prévisualisation » montre. `nil` — un compte
     /// sans voyage en cours — ouvre le jeu d'essai : la feuille est là pour
     /// montrer à quoi ça ressemble, et un aperçu vide ne vendrait rien.
@@ -37,7 +48,8 @@ struct PaywallView: View {
     /// Part de l'écran courant déjà écoulée, de 0 à 1. C'est **elle** qui remplit
     /// la barre, et c'est son arrivée à 1 qui tourne la page.
     @State private var progress: Double = 0
-    private static let pageCount = 3
+
+    private var pageCount: Int { variant.pageCount }
 
     /// L'opacité du M derrière le paywall.
     private static let backdropOpacity: Double = 0.1
@@ -72,18 +84,26 @@ struct PaywallView: View {
 
             VStack(spacing: 0) {
                 header
-                PaywallStoriesBar(pageCount: Self.pageCount, page: page, progress: progress)
+                PaywallStoriesBar(pageCount: pageCount, page: page, progress: progress)
                     .padding(.top, MemoBookSpacing.s)
 
                 Group {
-                    switch page {
-                    case 0: PaywallCongratulations { turn(+1) }
-                    case 1:
+                    switch (variant, page) {
+                    case (.firstTime, 0):
+                        PaywallCongratulations { turn(+1) }
+                    case (.firstTime, 1):
                         PaywallEstimate(
                             onContinue: { turn(+1) },
                             onPreview: { showsPreview = true }
                         )
-                    default: PaywallOffer(price: price, onSubscribe: onSubscribe)
+                    case (.returning, 0):
+                        PaywallReturning { turn(+1) }
+                    default:
+                        PaywallOffer(
+                            price: price,
+                            title: variant.offerTitle,
+                            onSubscribe: onSubscribe
+                        )
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -202,7 +222,7 @@ struct PaywallView: View {
         // barre reste donc pleine plutôt que de se remplir dans le vide. En
         // Reduce Motion, aucune page ne tourne toute seule — on remplit la
         // barre pour dire où on en est, et c'est le doigt qui avance.
-        guard page < Self.pageCount - 1, !reduceMotion else {
+        guard page < pageCount - 1, !reduceMotion else {
             progress = 1
             return
         }
@@ -232,7 +252,7 @@ struct PaywallView: View {
 
     private func turn(_ step: Int) {
         let next = page + step
-        guard next >= 0, next < Self.pageCount else {
+        guard next >= 0, next < pageCount else {
             // Revenir en arrière depuis le premier écran, c'est sortir.
             if next < 0 { dismiss() }
             return
@@ -257,6 +277,42 @@ struct PaywallView: View {
         withTransaction(immediate) {
             progress = 0
             page = next
+        }
+    }
+}
+
+// MARK: - Les deux versions
+
+/// Qui regarde l'offre : quelqu'un qui découvre, ou quelqu'un qui revient.
+///
+/// **La seconde existe parce que l'abonnement s'arrête tout seul.** Il s'éteint
+/// à la fin du voyage — c'est ce que promet le troisième argument de l'offre,
+/// « Parce que tu n'as pas besoin de notre application en dehors de tes
+/// voyages ». Quelqu'un qui repart doit donc se réabonner, et lui rejouer les
+/// trois écrans de découverte reviendrait à lui réexpliquer ce qu'il nous a déjà
+/// acheté une fois.
+enum PaywallVariant: Sendable, Hashable {
+    /// Trois écrans : les trois étapes franchies, l'estimation, l'offre.
+    case firstTime
+    /// Deux écrans : le mot de retour, puis l'offre.
+    case returning
+
+    var pageCount: Int {
+        switch self {
+        case .firstTime: 3
+        case .returning: 2
+        }
+    }
+
+    /// Le titre de l'écran d'offre. Il change avec la version : la première fois
+    /// il vend le carnet (« Ce carnet que tu relieras peut-être encore dans
+    /// 30 ans »), au retour il rassure (« On a pas changé la recette ! »).
+    var offerTitle: (lead: String, strong: String) {
+        switch self {
+        case .firstTime:
+            (PaywallCopy.offerTitleLead, PaywallCopy.offerTitleStrong)
+        case .returning:
+            (PaywallCopy.returnOfferTitleLead, PaywallCopy.returnOfferTitleStrong)
         }
     }
 }
@@ -303,6 +359,19 @@ enum PaywallCopy {
         "—",
         "Ce nombre de pages est à titre indicatif. Il peut varier en fonction de la quantité de récit que tu enregistreras.",
     ]
+
+    // — La version « retour », premier écran
+    static let returnEyebrow = "C’est reparti ?"
+    static let returnTitleLead = "Tu reviens pour un "
+    static let returnTitleStrong = "nouveau voyage !"
+    static let returnBody = [
+        "Nous sommes ravi que tu aies apprécié MemoBook !",
+        "Tu connais déjà bien le fonctionnement, on ne t’embête pas plus...",
+    ]
+
+    // — La version « retour », écran d'offre
+    static let returnOfferTitleLead = "On a pas changé "
+    static let returnOfferTitleStrong = "la recette !"
 
     // — Écran 3
     static let offerEyebrow = "Abonne toi pour continuer"

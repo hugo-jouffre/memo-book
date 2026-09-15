@@ -5,7 +5,7 @@ import SwiftUI
 
 @main
 struct MemoBookApp: App {
-    @State private var dependencies = AppDependencies(configuration: .fromBuildConfiguration)
+    @State private var dependencies = AppDependencies.forLaunch()
 
     init() {
         // Sora et General Sans sont des ressources du module design : c'est du
@@ -22,6 +22,27 @@ struct MemoBookApp: App {
             RootView()
                 .environment(dependencies)
         }
+    }
+}
+
+extension AppDependencies {
+    /// Les dépendances de ce lancement-ci.
+    ///
+    /// **Le raccourci `-previewSignedIn` reçoit le jeu d'essai**, et pas
+    /// seulement un compte inventé. C'est ce que `ios/CLAUDE.md` en promet
+    /// depuis le début — « ouvre l'app directement sur l'accueil avec le jeu
+    /// d'essai » — et ce qui n'était vrai qu'à moitié : l'app entrait bien, mais
+    /// chaque écran derrière appelait le vrai client d'API et tombait sur une
+    /// panne de réseau. On regardait un écran d'erreur au lieu de l'écran qu'on
+    /// venait vérifier.
+    ///
+    /// Sans effet en release : ``OnboardingStorage/isPreviewingSignedIn`` y vaut
+    /// toujours `false`, et ``PreviewAPI`` n'ouvre de toute façon aucun accès.
+    static func forLaunch() -> AppDependencies {
+        if OnboardingStorage.isPreviewingSignedIn {
+            return AppDependencies(api: PreviewAPI())
+        }
+        return AppDependencies(configuration: .fromBuildConfiguration)
     }
 }
 

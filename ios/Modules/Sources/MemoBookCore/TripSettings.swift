@@ -18,7 +18,18 @@ import Foundation
 public enum NarrationPace: Sendable, Hashable {
     case daily
     case everyTwoDays
+    case everyThreeDays
     case weekly
+    /// Le voyageur règle ses propres alertes.
+    ///
+    /// ⚠️ **L'écran qui les règle n'est pas dessiné.** L'option existe parce que
+    /// la maquette la pose (`3443:9874`) et qu'on n'invente pas plus qu'elle ne
+    /// dit (R3) ; choisir « Personnalisé » enregistre donc le rythme et ne
+    /// demande rien d'autre. Signalé dans la fiche écran.
+    case custom
+    /// L'ancien rythme « À chaque lieu », remplacé dans la maquette par
+    /// « Tous les 3 jours ». Gardé pour **relire** les voyages déjà réglés
+    /// dessus : il s'affiche, il ne se propose plus.
     case byPlace
     case unknown(String)
 
@@ -27,13 +38,31 @@ public enum NarrationPace: Sendable, Hashable {
         switch self {
         case .daily: "Tous les jours"
         case .everyTwoDays: "Tous les 2 jours"
-        case .weekly: "Toutes les semaines"
+        case .everyThreeDays: "Tous les 3 jours"
+        case .weekly: "Une fois par semaine"
+        case .custom: "Personnalisé"
         case .byPlace: "À chaque lieu"
         case .unknown(let raw): raw
         }
     }
 
-    public static let selectable: [NarrationPace] = [.daily, .everyTwoDays, .weekly, .byPlace]
+    /// La ligne sous le nom, dans la feuille « Rythme du récit ». Elle dit ce
+    /// que le rythme **fait**, pas ce qu'il est.
+    public var detail: String? {
+        switch self {
+        case .daily: "Une entrée chaque soir"
+        case .everyTwoDays: "Le rythme recommandé pour souffler"
+        case .everyThreeDays: "Idéal pour les longs séjours"
+        case .weekly: "Pour un résumé global"
+        case .custom: "Définissez vos propres alertes"
+        case .byPlace, .unknown: nil
+        }
+    }
+
+    /// Les cinq rythmes que la feuille propose, dans l'ordre de la maquette.
+    public static let selectable: [NarrationPace] = [
+        .daily, .everyTwoDays, .everyThreeDays, .weekly, .custom,
+    ]
 }
 
 extension NarrationPace: Codable {
@@ -43,7 +72,9 @@ extension NarrationPace: Codable {
             switch raw {
             case "daily": .daily
             case "every_two_days": .everyTwoDays
+            case "every_three_days": .everyThreeDays
             case "weekly": .weekly
+            case "custom": .custom
             case "by_place": .byPlace
             default: .unknown(raw)
             }
@@ -58,10 +89,53 @@ extension NarrationPace: Codable {
         switch self {
         case .daily: "daily"
         case .everyTwoDays: "every_two_days"
+        case .everyThreeDays: "every_three_days"
         case .weekly: "weekly"
+        case .custom: "custom"
         case .byPlace: "by_place"
         case .unknown(let raw): raw
         }
+    }
+}
+
+/// Les quatre alertes d'un voyage — la feuille « Notifications ».
+///
+/// **Quatre drapeaux et non un seul.** L'interrupteur « Notifications » des
+/// réglages coupe tout d'un coup ; ceux-ci disent *quoi* recevoir quand il est
+/// levé. Les confondre revenait à proposer un réglage fin qui n'était pas
+/// retenu — exactement ce que `docs/reglages-utilisateur.md` interdit.
+///
+/// Décodage tolérant : un serveur qui ne les sert pas encore rend quatre
+/// alertes actives, ce qui est le défaut de la base.
+public struct TripNotificationPreferences: Codable, Sendable, Hashable {
+    /// « Rappel d'écriture » — la relance calée sur le rythme du récit.
+    public var writingReminder: Bool
+    /// « Nouveau récit » — un proche a alimenté le carnet.
+    public var newStory: Bool
+    /// « Résumé hebdomadaire » — un point sur les souvenirs capturés.
+    public var weeklyDigest: Bool
+    /// « Rappel de fin de voyage » — l'alerte qui dit qu'il est temps de
+    /// valider l'impression.
+    public var tripEndReminder: Bool
+
+    public init(
+        writingReminder: Bool = true,
+        newStory: Bool = true,
+        weeklyDigest: Bool = true,
+        tripEndReminder: Bool = true
+    ) {
+        self.writingReminder = writingReminder
+        self.newStory = newStory
+        self.weeklyDigest = weeklyDigest
+        self.tripEndReminder = tripEndReminder
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        writingReminder = try container.decodeIfPresent(Bool.self, forKey: .writingReminder) ?? true
+        newStory = try container.decodeIfPresent(Bool.self, forKey: .newStory) ?? true
+        weeklyDigest = try container.decodeIfPresent(Bool.self, forKey: .weeklyDigest) ?? true
+        tripEndReminder = try container.decodeIfPresent(Bool.self, forKey: .tripEndReminder) ?? true
     }
 }
 
@@ -90,8 +164,22 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
     /// seulement les relances de ce carnet-là.
     public var wantsNotifications: Bool
 
-    /// Ceux qui racontent le voyage avec toi.
+    /// Le détail des quatre alertes, réglé par « Gérer mes notifications ».
+    public var notifications: TripNotificationPreferences
+
+    /// Ceux qui racontent le voyage avec toi — **le propriétaire compris**, en
+    /// tête de liste.
+    ///
+    /// Il y figure parce que la feuille « Inviter un proche » le montre : sa
+    /// ligne dit « Moi » et « Propriétaire du voyage », et c'est elle qui fait
+    /// comprendre que la liste est celle du voyage entier. Il en est retiré
+    /// **là où on compte les autres** — voir ``guests``.
     public var companions: [Companion]
+
+    /// Le code d'accès du voyage — « JHKFDA ». C'est lui qu'on colle dans un
+    /// message pour faire entrer quelqu'un. Nul tant que les réglages
+    /// viennent d'un jeu d'essai sans code.
+    public var accessCode: String?
 
     // MARK: Le contenu du carnet
 
@@ -116,6 +204,18 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
     /// `nil` quand rien n'a encore été composé.
     public var previewCoverUrl: URL?
 
+    /// Le PDF du dernier carnet composé.
+    ///
+    /// Il voyage **avec les réglages** parce qu'il s'y trouvait déjà : la route
+    /// lit le dernier rendu prêt pour en tirer la vignette de couverture, et le
+    /// document est dans la même ligne. C'est lui que les feuilles de
+    /// personnalisation feuillettent au-dessus d'elles — voir `BookPagesPeek`.
+    ///
+    /// `nil` tant qu'aucun carnet n'a été composé : les feuilles s'ouvrent
+    /// alors seules, sans pages au-dessus. Montrer deux rectangles vides
+    /// donnerait l'impression d'un rendu qui a échoué.
+    public var bookPdfUrl: URL?
+
     /// Le carnet peut partir à l'impression. Faux, la ligne « Commander le
     /// carnet » reste lisible mais ne mène nulle part — il n'y a rien à
     /// imprimer.
@@ -137,12 +237,15 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
         endDate: Date? = nil,
         narrationPace: NarrationPace? = nil,
         wantsNotifications: Bool = true,
+        notifications: TripNotificationPreferences = TripNotificationPreferences(),
         companions: [Companion] = [],
+        accessCode: String? = nil,
         theme: String? = nil,
         isPublicGallery: Bool = false,
         styleSummary: String? = nil,
         tricountLabel: String? = nil,
         previewCoverUrl: URL? = nil,
+        bookPdfUrl: URL? = nil,
         isPrintable: Bool = false,
         customisation: BookCustomisation? = nil
     ) {
@@ -153,12 +256,15 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
         self.endDate = endDate
         self.narrationPace = narrationPace
         self.wantsNotifications = wantsNotifications
+        self.notifications = notifications
         self.companions = companions
+        self.accessCode = accessCode
         self.theme = theme
         self.isPublicGallery = isPublicGallery
         self.styleSummary = styleSummary
         self.tricountLabel = tricountLabel
         self.previewCoverUrl = previewCoverUrl
+        self.bookPdfUrl = bookPdfUrl
         self.isPrintable = isPrintable
         self.customisation = customisation
     }
@@ -169,8 +275,17 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
     /// ligne « Co-voyageur(s) » vide se lirait comme une valeur qui n'a pas
     /// chargé. C'est un écart signalé dans la fiche écran.
     public var companionsLabel: String? {
-        guard !companions.isEmpty else { return nil }
-        return companions.map(\.name).joined(separator: ", ")
+        guard !guests.isEmpty else { return nil }
+        return guests.map(\.name).joined(separator: ", ")
+    }
+
+    /// Les co-voyageurs **sans le propriétaire**.
+    ///
+    /// C'est ce que compte la ligne « Co-voyageur(s) » des réglages : le
+    /// titulaire de l'écran n'est pas quelqu'un qu'il a invité, et se voir dans
+    /// sa propre liste ferait douter du nombre.
+    public var guests: [Companion] {
+        companions.filter { !$0.isOwner }
     }
 }
 
@@ -184,6 +299,11 @@ public enum TripSettingsEdit: Sendable, Hashable {
     case dates(start: Date?, end: Date?)
     case narrationPace(NarrationPace)
     case notifications(Bool)
+    /// Les quatre alertes, d'un bloc. **Une exception à la règle du réglage
+    /// unique**, et elle se justifie : les quatre vivent sur la même feuille,
+    /// personne d'autre ne les touche, et les envoyer une par une ferait quatre
+    /// requêtes pour quatre bascules qu'on enchaîne au doigt.
+    case notificationPreferences(TripNotificationPreferences)
     case theme(String)
     case publicGallery(Bool)
 }

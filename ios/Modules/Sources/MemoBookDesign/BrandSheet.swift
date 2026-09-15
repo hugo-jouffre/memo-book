@@ -71,6 +71,7 @@ public struct BrandSheet<Content: View>: View {
     private let paragraphs: [String]
     private let titleAlignment: TitleAlignment
     private let surface: Surface
+    private let topInset: CGFloat
     private let content: Content
 
     /// - Parameter badge: la pastille qui se glisse **entre** le titre et le
@@ -78,12 +79,22 @@ public struct BrandSheet<Content: View>: View {
     ///   titre, donc elle appartient à l'en-tête et non au contenu : mise dans
     ///   le contenu, elle se serait retrouvée sous le sous-titre qui la
     ///   commente.
+    /// - Parameter topInset: la place **réservée au-dessus du titre**, pour un
+    ///   objet posé en `overlay` qui déborde par le haut — les deux pages du
+    ///   carnet au-dessus des feuilles de personnalisation.
+    ///
+    ///   ⚠️ **Une feuille du système ne laisse voir qu'une vingtaine de points
+    ///   hors d'elle.** Ce qu'on offre à un `overlay` débordant s'arrête là :
+    ///   au-delà, tout est rogné. Un objet qui doit se voir en entier prend
+    ///   donc sa place *dans* la feuille, et ne dépasse que du bord — c'est ce
+    ///   que cette réserve permet, sans que l'objet vienne couvrir le titre.
     public init(
         _ title: String,
         badge: String? = nil,
         subtitle: String? = nil,
         titleAlignment: TitleAlignment = .leading,
         surface: Surface = .paper,
+        topInset: CGFloat = 0,
         @ViewBuilder content: () -> Content
     ) {
         self.init(
@@ -92,6 +103,7 @@ public struct BrandSheet<Content: View>: View {
             paragraphs: subtitle.map { [$0] } ?? [],
             titleAlignment: titleAlignment,
             surface: surface,
+            topInset: topInset,
             content: content
         )
     }
@@ -109,6 +121,7 @@ public struct BrandSheet<Content: View>: View {
         paragraphs: [String],
         titleAlignment: TitleAlignment = .leading,
         surface: Surface = .paper,
+        topInset: CGFloat = 0,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
@@ -116,6 +129,7 @@ public struct BrandSheet<Content: View>: View {
         self.paragraphs = paragraphs
         self.titleAlignment = titleAlignment
         self.surface = surface
+        self.topInset = topInset
         self.content = content()
     }
 
@@ -226,6 +240,7 @@ public struct BrandSheet<Content: View>: View {
                 header
                 content
             }
+            .padding(.top, topInset)
             .padding(.horizontal, MemoBookSpacing.screenMargin)
             // ⚠️ **La safe area compte déjà dans cette marge.** Le défilement
             // réserve l'indicateur d'accueil sous le contenu — 34 pt sur un

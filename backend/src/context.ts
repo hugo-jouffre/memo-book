@@ -5,6 +5,7 @@ import { InlineQueue, PgBossQueue, type JobQueue } from "./jobs/queue.js";
 import { createBookRenderer, type BookRenderer } from "./services/apitemplate.js";
 import { createRedactor, type Redactor } from "./services/redaction.js";
 import { createSocialVerifier, type SocialVerifier } from "./services/socialIdentity.js";
+import { createPaymentGateway, type PaymentGateway } from "./services/payments.js";
 import { createMediaStorage, type MediaStorage } from "./services/storage.js";
 import { createStructurer, type Structurer } from "./services/structuring.js";
 import { createTranscriber, type Transcriber } from "./services/transcription.js";
@@ -29,6 +30,8 @@ export interface AppContext {
   structurer: Structurer;
   publisher: AssetPublisher;
   renderer: BookRenderer;
+  /** Encaissement Stripe : carnets imprimés et cagnotte. Jamais l'abonnement. */
+  payments: PaymentGateway;
 }
 
 export interface CreateContextOptions {
@@ -39,12 +42,22 @@ export interface CreateContextOptions {
 export function createContext(env: Env, options: CreateContextOptions = {}): AppContext {
   const logger = pino({ level: env.LOG_LEVEL });
 
+  const queue =
+    env.NODE_ENV === "test" ? new InlineQueue() : new PgBossQueue(env.DATABASE_URL);
+
+  // Les pannes de la file vont dans les logs du serveur — et nulle part
+  // ailleurs. Sans écouteur, Node relancerait l'événement `error` d'un
+  // `EventEmitter` et terminerait le processus : une file en carafe emporterait
+  // l'API avec elle. Voir `PgBossQueue`.
+  if (queue instanceof PgBossQueue) {
+    queue.onError = (error) => logger.error({ err: error }, "Panne de la file de travaux.");
+  }
+
   const base: AppContext = {
     env,
     logger,
     prisma: new PrismaClient({ datasourceUrl: env.DATABASE_URL }),
-    queue:
-      env.NODE_ENV === "test" ? new InlineQueue() : new PgBossQueue(env.DATABASE_URL),
+    queue,
     storage: createMediaStorage(env),
     socialVerifier: createSocialVerifier(env),
     transcriber: createTranscriber(env),
@@ -52,6 +65,7 @@ export function createContext(env: Env, options: CreateContextOptions = {}): App
     structurer: createStructurer(env),
     publisher: createAssetPublisher(env),
     renderer: createBookRenderer(env),
+    payments: createPaymentGateway(env),
   };
 
   return { ...base, ...options.overrides };
