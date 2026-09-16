@@ -369,11 +369,11 @@ public struct WelcomeView: View {
 
 #Preview("Accueil — 1ère connexion") {
     WelcomeView(onAuthenticated: { _ in }, onEmail: {})
-        .environment(AppDependencies(api: PreviewAPI()))
+        .environment(AppDependencies.preview())
 }
 
 #Preview("Accueil — AX3") {
     WelcomeView(onAuthenticated: { _ in }, onEmail: {})
-        .environment(AppDependencies(api: PreviewAPI()))
+        .environment(AppDependencies.preview())
         .environment(\.dynamicTypeSize, .accessibility3)
 }

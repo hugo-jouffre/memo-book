@@ -122,6 +122,9 @@ async function main() {
   });
 
   const intentId = order.payment.clientSecret.split("_secret")[0]!;
+  // Gardé pour l'étape 10 : le même carnet, commandé une seconde fois, coûte le
+  // même prix — et c'est de ce total qu'on déduira les 30 € de cagnotte.
+  const cardTotal = order.payment.amountCents;
   console.log(`   commande ${order.id} — statut « ${order.status} »`);
   console.log(
     `   intention ${intentId} — ${(order.payment.amountCents / 100).toFixed(2)} ${order.payment.currency.toUpperCase()}`,
@@ -227,20 +230,25 @@ async function main() {
   console.log(`   solde recopié sur l'écriture : ${ledger[0]?.balanceAfterCents}`);
   console.log(`   événement Stripe tracé : ${ledger[0]?.stripeEventId ?? "aucun"}`);
 
-  step(10, "Commander un second carnet, payé par la cagnotte cette fois");
+  step(10, "Commander un second carnet : 30 € de cagnotte, la carte pour le reste");
   const second = await prisma.render.create({
     data: { memoId: memo.id, status: "ready", pdfUrl: "https://pdf.example.test/e2e-2.pdf" },
   });
 
-  // 30 € ne couvrent pas un carnet à 107,88 € : le refus est le comportement
-  // attendu, et il doit être **propre** — pas une erreur 500.
-  const refused = await fetch(`${API}/v1/memos/${memo.id}/orders`, {
+  // **Les deux rails se partagent la note.** La cagnotte n'est pas un mode de
+  // paiement qu'on choisit : elle couvre ce qu'elle peut, et l'intention Stripe
+  // ne porte que le reste. Il n'y a donc rien à refuser — 30 € sur un carnet à
+  // 103,10 € n'est pas un solde insuffisant, c'est un acompte.
+  const partial = await api<{
+    id: string;
+    status: string;
+    payment: { paidFromWallet: boolean; clientSecret?: string; amountCents: number };
+  }>(`/v1/memos/${memo.id}/orders`, {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${auth.token}` },
-    body: JSON.stringify({
+    token: auth.token,
+    body: {
       renderId: second.id,
       copies: 1,
-      payWithWallet: true,
       shipping: {
         name: "Clara Martin",
         line1: "12 rue des Lilas",
@@ -248,26 +256,47 @@ async function main() {
         city: "Nantes",
         country: "FR",
       },
-    }),
+    },
   });
 
-  const refusedBody = (await refused.json()) as { error?: string; message?: string };
-  console.log(`   HTTP ${refused.status} — ${refusedBody.error}`);
-  console.log(`   « ${refusedBody.message} »`);
+  const expectedCard = cardTotal - 3000;
+  console.log(
+    `   commande ${partial.id} — ${(partial.payment.amountCents / 100).toFixed(2)} € à la carte`,
+  );
 
-  if (refused.status !== 400 || refusedBody.error !== "wallet_insufficient") {
-    throw new Error("Un solde insuffisant aurait dû être refusé proprement.");
+  if (partial.payment.paidFromWallet) {
+    throw new Error("La cagnotte ne couvrait que 30 € : la carte devait payer le reste.");
+  }
+  if (partial.payment.amountCents !== expectedCard) {
+    throw new Error(
+      `L'intention porte ${partial.payment.amountCents} centimes au lieu de ${expectedCard} : ` +
+        "la déduction de cagnotte n'a pas été appliquée au montant débité.",
+    );
   }
 
-  const afterRefusal = await prisma.account.findUniqueOrThrow({
+  // Le débit est écrit **à la création de la commande**, pas au retour de
+  // Stripe : c'est ce qui empêche la même somme de couvrir deux commandes
+  // parties en même temps.
+  const drained = await prisma.account.findUniqueOrThrow({
     where: { id: auth.account.id },
   });
-  if (afterRefusal.walletBalanceCents !== 3000) {
-    throw new Error("Un refus a bougé le solde — il ne devrait rien toucher.");
+  if (drained.walletBalanceCents !== 0) {
+    throw new Error(
+      `La cagnotte affiche ${drained.walletBalanceCents} centimes : les 30 € auraient dû être débités.`,
+    );
   }
 
+  const debit = await prisma.walletEntry.findFirstOrThrow({
+    where: { accountId: auth.account.id, kind: "order_payment" },
+  });
+  if (debit.amountCents !== -3000 || debit.printOrderId !== partial.id) {
+    throw new Error("Le débit de cagnotte n'est pas rattaché à la bonne commande.");
+  }
+
+  console.log(`   cagnotte vidée : ${debit.amountCents} centimes, rattachés à la commande ✓`);
+
   console.log(`\n\x1b[32m✅ Cagnotte : chaîne vérifiée\x1b[0m`);
-  console.log("   crédit par webhook ✓  solde intact après refus ✓");
+  console.log("   crédit par webhook ✓  déduction sur la commande suivante ✓");
   console.log(`\n\x1b[1mTout le système de paiement de test est opérationnel.\x1b[0m`);
 }
 

@@ -426,8 +426,12 @@ public enum BookCopy {
         public static let previewBook = "Prévisualiser mon carnet"
         public static let help = "Besoin d’aide ?"
 
-        /// Recharger sa cagnotte n'a pas encore d'encaissement derrière. On le
-        /// dit plutôt que d'ouvrir un écran vide — voir T20.
+        /// Le repli quand aucun encaissement n'est branché derrière l'écran.
+        ///
+        /// **Plus atteignable dans l'app** : depuis que ``WalletModel/topUp``
+        /// est branché sur Stripe, seuls les aperçus SwiftUI passent par là.
+        /// Gardé parce que c'est le message honnête pour ce cas-là, et parce
+        /// qu'un aperçu doit pouvoir dire pourquoi son bouton ne fait rien.
         public static let addUnavailable =
             "Recharger ta cagnotte arrive bientôt : le paiement n’est pas encore branché."
     }

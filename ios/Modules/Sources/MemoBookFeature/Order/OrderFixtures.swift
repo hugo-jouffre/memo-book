@@ -212,6 +212,23 @@ extension NewPrintOrderRequest {
     }
 }
 
+extension PlacedPrintOrder {
+    /// Ce que le double d'aperçu rend : une commande **déjà réglée**.
+    ///
+    /// `paidFromWallet` plutôt qu'un faux `clientSecret` : c'est le seul cas qui
+    /// n'ouvre aucune feuille. Un aperçu ne doit pas pouvoir appeler Stripe,
+    /// même par accident.
+    public static func fixture(
+        memoId: String,
+        request: NewPrintOrderRequest
+    ) -> PlacedPrintOrder {
+        PlacedPrintOrder(
+            order: .fixture(memoId: memoId, request: request),
+            payment: OrderPayment(paidFromWallet: true, amountCents: 0, currency: "eur")
+        )
+    }
+}
+
 extension PrintOrder {
     /// La commande que le double d'aperçu rend, à partir de ce qu'on lui envoie.
     public static func fixture(memoId: String, request: NewPrintOrderRequest) -> PrintOrder {

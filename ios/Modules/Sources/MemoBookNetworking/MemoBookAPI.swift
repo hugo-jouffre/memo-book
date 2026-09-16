@@ -207,7 +207,23 @@ public protocol MemoBookAPI: Sendable {
     func bookShareLink(memoId: String) async throws -> URL
 
     /// Commande le carnet imprimé, sur un rendu déjà prévisualisé.
-    func createPrintOrder(memoId: String, order: NewPrintOrderRequest) async throws -> PrintOrder
+    ///
+    /// **N'encaisse rien.** Elle enregistre la commande en brouillon et rend,
+    /// à côté, de quoi la régler — voir ``PlacedPrintOrder``. Le passage en
+    /// `submitted` viendra du webhook de Stripe, jamais de l'app : entre le
+    /// moment où la feuille se ferme et celui où elle rappellerait le serveur,
+    /// l'app peut être tuée, et le paiement n'en aurait pas moins eu lieu.
+    func createPrintOrder(
+        memoId: String,
+        order: NewPrintOrderRequest
+    ) async throws -> PlacedPrintOrder
+
+    /// Relit une commande, pour savoir ce que le serveur en dit **maintenant**.
+    ///
+    /// C'est la lecture qui suit un paiement : la feuille qui rend
+    /// `.succeeded` dit que Stripe a accepté, pas que notre serveur l'a appris.
+    func printOrder(id: String) async throws -> PrintOrder
+
     func printOrders(memoId: String) async throws -> [PrintOrder]
 
     /// Ouvre une recharge de cagnotte.

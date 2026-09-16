@@ -40,7 +40,7 @@ extension AppDependencies {
     /// toujours `false`, et ``PreviewAPI`` n'ouvre de toute façon aucun accès.
     static func forLaunch() -> AppDependencies {
         if OnboardingStorage.isPreviewingSignedIn {
-            return AppDependencies(api: PreviewAPI())
+            return AppDependencies.preview()
         }
         return AppDependencies(configuration: .fromBuildConfiguration)
     }

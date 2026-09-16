@@ -130,6 +130,17 @@ extension BookCopy {
 
             public static let failure =
                 "Le paiement a échoué, merci de choisir une autre option."
+
+            /// Le serveur a enregistré la commande mais n'a pas donné de quoi
+            /// l'encaisser — il lui manque ses clés Stripe.
+            ///
+            /// Une panne de configuration, pas un geste à refaire : réessayer
+            /// n'y changera rien tant que l'API déployée n'a pas ses clés. On le
+            /// dit donc sans inviter à recommencer, et la commande reste en
+            /// brouillon, reprenable telle quelle.
+            public static let unavailable =
+                "Le paiement est momentanément indisponible. Ta commande est "
+                + "gardée : tu pourras la régler dès que possible."
         }
 
         // MARK: Étape 7 — Confirmation

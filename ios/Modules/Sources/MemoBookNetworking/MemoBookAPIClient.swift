@@ -456,12 +456,16 @@ public actor MemoBookAPIClient: MemoBookAPI {
     public func createPrintOrder(
         memoId: String,
         order: NewPrintOrderRequest
-    ) async throws -> PrintOrder {
+    ) async throws -> PlacedPrintOrder {
         try await send(
             method: "POST",
             path: "/v1/memos/\(memoId)/orders",
             encodableBody: order
         )
+    }
+
+    public func printOrder(id: String) async throws -> PrintOrder {
+        try await send(method: "GET", path: "/v1/orders/\(id)")
     }
 
 

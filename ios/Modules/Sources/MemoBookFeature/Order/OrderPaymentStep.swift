@@ -4,11 +4,15 @@ import SwiftUI
 
 /// Étape 6 — par quoi on paie, où ça va, et combien.
 ///
-/// ⚠️ **Aucun encaissement n'a lieu.** « Payer » enregistre la commande en
-/// brouillon ; le débit viendra du webhook du prestataire, avec le passage en
-/// `submitted`. C'est la même honnêteté que l'abonnement du profil : l'écran
-/// est complet, le paiement ne l'est pas encore, et rien ici ne prétend le
-/// contraire.
+/// « Payer » enregistre la commande en brouillon **puis ouvre la feuille
+/// Stripe**, et ne passe à la confirmation qu'une fois le paiement accepté.
+/// Voir ``OrderModel/pay()``, qui tient les trois chemins possibles.
+///
+/// ⚠️ Les cartes listées ci-dessous sont celles du **contexte de commande**, et
+/// elles ne choisissent rien : c'est la feuille Stripe qui porte le vrai choix
+/// du moyen de paiement, y compris Apple Pay et les cartes enregistrées chez
+/// Stripe. Cette section reste un affichage tant que la liste du serveur n'est
+/// pas alimentée par le client Stripe du compte.
 struct OrderPaymentStep: View {
     let model: OrderModel
     let onChoosePayment: () -> Void

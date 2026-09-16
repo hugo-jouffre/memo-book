@@ -24,12 +24,13 @@ public final class WalletModel {
     private let tripId: String?
     private let source: (String?) async throws -> Wallet
 
-    /// L'encaissement : `nil` tant que Stripe n'est pas branché.
+    /// L'encaissement. `nil` dans les aperçus, qui n'ont pas de serveur — et
+    /// qui ne doivent pas pouvoir ouvrir Stripe.
     ///
-    /// C'est **la** différence entre « recharger » et les autres actions de
-    /// l'écran : partager et inviter marchent déjà, ajouter de l'argent non.
-    /// L'écran le lit pour le dire plutôt que d'ouvrir un écran vide.
-    private let topUp: ((String?, Decimal) async throws -> Wallet)?
+    /// Rend la cagnotte relue une fois l'argent encaissé, ou **`nil` quand la
+    /// personne a fermé la feuille**. Fermer n'est pas un échec : c'est un
+    /// choix, et il ne mérite ni message d'erreur ni solde qui bouge.
+    private let topUp: ((String?, Decimal) async throws -> Wallet?)?
 
     /// L'écriture de bac à sable, en développement seulement. `nil` dans les
     /// aperçus, qui n'ont pas de serveur à qui écrire.
@@ -38,7 +39,7 @@ public final class WalletModel {
     public init(
         tripId: String? = nil,
         source: @escaping (String?) async throws -> Wallet = { _ in .fixture },
-        topUp: ((String?, Decimal) async throws -> Wallet)? = nil,
+        topUp: ((String?, Decimal) async throws -> Wallet?)? = nil,
         sandbox: ((Decimal, WalletEntryKind, String) async throws -> Decimal)? = nil
     ) {
         self.tripId = tripId
@@ -53,8 +54,7 @@ public final class WalletModel {
     /// d'attente — voir ``BrandSkeleton``.
     public var isLoading: Bool { wallet == nil && errorMessage == nil }
 
-    /// L'encaissement est branché. Faux aujourd'hui : « Ajouter » le dit au
-    /// lieu d'ouvrir un écran qui n'existe pas.
+    /// L'encaissement est branché. Vrai dans l'app, faux dans les aperçus.
     public var canTopUp: Bool { topUp != nil }
 
     public func load() async {
@@ -68,6 +68,9 @@ public final class WalletModel {
 
     /// Recharge la cagnotte. Sans encaissement branché, dit pourquoi ce n'est
     /// pas possible plutôt que de ne rien faire.
+    ///
+    /// Une feuille fermée ne rapporte rien et n'affiche rien : `topUp` rend
+    /// alors `nil`, et le solde reste celui qu'on lisait avant.
     public func addFunds(_ amount: Decimal) async {
         guard let topUp else {
             errorMessage = BookCopy.Wallet.addUnavailable
@@ -75,7 +78,9 @@ public final class WalletModel {
         }
 
         do {
-            wallet = try await topUp(tripId, amount)
+            if let credited = try await topUp(tripId, amount) {
+                wallet = credited
+            }
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription

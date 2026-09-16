@@ -1,6 +1,7 @@
 import Foundation
 import MemoBookCore
 import MemoBookNetworking
+import MemoBookPayments
 import MemoBookRecording
 import Observation
 import SwiftUI
@@ -30,6 +31,7 @@ public final class AppDependencies {
     /// Une dépendance injectée et non un appel direct au SDK : les aperçus
     /// Xcode et les tests en fournissent une qui n'appelle personne, et l'écran
     /// de cagnotte se relit sans compte Stripe.
+    public let payments: any PaymentPresenter
 
     /// Le dernier accueil reçu, pour pouvoir le relire hors ligne.
     private let homeFeed = HomeFeedCache()
@@ -43,16 +45,21 @@ public final class AppDependencies {
     ///   - connectivity: d'où l'app apprend qu'elle a du réseau. Le vrai
     ///     moniteur par défaut ; un test en fournit un qu'il pilote.
     ///   - pendingRecordings: où dorment les vocaux qui n'ont pas pu partir.
+    ///   - payments: qui ouvre la feuille de paiement. La vraie par défaut ;
+    ///     un aperçu — et le lancement `-previewSignedIn` — passe
+    ///     ``StubPaymentPresenter``, qui n'appelle personne.
     public init(
         api: any MemoBookAPI,
         connectivity: Connectivity = .system,
         pendingRecordings: PendingRecordingStore = .inLibrary(),
+        payments: (any PaymentPresenter)? = nil,
     ) {
         self.api = api
         // La vraie feuille Stripe par défaut ; un aperçu passe la sienne.
         // `applePayMerchantId` reste nul tant que le certificat Apple Pay n'est
         // pas posé : la feuille montre alors les cartes seules, au lieu d'un
         // bouton Apple Pay qui échouerait au moment de payer.
+        self.payments = payments ?? StripePaymentSheetPresenter()
         outbox = RecordingOutbox(store: pendingRecordings, connectivity: connectivity) { audio, tripId in
             _ = try await api.uploadAudio(
                 memoId: tripId,
@@ -294,9 +301,8 @@ public final class AppDependencies {
     /// les réglages du voyage, autre chose ailleurs. Une seule source
     /// maintenant : le registre du serveur.
     ///
-    /// `topUp` reste `nil` tant que Stripe n'est pas branché : l'écran le lit
-    /// pour dire pourquoi « Ajouter » n'aboutit pas, au lieu d'ouvrir un écran
-    /// qui n'existe pas.
+    /// `topUp` ouvre une intention côté serveur, présente la feuille, puis
+    /// **attend que la cagnotte ait bougé** — voir ``creditedWallet(after:)``.
     ///
     /// `sandbox` n'existe qu'en debug, et écrit une **vraie** écriture : c'est
     /// ce qui permet de voir les déductions du tunnel de commande, que le
@@ -305,6 +311,28 @@ public final class AppDependencies {
         WalletModel(
             tripId: tripId,
             source: { [api] trip in try await api.wallet(tripId: trip) },
+            topUp: { [api, payments] trip, amount in
+                // Le solde d'avant, lu maintenant : c'est la référence qui dira
+                // que le webhook est passé. Le demander au serveur plutôt que
+                // de croire l'écran évite de partir d'un solde périmé, affiché
+                // avant qu'un proche ne contribue.
+                let before = try await api.wallet(tripId: trip).balance
+
+                let cents = NSDecimalNumber(decimal: amount * 100).intValue
+                let ticket = try await api.startWalletTopUp(amountCents: cents)
+
+                switch await payments.present(ticket) {
+                case .cancelled:
+                    return nil
+                case .failed(let message):
+                    throw PaymentError.refused(message)
+                case .succeeded:
+                    return try await Self.creditedWallet(
+                        from: { try await api.wallet(tripId: trip) },
+                        above: before
+                    )
+                }
+            },
             sandbox: {
                 #if DEBUG
                     { [api] amount, kind, label in
@@ -324,15 +352,14 @@ public final class AppDependencies {
     /// a besoin du profil pour sa feuille de paiement, et il se présente depuis
     /// des écrans qui ne tiennent pas de dépendances.
     ///
-    /// Trois routes, et pas une de plus : `GET /v1/memos/:id/order-context`
-    /// ouvre les sept étapes d'un seul appel,
-    /// `POST /v1/memos/:id/orders/quote` compte le récapitulatif, et
-    /// `POST /v1/memos/:id/orders` enregistre.
+    /// Quatre routes : `GET /v1/memos/:id/order-context` ouvre les sept étapes
+    /// d'un seul appel, `POST /v1/memos/:id/orders/quote` compte le
+    /// récapitulatif, `POST /v1/memos/:id/orders` enregistre **et rend de quoi
+    /// payer**, et `GET /v1/orders/:id` relit ce que le webhook a conclu.
     ///
-    /// ⚠️ **Rien n'est encaissé.** La commande naît en `draft` : le débit et le
-    /// passage en `submitted` viendront du webhook du prestataire. L'écran de
-    /// paiement le dit dans son propre commentaire, et rien n'y prétend le
-    /// contraire.
+    /// La commande naît en `draft` et n'en sort que sur retour de Stripe au
+    /// serveur : `presentPayment` ouvre la feuille, `reloadOrder` attend le
+    /// verdict. L'app ne décide jamais qu'une commande est payée.
     ///
     /// - Parameter email: l'adresse à laquelle la confirmation partira, pour
     ///   la dernière phrase de l'écran de confirmation. `nil` quand le compte
@@ -348,8 +375,42 @@ public final class AppDependencies {
             },
             submit: { [api] id, request in
                 try await api.createPrintOrder(memoId: id, order: request)
-            }
+            },
+            presentPayment: { [payments] ticket in await payments.present(ticket) },
+            reloadOrder: { [api] orderId in try await api.printOrder(id: orderId) }
         )
+    }
+
+    /// Combien de fois relire la cagnotte après un paiement réussi.
+    ///
+    /// Une seconde entre deux lectures. Même raison que dans ``OrderModel`` :
+    /// la feuille dit que Stripe a accepté, pas que le serveur l'a appris.
+    private static let creditAttempts = 6
+
+    /// Relit la cagnotte jusqu'à ce que le solde ait monté.
+    ///
+    /// **Le solde ne bouge pas au retour de la feuille** : il bouge quand le
+    /// webhook écrit au registre, une seconde ou deux plus tard. Relire tout de
+    /// suite rendrait le montant d'avant, et la recharge aurait l'air perdue.
+    ///
+    /// Au bout du budget, on rend la dernière lecture telle quelle : l'argent
+    /// est encaissé de toute façon, et la prochaine ouverture de l'écran
+    /// montrera le bon solde. Lever ici ferait afficher une erreur sur un
+    /// paiement réussi, ce qui est la pire des deux issues.
+    private static func creditedWallet(
+        from read: () async throws -> Wallet,
+        above previous: Decimal
+    ) async throws -> Wallet {
+        var latest = try await read()
+        var attempts = 0
+
+        while latest.balance <= previous, attempts < creditAttempts {
+            try? await Task.sleep(for: .seconds(1))
+            latest = try await read()
+            attempts += 1
+        }
+
+        return latest
     }
 }
 
