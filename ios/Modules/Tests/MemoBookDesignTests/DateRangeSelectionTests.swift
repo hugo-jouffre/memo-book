@@ -3,8 +3,8 @@ import Testing
 @testable import MemoBookDesign
 
 /// Les règles du geste, telles qu'elles sont énoncées en tête de
-/// `BrandRangeCalendar` : le départ, puis le retour, et ce que fait un jour
-/// touché à contre-sens.
+/// `BrandRangeCalendar` : une case en cours, le jour touché va dedans, et ce
+/// que fait un jour touché à contre-sens.
 struct DateRangeSelectionTests {
     private let calendar = Calendar(identifier: .gregorian)
 
@@ -12,51 +12,97 @@ struct DateRangeSelectionTests {
         calendar.date(from: DateComponents(year: 2026, month: 9, day: n, hour: 15))!
     }
 
-    @Test func premierGestePoseLeDepart() {
+    private func midnight(_ n: Int) -> Date { calendar.startOfDay(for: day(n)) }
+
+    // MARK: - Case « Départ »
+
+    @Test func poserLeDepartPasseAuRetour() {
         var selection = DateRangeSelection(calendar: calendar)
         selection.tap(day(18), calendar: calendar)
 
-        #expect(selection.start == calendar.startOfDay(for: day(18)))
+        #expect(selection.start == midnight(18))
+        #expect(selection.end == nil)
+        #expect(selection.editing == .end)
+    }
+
+    @Test func corrigerLeDepartGardeUnRetourQuiLeSuit() {
+        var selection = DateRangeSelection(start: day(18), end: day(26), editing: .start, calendar: calendar)
+        selection.tap(day(20), calendar: calendar)
+
+        #expect(selection.start == midnight(20))
+        #expect(selection.end == midnight(26))
+    }
+
+    @Test func corrigerLeDepartApresLeRetourEffaceLeRetour() {
+        var selection = DateRangeSelection(start: day(18), end: day(26), editing: .start, calendar: calendar)
+        selection.tap(day(28), calendar: calendar)
+
+        #expect(selection.start == midnight(28))
         #expect(selection.end == nil)
     }
 
-    @Test func secondGesteApresLeDepartPoseLeRetour() {
-        var selection = DateRangeSelection(start: day(18), calendar: calendar)
+    // MARK: - Case « Retour »
+
+    @Test func unJourApresLeDepartDevientLeRetour() {
+        var selection = DateRangeSelection(start: day(18), editing: .end, calendar: calendar)
         selection.tap(day(26), calendar: calendar)
 
-        #expect(selection.start == calendar.startOfDay(for: day(18)))
-        #expect(selection.end == calendar.startOfDay(for: day(26)))
+        #expect(selection.start == midnight(18))
+        #expect(selection.end == midnight(26))
+        #expect(selection.editing == .end)
     }
 
-    @Test func secondGesteAvantLeDepartLeRemplace() {
-        var selection = DateRangeSelection(start: day(18), calendar: calendar)
+    @Test func unJourAvantLeDepartDevientLeDepart() {
+        var selection = DateRangeSelection(start: day(18), end: day(26), editing: .end, calendar: calendar)
         selection.tap(day(10), calendar: calendar)
 
-        #expect(selection.start == calendar.startOfDay(for: day(10)))
+        #expect(selection.start == midnight(10))
         #expect(selection.end == nil)
     }
 
-    @Test func toucherLeDepartSeulNeFaitRien() {
-        var selection = DateRangeSelection(start: day(18), calendar: calendar)
+    @Test func toucherLeDepartEnReglantLeRetourNeFaitRien() {
+        var selection = DateRangeSelection(start: day(18), editing: .end, calendar: calendar)
         selection.tap(day(18), calendar: calendar)
 
-        #expect(selection.start == calendar.startOfDay(for: day(18)))
+        #expect(selection.start == midnight(18))
         #expect(selection.end == nil)
     }
 
-    @Test func plageCompleteRecommenceAuJourTouche() {
+    @Test func pasDeRetourSansDepart() {
+        var selection = DateRangeSelection(editing: .end, calendar: calendar)
+        selection.tap(day(18), calendar: calendar)
+
+        #expect(selection.start == midnight(18))
+        #expect(selection.end == nil)
+    }
+
+    // MARK: - Effacer
+
+    @Test func effacerLeRetourGardeLeDepart() {
         var selection = DateRangeSelection(start: day(18), end: day(26), calendar: calendar)
-        selection.tap(day(22), calendar: calendar)
+        selection.clear(.end)
 
-        #expect(selection.start == calendar.startOfDay(for: day(22)))
+        #expect(selection.start == midnight(18))
         #expect(selection.end == nil)
+        #expect(selection.editing == .end)
     }
+
+    @Test func effacerLeDepartEmporteLeRetour() {
+        var selection = DateRangeSelection(start: day(18), end: day(26), editing: .end, calendar: calendar)
+        selection.clear(.start)
+
+        #expect(selection.isEmpty)
+        #expect(selection.end == nil)
+        #expect(selection.editing == .start)
+    }
+
+    // MARK: - Lecture
 
     @Test func lesDatesSontRameneesAMinuit() {
         let selection = DateRangeSelection(start: day(18), end: day(26), calendar: calendar)
 
-        #expect(selection.start == calendar.startOfDay(for: day(18)))
-        #expect(selection.end == calendar.startOfDay(for: day(26)))
+        #expect(selection.start == midnight(18))
+        #expect(selection.end == midnight(26))
     }
 
     @Test func chaqueJourConnaitSonRole() {

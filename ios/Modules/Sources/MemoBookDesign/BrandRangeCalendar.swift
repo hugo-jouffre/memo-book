@@ -9,14 +9,11 @@ import SwiftUI
 /// « du combien au combien ? ». Ce calendrier en est un seul, dessiné à la
 /// main, où la plage se lit d'un coup : une bande entre les deux jours.
 ///
-/// **Les règles du geste**, dans ``DateRangeSelection`` :
-///
-/// - rien de posé → le jour touché devient le départ ;
-/// - un départ seul → un jour après lui devient le retour, un jour avant
-///   devient le nouveau départ ;
-/// - les deux posés → on recommence, le jour touché est le nouveau départ ;
-/// - toucher le départ seul ne fait rien : la plage d'un jour, c'est un
-///   retour posé sur le départ.
+/// **Les règles du geste**, dans ``DateRangeSelection`` : la plage a toujours
+/// une case **en cours** — le départ, puis le retour —, et le jour touché va
+/// dans cette case. Poser le départ passe au retour ; un retour avant le
+/// départ devient le nouveau départ. L'écran au-dessus choisit la case en
+/// cours en la touchant : on revient corriger le départ sans perdre le retour.
 ///
 /// Un retour n'est jamais exigé : un voyage dont on ne connaît pas la fin
 /// commence quand même.
@@ -42,6 +39,12 @@ public struct BrandRangeCalendar: View {
         }
         .padding(MemoBookSpacing.snug)
         .background(MemoBookColor.surface, in: .rect(cornerRadius: MemoBookSpacing.largeCornerRadius))
+        .onChange(of: selection.editing) {
+            // On vient corriger le retour : le calendrier se met sur son mois,
+            // pas sur celui où l'on était resté.
+            guard let anchor = selection.date(of: selection.editing) else { return }
+            withAnimation(.smooth(duration: 0.2)) { visibleMonth = calendar.startOfMonth(for: anchor) }
+        }
     }
 
     // MARK: - Le mois
@@ -200,34 +203,68 @@ public struct BrandRangeCalendar: View {
 public struct DateRangeSelection: Equatable, Sendable {
     public var start: Date?
     public var end: Date?
+    /// La case que le prochain geste remplit.
+    public var editing: Slot
 
-    public init(start: Date? = nil, end: Date? = nil, calendar: Calendar = .current) {
+    /// Les deux cases de la plage.
+    public enum Slot: Equatable, Sendable {
+        case start
+        case end
+    }
+
+    public init(start: Date? = nil, end: Date? = nil, editing: Slot = .start, calendar: Calendar = .current) {
         self.start = start.map(calendar.startOfDay)
         self.end = end.map(calendar.startOfDay)
+        self.editing = editing
     }
 
     public var isEmpty: Bool { start == nil }
+
+    public func date(of slot: Slot) -> Date? {
+        switch slot {
+        case .start: start
+        case .end: end
+        }
+    }
 
     /// Le geste — voir les règles en tête de ``BrandRangeCalendar``.
     public mutating func tap(_ date: Date, calendar: Calendar = .current) {
         let day = calendar.startOfDay(for: date)
 
-        switch (start, end) {
-        case (nil, _):
+        switch editing {
+        case .start:
             start = day
-        case (let start?, nil) where day > start:
-            end = day
-        case (let start?, nil) where day == start:
-            break
-        default:
-            start = day
-            end = nil
+            // Un retour qui ne suit plus le départ n'a plus de sens.
+            if let end, end <= day { self.end = nil }
+            editing = .end
+
+        case .end:
+            guard let start else {
+                // Pas de retour sans départ : le jour touché est le départ.
+                self.start = day
+                return
+            }
+            if day > start {
+                end = day
+            } else if day < start {
+                self.start = day
+                end = nil
+            }
         }
     }
 
-    public mutating func clear() {
-        start = nil
-        end = nil
+    /// Vide une case. Effacer le départ emporte le retour : il n'a plus rien
+    /// à suivre.
+    public mutating func clear(_ slot: Slot) {
+        switch slot {
+        case .start:
+            start = nil
+            end = nil
+            editing = .start
+        case .end:
+            end = nil
+            editing = .end
+        }
     }
 
     /// Ce qu'un jour est pour la plage : rien, une borne, ou dedans.
