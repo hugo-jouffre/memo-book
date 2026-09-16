@@ -878,6 +878,16 @@ model Render {
   pdfUrl                   String?
   error                    String?
 
+  /// Le nombre de pages réellement composées par ce rendu.
+  ///
+  /// ⚠️ **Orpheline** : la colonne existe en base depuis le 15/09/2026, posée
+  /// par une migration dont le fichier n'a jamais été versionné, et **aucun
+  /// code ne la lit ni ne l'écrit**. Les pages facturées passent par
+  /// `memos.pageCount` et `print_orders.pageCount` (voir `billablePages`).
+  /// Elle est déclarée ici pour que le schéma dise la vérité sur la base —
+  /// sans quoi la prochaine migration proposerait de la supprimer.
+  pageCount                Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
