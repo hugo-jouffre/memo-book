@@ -461,9 +461,13 @@ enum PaywallCopy {
     static let offerTitleLead = "Ce carnet que tu relieras peut-être encore "
     static let offerTitleStrong = "dans 30 ans"
     static let estimationPill = "Voir une estimation →"
+    /// ⚠️ **« /semaine » et non « /mois »** (Hugo, 17/09/2026). L’abonnement
+    /// est hebdomadaire — la feuille d’abonnement l’écrit, l’estimation compte
+    /// trois semaines —, et ce pied de page seul promettait un prélèvement
+    /// mensuel : il annonçait donc un quart du prix réel.
     static func offerFootnote(price: String) -> [String] {
         [
-            "Renouvellement automatique pour \(price)/mois",
+            "Renouvellement automatique pour \(price)/semaine",
             "résilie à tout moment ou automatiquement à la fin du voyage",
         ]
     }
