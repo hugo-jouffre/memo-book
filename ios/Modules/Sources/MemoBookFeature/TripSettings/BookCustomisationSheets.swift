@@ -25,8 +25,8 @@ enum BookCustomisationSheet: Identifiable, Hashable {
     case pages
     case funFacts
     case rules
-    /// La typographie d'un rôle — la même feuille pour les quatre.
-    case font(BookFontRole)
+    /// Les typographies — **une** feuille, quatre assortiments.
+    case fonts
     case decorations
 
     var id: String {
@@ -35,7 +35,7 @@ enum BookCustomisationSheet: Identifiable, Hashable {
         case .pages: "pages"
         case .funFacts: "funFacts"
         case .rules: "rules"
-        case .font(let role): "font-\(role.rawValue)"
+        case .fonts: "fonts"
         case .decorations: "decorations"
         }
     }
@@ -43,7 +43,7 @@ enum BookCustomisationSheet: Identifiable, Hashable {
     /// Celles qui montrent les pages du carnet.
     var showsBookPages: Bool {
         switch self {
-        case .funFacts, .rules, .font, .decorations: true
+        case .funFacts, .rules, .fonts, .decorations: true
         case .ratio, .pages: false
         }
     }
@@ -257,36 +257,35 @@ struct BookToggleSheet: View {
 
 // MARK: - Les typographies
 
-/// « Titres du carnet », et ses trois sœurs — quelques familles, une seule
-/// choisie.
+/// « Typographies du carnet » — quatre assortiments, un seul choisi.
 ///
-/// **Une vue pour les quatre rôles**, parce qu'ils doivent se comporter pareil
-/// (Hugo, 16/09/2026) : même liste encadrée, même « Valider » qui ne fait que
-/// fermer, même pages du carnet au-dessus. Ce qui change — le titre, le
-/// chapeau, les familles proposées et la colonne écrite — appartient au rôle
-/// (``BookFontRole``), pas à la feuille.
+/// **On ne compose plus police par police** (Hugo, 16/09/2026). L'écran posait
+/// quatre lignes et laissait marier librement trois familles sur chacune ; la
+/// plupart des combinaisons sont laides, et un carnet imprimé ne se rattrape
+/// pas. La feuille propose donc quatre assortiments dont on sait qu'ils
+/// tiennent — voir ``BookFontCombo`` — et **dit ce que chaque police habille**,
+/// parce que c'est la seule information qui permet de choisir sans connaître la
+/// typographie.
+///
+/// Le choix part **tout de suite**, comme partout ailleurs dans les réglages :
+/// « Valider » ne fait que refermer.
 struct BookFontsSheet: View {
     let model: BookCustomisationModel
-    let role: BookFontRole
     var topOverflow: CGFloat = 0
 
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         BrandSheet(
-            BookCopy.Fonts.sheetTitle(for: role),
-            subtitle: BookCopy.Fonts.sheetSubtitle(for: role),
+            BookCopy.Fonts.title,
+            subtitle: BookCopy.Fonts.subtitle,
             topOverflow: topOverflow
         ) {
             VStack(spacing: MemoBookSpacing.m) {
-                BrandOptionGroup {
-                    ForEach(role.options) { font in
-                        BrandOptionRow(
-                            font.label,
-                            subtitle: font.detail,
-                            isSelected: isSelected(font)
-                        ) {
-                            model.setFont(role, font.name)
+                VStack(spacing: MemoBookSpacing.xs) {
+                    ForEach(BookFontCombo.all) { combo in
+                        BookFontComboCard(combo: combo, isSelected: isSelected(combo)) {
+                            model.setFontCombo(combo)
                         }
                     }
                 }
@@ -297,9 +296,139 @@ struct BookFontsSheet: View {
         }
     }
 
-    private func isSelected(_ font: BookFontOption) -> Bool {
+    private func isSelected(_ combo: BookFontCombo) -> Bool {
         guard let customisation = model.customisation else { return false }
-        return font.matches(customisation[keyPath: role.keyPath])
+        return combo.matches(customisation)
+    }
+}
+
+/// Un assortiment, et les quatre lignes qui disent ce qu'il décide.
+///
+/// Ce n'est pas une ``BrandOptionRow`` : celle-ci porte un titre, une précision
+/// et un rond. Ici il faut **quatre couples rôle / police** sous le nom, et
+/// c'est justement ce qu'on vient lire. Le dessin reste celui de la famille —
+/// même rond, même aplat bleu quand c'est coché — pour que le geste soit le
+/// même.
+private struct BookFontComboCard: View {
+    let combo: BookFontCombo
+    let isSelected: Bool
+    let action: () -> Void
+
+    @ScaledMetric(relativeTo: .body) private var markSide: CGFloat = 22
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    private var shape: RoundedRectangle {
+        .rect(cornerRadius: MemoBookSpacing.controlCornerRadius)
+    }
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
+                header
+                assignments
+            }
+            .padding(MemoBookSpacing.s)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(isSelected ? MemoBookColor.outline.opacity(0.35) : Color.clear, in: shape)
+            .overlay {
+                shape.strokeBorder(
+                    isSelected ? MemoBookColor.outline : MemoBookColor.hairline,
+                    lineWidth: 1
+                )
+            }
+            .contentShape(shape)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline, spacing: MemoBookSpacing.s) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(combo.name)
+                    .font(MemoBookFont.bodySemibold)
+                    .foregroundStyle(MemoBookColor.ink)
+                Text(combo.detail)
+                    .font(MemoBookFont.caption)
+                    .foregroundStyle(MemoBookColor.inkMuted)
+            }
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            mark
+        }
+    }
+
+    /// Les quatre couples « rôle → police », sur un filet.
+    ///
+    /// En deux colonnes à la taille courante, en une seule dès que le texte
+    /// grandit : « Fun facts & autres » et « Gloria Hallelujah » côte à côte
+    /// dans une demi-largeur ne laisseraient qu'un mot par ligne.
+    private var assignments: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(BookFontRole.allCases) { role in
+                if typeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(role.label)
+                            .font(MemoBookFont.caption)
+                            .foregroundStyle(MemoBookColor.inkMuted)
+                        Text(combo.fontLabel(role))
+                            .font(MemoBookFont.tagline)
+                            .foregroundStyle(MemoBookColor.ink)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    HStack(alignment: .firstTextBaseline, spacing: MemoBookSpacing.xs) {
+                        Text(role.label)
+                            .font(MemoBookFont.caption)
+                            .foregroundStyle(MemoBookColor.inkMuted)
+                        Spacer(minLength: MemoBookSpacing.xs)
+                        Text(combo.fontLabel(role))
+                            .font(MemoBookFont.tagline)
+                            .foregroundStyle(MemoBookColor.ink)
+                    }
+                }
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.top, MemoBookSpacing.xs / 2)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(MemoBookColor.hairline)
+                .frame(height: 1)
+                .accessibilityHidden(true)
+        }
+    }
+
+    /// Le rond de sélection, celui de ``BrandOptionRow``.
+    private var mark: some View {
+        ZStack {
+            Circle()
+                .strokeBorder(
+                    isSelected ? MemoBookColor.blueText : MemoBookColor.separator,
+                    lineWidth: 1.5
+                )
+            if isSelected {
+                Circle()
+                    .fill(MemoBookColor.blueText)
+                    .padding(5)
+            }
+        }
+        .frame(width: markSide, height: markSide)
+        .accessibilityHidden(true)
+    }
+
+    /// VoiceOver lit l'assortiment **en entier** : son nom, sa phrase, puis les
+    /// quatre affectations. Quatre lignes lues séparément auraient perdu le
+    /// lien entre le rôle et sa police.
+    private var accessibilityLabel: String {
+        let roles = BookFontRole.allCases
+            .map { "\($0.label) : \(combo.fontLabel($0))" }
+            .joined(separator: ", ")
+        return "\(combo.name). \(combo.detail) \(roles)."
     }
 }
 
@@ -353,7 +482,7 @@ struct BookDecorationsSheet: View {
             switch destination {
             case .ratio: BookRatioSheet(model: model)
             case .pages: BookPagesSheet(model: model)
-            case .font(let role): BookFontsSheet(model: model, role: role)
+            case .fonts: BookFontsSheet(model: model)
             case .decorations: BookDecorationsSheet(model: model)
             case .funFacts, .rules: EmptyView()
             }

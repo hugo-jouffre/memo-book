@@ -31,6 +31,20 @@ extension Date {
     var relativeDelay: String {
         formatted(.relative(presentation: .numeric))
     }
+
+    /// « 22 septembre » — un jour qu'on nomme, et non un délai.
+    ///
+    /// Les deux cohabitent, et la distinction compte : ``relativeDelay`` répond
+    /// à « dans combien de temps » — c'est ce que la feuille « Mon Abonnement »
+    /// annonce d'une résiliation automatique encore lointaine. Une **date
+    /// butoir**, elle, répond à « jusqu'à quand », et on la vérifie sur son
+    /// calendrier : « dans 5 jours » se recompte, « le 22 septembre » se lit.
+    ///
+    /// Sans l'année : la semaine payée se compte en jours, et personne ne se
+    /// demande de quelle année on parle.
+    var dayAndMonth: String {
+        formatted(.dateTime.day().month(.wide))
+    }
 }
 
 extension CurrentTrip {

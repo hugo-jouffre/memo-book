@@ -133,10 +133,11 @@ faire aujourd'hui.
 | Quiz | ON | `quiz` | Rendu |
 | Pointillés | ON | La **réglure** du papier, `.mb-note__rules` | **À construire** |
 | Décorations & stickers | 2 | Quota par paragraphe ou par image ; le scotch y est compté | **Partiel** : le scotch est rendu, les stickers non |
-| Typographie des titres | Playfair | `--mb-font-display` | **À construire** |
-| Typographie des sous-titres | Hansley | `--mb-font-title` | **À construire** — `Hansley.otf` versionné mais pas inliné, repli sur la manuscrite |
-| Typographie des textes | Gloria Hallelujah | `--mb-font-hand` | **À construire** |
-| Typographie des fun facts | Playfair | Pas de token dédié : partage `--mb-font-display` | **À construire** — créer `--mb-font-facts` |
+| Typographies (assortiment) | Carnet de voyage | Les quatre tokens ci-dessous d'un bloc | **À construire** — l'app n'expose plus quatre réglages mais **quatre assortiments** (`docs/reglages-utilisateur.md`) : Carnet de voyage, Éditorial, Moderne, Manuscrit. Le payload, lui, reste quatre champs |
+| ↳ titres | Playfair | `--mb-font-display` | **À construire** |
+| ↳ sous-titres | Hansley | `--mb-font-title` | **À construire** — `Hansley.otf` versionné mais pas inliné, repli sur la manuscrite |
+| ↳ textes | Gloria Hallelujah | `--mb-font-hand` | **À construire** |
+| ↳ fun facts | Playfair | Pas de token dédié : partage `--mb-font-display` | **À construire** — créer `--mb-font-facts` |
 | Zones libres | ON | Zone blanche en fin d'étape + trois pages blanches en fin de carnet | **À construire** |
 | Mot fléché | ON | Grille générée à la commande, posée en fin de carnet | **À construire** |
 
@@ -434,6 +435,13 @@ Pour la brancher : déclarer Hansley comme face **locale** dans le générateur
 (sans sous-ensemble ni `unicode-range`, puisqu'elle ne vient pas de Google),
 la convertir en `.woff2` — l'`.otf` s'inline aussi, en `format("opentype")`,
 au prix de quelques dizaines de kilo-octets — puis relancer `fonts:build`.
+
+⚠️ **Deux familles de plus sont désormais proposées par l'app** et ne sont pas
+ici : **Alegreya** et **Montserrat**, qu'emploient les assortiments « Éditorial »
+et « Moderne ». Comme Hansley, elles retombent sur une police système tant
+qu'elles ne sont pas inlinées — rien n'échoue, mais le carnet ne rend pas ce que
+l'écran promet. Les ajouter à la liste de `build-font-css.ts`, en `.woff2`, puis
+relancer `npm run fonts:build`.
 
 Un `@import` Google Fonts fonctionne aussi :
 

@@ -3180,3 +3180,106 @@ maquettes, des fiches, du code et des conversations soient les mêmes.
 | T136 | **Trois feuilles de typographie sans maquette.** « Sous-titres du carnet », « Textes du carnet », « Fun facts du carnet » sont écrites sur le modèle de « Titres du carnet » (`3443:10073`), au tutoiement ; leurs familles — Hansley ou Gloria Hallelujah d'abord, puis Playfair, Alegreya, Montserrat — et leurs phrases sont à valider ou à dessiner. « La recommandations de nos équipes » reste tel quel sur la feuille des titres (R8) ; les défauts des autres disent « Le choix de nos équipes ». Remplace T78 |
 | T137 | **Déployé par Hugo le 16/09 à 1 h 38** (`railway up --detach -s api`, puis `worker`, depuis son checkout local) : `GET /v1/trips/:id/settings` répond 200 sur le compte de démo, le 500 de § 20.1 est clos. Deux restes : le checkout était à `60cf53b` (PR #28), la **PR #30** n'est donc toujours pas en production — `git pull` puis les deux mêmes commandes —, et Railway n'a toujours pas déployé une fusion de lui-même (T131). `railway up` depuis une session Claude reste refusé par son garde-fou |
 | T138 | **Le champ des textes de couverture remonte après 350 ms**, le temps que le clavier monte — une durée choisie, pas mesurée. Sur un iPhone lent, le premier caractère peut encore se taper sous le clavier ; la parade propre est d'écouter sa hauteur (`keyboardLayoutGuide`), ce qui touche au design system |
+
+## 22. Retouches du 16/09/2026 (soir) — treize retours, et deux chantiers
+
+Treize retours de Hugo sur `main`, traités dans une même PR. Deux d'entre eux
+ne sont pas des retouches mais des **fonctionnalités** — les limites de
+souvenirs et le cache local —, et ils amènent chacun leur lot de base, de
+route, de modèle et d'écran.
+
+⚠️ **Six écrans ou blocs de cette section n'ont pas de maquette** : la ligne et
+la feuille des limites de souvenirs, la feuille des assortiments de
+typographies, le champ de recherche du support, les messages d'information des
+couvertures, la carte « Bientôt disponible » et le lien « Commander sans
+attendre ». Ils sont écrits sur les motifs existants et **restent à dessiner
+dans Figma** — voir « À trancher ».
+
+### 22.1 Ce qui a changé, écran par écran
+
+| Écran | Retour de Hugo | Ce qui a été fait |
+|---|---|---|
+| Abonnement — résiliation | une semaine payée doit aller à son terme ; le dire sur l'avant-dernière modale ; une alerte système quand ça s'arrête pour de bon ; si le dernier jour est aujourd'hui, rien ne change | `Subscription.paidThrough` (= `subscriptions.renewsAt`) et trois règles testées — `isWithinPaidWeek`, `grantsAccess`, `graceEnd`. La feuille « Pourquoi nous quittes-tu ? » annonce « jusqu'au 22 septembre inclus », la dernière dit « ne se renouvellera pas » au lieu de « s'arrête aujourd'hui ». **Le dernier jour garde la phrase d'avant**, à la journée près. Côté serveur, `assertCanRecord` accepte un abonnement `cancelled`/`expired` dont la période court encore. L'alerte native s'ouvre sur l'accueil (`Traveller.subscriptionEndedOn`, borné à 15 jours côté serveur, `@AppStorage` côté app pour ne le dire qu'une fois) |
+| Réglages du voyage | des limites de souvenirs, hautes, visibles **ici seulement**, avec un palier étendu à 3,99 €/mois ; jamais le mot « token » | Une ligne « Limites de souvenirs » sous la cagnotte, muette tant qu'il reste de la marge, et une feuille en trois temps — solde, comparaison, confirmation. 3 000 souvenirs/mois compris, 12 000 étendus. Un message écrit vaut 1, une **minute entamée** de vocal vaut 10 (`services/memoryAllowance.ts`, seul endroit où le barème vit). La durée part désormais avec le vocal (`uploadAudio(durationSeconds:)`), et voyage déjà dans la file hors ligne |
+| Couvertures | griser ce qu'un style ne porte pas — texte au dos, photo sur un aplat —, avec un message en couleur d'information | `CoverTreatment.carriesPhoto` / `carriesText(on:)`, et `BookCovers.acceptsPhoto/acceptsText`. Le segment du rail et la ligne d'action **pâlissent sans se désactiver** : ils restent tapables, et l'appui pose un `BrandNotice(tone: .information)` qui nomme la cause *et* donne la sortie. Le plat lui-même cesse d'écrire le texte de quatrième sur une photo pleine page — sinon le dessin contredirait l'explication |
+| Accueil — entrée | la carte de connexion laisse voir la photo et sa coupe nette quand on la tire vers le haut | Le crème de la carte déborde d'**une hauteur d'écran** sous la dalle (`WelcomeView.cardUnderrun`). `ignoresSafeArea` ne suffisait pas : il prolonge jusqu'au bord, pas au-delà, et l'élastique de la `ScrollView` va plus loin. Un fond n'impose pas sa taille, donc la mise en page ne bouge pas |
+| Partout — le prix | 1,99 €/semaine partout, y compris le « 3 × » de l'estimation, au lieu de 0 € | `services/subscriptionCatalog.ts` : le tarif est servi à qui **n'a pas** encore d'abonnement (le serveur rendait 0, faute de ligne à lire). Côté app, `Subscription.displayedWeeklyPrice` ne rend jamais zéro. Le seed disait 2,99 €, corrigé. Un prix Stripe `memobook_subscription_weekly` existe désormais dans le sandbox |
+| Aperçu PDF | pouvoir commander même quand le carnet n'est pas composé, **hors debug** | Un lien beige sous le bouton grisé, en légende soulignée, uniquement quand `!isComposed`. Dans la version livrée : un TestFlight est un build Release, et une porte sous `#if DEBUG` ne s'ouvre nulle part où l'on en a besoin |
+| Support et retours | un champ de recherche sous l'introduction, résultats vivants | `BrandSearchField` (nouveau) + `FaqQuery`, qui cherche dans la **question, la réponse et le titre du paquet**, sans casse ni accents, tous les mots devant répondre. Le filtre vit dans `SupportModel`, pas dans un `body`. La ligne « Écris à notre équipe » reste **toujours** visible : c'est la sortie d'une recherche qui ne trouve rien |
+| Partout — l'ouverture | garder un maximum de données en local, et animer la mise à jour quand le serveur dit autre chose | `ContentCache` (l'ancien `HomeFeedCache`, devenu générique) garde cinq choses : accueil, profil, voyage, réglages du voyage, galerie. Les cinq modèles s'ouvrent dessus et **continuent** l'appel derrière ; `contentFreshness(of:replacing:)` dit si ça a bougé, et `BrandRefreshFlash` joue un balayage et une pastille « Mis à jour ». Rien n'est animé à la première arrivée ni sur une réponse identique |
+| Paiement | Apple Pay sélectionné doit se voir comme les autres | `BrandApplePayRow` retenue passe au **bleu de la marque sur un aplat bleu à 35 %**, exactement comme une `BrandOptionRow` cochée. Elle portait le vert d'action et aucun fond |
+| Paywall → support | la flèche doit revenir à l'étape du paywall, pas au profil | Le support se pose **sur** le paywall (`fullScreenCover`), qui reste monté avec sa page ; sa flèche `dismiss()` y ramène sans une ligne de plus. Le minuteur des stories s'arrête pendant ce temps, comme devant l'aperçu. `PaywallView.onHelp` disparaît, et `RootView` descend le `SupportModel` de la session (`\.supportModel`) |
+| Nouveau carnet | « Importe depuis Polarsteps » n'est pas dans la V1 | `NewNotebookOptionCard.availability = .comingSoon` : aplat beige, contour et titre au beige, contenu à 75 %, flèche retirée, et une pastille « Bientôt disponible » **à l'encre pleine** posée à cheval sur le coin. La carte n'est pas `disabled` — ça l'aurait grisée et aurait emporté la pastille — elle perd son geste (`allowsHitTesting`) et son rôle VoiceOver |
+| Personnalisations | une seule ligne de typographie, groupée avec les décors, ouvrant quatre **combos** ; le choix des combos est de ton ressort | Les quatre lignes deviennent « Typographies », rangée avec Fun facts / Pointillés / Décorations. `BookFontCombo` porte quatre assortiments — **Carnet de voyage** (le défaut d'aujourd'hui : Playfair, Hansley, Hallelujah, Playfair), **Éditorial**, **Moderne**, **Manuscrit** — et la feuille écrit en face de chaque police **ce qu'elle habille**. `BookCustomisationEdit.fontCombo` envoie les quatre colonnes en un seul `PATCH` : quatre requêtes auraient laissé trois états intermédiaires que personne n'a choisis |
+| Personnalisations | le chapeau est trop petit, et il vouvoie | Le chapeau passe au **corps de texte** (16, à l'encre pleine) et le détail d'une `BrandToggleCard` de 12 à 14. Et **tout le vouvoiement du carnet, du voyage et de la cagnotte est corrigé** : douze phrases, R9 l'emportant sur R8 — voir § 22.2 |
+| E-mail de réinitialisation | reçu en spam, et le bouton ne marchait pas | **Déjà corrigé** par la PR #32 (`lien-de-reinitialisation`), ouverte et non fusionnée : le lien devient une URL `https://` servie par l'API, et `RootView` repasse le secret à `AuthView`. Rien n'a été refait ici. Le **spam**, lui, est un sujet de délivrabilité (SPF/DKIM/DMARC du domaine d'envoi), pas de code — voir « À trancher » |
+
+### 22.2 Le vouvoiement de la maquette n'est plus recopié
+
+R8 dit « la copie de Figma au caractère près », R9 dit « on tutoie
+l'utilisateur, toujours ». Les deux s'opposaient sur une douzaine de phrases du
+carnet, du voyage et de la cagnotte, qui vouvoyaient au milieu d'une app qui
+tutoie — et chacune portait un commentaire « signalé » depuis des semaines.
+
+**R9 l'emporte** (Hugo, 16/09/2026), comme il l'emportait déjà sur les cinq
+feuilles de l'abonnement. Chaque phrase corrigée le dit dans son commentaire, et
+la liste vit ici pour que Clara les reprenne **à la source** :
+
+| Où | Avant | Après |
+|---|---|---|
+| Personnalisations, chapeau | « Ajuster les différents options … votre carnet vous ressemble » | « Ajuste les différentes options … ton carnet te ressemble » |
+| Couvertures, style assorti | « Assortie à votre 1e de couverture » | « Assortie à ta 1re de couverture » |
+| Cagnotte, vide | « Partagez votre cagnotte avec vos proches » | « Partage ta cagnotte avec tes proches » |
+| Rythme du récit | « Ajustez … vos émotions et votre personnalité » | « Ajuste … tes émotions et ta personnalité » |
+| Notifications | « Activez ou désactivez les alertes … » | « Active ou désactive les alertes … » |
+| Thème | « … l'agencement graphique de vos souvenirs » | « … de tes souvenirs » |
+| Co-voyageurs | « Invitez vos proches à participer … » | « Invite tes proches à participer … » |
+| Ratio média | « Déterminez l'importance visuelle … » | « Détermine l'importance visuelle … » |
+| Nombre de page | « Gérez le niveau de détails de votre carnet … » | « Gère le niveau de détail de ton carnet … » |
+| Fun facts | « … pour agrémenter vos récits » | « … pour agrémenter tes récits » |
+| Pointillés | « … dans votre carnet » | « … dans ton carnet » |
+| Décorations | « Déterminez la quantité … dans vos pages » | « Détermine la quantité … dans tes pages » |
+
+Trois coquilles restent recopiées telles quelles, parce qu'elles ne touchent pas
+à la personne à qui l'app parle : « grace » sans circonflexe, « Prévisulation »,
+« Défini » pour « Définis ».
+
+### 22.3 Ce qui entre dans le code partagé
+
+| Pièce | Ce qu'elle porte |
+|---|---|
+| `BrandSearchField` (`Design`) | **le** champ de recherche : capsule, loupe, croix qui efface sans rendre le clavier. Distinct de `BrandTextField`, qui saisit une valeur dans un formulaire — celui-ci filtre ce qui est en dessous |
+| `BrandGauge` (`Design`) | **la** jauge : une barre qui se lit, jamais qu'on règle. Vert d'action, rouge sémantique à zéro, **pas d'orange** — trois couleurs demanderaient une légende |
+| `BrandRefreshFlash` (`Design`) | le balayage et la pastille « Mis à jour ». Rien ne bouge en Reduce Motion, sauf la pastille, en fondu |
+| `BrandNotice(tone:)` (`Design`) | un second ton, `.information` : filet, pictogramme et aplat dilué en `MemoBookColor.information`. Pour ce qu'on **explique** à quelqu'un qui vient de taper quelque part |
+| `BrandSegmentedPicker(isAvailable:onUnavailable:)` | un segment fermé **pâlit et reste tapable**. Un `disabled` avale le geste et n'explique rien |
+| `BookFontCombo`, `BookFontOption.catalogue` (`Core`) | les quatre assortiments, les cinq familles, et la résolution « Playfair » ↔ « Playfair Display » |
+| `MemoryAllowance`, `MemoryPlan`, `MemoryCopy` (`Core`) | les limites de souvenirs et tout ce qu'elles font écrire. **Le mot « token » n'y figure pas** |
+| `Subscription.paidThrough` + `grantsAccess/graceEnd` (`Core`) | le sursis de la semaine payée, testé dans `SubscriptionGraceTests` |
+| `FaqQuery`, `FaqCategory.filtered(by:)` (`Core`) | la recherche du support, sans casse ni accents, tous les mots devant répondre |
+| `ContentCache`, `CachedValue`, `ContentFreshness` (`Feature`) | le cache local et sa règle d'animation, en une seule pièce pour les cinq écrans |
+| `\.supportModel` (`Feature`) | le support de la session, à portée du paywall |
+
+### 22.4 Contrat back-end
+
+| Route | Ce qui change |
+|---|---|
+| `GET /v1/profile` | `subscription.weeklyPrice` rend le **tarif du catalogue** quand rien n'a été souscrit (il rendait 0) ; `subscription.cancelledAt` et `subscription.paidThrough` s'ajoutent |
+| `GET /v1/home` | `traveller.subscriptionEndedOn` — la fin de la semaine payée du dernier abonnement, **si elle date de moins de quinze jours**. Déduit, pas stocké |
+| `GET /v1/trips/:id/settings` | `memory` : palier, consommé, plafond, date de renouvellement, prix de l'extension, et les **deux coûts** (un message, une minute de vocal) |
+| `POST /v1/trips/:id/memory-plan` | nouvelle. Pose le palier et rend les réglages entiers. ⚠️ **N'encaisse rien** — voir « À trancher » |
+| `POST /v1/memos/:id/entries` | accepte `durationSeconds` en multipart, le range sur `media_assets`, et **décompte** les limites de souvenirs. Refus `403 memory_limit_reached` |
+| Migration | `20260916230000_limites_de_souvenirs` — `accounts.memoryPlan`, `memoryUsed`, `memoryPeriodStart`, et l'énumération `MemoryPlan`. ⚠️ À appliquer **aussi** au schéma `memobook_test`, sinon la suite entière échoue |
+
+### 22.5 À trancher
+
+| # | Point |
+|---|---|
+| T139 | **L'abonnement et l'extension ne s'encaissent toujours pas.** Un prix Stripe `memobook_subscription_weekly` (1,99 €/semaine) existe dans le sandbox et donne au back-end une référence, mais Apple impose l'achat intégré pour un service numérique : c'est **StoreKit** qui portera les deux transactions, et `POST /v1/trips/:id/memory-plan` deviendra alors ce que son reçu appelle. Le prix `memobook_memory_upgrade_monthly` (3,99 €/mois) **reste à créer** — la commande a été refusée par le garde-fou de la session |
+| T140 | **Le barème des souvenirs est un ordre de grandeur, pas une mesure.** 1 pour un message, 10 pour une minute de vocal : à réétalonner sur les factures OpenAI et Anthropic d'un mois plein. Les deux constantes sont dans `services/memoryAllowance.ts`, et les deux coûts voyagent jusqu'à l'app — l'écran n'en écrit aucun |
+| T141 | **Le plafond du palier étendu est écrit dans l'app** (`MemoryAllowanceSheet.extendedAllowance = 12 000`), faute de route de catalogue : la réponse ne porte que le palier *courant*. À remplacer le jour où `GET /v1/catalog` existe |
+| T142 | **Quatre assortiments, deux familles absentes du gabarit.** `fonts.css` n'inline que Playfair Display et Gloria Hallelujah ; Hansley est versionné sans être inliné, Alegreya et Montserrat ne sont pas là. Rien n'échoue — la page retombe sur une police système —, et c'était déjà vrai des quatre lignes que les combos remplacent. À inliner avant de promettre « Moderne » et « Éditorial » |
+| T143 | **Six blocs sans maquette** : la ligne et la feuille des limites de souvenirs, la feuille des assortiments, le champ de recherche du support, les messages d'information des couvertures, la carte « Bientôt disponible », le lien « Commander sans attendre ». Écrits sur les motifs existants, au tutoiement, à dessiner dans Figma |
+| T144 | **Quel style de couverture porte quoi, c'est l'app qui le décide.** `CoverTreatment.carriesPhoto` et `carriesText(on:)` sont des règles écrites ici : la photo pleine page au dos n'a pas de texte, l'aplat et le kraft n'ont pas de photo. À valider avec Clara, et à faire redescendre du serveur le jour où le catalogue des styles y vivra |
+| T145 | **L'e-mail de réinitialisation arrive en spam.** Le lien est réparé (PR #32) ; la délivrabilité ne l'est pas. Elle demande SPF, DKIM et DMARC sur le domaine d'envoi côté Resend, plus un expéditeur au domaine de la marque — c'est une configuration DNS, pas du code. À faire avant la beta élargie |
+| T146 | **L'écran d'entrée n'a pas été vérifié sur un petit écran.** Le débordement du crème sous la dalle est la correction du bord net ; aucun simulateur SE (375 × 667) n'est installé sur cette machine, et c'est précisément le format où le défaut se voit. À revoir au premier build TestFlight |

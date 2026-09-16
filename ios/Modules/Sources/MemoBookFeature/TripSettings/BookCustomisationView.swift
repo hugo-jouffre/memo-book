@@ -16,15 +16,17 @@ import SwiftUI
 /// choisir entre des valeurs. Un interrupteur répond à « est-ce que j'en veux »,
 /// une ligne à « lequel ».
 ///
-/// **Neuf lignes ouvrent leur feuille** — ratio média, nombre de pages, fun
-/// facts, pointillés, décorations, et les quatre typographies — et sept
-/// d'entre elles portent les deux pages du carnet au-dessus d'elles, pour
-/// qu'on règle en regardant ce qu'on règle (``BookPagesPeek``).
+/// **Six lignes ouvrent leur feuille** — ratio média, nombre de pages, fun
+/// facts, pointillés, décorations et typographies — et quatre d'entre elles
+/// portent les deux pages du carnet au-dessus d'elles, pour qu'on règle en
+/// regardant ce qu'on règle (``BookPagesPeek``).
 ///
-/// Les quatre typographies partagent **une** feuille (``BookFontsSheet``), que
-/// la maquette ne dessine que pour les titres : Hugo a tranché le 16/09/2026
-/// que les trois autres se comportent pareil plutôt que de rester inertes
-/// (T78 → T136). Ce qu'elles proposent vient de ``BookFontRole``.
+/// **Les typographies tiennent en une ligne, rangée avec les décors** (Hugo,
+/// 16/09/2026). Il y en avait quatre — titres, sous-titres, textes, fun facts —,
+/// chacune avec sa feuille et trois familles au choix : de quoi composer des
+/// dizaines de mariages dont la plupart sont ratés, sur un objet qu'on imprime
+/// et qui ne se rattrape pas. La feuille propose désormais quatre
+/// **assortiments** (``BookFontCombo``) et dit ce que chaque police habille.
 public struct BookCustomisationView: View {
     private let onIntent: (BookCustomisationIntent) -> Void
 
@@ -46,16 +48,21 @@ public struct BookCustomisationView: View {
             VStack(alignment: .leading, spacing: MemoBookSpacing.m) {
                 BrandScreenHeader(title: BookCopy.Customisation.title)
 
+                // **Le corps de texte, et non la légende de 12.** C'est un
+                // paragraphe qu'on lit — le seul de l'écran —, et à 12 pt il
+                // était plus petit que tout le reste de l'app (Hugo,
+                // 16/09/2026). Même arbitrage que le chapeau du support, passé
+                // au corps le 15/09. À l'encre pleine pour la même raison : une
+                // explication n'est pas une mention.
                 Text(BookCopy.Customisation.intro)
-                    .font(MemoBookFont.caption)
-                    .foregroundStyle(MemoBookColor.inkMuted)
+                    .font(MemoBookFont.body)
+                    .foregroundStyle(MemoBookColor.ink)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
 
                 coversRow
                 layoutGroup
                 decorGroup
-                typographyGroup
                 extras
 
                 if let message = model.errorMessage {
@@ -116,8 +123,8 @@ public struct BookCustomisationView: View {
                     isEnabled: model.customisation != nil,
                     topOverflow: inset
                 )
-            case .font(let role):
-                BookFontsSheet(model: model, role: role, topOverflow: inset)
+            case .fonts:
+                BookFontsSheet(model: model, topOverflow: inset)
             case .decorations:
                 BookDecorationsSheet(model: model, topOverflow: inset)
             }
@@ -226,56 +233,28 @@ public struct BookCustomisationView: View {
                 isValueLoading: model.isLoading,
                 action: { sheet = .decorations }
             )
+            // **Les typographies sont rangées ici**, avec les décors et non
+            // dans un groupe à elles (Hugo, 16/09/2026) : ce sont les réglages
+            // d'allure du carnet, et ils se règlent d'un bloc.
+            BrandRow(
+                BookCopy.Customisation.fonts,
+                value: fontComboValue,
+                isValueLoading: model.isLoading,
+                action: { sheet = .fonts }
+            )
         }
         .disabled(model.isLoading)
     }
 
-    /// Les quatre familles du carnet.
+    /// Ce que la ligne « Typographies » affiche : le nom de l'assortiment.
     ///
-    /// Les valeurs sont des **noms de police**, affichés tels quels — au
-    /// libellé de la maquette près, « Playfair » pour Playfair Display : c'est
-    /// le gabarit d'impression qui les résout, et les rendre dans leur propre
-    /// dessin demanderait d'embarquer quatre polices de plus dans l'app pour
-    /// quatre bouts de ligne.
-    ///
-    /// Les quatre lignes ouvrent la même feuille, chacune sur son rôle. Le
-    /// croisement des colonnes — « des titres » écrit `fontDisplay`, « des
-    /// sous-titres » écrit `fontTitle` — est porté par ``BookFontRole``, pas
-    /// par l'écran.
-    private var typographyGroup: some View {
-        BrandRowGroup {
-            BrandRow(
-                BookCopy.Customisation.fontTitle,
-                value: fontValue(.titles),
-                isValueLoading: model.isLoading,
-                action: { sheet = .font(.titles) }
-            )
-            BrandRow(
-                BookCopy.Customisation.fontDisplay,
-                value: fontValue(.subtitles),
-                isValueLoading: model.isLoading,
-                action: { sheet = .font(.subtitles) }
-            )
-            BrandRow(
-                BookCopy.Customisation.fontHand,
-                value: fontValue(.texts),
-                isValueLoading: model.isLoading,
-                action: { sheet = .font(.texts) }
-            )
-            BrandRow(
-                BookCopy.Customisation.fontFacts,
-                value: fontValue(.funFacts),
-                isValueLoading: model.isLoading,
-                action: { sheet = .font(.funFacts) }
-            )
-        }
-        // Même règle que les autres groupes : les lignes attendent la
-        // lecture, pas son échec.
-        .disabled(model.isLoading)
-    }
-
-    private func fontValue(_ role: BookFontRole) -> String {
-        model.customisation.map { role.label(in: $0) } ?? BookCopy.Settings.noValue
+    /// « Personnalisé » quand le carnet n'entre dans aucun des quatre — il a
+    /// été composé police par police avant que cette feuille existe, ou par un
+    /// autre client. On ne coche pas de force : la ligne le dit, et ouvrir la
+    /// feuille laisse choisir.
+    private var fontComboValue: String {
+        guard let customisation = model.customisation else { return BookCopy.Settings.noValue }
+        return BookFontCombo.matching(customisation)?.name ?? BookCopy.Fonts.custom
     }
 
     // MARK: - Les extras

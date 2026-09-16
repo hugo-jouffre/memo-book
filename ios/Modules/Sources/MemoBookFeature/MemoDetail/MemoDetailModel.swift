@@ -167,6 +167,7 @@ public final class MemoDetailModel {
                 // de l'envoi : c'est elle qui regroupe les entrées par journée,
                 // et un upload différé (hors réseau) ne doit pas la fausser.
                 capturedAt: recorded.recordedAt,
+                durationSeconds: recorded.duration,
                 placeLabel: nil
             )
             errorMessage = nil

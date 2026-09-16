@@ -64,6 +64,8 @@ public struct GalleryView: View {
             model.use(columnCount: GalleryMetrics.columnCount(for: typeSize))
         }
         .task { await model.load() }
+        .brandRefreshFlash(model.freshness.isUpdated)
+        .animation(.smooth(duration: 0.35), value: model.gallery)
         .refreshable { await model.load() }
     }
 

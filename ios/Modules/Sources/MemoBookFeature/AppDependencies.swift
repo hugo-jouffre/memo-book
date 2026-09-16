@@ -33,8 +33,13 @@ public final class AppDependencies {
     /// de cagnotte se relit sans compte Stripe.
     public let payments: any PaymentPresenter
 
-    /// Le dernier accueil reçu, pour pouvoir le relire hors ligne.
-    private let homeFeed = HomeFeedCache()
+    /// Ce que l'app garde du serveur sur l'appareil — voir ``ContentCache``.
+    ///
+    /// **Deux usages pour une seule pièce** : relire hors ligne, ce pour quoi
+    /// il existait ; et **ouvrir vite**, ce qu'il fait depuis le 16/09/2026 —
+    /// un écran déjà vu se dessine avec ce qu'on avait pendant que la lecture
+    /// réseau continue derrière.
+    private let content = ContentCache()
 
     /// Enregistrement en cours ou terminé. Le garder permet à plusieurs écrans
     /// qui démarrent en même temps d'attendre le même appel plutôt que d'en
@@ -67,6 +72,11 @@ public final class AppDependencies {
                 filename: audio.filename,
                 mimeType: audio.mimeType,
                 capturedAt: audio.recordedAt,
+                // La durée part avec le fichier : c'est elle qui décompte les
+                // limites de souvenirs. Elle voyage déjà dans la file hors
+                // ligne (`PendingRecording.duration`), donc un vocal parti
+                // trois jours plus tard décompte la même chose.
+                durationSeconds: audio.duration,
                 placeLabel: nil
             )
         }
@@ -90,7 +100,7 @@ public final class AppDependencies {
     /// c'en est un autre, le serveur les refuse et la file le dit. Les jeter
     /// serait le seul geste irréversible du lot.
     public func forgetAccountContent() async {
-        await homeFeed.clear()
+        await content.clearAll()
     }
 
     /// Garantit que l'appareil est enregistré avant un appel réseau.
@@ -140,24 +150,41 @@ public final class AppDependencies {
     /// inventer un libellé serait pire que de n'en donner aucun.
     public func homeModel() -> HomeModel {
         HomeModel(
-            source: { [api, homeFeed] in
-                do {
-                    let feed = try await api.homeFeed()
-                    await homeFeed.write(feed)
-                    return feed
-                } catch {
-                    // **On ne se replie que sur une panne de transport.** Un 500
-                    // ou un 404 sont des réponses : les cacher derrière un
-                    // contenu périmé, c'est masquer une panne du serveur.
-                    guard (error as? APIError)?.isTransport == true,
-                        let cached = await homeFeed.read()
-                    else { throw error }
-
-                    return cached
-                }
-            },
+            source: cachedSource(.home) { [api] in try await api.homeFeed() },
+            cached: { [content] in await content.read(.home, as: HomeFeed.self) },
             outbox: outbox
         )
+    }
+
+    /// Enveloppe une lecture réseau du cache : elle **recopie** ce qui arrive,
+    /// et **relit** ce qu'elle avait si le transport échoue.
+    ///
+    /// **On ne se replie que sur une panne de transport.** Un 500 ou un 404
+    /// sont des réponses : les cacher derrière un contenu périmé, c'est masquer
+    /// une panne du serveur — et laisser quelqu'un travailler sur un écran qui
+    /// ment.
+    ///
+    /// Le repli et l'ouverture rapide sont **deux choses** : celui-ci rattrape
+    /// une panne, l'autre — le `cached:` du modèle — dessine *avant* d'appeler.
+    /// Les deux lisent le même fichier, et c'est pour ça qu'ils tiennent dans
+    /// la même pièce.
+    private func cachedSource<Value: Codable & Sendable>(
+        _ slot: ContentCache.Slot,
+        _ fetch: @escaping @Sendable () async throws -> Value
+    ) -> @Sendable () async throws -> Value {
+        { [content] in
+            do {
+                let fresh = try await fetch()
+                await content.write(slot, fresh)
+                return fresh
+            } catch {
+                guard (error as? APIError)?.isTransport == true,
+                    let stored = await content.read(slot, as: Value.self)
+                else { throw error }
+
+                return stored
+            }
+        }
     }
 
     /// Le profil, servi par `GET /v1/profile` — et corrigé par `PATCH`.
@@ -169,19 +196,27 @@ public final class AppDependencies {
     /// comme avant.
     public func profileModel() -> ProfileModel {
         ProfileModel(
-            source: { [api] in try await api.profile() },
+            source: cachedSource(.profile) { [api] in try await api.profile() },
             persist: { [api] edit in try await api.updateProfile(edit) },
             // La troisième, et la seule sans retour : elle supprime le compte
             // et tout ce qui est à lui. L'écran demande confirmation avant.
-            remove: { [api] in try await api.deleteAccount() }
+            remove: { [api] in try await api.deleteAccount() },
+            cached: { [content] in await content.read(.profile, as: TravellerProfile.self) }
         )
     }
 
     /// Un voyage ouvert, servi par `GET /v1/trips/:id`.
     public func tripModel(id: String) -> TripHomeModel {
-        TripHomeModel(tripId: id) { [api] identifier in
-            try await api.tripDetail(id: identifier)
-        }
+        // La source est construite **ici**, une fois, parce que le voyage est
+        // fixé à la construction du modèle : c'est ce qui permet au cache
+        // d'avoir sa case (`.trip(id)`) sans que le modèle sache qu'il existe.
+        let read = cachedSource(.trip(id)) { [api] in try await api.tripDetail(id: id) }
+
+        return TripHomeModel(
+            tripId: id,
+            source: { _ in try await read() },
+            cached: { [content] in await content.read(.trip(id), as: TripDetail.self) }
+        )
     }
 
     /// La conversation avec MEMO.
@@ -210,7 +245,10 @@ public final class AppDependencies {
 
     /// La galerie des carnets de la communauté, servie par `GET /v1/gallery`.
     public func galleryModel() -> GalleryModel {
-        GalleryModel { [api] in try await api.gallery() }
+        GalleryModel(
+            source: cachedSource(.gallery) { [api] in try await api.gallery() },
+            cached: { [content] in await content.read(.gallery, as: Gallery.self) }
+        )
     }
 
     /// Les six étapes de « Créer un voyage ». Deux routes et non une : la
@@ -232,9 +270,13 @@ public final class AppDependencies {
     /// touchent `memo_members`, pas `memos`. Elles ont donc leur route, et le
     /// modèle les reçoit comme le reste.
     public func tripSettingsModel(tripId: String) -> TripSettingsModel {
-        TripSettingsModel(
+        let read = cachedSource(.tripSettings(tripId)) { [api] in
+            try await api.tripSettings(id: tripId)
+        }
+
+        return TripSettingsModel(
             tripId: tripId,
-            source: { [api] id in try await api.tripSettings(id: id) },
+            source: { _ in try await read() },
             persist: { [api] id, edit in try await api.updateTripSettings(id: id, edit: edit) },
             removeCompanion: { [api] id, companionId in
                 try await api.removeCompanion(tripId: id, companionId: companionId)
@@ -245,6 +287,13 @@ public final class AppDependencies {
             // La seule sans retour : `DELETE /v1/memos/:id`, que le serveur
             // réserve au propriétaire. L'écran demande confirmation avant.
             delete: { [api] id in try await api.deleteMemo(id: id) },
+            // Les limites de souvenirs : le seul « achat » que cet écran porte.
+            setMemoryPlan: { [api] id, plan in
+                try await api.setMemoryPlan(tripId: id, plan: plan)
+            },
+            cached: { [content] in
+                await content.read(.tripSettings(tripId), as: TripSettings.self)
+            },
             themes: { [api] in try await api.tripThemes() }
         )
     }
@@ -425,4 +474,19 @@ extension EnvironmentValues {
     /// fabrique branchée sur l'API ; un aperçu n'en pose aucune et le paywall
     /// retombe sur le jeu d'essai.
     @Entry public var profileModelFactory: (@MainActor () -> ProfileModel)?
+
+    /// Le support de la session, pour un écran qui doit l'ouvrir **par-dessus
+    /// lui** au lieu de le faire pousser par ``RootView``.
+    ///
+    /// Un seul écran est dans ce cas, et c'est le paywall (Hugo, 16/09/2026) :
+    /// « Besoin d'aide ? » y refermait l'offre avant de pousser le support, et
+    /// la flèche de retour ramenait donc au profil — l'écran qui avait présenté
+    /// le paywall — au lieu de l'étape qu'on regardait. Le support se pose
+    /// désormais **sur** le paywall, qui reste monté derrière avec sa page.
+    ///
+    /// Le modèle est celui de la session et non un neuf : les votes « cette
+    /// réponse t'a-t-elle aidé » et le message en cours d'écriture ne doivent
+    /// pas repartir de zéro parce qu'on est entré par une porte plutôt qu'une
+    /// autre. `nil` en aperçu, où le paywall en fabrique un à la volée.
+    @Entry public var supportModel: SupportModel?
 }

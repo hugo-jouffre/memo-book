@@ -38,8 +38,19 @@ public final class GalleryModel {
 
     private let source: () async throws -> Gallery
 
-    public init(source: @escaping () async throws -> Gallery = { .fixture }) {
+    /// Ce qu'on avait sur le disque — voir ``ContentCache``. `nil` en aperçu.
+    private let cached: CachedValue<Gallery>?
+
+    /// Ce que le dernier chargement a appris. C'est lui que la vue anime —
+    /// voir ``SwiftUI/View/brandRefreshFlash(_:)``.
+    public private(set) var freshness: ContentFreshness = .unknown
+
+    public init(
+        source: @escaping () async throws -> Gallery = { .fixture },
+        cached: CachedValue<Gallery>? = nil
+    ) {
         self.source = source
+        self.cached = cached
     }
 
     /// `true` tant qu'on n'a rien à montrer. L'écran pose alors des vignettes
@@ -59,8 +70,16 @@ public final class GalleryModel {
     public var isEmpty: Bool { columns.allSatisfy(\.isEmpty) }
 
     public func load() async {
+        // Des carnets publics, qui bougent à l'échelle de la semaine : les
+        // rouvrir depuis le disque ne risque pas de montrer du périmé.
+        if gallery == nil, let stored = await cached?() {
+            gallery = stored
+            freshness = .restored
+        }
+
         do {
             let loaded = try await source()
+            freshness = contentFreshness(of: loaded, replacing: gallery)
             gallery = loaded
             errorMessage = nil
 

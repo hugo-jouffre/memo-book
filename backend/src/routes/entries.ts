@@ -5,6 +5,7 @@ import { JOB_NAMES, type RedactJob, type TranscribeJob } from "../jobs/index.js"
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
+import { TEXT_MEMORY_COST, consumeMemory, voiceCost } from "../services/memoryAllowance.js";
 import { assertCanRecord } from "../services/quota.js";
 import { loadVisibleMemo } from "./memos.js";
 import { serializeEntry } from "./serializers.js";
@@ -57,6 +58,12 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
 
     if (!request.isMultipart()) {
       const body = textEntryBody.parse(request.body ?? {});
+
+      // Les limites de souvenirs, **avant** d'écrire : un message coûte une
+      // unité. Le refus porte `memory_limit_reached`, que l'app traduit en
+      // feuille d'extension plutôt qu'en bandeau rouge.
+      await consumeMemory(context.prisma, accountIdOf(request), TEXT_MEMORY_COST);
+
       const entry = await context.prisma.entry.create({
         data: {
           memoId,
@@ -109,6 +116,23 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
       throw HttpError.badRequest("`capturedAt` n'est pas une date ISO 8601 valide.");
     }
 
+    // La durée réellement capturée, pauses déduites, telle que l'app l'envoie.
+    // Absente — un client plus ancien —, `voiceCost` compte une minute.
+    const rawDuration = fields["durationSeconds"]?.value;
+    const durationSeconds =
+      typeof rawDuration === "string" && rawDuration.length > 0
+        ? Number.parseFloat(rawDuration)
+        : null;
+    const duration =
+      durationSeconds !== null && Number.isFinite(durationSeconds) && durationSeconds > 0
+        ? durationSeconds
+        : null;
+
+    // Un vocal décompte ses minutes ; une photo, rien — elle ne passe ni par la
+    // transcription ni par la rédaction, qui sont ce que les limites de
+    // souvenirs financent.
+    await consumeMemory(context.prisma, accountIdOf(request), isAudio ? voiceCost(duration) : 0);
+
     const stored = await context.storage.put(
       isAudio ? "audio" : "photo",
       file.filename,
@@ -128,6 +152,10 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
             storageKey: stored.storageKey,
             mimeType: stored.mimeType,
             bytes: stored.bytes,
+            // Elle était nulle depuis toujours : l'app ne l'envoyait pas. Elle
+            // sert maintenant au décompte des limites de souvenirs, et elle
+            // servira à afficher la durée d'un vocal dans le fil.
+            durationSeconds: isAudio ? duration : null,
           },
         },
       },

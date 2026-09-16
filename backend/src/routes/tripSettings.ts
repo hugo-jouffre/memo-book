@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { AppContext } from "../context.js";
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
+import { readMemoryAllowance, setMemoryPlan } from "../services/memoryAllowance.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
 import { endSubscriptionsWithoutRunningTrip } from "../services/subscriptions.js";
 import { serializeTripSettings } from "./appSerializers.js";
@@ -25,6 +26,8 @@ import { serializeTripSettings } from "./appSerializers.js";
  * `ownedByAccount`. C'est la règle de tout le voyage — seule la suppression
  * reste au propriétaire (voir `ios/CLAUDE.md`).
  */
+
+const memoryPlanBody = z.object({ plan: z.enum(["included", "extended"]) });
 
 const params = z.object({ id: z.string().uuid() });
 
@@ -105,7 +108,7 @@ const settingsInclude = {
 };
 
 async function readSettings(context: AppContext, accountId: string, memoId: string) {
-  const [memo, account] = await Promise.all([
+  const [memo, account, memory] = await Promise.all([
     context.prisma.memo.findFirst({
       where: { id: memoId, ...visibleToAccount(accountId) },
       include: settingsInclude,
@@ -116,17 +119,38 @@ async function readSettings(context: AppContext, accountId: string, memoId: stri
       where: { id: accountId },
       select: { walletBalanceCents: true },
     }),
+    // Les limites de souvenirs pendent du compte elles aussi. La lecture remet
+    // la période à zéro si le mois est écoulé — voir `readMemoryAllowance`.
+    readMemoryAllowance(context.prisma, accountId),
   ]);
 
   if (!memo) throw new HttpError(404, "Ce voyage n’existe pas.");
 
-  return serializeTripSettings(memo, account?.walletBalanceCents ?? 0);
+  return serializeTripSettings(memo, account?.walletBalanceCents ?? 0, memory);
 }
 
 export function registerTripSettingsRoutes(app: FastifyInstance, context: AppContext) {
   app.get("/v1/trips/:id/settings", async (request) => {
     const { id } = params.parse(request.params);
     return readSettings(context, accountIdOf(request), id);
+  });
+
+  /**
+   * Étendre — ou remettre — les limites de souvenirs.
+   *
+   * **Sur le voyage et non sur le compte**, alors que le palier appartient au
+   * compte : c'est l'écran des réglages d'un voyage qui l'ouvre, et la réponse
+   * est le jeu de réglages entier, que l'app remplace tel quel. Une route
+   * `/v1/account/memory` aurait rendu quatre nombres que l'écran aurait dû
+   * recoller à la main dans ce qu'il avait déjà.
+   */
+  app.post("/v1/trips/:id/memory-plan", async (request) => {
+    const { id } = params.parse(request.params);
+    const { plan } = memoryPlanBody.parse(request.body);
+    const accountId = accountIdOf(request);
+
+    await setMemoryPlan(context.prisma, accountId, plan);
+    return readSettings(context, accountId, id);
   });
 
   app.patch("/v1/trips/:id/settings", async (request) => {

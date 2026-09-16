@@ -184,6 +184,25 @@ model Account {
   offeredSteps   Int?
   remainingSteps Int?
 
+  /// **Les limites de souvenirs**, en « souvenirs » consommés dans le mois.
+  ///
+  /// À ne pas confondre avec les étapes offertes ci-dessus, qui sont le palier
+  /// d'entrée : celles-là s'épuisent une fois et ouvrent le paywall. Les
+  /// limites de souvenirs, elles, sont le budget **mensuel** de quelqu'un qui
+  /// raconte déjà — elles se rechargent, et se relèvent contre 3,99 €/mois.
+  ///
+  /// Un vocal coûte plus cher qu'un message, parce qu'il coûte plus cher :
+  /// transcription, rédaction, relecture. La table des coûts vit dans
+  /// `services/memoryAllowance.ts`, pas ici — une règle de tarification ne se
+  /// range pas dans un schéma.
+  memoryPlan      MemoryPlan @default(included)
+  /// Combien de souvenirs ont été consommés depuis `memoryPeriodStart`.
+  memoryUsed      Int        @default(0)
+  /// Le début du mois glissant en cours. Le budget se remet à zéro au premier
+  /// usage qui suit son échéance — un mois glissant et non calendaire, pour
+  /// qu'un compte ouvert le 28 n'ait pas trois jours de budget.
+  memoryPeriodStart DateTime @default(now())
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -859,6 +878,16 @@ model Render {
   pdfUrl                   String?
   error                    String?
 
+  /// Le nombre de pages réellement composées par ce rendu.
+  ///
+  /// ⚠️ **Orpheline** : la colonne existe en base depuis le 15/09/2026, posée
+  /// par une migration dont le fichier n'a jamais été versionné, et **aucun
+  /// code ne la lit ni ne l'écrit**. Les pages facturées passent par
+  /// `memos.pageCount` et `print_orders.pageCount` (voir `billablePages`).
+  /// Elle est déclarée ici pour que le schéma dise la vérité sur la base —
+  /// sans quoi la prochaine migration proposerait de la supprimer.
+  pageCount                Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1107,6 +1136,18 @@ model PaymentCard {
 }
 
 /// L'abonnement, tel que la feuille du profil le présente.
+/// Les deux paliers de limites de souvenirs.
+///
+/// Deux et pas trois : la feuille d'extension oppose **ce qu'on a** à **ce qu'on
+/// peut avoir**, et un troisième palier transformerait une décision en
+/// comparaison de tableau.
+enum MemoryPlan {
+  /// Le palier compris dans l'abonnement.
+  included
+  /// Le palier étendu, à 3,99 €/mois.
+  extended
+}
+
 model Subscription {
   id        String  @id @default(uuid())
   accountId String

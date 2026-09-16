@@ -44,6 +44,27 @@ public struct HomeView: View {
     /// sont épuisées. Plein écran, comme depuis le profil.
     @State private var showsPaywall = false
 
+    /// L'alerte système « Ton abonnement MemoBook s'est arrêté », ouverte quand
+    /// la semaine payée s'est achevée depuis la dernière ouverture.
+    ///
+    /// **Une alerte du système et non une feuille de la marque** : elle
+    /// n'arrive au bout d'aucun geste — on ouvre l'app, et on l'apprend. Une
+    /// feuille qui monterait toute seule se lirait comme un écran de plus dans
+    /// un parcours ; une alerte se lit comme une nouvelle, et c'est aussi la
+    /// forme qu'iOS emploie lui-même pour annoncer la fin d'un abonnement.
+    @State private var showsSubscriptionEnded = false
+
+    /// Le dernier arrêt d'abonnement **déjà annoncé**, en secondes depuis 1970.
+    ///
+    /// Une date et non un booléen : l'alerte doit revenir au prochain
+    /// abonnement qui s'arrête, et un drapeau posé une fois pour toutes
+    /// l'aurait tue pour la vie du compte. Zéro tant que rien n'a été annoncé.
+    ///
+    /// Dans `UserDefaults` et non sur le serveur : c'est de l'état
+    /// d'**affichage**, propre à cet appareil. Deux téléphones du même compte
+    /// doivent chacun l'apprendre.
+    @AppStorage("subscription.endAnnounced") private var announcedEnd: Double = 0
+
     /// La feuille « Nouveau carnet » est ouverte.
     ///
     /// C'est la **seule** chose que l'accueil présente lui-même, et ce n'est pas
@@ -113,10 +134,6 @@ public struct HomeView: View {
                 onSubscribe: {
                     subscriptionSession?.record(isSubscribed: true)
                     showsPaywall = false
-                },
-                onHelp: {
-                    showsPaywall = false
-                    onIntent(.openHelp)
                 }
             )
         }
@@ -126,6 +143,20 @@ public struct HomeView: View {
         .onChange(of: model.feed, initial: true) { _, feed in
             guard let feed else { return }
             subscriptionSession?.learn(feed.traveller.freemiumStatus(override: nil))
+            announceSubscriptionEndIfNeeded(feed.traveller.subscriptionEndedOn)
+        }
+        // **L'alerte de fin d'abonnement.** Elle ne propose que deux gestes :
+        // en prendre acte, ou se réabonner — et le second ouvre le paywall, où
+        // l'offre est déjà écrite. Une alerte qui ne mènerait qu'à « D'accord »
+        // annoncerait une porte fermée sans dire où est la poignée.
+        .alert(
+            SubscriptionCopy.endedTitle,
+            isPresented: $showsSubscriptionEnded
+        ) {
+            Button(SubscriptionCopy.endedResubscribe) { showsPaywall = true }
+            Button(SubscriptionCopy.endedDismiss, role: .cancel) {}
+        } message: {
+            Text(SubscriptionCopy.endedMessage(tripTitle: ongoingTripTitle))
         }
         // Le crème de la marque ne se retourne pas en sombre — voir
         // `MemoBookColor`.
@@ -134,6 +165,11 @@ public struct HomeView: View {
             await model.load()
             isLoaded = true
         }
+        // **L'accueil s'ouvre sur ce qu'on avait, et le dit quand ça change.**
+        // C'est l'écran qui gagne le plus au cache — c'est le premier — et
+        // celui qui risque le plus de changer sous les yeux : une étape de
+        // plus, un vocal transcrit, un solde d'étapes qui descend.
+        .brandRefreshFlash(model.freshness.isUpdated)
         // Deux conditions, dans n'importe quel ordre : le contenu est là, et le
         // tracé du M ne couvre plus l'écran. C'est la seconde qui manquait —
         // l'accueil étant désormais monté **sous** le voile, sa cascade se
@@ -495,6 +531,25 @@ public struct HomeView: View {
     /// Le voyage que le bouton fait raconter : le premier en cours, celui que
     /// l'accueil montre en haut.
     private var ongoingTripId: String? { model.ongoingTrips.first?.id }
+
+    /// Son titre, pour nommer le voyage dans l'alerte de fin d'abonnement.
+    /// `nil` quand il n'y en a pas — la phrase se replie alors.
+    private var ongoingTripTitle: String? { model.ongoingTrips.first?.title }
+
+    /// Ouvre l'alerte **une seule fois par arrêt d'abonnement**.
+    ///
+    /// Le serveur ne dit que « la semaine payée s'est achevée ce jour-là », et
+    /// il le dira à chaque chargement de l'accueil pendant quinze jours : c'est
+    /// à l'app de se souvenir qu'elle l'a annoncé. D'où la date retenue plutôt
+    /// qu'un drapeau — le prochain abonnement qui s'arrêtera portera une autre
+    /// date, et l'alerte reviendra.
+    private func announceSubscriptionEndIfNeeded(_ endedOn: Date?) {
+        guard let endedOn else { return }
+        let stamp = endedOn.timeIntervalSince1970
+        guard stamp > announcedEnd else { return }
+        announcedEnd = stamp
+        showsSubscriptionEnded = true
+    }
 
     /// Le CTA change de couleur et de destination, pas de place ni de taille.
     ///

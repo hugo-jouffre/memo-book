@@ -1,0 +1,17 @@
+-- Le nombre de pages **réellement composées** par un rendu.
+--
+-- ⚠️ **Ce fichier est une reconstitution** (16/09/2026). La migration avait été
+-- appliquée à la base — `_prisma_migrations` la porte depuis le 15/09 — mais
+-- son fichier n'a jamais été versionné : il n'est dans aucun commit ni aucune
+-- branche du dépôt. `prisma migrate dev` voyait donc une dérive et proposait un
+-- `reset`, c'est-à-dire la perte de toute la base.
+--
+-- Le SQL ci-dessous est relevé sur la base elle-même (`prisma migrate diff`),
+-- pas réinventé : une colonne entière, nullable, sans défaut. Le recréer
+-- réaligne l'historique local sur ce que la base sait déjà, sans rien toucher
+-- aux données.
+--
+-- ⚠️ **Aucun code ne la lit ni ne l'écrit à ce jour.** Les pages facturées
+-- passent par `memos.pageCount` et `print_orders.pageCount` (`billablePages`).
+-- La colonne attend le travail qui l'a créée.
+ALTER TABLE "renders" ADD COLUMN "pageCount" INTEGER;

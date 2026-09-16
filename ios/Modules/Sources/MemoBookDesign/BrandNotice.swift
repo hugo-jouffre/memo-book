@@ -6,8 +6,12 @@ import SwiftUI
 /// Ce n'est ni une erreur ni une alerte, et c'est pour ça qu'il ne ressemble à
 /// aucune des deux. ``ErrorBanner`` dit « quelque chose a raté, voilà le
 /// bouton pour réessayer » ; celui-ci dit « voilà où on en est, tu peux
-/// continuer » — pas de rouge, pas de pictogramme, pas d'action. Il disparaît
-/// tout seul quand la situation qu'il décrit a changé.
+/// continuer » — pas de rouge, pas d'action. Il disparaît tout seul quand la
+/// situation qu'il décrit a changé.
+///
+/// Il a **deux tons** — voir ``Tone`` : le beige de l'état des choses, et le
+/// bleu d'information pour ce qu'on vient d'expliquer à quelqu'un qui a tapé
+/// quelque part où ça ne mène pas encore.
 ///
 /// **Le gras n'est pas une décoration** : chaque message porte une phrase qui
 /// compte — ce que la personne peut faire malgré la panne, ou ce qui est
@@ -16,33 +20,87 @@ import SwiftUI
 /// construction** : rien à calculer dans un `body`, donc rien à recalculer à
 /// chaque image d'animation.
 public struct BrandNotice: View {
-    private let message: AttributedString
+    /// Ce que le bloc dit de lui-même.
+    public enum Tone {
+        /// L'état des choses, sur le beige de la marque. Le cas courant.
+        case neutral
 
-    /// - Parameter markup: le message, dont la partie qui compte est entourée
-    ///   de `**`. Un balisage invalide n'efface rien : la phrase s'affiche
-    ///   telle quelle, sans gras.
-    public init(_ markup: String) {
+        /// **Une explication qu'on vient de demander** : pourquoi un réglage
+        /// n'est pas ouvert, pourquoi une porte ne mène nulle part. Elle porte
+        /// la couleur sémantique d'information (``MemoBookColor/information``)
+        /// — un filet, un pictogramme et un texte bleus sur un aplat très
+        /// clair — parce qu'elle répond à un geste au lieu de décrire un fond
+        /// de situation, et qu'il faut la distinguer d'une erreur.
+        case information
+    }
+
+    private let message: AttributedString
+    private let tone: Tone
+
+    /// - Parameters:
+    ///   - markup: le message, dont la partie qui compte est entourée de `**`.
+    ///     Un balisage invalide n'efface rien : la phrase s'affiche telle
+    ///     quelle, sans gras.
+    ///   - tone: voir ``Tone``. Neutre par défaut, c'est-à-dire le bloc d'avant.
+    public init(_ markup: String, tone: Tone = .neutral) {
         message = Self.resolved(markup)
+        self.tone = tone
     }
 
     public var body: some View {
+        content
+            .multilineTextAlignment(tone == .information ? .leading : .center)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: tone == .information ? .leading : .center)
+            .padding(MemoBookSpacing.s)
+            .background(background, in: .rect(cornerRadius: MemoBookSpacing.largeCornerRadius))
+            .overlay {
+                if tone == .information {
+                    RoundedRectangle(cornerRadius: MemoBookSpacing.largeCornerRadius)
+                        .strokeBorder(MemoBookColor.information, lineWidth: 1)
+                }
+            }
+            .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch tone {
+        case .neutral:
+            text
+        case .information:
+            // Le pictogramme se cale sur la **première ligne** du texte et non
+            // sur le milieu du bloc : sur trois lignes, un centrage vertical le
+            // faisait descendre au milieu de la phrase.
+            HStack(alignment: .firstTextBaseline, spacing: MemoBookSpacing.xs) {
+                Image(systemName: "info.circle.fill")
+                    .foregroundStyle(MemoBookColor.information)
+                    .accessibilityHidden(true)
+                text
+            }
+        }
+    }
+
+    private var text: some View {
         Text(message)
             // La police de base est posée deux fois — ici et sur chaque
             // portion de texte — et c'est voulu : `Text` a besoin d'une police
             // même quand le balisage n'a pas pu être lu.
             .font(MemoBookFont.body)
             .foregroundStyle(MemoBookColor.ink)
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity)
-            .padding(MemoBookSpacing.s)
-            // `Beige Darker`, le seul aplat discret de la palette : plus
-            // soutenu que le crème du fond, donc le bloc se détache ; assez
-            // proche pour ne pas se lire comme une carte de contenu.
-            .background(
-                MemoBookColor.separator,
-                in: .rect(cornerRadius: MemoBookSpacing.largeCornerRadius)
-            )
+    }
+
+    private var background: Color {
+        switch tone {
+        // `Beige Darker`, le seul aplat discret de la palette : plus soutenu
+        // que le crème du fond, donc le bloc se détache ; assez proche pour ne
+        // pas se lire comme une carte de contenu.
+        case .neutral: MemoBookColor.separator
+        // Le bleu d'information, très dilué : c'est le filet et le pictogramme
+        // qui portent la couleur, pas l'aplat — un fond bleu franc sous du
+        // texte encre tombe sous le contraste demandé.
+        case .information: MemoBookColor.information.opacity(0.12)
+        }
     }
 
     /// Traduit `**…**` en portions de texte en demi-gras.

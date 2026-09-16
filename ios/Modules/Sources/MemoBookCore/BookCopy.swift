@@ -11,11 +11,17 @@ import Foundation
 // (U+2019) partout, espace insécable avant `?` et `!`, points de suspension `…`
 // (U+2026), guillemets français `«  »`.
 //
-// ⚠️ **Quatre coquilles de la maquette sont recopiées telles quelles** (R8
-// interdit de corriger en silence) :
-//   - `Wallet.emptyMessage` **vouvoie** — « Partagez votre cagnotte avec vos
-//     proches ». R9 ne souffre pas d'exception dans l'app : la phrase est
-//     recopiée et **signalée**, pas réécrite (voir la fiche de la cagnotte).
+// ⚠️ **Le vouvoiement de la maquette est corrigé ici, et plus recopié**
+// (Hugo, 16/09/2026). R8 dit « la copie de Figma au caractère près », R9 dit
+// « on tutoie l'utilisateur, toujours » : les deux s'opposaient sur une dizaine
+// de phrases du carnet, du voyage et de la cagnotte, qui vouvoyaient au milieu
+// d'une app qui tutoie. R9 l'emporte, comme il l'emportait déjà sur les cinq
+// feuilles de l'abonnement (`SubscriptionCopy`). Chaque phrase corrigée le dit
+// dans son commentaire, et la liste des écarts vit dans la fiche écran pour que
+// Clara les reprenne **à la source**.
+//
+// Trois coquilles restent recopiées telles quelles (R8), parce qu'elles ne
+// touchent pas à la personne à qui l'app parle :
 //   - `Wallet.subscriptionTile` écrit « grace » sans accent circonflexe.
 //   - `Settings.pdfPreview` écrit « Prévisulation » pour « Prévisualisation ».
 //   - `Preview.configureCover` écrit « Défini » pour « Définis ».
@@ -91,14 +97,14 @@ public enum BookCopy {
     public enum Customisation {
         public static let title = "Personnalisations du carnet"
 
-        /// ⚠️ **Cette phrase vouvoie**, et elle est recopiée telle quelle (R8) :
-        /// R9 dit que l'app tutoie sans exception. Signalée — à réécrire dans
-        /// Figma en « Ajuste les différentes options de MemoBook pour que ton
-        /// carnet te ressemble de plus en plus ». La maquette écrit aussi
-        /// « Ajuster les différents options » : un infinitif là où il faut un
-        /// impératif, et un accord manquant.
+        /// **Corrigée** : la maquette vouvoie (« Ajuster les différents
+        /// options … votre carnet vous ressemble »), avec un infinitif là où il
+        /// faut un impératif et un accord manquant. R9 — « on tutoie
+        /// l'utilisateur, toujours » — l'emporte ici sur R8, tranché par Hugo
+        /// le 16/09/2026 pour toute la copie du carnet et du voyage. L'écart
+        /// est à reprendre à la source dans Figma.
         public static let intro =
-            "Ajuster les différents options de MemoBook pour que votre carnet vous ressemble de plus en plus"
+            "Ajuste les différentes options de MemoBook pour que ton carnet te ressemble de plus en plus."
 
         public static let covers = "Couvertures (1re & 4e)"
         public static let coversDetail = "Aperçu et personnalisation"
@@ -110,10 +116,10 @@ public enum BookCopy {
         public static let rules = "Pointillés"
         public static let decorations = "Décorations & stickers"
 
-        public static let fontTitle = "Typographie des titres"
-        public static let fontDisplay = "Typographie des sous-titres"
-        public static let fontHand = "Typographie des textes"
-        public static let fontFacts = "Typographie des fun facts"
+        /// **Une seule ligne pour les quatre polices** (Hugo, 16/09/2026),
+        /// rangée avec les décors : on règle l'allure du carnet d'un bloc.
+        /// Elle remplace « Typographie des titres » et ses trois sœurs.
+        public static let fonts = "Typographies"
 
         /// L'état d'un décor qu'on active ou non. Deux mots, pas un
         /// interrupteur : la maquette en fait une ligne qui **mène** à un choix,
@@ -143,11 +149,9 @@ public enum BookCopy {
     /// Ce qu'écrit le parcours des deux plats : le choix, le style, la photo,
     /// les textes et les chiffres du dos.
     ///
-    /// ⚠️ **Deux écarts de la maquette sont recopiés tels quels** (R8) :
-    ///   - ``matchedStyle`` **vouvoie** — « Assortie à votre 1e de couverture ».
-    ///     R9 ne souffre aucune exception dans l'app : la phrase est recopiée et
-    ///     signalée, pas réécrite. À reprendre dans Figma en « Assortie à ta 1re
-    ///     de couverture ».
+    /// ⚠️ **Deux écarts de la maquette, corrigés** (R9 > R8, voir l'en-tête du
+    /// fichier) :
+    ///   - ``matchedStyle`` vouvoyait — « Assortie à votre 1e de couverture ».
     ///   - La même phrase écrit « 1e » là où l'ordinal abrégé français s'écrit
     ///     « 1re » — c'est d'ailleurs ce que les onglets du même écran écrivent
     ///     deux centimètres plus haut.
@@ -171,14 +175,32 @@ public enum BookCopy {
         public static let choosePhoto = "Choisir la photo"
         public static let importPhoto = "Importer ma photo"
 
-        /// ⚠️ Vouvoiement et « 1e » : coquilles de la maquette (R8).
-        public static let matchedStyle = "Assortie à votre 1e de couverture"
+        /// **Corrigée** : la maquette écrit « Assortie à votre 1e de
+        /// couverture » — vouvoiement et ordinal fautif. Voir
+        /// ``Customisation/intro`` pour l'arbitrage.
+        public static let matchedStyle = "Assortie à ta 1re de couverture"
 
         /// La photo choisie n'a pas pu être lue. Aucune maquette ne dessine cet
         /// état ; la phrase dit ce qui s'est passé et ce qu'on peut faire,
         /// plutôt que de laisser le carrousel inchangé sans explication.
         public static let importFailed =
             "Cette photo n’a pas pu être ouverte. Choisis-en une autre."
+
+        // MARK: Ce qu'un style ne permet pas
+
+        /// Pourquoi ce plat n'a pas de texte à écrire.
+        ///
+        /// **Elle nomme la cause et donne la sortie**, dans cet ordre : sans le
+        /// second bout, on comprend qu'on ne peut pas sans savoir quoi faire —
+        /// et le geste qui débloque est deux écrans plus haut.
+        public static func noTextHere(_ face: CoverFace) -> String {
+            "Le style choisi pour ta \(face.title) **ne porte aucun texte** : la photo occupe tout le plat. Change son style graphique pour pouvoir y écrire."
+        }
+
+        /// Pourquoi ce plat n'a pas de photo à choisir.
+        public static func noPhotoHere(_ face: CoverFace) -> String {
+            "Le style choisi pour ta \(face.title) **ne porte aucune photo** : c'est un aplat. Change son style graphique pour en ajouter une."
+        }
 
         /// Le titre par défaut d'une première de couverture qu'on n'a pas encore
         /// écrite. Le nom du voyage, et non un texte d'invite : un plat vide se
@@ -266,6 +288,17 @@ public enum BookCopy {
 
         public static let customise = "Personnaliser mon carnet"
         public static let order = "Commander ce carnet"
+
+        /// La porte de service, sous le bouton grisé : commander alors que le
+        /// carnet n'est pas composé.
+        ///
+        /// ⚠️ **Elle est dans la version livrée**, et pas seulement en debug
+        /// (Hugo, 16/09/2026) : le tunnel de commande ne se teste pas de bout
+        /// en bout autrement — il faut un TestFlight, et un TestFlight ne
+        /// compile pas `#if DEBUG`. Elle est écrite en **beige soutenu et en
+        /// petit** pour que personne ne la prenne pour l'appel à l'action, et
+        /// elle dit ce qu'elle fait plutôt que « Commander quand même ».
+        public static let orderAnyway = "Commander sans attendre la composition"
 
         /// ⚠️ « Défini » pour « Définis » : coquille de la maquette (R8).
         public static let configureCover = "Défini maintenant\nta 1ère et 4ème de couverture"
@@ -404,13 +437,11 @@ public enum BookCopy {
 
         public static let historySection = "Historique des contributions"
 
-        /// ⚠️ **Cette phrase vouvoie** — c'est la maquette, et R9 dit que l'app
-        /// tutoie sans exception. Recopiée telle quelle et signalée (R8 + R9) :
-        /// à réécrire dans Figma en « Partage ta cagnotte avec tes proches pour
-        /// recevoir tes premières contributions ! ».
+        /// **Corrigée au tutoiement** — la maquette écrit « Partagez votre
+        /// cagnotte avec vos proches ». Voir ``Customisation/intro``.
         public static let emptyTitle = "Aucune contribution pour le moment"
         public static let emptyMessage =
-            "Partagez votre cagnotte avec vos proches pour recevoir vos premières contributions !"
+            "Partage ta cagnotte avec tes proches pour recevoir tes premières contributions !"
         public static let invite = "Inviter des proches"
 
         /// « 60 € offerts par tes proches ».
@@ -438,10 +469,10 @@ public enum BookCopy {
 
     // MARK: - Les feuilles des réglages du voyage
     //
-    // Copie recopiée des nœuds de la page « 🤖 Claude Import » (section « Trip
-    // settings »), au caractère près — R8. Les phrases qui **vouvoient** sont
-    // signalées une à une : R9 veut le tutoiement partout dans l'app, et on
-    // remonte la coquille à Clara au lieu de la corriger soi-même.
+    // Copie reprise des nœuds de la page « 🤖 Claude Import » (section « Trip
+    // settings ») — R8 pour tout ce qui n'est pas une adresse à la personne, et
+    // R9 pour ce qui l'est : les phrases qui vouvoyaient sont **corrigées** et
+    // le disent, au lieu d'être recopiées (voir l'en-tête du fichier).
 
     /// « Dates » — `3443:9881`.
     public enum Dates {
@@ -454,20 +485,20 @@ public enum BookCopy {
     public enum Pace {
         public static let title = "Rythme du récit"
 
-        /// ⚠️ **Vouvoie**, et recopié tel quel (R8). Signalé.
+        /// **Corrigée au tutoiement** — voir ``Customisation/intro``.
         public static let subtitle =
-            "Ajustez le style de narration généré par l'IA pour refléter au mieux vos émotions et votre personnalité."
+            "Ajuste le style de narration généré par l'IA pour refléter au mieux tes émotions et ta personnalité."
     }
 
     /// « Notifications » — `3443:9895`.
     public enum Notifications {
         public static let title = "Notifications"
 
-        /// ⚠️ **Vouvoie**, et recopié tel quel (R8). Le nom du voyage est
-        /// glissé dedans : la maquette écrit « Rome » en dur, l'app met celui
-        /// qu'on regarde.
+        /// **Corrigée au tutoiement** — voir ``Customisation/intro``. Le nom
+        /// du voyage est glissé dedans : la maquette écrit « Rome » en dur,
+        /// l'app met celui qu'on regarde.
         public static func subtitle(trip: String) -> String {
-            "Activez ou désactivez les alertes d'écriture du voyage à '\(trip)' pour ne rien rater sans être dérangé non plus."
+            "Active ou désactive les alertes d'écriture du voyage à « \(trip) » pour ne rien rater sans être dérangé non plus."
         }
 
         public static let writingReminder = "Rappel d’écriture"
@@ -489,9 +520,9 @@ public enum BookCopy {
     public enum Theme {
         public static let title = "Thème de l’aventure"
 
-        /// ⚠️ **Vouvoie**, et recopié tel quel (R8). Signalé.
+        /// **Corrigée au tutoiement** — voir ``Customisation/intro``.
         public static let subtitle =
-            "Le thème ajuste le vocabulaire de l'IA et l'agencement graphique de vos souvenirs imprimés."
+            "Le thème ajuste le vocabulaire de l'IA et l'agencement graphique de tes souvenirs imprimés."
 
         public static let placeholder = "Trek entre amis"
         public static let validate = "Valider"
@@ -501,9 +532,9 @@ public enum BookCopy {
     public enum Invite {
         public static let title = "Inviter un proche"
 
-        /// ⚠️ **Vouvoie**, et recopié tel quel (R8). Signalé.
+        /// **Corrigée au tutoiement** — voir ``Customisation/intro``.
         public static let subtitle =
-            "Invitez vos proches à participer au récit, ajouter leurs médias et co-valider les étapes."
+            "Invite tes proches à participer au récit, à ajouter leurs médias et à co-valider les étapes."
 
         public static let listTitle = "Co-voyageur(s) actuels"
         public static let me = "Moi"
@@ -542,9 +573,9 @@ public enum BookCopy {
     public enum Ratio {
         public static let title = "Ratio média"
 
-        /// ⚠️ **Vouvoie**, et recopié tel quel (R8). Signalé.
+        /// **Corrigée au tutoiement** — voir ``Customisation/intro``.
         public static let subtitle =
-            "Déterminez l'importance visuelle des images par rapport aux textes générés au sein des chapitres."
+            "Détermine l'importance visuelle des images par rapport aux textes générés au sein des chapitres."
 
         public static let more = "Plus de photos"
         public static let less = "Plus de texte"
@@ -570,9 +601,9 @@ public enum BookCopy {
     public enum Pages {
         public static let title = "Nombre de page"
 
-        /// ⚠️ **Vouvoie**, et recopié tel quel (R8). Signalé.
+        /// **Corrigée au tutoiement** — voir ``Customisation/intro``.
         public static let subtitle =
-            "Gérez le niveau de détails de votre carnet en permettant à notre outil d’utiliser plus de page."
+            "Gère le niveau de détail de ton carnet en laissant notre outil utiliser plus de pages."
 
         /// La ligne verte sous le chapeau. Elle dit **sur quoi** les
         /// projections sont faites — la maquette écrit « 2 mois » en dur, l'app
@@ -590,9 +621,9 @@ public enum BookCopy {
         public static let title = "Fun Facts"
         public static let toggle = "Insérer des Fun facts"
 
-        /// ⚠️ **Vouvoie**, et recopié tel quel (R8). Signalé.
+        /// **Corrigée au tutoiement** — voir ``Customisation/intro``.
         public static let detail =
-            "Encarts de culture générale toutes les 3 pages pour agrémenter vos récits."
+            "Encarts de culture générale toutes les 3 pages pour agrémenter tes récits."
         public static let validate = "Valider"
     }
 
@@ -601,47 +632,37 @@ public enum BookCopy {
         public static let title = "Pointillés"
         public static let toggle = "Pointillés"
 
-        /// ⚠️ **Vouvoie**, et recopié tel quel (R8). Signalé.
-        public static let detail = "Lignes en pointillé sous le texte dans votre carnet"
+        /// **Corrigée au tutoiement** — voir ``Customisation/intro``.
+        public static let detail = "Lignes en pointillé sous le texte dans ton carnet"
         public static let validate = "Valider"
     }
 
-    /// « Titres du carnet » — `3443:10073`.
+    /// « Typographies du carnet » — l'héritière de « Titres du carnet »
+    /// (`3443:10073`).
+    ///
+    /// ⚠️ **L'écran ne suit plus la maquette ici** (Hugo, 16/09/2026) : celle-ci
+    /// dessine une feuille par rôle, où l'on marie librement trois familles. On
+    /// propose désormais quatre assortiments — voir ``BookFontCombo`` — parce
+    /// qu'un carnet imprimé ne se rattrape pas et que la plupart des mariages
+    /// libres sont ratés. À reprendre dans Figma.
     public enum Fonts {
-        public static let title = "Titres du carnet"
-
-        /// ⚠️ **Vouvoie**, et recopié tel quel (R8). Signalé.
-        public static let subtitle = "Déterminez la typographie de vos titres"
+        public static let title = "Typographies du carnet"
+        public static let subtitle =
+            "Choisis l’assortiment qui habillera ton carnet. Chacun est pensé pour tenir de bout en bout."
         public static let validate = "Valider"
 
-        /// Le titre de la feuille d'un rôle. Seule celle des titres vient de la
-        /// maquette ; les trois autres sont écrites sur son modèle, au
-        /// tutoiement (R9), et signalées (T136).
-        public static func sheetTitle(for role: BookFontRole) -> String {
-            switch role {
-            case .titles: title
-            case .subtitles: "Sous-titres du carnet"
-            case .texts: "Textes du carnet"
-            case .funFacts: "Fun facts du carnet"
-            }
-        }
-
-        public static func sheetSubtitle(for role: BookFontRole) -> String {
-            switch role {
-            case .titles: subtitle
-            case .subtitles: "Détermine la typographie de tes sous-titres"
-            case .texts: "Détermine la typographie de tes textes"
-            case .funFacts: "Détermine la typographie de tes fun facts"
-            }
-        }
+        /// Ce que la ligne de l'écran affiche quand le carnet ne porte aucun
+        /// des quatre assortiments — un carnet composé police par police avant
+        /// cette feuille. On ne coche pas de force, on le nomme.
+        public static let custom = "Personnalisé"
     }
 
     /// « Décorations & stickers » — `3443:10147`.
     public enum Decorations {
         public static let title = "Décorations\n& stickers "
 
-        /// ⚠️ **Vouvoie**, et recopié tel quel (R8). Signalé.
-        public static let subtitle = "Déterminez la quantité de décorations dans vos pages"
+        /// **Corrigée au tutoiement** — voir ``Customisation/intro``.
+        public static let subtitle = "Détermine la quantité de décorations dans tes pages"
         public static let sliderLabel = "Quantité de décorations par paragraphe ou image"
         public static let validate = "Valider"
     }

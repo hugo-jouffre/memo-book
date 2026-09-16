@@ -64,8 +64,11 @@ public struct BrandToggleCard: View {
             Text(title)
                 .font(MemoBookFont.bodySemibold)
                 .foregroundStyle(MemoBookColor.ink)
+            // 14 et non 12 : ce détail porte une **phrase entière** — ce que
+            // l'extra ajoute au carnet —, et la légende de 12 est réservée à ce
+            // qui se lit d'un coup d'œil (Hugo, 16/09/2026).
             Text(detail)
-                .font(MemoBookFont.caption)
+                .font(MemoBookFont.taglineRegular)
                 .foregroundStyle(MemoBookColor.inkMuted)
         }
         .multilineTextAlignment(.leading)

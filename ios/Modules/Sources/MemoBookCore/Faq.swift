@@ -26,9 +26,13 @@ import Foundation
 //      Le contenu est statique pour l'instant, mais ``SupportModel`` le reçoit
 //      par une fonction : le jour où la route existe, seul ce branchement
 //      change, pas l'écran.
-//   2. Le champ « mots-clés par question » de la recherche interne n'existe pas
-//      encore : aucune maquette ne dessine de champ de recherche, et on
-//      n'invente pas d'écran (R3). Il entrera avec lui.
+//   2. Le champ « mots-clés par question » de la recherche interne n'existe
+//      toujours pas. L'écran a désormais **une recherche** (Hugo, 16/09/2026),
+//      mais elle cherche dans la question, dans la réponse et dans le titre du
+//      paquet — voir ``FaqQuery`` —, ce qui couvre ce que des mots-clés
+//      auraient couvert sans demander à Clara d'en écrire quarante-cinq jeux.
+//      Le champ reste à ajouter le jour où une réponse doit se trouver sur un
+//      mot qu'elle n'emploie pas.
 //   3. Une entrée par langue rattachée au même identifiant. L'app est en
 //      français seul aujourd'hui ; l'identifiant est déjà là pour porter le
 //      reste.
@@ -88,6 +92,21 @@ public struct FaqEntry: Sendable, Hashable, Identifiable {
     public func answer(with variables: FaqVariables = .current) -> [String] {
         answer.map(variables.resolve)
     }
+
+    /// Cette question répond-elle à ce qu'on cherche ?
+    ///
+    /// **La question et la réponse, toutes les deux.** Quelqu'un qui tape
+    /// « remboursement » ne cherche pas un titre, il cherche une phrase — et
+    /// aucun des quarante-cinq titres ne porte ce mot alors que trois réponses
+    /// le portent. Chercher dans les seuls titres aurait rendu le champ
+    /// décevant sur exactement les mots qu'on tape quand on est bloqué.
+    ///
+    /// Les variables sont résolues avant la comparaison : on doit pouvoir
+    /// trouver « 16 pages » alors que le texte dit `{{nb_pages_min}}`.
+    public func matches(_ query: FaqQuery, variables: FaqVariables = .current) -> Bool {
+        guard !query.isEmpty else { return true }
+        return query.matches(question) || answer(with: variables).contains(where: query.matches)
+    }
 }
 
 /// Un paquet de questions. Les dix titres sont ceux de la page Notion.
@@ -100,6 +119,63 @@ public struct FaqCategory: Sendable, Hashable, Identifiable {
         self.id = id
         self.title = title
         self.entries = entries
+    }
+
+    /// Le même paquet, réduit à ce qui répond. `nil` quand plus rien n'y
+    /// répond : un paquet vide se retire de l'écran entier plutôt que de
+    /// laisser un titre de section sans lignes dessous.
+    ///
+    /// **Le titre du paquet compte aussi.** Taper « photos » doit rendre le
+    /// paquet « Photos et souvenirs » en entier, même si le mot ne figure dans
+    /// aucune de ses questions : on cherche souvent le rayon avant l'article.
+    public func filtered(by query: FaqQuery, variables: FaqVariables = .current) -> FaqCategory? {
+        guard !query.isEmpty else { return self }
+        if query.matches(title) { return self }
+
+        let kept = entries.filter { $0.matches(query, variables: variables) }
+        guard !kept.isEmpty else { return nil }
+        return FaqCategory(id: id, title: title, entries: kept)
+    }
+}
+
+/// Ce qu'on a tapé dans le champ de recherche, préparé une seule fois.
+///
+/// **Le travail est fait à la construction, pas à chaque comparaison.** Une
+/// recherche vivante rejoue le filtre à chaque caractère sur quarante-cinq
+/// questions et leurs réponses : normaliser la requête une fois par frappe au
+/// lieu d'une fois par comparaison, c'est deux ordres de grandeur.
+///
+/// La comparaison ignore la **casse** et les **accents** : on tape « reglage »
+/// et on trouve « réglage », ce que personne ne pense à faire marcher et que
+/// tout le monde remarque quand ça ne marche pas.
+public struct FaqQuery: Sendable, Hashable {
+    private let needles: [String]
+
+    /// La requête brute, telle qu'elle est tapée. L'écran l'affiche.
+    public let raw: String
+
+    public init(_ raw: String) {
+        self.raw = raw
+        // Chaque mot compte séparément : « carnet papier » doit trouver une
+        // réponse qui parle du « papier du carnet ». Un seul bloc n'aurait
+        // trouvé que la suite exacte.
+        needles = Self.folded(raw)
+            .split(whereSeparator: { $0.isWhitespace })
+            .map(String.init)
+    }
+
+    public var isEmpty: Bool { needles.isEmpty }
+
+    /// Tous les mots de la requête, et non un seul : ajouter un mot **réduit**
+    /// les résultats, comme partout ailleurs.
+    public func matches(_ text: String) -> Bool {
+        guard !needles.isEmpty else { return true }
+        let haystack = Self.folded(text)
+        return needles.allSatisfy { haystack.contains($0) }
+    }
+
+    private static func folded(_ text: String) -> String {
+        text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
     }
 }
 

@@ -96,3 +96,132 @@ describe("les étapes offertes", () => {
     expect(told.statusCode).toBe(201);
   });
 });
+
+/**
+ * Le **sursis de la semaine payée** : une semaine commencée est une semaine
+ * réglée, donc elle va à son terme même après une résiliation. Hugo,
+ * 16/09/2026. Voir `PAID_THROUGH_SUBSCRIPTION` dans `services/quota.ts`.
+ */
+describe("la semaine déjà payée", () => {
+  async function exhaustedAccountWith(status: "cancelled" | "expired", renewsAt: Date | null) {
+    const account = await registerAccount(harness.app);
+    const memo = await tripOf(account.accountId);
+    await harness.prisma.account.update({
+      where: { id: account.accountId },
+      data: { remainingSteps: 0 },
+    });
+    await harness.prisma.subscription.create({
+      data: { accountId: account.accountId, provider: "stripe", status, priceCents: 199, renewsAt },
+    });
+    return { account, memo };
+  }
+
+  it("laisse raconter après une résiliation, jusqu'à la fin de la période", async () => {
+    const { account, memo } = await exhaustedAccountWith(
+      "cancelled",
+      new Date(Date.now() + 5 * 86_400_000),
+    );
+
+    const told = await tellSomething(account.authorization, memo.id);
+    expect(told.statusCode).toBe(201);
+  });
+
+  it("vaut aussi pour un abonnement éteint par la fin du voyage", async () => {
+    // `expired` et non `cancelled` : personne n'a résilié, c'est le voyage qui
+    // s'est terminé. La semaine a coûté le même prix.
+    const { account, memo } = await exhaustedAccountWith(
+      "expired",
+      new Date(Date.now() + 2 * 86_400_000),
+    );
+
+    const told = await tellSomething(account.authorization, memo.id);
+    expect(told.statusCode).toBe(201);
+  });
+
+  it("ferme une fois la période écoulée", async () => {
+    const { account, memo } = await exhaustedAccountWith(
+      "cancelled",
+      new Date(Date.now() - 86_400_000),
+    );
+
+    const told = await tellSomething(account.authorization, memo.id);
+    expect(told.statusCode).toBe(403);
+    expect(told.json<{ error: string }>().error).toBe("quota_exhausted");
+  });
+
+  it("ferme quand aucune période n'a été payée", async () => {
+    const { account, memo } = await exhaustedAccountWith("cancelled", null);
+
+    const told = await tellSomething(account.authorization, memo.id);
+    expect(told.statusCode).toBe(403);
+  });
+});
+
+/**
+ * Les **limites de souvenirs** : le budget mensuel de quelqu'un qui raconte
+ * déjà. Voir `services/memoryAllowance.ts`.
+ */
+describe("les limites de souvenirs", () => {
+  it("décomptent un message écrit, et un vocal bien plus", async () => {
+    const account = await registerAccount(harness.app);
+    const memo = await tripOf(account.accountId);
+
+    await tellSomething(account.authorization, memo.id);
+
+    const after = await harness.prisma.account.findUniqueOrThrow({
+      where: { id: account.accountId },
+      select: { memoryUsed: true },
+    });
+    expect(after.memoryUsed).toBe(1);
+  });
+
+  it("refusent avec un code que l'app sait lire", async () => {
+    const account = await registerAccount(harness.app);
+    const memo = await tripOf(account.accountId);
+    // Tout consommé : le palier compris ouvre 3 000 souvenirs.
+    await harness.prisma.account.update({
+      where: { id: account.accountId },
+      data: { memoryUsed: 3_000 },
+    });
+
+    const told = await tellSomething(account.authorization, memo.id);
+    expect(told.statusCode).toBe(403);
+    expect(told.json<{ error: string }>().error).toBe("memory_limit_reached");
+    expect(await harness.prisma.entry.count({ where: { memoId: memo.id } })).toBe(0);
+  });
+
+  it("rouvrent au palier étendu", async () => {
+    const account = await registerAccount(harness.app);
+    const memo = await tripOf(account.accountId);
+    await harness.prisma.account.update({
+      where: { id: account.accountId },
+      data: { memoryUsed: 3_000, memoryPlan: "extended" },
+    });
+
+    const told = await tellSomething(account.authorization, memo.id);
+    expect(told.statusCode).toBe(201);
+  });
+
+  it("repartent à zéro quand le mois est écoulé", async () => {
+    const account = await registerAccount(harness.app);
+    const memo = await tripOf(account.accountId);
+    await harness.prisma.account.update({
+      where: { id: account.accountId },
+      data: {
+        memoryUsed: 3_000,
+        // Une période entière derrière nous : la lecture la remet à zéro.
+        memoryPeriodStart: new Date(Date.now() - 31 * 86_400_000),
+      },
+    });
+
+    const told = await tellSomething(account.authorization, memo.id);
+    expect(told.statusCode).toBe(201);
+
+    const after = await harness.prisma.account.findUniqueOrThrow({
+      where: { id: account.accountId },
+      select: { memoryUsed: true },
+    });
+    // La période a été remise à plat, puis le message a coûté son unité.
+    expect(after.memoryUsed).toBe(1);
+  });
+});

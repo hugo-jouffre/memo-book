@@ -23,6 +23,8 @@ enum TripSettingsSheet: String, Identifiable, Hashable {
     case notifications
     case theme
     case companions
+    /// Les limites de souvenirs, et le palier étendu.
+    case memory
 
     var id: String { rawValue }
 }
@@ -641,6 +643,7 @@ struct DeleteTripSheet: View {
             case .notifications: TripNotificationsSheet(model: model)
             case .theme: TripThemeSheet(model: model)
             case .companions: TripInviteSheet(model: model)
+            case .memory: MemoryAllowanceSheet(model: model)
             }
         }
         .environment(\.colorScheme, .light)

@@ -17,6 +17,10 @@ public struct CoversView: View {
     @State private var model: CoversModel
     private let onIntent: (CoversIntent) -> Void
 
+    /// L'explication posée par une ligne qui ne mène nulle part. `nil` le reste
+    /// du temps — voir ``actions``.
+    @State private var blockedMessage: String?
+
     public init(model: CoversModel, onIntent: @escaping (CoversIntent) -> Void) {
         _model = State(initialValue: model)
         self.onIntent = onIntent
@@ -51,6 +55,8 @@ public struct CoversView: View {
         // `MemoBookColor`.
         .environment(\.colorScheme, .light)
         .task { await model.load() }
+        // Changer de plat referme l'explication : elle parlait de l'autre.
+        .onChange(of: model.face) { _, _ in blockedMessage = nil }
     }
 
     // MARK: - Le plat
@@ -101,21 +107,50 @@ public struct CoversView: View {
                 onIntent(.openStyle)
             }
 
+            // **Les deux lignes suivantes pâlissent** quand le style du plat
+            // qu'on regarde ne les porte pas : un aplat n'a pas de photo, une
+            // photo pleine page au dos n'a pas de texte. Elles restent tapables
+            // et posent l'explication — voir ``blockedMessage``.
             CoverActionRow(
                 icon: "IconPictureFrame",
-                title: BookCopy.Covers.changePhoto
+                title: BookCopy.Covers.changePhoto,
+                isAvailable: acceptsPhoto
             ) {
+                guard acceptsPhoto else {
+                    block(BookCopy.Covers.noPhotoHere(model.face))
+                    return
+                }
                 onIntent(.openPhoto)
             }
 
             CoverActionRow(
                 icon: "IconPen",
-                title: BookCopy.Covers.editTexts
+                title: BookCopy.Covers.editTexts,
+                isAvailable: acceptsText
             ) {
+                guard acceptsText else {
+                    block(BookCopy.Covers.noTextHere(model.face))
+                    return
+                }
                 onIntent(.openTexts)
             }
+
+            if let blockedMessage {
+                BrandNotice(blockedMessage, tone: .information)
+                    .transition(.opacity)
+            }
         }
+        .animation(.snappy(duration: 0.25), value: blockedMessage)
         .disabled(model.covers == nil)
+    }
+
+    private var acceptsPhoto: Bool { model.covers?.acceptsPhoto(on: model.face) ?? true }
+    private var acceptsText: Bool { model.covers?.acceptsText(on: model.face) ?? true }
+
+    /// Pose l'explication, et l'efface quand on change de plat — sans quoi elle
+    /// resterait à parler d'une couverture qu'on ne regarde plus.
+    private func block(_ message: String) {
+        blockedMessage = message
     }
 }
 
@@ -126,11 +161,32 @@ public struct CoversView: View {
 /// Partagé par les quatre écrans du parcours : c'est le même rail, au même
 /// endroit, et c'est ce qui fait qu'on ne perd pas le plat qu'on regardait en
 /// passant du style à la photo.
+///
+/// **Un plat que l'écran ne sait pas régler pâlit au lieu de disparaître**
+/// (Hugo, 16/09/2026) : sur l'écran des textes, une quatrième de couverture en
+/// photo pleine page n'a pas de texte à écrire ; sur celui des photos, un plat
+/// en aplat n'a pas de photo à choisir. Le segment reste lisible et **tapable**,
+/// et son appui pose l'explication — la retirer ou la désactiver laisserait
+/// chercher pourquoi.
 struct CoverFaceTabs: View {
     @Binding var face: CoverFace
 
+    /// Ce plat se règle-t-il sur cet écran. Tout est ouvert par défaut : les
+    /// écrans du choix et du style n'ont rien à fermer.
+    var isAvailable: (CoverFace) -> Bool = { _ in true }
+
+    /// Ce qu'on fait de l'appui sur un plat fermé. `nil` sur les écrans où
+    /// aucun ne l'est.
+    var onUnavailable: ((CoverFace) -> Void)?
+
     var body: some View {
-        BrandSegmentedPicker(CoverFace.allCases, selection: $face, size: .compact) { $0.title }
+        BrandSegmentedPicker(
+            CoverFace.allCases,
+            selection: $face,
+            size: .compact,
+            isAvailable: isAvailable,
+            onUnavailable: onUnavailable
+        ) { $0.title }
     }
 }
 
@@ -146,6 +202,9 @@ struct CoverFaceTabs: View {
 private struct CoverActionRow: View {
     let icon: String
     let title: String
+    /// La ligne mène-t-elle quelque part. **Pâlie et non désactivée** quand
+    /// elle ne le fait pas : elle doit rester tapable pour pouvoir expliquer.
+    var isAvailable: Bool = true
     let action: () -> Void
 
     @ScaledMetric(relativeTo: .body) private var iconSide: CGFloat = MemoBookSpacing.contentIcon
@@ -176,7 +235,11 @@ private struct CoverActionRow: View {
                     .scaledToFit()
                     .frame(width: chevronSide, height: chevronSide)
                     .foregroundStyle(MemoBookColor.inkMuted)
+                    // Le chevron dit « ça mène quelque part » : il part quand
+                    // ce n'est pas le cas, plutôt que de pâlir en promettant.
+                    .opacity(isAvailable ? 1 : 0)
             }
+            .opacity(isAvailable ? 1 : 0.45)
             .padding(MemoBookSpacing.snug)
             .frame(minHeight: MemoBookSpacing.minimumTapTarget)
             // Figma dessine #E6DAD0 ; `hairline` est l'encre à 10 %, qui tombe
@@ -188,6 +251,7 @@ private struct CoverActionRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(.isButton)
+        .accessibilityValue(isAvailable ? "" : "Non disponible")
     }
 }
 

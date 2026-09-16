@@ -386,6 +386,7 @@ final class APIClientTests: XCTestCase {
             filename: "memo.m4a",
             mimeType: "audio/mp4",
             capturedAt: capturedAt,
+            durationSeconds: 95,
             placeLabel: "Kyoto"
         )
 
@@ -398,6 +399,11 @@ final class APIClientTests: XCTestCase {
         let body = String(decoding: StubURLProtocol.lastBody ?? Data(), as: UTF8.self)
         XCTAssertTrue(body.contains(#"name="file"; filename="memo.m4a""#))
         XCTAssertTrue(body.contains("2026-08-08T09:00:00.000Z"), "La date de capture doit être transmise")
+        // La durée part avec le fichier : c'est elle qui décompte les limites
+        // de souvenirs, et le serveur ne peut pas la déduire du poids, qui
+        // dépend du codec. Arrondie à la seconde.
+        XCTAssertTrue(body.contains(#"name="durationSeconds""#), "La durée doit être transmise")
+        XCTAssertTrue(body.contains("95"), "La durée doit être transmise arrondie à la seconde")
         XCTAssertTrue(body.contains("Kyoto"))
     }
 

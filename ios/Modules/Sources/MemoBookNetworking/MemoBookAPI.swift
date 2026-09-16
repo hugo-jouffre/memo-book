@@ -120,12 +120,19 @@ public protocol MemoBookAPI: Sendable {
 
     func addTextEntry(memoId: String, entry: NewTextEntry) async throws -> Entry
 
+    /// - Parameter durationSeconds: la durée **réellement capturée**, pauses
+    ///   déduites — voir `AudioRecorder.elapsed`. Elle part avec le fichier
+    ///   parce que c'est elle qui décompte les limites de souvenirs : une
+    ///   minute de vocal coûte dix fois un message écrit, et le serveur ne peut
+    ///   pas la deviner du poids du fichier, qui dépend du codec. Absente, le
+    ///   serveur compte une minute (`voiceCost`).
     func uploadAudio(
         memoId: String,
         data: Data,
         filename: String,
         mimeType: String,
         capturedAt: Date,
+        durationSeconds: TimeInterval?,
         placeLabel: String?
     ) async throws -> Entry
 
@@ -258,6 +265,19 @@ public protocol MemoBookAPI: Sendable {
         tripId: String,
         edit: BookCustomisationEdit
     ) async throws -> TripSettings
+
+    /// Relève — ou remet — les **limites de souvenirs** du compte, et relit les
+    /// réglages.
+    ///
+    /// Sur le voyage alors que le palier appartient au compte : c'est cet
+    /// écran-là qui l'ouvre, et la réponse est le jeu de réglages entier, que
+    /// l'app remplace tel quel. Une route à part aurait rendu quatre nombres à
+    /// recoller à la main dans ce qu'on avait déjà.
+    ///
+    /// ⚠️ **Rien n'est encaissé.** Comme l'abonnement, l'extension est un
+    /// service numérique : Apple impose l'achat intégré, et c'est StoreKit qui
+    /// portera la transaction. Cette route pose le palier.
+    func setMemoryPlan(tripId: String, plan: MemoryPlan) async throws -> TripSettings
 
     /// Retire un co-voyageur du voyage, et relit les réglages.
     ///

@@ -99,6 +99,10 @@ public struct RootView: View {
         // Le profil, à portée du paywall — voir
         // ``SwiftUI/EnvironmentValues/profileModelFactory``.
         .environment(\.profileModelFactory, { dependencies.profileModel() })
+        // Le support **de la session**, à portée du paywall : « Besoin d'aide ? »
+        // l'ouvre par-dessus l'offre au lieu de la refermer, pour que la flèche
+        // de retour ramène à l'étape qu'on regardait (Hugo, 16/09/2026).
+        .environment(\.supportModel, support)
         .onOpenURL { url in
             guard let token = PasswordResetLink.token(from: url) else { return }
             // Déjà entré : le mot de passe se change depuis le profil, et un

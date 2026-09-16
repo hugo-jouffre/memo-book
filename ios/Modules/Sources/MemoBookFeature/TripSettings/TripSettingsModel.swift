@@ -31,10 +31,25 @@ public final class TripSettingsModel {
     private let source: (String) async throws -> TripSettings
     private let persist: ((String, TripSettingsEdit) async throws -> TripSettings)?
 
+    /// Ce qu'on avait sur le disque — voir ``ContentCache``. `nil` en aperçu.
+    private let cached: CachedValue<TripSettings>?
+
+    /// Ce que le dernier chargement a appris. C'est lui que la vue anime —
+    /// voir ``SwiftUI/View/brandRefreshFlash(_:)``.
+    public private(set) var freshness: ContentFreshness = .unknown
+
     /// Supprimer le voyage — **le propriétaire seul**, et le serveur le
     /// vérifie. `nil` en aperçu : on ne supprime pas un voyage depuis une
     /// maquette.
     private let remove: ((String) async throws -> Void)?
+
+    /// Relève le palier de limites de souvenirs. `nil` en aperçu — la feuille
+    /// travaille alors en mémoire et le parcours se déroule quand même.
+    private let setPlan: ((String, MemoryPlan) async throws -> TripSettings)?
+
+    /// `true` pendant le changement de palier. Le bouton de la feuille tourne,
+    /// et ne part pas deux fois.
+    public private(set) var isChangingMemoryPlan = false
 
     /// `true` pendant la suppression. L'écran verrouille alors la feuille : la
     /// demande est définitive, elle ne doit pas partir deux fois.
@@ -73,15 +88,63 @@ public final class TripSettingsModel {
         removeCompanion: ((String, String) async throws -> TripSettings)? = nil,
         resendInvitation: ((String, String) async throws -> Void)? = nil,
         delete: ((String) async throws -> Void)? = nil,
+        setMemoryPlan: ((String, MemoryPlan) async throws -> TripSettings)? = nil,
+        cached: CachedValue<TripSettings>? = nil,
         themes: @escaping @Sendable () async throws -> [TripTheme] = { TripTheme.fixtures }
     ) {
+        self.cached = cached
         self.tripId = tripId
         self.source = source
         self.persist = persist
         self.removeCompanion = removeCompanion
         self.resendInvitation = resendInvitation
         self.remove = delete
+        self.setPlan = setMemoryPlan
         self.readThemes = themes
+    }
+
+    // MARK: - Les limites de souvenirs
+
+    /// Où en est le compte. `nil` quand le serveur ne les sert pas encore : la
+    /// ligne disparaît alors, plutôt que d'annoncer un budget inventé.
+    public var memory: MemoryAllowance? { settings?.memory }
+
+    #if DEBUG
+        /// Rejoue un état des limites de souvenirs, **sans rien envoyer**.
+        ///
+        /// Les deux seuils que le jeu d'essai ne montre pas : celui où la jauge
+        /// apparaît (80 %), et celui où tout est consommé. Ce sont les deux
+        /// états dont le dessin n'existe nulle part ailleurs — le reste se voit
+        /// en ouvrant l'écran. Absent de l'app livrée.
+        public func debugPlayMemory(fraction: Double) {
+            guard var current = settings, var memory = current.memory else { return }
+            memory.used = Int(Double(memory.allowance) * fraction)
+            current.memory = memory
+            settings = current
+        }
+    #endif
+
+    /// Passe au palier étendu, ou revient au palier compris.
+    ///
+    /// **Rien n'est posé à l'écran avant la réponse**, contrairement aux
+    /// réglages d'à côté : ceux-là sont des préférences, celui-ci est un achat.
+    /// Montrer « 12 000 souvenirs » avant que le serveur l'ait accordé serait
+    /// annoncer une limite qu'on n'a pas.
+    @discardableResult
+    public func changeMemoryPlan(to plan: MemoryPlan) async -> Bool {
+        guard let setPlan else { return false }
+
+        isChangingMemoryPlan = true
+        defer { isChangingMemoryPlan = false }
+
+        do {
+            settings = try await setPlan(tripId, plan)
+            clearError()
+            return true
+        } catch {
+            report(error)
+            return false
+        }
     }
 
     /// Les thèmes, chargés à l'ouverture de leur feuille et pas avant : c'est
@@ -100,8 +163,17 @@ public final class TripSettingsModel {
     public var isLoading: Bool { settings == nil && errorMessage == nil }
 
     public func load() async {
+        // Trente valeurs pour un écran qu'on ouvre pour en changer une : c'est
+        // celui qui gagne le plus à s'ouvrir sur ce qu'on avait.
+        if settings == nil, let stored = await cached?() {
+            settings = stored
+            freshness = .restored
+        }
+
         do {
-            settings = try await source(tripId)
+            let loaded = try await source(tripId)
+            freshness = contentFreshness(of: loaded, replacing: settings)
+            settings = loaded
             clearError()
         } catch {
             report(error)

@@ -21,6 +21,14 @@ import SwiftUI
 /// **Rien ne bouge en Reduce Motion.** Les barres sont remplies d'avance, les
 /// traits déjà tracés, et l'avancement se fait au doigt : une page qui se
 /// dérobe toute seule est exactement ce que ce réglage demande d'éteindre.
+///
+/// **« Besoin d'aide ? » ouvre le support par-dessus l'offre**, et le paywall
+/// reste monté derrière avec sa page (Hugo, 16/09/2026). C'était l'inverse : il
+/// se refermait, le support était poussé par l'écran d'en dessous, et la flèche
+/// de retour ramenait donc au profil ou à l'accueil — jamais à l'étape qu'on
+/// regardait. Or on va chercher de l'aide **pour revenir décider**, et perdre sa
+/// place au milieu d'un tunnel d'achat est exactement ce qu'il ne faut pas
+/// faire. Le minuteur s'arrête pendant ce temps-là, comme devant l'aperçu.
 struct PaywallView: View {
     let subscription: Subscription?
 
@@ -33,12 +41,6 @@ struct PaywallView: View {
     var previewMemoId: String?
     let onSubscribe: () -> Void
 
-    /// « Besoin d'aide ? ». Elle **referme le paywall** avant d'ouvrir le
-    /// support, et c'est l'écran qui présente celui-ci qui s'en charge : le
-    /// support est un écran poussé, pas une couche de plus au-dessus d'une
-    /// offre. Quelqu'un qui va chercher de l'aide devant un prix ne revient pas
-    /// à la story qu'il regardait.
-    var onHelp: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -54,6 +56,16 @@ struct PaywallView: View {
     /// l'offre — et le modèle du profil qu'elle pilote, fabriqué à l'ouverture.
     @State private var showsPayment = false
     @State private var paymentModel: ProfileModel?
+
+    /// Le support, ouvert **par-dessus** le paywall par « Besoin d'aide ? ».
+    @State private var showsHelp = false
+
+    /// Le support de la session — voir
+    /// ``SwiftUI/EnvironmentValues/supportModel``.
+    @Environment(\.supportModel) private var sessionSupport
+
+    /// Celui qu'un aperçu fabrique faute de session.
+    @State private var previewSupport: SupportModel?
 
     /// Où en est la barre de l'écran courant — voir ``PaywallFill``. C'est elle
     /// que le segment lit à chaque image ; le minuteur de ``runPage()`` tourne
@@ -73,7 +85,7 @@ struct PaywallView: View {
     /// se sentir bousculé, assez court pour qu'on n'attende pas la suite.
     private static let pageDuration: Duration = .seconds(6)
 
-    private var price: String { (subscription?.weeklyPrice ?? 0).euros }
+    private var price: String { subscription.displayedWeeklyPrice.euros }
 
     var body: some View {
         ZStack {
@@ -153,7 +165,19 @@ struct PaywallView: View {
         // le refermer en démarre une neuve. Un `onChange` qui relançait
         // `runPage()` à la fermeture a été essayé — il faisait cohabiter deux
         // minuteurs, et les écrans défilaient deux fois plus vite.
-        .task(id: PageTimer(page: page, isPaused: showsPreview)) { await runPage() }
+        .task(id: PageTimer(page: page, isPaused: showsPreview || showsHelp)) { await runPage() }
+        // **Le support, par-dessus l'offre.** Un `fullScreenCover` et non une
+        // feuille : c'est un écran, avec son en-tête et sa flèche — et cette
+        // flèche, qui appelle `dismiss()`, ramène donc à l'étape du paywall
+        // qu'on regardait, sans qu'il y ait une ligne à écrire pour ça.
+        .fullScreenCover(isPresented: $showsHelp) {
+            if let support = sessionSupport ?? previewSupport {
+                NavigationStack {
+                    SupportView(model: support)
+                }
+                .tint(MemoBookColor.action)
+            }
+        }
         // La feuille se pose **par-dessus le paywall entier**, et non dans une
         // page : on doit pouvoir la refermer et retrouver l'offre exactement où
         // on l'avait laissée.
@@ -164,7 +188,7 @@ struct PaywallView: View {
         // aussi : on les referme et on retrouve l'offre.
         .brandSheet(isPresented: $showsEstimation) {
             PaywallEstimationSheet(
-                estimation: .example(weeklyPrice: subscription?.weeklyPrice ?? 0)
+                estimation: .example(weeklyPrice: subscription.displayedWeeklyPrice)
             )
         }
         .brandSheet(isPresented: $showsPayment) {
@@ -228,9 +252,7 @@ struct PaywallView: View {
 
             Spacer(minLength: 0)
 
-            Button {
-                onHelp?()
-            } label: {
+            Button(action: openHelp) {
                 Text(PaywallCopy.help)
                     .font(MemoBookFont.h3)
                     .foregroundStyle(MemoBookColor.ink)
@@ -241,8 +263,17 @@ struct PaywallView: View {
                     .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .disabled(onHelp == nil)
         }
+    }
+
+    /// Ouvre le support **sur** le paywall.
+    ///
+    /// Sur le modèle de la session quand il y en a un, sur un modèle neuf
+    /// sinon : un aperçu doit pouvoir ouvrir l'écran, et le jeu d'essai de la
+    /// foire aux questions est dans le binaire.
+    private func openHelp() {
+        if sessionSupport == nil, previewSupport == nil { previewSupport = SupportModel() }
+        showsHelp = true
     }
 
     /// Deux moitiés d'écran, comme dans une story : à droite on avance, à

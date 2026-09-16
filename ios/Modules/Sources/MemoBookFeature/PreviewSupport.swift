@@ -307,6 +307,7 @@ public actor PreviewAPI: MemoBookAPI {
         filename: String,
         mimeType: String,
         capturedAt: Date,
+        durationSeconds: TimeInterval?,
         placeLabel: String?
     ) async throws -> Entry {
         try append(
@@ -593,6 +594,16 @@ public actor PreviewAPI: MemoBookAPI {
         await Self.settingsBox.read()
     }
 
+    public func setMemoryPlan(tripId: String, plan: MemoryPlan) async throws -> TripSettings {
+        await Self.settingsBox.apply { settings in
+            var memory = settings.memory ?? MemoryAllowance()
+            memory.plan = plan
+            // Le palier étendu ouvre quatre fois plus, comme le barème serveur.
+            memory.allowance = plan == .extended ? 12_000 : 3_000
+            settings.memory = memory
+        }
+    }
+
     public func updateTripSettings(id: String, edit: TripSettingsEdit) async throws -> TripSettings {
         await Self.settingsBox.apply { settings in
             switch edit {
@@ -625,6 +636,11 @@ public actor PreviewAPI: MemoBookAPI {
             case .fontTitle(let value): customisation.fontTitle = value
             case .fontHand(let value): customisation.fontHand = value
             case .fontFacts(let value): customisation.fontFacts = value
+            case .fontCombo(let combo):
+                customisation.fontDisplay = combo.font(.titles)
+                customisation.fontTitle = combo.font(.subtitles)
+                customisation.fontHand = combo.font(.texts)
+                customisation.fontFacts = combo.font(.funFacts)
             case .quiz(let isOn): customisation.quizEnabled = isOn
             case .freeZones(let isOn): customisation.freeZonesEnabled = isOn
             case .crossword(let isOn): customisation.crosswordEnabled = isOn

@@ -18,7 +18,11 @@ public struct BrandApplePayRow: View {
 
     /// - Parameters:
     ///   - isSelected: Apple Pay est le moyen retenu. Le cadre passe alors au
-    ///     vert d'action, comme les autres options sélectionnées.
+    ///     **bleu** de la marque sur un aplat bleu transparent — exactement ce
+    ///     que fait une ``BrandOptionRow`` cochée, parce que c'est le même
+    ///     geste : choisir un moyen de paiement dans une liste. Il portait le
+    ///     vert d'action et aucun fond, et la ligne retenue ne se distinguait
+    ///     donc pas des cartes au-dessus d'elle (Hugo, 16/09/2026).
     ///   - action: `nil` pour une ligne qui **montre** sans se choisir — c'est
     ///     le cas du profil tant que le paiement n'existe pas. La ligne n'est
     ///     alors pas un bouton, et VoiceOver ne l'annonce pas comme tel.
@@ -63,9 +67,13 @@ public struct BrandApplePayRow: View {
         .padding(.horizontal, MemoBookSpacing.s)
         .padding(.vertical, MemoBookSpacing.s - 2)
         .frame(minHeight: MemoBookSpacing.minimumTapTarget)
+        // Le même aplat que ``BrandOptionRow`` retenue : le bleu de la marque à
+        // 35 %, assez pour que la ligne se détache sans avaler le logotype
+        // d'Apple, qui garde ses couleurs.
+        .background(isSelected ? MemoBookColor.outline.opacity(0.35) : Color.clear, in: shape)
         .overlay {
             shape.strokeBorder(
-                isSelected ? MemoBookColor.action : MemoBookColor.ink,
+                isSelected ? MemoBookColor.outline : MemoBookColor.ink,
                 lineWidth: 2
             )
         }

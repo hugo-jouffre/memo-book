@@ -42,6 +42,10 @@ struct CoverTextsView: View {
     @State private var subtitle = ""
     @State private var isChoosingStats = false
 
+    /// Le plat sur lequel on vient de taper alors qu'il n'a pas de texte.
+    /// `nil` le reste du temps — voir ``CoverFaceTabs``.
+    @State private var blockedFace: CoverFace?
+
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -54,9 +58,23 @@ struct CoverTextsView: View {
                     )
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    CoverFaceTabs(face: $model.face)
+                    // **Le plat sans texte pâlit dans le rail** (Hugo,
+                    // 16/09/2026) : une quatrième de couverture en photo pleine
+                    // page n'a rien à écrire, et l'écran n'y proposait aucun
+                    // crayon sans jamais dire pourquoi. Le segment reste
+                    // tapable et pose l'explication.
+                    CoverFaceTabs(
+                        face: $model.face,
+                        isAvailable: acceptsText,
+                        onUnavailable: { blockedFace = $0 }
+                    )
 
                     plate
+
+                    if let blockedFace {
+                        BrandNotice(BookCopy.Covers.noTextHere(blockedFace), tone: .information)
+                            .transition(.opacity)
+                    }
 
                     fields
                         .id(Self.fieldsAnchor)
@@ -65,7 +83,7 @@ struct CoverTextsView: View {
                         commit()
                         dismiss()
                     }
-                    .disabled(model.covers == nil)
+                    .disabled(model.covers == nil || !acceptsText(model.face))
                 }
                 .padding(.horizontal, MemoBookSpacing.screenMargin)
                 .padding(.top, MemoBookSpacing.xs)
@@ -82,10 +100,13 @@ struct CoverTextsView: View {
             .onChange(of: model.cover?.title) { _, _ in readTexts() }
             .onChange(of: model.face) { _, _ in
                 // Changer de plat ferme le champ ouvert : le titre du devant et
-                // le texte du dos ne se corrigent pas dans le même champ.
+                // le texte du dos ne se corrigent pas dans le même champ. Et
+                // l'explication, qui parlait de l'autre plat.
                 close()
                 readTexts()
+                blockedFace = nil
             }
+            .animation(.snappy(duration: 0.25), value: blockedFace)
             .onAppear(perform: readTexts)
             .brandSheet(isPresented: $isChoosingStats) {
                 CoverStatsSheet(model: model)
@@ -282,6 +303,12 @@ struct CoverTextsView: View {
             try? await Task.sleep(for: .milliseconds(60))
             apply()
         }
+    }
+
+    /// Ce plat porte-t-il un texte ? Ouvert par défaut : on ne ferme pas un
+    /// geste parce qu'on n'a pas encore lu les couvertures.
+    private func acceptsText(_ face: CoverFace) -> Bool {
+        model.covers?.acceptsText(on: face) ?? true
     }
 
     // MARK: - Le brouillon

@@ -324,9 +324,19 @@ describe("le profil", () => {
     // `hasEndedBefore` dit que le compte a **déjà** été abonné : il décide de la
     // version du paywall — deux écrans au lieu de trois. Faux ici, ce compte
     // vient d'être créé.
+    //
+    // **Le prix est celui du catalogue, pas zéro.** Un compte sans ligne
+    // `subscriptions` n'a pas un abonnement à zéro euro : il n'en a pas. Rendre
+    // 0 faisait écrire « 0,00 €/semaine » à la feuille d'offre et « 3 x 0,00 € »
+    // à l'estimation (Hugo, 16/09/2026) — voir `services/subscriptionCatalog.ts`.
     expect(body.subscription).toEqual({
-      weeklyPrice: 0,
+      weeklyPrice: 1.99,
       isActive: false,
+      cancelledAt: null,
+      // Rien n'a été payé, donc aucune semaine ne court : c'est le cas où la
+      // résiliation garde sa phrase d'avant, « l'abonnement s'arrête
+      // aujourd'hui ».
+      paidThrough: null,
       hasEndedBefore: false,
     });
     expect(body.orders).toEqual([]);

@@ -232,10 +232,67 @@ vérifie qu'ils sont égaux au centime.
 > `Memo.pageCount` n'est jamais écrit par le back-end. Les deux sont signalés
 > dans le code.
 
+## L'abonnement, et les limites de souvenirs
+
+Deux choses à vendre, un seul tarif chacune, **écrites une fois** dans
+`src/services/subscriptionCatalog.ts` :
+
+| | Prix | Clé Stripe |
+|---|---|---|
+| Abonnement | **1,99 €/semaine** | `memobook_subscription_weekly` |
+| Limites de souvenirs étendues | **3,99 €/mois** | `memobook_memory_upgrade_monthly` |
+
+**Le tarif est servi même à qui n'a rien souscrit** (16/09/2026). Il ne l'était
+pas : `GET /v1/profile` rendait `weeklyPrice: 0` faute de ligne `subscriptions`
+à lire, et l'app écrivait donc « 0,00 €/semaine » sur la feuille d'offre, sur le
+paywall et « 3 × 0,00 € » sur l'estimation. Un prix ne dépend pas de ce que la
+personne a déjà acheté : c'est un tarif, il vit dans un catalogue. Côté app,
+`Subscription.displayedWeeklyPrice` est le second filet — il ne rend jamais zéro.
+
+⚠️ **Ni l'un ni l'autre ne s'encaisse aujourd'hui.** Apple impose l'achat
+intégré pour un service numérique : les deux passeront par **StoreKit**, et
+`PAYMENT_KIND` ne porte donc aucune valeur d'abonnement (voir `billing.ts`).
+Les références Stripe existent pour le jour où l'offre se vend aussi hors de
+l'app — le web —, et pour que le back-end sache de quel prix il parle.
+
+État du sandbox Stripe (`acct_1UFioWBknFHnQoHL`, *MemoBook Test*) :
+
+- ✅ produit « Abonnement MemoBook » + prix récurrent hebdomadaire de 1,99 €,
+  sous la clé `memobook_subscription_weekly` ;
+- ⏳ le prix mensuel de 3,99 € **reste à créer**. En une commande :
+
+```bash
+stripe products create --name "Limites de souvenirs étendues"   --description "Quatre fois plus de souvenirs par mois : vocaux et messages."
+stripe prices create --product prod_… --currency eur --unit-amount 399   -d "recurring[interval]=month" -d "lookup_key=memobook_memory_upgrade_monthly"
+```
+
+Une **`lookup_key` et non un identifiant de prix** : celui-ci change entre le
+sandbox et la production, celle-là non. C'est ce qui permet de poser la même
+valeur dans les deux comptes sans variable d'environnement de plus.
+
+### La semaine payée va à son terme
+
+Une semaine commencée est une semaine réglée : résilier le lundi ne rend pas les
+six jours suivants, donc ça ne ferme pas le micro non plus (Hugo, 16/09/2026).
+
+`subscriptions.renewsAt` est la fin de la période payée. Elle sort dans
+`subscription.paidThrough`, et **deux verrous la lisent** : `assertCanRecord`
+côté serveur, qui accepte un abonnement `cancelled` ou `expired` dont la période
+court encore ; et `Subscription.grantsAccess()` côté app, que lisent
+`freemiumStatus` et `isSubscriber` — jamais `isActive` seul.
+
+Le dernier jour, rien ne change : la résiliation garde sa phrase d'avant,
+« l'abonnement s'arrête aujourd'hui ». Il n'y a pas de sursis à annoncer pour un
+jour qui est déjà là.
+
 ## Ce qui n'existe pas encore
 
-- **L'abonnement StoreKit** — colonnes (`Subscription`), paywall et
-  `FreemiumStatus` sont prêts ; la plomberie ne l'est pas.
+- **L'abonnement StoreKit** — colonnes (`Subscription`), paywall,
+  `FreemiumStatus`, catalogue et sursis de la semaine payée sont prêts ; la
+  plomberie d'achat ne l'est pas.
+- **L'extension des limites de souvenirs** — `POST /v1/trips/:id/memory-plan`
+  pose le palier et laisse dérouler le parcours de bout en bout, mais
+  n'encaisse rien. C'est le reçu StoreKit qui l'appellera.
 - **L'imprimeur** — une commande payée reste en `submitted` jusqu'à ce qu'un
   humain la traite. `in_production` et `shipped` attendent un fournisseur.
 - **La contribution d'un proche** — la page web derrière `shareSlug`.

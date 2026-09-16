@@ -77,6 +77,14 @@ public enum APIError: Error, LocalizedError, Sendable {
             "Le problème vient de notre côté, pas du tien. Réessaie dans un instant ; si ça continue, écris-nous depuis « Besoin d’aide ? » et on répare."
         case .server(404, _, _):
             "Ce voyage n’est plus sur ton compte, ou il a été supprimé : reviens à l’accueil pour le vérifier."
+        // **Avant le cas générique des 403** : un 403 se traite d'ordinaire par
+        // « reconnecte-toi », et ces deux-là n'ont rien à voir avec la session.
+        // Les placer après ferait dire à l'app exactement le contraire de ce
+        // qu'il faut faire.
+        case .server(403, "memory_limit_reached", _):
+            "Ouvre « Limites de souvenirs » dans les paramètres du voyage pour les étendre, ou attends le renouvellement du mois."
+        case .server(403, "quota_exhausted", _):
+            "Abonne-toi pour continuer à raconter : l’offre est dans ton profil, ou sur l’accueil."
         case .server(401, _, _), .server(403, _, _), .notAuthenticated:
             "Reconnecte-toi pour continuer."
         case .server:
