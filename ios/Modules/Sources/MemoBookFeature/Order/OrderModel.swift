@@ -1,5 +1,6 @@
 import Foundation
 import MemoBookCore
+import MemoBookPayments
 import Observation
 
 /// Ce que le tunnel de commande sait faire : porter les sept étapes, tenir le
@@ -59,9 +60,17 @@ public final class OrderModel {
     private let email: String?
     private let loadContext: (String) async throws -> OrderContext
     private let loadQuote: (String, Int, ShippingSpeed) async throws -> OrderQuote
-    private let submit: (String, NewPrintOrderRequest) async throws -> PrintOrder
+    private let submit: (String, NewPrintOrderRequest) async throws -> PlacedPrintOrder
     private let requestShareLink: (String) async throws -> URL
     private let setWhatsApp: (String, String?) async throws -> PrintOrder
+
+    /// Qui ouvre la feuille de paiement. Une fonction et non le SDK : les
+    /// previews Xcode en passent une qui n'appelle personne.
+    private let presentPayment: (PaymentIntentTicket) async -> PaymentOutcome
+
+    /// Relit la commande auprès du serveur. `nil` dans les previews Xcode, qui n'ont
+    /// pas de serveur à qui demander — la commande y est réglée d'avance.
+    private let reloadOrder: ((String) async throws -> PrintOrder)?
 
     /// L'accord de suivi est en train de partir. Le bouton tourne plutôt que de
     /// basculer avant que le serveur ait confirmé.
@@ -89,7 +98,7 @@ public final class OrderModel {
         quote: @escaping (String, Int, ShippingSpeed) async throws -> OrderQuote = {
             _, copies, speed in .fixture(copies: copies, speed: speed)
         },
-        submit: @escaping (String, NewPrintOrderRequest) async throws -> PrintOrder = {
+        submit: @escaping (String, NewPrintOrderRequest) async throws -> PlacedPrintOrder = {
             memoId, request in .fixture(memoId: memoId, request: request)
         },
         shareLink: @escaping (String) async throws -> URL = { memoId in
@@ -97,7 +106,11 @@ public final class OrderModel {
         },
         setWhatsApp: @escaping (String, String?) async throws -> PrintOrder = { _, _ in
             .fixture(memoId: "preview", request: .previewRequest)
-        }
+        },
+        presentPayment: @escaping (PaymentIntentTicket) async -> PaymentOutcome = { _ in
+            .succeeded
+        },
+        reloadOrder: ((String) async throws -> PrintOrder)? = nil
     ) {
         self.memoId = memoId
         self.email = email
@@ -106,6 +119,8 @@ public final class OrderModel {
         self.submit = submit
         self.requestShareLink = shareLink
         self.setWhatsApp = setWhatsApp
+        self.presentPayment = presentPayment
+        self.reloadOrder = reloadOrder
         self.draft = PrintOrderDraft(shipping: .empty)
     }
 
@@ -321,10 +336,19 @@ public final class OrderModel {
         return cards.first { $0.id == id }
     }
 
-    /// Passe la commande, puis ouvre la confirmation.
+    /// Enregistre la commande, l'encaisse, puis ouvre la confirmation.
     ///
     /// Le montant n'est **pas** envoyé : le serveur le recalcule. Ce que l'app
     /// a affiché ne l'engage pas, sans quoi un total deviendrait réécrivable.
+    ///
+    /// Trois chemins, et un seul ouvre une feuille :
+    ///
+    /// - la cagnotte couvre tout → il n'y a rien à encaisser, le serveur a déjà
+    ///   enregistré la commande comme payée ;
+    /// - il reste à payer → feuille Stripe, puis relecture de la commande ;
+    /// - il reste à payer et le serveur n'a pas donné de quoi le faire → on le
+    ///   dit. C'est une panne de configuration, et afficher la confirmation
+    ///   annoncerait une commande payée qui ne l'est pas.
     public func pay() async {
         guard !isSubmitting, let renderId = context?.renderId else { return }
 
@@ -333,13 +357,73 @@ public final class OrderModel {
         defer { isSubmitting = false }
 
         do {
-            let placed = try await submit(memoId, NewPrintOrderRequest(renderId: renderId, draft: draft))
-            order = placed
+            let placed = try await submit(
+                memoId,
+                NewPrintOrderRequest(renderId: renderId, draft: draft)
+            )
+            order = placed.order
+
+            switch placed.payment.settlement {
+            case .wallet:
+                break
+
+            case .unavailable:
+                paymentError = BookCopy.Order.Payment.unavailable
+                return
+
+            case .card(let ticket):
+                switch await presentPayment(ticket) {
+                case .cancelled:
+                    // Pas une erreur, un choix — donc pas de message. La
+                    // commande reste en brouillon et « Payer » la reprendra :
+                    // la clé d'idempotence étant son identifiant, Stripe rendra
+                    // **la même** intention plutôt qu'un second débit.
+                    return
+
+                case .failed(let message):
+                    paymentError = message
+                    return
+
+                case .succeeded:
+                    order = await settled(placed.order)
+                }
+            }
+
             isAdvancing = true
             step = .confirmation
         } catch {
             paymentError = error.localizedDescription
         }
+    }
+
+    /// Combien de fois relire la commande avant de passer à la confirmation.
+    ///
+    /// Une seconde entre deux lectures. Le webhook arrive en général avant la
+    /// deuxième ; le budget couvre un Stripe qui traîne sans faire tourner le
+    /// bouton pendant une demi-minute.
+    private static let settlementAttempts = 6
+
+    /// Relit la commande jusqu'à ce que le serveur la dise payée.
+    ///
+    /// **Une feuille qui rend `.succeeded` dit que Stripe a accepté, pas que
+    /// notre serveur l'a appris.** Le passage en `submitted` vient du webhook,
+    /// qui arrive par un autre chemin — d'où cette relecture, plutôt que de
+    /// conclure depuis le retour de la feuille.
+    ///
+    /// Au bout du budget, on rend ce qu'on a et la confirmation s'affiche quand
+    /// même : l'argent est pris, la confirmation est due. Un échec ici
+    /// annoncerait une commande perdue sur un paiement réussi, et l'écran de
+    /// suivi relira l'état plus tard de toute façon.
+    private func settled(_ placed: PrintOrder) async -> PrintOrder {
+        guard let reloadOrder else { return placed }
+
+        for _ in 0..<Self.settlementAttempts {
+            try? await Task.sleep(for: .seconds(1))
+            guard let fresh = try? await reloadOrder(placed.id) else { continue }
+            if fresh.status != .draft { return fresh }
+        }
+
+        return placed
     }
 
     // MARK: - Étape 7 — la confirmation

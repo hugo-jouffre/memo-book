@@ -149,9 +149,10 @@ public enum WalletIntent: Sendable, Hashable {
     /// « Inviter des proches », depuis la cagnotte vide. Le même partage, dit
     /// autrement : c'est le premier geste plutôt qu'un geste de plus.
     case inviteFriends
-    /// « Ajouter » — recharger, quand l'encaissement existera.
+    /// « Ajouter » — recharger, feuille Stripe à la clé.
     case addFunds
-    /// « Ajouter », mais l'encaissement n'est pas branché.
+    /// « Ajouter » là où l'encaissement n'est pas branché : les previews Xcode,
+    /// qui n'ont pas de serveur à qui demander une intention.
     case topUpUnavailable
     case openBookPreview
     case openHelp

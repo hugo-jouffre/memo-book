@@ -274,47 +274,19 @@ public final class MemoDetailModel {
     // MARK: - Impression
 
     public private(set) var orders: [PrintOrder] = []
-    public private(set) var isOrdering = false
 
     public func loadOrders() async {
         orders = (try? await api.printOrders(memoId: memoId)) ?? []
     }
 
-    /// Commande le carnet imprimé sur le rendu prévisualisé.
-    ///
-    /// Le `renderId` est celui que l'utilisateur a sous les yeux, pas « le
-    /// dernier en date » : entre l'aperçu et la commande il a pu enregistrer
-    /// une étape, et il doit recevoir le carnet qu'il a validé.
-    @discardableResult
-    public func orderPrintedBook(shipping: ShippingAddress, copies: Int = 1) async -> PrintOrder? {
-        guard let render = orderableRender else {
-            errorMessage = "Génère et prévisualise ton carnet avant de le commander."
-            return nil
-        }
-
-        isOrdering = true
-        defer { isOrdering = false }
-
-        do {
-            let order = try await api.createPrintOrder(
-                memoId: memoId,
-                order: NewPrintOrderRequest(
-                    renderId: render.id,
-                    copies: copies,
-                    shippingSpeed: .standard,
-                    shipping: shipping,
-                    // Pas d'options par exemplaire ici : cet écran commande à
-                    // l'identique du style du carnet, et le serveur les remplit.
-                    copyOptions: [],
-                    paymentCardId: nil
-                )
-            )
-            errorMessage = nil
-            await loadOrders()
-            return order
-        } catch {
-            errorMessage = error.localizedDescription
-            return nil
-        }
-    }
+    // ⚠️ **Il n'y a volontairement pas de « commander » ici.**
+    //
+    // Il y en avait un — `orderPrintedBook(shipping:copies:)` — sans un seul
+    // appelant, et il enregistrait une commande sans jamais l'encaisser. Une
+    // deuxième porte vers `POST /orders`, à côté du tunnel qui, lui, ouvre la
+    // feuille de paiement : le jour où un écran l'aurait branchée, il aurait
+    // fabriqué des brouillons que personne ne paie.
+    //
+    // Commander passe par ``OrderModel``, qui règle avant de confirmer. Cette
+    // section-ci ne fait plus que **lire** l'historique.
 }

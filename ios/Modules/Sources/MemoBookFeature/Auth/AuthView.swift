@@ -299,5 +299,5 @@ public struct AuthView: View {
     NavigationStack {
         AuthView { _ in }
     }
-    .environment(AppDependencies(api: PreviewAPI()))
+    .environment(AppDependencies.preview())
 }

@@ -21,10 +21,20 @@ public enum PaymentError: LocalizedError {
     /// passée en arrière-plan entre la demande et la présentation.
     case noPresenter
 
+    /// La feuille a rendu ``PaymentOutcome/failed(_:)``.
+    ///
+    /// Un cas relayé et non reformulé : le message vient de Stripe, qui est le
+    /// seul à savoir si la carte a été refusée, si le plafond est atteint ou si
+    /// l'authentification a échoué. Le réécrire ici perdrait ce que la personne
+    /// a besoin de lire pour s'en sortir.
+    case refused(String)
+
     public var errorDescription: String? {
         switch self {
         case .noPresenter:
             "Impossible d’ouvrir le paiement pour le moment. Réessaie."
+        case .refused(let message):
+            message
         }
     }
 }

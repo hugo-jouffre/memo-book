@@ -1,6 +1,21 @@
 import Foundation
 import MemoBookCore
 import MemoBookNetworking
+import MemoBookPayments
+
+extension AppDependencies {
+    /// Le graphe **sans serveur et sans argent** : previews Xcode, tests
+    /// d'interface, et le lancement `-previewSignedIn`.
+    ///
+    /// Une fabrique et non deux arguments à recopier : le jour où une dépendance
+    /// de plus doit être neutralisée pour une preview Xcode, elle se neutralise ici, et
+    /// aucun site d'appel ne peut l'oublier. C'est ``StubPaymentPresenter`` qui
+    /// garantit qu'une preview Xcode n'ouvre jamais Stripe.
+    @MainActor
+    public static func preview() -> AppDependencies {
+        AppDependencies(api: PreviewAPI(), payments: StubPaymentPresenter())
+    }
+}
 
 /// Double de l'API pour les aperçus SwiftUI et les tests d'interface.
 ///
@@ -501,17 +516,22 @@ public actor PreviewAPI: MemoBookAPI {
         .fixture(copies: copies, speed: shippingSpeed)
     }
 
+    /// Une commande déjà réglée, et **sans intention de paiement**.
+    ///
+    /// `paidFromWallet` plutôt qu'un faux `clientSecret` : c'est le seul cas qui
+    /// ne monte aucune feuille. Une preview Xcode — ou un lancement `-previewSignedIn` —
+    /// ne doit pas pouvoir ouvrir Stripe, même par accident.
     public func createPrintOrder(
         memoId: String,
         order: NewPrintOrderRequest
-    ) async throws -> PrintOrder {
+    ) async throws -> PlacedPrintOrder {
         _ = try existingMemo(memoId)
 
         let created = PrintOrder(
             id: UUID().uuidString,
             memoId: memoId,
             renderId: order.renderId,
-            status: .draft,
+            status: .submitted,
             copies: order.copies,
             shipping: order.shipping,
             trackingUrl: nil,
@@ -521,11 +541,25 @@ public actor PreviewAPI: MemoBookAPI {
         )
 
         ordersByMemoId[memoId, default: []].insert(created, at: 0)
-        return created
+        return PlacedPrintOrder(
+            order: created,
+            payment: OrderPayment(paidFromWallet: true, amountCents: 0, currency: "eur")
+        )
     }
 
     public func printOrders(memoId: String) async throws -> [PrintOrder] {
         ordersByMemoId[memoId] ?? []
+    }
+
+    public func printOrder(id: String) async throws -> PrintOrder {
+        guard let found = ordersByMemoId.values.flatMap({ $0 }).first(where: { $0.id == id }) else {
+            throw APIError.server(
+                statusCode: 404,
+                code: "not_found",
+                message: "Commande introuvable."
+            )
+        }
+        return found
     }
 
     /// Une recharge qui n'appelle personne.
