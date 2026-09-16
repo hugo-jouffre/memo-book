@@ -287,12 +287,42 @@ describe("mot de passe oublié", () => {
     const url = passwordResetUrl(harness.context.env, "a+b/c");
     expect(url).toBe("memobook://password/reset?token=a%2Bb%2Fc");
 
-    // Le jour du lien universel, le même chemin derrière un domaine.
-    const universal = passwordResetUrl(
-      { ...harness.context.env, APP_LINK_BASE_URL: "https://memo-book.com/app/" },
+    // En production, le même chemin derrière l'adresse de l'API : c'est la
+    // page ci-dessous, cliquable depuis n'importe quel client mail.
+    const hosted = passwordResetUrl(
+      { ...harness.context.env, APP_LINK_BASE_URL: "https://api.memo-book.com/" },
       "t",
     );
-    expect(universal).toBe("https://memo-book.com/app/password/reset?token=t");
+    expect(hosted).toBe("https://api.memo-book.com/password/reset?token=t");
+  });
+
+  it("sert une page qui ouvre l'app avec le secret, sans le laisser s'échapper", async () => {
+    const response = await harness.app.inject({
+      method: "GET",
+      url: "/password/reset?token=a%2Bb%2Fc%22%3Cscript%3E",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("text/html");
+    expect(response.headers["cache-control"]).toBe("no-store");
+    // Le secret, ré-encodé pour l'URL et échappé pour le HTML : ce qu'on a
+    // reçu ne se retrouve jamais tel quel dans la page.
+    expect(response.body).toContain(
+      'href="memobook://password/reset?token=a%2Bb%2Fc%22%3Cscript%3E"',
+    );
+    expect(response.body).not.toContain("<script>\"");
+    expect(response.body).not.toContain('"<script>');
+    // Et elle ne consomme rien : le secret reste à l'app.
+    expect(await harness.prisma.passwordReset.count()).toBe(0);
+  });
+
+  it("dit qu'un lien sans secret est incomplet", async () => {
+    const response = await harness.app.inject({ method: "GET", url: "/password/reset" });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.headers["content-type"]).toContain("text/html");
+    expect(response.body).toContain("Ce lien est incomplet");
+    expect(response.body).not.toContain("memobook://");
   });
 
   async function requestReset(): Promise<string> {

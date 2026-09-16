@@ -105,6 +105,10 @@ public struct RootView: View {
             // lien reçu pour un compte où l'on est déjà n'a rien à ouvrir.
             if case .signedIn = stage { return }
             pendingResetToken = token
+            // C'est l'écran d'entrée par e-mail qui le consomme. Depuis
+            // l'accueil, ou à froid, il n'est pas là : on le pousse — le
+            // chemin survit au temps que dure ``restoreSession()``.
+            if signedOutPath.isEmpty { signedOutPath.append(.email) }
         }
         // Un lien reçu pendant qu'on restaurait la session, et la session a
         // tenu : il ne doit pas ressortir à la prochaine déconnexion.
@@ -185,7 +189,7 @@ public struct RootView: View {
             .navigationDestination(for: SignedOutRoute.self) { route in
                 switch route {
                 case .email:
-                    AuthView { enterApp(as: $0) }
+                    AuthView(resetToken: $pendingResetToken) { enterApp(as: $0) }
                 }
             }
         }

@@ -15,6 +15,7 @@ import { registerHomeRoutes, registerWelcomeRoutes } from "./routes/home.js";
 import { registerLocalRenderRoutes } from "./routes/localRenders.js";
 import { registerMemoRoutes } from "./routes/memos.js";
 import { registerOrderRoutes } from "./routes/orders.js";
+import { registerPasswordResetPageRoutes } from "./routes/passwordResetPage.js";
 import { registerProfileRoutes } from "./routes/profile.js";
 import { registerRenderRoutes } from "./routes/renders.js";
 import { registerStripeWebhookRoutes } from "./routes/stripeWebhook.js";
@@ -100,6 +101,11 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
   // Entrée dans un compte : ce sont ces routes qui délivrent le token, elles ne
   // peuvent donc pas en exiger un.
   registerAuthRoutes(app, context);
+
+  // La page que le bouton de l'e-mail « mot de passe oublié » ouvre dans un
+  // navigateur, et qui relaie vers l'app. Publique par nature : on y arrive
+  // sans session, c'est pour en ouvrir une.
+  registerPasswordResetPageRoutes(app);
 
   // Tout ce qui appartient à quelqu'un, sous **une seule** identification : la
   // session de compte. Le token d'appareil n'ouvre plus rien — un carnet a

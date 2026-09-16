@@ -125,14 +125,20 @@ const schema = z.object({
   MAIL_OUTPUT_DIR: z.string().default(".mail-out"),
 
   /**
-   * La racine des liens qui **ouvrent l'app** — celui du bouton « Réinitialiser
-   * mon mot de passe » dans l'e-mail.
+   * La racine du lien du bouton « Réinitialiser mon mot de passe » dans
+   * l'e-mail. Le chemin derrière est toujours `password/reset?token=…`.
    *
-   * Un schéma d'app pour l'instant (`memobook://`), déclaré dans
-   * `ios/project.yml`. Le jour où memo-book.com sert un fichier
-   * `apple-app-site-association`, ce sera `https://memo-book.com/app` et les
-   * mêmes liens deviendront universels sans toucher au code : le chemin
-   * derrière est le même.
+   * **En production, l'adresse publique de l'API** — par exemple
+   * `https://api-production-9f35a.up.railway.app/`. Le lien mène alors à la
+   * page `GET /password/reset` (`routes/passwordResetPage.ts`), qui ouvre
+   * l'app par son schéma `memobook://`. Il le faut : un lien `memobook://`
+   * écrit tel quel dans l'e-mail n'est **pas cliquable** dans Gmail et la
+   * plupart des clients mail.
+   *
+   * La valeur par défaut, le schéma d'app lui-même, sert au développement :
+   * le lien journalisé s'ouvre d'un `xcrun simctl openurl`. Le jour où ce
+   * domaine sert un `apple-app-site-association`, le même lien deviendra
+   * universel sans toucher au code.
    */
   APP_LINK_BASE_URL: z.string().default("memobook://"),
 
