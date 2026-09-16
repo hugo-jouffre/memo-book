@@ -38,7 +38,12 @@ extension TravellerProfile {
             isActive: true,
             tripDestination: "Rome",
             tripTitle: "Rome entre amis",
-            endsOn: Calendar.current.date(byAdding: .day, value: 21, to: .now)
+            endsOn: Calendar.current.date(byAdding: .day, value: 21, to: .now),
+            // La semaine en cours est réglée jusque dans cinq jours : c'est ce
+            // qui fait voir le sursis sur les deux dernières feuilles de
+            // résiliation. À zéro, elles retombent sur « l'abonnement s'arrête
+            // aujourd'hui », qui est l'autre cas à vérifier.
+            paidThrough: Calendar.current.date(byAdding: .day, value: 5, to: .now)
         ),
         orders: [
             OrderTracking(

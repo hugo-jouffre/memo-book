@@ -29,6 +29,18 @@
                 .font(MemoBookFont.caption)
                 .buttonStyle(.bordered)
                 .tint(MemoBookColor.action)
+
+                // Les deux seuils des limites de souvenirs : celui où la jauge
+                // apparaît, et celui où tout est consommé. Aucun des deux ne se
+                // voit en ouvrant l'écran — le jeu d'essai est à 10 %.
+                HStack(spacing: MemoBookSpacing.xs) {
+                    Button("Souvenirs ~ 10 %") { model.debugPlayMemory(fraction: 0.1) }
+                    Button("~ 90 %") { model.debugPlayMemory(fraction: 0.9) }
+                    Button("Épuisées") { model.debugPlayMemory(fraction: 1) }
+                }
+                .font(MemoBookFont.caption)
+                .buttonStyle(.bordered)
+                .tint(MemoBookColor.action)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(MemoBookSpacing.s)

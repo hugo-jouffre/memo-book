@@ -58,10 +58,15 @@ struct NewNotebookSheet: View {
                     isJoining = true
                 }
 
+                // ⚠️ **Pas dans la V1** (Hugo, 16/09/2026). La porte reste
+                // dessinée — elle dit ce que l'app saura faire — mais elle est
+                // mise au beige et annonce son délai, au lieu de mener à une
+                // intention que `RootView` ignore en silence.
                 NewNotebookOptionCard(
                     icon: .thirdParty("IconPolarsteps"),
                     title: "Importe depuis Polarsteps",
-                    detail: "On récupérera toutes tes étapes"
+                    detail: "On récupérera toutes tes étapes",
+                    availability: .comingSoon
                 ) {
                     choose(.importFromPolarsteps)
                 }
@@ -158,12 +163,41 @@ struct NewNotebookOptionCard: View {
         case cover(Trip)
     }
 
+    /// Est-ce qu'on peut y aller, ou seulement l'entrevoir.
+    enum Availability {
+        /// La porte s'ouvre. Le cas de toutes, sauf une.
+        case available
+
+        /// La porte est dessinée mais ne s'ouvre pas encore : elle passe au
+        /// **beige** — pas au gris, qui dirait « cassé » —, s'éclaircit d'un
+        /// cran, et porte une pastille qui dit quand.
+        ///
+        /// Elle reste **lisible**, contrairement à un contrôle désactivé du
+        /// système : on la laisse justement pour qu'elle se lise, et une
+        /// pastille posée sur un texte qu'on ne déchiffre plus n'expliquerait
+        /// rien. Elle sort en revanche du parcours au doigt et de VoiceOver
+        /// comme bouton — c'est une annonce, pas une action.
+        case comingSoon
+    }
+
     let icon: Icon
     let title: String
     let detail: String
+    var availability: Availability = .available
     let action: () -> Void
 
     @Environment(\.dynamicTypeSize) private var typeSize
+
+    private var isComingSoon: Bool {
+        if case .comingSoon = availability { return true }
+        return false
+    }
+
+    /// Le beige des portes fermées : contour et titre. Le vert dit « appuie »,
+    /// et il n'y a rien à appuyer.
+    private var accentColor: Color {
+        isComingSoon ? MemoBookColor.separator : MemoBookColor.action
+    }
 
     /// La plaque d'icône du design system : 44 × 40, rayon 12, bleu à 30 %.
     /// Voir « Fond d'icône » dans `docs/ui-development.md`.
@@ -187,13 +221,51 @@ struct NewNotebookOptionCard: View {
             content
                 .padding(MemoBookSpacing.xs + 4)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                // Un cran de transparence, et pas plus : assez pour que la
+                // carte recule derrière les deux autres, pas assez pour qu'on
+                // cesse de lire ce qu'elle promet.
+                .opacity(isComingSoon ? 0.75 : 1)
                 .contentShape(shape)
         }
         .buttonStyle(CardPressStyle())
-        .background(MemoBookColor.surface, in: shape)
-        .overlay { shape.strokeBorder(MemoBookColor.action, lineWidth: 1) }
+        // Le beige des portes fermées passe **sous** la carte, pas par-dessus :
+        // un voile posé au-dessus aurait aussi délavé la pastille, qui est
+        // justement ce qu'on vient lire.
+        .background(isComingSoon ? MemoBookColor.beige : MemoBookColor.surface, in: shape)
+        .overlay { shape.strokeBorder(accentColor, lineWidth: 1) }
+        .overlay(alignment: .topTrailing) { comingSoonBadge }
+        // On ne désactive pas le bouton : `disabled` grise le contenu au lieu
+        // de le mettre au beige, et emporte la pastille avec lui. On lui retire
+        // son geste — `allowsHitTesting` — et son rôle.
+        .allowsHitTesting(!isComingSoon)
         .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(isComingSoon ? [] : .isButton)
+        .accessibilityLabel(
+            isComingSoon ? "\(title). \(detail). \(Self.comingSoonLabel)" : "\(title). \(detail)"
+        )
+    }
+
+    static let comingSoonLabel = "Bientôt disponible"
+
+    /// La pastille qui dit quand. Posée **à cheval sur le coin**, comme les
+    /// pastilles de sélection des couvertures : dans la carte, elle se serait
+    /// lue comme une ligne de plus.
+    @ViewBuilder
+    private var comingSoonBadge: some View {
+        if isComingSoon {
+            Text(Self.comingSoonLabel)
+                .font(MemoBookFont.overline)
+                // À l'encre pleine sur le crème, et non au beige : c'est la
+                // seule chose de la carte qui doit rester franchement lisible.
+                .foregroundStyle(MemoBookColor.ink)
+                .padding(.horizontal, MemoBookSpacing.xs)
+                .padding(.vertical, MemoBookSpacing.xs / 2)
+                .background(MemoBookColor.surface, in: .capsule)
+                .overlay { Capsule().strokeBorder(MemoBookColor.separator, lineWidth: 1) }
+                .padding(.trailing, MemoBookSpacing.snug)
+                .offset(y: -MemoBookSpacing.xs)
+                .accessibilityHidden(true)
+        }
     }
 
     @ViewBuilder
@@ -222,8 +294,9 @@ struct NewNotebookOptionCard: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(MemoBookFont.bodySemibold)
-                // Le vert d'action, comme le contour : le titre **est** l'action.
-                .foregroundStyle(MemoBookColor.action)
+                // Le vert d'action, comme le contour : le titre **est**
+                // l'action — et le beige quand il n'y en a pas encore.
+                .foregroundStyle(accentColor)
             Text(detail)
                 .font(MemoBookFont.caption)
                 .foregroundStyle(MemoBookColor.inkMuted)
@@ -278,7 +351,10 @@ struct NewNotebookOptionCard: View {
             .renderingMode(.template)
             .scaledToFit()
             .frame(width: arrowSide, height: arrowSide)
-            .foregroundStyle(MemoBookColor.action)
+            .foregroundStyle(accentColor)
+            // La flèche dit « ça mène quelque part » : elle s'efface quand
+            // ça ne mène encore nulle part, plutôt que de promettre en beige.
+            .opacity(isComingSoon ? 0 : 1)
             .accessibilityHidden(true)
     }
 }

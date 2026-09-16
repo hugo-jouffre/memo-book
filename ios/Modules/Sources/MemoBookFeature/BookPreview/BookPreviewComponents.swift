@@ -49,7 +49,33 @@ struct BookActionsBlock: View {
                 action: onOrder
             )
             .disabled(!isComposed)
+
+            // **La porte de service**, et seulement quand le bouton du dessus
+            // est fermé : elle ouvre quand même le tunnel de commande.
+            //
+            // Elle est **dans la version livrée** et non sous `#if DEBUG`
+            // (Hugo, 16/09/2026) : le tunnel se teste sur un TestFlight, qui
+            // est un build Release — une porte compilée en debug seulement ne
+            // s'ouvre nulle part où l'on en a besoin. Son dessin la range à sa
+            // place : un lien beige, au corps d'une légende, sans fond ni
+            // contour. On ne peut pas la confondre avec l'appel à l'action
+            // juste au-dessus.
+            if !isComposed {
+                Button(action: onOrder) {
+                    Text(BookCopy.Preview.orderAnyway)
+                        .font(MemoBookFont.caption)
+                        .foregroundStyle(MemoBookColor.separator)
+                        .underline()
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        // Le dessin fait une ligne, la cible 2.75 rem : R7.
+                        .frame(maxWidth: .infinity, minHeight: MemoBookSpacing.minimumTapTarget)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+            }
         }
+        .animation(.snappy(duration: 0.25), value: isComposed)
     }
 }
 

@@ -138,6 +138,21 @@ public struct Subscription: Codable, Sendable, Hashable {
     /// Le jour où il a été résilié à la main, s'il l'a été.
     public var cancelledAt: Date?
 
+    /// **Jusqu'où la semaine payée porte.** La fin de la période déjà réglée —
+    /// `subscriptions.renewsAt` côté serveur.
+    ///
+    /// C'est ce qui rend vraie la promesse de la résiliation : une semaine
+    /// commencée est une semaine payée, et résilier au lendemain d'un
+    /// prélèvement ne doit pas fermer le micro six jours plus tôt que prévu
+    /// (Hugo, 16/09/2026). L'abonnement passe donc par un **sursis** :
+    /// `isActive` tombe, `paidThrough` reste, et l'app comme le serveur
+    /// continuent d'ouvrir l'enregistrement jusqu'à cette date.
+    ///
+    /// `nil` quand rien n'a été payé — un compte qui n'a jamais souscrit —, ou
+    /// quand un serveur plus ancien ne sert pas le champ : on retombe alors sur
+    /// l'ancien comportement, l'arrêt le jour même.
+    public var paidThrough: Date?
+
     /// Ce compte a **déjà** été abonné, et ne l'est plus.
     ///
     /// C'est ce qui décide de la version du paywall : quelqu'un qui revient pour
@@ -158,6 +173,7 @@ public struct Subscription: Codable, Sendable, Hashable {
         tripTitle: String? = nil,
         endsOn: Date? = nil,
         cancelledAt: Date? = nil,
+        paidThrough: Date? = nil,
         hasEndedBefore: Bool = false
     ) {
         self.weeklyPrice = weeklyPrice
@@ -166,6 +182,7 @@ public struct Subscription: Codable, Sendable, Hashable {
         self.tripTitle = tripTitle
         self.endsOn = endsOn
         self.cancelledAt = cancelledAt
+        self.paidThrough = paidThrough
         self.hasEndedBefore = hasEndedBefore
     }
 
@@ -180,19 +197,71 @@ public struct Subscription: Codable, Sendable, Hashable {
         tripTitle = try container.decodeIfPresent(String.self, forKey: .tripTitle)
         endsOn = try container.decodeIfPresent(Date.self, forKey: .endsOn)
         cancelledAt = try container.decodeIfPresent(Date.self, forKey: .cancelledAt)
+        paidThrough = try container.decodeIfPresent(Date.self, forKey: .paidThrough)
         hasEndedBefore = try container.decodeIfPresent(Bool.self, forKey: .hasEndedBefore) ?? false
     }
 
     /// **L'offre**, telle que le paywall la présente à quelqu'un qui n'a pas
-    /// encore d'abonnement : 1,99 € par semaine, le prix de la maquette et du
-    /// seed.
+    /// encore d'abonnement : 1,99 € par semaine, le prix de la maquette, du
+    /// seed et du catalogue serveur (`backend/src/services/subscriptionCatalog.ts`).
     ///
-    /// ⚠️ Le serveur ne sert pas encore de catalogue : `GET /v1/profile` rend un
-    /// prix à zéro à qui n'est pas abonné, et l'accueil, un voyage ou la
-    /// conversation — qui ouvrent le paywall depuis le 14/09/2026 — n'ont
-    /// aucun abonnement à lire. C'est ce prix-ci qu'ils montrent, en attendant
-    /// StoreKit, qui aura le dernier mot.
+    /// Le serveur sert désormais ce tarif à qui n'est pas abonné, au lieu d'un
+    /// zéro. Ce prix-ci reste le filet : l'accueil, un voyage ou la conversation
+    /// ouvrent le paywall sans avoir lu de profil, et StoreKit aura le dernier
+    /// mot le jour où il sera branché.
     public static let offer = Subscription(weeklyPrice: 1.99)
+
+    // MARK: Le sursis de la semaine payée
+
+    /// La semaine payée court-elle encore, à cette date ?
+    ///
+    /// **Strictement après**, et non « à partir de » : une semaine qui se
+    /// termine aujourd'hui se termine aujourd'hui. C'est le cas que Hugo a
+    /// nommément épargné — « si le dernier jour est aujourd'hui, le processus
+    /// reste celui d'avant » —, et c'est aussi le plus simple à tenir : il n'y
+    /// a pas de sursis à annoncer pour un jour qui est déjà là.
+    public func isWithinPaidWeek(on date: Date = .now) -> Bool {
+        guard let paidThrough else { return false }
+        return Calendar.current.startOfDay(for: paidThrough)
+            > Calendar.current.startOfDay(for: date)
+    }
+
+    /// Le compte a-t-il encore le droit de raconter : abonné, **ou** résilié
+    /// mais dans sa semaine payée.
+    ///
+    /// C'est cette question-là que posent l'app et le serveur, jamais
+    /// `isActive` seul. Le pendant côté serveur est `assertCanRecord`, qui
+    /// accepte un abonnement `cancelled` dont le `renewsAt` n'est pas passé.
+    public func grantsAccess(on date: Date = .now) -> Bool {
+        isActive || isWithinPaidWeek(on: date)
+    }
+
+    /// Le jour où le sursis s'arrête, quand il y en a un à annoncer. `nil`
+    /// quand l'abonnement est encore actif, ou quand la semaine payée se
+    /// termine aujourd'hui ou est déjà passée.
+    public func graceEnd(on date: Date = .now) -> Date? {
+        guard !isActive, isWithinPaidWeek(on: date) else { return nil }
+        return paidThrough
+    }
+
+    /// Le prix à **écrire**, qui n'est jamais zéro.
+    ///
+    /// ⚠️ Un abonnement à zéro euro n'existe pas : c'est la marque d'un serveur
+    /// qui n'a pas de ligne à lire — l'ancien comportement de `GET /v1/profile`,
+    /// et celui de tout back-end plus ancien que le catalogue. L'app affichait
+    /// alors « 0,00 €/semaine » sur la feuille d'offre et « 3 x 0,00 € » sur
+    /// l'estimation (Hugo, 16/09/2026). On retombe sur le tarif de l'offre.
+    public var displayedWeeklyPrice: Decimal {
+        weeklyPrice > 0 ? weeklyPrice : Self.offer.weeklyPrice
+    }
+}
+
+public extension Optional where Wrapped == Subscription {
+    /// Le même prix, pour les écrans qui n'ont pas d'abonnement sous la main —
+    /// le paywall ouvert depuis l'accueil ou la conversation.
+    var displayedWeeklyPrice: Decimal {
+        self?.displayedWeeklyPrice ?? Subscription.offer.weeklyPrice
+    }
 }
 
 /// Pourquoi on s'en va. Les quatre raisons de la maquette, dans son ordre.
@@ -390,7 +459,11 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
     /// peut très bien n'avoir ni l'un ni l'autre — un ancien abonné qui a
     /// résilié — et il faut alors lui reproposer l'abonnement, pas lui
     /// inventer des étapes.
-    public var isSubscriber: Bool { subscription.isActive }
+    /// **La semaine payée compte.** Quelqu'un qui vient de résilier garde
+    /// l'écran d'un abonné jusqu'au bout de ce qu'il a réglé : lui remontrer
+    /// l'offre le jour du geste, alors qu'il a encore cinq jours ouverts,
+    /// reviendrait à lui vendre ce qu'il possède déjà.
+    public var isSubscriber: Bool { subscription.grantsAccess() }
 
     /// Une ou deux initiales, quand la photo manque. Même règle que
     /// ``Companion``.

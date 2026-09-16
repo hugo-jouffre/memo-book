@@ -47,6 +47,42 @@ public final class SupportModel {
     /// fois, et fausserait justement la mesure.
     public private(set) var votes: [String: Bool] = [:]
 
+    /// Ce qu'on cherche. Vide, l'écran montre les dix paquets tels quels.
+    ///
+    /// **La recherche vit dans le modèle et non dans la vue**, comme les trois
+    /// listes triées de l'accueil : filtrer quarante-cinq questions et leurs
+    /// réponses à chaque passage dans un `body`, c'est le refaire à chaque
+    /// image d'animation. Ici c'est refait à chaque frappe, et pas plus.
+    public var search = "" {
+        didSet {
+            guard search != oldValue else { return }
+            apply(FaqQuery(search))
+        }
+    }
+
+    /// Les paquets qui répondent à ce qu'on cherche, déjà réduits à leurs
+    /// questions retenues.
+    public private(set) var visibleTopics: [FaqCategory] = []
+
+    /// Le paquet « Nous contacter », filtré lui aussi. `nil` quand rien n'y
+    /// répond : sa section disparaît alors, sauf la ligne « J'ai encore une
+    /// question », qui reste — c'est la sortie de secours d'une recherche qui
+    /// ne trouve rien.
+    public private(set) var visibleContact: FaqCategory?
+
+    /// On cherche quelque chose.
+    public var isSearching: Bool { !FaqQuery(search).isEmpty }
+
+    /// On cherche, et rien ne répond. L'écran le dit et propose d'écrire.
+    public var hasNoResults: Bool {
+        isSearching && visibleTopics.isEmpty && visibleContact == nil
+    }
+
+    /// Combien de questions la recherche a retenues, pour l'annoncer.
+    public var resultCount: Int {
+        visibleTopics.reduce(0) { $0 + $1.entries.count } + (visibleContact?.entries.count ?? 0)
+    }
+
     private let submit: ((String) async throws -> Void)?
     private let record: ((String, Bool) async -> Void)?
 
@@ -68,6 +104,20 @@ public final class SupportModel {
         self.variables = variables
         self.submit = submit
         self.record = record
+        visibleTopics = topics
+        visibleContact = contact
+    }
+
+    /// Range ce que la recherche retient. Appelé à chaque frappe, et là
+    /// seulement.
+    private func apply(_ query: FaqQuery) {
+        visibleTopics = topics.compactMap { $0.filtered(by: query, variables: variables) }
+        visibleContact = contact.filtered(by: query, variables: variables)
+    }
+
+    /// Efface la recherche — la croix du champ, et la fermeture de l'écran.
+    public func clearSearch() {
+        search = ""
     }
 
     /// La réponse d'une question, variables résolues.

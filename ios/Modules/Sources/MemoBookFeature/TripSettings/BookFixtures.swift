@@ -22,6 +22,14 @@ extension TripSettings {
             // la cagnotte appartient au compte, les trois écrans lisent la même
             // somme. Les désaccorder ferait croire à un bogue.
             walletBalance: 0,
+            // Un usage **normal** : un dixième du budget consommé, donc la
+            // jauge reste cachée et la ligne se contente de son solde. C'est
+            // l'état de tout le monde, et c'est celui qu'il faut voir par
+            // défaut. Le panneau de débogage rejoue les deux autres.
+            memory: MemoryAllowance(
+                used: 312,
+                renewsOn: Calendar.current.date(byAdding: .day, value: 22, to: .now)
+            ),
             startDate: Self.day(26, 8, 2026),
             endDate: Self.day(15, 9, 2026),
             narrationPace: .everyTwoDays,

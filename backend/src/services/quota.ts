@@ -9,6 +9,22 @@ import { HttpError } from "../lib/httpError.js";
 const LIVING_SUBSCRIPTION = ["active", "trialing", "past_due"] as const;
 
 /**
+ * Les statuts d'un abonnement **terminé mais encore payé**.
+ *
+ * Une semaine commencée est une semaine réglée : résilier le lundi ne rend pas
+ * les six jours suivants, donc il ne ferme pas le micro non plus (Hugo,
+ * 16/09/2026). Le sursis court jusqu'à `renewsAt`, la fin de la période payée —
+ * c'est la même date que l'app annonce sur les deux dernières feuilles de
+ * résiliation (`Subscription.paidThrough`).
+ *
+ * `expired` en fait partie autant que `cancelled` : un abonnement éteint par la
+ * fin du voyage (`endSubscriptionsWithoutRunningTrip`) a été payé jusqu'au même
+ * jour, et couper l'accès plus tôt parce que personne n'a cliqué serait plus
+ * sévère qu'une résiliation volontaire.
+ */
+const PAID_THROUGH_SUBSCRIPTION = ["cancelled", "expired"] as const;
+
+/**
  * Le compte a-t-il encore le droit de raconter ?
  *
  * **C'est le vrai verrou.** L'app grise son micro et ouvre le paywall quand les
@@ -29,7 +45,16 @@ export async function assertCanRecord(prisma: PrismaClient, accountId: string): 
     select: {
       remainingSteps: true,
       subscriptions: {
-        where: { status: { in: [...LIVING_SUBSCRIPTION] } },
+        where: {
+          OR: [
+            { status: { in: [...LIVING_SUBSCRIPTION] } },
+            // Le sursis de la semaine payée — voir `PAID_THROUGH_SUBSCRIPTION`.
+            {
+              status: { in: [...PAID_THROUGH_SUBSCRIPTION] },
+              renewsAt: { gt: new Date() },
+            },
+          ],
+        },
         select: { id: true },
         take: 1,
       },

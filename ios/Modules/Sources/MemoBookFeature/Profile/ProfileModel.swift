@@ -39,6 +39,13 @@ public final class ProfileModel {
     private let persist: ((ProfileEdit) async throws -> TravellerProfile)?
     private let remove: (() async throws -> Void)?
 
+    /// Ce qu'on avait sur le disque — voir ``ContentCache``. `nil` en aperçu.
+    private let cached: CachedValue<TravellerProfile>?
+
+    /// Ce que le dernier chargement a appris. C'est lui que la vue anime —
+    /// voir ``SwiftUI/View/brandRefreshFlash(_:)``.
+    public private(set) var freshness: ContentFreshness = .unknown
+
     /// L'envoi en cours. Le garder permet d'annuler celui d'avant quand deux
     /// corrections s'enchaînent : c'est la dernière qui compte, et la réponse
     /// d'une requête dépassée réécrirait l'écran avec une valeur périmée.
@@ -57,8 +64,10 @@ public final class ProfileModel {
     public init(
         source: @escaping () async throws -> TravellerProfile = { .fixture },
         persist: ((ProfileEdit) async throws -> TravellerProfile)? = nil,
-        remove: (() async throws -> Void)? = nil
+        remove: (() async throws -> Void)? = nil,
+        cached: CachedValue<TravellerProfile>? = nil
     ) {
+        self.cached = cached
         self.source = source
         self.persist = persist
         self.remove = remove
@@ -70,8 +79,15 @@ public final class ProfileModel {
     public var isLoading: Bool { profile == nil && errorMessage == nil }
 
     public func load() async {
+        // Ce qu'on avait, tout de suite, et seulement au premier chargement.
+        if profile == nil, let stored = await cached?() {
+            profile = stored
+            freshness = .restored
+        }
+
         do {
             let loaded = try await source()
+            freshness = contentFreshness(of: loaded, replacing: profile)
 
             #if DEBUG
                 // Le bac à sable de l'accueil décide aussi de ce profil-ci :
@@ -227,11 +243,15 @@ public final class ProfileModel {
 
     /// Résilier, au bout des trois confirmations.
     ///
-    /// L'abonnement **s'éteint le jour même** — « L'abonnement s'arrête
-    /// aujourd'hui », dit la dernière feuille — et non à la fin de la période
-    /// payée. C'est ce que la maquette écrit, et c'est la seule lecture qui
-    /// s'accorde avec l'écran précédent, qui propose justement d'*attendre* la
-    /// résiliation automatique si on veut garder ses derniers jours.
+    /// **L'abonnement cesse de se renouveler ; la semaine déjà payée, elle, va
+    /// à son terme** (Hugo, 16/09/2026). `isActive` tombe, `paidThrough` reste,
+    /// et c'est ``Subscription/grantsAccess(on:)`` qui décide de ce qui est
+    /// ouvert — pas `isActive` seul. Le serveur applique la même règle sur son
+    /// verrou (`assertCanRecord`).
+    ///
+    /// Ça remplace « l'abonnement s'arrête aujourd'hui », qui n'était vrai que
+    /// le dernier jour d'une période — et qui reste la phrase affichée dans ce
+    /// cas-là, voir ``SubscriptionCopy/doneParagraphs(graceEnd:)``.
     ///
     /// ⚠️ **Rien ne part au serveur**, comme le reste de cet écran : la base
     /// sait dire `cancelled` et `cancelledAt` (`schema.prisma`), mais aucune
@@ -243,6 +263,12 @@ public final class ProfileModel {
             $0.subscription.isActive = false
             $0.subscription.cancelledAt = .now
         }
+    }
+
+    /// L'abonnement laisse-t-il encore raconter — actif, ou dans sa semaine
+    /// payée. C'est ce que la session doit retenir après une résiliation.
+    public var subscriptionGrantsAccess: Bool {
+        profile?.subscription.grantsAccess() ?? false
     }
 
     // MARK: - L'envoi

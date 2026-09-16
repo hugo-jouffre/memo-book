@@ -75,6 +75,15 @@ public struct TripSettingsView: View {
             // Les valeurs se posent en douceur quand elles arrivent, au lieu de
             // remplacer les barres d'attente d'un coup sec.
             .animation(.snappy(duration: 0.25), value: model.settings == nil)
+            // **Et quand elles changent, ça se voit.** L'écran s'ouvre sur ce
+            // qu'on avait en cache ; si le serveur dit autre chose, trente
+            // valeurs bougent en silence sous les yeux de quelqu'un qui lisait.
+            // Le balayage et la pastille le disent — voir `BrandRefreshFlash`.
+            .brandRefreshFlash(model.freshness.isUpdated)
+            // Les valeurs elles-mêmes se remplacent en fondu chiffré plutôt que
+            // d'un coup : c'est ce qui rend le changement lisible au lieu de le
+            // rendre surprenant.
+            .animation(.smooth(duration: 0.35), value: model.settings)
             .padding(.horizontal, MemoBookSpacing.screenMargin)
             .padding(.top, MemoBookSpacing.xs)
             .padding(.bottom, MemoBookSpacing.l)
@@ -95,6 +104,7 @@ public struct TripSettingsView: View {
             case .notifications: TripNotificationsSheet(model: model)
             case .theme: TripThemeSheet(model: model)
             case .companions: TripInviteSheet(model: model)
+            case .memory: MemoryAllowanceSheet(model: model)
             }
         }
         .brandSheet(isPresented: $isConfirmingDeletion) {
@@ -149,6 +159,16 @@ public struct TripSettingsView: View {
                     isValueLoading: isLoading,
                     action: { onIntent(.openWallet) }
                 )
+            }
+
+            // **Les limites de souvenirs, et cet écran seul** (Hugo,
+            // 16/09/2026). Elles appartiennent au compte comme la cagnotte
+            // juste au-dessus, et n'apparaissent nulle part ailleurs : c'est un
+            // garde-fou, pas un décompte qu'on suit. Quelqu'un qui raconte
+            // normalement ne doit jamais avoir à y penser — d'où la ligne
+            // discrète, et la jauge seulement quand elle commence à compter.
+            if let memory = settings?.memory {
+                MemoryAllowanceRow(memory: memory) { sheet = .memory }
             }
 
             BrandRowGroup {
@@ -327,6 +347,84 @@ public enum TripSettingsIntent: Sendable, Hashable {
 }
 
 // MARK: - Les blocs qui ne sont pas des lignes
+
+/// La ligne des **limites de souvenirs** : le solde, et la jauge quand elle
+/// commence à compter.
+///
+/// **Elle se tait tant qu'il reste de la marge**, et c'est le point de tout le
+/// réglage : ces limites sont un garde-fou contre l'usage qui coûterait plus
+/// cher que l'abonnement, pas un levier commercial. Une jauge posée en
+/// permanence à 4 % ferait compter des souvenirs à quelqu'un qui devrait
+/// compter des jours de voyage. Elle n'apparaît qu'au seuil — voir
+/// ``MemoryAllowance/isRunningLow``.
+///
+/// Ce n'est donc pas une ``BrandRow`` : celle-ci porte un intitulé et une
+/// valeur, et n'a pas de place pour une barre qui pousse sous elle.
+///
+/// ⚠️ **Aucune maquette ne la dessine** (Hugo, 16/09/2026). Elle reprend le
+/// dessin des lignes d'à côté — même coque, même filet, même chevron — et reste
+/// à valider dans Figma.
+private struct MemoryAllowanceRow: View {
+    let memory: MemoryAllowance
+    let action: () -> Void
+
+    @ScaledMetric(relativeTo: .body) private var chevronSide: CGFloat = 14
+
+    private var shape: RoundedRectangle {
+        .rect(cornerRadius: MemoBookSpacing.largeCornerRadius)
+    }
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
+                HStack(spacing: MemoBookSpacing.s) {
+                    Text(MemoryCopy.rowTitle)
+                        .font(MemoBookFont.body)
+                        .foregroundStyle(MemoBookColor.ink)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Text(MemoryCopy.rowValue(used: memory.used, allowance: memory.allowance))
+                        .font(MemoBookFont.label)
+                        .foregroundStyle(
+                            memory.isExhausted ? MemoBookColor.error : MemoBookColor.inkMuted
+                        )
+                        .monospacedDigit()
+                        .fixedSize()
+
+                    Image(brand: "IconChevron")
+                        .resizable()
+                        .renderingMode(.template)
+                        .scaledToFit()
+                        .frame(width: chevronSide, height: chevronSide)
+                        .foregroundStyle(MemoBookColor.inkMuted)
+                }
+
+                // La barre n'apparaît qu'au seuil : voir l'en-tête.
+                if memory.isRunningLow || memory.isExhausted {
+                    BrandGauge(
+                        fraction: memory.fraction,
+                        isExhausted: memory.isExhausted,
+                        accessibilityLabel: MemoryCopy.rowTitle
+                    )
+                }
+            }
+            .padding(.horizontal, MemoBookSpacing.s)
+            .padding(.vertical, MemoBookSpacing.snug)
+            .frame(minHeight: MemoBookSpacing.minimumTapTarget)
+            .background(MemoBookColor.surface, in: shape)
+            .overlay { shape.strokeBorder(MemoBookColor.hairline, lineWidth: 1) }
+            .contentShape(shape)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel(
+            "\(MemoryCopy.rowTitle). \(MemoryCopy.remaining(memory.remaining, renewsOn: nil))"
+        )
+    }
+}
 
 /// L'invitation à relier son Tricount : une carte à trois étages — le
 /// pictogramme, ce que ça apporte, et le chevron.

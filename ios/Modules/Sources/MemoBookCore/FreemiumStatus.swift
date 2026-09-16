@@ -118,7 +118,11 @@ extension TravellerProfile {
     /// inventé.
     public func freemiumStatus(override: FreemiumStatus?) -> FreemiumStatus {
         if let override { return override }
-        if subscription.isActive { return .subscriber }
+        // **`grantsAccess` et non `isActive`** : une semaine payée court encore
+        // après une résiliation, et le micro reste ouvert jusqu'au bout (Hugo,
+        // 16/09/2026). Fermer le jour du geste rendrait fausse la phrase que la
+        // feuille de résiliation vient d'écrire.
+        if subscription.grantsAccess() { return .subscriber }
 
         guard let offered = offeredSteps else { return .limitReached }
         let remaining = remainingSteps ?? 0

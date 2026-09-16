@@ -52,6 +52,33 @@ public enum CoverTreatment: String, Codable, Sendable, Hashable {
     case plain
     /// Le papier kraft et l'écriture à la main.
     case kraft
+
+    /// Cette composition **porte-t-elle une photo** ?
+    ///
+    /// Deux des quatre n'en portent pas : un aplat et un kraft sont des fonds,
+    /// pas des cadres. Choisir une photo dessus ne changerait rien au plat —
+    /// et c'est exactement ce que faisait le carrousel des photos avant qu'on
+    /// le dise (Hugo, 16/09/2026).
+    public var carriesPhoto: Bool {
+        switch self {
+        case .photo, .framed: true
+        case .plain, .kraft: false
+        }
+    }
+
+    /// Cette composition **porte-t-elle un texte**, sur ce plat-là ?
+    ///
+    /// La question ne se pose qu'au dos. Un devant a toujours son titre, quelle
+    /// que soit la composition — posé sur la photo, sur l'aplat ou à la main.
+    /// Au dos, en revanche, la photo pleine page **occupe tout le plat** : il
+    /// n'y a pas de place pour le texte de quatrième, et l'écran des textes n'a
+    /// donc rien à y écrire.
+    public func carriesText(on face: CoverFace) -> Bool {
+        switch face {
+        case .front: true
+        case .back: self != .photo
+        }
+    }
 }
 
 /// L'aplat d'un style. Un nom et non une couleur : `MemoBookCore` ne connaît pas
@@ -218,6 +245,25 @@ public struct BookCovers: Codable, Sendable, Hashable {
     /// colonnes vides ; au-delà de quatre, les chiffres ne sont plus lisibles à
     /// la taille imprimée.
     public static let statRange = 3...4
+
+    // MARK: Ce qu'un plat accepte, vu du style qu'il porte
+
+    /// La composition que ce plat porte en ce moment. `nil` si le style n'est
+    /// pas dans le catalogue — un plat servi par un serveur plus récent.
+    public func treatment(of face: CoverFace) -> CoverTreatment? {
+        style(id: self[face].styleId)?.treatment
+    }
+
+    /// Ce plat accepte-t-il une photo ? **Oui par défaut** quand le style est
+    /// inconnu : on n'interdit pas un geste parce qu'on n'a pas su lire.
+    public func acceptsPhoto(on face: CoverFace) -> Bool {
+        treatment(of: face)?.carriesPhoto ?? true
+    }
+
+    /// Ce plat accepte-t-il un texte ? Même règle de prudence.
+    public func acceptsText(on face: CoverFace) -> Bool {
+        treatment(of: face)?.carriesText(on: face) ?? true
+    }
 
     /// Les chiffres retenus pour le dos, dans l'ordre du catalogue.
     public var statSelection: [CoverStat] {

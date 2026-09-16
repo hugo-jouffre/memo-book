@@ -42,6 +42,7 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
 | **Style du carnet** | Pointillés, cadres, etc. | Le fichier de `agents/carnet-styles/` appliqué de bout en bout |
 | **Partager sur la galerie** | Désactivé | Un carnet public passe une modération plus stricte (→ Agent Modération) |
 | **Ma cagnotte** · **Tricount** | 67,88 € | Une dépense est une **métadonnée vérifiable** : elle situe une date et un lieu. Elle ne raconte rien — le souvenir doit venir du voyageur |
+| **Limites de souvenirs** | 312 / 3 000 | Rien pour les agents, et c'est le but : c'est un **garde-fou de coût**, pas un réglage de contenu. Voir plus bas |
 
 ---
 
@@ -55,10 +56,7 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
 | **Fun facts** | ON / OFF | ON | Rédaction les écrit, mise en page les place | Rendu (`fun_facts`) |
 | **Pointillés** | ON / OFF | ON | Gabarit (`.mb-note__rules`) | À construire : un booléen dans le payload |
 | **Décorations & stickers** | 0 · 1 · 2 · 3 · 4 par paragraphe ou par image | 2 | Mise en page | Partiel : seul le scotch est rendu, les stickers ne le sont pas |
-| **Typographie des titres** | Liste fermée | Playfair | Gabarit — `--mb-font-display` | À construire |
-| **Typographie des sous-titres** | Liste fermée | Hansley | Gabarit — `--mb-font-title` | À construire. `Hansley.otf` est versionné, mais pas encore inliné : le titre retombe sur Gloria Hallelujah |
-| **Typographie des textes** | Liste fermée | Gloria Hallelujah | Gabarit — `--mb-font-hand` | À construire |
-| **Typographie des fun facts** | Liste fermée | Playfair | Gabarit — pas de token dédié aujourd'hui | À construire : ajouter `--mb-font-facts` |
+| **Typographies** | Quatre **assortiments** — voir plus bas | Carnet de voyage | Gabarit — `--mb-font-display`, `--mb-font-title`, `--mb-font-hand`, et `--mb-font-facts` à créer | À construire. Les quatre colonnes existent en base ; le gabarit ne les lit pas encore |
 | **Quiz intégrés à l'histoire** | ON / OFF | ON | Rédaction les écrit, mise en page les place | Rendu (`quiz`) |
 | **Zones libres** | ON / OFF | ON | Mise en page | À construire : une zone blanche en fin d'étape, trois pages blanches en fin de carnet |
 | **Mot fléché à la fin du livre** | ON / OFF | ON | Rédaction fournit les mots, la grille se génère à la commande | À construire |
@@ -89,6 +87,78 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
 
 ---
 
+## Les quatre assortiments de typographies
+
+**On ne choisit plus police par police** (Hugo, 16/09/2026). L'écran posait
+quatre lignes — titres, sous-titres, textes, fun facts — et laissait marier
+librement trois familles sur chacune : des dizaines de combinaisons, dont la
+plupart sont laides, sur un objet qu'on imprime et qui ne se rattrape pas.
+
+Quatre assortiments, donc, chacun cohérent de bout en bout. La feuille écrit en
+face de chaque police **ce qu'elle habille** : c'est la seule information qui
+permet de choisir sans connaître la typographie.
+
+| Assortiment | Titres | Sous-titres | Textes | Fun facts & autres |
+|---|---|---|---|---|
+| **Carnet de voyage** (défaut) | Playfair | Hansley | Gloria Hallelujah | Playfair |
+| **Éditorial** | Playfair | Playfair | Alegreya | Alegreya |
+| **Moderne** | Montserrat | Montserrat | Alegreya | Montserrat |
+| **Manuscrit** | Hansley | Hansley | Gloria Hallelujah | Gloria Hallelujah |
+
+Le défaut est **exactement** le jeu que la base pose déjà : un carnet réglé
+avant que cette feuille existe s'y reconnaît sans qu'on touche à quoi que ce
+soit. Un carnet composé police par police qui n'entre dans aucune des quatre
+cases s'affiche « Personnalisé » — on ne coche pas de force.
+
+⚠️ **Deux familles ne sont pas dans le gabarit.** `fonts.css` n'inline que
+Playfair Display et Gloria Hallelujah ; Hansley est versionné sans être inliné,
+Alegreya et Montserrat ne sont pas là du tout. Rien n'échoue — la page retombe
+sur une police système —, mais « Moderne » et « Éditorial » ne s'imprimeront
+vraiment qu'une fois ces faces ajoutées à `build-font-css.ts`.
+
+---
+
+## Les limites de souvenirs
+
+**Ce n'est pas le quota d'étapes offertes.** Celui-là est le palier d'entrée :
+trois étapes, une fois, puis l'abonnement. Les limites de souvenirs sont le
+budget **mensuel** de quelqu'un qui raconte déjà — elles se rechargent, et se
+relèvent contre 3,99 €/mois.
+
+| | Compris | Étendu |
+|---|---|---|
+| Par mois | 3 000 souvenirs | 12 000 souvenirs |
+| Prix | inclus dans l'abonnement | 3,99 €/mois |
+
+Le barème, et lui seul, décide de ce que chaque geste consomme :
+
+| Geste | Coût |
+|---|---|
+| Un message écrit | 1 souvenir |
+| Une **minute entamée** de vocal | 10 souvenirs |
+| Une photo | rien |
+
+**Un vocal coûte plus cher parce qu'il coûte plus cher** : transcription,
+rédaction, relecture. Une photo ne passe par aucune des trois. La minute est
+*entamée* et non écoulée — c'est la règle la plus facile à expliquer, et la
+seule qui ne récompense pas le découpage d'un vocal en morceaux de 59 secondes.
+
+**Elles ne se voient que dans les paramètres du voyage**, et la ligne reste
+muette tant qu'il reste de la marge : la jauge n'apparaît qu'à 80 %. Cette
+limite est un garde-fou contre l'usage qui coûterait plus cher que
+l'abonnement, pas un levier commercial — quelqu'un qui raconte normalement ne
+doit jamais la voir bouger.
+
+⚠️ **Le mot « jeton » — et le mot « token » — n'apparaissent nulle part dans
+l'app.** L'unité s'appelle un souvenir, et l'app compte en souvenirs.
+
+⚠️ Le barème est un **ordre de grandeur, pas une mesure** : il est à réétalonner
+sur les factures OpenAI et Anthropic d'un mois plein. Les deux constantes vivent
+dans `backend/src/services/memoryAllowance.ts`, et voyagent jusqu'à l'app — qui
+n'en écrit aucune.
+
+---
+
 ## Ce qui n'est pas réglable
 
 Ces points sont arbitrés une fois pour toutes. Les ouvrir reviendrait à demander
@@ -115,8 +185,8 @@ au voyageur d'arbitrer un défaut qu'il n'a pas produit.
    polices, quota de décor.
 2. **Les polices** : inliner Hansley — le fichier est versionné, mais
    `build-font-css.ts` ne connaît que les deux familles Google et ne lit que des
-   `.woff2` — puis faire de même pour toute face ajoutée à la liste, et créer le
-   token `--mb-font-facts`.
+   `.woff2` —, **ajouter Alegreya et Montserrat**, que deux des quatre
+   assortiments emploient, et créer le token `--mb-font-facts`.
 3. **Les zones libres** : bloc de fin d'étape, et pages blanches de fin de carnet.
 4. **Le mot fléché** : grille générée à la commande à partir des mots du voyage.
 5. **La carte postale automatique** : repoussée, mais toujours demandée par deux

@@ -105,6 +105,7 @@ public struct ProfileView: View {
         // `MemoBookColor`.
         .environment(\.colorScheme, .light)
         .task { await model.load() }
+        .brandRefreshFlash(model.freshness.isUpdated)
         .brandSheet(item: $sheet) { destination in
             sheetContent(destination)
         }
@@ -117,13 +118,6 @@ public struct ProfileView: View {
                     model.activateSubscription()
                     subscriptionSession?.record(isSubscribed: true)
                     showsPaywall = false
-                },
-                // Le paywall se referme **avant** que le support s'ouvre :
-                // celui-ci est un écran poussé sur la pile du profil, et il ne
-                // peut pas apparaître sous une couverture plein écran.
-                onHelp: {
-                    showsPaywall = false
-                    onIntent(.openHelp)
                 }
             )
         }
@@ -528,7 +522,11 @@ public struct ProfileView: View {
                 },
                 onCancel: {
                     model.cancelSubscription(reason: $0)
-                    subscriptionSession?.record(isSubscribed: false)
+                    // **La semaine payée compte comme un abonnement** pour tout
+                    // ce qui ouvre un micro : la session retient donc l'accès
+                    // réel, pas le geste. Sans ça, l'accueil reproposait l'offre
+                    // à quelqu'un qui a encore cinq jours réglés devant lui.
+                    subscriptionSession?.record(isSubscribed: model.subscriptionGrantsAccess)
                 },
                 onLearnMore: {
                     sheet = nil

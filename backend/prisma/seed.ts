@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { generateDeviceToken, hashDeviceToken } from "../src/lib/auth.js";
 import { hashPassword } from "../src/lib/password.js";
+import { SUBSCRIPTION_WEEKLY_CENTS } from "../src/services/subscriptionCatalog.js";
 import { seedTripThemes } from "./tripThemes.js";
 
 /**
@@ -159,6 +160,17 @@ async function seedTraveller(
     ? { offeredSteps: null, remainingSteps: null }
     : { offeredSteps: 3, remainingSteps: 3 };
 
+  // Les **limites de souvenirs**, remises à plat à chaque passage du seed. Un
+  // usage normal : un dixième consommé, donc la jauge reste cachée et la ligne
+  // ne montre que son solde. C'est l'état de tout le monde, et donc celui qu'on
+  // doit voir sans rien faire — le bac à sable des réglages rejoue les deux
+  // seuils (80 % et épuisé) sans toucher à la base.
+  const memory = {
+    memoryPlan: "included" as const,
+    memoryUsed: 312,
+    memoryPeriodStart: new Date(Date.now() - 8 * 86_400_000),
+  };
+
   const identity = {
     emailVerifiedAt: new Date(),
     firstName: seed.firstName,
@@ -173,6 +185,7 @@ async function seedTraveller(
     addressCountry: "France",
     wantsNewsletter: true,
     ...quota,
+    ...memory,
   };
 
   const account = await prisma.account.upsert({
@@ -343,8 +356,16 @@ async function seedTraveller(
         accountId: account.id,
         provider: "stripe",
         status: "active",
-        priceCents: 299,
+        // **199 et non 299** : le tarif de l'offre, celui du catalogue
+        // (`services/subscriptionCatalog.ts`), de la maquette et du prix Stripe
+        // `memobook_subscription_weekly`. Le seed en annonçait un troisième,
+        // et le compte abonné voyait donc « 2,99 € » là où le compte gratuit
+        // voit « 1,99 € ».
+        priceCents: SUBSCRIPTION_WEEKLY_CENTS,
         interval: "week",
+        // La fin de la **période payée**. C'est elle qui donne son sursis à une
+        // résiliation — sept jours devant soi, de quoi voir les deux dernières
+        // feuilles annoncer « jusqu'au … » plutôt que « aujourd'hui ».
         renewsAt: new Date(Date.now() + 7 * 86_400_000),
       },
     });

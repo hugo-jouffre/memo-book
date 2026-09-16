@@ -56,6 +56,15 @@ public struct WelcomeView: View {
     /// le bas — ce qui apparaît alors est la photo, jamais le crème du fond.
     private static let heroRevealRatio: CGFloat = 201 / 844
 
+    /// De combien le crème de la carte descend **sous** le bas de la dalle.
+    ///
+    /// Une hauteur d'écran entière : c'est la borne de l'élastique d'une
+    /// `ScrollView`, qui ne laisse jamais remonter le contenu de plus que ça.
+    /// Au-delà, on paierait des pixels que personne ne verra ; en deçà, il
+    /// resterait un cas où le bord réapparaît.
+    @MainActor
+    private static var cardUnderrun: CGFloat { DeviceScreen.height }
+
     public var body: some View {
         // Le modèle a besoin de l'API, qui arrive par l'environnement : il ne
         // peut pas naître dans un initialiseur de propriété.
@@ -157,11 +166,27 @@ public struct WelcomeView: View {
             // Le crème remonte sous la carte et **déborde vers le bas** : sur un
             // grand écran, la carte s'arrête à la zone sûre et la bande
             // d'indicateur d'accueil doit rester crème, pas montrer la photo.
+            //
+            // ⚠️ **Et il déborde bien plus bas que la dalle** (Hugo,
+            // 16/09/2026). Sur un petit écran la carte défile ; tirée vers le
+            // haut, son bord inférieur entrait dans le champ et laissait voir la
+            // photo derrière, coupée net sur toute la largeur. `ignoresSafeArea`
+            // ne réglait rien : il prolonge jusqu'au bord de l'écran, pas
+            // au-delà — or ce qui manquait, c'est de la matière **sous** la
+            // dalle, là où le rebond emmène la carte.
+            //
+            // La réserve ne change pas la mise en page : un fond n'impose
+            // jamais sa taille à la vue qu'il habille, et l'élastique d'une
+            // `ScrollView` ne dépasse jamais une hauteur d'écran. Le bas de la
+            // carte est donc devenu inatteignable, ce qui est exactement ce
+            // qu'on voulait — le geste reste libre, il n'y a plus rien de laid
+            // à trouver au bout.
             UnevenRoundedRectangle(
                 topLeadingRadius: MemoBookSpacing.largeCornerRadius + MemoBookSpacing.s,
                 topTrailingRadius: MemoBookSpacing.largeCornerRadius + MemoBookSpacing.s
             )
             .fill(MemoBookColor.background)
+            .padding(.bottom, -Self.cardUnderrun)
             .ignoresSafeArea(edges: .bottom)
             // L'ombre de la maquette monte : c'est la carte qui est posée sur
             // la photo, pas l'inverse.

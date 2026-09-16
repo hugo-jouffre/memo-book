@@ -34,6 +34,9 @@ struct CoverCarouselView: View {
     @State private var isPicking = false
     @State private var importProblem: String?
 
+    /// Le plat sur lequel on vient de taper alors qu'il ne porte pas de photo.
+    @State private var blockedFace: CoverFace?
+
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -49,8 +52,24 @@ struct CoverCarouselView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, MemoBookSpacing.screenMargin)
 
-                CoverFaceTabs(face: $model.face)
-                    .padding(.horizontal, MemoBookSpacing.screenMargin)
+                // **Le plat sans photo pâlit dans le rail** (Hugo,
+                // 16/09/2026) : un aplat ou un kraft n'en porte aucune, et
+                // choisir une image dessus ne changeait rien au plat sans que
+                // rien ne le dise. Le segment reste tapable et pose
+                // l'explication. Le carrousel des **styles**, lui, n'a rien à
+                // fermer : on y va justement pour changer ce style.
+                CoverFaceTabs(
+                    face: $model.face,
+                    isAvailable: { kind == .style || acceptsPhoto($0) },
+                    onUnavailable: { blockedFace = $0 }
+                )
+                .padding(.horizontal, MemoBookSpacing.screenMargin)
+
+                if let blockedFace {
+                    BrandNotice(BookCopy.Covers.noPhotoHere(blockedFace), tone: .information)
+                        .padding(.horizontal, MemoBookSpacing.screenMargin)
+                        .transition(.opacity)
+                }
 
                 carousel
 
@@ -83,7 +102,12 @@ struct CoverCarouselView: View {
             await model.load()
             centred = currentId
         }
-        .onChange(of: model.face) { _, _ in centred = currentId }
+        .onChange(of: model.face) { _, _ in
+            centred = currentId
+            // L'explication parlait de l'autre plat.
+            blockedFace = nil
+        }
+        .animation(.snappy(duration: 0.25), value: blockedFace)
         .onChange(of: centred) { _, id in select(id) }
         .photosPicker(isPresented: $isPicking, selection: $pickedItem, matching: .images)
         .onChange(of: pickedItem) { _, item in
@@ -97,6 +121,12 @@ struct CoverCarouselView: View {
         case .style: BookCopy.Covers.styleSubtitle
         case .photo: BookCopy.Covers.photoSubtitle
         }
+    }
+
+    /// Ce plat porte-t-il une photo ? Ouvert par défaut : on ne ferme pas un
+    /// geste parce qu'on n'a pas encore lu les couvertures.
+    private func acceptsPhoto(_ face: CoverFace) -> Bool {
+        model.covers?.acceptsPhoto(on: face) ?? true
     }
 
     // MARK: - La file
@@ -247,7 +277,7 @@ struct CoverCarouselView: View {
                 }
                 dismiss()
             }
-            .disabled(model.covers == nil)
+            .disabled(model.covers == nil || (kind == .photo && !acceptsPhoto(model.face)))
         }
         .animation(.snappy(duration: 0.25), value: centred)
     }

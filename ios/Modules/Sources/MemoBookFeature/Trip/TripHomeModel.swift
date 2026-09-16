@@ -24,12 +24,21 @@ public final class TripHomeModel {
     private let tripId: String
     private let source: (String) async throws -> TripDetail
 
+    /// Ce qu'on avait sur le disque — voir ``ContentCache``. `nil` en aperçu.
+    private let cached: CachedValue<TripDetail>?
+
+    /// Ce que le dernier chargement a appris. C'est lui que la vue anime —
+    /// voir ``SwiftUI/View/brandRefreshFlash(_:)``.
+    public private(set) var freshness: ContentFreshness = .unknown
+
     public init(
         tripId: String,
-        source: @escaping (String) async throws -> TripDetail = { .fixture(id: $0) }
+        source: @escaping (String) async throws -> TripDetail = { .fixture(id: $0) },
+        cached: CachedValue<TripDetail>? = nil
     ) {
         self.tripId = tripId
         self.source = source
+        self.cached = cached
     }
 
     /// `true` tant qu'on n'a rien à montrer. L'écran ne dessine alors rien
@@ -37,10 +46,22 @@ public final class TripHomeModel {
     public var isLoading: Bool { detail == nil && errorMessage == nil }
 
     public func load() async {
+        // Ce qu'on avait, tout de suite, et seulement au premier chargement :
+        // un « tirer pour rafraîchir » ne doit pas repasser par une copie.
+        if detail == nil, let stored = await cached?() {
+            detail = stored
+            freshness = .restored
+        }
+
         do {
-            detail = try await source(tripId)
+            let loaded = try await source(tripId)
+            freshness = contentFreshness(of: loaded, replacing: detail)
+            detail = loaded
             errorMessage = nil
         } catch {
+            // Un échec **ne vide pas** ce qui vient du disque : on garde la
+            // page et on pose le bandeau. C'est la même règle que l'accueil
+            // hors ligne.
             errorMessage = error.localizedDescription
         }
     }

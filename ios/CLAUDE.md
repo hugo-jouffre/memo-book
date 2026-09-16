@@ -261,6 +261,23 @@ police ou marge codée en dur ailleurs.
   (`help:`) en plus de « Réessayer » : `APIError.recoveryAdvice` donne le
   conseil par famille d'erreur. Un bandeau qui ne propose rien laisse chercher
   ce qu'on a mal fait.
+- `BrandNotice` a **deux tons**. Le beige dit l'état des choses ; `.information`
+  — filet, pictogramme et aplat en `MemoBookColor.information` — répond à un
+  geste : pourquoi cette ligne ne mène nulle part, pourquoi ce réglage n'est pas
+  ouvert. Il ne remplace pas `ErrorBanner` : rien n'a raté.
+- **Ce qu'on ne peut pas faire pâlit, ça ne se désactive pas.** Un `disabled`
+  avale le geste et n'explique rien ; l'app passe le contrôle à 40–45 %, le
+  laisse **tapable**, et l'appui pose un `BrandNotice(tone: .information)` qui
+  nomme la cause *et* donne la sortie. C'est ce que font
+  `BrandSegmentedPicker(isAvailable:onUnavailable:)`, les lignes d'action des
+  couvertures, et la carte « Bientôt disponible » de la feuille « Nouveau
+  carnet » — celle-ci au **beige** et non au gris, parce qu'elle n'est pas
+  cassée, elle n'est pas encore là.
+- `BrandSearchField` est **le** champ de recherche, distinct de
+  `BrandTextField` : l'un filtre ce qui est en dessous, l'autre saisit une
+  valeur dans un formulaire. `BrandGauge` est **la** jauge — elle se lit, elle
+  ne se règle pas, et elle n'a que deux couleurs : le vert d'action, et le rouge
+  sémantique à zéro.
 
 ### Une `ScrollView` dans une barre doit se voir imposer sa hauteur
 
@@ -449,6 +466,40 @@ stockage S3 qui ne participe pas à la transaction).
 paresseux : `AppDependencies.ensureRegistered()` est appelé par le modèle qui en
 a besoin, et son échec est l'erreur de cet écran-là (un `ErrorBanner` en ligne),
 jamais un mur devant l'app.
+
+## Le cache local, et ce qu'il change à l'écran
+
+**Cinq écrans s'ouvrent sur ce qu'on avait** : l'accueil, le profil, un voyage,
+ses réglages, la galerie. `ContentCache` — l'ancien `HomeFeedCache`, devenu
+générique — les garde dans **Caches**, jamais ailleurs : c'est une copie de ce
+que le serveur sait, iOS peut la purger, on la redemande. Elle s'efface à la
+déconnexion (`AppDependencies.forgetAccountContent()`).
+
+Ce qu'on ne garde **pas**, et c'est délibéré : la conversation — elle change à
+chaque phrase, et un fil périmé se lit comme un message perdu ; la cagnotte et
+les commandes — c'est de l'argent, et un solde périmé est pire qu'un solde
+absent.
+
+Le modèle reçoit **deux** fonctions : `source` comme avant, et `cached`, qui
+rend ce qui est sur le disque tout de suite et sans pouvoir échouer. Il les
+emploie dans cet ordre, et c'est tout ce qu'il a à savoir :
+
+```swift
+if value == nil, let stored = await cached?() { apply(stored); freshness = .restored }
+let loaded = try await source()
+freshness = contentFreshness(of: loaded, replacing: value)   // avant de poser
+```
+
+**Le cache n'est jamais la réponse finale**, et il n'ouvre vite qu'au *premier*
+chargement : un « tirer pour rafraîchir » ne doit pas remplacer ce qui est à
+l'écran par une copie plus ancienne.
+
+⚠️ **Un écran qui change sous les yeux doit le dire.** C'est le risque que le
+cache introduit : on lit une page, trois valeurs bougent, rien ne le signale.
+`.brandRefreshFlash(model.freshness.isUpdated)` joue un balayage et une pastille
+« Mis à jour ». **Seulement sur un vrai changement** — jamais à la première
+arrivée, jamais sur une réponse identique : un écran qui clignote à chaque
+ouverture apprend à ne plus être regardé.
 
 ## Hors ligne
 

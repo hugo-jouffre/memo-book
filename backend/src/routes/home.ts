@@ -103,7 +103,13 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
     const accountId = accountIdOf(request);
 
     const [account, memos, showcase] = await Promise.all([
-      context.prisma.account.findUniqueOrThrow({ where: { id: accountId } }),
+      // Les abonnements viennent avec le compte : `serializeTraveller` en tire
+      // la fin de la semaine payée, qui ouvre l'alerte « ton abonnement s'est
+      // arrêté ». Un `include` et non un second appel — c'est la même ligne.
+      context.prisma.account.findUniqueOrThrow({
+        where: { id: accountId },
+        include: { subscriptions: { orderBy: { createdAt: "desc" } } },
+      }),
 
       context.prisma.memo.findMany({
         where: visibleToAccount(accountId),

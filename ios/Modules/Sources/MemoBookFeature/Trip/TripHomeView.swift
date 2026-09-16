@@ -96,6 +96,10 @@ public struct TripHomeView: View {
         .environment(\.colorScheme, .light)
         .task { await model.load() }
         .refreshable { await model.load() }
+        // L'écran s'ouvre sur le voyage qu'on avait ; quand le serveur en dit
+        // plus — une étape de plus, des pages composées —, ça s'anime.
+        .brandRefreshFlash(model.freshness.isUpdated)
+        .animation(.smooth(duration: 0.35), value: model.detail)
         .fullScreenCover(isPresented: $showsPaywall) {
             PaywallView(
                 subscription: .offer,
@@ -103,10 +107,6 @@ public struct TripHomeView: View {
                 onSubscribe: {
                     subscriptionSession?.record(isSubscribed: true)
                     showsPaywall = false
-                },
-                onHelp: {
-                    showsPaywall = false
-                    onIntent(.openHelp)
                 }
             )
         }

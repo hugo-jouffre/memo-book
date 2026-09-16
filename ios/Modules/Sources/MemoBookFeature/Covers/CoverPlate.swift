@@ -191,13 +191,19 @@ struct CoverPlate: View {
                     .clipShape(.rect(cornerRadius: unit(0.02)))
             }
 
-            Text(cover.subtitle)
-                .font(.custom(BrandFonts.generalSansRegular, fixedSize: unit(0.045)))
-                .foregroundStyle(inkColor)
-                .multilineTextAlignment(.center)
-                .lineSpacing(unit(0.014))
-                .minimumScaleFactor(0.5)
-                .frame(maxWidth: .infinity)
+            // **Une photo pleine page ne porte pas de texte de quatrième**, et
+            // c'est ce que l'écran des textes annonce désormais en grisant le
+            // plat (Hugo, 16/09/2026). Le dessin doit dire la même chose, sans
+            // quoi l'explication contredirait ce qu'on a sous les yeux.
+            if style?.treatment.carriesText(on: .back) ?? true {
+                Text(cover.subtitle)
+                    .font(.custom(BrandFonts.generalSansRegular, fixedSize: unit(0.045)))
+                    .foregroundStyle(inkColor)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(unit(0.014))
+                    .minimumScaleFactor(0.5)
+                    .frame(maxWidth: .infinity)
+            }
 
             Spacer(minLength: 0)
 

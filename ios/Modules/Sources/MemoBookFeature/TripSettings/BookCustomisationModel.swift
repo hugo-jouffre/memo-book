@@ -111,10 +111,18 @@ public final class BookCustomisationModel {
         edit(.decorationQuota(quota)) { $0.decorationQuota = quota }
     }
 
-    /// Une des quatre typographies. C'est le rôle qui sait quelle colonne il
-    /// écrit — et « des titres » n'écrit pas `fontTitle`, voir ``BookFontRole``.
-    public func setFont(_ role: BookFontRole, _ name: String) {
-        edit(role.edit(name)) { $0[keyPath: role.keyPath] = name }
+    /// L'assortiment de typographies du carnet : les quatre polices d'un coup.
+    ///
+    /// **Il n'y a plus de réglage par rôle** (Hugo, 16/09/2026) — voir
+    /// ``BookFontCombo``. Une seule édition part, et les quatre colonnes
+    /// bougent ensemble : c'est ce qui garantit qu'aucun carnet ne se retrouve
+    /// avec deux polices d'un assortiment et deux d'un autre.
+    public func setFontCombo(_ combo: BookFontCombo) {
+        edit(.fontCombo(combo)) { customisation in
+            for role in BookFontRole.allCases {
+                customisation[keyPath: role.keyPath] = combo.font(role)
+            }
+        }
     }
 
     public func setQuiz(_ isOn: Bool) { edit(.quiz(isOn)) { $0.quizEnabled = isOn } }

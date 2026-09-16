@@ -82,7 +82,20 @@ struct SubscriptionSheet: View {
         step ?? (subscription?.isActive == true ? .current : .pitch)
     }
 
-    private var price: String { (subscription?.weeklyPrice ?? 0).euros }
+    private var price: String { subscription.displayedWeeklyPrice.euros }
+
+    /// Le dernier jour de la semaine déjà payée, quand il en reste un.
+    ///
+    /// **Relevé sur l'abonnement tel qu'il était en entrant dans la feuille**,
+    /// et gardé : `onCancel` met `isActive` à `false`, et
+    /// ``Subscription/graceEnd(on:)`` ne rend une date que sur un abonnement
+    /// résilié — les deux feuilles doivent donc lire la même chose avant et
+    /// après le geste, sans quoi le chapeau de l'avant-dernière changerait sous
+    /// les yeux au moment où on confirme.
+    private var graceEnd: Date? {
+        guard let subscription else { return nil }
+        return subscription.isWithinPaidWeek() ? subscription.paidThrough : nil
+    }
 
     var body: some View {
         Group {
@@ -214,7 +227,7 @@ struct SubscriptionSheet: View {
     private var reasons: some View {
         BrandSheet(
             SubscriptionCopy.reasonTitle,
-            paragraphs: SubscriptionCopy.reasonParagraphs
+            paragraphs: SubscriptionCopy.reasonParagraphs(graceEnd: graceEnd)
         ) {
             VStack(spacing: MemoBookSpacing.m) {
                 BrandOptionGroup {
@@ -253,7 +266,10 @@ struct SubscriptionSheet: View {
     // MARK: - Résiliation 3 — « C'est validé »
 
     private var done: some View {
-        BrandSheet(SubscriptionCopy.doneTitle, paragraphs: SubscriptionCopy.doneParagraphs) {
+        BrandSheet(
+            SubscriptionCopy.doneTitle,
+            paragraphs: SubscriptionCopy.doneParagraphs(graceEnd: graceEnd)
+        ) {
             VStack(spacing: MemoBookSpacing.s) {
                 BrandButton(SubscriptionCopy.backHome, fillsWidth: true) { dismiss() }
 
@@ -537,20 +553,86 @@ enum SubscriptionCopy {
     // — Feuille 4 : « Pourquoi nous quittes-tu ? »
 
     static let reasonTitle = "Pourquoi nous quittes-tu ?"
-    static let reasonParagraphs = [
-        "Aide-nous à faire évoluer l’application.",
-        "Choisis la raison principale.",
-    ]
+
+    /// Le chapeau de l'avant-dernière feuille — **et c'est ici que se dit le
+    /// sursis** (Hugo, 16/09/2026).
+    ///
+    /// Ici, et pas sur la dernière : c'est la feuille où l'on est encore en
+    /// train de décider. Apprendre après coup qu'on gardait sa semaine est une
+    /// bonne nouvelle qui arrive trop tard — on a hésité pour rien.
+    ///
+    /// Sans semaine restante — elle se termine aujourd'hui, ou rien n'a été
+    /// payé —, la phrase ne s'écrit pas : promettre « jusqu'au 16 septembre »
+    /// le 16 septembre ne promet rien.
+    static func reasonParagraphs(graceEnd: Date?) -> [String] {
+        var paragraphs = [
+            "Aide-nous à faire évoluer l’application.",
+            "Choisis la raison principale.",
+        ]
+        if let graceEnd {
+            paragraphs.append(
+                "Ta semaine est déjà réglée : tu continues de raconter et de mettre en page jusqu’au \(graceEnd.dayAndMonth) inclus."
+            )
+        }
+        return paragraphs
+    }
+
     static let stayAWhile = "Rester abonné encore quelques jours"
     static let confirmCancellation = "Confirmer ma résiliation"
 
     // — Feuille 5 : « C'est validé »
 
     static let doneTitle = "C’est validé"
-    static let doneParagraphs = [
-        "L’abonnement s’arrête aujourd’hui.",
-        "Tu ne pourras plus dicter tes souvenirs, mais tu gardes accès à ton carnet de bord pour le relire quand tu veux.",
-    ]
+
+    /// Ce que la dernière feuille annonce.
+    ///
+    /// **Deux versions, et la première est celle d'avant.** Quand la semaine
+    /// payée se termine aujourd'hui — ou qu'il n'y en a pas —, rien ne change :
+    /// « L'abonnement s'arrête aujourd'hui ». C'est exactement ce que Hugo a
+    /// demandé de garder. Quand il reste des jours réglés, la phrase les nomme
+    /// plutôt que de mentir d'une semaine.
+    static func doneParagraphs(graceEnd: Date?) -> [String] {
+        let keepsBook =
+            "Tu gardes accès à ton carnet de bord pour le relire quand tu veux."
+        guard let graceEnd else {
+            return [
+                "L’abonnement s’arrête aujourd’hui.",
+                "Tu ne pourras plus dicter tes souvenirs, mais \(keepsBook)",
+            ]
+        }
+        return [
+            "L’abonnement ne se renouvellera pas.",
+            "Ta semaine est réglée jusqu’au \(graceEnd.dayAndMonth) : d’ici là, rien ne change — tu racontes et tu mets en page comme avant.",
+            "Ensuite, tu ne pourras plus dicter tes souvenirs, mais \(keepsBook)",
+        ]
+    }
+
+    // — L'alerte du système, quand le sursis s'achève
+
+    /// Le titre de l'alerte native qui s'ouvre le jour où la semaine payée
+    /// s'achève.
+    ///
+    /// **Une alerte du système et non une feuille de la marque**, et c'est
+    /// voulu : elle n'arrive pas au bout d'un geste qu'on vient de faire, elle
+    /// tombe à l'ouverture de l'app, des jours plus tard. Une feuille qui monte
+    /// toute seule se lit comme un écran de l'app ; une alerte se lit comme une
+    /// nouvelle. C'est la même raison qui fait qu'iOS annonce lui-même la fin
+    /// d'un abonnement.
+    static let endedTitle = "Ton abonnement MemoBook s’est arrêté"
+
+    static func endedMessage(tripTitle: String?) -> String {
+        let opening =
+            if let tripTitle, !tripTitle.isEmpty {
+                "Ta semaine réglée est terminée, et l’abonnement de « \(tripTitle) » ne s’est pas renouvelé."
+            } else {
+                "Ta semaine réglée est terminée, et l’abonnement ne s’est pas renouvelé."
+            }
+        return
+            "\(opening) Tu gardes ton carnet et tous tes souvenirs ; pour en dicter de nouveaux, il faut te réabonner."
+    }
+
+    static let endedDismiss = "D’accord"
+    static let endedResubscribe = "Me réabonner"
     static let backHome = "Revenir à l’accueil"
     static let subscribeAgain = "S’inscrire à nouveau"
 }

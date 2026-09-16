@@ -13,6 +13,12 @@ import type {
 } from "@prisma/client";
 import { CONNECTOR_CATALOG } from "../services/connectorCatalog.js";
 import { unitPriceCents } from "../services/printPricing.js";
+import type { MemorySnapshot } from "../services/memoryAllowance.js";
+import {
+  TEXT_MEMORY_COST,
+  VOICE_MEMORY_COST_PER_MINUTE,
+} from "../services/memoryAllowance.js";
+import { SUBSCRIPTION_WEEKLY_CENTS } from "../services/subscriptionCatalog.js";
 
 /**
  * Ce que les trois écrans « produit » reçoivent : l'accueil, un voyage, le
@@ -241,7 +247,9 @@ export function serializeShowcase(showcase: Showcase) {
   };
 }
 
-export function serializeTraveller(account: Account) {
+type AccountWithSubscriptions = Account & { subscriptions?: Subscription[] };
+
+export function serializeTraveller(account: AccountWithSubscriptions) {
   return {
     id: account.id,
     // Le prénom porte la salutation de l'accueil. À défaut, la partie locale de
@@ -250,7 +258,47 @@ export function serializeTraveller(account: Account) {
     avatarUrl: account.avatarUrl,
     offeredSteps: account.offeredSteps,
     remainingSteps: account.remainingSteps,
+    // **Déduit, pas stocké** : la semaine payée du dernier abonnement, si elle
+    // vient de s'achever. C'est ce qui permet à l'accueil d'ouvrir l'alerte
+    // système « ton abonnement s'est arrêté » — voir `justEndedSubscription`.
+    subscriptionEndedOn: iso(justEndedSubscription(account.subscriptions ?? [])),
   };
+}
+
+/**
+ * Le jour où la semaine payée du dernier abonnement s'est achevée, quand c'est
+ * **récent**.
+ *
+ * `null` le reste du temps, et c'est tout l'intérêt : ce champ sert à ouvrir une
+ * alerte, et une alerte annonce une nouvelle. Quelqu'un qui n'a pas ouvert l'app
+ * depuis trois mois n'a pas besoin d'apprendre en sursaut qu'un abonnement s'est
+ * arrêté au printemps — il le sait. L'app se souvient par ailleurs de l'avoir
+ * montrée, donc ce champ ne fait que **cesser de proposer** au bout du délai.
+ *
+ * On lit `renewsAt` — la fin de la période réglée — et non `cancelledAt` : c'est
+ * la date jusqu'à laquelle l'accès a duré, pas celle du geste de résiliation.
+ * Un abonnement résilié le 1er avec une semaine payée jusqu'au 7 s'arrête
+ * *pour de bon* le 7, et c'est ce jour-là qui s'annonce.
+ */
+const RECENTLY_ENDED_DAYS = 14;
+
+function justEndedSubscription(subscriptions: Subscription[]): Date | null {
+  // Un abonnement encore vivant n'a rien à annoncer, quoi qu'en disent les
+  // lignes plus anciennes de l'historique.
+  if (subscriptions.some((entry) => entry.status === "active" || entry.status === "trialing")) {
+    return null;
+  }
+
+  const now = Date.now();
+  const floor = now - RECENTLY_ENDED_DAYS * 24 * 60 * 60 * 1000;
+
+  const ended = subscriptions
+    .filter((entry) => entry.status === "cancelled" || entry.status === "expired")
+    .map((entry) => entry.renewsAt)
+    .filter((date): date is Date => date !== null && date.getTime() <= now && date.getTime() >= floor)
+    .sort((a, b) => b.getTime() - a.getTime());
+
+  return ended[0] ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -413,8 +461,18 @@ export function serializeProfile(
     selectedCardId: defaultCard?.id ?? account.cards?.[0]?.id ?? null,
     connectors: serializeConnectors(account.connectors ?? []),
     subscription: {
-      weeklyPrice: subscription ? euros(subscription.priceCents) : 0,
+      // **Le tarif du catalogue quand rien n'a encore été souscrit.** Un compte
+      // sans ligne `subscriptions` n'a pas un abonnement à zéro euro : il n'en a
+      // pas. Rendre 0 faisait écrire « 0,00 €/semaine » à la feuille d'offre, au
+      // paywall et à l'estimation — voir `subscriptionCatalog.ts`.
+      weeklyPrice: euros(subscription?.priceCents ?? SUBSCRIPTION_WEEKLY_CENTS),
       isActive: isSubscribed,
+      cancelledAt: iso(subscription?.cancelledAt ?? null),
+      // **Jusqu'où la semaine payée porte.** `renewsAt` est la fin de la
+      // période déjà réglée : c'est elle qui donne son sursis à une résiliation
+      // — l'app comme le serveur laissent raconter jusque-là (Hugo,
+      // 16/09/2026). Nul quand rien n'a été payé.
+      paidThrough: iso(subscription?.renewsAt ?? null),
       // **Déduit, pas stocké** : un abonnement terminé dans l'historique du
       // compte, et aucun en cours. C'est ce qui fait voir le paywall de retour
       // — deux écrans au lieu de trois — à quelqu'un qui repart en voyage.
@@ -442,6 +500,26 @@ export function serializeProfile(
 // suit `TripSettings`, `Wallet` et `BookPreview` de `MemoBookCore` au champ
 // près.
 
+/**
+ * Les limites de souvenirs, au champ près de `MemoryAllowance` côté Swift.
+ *
+ * **Les deux coûts voyagent avec le solde**, et ce n'est pas du remplissage :
+ * la feuille explique *pourquoi* un vocal pèse plus qu'un message, et elle doit
+ * pouvoir le chiffrer. Écrire « 10 » dans l'app en aurait fait une seconde
+ * vérité, qui se serait désaccordée au premier réétalonnage.
+ */
+function serializeMemoryAllowance(memory: MemorySnapshot) {
+  return {
+    plan: memory.plan,
+    used: memory.used,
+    allowance: memory.allowance,
+    renewsOn: iso(memory.renewsOn),
+    upgradeMonthlyPrice: euros(memory.upgradeMonthlyPrice),
+    textCost: TEXT_MEMORY_COST,
+    voiceCostPerMinute: VOICE_MEMORY_COST_PER_MINUTE,
+  };
+}
+
 type MemoForSettings = Memo & {
   members?: (MemoMember & { account?: Account | null })[];
   renders?: { id: string; pdfUrl?: string | null }[];
@@ -455,11 +533,20 @@ type MemoForSettings = Memo & {
  * cagnotte n'appartient pas au carnet, et lire le solde depuis le voyage
  * laisserait croire qu'il y en a un par voyage.
  */
-export function serializeTripSettings(memo: MemoForSettings, walletBalanceCents: number) {
+export function serializeTripSettings(
+  memo: MemoForSettings,
+  walletBalanceCents: number,
+  memory: MemorySnapshot,
+) {
   return {
     tripId: memo.id,
     name: memo.title,
     walletBalance: euros(walletBalanceCents),
+    // **Les limites de souvenirs** — du compte, comme la cagnotte, et servies
+    // avec le voyage pour la même raison : c'est le seul écran qui les montre
+    // (Hugo, 16/09/2026), et un second appel pour quatre nombres aurait été un
+    // aller-retour pour rien.
+    memory: serializeMemoryAllowance(memory),
     startDate: iso(memo.startDate),
     endDate: iso(memo.endDate),
     narrationPace: memo.narrationPace,

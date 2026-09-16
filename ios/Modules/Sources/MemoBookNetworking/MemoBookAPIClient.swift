@@ -296,6 +296,7 @@ public actor MemoBookAPIClient: MemoBookAPI {
         filename: String,
         mimeType: String,
         capturedAt: Date,
+        durationSeconds: TimeInterval?,
         placeLabel: String?
     ) async throws -> Entry {
         try await uploadMedia(
@@ -304,6 +305,7 @@ public actor MemoBookAPIClient: MemoBookAPI {
             filename: filename,
             mimeType: mimeType,
             capturedAt: capturedAt,
+            durationSeconds: durationSeconds,
             placeLabel: placeLabel
         )
     }
@@ -332,10 +334,16 @@ public actor MemoBookAPIClient: MemoBookAPI {
         filename: String,
         mimeType: String,
         capturedAt: Date,
+        durationSeconds: TimeInterval? = nil,
         placeLabel: String?
     ) async throws -> Entry {
         var form = MultipartFormData()
         form.addField(name: "capturedAt", value: ISO8601DateFormatter.memoBookString(from: capturedAt))
+        if let durationSeconds {
+            // Arrondie à la seconde : le serveur compte en minutes entamées, et
+            // une décimale ne changerait rien qu'à la taille de la requête.
+            form.addField(name: "durationSeconds", value: String(Int(durationSeconds.rounded())))
+        }
         if let placeLabel {
             form.addField(name: "placeLabel", value: placeLabel)
         }
@@ -484,6 +492,15 @@ public actor MemoBookAPIClient: MemoBookAPI {
         )
     }
 
+    public func setMemoryPlan(tripId: String, plan: MemoryPlan) async throws -> TripSettings {
+        struct Body: Encodable { let plan: MemoryPlan }
+        return try await send(
+            method: "POST",
+            path: "/v1/trips/\(tripId)/memory-plan",
+            encodableBody: Body(plan: plan)
+        )
+    }
+
     public func updateBookCustomisation(
         tripId: String,
         edit: BookCustomisationEdit
@@ -564,6 +581,11 @@ public actor MemoBookAPIClient: MemoBookAPI {
             case .fontTitle(let value): fontTitle = value
             case .fontHand(let value): fontHand = value
             case .fontFacts(let value): fontFacts = value
+            case .fontCombo(let combo):
+                fontDisplay = combo.font(.titles)
+                fontTitle = combo.font(.subtitles)
+                fontHand = combo.font(.texts)
+                fontFacts = combo.font(.funFacts)
             case .quiz(let isOn): quizEnabled = isOn
             case .freeZones(let isOn): freeZonesEnabled = isOn
             case .crossword(let isOn): crosswordEnabled = isOn

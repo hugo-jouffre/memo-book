@@ -21,18 +21,49 @@ public struct Traveller: Codable, Sendable, Hashable, Identifiable {
     public let offeredSteps: Int?
     public let remainingSteps: Int?
 
+    /// Le jour où la **semaine payée** du dernier abonnement s'est achevée,
+    /// quand c'est récent.
+    ///
+    /// C'est ce qui ouvre l'alerte système « Ton abonnement MemoBook s'est
+    /// arrêté » à l'ouverture de l'app (Hugo, 16/09/2026). Il ne sert qu'à ça :
+    /// l'abonnement lui-même se lit sur le profil, et l'accueil n'en a pas
+    /// besoin pour le reste.
+    ///
+    /// **Déduit et non stocké**, et **borné à quinze jours** côté serveur — une
+    /// alerte annonce une nouvelle, et quelqu'un qui revient au bout de trois
+    /// mois n'a pas de nouvelle à apprendre. `nil` le reste du temps, ou quand
+    /// un serveur plus ancien ne sert pas le champ.
+    public let subscriptionEndedOn: Date?
+
     public init(
         id: String,
         firstName: String,
         avatarUrl: URL? = nil,
         offeredSteps: Int? = nil,
-        remainingSteps: Int? = nil
+        remainingSteps: Int? = nil,
+        subscriptionEndedOn: Date? = nil
     ) {
         self.id = id
         self.firstName = firstName
         self.avatarUrl = avatarUrl
         self.offeredSteps = offeredSteps
         self.remainingSteps = remainingSteps
+        self.subscriptionEndedOn = subscriptionEndedOn
+    }
+
+    /// Décodage tolérant sur le champ ajouté avec le sursis de la semaine
+    /// payée : un serveur qui ne le sert pas encore ne doit pas faire échouer
+    /// tout l'accueil.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        firstName = try container.decode(String.self, forKey: .firstName)
+        avatarUrl = try container.decodeIfPresent(URL.self, forKey: .avatarUrl)
+        offeredSteps = try container.decodeIfPresent(Int.self, forKey: .offeredSteps)
+        remainingSteps = try container.decodeIfPresent(Int.self, forKey: .remainingSteps)
+        subscriptionEndedOn = try container.decodeIfPresent(
+            Date.self, forKey: .subscriptionEndedOn
+        )
     }
 }
 

@@ -40,17 +40,29 @@ public final class HomeModel {
 
     private let source: () async throws -> HomeFeed
 
+    /// Ce qu'on avait sur le disque — voir ``ContentCache``. `nil` en aperçu.
+    private let cached: CachedValue<HomeFeed>?
+
+    /// Ce que le dernier chargement a appris : rien, une reprise du disque, une
+    /// confirmation, ou un vrai changement. C'est lui que la vue anime.
+    public private(set) var freshness: ContentFreshness = .unknown
+
     /// - Parameters:
     ///   - source: d'où vient le contenu. Par défaut, le jeu d'essai — voir
     ///     ``HomeFeed/fixture``.
     ///   - outbox: où partent les vocaux. Par défaut, une file qui n'envoie
     ///     nulle part et se croit toujours en ligne : les aperçus SwiftUI n'ont
     ///     pas de serveur, et un enregistrement y est un geste sans conséquence.
+    ///   - cached: ce que l'appareil a gardé du dernier passage. Sert à
+    ///     **ouvrir tout de suite** plutôt qu'à attendre le réseau ; la lecture
+    ///     continue derrière, et remplace. `nil` en aperçu.
     public init(
         source: @escaping () async throws -> HomeFeed = { .fixture },
+        cached: CachedValue<HomeFeed>? = nil,
         outbox: RecordingOutbox = RecordingOutbox()
     ) {
         self.source = source
+        self.cached = cached
         self.outbox = outbox
     }
 
@@ -163,8 +175,19 @@ public final class HomeModel {
         isLoading = true
         defer { isLoading = false }
 
+        // **Ce qu'on avait, tout de suite.** Seulement au premier chargement :
+        // un « tirer pour rafraîchir » ne doit pas remplacer ce qui est à
+        // l'écran par une copie plus ancienne le temps d'un aller-retour.
+        if feed == nil, let stored = await cached?() {
+            apply(stored)
+            freshness = .restored
+        }
+
         do {
             let loaded = try await source()
+            // **Avant** de poser la valeur : la comparaison porte sur ce qui
+            // est encore à l'écran.
+            freshness = contentFreshness(of: loaded, replacing: feed)
 
             #if DEBUG
                 // Le personnage du bac à sable survit à un rechargement : sans

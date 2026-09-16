@@ -155,6 +155,17 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
     /// ``Wallet``). Elle apparaît ici parce que c'est là qu'on la remplit.
     public var walletBalance: Decimal
 
+    /// Les **limites de souvenirs** du compte — voir ``MemoryAllowance``.
+    ///
+    /// Elles appartiennent au compte comme la cagnotte, et elles voyagent ici
+    /// pour la même raison : c'est **le seul écran qui les montre** (Hugo,
+    /// 16/09/2026). Elles n'ont rien à faire sur l'accueil, où elles feraient
+    /// du bruit pour une limite que personne n'atteint.
+    ///
+    /// Optionnelle le temps qu'un serveur plus ancien la serve : la ligne
+    /// disparaît alors, au lieu d'annoncer un budget inventé.
+    public var memory: MemoryAllowance?
+
     public var startDate: Date?
     public var endDate: Date?
     public var narrationPace: NarrationPace?
@@ -233,6 +244,7 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
         tripId: String,
         name: String,
         walletBalance: Decimal = 0,
+        memory: MemoryAllowance? = nil,
         startDate: Date? = nil,
         endDate: Date? = nil,
         narrationPace: NarrationPace? = nil,
@@ -252,6 +264,7 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
         self.tripId = tripId
         self.name = name
         self.walletBalance = walletBalance
+        self.memory = memory
         self.startDate = startDate
         self.endDate = endDate
         self.narrationPace = narrationPace

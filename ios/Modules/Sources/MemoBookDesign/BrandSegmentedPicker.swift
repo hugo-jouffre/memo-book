@@ -26,17 +26,32 @@ public struct BrandSegmentedPicker<Value: Hashable & Identifiable>: View {
     private let values: [Value]
     private let title: (Value) -> String
     private let size: Size
+    private let isAvailable: (Value) -> Bool
+    private let onUnavailable: ((Value) -> Void)?
     @Binding private var selection: Value
 
+    /// - Parameters:
+    ///   - isAvailable: ce segment mène-t-il quelque part. Un segment
+    ///     indisponible reste **lisible et tapable** : il pâlit, il n'est pas
+    ///     retiré, et son appui appelle `onUnavailable` au lieu de changer la
+    ///     sélection. C'est la seule façon d'expliquer *pourquoi* on ne peut
+    ///     pas y aller — un `disabled` du système avale le geste et ne dit
+    ///     rien (Hugo, 16/09/2026).
+    ///   - onUnavailable: ce qu'on fait de cet appui. Poser un message,
+    ///     toujours : un segment qui ne répond pas se lit comme une panne.
     public init(
         _ values: [Value],
         selection: Binding<Value>,
         size: Size = .regular,
+        isAvailable: @escaping (Value) -> Bool = { _ in true },
+        onUnavailable: ((Value) -> Void)? = nil,
         title: @escaping (Value) -> String
     ) {
         self.values = values
         self._selection = selection
         self.size = size
+        self.isAvailable = isAvailable
+        self.onUnavailable = onUnavailable
         self.title = title
     }
 
@@ -82,7 +97,14 @@ public struct BrandSegmentedPicker<Value: Hashable & Identifiable>: View {
 
     private var segments: some View {
         ForEach(values) { value in
+            let available = isAvailable(value)
+
             Button {
+                // Un segment fermé **ne change pas la sélection** : il explique.
+                guard available else {
+                    onUnavailable?(value)
+                    return
+                }
                 selection = value
             } label: {
                 Text(title(value))
@@ -94,6 +116,9 @@ public struct BrandSegmentedPicker<Value: Hashable & Identifiable>: View {
                     // même endroit ne se distinguent plus l'un de l'autre.
                     .fixedSize(horizontal: false, vertical: true)
                     .foregroundStyle(value == selection ? MemoBookColor.onAction : MemoBookColor.ink)
+                    // Pâli, pas effacé : il faut encore pouvoir le lire pour
+                    // comprendre le message qu'il pose.
+                    .opacity(available ? 1 : 0.4)
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: segmentHeight)
                     .padding(.horizontal, MemoBookSpacing.xs)
@@ -108,6 +133,9 @@ public struct BrandSegmentedPicker<Value: Hashable & Identifiable>: View {
                 }
             }
             .accessibilityAddTraits(value == selection ? [.isButton, .isSelected] : .isButton)
+            // VoiceOver doit l'entendre avant de taper, pas après : « non
+            // disponible » suit le libellé.
+            .accessibilityValue(available ? "" : "Non disponible")
         }
     }
 

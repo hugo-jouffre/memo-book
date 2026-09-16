@@ -34,6 +34,28 @@ public enum SupportCopy {
         "Voici notre foire aux questions, en espérant que celle-ci réponde à tes interrogations. Tu auras la possibilité de nous écrire si tu ne trouve pas de réponse.",
     ]
 
+    // MARK: - La recherche
+
+    /// Ce que le champ propose quand il est vide. Il dit **où** l'on cherche.
+    ///
+    /// ⚠️ **Aucune maquette ne dessine ce champ** (Hugo, 16/09/2026) : c'est le
+    /// point 2 de la page Notion — « recherche interne » — qui attendait un
+    /// écran. Il est écrit sur le motif des autres champs de l'app, au
+    /// tutoiement, et reste à dessiner dans Figma.
+    public static let searchPlaceholder = "Rechercher une question"
+
+    /// Ce que la recherche a trouvé, annoncé sous le champ.
+    public static func searchResults(_ count: Int) -> String {
+        count == 1 ? "1 question trouvée" : "\(count) questions trouvées"
+    }
+
+    /// Rien ne répond. **La phrase ne s'arrête pas au constat** : la règle de
+    /// rédaction de la page Notion vaut ici aussi — aucune limite sans une
+    /// sortie, et la sortie est la ligne juste en dessous.
+    public static func searchEmpty(_ query: String) -> String {
+        "Aucune question ne parle de « \(query) ». **Écris-nous** : on te répond, et la réponse rejoindra cette page."
+    }
+
     /// Le chapeau de la liste des questions. La maquette l'écrit en minuscules
     /// et le dessine en capitales : c'est une casse d'affichage, pas une casse
     /// de copie — VoiceOver doit lire « sujets courants », pas épeler.

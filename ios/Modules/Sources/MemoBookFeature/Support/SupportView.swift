@@ -40,6 +40,7 @@ public struct SupportView: View {
                 VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
                     BrandScreenHeader(title: SupportCopy.title)
                     greeting
+                    search
                 }
 
                 topics
@@ -96,6 +97,37 @@ public struct SupportView: View {
     /// La photo des fondateurs, ronde. 112 sur la maquette — 7 rem.
     private static let portraitSide: CGFloat = 112
 
+    // MARK: - La recherche
+
+    /// Le champ, et ce qu'il a trouvé.
+    ///
+    /// **Sous le chapeau et au-dessus des paquets**, là où Hugo l'a demandé
+    /// (16/09/2026) : on lit qui nous parle, puis on cherche, puis on parcourt.
+    /// Posé plus haut il aurait devancé la présentation ; plus bas, il se
+    /// serait perdu dans les dix paquets qu'il sert à ne pas parcourir.
+    ///
+    /// **Le résultat est vivant** : le modèle refiltre à chaque frappe, et
+    /// l'écran s'anime plutôt que de sauter — quarante-cinq lignes qui
+    /// disparaissent d'un coup se lisent comme un écran qui s'est vidé.
+    @ViewBuilder
+    private var search: some View {
+        VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
+            BrandSearchField(SupportCopy.searchPlaceholder, text: $model.search)
+
+            if model.hasNoResults {
+                BrandNotice(SupportCopy.searchEmpty(model.search), tone: .information)
+            } else if model.isSearching {
+                Text(SupportCopy.searchResults(model.resultCount))
+                    .font(MemoBookFont.caption)
+                    .foregroundStyle(MemoBookColor.inkMuted)
+                    // Le compte change sans que la ligne saute.
+                    .contentTransition(.numericText())
+                    .accessibilityAddTraits(.updatesFrequently)
+            }
+        }
+        .animation(.snappy(duration: 0.25), value: model.resultCount)
+    }
+
     // MARK: - Les sujets courants
 
     /// Les neuf paquets de la foire aux questions, chacun dans son groupe.
@@ -104,9 +136,14 @@ public struct SupportView: View {
     /// ne cherche pas une réponse en lisant tout, on cherche d'abord le rayon.
     private var topics: some View {
         VStack(alignment: .leading, spacing: MemoBookSpacing.m) {
-            SupportSectionTitle(SupportCopy.topicsSection)
+            // Le chapeau « sujets courants » ne s'écrit plus pendant qu'on
+            // cherche : ce qui est en dessous n'est plus une liste de sujets,
+            // c'est un résultat. Le compte le dit à sa place.
+            if !model.isSearching {
+                SupportSectionTitle(SupportCopy.topicsSection)
+            }
 
-            ForEach(model.topics) { category in
+            ForEach(model.visibleTopics) { category in
                 VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
                     Text(category.title)
                         .font(MemoBookFont.label)
@@ -136,9 +173,13 @@ public struct SupportView: View {
             SupportSectionTitle(SupportCopy.contactSection)
 
             BrandRowGroup {
-                for entry in model.contact.entries {
+                // Les deux questions se filtrent comme les autres…
+                for entry in model.visibleContact?.entries ?? [] {
                     BrandRow(entry.question) { sheet = .answer(entry) }
                 }
+                // …mais la ligne qui mène au formulaire **reste toujours**.
+                // C'est la sortie de secours d'une recherche qui ne trouve
+                // rien, et c'est précisément là qu'on en a besoin.
                 BrandRow(SupportCopy.writeToUs) { sheet = .contact }
             }
         }
