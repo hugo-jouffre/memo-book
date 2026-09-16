@@ -185,8 +185,12 @@ Le serveur **refuse de démarrer** si les deux clés ne sont pas du même mode
 
 > 🚨 **Le piège de Stripe Tax.** Sans immatriculation active, Stripe ne
 > calcule ni ne collecte rien **et ne signale pas d'erreur**. On croit la TVA
-> activée et on encaisse du HT. Au 15 septembre 2026 : `tax/settings` est en
-> `pending` (pas d'adresse de siège) et `tax/registrations` est **vide**.
+> activée et on encaisse du HT. Revérifié le 16 septembre 2026 :
+> `tax/settings` est en `pending`, `status_details.pending.missing_fields` ne
+> contient que `head_office`, et `tax/registrations` renvoie **zéro** ligne.
+>
+> Se relit en deux commandes, sans passer par le tableau de bord :
+> `stripe get /v1/tax/settings` et `stripe get /v1/tax/registrations`.
 
 > ⚠️ **`automatic_tax` ne s'applique pas à un PaymentIntent.** Il n'existe que
 > sur les Subscriptions, Invoices et Checkout Sessions. Notre flux est un
@@ -205,8 +209,16 @@ décide. Activer un moyen devient une case à cocher, pas une livraison.
 > chuter la conversion. Pour restreindre, utiliser `payment_method_configurations`
 > ou `excluded_payment_method_types`.
 
-Au 15 septembre 2026, la configuration « Default » du bac à sable a déjà
-`apple_pay`, `card`, `link`, `klarna` et une douzaine d'autres.
+Au 16 septembre 2026, la configuration « Default » du bac à sable (celle par
+défaut) compte **quinze** moyens actifs, dont `card`, `link`, `klarna`,
+`amazon_pay` et `apple_pay`. À relire avec
+`stripe get /v1/payment_method_configurations`.
+
+> ⚠️ **`apple_pay` est actif chez Stripe et n'apparaîtra pourtant pas.** Ce
+> n'est pas le tableau de bord qui bloque, c'est l'app : sans identifiant
+> marchand Apple, `StripePaymentSheetPresenter` reçoit `applePayMerchantId:
+> nil` et ne configure pas `configuration.applePay` — la feuille montre alors
+> les cartes seules. Le manque est du côté du portail Apple, pas de Stripe.
 
 ## Le prix
 
