@@ -42,7 +42,7 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
 | **Style du carnet** | Pointillés, cadres, etc. | Le fichier de `agents/carnet-styles/` appliqué de bout en bout |
 | **Partager sur la galerie** | Désactivé | Un carnet public passe une modération plus stricte (→ Agent Modération) |
 | **Ma cagnotte** · **Tricount** | 67,88 € | Une dépense est une **métadonnée vérifiable** : elle situe une date et un lieu. Elle ne raconte rien — le souvenir doit venir du voyageur |
-| **Limites de souvenirs** | 312 / 3 000 | Rien pour les agents, et c'est le but : c'est un **garde-fou de coût**, pas un réglage de contenu. Voir plus bas |
+| **Limites de souvenirs** | 312 / 2 000 | Rien pour les agents, et c'est le but : c'est un **garde-fou de coût**, pas un réglage de contenu. Voir plus bas |
 
 ---
 
@@ -122,13 +122,18 @@ vraiment qu'une fois ces faces ajoutées à `build-font-css.ts`.
 
 **Ce n'est pas le quota d'étapes offertes.** Celui-là est le palier d'entrée :
 trois étapes, une fois, puis l'abonnement. Les limites de souvenirs sont le
-budget **mensuel** de quelqu'un qui raconte déjà — elles se rechargent, et se
-relèvent contre 3,99 €/mois.
+budget **hebdomadaire** de quelqu'un qui raconte déjà — elles se rechargent, et
+se relèvent contre 3,99 €/semaine.
 
 | | Compris | Étendu |
 |---|---|---|
-| Par mois | 3 000 souvenirs | 12 000 souvenirs |
-| Prix | inclus dans l'abonnement | 3,99 €/mois |
+| Par semaine | 2 000 souvenirs | 8 000 souvenirs |
+| Prix | inclus dans l'abonnement | 3,99 €/semaine |
+
+**La semaine, parce que tout le produit est à la semaine** (Hugo, 17/09/2026) :
+l'abonnement se facture ainsi, un voyage se compte ainsi, et l'extension est une
+**option du même produit** — pas une seconde offre. Elle vit d'ailleurs sous le
+même produit Stripe.
 
 Le barème, et lui seul, décide de ce que chaque geste consomme :
 
@@ -148,6 +153,10 @@ muette tant qu'il reste de la marge : la jauge n'apparaît qu'à 80 %. Cette
 limite est un garde-fou contre l'usage qui coûterait plus cher que
 l'abonnement, pas un levier commercial — quelqu'un qui raconte normalement ne
 doit jamais la voir bouger.
+
+Le compte est vite fait : 2 000 souvenirs par semaine, c'est **200 minutes de
+vocal**, soit près de 30 minutes par jour. Un voyageur bavard qui raconte
+20 minutes quotidiennes en consomme 1 400. La limite ne mord pas.
 
 ⚠️ **Le mot « jeton » — et le mot « token » — n'apparaissent nulle part dans
 l'app.** L'unité s'appelle un souvenir, et l'app compte en souvenirs.

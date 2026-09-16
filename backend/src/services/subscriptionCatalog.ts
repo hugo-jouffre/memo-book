@@ -22,13 +22,19 @@
 export const SUBSCRIPTION_WEEKLY_CENTS = 199;
 
 /**
- * Le supplément mensuel qui relève les limites de souvenirs, en centimes.
+ * Le supplément **hebdomadaire** qui relève les limites de souvenirs, en
+ * centimes.
  *
- * Mensuel et non hebdomadaire, contrairement à l'abonnement : ce n'est pas le
- * voyage qu'il suit mais l'appétit de celui qui raconte, et une limite se
- * compte par mois — voir `memoryAllowance.ts`.
+ * Hebdomadaire comme l'abonnement, et pour la même raison : c'est une **option
+ * du même produit**, pas une seconde offre (Hugo, 17/09/2026). Un voyage se
+ * compte en semaines, l'abonnement se facture à la semaine, et une extension
+ * facturée au mois aurait survécu au voyage qu'elle servait.
+ *
+ * ⚠️ La période des limites suit la facturation — voir `PERIOD_DAYS` dans
+ * `memoryAllowance.ts`. Les désaccorder ferait annoncer un plafond mensuel pour
+ * un prix hebdomadaire, soit quatre fois le montant affiché.
  */
-export const MEMORY_UPGRADE_MONTHLY_CENTS = 399;
+export const MEMORY_UPGRADE_WEEKLY_CENTS = 399;
 
 /** La devise du catalogue. Une seule pour l'instant. */
 export const CATALOG_CURRENCY = "EUR";
@@ -42,5 +48,5 @@ export const CATALOG_CURRENCY = "EUR";
  */
 export const STRIPE_LOOKUP_KEYS = {
   weeklySubscription: "memobook_subscription_weekly",
-  memoryUpgrade: "memobook_memory_upgrade_monthly",
+  memoryUpgrade: "memobook_memory_upgrade_weekly",
 } as const;

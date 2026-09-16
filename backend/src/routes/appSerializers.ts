@@ -514,7 +514,7 @@ function serializeMemoryAllowance(memory: MemorySnapshot) {
     used: memory.used,
     allowance: memory.allowance,
     renewsOn: iso(memory.renewsOn),
-    upgradeMonthlyPrice: euros(memory.upgradeMonthlyPrice),
+    upgradeWeeklyPrice: euros(memory.upgradeWeeklyPrice),
     textCost: TEXT_MEMORY_COST,
     voiceCostPerMinute: VOICE_MEMORY_COST_PER_MINUTE,
   };

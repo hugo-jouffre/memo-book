@@ -12,7 +12,7 @@ import SwiftUI
 ///
 /// ```
 /// « Tes limites de souvenirs »  ──  Étendre mes limites  ──▶  .compare
-///   (la jauge, le barème)                                        │ Étendre pour 3,99 €/mois
+///   (la jauge, le barème)                                      │ Étendre pour 3,99 €/semaine
 ///                                                                ▼
 ///                                                              .done  (« C’est étendu »)
 /// ```
@@ -44,7 +44,7 @@ struct MemoryAllowanceSheet: View {
     /// valeur de cet écran que l'app connaît d'elle-même, et elle est à
     /// remplacer le jour où `GET /v1/catalog` existe. Elle s'accorde avec
     /// `MEMORY_ALLOWANCE.extended` côté serveur.
-    private static let extendedAllowance = 12_000
+    private static let extendedAllowance = 8_000
 
     private var memory: MemoryAllowance { model.memory ?? MemoryAllowance() }
 
@@ -74,7 +74,7 @@ struct MemoryAllowanceSheet: View {
                 VStack(spacing: MemoBookSpacing.s) {
                     if memory.plan == .included {
                         BrandButton(
-                            MemoryCopy.upgradeCta(price: memory.upgradeMonthlyPrice.euros),
+                            MemoryCopy.upgradeCta(price: memory.upgradeWeeklyPrice.euros),
                             style: .accent,
                             fillsWidth: true
                         ) {
@@ -184,9 +184,9 @@ struct MemoryAllowanceSheet: View {
                         title: MemoryPlan.extended.title,
                         detail: MemoryCopy.extendedDetail(
                             allowance: Self.extendedAllowance,
-                            price: "\(memory.upgradeMonthlyPrice.euros)/mois"
+                            price: "\(memory.upgradeWeeklyPrice.euros)/semaine"
                         ),
-                        price: memory.upgradeMonthlyPrice.euros,
+                        price: memory.upgradeWeeklyPrice.euros,
                         isCurrent: memory.plan == .extended
                     )
                 }
@@ -197,7 +197,7 @@ struct MemoryAllowanceSheet: View {
 
                 VStack(spacing: MemoBookSpacing.s) {
                     BrandButton(
-                        MemoryCopy.upgradeCta(price: memory.upgradeMonthlyPrice.euros),
+                        MemoryCopy.upgradeCta(price: memory.upgradeWeeklyPrice.euros),
                         style: .accent,
                         isLoading: model.isChangingMemoryPlan,
                         fillsWidth: true
@@ -223,7 +223,7 @@ struct MemoryAllowanceSheet: View {
             paragraphs: [
                 MemoryCopy.extendedDetail(
                     allowance: memory.allowance,
-                    price: "\(memory.upgradeMonthlyPrice.euros)/mois"
+                    price: "\(memory.upgradeWeeklyPrice.euros)/semaine"
                 ),
                 "Tu peux revenir aux limites comprises quand tu veux, depuis cette même ligne.",
             ]

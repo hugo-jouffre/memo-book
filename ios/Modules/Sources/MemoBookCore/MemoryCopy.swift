@@ -27,7 +27,7 @@ public enum MemoryCopy {
 
     /// Le chapeau, qui dit **ce que c'est** avant de dire où on en est.
     public static let sheetIntro =
-        "Chaque mois, tu disposes d’un volume de souvenirs à raconter. Il est large : en usage normal, tu ne le verras jamais bouger."
+        "Chaque semaine, tu disposes d’un volume de souvenirs à raconter. Il est large : en usage normal, tu ne le verras jamais bouger."
 
     /// « Il te reste 1 760 souvenirs, jusqu'au 14 octobre. »
     public static func remaining(_ count: Int, renewsOn: String?) -> String {
@@ -58,17 +58,17 @@ public enum MemoryCopy {
     public static let compareHeading = "Rester, ou étendre"
 
     public static func includedDetail(_ allowance: Int) -> String {
-        "\(number(allowance)) souvenirs par mois, compris dans ton abonnement. De quoi raconter tous les jours, vocaux compris."
+        "\(number(allowance)) souvenirs par semaine, compris dans ton abonnement. De quoi raconter tous les jours, vocaux compris."
     }
 
     public static func extendedDetail(allowance: Int, price: String) -> String {
-        "\(number(allowance)) souvenirs par mois pour \(price). Pour les voyages racontés à plusieurs, tous les jours, en vocal."
+        "\(number(allowance)) souvenirs par semaine pour \(price). Pour les voyages racontés à plusieurs, tous les jours, en vocal."
     }
 
     public static let includedPrice = "Compris"
 
     /// Le bouton qui étend.
-    public static func upgradeCta(price: String) -> String { "Étendre pour \(price)/mois" }
+    public static func upgradeCta(price: String) -> String { "Étendre pour \(price)/semaine" }
 
     /// Celui qui revient au palier compris. Rouge et sans fond — c'est l'action
     /// qui défait, comme « Résilier mon abonnement ».
@@ -83,7 +83,7 @@ public enum MemoryCopy {
 
     /// Et quand il ne reste rien du tout.
     public static let exhausted =
-        "**Tes limites de souvenirs sont atteintes pour ce mois-ci.** Étends-les, ou attends le renouvellement."
+        "**Tes limites de souvenirs sont atteintes pour cette semaine.** Étends-les, ou attends le renouvellement."
 
     // MARK: Mise en forme
 

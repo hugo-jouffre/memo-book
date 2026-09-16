@@ -599,7 +599,7 @@ public actor PreviewAPI: MemoBookAPI {
             var memory = settings.memory ?? MemoryAllowance()
             memory.plan = plan
             // Le palier étendu ouvre quatre fois plus, comme le barème serveur.
-            memory.allowance = plan == .extended ? 12_000 : 3_000
+            memory.allowance = plan == .extended ? 8_000 : 2_000
             settings.memory = memory
         }
     }

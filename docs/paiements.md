@@ -240,7 +240,7 @@ Deux choses à vendre, un seul tarif chacune, **écrites une fois** dans
 | | Prix | Clé Stripe |
 |---|---|---|
 | Abonnement | **1,99 €/semaine** | `memobook_subscription_weekly` |
-| Limites de souvenirs étendues | **3,99 €/mois** | `memobook_memory_upgrade_monthly` |
+| Limites de souvenirs étendues | **3,99 €/semaine** | `memobook_memory_upgrade_weekly` |
 
 **Le tarif est servi même à qui n'a rien souscrit** (16/09/2026). Il ne l'était
 pas : `GET /v1/profile` rendait `weeklyPrice: 0` faute de ligne `subscriptions`
@@ -255,16 +255,21 @@ intégré pour un service numérique : les deux passeront par **StoreKit**, et
 Les références Stripe existent pour le jour où l'offre se vend aussi hors de
 l'app — le web —, et pour que le back-end sache de quel prix il parle.
 
+**Les deux prix vivent sous le même produit Stripe**, « Abonnement MemoBook »
+(`prod_VGyIuAiG0DcXLa`) : l'extension n'est pas une seconde offre, c'est une
+option de l'abonnement (Hugo, 17/09/2026).
+
 État du sandbox Stripe (`acct_1UFioWBknFHnQoHL`, *MemoBook Test*) :
 
-- ✅ produit « Abonnement MemoBook » + prix récurrent hebdomadaire de 1,99 €,
-  sous la clé `memobook_subscription_weekly` ;
-- ⏳ le prix mensuel de 3,99 € **reste à créer**. En une commande :
+| Prix | | `lookup_key` | |
+|---|---|---|---|
+| `price_1UGQMe…` | 1,99 €/semaine | `memobook_subscription_weekly` | actif |
+| `price_1UGRnH…` | 3,99 €/semaine | `memobook_memory_upgrade_weekly` | actif |
+| `price_1UGRhK…` | 3,99 €/**mois** | `memobook_memory_upgrade_monthly` | **désactivé** |
 
-```bash
-stripe products create --name "Limites de souvenirs étendues"   --description "Quatre fois plus de souvenirs par mois : vocaux et messages."
-stripe prices create --product prod_… --currency eur --unit-amount 399   -d "recurring[interval]=month" -d "lookup_key=memobook_memory_upgrade_monthly"
-```
+⚠️ **L'intervalle d'un prix Stripe ne se modifie pas.** Le mensuel avait été créé
+par erreur ; on ne le corrige pas, on en crée un neuf à la bonne cadence et on
+désactive l'ancien — un prix ne se supprime jamais, il se désactive.
 
 Une **`lookup_key` et non un identifiant de prix** : celui-ci change entre le
 sandbox et la production, celle-là non. C'est ce qui permet de poser la même
