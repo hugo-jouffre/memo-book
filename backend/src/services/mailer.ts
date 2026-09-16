@@ -28,9 +28,11 @@ export interface PasswordResetMail {
 }
 
 /**
- * Le lien du bouton « Réinitialiser mon mot de passe ». Il **ouvre l'app** sur
- * la feuille du nouveau mot de passe — voir `APP_LINK_BASE_URL` dans `env.ts`
- * et `PasswordResetLink` côté iOS, qui lit exactement ce chemin.
+ * Le lien du bouton « Réinitialiser mon mot de passe ». En production, il mène
+ * à la page `GET /password/reset` de l'API, qui **ouvre l'app** sur la feuille
+ * du nouveau mot de passe — voir `APP_LINK_BASE_URL` dans `env.ts`,
+ * `routes/passwordResetPage.ts`, et `PasswordResetLink` côté iOS, qui lit
+ * exactement ce chemin, quel que soit le schéma devant.
  */
 export function passwordResetUrl(env: Env, token: string): string {
   // `memobook://` garde ses deux barres ; `https://memo-book.com/app/` perd la

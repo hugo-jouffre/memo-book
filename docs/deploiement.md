@@ -187,13 +187,21 @@ démarrer en production** — en développement, il écrit les messages dans
 relais `@privaterelay.appleid.com` : il faut alors déclarer le domaine d'envoi
 chez Apple pour que le courrier arrive.
 
-Le bouton de l'e-mail ouvre l'app par `memobook://password/reset?token=…`
-(`APP_LINK_BASE_URL`). Un schéma privé : les clients mail le proposent avec une
-confirmation (« Ouvrir dans MemoBook ? »), et Gmail sur iOS peut le bloquer.
-Le lien universel — `https://memo-book.com/app/…` — demande de servir un
-`apple-app-site-association` depuis memo-book.com et d'ajouter l'*Associated
-Domain* dans `project.yml` ; le jour venu, changer `APP_LINK_BASE_URL` suffit
-côté serveur, `PasswordResetLink` lit le même chemin.
+Le bouton de l'e-mail doit être un lien `https://` : un `memobook://…` écrit
+tel quel n'est **pas cliquable** dans Gmail et la plupart des clients mail
+(constaté le 16/09/2026). Il faut donc poser sur le service `api` :
+
+| Variable | Valeur |
+| --- | --- |
+| `APP_LINK_BASE_URL` | `https://api-production-9f35a.up.railway.app/` (l'adresse publique de l'API, barre finale comprise) |
+
+Le lien devient `https://…/password/reset?token=…` : une page servie par l'API
+(`routes/passwordResetPage.ts`) qui ouvre l'app par `memobook://password/reset?token=…`
+— Safari demande « Ouvrir dans MemoBook ? » — avec un bouton en secours.
+`PasswordResetLink` côté iOS lit le même chemin derrière n'importe quel schéma.
+Le lien universel, plus tard, demande de servir un `apple-app-site-association`
+depuis ce domaine et d'ajouter l'*Associated Domain* dans `project.yml` : le
+lien de l'e-mail ne changera pas, iOS ouvrira l'app avant d'arriver sur la page.
 
 ### Côté Google Cloud
 
