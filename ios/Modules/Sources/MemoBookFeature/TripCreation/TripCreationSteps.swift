@@ -95,26 +95,15 @@ struct TripCreationStepContent: View {
 
     // MARK: - 3. Dates
 
-    /// Deux lignes qui se déplient. Le sélecteur s'ouvre **sous** la ligne
-    /// qu'on touche plutôt que dans une feuille : les deux dates se lisent
-    /// ensemble, et une feuille par-dessus cacherait celle qu'on vient de
-    /// poser.
+    /// Une seule ligne, « Du … au … », et un calendrier qui se déplie dessous.
+    ///
+    /// Deux lignes demandaient quatre gestes et deux calendriers pour une
+    /// question qu'on se pose en une fois. Ici on touche le jour de départ,
+    /// puis celui du retour, et la plage se lit entre les deux. Le calendrier
+    /// s'ouvre **sous** la ligne plutôt que dans une feuille : ce qu'on vient
+    /// de poser reste lisible au-dessus.
     private var dates: some View {
-        VStack(spacing: MemoBookSpacing.xs + 4) {
-            TripDateRow(
-                label: "Date de début",
-                date: $model.draft.startDate,
-                // Une fin déjà posée borne le début : l'inverse n'a pas de sens
-                // et le serveur le refuserait.
-                range: ...(model.draft.endDate ?? .distantFuture)
-            )
-
-            TripDateRow(
-                label: "Date de fin (optionnel)",
-                date: $model.draft.endDate,
-                range: (model.draft.startDate ?? .distantPast)...
-            )
-        }
+        TripDateRangeRow(start: $model.draft.startDate, end: $model.draft.endDate)
     }
 
     // MARK: - 4. Notifications
@@ -440,41 +429,49 @@ struct TripCreationCard<Label: View>: View {
     }
 }
 
-// MARK: - Une date
+// MARK: - Les dates
 
-/// Une ligne de date qui se déplie sur son calendrier.
-struct TripDateRow: View {
-    let label: String
-    @Binding var date: Date?
-    let range: PartialRangeThrough<Date>?
-    let openRange: PartialRangeFrom<Date>?
-
-    init(label: String, date: Binding<Date?>, range: PartialRangeThrough<Date>) {
-        self.label = label
-        self._date = date
-        self.range = range
-        self.openRange = nil
-    }
-
-    init(label: String, date: Binding<Date?>, range: PartialRangeFrom<Date>) {
-        self.label = label
-        self._date = date
-        self.range = nil
-        self.openRange = range
-    }
+/// « Du 1 sept. au 12 sept. 2026 », et le calendrier de plage qui se déplie
+/// dessous.
+struct TripDateRangeRow: View {
+    @Binding var start: Date?
+    @Binding var end: Date?
 
     @State private var isOpen = false
 
-    /// Ce que la ligne affiche : la date choisie, ou l'intitulé en gris tant
-    /// qu'il n'y en a pas.
+    /// Le calendrier travaille sur une plage ; le brouillon garde deux dates.
+    /// La liaison fait le pont dans les deux sens.
+    private var selection: Binding<DateRangeSelection> {
+        Binding(
+            get: { DateRangeSelection(start: start, end: end) },
+            set: { picked in
+                start = picked.start
+                end = picked.end
+            }
+        )
+    }
+
+    /// Ce que la ligne affiche : la plage posée, ou l'invite en gris tant
+    /// qu'il n'y a rien.
     private var text: String {
-        date?.formatted(.dateTime.day().month(.wide).year()) ?? label
+        guard let start else { return "Du … au …" }
+        guard let end else {
+            return "Du \(start.formatted(.dateTime.day().month(.abbreviated).year())) au …"
+        }
+        return "Du \(start.formatted(.dateTime.day().month(.abbreviated))) au \(end.formatted(.dateTime.day().month(.abbreviated).year()))"
+    }
+
+    /// Pour VoiceOver, en toutes lettres.
+    private var accessibilityText: String {
+        guard let start else { return "Non définies" }
+        let from = start.formatted(date: .long, time: .omitted)
+        guard let end else { return "Départ le \(from), retour non défini" }
+        return "Du \(from) au \(end.formatted(date: .long, time: .omitted))"
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: MemoBookSpacing.xs) {
             TripCreationCard(isSelected: isOpen) {
-                if date == nil { date = .now }
                 withAnimation(.smooth(duration: 0.25)) { isOpen.toggle() }
             } label: {
                 HStack(spacing: MemoBookSpacing.xs + 4) {
@@ -484,14 +481,15 @@ struct TripDateRow: View {
 
                     Text(text)
                         .font(MemoBookFont.body)
-                        .foregroundStyle(date == nil ? MemoBookColor.inkMuted : MemoBookColor.ink)
+                        .foregroundStyle(start == nil ? MemoBookColor.inkMuted : MemoBookColor.ink)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     Spacer(minLength: 0)
 
-                    if date != nil {
+                    if start != nil {
                         Button {
-                            date = nil
-                            withAnimation(.smooth(duration: 0.25)) { isOpen = false }
+                            start = nil
+                            end = nil
                         } label: {
                             Image(brand: "IconCross")
                                 .resizable()
@@ -500,31 +498,31 @@ struct TripDateRow: View {
                                 .foregroundStyle(MemoBookColor.inkMuted)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Effacer \(label)")
+                        .accessibilityLabel("Effacer les dates")
                     }
                 }
             }
+            .accessibilityLabel("Dates du voyage")
+            .accessibilityValue(accessibilityText)
 
             if isOpen {
-                picker
-                    .datePickerStyle(.graphical)
-                    .tint(MemoBookColor.action)
-                    .padding(.horizontal, MemoBookSpacing.xs)
-                    .padding(.top, MemoBookSpacing.xs)
+                BrandRangeCalendar(selection: selection)
+
+                Text(hint)
+                    .font(MemoBookFont.caption)
+                    .foregroundStyle(MemoBookColor.inkMuted)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .contentTransition(.opacity)
             }
         }
     }
 
-    @ViewBuilder
-    private var picker: some View {
-        let bound = Binding(get: { date ?? .now }, set: { date = $0 })
-
-        if let range {
-            DatePicker(label, selection: bound, in: range, displayedComponents: .date)
-                .labelsHidden()
-        } else if let openRange {
-            DatePicker(label, selection: bound, in: openRange, displayedComponents: .date)
-                .labelsHidden()
+    /// Ce qu'il reste à faire, dit sous le calendrier.
+    private var hint: String {
+        switch (start, end) {
+        case (nil, _): "Touche ton jour de départ"
+        case (_, nil): "Puis ton jour de retour — ou laisse-le vide"
+        default: "Touche un jour pour recommencer"
         }
     }
 }
