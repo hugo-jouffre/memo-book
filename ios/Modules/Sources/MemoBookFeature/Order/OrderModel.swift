@@ -65,10 +65,10 @@ public final class OrderModel {
     private let setWhatsApp: (String, String?) async throws -> PrintOrder
 
     /// Qui ouvre la feuille de paiement. Une fonction et non le SDK : les
-    /// aperçus en passent une qui n'appelle personne.
+    /// previews Xcode en passent une qui n'appelle personne.
     private let presentPayment: (PaymentIntentTicket) async -> PaymentOutcome
 
-    /// Relit la commande auprès du serveur. `nil` dans les aperçus, qui n'ont
+    /// Relit la commande auprès du serveur. `nil` dans les previews Xcode, qui n'ont
     /// pas de serveur à qui demander — la commande y est réglée d'avance.
     private let reloadOrder: ((String) async throws -> PrintOrder)?
 

@@ -213,10 +213,10 @@ extension NewPrintOrderRequest {
 }
 
 extension PlacedPrintOrder {
-    /// Ce que le double d'aperçu rend : une commande **déjà réglée**.
+    /// Ce que le bac à sable rend : une commande **déjà réglée**.
     ///
     /// `paidFromWallet` plutôt qu'un faux `clientSecret` : c'est le seul cas qui
-    /// n'ouvre aucune feuille. Un aperçu ne doit pas pouvoir appeler Stripe,
+    /// n'ouvre aucune feuille. Une preview Xcode ne doit pas pouvoir appeler Stripe,
     /// même par accident.
     public static func fixture(
         memoId: String,

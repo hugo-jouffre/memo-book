@@ -4,13 +4,13 @@ import MemoBookNetworking
 import MemoBookPayments
 
 extension AppDependencies {
-    /// Le graphe **sans serveur et sans argent** : aperçus SwiftUI, tests
+    /// Le graphe **sans serveur et sans argent** : previews Xcode, tests
     /// d'interface, et le lancement `-previewSignedIn`.
     ///
     /// Une fabrique et non deux arguments à recopier : le jour où une dépendance
-    /// de plus doit être neutralisée pour un aperçu, elle se neutralise ici, et
+    /// de plus doit être neutralisée pour une preview Xcode, elle se neutralise ici, et
     /// aucun site d'appel ne peut l'oublier. C'est ``StubPaymentPresenter`` qui
-    /// garantit qu'un aperçu n'ouvre jamais Stripe.
+    /// garantit qu'une preview Xcode n'ouvre jamais Stripe.
     @MainActor
     public static func preview() -> AppDependencies {
         AppDependencies(api: PreviewAPI(), payments: StubPaymentPresenter())
@@ -519,7 +519,7 @@ public actor PreviewAPI: MemoBookAPI {
     /// Une commande déjà réglée, et **sans intention de paiement**.
     ///
     /// `paidFromWallet` plutôt qu'un faux `clientSecret` : c'est le seul cas qui
-    /// ne monte aucune feuille. Un aperçu — ou un lancement `-previewSignedIn` —
+    /// ne monte aucune feuille. Une preview Xcode — ou un lancement `-previewSignedIn` —
     /// ne doit pas pouvoir ouvrir Stripe, même par accident.
     public func createPrintOrder(
         memoId: String,

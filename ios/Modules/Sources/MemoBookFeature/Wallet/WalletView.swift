@@ -151,8 +151,8 @@ public enum WalletIntent: Sendable, Hashable {
     case inviteFriends
     /// « Ajouter » — recharger, feuille Stripe à la clé.
     case addFunds
-    /// « Ajouter » là où l'encaissement n'est pas branché : les aperçus, qui
-    /// n'ont pas de serveur à qui demander une intention.
+    /// « Ajouter » là où l'encaissement n'est pas branché : les previews Xcode,
+    /// qui n'ont pas de serveur à qui demander une intention.
     case topUpUnavailable
     case openBookPreview
     case openHelp

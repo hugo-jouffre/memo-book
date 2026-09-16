@@ -46,7 +46,7 @@ public final class AppDependencies {
     ///     moniteur par défaut ; un test en fournit un qu'il pilote.
     ///   - pendingRecordings: où dorment les vocaux qui n'ont pas pu partir.
     ///   - payments: qui ouvre la feuille de paiement. La vraie par défaut ;
-    ///     un aperçu — et le lancement `-previewSignedIn` — passe
+    ///     une preview Xcode — et le lancement `-previewSignedIn` — passe
     ///     ``StubPaymentPresenter``, qui n'appelle personne.
     public init(
         api: any MemoBookAPI,

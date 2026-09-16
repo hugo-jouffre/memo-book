@@ -24,7 +24,7 @@ public final class WalletModel {
     private let tripId: String?
     private let source: (String?) async throws -> Wallet
 
-    /// L'encaissement. `nil` dans les aperçus, qui n'ont pas de serveur — et
+    /// L'encaissement. `nil` dans les previews Xcode, qui n'ont pas de serveur — et
     /// qui ne doivent pas pouvoir ouvrir Stripe.
     ///
     /// Rend la cagnotte relue une fois l'argent encaissé, ou **`nil` quand la
@@ -54,7 +54,7 @@ public final class WalletModel {
     /// d'attente — voir ``BrandSkeleton``.
     public var isLoading: Bool { wallet == nil && errorMessage == nil }
 
-    /// L'encaissement est branché. Vrai dans l'app, faux dans les aperçus.
+    /// L'encaissement est branché. Vrai dans l'app, faux dans les previews Xcode.
     public var canTopUp: Bool { topUp != nil }
 
     public func load() async {
