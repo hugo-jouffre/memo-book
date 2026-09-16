@@ -247,17 +247,51 @@ final class RecordingOutboxTests: XCTestCase {
     // MARK: - Le contenu relu hors ligne
 
     func testTheLastFeedIsReadableAgainAndForgottenOnSignOut() async {
-        let cache = HomeFeedCache(
-            url: FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).json")
-        )
+        // `ContentCache` a remplacé `HomeFeedCache` le 16/09/2026 : le cache ne
+        // sert plus seulement à relire l'accueil hors ligne, il sert aussi à
+        // **ouvrir vite** cinq écrans. La question, elle, n'a pas changé — ce
+        // qu'on écrit se relit, et s'efface à la déconnexion.
+        let cache = ContentCache(directory: Self.scratchDirectory())
 
-        await cache.write(.fixture)
-        let reread = await cache.read()
+        await cache.write(.home, HomeFeed.fixture)
+        let reread = await cache.read(.home, as: HomeFeed.self)
         XCTAssertEqual(reread?.trips.map(\.id), HomeFeed.fixture.trips.map(\.id))
 
-        await cache.clear()
-        let afterSignOut = await cache.read()
+        await cache.clearAll()
+        let afterSignOut = await cache.read(.home, as: HomeFeed.self)
         XCTAssertNil(afterSignOut, "Les voyages de quelqu'un ne restent pas sur le téléphone après sa sortie.")
+    }
+
+    /// **Deux écrans ne se marchent pas dessus.** Chaque case a son fichier, et
+    /// un voyage a le sien par identifiant : sans ça, ouvrir un second voyage
+    /// aurait servi le premier au lancement suivant.
+    func testEachSlotHasItsOwnFile() async {
+        let cache = ContentCache(directory: Self.scratchDirectory())
+
+        await cache.write(.home, HomeFeed.fixture)
+
+        // `XCTAssertNil` prend une autoclosure, qui ne sait pas attendre : on
+        // lit d'abord, on affirme ensuite.
+        let fromAnotherSlot = await cache.read(.gallery, as: HomeFeed.self)
+        let fromItsOwnSlot = await cache.read(.home, as: HomeFeed.self)
+        XCTAssertNil(fromAnotherSlot)
+        XCTAssertNotNil(fromItsOwnSlot)
+
+        XCTAssertNotEqual(
+            ContentCache.Slot.trip("rome").filename,
+            ContentCache.Slot.trip("lisbonne").filename
+        )
+        // Et l'identifiant du voyage n'est pas écrit en clair dans
+        // l'arborescence de l'appareil.
+        XCTAssertFalse(ContentCache.Slot.trip("rome").filename.contains("rome"))
+    }
+
+    /// Un dossier neuf par test : deux tests qui partageraient le même
+    /// écriraient dans les mêmes fichiers, et le second lirait ce que le
+    /// premier a laissé.
+    private static func scratchDirectory() -> URL {
+        FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
     }
 
     // MARK: - Outils
