@@ -54,6 +54,7 @@ interface TripDetailBody {
 
 interface ProfileBody {
   phoneNumber: string | null;
+  gender: "female" | "male" | "undisclosed";
   wantsNewsletter: boolean;
   walletBalance: number;
   address: { street: string; postalCode: string; city: string; country: string };
@@ -370,6 +371,38 @@ describe("le profil", () => {
       payload: { phoneNumber: null },
     });
     expect(cleared.json<ProfileBody>().phoneNumber).toBeNull();
+  });
+
+  it("devine le genre sur le prénom, et s'efface devant ce que la personne dit", async () => {
+    const account = await registerAccount(harness.app);
+
+    // « Hugo » : le prénom du compte de test suffit à accorder au masculin,
+    // sans que personne n'ait rien déclaré.
+    const guessed = await harness.app.inject({
+      method: "GET",
+      url: "/v1/profile",
+      headers: { authorization: account.authorization },
+    });
+    expect(guessed.json<ProfileBody>().gender).toBe("male");
+
+    // Ce que la personne choisit l'emporte, y compris « je ne préfère pas
+    // répondre » — c'est une réponse, pas une absence de réponse.
+    const declared = await harness.app.inject({
+      method: "PATCH",
+      url: "/v1/profile",
+      headers: { authorization: account.authorization },
+      payload: { gender: "undisclosed" },
+    });
+    expect(declared.json<ProfileBody>().gender).toBe("undisclosed");
+
+    // Et un prénom qui change ne revient pas sur ce qui a été dit.
+    const renamed = await harness.app.inject({
+      method: "PATCH",
+      url: "/v1/profile",
+      headers: { authorization: account.authorization },
+      payload: { firstName: "Clara" },
+    });
+    expect(renamed.json<ProfileBody>().gender).toBe("undisclosed");
   });
 
   it("refuse un connecteur qui n'est pas au catalogue", async () => {

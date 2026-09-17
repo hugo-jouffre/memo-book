@@ -27,6 +27,9 @@ const updateBody = z.object({
   firstName: nullableText(100),
   lastName: nullableText(100),
   phoneNumber: nullableText(40),
+  // Ce que la personne dit d'elle-même : un des trois choix, jamais `null` —
+  // « je ne préfère pas répondre » est une réponse, pas une absence.
+  gender: z.enum(["female", "male", "undisclosed"]).optional(),
   wantsNewsletter: z.boolean().optional(),
   address: z
     .object({
@@ -138,6 +141,7 @@ export function registerProfileRoutes(app: FastifyInstance, context: AppContext)
         firstName: orNull(body.firstName),
         lastName: orNull(body.lastName),
         phoneNumber: orNull(body.phoneNumber),
+        ...(body.gender !== undefined ? { gender: body.gender } : {}),
         ...(body.wantsNewsletter !== undefined
           ? { wantsNewsletter: body.wantsNewsletter }
           : {}),
