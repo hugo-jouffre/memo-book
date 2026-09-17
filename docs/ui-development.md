@@ -1964,7 +1964,7 @@ branches aurait donné treize dessins à tenir cohérents.
 | `… sans micro` | les mêmes, cerne du micro en gris et icône barrée |
 | `Start Recording` | `recorder.isRecording` — pause, frise, chrono, micro allumé, envoyer |
 | `Finish Recording` | `recorder.isPaused` — corbeille, frise éteinte, chrono figé, envoyer |
-| `Modifying transcription` | ``.writing`` avec un long brouillon : le champ s'étire tout seul, il n'y avait pas de cinquième disposition à écrire |
+| `Modifying transcription` | ``.writing`` avec `isEditingTranscript` : le texte de la fiche est **déjà dans le champ**, qui monte à dix lignes et prend toute la barre — voir § 24 |
 | `skeleton` | `ChatSkeleton`, qui dessine déjà la barre en blocs gris |
 
 **Tokens ajoutés** — `MemoBookColor.send` (#5D6CF5, `chat/toolbar/input-btn-active`) ·
@@ -3392,7 +3392,103 @@ l'afficher : c'est là qu'elle relance, pas dans le fil.
 contexte qui porte une relance.
 
 ### 26.1 À trancher
+## 23. Lot 8 — Les documents légaux
+
+### 23.1 Conditions d'utilisation, et Politique de confidentialité
+
+- **Nœud Figma** : aucun — la référence est le gabarit « Template Pages
+  Légales » fourni par Hugo (17/09/2026), une image, pas un nœud. Il dessine le
+  **motif** (des cartes qui se déplient, la première ouverte en bleu, un pied
+  « Besoin d'aide ? Découvrir notre FAQ ») avec des titres de remplissage
+  (« Chapitre 1 — Principes », du lorem ipsum).
+- **Vue** : `MemoBookFeature/Legal/LegalDocumentView.swift` — **une seule vue
+  pour les deux documents**, qui reçoit un `LegalDocument` (titre + chapitres).
+- **Rôle** : lire un document légal du site, chapitre par chapitre.
+- **Entrée / sortie** : les deux lignes du groupe légal du profil
+  (`ProfileIntent.openTermsOfUse` / `.openPrivacyPolicy` →
+  `HomeRoute.legal(.termsOfUse | .privacyPolicy)`). Sortie par la flèche, ou
+  par « Découvrir notre FAQ » vers le support (`LegalIntent.openHelp`).
+
+**Structure (en rem)** — marge d'écran 1 ; en-tête `BrandScreenHeader` ; les
+cartes à 1 d'écart, marge intérieure 1, rayon 1.25 (celui des cartes de
+l'accueil) ; titre en `cardTitle` (Sora 16), chevron du jeu de marque à 22 pt
+comme sur une `BrandRow`, tourné de 90° (bas) ou −90° (haut) ; corps en
+`taglineRegular` (14), en sourdine repliée, à l'encre dépliée ; **trois
+lignes** visibles repliée. Le pied à 0.5 sous la dernière carte.
+
+**Tokens utilisés** — `surface` + `hairline` pour une carte repliée, `outline`
+(le bleu d'aplat) pour une carte dépliée ; `ink`, `inkMuted` ; `action` pour
+les liens du texte (l'adresse de contact, le site de la CNIL) ; `tagline`
+(General Sans Semibold 14) pour les étiquettes `**…**` et les intertitres.
+Rien de nouveau.
+
+**Composants** — **`BrandDisclosureCard`** entre dans le design system : le
+motif « carte qui se déplie » n'existait pas (`BrandToggleCard` règle,
+`BrandRow` mène ailleurs, ici on lit). Le contenu replié et le contenu déplié
+sont deux vues fournies par l'écran ; la carte ne sait pas ce qu'elle porte et
+c'est l'écran qui tronque. L'état appartient à l'écran (un `Set` d'identifiants
+— plusieurs chapitres peuvent être ouverts à la fois ; le premier l'est à
+l'arrivée).
+
+**« Si le contenu est trop long, on peut appuyer » — et pas autrement.** La
+carte a un interrupteur `isExpandable` : faux, elle perd son chevron et ne
+répond plus au toucher (sans `disabled`, qui éteindrait le titre). L'écran le
+règle en **mesurant** : `LegalText` dessine le même texte caché sans limite
+sous le texte limité et compare les deux hauteurs (`onGeometryChange`) — la
+seule façon en SwiftUI de savoir si `lineLimit` a coupé. Mesuré et non deviné,
+parce qu'un chapitre qui tient sur un 17 Pro Max déborde à AX3. Un chapitre
+dont l'aperçu tient **mais qui a une structure** (intertitres, puces, lignes)
+reste dépliable : trois lignes d'adresse jointes par des espaces ne sont pas le
+chapitre. Aujourd'hui, un seul chapitre est concerné : « Cookies » de la
+politique de confidentialité.
+
+Le corps d'un chapitre (`LegalChapterBody`) et le paragraphe avec ses liens et
+ses étiquettes (`LegalText`) sont spécifiques à l'écran. `LegalText` lit deux
+balises Markdown et seulement celles-là : le lien, et `**…**` — traduit en
+General Sans Semibold par portions, comme `BrandNotice`, parce que le gras est
+une autre police et non un épaississement.
+
+**Copie** — le texte des deux documents vient du site memobook.fr, recopié au
+caractère près dans `MemoBookCore/TermsOfUse.swift` (9 chapitres) et
+`MemoBookCore/PrivacyPolicy.swift` (11 chapitres) ; la forme dans
+`LegalDocument.swift`, les libellés de l'interface dans `LegalCopy`.
+Apostrophes typographiques, espaces insécables dans le SIRET et le numéro de
+TVA. Le titre d'une carte suit le motif du gabarit — « Chapitre 4 — Description
+du service » — avec le titre du site. La ligne du profil dit
+« Confidentialité », l'écran « Politique de confidentialité » (le titre de la
+page du site). L'aperçu d'une carte repliée est **tout le texte courant du
+chapitre** d'un seul tenant, sans les intertitres : le premier paragraphe du
+chapitre 4 des CGU tient en deux lignes et finit sur deux-points, une carte qui
+ne montrerait que ça aurait l'air vide.
+
+**États** — nominal seulement : le contenu est embarqué, il n'y a ni vide, ni
+chargement, ni erreur.
+
+**Contrat back-end** — aucun. Même parti pris que la FAQ : le texte arrive par
+une constante, le brancher sur une route fera quatre lignes le jour où les
+documents seront servis.
+
+**Assets** — aucun nouveau : `IconChevron` tourné.
+
+**Accessibilité** — chaque carte dépliable est un bouton portant son titre, la
+valeur « Dépliée / Repliée » et l'indice « Déplier / Replier » ; une carte qui
+ne se déplie pas perd le trait de bouton ; le chevron et les puces sont masqués
+à VoiceOver ; les intertitres portent le trait d'en-tête ; l'adresse est un
+lien `mailto:`, la CNIL un lien `https:`. Vérifié à AX3 : le chevron reste en
+face de la première ligne du titre, rien ne se rogne, la carte grandit.
+
+`LegalDocumentTests` garde le contenu **des deux documents** (tests
+paramétrés) : numérotation 1 à n, identifiants `<document>.slug` uniques, un
+aperçu par chapitre, l'adresse toujours liée, apostrophe typographique partout,
+demi-gras refermés.
+
+### 23.2 À trancher
 
 | # | Sujet |
 |---|---|
-| T161 | **La notification de relance n'existe pas encore.** « Comment ça se passe à Testaccio ? » n'a plus qu'un endroit — la carte de l'accueil du voyage — en attendant la notification qui rappellera une journée pas racontée. C'est le rythme du récit (« Tous les 2 jours ») qui devrait la cadencer |
+| T147 | **Les documents légaux vouvoient**, seule exception à R9. C'est un contrat, pas une phrase de l'interface : le texte du site est celui qui engage, et il est recopié tel quel. Si Clara et Hugo veulent tutoyer, c'est le site qui change d'abord, et l'app suit |
+| T148 | **« Découvrir notre FAQ » est à l'encre**, là où le gabarit le dessine en vert. C'est `BrandButton` en style `link`, petite taille : le design system n'a pas de lien vert, et un lien d'une autre couleur serait un second bouton. À dessiner dans Figma, ou à valider tel quel |
+| T151 | **« En continuant, vous acceptez nos Conditions d'utilisation »** sur l'écran d'entrée n'ouvre pas la page : elle est derrière la session (`HomeRoute`), et l'écran d'entrée a sa propre pile. À relier si on veut lire les CGU avant de créer un compte |
+| T152 | **Le chapitre 3 de la politique de confidentialité annonce une liste qui ne suit pas** — « transmises aux prestataires techniques suivants … : » puis rien. Le site la porte dans un tableau qui n'a pas été fourni. Recopié tel quel (R8) ; **à compléter** avec la liste des prestataires (Webflow, Google Analytics, Hotjar, Meta, WhatsApp ?) |
+| T153 | **Le chapitre 9 (« Mineurs ») se termine par un point-virgule** au lieu d'un point. Recopié tel quel (R8), à corriger sur le site |
+| T154 | **La politique de cookies n'existe pas dans l'app**, et les deux documents y renvoient (« disponible sur ce site »). Un troisième `LegalDocument` suffira le jour où le texte est fourni |

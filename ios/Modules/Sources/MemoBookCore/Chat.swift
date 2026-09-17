@@ -353,6 +353,13 @@ public struct ChatSuggestion: Codable, Sendable, Hashable, Identifiable {
         /// Envoyer le libellé, puis ouvrir le clavier : « à la main ».
         case sendThenWrite
 
+        /// Envoyer le libellé, puis ouvrir le clavier **avec la retranscription
+        /// déjà dedans** : « J'aimerais faire des modifications à la main »
+        /// sous une fiche remplie. On ne retape pas cinquante mots pour en
+        /// changer trois — le texte de MEMO est posé dans le champ, prêt à
+        /// être corrigé (Hugo, 17/09/2026).
+        case sendThenEditTranscript
+
         /// Envoyer le libellé, puis armer le micro : « à l'oral ».
         case sendThenSpeak
 
@@ -392,6 +399,7 @@ extension ChatSuggestion.Intent: Codable {
             switch raw {
             case "send": .send
             case "send_then_write": .sendThenWrite
+            case "send_then_edit_transcript": .sendThenEditTranscript
             case "send_then_speak": .sendThenSpeak
             case "import_photos": .importPhotos
             default: .unknown(raw)
@@ -407,6 +415,7 @@ extension ChatSuggestion.Intent: Codable {
         switch self {
         case .send: "send"
         case .sendThenWrite: "send_then_write"
+        case .sendThenEditTranscript: "send_then_edit_transcript"
         case .sendThenSpeak: "send_then_speak"
         case .importPhotos: "import_photos"
         case .unknown(let raw): raw
