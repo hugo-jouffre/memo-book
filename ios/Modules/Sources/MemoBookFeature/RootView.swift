@@ -629,6 +629,7 @@ public struct RootView: View {
                 stepId: stepId,
                 handoff: recordingHandoff,
                 outbox: dependencies.outbox,
+                archive: dependencies.conversations,
                 onIntent: handle
             )
         case .gallery:

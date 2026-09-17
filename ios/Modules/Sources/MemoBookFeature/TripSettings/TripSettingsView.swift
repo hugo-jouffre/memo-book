@@ -31,6 +31,11 @@ public struct TripSettingsView: View {
     /// ce qui part mérite sa place.
     @State private var isConfirmingDeletion = false
 
+    /// La confirmation avant d'effacer la conversation. Une seconde feuille
+    /// et non un second temps de la première : les deux gestes ne se suivent
+    /// jamais, et chacun a sa porte.
+    @State private var isConfirmingConversationClearing = false
+
     @Environment(\.dismiss) private var dismiss
 
     public init(
@@ -66,6 +71,7 @@ public struct TripSettingsView: View {
                 }
 
                 helpLink
+                clearConversationLink
                 deleteLink
 
                 #if DEBUG
@@ -106,6 +112,23 @@ public struct TripSettingsView: View {
             case .companions: TripInviteSheet(model: model)
             case .memory: MemoryAllowanceSheet(model: model)
             }
+        }
+        .brandSheet(isPresented: $isConfirmingConversationClearing) {
+            ClearConversationSheet(
+                isClearing: model.isClearingConversation,
+                errorMessage: model.errorMessage,
+                onKeep: { isConfirmingConversationClearing = false },
+                onClear: {
+                    Task {
+                        // On reste sur les réglages : c'est le fil, en
+                        // dessous dans la pile, qui se vide — et c'est lui
+                        // qu'on retrouve en revenant.
+                        if await model.clearConversation() {
+                            isConfirmingConversationClearing = false
+                        }
+                    }
+                }
+            )
         }
         .brandSheet(isPresented: $isConfirmingDeletion) {
             DeleteTripSheet(
@@ -274,31 +297,54 @@ public struct TripSettingsView: View {
         }
     }
 
+    /// « Supprimer la conversation », juste au-dessus du voyage — à l'encre et
+    /// avec la bulle, sur le dessin de « Me déconnecter » : c'est un geste qui
+    /// se rattrape moins qu'un réglage et plus qu'une suppression de voyage,
+    /// et deux croix rouges l'une sur l'autre auraient dit deux fois la même
+    /// chose (Hugo, 17/09/2026).
+    private var clearConversationLink: some View {
+        exitLink(
+            icon: "IconBubble",
+            title: BookCopy.Settings.clearConversation,
+            tint: MemoBookColor.ink
+        ) {
+            isConfirmingConversationClearing = true
+        }
+        .disabled(model.isClearingConversation)
+    }
+
     /// « Supprimer ce voyage », tout en bas — le même dessin que « Supprimer
     /// mon compte » sur le profil : une croix rouge et un mot, centrés, sans
     /// carte ni bouton plein. On ne met pas en avant la porte de sortie, mais
     /// elle existe (Hugo, 15/09/2026). La confirmation est dans la feuille ;
     /// après elle, il n'y a plus rien à annuler.
     private var deleteLink: some View {
-        Button {
+        exitLink(icon: "IconCross", title: BookCopy.Settings.delete, tint: MemoBookColor.error) {
             isConfirmingDeletion = true
-        } label: {
+        }
+        .disabled(model.isDeleting)
+    }
+
+    /// Le dessin commun des deux portes de sortie : une icône et un mot,
+    /// centrés, sans carte ni bouton plein — celui des actions de sortie du
+    /// profil.
+    private func exitLink(icon: String, title: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             HStack(spacing: MemoBookSpacing.xs) {
-                Image(brand: "IconCross")
+                Image(brand: icon)
                     .resizable()
                     .renderingMode(.template)
                     .scaledToFit()
                     .frame(width: MemoBookSpacing.contentIcon, height: MemoBookSpacing.contentIcon)
-                Text(BookCopy.Settings.delete)
+                Text(title)
                     .font(MemoBookFont.button)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .foregroundStyle(MemoBookColor.error)
+            .foregroundStyle(tint)
             .frame(maxWidth: .infinity, minHeight: MemoBookSpacing.minimumTapTarget)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .disabled(model.isDeleting)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
     }
