@@ -77,6 +77,12 @@ public final class ChatModel {
     public var composer: ChatComposerMode = .tools
     public var draft: String = ""
 
+    /// Le brouillon est une retranscription qu'on corrige, et non un message
+    /// qu'on écrit. Le champ s'y étire plus haut — corriger un texte de
+    /// cinquante mots demande de le **lire**, et six lignes en cachent la
+    /// moitié. Retombe à faux dès que le brouillon part ou se jette.
+    public private(set) var isEditingTranscript = false
+
     public let recorder = AudioRecorder()
     public let player = AudioNotePlayer()
     public let reader = SpeechReader()
@@ -233,6 +239,7 @@ public final class ChatModel {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         draft = ""
+        isEditingTranscript = false
         send(.text(text))
     }
 
@@ -247,6 +254,7 @@ public final class ChatModel {
             cancelRecording()
         }
         draft = ""
+        isEditingTranscript = false
         composer = .tools
     }
 
@@ -271,6 +279,18 @@ public final class ChatModel {
             composer = .tools
             send(.text(suggestion.label))
         case .sendThenWrite:
+            composer = .writing
+            send(.text(suggestion.label))
+        case .sendThenEditTranscript:
+            // Le texte de la fiche est posé dans le champ **avant** d'envoyer
+            // la puce : la bulle bleue part, MEMO répond « je te laisse la
+            // main », et le voyageur a déjà le texte sous les doigts. S'il n'y
+            // a aucune fiche remplie — la puce vient du serveur sous un tour
+            // qui n'en a pas —, le champ s'ouvre simplement vide.
+            if let text = latestTranscriptText {
+                draft = text
+                isEditingTranscript = true
+            }
             composer = .writing
             send(.text(suggestion.label))
         case .sendThenSpeak:
@@ -602,7 +622,20 @@ public final class ChatModel {
     public func edit(_ message: ChatMessage) {
         guard let text = message.spokenText else { return }
         draft = text
+        if case .transcript = message.body { isEditingTranscript = true }
         composer = .writing
+    }
+
+    /// Le récit de la dernière fiche remplie du fil — celle que le trio
+    /// « Ça me convient / à la main / à l'oral » suit. La dernière et non la
+    /// première : on corrige ce qu'on vient d'entendre, pas la fiche d'hier.
+    private var latestTranscriptText: String? {
+        for message in messages.reversed() {
+            if case .transcript(let card) = message.body, let text = card.text, !text.isEmpty {
+                return text
+            }
+        }
+        return nil
     }
 
     // MARK: -

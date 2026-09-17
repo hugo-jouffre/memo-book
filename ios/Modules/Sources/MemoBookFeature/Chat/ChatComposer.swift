@@ -277,11 +277,19 @@ struct ChatSendingBar: View {
 
     // MARK: Au clavier — nœuds `Start Typing` / `Finish Typing`
 
+    /// Le micro **s'efface** quand on corrige une retranscription : on a
+    /// choisi « à la main », et à ce corps-là, un bouton de 44 à côté du champ
+    /// coupait chaque ligne à quatorze caractères — on ne relit pas cinquante
+    /// mots dans une colonne. Le champ prend toute la barre ; le micro revient
+    /// avec le prochain message.
     private var writingControls: some View {
         HStack(spacing: MemoBookSpacing.xs) {
             field
-            micButton(fills: false)
+            if !model.isEditingTranscript {
+                micButton(fills: false)
+            }
         }
+        .animation(bounce, value: model.isEditingTranscript)
     }
 
     /// Le champ grandit avec ce qu'on écrit.
@@ -295,19 +303,20 @@ struct ChatSendingBar: View {
     /// C'est aussi ce champ qui porte l'état `Modifying transcription` de la
     /// maquette : corriger une retranscription, c'est écrire un long texte, et
     /// le champ s'y étire tout seul. Il n'y avait pas de cinquième disposition à
-    /// écrire pour ça.
+    /// écrire pour ça — seulement un plafond plus haut, voir ``lineRange``.
     private var field: some View {
         HStack(alignment: .bottom, spacing: MemoBookSpacing.xs) {
             TextField(ChatCopy.composerPlaceholder, text: $model.draft, axis: .vertical)
                 .font(MemoBookFont.composer)
                 .foregroundStyle(MemoBookColor.ink)
                 .tint(MemoBookColor.send)
-                // Trois lignes en taille accessible et six sinon : à ce corps-là,
-                // six lignes de saisie occupent la moitié de l'écran et poussent
-                // la conversation hors de vue au moment précis où on lui répond.
-                .lineLimit(typeSize.isAccessibilitySize ? 1...3 : 1...6)
+                .lineLimit(lineRange)
                 .focused($isWriting)
                 .submitLabel(.return)
+                // Le champ qui apparaît prend le clavier. C'est ce qui manquait
+                // aux puces « à la main » : elles ouvraient le champ, et il
+                // fallait encore le toucher pour écrire dedans.
+                .onAppear { isWriting = true }
 
             sendButton
         }
@@ -317,6 +326,25 @@ struct ChatSendingBar: View {
         .background(MemoBookColor.surface, in: Self.fieldShape)
         .overlay { Self.fieldShape.strokeBorder(MemoBookColor.hairline, lineWidth: 1) }
         .brandShadow(.raised)
+    }
+
+    /// Jusqu'où le champ grandit avant de défiler.
+    ///
+    /// Trois lignes en taille accessible et six sinon : à ce corps-là, six
+    /// lignes de saisie occupent la moitié de l'écran et poussent la
+    /// conversation hors de vue au moment précis où on lui répond.
+    ///
+    /// **Dix quand on corrige une retranscription** (Hugo, 17/09/2026) : là,
+    /// la conversation n'est plus ce qu'on regarde — c'est le texte, et il
+    /// faut le lire en entier pour trouver les trois mots à changer. Une fiche
+    /// de cinquante mots tient dans dix lignes de ce corps. En taille
+    /// accessible, cinq : au-delà, le champ dépasserait l'écran avec le
+    /// clavier.
+    private var lineRange: ClosedRange<Int> {
+        if model.isEditingTranscript {
+            return typeSize.isAccessibilitySize ? 1...5 : 1...10
+        }
+        return typeSize.isAccessibilitySize ? 1...3 : 1...6
     }
 
     /// Une capsule tant que le champ tient sur une ligne, un rectangle arrondi

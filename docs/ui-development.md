@@ -1964,7 +1964,7 @@ branches aurait donné treize dessins à tenir cohérents.
 | `… sans micro` | les mêmes, cerne du micro en gris et icône barrée |
 | `Start Recording` | `recorder.isRecording` — pause, frise, chrono, micro allumé, envoyer |
 | `Finish Recording` | `recorder.isPaused` — corbeille, frise éteinte, chrono figé, envoyer |
-| `Modifying transcription` | ``.writing`` avec un long brouillon : le champ s'étire tout seul, il n'y avait pas de cinquième disposition à écrire |
+| `Modifying transcription` | ``.writing`` avec `isEditingTranscript` : le texte de la fiche est **déjà dans le champ**, qui monte à dix lignes et prend toute la barre — voir § 24 |
 | `skeleton` | `ChatSkeleton`, qui dessine déjà la barre en blocs gris |
 
 **Tokens ajoutés** — `MemoBookColor.send` (#5D6CF5, `chat/toolbar/input-btn-active`) ·
@@ -3318,32 +3318,50 @@ prix hebdomadaire le remplace sous la clé `memobook_memory_upgrade_weekly`.
 
 ---
 
-## 26. La relance du voyage n'est pas une bulle
+## 24. Retouche de la retranscription — le texte vient dans le champ
 
-Hugo, 17/09/2026 : **la bulle d'ouverture de MEMO est seule.** Elle se termine
-déjà sur une question — « pourrais-tu me faire un contexte global de ton
-voyage ? » — et la personne doit y répondre. « Comment ça se passe à
-Testaccio ? » ne doit jamais venir par-dessus, ni en seconde bulle
-d'ouverture, ni en dernière bulle du fil.
+Hugo, 17/09/2026 : « J'aimerais faire des modifications à la main » ouvrait le
+clavier sur un champ **vide**. Pour changer trois mots d'une fiche de cinquante,
+il fallait tout retaper — ou remonter le fil, copier, redescendre, coller.
 
-Deux endroits la posaient, les deux sont retirés :
+**Ce qui se passe maintenant, dans cet ordre, à la touche de la puce :**
 
-| Où | Avant | Après |
+1. le récit de la **dernière fiche remplie** du fil est posé dans le champ
+   (`ChatModel.latestTranscriptText`) — la dernière et non la première : on
+   corrige ce qu'on vient d'entendre, pas la fiche d'hier ;
+2. la puce part en bulle bleue, MEMO répond « Je te laisse la main » ;
+3. le champ s'ouvre **avec le texte dedans et le clavier**, et s'étire.
+
+Trois choses changent dans la barre quand `isEditingTranscript` est vrai :
+
+| | Message ordinaire | Retranscription à corriger |
 |---|---|---|
-| `LocalMemoResponder.opening(for:)` | la bulle d'ouverture, puis `context.prompt` en seconde bulle | la bulle d'ouverture, seule |
-| `ChatThread.fixture` | la relance du jour en dernière bulle, sous des puces « question ouverte » | rien après « C'est enregistré », et les puces d'après-validation (raconter à l'oral, importer des photos, plus tard) |
+| Plafond du champ | 6 lignes (3 en AX) | **10 lignes** (5 en AX) — il faut *lire* le texte pour trouver ce qu'on change |
+| Le micro | à droite du champ | **s'efface** : on a dit « à la main », et le bouton coupait chaque ligne à quatorze caractères |
+| Retombée | — | à l'envoi ou à la croix : le champ se vide, le micro revient |
 
-`ChatContext.prompt` reste : le répondeur doit savoir de quelle journée on
-parle, et c'est la relance que portera la **notification** — celle qui
-rappellera à qui n'a pas raconté sa journée. La carte de l'accueil du voyage
-(« Comment ça se passe à Hanoï ? » + « Accéder au chat ») continue de
-l'afficher : c'est là qu'elle relance, pas dans le fil.
+**La puce porte sa propre intention.** `ChatSuggestion.Intent` gagne
+`sendThenEditTranscript` (`send_then_edit_transcript`), distincte de
+`sendThenWrite` : « Je te le réécris ici », « Je préfère écrire » et « J'ai une
+autre question » ouvrent toujours un champ vide, et c'est voulu. Un serveur qui
+enverra ses puces dira la même chose sous le même nom ; sans fiche remplie dans
+le fil, la puce se contente d'ouvrir le champ vide.
 
-`ChatResponderTests.testTheOpeningIsTheSingleOpeningBubble` le garde, avec un
-contexte qui porte une relance.
+**Le clavier suit le champ.** Avant, seul le bouton clavier donnait le focus :
+une puce ouvrait le champ, et il fallait encore le toucher. Le champ prend
+maintenant le focus en apparaissant — pour toutes les puces « écrire », pas
+seulement celle-ci.
 
-### 26.1 À trancher
+**Le crayon d'une fiche** (`ChatModel.edit(_:)`) passe par le même état : il
+posait déjà le texte, il ouvre maintenant le champ haut et sans micro.
+
+`ChatResponderTests.testEditingByHandCarriesTheTranscriptIntoTheComposer`
+garde l'intention de la puce et son nom de contrat.
+
+### 24.1 À trancher
 
 | # | Sujet |
 |---|---|
-| T161 | **La notification de relance n'existe pas encore.** « Comment ça se passe à Testaccio ? » n'a plus qu'un endroit — la carte de l'accueil du voyage — en attendant la notification qui rappellera une journée pas racontée. C'est le rythme du récit (« Tous les 2 jours ») qui devrait la cadencer |
+| T155 | **Le curseur arrive en fin de texte**, et le champ défile donc sur ses dernières lignes quand la fiche dépasse dix lignes. SwiftUI ne donne pas la main sur la sélection d'un `TextField` ; un `UITextView` la donnerait. À voir si une fiche longue le demande |
+| T156 | **Le nœud Figma `Modifying transcription` n'a pas été relu** (quota MCP) : le plafond de dix lignes et le micro effacé sont écrits sur la demande de Hugo, à confronter à la maquette |
+| T157 | **La correction ne part nulle part** : la bulle corrigée s'envoie comme un message ordinaire, et la fiche reste telle quelle dans le fil — `PATCH /v1/entries/:id` n'existe pas (déjà noté sur le crayon, § 14) |
