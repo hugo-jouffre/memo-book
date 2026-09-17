@@ -1,6 +1,6 @@
 import Foundation
 
-// Les **limites de souvenirs** : ce qu'un compte peut raconter dans le mois.
+// Les **limites de souvenirs** : ce qu'un compte peut raconter dans la semaine.
 //
 // ⚠️ **Le mot « jeton » n'apparaît nulle part**, et c'est une consigne, pas une
 // préférence (Hugo, 16/09/2026). L'unité s'appelle un **souvenir**, et l'app
@@ -17,7 +17,7 @@ import Foundation
 public enum MemoryPlan: String, Codable, Sendable, Hashable, CaseIterable, Identifiable {
     /// Ce qui est compris. Le palier de tout le monde.
     case included
-    /// Le palier étendu, à 3,99 €/mois.
+    /// Le palier étendu, à 3,99 €/semaine.
     case extended
 
     public var id: String { rawValue }
@@ -43,8 +43,11 @@ public struct MemoryAllowance: Codable, Sendable, Hashable {
     public var allowance: Int
     /// Le jour où le compteur repart à zéro.
     public var renewsOn: Date?
-    /// Ce que coûte le palier étendu, par mois.
-    public var upgradeMonthlyPrice: Decimal
+    /// Ce que coûte le palier étendu, **par semaine**.
+    ///
+    /// Hebdomadaire comme l'abonnement, et pour la même raison : c'est une
+    /// option du même produit, pas une seconde offre (Hugo, 17/09/2026).
+    public var upgradeWeeklyPrice: Decimal
     /// Ce qu'un message écrit consomme.
     public var textCost: Int
     /// Ce qu'une **minute entamée** de vocal consomme.
@@ -53,9 +56,9 @@ public struct MemoryAllowance: Codable, Sendable, Hashable {
     public init(
         plan: MemoryPlan = .included,
         used: Int = 0,
-        allowance: Int = 3_000,
+        allowance: Int = 2_000,
         renewsOn: Date? = nil,
-        upgradeMonthlyPrice: Decimal = 3.99,
+        upgradeWeeklyPrice: Decimal = 3.99,
         textCost: Int = 1,
         voiceCostPerMinute: Int = 10
     ) {
@@ -63,7 +66,7 @@ public struct MemoryAllowance: Codable, Sendable, Hashable {
         self.used = used
         self.allowance = allowance
         self.renewsOn = renewsOn
-        self.upgradeMonthlyPrice = upgradeMonthlyPrice
+        self.upgradeWeeklyPrice = upgradeWeeklyPrice
         self.textCost = textCost
         self.voiceCostPerMinute = voiceCostPerMinute
     }
@@ -75,10 +78,10 @@ public struct MemoryAllowance: Codable, Sendable, Hashable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         plan = try container.decodeIfPresent(MemoryPlan.self, forKey: .plan) ?? .included
         used = try container.decodeIfPresent(Int.self, forKey: .used) ?? 0
-        allowance = try container.decodeIfPresent(Int.self, forKey: .allowance) ?? 3_000
+        allowance = try container.decodeIfPresent(Int.self, forKey: .allowance) ?? 2_000
         renewsOn = try container.decodeIfPresent(Date.self, forKey: .renewsOn)
-        upgradeMonthlyPrice =
-            try container.decodeIfPresent(Decimal.self, forKey: .upgradeMonthlyPrice) ?? 3.99
+        upgradeWeeklyPrice =
+            try container.decodeIfPresent(Decimal.self, forKey: .upgradeWeeklyPrice) ?? 3.99
         textCost = try container.decodeIfPresent(Int.self, forKey: .textCost) ?? 1
         voiceCostPerMinute =
             try container.decodeIfPresent(Int.self, forKey: .voiceCostPerMinute) ?? 10

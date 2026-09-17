@@ -178,10 +178,10 @@ describe("les limites de souvenirs", () => {
   it("refusent avec un code que l'app sait lire", async () => {
     const account = await registerAccount(harness.app);
     const memo = await tripOf(account.accountId);
-    // Tout consommé : le palier compris ouvre 3 000 souvenirs.
+    // Tout consommé : le palier compris ouvre 2 000 souvenirs par semaine.
     await harness.prisma.account.update({
       where: { id: account.accountId },
-      data: { memoryUsed: 3_000 },
+      data: { memoryUsed: 2_000 },
     });
 
     const told = await tellSomething(account.authorization, memo.id);
@@ -195,22 +195,22 @@ describe("les limites de souvenirs", () => {
     const memo = await tripOf(account.accountId);
     await harness.prisma.account.update({
       where: { id: account.accountId },
-      data: { memoryUsed: 3_000, memoryPlan: "extended" },
+      data: { memoryUsed: 2_000, memoryPlan: "extended" },
     });
 
     const told = await tellSomething(account.authorization, memo.id);
     expect(told.statusCode).toBe(201);
   });
 
-  it("repartent à zéro quand le mois est écoulé", async () => {
+  it("repartent à zéro quand la semaine est écoulée", async () => {
     const account = await registerAccount(harness.app);
     const memo = await tripOf(account.accountId);
     await harness.prisma.account.update({
       where: { id: account.accountId },
       data: {
-        memoryUsed: 3_000,
+        memoryUsed: 2_000,
         // Une période entière derrière nous : la lecture la remet à zéro.
-        memoryPeriodStart: new Date(Date.now() - 31 * 86_400_000),
+        memoryPeriodStart: new Date(Date.now() - 8 * 86_400_000),
       },
     });
 

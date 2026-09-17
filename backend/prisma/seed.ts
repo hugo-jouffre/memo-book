@@ -168,7 +168,10 @@ async function seedTraveller(
   const memory = {
     memoryPlan: "included" as const,
     memoryUsed: 312,
-    memoryPeriodStart: new Date(Date.now() - 8 * 86_400_000),
+    // **Deux jours**, pas huit : la période est une semaine glissante, et un
+    // début plus ancien remettrait le compteur à zéro à la première lecture —
+    // le seed ne montrerait alors rien du tout.
+    memoryPeriodStart: new Date(Date.now() - 2 * 86_400_000),
   };
 
   const identity = {

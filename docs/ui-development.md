@@ -3200,7 +3200,7 @@ dans Figma** — voir « À trancher ».
 | Écran | Retour de Hugo | Ce qui a été fait |
 |---|---|---|
 | Abonnement — résiliation | une semaine payée doit aller à son terme ; le dire sur l'avant-dernière modale ; une alerte système quand ça s'arrête pour de bon ; si le dernier jour est aujourd'hui, rien ne change | `Subscription.paidThrough` (= `subscriptions.renewsAt`) et trois règles testées — `isWithinPaidWeek`, `grantsAccess`, `graceEnd`. La feuille « Pourquoi nous quittes-tu ? » annonce « jusqu'au 22 septembre inclus », la dernière dit « ne se renouvellera pas » au lieu de « s'arrête aujourd'hui ». **Le dernier jour garde la phrase d'avant**, à la journée près. Côté serveur, `assertCanRecord` accepte un abonnement `cancelled`/`expired` dont la période court encore. L'alerte native s'ouvre sur l'accueil (`Traveller.subscriptionEndedOn`, borné à 15 jours côté serveur, `@AppStorage` côté app pour ne le dire qu'une fois) |
-| Réglages du voyage | des limites de souvenirs, hautes, visibles **ici seulement**, avec un palier étendu à 3,99 €/mois ; jamais le mot « token » | Une ligne « Limites de souvenirs » sous la cagnotte, muette tant qu'il reste de la marge, et une feuille en trois temps — solde, comparaison, confirmation. 3 000 souvenirs/mois compris, 12 000 étendus. Un message écrit vaut 1, une **minute entamée** de vocal vaut 10 (`services/memoryAllowance.ts`, seul endroit où le barème vit). La durée part désormais avec le vocal (`uploadAudio(durationSeconds:)`), et voyage déjà dans la file hors ligne |
+| Réglages du voyage | des limites de souvenirs, hautes, visibles **ici seulement**, avec un palier étendu à 3,99 €/semaine ; jamais le mot « token » | Une ligne « Limites de souvenirs » sous la cagnotte, muette tant qu'il reste de la marge, et une feuille en trois temps — solde, comparaison, confirmation. **2 000 souvenirs/semaine** compris, 8 000 étendus. Un message écrit vaut 1, une **minute entamée** de vocal vaut 10 (`services/memoryAllowance.ts`, seul endroit où le barème vit). La durée part désormais avec le vocal (`uploadAudio(durationSeconds:)`), et voyage déjà dans la file hors ligne |
 | Couvertures | griser ce qu'un style ne porte pas — texte au dos, photo sur un aplat —, avec un message en couleur d'information | `CoverTreatment.carriesPhoto` / `carriesText(on:)`, et `BookCovers.acceptsPhoto/acceptsText`. Le segment du rail et la ligne d'action **pâlissent sans se désactiver** : ils restent tapables, et l'appui pose un `BrandNotice(tone: .information)` qui nomme la cause *et* donne la sortie. Le plat lui-même cesse d'écrire le texte de quatrième sur une photo pleine page — sinon le dessin contredirait l'explication |
 | Accueil — entrée | la carte de connexion laisse voir la photo et sa coupe nette quand on la tire vers le haut | Le crème de la carte déborde d'**une hauteur d'écran** sous la dalle (`WelcomeView.cardUnderrun`). `ignoresSafeArea` ne suffisait pas : il prolonge jusqu'au bord, pas au-delà, et l'élastique de la `ScrollView` va plus loin. Un fond n'impose pas sa taille, donc la mise en page ne bouge pas |
 | Partout — le prix | 1,99 €/semaine partout, y compris le « 3 × » de l'estimation, au lieu de 0 € | `services/subscriptionCatalog.ts` : le tarif est servi à qui **n'a pas** encore d'abonnement (le serveur rendait 0, faute de ligne à lire). Côté app, `Subscription.displayedWeeklyPrice` ne rend jamais zéro. Le seed disait 2,99 €, corrigé. Un prix Stripe `memobook_subscription_weekly` existe désormais dans le sandbox |
@@ -3266,7 +3266,7 @@ Trois coquilles restent recopiées telles quelles, parce qu'elles ne touchent pa
 |---|---|
 | `GET /v1/profile` | `subscription.weeklyPrice` rend le **tarif du catalogue** quand rien n'a été souscrit (il rendait 0) ; `subscription.cancelledAt` et `subscription.paidThrough` s'ajoutent |
 | `GET /v1/home` | `traveller.subscriptionEndedOn` — la fin de la semaine payée du dernier abonnement, **si elle date de moins de quinze jours**. Déduit, pas stocké |
-| `GET /v1/trips/:id/settings` | `memory` : palier, consommé, plafond, date de renouvellement, prix de l'extension, et les **deux coûts** (un message, une minute de vocal) |
+| `GET /v1/trips/:id/settings` | `memory` : palier, consommé, plafond, date de renouvellement, prix **hebdomadaire** de l'extension, et les **deux coûts** (un message, une minute de vocal) |
 | `POST /v1/trips/:id/memory-plan` | nouvelle. Pose le palier et rend les réglages entiers. ⚠️ **N'encaisse rien** — voir « À trancher » |
 | `POST /v1/memos/:id/entries` | accepte `durationSeconds` en multipart, le range sur `media_assets`, et **décompte** les limites de souvenirs. Refus `403 memory_limit_reached` |
 | Migration | `20260916230000_limites_de_souvenirs` — `accounts.memoryPlan`, `memoryUsed`, `memoryPeriodStart`, et l'énumération `MemoryPlan`. ⚠️ À appliquer **aussi** au schéma `memobook_test`, sinon la suite entière échoue |
@@ -3277,9 +3277,41 @@ Trois coquilles restent recopiées telles quelles, parce qu'elles ne touchent pa
 |---|---|
 | T139 | **L'abonnement et l'extension ne s'encaissent toujours pas.** Un prix Stripe `memobook_subscription_weekly` (1,99 €/semaine) existe dans le sandbox et donne au back-end une référence, mais Apple impose l'achat intégré pour un service numérique : c'est **StoreKit** qui portera les deux transactions, et `POST /v1/trips/:id/memory-plan` deviendra alors ce que son reçu appelle. Le prix `memobook_memory_upgrade_monthly` (3,99 €/mois) **reste à créer** — la commande a été refusée par le garde-fou de la session |
 | T140 | **Le barème des souvenirs est un ordre de grandeur, pas une mesure.** 1 pour un message, 10 pour une minute de vocal : à réétalonner sur les factures OpenAI et Anthropic d'un mois plein. Les deux constantes sont dans `services/memoryAllowance.ts`, et les deux coûts voyagent jusqu'à l'app — l'écran n'en écrit aucun |
-| T141 | **Le plafond du palier étendu est écrit dans l'app** (`MemoryAllowanceSheet.extendedAllowance = 12 000`), faute de route de catalogue : la réponse ne porte que le palier *courant*. À remplacer le jour où `GET /v1/catalog` existe |
+| T141 | **Le plafond du palier étendu est écrit dans l'app** (`MemoryAllowanceSheet.extendedAllowance = 8 000`), faute de route de catalogue : la réponse ne porte que le palier *courant*. À remplacer le jour où `GET /v1/catalog` existe |
 | T142 | **Quatre assortiments, deux familles absentes du gabarit.** `fonts.css` n'inline que Playfair Display et Gloria Hallelujah ; Hansley est versionné sans être inliné, Alegreya et Montserrat ne sont pas là. Rien n'échoue — la page retombe sur une police système —, et c'était déjà vrai des quatre lignes que les combos remplacent. À inliner avant de promettre « Moderne » et « Éditorial » |
 | T143 | **Six blocs sans maquette** : la ligne et la feuille des limites de souvenirs, la feuille des assortiments, le champ de recherche du support, les messages d'information des couvertures, la carte « Bientôt disponible », le lien « Commander sans attendre ». Écrits sur les motifs existants, au tutoiement, à dessiner dans Figma |
 | T144 | **Quel style de couverture porte quoi, c'est l'app qui le décide.** `CoverTreatment.carriesPhoto` et `carriesText(on:)` sont des règles écrites ici : la photo pleine page au dos n'a pas de texte, l'aplat et le kraft n'ont pas de photo. À valider avec Clara, et à faire redescendre du serveur le jour où le catalogue des styles y vivra |
 | T145 | **L'e-mail de réinitialisation arrive en spam.** Le lien est réparé (PR #32) ; la délivrabilité ne l'est pas. Elle demande SPF, DKIM et DMARC sur le domaine d'envoi côté Resend, plus un expéditeur au domaine de la marque — c'est une configuration DNS, pas du code. À faire avant la beta élargie |
 | T146 | **L'écran d'entrée n'a pas été vérifié sur un petit écran.** Le débordement du crème sous la dalle est la correction du bord net ; aucun simulateur SE (375 × 667) n'est installé sur cette machine, et c'est précisément le format où le défaut se voit. À revoir au premier build TestFlight |
+
+### 22.6 Après coup — la cadence, et une erreur de prix trouvée en chemin
+
+**3,99 € c'est par semaine, pas par mois** (Hugo, 17/09/2026), et l'extension
+**reste sous le produit « Abonnement MemoBook »** : ce n'est pas une seconde
+offre, c'est une option de l'abonnement.
+
+La cadence ne s'arrête pas au prix. Un plafond mensuel derrière un prélèvement
+hebdomadaire aurait annoncé quatre fois le montant affiché — « 12 000 souvenirs
+par mois pour 3,99 €/semaine », soit ~17 €/mois. **Tout passe donc à la
+semaine** : le prix, la période (`PERIOD_DAYS = 7`), et les plafonds.
+
+| | Avant | Après |
+|---|---|---|
+| Palier compris | 3 000 / mois | **2 000 / semaine** |
+| Palier étendu | 12 000 / mois | **8 000 / semaine** |
+| Prix de l'extension | 3,99 €/mois | **3,99 €/semaine** |
+
+2 000 souvenirs par semaine, c'est 200 minutes de vocal — près de 30 minutes par
+jour. Un voyageur qui raconte 20 minutes quotidiennes en consomme 1 400 : la
+limite ne mord pas, ce qui est exactement ce qu'on lui demande.
+
+**Et une erreur de prix trouvée en passant** : le pied de page de l'écran
+d'offre du paywall écrivait « Renouvellement automatique pour 1,99 €/**mois** »,
+alors que l'abonnement est hebdomadaire — la feuille d'abonnement l'écrit,
+l'estimation compte trois semaines. Il annonçait donc le quart du prix réel.
+Corrigé (`PaywallCopy.offerFootnote`). C'est la même famille que le 0 € de
+§ 22.1, et elle n'était pas dans les treize retours.
+
+⚠️ **L'intervalle d'un prix Stripe ne se modifie pas.** Le prix mensuel créé par
+erreur est **désactivé**, pas supprimé — un prix ne se supprime jamais —, et un
+prix hebdomadaire le remplace sous la clé `memobook_memory_upgrade_weekly`.
