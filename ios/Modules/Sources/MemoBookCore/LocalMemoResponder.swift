@@ -452,7 +452,7 @@ public struct LocalMemoResponder: MemoResponder {
     private enum Suggestions {
         static let trio = [
             ChatSuggestion(id: "accept", label: ChatCopy.Suggest.accept, intent: .send),
-            ChatSuggestion(id: "edit-hand", label: ChatCopy.Suggest.editByHand, intent: .sendThenWrite),
+            ChatSuggestion(id: "edit-hand", label: ChatCopy.Suggest.editByHand, intent: .sendThenEditTranscript),
             ChatSuggestion(id: "edit-voice", label: ChatCopy.Suggest.editByVoice, intent: .sendThenSpeak),
         ]
 

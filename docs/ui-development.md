@@ -1964,7 +1964,7 @@ branches aurait donné treize dessins à tenir cohérents.
 | `… sans micro` | les mêmes, cerne du micro en gris et icône barrée |
 | `Start Recording` | `recorder.isRecording` — pause, frise, chrono, micro allumé, envoyer |
 | `Finish Recording` | `recorder.isPaused` — corbeille, frise éteinte, chrono figé, envoyer |
-| `Modifying transcription` | ``.writing`` avec un long brouillon : le champ s'étire tout seul, il n'y avait pas de cinquième disposition à écrire |
+| `Modifying transcription` | ``.writing`` avec `isEditingTranscript` : le texte de la fiche est **déjà dans le champ**, qui monte à dix lignes et prend toute la barre — voir § 24 |
 | `skeleton` | `ChatSkeleton`, qui dessine déjà la barre en blocs gris |
 
 **Tokens ajoutés** — `MemoBookColor.send` (#5D6CF5, `chat/toolbar/input-btn-active`) ·
@@ -3315,3 +3315,53 @@ Corrigé (`PaywallCopy.offerFootnote`). C'est la même famille que le 0 € de
 ⚠️ **L'intervalle d'un prix Stripe ne se modifie pas.** Le prix mensuel créé par
 erreur est **désactivé**, pas supprimé — un prix ne se supprime jamais —, et un
 prix hebdomadaire le remplace sous la clé `memobook_memory_upgrade_weekly`.
+
+---
+
+## 24. Retouche de la retranscription — le texte vient dans le champ
+
+Hugo, 17/09/2026 : « J'aimerais faire des modifications à la main » ouvrait le
+clavier sur un champ **vide**. Pour changer trois mots d'une fiche de cinquante,
+il fallait tout retaper — ou remonter le fil, copier, redescendre, coller.
+
+**Ce qui se passe maintenant, dans cet ordre, à la touche de la puce :**
+
+1. le récit de la **dernière fiche remplie** du fil est posé dans le champ
+   (`ChatModel.latestTranscriptText`) — la dernière et non la première : on
+   corrige ce qu'on vient d'entendre, pas la fiche d'hier ;
+2. la puce part en bulle bleue, MEMO répond « Je te laisse la main » ;
+3. le champ s'ouvre **avec le texte dedans et le clavier**, et s'étire.
+
+Trois choses changent dans la barre quand `isEditingTranscript` est vrai :
+
+| | Message ordinaire | Retranscription à corriger |
+|---|---|---|
+| Plafond du champ | 6 lignes (3 en AX) | **10 lignes** (5 en AX) — il faut *lire* le texte pour trouver ce qu'on change |
+| Le micro | à droite du champ | **s'efface** : on a dit « à la main », et le bouton coupait chaque ligne à quatorze caractères |
+| Retombée | — | à l'envoi ou à la croix : le champ se vide, le micro revient |
+
+**La puce porte sa propre intention.** `ChatSuggestion.Intent` gagne
+`sendThenEditTranscript` (`send_then_edit_transcript`), distincte de
+`sendThenWrite` : « Je te le réécris ici », « Je préfère écrire » et « J'ai une
+autre question » ouvrent toujours un champ vide, et c'est voulu. Un serveur qui
+enverra ses puces dira la même chose sous le même nom ; sans fiche remplie dans
+le fil, la puce se contente d'ouvrir le champ vide.
+
+**Le clavier suit le champ.** Avant, seul le bouton clavier donnait le focus :
+une puce ouvrait le champ, et il fallait encore le toucher. Le champ prend
+maintenant le focus en apparaissant — pour toutes les puces « écrire », pas
+seulement celle-ci.
+
+**Le crayon d'une fiche** (`ChatModel.edit(_:)`) passe par le même état : il
+posait déjà le texte, il ouvre maintenant le champ haut et sans micro.
+
+`ChatResponderTests.testEditingByHandCarriesTheTranscriptIntoTheComposer`
+garde l'intention de la puce et son nom de contrat.
+
+### 24.1 À trancher
+
+| # | Sujet |
+|---|---|
+| T155 | **Le curseur arrive en fin de texte**, et le champ défile donc sur ses dernières lignes quand la fiche dépasse dix lignes. SwiftUI ne donne pas la main sur la sélection d'un `TextField` ; un `UITextView` la donnerait. À voir si une fiche longue le demande |
+| T156 | **Le nœud Figma `Modifying transcription` n'a pas été relu** (quota MCP) : le plafond de dix lignes et le micro effacé sont écrits sur la demande de Hugo, à confronter à la maquette |
+| T157 | **La correction ne part nulle part** : la bulle corrigée s'envoie comme un message ordinaire, et la fiche reste telle quelle dans le fil — `PATCH /v1/entries/:id` n'existe pas (déjà noté sur le crayon, § 14) |

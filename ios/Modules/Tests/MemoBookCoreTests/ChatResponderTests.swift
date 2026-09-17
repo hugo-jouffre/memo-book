@@ -256,6 +256,18 @@ final class ChatResponderTests: XCTestCase {
         XCTAssertTrue(filled.suggestions.contains { $0.label == ChatCopy.Suggest.accept })
     }
 
+    /// « À la main » ne se contente pas d'ouvrir le clavier : la puce porte
+    /// l'intention qui pose la retranscription dans le champ. Un serveur qui
+    /// enverra la sienne dira la même chose, sous le même nom.
+    func testEditingByHandCarriesTheTranscriptIntoTheComposer() async throws {
+        let filled = try await LocalMemoResponder(voice: .simulated)
+            .reply(to: turn(.voice(VoiceNote(id: "v1", duration: 12))))
+        let byHand = filled.suggestions.first { $0.label == ChatCopy.Suggest.editByHand }
+
+        XCTAssertEqual(byHand?.intent, .sendThenEditTranscript)
+        XCTAssertEqual(ChatSuggestion.Intent.sendThenEditTranscript.rawValue, "send_then_edit_transcript")
+    }
+
     func testEveryTurnOffersAtMostThreeSuggestions() async throws {
         for message in Self.sampleMessages {
             let reply = try await responder.reply(to: turn(message))
