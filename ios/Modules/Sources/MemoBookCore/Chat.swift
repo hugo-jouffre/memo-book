@@ -479,8 +479,13 @@ public struct ChatContext: Codable, Sendable, Hashable {
     public let stepId: String?
 
     /// ``TripDetail/prompt`` — la relance que le voyageur a déjà vue au-dessus
-    /// du micro. **Le chat ouvre dessus** : les deux écrans doivent dire la
-    /// même phrase, sinon le même voyage se relance deux fois différemment.
+    /// du micro, sur l'accueil du voyage.
+    ///
+    /// **Le chat n'ouvre plus dessus** (Hugo, 17/09/2026) : la bulle
+    /// d'ouverture pose déjà sa question — le contexte du voyage — et la
+    /// relance ne doit pas venir par-dessus. Elle reste dans le contexte pour
+    /// que le répondeur sache de quelle journée on parle, et pour la
+    /// notification qui la portera.
     public let prompt: String?
 
     public init(

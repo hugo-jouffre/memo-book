@@ -64,17 +64,16 @@ public struct LocalMemoResponder: MemoResponder {
 
     public func opening(for context: ChatContext) -> MemoReply {
         // La maquette dessine cette bulle en entier : c'est elle, et pas une
-        // paraphrase. Quand le voyage porte déjà une relance, elle vient
-        // ensuite — les deux écrans doivent dire la même phrase.
-        var beats = [
-            beat(ChatCopy.opening, id: "memo-opening", pause: 700)
-        ]
-
-        if let prompt = context.prompt {
-            beats.append(beat(prompt, id: "memo-opening-prompt", pause: pause(forSaying: prompt)))
-        }
-
-        return MemoReply(beats: beats, suggestions: Suggestions.opening)
+        // paraphrase. **Et elle seule** : elle se termine déjà sur une
+        // question — le contexte du voyage —, et rien ne doit venir la
+        // recouvrir. La relance du voyage (« Comment ça se passe à
+        // Testaccio ? ») n'est pas une bulle : c'est ce que l'accueil du voyage
+        // affiche, et ce qu'une notification rappellera à qui n'a pas raconté
+        // sa journée (Hugo, 17/09/2026).
+        MemoReply(
+            beats: [beat(ChatCopy.opening, id: "memo-opening", pause: 700)],
+            suggestions: Suggestions.opening
+        )
     }
 
     // MARK: - Le tour de parole
