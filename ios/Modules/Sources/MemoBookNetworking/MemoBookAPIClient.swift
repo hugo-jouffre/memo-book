@@ -206,6 +206,10 @@ public actor MemoBookAPIClient: MemoBookAPI {
         try await send(method: "GET", path: "/v1/profile", credential: .session)
     }
 
+    public func travelStatistics() async throws -> TravelStatistics {
+        try await send(method: "GET", path: "/v1/profile/statistics", credential: .session)
+    }
+
     public func updateProfile(_ edit: ProfileEdit) async throws -> TravellerProfile {
         try await send(
             method: "PATCH",

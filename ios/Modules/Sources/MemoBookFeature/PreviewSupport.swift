@@ -201,6 +201,8 @@ public actor PreviewAPI: MemoBookAPI {
 
     public func profile() async throws -> TravellerProfile { editedProfile ?? .fixture }
 
+    public func travelStatistics() async throws -> TravelStatistics { .fixture }
+
     public func updateProfile(_ edit: ProfileEdit) async throws -> TravellerProfile {
         // Le double garde ce qu'on lui écrit : un aperçu où l'on corrige son
         // prénom doit montrer le prénom corrigé, pas retomber sur le jeu

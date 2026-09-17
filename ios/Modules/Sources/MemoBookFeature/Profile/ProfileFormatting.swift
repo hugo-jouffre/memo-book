@@ -57,18 +57,7 @@ extension CurrentTrip {
     /// de la région de l'utilisateur — c'est `FormatStyle` qui met le jour avant
     /// le mois en France et l'inverse ailleurs.
     var dateRangeLabel: String? {
-        // `.twoDigits` des deux côtés : sans ça, `month()` rend le mois en
-        // toutes lettres en français — « 26 août 2026 » — et deux bornes comme
-        // celles-là ne tiennent pas en bout de ligne. L'ordre des composants,
-        // lui, reste celui de la région.
-        let numeric = Date.FormatStyle.dateTime.day(.twoDigits).month(.twoDigits).year()
-
-        return switch (startDate, endDate) {
-        case let (start?, end?): "\(start.formatted(numeric)) - \(end.formatted(numeric))"
-        case let (start?, nil): start.formatted(numeric)
-        case let (nil, end?): end.formatted(numeric)
-        case (nil, nil): nil
-        }
+        Date.numericRangeLabel(from: startDate, to: endDate)
     }
 }
 

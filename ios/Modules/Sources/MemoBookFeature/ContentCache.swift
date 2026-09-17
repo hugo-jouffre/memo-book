@@ -45,6 +45,7 @@ actor ContentCache {
     enum Slot: Hashable {
         case home
         case profile
+        case statistics
         case gallery
         case trip(String)
         case tripSettings(String)
@@ -56,6 +57,7 @@ actor ContentCache {
             switch self {
             case .home: "home.json"
             case .profile: "profile.json"
+            case .statistics: "statistics.json"
             case .gallery: "gallery.json"
             case .trip(let id): "trip-\(Self.digest(id)).json"
             case .tripSettings(let id): "trip-settings-\(Self.digest(id)).json"
