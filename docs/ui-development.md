@@ -1964,7 +1964,7 @@ branches aurait donné treize dessins à tenir cohérents.
 | `… sans micro` | les mêmes, cerne du micro en gris et icône barrée |
 | `Start Recording` | `recorder.isRecording` — pause, frise, chrono, micro allumé, envoyer |
 | `Finish Recording` | `recorder.isPaused` — corbeille, frise éteinte, chrono figé, envoyer |
-| `Modifying transcription` | ``.writing`` avec un long brouillon : le champ s'étire tout seul, il n'y avait pas de cinquième disposition à écrire |
+| `Modifying transcription` | ``.writing`` avec `isEditingTranscript` : le texte de la fiche est **déjà dans le champ**, qui monte à dix lignes et prend toute la barre — voir § 24 |
 | `skeleton` | `ChatSkeleton`, qui dessine déjà la barre en blocs gris |
 
 **Tokens ajoutés** — `MemoBookColor.send` (#5D6CF5, `chat/toolbar/input-btn-active`) ·
