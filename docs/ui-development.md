@@ -3315,3 +3315,35 @@ Corrigé (`PaywallCopy.offerFootnote`). C'est la même famille que le 0 € de
 ⚠️ **L'intervalle d'un prix Stripe ne se modifie pas.** Le prix mensuel créé par
 erreur est **désactivé**, pas supprimé — un prix ne se supprime jamais —, et un
 prix hebdomadaire le remplace sous la clé `memobook_memory_upgrade_weekly`.
+
+---
+
+## 26. La relance du voyage n'est pas une bulle
+
+Hugo, 17/09/2026 : **la bulle d'ouverture de MEMO est seule.** Elle se termine
+déjà sur une question — « pourrais-tu me faire un contexte global de ton
+voyage ? » — et la personne doit y répondre. « Comment ça se passe à
+Testaccio ? » ne doit jamais venir par-dessus, ni en seconde bulle
+d'ouverture, ni en dernière bulle du fil.
+
+Deux endroits la posaient, les deux sont retirés :
+
+| Où | Avant | Après |
+|---|---|---|
+| `LocalMemoResponder.opening(for:)` | la bulle d'ouverture, puis `context.prompt` en seconde bulle | la bulle d'ouverture, seule |
+| `ChatThread.fixture` | la relance du jour en dernière bulle, sous des puces « question ouverte » | rien après « C'est enregistré », et les puces d'après-validation (raconter à l'oral, importer des photos, plus tard) |
+
+`ChatContext.prompt` reste : le répondeur doit savoir de quelle journée on
+parle, et c'est la relance que portera la **notification** — celle qui
+rappellera à qui n'a pas raconté sa journée. La carte de l'accueil du voyage
+(« Comment ça se passe à Hanoï ? » + « Accéder au chat ») continue de
+l'afficher : c'est là qu'elle relance, pas dans le fil.
+
+`ChatResponderTests.testTheOpeningIsTheSingleOpeningBubble` le garde, avec un
+contexte qui porte une relance.
+
+### 26.1 À trancher
+
+| # | Sujet |
+|---|---|
+| T161 | **La notification de relance n'existe pas encore.** « Comment ça se passe à Testaccio ? » n'a plus qu'un endroit — la carte de l'accueil du voyage — en attendant la notification qui rappellera une journée pas racontée. C'est le rythme du récit (« Tous les 2 jours ») qui devrait la cadencer |

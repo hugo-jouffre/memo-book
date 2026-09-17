@@ -273,17 +273,19 @@ final class ChatResponderTests: XCTestCase {
 
     // MARK: - L'ouverture
 
-    /// Le chat ouvre sur la relance déjà affichée au-dessus du micro : les deux
-    /// écrans doivent dire la même phrase.
-    func testTheOpeningReusesTheTripPrompt() {
+    /// La bulle d'ouverture se termine sur une question — le contexte du
+    /// voyage — et **rien ne vient après**, même quand le voyage porte une
+    /// relance : « Comment ça se passe à Testaccio ? » n'est pas une bulle
+    /// (Hugo, 17/09/2026).
+    func testTheOpeningIsTheSingleOpeningBubble() {
         let opening = responder.opening(for: context)
 
-        XCTAssertEqual(opening.beats.count, 2)
+        XCTAssertNotNil(context.prompt, "Le contexte de test porte une relance, et elle ne doit pas s'entendre.")
+        XCTAssertEqual(opening.beats.count, 1)
         XCTAssertEqual(bodyText(opening.beats[0].message), ChatCopy.opening)
-        XCTAssertEqual(bodyText(opening.beats[1].message), context.prompt)
     }
 
-    func testTheOpeningWithoutAPromptIsASingleBeat() {
+    func testTheOpeningWithoutAPromptIsTheSameSingleBeat() {
         let bare = ChatContext(tripId: "trip-rome")
         XCTAssertEqual(responder.opening(for: bare).beats.count, 1)
     }
