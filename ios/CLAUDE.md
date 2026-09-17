@@ -278,6 +278,12 @@ police ou marge codée en dur ailleurs.
   valeur dans un formulaire. `BrandGauge` est **la** jauge — elle se lit, elle
   ne se règle pas, et elle n'a que deux couleurs : le vert d'action, et le rouge
   sémantique à zéro.
+- `BrandDisclosureCard` est **la** carte qui se déplie — les chapitres des
+  conditions d'utilisation et de la politique de confidentialité. Repliée,
+  crème et filet, trois lignes ; dépliée, l'aplat bleu `outline` et tout le
+  texte. L'état appartient à l'écran, et c'est l'écran qui tronque — et qui
+  dit, en mesurant la troncature, si la carte a une suite (`isExpandable`) :
+  sans suite, pas de chevron, et le toucher ne fait rien.
 
 ### Une `ScrollView` dans une barre doit se voir imposer sa hauteur
 
