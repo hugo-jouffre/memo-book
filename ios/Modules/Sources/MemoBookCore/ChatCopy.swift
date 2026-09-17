@@ -81,9 +81,8 @@ public enum ChatCopy {
         voyage ? Cela m’aidera à garder de la cohérence tous le long du récit.
         """
 
-    /// Quand le voyage porte déjà une relance (``TripDetail/prompt``), le chat
-    /// ouvre **dessus** plutôt que sur son propre texte : les deux écrans
-    /// doivent dire la même phrase.
+    /// La réponse à « Commencer mon carnet » : une invitation à raconter, sans
+    /// reproposer les puces d'ouverture à qui vient de commencer.
     public static let openingWithoutPrompt =
         "Raconte-moi ta journée, à l’oral ou au clavier. Je m’occupe du reste."
 
