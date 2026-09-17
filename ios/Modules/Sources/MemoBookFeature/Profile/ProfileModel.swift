@@ -32,6 +32,7 @@ public final class ProfileModel {
         case fullName
         case phoneNumber
         case address
+        case gender
         case newsletter
     }
 
@@ -200,6 +201,14 @@ public final class ProfileModel {
         guard address != profile?.address else { return }
         mutate { $0.address = address }
         save(ProfileEdit(address: address), confirming: .address)
+    }
+
+    /// Ce que la personne dit d'elle-même, à la place de ce que le serveur
+    /// devinait sur son prénom. Voir ``Gender``.
+    public func setGender(_ gender: Gender) {
+        guard gender != profile?.gender else { return }
+        mutate { $0.gender = gender }
+        save(ProfileEdit(gender: gender), confirming: .gender)
     }
 
     /// Enregistre une carte à partir du formulaire.

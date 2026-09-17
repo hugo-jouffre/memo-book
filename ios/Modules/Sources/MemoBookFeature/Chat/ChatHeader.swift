@@ -72,12 +72,11 @@ struct ChatHeader: View {
                 label: ChatCopy.Voice.settings,
                 action: onSettings
             )
-            // Le carnet, et non plus le globe. La carte du voyage n'avait pas
-            // d'écran derrière elle ; l'aperçu du carnet, lui, en a un — et
-            // c'est **la** chose qu'on vient chercher depuis une conversation :
-            // voir ce que ce qu'on raconte est en train de produire. C'est le
-            // même écran que la bannière bleue du fil ouvre.
-            ChatHeaderButton(icon: "IconBookSimple", label: ChatCopy.Voice.openPreview, action: onBook)
+            // L'imprimante, **la même que sur l'accueil du voyage** (Hugo,
+            // 17/09/2026) : les deux ouvrent l'aperçu du carnet, et deux dessins
+            // pour une même porte se lisaient comme deux portes. C'est le même
+            // écran que la bannière bleue du fil ouvre.
+            ChatHeaderButton(icon: "IconPrinter", label: ChatCopy.Voice.openPreview, action: onBook)
         }
         .padding(.horizontal, MemoBookSpacing.xs)
         .padding(.bottom, MemoBookSpacing.xs)

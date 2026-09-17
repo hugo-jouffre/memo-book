@@ -24,13 +24,13 @@ public enum CoverFace: String, Codable, Sendable, Hashable, Identifiable, CaseIt
 
     public var id: String { rawValue }
 
-    /// « 1re de couverture » et « 4e de couverture », les deux onglets.
+    /// « 1ère de couverture » et « 4e de couverture », les deux onglets.
     ///
-    /// Ordinaux abrégés à la française — `1re`, `4e` — et non `1ère`/`4ème`,
-    /// qui sont les fautes courantes. C'est aussi ce qu'écrit la maquette.
+    /// « 1ère » et non « 1re » : c'est l'abréviation que la maquette emploie
+    /// partout, et l'app la suit (Hugo, 17/09/2026, T91).
     public var title: String {
         switch self {
-        case .front: "1re de couverture"
+        case .front: "1ère de couverture"
         case .back: "4e de couverture"
         }
     }
@@ -100,22 +100,26 @@ public struct CoverStyle: Codable, Sendable, Hashable, Identifiable {
     public let name: String
     public let treatment: CoverTreatment
     public let tint: CoverTint
-    /// Le style s'accorde à celui de l'autre plat. La maquette pose la pastille
-    /// « Assortie à votre 1e de couverture » sur la quatrième correspondante.
-    public let isMatched: Bool
 
     public init(
         id: String,
         name: String,
         treatment: CoverTreatment,
-        tint: CoverTint,
-        isMatched: Bool = false
+        tint: CoverTint
     ) {
         self.id = id
         self.name = name
         self.treatment = treatment
         self.tint = tint
-        self.isMatched = isMatched
+    }
+
+    /// Ce style **s'accorde** à un autre : même composition, même aplat. C'est
+    /// ce que la pastille « Assortie à ta 1ère de couverture » veut dire, et
+    /// elle se calcule sur le plat d'en face **tel qu'il est choisi** — un
+    /// drapeau figé dans le catalogue ne suivait pas le devant quand on le
+    /// changeait (Clara, 17/09/2026).
+    public func matches(_ other: CoverStyle) -> Bool {
+        treatment == other.treatment && tint == other.tint
     }
 }
 
@@ -268,6 +272,15 @@ public struct BookCovers: Codable, Sendable, Hashable {
     /// Les chiffres retenus pour le dos, dans l'ordre du catalogue.
     public var statSelection: [CoverStat] {
         back.statIds.compactMap { id in stats.first { $0.id == id } }
+    }
+
+    /// Ce style, proposé pour `face`, reprend-il le style **choisi** sur
+    /// l'autre plat ? C'est lui que le carrousel coiffe de la pastille
+    /// « Assortie à ta 1ère de couverture ».
+    public func isMatched(_ style: CoverStyle, on face: CoverFace) -> Bool {
+        let other: CoverFace = face == .front ? .back : .front
+        guard let chosen = self.style(id: self[other].styleId) else { return false }
+        return style.matches(chosen)
     }
 }
 

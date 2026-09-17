@@ -104,6 +104,10 @@ private struct CoverStatCard: View {
                     Text(stat.value)
                         .font(MemoBookFont.figure)
                         .foregroundStyle(MemoBookColor.ink)
+                        // Un chiffre tient sur une ligne — « 2,3k » ne se
+                        // coupe pas (Clara, 17/09/2026).
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
 
                     Text(stat.label)
                         .font(MemoBookFont.taglineRegular)

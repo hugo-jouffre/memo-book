@@ -14,9 +14,9 @@ import Foundation
 // livrés : apostrophe typographique `’` (U+2019) partout, espace simple avant
 // `?` et `!`, points de suspension `…` (U+2026).
 //
-// ⚠️ **Deux coquilles de la maquette sont recopiées telles quelles** dans
-// ``opening`` : « pourrais tu » sans trait d'union, et « tous le long » pour
-// « tout le long ». R8 interdit de corriger en silence — voir T49.
+// Les deux coquilles de la maquette dans ``opening`` — « pourrais tu » sans
+// trait d'union, « tous le long » — sont **corrigées** dans l'app (Hugo,
+// 17/09/2026, T49) ; Figma reste à reprendre.
 //
 // Le vouvoiement de ``greetingMessage``, lui, est **corrigé** : Hugo a tranché
 // (D9), et R9 l'emportait de toute façon sur R8 pour cette phrase.
@@ -66,8 +66,8 @@ public enum ChatCopy {
 
     /// La première bulle blanche, celle que la maquette dessine en entier.
     ///
-    /// ⚠️ **Deux coquilles recopiées** (R8) : « pourrais tu » sans trait d'union,
-    /// et « tous le long » au lieu de « tout le long ». Remontées à Clara — T49.
+    /// Deux coquilles de la maquette corrigées ici (T49) : « pourrais-tu » et
+    /// « tout le long ».
     public static let opening = """
         Bonjour 👋
         Je suis MEMO, ton assistant pour t’aider à construire ton carnet de voyage.
@@ -77,8 +77,8 @@ public enum ChatCopy {
         Je m’adapte à ton style : tu peux me dicter ta journée, ta semaine, ton \
         expérience à l’oral ou l’écrire, comme tu préfères.
 
-        Avant de commencer pourrais tu me faire un contexte global de ton \
-        voyage ? Cela m’aidera à garder de la cohérence tous le long du récit.
+        Avant de commencer pourrais-tu me faire un contexte global de ton \
+        voyage ? Cela m’aidera à garder de la cohérence tout le long du récit.
         """
 
     /// La réponse à « Commencer mon carnet » : une invitation à raconter, sans
@@ -301,9 +301,9 @@ public enum ChatCopy {
 
     public static let backToBottom = "Retourner en bas"
 
-    /// ⚠️ **En anglais dans la maquette**, au milieu d'une app française. Recopié
-    /// tel quel (R8) et remonté — T51.
-    public static let record = "Record"
+    /// « Record » dans la maquette, en anglais au milieu d'une app française :
+    /// traduit (Hugo, 17/09/2026, T51).
+    public static let record = "Enregistrer"
 
     public static let composerPlaceholder = "Raconte-moi…"
 

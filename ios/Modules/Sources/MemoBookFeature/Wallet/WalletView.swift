@@ -298,19 +298,17 @@ private struct WalletBalanceCard: View {
     /// avec le bouton d'Apple, expliqué dans ``MemoBookFont/button``. À 18 pt,
     /// « Partager » et son icône demandent 152 pt dans une moitié de carte qui
     /// en offre 133 sur un iPhone SE, et le mot se coupait en deux.
-    /// ``BrandButton/Size/small`` porte exactement le 16 pt de la maquette.
     ///
-    /// Coût : 44 pt de haut au lieu de 48. Quatre points au-dessus du seuil de
-    /// R2 — écart assumé et signalé dans la fiche de la cagnotte. Le vrai
-    /// arbitrage appartient à Clara : soit la maquette descend son libellé de
-    /// taille pleine à 16, soit ces deux boutons montent à 48.
+    /// ``BrandButton/Size/medium`` porte exactement le 16 pt de la maquette
+    /// **et ses 48 pt de haut** — tranché par Hugo le 17/09/2026 (T70), après
+    /// que les deux étaient restés à 44 en `small`.
     @ViewBuilder
     private var actions: some View {
         let add = BrandButton(
             BookCopy.Wallet.add,
             icon: Image(brand: "IconPlus"),
             style: .tertiary,
-            size: .small,
+            size: .medium,
             fillsWidth: true,
             action: onAdd
         )
@@ -319,7 +317,7 @@ private struct WalletBalanceCard: View {
             BookCopy.Wallet.share,
             icon: Image(brand: "IconShareSystem"),
             style: .primary,
-            size: .small,
+            size: .medium,
             fillsWidth: true,
             action: onShare
         )

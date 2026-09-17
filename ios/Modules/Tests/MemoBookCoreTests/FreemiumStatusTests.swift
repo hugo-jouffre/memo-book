@@ -74,7 +74,16 @@ struct FreemiumStatusTests {
 
         #expect(profile.freemiumStatus(override: nil) == .subscriber)
         #expect(!profile.freemiumStatus(override: nil).wantsSubscription)
-        #expect(profile.freemiumStatus(override: nil).profilePillLabel == "Abonné")
+        #expect(profile.freemiumStatus(override: nil).profilePillLabel() == "Abonné")
+    }
+
+    @Test("La pastille s'accorde sur le genre du profil (T76)")
+    func subscriberPillAgreesWithGender() {
+        #expect(FreemiumStatus.subscriber.profilePillLabel(for: .female) == "Abonnée")
+        #expect(FreemiumStatus.subscriber.profilePillLabel(for: .male) == "Abonné")
+        #expect(FreemiumStatus.subscriber.profilePillLabel(for: .undisclosed) == "Abonné")
+        // Le décompte, lui, ne s'accorde pas : il n'y a rien à accorder.
+        #expect(FreemiumStatus.limitReached.profilePillLabel(for: .female) == "Abonne-toi")
     }
 
     @Test("Résilié : le bouton lime revient et la pastille invite")
@@ -84,6 +93,6 @@ struct FreemiumStatusTests {
 
         #expect(profile.freemiumStatus(override: nil) == .limitReached)
         #expect(profile.freemiumStatus(override: nil).wantsSubscription)
-        #expect(profile.freemiumStatus(override: nil).profilePillLabel == "Abonne-toi")
+        #expect(profile.freemiumStatus(override: nil).profilePillLabel() == "Abonne-toi"
     }
 }

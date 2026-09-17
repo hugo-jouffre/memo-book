@@ -225,7 +225,7 @@ public struct ProfileView: View {
     private var statusPill: some View {
         if model.profile != nil {
             let pill = BrandTagPill(
-                freemiumStatus.profilePillLabel,
+                freemiumStatus.profilePillLabel(for: model.profile?.gender ?? .undisclosed),
                 tone: .accentOutlined,
                 isUppercased: true,
                 // « 3 ÉTAPES GRATUITES RESTANTES » est plus large que ce que la
@@ -304,7 +304,11 @@ public struct ProfileView: View {
         // Sous clé — ou sans voyage en cours — la ligne ne mène nulle part : un
         // chevron promettrait un écran qu'on n'a pas le droit d'ouvrir.
         let openStatistics: (() -> Void)? = isSubscriber ? { notYetRouted() } : nil
-        let openCurrentTrip: (() -> Void)? = profile?.currentTrip == nil ? nil : { notYetRouted() }
+        // Le voyage en cours s'ouvre depuis sa ligne — l'accueil du voyage,
+        // celui de la carte de l'accueil (Clara, 17/09/2026).
+        let openCurrentTrip: (() -> Void)? = profile?.currentTrip.map { trip in
+            { onIntent(.openTrip(id: trip.id)) }
+        }
 
         return BrandRowGroup(tone: .highlighted) {
             BrandRow(
@@ -356,13 +360,23 @@ public struct ProfileView: View {
             // champ de plus : c'est l'identifiant de connexion. En changer
             // demande de vérifier la nouvelle, de refuser celles déjà prises et
             // de décider du sort de la session ouverte avec l'ancienne — un
-            // écran à part entière, que cette ligne ne peut pas tenir. La note
-            // dit d'où elle vient quand c'est un compte tiers qui la porte.
+            // écran à part entière, que cette ligne ne peut pas tenir.
+            //
+            // **Le logo dit d'où elle vient**, quand c'est un compte tiers qui
+            // la porte : l'autocollant Apple ou Google, petit, après
+            // « E-mail » — et non plus la phrase « Gérée par ton compte … »
+            // (Hugo, 17/09/2026). VoiceOver garde la phrase, qu'un logo ne
+            // sait pas dire.
             BrandRow(
                 "E-mail",
                 value: profile?.email,
-                isValueLoading: profile == nil,
-                note: profile?.signInProvider.map { "Gérée par ton compte \($0.displayName)" }
+                titleIcon: profile?.signInProvider.map {
+                    BrandRow.TitleIcon(
+                        Image(brand: $0.logoAsset),
+                        label: "Gérée par ton compte \($0.displayName)"
+                    )
+                },
+                isValueLoading: profile == nil
             )
             BrandRow(
                 "Téléphone",
@@ -384,6 +398,15 @@ public struct ProfileView: View {
                 isValueLoading: profile == nil
             ) {
                 sheet = .postalAddress
+            }
+            // Juste sous l'adresse (Hugo, 17/09/2026, T76) : deviné sur le
+            // prénom par le serveur, corrigé ici. Voir ``Gender``.
+            BrandRow(
+                "Genre",
+                value: profile?.gender.label,
+                isValueLoading: profile == nil
+            ) {
+                sheet = .gender
             }
             BrandRow("Newsletter mensuelle MemoBook", isOn: newsletterBinding)
         }
@@ -511,6 +534,10 @@ public struct ProfileView: View {
             PostalAddressSheet(address: model.profile?.address ?? PostalAddress()) {
                 model.save(address: $0)
             }
+        case .gender:
+            GenderSheet(current: model.profile?.gender ?? .undisclosed) {
+                model.setGender($0)
+            }
         case .paymentMethod:
             PaymentMethodSheet(model: model)
         case .subscription:
@@ -532,7 +559,15 @@ public struct ProfileView: View {
                     sheet = nil
                     showsPaywall = true
                 },
-                previewMemoId: model.profile?.currentTrip?.id
+                onSeeWallet: {
+                    // La feuille se referme **avant** que la cagnotte s'ouvre :
+                    // c'est un écran poussé sur la pile du profil, comme la
+                    // galerie depuis la feuille des commandes.
+                    sheet = nil
+                    onIntent(.openWallet)
+                },
+                previewMemoId: model.profile?.currentTrip?.id,
+                gender: model.profile?.gender ?? .undisclosed
             )
         case .connectors:
             ConnectorsSheet(model: model)
@@ -579,6 +614,7 @@ public struct ProfileView: View {
 /// Où mène chaque ligne du profil.
 enum ProfileSheet: String, Identifiable, CaseIterable {
     case postalAddress
+    case gender
     case paymentMethod
     case subscription
     case connectors
@@ -900,6 +936,9 @@ private struct ProfileExitAction: View {
 /// les paramètres d'un voyage, parce que c'est la même somme.
 public enum ProfileIntent: Sendable, Hashable {
     case openWallet
+    /// Le voyage en cours, depuis sa ligne de la carte de chiffres : l'accueil
+    /// du voyage, le même écran que la carte de l'accueil (Clara, 17/09/2026).
+    case openTrip(id: String)
     /// Les carnets de la communauté, depuis la feuille des commandes quand il
     /// n'y en a aucune : c'est là que la maquette envoie (`3162:34917`).
     case openGallery

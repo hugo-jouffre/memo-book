@@ -387,6 +387,15 @@ public struct RootView: View {
         switch intent {
         case .openWallet:
             path.append(.wallet(tripId: nil))
+        case .openTrip(let id):
+            // Même garde-fou que depuis l'accueil : un voyage du bac à sable
+            // n'a pas d'identifiant de ressource, et n'ouvre rien.
+            guard UUID(uuidString: id) != nil else {
+                routingProblem =
+                    "Ce voyage n’existe pas encore sur ton compte : il n’y a rien à ouvrir."
+                return
+            }
+            path.append(.trip(id: id))
         case .openGallery:
             path.append(.gallery)
         case .openHelp:
@@ -509,7 +518,7 @@ public struct RootView: View {
             guard let tripId = currentTripId else { return }
             path.append(.bookCustomisation(tripId: tripId))
         case .configureCovers:
-            // « Défini maintenant ta 1ère et 4ème de couverture » → « Configurer ».
+            // « Définis maintenant ta 1ère et 4ème de couverture » → « Configurer ».
             // C'est le chemin le plus important vers les couvertures : c'est en
             // feuilletant son carnet qu'on s'aperçoit qu'il n'en a pas.
             openCovers()

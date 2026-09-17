@@ -336,6 +336,36 @@ public struct CurrentTrip: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
+/// Le genre de la personne, tel que le profil le montre et que la feuille
+/// d'abonnement l'accorde (« Abonnée » / « Abonné »).
+///
+/// **Le serveur le devine sur le prénom** tant que la personne n'a rien dit,
+/// et c'est la ligne « Genre » du profil qui permet de corriger — femme,
+/// homme, ou « je ne préfère pas répondre » (Hugo, 17/09/2026, T76). Le
+/// troisième cas est un choix, pas une absence : l'app accorde alors sur la
+/// forme non marquée, comme elle le faisait pour tout le monde.
+public enum Gender: String, Codable, Sendable, Hashable, CaseIterable {
+    case female
+    case male
+    case undisclosed
+
+    /// Le libellé de la ligne et de la feuille — les trois options de la
+    /// demande, mot pour mot.
+    public var label: String {
+        switch self {
+        case .female: "Femme"
+        case .male: "Homme"
+        case .undisclosed: "Je ne préfère pas répondre"
+        }
+    }
+
+    /// Accorde un participe en `-é` : « Abonné » ou « Abonnée ». La forme non
+    /// marquée quand on ne sait pas.
+    public func agreed(_ masculine: String) -> String {
+        self == .female ? masculine + "e" : masculine
+    }
+}
+
 /// Tout ce que l'écran de profil montre, d'un seul tenant.
 public struct TravellerProfile: Codable, Sendable, Hashable {
     public var fullName: String
@@ -349,6 +379,8 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
     /// que la désaccorder de celle avec laquelle on se reconnecte.
     public var signInProvider: AuthProvider?
     public var phoneNumber: String?
+    /// Voir ``Gender`` : deviné par le serveur, corrigé depuis le profil.
+    public var gender: Gender
     public var avatarUrl: URL?
     public var address: PostalAddress
     public var wantsNewsletter: Bool
@@ -380,6 +412,7 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         email: String? = nil,
         signInProvider: AuthProvider? = nil,
         phoneNumber: String? = nil,
+        gender: Gender = .undisclosed,
         avatarUrl: URL? = nil,
         address: PostalAddress = PostalAddress(),
         wantsNewsletter: Bool = false,
@@ -398,6 +431,7 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         self.email = email
         self.signInProvider = signInProvider
         self.phoneNumber = phoneNumber
+        self.gender = gender
         self.avatarUrl = avatarUrl
         self.address = address
         self.wantsNewsletter = wantsNewsletter
@@ -425,6 +459,8 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         email = try container.decodeIfPresent(String.self, forKey: .email)
         signInProvider = try container.decodeIfPresent(AuthProvider.self, forKey: .signInProvider)
         phoneNumber = try container.decodeIfPresent(String.self, forKey: .phoneNumber)
+        // Un serveur d'avant le genre ne le rend pas : on n'accorde alors rien.
+        gender = try container.decodeIfPresent(Gender.self, forKey: .gender) ?? .undisclosed
         avatarUrl = try container.decodeIfPresent(URL.self, forKey: .avatarUrl)
         address = try container.decode(PostalAddress.self, forKey: .address)
         wantsNewsletter = try container.decode(Bool.self, forKey: .wantsNewsletter)
@@ -487,6 +523,8 @@ public struct ProfileEdit: Encodable, Sendable, Hashable {
     public var firstName: String??
     public var lastName: String??
     public var phoneNumber: String??
+    /// Un simple optionnel : le genre ne s'efface pas, il se choisit.
+    public var gender: Gender?
     public var wantsNewsletter: Bool?
     public var address: PostalAddress?
 
@@ -494,18 +532,20 @@ public struct ProfileEdit: Encodable, Sendable, Hashable {
         firstName: String?? = nil,
         lastName: String?? = nil,
         phoneNumber: String?? = nil,
+        gender: Gender? = nil,
         wantsNewsletter: Bool? = nil,
         address: PostalAddress? = nil
     ) {
         self.firstName = firstName
         self.lastName = lastName
         self.phoneNumber = phoneNumber
+        self.gender = gender
         self.wantsNewsletter = wantsNewsletter
         self.address = address
     }
 
     private enum CodingKeys: String, CodingKey {
-        case firstName, lastName, phoneNumber, wantsNewsletter, address
+        case firstName, lastName, phoneNumber, gender, wantsNewsletter, address
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -513,6 +553,7 @@ public struct ProfileEdit: Encodable, Sendable, Hashable {
         if let firstName { try container.encode(firstName, forKey: .firstName) }
         if let lastName { try container.encode(lastName, forKey: .lastName) }
         if let phoneNumber { try container.encode(phoneNumber, forKey: .phoneNumber) }
+        if let gender { try container.encode(gender, forKey: .gender) }
         if let wantsNewsletter {
             try container.encode(wantsNewsletter, forKey: .wantsNewsletter)
         }

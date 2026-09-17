@@ -35,9 +35,13 @@ struct ShareBookSheet: View {
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
 
+                    // Deux gestes, deux icônes (Hugo, 17/09/2026, T68) : le
+                    // fichier porte le PDF, le lien porte l'œil de la
+                    // prévisualisation. Le cube Relume de la maquette était un
+                    // reste de composant.
                     BrandButton(
                         BookCopy.Share.sharePdf,
-                        icon: Image(brand: "IconCube"),
+                        icon: Image(brand: "IconPDF"),
                         style: .secondary,
                         fillsWidth: true,
                         action: onSharePdf
@@ -45,7 +49,7 @@ struct ShareBookSheet: View {
 
                     BrandButton(
                         BookCopy.Share.shareLink,
-                        icon: Image(brand: "IconCube"),
+                        icon: Image(brand: "IconView"),
                         style: .primary,
                         isLoading: isPreparingLink,
                         fillsWidth: true,

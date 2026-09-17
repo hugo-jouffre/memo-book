@@ -175,15 +175,13 @@ public enum MemoBookColor {
     public static let disabledOutline = Color(hex: 0xC8C8C8)
 
     /// Le bleu du bouton d'envoi, une fois qu'il y a quelque chose à envoyer.
-    /// — Figma `chat/toolbar/input-btn-active`.
     ///
-    /// ⚠️ **Il n'est pas dans la palette de marque** : c'est un bleu-violet
-    /// emprunté au kit de messagerie de la maquette. Il tient parce qu'un envoi
-    /// n'est pas une action de marque mais un geste de système — le même que la
-    /// flèche bleue d'iMessage —, et parce que le vert de MemoBook sert déjà à
-    /// « c'est ici qu'on appuie » partout ailleurs. À faire entrer dans les
-    /// variables sous le nom que choisira Clara — voir T59.
-    public static let send = Color(hex: 0x5D6CF5)
+    /// **Le bleu qui s'écrit** (``blueText``), et non plus le bleu-violet
+    /// `chat/toolbar/input-btn-active` emprunté au kit de messagerie de la
+    /// maquette (Hugo, 17/09/2026, T59). Un envoi reste un geste de système —
+    /// pas le vert d'action —, mais il se fait avec un bleu de la palette. Le
+    /// bouton est un rond plein de cette couleur, l'avion en blanc dedans.
+    public static let send = blueText
 
     /// Surfaces « carnet » : aperçu du livre, cartes de couverture.
     public static let paper = Color(hex: 0xFFFCF8)
@@ -331,6 +329,13 @@ public enum MemoBookSpacing {
     /// et c'est ``MemoBookFont/button`` et ``markSide`` qui viennent s'aligner
     /// dessus plutôt que l'inverse.
     public static let controlHeight: CGFloat = 50
+
+    /// La hauteur d'un bouton **d'appoint qui compte** — les deux de la carte
+    /// de solde de la cagnotte, « Ajouter » et « Partager » : 48, celle de la
+    /// maquette (Hugo, 17/09/2026, T70). Entre le `small` de 44, qui est un
+    /// bouton de coin, et le CTA de 50, que seul un appel pleine largeur
+    /// porte. Voir ``BrandButton/Size/medium``.
+    public static let mediumControlHeight: CGFloat = 48
 
     /// Hauteur d'un champ de saisie. Plus haute qu'un bouton, et découplée de
     /// lui : la hauteur des CTA est contrainte par le bouton d'Apple, dont on
@@ -575,11 +580,12 @@ public enum MemoBookFont {
     public static let microBadge = Font.custom(BrandFonts.generalSansSemibold, size: 11, relativeTo: .caption2)
 
     /// Une ligne écrite **à la main dans le carnet**, reprise dans l'app : la
-    /// phrase verte du mot des fondateurs.
+    /// phrase verte du mot des fondateurs, et le titre des fiches de la
+    /// conversation — « Retranscription du contexte » (Clara, 17/09/2026, T54).
     ///
-    /// Elle n'a qu'un emploi, et il est délibérément rare. La manuscrite dit
-    /// « ceci n'est pas de l'interface, c'est quelqu'un qui te parle » — en
-    /// mettre deux dans l'app lui retirerait exactement ça.
+    /// Deux emplois, et pas un de plus. La manuscrite dit « ceci n'est pas de
+    /// l'interface, c'est le carnet qui s'écrit » — la multiplier lui
+    /// retirerait exactement ça.
     public static let handwriting = Font.custom(BrandFonts.gloriaHallelujah, size: 16, relativeTo: .body)
 
     /// Titres de **carnet** uniquement, jamais les titres d'écran système.

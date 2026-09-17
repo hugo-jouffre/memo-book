@@ -209,6 +209,7 @@ public actor PreviewAPI: MemoBookAPI {
         if case .some(let value) = edit.phoneNumber { profile.phoneNumber = value }
         if let wantsNewsletter = edit.wantsNewsletter { profile.wantsNewsletter = wantsNewsletter }
         if let address = edit.address { profile.address = address }
+        if let gender = edit.gender { profile.gender = gender }
         editedProfile = profile
         return profile
     }

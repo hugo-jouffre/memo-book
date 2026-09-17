@@ -554,7 +554,7 @@ private struct TricountCallout: View {
     }
 }
 
-/// La ligne « Prévisulation PDF » : l'intitulé, sa précision, et la couverture
+/// La ligne « Prévisualisation PDF » : l'intitulé, sa précision, et la couverture
 /// du carnet en vignette.
 private struct PdfPreviewRow: View {
     let coverUrl: URL?

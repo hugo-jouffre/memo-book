@@ -211,7 +211,7 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
     /// ligne : « Connecte ton Tricount » devient le compte relié.
     public var tricountLabel: String?
 
-    /// L'aperçu du carnet, pour la vignette de la ligne « Prévisulation PDF ».
+    /// L'aperçu du carnet, pour la vignette de la ligne « Prévisualisation PDF ».
     /// `nil` quand rien n'a encore été composé.
     public var previewCoverUrl: URL?
 

@@ -30,7 +30,9 @@ struct SupportSheet: View {
 
     enum Step: Equatable {
         case answer(FaqEntry)
-        case contact
+        /// Le formulaire — au sujet d'une question de « Nous contacter », ou
+        /// sans sujet. Le sujet change le titre et raccourcit le chapeau.
+        case contact(about: FaqEntry?)
         case sent
     }
 
@@ -51,15 +53,17 @@ struct SupportSheet: View {
     private var title: String {
         switch step {
         case .answer(let entry): entry.question
-        case .contact: SupportCopy.Contact.title
+        case .contact(let entry): entry?.question ?? SupportCopy.Contact.title
         case .sent: SupportCopy.Contact.confirmation
         }
     }
 
     /// Le chapeau gris sous le titre. Seul le formulaire en a un : une réponse
-    /// écrit son texte en pleine encre, plus bas.
+    /// écrit son texte en pleine encre, plus bas. Ouvert au sujet d'une
+    /// question, il tient en une phrase.
     private var paragraphs: [String] {
-        step == .contact ? [SupportCopy.Contact.message] : []
+        guard case .contact(let entry) = step else { return [] }
+        return [entry.flatMap { SupportCopy.Contact.brief(for: $0.id) } ?? SupportCopy.Contact.message]
     }
 
     @ViewBuilder
@@ -92,7 +96,7 @@ struct SupportSheet: View {
                     style: .secondary,
                     fillsWidth: true
                 ) {
-                    step = .contact
+                    step = .contact(about: nil)
                 }
 
                 BrandButton(SupportCopy.Answer.understood, fillsWidth: true) {
@@ -164,7 +168,7 @@ private extension SupportSheet.Step {
     init(_ route: SupportSheetRoute) {
         switch route {
         case .answer(let entry): self = .answer(entry)
-        case .contact: self = .contact
+        case .contact(let entry): self = .contact(about: entry)
         }
     }
 }
@@ -242,7 +246,7 @@ private struct HelpfulVote: View {
 #Preview("Nous contacter") {
     Color.clear
         .brandSheet(isPresented: .constant(true)) {
-            SupportSheet(model: SupportModel(), route: .contact)
+            SupportSheet(model: SupportModel(), route: .contact(about: nil))
         }
         .environment(\.colorScheme, .light)
 }
