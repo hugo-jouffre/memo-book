@@ -50,7 +50,7 @@ extension ChatThread {
         )
 
         thread.messages = history(of: detail)
-        thread.suggestions = thread.messages.isEmpty ? [] : openQuestionTrio
+        thread.suggestions = thread.messages.isEmpty ? [] : afterAcceptTrio
         return thread
     }
 
@@ -146,27 +146,30 @@ extension ChatThread {
             )
         }
 
-        // Et la relance du jour, posée sur l'étape en cours.
-        if let current = detail.steps.last, let prompt = detail.prompt {
-            messages.append(
-                ChatMessage(
-                    id: "memo-current-prompt",
-                    author: .memo,
-                    body: .text(prompt),
-                    sentAt: current.startDate ?? fallbackDay,
-                    stepId: current.id
-                )
-            )
-        }
-
+        // **Pas** la relance du jour en dernière bulle : « Comment ça se passe
+        // à Testaccio ? » vit sur l'accueil du voyage, et sera une
+        // notification — jamais une bulle que MEMO pose de lui-même dans le
+        // fil (Hugo, 17/09/2026).
         return messages
     }
 
-    /// Ce que MEMO propose sous une question ouverte. **Pas** le trio de
-    /// validation : celui-là ne suit qu'une fiche qui porte du vrai texte.
-    private static let openQuestionTrio = [
-        ChatSuggestion(id: "voice", label: ChatCopy.Suggest.tellByVoice, intent: .sendThenSpeak),
-        ChatSuggestion(id: "write", label: ChatCopy.Suggest.preferWriting, intent: .sendThenWrite),
+    /// Ce que MEMO propose après « C'est enregistré » — le dernier mot du jeu
+    /// d'essai : raconter la suite, ou plus tard. Le même jeu que le répondeur
+    /// local donne après une validation. **Pas** le trio de validation :
+    /// celui-là ne suit qu'une fiche qui porte du vrai texte.
+    private static let afterAcceptTrio = [
+        ChatSuggestion(
+            id: "dictate",
+            label: ChatCopy.Suggest.dictate,
+            symbol: ChatCopy.Suggest.dictateSymbol,
+            intent: .sendThenSpeak
+        ),
+        ChatSuggestion(
+            id: "photos",
+            label: ChatCopy.Suggest.importPhotos,
+            symbol: ChatCopy.Suggest.importPhotosSymbol,
+            intent: .importPhotos
+        ),
         ChatSuggestion(id: "later", label: ChatCopy.Suggest.later, intent: .send),
     ]
 
