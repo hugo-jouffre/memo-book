@@ -38,11 +38,16 @@ public struct TripSettingsView: View {
 
     @Environment(\.dismiss) private var dismiss
 
+    /// - Parameter opening: la feuille à ouvrir dès l'arrivée — celle des
+    ///   co-voyageurs quand on vient du « + » de l'accueil du voyage. `nil`
+    ///   depuis la roue crantée.
     public init(
         model: TripSettingsModel,
+        opening: TripSettingsSheet? = nil,
         onIntent: @escaping (TripSettingsIntent) -> Void
     ) {
         _model = State(initialValue: model)
+        _sheet = State(initialValue: opening)
         self.onIntent = onIntent
     }
 

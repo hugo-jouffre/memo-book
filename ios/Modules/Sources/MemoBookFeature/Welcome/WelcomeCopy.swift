@@ -4,11 +4,8 @@ import Foundation
 /// « Accueil - 1ère Connexion » (`3420:10409`) au caractère près — apostrophes
 /// typographiques comprises (R8).
 ///
-/// ⚠️ Deux phrases de la maquette **vouvoient** : le chapeau des boutons
-/// (« Nous allons t'accompagner… » tutoie, lui) et la mention légale (« vous
-/// acceptez nos Conditions d'utilisation »). R9 veut le tutoiement partout ;
-/// R8 interdit de réécrire une maquette soi-même. Elles sont donc recopiées
-/// telles quelles et remontées à Clara — voir la fiche écran.
+/// La mention légale vouvoyait dans la maquette (« vous acceptez ») ; Figma
+/// tutoie depuis, et l'app suit (Hugo, 17/09/2026, T113).
 enum WelcomeCopy {
     /// Le titre se lit en deux temps, comme ceux du paywall : la moitié
     /// courante à l'encre, la chute en vert et en gras.
@@ -54,7 +51,7 @@ enum WelcomeCopy {
     /// personne ne lit.
     static let google = "Continuer avec Google"
     static let email = "S'inscrire avec un e-mail"
-    static let legal = "En continuant, vous acceptez nos Conditions d'utilisation."
+    static let legal = "En continuant, tu acceptes nos Conditions d'utilisation."
 
     /// La flèche de retour des écrans d'entrée par e-mail. Elle ramène ici, et
     /// c'est la seule sortie de ces écrans-là.

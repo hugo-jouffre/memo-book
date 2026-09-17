@@ -165,7 +165,7 @@ public struct TripCreationView: View {
                     .id("illustration-\(model.step.rawValue)")
                     .transition(illustrationTransition)
 
-                TripCreationProgress(current: model.progress)
+                TripCreationProgress(current: model.progress, count: model.stepCount)
                     .padding(.top, MemoBookSpacing.m)
 
                 Text(model.step.title)
@@ -189,6 +189,26 @@ public struct TripCreationView: View {
             }
         }
         .scrollBounceBehavior(.basedOnSize)
+        // **Les étapes se feuillettent au doigt, dans les deux sens** (Hugo,
+        // 17/09/2026) : un glissé vers la gauche vaut « Valider », un glissé
+        // vers la droite vaut la flèche. Franchement horizontal, pour ne pas
+        // prendre le défilement vertical de l'étape ; et jamais depuis la
+        // première vers l'accueil — c'est la flèche qui referme.
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 30)
+                .onEnded { value in
+                    let dx = value.translation.width
+                    guard abs(dx) > 60, abs(dx) > abs(value.translation.height) * 1.5 else { return }
+                    if dx < 0 {
+                        guard model.canAdvance else { return }
+                        focus = nil
+                        direction = .forward
+                        Task { await model.validate() }
+                    } else if model.canGoBack {
+                        goBack()
+                    }
+                }
+        )
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: MemoBookSpacing.xs) {
                 if let errorMessage = model.errorMessage {
@@ -287,6 +307,9 @@ public struct TripCreationView: View {
 /// hauteurs se posent sans mouvement.
 struct TripCreationProgress: View {
     let current: Int
+    /// Combien de barres : les étapes **traversées**, pas toutes celles que
+    /// le code connaît.
+    var count: Int = TripCreationStep.active.count
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -297,8 +320,8 @@ struct TripCreationProgress: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 5) {
-            ForEach(TripCreationStep.allCases, id: \.rawValue) { step in
-                let distance = abs(step.rawValue - current)
+            ForEach(0..<count, id: \.self) { index in
+                let distance = abs(index - current)
                 Capsule()
                     .fill(distance == 0 ? MemoBookColor.action : MemoBookColor.inkFaint)
                     .frame(width: barWidth, height: height(atDistance: distance))
@@ -311,7 +334,7 @@ struct TripCreationProgress: View {
             }
         }
         .accessibilityElement()
-        .accessibilityLabel("Étape \(current + 1) sur \(TripCreationStep.allCases.count)")
+        .accessibilityLabel("Étape \(current + 1) sur \(count)")
     }
 
     private func height(atDistance distance: Int) -> CGFloat {

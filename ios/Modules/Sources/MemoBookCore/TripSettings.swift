@@ -54,7 +54,7 @@ public enum NarrationPace: Sendable, Hashable {
         case .everyTwoDays: "Le rythme recommandé pour souffler"
         case .everyThreeDays: "Idéal pour les longs séjours"
         case .weekly: "Pour un résumé global"
-        case .custom: "Définissez vos propres alertes"
+        case .custom: "Définis tes propres alertes"
         case .byPlace, .unknown: nil
         }
     }

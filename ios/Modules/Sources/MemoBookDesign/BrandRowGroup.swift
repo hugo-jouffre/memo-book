@@ -527,7 +527,14 @@ public struct BrandRow: View, Identifiable {
             }
         } else {
             HStack(alignment: .firstTextBaseline, spacing: MemoBookSpacing.s) {
+                // **L'intitulé tient sur sa ligne, c'est la valeur qui
+                // s'abrège.** Sans priorité, « Décorations & stickers » passait
+                // à la ligne dès que « 2 / paragraphe » demandait sa place
+                // (Clara, 17/09/2026) ; l'intitulé appartient à l'app et se lit
+                // entier, la valeur s'abrège par la fin comme elle sait le
+                // faire.
                 titleText
+                    .layoutPriority(1)
                 Spacer(minLength: 0)
                 valueText
                     .multilineTextAlignment(.trailing)

@@ -71,12 +71,12 @@ struct PaywallStoriesBar: View {
 
 /// Un segment de la barre.
 ///
-/// **Les sauts s'animent, le remplissage non.** En avançant, la barre qu'on
-/// quitte passe de sa part à 1 : elle *finit* de se remplir, en un tiers de
-/// seconde, au lieu de sauter. En revenant, celle qu'on rouvre retombe à 0 de la
-/// même façon, puis repart de zéro. Le remplissage continu, lui, est piloté
-/// image par image par la barre et n'a rien à lisser — l'animer lui ferait
-/// prendre du retard sur le minuteur.
+/// **Rien ne s'anime ici.** Le remplissage continu est piloté image par image
+/// par la barre, et les sauts — la barre qu'on quitte passe à 1, celle qu'on
+/// rouvre retombe à 0 — sont **instantanés** (Clara, 17/09/2026) : le tiers de
+/// seconde qui les lissait se lisait encore comme la barre d'avant qui se
+/// remplit, et deux barres qui bougent ensemble ne se lisent plus comme une
+/// suite d'écrans.
 private struct PaywallStorySegment: View {
     let share: Double
 
@@ -91,7 +91,7 @@ private struct PaywallStorySegment: View {
                 }
             }
             .frame(height: PaywallMetrics.storyBarHeight)
-            .animation(share == 0 || share == 1 ? .easeOut(duration: 0.3) : nil, value: share)
+            .animation(nil, value: share)
     }
 }
 
@@ -373,6 +373,13 @@ struct PaywallOffer: View {
     /// le paywall pour la même raison.
     let onSubscribe: () -> Void
 
+    /// Le tapotis sur la moitié gauche : **reculer d'un écran**, comme sur les
+    /// deux premiers (T132, T135). La `ScrollView` prend le doigt avant les
+    /// zones que le paywall pose sous lui ; la zone vit donc **dans** son
+    /// contenu, derrière les cartes, qui laissent passer le tapotis partout
+    /// sauf sur leur pastille.
+    var onBack: () -> Void = {}
+
     /// La hauteur du pied, mesurée : c'est elle qu'il faut retirer de la page
     /// pour centrer le contenu dans ce qu'on **voit**. Le `GeometryReader`
     /// mesure la page entière, pied compris ; centré sur cette hauteur-là, le
@@ -409,6 +416,10 @@ struct PaywallOffer: View {
                                 argument: argument,
                                 onPill: argument.pill == nil ? nil : onEstimate
                             )
+                            // Une carte de décor laisse passer le tapotis
+                            // jusqu'à la zone de retour ; celle qui porte la
+                            // pastille garde le doigt pour elle.
+                            .allowsHitTesting(argument.pill != nil)
                         }
                     }
 
@@ -420,6 +431,16 @@ struct PaywallOffer: View {
                 // Assez haut pour que les deux ressorts centrent le contenu
                 // dans la zone visible quand il y tient ; au-delà, il défile.
                 .frame(minHeight: max(0, proxy.size.height - footerHeight))
+                // La moitié gauche recule d'un écran ; la droite ne fait rien,
+                // c'est le dernier. Derrière le contenu, pour que la pastille
+                // et le bouton gagnent toujours.
+                .background {
+                    HStack(spacing: 0) {
+                        Color.clear.contentShape(.rect).onTapGesture(perform: onBack)
+                        Color.clear
+                    }
+                    .accessibilityHidden(true)
+                }
             }
             .scrollIndicators(.hidden)
             .scrollBounceBehavior(.basedOnSize)

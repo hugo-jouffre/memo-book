@@ -38,11 +38,15 @@ public struct BookPreviewFlowView: View {
     /// arriverait après qu'on a rangé le téléphone.
     private static let foundersDelay: Duration = .seconds(12)
 
+    /// - Parameter opensShare: ouvre la feuille de partage dès l'arrivée —
+    ///   depuis le tiroir d'une carte de l'accueil, où « partager » mène ici.
     public init(
         model: BookPreviewModel,
+        opensShare: Bool = false,
         onIntent: @escaping (BookPreviewIntent) -> Void
     ) {
         _model = State(initialValue: model)
+        _showsShareChoice = State(initialValue: opensShare)
         self.onIntent = onIntent
     }
 

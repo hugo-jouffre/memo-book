@@ -152,7 +152,8 @@ public final class AppDependencies {
         HomeModel(
             source: cachedSource(.home) { [api] in try await api.homeFeed() },
             cached: { [content] in await content.read(.home, as: HomeFeed.self) },
-            outbox: outbox
+            outbox: outbox,
+            remove: { [api] id in try await api.deleteMemo(id: id) }
         )
     }
 

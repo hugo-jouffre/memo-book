@@ -52,6 +52,11 @@ NAMES = {
     # Le logo d'un service tiers, fourni par lui en PNG (361 × 361) : il
     # entre tel quel, sans passer par un SVG (T73).
     "Tricount Icon": "LogoTricount",
+    # Monochrome, 24 × 24, un seul tracé : il se pose en gabarit
+    # (`renderingMode(.template)`) et prend le vert foncé de la marque —
+    # « Partager via WhatsApp » à la création et sur la feuille d'invitation
+    # (Hugo, 17/09/2026, T121).
+    "whatsapp": "LogoWhatsApp",
 }
 
 DATA_URI = re.compile(r'xlink:href="data:image/png;base64,([^"]+)"')
