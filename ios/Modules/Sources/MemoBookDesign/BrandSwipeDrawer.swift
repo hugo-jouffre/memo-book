@@ -103,7 +103,11 @@ public struct BrandSwipeDrawer<Content: View>: View {
 
             content
                 .offset(x: translation)
-                .gesture(swipe)
+                // **Prioritaire sur le bouton de la carte** : une carte de
+                // l'accueil est un `Button`, et avec un `.gesture` ordinaire
+                // c'est lui qui prenait le doigt — le glissé ouvrait le voyage.
+                // Le seuil de 12 pt laisse le tapotis au bouton.
+                .highPriorityGesture(swipe)
         }
         .clipShape(.rect(cornerRadius: cornerRadius))
         .contextMenu {

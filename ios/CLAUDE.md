@@ -214,8 +214,10 @@ police ou marge codée en dur ailleurs.
 - Les couleurs sont **fixes**, pas adaptatives : la marque est un papier crème,
   elle ne se retourne pas en sombre. Les écrans forcent `.colorScheme(.light)`.
 - `BrandButton` est **le** bouton (styles primary / secondary / tertiary / soft /
-  raised / accent / blue / destructive / link, tailles regular / small,
-  `alternate` pour les fonds sombres). Ne pas en écrire d'autre. `destructive`
+  raised / accent / blue / destructive / link, tailles regular / medium / small
+  — `medium` est le libellé de 16 sur 48 pt des boutons d'appoint qui comptent,
+  ceux de la carte de solde —, `alternate` pour les fonds sombres). Ne pas en
+  écrire d'autre. `destructive`
   porte le rouge sémantique sans fond ni contour — c'est l'action qui défait,
   jamais un `link` ; `accent` est le seul aplat large que porte le lime, et **le
   lime ne dit que l'abonnement** (T7) — l'accent de tout le reste est le bleu
@@ -284,6 +286,14 @@ police ou marge codée en dur ailleurs.
   texte. L'état appartient à l'écran, et c'est l'écran qui tronque — et qui
   dit, en mesurant la troncature, si la carte a une suite (`isExpandable`) :
   sans suite, pas de chevron, et le toucher ne fait rien.
+- `BrandSwipeDrawer` est **le** tiroir d'actions d'une carte : un glissé vers
+  la gauche découvre ses gestes (supprimer, partager, prévisualiser un voyage ;
+  retirer un co-voyageur), l'appui long ouvre le menu contextuel du système,
+  VoiceOver reçoit le rotor d'actions. Une carte qui a des gestes cachés passe
+  par lui, elle ne réécrit pas le geste.
+- `brandScrollWithoutBounce()` retire l'élastique d'une `ScrollView` — posé sur
+  son **contenu**, il remonte jusqu'à l'`UIScrollView`. Une seule vue s'en
+  sert, la carte de l'écran d'entrée, qui doit bloquer en bas.
 
 ### Une `ScrollView` dans une barre doit se voir imposer sa hauteur
 
@@ -502,10 +512,12 @@ l'écran par une copie plus ancienne.
 
 ⚠️ **Un écran qui change sous les yeux doit le dire.** C'est le risque que le
 cache introduit : on lit une page, trois valeurs bougent, rien ne le signale.
-`.brandRefreshFlash(model.freshness.isUpdated)` joue un balayage et une pastille
-« Mis à jour ». **Seulement sur un vrai changement** — jamais à la première
-arrivée, jamais sur une réponse identique : un écran qui clignote à chaque
-ouverture apprend à ne plus être regardé.
+`.brandRefreshFlash(model.freshness.isUpdated)` joue un balayage — et une
+annonce VoiceOver, plus de pastille « Mis à jour » : elle prenait trop de place
+sur le contenu, le clignotement des chiffres suffit (Hugo, 17/09/2026 ;
+`showsBadge:` la garde pour l'aperçu PDF). **Seulement sur un vrai
+changement** — jamais à la première arrivée, jamais sur une réponse identique :
+un écran qui clignote à chaque ouverture apprend à ne plus être regardé.
 
 ## Hors ligne
 

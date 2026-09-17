@@ -47,6 +47,7 @@ Et les mots des pièces d'un écran, pour décrire une maquette sans la montrer 
 | **Voile** | le fondu sous un pied d'écran, pour que le contenu passe sous le CTA sans le gêner | `BrandFooterScrim` |
 | **Barre du clavier** | la barre d'accessoires du clavier, avec son seul bouton | `brandKeyboardDismissBar()` |
 | **Squelette** | la barre d'attente d'une valeur qui n'est pas encore là — jamais un écran entier | `BrandSkeleton` |
+| **Tiroir** | les actions qu'un glissé vers la gauche découvre derrière une carte — supprimer, partager, prévisualiser un voyage ; retirer un co-voyageur | `BrandSwipeDrawer`, `BrandSwipeAction` |
 
 ---
 

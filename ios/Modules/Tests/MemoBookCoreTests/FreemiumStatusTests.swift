@@ -93,6 +93,6 @@ struct FreemiumStatusTests {
 
         #expect(profile.freemiumStatus(override: nil) == .limitReached)
         #expect(profile.freemiumStatus(override: nil).wantsSubscription)
-        #expect(profile.freemiumStatus(override: nil).profilePillLabel() == "Abonne-toi"
+        #expect(profile.freemiumStatus(override: nil).profilePillLabel() == "Abonne-toi")
     }
 }
