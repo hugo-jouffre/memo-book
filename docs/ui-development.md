@@ -3315,3 +3315,55 @@ Corrigé (`PaywallCopy.offerFootnote`). C'est la même famille que le 0 € de
 ⚠️ **L'intervalle d'un prix Stripe ne se modifie pas.** Le prix mensuel créé par
 erreur est **désactivé**, pas supprimé — un prix ne se supprime jamais —, et un
 prix hebdomadaire le remplace sous la clé `memobook_memory_upgrade_weekly`.
+
+---
+
+## 25. « Supprimer la conversation » — dans les réglages du voyage
+
+Hugo, 17/09/2026 : un lien « Supprimer la conversation » **juste au-dessus de
+« Supprimer ce voyage »**, et supprimer veut dire **garder la bulle
+d'introduction de MEMO** (« Bonjour 👋 Je suis MEMO… »).
+
+**Le lien** — à l'encre avec la bulle (`IconBubble`), sur le dessin de « Me
+déconnecter » : deux croix rouges l'une sur l'autre auraient dit deux fois la
+même chose, et effacer un fil se rattrape plus qu'effacer un voyage. Les deux
+portes partagent maintenant un seul dessin (`TripSettingsView.exitLink`).
+
+**La feuille** — `ClearConversationSheet`, sur le modèle de `DeleteTripSheet` :
+le bouton plein garde, le rouge efface, et le paragraphe dit ce qui part **et
+ce qui reste** — le mot d'accueil revient, les souvenirs déjà dans le carnet
+n'y sont pour rien. On reste sur les réglages après : c'est le fil, en dessous
+dans la pile, qui se vide.
+
+**Ce qu'on retrouve en revenant** — la bulle d'ouverture de MEMO, la relance du
+voyage s'il en a une, et les puces d'ouverture. **Pas** l'écran d'accueil du
+chat (le M et « Nouveau voyage à Rome ! ») : celui-là est l'écran de quelqu'un
+qui n'a jamais rien dit, et on a effacé ce qu'on s'est dit, pas fait comme si
+on ne s'était jamais parlé.
+
+**Comment ça tient, sans serveur.** Il n'y a pas de conversation côté serveur
+— ni `GET /v1/trips/:id/chat`, ni `DELETE` — et le fil vient du jeu d'essai
+(§ 14). `ConversationArchive` retient donc les voyages dont la conversation a
+été supprimée, dans les réglages de l'app, un pour la session
+(`AppDependencies.conversations`) :
+
+| Qui | Quoi |
+|---|---|
+| `TripSettingsModel.clearConversation()` | y écrit, par la fonction que `AppDependencies` lui passe — le jour où la route existe, c'est cette fonction qui l'appelle |
+| `ChatModel` | y lit : un voyage supprimé rend son fil vide (`ChatThread.cleared()`) puis pose l'ouverture de MEMO (`ensureOpening()`) |
+| `ChatView` | recharge sur `archive.version` : l'écran du chat reste sous celui des réglages dans la pile, il ne se refabrique pas au retour |
+
+Le bac à sable des réglages gagne « Rétablir la conversation » : après une
+suppression, c'est le seul moyen de revoir le jeu d'essai sans réinstaller.
+
+`ConversationArchiveTests` (cible app) garde les trois promesses : un fil
+supprimé rouvre sur l'ouverture de MEMO, un fil intact garde ses bulles, et la
+suppression survit à un relancement.
+
+### 25.1 À trancher
+
+| # | Sujet |
+|---|---|
+| T158 | **La suppression n'existe que sur l'appareil.** Un autre téléphone du même compte verra la conversation du jeu d'essai. C'est la conséquence de l'absence de route, pas un choix : `DELETE /v1/trips/:id/chat` remplacera l'archive le jour où le fil sera servi |
+| T159 | **Aucune maquette** pour le lien ni pour la feuille : écrits sur les motifs existants (« Me déconnecter », `DeleteTripSheet`). À dessiner dans Figma |
+| T160 | **Un co-voyageur peut supprimer la conversation**, alors qu'il ne peut pas supprimer le voyage. Aujourd'hui le fil est propre à l'appareil, la question ne se pose pas ; elle se posera avec la route — qui décide de l'effacer pour tout le monde ? |

@@ -25,6 +25,9 @@
                 HStack(spacing: MemoBookSpacing.xs) {
                     Button("Barres d’attente", action: model.debugShowSkeleton)
                     Button("Recharger") { Task { await model.load() } }
+                    // Après « Supprimer la conversation », c'est le seul moyen
+                    // de la revoir sans réinstaller l'app.
+                    Button("Rétablir la conversation", action: model.debugRestoreConversation)
                 }
                 .font(MemoBookFont.caption)
                 .buttonStyle(.bordered)

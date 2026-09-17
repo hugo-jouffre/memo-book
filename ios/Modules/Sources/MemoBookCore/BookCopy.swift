@@ -57,9 +57,24 @@ public enum BookCopy {
         public static let order = "Commander le carnet"
         public static let help = "Besoin d’aide ?"
 
+        /// Le lien à l'encre juste au-dessus du rouge, sur le même dessin que
+        /// « Me déconnecter » sur le profil : on efface le fil, pas le voyage
+        /// (Hugo, 17/09/2026).
+        public static let clearConversation = "Supprimer la conversation"
+
         /// Le lien rouge tout en bas de l'écran, sous « Besoin d'aide ? » —
         /// le même dessin que « Supprimer mon compte » sur le profil.
         public static let delete = "Supprimer ce voyage"
+
+        /// La feuille de confirmation, sur le modèle de celle du voyage. Elle
+        /// dit ce qui reste autant que ce qui part : le mot d'accueil de MEMO
+        /// revient, et les souvenirs déjà dans le carnet n'y sont pour rien.
+        public enum ClearConversation {
+            public static let title = "Supprimer la conversation ?"
+            public static let body = "Les messages échangés avec MEMO dans ce voyage seront effacés, et la conversation repartira de son mot d’accueil. Les souvenirs déjà enregistrés dans ton carnet sont conservés. C’est immédiat et sans retour."
+            public static let keep = "Garder la conversation"
+            public static let confirm = "Supprimer la conversation"
+        }
 
         /// La feuille de confirmation, sur le modèle de celle du compte : ce
         /// que la suppression emporte, et les deux issues.

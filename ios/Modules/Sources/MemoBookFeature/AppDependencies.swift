@@ -240,8 +240,13 @@ public final class AppDependencies {
     /// fiche du chat dans `docs/ui-development.md` pour le contrat des deux
     /// routes.
     public func chatModel(tripId: String, stepId: String? = nil) -> ChatModel {
-        ChatModel(tripId: tripId, focusStepId: stepId)
+        ChatModel(tripId: tripId, focusStepId: stepId, archive: conversations)
     }
+
+    /// Les conversations supprimées, **retenues sur l'appareil** en attendant
+    /// `DELETE /v1/trips/:id/chat` — voir ``ConversationArchive``. Les réglages
+    /// d'un voyage y écrivent, la conversation y lit.
+    public let conversations = ConversationArchive(defaults: .standard)
 
     /// La galerie des carnets de la communauté, servie par `GET /v1/gallery`.
     public func galleryModel() -> GalleryModel {
@@ -287,6 +292,11 @@ public final class AppDependencies {
             // La seule sans retour : `DELETE /v1/memos/:id`, que le serveur
             // réserve au propriétaire. L'écran demande confirmation avant.
             delete: { [api] id in try await api.deleteMemo(id: id) },
+            // Supprimer la conversation ne va **pas** au serveur : il n'y a
+            // pas de conversation chez lui à supprimer. L'archive la retient
+            // sur l'appareil, et le fil s'ouvre vide ensuite.
+            clearConversation: { [conversations] id in conversations.clear(tripId: id) },
+            restoreConversation: { [conversations] id in conversations.restore(tripId: id) },
             // Les limites de souvenirs : le seul « achat » que cet écran porte.
             setMemoryPlan: { [api] id, plan in
                 try await api.setMemoryPlan(tripId: id, plan: plan)

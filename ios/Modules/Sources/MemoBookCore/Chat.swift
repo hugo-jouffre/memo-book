@@ -623,6 +623,17 @@ public struct ChatThread: Codable, Sendable, Hashable, Identifiable {
     /// ``greeting`` à la place de la conversation.
     public var isEmpty: Bool { messages.isEmpty }
 
+    /// Le même fil, **sans un mot** : ce qu'on obtient après « Supprimer la
+    /// conversation ». Le voyage, son en-tête et son mot d'accueil restent ;
+    /// les messages et les puces s'en vont — les puces d'ouverture reviennent
+    /// d'elles-mêmes, elles appartiennent au répondeur.
+    public func cleared() -> ChatThread {
+        var thread = self
+        thread.messages = []
+        thread.suggestions = []
+        return thread
+    }
+
     /// Le dernier message qui parle de cette étape.
     ///
     /// C'est **la** cible d'une ouverture depuis une carte d'étape : on ne veut

@@ -84,6 +84,13 @@ public final class ChatModel {
     private let source: () async throws -> ChatThread
     private let responder: any MemoResponder
 
+    /// La conversation a été supprimée depuis les réglages — voir
+    /// ``ConversationArchive``. Le fil s'ouvre alors **sur la bulle
+    /// d'ouverture de MEMO** et non sur l'écran d'accueil du chat : on a
+    /// effacé ce qu'on s'est dit, pas fait comme si on ne s'était jamais
+    /// parlé (Hugo, 17/09/2026).
+    private let isCleared: @MainActor () -> Bool
+
     /// Les niveaux du micro, accumulés pendant qu'on parle.
     ///
     /// ``AudioRecorder`` ne publie qu'un niveau **instantané** : sans cette
@@ -115,11 +122,13 @@ public final class ChatModel {
     public init(
         source: @escaping () async throws -> ChatThread,
         focusStepId: String? = nil,
-        responder: any MemoResponder = LocalMemoResponder()
+        responder: any MemoResponder = LocalMemoResponder(),
+        isCleared: @escaping @MainActor () -> Bool = { false }
     ) {
         self.source = source
         self.focusStepId = focusStepId
         self.responder = responder
+        self.isCleared = isCleared
     }
 
     /// La conversation d'un voyage.
@@ -127,15 +136,25 @@ public final class ChatModel {
     /// `focusStepId` n'ouvre **pas** un autre fil : il dit sur quelle journée
     /// se poser en arrivant, et à quelle étape rattacher ce qu'on va raconter.
     /// Un seul fil par voyage — voir ``ChatMessage/stepId``.
+    ///
+    /// - Parameter archive: ce que l'app retient des conversations supprimées.
+    ///   Un voyage qui y est rend son fil **vide** — le mot d'accueil et rien
+    ///   d'autre — au lieu du jeu d'essai. `nil` en aperçu.
     public convenience init(
         tripId: String,
         focusStepId: String? = nil,
+        archive: ConversationArchive? = nil,
         responder: any MemoResponder = LocalMemoResponder()
     ) {
+        let isCleared: @MainActor () -> Bool = { archive?.isCleared(tripId: tripId) == true }
         self.init(
-            source: { .fixture(tripId: tripId) },
+            source: { @MainActor in
+                let thread = ChatThread.fixture(tripId: tripId)
+                return isCleared() ? thread.cleared() : thread
+            },
             focusStepId: focusStepId,
-            responder: responder
+            responder: responder,
+            isCleared: isCleared
         )
     }
 
@@ -174,6 +193,12 @@ public final class ChatModel {
 
             thread = loaded
             errorMessage = nil
+
+            // Une conversation supprimée repart de la bulle d'ouverture de
+            // MEMO, posée tout de suite — pas de l'écran d'accueil, qui est
+            // celui de quelqu'un qui n'a encore jamais rien dit.
+            if loaded.isEmpty, isCleared() { ensureOpening() }
+
             // Relu à chaque ouverture : l'accès peut avoir été retiré depuis
             // les Réglages pendant que l'app était en arrière-plan.
             microphoneIsDenied = RecordingPermission.current == .denied

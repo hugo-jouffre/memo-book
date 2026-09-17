@@ -43,6 +43,14 @@ public final class TripSettingsModel {
     /// maquette.
     private let remove: ((String) async throws -> Void)?
 
+    /// Supprimer la conversation — tout le monde y a droit, contrairement au
+    /// voyage : c'est le fil qu'on efface, pas le récit des autres. `nil` en
+    /// aperçu, où la feuille se joue quand même.
+    private let clearConversation: ((String) async throws -> Void)?
+
+    /// L'inverse, pour le bac à sable — voir ``ConversationArchive/restore(tripId:)``.
+    private let restoreConversation: ((String) -> Void)?
+
     /// Relève le palier de limites de souvenirs. `nil` en aperçu — la feuille
     /// travaille alors en mémoire et le parcours se déroule quand même.
     private let setPlan: ((String, MemoryPlan) async throws -> TripSettings)?
@@ -54,6 +62,10 @@ public final class TripSettingsModel {
     /// `true` pendant la suppression. L'écran verrouille alors la feuille : la
     /// demande est définitive, elle ne doit pas partir deux fois.
     public private(set) var isDeleting = false
+
+    /// `true` pendant la suppression de la conversation. Même verrou que pour
+    /// le voyage : la feuille ne repart pas deux fois.
+    public private(set) var isClearingConversation = false
 
     /// L'envoi en cours. Le garder permet d'annuler celui d'avant quand deux
     /// bascules s'enchaînent : c'est la dernière qui compte, et la réponse
@@ -88,6 +100,8 @@ public final class TripSettingsModel {
         removeCompanion: ((String, String) async throws -> TripSettings)? = nil,
         resendInvitation: ((String, String) async throws -> Void)? = nil,
         delete: ((String) async throws -> Void)? = nil,
+        clearConversation: ((String) async throws -> Void)? = nil,
+        restoreConversation: ((String) -> Void)? = nil,
         setMemoryPlan: ((String, MemoryPlan) async throws -> TripSettings)? = nil,
         cached: CachedValue<TripSettings>? = nil,
         themes: @escaping @Sendable () async throws -> [TripTheme] = { TripTheme.fixtures }
@@ -99,6 +113,8 @@ public final class TripSettingsModel {
         self.removeCompanion = removeCompanion
         self.resendInvitation = resendInvitation
         self.remove = delete
+        self.clearConversation = clearConversation
+        self.restoreConversation = restoreConversation
         self.setPlan = setMemoryPlan
         self.readThemes = themes
     }
@@ -204,6 +220,37 @@ public final class TripSettingsModel {
             return false
         }
     }
+
+    // MARK: - Supprimer la conversation
+
+    /// Efface le fil de la conversation — les messages, pas le mot d'accueil
+    /// de MEMO, qui est là pour quiconque n'a rien dit encore. Renvoie `true`
+    /// quand c'est fait : la feuille se ferme, et on reste sur les réglages.
+    ///
+    /// L'écran a déjà demandé confirmation, comme pour le voyage. Sans
+    /// fonction — en aperçu —, la feuille se ferme comme si c'était fait.
+    public func clearConversation() async -> Bool {
+        guard let clearConversation else { return true }
+
+        isClearingConversation = true
+        defer { isClearingConversation = false }
+
+        do {
+            try await clearConversation(tripId)
+            clearError()
+            return true
+        } catch {
+            report(error)
+            return false
+        }
+    }
+
+    #if DEBUG
+        /// Fait revenir la conversation supprimée. Bac à sable seulement.
+        public func debugRestoreConversation() {
+            restoreConversation?(tripId)
+        }
+    #endif
 
     /// Pose l'erreur **et son conseil** : la phrase dit ce qui s'est passé, le
     /// conseil ce qu'on peut faire.
