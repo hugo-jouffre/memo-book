@@ -440,8 +440,8 @@ public struct ProfileView: View {
 
     private var legalGroup: some View {
         BrandRowGroup {
-            BrandRow("Confidentialité", action: notYetRouted)
-            BrandRow("Conditions d’utilisation", action: notYetRouted)
+            BrandRow("Confidentialité") { onIntent(.openPrivacyPolicy) }
+            BrandRow(TermsOfUse.document.title) { onIntent(.openTermsOfUse) }
         }
     }
 
@@ -906,4 +906,9 @@ public enum ProfileIntent: Sendable, Hashable {
     /// « Besoin d'aide ? », depuis le bas du profil comme depuis la barre du
     /// paywall. La même destination dans les deux cas : le support.
     case openHelp
+    /// Les deux lignes du groupe légal : un document en chapitres. Un écran
+    /// poussé et non une feuille — un contrat se lit en entier, et une feuille
+    /// se ferme d'un glissé sans qu'on l'ait voulu.
+    case openTermsOfUse
+    case openPrivacyPolicy
 }

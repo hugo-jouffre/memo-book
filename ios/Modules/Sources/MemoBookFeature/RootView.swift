@@ -391,6 +391,19 @@ public struct RootView: View {
             path.append(.gallery)
         case .openHelp:
             path.append(.support)
+        case .openTermsOfUse:
+            path.append(.legal(.termsOfUse))
+        case .openPrivacyPolicy:
+            path.append(.legal(.privacyPolicy))
+        }
+    }
+
+    /// Où mène l'unique intention d'un document légal : le support, par
+    /// « Découvrir notre FAQ ».
+    private func handle(_ intent: LegalIntent) {
+        switch intent {
+        case .openHelp:
+            path.append(.support)
         }
     }
 
@@ -589,7 +602,7 @@ public struct RootView: View {
                 return tripId
             case .wallet(let tripId):
                 if let tripId { return tripId }
-            case .profile, .gallery, .tripCreation, .memos, .support:
+            case .profile, .gallery, .tripCreation, .memos, .support, .legal:
                 continue
             }
         }
@@ -653,6 +666,8 @@ public struct RootView: View {
             CoverTextsView(model: covers(for: tripId))
         case .support:
             SupportView(model: support)
+        case .legal(let document):
+            LegalDocumentView(document: document.content, onIntent: handle)
         }
     }
 
@@ -749,4 +764,22 @@ enum HomeRoute: Hashable {
     /// fait qu'on y arrive de l'accueil, du profil et du paywall, où il n'y a
     /// pas de voyage ouvert.
     case support
+    /// Un document légal, depuis le groupe légal du profil. Sans identifiant
+    /// de voyage, pour la même raison que le support.
+    case legal(LegalRoute)
+}
+
+/// Les documents légaux que l'app sait ouvrir. Une énumération et non le
+/// ``LegalDocument`` lui-même dans la route : un chemin restauré ne doit
+/// porter qu'un nom, pas onze chapitres de texte.
+enum LegalRoute: Hashable {
+    case termsOfUse
+    case privacyPolicy
+
+    var content: LegalDocument {
+        switch self {
+        case .termsOfUse: TermsOfUse.document
+        case .privacyPolicy: PrivacyPolicy.document
+        }
+    }
 }
