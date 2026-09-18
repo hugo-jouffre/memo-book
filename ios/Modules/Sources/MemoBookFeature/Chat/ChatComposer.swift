@@ -103,13 +103,13 @@ struct ChatSuggestionRail: View {
             }
             .padding(.horizontal, MemoBookSpacing.snug)
             .frame(height: railHeight)
-            .background(
-                MemoBookColor.surface,
-                in: .rect(cornerRadius: MemoBookSpacing.bubbleCornerRadius)
-            )
+            // **Une capsule**, blanche, l'émoji devant : c'est la bulle des
+            // propositions de la maquette de Hugo (`3520:35958`, 17/09/2026),
+            // et non le rectangle arrondi des bulles du fil.
+            .background(MemoBookColor.surface, in: .capsule)
         }
         .buttonStyle(CardPressStyle())
-        .contentShape(.rect(cornerRadius: MemoBookSpacing.bubbleCornerRadius))
+        .contentShape(.capsule)
         .accessibilityLabel(suggestion.label)
     }
 }

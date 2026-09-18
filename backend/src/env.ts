@@ -110,6 +110,14 @@ const schema = z.object({
    */
   SHARE_PUBLIC_BASE_URL: z.string().default("https://memo-book.com"),
 
+  /**
+   * L'adresse publique de l'API elle-même, pour les liens qu'elle sert en
+   * HTTP simple — les photos de profil (`GET /v1/avatars/:file`). Vide, on
+   * retombe sur `APP_LINK_BASE_URL` quand il est en `https://` (c'est l'API en
+   * production), sinon sur `http://localhost:3000`. Voir `services/avatars.ts`.
+   */
+  API_PUBLIC_BASE_URL: z.string().default(""),
+
   WEBFLOW_API_TOKEN: z.string().default(""),
   WEBFLOW_SITE_ID: z.string().default(""),
 

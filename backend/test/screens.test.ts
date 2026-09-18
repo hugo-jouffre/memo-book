@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
   createHarness,
+  multipartBody,
   registerAccount,
   registerDevice,
   resetDatabase,
@@ -55,6 +56,7 @@ interface TripDetailBody {
 interface ProfileBody {
   phoneNumber: string | null;
   gender: "female" | "male" | "undisclosed";
+  avatarUrl: string | null;
   wantsNewsletter: boolean;
   walletBalance: number;
   address: { street: string; postalCode: string; city: string; country: string };
@@ -403,6 +405,53 @@ describe("le profil", () => {
       payload: { firstName: "Clara" },
     });
     expect(renamed.json<ProfileBody>().gender).toBe("undisclosed");
+  });
+
+  it("garde la photo de profil, et la sert sans session", async () => {
+    const account = await registerAccount(harness.app);
+    const bytes = Buffer.from("fausse-image-jpeg");
+    const { payload, contentType } = multipartBody(
+      {},
+      { field: "file", filename: "moi.jpg", contentType: "image/jpeg", content: bytes },
+    );
+
+    const uploaded = await harness.app.inject({
+      method: "POST",
+      url: "/v1/profile/avatar",
+      headers: { authorization: account.authorization, "content-type": contentType },
+      payload,
+    });
+    expect(uploaded.statusCode).toBe(200);
+
+    // L'adresse est calculée à la lecture, sur la racine de l'API, et mène à
+    // la route publique.
+    const url = uploaded.json<ProfileBody>().avatarUrl;
+    expect(url).toMatch(/^http:\/\/localhost:3000\/v1\/avatars\/[0-9a-f-]{36}\.jpg$/);
+
+    const read = await harness.app.inject({
+      method: "GET",
+      url: new URL(url!).pathname,
+    });
+    expect(read.statusCode).toBe(200);
+    expect(read.headers["content-type"]).toContain("image/jpeg");
+    expect(read.rawPayload.equals(bytes)).toBe(true);
+
+    // Un type qui n'est pas une image est refusé avant d'être stocké.
+    const pdf = multipartBody(
+      {},
+      { field: "file", filename: "moi.pdf", contentType: "application/pdf", content: bytes },
+    );
+    const refused = await harness.app.inject({
+      method: "POST",
+      url: "/v1/profile/avatar",
+      headers: { authorization: account.authorization, "content-type": pdf.contentType },
+      payload: pdf.payload,
+    });
+    expect(refused.statusCode).toBe(400);
+
+    // Un nom qui n'est pas une clé d'avatar ne mène nulle part.
+    const missing = await harness.app.inject({ method: "GET", url: "/v1/avatars/../etc/passwd" });
+    expect([400, 404]).toContain(missing.statusCode);
   });
 
   it("refuse un connecteur qui n'est pas au catalogue", async () => {

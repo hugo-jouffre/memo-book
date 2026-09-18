@@ -29,7 +29,8 @@ enum ChatPhotoFile {
     }
 }
 
-/// Comment on ajoute une photo à la conversation.
+/// Comment on choisit une photo — pour la conversation, pour sa photo de
+/// profil.
 ///
 /// **Le geste suit iOS, pas MemoBook.** On demande d'abord l'accès à la
 /// photothèque — c'est là qu'iOS propose « Tout » ou « Sélectionner des
@@ -41,7 +42,7 @@ enum ChatPhotoFile {
 /// l'écran dit ce qui manque et mène aux Réglages.
 @MainActor
 @Observable
-final class ChatPhotoFlow {
+final class PhotoFlow {
     /// La feuille de choix est ouverte.
     var isChoosing = false
 
@@ -121,18 +122,27 @@ final class ChatPhotoFlow {
 }
 
 extension View {
-    /// Pose le parcours d'ajout de photos : la feuille de choix, la
+    /// Pose le parcours de choix d'une photo : la feuille de choix, la
     /// photothèque, et l'appareil photo.
-    func chatPhotoFlow(
-        _ flow: ChatPhotoFlow,
+    ///
+    /// - Parameters:
+    ///   - title: ce que la feuille de choix annonce — « Ajouter une photo »
+    ///     dans la conversation, « Photo de profil » sur le profil.
+    ///   - maxSelection: combien de photos la photothèque laisse choisir.
+    func photoFlow(
+        _ flow: PhotoFlow,
+        title: String = ChatCopy.Photos.title,
+        maxSelection: Int = ChatMetrics.visiblePhotoCount,
         onPicked: @escaping ([Data]) -> Void
     ) -> some View {
-        modifier(ChatPhotoFlowModifier(flow: flow, onPicked: onPicked))
+        modifier(PhotoFlowModifier(flow: flow, title: title, maxSelection: maxSelection, onPicked: onPicked))
     }
 }
 
-private struct ChatPhotoFlowModifier: ViewModifier {
-    @Bindable var flow: ChatPhotoFlow
+private struct PhotoFlowModifier: ViewModifier {
+    @Bindable var flow: PhotoFlow
+    let title: String
+    let maxSelection: Int
     let onPicked: ([Data]) -> Void
 
     @State private var selection: [PhotosPickerItem] = []
@@ -140,7 +150,7 @@ private struct ChatPhotoFlowModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .confirmationDialog(
-                ChatCopy.Photos.title,
+                title,
                 isPresented: $flow.isChoosing,
                 titleVisibility: .visible
             ) {
@@ -155,11 +165,11 @@ private struct ChatPhotoFlowModifier: ViewModifier {
             .photosPicker(
                 isPresented: $flow.isPickingFromLibrary,
                 selection: $selection,
-                maxSelectionCount: ChatMetrics.visiblePhotoCount,
+                maxSelectionCount: maxSelection,
                 matching: .images
             )
             .fullScreenCover(isPresented: $flow.isTakingPhoto) {
-                ChatCameraPicker { data in
+                CameraPicker { data in
                     flow.isTakingPhoto = false
                     guard let data else { return }
                     onPicked([data])
@@ -191,7 +201,7 @@ private struct ChatPhotoFlowModifier: ViewModifier {
 /// d'iOS, avec son déclencheur, sa mise au point et son « Utiliser la photo » —
 /// pas un viseur à redessiner. Le contrôleur est déprécié pour la photothèque,
 /// pas pour la prise de vue, où il reste la voie courte.
-private struct ChatCameraPicker: UIViewControllerRepresentable {
+private struct CameraPicker: UIViewControllerRepresentable {
     let onFinish: (Data?) -> Void
 
     func makeCoordinator() -> Coordinator {

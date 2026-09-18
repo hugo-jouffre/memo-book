@@ -263,7 +263,9 @@ police ou marge codée en dur ailleurs.
   (`help:`) en plus de « Réessayer » : `APIError.recoveryAdvice` donne le
   conseil par famille d'erreur. Un bandeau qui ne propose rien laisse chercher
   ce qu'on a mal fait.
-- `BrandNotice` a **deux tons**. Le beige dit l'état des choses ; `.information`
+- `BrandNotice` a **deux tons**. Le beige — `noticeBeige`, sur un verre
+  dépoli, plus doux que `Beige Darker` (Hugo, 17/09/2026) — dit l'état des
+  choses ; `.information`
   — filet, pictogramme et aplat en `MemoBookColor.information` — répond à un
   geste : pourquoi cette ligne ne mène nulle part, pourquoi ce réglage n'est pas
   ouvert. Il ne remplace pas `ErrorBanner` : rien n'a raté.
@@ -288,9 +290,14 @@ police ou marge codée en dur ailleurs.
   sans suite, pas de chevron, et le toucher ne fait rien.
 - `BrandSwipeDrawer` est **le** tiroir d'actions d'une carte : un glissé vers
   la gauche découvre ses gestes (supprimer, partager, prévisualiser un voyage ;
-  retirer un co-voyageur), l'appui long ouvre le menu contextuel du système,
-  VoiceOver reçoit le rotor d'actions. Une carte qui a des gestes cachés passe
-  par lui, elle ne réécrit pas le geste.
+  retirer un co-voyageur), qui arrivent en quinconce avec le doigt ; l'appui
+  long ouvre le menu contextuel du système, VoiceOver reçoit le rotor
+  d'actions. Une carte qui a des gestes cachés passe par lui, elle ne réécrit
+  pas le geste — et il pose son `DragGesture` en `highPriorityGesture`, sans
+  quoi le `Button` de la carte prend le doigt.
+- `PhotoFlow` (`Feature`) est **le** parcours de choix d'une photo —
+  autorisation, « Prendre une photo / Choisir dans la galerie », photothèque
+  ou appareil : la conversation et la photo de profil le partagent.
 - `brandScrollWithoutBounce()` retire l'élastique d'une `ScrollView` — posé sur
   son **contenu**, il remonte jusqu'à l'`UIScrollView`. Une seule vue s'en
   sert, la carte de l'écran d'entrée, qui doit bloquer en bas.

@@ -202,6 +202,9 @@ public final class AppDependencies {
             // La troisième, et la seule sans retour : elle supprime le compte
             // et tout ce qui est à lui. L'écran demande confirmation avant.
             remove: { [api] in try await api.deleteAccount() },
+            uploadAvatar: { [api] data, mimeType in
+                try await api.uploadAvatar(data: data, mimeType: mimeType)
+            },
             cached: { [content] in await content.read(.profile, as: TravellerProfile.self) }
         )
     }

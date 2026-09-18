@@ -144,6 +144,14 @@ public enum MemoBookColor {
     /// `Brand Colors/Beige Darker`.
     public static let separator = Color(hex: 0xCFBBAA)
 
+    /// Le beige **des boîtes d'information** — hors ligne, vocaux en attente,
+    /// et les autres ``BrandNotice`` neutres. `Beige Darker` y était trop
+    /// foncé (Hugo, 17/09/2026) : celui-ci est à mi-chemin entre lui et
+    /// `Beige`, et la boîte le pose sur un verre dépoli, à 70 %, pour qu'on
+    /// devine ce qui passe dessous. Il ne sert qu'à ça ; les séparateurs
+    /// gardent `Beige Darker`. Variable Figma à poser par Clara.
+    public static let noticeBeige = Color(hex: 0xE6D5C4)
+
     /// Bleu clair : **le fond des écrans où l'app écoute**. Aujourd'hui la
     /// feuille d'enregistrement, et rien d'autre. Le crème est le papier du
     /// carnet, celui sur lequel on lit ; ce bleu dit qu'on est passé de l'autre

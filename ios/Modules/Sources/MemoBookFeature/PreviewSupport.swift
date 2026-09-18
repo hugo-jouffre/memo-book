@@ -214,6 +214,17 @@ public actor PreviewAPI: MemoBookAPI {
         return profile
     }
 
+    /// La photo reste sur le disque de l'aperçu, et le profil pointe dessus :
+    /// c'est ce qui permet de voir sa photo changer sans serveur.
+    public func uploadAvatar(data: Data, mimeType: String) async throws -> TravellerProfile {
+        var profile = editedProfile ?? .fixture
+        let url = URL.cachesDirectory.appending(path: "preview-avatar-\(UUID().uuidString).jpg")
+        try data.write(to: url, options: .atomic)
+        profile.avatarUrl = url
+        editedProfile = profile
+        return profile
+    }
+
     public func setConnector(key: String, isEnabled: Bool) async throws {
         var profile = editedProfile ?? .fixture
         profile.connectors = profile.connectors.map { connector in

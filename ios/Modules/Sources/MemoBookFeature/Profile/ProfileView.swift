@@ -1,6 +1,7 @@
 import MemoBookCore
 import MemoBookDesign
 import SwiftUI
+import UIKit
 
 /// Le profil : qui tu es pour MemoBook, ce que tu lui as confié, et par où on
 /// sort.
@@ -30,6 +31,11 @@ public struct ProfileView: View {
     /// pas, et il doit ressembler à ce que l'utilisateur a déjà appris à
     /// craindre ailleurs.
     @State private var isConfirmingDeletion = false
+
+    /// Le parcours de choix de la photo de profil — la feuille du système
+    /// « Prendre une photo / Choisir dans la galerie », comme dans la
+    /// conversation (Clara, 17/09/2026, T165).
+    @State private var avatarPhotos = PhotoFlow()
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -95,6 +101,10 @@ public struct ProfileView: View {
         // attente pendant qu'on lit le bas de l'écran.
         .scrollDismissesKeyboard(.immediately)
         .brandKeyboardDismissBar()
+        .photoFlow(avatarPhotos, title: "Photo de profil", maxSelection: 1) { images in
+            guard let data = images.first, let jpeg = ProfileAvatar.jpeg(from: data) else { return }
+            Task { await model.setAvatar(jpeg) }
+        }
         .background(MemoBookColor.background.ignoresSafeArea())
         // L'écran dessine son propre en-tête, comme la maquette : la flèche et
         // le titre partagent une ligne, à la marge de la colonne. Une barre de
@@ -335,7 +345,17 @@ public struct ProfileView: View {
 
     private var identity: some View {
         VStack(spacing: MemoBookSpacing.s) {
-            ProfileAvatar(profile: model.profile)
+            VStack(spacing: MemoBookSpacing.xs) {
+                ProfileAvatar(
+                    profile: model.profile,
+                    isUploading: model.isUploadingAvatar,
+                    onTap: avatarPhotos.begin
+                )
+
+                if let denied = avatarPhotos.deniedMessage {
+                    BrandNotice(denied, tone: .information)
+                }
+            }
 
             if let profile = model.profile {
                 EditableName(name: profile.fullName) { model.setFullName($0) }
@@ -473,7 +493,9 @@ public struct ProfileView: View {
     private var exitActions: some View {
         VStack(spacing: MemoBookSpacing.xs) {
             ProfileExitAction(
-                icon: Image(brand: "IconExport"),
+                // `Export data.svg`, dessiné pour cette ligne (Clara,
+                // 17/09/2026, T162) — `Export.svg` est le partage d'un fichier.
+                icon: Image(brand: "IconExportData"),
                 title: "Exporter mes données",
                 tint: MemoBookColor.warning,
                 action: notYetRouted
@@ -751,32 +773,85 @@ private struct EditableName: View {
 /// photo. Rien ne bouge quand elle arrive.
 private struct ProfileAvatar: View {
     let profile: TravellerProfile?
+    /// La photo est en route : le rond s'assombrit et tourne.
+    var isUploading = false
+    /// Le rond **se touche** : il ouvre la feuille « Prendre une photo /
+    /// Choisir dans la galerie » (Clara, 17/09/2026, T165).
+    var onTap: () -> Void = {}
 
     /// Taille **fixe**, comme l'avatar de l'accueil. Une photo n'est pas du
     /// texte : la faire grandir avec le Dynamic Type lui faisait prendre la
     /// moitié de l'écran en AX3, au détriment de ce qui, lui, se lit.
     private static let side: CGFloat = 80
 
+    /// Le plus grand côté envoyé au serveur. Le rond fait 80 pt, l'accueil 40 :
+    /// 512 px couvre trois fois l'écran le plus dense, et pèse quelques dizaines
+    /// de kilo-octets au lieu des mégaoctets d'une photo d'iPhone.
+    private static let uploadSide: CGFloat = 512
+
     var body: some View {
-        AsyncImage(url: profile?.avatarUrl) { phase in
-            if let image = phase.image {
-                image.resizable().scaledToFill()
-            } else {
-                Text(profile?.initials ?? "")
-                    .font(MemoBookFont.h2)
-                    .foregroundStyle(MemoBookColor.ink)
-                    // Les initiales, elles, suivent le texte — mais dans un
-                    // cadre qui ne bouge pas : elles se réduisent plutôt que
-                    // de déborder du rond.
-                    .minimumScaleFactor(0.5)
-                    .lineLimit(1)
-                    .padding(.horizontal, MemoBookSpacing.xs)
+        Button(action: onTap) {
+            AsyncImage(url: profile?.avatarUrl) { phase in
+                if let image = phase.image {
+                    image.resizable().scaledToFill()
+                } else {
+                    Text(profile?.initials ?? "")
+                        .font(MemoBookFont.h2)
+                        .foregroundStyle(MemoBookColor.ink)
+                        // Les initiales, elles, suivent le texte — mais dans un
+                        // cadre qui ne bouge pas : elles se réduisent plutôt que
+                        // de déborder du rond.
+                        .minimumScaleFactor(0.5)
+                        .lineLimit(1)
+                        .padding(.horizontal, MemoBookSpacing.xs)
+                }
             }
+            .frame(width: Self.side, height: Self.side)
+            .background(MemoBookColor.outline, in: .circle)
+            .clipShape(.circle)
+            .overlay {
+                if isUploading {
+                    Circle().fill(MemoBookColor.ink.opacity(0.35))
+                    ProgressView().tint(MemoBookColor.onAction)
+                }
+            }
+            // Le petit crayon cerclé, à cheval sur le bord du rond : c'est lui
+            // qui dit que la photo se change — le même dessin que les crayons
+            // des couvertures.
+            .overlay(alignment: .bottomTrailing) {
+                Image(brand: "IconPen")
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .frame(width: MemoBookSpacing.snug, height: MemoBookSpacing.snug)
+                    .foregroundStyle(MemoBookColor.action)
+                    .frame(width: MemoBookSpacing.m + 4, height: MemoBookSpacing.m + 4)
+                    .background(MemoBookColor.surface, in: .circle)
+                    .overlay { Circle().strokeBorder(MemoBookColor.outline, lineWidth: 1.5) }
+                    .offset(x: 4, y: 4)
+            }
+            .contentShape(.circle)
         }
-        .frame(width: Self.side, height: Self.side)
-        .background(MemoBookColor.outline, in: .circle)
-        .clipShape(.circle)
-        .accessibilityHidden(true)
+        .buttonStyle(.plain)
+        .disabled(isUploading || profile == nil)
+        .accessibilityLabel("Photo de profil")
+        .accessibilityHint("Prendre une photo, ou en choisir une dans la galerie")
+    }
+
+    /// Réduit la photo choisie à ce que le serveur a besoin de garder, en
+    /// JPEG. `nil` si ce n'est pas une image lisible.
+    static func jpeg(from data: Data) -> Data? {
+        guard let image = UIImage(data: data) else { return nil }
+        let longest = max(image.size.width, image.size.height)
+        let scale = min(1, uploadSide / max(longest, 1))
+        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let resized = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
+        return resized.jpegData(compressionQuality: 0.85)
     }
 }
 

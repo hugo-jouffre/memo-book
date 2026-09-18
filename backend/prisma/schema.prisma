@@ -156,8 +156,14 @@ model Account {
   /// Apple ou Google.
   passwordHash    String?
 
-  phoneNumber String?
-  avatarUrl   String?
+  phoneNumber      String?
+  /// L'URL d'une photo venue d'un fournisseur (Apple, Google). Elle s'efface
+  /// devant `avatarStorageKey` dès qu'on a envoyé la sienne.
+  avatarUrl        String?
+  /// La photo envoyée depuis le profil, dans le stockage des médias
+  /// (`avatars/<uuid>.jpg`). L'app la lit par `GET /v1/avatars/:file` — voir
+  /// `services/avatars.ts` pour la raison de ne pas garder une URL.
+  avatarStorageKey String?
 
   /// Ce que la personne a dit d'elle-même — femme, homme, ou qu'elle préfère ne
   /// pas répondre. **Nul tant qu'elle n'a rien dit** : l'app accorde alors sur

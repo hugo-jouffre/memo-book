@@ -206,6 +206,23 @@ public actor MemoBookAPIClient: MemoBookAPI {
         try await send(method: "GET", path: "/v1/profile", credential: .session)
     }
 
+    public func uploadAvatar(data: Data, mimeType: String) async throws -> TravellerProfile {
+        var form = MultipartFormData()
+        form.addFile(
+            name: "file",
+            filename: mimeType == "image/png" ? "avatar.png" : "avatar.jpg",
+            mimeType: mimeType,
+            data: data
+        )
+
+        let contentType = form.contentType
+        var request = try makeRequest(method: "POST", path: "/v1/profile/avatar")
+        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        request.httpBody = form.finalized()
+
+        return try await perform(request, credential: .session)
+    }
+
     public func updateProfile(_ edit: ProfileEdit) async throws -> TravellerProfile {
         try await send(
             method: "PATCH",

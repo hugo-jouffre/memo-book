@@ -198,13 +198,28 @@ struct TripThemeSheet: View {
     /// Le thème choisi dans le carrousel, ou `nil` quand c'est un texte libre
     /// qui ne correspond à aucun.
     @State private var selection: TripTheme?
-    /// Ce que le champ contient. Il porte le thème quel qu'il soit : choisir
-    /// une pastille l'écrit dedans, et on peut ensuite le retoucher.
+    /// Ce que le champ contient — **le nom d'un thème libre**, seulement
+    /// derrière « Autre ». Un thème de la rangée n'a rien à taper : son nom
+    /// est le thème (Hugo, 17/09/2026).
     @State private var text: String
 
     init(model: TripSettingsModel) {
         self.model = model
         _text = State(initialValue: model.settings?.theme ?? "")
+    }
+
+    /// Le champ n'existe que derrière « Autre » — et derrière un thème libre
+    /// déjà enregistré, que la rangée ne connaît pas : sans champ, on ne
+    /// pourrait ni le relire ni le corriger.
+    private var showsField: Bool {
+        selection?.isOther == true || (selection == nil && !model.themes.isEmpty)
+    }
+
+    /// Ce que « Valider » enregistre : le nom du thème choisi, ou le texte
+    /// libre derrière « Autre ».
+    private var chosenTheme: String {
+        if let selection, !selection.isOther { return selection.name }
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var body: some View {
@@ -214,40 +229,54 @@ struct TripThemeSheet: View {
                     TripThemePickerPlaceholder()
                 } else {
                     TripThemePicker(themes: model.themes, selection: $selection) { theme in
-                        // Le carrousel **écrit dans le champ** au lieu de le
-                        // remplacer : « Autre » ouvre la saisie libre, les
-                        // autres posent leur nom, et on garde la main dessus.
-                        text = theme.isOther ? "" : theme.name
-                        focus = theme.isOther ? .theme : nil
+                        // « Autre » ouvre la saisie libre, avec le clavier ;
+                        // un thème de la rangée referme le champ — il n'y a
+                        // plus que « Valider ».
+                        if theme.isOther {
+                            if model.themes.contains(where: { $0.name == text }) { text = "" }
+                            focus = .theme
+                        } else {
+                            focus = nil
+                        }
                     }
                 }
 
-                BrandTextField(
-                    BookCopy.Theme.title,
-                    text: $text,
-                    field: Field.theme,
-                    focus: $focus,
-                    labelPlacement: .hidden,
-                    placeholder: BookCopy.Theme.placeholder
-                )
-                .submitLabel(.done)
-                .onSubmit(validate)
+                if showsField {
+                    BrandTextField(
+                        BookCopy.Theme.title,
+                        text: $text,
+                        field: Field.theme,
+                        focus: $focus,
+                        labelPlacement: .hidden,
+                        placeholder: BookCopy.Theme.placeholder
+                    )
+                    .submitLabel(.done)
+                    .onSubmit(validate)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
 
                 BrandButton(BookCopy.Theme.validate, fillsWidth: true, action: validate)
-                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(chosenTheme.isEmpty)
             }
+            .animation(.snappy(duration: 0.25), value: showsField)
         }
         // Les thèmes viennent du serveur, et la rangée montre sa barre
         // d'attente le temps qu'ils arrivent. Sans effet s'ils sont déjà là.
         .task {
             await model.loadThemes()
-            selection = model.themes.first { $0.name == text }
+            // Le thème enregistré, s'il est dans la rangée ; sinon c'est un
+            // thème libre, et « Autre » le porte.
+            if let known = model.themes.first(where: { $0.name == text }) {
+                selection = known
+            } else if !text.isEmpty {
+                selection = model.themes.first { $0.isOther }
+            }
         }
     }
 
     private func validate() {
         focus = nil
-        model.setTheme(text)
+        model.setTheme(chosenTheme)
         dismiss()
     }
 }

@@ -148,6 +148,15 @@ export async function deleteAccountAndData(
 
   const { entryCount, mediaIds, storageKeys } = await mediaOf(prisma, memoIds);
 
+  // La photo de profil part avec le compte : elle n'appartient qu'à lui.
+  const account = await prisma.account.findUnique({
+    where: { id: accountId },
+    select: { avatarStorageKey: true },
+  });
+  const objects = account?.avatarStorageKey
+    ? [...storageKeys, account.avatarStorageKey]
+    : storageKeys;
+
   await prisma.$transaction(async (tx) => {
     for (const transfer of transfers) {
       await tx.memo.update({
@@ -171,7 +180,7 @@ export async function deleteAccountAndData(
     await deleteMedia(tx, mediaIds);
   });
 
-  await removeObjects(context, storageKeys, { accountId });
+  await removeObjects(context, objects, { accountId });
 
   const report: DeletionReport = {
     memos: memoIds.length,

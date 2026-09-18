@@ -34,11 +34,17 @@ public final class ProfileModel {
         case address
         case gender
         case newsletter
+        case avatar
     }
 
     private let source: () async throws -> TravellerProfile
     private let persist: ((ProfileEdit) async throws -> TravellerProfile)?
     private let remove: (() async throws -> Void)?
+    /// Envoie la photo de profil. `nil` en aperçu : la photo reste sur place.
+    private let uploadAvatar: ((Data, String) async throws -> TravellerProfile)?
+
+    /// La photo est en route vers le serveur : l'avatar le montre.
+    public private(set) var isUploadingAvatar = false
 
     /// Ce qu'on avait sur le disque — voir ``ContentCache``. `nil` en aperçu.
     private let cached: CachedValue<TravellerProfile>?
@@ -66,12 +72,14 @@ public final class ProfileModel {
         source: @escaping () async throws -> TravellerProfile = { .fixture },
         persist: ((ProfileEdit) async throws -> TravellerProfile)? = nil,
         remove: (() async throws -> Void)? = nil,
+        uploadAvatar: ((Data, String) async throws -> TravellerProfile)? = nil,
         cached: CachedValue<TravellerProfile>? = nil
     ) {
         self.cached = cached
         self.source = source
         self.persist = persist
         self.remove = remove
+        self.uploadAvatar = uploadAvatar
     }
 
     /// `true` tant qu'on n'a rien à montrer. L'écran se dessine quand même —
@@ -201,6 +209,32 @@ public final class ProfileModel {
         guard address != profile?.address else { return }
         mutate { $0.address = address }
         save(ProfileEdit(address: address), confirming: .address)
+    }
+
+    /// Envoie la photo de profil choisie (Clara, 17/09/2026, T165).
+    ///
+    /// **Rien ne change à l'écran avant la réponse** : c'est le profil relu que
+    /// le serveur renvoie qui porte la nouvelle adresse, et un échec laisse
+    /// l'ancienne photo avec le reproche au-dessus — comme les lignes qui
+    /// s'enregistrent. Le JPEG est déjà réduit par l'écran ; ici on envoie.
+    public func setAvatar(_ data: Data, mimeType: String = "image/jpeg") async {
+        guard let uploadAvatar else { return }
+
+        isUploadingAvatar = true
+        defer { isUploadingAvatar = false }
+
+        do {
+            let saved = try await uploadAvatar(data, mimeType)
+            #if DEBUG
+                profile = SandboxPersona.current?.applied(to: saved) ?? saved
+            #else
+                profile = saved
+            #endif
+            errorMessage = nil
+            confirm(.avatar)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     /// Ce que la personne dit d'elle-même, à la place de ce que le serveur

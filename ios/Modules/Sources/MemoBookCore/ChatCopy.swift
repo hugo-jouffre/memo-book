@@ -25,7 +25,8 @@ public enum ChatCopy {
     // MARK: - La bannière « Aperçu en direct »
 
     public static let previewOverline = "Aperçu en direct"
-    public static let previewTitle = "Votre Carnet prend forme"
+    /// « Votre Carnet » dans la maquette : tutoyé, comme tout le reste (R9).
+    public static let previewTitle = "Ton Carnet prend forme"
 
     /// « 5 Souvenirs - 10 pages composées ».
     ///
@@ -267,14 +268,23 @@ public enum ChatCopy {
     // ponctuation finale.
 
     public enum Suggest {
+        // **Chaque proposition porte un émoji devant** — c'est la maquette de
+        // Hugo (`3520:35958`), et il est porté à part du libellé : il ne part
+        // pas dans le message envoyé, et VoiceOver ne le lit pas.
+
         /// Le trio de la maquette, sous une fiche qui porte du **vrai** texte.
         public static let accept = "Ça me convient"
+        public static let acceptSymbol = "👌"
         public static let editByHand = "J’aimerais faire des modifications à la main"
+        public static let editByHandSymbol = "✍️"
         public static let editByVoice = "J’aimerais faire des modifications à l’oral"
+        public static let editByVoiceSymbol = "🎙"
 
         /// Sous une fiche sans récit : le trio n'a rien à valider.
         public static let rewrite = "Je te le réécris ici"
+        public static let rewriteSymbol = "✍️"
         public static let recordAgain = "Je réenregistre"
+        public static let recordAgainSymbol = "🎙"
 
         /// L'écran vide, tel que la maquette l'écrit — emoji de tête compris,
         /// porté séparément pour qu'il ne partre pas dans le message.
@@ -286,15 +296,25 @@ public enum ChatCopy {
         public static let dictateSymbol = "🎙"
 
         public static let tellByVoice = "Je te raconte à l’oral"
+        public static let tellByVoiceSymbol = "🎙"
         public static let preferWriting = "Je préfère écrire"
+        public static let preferWritingSymbol = "✍️"
         public static let later = "Plus tard"
+        public static let laterSymbol = "⏰"
         public static let tomorrow = "On en reparle demain"
+        public static let tomorrowSymbol = "🌙"
         public static let somethingElse = "Je te raconte autre chose"
+        public static let somethingElseSymbol = "💬"
         public static let clear = "C’est clair, merci"
+        public static let clearSymbol = "👍"
         public static let anotherQuestion = "J’ai une autre question"
+        public static let anotherQuestionSymbol = "❓"
         public static let resume = "Je reprends mon récit"
+        public static let resumeSymbol = "📖"
         public static let splitInTwo = "Découpe en deux étapes"
+        public static let splitInTwoSymbol = "✂️"
         public static let keepAsOne = "Garde d’un seul tenant"
+        public static let keepAsOneSymbol = "🧩"
     }
 
     // MARK: - Les commandes de l'écran

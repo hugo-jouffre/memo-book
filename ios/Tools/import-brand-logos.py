@@ -57,6 +57,13 @@ NAMES = {
     # « Partager via WhatsApp » à la création et sur la feuille d'invitation
     # (Hugo, 17/09/2026, T121).
     "whatsapp": "LogoWhatsApp",
+    # Les **noms des polices du carnet, dessinés dans leur police** — des
+    # vectoriels, pour ne pas embarquer trois familles pour trois bouts de
+    # ligne (Hugo, 17/09/2026, T118). Monochromes, à poser en gabarit ; la
+    # feuille des assortiments les montre à la hauteur d'une ligne de texte.
+    "Playfair": "WordmarkPlayfair",
+    "Hansley": "WordmarkHansley",
+    "Gloria Hallelujah": "WordmarkGloriaHallelujah",
 }
 
 DATA_URI = re.compile(r'xlink:href="data:image/png;base64,([^"]+)"')

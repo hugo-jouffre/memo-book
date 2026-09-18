@@ -19,6 +19,7 @@ import {
   VOICE_MEMORY_COST_PER_MINUTE,
 } from "../services/memoryAllowance.js";
 import { SUBSCRIPTION_WEEKLY_CENTS } from "../services/subscriptionCatalog.js";
+import { avatarUrlOf } from "../services/avatars.js";
 import { effectiveGender } from "../services/genderInference.js";
 import { effectiveStage } from "../services/tripStage.js";
 
@@ -82,7 +83,7 @@ function serializeCompanion(member: MemoMember & { account?: Account | null }) {
   return {
     id: member.id,
     name: companionName(member),
-    avatarUrl: member.account?.avatarUrl ?? null,
+    avatarUrl: member.account ? avatarUrlOf(member.account) : null,
     role: member.role ?? null,
     isOwner: false,
     // `invited` : le lien est parti, personne n'est entré. `active` veut dire
@@ -107,7 +108,7 @@ function serializeOwner(owner: Account) {
   return {
     id: owner.id,
     name: fullName || owner.email || "Moi",
-    avatarUrl: owner.avatarUrl ?? null,
+    avatarUrl: avatarUrlOf(owner),
     role: null,
     isOwner: true,
     isPending: false,
@@ -262,7 +263,7 @@ export function serializeTraveller(account: AccountWithSubscriptions) {
     // Le prénom porte la salutation de l'accueil. À défaut, la partie locale de
     // l'adresse vaut mieux qu'un « Bonjour  » avec un trou dedans.
     firstName: account.firstName?.trim() || account.email?.split("@")[0] || "voyageur",
-    avatarUrl: account.avatarUrl,
+    avatarUrl: avatarUrlOf(account),
     offeredSteps: account.offeredSteps,
     remainingSteps: account.remainingSteps,
     // **Déduit, pas stocké** : la semaine payée du dernier abonnement, si elle
@@ -459,7 +460,7 @@ export function serializeProfile(
     // ce que la ligne « Genre » du profil affiche, et ce sur quoi la feuille
     // d'abonnement accorde « Abonné(e) » (T76).
     gender: effectiveGender(account.gender, account.firstName),
-    avatarUrl: account.avatarUrl,
+    avatarUrl: avatarUrlOf(account),
     address: {
       street: account.addressLine1 ?? "",
       postalCode: account.addressPostalCode ?? "",

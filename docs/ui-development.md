@@ -1522,7 +1522,6 @@ voir le carnets de la communauté » · « Tes voyages passés s'afficheront ici
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
-| T37 | 🟠 **Reste ouvert, volontairement** — Hugo, 14/09/2026 : « Hugo va le faire ». L'illustration (passeport + carnet ouvert) arrive ; le livre du *Welcome* tient la place d'ici là | Lot 3 — Les états de l'accueil |
 
 ---
 
@@ -2912,7 +2911,7 @@ booléens d'alerte sur `memos`, et `memo_members.role`.
 |---|---|
 | T115 | **La photo de l'écran d'entrée est floue** : le fichier fait 587 × 360 px, soit moins d'un pixel d'image par point d'écran. Il faut un export plus grand de la même photo (au moins 1170 × 720, le double sur un grand iPhone). Reformulé le 17/09/2026 — c'est un export à refaire dans Figma, rien à trancher |
 | T116 | **L'arrêt automatique de l'abonnement ne parle pas à Apple.** Le jour où StoreKit sera branché, c'est le webhook App Store qui devra fermer la ligne `subscriptions`, et cette tâche deviendra le filet plutôt que la règle |
-| T118 | **Les noms des trois polices de titre ne sont pas dessinés dans leur police** — « Playfair » s'écrit en General Sans, pas en Playfair. **On n'embarque pas les polices pour le moment** (Hugo, 17/09/2026) : Hugo fournira peut-être un vectoriel du nom de chaque typographie, à poser en image |
+| T118 | **Alegreya et Montserrat s'écrivent encore en General Sans** dans la feuille des assortiments : Playfair, Hansley et Gloria Hallelujah ont leur nom dessiné en vectoriel depuis le 18/09/2026 (`assets/logos/<Nom>.svg` → `Wordmark<Nom>`), les deux autres attendent le leur | Typographies du carnet |
 | T121 | **L'icône « Renvoyer » emprunte `IconTeleverser`**, faute d'un envoi dans le jeu de marque. Le logo WhatsApp, lui, est arrivé le 17/09/2026 (`assets/logos/whatsapp.svg`, en vert foncé) |
 | T124 | **Les autocollants Apple et Google sont des images, pas des dessins vectoriels.** Ce sont les deux logos cerclés de bleu des boutons de l'écran d'entrée (`assets/logos/Apple Icon.svg`, `Google Icon.svg`) : Figma les a exportés en bitmap collé dans un SVG. Nets à 24 pt, ils pixelliseraient plus grand. Reformulé le 17/09/2026 — un export **vectoriel** de ces deux autocollants règle la question |
 
@@ -3496,15 +3495,50 @@ masculin) et le voyage fini reste « en cours ».
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
-| T161 | **Les recommandations de message ne sont pas dans le bon type de bulle** (Clara) — la maquette de Hugo les dessine avec un émoji en début de ligne. Le rail actuel pose déjà l'émoji devant le libellé ; ce qui manque, c'est le **dessin** de la bulle, que le quota Figma n'a pas laissé lire. Il faut le nœud de la maquette | Conversation |
-| T162 | **L'icône « export data.svg » n'est pas dans le dépôt.** La ligne « Exporter mes données » porte `Export.svg` (`IconExport`), le seul export du jeu de marque. À déposer dans `assets/icons/brand-icons` — le script d'import fait le reste | Profil |
-| T163 | **Le carrousel des thèmes** — glissé horizontal, l'émoji du centre plus gros et à 100 %, les autres à 60 %, tous les thèmes, noms longs entiers (Clara). L'étape « Contexte de ton voyage » est retirée du parcours le même jour (Hugo) ; le dessin vaudra pour la feuille « Thème » des réglages et pour le jour où l'étape revient. Il faut le nœud de la maquette | Création — contexte, réglages — thème |
 | T164 | **Les « Valider » des feuilles de personnalisation** semblent inutiles à Clara ; seule « Nombre de pages » n'en a pas, et c'est bien — mais la feuille ne devrait peut-être pas se refermer dès qu'on choisit. **À trancher avec Hugo et Paul** : sans bouton, la feuille se referme au choix (comme « Genre » du profil) ; avec, elle reste ouverte | Personnalisations du carnet |
-| T165 | **Une photo de profil** (Clara). Rien ne l'envoie encore : il faut une route `POST /v1/profile/avatar` (S3, comme les photos du chat), `avatarUrl` déjà servi côté profil, et un sélecteur de photo sur l'avatar. Un écran avec un sélecteur qui n'enverrait rien serait l'écran qui ment — chaîne entière ou rien | Profil |
-| T166 | **« Les données de la cagnotte sont en dur »** (Clara). La page lit `GET /v1/wallet` depuis le 16/09 — solde, historique, estimation. Ce qu'elle voit est le **jeu d'essai du seed** sur les comptes de démo. Si une valeur reste figée à l'écran, laquelle ? | Ma cagnotte |
 | T167 | **« Voir une estimation » sur la 3e story** (Clara) : la pastille ouvre bien la feuille « Estimation » depuis le 15/09, sur les chiffres de la maquette (T127). Clara a peut-être vu la version d'avant ; à revérifier sur ce build. T80 reste ouvert jusqu'à ce que la pastille soit configurée pour de bon | Paywall |
 | T168 | **Le tiroir des cartes de l'accueil n'a pas de maquette** — croix, flèche, imprimante cerclées, sur le modèle de la liste des co-voyageurs. À dessiner dans Figma, ou à valider tel quel | Accueil |
 | T169 | **La feuille « Genre » n'a pas de maquette** — trois options sur le motif des feuilles de choix du profil, et la ligne « Genre » sous « Adresse postale ». À dessiner dans Figma, ou à valider telle quelle | Profil |
 | T170 | **Le genre deviné est une liste de prénoms**, pas une science : environ six cents prénoms français, les mixtes (Camille, Dominique, Sacha…) restent sans réponse. Un prénom absent accorde au masculin par défaut (« Abonné ») — c'est la forme non marquée, pas une erreur, mais c'est à savoir | Profil |
 | T171 | **Le glissé vers la droite de l'accueil** ouvre le profil de n'importe où sur l'écran. Il n'entre pas en conflit avec le tiroir des cartes (vers la gauche) ni avec le retour de la pile (l'accueil est le premier écran) ; s'il gêne le défilement des bandes horizontales de l'accueil, il faudra le limiter au bord | Accueil |
-| T172 | **La migration `genre_du_profil` et l'API sont à déployer** — voir § 27.5. Tant que l'API sert le code d'avant, l'accueil montre encore « en cours » un voyage fini | Back-end |
+| T172 | **Deux migrations et l'API sont à déployer** — `genre_du_profil` et `photo_de_profil`, voir § 27.5 et § 27.8. Tant que l'API sert le code d'avant, l'accueil montre encore « en cours » un voyage fini, et le profil ne connaît ni le genre ni la photo | Back-end |
+
+### 27.7 Le lendemain — les assets déposés, et neuf détails
+
+Hugo a déposé ce qui manquait (18/09/2026) et ajusté neuf points ; tout est
+dans le même lot.
+
+| Écran | Demande | Ce qui a été fait |
+|---|---|---|
+| Typographies du carnet | les noms des polices dessinés dans leur police, sans embarquer les familles | `assets/logos/Playfair.svg`, `Hansley.svg`, `Gloria Hallelujah.svg` → `WordmarkPlayfair`, `WordmarkHansley`, `WordmarkGloriaHallelujah` (`import-brand-logos.py`) ; `BookFontOption.wordmark`, et la carte d'un assortiment les pose en gabarit **à la hauteur d'une ligne de texte** (`@ScaledMetric` 14). Alegreya et Montserrat restent en General Sans (T118) |
+| Accueil — carte de découverte | la nouvelle image, sans dégradé, et un léger bleu sur sa gauche pour que le texte puisse mordre dessus | `ShowcaseCarnets` remplacée ; **le dégradé est dessiné par l'app**, depuis les deux couches de la carte (crème puis bleu à 22 %), sur les 45 premiers pour cent de l'image — pas une couleur inventée. ⚠️ L'export fait **111 × 85 px**, trois fois moins que l'ancien (330 × 252) pour 124 pt d'affichage : net sur aucun écran — voir T173 |
+| Accueil — voyage à venir | T37, l'illustration passeport + carnet ouvert | elle était déjà là : `assets/illustrations/Empty Trip Illustration.png` est `EmptyTripIllustration`, posée par `UpcomingTripInvite`. Ticket retiré |
+| Profil — photo | toucher le rond ouvre « Prendre une photo / Choisir dans la galerie », et la chaîne base de données | **chaîne entière** : `accounts.avatarStorageKey` (migration `20260918100000_photo_de_profil`), `POST /v1/profile/avatar` (multipart, JPEG ou PNG, 5 Mo), l'objet dans le stockage sous `avatars/`, l'ancien retiré, et `GET /v1/avatars/:file` qui le sert **sans session** — `AsyncImage` n'envoie pas d'en-tête. L'adresse se calcule à la lecture (`services/avatars.ts`, `API_PUBLIC_BASE_URL`). Côté app : `PhotoFlow` (l'ancien `ChatPhotoFlow`, sorti du chat), le rond du profil devient un bouton avec un petit crayon, l'image est réduite à 512 px avant de partir, `ProfileModel.setAvatar`. Testé côté serveur, vu en simulateur |
+| Profil | l'icône `Export data.svg` | `IconExportData` sur « Exporter mes données » (T162 clos) |
+| Conversation — propositions | le bon type de bulle, un émoji devant chaque proposition (nœud `3520:35958`) | les puces sont des **capsules** blanches, et **chaque** proposition porte son émoji (`ChatCopy.Suggest.*Symbol`) — T161 clos. Le nœud `3520:35930` est la bulle bleue du voyageur, déjà en place |
+| Conversation — bannière « Ton Carnet prend forme » | posée sur le fil ; part vers le haut après 4 s avec un rebond ; revient dès 20 pt de remontée ; repart après 200 pt de remontée ou 20 pt de descente | la bannière quitte la pile des messages et devient un **calque sous l'en-tête** (`overlay`, hauteur de l'en-tête mesurée) ; `ChatView.trackScroll` cumule le défilement dans chaque sens sur un `GeometryReader` (iOS 17, pas d'`onScrollGeometryChange`) ; ressort `bounce: 0.35`, fondu en Reduce Motion. Et **« Votre Carnet » devient « Ton Carnet »** (R9) |
+| Contexte de voyage | le carrousel est très bien tel quel | T163 clos |
+| Ma cagnotte | plus de valeur figée | T166 clos |
+| Accueil — tiroir des cartes | les trois icônes arrivent en quinconce avec le glissé | `BrandSwipeDrawer` décale chaque icône d'une part de ce qu'il reste à découvrir, croissante de la première à la dernière (0,35 / 0,70 / 1,05), et les fait monter en opacité — un rapport, pas une animation : rien à couper quand on relâche |
+| Partout — boîtes d'information | le beige trop foncé, plus doux, avec un léger effet de verre | `MemoBookColor.noticeBeige` (#E6D5C4, entre `Beige` et `Beige Darker`) à 70 % **sur un verre dépoli** (`ultraThinMaterial`), liseré blanc à 45 %. `Beige Darker` ne change pas ailleurs (séparateurs, scotch) — à trancher si le token lui-même doit s'éclaircir, voir T174 |
+| Paramètres du voyage — thème | seul « Autre » ouvre un champ ; les autres n'ont que « Valider » | `TripThemeSheet` : le champ n'existe que derrière « Autre » (ou un thème libre déjà enregistré, que la rangée ne connaît pas) ; un thème de la rangée se valide tel quel |
+
+### 27.8 Contrat back-end (suite)
+
+| Route / colonne | Ce qui change |
+|---|---|
+| `accounts.avatarStorageKey` (migration `20260918100000_photo_de_profil`) | la clé de la photo envoyée ; `avatarUrl` reste pour celle d'un fournisseur |
+| `POST /v1/profile/avatar` | multipart, champ `file` en `image/jpeg` ou `image/png`, 5 Mo ; renvoie le profil relu |
+| `GET /v1/avatars/:file` | **sans session**, `Cache-Control` long, 404 hors `avatars/<uuid>.(jpg\|png)` |
+| `avatarUrl` (profil, accueil, co-voyageurs, propriétaire) | `avatarUrlOf` : la photo envoyée d'abord, sinon celle du fournisseur |
+| `API_PUBLIC_BASE_URL` (env) | la racine des adresses d'avatar ; vide, `APP_LINK_BASE_URL` s'il est en `https://`, sinon `localhost:3000`. **À poser sur Railway si `APP_LINK_BASE_URL` n'y est pas l'adresse de l'API** |
+| Suppression de compte | la photo part avec le compte (`services/deletion.ts`) |
+
+### 27.9 À trancher (suite)
+
+| # | Sujet | Écran / parcours |
+|---|---|---|
+| T173 | **La nouvelle image de la carte de découverte est trop petite** : 111 × 85 px pour un cadre de 124 pt — l'ancienne faisait 330 × 252. Elle s'affiche floue sur tous les écrans. Il faut le même export en **au moins 372 × 285 px** (3×), déposé au même chemin ; le script ne change pas | Accueil |
+| T174 | **`Beige Darker` lui-même doit-il s'éclaircir ?** Les boîtes d'information ont leur propre beige doux depuis le 18/09 ; les séparateurs, le scotch des cartes et le filet des boutons Apple/Google gardent `#CFBBAA`. Si c'est le token qui doit changer, c'est une ligne dans `Tokens.swift` — et la variable Figma avec | Partout |
+| T175 | **La bannière du chat ne sait pas qu'un message vient d'arriver** : un nouveau message en bas fait bouger le haut du contenu comme un défilement vers le bas, et la referme. C'est acceptable — on lit ce qui arrive —, mais c'est un effet de bord, pas un choix | Conversation |
+

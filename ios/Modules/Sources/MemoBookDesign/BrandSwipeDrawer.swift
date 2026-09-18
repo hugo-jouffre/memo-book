@@ -126,9 +126,13 @@ public struct BrandSwipeDrawer<Content: View>: View {
 
     // MARK: Le tiroir
 
+    /// Ce qu'il reste à découvrir du tiroir, de sa largeur (fermé) à zéro
+    /// (ouvert). C'est lui qui déplace les icônes.
+    private var remaining: CGFloat { max(0, drawerWidth + translation) }
+
     private var drawer: some View {
         HStack(spacing: MemoBookSpacing.xs) {
-            ForEach(actions) { action in
+            ForEach(Array(actions.enumerated()), id: \.element.id) { index, action in
                 Button {
                     close()
                     action.action()
@@ -148,6 +152,15 @@ public struct BrandSwipeDrawer<Content: View>: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(action.label)
+                // **Elles arrivent avec le glissé, en quinconce** (Hugo,
+                // 17/09/2026) : chaque icône suit la carte avec un retard qui
+                // croît de la première à la dernière — elles glissent de la
+                // droite l'une après l'autre et se posent avec le doigt, au
+                // lieu d'être découvertes déjà en place. Le retard est un
+                // rapport, pas une durée : pas d'animation à couper quand on
+                // relâche à mi-chemin.
+                .offset(x: remaining * (0.35 + 0.35 * CGFloat(index)))
+                .opacity(1 - Double(min(1, remaining / max(drawerWidth, 1))) * 0.6)
             }
         }
         .padding(.trailing, MemoBookSpacing.xs)

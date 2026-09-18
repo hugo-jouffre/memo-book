@@ -16,7 +16,8 @@ import { registerLocalRenderRoutes } from "./routes/localRenders.js";
 import { registerMemoRoutes } from "./routes/memos.js";
 import { registerOrderRoutes } from "./routes/orders.js";
 import { registerPasswordResetPageRoutes } from "./routes/passwordResetPage.js";
-import { registerProfileRoutes } from "./routes/profile.js";
+import { registerAvatarRoutes, registerProfileRoutes } from "./routes/profile.js";
+import { configureAvatarUrls } from "./services/avatars.js";
 import { registerRenderRoutes } from "./routes/renders.js";
 import { registerStripeWebhookRoutes } from "./routes/stripeWebhook.js";
 import { registerBookPreviewRoutes } from "./routes/bookPreview.js";
@@ -34,6 +35,7 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
 
   registerAuthDecorator(app);
   registerJobs(context);
+  configureAvatarUrls(context.env);
 
   app.setErrorHandler((error: Error & { statusCode?: number; code?: string }, request, reply) => {
     if (error instanceof HttpError) {
@@ -127,6 +129,10 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
 
   // Uniquement en mode de rendu local : sert les PDF produits sur le disque.
   registerLocalRenderRoutes(app, context);
+
+  // Les photos de profil, en HTTP simple : `AsyncImage` n'envoie pas de
+  // session, et un avatar se montre à ceux qui partagent le voyage.
+  registerAvatarRoutes(app, context);
 
   return app;
 }
