@@ -26,16 +26,25 @@ export function avatarMimeType(filename: string): string {
   return filename.endsWith(".png") ? "image/png" : "image/jpeg";
 }
 
+/** Ce que la racine publique lit dans la configuration. */
+export type PublicBaseEnv = Pick<
+  Env,
+  "API_PUBLIC_BASE_URL" | "RAILWAY_PUBLIC_DOMAIN" | "APP_LINK_BASE_URL"
+>;
+
 /**
  * L'adresse publique de l'API, sans barre finale.
  *
- * `API_PUBLIC_BASE_URL` d'abord ; sinon `APP_LINK_BASE_URL`, qui est
- * l'adresse de l'API en production (voir `env.ts`) ; sinon la boucle locale du
+ * `API_PUBLIC_BASE_URL` d'abord ; sinon le domaine que **Railway** donne au
+ * service (`RAILWAY_PUBLIC_DOMAIN`, posé sans qu'on ait rien à faire) ; sinon
+ * `APP_LINK_BASE_URL` quand il est en `https://` ; sinon la boucle locale du
  * développement — celle que le simulateur vise.
  */
-export function publicApiBaseUrl(env: Pick<Env, "API_PUBLIC_BASE_URL" | "APP_LINK_BASE_URL">) {
+export function publicApiBaseUrl(env: PublicBaseEnv): string {
   const configured = env.API_PUBLIC_BASE_URL.trim();
   if (configured) return configured.replace(/\/+$/, "");
+  const railway = env.RAILWAY_PUBLIC_DOMAIN.trim();
+  if (railway) return `https://${railway.replace(/^https?:\/\//, "").replace(/\/+$/, "")}`;
   if (/^https?:\/\//.test(env.APP_LINK_BASE_URL)) {
     return env.APP_LINK_BASE_URL.replace(/\/+$/, "");
   }
@@ -52,9 +61,7 @@ export function publicApiBaseUrl(env: Pick<Env, "API_PUBLIC_BASE_URL" | "APP_LIN
  */
 let configuredBaseUrl = "http://localhost:3000";
 
-export function configureAvatarUrls(
-  env: Pick<Env, "API_PUBLIC_BASE_URL" | "APP_LINK_BASE_URL">,
-): void {
+export function configureAvatarUrls(env: PublicBaseEnv): void {
   configuredBaseUrl = publicApiBaseUrl(env);
 }
 

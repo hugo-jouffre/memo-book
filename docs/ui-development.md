@@ -3501,7 +3501,7 @@ masculin) et le voyage fini reste « en cours ».
 | T169 | **La feuille « Genre » n'a pas de maquette** — trois options sur le motif des feuilles de choix du profil, et la ligne « Genre » sous « Adresse postale ». À dessiner dans Figma, ou à valider telle quelle | Profil |
 | T170 | **Le genre deviné est une liste de prénoms**, pas une science : environ six cents prénoms français, les mixtes (Camille, Dominique, Sacha…) restent sans réponse. Un prénom absent accorde au masculin par défaut (« Abonné ») — c'est la forme non marquée, pas une erreur, mais c'est à savoir | Profil |
 | T171 | **Le glissé vers la droite de l'accueil** ouvre le profil de n'importe où sur l'écran. Il n'entre pas en conflit avec le tiroir des cartes (vers la gauche) ni avec le retour de la pile (l'accueil est le premier écran) ; s'il gêne le défilement des bandes horizontales de l'accueil, il faudra le limiter au bord | Accueil |
-| T172 | **Deux migrations et l'API sont à déployer** — `genre_du_profil` et `photo_de_profil`, voir § 27.5 et § 27.8. Tant que l'API sert le code d'avant, l'accueil montre encore « en cours » un voyage fini, et le profil ne connaît ni le genre ni la photo | Back-end |
+| T172 | **Deux migrations et l'API sont à déployer** — `genre_du_profil` et `photo_de_profil`, voir § 27.5 et § 27.8. Tant que l'API sert le code d'avant, l'accueil montre encore « en cours » un voyage fini, et le profil ne connaît ni le genre ni la photo. Aucune variable à ajouter sur Railway : le domaine du service suffit aux adresses d'avatar et au lien de l'e-mail | Back-end |
 
 ### 27.7 Le lendemain — les assets déposés, et neuf détails
 
@@ -3531,7 +3531,7 @@ dans le même lot.
 | `POST /v1/profile/avatar` | multipart, champ `file` en `image/jpeg` ou `image/png`, 5 Mo ; renvoie le profil relu |
 | `GET /v1/avatars/:file` | **sans session**, `Cache-Control` long, 404 hors `avatars/<uuid>.(jpg\|png)` |
 | `avatarUrl` (profil, accueil, co-voyageurs, propriétaire) | `avatarUrlOf` : la photo envoyée d'abord, sinon celle du fournisseur |
-| `API_PUBLIC_BASE_URL` (env) | la racine des adresses d'avatar ; vide, `APP_LINK_BASE_URL` s'il est en `https://`, sinon `localhost:3000`. **À poser sur Railway si `APP_LINK_BASE_URL` n'y est pas l'adresse de l'API** |
+| `API_PUBLIC_BASE_URL` (env) | la racine des adresses d'avatar. Vide, c'est **`RAILWAY_PUBLIC_DOMAIN`** — que Railway pose tout seul sur le service — qui sert ; puis `APP_LINK_BASE_URL` s'il est en `https://`, sinon `localhost:3000`. **Rien à poser sur Railway.** Le lien de l'e-mail « mot de passe oublié » suit la même règle : `APP_LINK_BASE_URL` n'y avait jamais été posé, et l'e-mail partait en `memobook://` |
 | Suppression de compte | la photo part avec le compte (`services/deletion.ts`) |
 
 ### 27.9 À trancher (suite)
