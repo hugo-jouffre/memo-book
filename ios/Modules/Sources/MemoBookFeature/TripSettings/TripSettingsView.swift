@@ -103,6 +103,9 @@ public struct TripSettingsView: View {
         .background(MemoBookColor.background.ignoresSafeArea())
         // L'écran dessine son propre en-tête, comme la maquette : la flèche et
         // le titre partagent une ligne, à la marge de la colonne.
+        // Le nom du voyage se corrige sur place : la barre qui range le
+        // clavier, la même que sur le profil.
+        .brandKeyboardDismissBar()
         .brandHiddenNavigationBar()
         // Le crème de la marque ne se retourne pas en sombre — voir
         // `MemoBookColor`.

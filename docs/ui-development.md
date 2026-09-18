@@ -3682,6 +3682,15 @@ sont réparés en premier ; le reste est ce qu'il a demandé.
 | Ma cagnotte | retirer « Inviter des proches » ; « Aucune contribution… » dans un cadre en pointillés, distinct de la FAQ dessous | `WalletEmptyCard` sans bouton, sur `brandDashedCard()` — le même cadre que l'accueil sans voyage. `WalletIntent.inviteFriends` et `BookCopy.Wallet.invite` disparaissent |
 | Paramètres du voyage — Rythme du récit | la valeur choisie à la création n'était pas cochée dans la feuille | La création écrivait jusqu'au 17/09 le **libellé** de l'écran (« Tous les jours ») là où la feuille écrit la **clé** (`daily`) : dix voyages en base portaient un libellé, décodé `.unknown` et jamais coché. Trois verrous : `services/narrationPace.ts` ramène tout ce qui entre à la clé (les deux routes) ; la migration `20260918150000_rythme_du_recit_en_cles` a réécrit les dix rangées (appliquée sur `public` et `memobook_test`) ; `NarrationPace(storedValue:)` relit aussi les anciens libellés, au cas où l'app parle à l'API d'avant. Tests des deux côtés |
 
+Et quatre retours de Hugo sur ce lot, le même soir :
+
+| Écran | Demande | Ce qui a été fait |
+|---|---|---|
+| Conversation — bannière | descend beaucoup trop bas ; plus discrète, moins de texte, moins large ; moins souvent | **Trop bas** : l'en-tête s'étend sous la barre d'état, et sa *hauteur* comptée depuis le haut du fil posait la bannière soixante points trop bas — elle se cale maintenant sur le *bas* de l'en-tête en coordonnées globales. **Discrète** : une capsule centrée — icône PDF, « Ton Carnet prend forme », flèche —, verre teinté du bleu du voyageur ; l'étiquette « Aperçu en direct » et le compte de souvenirs disparaissent de l'écran (VoiceOver les garde). **Moins souvent** : elle ne revient qu'après 80 pt de remontée (20 avant), et pas plus d'une fois par demi-minute |
+| Conversation — arrivée avec un vocal de l'accueil | trop d'agitation à l'ouverture : le fil défile, la bannière descend | Avec un `RecordingHandoff`, la bannière **ne descend pas à l'ouverture** (`arrivesWithRecording`). Elle reste disponible au défilement, avec les mêmes seuils |
+| Paramètres du voyage — Nom de l'aventure | le clavier n'a pas l'icône qui le range | `brandKeyboardDismissBar()` sur l'écran, comme sur le profil |
+| Paramètres du voyage — Rythme du récit | montrer la sélection avant de fermer, comme « Genre » | même mécanique : la feuille coche sa valeur, attend `BrandOptionRow.lingerBeforeDismiss` (350 ms, partagé avec « Genre »), puis se referme |
+
 ### 27.11 Contrat back-end (suite)
 
 | Route / colonne | Ce qui change |

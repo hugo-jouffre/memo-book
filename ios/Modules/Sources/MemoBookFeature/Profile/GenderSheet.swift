@@ -30,9 +30,6 @@ struct GenderSheet: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    /// Le temps de voir la coche posée avant que la feuille descende.
-    private static let lingerBeforeDismiss: Duration = .milliseconds(350)
-
     var body: some View {
         BrandSheet(
             "Genre",
@@ -57,7 +54,7 @@ extension GenderSheet {
         withAnimation(.snappy(duration: 0.2)) { chosen = gender }
         onSelect(gender)
         Task {
-            try? await Task.sleep(for: Self.lingerBeforeDismiss)
+            try? await Task.sleep(for: BrandOptionRow.lingerBeforeDismiss)
             dismiss()
         }
     }
