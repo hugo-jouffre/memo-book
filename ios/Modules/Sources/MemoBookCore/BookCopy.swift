@@ -453,7 +453,6 @@ public enum BookCopy {
         public static let emptyTitle = "Aucune contribution pour le moment"
         public static let emptyMessage =
             "Partage ta cagnotte avec tes proches pour recevoir tes premières contributions !"
-        public static let invite = "Inviter des proches"
 
         /// « 60 € offerts par tes proches ».
         public static let giftedTile = "offerts par tes proches"

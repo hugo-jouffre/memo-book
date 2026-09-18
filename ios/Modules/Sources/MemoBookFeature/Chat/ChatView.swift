@@ -36,6 +36,12 @@ public struct ChatView: View {
     private let outbox: RecordingOutbox?
     private let archive: ConversationArchive?
 
+    /// On arrive avec un vocal enregistré depuis l'accueil. Le fil a déjà
+    /// beaucoup à faire — poser la bulle, suivre la transcription, défiler —
+    /// et la bannière d'aperçu n'y ajoute que du mouvement : elle ne descend
+    /// pas à l'ouverture dans ce cas (Hugo, 18/09/2026).
+    private let arrivesWithRecording: Bool
+
     @State private var model: ChatModel
 
     @Environment(\.dismiss) private var dismiss
@@ -86,10 +92,12 @@ public struct ChatView: View {
         self.outbox = outbox
         self.archive = archive
         self.onIntent = onIntent
+        self.arrivesWithRecording = handoff != nil
         let model = ChatModel(tripId: tripId, focusStepId: stepId, archive: archive)
         if let handoff { model.expect(handoff) }
         _model = State(initialValue: model)
         _pendingFocus = State(initialValue: stepId)
+        _showsPreviewBanner = State(initialValue: handoff == nil)
     }
 
     /// Pour les aperçus et les tests, qui fournissent leur propre source.
@@ -103,6 +111,7 @@ public struct ChatView: View {
         self.outbox = nil
         self.archive = nil
         self.onIntent = onIntent
+        self.arrivesWithRecording = false
         _model = State(initialValue: model)
         _pendingFocus = State(initialValue: stepId)
     }
@@ -123,15 +132,20 @@ public struct ChatView: View {
 
     /// La bannière d'aperçu en direct est **posée sur le fil**, pas dedans
     /// (Hugo, 17/09/2026). Elle apparaît à l'arrivée, s'en va vers le haut
-    /// après quatre secondes, et revient dès que le doigt remonte de 20 pt
-    /// dans la conversation — puis disparaît quand on remonte franchement
-    /// (200 pt : on lit ses messages, on ne veut pas l'aperçu) ou dès qu'on
-    /// redescend de 20 pt. Vivante : là quand on peut en avoir besoin, partie
-    /// dès qu'on ne l'a plus.
+    /// après quatre secondes, et revient quand le doigt remonte franchement
+    /// dans la conversation (80 pt) — puis disparaît quand on remonte plus
+    /// loin encore (200 pt : on lit ses messages, on ne veut pas l'aperçu) ou
+    /// dès qu'on redescend de 20 pt. Pas de délai entre deux retours : on
+    /// avait essayé une demi-minute de silence, et une bannière qui ne
+    /// répond pas au geste qui la rappelle se lit comme cassée (Hugo,
+    /// 18/09/2026).
     @State private var showsPreviewBanner = true
 
-    /// La hauteur de l'en-tête, mesurée : la bannière se pose juste dessous.
-    @State private var headerHeight: CGFloat = 0
+    /// Le bas de l'en-tête, en coordonnées globales : la bannière se pose
+    /// juste dessous. Le bas et non la hauteur — l'en-tête s'étend sous la
+    /// barre d'état, et sa hauteur comptée depuis le haut du fil la posait
+    /// soixante points trop bas.
+    @State private var headerBottom: CGFloat = 0
 
     /// Le haut du contenu dans l'espace du fil, à la dernière mesure. `nil`
     /// avant la première : la première mesure n'est pas un mouvement.
@@ -143,7 +157,7 @@ public struct ChatView: View {
     @State private var scrolledDown: CGFloat = 0
 
     /// Les seuils de la bannière — voir ``showsPreviewBanner``.
-    private static let bannerRevealDistance: CGFloat = 20
+    private static let bannerRevealDistance: CGFloat = 80
     private static let bannerReadingDistance: CGFloat = 200
     private static let bannerDismissDistance: CGFloat = 20
     private static let bannerLinger: Duration = .seconds(4)
@@ -263,14 +277,16 @@ public struct ChatView: View {
             // de la même façon. En Reduce Motion, un fondu.
             .overlay(alignment: .top) {
                 if showsPreviewBanner, let preview = thread.preview {
-                    ChatPreviewBanner(preview: preview) { onIntent(.openBookPreview(memoId: tripId)) }
-                        .padding(.horizontal, MemoBookSpacing.snug)
-                        .padding(.top, headerHeight + MemoBookSpacing.xs)
-                        .transition(
-                            reduceMotion
-                                ? .opacity
-                                : .move(edge: .top).combined(with: .opacity)
-                        )
+                    GeometryReader { proxy in
+                        ChatPreviewBanner(preview: preview) { onIntent(.openBookPreview(memoId: tripId)) }
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, max(0, headerBottom - proxy.frame(in: .global).minY) + MemoBookSpacing.xs)
+                    }
+                    .transition(
+                        reduceMotion
+                            ? .opacity
+                            : .move(edge: .top).combined(with: .opacity)
+                    )
                 }
             }
             .animation(
@@ -278,9 +294,10 @@ public struct ChatView: View {
                 value: showsPreviewBanner
             )
             // Quatre secondes à l'arrivée, puis elle s'en va toute seule. Le
-            // minuteur est structuré : quitter le fil l'annule.
+            // minuteur est structuré : quitter le fil l'annule. Pas d'arrivée
+            // du tout avec un vocal de l'accueil — voir ``arrivesWithRecording``.
             .task(id: thread.preview != nil) {
-                guard thread.preview != nil else { return }
+                guard thread.preview != nil, !arrivesWithRecording else { return }
                 showsPreviewBanner = true
                 try? await Task.sleep(for: Self.bannerLinger)
                 guard !Task.isCancelled else { return }
@@ -288,7 +305,9 @@ public struct ChatView: View {
             }
             .safeAreaInset(edge: .top, spacing: 0) {
                 header(thread)
-                    .onGeometryChange(for: CGFloat.self, of: \.size.height) { headerHeight = $0 }
+                    .onGeometryChange(for: CGFloat.self, of: { $0.frame(in: .global).maxY }) {
+                        headerBottom = $0
+                    }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) { footer(proxy) }
         }

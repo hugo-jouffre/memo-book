@@ -150,112 +150,57 @@ private struct ChatHeaderButton: View {
     }
 }
 
-/// La bannière « Aperçu en direct » : ce que la conversation a déjà produit.
+/// « Ton carnet prend forme » — la capsule posée sous l'en-tête, qui mène à
+/// l'aperçu du carnet.
 ///
-/// Elle est là pour une seule raison — raconter dans le vide est décourageant.
-/// Deux compteurs suffisent à montrer que le carnet monte pendant qu'on parle.
+/// **Une capsule, pas une carte** (Hugo, 18/09/2026). La version d'avant
+/// tenait trois lignes et toute la largeur du fil : elle se lisait comme un
+/// message de plus, et un message qui revient toutes les dix secondes agace.
+/// Celle-ci tient sur une ligne, au milieu, en verre teinté du bleu du
+/// voyageur : elle se pose sur le fil sans le couvrir. Le compte de souvenirs
+/// et de pages n'est plus écrit — il est dit à VoiceOver, et l'aperçu le
+/// montre.
 struct ChatPreviewBanner: View {
     let preview: ChatBookPreview
     let onOpen: () -> Void
 
-    @Environment(\.dynamicTypeSize) private var typeSize
-    @ScaledMetric(relativeTo: .body) private var iconSide: CGFloat = MemoBookSpacing.contentIcon
-
-    private var shape: RoundedRectangle {
-        .rect(cornerRadius: MemoBookSpacing.largeCornerRadius)
-    }
+    @ScaledMetric(relativeTo: .subheadline) private var iconSide: CGFloat = 18
 
     var body: some View {
         Button(action: onOpen) {
-            content
-                .padding(.horizontal, MemoBookSpacing.s)
-                .padding(.vertical, MemoBookSpacing.sectionGap)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(MemoBookColor.bubbleTraveller, in: shape)
-                .overlay { shape.strokeBorder(MemoBookColor.action, lineWidth: 1) }
-                .contentShape(shape)
+            HStack(spacing: MemoBookSpacing.xs) {
+                Image(brand: "IconPDF")
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .frame(width: iconSide, height: iconSide)
+                    .accessibilityHidden(true)
+
+                Text(ChatCopy.previewTitle)
+                    .font(MemoBookFont.label)
+                    .lineLimit(1)
+
+                Image(brand: "IconArrowRight")
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .frame(width: iconSide, height: iconSide)
+                    .accessibilityHidden(true)
+            }
+            .foregroundStyle(MemoBookColor.ink)
+            .padding(.horizontal, MemoBookSpacing.s)
+            .padding(.vertical, MemoBookSpacing.xs + 2)
+            .background(MemoBookColor.bubbleTraveller.opacity(0.75), in: .capsule)
+            .background(.ultraThinMaterial, in: .capsule)
+            .overlay { Capsule().strokeBorder(MemoBookColor.outline, lineWidth: 1) }
+            .contentShape(.capsule)
         }
         .buttonStyle(CardPressStyle())
         .disabled(!preview.isOpenable)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
         .accessibilityLabel(
             "\(ChatCopy.previewTitle). \(ChatCopy.previewSubtitle(memories: preview.memoryCount, pages: preview.pageCount))"
         )
         .accessibilityHint(ChatCopy.Voice.openPreview)
-    }
-
-    /// En taille accessible, la vignette et la flèche passent au-dessus du
-    /// texte : leur garder une colonne chacune ne laisserait au titre que deux
-    /// mots de large.
-    @ViewBuilder
-    private var content: some View {
-        if typeSize.isAccessibilitySize {
-            VStack(alignment: .leading, spacing: MemoBookSpacing.snug) {
-                HStack(spacing: MemoBookSpacing.snug) {
-                    mark
-                    Spacer(minLength: 0)
-                    arrow
-                }
-                text
-            }
-        } else {
-            HStack(spacing: MemoBookSpacing.snug) {
-                mark
-                text
-                Spacer(minLength: MemoBookSpacing.xs)
-                arrow
-            }
-        }
-    }
-
-    private var mark: some View {
-        Image(brand: "IconPDF")
-            .resizable()
-            .renderingMode(.template)
-            .scaledToFit()
-            .frame(width: iconSide, height: iconSide)
-            .foregroundStyle(MemoBookColor.ink)
-            .padding(MemoBookSpacing.xs + 2)
-            .background(MemoBookColor.surface.opacity(0.5), in: .rect(cornerRadius: MemoBookSpacing.snug))
-            .accessibilityHidden(true)
-    }
-
-    private var text: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            // La pastille de la maquette est en General Sans Semibold 10 ; l'app
-            // n'est pas descendue sous 12 et n'a pas de raison de commencer ici.
-            // Écart signalé dans la fiche écran.
-            Text(ChatCopy.previewOverline)
-                .font(MemoBookFont.overline)
-                .foregroundStyle(MemoBookColor.action)
-                .padding(.horizontal, MemoBookSpacing.xs / 2)
-                .padding(.vertical, 2)
-                .background(
-                    MemoBookColor.bubbleTraveller.opacity(0.2),
-                    in: .rect(cornerRadius: MemoBookSpacing.xs)
-                )
-
-            Text(ChatCopy.previewTitle)
-                .font(MemoBookFont.bodySemibold)
-                .foregroundStyle(MemoBookColor.ink)
-
-            Text(ChatCopy.previewSubtitle(memories: preview.memoryCount, pages: preview.pageCount))
-                .font(MemoBookFont.caption)
-                .foregroundStyle(MemoBookColor.ink)
-        }
-        .multilineTextAlignment(.leading)
-        .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private var arrow: some View {
-        Image(brand: "IconArrowRight")
-            .resizable()
-            .renderingMode(.template)
-            .scaledToFit()
-            .frame(width: iconSide, height: iconSide)
-            .foregroundStyle(MemoBookColor.ink)
-            .accessibilityHidden(true)
     }
 }
 

@@ -87,14 +87,16 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
 
 ---
 
-## Les quatre assortiments de typographies
+## Les trois assortiments de typographies
 
 **On ne choisit plus police par police** (Hugo, 16/09/2026). L'écran posait
 quatre lignes — titres, sous-titres, textes, fun facts — et laissait marier
 librement trois familles sur chacune : des dizaines de combinaisons, dont la
 plupart sont laides, sur un objet qu'on imprime et qui ne se rattrape pas.
 
-Quatre assortiments, donc, chacun cohérent de bout en bout. La feuille écrit en
+Trois assortiments, donc, chacun cohérent de bout en bout — il y en avait
+quatre, « Moderne » (titres Montserrat) est retiré le 18/09/2026 (Hugo) ; un
+carnet réglé dessus garde ses polices et se lit « Personnalisé ». La feuille écrit en
 face de chaque police **ce qu'elle habille** : c'est la seule information qui
 permet de choisir sans connaître la typographie.
 
@@ -102,19 +104,18 @@ permet de choisir sans connaître la typographie.
 |---|---|---|---|---|
 | **Carnet de voyage** (défaut) | Playfair | Hansley | Gloria Hallelujah | Playfair |
 | **Éditorial** | Playfair | Playfair | Alegreya | Alegreya |
-| **Moderne** | Montserrat | Montserrat | Alegreya | Montserrat |
 | **Manuscrit** | Hansley | Hansley | Gloria Hallelujah | Gloria Hallelujah |
 
 Le défaut est **exactement** le jeu que la base pose déjà : un carnet réglé
 avant que cette feuille existe s'y reconnaît sans qu'on touche à quoi que ce
-soit. Un carnet composé police par police qui n'entre dans aucune des quatre
+soit. Un carnet composé police par police qui n'entre dans aucune des trois
 cases s'affiche « Personnalisé » — on ne coche pas de force.
 
-⚠️ **Deux familles ne sont pas dans le gabarit.** `fonts.css` n'inline que
+⚠️ **Une famille n'est pas dans le gabarit.** `fonts.css` n'inline que
 Playfair Display et Gloria Hallelujah ; Hansley est versionné sans être inliné,
-Alegreya et Montserrat ne sont pas là du tout. Rien n'échoue — la page retombe
-sur une police système —, mais « Moderne » et « Éditorial » ne s'imprimeront
-vraiment qu'une fois ces faces ajoutées à `build-font-css.ts`.
+Alegreya n'est pas là du tout. Rien n'échoue — la page retombe sur une police
+système —, mais « Éditorial » ne s'imprimera vraiment qu'une fois cette face
+ajoutée à `build-font-css.ts`.
 
 ---
 

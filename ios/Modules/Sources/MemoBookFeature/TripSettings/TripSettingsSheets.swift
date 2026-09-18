@@ -81,6 +81,11 @@ struct TripDatesSheet: View {
 struct TripPaceSheet: View {
     let model: TripSettingsModel
 
+    /// Ce qu'on vient de toucher, le temps que la feuille parte — la coche se
+    /// pose sur **cette** valeur, pas sur celle du modèle, dont l'aller-retour
+    /// ne doit pas la faire clignoter. Même mécanique que « Genre ».
+    @State private var chosen: NarrationPace?
+
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -90,16 +95,27 @@ struct TripPaceSheet: View {
                     BrandOptionRow(
                         pace.displayName,
                         subtitle: pace.detail,
-                        isSelected: model.settings?.narrationPace == pace
+                        isSelected: (chosen ?? model.settings?.narrationPace) == pace
                     ) {
-                        model.setPace(pace)
-                        // Choisir, c'est finir : la feuille n'a rien d'autre à
-                        // proposer, et la garder ouverte obligerait à la
-                        // refermer pour voir la valeur posée sur la ligne.
-                        dismiss()
+                        select(pace)
                     }
                 }
             }
+        }
+    }
+
+    /// Coche, enregistre, puis referme — dans cet ordre. Choisir, c'est finir :
+    /// la feuille n'a rien d'autre à proposer, et la garder ouverte obligerait
+    /// à la refermer pour voir la valeur posée sur la ligne. Mais on voit la
+    /// coche avant (Hugo, 18/09/2026). Un second toucher pendant l'attente ne
+    /// fait rien : le premier est déjà parti.
+    private func select(_ pace: NarrationPace) {
+        guard chosen == nil else { return }
+        withAnimation(.snappy(duration: 0.2)) { chosen = pace }
+        model.setPace(pace)
+        Task {
+            try? await Task.sleep(for: BrandOptionRow.lingerBeforeDismiss)
+            dismiss()
         }
     }
 }

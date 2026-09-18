@@ -502,6 +502,9 @@ public struct ProfileView: View {
             ProfileExitAction(
                 // `Export data.svg`, dessiné pour cette ligne (Clara,
                 // 17/09/2026, T162) — `Export.svg` est le partage d'un fichier.
+                // Le halo orange que l'export portait autour du signe est
+                // retiré du fichier : la ligne se dessine comme les deux
+                // d'en dessous, le signe seul dans sa teinte (Hugo, 18/09/2026).
                 icon: Image(brand: "IconExportData"),
                 title: "Exporter mes données",
                 tint: MemoBookColor.warning,

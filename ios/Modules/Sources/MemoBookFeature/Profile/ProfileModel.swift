@@ -335,9 +335,18 @@ public final class ProfileModel {
 
         pendingSave = Task { [weak self] in
             do {
-                let saved = try await persist(edit)
+                var saved = try await persist(edit)
                 guard !Task.isCancelled else { return }
                 guard let self else { return }
+
+                // **Le genre envoyé fait foi.** L'API d'avant le 18/09/2026 ne
+                // connaît pas le champ : elle répond sans, ce que le décodage
+                // lit « ne préfère pas répondre » — et le choix qu'on venait de
+                // faire s'effaçait sous les yeux, une seconde après. Le serveur
+                // n'a rien à corriger sur un genre : il l'enregistre tel quel,
+                // donc ce qu'on a envoyé est ce qu'il a — ou ce qu'il aura, une
+                // fois déployé.
+                if let gender = edit.gender { saved.gender = gender }
 
                 #if DEBUG
                     profile = SandboxPersona.current?.applied(to: saved) ?? saved

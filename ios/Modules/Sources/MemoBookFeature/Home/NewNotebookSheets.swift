@@ -168,15 +168,17 @@ struct NewNotebookOptionCard: View {
         /// La porte s'ouvre. Le cas de toutes, sauf une.
         case available
 
-        /// La porte est dessinée mais ne s'ouvre pas encore : elle passe au
-        /// **beige** — pas au gris, qui dirait « cassé » —, s'éclaircit d'un
-        /// cran, et porte une pastille qui dit quand.
+        /// La porte est dessinée mais ne s'ouvre pas encore : elle **s'efface**
+        /// — contour et titre au gris des contrôles inactifs, contenu à demi
+        /// transparent — et porte une pastille qui dit quand.
         ///
-        /// Elle reste **lisible**, contrairement à un contrôle désactivé du
-        /// système : on la laisse justement pour qu'elle se lise, et une
-        /// pastille posée sur un texte qu'on ne déchiffre plus n'expliquerait
-        /// rien. Elle sort en revanche du parcours au doigt et de VoiceOver
-        /// comme bouton — c'est une annonce, pas une action.
+        /// Au gris et non au beige (Hugo, 18/09/2026) : le beige la faisait
+        /// ressembler à une carte d'un autre genre, alors qu'elle est la même
+        /// carte que les deux autres, en retrait. Elle reste **lisible** — on
+        /// la laisse justement pour qu'elle se lise, et une pastille posée sur
+        /// un texte qu'on ne déchiffre plus n'expliquerait rien. Elle sort en
+        /// revanche du parcours au doigt et de VoiceOver comme bouton — c'est
+        /// une annonce, pas une action.
         case comingSoon
     }
 
@@ -193,10 +195,10 @@ struct NewNotebookOptionCard: View {
         return false
     }
 
-    /// Le beige des portes fermées : contour et titre. Le vert dit « appuie »,
+    /// Le gris des portes fermées : contour et titre. Le vert dit « appuie »,
     /// et il n'y a rien à appuyer.
     private var accentColor: Color {
-        isComingSoon ? MemoBookColor.separator : MemoBookColor.action
+        isComingSoon ? MemoBookColor.disabledOutline : MemoBookColor.action
     }
 
     /// La plaque d'icône du design system : 44 × 40, rayon 12, bleu à 30 %.
@@ -221,22 +223,24 @@ struct NewNotebookOptionCard: View {
             content
                 .padding(MemoBookSpacing.xs + 4)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                // Un cran de transparence, et pas plus : assez pour que la
-                // carte recule derrière les deux autres, pas assez pour qu'on
-                // cesse de lire ce qu'elle promet.
-                .opacity(isComingSoon ? 0.75 : 1)
+                // À demi effacée : assez pour que la carte recule franchement
+                // derrière les deux autres, pas assez pour qu'on cesse de lire
+                // ce qu'elle promet. Le logo de Polarsteps s'efface avec le
+                // reste — pas de teinte, une marque repeinte n'est plus la
+                // marque — et le voile ne touche que le contenu : la pastille,
+                // posée par-dessus, reste franche.
+                .opacity(isComingSoon ? 0.45 : 1)
                 .contentShape(shape)
         }
         .buttonStyle(CardPressStyle())
-        // Le beige des portes fermées passe **sous** la carte, pas par-dessus :
-        // un voile posé au-dessus aurait aussi délavé la pastille, qui est
-        // justement ce qu'on vient lire.
-        .background(isComingSoon ? MemoBookColor.beige : MemoBookColor.surface, in: shape)
+        // Le même fond que les autres cartes : c'est le contenu qui s'efface,
+        // pas la carte qui change de couleur.
+        .background(MemoBookColor.surface, in: shape)
         .overlay { shape.strokeBorder(accentColor, lineWidth: 1) }
         .overlay(alignment: .topTrailing) { comingSoonBadge }
-        // On ne désactive pas le bouton : `disabled` grise le contenu au lieu
-        // de le mettre au beige, et emporte la pastille avec lui. On lui retire
-        // son geste — `allowsHitTesting` — et son rôle.
+        // On ne désactive pas le bouton : `disabled` emporterait la pastille
+        // dans le gris avec le reste. On lui retire son geste —
+        // `allowsHitTesting` — et son rôle.
         .allowsHitTesting(!isComingSoon)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isComingSoon ? [] : .isButton)
@@ -255,8 +259,8 @@ struct NewNotebookOptionCard: View {
         if isComingSoon {
             Text(Self.comingSoonLabel)
                 .font(MemoBookFont.overline)
-                // À l'encre pleine sur le crème, et non au beige : c'est la
-                // seule chose de la carte qui doit rester franchement lisible.
+                // À l'encre pleine sur le crème : c'est la seule chose de la
+                // carte qui doit rester franchement lisible.
                 .foregroundStyle(MemoBookColor.ink)
                 .padding(.horizontal, MemoBookSpacing.xs)
                 .padding(.vertical, MemoBookSpacing.xs / 2)
@@ -295,7 +299,7 @@ struct NewNotebookOptionCard: View {
             Text(title)
                 .font(MemoBookFont.bodySemibold)
                 // Le vert d'action, comme le contour : le titre **est**
-                // l'action — et le beige quand il n'y en a pas encore.
+                // l'action — et le gris quand il n'y en a pas encore.
                 .foregroundStyle(accentColor)
             Text(detail)
                 .font(MemoBookFont.caption)
@@ -353,7 +357,7 @@ struct NewNotebookOptionCard: View {
             .frame(width: arrowSide, height: arrowSide)
             .foregroundStyle(accentColor)
             // La flèche dit « ça mène quelque part » : elle s'efface quand
-            // ça ne mène encore nulle part, plutôt que de promettre en beige.
+            // ça ne mène encore nulle part, plutôt que de promettre en gris.
             .opacity(isComingSoon ? 0 : 1)
             .accessibilityHidden(true)
     }

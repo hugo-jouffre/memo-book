@@ -37,6 +37,12 @@ public struct BrandOptionGroup<Content: View>: View {
 
 /// Une option d'un ``BrandOptionGroup``.
 public struct BrandOptionRow: View {
+    /// Le temps de voir la coche posée avant qu'une feuille de choix se
+    /// referme d'elle-même. Une feuille qui part à l'instant du toucher ne dit
+    /// pas ce qu'elle a retenu ; un tiers de seconde le dit (Hugo,
+    /// 18/09/2026 — la feuille « Genre », puis « Rythme du récit »).
+    public static let lingerBeforeDismiss: Duration = .milliseconds(350)
+
     private let title: String
     private let subtitle: String?
     private let value: String?
