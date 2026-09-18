@@ -617,6 +617,58 @@ struct DeleteTripSheet: View {
     }
 }
 
+// MARK: - Supprimer la conversation
+
+/// La confirmation avant d'effacer la conversation d'un voyage — le même
+/// dessin que ``DeleteTripSheet`` : le bouton plein garde, le rouge efface, et
+/// le paragraphe dit ce qui part **et ce qui reste** avant qu'on appuie. Ce qui
+/// reste compte ici plus qu'ailleurs : le mot d'accueil de MEMO revient, et
+/// les souvenirs du carnet ne sont pas la conversation.
+struct ClearConversationSheet: View {
+    let isClearing: Bool
+    let errorMessage: String?
+    let onKeep: () -> Void
+    let onClear: () -> Void
+
+    var body: some View {
+        BrandSheet(BookCopy.Settings.ClearConversation.title) {
+            VStack(alignment: .leading, spacing: MemoBookSpacing.m) {
+                Text(BookCopy.Settings.ClearConversation.body)
+                    .font(MemoBookFont.body)
+                    .foregroundStyle(MemoBookColor.ink)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                if let errorMessage {
+                    ErrorBanner(message: errorMessage)
+                }
+
+                VStack(spacing: MemoBookSpacing.s) {
+                    BrandButton(BookCopy.Settings.ClearConversation.keep, fillsWidth: true, action: onKeep)
+                        .disabled(isClearing)
+
+                    BrandButton(
+                        BookCopy.Settings.ClearConversation.confirm,
+                        style: .destructive,
+                        isLoading: isClearing,
+                        fillsWidth: true,
+                        action: onClear
+                    )
+                }
+            }
+        }
+        .interactiveDismissDisabled(isClearing)
+    }
+}
+
+#Preview("Supprimer la conversation") {
+    Color.clear
+        .brandSheet(isPresented: .constant(true)) {
+            ClearConversationSheet(isClearing: false, errorMessage: nil, onKeep: {}, onClear: {})
+        }
+}
+
 #Preview("Supprimer le voyage") {
     Color.clear
         .brandSheet(isPresented: .constant(true)) {

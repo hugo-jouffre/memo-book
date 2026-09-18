@@ -34,6 +34,7 @@ public struct ChatView: View {
     /// état d'envoi ne lui appartient pas — voir ``ChatModel/markHandoff(_:)``.
     /// `nil` en aperçu et en test, où rien n'a été enregistré ailleurs.
     private let outbox: RecordingOutbox?
+    private let archive: ConversationArchive?
 
     @State private var model: ChatModel
 
@@ -70,17 +71,22 @@ public struct ChatView: View {
     ///   le fil dès qu'il est chargé — voir ``RecordingHandoff``.
     /// - Parameter outbox: la file qui l'envoie, pour que la bulle suive son
     ///   sort au lieu de l'inventer.
+    /// - Parameter archive: les conversations supprimées — voir
+    ///   ``ConversationArchive``. Le fil se vide quand ce voyage y entre, y
+    ///   compris depuis l'écran des réglages posé par-dessus celui-ci.
     public init(
         tripId: String,
         stepId: String? = nil,
         handoff: RecordingHandoff? = nil,
         outbox: RecordingOutbox? = nil,
+        archive: ConversationArchive? = nil,
         onIntent: @escaping (ChatIntent) -> Void = { _ in }
     ) {
         self.tripId = tripId
         self.outbox = outbox
+        self.archive = archive
         self.onIntent = onIntent
-        let model = ChatModel(tripId: tripId, focusStepId: stepId)
+        let model = ChatModel(tripId: tripId, focusStepId: stepId, archive: archive)
         if let handoff { model.expect(handoff) }
         _model = State(initialValue: model)
         _pendingFocus = State(initialValue: stepId)
@@ -95,6 +101,7 @@ public struct ChatView: View {
     ) {
         self.tripId = tripId
         self.outbox = nil
+        self.archive = nil
         self.onIntent = onIntent
         _model = State(initialValue: model)
         _pendingFocus = State(initialValue: stepId)
@@ -125,7 +132,10 @@ public struct ChatView: View {
         // Le crème de la marque ne se retourne pas en sombre — voir
         // `MemoBookColor`.
         .environment(\.colorScheme, .light)
-        .task { await model.load() }
+        // Rechargé quand une conversation est supprimée depuis les réglages :
+        // cet écran reste sous le leur dans la pile, et c'est lui qu'on
+        // retrouve en revenant — il doit alors être vide.
+        .task(id: archive?.version ?? 0) { await model.load() }
         // L'envoi du vocal venu de l'accueil se joue **ailleurs** — dans la
         // file, qui vit au-dessus des écrans et continue pendant qu'on navigue.
         // La bulle ne fait que suivre ce qu'elle en dit, et `initial: true`
