@@ -4,6 +4,7 @@ import type { AppContext } from "../context.js";
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
 import { createMemoFor, visibleToAccount } from "../services/memoOwnership.js";
+import { normalizeNarrationPace } from "../services/narrationPace.js";
 import { effectiveStage, stageFromDates } from "../services/tripStage.js";
 import {
   serializeGalleryCategory,
@@ -71,8 +72,9 @@ const tripDraft = z.object({
   title: z.string().trim().min(1, "le titre est requis").max(200),
   startDate: z.coerce.date().nullish(),
   endDate: z.coerce.date().nullish(),
-  // Le rythme des relances, dans les mots de l'écran — « Tous les jours ».
-  // Même raison que `theme` : c’est une consigne lue par un agent.
+  // Le rythme des relances. L'app envoie la clé (`daily`, `weekly`…) ; un
+  // ancien client qui enverrait encore le libellé de son écran est ramené à la
+  // clé à l'entrée — voir `services/narrationPace.ts`.
   narrationPace: z.string().trim().min(1).max(100).nullish(),
   photoTextRatio: z.number().int().min(0).max(100).optional(),
 });
@@ -186,7 +188,7 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
       theme: draft.theme ?? null,
       startDate: draft.startDate ?? null,
       endDate: draft.endDate ?? null,
-      narrationPace: draft.narrationPace ?? null,
+      narrationPace: normalizeNarrationPace(draft.narrationPace),
       ...(draft.photoTextRatio === undefined ? {} : { photoTextRatio: draft.photoTextRatio }),
       stage: stageFromDates(draft.startDate ?? null, draft.endDate ?? null),
     });
@@ -228,7 +230,7 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
         theme: draft.theme ?? null,
         startDate: draft.startDate ?? null,
         endDate: draft.endDate ?? null,
-        narrationPace: draft.narrationPace ?? null,
+        narrationPace: normalizeNarrationPace(draft.narrationPace),
         ...(draft.photoTextRatio === undefined ? {} : { photoTextRatio: draft.photoTextRatio }),
         stage: stageFromDates(draft.startDate ?? null, draft.endDate ?? null),
       },

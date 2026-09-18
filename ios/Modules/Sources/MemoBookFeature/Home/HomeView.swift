@@ -33,6 +33,13 @@ public struct HomeView: View {
 
     /// Le contenu est arrivé. Ce n'est pas encore le signal de la cascade : il
     /// faut aussi que le tracé du M se soit effacé.
+    ///
+    /// **Arrivé, pas rechargé.** Il se lève dès que l'écran a quelque chose à
+    /// montrer — ce que le cache avait, en quelques millisecondes — et non au
+    /// retour du serveur : attendre l'aller-retour faisait durer le lancement
+    /// exactement du temps que le cache était censé faire gagner (Hugo,
+    /// 18/09/2026). Le serveur, lui, arrive quand il arrive, et le flash de
+    /// rafraîchissement dit si quelque chose a changé.
     @State private var isLoaded = false
 
     @Environment(\.subscriptionSession) private var subscriptionSession
@@ -201,6 +208,9 @@ public struct HomeView: View {
         .task {
             await model.load()
             isLoaded = true
+        }
+        .onChange(of: model.feed != nil || model.errorMessage != nil, initial: true) { _, hasContent in
+            if hasContent { isLoaded = true }
         }
         // **L'accueil s'ouvre sur ce qu'on avait, et le dit quand ça change.**
         // C'est l'écran qui gagne le plus au cache — c'est le premier — et
@@ -726,19 +736,12 @@ public struct HomeView: View {
     }
 }
 
-/// Les mesures que l'accueil partage avec son écran de lancement : c'est parce
-/// que le squelette et l'écran réel tombent au même endroit que le passage de
-/// l'un à l'autre ne saute pas.
+/// Les mesures de l'accueil.
 enum HomeMetrics {
     /// L'avatar est **le** diamètre du design system : le chat pose le même
     /// devant son titre, et c'est à sa deuxième occurrence qu'il est monté dans
     /// `MemoBookSpacing`.
     static let avatarSide = MemoBookSpacing.avatarSide
-
-    /// Largeur de la barre qui tient la place de la salutation.
-    static let greetingPlaceholderWidth: CGFloat = 196
-    static let greetingPlaceholderHeight: CGFloat = 26
-    static let topPadding: CGFloat = MemoBookSpacing.xs
 }
 
 // MARK: - Apparition

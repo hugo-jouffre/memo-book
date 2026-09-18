@@ -5,6 +5,7 @@ import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
 import { readMemoryAllowance, setMemoryPlan } from "../services/memoryAllowance.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
+import { normalizeNarrationPace } from "../services/narrationPace.js";
 import { endSubscriptionsWithoutRunningTrip } from "../services/subscriptions.js";
 import { stageFromDates } from "../services/tripStage.js";
 import { serializeTripSettings } from "./appSerializers.js";
@@ -188,7 +189,9 @@ export function registerTripSettingsRoutes(app: FastifyInstance, context: AppCon
         ...(body.startDate !== undefined ? { startDate: body.startDate } : {}),
         ...(body.endDate !== undefined ? { endDate: body.endDate } : {}),
         ...(datesChanged ? { stage: stageFromDates(nextStart, nextEnd) } : {}),
-        ...(body.narrationPace !== undefined ? { narrationPace: body.narrationPace } : {}),
+        ...(body.narrationPace !== undefined
+          ? { narrationPace: normalizeNarrationPace(body.narrationPace) }
+          : {}),
         ...(body.notificationsEnabled !== undefined
           ? { notificationsEnabled: body.notificationsEnabled }
           : {}),

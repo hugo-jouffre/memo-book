@@ -731,8 +731,11 @@ la maquette mais généralement exigée à la création de compte.
   le fichier *Product*, il remplace le *Splash Screen* de §8.1.
 - **Vues** : `MemoBookFeature/Onboarding/LaunchView.swift`,
   `MemoBookDesign/BrandMark.swift`.
-- **Rôle** : couvrir le démarrage. Le M s'écrit d'un trait par-dessus le squelette de
-  l'accueil, puis s'efface en fondu pendant que le contenu se pose.
+- **Rôle** : couvrir le démarrage. Le M s'écrit d'un trait sur le crème, puis s'efface
+  en fondu pendant que le contenu de l'accueil monte du bas. **Plus de squelette**
+  sous le tracé depuis le 18/09/2026 (Hugo) : le signe, puis la cascade, rien d'autre.
+  Et le tracé commence **dès qu'un jeton est au trousseau** — la vérification de la
+  session se joue dessous, pas avant.
 
 **Structure**
 
@@ -762,7 +765,7 @@ son animation, il ne peut donc pas rester bloqué.
 **Contrat back-end** : aucun.
 
 **Accessibilité** : `accessibilityLabel` « MemoBook, chargement en cours » sur le bloc,
-squelette et signe masqués. **Reduce Motion** : pas de tracé, le signe est posé entier
+signe masqué. **Reduce Motion** : pas de tracé, le signe est posé entier
 pendant 0,4 s.
 
 **À trancher** — l'`UILaunchScreen` d'iOS affiche encore le logotype vert (`LaunchLogo`)
@@ -2911,7 +2914,7 @@ booléens d'alerte sur `memos`, et `memo_members.role`.
 |---|---|
 | T115 | **La photo de l'écran d'entrée est floue** : le fichier fait 587 × 360 px, soit moins d'un pixel d'image par point d'écran. Il faut un export plus grand de la même photo (au moins 1170 × 720, le double sur un grand iPhone). Reformulé le 17/09/2026 — c'est un export à refaire dans Figma, rien à trancher |
 | T116 | **L'arrêt automatique de l'abonnement ne parle pas à Apple.** Le jour où StoreKit sera branché, c'est le webhook App Store qui devra fermer la ligne `subscriptions`, et cette tâche deviendra le filet plutôt que la règle |
-| T118 | **Alegreya et Montserrat s'écrivent encore en General Sans** dans la feuille des assortiments : Playfair, Hansley et Gloria Hallelujah ont leur nom dessiné en vectoriel depuis le 18/09/2026 (`assets/logos/<Nom>.svg` → `Wordmark<Nom>`), les deux autres attendent le leur | Typographies du carnet |
+| T118 | **Alegreya s'écrit encore en General Sans** dans la feuille des assortiments : Playfair, Hansley et Gloria Hallelujah ont leur nom dessiné en vectoriel depuis le 18/09/2026 (`assets/logos/<Nom>.svg` → `Wordmark<Nom>`), elle attend le sien. Montserrat n'y est plus (« Moderne » retiré) | Typographies du carnet |
 | T121 | **L'icône « Renvoyer » emprunte `IconTeleverser`**, faute d'un envoi dans le jeu de marque. Le logo WhatsApp, lui, est arrivé le 17/09/2026 (`assets/logos/whatsapp.svg`, en vert foncé) |
 | T124 | **Les autocollants Apple et Google sont des images, pas des dessins vectoriels.** Ce sont les deux logos cerclés de bleu des boutons de l'écran d'entrée (`assets/logos/Apple Icon.svg`, `Google Icon.svg`) : Figma les a exportés en bitmap collé dans un SVG. Nets à 24 pt, ils pixelliseraient plus grand. Reformulé le 17/09/2026 — un export **vectoriel** de ces deux autocollants règle la question |
 
@@ -3141,7 +3144,7 @@ Trois coquilles restent recopiées telles quelles, parce qu'elles ne touchent pa
 | `BrandRefreshFlash` (`Design`) | le balayage et la pastille « Mis à jour ». Rien ne bouge en Reduce Motion, sauf la pastille, en fondu |
 | `BrandNotice(tone:)` (`Design`) | un second ton, `.information` : filet, pictogramme et aplat dilué en `MemoBookColor.information`. Pour ce qu'on **explique** à quelqu'un qui vient de taper quelque part |
 | `BrandSegmentedPicker(isAvailable:onUnavailable:)` | un segment fermé **pâlit et reste tapable**. Un `disabled` avale le geste et n'explique rien |
-| `BookFontCombo`, `BookFontOption.catalogue` (`Core`) | les quatre assortiments, les cinq familles, et la résolution « Playfair » ↔ « Playfair Display » |
+| `BookFontCombo`, `BookFontOption.catalogue` (`Core`) | les assortiments (quatre alors, trois depuis le 18/09), les cinq familles, et la résolution « Playfair » ↔ « Playfair Display » |
 | `MemoryAllowance`, `MemoryPlan`, `MemoryCopy` (`Core`) | les limites de souvenirs et tout ce qu'elles font écrire. **Le mot « token » n'y figure pas** |
 | `Subscription.paidThrough` + `grantsAccess/graceEnd` (`Core`) | le sursis de la semaine payée, testé dans `SubscriptionGraceTests` |
 | `FaqQuery`, `FaqCategory.filtered(by:)` (`Core`) | la recherche du support, sans casse ni accents, tous les mots devant répondre |
@@ -3166,7 +3169,7 @@ Trois coquilles restent recopiées telles quelles, parce qu'elles ne touchent pa
 | T139 | **L'abonnement et l'extension ne s'encaissent toujours pas.** Un prix Stripe `memobook_subscription_weekly` (1,99 €/semaine) existe dans le sandbox et donne au back-end une référence, mais Apple impose l'achat intégré pour un service numérique : c'est **StoreKit** qui portera les deux transactions, et `POST /v1/trips/:id/memory-plan` deviendra alors ce que son reçu appelle. Le prix `memobook_memory_upgrade_monthly` (3,99 €/mois) **reste à créer** — la commande a été refusée par le garde-fou de la session |
 | T140 | **Le barème des souvenirs est un ordre de grandeur, pas une mesure.** 1 pour un message, 10 pour une minute de vocal : à réétalonner sur les factures OpenAI et Anthropic d'un mois plein. Les deux constantes sont dans `services/memoryAllowance.ts`, et les deux coûts voyagent jusqu'à l'app — l'écran n'en écrit aucun |
 | T141 | **Le plafond du palier étendu est écrit dans l'app** (`MemoryAllowanceSheet.extendedAllowance = 8 000`), faute de route de catalogue : la réponse ne porte que le palier *courant*. À remplacer le jour où `GET /v1/catalog` existe |
-| T142 | **Quatre assortiments, deux familles absentes du gabarit.** `fonts.css` n'inline que Playfair Display et Gloria Hallelujah ; Hansley est versionné sans être inliné, Alegreya et Montserrat ne sont pas là. Rien n'échoue — la page retombe sur une police système —, et c'était déjà vrai des quatre lignes que les combos remplacent. À inliner avant de promettre « Moderne » et « Éditorial » |
+| T142 | **Trois assortiments, une famille absente du gabarit.** `fonts.css` n'inline que Playfair Display et Gloria Hallelujah ; Hansley est versionné sans être inliné, Alegreya n'est pas là (Montserrat n'est plus promise : « Moderne » est retiré le 18/09/2026). Rien n'échoue — la page retombe sur une police système —, et c'était déjà vrai des quatre lignes que les combos remplacent. À inliner avant de promettre « Éditorial » |
 | T143 | **Six blocs sans maquette** : la ligne et la feuille des limites de souvenirs, la feuille des assortiments, le champ de recherche du support, les messages d'information des couvertures, la carte « Bientôt disponible », le lien « Commander sans attendre ». Écrits sur les motifs existants, au tutoiement, à dessiner dans Figma |
 | T144 | **Quel style de couverture porte quoi, c'est l'app qui le décide.** `CoverTreatment.carriesPhoto` et `carriesText(on:)` sont des règles écrites ici : la photo pleine page au dos n'a pas de texte, l'aplat et le kraft n'ont pas de photo. À valider avec Clara, et à faire redescendre du serveur le jour où le catalogue des styles y vivra |
 | T145 | **L'e-mail de réinitialisation arrive en spam.** Le lien est réparé (PR #32) ; la délivrabilité ne l'est pas. Elle demande SPF, DKIM et DMARC sur le domaine d'envoi côté Resend, plus un expéditeur au domaine de la marque — c'est une configuration DNS, pas du code. À faire avant la beta élargie |
@@ -3620,7 +3623,7 @@ masculin) et le voyage fini reste « en cours ».
 | T169 | **La feuille « Genre » n'a pas de maquette** — trois options sur le motif des feuilles de choix du profil, et la ligne « Genre » sous « Adresse postale ». À dessiner dans Figma, ou à valider telle quelle | Profil |
 | T170 | **Le genre deviné est une liste de prénoms**, pas une science : environ six cents prénoms français, les mixtes (Camille, Dominique, Sacha…) restent sans réponse. Un prénom absent accorde au masculin par défaut (« Abonné ») — c'est la forme non marquée, pas une erreur, mais c'est à savoir | Profil |
 | T171 | **Le glissé vers la droite de l'accueil** ouvre le profil de n'importe où sur l'écran. Il n'entre pas en conflit avec le tiroir des cartes (vers la gauche) ni avec le retour de la pile (l'accueil est le premier écran) ; s'il gêne le défilement des bandes horizontales de l'accueil, il faudra le limiter au bord | Accueil |
-| T172 | **Deux migrations et l'API sont à déployer** — `genre_du_profil` et `photo_de_profil`, voir § 27.5 et § 27.8. Tant que l'API sert le code d'avant, l'accueil montre encore « en cours » un voyage fini, et le profil ne connaît ni le genre ni la photo. Aucune variable à ajouter sur Railway : le domaine du service suffit aux adresses d'avatar et au lien de l'e-mail | Back-end |
+| T172 | **Trois migrations et l'API sont à déployer** — `genre_du_profil`, `photo_de_profil` et `rythme_du_recit_en_cles`, voir § 27.5, § 27.8 et § 27.11. Tant que l'API sert le code d'avant, l'accueil montre encore « en cours » un voyage fini, et le profil ne connaît ni le genre ni la photo. Aucune variable à ajouter sur Railway : le domaine du service suffit aux adresses d'avatar et au lien de l'e-mail | Back-end |
 
 ### 27.7 Le lendemain — les assets déposés, et neuf détails
 
@@ -3660,4 +3663,29 @@ dans le même lot.
 | T173 | **La nouvelle image de la carte de découverte est trop petite** : 111 × 85 px pour un cadre de 124 pt — l'ancienne faisait 330 × 252. Elle s'affiche floue sur tous les écrans. Il faut le même export en **au moins 372 × 285 px** (3×), déposé au même chemin ; le script ne change pas | Accueil |
 | T174 | **`Beige Darker` lui-même doit-il s'éclaircir ?** Les boîtes d'information ont leur propre beige doux depuis le 18/09 ; les séparateurs, le scotch des cartes et le filet des boutons Apple/Google gardent `#CFBBAA`. Si c'est le token qui doit changer, c'est une ligne dans `Tokens.swift` — et la variable Figma avec | Partout |
 | T175 | **La bannière du chat ne sait pas qu'un message vient d'arriver** : un nouveau message en bas fait bouger le haut du contenu comme un défilement vers le bas, et la referme. C'est acceptable — on lit ce qui arrive —, mais c'est un effet de bord, pas un choix | Conversation |
+
+### 27.10 Le 18/09 au soir — huit détails, et une accolade
+
+Hugo a fusionné les deux dernières PR et résolu les conflits à la main ; deux
+fichiers en sont sortis blessés — `MemoBookAPIClient.swift` sans l'accolade qui
+ferme `travelStatistics()` (d'où « Expected '}' in actor » et ses quatre-vingts
+échos), `routes/profile.ts` sans l'`import {` de `services/avatars.js`. Les deux
+sont réparés en premier ; le reste est ce qu'il a demandé.
+
+| Écran | Demande | Ce qui a été fait |
+|---|---|---|
+| Nouveau carnet | « Importe depuis Polarsteps » plus effacée et grisée, pas beige | `NewNotebookOptionCard.comingSoon` : même fond crème que les deux autres, contour et titre au gris des contrôles inactifs (`disabledOutline`), contenu à 45 % — le logo s'efface avec, sans être teinté —, pastille intacte par-dessus |
+| Typographies du carnet | retirer « Moderne », garder trois assortiments | `BookFontCombo.all = [travelJournal, editorial, handwritten]`. Un carnet réglé sur Montserrat garde ses quatre polices en base et se lit « Personnalisé » |
+| Profil — Genre | la feuille se referme avant qu'on voie le choix ; et « Homme » / « Femme » revient à « Je ne préfère pas répondre » au bout de quelques secondes | Deux choses. **La feuille** coche sa propre valeur (`@State chosen`), attend 350 ms, puis se referme. **Le retour en arrière** venait de l'API : celle qui tourne sur Railway est celle d'avant le genre, elle répond au `PATCH` sans le champ, l'app le décode « ne préfère pas répondre » et remplace le profil par cette réponse. `ProfileModel.save` garde désormais le genre envoyé — le serveur n'a rien à corriger dessus. Disparaît de toute façon au déploiement (T172) |
+| Lancement | plus lent depuis le cache ; retirer le squelette, garder le M puis le contenu qui monte | Trois causes, trois coupes. **Le M ne s'écrivait qu'après** `GET /v1/auth/me` : `RootView.restore` lance le tracé dès qu'un jeton est au trousseau, et vérifie dessous (`drawingFinished` retient le voile si le compte n'est pas encore là ; un 401 ou une panne lève le voile sur l'écran d'entrée). **L'accueil attendait le serveur** : `HomeView.isLoaded` se lève dès que `feed` ou `errorMessage` existe — le cache, en millisecondes —, le serveur suit et le flash dit s'il a changé quelque chose. **Le squelette** (`HomeSkeleton`, `HomeMetrics.greetingPlaceholder*`) est retiré. Vu en simulateur : M à ~1,6 s après le lancement du processus, accueil posé à ~2,7 s, dont ~1,1 s de `UILaunchScreen` |
+| Paramètres du voyage — Nom de l'aventure | se corrige sur place, clavier direct, comme le téléphone du profil | `BrandRow(text:)` sur la ligne, `TripSettingsModel.setName` (vide refusé, espaces coupés), coche verte quatre secondes via `justSaved == .name`. L'intention `renameTrip`, que `RootView` ignorait, disparaît. `BrandRow` relit le modèle en sortant du champ, pour qu'un nom refusé reprenne sa valeur |
+| Ma cagnotte | retirer « Inviter des proches » ; « Aucune contribution… » dans un cadre en pointillés, distinct de la FAQ dessous | `WalletEmptyCard` sans bouton, sur `brandDashedCard()` — le même cadre que l'accueil sans voyage. `WalletIntent.inviteFriends` et `BookCopy.Wallet.invite` disparaissent |
+| Paramètres du voyage — Rythme du récit | la valeur choisie à la création n'était pas cochée dans la feuille | La création écrivait jusqu'au 17/09 le **libellé** de l'écran (« Tous les jours ») là où la feuille écrit la **clé** (`daily`) : dix voyages en base portaient un libellé, décodé `.unknown` et jamais coché. Trois verrous : `services/narrationPace.ts` ramène tout ce qui entre à la clé (les deux routes) ; la migration `20260918150000_rythme_du_recit_en_cles` a réécrit les dix rangées (appliquée sur `public` et `memobook_test`) ; `NarrationPace(storedValue:)` relit aussi les anciens libellés, au cas où l'app parle à l'API d'avant. Tests des deux côtés |
+
+### 27.11 Contrat back-end (suite)
+
+| Route / colonne | Ce qui change |
+|---|---|
+| `memos.narrationPace` (migration `20260918150000_rythme_du_recit_en_cles`) | les libellés d'écran deviennent des clés : `daily`, `every_two_days`, `every_three_days`, `weekly`, `custom`, `by_place` |
+| `POST /v1/trips`, `PATCH /v1/trips/:id`, `PATCH /v1/trips/:id/settings` | `narrationPace` est normalisé à l'entrée — un libellé connu devient sa clé, un mot inconnu est gardé tel quel |
 

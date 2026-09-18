@@ -208,7 +208,7 @@ public struct BookFontOption: Sendable, Hashable, Identifiable {
 /// Les quatre typographies du carnet, dans l'ordre de l'écran.
 ///
 /// **On n'en choisit plus une par une** (Hugo, 16/09/2026) : l'écran ne propose
-/// que des ``BookFontCombo``, quatre assortiments dont on sait qu'ils tiennent
+/// que des ``BookFontCombo``, trois assortiments dont on sait qu'ils tiennent
 /// ensemble. Ce type reste, parce qu'il porte ce qu'un combo ne dit pas —
 /// quelle colonne chaque rôle écrit, quelle édition il envoie, et sous quel nom
 /// il se lit. C'est lui qui traduit un combo en quatre valeurs.
@@ -268,7 +268,7 @@ public enum BookFontRole: String, Sendable, Hashable, CaseIterable, Identifiable
     }
 }
 
-// MARK: - Les quatre assortiments
+// MARK: - Les trois assortiments
 
 /// Un assortiment de quatre typographies qui vont ensemble.
 ///
@@ -337,7 +337,7 @@ public struct BookFontCombo: Sendable, Hashable, Identifiable {
         }
     }
 
-    // MARK: Les quatre
+    // MARK: Les trois
 
     /// Le défaut, et celui que portent déjà les carnets existants : Playfair,
     /// Hansley, Gloria Hallelujah, Playfair. C'est **exactement** le jeu que la
@@ -359,25 +359,12 @@ public struct BookFontCombo: Sendable, Hashable, Identifiable {
     public static let editorial = BookFontCombo(
         id: "editorial",
         name: "Éditorial",
-        detail: "Tout en serif, comme un roman. Le plus sobre des quatre.",
+        detail: "Tout en serif, comme un roman. Le plus sobre des trois.",
         fonts: [
             .titles: "Playfair Display",
             .subtitles: "Playfair Display",
             .texts: "Alegreya",
             .funFacts: "Alegreya",
-        ]
-    )
-
-    /// Titres géométriques, récit en serif : le contraste le plus net.
-    public static let modern = BookFontCombo(
-        id: "modern",
-        name: "Moderne",
-        detail: "Des titres nets et géométriques, un récit qui reste doux à lire.",
-        fonts: [
-            .titles: "Montserrat",
-            .subtitles: "Montserrat",
-            .texts: "Alegreya",
-            .funFacts: "Montserrat",
         ]
     )
 
@@ -394,14 +381,19 @@ public struct BookFontCombo: Sendable, Hashable, Identifiable {
         ]
     )
 
-    /// Les quatre, dans l'ordre de la feuille — le défaut en tête.
-    public static let all: [BookFontCombo] = [travelJournal, editorial, modern, handwritten]
+    /// Les trois, dans l'ordre de la feuille — le défaut en tête.
+    ///
+    /// Il y en avait quatre : « Moderne » (titres Montserrat, récit Alegreya)
+    /// est retiré le 18/09/2026 (Hugo). Un carnet réglé dessus reste tel quel —
+    /// ses quatre polices sont en base, le gabarit les résout — et la feuille
+    /// l'écrit « Personnalisé », comme tout carnet composé hors de ces trois.
+    public static let all: [BookFontCombo] = [travelJournal, editorial, handwritten]
 
     /// L'assortiment d'un carnet, ou `nil` s'il n'en porte aucun.
     ///
     /// `nil` est un état réel et non un défaut manquant : un carnet composé
     /// police par police avant cette feuille, ou par un autre client, peut
-    /// n'entrer dans aucune des quatre cases. L'écran l'écrit alors
+    /// n'entrer dans aucune des trois cases. L'écran l'écrit alors
     /// « Personnalisé » plutôt que de cocher de force.
     public static func matching(_ customisation: BookCustomisation) -> BookFontCombo? {
         all.first { $0.matches(customisation) }

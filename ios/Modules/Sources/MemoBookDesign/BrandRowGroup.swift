@@ -424,7 +424,12 @@ public struct BrandRow: View, Identifiable {
         // **L'enregistrement.** Sortir du champ suffit : refermer le clavier,
         // faire défiler la page, toucher un autre champ. Rien à valider.
         .onChange(of: isEditing) { _, editing in
-            if !editing { field.text.wrappedValue = draft }
+            guard !editing else { return }
+            field.text.wrappedValue = draft
+            // Le modèle a pu refuser ce qu'on a tapé (un nom vide) ou le
+            // normaliser (des espaces autour) : la ligne reprend ce qu'il a
+            // gardé, plutôt que d'afficher une valeur que personne n'a.
+            draft = field.text.wrappedValue
         }
         // Quitter l'écran clavier ouvert compte aussi comme une sortie.
         .onDisappear {

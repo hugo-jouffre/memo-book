@@ -30,7 +30,17 @@ public struct RootView: View {
     /// l'attente de l'accueil : il ne s'écrit que lorsqu'on va vers l'accueil,
     /// et pendant que celui-ci se charge. Quelqu'un qui n'a pas encore de compte
     /// arrive donc directement sur l'écran d'entrée, sans animation devant.
+    ///
+    /// Il s'écrit **dès qu'un jeton est au trousseau**, pas une fois le compte
+    /// relu : l'aller-retour qui vérifie la session se joue sous le tracé, pas
+    /// avant lui. Le lancement durait le temps du réseau **plus** celui du
+    /// tracé ; les deux se recouvrent (Hugo, 18/09/2026).
     @State private var isLaunching = false
+
+    /// Le M a fini de s'écrire, mais l'accueil n'est pas encore là pour le
+    /// recevoir — la session se vérifie toujours. Le voile se lèvera à
+    /// l'arrivée du compte, pas sur le crème vide.
+    @State private var drawingFinished = false
 
     /// La pile de l'écran d'entrée : vide sur l'accueil, un cran quand on ouvre
     /// le formulaire par e-mail.
@@ -86,7 +96,7 @@ public struct RootView: View {
             content
 
             if isLaunching {
-                LaunchView { endLaunch() }
+                LaunchView { drawingDidFinish() }
                     // Le signe grandit d'un cheveu en s'effaçant : il s'éloigne
                     // au lieu de s'éteindre.
                     .transition(.opacity.combined(with: .scale(scale: 1.06)))
@@ -234,11 +244,18 @@ public struct RootView: View {
             return
         }
 
+        // Il y a un jeton : on va vers l'accueil, sauf surprise. Le M commence
+        // à s'écrire **maintenant**, et la vérification se fait dessous.
+        isLaunching = true
+
         do {
             let account = try await dependencies.api.currentAccount()
             enterApp(as: account)
         } catch {
+            // La session ne valait plus rien, ou le réseau n'a pas répondu : le
+            // voile se lève sur l'écran d'entrée, que le tracé soit fini ou non.
             stage = .signedOut
+            endLaunch()
         }
     }
 
@@ -263,10 +280,23 @@ public struct RootView: View {
                 path = [.order(memoId: "trip-rome")]
             }
         #endif
+        // Depuis le formulaire, le tracé commence ici ; depuis le trousseau, il
+        // est déjà en cours — et s'il est déjà fini, le voile se lève tout de
+        // suite sur l'accueil qui vient d'arriver.
         isLaunching = true
+        if drawingFinished { endLaunch() }
+    }
+
+    /// Le tracé est fini. Le voile se lève si l'accueil est là pour le
+    /// recevoir ; sinon il attend le compte — voir ``drawingFinished``.
+    private func drawingDidFinish() {
+        drawingFinished = true
+        if case .restoring = stage { return }
+        endLaunch()
     }
 
     private func endLaunch() {
+        drawingFinished = false
         // Court : le voile se lève pendant que l'accueil se pose, au lieu de
         // le cacher jusqu'à ce que tout soit déjà en place.
         withAnimation(.smooth(duration: 0.45)) { isLaunching = false }
@@ -471,7 +501,7 @@ public struct RootView: View {
             // rouvrirait un écran sur un 404. On revient à l'accueil, qui se
             // relit en réapparaissant.
             path.removeAll()
-        case .renameTrip, .connectTricount:
+        case .connectTricount:
             break
         }
     }
@@ -570,7 +600,7 @@ public struct RootView: View {
             path.append(.bookPreview(memoId: tripId))
         case .openHelp:
             path.append(.support)
-        case .shareWallet, .inviteFriends, .addFunds, .topUpUnavailable:
+        case .shareWallet, .addFunds, .topUpUnavailable:
             // Le partage de la cagnotte passe par la feuille du système, que la
             // vue présente elle-même. Recharger attend Stripe, et l'écran le
             // dit — voir ``BookCopy/Wallet/addUnavailable``.

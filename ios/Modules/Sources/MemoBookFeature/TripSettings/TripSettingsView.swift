@@ -169,13 +169,16 @@ public struct TripSettingsView: View {
             // l'écran qui portent une valeur qu'on vient chercher du regard.
             // Les fondre dans le groupe qui suit les aurait rangées parmi les
             // réglages, alors qu'elles n'en sont pas.
+            // Le nom se corrige **sur la ligne**, comme le téléphone du profil :
+            // toucher ouvre le clavier, sortir du champ enregistre, la coche
+            // verte accuse réception (Hugo, 18/09/2026). Il menait avant à une
+            // intention que personne ne routait — la ligne s'ouvrait sur rien.
             BrandRowGroup {
                 BrandRow(
                     BookCopy.Settings.name,
-                    value: settings?.name,
-                    valueTone: .prominent,
+                    text: nameBinding,
                     isValueLoading: isLoading,
-                    action: { onIntent(.renameTrip) }
+                    isConfirmed: model.justSaved == .name
                 )
             }
 
@@ -358,6 +361,15 @@ public struct TripSettingsView: View {
 
     /// Les liaisons passent par le modèle et non par `settings` : une vue ne
     /// doit pas pouvoir poser une valeur sans qu'elle partie au serveur.
+    /// La ligne relit le nom du modèle, et lui rend ce qu'on a tapé en sortant
+    /// du champ. Voir ``TripSettingsModel/setName(_:)``.
+    private var nameBinding: Binding<String> {
+        Binding(
+            get: { model.settings?.name ?? "" },
+            set: { model.setName($0) }
+        )
+    }
+
     private var notificationsBinding: Binding<Bool> {
         Binding(
             get: { model.settings?.wantsNotifications ?? false },
@@ -383,7 +395,6 @@ public struct TripSettingsView: View {
 /// une feuille **sur** cet écran (``TripSettingsSheet``). Une intention qui
 /// remonte pour redescendre aussitôt n'apprend rien à personne.
 public enum TripSettingsIntent: Sendable, Hashable {
-    case renameTrip
     case openWallet
     /// « Style du carnet » — les personnalisations de la mise en page.
     case openCustomisation

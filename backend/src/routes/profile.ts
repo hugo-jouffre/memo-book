@@ -11,6 +11,7 @@ import {
   memoStatisticsSelect,
   type TravelStatistics,
 } from "../services/travelStatistics.js";
+import {
   AVATAR_FILENAME,
   AVATAR_PREFIX,
   avatarMimeType,

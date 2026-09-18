@@ -25,7 +25,7 @@ enum BookCustomisationSheet: Identifiable, Hashable {
     case pages
     case funFacts
     case rules
-    /// Les typographies — **une** feuille, quatre assortiments.
+    /// Les typographies — **une** feuille, trois assortiments.
     case fonts
     case decorations
 
@@ -257,12 +257,12 @@ struct BookToggleSheet: View {
 
 // MARK: - Les typographies
 
-/// « Typographies du carnet » — quatre assortiments, un seul choisi.
+/// « Typographies du carnet » — trois assortiments, un seul choisi.
 ///
 /// **On ne compose plus police par police** (Hugo, 16/09/2026). L'écran posait
 /// quatre lignes et laissait marier librement trois familles sur chacune ; la
 /// plupart des combinaisons sont laides, et un carnet imprimé ne se rattrape
-/// pas. La feuille propose donc quatre assortiments dont on sait qu'ils
+/// pas. La feuille propose donc trois assortiments dont on sait qu'ils
 /// tiennent — voir ``BookFontCombo`` — et **dit ce que chaque police habille**,
 /// parce que c'est la seule information qui permet de choisir sans connaître la
 /// typographie.

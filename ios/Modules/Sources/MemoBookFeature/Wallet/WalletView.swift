@@ -45,7 +45,7 @@ public struct WalletView: View {
 
                 // C'est **le seul bloc** qui distingue les deux maquettes.
                 if let wallet = model.wallet, wallet.isEmpty {
-                    WalletEmptyCard { onIntent(.inviteFriends) }
+                    WalletEmptyCard()
                 } else {
                     WalletHistory(wallet: model.wallet, isLoading: model.isLoading)
                 }
@@ -146,9 +146,6 @@ public struct WalletView: View {
 public enum WalletIntent: Sendable, Hashable {
     /// Partager la cagnotte — la feuille de partage, avec le message et le lien.
     case shareWallet
-    /// « Inviter des proches », depuis la cagnotte vide. Le même partage, dit
-    /// autrement : c'est le premier geste plutôt qu'un geste de plus.
-    case inviteFriends
     /// « Ajouter » — recharger, feuille Stripe à la clé.
     case addFunds
     /// « Ajouter » là où l'encaissement n'est pas branché : les previews Xcode,
@@ -589,15 +586,20 @@ private struct WalletTotals: View {
 
 // MARK: - La cagnotte vide
 
-/// Ce qu'on montre quand rien n'est encore arrivé : le cadeau, la phrase, et le
-/// seul geste qui change quelque chose.
+/// Ce qu'on montre quand rien n'est encore arrivé : le cadeau et la phrase,
+/// dans un cadre en pointillés.
 ///
 /// **Pas un état d'erreur, et pas un vide.** Une cagnotte sans contribution est
-/// l'état normal d'une cagnotte qu'on vient d'ouvrir ; la carte propose donc
-/// une action, elle ne s'excuse pas.
+/// l'état normal d'une cagnotte qu'on vient d'ouvrir. Le pointillé dit « il n'y
+/// a rien ici, mais il y aura quelque chose » — le même cadre que l'accueil
+/// sans voyage —, et c'est lui qui sépare ce bloc de la question qui suit,
+/// laquelle est une phrase à lire et non une place à remplir (Hugo,
+/// 18/09/2026).
+///
+/// **Sans bouton.** « Inviter des proches » doublait « Partager », trois
+/// centimètres plus haut sur la carte du solde ; le second suffit, la phrase
+/// dit déjà d'y aller.
 private struct WalletEmptyCard: View {
-    let onInvite: () -> Void
-
     @ScaledMetric(relativeTo: .body) private var markSide: CGFloat = 48
 
     var body: some View {
@@ -621,17 +623,11 @@ private struct WalletEmptyCard: View {
             }
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
-
-            BrandButton(
-                BookCopy.Wallet.invite,
-                icon: Image(brand: "IconShareNodes"),
-                style: .primary,
-                size: .small,
-                action: onInvite
-            )
         }
         .padding(MemoBookSpacing.m)
         .frame(maxWidth: .infinity)
+        .brandDashedCard()
+        .accessibilityElement(children: .combine)
     }
 }
 
