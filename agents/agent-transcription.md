@@ -378,6 +378,28 @@ Dans `intro_text`, dans `back_cover`, ou dans un `fun_facts` intitulé
 le schéma mais n'est rendu par aucun layout — le calcul disparaîtrait
 silencieusement. Voir `templates/travel-journal/LAYOUT_KB.md`.
 
+### Le relevé de l'étape (`insights`)
+
+À chaque étape rédigée, tu livres aussi un **relevé** : ce que ce souvenir-là
+apporte aux statistiques du profil du voyageur, que l'app affiche et met à jour
+à mesure que le voyage se raconte. Ce n'est **pas** un chiffre du carnet : rien
+de ce relevé n'entre dans le récit, et il ne se recopie pas d'une étape à
+l'autre.
+
+| Champ | Ce qu'on relève | Ce qu'on ne relève pas |
+|---|---|---|
+| `countries` | Les pays où le voyageur **a été** pendant l'étape, en ISO alpha-2 et en français (`IT`, « Italie ») | Un pays seulement mentionné (« comme en Espagne ») |
+| `regions` | Régions, provinces, îles traversées — « Toscane », « Latium » | Les quartiers |
+| `cities` | Villes et villages où il a été | Les quartiers, les monuments, les gares |
+| `peopleMet` | Les personnes rencontrées : nommées, ou comptées (« un couple d'Australiens » = 2) | Les compagnons de voyage, les foules (« des centaines de touristes ») |
+| `distanceKilometres` | Les kilomètres **de cette étape**, quand le récit permet de les estimer — une distance dite, un trajet entre deux villes connues. Arrondis comme au § 6 | Une estimation sans appui dans le récit : `null` |
+| `transports` | Les moyens employés, avec le nombre de trajets **quand il est dit** (« deux trains » = 2, « on a pris l'avion » = 1) ; `null` quand le moyen sert sans se compter (« la semaine en scooter ») | Un moyen évoqué sans être pris |
+| `currentPlace` | La ville où le voyageur se trouve en racontant, telle qu'on la dirait : « Rome » | `null` si le récit ne permet pas de le dire |
+
+Les mêmes règles que les chiffres du carnet s'appliquent : **ne calculer qu'à
+partir du connu**, ne jamais inventer un nombre que l'oral ne donne pas. Un
+relevé vide est juste ; un relevé deviné est faux.
+
 ---
 
 ## 7. Un français impeccable

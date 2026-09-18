@@ -85,6 +85,11 @@ public protocol MemoBookAPI: Sendable {
 
     func profile() async throws -> TravellerProfile
 
+    /// Les chiffres du profil — la feuille « Statistiques », réservée aux
+    /// abonnés. Additionnés par le serveur depuis les relevés de la rédaction ;
+    /// l'app les relit tant que `pendingDetections` n'est pas à zéro.
+    func travelStatistics() async throws -> TravelStatistics
+
     /// Corrige le profil. Renvoie la version enregistrée par le serveur, qui
     /// fait ensuite autorité sur ce que l'écran affiche.
     func updateProfile(_ edit: ProfileEdit) async throws -> TravellerProfile

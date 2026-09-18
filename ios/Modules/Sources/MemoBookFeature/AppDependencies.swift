@@ -209,6 +209,20 @@ public final class AppDependencies {
         )
     }
 
+    /// Les chiffres du profil, servis par `GET /v1/profile/statistics`.
+    ///
+    /// Un modèle à part du profil, parce qu'il **veille** : il relit sa route
+    /// tant que le serveur annonce des relevés en attente, et repart à chaque
+    /// vocal livré — d'où la file, passée en plus de la source. Le cache lui
+    /// donne son ouverture immédiate, comme aux cinq autres écrans.
+    public func statisticsModel() -> StatisticsModel {
+        StatisticsModel(
+            source: cachedSource(.statistics) { [api] in try await api.travelStatistics() },
+            cached: { [content] in await content.read(.statistics, as: TravelStatistics.self) },
+            outbox: outbox
+        )
+    }
+
     /// Un voyage ouvert, servi par `GET /v1/trips/:id`.
     public func tripModel(id: String) -> TripHomeModel {
         // La source est construite **ici**, une fois, parce que le voyage est

@@ -3480,6 +3480,125 @@ colonne — les tables existantes l'ont reçue aussi.
 
 | Route / colonne | Ce qui change |
 |---|---|
+| T147 | **Les documents légaux vouvoient**, seule exception à R9. C'est un contrat, pas une phrase de l'interface : le texte du site est celui qui engage, et il est recopié tel quel. Si Clara et Hugo veulent tutoyer, c'est le site qui change d'abord, et l'app suit |
+| T148 | **« Découvrir notre FAQ » est à l'encre**, là où le gabarit le dessine en vert. C'est `BrandButton` en style `link`, petite taille : le design system n'a pas de lien vert, et un lien d'une autre couleur serait un second bouton. À dessiner dans Figma, ou à valider tel quel |
+| T151 | **« En continuant, vous acceptez nos Conditions d'utilisation »** sur l'écran d'entrée n'ouvre pas la page : elle est derrière la session (`HomeRoute`), et l'écran d'entrée a sa propre pile. À relier si on veut lire les CGU avant de créer un compte |
+| T152 | **Le chapitre 3 de la politique de confidentialité annonce une liste qui ne suit pas** — « transmises aux prestataires techniques suivants … : » puis rien. Le site la porte dans un tableau qui n'a pas été fourni. Recopié tel quel (R8) ; **à compléter** avec la liste des prestataires (Webflow, Google Analytics, Hotjar, Meta, WhatsApp ?) |
+| T153 | **Le chapitre 9 (« Mineurs ») se termine par un point-virgule** au lieu d'un point. Recopié tel quel (R8), à corriger sur le site |
+| T154 | **La politique de cookies n'existe pas dans l'app**, et les deux documents y renvoient (« disponible sur ce site »). Un troisième `LegalDocument` suffira le jour où le texte est fourni |
+
+## 24. Lot 5 — La feuille « Statistiques »
+
+### 24.1 Statistiques
+
+- **Maquette** : la capture fournie par Hugo le 17/09/2026 (une carte cerclée
+  de vert, deux volets : « STATISTIQUES » et « VOYAGE EN COURS »). Pas de nœud
+  Figma relevé — les tokens sont ceux de la carte de chiffres du profil (§10.1),
+  dont cette feuille est la version dépliée.
+- **Vues** : `MemoBookFeature/Profile/` — `StatisticsSheet`, `StatisticsModel`,
+  `StatisticsFormatting` ; modèle `MemoBookCore/TravelStatistics.swift` ;
+  jeu d'essai dans `ProfileFixtures`.
+- **Rôle** : les chiffres du voyageur — tous ses voyages, puis celui en cours —
+  **relevés par l'agent de rédaction** à chaque souvenir, et mis à jour sous les
+  yeux pendant que le voyage se raconte.
+- **Entrée / sortie** : la ligne « Statistiques » de la carte de chiffres du
+  profil. **Réservée aux abonnés** : sans abonnement la ligne dit « Réservé aux
+  abonnés », porte la pastille `LOCKED`, perd son chevron et ne répond pas au
+  toucher (c'était déjà le cas ; la feuille ne fait que se brancher derrière).
+  Retour au profil au glissé ou par le rond.
+
+**Structure (en rem)**
+
+| Élément | rem | Note |
+|---|---|---|
+| Carte | rayon 1.25, filet vert 1.5 pt | `largeCornerRadius`, `MemoBookColor.action` — la même coque que la carte de chiffres du profil |
+| Marge intérieure d'un volet | 1 | `MemoBookSpacing.s` |
+| Espacement surtitre → lignes | 0.75 | `snug` |
+| Espacement entre deux lignes | 0.5 | `xs` |
+| Anneau | 4.75, trait 0.4375 | `@ScaledMetric`, **plafonné à xxLarge** — voir Accessibilité |
+| Surtitre d'un volet | `sectionOverline` (Sora 12, capitales, vert) | |
+| Détail du volet (« 5 voyages », les dates) | `label` (14, vert) | |
+| Intitulé d'une ligne | `body`, `inkMuted` | |
+| Valeur d'une ligne | `body`, `ink` | roule vers sa nouvelle valeur (`contentTransition(.numericText())`) |
+| Chiffre d'un anneau | `figure` (Sora 24) | |
+| Ligne « en cours de lecture » | `caption`, `inkMuted` + `ProgressView` petit | n'existe que pendant |
+
+**Les deux volets se replient**, chacun par sa ligne de tête (toute la ligne se
+touche, pas seulement le chevron), et repartent ouverts à chaque ouverture de
+la feuille. Le chevron est `IconChevron` tourné comme dans
+`BrandDisclosureCard`. La feuille suit la hauteur de son contenu, volets
+repliés ou non.
+
+**Ce que chaque ligne écrit** — tout est accordé par `counted(_:_:_:)`, et zéro
+prend le singulier :
+
+| Ligne | Exemple | Règle |
+|---|---|---|
+| Étapes | « 6 pays, 8 régions, 13 villes » | une part à zéro s'omet ; tout à zéro : « Pas encore relevé » |
+| Rencontres | « 406 personnes » | zéro : « Pas encore relevé » |
+| Km parcourus | « 2 280 km » | formateur du système, unité espacée (§ 6 de l'agent) |
+| Enregistrements | « 300 vocaux » | les vocaux seulement, pas les messages |
+| Transports | « 1 avion, 2 trains, scooter » | le nombre ne s'écrit que s'il a été relevé ; « à pied » ne se compte jamais ; plus fréquents d'abord |
+| Anneau 1 | « 9 % du voyage » | jours ayant au moins un souvenir rédigé / jours du voyage |
+| Anneau 2 | « 2 pays » | pays du voyage / pays du compte |
+| Phrase | « Tu es actuellement à Rome. » | la dernière ville où un souvenir situe le voyageur, sinon la destination |
+| Sous-phrase | « 9 % écrit (2 jours validés sur 21) » | |
+
+**Les chiffres bougent sous les yeux, et c'est le point.** Le serveur dit
+combien de souvenirs attendent encore leur relevé (`pendingDetections`) ; tant
+qu'il y en a, `StatisticsModel.watch()` relit la route toutes les **3 s**, et
+s'arrête dès que la file est vide — ou après **40 relectures sans changement**
+(un job perdu ne doit pas faire frapper le serveur toute la soirée). La veille
+est une `.task(id:)` sur le compteur de livraisons de la file des vocaux : un
+vocal qui part relance la lecture tout de suite. Un changement de chiffres joue
+`brandRefreshFlash` ; une relecture identique ne joue rien (comparée sur les
+chiffres, jamais sur l'horodatage). Aucune connexion ouverte : c'est un choix,
+argumenté dans `StatisticsModel`.
+
+**La feuille s'ouvre sur ce qu'on avait** : case `statistics` de `ContentCache`,
+même contrat que le profil. Barres d'attente (`BrandSkeleton`) à la place des
+valeurs tant que rien n'est arrivé ; `ErrorBanner` en ligne sous la carte avec
+« Réessayer ».
+
+**Contrat back-end** — `GET /v1/profile/statistics`, servi à tout compte (c'est
+l'app qui tient la ligne sous clé). Forme : `TravelStatistics` au champ près —
+`tripCount`, `overall {countries, regions, cities, encounters,
+distanceKilometres}`, `currentTrip {id, startDate, endDate, currentPlace,
+dayCount, validatedDays, figures, recordings, transports[{kind, count|null}]}`,
+`pendingDetections`, `updatedAt`. **Rien n'est stocké** : chaque souvenir rédigé
+porte le relevé de l'agent (`entries.insights`, migration
+`20260917100000_releves_de_la_redaction`), et `services/travelStatistics.ts`
+additionne à la lecture — ce que le voyage déclare (destination, étapes,
+distance de la fiche) sert de plancher, ce que la rédaction relève prime. Le
+contrat du relevé est dans `agents/agent-transcription.md` § 6 (« Le relevé de
+l'étape »), chargé tel quel comme prompt système ; `FakeRedactor` en produit un
+minimal (la ville du `placeLabel`) pour que la feuille vive en développement.
+
+**Accessibilité** — chaque volet est un bouton portant son titre, son détail et
+« déplié / replié », avec le trait d'en-tête ; chaque ligne est un seul
+élément ; chaque anneau annonce son intitulé et sa valeur. Vérifié à AX3 : les
+anneaux passent **au-dessus** du texte, côte à côte, et **cessent de grandir à
+xxLarge** — à AX3 ils feraient 240 pt chacun et emmenaient toute la feuille
+hors de l'écran ; l'intitulé d'une ligne passe au-dessus de sa valeur ; le
+détail d'un volet passe sous son surtitre et s'enroule. `reduceMotion` fige
+l'arc au lieu de le dessiner.
+
+`TravelStatisticsTests` (Core) garde la part écrite, l'accord des transports, la
+comparaison hors horodatage et le décodage tolérant (transport inconnu sauté,
+serveur ancien qui rend `{}`). `travelStatistics.test.ts` et `screens.test.ts`
+gardent l'addition côté serveur.
+
+### 24.2 À trancher
+
+| # | Sujet |
+|---|---|
+| T155 | **La maquette vouvoie** (« Vous êtes actuellement à Rome. ») ; la feuille tutoie (R9), comme le reste du profil depuis §22.2 |
+| T156 | **« 2.280km » devient « 2 280 km »**, et « 9% » devient « 9 % » : formateur du système et espace de l'unité, même parti pris que les euros de la cagnotte. À valider ou à redessiner |
+| T157 | **Le second anneau n'a pas de définition dans la maquette** (« 2 pays »). Il montre la part des pays du compte que ce voyage couvre ; si Clara y voyait autre chose, seule `countryFraction(of:)` change |
+| T158 | **« Pas encore relevé »** est inventé pour une ligne à zéro — la maquette ne montre que des chiffres pleins. Un tiret se lisait comme une panne |
+| T159 | **Les souvenirs rédigés avant la migration n'ont pas de relevé** : ils comptent pour les jours validés, pas pour les lieux ni les rencontres. Une relance de la rédaction (`POST /v1/entries/:id/redaction`) les relit ; à décider si on la lance en masse |
+| T160 | **Le jeu d'essai n'enfile pas sa rédaction** : ses souvenirs restent « en cours de lecture » (4 sur le compte de test), et la veille s'arrête d'elle-même au bout de deux minutes. Le seed pourrait enfiler les jobs `redact` |
+| T161 | **Pas de simulateur SE sur le Mac de vérification** : contrôlé sur iPhone 17 (medium et AX3). Sur un écran court, la feuille défile — c'est `BrandSheet` qui plafonne |
 | `accounts.gender` (`Gender?`, migration `20260917200000_genre_du_profil`) | nulle tant que la personne n'a rien dit ; `undisclosed` est un choix |
 | `GET /v1/profile` → `gender` | ce que la personne a dit, sinon ce que son prénom laisse deviner (`effectiveGender`) |
 | `PATCH /v1/profile { gender }` | `"female" \| "male" \| "undisclosed"`, jamais `null` |

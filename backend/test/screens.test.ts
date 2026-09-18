@@ -345,6 +345,122 @@ describe("le profil", () => {
     expect(body.orders).toEqual([]);
   });
 
+  /**
+   * La feuille « Statistiques » : additionnée à la lecture depuis les relevés
+   * de la rédaction, **au champ près** de `TravelStatistics` côté Swift. Ce
+   * que le voyage déclare sert de plancher, ce que la rédaction relève
+   * s'ajoute, et le compte des souvenirs en attente pilote le rafraîchissement
+   * de l'app.
+   */
+  it("additionne les statistiques depuis les relevés de la rédaction", async () => {
+    const account = await registerAccount(harness.app);
+    const trip = await seedTrip(account.accountId, {
+      destinationCity: "Rome",
+      startDate: new Date("2026-12-10T00:00:00Z"),
+      endDate: new Date("2027-01-02T00:00:00Z"),
+      distanceKilometres: 87.4,
+    });
+
+    await harness.prisma.entry.createMany({
+      data: [
+        {
+          memoId: trip.id,
+          kind: "audio",
+          status: "ready",
+          redactionStatus: "ready",
+          transcript: "Une demi-heure de train et plus personne.",
+          capturedAt: new Date("2026-12-11T10:00:00Z"),
+          insights: {
+            countries: [{ code: "IT", name: "Italie" }],
+            regions: ["Latium"],
+            cities: ["Rome", "Ostie"],
+            peopleMet: 6,
+            distanceKilometres: 30,
+            transports: [{ kind: "train", count: 1 }],
+            currentPlace: "Ostie",
+          },
+        },
+        {
+          memoId: trip.id,
+          kind: "audio",
+          status: "ready",
+          redactionStatus: "pending",
+          transcript: "Pas encore rédigé.",
+          capturedAt: new Date("2026-12-12T10:00:00Z"),
+        },
+      ],
+    });
+
+    // Un voyage passé compte dans le total, pas dans le voyage en cours.
+    await seedTrip(account.accountId, {
+      stage: "past",
+      destinationCountryCode: "PT",
+      destinationCity: "Lisbonne",
+      distanceKilometres: 41.2,
+    });
+
+    const response = await harness.app.inject({
+      method: "GET",
+      url: "/v1/profile/statistics",
+      headers: { authorization: account.authorization },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json<{
+      tripCount: number;
+      overall: Record<string, number>;
+      currentTrip: {
+        id: string;
+        currentPlace: string | null;
+        dayCount: number;
+        validatedDays: number;
+        recordings: number;
+        figures: Record<string, number>;
+        transports: { kind: string; count: number | null }[];
+      } | null;
+      pendingDetections: number;
+      updatedAt: string;
+    }>();
+
+    expect(body.tripCount).toBe(2);
+    expect(body.overall).toEqual({
+      countries: 2,
+      regions: 1,
+      cities: 3,
+      encounters: 6,
+      // 30 relevés à Rome (qui priment sur les 87,4 de la fiche) + 41,2 à
+      // Lisbonne, arrondis sur le total.
+      distanceKilometres: 71,
+    });
+    expect(body.currentTrip).toMatchObject({
+      id: trip.id,
+      currentPlace: "Ostie",
+      dayCount: 24,
+      validatedDays: 1,
+      recordings: 2,
+      figures: { countries: 1, regions: 1, cities: 2, encounters: 6, distanceKilometres: 30 },
+      transports: [{ kind: "train", count: 1 }],
+    });
+    expect(body.pendingDetections).toBe(1);
+    expect(typeof body.updatedAt).toBe("string");
+  });
+
+  it("ne montre pas les statistiques des voyages d'un autre compte", async () => {
+    const owner = await registerAccount(harness.app);
+    const stranger = await registerAccount(harness.app, "inconnu@memobook.app");
+    await seedTrip(owner.accountId, { destinationCity: "Rome" });
+
+    const response = await harness.app.inject({
+      method: "GET",
+      url: "/v1/profile/statistics",
+      headers: { authorization: stranger.authorization },
+    });
+
+    const body = response.json<{ tripCount: number; currentTrip: unknown }>();
+    expect(body.tripCount).toBe(0);
+    expect(body.currentTrip).toBeNull();
+  });
+
   it("distingue « effacer » de « ne pas toucher »", async () => {
     const account = await registerAccount(harness.app);
 

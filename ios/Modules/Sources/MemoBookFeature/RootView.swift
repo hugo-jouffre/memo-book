@@ -631,7 +631,12 @@ public struct RootView: View {
     private func destination(for route: HomeRoute) -> some View {
         switch route {
         case .profile:
-            ProfileView(model: dependencies.profileModel(), onSignOut: signOut, onIntent: handle)
+            ProfileView(
+                model: dependencies.profileModel(),
+                statistics: dependencies.statisticsModel(),
+                onSignOut: signOut,
+                onIntent: handle
+            )
         case .trip(let id):
             TripHomeView(
                 tripId: id,

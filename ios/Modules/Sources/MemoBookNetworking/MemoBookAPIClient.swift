@@ -206,6 +206,8 @@ public actor MemoBookAPIClient: MemoBookAPI {
         try await send(method: "GET", path: "/v1/profile", credential: .session)
     }
 
+    public func travelStatistics() async throws -> TravelStatistics {
+        try await send(method: "GET", path: "/v1/profile/statistics", credential: .session)
     public func uploadAvatar(data: Data, mimeType: String) async throws -> TravellerProfile {
         var form = MultipartFormData()
         form.addFile(

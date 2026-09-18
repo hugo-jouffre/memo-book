@@ -21,6 +21,11 @@ public struct ProfileView: View {
     @State private var model: ProfileModel
     @State private var sheet: ProfileSheet?
 
+    /// Les chiffres du compte, pour la feuille « Statistiques ». Un modèle à
+    /// part : il a sa route, sa case de cache et sa veille, et il ne vit que le
+    /// temps de la feuille — voir ``StatisticsModel``.
+    @State private var statistics: StatisticsModel
+
     /// Le paywall se présente **par-dessus tout**, feuille comprise : c'est un
     /// écran entier, pas une feuille de plus. La feuille qui l'a ouvert se
     /// referme donc d'abord, sans quoi on la retrouverait dessous en sortant.
@@ -43,10 +48,12 @@ public struct ProfileView: View {
 
     public init(
         model: ProfileModel = ProfileModel(),
+        statistics: StatisticsModel = StatisticsModel(),
         onSignOut: @escaping () -> Void,
         onIntent: @escaping (ProfileIntent) -> Void = { _ in }
     ) {
         _model = State(initialValue: model)
+        _statistics = State(initialValue: statistics)
         self.onSignOut = onSignOut
         self.onIntent = onIntent
     }
@@ -593,6 +600,8 @@ public struct ProfileView: View {
             )
         case .connectors:
             ConnectorsSheet(model: model)
+        case .statistics:
+            StatisticsSheet(model: statistics)
         case .orderTracking:
             OrderTrackingSheet(orders: model.profile?.orders ?? []) {
                 // La feuille se referme **avant** que la galerie s'ouvre : c'est
@@ -641,6 +650,7 @@ enum ProfileSheet: String, Identifiable, CaseIterable {
     case subscription
     case connectors
     case orderTracking
+    case statistics
 
     var id: String { rawValue }
 }

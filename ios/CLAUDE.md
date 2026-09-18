@@ -492,10 +492,11 @@ jamais un mur devant l'app.
 
 ## Le cache local, et ce qu'il change à l'écran
 
-**Cinq écrans s'ouvrent sur ce qu'on avait** : l'accueil, le profil, un voyage,
-ses réglages, la galerie. `ContentCache` — l'ancien `HomeFeedCache`, devenu
-générique — les garde dans **Caches**, jamais ailleurs : c'est une copie de ce
-que le serveur sait, iOS peut la purger, on la redemande. Elle s'efface à la
+**Six écrans s'ouvrent sur ce qu'on avait** : l'accueil, le profil, ses
+statistiques, un voyage, ses réglages, la galerie. `ContentCache` — l'ancien
+`HomeFeedCache`, devenu générique — les garde dans **Caches**, jamais
+ailleurs : c'est une copie de ce que le serveur sait, iOS peut la purger, on la
+redemande. Elle s'efface à la
 déconnexion (`AppDependencies.forgetAccountContent()`).
 
 Ce qu'on ne garde **pas**, et c'est délibéré : la conversation — elle change à
@@ -516,6 +517,14 @@ freshness = contentFreshness(of: loaded, replacing: value)   // avant de poser
 **Le cache n'est jamais la réponse finale**, et il n'ouvre vite qu'au *premier*
 chargement : un « tirer pour rafraîchir » ne doit pas remplacer ce qui est à
 l'écran par une copie plus ancienne.
+
+**Un écran peut aussi relire tout seul, à condition de savoir s'arrêter.** La
+feuille « Statistiques » (`StatisticsModel.watch()`) relit sa route toutes les
+3 s tant que le serveur annonce des relevés en attente, et cesse dès que la
+file est vide ou après deux minutes sans changement. Pas de connexion ouverte,
+pas de minuterie globale : une `.task(id:)` sur le compteur de livraisons de la
+file des vocaux, qui meurt avec la feuille. C'est le motif à reprendre pour
+tout écran qui attend un job serveur.
 
 ⚠️ **Un écran qui change sous les yeux doit le dire.** C'est le risque que le
 cache introduit : on lit une page, trois valeurs bougent, rien ne le signale.

@@ -7,6 +7,10 @@ import { connectorByKey } from "../services/connectorCatalog.js";
 import { linkDeviceToAccount, visibleToAccount } from "../services/memoOwnership.js";
 import { hashDeviceToken } from "../lib/auth.js";
 import {
+  aggregateTravelStatistics,
+  memoStatisticsSelect,
+  type TravelStatistics,
+} from "../services/travelStatistics.js";
   AVATAR_FILENAME,
   AVATAR_PREFIX,
   avatarMimeType,
@@ -63,6 +67,23 @@ function profileTrips(context: AppContext, accountId: string): Promise<TripForPr
     where: visibleToAccount(accountId),
     select: { id: true, stage: true, startDate: true, endDate: true },
   });
+}
+
+/**
+ * La feuille « Statistiques » : tous les voyages visibles du compte, réduits
+ * aux colonnes que l'addition regarde — voir `memoStatisticsSelect`. **Une
+ * requête**, et pas une par voyage : la feuille se relit toutes les quelques
+ * secondes tant qu'un souvenir est en cours de rédaction.
+ */
+async function readTravelStatistics(
+  context: AppContext,
+  accountId: string,
+): Promise<TravelStatistics> {
+  const memos = await context.prisma.memo.findMany({
+    where: visibleToAccount(accountId),
+    select: memoStatisticsSelect,
+  });
+  return aggregateTravelStatistics(memos);
 }
 
 /** Ce que `serializeProfile` attend du compte, et rien de plus. */
@@ -133,6 +154,17 @@ function orNull(value: string | null | undefined): string | null | undefined {
 
 export function registerProfileRoutes(app: FastifyInstance, context: AppContext): void {
   app.get("/v1/profile", async (request) => readProfile(context, accountIdOf(request)));
+
+  /**
+   * Les statistiques du profil, additionnées à la lecture depuis les relevés
+   * de la rédaction. Servies à tout compte : c'est **l'app** qui tient la
+   * ligne sous clé pour un non-abonné, et elle ne demande la feuille qu'une
+   * fois ouverte. Le serveur n'a rien à cacher ici — ce sont les chiffres du
+   * voyageur lui-même.
+   */
+  app.get("/v1/profile/statistics", async (request) =>
+    readTravelStatistics(context, accountIdOf(request)),
+  );
 
   app.patch("/v1/profile", async (request) => {
     const accountId = accountIdOf(request);

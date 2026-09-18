@@ -165,6 +165,7 @@ champ près — `test/screens.test.ts` est ce qui les tient ensemble.
 | `GET /v1/trips/:id` | Un voyage ouvert : sa couverture, la relance, ses étapes |
 | `GET /v1/profile` | Identité, adresse, cagnotte, cartes, connecteurs, abonnement, commandes |
 | `PATCH /v1/profile` | Corrige le profil. Un champ absent n'est pas touché, un champ à `null` est effacé |
+| `GET /v1/profile/statistics` | Les chiffres de la feuille « Statistiques » : pays, régions, villes, rencontres, km, transports, additionnés à la lecture depuis les relevés de la rédaction (`entries.insights`). `pendingDetections` dit combien de souvenirs attendent encore leur relevé — l'app relit tant qu'il y en a |
 | `PUT /v1/profile/connectors/:key` | Branche ou débranche un connecteur |
 | `POST /v1/profile/link-device` | Rattache l'appareil au compte et lui transfère ses carnets |
 | `GET /v1/trips/:id/settings` | Les réglages d'un voyage : nom, dates, rythme, co-voyageurs, solde, style, aperçu |

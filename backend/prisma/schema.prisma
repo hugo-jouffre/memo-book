@@ -832,6 +832,20 @@ model Entry {
   /// Posé par le job `memobook.enhance` après un agrandissement réussi.
   enhancedAt DateTime?
 
+  /// Ce que l'agent de rédaction a **relevé** dans ce souvenir pour les
+  /// statistiques du profil : pays, régions et villes cités, personnes
+  /// rencontrées, kilomètres parcourus, moyens de transport, et l'endroit où
+  /// le voyageur se trouve en le racontant. Forme : `EntryInsights` dans
+  /// `services/redaction.ts`.
+  ///
+  /// Porté par le souvenir et non par le carnet : c'est un relevé **par
+  /// étape**, que `services/travelStatistics.ts` additionne à la lecture. Un
+  /// compteur tenu sur le carnet dériverait à la première correction ou
+  /// suppression d'un souvenir. Nul tant que la rédaction n'est pas passée —
+  /// la statistique retombe alors sur ce que le voyage déclare (destination,
+  /// étapes), jamais sur zéro.
+  insights Json?
+
   /// Horodatage du souvenir lui-même, pas de l'upload — c'est lui qui sert à
   /// regrouper les entries par journée lors de la structuration.
   capturedAt DateTime @default(now())
