@@ -135,9 +135,9 @@ public struct ChatView: View {
     /// après quatre secondes, et revient quand le doigt remonte franchement
     /// dans la conversation (80 pt) — puis disparaît quand on remonte plus
     /// loin encore (200 pt : on lit ses messages, on ne veut pas l'aperçu) ou
-    /// dès qu'on redescend de 20 pt. Et **pas plus d'une fois la demi-minute**
-    /// : elle revenait à chaque hésitation du pouce, et une bannière qui
-    /// revient sans cesse n'est plus une invitation, c'est un tic (Hugo,
+    /// dès qu'on redescend de 20 pt. Pas de délai entre deux retours : on
+    /// avait essayé une demi-minute de silence, et une bannière qui ne
+    /// répond pas au geste qui la rappelle se lit comme cassée (Hugo,
     /// 18/09/2026).
     @State private var showsPreviewBanner = true
 
@@ -146,9 +146,6 @@ public struct ChatView: View {
     /// barre d'état, et sa hauteur comptée depuis le haut du fil la posait
     /// soixante points trop bas.
     @State private var headerBottom: CGFloat = 0
-
-    /// La dernière fois qu'un défilement l'a fait revenir.
-    @State private var lastScrollReveal: Date?
 
     /// Le haut du contenu dans l'espace du fil, à la dernière mesure. `nil`
     /// avant la première : la première mesure n'est pas un mouvement.
@@ -164,7 +161,6 @@ public struct ChatView: View {
     private static let bannerReadingDistance: CGFloat = 200
     private static let bannerDismissDistance: CGFloat = 20
     private static let bannerLinger: Duration = .seconds(4)
-    private static let bannerRevealCooldown: TimeInterval = 30
 
     public var body: some View {
         Group {
@@ -334,8 +330,7 @@ public struct ChatView: View {
             scrolledUp += delta
             if scrolledUp >= Self.bannerReadingDistance {
                 showsPreviewBanner = false
-            } else if scrolledUp >= Self.bannerRevealDistance, !showsPreviewBanner, canRevealAgain {
-                lastScrollReveal = .now
+            } else if scrolledUp >= Self.bannerRevealDistance {
                 showsPreviewBanner = true
             }
         } else if delta < 0 {
@@ -345,13 +340,6 @@ public struct ChatView: View {
                 showsPreviewBanner = false
             }
         }
-    }
-
-    /// Un défilement ne la fait revenir qu'une fois la demi-minute écoulée
-    /// depuis la dernière fois — voir ``showsPreviewBanner``.
-    private var canRevealAgain: Bool {
-        guard let lastScrollReveal else { return true }
-        return Date.now.timeIntervalSince(lastScrollReveal) >= Self.bannerRevealCooldown
     }
 
     private func header(_ thread: ChatThread) -> some View {
