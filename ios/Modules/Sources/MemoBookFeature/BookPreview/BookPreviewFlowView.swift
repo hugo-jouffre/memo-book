@@ -12,7 +12,7 @@ import SwiftUI
 ///
 /// On y arrive de trois endroits, et c'est voulu — c'est le même carnet :
 /// la bannière bleue de la conversation, l'icône de carnet de son en-tête, et
-/// la ligne « Prévisulation PDF » des paramètres du voyage.
+/// la ligne « Prévisualisation PDF » des paramètres du voyage.
 public struct BookPreviewFlowView: View {
     @State private var model: BookPreviewModel
 
@@ -38,11 +38,15 @@ public struct BookPreviewFlowView: View {
     /// arriverait après qu'on a rangé le téléphone.
     private static let foundersDelay: Duration = .seconds(12)
 
+    /// - Parameter opensShare: ouvre la feuille de partage dès l'arrivée —
+    ///   depuis le tiroir d'une carte de l'accueil, où « partager » mène ici.
     public init(
         model: BookPreviewModel,
+        opensShare: Bool = false,
         onIntent: @escaping (BookPreviewIntent) -> Void
     ) {
         _model = State(initialValue: model)
+        _showsShareChoice = State(initialValue: opensShare)
         self.onIntent = onIntent
     }
 
@@ -218,6 +222,7 @@ private struct BookCompositionView: View {
                     // encore, mais on peut déjà aller régler son style.
                     isComposed: false,
                     onCustomise: { onIntent(.customise) },
+                    onConfigureCovers: { onIntent(.configureCovers) },
                     onOrder: { onIntent(.order) }
                 )
 
@@ -292,6 +297,7 @@ private struct BookReaderView: View {
                     // commande que l'imprimeur, lui, peut honorer.
                     isComposed: model.isComposed,
                     onCustomise: { onIntent(.customise) },
+                    onConfigureCovers: { onIntent(.configureCovers) },
                     onOrder: { onIntent(.order) }
                 )
 

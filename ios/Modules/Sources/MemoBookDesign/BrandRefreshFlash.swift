@@ -8,32 +8,41 @@ import SwiftUI
 /// « rien ne s'est passé » et « trois valeurs viennent de bouger » est
 /// invisible — et c'est précisément ce que le cache introduit comme risque.
 ///
-/// **Deux gestes, et pas un de plus.** Un voile clair qui traverse le bloc de
-/// gauche à droite — la lumière qu'on passe sur une page qu'on vient de
-/// réécrire —, et une pastille « Mis à jour » qui descend puis s'en va toute
-/// seule. Ni rebond, ni changement de couleur, ni son : ce n'est pas une
-/// réussite qu'on célèbre, c'est une information qu'on signale.
+/// **Un geste, et pas deux.** Un voile clair qui traverse le bloc de gauche à
+/// droite — la lumière qu'on passe sur une page qu'on vient de réécrire — et,
+/// pour qui ne voit pas, l'annonce « Mis à jour » de VoiceOver. Ni rebond, ni
+/// changement de couleur, ni son : ce n'est pas une réussite qu'on célèbre,
+/// c'est une information qu'on signale.
 ///
-/// **Rien ne bouge en Reduce Motion**, sauf la pastille — qui apparaît alors en
-/// fondu et reste le même temps. C'est l'information qui compte ; le balayage
-/// n'en est que l'emballage, et c'est exactement ce que ce réglage demande
-/// d'éteindre.
+/// La **pastille** « Mis à jour » qui descendait du haut n'est plus posée par
+/// défaut (Hugo, 17/09/2026) : elle prenait trop de place sur le contenu, et
+/// le clignotement des chiffres qui changent suffit. Elle reste disponible
+/// (`showsBadge:`) pour le jour où un changement le mérite — l'aperçu PDF qui
+/// se recompose, par exemple.
+///
+/// **Rien ne bouge en Reduce Motion** : le balayage s'éteint, et l'annonce
+/// VoiceOver reste. C'est l'information qui compte ; le balayage n'en est que
+/// l'emballage, et c'est exactement ce que ce réglage demande d'éteindre.
 ///
 /// ```swift
 /// VStack { … }
 ///     .brandRefreshFlash(model.freshness.isUpdated)
 /// ```
 public extension View {
-    /// - Parameter isUpdated: passe à `true` quand le contenu vient de changer.
-    ///   Le modificateur se charge de le remettre à `false` tout seul : il ne
-    ///   demande pas à l'appelant de gérer une durée.
-    func brandRefreshFlash(_ isUpdated: Bool) -> some View {
-        modifier(BrandRefreshFlash(isUpdated: isUpdated))
+    /// - Parameters:
+    ///   - isUpdated: passe à `true` quand le contenu vient de changer. Le
+    ///     modificateur se charge de le remettre à `false` tout seul : il ne
+    ///     demande pas à l'appelant de gérer une durée.
+    ///   - showsBadge: pose aussi la pastille « Mis à jour » en haut du bloc.
+    ///     Éteinte partout aujourd'hui — voir l'en-tête.
+    func brandRefreshFlash(_ isUpdated: Bool, showsBadge: Bool = false) -> some View {
+        modifier(BrandRefreshFlash(isUpdated: isUpdated, badgeEnabled: showsBadge))
     }
 }
 
 private struct BrandRefreshFlash: ViewModifier {
     let isUpdated: Bool
+    let badgeEnabled: Bool
 
     /// Où en est le balayage, de -1 (hors cadre à gauche) à 1 (hors cadre à
     /// droite).
@@ -108,6 +117,11 @@ private struct BrandRefreshFlash: ViewModifier {
             withAnimation(.easeInOut(duration: 0.9)) { sweep = 1 }
         }
 
+        // Sans pastille, c'est l'annonce qui dit à VoiceOver que la page a
+        // bougé — sans interrompre la lecture en cours.
+        AccessibilityNotification.Announcement("Mis à jour").post()
+
+        guard badgeEnabled else { return }
         withAnimation(.snappy(duration: 0.3)) { showsBadge = true }
 
         Task { @MainActor in

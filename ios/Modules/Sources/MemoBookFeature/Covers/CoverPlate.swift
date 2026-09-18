@@ -203,6 +203,9 @@ struct CoverPlate: View {
                     .lineSpacing(unit(0.014))
                     .minimumScaleFactor(0.5)
                     .frame(maxWidth: .infinity)
+                    // Le crayon du texte de dos, en haut à droite du texte
+                    // (T90) — le devant pose le sien en bas de la signature.
+                    .overlay(alignment: .topTrailing) { subtitleBadge }
             }
 
             Spacer(minLength: 0)
@@ -232,8 +235,13 @@ struct CoverPlate: View {
             HStack(alignment: .top, spacing: unit(0.03)) {
                 ForEach(stats) { stat in
                     VStack(spacing: unit(0.012)) {
+                        // « 2,3k » se coupait en deux lignes sur une colonne
+                        // étroite (Clara, 17/09/2026) : un chiffre tient sur
+                        // une ligne et rapetisse s'il le faut.
                         Text(stat.value)
                             .font(.custom(BrandFonts.soraSemiBold, fixedSize: unit(0.085)))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
                         Text(stat.label)
                             .font(.custom(BrandFonts.generalSansRegular, fixedSize: unit(0.035)))
                             .multilineTextAlignment(.center)

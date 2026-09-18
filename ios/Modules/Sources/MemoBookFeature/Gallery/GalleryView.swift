@@ -157,13 +157,11 @@ public struct GalleryView: View {
     private var filters: some View {
         ScrollView(.horizontal) {
             HStack(spacing: MemoBookSpacing.xs) {
-                // Le pictogramme **défile avec les pastilles**. Posé hors de la
-                // bande, il restait planté à la marge pendant que les pastilles
-                // lui passaient dessus — un signe fixe à moitié recouvert, qu'on
-                // lisait comme un défaut de rendu. Il ouvre la ligne, il ne la
-                // surplombe pas.
-                filterMark
-
+                // Les trois traits du filtre ne sont plus là : la maquette les
+                // dessinait sans action, l'app les rendait décoratifs (T39), et
+                // un pictogramme qu'on ne peut pas toucher en tête d'une ligne
+                // de pastilles déroutait plus qu'il n'annonçait (Clara,
+                // 17/09/2026). La première pastille, « Tout », ouvre la ligne.
                 chip("Tout", icon: nil, isActive: model.selectedCategoryId == nil) {
                     model.select(nil)
                 }
@@ -211,28 +209,6 @@ public struct GalleryView: View {
         .buttonStyle(.plain)
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }
-
-    /// Les trois traits du jeu de marque, à gauche de la barre.
-    ///
-    /// ⚠️ **Décoratif** : la maquette ne lui donne aucune action, et un
-    /// pictogramme qui ne fait rien ne doit pas non plus se laisser toucher. Il
-    /// dit ce qu'est cette ligne, comme un intitulé. À trancher avec Clara —
-    /// voir la fiche écran.
-    private var filterMark: some View {
-        Image(brand: "IconFilter")
-            .resizable()
-            .renderingMode(.template)
-            .scaledToFit()
-            .frame(width: markSide, height: markSide)
-            .foregroundStyle(MemoBookColor.ink)
-            // La hauteur d'une pastille : sans elle, le pictogramme est plus
-            // court que ses voisines et la ligne se recentre autour de lui.
-            .frame(minHeight: MemoBookSpacing.minimumTapTarget)
-            .padding(.trailing, MemoBookSpacing.xs - 4)
-            .accessibilityHidden(true)
-    }
-
-    @ScaledMetric(relativeTo: .subheadline) private var markSide: CGFloat = 20
 
     // MARK: - La mosaïque
 

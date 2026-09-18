@@ -136,19 +136,13 @@ public struct SupportView: View {
     /// ne cherche pas une réponse en lisant tout, on cherche d'abord le rayon.
     private var topics: some View {
         VStack(alignment: .leading, spacing: MemoBookSpacing.m) {
-            // Le chapeau « sujets courants » ne s'écrit plus pendant qu'on
-            // cherche : ce qui est en dessous n'est plus une liste de sujets,
-            // c'est un résultat. Le compte le dit à sa place.
-            if !model.isSearching {
-                SupportSectionTitle(SupportCopy.topicsSection)
-            }
-
+            // Plus de chapeau « Sujets courants » au-dessus des paquets
+            // (Clara, 17/09/2026) : chaque paquet porte son titre, **en
+            // surtitre** — Sora Semibold 12, gris, capitales —, le même dessin
+            // que « Nous contacter » plus bas.
             ForEach(model.visibleTopics) { category in
                 VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
-                    Text(category.title)
-                        .font(MemoBookFont.label)
-                        .foregroundStyle(MemoBookColor.ink)
-                        .accessibilityAddTraits(.isHeader)
+                    SupportSectionTitle(category.title)
 
                     BrandRowGroup {
                         for entry in category.entries {
@@ -173,14 +167,17 @@ public struct SupportView: View {
             SupportSectionTitle(SupportCopy.contactSection)
 
             BrandRowGroup {
-                // Les deux questions se filtrent comme les autres…
+                // Les deux questions se filtrent comme les autres… et **ouvrent
+                // le formulaire**, pas une réponse : on est là pour écrire
+                // (Hugo, 17/09/2026). Leur chapeau est une phrase, celle de
+                // `SupportCopy.Contact.brief`.
                 for entry in model.visibleContact?.entries ?? [] {
-                    BrandRow(entry.question) { sheet = .answer(entry) }
+                    BrandRow(entry.question) { sheet = .contact(about: entry) }
                 }
                 // …mais la ligne qui mène au formulaire **reste toujours**.
                 // C'est la sortie de secours d'une recherche qui ne trouve
                 // rien, et c'est précisément là qu'on en a besoin.
-                BrandRow(SupportCopy.writeToUs) { sheet = .contact }
+                BrandRow(SupportCopy.writeToUs) { sheet = .contact(about: nil) }
             }
         }
     }
@@ -229,12 +226,14 @@ private struct SupportSectionTitle: View {
 /// formulaire depuis une réponse.
 enum SupportSheetRoute: Identifiable, Hashable {
     case answer(FaqEntry)
-    case contact
+    /// Le formulaire, ouvert tel quel ou **au sujet** d'une des deux questions
+    /// de « Nous contacter » — qui donne alors son titre et son chapeau court.
+    case contact(about: FaqEntry?)
 
     var id: String {
         switch self {
         case .answer(let entry): entry.id
-        case .contact: "faq.contact"
+        case .contact(let entry): entry.map { "faq.contact.\($0.id)" } ?? "faq.contact"
         }
     }
 }

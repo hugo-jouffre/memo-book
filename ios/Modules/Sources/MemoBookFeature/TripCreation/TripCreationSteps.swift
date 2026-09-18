@@ -108,15 +108,18 @@ struct TripCreationStepContent: View {
 
     // MARK: - 4. Notifications
 
-    /// Le rythme des relances. Les libellés partent tels quels en base :
-    /// `memos.narrationPace` est une consigne lue par un agent, pas une clé.
+    /// Le rythme des relances — **les mêmes que les réglages du voyage**
+    /// (``NarrationPace``), dont on ne propose ici que trois : on va vite à
+    /// la création, on ajuste finement plus tard (Hugo, 17/09/2026, T122).
+    /// C'est la clé du rythme qui part en base, comme depuis la feuille des
+    /// réglages ; trois libellés libres y écrivaient une autre langue.
     private var notifications: some View {
         VStack(spacing: MemoBookSpacing.xs + 4) {
             ForEach(TripCreationStepContent.paces, id: \.self) { pace in
-                TripCreationCard(isSelected: model.draft.narrationPace == pace) {
-                    model.draft.narrationPace = pace
+                TripCreationCard(isSelected: model.draft.narrationPace == pace.rawValue) {
+                    model.draft.narrationPace = pace.rawValue
                 } label: {
-                    Text(pace)
+                    Text(pace.displayName)
                         .font(MemoBookFont.body)
                         .foregroundStyle(MemoBookColor.ink)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -125,7 +128,7 @@ struct TripCreationStepContent: View {
         }
     }
 
-    static let paces = ["Tous les jours", "Toutes les semaines", "Tous les mois"]
+    static let paces: [NarrationPace] = [.daily, .everyTwoDays, .weekly]
 
     // MARK: - 5. Ratio image / texte
 
@@ -605,11 +608,12 @@ struct TripAccessCode: View {
 
             VStack(spacing: MemoBookSpacing.s) {
                 BrandButton(
-                    "Partager via Whatsapp",
-                    // ⚠️ Le logo WhatsApp n'est pas un asset de la marque et n'a
-                    // pas à entrer dans son catalogue : c'est la marque d'un
-                    // tiers. La bulle du système en attendant — écart signalé.
-                    icon: Image(systemName: "message"),
+                    "Partager via WhatsApp",
+                    // Le logo WhatsApp, en **vert foncé** : `BrandButton` le
+                    // teinte comme n'importe quelle icône de la marque (Hugo,
+                    // 17/09/2026, T121). Il vient de `assets/logos/whatsapp.svg`
+                    // par `import-brand-logos.py`.
+                    icon: Image(brand: "LogoWhatsApp"),
                     style: showsSystemShare ? .primary : .secondary,
                     fillsWidth: true,
                     action: share

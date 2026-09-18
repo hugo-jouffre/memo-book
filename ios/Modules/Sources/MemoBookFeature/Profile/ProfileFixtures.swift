@@ -15,6 +15,9 @@ extension TravellerProfile {
         fullName: "Maylis Garde",
         email: "maylis.garde@icloud.com",
         phoneNumber: "+33 6 98 69 34 48",
+        // Ce que le serveur devine sur « Maylis » : c'est ce qui fait écrire
+        // « Abonnée » à la feuille, comme la maquette.
+        gender: .female,
         address: PostalAddress(
             street: "7 Rue Simon Fryd",
             postalCode: "69007",

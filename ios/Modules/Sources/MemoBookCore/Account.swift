@@ -63,4 +63,14 @@ public enum AuthProvider: String, Codable, Sendable, Hashable {
         case .google: "Google"
         }
     }
+
+    /// L'autocollant de la marque dans le catalogue — le logo cerné de bleu
+    /// des boutons d'entrée, que la ligne « E-mail » du profil reprend en
+    /// petit.
+    public var logoAsset: String {
+        switch self {
+        case .apple: "LogoApple"
+        case .google: "LogoGoogle"
+        }
+    }
 }

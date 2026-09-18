@@ -9,13 +9,9 @@ import Foundation
 /// Mêmes conventions typographiques que ``BookCopy`` : apostrophe `’` (U+2019),
 /// espace insécable avant `?` et `!`, points de suspension `…` (U+2026).
 ///
-/// ⚠️ **Trois coquilles de la maquette sont recopiées telles quelles** (R8
-/// interdit de corriger en silence) :
-///   - ``intro`` écrit « si tu ne trouve pas de réponse » — il manque le `s` de
-///     la deuxième personne.
-///   - ``Contact/title`` écrit « Ecris » sans accent sur le E capital.
-///   - ``Contact/message`` écrit « dans les plus bref délais » — il manque le
-///     `s` de « brefs » — et « whatsapp » sans capitale.
+/// Les trois coquilles de la maquette — « tu ne trouve », « Ecris », « bref
+/// délais par whatsapp » — sont corrigées dans Figma et ici (Hugo, 17/09/2026,
+/// T92).
 public enum SupportCopy {
     public static let title = "Support et retours"
 
@@ -27,11 +23,9 @@ public enum SupportCopy {
     }
 
     /// Les deux paragraphes de présentation, sous la photo.
-    ///
-    /// ⚠️ Le second porte la coquille « tu ne trouve » (R8).
     public static let intro = [
         "Nous sommes Paul & Hugo, les développeurs de MemoBook. On adore voyager et on veut rendre la création des carnets de voyage rapide, intelligente et authentique.",
-        "Voici notre foire aux questions, en espérant que celle-ci réponde à tes interrogations. Tu auras la possibilité de nous écrire si tu ne trouve pas de réponse.",
+        "Voici notre foire aux questions, en espérant que celle-ci réponde à tes interrogations. Tu auras la possibilité de nous écrire si tu ne trouves pas de réponse.",
     ]
 
     // MARK: - La recherche
@@ -56,10 +50,11 @@ public enum SupportCopy {
         "Aucune question ne parle de « \(query) ». **Écris-nous** : on te répond, et la réponse rejoindra cette page."
     }
 
-    /// Le chapeau de la liste des questions. La maquette l'écrit en minuscules
-    /// et le dessine en capitales : c'est une casse d'affichage, pas une casse
-    /// de copie — VoiceOver doit lire « sujets courants », pas épeler.
-    public static let topicsSection = "sujets courants"
+    /// Le chapeau de la seconde section. « Sujets courants », qui coiffait la
+    /// première, est parti (Clara, 17/09/2026) : les titres des paquets
+    /// suffisent à dire ce qu'on parcourt. La maquette écrit ces chapeaux en
+    /// minuscules et les dessine en capitales : c'est une casse d'affichage,
+    /// pas une casse de copie — VoiceOver lit, il n'épelle pas.
     public static let contactSection = "Nous contacter"
 
     /// La ligne qui ouvre directement le formulaire, sous les deux questions de
@@ -98,13 +93,25 @@ public enum SupportCopy {
     // MARK: - La feuille « Nous contacter »
 
     public enum Contact {
-        /// ⚠️ « Ecris » sans accent : coquille de la maquette (R8).
-        public static let title = "Ecris à notre équipe"
+        public static let title = "Écris à notre équipe"
 
-        /// ⚠️ « les plus bref délais » et « whatsapp » : coquilles de la
-        /// maquette (R8).
         public static let message =
-            "Nous reviendrons vers toi dans les plus bref délais par mail ou par whatsapp si tu as renseigné ton numéro."
+            "Nous reviendrons vers toi dans les plus brefs délais par mail ou par WhatsApp si tu as renseigné ton numéro."
+
+        /// Le chapeau du formulaire quand on y arrive par une des deux
+        /// questions de « Nous contacter » — plus court que la réponse qu'elles
+        /// ouvraient : **les trois lignes de la section ouvrent le formulaire**
+        /// (Hugo, 17/09/2026), et l'explication tient en une phrase.
+        public static func brief(for entryId: String) -> String? {
+            switch entryId {
+            case "faq.aide.probleme":
+                "Décris ce que tu faisais au moment du souci : le diagnostic technique est joint, sans tes souvenirs."
+            case "faq.aide.suggestion":
+                "Dis-nous ce qui te manque : les demandes qui reviennent orientent les prochaines évolutions."
+            default:
+                nil
+            }
+        }
 
         public static let placeholder = "Ton message…"
         public static let send = "Envoyer"

@@ -100,6 +100,12 @@ public struct WelcomeView: View {
                         card(model)
                     }
                     .frame(minHeight: proxy.size.height, alignment: .bottom)
+                    // **La carte bloque en bas** (Clara, 17/09/2026) : une fois
+                    // entièrement montrée, on ne tire plus vers le haut. Le
+                    // crème déborde sous la dalle pour le cas où l'élastique
+                    // reviendrait ; sans élastique, il n'y a plus rien à
+                    // découvrir.
+                    .brandScrollWithoutBounce()
                 }
                 .scrollIndicators(.hidden)
                 .scrollBounceBehavior(.basedOnSize)

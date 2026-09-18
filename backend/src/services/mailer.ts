@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Logger } from "pino";
 import type { Env } from "../env.js";
+import { publicApiBaseUrl } from "./avatars.js";
 import { renderPasswordResetMail, type RenderedMail } from "./mailTemplates.js";
 
 /**
@@ -35,11 +36,16 @@ export interface PasswordResetMail {
  * exactement ce chemin, quel que soit le schéma devant.
  */
 export function passwordResetUrl(env: Env, token: string): string {
+  // **Sur Railway, l'adresse publique de l'API sans rien configurer** : la
+  // variable n'y avait jamais été posée (18/09/2026), et l'e-mail partait
+  // avec un lien `memobook://` que Gmail ne rend pas cliquable. Le schéma
+  // d'app reste le repli du développement, où Railway n'est pas là.
+  const link = env.APP_LINK_BASE_URL === "memobook://" && env.RAILWAY_PUBLIC_DOMAIN.trim()
+    ? publicApiBaseUrl(env)
+    : env.APP_LINK_BASE_URL;
   // `memobook://` garde ses deux barres ; `https://memo-book.com/app/` perd la
   // sienne. Le chemin est le même derrière : `password/reset`.
-  const base = env.APP_LINK_BASE_URL.endsWith("://")
-    ? env.APP_LINK_BASE_URL
-    : env.APP_LINK_BASE_URL.replace(/\/+$/, "") + "/";
+  const base = link.endsWith("://") ? link : link.replace(/\/+$/, "") + "/";
   return `${base}password/reset?token=${encodeURIComponent(token)}`;
 }
 

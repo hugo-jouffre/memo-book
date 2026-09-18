@@ -345,6 +345,13 @@ public struct RootView: View {
                 return
             }
             path.append(.bookPreview(memoId: tripId))
+        case .shareTrip(let id):
+            guard UUID(uuidString: id) != nil else {
+                routingProblem =
+                    "Ce voyage n’existe pas encore sur ton compte : il n’y a rien à partager."
+                return
+            }
+            path.append(.bookPreview(memoId: id, sharing: true))
         case .openHelp:
             path.append(.support)
         case .openConversation(let tripId, let handoff):
@@ -371,6 +378,8 @@ public struct RootView: View {
             path.append(.chat(tripId: tripId, stepId: stepId))
         case .openSettings(let tripId):
             path.append(.tripSettings(id: tripId))
+        case .inviteCompanions(let tripId):
+            path.append(.tripSettings(id: tripId, opening: .companions))
         case .openBookPreview(let tripId):
             path.append(.bookPreview(memoId: tripId))
         case .openHelp:
@@ -387,6 +396,15 @@ public struct RootView: View {
         switch intent {
         case .openWallet:
             path.append(.wallet(tripId: nil))
+        case .openTrip(let id):
+            // Même garde-fou que depuis l'accueil : un voyage du bac à sable
+            // n'a pas d'identifiant de ressource, et n'ouvre rien.
+            guard UUID(uuidString: id) != nil else {
+                routingProblem =
+                    "Ce voyage n’existe pas encore sur ton compte : il n’y a rien à ouvrir."
+                return
+            }
+            path.append(.trip(id: id))
         case .openGallery:
             path.append(.gallery)
         case .openHelp:
@@ -509,7 +527,7 @@ public struct RootView: View {
             guard let tripId = currentTripId else { return }
             path.append(.bookCustomisation(tripId: tripId))
         case .configureCovers:
-            // « Défini maintenant ta 1ère et 4ème de couverture » → « Configurer ».
+            // « Définis maintenant ta 1ère et 4ème de couverture » → « Configurer ».
             // C'est le chemin le plus important vers les couvertures : c'est en
             // feuilletant son carnet qu'on s'aperçoit qu'il n'en a pas.
             openCovers()
@@ -594,7 +612,7 @@ public struct RootView: View {
     private var currentTripId: String? {
         for route in path.reversed() {
             switch route {
-            case .trip(let id), .tripSettings(let id), .bookPreview(let id),
+            case .trip(let id), .tripSettings(let id, _), .bookPreview(let id, _),
                 .order(let id), .bookCustomisation(let id), .covers(let id),
                 .coverStyle(let id), .coverPhoto(let id), .coverTexts(let id):
                 return id
@@ -644,10 +662,18 @@ public struct RootView: View {
             TripCreationView(model: dependencies.tripCreationModel(), onIntent: handle)
         case .memos:
             MemoListView()
-        case .tripSettings(let id):
-            TripSettingsView(model: dependencies.tripSettingsModel(tripId: id), onIntent: handle)
-        case .bookPreview(let memoId):
-            BookPreviewFlowView(model: dependencies.bookPreviewModel(memoId: memoId), onIntent: handle)
+        case .tripSettings(let id, let opening):
+            TripSettingsView(
+                model: dependencies.tripSettingsModel(tripId: id),
+                opening: opening,
+                onIntent: handle
+            )
+        case .bookPreview(let memoId, let sharing):
+            BookPreviewFlowView(
+                model: dependencies.bookPreviewModel(memoId: memoId),
+                opensShare: sharing,
+                onIntent: handle
+            )
         case .order(let memoId):
             OrderView(model: orderModel(memoId: memoId), onIntent: handle)
         case .wallet(let tripId):
@@ -727,13 +753,16 @@ enum HomeRoute: Hashable {
     case tripCreation
     case memos
     /// Les réglages d'un voyage, ouverts par la roue crantée — depuis son
-    /// accueil comme depuis la conversation.
-    case tripSettings(id: String)
+    /// accueil comme depuis la conversation. `opening` : la feuille à ouvrir
+    /// en arrivant — les co-voyageurs, depuis le « + » de l'accueil du voyage.
+    case tripSettings(id: String, opening: TripSettingsSheet? = nil)
     /// L'aperçu du carnet : la page qui se monte, puis le PDF qu'on feuillette.
     ///
     /// L'identifiant est celui du **carnet** et non du voyage : c'est le carnet
-    /// qu'on compose, et `memos` est la ressource qui le porte.
-    case bookPreview(memoId: String)
+    /// qu'on compose, et `memos` est la ressource qui le porte. `sharing`
+    /// ouvre l'aperçu **sur sa feuille de partage** — le tiroir d'une carte de
+    /// l'accueil.
+    case bookPreview(memoId: String, sharing: Bool = false)
     /// Les sept étapes de « Commander mon Carnet ».
     ///
     /// On n'y arrive **que par l'aperçu** : on ne commande pas un carnet qu'on

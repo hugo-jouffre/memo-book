@@ -197,7 +197,7 @@ l'écran implémenté à côté de la maquette Figma**.
 | Icône inline (symbole système) | 1.5 rem (24) | Figma : `keyboard_backspace` = 24 |
 | **Icône de contenu du jeu de marque** | **2 rem (32)** | `contentIcon` — les glyphes du jeu n'occupent que 55 à 70 % de leur boîte de 24 ; à 24 pt ils faisaient 9 à 12 pt d'encre. Hugo, 14/09/2026 — voir T101 |
 | Texte courant | 1 rem (16) | `Text Sizes/Text Regular` |
-| Barre de progression | 0.25 rem (4) | Convention iOS (Figma dessine 7 → §7) |
+| Barre de progression | 0.375 rem (6) | `progressBarHeight` — ce que dessinent la cagnotte et les cartes de l'accueil (T77, 17/09/2026) |
 
 > **La marge d'écran est de 1 rem (16 pt), sur tous les écrans, sans exception.**
 >
@@ -448,6 +448,14 @@ Aucune PR d'écran ne part sans que ces cases soient cochées.
 | D22 | **Accueil d'un voyage** — Hugo, 14/09/2026. Le filtre « Étapes » est retiré pour le moment (T30). Les icônes que le jeu de marque n'a pas restent des symboles système : à terme, toutes les icônes seront dans la DA (T32). Les points à trancher sur la carte attendent la v2 (T33) |
 | D23 | **Ce qui a été redessiné dans Figma** — Hugo, 14/09/2026. Le *Welcome* est redessiné et ne vouvoie plus : il reste à le redévelopper (T8, → T106). Les états d'erreur du *Sign Up* sont dessinés — validation, adresse déjà prise, serveur — et l'état de chargement avant l'inscription est le Splash (T9, → T107) |
 
+| D24 | **Le genre se déduit du prénom, et se corrige dans le profil** — Hugo, 17/09/2026 (T76). Femme, homme, ou « je ne préfère pas répondre », juste sous l'adresse postale. Il ne sert qu'à accorder « Abonné(e) » ; le serveur devine, la personne l'emporte |
+| D25 | **« 1ère », partout.** L'ordinal s'abrège comme la maquette l'écrit, et non « 1re » — Hugo, 17/09/2026 (T91). « 4e » reste |
+| D26 | **Les coquilles de la maquette se corrigent des deux côtés.** Quand Hugo dit qu'une faute est corrigée dans Figma, le code suit sans attendre un nouvel export (T49, T67, T92, T113) — R8 vaut pour la copie voulue, pas pour la faute |
+| D27 | **Les étapes Contexte et Ratio quittent le parcours de création**, code gardé — Hugo, 17/09/2026. Le brouillon part avec leurs valeurs par défaut ; les réglages du voyage les portent toujours |
+| D28 | **La pastille « Mis à jour » s'éteint** — Hugo, 17/09/2026. Le balayage et le clignotement des chiffres suffisent ; elle reviendra peut-être pour l'aperçu PDF |
+| D29 | **Un seul cadrage du M** derrière tous les écrans, celui du design system — Hugo, 17/09/2026 (T63) |
+| D30 | **Chaque ticket dit son écran** — troisième colonne « Écran / parcours » dans toutes les tables de tickets, à partir du 17/09/2026 |
+
 ### 7.2 Ce qui reste ouvert
 
 Tant que Clara n'a pas arbitré, on applique R4 (les variables Figma gagnent) et on
@@ -455,11 +463,6 @@ n'harmonise rien de sa propre initiative.
 
 | # | Sujet | État |
 |---|---|---|
-| T4 | ✅ **Tranché (D20)** — le modèle d'authentification est réglé : email + mot de passe, Apple et Google, ce que `backend/src/routes/auth.ts` fait | Hugo, 14/09/2026 |
-| T6 | ✅ **Tranché (D20)** — le loader n'est pas prévu pour le moment. L'écran de lancement (§9.1, le M qui s'écrit) a remplacé le Splash ; il n'y a plus de barre à dimensionner | Hugo, 14/09/2026 |
-| T7 | ✅ **Tranché (D16)** — le lime ne dit que l'abonnement ; l'accent du reste de l'app est le bleu `#AFD2F0`. Règle posée dans `Tokens.swift` | Hugo, 14/09/2026 |
-| T8 | ✅ **Tranché (D23)** — le *Welcome* a été redessiné dans Figma et ne vouvoie plus. **Reste à le redévelopper** : voir T106 | Hugo, 14/09/2026 |
-| T9 | ✅ **Tranché (D23)** — l'état de chargement avant l'inscription est le Splash ; les erreurs (validation, adresse déjà prise, serveur) sont dessinées dans Figma et **implémentées** : voir T107 | Hugo, 14/09/2026 |
 
 ---
 
@@ -907,16 +910,9 @@ area et `ignoresSafeArea` l'étire vers le haut.
 
 **À trancher**
 
-| # | Sujet |
-|---|---|
-| T10 | **Mesures non confirmées.** Les couleurs viennent du nœud ; les espacements, rayons et tailles sont relevés sur l'image. À confirmer au premier `get_design_context` disponible |
-| T11 | ✅ **Tranché (D19)** — `screenMargin` vaut 1 rem (16) depuis le 14/09/2026, sur toute l'app en une fois |
-| T12 | ✅ **Tranché (D17)** — `blueText` vaut **#4088C6**, troisième bleu de la palette ; `blueTextSoft` disparaît. Le sous-titre de la carte de découverte et la promesse des connecteurs prennent le même bleu que leur titre |
-| T13 | ✅ **Tranché (D20)** — les compteurs sont en français, R9 s'applique |
-| T15 | ✅ **Tranché (D20)** — la pastille compte les voyages de la liste qu'elle coiffe, dont toutes les cartes sont visibles ; le « ×8 » de la maquette était une erreur |
-| T16 | ~~Image du carnet d'exemple~~ **Réglé** : `assets/illustrations/Carnets Example Homepage.png`, embarquée sous `ShowcaseCarnets`. Elle est **livrée avec l'app** — c'est une image de marque, pas une donnée ; `Showcase.imageUrl` la remplacera le jour où une campagne veut la sienne. Source en 330 × 252, un peu juste pour du @3x : à réexporter en 2× si elle paraît molle |
-| T17 | ✅ **Tranché (D20)** — `Green Lighter` sur le point « en ce moment » est confirmé |
-| T18 | ✅ **Tranché (D18)** — `Grays/Gray` ne sert qu'aux aplats ; tout texte secondaire est en `Grey Typo` (`inkMuted`), écrans du lot 1 compris |
+| # | Sujet | Écran / parcours |
+|---|---|---|
+| T10 | **Mesures non confirmées.** Les couleurs viennent du nœud ; les espacements, rayons et tailles sont relevés sur l'image. À confirmer au premier `get_design_context` disponible | Accueil |
 
 ### 9.3 La boîte d'information de l'accueil
 
@@ -988,10 +984,8 @@ mauvais réseau.
 
 **À trancher**
 
-| # | Sujet |
-|---|---|
-| T19 | ✅ **Tranché (D20)** — la copie des états est relue, telle qu'implémentée |
-| T20 | ✅ **Tranché (D20)** — `Beige Darker` est confirmé pour le fond de la boîte |
+| # | Sujet | Écran / parcours |
+|---|---|---|
 
 ## 10. Ce qu'on ne fait jamais
 
@@ -1322,21 +1316,10 @@ l'accueil, et il se voit en **un seul endroit** (`ProfileView.notYetRouted`).
 
 **À trancher**
 
-| # | Sujet |
-|---|---|
-| T16 | **Mesures non confirmées.** Aucun appel MCP n'a abouti : tout est relevé sur les captures. À confirmer au premier `get_design_context` disponible — au minimum le rayon des groupes, la taille du titre (24 supposé), la présence ou non d'un filet autour des cartes blanches (implémenté avec, par cohérence avec `homeCard()`), et la teinte de l'icône « Exporter mes données » (implémentée en `warning`) |
-| T17 | ✅ **Tranché (D21)** — les quatre coquilles sont corrigées dans Figma, et le code suit : « Profil », « Ajouter », « à », « permet », et la carte des connecteurs tutoie |
-| T18 | ✅ **Tranché (D21)** — le doublon était une erreur : « Confidentialité » ne vit que dans le bloc des conditions d'utilisation (groupe 4), la ligne du groupe 2 est retirée |
-| T19 | ✅ **Tranché (D21)** — la sélection reste bleue |
-| T20 | ✅ **Tranché (D21)** — le formateur du système est validé (« 67,88 € ») |
-| T21 | ✅ **Tranché (D21)** — le dessin groupé convient, et le « + » passe **devant** le libellé (`iconPlacement` par défaut) |
-| T22 | ✅ **Tranché (D21)** — sans adresse ou sans carte, la ligne écrit « Ajouter une adresse » / « Ajouter une carte » en General Sans Regular 13 vert (`BrandRow.ValueTone.invitation`, `MemoBookFont.rowAction` — la maquette dit Inter, qui n'est pas une police de la marque). Sans commande, la feuille reprend la carte en pointillés de la maquette `Modale – Profile PAS de commande` (`3162:34917`), qui mène aux carnets de la communauté. ⚠️ Le titre de cette modale n'a pas pu être lu (quota MCP) ; sa seconde ligne écrit « le carnets », corrigé |
-| T23 | ✅ **Tranché (D21)** — deux modales dessinées, `Modale – Supression de compte (sans voyage)` `3203:21809` et `(avec voyage)` `3206:21854`, implémentées dans `DeleteAccountSheet` à la place de l'alerte du système. Le paragraphe est celui de la maquette, à deux corrections signalées : « sont supprimé » s'accorde, « Co-voyageurs » prend sa minuscule. ⚠️ Le titre et les deux libellés de bouton n'ont pas pu être lus (quota MCP) : « Tu es sûr de vouloir supprimer ton compte MemoBook ? », « Garder mon compte », « Supprimer définitivement mon compte » sont à relire sur les nœuds |
-| T24 | ✅ **Tranché (D21)** — le crayon est sur le nom et sur le téléphone, **petit** (1 rem), **sans cerne**, et **au bord droit de la colonne** : celui du nom ne suit plus le nom, il est à l'aplomb des chevrons des lignes du dessous |
-| T26 | ✅ **Tranché (D21)** — la table de formats est validée telle quelle |
-| T27 | ✅ **Tranché (D21)** — « Gérée par ton compte Apple » est validé |
-| T28 | **`signInProvider` n'existe pas encore côté back-end.** L'écran le lit sur le profil, le jeu d'essai le fournit ; il faudra que `GET /v1/me/profile` le renvoie, sans quoi une adresse Apple restera modifiable |
-| T27 | ~~**L'icône « clavier bas »**~~ — close le 08/09/2026 : `IconKeyboardDown` est livrée, le double chevron provisoire est retiré |
+| # | Sujet | Écran / parcours |
+|---|---|---|
+| T16 | **Mesures non confirmées.** Aucun appel MCP n'a abouti : tout est relevé sur les captures. À confirmer au premier `get_design_context` disponible — au minimum le rayon des groupes, la taille du titre (24 supposé), la présence ou non d'un filet autour des cartes blanches (implémenté avec, par cohérence avec `homeCard()`), et la teinte de l'icône « Exporter mes données » (implémentée en `warning`) | Profil |
+| T28 | **`signInProvider` n'existe pas encore côté back-end.** L'écran le lit sur le profil, le jeu d'essai le fournit ; il faudra que `GET /v1/me/profile` le renvoie, sans quoi une adresse Apple restera modifiable | Profil |
 
 ---
 
@@ -1464,13 +1447,9 @@ se voit en un seul endroit (`TripHomeView.notYetRouted`).
 
 **À trancher**
 
-| # | Sujet |
-|---|---|
-| T29 | ✅ **Tranché (D7)** — le E sans accent et les compteurs en français sont validés. Restent les mesures relevées sur une capture, faute de nœud Figma |
-| T30 | ✅ **Tranché (D22)** — le filtre « Étapes » est **retiré** pour le moment : il reste « Pays » et « Transports », et `TripHomeModel` ne connaît plus d'étape choisie. Sans étape, aucune pastille ne s'affiche (T100) |
-| T31 | ✅ **Tranché (D8)** — le premier groupe est celui des **collaborateurs**, qui ajoutent des étapes ; le second, les visages croisés en chemin, passe en v2 et est retiré |
-| T32 | ✅ **Tranché (D22)** — ce qui manque reste sur des symboles système en attendant ; à terme toutes les icônes seront dans la DA. Ce qui est entré dans `assets/icons/brand-icons` le 14/09/2026, c'est `Layers`, `Thumb Up` et `Thumb Down` : le drapeau, la valise (dont le filtre n'existe plus) et l'itinéraire n'y sont pas encore |
-| T33 | ⏸️ **En stand-by (D22)** — Hugo, 14/09/2026 : les points à trancher concernant la carte attendent la **v2** de l'app, la carte en fait partie |
+| # | Sujet | Écran / parcours |
+|---|---|---|
+| T33 | ⏸️ **En stand-by (D22)** — Hugo, 14/09/2026 : les points à trancher concernant la carte attendent la **v2** de l'app, la carte en fait partie | Accueil d'un voyage |
 
 ---
 
@@ -1541,13 +1520,8 @@ voir le carnets de la communauté » · « Tes voyages passés s'afficheront ici
 
 **À trancher**
 
-| # | Sujet |
-|---|---|
-| T34 | ✅ **Tranché (D9)** — coquille confirmée, corrigée dans le code, à reprendre dans Figma |
-| T35 | ✅ **Tranché (D10)** — « Ton voyage » pour un seul, « Tes voyages » dès le deuxième |
-| T36 | ✅ **Tranché (D16)** — la pastille « ×1 » est **bleue à contour** (`BrandTagPill.Tone.info`). Seul ce qui concerne l'abonnement est lime, d'où le compteur d'étapes offertes qui le reste |
-| T37 | 🟠 **Reste ouvert, volontairement** — Hugo, 14/09/2026 : « Hugo va le faire ». L'illustration (passeport + carnet ouvert) arrive ; le livre du *Welcome* tient la place d'ici là |
-| T38 | ✅ **Tranché (D11)** — dès que les dates le disent en cours, il est en cours, même sans souvenir : c'est là qu'il faut inciter à raconter la première étape |
+| # | Sujet | Écran / parcours |
+|---|---|---|
 
 ---
 
@@ -1757,20 +1731,11 @@ simulateur à l'autre. À reprendre à la prochaine session sur un SE connecté.
 
 **À trancher**
 
-| # | Sujet |
-|---|---|
-| T66 | ✅ **Tranché (D12)** — les neuf fautes et les deux formes d'apostrophe sont corrigées dans le code. À reprendre dans Figma |
-| T67 | **Le rayon de la pastille.** La maquette dessine 6 ; `BrandTagPill` est une capsule pour tous ses tons. Un quatrième rayon rouvrirait le problème que ce composant a été écrit pour fermer — implémenté en capsule |
-| T68 | ✅ **Tranché (D13)** — le lime **peut** porter un fond de bouton, à une condition qui n'est pas négociable : le libellé et le filet sont alors verts, jamais l'encre. `Tokens.swift` porte désormais la règle, et `BrandButton.accent` comme `BrandTagPill.accentOutlined` l'appliquent |
-| T69 | **Les cartes d'options divergent d'un écran à l'autre.** Rayon 8 / padding 14 / gouttière 12 ici, contre 16 / 8 / 8 sur la feuille du moyen de paiement (§10.1), pour le même motif. `BrandOptionGroup` est réemployé tel quel ; à harmoniser dans Figma |
-| T70 | ✅ **Tranché (D14)** — on garde le rond de fermeture existant, partout. `BrandSheet` n'est pas touché, et les cinq nouvelles feuilles emploient le même que les six du lot Profil. L'écart avec la maquette (× simple contre × cerclé) est à reprendre dans Figma |
-| T71 | **Le voyage n'est pas rattachable à un abonnement** côté base. Sans lui, trois phrases sur cinq feuilles perdent leur donnée et se replient sur une formulation vague. À trancher avec le modèle de données avant de brancher StoreKit |
-| T72 | **La raison de départ n'a pas de compteur.** Les quatre réponses sont modélisées côté app et jetées à l'envoi. Où doivent-elles atterrir ? |
-| T73 | **Aucune raison n'est pré-cochée**, alors que la maquette montre « C'est un peu cher » sélectionnée. Lu comme la démonstration d'un état, pas comme une réponse par défaut : en pré-cocher une fausserait le compteur |
-| T74 | **« Voir un aperçu de ton carnet → », « En savoir plus » et « Voir ma cagnotte » ne mènent nulle part** — aucun écran n'est dessiné derrière. Même parti pris que les intentions non routées du profil |
-| T75 | ✅ **Tranché (D15)** — résiliation immédiate, dès maintenant. ⚠️ **StoreKit s'y opposera** : voir §13.2 |
-| T76 | **« Abonné » ou « Abonnée » ?** La feuille écrit « Abonnée » (la maquette montre un compte féminin) ; la pastille du profil, elle, s'en tient à la forme non marquée parce que l'app ne sait pas à qui elle s'adresse. Les deux se contredisent à l'écran. Forme non marquée, doublet (« Abonné·e »), ou donnée de genre au compte ? |
-| T77 | **Le profil ne connaît pas le quota.** `GET /v1/profile` ne rend pas `offeredSteps` / `remainingSteps`, que seul l'accueil reçoit : le profil ne sait donc pas distinguer un compte neuf d'un compte épuisé, et leur montre la même invitation. Faut-il que le profil porte le quota, ou lui suffit-il de savoir qu'il n'y a pas d'abonnement ? |
+| # | Sujet | Écran / parcours |
+|---|---|---|
+| T69 | **Les cartes d'options divergent d'un écran à l'autre.** Rayon 8 / padding 14 / gouttière 12 ici, contre 16 / 8 / 8 sur la feuille du moyen de paiement (§10.1), pour le même motif. `BrandOptionGroup` est réemployé tel quel ; à harmoniser dans Figma | Abonnement : mode d'emploi, état, et résiliation en trois temps |
+| T71 | **Le voyage n'est pas rattachable à un abonnement** côté base. Sans lui, trois phrases sur cinq feuilles perdent leur donnée et se replient sur une formulation vague. À trancher avec le modèle de données avant de brancher StoreKit | Abonnement : mode d'emploi, état, et résiliation en trois temps |
+| T72 | **La raison de départ n'a pas de compteur.** Les quatre réponses sont modélisées côté app et jetées à l'envoi. Où doivent-elles atterrir ? | Abonnement : mode d'emploi, état, et résiliation en trois temps |
 
 ---
 
@@ -1927,21 +1892,8 @@ seul endroit (`ChatView.notYetRouted`).
 
 **À trancher**
 
-| # | Sujet |
-|---|---|
-| T49 | **Deux coquilles dans la bulle d'ouverture** : « pourrais tu » sans trait d'union, et « tous le long » pour « tout le long ». Recopiées telles quelles (R8) |
-| T50 | ✅ **Tranché (D9)** — l'accueil tutoie : « Comment souhaites-tu commencer aujourd'hui ? ». R9 ne souffre pas d'exception, et la phrase se contredisait elle-même. À reprendre dans Figma |
-| T51 | **« Record » est en anglais** au milieu d'une app française. Recopié tel quel |
-| T52 | ✅ **Tranché (D10)** — la ville est **entrée dans le modèle** : `Destination.city` côté app, `memos.destinationCity` en base (migration `20260910120000_ville_du_voyage`), sérialisée par `serializeTrip`, et posée sur chaque voyage du jeu d'essai. L'accueil écrit donc « Nouveau voyage à Rome ! » comme la maquette. Nulle pour un voyage sans ville — un tour du monde —, où la phrase se replie |
-| T53 | **Seize icônes Lucide** remplacent des dessins que le jeu de marque n'a pas. Lesquelles Clara veut-elle dessiner, et lesquelles restent empruntées ? |
-| T54 | **La police manuscrite manque.** « Retranscription du contexte » est en Gloria Hallelujah dans la maquette ; elle n'est pas dans le bundle et doit passer par `make-brand-fonts.py`. Rendu en surtitre General Sans vert en attendant |
-| T55 | **La pastille « Aperçu en direct » est en 10 pt** dans la maquette. L'app n'est jamais descendue sous 12 et emploie `overline` ici |
-| T56 | **Le blanc des bulles.** La maquette dit `Neutral/100` (#FFFFFF), l'app pose son blanc crème `surface` (#FFFCF8). Écart invisible sur le fond crème, et deux blancs presque identiques coûtent plus cher que lui |
-| T57 | ✅ **Accepté en l'état (D11)** — on garde le repli tant que la transcription n'est pas branchée. **Le trio de validation suit une fiche qui porte du vrai texte.** Tant que la transcription n'est pas branchée, une fiche sans récit propose « Je te le réécris ici / Je réenregistre / Plus tard ». En debug, une petite banque déterministe remplit la fiche et la marque `isSimulated` ; en release, elle reste vide — une fiche qui prétend restituer un vocal que personne n'a écouté est un fait inventé |
-| T58 | **Une puce s'affiche en bulle bleue dans le fil**, comme la maquette le montre (frame 4). Est-ce voulu pour « J'aimerais faire des modifications à la main », qui se lit alors comme une phrase adressée à MEMO ? |
-| T59 | **Le bleu du bouton d'envoi** (`chat/toolbar/input-btn-active`, #5D6CF5) n'est pas dans la palette de marque : c'est un bleu-violet emprunté au kit de messagerie. Gardé parce qu'un envoi est un geste de système, pas une action de marque — le vert sert déjà à « c'est ici qu'on appuie » partout ailleurs. À faire entrer dans les variables, ou à remplacer |
-| T60 | **La bulle de photos n'est pas dessinée.** La maquette propose l'ajout de photos (une puce, un bouton) sans montrer ce que ça produit dans le fil. Écrite ici — une grande vignette seule, une grille de deux colonnes sinon, `+n` au-delà de quatre — pour que le bouton mène quelque part. À faire dessiner |
-| T61 | ✅ **Réglé** — la grande feuille d'enregistrement est dans `main` (e507931) : « Commencer à enregistrer » la rouvre depuis l'accueil, et la conversation se rejoint par une étape du voyage. `BrandWaveform` porte les deux frises — celle de la feuille (`size: .sheet`) et celle de la barre du chat (`size: .bar`) — et le même rendu d'un vocal terminé |
+| # | Sujet | Écran / parcours |
+|---|---|---|
 
 ### 14.2 La barre d'envoi, état par état
 
@@ -2331,18 +2283,9 @@ afficher »
 
 **À trancher (suite)**
 
-| # | Sujet |
-|---|---|
-| T65 | ✅ **Réglé** — le hors-ligne du bac à sable coupe vraiment le réseau depuis la fusion de `proprietaire-unique-et-secrets` : le vocal part sur le disque (`PendingRecordingStore`) et la file (`RecordingOutbox`) le renvoie au retour. Le drapeau provisoire `SandboxNetwork`, qui ne faisait qu'échouer le chargement, a été retiré |
-| T62 | ✅ **Réglé (D19)** — `screenMargin` vaut 16 depuis le 14/09/2026 : le paywall ne s'écarte plus de rien, `PaywallMetrics.margin` n'est plus qu'un alias |
-| T63 | **Le M de fond** : cadrage du design system contre quart de tour de la maquette du paywall. Uniformiser le cadrage, ou ouvrir un axe de rotation sur `BrandMarkBackdrop` ? |
-| T64 | **Durée d'un écran de story : 6 s**, choisie ici — la maquette ne la donne pas (seul le tracé du trait est animé dans Figma). À valider à l'usage |
-| T39 | ✅ **Tranché** — l'icône de filtre est **décorative**, et rien d'autre. Hugo, 09/09/2026. Elle ouvre la ligne et défile avec elle ; elle ne se laisse pas toucher et reste masquée à VoiceOver |
-| T40 | ✅ **Tranché** — le rayon 1.5 rem (24) reste tel quel. Hugo, 09/09/2026 : « c'est ok pour l'instant ». Cinquième valeur de rayon de l'app, à reprendre le jour où Clara passe sur l'échelle |
-| T41 | **Les vignettes ne s'ouvrent pas** — confirmé par Hugo, c'est normal pour l'instant. Il n'y a donc ni bouton, ni flèche, ni retour au doigt : rien ne promet un geste qui ne se passerait pas |
-| T42 | **Les pictogrammes de catégorie sont ceux de Lucide**, tracés, là où le jeu de marque est plein. L'écart se voit dans la barre. À reprendre le jour où Clara dessine la série |
-| T43 | **Aucune photo de couverture** ne remonte encore : toutes les vignettes portent l'aplat dégradé. Les formats de la mosaïque sont donc à revoir sur de vraies images |
-| T44 | **Un glissé vertical parti de la bande de filtres fait défiler la page.** C'est le verrou directionnel d'iOS — un glissé franchement horizontal ne bouge que les pastilles, un glissé vertical prend la page, exactement comme les rayons de l'App Store. Le rendre horizontal seul veut dire refuser le défilement depuis cette bande de 2.75 rem, ce qui demande de passer par UIKit. À trancher : est-ce gênant, ou est-ce l'attendu ? |
+| # | Sujet | Écran / parcours |
+|---|---|---|
+| T43 | **Aucune photo de couverture** ne remonte encore : toutes les vignettes portent l'aplat dégradé. Les formats de la mosaïque sont donc à revoir sur de vraies images | Exemples de carnets |
 
 ---
 
@@ -2554,29 +2497,10 @@ ramenait alors au profil au lieu de l'offre.
 
 ### 16.7 À trancher
 
-| # | Sujet |
-|---|---|
-| T66 | **`Wallet.emptyMessage` vouvoie** — « Partagez votre cagnotte avec vos proches pour recevoir vos premières contributions ! ». R9 ne souffre aucune exception : la phrase est recopiée telle quelle (R8) et remontée. À réécrire dans Figma en « Partage ta cagnotte avec tes proches pour recevoir tes premières contributions ! » |
-| T67 | **Trois coquilles recopiées** (R8 interdit de corriger en silence) : « grace » sans accent circonflexe sur la pastille de synthèse, « Prévisulation PDF » pour « Prévisualisation » dans les réglages, et « Défini maintenant » pour « Définis » sur la couverture à configurer |
-| T68 | **Les deux boutons de la feuille de partage portent la même icône** — un cube Relume, visiblement un reste de composant : « Partager le fichier pdf » et « Partager le lien de prévisualisation » ne veulent pas dire la même chose et se ressemblent trait pour trait. Implémenté tel quel (R3, R10). Le jeu de marque a `IconPDF` et `IconLink`, qui diraient exactement ce qu'il faut |
-| T69 | **Le libellé d'un bouton `small` passe à 16**, la valeur du composant Figma `Button`. Le 18 de `MemoBookFont.button` reste, mais il redevient ce qu'il est : une exception due au bouton d'Apple, qui n'a de sens que sur un appel à l'action pleine largeur. À 18, « Partager ma cagnotte » perdait le mot « cagnotte » |
-| T70 | **Les deux boutons de la carte de solde sont en taille `small`** (44 pt) là où la maquette les dessine à 48. Quatre points au-dessus du seuil de R2, et assumé : c'est la **typographie** qui décide — à 18 pt, « Partager » et son icône demandent 152 pt dans une moitié de carte qui en offre 133 sur un iPhone SE. Soit la maquette descend son libellé de taille pleine à 16, soit ces deux boutons montent à 48 |
-| T71 | **Le montant s'écrit toujours à deux décimales**, là où la maquette alterne « +30€ » et « +10,00€ » dans la même liste. Deux formats de montant côte à côte se lisent comme une erreur de saisie |
-| T72 | **La pastille « DON » est à 11 pt** et non aux 9 de la maquette : l'app n'est jamais descendue sous 11, et ce mot-là porte la seule information qui distingue deux lignes de l'historique |
-| T73 | **Le logo Tricount est écrit en toutes lettres** (« tt » dans le bleu de la marque) faute d'asset : c'est le logo d'un service tiers, il n'a pas à entrer dans le catalogue de MemoBook. À récupérer auprès de Tricount, ou à remplacer par un pictogramme neutre |
-| T74 | **« La carte » montre l'illustration `IllustrationMaps`** et non le tracé du voyage : `backend/src/services/mapSvg.ts` le produit pour le carnet, pas pour l'écran. La ligne ne mène d'ailleurs nulle part |
-| T75 | **Le coût d'impression est une constante** (1,798 € la page, soit les 89,90 € des 50 pages de la maquette). Les frais fixes de fabrication et de port sont dedans, donc un carnet de dix pages ne coûte pas un cinquième d'un carnet de cinquante. À trancher avec l'imprimeur **avant** d'encaisser quoi que ce soit |
-| T76 | **Neuf lignes de réglages n'ouvrent rien** — dates, rythme, notifications, co-voyageurs, thème, style, Tricount, carte, commande. ✅ « Besoin d'aide ? » mène désormais au support (§ 17.5). Les feuilles ne sont pas dessinées ; les lignes sont inertes plutôt que branchées sur un écran inventé (R3) |
-| T78 | ✅ **Réglé** — le profil lisait « Abonne-toi » à quelqu'un à qui l'accueil annonçait « 2 étapes restantes ». Il ne regardait que l'abonnement, jamais le quota, alors que `GET /v1/profile` rend `offeredSteps` et `remainingSteps` depuis toujours. Les deux écrans partagent désormais le même calcul, et les deux pastilles s'accordent au singulier |
-| T79 | ✅ **Réglé** — les trois barres du paywall se remplissaient ensemble. Deux causes : la remise à zéro et le remplissage tombaient dans la même passe (SwiftUI n'y voyait qu'une écriture, de 1 vers 1), et le `withAnimation` autour de `page` emportait les barres avec le contenu. La remise à zéro est explicitement sans animation, et la transition vit sur le contenu |
-| T85 | ✅ **Réglé** — appuyer sur « Continuer » en cours de remplissage faisait avancer **deux** barres ensemble. Le remplissage est une animation linéaire de six secondes posée sur `progress` ; tourner la page la laissait courir, et la barre qui s'ouvrait héritait des secondes restantes. `turn(_:)` remet désormais `progress` à zéro **et** change de page dans une seule transaction sans animation : l'animation en vol est remplacée au lieu d'être attendue |
-| T86 | ✅ **Réglé** — les traits s'arrêtaient pile au bord de l'écran et montraient leurs deux bouts arrondis. Ils débordent maintenant de 12 % de leur largeur de chaque côté, par le **chemin** (`BleedingShape`) et non par un `scaleEffect` : une mise à l'échelle non uniforme aurait ovalisé l'épaisseur du trait. Le `trim` de l'animation porte sur le tracé entier, si bien que le geste entre par le hors-champ |
-| T80 | **Les zones de tapotis du paywall passent sous le contenu.** Posées au-dessus, elles avalaient tout contrôle hors de la bande basse épargnée — c'est ce qui est arrivé à la pastille « Voir un aperçu ». Le texte des pages porte donc `paywallProse()`, qui le rend non touchable. Chaque nouveau bloc de texte du paywall devra le porter aussi, sinon la story ne défilera plus dessous. Les quatre cartes de l'écran 3 le portent également — pastille « Voir une estimation » comprise, qui est inerte : le jour où elle mènera quelque part, elle devra en sortir |
-| T81 | **La barre de la story finit de se remplir derrière la feuille d'aperçu.** Le minuteur, lui, est bien à l'arrêt — la page ne tourne pas, et on la retrouve entière en refermant. C'est l'animation SwiftUI déjà lancée qui va au bout : l'arrêter demanderait de lire l'avancement en cours, ce que SwiftUI n'expose pas |
-| T82 | **Dix lignes de personnalisation ne mènent nulle part** — ratio, nombre de pages, fun facts, pointillés, décorations, quatre typographies. Leurs écrans de choix ne sont pas dessinés. ✅ La onzième, **les couvertures**, a le sien depuis le lot 6 (§ 17.1) |
-| T83 | **Les deux plats de la ligne « Couvertures » sont dessinés en SwiftUI**, là où la maquette pose un rendu 3D de deux livres. Un rendu importé serait une image figée qui mentirait dès que le voyageur change sa couverture ; ces deux plats-là afficheront sa photo le jour où elle existe |
-| T84 | **« Ajuster les différents options… vous ressemble »** — l'intro des personnalisations vouvoie *et* porte deux fautes (infinitif au lieu de l'impératif, accord manquant). Recopiée telle quelle (R8) et remontée, comme T66 |
-| T77 | **La barre de progression est à 6 pt**, ce que dessinent la cagnotte comme les cartes de l'accueil. Le § 2.3 annonce encore 0.25 rem (4) au motif que Figma dessinait 7 : c'est **le document** qui est en retard, pas la valeur |
+| # | Sujet | Écran / parcours |
+|---|---|---|
+| T76 | **Deux lignes des réglages n'ouvrent rien** : « Connecte ton Tricount » et « La carte ». Les sept autres ont leur feuille ou leur écran depuis le lot 7. Pas de carte pour le moment (Hugo, 17/09/2026) ; Tricount attend son intégration | Lot 4 — Le carnet : réglages, aperçu, partage et cagnotte |
+| T80 | **Les zones de tapotis du paywall passent sous le contenu.** Posées au-dessus, elles avalaient tout contrôle hors de la bande basse épargnée — c'est ce qui est arrivé à la pastille « Voir un aperçu ». Le texte des pages porte donc `paywallProse()`, qui le rend non touchable. Chaque nouveau bloc de texte du paywall devra le porter aussi, sinon la story ne défilera plus dessous. Les quatre cartes de l'écran 3 le portent également — pastille « Voir une estimation » comprise, qui est inerte : le jour où elle mènera quelque part, elle devra en sortir | Lot 4 — Le carnet : réglages, aperçu, partage et cagnotte |
 
 ---
 
@@ -2746,17 +2670,11 @@ fermeture de l'écran**, et un message écrit au support n'arrive nulle part.
 
 ### 17.8 À trancher
 
-| # | Sujet |
-|---|---|
-| T87 | **Le plat est au rapport A5 (1,414)**, là où la maquette dessine 233 × 339 (1,455) — neuf points d'écart sur la hauteur. C'est le format du papier qui tranche, pas l'artboard, et c'est déjà le choix du § 16.1 pour la vignette des réglages |
-| T88 | **Une photo importée ne part nulle part.** Elle est enregistrée dans les caches de l'appareil, comme les photos du chat, et se perd à la fermeture de l'écran. C'est la route des couvertures qui manque (T-back-end ci-dessus), pas l'écran |
-| T89 | **L'état « en train d'écrire » n'est pas dessiné** sur l'écran des textes. Le champ s'ouvre sous le plat, faute de maquette. À dessiner, ou à valider tel quel |
-| T90 | **Le texte de quatrième n'a pas de crayon** — la maquette n'en pose qu'un, sur le bandeau des chiffres. Mais la FAQ promet « titre, visuel et **texte de dos** », et rien ne permet aujourd'hui de réécrire celui-ci. Incohérence entre deux sources, à arbitrer |
-| T91 | **« Assortie à votre 1e de couverture » vouvoie**, et écrit « 1e » là où l'ordinal abrégé s'écrit « 1re » — que les onglets du même écran écrivent correctement deux centimètres plus haut. Recopié tel quel (R8) et remonté, comme T66 et T84 |
-| T92 | **Trois coquilles du support**, recopiées telles quelles (R8) : « Tu auras la possibilité de nous écrire si tu ne trouve pas de réponse » (il manque le `s`), « **Ecris** à notre équipe » (E sans accent), et « dans les plus **bref** délais par **whatsapp** » (accord manquant, capitale manquante) |
-| T93 | **Les lignes de questions emploient `BrandRowGroup`** (rayon 20, titre à l'encre), là où la maquette dessine un groupe à rayon 12 dont les libellés sont en **Inter 13 gris** — une police qui n'est pas de la marque, et un gris qui se lit comme un texte désactivé sur une ligne qu'on doit toucher. C'est manifestement un bloc de remplissage copié d'un autre écran ; le composant du design system l'emporte. À reprendre dans Figma |
-| T94 | **La typographie du plat ne suit pas le Dynamic Type**, seule entorse de l'app à la règle « aucune taille de police fixe ». C'est l'image d'un objet imprimé : à AX3, le titre débordait du plat et donnait à voir une couverture ratée. Même parti pris que `CoverStack` et les pastilles de co-voyageurs |
-| T95 | ~~**Les voyages du bac à sable restent inouvrables**~~ — **réglé au lot 7** : `FixtureTripId` leur donne de vrais UUID fixes, et `-previewSignedIn` monte désormais ``PreviewAPI`` au lieu du vrai client. Le bac à sable se traverse en entier sans back-end |
+| # | Sujet | Écran / parcours |
+|---|---|---|
+| T87 | **Le plat est au rapport A5 (1,414)**, là où la maquette dessine 233 × 339 (1,455) — neuf points d'écart sur la hauteur. C'est le format du papier qui tranche, pas l'artboard, et c'est déjà le choix du § 16.1 pour la vignette des réglages | Lot 6 — Les couvertures, et le support |
+| T88 | **Une photo importée ne part nulle part.** Elle est enregistrée dans les caches de l'appareil, comme les photos du chat, et se perd à la fermeture de l'écran. C'est la route des couvertures qui manque (T-back-end ci-dessus), pas l'écran | Lot 6 — Les couvertures, et le support |
+| T89 | **L'état « en train d'écrire » n'est pas dessiné** sur l'écran des textes. Le champ s'ouvre sous le plat, faute de maquette. À dessiner, ou à valider tel quel | Lot 6 — Les couvertures, et le support |
 
 
 ---
@@ -2773,25 +2691,7 @@ réglés dans ce lot, trois attendent quelque chose.
 > calques, lus une fois — et jamais d'un rendu. Ce qui n'y était pas lisible
 > (les instances de composants, les titres nommés « title ») est signalé.
 
-| # | Sujet |
-|---|---|
-| T96 | ✅ **Après une entrée par Apple ou Google, la page qui vérifie ce que le fournisseur a donné** — `Social login - compléments` (`2707:9456`) : « Complète tes informations », « nous avons récupéré les informations suivantes, vérifie leur validité », prénom et nom côte à côte, l'adresse, « Continuer ». `SocialCompletionView`, dans le flux de `AuthView`. Elle s'affiche pour un compte **neuf** (créé il y a moins de deux minutes — le serveur ne le dit pas autrement) ou auquel il manque un prénom ou un nom ; une reconnexion sur un compte complet passe tout droit. L'adresse se lit et ne se corrige pas, comme sur le profil ; absente (adresse Apple masquée et refusée), la ligne ne s'affiche pas. Les noms partent par `PATCH /v1/profile`, la route du profil |
-| T97 | ✅ **Les thèmes du contexte de voyage sont complets, et viennent de la base.** Hugo a donné la liste le 14/09/2026 — dix thèmes précis, puis « Autre » **toujours en dernier**, parce qu'on préfère un thème précis. Ils vivent dans la table `trip_themes` (migration `20260914200000_themes_de_voyage`, `prisma/tripThemes.ts`, `npm run db:seed:themes`) et arrivent par `GET /v1/trip-themes`, qui les range et pose « Autre » dernier quelle que soit sa position ; `TripTheme` est un modèle de `MemoBookCore`, la rangée montre une barre d'attente le temps de la lecture. ✅ **Glisser choisit** (l'émoji arrêté au centre est le thème), les voisins sont à **60 %** et le choisi à 100 %, et **le nom s'écrit en entier sous la rangée**. Voir T108 |
-| T98 | ✅ **La dernière étape, « Co-voyageur(s) », n'a plus de « Passer »** : le voyage existe, il n'y a plus que « Commencer ! » (`TripCreationStep.canBeSkipped`). ⚠️ La maquette `Config - 6` (`2115:26335`) le dessine encore, en haut à droite — à retirer dans Figma |
-| T99 | ✅ **Trois étapes offertes dès la création du compte**, quel que soit le chemin d'entrée — `OFFERED_STEPS_ON_SIGNUP` dans `backend/src/services/accounts.ts`, testé pour le mot de passe et pour Google. Un compte naissait sans quota (`null`), que l'app lisait comme « sans limite ». ⚠️ **La consommation n'est pas écrite** : `remainingSteps` ne descend encore nulle part côté serveur quand une étape est racontée. C'est la prochaine ligne de la même chaîne (`ios/CLAUDE.md`, « Un choix de design ne s'arrête pas au dessin ») |
-| T100 | ✅ **Un voyage sans étape ne montre plus « Pays » et « Transports »** — deux pastilles présentes et inertes disaient « appuie ici » à quelqu'un qui n'avait rien à trier. Elles arrivent avec la première étape (`TripStepsSection.hasSteps`). « Étapes », lui, est retiré tout court (T30) |
-| T101 | ✅ **Les icônes étaient beaucoup trop petites**, sauf la flèche de retour, les chevrons et le disque d'enregistrement. La cause est dans les fichiers : les glyphes du jeu de marque **n'occupent pas leur boîte de 24** — mesuré sur les 90 SVG, le trait s'étend sur 10 à 19 unités selon l'icône (le stylo 17, la flèche 14, le plus 13, la roue des réglages 10). Dessinés à 24 pt, ils faisaient 9 à 12 pt d'encre là où un symbole système en fait 20. `MemoBookSpacing.contentIcon` (**2 rem**) est la boîte d'une icône de contenu, posée sur l'avatar de l'accueil, les ronds fléchés des cartes, les commandes de l'en-tête d'un voyage et du chat, les actions de sortie du profil, le « + » des connecteurs, les lignes des couvertures, les plaques du paywall et de « Nouveau carnet » ; `BrandButton` dessine son icône à 28 dans une boîte de 24 pour ne pas grandir. Les trois validés gardent leur taille. ⚠️ **Trois glyphes restent petits par construction** — Réglages (42 % de la boîte), Utilisateur (46 %), Filtre (45 %) — et deux icônes n'ont pas la grille de 24 (`Televerser`, `Full Screen`). À redessiner à la taille optique du reste du jeu ; le code n'y peut rien de plus |
-| T102 | ✅ **Le vocal de l'accueil arrive dans la conversation, le message déjà posé.** La feuille rend le vocal **et** ses niveaux ; l'accueil l'envoie comme avant (la file décide d'envoyer ou de garder) et route `HomeIntent.openConversation`, que `RootView` traduit en poussant le fil du voyage en cours avec un `RecordingHandoff`. `ChatModel` le pose au chargement par le chemin de `finishRecording()` — même bulle, même forme d'onde, même réponse de MEMO. Le paquet ne survit pas à la fermeture du fil |
-| T103 | ✅ **La flèche de retour des paramètres du voyage était mal alignée** — vérifié en simulateur : elle tombait 5 pt sous le milieu du titre. La cause est dans `BrandScreenHeader`, que l'écran partage avec l'aperçu PDF, la cagnotte, les couvertures et les personnalisations : la flèche est dessinée au centre d'une cible de 2.75 rem, le titre fait une ligne de 26, et les deux étaient posés bord à bord avec 4 pt de marge. La marge du titre vaut désormais la moitié de l'écart et suit le corps du texte ; les cinq écrans sont corrigés d'un coup |
-| T104 | ✅ **L'icône de partage de l'aperçu PDF** était `IconTeleverser` — un téléversement, dessiné plein et épais en noir. Les quatre commandes de partage passent à `IconShareSystem`, le partage tel qu'iOS le dessine, que le jeu de marque porte. `IconTeleverser` reste au seul endroit qui téléverse vraiment : l'import d'une photo de couverture |
-| T105 | ✅ **Les libellés des CTA du mot des fondateurs se centrent** quand ils passent à la ligne — `BrandButton` le fait pour tous ses boutons, un libellé de deux lignes aligné à gauche dans un bouton centré se lisait comme un paragraphe collé au bord |
-| T106 | 🟠 **Le *Welcome* redessiné reste à redévelopper** (T8, D23). Le nœud de la fiche §8.2 (`2552:27407`) **n'existe plus** dans le fichier, et aucun cadre de la page *App* ne porte la nouvelle version — seuls `welcome-screen-dark` (`2934:16066`) et `Splash Screen` (`3070:50596`) y sont ; elle est peut-être sur la page *Stories* (`0:1`), illisible sans quota. Il faut le nœud, puis une PR à lui (R12). La copie vouvoyée n'est plus qu'un souvenir : rien à corriger dans le code en attendant |
-| T107 | ✅ **Les erreurs du *Sign Up* de la maquette sont implémentées** (T9, D23) — trois cadres `Sign Up Filled` : l'adresse déjà prise (`3394:10929`, sous le champ de l'adresse), les deux mots de passe différents (`3390:10812`), le serveur indisponible (`3405:10991`). `AuthModel.report(_:)` les pose : un 409 sous l'adresse (`emailError`), un 5xx ou un transport hors développement en « MemoBook est actuellement indisponible, réessaie plus tard. » ⚠️ **Les trois phrases vouvoient dans Figma** (« Connectez-vous », « Vérifiez votre saisie », « veuillez ») : tutoyées dans le code, R9 ne souffre pas d'exception, à reprendre dans Figma. ⚠️ Le cadre `3262:25254` montre une **check-list de règles de mot de passe** (« Une majuscule & une minuscule », « Un caractère spécial ») qui contredit la règle des autres cadres et du serveur (« 8 caractères, 1 lettre, 1 chiffre ») — non implémentée, à trancher. ⚠️ L'écran « Mot de passe oublié » (`3162:35268`, avec « Il n’existe aucun compte associé à l’adresse … ») n'est pas implémenté : `recoverPassword()` est encore vide |
-| T108 | ✅ **Les thèmes sont une donnée, plus une liste dans l'app** (Hugo, 14/09/2026). `trip_themes` porte l'émoji, le nom, `isOther`, la position et `isActive` ; le libellé part tel quel dans `memos.theme`, du texte lu par l'agent de rédaction. Le seed complet les pose ; `npm run db:seed:themes` ne pose qu'eux, parce que le seed complet refait à neuf les carnets des comptes de test. La migration est jouée sur Supabase et les onze thèmes y sont (14/09/2026, `GET /v1/trip-themes` les rend dans l'ordre) ; le schéma de test les a aussi, et les tests passent. ⚠️ Le serveur de développement lancé par `tsx watch` peut garder un client Prisma d'avant `prisma generate` — un `touch` d'un fichier de `src/` le relance |
-| T109 | ✅ **L'illustration de chaque question est un sticker** : elle porte l'ombre `raised` de la marque, qui suit son détourage. Et elle **glisse** — celle de la question suivante arrive par la droite pendant que la précédente sort par la gauche, le sens s'inverse sur la flèche de retour ; le titre et le contenu, eux, se fondent, la frise et le bouton ne bougent pas. Fondu simple en « Reduce Motion » |
-| T110 | ✅ **La frise respire** : la barre verte est la plus haute (18), **ses deux voisines montent d'un cran** (15) — une seule aux deux bouts —, les autres restent à 12. Le passage d'une étape à l'autre est une onde : chaque barre rejoint sa hauteur avec un ressort et un retard proportionnel à sa distance à la barre verte. Immobile en « Reduce Motion » |
-| T111 | ✅ **« Confirmer ma résiliation » est grisé** tant qu'aucune raison n'est cochée dans « Pourquoi nous quittes-tu ? » : la question est posée pour être répondue, c'est le seul retour que la feuille rapporte |
-| T112 | ✅ **Le CTA verrouillé de l'accueil ouvre le paywall, jamais le micro** — sur « Tu as enregistré tes 3 premières étapes ! » —, et **le verrou tient partout** : le bouton d'un voyage et le micro de la conversation mènent au même paywall (`SubscriptionSession.isBlocked`, appris de l'accueil et imposé par la session), et le **serveur refuse** un souvenir à quota épuisé sans abonnement vivant — `403 quota_exhausted` sur `POST /v1/memos/:id/entries`, `services/quota.ts`, testé. Un vieux build ou un vocal resté dans la file ne passent donc pas non plus. ⚠️ Deux choses restent : la **consommation** — rien ne fait encore descendre `remainingSteps`, aucune étape n'est créée par le pipeline (T99) —, et le **prix de l'offre**, que le serveur ne sert pas : les trois nouveaux points d'entrée montrent `Subscription.offer` (1,99 €), en attendant StoreKit |
+Les dix lignes sont parties le 17/09/2026 : tout est réglé, ou validé tel quel.
 
 ---
 
@@ -3009,18 +2909,11 @@ booléens d'alerte sur `memos`, et `memo_members.role`.
 
 | # | Point |
 |---|---|
-| T113 | **Deux phrases de l'accueil vouvoient** — « Nous allons t'accompagner… » tutoie, mais la mention légale écrit « **vous** acceptez nos Conditions d'utilisation ». Recopiées telles quelles (R8), à réécrire dans Figma (R9) |
-| T114 | ~~**Le bouton Apple ne se cercle pas de `Beige Darker`**~~ — **réglé** : style `.white` (donc sans filet à lui), découpe à notre forme, et le beige posé par-dessus. Son libellé et sa pomme restent les siens, ce qui reste la règle |
-| T115 | **La photo d'accueil fait 587 × 360 px** — moins de 1× sur l'écran, donc visiblement molle. Il faut un export haute résolution du nœud `hero-container` |
+| T115 | **La photo de l'écran d'entrée est floue** : le fichier fait 587 × 360 px, soit moins d'un pixel d'image par point d'écran. Il faut un export plus grand de la même photo (au moins 1170 × 720, le double sur un grand iPhone). Reformulé le 17/09/2026 — c'est un export à refaire dans Figma, rien à trancher |
 | T116 | **L'arrêt automatique de l'abonnement ne parle pas à Apple.** Le jour où StoreKit sera branché, c'est le webhook App Store qui devra fermer la ligne `subscriptions`, et cette tâche deviendra le filet plutôt que la règle |
-| T117 | **Les pages du carnet ne flottent pas hors de la modale.** La maquette les pose presque entièrement au-dessus de la carte (9 pt de recouvrement sur 281) ; une feuille du système **rogne tout ce qui déborde d'elle** — trois géométries essayées en simulateur, aucune ne passe. Elles prennent donc leur place dans la feuille, au-dessus du titre, et gardent tout le reste du dessin. Seul un écran custom le permettrait, au prix du glissé, du repli et du redimensionnement au clavier que `BrandSheet` tient du système |
-| T118 | **Les trois polices de titre ne sont pas rendues dans leur dessin.** Figma écrit « Playfair » en Playfair, « Alegreya » en Alegreya : il faudrait embarquer trois familles de plus pour trois bouts de ligne, et le dépôt n'a que Playfair Display, en woff2 — que CoreText ne lit pas |
-| T119 | **Le rythme « Personnalisé » n'a pas d'écran de réglage.** La maquette propose « Définissez vos propres alertes » sans dessiner ce qui suit : le choix s'enregistre, et rien d'autre ne se passe |
-| T120 | **Trois ajouts que la maquette ne dessine pas**, tous signalés plutôt qu'inventés en silence : la phrase « Glisse une ligne vers la gauche pour la retirer. » (sans elle, les deux actions sont introuvables), l'état vide de la liste de co-voyageurs, et la phrase qui dit que l'interrupteur maître des notifications est baissé |
-| T121 | **Le logo WhatsApp manque**, comme à la création du voyage : la bulle du système en attendant. Et l'icône « Renvoyer » emprunte `IconTeleverser` faute d'un envoi dans le jeu de marque |
-| T122 | **`TripCreationStepContent.paces` reste sur trois libellés libres** (« Tous les jours », « Toutes les semaines », « Tous les mois ») là où les réglages en proposent désormais cinq, tirés de `NarrationPace`. Les deux écrans devraient parler la même langue — à reprendre dans Figma d'abord |
-| T123 | ~~**La pomme du bouton Apple reste celle d'Apple, pas celle de la marque**~~ — **tranché le 15/09/2026 : on garde celle d'Apple.** Un bouton « Se connecter avec Apple » qui porte une pomme redessinée sort de ce qu'Apple autorise — ses règles demandent **son** logo — et un refus en revue coûte une semaine, là où l'écart se voit à peine : le filet, l'aplat et l'arrondi sont déjà les mêmes des deux côtés. `LogoApple` reste dans le catalogue, disponible ailleurs. Le « G » de Google, lui, est bien celui de la marque : Google demande aussi le sien, mais sans porte d'entrée à l'App Store pour le faire respecter |
-| T124 | **La planche de logos est un bitmap, pas un vectoriel.** Les découpes tombent à 131 × 139 et 139 × 150 px pour un affichage de 24 pt — au-dessus du @3x, donc net aujourd'hui, mais sans marge pour un usage plus grand. Un export vectoriel des trois autocollants (Apple, Google, Facebook) réglerait la question |
+| T118 | **Alegreya et Montserrat s'écrivent encore en General Sans** dans la feuille des assortiments : Playfair, Hansley et Gloria Hallelujah ont leur nom dessiné en vectoriel depuis le 18/09/2026 (`assets/logos/<Nom>.svg` → `Wordmark<Nom>`), les deux autres attendent le leur | Typographies du carnet |
+| T121 | **L'icône « Renvoyer » emprunte `IconTeleverser`**, faute d'un envoi dans le jeu de marque. Le logo WhatsApp, lui, est arrivé le 17/09/2026 (`assets/logos/whatsapp.svg`, en vert foncé) |
+| T124 | **Les autocollants Apple et Google sont des images, pas des dessins vectoriels.** Ce sont les deux logos cerclés de bleu des boutons de l'écran d'entrée (`assets/logos/Apple Icon.svg`, `Google Icon.svg`) : Figma les a exportés en bitmap collé dans un SVG. Nets à 24 pt, ils pixelliseraient plus grand. Reformulé le 17/09/2026 — un export **vectoriel** de ces deux autocollants règle la question |
 
 ---
 
@@ -3110,10 +3003,7 @@ mur :
 | T126 | **« Payer » n'encaisse rien.** La feuille de paiement du paywall pose l'abonnement comme le bouton le faisait avant elle (`ProfileModel.activateSubscription`, `SubscriptionSession.record`). StoreKit reste à brancher, ici comme sur la feuille d'abonnement du profil. Et la feuille d'ajout de carte se présente **par-dessus**, comme dans le profil et la commande — trois occurrences du même écart à la règle des feuilles enchaînées, à régler ensemble |
 | T127 | **La feuille « Estimation » calcule sur les chiffres de la maquette** — trois semaines à partir d'aujourd'hui, 50 pages, 60 € — et seul le prix hebdomadaire vient de l'offre. `GET /v1/wallet` connaît déjà l'estimation d'un carnet ; la lire depuis le paywall demande de savoir quel voyage on finance (`previewMemoId`) et un appel de plus |
 | T128 | **Le lien « Supprimer ce voyage » s'affiche aussi aux co-voyageurs**, à qui le serveur refuse la suppression : `TripSettings` ne dit pas si le compte qui regarde est le propriétaire. Une ligne `isOwner` sur le voyageur courant — ou `companions` marqué « moi » — permettrait de ne le montrer qu'à lui |
-| T129 | **Le plantage de l'enregistrement rapide n'est pas reproduit.** Le diagnostic — la prise audio de la transcription en direct, sur un iPhone où la fréquence de la session a changé (casque Bluetooth, montre) — est le seul point du code qui lève une exception non rattrapable, et le seul écran où il existe. À confirmer avec le rapport de plantage de l'iPhone de Hugo (Réglages ▸ Confidentialité ▸ Analyse) : la première ligne dira `AVAudioIONodeImpl.mm` si c'est bien lui |
 | T130 | **« Commander le carnet » ouvre toujours le tunnel**, même sans carnet composé : c'est `GET /v1/memos/:id/order-context` qui répond alors, et son message. À vérifier sur un voyage sans rendu |
-| T131 | **Railway n'a pas déployé la fusion de la PR #28.** L'API sert `eba4dc6` depuis le 15/09 à 10 h 06 UTC, et le 500 des paramètres vient de là. Cette PR doit déclencher un déploiement ; si elle ne le fait pas, le déclencher à la main (`redeploy`) |
-| T132 | **Le paywall ne réagit plus au tapotis « retour » sur l'écran d'offre**, qui défile désormais : une `ScrollView` prend le doigt avant les zones posées dessous. La flèche du haut ferme, les deux premiers écrans gardent leurs zones. À décider si l'offre doit encore reculer d'un tapotis |
 
 ### 20.5 « Testing mode » et l'erreur `localhost`, pour la dernière fois
 
@@ -3176,9 +3066,7 @@ maquettes, des fiches, du code et des conversations soient les mêmes.
 |---|---|
 | T133 | **L'aperçu se pose sur la feuille d'abonnement** : première exception assumée à « un enchaînement de feuilles ne s'empile pas ». Les trois empilements de T126 (la feuille d'ajout de carte) restent à régler ; si Clara les accepte aussi, la règle devient « une feuille ne s'empile que pour aller voir et revenir » |
 | T134 | **Le burger de la conversation a quitté l'app, pas la maquette.** Le nœud du chat le dessine encore à gauche des trois boutons ; à retirer dans Figma, ou à lui donner un menu |
-| T135 | **La flèche du paywall recule ; le tapotis « retour » sur l'écran d'offre, lui, reste pris par le défilement** (T132). Si les deux gestes doivent reculer, l'écran d'offre a besoin d'une zone de retour hors de sa `ScrollView` |
 | T136 | **Trois feuilles de typographie sans maquette.** « Sous-titres du carnet », « Textes du carnet », « Fun facts du carnet » sont écrites sur le modèle de « Titres du carnet » (`3443:10073`), au tutoiement ; leurs familles — Hansley ou Gloria Hallelujah d'abord, puis Playfair, Alegreya, Montserrat — et leurs phrases sont à valider ou à dessiner. « La recommandations de nos équipes » reste tel quel sur la feuille des titres (R8) ; les défauts des autres disent « Le choix de nos équipes ». Remplace T78 |
-| T137 | **Déployé par Hugo le 16/09 à 1 h 38** (`railway up --detach -s api`, puis `worker`, depuis son checkout local) : `GET /v1/trips/:id/settings` répond 200 sur le compte de démo, le 500 de § 20.1 est clos. Deux restes : le checkout était à `60cf53b` (PR #28), la **PR #30** n'est donc toujours pas en production — `git pull` puis les deux mêmes commandes —, et Railway n'a toujours pas déployé une fusion de lui-même (T131). `railway up` depuis une session Claude reste refusé par son garde-fou |
 | T138 | **Le champ des textes de couverture remonte après 350 ms**, le temps que le clavier monte — une durée choisie, pas mesurée. Sur un iPhone lent, le premier caractère peut encore se taper sous le clavier ; la parade propre est d'écouter sa hauteur (`keyboardLayoutGuide`), ce qui touche au design system |
 
 ## 22. Retouches du 16/09/2026 (soir) — treize retours, et deux chantiers
@@ -3362,11 +3250,11 @@ suppression survit à un relancement.
 
 ### 25.1 À trancher
 
-| # | Sujet |
-|---|---|
-| T158 | **La suppression n'existe que sur l'appareil.** Un autre téléphone du même compte verra la conversation du jeu d'essai. C'est la conséquence de l'absence de route, pas un choix : `DELETE /v1/trips/:id/chat` remplacera l'archive le jour où le fil sera servi |
-| T159 | **Aucune maquette** pour le lien ni pour la feuille : écrits sur les motifs existants (« Me déconnecter », `DeleteTripSheet`). À dessiner dans Figma |
-| T160 | **Un co-voyageur peut supprimer la conversation**, alors qu'il ne peut pas supprimer le voyage. Aujourd'hui le fil est propre à l'appareil, la question ne se pose pas ; elle se posera avec la route — qui décide de l'effacer pour tout le monde ? |
+| # | Sujet | Écran / parcours |
+|---|---|---|
+| T158 | **La suppression n'existe que sur l'appareil.** Un autre téléphone du même compte verra la conversation du jeu d'essai. C'est la conséquence de l'absence de route, pas un choix : `DELETE /v1/trips/:id/chat` remplacera l'archive le jour où le fil sera servi | « Supprimer la conversation » — dans les réglages du voyage |
+| T159 | **Aucune maquette** pour le lien ni pour la feuille : écrits sur les motifs existants (« Me déconnecter », `DeleteTripSheet`). À dessiner dans Figma | « Supprimer la conversation » — dans les réglages du voyage |
+| T160 | **Un co-voyageur peut supprimer la conversation**, alors qu'il ne peut pas supprimer le voyage. Aujourd'hui le fil est propre à l'appareil, la question ne se pose pas ; elle se posera avec la route — qui décide de l'effacer pour tout le monde ? | « Supprimer la conversation » — dans les réglages du voyage |
 ## 26. La relance du voyage n'est pas une bulle
 
 Hugo, 17/09/2026 : **la bulle d'ouverture de MEMO est seule.** Elle se termine
@@ -3484,11 +3372,173 @@ demi-gras refermés.
 
 ### 23.2 À trancher
 
-| # | Sujet |
+| # | Sujet | Écran / parcours |
+|---|---|---|
+| T147 | **Les documents légaux vouvoient**, seule exception à R9. C'est un contrat, pas une phrase de l'interface : le texte du site est celui qui engage, et il est recopié tel quel. Si Clara et Hugo veulent tutoyer, c'est le site qui change d'abord, et l'app suit | Lot 8 — Les documents légaux |
+| T148 | **« Découvrir notre FAQ » est à l'encre**, là où le gabarit le dessine en vert. C'est `BrandButton` en style `link`, petite taille : le design system n'a pas de lien vert, et un lien d'une autre couleur serait un second bouton. À dessiner dans Figma, ou à valider tel quel | Lot 8 — Les documents légaux |
+| T151 | **« En continuant, tu acceptes nos Conditions d'utilisation »** sur l'écran d'entrée n'ouvre pas la page : elle est derrière la session (`HomeRoute`), et l'écran d'entrée a sa propre pile. À relier si on veut lire les CGU avant de créer un compte | Lot 8 — Les documents légaux |
+| T152 | **Le chapitre 3 de la politique de confidentialité annonce une liste qui ne suit pas** — « transmises aux prestataires techniques suivants … : » puis rien. Le site la porte dans un tableau qui n'a pas été fourni. Recopié tel quel (R8) ; **à compléter** avec la liste des prestataires (Webflow, Google Analytics, Hotjar, Meta, WhatsApp ?) | Lot 8 — Les documents légaux |
+| T153 | **Le chapitre 9 (« Mineurs ») se termine par un point-virgule** au lieu d'un point. Recopié tel quel (R8), à corriger sur le site | Lot 8 — Les documents légaux |
+| T154 | **La politique de cookies n'existe pas dans l'app**, et les deux documents y renvoient (« disponible sur ce site »). Un troisième `LegalDocument` suffira le jour où le texte est fourni | Lot 8 — Les documents légaux |
+
+---
+
+## 27. Réponses du 17/09/2026 — les tickets tranchés, les retours de Clara, l'UX de Hugo
+
+Hugo a répondu ticket par ticket au fichier, Clara a relu l'app de bout en
+bout, et Hugo a ajouté dix changements d'UX. **Tout ce qui est réglé a quitté
+le fichier** : les lignes de tickets tranchées ou livrées sont parties, et
+celles qui restent sont ouvertes pour de vrai. À partir de ce lot, chaque
+ticket dit **sur quel écran ou quel parcours** il se joue, dans une troisième
+colonne — les tables existantes l'ont reçue aussi.
+
+> ⚠️ **Le quota du MCP Figma était épuisé** au premier appel (plan Starter).
+> Ce qui demandait une maquette qu'on n'a pas encore lue — les recommandations
+> de message du chat, l'icône « export data », le carrousel des thèmes — est
+> écrit en ticket, pas inventé.
+
+### 27.1 Ce que les réponses de Hugo ont changé
+
+| Ticket | Réponse | Ce qui a été fait | Écran / parcours |
+|---|---|---|---|
+| T49 | corrige dans l'app | « pourrais-tu », « tout le long » (`ChatCopy.opening`) | Conversation |
+| T51 | « enregistrer » | `ChatCopy.record` = « Enregistrer » | Conversation |
+| T54 | Gloria Hallelujah pour les titres des fiches | `MemoBookFont.handwriting` sur le titre de la fiche de retranscription — la police était déjà dans le bundle | Conversation |
+| T59 | bleu #4088C6, un rond, l'icône en blanc | `MemoBookColor.send` = `blueText` ; `ChatSendingBar.sendGlyph` : rond plein de 2 rem, avion blanc, cible 2.75 rem — les deux boutons d'envoi | Conversation |
+| T62 | marges de 16 partout | vérifié : tous les écrans posent `screenMargin` ; les seuls 20 restants sont l'alignement d'un message d'erreur sous son champ | Partout |
+| T63 | uniformise | un seul cadrage du M, celui du design system ; le quart de tour de la maquette du paywall est abandonné | Paywall |
+| T66, T84, T91 | tutoiement, « 1ère » partout | le tutoiement était déjà là depuis le 16/09 ; « 1re » devient **« 1ère »** partout — onglets, ligne « Couvertures (1ère & 4e) », pastille, « ma 1ère étape » | Couvertures, personnalisations, cagnotte |
+| T67 | coquilles corrigées dans Figma | « grâce à ton abonnement », « Prévisualisation PDF », « Définis maintenant » | Cagnotte, réglages du voyage, aperçu PDF |
+| T68 | `PDF.svg` et `View.svg` | `IconPDF` sur « Partager le fichier pdf », `IconView` sur « Partager le lien de prévisualisation » | Partager ton MemoBook |
+| T70 | les deux boutons à 48 | `BrandButton.Size.medium` : le libellé de 16 du `small`, la hauteur de 48 (`MemoBookSpacing.mediumControlHeight`) | Ma cagnotte |
+| T74 | les trois liens mènent quelque part | « Voir un aperçu » et « En savoir plus » y menaient déjà ; **« Voir ma cagnotte » ouvre la cagnotte** (`SubscriptionSheet.onSeeWallet`, la feuille se referme d'abord) | Mon abonnement |
+| T76 | genre déduit du prénom, modifiable sous l'adresse postale | colonne `accounts.gender` (nulle tant qu'on n'a rien dit), `services/genderInference.ts` devine sur le prénom, `PATCH /v1/profile { gender }`, ligne « Genre » sous « Adresse postale », `GenderSheet` (femme, homme, je ne préfère pas répondre). « Abonnée » / « Abonné » s'accorde sur la feuille et sur la pastille | Profil, Mon abonnement |
+| T77 (§ 16) | pas compris | c'était une note pour le document : le § 2.3 disait 4 pt pour une barre de progression que l'app dessine à 6. Le § 2.3 est corrigé, le ticket est clos | Cagnotte, accueil |
+| T90 | un crayon sur le texte de dos, en haut à droite | `CoverPlate` pose `subtitleBadge` sur le texte de quatrième ; `CoverTextsView` le donne dès que le plat porte un texte | Couvertures — les textes |
+| T92 | coquilles corrigées dans Figma | « tu ne trouves », « Écris à notre équipe », « les plus brefs délais par mail ou par WhatsApp » | Support et retours |
+| T113 | tutoiement dans Figma | « En continuant, tu acceptes nos Conditions d'utilisation. » | Accueil — 1ère connexion |
+| T118 | pas de polices embarquées | ticket réécrit : Hugo fournira peut-être un vectoriel du nom de chaque typographie | Typographies du carnet |
+| T121 | le logo WhatsApp, en vert foncé | `assets/logos/whatsapp.svg` → `LogoWhatsApp` (`import-brand-logos.py`), teinté par `BrandButton` sur « Partager via WhatsApp ». La partie « Renvoyer » du ticket reste | Création — co-voyageurs, invitation |
+| T122 | données communes, moins d'options à la création | `TripCreationStepContent.paces` = trois `NarrationPace` (tous les jours, tous les 2 jours, une fois par semaine) ; c'est la **clé** qui part en base, comme depuis les réglages | Création — notifications |
+| T115, T124 | pas compris | réécrits dans leur table : la photo d'entrée est à réexporter plus grande ; les deux autocollants Apple et Google sont des bitmaps à réexporter en vectoriel | Accueil — 1ère connexion |
+| T41, T42, T44, T53, T55, T56, T58, T60, T64, T69, T71, T72, T73, T75, T81, T82, T83, T93, T94, T95, T106, T117, T119, T120 | validés tels quels, ou réglés entre-temps | lignes retirées | — |
+
+### 27.2 Ce que Clara a relevé, écran par écran
+
+| Écran | Retour de Clara | Ce qui a été fait |
+|---|---|---|
+| Accueil | un voyage fini le 15 est encore « en cours » le 16 | `memos.stage` était figé à l'écriture. `services/tripStage.ts` **déduit l'état des dates à chaque lecture**, le dernier jour compris en entier ; la colonne n'est plus qu'un repli pour un voyage sans date, et le `PATCH` des dates la réécrit. Testé (`tripStage.test.ts`) |
+| Accueil d'un voyage | le « + » des collaborateurs n'est pas cliquable | `TripIntent.inviteCompanions` : les réglages du voyage s'ouvrent **sur la feuille des co-voyageurs** (`TripSettingsView(opening: .companions)`, `HomeRoute.tripSettings(id:opening:)`) |
+| Conversation | l'onde n'est pas centrée, le micro trop petit et mal placé | l'onde et le chrono passent sur **une ligne**, centrée sur le bouton et la signature ; le micro prend la taille d'une icône de barre et se pose en bas à gauche du disque |
+| Conversation | l'icône d'aperçu doit être l'imprimante du voyage | `IconPrinter` en en-tête, comme sur l'accueil du voyage |
+| Exemples de carnets | l'icône « filtre » n'est pas cliquable et perturbe | retirée ; « Tout » ouvre la ligne |
+| Paywall | la barre d'avant se remplit encore un peu ; la 3e va plus vite ; tapotis « retour » inerte sur la 3e | les sauts des segments sont **instantanés** (plus d'animation) ; la 3e barre se remplit en six secondes comme les autres et reste pleine ; la moitié gauche de l'écran d'offre recule d'un écran — la zone vit **dans** la `ScrollView`, derrière les cartes, qui laissent passer le doigt sauf sur la pastille (T132, T135 clos) |
+| Personnalisations | le titre « Décorations & stickers » passe à deux lignes dès deux stickers | `BrandRow` donne la priorité à l'intitulé : c'est la valeur qui s'abrège, jamais l'intitulé qui se coupe — pour toutes les lignes |
+| Couvertures | la pastille « assortie » ne suit pas le devant | `CoverStyle.isMatched` (un drapeau du catalogue) disparaît ; `BookCovers.isMatched(_:on:)` compare composition et aplat au style **choisi** sur l'autre plat. Testé |
+| Couvertures — 4e | « 2,3k » sur deux lignes | un chiffre tient sur une ligne et rapetisse s'il le faut (plat et feuille des chiffres) |
+| Couvertures — textes | pas d'icône « clavier bas » sur le titre | `brandKeyboardDismissBar()` sur le champ du titre ; le texte l'avait déjà par `BrandTextBox` |
+| Aperçu PDF | pas d'accès aux couvertures | un lien « Configurer mes couvertures » sous « Personnaliser mon carnet », toujours là — l'invitation sur la page ne s'affichait que tant qu'elles n'étaient pas choisies |
+| Support et retours | retirer « Sujets courants » ; sous-titres en Sora Semibold 12 gris capitales | le chapeau part ; les titres de paquets prennent `sectionOverline` (Sora Semibold 12, `inkMuted`, capitales), le même dessin que « Nous contacter » |
+| Profil | le chevron « Voyage en cours » doit mener au voyage | `ProfileIntent.openTrip(id:)` → l'accueil du voyage |
+| Accueil — 1ère connexion | la carte doit bloquer en bas | `brandScrollWithoutBounce()` : l'`UIScrollView` de SwiftUI perd son élastique, la carte s'arrête une fois entière |
+| Personnalisations — typographies | un paquet de typos plutôt qu'une par catégorie | déjà fait le 16/09 (`BookFontCombo`) |
+| Personnalisations — chapeau | tutoiement | déjà fait le 16/09 |
+| Config — contexte, co-voyageurs, 3 étapes offertes, boutons inertes sans étape, icônes trop petites, vocal qui arrive dans le chat, flèche des paramètres, icône de partage de l'aperçu, CTA des fondateurs, page après un social login | relevés avant le 14/09 | déjà faits (T96–T105) |
+| Config — contexte de voyage | tous les thèmes, glissé horizontal, l'émoji du centre plus gros à 100 %, les autres à 60 %, noms longs coupés | l'étape est **retirée du parcours** ce même jour (Hugo, ci-dessous) ; le carrousel attend le nœud Figma — voir T163 |
+
+### 27.3 Ce que Hugo a changé dans l'UX
+
+| Écran | Demande | Ce qui a été fait |
+|---|---|---|
+| Accueil | glisser vers la droite ouvre le profil | un `DragGesture` sur l'accueil, franchement horizontal, parti de n'importe où ; le tiroir des cartes va dans l'autre sens |
+| Accueil | glisser un voyage vers la gauche : supprimer (croix), partager (flèche), prévisualiser (imprimante) | `BrandSwipeDrawer` — **le** tiroir d'actions, extrait de la liste des co-voyageurs qui l'emploie aussi. Supprimer ouvre `DeleteTripSheet` (celle des réglages) et `HomeModel.deleteTrip` → `DELETE /v1/memos/:id`, puis recharge ; partager ouvre l'aperçu **sur sa feuille de partage** (`HomeRoute.bookPreview(memoId:sharing:)`) ; prévisualiser ouvre l'aperçu |
+| Création d'un voyage | retirer les étapes Ratio et Thème, garder le code | `TripCreationStep.active` = nom, dates, notifications, co-voyageurs ; `next` / `previous` / `position` suivent cette liste, la frise compte quatre barres, le brouillon part avec les valeurs par défaut des deux étapes retirées |
+| Création d'un voyage | feuilleter les étapes au doigt, dans les deux sens | glissé vers la gauche = « Valider » (seulement si l'étape le permet), vers la droite = la flèche |
+| Accueil d'un voyage | l'imprimante du chat = celle du voyage ; « Accéder au chat » avec une bulle | `IconPrinter` en en-tête du chat ; `IconBubble` en fin de libellé du CTA |
+| Support et retours | les trois dernières lignes ouvrent le formulaire, avec une explication plus courte | `SupportSheetRoute.contact(about:)` : les deux questions de « Nous contacter » ouvrent le formulaire sous leur propre titre, avec une phrase (`SupportCopy.Contact.brief(for:)`) ; « Écris à notre équipe » garde la sienne |
+| Profil | le logo Apple ou Google, petit, après « E-mail », à la place de la phrase | `BrandRow.TitleIcon` (`LogoApple` / `LogoGoogle`, cerclés de bleu, 20 pt) ; VoiceOver garde la phrase |
+| Accueil | « Commencer à enregistrer » plante sur son iPhone | **la permission d'abord, la feuille ensuite** : le premier appui demande l'accès au micro (et à la reconnaissance vocale) sans toucher au micro ; le second ouvre la feuille ; l'accès déjà accordé, le premier appui l'ouvre. Refusé, une boîte mène aux Réglages. T129 clos |
+| Partout | retirer la pastille « Mis à jour » | `brandRefreshFlash` ne pose plus la pastille (le balayage reste, et VoiceOver reçoit l'annonce) ; `showsBadge:` la garde sous la main pour l'aperçu PDF |
+
+### 27.4 Ce qui entre dans le code partagé
+
+| Pièce | Ce qu'elle porte |
 |---|---|
-| T147 | **Les documents légaux vouvoient**, seule exception à R9. C'est un contrat, pas une phrase de l'interface : le texte du site est celui qui engage, et il est recopié tel quel. Si Clara et Hugo veulent tutoyer, c'est le site qui change d'abord, et l'app suit |
-| T148 | **« Découvrir notre FAQ » est à l'encre**, là où le gabarit le dessine en vert. C'est `BrandButton` en style `link`, petite taille : le design system n'a pas de lien vert, et un lien d'une autre couleur serait un second bouton. À dessiner dans Figma, ou à valider tel quel |
-| T151 | **« En continuant, vous acceptez nos Conditions d'utilisation »** sur l'écran d'entrée n'ouvre pas la page : elle est derrière la session (`HomeRoute`), et l'écran d'entrée a sa propre pile. À relier si on veut lire les CGU avant de créer un compte |
-| T152 | **Le chapitre 3 de la politique de confidentialité annonce une liste qui ne suit pas** — « transmises aux prestataires techniques suivants … : » puis rien. Le site la porte dans un tableau qui n'a pas été fourni. Recopié tel quel (R8) ; **à compléter** avec la liste des prestataires (Webflow, Google Analytics, Hotjar, Meta, WhatsApp ?) |
-| T153 | **Le chapitre 9 (« Mineurs ») se termine par un point-virgule** au lieu d'un point. Recopié tel quel (R8), à corriger sur le site |
-| T154 | **La politique de cookies n'existe pas dans l'app**, et les deux documents y renvoient (« disponible sur ce site »). Un troisième `LegalDocument` suffira le jour où le texte est fourni |
+| `BrandSwipeDrawer`, `BrandSwipeAction` (`Design`) | **le** tiroir d'actions d'une carte : glissé vers la gauche, menu contextuel à l'appui long, rotor VoiceOver. L'accueil et la liste des co-voyageurs le partagent |
+| `BrandButton.Size.medium`, `MemoBookSpacing.mediumControlHeight` | le libellé de 16 et les 48 pt de la maquette pour un bouton d'appoint qui compte |
+| `BrandRow.TitleIcon` | un petit logo après l'intitulé d'une ligne, avec ce que VoiceOver en dit |
+| `brandScrollWithoutBounce()` (`Design`) | retire l'élastique de la `ScrollView` qui porte la vue |
+| `MemoBookColor.send` = `blueText` | le bouton d'envoi est du bleu de la palette, plus du bleu-violet du kit |
+| `MemoBookFont.handwriting` | deux emplois désormais : le mot des fondateurs et le titre des fiches du chat |
+| `Gender` (`Core`), `TravellerProfile.gender`, `ProfileEdit.gender` | femme, homme, je ne préfère pas répondre ; `agreed(_:)` accorde « Abonné(e) » |
+| `BookCovers.isMatched(_:on:)`, `CoverStyle.matches(_:)` | la pastille « assortie » se calcule, elle ne se stocke plus |
+| `TripCreationStep.active`, `next`, `previous`, `position` | le parcours de création, distinct de la liste des étapes que le code connaît |
+| `LogoWhatsApp` | depuis `assets/logos/whatsapp.svg`, monochrome, à teinter |
+| `services/tripStage.ts`, `services/genderInference.ts` (back-end) | l'état d'un voyage lu sur ses dates ; le genre deviné sur le prénom |
+
+### 27.5 Contrat back-end
+
+| Route / colonne | Ce qui change |
+|---|---|
+| `accounts.gender` (`Gender?`, migration `20260917200000_genre_du_profil`) | nulle tant que la personne n'a rien dit ; `undisclosed` est un choix |
+| `GET /v1/profile` → `gender` | ce que la personne a dit, sinon ce que son prénom laisse deviner (`effectiveGender`) |
+| `PATCH /v1/profile { gender }` | `"female" \| "male" \| "undisclosed"`, jamais `null` |
+| `GET /v1/home`, `GET /v1/profile`, `GET /v1/gallery` → `stage`, `currentTrip`, `resumableTripId` | **déduits des dates** à la lecture (`effectiveStage`) ; un voyage fini hier est « terminé » aujourd'hui sans qu'on le rouvre |
+| `PATCH /v1/trips/:id/settings` (dates) | réécrit `memos.stage` pour que la colonne ne contredise pas les dates |
+
+⚠️ La migration est à déployer **sur les deux schémas** (`public` et
+`memobook_test`), et l'API sur Railway **ne se redéploie pas toute seule** à la
+fusion : sans elle, le profil ne rend pas `gender` (l'app accorde alors au
+masculin) et le voyage fini reste « en cours ».
+
+### 27.6 À trancher, et ce qui attend quelque chose
+
+| # | Sujet | Écran / parcours |
+|---|---|---|
+| T164 | **Les « Valider » des feuilles de personnalisation** semblent inutiles à Clara ; seule « Nombre de pages » n'en a pas, et c'est bien — mais la feuille ne devrait peut-être pas se refermer dès qu'on choisit. **À trancher avec Hugo et Paul** : sans bouton, la feuille se referme au choix (comme « Genre » du profil) ; avec, elle reste ouverte | Personnalisations du carnet |
+| T167 | **« Voir une estimation » sur la 3e story** (Clara) : la pastille ouvre bien la feuille « Estimation » depuis le 15/09, sur les chiffres de la maquette (T127). Clara a peut-être vu la version d'avant ; à revérifier sur ce build. T80 reste ouvert jusqu'à ce que la pastille soit configurée pour de bon | Paywall |
+| T168 | **Le tiroir des cartes de l'accueil n'a pas de maquette** — croix, flèche, imprimante cerclées, sur le modèle de la liste des co-voyageurs. À dessiner dans Figma, ou à valider tel quel | Accueil |
+| T169 | **La feuille « Genre » n'a pas de maquette** — trois options sur le motif des feuilles de choix du profil, et la ligne « Genre » sous « Adresse postale ». À dessiner dans Figma, ou à valider telle quelle | Profil |
+| T170 | **Le genre deviné est une liste de prénoms**, pas une science : environ six cents prénoms français, les mixtes (Camille, Dominique, Sacha…) restent sans réponse. Un prénom absent accorde au masculin par défaut (« Abonné ») — c'est la forme non marquée, pas une erreur, mais c'est à savoir | Profil |
+| T171 | **Le glissé vers la droite de l'accueil** ouvre le profil de n'importe où sur l'écran. Il n'entre pas en conflit avec le tiroir des cartes (vers la gauche) ni avec le retour de la pile (l'accueil est le premier écran) ; s'il gêne le défilement des bandes horizontales de l'accueil, il faudra le limiter au bord | Accueil |
+| T172 | **Deux migrations et l'API sont à déployer** — `genre_du_profil` et `photo_de_profil`, voir § 27.5 et § 27.8. Tant que l'API sert le code d'avant, l'accueil montre encore « en cours » un voyage fini, et le profil ne connaît ni le genre ni la photo. Aucune variable à ajouter sur Railway : le domaine du service suffit aux adresses d'avatar et au lien de l'e-mail | Back-end |
+
+### 27.7 Le lendemain — les assets déposés, et neuf détails
+
+Hugo a déposé ce qui manquait (18/09/2026) et ajusté neuf points ; tout est
+dans le même lot.
+
+| Écran | Demande | Ce qui a été fait |
+|---|---|---|
+| Typographies du carnet | les noms des polices dessinés dans leur police, sans embarquer les familles | `assets/logos/Playfair.svg`, `Hansley.svg`, `Gloria Hallelujah.svg` → `WordmarkPlayfair`, `WordmarkHansley`, `WordmarkGloriaHallelujah` (`import-brand-logos.py`) ; `BookFontOption.wordmark`, et la carte d'un assortiment les pose en gabarit **à la hauteur d'une ligne de texte** (`@ScaledMetric` 14). Alegreya et Montserrat restent en General Sans (T118) |
+| Accueil — carte de découverte | la nouvelle image, sans dégradé, et un léger bleu sur sa gauche pour que le texte puisse mordre dessus | `ShowcaseCarnets` remplacée ; **le dégradé est dessiné par l'app**, depuis les deux couches de la carte (crème puis bleu à 22 %), sur les 45 premiers pour cent de l'image — pas une couleur inventée. ⚠️ L'export fait **111 × 85 px**, trois fois moins que l'ancien (330 × 252) pour 124 pt d'affichage : net sur aucun écran — voir T173 |
+| Accueil — voyage à venir | T37, l'illustration passeport + carnet ouvert | elle était déjà là : `assets/illustrations/Empty Trip Illustration.png` est `EmptyTripIllustration`, posée par `UpcomingTripInvite`. Ticket retiré |
+| Profil — photo | toucher le rond ouvre « Prendre une photo / Choisir dans la galerie », et la chaîne base de données | **chaîne entière** : `accounts.avatarStorageKey` (migration `20260918100000_photo_de_profil`), `POST /v1/profile/avatar` (multipart, JPEG ou PNG, 5 Mo), l'objet dans le stockage sous `avatars/`, l'ancien retiré, et `GET /v1/avatars/:file` qui le sert **sans session** — `AsyncImage` n'envoie pas d'en-tête. L'adresse se calcule à la lecture (`services/avatars.ts`, `API_PUBLIC_BASE_URL`). Côté app : `PhotoFlow` (l'ancien `ChatPhotoFlow`, sorti du chat), le rond du profil devient un bouton avec un petit crayon, l'image est réduite à 512 px avant de partir, `ProfileModel.setAvatar`. Testé côté serveur, vu en simulateur |
+| Profil | l'icône `Export data.svg` | `IconExportData` sur « Exporter mes données » (T162 clos) |
+| Conversation — propositions | le bon type de bulle, un émoji devant chaque proposition (nœud `3520:35958`) | les puces sont des **capsules** blanches, et **chaque** proposition porte son émoji (`ChatCopy.Suggest.*Symbol`) — T161 clos. Le nœud `3520:35930` est la bulle bleue du voyageur, déjà en place |
+| Conversation — bannière « Ton Carnet prend forme » | posée sur le fil ; part vers le haut après 4 s avec un rebond ; revient dès 20 pt de remontée ; repart après 200 pt de remontée ou 20 pt de descente | la bannière quitte la pile des messages et devient un **calque sous l'en-tête** (`overlay`, hauteur de l'en-tête mesurée) ; `ChatView.trackScroll` cumule le défilement dans chaque sens sur un `GeometryReader` (iOS 17, pas d'`onScrollGeometryChange`) ; ressort `bounce: 0.35`, fondu en Reduce Motion. Et **« Votre Carnet » devient « Ton Carnet »** (R9) |
+| Contexte de voyage | le carrousel est très bien tel quel | T163 clos |
+| Ma cagnotte | plus de valeur figée | T166 clos |
+| Accueil — tiroir des cartes | les trois icônes arrivent en quinconce avec le glissé | `BrandSwipeDrawer` décale chaque icône d'une part de ce qu'il reste à découvrir, croissante de la première à la dernière (0,35 / 0,70 / 1,05), et les fait monter en opacité — un rapport, pas une animation : rien à couper quand on relâche |
+| Partout — boîtes d'information | le beige trop foncé, plus doux, avec un léger effet de verre | `MemoBookColor.noticeBeige` (#E6D5C4, entre `Beige` et `Beige Darker`) à 70 % **sur un verre dépoli** (`ultraThinMaterial`), liseré blanc à 45 %. `Beige Darker` ne change pas ailleurs (séparateurs, scotch) — à trancher si le token lui-même doit s'éclaircir, voir T174 |
+| Paramètres du voyage — thème | seul « Autre » ouvre un champ ; les autres n'ont que « Valider » | `TripThemeSheet` : le champ n'existe que derrière « Autre » (ou un thème libre déjà enregistré, que la rangée ne connaît pas) ; un thème de la rangée se valide tel quel |
+
+### 27.8 Contrat back-end (suite)
+
+| Route / colonne | Ce qui change |
+|---|---|
+| `accounts.avatarStorageKey` (migration `20260918100000_photo_de_profil`) | la clé de la photo envoyée ; `avatarUrl` reste pour celle d'un fournisseur |
+| `POST /v1/profile/avatar` | multipart, champ `file` en `image/jpeg` ou `image/png`, 5 Mo ; renvoie le profil relu |
+| `GET /v1/avatars/:file` | **sans session**, `Cache-Control` long, 404 hors `avatars/<uuid>.(jpg\|png)` |
+| `avatarUrl` (profil, accueil, co-voyageurs, propriétaire) | `avatarUrlOf` : la photo envoyée d'abord, sinon celle du fournisseur |
+| `API_PUBLIC_BASE_URL` (env) | la racine des adresses d'avatar. Vide, c'est **`RAILWAY_PUBLIC_DOMAIN`** — que Railway pose tout seul sur le service — qui sert ; puis `APP_LINK_BASE_URL` s'il est en `https://`, sinon `localhost:3000`. **Rien à poser sur Railway.** Le lien de l'e-mail « mot de passe oublié » suit la même règle : `APP_LINK_BASE_URL` n'y avait jamais été posé, et l'e-mail partait en `memobook://` |
+| Suppression de compte | la photo part avec le compte (`services/deletion.ts`) |
+
+### 27.9 À trancher (suite)
+
+| # | Sujet | Écran / parcours |
+|---|---|---|
+| T173 | **La nouvelle image de la carte de découverte est trop petite** : 111 × 85 px pour un cadre de 124 pt — l'ancienne faisait 330 × 252. Elle s'affiche floue sur tous les écrans. Il faut le même export en **au moins 372 × 285 px** (3×), déposé au même chemin ; le script ne change pas | Accueil |
+| T174 | **`Beige Darker` lui-même doit-il s'éclaircir ?** Les boîtes d'information ont leur propre beige doux depuis le 18/09 ; les séparateurs, le scotch des cartes et le filet des boutons Apple/Google gardent `#CFBBAA`. Si c'est le token qui doit changer, c'est une ligne dans `Tokens.swift` — et la variable Figma avec | Partout |
+| T175 | **La bannière du chat ne sait pas qu'un message vient d'arriver** : un nouveau message en bas fait bouger le haut du contenu comme un défilement vers le bas, et la referme. C'est acceptable — on lit ce qui arrive —, mais c'est un effet de bord, pas un choix | Conversation |
+

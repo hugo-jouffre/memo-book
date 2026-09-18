@@ -19,6 +19,9 @@ import {
   VOICE_MEMORY_COST_PER_MINUTE,
 } from "../services/memoryAllowance.js";
 import { SUBSCRIPTION_WEEKLY_CENTS } from "../services/subscriptionCatalog.js";
+import { avatarUrlOf } from "../services/avatars.js";
+import { effectiveGender } from "../services/genderInference.js";
+import { effectiveStage } from "../services/tripStage.js";
 
 /**
  * Ce que les trois écrans « produit » reçoivent : l'accueil, un voyage, le
@@ -80,7 +83,7 @@ function serializeCompanion(member: MemoMember & { account?: Account | null }) {
   return {
     id: member.id,
     name: companionName(member),
-    avatarUrl: member.account?.avatarUrl ?? null,
+    avatarUrl: member.account ? avatarUrlOf(member.account) : null,
     role: member.role ?? null,
     isOwner: false,
     // `invited` : le lien est parti, personne n'est entré. `active` veut dire
@@ -105,7 +108,7 @@ function serializeOwner(owner: Account) {
   return {
     id: owner.id,
     name: fullName || owner.email || "Moi",
-    avatarUrl: owner.avatarUrl ?? null,
+    avatarUrl: avatarUrlOf(owner),
     role: null,
     isOwner: true,
     isPending: false,
@@ -120,6 +123,11 @@ export function serializeTrip(memo: MemoForTrip) {
     .filter((member) => member.status !== "removed")
     .map(serializeCompanion);
 
+  // **L'état se lit sur les dates, pas sur la colonne** : un voyage fini hier
+  // restait « en cours » tant que personne ne le rouvrait. Voir
+  // `services/tripStage.ts`.
+  const stage = effectiveStage(memo);
+
   return {
     id: memo.id,
     title: memo.title,
@@ -130,7 +138,7 @@ export function serializeTrip(memo: MemoForTrip) {
           city: memo.destinationCity ?? null,
         }
       : null,
-    stage: memo.stage,
+    stage,
     startDate: iso(memo.startDate),
     endDate: iso(memo.endDate),
     coverPhotoUrl: memo.coverPhotoUrl,
@@ -143,7 +151,7 @@ export function serializeTrip(memo: MemoForTrip) {
     // Un voyage à venir n'a rien à remplir encore : une barre à zéro dirait le
     // contraire de ce qui est vrai.
     progress:
-      memo.stage === "upcoming"
+      stage === "upcoming"
         ? null
         : {
             memoryCount: memo.memoryCount,
@@ -255,7 +263,7 @@ export function serializeTraveller(account: AccountWithSubscriptions) {
     // Le prénom porte la salutation de l'accueil. À défaut, la partie locale de
     // l'adresse vaut mieux qu'un « Bonjour  » avec un trou dedans.
     firstName: account.firstName?.trim() || account.email?.split("@")[0] || "voyageur",
-    avatarUrl: account.avatarUrl,
+    avatarUrl: avatarUrlOf(account),
     offeredSteps: account.offeredSteps,
     remainingSteps: account.remainingSteps,
     // **Déduit, pas stocké** : la semaine payée du dernier abonnement, si elle
@@ -368,7 +376,7 @@ export type TripForProfileStats = {
  */
 function serializeProfileStats(trips: TripForProfileStats[]) {
   const ongoing = trips
-    .filter((trip) => trip.stage === "ongoing")
+    .filter((trip) => effectiveStage(trip) === "ongoing")
     .sort((a, b) => (b.startDate?.getTime() ?? 0) - (a.startDate?.getTime() ?? 0))[0];
 
   return {
@@ -448,7 +456,11 @@ export function serializeProfile(
     // Elle appartient au compte Apple ou Google.
     signInProvider: account.identities?.[0]?.provider ?? null,
     phoneNumber: account.phoneNumber,
-    avatarUrl: account.avatarUrl,
+    // Ce que la personne a dit, sinon ce que son prénom laisse deviner : c'est
+    // ce que la ligne « Genre » du profil affiche, et ce sur quoi la feuille
+    // d'abonnement accorde « Abonné(e) » (T76).
+    gender: effectiveGender(account.gender, account.firstName),
+    avatarUrl: avatarUrlOf(account),
     address: {
       street: account.addressLine1 ?? "",
       postalCode: account.addressPostalCode ?? "",

@@ -170,7 +170,7 @@ extension ChatThread {
             symbol: ChatCopy.Suggest.importPhotosSymbol,
             intent: .importPhotos
         ),
-        ChatSuggestion(id: "later", label: ChatCopy.Suggest.later, intent: .send),
+        ChatSuggestion(id: "later", label: ChatCopy.Suggest.later, symbol: ChatCopy.Suggest.laterSymbol, intent: .send),
     ]
 
     /// L'accueil nomme **la ville du voyage**.

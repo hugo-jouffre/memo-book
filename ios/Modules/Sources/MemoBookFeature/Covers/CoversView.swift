@@ -5,8 +5,8 @@ import SwiftUI
 /// Le choix des couvertures : le plat qu'on a, et les trois façons d'en changer.
 ///
 /// **On y arrive de deux endroits**, et c'est voulu : par la ligne
-/// « Couvertures (1re & 4e) » en tête des personnalisations, et par la pastille
-/// « Défini maintenant ta 1ère et 4ème de couverture » posée sur la première et
+/// « Couvertures (1ère & 4e) » en tête des personnalisations, et par la pastille
+/// « Définis maintenant ta 1ère et 4ème de couverture » posée sur la première et
 /// la dernière page de l'aperçu PDF. Le second chemin est le plus important —
 /// c'est en regardant son carnet qu'on se rend compte qu'il n'a pas de
 /// couverture.

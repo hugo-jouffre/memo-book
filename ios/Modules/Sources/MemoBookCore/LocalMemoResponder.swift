@@ -450,15 +450,15 @@ public struct LocalMemoResponder: MemoResponder {
 
     private enum Suggestions {
         static let trio = [
-            ChatSuggestion(id: "accept", label: ChatCopy.Suggest.accept, intent: .send),
-            ChatSuggestion(id: "edit-hand", label: ChatCopy.Suggest.editByHand, intent: .sendThenEditTranscript),
-            ChatSuggestion(id: "edit-voice", label: ChatCopy.Suggest.editByVoice, intent: .sendThenSpeak),
+            ChatSuggestion(id: "accept", label: ChatCopy.Suggest.accept, symbol: ChatCopy.Suggest.acceptSymbol, intent: .send),
+            ChatSuggestion(id: "edit-hand", label: ChatCopy.Suggest.editByHand, symbol: ChatCopy.Suggest.editByHandSymbol, intent: .sendThenEditTranscript),
+            ChatSuggestion(id: "edit-voice", label: ChatCopy.Suggest.editByVoice, symbol: ChatCopy.Suggest.editByVoiceSymbol, intent: .sendThenSpeak),
         ]
 
         static let withoutTranscript = [
-            ChatSuggestion(id: "rewrite", label: ChatCopy.Suggest.rewrite, intent: .sendThenWrite),
-            ChatSuggestion(id: "record-again", label: ChatCopy.Suggest.recordAgain, intent: .sendThenSpeak),
-            ChatSuggestion(id: "later", label: ChatCopy.Suggest.later, intent: .send),
+            ChatSuggestion(id: "rewrite", label: ChatCopy.Suggest.rewrite, symbol: ChatCopy.Suggest.rewriteSymbol, intent: .sendThenWrite),
+            ChatSuggestion(id: "record-again", label: ChatCopy.Suggest.recordAgain, symbol: ChatCopy.Suggest.recordAgainSymbol, intent: .sendThenSpeak),
+            ChatSuggestion(id: "later", label: ChatCopy.Suggest.later, symbol: ChatCopy.Suggest.laterSymbol, intent: .send),
         ]
 
         static let opening = [
@@ -483,20 +483,20 @@ public struct LocalMemoResponder: MemoResponder {
         ]
 
         static let neutral = [
-            ChatSuggestion(id: "voice", label: ChatCopy.Suggest.tellByVoice, intent: .sendThenSpeak),
-            ChatSuggestion(id: "write", label: ChatCopy.Suggest.preferWriting, intent: .sendThenWrite),
-            ChatSuggestion(id: "later", label: ChatCopy.Suggest.later, intent: .send),
+            ChatSuggestion(id: "voice", label: ChatCopy.Suggest.tellByVoice, symbol: ChatCopy.Suggest.tellByVoiceSymbol, intent: .sendThenSpeak),
+            ChatSuggestion(id: "write", label: ChatCopy.Suggest.preferWriting, symbol: ChatCopy.Suggest.preferWritingSymbol, intent: .sendThenWrite),
+            ChatSuggestion(id: "later", label: ChatCopy.Suggest.later, symbol: ChatCopy.Suggest.laterSymbol, intent: .send),
         ]
 
         static let afterAnswer = [
-            ChatSuggestion(id: "clear", label: ChatCopy.Suggest.clear, intent: .send),
-            ChatSuggestion(id: "another", label: ChatCopy.Suggest.anotherQuestion, intent: .sendThenWrite),
-            ChatSuggestion(id: "resume", label: ChatCopy.Suggest.resume, intent: .sendThenSpeak),
+            ChatSuggestion(id: "clear", label: ChatCopy.Suggest.clear, symbol: ChatCopy.Suggest.clearSymbol, intent: .send),
+            ChatSuggestion(id: "another", label: ChatCopy.Suggest.anotherQuestion, symbol: ChatCopy.Suggest.anotherQuestionSymbol, intent: .sendThenWrite),
+            ChatSuggestion(id: "resume", label: ChatCopy.Suggest.resume, symbol: ChatCopy.Suggest.resumeSymbol, intent: .sendThenSpeak),
         ]
 
         static let afterRefusal = [
-            ChatSuggestion(id: "tomorrow", label: ChatCopy.Suggest.tomorrow, intent: .send),
-            ChatSuggestion(id: "else", label: ChatCopy.Suggest.somethingElse, intent: .sendThenSpeak),
+            ChatSuggestion(id: "tomorrow", label: ChatCopy.Suggest.tomorrow, symbol: ChatCopy.Suggest.tomorrowSymbol, intent: .send),
+            ChatSuggestion(id: "else", label: ChatCopy.Suggest.somethingElse, symbol: ChatCopy.Suggest.somethingElseSymbol, intent: .sendThenSpeak),
         ]
 
         static let afterAccept = [
@@ -512,12 +512,12 @@ public struct LocalMemoResponder: MemoResponder {
                 symbol: ChatCopy.Suggest.importPhotosSymbol,
                 intent: .importPhotos
             ),
-            ChatSuggestion(id: "later", label: ChatCopy.Suggest.later, intent: .send),
+            ChatSuggestion(id: "later", label: ChatCopy.Suggest.later, symbol: ChatCopy.Suggest.laterSymbol, intent: .send),
         ]
 
         static let split = [
-            ChatSuggestion(id: "split", label: ChatCopy.Suggest.splitInTwo, intent: .send),
-            ChatSuggestion(id: "keep", label: ChatCopy.Suggest.keepAsOne, intent: .send),
+            ChatSuggestion(id: "split", label: ChatCopy.Suggest.splitInTwo, symbol: ChatCopy.Suggest.splitInTwoSymbol, intent: .send),
+            ChatSuggestion(id: "keep", label: ChatCopy.Suggest.keepAsOne, symbol: ChatCopy.Suggest.keepAsOneSymbol, intent: .send),
         ]
     }
 }

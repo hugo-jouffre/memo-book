@@ -54,7 +54,7 @@ public enum NarrationPace: Sendable, Hashable {
         case .everyTwoDays: "Le rythme recommandé pour souffler"
         case .everyThreeDays: "Idéal pour les longs séjours"
         case .weekly: "Pour un résumé global"
-        case .custom: "Définissez vos propres alertes"
+        case .custom: "Définis tes propres alertes"
         case .byPlace, .unknown: nil
         }
     }
@@ -211,7 +211,7 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
     /// ligne : « Connecte ton Tricount » devient le compte relié.
     public var tricountLabel: String?
 
-    /// L'aperçu du carnet, pour la vignette de la ligne « Prévisulation PDF ».
+    /// L'aperçu du carnet, pour la vignette de la ligne « Prévisualisation PDF ».
     /// `nil` quand rien n'a encore été composé.
     public var previewCoverUrl: URL?
 
