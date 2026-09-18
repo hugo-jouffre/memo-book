@@ -55,6 +55,7 @@ curl -s -o /dev/null -w "%{http_code}\n" localhost:3000/v1/showcases/welcome
 | `statusCode: 400` | corps de requête refusé par Zod ; la ligne dit quel champ |
 | `statusCode: 500` | vraie erreur serveur ; la pile est juste au-dessus |
 | `PrismaClientKnownRequestError` | la base a refusé. Migration manquante, ou `DATABASE_URL` qui pointe ailleurs |
+| « `APPLE_BUNDLE_ID` n'est pas configuré » / « Aucun client OAuth Google configuré » | « Continuer avec Apple/Google » répond 500 : le `.env` n'a pas les deux variables, qu'un `.env` plus ancien que `.env.example` n'a jamais reçues. Les recopier depuis `.env.example`, puis relancer |
 | `EMAXCONNSESSION` / « max clients reached » | le pooler est plein. La ligne dit quoi faire — voir § 4 |
 | « La file de travaux n'a pas démarré » | l'API répond, mais rien ne se transcrit ni ne se génère. Même cause |
 | plus rien du tout | il est mort. La **dernière ligne** avant le silence est la cause |
