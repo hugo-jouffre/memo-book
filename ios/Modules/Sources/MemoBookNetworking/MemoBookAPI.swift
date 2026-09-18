@@ -94,6 +94,10 @@ public protocol MemoBookAPI: Sendable {
     /// fait ensuite autorité sur ce que l'écran affiche.
     func updateProfile(_ edit: ProfileEdit) async throws -> TravellerProfile
 
+    /// Envoie la photo de profil — `POST /v1/profile/avatar`, en JPEG ou PNG.
+    /// Renvoie le profil relu, dont `avatarUrl` pointe désormais sur elle.
+    func uploadAvatar(data: Data, mimeType: String) async throws -> TravellerProfile
+
     /// Branche ou débranche un connecteur.
     func setConnector(key: String, isEnabled: Bool) async throws
 

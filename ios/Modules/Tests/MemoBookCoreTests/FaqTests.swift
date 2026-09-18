@@ -157,13 +157,7 @@ struct BookCoversTests {
             ],
             backStyles: [
                 CoverStyle(id: "back-sand", name: "Sable", treatment: .plain, tint: .sand),
-                CoverStyle(
-                    id: "back-framed",
-                    name: "Cadre",
-                    treatment: .framed,
-                    tint: .paper,
-                    isMatched: true
-                ),
+                CoverStyle(id: "back-framed", name: "Cadre", treatment: .framed, tint: .paper),
             ],
             photos: [CoverPhoto(id: "photo-1"), CoverPhoto(id: "photo-2")],
             stats: [
@@ -175,9 +169,9 @@ struct BookCoversTests {
         )
     }
 
-    @Test("Les ordinaux s’écrivent 1re et 4e")
-    func facesUseFrenchOrdinals() {
-        #expect(CoverFace.front.title == "1re de couverture")
+    @Test("Les ordinaux s’écrivent 1ère et 4e, comme la maquette (T91)")
+    func facesUseTheMockupOrdinals() {
+        #expect(CoverFace.front.title == "1ère de couverture")
         #expect(CoverFace.back.title == "4e de couverture")
     }
 
@@ -225,8 +219,24 @@ struct BookCoversTests {
         }
     }
 
-    @Test("Un seul style de quatrième est annoncé assorti")
-    func onlyOneBackStyleIsMatched() {
-        #expect(Self.covers.backStyles.filter(\.isMatched).count == 1)
+    @Test("La pastille « assortie » suit le style choisi sur l’autre plat")
+    func matchedStyleFollowsTheOtherFace() {
+        var covers = Self.covers
+
+        // Devant en photo pleine page : aucune quatrième ne s'accorde.
+        covers.front.styleId = "front-photo"
+        #expect(covers.backStyles.filter { covers.isMatched($0, on: .back) }.isEmpty)
+
+        // Devant en sable : c'est « Sable » au dos qui devient assortie — et
+        // une seule.
+        covers.front.styleId = "front-sand"
+        let matched = covers.backStyles.filter { covers.isMatched($0, on: .back) }
+        #expect(matched.map(\.id) == ["back-sand"])
+
+        // Et dans l'autre sens, le devant en sable s'annonce assorti au dos
+        // en sable.
+        covers.back.styleId = "back-sand"
+        #expect(covers.isMatched(covers.frontStyles[1], on: .front))
+        #expect(!covers.isMatched(covers.frontStyles[0], on: .front))
     }
 }

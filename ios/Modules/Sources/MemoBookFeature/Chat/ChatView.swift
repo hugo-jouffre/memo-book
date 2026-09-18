@@ -54,8 +54,8 @@ public struct ChatView: View {
     @FocusState private var isWriting: Bool
 
     /// Le parcours d'ajout de photos : autorisation, feuille de choix,
-    /// photothèque ou appareil photo. Voir ``ChatPhotoFlow``.
-    @State private var photos = ChatPhotoFlow()
+    /// photothèque ou appareil photo. Voir ``PhotoFlow``.
+    @State private var photos = PhotoFlow()
 
     /// Le paywall, ouvert par le micro quand les étapes offertes sont épuisées
     /// — le même verrou que sur l'accueil et sur un voyage.
@@ -116,6 +116,38 @@ public struct ChatView: View {
     /// puisqu'elle ne mesure rien pendant le défilement.
     private static let bottomAnchor = "chat-bottom"
 
+    /// L'espace de coordonnées du fil, pour mesurer de combien il a défilé.
+    private static let scrollSpace = "chat-scroll"
+
+    // MARK: La bannière « Ton carnet prend forme »
+
+    /// La bannière d'aperçu en direct est **posée sur le fil**, pas dedans
+    /// (Hugo, 17/09/2026). Elle apparaît à l'arrivée, s'en va vers le haut
+    /// après quatre secondes, et revient dès que le doigt remonte de 20 pt
+    /// dans la conversation — puis disparaît quand on remonte franchement
+    /// (200 pt : on lit ses messages, on ne veut pas l'aperçu) ou dès qu'on
+    /// redescend de 20 pt. Vivante : là quand on peut en avoir besoin, partie
+    /// dès qu'on ne l'a plus.
+    @State private var showsPreviewBanner = true
+
+    /// La hauteur de l'en-tête, mesurée : la bannière se pose juste dessous.
+    @State private var headerHeight: CGFloat = 0
+
+    /// Le haut du contenu dans l'espace du fil, à la dernière mesure. `nil`
+    /// avant la première : la première mesure n'est pas un mouvement.
+    @State private var lastContentTop: CGFloat?
+
+    /// De combien on a remonté (vers les anciens messages) sans redescendre,
+    /// et l'inverse. Un changement de sens remet l'autre compteur à zéro.
+    @State private var scrolledUp: CGFloat = 0
+    @State private var scrolledDown: CGFloat = 0
+
+    /// Les seuils de la bannière — voir ``showsPreviewBanner``.
+    private static let bannerRevealDistance: CGFloat = 20
+    private static let bannerReadingDistance: CGFloat = 200
+    private static let bannerDismissDistance: CGFloat = 20
+    private static let bannerLinger: Duration = .seconds(4)
+
     public var body: some View {
         Group {
             if let thread = model.thread {
@@ -127,7 +159,7 @@ public struct ChatView: View {
             }
         }
         .background(BrandBackdrop())
-        .chatPhotoFlow(photos) { model.sendPhotos($0) }
+        .photoFlow(photos) { model.sendPhotos($0) }
         .brandHiddenNavigationBar()
         // Le crème de la marque ne se retourne pas en sombre — voir
         // `MemoBookColor`.
@@ -172,11 +204,6 @@ public struct ChatView: View {
                 LazyVStack(spacing: ChatMetrics.messageSpacing) {
                     notices
 
-                    if let preview = thread.preview {
-                        ChatPreviewBanner(preview: preview) { onIntent(.openBookPreview(memoId: tripId)) }
-                            .padding(.bottom, MemoBookSpacing.snug)
-                    }
-
                     if thread.isEmpty, let greeting = thread.greeting {
                         ChatGreetingView(greeting: greeting)
                     }
@@ -207,7 +234,17 @@ public struct ChatView: View {
                     reduceMotion ? nil : .smooth(duration: 0.3),
                     value: model.messages.count
                 )
+                // De combien le fil a défilé, lu sur le haut de son contenu.
+                // Un `GeometryReader` en fond, et non `onScrollGeometryChange`
+                // : celui-là est iOS 18, l'app cible iOS 17.
+                .background {
+                    GeometryReader { proxy in
+                        let top = proxy.frame(in: .named(Self.scrollSpace)).minY
+                        Color.clear.onChange(of: top) { _, value in trackScroll(to: value) }
+                    }
+                }
             }
+            .coordinateSpace(name: Self.scrollSpace)
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
             // Une conversation s'ouvre sur sa fin : c'est le dernier message
@@ -221,8 +258,68 @@ public struct ChatView: View {
                 guard isThinking else { return }
                 follow(proxy)
             }
-            .safeAreaInset(edge: .top, spacing: 0) { header(thread) }
+            // **La bannière, par-dessus le fil**, juste sous l'en-tête. Elle
+            // glisse vers le haut avec un rebond quand elle s'en va, et revient
+            // de la même façon. En Reduce Motion, un fondu.
+            .overlay(alignment: .top) {
+                if showsPreviewBanner, let preview = thread.preview {
+                    ChatPreviewBanner(preview: preview) { onIntent(.openBookPreview(memoId: tripId)) }
+                        .padding(.horizontal, MemoBookSpacing.snug)
+                        .padding(.top, headerHeight + MemoBookSpacing.xs)
+                        .transition(
+                            reduceMotion
+                                ? .opacity
+                                : .move(edge: .top).combined(with: .opacity)
+                        )
+                }
+            }
+            .animation(
+                reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.55, bounce: 0.35),
+                value: showsPreviewBanner
+            )
+            // Quatre secondes à l'arrivée, puis elle s'en va toute seule. Le
+            // minuteur est structuré : quitter le fil l'annule.
+            .task(id: thread.preview != nil) {
+                guard thread.preview != nil else { return }
+                showsPreviewBanner = true
+                try? await Task.sleep(for: Self.bannerLinger)
+                guard !Task.isCancelled else { return }
+                showsPreviewBanner = false
+            }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                header(thread)
+                    .onGeometryChange(for: CGFloat.self, of: \.size.height) { headerHeight = $0 }
+            }
             .safeAreaInset(edge: .bottom, spacing: 0) { footer(proxy) }
+        }
+    }
+
+    /// Ce que le défilement fait à la bannière — voir ``showsPreviewBanner``.
+    ///
+    /// Le haut du contenu **monte** quand on descend vers les messages récents
+    /// (il devient plus négatif) et **descend** quand on remonte vers les
+    /// anciens. On cumule chaque sens tant qu'il dure ; un changement de sens
+    /// remet l'autre compteur à zéro, pour qu'un tremblement du doigt ne
+    /// compte pas.
+    private func trackScroll(to top: CGFloat) {
+        defer { lastContentTop = top }
+        guard let previous = lastContentTop else { return }
+
+        let delta = top - previous
+        if delta > 0 {
+            scrolledDown = 0
+            scrolledUp += delta
+            if scrolledUp >= Self.bannerReadingDistance {
+                showsPreviewBanner = false
+            } else if scrolledUp >= Self.bannerRevealDistance {
+                showsPreviewBanner = true
+            }
+        } else if delta < 0 {
+            scrolledUp = 0
+            scrolledDown -= delta
+            if scrolledDown >= Self.bannerDismissDistance {
+                showsPreviewBanner = false
+            }
         }
     }
 

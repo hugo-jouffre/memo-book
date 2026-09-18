@@ -39,15 +39,10 @@ extension BookCovers {
             backStyles: [
                 CoverStyle(id: "back-sand", name: "Sable", treatment: .plain, tint: .sand),
                 CoverStyle(id: "back-photo", name: "Photo pleine page", treatment: .photo, tint: .ink),
-                CoverStyle(
-                    id: "back-framed",
-                    name: "Cadre",
-                    treatment: .framed,
-                    tint: .paper,
-                    // C'est ce plat-là que la maquette coiffe de la pastille
-                    // « Assortie à votre 1e de couverture ».
-                    isMatched: true
-                ),
+                // La pastille « Assortie à ta 1ère de couverture » se calcule
+                // sur le devant choisi : « Cadre » ici, donc ce plat-là, comme
+                // la maquette — et « Sable » si l'on choisit « Sable » devant.
+                CoverStyle(id: "back-framed", name: "Cadre", treatment: .framed, tint: .paper),
                 CoverStyle(id: "back-forest", name: "Forêt", treatment: .plain, tint: .forest),
                 CoverStyle(id: "back-kraft", name: "Kraft", treatment: .kraft, tint: .sand),
             ],

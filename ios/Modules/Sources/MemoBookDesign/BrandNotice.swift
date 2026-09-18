@@ -53,7 +53,7 @@ public struct BrandNotice: View {
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: tone == .information ? .leading : .center)
             .padding(MemoBookSpacing.s)
-            .background(background, in: .rect(cornerRadius: MemoBookSpacing.largeCornerRadius))
+            .background { backdrop }
             .overlay {
                 if tone == .information {
                     RoundedRectangle(cornerRadius: MemoBookSpacing.largeCornerRadius)
@@ -61,6 +61,26 @@ public struct BrandNotice: View {
                 }
             }
             .accessibilityElement(children: .combine)
+    }
+
+    /// Le fond. **Un verre dépoli sous un beige doux** pour le ton neutre
+    /// (Hugo, 17/09/2026) : l'aplat `Beige Darker` d'avant était trop foncé, et
+    /// une boîte qui laisse deviner ce qui passe dessous se lit comme une
+    /// information posée sur la page, pas comme un bloc de plus. Un liseré
+    /// blanc à demi-transparent fait le bord du verre.
+    @ViewBuilder
+    private var backdrop: some View {
+        let shape = RoundedRectangle(cornerRadius: MemoBookSpacing.largeCornerRadius)
+
+        switch tone {
+        case .neutral:
+            shape
+                .fill(.ultraThinMaterial)
+                .overlay { shape.fill(MemoBookColor.noticeBeige.opacity(0.7)) }
+                .overlay { shape.strokeBorder(.white.opacity(0.45), lineWidth: 1) }
+        case .information:
+            shape.fill(background)
+        }
     }
 
     @ViewBuilder
@@ -92,10 +112,7 @@ public struct BrandNotice: View {
 
     private var background: Color {
         switch tone {
-        // `Beige Darker`, le seul aplat discret de la palette : plus soutenu
-        // que le crème du fond, donc le bloc se détache ; assez proche pour ne
-        // pas se lire comme une carte de contenu.
-        case .neutral: MemoBookColor.separator
+        case .neutral: MemoBookColor.noticeBeige
         // Le bleu d'information, très dilué : c'est le filet et le pictogramme
         // qui portent la couleur, pas l'aplat — un fond bleu franc sous du
         // texte encre tombe sous le contraste demandé.

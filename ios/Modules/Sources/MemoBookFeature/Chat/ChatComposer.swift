@@ -103,13 +103,13 @@ struct ChatSuggestionRail: View {
             }
             .padding(.horizontal, MemoBookSpacing.snug)
             .frame(height: railHeight)
-            .background(
-                MemoBookColor.surface,
-                in: .rect(cornerRadius: MemoBookSpacing.bubbleCornerRadius)
-            )
+            // **Une capsule**, blanche, l'émoji devant : c'est la bulle des
+            // propositions de la maquette de Hugo (`3520:35958`, 17/09/2026),
+            // et non le rectangle arrondi des bulles du fil.
+            .background(MemoBookColor.surface, in: .capsule)
         }
         .buttonStyle(CardPressStyle())
-        .contentShape(.rect(cornerRadius: MemoBookSpacing.bubbleCornerRadius))
+        .contentShape(.capsule)
         .accessibilityLabel(suggestion.label)
     }
 }
@@ -258,8 +258,8 @@ struct ChatSendingBar: View {
                 cameraButton(fills: false)
                 keyboardButton(fills: false)
 
-                // ⚠️ « Record » est **en anglais dans la maquette**, au milieu
-                // d'une app française, et recopié tel quel (R8) — T51.
+                // « Record » dans la maquette ; « Enregistrer » dans l'app
+                // (T51).
                 BrandButton(
                     ChatCopy.record,
                     icon: Image(brand: "IconMic"),
@@ -360,20 +360,15 @@ struct ChatSendingBar: View {
         style: .continuous
     )
 
-    /// L'avion en papier. Gris tant qu'il n'y a rien à envoyer, bleu dès qu'il y
-    /// a un mot : c'est le seul endroit de la barre où la couleur annonce que
-    /// l'action vient de devenir possible.
+    /// L'avion en papier, **blanc dans un rond bleu**. Gris tant qu'il n'y a
+    /// rien à envoyer, bleu dès qu'il y a un mot : c'est le seul endroit de la
+    /// barre où la couleur annonce que l'action vient de devenir possible.
     private var sendButton: some View {
-        barGlyph(
-            "IconLucideSend",
-            label: ChatCopy.Voice.send,
-            tint: model.canSendDraft ? MemoBookColor.send : MemoBookColor.disabledOutline,
-            action: model.sendDraft
-        )
-        .disabled(!model.canSendDraft)
-        // Le bleu arrive avec un petit sursaut : c'est le moment où le message
-        // devient envoyable, et il vaut d'être vu.
-        .scaleEffect(model.canSendDraft ? 1 : 0.86)
+        sendGlyph(isActive: model.canSendDraft, action: model.sendDraft)
+            .disabled(!model.canSendDraft)
+            // Le bleu arrive avec un petit sursaut : c'est le moment où le
+            // message devient envoyable, et il vaut d'être vu.
+            .scaleEffect(model.canSendDraft ? 1 : 0.86)
     }
 
     // MARK: Pendant qu'on parle — nœuds `Start Recording` / `Finish Recording`
@@ -415,12 +410,7 @@ struct ChatSendingBar: View {
                     .accessibilityHidden(true)
             }
 
-            barGlyph(
-                "IconLucideSend",
-                label: ChatCopy.Voice.send,
-                tint: MemoBookColor.send,
-                action: model.finishRecording
-            )
+            sendGlyph(isActive: true, action: model.finishRecording)
         }
         .padding(.horizontal, MemoBookSpacing.snug)
         .frame(maxWidth: .infinity)
@@ -530,6 +520,32 @@ struct ChatSendingBar: View {
     }
 
     /// Une icône nue posée dans la barre, dans une cible de 2.75 rem.
+    /// Le bouton d'envoi : **un rond plein du bleu qui s'écrit, l'avion en
+    /// blanc dedans** (Hugo, 17/09/2026, T59). Le bleu-violet du kit de
+    /// messagerie est parti avec ; le rond est de la taille d'une icône de
+    /// contenu, et sa cible garde les 2.75 rem de la barre.
+    private func sendGlyph(isActive: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(brand: "IconLucideSend")
+                .resizable()
+                .renderingMode(.template)
+                .scaledToFit()
+                .frame(width: glyph * 0.8, height: glyph * 0.8)
+                .foregroundStyle(MemoBookColor.surface)
+                .frame(width: MemoBookSpacing.contentIcon, height: MemoBookSpacing.contentIcon)
+                .background(
+                    isActive ? MemoBookColor.send : MemoBookColor.disabledOutline,
+                    in: .circle
+                )
+                .frame(
+                    minWidth: MemoBookSpacing.minimumTapTarget,
+                    minHeight: MemoBookSpacing.minimumTapTarget
+                )
+        }
+        .contentShape(.rect)
+        .accessibilityLabel(ChatCopy.Voice.send)
+    }
+
     private func barGlyph(
         _ icon: String,
         label: String,

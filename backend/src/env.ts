@@ -110,6 +110,18 @@ const schema = z.object({
    */
   SHARE_PUBLIC_BASE_URL: z.string().default("https://memo-book.com"),
 
+  /**
+   * L'adresse publique de l'API elle-même, pour les liens qu'elle sert en
+   * HTTP simple — les photos de profil (`GET /v1/avatars/:file`). Vide, on
+   * retombe sur **`RAILWAY_PUBLIC_DOMAIN`**, que Railway pose tout seul sur le
+   * service (`api-production-9f35a.up.railway.app`) ; puis sur
+   * `APP_LINK_BASE_URL` quand il est en `https://` ; sinon sur
+   * `http://localhost:3000`. Voir `services/avatars.ts` — rien à configurer
+   * sur Railway.
+   */
+  API_PUBLIC_BASE_URL: z.string().default(""),
+  RAILWAY_PUBLIC_DOMAIN: z.string().default(""),
+
   WEBFLOW_API_TOKEN: z.string().default(""),
   WEBFLOW_SITE_ID: z.string().default(""),
 

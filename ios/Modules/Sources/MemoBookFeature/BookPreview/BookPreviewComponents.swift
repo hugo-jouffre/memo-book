@@ -25,6 +25,9 @@ struct BookActionsBlock: View {
     /// ne demande rien du tout.
     let isComposed: Bool
     let onCustomise: () -> Void
+    /// Les couvertures, depuis l'aperçu et à tout moment — pas seulement
+    /// depuis le voile d'une couverture pas encore choisie.
+    let onConfigureCovers: () -> Void
     let onOrder: () -> Void
 
     var body: some View {
@@ -38,6 +41,12 @@ struct BookActionsBlock: View {
                 fillsWidth: true,
                 action: onCustomise
             )
+
+            // Le lien vers les couvertures. Un lien et non un troisième pavé :
+            // deux boutons pleine largeur suffisent à un écran, et celui-ci est
+            // un sous-chemin de la personnalisation.
+            BrandButton(BookCopy.Preview.configureCovers, style: .link, action: onConfigureCovers)
+                .frame(maxWidth: .infinity)
 
             // Commander demande, lui, un carnet composé : on ne fait pas
             // imprimer ce qui n'existe pas encore.

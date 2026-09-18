@@ -154,14 +154,13 @@ struct CoverTextsView: View {
                         titleBadge: model.face == .front
                             ? AnyView(pencil(BookCopy.Covers.Voice.editTitle) { open(.title) })
                             : nil,
-                        // ⚠️ **Le texte de dos n'a pas de crayon**, et c'est la
-                        // maquette : « 4 - cover textes verso » n'en pose qu'un,
-                        // sur le bandeau des chiffres. On implémente ce qui est
-                        // dessiné (R3) plutôt que d'en ajouter un — mais c'est
-                        // signalé (T90) : la FAQ promet « titre, visuel et
-                        // **texte de dos** », et rien ne permet aujourd'hui de
-                        // réécrire celui-ci.
-                        subtitleBadge: model.face == .front
+                        // **Le texte de dos a son crayon aussi**, en haut à
+                        // droite du texte (Hugo, 17/09/2026, T90) : la maquette
+                        // n'en posait qu'un, sur le bandeau des chiffres, mais
+                        // la FAQ promet « titre, visuel et texte de dos ». Il
+                        // ne se pose pas sur un plat qui n'a pas de texte — la
+                        // photo pleine page —, le plat pâlit alors et l'explique.
+                        subtitleBadge: acceptsText(model.face)
                             ? AnyView(
                                 pencil(BookCopy.Covers.Voice.editSubtitle) { open(.subtitle) }
                             )
@@ -244,6 +243,10 @@ struct CoverTextsView: View {
                 // passage par `editing`. Une image plus tard, pour que la vue
                 // soit bien dans la hiérarchie quand le focus la cherche.
                 .onAppear { focusSoon { focus = .title } }
+                // L'icône « clavier bas », comme sur le texte : sans elle, rien
+                // ne rangeait le clavier ouvert sur le titre (Clara,
+                // 17/09/2026). `BrandTextBox` porte déjà la sienne.
+                .brandKeyboardDismissBar()
 
             case .subtitle:
                 BrandTextBox(

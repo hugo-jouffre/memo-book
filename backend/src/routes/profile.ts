@@ -11,7 +11,14 @@ import {
   memoStatisticsSelect,
   type TravelStatistics,
 } from "../services/travelStatistics.js";
+  AVATAR_FILENAME,
+  AVATAR_PREFIX,
+  avatarMimeType,
+} from "../services/avatars.js";
 import { serializeProfile, type TripForProfileStats } from "./appSerializers.js";
+
+/** Une photo de profil ne pèse pas plus : l'app la réduit avant de l'envoyer. */
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 
 /**
  * L'écran de profil : ce qu'il montre, et ce qu'on y change.
@@ -32,6 +39,9 @@ const updateBody = z.object({
   firstName: nullableText(100),
   lastName: nullableText(100),
   phoneNumber: nullableText(40),
+  // Ce que la personne dit d'elle-même : un des trois choix, jamais `null` —
+  // « je ne préfère pas répondre » est une réponse, pas une absence.
+  gender: z.enum(["female", "male", "undisclosed"]).optional(),
   wantsNewsletter: z.boolean().optional(),
   address: z
     .object({
@@ -171,6 +181,7 @@ export function registerProfileRoutes(app: FastifyInstance, context: AppContext)
         firstName: orNull(body.firstName),
         lastName: orNull(body.lastName),
         phoneNumber: orNull(body.phoneNumber),
+        ...(body.gender !== undefined ? { gender: body.gender } : {}),
         ...(body.wantsNewsletter !== undefined
           ? { wantsNewsletter: body.wantsNewsletter }
           : {}),
@@ -188,6 +199,55 @@ export function registerProfileRoutes(app: FastifyInstance, context: AppContext)
     // On relit par le **même chemin** que le `GET` : la réponse d'un `PATCH`
     // est ce que l'app garde à l'écran, et un profil amputé de ses commandes ou
     // de ses chiffres les effacerait de la page à chaque correction.
+    return readProfile(context, accountId);
+  });
+
+  /**
+   * La photo de profil — `multipart/form-data`, un champ `file` en `image/*`.
+   *
+   * Elle part dans le stockage des médias sous `avatars/`, et le compte ne
+   * retient que sa **clé** : l'adresse se calcule à la lecture, voir
+   * `services/avatars.ts`. L'ancienne photo est retirée du stockage dans la
+   * foulée — personne ne la lira plus. On relit le profil entier en réponse,
+   * comme le `PATCH` : c'est ce que l'app garde à l'écran.
+   */
+  app.post("/v1/profile/avatar", async (request) => {
+    const accountId = accountIdOf(request);
+
+    const file = await request.file({ limits: { fileSize: MAX_AVATAR_BYTES } });
+    if (!file) throw HttpError.badRequest("Aucun fichier reçu.");
+
+    const buffer = await file.toBuffer();
+    if (buffer.byteLength === 0) throw HttpError.badRequest("Le fichier reçu est vide.");
+
+    const mimeType = file.mimetype;
+    if (mimeType !== "image/jpeg" && mimeType !== "image/png") {
+      throw HttpError.badRequest(
+        `Type d'image non supporté : ${mimeType}. Attendu : image/jpeg ou image/png.`,
+      );
+    }
+
+    // L'extension vient du type, pas du nom envoyé : c'est elle qui dira le
+    // type MIME à la lecture (`avatarMimeType`).
+    const filename = mimeType === "image/png" ? "avatar.png" : "avatar.jpg";
+    const stored = await context.storage.put(AVATAR_PREFIX, filename, buffer, mimeType);
+
+    const previous = await context.prisma.account.findUniqueOrThrow({
+      where: { id: accountId },
+      select: { avatarStorageKey: true },
+    });
+
+    await context.prisma.account.update({
+      where: { id: accountId },
+      data: { avatarStorageKey: stored.storageKey },
+    });
+
+    if (previous.avatarStorageKey) {
+      await context.storage.remove([previous.avatarStorageKey]).catch((cause: unknown) => {
+        request.log.warn({ cause }, "Ancienne photo de profil non retirée du stockage");
+      });
+    }
+
     return readProfile(context, accountId);
   });
 
@@ -258,5 +318,31 @@ export function registerProfileRoutes(app: FastifyInstance, context: AppContext)
     await linkDeviceToAccount(context.prisma, device.id, accountId);
 
     return { deviceId: device.id };
+  });
+}
+
+/**
+ * Sert une photo de profil, **sans session** — `AsyncImage` n'envoie pas
+ * d'en-tête, et l'avatar se montre à ceux qui partagent le voyage. La clé est
+ * un UUID : le nom est entièrement contraint par `AVATAR_FILENAME`, donc ni
+ * `..` ni `/`, et rien à deviner. Mise en cache longue : la clé change à
+ * chaque nouvelle photo, l'ancienne adresse n'a plus à être revalidée.
+ */
+export function registerAvatarRoutes(app: FastifyInstance, context: AppContext): void {
+  app.get("/v1/avatars/:file", async (request, reply) => {
+    const { file } = request.params as { file: string };
+    if (!AVATAR_FILENAME.test(file)) throw HttpError.notFound("Photo introuvable.");
+
+    let body: Buffer;
+    try {
+      body = await context.storage.get(`${AVATAR_PREFIX}/${file}`);
+    } catch {
+      throw HttpError.notFound("Photo introuvable.");
+    }
+
+    return reply
+      .header("Cache-Control", "public, max-age=2592000, immutable")
+      .type(avatarMimeType(file))
+      .send(body);
   });
 }

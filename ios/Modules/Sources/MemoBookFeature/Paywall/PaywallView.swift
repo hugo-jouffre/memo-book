@@ -92,9 +92,10 @@ struct PaywallView: View {
             MemoBookColor.background.ignoresSafeArea()
             // Plus discret que sur l'accueil : ici le signe passe **derrière un
             // écran entier de texte**, et à l'opacité de repos il se lisait
-            // à travers les titres. ⚠️ Le cadrage reste celui du design
-            // system ; la maquette du paywall, elle, tourne le M d'un quart de
-            // tour — signalé (T63).
+            // à travers les titres. Le cadrage est celui du design system,
+            // **le même partout** — la maquette du paywall tournait le M d'un
+            // quart de tour, et Hugo a tranché pour un seul cadrage (T63,
+            // 17/09/2026).
             BrandMarkBackdrop(progress: 1, opacity: Self.backdropOpacity)
                 .ignoresSafeArea()
 
@@ -135,7 +136,8 @@ struct PaywallView: View {
                             price: price,
                             title: variant.offerTitle,
                             onEstimate: { showsEstimation = true },
-                            onSubscribe: openPayment
+                            onSubscribe: openPayment,
+                            onBack: { turn(-1) }
                         )
                     }
                 }
@@ -316,11 +318,9 @@ struct PaywallView: View {
             return
         }
 
-        // Le dernier écran porte l'offre : il ne s'en va pas tout seul, et sa
-        // barre reste donc pleine plutôt que de se remplir dans le vide. En
-        // Reduce Motion, aucune page ne tourne toute seule — on remplit la
+        // En Reduce Motion, aucune page ne tourne toute seule — on remplit la
         // barre pour dire où on en est, et c'est le doigt qui avance.
-        guard page < pageCount - 1, !reduceMotion else {
+        guard !reduceMotion else {
             fill = .held(1)
             return
         }
@@ -337,6 +337,14 @@ struct PaywallView: View {
         let remaining = max(0, seconds - Date.now.timeIntervalSince(since))
         do { try await Task.sleep(for: .seconds(remaining)) } catch { return }
         guard !Task.isCancelled else { return }
+
+        // Le dernier écran porte l'offre : il ne s'en va pas tout seul. Sa
+        // barre se remplit **au même rythme que les deux autres** — elle
+        // sautait à 1 d'un coup (Clara, 17/09/2026) — et reste pleine.
+        guard page < pageCount - 1 else {
+            fill = .held(1)
+            return
+        }
 
         turn(+1)
     }

@@ -108,6 +108,13 @@ public enum TripIntent: Sendable, Hashable {
     /// on parle sans avoir à le demander.
     case openStep(tripId: String, stepId: String)
 
+    /// Le « + » de la file des collaborateurs, sur la photo : inviter
+    /// quelqu'un. Il ouvre les réglages du voyage **sur la feuille des
+    /// co-voyageurs** — c'est là que vivent l'invitation, la liste et le lien,
+    /// et un second écran d'invitation aurait dit la même chose (Clara,
+    /// 17/09/2026 : le « + » n'était pas cliquable).
+    case inviteCompanions(tripId: String)
+
     /// « Besoin d'aide ? » depuis le paywall qu'ouvre un micro verrouillé :
     /// le support, la même destination que depuis l'accueil et le profil.
     case openHelp

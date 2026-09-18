@@ -29,12 +29,12 @@ public enum FreemiumStatus: Equatable {
     /// place de dire « gratuites ». Les deux comptent la même chose, et c'est
     /// ce qui compte : voir deux formulations pour un même solde fait douter
     /// qu'il s'agisse du même.
-    public var profilePillLabel: String {
+    public func profilePillLabel(for gender: Gender = .undisclosed) -> String {
         switch self {
-        // La maquette de la feuille écrit « Abonnée ». Ici l'app ne sait pas à
-        // qui elle s'adresse : elle s'en tient à la forme non marquée plutôt
-        // que de deviner. Signalé (T76).
-        case .subscriber: "Abonné"
+        // La maquette de la feuille écrit « Abonnée » : l'app accorde sur ce
+        // que le profil sait de la personne — deviné sur le prénom, corrigé
+        // depuis sa ligne « Genre » (T76).
+        case .subscriber: gender.agreed("Abonné")
         case .freeSteps(let remaining, _):
             remaining == 1
                 ? "1 étape gratuite restante"
@@ -65,7 +65,7 @@ public enum FreemiumStatus: Equatable {
         // la salutation et le bord de l'écran, et n'a pas la ligne pour elle.
         case .freeSteps(let remaining, _):
             remaining == 1 ? "1 étape restante" : "\(remaining) étapes restantes"
-        case .limitReached: profilePillLabel
+        case .limitReached: profilePillLabel()
         }
     }
 

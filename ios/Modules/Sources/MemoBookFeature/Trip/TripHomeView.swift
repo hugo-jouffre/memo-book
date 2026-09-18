@@ -75,7 +75,7 @@ public struct TripHomeView: View {
                         // est déjà en portée. En garder une copie dans la vue
                         // aurait fait deux vérités pour la même valeur.
                         onSettings: { onIntent(.openSettings(tripId: detail.trip.id)) },
-                        onInvite: notYetRouted
+                        onInvite: { onIntent(.inviteCompanions(tripId: detail.trip.id)) }
                     )
                 } else {
                     TripHeaderPlaceholder(onBack: { dismiss() })
@@ -182,7 +182,7 @@ public struct TripHomeView: View {
 
             BrandButton(
                 Self.callToAction,
-                icon: Image(brand: "IconArrowRight"),
+                icon: Image(brand: "IconBubble"),
                 iconPlacement: .trailing,
                 fillsWidth: true
             ) {}
@@ -211,15 +211,16 @@ public struct TripHomeView: View {
                     .accessibilityAddTraits(.isHeader)
             }
 
-            // **« Accéder au chat »**, avec la flèche de la marque en fin de
-            // libellé : le bouton mène à la conversation, il n'ouvre pas le
-            // micro — c'est là-bas qu'on enregistre (Hugo, 15/09/2026).
-            // Verrouillé, il passe au lime et au cadenas, et ouvre le paywall
-            // au lieu de la conversation — exactement comme le CTA de l'accueil
-            // (Hugo, 14/09/2026).
+            // **« Accéder au chat »**, avec la bulle de la marque en fin de
+            // libellé — la flèche disait « plus loin », la bulle dit « la
+            // conversation » (Hugo, 17/09/2026). Le bouton mène à la
+            // conversation, il n'ouvre pas le micro — c'est là-bas qu'on
+            // enregistre (Hugo, 15/09/2026). Verrouillé, il passe au lime et
+            // au cadenas, et ouvre le paywall au lieu de la conversation —
+            // exactement comme le CTA de l'accueil (Hugo, 14/09/2026).
             BrandButton(
                 Self.callToAction,
-                icon: Image(brand: isBlocked ? "IconLocker" : "IconArrowRight"),
+                icon: Image(brand: isBlocked ? "IconLocker" : "IconBubble"),
                 iconPlacement: isBlocked ? .leading : .trailing,
                 style: isBlocked ? .accent : .primary,
                 fillsWidth: true,
