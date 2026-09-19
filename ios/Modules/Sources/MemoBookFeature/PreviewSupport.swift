@@ -216,6 +216,21 @@ public actor PreviewAPI: MemoBookAPI {
         return profile
     }
 
+    /// L'abonnement se referme **dans le double**, comme le reste : rouvrir la
+    /// feuille doit montrer quelqu'un de résilié, pas l'abonné du jeu d'essai.
+    /// La semaine réglée (`paidThrough`) ne bouge pas — c'est elle qui donne
+    /// son sursis, et c'est ce qu'on vient vérifier à l'écran.
+    public func cancelSubscription(
+        reason: SubscriptionCancellationReason?
+    ) async throws -> TravellerProfile {
+        _ = reason
+        var profile = editedProfile ?? .fixture
+        profile.subscription.isActive = false
+        profile.subscription.cancelledAt = .now
+        editedProfile = profile
+        return profile
+    }
+
     /// La photo reste sur le disque de l'aperçu, et le profil pointe dessus :
     /// c'est ce qui permet de voir sa photo changer sans serveur.
     public func uploadAvatar(data: Data, mimeType: String) async throws -> TravellerProfile {

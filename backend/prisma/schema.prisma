@@ -1207,6 +1207,17 @@ model Subscription {
   renewsAt    DateTime?
   cancelledAt DateTime?
 
+  /// Ce que la personne a répondu à « Pourquoi nous quittes-tu ? ».
+  ///
+  /// **La feuille pose la question pour qu'on y réponde** — son bouton reste
+  /// gris tant qu'aucune raison n'est cochée —, et jusqu'au 19/09/2026 la
+  /// réponse était jetée : l'app la passait à un modèle qui ne l'envoyait nulle
+  /// part. Une des cinq valeurs de `SubscriptionCancellationReason` côté app,
+  /// libre ici : c'est une donnée de sondage, pas un état du système, et la
+  /// contraindre en énumération obligerait à migrer la base chaque fois que la
+  /// question change.
+  cancellationReason String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

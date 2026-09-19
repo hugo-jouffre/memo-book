@@ -43,6 +43,10 @@ public final class ProfileModel {
     /// Envoie la photo de profil. `nil` en aperçu : la photo reste sur place.
     private let uploadAvatar: ((Data, String) async throws -> TravellerProfile)?
 
+    /// Ferme l'abonnement côté serveur. `nil` en aperçu.
+    private let cancelSubscriptionRemotely:
+        ((SubscriptionCancellationReason?) async throws -> TravellerProfile)?
+
     /// La photo est en route vers le serveur : l'avatar le montre.
     public private(set) var isUploadingAvatar = false
 
@@ -73,6 +77,9 @@ public final class ProfileModel {
         persist: ((ProfileEdit) async throws -> TravellerProfile)? = nil,
         remove: (() async throws -> Void)? = nil,
         uploadAvatar: ((Data, String) async throws -> TravellerProfile)? = nil,
+        cancelSubscription: (
+            (SubscriptionCancellationReason?) async throws -> TravellerProfile
+        )? = nil,
         cached: CachedValue<TravellerProfile>? = nil
     ) {
         self.cached = cached
@@ -80,6 +87,7 @@ public final class ProfileModel {
         self.persist = persist
         self.remove = remove
         self.uploadAvatar = uploadAvatar
+        self.cancelSubscriptionRemotely = cancelSubscription
     }
 
     /// `true` tant qu'on n'a rien à montrer. L'écran se dessine quand même —
@@ -296,15 +304,44 @@ public final class ProfileModel {
     /// le dernier jour d'une période — et qui reste la phrase affichée dans ce
     /// cas-là, voir ``SubscriptionCopy/doneParagraphs(graceEnd:)``.
     ///
-    /// ⚠️ **Rien ne part au serveur**, comme le reste de cet écran : la base
-    /// sait dire `cancelled` et `cancelledAt` (`schema.prisma`), mais aucune
-    /// route ne les écrit encore et l'achat lui-même n'existe pas. La raison
-    /// invoquée est perdue ici — elle attend son compteur côté serveur.
+    /// **Et ça part au serveur** (Hugo, 19/09/2026). Ça ne partait pas : la
+    /// méthode ne touchait que la copie locale, le prochain chargement relisait
+    /// une ligne `subscriptions` toujours active, et on se retrouvait abonné
+    /// après avoir confirmé trois fois. `POST /v1/profile/subscription/cancel`
+    /// ferme la ligne et rend le profil relu.
+    ///
+    /// L'écran a **déjà** bougé quand la requête part — trois confirmations,
+    /// on ne fait pas attendre le réseau pour la quatrième —, et un échec
+    /// **remet ce que le serveur a vraiment** : une résiliation qu'on croit
+    /// faite et qui ne l'est pas est pire qu'un message d'erreur.
     public func cancelSubscription(reason: SubscriptionCancellationReason?) {
-        _ = reason
         mutate {
             $0.subscription.isActive = false
             $0.subscription.cancelledAt = .now
+        }
+
+        guard let cancelSubscriptionRemotely else { return }
+
+        pendingSave?.cancel()
+        pendingSave = Task { [weak self] in
+            do {
+                let saved = try await cancelSubscriptionRemotely(reason)
+                guard !Task.isCancelled, let self else { return }
+
+                #if DEBUG
+                    profile = SandboxPersona.current?.applied(to: saved) ?? saved
+                #else
+                    profile = saved
+                #endif
+
+                errorMessage = nil
+            } catch {
+                guard !Task.isCancelled, let self else { return }
+                errorMessage = error.localizedDescription
+                // Ce que le serveur a vraiment : l'abonnement est peut-être
+                // encore ouvert, et l'écran doit le dire.
+                await load()
+            }
         }
     }
 

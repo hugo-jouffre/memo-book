@@ -205,6 +205,11 @@ public final class AppDependencies {
             uploadAvatar: { [api] data, mimeType in
                 try await api.uploadAvatar(data: data, mimeType: mimeType)
             },
+            // La résiliation, qui ne partait nulle part avant le 19/09/2026 —
+            // voir ``ProfileModel/cancelSubscription(reason:)``.
+            cancelSubscription: { [api] reason in
+                try await api.cancelSubscription(reason: reason)
+            },
             cached: { [content] in await content.read(.profile, as: TravellerProfile.self) }
         )
     }
