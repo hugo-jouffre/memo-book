@@ -212,7 +212,10 @@ struct SubscriptionSheet: View {
     private var keepGoing: some View {
         BrandSheet(
             SubscriptionCopy.keepGoingTitle,
-            paragraphs: SubscriptionCopy.keepGoingParagraphs(tripTitle: subscription?.tripTitle)
+            paragraphs: SubscriptionCopy.keepGoingParagraphs(
+                tripTitle: subscription?.tripTitle,
+                graceEnd: graceEnd
+            )
         ) {
             VStack(spacing: MemoBookSpacing.s) {
                 BrandButton(SubscriptionCopy.waitForAutoCancel, fillsWidth: true) { dismiss() }
@@ -543,16 +546,29 @@ enum SubscriptionCopy {
 
     /// ⚠️ **État non maquetté** : sans titre de voyage, la première phrase se
     /// passe des guillemets.
-    static func keepGoingParagraphs(tripTitle: String?) -> [String] {
+    ///
+    /// **La deuxième phrase dit *quand*** (Hugo, 19/09/2026). Elle annonçait
+    /// « tu ne pourras plus dicter tes derniers souvenirs » sans date, ce qui
+    /// se lisait « tout s'arrête maintenant » — alors que la semaine déjà
+    /// réglée continue. Elle nomme donc le jour, comme les deux feuilles
+    /// suivantes. Sans semaine réglée, elle reste la phrase d'avant : il n'y a
+    /// pas de date à promettre.
+    static func keepGoingParagraphs(tripTitle: String?, graceEnd: Date?) -> [String] {
         let opening =
             if let tripTitle, !tripTitle.isEmpty {
                 "Il te reste encore quelques jours dans ton voyage “\(tripTitle)”."
             } else {
                 "Il te reste encore quelques jours dans ton voyage."
             }
+        let consequence =
+            if let graceEnd {
+                "Si tu coupes maintenant, tu ne pourras plus dicter tes derniers souvenirs à la fin de la semaine d’abonnement actuelle, soit à partir du \(graceEnd.dayAndMonth)."
+            } else {
+                "Si tu coupes maintenant, tu ne pourras plus dicter tes derniers souvenirs."
+            }
         return [
             opening,
-            "Si tu coupes maintenant, tu ne pourras plus dicter tes derniers souvenirs.",
+            consequence,
             "Pour rappel, ton abonnement sera résilié automatiquement à ton retour.",
         ]
     }

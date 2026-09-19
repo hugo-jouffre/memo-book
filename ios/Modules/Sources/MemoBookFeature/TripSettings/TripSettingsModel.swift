@@ -149,6 +149,34 @@ public final class TripSettingsModel {
             current.memory = memory
             settings = current
         }
+
+        /// Ajoute un co-voyageur **à l'écran seulement**, pour voir la feuille
+        /// se remplir et son tiroir se glisser.
+        ///
+        /// Le jeu d'essai en compte deux, et il faut un compte de plus pour en
+        /// inviter un vrai : sans ça, le retrait et l'invitation relancée ne se
+        /// vérifient qu'à deux, et jamais sur une invitation en attente.
+        /// Retirer celui-ci passe par le même chemin que les autres — la
+        /// réponse du serveur remettra la liste d'aplomb.
+        func debugAddCompanion() {
+            guard var current = settings else { return }
+            let index = current.companions.count
+            current.companions.append(
+                Companion(
+                    id: "debug-companion-\(index)-\(UUID().uuidString.prefix(4))",
+                    name: Self.debugCompanionNames[index % Self.debugCompanionNames.count],
+                    role: "Co-voyageur",
+                    // Un sur deux n'a pas encore accepté : c'est l'état qui
+                    // porte « Relancer l'invitation ».
+                    isPending: index.isMultiple(of: 2)
+                )
+            )
+            settings = current
+        }
+
+        private static let debugCompanionNames = [
+            "Camille Roux", "Sacha Blin", "Inès Fabre", "Naïm Bacri", "Lou Vidal",
+        ]
     #endif
 
     /// Passe au palier étendu, ou revient au palier compris.

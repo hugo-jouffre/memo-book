@@ -31,6 +31,10 @@ extension BookCopy {
             public static let notComposed = "Ce carnet n’est pas encore généré."
             public static let notComposedDetail =
                 "Prévisualise-le d’abord : on ne commande pas un carnet qu’on n’a pas vu."
+
+            /// La porte de service de la boîte ci-dessus — voir
+            /// ``OrderModel/ordersWithoutRender``.
+            public static let orderAnyway = "Commander ce carnet malgré tout"
         }
 
         // MARK: Étape 2 — Livraison

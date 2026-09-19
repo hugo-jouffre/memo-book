@@ -164,10 +164,25 @@ public final class OrderModel {
 
     // MARK: - Avancer, reculer
 
+    /// On commande un carnet que le serveur n'a pas encore composé.
+    ///
+    /// **La porte de service de la première étape** (Hugo, 19/09/2026). Le
+    /// tunnel refuse de s'ouvrir sans rendu — c'est le bon défaut, on ne fait
+    /// pas imprimer ce qui n'existe pas —, mais il n'y avait alors aucun moyen
+    /// de voir les six étapes suivantes sur un compte dont aucun carnet n'est
+    /// composé. Le lien de la boîte lève le verrou, et il est **dans l'app
+    /// livrée** : un carnet se compose pendant qu'on remplit son adresse, et
+    /// refuser la commande pour ça ferait perdre la vente.
+    public private(set) var ordersWithoutRender = false
+
+    public func orderWithoutRender() {
+        ordersWithoutRender = true
+    }
+
     /// L'étape courante laisse-t-elle passer ?
     public var canContinue: Bool {
         switch step {
-        case .start: context?.renderId != nil
+        case .start: context?.renderId != nil || ordersWithoutRender
         case .shipping: draft.hasCompleteAddress
         case .copies: draft.copies >= 1
         case .speed: true

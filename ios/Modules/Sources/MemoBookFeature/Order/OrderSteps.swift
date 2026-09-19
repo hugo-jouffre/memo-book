@@ -25,12 +25,23 @@ struct OrderStartStep: View {
             OrderTripCard(trip: model.context?.trip, isLoading: isLoading)
 
             // Le carnet n'a jamais été composé : il n'y a rien à imprimer, et
-            // c'est dit ici plutôt que découvert au moment de payer.
+            // c'est dit ici plutôt que découvert au moment de payer. La boîte
+            // porte **la porte de service** : on peut passer commande quand
+            // même, et c'est elle qui débloque le bouton du bas — voir
+            // ``OrderModel/ordersWithoutRender``.
             if case .ready = model.phase, model.context?.renderId == nil {
                 BrandNotice(
                     "**\(BookCopy.Order.Start.notComposed)** "
                         + BookCopy.Order.Start.notComposedDetail
-                )
+                ) {
+                    if !model.ordersWithoutRender {
+                        BrandButton(
+                            BookCopy.Order.Start.orderAnyway,
+                            style: .link,
+                            action: model.orderWithoutRender
+                        )
+                    }
+                }
             }
 
             if case .failed(let message) = model.phase {

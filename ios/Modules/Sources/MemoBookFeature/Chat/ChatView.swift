@@ -131,15 +131,25 @@ public struct ChatView: View {
     // MARK: La bannière « Ton carnet prend forme »
 
     /// La bannière d'aperçu en direct est **posée sur le fil**, pas dedans
-    /// (Hugo, 17/09/2026). Elle apparaît à l'arrivée, s'en va vers le haut
-    /// après quatre secondes, et revient quand le doigt remonte franchement
-    /// dans la conversation (80 pt) — puis disparaît quand on remonte plus
-    /// loin encore (200 pt : on lit ses messages, on ne veut pas l'aperçu) ou
-    /// dès qu'on redescend de 20 pt. Pas de délai entre deux retours : on
-    /// avait essayé une demi-minute de silence, et une bannière qui ne
-    /// répond pas au geste qui la rappelle se lit comme cassée (Hugo,
-    /// 18/09/2026).
+    /// (Hugo, 17/09/2026).
+    ///
+    /// **Une règle, et deux sens** (Hugo, 19/09/2026) : on remonte vers les
+    /// anciens messages, elle vient ; on redescend vers les récents, elle s'en
+    /// va. Rien d'autre. Elle allait et venait trop vite — trois seuils se
+    /// contredisaient : elle apparaissait à 80 pt de remontée et **repartait**
+    /// à 200 pt du même geste, c'est-à-dire au milieu du défilement qui venait
+    /// de la faire venir.
+    ///
+    /// **Le temps ne la reprend qu'à l'arrivée.** Elle se montre quatre
+    /// secondes en ouvrant le fil, puis se retire. Rappelée par un geste, en
+    /// revanche, elle **reste** : c'est une descente qui la renvoie, et rien
+    /// d'autre. Un minuteur qui l'effaçait pendant qu'on lisait faisait
+    /// exactement ce que Hugo décrit — elle allait et venait toute seule.
     @State private var showsPreviewBanner = true
+
+    /// Le retrait différé de la bannière. Une tâche et non un minuteur : elle
+    /// s'annule quand on quitte le fil, et se relance à chaque remontée.
+    @State private var bannerLingerTask: Task<Void, Never>?
 
     /// Le bas de l'en-tête, en coordonnées globales : la bannière se pose
     /// juste dessous. Le bas et non la hauteur — l'en-tête s'étend sous la
@@ -157,9 +167,12 @@ public struct ChatView: View {
     @State private var scrolledDown: CGFloat = 0
 
     /// Les seuils de la bannière — voir ``showsPreviewBanner``.
-    private static let bannerRevealDistance: CGFloat = 80
-    private static let bannerReadingDistance: CGFloat = 200
-    private static let bannerDismissDistance: CGFloat = 20
+    ///
+    /// Remonter demande un geste franc (60 pt) ; redescendre en demande un
+    /// aussi (40 pt, et non 20 : à vingt points, le rebond d'un doigt qui
+    /// s'arrête suffisait à la faire partir).
+    private static let bannerRevealDistance: CGFloat = 60
+    private static let bannerDismissDistance: CGFloat = 40
     private static let bannerLinger: Duration = .seconds(4)
 
     public var body: some View {
@@ -293,15 +306,17 @@ public struct ChatView: View {
                 reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.55, bounce: 0.35),
                 value: showsPreviewBanner
             )
-            // Quatre secondes à l'arrivée, puis elle s'en va toute seule. Le
-            // minuteur est structuré : quitter le fil l'annule. Pas d'arrivée
-            // du tout avec un vocal de l'accueil — voir ``arrivesWithRecording``.
+            // Quatre secondes à l'arrivée, puis elle s'en va toute seule. Pas
+            // d'arrivée du tout avec un vocal de l'accueil — voir
+            // ``arrivesWithRecording``.
             .task(id: thread.preview != nil) {
                 guard thread.preview != nil, !arrivesWithRecording else { return }
-                showsPreviewBanner = true
-                try? await Task.sleep(for: Self.bannerLinger)
-                guard !Task.isCancelled else { return }
-                showsPreviewBanner = false
+                revealBanner(withdrawing: true)
+            }
+            // Quitter le fil emporte le retrait différé avec lui.
+            .onDisappear {
+                bannerLingerTask?.cancel()
+                bannerLingerTask = nil
             }
             .safeAreaInset(edge: .top, spacing: 0) {
                 header(thread)
@@ -328,18 +343,40 @@ public struct ChatView: View {
         if delta > 0 {
             scrolledDown = 0
             scrolledUp += delta
-            if scrolledUp >= Self.bannerReadingDistance {
-                showsPreviewBanner = false
-            } else if scrolledUp >= Self.bannerRevealDistance {
-                showsPreviewBanner = true
-            }
+            // On remonte : elle vient, et le délai repart de zéro tant que le
+            // geste dure. C'est ce qui la fait **rester** pendant qu'on
+            // remonte, au lieu de repartir au milieu du mouvement.
+            if scrolledUp >= Self.bannerRevealDistance { revealBanner() }
         } else if delta < 0 {
             scrolledUp = 0
             scrolledDown -= delta
-            if scrolledDown >= Self.bannerDismissDistance {
-                showsPreviewBanner = false
-            }
+            if scrolledDown >= Self.bannerDismissDistance { hideBanner() }
         }
+    }
+
+    /// Montre la bannière, et la laisse.
+    ///
+    /// - Parameter withdrawing: elle se retire toute seule au bout de
+    ///   ``bannerLinger``. Vrai **à l'arrivée seulement** : c'est une
+    ///   présentation, pas une invitation qu'on garde sous les yeux. Rappelée
+    ///   au doigt, elle attend qu'on redescende.
+    private func revealBanner(withdrawing: Bool = false) {
+        showsPreviewBanner = true
+        bannerLingerTask?.cancel()
+        bannerLingerTask = nil
+
+        guard withdrawing else { return }
+        bannerLingerTask = Task {
+            try? await Task.sleep(for: Self.bannerLinger)
+            guard !Task.isCancelled else { return }
+            showsPreviewBanner = false
+        }
+    }
+
+    private func hideBanner() {
+        bannerLingerTask?.cancel()
+        bannerLingerTask = nil
+        showsPreviewBanner = false
     }
 
     private func header(_ thread: ChatThread) -> some View {

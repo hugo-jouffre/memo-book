@@ -44,6 +44,16 @@
                 .font(MemoBookFont.caption)
                 .buttonStyle(.bordered)
                 .tint(MemoBookColor.action)
+
+                // De quoi remplir « Co-voyageur(s) » : le jeu d'essai en compte
+                // deux, et le tiroir de retrait comme la relance d'invitation
+                // demandent d'en avoir plusieurs, dont un en attente.
+                HStack(spacing: MemoBookSpacing.xs) {
+                    Button("+ Un co-voyageur", action: model.debugAddCompanion)
+                }
+                .font(MemoBookFont.caption)
+                .buttonStyle(.bordered)
+                .tint(MemoBookColor.action)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(MemoBookSpacing.s)

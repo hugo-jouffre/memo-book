@@ -210,11 +210,12 @@ struct ShowcaseCard: View {
         }
         .frame(maxHeight: .infinity)
         .clipped()
-        // **Le bleu de la carte se fond dans l'image par la gauche.** La
-        // nouvelle image n'a plus de dégradé (elle se coupait net sur le
-        // beige) ; c'est l'app qui le dessine, du bleu de la carte au
-        // transparent sur le premier tiers, pour que le texte puisse mordre
-        // un peu sur elle sans perdre en lisibilité (Hugo, 17/09/2026).
+        // **Le bleu de la carte se fond dans l'image par la gauche.** L'image
+        // livrée n'a pas de dégradé (elle se coupait net sur le beige) ; c'est
+        // l'app qui le dessine, du bleu de la carte au transparent sur le
+        // premier tiers, pour que le texte puisse mordre un peu sur elle sans
+        // perdre en lisibilité (Hugo, 17/09/2026). L'export du 19/09 fait
+        // 444 × 340 px pour un cadre de 124 pt — net jusqu'en 3×.
         .overlay {
             // Les deux couches de la carte — le crème, puis le bleu à 22 % —
             // fondues de la même façon : le dégradé part exactement de la
