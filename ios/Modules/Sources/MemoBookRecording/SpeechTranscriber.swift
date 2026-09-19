@@ -37,6 +37,26 @@ public final class SpeechTranscriber {
     private var task: SFSpeechRecognitionTask?
     private let engine = AVAudioEngine()
 
+    /// Une prise est posée sur l'entrée du moteur.
+    ///
+    /// ⚠️ **C'est le garde-fou du double `installTap`.** Poser une seconde
+    /// prise sur un bus qui en a déjà une lève `NSException` (« May not install
+    /// a tap while an existing tap is present on bus 0 ») : l'app disparaît,
+    /// sans que Swift puisse rien rattraper. On tient donc nous-mêmes le compte
+    /// plutôt que de le déduire de ``isTranscribing``, qui n'est levé
+    /// qu'**après** le démarrage du moteur.
+    private var hasTap = false
+
+    /// Un démarrage est déjà en cours.
+    ///
+    /// ``start()`` attend l'autorisation de reconnaissance vocale avant de
+    /// poser sa prise, et cette attente **suspend** : deux appels rapprochés
+    /// franchissaient tous les deux le garde de `isTranscribing`, encore faux,
+    /// et se retrouvaient à poser deux prises. Sur le simulateur la
+    /// reconnaissance n'est pas autorisée et les deux repartaient avant d'y
+    /// arriver ; sur un iPhone, l'app disparaissait (Hugo, 19/09/2026).
+    private var isStarting = false
+
     /// Ce que les segments **déjà figés** ont donné. L'hypothèse en cours s'y
     /// ajoute à l'affichage : le moteur la réécrit à chaque mot, et repartir de
     /// zéro à chaque fois ferait clignoter tout le texte.
@@ -91,8 +111,12 @@ public final class SpeechTranscriber {
     /// À appeler **après** ``AudioRecorder/start()``, qui a déjà posé la
     /// catégorie de session et obtenu le micro.
     public func start() async {
-        guard !isTranscribing else { return }
+        // Les trois verrous **avant** toute attente : voir ``isStarting``.
+        guard !isTranscribing, !isStarting, !hasTap else { return }
         guard let recognizer else { return }
+
+        isStarting = true
+        defer { isStarting = false }
         // L'autorisation **d'abord** : c'est elle qui pose la question à
         // l'utilisateur, et `isAvailable` ne veut rien dire tant qu'on ne l'a
         // pas. Dans l'autre sens, le moteur se déclarait indisponible et la
@@ -139,18 +163,36 @@ public final class SpeechTranscriber {
         // l'app sur un iPhone et pas sur l'autre (Hugo, 15/09/2026). Mieux vaut
         // un vocal sans texte qu'un vocal sans app : la reconnaissance
         // repartira au prochain enregistrement.
-        let hardwareRate = AVAudioSession.sharedInstance().sampleRate
+        let session = AVAudioSession.sharedInstance()
+        let hardwareRate = session.sampleRate
         guard hardwareRate == 0 || abs(format.sampleRate - hardwareRate) < 1 else { return }
 
+        // Et le **nombre de canaux**, pour la même raison que la fréquence :
+        // c'est l'autre moitié de `IsFormatSampleRateAndChannelCountValid`, et
+        // un micro externe qui vient d'être branché change l'un sans l'autre.
+        let hardwareChannels = session.inputNumberOfChannels
+        guard hardwareChannels == 0 || format.channelCount == AVAudioChannelCount(hardwareChannels)
+        else { return }
+
+        // Une entrée disponible, enfin : sans micro utilisable, le nœud
+        // d'entrée n'a rien à donner et la prise lève.
+        guard session.isInputAvailable else { return }
+
+        // La prise est retirée avant d'être posée : si un démarrage précédent
+        // s'est arrêté en chemin sans passer par ``finish()``, le bus en porte
+        // encore une — et la seconde ferait disparaître l'app.
+        input.removeTap(onBus: 0)
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
             request.append(buffer)
         }
+        hasTap = true
 
         engine.prepare()
         do {
             try engine.start()
         } catch {
             input.removeTap(onBus: 0)
+            hasTap = false
             return
         }
 
@@ -204,11 +246,17 @@ public final class SpeechTranscriber {
         hasFallenBackToServer = false
     }
 
+    /// Range le moteur. **Toujours sûr à appeler**, y compris deux fois de
+    /// suite : c'est la seule façon d'être certain qu'aucune prise ne survit à
+    /// une feuille qu'on referme — voir ``hasTap``.
     private func finish() {
-        guard isTranscribing || engine.isRunning else { return }
-
         if engine.isRunning { engine.stop() }
-        engine.inputNode.removeTap(onBus: 0)
+
+        if hasTap {
+            engine.inputNode.removeTap(onBus: 0)
+            hasTap = false
+        }
+
         task?.cancel()
         task = nil
         request = nil

@@ -177,7 +177,11 @@ public struct BrandHeaderAction: View {
 
     /// L'icône suit le texte, la cible non : une commande qui grandit à
     /// l'infini pousserait le titre hors de sa ligne.
-    @ScaledMetric(relativeTo: .body) private var iconSide: CGFloat = 28
+    /// 24 et non 28 (Hugo, 19/09/2026) : le tracé du partage remplit sa boîte
+    /// bien plus que le crayon ou l'engrenage, et à 28 il pesait plus lourd
+    /// que le titre qu'il accompagne. C'est la taille d'une icône de barre,
+    /// pas celle d'une icône de contenu.
+    @ScaledMetric(relativeTo: .body) private var iconSide: CGFloat = 24
 
     public var body: some View {
         let shape = RoundedRectangle(cornerRadius: MemoBookSpacing.snug)

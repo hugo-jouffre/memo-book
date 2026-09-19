@@ -325,6 +325,12 @@ struct PaywallView: View {
             return
         }
 
+        // **Une barre finie ne recommence pas.** La dernière page s'arrête sur
+        // une barre pleine ; ouvrir « Besoin d'aide ? » annule la tâche, et la
+        // refermer en relançait une neuve qui repartait de zéro — l'écran
+        // avait l'air de se recharger tout seul (Hugo, 19/09/2026).
+        if case .held(let value) = fill, value >= 1 { return }
+
         // La barre repart d'où elle s'était figée — un aperçu refermé reprend
         // le décompte, il ne le recommence pas — et de zéro partout ailleurs.
         let seconds = Self.pageDuration.seconds
@@ -479,6 +485,13 @@ enum PaywallCopy {
             "résilie à tout moment ou automatiquement à la fin du voyage",
         ]
     }
+
+    /// La première ligne du pied, en deux morceaux : **le prix se lit en
+    /// gras** (Hugo, 19/09/2026). C'est le seul chiffre de l'écran, et il
+    /// était écrit du même gris léger que la mention qui l'entoure.
+    static func offerFootnotePrice(price: String) -> (lead: String, price: String) {
+        ("Renouvellement automatique pour ", "\(price)/semaine")
+    }
     /// Le bouton de l'offre ouvre la feuille de paiement, et le dit — Hugo,
     /// 15/09/2026. « Envoyer des vocaux en illimité » promettait le résultat
     /// sans nommer le geste.
@@ -527,7 +540,10 @@ enum PaywallCopy {
             tilt: -1
         ),
         Argument(
-            icon: "IconPrinter",
+            // **Pleine**, comme les trois autres (Hugo, 19/09/2026) : le tracé
+            // au trait se lisait plus léger que le cadre photo, le cadenas et
+            // le sac, et la pile de cartes perdait son unité.
+            icon: "IconPrinterFilled",
             title: "Vite fait, bien fait !",
             detail: "Ton carnet est imprimé et livré chez toi quelques jours après ton retour !",
             pill: nil,

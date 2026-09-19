@@ -28,7 +28,6 @@ struct FoundersNoteSheet: View {
     @Environment(\.travellerFirstName) private var firstName
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.openURL) private var openURL
 
     /// La photo flotte : elle monte et descend d'un cheveu, sans fin.
     ///
@@ -199,17 +198,16 @@ struct FoundersNoteSheet: View {
     /// et le courrier laisse une trace des deux côtés — celui qui écrit garde
     /// ce qu'il a envoyé. L'écran remonte quand même l'intention, pour que
     /// ``RootView`` puisse un jour la router ailleurs.
+    /// **Le formulaire de l'app, et non un courrier** (Hugo, 19/09/2026).
+    ///
+    /// Le bouton ouvrait `mailto:` : on quittait MemoBook pour une app de mail
+    /// qui n'est pas toujours configurée, avec un message vide et un objet
+    /// prérempli. Or l'app a déjà un endroit où l'on écrit à l'équipe — celui
+    /// du support, avec son champ, son envoi et sa confirmation. C'est lui qui
+    /// s'ouvre, et la feuille se referme d'abord pour qu'il prenne sa place.
     private func sendFeedback() {
+        dismiss()
         onFeedback()
-
-        var components = URLComponents()
-        components.scheme = "mailto"
-        components.path = BookCopy.Founders.feedbackAddress
-        components.queryItems = [
-            URLQueryItem(name: "subject", value: BookCopy.Founders.feedbackSubject)
-        ]
-
-        if let url = components.url { openURL(url) }
     }
 }
 

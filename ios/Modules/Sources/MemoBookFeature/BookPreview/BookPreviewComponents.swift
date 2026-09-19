@@ -25,9 +25,6 @@ struct BookActionsBlock: View {
     /// ne demande rien du tout.
     let isComposed: Bool
     let onCustomise: () -> Void
-    /// Les couvertures, depuis l'aperçu et à tout moment — pas seulement
-    /// depuis le voile d'une couverture pas encore choisie.
-    let onConfigureCovers: () -> Void
     let onOrder: () -> Void
 
     var body: some View {
@@ -42,11 +39,11 @@ struct BookActionsBlock: View {
                 action: onCustomise
             )
 
-            // Le lien vers les couvertures. Un lien et non un troisième pavé :
-            // deux boutons pleine largeur suffisent à un écran, et celui-ci est
-            // un sous-chemin de la personnalisation.
-            BrandButton(BookCopy.Preview.configureCovers, style: .link, action: onConfigureCovers)
-                .frame(maxWidth: .infinity)
+            // ⚠️ Il y avait ici « Configurer mes couvertures », en lien sous le
+            // bouton de personnalisation. Retiré (Hugo, 19/09/2026) : les
+            // couvertures se choisissent **sur la page**, en touchant le voile
+            // de la première ou de la dernière — voir `CoverInvitation` —, et
+            // ce lien disait une seconde fois ce que la page proposait déjà.
 
             // Commander demande, lui, un carnet composé : on ne fait pas
             // imprimer ce qui n'existe pas encore.

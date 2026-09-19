@@ -2,6 +2,7 @@ import Foundation
 import MemoBookCore
 import Observation
 import SwiftUI
+import UIKit
 
 /// Ce que le parcours de l'aperçu sait faire : suivre la composition du carnet,
 /// ouvrir son PDF, et fabriquer de quoi le partager.
@@ -256,9 +257,15 @@ public final class BookPreviewModel {
     /// reçoit mieux que « Pièce jointe ». Le nom est nettoyé de ce qu'un système
     /// de fichiers refuse.
     public func exportPdf() -> URL? {
-        guard let data = renderer.documentData else { return nil }
-
         let title = preview?.title ?? "Carnet MemoBook"
+
+        // **Il y a toujours un fichier à partager** (Hugo, 19/09/2026). Quand
+        // le PDF du serveur n'est pas chargé — aperçu du jeu d'essai, réseau
+        // absent, carnet pas encore composé —, `documentData` est nul et le
+        // bouton ne faisait rien du tout : on touchait « Partager le fichier
+        // PDF » et la feuille du système n'arrivait jamais. On en compose donc
+        // un, d'une page, qui dit ce qu'il est.
+        let data = renderer.documentData ?? Self.placeholderPdf(title: title)
         let safe =
             title
             .components(separatedBy: CharacterSet(charactersIn: "/\\:?%*|\"<>"))
@@ -272,6 +279,42 @@ public final class BookPreviewModel {
             return url
         } catch {
             return nil
+        }
+    }
+
+    /// Un PDF d'une page, composé par l'app, à la place du carnet.
+    ///
+    /// Il **dit qu'il n'est pas le carnet** : partager un fichier vide ou une
+    /// page blanche laisserait croire à un carnet raté. Une page A5 au format
+    /// du carnet, le titre, et la phrase qui explique.
+    private static func placeholderPdf(title: String) -> Data {
+        // A5 en points PostScript : le format du carnet.
+        let page = CGRect(x: 0, y: 0, width: 420, height: 595)
+        let renderer = UIGraphicsPDFRenderer(bounds: page)
+
+        return renderer.pdfData { context in
+            context.beginPage()
+
+            let margin: CGFloat = 48
+            let width = page.width - margin * 2
+
+            let heading = NSAttributedString(
+                string: title,
+                attributes: [
+                    .font: UIFont.systemFont(ofSize: 24, weight: .semibold),
+                    .foregroundColor: UIColor(red: 0.18, green: 0.14, blue: 0.10, alpha: 1),
+                ]
+            )
+            heading.draw(in: CGRect(x: margin, y: margin, width: width, height: 120))
+
+            let body = NSAttributedString(
+                string: BookCopy.Preview.placeholderPdfBody,
+                attributes: [
+                    .font: UIFont.systemFont(ofSize: 13),
+                    .foregroundColor: UIColor(red: 0.18, green: 0.14, blue: 0.10, alpha: 0.6),
+                ]
+            )
+            body.draw(in: CGRect(x: margin, y: margin + 120, width: width, height: 200))
         }
     }
 

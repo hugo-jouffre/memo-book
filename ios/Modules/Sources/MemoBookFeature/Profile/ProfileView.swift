@@ -110,6 +110,9 @@ public struct ProfileView: View {
         .brandKeyboardDismissBar()
         .photoFlow(avatarPhotos, title: "Photo de profil", maxSelection: 1) { images in
             guard let data = images.first, let jpeg = ProfileAvatar.jpeg(from: data) else { return }
+            // Le rond porte la photo **avant** l'aller-retour — voir
+            // ``ProfileAvatar/pending``.
+            pendingAvatar = UIImage(data: jpeg)
             Task { await model.setAvatar(jpeg) }
         }
         .background(MemoBookColor.background.ignoresSafeArea())
@@ -363,11 +366,17 @@ public struct ProfileView: View {
         }
     }
 
+    /// La photo qu'on vient de choisir, posée dans le rond le temps que le
+    /// serveur la reçoive — et gardée ensuite, tant que l'adresse distante ne
+    /// charge pas. Voir ``ProfileAvatar/pending``.
+    @State private var pendingAvatar: UIImage?
+
     private var identity: some View {
         VStack(spacing: MemoBookSpacing.s) {
             VStack(spacing: MemoBookSpacing.xs) {
                 ProfileAvatar(
                     profile: model.profile,
+                    pending: pendingAvatar,
                     isUploading: model.isUploadingAvatar,
                     onTap: avatarPhotos.begin
                 )
@@ -407,16 +416,18 @@ public struct ProfileView: View {
             // « E-mail » — et non plus la phrase « Gérée par ton compte … »
             // (Hugo, 17/09/2026). VoiceOver garde la phrase, qu'un logo ne
             // sait pas dire.
+            // **Le fournisseur se dit, il ne se dessine pas** (Hugo,
+            // 19/09/2026). La ligne portait le logo Apple ou Google en petit,
+            // devant l'intitulé : cerné de bleu et réduit à quatorze points, il
+            // se lisait comme une vignette sale au bout d'une ligne de
+            // réglages. Trois mots en gris sous l'adresse disent la même chose
+            // sans rien salir — et l'adresse, elle, garde toute la ligne et
+            // s'abrège par la fin si elle est longue.
             BrandRow(
                 "E-mail",
                 value: profile?.email,
-                titleIcon: profile?.signInProvider.map {
-                    BrandRow.TitleIcon(
-                        Image(brand: $0.logoAsset),
-                        label: "Gérée par ton compte \($0.displayName)"
-                    )
-                },
-                isValueLoading: profile == nil
+                isValueLoading: profile == nil,
+                note: profile?.signInProvider.map { "Compte \($0.displayName)" }
             )
             BrandRow(
                 "Téléphone",
@@ -799,6 +810,17 @@ private struct EditableName: View {
 /// photo. Rien ne bouge quand elle arrive.
 private struct ProfileAvatar: View {
     let profile: TravellerProfile?
+
+    /// La photo qu'on vient de choisir, avant même que le serveur l'ait reçue.
+    ///
+    /// **Elle se pose tout de suite** (Hugo, 19/09/2026). Le rond n'affichait
+    /// que `avatarUrl`, c'est-à-dire la photo *du serveur* : entre le moment où
+    /// l'on choisit dans sa pellicule et celui où l'API répond, le rond gardait
+    /// ses initiales — et si l'API déployée ne sert pas encore les avatars, il
+    /// les gardait pour toujours. On montre donc ce qu'on vient de choisir, et
+    /// l'adresse distante prend le relais quand elle arrive.
+    var pending: UIImage?
+
     /// La photo est en route : le rond s'assombrit et tourne.
     var isUploading = false
     /// Le rond **se touche** : il ouvre la feuille « Prendre une photo /
@@ -820,6 +842,8 @@ private struct ProfileAvatar: View {
             AsyncImage(url: profile?.avatarUrl) { phase in
                 if let image = phase.image {
                     image.resizable().scaledToFill()
+                } else if let pending {
+                    Image(uiImage: pending).resizable().scaledToFill()
                 } else {
                     Text(profile?.initials ?? "")
                         .font(MemoBookFont.h2)

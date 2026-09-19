@@ -3660,7 +3660,6 @@ dans le même lot.
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
-| T173 | **La nouvelle image de la carte de découverte est trop petite** : 111 × 85 px pour un cadre de 124 pt — l'ancienne faisait 330 × 252. Elle s'affiche floue sur tous les écrans. Il faut le même export en **au moins 372 × 285 px** (3×), déposé au même chemin ; le script ne change pas | Accueil |
 | T174 | **`Beige Darker` lui-même doit-il s'éclaircir ?** Les boîtes d'information ont leur propre beige doux depuis le 18/09 ; les séparateurs, le scotch des cartes et le filet des boutons Apple/Google gardent `#CFBBAA`. Si c'est le token qui doit changer, c'est une ligne dans `Tokens.swift` — et la variable Figma avec | Partout |
 | T175 | **La bannière du chat ne sait pas qu'un message vient d'arriver** : un nouveau message en bas fait bouger le haut du contenu comme un défilement vers le bas, et la referme. C'est acceptable — on lit ce qui arrive —, mais c'est un effet de bord, pas un choix | Conversation |
 
@@ -3756,4 +3755,56 @@ ton carnet » — la majuscule en plein milieu de la phrase est corrigée.
 |---|---|---|
 | T179 | **La pastille du profil dit encore « Abonnée » pendant la semaine réglée.** Ce n'est pas faux — l'accès continue jusqu'au terme payé, et c'est la règle voulue (Hugo, 16/09) —, mais juste après avoir résilié, ça se lit comme un geste sans effet. La feuille d'abonnement, elle, dit désormais la vérité. Lui donner un quatrième état (`FreemiumStatus`) toucherait l'accueil, la conversation et le paywall : à décider avant de le faire | Profil |
 | T180 | **Rien n'est annulé chez le fournisseur**, faute de fournisseur : aucune route ne crée de ligne `subscriptions`, et StoreKit n'est pas branché. Le jour où il le sera, la vraie résiliation restera un geste de l'utilisateur dans les réglages iOS — Apple ne laisse aucune app résilier pour son client — et c'est le webhook App Store qui fermera la ligne. Cette route deviendra l'enregistrement d'une intention | Back-end |
+## 28. La recette du 19/09/2026 — vingt-cinq retours de Hugo
+
+Une passe de recette sur l'app entière, iPhone en main. Tout est dans le même
+lot ; les tickets ouverts sont en § 28.3.
+
+### 28.1 Accueil, conversation, enregistrement
+
+| Écran | Demande | Ce qui a été fait |
+|---|---|---|
+| Accueil — tiroir des cartes | rien ne doit être rogné : la carte sort de l'écran, les icônes y entrent ; et le scotch des cartes est coupé | `BrandSwipeDrawer` ne rogne plus (`clipShape` retiré, et le paramètre `cornerRadius` avec, qui ne servait qu'à ça). La carte glisse sous le bord de la dalle, les icônes arrivent du hors-champ, et le scotch qui dépasse en haut de `FeaturedTripCard` se voit enfin — c'est le même rognage qui le coupait |
+| Accueil — tiroir | l'imprimante paraît plus petite que les deux autres | `BrandSwipeAction.iconScale`, à 1,15 pour elle seule : le tracé de l'imprimante occupe moins de sa boîte que la croix et le partage. Rattrapage optique, réglé sur l'action et non sur le tiroir |
+| Accueil — glissé vers le profil | c'était une erreur, retire-le | le `simultaneousGesture` est retiré. **Pas inversé** : vers la gauche, il entrerait en concurrence avec le tiroir. L'avatar reste le chemin |
+| Accueil — carte de découverte | nouvelle image sans dégradé, à charge de l'app d'en poser un | `ShowcaseCarnets` remplacée (444 × 340 px, contre 111 × 85 : T173 clos). Le dégradé que l'app dessine depuis le 18/09 ne change pas |
+| Accueil — enregistrement rapide | l'app disparaît sur l'iPhone de Hugo, alors que le chat enregistre très bien | **La différence est le moteur de reconnaissance vocale** : le chat n'utilise que `AudioRecorder`, la feuille y ajoute `SpeechTranscriber` et son `installTap`, qui lève une `NSException` que Swift ne rattrape pas. Trois verrous posés — un drapeau `hasTap` (poser deux prises sur le même bus tue l'app), un drapeau `isStarting` (deux appels concurrents franchissaient tous deux le garde, l'attente de l'autorisation étant suspendue), et deux conditions de plus avant la prise : le nombre de canaux du matériel et `isInputAvailable`. La feuille n'ouvre plus la reconnaissance qu'une fois le micro **effectivement** ouvert. Voir T176 |
+| Enregistrement rapide | la frise n'atteint pas le bord droit | elle comptait 34 barres fixes, soit 301 pt dans une place de 370. Elle se mesure désormais (`GeometryReader`) et en dessine autant que la largeur en tient ; `BrandWaveformCapacity.maximum` monte à 64 pour qu'il y ait toujours de quoi remplir |
+| Conversation — enregistrement | quand la frise atteint le bord, **toute la page** devient plus large que l'écran | même cause, autre symptôme : la pile de capsules *proposait* sa largeur idéale, qui grandissait à chaque échantillon, et le fil entier s'élargissait avec elle. Le `GeometryReader` prend ce qu'on lui donne et ne redemande rien |
+| Conversation — barre d'envoi | l'avion n'est pas centré dans son rond | `.offset(x: -1, y: 1)` : le tracé pointe vers le coin haut droit, sa masse est en bas à gauche. Recentrage optique |
+| Conversation — barre d'enregistrement | le petit micro ne sert à rien | retiré. La frise et le chrono disent déjà qu'on enregistre |
+| Conversation — champ de saisie | trop haut au clavier ; une ligne au départ, trois au plus | marge verticale à 8 pt (elle faisait un champ de 49 pt, plus haut que la cible de 44 qui le borne) et `lineLimit` plafonné à 3 au lieu de 6 |
+| Conversation — « Ton Carnet prend forme » | elle va et vient trop vite : qu'elle reste en remontant, qu'elle parte en redescendant | trois seuils se contredisaient — elle arrivait à 80 pt de remontée et **repartait** à 200 pt du même geste. Une règle désormais : on remonte de 60 pt, elle vient et **reste** ; on redescend de 40 pt, elle part. Le minuteur de quatre secondes ne vaut plus qu'à l'arrivée |
+
+### 28.2 Réglages, aperçu, commande, paywall, profil
+
+| Écran | Demande | Ce qui a été fait |
+|---|---|---|
+| Paramètres du voyage — bac à sable | un bouton pour ajouter un co-voyageur | `debugAddCompanion` : un nom pris dans une liste, et un sur deux en attente — c'est l'état qui porte « Relancer l'invitation ». Absent de l'app livrée |
+| Paramètres du voyage — bas de page | les deux suppressions doivent se lire comme un groupe | 24 pt d'écart deviennent 12. Les deux gardent leur cible de 44 pt : il en faut assez pour ne pas supprimer un voyage en visant la conversation |
+| Aperçu PDF | retire « Configurer mes couvertures » | le lien disparaît de `BookActionsBlock` : les couvertures se choisissent **sur la page**, en touchant le voile de la première ou de la dernière |
+| Aperçu PDF | l'icône de partage est trop grosse | `BrandHeaderAction` passe de 28 à 24 pt |
+| Aperçu PDF | un glissé doit tourner la page | `pageTurn` sur `BookReaderView`, le même contrat qu'en plein écran : 50 pt, nettement horizontal, en `highPriorityGesture` |
+| Aperçu PDF | « Partager le fichier PDF » ne fait rien | `exportPdf()` rendait `nil` quand le carnet du serveur n'est pas chargé. Il compose désormais une page A5 qui dit ce qu'elle est (`UIGraphicsPDFRenderer`), et la feuille du système s'ouvre toujours |
+| Aperçu PDF — composition | la flèche de retour est morte pendant le chargement | le `.disabled(true)` destiné au seul bouton de partage était posé sur **l'en-tête entier**, flèche comprise |
+| Mot des fondateurs | « Partager mes retours » doit ouvrir la modale de message | elle ouvrait `mailto:`. C'est désormais `SupportSheet(route: .contact)`, le formulaire de l'app, avec son envoi et sa confirmation |
+| Commander mon carnet | un lien vert pour commander malgré tout, **dans l'app livrée** | `BrandNotice` accepte un pied (générique sur `Footer`, `EmptyView` partout ailleurs) et porte « Commander ce carnet malgré tout ». `OrderModel.ordersWithoutRender` lève le verrou de la première étape : un carnet se compose pendant qu'on remplit son adresse |
+| Paywall — écrans 1 et 2 | le trait doit entrer par la gauche comme il sort par la droite | **un vrai bug** : `BleedingShape` élargissait le cadre avec `insetBy(dx:)`, dont l'origine passe en négatif — mais les tracés de `BrandStrokes` rapportent leurs points à `rect.width` **sans lire `rect.origin`**. Tout le débordement partait à droite. Le chemin est construit à l'origine puis décalé de la moitié |
+| Paywall — soulignement | il déborde à droite des mots gras | il tenait 143 pt calés sur le bord du bloc, alors que le titre est centré. Les mots forts passent sur **leur propre ligne** et le trait fait leur largeur exacte, sous eux. ⚠️ Le retour à la ligne des trois titres change : voir T177 |
+| Paywall — écran 3 | l'imprimante doit être pleine | `IconPrinterFilled`, comme le cadre photo, le cadenas et le sac |
+| Paywall — écran 3 | la flèche du sac est illisible | elle était dessinée **en contour** : trois sous-chemins en règle *evenodd*, dont le dernier redonnait du plein à l'intérieur de la flèche. Le contour intérieur est retiré — la flèche devient une silhouette pleine, creusée dans le sac |
+| Paywall — « Besoin d'aide ? » | la barre du troisième écran repart de zéro au retour | `runPage()` ne gardait pas les barres finies : `.held(1)` repartait en `.running`. Une barre pleine ne recommence plus |
+| Paywall — pied | le prix en gras | `offerFootnotePrice` coupe la ligne en deux ; « 1,99 €/semaine » passe en `tagline` |
+| Paywall — les quatre cartes | moins de hauteur | 14 pt de marge verticale deviennent 10, et l'écart titre/détail 4 pt. L'écran tient d'un bloc |
+| Profil — « Ton voyage continue » | la deuxième phrase doit nommer la date de fin | elle annonçait « tu ne pourras plus dicter » sans date, ce qui se lisait « tout s'arrête maintenant ». Elle dit le jour, comme les deux feuilles suivantes ; sans semaine réglée, elle reste la phrase d'avant |
+| Profil — ligne E-mail | le logo Apple/Google est laid ; un petit texte gris | le `titleIcon` disparaît au profit de `note: "Compte Apple"`. L'adresse garde toute la ligne et s'abrège par la fin |
+| Profil — photo | la photo choisie n'arrive pas dans le rond | le rond ne lisait que `avatarUrl`, c'est-à-dire la photo **du serveur**. Il affiche désormais ce qu'on vient de choisir (`ProfileAvatar.pending`), et l'adresse distante prend le relais quand elle arrive — ce qui le répare aussi tant que l'API déployée ne sert pas les avatars |
+
+### 28.3 À trancher (suite)
+
+| # | Sujet | Écran / parcours |
+|---|---|---|
+| T176 | **Le plantage de l'enregistrement rapide n'est pas reproductible ici** : ni simulateur, ni iPhone sous la main — la reconnaissance vocale n'est même pas autorisée sur le simulateur, ce qui explique qu'il n'y plante jamais. Trois causes connues d'exception sont fermées (double prise, appels concurrents, format du matériel). **Si ça recommence**, le pas suivant est de retirer la transcription en direct de la feuille : le chat prouve qu'on enregistre très bien sans elle | Accueil, enregistrement rapide |
+| T177 | **Les titres du paywall se coupent autrement** : les mots soulignés passent sur leur propre ligne, ce qui était le seul moyen de poser le trait exactement sous eux (SwiftUI ne dit pas où finit une ligne avant iOS 18). « Ton carnet comptera environ / 40 pages ! » fait trois lignes au lieu de deux. À valider ou à redessiner | Paywall, écrans 2 et 3 |
+| T178 | **La boîte d'information porte maintenant un pied** (`BrandNotice`, générique sur `Footer`). Elle n'en a qu'un, celui de la commande forcée. Si un deuxième arrive, vérifier que « une boîte qui ne demande rien » reste vraie — c'est ce que sa fiche promet | Partout |
 

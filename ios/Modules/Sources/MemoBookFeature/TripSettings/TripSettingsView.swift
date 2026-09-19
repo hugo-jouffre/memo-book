@@ -76,8 +76,16 @@ public struct TripSettingsView: View {
                 }
 
                 helpLink
-                clearConversationLink
-                deleteLink
+
+                // **Les deux suppressions vont ensemble** (Hugo, 19/09/2026) :
+                // à 24 pt, elles se lisaient comme deux blocs sans rapport, au
+                // milieu de rien. Douze les rapprochent en un groupe, et les
+                // deux gardent leur cible de 44 pt — il en faut assez pour ne
+                // pas supprimer un voyage en visant la conversation.
+                VStack(spacing: MemoBookSpacing.snug) {
+                    clearConversationLink
+                    deleteLink
+                }
 
                 #if DEBUG
                     TripSettingsDebugPanel(model: model)
