@@ -227,6 +227,19 @@ public actor MemoBookAPIClient: MemoBookAPI {
         return try await perform(request, credential: .session)
     }
 
+    public func cancelSubscription(
+        reason: SubscriptionCancellationReason?
+    ) async throws -> TravellerProfile {
+        struct Body: Encodable { let reason: String? }
+
+        return try await send(
+            method: "POST",
+            path: "/v1/profile/subscription/cancel",
+            encodableBody: Body(reason: reason?.rawValue),
+            credential: .session
+        )
+    }
+
     public func updateProfile(_ edit: ProfileEdit) async throws -> TravellerProfile {
         try await send(
             method: "PATCH",

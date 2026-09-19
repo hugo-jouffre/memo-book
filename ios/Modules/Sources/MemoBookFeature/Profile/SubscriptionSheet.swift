@@ -602,8 +602,10 @@ enum SubscriptionCopy {
     /// demandé de garder. Quand il reste des jours réglés, la phrase les nomme
     /// plutôt que de mentir d'une semaine.
     static func doneParagraphs(graceEnd: Date?) -> [String] {
+        // En minuscule : la phrase se poursuit après « mais ». Elle s'écrivait
+        // « mais Tu gardes accès… », majuscule comprise (Hugo, 19/09/2026).
         let keepsBook =
-            "Tu gardes accès à ton carnet de bord pour le relire quand tu veux."
+            "tu gardes accès à ton carnet de bord pour le relire quand tu veux."
         guard let graceEnd else {
             return [
                 "L’abonnement s’arrête aujourd’hui.",

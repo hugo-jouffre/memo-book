@@ -59,6 +59,17 @@ const connectorParams = z.object({ key: z.string().min(1).max(64) });
 const linkDeviceBody = z.object({ deviceToken: z.string().min(1) });
 
 /**
+ * La raison de la résiliation, facultative.
+ *
+ * Facultative parce qu'elle est un sondage : l'app grise son bouton tant que
+ * rien n'est coché, mais un client plus ancien — ou un rejeu — ne doit pas se
+ * voir refuser une résiliation pour une question de statistique.
+ */
+const cancelSubscriptionBody = z.object({
+  reason: z.string().trim().min(1).max(60).optional(),
+});
+
+/**
  * Les voyages du compte, réduits à ce que la carte de chiffres du profil
  * regarde : combien il y en a, et lequel est en cours. Rien de plus — c'est un
  * comptage, pas une seconde liste d'accueil.
@@ -248,6 +259,55 @@ export function registerProfileRoutes(app: FastifyInstance, context: AppContext)
         request.log.warn({ cause }, "Ancienne photo de profil non retirée du stockage");
       });
     }
+
+    return readProfile(context, accountId);
+  });
+
+  /**
+   * Résilie l'abonnement — **et ça tient**.
+   *
+   * Jusqu'au 19/09/2026, les trois feuilles de résiliation ne touchaient que
+   * l'écran : `ProfileModel.cancelSubscription` posait `isActive` à faux dans
+   * sa copie locale et rien ne partait. Le prochain chargement du profil
+   * relisait la ligne `subscriptions` du serveur, toujours active, et la
+   * personne se retrouvait abonnée — après avoir confirmé trois fois.
+   *
+   * **`cancelled`, pas `expired`.** Les deux ferment l'abonnement et les deux
+   * gardent la semaine réglée (`PAID_THROUGH_SUBSCRIPTION`, `quota.ts`), mais
+   * ils ne disent pas la même chose : `expired` est le voyage qui se termine
+   * (`endSubscriptionsWithoutRunningTrip`), `cancelled` est quelqu'un qui s'en
+   * va. La distinction se lit dans l'historique, et c'est elle qui fera voir le
+   * paywall de retour.
+   *
+   * **La semaine payée n'est pas rendue.** `renewsAt` reste tel quel : c'est
+   * lui qui porte le sursis, côté app comme côté verrou d'enregistrement.
+   * Résilier le lundi ne rembourse pas les six jours suivants, et ne ferme donc
+   * pas le micro non plus (Hugo, 16/09/2026).
+   *
+   * **Idempotent.** Résilier deux fois — un double tapotis, une requête
+   * rejouée — n'est pas une erreur : la seconde ne trouve plus d'abonnement
+   * vivant et rend le profil tel quel.
+   *
+   * ⚠️ **Rien n'est annulé chez le fournisseur**, parce qu'il n'y en a pas
+   * encore : aucune route ne crée de ligne `subscriptions`, et StoreKit n'est
+   * pas branché. Le jour où il le sera, la vraie résiliation restera **un geste
+   * de l'utilisateur** dans les réglages iOS — Apple ne laisse aucune app
+   * résilier à la place de son client — et c'est le webhook App Store qui
+   * fermera cette ligne. Cette route deviendra alors ce qu'elle décrit déjà :
+   * l'enregistrement d'une intention, et la raison qui l'accompagne.
+   */
+  app.post("/v1/profile/subscription/cancel", async (request) => {
+    const accountId = accountIdOf(request);
+    const { reason } = cancelSubscriptionBody.parse(request.body ?? {});
+
+    await context.prisma.subscription.updateMany({
+      where: { accountId, status: { in: ["active", "trialing", "past_due"] } },
+      data: {
+        status: "cancelled",
+        cancelledAt: new Date(),
+        ...(reason === undefined ? {} : { cancellationReason: reason }),
+      },
+    });
 
     return readProfile(context, accountId);
   });

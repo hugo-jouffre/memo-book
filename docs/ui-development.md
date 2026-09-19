@@ -3699,3 +3699,61 @@ Et quatre retours de Hugo sur ce lot, le même soir :
 | `memos.narrationPace` (migration `20260918150000_rythme_du_recit_en_cles`) | les libellés d'écran deviennent des clés : `daily`, `every_two_days`, `every_three_days`, `weekly`, `custom`, `by_place` |
 | `POST /v1/trips`, `PATCH /v1/trips/:id`, `PATCH /v1/trips/:id/settings` | `narrationPace` est normalisé à l'entrée — un libellé connu devient sa clé, un mot inconnu est gardé tel quel |
 
+## 29. La résiliation qui ne résiliait pas (19/09/2026)
+
+> « La résiliation ne marche pas à la dernière modale de résiliation, l'user
+> reste abonné. » — Hugo
+
+**Deux défauts, l'un derrière l'autre**, et il fallait corriger les deux pour
+que le geste tienne.
+
+### 29.1 Rien ne partait au serveur
+
+`ProfileModel.cancelSubscription(reason:)` ne touchait que sa copie locale du
+profil — c'était écrit dans sa fiche, en avertissement : « Rien ne part au
+serveur […] aucune route ne les écrit encore ». Le prochain
+`GET /v1/profile` relisait une ligne `subscriptions` toujours `active`, et
+l'app réabonnait la personne après trois confirmations.
+
+| Ce qui est ajouté | Où |
+|---|---|
+| `POST /v1/profile/subscription/cancel` | `routes/profile.ts`. Ferme les abonnements vivants du compte en `cancelled`, pose `cancelledAt`, garde `renewsAt`, et rend le profil relu. **Idempotent** : résilier deux fois n'est pas une erreur |
+| `subscriptions.cancellationReason` | migration `20260919120000_raison_de_resiliation`, déployée sur `public` et `memobook_test`. La feuille « Pourquoi nous quittes-tu ? » exige une réponse pour activer son bouton, et cette réponse était jetée |
+| `MemoBookAPI.cancelSubscription(reason:)` | protocole, client, double d'aperçu, et la dépendance passée par `AppDependencies.profileModel()` |
+
+**`cancelled` et non `expired`** : les deux ferment l'abonnement et gardent la
+semaine réglée (`PAID_THROUGH_SUBSCRIPTION`, `quota.ts`), mais `expired` est le
+voyage qui se termine, `cancelled` est quelqu'un qui s'en va. C'est cette
+distinction qui fait voir le paywall de retour.
+
+**La semaine payée n'est pas rendue** : `renewsAt` ne bouge pas. Résilier le
+lundi ne rembourse pas les six jours suivants et ne ferme donc pas le micro —
+c'est la règle du 16/09, et le verrou du serveur l'applique déjà.
+
+### 29.2 La session ressuscitait l'abonnement
+
+Même corrigé, le premier essai rouvrait la feuille sur « ABONNÉE ».
+
+`ProfileView.effectiveSubscription` écrasait `isActive` avec
+`freemiumStatus == .subscriber`, et `onCancel` venait justement d'appeler
+`subscriptionSession.record(isSubscribed: model.subscriptionGrantsAccess)` —
+vrai pendant la semaine réglée. **La session ne sait pas si on est abonné,
+elle sait si le micro s'ouvre** : elle répondait à une question qu'on ne lui
+posait pas.
+
+Elle peut toujours **donner** un abonnement — le bac à sable fait jouer un
+abonné à un compte qui n'en a pas — mais plus en **rendre** un : un abonnement
+qui porte une date de résiliation fait foi.
+
+### 29.3 Au passage
+
+« Ensuite, tu ne pourras plus dicter tes souvenirs, mais **Tu** gardes accès à
+ton carnet » — la majuscule en plein milieu de la phrase est corrigée.
+
+### 29.4 À trancher
+
+| # | Sujet | Écran / parcours |
+|---|---|---|
+| T179 | **La pastille du profil dit encore « Abonnée » pendant la semaine réglée.** Ce n'est pas faux — l'accès continue jusqu'au terme payé, et c'est la règle voulue (Hugo, 16/09) —, mais juste après avoir résilié, ça se lit comme un geste sans effet. La feuille d'abonnement, elle, dit désormais la vérité. Lui donner un quatrième état (`FreemiumStatus`) toucherait l'accueil, la conversation et le paywall : à décider avant de le faire | Profil |
+| T180 | **Rien n'est annulé chez le fournisseur**, faute de fournisseur : aucune route ne crée de ligne `subscriptions`, et StoreKit n'est pas branché. Le jour où il le sera, la vraie résiliation restera un geste de l'utilisateur dans les réglages iOS — Apple ne laisse aucune app résilier pour son client — et c'est le webhook App Store qui fermera la ligne. Cette route deviendra l'enregistrement d'une intention | Back-end |
+

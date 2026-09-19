@@ -166,12 +166,25 @@ public struct ProfileView: View {
     /// L'abonnement du profil, **corrigé par la session**.
     ///
     /// ``ProfileModel`` est un `@State` : l'écran se reconstruit à chaque fois
-    /// qu'on y revient, et repartirait donc du jeu d'essai — abonnement
-    /// rétabli, résiliation oubliée. Tant que rien n'est persisté, c'est la
-    /// session qui a le dernier mot, ici comme sur l'accueil.
+    /// qu'on y revient, et repartirait donc du jeu d'essai. La session pouvait
+    /// donc **imposer** l'abonnement, et elle avait le dernier mot.
+    ///
+    /// ⚠️ **Elle ne l'a plus sur une résiliation** (Hugo, 19/09/2026), et c'est
+    /// la seconde moitié du défaut qu'il a vu : après avoir confirmé trois
+    /// fois, la feuille rouvrait sur « ABONNÉE ». La session ne sait pas si on
+    /// est abonné, elle sait si le micro s'ouvre — et pendant la semaine déjà
+    /// réglée, il s'ouvre encore (``ProfileModel/subscriptionGrantsAccess``).
+    /// Elle répondait donc « abonné » à une question qu'on ne lui posait pas,
+    /// et ressuscitait l'abonnement qu'on venait de fermer.
+    ///
+    /// Elle peut toujours en **donner** un — le bac à sable fait jouer un
+    /// abonné à un compte qui n'en a pas —, jamais en **rendre** un : un
+    /// abonnement résilié porte sa date, et cette date fait foi.
     private var effectiveSubscription: Subscription? {
         guard var subscription = model.profile?.subscription else { return nil }
-        subscription.isActive = freemiumStatus == .subscriber
+        if freemiumStatus == .subscriber, subscription.cancelledAt == nil {
+            subscription.isActive = true
+        }
         return subscription
     }
 
