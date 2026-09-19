@@ -10,23 +10,33 @@ public struct BrandSwipeAction: Identifiable {
     let icon: String
     let tint: Color
     let label: String
+    /// De combien le glyphe grandit dans son rond, à corriger **au cas par
+    /// cas**. Les tracés du jeu de marque n'occupent pas tous la même part de
+    /// leur boîte : l'imprimante y est dessinée plus petite que la croix et la
+    /// flèche de partage, et à taille égale elle se lisait comme une icône plus
+    /// petite (Hugo, 19/09/2026). C'est un rattrapage optique, pas une mesure —
+    /// d'où le réglage sur l'action et non sur le tiroir.
+    let iconScale: CGFloat
     let action: () -> Void
 
     /// - Parameters:
     ///   - icon: le nom d'une icône monochrome du catalogue (`IconCross`).
     ///   - tint: la couleur du rond et de l'icône.
     ///   - label: ce que VoiceOver lit — le rond ne porte pas de mot.
+    ///   - iconScale: voir ``iconScale``. 1 pour la quasi-totalité des tracés.
     public init(
         id: String? = nil,
         icon: String,
         tint: Color,
         label: String,
+        iconScale: CGFloat = 1,
         action: @escaping () -> Void
     ) {
         self.id = id ?? icon
         self.icon = icon
         self.tint = tint
         self.label = label
+        self.iconScale = iconScale
         self.action = action
     }
 }
@@ -47,21 +57,24 @@ public struct BrandSwipeAction: Identifiable {
 ///   contextuel du système, et VoiceOver reçoit le rotor d'actions — un geste
 ///   continu n'existe pas pour ces deux-là.
 ///
-/// La carte est **rognée sur sa propre place** : sans ça, elle glisserait
-/// par-dessus la marge de l'écran et jusque sous le bord, le coin arrondi
-/// coupé net. Rognée, elle disparaît sous la colonne comme une ligne de liste
-/// sous le bord d'un tableau.
+/// **Rien n'est rogné** (Hugo, 19/09/2026). Le tiroir rognait à la forme de la
+/// carte : la carte disparaissait au ras de la marge, les icônes apparaissaient
+/// au ras du bord droit, et le scotch qui dépasse en haut des cartes de
+/// l'accueil était coupé net. Le geste se lit mieux sans : la carte **sort de
+/// l'écran** par la gauche et les icônes **y entrent** par la droite, chacune
+/// n'étant plus arrêtée que par le bord de la dalle. C'est aussi ce que fait
+/// une ligne de `List` d'iOS, qui glisse hors de l'écran et non hors de sa
+/// cellule.
 ///
 /// ```swift
 /// BrandSwipeDrawer(actions: [
 ///     BrandSwipeAction(icon: "IconCross", tint: MemoBookColor.error, label: "Supprimer") { … },
-/// ], cornerRadius: MemoBookSpacing.largeCornerRadius) {
+/// ]) {
 ///     FeaturedTripCard(…)
 /// }
 /// ```
 public struct BrandSwipeDrawer<Content: View>: View {
     private let actions: [BrandSwipeAction]
-    private let cornerRadius: CGFloat
     private let content: Content
 
     /// De combien la carte est décalée vers la gauche. `0` au repos, la largeur
@@ -71,16 +84,13 @@ public struct BrandSwipeDrawer<Content: View>: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// - Parameters:
-    ///   - actions: les gestes, de gauche à droite. Vide, la carte ne glisse pas.
-    ///   - cornerRadius: le rayon de la carte, pour la rogner à sa forme.
+    /// - Parameter actions: les gestes, de gauche à droite. Vide, la carte ne
+    ///   glisse pas.
     public init(
         actions: [BrandSwipeAction],
-        cornerRadius: CGFloat = MemoBookSpacing.snug,
         @ViewBuilder content: () -> Content
     ) {
         self.actions = actions
-        self.cornerRadius = cornerRadius
         self.content = content()
     }
 
@@ -109,7 +119,6 @@ public struct BrandSwipeDrawer<Content: View>: View {
                 // Le seuil de 12 pt laisse le tapotis au bouton.
                 .highPriorityGesture(swipe)
         }
-        .clipShape(.rect(cornerRadius: cornerRadius))
         .contextMenu {
             ForEach(actions) { action in
                 Button(action.label, role: action.tint == MemoBookColor.error ? .destructive : nil) {
@@ -141,7 +150,10 @@ public struct BrandSwipeDrawer<Content: View>: View {
                         .resizable()
                         .renderingMode(.template)
                         .scaledToFit()
-                        .frame(width: MemoBookSpacing.sectionGap, height: MemoBookSpacing.sectionGap)
+                        .frame(
+                            width: MemoBookSpacing.sectionGap * action.iconScale,
+                            height: MemoBookSpacing.sectionGap * action.iconScale
+                        )
                         .foregroundStyle(action.tint)
                         .frame(
                             width: MemoBookSpacing.minimumTapTarget,
@@ -214,8 +226,7 @@ private extension CGFloat {
                 BrandSwipeAction(icon: "IconCross", tint: MemoBookColor.error, label: "Supprimer") {},
                 BrandSwipeAction(icon: "IconShareSystem", tint: MemoBookColor.action, label: "Partager") {},
                 BrandSwipeAction(icon: "IconPrinter", tint: MemoBookColor.action, label: "Prévisualiser") {},
-            ],
-            cornerRadius: MemoBookSpacing.largeCornerRadius
+            ]
         ) {
             Text("Glisse-moi vers la gauche")
                 .font(MemoBookFont.body)

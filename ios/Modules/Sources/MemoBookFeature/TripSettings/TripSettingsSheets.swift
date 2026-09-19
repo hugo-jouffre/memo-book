@@ -437,7 +437,7 @@ private struct CompanionRow: View {
     }
 
     var body: some View {
-        BrandSwipeDrawer(actions: actions, cornerRadius: MemoBookSpacing.snug) {
+        BrandSwipeDrawer(actions: actions) {
             card
         }
         .accessibilityElement(children: .combine)

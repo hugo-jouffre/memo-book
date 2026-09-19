@@ -298,7 +298,17 @@ public enum BookCopy {
         /// choisies, et l'aperçu n'offrait plus aucun chemin pour y revenir
         /// (Clara, 17/09/2026). Aucune maquette : un lien vert, au corps des
         /// boutons, comme « Besoin d'aide ? ».
+        /// ⚠️ Plus de bouton « Configurer mes couvertures » sous l'aperçu
+        /// (Hugo, 19/09/2026) : les couvertures se choisissent en touchant le
+        /// voile de la première ou de la dernière page. La phrase reste, elle
+        /// intitule l'invitation posée sur la page.
         public static let configureCovers = "Configurer mes couvertures"
+
+        /// Ce qu'on lit dans le PDF d'attente, celui que l'app compose quand le
+        /// carnet du serveur n'est pas chargé — voir `BookPreviewModel`.
+        public static let placeholderPdfBody = """
+            Ce carnet n’est pas encore composé : ce fichier tient sa place,             le temps que MemoBook mette en page tes souvenirs.
+            """
         public static let order = "Commander ce carnet"
 
         /// La porte de service, sous le bouton grisé : commander alors que le

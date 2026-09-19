@@ -321,7 +321,11 @@ struct ChatSendingBar: View {
             sendButton
         }
         .padding(.horizontal, MemoBookSpacing.s)
-        .padding(.vertical, MemoBookSpacing.snug)
+        // 8 pt et non 12 : à 21 pt de corps, douze points en haut et en bas
+        // faisaient un champ d'une ligne haut de 49 pt — plus haut que la
+        // cible tactile qui le borne, donc plus haut que tout le reste de la
+        // barre. La hauteur d'une ligne est désormais celle de la cible.
+        .padding(.vertical, MemoBookSpacing.xs)
         .frame(minHeight: MemoBookSpacing.minimumTapTarget)
         .background(MemoBookColor.surface, in: Self.fieldShape)
         .overlay { Self.fieldShape.strokeBorder(MemoBookColor.hairline, lineWidth: 1) }
@@ -330,9 +334,11 @@ struct ChatSendingBar: View {
 
     /// Jusqu'où le champ grandit avant de défiler.
     ///
-    /// Trois lignes en taille accessible et six sinon : à ce corps-là, six
-    /// lignes de saisie occupent la moitié de l'écran et poussent la
-    /// conversation hors de vue au moment précis où on lui répond.
+    /// **Trois lignes, et une seule au départ** (Hugo, 19/09/2026). Il en
+    /// montait six : le champ s'ouvrait déjà haut sous le clavier, et une fois
+    /// rempli il prenait la moitié de ce qui restait de la conversation. Trois
+    /// suffisent à relire ce qu'on vient d'écrire ; au-delà, c'est le champ qui
+    /// défile.
     ///
     /// **Dix quand on corrige une retranscription** (Hugo, 17/09/2026) : là,
     /// la conversation n'est plus ce qu'on regarde — c'est le texte, et il
@@ -344,7 +350,7 @@ struct ChatSendingBar: View {
         if model.isEditingTranscript {
             return typeSize.isAccessibilitySize ? 1...5 : 1...10
         }
-        return typeSize.isAccessibilitySize ? 1...3 : 1...6
+        return 1...3
     }
 
     /// Une capsule tant que le champ tient sur une ligne, un rectangle arrondi
@@ -389,7 +395,7 @@ struct ChatSendingBar: View {
 
             BrandWaveform(
                 live: model.capturedLevels,
-                capacity: ChatMetrics.recordingBarCount,
+                size: .bar,
                 isDimmed: model.recorder.isPaused
             )
 
@@ -400,15 +406,10 @@ struct ChatSendingBar: View {
                 .contentTransition(.numericText())
                 .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: model.recorder.elapsed)
 
-            if !model.recorder.isPaused, !typeSize.isAccessibilitySize {
-                Image(brand: "IconMic")
-                    .resizable()
-                    .renderingMode(.template)
-                    .scaledToFit()
-                    .frame(width: glyph * 0.7, height: glyph * 0.7)
-                    .foregroundStyle(MemoBookColor.action)
-                    .accessibilityHidden(true)
-            }
+            // ⚠️ Il y avait ici un petit micro vert, entre le chrono et
+            // l'envoi. Retiré (Hugo, 19/09/2026) : la frise qui bouge et le
+            // chrono qui court disent déjà qu'on enregistre, et il ne se
+            // touchait pas. Sa place revient à la frise.
 
             sendGlyph(isActive: true, action: model.finishRecording)
         }
@@ -532,6 +533,12 @@ struct ChatSendingBar: View {
                 .scaledToFit()
                 .frame(width: glyph * 0.8, height: glyph * 0.8)
                 .foregroundStyle(MemoBookColor.surface)
+                // **Un point à gauche, un point en bas** (Hugo, 19/09/2026).
+                // L'avion pointe vers le coin haut droit : sa masse est en bas
+                // à gauche, et centré au pixel il se lisait poussé vers le haut
+                // à droite de son rond. C'est un recentrage optique, comme on
+                // en fait pour un triangle de lecture.
+                .offset(x: -1, y: 1)
                 .frame(width: MemoBookSpacing.contentIcon, height: MemoBookSpacing.contentIcon)
                 .background(
                     isActive ? MemoBookColor.send : MemoBookColor.disabledOutline,

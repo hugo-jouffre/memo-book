@@ -135,20 +135,11 @@ public struct HomeView: View {
             )
             .onDisappear { model.dismissDeletionError() }
         }
-        // **Glisser vers la droite ouvre le profil** (Hugo, 17/09/2026) : c'est
-        // l'écran d'à côté, celui que l'avatar en haut à droite ouvre aussi.
-        // Un glissé franc et horizontal, parti de n'importe où — pas seulement
-        // du bord, que la pile réserve à son retour et que l'accueil, premier
-        // écran, n'a pas. Les cartes gardent leur tiroir, qui va dans l'autre
-        // sens.
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 40)
-                .onEnded { value in
-                    let horizontal = value.translation.width
-                    guard horizontal > 80, abs(value.translation.height) < horizontal / 2 else { return }
-                    onIntent(.openProfile)
-                }
-        )
+        // ⚠️ **Plus de glissé vers le profil** (Hugo, 19/09/2026). Il ouvrait
+        // le profil d'un glissé vers la droite parti de n'importe où ; le geste
+        // est retiré, et non inversé — vers la gauche, il entrerait en
+        // concurrence avec le tiroir des cartes, qui va de ce côté-là. L'avatar
+        // en haut à droite reste le chemin, et il est le seul.
         .brandSheet(isPresented: $isRecording) {
             // Deux choses, et les deux : l'envoi est l'affaire du modèle de
             // l'écran, comme son chargement — la file décide d'envoyer ou de
@@ -585,10 +576,12 @@ public struct HomeView: View {
                 BrandSwipeAction(
                     icon: "IconPrinter",
                     tint: MemoBookColor.action,
-                    label: "Prévisualiser « \(trip.title) »"
+                    label: "Prévisualiser « \(trip.title) »",
+                    // Le tracé de l'imprimante est plus petit dans sa boîte que
+                    // les deux autres — voir ``BrandSwipeAction/iconScale``.
+                    iconScale: 1.15
                 ) { onIntent(.orderPrint(tripId: trip.id)) },
             ],
-            cornerRadius: MemoBookSpacing.largeCornerRadius,
             content: card
         )
     }

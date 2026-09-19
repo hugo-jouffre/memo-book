@@ -71,7 +71,6 @@ public struct BrandWaveform: View {
         self.levels = levels
         self.live = nil
         self.size = .bar
-        self.capacity = 0
         self.isDimmed = false
         self.progress = min(max(progress, 0), 1)
         self.tint = tint
@@ -80,7 +79,6 @@ public struct BrandWaveform: View {
 
     /// Les niveaux d'une capture en cours. `nil` pour un vocal terminé.
     private let live: [Double]?
-    private let capacity: Int
     private let isDimmed: Bool
 
     /// La frise du micro pendant qu'on parle.
@@ -95,33 +93,23 @@ public struct BrandWaveform: View {
     ///   - live: tous les niveaux relevés depuis le début, du plus ancien au
     ///     plus récent. Seuls les ``capacity`` derniers sont dessinés.
     ///   - size: où la frise est posée. Voir ``Size``.
-    ///   - capacity: combien de barres tiennent dans la place. C'est **la**
-    ///     constante qui règle la vitesse apparente de la frise : avec un
-    ///     échantillon toutes les 80 ms, 34 barres font défiler un peu moins de
-    ///     trois secondes de voix.
     ///   - isDimmed: la capture est en pause. Les barres restent en place — on
     ///     n'efface pas ce qui a été dit — mais s'éteignent, pour qu'on ne les
     ///     lise pas comme du son qui continue d'arriver.
     public init(
         live levels: [Double],
         size: Size = .sheet,
-        capacity: Int = BrandWaveform.capacity,
         isDimmed: Bool = false,
         tint: Color = MemoBookColor.action
     ) {
         self.levels = levels
         self.live = levels
         self.size = size
-        self.capacity = max(1, capacity)
         self.isDimmed = isDimmed
         self.progress = nil
         self.tint = tint
         self.playedTint = tint
     }
-
-    /// Combien de barres tient la grande feuille. Défaut de l'emploi en direct ;
-    /// une barre d'outils en tient bien moins et le dit.
-    public static let capacity = 34
 
     /// Les mesures d'une frise de barre d'outils ou de bulle. Fixes, à dessein :
     /// voir ``Size/bar``.
@@ -162,20 +150,38 @@ public struct BrandWaveform: View {
 
     /// La frise en direct : une `Capsule` par position, la plus récente à
     /// droite.
+    ///
+    /// **Elle se mesure avant de se dessiner** (Hugo, 19/09/2026), et les deux
+    /// raisons sont des défauts qu'on a vus à l'écran :
+    ///
+    /// 1. Avec un nombre de barres fixe, la frise s'arrêtait **avant le bord
+    ///    droit** de la feuille d'enregistrement : trente-quatre barres de 9 pt
+    ///    font 301 pt, et la place en faisait 370. C'est donc la largeur, et
+    ///    elle seule, qui dit combien de barres on dessine.
+    /// 2. Dans la barre d'envoi du chat, la pile de capsules **proposait** sa
+    ///    largeur idéale, qui grandissait à chaque échantillon : la barre
+    ///    s'élargissait, et avec elle le fil entier, jusqu'à déborder de
+    ///    l'écran.
+    ///
+    /// Un `GeometryReader` répond aux deux : il prend ce qu'on lui propose et
+    /// ne redemande jamais rien, et sa largeur dit combien de barres tiennent.
     private var frieze: some View {
-        let shown = (live ?? []).suffix(capacity)
+        GeometryReader { proxy in
+            let fitting = max(1, Int((proxy.size.width + barSpacing) / (barWidth + barSpacing)))
+            let shown = (live ?? []).suffix(fitting)
 
-        return HStack(alignment: .center, spacing: barSpacing) {
-            ForEach(Array(shown.enumerated()), id: \.offset) { _, level in
-                Capsule()
-                    .fill(tint)
-                    .frame(width: barWidth, height: barHeight(for: level))
+            HStack(alignment: .center, spacing: barSpacing) {
+                ForEach(Array(shown.enumerated()), id: \.offset) { _, level in
+                    Capsule()
+                        .fill(tint)
+                        .frame(width: barWidth, height: barHeight(for: level))
+                }
+                // La frise pousse depuis la gauche tant qu'elle n'est pas pleine.
+                Spacer(minLength: 0)
             }
-            // La frise pousse depuis la gauche tant qu'elle n'est pas pleine.
-            Spacer(minLength: 0)
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .leading)
         }
         .opacity(isDimmed ? 0.35 : 1)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: maximumHeight)
         // Assez court pour suivre la voix, assez long pour que deux
         // échantillons se rejoignent au lieu de clignoter.
@@ -248,9 +254,9 @@ public struct BrandWaveform: View {
     VStack(alignment: .leading, spacing: MemoBookSpacing.m) {
         BrandWaveform(levels: BrandWaveform.sampleLevels, progress: 0.35)
         BrandWaveform(levels: [])
-        BrandWaveform(live: BrandWaveform.sampleLevels, size: .bar, capacity: 19)
-        BrandWaveform(live: Array(BrandWaveform.sampleLevels.prefix(6)), size: .bar, capacity: 19)
-        BrandWaveform(live: BrandWaveform.sampleLevels, size: .bar, capacity: 19, isDimmed: true)
+        BrandWaveform(live: BrandWaveform.sampleLevels, size: .bar)
+        BrandWaveform(live: Array(BrandWaveform.sampleLevels.prefix(6)), size: .bar)
+        BrandWaveform(live: BrandWaveform.sampleLevels, size: .bar, isDimmed: true)
     }
     .padding(MemoBookSpacing.screenMargin)
     .frame(maxWidth: .infinity)

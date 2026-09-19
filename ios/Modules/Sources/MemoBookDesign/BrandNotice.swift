@@ -19,7 +19,7 @@ import SwiftUI
 /// avec `**…**`, comme en Markdown, et le balisage est résolu **à la
 /// construction** : rien à calculer dans un `body`, donc rien à recalculer à
 /// chaque image d'animation.
-public struct BrandNotice: View {
+public struct BrandNotice<Footer: View>: View {
     /// Ce que le bloc dit de lui-même.
     public enum Tone {
         /// L'état des choses, sur le beige de la marque. Le cas courant.
@@ -37,21 +37,39 @@ public struct BrandNotice: View {
     private let message: AttributedString
     private let tone: Tone
 
+    /// Ce qui se pose **sous la phrase, dans la boîte** : un lien, jamais un
+    /// pavé. Une boîte d'information ne demande rien — mais quand elle explique
+    /// pourquoi une porte est fermée, elle peut porter celle qui reste ouverte,
+    /// et c'est plus honnête que de renvoyer ailleurs (Hugo, 19/09/2026).
+    ///
+    /// `EmptyView` dans la quasi-totalité des cas, et la boîte est alors
+    /// exactement celle d'avant.
+    private let footer: Footer
+
     /// - Parameters:
     ///   - markup: le message, dont la partie qui compte est entourée de `**`.
     ///     Un balisage invalide n'efface rien : la phrase s'affiche telle
     ///     quelle, sans gras.
     ///   - tone: voir ``Tone``. Neutre par défaut, c'est-à-dire le bloc d'avant.
-    public init(_ markup: String, tone: Tone = .neutral) {
+    public init(
+        _ markup: String,
+        tone: Tone = .neutral,
+        @ViewBuilder footer: () -> Footer
+    ) {
         message = Self.resolved(markup)
         self.tone = tone
+        self.footer = footer()
     }
 
     public var body: some View {
-        content
-            .multilineTextAlignment(tone == .information ? .leading : .center)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: tone == .information ? .leading : .center)
+        VStack(spacing: MemoBookSpacing.xs) {
+            content
+                .multilineTextAlignment(tone == .information ? .leading : .center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: tone == .information ? .leading : .center)
+
+            footer
+        }
             .padding(MemoBookSpacing.s)
             .background { backdrop }
             .overlay {
@@ -163,4 +181,12 @@ public struct BrandNotice: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     .background(MemoBookColor.background)
     .environment(\.colorScheme, .light)
+}
+
+extension BrandNotice where Footer == EmptyView {
+    /// La boîte d'information telle qu'elle est partout : une phrase, et rien
+    /// en dessous.
+    public init(_ markup: String, tone: Tone = .neutral) {
+        self.init(markup, tone: tone) { EmptyView() }
+    }
 }

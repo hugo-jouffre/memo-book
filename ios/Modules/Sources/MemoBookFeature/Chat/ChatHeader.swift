@@ -31,13 +31,10 @@ enum ChatMetrics {
     /// bulles de MEMO d'affilée sont une même prise de parole, pas deux.
     static let sameAuthorSpacing = MemoBookSpacing.xs / 2
 
-    /// Combien de barres la frise de la barre d'envoi affiche.
-    ///
-    /// La maquette dessine 96 pt de frise ; à 3 pt de barre et 2 pt d'air, ça en
-    /// fait dix-neuf. C'est **la** constante qui règle la vitesse apparente du
-    /// défilement : avec un relevé toutes les 90 ms, dix-neuf barres font
-    /// glisser un peu moins de deux secondes de voix.
-    static let recordingBarCount = 19
+    // ⚠️ `recordingBarCount` a disparu (Hugo, 19/09/2026). La frise ne compte
+    // plus ses barres : elle en dessine autant que la place reçue peut en
+    // tenir, et c'est ce qui l'empêche à la fois de s'arrêter avant le bord et
+    // de faire grandir la barre qui la porte — voir ``BrandWaveform``.
 
     /// Combien de vignettes une bulle de photos montre avant de compter le
     /// reste. Quatre, comme `agents/agent-conversation.md` le demande — « 2 à 4
