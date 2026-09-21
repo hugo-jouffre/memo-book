@@ -19,7 +19,7 @@ import SwiftUI
 /// avec `**…**`, comme en Markdown, et le balisage est résolu **à la
 /// construction** : rien à calculer dans un `body`, donc rien à recalculer à
 /// chaque image d'animation.
-public struct BrandNotice: View {
+public struct BrandNotice<Footer: View>: View {
     /// Ce que le bloc dit de lui-même.
     public enum Tone {
         /// L'état des choses, sur le beige de la marque. Le cas courant.
@@ -37,23 +37,41 @@ public struct BrandNotice: View {
     private let message: AttributedString
     private let tone: Tone
 
+    /// Ce qui se pose **sous la phrase, dans la boîte** : un lien, jamais un
+    /// pavé. Une boîte d'information ne demande rien — mais quand elle explique
+    /// pourquoi une porte est fermée, elle peut porter celle qui reste ouverte,
+    /// et c'est plus honnête que de renvoyer ailleurs (Hugo, 19/09/2026).
+    ///
+    /// `EmptyView` dans la quasi-totalité des cas, et la boîte est alors
+    /// exactement celle d'avant.
+    private let footer: Footer
+
     /// - Parameters:
     ///   - markup: le message, dont la partie qui compte est entourée de `**`.
     ///     Un balisage invalide n'efface rien : la phrase s'affiche telle
     ///     quelle, sans gras.
     ///   - tone: voir ``Tone``. Neutre par défaut, c'est-à-dire le bloc d'avant.
-    public init(_ markup: String, tone: Tone = .neutral) {
+    public init(
+        _ markup: String,
+        tone: Tone = .neutral,
+        @ViewBuilder footer: () -> Footer
+    ) {
         message = Self.resolved(markup)
         self.tone = tone
+        self.footer = footer()
     }
 
     public var body: some View {
-        content
-            .multilineTextAlignment(tone == .information ? .leading : .center)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: tone == .information ? .leading : .center)
+        VStack(spacing: MemoBookSpacing.xs) {
+            content
+                .multilineTextAlignment(tone == .information ? .leading : .center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: tone == .information ? .leading : .center)
+
+            footer
+        }
             .padding(MemoBookSpacing.s)
-            .background(background, in: .rect(cornerRadius: MemoBookSpacing.largeCornerRadius))
+            .background { backdrop }
             .overlay {
                 if tone == .information {
                     RoundedRectangle(cornerRadius: MemoBookSpacing.largeCornerRadius)
@@ -61,6 +79,26 @@ public struct BrandNotice: View {
                 }
             }
             .accessibilityElement(children: .combine)
+    }
+
+    /// Le fond. **Un verre dépoli sous un beige doux** pour le ton neutre
+    /// (Hugo, 17/09/2026) : l'aplat `Beige Darker` d'avant était trop foncé, et
+    /// une boîte qui laisse deviner ce qui passe dessous se lit comme une
+    /// information posée sur la page, pas comme un bloc de plus. Un liseré
+    /// blanc à demi-transparent fait le bord du verre.
+    @ViewBuilder
+    private var backdrop: some View {
+        let shape = RoundedRectangle(cornerRadius: MemoBookSpacing.largeCornerRadius)
+
+        switch tone {
+        case .neutral:
+            shape
+                .fill(.ultraThinMaterial)
+                .overlay { shape.fill(MemoBookColor.noticeBeige.opacity(0.7)) }
+                .overlay { shape.strokeBorder(.white.opacity(0.45), lineWidth: 1) }
+        case .information:
+            shape.fill(background)
+        }
     }
 
     @ViewBuilder
@@ -92,10 +130,7 @@ public struct BrandNotice: View {
 
     private var background: Color {
         switch tone {
-        // `Beige Darker`, le seul aplat discret de la palette : plus soutenu
-        // que le crème du fond, donc le bloc se détache ; assez proche pour ne
-        // pas se lire comme une carte de contenu.
-        case .neutral: MemoBookColor.separator
+        case .neutral: MemoBookColor.noticeBeige
         // Le bleu d'information, très dilué : c'est le filet et le pictogramme
         // qui portent la couleur, pas l'aplat — un fond bleu franc sous du
         // texte encre tombe sous le contraste demandé.
@@ -146,4 +181,12 @@ public struct BrandNotice: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     .background(MemoBookColor.background)
     .environment(\.colorScheme, .light)
+}
+
+extension BrandNotice where Footer == EmptyView {
+    /// La boîte d'information telle qu'elle est partout : une phrase, et rien
+    /// en dessous.
+    public init(_ markup: String, tone: Tone = .neutral) {
+        self.init(markup, tone: tone) { EmptyView() }
+    }
 }

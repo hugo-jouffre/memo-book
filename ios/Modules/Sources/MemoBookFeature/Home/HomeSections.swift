@@ -210,8 +210,35 @@ struct ShowcaseCard: View {
         }
         .frame(maxHeight: .infinity)
         .clipped()
+        // **Le bleu de la carte se fond dans l'image par la gauche.** L'image
+        // livrée n'a pas de dégradé (elle se coupait net sur le beige) ; c'est
+        // l'app qui le dessine, du bleu de la carte au transparent sur le
+        // premier tiers, pour que le texte puisse mordre un peu sur elle sans
+        // perdre en lisibilité (Hugo, 17/09/2026). L'export du 19/09 fait
+        // 444 × 340 px pour un cadre de 124 pt — net jusqu'en 3×.
+        .overlay {
+            // Les deux couches de la carte — le crème, puis le bleu à 22 % —
+            // fondues de la même façon : le dégradé part exactement de la
+            // couleur de la carte, sans en inventer une.
+            ZStack {
+                LinearGradient(
+                    colors: [MemoBookColor.background, MemoBookColor.background.opacity(0.6), .clear],
+                    startPoint: .leading,
+                    endPoint: Self.fadeEnd
+                )
+                LinearGradient(
+                    colors: [MemoBookColor.outline.opacity(0.22), MemoBookColor.outline.opacity(0.13), .clear],
+                    startPoint: .leading,
+                    endPoint: Self.fadeEnd
+                )
+            }
+            .allowsHitTesting(false)
+        }
         .accessibilityHidden(true)
     }
+
+    /// Jusqu'où le fondu mord sur l'image : un peu moins de la moitié.
+    private static let fadeEnd = UnitPoint(x: 0.45, y: 0.5)
 
     /// Rond blanc cerclé de bleu, posé à cheval sur l'image.
     ///

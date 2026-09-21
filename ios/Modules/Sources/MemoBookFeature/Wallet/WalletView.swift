@@ -45,7 +45,7 @@ public struct WalletView: View {
 
                 // C'est **le seul bloc** qui distingue les deux maquettes.
                 if let wallet = model.wallet, wallet.isEmpty {
-                    WalletEmptyCard { onIntent(.inviteFriends) }
+                    WalletEmptyCard()
                 } else {
                     WalletHistory(wallet: model.wallet, isLoading: model.isLoading)
                 }
@@ -146,9 +146,6 @@ public struct WalletView: View {
 public enum WalletIntent: Sendable, Hashable {
     /// Partager la cagnotte — la feuille de partage, avec le message et le lien.
     case shareWallet
-    /// « Inviter des proches », depuis la cagnotte vide. Le même partage, dit
-    /// autrement : c'est le premier geste plutôt qu'un geste de plus.
-    case inviteFriends
     /// « Ajouter » — recharger, feuille Stripe à la clé.
     case addFunds
     /// « Ajouter » là où l'encaissement n'est pas branché : les previews Xcode,
@@ -298,19 +295,17 @@ private struct WalletBalanceCard: View {
     /// avec le bouton d'Apple, expliqué dans ``MemoBookFont/button``. À 18 pt,
     /// « Partager » et son icône demandent 152 pt dans une moitié de carte qui
     /// en offre 133 sur un iPhone SE, et le mot se coupait en deux.
-    /// ``BrandButton/Size/small`` porte exactement le 16 pt de la maquette.
     ///
-    /// Coût : 44 pt de haut au lieu de 48. Quatre points au-dessus du seuil de
-    /// R2 — écart assumé et signalé dans la fiche de la cagnotte. Le vrai
-    /// arbitrage appartient à Clara : soit la maquette descend son libellé de
-    /// taille pleine à 16, soit ces deux boutons montent à 48.
+    /// ``BrandButton/Size/medium`` porte exactement le 16 pt de la maquette
+    /// **et ses 48 pt de haut** — tranché par Hugo le 17/09/2026 (T70), après
+    /// que les deux étaient restés à 44 en `small`.
     @ViewBuilder
     private var actions: some View {
         let add = BrandButton(
             BookCopy.Wallet.add,
             icon: Image(brand: "IconPlus"),
             style: .tertiary,
-            size: .small,
+            size: .medium,
             fillsWidth: true,
             action: onAdd
         )
@@ -319,7 +314,7 @@ private struct WalletBalanceCard: View {
             BookCopy.Wallet.share,
             icon: Image(brand: "IconShareSystem"),
             style: .primary,
-            size: .small,
+            size: .medium,
             fillsWidth: true,
             action: onShare
         )
@@ -591,15 +586,20 @@ private struct WalletTotals: View {
 
 // MARK: - La cagnotte vide
 
-/// Ce qu'on montre quand rien n'est encore arrivé : le cadeau, la phrase, et le
-/// seul geste qui change quelque chose.
+/// Ce qu'on montre quand rien n'est encore arrivé : le cadeau et la phrase,
+/// dans un cadre en pointillés.
 ///
 /// **Pas un état d'erreur, et pas un vide.** Une cagnotte sans contribution est
-/// l'état normal d'une cagnotte qu'on vient d'ouvrir ; la carte propose donc
-/// une action, elle ne s'excuse pas.
+/// l'état normal d'une cagnotte qu'on vient d'ouvrir. Le pointillé dit « il n'y
+/// a rien ici, mais il y aura quelque chose » — le même cadre que l'accueil
+/// sans voyage —, et c'est lui qui sépare ce bloc de la question qui suit,
+/// laquelle est une phrase à lire et non une place à remplir (Hugo,
+/// 18/09/2026).
+///
+/// **Sans bouton.** « Inviter des proches » doublait « Partager », trois
+/// centimètres plus haut sur la carte du solde ; le second suffit, la phrase
+/// dit déjà d'y aller.
 private struct WalletEmptyCard: View {
-    let onInvite: () -> Void
-
     @ScaledMetric(relativeTo: .body) private var markSide: CGFloat = 48
 
     var body: some View {
@@ -623,17 +623,11 @@ private struct WalletEmptyCard: View {
             }
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
-
-            BrandButton(
-                BookCopy.Wallet.invite,
-                icon: Image(brand: "IconShareNodes"),
-                style: .primary,
-                size: .small,
-                action: onInvite
-            )
         }
         .padding(MemoBookSpacing.m)
         .frame(maxWidth: .infinity)
+        .brandDashedCard()
+        .accessibilityElement(children: .combine)
     }
 }
 

@@ -38,11 +38,16 @@ public struct TripSettingsView: View {
 
     @Environment(\.dismiss) private var dismiss
 
+    /// - Parameter opening: la feuille à ouvrir dès l'arrivée — celle des
+    ///   co-voyageurs quand on vient du « + » de l'accueil du voyage. `nil`
+    ///   depuis la roue crantée.
     public init(
         model: TripSettingsModel,
+        opening: TripSettingsSheet? = nil,
         onIntent: @escaping (TripSettingsIntent) -> Void
     ) {
         _model = State(initialValue: model)
+        _sheet = State(initialValue: opening)
         self.onIntent = onIntent
     }
 
@@ -71,8 +76,16 @@ public struct TripSettingsView: View {
                 }
 
                 helpLink
-                clearConversationLink
-                deleteLink
+
+                // **Les deux suppressions vont ensemble** (Hugo, 19/09/2026) :
+                // à 24 pt, elles se lisaient comme deux blocs sans rapport, au
+                // milieu de rien. Douze les rapprochent en un groupe, et les
+                // deux gardent leur cible de 44 pt — il en faut assez pour ne
+                // pas supprimer un voyage en visant la conversation.
+                VStack(spacing: MemoBookSpacing.snug) {
+                    clearConversationLink
+                    deleteLink
+                }
 
                 #if DEBUG
                     TripSettingsDebugPanel(model: model)
@@ -98,6 +111,9 @@ public struct TripSettingsView: View {
         .background(MemoBookColor.background.ignoresSafeArea())
         // L'écran dessine son propre en-tête, comme la maquette : la flèche et
         // le titre partagent une ligne, à la marge de la colonne.
+        // Le nom du voyage se corrige sur place : la barre qui range le
+        // clavier, la même que sur le profil.
+        .brandKeyboardDismissBar()
         .brandHiddenNavigationBar()
         // Le crème de la marque ne se retourne pas en sombre — voir
         // `MemoBookColor`.
@@ -164,13 +180,16 @@ public struct TripSettingsView: View {
             // l'écran qui portent une valeur qu'on vient chercher du regard.
             // Les fondre dans le groupe qui suit les aurait rangées parmi les
             // réglages, alors qu'elles n'en sont pas.
+            // Le nom se corrige **sur la ligne**, comme le téléphone du profil :
+            // toucher ouvre le clavier, sortir du champ enregistre, la coche
+            // verte accuse réception (Hugo, 18/09/2026). Il menait avant à une
+            // intention que personne ne routait — la ligne s'ouvrait sur rien.
             BrandRowGroup {
                 BrandRow(
                     BookCopy.Settings.name,
-                    value: settings?.name,
-                    valueTone: .prominent,
+                    text: nameBinding,
                     isValueLoading: isLoading,
-                    action: { onIntent(.renameTrip) }
+                    isConfirmed: model.justSaved == .name
                 )
             }
 
@@ -353,6 +372,15 @@ public struct TripSettingsView: View {
 
     /// Les liaisons passent par le modèle et non par `settings` : une vue ne
     /// doit pas pouvoir poser une valeur sans qu'elle partie au serveur.
+    /// La ligne relit le nom du modèle, et lui rend ce qu'on a tapé en sortant
+    /// du champ. Voir ``TripSettingsModel/setName(_:)``.
+    private var nameBinding: Binding<String> {
+        Binding(
+            get: { model.settings?.name ?? "" },
+            set: { model.setName($0) }
+        )
+    }
+
     private var notificationsBinding: Binding<Bool> {
         Binding(
             get: { model.settings?.wantsNotifications ?? false },
@@ -378,7 +406,6 @@ public struct TripSettingsView: View {
 /// une feuille **sur** cet écran (``TripSettingsSheet``). Une intention qui
 /// remonte pour redescendre aussitôt n'apprend rien à personne.
 public enum TripSettingsIntent: Sendable, Hashable {
-    case renameTrip
     case openWallet
     /// « Style du carnet » — les personnalisations de la mise en page.
     case openCustomisation
@@ -554,7 +581,7 @@ private struct TricountCallout: View {
     }
 }
 
-/// La ligne « Prévisulation PDF » : l'intitulé, sa précision, et la couverture
+/// La ligne « Prévisualisation PDF » : l'intitulé, sa précision, et la couverture
 /// du carnet en vignette.
 private struct PdfPreviewRow: View {
     let coverUrl: URL?

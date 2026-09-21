@@ -169,6 +169,23 @@ public struct BrandRow: View, Identifiable {
     /// La pastille posée en bout de ligne, après la valeur. Un mot, pas une
     /// phrase : « LOCKED », « BIENTÔT ».
     private let badge: String?
+    /// Un petit dessin **après l'intitulé** — l'autocollant Apple ou Google
+    /// qui dit d'où vient une adresse, sans une phrase pour le dire (Hugo,
+    /// 17/09/2026). Posé tel quel, sans mode gabarit : c'est un logo, il garde
+    /// ses couleurs.
+    private let titleIcon: TitleIcon?
+
+    /// Le logo d'intitulé, et ce que VoiceOver en dit — un dessin ne parle
+    /// pas, la phrase qu'il remplace reste pour qui ne le voit pas.
+    public struct TitleIcon {
+        let image: Image
+        let label: String
+
+        public init(_ image: Image, label: String) {
+            self.image = image
+            self.label = label
+        }
+    }
     private let accessory: Accessory
     private let footnote: Footnote?
     private let action: (() -> Void)?
@@ -177,6 +194,10 @@ public struct BrandRow: View, Identifiable {
     /// que celui d'une ligne corrigée sur place, pour une ligne dont la valeur
     /// se corrige dans une feuille — l'adresse postale.
     private let isConfirmed: Bool
+
+    /// La taille du logo d'intitulé : celle d'une ligne de corps de texte, et
+    /// elle suit le Dynamic Type avec lui.
+    @ScaledMetric(relativeTo: .body) private var titleIconSide: CGFloat = 20
 
     /// `nonisolated` : ``BrandRow`` est une `View`, donc isolée sur l'acteur
     /// principal, alors qu'`Identifiable` ne l'est pas. Une identité qui ne lit
@@ -200,6 +221,8 @@ public struct BrandRow: View, Identifiable {
     ///     valeur ne dit pas — qu'elle est sous clé, par exemple.
     ///   - isValueLoading: la valeur est encore en route. **L'intitulé, lui,
     ///     s'affiche tout de suite** : il appartient à l'app, pas au serveur.
+    ///   - titleIcon: un petit logo après l'intitulé, à la place d'une note
+    ///     qui dirait la même chose en une phrase.
     ///   - isConfirmed: la valeur vient d'être enregistrée par le serveur. Le
     ///     chevron devient une coche verte le temps qu'on la voie — pour une
     ///     ligne dont la feuille s'est refermée avant que la réponse arrive.
@@ -209,6 +232,7 @@ public struct BrandRow: View, Identifiable {
         valuePlacement: ValuePlacement = .trailing,
         valueTone: ValueTone = .plain,
         titleTone: TitleTone = .plain,
+        titleIcon: TitleIcon? = nil,
         badge: String? = nil,
         isValueLoading: Bool = false,
         note: String? = nil,
@@ -220,6 +244,7 @@ public struct BrandRow: View, Identifiable {
         self.valuePlacement = valuePlacement
         self.valueTone = valueTone
         self.titleTone = titleTone
+        self.titleIcon = titleIcon
         self.badge = badge
         self.isValueLoading = isValueLoading
         self.accessory = action == nil ? .none : .disclosure
@@ -264,6 +289,7 @@ public struct BrandRow: View, Identifiable {
         self.valuePlacement = .trailing
         self.valueTone = .plain
         self.titleTone = .plain
+        self.titleIcon = nil
         self.badge = nil
         self.isValueLoading = isValueLoading
         self.footnote = error.map(Footnote.problem)
@@ -284,6 +310,7 @@ public struct BrandRow: View, Identifiable {
     /// l'interrupteur qui agit, et lui seul.
     public init(_ title: String, isOn: Binding<Bool>) {
         self.title = title
+        self.titleIcon = nil
         self.value = nil
         self.valuePlacement = .trailing
         self.valueTone = .plain
@@ -409,7 +436,12 @@ public struct BrandRow: View, Identifiable {
         // **L'enregistrement.** Sortir du champ suffit : refermer le clavier,
         // faire défiler la page, toucher un autre champ. Rien à valider.
         .onChange(of: isEditing) { _, editing in
-            if !editing { field.text.wrappedValue = draft }
+            guard !editing else { return }
+            field.text.wrappedValue = draft
+            // Le modèle a pu refuser ce qu'on a tapé (un nom vide) ou le
+            // normaliser (des espaces autour) : la ligne reprend ce qu'il a
+            // gardé, plutôt que d'afficher une valeur que personne n'a.
+            draft = field.text.wrappedValue
         }
         // Quitter l'écran clavier ouvert compte aussi comme une sortie.
         .onDisappear {
@@ -529,7 +561,14 @@ public struct BrandRow: View, Identifiable {
             }
         } else {
             HStack(alignment: .firstTextBaseline, spacing: MemoBookSpacing.s) {
+                // **L'intitulé tient sur sa ligne, c'est la valeur qui
+                // s'abrège.** Sans priorité, « Décorations & stickers » passait
+                // à la ligne dès que « 2 / paragraphe » demandait sa place
+                // (Clara, 17/09/2026) ; l'intitulé appartient à l'app et se lit
+                // entier, la valeur s'abrège par la fin comme elle sait le
+                // faire.
                 titleText
+                    .layoutPriority(1)
                 Spacer(minLength: 0)
                 valueText
                     .multilineTextAlignment(.trailing)
@@ -541,10 +580,21 @@ public struct BrandRow: View, Identifiable {
     private var titleText: some View {
         switch titleTone {
         case .plain:
-            Text(title)
-                .font(MemoBookFont.body)
-                .foregroundStyle(MemoBookColor.ink)
-                .fixedSize(horizontal: false, vertical: true)
+            // Le logo suit l'intitulé sur sa ligne de base, à la taille d'une
+            // majuscule : il précise le mot, il ne le concurrence pas.
+            HStack(alignment: .center, spacing: MemoBookSpacing.xs) {
+                Text(title)
+                    .font(MemoBookFont.body)
+                    .foregroundStyle(MemoBookColor.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let titleIcon {
+                    titleIcon.image
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: titleIconSide, height: titleIconSide)
+                        .accessibilityLabel(titleIcon.label)
+                }
+            }
         case .accent:
             Text(title.uppercased())
                 .font(MemoBookFont.overline)

@@ -54,7 +54,7 @@ public enum NarrationPace: Sendable, Hashable {
         case .everyTwoDays: "Le rythme recommandé pour souffler"
         case .everyThreeDays: "Idéal pour les longs séjours"
         case .weekly: "Pour un résumé global"
-        case .custom: "Définissez vos propres alertes"
+        case .custom: "Définis tes propres alertes"
         case .byPlace, .unknown: nil
         }
     }
@@ -67,15 +67,28 @@ public enum NarrationPace: Sendable, Hashable {
 
 extension NarrationPace: Codable {
     public init(from decoder: any Decoder) throws {
-        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = NarrationPace(storedValue: try decoder.singleValueContainer().decode(String.self))
+    }
+
+    /// Le rythme, depuis ce que la base garde.
+    ///
+    /// **Les anciens libellés aussi.** Jusqu'au 17/09/2026, la création écrivait
+    /// le rythme dans les mots de l'écran — « Tous les jours », « Tous les 2
+    /// jours », « Toutes les semaines » — quand la feuille des réglages
+    /// écrivait déjà la clé. Dix voyages en portent encore un : la feuille les
+    /// lisait comme un rythme inconnu et ne cochait rien (Hugo, 18/09/2026).
+    /// Le serveur les réécrit désormais en clés à l'entrée et une migration a
+    /// corrigé les rangées existantes, mais une app qui parle à l'API d'avant
+    /// doit les relire de la même façon.
+    public init(storedValue raw: String) {
         self =
-            switch raw {
-            case "daily": .daily
-            case "every_two_days": .everyTwoDays
-            case "every_three_days": .everyThreeDays
-            case "weekly": .weekly
-            case "custom": .custom
-            case "by_place": .byPlace
+            switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "daily", "tous les jours": .daily
+            case "every_two_days", "tous les 2 jours", "tous les deux jours": .everyTwoDays
+            case "every_three_days", "tous les 3 jours", "tous les trois jours": .everyThreeDays
+            case "weekly", "toutes les semaines", "une fois par semaine": .weekly
+            case "custom", "personnalisé": .custom
+            case "by_place", "à chaque lieu": .byPlace
             default: .unknown(raw)
             }
     }
@@ -211,7 +224,7 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
     /// ligne : « Connecte ton Tricount » devient le compte relié.
     public var tricountLabel: String?
 
-    /// L'aperçu du carnet, pour la vignette de la ligne « Prévisulation PDF ».
+    /// L'aperçu du carnet, pour la vignette de la ligne « Prévisualisation PDF ».
     /// `nil` quand rien n'a encore été composé.
     public var previewCoverUrl: URL?
 

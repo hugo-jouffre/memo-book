@@ -19,7 +19,10 @@ final class ConversationArchiveTests: XCTestCase {
         let model = ChatModel(tripId: tripId, archive: archive, responder: LocalMemoResponder(voice: .unavailable))
         await model.load()
 
-        XCTAssertEqual(model.messages.map(\.author), [.memo, .memo], "La bulle d’ouverture et la relance du voyage, rien d’autre.")
+        // **La bulle d'ouverture, seule** (§ 26, Hugo, 17/09/2026) : la relance
+        // du voyage n'est plus une bulle. Les deux PR se sont croisées, et ce
+        // test attendait encore la seconde.
+        XCTAssertEqual(model.messages.map(\.author), [.memo], "La bulle d’ouverture de MEMO, rien d’autre.")
         XCTAssertEqual(model.messages.first?.spokenText, ChatCopy.opening)
         XCTAssertFalse(model.suggestions.isEmpty, "Les puces d’ouverture reviennent avec la bulle.")
     }

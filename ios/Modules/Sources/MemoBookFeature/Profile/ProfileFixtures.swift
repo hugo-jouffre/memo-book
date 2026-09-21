@@ -15,6 +15,9 @@ extension TravellerProfile {
         fullName: "Maylis Garde",
         email: "maylis.garde@icloud.com",
         phoneNumber: "+33 6 98 69 34 48",
+        // Ce que le serveur devine sur « Maylis » : c'est ce qui fait écrire
+        // « Abonnée » à la feuille, comme la maquette.
+        gender: .female,
         address: PostalAddress(
             street: "7 Rue Simon Fryd",
             postalCode: "69007",
@@ -168,4 +171,59 @@ extension Connector {
             logoAssetName: "ConnectorBooking"
         ),
     ]
+}
+
+extension TravelStatistics {
+    /// Les chiffres de la maquette, pour que la comparaison porte sur le dessin.
+    ///
+    /// **Ils ne sont pas cohérents entre eux, et c'est voulu** : 406 personnes
+    /// et 2 280 km sont ceux du dessin, pas d'un vrai compte — et le voyage en
+    /// cours s'écrit à 9 % pour que l'anneau ait un début d'arc à montrer.
+    public static let fixture = TravelStatistics(
+        tripCount: 5,
+        overall: TravelFigures(
+            countries: 6,
+            regions: 8,
+            cities: 13,
+            encounters: 406,
+            distanceKilometres: 2280
+        ),
+        currentTrip: CurrentTripStatistics(
+            id: "trip-rome",
+            startDate: .fixture(10, 12, 2026),
+            endDate: .fixture(2, 1, 2027),
+            currentPlace: "Rome",
+            dayCount: 21,
+            validatedDays: 2,
+            figures: TravelFigures(
+                countries: 2,
+                regions: 4,
+                cities: 7,
+                encounters: 206,
+                distanceKilometres: 1280
+            ),
+            recordings: 300,
+            transports: [
+                TransportUsage(kind: .plane, count: 1),
+                TransportUsage(kind: .train, count: 2),
+                TransportUsage(kind: .scooter),
+            ]
+        )
+    )
+
+    /// Le même compte, pendant que l'agent relit trois souvenirs : c'est
+    /// l'état que la feuille annonce d'une ligne et relit toute seule.
+    public static var detectingFixture: TravelStatistics {
+        var statistics = fixture
+        statistics.pendingDetections = 3
+        return statistics
+    }
+
+    /// Un compte qui n'a pas de voyage en cours : la seconde carte dit qu'il
+    /// n'y en a pas, elle ne disparaît pas.
+    public static var restingFixture: TravelStatistics {
+        var statistics = fixture
+        statistics.currentTrip = nil
+        return statistics
+    }
 }

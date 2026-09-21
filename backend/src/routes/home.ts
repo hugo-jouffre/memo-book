@@ -4,6 +4,8 @@ import type { AppContext } from "../context.js";
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
 import { createMemoFor, visibleToAccount } from "../services/memoOwnership.js";
+import { normalizeNarrationPace } from "../services/narrationPace.js";
+import { effectiveStage, stageFromDates } from "../services/tripStage.js";
 import {
   serializeGalleryCategory,
   serializeGalleryTrip,
@@ -70,26 +72,16 @@ const tripDraft = z.object({
   title: z.string().trim().min(1, "le titre est requis").max(200),
   startDate: z.coerce.date().nullish(),
   endDate: z.coerce.date().nullish(),
-  // Le rythme des relances, dans les mots de l'écran — « Tous les jours ».
-  // Même raison que `theme` : c’est une consigne lue par un agent.
+  // Le rythme des relances. L'app envoie la clé (`daily`, `weekly`…) ; un
+  // ancien client qui enverrait encore le libellé de son écran est ramené à la
+  // clé à l'entrée — voir `services/narrationPace.ts`.
   narrationPace: z.string().trim().min(1).max(100).nullish(),
   photoTextRatio: z.number().int().min(0).max(100).optional(),
 });
 
-/**
- * Où en est le voyage, **déduit de ses dates** et jamais demandé à l'app.
- *
- * L'écran de création ne pose pas la question, et il a raison : quelqu'un qui
- * saisit un départ le mois prochain n'a pas à préciser en plus que son voyage
- * est « à venir ». Sans dates, on suppose qu'il commence maintenant — c'est ce
- * que fait quelqu'un qui ouvre l'app le premier soir.
- */
-function stageFromDates(startDate: Date | null, endDate: Date | null) {
-  const now = new Date();
-  if (endDate && endDate < now) return "past" as const;
-  if (startDate && startDate > now) return "upcoming" as const;
-  return "ongoing" as const;
-}
+// `stageFromDates` vit dans `services/tripStage.ts` : la colonne `memos.stage`
+// est écrite à la création, mais c'est sur les **dates** que l'état se lit
+// ensuite — un voyage se termine par le calendrier, pas par un geste.
 
 export function registerHomeRoutes(app: FastifyInstance, context: AppContext): void {
   /**
@@ -196,7 +188,7 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
       theme: draft.theme ?? null,
       startDate: draft.startDate ?? null,
       endDate: draft.endDate ?? null,
-      narrationPace: draft.narrationPace ?? null,
+      narrationPace: normalizeNarrationPace(draft.narrationPace),
       ...(draft.photoTextRatio === undefined ? {} : { photoTextRatio: draft.photoTextRatio }),
       stage: stageFromDates(draft.startDate ?? null, draft.endDate ?? null),
     });
@@ -238,7 +230,7 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
         theme: draft.theme ?? null,
         startDate: draft.startDate ?? null,
         endDate: draft.endDate ?? null,
-        narrationPace: draft.narrationPace ?? null,
+        narrationPace: normalizeNarrationPace(draft.narrationPace),
         ...(draft.photoTextRatio === undefined ? {} : { photoTextRatio: draft.photoTextRatio }),
         stage: stageFromDates(draft.startDate ?? null, draft.endDate ?? null),
       },
@@ -311,9 +303,12 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
       // lui (« Continuer mon voyage » plutôt que « Créer mon voyage »), et deux
       // écrans qui répondraient différemment à la même question seraient un
       // bug qu'on ne verrait qu'en passant de l'un à l'autre.
+      // Tous les voyages visibles, et non ceux dont la colonne dit « en
+      // cours » : l'état se lit sur les dates (`effectiveStage`), et un voyage
+      // fini hier n'a pas à être proposé.
       context.prisma.memo.findMany({
-        where: { ...visibleToAccount(accountId), stage: { in: ["ongoing", "upcoming"] } },
-        select: { id: true, stage: true, startDate: true },
+        where: visibleToAccount(accountId),
+        select: { id: true, stage: true, startDate: true, endDate: true },
       }),
     ]);
 
@@ -334,16 +329,17 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
  * venir. Une requête qui ferait les deux demanderait deux appels.
  */
 function resumableTripId(
-  memos: { id: string; stage: "ongoing" | "upcoming" | "past"; startDate: Date | null }[],
+  memos: { id: string; stage: string; startDate: Date | null; endDate: Date | null }[],
 ): string | null {
+  const now = new Date();
   const ongoing = memos
-    .filter((memo) => memo.stage === "ongoing")
+    .filter((memo) => effectiveStage(memo, now) === "ongoing")
     .sort((a, b) => (b.startDate?.getTime() ?? 0) - (a.startDate?.getTime() ?? 0));
 
   if (ongoing[0]) return ongoing[0].id;
 
   const upcoming = memos
-    .filter((memo) => memo.stage === "upcoming")
+    .filter((memo) => effectiveStage(memo, now) === "upcoming")
     .sort(
       (a, b) =>
         (a.startDate?.getTime() ?? Number.MAX_SAFE_INTEGER) -

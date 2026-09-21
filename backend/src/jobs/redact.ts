@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import type { AppContext } from "../context.js";
 import {
   EMPTY_COHERENCE_SHEET,
+  parseInsights,
   type CoherenceSheet,
   type RedactedNeighbour,
 } from "../services/redaction.js";
@@ -135,6 +136,9 @@ export async function redactEntry(
           weatherKey: result.weatherKey,
           funFact: result.funFact,
           funFactTitle: result.funFactTitle,
+          // Le relevé part avec le texte : c'est lui que le profil additionne,
+          // et c'est à cet instant que les statistiques bougent.
+          insights: parseInsights(result.insights) as unknown as Prisma.InputJsonObject,
           redactionStatus: "ready",
           redactionModel: result.model,
           redactedAt: new Date(),

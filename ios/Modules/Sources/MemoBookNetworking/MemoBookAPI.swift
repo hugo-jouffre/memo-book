@@ -85,9 +85,28 @@ public protocol MemoBookAPI: Sendable {
 
     func profile() async throws -> TravellerProfile
 
+    /// Les chiffres du profil — la feuille « Statistiques », réservée aux
+    /// abonnés. Additionnés par le serveur depuis les relevés de la rédaction ;
+    /// l'app les relit tant que `pendingDetections` n'est pas à zéro.
+    func travelStatistics() async throws -> TravelStatistics
+
     /// Corrige le profil. Renvoie la version enregistrée par le serveur, qui
     /// fait ensuite autorité sur ce que l'écran affiche.
     func updateProfile(_ edit: ProfileEdit) async throws -> TravellerProfile
+
+    /// Envoie la photo de profil — `POST /v1/profile/avatar`, en JPEG ou PNG.
+    /// Renvoie le profil relu, dont `avatarUrl` pointe désormais sur elle.
+    func uploadAvatar(data: Data, mimeType: String) async throws -> TravellerProfile
+
+    /// Résilie l'abonnement, au bout des trois confirmations de la feuille.
+    ///
+    /// Rend le profil relu : c'est lui qui porte l'abonnement fermé, la date de
+    /// résiliation et la semaine encore réglée. Le geste ne se devine pas côté
+    /// app — sans cet aller-retour, la résiliation ne survivait pas au
+    /// chargement suivant (Hugo, 19/09/2026).
+    func cancelSubscription(
+        reason: SubscriptionCancellationReason?
+    ) async throws -> TravellerProfile
 
     /// Branche ou débranche un connecteur.
     func setConnector(key: String, isEnabled: Bool) async throws

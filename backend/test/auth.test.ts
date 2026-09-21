@@ -294,6 +294,17 @@ describe("mot de passe oublié", () => {
       "t",
     );
     expect(hosted).toBe("https://api.memo-book.com/password/reset?token=t");
+
+    // Sur Railway, sans variable posée : le domaine du service suffit.
+    const railway = passwordResetUrl(
+      {
+        ...harness.context.env,
+        APP_LINK_BASE_URL: "memobook://",
+        RAILWAY_PUBLIC_DOMAIN: "api-production-9f35a.up.railway.app",
+      },
+      "t",
+    );
+    expect(railway).toBe("https://api-production-9f35a.up.railway.app/password/reset?token=t");
   });
 
   it("sert une page qui ouvre l'app avec le secret, sans le laisser s'échapper", async () => {

@@ -193,12 +193,12 @@ struct CoverCarouselView: View {
             case .style(let style):
                 plate(style: style, photo: model.cover.flatMap(model.photo(of:)))
                     .accessibilityLabel(BookCopy.Covers.Voice.style(style.name))
-                    // « Assortie à votre 1e de couverture » : la maquette ne la
-                    // pose que sur le plat de quatrième qui reprend le style du
-                    // devant, et c'est la seule chose que le carrousel dise
-                    // avec des mots.
+                    // « Assortie à ta 1ère de couverture » : sur le plat qui
+                    // reprend le style **choisi** de l'autre côté — et c'est la
+                    // seule chose que le carrousel dise avec des mots. Elle
+                    // suit le devant quand on le change (Clara, 17/09/2026).
                     .overlay(alignment: .top) {
-                        if style.isMatched, isSelected {
+                        if isSelected, model.covers?.isMatched(style, on: model.face) == true {
                             MatchedStyleTag().offset(y: -MemoBookSpacing.snug)
                         }
                     }
@@ -366,12 +366,8 @@ enum CoverCarouselItem: Identifiable, Hashable {
     }
 }
 
-/// « Assortie à votre 1e de couverture », posée au-dessus du plat de quatrième
-/// qui reprend le style du devant.
-///
-/// ⚠️ La phrase **vouvoie** et écrit « 1e » là où l'ordinal abrégé s'écrit
-/// « 1re » — ce sont les coquilles de la maquette, recopiées telles quelles
-/// (R8) et signalées.
+/// « Assortie à ta 1ère de couverture », posée au-dessus du plat qui reprend
+/// le style choisi de l'autre côté.
 private struct MatchedStyleTag: View {
     var body: some View {
         Text(BookCopy.Covers.matchedStyle)

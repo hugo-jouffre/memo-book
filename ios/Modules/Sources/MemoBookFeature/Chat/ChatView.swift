@@ -36,6 +36,12 @@ public struct ChatView: View {
     private let outbox: RecordingOutbox?
     private let archive: ConversationArchive?
 
+    /// On arrive avec un vocal enregistré depuis l'accueil. Le fil a déjà
+    /// beaucoup à faire — poser la bulle, suivre la transcription, défiler —
+    /// et la bannière d'aperçu n'y ajoute que du mouvement : elle ne descend
+    /// pas à l'ouverture dans ce cas (Hugo, 18/09/2026).
+    private let arrivesWithRecording: Bool
+
     @State private var model: ChatModel
 
     @Environment(\.dismiss) private var dismiss
@@ -54,8 +60,8 @@ public struct ChatView: View {
     @FocusState private var isWriting: Bool
 
     /// Le parcours d'ajout de photos : autorisation, feuille de choix,
-    /// photothèque ou appareil photo. Voir ``ChatPhotoFlow``.
-    @State private var photos = ChatPhotoFlow()
+    /// photothèque ou appareil photo. Voir ``PhotoFlow``.
+    @State private var photos = PhotoFlow()
 
     /// Le paywall, ouvert par le micro quand les étapes offertes sont épuisées
     /// — le même verrou que sur l'accueil et sur un voyage.
@@ -86,10 +92,12 @@ public struct ChatView: View {
         self.outbox = outbox
         self.archive = archive
         self.onIntent = onIntent
+        self.arrivesWithRecording = handoff != nil
         let model = ChatModel(tripId: tripId, focusStepId: stepId, archive: archive)
         if let handoff { model.expect(handoff) }
         _model = State(initialValue: model)
         _pendingFocus = State(initialValue: stepId)
+        _showsPreviewBanner = State(initialValue: handoff == nil)
     }
 
     /// Pour les aperçus et les tests, qui fournissent leur propre source.
@@ -103,6 +111,7 @@ public struct ChatView: View {
         self.outbox = nil
         self.archive = nil
         self.onIntent = onIntent
+        self.arrivesWithRecording = false
         _model = State(initialValue: model)
         _pendingFocus = State(initialValue: stepId)
     }
@@ -116,6 +125,56 @@ public struct ChatView: View {
     /// puisqu'elle ne mesure rien pendant le défilement.
     private static let bottomAnchor = "chat-bottom"
 
+    /// L'espace de coordonnées du fil, pour mesurer de combien il a défilé.
+    private static let scrollSpace = "chat-scroll"
+
+    // MARK: La bannière « Ton carnet prend forme »
+
+    /// La bannière d'aperçu en direct est **posée sur le fil**, pas dedans
+    /// (Hugo, 17/09/2026).
+    ///
+    /// **Une règle, et deux sens** (Hugo, 19/09/2026) : on remonte vers les
+    /// anciens messages, elle vient ; on redescend vers les récents, elle s'en
+    /// va. Rien d'autre. Elle allait et venait trop vite — trois seuils se
+    /// contredisaient : elle apparaissait à 80 pt de remontée et **repartait**
+    /// à 200 pt du même geste, c'est-à-dire au milieu du défilement qui venait
+    /// de la faire venir.
+    ///
+    /// **Le temps ne la reprend qu'à l'arrivée.** Elle se montre quatre
+    /// secondes en ouvrant le fil, puis se retire. Rappelée par un geste, en
+    /// revanche, elle **reste** : c'est une descente qui la renvoie, et rien
+    /// d'autre. Un minuteur qui l'effaçait pendant qu'on lisait faisait
+    /// exactement ce que Hugo décrit — elle allait et venait toute seule.
+    @State private var showsPreviewBanner = true
+
+    /// Le retrait différé de la bannière. Une tâche et non un minuteur : elle
+    /// s'annule quand on quitte le fil, et se relance à chaque remontée.
+    @State private var bannerLingerTask: Task<Void, Never>?
+
+    /// Le bas de l'en-tête, en coordonnées globales : la bannière se pose
+    /// juste dessous. Le bas et non la hauteur — l'en-tête s'étend sous la
+    /// barre d'état, et sa hauteur comptée depuis le haut du fil la posait
+    /// soixante points trop bas.
+    @State private var headerBottom: CGFloat = 0
+
+    /// Le haut du contenu dans l'espace du fil, à la dernière mesure. `nil`
+    /// avant la première : la première mesure n'est pas un mouvement.
+    @State private var lastContentTop: CGFloat?
+
+    /// De combien on a remonté (vers les anciens messages) sans redescendre,
+    /// et l'inverse. Un changement de sens remet l'autre compteur à zéro.
+    @State private var scrolledUp: CGFloat = 0
+    @State private var scrolledDown: CGFloat = 0
+
+    /// Les seuils de la bannière — voir ``showsPreviewBanner``.
+    ///
+    /// Remonter demande un geste franc (60 pt) ; redescendre en demande un
+    /// aussi (40 pt, et non 20 : à vingt points, le rebond d'un doigt qui
+    /// s'arrête suffisait à la faire partir).
+    private static let bannerRevealDistance: CGFloat = 60
+    private static let bannerDismissDistance: CGFloat = 40
+    private static let bannerLinger: Duration = .seconds(4)
+
     public var body: some View {
         Group {
             if let thread = model.thread {
@@ -127,7 +186,7 @@ public struct ChatView: View {
             }
         }
         .background(BrandBackdrop())
-        .chatPhotoFlow(photos) { model.sendPhotos($0) }
+        .photoFlow(photos) { model.sendPhotos($0) }
         .brandHiddenNavigationBar()
         // Le crème de la marque ne se retourne pas en sombre — voir
         // `MemoBookColor`.
@@ -172,11 +231,6 @@ public struct ChatView: View {
                 LazyVStack(spacing: ChatMetrics.messageSpacing) {
                     notices
 
-                    if let preview = thread.preview {
-                        ChatPreviewBanner(preview: preview) { onIntent(.openBookPreview(memoId: tripId)) }
-                            .padding(.bottom, MemoBookSpacing.snug)
-                    }
-
                     if thread.isEmpty, let greeting = thread.greeting {
                         ChatGreetingView(greeting: greeting)
                     }
@@ -207,7 +261,17 @@ public struct ChatView: View {
                     reduceMotion ? nil : .smooth(duration: 0.3),
                     value: model.messages.count
                 )
+                // De combien le fil a défilé, lu sur le haut de son contenu.
+                // Un `GeometryReader` en fond, et non `onScrollGeometryChange`
+                // : celui-là est iOS 18, l'app cible iOS 17.
+                .background {
+                    GeometryReader { proxy in
+                        let top = proxy.frame(in: .named(Self.scrollSpace)).minY
+                        Color.clear.onChange(of: top) { _, value in trackScroll(to: value) }
+                    }
+                }
             }
+            .coordinateSpace(name: Self.scrollSpace)
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
             // Une conversation s'ouvre sur sa fin : c'est le dernier message
@@ -221,9 +285,98 @@ public struct ChatView: View {
                 guard isThinking else { return }
                 follow(proxy)
             }
-            .safeAreaInset(edge: .top, spacing: 0) { header(thread) }
+            // **La bannière, par-dessus le fil**, juste sous l'en-tête. Elle
+            // glisse vers le haut avec un rebond quand elle s'en va, et revient
+            // de la même façon. En Reduce Motion, un fondu.
+            .overlay(alignment: .top) {
+                if showsPreviewBanner, let preview = thread.preview {
+                    GeometryReader { proxy in
+                        ChatPreviewBanner(preview: preview) { onIntent(.openBookPreview(memoId: tripId)) }
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, max(0, headerBottom - proxy.frame(in: .global).minY) + MemoBookSpacing.xs)
+                    }
+                    .transition(
+                        reduceMotion
+                            ? .opacity
+                            : .move(edge: .top).combined(with: .opacity)
+                    )
+                }
+            }
+            .animation(
+                reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.55, bounce: 0.35),
+                value: showsPreviewBanner
+            )
+            // Quatre secondes à l'arrivée, puis elle s'en va toute seule. Pas
+            // d'arrivée du tout avec un vocal de l'accueil — voir
+            // ``arrivesWithRecording``.
+            .task(id: thread.preview != nil) {
+                guard thread.preview != nil, !arrivesWithRecording else { return }
+                revealBanner(withdrawing: true)
+            }
+            // Quitter le fil emporte le retrait différé avec lui.
+            .onDisappear {
+                bannerLingerTask?.cancel()
+                bannerLingerTask = nil
+            }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                header(thread)
+                    .onGeometryChange(for: CGFloat.self, of: { $0.frame(in: .global).maxY }) {
+                        headerBottom = $0
+                    }
+            }
             .safeAreaInset(edge: .bottom, spacing: 0) { footer(proxy) }
         }
+    }
+
+    /// Ce que le défilement fait à la bannière — voir ``showsPreviewBanner``.
+    ///
+    /// Le haut du contenu **monte** quand on descend vers les messages récents
+    /// (il devient plus négatif) et **descend** quand on remonte vers les
+    /// anciens. On cumule chaque sens tant qu'il dure ; un changement de sens
+    /// remet l'autre compteur à zéro, pour qu'un tremblement du doigt ne
+    /// compte pas.
+    private func trackScroll(to top: CGFloat) {
+        defer { lastContentTop = top }
+        guard let previous = lastContentTop else { return }
+
+        let delta = top - previous
+        if delta > 0 {
+            scrolledDown = 0
+            scrolledUp += delta
+            // On remonte : elle vient, et le délai repart de zéro tant que le
+            // geste dure. C'est ce qui la fait **rester** pendant qu'on
+            // remonte, au lieu de repartir au milieu du mouvement.
+            if scrolledUp >= Self.bannerRevealDistance { revealBanner() }
+        } else if delta < 0 {
+            scrolledUp = 0
+            scrolledDown -= delta
+            if scrolledDown >= Self.bannerDismissDistance { hideBanner() }
+        }
+    }
+
+    /// Montre la bannière, et la laisse.
+    ///
+    /// - Parameter withdrawing: elle se retire toute seule au bout de
+    ///   ``bannerLinger``. Vrai **à l'arrivée seulement** : c'est une
+    ///   présentation, pas une invitation qu'on garde sous les yeux. Rappelée
+    ///   au doigt, elle attend qu'on redescende.
+    private func revealBanner(withdrawing: Bool = false) {
+        showsPreviewBanner = true
+        bannerLingerTask?.cancel()
+        bannerLingerTask = nil
+
+        guard withdrawing else { return }
+        bannerLingerTask = Task {
+            try? await Task.sleep(for: Self.bannerLinger)
+            guard !Task.isCancelled else { return }
+            showsPreviewBanner = false
+        }
+    }
+
+    private func hideBanner() {
+        bannerLingerTask?.cancel()
+        bannerLingerTask = nil
+        showsPreviewBanner = false
     }
 
     private func header(_ thread: ChatThread) -> some View {

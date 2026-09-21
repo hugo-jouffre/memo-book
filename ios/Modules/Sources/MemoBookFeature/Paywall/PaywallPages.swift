@@ -71,12 +71,12 @@ struct PaywallStoriesBar: View {
 
 /// Un segment de la barre.
 ///
-/// **Les sauts s'animent, le remplissage non.** En avançant, la barre qu'on
-/// quitte passe de sa part à 1 : elle *finit* de se remplir, en un tiers de
-/// seconde, au lieu de sauter. En revenant, celle qu'on rouvre retombe à 0 de la
-/// même façon, puis repart de zéro. Le remplissage continu, lui, est piloté
-/// image par image par la barre et n'a rien à lisser — l'animer lui ferait
-/// prendre du retard sur le minuteur.
+/// **Rien ne s'anime ici.** Le remplissage continu est piloté image par image
+/// par la barre, et les sauts — la barre qu'on quitte passe à 1, celle qu'on
+/// rouvre retombe à 0 — sont **instantanés** (Clara, 17/09/2026) : le tiers de
+/// seconde qui les lissait se lisait encore comme la barre d'avant qui se
+/// remplit, et deux barres qui bougent ensemble ne se lisent plus comme une
+/// suite d'écrans.
 private struct PaywallStorySegment: View {
     let share: Double
 
@@ -91,7 +91,7 @@ private struct PaywallStorySegment: View {
                 }
             }
             .frame(height: PaywallMetrics.storyBarHeight)
-            .animation(share == 0 || share == 1 ? .easeOut(duration: 0.3) : nil, value: share)
+            .animation(nil, value: share)
     }
 }
 
@@ -105,6 +105,11 @@ struct PaywallSquiggle<S: Shape>: View {
     let shape: S
     let lineWidthRatio: CGFloat
     let aspectRatio: CGFloat
+
+    /// De combien le trait dépasse de chaque côté — voir ``bleed``. Zéro pour
+    /// le soulignement d'un titre, qui doit tenir **sous les mots** et non les
+    /// déborder.
+    var bleedRatio: CGFloat = PaywallSquiggle.bleed
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var drawn: CGFloat = 0
@@ -120,11 +125,11 @@ struct PaywallSquiggle<S: Shape>: View {
     /// arrondis, et se lit alors comme un objet posé là plutôt que comme un
     /// geste qui traverse la page. Douze pour cent de chaque côté suffisent à
     /// les sortir du cadre sur tous les formats, y compris le SE.
-    private static var bleed: CGFloat { 0.12 }
+    static var bleed: CGFloat { 0.12 }
 
     var body: some View {
         GeometryReader { proxy in
-            BleedingShape(base: shape, bleed: Self.bleed)
+            BleedingShape(base: shape, bleed: bleedRatio)
                 .trim(from: 0, to: drawn)
                 .stroke(
                     MemoBookColor.outline,
@@ -165,8 +170,23 @@ private struct BleedingShape<Base: Shape>: Shape {
     /// Part de la largeur ajoutée de chaque côté.
     let bleed: CGFloat
 
+    /// ⚠️ **Le cadre élargi doit être *recentré*, pas seulement élargi.**
+    ///
+    /// `insetBy(dx: -…)` rend bien un rectangle plus large, et son origine
+    /// passe en négatif — mais les tracés de `BrandStrokes` rapportent leurs
+    /// points à `rect.width` et `rect.height` **sans jamais lire
+    /// `rect.origin`**. Le débordement partait donc entièrement vers la
+    /// droite : le trait sortait parfaitement de l'écran par la droite, et
+    /// commençait pile au bord gauche au lieu de venir du hors-champ (Hugo,
+    /// 19/09/2026). On construit donc le chemin dans un cadre à l'origine, puis
+    /// on le décale de la moitié du débordement.
     func path(in rect: CGRect) -> Path {
-        base.path(in: rect.insetBy(dx: -rect.width * bleed, dy: 0))
+        let margin = rect.width * bleed
+        let widened = CGRect(
+            origin: .zero,
+            size: CGSize(width: rect.width + margin * 2, height: rect.height)
+        )
+        return base.path(in: widened).offsetBy(dx: -margin, dy: 0)
     }
 }
 
@@ -373,6 +393,13 @@ struct PaywallOffer: View {
     /// le paywall pour la même raison.
     let onSubscribe: () -> Void
 
+    /// Le tapotis sur la moitié gauche : **reculer d'un écran**, comme sur les
+    /// deux premiers (T132, T135). La `ScrollView` prend le doigt avant les
+    /// zones que le paywall pose sous lui ; la zone vit donc **dans** son
+    /// contenu, derrière les cartes, qui laissent passer le tapotis partout
+    /// sauf sur leur pastille.
+    var onBack: () -> Void = {}
+
     /// La hauteur du pied, mesurée : c'est elle qu'il faut retirer de la page
     /// pour centrer le contenu dans ce qu'on **voit**. Le `GeometryReader`
     /// mesure la page entière, pied compris ; centré sur cette hauteur-là, le
@@ -409,6 +436,10 @@ struct PaywallOffer: View {
                                 argument: argument,
                                 onPill: argument.pill == nil ? nil : onEstimate
                             )
+                            // Une carte de décor laisse passer le tapotis
+                            // jusqu'à la zone de retour ; celle qui porte la
+                            // pastille garde le doigt pour elle.
+                            .allowsHitTesting(argument.pill != nil)
                         }
                     }
 
@@ -420,6 +451,16 @@ struct PaywallOffer: View {
                 // Assez haut pour que les deux ressorts centrent le contenu
                 // dans la zone visible quand il y tient ; au-delà, il défile.
                 .frame(minHeight: max(0, proxy.size.height - footerHeight))
+                // La moitié gauche recule d'un écran ; la droite ne fait rien,
+                // c'est le dernier. Derrière le contenu, pour que la pastille
+                // et le bouton gagnent toujours.
+                .background {
+                    HStack(spacing: 0) {
+                        Color.clear.contentShape(.rect).onTapGesture(perform: onBack)
+                        Color.clear
+                    }
+                    .accessibilityHidden(true)
+                }
             }
             .scrollIndicators(.hidden)
             .scrollBounceBehavior(.basedOnSize)
@@ -457,7 +498,14 @@ struct PaywallOffer: View {
     private var footer: some View {
         VStack(spacing: MemoBookSpacing.s) {
             VStack(spacing: MemoBookSpacing.xs / 2) {
-                ForEach(PaywallCopy.offerFootnote(price: price), id: \.self) { line in
+                let renewal = PaywallCopy.offerFootnotePrice(price: price)
+                (Text(renewal.lead).font(MemoBookFont.taglineRegular)
+                    + Text(renewal.price).font(MemoBookFont.tagline))
+                    .foregroundStyle(MemoBookColor.ink)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                ForEach(PaywallCopy.offerFootnote(price: price).dropFirst(), id: \.self) { line in
                     Text(line)
                         .font(MemoBookFont.taglineRegular)
                         .foregroundStyle(MemoBookColor.ink)
@@ -519,7 +567,7 @@ struct PaywallArgumentCard: View {
                 .rotationEffect(.degrees(-argument.tilt))
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
+            VStack(alignment: .leading, spacing: MemoBookSpacing.xs / 2) {
                 Text(argument.title)
                     .font(MemoBookFont.tagline)
                 Text(argument.detail)
@@ -555,7 +603,10 @@ struct PaywallArgumentCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, MemoBookSpacing.xs)
-        .padding(.vertical, 14)
+        // 10 pt et non 14 : les quatre cartes empilées prenaient assez de
+        // hauteur pour pousser le titre hors de l'écran sur un iPhone SE, et
+        // l'offre se lit d'un bloc ou ne se lit pas (Hugo, 19/09/2026).
+        .padding(.vertical, MemoBookSpacing.xs + 2)
         .background(MemoBookColor.background, in: shape)
         .overlay { shape.strokeBorder(MemoBookColor.outline, lineWidth: 1) }
         .rotationEffect(.degrees(argument.tilt))
@@ -589,23 +640,52 @@ struct PaywallTitle: View {
     var isUnderlined = false
 
     var body: some View {
-        (Text(lead).font(MemoBookFont.h1Light) + Text(strong).font(MemoBookFont.h1))
-            .foregroundStyle(MemoBookColor.ink)
-            .tracking(-0.41)
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
-            .overlay(alignment: .bottomTrailing) {
-                if isUnderlined {
-                    PaywallSquiggle(
-                        shape: BrandUnderline(),
-                        lineWidthRatio: BrandUnderline.lineWidthRatio,
-                        aspectRatio: BrandUnderline.size.width / BrandUnderline.size.height
-                    )
-                    // Le trait souligne les derniers mots : il tient la moitié
-                    // de la colonne et s'aligne sur leur fin.
-                    .frame(width: 143)
-                    .offset(y: MemoBookSpacing.xs / 2)
-                }
-            }
+        VStack(spacing: 0) {
+            Text(lead)
+                .font(MemoBookFont.h1Light)
+
+            // **Les mots forts sur leur propre ligne.**
+            //
+            // Ils étaient dans la même phrase que l'amorce, et le trait qui les
+            // souligne se posait donc sous une ligne dont ils n'occupent que la
+            // fin : calé à droite du bloc il débordait, centré sur le bloc il
+            // glissait vers la gauche. Aucun des deux n'est « exactement sous
+            // le texte en gras », ce que Hugo demande (19/09/2026), et le savoir
+            // demanderait de mesurer la dernière ligne — ce que SwiftUI ne dit
+            // pas avant iOS 18.
+            //
+            // Sur leur ligne, la question ne se pose plus : le trait fait leur
+            // largeur, sous eux. Et la phrase se lit mieux — c'est bien la fin
+            // qui pèse.
+            Text(strong)
+                .font(MemoBookFont.h1)
+                .overlay(alignment: .bottom) { underline }
+        }
+        .foregroundStyle(MemoBookColor.ink)
+        .tracking(-0.41)
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(lead + strong)
+    }
+
+    /// Le trait sous les derniers mots : leur largeur exacte, et sans
+    /// débordement — un soulignement n'a pas à sortir de l'écran,
+    /// contrairement aux grands gestes qui traversent les pages.
+    @ViewBuilder
+    private var underline: some View {
+        if isUnderlined {
+            PaywallSquiggle(
+                shape: BrandUnderline(),
+                lineWidthRatio: BrandUnderline.lineWidthRatio,
+                aspectRatio: BrandUnderline.size.width / BrandUnderline.size.height,
+                bleedRatio: 0
+            )
+            .alignmentGuide(.bottom) { _ in 0 }
+            // Sous les jambages, pas dedans : le « p » et le « g » de
+            // « 40 pages ! » descendent sous la ligne de base.
+            .offset(y: MemoBookSpacing.xs + 2)
+            .accessibilityHidden(true)
+        }
     }
 }

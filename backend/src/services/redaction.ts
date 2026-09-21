@@ -63,6 +63,150 @@ export interface RedactionInput {
   previous: RedactedNeighbour[];
 }
 
+/**
+ * Les moyens de transport que la rédaction sait nommer. Fermée, parce que
+ * l'app en écrit le libellé et l'accord — « 2 trains », « scooter » — et
+ * qu'une valeur libre ne se compte pas d'un souvenir à l'autre.
+ *
+ * Plus large que `TripTransport` (ce qu'on déclare entre deux étapes) : un
+ * récit parle aussi de métro, de taxi et de scooter, et c'est précisément ce
+ * que le profil veut compter.
+ */
+export const TRANSPORT_KINDS = [
+  "plane",
+  "train",
+  "bus",
+  "car",
+  "boat",
+  "bike",
+  "walk",
+  "scooter",
+  "motorbike",
+  "metro",
+  "taxi",
+] as const;
+
+export type TransportKind = (typeof TRANSPORT_KINDS)[number];
+
+/**
+ * Ce que la rédaction **relève** dans un souvenir pour les statistiques du
+ * profil. Un relevé par étape, additionné à la lecture par
+ * `travelStatistics.ts` ; rien ici n'est un total.
+ *
+ * Tout est nullable ou vide par défaut, et c'est le contrat : un chiffre que
+ * le récit ne donne pas ne s'invente pas. « On a pris le train » compte un
+ * train ; « on a passé la semaine en scooter » compte un scooter **sans
+ * nombre** (`count: null`) — l'app l'écrit alors sans chiffre, comme la
+ * maquette.
+ */
+export interface EntryInsights {
+  /** Pays cités comme visités, en ISO 3166-1 alpha-2 et avec leur nom français. */
+  countries: { code: string; name: string }[];
+  /** Régions, provinces ou îles traversées — « Toscane », « Latium ». */
+  regions: string[];
+  /** Villes et villages où le voyageur a été. */
+  cities: string[];
+  /** Combien de personnes rencontrées — nommées ou comptées dans le récit. */
+  peopleMet: number;
+  /** Kilomètres parcourus **dans cette étape**, quand le récit permet de les estimer. */
+  distanceKilometres: number | null;
+  /** Les moyens de transport employés, avec le nombre de trajets quand il est dit. */
+  transports: { kind: TransportKind; count: number | null }[];
+  /** Où le voyageur se trouve en racontant — la ville, telle qu'on la dirait. */
+  currentPlace: string | null;
+}
+
+export const EMPTY_INSIGHTS: EntryInsights = {
+  countries: [],
+  regions: [],
+  cities: [],
+  peopleMet: 0,
+  distanceKilometres: null,
+  transports: [],
+  currentPlace: null,
+};
+
+const TRANSPORT_KIND_SET: ReadonlySet<string> = new Set(TRANSPORT_KINDS);
+
+function cleanStrings(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string") continue;
+    const trimmed = item.trim();
+    if (!trimmed || seen.has(trimmed.toLowerCase())) continue;
+    seen.add(trimmed.toLowerCase());
+    out.push(trimmed);
+  }
+  return out;
+}
+
+function finiteOrNull(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+/**
+ * Le relevé, relu de façon défensive — modèle comme base : un champ absent ou
+ * d'une forme inattendue devient sa valeur vide, jamais une exception. Un
+ * relevé raté ne doit pas faire échouer un souvenir dont le texte est bon,
+ * et une colonne écrite par une version plus ancienne du schéma doit se lire
+ * encore.
+ *
+ * Les doublons et les transports inconnus sont écartés ici, une fois, plutôt
+ * que dans chaque lecteur.
+ */
+export function parseInsights(value: unknown): EntryInsights {
+  if (!value || typeof value !== "object") return EMPTY_INSIGHTS;
+  const candidate = value as Record<string, unknown>;
+
+  const countries: EntryInsights["countries"] = [];
+  const seenCodes = new Set<string>();
+  if (Array.isArray(candidate["countries"])) {
+    for (const item of candidate["countries"]) {
+      if (!item || typeof item !== "object") continue;
+      const { code, name } = item as Record<string, unknown>;
+      if (typeof code !== "string" || typeof name !== "string") continue;
+      const upper = code.trim().toUpperCase();
+      if (!/^[A-Z]{2}$/.test(upper) || seenCodes.has(upper)) continue;
+      seenCodes.add(upper);
+      countries.push({ code: upper, name: name.trim() || upper });
+    }
+  }
+
+  const transports: EntryInsights["transports"] = [];
+  const seenKinds = new Set<string>();
+  if (Array.isArray(candidate["transports"])) {
+    for (const item of candidate["transports"]) {
+      if (!item || typeof item !== "object") continue;
+      const { kind, count } = item as Record<string, unknown>;
+      if (typeof kind !== "string" || !TRANSPORT_KIND_SET.has(kind) || seenKinds.has(kind)) continue;
+      seenKinds.add(kind);
+      const rides = finiteOrNull(count);
+      transports.push({
+        kind: kind as TransportKind,
+        count: rides === null ? null : Math.round(rides),
+      });
+    }
+  }
+
+  const peopleMet = finiteOrNull(candidate["peopleMet"]);
+  const currentPlace =
+    typeof candidate["currentPlace"] === "string" && candidate["currentPlace"].trim()
+      ? candidate["currentPlace"].trim()
+      : null;
+
+  return {
+    countries,
+    regions: cleanStrings(candidate["regions"]),
+    cities: cleanStrings(candidate["cities"]),
+    peopleMet: peopleMet === null ? 0 : Math.round(peopleMet),
+    distanceKilometres: finiteOrNull(candidate["distanceKilometres"]),
+    transports,
+    currentPlace,
+  };
+}
+
 export interface RedactionResult {
   title: string;
   text: string;
@@ -70,6 +214,8 @@ export interface RedactionResult {
   funFact: string | null;
   funFactTitle: string | null;
   coherenceSheet: CoherenceSheet;
+  /** Le relevé pour les statistiques — voir `EntryInsights`. */
+  insights: EntryInsights;
   /** Modèle qui a produit le texte, tracé sur l'entrée. */
   model: string;
 }
@@ -182,8 +328,93 @@ const REDACTION_SCHEMA = {
       required: ["people", "places", "lexicon", "narration", "figures"],
       additionalProperties: false,
     },
+    insights: {
+      type: "object",
+      description:
+        "Ce que ce souvenir apporte aux statistiques du voyage. Un relevé de CETTE étape seulement, " +
+        "jamais un total du carnet. Ne rien inventer : ce que le récit ne dit pas reste vide ou null.",
+      properties: {
+        countries: {
+          type: "array",
+          description: "Les pays où le voyageur a été pendant cette étape.",
+          items: {
+            type: "object",
+            properties: {
+              code: { type: "string", description: "Code ISO 3166-1 alpha-2, en majuscules : IT, FR." },
+              name: { type: "string", description: "Le nom du pays en français : Italie, France." },
+            },
+            required: ["code", "name"],
+            additionalProperties: false,
+          },
+        },
+        regions: {
+          type: "array",
+          description: "Régions, provinces ou îles traversées, en français : Toscane, Latium, Sicile.",
+          items: { type: "string" },
+        },
+        cities: {
+          type: "array",
+          description: "Villes et villages où le voyageur a été. Pas les quartiers ni les monuments.",
+          items: { type: "string" },
+        },
+        peopleMet: {
+          type: "integer",
+          description:
+            "Combien de personnes le voyageur a rencontrées dans cette étape : nommées, ou comptées " +
+            "(« un couple d'Australiens » = 2). 0 si le récit n'en parle pas. Jamais les compagnons de voyage.",
+        },
+        distanceKilometres: {
+          anyOf: [{ type: "number" }, { type: "null" }],
+          description:
+            "Kilomètres parcourus pendant cette étape, si le récit permet de les estimer (une distance dite, " +
+            "un trajet entre deux villes connues). null sinon. Arrondir : au km sous 100, à la dizaine au-delà.",
+        },
+        transports: {
+          type: "array",
+          description: "Les moyens de transport employés dans cette étape.",
+          items: {
+            type: "object",
+            properties: {
+              kind: { type: "string", enum: [...TRANSPORT_KINDS] },
+              count: {
+                anyOf: [{ type: "integer" }, { type: "null" }],
+                description:
+                  "Le nombre de trajets, quand le récit le dit (« deux trains » = 2, « on a pris l'avion » = 1). " +
+                  "null quand le moyen est utilisé sans se compter (« la semaine en scooter »).",
+              },
+            },
+            required: ["kind", "count"],
+            additionalProperties: false,
+          },
+        },
+        currentPlace: {
+          anyOf: [{ type: "string" }, { type: "null" }],
+          description:
+            "La ville où le voyageur se trouve en racontant — telle qu'on la dirait : « Rome ». " +
+            "null si le récit ne permet pas de le dire.",
+        },
+      },
+      required: [
+        "countries",
+        "regions",
+        "cities",
+        "peopleMet",
+        "distanceKilometres",
+        "transports",
+        "currentPlace",
+      ],
+      additionalProperties: false,
+    },
   },
-  required: ["title", "text", "weatherKey", "funFact", "funFactTitle", "coherenceSheet"],
+  required: [
+    "title",
+    "text",
+    "weatherKey",
+    "funFact",
+    "funFactTitle",
+    "coherenceSheet",
+    "insights",
+  ],
   additionalProperties: false,
 } as const;
 
@@ -288,6 +519,10 @@ export class AnthropicRedactor implements Redactor {
       "  page s'en charge.",
       "- Tout ce que tu écris dans `text` doit se retrouver dans la transcription",
       "  ci-dessus. La culture générale va dans `funFact`, jamais dans le récit.",
+      "- `insights` : ce que **cette étape** apporte aux statistiques du profil —",
+      "  pays, régions, villes, personnes rencontrées, kilomètres, transports, et la",
+      "  ville où le voyageur se trouve. Un relevé, pas un total : ne reprends rien",
+      "  des étapes précédentes, et n'invente aucun chiffre que le récit ne donne pas.",
     );
 
     return lines.join("\n");
@@ -367,7 +602,31 @@ export class FakeRedactor implements Redactor {
       // La fiche est propagée telle quelle : le faux rédacteur ne prétend pas
       // tenir une cohérence, mais il ne la détruit pas non plus.
       coherenceSheet: input.coherenceSheet,
+      insights: FakeRedactor.insightsFrom(input.entry),
       model: "fake-redactor",
+    };
+  }
+
+  /**
+   * Un relevé **sans modèle**, tiré de ce que l'app a déclaré : le lieu du
+   * souvenir. « Trastevere, Rome » donne la ville Rome ; les kilomètres, les
+   * rencontres et les transports restent vides, parce que rien ne les lit.
+   *
+   * C'est ce qui fait vivre les statistiques en développement — le profil
+   * voit une ville apparaître à chaque souvenir — sans prétendre à ce que
+   * seule la vraie rédaction sait relever.
+   */
+  static insightsFrom(entry: { placeLabel: string | null }): EntryInsights {
+    const parts = (entry.placeLabel ?? "")
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean);
+    const city = parts.length > 1 ? (parts[parts.length - 1] ?? null) : null;
+
+    return {
+      ...EMPTY_INSIGHTS,
+      cities: city ? [city] : [],
+      currentPlace: city,
     };
   }
 }

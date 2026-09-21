@@ -57,8 +57,34 @@ public enum TripCreationStep: Int, CaseIterable, Sendable, Hashable {
     ///
     /// La création ne se fait pas au « Commencer ! » de la fin : la dernière
     /// étape ne montre que le code d'accès, et un code d'accès désigne un
-    /// voyage. Le carnet part donc à la validation de l'avant-dernière.
-    static var lastBeforeSave: TripCreationStep { .ratio }
+    /// voyage. Le carnet part donc à la validation de l'avant-dernière — de
+    /// celles qu'on traverse.
+    static var lastBeforeSave: TripCreationStep {
+        let index = active.firstIndex(of: .companions) ?? active.endIndex
+        return active[max(0, index - 1)]
+    }
+
+    /// Les étapes **qu'on traverse**, dans l'ordre. Le contexte (les thèmes)
+    /// et le ratio image / texte sont **retirés du parcours pour le moment**
+    /// (Hugo, 17/09/2026) : leur code reste — écran, modèle, brouillon —, et
+    /// le brouillon part avec leurs valeurs par défaut. Les remettre, c'est
+    /// une ligne ici.
+    static let active: [TripCreationStep] = [.name, .dates, .notifications, .companions]
+
+    /// L'étape qui suit celle-ci dans le parcours, `nil` sur la dernière.
+    var next: TripCreationStep? {
+        guard let index = Self.active.firstIndex(of: self) else { return nil }
+        return Self.active.indices.contains(index + 1) ? Self.active[index + 1] : nil
+    }
+
+    /// L'étape qui précède celle-ci dans le parcours, `nil` sur la première.
+    var previous: TripCreationStep? {
+        guard let index = Self.active.firstIndex(of: self), index > 0 else { return nil }
+        return Self.active[index - 1]
+    }
+
+    /// Le rang de l'étape dans le parcours, pour la frise.
+    var position: Int { Self.active.firstIndex(of: self) ?? 0 }
 }
 
 /// Ce que sait faire la création d'un voyage : garder le brouillon des six
@@ -71,7 +97,7 @@ public enum TripCreationStep: Int, CaseIterable, Sendable, Hashable {
 @MainActor
 @Observable
 public final class TripCreationModel {
-    public private(set) var step: TripCreationStep = .theme
+    public private(set) var step: TripCreationStep = TripCreationStep.active[0]
 
     /// Le brouillon, rempli étape par étape. Il ne part **qu'une fois**, à la
     /// fin de l'avant-dernière : six requêtes pour un formulaire qu'on peut
@@ -156,8 +182,18 @@ public final class TripCreationModel {
         }
     }
 
-    /// La frise : une barre par étape, la verte étant celle-ci.
-    public var progress: Int { step.rawValue }
+    /// La frise : une barre par étape traversée, la verte étant celle-ci.
+    public var progress: Int { step.position }
+
+    /// Combien d'étapes le parcours compte — pour la frise et VoiceOver.
+    public var stepCount: Int { TripCreationStep.active.count }
+
+    /// Le glissé vers l'avant vaut « Valider » : il n'avance que si l'étape
+    /// le permet, comme le bouton.
+    public var canAdvance: Bool { canValidate && step != .companions }
+
+    /// Le glissé vers l'arrière n'a d'effet que s'il y a une étape avant.
+    public var canGoBack: Bool { step.previous != nil }
 
     // MARK: - Aller et venir
 
@@ -199,7 +235,7 @@ public final class TripCreationModel {
     /// alors à l'écran de se refermer, pas au modèle.
     @discardableResult
     public func goBack() -> Bool {
-        guard let previous = TripCreationStep(rawValue: step.rawValue - 1) else { return false }
+        guard let previous = step.previous else { return false }
         errorMessage = nil
         step = previous
         return true
@@ -223,7 +259,7 @@ public final class TripCreationModel {
             guard await save() else { return }
         }
 
-        guard let next = TripCreationStep(rawValue: step.rawValue + 1) else { return }
+        guard let next = step.next else { return }
         step = next
     }
 

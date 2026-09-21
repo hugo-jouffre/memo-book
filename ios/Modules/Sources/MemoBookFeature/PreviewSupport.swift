@@ -201,6 +201,8 @@ public actor PreviewAPI: MemoBookAPI {
 
     public func profile() async throws -> TravellerProfile { editedProfile ?? .fixture }
 
+    public func travelStatistics() async throws -> TravelStatistics { .fixture }
+
     public func updateProfile(_ edit: ProfileEdit) async throws -> TravellerProfile {
         // Le double garde ce qu'on lui écrit : un aperçu où l'on corrige son
         // prénom doit montrer le prénom corrigé, pas retomber sur le jeu
@@ -214,6 +216,33 @@ public actor PreviewAPI: MemoBookAPI {
             address.countryName = profile.shippingCountry(code: address.country)?.name ?? address.country
             profile.address = address
         }
+        if let gender = edit.gender { profile.gender = gender }
+        editedProfile = profile
+        return profile
+    }
+
+    /// L'abonnement se referme **dans le double**, comme le reste : rouvrir la
+    /// feuille doit montrer quelqu'un de résilié, pas l'abonné du jeu d'essai.
+    /// La semaine réglée (`paidThrough`) ne bouge pas — c'est elle qui donne
+    /// son sursis, et c'est ce qu'on vient vérifier à l'écran.
+    public func cancelSubscription(
+        reason: SubscriptionCancellationReason?
+    ) async throws -> TravellerProfile {
+        _ = reason
+        var profile = editedProfile ?? .fixture
+        profile.subscription.isActive = false
+        profile.subscription.cancelledAt = .now
+        editedProfile = profile
+        return profile
+    }
+
+    /// La photo reste sur le disque de l'aperçu, et le profil pointe dessus :
+    /// c'est ce qui permet de voir sa photo changer sans serveur.
+    public func uploadAvatar(data: Data, mimeType: String) async throws -> TravellerProfile {
+        var profile = editedProfile ?? .fixture
+        let url = URL.cachesDirectory.appending(path: "preview-avatar-\(UUID().uuidString).jpg")
+        try data.write(to: url, options: .atomic)
+        profile.avatarUrl = url
         editedProfile = profile
         return profile
     }

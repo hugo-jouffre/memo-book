@@ -7,7 +7,20 @@ import { connectorByKey } from "../services/connectorCatalog.js";
 import { findShippingCountry } from "../services/shippingCountries.js";
 import { linkDeviceToAccount, visibleToAccount } from "../services/memoOwnership.js";
 import { hashDeviceToken } from "../lib/auth.js";
+import {
+  aggregateTravelStatistics,
+  memoStatisticsSelect,
+  type TravelStatistics,
+} from "../services/travelStatistics.js";
+import {
+  AVATAR_FILENAME,
+  AVATAR_PREFIX,
+  avatarMimeType,
+} from "../services/avatars.js";
 import { serializeProfile, type TripForProfileStats } from "./appSerializers.js";
+
+/** Une photo de profil ne pèse pas plus : l'app la réduit avant de l'envoyer. */
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 
 /**
  * L'écran de profil : ce qu'il montre, et ce qu'on y change.
@@ -50,6 +63,9 @@ const updateBody = z.object({
   firstName: nullableText(100),
   lastName: nullableText(100),
   phoneNumber: nullableText(40),
+  // Ce que la personne dit d'elle-même : un des trois choix, jamais `null` —
+  // « je ne préfère pas répondre » est une réponse, pas une absence.
+  gender: z.enum(["female", "male", "undisclosed"]).optional(),
   wantsNewsletter: z.boolean().optional(),
   address: z
     .object({
@@ -66,6 +82,17 @@ const connectorParams = z.object({ key: z.string().min(1).max(64) });
 const linkDeviceBody = z.object({ deviceToken: z.string().min(1) });
 
 /**
+ * La raison de la résiliation, facultative.
+ *
+ * Facultative parce qu'elle est un sondage : l'app grise son bouton tant que
+ * rien n'est coché, mais un client plus ancien — ou un rejeu — ne doit pas se
+ * voir refuser une résiliation pour une question de statistique.
+ */
+const cancelSubscriptionBody = z.object({
+  reason: z.string().trim().min(1).max(60).optional(),
+});
+
+/**
  * Les voyages du compte, réduits à ce que la carte de chiffres du profil
  * regarde : combien il y en a, et lequel est en cours. Rien de plus — c'est un
  * comptage, pas une seconde liste d'accueil.
@@ -75,6 +102,23 @@ function profileTrips(context: AppContext, accountId: string): Promise<TripForPr
     where: visibleToAccount(accountId),
     select: { id: true, stage: true, startDate: true, endDate: true },
   });
+}
+
+/**
+ * La feuille « Statistiques » : tous les voyages visibles du compte, réduits
+ * aux colonnes que l'addition regarde — voir `memoStatisticsSelect`. **Une
+ * requête**, et pas une par voyage : la feuille se relit toutes les quelques
+ * secondes tant qu'un souvenir est en cours de rédaction.
+ */
+async function readTravelStatistics(
+  context: AppContext,
+  accountId: string,
+): Promise<TravelStatistics> {
+  const memos = await context.prisma.memo.findMany({
+    where: visibleToAccount(accountId),
+    select: memoStatisticsSelect,
+  });
+  return aggregateTravelStatistics(memos);
 }
 
 /** Ce que `serializeProfile` attend du compte, et rien de plus. */
@@ -146,6 +190,17 @@ function orNull(value: string | null | undefined): string | null | undefined {
 export function registerProfileRoutes(app: FastifyInstance, context: AppContext): void {
   app.get("/v1/profile", async (request) => readProfile(context, accountIdOf(request)));
 
+  /**
+   * Les statistiques du profil, additionnées à la lecture depuis les relevés
+   * de la rédaction. Servies à tout compte : c'est **l'app** qui tient la
+   * ligne sous clé pour un non-abonné, et elle ne demande la feuille qu'une
+   * fois ouverte. Le serveur n'a rien à cacher ici — ce sont les chiffres du
+   * voyageur lui-même.
+   */
+  app.get("/v1/profile/statistics", async (request) =>
+    readTravelStatistics(context, accountIdOf(request)),
+  );
+
   app.patch("/v1/profile", async (request) => {
     const accountId = accountIdOf(request);
     const body = updateBody.parse(request.body ?? {});
@@ -162,6 +217,7 @@ export function registerProfileRoutes(app: FastifyInstance, context: AppContext)
         firstName: orNull(body.firstName),
         lastName: orNull(body.lastName),
         phoneNumber: orNull(body.phoneNumber),
+        ...(body.gender !== undefined ? { gender: body.gender } : {}),
         ...(body.wantsNewsletter !== undefined
           ? { wantsNewsletter: body.wantsNewsletter }
           : {}),
@@ -179,6 +235,104 @@ export function registerProfileRoutes(app: FastifyInstance, context: AppContext)
     // On relit par le **même chemin** que le `GET` : la réponse d'un `PATCH`
     // est ce que l'app garde à l'écran, et un profil amputé de ses commandes ou
     // de ses chiffres les effacerait de la page à chaque correction.
+    return readProfile(context, accountId);
+  });
+
+  /**
+   * La photo de profil — `multipart/form-data`, un champ `file` en `image/*`.
+   *
+   * Elle part dans le stockage des médias sous `avatars/`, et le compte ne
+   * retient que sa **clé** : l'adresse se calcule à la lecture, voir
+   * `services/avatars.ts`. L'ancienne photo est retirée du stockage dans la
+   * foulée — personne ne la lira plus. On relit le profil entier en réponse,
+   * comme le `PATCH` : c'est ce que l'app garde à l'écran.
+   */
+  app.post("/v1/profile/avatar", async (request) => {
+    const accountId = accountIdOf(request);
+
+    const file = await request.file({ limits: { fileSize: MAX_AVATAR_BYTES } });
+    if (!file) throw HttpError.badRequest("Aucun fichier reçu.");
+
+    const buffer = await file.toBuffer();
+    if (buffer.byteLength === 0) throw HttpError.badRequest("Le fichier reçu est vide.");
+
+    const mimeType = file.mimetype;
+    if (mimeType !== "image/jpeg" && mimeType !== "image/png") {
+      throw HttpError.badRequest(
+        `Type d'image non supporté : ${mimeType}. Attendu : image/jpeg ou image/png.`,
+      );
+    }
+
+    // L'extension vient du type, pas du nom envoyé : c'est elle qui dira le
+    // type MIME à la lecture (`avatarMimeType`).
+    const filename = mimeType === "image/png" ? "avatar.png" : "avatar.jpg";
+    const stored = await context.storage.put(AVATAR_PREFIX, filename, buffer, mimeType);
+
+    const previous = await context.prisma.account.findUniqueOrThrow({
+      where: { id: accountId },
+      select: { avatarStorageKey: true },
+    });
+
+    await context.prisma.account.update({
+      where: { id: accountId },
+      data: { avatarStorageKey: stored.storageKey },
+    });
+
+    if (previous.avatarStorageKey) {
+      await context.storage.remove([previous.avatarStorageKey]).catch((cause: unknown) => {
+        request.log.warn({ cause }, "Ancienne photo de profil non retirée du stockage");
+      });
+    }
+
+    return readProfile(context, accountId);
+  });
+
+  /**
+   * Résilie l'abonnement — **et ça tient**.
+   *
+   * Jusqu'au 19/09/2026, les trois feuilles de résiliation ne touchaient que
+   * l'écran : `ProfileModel.cancelSubscription` posait `isActive` à faux dans
+   * sa copie locale et rien ne partait. Le prochain chargement du profil
+   * relisait la ligne `subscriptions` du serveur, toujours active, et la
+   * personne se retrouvait abonnée — après avoir confirmé trois fois.
+   *
+   * **`cancelled`, pas `expired`.** Les deux ferment l'abonnement et les deux
+   * gardent la semaine réglée (`PAID_THROUGH_SUBSCRIPTION`, `quota.ts`), mais
+   * ils ne disent pas la même chose : `expired` est le voyage qui se termine
+   * (`endSubscriptionsWithoutRunningTrip`), `cancelled` est quelqu'un qui s'en
+   * va. La distinction se lit dans l'historique, et c'est elle qui fera voir le
+   * paywall de retour.
+   *
+   * **La semaine payée n'est pas rendue.** `renewsAt` reste tel quel : c'est
+   * lui qui porte le sursis, côté app comme côté verrou d'enregistrement.
+   * Résilier le lundi ne rembourse pas les six jours suivants, et ne ferme donc
+   * pas le micro non plus (Hugo, 16/09/2026).
+   *
+   * **Idempotent.** Résilier deux fois — un double tapotis, une requête
+   * rejouée — n'est pas une erreur : la seconde ne trouve plus d'abonnement
+   * vivant et rend le profil tel quel.
+   *
+   * ⚠️ **Rien n'est annulé chez le fournisseur**, parce qu'il n'y en a pas
+   * encore : aucune route ne crée de ligne `subscriptions`, et StoreKit n'est
+   * pas branché. Le jour où il le sera, la vraie résiliation restera **un geste
+   * de l'utilisateur** dans les réglages iOS — Apple ne laisse aucune app
+   * résilier à la place de son client — et c'est le webhook App Store qui
+   * fermera cette ligne. Cette route deviendra alors ce qu'elle décrit déjà :
+   * l'enregistrement d'une intention, et la raison qui l'accompagne.
+   */
+  app.post("/v1/profile/subscription/cancel", async (request) => {
+    const accountId = accountIdOf(request);
+    const { reason } = cancelSubscriptionBody.parse(request.body ?? {});
+
+    await context.prisma.subscription.updateMany({
+      where: { accountId, status: { in: ["active", "trialing", "past_due"] } },
+      data: {
+        status: "cancelled",
+        cancelledAt: new Date(),
+        ...(reason === undefined ? {} : { cancellationReason: reason }),
+      },
+    });
+
     return readProfile(context, accountId);
   });
 
@@ -249,5 +403,31 @@ export function registerProfileRoutes(app: FastifyInstance, context: AppContext)
     await linkDeviceToAccount(context.prisma, device.id, accountId);
 
     return { deviceId: device.id };
+  });
+}
+
+/**
+ * Sert une photo de profil, **sans session** — `AsyncImage` n'envoie pas
+ * d'en-tête, et l'avatar se montre à ceux qui partagent le voyage. La clé est
+ * un UUID : le nom est entièrement contraint par `AVATAR_FILENAME`, donc ni
+ * `..` ni `/`, et rien à deviner. Mise en cache longue : la clé change à
+ * chaque nouvelle photo, l'ancienne adresse n'a plus à être revalidée.
+ */
+export function registerAvatarRoutes(app: FastifyInstance, context: AppContext): void {
+  app.get("/v1/avatars/:file", async (request, reply) => {
+    const { file } = request.params as { file: string };
+    if (!AVATAR_FILENAME.test(file)) throw HttpError.notFound("Photo introuvable.");
+
+    let body: Buffer;
+    try {
+      body = await context.storage.get(`${AVATAR_PREFIX}/${file}`);
+    } catch {
+      throw HttpError.notFound("Photo introuvable.");
+    }
+
+    return reply
+      .header("Cache-Control", "public, max-age=2592000, immutable")
+      .type(avatarMimeType(file))
+      .send(body);
   });
 }

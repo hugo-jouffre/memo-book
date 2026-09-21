@@ -1,0 +1,244 @@
+import SwiftUI
+
+/// Une action qu'un glissé vers la gauche découvre derrière une carte.
+///
+/// Un rond cerclé de sa couleur, une icône du jeu de marque, et ce que
+/// VoiceOver en dit. La couleur dit le geste : le rouge sémantique pour ce qui
+/// défait, le vert d'action pour le reste.
+public struct BrandSwipeAction: Identifiable {
+    public let id: String
+    let icon: String
+    let tint: Color
+    let label: String
+    /// De combien le glyphe grandit dans son rond, à corriger **au cas par
+    /// cas**. Les tracés du jeu de marque n'occupent pas tous la même part de
+    /// leur boîte : l'imprimante y est dessinée plus petite que la croix et la
+    /// flèche de partage, et à taille égale elle se lisait comme une icône plus
+    /// petite (Hugo, 19/09/2026). C'est un rattrapage optique, pas une mesure —
+    /// d'où le réglage sur l'action et non sur le tiroir.
+    let iconScale: CGFloat
+    let action: () -> Void
+
+    /// - Parameters:
+    ///   - icon: le nom d'une icône monochrome du catalogue (`IconCross`).
+    ///   - tint: la couleur du rond et de l'icône.
+    ///   - label: ce que VoiceOver lit — le rond ne porte pas de mot.
+    ///   - iconScale: voir ``iconScale``. 1 pour la quasi-totalité des tracés.
+    public init(
+        id: String? = nil,
+        icon: String,
+        tint: Color,
+        label: String,
+        iconScale: CGFloat = 1,
+        action: @escaping () -> Void
+    ) {
+        self.id = id ?? icon
+        self.icon = icon
+        self.tint = tint
+        self.label = label
+        self.iconScale = iconScale
+        self.action = action
+    }
+}
+
+/// **Le** tiroir d'actions de MemoBook : une carte qu'on glisse vers la gauche
+/// pour découvrir ses gestes — retirer un co-voyageur, supprimer un voyage,
+/// le partager, le prévisualiser.
+///
+/// C'est le glissé des listes d'iOS, transposé aux cartes de l'app, qui ne
+/// vivent pas dans une `List`. Trois choses le rendent honnête :
+///
+/// - **Vers la gauche seulement, et franchement horizontal** : l'écran défile
+///   verticalement sous ce geste, et un glissé un peu de travers ne doit pas
+///   ouvrir un tiroir au milieu d'une lecture.
+/// - **Les actions n'existent que découvertes** : posées en permanence sous la
+///   carte, elles resteraient tapables à travers elle.
+/// - **Deux autres chemins vers les mêmes gestes** : l'appui long ouvre le menu
+///   contextuel du système, et VoiceOver reçoit le rotor d'actions — un geste
+///   continu n'existe pas pour ces deux-là.
+///
+/// **Rien n'est rogné** (Hugo, 19/09/2026). Le tiroir rognait à la forme de la
+/// carte : la carte disparaissait au ras de la marge, les icônes apparaissaient
+/// au ras du bord droit, et le scotch qui dépasse en haut des cartes de
+/// l'accueil était coupé net. Le geste se lit mieux sans : la carte **sort de
+/// l'écran** par la gauche et les icônes **y entrent** par la droite, chacune
+/// n'étant plus arrêtée que par le bord de la dalle. C'est aussi ce que fait
+/// une ligne de `List` d'iOS, qui glisse hors de l'écran et non hors de sa
+/// cellule.
+///
+/// ```swift
+/// BrandSwipeDrawer(actions: [
+///     BrandSwipeAction(icon: "IconCross", tint: MemoBookColor.error, label: "Supprimer") { … },
+/// ]) {
+///     FeaturedTripCard(…)
+/// }
+/// ```
+public struct BrandSwipeDrawer<Content: View>: View {
+    private let actions: [BrandSwipeAction]
+    private let content: Content
+
+    /// De combien la carte est décalée vers la gauche. `0` au repos, la largeur
+    /// du tiroir quand il est ouvert.
+    @State private var offset: CGFloat = 0
+    @GestureState private var drag: CGFloat = 0
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// - Parameter actions: les gestes, de gauche à droite. Vide, la carte ne
+    ///   glisse pas.
+    public init(
+        actions: [BrandSwipeAction],
+        @ViewBuilder content: () -> Content
+    ) {
+        self.actions = actions
+        self.content = content()
+    }
+
+    /// Largeur du tiroir : une cible tactile par action, et leurs gouttières.
+    private var drawerWidth: CGFloat {
+        guard !actions.isEmpty else { return 0 }
+        return MemoBookSpacing.minimumTapTarget * CGFloat(actions.count)
+            + MemoBookSpacing.xs * CGFloat(actions.count + 1)
+    }
+
+    private var translation: CGFloat {
+        (offset + drag).clampedToDrawer(drawerWidth)
+    }
+
+    private var isOpen: Bool { translation < -MemoBookSpacing.xs }
+
+    public var body: some View {
+        ZStack(alignment: .trailing) {
+            if !actions.isEmpty { drawer }
+
+            content
+                .offset(x: translation)
+                // **Prioritaire sur le bouton de la carte** : une carte de
+                // l'accueil est un `Button`, et avec un `.gesture` ordinaire
+                // c'est lui qui prenait le doigt — le glissé ouvrait le voyage.
+                // Le seuil de 12 pt laisse le tapotis au bouton.
+                .highPriorityGesture(swipe)
+        }
+        .contextMenu {
+            ForEach(actions) { action in
+                Button(action.label, role: action.tint == MemoBookColor.error ? .destructive : nil) {
+                    action.action()
+                }
+            }
+        }
+        .accessibilityActions {
+            ForEach(actions) { action in
+                Button(action.label, action: action.action)
+            }
+        }
+    }
+
+    // MARK: Le tiroir
+
+    /// Ce qu'il reste à découvrir du tiroir, de sa largeur (fermé) à zéro
+    /// (ouvert). C'est lui qui déplace les icônes.
+    private var remaining: CGFloat { max(0, drawerWidth + translation) }
+
+    private var drawer: some View {
+        HStack(spacing: MemoBookSpacing.xs) {
+            ForEach(Array(actions.enumerated()), id: \.element.id) { index, action in
+                Button {
+                    close()
+                    action.action()
+                } label: {
+                    Image(brand: action.icon)
+                        .resizable()
+                        .renderingMode(.template)
+                        .scaledToFit()
+                        .frame(
+                            width: MemoBookSpacing.sectionGap * action.iconScale,
+                            height: MemoBookSpacing.sectionGap * action.iconScale
+                        )
+                        .foregroundStyle(action.tint)
+                        .frame(
+                            width: MemoBookSpacing.minimumTapTarget,
+                            height: MemoBookSpacing.minimumTapTarget
+                        )
+                        .overlay { Circle().strokeBorder(action.tint, lineWidth: 1) }
+                        .contentShape(.circle)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(action.label)
+                // **Elles arrivent avec le glissé, en quinconce** (Hugo,
+                // 17/09/2026) : chaque icône suit la carte avec un retard qui
+                // croît de la première à la dernière — elles glissent de la
+                // droite l'une après l'autre et se posent avec le doigt, au
+                // lieu d'être découvertes déjà en place. Le retard est un
+                // rapport, pas une durée : pas d'animation à couper quand on
+                // relâche à mi-chemin.
+                .offset(x: remaining * (0.35 + 0.35 * CGFloat(index)))
+                .opacity(1 - Double(min(1, remaining / max(drawerWidth, 1))) * 0.6)
+            }
+        }
+        .padding(.trailing, MemoBookSpacing.xs)
+        // Elles n'existent que lorsqu'on les a fait apparaître : posées en
+        // permanence sous la carte, elles resteraient tapables à travers elle.
+        .opacity(isOpen ? 1 : 0)
+        .allowsHitTesting(isOpen)
+        // VoiceOver passe par le rotor d'actions, pas par le tiroir.
+        .accessibilityHidden(true)
+    }
+
+    // MARK: Le geste
+
+    private var swipe: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .updating($drag) { value, state, _ in
+                guard !actions.isEmpty, abs(value.translation.width) > abs(value.translation.height) else {
+                    return
+                }
+                state = value.translation.width
+            }
+            .onEnded { value in
+                guard !actions.isEmpty, abs(value.translation.width) > abs(value.translation.height) else {
+                    return
+                }
+                let settled = (offset + value.translation.width).clampedToDrawer(drawerWidth)
+                withAnimation(reduceMotion ? .none : .snappy(duration: 0.25)) {
+                    offset = settled < -drawerWidth / 2 ? -drawerWidth : 0
+                }
+            }
+    }
+
+    private func close() {
+        withAnimation(reduceMotion ? .none : .snappy(duration: 0.25)) { offset = 0 }
+    }
+}
+
+private extension CGFloat {
+    /// Le tiroir ne s'ouvre que vers la gauche, et pas au-delà de sa largeur.
+    func clampedToDrawer(_ width: CGFloat) -> CGFloat {
+        // `Swift.min` / `Swift.max` explicitement : dans une extension de
+        // `CGFloat`, `min` et `max` désignent d'abord les bornes du type.
+        Swift.min(0, Swift.max(-width, self))
+    }
+}
+
+#Preview("Tiroir d’actions") {
+    VStack(spacing: MemoBookSpacing.s) {
+        BrandSwipeDrawer(
+            actions: [
+                BrandSwipeAction(icon: "IconCross", tint: MemoBookColor.error, label: "Supprimer") {},
+                BrandSwipeAction(icon: "IconShareSystem", tint: MemoBookColor.action, label: "Partager") {},
+                BrandSwipeAction(icon: "IconPrinter", tint: MemoBookColor.action, label: "Prévisualiser") {},
+            ]
+        ) {
+            Text("Glisse-moi vers la gauche")
+                .font(MemoBookFont.body)
+                .padding(MemoBookSpacing.s)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    MemoBookColor.surface,
+                    in: .rect(cornerRadius: MemoBookSpacing.largeCornerRadius)
+                )
+        }
+    }
+    .padding(MemoBookSpacing.screenMargin)
+    .background(MemoBookColor.background)
+    .environment(\.colorScheme, .light)
+}

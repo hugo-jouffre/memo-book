@@ -39,6 +39,12 @@ struct BookActionsBlock: View {
                 action: onCustomise
             )
 
+            // ⚠️ Il y avait ici « Configurer mes couvertures », en lien sous le
+            // bouton de personnalisation. Retiré (Hugo, 19/09/2026) : les
+            // couvertures se choisissent **sur la page**, en touchant le voile
+            // de la première ou de la dernière — voir `CoverInvitation` —, et
+            // ce lien disait une seconde fois ce que la page proposait déjà.
+
             // Commander demande, lui, un carnet composé : on ne fait pas
             // imprimer ce qui n'existe pas encore.
             BrandButton(

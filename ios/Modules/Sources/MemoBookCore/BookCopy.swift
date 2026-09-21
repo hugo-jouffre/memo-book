@@ -20,11 +20,9 @@ import Foundation
 // dans son commentaire, et la liste des écarts vit dans la fiche écran pour que
 // Clara les reprenne **à la source**.
 //
-// Trois coquilles restent recopiées telles quelles (R8), parce qu'elles ne
-// touchent pas à la personne à qui l'app parle :
-//   - `Wallet.subscriptionTile` écrit « grace » sans accent circonflexe.
-//   - `Settings.pdfPreview` écrit « Prévisulation » pour « Prévisualisation ».
-//   - `Preview.configureCover` écrit « Défini » pour « Définis ».
+// Les trois coquilles qui restaient — « grace », « Prévisulation », « Défini »
+// — sont corrigées dans Figma et ici (Hugo, 17/09/2026, T67). Et l'ordinal
+// s'abrège « 1ère » partout, comme la maquette (T91).
 public enum BookCopy {
 
     // MARK: - Paramètres du voyage
@@ -50,8 +48,7 @@ public enum BookCopy {
         public static let tricountMessage =
             "MemoBook pourra déduire tes étapes et t’aider à raconter des souvenirs à partir de tes dépenses"
 
-        /// ⚠️ « Prévisulation » est la coquille de la maquette (R8).
-        public static let pdfPreview = "Prévisulation PDF"
+        public static let pdfPreview = "Prévisualisation PDF"
         public static let pdfPreviewDetail = "Aperçu et partage"
 
         public static let order = "Commander le carnet"
@@ -121,7 +118,7 @@ public enum BookCopy {
         public static let intro =
             "Ajuste les différentes options de MemoBook pour que ton carnet te ressemble de plus en plus."
 
-        public static let covers = "Couvertures (1re & 4e)"
+        public static let covers = "Couvertures (1ère & 4e)"
         public static let coversDetail = "Aperçu et personnalisation"
 
         public static let photoTextRatio = "Ratio photo / texte"
@@ -164,12 +161,9 @@ public enum BookCopy {
     /// Ce qu'écrit le parcours des deux plats : le choix, le style, la photo,
     /// les textes et les chiffres du dos.
     ///
-    /// ⚠️ **Deux écarts de la maquette, corrigés** (R9 > R8, voir l'en-tête du
-    /// fichier) :
-    ///   - ``matchedStyle`` vouvoyait — « Assortie à votre 1e de couverture ».
-    ///   - La même phrase écrit « 1e » là où l'ordinal abrégé français s'écrit
-    ///     « 1re » — c'est d'ailleurs ce que les onglets du même écran écrivent
-    ///     deux centimètres plus haut.
+    /// ``matchedStyle`` vouvoyait dans la maquette — « Assortie à votre 1e de
+    /// couverture » ; elle tutoie depuis, et l'ordinal s'écrit « 1ère » comme
+    /// partout dans l'app (Hugo, 17/09/2026, T91).
     public enum Covers {
         public static let title = "Couvertures"
 
@@ -190,10 +184,7 @@ public enum BookCopy {
         public static let choosePhoto = "Choisir la photo"
         public static let importPhoto = "Importer ma photo"
 
-        /// **Corrigée** : la maquette écrit « Assortie à votre 1e de
-        /// couverture » — vouvoiement et ordinal fautif. Voir
-        /// ``Customisation/intro`` pour l'arbitrage.
-        public static let matchedStyle = "Assortie à ta 1re de couverture"
+        public static let matchedStyle = "Assortie à ta 1ère de couverture"
 
         /// La photo choisie n'a pas pu être lue. Aucune maquette ne dessine cet
         /// état ; la phrase dit ce qui s'est passé et ce qu'on peut faire,
@@ -302,6 +293,22 @@ public enum BookCopy {
         }
 
         public static let customise = "Personnaliser mon carnet"
+        /// La porte vers les couvertures, **toujours là** sous les boutons :
+        /// l'invitation sur la page ne s'affiche que tant qu'elles ne sont pas
+        /// choisies, et l'aperçu n'offrait plus aucun chemin pour y revenir
+        /// (Clara, 17/09/2026). Aucune maquette : un lien vert, au corps des
+        /// boutons, comme « Besoin d'aide ? ».
+        /// ⚠️ Plus de bouton « Configurer mes couvertures » sous l'aperçu
+        /// (Hugo, 19/09/2026) : les couvertures se choisissent en touchant le
+        /// voile de la première ou de la dernière page. La phrase reste, elle
+        /// intitule l'invitation posée sur la page.
+        public static let configureCovers = "Configurer mes couvertures"
+
+        /// Ce qu'on lit dans le PDF d'attente, celui que l'app compose quand le
+        /// carnet du serveur n'est pas chargé — voir `BookPreviewModel`.
+        public static let placeholderPdfBody = """
+            Ce carnet n’est pas encore composé : ce fichier tient sa place,             le temps que MemoBook mette en page tes souvenirs.
+            """
         public static let order = "Commander ce carnet"
 
         /// La porte de service, sous le bouton grisé : commander alors que le
@@ -315,8 +322,7 @@ public enum BookCopy {
         /// elle dit ce qu'elle fait plutôt que « Commander quand même ».
         public static let orderAnyway = "Commander sans attendre la composition"
 
-        /// ⚠️ « Défini » pour « Définis » : coquille de la maquette (R8).
-        public static let configureCover = "Défini maintenant\nta 1ère et 4ème de couverture"
+        public static let configureCover = "Définis maintenant\nta 1ère et 4ème de couverture"
         public static let configureCoverAction = "Configurer"
 
         public static let offerTitle = "Fais-toi offrir ce carnet"
@@ -404,7 +410,7 @@ public enum BookCopy {
         /// spécification de Hugo employait des guillemets anglais fermants des
         /// deux côtés, ce qui est une glissade de clavier. Signalé.
         public static func invitation(title: String, steps: Int, link: URL) -> String {
-            let written = steps == 1 ? "ma 1re étape" : "mes \(steps) premières étapes"
+            let written = steps == 1 ? "ma 1ère étape" : "mes \(steps) premières étapes"
             return """
                 Je prépare le carnet de mon voyage « \(title) ». J’ai déjà écrit \(written) ! \
                 Il est possible de m’aider à financer la version imprimée en cliquant sur ce lien : \(link.absoluteString)
@@ -457,13 +463,11 @@ public enum BookCopy {
         public static let emptyTitle = "Aucune contribution pour le moment"
         public static let emptyMessage =
             "Partage ta cagnotte avec tes proches pour recevoir tes premières contributions !"
-        public static let invite = "Inviter des proches"
 
         /// « 60 € offerts par tes proches ».
         public static let giftedTile = "offerts par tes proches"
 
-        /// ⚠️ « grace » sans accent circonflexe : coquille de la maquette (R8).
-        public static let subscriptionTile = "grace à ton abonnement"
+        public static let subscriptionTile = "grâce à ton abonnement"
 
         public static let faqTitle = "Si je n’utilise pas toute ma cagnotte ?"
         public static let faqMessage =

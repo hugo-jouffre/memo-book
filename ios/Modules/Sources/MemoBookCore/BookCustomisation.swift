@@ -147,13 +147,18 @@ public struct BookFontOption: Sendable, Hashable, Identifiable {
     public let name: String
     public let label: String
     public let detail: String
+    /// Le nom de la police **dessiné dans sa police**, quand Clara l'a fourni
+    /// en vectoriel (`assets/logos/<Nom>.svg` → `Wordmark<Nom>`). `nil` :
+    /// l'écran écrit le libellé en General Sans.
+    public let wordmark: String?
 
     public var id: String { name }
 
-    public init(name: String, label: String? = nil, detail: String) {
+    public init(name: String, label: String? = nil, detail: String, wordmark: String? = nil) {
         self.name = name
         self.label = label ?? name
         self.detail = detail
+        self.wordmark = wordmark
     }
 
     /// Cette option est-elle celle qu'un carnet porte ? Le nom entier d'abord ;
@@ -174,19 +179,26 @@ public struct BookFontOption: Sendable, Hashable, Identifiable {
 
     // Les cinq familles que le carnet sait porter.
     //
-    // ⚠️ **Elles ne sont pas rendues dans leur propre dessin.** Figma écrit
-    // chaque nom dans sa police ; les embarquer demanderait cinq familles de
-    // plus dans le binaire pour cinq bouts de ligne, et le dépôt n'a que
-    // Playfair Display, en woff2 — un format que CoreText ne lit pas. Écart
-    // signalé dans la fiche écran.
+    // **Trois d'entre elles se dessinent dans leur propre police**, par un
+    // vectoriel du nom (Hugo, 17/09/2026, T118) : on n'embarque pas une
+    // famille pour un bout de ligne. Alegreya et Montserrat s'écrivent encore
+    // en General Sans, faute de vectoriel.
     public static let playfair = BookFontOption(
-        name: "Playfair Display", label: "Playfair", detail: "L’élégante, celle des titres"
+        name: "Playfair Display",
+        label: "Playfair",
+        detail: "L’élégante, celle des titres",
+        wordmark: "WordmarkPlayfair"
     )
     public static let alegreya = BookFontOption(name: "Alegreya", detail: "La serif chaleureuse du récit")
     public static let montserrat = BookFontOption(name: "Montserrat", detail: "La géométrique, nette et moderne")
-    public static let hansley = BookFontOption(name: "Hansley", detail: "La manuscrite des titres")
+    public static let hansley = BookFontOption(
+        name: "Hansley", detail: "La manuscrite des titres", wordmark: "WordmarkHansley"
+    )
     public static let gloria = BookFontOption(
-        name: "Gloria Hallelujah", label: "Hallelujah", detail: "L’écriture à la main du récit"
+        name: "Gloria Hallelujah",
+        label: "Hallelujah",
+        detail: "L’écriture à la main du récit",
+        wordmark: "WordmarkGloriaHallelujah"
     )
 
     /// Le catalogue entier, pour résoudre un nom stocké en libellé.
@@ -196,7 +208,7 @@ public struct BookFontOption: Sendable, Hashable, Identifiable {
 /// Les quatre typographies du carnet, dans l'ordre de l'écran.
 ///
 /// **On n'en choisit plus une par une** (Hugo, 16/09/2026) : l'écran ne propose
-/// que des ``BookFontCombo``, quatre assortiments dont on sait qu'ils tiennent
+/// que des ``BookFontCombo``, trois assortiments dont on sait qu'ils tiennent
 /// ensemble. Ce type reste, parce qu'il porte ce qu'un combo ne dit pas —
 /// quelle colonne chaque rôle écrit, quelle édition il envoie, et sous quel nom
 /// il se lit. C'est lui qui traduit un combo en quatre valeurs.
@@ -256,7 +268,7 @@ public enum BookFontRole: String, Sendable, Hashable, CaseIterable, Identifiable
     }
 }
 
-// MARK: - Les quatre assortiments
+// MARK: - Les trois assortiments
 
 /// Un assortiment de quatre typographies qui vont ensemble.
 ///
@@ -310,6 +322,11 @@ public struct BookFontCombo: Sendable, Hashable, Identifiable {
         return BookFontOption.catalogue.first { $0.matches(name) }?.label ?? name
     }
 
+    /// Le vectoriel du nom de la police de ce rôle, s'il existe.
+    public func fontWordmark(_ role: BookFontRole) -> String? {
+        BookFontOption.catalogue.first { $0.matches(font(role)) }?.wordmark
+    }
+
     /// Ce carnet porte-t-il cet assortiment ? **Les quatre rôles, ou aucun** :
     /// un carnet composé à la main avant cette feuille peut très bien avoir
     /// trois polices sur quatre en commun avec un combo, et le cocher serait
@@ -320,7 +337,7 @@ public struct BookFontCombo: Sendable, Hashable, Identifiable {
         }
     }
 
-    // MARK: Les quatre
+    // MARK: Les trois
 
     /// Le défaut, et celui que portent déjà les carnets existants : Playfair,
     /// Hansley, Gloria Hallelujah, Playfair. C'est **exactement** le jeu que la
@@ -342,25 +359,12 @@ public struct BookFontCombo: Sendable, Hashable, Identifiable {
     public static let editorial = BookFontCombo(
         id: "editorial",
         name: "Éditorial",
-        detail: "Tout en serif, comme un roman. Le plus sobre des quatre.",
+        detail: "Tout en serif, comme un roman. Le plus sobre des trois.",
         fonts: [
             .titles: "Playfair Display",
             .subtitles: "Playfair Display",
             .texts: "Alegreya",
             .funFacts: "Alegreya",
-        ]
-    )
-
-    /// Titres géométriques, récit en serif : le contraste le plus net.
-    public static let modern = BookFontCombo(
-        id: "modern",
-        name: "Moderne",
-        detail: "Des titres nets et géométriques, un récit qui reste doux à lire.",
-        fonts: [
-            .titles: "Montserrat",
-            .subtitles: "Montserrat",
-            .texts: "Alegreya",
-            .funFacts: "Montserrat",
         ]
     )
 
@@ -377,14 +381,19 @@ public struct BookFontCombo: Sendable, Hashable, Identifiable {
         ]
     )
 
-    /// Les quatre, dans l'ordre de la feuille — le défaut en tête.
-    public static let all: [BookFontCombo] = [travelJournal, editorial, modern, handwritten]
+    /// Les trois, dans l'ordre de la feuille — le défaut en tête.
+    ///
+    /// Il y en avait quatre : « Moderne » (titres Montserrat, récit Alegreya)
+    /// est retiré le 18/09/2026 (Hugo). Un carnet réglé dessus reste tel quel —
+    /// ses quatre polices sont en base, le gabarit les résout — et la feuille
+    /// l'écrit « Personnalisé », comme tout carnet composé hors de ces trois.
+    public static let all: [BookFontCombo] = [travelJournal, editorial, handwritten]
 
     /// L'assortiment d'un carnet, ou `nil` s'il n'en porte aucun.
     ///
     /// `nil` est un état réel et non un défaut manquant : un carnet composé
     /// police par police avant cette feuille, ou par un autre client, peut
-    /// n'entrer dans aucune des quatre cases. L'écran l'écrit alors
+    /// n'entrer dans aucune des trois cases. L'écran l'écrit alors
     /// « Personnalisé » plutôt que de cocher de force.
     public static func matching(_ customisation: BookCustomisation) -> BookFontCombo? {
         all.first { $0.matches(customisation) }

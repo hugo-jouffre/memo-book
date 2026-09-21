@@ -25,7 +25,7 @@ enum BookCustomisationSheet: Identifiable, Hashable {
     case pages
     case funFacts
     case rules
-    /// Les typographies — **une** feuille, quatre assortiments.
+    /// Les typographies — **une** feuille, trois assortiments.
     case fonts
     case decorations
 
@@ -257,12 +257,12 @@ struct BookToggleSheet: View {
 
 // MARK: - Les typographies
 
-/// « Typographies du carnet » — quatre assortiments, un seul choisi.
+/// « Typographies du carnet » — trois assortiments, un seul choisi.
 ///
 /// **On ne compose plus police par police** (Hugo, 16/09/2026). L'écran posait
 /// quatre lignes et laissait marier librement trois familles sur chacune ; la
 /// plupart des combinaisons sont laides, et un carnet imprimé ne se rattrape
-/// pas. La feuille propose donc quatre assortiments dont on sait qu'ils
+/// pas. La feuille propose donc trois assortiments dont on sait qu'ils
 /// tiennent — voir ``BookFontCombo`` — et **dit ce que chaque police habille**,
 /// parce que c'est la seule information qui permet de choisir sans connaître la
 /// typographie.
@@ -375,20 +375,16 @@ private struct BookFontComboCard: View {
                         Text(role.label)
                             .font(MemoBookFont.caption)
                             .foregroundStyle(MemoBookColor.inkMuted)
-                        Text(combo.fontLabel(role))
-                            .font(MemoBookFont.tagline)
-                            .foregroundStyle(MemoBookColor.ink)
+                        fontName(for: role)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
-                    HStack(alignment: .firstTextBaseline, spacing: MemoBookSpacing.xs) {
+                    HStack(alignment: .center, spacing: MemoBookSpacing.xs) {
                         Text(role.label)
                             .font(MemoBookFont.caption)
                             .foregroundStyle(MemoBookColor.inkMuted)
                         Spacer(minLength: MemoBookSpacing.xs)
-                        Text(combo.fontLabel(role))
-                            .font(MemoBookFont.tagline)
-                            .foregroundStyle(MemoBookColor.ink)
+                        fontName(for: role)
                     }
                 }
             }
@@ -400,6 +396,32 @@ private struct BookFontComboCard: View {
                 .fill(MemoBookColor.hairline)
                 .frame(height: 1)
                 .accessibilityHidden(true)
+        }
+    }
+
+    /// La hauteur du nom dessiné : celle d'une ligne de ``MemoBookFont/tagline``,
+    /// et elle suit le Dynamic Type avec elle. Les vectoriels sont des mots à
+    /// hauteur de x variable ; à cette hauteur, ils pèsent comme le texte
+    /// qu'ils remplacent, pas plus.
+    @ScaledMetric(relativeTo: .subheadline) private var wordmarkHeight: CGFloat = 14
+
+    /// Le nom de la police — **dessiné dans sa police** quand le vectoriel
+    /// existe (Playfair, Hansley, Gloria Hallelujah), écrit en General Sans
+    /// sinon (Alegreya, Montserrat). Hugo, 17/09/2026 (T118).
+    @ViewBuilder
+    private func fontName(for role: BookFontRole) -> some View {
+        if let wordmark = combo.fontWordmark(role) {
+            Image(brand: wordmark)
+                .resizable()
+                .renderingMode(.template)
+                .scaledToFit()
+                .frame(height: wordmarkHeight)
+                .foregroundStyle(MemoBookColor.ink)
+                .accessibilityLabel(combo.fontLabel(role))
+        } else {
+            Text(combo.fontLabel(role))
+                .font(MemoBookFont.tagline)
+                .foregroundStyle(MemoBookColor.ink)
         }
     }
 

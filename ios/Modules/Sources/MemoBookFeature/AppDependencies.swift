@@ -152,7 +152,8 @@ public final class AppDependencies {
         HomeModel(
             source: cachedSource(.home) { [api] in try await api.homeFeed() },
             cached: { [content] in await content.read(.home, as: HomeFeed.self) },
-            outbox: outbox
+            outbox: outbox,
+            remove: { [api] id in try await api.deleteMemo(id: id) }
         )
     }
 
@@ -201,7 +202,29 @@ public final class AppDependencies {
             // La troisième, et la seule sans retour : elle supprime le compte
             // et tout ce qui est à lui. L'écran demande confirmation avant.
             remove: { [api] in try await api.deleteAccount() },
+            uploadAvatar: { [api] data, mimeType in
+                try await api.uploadAvatar(data: data, mimeType: mimeType)
+            },
+            // La résiliation, qui ne partait nulle part avant le 19/09/2026 —
+            // voir ``ProfileModel/cancelSubscription(reason:)``.
+            cancelSubscription: { [api] reason in
+                try await api.cancelSubscription(reason: reason)
+            },
             cached: { [content] in await content.read(.profile, as: TravellerProfile.self) }
+        )
+    }
+
+    /// Les chiffres du profil, servis par `GET /v1/profile/statistics`.
+    ///
+    /// Un modèle à part du profil, parce qu'il **veille** : il relit sa route
+    /// tant que le serveur annonce des relevés en attente, et repart à chaque
+    /// vocal livré — d'où la file, passée en plus de la source. Le cache lui
+    /// donne son ouverture immédiate, comme aux cinq autres écrans.
+    public func statisticsModel() -> StatisticsModel {
+        StatisticsModel(
+            source: cachedSource(.statistics) { [api] in try await api.travelStatistics() },
+            cached: { [content] in await content.read(.statistics, as: TravelStatistics.self) },
+            outbox: outbox
         )
     }
 

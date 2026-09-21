@@ -83,6 +83,17 @@ public final class TripSettingsModel {
     /// il n'y a rien à confirmer.
     public private(set) var confirmation: String?
 
+    /// La ligne dont la correction sur place vient d'être enregistrée — la
+    /// coche verte du crayon, le temps qu'on la voie. Voir ``SavedField``.
+    public private(set) var justSaved: SavedField?
+
+    /// Les lignes qui se corrigent sur place, sans feuille. Une seule pour
+    /// l'instant ; le type est là pour que la coche ne soit jamais un booléen
+    /// anonyme.
+    public enum SavedField: Sendable, Hashable {
+        case name
+    }
+
     /// Les thèmes de voyage, dans l'ordre du serveur — « Autre » en dernier.
     ///
     /// **La même source qu'à la création du voyage**, et c'est la note du nœud
@@ -138,6 +149,34 @@ public final class TripSettingsModel {
             current.memory = memory
             settings = current
         }
+
+        /// Ajoute un co-voyageur **à l'écran seulement**, pour voir la feuille
+        /// se remplir et son tiroir se glisser.
+        ///
+        /// Le jeu d'essai en compte deux, et il faut un compte de plus pour en
+        /// inviter un vrai : sans ça, le retrait et l'invitation relancée ne se
+        /// vérifient qu'à deux, et jamais sur une invitation en attente.
+        /// Retirer celui-ci passe par le même chemin que les autres — la
+        /// réponse du serveur remettra la liste d'aplomb.
+        func debugAddCompanion() {
+            guard var current = settings else { return }
+            let index = current.companions.count
+            current.companions.append(
+                Companion(
+                    id: "debug-companion-\(index)-\(UUID().uuidString.prefix(4))",
+                    name: Self.debugCompanionNames[index % Self.debugCompanionNames.count],
+                    role: "Co-voyageur",
+                    // Un sur deux n'a pas encore accepté : c'est l'état qui
+                    // porte « Relancer l'invitation ».
+                    isPending: index.isMultiple(of: 2)
+                )
+            )
+            settings = current
+        }
+
+        private static let debugCompanionNames = [
+            "Camille Roux", "Sacha Blin", "Inès Fabre", "Naïm Bacri", "Lou Vidal",
+        ]
     #endif
 
     /// Passe au palier étendu, ou revient au palier compris.
@@ -269,6 +308,20 @@ public final class TripSettingsModel {
     // Des méthodes plutôt qu'un `settings` ouvert en écriture : une vue ne doit
     // pas pouvoir poser une valeur sans qu'elle partie au serveur.
 
+    /// Le nom du voyage, corrigé sur place depuis la première ligne de
+    /// l'écran — comme le téléphone sur le profil : le clavier s'ouvre sur la
+    /// ligne, et sortir du champ enregistre (Hugo, 18/09/2026).
+    ///
+    /// Un nom vide n'est pas un nom : on ne l'envoie pas, et la ligne reprend
+    /// celui qu'elle avait — elle relit le modèle en sortant du champ.
+    public func setName(_ name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard var current = settings, !trimmed.isEmpty, trimmed != current.name else { return }
+        current.name = trimmed
+        settings = current
+        save(.name(trimmed), confirming: .name)
+    }
+
     public func setNotifications(_ isOn: Bool) {
         guard var current = settings else { return }
         current.wantsNotifications = isOn
@@ -360,6 +413,17 @@ public final class TripSettingsModel {
         }
     }
 
+    /// La coche d'une ligne qui se corrige sur place — le même accusé de
+    /// réception que sur le profil, quatre secondes, puis plus rien.
+    private func confirm(_ field: SavedField) {
+        justSaved = field
+        Task {
+            try? await Task.sleep(for: .seconds(4))
+            guard justSaved == field else { return }
+            justSaved = nil
+        }
+    }
+
     /// Un mot qui s'efface tout seul. Il ne demande rien, il **accuse
     /// réception** — le laisser à l'écran obligerait à le refermer.
     private func confirm(_ message: String) {
@@ -377,16 +441,18 @@ public final class TripSettingsModel {
     /// attend un aller-retour réseau pour basculer se lit comme cassé. La
     /// réponse ne fait que confirmer — ou, en cas d'échec, remettre les
     /// valeurs du serveur, ce qui annule visiblement la bascule.
-    private func save(_ edit: TripSettingsEdit) {
+    private func save(_ edit: TripSettingsEdit, confirming field: SavedField? = nil) {
         guard let persist else { return }
 
         pendingSave?.cancel()
+        justSaved = nil
         pendingSave = Task {
             do {
                 let updated = try await persist(tripId, edit)
                 guard !Task.isCancelled else { return }
                 settings = updated
                 clearError()
+                if let field { confirm(field) }
             } catch {
                 guard !Task.isCancelled else { return }
                 report(error)

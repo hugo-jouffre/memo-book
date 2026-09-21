@@ -14,9 +14,9 @@ import Foundation
 // livrés : apostrophe typographique `’` (U+2019) partout, espace simple avant
 // `?` et `!`, points de suspension `…` (U+2026).
 //
-// ⚠️ **Deux coquilles de la maquette sont recopiées telles quelles** dans
-// ``opening`` : « pourrais tu » sans trait d'union, et « tous le long » pour
-// « tout le long ». R8 interdit de corriger en silence — voir T49.
+// Les deux coquilles de la maquette dans ``opening`` — « pourrais tu » sans
+// trait d'union, « tous le long » — sont **corrigées** dans l'app (Hugo,
+// 17/09/2026, T49) ; Figma reste à reprendre.
 //
 // Le vouvoiement de ``greetingMessage``, lui, est **corrigé** : Hugo a tranché
 // (D9), et R9 l'emportait de toute façon sur R8 pour cette phrase.
@@ -24,8 +24,8 @@ public enum ChatCopy {
 
     // MARK: - La bannière « Aperçu en direct »
 
-    public static let previewOverline = "Aperçu en direct"
-    public static let previewTitle = "Votre Carnet prend forme"
+    /// « Votre Carnet » dans la maquette : tutoyé, comme tout le reste (R9).
+    public static let previewTitle = "Ton Carnet prend forme"
 
     /// « 5 Souvenirs - 10 pages composées ».
     ///
@@ -66,8 +66,8 @@ public enum ChatCopy {
 
     /// La première bulle blanche, celle que la maquette dessine en entier.
     ///
-    /// ⚠️ **Deux coquilles recopiées** (R8) : « pourrais tu » sans trait d'union,
-    /// et « tous le long » au lieu de « tout le long ». Remontées à Clara — T49.
+    /// Deux coquilles de la maquette corrigées ici (T49) : « pourrais-tu » et
+    /// « tout le long ».
     public static let opening = """
         Bonjour 👋
         Je suis MEMO, ton assistant pour t’aider à construire ton carnet de voyage.
@@ -77,8 +77,8 @@ public enum ChatCopy {
         Je m’adapte à ton style : tu peux me dicter ta journée, ta semaine, ton \
         expérience à l’oral ou l’écrire, comme tu préfères.
 
-        Avant de commencer pourrais tu me faire un contexte global de ton \
-        voyage ? Cela m’aidera à garder de la cohérence tous le long du récit.
+        Avant de commencer pourrais-tu me faire un contexte global de ton \
+        voyage ? Cela m’aidera à garder de la cohérence tout le long du récit.
         """
 
     /// La réponse à « Commencer mon carnet » : une invitation à raconter, sans
@@ -267,14 +267,23 @@ public enum ChatCopy {
     // ponctuation finale.
 
     public enum Suggest {
+        // **Chaque proposition porte un émoji devant** — c'est la maquette de
+        // Hugo (`3520:35958`), et il est porté à part du libellé : il ne part
+        // pas dans le message envoyé, et VoiceOver ne le lit pas.
+
         /// Le trio de la maquette, sous une fiche qui porte du **vrai** texte.
         public static let accept = "Ça me convient"
+        public static let acceptSymbol = "👌"
         public static let editByHand = "J’aimerais faire des modifications à la main"
+        public static let editByHandSymbol = "✍️"
         public static let editByVoice = "J’aimerais faire des modifications à l’oral"
+        public static let editByVoiceSymbol = "🎙"
 
         /// Sous une fiche sans récit : le trio n'a rien à valider.
         public static let rewrite = "Je te le réécris ici"
+        public static let rewriteSymbol = "✍️"
         public static let recordAgain = "Je réenregistre"
+        public static let recordAgainSymbol = "🎙"
 
         /// L'écran vide, tel que la maquette l'écrit — emoji de tête compris,
         /// porté séparément pour qu'il ne partre pas dans le message.
@@ -286,24 +295,34 @@ public enum ChatCopy {
         public static let dictateSymbol = "🎙"
 
         public static let tellByVoice = "Je te raconte à l’oral"
+        public static let tellByVoiceSymbol = "🎙"
         public static let preferWriting = "Je préfère écrire"
+        public static let preferWritingSymbol = "✍️"
         public static let later = "Plus tard"
+        public static let laterSymbol = "⏰"
         public static let tomorrow = "On en reparle demain"
+        public static let tomorrowSymbol = "🌙"
         public static let somethingElse = "Je te raconte autre chose"
+        public static let somethingElseSymbol = "💬"
         public static let clear = "C’est clair, merci"
+        public static let clearSymbol = "👍"
         public static let anotherQuestion = "J’ai une autre question"
+        public static let anotherQuestionSymbol = "❓"
         public static let resume = "Je reprends mon récit"
+        public static let resumeSymbol = "📖"
         public static let splitInTwo = "Découpe en deux étapes"
+        public static let splitInTwoSymbol = "✂️"
         public static let keepAsOne = "Garde d’un seul tenant"
+        public static let keepAsOneSymbol = "🧩"
     }
 
     // MARK: - Les commandes de l'écran
 
     public static let backToBottom = "Retourner en bas"
 
-    /// ⚠️ **En anglais dans la maquette**, au milieu d'une app française. Recopié
-    /// tel quel (R8) et remonté — T51.
-    public static let record = "Record"
+    /// « Record » dans la maquette, en anglais au milieu d'une app française :
+    /// traduit (Hugo, 17/09/2026, T51).
+    public static let record = "Enregistrer"
 
     public static let composerPlaceholder = "Raconte-moi…"
 

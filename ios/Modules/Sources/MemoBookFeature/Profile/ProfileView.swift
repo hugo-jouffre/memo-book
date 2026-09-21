@@ -1,6 +1,7 @@
 import MemoBookCore
 import MemoBookDesign
 import SwiftUI
+import UIKit
 
 /// Le profil : qui tu es pour MemoBook, ce que tu lui as confié, et par où on
 /// sort.
@@ -20,6 +21,11 @@ public struct ProfileView: View {
     @State private var model: ProfileModel
     @State private var sheet: ProfileSheet?
 
+    /// Les chiffres du compte, pour la feuille « Statistiques ». Un modèle à
+    /// part : il a sa route, sa case de cache et sa veille, et il ne vit que le
+    /// temps de la feuille — voir ``StatisticsModel``.
+    @State private var statistics: StatisticsModel
+
     /// Le paywall se présente **par-dessus tout**, feuille comprise : c'est un
     /// écran entier, pas une feuille de plus. La feuille qui l'a ouvert se
     /// referme donc d'abord, sans quoi on la retrouverait dessous en sortant.
@@ -31,16 +37,23 @@ public struct ProfileView: View {
     /// craindre ailleurs.
     @State private var isConfirmingDeletion = false
 
+    /// Le parcours de choix de la photo de profil — la feuille du système
+    /// « Prendre une photo / Choisir dans la galerie », comme dans la
+    /// conversation (Clara, 17/09/2026, T165).
+    @State private var avatarPhotos = PhotoFlow()
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.subscriptionSession) private var subscriptionSession
 
     public init(
         model: ProfileModel = ProfileModel(),
+        statistics: StatisticsModel = StatisticsModel(),
         onSignOut: @escaping () -> Void,
         onIntent: @escaping (ProfileIntent) -> Void = { _ in }
     ) {
         _model = State(initialValue: model)
+        _statistics = State(initialValue: statistics)
         self.onSignOut = onSignOut
         self.onIntent = onIntent
     }
@@ -95,6 +108,13 @@ public struct ProfileView: View {
         // attente pendant qu'on lit le bas de l'écran.
         .scrollDismissesKeyboard(.immediately)
         .brandKeyboardDismissBar()
+        .photoFlow(avatarPhotos, title: "Photo de profil", maxSelection: 1) { images in
+            guard let data = images.first, let jpeg = ProfileAvatar.jpeg(from: data) else { return }
+            // Le rond porte la photo **avant** l'aller-retour — voir
+            // ``ProfileAvatar/pending``.
+            pendingAvatar = UIImage(data: jpeg)
+            Task { await model.setAvatar(jpeg) }
+        }
         .background(MemoBookColor.background.ignoresSafeArea())
         // L'écran dessine son propre en-tête, comme la maquette : la flèche et
         // le titre partagent une ligne, à la marge de la colonne. Une barre de
@@ -149,12 +169,25 @@ public struct ProfileView: View {
     /// L'abonnement du profil, **corrigé par la session**.
     ///
     /// ``ProfileModel`` est un `@State` : l'écran se reconstruit à chaque fois
-    /// qu'on y revient, et repartirait donc du jeu d'essai — abonnement
-    /// rétabli, résiliation oubliée. Tant que rien n'est persisté, c'est la
-    /// session qui a le dernier mot, ici comme sur l'accueil.
+    /// qu'on y revient, et repartirait donc du jeu d'essai. La session pouvait
+    /// donc **imposer** l'abonnement, et elle avait le dernier mot.
+    ///
+    /// ⚠️ **Elle ne l'a plus sur une résiliation** (Hugo, 19/09/2026), et c'est
+    /// la seconde moitié du défaut qu'il a vu : après avoir confirmé trois
+    /// fois, la feuille rouvrait sur « ABONNÉE ». La session ne sait pas si on
+    /// est abonné, elle sait si le micro s'ouvre — et pendant la semaine déjà
+    /// réglée, il s'ouvre encore (``ProfileModel/subscriptionGrantsAccess``).
+    /// Elle répondait donc « abonné » à une question qu'on ne lui posait pas,
+    /// et ressuscitait l'abonnement qu'on venait de fermer.
+    ///
+    /// Elle peut toujours en **donner** un — le bac à sable fait jouer un
+    /// abonné à un compte qui n'en a pas —, jamais en **rendre** un : un
+    /// abonnement résilié porte sa date, et cette date fait foi.
     private var effectiveSubscription: Subscription? {
         guard var subscription = model.profile?.subscription else { return nil }
-        subscription.isActive = freemiumStatus == .subscriber
+        if freemiumStatus == .subscriber, subscription.cancelledAt == nil {
+            subscription.isActive = true
+        }
         return subscription
     }
 
@@ -225,7 +258,7 @@ public struct ProfileView: View {
     private var statusPill: some View {
         if model.profile != nil {
             let pill = BrandTagPill(
-                freemiumStatus.profilePillLabel,
+                freemiumStatus.profilePillLabel(for: model.profile?.gender ?? .undisclosed),
                 tone: .accentOutlined,
                 isUppercased: true,
                 // « 3 ÉTAPES GRATUITES RESTANTES » est plus large que ce que la
@@ -304,7 +337,11 @@ public struct ProfileView: View {
         // Sous clé — ou sans voyage en cours — la ligne ne mène nulle part : un
         // chevron promettrait un écran qu'on n'a pas le droit d'ouvrir.
         let openStatistics: (() -> Void)? = isSubscriber ? { notYetRouted() } : nil
-        let openCurrentTrip: (() -> Void)? = profile?.currentTrip == nil ? nil : { notYetRouted() }
+        // Le voyage en cours s'ouvre depuis sa ligne — l'accueil du voyage,
+        // celui de la carte de l'accueil (Clara, 17/09/2026).
+        let openCurrentTrip: (() -> Void)? = profile?.currentTrip.map { trip in
+            { onIntent(.openTrip(id: trip.id)) }
+        }
 
         return BrandRowGroup(tone: .highlighted) {
             BrandRow(
@@ -329,9 +366,25 @@ public struct ProfileView: View {
         }
     }
 
+    /// La photo qu'on vient de choisir, posée dans le rond le temps que le
+    /// serveur la reçoive — et gardée ensuite, tant que l'adresse distante ne
+    /// charge pas. Voir ``ProfileAvatar/pending``.
+    @State private var pendingAvatar: UIImage?
+
     private var identity: some View {
         VStack(spacing: MemoBookSpacing.s) {
-            ProfileAvatar(profile: model.profile)
+            VStack(spacing: MemoBookSpacing.xs) {
+                ProfileAvatar(
+                    profile: model.profile,
+                    pending: pendingAvatar,
+                    isUploading: model.isUploadingAvatar,
+                    onTap: avatarPhotos.begin
+                )
+
+                if let denied = avatarPhotos.deniedMessage {
+                    BrandNotice(denied, tone: .information)
+                }
+            }
 
             if let profile = model.profile {
                 EditableName(name: profile.fullName) { model.setFullName($0) }
@@ -356,13 +409,25 @@ public struct ProfileView: View {
             // champ de plus : c'est l'identifiant de connexion. En changer
             // demande de vérifier la nouvelle, de refuser celles déjà prises et
             // de décider du sort de la session ouverte avec l'ancienne — un
-            // écran à part entière, que cette ligne ne peut pas tenir. La note
-            // dit d'où elle vient quand c'est un compte tiers qui la porte.
+            // écran à part entière, que cette ligne ne peut pas tenir.
+            //
+            // **Le logo dit d'où elle vient**, quand c'est un compte tiers qui
+            // la porte : l'autocollant Apple ou Google, petit, après
+            // « E-mail » — et non plus la phrase « Gérée par ton compte … »
+            // (Hugo, 17/09/2026). VoiceOver garde la phrase, qu'un logo ne
+            // sait pas dire.
+            // **Le fournisseur se dit, il ne se dessine pas** (Hugo,
+            // 19/09/2026). La ligne portait le logo Apple ou Google en petit,
+            // devant l'intitulé : cerné de bleu et réduit à quatorze points, il
+            // se lisait comme une vignette sale au bout d'une ligne de
+            // réglages. Trois mots en gris sous l'adresse disent la même chose
+            // sans rien salir — et l'adresse, elle, garde toute la ligne et
+            // s'abrège par la fin si elle est longue.
             BrandRow(
                 "E-mail",
                 value: profile?.email,
                 isValueLoading: profile == nil,
-                note: profile?.signInProvider.map { "Gérée par ton compte \($0.displayName)" }
+                note: profile?.signInProvider.map { "Compte \($0.displayName)" }
             )
             BrandRow(
                 "Téléphone",
@@ -389,6 +454,15 @@ public struct ProfileView: View {
                 isConfirmed: model.justSaved == .address
             ) {
                 sheet = .postalAddress
+            }
+            // Juste sous l'adresse (Hugo, 17/09/2026, T76) : deviné sur le
+            // prénom par le serveur, corrigé ici. Voir ``Gender``.
+            BrandRow(
+                "Genre",
+                value: profile?.gender.label,
+                isValueLoading: profile == nil
+            ) {
+                sheet = .gender
             }
             BrandRow("Newsletter mensuelle MemoBook", isOn: newsletterBinding)
         }
@@ -455,7 +529,12 @@ public struct ProfileView: View {
     private var exitActions: some View {
         VStack(spacing: MemoBookSpacing.xs) {
             ProfileExitAction(
-                icon: Image(brand: "IconExport"),
+                // `Export data.svg`, dessiné pour cette ligne (Clara,
+                // 17/09/2026, T162) — `Export.svg` est le partage d'un fichier.
+                // Le halo orange que l'export portait autour du signe est
+                // retiré du fichier : la ligne se dessine comme les deux
+                // d'en dessous, le signe seul dans sa teinte (Hugo, 18/09/2026).
+                icon: Image(brand: "IconExportData"),
                 title: "Exporter mes données",
                 tint: MemoBookColor.warning,
                 action: notYetRouted
@@ -519,6 +598,10 @@ public struct ProfileView: View {
             ) {
                 model.save(address: $0)
             }
+        case .gender:
+            GenderSheet(current: model.profile?.gender ?? .undisclosed) {
+                model.setGender($0)
+            }
         case .paymentMethod:
             PaymentMethodSheet(model: model)
         case .subscription:
@@ -540,10 +623,20 @@ public struct ProfileView: View {
                     sheet = nil
                     showsPaywall = true
                 },
-                previewMemoId: model.profile?.currentTrip?.id
+                onSeeWallet: {
+                    // La feuille se referme **avant** que la cagnotte s'ouvre :
+                    // c'est un écran poussé sur la pile du profil, comme la
+                    // galerie depuis la feuille des commandes.
+                    sheet = nil
+                    onIntent(.openWallet)
+                },
+                previewMemoId: model.profile?.currentTrip?.id,
+                gender: model.profile?.gender ?? .undisclosed
             )
         case .connectors:
             ConnectorsSheet(model: model)
+        case .statistics:
+            StatisticsSheet(model: statistics)
         case .orderTracking:
             OrderTrackingSheet(orders: model.profile?.orders ?? []) {
                 // La feuille se referme **avant** que la galerie s'ouvre : c'est
@@ -587,10 +680,12 @@ public struct ProfileView: View {
 /// Où mène chaque ligne du profil.
 enum ProfileSheet: String, Identifiable, CaseIterable {
     case postalAddress
+    case gender
     case paymentMethod
     case subscription
     case connectors
     case orderTracking
+    case statistics
 
     var id: String { rawValue }
 }
@@ -724,31 +819,97 @@ private struct EditableName: View {
 private struct ProfileAvatar: View {
     let profile: TravellerProfile?
 
+    /// La photo qu'on vient de choisir, avant même que le serveur l'ait reçue.
+    ///
+    /// **Elle se pose tout de suite** (Hugo, 19/09/2026). Le rond n'affichait
+    /// que `avatarUrl`, c'est-à-dire la photo *du serveur* : entre le moment où
+    /// l'on choisit dans sa pellicule et celui où l'API répond, le rond gardait
+    /// ses initiales — et si l'API déployée ne sert pas encore les avatars, il
+    /// les gardait pour toujours. On montre donc ce qu'on vient de choisir, et
+    /// l'adresse distante prend le relais quand elle arrive.
+    var pending: UIImage?
+
+    /// La photo est en route : le rond s'assombrit et tourne.
+    var isUploading = false
+    /// Le rond **se touche** : il ouvre la feuille « Prendre une photo /
+    /// Choisir dans la galerie » (Clara, 17/09/2026, T165).
+    var onTap: () -> Void = {}
+
     /// Taille **fixe**, comme l'avatar de l'accueil. Une photo n'est pas du
     /// texte : la faire grandir avec le Dynamic Type lui faisait prendre la
     /// moitié de l'écran en AX3, au détriment de ce qui, lui, se lit.
     private static let side: CGFloat = 80
 
+    /// Le plus grand côté envoyé au serveur. Le rond fait 80 pt, l'accueil 40 :
+    /// 512 px couvre trois fois l'écran le plus dense, et pèse quelques dizaines
+    /// de kilo-octets au lieu des mégaoctets d'une photo d'iPhone.
+    private static let uploadSide: CGFloat = 512
+
     var body: some View {
-        AsyncImage(url: profile?.avatarUrl) { phase in
-            if let image = phase.image {
-                image.resizable().scaledToFill()
-            } else {
-                Text(profile?.initials ?? "")
-                    .font(MemoBookFont.h2)
-                    .foregroundStyle(MemoBookColor.ink)
-                    // Les initiales, elles, suivent le texte — mais dans un
-                    // cadre qui ne bouge pas : elles se réduisent plutôt que
-                    // de déborder du rond.
-                    .minimumScaleFactor(0.5)
-                    .lineLimit(1)
-                    .padding(.horizontal, MemoBookSpacing.xs)
+        Button(action: onTap) {
+            AsyncImage(url: profile?.avatarUrl) { phase in
+                if let image = phase.image {
+                    image.resizable().scaledToFill()
+                } else if let pending {
+                    Image(uiImage: pending).resizable().scaledToFill()
+                } else {
+                    Text(profile?.initials ?? "")
+                        .font(MemoBookFont.h2)
+                        .foregroundStyle(MemoBookColor.ink)
+                        // Les initiales, elles, suivent le texte — mais dans un
+                        // cadre qui ne bouge pas : elles se réduisent plutôt que
+                        // de déborder du rond.
+                        .minimumScaleFactor(0.5)
+                        .lineLimit(1)
+                        .padding(.horizontal, MemoBookSpacing.xs)
+                }
             }
+            .frame(width: Self.side, height: Self.side)
+            .background(MemoBookColor.outline, in: .circle)
+            .clipShape(.circle)
+            .overlay {
+                if isUploading {
+                    Circle().fill(MemoBookColor.ink.opacity(0.35))
+                    ProgressView().tint(MemoBookColor.onAction)
+                }
+            }
+            // Le petit crayon cerclé, à cheval sur le bord du rond : c'est lui
+            // qui dit que la photo se change — le même dessin que les crayons
+            // des couvertures.
+            .overlay(alignment: .bottomTrailing) {
+                Image(brand: "IconPen")
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .frame(width: MemoBookSpacing.snug, height: MemoBookSpacing.snug)
+                    .foregroundStyle(MemoBookColor.action)
+                    .frame(width: MemoBookSpacing.m + 4, height: MemoBookSpacing.m + 4)
+                    .background(MemoBookColor.surface, in: .circle)
+                    .overlay { Circle().strokeBorder(MemoBookColor.outline, lineWidth: 1.5) }
+                    .offset(x: 4, y: 4)
+            }
+            .contentShape(.circle)
         }
-        .frame(width: Self.side, height: Self.side)
-        .background(MemoBookColor.outline, in: .circle)
-        .clipShape(.circle)
-        .accessibilityHidden(true)
+        .buttonStyle(.plain)
+        .disabled(isUploading || profile == nil)
+        .accessibilityLabel("Photo de profil")
+        .accessibilityHint("Prendre une photo, ou en choisir une dans la galerie")
+    }
+
+    /// Réduit la photo choisie à ce que le serveur a besoin de garder, en
+    /// JPEG. `nil` si ce n'est pas une image lisible.
+    static func jpeg(from data: Data) -> Data? {
+        guard let image = UIImage(data: data) else { return nil }
+        let longest = max(image.size.width, image.size.height)
+        let scale = min(1, uploadSide / max(longest, 1))
+        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let resized = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
+        return resized.jpegData(compressionQuality: 0.85)
     }
 }
 
@@ -908,6 +1069,9 @@ private struct ProfileExitAction: View {
 /// les paramètres d'un voyage, parce que c'est la même somme.
 public enum ProfileIntent: Sendable, Hashable {
     case openWallet
+    /// Le voyage en cours, depuis sa ligne de la carte de chiffres : l'accueil
+    /// du voyage, le même écran que la carte de l'accueil (Clara, 17/09/2026).
+    case openTrip(id: String)
     /// Les carnets de la communauté, depuis la feuille des commandes quand il
     /// n'y en a aucune : c'est là que la maquette envoie (`3162:34917`).
     case openGallery

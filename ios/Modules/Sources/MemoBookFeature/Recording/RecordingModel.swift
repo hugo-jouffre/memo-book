@@ -106,6 +106,12 @@ public final class RecordingModel {
         // La reconnaissance vocale démarre **après**, et son échec ne remonte
         // pas : elle demande sa propre autorisation, et un refus ne doit pas
         // arrêter un enregistrement qui tourne déjà.
+        //
+        // Et seulement si le micro capte vraiment : le moteur de
+        // reconnaissance pose une prise sur la même entrée, et le faire avant
+        // que la session soit posée est exactement ce qui fait disparaître
+        // l'app (voir ``SpeechTranscriber``).
+        guard recorder.isCapturing else { return }
         await transcriber.start()
     }
 
@@ -188,6 +194,12 @@ public final class RecordingModel {
 
 /// Le nombre d'échantillons qu'on garde. Il vit ici et non dans la vue parce
 /// que c'est le modèle qui remplit le tableau.
+///
+/// **Assez pour remplir la plus large des deux frises.** La feuille
+/// d'enregistrement en tient une quarantaine sur un iPhone 17, et davantage sur
+/// un Max : en dessous, la frise s'arrêtait avant le bord droit faute
+/// d'échantillons à dessiner (Hugo, 19/09/2026). Ce sont des `Double` — en
+/// garder soixante-quatre ne coûte rien.
 enum BrandWaveformCapacity {
-    static let maximum = 40
+    static let maximum = 64
 }

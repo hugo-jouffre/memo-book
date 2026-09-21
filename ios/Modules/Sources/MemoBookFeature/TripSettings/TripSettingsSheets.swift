@@ -17,7 +17,7 @@ import SwiftUI
 /// s'enregistre à chaque lettre enverrait dix requêtes par mot.
 
 /// Ce que les paramètres d'un voyage ouvrent en feuille.
-enum TripSettingsSheet: String, Identifiable, Hashable {
+public enum TripSettingsSheet: String, Identifiable, Hashable, Sendable {
     case dates
     case pace
     case notifications
@@ -26,7 +26,7 @@ enum TripSettingsSheet: String, Identifiable, Hashable {
     /// Les limites de souvenirs, et le palier étendu.
     case memory
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 }
 
 // MARK: - Dates
@@ -81,6 +81,11 @@ struct TripDatesSheet: View {
 struct TripPaceSheet: View {
     let model: TripSettingsModel
 
+    /// Ce qu'on vient de toucher, le temps que la feuille parte — la coche se
+    /// pose sur **cette** valeur, pas sur celle du modèle, dont l'aller-retour
+    /// ne doit pas la faire clignoter. Même mécanique que « Genre ».
+    @State private var chosen: NarrationPace?
+
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -90,16 +95,27 @@ struct TripPaceSheet: View {
                     BrandOptionRow(
                         pace.displayName,
                         subtitle: pace.detail,
-                        isSelected: model.settings?.narrationPace == pace
+                        isSelected: (chosen ?? model.settings?.narrationPace) == pace
                     ) {
-                        model.setPace(pace)
-                        // Choisir, c'est finir : la feuille n'a rien d'autre à
-                        // proposer, et la garder ouverte obligerait à la
-                        // refermer pour voir la valeur posée sur la ligne.
-                        dismiss()
+                        select(pace)
                     }
                 }
             }
+        }
+    }
+
+    /// Coche, enregistre, puis referme — dans cet ordre. Choisir, c'est finir :
+    /// la feuille n'a rien d'autre à proposer, et la garder ouverte obligerait
+    /// à la refermer pour voir la valeur posée sur la ligne. Mais on voit la
+    /// coche avant (Hugo, 18/09/2026). Un second toucher pendant l'attente ne
+    /// fait rien : le premier est déjà parti.
+    private func select(_ pace: NarrationPace) {
+        guard chosen == nil else { return }
+        withAnimation(.snappy(duration: 0.2)) { chosen = pace }
+        model.setPace(pace)
+        Task {
+            try? await Task.sleep(for: BrandOptionRow.lingerBeforeDismiss)
+            dismiss()
         }
     }
 }
@@ -198,13 +214,28 @@ struct TripThemeSheet: View {
     /// Le thème choisi dans le carrousel, ou `nil` quand c'est un texte libre
     /// qui ne correspond à aucun.
     @State private var selection: TripTheme?
-    /// Ce que le champ contient. Il porte le thème quel qu'il soit : choisir
-    /// une pastille l'écrit dedans, et on peut ensuite le retoucher.
+    /// Ce que le champ contient — **le nom d'un thème libre**, seulement
+    /// derrière « Autre ». Un thème de la rangée n'a rien à taper : son nom
+    /// est le thème (Hugo, 17/09/2026).
     @State private var text: String
 
     init(model: TripSettingsModel) {
         self.model = model
         _text = State(initialValue: model.settings?.theme ?? "")
+    }
+
+    /// Le champ n'existe que derrière « Autre » — et derrière un thème libre
+    /// déjà enregistré, que la rangée ne connaît pas : sans champ, on ne
+    /// pourrait ni le relire ni le corriger.
+    private var showsField: Bool {
+        selection?.isOther == true || (selection == nil && !model.themes.isEmpty)
+    }
+
+    /// Ce que « Valider » enregistre : le nom du thème choisi, ou le texte
+    /// libre derrière « Autre ».
+    private var chosenTheme: String {
+        if let selection, !selection.isOther { return selection.name }
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var body: some View {
@@ -214,40 +245,54 @@ struct TripThemeSheet: View {
                     TripThemePickerPlaceholder()
                 } else {
                     TripThemePicker(themes: model.themes, selection: $selection) { theme in
-                        // Le carrousel **écrit dans le champ** au lieu de le
-                        // remplacer : « Autre » ouvre la saisie libre, les
-                        // autres posent leur nom, et on garde la main dessus.
-                        text = theme.isOther ? "" : theme.name
-                        focus = theme.isOther ? .theme : nil
+                        // « Autre » ouvre la saisie libre, avec le clavier ;
+                        // un thème de la rangée referme le champ — il n'y a
+                        // plus que « Valider ».
+                        if theme.isOther {
+                            if model.themes.contains(where: { $0.name == text }) { text = "" }
+                            focus = .theme
+                        } else {
+                            focus = nil
+                        }
                     }
                 }
 
-                BrandTextField(
-                    BookCopy.Theme.title,
-                    text: $text,
-                    field: Field.theme,
-                    focus: $focus,
-                    labelPlacement: .hidden,
-                    placeholder: BookCopy.Theme.placeholder
-                )
-                .submitLabel(.done)
-                .onSubmit(validate)
+                if showsField {
+                    BrandTextField(
+                        BookCopy.Theme.title,
+                        text: $text,
+                        field: Field.theme,
+                        focus: $focus,
+                        labelPlacement: .hidden,
+                        placeholder: BookCopy.Theme.placeholder
+                    )
+                    .submitLabel(.done)
+                    .onSubmit(validate)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
 
                 BrandButton(BookCopy.Theme.validate, fillsWidth: true, action: validate)
-                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(chosenTheme.isEmpty)
             }
+            .animation(.snappy(duration: 0.25), value: showsField)
         }
         // Les thèmes viennent du serveur, et la rangée montre sa barre
         // d'attente le temps qu'ils arrivent. Sans effet s'ils sont déjà là.
         .task {
             await model.loadThemes()
-            selection = model.themes.first { $0.name == text }
+            // Le thème enregistré, s'il est dans la rangée ; sinon c'est un
+            // thème libre, et « Autre » le porte.
+            if let known = model.themes.first(where: { $0.name == text }) {
+                selection = known
+            } else if !text.isEmpty {
+                selection = model.themes.first { $0.isOther }
+            }
         }
     }
 
     private func validate() {
         focus = nil
-        model.setTheme(text)
+        model.setTheme(chosenTheme)
         dismiss()
     }
 }
@@ -350,70 +395,52 @@ struct TripInviteSheet: View {
 /// **Deux gestes pour les mêmes deux actions**, et c'est ce que demande la note
 /// « Logique » de la maquette. Le glissé vers la gauche est celui des listes
 /// d'iOS ; l'appui long ouvre le menu contextuel du système, qui est aussi ce
-/// que VoiceOver et le Contrôle de sélection savent atteindre. On ne peut pas
-/// se contenter du glissé : un geste continu n'existe pas pour ces deux-là.
+/// que VoiceOver et le Contrôle de sélection savent atteindre. Les deux
+/// viennent de ``BrandSwipeDrawer``, que les cartes de l'accueil partagent
+/// désormais.
 private struct CompanionRow: View {
     let companion: Companion
     let onRemove: () -> Void
     let onResend: () -> Void
 
-    /// De combien la carte est décalée vers la gauche. `0` au repos, la largeur
-    /// des actions quand elles sont ouvertes.
-    @State private var offset: CGFloat = 0
-    @GestureState private var drag: CGFloat = 0
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
-
-    /// Largeur du tiroir : deux cibles tactiles et leur gouttière.
-    private var drawerWidth: CGFloat {
-        canRemove
-            ? MemoBookSpacing.minimumTapTarget * (canResend ? 2 : 1)
-                + MemoBookSpacing.xs * (canResend ? 3 : 2)
-            : 0
-    }
 
     /// Le propriétaire ne se retire pas — première règle de la note.
     private var canRemove: Bool { !companion.isOwner }
     /// On ne renvoie un lien qu'à quelqu'un qui n'est jamais entré.
     private var canResend: Bool { companion.isPending }
 
-    private var translation: CGFloat {
-        (offset + drag).clampedToDrawer(drawerWidth)
+    /// Renvoyer d'abord, retirer ensuite — le geste qui défait est le plus
+    /// loin sous le doigt.
+    private var actions: [BrandSwipeAction] {
+        guard canRemove else { return [] }
+        var actions: [BrandSwipeAction] = []
+        if canResend {
+            actions.append(
+                BrandSwipeAction(
+                    icon: "IconTeleverser",
+                    tint: MemoBookColor.action,
+                    label: BookCopy.Invite.resend,
+                    action: onResend
+                )
+            )
+        }
+        actions.append(
+            BrandSwipeAction(
+                icon: "IconCross",
+                tint: MemoBookColor.error,
+                label: BookCopy.Invite.remove,
+                action: onRemove
+            )
+        )
+        return actions
     }
 
     var body: some View {
-        ZStack(alignment: .trailing) {
-            if canRemove { actions }
-
+        BrandSwipeDrawer(actions: actions) {
             card
-                .offset(x: translation)
-                .gesture(swipe)
         }
-        // La carte est **rognée sur sa propre place**. Sans ça, elle glissait
-        // par-dessus la marge de la feuille et jusque sous le bord de l'écran :
-        // le portrait sortait du cadre et le coin arrondi se retrouvait coupé
-        // net. Rognée, elle disparaît sous la colonne comme une ligne de liste
-        // disparaît sous le bord d'un tableau — et le coin reste rond.
-        .clipShape(.rect(cornerRadius: MemoBookSpacing.snug))
-        // L'appui long : le même couple d'actions, par le menu du système.
-        .contextMenu {
-            if canResend {
-                Button(BookCopy.Invite.resend, systemImage: "paperplane") { onResend() }
-            }
-            if canRemove {
-                Button(BookCopy.Invite.remove, systemImage: "person.badge.minus", role: .destructive) {
-                    onRemove()
-                }
-            }
-        }
-        // Et pour VoiceOver, où ni l'un ni l'autre n'existe : le rotor
-        // d'actions, qui est la façon dont iOS rend un balayage de liste.
         .accessibilityElement(children: .combine)
-        .accessibilityActions {
-            if canResend { Button(BookCopy.Invite.resend, action: onResend) }
-            if canRemove { Button(BookCopy.Invite.remove, action: onRemove) }
-        }
     }
 
     // MARK: La carte
@@ -459,99 +486,6 @@ private struct CompanionRow: View {
         if companion.isOwner { return BookCopy.Invite.me }
         if companion.isPending { return BookCopy.Invite.pending }
         return companion.role
-    }
-
-    // MARK: Le tiroir
-
-    private var actions: some View {
-        HStack(spacing: MemoBookSpacing.xs) {
-            if canResend {
-                actionButton(
-                    icon: "IconTeleverser",
-                    tint: MemoBookColor.action,
-                    label: BookCopy.Invite.resend
-                ) {
-                    close()
-                    onResend()
-                }
-            }
-
-            actionButton(
-                icon: "IconCross",
-                tint: MemoBookColor.error,
-                label: BookCopy.Invite.remove
-            ) {
-                close()
-                onRemove()
-            }
-        }
-        .padding(.trailing, MemoBookSpacing.xs)
-        // Elles n'existent que lorsqu'on les a fait apparaître : posées en
-        // permanence sous la carte, elles resteraient tapables à travers elle.
-        .opacity(translation < -MemoBookSpacing.xs ? 1 : 0)
-        .allowsHitTesting(translation < -MemoBookSpacing.xs)
-        .accessibilityHidden(true)
-    }
-
-    private func actionButton(
-        icon: String,
-        tint: Color,
-        label: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(brand: icon)
-                .resizable()
-                .renderingMode(.template)
-                .scaledToFit()
-                .frame(width: MemoBookSpacing.snug, height: MemoBookSpacing.snug)
-                .foregroundStyle(tint)
-                .frame(
-                    width: MemoBookSpacing.minimumTapTarget,
-                    height: MemoBookSpacing.minimumTapTarget
-                )
-                .overlay { Circle().strokeBorder(tint, lineWidth: 1) }
-                .contentShape(.circle)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-    }
-
-    // MARK: Le geste
-
-    /// Vers la gauche seulement, et franchement horizontal : la feuille défile
-    /// verticalement sous ce geste, et un glissé un peu de travers ne doit pas
-    /// ouvrir un tiroir au milieu d'une lecture.
-    private var swipe: some Gesture {
-        DragGesture(minimumDistance: 12)
-            .updating($drag) { value, state, _ in
-                guard canRemove, abs(value.translation.width) > abs(value.translation.height) else {
-                    return
-                }
-                state = value.translation.width
-            }
-            .onEnded { value in
-                guard canRemove, abs(value.translation.width) > abs(value.translation.height) else {
-                    return
-                }
-                let settled = (offset + value.translation.width).clampedToDrawer(drawerWidth)
-                withAnimation(reduceMotion ? .none : .snappy(duration: 0.25)) {
-                    offset = settled < -drawerWidth / 2 ? -drawerWidth : 0
-                }
-            }
-    }
-
-    private func close() {
-        withAnimation(reduceMotion ? .none : .snappy(duration: 0.25)) { offset = 0 }
-    }
-}
-
-private extension CGFloat {
-    /// Le tiroir ne s'ouvre que vers la gauche, et pas au-delà de sa largeur.
-    func clampedToDrawer(_ width: CGFloat) -> CGFloat {
-        // `Swift.min` / `Swift.max` explicitement : dans une extension de
-        // `CGFloat`, `min` et `max` désignent d'abord les bornes du type.
-        Swift.min(0, Swift.max(-width, self))
     }
 }
 

@@ -311,10 +311,14 @@ struct ChatVoiceBubble: View {
 
     var body: some View {
         BrandChatBubble(author: author) {
-            HStack(spacing: MemoBookSpacing.snug) {
+            // Tout sur **une ligne, centrée** : le bouton, l'onde, le chrono et
+            // la signature partagent le même axe. L'onde vivait au-dessus du
+            // chrono, et se retrouvait au-dessus du milieu de la bulle
+            // (Clara, 17/09/2026).
+            HStack(alignment: .center, spacing: MemoBookSpacing.snug) {
                 playButton
 
-                VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .center, spacing: MemoBookSpacing.xs) {
                     BrandWaveform(
                         levels: note.levels,
                         progress: isPlaying ? model.player.progress : 0,
@@ -325,6 +329,7 @@ struct ChatVoiceBubble: View {
                         .font(MemoBookFont.caption)
                         .foregroundStyle(MemoBookColor.ink)
                         .monospacedDigit()
+                        .fixedSize()
                 }
                 .frame(minWidth: MemoBookSpacing.xl * 2)
 
@@ -374,15 +379,17 @@ struct ChatVoiceBubble: View {
             .background(MemoBookColor.action, in: .circle)
             // Le micro à cheval sur le bord du rond, comme la maquette le pose :
             // c'est lui qui dit que ce disque signe un **vocal** et pas un
-            // message écrit.
-            .overlay(alignment: .leading) {
+            // message écrit. **En bas à gauche du disque, et à la taille d'une
+            // icône de barre** — il était plus petit et posé à mi-hauteur
+            // (Clara, 17/09/2026).
+            .overlay(alignment: .bottomLeading) {
                 Image(brand: "IconMic")
                     .resizable()
                     .renderingMode(.template)
                     .scaledToFit()
-                    .frame(width: glyph * 0.8, height: glyph * 0.8)
+                    .frame(width: glyph, height: glyph)
                     .foregroundStyle(MemoBookColor.ink)
-                    .offset(x: -glyph * 0.4)
+                    .offset(x: -glyph * 0.35, y: glyph * 0.1)
             }
             .accessibilityHidden(true)
     }
@@ -442,10 +449,9 @@ struct ChatTranscriptBubble: View {
     private var heading: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: MemoBookSpacing.xs) {
-                // ⚠️ La maquette écrit cet intitulé en Gloria Hallelujah, une
-                // manuscrite qui n'est pas dans le bundle. En attendant qu'elle
-                // passe par `make-brand-fonts.py`, c'est le surtitre de l'app,
-                // dans le vert de MEMO — voir la fiche écran.
+                // L'intitulé est **écrit à la main** — Gloria Hallelujah, comme
+                // la maquette, et comme les titres du carnet (T54). La police
+                // est dans le bundle depuis le mot des fondateurs.
                 Image(brand: "IconLucideSparkles")
                     .resizable()
                     .renderingMode(.template)
@@ -454,7 +460,7 @@ struct ChatTranscriptBubble: View {
                     .foregroundStyle(MemoBookColor.action)
 
                 Text(card.title)
-                    .font(MemoBookFont.overline)
+                    .font(MemoBookFont.handwriting)
                     .foregroundStyle(MemoBookColor.action)
             }
 

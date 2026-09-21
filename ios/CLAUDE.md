@@ -214,8 +214,10 @@ police ou marge codée en dur ailleurs.
 - Les couleurs sont **fixes**, pas adaptatives : la marque est un papier crème,
   elle ne se retourne pas en sombre. Les écrans forcent `.colorScheme(.light)`.
 - `BrandButton` est **le** bouton (styles primary / secondary / tertiary / soft /
-  raised / accent / blue / destructive / link, tailles regular / small,
-  `alternate` pour les fonds sombres). Ne pas en écrire d'autre. `destructive`
+  raised / accent / blue / destructive / link, tailles regular / medium / small
+  — `medium` est le libellé de 16 sur 48 pt des boutons d'appoint qui comptent,
+  ceux de la carte de solde —, `alternate` pour les fonds sombres). Ne pas en
+  écrire d'autre. `destructive`
   porte le rouge sémantique sans fond ni contour — c'est l'action qui défait,
   jamais un `link` ; `accent` est le seul aplat large que porte le lime, et **le
   lime ne dit que l'abonnement** (T7) — l'accent de tout le reste est le bleu
@@ -265,7 +267,9 @@ police ou marge codée en dur ailleurs.
   (`help:`) en plus de « Réessayer » : `APIError.recoveryAdvice` donne le
   conseil par famille d'erreur. Un bandeau qui ne propose rien laisse chercher
   ce qu'on a mal fait.
-- `BrandNotice` a **deux tons**. Le beige dit l'état des choses ; `.information`
+- `BrandNotice` a **deux tons**. Le beige — `noticeBeige`, sur un verre
+  dépoli, plus doux que `Beige Darker` (Hugo, 17/09/2026) — dit l'état des
+  choses ; `.information`
   — filet, pictogramme et aplat en `MemoBookColor.information` — répond à un
   geste : pourquoi cette ligne ne mène nulle part, pourquoi ce réglage n'est pas
   ouvert. Il ne remplace pas `ErrorBanner` : rien n'a raté.
@@ -288,6 +292,19 @@ police ou marge codée en dur ailleurs.
   texte. L'état appartient à l'écran, et c'est l'écran qui tronque — et qui
   dit, en mesurant la troncature, si la carte a une suite (`isExpandable`) :
   sans suite, pas de chevron, et le toucher ne fait rien.
+- `BrandSwipeDrawer` est **le** tiroir d'actions d'une carte : un glissé vers
+  la gauche découvre ses gestes (supprimer, partager, prévisualiser un voyage ;
+  retirer un co-voyageur), qui arrivent en quinconce avec le doigt ; l'appui
+  long ouvre le menu contextuel du système, VoiceOver reçoit le rotor
+  d'actions. Une carte qui a des gestes cachés passe par lui, elle ne réécrit
+  pas le geste — et il pose son `DragGesture` en `highPriorityGesture`, sans
+  quoi le `Button` de la carte prend le doigt.
+- `PhotoFlow` (`Feature`) est **le** parcours de choix d'une photo —
+  autorisation, « Prendre une photo / Choisir dans la galerie », photothèque
+  ou appareil : la conversation et la photo de profil le partagent.
+- `brandScrollWithoutBounce()` retire l'élastique d'une `ScrollView` — posé sur
+  son **contenu**, il remonte jusqu'à l'`UIScrollView`. Une seule vue s'en
+  sert, la carte de l'écran d'entrée, qui doit bloquer en bas.
 
 ### Une `ScrollView` dans une barre doit se voir imposer sa hauteur
 
@@ -479,10 +496,11 @@ jamais un mur devant l'app.
 
 ## Le cache local, et ce qu'il change à l'écran
 
-**Cinq écrans s'ouvrent sur ce qu'on avait** : l'accueil, le profil, un voyage,
-ses réglages, la galerie. `ContentCache` — l'ancien `HomeFeedCache`, devenu
-générique — les garde dans **Caches**, jamais ailleurs : c'est une copie de ce
-que le serveur sait, iOS peut la purger, on la redemande. Elle s'efface à la
+**Six écrans s'ouvrent sur ce qu'on avait** : l'accueil, le profil, ses
+statistiques, un voyage, ses réglages, la galerie. `ContentCache` — l'ancien
+`HomeFeedCache`, devenu générique — les garde dans **Caches**, jamais
+ailleurs : c'est une copie de ce que le serveur sait, iOS peut la purger, on la
+redemande. Elle s'efface à la
 déconnexion (`AppDependencies.forgetAccountContent()`).
 
 Ce qu'on ne garde **pas**, et c'est délibéré : la conversation — elle change à
@@ -504,12 +522,22 @@ freshness = contentFreshness(of: loaded, replacing: value)   // avant de poser
 chargement : un « tirer pour rafraîchir » ne doit pas remplacer ce qui est à
 l'écran par une copie plus ancienne.
 
+**Un écran peut aussi relire tout seul, à condition de savoir s'arrêter.** La
+feuille « Statistiques » (`StatisticsModel.watch()`) relit sa route toutes les
+3 s tant que le serveur annonce des relevés en attente, et cesse dès que la
+file est vide ou après deux minutes sans changement. Pas de connexion ouverte,
+pas de minuterie globale : une `.task(id:)` sur le compteur de livraisons de la
+file des vocaux, qui meurt avec la feuille. C'est le motif à reprendre pour
+tout écran qui attend un job serveur.
+
 ⚠️ **Un écran qui change sous les yeux doit le dire.** C'est le risque que le
 cache introduit : on lit une page, trois valeurs bougent, rien ne le signale.
-`.brandRefreshFlash(model.freshness.isUpdated)` joue un balayage et une pastille
-« Mis à jour ». **Seulement sur un vrai changement** — jamais à la première
-arrivée, jamais sur une réponse identique : un écran qui clignote à chaque
-ouverture apprend à ne plus être regardé.
+`.brandRefreshFlash(model.freshness.isUpdated)` joue un balayage — et une
+annonce VoiceOver, plus de pastille « Mis à jour » : elle prenait trop de place
+sur le contenu, le clignotement des chiffres suffit (Hugo, 17/09/2026 ;
+`showsBadge:` la garde pour l'aperçu PDF). **Seulement sur un vrai
+changement** — jamais à la première arrivée, jamais sur une réponse identique :
+un écran qui clignote à chaque ouverture apprend à ne plus être regardé.
 
 ## Hors ligne
 

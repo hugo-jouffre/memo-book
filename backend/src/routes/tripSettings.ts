@@ -5,7 +5,9 @@ import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
 import { readMemoryAllowance, setMemoryPlan } from "../services/memoryAllowance.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
+import { normalizeNarrationPace } from "../services/narrationPace.js";
 import { endSubscriptionsWithoutRunningTrip } from "../services/subscriptions.js";
+import { stageFromDates } from "../services/tripStage.js";
 import { serializeTripSettings } from "./appSerializers.js";
 
 /**
@@ -167,13 +169,29 @@ export function registerTripSettingsRoutes(app: FastifyInstance, context: AppCon
     });
     if (!visible) throw new HttpError(404, "Ce voyage n’existe pas.");
 
+    // Les dates qui bougent réécrivent la colonne `stage`, pour qu'elle ne
+    // contredise pas ce que l'app lit — l'état se lit sur les dates
+    // (`services/tripStage.ts`), la colonne n'est qu'un repli sans date.
+    const datesChanged = body.startDate !== undefined || body.endDate !== undefined;
+    const current = datesChanged
+      ? await context.prisma.memo.findUniqueOrThrow({
+          where: { id },
+          select: { startDate: true, endDate: true },
+        })
+      : null;
+    const nextStart = body.startDate !== undefined ? body.startDate : current?.startDate;
+    const nextEnd = body.endDate !== undefined ? body.endDate : current?.endDate;
+
     await context.prisma.memo.update({
       where: { id },
       data: {
         ...(body.name !== undefined ? { title: body.name } : {}),
         ...(body.startDate !== undefined ? { startDate: body.startDate } : {}),
         ...(body.endDate !== undefined ? { endDate: body.endDate } : {}),
-        ...(body.narrationPace !== undefined ? { narrationPace: body.narrationPace } : {}),
+        ...(datesChanged ? { stage: stageFromDates(nextStart, nextEnd) } : {}),
+        ...(body.narrationPace !== undefined
+          ? { narrationPace: normalizeNarrationPace(body.narrationPace) }
+          : {}),
         ...(body.notificationsEnabled !== undefined
           ? { notificationsEnabled: body.notificationsEnabled }
           : {}),

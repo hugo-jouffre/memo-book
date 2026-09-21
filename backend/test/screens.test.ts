@@ -1,11 +1,13 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
   createHarness,
+  multipartBody,
   registerAccount,
   registerDevice,
   resetDatabase,
   type TestHarness,
 } from "./helpers.js";
+import { assertCanRecord } from "../src/services/quota.js";
 
 /**
  * Les trois écrans « produit » : l'accueil, un voyage, le profil.
@@ -54,6 +56,8 @@ interface TripDetailBody {
 
 interface ProfileBody {
   phoneNumber: string | null;
+  gender: "female" | "male" | "undisclosed";
+  avatarUrl: string | null;
   wantsNewsletter: boolean;
   walletBalance: number;
   address: {
@@ -354,6 +358,122 @@ describe("le profil", () => {
     expect(body.orders).toEqual([]);
   });
 
+  /**
+   * La feuille « Statistiques » : additionnée à la lecture depuis les relevés
+   * de la rédaction, **au champ près** de `TravelStatistics` côté Swift. Ce
+   * que le voyage déclare sert de plancher, ce que la rédaction relève
+   * s'ajoute, et le compte des souvenirs en attente pilote le rafraîchissement
+   * de l'app.
+   */
+  it("additionne les statistiques depuis les relevés de la rédaction", async () => {
+    const account = await registerAccount(harness.app);
+    const trip = await seedTrip(account.accountId, {
+      destinationCity: "Rome",
+      startDate: new Date("2026-12-10T00:00:00Z"),
+      endDate: new Date("2027-01-02T00:00:00Z"),
+      distanceKilometres: 87.4,
+    });
+
+    await harness.prisma.entry.createMany({
+      data: [
+        {
+          memoId: trip.id,
+          kind: "audio",
+          status: "ready",
+          redactionStatus: "ready",
+          transcript: "Une demi-heure de train et plus personne.",
+          capturedAt: new Date("2026-12-11T10:00:00Z"),
+          insights: {
+            countries: [{ code: "IT", name: "Italie" }],
+            regions: ["Latium"],
+            cities: ["Rome", "Ostie"],
+            peopleMet: 6,
+            distanceKilometres: 30,
+            transports: [{ kind: "train", count: 1 }],
+            currentPlace: "Ostie",
+          },
+        },
+        {
+          memoId: trip.id,
+          kind: "audio",
+          status: "ready",
+          redactionStatus: "pending",
+          transcript: "Pas encore rédigé.",
+          capturedAt: new Date("2026-12-12T10:00:00Z"),
+        },
+      ],
+    });
+
+    // Un voyage passé compte dans le total, pas dans le voyage en cours.
+    await seedTrip(account.accountId, {
+      stage: "past",
+      destinationCountryCode: "PT",
+      destinationCity: "Lisbonne",
+      distanceKilometres: 41.2,
+    });
+
+    const response = await harness.app.inject({
+      method: "GET",
+      url: "/v1/profile/statistics",
+      headers: { authorization: account.authorization },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json<{
+      tripCount: number;
+      overall: Record<string, number>;
+      currentTrip: {
+        id: string;
+        currentPlace: string | null;
+        dayCount: number;
+        validatedDays: number;
+        recordings: number;
+        figures: Record<string, number>;
+        transports: { kind: string; count: number | null }[];
+      } | null;
+      pendingDetections: number;
+      updatedAt: string;
+    }>();
+
+    expect(body.tripCount).toBe(2);
+    expect(body.overall).toEqual({
+      countries: 2,
+      regions: 1,
+      cities: 3,
+      encounters: 6,
+      // 30 relevés à Rome (qui priment sur les 87,4 de la fiche) + 41,2 à
+      // Lisbonne, arrondis sur le total.
+      distanceKilometres: 71,
+    });
+    expect(body.currentTrip).toMatchObject({
+      id: trip.id,
+      currentPlace: "Ostie",
+      dayCount: 24,
+      validatedDays: 1,
+      recordings: 2,
+      figures: { countries: 1, regions: 1, cities: 2, encounters: 6, distanceKilometres: 30 },
+      transports: [{ kind: "train", count: 1 }],
+    });
+    expect(body.pendingDetections).toBe(1);
+    expect(typeof body.updatedAt).toBe("string");
+  });
+
+  it("ne montre pas les statistiques des voyages d'un autre compte", async () => {
+    const owner = await registerAccount(harness.app);
+    const stranger = await registerAccount(harness.app, "inconnu@memobook.app");
+    await seedTrip(owner.accountId, { destinationCity: "Rome" });
+
+    const response = await harness.app.inject({
+      method: "GET",
+      url: "/v1/profile/statistics",
+      headers: { authorization: stranger.authorization },
+    });
+
+    const body = response.json<{ tripCount: number; currentTrip: unknown }>();
+    expect(body.tripCount).toBe(0);
+    expect(body.currentTrip).toBeNull();
+  });
+
   it("distingue « effacer » de « ne pas toucher »", async () => {
     const account = await registerAccount(harness.app);
 
@@ -382,6 +502,85 @@ describe("le profil", () => {
       payload: { phoneNumber: null },
     });
     expect(cleared.json<ProfileBody>().phoneNumber).toBeNull();
+  });
+
+  it("devine le genre sur le prénom, et s'efface devant ce que la personne dit", async () => {
+    const account = await registerAccount(harness.app);
+
+    // « Hugo » : le prénom du compte de test suffit à accorder au masculin,
+    // sans que personne n'ait rien déclaré.
+    const guessed = await harness.app.inject({
+      method: "GET",
+      url: "/v1/profile",
+      headers: { authorization: account.authorization },
+    });
+    expect(guessed.json<ProfileBody>().gender).toBe("male");
+
+    // Ce que la personne choisit l'emporte, y compris « je ne préfère pas
+    // répondre » — c'est une réponse, pas une absence de réponse.
+    const declared = await harness.app.inject({
+      method: "PATCH",
+      url: "/v1/profile",
+      headers: { authorization: account.authorization },
+      payload: { gender: "undisclosed" },
+    });
+    expect(declared.json<ProfileBody>().gender).toBe("undisclosed");
+
+    // Et un prénom qui change ne revient pas sur ce qui a été dit.
+    const renamed = await harness.app.inject({
+      method: "PATCH",
+      url: "/v1/profile",
+      headers: { authorization: account.authorization },
+      payload: { firstName: "Clara" },
+    });
+    expect(renamed.json<ProfileBody>().gender).toBe("undisclosed");
+  });
+
+  it("garde la photo de profil, et la sert sans session", async () => {
+    const account = await registerAccount(harness.app);
+    const bytes = Buffer.from("fausse-image-jpeg");
+    const { payload, contentType } = multipartBody(
+      {},
+      { field: "file", filename: "moi.jpg", contentType: "image/jpeg", content: bytes },
+    );
+
+    const uploaded = await harness.app.inject({
+      method: "POST",
+      url: "/v1/profile/avatar",
+      headers: { authorization: account.authorization, "content-type": contentType },
+      payload,
+    });
+    expect(uploaded.statusCode).toBe(200);
+
+    // L'adresse est calculée à la lecture, sur la racine de l'API, et mène à
+    // la route publique.
+    const url = uploaded.json<ProfileBody>().avatarUrl;
+    expect(url).toMatch(/^http:\/\/localhost:3000\/v1\/avatars\/[0-9a-f-]{36}\.jpg$/);
+
+    const read = await harness.app.inject({
+      method: "GET",
+      url: new URL(url!).pathname,
+    });
+    expect(read.statusCode).toBe(200);
+    expect(read.headers["content-type"]).toContain("image/jpeg");
+    expect(read.rawPayload.equals(bytes)).toBe(true);
+
+    // Un type qui n'est pas une image est refusé avant d'être stocké.
+    const pdf = multipartBody(
+      {},
+      { field: "file", filename: "moi.pdf", contentType: "application/pdf", content: bytes },
+    );
+    const refused = await harness.app.inject({
+      method: "POST",
+      url: "/v1/profile/avatar",
+      headers: { authorization: account.authorization, "content-type": pdf.contentType },
+      payload: pdf.payload,
+    });
+    expect(refused.statusCode).toBe(400);
+
+    // Un nom qui n'est pas une clé d'avatar ne mène nulle part.
+    const missing = await harness.app.inject({ method: "GET", url: "/v1/avatars/../etc/passwd" });
+    expect([400, 404]).toContain(missing.statusCode);
   });
 
   it("enregistre l'adresse postale avec un pays livrable, et la relit", async () => {
@@ -881,6 +1080,94 @@ describe("l'arrêt automatique de l'abonnement", () => {
       where: { accountId, status: { in: ["active", "trialing"] } },
     });
   }
+});
+
+describe("la résiliation depuis le profil", () => {
+  async function subscribe(accountId: string, renewsAt: Date | null = null) {
+    return harness.prisma.subscription.create({
+      data: { accountId, provider: "stripe", status: "active", priceCents: 299, renewsAt },
+    });
+  }
+
+  it("ferme l'abonnement, garde la semaine payée, et survit au rechargement", async () => {
+    const account = await registerAccount(harness.app, "resilie@memobook.app");
+    const paidThrough = new Date(Date.now() + 5 * 86_400_000);
+    await subscribe(account.accountId, paidThrough);
+
+    const cancelled = await harness.app.inject({
+      method: "POST",
+      url: "/v1/profile/subscription/cancel",
+      headers: { authorization: account.authorization },
+      payload: { reason: "tooExpensive" },
+    });
+    expect(cancelled.statusCode).toBe(200);
+
+    // La réponse porte déjà le profil relu : l'app n'a rien à redemander.
+    expect(cancelled.json<ProfileBody>().subscription).toMatchObject({
+      isActive: false,
+      hasEndedBefore: true,
+    });
+
+    // **Et ça tient.** C'est tout l'objet du correctif : la résiliation ne
+    // vivait que dans l'app, et le chargement suivant la rendait abonnée.
+    const reloaded = await harness.app.inject({
+      method: "GET",
+      url: "/v1/profile",
+      headers: { authorization: account.authorization },
+    });
+    expect(reloaded.json<ProfileBody>().subscription.isActive).toBe(false);
+
+    // La semaine déjà réglée n'est pas rendue — c'est elle qui laisse raconter
+    // jusqu'à son terme, côté app comme côté verrou.
+    const row = await harness.prisma.subscription.findFirstOrThrow({
+      where: { accountId: account.accountId },
+    });
+    expect(row.status).toBe("cancelled");
+    expect(row.cancelledAt).not.toBeNull();
+    expect(row.renewsAt?.toISOString()).toBe(paidThrough.toISOString());
+    expect(row.cancellationReason).toBe("tooExpensive");
+  });
+
+  it("laisse encore enregistrer pendant la semaine réglée", async () => {
+    const account = await registerAccount(harness.app, "sursis@memobook.app");
+    await subscribe(account.accountId, new Date(Date.now() + 3 * 86_400_000));
+    await harness.prisma.account.update({
+      where: { id: account.accountId },
+      data: { remainingSteps: 0 },
+    });
+
+    await harness.app.inject({
+      method: "POST",
+      url: "/v1/profile/subscription/cancel",
+      headers: { authorization: account.authorization },
+      payload: { reason: "unused" },
+    });
+
+    await expect(
+      assertCanRecord(harness.prisma, account.accountId),
+    ).resolves.toBeUndefined();
+  });
+
+  it("se résilie deux fois sans se plaindre", async () => {
+    const account = await registerAccount(harness.app, "deuxfois@memobook.app");
+    await subscribe(account.accountId);
+
+    for (const _ of [0, 1]) {
+      const response = await harness.app.inject({
+        method: "POST",
+        url: "/v1/profile/subscription/cancel",
+        headers: { authorization: account.authorization },
+        payload: {},
+      });
+      expect(response.statusCode).toBe(200);
+    }
+
+    expect(
+      await harness.prisma.subscription.count({
+        where: { accountId: account.accountId, status: "cancelled" },
+      }),
+    ).toBe(1);
+  });
 });
 
 describe("la suppression d'un compte", () => {

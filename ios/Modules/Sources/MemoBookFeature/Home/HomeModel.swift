@@ -43,6 +43,17 @@ public final class HomeModel {
     /// Ce qu'on avait sur le disque — voir ``ContentCache``. `nil` en aperçu.
     private let cached: CachedValue<HomeFeed>?
 
+    /// Supprime un voyage — `DELETE /v1/memos/:id`. `nil` en aperçu, où la
+    /// carte disparaît comme si c'était fait.
+    private let remove: ((String) async throws -> Void)?
+
+    /// Le voyage dont la suppression est partie, le temps qu'elle aboutisse.
+    public private(set) var deletingTripId: String?
+
+    /// Ce que le serveur a répondu à une suppression refusée — un co-voyageur
+    /// qui essaie, par exemple. Se lit dans la feuille de confirmation.
+    public private(set) var deletionError: String?
+
     /// Ce que le dernier chargement a appris : rien, une reprise du disque, une
     /// confirmation, ou un vrai changement. C'est lui que la vue anime.
     public private(set) var freshness: ContentFreshness = .unknown
@@ -56,14 +67,18 @@ public final class HomeModel {
     ///   - cached: ce que l'appareil a gardé du dernier passage. Sert à
     ///     **ouvrir tout de suite** plutôt qu'à attendre le réseau ; la lecture
     ///     continue derrière, et remplace. `nil` en aperçu.
+    ///   - remove: supprime un voyage, depuis le tiroir d'une carte. `nil` en
+    ///     aperçu.
     public init(
         source: @escaping () async throws -> HomeFeed = { .fixture },
         cached: CachedValue<HomeFeed>? = nil,
-        outbox: RecordingOutbox = RecordingOutbox()
+        outbox: RecordingOutbox = RecordingOutbox(),
+        remove: ((String) async throws -> Void)? = nil
     ) {
         self.source = source
         self.cached = cached
         self.outbox = outbox
+        self.remove = remove
     }
 
     /// Le seul message d'erreur de l'écran, d'où qu'il vienne : le chargement
@@ -163,6 +178,37 @@ public final class HomeModel {
         }
     }
 
+    /// Supprime un voyage depuis le tiroir de sa carte (Hugo, 17/09/2026).
+    ///
+    /// La carte disparaît **sur la réponse du serveur**, pas avant : c'est le
+    /// récit de tout le monde qui part, et un co-voyageur se voit refuser le
+    /// geste — la feuille lit alors le refus. Renvoie `true` quand c'est fait,
+    /// et recharge l'accueil : les compteurs et la section « en cours » ont
+    /// changé.
+    public func deleteTrip(id: String) async -> Bool {
+        deletingTripId = id
+        deletionError = nil
+        defer { deletingTripId = nil }
+
+        do {
+            if let remove {
+                try await remove(id)
+                await load()
+            } else if let feed {
+                apply(HomeFeed(traveller: feed.traveller, trips: feed.trips.filter { $0.id != id }, showcase: feed.showcase))
+            }
+            return true
+        } catch {
+            deletionError = error.localizedDescription
+            return false
+        }
+    }
+
+    /// Oublie le refus d'une suppression : à la fermeture de la feuille.
+    public func dismissDeletionError() {
+        deletionError = nil
+    }
+
     /// Ce que fait « Réessayer » du bandeau d'erreur : oublier le refus, et
     /// redemander le contenu. Les deux, parce qu'un seul bouton ne peut pas
     /// laisser un message à l'écran après qu'on a appuyé dessus.
@@ -219,6 +265,10 @@ public enum HomeIntent: Sendable, Hashable {
     case openProfile
     case openTrip(id: String)
     case orderPrint(tripId: String)
+    /// Partager un voyage, depuis le tiroir de sa carte : l'aperçu du carnet,
+    /// ouvert directement sur sa feuille de partage — c'est là que vivent le
+    /// PDF et le lien, et un second chemin de partage aurait dit la même chose.
+    case shareTrip(id: String)
     /// La carte de découverte, en bas de l'accueil : elle ouvre la galerie des
     /// carnets de la communauté.
     ///

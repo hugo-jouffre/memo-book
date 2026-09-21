@@ -39,9 +39,18 @@ struct SubscriptionSheet: View {
     /// en entier, là où la feuille n'en donne que le principe.
     let onLearnMore: () -> Void
 
+    /// « Voir ma cagnotte » mène à la page de la cagnotte (Hugo, 17/09/2026,
+    /// T74). C'est l'écran qui présente qui la pousse : la feuille se referme
+    /// d'abord, une page ne s'ouvre pas sous une feuille.
+    var onSeeWallet: () -> Void = {}
+
     /// Le carnet que l'aperçu montre. `nil` — un compte sans voyage en cours —
     /// ouvre le jeu d'essai : l'aperçu est là pour montrer à quoi ça ressemble.
     var previewMemoId: String?
+
+    /// À qui la pastille s'adresse : « Abonnée » ou « Abonné » (T76). La forme
+    /// non marquée quand on ne sait pas.
+    var gender: Gender = .undisclosed
 
     /// Où on en est du chemin. `nil` tant qu'on n'a rien poussé : l'étape de
     /// départ se **déduit** alors de l'abonnement, pour qu'elle suive le profil
@@ -176,7 +185,7 @@ struct SubscriptionSheet: View {
     private var current: some View {
         BrandSheet(
             SubscriptionCopy.currentTitle,
-            badge: SubscriptionCopy.currentBadge,
+            badge: SubscriptionCopy.currentBadge(for: gender),
             subtitle: SubscriptionCopy.currentSubtitle
         ) {
             VStack(alignment: .leading, spacing: MemoBookSpacing.m) {
@@ -186,10 +195,9 @@ struct SubscriptionSheet: View {
                 )
 
                 VStack(spacing: MemoBookSpacing.s) {
-                    // ⚠️ « Ma cagnotte » n'a pas d'écran dessiné derrière elle,
-                    // pas plus ici que sur la ligne du profil qui porte le même
-                    // nom — fiche écran.
-                    BrandButton(SubscriptionCopy.seeWallet, style: .secondary, fillsWidth: true) {}
+                    BrandButton(SubscriptionCopy.seeWallet, style: .secondary, fillsWidth: true) {
+                        onSeeWallet()
+                    }
 
                     BrandButton(SubscriptionCopy.cancelSubscription, style: .destructive, fillsWidth: true) {
                         step = .keepGoing
@@ -204,7 +212,10 @@ struct SubscriptionSheet: View {
     private var keepGoing: some View {
         BrandSheet(
             SubscriptionCopy.keepGoingTitle,
-            paragraphs: SubscriptionCopy.keepGoingParagraphs(tripTitle: subscription?.tripTitle)
+            paragraphs: SubscriptionCopy.keepGoingParagraphs(
+                tripTitle: subscription?.tripTitle,
+                graceEnd: graceEnd
+            )
         ) {
             VStack(spacing: MemoBookSpacing.s) {
                 BrandButton(SubscriptionCopy.waitForAutoCancel, fillsWidth: true) { dismiss() }
@@ -501,7 +512,9 @@ enum SubscriptionCopy {
     // — Feuille 2 : « Mon Abonnement »
 
     static let currentTitle = "Mon Abonnement"
-    static let currentBadge = "Abonnée"
+    /// La maquette écrit « Abonnée » ; l'app accorde sur ce que le profil sait
+    /// de la personne (T76).
+    static func currentBadge(for gender: Gender) -> String { gender.agreed("Abonné") }
     static let currentSubtitle =
         "Tu as déjà souscrit à ton abonnement MemoBook, tu peux mettre en page tes récits de manière illimitée."
 
@@ -533,16 +546,29 @@ enum SubscriptionCopy {
 
     /// ⚠️ **État non maquetté** : sans titre de voyage, la première phrase se
     /// passe des guillemets.
-    static func keepGoingParagraphs(tripTitle: String?) -> [String] {
+    ///
+    /// **La deuxième phrase dit *quand*** (Hugo, 19/09/2026). Elle annonçait
+    /// « tu ne pourras plus dicter tes derniers souvenirs » sans date, ce qui
+    /// se lisait « tout s'arrête maintenant » — alors que la semaine déjà
+    /// réglée continue. Elle nomme donc le jour, comme les deux feuilles
+    /// suivantes. Sans semaine réglée, elle reste la phrase d'avant : il n'y a
+    /// pas de date à promettre.
+    static func keepGoingParagraphs(tripTitle: String?, graceEnd: Date?) -> [String] {
         let opening =
             if let tripTitle, !tripTitle.isEmpty {
                 "Il te reste encore quelques jours dans ton voyage “\(tripTitle)”."
             } else {
                 "Il te reste encore quelques jours dans ton voyage."
             }
+        let consequence =
+            if let graceEnd {
+                "Si tu coupes maintenant, tu ne pourras plus dicter tes derniers souvenirs à la fin de la semaine d’abonnement actuelle, soit à partir du \(graceEnd.dayAndMonth)."
+            } else {
+                "Si tu coupes maintenant, tu ne pourras plus dicter tes derniers souvenirs."
+            }
         return [
             opening,
-            "Si tu coupes maintenant, tu ne pourras plus dicter tes derniers souvenirs.",
+            consequence,
             "Pour rappel, ton abonnement sera résilié automatiquement à ton retour.",
         ]
     }
@@ -592,8 +618,10 @@ enum SubscriptionCopy {
     /// demandé de garder. Quand il reste des jours réglés, la phrase les nomme
     /// plutôt que de mentir d'une semaine.
     static func doneParagraphs(graceEnd: Date?) -> [String] {
+        // En minuscule : la phrase se poursuit après « mais ». Elle s'écrivait
+        // « mais Tu gardes accès… », majuscule comprise (Hugo, 19/09/2026).
         let keepsBook =
-            "Tu gardes accès à ton carnet de bord pour le relire quand tu veux."
+            "tu gardes accès à ton carnet de bord pour le relire quand tu veux."
         guard let graceEnd else {
             return [
                 "L’abonnement s’arrête aujourd’hui.",

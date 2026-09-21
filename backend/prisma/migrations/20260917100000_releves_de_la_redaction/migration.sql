@@ -1,0 +1,11 @@
+-- Les relevés de la rédaction : ce que l'agent détecte dans chaque souvenir
+-- pour les statistiques du profil — pays, régions, villes, rencontres,
+-- kilomètres, transports, et l'endroit où le voyageur se trouve.
+--
+-- Une colonne JSON sur `entries` et non des compteurs sur `memos` : le relevé
+-- appartient au souvenir qui l'a produit. Les totaux s'additionnent à la
+-- lecture (`services/travelStatistics.ts`), ce qui les rend justes après une
+-- correction ou une suppression sans rien avoir à décompter. Nulle pour tout
+-- souvenir déjà rédigé avant cette colonne : il n'apporte rien aux totaux tant
+-- qu'une relance de la rédaction ne l'a pas relu.
+ALTER TABLE "entries" ADD COLUMN "insights" JSONB;

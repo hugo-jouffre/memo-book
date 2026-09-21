@@ -59,6 +59,11 @@ public struct BrandButton: View {
 
     public enum Size {
         case regular
+        /// Le libellé de 16 de la maquette (``MemoBookFont/buttonSmall``), et
+        /// **48 pt de haut** — les deux boutons de la carte de solde de la
+        /// cagnotte (T70). Ni le pavé de 50 d'un CTA, ni les 44 d'un bouton de
+        /// coin.
+        case medium
         case small
     }
 
@@ -127,6 +132,7 @@ public struct BrandButton: View {
     /// tous les CTA, y compris ceux des fournisseurs tiers, qui ne passent pas
     /// par ce composant. Il grandit avec le Dynamic Type comme le reste.
     @ScaledMetric(relativeTo: .body) private var controlHeight = MemoBookSpacing.controlHeight
+    @ScaledMetric(relativeTo: .body) private var mediumControlHeight = MemoBookSpacing.mediumControlHeight
 
     /// La **boîte** de l'icône dans la mise en page : la hauteur de ligne du
     /// design system, pour que le bouton garde la sienne.
@@ -178,11 +184,11 @@ public struct BrandButton: View {
                     // **d'appoint**, non : il tient sur une ligne ou il se
                     // rétrécit, mais il ne se coupe pas en deux au milieu d'un
                     // mot.
-                    .lineLimit(fillsWidth && size != .small ? nil : 1)
+                    .lineLimit(fillsWidth && size == .regular ? nil : 1)
                     // Plutôt rétrécir d'un cheveu que rogner : sur un iPhone SE,
                     // deux boutons d'appoint côte à côte gagnent les deux ou
                     // trois points qui leur manquaient.
-                    .minimumScaleFactor(size == .small ? 0.85 : 1)
+                    .minimumScaleFactor(size == .regular ? 1 : 0.85)
                     // Un libellé qui passe à la ligne se **centre**, comme le
                     // bouton entier : aligné à gauche, « Continuer à découvrir
                     // mon carnet » sur deux lignes se lisait comme un
@@ -227,7 +233,7 @@ public struct BrandButton: View {
     /// pleine taille le 18 imposé par le bouton d'Apple (``MemoBookFont/button``).
     private var titleFont: Font {
         if isSubdued { return MemoBookFont.label }
-        return size == .small ? MemoBookFont.buttonSmall : MemoBookFont.button
+        return size == .regular ? MemoBookFont.button : MemoBookFont.buttonSmall
     }
 
     private var isIconOnly: Bool { title == nil }
@@ -256,14 +262,14 @@ public struct BrandButton: View {
         // charge. Ces 20 pt de chaque côté lui coûtaient 40 pt de libellé, et
         // deux boutons d'appoint côte à côte — « Ajouter » et « Partager » de
         // la cagnotte — y perdaient une syllabe chacun.
-        if fillsWidth, size == .small { return MemoBookSpacing.snug }
+        if fillsWidth, size != .regular { return MemoBookSpacing.snug }
 
         return switch (style, size, isIconOnly) {
         case (.link, _, _): 0
         case (_, .regular, true): 12
         case (_, .regular, false): 24
-        case (_, .small, true): 8
-        case (_, .small, false): 20
+        case (_, .small, true), (_, .medium, true): 8
+        case (_, .small, false), (_, .medium, false): 20
         }
     }
 
@@ -273,6 +279,7 @@ public struct BrandButton: View {
     private var minimumHeight: CGFloat? {
         switch (style, size) {
         case (.link, _), (_, .small): nil
+        case (_, .medium): mediumControlHeight
         case (_, .regular): controlHeight
         }
     }
@@ -281,7 +288,7 @@ public struct BrandButton: View {
         switch (style, size) {
         case (.link, _): 0
         case (_, .regular): 12
-        case (_, .small): 8
+        case (_, .small), (_, .medium): 8
         }
     }
 

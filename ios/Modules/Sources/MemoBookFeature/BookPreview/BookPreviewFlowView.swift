@@ -12,7 +12,7 @@ import SwiftUI
 ///
 /// On y arrive de trois endroits, et c'est voulu — c'est le même carnet :
 /// la bannière bleue de la conversation, l'icône de carnet de son en-tête, et
-/// la ligne « Prévisulation PDF » des paramètres du voyage.
+/// la ligne « Prévisualisation PDF » des paramètres du voyage.
 public struct BookPreviewFlowView: View {
     @State private var model: BookPreviewModel
 
@@ -29,6 +29,15 @@ public struct BookPreviewFlowView: View {
 
     private let onIntent: (BookPreviewIntent) -> Void
 
+    /// Le formulaire de retours est ouvert — voir « Partager mes retours » du
+    /// mot des fondateurs.
+    @State private var showsFeedback = false
+
+    /// Le support de la session, posé par `RootView`, et celui qu'un aperçu
+    /// fabrique faute de session — comme le paywall.
+    @Environment(\.supportModel) private var sessionSupport
+    @State private var previewSupport: SupportModel?
+
     /// Combien de temps l'aperçu tourne avant que le mot des fondateurs
     /// s'invite.
     ///
@@ -38,11 +47,15 @@ public struct BookPreviewFlowView: View {
     /// arriverait après qu'on a rangé le téléphone.
     private static let foundersDelay: Duration = .seconds(12)
 
+    /// - Parameter opensShare: ouvre la feuille de partage dès l'arrivée —
+    ///   depuis le tiroir d'une carte de l'accueil, où « partager » mène ici.
     public init(
         model: BookPreviewModel,
+        opensShare: Bool = false,
         onIntent: @escaping (BookPreviewIntent) -> Void
     ) {
         _model = State(initialValue: model)
+        _showsShareChoice = State(initialValue: opensShare)
         self.onIntent = onIntent
     }
 
@@ -57,9 +70,28 @@ public struct BookPreviewFlowView: View {
             .task(id: model.stage) { await inviteFoundersNoteIfNeeded() }
             .brandSheet(isPresented: $showsFoundersNote) {
                 FoundersNoteSheet(
-                    onFeedback: { onIntent(.shareFeedback) },
+                    onFeedback: {
+                        showsFoundersNote = false
+                        showsFeedback = true
+                        onIntent(.shareFeedback)
+                    },
                     onContinue: { showsFoundersNote = false }
                 )
+            }
+            // **Le formulaire du support**, celui de « Nous contacter » : c'est
+            // là qu'on écrit à l'équipe, et « Partager mes retours » n'a pas de
+            // raison d'ouvrir autre chose.
+            .brandSheet(isPresented: $showsFeedback) {
+                if let support = sessionSupport ?? previewSupport {
+                    SupportSheet(model: support, route: .contact(about: nil))
+                }
+            }
+            .task(id: showsFeedback) {
+                // Hors session — un aperçu Xcode —, on fabrique le modèle sur
+                // place plutôt que de laisser la feuille vide.
+                if showsFeedback, sessionSupport == nil, previewSupport == nil {
+                    previewSupport = SupportModel()
+                }
             }
             .brandSheet(isPresented: $showsShareChoice) {
                 ShareBookSheet(
@@ -196,11 +228,17 @@ private struct BookCompositionView: View {
                         label: BookCopy.Preview.Voice.share,
                         action: onShare
                     )
+                    // Le partage n'a rien à partager tant que le carnet n'est
+                    // pas composé. Le bouton reste à sa place — il déciderait
+                    // sinon de la hauteur de l'en-tête en apparaissant.
+                    //
+                    // ⚠️ **Désactivé ici, et pas sur l'en-tête** (Hugo,
+                    // 19/09/2026) : posé sur l'en-tête entier, le `disabled`
+                    // emportait la flèche de retour avec lui, et on restait
+                    // bloqué sur l'écran de composition jusqu'à la fin du
+                    // chargement.
+                    .disabled(true)
                 }
-                // Le partage n'a rien à partager tant que le carnet n'est pas
-                // composé. Le bouton reste à sa place — il déciderait sinon de
-                // la hauteur de l'en-tête en apparaissant.
-                .disabled(true)
 
                 BookPageStage {
                     BookCompositionPage(progress: model.compositionProgress)
@@ -257,6 +295,28 @@ private struct BookReaderView: View {
     let onIntent: (BookPreviewIntent) -> Void
     let onShare: () -> Void
 
+    /// Tourner la page au doigt : vers la gauche on avance, vers la droite on
+    /// revient (Hugo, 19/09/2026).
+    ///
+    /// **Le même contrat qu'en plein écran** — seuil franc de 50 pt, geste
+    /// nettement horizontal —, et pour la même raison : la page vit dans un
+    /// écran qui défile, et remonter d'un doigt un peu de travers ne doit pas
+    /// changer de feuille. En `highPriorityGesture`, sinon le défilement
+    /// vertical prend le doigt le premier.
+    private var pageTurn: some Gesture {
+        DragGesture(minimumDistance: 20)
+            .onEnded { drag in
+                let horizontal = drag.translation.width
+                guard abs(horizontal) > 50,
+                    abs(horizontal) > abs(drag.translation.height) * 1.5
+                else { return }
+
+                withAnimation(.snappy(duration: 0.25)) {
+                    if horizontal < 0 { model.goForward() } else { model.goBack() }
+                }
+            }
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: MemoBookSpacing.m) {
@@ -282,6 +342,12 @@ private struct BookReaderView: View {
                         onConfigureCovers: { onIntent(.configureCovers) }
                     )
                 }
+                // **On tourne la page au doigt** (Hugo, 19/09/2026), comme en
+                // plein écran : vers la gauche pour avancer, vers la droite
+                // pour revenir. Le geste vit ici et non dans `BookSheetView`,
+                // qui sert aussi la feuille du paywall — celle-là n'a pas de
+                // pages à tourner.
+                .highPriorityGesture(pageTurn)
 
                 BookPageStepper(model: model)
 

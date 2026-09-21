@@ -1,5 +1,6 @@
 import MemoBookCore
 import MemoBookDesign
+import MemoBookRecording
 import SwiftUI
 
 /// L'accueil : où on en est de ses voyages, et le micro toujours à portée de
@@ -32,6 +33,13 @@ public struct HomeView: View {
 
     /// Le contenu est arrivé. Ce n'est pas encore le signal de la cascade : il
     /// faut aussi que le tracé du M se soit effacé.
+    ///
+    /// **Arrivé, pas rechargé.** Il se lève dès que l'écran a quelque chose à
+    /// montrer — ce que le cache avait, en quelques millisecondes — et non au
+    /// retour du serveur : attendre l'aller-retour faisait durer le lancement
+    /// exactement du temps que le cache était censé faire gagner (Hugo,
+    /// 18/09/2026). Le serveur, lui, arrive quand il arrive, et le flash de
+    /// rafraîchissement dit si quelque chose a changé.
     @State private var isLoaded = false
 
     @Environment(\.subscriptionSession) private var subscriptionSession
@@ -67,11 +75,19 @@ public struct HomeView: View {
 
     /// La feuille « Nouveau carnet » est ouverte.
     ///
-    /// C'est la **seule** chose que l'accueil présente lui-même, et ce n'est pas
-    /// une entorse à la règle qui veut qu'il ne navigue pas : une feuille ne
-    /// mène nulle part, elle propose. Ce qu'on y choisit, en revanche, redevient
-    /// une ``HomeIntent`` que `RootView` route.
+    /// Une feuille ne mène nulle part, elle propose, et ce n'est donc pas une
+    /// entorse à la règle qui veut que l'accueil ne navigue pas. Ce qu'on y
+    /// choisit, en revanche, redevient une ``HomeIntent`` que `RootView` route.
     @State private var isCreatingNotebook = false
+
+    /// Le voyage dont on confirme la suppression — depuis le tiroir de sa
+    /// carte (Hugo, 17/09/2026). La même feuille que celle des réglages du
+    /// voyage : le bouton plein garde, le rouge supprime.
+    @State private var tripToDelete: Trip?
+
+    /// Le micro a été refusé dans iOS : la feuille ne s'ouvrira pas, et c'est
+    /// cette boîte qui dit pourquoi, et où aller. `false` le reste du temps.
+    @State private var showsMicrophoneDenied = false
 
     @Environment(\.launchOverlayIsVisible) private var isCoveredByLaunch
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -105,6 +121,25 @@ public struct HomeView: View {
         .brandSheet(isPresented: $isCreatingNotebook) {
             NewNotebookSheet(resumableTrip: model.resumableTrip, onIntent: onIntent)
         }
+        .brandSheet(item: $tripToDelete) { trip in
+            DeleteTripSheet(
+                tripName: trip.title,
+                isDeleting: model.deletingTripId == trip.id,
+                errorMessage: model.deletionError,
+                onKeep: { tripToDelete = nil },
+                onDelete: {
+                    Task {
+                        if await model.deleteTrip(id: trip.id) { tripToDelete = nil }
+                    }
+                }
+            )
+            .onDisappear { model.dismissDeletionError() }
+        }
+        // ⚠️ **Plus de glissé vers le profil** (Hugo, 19/09/2026). Il ouvrait
+        // le profil d'un glissé vers la droite parti de n'importe où ; le geste
+        // est retiré, et non inversé — vers la gauche, il entrerait en
+        // concurrence avec le tiroir des cartes, qui va de ce côté-là. L'avatar
+        // en haut à droite reste le chemin, et il est le seul.
         .brandSheet(isPresented: $isRecording) {
             // Deux choses, et les deux : l'envoi est l'affaire du modèle de
             // l'écran, comme son chargement — la file décide d'envoyer ou de
@@ -164,6 +199,9 @@ public struct HomeView: View {
         .task {
             await model.load()
             isLoaded = true
+        }
+        .onChange(of: model.feed != nil || model.errorMessage != nil, initial: true) { _, hasContent in
+            if hasContent { isLoaded = true }
         }
         // **L'accueil s'ouvre sur ce qu'on avait, et le dit quand ça change.**
         // C'est l'écran qui gagne le plus au cache — c'est le premier — et
@@ -260,6 +298,10 @@ public struct HomeView: View {
                     Task { await model.retry() }
                 }
                 .rising(1)
+            }
+
+            if showsMicrophoneDenied {
+                microphoneDeniedNotice.rising(1)
             }
 
             ongoingSection
@@ -438,13 +480,17 @@ public struct HomeView: View {
                 // tiennent sur une ligne. Une seule photo par écran, celle qui
                 // compte.
                 if let featured = trips.first {
-                    FeaturedTripCard(trip: featured) { onIntent(.openTrip(id: featured.id)) }
-                        .rising(ongoingHeadingOrder + 1)
+                    drawer(for: featured) {
+                        FeaturedTripCard(trip: featured) { onIntent(.openTrip(id: featured.id)) }
+                    }
+                    .rising(ongoingHeadingOrder + 1)
                 }
 
                 ForEach(Array(trips.dropFirst().enumerated()), id: \.element.id) { index, trip in
-                    CompactTripCard(trip: trip) { onIntent(.openTrip(id: trip.id)) }
-                        .rising(ongoingHeadingOrder + 2 + index)
+                    drawer(for: trip) {
+                        CompactTripCard(trip: trip) { onIntent(.openTrip(id: trip.id)) }
+                    }
+                    .rising(ongoingHeadingOrder + 2 + index)
                 }
             }
         }
@@ -470,8 +516,10 @@ public struct HomeView: View {
                         .rising(upcomingHeadingOrder + 1)
                 } else {
                     ForEach(Array(trips.enumerated()), id: \.element.id) { index, trip in
-                        CompactTripCard(trip: trip) { onIntent(.openTrip(id: trip.id)) }
-                            .rising(upcomingHeadingOrder + 1 + index)
+                        drawer(for: trip) {
+                            CompactTripCard(trip: trip) { onIntent(.openTrip(id: trip.id)) }
+                        }
+                        .rising(upcomingHeadingOrder + 1 + index)
                     }
                 }
             }
@@ -493,16 +541,49 @@ public struct HomeView: View {
             } else {
                 LazyVStack(spacing: MemoBookSpacing.s) {
                     ForEach(Array(trips.enumerated()), id: \.element.id) { index, trip in
-                        PastTripCard(trip: trip) {
-                            onIntent(.openTrip(id: trip.id))
-                        } onOrderPrint: {
-                            onIntent(.orderPrint(tripId: trip.id))
+                        drawer(for: trip) {
+                            PastTripCard(trip: trip) {
+                                onIntent(.openTrip(id: trip.id))
+                            } onOrderPrint: {
+                                onIntent(.orderPrint(tripId: trip.id))
+                            }
                         }
                         .rising(pastHeadingOrder + 1 + index)
                     }
                 }
             }
         }
+    }
+
+    /// Le tiroir d'une carte de voyage : **supprimer, partager, prévisualiser**
+    /// — la croix, la flèche de partage, l'imprimante (Hugo, 17/09/2026). Le
+    /// même ``BrandSwipeDrawer`` que la liste des co-voyageurs, au rayon des
+    /// cartes de l'accueil. Le geste qui défait est le premier sous le doigt,
+    /// et il demande confirmation ; les deux autres ouvrent l'aperçu du carnet.
+    private func drawer<Card: View>(for trip: Trip, @ViewBuilder card: () -> Card) -> some View {
+        BrandSwipeDrawer(
+            actions: [
+                BrandSwipeAction(
+                    icon: "IconCross",
+                    tint: MemoBookColor.error,
+                    label: "Supprimer « \(trip.title) »"
+                ) { tripToDelete = trip },
+                BrandSwipeAction(
+                    icon: "IconShareSystem",
+                    tint: MemoBookColor.action,
+                    label: "Partager « \(trip.title) »"
+                ) { onIntent(.shareTrip(id: trip.id)) },
+                BrandSwipeAction(
+                    icon: "IconPrinter",
+                    tint: MemoBookColor.action,
+                    label: "Prévisualiser « \(trip.title) »",
+                    // Le tracé de l'imprimante est plus petit dans sa boîte que
+                    // les deux autres — voir ``BrandSwipeAction/iconScale``.
+                    iconScale: 1.15
+                ) { onIntent(.orderPrint(tripId: trip.id)) },
+            ],
+            content: card
+        )
     }
 
     private var helpLink: some View {
@@ -581,7 +662,7 @@ public struct HomeView: View {
             if isBlocked {
                 showsPaywall = true
             } else if hasOngoingTrip {
-                isRecording = true
+                startRecording()
             } else {
                 isCreatingNotebook = true
             }
@@ -600,21 +681,60 @@ public struct HomeView: View {
         if isBlocked { return Image(brand: "IconLocker") }
         return hasOngoingTrip ? Image(brand: "IconMic") : nil
     }
+
+    // MARK: - Le micro
+
+    /// **La permission d'abord, la feuille ensuite** (Hugo, 17/09/2026).
+    ///
+    /// « Commencer à enregistrer » faisait disparaître l'app sur son iPhone :
+    /// la feuille s'ouvrait et le micro démarrait pendant que la demande
+    /// d'accès d'iOS montait par-dessus. Le premier appui ne fait donc que
+    /// poser la question — l'app ne touche pas au micro avant la réponse — et
+    /// c'est le second qui ouvre la feuille ; avec l'accès déjà accordé, le
+    /// premier appui l'ouvre directement. La reconnaissance vocale est
+    /// demandée dans la foulée, pour que la feuille n'ait plus rien à demander.
+    ///
+    /// Refusé, iOS ne repose jamais la question : la boîte le dit et mène aux
+    /// Réglages, comme le micro barré de la conversation.
+    private func startRecording() {
+        switch RecordingPermission.current {
+        case .granted:
+            showsMicrophoneDenied = false
+            isRecording = true
+        case .undetermined:
+            Task {
+                guard await RecordingPermission.request() else {
+                    showsMicrophoneDenied = true
+                    return
+                }
+                _ = await SpeechTranscriber.requestAuthorization()
+            }
+        case .denied:
+            showsMicrophoneDenied = true
+        }
+    }
+
+    private var microphoneDeniedNotice: some View {
+        VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
+            BrandNotice(
+                "**Le micro est refusé** dans les réglages d’iOS : MemoBook ne peut pas t’écouter tant qu’il l’est.",
+                tone: .information
+            )
+            BrandButton("Ouvrir les Réglages", style: .link) {
+                guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                UIApplication.shared.open(url)
+            }
+        }
+        .transition(.opacity)
+    }
 }
 
-/// Les mesures que l'accueil partage avec son écran de lancement : c'est parce
-/// que le squelette et l'écran réel tombent au même endroit que le passage de
-/// l'un à l'autre ne saute pas.
+/// Les mesures de l'accueil.
 enum HomeMetrics {
     /// L'avatar est **le** diamètre du design system : le chat pose le même
     /// devant son titre, et c'est à sa deuxième occurrence qu'il est monté dans
     /// `MemoBookSpacing`.
     static let avatarSide = MemoBookSpacing.avatarSide
-
-    /// Largeur de la barre qui tient la place de la salutation.
-    static let greetingPlaceholderWidth: CGFloat = 196
-    static let greetingPlaceholderHeight: CGFloat = 26
-    static let topPadding: CGFloat = MemoBookSpacing.xs
 }
 
 // MARK: - Apparition

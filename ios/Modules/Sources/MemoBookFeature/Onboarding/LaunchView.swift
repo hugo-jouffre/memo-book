@@ -1,19 +1,19 @@
 import MemoBookDesign
 import SwiftUI
 
-/// L'écran de lancement : le M de MemoBook s'écrit d'un trait, par-dessus le
-/// squelette de l'accueil, puis **reste** derrière le contenu.
+/// L'écran de lancement : le M de MemoBook s'écrit d'un trait sur le crème,
+/// puis **reste** derrière le contenu.
 ///
-/// **Pourquoi un squelette et pas un logo centré.** Un logo seul suivi d'un
-/// écran plein est une coupure : deux images sans rapport. Ici la barre de
-/// salutation et le rond de l'avatar sont déjà à leur place définitive — voir
-/// ``HomeMetrics`` —, si bien que la sortie est une résolution, pas un
-/// changement d'écran.
+/// **Le signe seul, et rien d'autre** (Hugo, 18/09/2026). Il y avait sous le
+/// tracé un squelette de l'accueil — la barre de la salutation, le rond de
+/// l'avatar — pour que la sortie soit une résolution plutôt qu'un changement
+/// d'écran. Il est parti : l'accueil arrive **en montant** du bas, bloc après
+/// bloc, et c'est cette cascade qui fait la transition ; deux formes grises
+/// qui l'attendaient à leur place ne faisaient que la précéder.
 ///
 /// **Le signe ne disparaît pas.** Il est dessiné par ``BrandMarkBackdrop``, la
-/// même vue que l'accueil garde en fond : au moment du passage, seul le
-/// squelette s'efface et l'opacité du M descend de 50 % à 20 %. Le M, lui, ne
-/// bouge pas.
+/// même vue que l'accueil garde en fond : au moment du passage, l'opacité du M
+/// descend de 50 % à 20 %. Le M, lui, ne bouge pas.
 ///
 /// **La courbe du tracé est celle du fichier de marque**
 /// (`cubic-bezier(0.884, 0.01, 0.302, 0.99)` dans `Animated Cutout.svg`) : un
@@ -38,8 +38,6 @@ struct LaunchView: View {
     var body: some View {
         ZStack {
             MemoBookColor.background.ignoresSafeArea()
-
-            HomeSkeleton()
 
             BrandMarkBackdrop(
                 progress: drawn,
@@ -74,35 +72,6 @@ struct LaunchView: View {
         } completion: {
             onDrawingFinished()
         }
-    }
-}
-
-/// Le squelette de l'accueil : la salutation et l'avatar, réduits à leurs
-/// formes. Rien d'autre — un squelette qui dessine des cartes vides promet un
-/// contenu qu'il ne connaît pas encore.
-struct HomeSkeleton: View {
-    var body: some View {
-        VStack {
-            HStack(spacing: MemoBookSpacing.s) {
-                RoundedRectangle(cornerRadius: MemoBookSpacing.xs)
-                    .fill(MemoBookColor.hairline)
-                    .frame(
-                        width: HomeMetrics.greetingPlaceholderWidth,
-                        height: HomeMetrics.greetingPlaceholderHeight
-                    )
-
-                Spacer(minLength: 0)
-
-                Circle()
-                    .fill(MemoBookColor.hairline)
-                    .frame(width: HomeMetrics.avatarSide, height: HomeMetrics.avatarSide)
-            }
-            .padding(.horizontal, MemoBookSpacing.screenMargin)
-            .padding(.top, HomeMetrics.topPadding)
-
-            Spacer(minLength: 0)
-        }
-        .accessibilityHidden(true)
     }
 }
 

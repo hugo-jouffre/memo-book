@@ -32,12 +32,23 @@ public final class ProfileModel {
         case fullName
         case phoneNumber
         case address
+        case gender
         case newsletter
+        case avatar
     }
 
     private let source: () async throws -> TravellerProfile
     private let persist: ((ProfileEdit) async throws -> TravellerProfile)?
     private let remove: (() async throws -> Void)?
+    /// Envoie la photo de profil. `nil` en aperçu : la photo reste sur place.
+    private let uploadAvatar: ((Data, String) async throws -> TravellerProfile)?
+
+    /// Ferme l'abonnement côté serveur. `nil` en aperçu.
+    private let cancelSubscriptionRemotely:
+        ((SubscriptionCancellationReason?) async throws -> TravellerProfile)?
+
+    /// La photo est en route vers le serveur : l'avatar le montre.
+    public private(set) var isUploadingAvatar = false
 
     /// Ce qu'on avait sur le disque — voir ``ContentCache``. `nil` en aperçu.
     private let cached: CachedValue<TravellerProfile>?
@@ -65,12 +76,18 @@ public final class ProfileModel {
         source: @escaping () async throws -> TravellerProfile = { .fixture },
         persist: ((ProfileEdit) async throws -> TravellerProfile)? = nil,
         remove: (() async throws -> Void)? = nil,
+        uploadAvatar: ((Data, String) async throws -> TravellerProfile)? = nil,
+        cancelSubscription: (
+            (SubscriptionCancellationReason?) async throws -> TravellerProfile
+        )? = nil,
         cached: CachedValue<TravellerProfile>? = nil
     ) {
         self.cached = cached
         self.source = source
         self.persist = persist
         self.remove = remove
+        self.uploadAvatar = uploadAvatar
+        self.cancelSubscriptionRemotely = cancelSubscription
     }
 
     /// `true` tant qu'on n'a rien à montrer. L'écran se dessine quand même —
@@ -216,6 +233,40 @@ public final class ProfileModel {
         save(ProfileEdit(address: address), confirming: .address)
     }
 
+    /// Envoie la photo de profil choisie (Clara, 17/09/2026, T165).
+    ///
+    /// **Rien ne change à l'écran avant la réponse** : c'est le profil relu que
+    /// le serveur renvoie qui porte la nouvelle adresse, et un échec laisse
+    /// l'ancienne photo avec le reproche au-dessus — comme les lignes qui
+    /// s'enregistrent. Le JPEG est déjà réduit par l'écran ; ici on envoie.
+    public func setAvatar(_ data: Data, mimeType: String = "image/jpeg") async {
+        guard let uploadAvatar else { return }
+
+        isUploadingAvatar = true
+        defer { isUploadingAvatar = false }
+
+        do {
+            let saved = try await uploadAvatar(data, mimeType)
+            #if DEBUG
+                profile = SandboxPersona.current?.applied(to: saved) ?? saved
+            #else
+                profile = saved
+            #endif
+            errorMessage = nil
+            confirm(.avatar)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Ce que la personne dit d'elle-même, à la place de ce que le serveur
+    /// devinait sur son prénom. Voir ``Gender``.
+    public func setGender(_ gender: Gender) {
+        guard gender != profile?.gender else { return }
+        mutate { $0.gender = gender }
+        save(ProfileEdit(gender: gender), confirming: .gender)
+    }
+
     /// Enregistre une carte à partir du formulaire.
     ///
     /// **Seuls les quatre derniers chiffres sont conservés** — voir
@@ -267,15 +318,44 @@ public final class ProfileModel {
     /// le dernier jour d'une période — et qui reste la phrase affichée dans ce
     /// cas-là, voir ``SubscriptionCopy/doneParagraphs(graceEnd:)``.
     ///
-    /// ⚠️ **Rien ne part au serveur**, comme le reste de cet écran : la base
-    /// sait dire `cancelled` et `cancelledAt` (`schema.prisma`), mais aucune
-    /// route ne les écrit encore et l'achat lui-même n'existe pas. La raison
-    /// invoquée est perdue ici — elle attend son compteur côté serveur.
+    /// **Et ça part au serveur** (Hugo, 19/09/2026). Ça ne partait pas : la
+    /// méthode ne touchait que la copie locale, le prochain chargement relisait
+    /// une ligne `subscriptions` toujours active, et on se retrouvait abonné
+    /// après avoir confirmé trois fois. `POST /v1/profile/subscription/cancel`
+    /// ferme la ligne et rend le profil relu.
+    ///
+    /// L'écran a **déjà** bougé quand la requête part — trois confirmations,
+    /// on ne fait pas attendre le réseau pour la quatrième —, et un échec
+    /// **remet ce que le serveur a vraiment** : une résiliation qu'on croit
+    /// faite et qui ne l'est pas est pire qu'un message d'erreur.
     public func cancelSubscription(reason: SubscriptionCancellationReason?) {
-        _ = reason
         mutate {
             $0.subscription.isActive = false
             $0.subscription.cancelledAt = .now
+        }
+
+        guard let cancelSubscriptionRemotely else { return }
+
+        pendingSave?.cancel()
+        pendingSave = Task { [weak self] in
+            do {
+                let saved = try await cancelSubscriptionRemotely(reason)
+                guard !Task.isCancelled, let self else { return }
+
+                #if DEBUG
+                    profile = SandboxPersona.current?.applied(to: saved) ?? saved
+                #else
+                    profile = saved
+                #endif
+
+                errorMessage = nil
+            } catch {
+                guard !Task.isCancelled, let self else { return }
+                errorMessage = error.localizedDescription
+                // Ce que le serveur a vraiment : l'abonnement est peut-être
+                // encore ouvert, et l'écran doit le dire.
+                await load()
+            }
         }
     }
 
@@ -306,9 +386,18 @@ public final class ProfileModel {
 
         pendingSave = Task { [weak self] in
             do {
-                let saved = try await persist(edit)
+                var saved = try await persist(edit)
                 guard !Task.isCancelled else { return }
                 guard let self else { return }
+
+                // **Le genre envoyé fait foi.** L'API d'avant le 18/09/2026 ne
+                // connaît pas le champ : elle répond sans, ce que le décodage
+                // lit « ne préfère pas répondre » — et le choix qu'on venait de
+                // faire s'effaçait sous les yeux, une seconde après. Le serveur
+                // n'a rien à corriger sur un genre : il l'enregistre tel quel,
+                // donc ce qu'on a envoyé est ce qu'il a — ou ce qu'il aura, une
+                // fois déployé.
+                if let gender = edit.gender { saved.gender = gender }
 
                 #if DEBUG
                     profile = SandboxPersona.current?.applied(to: saved) ?? saved
