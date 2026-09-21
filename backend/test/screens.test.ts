@@ -7,6 +7,7 @@ import {
   resetDatabase,
   type TestHarness,
 } from "./helpers.js";
+import { assertCanRecord } from "../src/services/quota.js";
 
 /**
  * Les trois écrans « produit » : l'accueil, un voyage, le profil.
@@ -977,6 +978,94 @@ describe("l'arrêt automatique de l'abonnement", () => {
       where: { accountId, status: { in: ["active", "trialing"] } },
     });
   }
+});
+
+describe("la résiliation depuis le profil", () => {
+  async function subscribe(accountId: string, renewsAt: Date | null = null) {
+    return harness.prisma.subscription.create({
+      data: { accountId, provider: "stripe", status: "active", priceCents: 299, renewsAt },
+    });
+  }
+
+  it("ferme l'abonnement, garde la semaine payée, et survit au rechargement", async () => {
+    const account = await registerAccount(harness.app, "resilie@memobook.app");
+    const paidThrough = new Date(Date.now() + 5 * 86_400_000);
+    await subscribe(account.accountId, paidThrough);
+
+    const cancelled = await harness.app.inject({
+      method: "POST",
+      url: "/v1/profile/subscription/cancel",
+      headers: { authorization: account.authorization },
+      payload: { reason: "tooExpensive" },
+    });
+    expect(cancelled.statusCode).toBe(200);
+
+    // La réponse porte déjà le profil relu : l'app n'a rien à redemander.
+    expect(cancelled.json<ProfileBody>().subscription).toMatchObject({
+      isActive: false,
+      hasEndedBefore: true,
+    });
+
+    // **Et ça tient.** C'est tout l'objet du correctif : la résiliation ne
+    // vivait que dans l'app, et le chargement suivant la rendait abonnée.
+    const reloaded = await harness.app.inject({
+      method: "GET",
+      url: "/v1/profile",
+      headers: { authorization: account.authorization },
+    });
+    expect(reloaded.json<ProfileBody>().subscription.isActive).toBe(false);
+
+    // La semaine déjà réglée n'est pas rendue — c'est elle qui laisse raconter
+    // jusqu'à son terme, côté app comme côté verrou.
+    const row = await harness.prisma.subscription.findFirstOrThrow({
+      where: { accountId: account.accountId },
+    });
+    expect(row.status).toBe("cancelled");
+    expect(row.cancelledAt).not.toBeNull();
+    expect(row.renewsAt?.toISOString()).toBe(paidThrough.toISOString());
+    expect(row.cancellationReason).toBe("tooExpensive");
+  });
+
+  it("laisse encore enregistrer pendant la semaine réglée", async () => {
+    const account = await registerAccount(harness.app, "sursis@memobook.app");
+    await subscribe(account.accountId, new Date(Date.now() + 3 * 86_400_000));
+    await harness.prisma.account.update({
+      where: { id: account.accountId },
+      data: { remainingSteps: 0 },
+    });
+
+    await harness.app.inject({
+      method: "POST",
+      url: "/v1/profile/subscription/cancel",
+      headers: { authorization: account.authorization },
+      payload: { reason: "unused" },
+    });
+
+    await expect(
+      assertCanRecord(harness.prisma, account.accountId),
+    ).resolves.toBeUndefined();
+  });
+
+  it("se résilie deux fois sans se plaindre", async () => {
+    const account = await registerAccount(harness.app, "deuxfois@memobook.app");
+    await subscribe(account.accountId);
+
+    for (const _ of [0, 1]) {
+      const response = await harness.app.inject({
+        method: "POST",
+        url: "/v1/profile/subscription/cancel",
+        headers: { authorization: account.authorization },
+        payload: {},
+      });
+      expect(response.statusCode).toBe(200);
+    }
+
+    expect(
+      await harness.prisma.subscription.count({
+        where: { accountId: account.accountId, status: "cancelled" },
+      }),
+    ).toBe(1);
+  });
 });
 
 describe("la suppression d'un compte", () => {
