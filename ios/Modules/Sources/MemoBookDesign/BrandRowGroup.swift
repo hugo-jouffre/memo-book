@@ -172,6 +172,11 @@ public struct BrandRow: View, Identifiable {
     private let accessory: Accessory
     private let footnote: Footnote?
     private let action: (() -> Void)?
+    /// La valeur vient d'être **enregistrée côté serveur** : le chevron laisse
+    /// la place à la coche, le temps qu'on la voie. Même accusé de réception
+    /// que celui d'une ligne corrigée sur place, pour une ligne dont la valeur
+    /// se corrige dans une feuille — l'adresse postale.
+    private let isConfirmed: Bool
 
     /// `nonisolated` : ``BrandRow`` est une `View`, donc isolée sur l'acteur
     /// principal, alors qu'`Identifiable` ne l'est pas. Une identité qui ne lit
@@ -195,6 +200,9 @@ public struct BrandRow: View, Identifiable {
     ///     valeur ne dit pas — qu'elle est sous clé, par exemple.
     ///   - isValueLoading: la valeur est encore en route. **L'intitulé, lui,
     ///     s'affiche tout de suite** : il appartient à l'app, pas au serveur.
+    ///   - isConfirmed: la valeur vient d'être enregistrée par le serveur. Le
+    ///     chevron devient une coche verte le temps qu'on la voie — pour une
+    ///     ligne dont la feuille s'est refermée avant que la réponse arrive.
     public init(
         _ title: String,
         value: String? = nil,
@@ -204,6 +212,7 @@ public struct BrandRow: View, Identifiable {
         badge: String? = nil,
         isValueLoading: Bool = false,
         note: String? = nil,
+        isConfirmed: Bool = false,
         action: (() -> Void)? = nil
     ) {
         self.title = title
@@ -215,6 +224,7 @@ public struct BrandRow: View, Identifiable {
         self.isValueLoading = isValueLoading
         self.accessory = action == nil ? .none : .disclosure
         self.footnote = note.map(Footnote.note)
+        self.isConfirmed = isConfirmed
         self.action = action
     }
 
@@ -257,6 +267,7 @@ public struct BrandRow: View, Identifiable {
         self.badge = nil
         self.isValueLoading = isValueLoading
         self.footnote = error.map(Footnote.problem)
+        self.isConfirmed = isConfirmed
         self.accessory = .editable(
             Editable(
                 text: text,
@@ -281,6 +292,7 @@ public struct BrandRow: View, Identifiable {
         self.isValueLoading = false
         self.accessory = .toggle(isOn)
         self.footnote = nil
+        self.isConfirmed = false
         self.action = nil
     }
 
@@ -447,19 +459,10 @@ public struct BrandRow: View, Identifiable {
     /// Le crayon : sans lui, rien ne dirait qu'une ligne se corrige. Il prend la
     /// place du chevron, à la même distance du bord — les deux disent « cette
     /// ligne se touche », l'un mène ailleurs, l'autre ouvre le clavier ici.
-    ///
-    /// La coche : une ligne qui s'enregistre en perdant le focus ne dit rien de
-    /// ce qui s'est passé. Le symbole système et non le jeu de marque, qui n'a
-    /// pas de coche — même parti pris que le chevron, un seul endroit à changer
-    /// le jour où elle arrive.
     @ViewBuilder
     private func trailingMark(_ field: Editable) -> some View {
         if field.isConfirmed {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: pencilSide, weight: .semibold))
-                .foregroundStyle(MemoBookColor.valid)
-                .transition(.opacity.combined(with: .scale(scale: 0.7)))
-                .accessibilityLabel("Enregistré")
+            confirmedMark(side: pencilSide)
         } else {
             pencil
         }
@@ -480,12 +483,38 @@ public struct BrandRow: View, Identifiable {
             labelAndValue
                 .frame(maxWidth: .infinity, alignment: .leading)
             badgeView
-            if case .disclosure = accessory { chevron }
+            if case .disclosure = accessory {
+                if isConfirmed {
+                    confirmedMark(side: chevronSide)
+                } else {
+                    chevron
+                }
+            }
         }
+        // La coche remplace le chevron en fondu, comme elle remplace le crayon
+        // d'une ligne corrigée sur place.
+        .animation(.snappy(duration: 0.25), value: isConfirmed)
         .padding(.horizontal, MemoBookSpacing.s)
         .padding(.vertical, MemoBookSpacing.xs + 4)
         .frame(minHeight: minimumHeight)
         .contentShape(.rect)
+    }
+
+    /// La coche d'accusé de réception : une ligne qui s'enregistre toute seule
+    /// ne dit rien de ce qui s'est passé. Le symbole système et non le jeu de
+    /// marque, qui n'a pas de coche — même parti pris que le chevron, un seul
+    /// endroit à changer le jour où elle arrive.
+    ///
+    /// - Parameter side: la boîte de ce qu'elle remplace — le chevron ou le
+    ///   crayon —, pour que la valeur ne bouge pas d'un point quand l'un prend
+    ///   la place de l'autre.
+    private func confirmedMark(side: CGFloat) -> some View {
+        Image(systemName: "checkmark.circle.fill")
+            .font(.system(size: pencilSide, weight: .semibold))
+            .foregroundStyle(MemoBookColor.valid)
+            .frame(width: side, height: side)
+            .transition(.opacity.combined(with: .scale(scale: 0.7)))
+            .accessibilityLabel("Enregistré")
     }
 
     /// L'intitulé et sa valeur. Ils partagent une ligne tant qu'ils y tiennent :

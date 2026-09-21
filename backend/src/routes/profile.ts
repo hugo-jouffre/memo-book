@@ -4,6 +4,7 @@ import type { AppContext } from "../context.js";
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
 import { connectorByKey } from "../services/connectorCatalog.js";
+import { findShippingCountry } from "../services/shippingCountries.js";
 import { linkDeviceToAccount, visibleToAccount } from "../services/memoOwnership.js";
 import { hashDeviceToken } from "../lib/auth.js";
 import { serializeProfile, type TripForProfileStats } from "./appSerializers.js";
@@ -22,6 +23,28 @@ import { serializeProfile, type TripForProfileStats } from "./appSerializers.js"
  * sémantique JSON qui fait la différence — pas une chaîne vide.
  */
 const nullableText = (max: number) => z.string().trim().max(max).nullable().optional();
+
+/**
+ * Le pays d'une adresse : un pays **où l'imprimeur livre**, ou rien.
+ *
+ * L'app envoie le code ISO depuis qu'elle le choisit dans la liste servie avec
+ * le profil ; un nom (« France ») est encore accepté et ramené au code, parce
+ * qu'une app d'avant le 18/09/2026 saisissait le pays en texte libre. Un pays
+ * hors liste est refusé **ici**, et non à la commande : le profil est l'amorce
+ * de l'étape 2, et une amorce que l'étape 2 refuserait ne sert à rien. Une
+ * `HttpError` plutôt qu'un refus de `zod`, pour que l'app reçoive la phrase et
+ * non « Requête invalide ».
+ */
+function shippingCountryCode(value: string | null | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+
+  const country = findShippingCountry(value);
+  if (!country) {
+    throw HttpError.badRequest("Ce pays n'est pas encore livré. Choisis-en un dans la liste.");
+  }
+  return country.code;
+}
 
 const updateBody = z.object({
   firstName: nullableText(100),
@@ -127,10 +150,11 @@ export function registerProfileRoutes(app: FastifyInstance, context: AppContext)
     const accountId = accountIdOf(request);
     const body = updateBody.parse(request.body ?? {});
 
-    // L'adresse n'est pas modifiable ici : elle appartient au compte Apple ou
-    // Google quand la session vient de l'un des deux, et la changer de ce côté
-    // ne ferait que la désaccorder de celle avec laquelle on se reconnecte.
-    // C'est aussi la règle appliquée par l'app.
+    // L'adresse **e-mail** n'est pas modifiable ici : elle appartient au compte
+    // Apple ou Google quand la session vient de l'un des deux, et la changer de
+    // ce côté ne ferait que la désaccorder de celle avec laquelle on se
+    // reconnecte. C'est aussi la règle appliquée par l'app. L'adresse
+    // **postale**, elle, se corrige librement : c'est là que part le carnet.
 
     await context.prisma.account.update({
       where: { id: accountId },
@@ -146,7 +170,7 @@ export function registerProfileRoutes(app: FastifyInstance, context: AppContext)
               addressLine1: orNull(body.address.street),
               addressPostalCode: orNull(body.address.postalCode),
               addressCity: orNull(body.address.city),
-              addressCountry: orNull(body.address.country),
+              addressCountry: shippingCountryCode(body.address.country),
             }
           : {}),
       },

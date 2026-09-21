@@ -228,7 +228,11 @@ police ou marge codée en dur ailleurs.
   `labelPlacement: .floating` pour les formulaires d'entrée, `.above` pour les
   feuilles, `.hidden` pour le champ unique d'une feuille dont le sous-titre dit
   déjà quoi saisir), `BrandSegmentedPicker` **le** sélecteur à segments,
-  `BrandBackdrop` le motif de fond. Même règle.
+  `BrandBackdrop` le motif de fond. Même règle. `BrandCountryField` est **le**
+  champ « Pays » : un choix dans la liste que le serveur sert
+  (`ShippingCountry`), jamais un texte libre — le tunnel de commande et
+  l'adresse du profil partagent le même, parce que l'une est l'amorce de
+  l'autre.
 - `BrandRowGroup` est **le** motif « lignes empilées et groupées » des écrans de
   réglages : une ligne se *décrit* (`BrandRow`), elle ne se dessine pas.
   `BrandOptionGroup` est **le** choix unique en lignes encadrées, et `BrandSheet`

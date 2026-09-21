@@ -185,7 +185,9 @@ async function seedTraveller(
     addressLine1: "7 rue Simon Fryd",
     addressPostalCode: "69002",
     addressCity: "Lyon",
-    addressCountry: "France",
+    // Le code ISO, comme l'app l'écrit désormais : `serializeProfile` le rend
+    // avec son nom, et la commande le lit tel quel.
+    addressCountry: "FR",
     wantsNewsletter: true,
     ...quota,
     ...memory,

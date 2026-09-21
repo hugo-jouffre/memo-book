@@ -124,7 +124,8 @@ struct OrderShippingStep: View {
 
             postalCodeAndCity
 
-            OrderCountryField(
+            BrandCountryField(
+                BookCopy.Order.Shipping.country,
                 countries: model.context?.countries ?? [],
                 code: $model.draft.shipping.country
             )
@@ -198,59 +199,6 @@ struct OrderShippingStep: View {
                     )
                 }
             }
-        }
-    }
-}
-
-/// Le pays, choisi dans la liste que **le serveur** sert : elle suit
-/// l'imprimeur, pas nos livraisons. Un texte libre laisserait commander depuis
-/// un pays où le carnet ne partira jamais.
-private struct OrderCountryField: View {
-    let countries: [ShippingCountry]
-    @Binding var code: String
-
-    private var selected: ShippingCountry? {
-        countries.first { $0.code == code }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
-            Text(BookCopy.Order.Shipping.country)
-                .font(MemoBookFont.bodySemibold)
-                .foregroundStyle(MemoBookColor.ink)
-
-            Menu {
-                Picker(BookCopy.Order.Shipping.country, selection: $code) {
-                    ForEach(countries) { country in
-                        Text(country.name).tag(country.code)
-                    }
-                }
-                .pickerStyle(.inline)
-            } label: {
-                HStack(spacing: MemoBookSpacing.xs) {
-                    Text(selected?.name ?? code)
-                        .font(MemoBookFont.body)
-                        .foregroundStyle(MemoBookColor.ink)
-                        .lineLimit(1)
-
-                    Spacer(minLength: MemoBookSpacing.xs)
-
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.footnote.weight(.medium))
-                        .foregroundStyle(MemoBookColor.inkMuted)
-                }
-                .padding(.horizontal, MemoBookSpacing.s)
-                .frame(height: MemoBookSpacing.fieldHeight)
-                .frame(maxWidth: .infinity)
-                .overlay {
-                    RoundedRectangle(cornerRadius: MemoBookSpacing.controlCornerRadius)
-                        .strokeBorder(MemoBookColor.separator, lineWidth: 1)
-                }
-                .contentShape(.rect)
-            }
-            .disabled(countries.isEmpty)
-            .accessibilityLabel(BookCopy.Order.Shipping.country)
-            .accessibilityValue(selected?.name ?? code)
         }
     }
 }

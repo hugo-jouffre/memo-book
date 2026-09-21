@@ -3392,6 +3392,11 @@ l'afficher : c'est là qu'elle relance, pas dans le fil.
 contexte qui porte une relance.
 
 ### 26.1 À trancher
+
+| # | Sujet |
+|---|---|
+| T161 | **La notification de relance n'existe pas encore** — c'est le rythme du récit (« Tous les 2 jours ») qui devrait la cadencer. (Noté dans la PR #40, la fiche ne l'avait pas repris.) |
+
 ## 23. Lot 8 — Les documents légaux
 
 ### 23.1 Conditions d'utilisation, et Politique de confidentialité
@@ -3492,3 +3497,74 @@ demi-gras refermés.
 | T152 | **Le chapitre 3 de la politique de confidentialité annonce une liste qui ne suit pas** — « transmises aux prestataires techniques suivants … : » puis rien. Le site la porte dans un tableau qui n'a pas été fourni. Recopié tel quel (R8) ; **à compléter** avec la liste des prestataires (Webflow, Google Analytics, Hotjar, Meta, WhatsApp ?) |
 | T153 | **Le chapitre 9 (« Mineurs ») se termine par un point-virgule** au lieu d'un point. Recopié tel quel (R8), à corriger sur le site |
 | T154 | **La politique de cookies n'existe pas dans l'app**, et les deux documents y renvoient (« disponible sur ce site »). Un troisième `LegalDocument` suffira le jour où le texte est fourni |
+
+## 27. L'adresse postale se valide, et se corrige
+
+Paul, 18/09/2026 : **« impossible de valider une adresse postale »**, et il
+faut pouvoir la modifier ensuite.
+
+**Ce qui bloquait.** La feuille « Adresse postale » posait un « Valider »
+`disabled` tant que les quatre lignes n'étaient pas remplies — contre la règle
+de l'app, qui veut qu'un contrôle indisponible pâlisse et explique. Or ses
+champs vides montrent des **exemples** (« 7 rue Simon Fryd », « 69007 »,
+« Lyon », « FRANCE »), dans le même gris semi-gras que le texte indicatif de
+partout : on lisait une adresse déjà remplie, on tapait sur un bouton gris, et
+rien ne disait ce qui manquait. Le pays, lui, se tapait en texte libre, alors
+que la commande le **choisit** dans la liste de l'imprimeur : « FRANCE »,
+« France », « Fr », « Monaco » entraient dans le profil et retombaient sur
+« FR » à l'étape 2, en silence.
+
+**Ce qui change, dans l'ordre de la chaîne** (`ios/CLAUDE.md`, « Un choix de
+design ne s'arrête pas au dessin ») :
+
+| Maillon | Quoi |
+|---|---|
+| `services/shippingCountries.ts` | `findShippingCountry(raw)` reconnaît un code ou un nom, et rend `undefined` sinon — `toShippingCountryCode`, qui retombe sur « FR », ne sert plus qu'à amorcer une commande |
+| `appSerializers.ts` | `address.country` est le **code** ISO ; `address.countryName` se **dérive** de la liste (rien de stocké) ; `shippingCountries` voyage avec le profil, pour que la feuille ait son menu sans second appel. Une valeur en base qui ne se reconnaît pas est rendue telle quelle dans les deux champs — l'écran montre ce qu'on avait écrit, et le menu invite à choisir |
+| `PATCH /v1/profile` | le pays est ramené au code (« France » → « FR »), et un pays hors liste est refusé **avec la phrase pour l'écran** (« Ce pays n'est pas encore livré. Choisis-en un dans la liste. ») — une `HttpError`, pas un refus `zod` qui dirait « Requête invalide » |
+| `seed.ts` | le compte abonné porte « FR » |
+| `PostalAddress` | `countryName` (décodage tolérant : le code tient lieu de nom sur un serveur d'avant), `missingFields` et `missingFieldsDescription` (« le code postal et la ville »), `singleLine` écrit le pays en toutes lettres |
+| `TravellerProfile` | `shippingCountries` (décodage tolérant : liste vide) et `shippingCountry(code:)` |
+| `BrandCountryField` | le champ « Pays » du tunnel de commande (`OrderCountryField`, privé) devient un composant : deux écrans le veulent. Même dessin qu'un `BrandTextField` à intitulé au-dessus, le double chevron en plus ; un code hors liste s'affiche tel quel, une valeur vide dit « Choisir un pays » |
+| `BrandRow` | `isConfirmed:` sur une ligne à chevron : la coche verte remplace le chevron le temps qu'on la voie, comme elle remplace le crayon d'une ligne corrigée sur place |
+| `PostalAddressSheet` | le pays se choisit (la France proposée d'office quand il n'y en a pas) ; **« Valider » pâlit à 45 % et reste tapable** : l'appui pose un `BrandNotice(tone: .information)` — « Il manque **le code postal et la ville** pour que ton carnet arrive. » —, lue sur le brouillon, donc qui se raccourcit à mesure et s'efface à la dernière ligne, et ouvre le premier champ vide ; le clavier enchaîne adresse → code postal → ville → rangé ; la barre du clavier est celle de l'app (`brandKeyboardDismissBar`) et non un « OK » |
+| `ProfileModel.save(address:)` | recopie le nom du pays depuis la liste avant de poser l'adresse : la ligne l'écrit en toutes lettres **tout de suite**, sans attendre le serveur |
+| `ProfileView` | la ligne rouvre la même feuille avec l'adresse connue, et accuse réception (`isConfirmed: model.justSaved == .address`) |
+
+**Modifier, c'est la même feuille.** Ouverte sur une adresse connue, elle la
+montre telle quelle, tout s'y corrige, et son chapeau dit « Modifie l’adresse
+où tu souhaites recevoir ton carnet. » au lieu de « Ajoute … ». Le geste de
+fermeture reste une annulation : rien ne part avant « Valider ».
+
+**Et sans liste de pays, la feuille reste ouverte** (Paul, 21/09/2026 :
+« je n'arrive pas à modifier le pays »). La liste voyage avec le profil, donc
+un profil relu depuis le cache, ou servi par un back-end **pas encore
+déployé** avec ce lot, arrive sans elle : le menu s'affichait vide et grisé —
+« Choisir un pays » qu'on ne pouvait pas choisir — et « Valider » n'y arrivait
+jamais. Un écran qui dépend d'un champ que le serveur n'a pas encore ne doit
+pas se bloquer : sans liste, le champ « Pays » redevient une **saisie libre**
+(`BrandTextField`, exemple « France »), et `ProfileModel.save(address:)` comme
+le serveur (`findShippingCountry`) ramènent le nom au code quand ils le
+connaissent. Si la liste arrive après l'ouverture — le profil frais remplaçant
+celui du cache —, le menu prend la place du champ sans perdre ce qui y était
+tapé (`PostalAddressSheet.onChange(of: countries)`, `PostalAddress.settled(in:)`),
+et une adresse d'avant la liste, « France » tapé à la main, retombe sur sa
+ligne du menu (`[ShippingCountry].matching(_:)`, code ou nom, sans casse ni
+accents). Tant que la production n'a pas ce back-end, c'est donc le champ
+libre qu'on voit sur un téléphone : le menu vient avec le déploiement.
+
+`ProfileTests` garde la phrase de ce qui manque, le nom du pays sur la ligne,
+la reconnaissance d'un code ou d'un nom, le décodage sans liste et
+l'aller-retour par le cache ; `ProfileModelTests` (cible app) garde
+l'enregistrement — posé tout de suite, confirmé à la réponse, le nom tapé
+ramené au code, le refus qui laisse ce qui est écrit ; `screens.test.ts` (« le
+profil ») garde le code et le nom dérivé, le nom ramené au code, la valeur
+inconnue rendue telle quelle, et le refus d'un pays non livré.
+
+### 27.1 À trancher
+
+| # | Sujet |
+|---|---|
+| T164 | **« Modifie l’adresse où tu souhaites recevoir ton carnet. »** n'est pas dans Figma, qui ne dessine que l'ajout. Écrit sur le modèle de la phrase d'origine ; à valider ou à dessiner |
+| T165 | **Les exemples dans les champs vides** (« 7 rue Simon Fryd », « Lyon », « 0000000000000000 » sur la carte) ont le gris semi-gras du texte indicatif de tout `BrandTextField` à intitulé au-dessus, et se lisent comme des valeurs. La feuille ne se trompe plus sur ce qui manque ; reste que le dessin y invite. Un texte indicatif plus léger (`inkFaint`, ou en romain) est un choix du design system, pas de cet écran |
+| T166 | **L'adresse de l'étape 2 ne remonte pas sur le profil.** Corriger la livraison d'une commande ne corrige pas l'adresse du compte — c'est voulu, l'adresse de la commande se fige à la commande —, mais quelqu'un qui déménage entre deux carnets la retapera deux fois. À décider : une case « mettre à jour mon profil » |
