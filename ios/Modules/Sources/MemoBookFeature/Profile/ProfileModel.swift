@@ -213,7 +213,21 @@ public final class ProfileModel {
         mutate { $0.selectedCardId = id }
     }
 
+    /// Enregistre l'adresse que la feuille a validée — la première comme une
+    /// correction : c'est le même geste, sur les mêmes quatre lignes.
+    ///
+    /// Le pays se lit dans la liste servie avec le profil, pour que la ligne
+    /// l'écrive **tout de suite** en toutes lettres et que le serveur reçoive
+    /// le code : la feuille peut n'avoir qu'un nom — tapé à la main quand la
+    /// liste n'était pas là — et le serveur ne répond qu'après. Ce que la
+    /// liste ne connaît pas part tel quel : le serveur le reconnaîtra, ou le
+    /// refusera en le disant.
     public func save(address: PostalAddress) {
+        var address = address
+        if let country = profile?.shippingCountry(code: address.country) {
+            address.country = country.code
+            address.countryName = country.name
+        }
         guard address != profile?.address else { return }
         mutate { $0.address = address }
         save(ProfileEdit(address: address), confirming: .address)

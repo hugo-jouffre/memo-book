@@ -5,7 +5,10 @@
  * contrainte de l'imprimeur, elle changera sans qu'on livre une version d'iOS.
  * Le champ « Pays » de l'étape 2 est donc un choix dans cette liste, et pas un
  * texte libre — une adresse dont le pays n'est pas livrable est une commande
- * qu'on accepte pour la refuser plus tard.
+ * qu'on accepte pour la refuser plus tard. Depuis le 18/09/2026, le champ
+ * « Pays » de l'adresse du profil est le même choix, dans la même liste : le
+ * profil est l'amorce de la commande, il ne doit pas pouvoir dire un pays que
+ * la commande refusera.
  *
  * Le code est l'ISO 3166-1 alpha-2, seule forme que la base garde et que
  * l'imprimeur lit. Le nom n'existe que pour l'écran.
@@ -27,26 +30,37 @@ export const SHIPPING_COUNTRIES = [
   { code: "US", name: "États-Unis" },
 ] as const;
 
+export type ShippingCountry = (typeof SHIPPING_COUNTRIES)[number];
+
 export const SHIPPING_COUNTRY_CODES = SHIPPING_COUNTRIES.map((country) => country.code);
 
 /**
- * Ramène ce qu'on a sous la main à un code livrable.
+ * Le pays livrable que désigne ce texte, s'il y en a un.
  *
- * L'adresse du profil est un texte libre et ancien — « France », « FRANCE »,
- * parfois déjà « FR ». Elle sert d'**amorce** au formulaire, donc elle doit
+ * Reconnaît le code (« FR », « fr ») comme le nom (« France », « FRANCE ») :
+ * `accounts.addressCountry` est une colonne de texte libre et ancienne, où les
+ * deux formes cohabitent. `undefined` quand rien n'y correspond — c'est à
+ * l'appelant de décider ce qu'il en fait, et les deux appelants ne décident
+ * pas la même chose.
+ */
+export function findShippingCountry(raw: string | null | undefined): ShippingCountry | undefined {
+  const value = raw?.trim();
+  if (!value) return undefined;
+
+  const upper = value.toLocaleUpperCase("fr-FR");
+  return SHIPPING_COUNTRIES.find(
+    (country) => country.code === upper || country.name.toLocaleUpperCase("fr-FR") === upper,
+  );
+}
+
+/**
+ * Ramène ce qu'on a sous la main à un code livrable, **pour amorcer une
+ * commande**.
+ *
+ * L'adresse du profil sert d'amorce au formulaire de l'étape 2, donc elle doit
  * retomber sur un code sans jamais faire échouer l'ouverture de l'écran : à
  * défaut de reconnaître, on propose la France et l'utilisateur corrige.
  */
 export function toShippingCountryCode(raw: string | null | undefined): string {
-  const value = raw?.trim();
-  if (!value) return "FR";
-
-  const upper = value.toUpperCase();
-  const byCode = SHIPPING_COUNTRIES.find((country) => country.code === upper);
-  if (byCode) return byCode.code;
-
-  const byName = SHIPPING_COUNTRIES.find(
-    (country) => country.name.toLocaleUpperCase("fr-FR") === upper,
-  );
-  return byName?.code ?? "FR";
+  return findShippingCountry(raw)?.code ?? "FR";
 }

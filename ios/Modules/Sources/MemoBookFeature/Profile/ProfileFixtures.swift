@@ -22,8 +22,10 @@ extension TravellerProfile {
             street: "7 Rue Simon Fryd",
             postalCode: "69007",
             city: "Lyon",
-            country: "France"
+            country: "FR",
+            countryName: "France"
         ),
+        shippingCountries: ShippingCountry.fixtures,
         wantsNewsletter: true,
         walletBalance: 0,
         cards: [
@@ -94,6 +96,9 @@ extension TravellerProfile {
     public static let emptyFixture = TravellerProfile(
         fullName: "Maylis Garde",
         email: "maylis.garde@icloud.com",
+        // Sans adresse, mais avec la liste : c'est elle qui fait le menu de la
+        // feuille, et un compte neuf la reçoit comme les autres.
+        shippingCountries: ShippingCountry.fixtures,
         wantsNewsletter: false,
         walletBalance: 0,
         connectors: Connector.fixtures.map {

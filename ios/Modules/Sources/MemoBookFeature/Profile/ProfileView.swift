@@ -441,12 +441,17 @@ public struct ProfileView: View {
             // Sans adresse, la ligne **invite** à en donner une, en vert et un
             // cran plus petit — Hugo, 14/09/2026 (T22). Une valeur vide se
             // lisait comme une ligne cassée.
+            //
+            // Avec une adresse, la ligne la résume et **la rouvre** : c'est la
+            // même feuille qui corrige. La coche dit que le serveur l'a bien
+            // reçue — la feuille s'est refermée avant sa réponse.
             let hasAddress = !(profile?.address.singleLine.isEmpty ?? true)
             BrandRow(
                 "Adresse postale",
                 value: profile.map { hasAddress ? $0.address.singleLine : "Ajouter une adresse" },
                 valueTone: hasAddress ? .plain : .invitation,
-                isValueLoading: profile == nil
+                isValueLoading: profile == nil,
+                isConfirmed: model.justSaved == .address
             ) {
                 sheet = .postalAddress
             }
@@ -587,7 +592,10 @@ public struct ProfileView: View {
     private func sheetContent(_ destination: ProfileSheet) -> some View {
         switch destination {
         case .postalAddress:
-            PostalAddressSheet(address: model.profile?.address ?? PostalAddress()) {
+            PostalAddressSheet(
+                address: model.profile?.address ?? PostalAddress(),
+                countries: model.profile?.shippingCountries ?? []
+            ) {
                 model.save(address: $0)
             }
         case .gender:

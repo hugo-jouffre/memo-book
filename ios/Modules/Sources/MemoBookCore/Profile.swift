@@ -11,28 +11,98 @@ public struct PostalAddress: Codable, Sendable, Hashable {
     public var street: String
     public var postalCode: String
     public var city: String
-    /// Nom du pays tel que l'utilisateur l'a saisi. Pas un code ISO : la
-    /// maquette montre un champ libre, et l'imprimeur lit une étiquette.
+    /// Le pays, en code ISO 3166-1 alpha-2 — « FR ». C'est la forme que la
+    /// commande exige (``ShippingAddress/country``) et que la base garde : le
+    /// profil est l'amorce de l'étape de livraison, il parle la même langue.
+    /// Il se choisit dans ``TravellerProfile/shippingCountries``, jamais en
+    /// texte libre. Un profil enregistré avant cette liste peut porter ici ce
+    /// que la personne avait tapé (« Monaco ») : le serveur le rend tel quel
+    /// plutôt que d'inventer un code, et le menu invite alors à choisir.
     public var country: String
+    /// Le nom du pays, pour la ligne du profil — « France ». **Dérivé** par le
+    /// serveur de la liste de l'imprimeur, jamais saisi ; l'app le recopie
+    /// depuis la même liste quand elle pose une adresse avant que le serveur
+    /// ait répondu. Vide quand le pays l'est.
+    public var countryName: String
 
-    public init(street: String = "", postalCode: String = "", city: String = "", country: String = "") {
+    public init(
+        street: String = "",
+        postalCode: String = "",
+        city: String = "",
+        country: String = "",
+        countryName: String? = nil
+    ) {
         self.street = street
         self.postalCode = postalCode
         self.city = city
         self.country = country
+        self.countryName = countryName ?? country
+    }
+
+    /// Décodage tolérant sur le nom du pays : un serveur d'avant le
+    /// 18/09/2026 ne l'envoie pas, et le code fait alors office de nom plutôt
+    /// que de faire tomber tout le profil.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        street = try container.decode(String.self, forKey: .street)
+        postalCode = try container.decode(String.self, forKey: .postalCode)
+        city = try container.decode(String.self, forKey: .city)
+        country = try container.decode(String.self, forKey: .country)
+        countryName = try container.decodeIfPresent(String.self, forKey: .countryName) ?? country
     }
 
     /// Une adresse ne vaut que complète : un colis part avec les quatre lignes
     /// ou ne part pas.
-    public var isComplete: Bool {
-        [street, postalCode, city, country].allSatisfy { !$0.trimmed.isEmpty }
+    public var isComplete: Bool { missingFields.isEmpty }
+
+    /// Ce qui manque encore, dans l'ordre des champs de la feuille. C'est ce
+    /// que « Valider » nomme quand on appuie dessus trop tôt.
+    public var missingFields: [Field] {
+        Field.allCases.filter { self[$0].trimmed.isEmpty }
+    }
+
+    /// Les quatre lignes, dans l'ordre où la feuille les demande.
+    public enum Field: CaseIterable, Sendable, Hashable {
+        case street, postalCode, city, country
+
+        /// Le nom de la ligne dans une phrase — « il manque *le code postal* ».
+        public var label: String {
+            switch self {
+            case .street: "l’adresse"
+            case .postalCode: "le code postal"
+            case .city: "la ville"
+            case .country: "le pays"
+            }
+        }
+    }
+
+    /// Ce qui manque, en une phrase : « le code postal et la ville ». `nil`
+    /// quand rien ne manque. C'est ce que « Valider » dit quand on appuie
+    /// dessus trop tôt, au lieu d'avaler le geste.
+    public var missingFieldsDescription: String? {
+        let labels = missingFields.map(\.label)
+        switch labels.count {
+        case 0: return nil
+        case 1: return labels[0]
+        default: return labels.dropLast().joined(separator: ", ") + " et " + labels[labels.count - 1]
+        }
+    }
+
+    private subscript(field: Field) -> String {
+        switch field {
+        case .street: street
+        case .postalCode: postalCode
+        case .city: city
+        case .country: country
+        }
     }
 
     /// L'adresse sur une ligne, pour la ligne du profil : « 7 Rue Simon Fryd,
     /// Lyon, France ». Les champs vides sont sautés plutôt que de laisser des
-    /// virgules orphelines.
+    /// virgules orphelines. Le pays y est écrit en toutes lettres, jamais en
+    /// code : « FR » en bout de ligne se lirait comme une coquille.
     public var singleLine: String {
-        [street, city, country].map(\.trimmed).filter { !$0.isEmpty }.joined(separator: ", ")
+        [street, city, countryName].map(\.trimmed).filter { !$0.isEmpty }.joined(separator: ", ")
     }
 }
 
@@ -383,6 +453,10 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
     public var gender: Gender
     public var avatarUrl: URL?
     public var address: PostalAddress
+    /// Les pays où l'imprimeur livre, servis avec le profil pour que la feuille
+    /// « Adresse postale » y choisisse le sien sans second appel. La même
+    /// liste que celle du tunnel de commande (``OrderContext/countries``).
+    public var shippingCountries: [ShippingCountry]
     public var wantsNewsletter: Bool
     /// La cagnotte, en euros. `Decimal` et non `Double` : c'est de l'argent.
     public var walletBalance: Decimal
@@ -415,6 +489,7 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         gender: Gender = .undisclosed,
         avatarUrl: URL? = nil,
         address: PostalAddress = PostalAddress(),
+        shippingCountries: [ShippingCountry] = [],
         wantsNewsletter: Bool = false,
         walletBalance: Decimal = 0,
         cards: [PaymentCard] = [],
@@ -434,6 +509,7 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         self.gender = gender
         self.avatarUrl = avatarUrl
         self.address = address
+        self.shippingCountries = shippingCountries
         self.wantsNewsletter = wantsNewsletter
         self.walletBalance = walletBalance
         self.cards = cards
@@ -447,7 +523,8 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         self.currentTrip = currentTrip
     }
 
-    /// Décodage tolérant sur les quatre champs de l'abonnement freemium.
+    /// Décodage tolérant sur les quatre champs de l'abonnement freemium et
+    /// sur la liste des pays.
     ///
     /// Même raison que ``Entry`` : une app déjà installée ne doit pas cesser
     /// d'afficher un profil parce qu'un serveur plus ancien ne connaît pas
@@ -463,6 +540,9 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         gender = try container.decodeIfPresent(Gender.self, forKey: .gender) ?? .undisclosed
         avatarUrl = try container.decodeIfPresent(URL.self, forKey: .avatarUrl)
         address = try container.decode(PostalAddress.self, forKey: .address)
+        // Absente d'un serveur plus ancien : la feuille n'a alors pas de menu,
+        // pas le profil entier qui disparaît.
+        shippingCountries = try container.decodeIfPresent([ShippingCountry].self, forKey: .shippingCountries) ?? []
         wantsNewsletter = try container.decode(Bool.self, forKey: .wantsNewsletter)
         walletBalance = try container.decode(Decimal.self, forKey: .walletBalance)
         cards = try container.decode([PaymentCard].self, forKey: .cards)
@@ -484,9 +564,15 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         cards.first { $0.id == selectedCardId } ?? cards.first
     }
 
-    /// `true` quand l'adresse vient d'un fournisseur tiers et ne peut donc pas
-    /// être corrigée depuis l'app.
+    /// `true` quand l'adresse e-mail vient d'un fournisseur tiers et ne peut
+    /// donc pas être corrigée depuis l'app.
     public var isEmailManagedByProvider: Bool { signInProvider != nil }
+
+    /// Le pays livrable que désigne ce code — ou ce nom, pour une adresse
+    /// d'avant la liste —, s'il est dans la liste.
+    public func shippingCountry(code: String) -> ShippingCountry? {
+        shippingCountries.matching(code)
+    }
 
     /// **La** question qui départage les deux profils de la maquette : celui
     /// qui paie, et celui qui use ses étapes offertes.

@@ -81,6 +81,23 @@ public struct ShippingCountry: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
+extension Array where Element == ShippingCountry {
+    /// Le pays que désigne ce texte : son code (« FR », « fr ») ou son nom
+    /// (« France », « FRANCE »), sans tenir compte de la casse.
+    ///
+    /// La même règle que celle du serveur (`findShippingCountry`) : un profil
+    /// enregistré avant la liste porte un nom tapé à la main, et il doit
+    /// retomber sur sa ligne du menu plutôt que d'y apparaître comme un
+    /// inconnu. `nil` quand rien ne correspond — c'est à l'appelant de dire ce
+    /// qu'il en fait.
+    public func matching(_ raw: String) -> ShippingCountry? {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return nil }
+        return first { $0.code.caseInsensitiveCompare(value) == .orderedSame }
+            ?? first { $0.name.compare(value, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame }
+    }
+}
+
 // MARK: - Les options d'un exemplaire
 
 /// Les quatre options d'**un** exemplaire — « 1er Carnet », « 2e Carnet ».

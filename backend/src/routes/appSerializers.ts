@@ -18,6 +18,7 @@ import {
   TEXT_MEMORY_COST,
   VOICE_MEMORY_COST_PER_MINUTE,
 } from "../services/memoryAllowance.js";
+import { findShippingCountry, SHIPPING_COUNTRIES } from "../services/shippingCountries.js";
 import { SUBSCRIPTION_WEEKLY_CENTS } from "../services/subscriptionCatalog.js";
 import { avatarUrlOf } from "../services/avatars.js";
 import { effectiveGender } from "../services/genderInference.js";
@@ -427,6 +428,31 @@ function serializeConnectors(linked: AccountConnector[]) {
   }));
 }
 
+/**
+ * L'adresse du profil, telle que `PostalAddress` la lit.
+ *
+ * `country` est le **code** ISO — la forme que la commande exige et que l'app
+ * envoie depuis le 18/09/2026 — et `countryName` se **dérive** de la liste de
+ * l'imprimeur : rien n'est stocké, c'est la ligne du profil qui l'affiche.
+ * `addressCountry` est une colonne de texte libre et ancienne : « France »,
+ * « FRANCE », parfois déjà « FR ». Ce qui s'y reconnaît devient un code ; ce
+ * qui ne s'y reconnaît pas est rendu tel quel, pour les deux champs — l'écran
+ * montre alors ce que la personne avait écrit, et le menu l'invite à choisir
+ * un pays livrable. Inventer « FR » à sa place serait une adresse qui ment.
+ */
+function serializePostalAddress(account: Account) {
+  const country = findShippingCountry(account.addressCountry);
+  const raw = account.addressCountry?.trim() ?? "";
+
+  return {
+    street: account.addressLine1 ?? "",
+    postalCode: account.addressPostalCode ?? "",
+    city: account.addressCity ?? "",
+    country: country?.code ?? raw,
+    countryName: country?.name ?? raw,
+  };
+}
+
 export function serializeProfile(
   account: AccountForProfile,
   orders: OrderForTracking[],
@@ -461,12 +487,10 @@ export function serializeProfile(
     // d'abonnement accorde « Abonné(e) » (T76).
     gender: effectiveGender(account.gender, account.firstName),
     avatarUrl: avatarUrlOf(account),
-    address: {
-      street: account.addressLine1 ?? "",
-      postalCode: account.addressPostalCode ?? "",
-      city: account.addressCity ?? "",
-      country: account.addressCountry ?? "",
-    },
+    address: serializePostalAddress(account),
+    // La liste de l'imprimeur, avec le profil : la feuille « Adresse postale »
+    // y choisit le pays, et un second appel ferait attendre un menu.
+    shippingCountries: SHIPPING_COUNTRIES,
     wantsNewsletter: account.wantsNewsletter,
     walletBalance: euros(account.walletBalanceCents),
     cards: (account.cards ?? []).map(serializeCard),

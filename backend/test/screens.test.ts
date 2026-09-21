@@ -60,7 +60,14 @@ interface ProfileBody {
   avatarUrl: string | null;
   wantsNewsletter: boolean;
   walletBalance: number;
-  address: { street: string; postalCode: string; city: string; country: string };
+  address: {
+    street: string;
+    postalCode: string;
+    city: string;
+    country: string;
+    countryName: string;
+  };
+  shippingCountries: { code: string; name: string }[];
   connectors: { id: string; isEnabled: boolean }[];
   subscription: { weeklyPrice: number; isActive: boolean; hasEndedBefore: boolean };
   orders: unknown[];
@@ -320,7 +327,12 @@ describe("le profil", () => {
       postalCode: "",
       city: "Lyon",
       country: "",
+      countryName: "",
     });
+    // La liste de l'imprimeur voyage avec le profil : c'est dans elle que la
+    // feuille « Adresse postale » choisit le pays, sans second appel.
+    expect(body.shippingCountries[0]).toEqual({ code: "FR", name: "France" });
+    expect(body.shippingCountries.length).toBeGreaterThan(1);
     // Le catalogue complet, pas seulement ce qui est branché : l'écran doit
     // pouvoir proposer les six.
     expect(body.connectors.length).toBeGreaterThan(0);
@@ -569,6 +581,96 @@ describe("le profil", () => {
     // Un nom qui n'est pas une clé d'avatar ne mène nulle part.
     const missing = await harness.app.inject({ method: "GET", url: "/v1/avatars/../etc/passwd" });
     expect([400, 404]).toContain(missing.statusCode);
+  });
+
+  it("enregistre l'adresse postale avec un pays livrable, et la relit", async () => {
+    const account = await registerAccount(harness.app);
+
+    const saved = await harness.app.inject({
+      method: "PATCH",
+      url: "/v1/profile",
+      headers: { authorization: account.authorization },
+      payload: {
+        address: { street: "7 rue Simon Fryd", postalCode: "69007", city: "Lyon", country: "FR" },
+      },
+    });
+    expect(saved.statusCode).toBe(200);
+    // Le code est gardé, le nom se dérive : rien de plus n'est stocké.
+    expect(saved.json<ProfileBody>().address).toEqual({
+      street: "7 rue Simon Fryd",
+      postalCode: "69007",
+      city: "Lyon",
+      country: "FR",
+      countryName: "France",
+    });
+
+    // Corriger l'adresse remplace ce qu'il y avait — c'est ce que fait la
+    // feuille, qui renvoie toujours les quatre champs.
+    const corrected = await harness.app.inject({
+      method: "PATCH",
+      url: "/v1/profile",
+      headers: { authorization: account.authorization },
+      payload: {
+        address: { street: "12 rue Neuve", postalCode: "1000", city: "Bruxelles", country: "BE" },
+      },
+    });
+    expect(corrected.json<ProfileBody>().address).toMatchObject({
+      street: "12 rue Neuve",
+      city: "Bruxelles",
+      country: "BE",
+      countryName: "Belgique",
+    });
+  });
+
+  it("ramène un nom de pays au code, et rend tel quel ce qu'il ne reconnaît pas", async () => {
+    const account = await registerAccount(harness.app);
+
+    // Une app d'avant la liste envoyait le pays en texte libre.
+    const named = await harness.app.inject({
+      method: "PATCH",
+      url: "/v1/profile",
+      headers: { authorization: account.authorization },
+      payload: { address: { street: "1 rue", postalCode: "75001", city: "Paris", country: "FRANCE" } },
+    });
+    expect(named.json<ProfileBody>().address).toMatchObject({ country: "FR", countryName: "France" });
+
+    // Ce qui dort en base sans correspondre à la liste n'est pas maquillé en
+    // « FR » : l'écran montre ce que la personne avait écrit, et son menu
+    // l'invite à choisir.
+    await harness.prisma.account.update({
+      where: { id: account.accountId },
+      data: { addressCountry: "Monaco" },
+    });
+    const legacy = await harness.app.inject({
+      method: "GET",
+      url: "/v1/profile",
+      headers: { authorization: account.authorization },
+    });
+    expect(legacy.json<ProfileBody>().address).toMatchObject({
+      country: "Monaco",
+      countryName: "Monaco",
+    });
+  });
+
+  it("refuse un pays où l'imprimeur ne livre pas, avec une phrase pour l'écran", async () => {
+    const account = await registerAccount(harness.app);
+
+    const response = await harness.app.inject({
+      method: "PATCH",
+      url: "/v1/profile",
+      headers: { authorization: account.authorization },
+      payload: { address: { street: "1 rue", postalCode: "98000", city: "Monaco", country: "MC" } },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json<{ message: string }>().message).toMatch(/pas encore livré/);
+
+    // Rien n'a été écrit : l'adresse reste vide.
+    const profile = await harness.app.inject({
+      method: "GET",
+      url: "/v1/profile",
+      headers: { authorization: account.authorization },
+    });
+    expect(profile.json<ProfileBody>().address.street).toBe("");
   });
 
   it("refuse un connecteur qui n'est pas au catalogue", async () => {
