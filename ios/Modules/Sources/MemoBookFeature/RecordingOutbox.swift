@@ -4,21 +4,28 @@ import MemoBookNetworking
 import MemoBookRecording
 import Observation
 
-/// La file de départ des vocaux : ce qui garantit qu'un souvenir raconté hors
-/// ligne finit dans le carnet.
+/// La file de départ de ce qu'on raconte : ce qui garantit qu'un souvenir dit
+/// hors ligne finit dans le carnet.
 ///
 /// **Elle vit au-dessus des écrans**, dans ``AppDependencies``, et pas dans
 /// ``HomeModel`` : un envoi commencé depuis l'accueil doit se terminer même si
 /// on file dans son profil pendant ce temps, et un vocal mis de côté dans le
 /// métro doit repartir tout seul à la sortie, quel que soit l'écran affiché.
 ///
+/// **Tout ce qu'on dit passe par elle** — le vocal de l'accueil comme un
+/// texte, un vocal ou des photos envoyés depuis la conversation (`docs/
+/// conversation.md` § 9). Un tour est un ``OutgoingTurn`` : il porte
+/// l'identifiant que le serveur reprendra, donc un tour parti deux fois n'est
+/// jamais dans le fil deux fois.
+///
 /// Elle tient trois choses, et rien d'autre :
 ///
 /// 1. **l'état du réseau** (``Connectivity``), pour savoir s'il faut essayer ;
 /// 2. **la file sur le disque** (``PendingRecordingStore``), pour que ce qui
 ///    n'est pas parti survive à la fermeture de l'app ;
-/// 3. **l'envoi lui-même**, une fonction — elle ne connaît pas `MemoBookAPI`,
-///    comme les modèles d'écran ne connaissent pas leur route.
+/// 3. **l'envoi lui-même**, une fonction qui rend le reçu du serveur — elle ne
+///    connaît pas `MemoBookAPI`, comme les modèles d'écran ne connaissent pas
+///    leur route.
 ///
 /// ⚠️ **Un envoi ne survit pas à la mise en arrière-plan.** `URLSession` en
 /// tâche de fond serait la réponse complète ; elle demande un envoi par
@@ -28,10 +35,12 @@ import Observation
 @MainActor
 @Observable
 public final class RecordingOutbox {
-    /// Ce qu'il est advenu d'un vocal qu'on vient de confier.
+    /// Ce qu'il est advenu d'un tour qu'on vient de confier.
     public enum Delivery: Sendable, Equatable {
-        /// Il est arrivé dans tous les carnets visés.
-        case delivered
+        /// Il est arrivé, et voici ce que le serveur a écrit. Sans reçu quand
+        /// l'appel a abouti mais que sa réponse n'a pas pu se lire — le tour
+        /// est bien là-bas, on ne le renvoie pas.
+        case delivered(ChatTurnReceipt?)
         /// Il attend le réseau, sur le disque. Ce n'est **pas** un échec : la
         /// boîte d'information de l'accueil le dit, il n'y a rien à faire.
         case queued
@@ -43,17 +52,17 @@ public final class RecordingOutbox {
     /// pas parlé, on n'affiche pas « hors ligne » à quelqu'un qui ne l'est pas.
     public private(set) var isOnline = true
 
-    /// Combien de vocaux attendent sur le disque.
+    /// Combien de tours attendent sur le disque.
     public private(set) var pending = 0
 
-    /// Combien de vocaux sont en train de partir. Zéro quand rien n'est en vol.
+    /// Combien de tours sont en train de partir. Zéro quand rien n'est en vol.
     public private(set) var sending = 0
 
     /// Ce que le dernier envoi a fait arriver, le temps de le dire — voir
     /// ``confirmationDelay``. `nil` le reste du temps.
     public private(set) var justDelivered: Int?
 
-    /// Compteur monotone des vocaux arrivés. Il ne sert qu'à une chose : que
+    /// Compteur monotone des tours arrivés. Il ne sert qu'à une chose : que
     /// l'accueil sache qu'il doit se recharger, parce que ses compteurs et sa
     /// jauge viennent de vieillir.
     public private(set) var deliveries = 0
@@ -62,25 +71,31 @@ public final class RecordingOutbox {
     /// tient au réseau n'arrive jamais ici : ça retourne dans la file.
     public private(set) var rejection: String?
 
-    /// Où en est le vocal qu'on vient de raconter depuis l'accueil.
+    /// Où en est le dernier tour dont le sort a changé — et le reçu du
+    /// serveur, quand il est arrivé.
     ///
-    /// Il s'affiche **dans la conversation**, sur un écran que la file ne
-    /// connaît pas — et il peut très bien attendre le réseau sur le disque. La
-    /// bulle lit donc cet état-ci au lieu de décider elle-même : une bulle qui
-    /// se déclarerait envoyée parce que MEMO a répondu mentirait à chaque fois
-    /// qu'on raconte dans le métro. Voir ``RecordingHandoff``.
-    public private(set) var handoffDelivery: HandoffDelivery?
+    /// La bulle s'affiche **dans la conversation**, sur un écran que la file ne
+    /// connaît pas — et le tour peut très bien attendre le réseau sur le
+    /// disque. La bulle suit donc la file au lieu de décider elle-même : une
+    /// bulle qui se déclarerait envoyée parce que MEMO a répondu mentirait à
+    /// chaque fois qu'on raconte dans le métro. La conversation écoute
+    /// ``turnDeliveries()`` ; cette valeur-ci est le dernier mot, pour qui arrive
+    /// après. Voir ``ChatModel/markDelivery(_:)``.
+    public private(set) var lastDelivery: ChatTurnDelivery?
 
-    /// L'envoi d'une bulle précise, suivi de bout en bout. Un seul à la fois :
-    /// c'est toujours le dernier vocal dit.
-    public struct HandoffDelivery: Sendable, Equatable {
-        public let id: String
-        public internal(set) var state: ChatDelivery
+    /// Un refus définitif, tel que la conversation le reçoit : le libellé est
+    /// déjà écrit pour l'utilisateur.
+    public struct Rejection: LocalizedError, Sendable, Hashable {
+        public let message: String
+        public var errorDescription: String? { message }
     }
 
     private let store: PendingRecordingStore
     private let connectivity: Connectivity
-    private let send: @Sendable (RecordedAudio, String) async throws -> Void
+    private let send: @Sendable (OutgoingTurn, String) async throws -> ChatTurnReceipt
+
+    /// Les conversations à l'écoute — voir ``turnDeliveries()``.
+    private var listeners: [UUID: AsyncStream<ChatTurnDelivery>.Continuation] = [:]
 
     private var monitor: Task<Void, Never>?
     private var flushing: Task<Void, Never>?
@@ -103,7 +118,9 @@ public final class RecordingOutbox {
     public init(
         store: PendingRecordingStore = .temporary(),
         connectivity: Connectivity = .online,
-        send: @escaping @Sendable (RecordedAudio, String) async throws -> Void = { _, _ in }
+        send: @escaping @Sendable (OutgoingTurn, String) async throws -> ChatTurnReceipt = { _, _ in
+            ChatTurnReceipt(messages: [], turn: .idle, now: .now)
+        }
     ) {
         self.store = store
         self.connectivity = connectivity
@@ -139,7 +156,7 @@ public final class RecordingOutbox {
         }
     }
 
-    /// Confie un vocal à un ou plusieurs carnets.
+    /// Confie un tour à un carnet.
     ///
     /// Hors ligne, il part directement dans la file — on n'essaie même pas, et
     /// on ne fait donc pas attendre quelqu'un devant un échec annoncé. En
@@ -147,56 +164,86 @@ public final class RecordingOutbox {
     /// file** : le moniteur dit qu'une interface est montée, pas que l'API
     /// répond.
     @discardableResult
-    public func submit(
-        _ audio: RecordedAudio,
-        to tripIds: [String],
-        handoffId: String? = nil
-    ) async -> Delivery {
-        guard !tripIds.isEmpty else { return .delivered }
+    public func submit(_ turn: OutgoingTurn, to tripId: String) async -> Delivery {
         rejection = nil
-        if let handoffId { handoffDelivery = HandoffDelivery(id: handoffId, state: .sending) }
+        publish(ChatTurnDelivery(id: turn.id, tripId: tripId, state: .sending))
 
-        let outcome = await deliverOrQueue(audio, to: tripIds)
-        if let handoffId { note(outcome, of: handoffId) }
+        let outcome = await deliverOrQueue(turn, to: tripId)
+        note(outcome, of: turn.id, to: tripId)
         return outcome
     }
 
-    private func deliverOrQueue(_ audio: RecordedAudio, to tripIds: [String]) async -> Delivery {
-        guard isOnline else { return await queue(audio, for: tripIds) }
+    /// Le sort des tours, au fil de l'eau — ce que la conversation écoute.
+    ///
+    /// Un flux et non une valeur observée : deux tours qui partent dans la
+    /// même seconde font deux événements, et une bulle ne doit rater ni l'un
+    /// ni l'autre. Il commence par le dernier connu : un écran ouvert après
+    /// l'arrivée du vocal de l'accueil ne l'attend pas pour rien. Le flux
+    /// s'arrête quand la tâche qui le lit s'arrête.
+    public func turnDeliveries() -> AsyncStream<ChatTurnDelivery> {
+        AsyncStream { continuation in
+            let key = UUID()
+            if let lastDelivery { continuation.yield(lastDelivery) }
+            listeners[key] = continuation
+            continuation.onTermination = { [weak self] _ in
+                Task { @MainActor [weak self] in self?.listeners[key] = nil }
+            }
+        }
+    }
+
+    private func publish(_ delivery: ChatTurnDelivery) {
+        lastDelivery = delivery
+        for listener in listeners.values { listener.yield(delivery) }
+    }
+
+    /// Les tours qui attendent le réseau pour un carnet, le plus ancien
+    /// d'abord — ce que la conversation pose en bulles « en cours d'envoi »
+    /// quand on l'ouvre. Relus du disque, fichiers compris : la bulle d'un
+    /// vocal doit se réécouter.
+    public func waiting(for tripId: String) async -> [OutgoingTurn] {
+        var turns: [OutgoingTurn] = []
+        for record in await store.all() where record.tripId == tripId {
+            guard let files = try? await store.files(for: record), let turn = Self.turn(from: record, files: files)
+            else { continue }
+            turns.append(turn)
+        }
+        return turns
+    }
+
+    private func deliverOrQueue(_ turn: OutgoingTurn, to tripId: String) async -> Delivery {
+        guard isOnline else { return await queue(turn, for: tripId) }
 
         sending += 1
-        let attempt = await deliver(audio, to: tripIds)
+        let outcome = await deliver(turn, to: tripId)
         sending -= 1
 
-        if !attempt.rejected.isEmpty {
-            rejection = message(for: attempt, of: tripIds.count)
-        }
-
-        guard attempt.deferred.isEmpty else {
-            return await queue(audio, for: attempt.deferred, keepingRejection: true)
-        }
-
-        if let message = rejection, attempt.rejected.count == tripIds.count {
+        switch outcome {
+        case .sent(let receipt):
+            noteDelivery(of: 1)
+            return .delivered(receipt)
+        case .deferred:
+            return await queue(turn, for: tripId)
+        case .rejected(let reason):
+            let message = Self.message(for: turn, reason: reason)
+            rejection = message
             return .rejected(message)
         }
-
-        noteDelivery(of: 1)
-        return .delivered
     }
 
     /// Ce que la bulle de la conversation doit montrer.
     ///
-    /// ⚠️ `.queued` **n'est pas un échec, et n'est pas une arrivée** : le vocal
+    /// ⚠️ `.queued` **n'est pas un échec, et n'est pas une arrivée** : le tour
     /// attend le réseau sur le disque, et la bulle reste donc sur « envoi en
-    /// cours ». C'est ``resolveHandoffIfQueueIsEmpty()`` qui la terminera, au
-    /// retour de la connexion.
-    private func note(_ outcome: Delivery, of handoffId: String) {
-        guard handoffDelivery?.id == handoffId else { return }
-
+    /// cours ». C'est ``drain()`` qui la terminera, au retour de la connexion,
+    /// **par son identifiant**.
+    private func note(_ outcome: Delivery, of id: String, to tripId: String) {
         switch outcome {
-        case .delivered: handoffDelivery?.state = .sent
-        case .queued: break
-        case .rejected(let message): handoffDelivery?.state = .failed(message)
+        case .delivered(let receipt):
+            publish(ChatTurnDelivery(id: id, tripId: tripId, state: .sent, receipt: receipt))
+        case .queued:
+            break
+        case .rejected(let message):
+            publish(ChatTurnDelivery(id: id, tripId: tripId, state: .failed(message)))
         }
     }
 
@@ -236,101 +283,54 @@ public final class RecordingOutbox {
         for record in waiting {
             guard isOnline else { break }
 
-            guard let audio = try? await store.audio(for: record) else {
+            guard let files = try? await store.files(for: record),
+                let turn = Self.turn(from: record, files: files)
+            else {
                 // Le fichier a disparu sous la fiche : elle ne sert plus à rien.
                 await store.remove(record)
                 continue
             }
 
-            let attempt = await deliver(audio, to: record.tripIds)
-
-            if !attempt.rejected.isEmpty {
-                rejection = message(for: attempt, of: record.tripIds.count)
-            }
-
-            if attempt.deferred.isEmpty {
+            switch await deliver(turn, to: record.tripId) {
+            case .sent(let receipt):
                 await store.remove(record)
-                if attempt.rejected.count < record.tripIds.count { delivered += 1 }
-            } else if attempt.deferred.count == record.tripIds.count {
+                delivered += 1
+                note(.delivered(receipt), of: record.id, to: record.tripId)
+            case .rejected(let reason):
+                await store.remove(record)
+                let message = Self.message(for: turn, reason: reason)
+                rejection = message
+                note(.rejected(message), of: record.id, to: record.tripId)
+            case .deferred:
                 // Rien n'est passé : le réseau est reparti. Inutile de faire
                 // subir la même attente aux suivants.
-                break
-            } else {
-                var remaining = record
-                remaining.tripIds = attempt.deferred
-                try? await store.update(remaining)
+                pending = await store.count()
+                return
             }
         }
 
         pending = await store.count()
         if delivered > 0 { noteDelivery(of: delivered) }
-        resolveHandoffIfQueueIsEmpty()
     }
 
-    /// La file est vide et quelque chose est parti : le vocal qu'on suivait en
-    /// faisait partie.
-    ///
-    /// C'est un raccourci, et il est assumé : la file ne rend pas l'identifiant
-    /// du vocal qu'elle vient d'envoyer, et lui en donner un pour cette seule
-    /// bulle demanderait de le porter jusqu'au disque. Le suivi porte toujours
-    /// le **dernier** vocal dit ; quand la file s'est vidée sans rien laisser
-    /// derrière, il est parti avec. Sans ça, la bulle resterait sur « envoi en
-    /// cours » alors que le souvenir est dans le carnet.
-    private func resolveHandoffIfQueueIsEmpty() {
-        guard pending == 0, handoffDelivery?.state == .sending else { return }
-        handoffDelivery?.state = .sent
-    }
-
-    /// Un vocal, plusieurs carnets, **en même temps** : deux carnets ne font
-    /// pas deux fois l'attente. Chaque envoi est indépendant — ce qui passe
-    /// passe, et on ne retient que ce qui a manqué.
-    private func deliver(_ audio: RecordedAudio, to tripIds: [String]) async -> Attempt {
-        let send = send
-
-        let outcomes = await withTaskGroup(of: (String, Outcome).self) { group in
-            for tripId in tripIds {
-                group.addTask {
-                    do {
-                        try await send(audio, tripId)
-                        return (tripId, .sent)
-                    } catch {
-                        return (tripId, Self.outcome(for: error))
-                    }
-                }
-            }
-
-            var collected: [(String, Outcome)] = []
-            for await outcome in group { collected.append(outcome) }
-            return collected
-        }
-
-        var attempt = Attempt()
-        for (tripId, outcome) in outcomes {
-            switch outcome {
-            case .sent: break
-            case .deferred: attempt.deferred.append(tripId)
-            case .rejected(let reason):
-                attempt.rejected.append(tripId)
-                attempt.reason = attempt.reason ?? reason
-            }
-        }
-        return attempt
-    }
-
-    private func queue(
-        _ audio: RecordedAudio,
-        for tripIds: [String],
-        keepingRejection: Bool = false
-    ) async -> Delivery {
+    private func deliver(_ turn: OutgoingTurn, to tripId: String) async -> Outcome {
         do {
-            try await store.enqueue(audio, for: tripIds)
+            return .sent(try await send(turn, tripId))
+        } catch {
+            return Self.outcome(for: error)
+        }
+    }
+
+    private func queue(_ turn: OutgoingTurn, for tripId: String) async -> Delivery {
+        do {
+            try await store.enqueue(Self.record(for: turn, tripId: tripId), files: Self.files(of: turn))
             pending = await store.count()
             return .queued
         } catch {
-            // Le disque a refusé : c'est le seul cas où un vocal se perd, et il
+            // Le disque a refusé : c'est le seul cas où un tour se perd, et il
             // faut le dire tout de suite — la personne peut encore recommencer.
-            let message = "Ton vocal n’a pas pu être gardé sur ton téléphone. Réessaie."
-            if !keepingRejection { rejection = message }
+            let message = "\(Self.subject(of: turn)) n’a pas pu être gardé sur ton téléphone. Réessaie."
+            rejection = message
             return .rejected(message)
         }
     }
@@ -355,27 +355,112 @@ public final class RecordingOutbox {
         #endif
     }
 
-    /// Ce qu'on écrit quand le serveur a refusé. Le libellé du serveur est
-    /// déjà destiné à l'utilisateur — on le reprend plutôt que d'en inventer un.
-    private func message(for attempt: Attempt, of total: Int) -> String {
-        let reason = attempt.reason.map { " \($0)" } ?? ""
+    // MARK: - Entre la file et le disque
 
-        return attempt.rejected.count == total
-            ? "Ton vocal n’a pas pu être envoyé.\(reason)"
-            : "Ton vocal n’a pas pu être ajouté à \(attempt.rejected.count) de tes carnets.\(reason)"
+    /// La fiche d'un tour, telle qu'elle attend sur le disque.
+    nonisolated private static func record(for turn: OutgoingTurn, tripId: String) -> PendingTurn {
+        switch turn.body {
+        case .text(let text, let suggestionId, let entryId):
+            return PendingTurn(
+                id: turn.id,
+                tripId: tripId,
+                kind: .text,
+                text: text,
+                suggestionId: suggestionId,
+                entryId: entryId,
+                stepId: turn.stepId,
+                recordedAt: .now
+            )
+        case .voice(let audio):
+            return PendingTurn(
+                id: turn.id,
+                tripId: tripId,
+                kind: .voice,
+                stepId: turn.stepId,
+                filenames: [audio.filename],
+                mimeTypes: [audio.mimeType],
+                duration: audio.durationSeconds,
+                levels: audio.levels,
+                placeLabel: audio.placeLabel,
+                recordedAt: audio.capturedAt
+            )
+        case .photos(let photos, let capturedAt):
+            return PendingTurn(
+                id: turn.id,
+                tripId: tripId,
+                kind: .photos,
+                stepId: turn.stepId,
+                filenames: photos.map(\.filename),
+                mimeTypes: photos.map(\.mimeType),
+                recordedAt: capturedAt
+            )
+        }
     }
 
-    /// Ce qu'un envoi a laissé derrière lui.
-    private struct Attempt {
-        /// À retenter : le réseau a manqué.
-        var deferred: [String] = []
-        /// À oublier : le serveur a dit non.
-        var rejected: [String] = []
-        var reason: String?
+    nonisolated private static func files(of turn: OutgoingTurn) -> [Data] {
+        switch turn.body {
+        case .text: []
+        case .voice(let audio): [audio.data]
+        case .photos(let photos, _): photos.map(\.data)
+        }
+    }
+
+    /// Le tour relu du disque. `nil` quand la fiche ne dit plus ce qu'elle
+    /// promettait — une version d'avant sans fichier, par exemple.
+    nonisolated private static func turn(from record: PendingTurn, files: [Data]) -> OutgoingTurn? {
+        switch record.kind {
+        case .text:
+            guard let text = record.text else { return nil }
+            return OutgoingTurn(
+                id: record.id,
+                stepId: record.stepId,
+                body: .text(text, suggestionId: record.suggestionId, entryId: record.entryId)
+            )
+        case .voice:
+            guard let data = files.first, let filename = record.filenames.first,
+                let mimeType = record.mimeTypes.first
+            else { return nil }
+            return OutgoingTurn(
+                id: record.id,
+                stepId: record.stepId,
+                body: .voice(
+                    RecordedTurnAudio(
+                        data: data,
+                        filename: filename,
+                        mimeType: mimeType,
+                        capturedAt: record.recordedAt,
+                        durationSeconds: record.duration ?? 0,
+                        levels: record.levels,
+                        placeLabel: record.placeLabel
+                    )
+                )
+            )
+        case .photos:
+            guard files.count == record.filenames.count, files.count == record.mimeTypes.count, !files.isEmpty
+            else { return nil }
+            let photos = zip(files, zip(record.filenames, record.mimeTypes)).map { data, names in
+                ChatPhotoUpload(data: data, filename: names.0, mimeType: names.1)
+            }
+            return OutgoingTurn(id: record.id, stepId: record.stepId, body: .photos(photos, capturedAt: record.recordedAt))
+        }
+    }
+
+    /// Ce qu'on écrit quand le serveur a refusé. Le libellé du serveur est
+    /// déjà destiné à l'utilisateur — on le reprend plutôt que d'en inventer un.
+    nonisolated private static func message(for turn: OutgoingTurn, reason: String) -> String {
+        "\(subject(of: turn)) n’a pas pu être envoyé. \(reason)"
+    }
+
+    nonisolated private static func subject(of turn: OutgoingTurn) -> String {
+        switch turn.body {
+        case .text: "Ton message"
+        case .voice: "Ton vocal"
+        case .photos: "Tes photos"
+        }
     }
 
     private enum Outcome: Sendable {
-        case sent
+        case sent(ChatTurnReceipt?)
         case deferred
         case rejected(String)
     }
@@ -385,12 +470,13 @@ public final class RecordingOutbox {
     /// Elle tient en une question — est-ce que réessayer a une chance ? Une
     /// panne de transport, oui, c'est même exactement ce pour quoi la file
     /// existe. Un 4xx, non : le carnet n'existe plus, le quota est atteint, le
-    /// fichier est trop gros. Garder un vocal que le serveur refusera à chaque
+    /// fichier est trop gros. Garder un tour que le serveur refusera à chaque
     /// fois, c'est promettre une arrivée qui n'aura jamais lieu.
     ///
     /// Le cas tordu est le décodage : l'appel **a abouti**, c'est la réponse
-    /// qu'on n'a pas su lire. Le souvenir est donc bien arrivé, et le renvoyer
-    /// le mettrait deux fois dans le carnet. On le compte comme parti.
+    /// qu'on n'a pas su lire. Le tour est donc bien arrivé, et le renvoyer
+    /// le mettrait deux fois dans le carnet. On le compte comme parti — sans
+    /// reçu.
     nonisolated private static func outcome(for error: any Error) -> Outcome {
         switch error {
         case let error as APIError:
@@ -400,7 +486,7 @@ public final class RecordingOutbox {
             case .server(let statusCode, _, let message):
                 statusCode >= 500 ? .deferred : .rejected(message)
             case .decoding:
-                .sent
+                .sent(nil)
             }
         case is URLError, is CancellationError:
             .deferred
@@ -435,8 +521,8 @@ public final class RecordingOutbox {
         }
 
         /// Met un vocal en file sans passer par le micro.
-        public func debugQueue(_ audio: RecordedAudio, for tripIds: [String]) async {
-            _ = await queue(audio, for: tripIds)
+        public func debugQueue(_ audio: RecordedAudio, for tripId: String) async {
+            _ = await queue(OutgoingTurn.voice(audio, levels: []), for: tripId)
         }
 
         /// Montre l'envoi en cours, sans rien envoyer.
@@ -467,3 +553,31 @@ public final class RecordingOutbox {
     }
 
 #endif
+
+extension OutgoingTurn {
+    /// Un tour vocal depuis un enregistrement du micro — l'accueil et la
+    /// conversation en font le même.
+    public static func voice(
+        _ audio: RecordedAudio,
+        levels: [Double],
+        id: String = UUID().uuidString.lowercased(),
+        stepId: String? = nil,
+        placeLabel: String? = nil
+    ) -> OutgoingTurn {
+        OutgoingTurn(
+            id: id,
+            stepId: stepId,
+            body: .voice(
+                RecordedTurnAudio(
+                    data: audio.data,
+                    filename: audio.filename,
+                    mimeType: audio.mimeType,
+                    capturedAt: audio.recordedAt,
+                    durationSeconds: audio.duration,
+                    levels: levels,
+                    placeLabel: placeLabel
+                )
+            )
+        )
+    }
+}

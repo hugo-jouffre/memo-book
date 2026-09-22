@@ -118,12 +118,14 @@ public final class ChatModel {
     /// second souvenir.
     private var pending: OutgoingTurn?
 
-    /// La bulle venue de l'accueil, s'il y en a une — voir ``expect(_:)``.
-    ///
-    /// Son état d'envoi ne se décide **pas** ici : ce vocal est parti avant que
-    /// cet écran n'existe, et c'est la file qui sait s'il est arrivé. Le modèle
-    /// retient son identifiant pour ne rien écrire par-dessus.
-    private var handoffId: String?
+    /// L'écoute de la file — voir ``markDelivery(_:)``. Une tâche, qui meurt
+    /// avec l'écran.
+    private var deliveryWatcher: Task<Void, Never>?
+
+    /// Le dernier mot de la file, gardé au cas où il arrive **avant** le fil —
+    /// l'écran s'ouvre pendant que le vocal de l'accueil part. Il est rejoué
+    /// dès que le fil est là.
+    private var latestDelivery: ChatTurnDelivery?
 
     /// - Parameters:
     ///   - transport: ce qui relie le modèle au monde — le serveur, ou le
@@ -184,19 +186,48 @@ public final class ChatModel {
                 pendingHandoff = nil
                 receive(handoff)
             }
+
+            // Ce qui attend le réseau sur le disque pour ce fil se pose en
+            // bulles « en cours d'envoi » : on a quitté l'écran sur un texte
+            // dit dans le métro, il est encore là quand on revient.
+            for turn in await transport.waiting() where !messages.contains(where: { $0.id == turn.id }) {
+                keepLocalFiles(of: turn)
+                append(optimisticMessage(for: turn))
+            }
+
+            // Et si la file a parlé pendant qu'on chargeait, on l'écoute
+            // maintenant — puis on l'écoute tout court.
+            if let latestDelivery { markDelivery(latestDelivery) }
+            watchDeliveries()
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
+    /// Suit ce que la file fait des tours partis par elle — le vocal de
+    /// l'accueil, un message d'ici qui attendait le réseau. Une seule écoute à
+    /// la fois ; elle repart avec le prochain chargement quand l'écran revient.
+    private func watchDeliveries() {
+        guard deliveryWatcher == nil else { return }
+        deliveryWatcher = Task { [weak self] in
+            guard let transport = self?.transport else { return }
+            for await delivery in await transport.deliveries() {
+                guard !Task.isCancelled, let self else { return }
+                self.markDelivery(delivery)
+            }
+        }
+    }
+
     /// Tout arrêter en quittant l'écran : la lecture, la voix de synthèse, le
-    /// tour en vol, le sondage, et la collecte de niveaux. Un écran de chat
-    /// laissé derrière soi ne doit ni parler ni enregistrer.
+    /// tour en vol, le sondage, l'écoute de la file et la collecte de niveaux.
+    /// Un écran de chat laissé derrière soi ne doit ni parler ni enregistrer.
     public func teardown() {
         exchange?.cancel()
         exchange = nil
         poller?.cancel()
         poller = nil
+        deliveryWatcher?.cancel()
+        deliveryWatcher = nil
         levelSampler?.cancel()
         player.stop()
         reader.stop()
@@ -364,10 +395,54 @@ public final class ChatModel {
     private var localVoiceUrls: [String: URL] = [:]
     private var localPhotoUrls: [String: URL] = [:]
 
+    /// « Réessayer » sous la bulle : le tour repart **tel quel**, sous le même
+    /// identifiant. Celui dont l'envoi vient d'échouer ici ; sinon celui que
+    /// la file a vu refuser — rebâti depuis la bulle et ses fichiers locaux,
+    /// puisque la file l'a déjà oublié.
     public func retry() {
-        guard let pending else { return }
-        mark(pending.id, as: .sending)
-        start(pending)
+        guard let turn = pending ?? refusedTurn() else { return }
+        mark(turn.id, as: .sending)
+        start(turn)
+    }
+
+    private func refusedTurn() -> OutgoingTurn? {
+        guard let message = messages.last(where: { $0.author.isTraveller && $0.delivery.hasFailed }) else { return nil }
+        return outgoingTurn(from: message)
+    }
+
+    /// Le tour qu'une bulle du voyageur représente, avec ses octets relus des
+    /// caches. `nil` quand ils n'y sont plus : il n'y a alors rien à renvoyer.
+    private func outgoingTurn(from message: ChatMessage) -> OutgoingTurn? {
+        switch message.body {
+        case .text(let text):
+            return OutgoingTurn(id: message.id, stepId: message.stepId, body: .text(text))
+        case .voice(let note):
+            guard let url = note.localUrl, let data = try? Data(contentsOf: url) else { return nil }
+            return OutgoingTurn(
+                id: message.id,
+                stepId: message.stepId,
+                body: .voice(
+                    RecordedTurnAudio(
+                        data: data,
+                        filename: "\(message.id).m4a",
+                        mimeType: "audio/mp4",
+                        capturedAt: message.sentAt,
+                        durationSeconds: note.duration,
+                        levels: note.levels,
+                        placeLabel: thread?.context.placeName
+                    )
+                )
+            )
+        case .photos(let attachments):
+            let photos = attachments.compactMap { attachment -> ChatPhotoUpload? in
+                guard let url = attachment.localUrl, let data = try? Data(contentsOf: url) else { return nil }
+                return ChatPhotoUpload(data: data, filename: "\(attachment.id).jpg", mimeType: "image/jpeg")
+            }
+            guard !photos.isEmpty, photos.count == attachments.count else { return nil }
+            return OutgoingTurn(id: message.id, stepId: message.stepId, body: .photos(photos, capturedAt: message.sentAt))
+        case .transcript:
+            return nil
+        }
     }
 
     // MARK: - Le tour de parole
@@ -388,23 +463,20 @@ public final class ChatModel {
         turn = .sending(messageId: outgoing.id)
 
         do {
-            let receipt = try await transport.send(outgoing)
+            let outcome = try await transport.send(outgoing)
             try Task.checkCancellation()
-
-            // Le reçu porte les bulles écrites : la mienne avec son rang,
-            // l'ouverture de MEMO si elle vient d'être posée, la fiche d'un
-            // vocal. On fusionne ; on ne remplace pas le fil.
-            merge(receipt.messages)
-            mark(outgoing.id, as: .sent)
-            cursor = receipt.now
             pending = nil
 
-            if receipt.turn.isReplying {
-                turn = .thinking
-            } else {
+            switch outcome {
+            case .received(let receipt):
+                accept(receipt, for: outgoing.id)
+            case .queued:
+                // Le tour attend le réseau sur le disque. Ce n'est pas un
+                // échec : la bulle reste « en cours d'envoi », le composeur se
+                // rouvre, et c'est la file qui la terminera — par son
+                // identifiant, voir ``markDelivery(_:)``.
                 turn = .idle
             }
-            if needsPolling { startPolling() }
         } catch is CancellationError {
             // L'écran s'est refermé, ou un nouveau tour a démarré. Rien à dire.
             turn = .idle
@@ -413,6 +485,35 @@ public final class ChatModel {
             turn = .failed(messageId: outgoing.id, message: error.localizedDescription)
         }
         exchange = nil
+    }
+
+    /// Ce que le serveur a écrit en recevant un tour : la bulle du voyageur
+    /// avec son rang, l'ouverture de MEMO si elle vient d'être posée, la fiche
+    /// d'un vocal. On fusionne ; on ne remplace pas le fil.
+    ///
+    /// Le curseur ne recule jamais : un reçu arrivé en retard — un tour parti
+    /// de la file après une lecture plus récente — ne fait pas relire ce qu'on
+    /// a déjà.
+    private func accept(_ receipt: ChatTurnReceipt, for id: String) {
+        merge(receipt.messages)
+        mark(id, as: .sent)
+        cursor = max(cursor ?? .distantPast, receipt.now)
+
+        if receipt.turn.isReplying {
+            turn = .thinking
+        } else if owns(id) {
+            turn = .idle
+        }
+        if needsPolling { startPolling() }
+    }
+
+    /// Le tour en cours est celui de cette bulle. Un reçu venu de la file pour
+    /// un tour d'hier ne doit pas rouvrir le composeur pendant qu'un autre part.
+    private func owns(_ id: String) -> Bool {
+        switch turn {
+        case .sending(let messageId), .failed(let messageId, _): messageId == id
+        case .idle, .thinking: false
+        }
     }
 
     // MARK: - Le sondage
@@ -536,15 +637,13 @@ public final class ChatModel {
     }
 
     /// Remplace par identifiant, en gardant ce que l'app seule sait : le
-    /// fichier local, et l'état d'envoi tant qu'il n'est pas confirmé.
+    /// fichier local. L'état d'envoi, lui, est celui du serveur — un message
+    /// qu'il rend est un message qu'il a : une bulle restée « en cours
+    /// d'envoi » parce qu'on a raté le mot de la file se répare au sondage
+    /// suivant.
     private func replace(_ message: ChatMessage) {
         guard var thread, let index = thread.messages.firstIndex(where: { $0.id == message.id }) else { return }
-        let previous = thread.messages[index]
-        var merged = message.keepingLocalFiles(of: previous)
-        if merged.author.isTraveller, previous.delivery != .sent {
-            merged.delivery = previous.delivery
-        }
-        thread.messages[index] = merged
+        thread.messages[index] = message.keepingLocalFiles(of: thread.messages[index])
         thread.messages.sort(by: Self.byRank)
         self.thread = thread
     }
@@ -611,11 +710,19 @@ public final class ChatModel {
 
     /// Pose un vocal déjà enregistré, **sans l'envoyer** : il est parti avant
     /// que cet écran n'existe, par la file de l'accueil, et c'est elle qui
-    /// dira où il en est — par ``markHandoff(_:)``. Le fichier est gardé pour
+    /// dira où il en est — par ``markDelivery(_:)``. Le fichier est gardé pour
     /// la réécoute.
+    ///
+    /// S'il est déjà dans le fil — le serveur l'a reçu avant qu'on ait fini de
+    /// charger —, la bulle du serveur reste, et ne gagne que le fichier local.
     private func receive(_ handoff: RecordingHandoff) {
         let url = try? VoiceNoteFile.save(handoff.audio, id: handoff.id)
-        handoffId = handoff.id
+        localVoiceUrls[handoff.id] = url
+
+        if messages.contains(where: { $0.id == handoff.id }) {
+            if let url { rememberLocalUrl(url, forVoice: handoff.id) }
+            return
+        }
 
         append(
             ChatMessage(
@@ -636,18 +743,56 @@ public final class ChatModel {
         )
     }
 
-    /// Ce que la file dit de la bulle venue de l'accueil. Sans effet s'il n'y en
-    /// a pas : l'écran s'ouvre le plus souvent par la porte ordinaire.
+    /// Ce que la file dit d'un tour — le vocal de l'accueil, ou un message
+    /// d'ici qui attendait le réseau. La bulle suit **la file**, pas l'écran :
+    /// hors ligne elle reste sur « envoi en cours », et c'est la reconnexion
+    /// qui la termine, par son identifiant.
     ///
-    /// Arrivé, le vocal est un souvenir que le serveur a déjà reconstruit dans
-    /// le fil : on relit le fil entier, et la bulle posée ici cède la place à
-    /// la sienne — avec sa fiche, que le sondage remplira.
-    public func markHandoff(_ delivery: ChatDelivery) {
-        guard let handoffId else { return }
-        mark(handoffId, as: delivery)
-        if delivery == .sent {
-            self.handoffId = nil
-            Task { await load() }
+    /// Arrivé, le tour a un reçu : les bulles que le serveur a écrites — la
+    /// sienne avec son rang, sa fiche — entrent dans le fil, et le sondage
+    /// prend la suite si MEMO répond. Un tour d'un autre voyage ne touche à
+    /// rien ici.
+    public func markDelivery(_ delivery: ChatTurnDelivery) {
+        latestDelivery = delivery
+        guard let thread, delivery.tripId == thread.context.tripId else { return }
+
+        switch delivery.state {
+        case .sending:
+            mark(delivery.id, as: .sending)
+        case .failed(let message):
+            mark(delivery.id, as: .failed(message))
+        case .sent:
+            if let receipt = delivery.receipt {
+                accept(receipt, for: delivery.id)
+            } else {
+                mark(delivery.id, as: .sent)
+            }
+        }
+    }
+
+    /// Écrit dans les caches les fichiers d'un tour relu du disque de la
+    /// file, pour que sa bulle se réécoute et se regarde comme celle d'un tour
+    /// dit ici.
+    private func keepLocalFiles(of turn: OutgoingTurn) {
+        switch turn.body {
+        case .text:
+            break
+        case .voice(let audio):
+            guard localVoiceUrls[turn.id] == nil else { return }
+            let recorded = RecordedAudio(
+                data: audio.data,
+                filename: audio.filename,
+                mimeType: audio.mimeType,
+                duration: audio.durationSeconds,
+                recordedAt: audio.capturedAt
+            )
+            localVoiceUrls[turn.id] = try? VoiceNoteFile.save(recorded, id: turn.id)
+        case .photos(let photos, _):
+            for (index, photo) in photos.enumerated() {
+                let id = "\(turn.id)-\(index)"
+                guard localPhotoUrls[id] == nil else { continue }
+                localPhotoUrls[id] = try? ChatPhotoFile.save(photo.data, id: id)
+            }
         }
     }
 

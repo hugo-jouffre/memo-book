@@ -19,14 +19,24 @@ final class ChatModelTests: XCTestCase {
         var edited: [(entryId: String, text: String)] = []
         var polls = 0
         var failsSending: (any Error)?
+        /// La file dit que le tour attend le réseau, au lieu de le livrer.
+        var queuesSends = false
+        /// Ce qui attend sur le disque pour ce fil.
+        var waiting: [OutgoingTurn] = []
+        /// La file, telle que le modèle l'écoute.
+        private let deliveryStream = AsyncStream.makeStream(of: ChatTurnDelivery.self)
 
         init(thread: ChatThread) { self.thread = thread }
 
-        func send(_ turn: OutgoingTurn) throws -> ChatTurnReceipt {
+        func send(_ turn: OutgoingTurn) throws -> ChatSendOutcome {
             sent.append(turn)
             if let failsSending { throw failsSending }
-            return receiptFor?(turn) ?? ChatTurnReceipt(messages: [], turn: .idle, now: .now)
+            if queuesSends { return .queued }
+            return .received(receiptFor?(turn) ?? ChatTurnReceipt(messages: [], turn: .idle, now: .now))
         }
+
+        func deliveries() -> AsyncStream<ChatTurnDelivery> { deliveryStream.stream }
+        func deliver(_ delivery: ChatTurnDelivery) { deliveryStream.continuation.yield(delivery) }
 
         func poll() -> ChatThreadUpdate {
             polls += 1
@@ -54,6 +64,9 @@ final class ChatModelTests: XCTestCase {
         func queueUpdate(_ update: ChatThreadUpdate) { updates.append(update) }
         func failSending(with error: any Error) { failsSending = error }
         func succeedSending() { failsSending = nil }
+        func queueSends() { queuesSends = true }
+        func deliverSends() { queuesSends = false }
+        func setWaiting(_ turns: [OutgoingTurn]) { waiting = turns }
     }
 
     private func transport(_ script: Script) -> ChatTransport {
@@ -62,7 +75,9 @@ final class ChatModelTests: XCTestCase {
             poll: { _ in await script.poll() },
             send: { turn in try await script.send(turn) },
             editTranscript: { entryId, text in await script.edit(entryId, text) },
-            media: { _ in Data() }
+            media: { _ in Data() },
+            waiting: { await script.waiting },
+            deliveries: { await script.deliveries() }
         )
     }
 
@@ -268,6 +283,94 @@ final class ChatModelTests: XCTestCase {
         guard case .transcript(let card) = model.messages.first?.body else { return XCTFail("une fiche") }
         XCTAssertEqual(card.text, "ma version")
         XCTAssertFalse(model.isEditingTranscript)
+    }
+
+    // MARK: - Hors ligne
+
+    /// Un tour qui attend le réseau **n'a pas échoué** : la bulle reste « en
+    /// cours d'envoi », le composeur se rouvre, et c'est la file qui la
+    /// termine — par son identifiant, avec le reçu du serveur, dont le fil
+    /// prend les bulles et le tour en vol. Un tour d'un autre voyage ne
+    /// touche à rien.
+    func testAQueuedTurnStaysSendingUntilTheQueueSaysItLeft() async throws {
+        let script = Script(thread: thread())
+        await script.queueSends()
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+
+        model.draft = "Dit dans le métro."
+        model.sendDraft()
+        let id = try XCTUnwrap(model.messages.last?.id)
+
+        try await until("le tour est confié à la file") { await script.sent.count == 1 }
+        try await until("le composeur se rouvre") { model.turn == .idle }
+        XCTAssertEqual(model.messages.last?.delivery, .sending)
+        XCTAssertNil(model.errorMessage)
+
+        await script.deliver(ChatTurnDelivery(id: id, tripId: "ailleurs", state: .failed("non")))
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(model.messages.last?.delivery, .sending, "Le sort d'un tour d'un autre voyage ne regarde pas ce fil.")
+
+        await script.deliver(
+            ChatTurnDelivery(
+                id: id,
+                tripId: "trip",
+                state: .sent,
+                receipt: ChatTurnReceipt(
+                    messages: [ChatMessage(id: id, author: .traveller, body: .text("Dit dans le métro."), sentAt: .now, seq: 7)],
+                    turn: .replying(messageId: id),
+                    now: .now
+                )
+            )
+        )
+        try await until("la bulle est envoyée") { model.messages.last?.delivery == .sent }
+        XCTAssertEqual(model.messages.last?.seq, 7, "Le rang du serveur, pris dans le reçu.")
+        XCTAssertEqual(model.turn, .thinking, "Le reçu dit que MEMO répond : on l'attend.")
+        XCTAssertEqual(model.messages.count, 1)
+    }
+
+    /// La file a vu le serveur refuser un tour parti d'ici : la bulle passe
+    /// « non envoyée », et « Réessayer » le renvoie **sous le même
+    /// identifiant** — même si le modèle ne le tenait plus en main.
+    func testARefusalFromTheQueueIsRetriedUnderTheSameId() async throws {
+        let script = Script(thread: thread())
+        await script.queueSends()
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+
+        model.draft = "Refusé plus tard."
+        model.sendDraft()
+        let id = try XCTUnwrap(model.messages.last?.id)
+        try await until("le composeur se rouvre") { model.turn == .idle }
+
+        await script.deliver(ChatTurnDelivery(id: id, tripId: "trip", state: .failed("Quota atteint.")))
+        try await until("la bulle est non envoyée") { model.messages.last?.delivery.hasFailed == true }
+
+        await script.deliverSends()
+        model.retry()
+        try await until("le renvoi aboutit") { model.messages.last?.delivery == .sent }
+        let sentIds = await script.sent.map(\.id)
+        XCTAssertEqual(sentIds, [id, id])
+        XCTAssertEqual(model.messages.count, 1)
+    }
+
+    /// Ce qui attend sur le disque pour ce fil se pose en bulles « en cours
+    /// d'envoi » à l'ouverture — et pas deux fois quand on recharge.
+    func testWhatWaitsOnDiskIsPostedAsSendingBubbles() async throws {
+        let script = Script(thread: thread(messages: [memo("opening", "Bonjour 👋", seq: 1)]))
+        await script.setWaiting([
+            OutgoingTurn(id: "w-1", body: .text("Hier soir")),
+            OutgoingTurn(id: "w-2", body: .text("Ce matin")),
+        ])
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+
+        XCTAssertEqual(model.messages.map(\.id), ["opening", "w-1", "w-2"], "Après le fil, dans l'ordre de la file.")
+        XCTAssertEqual(model.messages.dropFirst().map(\.delivery), [.sending, .sending])
+        XCTAssertEqual(model.turn, .idle)
+
+        await model.load()
+        XCTAssertEqual(model.messages.count, 3, "Recharger ne double pas ce qui attend.")
     }
 
     // MARK: - Échouer

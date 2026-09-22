@@ -152,7 +152,7 @@ public struct HomeView: View {
                 // « envoyé » dès que MEMO répond, même sur un vocal qui attend
                 // encore le réseau.
                 let handoff = RecordingHandoff(audio: audio, levels: levels)
-                Task { await model.upload(audio, handoffId: handoff.id) }
+                Task { await model.upload(audio, levels: levels, handoffId: handoff.id) }
                 if let tripId = ongoingTripId {
                     onIntent(.openConversation(tripId: tripId, handoff: handoff))
                 }

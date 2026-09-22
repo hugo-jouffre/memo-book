@@ -75,8 +75,21 @@ struct ChatMessageRow: View {
         }
     }
 
-    @ViewBuilder
+    /// « En cours d'envoi » se voit : la bulle est là, un peu en retrait, et
+    /// prend sa pleine couleur quand le serveur l'a — tout de suite en ligne,
+    /// à la sortie du tunnel sinon (`docs/conversation.md` § 9). Ni spinner
+    /// ni libellé : la bulle d'un texte dit dans le métro ne doit pas avoir
+    /// l'air cassée, juste pas encore arrivée. VoiceOver le dit en toutes
+    /// lettres.
     private var bubble: some View {
+        bubbleBody
+            .opacity(message.delivery == .sending ? 0.6 : 1)
+            .animation(.smooth(duration: 0.3), value: message.delivery)
+            .accessibilityHint(message.delivery == .sending ? ChatCopy.Voice.sending : "")
+    }
+
+    @ViewBuilder
+    private var bubbleBody: some View {
         switch message.body {
         case .text(let text):
             BrandChatBubble(author: message.author) {
