@@ -965,7 +965,10 @@ l'écran ment :
 - « ils seront envoyés dès ta reconnexion » ⟶ `RecordingOutbox` + `PendingRecordingStore`,
   file sur disque dans `Application Support` (pas dans `Caches` : iOS les purge, et un
   vocal en attente n'existe nulle part ailleurs), vidée automatiquement au retour de
-  `NWPathMonitor`.
+  `NWPathMonitor` — et au retour de l'app au premier plan, pour le cas où c'est le
+  serveur, et non le réseau, qui manquait. Depuis le 22/09/2026 la file porte **tout ce
+  qu'on envoie** — vocal de l'accueil, textes, vocaux et photos de la conversation —,
+  et le libellé de la boîte parle encore de « vocaux » : à trancher (T170).
 
 **États limites** — un refus **définitif** du serveur (4xx) sort le vocal de la file et
 s'affiche en `ErrorBanner` : garder un souvenir que le serveur refusera à chaque fois,
@@ -1861,9 +1864,11 @@ branche `atelier-conversation`.
 
 **Contrat back-end** — le fil vit sur le serveur depuis le 22/09/2026
 (`backend/src/routes/chat.ts`, `chatSerializers.ts`) ; le produit est dans
-`docs/conversation.md`. L'écran ne connaît qu'un `ChatTransport` — cinq
-fonctions-sources —, construit par `AppDependencies.chatModel(tripId:stepId:)`
-(`.remote`) ; les aperçus et `-previewSignedIn` reçoivent `.local`, le même
+`docs/conversation.md`. L'écran ne connaît qu'un `ChatTransport` — sept
+fonctions-sources : le fil, sa suite, un envoi, « à la main », un média, **ce
+qui attend** et **ce qui part** —, construit par
+`AppDependencies.chatModel(tripId:stepId:)` (`.remote`, la file posée
+par-dessus) ; les aperçus et `-previewSignedIn` reçoivent `.local`, le même
 contrat en mémoire avec le moteur de règles. **Pas de cache** pour le fil.
 
 | Besoin | Route |
@@ -1876,6 +1881,7 @@ contrat en mémoire avec le moteur de règles. **Pas de cache** pour le fil.
 | Le média | `GET /v1/entries/:id/media`, servi avec la session : `VoiceNote.remoteUrl` pointe dessus, le modèle télécharge puis joue depuis les caches |
 | L'agent de conversation | Côté serveur, sur le motif `Transcriber` / `Redactor` : `FakeResponder` (tests, `PIPELINE_MODE=fake`), `HeuristicResponder` (le portage des règles de `LocalMemoResponder`, et le repli), `AnthropicResponder` à venir (PR4) |
 | Le nombre de pages composées | `preview.memoryCount` est compté ; `pageCount` reste **déduit** (deux pages par souvenir) tant que `serializeRender` retient le payload |
+| Hors ligne (§ 9 de la fiche) | **Tout ce qu'on envoie passe par la file** (`RecordingOutbox`, 22/09/2026) — un texte, un vocal, des photos, comme le vocal de l'accueil. `send` rend `.queued` au lieu d'échouer : la bulle reste « en cours d'envoi » (à 60 %, VoiceOver dit « Envoi en cours »), le composeur se rouvre. À l'ouverture, `waiting` repose en bulles ce qui attend sur le disque pour ce fil ; `deliveries` est le **flux** des tours partis, par identifiant, avec le reçu du serveur — un flux et non une valeur observée, pour que deux tours partis dans la même seconde fassent deux événements. Le vocal de l'accueil suit le même chemin, à **un** carnet : le premier en cours, celui dont la conversation s'ouvre |
 
 **Ce qui reste dans l'app** : `ChatFixtures` et `LocalMemoResponder`, pour les
 aperçus Xcode, `-previewSignedIn` et `ChatResponderTests` — la copie de
@@ -2893,8 +2899,8 @@ moyen de paiement.
 
 ### 19.6 Le vocal de l'accueil ne se déclare pas arrivé avant de l'être
 
-- **Pièces** : `Recording/RecordingHandoff.swift`, `RecordingOutbox.handoffDelivery`,
-  `ChatModel.receive(_:)` / `markHandoff(_:)`
+- **Pièces** : `Recording/RecordingHandoff.swift`, `RecordingOutbox.turnDeliveries()`,
+  `ChatModel.receive(_:)` / `markDelivery(_:)`
 
 Le trajet lui-même — enregistrer sur l'accueil, arriver dans la conversation le
 message déjà posé — a été livré au lot précédent (T102). Ce lot-ci corrige deux
@@ -2907,9 +2913,12 @@ Or ce vocal est parti **avant** que la conversation n'existe, et il peut très
 bien attendre le réseau sur le disque : on lisait donc « envoyé » sur un
 souvenir encore dans la file, à chaque fois qu'on racontait dans le métro.
 `RecordingHandoff` porte désormais un identifiant, la file dit où en est **cet**
-envoi-là (`handoffDelivery`), et la conversation ne fait que l'écrire.
+envoi-là, et la conversation ne fait que l'écrire.
 `.queued` n'est ni un échec ni une arrivée : la bulle reste sur « envoi en
-cours », et la reprise de la file la termine.
+cours », et la reprise de la file la termine. Depuis le 22/09/2026, cet
+identifiant est aussi celui du message côté serveur, la file dit le sort de
+**chaque** tour dans un flux (`turnDeliveries()`), et le modèle l'écoute par
+son transport — la vue n'a plus la file en main. Voir § 14.1, « Hors ligne ».
 
 **La forme d'onde est celle du vocal entier.** La feuille rendait `levels`, la
 frise qui défile sous le micro — quarante barres, soit les trois dernières
@@ -3640,6 +3649,7 @@ masculin) et le voyage fini reste « en cours ».
 | T167 | **« Voir une estimation » sur la 3e story** (Clara) : la pastille ouvre bien la feuille « Estimation » depuis le 15/09, sur les chiffres de la maquette (T127). Clara a peut-être vu la version d'avant ; à revérifier sur ce build. T80 reste ouvert jusqu'à ce que la pastille soit configurée pour de bon | Paywall |
 | T168 | **Le tiroir des cartes de l'accueil n'a pas de maquette** — croix, flèche, imprimante cerclées, sur le modèle de la liste des co-voyageurs. À dessiner dans Figma, ou à valider tel quel | Accueil |
 | T169 | **La feuille « Genre » n'a pas de maquette** — trois options sur le motif des feuilles de choix du profil, et la ligne « Genre » sous « Adresse postale ». À dessiner dans Figma, ou à valider telle quelle | Profil |
+| T170 | **La boîte d'information de l'accueil parle de « vocaux »** alors que la file porte désormais tout ce qu'on envoie depuis la conversation — un texte dit dans le métro fait afficher « Ton vocal enregistré hors ligne est bien conservé ». Généraliser le libellé (« ce que tu as raconté » ?) ou le décliner par nature, dans Figma d'abord (R8) | Accueil |
 | T170 | **Le genre deviné est une liste de prénoms**, pas une science : environ six cents prénoms français, les mixtes (Camille, Dominique, Sacha…) restent sans réponse. Un prénom absent accorde au masculin par défaut (« Abonné ») — c'est la forme non marquée, pas une erreur, mais c'est à savoir | Profil |
 | T171 | **Le glissé vers la droite de l'accueil** ouvre le profil de n'importe où sur l'écran. Il n'entre pas en conflit avec le tiroir des cartes (vers la gauche) ni avec le retour de la pile (l'accueil est le premier écran) ; s'il gêne le défilement des bandes horizontales de l'accueil, il faudra le limiter au bord | Accueil |
 | T172 | **Trois migrations et l'API sont à déployer** — `genre_du_profil`, `photo_de_profil` et `rythme_du_recit_en_cles`, voir § 27.5, § 27.8 et § 27.11. Tant que l'API sert le code d'avant, l'accueil montre encore « en cours » un voyage fini, et le profil ne connaît ni le genre ni la photo. Aucune variable à ajouter sur Railway : le domaine du service suffit aux adresses d'avatar et au lien de l'e-mail | Back-end |

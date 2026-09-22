@@ -551,14 +551,24 @@ responsabilité :
 | Pièce | Où | Ce qu'elle fait |
 |---|---|---|
 | `Connectivity` | `Networking` | une **valeur** — une fonction qui rend un flux « en ligne / hors ligne », `NWPathMonitor` derrière. Un test en fabrique une qu'il pilote |
-| `PendingRecordingStore` | `Recording` | la file des vocaux **sur le disque**, un acteur |
-| `RecordingOutbox` | `Feature` | décide d'envoyer ou de garder, et vide la file au retour du réseau |
+| `PendingRecordingStore` | `Recording` | la file **sur le disque**, un acteur — un `PendingTurn` par tour : vocal, texte ou photos, avec ses fichiers à côté |
+| `RecordingOutbox` | `Feature` | décide d'envoyer ou de garder, vide la file au retour du réseau, et **dit le sort de chaque tour** (`turnDeliveries()`) à la conversation |
 
 `AppDependencies` monte la file au démarrage (`outbox.start()`), pas à
 l'ouverture d'un écran : c'est ce qui permet de savoir qu'on est hors ligne
 **avant** de dessiner l'accueil, et de repartir avec ce qu'un lancement
 précédent avait laissé en attente. Un envoi commencé continue quand on quitte
 l'accueil.
+
+**Tout ce qu'on dit passe par elle** (22/09/2026) — le vocal de l'accueil comme
+un texte, un vocal ou des photos envoyés depuis la conversation. Un tour est un
+`OutgoingTurn`, avec l'identifiant que le serveur reprendra : parti deux fois,
+il n'est jamais deux fois dans le fil. La conversation ne tient pas la file en
+main : son `ChatTransport` reçoit `send` (qui rend `.queued` au lieu
+d'échouer), `waiting` (ce qui attend pour ce fil, reposé en bulles à
+l'ouverture) et `deliveries` (le flux des tours partis, avec le reçu du
+serveur). Le vocal de l'accueil va à **un** carnet, le premier en cours — celui
+dont la conversation s'ouvre avec la bulle déjà posée.
 
 Trois règles portent tout le reste :
 

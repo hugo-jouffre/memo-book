@@ -1,26 +1,50 @@
 import Foundation
 
-/// Un vocal enregistré alors que le réseau manquait, gardé sur l'appareil
-/// jusqu'à ce qu'il parte.
+/// Un tour de conversation qui n'a pas pu partir — un vocal, un texte, des
+/// photos —, gardé sur l'appareil jusqu'à ce qu'il parte.
 ///
-/// Ce qui est stocké, c'est **le fichier audio**, jamais le texte : la
-/// transcription appartient au serveur, et un vocal en attente n'a encore rien
-/// produit.
-public struct PendingRecording: Codable, Sendable, Hashable, Identifiable {
-    public let id: UUID
+/// Ce qui est stocké, c'est **ce que le voyageur a dit**, jamais ce que le
+/// serveur en fera : la transcription appartient au serveur, et un tour en
+/// attente n'a encore rien produit.
+public struct PendingTurn: Sendable, Hashable, Identifiable {
+    public enum Kind: String, Codable, Sendable, Hashable {
+        case voice
+        case text
+        case photos
+    }
 
-    /// Les carnets auxquels il n'est **pas encore** arrivé.
-    ///
-    /// La liste rétrécit à chaque envoi réussi : quelqu'un qui mène deux
-    /// voyages de front et dont un seul des deux envois passe ne doit pas
-    /// recevoir le vocal en double dans le premier.
-    public var tripIds: [String]
+    /// L'identifiant **du message**, celui que le serveur reprendra : c'est ce
+    /// qui fait qu'un tour parti deux fois — une panne de transport après un
+    /// envoi qui avait abouti — ne se retrouve pas deux fois dans le fil.
+    public let id: String
 
-    public let filename: String
-    public let mimeType: String
-    public let duration: TimeInterval
+    /// Le carnet auquel il n'est **pas encore** arrivé. Un seul : un tour parle
+    /// à une conversation.
+    public var tripId: String
 
-    /// Le moment où **on a parlé**, pas celui où le vocal partira. C'est cette
+    public let kind: Kind
+
+    /// Le texte d'un tour `text`, la puce qui l'a produit, le souvenir visé.
+    public let text: String?
+    public let suggestionId: String?
+    public let entryId: String?
+
+    public let stepId: String?
+
+    /// Les fichiers, dans l'ordre : un pour un vocal, un à quatre pour des
+    /// photos, aucun pour un texte. Écrits à côté de la fiche.
+    public let filenames: [String]
+    public let mimeTypes: [String]
+
+    /// La durée réellement capturée d'un vocal — c'est elle qui décompte.
+    public let duration: TimeInterval?
+
+    /// La forme d'onde relevée pendant l'enregistrement, pour la bulle.
+    public let levels: [Double]
+
+    public let placeLabel: String?
+
+    /// Le moment où **on a parlé**, pas celui où le tour partira. C'est cette
     /// date que le carnet range : un souvenir raconté hier au fond d'une vallée
     /// ne se pose pas au jour de la reconnexion.
     public let recordedAt: Date
@@ -28,9 +52,109 @@ public struct PendingRecording: Codable, Sendable, Hashable, Identifiable {
     /// Depuis quand il attend. Sert à l'ordre d'envoi — le plus ancien
     /// d'abord — et à rien d'autre.
     public let queuedAt: Date
+
+    public init(
+        id: String,
+        tripId: String,
+        kind: Kind,
+        text: String? = nil,
+        suggestionId: String? = nil,
+        entryId: String? = nil,
+        stepId: String? = nil,
+        filenames: [String] = [],
+        mimeTypes: [String] = [],
+        duration: TimeInterval? = nil,
+        levels: [Double] = [],
+        placeLabel: String? = nil,
+        recordedAt: Date,
+        queuedAt: Date = .now
+    ) {
+        self.id = id
+        self.tripId = tripId
+        self.kind = kind
+        self.text = text
+        self.suggestionId = suggestionId
+        self.entryId = entryId
+        self.stepId = stepId
+        self.filenames = filenames
+        self.mimeTypes = mimeTypes
+        self.duration = duration
+        self.levels = levels
+        self.placeLabel = placeLabel
+        self.recordedAt = recordedAt
+        self.queuedAt = queuedAt
+    }
 }
 
-/// La file d'attente des vocaux, sur le disque de l'appareil.
+extension PendingTurn: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case id, tripId, kind, text, suggestionId, entryId, stepId
+        case filenames, mimeTypes, duration, levels, placeLabel, recordedAt, queuedAt
+        // La fiche d'avant le 22/09/2026 : un vocal, plusieurs carnets.
+        case tripIds, filename, mimeType
+    }
+
+    /// Décodage **tolérant** : une fiche écrite par une version d'avant — un
+    /// vocal pour plusieurs carnets, sous `tripIds`, `filename`, `mimeType` —
+    /// se relit comme un tour vocal pour le premier de ses carnets. Un
+    /// souvenir qui a passé la nuit sur le disque ne se jette pas parce que
+    /// l'app a été mise à jour entre-temps.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        let legacyTripIds = try container.decodeIfPresent([String].self, forKey: .tripIds) ?? []
+        guard let tripId = try container.decodeIfPresent(String.self, forKey: .tripId) ?? legacyTripIds.first
+        else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .tripId,
+                in: container,
+                debugDescription: "Un tour en attente sans carnet."
+            )
+        }
+
+        let legacyFilename = try container.decodeIfPresent(String.self, forKey: .filename)
+        let legacyMimeType = try container.decodeIfPresent(String.self, forKey: .mimeType)
+
+        self.init(
+            id: try container.decode(String.self, forKey: .id),
+            tripId: tripId,
+            kind: try container.decodeIfPresent(Kind.self, forKey: .kind) ?? .voice,
+            text: try container.decodeIfPresent(String.self, forKey: .text),
+            suggestionId: try container.decodeIfPresent(String.self, forKey: .suggestionId),
+            entryId: try container.decodeIfPresent(String.self, forKey: .entryId),
+            stepId: try container.decodeIfPresent(String.self, forKey: .stepId),
+            filenames: try container.decodeIfPresent([String].self, forKey: .filenames)
+                ?? legacyFilename.map { [$0] } ?? [],
+            mimeTypes: try container.decodeIfPresent([String].self, forKey: .mimeTypes)
+                ?? legacyMimeType.map { [$0] } ?? [],
+            duration: try container.decodeIfPresent(TimeInterval.self, forKey: .duration),
+            levels: try container.decodeIfPresent([Double].self, forKey: .levels) ?? [],
+            placeLabel: try container.decodeIfPresent(String.self, forKey: .placeLabel),
+            recordedAt: try container.decode(Date.self, forKey: .recordedAt),
+            queuedAt: try container.decode(Date.self, forKey: .queuedAt)
+        )
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(tripId, forKey: .tripId)
+        try container.encode(kind, forKey: .kind)
+        try container.encodeIfPresent(text, forKey: .text)
+        try container.encodeIfPresent(suggestionId, forKey: .suggestionId)
+        try container.encodeIfPresent(entryId, forKey: .entryId)
+        try container.encodeIfPresent(stepId, forKey: .stepId)
+        try container.encode(filenames, forKey: .filenames)
+        try container.encode(mimeTypes, forKey: .mimeTypes)
+        try container.encodeIfPresent(duration, forKey: .duration)
+        try container.encode(levels, forKey: .levels)
+        try container.encodeIfPresent(placeLabel, forKey: .placeLabel)
+        try container.encode(recordedAt, forKey: .recordedAt)
+        try container.encode(queuedAt, forKey: .queuedAt)
+    }
+}
+
+/// La file d'attente des tours, sur le disque de l'appareil.
 ///
 /// **Sur le disque et non en mémoire, parce que c'est tout l'intérêt** : un
 /// vocal enregistré dans un train doit survivre à la fermeture de l'app, à la
@@ -50,7 +174,7 @@ public actor PendingRecordingStore {
 
     /// L'état de la file, lu une fois du disque puis tenu à jour ici. `nil`
     /// tant qu'on n'a pas encore regardé.
-    private var records: [PendingRecording]?
+    private var records: [PendingTurn]?
 
     public init(directory: URL) {
         self.directory = directory
@@ -75,9 +199,9 @@ public actor PendingRecordingStore {
         )
     }
 
-    /// Les vocaux en attente, le plus ancien d'abord — c'est l'ordre dans
+    /// Les tours en attente, le plus ancien d'abord — c'est l'ordre dans
     /// lequel ils repartiront.
-    public func all() -> [PendingRecording] {
+    public func all() -> [PendingTurn] {
         if let records { return records }
 
         let loaded = readFromDisk().sorted { $0.queuedAt < $1.queuedAt }
@@ -87,91 +211,92 @@ public actor PendingRecordingStore {
 
     public func count() -> Int { all().count }
 
-    /// Met un vocal de côté. Le fichier audio est écrit **avant** sa fiche :
-    /// une écriture interrompue laisse alors un audio orphelin, que rien ne
+    /// Met un tour de côté. Les fichiers sont écrits **avant** la fiche : une
+    /// écriture interrompue laisse alors des fichiers orphelins, que rien ne
     /// lira, plutôt qu'une fiche qui promet un fichier absent.
+    ///
+    /// Un tour déjà en file sous le même identifiant n'est pas repris : c'est
+    /// le renvoi d'un même message, pas un second.
     @discardableResult
-    public func enqueue(_ audio: RecordedAudio, for tripIds: [String]) throws -> PendingRecording {
+    public func enqueue(_ turn: PendingTurn, files: [Data]) throws -> PendingTurn {
         // La file est relue **avant** d'écrire quoi que ce soit. Après, une
         // première relecture verrait déjà la fiche qu'on vient de poser sur le
-        // disque, et l'ajouter une seconde fois compterait deux vocaux en
-        // attente pour un seul enregistrement.
+        // disque, et l'ajouter une seconde fois compterait deux tours en
+        // attente pour un seul.
         var known = all()
+        if let existing = known.first(where: { $0.id == turn.id }) { return existing }
 
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
-        let record = PendingRecording(
-            id: UUID(),
-            tripIds: tripIds,
-            filename: audio.filename,
-            mimeType: audio.mimeType,
-            duration: audio.duration,
-            recordedAt: audio.recordedAt,
-            queuedAt: .now
-        )
+        for (index, data) in files.enumerated() {
+            try data.write(
+                to: fileURL(turn.id, index: index),
+                options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
+            )
+        }
+        try write(turn)
 
-        try audio.data.write(
-            to: audioURL(record.id),
-            options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
-        )
-        try write(record)
-
-        known.append(record)
+        known.append(turn)
         records = known
-        return record
+        return turn
     }
 
-    /// Le vocal lui-même, relu du disque au moment de l'envoyer et pas avant :
-    /// une file de dix souvenirs ne tient pas dix fichiers audio en mémoire.
-    public func audio(for record: PendingRecording) throws -> RecordedAudio {
-        RecordedAudio(
-            data: try Data(contentsOf: audioURL(record.id)),
-            filename: record.filename,
-            mimeType: record.mimeType,
-            duration: record.duration,
-            recordedAt: record.recordedAt
-        )
+    /// Les fichiers d'un tour, relus du disque au moment de l'envoyer et pas
+    /// avant : une file de dix souvenirs ne tient pas dix vocaux en mémoire.
+    public func files(for turn: PendingTurn) throws -> [Data] {
+        try turn.filenames.indices.map { index in
+            try Data(contentsOf: fileURL(turn.id, index: index))
+        }
     }
 
-    /// Réécrit une fiche — en pratique, sa liste de carnets, une fois qu'une
-    /// partie des envois est passée.
-    public func update(_ record: PendingRecording) throws {
-        try write(record)
-        records = all().map { $0.id == record.id ? record : $0 }
+    /// Réécrit une fiche.
+    public func update(_ turn: PendingTurn) throws {
+        try write(turn)
+        records = all().map { $0.id == turn.id ? turn : $0 }
     }
 
-    /// Le vocal est arrivé partout, ou plus rien ne peut le faire arriver : on
-    /// le retire, fiche et audio.
-    public func remove(_ record: PendingRecording) {
-        try? FileManager.default.removeItem(at: metadataURL(record.id))
-        try? FileManager.default.removeItem(at: audioURL(record.id))
-        records = all().filter { $0.id != record.id }
+    /// Le tour est arrivé, ou plus rien ne peut le faire arriver : on le
+    /// retire, fiche et fichiers.
+    public func remove(_ turn: PendingTurn) {
+        try? FileManager.default.removeItem(at: metadataURL(turn.id))
+        for index in 0..<max(turn.filenames.count, 1) {
+            try? FileManager.default.removeItem(at: fileURL(turn.id, index: index))
+        }
+        records = all().filter { $0.id != turn.id }
     }
 
     public func removeAll() {
-        for record in all() { remove(record) }
+        for turn in all() { remove(turn) }
     }
 
     // MARK: - Le disque
 
-    private func metadataURL(_ id: UUID) -> URL { directory.appending(path: "\(id.uuidString).json") }
-    private func audioURL(_ id: UUID) -> URL { directory.appending(path: "\(id.uuidString).audio") }
+    private func metadataURL(_ id: String) -> URL { directory.appending(path: "\(id).json") }
 
-    private func write(_ record: PendingRecording) throws {
+    /// Le premier fichier garde le nom d'avant (`<id>.audio`) : c'est celui
+    /// qu'une fiche d'une version précédente désigne.
+    private func fileURL(_ id: String, index: Int) -> URL {
+        index == 0
+            ? directory.appending(path: "\(id).audio")
+            : directory.appending(path: "\(id)-\(index).file")
+    }
+
+    private func write(_ turn: PendingTurn) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        try encoder.encode(record).write(
-            to: metadataURL(record.id),
+        try encoder.encode(turn).write(
+            to: metadataURL(turn.id),
             options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
         )
     }
 
-    /// Relit la file. Une fiche illisible — mise à jour de l'app, disque
-    /// abîmé — est **jetée avec son audio** plutôt que de faire échouer la
-    /// lecture entière : un souvenir perdu ne doit pas en bloquer neuf autres.
-    private func readFromDisk() -> [PendingRecording] {
+    /// Relit la file. Une fiche illisible — disque abîmé — est **jetée avec ses
+    /// fichiers** plutôt que de faire échouer la lecture entière : un souvenir
+    /// perdu ne doit pas en bloquer neuf autres. Une fiche qui promet un
+    /// fichier absent aussi.
+    private func readFromDisk() -> [PendingTurn] {
         let manager = FileManager.default
         guard let files = try? manager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
         else { return [] }
@@ -181,13 +306,19 @@ public actor PendingRecordingStore {
 
         return files.filter { $0.pathExtension == "json" }.compactMap { url in
             guard let data = try? Data(contentsOf: url),
-                let record = try? decoder.decode(PendingRecording.self, from: data),
-                manager.fileExists(atPath: audioURL(record.id).path(percentEncoded: false))
+                let turn = try? decoder.decode(PendingTurn.self, from: data)
             else {
                 try? manager.removeItem(at: url)
                 return nil
             }
-            return record
+            let filesArePresent = turn.filenames.indices.allSatisfy { index in
+                manager.fileExists(atPath: fileURL(turn.id, index: index).path(percentEncoded: false))
+            }
+            guard filesArePresent else {
+                try? manager.removeItem(at: url)
+                return nil
+            }
+            return turn
         }
     }
 }
