@@ -1,0 +1,7 @@
+{
+  "name": "Trois photos, sans un mot",
+  "why": "MEMO ne voit pas les photos : il ne doit en décrire aucune. Une question de rattachement, et c'est tout.",
+  "memo": { "title": "Rome 2026", "destinationCity": "Rome" },
+  "message": { "kind": "photos", "photoCount": 3 },
+  "expect": { "disposition": "memory" }
+}

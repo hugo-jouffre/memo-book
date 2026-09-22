@@ -1,0 +1,13 @@
+{
+  "name": "Le piège de la question déjà répondue",
+  "why": "Tout est dans le fil : le lieu, la personne, l'heure. Redemander l'un des trois est la faute la plus visible qui soit.",
+  "memo": { "title": "Rome 2026", "destinationCity": "Rome", "people": ["Clara", "Marco"], "places": ["Testaccio", "Trastevere"] },
+  "history": [
+    { "author": "traveller", "text": "Hier soir on était à Trastevere avec Clara et son cousin Marco." },
+    { "author": "memo", "text": "Tu étais à Trastevere hier soir, avec Clara et Marco." },
+    { "author": "traveller", "text": "On a mangé vers 21h dans une petite place." }
+  ],
+  "currentEntry": { "text": "Une soirée à Trastevere avec Clara et Marco, un dîner vers 21 h sur une petite place.", "validatedAt": null },
+  "message": { "kind": "text", "text": "et le vin était excellent, un frascati" },
+  "expect": { "disposition": "context" }
+}

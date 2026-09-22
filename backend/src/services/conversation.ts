@@ -1,6 +1,8 @@
 import type { ChatDisposition, ChatMessageKind } from "@prisma/client";
 import type { Env } from "../env.js";
 import type { CoherenceSheet, RedactedNeighbour } from "./redaction.js";
+import Anthropic from "@anthropic-ai/sdk";
+import { AnthropicResponder } from "./conversationAnthropic.js";
 import { HeuristicResponder } from "./conversationHeuristics.js";
 import {
   OPENING_TEXT,
@@ -392,13 +394,26 @@ export function fallbackResponder(): MemoResponder {
 }
 
 /**
- * Sans clés (`PIPELINE_MODE=fake`, la CI) : le simulé. Avec : le moteur de
- * règles, en attendant Claude — `AnthropicResponder` s'insère ici, avec le
- * moteur de règles en repli derrière lui.
+ * Qui répond, selon ce dont on dispose — trois paliers, jamais un silence :
+ *
+ * 1. **Claude** (`AnthropicResponder`, Sonnet 5) dès qu'on est en mode réel
+ *    avec une clé. C'est MEMO.
+ * 2. **Le moteur de règles** (`HeuristicResponder`) en mode réel sans clé, et
+ *    en repli de Claude à chaque tour qui tombe — voir `fallbackResponder`.
+ * 3. **Le simulé** (`FakeResponder`) sans mode réel : `PIPELINE_MODE=fake`,
+ *    la CI, les tests. Aucun appel réseau, aucune facture, des réponses
+ *    prévisibles.
+ *
+ * Le modèle **n'entre jamais en CI** : c'est `env.live` qui l'ouvre, et la CI
+ * ne l'active pas. Les tests du contrat se jouent contre un client doublé.
  */
 export function createResponder(env: Env): MemoResponder {
   if (!env.live) return new FakeResponder();
-  return new HeuristicResponder();
+  if (env.ANTHROPIC_API_KEY === "") return new HeuristicResponder();
+  return new AnthropicResponder(
+    new Anthropic({ apiKey: env.ANTHROPIC_API_KEY }),
+    env.ANTHROPIC_CONVERSATION_MODEL,
+  );
 }
 
 export { fallbackPrompt };
