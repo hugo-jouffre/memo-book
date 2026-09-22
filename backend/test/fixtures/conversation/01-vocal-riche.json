@@ -1,0 +1,11 @@
+{
+  "name": "Un vocal riche, lieu et personne déjà dits",
+  "why": "La question ne doit porter ni sur le lieu ni sur avec qui : les deux sont dans le vocal. On attend un détail concret.",
+  "memo": { "title": "Rome 2026", "theme": "Gastronomie", "destinationCity": "Rome", "people": ["Clara"], "places": ["Testaccio"] },
+  "message": {
+    "kind": "voice",
+    "durationSeconds": 52,
+    "text": "Alors ce matin euh on est allés au marché de Testaccio avec Clara, il devait être dix heures, enfin dix heures et demie, et on a goûté une burrata... franchement une burrata comme j'en avais jamais mangé, le mec nous l'a coupée devant nous. Et après on a marché jusqu'au Tibre, il faisait super chaud."
+  },
+  "expect": { "disposition": "memory" }
+}
