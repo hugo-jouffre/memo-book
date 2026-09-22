@@ -70,6 +70,10 @@ public enum BookCopy {
             public static let title = "Supprimer la conversation ?"
             public static let body = "Les messages échangés avec MEMO dans ce voyage seront effacés, et la conversation repartira de son mot d’accueil. Les souvenirs déjà enregistrés dans ton carnet sont conservés. C’est immédiat et sans retour."
             public static let keep = "Garder la conversation"
+
+            /// La notice sous le lien pâli, pour un co-voyageur : la cause et
+            /// la sortie (`docs/conversation.md` § 7).
+            public static let ownerOnly = "Seul le propriétaire du voyage peut supprimer la conversation. Tu peux continuer à raconter, et lui demander si tu veux repartir de zéro."
             public static let confirm = "Supprimer la conversation"
         }
 

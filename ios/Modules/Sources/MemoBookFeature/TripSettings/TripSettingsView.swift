@@ -322,15 +322,39 @@ public struct TripSettingsView: View {
     /// et deux croix rouges l'une sur l'autre auraient dit deux fois la même
     /// chose (Hugo, 17/09/2026).
     private var clearConversationLink: some View {
-        exitLink(
-            icon: "IconBubble",
-            title: BookCopy.Settings.clearConversation,
-            tint: MemoBookColor.ink
-        ) {
-            isConfirmingConversationClearing = true
+        VStack(spacing: MemoBookSpacing.snug) {
+            exitLink(
+                icon: "IconBubble",
+                title: BookCopy.Settings.clearConversation,
+                tint: MemoBookColor.ink
+            ) {
+                // **Ce qu'on ne peut pas faire pâlit, ça ne se désactive pas** :
+                // un co-voyageur ne supprime pas le fil de tout le monde, et
+                // l'appui le lui dit au lieu d'avaler le geste.
+                if canClearConversation {
+                    isConfirmingConversationClearing = true
+                } else {
+                    withAnimation(.snappy(duration: 0.25)) { explainsOwnerOnlyClearing = true }
+                }
+            }
+            .opacity(canClearConversation ? 1 : 0.4)
+            .disabled(model.isClearingConversation)
+
+            if explainsOwnerOnlyClearing {
+                BrandNotice(BookCopy.Settings.ClearConversation.ownerOnly, tone: .information)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
-        .disabled(model.isClearingConversation)
     }
+
+    /// Le serveur l'a dit ; sans réponse — un jeu d'essai —, on laisse faire
+    /// et c'est lui qui refusera.
+    private var canClearConversation: Bool {
+        model.settings?.canClearConversation ?? true
+    }
+
+    /// La notice posée par un co-voyageur qui a touché le lien pâli.
+    @State private var explainsOwnerOnlyClearing = false
 
     /// « Supprimer ce voyage », tout en bas — le même dessin que « Supprimer
     /// mon compte » sur le profil : une croix rouge et un mot, centrés, sans

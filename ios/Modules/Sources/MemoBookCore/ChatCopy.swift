@@ -97,6 +97,17 @@ public enum ChatCopy {
     /// récit : on ne cache pas une fiche réelle derrière une attente.
     public static let transcriptPending = "J’écoute ton vocal…"
 
+    /// Le brut est arrivé, la rédaction écrit — la fiche montre la transcription
+    /// en gris pendant ce temps (`docs/conversation.md` § 5).
+    public static let transcriptWriting = "Je rédige…"
+
+    /// La transcription ou la rédaction a échoué ; le brut reste s'il existe.
+    public static let transcriptFailed = "Je n’ai pas réussi à finir cette fiche. Tu peux la corriger à la main, ou réenregistrer."
+
+    /// Ce que le voyageur « dit » en envoyant une correction au clavier : la
+    /// bulle bleue d'une commande silencieuse, à laquelle MEMO accuse réception.
+    public static let editedByHand = "J’ai retouché le texte à la main."
+
     public static let transcriptUnavailable = """
         Je n’ai pas encore la transcription de ce vocal. Tu peux me le réécrire \
         ici, ou attendre que je l’aie.
@@ -391,6 +402,7 @@ public enum ChatCopy {
         public static let thinking = "MEMO réfléchit"
         public static let play = "Écouter ce vocal"
         public static let pause = "Mettre ce vocal en pause"
+        public static let validated = "Souvenir validé"
 
         public static func voiceNote(duration: String) -> String {
             "Vocal de \(duration)"

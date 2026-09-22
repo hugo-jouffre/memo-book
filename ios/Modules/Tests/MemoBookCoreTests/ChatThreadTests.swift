@@ -147,3 +147,132 @@ final class ChatThreadTests: XCTestCase {
         return nil
     }
 }
+
+// MARK: - Ce que le serveur rend
+
+/// Le fil tel que `GET /v1/trips/:id/chat` le sert — `backend/src/routes/chatSerializers.ts`
+/// —, et le même sans les champs que le jeu d'essai ne porte pas.
+final class ChatThreadDecodingTests: XCTestCase {
+    private let served = Data(
+        """
+        {
+          "id": "trip-rome", "title": "Rome 2026", "avatarUrl": null,
+          "destination": { "name": "Italie", "countryCode": "IT", "city": "Rome" },
+          "greeting": { "title": "Nouveau voyage à Rome ! 🇮🇹", "message": "Je suis là." },
+          "preview": { "memoryCount": 4, "pageCount": 8, "isOpenable": false },
+          "context": { "tripId": "trip-rome", "tripTitle": "Rome 2026", "travellerFirstName": "Hugo",
+                       "placeName": "Trastevere", "stepNumber": 3, "stepId": "step-3",
+                       "prompt": "Comment ça se passe à Trastevere ?", "memberCount": 2 },
+          "messages": [
+            { "id": "m1", "seq": 1, "author": "memo", "authorName": null,
+              "body": { "kind": "text", "text": "Bonjour" },
+              "sentAt": "2026-09-21T08:00:00.000Z", "stepId": null, "disposition": null, "pauseMilliseconds": 700 },
+            { "id": "m2", "seq": 2, "author": "traveller", "authorName": "Clara",
+              "body": { "kind": "voice", "voice": { "id": "m2", "duration": 37, "levels": [0.2, 0.8], "remoteUrl": "http://localhost:3000/v1/entries/e1/media" } },
+              "sentAt": "2026-09-21T18:02:11.000Z", "stepId": "step-3", "disposition": "memory", "pauseMilliseconds": null },
+            { "id": "m3", "seq": 3, "author": "memo", "authorName": null,
+              "body": { "kind": "transcript", "transcript": { "title": "Retranscription du contexte",
+                        "capturedAt": "2026-09-21T18:02:11.000Z", "placeLabel": "Trastevere, Rome", "duration": 37,
+                        "text": "Ce matin…", "isSimulated": false, "entryId": "e1", "footnote": null,
+                        "phase": "writing", "isValidated": false } },
+              "sentAt": "2026-09-21T18:02:12.000Z", "stepId": "step-3", "disposition": null, "pauseMilliseconds": 2800 }
+          ],
+          "suggestions": [ { "id": "accept", "label": "Ça me convient", "symbol": "👌", "intent": "send" } ],
+          "turn": { "status": "replying", "messageId": "m2" },
+          "canClear": false,
+          "now": "2026-09-21T18:03:00.412Z"
+        }
+        """.utf8)
+
+    func testDecodesEverythingTheServerAdds() throws {
+        let thread = try JSONDecoder.memoBook.decode(ChatThread.self, from: served)
+
+        XCTAssertEqual(thread.context.memberCount, 2)
+        XCTAssertEqual(thread.turn, .replying(messageId: "m2"))
+        XCTAssertFalse(thread.canClear)
+        XCTAssertNotNil(thread.now)
+        XCTAssertEqual(thread.messages.map(\.seq), [1, 2, 3])
+        XCTAssertEqual(thread.messages[1].authorName, "Clara")
+        XCTAssertEqual(thread.messages[1].disposition, .memory)
+        XCTAssertEqual(thread.messages[2].pauseMilliseconds, 2800)
+
+        guard case .transcript(let card) = thread.messages[2].body else { return XCTFail("une fiche") }
+        XCTAssertEqual(card.phase, .writing)
+        XCTAssertEqual(card.entryId, "e1")
+        XCTAssertTrue(card.isSettling)
+        XCTAssertFalse(card.isValidated)
+
+        guard case .voice(let note) = thread.messages[1].body else { return XCTFail("un vocal") }
+        XCTAssertEqual(note.remoteUrl?.lastPathComponent, "media")
+        XCTAssertNil(note.localUrl, "Un chemin d'appareil ne vient jamais du serveur.")
+    }
+
+    /// Le jeu d'essai des aperçus ne porte aucun des champs ajoutés : il décode
+    /// encore, avec les valeurs qui ne changent rien.
+    func testDecodesAThreadWithoutTheServerFields() throws {
+        let bare = Data(
+            """
+            {
+              "id": "t", "title": "T",
+              "context": { "tripId": "t" },
+              "messages": [
+                { "id": "m", "author": "memo", "body": { "kind": "transcript", "transcript": {
+                    "title": "Retranscription du contexte", "capturedAt": "2026-09-21T08:00:00.000Z",
+                    "text": "…", "isSimulated": true } }, "sentAt": "2026-09-21T08:00:00.000Z" }
+              ],
+              "suggestions": []
+            }
+            """.utf8)
+        let thread = try JSONDecoder.memoBook.decode(ChatThread.self, from: bare)
+
+        XCTAssertEqual(thread.context.memberCount, 1)
+        XCTAssertEqual(thread.turn, .idle)
+        XCTAssertTrue(thread.canClear)
+        XCTAssertNil(thread.now)
+        XCTAssertNil(thread.messages[0].seq)
+        guard case .transcript(let card) = thread.messages[0].body else { return XCTFail("une fiche") }
+        XCTAssertEqual(card.phase, .ready)
+        XCTAssertFalse(card.isSettling)
+    }
+
+    /// Un temps ou un classement que cette version ne connaît pas ne casse pas
+    /// le fil — même parti que `Status.unknown`.
+    func testUnknownPhaseAndDispositionSurvive() throws {
+        let json = Data(
+            """
+            { "id": "m", "author": "traveller", "body": { "kind": "text", "text": "x" },
+              "sentAt": "2026-09-21T08:00:00.000Z", "disposition": "dream" }
+            """.utf8)
+        let message = try JSONDecoder.memoBook.decode(ChatMessage.self, from: json)
+        XCTAssertEqual(message.disposition, .unknown("dream"))
+
+        let phase = try JSONDecoder.memoBook.decode(TranscriptCard.Phase.self, from: Data("\"dreaming\"".utf8))
+        XCTAssertEqual(phase, .unknown("dreaming"))
+    }
+
+    /// La suite du fil et le reçu d'un tour, tels que l'app les sonde et les reçoit.
+    func testDecodesAnUpdateAndAReceipt() throws {
+        let update = try JSONDecoder.memoBook.decode(
+            ChatThreadUpdate.self,
+            from: Data(
+                """
+                { "messages": [], "suggestions": [], "preview": null,
+                  "turn": { "status": "idle" }, "now": "2026-09-21T18:03:02.418Z" }
+                """.utf8)
+        )
+        XCTAssertEqual(update.turn, .idle)
+        XCTAssertTrue(update.messages.isEmpty)
+
+        let receipt = try JSONDecoder.memoBook.decode(
+            ChatTurnReceipt.self,
+            from: Data(
+                """
+                { "messages": [ { "id": "m9", "seq": 9, "author": "traveller", "body": { "kind": "text", "text": "…" },
+                                  "sentAt": "2026-09-21T18:03:00.000Z" } ],
+                  "turn": { "status": "replying", "messageId": "m9" }, "now": "2026-09-21T18:03:00.412Z" }
+                """.utf8)
+        )
+        XCTAssertEqual(receipt.turn, .replying(messageId: "m9"))
+        XCTAssertEqual(receipt.messages.first?.seq, 9)
+    }
+}

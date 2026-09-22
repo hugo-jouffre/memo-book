@@ -52,9 +52,23 @@ export function messageKindFor(entryKind: Entry["kind"]): "voice" | "text" | "ph
 // ---------------------------------------------------------------------------
 
 /**
- * Pose la bulle d'ouverture si le fil est vide. Idempotent : deux appels
- * concurrents peuvent en poser deux — c'est pour ça qu'il s'appelle **dans la
- * transaction** qui écrit le premier message, et nulle part ailleurs.
+ * Sérialise les écritures du fil d'un carnet : un verrou de ligne sur
+ * `memos`, tenu jusqu'à la fin de la transaction.
+ *
+ * Sans lui, deux lectures simultanées — l'app relit le fil en revenant des
+ * réglages, et le sondage passe au même instant — voyaient toutes deux un
+ * souvenir sans message et le matérialisaient **deux fois** (22/09/2026).
+ * Même chose pour la bulle d'ouverture, que deux premiers tours pouvaient poser
+ * en double. À appeler en tête de toute transaction qui écrit dans le fil.
+ */
+export async function lockThread(tx: Prisma.TransactionClient, memoId: string): Promise<void> {
+  await tx.$executeRaw`SELECT id FROM memos WHERE id = ${memoId} FOR UPDATE`;
+}
+
+/**
+ * Pose la bulle d'ouverture si le fil est vide. À appeler **dans une
+ * transaction verrouillée** (``lockThread``) : c'est le verrou qui rend
+ * l'opération idempotente face à deux premiers tours simultanés.
  */
 export async function ensureOpening(
   db: Db,

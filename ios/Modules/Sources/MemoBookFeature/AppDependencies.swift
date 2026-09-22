@@ -242,34 +242,17 @@ public final class AppDependencies {
         )
     }
 
-    /// La conversation avec MEMO.
+    /// La conversation avec MEMO — `docs/conversation.md`.
     ///
-    /// **Le seul modèle de l'app qui reçoive deux sources** : celle qui rend le
-    /// fil, et celle qui répond à la place de MEMO. Les deux sont encore
-    /// locales, et pour deux raisons différentes — il n'existe ni route de chat
-    /// (`GET /v1/trips/:id/chat`) ni agent de conversation côté serveur, alors
-    /// que `agents/agent-conversation.md` en écrit déjà le contrat.
-    ///
-    /// Le jour où les deux existent, cette fabrique devient :
-    ///
-    /// ```swift
-    /// ChatModel(
-    ///     source: { [api] in try await api.chatThread(tripId: tripId, stepId: stepId) },
-    ///     responder: RemoteMemoResponder(api: api)
-    /// )
-    /// ```
-    ///
-    /// Rien d'autre ne bouge : ni la vue, ni le modèle, ni les aperçus. Voir la
-    /// fiche du chat dans `docs/ui-development.md` pour le contrat des deux
-    /// routes.
+    /// Le fil vit sur le serveur (`GET`/`POST`/`DELETE /v1/trips/:id/chat`) et
+    /// MEMO y répond dans un job : le modèle reçoit un ``ChatTransport`` qui
+    /// relie ces routes, et **rien d'autre** — il ne sait pas s'il tient le
+    /// serveur ou le moteur local des aperçus, qui offre le même contrat
+    /// (`ChatTransport.local`). Pas de cache pour le fil, et c'est voulu : « un
+    /// fil périmé se lit comme un message perdu ».
     public func chatModel(tripId: String, stepId: String? = nil) -> ChatModel {
-        ChatModel(tripId: tripId, focusStepId: stepId, archive: conversations)
+        ChatModel(transport: .remote(api: api, tripId: tripId), focusStepId: stepId)
     }
-
-    /// Les conversations supprimées, **retenues sur l'appareil** en attendant
-    /// `DELETE /v1/trips/:id/chat` — voir ``ConversationArchive``. Les réglages
-    /// d'un voyage y écrivent, la conversation y lit.
-    public let conversations = ConversationArchive(defaults: .standard)
 
     /// La galerie des carnets de la communauté, servie par `GET /v1/gallery`.
     public func galleryModel() -> GalleryModel {
@@ -315,11 +298,10 @@ public final class AppDependencies {
             // La seule sans retour : `DELETE /v1/memos/:id`, que le serveur
             // réserve au propriétaire. L'écran demande confirmation avant.
             delete: { [api] id in try await api.deleteMemo(id: id) },
-            // Supprimer la conversation ne va **pas** au serveur : il n'y a
-            // pas de conversation chez lui à supprimer. L'archive la retient
-            // sur l'appareil, et le fil s'ouvre vide ensuite.
-            clearConversation: { [conversations] id in conversations.clear(tripId: id) },
-            restoreConversation: { [conversations] id in conversations.restore(tripId: id) },
+            // `DELETE /v1/trips/:id/chat` : le serveur efface le fil et repose
+            // l'ouverture. Propriétaire seul — il refuse (403) à un co-voyageur,
+            // et l'écran l'a déjà dit en pâlissant le lien.
+            clearConversation: { [api] id in try await api.clearChat(tripId: id) },
             // Les limites de souvenirs : le seul « achat » que cet écran porte.
             setMemoryPlan: { [api] id, plan in
                 try await api.setMemoryPlan(tripId: id, plan: plan)

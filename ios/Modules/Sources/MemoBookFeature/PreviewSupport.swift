@@ -33,6 +33,9 @@ public actor PreviewAPI: MemoBookAPI {
     /// Nul tant que rien n'a été corrigé : le profil est alors le jeu d'essai.
     private var editedProfile: TravellerProfile?
 
+    /// Les fils de conversation du double, un par voyage — voir `PreviewChat.swift`.
+    let chat = PreviewChatBox()
+
     public init(seeded: Bool = true) {
         // Le jeu d'essai est construit hors de l'acteur puis affecté : un `init`
         // synchrone d'acteur ne peut pas appeler ses propres méthodes isolées.

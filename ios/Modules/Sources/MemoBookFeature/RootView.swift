@@ -678,11 +678,11 @@ public struct RootView: View {
             // un enregistrement rapide : le vocal est déjà parti, et la bulle
             // doit suivre son sort au lieu de l'inventer.
             ChatView(
+                model: dependencies.chatModel(tripId: tripId, stepId: stepId),
                 tripId: tripId,
                 stepId: stepId,
                 handoff: recordingHandoff,
                 outbox: dependencies.outbox,
-                archive: dependencies.conversations,
                 onIntent: handle
             )
         case .gallery:
