@@ -6,7 +6,7 @@ import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
 import { TEXT_MEMORY_COST, consumeMemory, voiceCost } from "../services/memoryAllowance.js";
-import { assertCanRecord } from "../services/quota.js";
+import { assertCanRecord, validateEntry } from "../services/quota.js";
 import { loadVisibleMemo } from "./memos.js";
 import { serializeEntry } from "./serializers.js";
 
@@ -283,5 +283,60 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
 
     await context.prisma.entry.delete({ where: { id } });
     return reply.code(204).send();
+  });
+
+  /**
+   * « Ça me convient » — `docs/conversation.md` § 6. Le souvenir est relu et
+   * gardé tel quel ; l'étape offerte qu'il réservait est confirmée. Idempotent.
+   *
+   * La route du chat l'appelle elle-même quand la puce arrive en message ; elle
+   * existe aussi seule pour que l'aperçu du carnet puisse valider une fiche.
+   */
+  app.post("/v1/entries/:id/validate", async (request) => {
+    const { id } = entryIdParams.parse(request.params);
+    const accountId = accountIdOf(request);
+
+    const entry = await context.prisma.entry.findFirst({
+      where: { id, memo: visibleToAccount(accountId) },
+      select: { id: true, kind: true },
+    });
+    if (!entry) throw HttpError.notFound("Entrée introuvable.");
+    if (entry.kind === "photo") throw HttpError.badRequest("Une photo n'a rien à valider.");
+
+    const steps = await validateEntry(context.prisma, id, accountId);
+    const validated = await context.prisma.entry.findUniqueOrThrow({
+      where: { id },
+      include: { media: true },
+    });
+
+    return { entry: serializeEntry(validated), ...steps };
+  });
+
+  /**
+   * Le fichier d'un souvenir — le vocal à réécouter depuis un autre appareil,
+   * la photo d'une bulle. Servi **avec la session**, à ceux qui voient le
+   * carnet : l'app le télécharge par son client, pas par une URL nue. Mise en
+   * cache privée et longue : un média ne change jamais sous sa clé.
+   */
+  app.get("/v1/entries/:id/media", async (request, reply) => {
+    const { id } = entryIdParams.parse(request.params);
+
+    const entry = await context.prisma.entry.findFirst({
+      where: { id, memo: visibleToAccount(accountIdOf(request)) },
+      include: { media: true },
+    });
+    if (!entry?.media) throw HttpError.notFound("Média introuvable.");
+
+    let body: Buffer;
+    try {
+      body = await context.storage.get(entry.media.storageKey);
+    } catch {
+      throw HttpError.notFound("Média introuvable.");
+    }
+
+    return reply
+      .header("Cache-Control", "private, max-age=2592000, immutable")
+      .type(entry.media.mimeType)
+      .send(body);
   });
 }

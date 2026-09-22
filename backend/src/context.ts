@@ -5,6 +5,7 @@ import { InlineQueue, PgBossQueue, type JobQueue } from "./jobs/queue.js";
 import { splitPoolBudget, withConnectionLimit } from "./lib/databasePool.js";
 import { createBookRenderer, type BookRenderer } from "./services/apitemplate.js";
 import { createRedactor, type Redactor } from "./services/redaction.js";
+import { createResponder, type MemoResponder } from "./services/conversation.js";
 import { createSocialVerifier, type SocialVerifier } from "./services/socialIdentity.js";
 import { createMailer, type Mailer } from "./services/mailer.js";
 import { createPaymentGateway, type PaymentGateway } from "./services/payments.js";
@@ -31,6 +32,8 @@ export interface AppContext {
   mailer: Mailer;
   transcriber: Transcriber;
   redactor: Redactor;
+  /** MEMO, dans la conversation — voir `services/conversation.ts`. */
+  responder: MemoResponder;
   structurer: Structurer;
   publisher: AssetPublisher;
   renderer: BookRenderer;
@@ -72,6 +75,7 @@ export function createContext(env: Env, options: CreateContextOptions = {}): App
     mailer: createMailer(env, logger),
     transcriber: createTranscriber(env),
     redactor: createRedactor(env),
+    responder: createResponder(env),
     structurer: createStructurer(env),
     publisher: createAssetPublisher(env),
     renderer: createBookRenderer(env),

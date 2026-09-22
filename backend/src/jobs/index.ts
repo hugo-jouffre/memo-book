@@ -1,4 +1,5 @@
 import type { AppContext } from "../context.js";
+import { converseTurn, type ConverseJob } from "./converse.js";
 import { endSubscriptions, type EndSubscriptionsJob } from "./endSubscriptions.js";
 import { JOB_NAMES } from "./queue.js";
 import { redactEntry, type RedactJob } from "./redact.js";
@@ -27,6 +28,9 @@ export function registerJobs(context: AppContext): void {
   context.queue.register<RedactJob>(JOB_NAMES.redact, (payload) =>
     redactEntry(context, payload),
   );
+  context.queue.register<ConverseJob>(JOB_NAMES.converse, (payload) =>
+    converseTurn(context, payload),
+  );
   context.queue.register<StructureJob>(JOB_NAMES.structure, (payload) =>
     structureRender(context, payload),
   );
@@ -43,4 +47,4 @@ export function registerJobs(context: AppContext): void {
 }
 
 export { JOB_NAMES };
-export type { EndSubscriptionsJob, RedactJob, RenderJob, StructureJob, TranscribeJob };
+export type { ConverseJob, EndSubscriptionsJob, RedactJob, RenderJob, StructureJob, TranscribeJob };

@@ -45,6 +45,16 @@ export interface RedactedNeighbour {
   text: string;
 }
 
+/**
+ * Une précision donnée dans la conversation à propos de ce souvenir — la
+ * réponse à une question de MEMO. `topic` nomme la question quand elle a un
+ * sens pour la rédaction : `rose_epine_graine` (`docs/conversation.md` § 3).
+ */
+export interface RedactionPrecision {
+  text: string;
+  topic: string | null;
+}
+
 export interface RedactionInput {
   memo: {
     title: string;
@@ -57,6 +67,8 @@ export interface RedactionInput {
     transcript: string;
     capturedAt: Date;
     placeLabel: string | null;
+    /** Dans l'ordre où elles ont été dites. Vide pour un souvenir raconté hors du chat. */
+    precisions?: RedactionPrecision[];
   };
   coherenceSheet: CoherenceSheet;
   /** Étapes précédentes, de la plus ancienne à la plus récente. */
@@ -510,6 +522,25 @@ export class AnthropicRedactor implements Redactor {
       "```",
       entry.transcript,
       "```",
+    );
+
+    const precisions = entry.precisions ?? [];
+    if (precisions.length > 0) {
+      // Les réponses aux questions de MEMO. Elles ne sont pas un second récit
+      // à côté du premier : elles complètent celui-ci, à leur place.
+      lines.push(
+        "",
+        "## Précisions données par le voyageur dans la conversation",
+        "Elles font partie du récit au même titre que la transcription : tu les intègres à",
+        "leur place, tu ne les cites pas comme des réponses à des questions. Une précision",
+        "marquée `rose_epine_graine` est la rose, l'épine ou la graine de la journée (§ 5).",
+      );
+      for (const precision of precisions) {
+        lines.push(`- ${precision.topic ? `[${precision.topic}] ` : ""}${precision.text}`);
+      }
+    }
+
+    lines.push(
       "",
       "## Rappels de format",
       "- `text` : 2 à 3 paragraphes, séparés par une ligne vide, **420 caractères maximum",
@@ -518,7 +549,8 @@ export class AnthropicRedactor implements Redactor {
       "- Aucun HTML, aucun Markdown, aucun emoji dans `text` : du texte nu, la mise en",
       "  page s'en charge.",
       "- Tout ce que tu écris dans `text` doit se retrouver dans la transcription",
-      "  ci-dessus. La culture générale va dans `funFact`, jamais dans le récit.",
+      "  ci-dessus ou dans les précisions. La culture générale va dans `funFact`, jamais",
+      "  dans le récit.",
       "- `insights` : ce que **cette étape** apporte aux statistiques du profil —",
       "  pays, régions, villes, personnes rencontrées, kilomètres, transports, et la",
       "  ville où le voyageur se trouve. Un relevé, pas un total : ne reprends rien",
@@ -593,9 +625,14 @@ export class FakeRedactor implements Redactor {
 
     const firstSentence = capitalized.split(/(?<=[.!?…])\s+/)[0] ?? capitalized;
 
+    // Les précisions de la conversation arrivent **dans** le texte, pour que
+    // le test de bout en bout les voie atteindre le carnet.
+    const precisions = (input.entry.precisions ?? []).map((precision) => precision.text.trim());
+    const withPrecisions = [capitalized, ...precisions].filter(Boolean).join(" ");
+
     return {
       title: firstSentence.slice(0, 60).replace(/[.!?…]+$/, ""),
-      text: capitalized.slice(0, 420),
+      text: withPrecisions.slice(0, 420),
       weatherKey: "sun-wind",
       funFact: null,
       funFactTitle: null,

@@ -49,6 +49,8 @@ export function serializeEntry(entry: Entry & { media?: MediaAsset | null }) {
     redactionError: entry.redactionError,
     editedText: entry.editedText,
     editedAt: entry.editedAt?.toISOString() ?? null,
+    /** « Ça me convient » — voir `services/quota.ts`. */
+    validatedAt: entry.validatedAt?.toISOString() ?? null,
     /**
      * Le texte que l'app affiche, calculé côté serveur pour que la règle de
      * priorité ne soit pas réimplémentée — et donc divergente — dans chaque

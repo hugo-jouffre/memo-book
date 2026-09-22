@@ -78,6 +78,17 @@ const schema = z.object({
    */
   ANTHROPIC_API_KEY: z.string().default(""),
   ANTHROPIC_REDACTION_MODEL: z.string().default("claude-opus-5"),
+  /**
+   * La voix de MEMO dans le chat — `docs/conversation.md`. Un modèle plus
+   * rapide que la rédaction : un tour se joue en quelques secondes, sous les
+   * yeux du voyageur. Sans clé, le moteur de règles répond.
+   */
+  ANTHROPIC_CONVERSATION_MODEL: z.string().default("claude-sonnet-5"),
+  /**
+   * Le plafond anti-abus de la conversation : des tours du voyageur par
+   * carnet et par jour UTC. Ferme la porte à un script, pas à un voyageur.
+   */
+  CHAT_DAILY_TURN_CAP: z.coerce.number().int().positive().default(150),
 
   PIPELINE_MODE: z.enum(["auto", "live", "fake"]).default("auto"),
 

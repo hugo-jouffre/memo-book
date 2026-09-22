@@ -92,6 +92,34 @@ enum TapeCorner {
   bottom_right
 }
 
+/// Qui parle dans la conversation. Au nom près de `ChatAuthor` côté Swift
+/// (`MemoBookCore/Chat.swift`).
+enum ChatAuthor {
+  memo
+  traveller
+}
+
+/// La forme d'une bulle. Au nom près de `ChatMessageBody.kind` côté Swift :
+/// c'est ce que le décodeur lit dans `body.kind`.
+enum ChatMessageKind {
+  text
+  voice
+  transcript
+  photos
+}
+
+/// Ce que MEMO a fait d'un tour du voyageur. Nul pour une bulle de MEMO.
+///
+/// `memory` : le tour raconte un souvenir — une `Entry` existe pour lui.
+/// `context` : le tour précise le souvenir en cours (« oui c'était mardi avec
+/// Clara ») — il n'entre pas seul dans le carnet, la rédaction le relit.
+/// `command` : une puce (« Ça me convient »), un refus, une question sur l'app.
+enum ChatDisposition {
+  memory
+  context
+  command
+}
+
 /// La nature d'une écriture de cagnotte. Il n'y a pas d'état « en attente » :
 /// une écriture n'existe qu'une fois l'argent réellement mouvementé.
 enum WalletEntryKind {
@@ -241,6 +269,7 @@ model Account {
   subscriptions     Subscription[]
   connectors        AccountConnector[]
   feedbackResponses FeedbackResponse[]
+  chatMessages      ChatMessage[]
 
   @@map("accounts")
 }
@@ -369,6 +398,21 @@ model Memo {
   /// formats. L'agent de rédaction la relit avant chaque étape et la complète
   /// après : c'est ce qui fait que la page 20 parle comme la page 2.
   coherenceSheet Json?
+
+  // --- La conversation avec MEMO — `docs/conversation.md` ------------------
+
+  /// Ce que MEMO retient d'un tour à l'autre et qui n'est pas un message :
+  /// les journées dont il a déjà demandé la rose, l'épine et la graine
+  /// (`roseEpineGraineAskedFor: ["2026-09-21"]`). JSON libre relu
+  /// défensivement, comme `coherenceSheet` — forme : `ConversationState` dans
+  /// `services/conversation.ts`.
+  conversationState Json?
+
+  /// « Supprimer la conversation » : depuis quand le fil repart de la bulle
+  /// d'ouverture. Les souvenirs d'avant restent dans le carnet mais ne
+  /// reviennent pas dans le fil — sans cette borne, la reconstruction depuis
+  /// `entries` les y reposerait à la lecture suivante.
+  chatClearedAt DateTime?
 
   // --- Le voyage tel que l'accueil le montre -------------------------------
 
@@ -543,13 +587,14 @@ model Memo {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  entries    Entry[]
-  renders    Render[]
-  orders     PrintOrder[]
-  members    MemoMember[]
-  steps      MemoStep[]
-  expenses   Expense[]
-  categories MemoGalleryCategory[]
+  entries      Entry[]
+  renders      Render[]
+  orders       PrintOrder[]
+  members      MemoMember[]
+  steps        MemoStep[]
+  expenses     Expense[]
+  categories   MemoGalleryCategory[]
+  chatMessages ChatMessage[]
 
   @@index([ownerAccountId, createdAt])
   /// La galerie lit **tous** les carnets publics, quel qu'en soit le
@@ -720,6 +765,7 @@ model MemoStep {
   updatedAt DateTime @updatedAt
 
   entries Entry[]
+  chatMessages ChatMessage[]
 
   @@unique([memoId, number])
   @@index([memoId, startDate])
@@ -846,6 +892,15 @@ model Entry {
   /// étapes), jamais sur zéro.
   insights Json?
 
+  /// « Ça me convient » : le voyageur a relu le texte et le garde tel quel.
+  ///
+  /// Le carnet se compose avec tous les souvenirs, validés ou non — un
+  /// souvenir non relu n'est pas un souvenir absent ; l'aperçu signale ceux
+  /// qui ne le sont pas. C'est aussi **l'unité des étapes offertes** : une
+  /// validation confirme l'étape que la création du souvenir avait réservée
+  /// (`services/quota.ts`).
+  validatedAt DateTime?
+
   /// Horodatage du souvenir lui-même, pas de l'upload — c'est lui qui sert à
   /// regrouper les entries par journée lors de la structuration.
   capturedAt DateTime @default(now())
@@ -863,6 +918,10 @@ model Entry {
   stepId String?
   step   MemoStep? @relation(fields: [stepId], references: [id], onDelete: SetNull)
 
+  /// Les tours de conversation qui parlent de ce souvenir : celui qui l'a
+  /// créé, ses précisions, et sa fiche. Voir `ChatMessage.entryId`.
+  chatMessages ChatMessage[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -870,6 +929,109 @@ model Entry {
   @@index([stepId])
   @@map("entries")
 }
+/// Un tour de la conversation avec MEMO — ce que le voyageur a dit, ou ce que
+/// MEMO lui a répondu. `docs/conversation.md`.
+///
+/// **Un fil par voyage**, adossé à `memos` (§ 14.4 de `docs/ui-development.md`) :
+/// les messages portent leur étape, ils ne sont pas rangés par étape. Le fil
+/// est **commun aux co-voyageurs** — c'est le récit du voyage —, et chaque
+/// bulle bleue retient qui l'a dite, là où `entries` reste sans auteur : le
+/// souvenir appartient au récit, la phrase à celui qui l'a prononcée.
+///
+/// C'est aussi l'historique que MEMO relit avant de répondre (les vingt
+/// derniers tours) et la reprise d'un autre appareil : rien de ce qui se dit
+/// ici ne vit seulement dans l'app.
+model ChatMessage {
+  id     String @id @default(uuid())
+  memoId String
+  memo   Memo   @relation(fields: [memoId], references: [id], onDelete: Cascade)
+
+  /// L'ordre du fil, et **la seule vérité sur l'ordre**. Une séquence
+  /// Postgres, jamais `createdAt` : deux bulles de MEMO écrites dans la même
+  /// transaction partagent une milliseconde, et une réponse insérée par un
+  /// job ne doit jamais pouvoir passer avant la question.
+  seq Int @unique @default(autoincrement())
+
+  author ChatAuthor
+  kind   ChatMessageKind
+
+  /// Le compte qui a parlé — une bulle du voyageur seulement. `SetNull` et non
+  /// `Cascade` : un compte supprimé emporte son prénom, pas les phrases qui
+  /// font le récit des autres (même règle que `deletion.ts` pour les souvenirs).
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  /// Le texte d'une bulle `text`. Nul pour un vocal, une fiche ou des photos :
+  /// leur contenu se lit sur le souvenir, pas ici.
+  text String?
+
+  /// Le souvenir que ce tour a **créé** (vocal, photo, texte classé `memory`),
+  /// qu'il **enrichit** (`context`), ou dont il est **la fiche** (une bulle
+  /// `transcript` de MEMO). Un même souvenir a donc plusieurs messages ; la
+  /// fiche se redessine à chaque lecture depuis `entries`, elle ne recopie
+  /// rien. `SetNull` : supprimer un souvenir laisse la conversation lisible,
+  /// et le sérialiseur retire les fiches orphelines.
+  entryId String?
+  entry   Entry?  @relation(fields: [entryId], references: [id], onDelete: SetNull)
+
+  /// Ce que MEMO a décidé de ce tour — voir `ChatDisposition`. Écrit par le
+  /// job `converse` pour un texte libre, par la route pour un vocal, une photo
+  /// (toujours `memory`) ou une puce (toujours `command`).
+  disposition ChatDisposition?
+
+  /// La puce qui a produit ce message, quand c'en est une (« accept »,
+  /// « edit-hand »…). C'est ce qui permet de répondre sans modèle à une
+  /// commande connue, et de ne pas lui compter un souvenir.
+  suggestionId String?
+
+  /// L'étape dont ce message parle. `SetNull` : supprimer une étape ne
+  /// supprime pas ce qu'on en a dit.
+  stepId String?
+  step   MemoStep? @relation(fields: [stepId], references: [id], onDelete: SetNull)
+
+  // --- Ce que seule une bulle de MEMO porte -----------------------------
+
+  /// Le message du voyageur auquel cette bulle répond. C'est ce qui regroupe
+  /// les temps d'une même réponse.
+  replyToId String?
+
+  /// Le silence avant de poser la bulle, en millisecondes — la donnée de
+  /// rythme de `MemoBeat.pauseMilliseconds` côté Swift. Décidée ici, jouée
+  /// par l'app.
+  pauseMilliseconds Int?
+
+  /// Qui a écrit cette bulle : `claude-sonnet-5`, `heuristic` (le repli quand
+  /// le modèle ne répond pas), `fake`. Comme `entries.redactionModel` : pour
+  /// tracer une régression de ton, et compter combien de fois MEMO a parlé
+  /// sans modèle.
+  model String?
+
+  // --- Ce que seul un tour du voyageur porte ------------------------------
+
+  /// L'instant où MEMO a fini de répondre. Nul tant que le job `converse`
+  /// n'est pas passé : c'est **l'état « un tour est en vol »** que l'app
+  /// sonde, et rien d'autre ne le tient.
+  repliedAt DateTime?
+
+  /// Ce qui n'a pas mérité une colonne : les niveaux de la forme d'onde d'un
+  /// vocal (`levels`, 0 à 1), les souvenirs d'une bulle de photos (`entryIds`),
+  /// les puces proposées par une bulle de MEMO (`suggestions`, des
+  /// identifiants du catalogue), le sujet d'une précision
+  /// (`topic: "rose_epine_graine"`). Relu défensivement, comme
+  /// `memos.coherenceSheet`.
+  payload Json?
+
+  createdAt DateTime @default(now())
+
+  /// La lecture du fil : par carnet, dans l'ordre.
+  @@index([memoId, seq])
+  /// Le tour en vol, et le plafond quotidien : par carnet, par auteur, par date.
+  @@index([memoId, author, createdAt])
+  /// Les précisions d'un souvenir, relues par la rédaction.
+  @@index([entryId])
+  @@map("chat_messages")
+}
+
 
 /// Un fichier stocké. `storageKey` pointe vers S3 (audio brut, photo originale),
 /// `cdnUrl` vers Webflow une fois la photo publiée — c'est cette URL publique

@@ -128,7 +128,7 @@ async function readSettings(context: AppContext, accountId: string, memoId: stri
 
   if (!memo) throw new HttpError(404, "Ce voyage n’existe pas.");
 
-  return serializeTripSettings(memo, account?.walletBalanceCents ?? 0, memory);
+  return serializeTripSettings(memo, account?.walletBalanceCents ?? 0, memory, accountId);
 }
 
 export function registerTripSettingsRoutes(app: FastifyInstance, context: AppContext) {

@@ -1853,6 +1853,12 @@ avec les trois puces d'ouverture. *Erreur* : `ErrorBanner` en ligne — plus un
 bandeau dédié au **micro refusé**, qui mène aux Réglages ; `MemoDetailModel`
 calculait déjà cet état sans qu'aucune vue le lise. *Nominal* : la maquette.
 
+**Le produit de la conversation** — qui parle, ce qui devient un souvenir, la
+fiche en trois temps, valider et corriger, le fil commun, le temps, le hors
+ligne, ce que MEMO ne fait jamais — est dans `docs/conversation.md` (22/09/2026).
+Ce qui suit est la fiche d'écran et l'état du contrat, qui change avec la
+branche `atelier-conversation`.
+
 **Contrat back-end** — **aucun appel**. L'écran lit un `ChatThread` fourni par une
 closure, et fait répondre un `MemoResponder` local. Les deux se remplacent d'une
 ligne chacun dans `AppDependencies.chatModel(tripId:stepId:)`.

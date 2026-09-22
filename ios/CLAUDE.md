@@ -421,6 +421,10 @@ nulle part est pire qu'une ligne en lecture seule : elle a l'air d'avoir marché
 L'inverse compte autant — ne pas exposer dans l'app un réglage que la base ne
 sait pas retenir. Voir `docs/reglages-utilisateur.md`.
 
+La conversation avec MEMO a sa propre fiche produit, `docs/conversation.md` :
+qui parle, ce qui devient un souvenir, la fiche en trois temps, ce que MEMO ne
+fait jamais. Toute session qui touche `Chat/` la lit d'abord.
+
 ## Comptes de test
 
 `npm run db:seed` (dans `backend/`) pose **deux** comptes, mot de passe

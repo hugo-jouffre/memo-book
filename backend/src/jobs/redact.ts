@@ -5,6 +5,7 @@ import {
   parseInsights,
   type CoherenceSheet,
   type RedactedNeighbour,
+  type RedactionPrecision,
 } from "../services/redaction.js";
 
 export interface RedactJob {
@@ -107,6 +108,24 @@ export async function redactEntry(
       ];
     });
 
+    // Les précisions données dans la conversation — « c'était avec Clara, le
+    // mardi » — font partie du récit au même titre que la transcription. Le
+    // job `converse` les rattache au souvenir en cours (`disposition:
+    // context`) et relance cette rédaction pour qu'elles atteignent le texte.
+    const precisionRows = await prisma.chatMessage.findMany({
+      where: { entryId, author: "traveller", disposition: "context", text: { not: null } },
+      orderBy: { seq: "asc" },
+      select: { text: true, payload: true },
+    });
+    const precisions: RedactionPrecision[] = precisionRows.flatMap((row) => {
+      if (!row.text) return [];
+      const rawTopic =
+        row.payload && typeof row.payload === "object" && "topic" in row.payload
+          ? (row.payload as { topic?: unknown }).topic
+          : undefined;
+      return [{ text: row.text, topic: typeof rawTopic === "string" && rawTopic ? rawTopic : null }];
+    });
+
     const result = await redactor.redact({
       memo: {
         title: entry.memo.title,
@@ -119,6 +138,7 @@ export async function redactEntry(
         transcript: entry.transcript,
         capturedAt: entry.capturedAt,
         placeLabel: entry.placeLabel,
+        precisions,
       },
       coherenceSheet: parseCoherenceSheet(entry.memo.coherenceSheet),
       previous,
