@@ -83,6 +83,7 @@ export async function resetDatabase(prisma: PrismaClient): Promise<void> {
         "print_order_copies",
         "print_orders",
         "renders",
+        "chat_messages",
         "entries",
         "media_assets",
         "expenses",

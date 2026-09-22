@@ -36,8 +36,15 @@ const PAID_THROUGH_SUBSCRIPTION = ["cancelled", "expired"] as const;
  *
  * Trois cas, dans cet ordre : un abonnement vivant ouvre tout ; un compte
  * **sans quota** (`remainingSteps: null` — les comptes d'avant le quota, ou un
- * ancien abonné à qui on ne l'a jamais posé) n'est pas limité ; un quota à
- * zéro ferme.
+ * ancien abonné à qui on ne l'a jamais posé) n'est pas limité ; un quota
+ * épuisé ferme.
+ *
+ * **Une étape = un souvenir, réservée à la création et confirmée à la
+ * validation** (Hugo, 22/09/2026 — `docs/conversation.md` § 6). Un souvenir
+ * non validé compte donc déjà comme une étape prise : avec trois offertes, le
+ * quatrième souvenir est refusé même si aucun n'a été validé. Sans cette
+ * réserve, quelqu'un qui ne tape jamais « Ça me convient » raconterait sans
+ * fin sur un compte gratuit. `validateEntry` confirme, et décrémente.
  */
 export async function assertCanRecord(prisma: PrismaClient, accountId: string): Promise<void> {
   const account = await prisma.account.findUniqueOrThrow({
@@ -62,11 +69,67 @@ export async function assertCanRecord(prisma: PrismaClient, accountId: string): 
   });
 
   if (account.subscriptions.length > 0) return;
-  if (account.remainingSteps === null || account.remainingSteps > 0) return;
+  if (account.remainingSteps === null) return;
+
+  const reserved = await countReservedSteps(prisma, accountId);
+  if (account.remainingSteps - reserved > 0) return;
 
   throw new HttpError(
     403,
     "Tes étapes offertes sont toutes racontées : abonne-toi pour continuer ton carnet.",
     "quota_exhausted",
   );
+}
+
+/**
+ * Les souvenirs non validés qui **réservent** une étape de ce compte : ceux
+ * qu'il a racontés dans le chat — la bulle retient qui a parlé, le souvenir
+ * non (`docs/conversation.md` § 2). Une photo n'est pas une étape.
+ *
+ * Un souvenir arrivé hors du chat (le seed, un vocal de l'accueil d'avant
+ * que celui-ci passe par le fil) ne réserve rien : il a déjà franchi ce
+ * verrou à sa création, et compter après coup ce que personne n'a pu valider
+ * fermerait les comptes existants d'un jour à l'autre.
+ */
+export async function countReservedSteps(prisma: PrismaClient, accountId: string): Promise<number> {
+  return prisma.entry.count({
+    where: {
+      validatedAt: null,
+      kind: { not: "photo" },
+      chatMessages: { some: { accountId, disposition: "memory" } },
+    },
+  });
+}
+
+/**
+ * « Ça me convient » : le souvenir est relu et gardé tel quel, et l'étape
+ * qu'il réservait est confirmée — décomptée du compte **qui valide**, comme
+ * `assertCanRecord` est par compte.
+ *
+ * Idempotent : valider deux fois ne décompte qu'une fois. Un compte sans
+ * quota (`remainingSteps: null`) n'a rien à décompter.
+ */
+export async function validateEntry(
+  prisma: PrismaClient,
+  entryId: string,
+  accountId: string,
+): Promise<{ offeredSteps: number | null; remainingSteps: number | null }> {
+  return prisma.$transaction(async (tx) => {
+    const { count } = await tx.entry.updateMany({
+      where: { id: entryId, validatedAt: null },
+      data: { validatedAt: new Date() },
+    });
+
+    if (count > 0) {
+      await tx.account.updateMany({
+        where: { id: accountId, remainingSteps: { gt: 0 } },
+        data: { remainingSteps: { decrement: 1 } },
+      });
+    }
+
+    return tx.account.findUniqueOrThrow({
+      where: { id: accountId },
+      select: { offeredSteps: true, remainingSteps: true },
+    });
+  });
 }

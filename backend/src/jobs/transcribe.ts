@@ -1,9 +1,15 @@
 import type { AppContext } from "../context.js";
+import type { ConverseJob } from "./converse.js";
 import { JOB_NAMES } from "./queue.js";
 import type { RedactJob } from "./redact.js";
 
 export interface TranscribeJob {
   entryId: string;
+  /**
+   * Le tour de conversation qui attend cette transcription pour que MEMO
+   * réponde. Absent pour un vocal posté hors du chat.
+   */
+  converseMessageId?: string;
 }
 
 /**
@@ -16,7 +22,7 @@ export interface TranscribeJob {
  */
 export async function transcribeEntry(
   context: AppContext,
-  { entryId }: TranscribeJob,
+  { entryId, converseMessageId }: TranscribeJob,
 ): Promise<void> {
   const { prisma, storage, transcriber, logger } = context;
 
@@ -70,12 +76,21 @@ export async function transcribeEntry(
     logger.info({ entryId, characters: result.text.length }, "Entrée transcrite");
 
     await context.queue.publish<RedactJob>(JOB_NAMES.redact, { entryId });
+    // MEMO répond sur la transcription brute, pendant que la rédaction écrit.
+    if (converseMessageId) {
+      await context.queue.publish<ConverseJob>(JOB_NAMES.converse, { messageId: converseMessageId });
+    }
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
     await prisma.entry.update({
       where: { id: entryId },
       data: { status: "failed", error: message },
     });
+    // Un vocal inintelligible fait quand même parler MEMO : il le dit, au
+    // lieu de laisser une fiche attendre pour rien.
+    if (converseMessageId) {
+      await context.queue.publish<ConverseJob>(JOB_NAMES.converse, { messageId: converseMessageId });
+    }
     // Relancé pour que pg-boss compte la tentative et applique son backoff.
     throw cause;
   }

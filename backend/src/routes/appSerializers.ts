@@ -573,6 +573,7 @@ export function serializeTripSettings(
   memo: MemoForSettings,
   walletBalanceCents: number,
   memory: MemorySnapshot,
+  viewerAccountId?: string,
 ) {
   return {
     tripId: memo.id,
@@ -623,6 +624,10 @@ export function serializeTripSettings(
     bookPdfUrl: memo.renders?.[0]?.pdfUrl ?? null,
     isPrintable: memo.isPrintable,
     customisation: serializeBookCustomisation(memo),
+    // « Supprimer la conversation » n'appartient qu'au propriétaire, comme
+    // supprimer le voyage (`docs/conversation.md` § 7). L'app pâlit le lien et
+    // explique ; le serveur refuse quand même (`DELETE /v1/trips/:id/chat`).
+    canClearConversation: viewerAccountId === undefined || memo.ownerAccountId === viewerAccountId,
   };
 }
 

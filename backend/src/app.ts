@@ -21,6 +21,7 @@ import { configureAvatarUrls } from "./services/avatars.js";
 import { registerRenderRoutes } from "./routes/renders.js";
 import { registerStripeWebhookRoutes } from "./routes/stripeWebhook.js";
 import { registerBookPreviewRoutes } from "./routes/bookPreview.js";
+import { registerChatRoutes } from "./routes/chat.js";
 import { registerTripSettingsRoutes } from "./routes/tripSettings.js";
 import { registerWalletRoutes } from "./routes/wallet.js";
 
@@ -123,6 +124,7 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
     registerRenderRoutes(accountRoutes, context);
     registerOrderRoutes(accountRoutes, context);
     registerTripSettingsRoutes(accountRoutes, context);
+    registerChatRoutes(accountRoutes, context);
     registerBookPreviewRoutes(accountRoutes, context);
     registerWalletRoutes(accountRoutes, context);
   });
