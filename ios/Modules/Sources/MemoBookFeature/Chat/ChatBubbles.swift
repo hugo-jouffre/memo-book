@@ -18,10 +18,26 @@ struct ChatMessageRow: View {
 
     var body: some View {
         VStack(alignment: alignment, spacing: MemoBookSpacing.xs / 2) {
+            authorCaption
             row
             deliveryNotice
         }
         .frame(maxWidth: .infinity, alignment: horizontalAlignment)
+    }
+
+    /// Le prénom de l'autre voyageur, au-dessus de sa bulle, dans un fil à
+    /// plusieurs. **Seulement si le serveur l'a mis** : il sait qui lit, qui
+    /// parle, et s'ils sont plusieurs — la vue affiche, elle ne raisonne pas
+    /// (`docs/conversation.md` § 2).
+    @ViewBuilder
+    private var authorCaption: some View {
+        if let name = message.authorName, !name.isEmpty {
+            Text(name)
+                .font(MemoBookFont.caption)
+                .foregroundStyle(MemoBookColor.inkMuted)
+                .padding(.horizontal, MemoBookSpacing.snug)
+                .accessibilityLabel("\(name) :")
+        }
     }
 
     private var isTraveller: Bool { message.author.isTraveller }
@@ -427,23 +443,52 @@ struct ChatTranscriptBubble: View {
         (card.text?.count ?? 0) > Self.expandableLength
     }
 
+    /// Les trois temps de la fiche — `docs/conversation.md` § 5. Une fiche sans
+    /// texte écoute encore, quel que soit son temps : le moteur local n'en
+    /// pose pas.
+    private enum Stage { case listening, writing, ready, failed }
+
+    private var stage: Stage {
+        guard card.text != nil else { return .listening }
+        switch card.phase {
+        case .listening: return .listening
+        case .writing: return .writing
+        case .failed: return .failed
+        case .ready, .unknown: return .ready
+        }
+    }
+
     var body: some View {
         BrandChatBubble(author: .memo) {
             VStack(alignment: .leading, spacing: MemoBookSpacing.snug) {
                 heading
                 body(of: card)
-                if let footnote = card.footnote {
+                if let footnote = card.footnote, stage == .ready {
                     Text(footnote)
                         .font(MemoBookFont.caption)
                         .foregroundStyle(MemoBookColor.inkMuted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            // Le texte qui passe du brut au rédigé, la coche qui arrive : un
+            // fondu, pas un saut.
+            .animation(.smooth(duration: 0.3), value: card)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            "\(ChatCopy.Voice.transcript(day: card.capturedAt.chatFullDayLabel)). \(card.text ?? ChatCopy.transcriptPending)"
-        )
+        .accessibilityLabel(accessibilityText)
+    }
+
+    private var accessibilityText: String {
+        let day = ChatCopy.Voice.transcript(day: card.capturedAt.chatFullDayLabel)
+        let state: String
+        switch stage {
+        case .listening: state = ChatCopy.transcriptPending
+        case .writing: state = "\(ChatCopy.transcriptWriting) \(card.text ?? "")"
+        case .failed: state = "\(ChatCopy.transcriptFailed) \(card.text ?? "")"
+        case .ready: state = card.text ?? ""
+        }
+        let validated = card.isValidated ? " \(ChatCopy.Voice.validated)." : ""
+        return "\(day). \(state)\(validated)"
     }
 
     private var heading: some View {
@@ -462,6 +507,19 @@ struct ChatTranscriptBubble: View {
                 Text(card.title)
                     .font(MemoBookFont.handwriting)
                     .foregroundStyle(MemoBookColor.action)
+
+                // « Ça me convient » a été dit : une coche discrète, dans le
+                // vert d'action, à la place de rien — la fiche ne change pas
+                // de forme pour le dire.
+                if card.isValidated {
+                    Image(brand: "IconLucideCheck")
+                        .resizable()
+                        .renderingMode(.template)
+                        .scaledToFit()
+                        .frame(width: glyph, height: glyph)
+                        .foregroundStyle(MemoBookColor.action)
+                        .transition(.scale.combined(with: .opacity))
+                }
             }
 
             HStack(spacing: MemoBookSpacing.snug) {
@@ -495,31 +553,62 @@ struct ChatTranscriptBubble: View {
     /// attente donnerait l'impression que rien ne se passe.
     @ViewBuilder
     private func body(of card: TranscriptCard) -> some View {
-        if let text = card.text {
-            VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
-                Text(text)
-                    .font(MemoBookFont.bubble)
-                    .foregroundStyle(MemoBookColor.ink)
-                    .lineLimit(isExpanded || !isExpandable ? nil : Self.collapsedLineLimit)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if isExpandable {
-                    Button(action: onToggleExpansion) {
-                        Text(isExpanded ? ChatCopy.seeLess : ChatCopy.seeMore)
-                            .font(MemoBookFont.bubbleAction)
-                            .foregroundStyle(MemoBookColor.action)
-                    }
-                    .frame(minHeight: MemoBookSpacing.minimumTapTarget, alignment: .leading)
-                    .contentShape(.rect)
-                }
-            }
-        } else {
+        switch stage {
+        case .listening:
             HStack(spacing: MemoBookSpacing.xs) {
                 ProgressView().controlSize(.small).tint(MemoBookColor.action)
                 Text(ChatCopy.transcriptPending)
                     .font(MemoBookFont.bubble)
                     .foregroundStyle(MemoBookColor.inkMuted)
+            }
+
+        case .writing:
+            // Le brut est là, en gris : le voyageur voit tout de suite qu'il a
+            // été entendu, et le texte rédigé viendra le remplacer.
+            VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
+                HStack(spacing: MemoBookSpacing.xs) {
+                    ProgressView().controlSize(.small).tint(MemoBookColor.action)
+                    Text(ChatCopy.transcriptWriting)
+                        .font(MemoBookFont.caption)
+                        .foregroundStyle(MemoBookColor.inkMuted)
+                }
+                narrative(card.text ?? "", tint: MemoBookColor.inkMuted)
+            }
+
+        case .failed:
+            VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
+                Text(ChatCopy.transcriptFailed)
+                    .font(MemoBookFont.caption)
+                    .foregroundStyle(MemoBookColor.error)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let text = card.text, !text.isEmpty {
+                    narrative(text, tint: MemoBookColor.inkMuted)
+                }
+            }
+
+        case .ready:
+            narrative(card.text ?? "", tint: MemoBookColor.ink)
+        }
+    }
+
+    /// Le récit, replié à sept lignes tant qu'on ne demande pas la suite.
+    private func narrative(_ text: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
+            Text(text)
+                .font(MemoBookFont.bubble)
+                .foregroundStyle(tint)
+                .lineLimit(isExpanded || !isExpandable ? nil : Self.collapsedLineLimit)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if isExpandable {
+                Button(action: onToggleExpansion) {
+                    Text(isExpanded ? ChatCopy.seeLess : ChatCopy.seeMore)
+                        .font(MemoBookFont.bubbleAction)
+                        .foregroundStyle(MemoBookColor.action)
+                }
+                .frame(minHeight: MemoBookSpacing.minimumTapTarget, alignment: .leading)
+                .contentShape(.rect)
             }
         }
     }

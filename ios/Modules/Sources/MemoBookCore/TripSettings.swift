@@ -253,6 +253,12 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
     /// route les serve à tous les carnets.
     public var customisation: BookCustomisation?
 
+    /// « Supprimer la conversation » est ouvert à ce compte — le propriétaire du
+    /// voyage. `nil` quand le serveur ne l'a pas dit (un jeu d'essai, une
+    /// réponse mise en cache avant que la conversation vive sur le serveur) :
+    /// on lit alors `true`, et c'est le serveur qui refuse.
+    public var canClearConversation: Bool?
+
     public init(
         tripId: String,
         name: String,

@@ -1859,17 +1859,33 @@ ligne, ce que MEMO ne fait jamais — est dans `docs/conversation.md` (22/09/202
 Ce qui suit est la fiche d'écran et l'état du contrat, qui change avec la
 branche `atelier-conversation`.
 
-**Contrat back-end** — **aucun appel**. L'écran lit un `ChatThread` fourni par une
-closure, et fait répondre un `MemoResponder` local. Les deux se remplacent d'une
-ligne chacun dans `AppDependencies.chatModel(tripId:stepId:)`.
+**Contrat back-end** — le fil vit sur le serveur depuis le 22/09/2026
+(`backend/src/routes/chat.ts`, `chatSerializers.ts`) ; le produit est dans
+`docs/conversation.md`. L'écran ne connaît qu'un `ChatTransport` — cinq
+fonctions-sources —, construit par `AppDependencies.chatModel(tripId:stepId:)`
+(`.remote`) ; les aperçus et `-previewSignedIn` reçoivent `.local`, le même
+contrat en mémoire avec le moteur de règles. **Pas de cache** pour le fil.
 
-| Besoin | Route à créer |
+| Besoin | Route |
 |---|---|
-| Le fil, repris d'un autre appareil | `GET /v1/trips/:id/chat` — messages, suggestions, contexte. Demande un modèle Prisma `ChatMessage`, adossé à `Memo` et à `Entry` : c'est le seul vrai travail de schéma |
-| Un tour de parole | `POST /v1/trips/:id/chat` — JSON pour un texte, multipart pour un vocal, **comme `POST /v1/memos/:id/entries` le fait déjà**. La route crée l'`Entry`, enfile le job `transcribe`, appelle le répondeur serveur, et met à jour `Memo.prompt` avec la relance émise |
-| La transcription | **Elle existe déjà** (`transcribeEntry`, OpenAI, français forcé) mais c'est un job : la route répondra `text: null`, et l'app appelle `awaitTranscript(of:)` — prévu pour ça dès maintenant |
-| L'agent de conversation | Côté serveur, sur le motif `Transcriber` / `Redactor` : `HeuristicResponder` (le portage de ces mêmes règles) et `AnthropicResponder` (prompt système = `agents/agent-conversation.md`) |
-| Le nombre de pages composées | `serializeRender` retient volontairement le payload de mise en page. **Le compteur est aujourd'hui déduit** (deux pages par souvenir) — c'est un ordre de grandeur, pas une mesure |
+| Le fil, repris d'un autre appareil | `GET /v1/trips/:id/chat` — `ChatThread` au champ près de `Chat.swift`, plus `seq`, `authorName` (les autres voyageurs seulement), `pauseMilliseconds`, `disposition`, `turn`, `canClear`, `now`. Le serveur y **reconstruit** d'abord tout souvenir sans message (vocaux de l'accueil, seed). `?since=<now précédent>` rend la suite : messages écrits depuis, et fiches dont le souvenir a bougé |
+| Un tour de parole | `POST /v1/trips/:id/chat` — JSON `{id, kind: "text", text, stepId?, suggestionId?, entryId?}` pour un texte ou une puce, multipart pour un vocal (`id, capturedAt, durationSeconds, placeLabel, stepId, levels, file`) ou une à quatre photos. **`id` est fabriqué par l'app** (UUID) : la bulle optimiste et la bulle servie sont la même, un renvoi ne double rien (200). Répond 201 tout de suite ; MEMO répond dans le job `converse`, que l'app sonde toutes les 2 s tant que `turn` est `replying` ou qu'une fiche mûrit — trois minutes au plus sans changement |
+| La fiche | Recalculée depuis `entries` à chaque lecture, avec `phase` : `listening` (transcription), `writing` (le brut, en gris, pendant la rédaction), `ready`, `failed` ; `isValidated`, `entryId`. L'app ne sonde plus `GET /v1/entries/:id` |
+| Valider, corriger | « Ça me convient » part avec `suggestionId: "accept"` et l'`entryId` de la dernière fiche : validé dans la même requête (`validatedAt`, étape offerte confirmée). « À la main » : `PATCH /v1/entries/:id` (`editedText`), puis une commande silencieuse `transcript_edited` pour l'accusé de MEMO — la fiche change, le fil ne gagne pas de copie |
+| Le rythme | `pauseMilliseconds` sur chaque bulle de MEMO, décidé par le serveur, joué par le modèle (`ChatModel.apply`) — plancher 450 ms |
+| Le média | `GET /v1/entries/:id/media`, servi avec la session : `VoiceNote.remoteUrl` pointe dessus, le modèle télécharge puis joue depuis les caches |
+| L'agent de conversation | Côté serveur, sur le motif `Transcriber` / `Redactor` : `FakeResponder` (tests, `PIPELINE_MODE=fake`), `HeuristicResponder` (le portage des règles de `LocalMemoResponder`, et le repli), `AnthropicResponder` à venir (PR4) |
+| Le nombre de pages composées | `preview.memoryCount` est compté ; `pageCount` reste **déduit** (deux pages par souvenir) tant que `serializeRender` retient le payload |
+
+**Ce qui reste dans l'app** : `ChatFixtures` et `LocalMemoResponder`, pour les
+aperçus Xcode, `-previewSignedIn` et `ChatResponderTests` — la copie de
+référence est `backend/src/services/conversationCopy.ts`, et les deux se citent.
+
+⚠️ **Deux lectures au même instant reconstruisaient deux fois** un souvenir
+(22/09/2026) : `.task` repart à chaque apparition de la vue, un `onAppear` de
+plus faisait un second `GET`. Le serveur verrouille désormais le carnet
+(`lockThread`) dans toute transaction qui écrit le fil, et la vue n'a qu'un
+seul rechargement.
 
 **Assets** — onze icônes **Lucide** (licence ISC), faute d'équivalent dans le jeu
 de marque : haut-parleur, presse-papiers, appareil photo, clavier, calendrier,
@@ -3238,32 +3254,24 @@ chat (le M et « Nouveau voyage à Rome ! ») : celui-là est l'écran de quelqu
 qui n'a jamais rien dit, et on a effacé ce qu'on s'est dit, pas fait comme si
 on ne s'était jamais parlé.
 
-**Comment ça tient, sans serveur.** Il n'y a pas de conversation côté serveur
-— ni `GET /v1/trips/:id/chat`, ni `DELETE` — et le fil vient du jeu d'essai
-(§ 14). `ConversationArchive` retient donc les voyages dont la conversation a
-été supprimée, dans les réglages de l'app, un pour la session
-(`AppDependencies.conversations`) :
-
-| Qui | Quoi |
-|---|---|
-| `TripSettingsModel.clearConversation()` | y écrit, par la fonction que `AppDependencies` lui passe — le jour où la route existe, c'est cette fonction qui l'appelle |
-| `ChatModel` | y lit : un voyage supprimé rend son fil vide (`ChatThread.cleared()`) puis pose l'ouverture de MEMO (`ensureOpening()`) |
-| `ChatView` | recharge sur `archive.version` : l'écran du chat reste sous celui des réglages dans la pile, il ne se refabrique pas au retour |
-
-Le bac à sable des réglages gagne « Rétablir la conversation » : après une
-suppression, c'est le seul moyen de revoir le jeu d'essai sans réinstaller.
-
-`ConversationArchiveTests` (cible app) garde les trois promesses : un fil
-supprimé rouvre sur l'ouverture de MEMO, un fil intact garde ses bulles, et la
-suppression survit à un relancement.
+**Comment ça tient** (depuis le 22/09/2026 — `docs/conversation.md` § 7) :
+`DELETE /v1/trips/:id/chat`. Le serveur efface les messages du carnet, pose
+`memos.chatClearedAt` — les souvenirs d'avant ne reviennent pas dans le fil
+par la reconstruction, ils restent dans le carnet — et repose la bulle
+d'ouverture. **Propriétaire seul** : un co-voyageur reçoit 403 `owner_only`,
+et l'écran l'a dit avant, en pâlissant le lien (40 %, tapable) et en posant un
+`BrandNotice(tone: .information)` à l'appui, sur `TripSettings.canClearConversation`
+que le serveur rend. `ChatView` relit le fil au retour des réglages (`.task`
+repart à chaque apparition) : il n'y a plus d'archive sur l'appareil, ni de
+bouton « Rétablir la conversation » dans le bac à sable.
 
 ### 25.1 À trancher
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
-| T158 | **La suppression n'existe que sur l'appareil.** Un autre téléphone du même compte verra la conversation du jeu d'essai. C'est la conséquence de l'absence de route, pas un choix : `DELETE /v1/trips/:id/chat` remplacera l'archive le jour où le fil sera servi | « Supprimer la conversation » — dans les réglages du voyage |
+| T158 | ~~La suppression n'existe que sur l'appareil.~~ **Clos le 22/09/2026** : `DELETE /v1/trips/:id/chat`, le fil vit sur le serveur | « Supprimer la conversation » — dans les réglages du voyage |
 | T159 | **Aucune maquette** pour le lien ni pour la feuille : écrits sur les motifs existants (« Me déconnecter », `DeleteTripSheet`). À dessiner dans Figma | « Supprimer la conversation » — dans les réglages du voyage |
-| T160 | **Un co-voyageur peut supprimer la conversation**, alors qu'il ne peut pas supprimer le voyage. Aujourd'hui le fil est propre à l'appareil, la question ne se pose pas ; elle se posera avec la route — qui décide de l'effacer pour tout le monde ? | « Supprimer la conversation » — dans les réglages du voyage |
+| T160 | ~~Un co-voyageur peut supprimer la conversation.~~ **Tranché le 22/09/2026** : le propriétaire seul, comme le voyage ; le co-voyageur voit le lien pâli et une notice qui explique | « Supprimer la conversation » — dans les réglages du voyage |
 ## 26. La relance du voyage n'est pas une bulle
 
 Hugo, 17/09/2026 : **la bulle d'ouverture de MEMO est seule.** Elle se termine

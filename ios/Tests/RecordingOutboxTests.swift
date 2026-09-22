@@ -215,7 +215,7 @@ final class RecordingOutboxTests: XCTestCase {
     func testTheConversationPostsTheVocalWithoutOwningItsDelivery() async throws {
         let handoff = RecordingHandoff(audio: .debugSilence, levels: [0.3, 0.7])
 
-        let chat = ChatModel(tripId: "trip-rome")
+        let chat = ChatModel(transport: .local(tripId: "trip-rome"))
         chat.expect(handoff)
         await chat.load()
 
@@ -227,8 +227,9 @@ final class RecordingOutboxTests: XCTestCase {
             "Tant que la file n'a rien dit, la bulle ne peut pas se déclarer arrivée."
         )
 
-        // Même une fois MEMO passé, elle reste sur l'état que la file donne.
-        try await until("MEMO a répondu") { chat.turn == .idle && chat.messages.count > 1 }
+        // Le fil est chargé et au repos : la bulle reste sur l'état que la file
+        // donne — le chat ne l'envoie pas lui-même, elle est déjà partie.
+        XCTAssertEqual(chat.turn, .idle)
         XCTAssertEqual(chat.messages.first { $0.id == handoff.id }?.delivery, .sending)
 
         // C'est la file, et elle seule, qui la termine.

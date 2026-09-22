@@ -84,7 +84,7 @@ public struct VoiceNote: Codable, Sendable, Hashable, Identifiable {
 /// C'est la première réponse à un vocal, et elle est d'une autre nature qu'une
 /// phrase : on la relit, on la corrige, elle finira dans le carnet. D'où sa
 /// forme de fiche plutôt que de bulle de conversation.
-public struct TranscriptCard: Codable, Sendable, Hashable {
+public struct TranscriptCard: Sendable, Hashable {
     /// L'intitulé manuscrit de la fiche — « Retranscription du contexte ».
     /// Il vient de la réponse et non de l'interface parce qu'il dit **ce qui** a
     /// été retranscrit, et que ça change d'un tour à l'autre.
@@ -124,6 +124,28 @@ public struct TranscriptCard: Codable, Sendable, Hashable {
     /// dès qu'un texte vient de la machine.
     public let footnote: String?
 
+    /// Où en est la fiche — `docs/conversation.md` § 5. Trois temps que la
+    /// bulle dessine différemment : on écoute, on rédige (le brut est là, en
+    /// gris), c'est prêt. Le serveur le calcule depuis le souvenir ; le jeu
+    /// d'essai, qui ne le porte pas, décode `ready`.
+    public enum Phase: Sendable, Hashable {
+        /// La transcription est en cours : la fiche n'a que sa date, son lieu et sa durée.
+        case listening
+        /// Le brut est arrivé, la rédaction écrit : `text` est la transcription, en gris.
+        case writing
+        /// Le texte rédigé — ce qui ira dans le carnet.
+        case ready
+        /// La transcription ou la rédaction a échoué ; `text` garde le brut s'il existe.
+        case failed
+        /// Un temps que le serveur connaît et pas cette version de l'app.
+        case unknown(String)
+    }
+
+    public let phase: Phase
+
+    /// « Ça me convient » a été dit sur ce souvenir.
+    public let isValidated: Bool
+
     public init(
         title: String,
         capturedAt: Date,
@@ -132,7 +154,9 @@ public struct TranscriptCard: Codable, Sendable, Hashable {
         text: String? = nil,
         isSimulated: Bool = false,
         entryId: String? = nil,
-        footnote: String? = nil
+        footnote: String? = nil,
+        phase: Phase = .ready,
+        isValidated: Bool = false
     ) {
         self.title = title
         self.capturedAt = capturedAt
@@ -142,6 +166,8 @@ public struct TranscriptCard: Codable, Sendable, Hashable {
         self.isSimulated = isSimulated
         self.entryId = entryId
         self.footnote = footnote
+        self.phase = phase
+        self.isValidated = isValidated
     }
 
     /// La même fiche, une fois le récit revenu.
@@ -154,8 +180,85 @@ public struct TranscriptCard: Codable, Sendable, Hashable {
             text: text,
             isSimulated: isSimulated,
             entryId: entryId,
-            footnote: footnote
+            footnote: footnote,
+            phase: .ready,
+            isValidated: isValidated
         )
+    }
+
+    /// La fiche attend encore quelque chose du serveur : c'est ce qui décide
+    /// si l'écran continue de sonder le fil.
+    public var isSettling: Bool {
+        switch phase {
+        case .listening, .writing: true
+        case .ready, .failed, .unknown: false
+        }
+    }
+}
+
+extension TranscriptCard: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case title, capturedAt, placeLabel, duration, text, isSimulated, entryId, footnote
+        case phase, isValidated
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            title: try container.decode(String.self, forKey: .title),
+            capturedAt: try container.decode(Date.self, forKey: .capturedAt),
+            placeLabel: try container.decodeIfPresent(String.self, forKey: .placeLabel),
+            duration: try container.decodeIfPresent(TimeInterval.self, forKey: .duration),
+            text: try container.decodeIfPresent(String.self, forKey: .text),
+            isSimulated: try container.decodeIfPresent(Bool.self, forKey: .isSimulated) ?? false,
+            entryId: try container.decodeIfPresent(String.self, forKey: .entryId),
+            footnote: try container.decodeIfPresent(String.self, forKey: .footnote),
+            phase: try container.decodeIfPresent(Phase.self, forKey: .phase) ?? .ready,
+            isValidated: try container.decodeIfPresent(Bool.self, forKey: .isValidated) ?? false
+        )
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(title, forKey: .title)
+        try container.encode(capturedAt, forKey: .capturedAt)
+        try container.encodeIfPresent(placeLabel, forKey: .placeLabel)
+        try container.encodeIfPresent(duration, forKey: .duration)
+        try container.encodeIfPresent(text, forKey: .text)
+        try container.encode(isSimulated, forKey: .isSimulated)
+        try container.encodeIfPresent(entryId, forKey: .entryId)
+        try container.encodeIfPresent(footnote, forKey: .footnote)
+        try container.encode(phase, forKey: .phase)
+        try container.encode(isValidated, forKey: .isValidated)
+    }
+}
+
+extension TranscriptCard.Phase: Codable {
+    public init(from decoder: any Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self =
+            switch raw {
+            case "listening": .listening
+            case "writing": .writing
+            case "ready": .ready
+            case "failed": .failed
+            default: .unknown(raw)
+            }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+
+    public var rawValue: String {
+        switch self {
+        case .listening: "listening"
+        case .writing: "writing"
+        case .ready: "ready"
+        case .failed: "failed"
+        case .unknown(let raw): raw
+        }
     }
 }
 
@@ -277,13 +380,35 @@ public struct ChatMessage: Sendable, Hashable, Identifiable {
     /// MEMO, une question sur l'abonnement.
     public let stepId: String?
 
+    /// Le prénom de **l'autre** voyageur qui a dit cette bulle, dans un fil à
+    /// plusieurs. Le serveur a déjà décidé : `nil` pour soi-même, pour MEMO, et
+    /// quand on est seul sur le voyage — la vue affiche, elle ne raisonne pas.
+    public let authorName: String?
+
+    /// Le rang dans le fil, tel que le serveur le tient : **la seule vérité sur
+    /// l'ordre**. `nil` pour une bulle posée par l'app avant sa réponse.
+    public let seq: Int?
+
+    /// Le silence avant cette bulle de MEMO, décidé par le serveur et joué par
+    /// l'app — la donnée de rythme de ``MemoBeat``. `nil` pour une bulle du
+    /// voyageur.
+    public let pauseMilliseconds: Int?
+
+    /// Ce que MEMO a fait de ce tour — `docs/conversation.md` § 4. `nil` pour
+    /// une bulle de MEMO, ou tant qu'il n'a pas répondu.
+    public let disposition: ChatDisposition?
+
     public init(
         id: String,
         author: ChatAuthor,
         body: ChatMessageBody,
         sentAt: Date,
         stepId: String? = nil,
-        delivery: ChatDelivery = .sent
+        delivery: ChatDelivery = .sent,
+        authorName: String? = nil,
+        seq: Int? = nil,
+        pauseMilliseconds: Int? = nil,
+        disposition: ChatDisposition? = nil
     ) {
         self.id = id
         self.author = author
@@ -291,6 +416,10 @@ public struct ChatMessage: Sendable, Hashable, Identifiable {
         self.sentAt = sentAt
         self.stepId = stepId
         self.delivery = delivery
+        self.authorName = authorName
+        self.seq = seq
+        self.pauseMilliseconds = pauseMilliseconds
+        self.disposition = disposition
     }
 
     /// Le texte qu'on peut copier ou faire lire à voix haute. `nil` pour un
@@ -303,11 +432,72 @@ public struct ChatMessage: Sendable, Hashable, Identifiable {
         case .voice, .photos: nil
         }
     }
+
+    /// La même bulle, avec ce que l'app sait et que le serveur ne rend pas : le
+    /// fichier local d'un vocal ou d'une photo, le temps qu'il soit parti.
+    public func keepingLocalFiles(of previous: ChatMessage) -> ChatMessage {
+        var merged = self
+        switch (body, previous.body) {
+        case (.voice(var note), .voice(let known)):
+            note.localUrl = known.localUrl ?? note.localUrl
+            merged.body = .voice(note)
+        case (.photos(let attachments), .photos(let known)):
+            merged.body = .photos(
+                attachments.map { attachment in
+                    var copy = attachment
+                    copy.localUrl = known.first { $0.id == attachment.id }?.localUrl ?? copy.localUrl
+                    return copy
+                }
+            )
+        default:
+            break
+        }
+        return merged
+    }
+}
+
+/// Ce que MEMO a fait d'un tour du voyageur — `docs/conversation.md` § 4.
+public enum ChatDisposition: Sendable, Hashable {
+    /// Un souvenir : une entrée existe pour lui, la rédaction l'écrit.
+    case memory
+    /// Une précision, rattachée au souvenir en cours.
+    case context
+    /// Une puce, un refus, une question sur l'app : rien n'entre dans le carnet.
+    case command
+    case unknown(String)
+}
+
+extension ChatDisposition: Codable {
+    public init(from decoder: any Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self =
+            switch raw {
+            case "memory": .memory
+            case "context": .context
+            case "command": .command
+            default: .unknown(raw)
+            }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+
+    public var rawValue: String {
+        switch self {
+        case .memory: "memory"
+        case .context: "context"
+        case .command: "command"
+        case .unknown(let raw): raw
+        }
+    }
 }
 
 extension ChatMessage: Codable {
     private enum CodingKeys: String, CodingKey {
         case id, author, body, sentAt, stepId
+        case authorName, seq, pauseMilliseconds, disposition
     }
 
     /// L'acheminement n'est **pas** décodé : un message qui arrive du serveur
@@ -320,7 +510,11 @@ extension ChatMessage: Codable {
             author: try container.decode(ChatAuthor.self, forKey: .author),
             body: try container.decode(ChatMessageBody.self, forKey: .body),
             sentAt: try container.decode(Date.self, forKey: .sentAt),
-            stepId: try container.decodeIfPresent(String.self, forKey: .stepId)
+            stepId: try container.decodeIfPresent(String.self, forKey: .stepId),
+            authorName: try container.decodeIfPresent(String.self, forKey: .authorName),
+            seq: try container.decodeIfPresent(Int.self, forKey: .seq),
+            pauseMilliseconds: try container.decodeIfPresent(Int.self, forKey: .pauseMilliseconds),
+            disposition: try container.decodeIfPresent(ChatDisposition.self, forKey: .disposition)
         )
     }
 
@@ -331,6 +525,10 @@ extension ChatMessage: Codable {
         try container.encode(body, forKey: .body)
         try container.encode(sentAt, forKey: .sentAt)
         try container.encodeIfPresent(stepId, forKey: .stepId)
+        try container.encodeIfPresent(authorName, forKey: .authorName)
+        try container.encodeIfPresent(seq, forKey: .seq)
+        try container.encodeIfPresent(pauseMilliseconds, forKey: .pauseMilliseconds)
+        try container.encodeIfPresent(disposition, forKey: .disposition)
     }
 }
 
@@ -488,6 +686,11 @@ public struct ChatContext: Codable, Sendable, Hashable {
     /// notification qui la portera.
     public let prompt: String?
 
+    /// Combien de personnes sont sur ce voyage, propriétaire compris. Au-delà
+    /// de un, le fil est **commun** et les bulles portent un prénom. Un jeu
+    /// d'essai qui ne le dit pas décode `1`.
+    public let memberCount: Int
+
     public init(
         tripId: String,
         tripTitle: String? = nil,
@@ -495,7 +698,8 @@ public struct ChatContext: Codable, Sendable, Hashable {
         placeName: String? = nil,
         stepNumber: Int? = nil,
         stepId: String? = nil,
-        prompt: String? = nil
+        prompt: String? = nil,
+        memberCount: Int = 1
     ) {
         self.tripId = tripId
         self.tripTitle = tripTitle
@@ -504,6 +708,120 @@ public struct ChatContext: Codable, Sendable, Hashable {
         self.stepNumber = stepNumber
         self.stepId = stepId
         self.prompt = prompt
+        self.memberCount = memberCount
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case tripId, tripTitle, travellerFirstName, placeName, stepNumber, stepId, prompt
+        case memberCount
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            tripId: try container.decode(String.self, forKey: .tripId),
+            tripTitle: try container.decodeIfPresent(String.self, forKey: .tripTitle),
+            travellerFirstName: try container.decodeIfPresent(String.self, forKey: .travellerFirstName),
+            placeName: try container.decodeIfPresent(String.self, forKey: .placeName),
+            stepNumber: try container.decodeIfPresent(Int.self, forKey: .stepNumber),
+            stepId: try container.decodeIfPresent(String.self, forKey: .stepId),
+            prompt: try container.decodeIfPresent(String.self, forKey: .prompt),
+            memberCount: try container.decodeIfPresent(Int.self, forKey: .memberCount) ?? 1
+        )
+    }
+}
+
+/// Où en est le tour de parole, vu du serveur : un message du voyageur attend
+/// encore la réponse de MEMO, ou non. C'est ce que l'app sonde.
+public enum ChatTurnStatus: Sendable, Hashable {
+    case idle
+    case replying(messageId: String)
+
+    public var isReplying: Bool {
+        if case .replying = self { return true }
+        return false
+    }
+}
+
+extension ChatTurnStatus: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case status, messageId
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let status = try container.decode(String.self, forKey: .status)
+        if status == "replying", let messageId = try container.decodeIfPresent(String.self, forKey: .messageId) {
+            self = .replying(messageId: messageId)
+        } else {
+            self = .idle
+        }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .idle:
+            try container.encode("idle", forKey: .status)
+        case .replying(let messageId):
+            try container.encode("replying", forKey: .status)
+            try container.encode(messageId, forKey: .messageId)
+        }
+    }
+}
+
+/// La suite du fil depuis un instant — ce que `GET /v1/trips/:id/chat?since=`
+/// rend, et que le modèle fusionne dans ce qu'il a : on insère ou on remplace
+/// par `id`, on trie par `seq`.
+public struct ChatThreadUpdate: Codable, Sendable, Hashable {
+    public let messages: [ChatMessage]
+    public let suggestions: [ChatSuggestion]
+    public let preview: ChatBookPreview?
+    public let turn: ChatTurnStatus
+    /// L'heure du serveur à la lecture : le curseur de la lecture suivante.
+    public let now: Date
+
+    public init(
+        messages: [ChatMessage],
+        suggestions: [ChatSuggestion] = [],
+        preview: ChatBookPreview? = nil,
+        turn: ChatTurnStatus = .idle,
+        now: Date
+    ) {
+        self.messages = messages
+        self.suggestions = suggestions
+        self.preview = preview
+        self.turn = turn
+        self.now = now
+    }
+}
+
+/// Ce que `POST /v1/trips/:id/chat` rend : les bulles qu'il vient d'écrire —
+/// l'ouverture si elle vient d'être posée, le message du voyageur avec son
+/// `seq`, la fiche pour un vocal — et l'état du tour.
+public struct ChatTurnReceipt: Codable, Sendable, Hashable {
+    public let messages: [ChatMessage]
+    public let turn: ChatTurnStatus
+    public let now: Date
+
+    public init(messages: [ChatMessage], turn: ChatTurnStatus, now: Date) {
+        self.messages = messages
+        self.turn = turn
+        self.now = now
+    }
+}
+
+/// Ce que « Ça me convient » rend : le souvenir validé, et où en sont les
+/// étapes offertes.
+public struct EntryValidation: Codable, Sendable, Hashable {
+    public let entry: Entry
+    public let offeredSteps: Int?
+    public let remainingSteps: Int?
+
+    public init(entry: Entry, offeredSteps: Int? = nil, remainingSteps: Int? = nil) {
+        self.entry = entry
+        self.offeredSteps = offeredSteps
+        self.remainingSteps = remainingSteps
     }
 }
 
@@ -605,11 +923,23 @@ public struct ChatThread: Codable, Sendable, Hashable, Identifiable {
     public let destination: Destination?
 
     public let greeting: ChatGreeting?
-    public let preview: ChatBookPreview?
+    public var preview: ChatBookPreview?
     public let context: ChatContext
 
     public var messages: [ChatMessage]
     public var suggestions: [ChatSuggestion]
+
+    /// Un tour du voyageur attend encore MEMO — le serveur le sait, l'app le
+    /// sonde. `idle` pour un jeu d'essai.
+    public var turn: ChatTurnStatus
+
+    /// « Supprimer la conversation » est ouvert à ce compte : le propriétaire
+    /// du voyage. Un co-voyageur voit le lien pâli.
+    public let canClear: Bool
+
+    /// L'heure du serveur à la lecture — le curseur du sondage. `nil` pour un
+    /// jeu d'essai.
+    public let now: Date?
 
     public init(
         id: String,
@@ -620,7 +950,10 @@ public struct ChatThread: Codable, Sendable, Hashable, Identifiable {
         preview: ChatBookPreview? = nil,
         context: ChatContext,
         messages: [ChatMessage] = [],
-        suggestions: [ChatSuggestion] = []
+        suggestions: [ChatSuggestion] = [],
+        turn: ChatTurnStatus = .idle,
+        canClear: Bool = true,
+        now: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -631,6 +964,32 @@ public struct ChatThread: Codable, Sendable, Hashable, Identifiable {
         self.context = context
         self.messages = messages
         self.suggestions = suggestions
+        self.turn = turn
+        self.canClear = canClear
+        self.now = now
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, avatarUrl, destination, greeting, preview, context, messages, suggestions
+        case turn, canClear, now
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            id: try container.decode(String.self, forKey: .id),
+            title: try container.decode(String.self, forKey: .title),
+            avatarUrl: try container.decodeIfPresent(URL.self, forKey: .avatarUrl),
+            destination: try container.decodeIfPresent(Destination.self, forKey: .destination),
+            greeting: try container.decodeIfPresent(ChatGreeting.self, forKey: .greeting),
+            preview: try container.decodeIfPresent(ChatBookPreview.self, forKey: .preview),
+            context: try container.decode(ChatContext.self, forKey: .context),
+            messages: try container.decodeIfPresent([ChatMessage].self, forKey: .messages) ?? [],
+            suggestions: try container.decodeIfPresent([ChatSuggestion].self, forKey: .suggestions) ?? [],
+            turn: try container.decodeIfPresent(ChatTurnStatus.self, forKey: .turn) ?? .idle,
+            canClear: try container.decodeIfPresent(Bool.self, forKey: .canClear) ?? true,
+            now: try container.decodeIfPresent(Date.self, forKey: .now)
+        )
     }
 
     /// Rien n'a encore été dit. C'est cet état, et lui seul, qui montre
@@ -656,5 +1015,107 @@ public struct ChatThread: Codable, Sendable, Hashable, Identifiable {
     /// comme d'habitude.
     public func lastMessage(about stepId: String) -> ChatMessage? {
         messages.last { $0.stepId == stepId }
+    }
+}
+
+// MARK: - Ce que l'app envoie
+
+/// Un texte ou une puce, tel que `POST /v1/trips/:id/chat` le reçoit.
+///
+/// `id` est **fourni par l'app** et devient l'identifiant du message : la bulle
+/// optimiste et la bulle servie sont la même, et un renvoi après une panne de
+/// transport tombe sur l'existant au lieu de créer un doublon.
+public struct ChatTextTurn: Encodable, Sendable, Hashable {
+    public let id: String
+    public let kind = "text"
+    public let text: String
+    public let stepId: String?
+    /// La puce qui a produit ce message, ou une commande silencieuse
+    /// (`transcript_edited`). `nil` pour un texte libre.
+    public let suggestionId: String?
+    /// Le souvenir visé par « Ça me convient ».
+    public let entryId: String?
+
+    public init(
+        id: String,
+        text: String,
+        stepId: String? = nil,
+        suggestionId: String? = nil,
+        entryId: String? = nil
+    ) {
+        self.id = id
+        self.text = text
+        self.stepId = stepId
+        self.suggestionId = suggestionId
+        self.entryId = entryId
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, kind, text, stepId, suggestionId, entryId
+    }
+}
+
+/// Un vocal, tel que la route le reçoit en `multipart/form-data`.
+public struct ChatVoiceTurn: Sendable, Hashable {
+    public let id: String
+    public let data: Data
+    public let filename: String
+    public let mimeType: String
+    /// Le jour raconté — `RecordedAudio.recordedAt`.
+    public let capturedAt: Date
+    /// La durée réellement capturée, pauses déduites : c'est elle qui décompte.
+    public let durationSeconds: TimeInterval
+    /// La forme d'onde relevée pendant l'enregistrement, pour la bulle.
+    public let levels: [Double]
+    public let placeLabel: String?
+    public let stepId: String?
+
+    public init(
+        id: String,
+        data: Data,
+        filename: String,
+        mimeType: String,
+        capturedAt: Date,
+        durationSeconds: TimeInterval,
+        levels: [Double] = [],
+        placeLabel: String? = nil,
+        stepId: String? = nil
+    ) {
+        self.id = id
+        self.data = data
+        self.filename = filename
+        self.mimeType = mimeType
+        self.capturedAt = capturedAt
+        self.durationSeconds = durationSeconds
+        self.levels = levels
+        self.placeLabel = placeLabel
+        self.stepId = stepId
+    }
+}
+
+/// Une photo à envoyer, une à quatre par tour.
+public struct ChatPhotoUpload: Sendable, Hashable {
+    public let data: Data
+    public let filename: String
+    public let mimeType: String
+
+    public init(data: Data, filename: String, mimeType: String) {
+        self.data = data
+        self.filename = filename
+        self.mimeType = mimeType
+    }
+}
+
+public struct ChatPhotosTurn: Sendable, Hashable {
+    public let id: String
+    public let photos: [ChatPhotoUpload]
+    public let capturedAt: Date
+    public let stepId: String?
+
+    public init(id: String, photos: [ChatPhotoUpload], capturedAt: Date, stepId: String? = nil) {
+        self.id = id
+        self.photos = photos
+        self.capturedAt = capturedAt
+        self.stepId = stepId
     }
 }
