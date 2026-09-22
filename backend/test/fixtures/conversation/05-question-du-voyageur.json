@@ -1,0 +1,7 @@
+{
+  "name": "Une question sur le produit",
+  "why": "Une question reçoit une réponse, pas une relance. Et rien d'inventé : ni prix, ni délai, ni fonctionnalité.",
+  "memo": { "title": "Rome 2026", "destinationCity": "Rome" },
+  "message": { "kind": "text", "text": "mes vocaux ils partent où exactement ? c'est toi qui écris le carnet ?" },
+  "expect": { "disposition": "command" }
+}

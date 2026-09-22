@@ -85,6 +85,7 @@ export function loadLayoutKnowledgeBase(): string {
 }
 
 let cachedWritingRules: string | undefined;
+let cachedConversationRules: string | undefined;
 
 /**
  * Le contrat de rédaction : fidélité, cohérence, voix du voyageur, fluidité,
@@ -98,6 +99,20 @@ let cachedWritingRules: string | undefined;
 export function loadWritingRules(): string {
   cachedWritingRules ??= readRepoFile(AGENTS_DIR, "agent-transcription.md");
   return cachedWritingRules;
+}
+
+/**
+ * Le contrat de la conversation : le tour type, le classement d'un tour, les
+ * refus, la rose/épine/graine, la façon de parler.
+ *
+ * C'est le prompt système de MEMO, et il obéit à la même règle que celui de la
+ * rédaction : le fichier de `agents/` **est** le prompt, pas une paraphrase.
+ * Identique d'un tour à l'autre, il est mis en cache côté Anthropic (voir
+ * `conversationAnthropic.ts`).
+ */
+export function loadConversationRules(): string {
+  cachedConversationRules ??= readRepoFile(AGENTS_DIR, "agent-conversation.md");
+  return cachedConversationRules;
 }
 
 /** Le payload d'exemple, utilisé comme référence de style dans les prompts. */

@@ -1,0 +1,11 @@
+{
+  "name": "Une journée difficile",
+  "why": "On accuse d'abord, sobrement, sans consoler ni dédramatiser. La question est facultative, et jamais sur le ressenti.",
+  "memo": { "title": "Rome 2026", "destinationCity": "Rome", "people": ["Clara"] },
+  "message": {
+    "kind": "voice",
+    "durationSeconds": 31,
+    "text": "Bon là franchement la journée a été pourrie, on s'est engueulés avec Clara devant le Colisée pour une histoire de billets, on a fait la queue deux heures pour rien. Voilà."
+  },
+  "expect": { "disposition": "memory" }
+}

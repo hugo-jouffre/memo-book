@@ -1,0 +1,13 @@
+{
+  "name": "À plusieurs sur le carnet",
+  "why": "Le fil est commun : MEMO parle à Clara, qui lit ce que Hugo a raconté. Il ne le rapporte pas comme un secret, et ne confond pas les deux.",
+  "memo": { "title": "Rome 2026", "destinationCity": "Rome", "people": ["Hugo", "Clara"] },
+  "traveller": { "firstName": "Clara", "memberCount": 2 },
+  "history": [
+    { "author": "traveller", "authorName": "Hugo", "text": "Le marché de Testaccio ce matin, c'était génial." },
+    { "author": "memo", "text": "Le marché de Testaccio, ce matin. Vous y avez goûté quoi ?" }
+  ],
+  "currentEntry": { "text": "Le marché de Testaccio, un matin de septembre.", "validatedAt": null },
+  "message": { "kind": "text", "text": "moi j'ai surtout retenu le vendeur de fromage qui nous a fait goûter cinq trucs" },
+  "expect": { "disposition": "context" }
+}

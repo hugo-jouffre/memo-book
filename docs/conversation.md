@@ -20,7 +20,7 @@ savoir lequel :
 
 | Agent | Ce qu'il fait pour MEMO | État |
 |---|---|---|
-| **Conversation** (`agent-conversation.md`) | Sa voix : écouter, reformuler, relancer, classer ce qu'on lui dit | À construire — c'est ce chantier |
+| **Conversation** (`agent-conversation.md`) | Sa voix : écouter, reformuler, relancer, classer ce qu'on lui dit | En production (Claude Sonnet 5) — le fichier **est** le prompt système |
 | **Transcription & Rédaction** (`agent-transcription.md`) | Son écrivain : transformer un vocal en texte fidèle et agréable à lire | En production (OpenAI `gpt-4o-transcribe`, puis Claude Opus 5) |
 | **Photo** (`agent-photo.md`) | Choisir et ordonner les photos d'un souvenir | Non implémenté — phase 2 |
 | **Mise en page** (`agent-layout.md`) | Composer le carnet sans réécrire un mot | En production, à l'aperçu |
@@ -261,6 +261,35 @@ cette grille — une ligne, sept cases, pas de note :
 Deux ou trois itérations du prompt, en notant ici ce qui a changé et pourquoi.
 Les mêmes vocaux nourrissent les tests structurels — jamais le modèle en CI.
 
+### L'outil de relecture
+
+```bash
+cd backend && npm run conversation:eval            # Claude, sur toutes les scènes
+cd backend && npm run conversation:eval -- --heuristic   # le moteur de règles, sans clé
+```
+
+Le script (`backend/scripts/conversation-eval.ts`) fait parler MEMO sur les
+scènes de `backend/test/fixtures/conversation/` — dix situations du contrat :
+un vocal riche, une précision courte, un refus, une journée difficile, une
+question sur le produit, une transcription échouée, des photos, la
+rose/épine/graine, une question déjà répondue, un carnet à plusieurs. Il
+n'écrit rien en base, et **ce n'est pas un test** : il n'appelle que le
+répondeur.
+
+Quatre des sept lignes de la grille se vérifient à la machine, et le script les
+coche tout seul : une seule question, trois bulles au plus, le tutoiement, la
+relance qui se lit seule — plus les mots interdits, le Markdown, les puces hors
+catalogue, le classement attendu, et « la reformulation garde un mot du
+voyageur ». Les trois qui restent se lisent : **aucun fait inventé**, **la
+question n'est pas déjà répondue**, **c'est la question la plus utile au
+carnet**. Elles s'impriment sous chaque réponse, en cases vides.
+
+Les vocaux des testeurs entrent là, une scène par vocal — le mode d'emploi est
+dans `backend/test/fixtures/conversation/README.md`. Le moteur de règles sert
+d'étalon : il échoue aujourd'hui sur six points de forme (il redemande le lieu
+qu'on vient de lui donner, il ne reprend pas les mots du voyageur), et c'est
+exactement ce que le modèle doit faire mieux.
+
 ## 14. Décisions
 
 | Date | Décision | Par |
@@ -281,3 +310,6 @@ Les mêmes vocaux nourrissent les tests structurels — jamais le modèle en CI.
 | 22/09/2026 | Supprimer la conversation : propriétaire seul, 403 pour un co-voyageur | reco Claude |
 | 22/09/2026 | Repli heuristique côté serveur ; le moteur local de l'app ne sert plus qu'aux aperçus et aux tests | reco Claude |
 | 22/09/2026 | Tout ce qu'on envoie passe par la file de l'accueil ; un vocal de l'accueil va à un seul carnet, le premier en cours | reco Claude |
+| 22/09/2026 | `agents/agent-conversation.md` **est** le prompt système, comme `agent-transcription.md` pour la rédaction : on change ce que MEMO dit en éditant du Markdown | reco Claude |
+| 22/09/2026 | Le modèle écrit des phrases ; le rythme, le catalogue de puces et la rose/épine/graine restent au code. Une réponse hors contrat est refusée, pas rattrapée | reco Claude |
+| 22/09/2026 | Effort de réflexion bas pour la conversation (quelqu'un attend), élevé pour la rédaction (personne ne la regarde écrire) | reco Claude |
