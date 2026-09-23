@@ -228,7 +228,9 @@ Ce qui attend est dans `Application Support`, jamais dans les caches.
 
 Le détail — champs, codes d'erreur, tests, phasage en quatre PR — est dans le
 plan de la branche `atelier-conversation` et sera reporté dans
-`ui-development.md` § 14.1 à mesure.
+`ui-development.md` § 14.1 à mesure. Le choix du moteur lui-même — pourquoi
+Sonnet 5 ici et Opus 5 pour la rédaction, ce que ça coûte, et ce qui ferait
+changer d'avis — est dans [`modeles-ia.md`](modeles-ia.md) (23/09/2026).
 
 ## 13. Comment on saura que MEMO est bon
 
