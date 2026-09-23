@@ -389,6 +389,9 @@ public enum ChatCopy {
         public static let copy = "Copier ce message"
         public static let copied = "Message copié"
         public static let edit = "Modifier ce message"
+        /// La bulle en retrait : ce que VoiceOver dit à la place de la
+        /// transparence.
+        public static let sending = "Envoi en cours"
         public static let collapse = "Revenir aux trois boutons"
         public static let camera = "Ajouter une photo"
         public static let keyboard = "Écrire au clavier"

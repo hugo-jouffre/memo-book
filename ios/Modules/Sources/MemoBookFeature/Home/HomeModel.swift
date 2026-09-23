@@ -138,12 +138,13 @@ public final class HomeModel {
 
     /// Envoie le vocal qu'on vient d'enregistrer.
     ///
-    /// **À tous les carnets en cours, en même temps.** C'est la promesse écrite
-    /// sur la feuille d'enregistrement — « MemoBook l'attribuera
-    /// automatiquement » : on n'a rien choisi avant de parler, donc on ne
-    /// choisit rien après. Quelqu'un qui mène deux voyages de front retrouve le
-    /// souvenir dans les deux, et c'est au tri de faire le ménage plus tard,
-    /// pas à la personne qui vient de raconter quelque chose.
+    /// **Au carnet en cours** — le premier, celui dont la conversation s'ouvre
+    /// juste après avec la bulle déjà posée. C'est la promesse écrite sur la
+    /// feuille d'enregistrement — « MemoBook l'attribuera automatiquement » :
+    /// on n'a rien choisi avant de parler, donc on ne choisit rien après. Un
+    /// vocal est un tour de **une** conversation (`docs/conversation.md` § 2) ;
+    /// il ne se recopie plus dans un second voyage mené de front
+    /// (22/09/2026).
     ///
     /// L'envoi lui-même appartient à la ``RecordingOutbox`` : c'est elle qui
     /// décide d'essayer ou de garder, et elle continue sans cet écran. Ce qui
@@ -154,14 +155,16 @@ public final class HomeModel {
     /// s'ouvre pas depuis un accueil sans voyage ouvert.
     ///
     /// `handoffId` est l'identifiant de la bulle qui va s'afficher dans la
-    /// conversation : la file s'en sert pour dire **où en est cet envoi-là**,
-    /// et c'est ce qui permet à la bulle de ne pas se déclarer arrivée avant de
-    /// l'être. Voir ``RecordingOutbox/handoffDelivery``.
-    public func upload(_ audio: RecordedAudio, handoffId: String? = nil) async {
-        let trips = ongoingTrips.map(\.id)
-        guard !trips.isEmpty else { return }
+    /// conversation — et celui du message côté serveur : la file s'en sert
+    /// pour dire **où en est cet envoi-là**, et c'est ce qui permet à la bulle
+    /// de ne pas se déclarer arrivée avant de l'être. Voir
+    /// ``RecordingOutbox/lastDelivery``. `levels` est la forme d'onde relevée
+    /// pendant l'enregistrement : elle part avec le vocal, pour sa bulle.
+    public func upload(_ audio: RecordedAudio, levels: [Double] = [], handoffId: String? = nil) async {
+        guard let tripId = ongoingTrips.first?.id else { return }
 
-        switch await outbox.submit(audio, to: trips, handoffId: handoffId) {
+        let turn = OutgoingTurn.voice(audio, levels: levels, id: handoffId ?? UUID().uuidString.lowercased())
+        switch await outbox.submit(turn, to: tripId) {
         case .delivered:
             loadFailure = nil
             // Le carnet vient de grossir : ses compteurs et sa jauge sont
@@ -404,17 +407,16 @@ public enum HomeIntent: Sendable, Hashable {
         /// Met un vocal en file sans passer par le micro : de quoi voir la
         /// boîte « tes vocaux sont conservés » sans avoir à parler.
         ///
-        /// Il vise **les carnets en cours**, comme un vrai. Sur des voyages du
+        /// Il vise **le carnet en cours**, comme un vrai. Sur un voyage du
         /// jeu d'essai, le serveur le refusera à la reconnexion et la file le
         /// dira — c'est le comportement attendu, pas un bug du bac à sable.
         public func debugQueueRecording() async {
-            let trips = ongoingTrips.map(\.id)
-            guard !trips.isEmpty else {
+            guard let tripId = ongoingTrips.first?.id else {
                 loadFailure = "Aucun voyage en cours : il n’y a pas de carnet où envoyer un vocal."
                 return
             }
 
-            await outbox.debugQueue(.debugSilence, for: trips)
+            await outbox.debugQueue(.debugSilence, for: tripId)
         }
 
         /// Montre l'envoi en cours, quelques secondes.

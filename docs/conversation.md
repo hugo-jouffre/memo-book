@@ -190,6 +190,18 @@ d'envoi » dans le fil et partent au retour du réseau, dans l'ordre, sans
 doublon — la file des vocaux de l'accueil, généralisée à tout ce qu'on envoie.
 Ce qui attend est dans `Application Support`, jamais dans les caches.
 
+Ce que ça donne à l'écran : la bulle est posée, un peu en retrait, et le
+composeur se rouvre — attendre n'est pas échouer, il n'y a rien à faire. On
+quitte le fil et on y revient : ce qui attend est encore là, au même endroit.
+Le réseau revient : les bulles prennent leur pleine couleur une à une, et MEMO
+répond à chacune, dans l'ordre. Le vocal enregistré depuis l'accueil suit
+exactement le même chemin, vers **un** carnet — celui dont la conversation
+s'ouvre.
+
+Ce que le fil ne fait pas : s'ouvrir sans réseau. Il n'est jamais mis en cache
+(§ 2), donc un fil qu'on n'a pas encore chargé ne se charge pas dans le
+métro ; ce qu'on y a dit avant la coupure, en revanche, reste sous les yeux.
+
 ## 10. Ce que MEMO ne fait jamais
 
 - Inventer — un lieu, une météo, un prénom complété, un fait.
@@ -268,3 +280,4 @@ Les mêmes vocaux nourrissent les tests structurels — jamais le modèle en CI.
 | 22/09/2026 | Étape réservée à la création du souvenir, confirmée à la validation — sinon un compte gratuit raconte sans fin | Hugo |
 | 22/09/2026 | Supprimer la conversation : propriétaire seul, 403 pour un co-voyageur | reco Claude |
 | 22/09/2026 | Repli heuristique côté serveur ; le moteur local de l'app ne sert plus qu'aux aperçus et aux tests | reco Claude |
+| 22/09/2026 | Tout ce qu'on envoie passe par la file de l'accueil ; un vocal de l'accueil va à un seul carnet, le premier en cours | reco Claude |
