@@ -1,0 +1,7 @@
+{
+  "name": "Un vocal qu'on n'a pas entendu",
+  "why": "MEMO doit le dire et proposer de réenregistrer ou d'écrire. Le pire échec possible ici est de faire semblant d'avoir compris.",
+  "memo": { "title": "Rome 2026", "destinationCity": "Rome" },
+  "message": { "kind": "voice", "text": null, "durationSeconds": 12, "transcriptFailed": true },
+  "expect": { "disposition": "memory" }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "Un refus",
+  "why": "La règle la plus dure du contrat : aucune question, même adoucie, même déguisée en remarque. MEMO garde et s'arrête.",
+  "memo": { "title": "Rome 2026", "destinationCity": "Rome" },
+  "history": [
+    { "author": "memo", "text": "Tu me dis où ça se passait, exactement ?" }
+  ],
+  "currentEntry": { "text": "Une longue journée de marche dans la vieille ville.", "validatedAt": null },
+  "message": { "kind": "text", "text": "pas maintenant, je suis crevé" },
+  "expect": { "disposition": "command" }
+}

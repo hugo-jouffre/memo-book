@@ -1,0 +1,12 @@
+{
+  "name": "La rose, l'épine et la graine",
+  "why": "Autorisée ce tour-ci, sur un souvenir validé en fin de journée : une seule bulle, trois demandes, et c'est admis.",
+  "memo": { "title": "Rome 2026", "destinationCity": "Rome", "people": ["Clara"] },
+  "history": [
+    { "author": "traveller", "text": "On a fini la journée sur le Janicule, la vue sur les toits au coucher du soleil." },
+    { "author": "memo", "text": "Tu as fini sur le Janicule, avec la vue sur les toits au coucher du soleil." }
+  ],
+  "currentEntry": { "text": "La fin de journée sur le Janicule, la vue sur les toits de Rome au coucher du soleil.", "validatedAt": "2026-09-21T17:40:00Z" },
+  "message": { "kind": "text", "text": "voilà c'était ça la journée" },
+  "allows": { "roseEpineGraine": true }
+}
