@@ -163,6 +163,11 @@ function toInput(scene: Scene): ConversationInput {
 
 /** Les mots que MEMO n'emploie jamais — `agents/agent-conversation.md` § 5. */
 const FORBIDDEN = [
+  // MEMO parle en son nom : personne d'autre n'existe pour le voyageur (§ 1).
+  "agent de rédaction",
+  "l'écrivain",
+  "un écrivain",
+  "le système",
   "token",
   "jeton",
   "quota",
@@ -173,7 +178,15 @@ const FORBIDDEN = [
   "entrée",
 ];
 
-/** Le vouvoiement, sauf le « vous » d'un groupe, qu'on ne sait pas distinguer ici. */
+/**
+ * Le vouvoiement — mais **aucune machine ne sait le distinguer du « vous »
+ * d'un groupe**. « La burrata coupée devant vous », quand le voyageur était
+ * avec Clara, est du français correct et non un changement de registre.
+ *
+ * On ne tranche donc que le cas sûr : personne d'autre en scène. Dès qu'il y a
+ * un co-voyageur ou quelqu'un de nommé, la ligne passe en lecture à la main
+ * plutôt qu'en manquement — un faux positif répété apprend à ignorer la grille.
+ */
 const VOUVOIEMENT = /\b(vous (?:êtes|avez|pouvez|voulez|devez)|votre|vos)\b/i;
 
 interface Check {
@@ -182,7 +195,14 @@ interface Check {
   detail?: string;
 }
 
-function automaticChecks(reply: ConversationReply, input: ConversationInput): Check[] {
+/** Les scènes où un « vous » a été employé avec quelqu'un d'autre en scène. */
+const ambiguousVouvoiement = new Set<string>();
+
+function automaticChecks(
+  reply: ConversationReply,
+  input: ConversationInput,
+  file: string,
+): Check[] {
   const text = reply.beats.map((beat) => beat.text).join(" ");
   const questions = (text.match(/[?？]/g) ?? []).length;
   const received = (input.message.text ?? "").toLowerCase();
@@ -198,14 +218,28 @@ function automaticChecks(reply: ConversationReply, input: ConversationInput): Ch
   const forbidden = FORBIDDEN.filter((word) => text.toLowerCase().includes(word));
   const refused = /\b(plus tard|pas maintenant|pas envie|laisse[- ]moi|stop)\b/i.test(received);
 
+  // « C'était où, et avec qui ? » n'a qu'un point d'interrogation et pose deux
+  // questions. On cherche deux mots interrogatifs dans la même phrase.
+  const INTERROGATIVES =
+    /\b(où|qui|quoi|quand|comment|pourquoi|combien|quel|quelle|quels|quelles|lequel|laquelle)\b/gi;
+  const doubled = reply.beats
+    .flatMap((beat) => beat.text.split(/(?<=[.!?…])\s+/))
+    .filter((sentence) => sentence.includes("?"))
+    .map((sentence) => sentence.match(INTERROGATIVES)?.length ?? 0);
+
   const checks: Check[] = [
     { label: "Une seule question", ok: questions <= 1, detail: `${questions} point(s) d'interrogation` },
+    {
+      label: "Une seule demande dans la question",
+      ok: doubled.every((count) => count <= 1),
+      detail: doubled.some((count) => count > 1) ? "deux mots interrogatifs dans la même phrase" : undefined,
+    },
     {
       label: `${MAX_BEATS} bulles au plus`,
       ok: reply.beats.length <= MAX_BEATS,
       detail: `${reply.beats.length} bulle(s)`,
     },
-    { label: "Tutoiement", ok: !VOUVOIEMENT.test(text), detail: VOUVOIEMENT.exec(text)?.[0] },
+
     {
       label: "Aucun mot interdit",
       ok: forbidden.length === 0,
@@ -219,7 +253,23 @@ function automaticChecks(reply: ConversationReply, input: ConversationInput): Ch
     },
   ];
 
-  if (travellerWords.length > 0) {
+  // Sur un refus, il n'y a rien à reformuler : exiger l'écho serait exiger
+  // d'insister.
+  // Quelqu'un d'autre est en scène : un co-voyageur, une personne de la fiche
+  // de cohérence, ou un prénom dans le message.
+  const someoneElse =
+    input.traveller.memberCount > 1 ||
+    input.memo.coherenceSheet.people.length > 0 ||
+    input.history.some((turn) => turn.authorName !== null);
+  const vouvoiement = VOUVOIEMENT.exec(text)?.[0];
+
+  if (someoneElse) {
+    if (vouvoiement) ambiguousVouvoiement.add(file);
+  } else {
+    checks.push({ label: "Tutoiement", ok: vouvoiement === undefined, detail: vouvoiement });
+  }
+
+  if (travellerWords.length > 0 && !refused) {
     checks.push({
       label: "La reformulation reprend un mot du voyageur",
       ok: echoed.length > 0,
@@ -228,6 +278,13 @@ function automaticChecks(reply: ConversationReply, input: ConversationInput): Ch
   }
   if (refused) {
     checks.push({ label: "Aucune question après un refus", ok: questions === 0 });
+  }
+  if (input.allows.roseEpineGraine) {
+    checks.push({
+      label: "Rose/épine/graine posée",
+      ok: reply.asksRoseEpineGraine,
+      detail: reply.asksRoseEpineGraine ? undefined : "autorisée, mais non posée",
+    });
   }
   if (!input.allows.roseEpineGraine) {
     checks.push({ label: "Pas de rose/épine/graine non autorisée", ok: !reply.asksRoseEpineGraine });
@@ -318,7 +375,7 @@ async function main(): Promise<void> {
       continue;
     }
 
-    const checks = automaticChecks(reply, input);
+    const checks = automaticChecks(reply, input, file);
     const dispositionCheck: Check | null = scene.expect?.disposition
       ? {
           label: `Classement attendu : ${scene.expect.disposition}`,
@@ -353,7 +410,11 @@ async function main(): Promise<void> {
       const detail = check.detail ? `  — ${check.detail}` : "";
       console.log(`  ${check.ok ? "✓" : "✗"} ${check.label}${detail}`);
     }
-    console.log(`  ${BY_HAND.map((item) => `☐ ${item}`).join("\n  ")}`);
+    const byHand = [...BY_HAND];
+    if (ambiguousVouvoiement.has(file)) {
+      byHand.unshift("Le « vous » lu à haute voix : groupe (bon) ou vouvoiement (faute) ?");
+    }
+    console.log(`  ${byHand.map((item) => `☐ ${item}`).join("\n  ")}`);
     console.log("-".repeat(60));
   }
 
