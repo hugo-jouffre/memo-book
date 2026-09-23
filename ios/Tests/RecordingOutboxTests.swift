@@ -6,7 +6,9 @@ import XCTest
 
 /// La promesse écrite dans la boîte d'information de l'accueil : « tes vocaux
 /// enregistrés hors ligne sont bien conservés, ils seront envoyés dès ta
-/// reconnexion ».
+/// reconnexion » — et celle de `docs/conversation.md` § 9 : ce qu'on envoie
+/// depuis la conversation sans réseau reste « en cours d'envoi » dans le fil
+/// et part au retour du réseau, dans l'ordre, sans doublon.
 ///
 /// C'est une promesse sur des données que personne d'autre n'a — un vocal qui
 /// n'est pas parti n'existe qu'ici. Elle se vérifie donc, et sans simulateur
@@ -21,7 +23,7 @@ final class RecordingOutboxTests: XCTestCase {
         let outbox = outbox(sender: sender)
         outbox.debugSetOffline(true)
 
-        let outcome = await outbox.submit(.test, to: ["trip-1"])
+        let outcome = await outbox.submit(.test, to: "trip-1")
 
         XCTAssertEqual(outcome, .queued)
         XCTAssertEqual(outbox.pending, 1)
@@ -38,7 +40,7 @@ final class RecordingOutboxTests: XCTestCase {
         network.continuation.yield(false)
         try await until("la file se sait hors ligne") { !outbox.isOnline }
 
-        await outbox.submit(.test, to: ["trip-1"])
+        await outbox.submit(.test, to: "trip-1")
         XCTAssertEqual(outbox.pending, 1)
 
         // Personne n'appuie sur rien : c'est le retour du réseau qui déclenche
@@ -58,7 +60,7 @@ final class RecordingOutboxTests: XCTestCase {
 
         let beforeQuitting = outbox(sender: sender, store: PendingRecordingStore(directory: directory))
         beforeQuitting.debugSetOffline(true)
-        await beforeQuitting.submit(.test, to: ["trip-1"])
+        await beforeQuitting.submit(.test, to: "trip-1")
 
         // Une autre file, sur le même dossier : c'est ce que voit le lancement
         // suivant, qui n'a rien gardé en mémoire.
@@ -72,12 +74,16 @@ final class RecordingOutboxTests: XCTestCase {
 
     // MARK: - Ce qui passe et ce qui manque
 
-    func testOnlyTheNotebooksThatMissedItStayInTheQueue() async {
+    /// « En ligne » ne veut pas dire « l'API répond » : ce qui échoue au
+    /// transport retourne dans la file, et repart quand le serveur revient —
+    /// sous le **même** identifiant.
+    func testATurnThatFailsInTransitGoesBackToTheQueue() async {
         let sender = Sender()
-        await sender.setUnreachable(["trip-2"])
+        await sender.setUnreachable(["trip-1"])
         let outbox = outbox(sender: sender)
 
-        let outcome = await outbox.submit(.test, to: ["trip-1", "trip-2"])
+        let turn = OutgoingTurn.test
+        let outcome = await outbox.submit(turn, to: "trip-1")
 
         XCTAssertEqual(outcome, .queued)
         XCTAssertEqual(outbox.pending, 1)
@@ -85,8 +91,46 @@ final class RecordingOutboxTests: XCTestCase {
         await sender.setUnreachable([])
         await outbox.flush()
 
-        let sent = await sender.sent.sorted()
-        XCTAssertEqual(sent, ["trip-1", "trip-2"], "Le carnet servi du premier coup ne doit pas l'être deux fois.")
+        let sentIds = await sender.sentIds
+        XCTAssertEqual(sentIds, [turn.id])
+        XCTAssertEqual(outbox.pending, 0)
+    }
+
+    /// Tout ce qu'on dit passe par la file — un texte, un vocal, des photos —
+    /// et repart **dans l'ordre**, une seule fois.
+    func testEverythingSaidOfflineLeavesInOrderAndOnlyOnce() async {
+        let sender = Sender()
+        let outbox = outbox(sender: sender)
+        outbox.debugSetOffline(true)
+
+        let text = OutgoingTurn(id: "t-1", body: .text("Hier soir, le Trastevere."))
+        let voice = OutgoingTurn.test
+        let photos = OutgoingTurn(
+            id: "p-3",
+            body: .photos([ChatPhotoUpload(data: Data("jpg".utf8), filename: "p-3-0.jpg", mimeType: "image/jpeg")], capturedAt: .now)
+        )
+        await outbox.submit(text, to: "trip-1")
+        await outbox.submit(voice, to: "trip-1")
+        await outbox.submit(photos, to: "trip-1")
+        await outbox.submit(OutgoingTurn(id: "elsewhere", body: .text("Ailleurs")), to: "trip-2")
+
+        XCTAssertEqual(outbox.pending, 4)
+        let waiting = await outbox.waiting(for: "trip-1")
+        XCTAssertEqual(waiting.map(\.id), [text.id, voice.id, photos.id], "Ce qui attend se relit, pour ce carnet, dans l'ordre.")
+        guard case .voice(let relived) = waiting[1].body, case .voice(let original) = voice.body else {
+            return XCTFail("un vocal")
+        }
+        // Le vocal relu du disque est le vocal entier — octets, durée, forme d'onde.
+        XCTAssertEqual(relived.data, original.data)
+        XCTAssertEqual(relived.durationSeconds, original.durationSeconds)
+        XCTAssertEqual(relived.levels, original.levels)
+
+        outbox.debugSetOffline(false)
+        await outbox.flush()
+        await outbox.flush()
+
+        let sentIds = await sender.sentIds
+        XCTAssertEqual(sentIds, [text.id, voice.id, photos.id, "elsewhere"])
         XCTAssertEqual(outbox.pending, 0)
     }
 
@@ -97,7 +141,7 @@ final class RecordingOutboxTests: XCTestCase {
         await sender.setRefusing(["trip-1"])
         let outbox = outbox(sender: sender)
 
-        let outcome = await outbox.submit(.test, to: ["trip-1"])
+        let outcome = await outbox.submit(.test, to: "trip-1")
 
         XCTAssertEqual(outcome, .rejected("Ton vocal n’a pas pu être envoyé. Carnet introuvable."))
         XCTAssertEqual(outbox.pending, 0)
@@ -184,14 +228,17 @@ final class RecordingOutboxTests: XCTestCase {
         Task { await model.upload(.debugSilence, handoffId: handoff.id) }
 
         try await until("le vocal attend sur le disque") { outbox.pending == 1 }
+        XCTAssertEqual(outbox.lastDelivery?.id, handoff.id, "La file suit **cet** envoi-là, par l'identifiant de sa bulle.")
         XCTAssertEqual(
-            outbox.handoffDelivery?.state,
+            outbox.lastDelivery?.state,
             .sending,
             "Un vocal encore sur le disque n'est pas un vocal envoyé."
         )
 
         network.continuation.yield(true)
-        try await until("le vocal part") { outbox.handoffDelivery?.state == .sent }
+        try await until("le vocal part") { outbox.lastDelivery?.state == .sent }
+        XCTAssertNotNil(outbox.lastDelivery?.receipt, "Le reçu du serveur voyage avec, pour que le fil fusionne ses bulles.")
+        XCTAssertEqual(outbox.lastDelivery?.tripId, model.ongoingTrips.first?.id)
     }
 
     /// Un refus du serveur se lit sur la bulle, avec le mot du serveur.
@@ -206,7 +253,7 @@ final class RecordingOutboxTests: XCTestCase {
         Task { await model.upload(.debugSilence, handoffId: handoff.id) }
 
         try await until("le refus arrive à la bulle") {
-            outbox.handoffDelivery?.state.hasFailed == true
+            outbox.lastDelivery?.state.hasFailed == true
         }
     }
 
@@ -215,7 +262,7 @@ final class RecordingOutboxTests: XCTestCase {
     func testTheConversationPostsTheVocalWithoutOwningItsDelivery() async throws {
         let handoff = RecordingHandoff(audio: .debugSilence, levels: [0.3, 0.7])
 
-        let chat = ChatModel(tripId: "trip-rome")
+        let chat = ChatModel(transport: .local(tripId: "trip-rome"))
         chat.expect(handoff)
         await chat.load()
 
@@ -227,13 +274,64 @@ final class RecordingOutboxTests: XCTestCase {
             "Tant que la file n'a rien dit, la bulle ne peut pas se déclarer arrivée."
         )
 
-        // Même une fois MEMO passé, elle reste sur l'état que la file donne.
-        try await until("MEMO a répondu") { chat.turn == .idle && chat.messages.count > 1 }
+        // Le fil est chargé et au repos : la bulle reste sur l'état que la file
+        // donne — le chat ne l'envoie pas lui-même, elle est déjà partie.
+        XCTAssertEqual(chat.turn, .idle)
         XCTAssertEqual(chat.messages.first { $0.id == handoff.id }?.delivery, .sending)
 
-        // C'est la file, et elle seule, qui la termine.
-        chat.markHandoff(.sent)
+        // C'est la file, et elle seule, qui la termine — et pas celle d'un
+        // autre voyage.
+        chat.markDelivery(ChatTurnDelivery(id: handoff.id, tripId: "trip-lisbonne", state: .sent))
+        XCTAssertEqual(chat.messages.first { $0.id == handoff.id }?.delivery, .sending)
+        chat.markDelivery(ChatTurnDelivery(id: handoff.id, tripId: "trip-rome", state: .sent))
         XCTAssertEqual(chat.messages.first { $0.id == handoff.id }?.delivery, .sent)
+    }
+
+    /// `docs/conversation.md` § 9, de bout en bout : deux messages dits sans
+    /// réseau depuis la conversation restent « en cours d'envoi », le
+    /// composeur se rouvre entre les deux, on quitte et on revient — ils sont
+    /// encore là —, et le retour du réseau les fait partir dans l'ordre, une
+    /// fois, avec la bulle qui passe « envoyée » toute seule.
+    func testMessagesSentOfflineFromTheConversationStayAndLeaveInOrder() async throws {
+        let sender = Sender()
+        let network = AsyncStream.makeStream(of: Bool.self)
+        let outbox = outbox(sender: sender, connectivity: Connectivity { network.stream })
+        outbox.start()
+        network.continuation.yield(false)
+        try await until("la file se sait hors ligne") { !outbox.isOnline }
+
+        let chat = ChatModel(transport: Self.transport(through: outbox, tripId: "trip-1"))
+        await chat.load()
+
+        chat.draft = "Un"
+        chat.sendDraft()
+        try await until("le premier attend") { outbox.pending == 1 }
+        try await until("le composeur se rouvre") { chat.turn == .idle }
+        chat.draft = "Deux"
+        chat.sendDraft()
+        try await until("le second attend") { outbox.pending == 2 }
+
+        let ids = chat.messages.map(\.id)
+        XCTAssertEqual(ids.count, 2)
+        XCTAssertTrue(chat.messages.allSatisfy { $0.delivery == .sending }, "Attendre le réseau n'est pas échouer.")
+        XCTAssertNil(chat.errorMessage)
+
+        // On quitte, on revient : ce qui attend est encore dans le fil.
+        chat.teardown()
+        let reopened = ChatModel(transport: Self.transport(through: outbox, tripId: "trip-1"))
+        await reopened.load()
+        XCTAssertEqual(reopened.messages.map(\.id), ids)
+        XCTAssertTrue(reopened.messages.allSatisfy { $0.delivery == .sending })
+
+        network.continuation.yield(true)
+        try await until("la file se vide") { outbox.pending == 0 }
+        try await until("les bulles passent envoyées", timeout: .seconds(3)) {
+            reopened.messages.allSatisfy { $0.delivery == .sent }
+        }
+
+        let sentIds = await sender.sentIds
+        XCTAssertEqual(sentIds, ids, "Dans l'ordre, et une seule fois.")
+        XCTAssertEqual(reopened.messages.compactMap(\.seq), [1, 2], "Le rang que le serveur leur a donné.")
     }
 
     /// Le relevé du micro qui part avec le vocal est **celui du vocal entier**,
@@ -301,9 +399,42 @@ final class RecordingOutboxTests: XCTestCase {
         store: PendingRecordingStore = .temporary(),
         connectivity: Connectivity = .online
     ) -> RecordingOutbox {
-        RecordingOutbox(store: store, connectivity: connectivity) { audio, tripId in
-            try await sender.send(audio, to: tripId)
+        RecordingOutbox(store: store, connectivity: connectivity) { turn, tripId in
+            try await sender.send(turn, to: tripId)
         }
+    }
+
+    /// Le transport de la conversation tel que `AppDependencies.chatModel` le
+    /// monte : l'envoi, ce qui attend et ce qui part passent par la file. Le
+    /// fil lui-même est vide et ne bouge pas — c'est la file qu'on regarde.
+    private static func transport(through outbox: RecordingOutbox, tripId: String) -> ChatTransport {
+        ChatTransport(
+            load: {
+                ChatThread(
+                    id: tripId,
+                    title: "Rome 2026",
+                    context: ChatContext(tripId: tripId, stepId: nil),
+                    messages: [],
+                    suggestions: [],
+                    now: .now
+                )
+            },
+            poll: { _ in ChatThreadUpdate(messages: [], suggestions: [], turn: .idle, now: .now) },
+            send: { turn in
+                switch await outbox.submit(turn, to: tripId) {
+                case .delivered(let receipt):
+                    return .received(receipt ?? ChatTurnReceipt(messages: [], turn: .idle, now: .now))
+                case .queued:
+                    return .queued
+                case .rejected(let message):
+                    throw RecordingOutbox.Rejection(message: message)
+                }
+            },
+            editTranscript: { _, _ in throw APIError.server(statusCode: 0, code: nil, message: "Pas ici.") },
+            media: { _ in Data() },
+            waiting: { await outbox.waiting(for: tripId) },
+            deliveries: { await outbox.turnDeliveries() }
+        )
     }
 
     /// Attend qu'une condition devienne vraie, ou échoue en le disant. Les
@@ -328,16 +459,21 @@ final class RecordingOutboxTests: XCTestCase {
     }
 }
 
-/// Le serveur, vu de la file : il accepte, il est injoignable, ou il refuse.
+/// Le serveur, vu de la file : il accepte — et rend le reçu, la bulle du
+/// voyageur avec son rang —, il est injoignable, ou il refuse.
 private actor Sender {
+    /// Les carnets servis, dans l'ordre des envois.
     private(set) var sent: [String] = []
+    /// Les tours servis, dans l'ordre — c'est l'ordre et l'unicité qu'on
+    /// vérifie.
+    private(set) var sentIds: [String] = []
     private var unreachable: Set<String> = []
     private var refused: Set<String> = []
 
     func setUnreachable(_ tripIds: [String]) { unreachable = Set(tripIds) }
     func setRefusing(_ tripIds: [String]) { refused = Set(tripIds) }
 
-    func send(_ audio: RecordedAudio, to tripId: String) throws {
+    func send(_ turn: OutgoingTurn, to tripId: String) throws -> ChatTurnReceipt {
         if unreachable.contains(tripId) {
             throw APIError.transport(URLError(.notConnectedToInternet), url: nil)
         }
@@ -345,17 +481,34 @@ private actor Sender {
             throw APIError.server(statusCode: 404, code: nil, message: "Carnet introuvable.")
         }
         sent.append(tripId)
+        sentIds.append(turn.id)
+
+        let body: ChatMessageBody
+        switch turn.body {
+        case .text(let text, _, _): body = .text(text)
+        case .voice(let audio): body = .voice(VoiceNote(id: turn.id, duration: audio.durationSeconds, levels: audio.levels))
+        case .photos(let photos, _): body = .photos(photos.indices.map { PhotoAttachment(id: "\(turn.id)-\($0)") })
+        }
+        return ChatTurnReceipt(
+            messages: [ChatMessage(id: turn.id, author: .traveller, body: body, sentAt: .now, seq: sentIds.count)],
+            turn: .idle,
+            now: .now
+        )
     }
 }
 
-extension RecordedAudio {
-    fileprivate static var test: RecordedAudio {
-        RecordedAudio(
-            data: Data("un vocal".utf8),
-            filename: "test.m4a",
-            mimeType: "audio/m4a",
-            duration: 4,
-            recordedAt: .now
+extension OutgoingTurn {
+    /// Un vocal de quatre secondes, tel que l'accueil le confie.
+    fileprivate static var test: OutgoingTurn {
+        .voice(
+            RecordedAudio(
+                data: Data("un vocal".utf8),
+                filename: "test.m4a",
+                mimeType: "audio/m4a",
+                duration: 4,
+                recordedAt: .now
+            ),
+            levels: [0.2, 0.8]
         )
     }
 }

@@ -403,6 +403,87 @@ public actor MemoBookAPIClient: MemoBookAPI {
         try await send(method: "POST", path: "/v1/entries/\(entryId)/redaction")
     }
 
+    // MARK: - La conversation avec MEMO
+
+    public func chatThread(tripId: String) async throws -> ChatThread {
+        try await send(method: "GET", path: "/v1/trips/\(tripId)/chat")
+    }
+
+    public func chatUpdates(tripId: String, since: Date) async throws -> ChatThreadUpdate {
+        var components = URLComponents()
+        components.path = "/v1/trips/\(tripId)/chat"
+        components.queryItems = [
+            URLQueryItem(name: "since", value: ISO8601DateFormatter.memoBookString(from: since))
+        ]
+        guard let path = components.string else {
+            throw APIError.server(statusCode: 0, code: nil, message: "Chemin d'API invalide.")
+        }
+        return try await send(method: "GET", path: path)
+    }
+
+    public func sendChatText(tripId: String, turn: ChatTextTurn) async throws -> ChatTurnReceipt {
+        try await send(method: "POST", path: "/v1/trips/\(tripId)/chat", encodableBody: turn)
+    }
+
+    public func sendChatVoice(tripId: String, turn: ChatVoiceTurn) async throws -> ChatTurnReceipt {
+        var form = MultipartFormData()
+        form.addField(name: "id", value: turn.id)
+        form.addField(name: "capturedAt", value: ISO8601DateFormatter.memoBookString(from: turn.capturedAt))
+        // Arrondie à la seconde : le serveur compte en minutes entamées.
+        form.addField(name: "durationSeconds", value: String(Int(turn.durationSeconds.rounded())))
+        if let placeLabel = turn.placeLabel {
+            form.addField(name: "placeLabel", value: placeLabel)
+        }
+        if let stepId = turn.stepId {
+            form.addField(name: "stepId", value: stepId)
+        }
+        if !turn.levels.isEmpty,
+            let levels = try? JSONEncoder().encode(turn.levels.map { Float($0) }),
+            let json = String(data: levels, encoding: .utf8)
+        {
+            // La forme d'onde part avec le vocal : c'est elle que la bulle
+            // redessine depuis un autre appareil.
+            form.addField(name: "levels", value: json)
+        }
+        form.addFile(name: "file", filename: turn.filename, mimeType: turn.mimeType, data: turn.data)
+
+        return try await postForm(form, path: "/v1/trips/\(tripId)/chat")
+    }
+
+    public func sendChatPhotos(tripId: String, turn: ChatPhotosTurn) async throws -> ChatTurnReceipt {
+        var form = MultipartFormData()
+        form.addField(name: "id", value: turn.id)
+        form.addField(name: "capturedAt", value: ISO8601DateFormatter.memoBookString(from: turn.capturedAt))
+        if let stepId = turn.stepId {
+            form.addField(name: "stepId", value: stepId)
+        }
+        for photo in turn.photos {
+            form.addFile(name: "file", filename: photo.filename, mimeType: photo.mimeType, data: photo.data)
+        }
+        return try await postForm(form, path: "/v1/trips/\(tripId)/chat")
+    }
+
+    private func postForm<Response: Decodable>(_ form: MultipartFormData, path: String) async throws -> Response {
+        let contentType = form.contentType
+        var request = try makeRequest(method: "POST", path: path)
+        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        request.httpBody = form.finalized()
+        return try await perform(request, credential: .session)
+    }
+
+    public func validateEntry(id: String) async throws -> EntryValidation {
+        try await send(method: "POST", path: "/v1/entries/\(id)/validate")
+    }
+
+    public func clearChat(tripId: String) async throws {
+        try await sendIgnoringResponse(method: "DELETE", path: "/v1/trips/\(tripId)/chat")
+    }
+
+    public func entryMedia(id: String) async throws -> Data {
+        let request = try makeRequest(method: "GET", path: "/v1/entries/\(id)/media")
+        return try await performRaw(request, credential: .session)
+    }
+
     // MARK: - Génération
 
     public func startRender(memoId: String) async throws -> Render {

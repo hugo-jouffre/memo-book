@@ -15,6 +15,7 @@ import SwiftUI
 /// simplement l'écran d'entrée plutôt qu'un mur d'erreur.
 public struct RootView: View {
     @Environment(AppDependencies.self) private var dependencies
+    @Environment(\.scenePhase) private var scenePhase
     @State private var stage: Stage = .restoring
 
     private enum Stage: Equatable {
@@ -184,6 +185,14 @@ public struct RootView: View {
             Text(message)
         }
         .task { await restore() }
+        // « Ce qui n'a pas eu le temps de partir repart au retour dans
+        // l'app » : un envoi ne survit pas à la mise en arrière-plan, et le
+        // moniteur réseau ne dit rien quand c'est le serveur, et non le
+        // réseau, qui manquait. Sans effet quand la file est vide.
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { await dependencies.outbox.flush() }
+        }
     }
 
     // MARK: - Hors session
@@ -678,11 +687,10 @@ public struct RootView: View {
             // un enregistrement rapide : le vocal est déjà parti, et la bulle
             // doit suivre son sort au lieu de l'inventer.
             ChatView(
+                model: dependencies.chatModel(tripId: tripId, stepId: stepId),
                 tripId: tripId,
                 stepId: stepId,
                 handoff: recordingHandoff,
-                outbox: dependencies.outbox,
-                archive: dependencies.conversations,
                 onIntent: handle
             )
         case .gallery:

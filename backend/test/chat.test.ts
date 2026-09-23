@@ -221,6 +221,18 @@ describe("lire le fil", () => {
     const again = await readThread(memo.id);
     expect(again.messages).toHaveLength(5);
   });
+
+  it("reconstruit une seule fois, même sous deux lectures simultanées", async () => {
+    const memo = await seedTrip(owner.accountId);
+    await tellFromHome(memo.id, "Un souvenir raconté depuis l'accueil.", "2026-09-19T09:00:00.000Z");
+
+    // L'app relit le fil en revenant des réglages pendant que le sondage
+    // passe : deux lectures au même instant, un seul souvenir dans le fil.
+    const [first, second] = await Promise.all([readThread(memo.id), readThread(memo.id)]);
+    expect(first.messages).toHaveLength(3);
+    expect(second.messages).toHaveLength(3);
+    expect(await harness.prisma.chatMessage.count({ where: { memoId: memo.id } })).toBe(3);
+  });
 });
 
 describe("parler à MEMO", () => {

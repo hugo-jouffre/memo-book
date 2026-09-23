@@ -43,13 +43,11 @@ public final class TripSettingsModel {
     /// maquette.
     private let remove: ((String) async throws -> Void)?
 
-    /// Supprimer la conversation — tout le monde y a droit, contrairement au
-    /// voyage : c'est le fil qu'on efface, pas le récit des autres. `nil` en
-    /// aperçu, où la feuille se joue quand même.
+    /// Supprimer la conversation — le propriétaire seul, comme le voyage : le
+    /// serveur refuse un co-voyageur (`docs/conversation.md` § 7), et l'écran
+    /// pâlit le lien pour le dire avant. `nil` en aperçu, où la feuille se joue
+    /// quand même.
     private let clearConversation: ((String) async throws -> Void)?
-
-    /// L'inverse, pour le bac à sable — voir ``ConversationArchive/restore(tripId:)``.
-    private let restoreConversation: ((String) -> Void)?
 
     /// Relève le palier de limites de souvenirs. `nil` en aperçu — la feuille
     /// travaille alors en mémoire et le parcours se déroule quand même.
@@ -112,7 +110,6 @@ public final class TripSettingsModel {
         resendInvitation: ((String, String) async throws -> Void)? = nil,
         delete: ((String) async throws -> Void)? = nil,
         clearConversation: ((String) async throws -> Void)? = nil,
-        restoreConversation: ((String) -> Void)? = nil,
         setMemoryPlan: ((String, MemoryPlan) async throws -> TripSettings)? = nil,
         cached: CachedValue<TripSettings>? = nil,
         themes: @escaping @Sendable () async throws -> [TripTheme] = { TripTheme.fixtures }
@@ -125,7 +122,6 @@ public final class TripSettingsModel {
         self.resendInvitation = resendInvitation
         self.remove = delete
         self.clearConversation = clearConversation
-        self.restoreConversation = restoreConversation
         self.setPlan = setMemoryPlan
         self.readThemes = themes
     }
@@ -283,13 +279,6 @@ public final class TripSettingsModel {
             return false
         }
     }
-
-    #if DEBUG
-        /// Fait revenir la conversation supprimée. Bac à sable seulement.
-        public func debugRestoreConversation() {
-            restoreConversation?(tripId)
-        }
-    #endif
 
     /// Pose l'erreur **et son conseil** : la phrase dit ce qui s'est passé, le
     /// conseil ce qu'on peut faire.

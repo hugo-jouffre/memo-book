@@ -127,6 +127,10 @@ public struct Entry: Codable, Sendable, Hashable, Identifiable {
     public let editedText: String?
     public let editedAt: Date?
 
+    /// « Ça me convient » — le souvenir a été relu et gardé tel quel. Le carnet
+    /// se compose avec ou sans ; l'aperçu signale ceux qui ne le sont pas.
+    public let validatedAt: Date?
+
     /// Le texte à afficher et à éditer. Jamais `nil` une fois la
     /// transcription passée.
     public let displayText: String?
@@ -167,6 +171,7 @@ public struct Entry: Codable, Sendable, Hashable, Identifiable {
         redactionError: String? = nil,
         editedText: String? = nil,
         editedAt: Date? = nil,
+        validatedAt: Date? = nil,
         displayText: String? = nil,
         suggestedTitle: String? = nil,
         funFact: String? = nil,
@@ -188,6 +193,7 @@ public struct Entry: Codable, Sendable, Hashable, Identifiable {
         self.redactionError = redactionError
         self.editedText = editedText
         self.editedAt = editedAt
+        self.validatedAt = validatedAt
         self.displayText = displayText ?? editedText ?? redactedText ?? transcript
         self.suggestedTitle = suggestedTitle
         self.funFact = funFact
@@ -222,6 +228,7 @@ public struct Entry: Codable, Sendable, Hashable, Identifiable {
         redactionError = try container.decodeIfPresent(String.self, forKey: .redactionError)
         editedText = try container.decodeIfPresent(String.self, forKey: .editedText)
         editedAt = try container.decodeIfPresent(Date.self, forKey: .editedAt)
+        validatedAt = try container.decodeIfPresent(Date.self, forKey: .validatedAt)
 
         suggestedTitle = try container.decodeIfPresent(String.self, forKey: .suggestedTitle)
         funFact = try container.decodeIfPresent(String.self, forKey: .funFact)

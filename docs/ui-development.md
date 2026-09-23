@@ -965,7 +965,10 @@ l'écran ment :
 - « ils seront envoyés dès ta reconnexion » ⟶ `RecordingOutbox` + `PendingRecordingStore`,
   file sur disque dans `Application Support` (pas dans `Caches` : iOS les purge, et un
   vocal en attente n'existe nulle part ailleurs), vidée automatiquement au retour de
-  `NWPathMonitor`.
+  `NWPathMonitor` — et au retour de l'app au premier plan, pour le cas où c'est le
+  serveur, et non le réseau, qui manquait. Depuis le 22/09/2026 la file porte **tout ce
+  qu'on envoie** — vocal de l'accueil, textes, vocaux et photos de la conversation —,
+  et le libellé de la boîte parle encore de « vocaux » : à trancher (T170).
 
 **États limites** — un refus **définitif** du serveur (4xx) sort le vocal de la file et
 s'affiche en `ErrorBanner` : garder un souvenir que le serveur refusera à chaque fois,
@@ -1859,17 +1862,36 @@ ligne, ce que MEMO ne fait jamais — est dans `docs/conversation.md` (22/09/202
 Ce qui suit est la fiche d'écran et l'état du contrat, qui change avec la
 branche `atelier-conversation`.
 
-**Contrat back-end** — **aucun appel**. L'écran lit un `ChatThread` fourni par une
-closure, et fait répondre un `MemoResponder` local. Les deux se remplacent d'une
-ligne chacun dans `AppDependencies.chatModel(tripId:stepId:)`.
+**Contrat back-end** — le fil vit sur le serveur depuis le 22/09/2026
+(`backend/src/routes/chat.ts`, `chatSerializers.ts`) ; le produit est dans
+`docs/conversation.md`. L'écran ne connaît qu'un `ChatTransport` — sept
+fonctions-sources : le fil, sa suite, un envoi, « à la main », un média, **ce
+qui attend** et **ce qui part** —, construit par
+`AppDependencies.chatModel(tripId:stepId:)` (`.remote`, la file posée
+par-dessus) ; les aperçus et `-previewSignedIn` reçoivent `.local`, le même
+contrat en mémoire avec le moteur de règles. **Pas de cache** pour le fil.
 
-| Besoin | Route à créer |
+| Besoin | Route |
 |---|---|
-| Le fil, repris d'un autre appareil | `GET /v1/trips/:id/chat` — messages, suggestions, contexte. Demande un modèle Prisma `ChatMessage`, adossé à `Memo` et à `Entry` : c'est le seul vrai travail de schéma |
-| Un tour de parole | `POST /v1/trips/:id/chat` — JSON pour un texte, multipart pour un vocal, **comme `POST /v1/memos/:id/entries` le fait déjà**. La route crée l'`Entry`, enfile le job `transcribe`, appelle le répondeur serveur, et met à jour `Memo.prompt` avec la relance émise |
-| La transcription | **Elle existe déjà** (`transcribeEntry`, OpenAI, français forcé) mais c'est un job : la route répondra `text: null`, et l'app appelle `awaitTranscript(of:)` — prévu pour ça dès maintenant |
-| L'agent de conversation | Côté serveur, sur le motif `Transcriber` / `Redactor` : `HeuristicResponder` (le portage de ces mêmes règles) et `AnthropicResponder` (prompt système = `agents/agent-conversation.md`) |
-| Le nombre de pages composées | `serializeRender` retient volontairement le payload de mise en page. **Le compteur est aujourd'hui déduit** (deux pages par souvenir) — c'est un ordre de grandeur, pas une mesure |
+| Le fil, repris d'un autre appareil | `GET /v1/trips/:id/chat` — `ChatThread` au champ près de `Chat.swift`, plus `seq`, `authorName` (les autres voyageurs seulement), `pauseMilliseconds`, `disposition`, `turn`, `canClear`, `now`. Le serveur y **reconstruit** d'abord tout souvenir sans message (vocaux de l'accueil, seed). `?since=<now précédent>` rend la suite : messages écrits depuis, et fiches dont le souvenir a bougé |
+| Un tour de parole | `POST /v1/trips/:id/chat` — JSON `{id, kind: "text", text, stepId?, suggestionId?, entryId?}` pour un texte ou une puce, multipart pour un vocal (`id, capturedAt, durationSeconds, placeLabel, stepId, levels, file`) ou une à quatre photos. **`id` est fabriqué par l'app** (UUID) : la bulle optimiste et la bulle servie sont la même, un renvoi ne double rien (200). Répond 201 tout de suite ; MEMO répond dans le job `converse`, que l'app sonde toutes les 2 s tant que `turn` est `replying` ou qu'une fiche mûrit — trois minutes au plus sans changement |
+| La fiche | Recalculée depuis `entries` à chaque lecture, avec `phase` : `listening` (transcription), `writing` (le brut, en gris, pendant la rédaction), `ready`, `failed` ; `isValidated`, `entryId`. L'app ne sonde plus `GET /v1/entries/:id` |
+| Valider, corriger | « Ça me convient » part avec `suggestionId: "accept"` et l'`entryId` de la dernière fiche : validé dans la même requête (`validatedAt`, étape offerte confirmée). « À la main » : `PATCH /v1/entries/:id` (`editedText`), puis une commande silencieuse `transcript_edited` pour l'accusé de MEMO — la fiche change, le fil ne gagne pas de copie |
+| Le rythme | `pauseMilliseconds` sur chaque bulle de MEMO, décidé par le serveur, joué par le modèle (`ChatModel.apply`) — plancher 450 ms |
+| Le média | `GET /v1/entries/:id/media`, servi avec la session : `VoiceNote.remoteUrl` pointe dessus, le modèle télécharge puis joue depuis les caches |
+| L'agent de conversation | Côté serveur, sur le motif `Transcriber` / `Redactor` : `FakeResponder` (tests, `PIPELINE_MODE=fake`), `HeuristicResponder` (le portage des règles de `LocalMemoResponder`, et le repli), `AnthropicResponder` à venir (PR4) |
+| Le nombre de pages composées | `preview.memoryCount` est compté ; `pageCount` reste **déduit** (deux pages par souvenir) tant que `serializeRender` retient le payload |
+| Hors ligne (§ 9 de la fiche) | **Tout ce qu'on envoie passe par la file** (`RecordingOutbox`, 22/09/2026) — un texte, un vocal, des photos, comme le vocal de l'accueil. `send` rend `.queued` au lieu d'échouer : la bulle reste « en cours d'envoi » (à 60 %, VoiceOver dit « Envoi en cours »), le composeur se rouvre. À l'ouverture, `waiting` repose en bulles ce qui attend sur le disque pour ce fil ; `deliveries` est le **flux** des tours partis, par identifiant, avec le reçu du serveur — un flux et non une valeur observée, pour que deux tours partis dans la même seconde fassent deux événements. Le vocal de l'accueil suit le même chemin, à **un** carnet : le premier en cours, celui dont la conversation s'ouvre |
+
+**Ce qui reste dans l'app** : `ChatFixtures` et `LocalMemoResponder`, pour les
+aperçus Xcode, `-previewSignedIn` et `ChatResponderTests` — la copie de
+référence est `backend/src/services/conversationCopy.ts`, et les deux se citent.
+
+⚠️ **Deux lectures au même instant reconstruisaient deux fois** un souvenir
+(22/09/2026) : `.task` repart à chaque apparition de la vue, un `onAppear` de
+plus faisait un second `GET`. Le serveur verrouille désormais le carnet
+(`lockThread`) dans toute transaction qui écrit le fil, et la vue n'a qu'un
+seul rechargement.
 
 **Assets** — onze icônes **Lucide** (licence ISC), faute d'équivalent dans le jeu
 de marque : haut-parleur, presse-papiers, appareil photo, clavier, calendrier,
@@ -2877,8 +2899,8 @@ moyen de paiement.
 
 ### 19.6 Le vocal de l'accueil ne se déclare pas arrivé avant de l'être
 
-- **Pièces** : `Recording/RecordingHandoff.swift`, `RecordingOutbox.handoffDelivery`,
-  `ChatModel.receive(_:)` / `markHandoff(_:)`
+- **Pièces** : `Recording/RecordingHandoff.swift`, `RecordingOutbox.turnDeliveries()`,
+  `ChatModel.receive(_:)` / `markDelivery(_:)`
 
 Le trajet lui-même — enregistrer sur l'accueil, arriver dans la conversation le
 message déjà posé — a été livré au lot précédent (T102). Ce lot-ci corrige deux
@@ -2891,9 +2913,12 @@ Or ce vocal est parti **avant** que la conversation n'existe, et il peut très
 bien attendre le réseau sur le disque : on lisait donc « envoyé » sur un
 souvenir encore dans la file, à chaque fois qu'on racontait dans le métro.
 `RecordingHandoff` porte désormais un identifiant, la file dit où en est **cet**
-envoi-là (`handoffDelivery`), et la conversation ne fait que l'écrire.
+envoi-là, et la conversation ne fait que l'écrire.
 `.queued` n'est ni un échec ni une arrivée : la bulle reste sur « envoi en
-cours », et la reprise de la file la termine.
+cours », et la reprise de la file la termine. Depuis le 22/09/2026, cet
+identifiant est aussi celui du message côté serveur, la file dit le sort de
+**chaque** tour dans un flux (`turnDeliveries()`), et le modèle l'écoute par
+son transport — la vue n'a plus la file en main. Voir § 14.1, « Hors ligne ».
 
 **La forme d'onde est celle du vocal entier.** La feuille rendait `levels`, la
 frise qui défile sous le micro — quarante barres, soit les trois dernières
@@ -3238,32 +3263,24 @@ chat (le M et « Nouveau voyage à Rome ! ») : celui-là est l'écran de quelqu
 qui n'a jamais rien dit, et on a effacé ce qu'on s'est dit, pas fait comme si
 on ne s'était jamais parlé.
 
-**Comment ça tient, sans serveur.** Il n'y a pas de conversation côté serveur
-— ni `GET /v1/trips/:id/chat`, ni `DELETE` — et le fil vient du jeu d'essai
-(§ 14). `ConversationArchive` retient donc les voyages dont la conversation a
-été supprimée, dans les réglages de l'app, un pour la session
-(`AppDependencies.conversations`) :
-
-| Qui | Quoi |
-|---|---|
-| `TripSettingsModel.clearConversation()` | y écrit, par la fonction que `AppDependencies` lui passe — le jour où la route existe, c'est cette fonction qui l'appelle |
-| `ChatModel` | y lit : un voyage supprimé rend son fil vide (`ChatThread.cleared()`) puis pose l'ouverture de MEMO (`ensureOpening()`) |
-| `ChatView` | recharge sur `archive.version` : l'écran du chat reste sous celui des réglages dans la pile, il ne se refabrique pas au retour |
-
-Le bac à sable des réglages gagne « Rétablir la conversation » : après une
-suppression, c'est le seul moyen de revoir le jeu d'essai sans réinstaller.
-
-`ConversationArchiveTests` (cible app) garde les trois promesses : un fil
-supprimé rouvre sur l'ouverture de MEMO, un fil intact garde ses bulles, et la
-suppression survit à un relancement.
+**Comment ça tient** (depuis le 22/09/2026 — `docs/conversation.md` § 7) :
+`DELETE /v1/trips/:id/chat`. Le serveur efface les messages du carnet, pose
+`memos.chatClearedAt` — les souvenirs d'avant ne reviennent pas dans le fil
+par la reconstruction, ils restent dans le carnet — et repose la bulle
+d'ouverture. **Propriétaire seul** : un co-voyageur reçoit 403 `owner_only`,
+et l'écran l'a dit avant, en pâlissant le lien (40 %, tapable) et en posant un
+`BrandNotice(tone: .information)` à l'appui, sur `TripSettings.canClearConversation`
+que le serveur rend. `ChatView` relit le fil au retour des réglages (`.task`
+repart à chaque apparition) : il n'y a plus d'archive sur l'appareil, ni de
+bouton « Rétablir la conversation » dans le bac à sable.
 
 ### 25.1 À trancher
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
-| T158 | **La suppression n'existe que sur l'appareil.** Un autre téléphone du même compte verra la conversation du jeu d'essai. C'est la conséquence de l'absence de route, pas un choix : `DELETE /v1/trips/:id/chat` remplacera l'archive le jour où le fil sera servi | « Supprimer la conversation » — dans les réglages du voyage |
+| T158 | ~~La suppression n'existe que sur l'appareil.~~ **Clos le 22/09/2026** : `DELETE /v1/trips/:id/chat`, le fil vit sur le serveur | « Supprimer la conversation » — dans les réglages du voyage |
 | T159 | **Aucune maquette** pour le lien ni pour la feuille : écrits sur les motifs existants (« Me déconnecter », `DeleteTripSheet`). À dessiner dans Figma | « Supprimer la conversation » — dans les réglages du voyage |
-| T160 | **Un co-voyageur peut supprimer la conversation**, alors qu'il ne peut pas supprimer le voyage. Aujourd'hui le fil est propre à l'appareil, la question ne se pose pas ; elle se posera avec la route — qui décide de l'effacer pour tout le monde ? | « Supprimer la conversation » — dans les réglages du voyage |
+| T160 | ~~Un co-voyageur peut supprimer la conversation.~~ **Tranché le 22/09/2026** : le propriétaire seul, comme le voyage ; le co-voyageur voit le lien pâli et une notice qui explique | « Supprimer la conversation » — dans les réglages du voyage |
 ## 26. La relance du voyage n'est pas une bulle
 
 Hugo, 17/09/2026 : **la bulle d'ouverture de MEMO est seule.** Elle se termine
@@ -3632,6 +3649,7 @@ masculin) et le voyage fini reste « en cours ».
 | T167 | **« Voir une estimation » sur la 3e story** (Clara) : la pastille ouvre bien la feuille « Estimation » depuis le 15/09, sur les chiffres de la maquette (T127). Clara a peut-être vu la version d'avant ; à revérifier sur ce build. T80 reste ouvert jusqu'à ce que la pastille soit configurée pour de bon | Paywall |
 | T168 | **Le tiroir des cartes de l'accueil n'a pas de maquette** — croix, flèche, imprimante cerclées, sur le modèle de la liste des co-voyageurs. À dessiner dans Figma, ou à valider tel quel | Accueil |
 | T169 | **La feuille « Genre » n'a pas de maquette** — trois options sur le motif des feuilles de choix du profil, et la ligne « Genre » sous « Adresse postale ». À dessiner dans Figma, ou à valider telle quelle | Profil |
+| T170 | **La boîte d'information de l'accueil parle de « vocaux »** alors que la file porte désormais tout ce qu'on envoie depuis la conversation — un texte dit dans le métro fait afficher « Ton vocal enregistré hors ligne est bien conservé ». Généraliser le libellé (« ce que tu as raconté » ?) ou le décliner par nature, dans Figma d'abord (R8) | Accueil |
 | T170 | **Le genre deviné est une liste de prénoms**, pas une science : environ six cents prénoms français, les mixtes (Camille, Dominique, Sacha…) restent sans réponse. Un prénom absent accorde au masculin par défaut (« Abonné ») — c'est la forme non marquée, pas une erreur, mais c'est à savoir | Profil |
 | T171 | **Le glissé vers la droite de l'accueil** ouvre le profil de n'importe où sur l'écran. Il n'entre pas en conflit avec le tiroir des cartes (vers la gauche) ni avec le retour de la pile (l'accueil est le premier écran) ; s'il gêne le défilement des bandes horizontales de l'accueil, il faudra le limiter au bord | Accueil |
 | T172 | **Trois migrations et l'API sont à déployer** — `genre_du_profil`, `photo_de_profil` et `rythme_du_recit_en_cles`, voir § 27.5, § 27.8 et § 27.11. Tant que l'API sert le code d'avant, l'accueil montre encore « en cours » un voyage fini, et le profil ne connaît ni le genre ni la photo. Aucune variable à ajouter sur Railway : le domaine du service suffit aux adresses d'avatar et au lien de l'e-mail | Back-end |

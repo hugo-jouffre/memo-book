@@ -14,6 +14,7 @@ import {
   dailyTurnCount,
   ensureOpening,
   findTurnInFlight,
+  lockThread,
   materializeEntriesWithoutMessages,
   type ChatMessageRow,
 } from "../services/conversationThread.js";
@@ -174,6 +175,9 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
     const now = new Date();
 
     await context.prisma.$transaction(async (tx) => {
+      // Sérialisé par carnet : deux lectures au même instant ne
+      // reconstruisent pas deux fois — voir `lockThread`.
+      await lockThread(tx, memoId);
       const orphans = await tx.entry.count({
         where: {
           memoId,
@@ -314,6 +318,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
       }
 
       const written = await context.prisma.$transaction(async (tx) => {
+        await lockThread(tx, memoId);
         const ids: string[] = [];
         const opening = await ensureOpening(tx, memoId, context.responder);
         if (opening) ids.push(opening.id);
@@ -408,6 +413,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
     let entryIdForTranscription: string | null = null;
 
     const written = await context.prisma.$transaction(async (tx) => {
+      await lockThread(tx, memoId);
       const ids: string[] = [];
       const opening = await ensureOpening(tx, memoId, context.responder);
       if (opening) ids.push(opening.id);
@@ -514,6 +520,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
     }
 
     await context.prisma.$transaction(async (tx) => {
+      await lockThread(tx, memoId);
       await tx.chatMessage.deleteMany({ where: { memoId } });
       await tx.memo.update({
         where: { id: memoId },

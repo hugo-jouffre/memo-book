@@ -174,6 +174,35 @@ public protocol MemoBookAPI: Sendable {
     /// convient pas. Refusée si le souvenir a été corrigé à la main.
     func retryRedaction(entryId: String) async throws -> Entry
 
+    // MARK: - La conversation avec MEMO — `docs/conversation.md`
+
+    /// Le fil d'un voyage. Le serveur y reconstruit d'abord les souvenirs
+    /// racontés hors du chat, pour qu'on les retrouve.
+    func chatThread(tripId: String) async throws -> ChatThread
+
+    /// La suite du fil depuis un instant — le `now` de la lecture précédente,
+    /// en temps serveur. C'est ce que l'écran sonde tant qu'un tour est en vol.
+    func chatUpdates(tripId: String, since: Date) async throws -> ChatThreadUpdate
+
+    /// Un texte ou une puce. Le serveur répond tout de suite ; MEMO, ensuite.
+    func sendChatText(tripId: String, turn: ChatTextTurn) async throws -> ChatTurnReceipt
+
+    /// Un vocal : le souvenir est créé, sa fiche posée, la transcription enfilée.
+    func sendChatVoice(tripId: String, turn: ChatVoiceTurn) async throws -> ChatTurnReceipt
+
+    /// Une à quatre photos : un souvenir par image, une seule bulle.
+    func sendChatPhotos(tripId: String, turn: ChatPhotosTurn) async throws -> ChatTurnReceipt
+
+    /// « Ça me convient » : le souvenir est relu, l'étape offerte confirmée.
+    func validateEntry(id: String) async throws -> EntryValidation
+
+    /// « Supprimer la conversation » — propriétaire seul, garde l'ouverture.
+    func clearChat(tripId: String) async throws
+
+    /// Le fichier d'un souvenir — un vocal à réécouter, une photo —, servi
+    /// avec la session : une URL nue ne suffirait pas.
+    func entryMedia(id: String) async throws -> Data
+
     /// Lance la génération du carnet. Le résultat arrive de façon asynchrone :
     /// suivre ensuite avec `render(id:)`.
     func startRender(memoId: String) async throws -> Render

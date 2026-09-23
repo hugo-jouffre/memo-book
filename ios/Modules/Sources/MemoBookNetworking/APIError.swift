@@ -85,6 +85,10 @@ public enum APIError: Error, LocalizedError, Sendable {
             "Ouvre « Limites de souvenirs » dans les paramètres du voyage pour les étendre, ou attends le renouvellement du mois."
         case .server(403, "quota_exhausted", _):
             "Abonne-toi pour continuer à raconter : l’offre est dans ton profil, ou sur l’accueil."
+        case .server(429, "chat_daily_cap", _):
+            "Reviens demain, ou raconte la suite au clavier dans un autre carnet."
+        case .server(403, "owner_only", _):
+            "Seul le propriétaire du voyage peut faire ça. Demande-lui, ou continue à raconter."
         case .server(401, _, _), .server(403, _, _), .notAuthenticated:
             "Reconnecte-toi pour continuer."
         case .server:

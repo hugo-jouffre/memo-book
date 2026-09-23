@@ -65,20 +65,13 @@ public final class AppDependencies {
         // pas posé : la feuille montre alors les cartes seules, au lieu d'un
         // bouton Apple Pay qui échouerait au moment de payer.
         self.payments = payments ?? StripePaymentSheetPresenter()
-        outbox = RecordingOutbox(store: pendingRecordings, connectivity: connectivity) { audio, tripId in
-            _ = try await api.uploadAudio(
-                memoId: tripId,
-                data: audio.data,
-                filename: audio.filename,
-                mimeType: audio.mimeType,
-                capturedAt: audio.recordedAt,
-                // La durée part avec le fichier : c'est elle qui décompte les
-                // limites de souvenirs. Elle voyage déjà dans la file hors
-                // ligne (`PendingRecording.duration`), donc un vocal parti
-                // trois jours plus tard décompte la même chose.
-                durationSeconds: audio.duration,
-                placeLabel: nil
-            )
+        // Tout ce qu'on dit part par la file, et la file parle à la
+        // conversation (`POST /v1/trips/:id/chat`) : le vocal de l'accueil est
+        // un tour comme un autre, avec l'identifiant de sa bulle. La durée
+        // voyage avec (`PendingTurn.duration`), donc un vocal parti trois
+        // jours plus tard décompte la même chose.
+        outbox = RecordingOutbox(store: pendingRecordings, connectivity: connectivity) { turn, tripId in
+            try await ChatTransport.sendNow(turn, to: tripId, api: api)
         }
 
         // Au démarrage, et pas à l'ouverture d'un écran : c'est ce qui permet
@@ -242,34 +235,42 @@ public final class AppDependencies {
         )
     }
 
-    /// La conversation avec MEMO.
+    /// La conversation avec MEMO — `docs/conversation.md`.
     ///
-    /// **Le seul modèle de l'app qui reçoive deux sources** : celle qui rend le
-    /// fil, et celle qui répond à la place de MEMO. Les deux sont encore
-    /// locales, et pour deux raisons différentes — il n'existe ni route de chat
-    /// (`GET /v1/trips/:id/chat`) ni agent de conversation côté serveur, alors
-    /// que `agents/agent-conversation.md` en écrit déjà le contrat.
+    /// Le fil vit sur le serveur (`GET`/`POST`/`DELETE /v1/trips/:id/chat`) et
+    /// MEMO y répond dans un job : le modèle reçoit un ``ChatTransport`` qui
+    /// relie ces routes, et **rien d'autre** — il ne sait pas s'il tient le
+    /// serveur ou le moteur local des aperçus, qui offre le même contrat
+    /// (`ChatTransport.local`). Pas de cache pour le fil, et c'est voulu : « un
+    /// fil périmé se lit comme un message perdu ».
     ///
-    /// Le jour où les deux existent, cette fabrique devient :
-    ///
-    /// ```swift
-    /// ChatModel(
-    ///     source: { [api] in try await api.chatThread(tripId: tripId, stepId: stepId) },
-    ///     responder: RemoteMemoResponder(api: api)
-    /// )
-    /// ```
-    ///
-    /// Rien d'autre ne bouge : ni la vue, ni le modèle, ni les aperçus. Voir la
-    /// fiche du chat dans `docs/ui-development.md` pour le contrat des deux
-    /// routes.
+    /// **L'envoi passe par la file**, comme le vocal de l'accueil : hors
+    /// ligne, un tour attend sur le disque au lieu d'échouer, et la bulle
+    /// reste « en cours d'envoi » jusqu'à ce que la file dise qu'il est parti
+    /// (``RecordingOutbox/turnDeliveries()``). Le modèle ne voit qu'un
+    /// ``ChatSendOutcome``, ce qui attend, et ce qui part.
     public func chatModel(tripId: String, stepId: String? = nil) -> ChatModel {
-        ChatModel(tripId: tripId, focusStepId: stepId, archive: conversations)
+        var transport = ChatTransport.remote(api: api, tripId: tripId)
+        transport.send = { [outbox] turn in
+            switch await outbox.submit(turn, to: tripId) {
+            case .delivered(let receipt):
+                // Sans reçu — réponse illisible —, le tour est arrivé quand
+                // même : on dit au modèle qu'une réponse est en vol, et le
+                // sondage relira ce que le serveur a écrit, depuis le curseur
+                // qu'il tenait déjà.
+                return .received(
+                    receipt ?? ChatTurnReceipt(messages: [], turn: .replying(messageId: turn.id), now: .distantPast)
+                )
+            case .queued:
+                return .queued
+            case .rejected(let message):
+                throw RecordingOutbox.Rejection(message: message)
+            }
+        }
+        transport.waiting = { [outbox] in await outbox.waiting(for: tripId) }
+        transport.deliveries = { [outbox] in await outbox.turnDeliveries() }
+        return ChatModel(transport: transport, focusStepId: stepId)
     }
-
-    /// Les conversations supprimées, **retenues sur l'appareil** en attendant
-    /// `DELETE /v1/trips/:id/chat` — voir ``ConversationArchive``. Les réglages
-    /// d'un voyage y écrivent, la conversation y lit.
-    public let conversations = ConversationArchive(defaults: .standard)
 
     /// La galerie des carnets de la communauté, servie par `GET /v1/gallery`.
     public func galleryModel() -> GalleryModel {
@@ -315,11 +316,10 @@ public final class AppDependencies {
             // La seule sans retour : `DELETE /v1/memos/:id`, que le serveur
             // réserve au propriétaire. L'écran demande confirmation avant.
             delete: { [api] id in try await api.deleteMemo(id: id) },
-            // Supprimer la conversation ne va **pas** au serveur : il n'y a
-            // pas de conversation chez lui à supprimer. L'archive la retient
-            // sur l'appareil, et le fil s'ouvre vide ensuite.
-            clearConversation: { [conversations] id in conversations.clear(tripId: id) },
-            restoreConversation: { [conversations] id in conversations.restore(tripId: id) },
+            // `DELETE /v1/trips/:id/chat` : le serveur efface le fil et repose
+            // l'ouverture. Propriétaire seul — il refuse (403) à un co-voyageur,
+            // et l'écran l'a déjà dit en pâlissant le lien.
+            clearConversation: { [api] id in try await api.clearChat(tripId: id) },
             // Les limites de souvenirs : le seul « achat » que cet écran porte.
             setMemoryPlan: { [api] id, plan in
                 try await api.setMemoryPlan(tripId: id, plan: plan)

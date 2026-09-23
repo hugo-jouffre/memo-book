@@ -27,15 +27,6 @@ public struct ChatView: View {
 
     private let onIntent: (ChatIntent) -> Void
 
-    /// La file des vocaux, quand l'écran est ouvert par l'app.
-    ///
-    /// Elle n'est là que pour **une** chose : dire où en est l'envoi du vocal
-    /// venu de l'accueil. La bulle est posée par ``RecordingHandoff``, mais son
-    /// état d'envoi ne lui appartient pas — voir ``ChatModel/markHandoff(_:)``.
-    /// `nil` en aperçu et en test, où rien n'a été enregistré ailleurs.
-    private let outbox: RecordingOutbox?
-    private let archive: ConversationArchive?
-
     /// On arrive avec un vocal enregistré depuis l'accueil. Le fil a déjà
     /// beaucoup à faire — poser la bulle, suivre la transcription, défiler —
     /// et la bannière d'aperçu n'y ajoute que du mouvement : elle ne descend
@@ -73,43 +64,35 @@ public struct ChatView: View {
     /// suite.
     @State private var pendingFocus: String?
 
+    /// - Parameter model: le modèle, construit par `AppDependencies.chatModel`
+    ///   — c'est lui qui tient le transport, serveur ou moteur local.
     /// - Parameter handoff: le vocal enregistré depuis l'accueil, à poser dans
-    ///   le fil dès qu'il est chargé — voir ``RecordingHandoff``.
-    /// - Parameter outbox: la file qui l'envoie, pour que la bulle suive son
-    ///   sort au lieu de l'inventer.
-    /// - Parameter archive: les conversations supprimées — voir
-    ///   ``ConversationArchive``. Le fil se vide quand ce voyage y entre, y
-    ///   compris depuis l'écran des réglages posé par-dessus celui-ci.
+    ///   le fil dès qu'il est chargé — voir ``RecordingHandoff``. Son envoi
+    ///   n'appartient pas à la bulle : le modèle écoute la file par son
+    ///   transport (``ChatModel/markDelivery(_:)``).
     public init(
+        model: ChatModel,
         tripId: String,
         stepId: String? = nil,
         handoff: RecordingHandoff? = nil,
-        outbox: RecordingOutbox? = nil,
-        archive: ConversationArchive? = nil,
         onIntent: @escaping (ChatIntent) -> Void = { _ in }
     ) {
         self.tripId = tripId
-        self.outbox = outbox
-        self.archive = archive
         self.onIntent = onIntent
         self.arrivesWithRecording = handoff != nil
-        let model = ChatModel(tripId: tripId, focusStepId: stepId, archive: archive)
         if let handoff { model.expect(handoff) }
         _model = State(initialValue: model)
         _pendingFocus = State(initialValue: stepId)
         _showsPreviewBanner = State(initialValue: handoff == nil)
     }
 
-    /// Pour les aperçus et les tests, qui fournissent leur propre source.
+    /// Pour les aperçus et les tests, qui fournissent leur propre modèle.
     init(
         model: ChatModel,
         stepId: String? = nil,
-        tripId: String = "preview",
         onIntent: @escaping (ChatIntent) -> Void = { _ in }
     ) {
-        self.tripId = tripId
-        self.outbox = nil
-        self.archive = nil
+        self.tripId = "preview"
         self.onIntent = onIntent
         self.arrivesWithRecording = false
         _model = State(initialValue: model)
@@ -191,18 +174,13 @@ public struct ChatView: View {
         // Le crème de la marque ne se retourne pas en sombre — voir
         // `MemoBookColor`.
         .environment(\.colorScheme, .light)
-        // Rechargé quand une conversation est supprimée depuis les réglages :
-        // cet écran reste sous le leur dans la pile, et c'est lui qu'on
-        // retrouve en revenant — il doit alors être vide.
-        .task(id: archive?.version ?? 0) { await model.load() }
-        // L'envoi du vocal venu de l'accueil se joue **ailleurs** — dans la
-        // file, qui vit au-dessus des écrans et continue pendant qu'on navigue.
-        // La bulle ne fait que suivre ce qu'elle en dit, et `initial: true`
-        // parce qu'il peut être arrivé avant que cet écran ne soit dessiné.
-        .onChange(of: outbox?.handoffDelivery?.state, initial: true) { _, state in
-            guard let state else { return }
-            model.markHandoff(state)
-        }
+        // `.task` repart à **chaque** apparition, donc aussi au retour des
+        // réglages, posés par-dessus dans la pile : « Supprimer la
+        // conversation » a pu vider le fil, et c'est lui qu'on retrouve. Le fil
+        // n'est jamais mis en cache — « un fil périmé se lit comme un message
+        // perdu ». Pas de second rechargement en `onAppear` : deux lectures au
+        // même instant, c'est deux reconstructions (22/09/2026).
+        .task { await model.load() }
         // Un écran de chat laissé derrière soi ne doit ni parler ni enregistrer.
         .onDisappear { model.teardown() }
         // Le verrou des étapes offertes : le micro mène au paywall au lieu de
@@ -586,7 +564,7 @@ private enum RecordingErrorCopy {
 #Preview("Chat — erreur") {
     NavigationStack {
         ChatView(
-            model: ChatModel(source: { throw URLError(.notConnectedToInternet) })
+            model: ChatModel(transport: .failing(URLError(.notConnectedToInternet)))
         )
     }
 }
