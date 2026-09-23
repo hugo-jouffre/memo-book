@@ -261,6 +261,36 @@ cette grille — une ligne, sept cases, pas de note :
 Deux ou trois itérations du prompt, en notant ici ce qui a changé et pourquoi.
 Les mêmes vocaux nourrissent les tests structurels — jamais le modèle en CI.
 
+### Première calibration — 23/09/2026, Sonnet 5, dix scènes écrites
+
+Trois passes. Ce que la grille a attrapé, et ce que ça a changé dans
+`agents/agent-conversation.md` :
+
+| Ce qu'on a lu | Pourquoi c'est une faute | Ce qui a changé |
+|---|---|---|
+| « C'est un écrivain qui rédige les souvenirs, pas moi » | MEMO est **le** personnage (§ 1) : le voyageur n'a pas à savoir qu'il y a d'autres passages derrière | La section qui décrivait les autres agents devient « ce qui travaille derrière toi — et qui ne se dit pas ». MEMO répond en son nom : « c'est moi qui écris ton carnet » |
+| « C'était où, et avec qui ? » | Un seul point d'interrogation, deux demandes | La règle le dit avec l'exemple — et ajoute que la tentation est la plus forte quand on ne sait **rien** (des photos sans un mot) : demander le lieu, rien d'autre |
+| « lequel a marqué Clara ? » en relance, à Clara | La relance s'affiche sur la carte du voyage, que **tous** les co-voyageurs lisent | La relance ne nomme personne : un lieu, un moment, une chose |
+| Un vocal inaudible classé `command` | Le souvenir existe, c'est sa transcription qui manque | « Un vocal est toujours un souvenir, **y compris celui que tu n'as pas réussi à entendre** » |
+
+Et deux corrections dans le **banc**, pas dans le prompt — un faux positif
+répété apprend à ignorer la grille :
+
+- « Tutoiement » ne se coche plus automatiquement dès qu'une autre personne est
+  en scène : « la burrata coupée devant vous », avec Clara, est du français
+  correct. La ligne passe alors en lecture à la main.
+- L'écho des mots du voyageur ne s'exige plus sur un **refus** : il n'y a rien
+  à reformuler, et l'exiger reviendrait à demander d'insister.
+
+Au terme des trois passes, les dix scènes passent sans manquement de forme, et
+les trois lignes qui se lisent — rien d'inventé, la question n'est pas déjà
+répondue, c'est la plus utile — tiennent sur les dix.
+
+⚠️ **Ce sont des scènes écrites, pas des voix.** Elles disent que le contrat
+tient ; elles ne disent rien du français parlé, des hésitations et des noms
+propres mal transcrits. La calibration n'est pas finie tant que les vocaux des
+testeurs n'y sont pas passés.
+
 ### L'outil de relecture
 
 ```bash
