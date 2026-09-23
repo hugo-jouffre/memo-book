@@ -1,12 +1,32 @@
 {
   "name": "Une précision qui répond à la question de MEMO",
-  "why": "Ça ne se lit pas seul dans un carnet : c'est une précision, pas un souvenir. MEMO accuse et n'enchaîne pas sur une nouvelle question.",
-  "memo": { "title": "Rome 2026", "destinationCity": "Rome", "people": ["Clara"] },
+  "why": "Ça ne se lit pas seul dans un carnet : c'est une précision, pas un souvenir. MEMO l'accuse avec les mots du voyageur ; une relance précise est permise, un « raconte-m'en plus » ne l'est pas.",
+  "memo": {
+    "title": "Rome 2026",
+    "destinationCity": "Rome",
+    "people": [
+      "Clara"
+    ]
+  },
   "history": [
-    { "author": "traveller", "text": "On a dîné dans une trattoria hier soir, c'était vraiment bien." },
-    { "author": "memo", "text": "Tu as dîné dans une trattoria hier soir, et c'était vraiment bien. C'était où, dans quel quartier ?" }
+    {
+      "author": "traveller",
+      "text": "On a dîné dans une trattoria hier soir, c'était vraiment bien."
+    },
+    {
+      "author": "memo",
+      "text": "Tu as dîné dans une trattoria hier soir, et c'était vraiment bien. C'était où, dans quel quartier ?"
+    }
   ],
-  "currentEntry": { "text": "Un dîner dans une trattoria, hier soir. Très bon moment.", "validatedAt": null },
-  "message": { "kind": "text", "text": "à Trastevere, avec Clara" },
-  "expect": { "disposition": "context" }
+  "currentEntry": {
+    "text": "Un dîner dans une trattoria, hier soir. Très bon moment.",
+    "validatedAt": null
+  },
+  "message": {
+    "kind": "text",
+    "text": "à Trastevere, avec Clara"
+  },
+  "expect": {
+    "disposition": "context"
+  }
 }

@@ -332,6 +332,12 @@ function truncate(text: string, limit: number): string {
  * par le serveur sur la matière (`composeBeats`), et c'est le seul endroit où
  * il se décide — côté app comme côté modèle, on ne fait que l'appliquer.
  *
+ * ⚠️ **Les bornes vivent dans les descriptions, pas dans le schéma.** L'API
+ * refuse `minItems`/`maxItems` sur un tableau (400 `invalid_request_error`), et
+ * on ne l'apprend qu'au premier appel réel : un client doublé accepte
+ * n'importe quel schéma. Ce n'est pas une perte — `validateReply` fait déjà
+ * respecter les mêmes bornes, et lui refuse une réponse au lieu de la tronquer.
+ *
  * ⚠️ Une **fonction** et non une constante : `conversation.ts` importe ce
  * fichier (pour la fabrique) et ce fichier importe ses bornes — le cycle est
  * sain tant que rien ne les lit à l'initialisation du module. Une constante
@@ -344,10 +350,10 @@ export function replySchema() {
     properties: {
       beats: {
         type: "array",
-        minItems: 1,
-        maxItems: MAX_BEATS,
-        items: { type: "string", minLength: 1, maxLength: 400 },
-        description: "Les bulles de MEMO, dans l'ordre. Texte simple, sans Markdown ni emoji.",
+        items: { type: "string" },
+        description:
+          `Les bulles de MEMO, dans l'ordre : une à ${MAX_BEATS}, jamais plus. ` +
+          "Texte simple, sans Markdown ni emoji.",
       },
       disposition: {
         type: "string",
@@ -356,14 +362,14 @@ export function replySchema() {
       },
       suggestionIds: {
         type: "array",
-        maxItems: 3,
         items: { type: "string", enum: SUGGESTION_IDS },
-        description: "Des identifiants du catalogue, jamais des libellés.",
+        description: "Trois identifiants du catalogue au plus, jamais des libellés.",
       },
       prompt: {
         type: ["string", "null"],
-        maxLength: PROMPT_LIMIT,
-        description: "La relance de la carte du voyage, qui se lit seule. `null` pour ne pas y toucher.",
+        description:
+          `La relance de la carte du voyage, ${PROMPT_LIMIT} caractères au plus, qui se lit ` +
+          "seule. `null` pour ne pas y toucher.",
       },
       asksRoseEpineGraine: {
         type: "boolean",
