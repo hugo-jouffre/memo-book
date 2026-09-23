@@ -7,15 +7,20 @@
 > Les agents eux-mêmes sont décrits dans `agents/` ; la conversation a sa fiche
 > produit dans [`conversation.md`](conversation.md). Ici, on ne parle que du
 > **choix du moteur**.
+>
+> ⚠️ **Il n'y a plus de compte OpenAI** (Hugo, 23/09/2026). L'argument « c'est
+> déjà dans la maison » ne vaut donc plus pour eux, et deux postes du pipeline
+> — la transcription et la structuration — pointent aujourd'hui sur un
+> fournisseur qu'on ne paie plus. Le § 3 en tire les conséquences.
 
 ## 1. Ce qu'on fait faire à un modèle aujourd'hui
 
 | Poste | Où | Qui le fait | Ce que ça coûte par carnet |
 |---|---|---|---|
-| **Transcription** d'un vocal | `services/transcription.ts` | OpenAI `gpt-4o-transcribe` | ~0,13 $ (30 min d'audio) |
+| **Transcription** d'un vocal | `services/transcription.ts` | OpenAI `gpt-4o-transcribe` — ⚠️ **sans compte** | ~0,13 $ (30 min d'audio) |
 | **Rédaction** d'un souvenir | `services/redaction.ts` | Claude Opus 5 | ~2,36 $ (30 souvenirs) |
 | **Conversation** — MEMO | `services/conversationAnthropic.ts` | Claude Sonnet 5 | ~0,43 $ (60 tours) |
-| **Structuration** | `services/structuring.ts` | OpenAI `gpt-4o` | marginal |
+| **Structuration** | `services/structuring.ts` | OpenAI `gpt-4o` — ⚠️ **sans compte** | marginal |
 | **Mise en page** | `services/bookPdf.ts` + APITemplate | pas de modèle | — |
 | **Photo** | `agents/agent-photo.md` | non implémenté (phase 2) | — |
 | **Modération** | `agents/agent-moderation.md` | non implémenté | — |
@@ -105,24 +110,39 @@ le portage est d'une ligne dans `.env`. C'est le test à faire en premier.
 Un second fournisseur reste intéressant pour une autre raison que le prix : voir
 § 4.
 
-### La transcription — **gpt-4o-transcribe**, et Voxtral à regarder
+### La transcription — **il faut déménager**
 
-0,0045 $/min, déjà en place, français forcé. Rien ne presse.
+Le code appelle `gpt-4o-transcribe`, et il n'y a plus de compte OpenAI : ce
+poste est le **premier maillon** de tout le pipeline, et il est aujourd'hui sans
+moteur. C'est le seul point de ce fichier qui soit urgent — pas pour des raisons
+de prix, parce que sans lui rien ne marche.
 
-Deux prétendants, si l'argument européen devient un argument de vente (§ 5) :
-**Voxtral Mini Transcribe 2** (Mistral, 0,003 $/min) et **Gemini 3.5 Transcribe**
-(0,003 $/min). Moins cher, hébergeable en Europe pour le premier — mais changer
-de transcripteur, c'est re-vérifier la qualité sur des vocaux réels : accents,
-bruit de rue, noms de lieux italiens. Le banc du § 6 ne teste pas ça ; il
-faudrait une poignée de vocaux de testeurs et une comparaison à la main.
+Deux successeurs, tous deux moins chers que ce qu'on payait :
 
-### La structuration — **à moderniser**
+| Candidat | Prix | Ce qui le recommande |
+|---|---|---|
+| **Voxtral Mini Transcribe 2** (Mistral) | 0,003 $/min | Européen, modèle français, inférence régionale UE possible (+10 %). Ferme aussi la question du § 5 |
+| **Gemini 3.5 Transcribe** (Google) | 0,003 $/min | Même prix, gros fournisseur, mais même problème d'hébergement qu'aujourd'hui |
 
-`gpt-4o` est le plus vieux modèle de la pile, et il fait la tâche la plus
-mécanique. Un modèle récent de la même maison coûte vingt-cinq fois moins
-(GPT-6 Luna : 0,10 $/M contre 2,50 $/M). Le gain absolu est faible — c'est une
-ligne marginale — mais c'est une modernisation gratuite, sans portage : un nom
-de modèle dans `.env`. À faire au prochain passage dans ce fichier.
+**Reco : Voxtral**, et pas seulement parce qu'il est moins cher — si la
+transcription et la rédaction devaient un jour rester en Europe, c'est par là
+qu'on commence.
+
+⚠️ Changer de transcripteur ne se décide pas sur une fiche produit : il faut
+l'essayer sur de **vrais vocaux de testeurs** — accents, bruit de rue, noms de
+lieux italiens, phrases qui s'arrêtent en route. Le banc du § 6 ne teste pas ça.
+Prendre cinq vocaux, les passer dans les deux, lire les deux transcriptions
+côte à côte.
+
+### La structuration — **elle déménage avec la transcription**
+
+`gpt-4o` fait la tâche la plus mécanique de la pile, et il est sur le compte
+qui n'existe plus. Comme c'est du travail sans finesse — découper, ranger,
+nommer —, n'importe quel petit modèle récent fait l'affaire : **Mistral Small 4**
+(0,15 $/M) ou **Gemini 3.5 Flash-Lite** (0,30 $/M).
+
+Prendre le **même fournisseur que la transcription** : un contrat de moins à
+tenir, et c'est le poste où la qualité du moteur ne se voit pas.
 
 ### La modération — **Mistral Moderation 2, parce qu'elle est gratuite**
 
@@ -137,6 +157,23 @@ d'entrée la moins risquée pour un second fournisseur dans la maison.
 Phase 2. C'est de la vision sur un volume potentiellement gros (une pellicule
 entière). Les modèles Flash de Google sont taillés pour ça et peu chers ; Claude
 sait le faire aussi. Rien à décider avant que l'agent existe.
+
+### ⚠️ Un piège de configuration, créé par le départ d'OpenAI
+
+`env.live` — ce qui décide si le pipeline tourne pour de vrai — se calcule
+ainsi (`src/env.ts`) :
+
+```ts
+const hasLiveKeys = env.OPENAI_API_KEY !== "" && env.APITEMPLATE_API_KEY !== "";
+```
+
+Et `createResponder` rend `FakeResponder` quand `!env.live`. Autrement dit :
+**sans clé OpenAI, MEMO parle en simulé même avec une clé Anthropic valide**, et
+rien ne le dit à l'écran — les réponses sont plausibles, c'est ça le piège.
+
+Le correctif tient en quelques lignes : la conversation doit dépendre de **sa**
+clé, pas de celle d'un autre poste. `PIPELINE_MODE=fake` doit continuer à vouloir
+dire « personne n'appelle personne ».
 
 ## 4. Un second fournisseur, mais pour la bonne raison
 
@@ -171,6 +208,10 @@ ce qu'on a le droit d'**écrire sur la page de vente**. « Vos souvenirs ne
 quittent pas l'Europe » est une promesse commerciale, pas une préférence
 technique, et aujourd'hui on ne peut pas la tenir. Si Hugo veut la tenir, ça
 change le choix du moteur de la rédaction et de la transcription — pas l'inverse.
+
+Le départ d'OpenAI rapproche cette question : il faut de toute façon rebrancher
+la transcription, et le candidat recommandé (Voxtral) est justement celui qui
+ouvre la porte européenne. Autant décider maintenant, pendant qu'on y est.
 
 **Le scénario qui renverse le calcul du § 1** : un chat gratuit et illimité,
 ouvert à des gens qui ne commandent pas de carnet. Le coût passe alors de « 43 ¢
@@ -219,7 +260,10 @@ jobs, ni l'app.
 | 23/09/2026 | Un second fournisseur se justifie comme **repli** (Claude → l'autre → les règles), pas comme économie | reco Claude |
 | 23/09/2026 | La modération, quand elle sera construite, part sur Mistral Moderation 2 — gratuite, et c'est le bon usage d'un second fournisseur | reco Claude |
 | 23/09/2026 | « Vos souvenirs ne quittent pas l'Europe » n'est pas tenable aujourd'hui : à décider comme argument commercial avant de changer de moteur | à trancher — Hugo |
-| 23/09/2026 | La structuration passe d'un `gpt-4o` à un modèle récent : même maison, vingt-cinq fois moins cher, un nom dans `.env` | reco Claude |
+| 23/09/2026 | **Plus de compte OpenAI.** L'argument « déjà dans la maison » ne vaut plus, et deux postes pointent sur un fournisseur qu'on ne paie plus | Hugo |
+| 23/09/2026 | La transcription déménage sur **Voxtral Mini Transcribe 2** — moins cher, et c'est la porte européenne. À essayer sur cinq vocaux de testeurs avant de basculer | reco Claude |
+| 23/09/2026 | La structuration suit la transcription chez le même fournisseur : un contrat de moins, et la qualité du moteur ne s'y voit pas | reco Claude |
+| 23/09/2026 | `env.live` dépend de la clé OpenAI : sans elle, MEMO répond en simulé même avec une clé Anthropic. À découpler | reco Claude |
 
 ## Sources
 
