@@ -13,7 +13,7 @@ Ce repo contient le code de l'**app iOS native MemoBook**, développée en Swift
 | `ios/` | L'app iOS (SwiftUI). [Documentation](ios/README.md) |
 | `backend/` | L'API et le pipeline `transcrire → rédiger → relire → mettre en page → imprimer`. [Documentation](backend/README.md) |
 | `templates/travel-journal/` | Le template PDF et les schémas qui décrivent le format du carnet. **Source de vérité** : le back-end les lit, il ne les duplique pas |
-| `agents/` | Configuration des agents IA et référence du design system. **Source de vérité** : `agent-transcription.md` est chargé tel quel comme prompt système de la rédaction |
+| `agents/` | Configuration des agents IA et référence du design system. **Source de vérité** : `agent-transcription.md` est chargé tel quel comme prompt système de la rédaction, `agent-conversation.md` comme celui de MEMO dans le chat |
 | `MemoBook Generator/` | Le générateur de carnets : l'outil de composition à la main, en attendant l'app. Vocaux WhatsApp transcrits, récit découpé en étapes, JSON et PDF générés. [Documentation](MemoBook%20Generator/README.md) |
 | `docs/` | Documentation transverse : [`modeles-ia.md`](docs/modeles-ia.md) pour quel modèle fait quoi et ce que ça coûte, [`ui-development.md`](docs/ui-development.md) pour les règles d'implémentation des écrans depuis Figma, [`reglages-utilisateur.md`](docs/reglages-utilisateur.md) pour ce que le voyageur peut régler dans son carnet et qui l'applique, [`vocabulaire.md`](docs/vocabulaire.md) pour les mots — écran, feuille, parcours, fonctionnalité — et ce qu'ils désignent dans le code |
 
@@ -42,6 +42,7 @@ Le repo GitHub est la source de vérité du projet. Clara et Paul n'ont pas beso
 - **Backend** : ✅ **tranché — Node/TypeScript (Fastify) + PostgreSQL**, plutôt que Supabase ou Firebase. Le pipeline enchaîne des tâches longues (transcription d'un vocal, appel LLM, génération PDF) qui demandent une vraie file d'attente avec reprise sur échec ; c'est ce qu'un BaaS rend le plus pénible. La file est adossée à Postgres (pg-boss) : rien de plus à opérer
 - **Transcription** : API OpenAI (`gpt-4o-transcribe`), langue forcée en français. Hybride avec le framework Speech d'Apple encore possible plus tard
 - **Rédaction** : API Anthropic (`claude-opus-5`), pilotée par `agents/agent-transcription.md`. Passe distincte de la mise en page : le texte est écrit souvenir par souvenir et relu par l'utilisateur avant d'entrer dans le carnet
+- **Conversation** : API Anthropic (`claude-sonnet-5`), pilotée par `agents/agent-conversation.md`. C'est MEMO, dans le chat : il écoute, reformule, pose **une** question et classe ce qu'on lui dit. Un moteur de règles répond à sa place quand il se tait — le fil n'est jamais muet ([`docs/conversation.md`](docs/conversation.md))
 - **Génération de PDF** : APITemplate, sur le template de `templates/travel-journal/`
 - **Paiements** : StoreKit 2 pour les biens numériques (carnet PDF, abonnement) ; Stripe possible pour les carnets imprimés livrés physiquement — *pas encore implémenté*
 - **CI** : GitHub Actions — typecheck, lint et tests du back-end à chaque PR (`.github/workflows/ci-backend.yml`). La vérification de compilation iOS reste à ajouter (elle demande un runner macOS)

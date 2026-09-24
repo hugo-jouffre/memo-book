@@ -20,7 +20,7 @@ savoir lequel :
 
 | Agent | Ce qu'il fait pour MEMO | État |
 |---|---|---|
-| **Conversation** (`agent-conversation.md`) | Sa voix : écouter, reformuler, relancer, classer ce qu'on lui dit | À construire — c'est ce chantier |
+| **Conversation** (`agent-conversation.md`) | Sa voix : écouter, reformuler, relancer, classer ce qu'on lui dit | En production (Claude Sonnet 5) — le fichier **est** le prompt système |
 | **Transcription & Rédaction** (`agent-transcription.md`) | Son écrivain : transformer un vocal en texte fidèle et agréable à lire | En production (OpenAI `gpt-4o-transcribe`, puis Claude Opus 5) |
 | **Photo** (`agent-photo.md`) | Choisir et ordonner les photos d'un souvenir | Non implémenté — phase 2 |
 | **Mise en page** (`agent-layout.md`) | Composer le carnet sans réécrire un mot | En production, à l'aperçu |
@@ -235,7 +235,7 @@ métro ; ce qu'on y a dit avant la coupure, en revanche, reste sous les yeux.
 | Valider | `POST /v1/entries/:id/validate` | `validatedAt`, décrémente l'étape offerte |
 | Corriger | `PATCH /v1/entries/:id` (existe) | `editedText` |
 | Supprimer | `DELETE /v1/trips/:id/chat` | Propriétaire seul, 403 sinon |
-| Répondre | job `memobook.converse` | `AnthropicResponder` (Sonnet 5, prompt = `agents/agent-conversation.md`, sortie JSON contrainte) → repli `HeuristicResponder` → `FakeResponder` en local et en CI |
+| Répondre | job `memobook.converse` | `AnthropicResponder` (Sonnet 5, prompt = `agents/agent-conversation.md`, sortie JSON contrainte) → repli `HeuristicResponder` sans clé Anthropic → `FakeResponder` sous `PIPELINE_MODE=fake`, en CI et dans les tests |
 | Écrire | jobs `transcribe` → `redact` (existent) | La rédaction relit les précisions du fil |
 
 Le détail — champs, codes d'erreur, tests, phasage en quatre PR — est dans le
@@ -263,6 +263,93 @@ cette grille — une ligne, sept cases, pas de note :
 Deux ou trois itérations du prompt, en notant ici ce qui a changé et pourquoi.
 Les mêmes vocaux nourrissent les tests structurels — jamais le modèle en CI.
 
+### Première calibration — 23/09/2026, Sonnet 5, dix scènes écrites
+
+Trois passes. Ce que la grille a attrapé, et ce que ça a changé dans
+`agents/agent-conversation.md` :
+
+| Ce qu'on a lu | Pourquoi c'est une faute | Ce qui a changé |
+|---|---|---|
+| « C'est un écrivain qui rédige les souvenirs, pas moi » | MEMO est **le** personnage (§ 1) : le voyageur n'a pas à savoir qu'il y a d'autres passages derrière | La section qui décrivait les autres agents devient « ce qui travaille derrière toi — et qui ne se dit pas ». MEMO répond en son nom : « c'est moi qui écris ton carnet » |
+| « C'était où, et avec qui ? » | Un seul point d'interrogation, deux demandes | La règle le dit avec l'exemple — et ajoute que la tentation est la plus forte quand on ne sait **rien** (des photos sans un mot) : demander le lieu, rien d'autre |
+| « lequel a marqué Clara ? » en relance, à Clara | La relance s'affiche sur la carte du voyage, que **tous** les co-voyageurs lisent | La relance ne nomme personne : un lieu, un moment, une chose |
+| Un vocal inaudible classé `command` | Le souvenir existe, c'est sa transcription qui manque | « Un vocal est toujours un souvenir, **y compris celui que tu n'as pas réussi à entendre** » |
+
+Et deux corrections dans le **banc**, pas dans le prompt — un faux positif
+répété apprend à ignorer la grille :
+
+- « Tutoiement » ne se coche plus automatiquement dès qu'une autre personne est
+  en scène : « la burrata coupée devant vous », avec Clara, est du français
+  correct. La ligne passe alors en lecture à la main.
+- L'écho des mots du voyageur ne s'exige plus sur un **refus** : il n'y a rien
+  à reformuler, et l'exiger reviendrait à demander d'insister.
+
+Au terme des trois passes, les dix scènes passent sans manquement de forme, et
+les trois lignes qui se lisent — rien d'inventé, la question n'est pas déjà
+répondue, c'est la plus utile — tiennent sur les dix.
+
+⚠️ **Ce sont des scènes écrites, pas des voix.** Elles disent que le contrat
+tient ; elles ne disent rien du français parlé, des hésitations et des noms
+propres mal transcrits. La calibration n'est pas finie tant que les vocaux des
+testeurs n'y sont pas passés.
+
+### Deuxième calibration — 24/09/2026, Sonnet 5, neuf vocaux de testeurs
+
+Premier passage de vraies voix (`11` à `19` dans le dossier de scènes) : neuf
+vocaux WhatsApp de Hugo pendant un voyage en Grèce (Paros, Naxos, Ios,
+Mykonos), transcrits avec `gpt-4o-transcribe` pour l'occasion — texte gardé
+tel quel, hésitations et noms mal transcrits compris (ex. « Famine » entendu
+pour Fanny, scène 19).
+
+Les neuf passent sans manquement de forme après une correction — **dans le
+banc, pas dans le prompt** : son détecteur de refus cherchait le mot « stop »
+en isolé, et « on a fait un bon petit stop avant de prendre le ferry » (une
+halte de route) l'a déclenché à tort. Retiré du banc ; les autres formules de
+refus (« plus tard », « pas envie »…) sont plus explicites et n'ont pas ce
+défaut. Même famille de faux positif que les deux corrections du 23/09.
+
+Les trois lignes qui se lisent tiennent sur les neuf : rien d'inventé, aucune
+question déjà répondue, le mélange tu (au voyageur) / vous (au couple) sonne
+juste partout où il apparaît.
+
+**Une observation, laissée ouverte** : la scène 19 (dernier jour du voyage,
+aucun ressenti dit) visait à voir si MEMO pose la question ressenti en fin de
+séjour. Il a plutôt demandé un détail factuel non couvert — cohérent avec
+l'ordre du prompt (lieu → avec qui → détail → ressenti), mais ça montre que
+le ressenti peut ne jamais arriver tant qu'il reste un détail factuel non
+posé, ce qui est fréquent sur un vocal aussi dense. Pas changé pour l'instant
+— une scène ne suffit pas à trancher, et rien n'empêche la question au tour
+suivant.
+
+### L'outil de relecture
+
+```bash
+cd backend && npm run conversation:eval            # Claude, sur toutes les scènes
+cd backend && npm run conversation:eval -- --heuristic   # le moteur de règles, sans clé
+```
+
+Le script (`backend/scripts/conversation-eval.ts`) fait parler MEMO sur les
+scènes de `backend/test/fixtures/conversation/` — dix situations du contrat :
+un vocal riche, une précision courte, un refus, une journée difficile, une
+question sur le produit, une transcription échouée, des photos, la
+rose/épine/graine, une question déjà répondue, un carnet à plusieurs. Il
+n'écrit rien en base, et **ce n'est pas un test** : il n'appelle que le
+répondeur.
+
+Quatre des sept lignes de la grille se vérifient à la machine, et le script les
+coche tout seul : une seule question, trois bulles au plus, le tutoiement, la
+relance qui se lit seule — plus les mots interdits, le Markdown, les puces hors
+catalogue, le classement attendu, et « la reformulation garde un mot du
+voyageur ». Les trois qui restent se lisent : **aucun fait inventé**, **la
+question n'est pas déjà répondue**, **c'est la question la plus utile au
+carnet**. Elles s'impriment sous chaque réponse, en cases vides.
+
+Les vocaux des testeurs entrent là, une scène par vocal — le mode d'emploi est
+dans `backend/test/fixtures/conversation/README.md`. Le moteur de règles sert
+d'étalon : il échoue aujourd'hui sur six points de forme (il redemande le lieu
+qu'on vient de lui donner, il ne reprend pas les mots du voyageur), et c'est
+exactement ce que le modèle doit faire mieux.
+
 ## 14. Décisions
 
 | Date | Décision | Par |
@@ -283,3 +370,6 @@ Les mêmes vocaux nourrissent les tests structurels — jamais le modèle en CI.
 | 22/09/2026 | Supprimer la conversation : propriétaire seul, 403 pour un co-voyageur | reco Claude |
 | 22/09/2026 | Repli heuristique côté serveur ; le moteur local de l'app ne sert plus qu'aux aperçus et aux tests | reco Claude |
 | 22/09/2026 | Tout ce qu'on envoie passe par la file de l'accueil ; un vocal de l'accueil va à un seul carnet, le premier en cours | reco Claude |
+| 22/09/2026 | `agents/agent-conversation.md` **est** le prompt système, comme `agent-transcription.md` pour la rédaction : on change ce que MEMO dit en éditant du Markdown | reco Claude |
+| 22/09/2026 | Le modèle écrit des phrases ; le rythme, le catalogue de puces et la rose/épine/graine restent au code. Une réponse hors contrat est refusée, pas rattrapée | reco Claude |
+| 22/09/2026 | Effort de réflexion bas pour la conversation (quelqu'un attend), élevé pour la rédaction (personne ne la regarde écrire) | reco Claude |

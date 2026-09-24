@@ -1,0 +1,11 @@
+{
+  "name": "Vocal testeur — scooter, plage, contretemps de resto le soir",
+  "why": "Vrai vocal avec une hésitation qui se corrige à voix haute (« on est rentré... non, on n'est pas rentré ») : MEMO ne doit pas se tromper sur ce qui s'est réellement passé à cause de la fausse piste.",
+  "memo": { "title": "Grèce 2026", "destinationCity": "Naxos", "people": ["Maxime", "Fanny"] },
+  "traveller": { "firstName": "Maxime", "memberCount": 2 },
+  "message": {
+    "kind": "voice",
+    "text": "Le jeudi 27 août, on est donc à Naxos. On a été louer un scooter le matin, un superbe scooter chez Toto Scooter. Ensuite on est parti, on a fait deux villages grecs très sympas et ensuite on a fait la plage qui s'appelle la plage Hawaii qui est vraiment magnifique. Il y avait un petit peu beaucoup de vent mais c'était quand même très sympa. Ensuite on est rentré à la maison. Non, on n'est pas rentré à la maison, on est allé boire un verre dans un super beau restaurant avec un magnifique coucher de soleil. Du coup on a voulu manger là-bas mais c'était pas possible, il n'y avait plus de place, tout était réservé et du coup on a réservé pour le lendemain. Ensuite on est rentré à la maison, on s'est préparé et puis on est allé boire un verre à notre nouveau bar préféré, le Prime."
+  },
+  "expect": { "disposition": "memory" }
+}

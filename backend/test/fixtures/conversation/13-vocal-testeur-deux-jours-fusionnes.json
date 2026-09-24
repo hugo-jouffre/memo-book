@@ -1,0 +1,11 @@
+{
+  "name": "Vocal testeur — deux jours racontés d'un coup, dont un « rien à dire »",
+  "why": "Le voyageur annonce lui-même qu'un des deux jours n'a « pas grand chose à dire » puis l'évoque quand même en une phrase. MEMO ne doit pas insister sur ce jour-là ni le traiter comme absent : il y a une phrase à retenir, pas un manque.",
+  "memo": { "title": "Grèce 2026", "destinationCity": "Naxos", "people": ["Maxime", "Fanny"] },
+  "traveller": { "firstName": "Maxime", "memberCount": 2 },
+  "message": {
+    "kind": "voice",
+    "text": "Vendredi 28 août et samedi 29 août parce que du coup le samedi 29 août il n'y avait pas grand chose à dire étant donné qu'on est sorti le 28 août. Donc le vendredi 28 août on est allé faire une activité, l'activité préférée sur l'île. On a dû se lever aux aurores pour les vacances c'est à dire 8h. C'était très tôt et on est ensuite parti faire une activité qui était de faire de la cuisine avec une famille grecque qui avait en fait une ferme. Du coup on est allé dans leur ferme, on a nourri les animaux, on a récolté, cueilli nous-mêmes les différents légumes, les tomates, les concombres, les oignons etc. Pour ensuite se faire un excellent plat, enfin plein de plats différents. On a du coup nourri les poules à la main, on a nourri les vaches, les animaux, on a trait les chèvres. C'était vraiment incroyable, super bonne activité et Fanny était super bonne, super forte en équitation sur ce super beau âne. Ensuite après on est parti, on est allé direction la maison pour se changer et on est ensuite retourné manger dans le fameux restaurant Pieds dans le sable qui était exceptionnel, magnifique, très très très bon, tarama excellent et coucher de soleil juste sublime. Ensuite on est rentré, c'était une grosse journée, on est ensuite rentré et puis on s'est dit pourquoi pas et du coup on est parti au Prime qui était notre nouveau bar comme dit précédemment. Et on s'est donc éclaté la gueule au Prime puis ensuite dans un bar grec, on a rencontré un peu de monde c'était super sympa et puis après on a fait une soirée, on est parti en boîte et on a rencontré des australiens là-bas totalement je tarbé mais qui étaient vraiment très très cool. Du coup on est rentré un peu tard et le lendemain c'était un petit peu compliqué."
+  },
+  "expect": { "disposition": "memory" }
+}

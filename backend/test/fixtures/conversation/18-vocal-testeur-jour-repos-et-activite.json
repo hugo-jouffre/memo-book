@@ -1,0 +1,11 @@
+{
+  "name": "Vocal testeur — deux jours enchaînés, un jour de repos et un jour bateau",
+  "why": "Le premier jour n'a presque aucun fait (« on n'a pas fait grand-chose »), le second en a beaucoup (activité bateau, criques, snorkeling). La question doit se poser sur le jour riche, pas sur le jour de repos qui n'a rien à préciser.",
+  "memo": { "title": "Grèce 2026", "destinationCity": "Ios", "people": ["Maxime", "Fanny"] },
+  "traveller": { "firstName": "Maxime", "memberCount": 2 },
+  "message": {
+    "kind": "voice",
+    "text": "Mercredi 2 septembre, journée repos. On va pas se mentir, on est rentré, on était très fatigué, surtout Maxime qui a enchaîné les jeans toniques. Mais très fatigué, on s'est levé, on n'a pas fait grand-chose, on a juste profité de la piscine, à l'ombre, très tranquille. Voilà, on a joué aux échecs, après on a été manger dans un restaurant le soir. Vraiment notre vie ces derniers jours se résume à manger au restaurant et faire des échecs et profiter de la piscine. Et du coup le jeudi 3 septembre qu'on va enchaîner tout de suite, là c'était jeudi 3 septembre, on est allé faire le petit déjeuner le matin qui était toujours aussi bon, et ensuite on est parti et on a fait une activité bateau. On a découvert plein de petites criques très sympas avec des coins de snorkeling très cool. On a pris très peu de photos étant donné qu'on est fatigué et qu'on s'est beaucoup reposé. Du coup on n'a pas du tout pris notre téléphone, il y avait beaucoup de vent. Mais voilà, très sympa. Comme d'habitude on profite et c'est nos derniers jours, donc on espère que nos deux derniers jours en Grèce vont être tout aussi sympas que toutes les semaines qui sont passées avant."
+  },
+  "expect": { "disposition": "memory" }
+}

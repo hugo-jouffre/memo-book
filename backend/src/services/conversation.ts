@@ -1,6 +1,8 @@
 import type { ChatDisposition, ChatMessageKind } from "@prisma/client";
 import type { Env } from "../env.js";
 import type { CoherenceSheet, RedactedNeighbour } from "./redaction.js";
+import Anthropic from "@anthropic-ai/sdk";
+import { AnthropicResponder } from "./conversationAnthropic.js";
 import { HeuristicResponder } from "./conversationHeuristics.js";
 import {
   OPENING_TEXT,
@@ -392,13 +394,35 @@ export function fallbackResponder(): MemoResponder {
 }
 
 /**
- * Sans clés (`PIPELINE_MODE=fake`, la CI) : le simulé. Avec : le moteur de
- * règles, en attendant Claude — `AnthropicResponder` s'insère ici, avec le
- * moteur de règles en repli derrière lui.
+ * Qui répond, selon ce dont on dispose — trois paliers, jamais un silence :
+ *
+ * 1. **Claude** (`AnthropicResponder`, Sonnet 5) dès qu'on a une clé
+ *    Anthropic. C'est MEMO.
+ * 2. **Le moteur de règles** (`HeuristicResponder`) sans clé Anthropic mais en
+ *    mode réel, et en repli de Claude à chaque tour qui tombe — voir
+ *    `fallbackResponder`.
+ * 3. **Le simulé** (`FakeResponder`) quand personne n'appelle personne :
+ *    `PIPELINE_MODE=fake`, la CI, les tests. Aucun appel réseau, aucune
+ *    facture, des réponses prévisibles.
+ *
+ * ⚠️ **Ce que ce choix ne regarde pas.** `env.live` dit qu'on a de quoi
+ * *transcrire et rendre* (`OPENAI_API_KEY` et `APITEMPLATE_API_KEY`) — rien à
+ * voir avec de quoi *parler*. Les faire dépendre l'un de l'autre donnait un
+ * MEMO simulé, en silence, sur une machine qui a pourtant une clé Anthropic
+ * valide : les réponses restent plausibles, donc la panne ne se voit pas.
+ * Seul `PIPELINE_MODE=fake` — « personne n'appelle personne » — coupe Claude.
+ * Voir `docs/modeles-ia.md` § 5.
+ *
+ * Le modèle **n'entre jamais en CI** : la CI pose `PIPELINE_MODE=fake`, comme
+ * `test/helpers.ts`. Les tests du contrat se jouent contre un client doublé.
  */
 export function createResponder(env: Env): MemoResponder {
-  if (!env.live) return new FakeResponder();
-  return new HeuristicResponder();
+  if (env.PIPELINE_MODE === "fake") return new FakeResponder();
+  if (env.ANTHROPIC_API_KEY === "") return env.live ? new HeuristicResponder() : new FakeResponder();
+  return new AnthropicResponder(
+    new Anthropic({ apiKey: env.ANTHROPIC_API_KEY }),
+    env.ANTHROPIC_CONVERSATION_MODEL,
+  );
 }
 
 export { fallbackPrompt };

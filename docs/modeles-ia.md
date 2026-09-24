@@ -173,7 +173,7 @@ Tant que c'est du récit, Mistral. Si la photo passe devant, Google.
   **Haiku 4.5** (moitié prix, une ligne dans `.env`) **avant** de penser à
   changer de maison.
 
-## 5. ⚠️ Un piège de configuration, créé par le départ d'OpenAI
+## 5. Un piège de configuration, créé par le départ d'OpenAI — corrigé
 
 `env.live` — ce qui décide si le pipeline tourne pour de vrai — se calcule ainsi
 (`src/env.ts`) :
@@ -182,13 +182,24 @@ Tant que c'est du récit, Mistral. Si la photo passe devant, Google.
 const hasLiveKeys = env.OPENAI_API_KEY !== "" && env.APITEMPLATE_API_KEY !== "";
 ```
 
-Et `createResponder` rend `FakeResponder` quand `!env.live`. Autrement dit :
-**sans clé OpenAI, MEMO parle en simulé même avec une clé Anthropic valide**, et
-rien ne le dit à l'écran — les réponses sont plausibles, c'est ça le piège.
+`createResponder` rendait `FakeResponder` dès que `!env.live`. Autrement dit :
+**sans clé OpenAI, MEMO parlait en simulé même avec une clé Anthropic valide**,
+et rien ne le disait à l'écran — les réponses restaient plausibles, c'est ça le
+piège. Le jour où la transcription déménage, plus personne n'a de clé OpenAI :
+le piège se serait refermé sur tout le monde en même temps.
 
-Le correctif tient en quelques lignes : la conversation doit dépendre de **sa**
-clé, pas de celle d'un autre poste, et `PIPELINE_MODE=fake` doit continuer à
-vouloir dire « personne n'appelle personne ».
+Corrigé le **24/09/2026** (`src/services/conversation.ts`) : la conversation
+dépend de **sa** clé, pas de celle d'un autre poste.
+
+```ts
+if (env.PIPELINE_MODE === "fake") return new FakeResponder();
+if (env.ANTHROPIC_API_KEY === "") return env.live ? new HeuristicResponder() : new FakeResponder();
+return new AnthropicResponder(…);
+```
+
+Seul `PIPELINE_MODE=fake` — « personne n'appelle personne » — coupe encore
+Claude ; c'est ce que posent la CI et `test/helpers.ts`, donc le modèle n'entre
+toujours pas en CI.
 
 ## 6. Ce qu'un fournisseur doit savoir faire pour entrer ici
 
@@ -237,7 +248,7 @@ cd backend && npm run conversation:eval -- --heuristic   # l'étalon sans modèl
 | 23/09/2026 | Google passe devant si l'agent Photo devient central : c'est le seul poste où il est franchement meilleur | reco Claude |
 | 23/09/2026 | La rédaction reste sur Opus 5 ; regarder Opus 5.5 (‑23 %, aucun portage) | reco Claude |
 | 23/09/2026 | La conversation reste sur Sonnet 5 ; descendre à Haiku 4.5 avant d'envisager un autre fournisseur | reco Claude |
-| 23/09/2026 | `env.live` dépend de la clé OpenAI : sans elle, MEMO répond en simulé même avec une clé Anthropic. À découpler | reco Claude |
+| 24/09/2026 | `env.live` ne décide plus qui parle : MEMO répond dès qu'il a **sa** clé, même sans clé OpenAI. Seul `PIPELINE_MODE=fake` le coupe | fait |
 | 23/09/2026 | « Vos souvenirs ne quittent pas l'Europe » : argument commercial à trancher **avant** de rebrancher la transcription | à trancher — Hugo |
 
 ## Sources

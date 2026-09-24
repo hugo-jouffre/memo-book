@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { Env } from "../env.js";
 import {
   EMPTY_CONVERSATION_STATE,
   FakeResponder,
+  createResponder,
   InvalidReplyError,
   composeBeats,
   firstSentence,
@@ -272,5 +274,33 @@ describe("les commandes et les garde-fous", () => {
     expect(reply.prompt).toBe("Relance forcée");
     expect(reply.disposition).toBe("memory");
     expect(fake.calls).toBe(1);
+  });
+
+  /**
+   * Les trois paliers de `docs/conversation.md` § 12 — et, accessoirement, le
+   * garde-fou d'une panne qui ne se voyait qu'au démarrage : ce fichier charge
+   * `conversation.ts` **en premier**, l'ordre exact qui cassait le serveur
+   * quand `conversationAnthropic.ts` lisait les bornes à l'initialisation du
+   * module (« Cannot access 'MAX_BEATS' before initialization »). Le typecheck
+   * et les tests passaient ; seul `npm run dev` tombait.
+   */
+  it("choisit qui répond selon ce dont on dispose", () => {
+    const env = (mode: string, live: boolean, key: string) =>
+      ({
+        PIPELINE_MODE: mode,
+        live,
+        ANTHROPIC_API_KEY: key,
+        ANTHROPIC_CONVERSATION_MODEL: "claude-sonnet-5",
+      }) as Env;
+
+    // « Personne n'appelle personne » : la seule chose qui coupe Claude.
+    expect(createResponder(env("fake", false, "sk-test")).constructor.name).toBe("FakeResponder");
+    expect(createResponder(env("auto", true, "")).constructor.name).toBe("HeuristicResponder");
+    expect(createResponder(env("auto", true, "sk-test")).constructor.name).toBe("AnthropicResponder");
+
+    // Le cas qui avait rendu MEMO muet sans le dire : une clé Anthropic
+    // valide, mais pas de clé OpenAI, donc `live` faux. MEMO parle quand même.
+    expect(createResponder(env("auto", false, "sk-test")).constructor.name).toBe("AnthropicResponder");
+    expect(createResponder(env("auto", false, "")).constructor.name).toBe("FakeResponder");
   });
 });
