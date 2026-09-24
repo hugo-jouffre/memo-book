@@ -285,11 +285,22 @@ describe("les commandes et les garde-fous", () => {
    * et les tests passaient ; seul `npm run dev` tombait.
    */
   it("choisit qui répond selon ce dont on dispose", () => {
-    const env = (live: boolean, key: string) =>
-      ({ live, ANTHROPIC_API_KEY: key, ANTHROPIC_CONVERSATION_MODEL: "claude-sonnet-5" }) as Env;
+    const env = (mode: string, live: boolean, key: string) =>
+      ({
+        PIPELINE_MODE: mode,
+        live,
+        ANTHROPIC_API_KEY: key,
+        ANTHROPIC_CONVERSATION_MODEL: "claude-sonnet-5",
+      }) as Env;
 
-    expect(createResponder(env(false, "sk-test")).constructor.name).toBe("FakeResponder");
-    expect(createResponder(env(true, "")).constructor.name).toBe("HeuristicResponder");
-    expect(createResponder(env(true, "sk-test")).constructor.name).toBe("AnthropicResponder");
+    // « Personne n'appelle personne » : la seule chose qui coupe Claude.
+    expect(createResponder(env("fake", false, "sk-test")).constructor.name).toBe("FakeResponder");
+    expect(createResponder(env("auto", true, "")).constructor.name).toBe("HeuristicResponder");
+    expect(createResponder(env("auto", true, "sk-test")).constructor.name).toBe("AnthropicResponder");
+
+    // Le cas qui avait rendu MEMO muet sans le dire : une clé Anthropic
+    // valide, mais pas de clé OpenAI, donc `live` faux. MEMO parle quand même.
+    expect(createResponder(env("auto", false, "sk-test")).constructor.name).toBe("AnthropicResponder");
+    expect(createResponder(env("auto", false, "")).constructor.name).toBe("FakeResponder");
   });
 });

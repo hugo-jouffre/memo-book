@@ -235,7 +235,7 @@ métro ; ce qu'on y a dit avant la coupure, en revanche, reste sous les yeux.
 | Valider | `POST /v1/entries/:id/validate` | `validatedAt`, décrémente l'étape offerte |
 | Corriger | `PATCH /v1/entries/:id` (existe) | `editedText` |
 | Supprimer | `DELETE /v1/trips/:id/chat` | Propriétaire seul, 403 sinon |
-| Répondre | job `memobook.converse` | `AnthropicResponder` (Sonnet 5, prompt = `agents/agent-conversation.md`, sortie JSON contrainte) → repli `HeuristicResponder` → `FakeResponder` en local et en CI |
+| Répondre | job `memobook.converse` | `AnthropicResponder` (Sonnet 5, prompt = `agents/agent-conversation.md`, sortie JSON contrainte) → repli `HeuristicResponder` sans clé Anthropic → `FakeResponder` sous `PIPELINE_MODE=fake`, en CI et dans les tests |
 | Écrire | jobs `transcribe` → `redact` (existent) | La rédaction relit les précisions du fil |
 
 Le détail — champs, codes d'erreur, tests, phasage en quatre PR — est dans le
