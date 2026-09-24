@@ -1,0 +1,11 @@
+{
+  "name": "Vocal testeur — rectification d'un vocal précédent",
+  "why": "Le voyageur commence par parler de son propre vocal précédent (« rectification par rapport à mon vocal précédent »), une phrase méta qui ne raconte rien. MEMO ne doit pas la reformuler ni la citer : il reformule le souvenir réel qui suit, sans mentionner « rectification » ni « vocal précédent ».",
+  "memo": { "title": "Grèce 2026", "destinationCity": "Naxos", "people": ["Maxime", "Fanny"] },
+  "traveller": { "firstName": "Maxime", "memberCount": 2 },
+  "message": {
+    "kind": "voice",
+    "text": "Bon rectification par rapport à mon vocal précédent. Du coup on va parler quand même du 29 août. Donc on s'est réveillé un petit peu fatigué au vu de la soirée, mais on a ensuite décidé de prendre le taureau par les cornes, on s'est fait un bon brunch, très sympa, on s'est ensuite reposé, balade dans la ville de Naxos. On a trouvé un super beau restaurant avec un magnifique rooftop sur la ville, le port etc. Ensuite du coup je suis allé me faire coiffer, donc Maxime s'est fait coiffer avec une nouvelle coupe à la grecque, rien d'autre à dire, très sympa. Et ensuite on a mangé le meilleur restaurant de ce voyage avec une excellente moussaka qui était exceptionnelle. Et ensuite on est rentré à la maison tranquillou."
+  },
+  "expect": { "disposition": "memory" }
+}

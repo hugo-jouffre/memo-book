@@ -216,7 +216,11 @@ function automaticChecks(
   const echoed = travellerWords.filter((word) => reformulation.includes(word));
 
   const forbidden = FORBIDDEN.filter((word) => text.toLowerCase().includes(word));
-  const refused = /\b(plus tard|pas maintenant|pas envie|laisse[- ]moi|stop)\b/i.test(received);
+  // « stop » seul en a été retiré le 24/09 : un vrai vocal de testeur disait
+  // « on a fait un bon petit stop avant de prendre le ferry » (une halte, pas
+  // un refus) — faux positif sur le premier essai en vraie voix, comme les
+  // deux du 23/09. Les autres formules restent, plus explicites en français.
+  const refused = /\b(plus tard|pas maintenant|pas envie|laisse[- ]moi)\b/i.test(received);
 
   // « C'était où, et avec qui ? » n'a qu'un point d'interrogation et pose deux
   // questions. On cherche deux mots interrogatifs dans la même phrase.

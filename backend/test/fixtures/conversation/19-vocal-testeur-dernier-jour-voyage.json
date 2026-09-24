@@ -1,0 +1,11 @@
+{
+  "name": "Vocal testeur — tout dernier jour du voyage, aucun ressenti dit",
+  "why": "Le vocal raconte des faits (trajet, mauvais restaurant, pantalon trouvé) jusqu'au bout mais ne dit jamais ce que ça fait de finir le voyage. C'est l'occasion pour MEMO de poser la question ressenti, en dernier dans l'ordre du tour type — pas une question factuelle de plus. Contient aussi un vrai nom propre mal transcrit (« Famine » pour Fanny) : MEMO ne doit ni le reprendre tel quel dans sa reformulation, ni deviner un correctif hasardeux.",
+  "memo": { "title": "Grèce 2026", "destinationCity": "Mykonos", "people": ["Maxime", "Fanny"] },
+  "traveller": { "firstName": "Maxime", "memberCount": 2 },
+  "message": {
+    "kind": "voice",
+    "text": "Vendredi 4 septembre, on est parti de notre super beau resort pour aller au port et du coup direction Mykonos pour 1h30 de bateau. Bateau rapide avec beaucoup de vagues, c'était un peu laborieux, on a cru mourir mais c'était sans problème. On est ensuite arrivé du coup à Mykonos, on a récupéré notre hôtel, on se baladait rapidement dans la ville, on a essayé des petits pantalons pour Maxime, des petits pantalons en lin qu'on n'a pas trouvé et on a vu le coucher de soleil, c'était vraiment magnifique. Ensuite on a mangé dans le pire restaurant qu'on a fait parce qu'on a fait le pire choix, Mykonos, il faut savoir que c'était l'endroit où on a eu aucune chance sur les choix qu'on a fait, Famine a perdu son radar et du coup là on a mangé, ensuite on est rentré à l'hôtel, on a dormi et puis le lendemain on est parti, enfin on devait partir pour l'aéroport vers 17h, du coup on a profité toute la journée à Mykonos, on a fait une grande balade dans Mykonos pour visiter un peu tous les autres quartiers qu'on n'avait pas vu, c'est très sympa, une ville très sympa mais beaucoup plus fancy par rapport au reste de la Grèce qu'on a pu faire. Et donc du coup voilà, là on a trouvé pour le coup un pantalon pour Max et puis après on est rentré tranquillement à l'hôtel, on a pris le navette et puis on est allé au lounge de l'aéroport pour profiter une dernière fois des feuilles de vignes et puis de l'alcool à la gratte quoi. Voilà, c'était la fin de nos deux semaines en Grèce."
+  },
+  "expect": { "disposition": "memory" }
+}

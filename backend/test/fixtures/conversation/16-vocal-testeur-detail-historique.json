@@ -1,0 +1,11 @@
+{
+  "name": "Vocal testeur — activité et référence historique en passant",
+  "why": "Le voyageur glisse une explication culturelle (la tombe d'Homère, l'Odyssée) au milieu du récit d'activité : MEMO ne doit pas partir sur ce fait encyclopédique, mais rester sur le vécu du voyageur.",
+  "memo": { "title": "Grèce 2026", "destinationCity": "Ios", "people": ["Maxime", "Fanny"] },
+  "traveller": { "firstName": "Maxime", "memberCount": 2 },
+  "message": {
+    "kind": "voice",
+    "text": "Lundi 31 août, alors on s'est levé tranquillement, on est allé manger le petit déjeuner qui était excellent de l'hôtel. On a ensuite loué un super gros scooter de 200 cm cube. Maxime était super content. Tout ça pour visiter Ios, ce qui était quand même assez compliqué étant donné qu'il y a très peu de routes, de réelles routes avec beaucoup de montagnes. Donc 200 cm cube est très sympa. On est allé voir la tombe d'Homère. Il n'y avait vraiment pas grand chose. Donc Homère, l'écrivain de l'Odyssée. Et ensuite, on s'est baladé dans l'île. On a fait l'île de fond en comble et on s'est retrouvé à faire une dégustation en haut d'une montagne dans une ancienne fromagerie. Enfin, dans une fromagerie tout court. Et du coup, on a dégusté du vin, du fromage. Elle nous a expliqué l'histoire de Ios, de ses habitants, de comment ils vivaient avant, etc. On est ensuite rentré. On n'a pas rendu le scooter. On est ensuite rentré. Maxime s'est fait un super massage pendant que Fanny visitait Cora, la ville principale d'Ios. Et ensuite, on s'est fait un super restaurant avec vue sur la mer. On a loupé le coup de soleil, mais on a quand même réussi à manger dans ce super bon restaurant."
+  },
+  "expect": { "disposition": "memory" }
+}

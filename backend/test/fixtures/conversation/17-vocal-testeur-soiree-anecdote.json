@@ -1,0 +1,11 @@
+{
+  "name": "Vocal testeur — journée + grosse soirée surprise, ton enjoué",
+  "why": "Vocal long, ton très enjoué (« the place to be »), plein de petites anecdotes (chaton adopté par erreur, échecs, rencontre de bar). La reformulation doit garder le ton léger sans en rajouter, et la question porter sur un détail précis, pas sur « la soirée » en général.",
+  "memo": { "title": "Grèce 2026", "destinationCity": "Ios", "people": ["Maxime", "Fanny"] },
+  "traveller": { "firstName": "Maxime", "memberCount": 2 },
+  "message": {
+    "kind": "voice",
+    "text": "Mardi 1er septembre, c'est the place to be, the journée, the soirée, on dirait même. Donc activité surprise préparée par Fanny qui arrive fin de journée. Du coup, on s'est dit que la journée on allait se lever, donc on s'est réveillé tranquillement, on a profité de la plage, des sunbeds, on a free un super bon burger de notre hôtel qui est vraiment très très bon, avec des potatoes. On s'est ensuite posé à la piscine, on a failli adopter un nouveau chat qui s'est posé dans notre sac, un tout bébé chat qui doit avoir littéralement deux mois. On a joué aux échecs avec un super échec qui est offert par Fabien, encore une fois trop forte. Et ensuite, on est parti à l'activité surprise qui était grosse soirée le mardi soir au Far Out Beach Bar. Donc ça a fini vers 18h, on est allé s'installer au bar et là au bar on a rencontré deux grecs, on leur a donné 65 ans, ils en avaient 50, c'était l'enfer, mais très sympa, on a bien discuté. Et ensuite on est allé dans d'autres bars avec des Australiens, etc. On a bien profité de la journée et on est rentré encore une fois un peu tard, donc très fatigué."
+  },
+  "expect": { "disposition": "memory" }
+}

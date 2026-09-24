@@ -1,0 +1,11 @@
+{
+  "name": "Vocal testeur — arrivée sur une nouvelle île",
+  "why": "Beaucoup de petits faits d'affilée (trajet, taille de l'île, hôtel, plage, tennis, coucher de soleil, dîner thaï) : la question doit choisir le détail le plus utile au carnet, pas le premier venu ni un fait déjà cité.",
+  "memo": { "title": "Grèce 2026", "destinationCity": "Ios", "people": ["Maxime", "Fanny"] },
+  "traveller": { "firstName": "Maxime", "memberCount": 2 },
+  "message": {
+    "kind": "voice",
+    "text": "Alors dimanche 30 août, on est parti de Naxos direction Ios, notre dernière île des Cyclades. On a pris le bateau, on est ensuite arrivé. Ios est beaucoup plus petit comme ville, comme île pardon. Et on s'est pris vraiment à un hôtel pour se faire kiffer les cinq dernières nuits pour vraiment se reposer avec Sunbed et hôtel incroyable avec piscine, très bon etc. Donc on a mangé en arrivant, il était genre une heure, on a mangé, après on a profité un peu de la plage et ensuite on s'est préparé, on a bu un petit verre pour le coucher de soleil encore une fois, j'ai l'impression que c'est un rituel. On a fait un tennis avant, avant ça on avait fait un tennis, ensuite coucher de soleil avec du coup le petit verre et ensuite du coup on était un petit peu patrac de toutes ces aventures et donc on est allé manger un thaïlandais. Rien à voir avec la grecque consommation, mais c'était vraiment très cool."
+  },
+  "expect": { "disposition": "memory" }
+}

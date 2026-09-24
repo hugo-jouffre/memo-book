@@ -1,0 +1,11 @@
+{
+  "name": "Vocal testeur — dernier jour sur une île, avant le transfert",
+  "why": "Vrai vocal (pas écrit) : beaucoup de faits déjà donnés (lieu, activités, personnes) dans une seule prise. La question doit porter sur un détail concret non couvert, pas redemander le lieu ni qui était présent.",
+  "memo": { "title": "Grèce 2026", "destinationCity": "Paros", "people": ["Maxime", "Fanny"] },
+  "traveller": { "firstName": "Maxime", "memberCount": 2 },
+  "message": {
+    "kind": "voice",
+    "text": "Mercredi 26 août, donc on s'est levé, on a été rendre notre super scooter qu'on avait nommé Kane, en référence à The 100 qu'on est en train de regarder en ce moment. Ensuite on a fait un bon petit stop avant de prendre le ferry et on s'est fait un super brunch excellent sur le port pour notre dernière journée à Paros qui était exceptionnelle, très belle ville. Et ensuite du coup on a pris le bateau, sieste bien méritée pour Max parce qu'après il savait qu'il allait devoir tirer la valise pendant 20 minutes pour arriver à l'hôtel à Naxos. On est ensuite arrivé à l'hôtel avec pas mal de peine mais on est arrivé et on a ensuite été se balader, on s'est posé sur une plage, on a pris des petits transats kiff toute l'après-midi. On est ensuite rentré et on s'est préparé pour aller au repas, on a mangé encore une fois un excellent repas avec des gens très sympathiques, le restaurant était super et des mezedes, c'était super bon."
+  },
+  "expect": { "disposition": "memory" }
+}

@@ -293,6 +293,34 @@ tient ; elles ne disent rien du français parlé, des hésitations et des noms
 propres mal transcrits. La calibration n'est pas finie tant que les vocaux des
 testeurs n'y sont pas passés.
 
+### Deuxième calibration — 24/09/2026, Sonnet 5, neuf vocaux de testeurs
+
+Premier passage de vraies voix (`11` à `19` dans le dossier de scènes) : neuf
+vocaux WhatsApp de Hugo pendant un voyage en Grèce (Paros, Naxos, Ios,
+Mykonos), transcrits avec `gpt-4o-transcribe` pour l'occasion — texte gardé
+tel quel, hésitations et noms mal transcrits compris (ex. « Famine » entendu
+pour Fanny, scène 19).
+
+Les neuf passent sans manquement de forme après une correction — **dans le
+banc, pas dans le prompt** : son détecteur de refus cherchait le mot « stop »
+en isolé, et « on a fait un bon petit stop avant de prendre le ferry » (une
+halte de route) l'a déclenché à tort. Retiré du banc ; les autres formules de
+refus (« plus tard », « pas envie »…) sont plus explicites et n'ont pas ce
+défaut. Même famille de faux positif que les deux corrections du 23/09.
+
+Les trois lignes qui se lisent tiennent sur les neuf : rien d'inventé, aucune
+question déjà répondue, le mélange tu (au voyageur) / vous (au couple) sonne
+juste partout où il apparaît.
+
+**Une observation, laissée ouverte** : la scène 19 (dernier jour du voyage,
+aucun ressenti dit) visait à voir si MEMO pose la question ressenti en fin de
+séjour. Il a plutôt demandé un détail factuel non couvert — cohérent avec
+l'ordre du prompt (lieu → avec qui → détail → ressenti), mais ça montre que
+le ressenti peut ne jamais arriver tant qu'il reste un détail factuel non
+posé, ce qui est fréquent sur un vocal aussi dense. Pas changé pour l'instant
+— une scène ne suffit pas à trancher, et rien n'empêche la question au tour
+suivant.
+
 ### L'outil de relecture
 
 ```bash
