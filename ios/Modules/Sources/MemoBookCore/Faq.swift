@@ -50,8 +50,27 @@ public struct FaqVariables: Sendable, Hashable {
     /// pas coudre le dos. À revoir si la reliure ou l'imprimeur change.
     public var minimumPageCount: Int
 
-    public init(minimumPageCount: Int) {
+    /// Le prix hebdomadaire de l'abonnement, prélevé tant qu'un récit est en
+    /// cours (voir `faq.prix.app` et `faq.prix.abonnement`).
+    public var weeklySubscriptionPrice: String
+
+    /// La remise sur un exemplaire supplémentaire d'un même Carnet.
+    public var extraCopyDiscount: String
+
+    /// La durée pendant laquelle un voyageur retrouve ses souvenirs après un
+    /// voyage, avant qu'ils ne soient archivés.
+    public var retentionPeriod: String
+
+    public init(
+        minimumPageCount: Int,
+        weeklySubscriptionPrice: String = "1,99 €",
+        extraCopyDiscount: String = "10 %",
+        retentionPeriod: String = "5 ans"
+    ) {
         self.minimumPageCount = minimumPageCount
+        self.weeklySubscriptionPrice = weeklySubscriptionPrice
+        self.extraCopyDiscount = extraCopyDiscount
+        self.retentionPeriod = retentionPeriod
     }
 
     /// Les valeurs en vigueur. Elles viendront d'une configuration distante le
@@ -65,7 +84,11 @@ public struct FaqVariables: Sendable, Hashable {
     /// « {{delai_livraison}} » dans l'app se voit et se corrige, une phrase
     /// amputée passe inaperçue.
     public func resolve(_ text: String) -> String {
-        text.replacingOccurrences(of: "{{nb_pages_min}}", with: String(minimumPageCount))
+        text
+            .replacingOccurrences(of: "{{nb_pages_min}}", with: String(minimumPageCount))
+            .replacingOccurrences(of: "{{prix_abo_hebdo}}", with: weeklySubscriptionPrice)
+            .replacingOccurrences(of: "{{remise_exemplaire_sup}}", with: extraCopyDiscount)
+            .replacingOccurrences(of: "{{duree_conservation}}", with: retentionPeriod)
     }
 }
 
@@ -269,7 +292,7 @@ public enum Faq {
                 question: "Comment j’enregistre un souvenir ?",
                 answer: [
                     "Dans la conversation, tu appuies sur le micro et tu parles.",
-                    "Tu peux aussi lancer un enregistrement rapide depuis l’écran d’accueil : la conversation de ton voyage s’ouvre ensuite toute seule, et ton vocal s’y pose sous tes yeux.",
+                    "Tu peux aussi lancer un enregistrement rapide depuis l’écran d’accueil, sans ouvrir la conversation.",
                     "Ton récit est transcrit automatiquement, puis mis en forme.",
                     "Tu peux relire, corriger et même supprimer une étape enregistrée dans un récit à tout moment.",
                 ]
@@ -279,7 +302,7 @@ public enum Faq {
                 question: "Où va un enregistrement rapide si j’ai plusieurs récits en cours ?",
                 answer: [
                     "Le plus souvent tu n’as qu’un seul récit en cours, et ton souvenir y est ajouté directement.",
-                    "Si tu en as plusieurs, l’enregistrement est ajouté à chacun d’eux, et c’est la conversation du premier qui s’ouvre.",
+                    "Si tu en as plusieurs, l’enregistrement est ajouté à chacun d’eux.",
                     "Tu ouvres ensuite les étapes de chaque récit et tu supprimes celle qui n’a rien à y faire, en une touche.",
                     "Pour éviter ce tri, lance l’enregistrement depuis la conversation du récit concerné : il n’est alors ajouté qu’à celui-ci.",
                 ]
@@ -290,7 +313,7 @@ public enum Faq {
                 answer: [
                     "Autant que tu veux.",
                     "Une minute donne un récit court, cinq minutes donnent une étape bien remplie.",
-                    "La longueur du texte détermine le nombre de photos nécessaires pour équilibrer la page.",
+                    "Le nombre de photos attendu dépend du ratio image/texte que tu as choisi en configurant ton voyage. Au-delà d’un certain seuil, un récit très long ne demande pas plus de photos : il crée simplement une page supplémentaire pour la même étape.",
                 ]
             ),
             FaqEntry(
@@ -314,23 +337,25 @@ public enum Faq {
                 question: "Il y a du bruit autour de moi, ça pose problème ?",
                 answer: [
                     "Rarement. La transcription tolère bien les environnements sonores courants.",
-                    "Si un passage ressort mal, il apparaît en surbrillance dans le texte pour que tu le corriges en deux touches.",
+                    "L’IA transcrit ce qu’elle comprend de ton message vocal, et tu peux ensuite corriger le texte à la voix ou à la main.",
                 ]
             ),
             FaqEntry(
                 id: "faq.raconter.langue",
                 question: "Je peux raconter dans une autre langue ?",
                 answer: [
-                    "Oui, dans les langues prises en charge par l’app.",
-                    "Ton Carnet est ensuite produit dans la langue que tu as choisie pour ton voyage.",
+                    "Pour le moment, MemoBook fonctionne en français : c’est la langue dans laquelle ton récit est transcrit et rédigé.",
+                    "Les mots et expressions d’ailleurs que tu glisses dans ton récit sont conservés tels quels, rien n’est traduit de force.",
+                    "D’autres langues arriveront plus tard.",
                 ]
             ),
             FaqEntry(
                 id: "faq.raconter.plusieurs-voix",
                 question: "On peut être plusieurs à raconter le même voyage ?",
                 answer: [
-                    "Oui, chaque voyageur peut contribuer à un voyage partagé, et ses récits sont attribués à son prénom dans le Carnet.",
-                    "Si tu préfères une voix unique, une option permet d’unifier le ton du Carnet entier.",
+                    "Oui. Dans la conversation, chaque message porte le prénom de celui qui parle, avec une couleur par voyageur. Ces étiquettes n’apparaissent que si le voyage compte plusieurs voyageurs.",
+                    "Dans le Carnet imprimé, le prénom de celui qui a raconté est mentionné discrètement.",
+                    "Si tu préfères une voix unique, une option retire tous les prénoms et unifie le ton du Carnet entier.",
                 ]
             ),
             FaqEntry(
@@ -362,8 +387,8 @@ public enum Faq {
                 id: "faq.photos.combien",
                 question: "Combien de photos par étape ?",
                 answer: [
-                    "Cela dépend de la longueur de ton récit.",
-                    "Plus le texte est long, plus il faut de photos pour remplir la page harmonieusement.",
+                    "Cela dépend de la longueur de ton récit et du ratio image/texte que tu as configuré pour ton voyage.",
+                    "Plus ton récit est long, plus il faut de photos pour respecter ce ratio, jusqu’au seuil où une page supplémentaire est créée pour la même étape.",
                     "L’app t’indique toujours combien il en manque pour valider l’étape en cours.",
                 ]
             ),
@@ -371,8 +396,8 @@ public enum Faq {
                 id: "faq.photos.pourquoi-minimum",
                 question: "Pourquoi un minimum de photos est demandé ?",
                 answer: [
-                    "Parce que la mise en page est calculée pour que texte et images s’équilibrent.",
-                    "Sans ce minimum, la page imprimée aurait de grands vides.",
+                    "Parce que ton Carnet doit respecter le ratio image/texte que tu as choisi en configurant ton voyage.",
+                    "Sans ce minimum, la mise en page finale ne correspondrait pas à ce que tu as demandé.",
                     "Si tu n’as vraiment pas assez de photos, raccourcis le récit de l’étape : le nombre demandé baisse aussitôt.",
                 ]
             ),
@@ -396,7 +421,8 @@ public enum Faq {
                 id: "faq.photos.ordre",
                 question: "Je peux choisir l’ordre et le cadrage ?",
                 answer: [
-                    "Oui. Tu réorganises les photos d’une étape, et tu ajustes le cadrage de chacune avant impression.",
+                    "Pas pour l’instant. Les photos sont placées automatiquement par la mise en page, qui les répartit pour que la page reste équilibrée.",
+                    "Ce que tu choisis, ce sont les photos elles-mêmes : tu peux en retirer une et en ajouter une autre tant que ton Carnet n’est pas parti à l’impression.",
                 ]
             ),
         ]
@@ -453,7 +479,7 @@ public enum Faq {
                 id: "faq.carnet.apercu",
                 question: "Je peux voir mon Carnet avant de le commander ?",
                 answer: [
-                    "Oui. L’aperçu est accessible à tout moment depuis la conversation et se met à jour à chaque étape validée.",
+                    "Oui. L’aperçu est accessible à tout moment depuis la conversation, ou directement depuis la page d’accueil de ton voyage, et il se met à jour à chaque étape validée.",
                     "Tu vois exactement les pages qui seront imprimées.",
                 ]
             ),
@@ -461,9 +487,9 @@ public enum Faq {
                 id: "faq.carnet.pages",
                 question: "Combien de pages fait un Carnet ?",
                 answer: [
-                    "Cela dépend de la quantité de récits et de photos.",
+                    "Cela dépend d’abord de la durée de ton voyage, qui conditionne en grande partie le nombre d’étapes racontées et de photos ajoutées.",
                     "La reliure impose un minimum de {{nb_pages_min}} pages : en dessous, ton Carnet comporterait des pages blanches, et l’app t’invite alors à étoffer tes étapes.",
-                    "Tu peux aussi choisir une densité plus aérée ou plus compacte pour ajuster le volume.",
+                    "Tes étapes sont mises en page en format compact, entre une et deux doubles pages chacune.",
                 ]
             ),
             FaqEntry(
@@ -471,8 +497,8 @@ public enum Faq {
                 question: "C’est quoi la densité de mise en page ?",
                 answer: [
                     "C’est la quantité de contenu par page.",
-                    "Une densité aérée donne un Carnet plus épais et plus contemplatif, une densité compacte un Carnet plus fin.",
-                    "Le contenu reste identique, seule la respiration change.",
+                    "Aujourd’hui, chaque étape est mise en page en format compact : une double page au minimum, deux au maximum.",
+                    "Le format aéré, plus contemplatif, arrivera dans une prochaine version de l’app.",
                 ]
             ),
             FaqEntry(
@@ -495,7 +521,7 @@ public enum Faq {
                 question: "Je peux en commander plusieurs exemplaires ?",
                 answer: [
                     "Oui, en une seule commande ou plus tard.",
-                    "Les exemplaires supplémentaires d’un même Carnet sont proposés à un tarif réduit.",
+                    "Les exemplaires supplémentaires d’un même Carnet sont proposés {{remise_exemplaire_sup}} moins cher.",
                 ]
             ),
             FaqEntry(
@@ -510,8 +536,8 @@ public enum Faq {
                 id: "faq.carnet.abime",
                 question: "Mon Carnet est arrivé abîmé ou avec un défaut d’impression",
                 answer: [
-                    "Signale-le depuis la commande concernée, avec une photo du problème.",
-                    "Un nouvel exemplaire est réimprimé et réexpédié sans frais.",
+                    "Signale-le depuis la commande concernée, avec une photo ou une courte vidéo du problème.",
+                    "Sur présentation de cette preuve, un nouvel exemplaire est réimprimé et réexpédié sans frais.",
                 ]
             ),
         ]
@@ -527,15 +553,15 @@ public enum Faq {
                 id: "faq.partage.comment",
                 question: "Je peux partager mon Carnet sans l’imprimer ?",
                 answer: [
-                    "Oui. Tu partages une version numérique feuilletable, page après page, comme un vrai Carnet.",
-                    "Le partage se fait via un lien ou directement vers tes applications de messagerie.",
+                    "Oui, de deux façons.",
+                    "Le lien de prévisualisation ouvre ton Carnet dans l’app MemoBook et reste à jour : la personne suit l’avancée de ton Carnet sans que tu aies à lui renvoyer un lien à chaque nouvelle page. La copie du PDF, elle, s’ouvre partout sans avoir l’app MemoBook, mais elle fige le Carnet tel qu’il était au moment du partage.",
                 ]
             ),
             FaqEntry(
                 id: "faq.partage.pendant-le-voyage",
                 question: "Je peux partager mon voyage en cours de route ?",
                 answer: [
-                    "Oui. Tes proches peuvent suivre l’avancée de ton Carnet et la carte de ton trajet pendant que tu voyages.",
+                    "Oui, avec le lien de prévisualisation : c’est la seule option qui se met à jour en direct. Une copie du PDF reste figée à la date à laquelle tu l’as partagée.",
                 ]
             ),
             FaqEntry(
@@ -574,8 +600,8 @@ public enum Faq {
                 id: "faq.carte.localisation",
                 question: "MemoBook suit ma position en continu ?",
                 answer: [
-                    "Non. La position est associée à une étape au moment où tu la crées, pas suivie en arrière-plan.",
-                    "Tu peux aussi saisir un lieu à la main, sans activer la localisation.",
+                    "Seulement si tu l’y autorises. Ton téléphone te demande une fois si tu acceptes que MemoBook suive ta position : si tu acceptes, tes étapes se placent toutes seules sur la carte.",
+                    "Si tu refuses, rien n’est suivi. Les lieux de ton Carnet sont alors déduits de ce que tu racontes dans tes enregistrements, et tu peux toujours saisir un lieu à la main.",
                 ]
             ),
             FaqEntry(
@@ -615,7 +641,8 @@ public enum Faq {
                 id: "faq.donnees.conservation",
                 question: "Combien de temps mes souvenirs sont-ils conservés ?",
                 answer: [
-                    "Tant que ton compte existe, pour que tu puisses rouvrir un ancien voyage des années plus tard.",
+                    "Tes souvenirs, tes photos et tes enregistrements restent accessibles pendant {{duree_conservation}} après ton voyage.",
+                    "Passé ce délai, ils sont archivés, et seule la version imprimable de ton Carnet est conservée à vie : tu peux en recommander un exemplaire même des années plus tard.",
                     "Tu peux supprimer un voyage, un souvenir ou l’ensemble de tes données quand tu le décides.",
                 ]
             ),
@@ -656,8 +683,18 @@ public enum Faq {
                 id: "faq.prix.app",
                 question: "L’application est payante ?",
                 answer: [
-                    "Non, elle est gratuite au téléchargement, et enregistrer tes souvenirs l’est aussi.",
-                    "Tu paies uniquement au moment où tu commandes ton Carnet.",
+                    "L’app est gratuite au téléchargement, et tes trois premières étapes sont offertes pour que tu puisses tester l’expérience.",
+                    "Au-delà, un abonnement de {{prix_abo_hebdo}} par semaine prend le relais tant que ton récit est en cours.",
+                    "Tout ce que tu paies en abonnement est déduit du prix final de ton Carnet au moment de le commander.",
+                ]
+            ),
+            FaqEntry(
+                id: "faq.prix.abonnement",
+                question: "Comment marche l’abonnement ?",
+                answer: [
+                    "Il coûte {{prix_abo_hebdo}} par semaine. Il démarre une fois tes trois étapes offertes enregistrées, et il ne court que pendant un récit en cours.",
+                    "Dès que tu clôtures le récit de ton Carnet, il se résilie automatiquement. Tu peux aussi le résilier toi-même à tout moment.",
+                    "Chaque semaine payée est déduite du prix final de ton Carnet.",
                 ]
             ),
             FaqEntry(
@@ -665,7 +702,8 @@ public enum Faq {
                 question: "Combien coûte un Carnet ?",
                 answer: [
                     "Le prix dépend du nombre de pages et des options choisies.",
-                    "Il t’est affiché en clair avant le paiement, sans surprise à l’étape suivante.",
+                    "Les semaines d’abonnement déjà payées pendant ton récit en sont déduites.",
+                    "Le montant restant t’est affiché en clair avant le paiement, sans surprise à l’étape suivante.",
                 ]
             ),
             FaqEntry(
