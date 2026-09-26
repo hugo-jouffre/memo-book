@@ -243,11 +243,15 @@ struct ShareAction: Identifiable {
     let title: String
     /// Un nom du catalogue de la marque.
     let icon: String
-    let perform: () -> Void
+    /// Appelé par la feuille du système, sur le fil principal.
+    let perform: @MainActor () -> Void
 
     /// « Partager sur Whatsapp » : WhatsApp ouvert sur le message, sans passer
     /// par son extension de partage — qui laisse le texte de côté quand un
     /// lien l'accompagne.
+    ///
+    /// Sur le fil principal : `UIApplication` n'existe que là.
+    @MainActor
     static func whatsApp(message: String) -> ShareAction? {
         guard
             let encoded = message.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
@@ -381,7 +385,10 @@ private final class ClosureActivity: UIActivity {
         // doit pas la retrouver en revenant. Le geste lui-même oublie la
         // feuille côté SwiftUI avant de naviguer — voir ceux qui le posent.
         activityDidFinish(true)
-        action.perform()
+        // UIKit appelle `perform()` sur le fil principal, sans que le SDK le
+        // déclare : on le dit ici, une fois, plutôt que dans chaque geste.
+        let perform = action.perform
+        MainActor.assumeIsolated { perform() }
     }
 }
 
