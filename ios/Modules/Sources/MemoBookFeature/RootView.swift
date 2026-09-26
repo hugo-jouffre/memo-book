@@ -22,6 +22,9 @@ public struct RootView: View {
         /// On regarde si la session gardée au trousseau vaut encore quelque chose.
         case restoring
         case signedOut
+        /// Le compte vient d'être ouvert : les « Dernières questions » avant
+        /// l'accueil — voir ``LastQuestionsView``.
+        case lastQuestions(Account)
         case signedIn(Account)
     }
 
@@ -140,6 +143,17 @@ public struct RootView: View {
                 restoring
             case .signedOut:
                 signedOut
+            case .lastQuestions(let account):
+                LastQuestionsView(
+                    model: LastQuestionsModel(account: account) { [api = dependencies.api] edit in
+                        _ = try await api.updateProfile(edit)
+                    },
+                    onFinished: { finishLastQuestions(as: $0) },
+                    // La flèche du premier écran ramène à l'entrée : c'est
+                    // l'écran d'avant, et y revenir veut dire sortir du compte.
+                    onLeave: signOut
+                )
+                .transition(.move(edge: .trailing).combined(with: .opacity))
             case .signedIn(let account):
                 NavigationStack(path: $path) {
                     HomeView(model: dependencies.homeModel(), onIntent: handle)
@@ -281,6 +295,29 @@ public struct RootView: View {
     /// qu'il ait jamais eu à couvrir. L'écran d'accueil du tout premier
     /// démarrage, lui, ne passe pas par là et n'a donc pas d'animation devant.
     private func enterApp(as account: Account) {
+        // Un compte qui vient d'être ouvert passe d'abord par les « Dernières
+        // questions » (Clara, 26/09/2026) — une seule fois, et jamais dans le
+        // bac à sable.
+        let asksLastQuestions =
+            OnboardingStorage.isShowingLastQuestions
+            || (!OnboardingStorage.isPreviewingSignedIn && LastQuestionsModel.shouldAsk(account))
+        if asksLastQuestions, stage != .lastQuestions(account) {
+            signedOutPath.removeAll()
+            stage = .lastQuestions(account)
+            endLaunch()
+            return
+        }
+        openApp(as: account)
+    }
+
+    /// Les trois questions sont passées ou validées : on ne les reposera plus
+    /// à ce compte, et l'on entre — avec le prénom qu'on vient de confirmer.
+    private func finishLastQuestions(as account: Account) {
+        LastQuestionsModel.markAnswered(account)
+        openApp(as: account)
+    }
+
+    private func openApp(as account: Account) {
         stage = .signedIn(account)
         // La pile de l'entrée est vidée : quelqu'un qui se déconnecte doit
         // retrouver l'accueil, pas le formulaire qu'il venait d'envoyer.

@@ -30,6 +30,10 @@ CATALOG = REPO / "ios/Modules/Sources/MemoBookDesign/Resources/MemoBookAssets.xc
 # catalogue ne se remplit pas de dessins que l'app n'affiche nulle part.
 NAMES = {
     "appareilphoto": "AppareilPhoto",
+    # Les trois « Dernières questions » de la fin de l'onboarding (Clara,
+    # 26/09/2026) : le nom, la date de naissance, le numéro.
+    "calendrier": "Calendrier",
+    "carteID": "CarteID",
     "carnet": "Carnet",
     "duo": "Duo",
     "horloge": "Horloge",
@@ -37,6 +41,7 @@ NAMES = {
     "lunettes": "Lunettes",
     "maps": "Maps",
     "passport": "Passport",
+    "phone": "Phone",
     "sapin": "Sapin",
     # Le paraphe des fondateurs, pour le mot qui s'ouvre au premier aperçu.
     "signature": "Signature",

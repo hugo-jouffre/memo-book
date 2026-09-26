@@ -54,6 +54,17 @@ xcrun simctl launch <device> com.memobook.app -previewSignedIn -openOrder
 Combiné à `-previewSignedIn`, le tunnel travaille **en mémoire** : c'est ce qui
 permet de traverser ses sept étapes sans back-end. Sans effet en release.
 
+Les « Dernières questions » (nom, date de naissance, téléphone) ne se posent
+qu'à un compte ouvert il y a moins de dix minutes, une seule fois par appareil —
+et jamais dans le bac à sable. Pour les revoir :
+
+```bash
+xcrun simctl launch <device> com.memobook.app -previewSignedIn -lastQuestions
+```
+
+Avec `-previewSignedIn`, les réponses restent dans le double d'aperçu ; sans
+lui, elles partent au **vrai profil** du compte ouvert. Sans effet en release.
+
 ### Rejouer le lien de l'e-mail « Mot de passe oublié »
 
 Le back-end local n'envoie rien : il journalise le lien et écrit l'e-mail dans
