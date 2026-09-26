@@ -519,9 +519,11 @@ public struct HomeView: View {
                     UpcomingTripInvite { isCreatingNotebook = true }
                         .rising(upcomingHeadingOrder + 1)
                 } else {
+                    // La carte de la maquette `3125:33113` (Clara, 26/09/2026) :
+                    // photo d'attente floutée, compte à rebours, scotch.
                     ForEach(Array(trips.enumerated()), id: \.element.id) { index, trip in
                         drawer(for: trip) {
-                            CompactTripCard(trip: trip) { onIntent(.openTrip(id: trip.id)) }
+                            UpcomingTripCard(trip: trip) { onIntent(.openTrip(id: trip.id)) }
                         }
                         .rising(upcomingHeadingOrder + 1 + index)
                     }

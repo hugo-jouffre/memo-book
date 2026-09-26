@@ -171,6 +171,165 @@ struct CompactTripCard: View {
     }
 }
 
+/// Un voyage à venir (`3125:33113`) : une photo d'attente floutée, le compte à
+/// rebours du départ, le titre et les dates — et le scotch qui dépasse en haut.
+///
+/// **La photo est toujours la même** (Clara, 26/09/2026) : un voyage qui n'a
+/// pas commencé n'a pas encore de photo à lui, et une couverture vide se lit
+/// comme un manque. C'est celle de la maquette, exportée de Figma
+/// (`assets/illustrations/Upcoming Trip Photo.jpg`), et floutée **ici** plutôt
+/// qu'à l'export : une retouche du flou ne demande pas un nouvel export.
+///
+/// Les coins photo (`PhotoCornerMounts`) viennent du même nœud : quatre petits
+/// triangles d'encre à 15 %, comme les coins collés d'un album.
+struct UpcomingTripCard: View {
+    let trip: Trip
+    let onOpen: () -> Void
+    /// Aujourd'hui, pour le compte à rebours. Un paramètre pour les aperçus et
+    /// les tests : le jour qui passe n'a pas à être deviné par la vue.
+    var today: Date = .now
+
+    /// Le rapport de la photo dans la maquette : 310 × 193,75.
+    private static let photoRatio: CGFloat = 1.6
+
+    var body: some View {
+        Button(action: onOpen) {
+            VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
+                photo
+                titleAndDates
+            }
+            .padding(MemoBookSpacing.s)
+            .homeCardHitArea()
+        }
+        .buttonStyle(CardPressStyle())
+        .homeCard()
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .overlay(alignment: .top) { tape }
+    }
+
+    // MARK: La photo
+
+    /// ⚠️ **La photo est posée en `overlay` d'un cadre vide**, comme celle de
+    /// l'écran d'entrée : `scaledToFill` ne se laisse pas contraindre en
+    /// largeur, et la carte débordait.
+    private var photo: some View {
+        let shape = RoundedRectangle(cornerRadius: MemoBookSpacing.cornerRadius)
+
+        return Color.clear
+            .aspectRatio(Self.photoRatio, contentMode: .fit)
+            .overlay {
+                Image(brand: "PhotoUpcomingTrip")
+                    .resizable()
+                    .scaledToFill()
+                    // Un flou large, qui fond la rue en une matière brune comme
+                    // sur la maquette — relevé sur son export. `opaque` : sans
+                    // lui, le flou fait entrer du transparent par les bords, et
+                    // la photo s'éclaircit en liseré.
+                    .blur(radius: 16, opaque: true)
+            }
+            // Le voile qui fait lire le blanc du compte à rebours.
+            .overlay { Color.black.opacity(0.18) }
+            .overlay { countdown }
+            .clipShape(shape)
+            .overlay {
+                Image(brand: "PhotoCornerMounts")
+                    .resizable()
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+    }
+
+    /// « À VENIR », puis « Départ dans » et le nombre de jours.
+    private var countdown: some View {
+        VStack(spacing: MemoBookSpacing.xs) {
+            Text(UpcomingTripCopy.badge)
+                .font(MemoBookFont.microBadge)
+                .textCase(.uppercase)
+                .padding(.horizontal, MemoBookSpacing.xs)
+                .padding(.vertical, 2)
+                .overlay {
+                    RoundedRectangle(cornerRadius: MemoBookSpacing.xs / 2)
+                        .strokeBorder(MemoBookColor.onAction, lineWidth: 1)
+                }
+
+            if let days = daysUntilDeparture {
+                VStack(spacing: 0) {
+                    Text(UpcomingTripCopy.lead)
+                        .font(MemoBookFont.headingLight)
+                    Text(UpcomingTripCopy.days(days))
+                        .font(MemoBookFont.h1)
+                        .monospacedDigit()
+                }
+            }
+        }
+        .foregroundStyle(MemoBookColor.onAction)
+        .multilineTextAlignment(.center)
+        .minimumScaleFactor(0.6)
+        .lineLimit(1)
+        .padding(MemoBookSpacing.s)
+    }
+
+    /// Les jours pleins jusqu'au départ, comptés d'un minuit à l'autre : un
+    /// départ demain matin est « dans 1 jour », même à 23 h. `nil` sans date
+    /// de départ, ou si elle est déjà passée — la pastille parle seule.
+    private var daysUntilDeparture: Int? {
+        guard let start = trip.startDate else { return nil }
+        let calendar = Calendar.current
+        let days = calendar.dateComponents(
+            [.day],
+            from: calendar.startOfDay(for: today),
+            to: calendar.startOfDay(for: start)
+        ).day
+        guard let days, days > 0 else { return nil }
+        return days
+    }
+
+    // MARK: Le titre
+
+    private var titleAndDates: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(trip.title)
+                .font(MemoBookFont.heading)
+                .foregroundStyle(MemoBookColor.ink)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let dates = trip.dateRangeLabel {
+                Text(dates)
+                    .font(MemoBookFont.label)
+                    .foregroundStyle(MemoBookColor.inkMuted)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: Le scotch
+
+    /// Le bout de scotch **centré** qui dépasse du bord haut — celui de la
+    /// maquette : droit, translucide, le vert de la marque à 18 % (relevé sur
+    /// l'export). Même grammaire que ceux de ``FeaturedTripCard`` et de
+    /// ``UpcomingTripInvite`` : par-dessus la carte, à cheval sur son bord.
+    private var tape: some View {
+        RoundedRectangle(cornerRadius: 2)
+            .fill(MemoBookColor.action.opacity(0.18))
+            .frame(width: 64, height: 17)
+            .offset(y: -7)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+/// Les mots de la carte d'un voyage à venir, recopiés de `3125:33113` (R8).
+enum UpcomingTripCopy {
+    static let badge = "À venir"
+    static let lead = "Départ dans"
+
+    static func days(_ count: Int) -> String {
+        count == 1 ? "1 jour" : "\(count) jours"
+    }
+}
+
 /// Un carnet terminé : sa bande de couverture, son titre, et de quoi le faire
 /// imprimer quand il est prêt.
 struct PastTripCard: View {
