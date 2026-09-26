@@ -3941,7 +3941,7 @@ voyageur d'essai a ses initiales dans la conversation.
 | Route / colonne | Ce qui change |
 |---|---|
 | `POST /v1/trips/join { code }` | rejoint un voyage par son code d'accès, nettoyé (majuscules, sans espace ni tiret). Rend `{ trip, accessCode }` comme la création. 404 `trip_not_found` pour un code qui ne mène nulle part, 403 `member_removed` pour quelqu'un que le propriétaire a retiré |
-| `GET /v1/wallet` → `tripId` | le carnet que la cagnotte finance : celui qu'on demande, sinon un voyage pas fini (le plus tôt commencé), sinon le dernier créé |
+| `GET /v1/wallet` → `tripId` | le carnet que la cagnotte finance : celui qu'on demande, sinon un voyage pas fini (le plus tôt commencé), sinon le dernier créé. La cagnotte de `GET /v1/memos/:id/order-context` le porte aussi : c'est le carnet commandé |
 | `GET /v1/trips/:id/chat` et les reçus → `authorInitials`, `authorAvatarUrl` ; `context.travellerInitials`, `context.travellerAvatarUrl` | le portrait de celui qui a parlé, sur toutes les bulles du voyageur ; celui de qui lit, pour ses bulles pas encore parties |
 | `accounts.birthDate` (`DATE`, migration `20260926100000_date_de_naissance`) | la date de naissance ; `PATCH /v1/profile { birthDate: "AAAA-MM-JJ" \| null }`, refusée si elle n'existe pas, est dans le futur ou avant 1900 ; rendue telle quelle par `GET /v1/profile` |
 
