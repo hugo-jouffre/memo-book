@@ -221,6 +221,19 @@ public final class BookPreviewModel {
         return preview?.isConfigurableCover(page: sheetIndex, in: sheetCount) ?? false
     }
 
+    /// Ce que la page regardée porte pour aller aux couvertures.
+    ///
+    /// **La première page en porte toujours un** (Clara, 26/09/2026) : le voile
+    /// et son invitation tant que les couvertures ne sont pas choisies, la
+    /// pastille « Configurer » seule ensuite. Le 19/09, le lien sous l'aperçu
+    /// était parti au profit du voile — et une fois les couvertures choisies,
+    /// plus rien ne ramenait à elles depuis l'aperçu.
+    public var coverCallToAction: CoverCallToAction? {
+        guard renderer.sheetCount > 0 else { return nil }
+        if isOnConfigurableCover { return .invitation }
+        return sheetIndex == 0 ? .edit : nil
+    }
+
     // MARK: - Partager
 
     /// Demande le lien de prévisualisation, ou rend celui qu'on a déjà.
@@ -342,4 +355,13 @@ private func withAnimationCompat(duration: Duration, _ changes: () -> Void) {
     // `easeOut` et non un ressort : les morceaux doivent **se poser**, et un
     // ressort les ferait rebondir tous ensemble à la fin de la cascade.
     withAnimation(.easeOut(duration: seconds), changes)
+}
+
+/// Le chemin vers les couvertures, posé sur une page de l'aperçu.
+public enum CoverCallToAction: Sendable, Hashable {
+    /// « Définis maintenant ta 1ère et 4ème de couverture », sur le voile.
+    case invitation
+    /// La pastille « Configurer » seule : les couvertures sont choisies, on
+    /// peut y revenir.
+    case edit
 }

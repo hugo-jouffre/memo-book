@@ -16,6 +16,12 @@ public enum MemoryCopy {
     /// La ligne des réglages du voyage.
     public static let rowTitle = "Limites de souvenirs"
 
+    /// Sous l'intitulé de la ligne : **ce que ça coûte, avant qu'on le
+    /// demande** (Clara, 26/09/2026). Un compteur « 1 240 / 3 000 » sans cette
+    /// phrase se lit comme un forfait qui déborde, et fait craindre un
+    /// prélèvement.
+    public static let rowCaption = "Comprises dans ton abonnement, sans frais en plus"
+
     /// La valeur en bout de ligne : « 1 240 / 3 000 ».
     public static func rowValue(used: Int, allowance: Int) -> String {
         "\(number(used)) / \(number(allowance))"
@@ -25,9 +31,18 @@ public enum MemoryCopy {
 
     public static let sheetTitle = "Tes limites de souvenirs"
 
-    /// Le chapeau, qui dit **ce que c'est** avant de dire où on en est.
+    /// Le chapeau, qui dit **ce que c'est** avant de dire où on en est — et,
+    /// d'abord, que rien ne se paie sans qu'on le choisisse (Clara,
+    /// 26/09/2026 : la phrase d'avant laissait croire à un prélèvement au-delà
+    /// de la limite).
     public static let sheetIntro =
-        "Chaque semaine, tu disposes d’un volume de souvenirs à raconter. Il est large : en usage normal, tu ne le verras jamais bouger."
+        "Ton abonnement comprend chaque semaine de quoi raconter tous les jours. Si tu atteins la limite, rien n’est prélevé : tu attends le renouvellement, ou tu choisis d’étendre."
+
+    /// Le chapeau de la comparaison : étendre est un geste, jamais un
+    /// débordement facturé.
+    public static func compareIntro(price: String) -> String {
+        "Étendre est un choix, jamais automatique : \(price)/semaine, et tu reviens aux limites comprises quand tu veux."
+    }
 
     /// « Il te reste 1 760 souvenirs, jusqu'au 14 octobre. »
     public static func remaining(_ count: Int, renewsOn: String?) -> String {
@@ -79,11 +94,11 @@ public enum MemoryCopy {
     /// Le bandeau qui apparaît sur la ligne quand il ne reste presque plus
     /// rien — voir ``MemoryAllowance/isRunningLow``.
     public static let runningLow =
-        "**Tu approches de tes limites de souvenirs.** Étends-les pour continuer à raconter sans t’interrompre."
+        "**Tu approches de tes limites de souvenirs.** Elles se renouvellent chaque semaine ; tu peux aussi les étendre."
 
     /// Et quand il ne reste rien du tout.
     public static let exhausted =
-        "**Tes limites de souvenirs sont atteintes pour cette semaine.** Étends-les, ou attends le renouvellement."
+        "**Tes limites de souvenirs sont atteintes pour cette semaine.** Rien n’est prélevé : attends le renouvellement, ou étends-les."
 
     // MARK: Mise en forme
 

@@ -28,13 +28,17 @@ public struct WelcomeView: View {
     private let onAuthenticated: (Account) -> Void
     /// « S'inscrire avec un e-mail » — l'écran poussé qui porte le formulaire.
     private let onEmail: () -> Void
+    /// « Conditions d'utilisation », dans la mention légale (T151).
+    private let onTermsOfUse: () -> Void
 
     public init(
         onAuthenticated: @escaping (Account) -> Void,
-        onEmail: @escaping () -> Void
+        onEmail: @escaping () -> Void,
+        onTermsOfUse: @escaping () -> Void = {}
     ) {
         self.onAuthenticated = onAuthenticated
         self.onEmail = onEmail
+        self.onTermsOfUse = onTermsOfUse
     }
 
     @Environment(AppDependencies.self) private var dependencies
@@ -348,11 +352,18 @@ public struct WelcomeView: View {
             .buttonStyle(.plain)
             .disabled(model.isWorking)
 
-            Text(WelcomeCopy.legal)
+            // « Conditions d'utilisation » est un lien (T151) : on doit pouvoir
+            // lire ce qu'on accepte avant d'avoir un compte. Un lien **dans** la
+            // phrase et non un bouton sous elle — c'est la phrase qu'on lit.
+            Text(legalMention)
                 .font(MemoBookFont.mention)
                 .foregroundStyle(MemoBookColor.inkMuted)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
+                .environment(\.openURL, OpenURLAction { _ in
+                    onTermsOfUse()
+                    return .handled
+                })
 
             #if DEBUG
                 // ⚠️ PROVISOIRE — l'entrée de chantier, par le compte que le
@@ -374,6 +385,16 @@ public struct WelcomeView: View {
             #endif
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// La mention légale, son lien souligné au milieu. L'adresse ne sert qu'à
+    /// faire de ces mots un lien : c'est ``onTermsOfUse`` qui ouvre la page.
+    private var legalMention: AttributedString {
+        var link = AttributedString(WelcomeCopy.legalLink)
+        link.link = URL(string: "memobook://conditions-d-utilisation")
+        link.underlineStyle = .single
+        link.foregroundColor = MemoBookColor.inkMuted
+        return AttributedString(WelcomeCopy.legalLead) + link + AttributedString(WelcomeCopy.legalTail)
     }
 
     // MARK: - Actions

@@ -179,17 +179,20 @@ public struct BookFontOption: Sendable, Hashable, Identifiable {
 
     // Les cinq familles que le carnet sait porter.
     //
-    // **Trois d'entre elles se dessinent dans leur propre police**, par un
+    // **Quatre d'entre elles se dessinent dans leur propre police**, par un
     // vectoriel du nom (Hugo, 17/09/2026, T118) : on n'embarque pas une
-    // famille pour un bout de ligne. Alegreya et Montserrat s'écrivent encore
-    // en General Sans, faute de vectoriel.
+    // famille pour un bout de ligne. Alegreya a reçu le sien le 22/09/2026 ;
+    // Montserrat s'écrit encore en General Sans, mais aucun assortiment ne la
+    // propose plus.
     public static let playfair = BookFontOption(
         name: "Playfair Display",
         label: "Playfair",
         detail: "L’élégante, celle des titres",
         wordmark: "WordmarkPlayfair"
     )
-    public static let alegreya = BookFontOption(name: "Alegreya", detail: "La serif chaleureuse du récit")
+    public static let alegreya = BookFontOption(
+        name: "Alegreya", detail: "La serif chaleureuse du récit", wordmark: "WordmarkAlegreya"
+    )
     public static let montserrat = BookFontOption(name: "Montserrat", detail: "La géométrique, nette et moderne")
     public static let hansley = BookFontOption(
         name: "Hansley", detail: "La manuscrite des titres", wordmark: "WordmarkHansley"

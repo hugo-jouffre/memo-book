@@ -406,8 +406,8 @@ private struct BookFontComboCard: View {
     @ScaledMetric(relativeTo: .subheadline) private var wordmarkHeight: CGFloat = 14
 
     /// Le nom de la police — **dessiné dans sa police** quand le vectoriel
-    /// existe (Playfair, Hansley, Gloria Hallelujah), écrit en General Sans
-    /// sinon (Alegreya, Montserrat). Hugo, 17/09/2026 (T118).
+    /// existe (Playfair, Hansley, Gloria Hallelujah, Alegreya), écrit en
+    /// General Sans sinon (Montserrat). Hugo, 17/09/2026 (T118).
     @ViewBuilder
     private func fontName(for role: BookFontRole) -> some View {
         if let wordmark = combo.fontWordmark(role) {

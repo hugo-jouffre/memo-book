@@ -146,7 +146,8 @@ public final class AppDependencies {
             source: cachedSource(.home) { [api] in try await api.homeFeed() },
             cached: { [content] in await content.read(.home, as: HomeFeed.self) },
             outbox: outbox,
-            remove: { [api] id in try await api.deleteMemo(id: id) }
+            remove: { [api] id in try await api.deleteMemo(id: id) },
+            join: { [api] code in try await api.joinTrip(code: code) }
         )
     }
 
@@ -423,7 +424,8 @@ public final class AppDependencies {
                 #else
                     nil
                 #endif
-            }()
+            }(),
+            shareLink: { [api] memoId in try await api.bookShareLink(memoId: memoId) }
         )
     }
 

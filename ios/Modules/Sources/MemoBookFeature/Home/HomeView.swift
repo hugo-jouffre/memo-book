@@ -119,7 +119,11 @@ public struct HomeView: View {
         }
         .environment(\.homeContentHasAppeared, hasAppeared)
         .brandSheet(isPresented: $isCreatingNotebook) {
-            NewNotebookSheet(resumableTrip: model.resumableTrip, onIntent: onIntent)
+            NewNotebookSheet(
+                resumableTrip: model.resumableTrip,
+                join: { await model.join(code: $0) },
+                onIntent: onIntent
+            )
         }
         .brandSheet(item: $tripToDelete) { trip in
             DeleteTripSheet(

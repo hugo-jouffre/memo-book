@@ -114,7 +114,12 @@ public struct BookPreviewFlowView: View {
     private var content: some View {
         switch model.stage {
         case .composing:
-            BookCompositionView(model: model, onIntent: onIntent, onShare: openShare)
+            BookCompositionView(
+                model: model,
+                onIntent: onIntent,
+                onShare: openShare,
+                onShareWallet: shareWallet
+            )
                 // La composition s'efface **en montant** d'un cheveu, et
                 // l'aperçu arrive de la même façon : la page qui vient de se
                 // monter et celle qu'on va feuilleter sont la même, elle ne
@@ -127,8 +132,13 @@ public struct BookPreviewFlowView: View {
                     BookFullScreenView(model: model, onShare: openShare)
                         .transition(.opacity)
                 } else {
-                    BookReaderView(model: model, onIntent: onIntent, onShare: openShare)
-                        .transition(.opacity)
+                    BookReaderView(
+                        model: model,
+                        onIntent: onIntent,
+                        onShare: openShare,
+                        onShareWallet: shareWallet
+                    )
+                    .transition(.opacity)
                 }
             }
             .transition(.opacity.combined(with: .scale(scale: 0.98)))
@@ -137,6 +147,14 @@ public struct BookPreviewFlowView: View {
 
     private func openShare() {
         showsShareChoice = true
+    }
+
+    /// « Partager ma cagnotte » : **directement** la feuille du système, avec
+    /// le message et le lien (Clara, 26/09/2026). Le choix PDF ou lien reste
+    /// derrière le bouton de partage de l'en-tête ; demander de l'aide, c'est
+    /// toujours le lien.
+    private func shareWallet() {
+        Task { await share(.link) }
     }
 
     /// Ouvre la feuille de partage du système avec ce qu'il faut dedans.
@@ -155,13 +173,36 @@ public struct BookPreviewFlowView: View {
             // message qui demande un coup de main, pas la pièce jointe.
             let link = await model.prepareShareLink()
             showsShareChoice = false
-            systemShare = BookSharePayload(title: title, steps: steps, file: file, link: link)
+            systemShare = payload(title: title, steps: steps, file: file, link: link)
 
         case .link:
             guard let link = await model.prepareShareLink() else { return }
             showsShareChoice = false
-            systemShare = BookSharePayload(title: title, steps: steps, file: nil, link: link)
+            systemShare = payload(title: title, steps: steps, file: nil, link: link)
         }
+    }
+
+    /// Le partage, habillé comme la maquette `3551:26331` : la photo et le
+    /// titre du voyage en tête, « Commander » et « Partager sur Whatsapp » sous
+    /// les apps.
+    private func payload(title: String, steps: Int, file: URL?, link: URL?) -> BookSharePayload {
+        var share = BookSharePayload(
+            title: title,
+            steps: steps,
+            file: file,
+            link: link,
+            coverPhotoUrl: model.preview?.coverPhotoUrl
+        )
+        share.actions = [
+            ShareAction(title: BookCopy.Share.orderAction, icon: "IconCart") {
+                systemShare = nil
+                onIntent(.order)
+            },
+        ]
+        if let message = share.message, let whatsApp = ShareAction.whatsApp(message: message) {
+            share.actions.append(whatsApp)
+        }
+        return share
     }
 
     /// Invite le mot des fondateurs, une fois l'aperçu ouvert et si on ne l'a
@@ -215,6 +256,7 @@ private struct BookCompositionView: View {
     let model: BookPreviewModel
     let onIntent: (BookPreviewIntent) -> Void
     let onShare: () -> Void
+    let onShareWallet: () -> Void
 
     var body: some View {
         ScrollView {
@@ -260,7 +302,7 @@ private struct BookCompositionView: View {
                 )
 
                 BookOfferCard(
-                    onShare: onShare,
+                    onShare: onShareWallet,
                     onSeeWallet: { onIntent(.openWallet) }
                 )
 
@@ -294,6 +336,7 @@ private struct BookReaderView: View {
     let model: BookPreviewModel
     let onIntent: (BookPreviewIntent) -> Void
     let onShare: () -> Void
+    let onShareWallet: () -> Void
 
     /// Tourner la page au doigt : vers la gauche on avance, vers la droite on
     /// revient (Hugo, 19/09/2026).
@@ -362,7 +405,7 @@ private struct BookReaderView: View {
                 )
 
                 BookOfferCard(
-                    onShare: onShare,
+                    onShare: onShareWallet,
                     onSeeWallet: { onIntent(.openWallet) }
                 )
 
@@ -442,12 +485,20 @@ struct BookSheetView: View {
                 .transition(.opacity)
                 .animation(.easeInOut(duration: 0.18), value: model.sheetIndex)
 
-            // L'invitation à choisir ses couvertures ne couvre que la première
-            // et la dernière page — voir ``BookPreview/isConfigurableCover``.
-            if model.isOnConfigurableCover {
+            // L'invitation à choisir ses couvertures couvre la première et la
+            // dernière page tant qu'elles ne sont pas choisies ; la première
+            // garde ensuite sa pastille « Configurer » — voir
+            // ``BookPreviewModel/coverCallToAction``.
+            switch model.coverCallToAction {
+            case .invitation:
                 CoverInvitation(action: onConfigureCovers)
                     .clipShape(.rect(cornerRadius: MemoBookSpacing.pageCornerRadius))
                     .transition(.opacity)
+            case .edit:
+                CoverEditButton(action: onConfigureCovers)
+                    .transition(.opacity)
+            case nil:
+                EmptyView()
             }
 
             if let onExpand {
@@ -459,7 +510,7 @@ struct BookSheetView: View {
                 .padding(MemoBookSpacing.xs)
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: model.isOnConfigurableCover)
+        .animation(.easeInOut(duration: 0.2), value: model.coverCallToAction)
         .task(id: model.sheetIndex) {
             // La page voisine est rendue pendant qu'on lit celle-ci : tourner
             // ne coûte alors plus rien. Voir ``BookPageRenderer/prepare(around:width:)``.
@@ -498,6 +549,25 @@ private struct CoverInvitation: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// La pastille « Configurer » d'une première page dont les couvertures sont
+/// déjà choisies : pas de voile, la couverture se voit, et le chemin reste.
+/// Même bouton, même place que dans l'invitation — seul le voile est parti.
+private struct CoverEditButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        BrandButton(
+            BookCopy.Preview.configureCoverAction,
+            style: .raised,
+            size: .small,
+            action: action
+        )
+        .accessibilityLabel(BookCopy.Preview.configureCovers)
+        .padding(.bottom, MemoBookSpacing.m)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 }
 

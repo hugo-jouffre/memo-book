@@ -64,6 +64,9 @@ NAMES = {
     "Playfair": "WordmarkPlayfair",
     "Hansley": "WordmarkHansley",
     "Gloria Hallelujah": "WordmarkGloriaHallelujah",
+    # Arrivé le 22/09/2026 (T118) : le dernier nom qui s'écrivait encore en
+    # General Sans dans la feuille des assortiments.
+    "Alegreya": "WordmarkAlegreya",
 }
 
 DATA_URI = re.compile(r'xlink:href="data:image/png;base64,([^"]+)"')
