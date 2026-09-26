@@ -26,6 +26,8 @@ interface ChatMessageJson {
   seq: number;
   author: "memo" | "traveller";
   authorName: string | null;
+  authorInitials: string | null;
+  authorAvatarUrl: string | null;
   body:
     | { kind: "text"; text: string }
     | { kind: "voice"; voice: { id: string; duration: number; levels: number[]; remoteUrl: string | null } }
@@ -51,7 +53,14 @@ interface ChatThreadJson {
   title: string;
   greeting: { title: string; message: string };
   preview: { memoryCount: number; pageCount: number; isOpenable: boolean } | null;
-  context: { tripId: string; travellerFirstName: string | null; memberCount: number; prompt: string | null };
+  context: {
+    tripId: string;
+    travellerFirstName: string | null;
+    travellerInitials: string | null;
+    travellerAvatarUrl: string | null;
+    memberCount: number;
+    prompt: string | null;
+  };
   messages: ChatMessageJson[];
   suggestions: { id: string; label: string; symbol: string | null; intent: string }[];
   turn: { status: "idle" } | { status: "replying"; messageId: string };
@@ -448,6 +457,17 @@ describe("à plusieurs", () => {
     expect(seenByGuest.messages.filter((message) => message.author === "memo").every((m) => m.authorName === null)).toBe(true);
     expect(seenByGuest.context.memberCount).toBe(2);
     expect(seenByGuest.context.travellerFirstName).toBe("Clara");
+    // Le portrait de chacun, sur ses bulles comme sur celles des autres — c'est
+    // lui que la bulle d'un vocal montre. MEMO n'en a pas.
+    expect(travellers.map((message) => message.authorInitials)).toEqual(["H", "C"]);
+    expect(travellers.every((message) => message.authorAvatarUrl === null)).toBe(true);
+    expect(
+      seenByGuest.messages
+        .filter((message) => message.author === "memo")
+        .every((message) => message.authorInitials === null && message.authorAvatarUrl === null),
+    ).toBe(true);
+    expect(seenByGuest.context.travellerInitials).toBe("C");
+    expect(seenByGuest.context.travellerAvatarUrl).toBeNull();
     expect(seenByGuest.canClear).toBe(false);
 
     const seenByOwner = await readThread(memo.id);

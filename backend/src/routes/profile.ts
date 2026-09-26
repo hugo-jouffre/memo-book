@@ -59,10 +59,32 @@ function shippingCountryCode(value: string | null | undefined): string | null | 
   return country.code;
 }
 
+/**
+ * Une date de naissance : un **jour**, `AAAA-MM-JJ`, ni dans le futur ni avant
+ * 1900. Le jour et non l'instant, parce qu'un instant se relit dans un autre
+ * fuseau — et une naissance le 12 mai à minuit UTC devenait le 11 mai à New
+ * York. `null` l'efface, comme partout sur cette route.
+ */
+const birthDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "La date de naissance s'écrit AAAA-MM-JJ.")
+  .refine((value) => {
+    const date = new Date(`${value}T00:00:00.000Z`);
+    return (
+      !Number.isNaN(date.getTime()) &&
+      date.toISOString().slice(0, 10) === value &&
+      date.getUTCFullYear() >= 1900 &&
+      date.getTime() <= Date.now()
+    );
+  }, "Cette date de naissance n'existe pas.")
+  .nullable()
+  .optional();
+
 const updateBody = z.object({
   firstName: nullableText(100),
   lastName: nullableText(100),
   phoneNumber: nullableText(40),
+  birthDate,
   // Ce que la personne dit d'elle-même : un des trois choix, jamais `null` —
   // « je ne préfère pas répondre » est une réponse, pas une absence.
   gender: z.enum(["female", "male", "undisclosed"]).optional(),
@@ -217,6 +239,9 @@ export function registerProfileRoutes(app: FastifyInstance, context: AppContext)
         firstName: orNull(body.firstName),
         lastName: orNull(body.lastName),
         phoneNumber: orNull(body.phoneNumber),
+        ...(body.birthDate !== undefined
+          ? { birthDate: body.birthDate === null ? null : new Date(`${body.birthDate}T00:00:00.000Z`) }
+          : {}),
         ...(body.gender !== undefined ? { gender: body.gender } : {}),
         ...(body.wantsNewsletter !== undefined
           ? { wantsNewsletter: body.wantsNewsletter }

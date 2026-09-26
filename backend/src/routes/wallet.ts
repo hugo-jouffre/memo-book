@@ -61,6 +61,58 @@ const topupBody = z.object({
   amountCents: z.number().int().min(TOPUP_MIN_CENTS).max(TOPUP_MAX_CENTS),
 });
 
+const financedTripSelect = {
+  id: true,
+  title: true,
+  destinationCity: true,
+  targetPageCount: true,
+  pageCount: true,
+} as const;
+
+/**
+ * Le carnet que la cagnotte finance.
+ *
+ * Celui qu'on demande, quand on arrive d'un voyage. Un identifiant qui ne
+ * correspond à rien de visible ne fait pas échouer la route : la cagnotte
+ * existe indépendamment du carnet, et l'écran s'affiche sans estimation plutôt
+ * que pas du tout.
+ *
+ * **Depuis le profil, on n'en demande aucun** — et l'écran avait pourtant deux
+ * boutons qui en parlent, « Prévisualiser mon carnet » et « Partager », qui ne
+ * menaient alors nulle part (Clara, 26/09/2026). La route choisit donc le
+ * carnet du moment : un voyage qui n'est pas fini, le plus tôt commencé en
+ * premier — c'est celui qu'on raconte —, sinon le dernier créé.
+ */
+async function financedTrip(context: AppContext, accountId: string, tripId: string | undefined) {
+  if (tripId) {
+    return context.prisma.memo.findFirst({
+      where: { id: tripId, ...visibleToAccount(accountId) },
+      select: financedTripSelect,
+    });
+  }
+
+  const startOfToday = new Date();
+  startOfToday.setUTCHours(0, 0, 0, 0);
+
+  const current = await context.prisma.memo.findFirst({
+    where: {
+      AND: [
+        visibleToAccount(accountId),
+        { OR: [{ endDate: null }, { endDate: { gte: startOfToday } }] },
+      ],
+    },
+    orderBy: [{ startDate: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }],
+    select: financedTripSelect,
+  });
+  if (current) return current;
+
+  return context.prisma.memo.findFirst({
+    where: visibleToAccount(accountId),
+    orderBy: { createdAt: "desc" },
+    select: financedTripSelect,
+  });
+}
+
 export function registerWalletRoutes(app: FastifyInstance, context: AppContext) {
   app.get("/v1/wallet", async (request) => {
     const { tripId } = query.parse(request.query);
@@ -77,21 +129,7 @@ export function registerWalletRoutes(app: FastifyInstance, context: AppContext) 
         take: HISTORY_LIMIT,
         select: { id: true, amountCents: true, kind: true, label: true, createdAt: true },
       }),
-      // Le voyage n'est lu que pour l'estimation. Un identifiant qui ne
-      // correspond à rien de visible ne fait pas échouer la route : la cagnotte
-      // existe indépendamment du carnet, et l'écran s'affiche sans estimation
-      // plutôt que pas du tout.
-      tripId
-        ? context.prisma.memo.findFirst({
-            where: { id: tripId, ...visibleToAccount(accountId) },
-            select: {
-              title: true,
-              destinationCity: true,
-              targetPageCount: true,
-              pageCount: true,
-            },
-          })
-        : Promise.resolve(null),
+      financedTrip(context, accountId, tripId),
     ]);
 
     return serializeWallet(account?.walletBalanceCents ?? 0, entries, trip);
