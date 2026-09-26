@@ -65,6 +65,13 @@ public final class BookPreviewModel {
     private let source: (String) async throws -> BookPreview
     private let requestLink: ((String) async throws -> URL)?
 
+    /// Ce que « Partager ma cagnotte » envoie : le titre du voyage que la
+    /// cagnotte finance et le lien public du carnet, **lus sur le serveur**
+    /// (`GET /v1/wallet`, `POST /v1/memos/:id/share-link`). L'aperçu, lui, vit
+    /// encore sur son jeu d'essai : son titre partirait tel quel chez les
+    /// proches. `nil` dans les aperçus Xcode.
+    private let walletShare: ((String) async throws -> WalletShare)?
+
     /// Combien de temps la cascade dure.
     ///
     /// **C'est aussi le plancher de l'attente** : même si le serveur répond en
@@ -89,11 +96,13 @@ public final class BookPreviewModel {
     public init(
         memoId: String,
         source: @escaping (String) async throws -> BookPreview = { _ in .fixture },
-        requestLink: ((String) async throws -> URL)? = nil
+        requestLink: ((String) async throws -> URL)? = nil,
+        walletShare: ((String) async throws -> WalletShare)? = nil
     ) {
         self.memoId = memoId
         self.source = source
         self.requestLink = requestLink
+        self.walletShare = walletShare
     }
 
     // MARK: - Composer, puis montrer
@@ -256,6 +265,28 @@ public final class BookPreviewModel {
             let link = try await requestLink(memoId)
             shareLink = link
             return link
+        } catch {
+            errorMessage = BookCopy.Share.linkFailed
+            return nil
+        }
+    }
+
+    /// De quoi remplir la feuille du système pour « Partager ma cagnotte ».
+    /// Sans source branchée — un aperçu Xcode —, le lien et le titre de
+    /// l'aperçu.
+    public func prepareWalletShare() async -> WalletShare? {
+        guard let walletShare else {
+            guard let link = await prepareShareLink() else { return nil }
+            return WalletShare(tripId: memoId, title: preview?.title ?? "", link: link)
+        }
+
+        isPreparingLink = true
+        defer { isPreparingLink = false }
+
+        do {
+            let share = try await walletShare(memoId)
+            shareLink = share.link
+            return share
         } catch {
             errorMessage = BookCopy.Share.linkFailed
             return nil

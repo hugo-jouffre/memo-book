@@ -552,7 +552,11 @@ public actor PreviewAPI: MemoBookAPI {
     }
 
     public func bookShareLink(memoId: String) async throws -> URL {
-        _ = try existingMemo(memoId)
+        // Les voyages du jeu d'essai de l'accueil portent le carnet du même
+        // identifiant, comme sur le serveur : leur partage (la cagnotte,
+        // l'aperçu) doit marcher dans le bac à sable aussi.
+        let isFixtureTrip = HomeFeed.fixture.trips.contains { $0.id == memoId }
+        if !isFixtureTrip { _ = try existingMemo(memoId) }
         // Un lien d'aperçu, stable d'un appel à l'autre comme le vrai.
         return URL(string: "https://memo-book.com/c/\(memoId)")!
     }

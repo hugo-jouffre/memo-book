@@ -154,7 +154,13 @@ public struct BookPreviewFlowView: View {
     /// derrière le bouton de partage de l'en-tête ; demander de l'aide, c'est
     /// toujours le lien.
     private func shareWallet() {
-        Task { await share(.link) }
+        Task {
+            guard let wallet = await model.prepareWalletShare() else { return }
+            showsShareChoice = false
+            // La cagnotte ne sait pas où en est le récit : le message ne compte
+            // pas les étapes.
+            systemShare = payload(title: wallet.title, steps: nil, file: nil, link: wallet.link)
+        }
     }
 
     /// Ouvre la feuille de partage du système avec ce qu'il faut dedans.
@@ -185,7 +191,7 @@ public struct BookPreviewFlowView: View {
     /// Le partage, habillé comme la maquette `3551:26331` : la photo et le
     /// titre du voyage en tête, « Commander » et « Partager sur Whatsapp » sous
     /// les apps.
-    private func payload(title: String, steps: Int, file: URL?, link: URL?) -> BookSharePayload {
+    private func payload(title: String, steps: Int?, file: URL?, link: URL?) -> BookSharePayload {
         var share = BookSharePayload(
             title: title,
             steps: steps,
