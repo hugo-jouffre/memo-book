@@ -1,6 +1,8 @@
 import MemoBookCore
 import MemoBookDesign
+import LinkPresentation
 import SwiftUI
+import UniformTypeIdentifiers
 import UIKit
 
 /// « Partager ton MemoBook » : le choix entre un fichier et un lien.
@@ -194,18 +196,71 @@ struct ShareBookSheet: View {
 struct BookSharePayload: Identifiable {
     let id = UUID()
     let title: String
-    let steps: Int
+    /// Les étapes déjà racontées, que le message annonce. `nil` depuis la
+    /// cagnotte, qui ne sait pas où en est le récit : la phrase s'en passe.
+    let steps: Int?
     /// Le PDF écrit sur le disque, quand c'est lui qu'on partage.
     let file: URL?
     /// Le lien de la cagnotte. Il accompagne **les deux** modes de partage :
     /// c'est le message qui demande un coup de main, pas la pièce jointe.
     let link: URL?
+    /// La photo du voyage, en tête de la feuille — la vignette de la maquette
+    /// (`3551:26331`). Sans elle, iOS pose l'icône de l'app.
+    var coverPhotoUrl: URL?
+    /// Les gestes que la feuille ajoute aux apps du système : « Commander »,
+    /// « Partager sur Whatsapp ».
+    var actions: [ShareAction] = []
+
+    init(
+        title: String,
+        steps: Int?,
+        file: URL?,
+        link: URL?,
+        coverPhotoUrl: URL? = nil,
+        actions: [ShareAction] = []
+    ) {
+        self.title = title
+        self.steps = steps
+        self.file = file
+        self.link = link
+        self.coverPhotoUrl = coverPhotoUrl
+        self.actions = actions
+    }
 
     /// Le message pré-rempli. C'est lui qui apparaît dans WhatsApp, iMessage ou
     /// Snapchat dès que l'app de destination est choisie.
     var message: String? {
         guard let link else { return nil }
+        guard let steps else { return BookCopy.Share.invitation(title: title, link: link) }
         return BookCopy.Share.invitation(title: title, steps: steps, link: link)
+    }
+}
+
+/// Un geste de plus dans la feuille du système — une ligne sous les apps,
+/// comme « Imprimer ».
+struct ShareAction: Identifiable {
+    let id = UUID()
+    let title: String
+    /// Un nom du catalogue de la marque.
+    let icon: String
+    /// Appelé par la feuille du système, sur le fil principal.
+    let perform: @MainActor () -> Void
+
+    /// « Partager sur Whatsapp » : WhatsApp ouvert sur le message, sans passer
+    /// par son extension de partage — qui laisse le texte de côté quand un
+    /// lien l'accompagne.
+    ///
+    /// Sur le fil principal : `UIApplication` n'existe que là.
+    @MainActor
+    static func whatsApp(message: String) -> ShareAction? {
+        guard
+            let encoded = message.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+            let url = URL(string: "whatsapp://send?text=\(encoded)"),
+            UIApplication.shared.canOpenURL(url)
+        else { return nil }
+        return ShareAction(title: BookCopy.Share.whatsAppAction, icon: "LogoWhatsApp") {
+            UIApplication.shared.open(url)
+        }
     }
 }
 
@@ -217,6 +272,10 @@ struct BookSharePayload: Identifiable {
 /// qu'une liste plus courte et périmée — c'est pour ça que les deux maquettes
 /// « Modale - Partager son MB - 2 » et « - 5 » ne sont pas implémentées : elles
 /// dessinent la feuille du système, elles ne la remplacent pas.
+///
+/// Ce qu'on y met, en revanche, suit la maquette `3551:26331` : le titre du
+/// voyage et sa photo en tête, et deux gestes sous les apps — « Commander »,
+/// « Partager sur Whatsapp ».
 struct BookShareSheet: UIViewControllerRepresentable {
     let payload: BookSharePayload
 
@@ -225,19 +284,112 @@ struct BookShareSheet: UIViewControllerRepresentable {
         // qui décide de ce qu'une app de messagerie met dans le corps du
         // message et de ce qu'elle met en pièce jointe.
         var items: [Any] = []
-        if let message = payload.message { items.append(message) }
+        if let message = payload.message {
+            items.append(
+                ShareMessageSource(
+                    message: message,
+                    title: payload.title,
+                    link: payload.link,
+                    coverPhotoUrl: payload.coverPhotoUrl
+                )
+            )
+        }
         if let file = payload.file { items.append(file) }
         // Ni message ni fichier ne devrait pas arriver — la vue ne présente la
         // feuille qu'avec l'un des deux — mais un partage vide vaut mieux qu'un
         // plantage.
         if items.isEmpty { items.append(payload.title) }
 
-        let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        let controller = UIActivityViewController(
+            activityItems: items,
+            applicationActivities: payload.actions.map(ClosureActivity.init)
+        )
         controller.setValue(BookCopy.Share.subject(title: payload.title), forKey: "subject")
         return controller
     }
 
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
+}
+
+/// Le message, et l'en-tête qui va avec : le titre du voyage et sa photo.
+///
+/// Un `UIActivityItemSource` et non la chaîne seule : c'est par
+/// `LPLinkMetadata` qu'iOS dessine l'en-tête de sa feuille. Sans lui, il
+/// écrit le début du message tronqué sous l'icône de l'app.
+private final class ShareMessageSource: NSObject, UIActivityItemSource {
+    let message: String
+    let metadata: LPLinkMetadata
+
+    init(message: String, title: String, link: URL?, coverPhotoUrl: URL?) {
+        self.message = message
+        let metadata = LPLinkMetadata()
+        metadata.title = title.isEmpty ? BookCopy.Share.title : title
+        metadata.originalURL = link
+        metadata.url = link
+        if let coverPhotoUrl {
+            // Chargée par iOS quand la feuille la demande, pas avant : la
+            // feuille s'ouvre sans attendre le réseau.
+            let provider = NSItemProvider()
+            provider.registerDataRepresentation(forTypeIdentifier: UTType.image.identifier, visibility: .all) {
+                completion in
+                let task = URLSession.shared.dataTask(with: coverPhotoUrl) { data, _, error in
+                    completion(data, error)
+                }
+                task.resume()
+                return task.progress
+            }
+            metadata.imageProvider = provider
+        }
+        self.metadata = metadata
+    }
+
+    func activityViewControllerPlaceholderItem(_ controller: UIActivityViewController) -> Any {
+        message
+    }
+
+    func activityViewController(
+        _ controller: UIActivityViewController,
+        itemForActivityType activityType: UIActivity.ActivityType?
+    ) -> Any? {
+        message
+    }
+
+    func activityViewControllerLinkMetadata(_ controller: UIActivityViewController) -> LPLinkMetadata? {
+        metadata
+    }
+}
+
+/// Un ``ShareAction`` habillé en geste de la feuille du système.
+private final class ClosureActivity: UIActivity {
+    private let action: ShareAction
+
+    init(_ action: ShareAction) {
+        self.action = action
+        super.init()
+    }
+
+    override class var activityCategory: UIActivity.Category { .action }
+
+    override var activityType: UIActivity.ActivityType? {
+        UIActivity.ActivityType("com.memobook.share.\(action.title)")
+    }
+
+    override var activityTitle: String? { action.title }
+
+    override var activityImage: UIImage? { UIImage.brand(action.icon) }
+
+    override func canPerform(withActivityItems activityItems: [Any]) -> Bool { true }
+
+    override func perform() {
+        // La feuille se referme d'abord : le geste mène ailleurs, et on ne
+        // doit pas la retrouver en revenant. Le geste lui-même oublie la
+        // feuille côté SwiftUI avant de naviguer — voir ceux qui le posent.
+        activityDidFinish(true)
+        // UIKit appelle `perform()` sur le fil principal, sans que le SDK le
+        // déclare : on le dit ici, une fois, plutôt que dans chaque geste.
+        let perform = action.perform
+        MainActor.assumeIsolated { perform() }
+    }
 }
 
 #Preview("Partager ton MemoBook") {

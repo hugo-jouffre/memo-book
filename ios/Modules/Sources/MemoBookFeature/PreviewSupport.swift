@@ -198,6 +198,20 @@ public actor PreviewAPI: MemoBookAPI {
         .fixture(draft, id: id)
     }
 
+    /// Le code de la maquette ouvre le premier voyage du jeu d'essai ; tout
+    /// autre répond comme le serveur à un code inconnu — c'est ce qui montre
+    /// l'alerte « Oups, voyage introuvable » dans le bac à sable.
+    public func joinTrip(code: String) async throws -> CreatedTrip {
+        guard code == "JHKFDA", let trip = HomeFeed.fixture.ongoingTrips.first else {
+            throw APIError.server(
+                statusCode: 404,
+                code: "trip_not_found",
+                message: "Aucun voyage n’est associé à ce code."
+            )
+        }
+        return CreatedTrip(trip: trip, accessCode: code)
+    }
+
     public func welcomeShowcases() async throws -> [Showcase] {
         HomeFeed.fixture.showcase.map { [$0] } ?? []
     }
@@ -212,6 +226,7 @@ public actor PreviewAPI: MemoBookAPI {
         // d'essai au rechargement suivant.
         var profile = editedProfile ?? .fixture
         if case .some(let value) = edit.phoneNumber { profile.phoneNumber = value }
+        if case .some(let value) = edit.birthDate { profile.birthDate = value }
         if let wantsNewsletter = edit.wantsNewsletter { profile.wantsNewsletter = wantsNewsletter }
         if var address = edit.address {
             // Comme le serveur : le nom du pays se dérive du code, il ne se
@@ -537,7 +552,11 @@ public actor PreviewAPI: MemoBookAPI {
     }
 
     public func bookShareLink(memoId: String) async throws -> URL {
-        _ = try existingMemo(memoId)
+        // Les voyages du jeu d'essai de l'accueil portent le carnet du même
+        // identifiant, comme sur le serveur : leur partage (la cagnotte,
+        // l'aperçu) doit marcher dans le bac à sable aussi.
+        let isFixtureTrip = HomeFeed.fixture.trips.contains { $0.id == memoId }
+        if !isFixtureTrip { _ = try existingMemo(memoId) }
         // Un lien d'aperçu, stable d'un appel à l'autre comme le vrai.
         return URL(string: "https://memo-book.com/c/\(memoId)")!
     }

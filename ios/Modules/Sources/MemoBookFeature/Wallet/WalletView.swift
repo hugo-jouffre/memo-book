@@ -19,6 +19,10 @@ public struct WalletView: View {
 
     @State private var model: WalletModel
 
+    /// Ce qui part dans la feuille de partage du système — voir
+    /// ``BookShareSheet``. `nil` quand rien n'est en partage.
+    @State private var systemShare: BookSharePayload?
+
     public init(
         model: WalletModel,
         onIntent: @escaping (WalletIntent) -> Void
@@ -39,8 +43,9 @@ public struct WalletView: View {
                 WalletBalanceCard(
                     wallet: model.wallet,
                     isLoading: model.isLoading,
-                    onAdd: addFunds,
-                    onShare: { onIntent(.shareWallet) }
+                    isSharing: model.isPreparingShare,
+                    onAdd: { onIntent(.addFunds(tripId: model.financedTripId)) },
+                    onShare: share
                 )
 
                 // C'est **le seul bloc** qui distingue les deux maquettes.
@@ -86,7 +91,31 @@ public struct WalletView: View {
         // Le crème de la marque ne se retourne pas en sombre — voir
         // `MemoBookColor`.
         .environment(\.colorScheme, .light)
+        // Relue à chaque retour sur l'écran : c'est en revenant de « Ajouter à
+        // ma cagnotte » que le solde a bougé.
         .task { await model.load() }
+        // La feuille **du système**, directement (Clara, 26/09/2026) — comme
+        // « Partager ma cagnotte » de l'aperçu.
+        .sheet(item: $systemShare) { BookShareSheet(payload: $0) }
+    }
+
+    /// « Partager » : le message qui demande un coup de main et le lien du
+    /// carnet, dans la feuille de partage d'iOS.
+    private func share() {
+        Task {
+            guard let share = await model.prepareShare() else { return }
+            var payload = BookSharePayload(title: share.title, steps: nil, file: nil, link: share.link)
+            payload.actions = [
+                ShareAction(title: BookCopy.Share.orderAction, icon: "IconCart") {
+                    systemShare = nil
+                    onIntent(.order(tripId: share.tripId))
+                },
+            ]
+            if let message = payload.message, let whatsApp = ShareAction.whatsApp(message: message) {
+                payload.actions.append(whatsApp)
+            }
+            systemShare = payload
+        }
     }
 
     /// « Si je n'utilise pas toute ma cagnotte ? »
@@ -122,7 +151,7 @@ public struct WalletView: View {
             style: .primary,
             fillsWidth: true
         ) {
-            onIntent(.openBookPreview)
+            onIntent(.openBookPreview(tripId: model.financedTripId))
         }
         .padding(.horizontal, MemoBookSpacing.screenMargin)
         .padding(.vertical, MemoBookSpacing.snug)
@@ -132,26 +161,19 @@ public struct WalletView: View {
         .background(.thinMaterial)
     }
 
-    private func addFunds() {
-        guard model.canTopUp else {
-            onIntent(.topUpUnavailable)
-            Task { await model.addFunds(0) }
-            return
-        }
-        onIntent(.addFunds)
-    }
 }
 
 /// Ce que la cagnotte demande à l'app d'ouvrir.
+///
+/// Le partage n'y est pas : c'est la feuille du système, que l'écran présente
+/// lui-même.
 public enum WalletIntent: Sendable, Hashable {
-    /// Partager la cagnotte — la feuille de partage, avec le message et le lien.
-    case shareWallet
-    /// « Ajouter » — recharger, feuille Stripe à la clé.
-    case addFunds
-    /// « Ajouter » là où l'encaissement n'est pas branché : les previews Xcode,
-    /// qui n'ont pas de serveur à qui demander une intention.
-    case topUpUnavailable
-    case openBookPreview
+    /// « Ajouter » — la page « Ajouter à ma cagnotte », pour ce carnet-là.
+    case addFunds(tripId: String?)
+    /// « Prévisualiser mon carnet » — le carnet que la cagnotte finance.
+    case openBookPreview(tripId: String?)
+    /// « Commander », depuis la feuille de partage.
+    case order(tripId: String)
     case openHelp
 }
 
@@ -165,6 +187,8 @@ public enum WalletIntent: Sendable, Hashable {
 private struct WalletBalanceCard: View {
     let wallet: Wallet?
     let isLoading: Bool
+    /// Le lien se prépare : « Partager » tourne.
+    var isSharing = false
     let onAdd: () -> Void
     let onShare: () -> Void
 
@@ -315,6 +339,7 @@ private struct WalletBalanceCard: View {
             icon: Image(brand: "IconShareSystem"),
             style: .primary,
             size: .medium,
+            isLoading: isSharing,
             fillsWidth: true,
             action: onShare
         )

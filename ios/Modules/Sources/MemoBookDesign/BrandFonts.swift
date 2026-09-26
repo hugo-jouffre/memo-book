@@ -1,6 +1,7 @@
 import CoreText
 import Foundation
 import SwiftUI
+import UIKit
 
 /// Les polices de la marque sont des ressources du module, pas de la cible app.
 ///
@@ -66,5 +67,13 @@ public enum BrandFonts {
 extension Image {
     public init(brand name: String) {
         self.init(name, bundle: .module)
+    }
+}
+
+extension UIImage {
+    /// La même image du catalogue de la marque, pour ce qui ne parle qu'UIKit
+    /// — les gestes de la feuille de partage du système.
+    public static func brand(_ name: String) -> UIImage? {
+        UIImage(named: name, in: .module, compatibleWith: nil)
     }
 }

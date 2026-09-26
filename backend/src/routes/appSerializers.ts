@@ -482,6 +482,9 @@ export function serializeProfile(
     // Elle appartient au compte Apple ou Google.
     signInProvider: account.identities?.[0]?.provider ?? null,
     phoneNumber: account.phoneNumber,
+    // Le jour, `AAAA-MM-JJ` — pas un instant, qui se relirait dans le fuseau de
+    // l'appareil et pourrait reculer d'un jour.
+    birthDate: account.birthDate ? account.birthDate.toISOString().slice(0, 10) : null,
     // Ce que la personne a dit, sinon ce que son prénom laisse deviner : c'est
     // ce que la ligne « Genre » du profil affiche, et ce sur quoi la feuille
     // d'abonnement accorde « Abonné(e) » (T76).
@@ -711,9 +714,13 @@ type WalletEntryRow = {
 export function serializeWallet(
   balanceCents: number,
   entries: WalletEntryRow[],
-  trip: Pick<Memo, "title" | "destinationCity" | "targetPageCount" | "pageCount"> | null
+  trip: Pick<Memo, "id" | "title" | "destinationCity" | "targetPageCount" | "pageCount"> | null
 ) {
   return {
+    // Le carnet que cette cagnotte finance — celui qu'on a demandé, ou celui
+    // que la route a choisi quand on arrive du profil. C'est lui que « Prévisualiser
+    // mon carnet » ouvre et que « Partager » met dans le message.
+    tripId: trip?.id ?? null,
     balance: euros(balanceCents),
     // L'historique va du plus récent au plus ancien, et c'est **le serveur**
     // qui ordonne : l'app ne retrie pas, sinon deux écritures du même jour

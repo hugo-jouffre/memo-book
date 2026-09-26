@@ -154,6 +154,7 @@ extension Wallet {
                     date: TripSettings.day(4, 8, 2026)
                 ),
             ],
+            tripId: FixtureTripId.rome,
             tripTitle: "Rome",
             estimate: WalletEstimate(pageCount: 50, cost: 89.90)
         )
@@ -167,6 +168,7 @@ extension Wallet {
         Wallet(
             balance: 0,
             entries: [],
+            tripId: FixtureTripId.rome,
             tripTitle: "Rome",
             estimate: WalletEstimate(pageCount: 50, cost: 89.90)
         )

@@ -184,7 +184,14 @@ model Account {
   /// Apple ou Google.
   passwordHash    String?
 
+  /// Le numéro WhatsApp : demandé à la fin de l'onboarding (« Ton Numéro
+  /// Whatsapp »), et repris par la commande pour les nouvelles du colis.
   phoneNumber      String?
+  /// La date de naissance, demandée à la fin de l'onboarding — « Ta Date de
+  /// Naissance ». Un **jour**, sans heure ni fuseau : une date de naissance ne
+  /// change pas quand on traverse un océan. Nulle tant qu'on ne l'a pas donnée,
+  /// et l'écran se passe (« Passer »).
+  birthDate        DateTime? @db.Date
   /// L'URL d'une photo venue d'un fournisseur (Apple, Google). Elle s'efface
   /// devant `avatarStorageKey` dès qu'on a envoyé la sienne.
   avatarUrl        String?

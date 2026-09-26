@@ -27,12 +27,19 @@ export type EntryWithMedia = Entry & { media: MediaAsset | null };
 /** Un message avec ce qu'il faut pour le dessiner : son souvenir, et qui l'a dit. */
 export type ChatMessageRow = ChatMessage & {
   entry: EntryWithMedia | null;
-  account: { firstName: string | null; lastName: string | null } | null;
+  account: {
+    firstName: string | null;
+    lastName: string | null;
+    avatarStorageKey: string | null;
+    avatarUrl: string | null;
+  } | null;
 };
 
 export const chatMessageInclude = {
   entry: { include: { media: true } },
-  account: { select: { firstName: true, lastName: true } },
+  // La photo et le nom de celui qui a parlé : la bulle d'un vocal porte son
+  // portrait, ou ses initiales (Clara, 26/09/2026).
+  account: { select: { firstName: true, lastName: true, avatarStorageKey: true, avatarUrl: true } },
 } as const;
 
 /** Le `kind` d'une bulle du voyageur pour un souvenir donné. */

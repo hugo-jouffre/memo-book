@@ -521,6 +521,14 @@ public enum MemoBookFont {
     /// `Heading 6` / `Text Large` (20).
     public static let heading = Font.custom(BrandFonts.soraSemiBold, size: 20, relativeTo: .title3)
 
+    /// La moitié courante d'un compte à rebours — « Départ dans » au-dessus de
+    /// « 10 jours », sur la carte d'un voyage à venir (`3125:33113`). Même
+    /// corps que ``heading``, en Regular : le chiffre, lui, est en ``h1``.
+    ///
+    /// ⚠️ **Pas encore une variable Figma** : relevé sur l'export de la carte
+    /// (Sora Regular 20).
+    public static let headingLight = Font.custom(BrandFonts.soraRegular, size: 20, relativeTo: .title3)
+
     /// Titre d'une carte posée **dans** une feuille — « Comment résilier ? ».
     /// Sora, comme les titres, mais à la taille du corps de texte : la carte
     /// s'annonce sans concurrencer le titre de la feuille.

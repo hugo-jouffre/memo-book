@@ -3,12 +3,11 @@ import Foundation
 // La Politique de confidentialité, recopiée du site memobook.fr (Hugo,
 // 17/09/2026), en onze chapitres. La forme est dans ``LegalDocument``.
 //
-// ⚠️ Deux endroits du texte source sont recopiés **tels quels** et signalés
-// (R8 interdit de corriger en silence) :
-//   - le chapitre 3 annonce « les prestataires techniques suivants : » et la
-//     liste ne suit pas — le site la porte dans un tableau qui n'a pas été
-//     fourni (T152) ;
-//   - le chapitre 9 se termine par un point-virgule (T153).
+// Deux endroits du texte source ont été corrigés sur retour de Clara
+// (26/09/2026), et non en silence (R8) :
+//   - le chapitre 3 annonçait « les prestataires techniques suivants : » sans
+//     la liste, que le site porte dans un tableau non fourni — la voici (T152) ;
+//   - le chapitre 9 se terminait par un point-virgule (T153).
 
 public enum PrivacyPolicy {
     private static let contactLink = LegalContact.emailLink
@@ -87,8 +86,10 @@ public enum PrivacyPolicy {
         number: 3,
         title: "Destinataires des données",
         blocks: [
-            // ⚠️ La liste des prestataires manque au texte fourni (T152).
             .paragraph("Vos données peuvent être transmises aux prestataires techniques suivants dans le cadre strict des finalités décrites ci-dessus :"),
+            // La liste donnée par Clara (T152). « Hotter Ltd » dans son
+            // message : Hotjar Ltd, l'éditeur de Hotjar, que le ticket citait.
+            .bullets(["Webflow Inc.", "Google LLC (Analytics)", "Hotjar Ltd", "Meta Platforms Inc."]),
             .paragraph("Aucune de vos données n’est vendue à des tiers. Aucune donnée n’est partagée à des fins commerciales sans votre consentement explicite."),
         ]
     )
@@ -171,8 +172,7 @@ public enum PrivacyPolicy {
         number: 9,
         title: "Mineurs",
         blocks: [
-            // ⚠️ Le point-virgule final est celui du site (T153).
-            .paragraph("MemoBook est accessible à partir de 4 ans. Dans le cadre du RGPD, le traitement des données d’un enfant de moins de 16 ans n’est licite que si le titulaire de la responsabilité parentale a donné son consentement. En soumettant un numéro de téléphone via notre formulaire pour un enfant de moins de 16 ans, le parent ou tuteur légal confirme avoir donné son accord;"),
+            .paragraph("MemoBook est accessible à partir de 4 ans. Dans le cadre du RGPD, le traitement des données d’un enfant de moins de 16 ans n’est licite que si le titulaire de la responsabilité parentale a donné son consentement. En soumettant un numéro de téléphone via notre formulaire pour un enfant de moins de 16 ans, le parent ou tuteur légal confirme avoir donné son accord."),
         ]
     )
 
