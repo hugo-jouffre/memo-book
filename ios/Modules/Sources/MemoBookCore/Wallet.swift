@@ -155,6 +155,12 @@ public struct Wallet: Codable, Sendable, Hashable {
     /// changeraient de place d'un affichage à l'autre.
     public let entries: [WalletEntry]
 
+    /// Le carnet que cette cagnotte finance : celui du voyage d'où l'on vient,
+    /// ou celui du moment quand on arrive du profil — le serveur choisit.
+    /// C'est lui que « Prévisualiser mon carnet » ouvre et que « Partager » met
+    /// dans le message. `nil` pour un compte qui n'a aucun voyage.
+    public let tripId: String?
+
     /// Le voyage que cette cagnotte finance — « Rome ». Il ne change pas la
     /// somme, il nomme seulement ce qu'on est en train de payer.
     public let tripTitle: String?
@@ -170,11 +176,13 @@ public struct Wallet: Codable, Sendable, Hashable {
     public init(
         balance: Decimal,
         entries: [WalletEntry] = [],
+        tripId: String? = nil,
         tripTitle: String? = nil,
         estimate: WalletEstimate? = nil
     ) {
         self.balance = balance
         self.entries = entries
+        self.tripId = tripId
         self.tripTitle = tripTitle
         self.estimate = estimate
     }

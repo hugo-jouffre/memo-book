@@ -449,6 +449,9 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
     /// que la désaccorder de celle avec laquelle on se reconnecte.
     public var signInProvider: AuthProvider?
     public var phoneNumber: String?
+    /// La date de naissance, demandée à la fin de l'onboarding. Un jour, pas un
+    /// instant — voir ``CalendarDay``.
+    public var birthDate: CalendarDay?
     /// Voir ``Gender`` : deviné par le serveur, corrigé depuis le profil.
     public var gender: Gender
     public var avatarUrl: URL?
@@ -486,6 +489,7 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         email: String? = nil,
         signInProvider: AuthProvider? = nil,
         phoneNumber: String? = nil,
+        birthDate: CalendarDay? = nil,
         gender: Gender = .undisclosed,
         avatarUrl: URL? = nil,
         address: PostalAddress = PostalAddress(),
@@ -506,6 +510,7 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         self.email = email
         self.signInProvider = signInProvider
         self.phoneNumber = phoneNumber
+        self.birthDate = birthDate
         self.gender = gender
         self.avatarUrl = avatarUrl
         self.address = address
@@ -536,6 +541,9 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         email = try container.decodeIfPresent(String.self, forKey: .email)
         signInProvider = try container.decodeIfPresent(AuthProvider.self, forKey: .signInProvider)
         phoneNumber = try container.decodeIfPresent(String.self, forKey: .phoneNumber)
+        // Un serveur d'avant la date de naissance ne la rend pas, et une valeur
+        // illisible ne doit pas emporter le profil entier.
+        birthDate = try? container.decodeIfPresent(CalendarDay.self, forKey: .birthDate)
         // Un serveur d'avant le genre ne le rend pas : on n'accorde alors rien.
         gender = try container.decodeIfPresent(Gender.self, forKey: .gender) ?? .undisclosed
         avatarUrl = try container.decodeIfPresent(URL.self, forKey: .avatarUrl)
@@ -609,6 +617,7 @@ public struct ProfileEdit: Encodable, Sendable, Hashable {
     public var firstName: String??
     public var lastName: String??
     public var phoneNumber: String??
+    public var birthDate: CalendarDay??
     /// Un simple optionnel : le genre ne s'efface pas, il se choisit.
     public var gender: Gender?
     public var wantsNewsletter: Bool?
@@ -618,6 +627,7 @@ public struct ProfileEdit: Encodable, Sendable, Hashable {
         firstName: String?? = nil,
         lastName: String?? = nil,
         phoneNumber: String?? = nil,
+        birthDate: CalendarDay?? = nil,
         gender: Gender? = nil,
         wantsNewsletter: Bool? = nil,
         address: PostalAddress? = nil
@@ -625,13 +635,14 @@ public struct ProfileEdit: Encodable, Sendable, Hashable {
         self.firstName = firstName
         self.lastName = lastName
         self.phoneNumber = phoneNumber
+        self.birthDate = birthDate
         self.gender = gender
         self.wantsNewsletter = wantsNewsletter
         self.address = address
     }
 
     private enum CodingKeys: String, CodingKey {
-        case firstName, lastName, phoneNumber, gender, wantsNewsletter, address
+        case firstName, lastName, phoneNumber, birthDate, gender, wantsNewsletter, address
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -639,6 +650,7 @@ public struct ProfileEdit: Encodable, Sendable, Hashable {
         if let firstName { try container.encode(firstName, forKey: .firstName) }
         if let lastName { try container.encode(lastName, forKey: .lastName) }
         if let phoneNumber { try container.encode(phoneNumber, forKey: .phoneNumber) }
+        if let birthDate { try container.encode(birthDate, forKey: .birthDate) }
         if let gender { try container.encode(gender, forKey: .gender) }
         if let wantsNewsletter {
             try container.encode(wantsNewsletter, forKey: .wantsNewsletter)
