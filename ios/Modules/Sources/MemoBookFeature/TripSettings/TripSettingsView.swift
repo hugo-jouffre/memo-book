@@ -475,12 +475,19 @@ private struct MemoryAllowanceRow: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
                 HStack(spacing: MemoBookSpacing.s) {
-                    Text(MemoryCopy.rowTitle)
-                        .font(MemoBookFont.body)
-                        .foregroundStyle(MemoBookColor.ink)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(MemoryCopy.rowTitle)
+                            .font(MemoBookFont.body)
+                            .foregroundStyle(MemoBookColor.ink)
+                        // Ce que ça coûte, avant qu'on le demande : rien de
+                        // plus que l'abonnement (Clara, 26/09/2026).
+                        Text(MemoryCopy.rowCaption)
+                            .font(MemoBookFont.caption)
+                            .foregroundStyle(MemoBookColor.inkMuted)
+                    }
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                     Text(MemoryCopy.rowValue(used: memory.used, allowance: memory.allowance))
                         .font(MemoBookFont.label)
@@ -518,7 +525,7 @@ private struct MemoryAllowanceRow: View {
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
         .accessibilityLabel(
-            "\(MemoryCopy.rowTitle). \(MemoryCopy.remaining(memory.remaining, renewsOn: nil))"
+            "\(MemoryCopy.rowTitle), \(MemoryCopy.rowCaption). \(MemoryCopy.remaining(memory.remaining, renewsOn: nil))"
         )
     }
 }

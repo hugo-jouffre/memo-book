@@ -102,7 +102,7 @@ struct ChatMessageRow: View {
             .accessibilityElement(children: .combine)
 
         case .voice(let note):
-            ChatVoiceBubble(note: note, author: message.author, model: model)
+            ChatVoiceBubble(note: note, author: message.author, portrait: portrait, model: model)
 
         case .transcript(let card):
             ChatTranscriptBubble(
@@ -114,6 +114,19 @@ struct ChatMessageRow: View {
         case .photos(let attachments):
             ChatPhotosBubble(attachments: attachments, author: message.author)
         }
+    }
+
+    /// Le portrait de celui qui a parlé, pour la bulle d'un vocal (Clara,
+    /// 26/09/2026) : ce que le serveur a mis sur la bulle — la sienne comme
+    /// celle d'un co-voyageur —, sinon celui de qui lit, pour une bulle qui
+    /// n'est pas encore partie. `nil` pour MEMO, qui signe de son M.
+    private var portrait: ChatPortrait? {
+        guard isTraveller else { return nil }
+        if let initials = message.authorInitials {
+            return ChatPortrait(url: message.authorAvatarUrl, initials: initials)
+        }
+        let context = model.thread?.context
+        return ChatPortrait(url: context?.travellerAvatarUrl, initials: context?.travellerInitials ?? "")
     }
 
     /// Ce que chaque auteur permet de faire de son message.
@@ -330,6 +343,8 @@ struct ChatPhotosBubble: View {
 struct ChatVoiceBubble: View {
     let note: VoiceNote
     let author: ChatAuthor
+    /// La photo ou les initiales de celui qui a parlé. `nil` : le M de MEMO.
+    var portrait: ChatPortrait?
     @Bindable var model: ChatModel
 
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -362,10 +377,10 @@ struct ChatVoiceBubble: View {
                 }
                 .frame(minWidth: MemoBookSpacing.xl * 2)
 
-                // Le signe de la marque dans un rond vert : le vocal est signé
-                // par celui qui l'a dit. Un `BrandMarkDrawing` et non une image,
-                // parce que le M du dépôt est un tracé et qu'il se met à
-                // l'échelle sans se pixelliser.
+                // Le vocal est signé par celui qui l'a dit : son portrait —
+                // sa photo, ou ses initiales comme sur son profil (Clara,
+                // 26/09/2026). Le rond vert au M de la marque ne signe plus
+                // que MEMO.
                 if !typeSize.isAccessibilitySize {
                     signature
                 }
@@ -401,27 +416,80 @@ struct ChatVoiceBubble: View {
         .accessibilityLabel(isPlaying ? ChatCopy.Voice.pause : ChatCopy.Voice.play)
     }
 
+    @ViewBuilder
     private var signature: some View {
-        BrandMarkDrawing(progress: 1, color: MemoBookColor.onAction)
-            .frame(width: markSide * 0.55, height: BrandMark.height(forWidth: markSide * 0.55))
-            .frame(width: markSide, height: markSide)
-            .background(MemoBookColor.action, in: .circle)
-            // Le micro à cheval sur le bord du rond, comme la maquette le pose :
-            // c'est lui qui dit que ce disque signe un **vocal** et pas un
-            // message écrit. **En bas à gauche du disque, et à la taille d'une
-            // icône de barre** — il était plus petit et posé à mi-hauteur
-            // (Clara, 17/09/2026).
-            .overlay(alignment: .bottomLeading) {
-                Image(brand: "IconMic")
-                    .resizable()
-                    .renderingMode(.template)
-                    .scaledToFit()
-                    .frame(width: glyph, height: glyph)
-                    .foregroundStyle(MemoBookColor.ink)
-                    .offset(x: -glyph * 0.35, y: glyph * 0.1)
+        Group {
+            if let portrait {
+                ChatPortraitDisc(portrait: portrait, side: markSide)
+            } else {
+                // Un `BrandMarkDrawing` et non une image : le M du dépôt est un
+                // tracé, il se met à l'échelle sans se pixelliser.
+                BrandMarkDrawing(progress: 1, color: MemoBookColor.onAction)
+                    .frame(width: markSide * 0.55, height: BrandMark.height(forWidth: markSide * 0.55))
+                    .frame(width: markSide, height: markSide)
+                    .background(MemoBookColor.action, in: .circle)
             }
-            .accessibilityHidden(true)
+        }
+        // Le micro, **en pastille** sur le bord bas du rond (Clara,
+        // 26/09/2026 — « mieux intégré ») : un disque du fond de la bulle qui
+        // le détoure, et le glyphe vert dedans. Il se lit comme un badge du
+        // portrait, et non plus comme une icône posée à côté.
+        .overlay(alignment: .bottomLeading) { micBadge }
+        .accessibilityHidden(true)
     }
+
+    /// La pastille du micro : un disque du papier de la marque, cerclé comme
+    /// le portrait, et le glyphe vert dedans — le badge d'une photo, pas une
+    /// icône de plus dans la bulle.
+    private var micBadge: some View {
+        let side = markSide * 0.42
+
+        return Image(brand: "IconMic")
+            .resizable()
+            .renderingMode(.template)
+            .scaledToFit()
+            .foregroundStyle(MemoBookColor.action)
+            .padding(side * 0.2)
+            .frame(width: side, height: side)
+            .background(MemoBookColor.surface, in: .circle)
+            .overlay { Circle().strokeBorder(MemoBookColor.hairline, lineWidth: 1) }
+            .offset(x: -side * 0.3, y: side * 0.12)
+    }
+}
+
+/// Le portrait d'une bulle de vocal : la photo, ou les initiales **comme sur
+/// la page de profil** — le même bleu d'aplat, l'encre. Un cerne du papier de
+/// la marque le détache : sans lui, le rond bleu se fondait dans la bulle bleue
+/// du voyageur, et il ne restait que deux lettres qui flottaient.
+struct ChatPortraitDisc: View {
+    let portrait: ChatPortrait
+    let side: CGFloat
+
+    var body: some View {
+        AsyncImage(url: portrait.url) { phase in
+            if let image = phase.image {
+                image.resizable().scaledToFill()
+            } else {
+                Text(portrait.initials)
+                    .font(MemoBookFont.cardTitle)
+                    .foregroundStyle(MemoBookColor.ink)
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+                    .padding(.horizontal, 4)
+            }
+        }
+        .frame(width: side, height: side)
+        .background(MemoBookColor.outline, in: .circle)
+        .clipShape(.circle)
+        .overlay { Circle().strokeBorder(MemoBookColor.surface, lineWidth: 2) }
+    }
+}
+
+/// Qui a dit un vocal, pour son rond : une photo quand il y en a une, des
+/// initiales sinon.
+struct ChatPortrait: Hashable {
+    let url: URL?
+    let initials: String
 }
 
 // MARK: - La retranscription

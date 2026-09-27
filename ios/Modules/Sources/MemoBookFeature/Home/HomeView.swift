@@ -119,7 +119,11 @@ public struct HomeView: View {
         }
         .environment(\.homeContentHasAppeared, hasAppeared)
         .brandSheet(isPresented: $isCreatingNotebook) {
-            NewNotebookSheet(resumableTrip: model.resumableTrip, onIntent: onIntent)
+            NewNotebookSheet(
+                resumableTrip: model.resumableTrip,
+                join: { await model.join(code: $0) },
+                onIntent: onIntent
+            )
         }
         .brandSheet(item: $tripToDelete) { trip in
             DeleteTripSheet(
@@ -515,9 +519,11 @@ public struct HomeView: View {
                     UpcomingTripInvite { isCreatingNotebook = true }
                         .rising(upcomingHeadingOrder + 1)
                 } else {
+                    // La carte de la maquette `3125:33113` (Clara, 26/09/2026) :
+                    // photo d'attente floutée, compte à rebours, scotch.
                     ForEach(Array(trips.enumerated()), id: \.element.id) { index, trip in
                         drawer(for: trip) {
-                            CompactTripCard(trip: trip) { onIntent(.openTrip(id: trip.id)) }
+                            UpcomingTripCard(trip: trip) { onIntent(.openTrip(id: trip.id)) }
                         }
                         .rising(upcomingHeadingOrder + 1 + index)
                     }

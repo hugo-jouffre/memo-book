@@ -427,6 +427,18 @@ public enum BookCopy {
             "Mon carnet de voyage « \(title) »"
         }
 
+        /// Le même message **sans le compte des étapes**, pour la cagnotte : elle
+        /// ne sait pas où en est le récit, seulement ce qu'il finance.
+        public static func invitation(title: String, link: URL) -> String {
+            "Je prépare le carnet de mon voyage « \(title) ». "
+                + "Il est possible de m’aider à financer la version imprimée en cliquant sur ce lien : \(link.absoluteString)"
+        }
+
+        /// Les deux gestes que la feuille du système ajoute à ses apps
+        /// (`3551:26331`), recopiés tels quels (R8).
+        public static let orderAction = "Commander"
+        public static let whatsAppAction = "Partager sur Whatsapp"
+
         /// Le lien de prévisualisation n'existe pas encore et n'a pas pu se
         /// créer. On le dit sans jargon : ce n'est pas la faute de
         /// l'utilisateur, et le PDF reste partageable.
@@ -488,6 +500,51 @@ public enum BookCopy {
         /// qu'une preview Xcode doit pouvoir dire pourquoi son bouton ne fait rien.
         public static let addUnavailable =
             "Recharger ta cagnotte arrive bientôt : le paiement n’est pas encore branché."
+
+        /// « Partager » ou « Prévisualiser mon carnet » sans aucun voyage : il
+        /// n'y a pas encore de carnet à montrer.
+        public static let shareUnavailable =
+            "Tu n’as pas encore de carnet : crée ton premier voyage pour le partager."
+
+        // MARK: « Ajouter à ma cagnotte » — `3551:26486`, au caractère près (R8)
+
+        /// Le nom du cadre Figma, en titre : la maquette ne dessine pas
+        /// d'en-tête, et un écran poussé doit en avoir un pour sa flèche.
+        public static let topUpTitle = "Ajouter à ma cagnotte"
+
+        public static let topUpCardTitle = "Ma cagnotte"
+        /// « Carnet - Rome et la Dolce Vita ».
+        public static func topUpCardSubtitle(trip: String) -> String { "Carnet - \(trip)" }
+        public static let topUpCollected = "Collectés"
+        /// ⚠️ La maquette écrit « Prix moyen d’un carnet de voyage » face à
+        /// l'objectif. L'app connaît mieux : l'estimation de **ce** carnet
+        /// (``Wallet/estimate``). Le libellé dit donc ce que le chiffre est — à
+        /// trancher avec Clara.
+        public static let topUpGoalCaption = "Coût estimé de ton carnet"
+        public static func topUpGoal(_ amount: String) -> String { "Objectif : \(amount)" }
+        /// ⚠️ La maquette vouvoie (« Votre contribution ») : recopiée telle
+        /// quelle, et signalée (R9).
+        public static let topUpAmountCaption = "Votre contribution"
+        public static let topUpFreeAmount = "Montant libre"
+        public static let topUpFreeAmountPlaceholder = "Saisir un autre montant"
+        public static let topUpRecurringTitle = "Don récurrent"
+        public static let topUpRecurringDetail = "Contribuer automatiquement chaque mois"
+        /// L'appui sur l'interrupteur pâli : le don récurrent n'existe pas
+        /// encore côté serveur, et l'écran ne ment pas.
+        public static let topUpRecurringUnavailable =
+            "Le don récurrent arrive bientôt. En attendant, chaque contribution se fait en une fois."
+        public static let topUpPaymentSection = "Paiement"
+        /// À la place des trois champs de carte de la maquette : la carte se
+        /// saisit dans la fenêtre de Stripe, jamais dans un champ de l'app.
+        public static let topUpPaymentNote =
+            "Tu saisiras ta carte à l’étape suivante, dans la fenêtre sécurisée de Stripe."
+        public static let topUpAcceptedCards = "Cartes acceptées"
+        /// « Contribuer 10,00 € ».
+        public static func topUpCta(_ amount: String) -> String { "Contribuer \(amount)" }
+        /// Sous le bouton quand le montant sort des bornes du serveur.
+        public static func topUpBounds(min: String, max: String) -> String {
+            "Entre \(min) et \(max) par contribution."
+        }
     }
 
     // MARK: - Les feuilles des réglages du voyage

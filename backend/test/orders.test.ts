@@ -12,7 +12,13 @@ import { createHarness, registerAccount, resetDatabase, type TestHarness } from 
  */
 type ContextBody = {
   bookTitle: string;
-  wallet: { balance: number; entries: unknown[]; tripTitle: string | null; estimate: unknown };
+  wallet: {
+    tripId: string | null;
+    balance: number;
+    entries: unknown[];
+    tripTitle: string | null;
+    estimate: unknown;
+  };
   shipping: Record<string, unknown> & { country: string };
   countries: { code: string }[];
   options: Record<string, unknown>;
@@ -83,7 +89,8 @@ describe("ce que le tunnel reçoit pour s'ouvrir", () => {
    * **La régression qui a blanchi l'étape 1.** `OrderContext.wallet` est un
    * ``Wallet`` Swift, dont `entries` n'est pas optionnel : un objet partiel
    * faisait échouer le décodage de *tout* l'écran, pas seulement de la ligne
-   * concernée. Ce test fige les quatre champs du contrat.
+   * concernée. Ce test fige les cinq champs du contrat — `tripId` depuis le
+   * 26/09/2026 : le carnet que la cagnotte finance, ici celui qu'on commande.
    */
   it("rend une cagnotte complète, et pas seulement son solde", async () => {
     const account = await registerAccount(harness.app);
@@ -98,8 +105,9 @@ describe("ce que le tunnel reçoit pour s'ouvrir", () => {
     expect(response.statusCode).toBe(200);
     const body = response.json<ContextBody>();
     expect(Object.keys(body.wallet).sort()).toEqual(
-      ["balance", "entries", "estimate", "tripTitle"].sort(),
+      ["balance", "entries", "estimate", "tripId", "tripTitle"].sort(),
     );
+    expect(body.wallet.tripId).toBe(memo.id);
     expect(body.wallet.entries).toEqual([]);
     expect(body.wallet.balance).toBe(0);
   });

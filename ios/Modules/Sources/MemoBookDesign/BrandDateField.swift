@@ -33,18 +33,36 @@ public struct BrandDateField: View {
     private let closedRange: PartialRangeThrough<Date>?
     private let openRange: PartialRangeFrom<Date>?
 
-    public init(_ label: String, date: Binding<Date?>, in range: PartialRangeThrough<Date>) {
+    /// La croix qui efface la date. Faux là où une date posée se **change**
+    /// mais ne se retire plus — les dates d'un voyage, dans ses réglages
+    /// (Clara, 26/09/2026) : un voyage configuré sans date de départ n'a plus
+    /// ni compte à rebours ni rythme de relance.
+    private let isClearable: Bool
+
+    public init(
+        _ label: String,
+        date: Binding<Date?>,
+        in range: PartialRangeThrough<Date>,
+        isClearable: Bool = true
+    ) {
         self.label = label
         _date = date
         closedRange = range
         openRange = nil
+        self.isClearable = isClearable
     }
 
-    public init(_ label: String, date: Binding<Date?>, in range: PartialRangeFrom<Date>) {
+    public init(
+        _ label: String,
+        date: Binding<Date?>,
+        in range: PartialRangeFrom<Date>,
+        isClearable: Bool = true
+    ) {
         self.label = label
         _date = date
         closedRange = nil
         openRange = range
+        self.isClearable = isClearable
     }
 
     @State private var isPicking = false
@@ -84,7 +102,7 @@ public struct BrandDateField: View {
 
                 Spacer(minLength: MemoBookSpacing.xs)
 
-                if date != nil { clearButton }
+                if date != nil, isClearable { clearButton }
             }
             .padding(.horizontal, MemoBookSpacing.s)
             .padding(.vertical, MemoBookSpacing.snug)

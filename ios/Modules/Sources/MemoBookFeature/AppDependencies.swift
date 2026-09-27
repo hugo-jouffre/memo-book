@@ -146,7 +146,8 @@ public final class AppDependencies {
             source: cachedSource(.home) { [api] in try await api.homeFeed() },
             cached: { [content] in await content.read(.home, as: HomeFeed.self) },
             outbox: outbox,
-            remove: { [api] id in try await api.deleteMemo(id: id) }
+            remove: { [api] id in try await api.deleteMemo(id: id) },
+            join: { [api] code in try await api.joinTrip(code: code) }
         )
     }
 
@@ -372,8 +373,21 @@ public final class AppDependencies {
     /// mais rendent un ``Render`` et non un ``BookPreview`` — il manque le
     /// titre du carnet, l'extrait et l'état des couvertures, que l'écran
     /// affiche tous les trois.
+    ///
+    /// **« Partager ma cagnotte », lui, parle au serveur** (26/09/2026) : le
+    /// titre vient de la cagnotte (`GET /v1/wallet`) et le lien de
+    /// `POST /v1/memos/:id/share-link`, qui existent. Le partager depuis le jeu
+    /// d'essai aurait envoyé « Rome et la Dolce Vita » aux proches de tout le
+    /// monde.
     public func bookPreviewModel(memoId: String) -> BookPreviewModel {
-        BookPreviewModel(memoId: memoId)
+        BookPreviewModel(
+            memoId: memoId,
+            walletShare: { [api] memoId in
+                async let wallet = api.wallet(tripId: memoId)
+                async let link = api.bookShareLink(memoId: memoId)
+                return try await WalletShare(tripId: memoId, title: wallet.tripTitle ?? "", link: link)
+            }
+        )
     }
 
     /// Ma cagnotte, servie par `GET /v1/wallet`.
@@ -423,7 +437,8 @@ public final class AppDependencies {
                 #else
                     nil
                 #endif
-            }()
+            }(),
+            shareLink: { [api] memoId in try await api.bookShareLink(memoId: memoId) }
         )
     }
 

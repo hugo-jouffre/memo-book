@@ -171,7 +171,10 @@ struct MemoryAllowanceSheet: View {
     /// L'écran de décision : ce qu'on a, ce qu'on aurait, et le prix une seule
     /// fois — sur le bouton.
     private var compare: some View {
-        BrandSheet(MemoryCopy.compareHeading, subtitle: MemoryCopy.sheetIntro) {
+        BrandSheet(
+            MemoryCopy.compareHeading,
+            subtitle: MemoryCopy.compareIntro(price: memory.upgradeWeeklyPrice.euros)
+        ) {
             VStack(spacing: MemoBookSpacing.m) {
                 VStack(spacing: MemoBookSpacing.xs) {
                     MemoryPlanCard(

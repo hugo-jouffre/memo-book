@@ -23,3 +23,12 @@ export function makeAccessCode(): string {
   for (let i = 0; i < LENGTH; i += 1) code += ALPHABET[randomInt(ALPHABET.length)];
   return code;
 }
+
+/**
+ * Un code tel qu'on le reçoit — collé d'un message, dicté, recopié d'une
+ * capture — ramené à la forme de la base : en majuscules, sans espace ni tiret.
+ * « jhk-fda » et « JHK FDA » désignent le même voyage que « JHKFDA ».
+ */
+export function normalizeAccessCode(raw: string): string {
+  return raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
+}

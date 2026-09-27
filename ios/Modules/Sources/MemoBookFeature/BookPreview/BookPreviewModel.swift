@@ -65,6 +65,13 @@ public final class BookPreviewModel {
     private let source: (String) async throws -> BookPreview
     private let requestLink: ((String) async throws -> URL)?
 
+    /// Ce que « Partager ma cagnotte » envoie : le titre du voyage que la
+    /// cagnotte finance et le lien public du carnet, **lus sur le serveur**
+    /// (`GET /v1/wallet`, `POST /v1/memos/:id/share-link`). L'aperçu, lui, vit
+    /// encore sur son jeu d'essai : son titre partirait tel quel chez les
+    /// proches. `nil` dans les aperçus Xcode.
+    private let walletShare: ((String) async throws -> WalletShare)?
+
     /// Combien de temps la cascade dure.
     ///
     /// **C'est aussi le plancher de l'attente** : même si le serveur répond en
@@ -89,11 +96,13 @@ public final class BookPreviewModel {
     public init(
         memoId: String,
         source: @escaping (String) async throws -> BookPreview = { _ in .fixture },
-        requestLink: ((String) async throws -> URL)? = nil
+        requestLink: ((String) async throws -> URL)? = nil,
+        walletShare: ((String) async throws -> WalletShare)? = nil
     ) {
         self.memoId = memoId
         self.source = source
         self.requestLink = requestLink
+        self.walletShare = walletShare
     }
 
     // MARK: - Composer, puis montrer
@@ -221,6 +230,19 @@ public final class BookPreviewModel {
         return preview?.isConfigurableCover(page: sheetIndex, in: sheetCount) ?? false
     }
 
+    /// Ce que la page regardée porte pour aller aux couvertures.
+    ///
+    /// **La première page en porte toujours un** (Clara, 26/09/2026) : le voile
+    /// et son invitation tant que les couvertures ne sont pas choisies, la
+    /// pastille « Configurer » seule ensuite. Le 19/09, le lien sous l'aperçu
+    /// était parti au profit du voile — et une fois les couvertures choisies,
+    /// plus rien ne ramenait à elles depuis l'aperçu.
+    public var coverCallToAction: CoverCallToAction? {
+        guard renderer.sheetCount > 0 else { return nil }
+        if isOnConfigurableCover { return .invitation }
+        return sheetIndex == 0 ? .edit : nil
+    }
+
     // MARK: - Partager
 
     /// Demande le lien de prévisualisation, ou rend celui qu'on a déjà.
@@ -243,6 +265,28 @@ public final class BookPreviewModel {
             let link = try await requestLink(memoId)
             shareLink = link
             return link
+        } catch {
+            errorMessage = BookCopy.Share.linkFailed
+            return nil
+        }
+    }
+
+    /// De quoi remplir la feuille du système pour « Partager ma cagnotte ».
+    /// Sans source branchée — un aperçu Xcode —, le lien et le titre de
+    /// l'aperçu.
+    public func prepareWalletShare() async -> WalletShare? {
+        guard let walletShare else {
+            guard let link = await prepareShareLink() else { return nil }
+            return WalletShare(tripId: memoId, title: preview?.title ?? "", link: link)
+        }
+
+        isPreparingLink = true
+        defer { isPreparingLink = false }
+
+        do {
+            let share = try await walletShare(memoId)
+            shareLink = share.link
+            return share
         } catch {
             errorMessage = BookCopy.Share.linkFailed
             return nil
@@ -342,4 +386,13 @@ private func withAnimationCompat(duration: Duration, _ changes: () -> Void) {
     // `easeOut` et non un ressort : les morceaux doivent **se poser**, et un
     // ressort les ferait rebondir tous ensemble à la fin de la cascade.
     withAnimation(.easeOut(duration: seconds), changes)
+}
+
+/// Le chemin vers les couvertures, posé sur une page de l'aperçu.
+public enum CoverCallToAction: Sendable, Hashable {
+    /// « Définis maintenant ta 1ère et 4ème de couverture », sur le voile.
+    case invitation
+    /// La pastille « Configurer » seule : les couvertures sont choisies, on
+    /// peut y revenir.
+    case edit
 }

@@ -183,6 +183,16 @@ public actor MemoBookAPIClient: MemoBookAPI {
         )
     }
 
+    public func joinTrip(code: String) async throws -> CreatedTrip {
+        struct Body: Encodable { let code: String }
+        return try await send(
+            method: "POST",
+            path: "/v1/trips/join",
+            encodableBody: Body(code: code),
+            credential: .session
+        )
+    }
+
     public func tripThemes() async throws -> [TripTheme] {
         let response: TripThemes = try await send(method: "GET", path: "/v1/trip-themes", credential: .session)
         return response.themes

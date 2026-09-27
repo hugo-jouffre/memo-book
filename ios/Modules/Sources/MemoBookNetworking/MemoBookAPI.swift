@@ -70,6 +70,11 @@ public protocol MemoBookAPI: Sendable {
     /// doit pas créer un second voyage.
     func updateTrip(id: String, draft: TripDraft) async throws -> CreatedTrip
 
+    /// Rejoint le voyage de quelqu'un par son code d'accès — « Rejoins une
+    /// aventure ». Rend le voyage et son code, comme la création. Un code qui
+    /// ne mène nulle part lève `APIError.server` en 404, code `trip_not_found`.
+    func joinTrip(code: String) async throws -> CreatedTrip
+
     /// Les thèmes de « Contexte de ton voyage », dans l'ordre du serveur —
     /// « Autre » en dernier. Une table de référence, pas une liste dans l'app.
     func tripThemes() async throws -> [TripTheme]

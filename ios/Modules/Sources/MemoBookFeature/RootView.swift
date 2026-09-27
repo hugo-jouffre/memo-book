@@ -22,6 +22,9 @@ public struct RootView: View {
         /// On regarde si la session gardée au trousseau vaut encore quelque chose.
         case restoring
         case signedOut
+        /// Le compte vient d'être ouvert : les « Dernières questions » avant
+        /// l'accueil — voir ``LastQuestionsView``.
+        case lastQuestions(Account)
         case signedIn(Account)
     }
 
@@ -140,6 +143,17 @@ public struct RootView: View {
                 restoring
             case .signedOut:
                 signedOut
+            case .lastQuestions(let account):
+                LastQuestionsView(
+                    model: LastQuestionsModel(account: account) { [api = dependencies.api] edit in
+                        _ = try await api.updateProfile(edit)
+                    },
+                    onFinished: { finishLastQuestions(as: $0) },
+                    // La flèche du premier écran ramène à l'entrée : c'est
+                    // l'écran d'avant, et y revenir veut dire sortir du compte.
+                    onLeave: signOut
+                )
+                .transition(.move(edge: .trailing).combined(with: .opacity))
             case .signedIn(let account):
                 NavigationStack(path: $path) {
                     HomeView(model: dependencies.homeModel(), onIntent: handle)
@@ -207,12 +221,17 @@ public struct RootView: View {
         NavigationStack(path: $signedOutPath) {
             WelcomeView(
                 onAuthenticated: { enterApp(as: $0) },
-                onEmail: { signedOutPath.append(.email) }
+                onEmail: { signedOutPath.append(.email) },
+                onTermsOfUse: { signedOutPath.append(.termsOfUse) }
             )
             .navigationDestination(for: SignedOutRoute.self) { route in
                 switch route {
                 case .email:
                     AuthView(resetToken: $pendingResetToken) { enterApp(as: $0) }
+                case .termsOfUse:
+                    // Sans « Besoin d'aide ? » : le support demande un compte,
+                    // et la flèche de retour ramène à l'écran d'entrée (T151).
+                    LegalDocumentView(document: TermsOfUse.document, showsHelp: false)
                 }
             }
         }
@@ -276,6 +295,29 @@ public struct RootView: View {
     /// qu'il ait jamais eu à couvrir. L'écran d'accueil du tout premier
     /// démarrage, lui, ne passe pas par là et n'a donc pas d'animation devant.
     private func enterApp(as account: Account) {
+        // Un compte qui vient d'être ouvert passe d'abord par les « Dernières
+        // questions » (Clara, 26/09/2026) — une seule fois, et jamais dans le
+        // bac à sable.
+        let asksLastQuestions =
+            OnboardingStorage.isShowingLastQuestions
+            || (!OnboardingStorage.isPreviewingSignedIn && LastQuestionsModel.shouldAsk(account))
+        if asksLastQuestions, stage != .lastQuestions(account) {
+            signedOutPath.removeAll()
+            stage = .lastQuestions(account)
+            endLaunch()
+            return
+        }
+        openApp(as: account)
+    }
+
+    /// Les trois questions sont passées ou validées : on ne les reposera plus
+    /// à ce compte, et l'on entre — avec le prénom qu'on vient de confirmer.
+    private func finishLastQuestions(as account: Account) {
+        LastQuestionsModel.markAnswered(account)
+        openApp(as: account)
+    }
+
+    private func openApp(as account: Account) {
         stage = .signedIn(account)
         // La pile de l'entrée est vidée : quelqu'un qui se déconnecte doit
         // retrouver l'accueil, pas le formulaire qu'il venait d'envoyer.
@@ -398,7 +440,7 @@ public struct RootView: View {
             // construisant que la conversation le lit.
             recordingHandoff = handoff
             path.append(.chat(tripId: tripId, stepId: nil))
-        case .joinTrip, .importFromPolarsteps:
+        case .importFromPolarsteps:
             break
         }
     }
@@ -602,18 +644,26 @@ public struct RootView: View {
     }
 
     /// Où mène chaque intention de la cagnotte.
+    ///
+    /// Les trois boutons de l'écran menaient nulle part — « Ajouter » et
+    /// « Partager » s'arrêtaient ici, et « Prévisualiser mon carnet » n'avait
+    /// pas de voyage depuis le profil (Clara, 26/09/2026). La cagnotte dit
+    /// désormais quel carnet elle finance (``Wallet/tripId``) : c'est lui qui
+    /// s'ouvre quand la pile n'en porte aucun.
     private func handle(_ intent: WalletIntent) {
         switch intent {
-        case .openBookPreview:
-            guard let tripId = currentTripId else { return }
+        case .openBookPreview(let walletTripId):
+            guard let tripId = currentTripId ?? walletTripId else {
+                routingProblem = BookCopy.Wallet.shareUnavailable
+                return
+            }
             path.append(.bookPreview(memoId: tripId))
+        case .addFunds(let walletTripId):
+            path.append(.walletTopUp(tripId: currentTripId ?? walletTripId))
+        case .order(let tripId):
+            path.append(.order(memoId: tripId))
         case .openHelp:
             path.append(.support)
-        case .shareWallet, .addFunds, .topUpUnavailable:
-            // Le partage de la cagnotte passe par la feuille du système, que la
-            // vue présente elle-même. Recharger attend Stripe, et l'écran le
-            // dit — voir ``BookCopy/Wallet/addUnavailable``.
-            break
         }
     }
 
@@ -657,7 +707,7 @@ public struct RootView: View {
                 return id
             case .chat(let tripId, _):
                 return tripId
-            case .wallet(let tripId):
+            case .wallet(let tripId), .walletTopUp(let tripId):
                 if let tripId { return tripId }
             case .profile, .gallery, .tripCreation, .memos, .support, .legal:
                 continue
@@ -721,6 +771,11 @@ public struct RootView: View {
             OrderView(model: orderModel(memoId: memoId), onIntent: handle)
         case .wallet(let tripId):
             WalletView(model: dependencies.walletModel(tripId: tripId), onIntent: handle)
+        case .walletTopUp(let tripId):
+            // L'argent est arrivé : retour à la cagnotte, qui se relit.
+            WalletTopUpView(model: dependencies.walletModel(tripId: tripId)) {
+                if path.last == .walletTopUp(tripId: tripId) { path.removeLast() }
+            }
         case .bookCustomisation(let tripId):
             BookCustomisationView(
                 model: dependencies.bookCustomisationModel(tripId: tripId),
@@ -781,6 +836,9 @@ extension EnvironmentValues {
 enum SignedOutRoute: Hashable {
     /// Inscription et connexion par e-mail, sous leur sélecteur.
     case email
+    /// Les conditions d'utilisation, par le lien de la mention légale — on doit
+    /// pouvoir les lire avant de créer un compte (T151).
+    case termsOfUse
 }
 
 /// Les destinations que l'accueil peut pousser.
@@ -815,6 +873,8 @@ enum HomeRoute: Hashable {
     /// par compte — mais **quel carnet on finance**, pour l'estimation de pages
     /// et de coût. `nil` quand on arrive du profil.
     case wallet(tripId: String?)
+    /// « Ajouter à ma cagnotte » — la recharge, par « Ajouter ».
+    case walletTopUp(tripId: String?)
     /// Les personnalisations du carnet, ouvertes par « Style du carnet ».
     case bookCustomisation(tripId: String)
 

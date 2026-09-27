@@ -1,5 +1,6 @@
 import Foundation
 import MemoBookCore
+import MemoBookNetworking
 import MemoBookRecording
 import Observation
 
@@ -47,6 +48,11 @@ public final class HomeModel {
     /// carte disparaît comme si c'était fait.
     private let remove: ((String) async throws -> Void)?
 
+    /// Rejoint un voyage par son code — `POST /v1/trips/join`. `nil` en
+    /// aperçu, où le code de la maquette ouvre le premier voyage du jeu
+    /// d'essai et tout autre se dit introuvable.
+    private let joinByCode: ((String) async throws -> CreatedTrip)?
+
     /// Le voyage dont la suppression est partie, le temps qu'elle aboutisse.
     public private(set) var deletingTripId: String?
 
@@ -69,16 +75,19 @@ public final class HomeModel {
     ///     continue derrière, et remplace. `nil` en aperçu.
     ///   - remove: supprime un voyage, depuis le tiroir d'une carte. `nil` en
     ///     aperçu.
+    ///   - join: rejoint un voyage par son code d'accès. `nil` en aperçu.
     public init(
         source: @escaping () async throws -> HomeFeed = { .fixture },
         cached: CachedValue<HomeFeed>? = nil,
         outbox: RecordingOutbox = RecordingOutbox(),
-        remove: ((String) async throws -> Void)? = nil
+        remove: ((String) async throws -> Void)? = nil,
+        join: ((String) async throws -> CreatedTrip)? = nil
     ) {
         self.source = source
         self.cached = cached
         self.outbox = outbox
         self.remove = remove
+        self.joinByCode = join
     }
 
     /// Le seul message d'erreur de l'écran, d'où qu'il vienne : le chargement
@@ -212,6 +221,37 @@ public final class HomeModel {
         deletionError = nil
     }
 
+    /// Rejoint le voyage de quelqu'un par son code d'accès — « Rejoins une
+    /// aventure ».
+    ///
+    /// **Trois issues, et la feuille n'en montre que deux.** Le voyage ouvert,
+    /// et l'accueil rechargé pour qu'il y soit ; un code qui ne mène nulle
+    /// part, dit par l'alerte « Oups, voyage introuvable » (Clara, 26/09/2026)
+    /// — une faute de frappe se corrige dans le champ, sans rien refermer ;
+    /// tout le reste, un réseau absent ou un retrait par le propriétaire, avec
+    /// la phrase du serveur.
+    public func join(code: String) async -> JoinOutcome {
+        guard let joinByCode else {
+            // En aperçu, le code de la maquette ouvre le premier voyage du jeu
+            // d'essai ; tout autre est introuvable, pour voir l'alerte.
+            guard code == "JHKFDA", let trip = ongoingTrips.first ?? feed?.trips.first else { return .notFound }
+            return .joined(tripId: trip.id)
+        }
+
+        do {
+            let joined = try await joinByCode(code)
+            await load()
+            return .joined(tripId: joined.trip.id)
+        } catch let error as APIError {
+            if case .server(let status, let reason, _) = error, status == 404 || reason == "trip_not_found" {
+                return .notFound
+            }
+            return .failed(error.localizedDescription)
+        } catch {
+            return .failed(error.localizedDescription)
+        }
+    }
+
     /// Ce que fait « Réessayer » du bandeau d'erreur : oublier le refus, et
     /// redemander le contenu. Les deux, parce qu'un seul bouton ne peut pas
     /// laisser un message à l'écran après qu'on a appuyé dessus.
@@ -260,6 +300,14 @@ public final class HomeModel {
     }
 }
 
+/// Ce qu'a donné un code d'accès — voir ``HomeModel/join(code:)``.
+public enum JoinOutcome: Sendable, Hashable {
+    case joined(tripId: String)
+    /// Le code ne mène à aucun voyage : l'alerte « Oups, voyage introuvable ».
+    case notFound
+    case failed(String)
+}
+
 /// Ce que l'accueil peut demander à l'app de faire. L'écran ne navigue pas
 /// lui-même : il annonce une intention, et `RootView` décide où elle mène.
 /// Tant que les voyages ne sont pas branchés, certaines n'ont pas encore de
@@ -283,8 +331,6 @@ public enum HomeIntent: Sendable, Hashable {
     /// Créer un carnet à partir de zéro — la première porte de la feuille
     /// « Nouveau carnet ».
     case createTrip
-    /// Rejoindre le voyage de quelqu'un d'autre, code d'accès en main.
-    case joinTrip(code: String)
     /// Reprendre un voyage déjà enregistré dans Polarsteps, avec ses étapes.
     case importFromPolarsteps
     case openHelp

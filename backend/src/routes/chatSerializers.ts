@@ -10,6 +10,7 @@ import {
   type Suggestion,
 } from "../services/conversationCopy.js";
 import { firstNameOf, type ChatMessageRow, type EntryWithMedia } from "../services/conversationThread.js";
+import { avatarUrlOf } from "../services/avatars.js";
 
 /**
  * Ce que l'écran de conversation reçoit.
@@ -51,6 +52,23 @@ export function flagOf(countryCode: string | null): string | null {
 /** L'adresse d'un média servi par l'API, avec la session — `GET /v1/entries/:id/media`. */
 export function mediaUrlOf(publicBaseUrl: string, entryId: string): string {
   return `${publicBaseUrl}/v1/entries/${entryId}/media`;
+}
+
+/**
+ * Une ou deux initiales, quand la photo manque — la même règle que l'app
+ * (`TravellerProfile.initials`) : la première lettre des deux premiers mots du
+ * nom complet.
+ */
+export function initialsOf(
+  account: { firstName: string | null; lastName: string | null } | null,
+): string | null {
+  const words = [account?.firstName, account?.lastName]
+    .join(" ")
+    .split(/\s+/)
+    .filter((word) => word.length > 0)
+    .slice(0, 2);
+  const initials = words.map((word) => word[0]!.toUpperCase()).join("");
+  return initials.length > 0 ? initials : null;
 }
 
 function levelsOf(payload: unknown): number[] {
@@ -172,6 +190,12 @@ export function serializeChatMessage(message: ChatMessageRow, options: Serialize
     seq: message.seq,
     author: message.author,
     authorName: isOtherTraveller ? firstNameOf(message.account) : null,
+    // Le portrait de celui qui a parlé, **sur toutes les bulles du voyageur** —
+    // les siennes comme celles des autres : c'est lui que la bulle d'un vocal
+    // montre, pas un signe de la marque.
+    authorInitials: message.author === "traveller" ? initialsOf(message.account) : null,
+    authorAvatarUrl:
+      message.author === "traveller" && message.account ? avatarUrlOf(message.account) : null,
     body,
     sentAt: sentAt.toISOString(),
     stepId: message.stepId,
@@ -197,7 +221,7 @@ export type MemoForChat = Memo & {
 export interface SerializeThreadOptions {
   memo: MemoForChat;
   messages: ChatMessageRow[];
-  viewer: Pick<Account, "id" | "firstName" | "lastName">;
+  viewer: Pick<Account, "id" | "firstName" | "lastName" | "avatarStorageKey" | "avatarUrl">;
   activeStep: MemoStep | null;
   /** `count(entries kind ≠ photo)` — `memos.memoryCount` n'est écrit que par le seed. */
   memoryCount: number;
@@ -271,6 +295,10 @@ export function serializeChatThread(options: SerializeThreadOptions) {
       tripId: memo.id,
       tripTitle: memo.title,
       travellerFirstName: firstNameOf(viewer),
+      // Le portrait de celui qui lit, pour ses bulles qui ne sont pas encore
+      // parties : elles n'ont pas de réponse du serveur où le lire.
+      travellerInitials: initialsOf(viewer),
+      travellerAvatarUrl: avatarUrlOf(viewer),
       placeName,
       stepNumber: activeStep?.number ?? null,
       stepId: activeStep?.id ?? null,

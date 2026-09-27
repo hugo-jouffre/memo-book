@@ -14,14 +14,17 @@ import UIKit
 /// **La feuille ne navigue pas**, comme l'accueil qui la présente : elle émet
 /// une ``HomeIntent`` et se referme. La seule exception est « Rejoins une
 /// aventure », qui a besoin d'un code avant de mener quelque part : elle ouvre
-/// alors ``JoinTripSheet`` par-dessus elle, et c'est ce qui en revient qui
-/// devient l'intention.
+/// alors ``JoinTripSheet`` par-dessus elle, qui fait vérifier le code par
+/// l'accueil (``HomeModel/join(code:)``) — c'est le voyage retrouvé qui devient
+/// l'intention.
 struct NewNotebookSheet: View {
     /// Le carnet que la dernière ligne propose de retrouver : celui qui est
     /// ouvert, sinon le prochain voyage prévu. `nil` quand il n'y a ni l'un ni
     /// l'autre — la ligne et son filet disparaissent alors ensemble, plutôt que
     /// de laisser un séparateur qui ne sépare plus rien.
     let resumableTrip: Trip?
+    /// Fait vérifier un code d'accès — voir ``JoinTripSheet``.
+    var join: (String) async -> JoinOutcome = { _ in .notFound }
     let onIntent: (HomeIntent) -> Void
 
     @State private var isJoining = false
@@ -77,12 +80,12 @@ struct NewNotebookSheet: View {
             }
         }
         .brandSheet(isPresented: $isJoining) {
-            JoinTripSheet { code in
+            JoinTripSheet(join: join) { tripId in
                 // La feuille du code se referme elle-même ; celle-ci s'efface
-                // derrière, pour qu'on revienne à l'accueil et non au choix
-                // qu'on vient de faire.
+                // derrière, et on arrive dans le voyage qu'on vient de
+                // rejoindre plutôt que sur le choix qu'on vient de faire.
                 dismiss()
-                onIntent(.joinTrip(code: code))
+                onIntent(.openTrip(id: tripId))
             }
         }
     }
@@ -372,10 +375,22 @@ struct NewNotebookOptionCard: View {
 /// rare, pas l'inverse. C'est pour ça que « Coller » est posé à côté du champ
 /// et non caché dans le menu d'un appui long.
 struct JoinTripSheet: View {
-    /// Le code saisi, une fois nettoyé.
-    let onJoin: (String) -> Void
+    /// Fait vérifier le code saisi, une fois nettoyé.
+    let join: (String) async -> JoinOutcome
+    /// Le voyage est rejoint : son identifiant.
+    let onJoined: (String) -> Void
 
     @State private var code = ""
+
+    /// Le code part au serveur : le bouton tourne, et un second appui ne
+    /// repart pas.
+    @State private var isJoining = false
+
+    /// L'alerte d'Apple « Oups, voyage introuvable » (`3561:21647`).
+    @State private var showsNotFound = false
+
+    /// Ce que le serveur a répondu d'autre qu'un code inconnu.
+    @State private var failure: String?
 
     /// Le presse-papiers a quelque chose à coller. Relu à l'ouverture et au
     /// retour dans l'app — c'est là qu'on revient du message où on a copié le
@@ -399,15 +414,21 @@ struct JoinTripSheet: View {
             VStack(spacing: MemoBookSpacing.s) {
                 codeEntry
 
-                BrandButton("Rejoindre", fillsWidth: true) {
-                    focus = nil
-                    dismiss()
-                    onJoin(code)
+                if let failure {
+                    Text(failure)
+                        .font(MemoBookFont.notification)
+                        .foregroundStyle(MemoBookColor.error)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .transition(.opacity)
                 }
-                .disabled(code.isEmpty)
+
+                BrandButton("Rejoindre", isLoading: isJoining, fillsWidth: true, action: submit)
+                    .disabled(code.isEmpty)
 
                 cancelButton
             }
+            .animation(.snappy(duration: 0.2), value: failure)
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
@@ -420,6 +441,37 @@ struct JoinTripSheet: View {
         .task { canPaste = UIPasteboard.general.hasStrings }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { canPaste = UIPasteboard.general.hasStrings }
+        }
+        .onChange(of: code) { failure = nil }
+        // L'alerte **du système**, et non une feuille de la marque : la
+        // maquette dessine celle d'Apple (R6). « Réessayer » rend le champ
+        // pour corriger la faute de frappe ; « Annuler » renonce.
+        .alert(JoinCopy.notFoundTitle, isPresented: $showsNotFound) {
+            Button(JoinCopy.cancel, role: .cancel) { dismiss() }
+            Button(JoinCopy.retry) { focus = .code }
+        } message: {
+            Text(JoinCopy.notFoundMessage)
+        }
+        .tint(MemoBookColor.action)
+    }
+
+    private func submit() {
+        guard !code.isEmpty, !isJoining else { return }
+        focus = nil
+        failure = nil
+        isJoining = true
+        Task {
+            let outcome = await join(code)
+            isJoining = false
+            switch outcome {
+            case .joined(let tripId):
+                dismiss()
+                onJoined(tripId)
+            case .notFound:
+                showsNotFound = true
+            case .failed(let message):
+                failure = message
+            }
         }
     }
 
@@ -506,6 +558,15 @@ struct JoinTripSheet: View {
     }
 }
 
+/// L'alerte d'un code qui ne mène nulle part, recopiée du nœud `3561:21647`
+/// au caractère près (R8).
+enum JoinCopy {
+    static let notFoundTitle = "Oups, voyage introuvable"
+    static let notFoundMessage = "On ne trouve aucun voyage associé à ce code. Une petite faute de saisie ?"
+    static let cancel = "Annuler"
+    static let retry = "Réessayer"
+}
+
 // MARK: - Aperçus
 
 #Preview("Nouveau carnet") {
@@ -545,6 +606,6 @@ struct JoinTripSheet: View {
     Color.clear
         .background(MemoBookColor.background)
         .sheet(isPresented: .constant(true)) {
-            JoinTripSheet { _ in }
+            JoinTripSheet(join: { _ in .notFound }, onJoined: { _ in })
         }
 }

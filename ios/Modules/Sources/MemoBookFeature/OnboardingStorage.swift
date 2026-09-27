@@ -68,6 +68,26 @@ public enum OnboardingStorage {
     /// Sans effet en release.
     public static let openOrderArgument = "-openOrder"
 
+    /// Argument de lancement qui **ouvre les « Dernières questions »** à
+    /// l'entrée dans l'app, même pour un compte qui n'est pas neuf. Avec
+    /// `-previewSignedIn`, elles s'enregistrent dans le double d'aperçu.
+    ///
+    /// ```bash
+    /// xcrun simctl launch <device> com.memobook.app -previewSignedIn -lastQuestions
+    /// ```
+    ///
+    /// Sans effet en release.
+    public static let lastQuestionsArgument = "-lastQuestions"
+
+    /// `true` quand l'app a été lancée avec ``lastQuestionsArgument``.
+    public static var isShowingLastQuestions: Bool {
+        #if DEBUG
+            ProcessInfo.processInfo.arguments.contains(lastQuestionsArgument)
+        #else
+            false
+        #endif
+    }
+
     /// `true` quand l'app a été lancée avec ``openOrderArgument``.
     public static var isOpeningOrder: Bool {
         #if DEBUG

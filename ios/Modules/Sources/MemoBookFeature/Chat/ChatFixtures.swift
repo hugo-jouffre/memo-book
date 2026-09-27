@@ -42,6 +42,8 @@ extension ChatThread {
                 tripId: tripId,
                 tripTitle: detail.trip.title,
                 travellerFirstName: HomeFeed.fixture.traveller.firstName,
+                // Le portrait du voyageur du jeu d'essai, pour ses vocaux.
+                travellerInitials: HomeFeed.fixture.traveller.firstName.first.map { String($0).uppercased() },
                 placeName: current?.placeName,
                 stepNumber: current?.number,
                 stepId: current?.id,

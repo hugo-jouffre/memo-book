@@ -36,17 +36,31 @@ public final class WalletModel {
     /// aperçus, qui n'ont pas de serveur à qui écrire.
     private let sandbox: ((Decimal, WalletEntryKind, String) async throws -> Decimal)?
 
+    /// Le lien du carnet — `GET /v1/memos/:id/share`, celui que le message de
+    /// partage porte. `nil` dans les aperçus : le lien de la maquette le
+    /// remplace.
+    private let shareLink: ((String) async throws -> URL)?
+
+    /// Le partage se prépare : le bouton « Partager » tourne.
+    public private(set) var isPreparingShare = false
+
     public init(
         tripId: String? = nil,
         source: @escaping (String?) async throws -> Wallet = { _ in .fixture },
         topUp: ((String?, Decimal) async throws -> Wallet?)? = nil,
-        sandbox: ((Decimal, WalletEntryKind, String) async throws -> Decimal)? = nil
+        sandbox: ((Decimal, WalletEntryKind, String) async throws -> Decimal)? = nil,
+        shareLink: ((String) async throws -> URL)? = nil
     ) {
         self.tripId = tripId
         self.source = source
         self.topUp = topUp
         self.sandbox = sandbox
+        self.shareLink = shareLink
     }
+
+    /// Le carnet que la cagnotte finance : celui d'où l'on vient, sinon celui
+    /// que le serveur a choisi — voir ``Wallet/tripId``.
+    public var financedTripId: String? { tripId ?? wallet?.tripId }
 
     /// `true` tant qu'on n'a pas de valeurs. L'écran se dessine quand même :
     /// son en-tête, sa carte, ses boutons et son explication appartiennent à
@@ -71,19 +85,50 @@ public final class WalletModel {
     ///
     /// Une feuille fermée ne rapporte rien et n'affiche rien : `topUp` rend
     /// alors `nil`, et le solde reste celui qu'on lisait avant.
-    public func addFunds(_ amount: Decimal) async {
+    ///
+    /// - Returns: `true` quand l'argent est arrivé — la page « Ajouter à ma
+    ///   cagnotte » se referme alors sur la cagnotte relue.
+    @discardableResult
+    public func addFunds(_ amount: Decimal) async -> Bool {
         guard let topUp else {
             errorMessage = BookCopy.Wallet.addUnavailable
-            return
+            return false
         }
 
         do {
-            if let credited = try await topUp(tripId, amount) {
-                wallet = credited
+            guard let credited = try await topUp(tripId, amount) else {
+                errorMessage = nil
+                return false
             }
+            wallet = credited
             errorMessage = nil
+            return true
         } catch {
             errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    /// De quoi remplir la feuille de partage du système : le message qui
+    /// demande un coup de main, et le lien du carnet.
+    ///
+    /// `nil` quand il n'y a rien à partager — aucun voyage — ou que le lien
+    /// n'a pas pu être obtenu : le message d'erreur le dit alors.
+    public func prepareShare() async -> WalletShare? {
+        guard let tripId = financedTripId else {
+            errorMessage = BookCopy.Wallet.shareUnavailable
+            return nil
+        }
+        isPreparingShare = true
+        defer { isPreparingShare = false }
+
+        do {
+            let link = try await shareLink?(tripId) ?? WalletShare.previewLink
+            errorMessage = nil
+            return WalletShare(tripId: tripId, title: wallet?.tripTitle ?? "", link: link)
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
         }
     }
 
@@ -152,6 +197,7 @@ public final class WalletModel {
                 // En tête de liste : l'historique va du plus récent au plus
                 // ancien, et c'est le serveur qui ordonne en vrai.
                 entries: [entry] + current.entries,
+                tripId: current.tripId,
                 tripTitle: current.tripTitle,
                 estimate: current.estimate
             )
@@ -162,4 +208,14 @@ public final class WalletModel {
         /// si ce qu'on ajoute comptera au moment de commander.
         var isSandboxLive: Bool { sandbox != nil }
     #endif
+}
+
+/// Ce que « Partager » met dans la feuille du système.
+public struct WalletShare: Sendable, Hashable {
+    public let tripId: String
+    public let title: String
+    public let link: URL
+
+    /// Le lien des aperçus, qui n'ont pas de serveur.
+    static let previewLink = URL(string: "https://memobook.fr")!
 }

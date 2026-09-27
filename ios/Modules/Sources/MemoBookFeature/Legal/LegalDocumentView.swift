@@ -13,19 +13,27 @@ import SwiftUI
 /// réponses du support : un contrat se lit d'une traite, chapitre après
 /// chapitre, et ouvrir onze feuilles pour le parcourir en ferait un
 /// formulaire. Repliée, la carte montre les trois premières lignes du
-/// chapitre ; le premier chapitre est ouvert à l'arrivée, comme sur la
-/// maquette, pour que la page ne soit pas une colonne de titres.
+/// chapitre.
+///
+/// **Rien n'est ouvert à l'arrivée, et un seul chapitre l'est à la fois**
+/// (Clara, 26/09/2026). Le premier s'ouvrait tout seul, et les cartes bleues
+/// s'accumulaient au fil de la lecture : la page ressemblait à un bug plutôt
+/// qu'à un sommaire. Ouvrir un chapitre referme celui qu'on lisait.
 ///
 /// Le pied de page mène au support : quelqu'un qui lit les conditions cherche
-/// souvent une réponse plus simple que le contrat, et la FAQ la porte.
+/// souvent une réponse plus simple que le contrat, et la FAQ la porte. Il se
+/// retire quand on arrive de l'écran d'entrée (T151) : sans compte, le support
+/// n'est pas joignable, et la flèche de retour ramène à l'entrée.
 public struct LegalDocumentView: View {
     private let document: LegalDocument
     private let onIntent: (LegalIntent) -> Void
 
-    /// Les chapitres ouverts. Un ensemble et non un seul identifiant : deux
-    /// chapitres ouverts côte à côte se comparent, et refermer l'un pour lire
-    /// l'autre serait une contrainte que rien ne justifie.
-    @State private var expandedChapters: Set<String>
+    /// Le chapitre ouvert, ou aucun. **Un seul** : ouvrir l'un referme
+    /// l'autre (Clara, 26/09/2026).
+    @State private var expandedChapter: String?
+
+    /// « Besoin d'aide ? Découvrir notre FAQ ». Faux depuis l'écran d'entrée.
+    private let showsHelp: Bool
 
     /// Les chapitres dont l'aperçu **tient** en trois lignes, mesurés à
     /// l'affichage. Un chapitre qui y tient et qui n'a qu'un paragraphe n'a
@@ -37,10 +45,14 @@ public struct LegalDocumentView: View {
     /// 17 Pro Max déborde à AX3.
     @State private var fittingChapters: Set<String> = []
 
-    public init(document: LegalDocument, onIntent: @escaping (LegalIntent) -> Void = { _ in }) {
+    public init(
+        document: LegalDocument,
+        showsHelp: Bool = true,
+        onIntent: @escaping (LegalIntent) -> Void = { _ in }
+    ) {
         self.document = document
+        self.showsHelp = showsHelp
         self.onIntent = onIntent
-        _expandedChapters = State(initialValue: Set(document.chapters.prefix(1).map(\.id)))
     }
 
     public var body: some View {
@@ -49,7 +61,7 @@ public struct LegalDocumentView: View {
                 BrandScreenHeader(title: document.title)
 
                 chapters
-                help
+                if showsHelp { help }
             }
             .padding(.horizontal, MemoBookSpacing.screenMargin)
             .padding(.top, MemoBookSpacing.xs)
@@ -87,7 +99,7 @@ public struct LegalDocumentView: View {
                 }
                 .accessibilityHint(
                     isExpandable
-                        ? (expandedChapters.contains(chapter.id) ? LegalCopy.collapseHint : LegalCopy.expandHint)
+                        ? (expandedChapter == chapter.id ? LegalCopy.collapseHint : LegalCopy.expandHint)
                         : ""
                 )
             }
@@ -108,12 +120,12 @@ public struct LegalDocumentView: View {
 
     private func binding(for chapter: LegalChapter) -> Binding<Bool> {
         Binding(
-            get: { expandedChapters.contains(chapter.id) },
+            get: { expandedChapter == chapter.id },
             set: { isExpanded in
                 if isExpanded {
-                    expandedChapters.insert(chapter.id)
-                } else {
-                    expandedChapters.remove(chapter.id)
+                    expandedChapter = chapter.id
+                } else if expandedChapter == chapter.id {
+                    expandedChapter = nil
                 }
             }
         )

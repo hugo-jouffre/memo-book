@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppContext } from "../context.js";
+import { normalizeAccessCode } from "../lib/accessCode.js";
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
 import { createMemoFor, visibleToAccount } from "../services/memoOwnership.js";
@@ -78,6 +79,9 @@ const tripDraft = z.object({
   narrationPace: z.string().trim().min(1).max(100).nullish(),
   photoTextRatio: z.number().int().min(0).max(100).optional(),
 });
+
+/** « Rejoins une aventure » : le code tel qu'il a été collé. */
+const joinBody = z.object({ code: z.string().trim().min(1).max(40) });
 
 // `stageFromDates` vit dans `services/tripStage.ts` : la colonne `memos.stage`
 // est écrite à la création, mais c'est sur les **dates** que l'état se lit
@@ -238,6 +242,80 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
     });
 
     return { trip: serializeTrip(memo), accessCode: memo.accessCode };
+  });
+
+  /**
+   * Rejoindre le voyage de quelqu'un par son code d'accès — « Rejoins une
+   * aventure », dans la feuille « Nouveau carnet ».
+   *
+   * **Le code est le droit d'entrer** : c'est pour ça qu'il se partage. Qui le
+   * tient devient co-voyageur actif, sans que le propriétaire ait à l'accepter.
+   * La route est rejouable — le propriétaire, ou un co-voyageur déjà entré,
+   * retrouve simplement le voyage — et une invitation envoyée à l'adresse du
+   * compte se referme sur lui au lieu d'ouvrir une seconde ligne.
+   *
+   * Deux refus. Un code qui ne correspond à rien répond 404
+   * `trip_not_found` : l'app en fait l'alerte « Oups, voyage introuvable ».
+   * Quelqu'un que le propriétaire a retiré ne rentre pas par la porte de
+   * service : 403, et le retrait tient.
+   *
+   * Elle répond comme la création, voyage et code d'accès : l'app décode les
+   * deux avec le même type.
+   */
+  app.post("/v1/trips/join", async (request) => {
+    const accountId = accountIdOf(request);
+    const { code } = joinBody.parse(request.body ?? {});
+    const accessCode = normalizeAccessCode(code);
+
+    const memo = accessCode
+      ? await context.prisma.memo.findUnique({
+          where: { accessCode },
+          select: { id: true, ownerAccountId: true },
+        })
+      : null;
+    if (!memo) {
+      throw new HttpError(404, "Aucun voyage n’est associé à ce code.", "trip_not_found");
+    }
+
+    if (memo.ownerAccountId !== accountId) {
+      const account = await context.prisma.account.findUniqueOrThrow({
+        where: { id: accountId },
+        select: { email: true },
+      });
+      const rows = await context.prisma.memoMember.findMany({
+        where: {
+          memoId: memo.id,
+          OR: [
+            { accountId },
+            ...(account.email ? [{ accountId: null, invitedEmail: account.email }] : []),
+          ],
+        },
+      });
+      // La ligne du compte d'abord ; à défaut, l'invitation par adresse qui
+      // l'attendait.
+      const existing = rows.find((row) => row.accountId === accountId) ?? rows[0];
+
+      if (existing?.status === "removed") {
+        throw new HttpError(403, "Tu ne fais plus partie de ce voyage.", "member_removed");
+      }
+
+      if (!existing) {
+        await context.prisma.memoMember.create({
+          data: { memoId: memo.id, accountId, status: "active", acceptedAt: new Date() },
+        });
+      } else if (existing.status !== "active" || existing.accountId !== accountId) {
+        await context.prisma.memoMember.update({
+          where: { id: existing.id },
+          data: { accountId, status: "active", acceptedAt: existing.acceptedAt ?? new Date() },
+        });
+      }
+    }
+
+    const joined = await context.prisma.memo.findUniqueOrThrow({
+      where: { id: memo.id },
+      include: tripInclude,
+    });
+    return { trip: serializeTrip(joined), accessCode: joined.accessCode };
   });
 
   /**

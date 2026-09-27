@@ -56,6 +56,7 @@ interface TripDetailBody {
 
 interface ProfileBody {
   phoneNumber: string | null;
+  birthDate: string | null;
   gender: "female" | "male" | "undisclosed";
   avatarUrl: string | null;
   wantsNewsletter: boolean;
@@ -504,6 +505,37 @@ describe("le profil", () => {
     expect(cleared.json<ProfileBody>().phoneNumber).toBeNull();
   });
 
+  it("retient la date de naissance comme un jour, et refuse une date qui n'existe pas", async () => {
+    const account = await registerAccount(harness.app);
+    const patch = (payload: Record<string, unknown>) =>
+      harness.app.inject({
+        method: "PATCH",
+        url: "/v1/profile",
+        headers: { authorization: account.authorization },
+        payload,
+      });
+
+    // Un jour, relu tel quel : pas d'heure qui ferait reculer d'un jour dans
+    // un autre fuseau.
+    const saved = await patch({ birthDate: "1994-05-12" });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json<ProfileBody>().birthDate).toBe("1994-05-12");
+
+    // Le 30 février, le futur et le format de l'écran sont refusés.
+    for (const birthDate of ["1994-02-30", "2999-01-01", "12/05/1994"]) {
+      expect((await patch({ birthDate })).statusCode).toBe(400);
+    }
+    const reread = await harness.app.inject({
+      method: "GET",
+      url: "/v1/profile",
+      headers: { authorization: account.authorization },
+    });
+    expect(reread.json<ProfileBody>().birthDate).toBe("1994-05-12");
+
+    // `null` l'efface, comme le téléphone.
+    expect((await patch({ birthDate: null })).json<ProfileBody>().birthDate).toBeNull();
+  });
+
   it("devine le genre sur le prénom, et s'efface devant ce que la personne dit", async () => {
     const account = await registerAccount(harness.app);
 
@@ -843,6 +875,119 @@ describe("un co-voyageur", () => {
 
     expect(refused.statusCode).toBe(404);
     expect(await harness.prisma.memo.findUnique({ where: { id: memo.id } })).not.toBeNull();
+  });
+});
+
+describe("rejoindre un voyage par son code", () => {
+  const join = (authorization: string, code: string) =>
+    harness.app.inject({
+      method: "POST",
+      url: "/v1/trips/join",
+      headers: { authorization },
+      payload: { code },
+    });
+
+  it("fait entrer qui a le code, et le voyage apparaît sur son accueil", async () => {
+    const owner = await registerAccount(harness.app, "proprietaire@memobook.app");
+    const guest = await registerAccount(harness.app, "covoyageur@memobook.app");
+    const memo = await seedTrip(owner.accountId);
+
+    // Collé d'un message : en minuscules, avec un tiret et des espaces.
+    const pasted = ` ${memo.accessCode.slice(0, 3).toLowerCase()}-${memo.accessCode.slice(3).toLowerCase()} `;
+    const joined = await join(guest.authorization, pasted);
+    expect(joined.statusCode).toBe(200);
+    const body = joined.json<{ trip: TripBody; accessCode: string }>();
+    expect(body.trip.id).toBe(memo.id);
+    expect(body.accessCode).toBe(memo.accessCode);
+
+    const home = await harness.app.inject({
+      method: "GET",
+      url: "/v1/home",
+      headers: { authorization: guest.authorization },
+    });
+    expect(home.json<HomeBody>().trips.map((trip) => trip.id)).toContain(memo.id);
+
+    // Rejouable : la même ligne, pas une seconde.
+    expect((await join(guest.authorization, memo.accessCode)).statusCode).toBe(200);
+    expect(await harness.prisma.memoMember.count({ where: { memoId: memo.id } })).toBe(1);
+  });
+
+  it("répond 404 trip_not_found à un code qui ne mène nulle part", async () => {
+    const guest = await registerAccount(harness.app, "covoyageur@memobook.app");
+
+    for (const code of ["ZZZZZZ", "--"]) {
+      const response = await join(guest.authorization, code);
+      expect(response.statusCode).toBe(404);
+      expect(response.json<{ error: string }>().error).toBe("trip_not_found");
+    }
+  });
+
+  it("laisse le propriétaire retrouver son voyage sans lui ouvrir de ligne", async () => {
+    const owner = await registerAccount(harness.app, "proprietaire@memobook.app");
+    const memo = await seedTrip(owner.accountId);
+
+    expect((await join(owner.authorization, memo.accessCode)).statusCode).toBe(200);
+    expect(await harness.prisma.memoMember.count({ where: { memoId: memo.id } })).toBe(0);
+  });
+
+  it("referme sur le compte l'invitation qui attendait son adresse", async () => {
+    const owner = await registerAccount(harness.app, "proprietaire@memobook.app");
+    const memo = await seedTrip(owner.accountId);
+    await harness.prisma.memoMember.create({
+      data: { memoId: memo.id, invitedEmail: "clara@memobook.app", status: "invited" },
+    });
+    const guest = await registerAccount(harness.app, "clara@memobook.app");
+
+    expect((await join(guest.authorization, memo.accessCode)).statusCode).toBe(200);
+    const rows = await harness.prisma.memoMember.findMany({ where: { memoId: memo.id } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ accountId: guest.accountId, status: "active" });
+  });
+
+  it("ne rouvre pas la porte à quelqu'un que le propriétaire a retiré", async () => {
+    const owner = await registerAccount(harness.app, "proprietaire@memobook.app");
+    const guest = await registerAccount(harness.app, "covoyageur@memobook.app");
+    const memo = await seedTrip(owner.accountId);
+    await harness.prisma.memoMember.create({
+      data: { memoId: memo.id, accountId: guest.accountId, status: "removed" },
+    });
+
+    const refused = await join(guest.authorization, memo.accessCode);
+    expect(refused.statusCode).toBe(403);
+    const row = await harness.prisma.memoMember.findFirstOrThrow({ where: { memoId: memo.id } });
+    expect(row.status).toBe("removed");
+  });
+});
+
+describe("la cagnotte, depuis le profil", () => {
+  it("nomme le carnet du moment, pour que « Prévisualiser » et « Partager » aient un voyage", async () => {
+    const account = await registerAccount(harness.app);
+    const day = 24 * 60 * 60 * 1000;
+    const finished = await seedTrip(account.accountId, {
+      title: "Lisbonne",
+      startDate: new Date(Date.now() - 30 * day),
+      endDate: new Date(Date.now() - 20 * day),
+    });
+    const current = await seedTrip(account.accountId, {
+      title: "Rome",
+      startDate: new Date(Date.now() - 2 * day),
+      endDate: new Date(Date.now() + 5 * day),
+    });
+
+    const fromProfile = await harness.app.inject({
+      method: "GET",
+      url: "/v1/wallet",
+      headers: { authorization: account.authorization },
+    });
+    expect(fromProfile.json<{ tripId: string | null }>().tripId).toBe(current.id);
+
+    // Depuis un voyage, c'est ce voyage-là, même fini.
+    const fromTrip = await harness.app.inject({
+      method: "GET",
+      url: `/v1/wallet?tripId=${finished.id}`,
+      headers: { authorization: account.authorization },
+    });
+    expect(fromTrip.json<{ tripId: string | null }>().tripId).toBe(finished.id);
   });
 });
 

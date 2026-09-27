@@ -194,10 +194,25 @@ public struct BrandTextField<Field: Hashable>: View {
         .rect(cornerRadius: MemoBookSpacing.controlCornerRadius)
     }
 
+    /// L'alignement du texte, que l'écran pose sur le champ
+    /// (`multilineTextAlignment`). Le `TextField` le suit tout seul ; le texte
+    /// indicatif, dessiné à la main, doit le suivre aussi — sans ça, « Dupont »
+    /// restait à gauche d'un champ où l'on tape au centre (les « Dernières
+    /// questions », 26/09/2026).
+    @Environment(\.multilineTextAlignment) private var textAlignment
+
+    private var placeholderAlignment: Alignment {
+        switch textAlignment {
+        case .center: .center
+        case .trailing: .trailing
+        default: .leading
+        }
+    }
+
     @ViewBuilder
     private var input: some View {
         HStack(spacing: MemoBookSpacing.xs) {
-            ZStack(alignment: .leading) {
+            ZStack(alignment: placeholderAlignment) {
                 // Texte indicatif dessiné à la main : le `prompt` de SwiftUI ne
                 // se met pas à la typographie de la marque.
                 if showsPlaceholder {

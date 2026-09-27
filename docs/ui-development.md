@@ -911,11 +911,8 @@ où le texte restait justement lisible. Il faut l'ancrer au bas d'un cadre qui p
 `ignoresSafeArea()`), sans quoi l'alignement `.bottom` de la pile le repince sur la safe
 area et `ignoresSafeArea` l'étire vers le haut.
 
-**À trancher**
-
-| # | Sujet | Écran / parcours |
-|---|---|---|
-| T10 | **Mesures non confirmées.** Les couleurs viennent du nœud ; les espacements, rayons et tailles sont relevés sur l'image. À confirmer au premier `get_design_context` disponible | Accueil |
+**À trancher** — plus rien : les mesures relevées sur l'image sont confirmées
+par Clara (T10, 26/09/2026 — § 31).
 
 ### 9.3 La boîte d'information de l'accueil
 
@@ -1324,7 +1321,6 @@ l'accueil, et il se voit en **un seul endroit** (`ProfileView.notYetRouted`).
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
-| T16 | **Mesures non confirmées.** Aucun appel MCP n'a abouti : tout est relevé sur les captures. À confirmer au premier `get_design_context` disponible — au minimum le rayon des groupes, la taille du titre (24 supposé), la présence ou non d'un filet autour des cartes blanches (implémenté avec, par cohérence avec `homeCard()`), et la teinte de l'icône « Exporter mes données » (implémentée en `warning`) | Profil |
 | T28 | **`signInProvider` n'existe pas encore côté back-end.** L'écran le lit sur le profil, le jeu d'essai le fournit ; il faudra que `GET /v1/me/profile` le renvoie, sans quoi une adresse Apple restera modifiable | Profil |
 
 ---
@@ -2530,8 +2526,7 @@ ramenait alors au profil au lieu de l'offre.
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
-| T76 | **Deux lignes des réglages n'ouvrent rien** : « Connecte ton Tricount » et « La carte ». Les sept autres ont leur feuille ou leur écran depuis le lot 7. Pas de carte pour le moment (Hugo, 17/09/2026) ; Tricount attend son intégration | Lot 4 — Le carnet : réglages, aperçu, partage et cagnotte |
-| T80 | **Les zones de tapotis du paywall passent sous le contenu.** Posées au-dessus, elles avalaient tout contrôle hors de la bande basse épargnée — c'est ce qui est arrivé à la pastille « Voir un aperçu ». Le texte des pages porte donc `paywallProse()`, qui le rend non touchable. Chaque nouveau bloc de texte du paywall devra le porter aussi, sinon la story ne défilera plus dessous. Les quatre cartes de l'écran 3 le portent également — pastille « Voir une estimation » comprise, qui est inerte : le jour où elle mènera quelque part, elle devra en sortir | Lot 4 — Le carnet : réglages, aperçu, partage et cagnotte |
+| T76 | ⏸️ **En pause** — Clara, 26/09/2026 : « La carte » est pour la **v2**, et « Connecte ton Tricount » attend son intégration. Les deux lignes restent dessinées et n'ouvrent rien | Lot 4 — Le carnet : réglages, aperçu, partage et cagnotte |
 
 ---
 
@@ -2703,9 +2698,7 @@ fermeture de l'écran**, et un message écrit au support n'arrive nulle part.
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
-| T87 | **Le plat est au rapport A5 (1,414)**, là où la maquette dessine 233 × 339 (1,455) — neuf points d'écart sur la hauteur. C'est le format du papier qui tranche, pas l'artboard, et c'est déjà le choix du § 16.1 pour la vignette des réglages | Lot 6 — Les couvertures, et le support |
 | T88 | **Une photo importée ne part nulle part.** Elle est enregistrée dans les caches de l'appareil, comme les photos du chat, et se perd à la fermeture de l'écran. C'est la route des couvertures qui manque (T-back-end ci-dessus), pas l'écran | Lot 6 — Les couvertures, et le support |
-| T89 | **L'état « en train d'écrire » n'est pas dessiné** sur l'écran des textes. Le champ s'ouvre sous le plat, faute de maquette. À dessiner, ou à valider tel quel | Lot 6 — Les couvertures, et le support |
 
 
 ---
@@ -2943,11 +2936,9 @@ booléens d'alerte sur `memos`, et `memo_members.role`.
 
 | # | Point |
 |---|---|
-| T115 | **La photo de l'écran d'entrée est floue** : le fichier fait 587 × 360 px, soit moins d'un pixel d'image par point d'écran. Il faut un export plus grand de la même photo (au moins 1170 × 720, le double sur un grand iPhone). Reformulé le 17/09/2026 — c'est un export à refaire dans Figma, rien à trancher |
 | T116 | **L'arrêt automatique de l'abonnement ne parle pas à Apple.** Le jour où StoreKit sera branché, c'est le webhook App Store qui devra fermer la ligne `subscriptions`, et cette tâche deviendra le filet plutôt que la règle |
-| T118 | **Alegreya s'écrit encore en General Sans** dans la feuille des assortiments : Playfair, Hansley et Gloria Hallelujah ont leur nom dessiné en vectoriel depuis le 18/09/2026 (`assets/logos/<Nom>.svg` → `Wordmark<Nom>`), elle attend le sien. Montserrat n'y est plus (« Moderne » retiré) | Typographies du carnet |
 | T121 | **L'icône « Renvoyer » emprunte `IconTeleverser`**, faute d'un envoi dans le jeu de marque. Le logo WhatsApp, lui, est arrivé le 17/09/2026 (`assets/logos/whatsapp.svg`, en vert foncé) |
-| T124 | **Les autocollants Apple et Google sont des images, pas des dessins vectoriels.** Ce sont les deux logos cerclés de bleu des boutons de l'écran d'entrée (`assets/logos/Apple Icon.svg`, `Google Icon.svg`) : Figma les a exportés en bitmap collé dans un SVG. Nets à 24 pt, ils pixelliseraient plus grand. Reformulé le 17/09/2026 — un export **vectoriel** de ces deux autocollants règle la question |
+| T124 | **Les autocollants Apple et Google sont toujours des images dans le dépôt.** Clara a annoncé leurs exports vectoriels le 26/09/2026 (`assets/logos/Apple Icon.svg`, `Google Icon.svg`), mais les deux fichiers de GitHub n'ont pas bougé depuis le 15/09 : chacun porte encore un bitmap collé dans un `<pattern>`, aucun tracé. L'export n'a pas dû partir — à recharger sur GitHub, et `import-brand-logos.py` les prendra en vectoriel tout seul | Accueil — 1ère connexion |
 
 ---
 
@@ -3033,10 +3024,8 @@ mur :
 
 | # | Point |
 |---|---|
-| T125 | **La photo d'accueil n'a plus de voile.** L'ancienne portait un aplat d'encre à 40 % pour un texte blanc qui n'existe plus ; la nouvelle image est montrée telle quelle, sous le seul dégradé de la barre d'état. Si Clara veut l'assombrir sous la carte, c'est une ligne |
 | T126 | **« Payer » n'encaisse rien.** La feuille de paiement du paywall pose l'abonnement comme le bouton le faisait avant elle (`ProfileModel.activateSubscription`, `SubscriptionSession.record`). StoreKit reste à brancher, ici comme sur la feuille d'abonnement du profil. Et la feuille d'ajout de carte se présente **par-dessus**, comme dans le profil et la commande — trois occurrences du même écart à la règle des feuilles enchaînées, à régler ensemble |
 | T127 | **La feuille « Estimation » calcule sur les chiffres de la maquette** — trois semaines à partir d'aujourd'hui, 50 pages, 60 € — et seul le prix hebdomadaire vient de l'offre. `GET /v1/wallet` connaît déjà l'estimation d'un carnet ; la lire depuis le paywall demande de savoir quel voyage on finance (`previewMemoId`) et un appel de plus |
-| T128 | **Le lien « Supprimer ce voyage » s'affiche aussi aux co-voyageurs**, à qui le serveur refuse la suppression : `TripSettings` ne dit pas si le compte qui regarde est le propriétaire. Une ligne `isOwner` sur le voyageur courant — ou `companions` marqué « moi » — permettrait de ne le montrer qu'à lui |
 | T130 | **« Commander le carnet » ouvre toujours le tunnel**, même sans carnet composé : c'est `GET /v1/memos/:id/order-context` qui répond alors, et son message. À vérifier sur un voyage sans rendu |
 
 ### 20.5 « Testing mode » et l'erreur `localhost`, pour la dernière fois
@@ -3099,8 +3088,6 @@ maquettes, des fiches, du code et des conversations soient les mêmes.
 | # | Point |
 |---|---|
 | T133 | **L'aperçu se pose sur la feuille d'abonnement** : première exception assumée à « un enchaînement de feuilles ne s'empile pas ». Les trois empilements de T126 (la feuille d'ajout de carte) restent à régler ; si Clara les accepte aussi, la règle devient « une feuille ne s'empile que pour aller voir et revenir » |
-| T134 | **Le burger de la conversation a quitté l'app, pas la maquette.** Le nœud du chat le dessine encore à gauche des trois boutons ; à retirer dans Figma, ou à lui donner un menu |
-| T136 | **Trois feuilles de typographie sans maquette.** « Sous-titres du carnet », « Textes du carnet », « Fun facts du carnet » sont écrites sur le modèle de « Titres du carnet » (`3443:10073`), au tutoiement ; leurs familles — Hansley ou Gloria Hallelujah d'abord, puis Playfair, Alegreya, Montserrat — et leurs phrases sont à valider ou à dessiner. « La recommandations de nos équipes » reste tel quel sur la feuille des titres (R8) ; les défauts des autres disent « Le choix de nos équipes ». Remplace T78 |
 | T138 | **Le champ des textes de couverture remonte après 350 ms**, le temps que le clavier monte — une durée choisie, pas mesurée. Sur un iPhone lent, le premier caractère peut encore se taper sous le clavier ; la parade propre est d'écouter sa hauteur (`keyboardLayoutGuide`), ce qui touche au design system |
 
 ## 22. Retouches du 16/09/2026 (soir) — treize retours, et deux chantiers
@@ -3278,9 +3265,7 @@ bouton « Rétablir la conversation » dans le bac à sable.
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
-| T158 | ~~La suppression n'existe que sur l'appareil.~~ **Clos le 22/09/2026** : `DELETE /v1/trips/:id/chat`, le fil vit sur le serveur | « Supprimer la conversation » — dans les réglages du voyage |
-| T159 | **Aucune maquette** pour le lien ni pour la feuille : écrits sur les motifs existants (« Me déconnecter », `DeleteTripSheet`). À dessiner dans Figma | « Supprimer la conversation » — dans les réglages du voyage |
-| T160 | ~~Un co-voyageur peut supprimer la conversation.~~ **Tranché le 22/09/2026** : le propriétaire seul, comme le voyage ; le co-voyageur voit le lien pâli et une notice qui explique | « Supprimer la conversation » — dans les réglages du voyage |
+| T185 | **Aucune maquette** pour le lien « Supprimer la conversation » ni pour sa feuille : écrits sur les motifs existants (« Me déconnecter », `DeleteTripSheet`). À dessiner dans Figma. *(Anciennement T159 : le numéro était pris deux fois, avec celui de la feuille « Statistiques ».)* | « Supprimer la conversation » — dans les réglages du voyage |
 ## 26. La relance du voyage n'est pas une bulle
 
 Hugo, 17/09/2026 : **la bulle d'ouverture de MEMO est seule.** Elle se termine
@@ -3405,11 +3390,6 @@ demi-gras refermés.
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
-| T147 | **Les documents légaux vouvoient**, seule exception à R9. C'est un contrat, pas une phrase de l'interface : le texte du site est celui qui engage, et il est recopié tel quel. Si Clara et Hugo veulent tutoyer, c'est le site qui change d'abord, et l'app suit | Lot 8 — Les documents légaux |
-| T148 | **« Découvrir notre FAQ » est à l'encre**, là où le gabarit le dessine en vert. C'est `BrandButton` en style `link`, petite taille : le design system n'a pas de lien vert, et un lien d'une autre couleur serait un second bouton. À dessiner dans Figma, ou à valider tel quel | Lot 8 — Les documents légaux |
-| T151 | **« En continuant, tu acceptes nos Conditions d'utilisation »** sur l'écran d'entrée n'ouvre pas la page : elle est derrière la session (`HomeRoute`), et l'écran d'entrée a sa propre pile. À relier si on veut lire les CGU avant de créer un compte | Lot 8 — Les documents légaux |
-| T152 | **Le chapitre 3 de la politique de confidentialité annonce une liste qui ne suit pas** — « transmises aux prestataires techniques suivants … : » puis rien. Le site la porte dans un tableau qui n'a pas été fourni. Recopié tel quel (R8) ; **à compléter** avec la liste des prestataires (Webflow, Google Analytics, Hotjar, Meta, WhatsApp ?) | Lot 8 — Les documents légaux |
-| T153 | **Le chapitre 9 (« Mineurs ») se termine par un point-virgule** au lieu d'un point. Recopié tel quel (R8), à corriger sur le site | Lot 8 — Les documents légaux |
 | T154 | **La politique de cookies n'existe pas dans l'app**, et les deux documents y renvoient (« disponible sur ce site »). Un troisième `LegalDocument` suffira le jour où le texte est fourni | Lot 8 — Les documents légaux |
 
 ---
@@ -3511,11 +3491,6 @@ colonne — les tables existantes l'ont reçue aussi.
 
 | Route / colonne | Ce qui change |
 |---|---|
-| T147 | **Les documents légaux vouvoient**, seule exception à R9. C'est un contrat, pas une phrase de l'interface : le texte du site est celui qui engage, et il est recopié tel quel. Si Clara et Hugo veulent tutoyer, c'est le site qui change d'abord, et l'app suit |
-| T148 | **« Découvrir notre FAQ » est à l'encre**, là où le gabarit le dessine en vert. C'est `BrandButton` en style `link`, petite taille : le design system n'a pas de lien vert, et un lien d'une autre couleur serait un second bouton. À dessiner dans Figma, ou à valider tel quel |
-| T151 | **« En continuant, vous acceptez nos Conditions d'utilisation »** sur l'écran d'entrée n'ouvre pas la page : elle est derrière la session (`HomeRoute`), et l'écran d'entrée a sa propre pile. À relier si on veut lire les CGU avant de créer un compte |
-| T152 | **Le chapitre 3 de la politique de confidentialité annonce une liste qui ne suit pas** — « transmises aux prestataires techniques suivants … : » puis rien. Le site la porte dans un tableau qui n'a pas été fourni. Recopié tel quel (R8) ; **à compléter** avec la liste des prestataires (Webflow, Google Analytics, Hotjar, Meta, WhatsApp ?) |
-| T153 | **Le chapitre 9 (« Mineurs ») se termine par un point-virgule** au lieu d'un point. Recopié tel quel (R8), à corriger sur le site |
 | T154 | **La politique de cookies n'existe pas dans l'app**, et les deux documents y renvoient (« disponible sur ce site »). Un troisième `LegalDocument` suffira le jour où le texte est fourni |
 
 ## 24. Lot 5 — La feuille « Statistiques »
@@ -3623,12 +3598,8 @@ gardent l'addition côté serveur.
 
 | # | Sujet |
 |---|---|
-| T155 | **La maquette vouvoie** (« Vous êtes actuellement à Rome. ») ; la feuille tutoie (R9), comme le reste du profil depuis §22.2 |
-| T156 | **« 2.280km » devient « 2 280 km »**, et « 9% » devient « 9 % » : formateur du système et espace de l'unité, même parti pris que les euros de la cagnotte. À valider ou à redessiner |
-| T157 | **Le second anneau n'a pas de définition dans la maquette** (« 2 pays »). Il montre la part des pays du compte que ce voyage couvre ; si Clara y voyait autre chose, seule `countryFraction(of:)` change |
-| T158 | **« Pas encore relevé »** est inventé pour une ligne à zéro — la maquette ne montre que des chiffres pleins. Un tiret se lisait comme une panne |
-| T159 | **Les souvenirs rédigés avant la migration n'ont pas de relevé** : ils comptent pour les jours validés, pas pour les lieux ni les rencontres. Une relance de la rédaction (`POST /v1/entries/:id/redaction`) les relit ; à décider si on la lance en masse |
-| T160 | **Le jeu d'essai n'enfile pas sa rédaction** : ses souvenirs restent « en cours de lecture » (4 sur le compte de test), et la veille s'arrête d'elle-même au bout de deux minutes. Le seed pourrait enfiler les jobs `redact` |
+| T159 | **Reformulé le 26/09/2026.** La feuille « Statistiques » compte les lieux et les rencontres à partir de ce que la rédaction relève dans chaque souvenir — et ce relevé n'existe que pour les souvenirs rédigés **depuis le 18/09**. Les plus anciens comptent dans les jours, pas dans les lieux ni les rencontres : les chiffres d'un vieux voyage sont donc trop bas. Il suffit de faire relire ces souvenirs par la rédaction, une fois, pour tout le monde. **La question pour Hugo** : on lance cette relecture générale (quelques centimes d'IA par souvenir), ou on laisse les vieux voyages tels quels ? |
+| T160 | **Reformulé le 26/09/2026 — une note pour les développeurs, rien à trancher côté design.** Sur les comptes de test du simulateur, les souvenirs du jeu d'essai restent affichés « en cours de lecture » pour toujours, parce que le script qui crée ces comptes ne lance pas leur rédaction. Ça ne touche pas les vrais comptes. Le correctif est dans ce script (`seed.ts`) |
 | T161 | **Pas de simulateur SE sur le Mac de vérification** : contrôlé sur iPhone 17 (medium et AX3). Sur un écran court, la feuille défile — c'est `BrandSheet` qui plafonne |
 | `accounts.gender` (`Gender?`, migration `20260917200000_genre_du_profil`) | nulle tant que la personne n'a rien dit ; `undisclosed` est un choix |
 | `GET /v1/profile` → `gender` | ce que la personne a dit, sinon ce que son prénom laisse deviner (`effectiveGender`) |
@@ -3689,8 +3660,7 @@ dans le même lot.
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
-| T174 | **`Beige Darker` lui-même doit-il s'éclaircir ?** Les boîtes d'information ont leur propre beige doux depuis le 18/09 ; les séparateurs, le scotch des cartes et le filet des boutons Apple/Google gardent `#CFBBAA`. Si c'est le token qui doit changer, c'est une ligne dans `Tokens.swift` — et la variable Figma avec | Partout |
-| T175 | **La bannière du chat ne sait pas qu'un message vient d'arriver** : un nouveau message en bas fait bouger le haut du contenu comme un défilement vers le bas, et la referme. C'est acceptable — on lit ce qui arrive —, mais c'est un effet de bord, pas un choix | Conversation |
+| T174 | **`Beige Darker`, c'est justement `#CFBBAA`** (vérifié le 26/09/2026) : c'est le même beige, sous deux noms — la variable Figma, et `MemoBookColor.separator` dans le code. Et il sert : **22 endroits** de l'app le posent, les séparateurs, le scotch des cartes et le filet des boutons Apple/Google. La condition de Clara (« s'il n'est utilisé nulle part ») n'est donc pas remplie, et le ticket reste ouvert comme elle l'a demandé. **La vraie question** : veut-on des séparateurs, un scotch et des filets plus clairs ? Si oui, c'est une ligne dans `Tokens.swift` et la variable Figma, et les 22 suivent | Partout |
 
 ### 27.10 Le 18/09 au soir — huit détails, et une accolade
 
@@ -3907,3 +3877,97 @@ inconnue rendue telle quelle, et le refus d'un pays non livré.
 | T181 | **« Modifie l’adresse où tu souhaites recevoir ton carnet. »** n'est pas dans Figma, qui ne dessine que l'ajout. Écrit sur le modèle de la phrase d'origine ; à valider ou à dessiner |
 | T182 | **Les exemples dans les champs vides** (« 7 rue Simon Fryd », « Lyon », « 0000000000000000 » sur la carte) ont le gris semi-gras du texte indicatif de tout `BrandTextField` à intitulé au-dessus, et se lisent comme des valeurs. La feuille ne se trompe plus sur ce qui manque ; reste que le dessin y invite. Un texte indicatif plus léger (`inkFaint`, ou en romain) est un choix du design system, pas de cet écran |
 | T183 | **L'adresse de l'étape 2 ne remonte pas sur le profil.** Corriger la livraison d'une commande ne corrige pas l'adresse du compte — c'est voulu, l'adresse de la commande se fige à la commande —, mais quelqu'un qui déménage entre deux carnets la retapera deux fois. À décider : une case « mettre à jour mon profil » |
+
+## 31. Retours de Clara du 26/09/2026 — dix ajustements, et ses réponses aux tickets
+
+Clara a relu l'app, demandé dix ajustements, et répondu au fichier ticket par
+ticket. Branche `retours-de-clara-du-26-septembre`. **Tout ce qui est réglé a
+quitté les tables** ; ce qui reste est ouvert pour de vrai, ou vient de s'ouvrir
+(§ 31.4).
+
+> Le MCP Figma a répondu cette fois : la structure de la page App
+> (`get_metadata`), les captures et le contexte des nœuds cités, et la photo et
+> les coins de la carte par `download_assets`. Les maquettes citées sont lues,
+> pas devinées ; quatre demandes n'en ont pas (le portrait des vocaux, les
+> limites de souvenirs, les dates, les conditions d'utilisation).
+
+### 31.1 Les dix ajustements
+
+| Écran / parcours | Demande | Ce qui a été fait |
+|---|---|---|
+| Entrée — « Dernières questions » (`3533:14979`, `3533:15036`, `3533:15010`) | trois écrans à la fin de l'onboarding pour qui entre pour la première fois : nom et prénom, date de naissance, numéro de téléphone | `LastQuestionsView` et `LastQuestionsModel` : **un** écran dont le contenu glisse — la flèche et « Passer » en tête, l'illustration (`IllustrationCarteID`, `IllustrationCalendrier`, `IllustrationPhone`, importées par `import-brand-illustrations.py`), les trois traits de progression, le titre en vert, le champ, « Valider ». Chaque écran validé part tout de suite au profil (`PATCH /v1/profile`) : quelqu'un qui referme l'app au deuxième a déjà donné son nom. La date se tape `JJ/MM/AAAA`, les barres se posent toutes seules, et une date qui n'existe pas se refuse sous le champ. Posées à un compte ouvert il y a moins de dix minutes, **une seule fois** par compte sur l'appareil (`RootView`, étape `lastQuestions`). Elles remplacent la page de compléments après Apple ou Google (`2707:9456`), qui ne s'ouvrait plus depuis que ces entrées vivent sur l'écran d'entrée. Pour les revoir : `-previewSignedIn -lastQuestions` |
+| Aperçu PDF (`3545:21634`) | la 1ère page porte un CTA vers les couvertures | `BookPreviewModel.coverCallToAction` : le voile et « Configurer » tant que les couvertures ne sont pas choisies, comme avant ; ensuite, **la pastille « Configurer » seule** sur la première page. Le 19/09, le lien sous l'aperçu était parti au profit du voile — et une fois les couvertures choisies, plus rien n'y ramenait |
+| Conversation | la bulle ronde des vocaux : la photo du voyageur, ou ses initiales comme sur le profil ; le micro mieux intégré | `ChatPortraitDisc` remplace le M de la marque sur les vocaux du voyageur : sa photo, sinon ses initiales à l'encre sur le bleu du profil, cerclées du papier de la marque pour se détacher de la bulle bleue. Le micro devient une **pastille crème à cheval sur le bord bas du rond**, glyphe vert. Le serveur rend `authorInitials` et `authorAvatarUrl` sur chaque bulle du voyageur, et ceux de qui lit dans le contexte (pour une bulle pas encore partie) : dans un voyage à plusieurs, chaque vocal porte le portrait de celui qui l'a dit. MEMO garde son M |
+| Aperçu PDF, cagnotte (`3551:26331`) | les boutons « Partager ma cagnotte » ouvrent directement la feuille de partage d'iOS | « Partager ma cagnotte » (aperçu) et « Partager » (cagnotte) ouvrent **la feuille du système**, sans passer par « Partager ton MemoBook ». En tête, le titre du voyage (et sa photo quand il en a une, `LPLinkMetadata`) ; sous les apps, « Commander » et « Partager sur Whatsapp » (`ShareAction`). Le titre et le lien viennent du serveur — `GET /v1/wallet` et `POST /v1/memos/:id/share-link` — et non du jeu d'essai de l'aperçu (voir T194) |
+| Ma cagnotte (`3551:26486`) | « Ajouter », « Partager » et « Prévisualiser mon carnet » ne marchaient pas | Les trois intentions s'arrêtaient dans `RootView` sans rien faire. **« Ajouter »** ouvre la page « Ajouter à ma cagnotte » (`WalletTopUpView`) : la cagnotte et son objectif, le montant — 5, 10, 20, 60 € ou libre, entre 5 et 500 € —, puis « Contribuer 10,00 € », qui ouvre la feuille Stripe (`WalletModel.addFunds`) et revient sur la cagnotte relue une fois l'argent arrivé. **« Prévisualiser mon carnet »** ouvre l'aperçu du carnet financé, depuis le profil aussi : `GET /v1/wallet` rend désormais `tripId`, et choisit le carnet du moment quand on n'en demande aucun. **« Partager »** : la feuille du système, ci-dessus |
+| Réglages du voyage — limites de souvenirs | l'explication fait craindre un prélèvement : plus précis, sans être long | Sous l'intitulé de la ligne : « Comprises dans ton abonnement, sans frais en plus ». Le chapeau de la feuille : « Ton abonnement comprend chaque semaine de quoi raconter tous les jours. Si tu atteins la limite, rien n’est prélevé : tu attends le renouvellement, ou tu choisis d’étendre. » La comparaison dit que l'extension est un choix, jamais automatique ; le bandeau de la limite proche rappelle qu'elles se renouvellent chaque semaine, celui de la limite atteinte que rien n'est prélevé |
+| Réglages du voyage — dates | une date se change, elle ne se supprime pas | `BrandDateField(isClearable:)` : plus de croix sur les deux lignes de la feuille « Dates ». La création d'un voyage garde la sienne, où la date de fin est facultative |
+| Nouveau carnet — Rejoindre (`3561:21647`) | l'alerte d'Apple quand le code ne mène à rien | **« Rejoindre » ne faisait rien** : l'intention s'arrêtait dans `RootView`, et aucune route n'existait. `POST /v1/trips/join` — le code collé est nettoyé, on entre comme co-voyageur actif, la route est rejouable, une invitation envoyée à l'adresse du compte se referme sur lui, un co-voyageur retiré ne rentre pas. La feuille attend la réponse : le voyage s'ouvre, ou l'alerte du système « Oups, voyage introuvable » se pose — « Réessayer » rend le champ pour corriger, « Annuler » renonce |
+| Conditions d'utilisation | les sections bleues ne s'ouvrent qu'au toucher, une seule à la fois, aucune au départ | `LegalDocumentView.expandedChapter` : un identifiant et non un ensemble, `nil` à l'arrivée ; ouvrir un chapitre referme celui qu'on lisait |
+| Accueil — voyages à venir (`3125:33113`) | la carte de la maquette, une fausse photo floutée toujours la même, exportée de Figma et hébergée dans le dépôt, et le scotch qui dépasse | `UpcomingTripCard` : la photo du nœud (`assets/illustrations/Upcoming Trip Photo.jpg` → `PhotoUpcomingTrip`), floutée dans l'app ; « À VENIR », « Départ dans » et le nombre de jours (`MemoBookFont.headingLight`, nouveau) ; les coins photo du même nœud (`PhotoCornerMounts`) ; le titre et les dates ; le scotch **centré**, le vert de la marque à 18 %, à cheval sur le bord haut |
+
+En passant, dans le design system : le texte indicatif de `BrandTextField` suit
+maintenant l'alignement que l'écran pose (« Dupont » restait à gauche d'un champ
+centré). Dans le bac à sable : la cagnotte du jeu d'essai finance le voyage de
+Rome, le lien de partage marche pour les voyages de l'accueil d'essai, et le
+voyageur d'essai a ses initiales dans la conversation.
+
+### 31.2 Les réponses aux tickets
+
+| Ticket | Réponse | Ce qui a été fait | Écran / parcours |
+|---|---|---|---|
+| T10, T16 | mesures confirmées | lignes retirées | Accueil, Profil |
+| T76 | en pause : la carte est pour la v2, Tricount attend son intégration | ⏸️ dans sa table, comme T33 | Réglages du voyage |
+| T80, T87, T89, T125, T148, T155, T156, T157, T158 (§ 24), T175 | validés tels quels | lignes retirées | Paywall, couvertures, entrée, documents légaux, Statistiques, conversation |
+| T115 | nouvel export dans GitHub | `Empty Trip Illustration.png` (1704 × 927) remplace l'illustration du voyage vide (642 × 348). La photo de l'écran d'entrée, elle, avait déjà été remplacée entre-temps (1080 × 1920) | Accueil |
+| T118 | Alegreya importée en vectoriel | `assets/logos/Alegreya.svg` → `WordmarkAlegreya` (`import-brand-logos.py`) : son nom se dessine dans sa police dans la feuille des assortiments | Typographies du carnet |
+| T124 | exports vectoriels annoncés | **pas arrivés** : les deux fichiers du dépôt sont toujours des images, modifiés pour la dernière fois le 15/09. Le ticket reste ouvert, reformulé | Accueil — 1ère connexion |
+| T128 | on laisse comme ça pour l'instant | ligne retirée | Réglages du voyage |
+| T134 | le burger n'est plus dans Figma | ligne retirée | Conversation |
+| T136 | plus d'actualité : une seule modale d'assortiments | ligne retirée | Typographies du carnet |
+| T147 | on garde le vouvoiement des documents légaux | lignes retirées (§ 23, et leur copie égarée dans § 27.5) | Documents légaux |
+| T151 | un lien vers les CGU, sans FAQ, retour à l'entrée | « Conditions d'utilisation » est un lien **dans** la mention ; la page s'ouvre dans la pile de l'entrée (`SignedOutRoute.termsOfUse`), sans « Besoin d'aide ? » (`showsHelp: false`), et la flèche ramène à l'entrée | Accueil — 1ère connexion |
+| T152 | la liste des prestataires | Webflow Inc., Google LLC (Analytics), Hotjar Ltd, Meta Platforms Inc., en puces sous la phrase qui les annonce. « Hotter Ltd » dans le message a été lu Hotjar Ltd (T195) | Politique de confidentialité |
+| T153 | un point final | fait | Politique de confidentialité |
+| T159, T160 (§ 24) | pas compris | reformulés dans leur table | Statistiques |
+| T174 | modifier Beige Darker s'il n'est utilisé nulle part | il **est** `#CFBBAA`, et il sert à 22 endroits : la condition n'est pas remplie. Le ticket reste ouvert, avec la vraie question | Partout |
+| T28, T43, T88, T116, T126, T127, T130, T138, T154, T179, T180 | laissés ouverts | inchangés | — |
+| T69, T71, T72, T121, T133, T139 | sans réponse | inchangés | — |
+| T158, T160 (§ 25) | déjà clos le 22/09 | lignes barrées retirées | « Supprimer la conversation » |
+| T159 (§ 25) | — | **renuméroté T185** : le numéro était pris deux fois, avec celui de la feuille « Statistiques » | « Supprimer la conversation » |
+
+### 31.3 Contrat back-end
+
+| Route / colonne | Ce qui change |
+|---|---|
+| `POST /v1/trips/join { code }` | rejoint un voyage par son code d'accès, nettoyé (majuscules, sans espace ni tiret). Rend `{ trip, accessCode }` comme la création. 404 `trip_not_found` pour un code qui ne mène nulle part, 403 `member_removed` pour quelqu'un que le propriétaire a retiré |
+| `GET /v1/wallet` → `tripId` | le carnet que la cagnotte finance : celui qu'on demande, sinon un voyage pas fini (le plus tôt commencé), sinon le dernier créé. La cagnotte de `GET /v1/memos/:id/order-context` le porte aussi : c'est le carnet commandé |
+| `GET /v1/trips/:id/chat` et les reçus → `authorInitials`, `authorAvatarUrl` ; `context.travellerInitials`, `context.travellerAvatarUrl` | le portrait de celui qui a parlé, sur toutes les bulles du voyageur ; celui de qui lit, pour ses bulles pas encore parties |
+| `accounts.birthDate` (`DATE`, migration `20260926100000_date_de_naissance`) | la date de naissance ; `PATCH /v1/profile { birthDate: "AAAA-MM-JJ" \| null }`, refusée si elle n'existe pas, est dans le futur ou avant 1900 ; rendue telle quelle par `GET /v1/profile` |
+
+⚠️ **La migration est à appliquer avant la fusion**, sur `public` — la
+production — et sur `memobook_test`. Railway déploie le code dès la fusion et ne
+migre jamais : sans la colonne, toute lecture d'un compte tomberait en 500
+(`P2022`), comme le 22/09. Appliquée sur `memobook_test` (la suite passe) ; pas
+encore sur `public`.
+
+`screens.test.ts` garde « rejoindre un voyage par son code » (cinq cas), « la
+cagnotte, depuis le profil » et la date de naissance ; `chat.test.ts` les
+portraits. Côté app : `CalendarDayTests` (Core), `LastQuestionsModelTests` et
+`HomeJoinTests` (cible app).
+
+### 31.4 À trancher
+
+| # | Sujet | Écran / parcours |
+|---|---|---|
+| T186 | **La carte ne se saisit pas dans la page**, contrairement à la maquette (numéro, expiration, CVV) : un numéro de carte ne passe jamais par un champ de l'app, il se tape dans la fenêtre de Stripe qui s'ouvre sur « Contribuer ». La section « Paiement » le dit, et garde les cartes acceptées. Des champs intégrés sont possibles (le formulaire de carte de Stripe), mais c'est un autre flux de paiement : à décider avec Hugo | Ajouter à ma cagnotte |
+| T187 | **« Don récurrent » est pâli** : le serveur ne sait pas prélever chaque mois. L'appui explique que ça arrive bientôt | Ajouter à ma cagnotte |
+| T188 | **« Votre contribution » vouvoie** (R9) : recopié tel quel, à réécrire dans Figma | Ajouter à ma cagnotte |
+| T189 | **« Prix moyen d'un carnet de voyage » est devenu « Coût estimé de ton carnet »** : l'objectif affiché est l'estimation de ce carnet-là, celle de la cagnotte, et non une moyenne. Sans estimation, la barre disparaît. À valider, ou à donner un prix moyen à afficher | Ajouter à ma cagnotte |
+| T190 | **La maquette ne dessine pas d'en-tête** : écran poussé, il porte une flèche et le nom du cadre, « Ajouter à ma cagnotte » | Ajouter à ma cagnotte |
+| T191 | **Les titres sont recopiés tels quels** : « Ton Nom et Prénom », « Ta Date de Naissance », « Ton Numéro Whatsapp » — des majuscules de titre à l'anglaise, et « Whatsapp » pour WhatsApp. Le texte indicatif « XX/XX/XXXX » aussi : « JJ/MM/AAAA » se lirait mieux ? | Entrée — Dernières questions |
+| T192 | **La flèche du premier écran ramène à l'écran d'entrée**, ce qui ferme la session tout juste ouverte : c'est l'écran d'avant. À valider, ou à retirer du premier écran | Entrée — Dernières questions |
+| T193 | **La feuille de partage ne porte ni « Imprimer » ni « Modifier le ratio image/texte »** de la maquette : « Imprimer » n'apparaît que pour un PDF, et le ratio n'a plus d'écran où mener une fois le voyage créé. « Partager sur Whatsapp » n'apparaît que si WhatsApp est installé | Partager |
+| T194 | **L'aperçu PDF est encore sur le jeu d'essai dans l'app** : `GET /v1/memos/:id/preview` et `POST /v1/memos/:id/share-link` existent depuis le 11/09, mais l'écran ne les appelle pas. Il montre « Rome et la Dolce Vita » à tout le monde, et son partage par l'en-tête n'a pas de lien. Le brancher demande de décider **quand une composition se lance** (`POST /v1/memos/:id/renders`, payante) : sans elle, l'écran resterait sur « On compose ton Carnet ». « Partager ma cagnotte », lui, lit déjà le serveur | Aperçu PDF |
+| T195 | **« Hotter Ltd »** dans la liste des prestataires a été lu **Hotjar Ltd**, l'éditeur de Hotjar que le ticket citait. À confirmer | Politique de confidentialité |
+| T196 | **Le flou et le voile de la carte** (flou de 16, voile noir à 18 %) sont relevés sur l'export de la maquette, comme `MemoBookFont.headingLight` (Sora Regular 20) : pas de variable Figma derrière | Accueil — voyages à venir |

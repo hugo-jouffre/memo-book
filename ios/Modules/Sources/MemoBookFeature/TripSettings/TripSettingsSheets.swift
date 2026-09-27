@@ -33,6 +33,11 @@ public enum TripSettingsSheet: String, Identifiable, Hashable, Sendable {
 
 /// « Dates » — les deux bornes du voyage, chacune ouvrant le sélecteur du
 /// système par-dessus la feuille.
+///
+/// **Une date posée se change, elle ne s'efface plus** (Clara, 26/09/2026) :
+/// pas de croix sur les deux lignes. On pouvait retirer le départ d'un voyage
+/// déjà configuré, ce qui n'a pas de sens — c'est lui qui range le voyage dans
+/// « à venir » ou « en cours ».
 struct TripDatesSheet: View {
     let model: TripSettingsModel
 
@@ -58,13 +63,15 @@ struct TripDatesSheet: View {
                     date: $start,
                     // Une fin déjà posée borne le début : l'inverse n'a pas de
                     // sens, et le serveur le refuserait.
-                    in: ...(end ?? .distantFuture)
+                    in: ...(end ?? .distantFuture),
+                    isClearable: false
                 )
 
                 BrandDateField(
                     BookCopy.Dates.end,
                     date: $end,
-                    in: (start ?? .distantPast)...
+                    in: (start ?? .distantPast)...,
+                    isClearable: false
                 )
             }
             // Un seul envoi pour les deux, et **au changement** : la feuille n'a

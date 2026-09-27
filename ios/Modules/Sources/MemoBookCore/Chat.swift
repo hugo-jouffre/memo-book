@@ -385,6 +385,13 @@ public struct ChatMessage: Sendable, Hashable, Identifiable {
     /// quand on est seul sur le voyage — la vue affiche, elle ne raisonne pas.
     public let authorName: String?
 
+    /// Le portrait de celui qui a parlé : ses initiales, et sa photo s'il en a
+    /// posé une. Sur **toutes** les bulles du voyageur — les siennes comme
+    /// celles des autres —, `nil` pour MEMO. C'est lui que la bulle d'un vocal
+    /// montre (Clara, 26/09/2026).
+    public let authorInitials: String?
+    public let authorAvatarUrl: URL?
+
     /// Le rang dans le fil, tel que le serveur le tient : **la seule vérité sur
     /// l'ordre**. `nil` pour une bulle posée par l'app avant sa réponse.
     public let seq: Int?
@@ -406,6 +413,8 @@ public struct ChatMessage: Sendable, Hashable, Identifiable {
         stepId: String? = nil,
         delivery: ChatDelivery = .sent,
         authorName: String? = nil,
+        authorInitials: String? = nil,
+        authorAvatarUrl: URL? = nil,
         seq: Int? = nil,
         pauseMilliseconds: Int? = nil,
         disposition: ChatDisposition? = nil
@@ -417,6 +426,8 @@ public struct ChatMessage: Sendable, Hashable, Identifiable {
         self.stepId = stepId
         self.delivery = delivery
         self.authorName = authorName
+        self.authorInitials = authorInitials
+        self.authorAvatarUrl = authorAvatarUrl
         self.seq = seq
         self.pauseMilliseconds = pauseMilliseconds
         self.disposition = disposition
@@ -497,7 +508,7 @@ extension ChatDisposition: Codable {
 extension ChatMessage: Codable {
     private enum CodingKeys: String, CodingKey {
         case id, author, body, sentAt, stepId
-        case authorName, seq, pauseMilliseconds, disposition
+        case authorName, authorInitials, authorAvatarUrl, seq, pauseMilliseconds, disposition
     }
 
     /// L'acheminement n'est **pas** décodé : un message qui arrive du serveur
@@ -512,6 +523,10 @@ extension ChatMessage: Codable {
             sentAt: try container.decode(Date.self, forKey: .sentAt),
             stepId: try container.decodeIfPresent(String.self, forKey: .stepId),
             authorName: try container.decodeIfPresent(String.self, forKey: .authorName),
+            authorInitials: try container.decodeIfPresent(String.self, forKey: .authorInitials),
+            // Une adresse illisible ne doit pas faire tomber la bulle : les
+            // initiales prennent la place.
+            authorAvatarUrl: try? container.decodeIfPresent(URL.self, forKey: .authorAvatarUrl),
             seq: try container.decodeIfPresent(Int.self, forKey: .seq),
             pauseMilliseconds: try container.decodeIfPresent(Int.self, forKey: .pauseMilliseconds),
             disposition: try container.decodeIfPresent(ChatDisposition.self, forKey: .disposition)
@@ -526,6 +541,8 @@ extension ChatMessage: Codable {
         try container.encode(sentAt, forKey: .sentAt)
         try container.encodeIfPresent(stepId, forKey: .stepId)
         try container.encodeIfPresent(authorName, forKey: .authorName)
+        try container.encodeIfPresent(authorInitials, forKey: .authorInitials)
+        try container.encodeIfPresent(authorAvatarUrl, forKey: .authorAvatarUrl)
         try container.encodeIfPresent(seq, forKey: .seq)
         try container.encodeIfPresent(pauseMilliseconds, forKey: .pauseMilliseconds)
         try container.encodeIfPresent(disposition, forKey: .disposition)
@@ -663,6 +680,11 @@ public struct ChatContext: Codable, Sendable, Hashable {
     public let tripTitle: String?
     public let travellerFirstName: String?
 
+    /// Le portrait de celui qui lit, pour ses bulles qui ne sont pas encore
+    /// parties : elles n'ont pas de réponse du serveur où le trouver.
+    public let travellerInitials: String?
+    public let travellerAvatarUrl: URL?
+
     /// Le lieu de la dernière étape connue. Il complète l'analyse quand le
     /// message du voyageur n'en nomme aucun.
     public let placeName: String?
@@ -695,6 +717,8 @@ public struct ChatContext: Codable, Sendable, Hashable {
         tripId: String,
         tripTitle: String? = nil,
         travellerFirstName: String? = nil,
+        travellerInitials: String? = nil,
+        travellerAvatarUrl: URL? = nil,
         placeName: String? = nil,
         stepNumber: Int? = nil,
         stepId: String? = nil,
@@ -704,6 +728,8 @@ public struct ChatContext: Codable, Sendable, Hashable {
         self.tripId = tripId
         self.tripTitle = tripTitle
         self.travellerFirstName = travellerFirstName
+        self.travellerInitials = travellerInitials
+        self.travellerAvatarUrl = travellerAvatarUrl
         self.placeName = placeName
         self.stepNumber = stepNumber
         self.stepId = stepId
@@ -712,8 +738,8 @@ public struct ChatContext: Codable, Sendable, Hashable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case tripId, tripTitle, travellerFirstName, placeName, stepNumber, stepId, prompt
-        case memberCount
+        case tripId, tripTitle, travellerFirstName, travellerInitials, travellerAvatarUrl
+        case placeName, stepNumber, stepId, prompt, memberCount
     }
 
     public init(from decoder: any Decoder) throws {
@@ -722,6 +748,8 @@ public struct ChatContext: Codable, Sendable, Hashable {
             tripId: try container.decode(String.self, forKey: .tripId),
             tripTitle: try container.decodeIfPresent(String.self, forKey: .tripTitle),
             travellerFirstName: try container.decodeIfPresent(String.self, forKey: .travellerFirstName),
+            travellerInitials: try container.decodeIfPresent(String.self, forKey: .travellerInitials),
+            travellerAvatarUrl: try? container.decodeIfPresent(URL.self, forKey: .travellerAvatarUrl),
             placeName: try container.decodeIfPresent(String.self, forKey: .placeName),
             stepNumber: try container.decodeIfPresent(Int.self, forKey: .stepNumber),
             stepId: try container.decodeIfPresent(String.self, forKey: .stepId),
