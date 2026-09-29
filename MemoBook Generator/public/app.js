@@ -2639,10 +2639,25 @@ function rendreGroupe() {
     id: "texte-groupe",
     value: etat.texteGroupe,
     spellcheck: true,
+    // Ne touche qu'au strict nécessaire : reconstruire toute la carte comme
+    // `rendreGroupe()` le ferait couperait le curseur au milieu de la frappe.
     oninput: (ev) => {
       etat.texteGroupe = ev.target.value;
       etat.groupeModifie = true;
       $("etat-groupe").textContent = "modifications non appliquées";
+      const appliquer = $("btn-appliquer-groupe");
+      if (appliquer) appliquer.disabled = false;
+      if (!$("btn-annuler-groupe")) {
+        $("actions-groupe")?.append(
+          bouton("Annuler mes modifications", {
+            id: "btn-annuler-groupe",
+            surClic: () => {
+              etat.groupeModifie = false;
+              rendreGroupe();
+            },
+          }),
+        );
+      }
     },
   });
 
@@ -2683,8 +2698,9 @@ function rendreGroupe() {
       zone,
       h(
         "div",
-        { class: "rangee" },
+        { class: "rangee", id: "actions-groupe" },
         bouton("Appliquer aux étapes", {
+          id: "btn-appliquer-groupe",
           ton: "lime",
           desactive: !etat.groupeModifie,
           titre: "Réécrit les étapes à partir du texte relu",
@@ -2697,6 +2713,7 @@ function rendreGroupe() {
         }),
         etat.groupeModifie &&
           bouton("Annuler mes modifications", {
+            id: "btn-annuler-groupe",
             surClic: () => {
               etat.groupeModifie = false;
               rendreGroupe();
