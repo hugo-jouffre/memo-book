@@ -15,7 +15,7 @@
 | **Personnalisations** | Le carnet : ce que la page montre et comment elle est composée | Jusqu'à la génération du carnet |
 
 **Règle de survie.** Aucun réglage n'est exposé dans l'app avant d'exister dans
-`templates/travel-journal/LAYOUT_KB.md`. Un drapeau que le gabarit ne connaît
+`MemoBook Generator/templates/travel-journal/LAYOUT_KB.md`. Un drapeau que le gabarit ne connaît
 pas est ignoré en silence : l'utilisateur croirait avoir réglé quelque chose.
 
 ⚠️ **« Exister » n'est pas « être rendu ».** Les onze modales du lot 7 rendent
@@ -73,7 +73,7 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
   quota.** À 0, aucun décor — et la page se remplit autrement, ou pas du tout.
 - **Typographies.** Quatre axes indépendants. L'agent n'en substitue jamais
   aucune, même s'il juge une page trop dense. Seules les polices réellement
-  embarquées dans `templates/travel-journal/assets/fonts/` peuvent être
+  embarquées dans `MemoBook Generator/templates/travel-journal/assets/fonts/` peuvent être
   proposées dans la liste.
 - **Quiz.** Un seul bloc interactif par page, et il remplace la zone flottante
   du bas. À OFF, l'agent n'en produit aucun.

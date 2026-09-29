@@ -1397,7 +1397,7 @@ const enHtml = (texte) =>
 
 /**
  * Choix de la mise en page, repris de la table de
- * `templates/travel-journal/LAYOUT_KB.md` : c'est elle qui dit combien de
+ * `MemoBook Generator/templates/travel-journal/LAYOUT_KB.md` : c'est elle qui dit combien de
  * photos chaque gabarit sait tenir.
  */
 function layoutPour(nbPhotos, premiere) {
@@ -1418,7 +1418,7 @@ function dateLongue(iso) {
 
 /**
  * Traduit l'état de l'atelier vers le contrat attendu par le template, décrit
- * par `templates/travel-journal/data.json`. Conversion **mécanique** : elle
+ * par `MemoBook Generator/templates/travel-journal/data.json`. Conversion **mécanique** : elle
  * n'écrit pas à la place du voyageur, elle habille son texte.
  */
 function construirePayloadCarnet(photoDe = (data) => data) {
@@ -1745,6 +1745,88 @@ function rendreResultatPdf() {
     ", ",
     h("a", { href: etat.pdf.url, target: "_blank", rel: "noopener" }, "ouvrir le PDF"),
   );
+}
+
+/**
+ * Le gabarit tel que GitHub le sert, branche `main`. `raw.githubusercontent.com`
+ * répond avec des en-têtes CORS permissifs : pas besoin de passer par un
+ * serveur pour le lire depuis le navigateur.
+ */
+const GITHUB_TEMPLATE_BASE =
+  "https://raw.githubusercontent.com/hugo-jouffre/memo-book/main/MemoBook%20Generator/templates/travel-journal";
+
+async function recupererFichierTemplate(nom) {
+  const reponse = await fetch(`${GITHUB_TEMPLATE_BASE}/${nom}`, { cache: "no-store" });
+  if (!reponse.ok) throw new Error(`${nom} : GitHub a répondu HTTP ${reponse.status}`);
+  return reponse.text();
+}
+
+/**
+ * Pousse le gabarit de `MemoBook Generator/templates/travel-journal/` (sur
+ * GitHub, branche main) vers APITemplate via `POST /update-template`, pour
+ * que le rendu utilise exactement ces fichiers-là au lieu d'une version
+ * éditée à la main dans leur tableau de bord.
+ *
+ * Même logique que `.github/workflows/sync-apitemplate.yml`, qui fait ce même
+ * appel côté CI — mais celui-ci est gardé par un secret GitHub qui n'est pas
+ * toujours posé. Ce bouton utilise la clé déjà présente dans les réglages, ce
+ * qui marche même sans toucher à la configuration du dépôt.
+ *
+ * `css` est la concaténation de `fonts.css` puis `style.css`, dans cet ordre
+ * — comme `loadTemplateCss()` côté back-end. Envoyer `style.css` seul ferait
+ * perdre toutes les polices, sans la moindre erreur visible.
+ */
+async function synchroniserTemplate(bouton) {
+  if (bouton.disabled) return;
+  const cle = (etat.reglages.cleApitemplate || "").trim();
+  const templateId = (etat.reglages.templateApitemplate || "").trim();
+  const statut = $("statut-template");
+  const ecrire = (texte, erreur = false) => {
+    if (!statut) return;
+    statut.textContent = texte;
+    statut.classList.toggle("erreur", erreur);
+  };
+
+  if (!cle || !templateId) {
+    ecrire("Clé APITemplate et identifiant du template requis avant de synchroniser.", true);
+    return;
+  }
+
+  const contenu = [...bouton.childNodes];
+  bouton.disabled = true;
+
+  try {
+    bouton.textContent = "Récupération sur GitHub…";
+    ecrire("Récupération de index.html, style.css et fonts.css depuis GitHub…");
+    const [html, style, fonts] = await Promise.all([
+      recupererFichierTemplate("index.html"),
+      recupererFichierTemplate("style.css"),
+      recupererFichierTemplate("fonts.css"),
+    ]);
+
+    bouton.textContent = "Envoi à APITemplate…";
+    ecrire("Envoi à APITemplate…");
+    const base = (etat.reglages.baseApitemplate || "https://rest-de.apitemplate.io/v2").replace(/\/$/, "");
+    const reponse = await fetch(`${base}/update-template`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "X-API-KEY": cle },
+      body: JSON.stringify({ template_id: templateId, body: html, css: `${fonts}\n${style}` }),
+    });
+    const donnees = await reponse.json().catch(() => null);
+    // Ce point de terminaison ne renvoie pas de champ `status` : le 2xx fait foi,
+    // exactement comme le vérifie déjà le workflow de synchronisation.
+    if (!reponse.ok) {
+      throw new Error(donnees?.message || `APITemplate a refusé la mise à jour (HTTP ${reponse.status})`);
+    }
+
+    ecrire(`Gabarit synchronisé avec APITemplate à ${new Date().toLocaleTimeString("fr-FR")}.`);
+  } catch (erreur) {
+    console.error("[template] échec de synchronisation", erreur);
+    ecrire(`Échec : ${erreur.message}`, true);
+  } finally {
+    bouton.disabled = false;
+    bouton.replaceChildren(...contenu);
+  }
 }
 
 /* ---------------------------------------- sauvegarde et reprise du travail --- */
@@ -2197,6 +2279,22 @@ function rendreReglages() {
         sauverReglages();
       },
     }),
+    h(
+      "div",
+      { class: "rangee" },
+      h(
+        "button",
+        {
+          class: "btn btn-petit",
+          id: "btn-sync-template",
+          "data-action": "sync-template",
+          title:
+            "Récupère index.html, style.css et fonts.css de templates/travel-journal (branche main) sur GitHub, et les pousse vers APITemplate",
+        },
+        "Synchroniser le gabarit depuis GitHub",
+      ),
+    ),
+    h("p", { class: "aide", id: "statut-template" }),
     h(
       "div",
       { class: "rangee" },
@@ -2801,6 +2899,7 @@ document.addEventListener("click", (ev) => {
   if (action === "generer-carnet") genererCarnet(bouton);
   if (action === "sauvegarder") sauvegarderAvancement(bouton);
   if (action === "ouvrir") $("fichier-avancement").click();
+  if (action === "sync-template") synchroniserTemplate(bouton);
 });
 
 /** Les boutons à icône de l'en-tête, garnis une fois le DOM prêt. */

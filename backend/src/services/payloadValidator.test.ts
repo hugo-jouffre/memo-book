@@ -12,7 +12,7 @@ import {
  * validateur qui a tort.
  */
 describe("validatePayload — référence du dépôt", () => {
-  it("accepte templates/travel-journal/data.json", () => {
+  it("accepte MemoBook Generator/templates/travel-journal/data.json", () => {
     const result = validatePayload(loadSamplePayload());
 
     expect(result.errors).toEqual([]);

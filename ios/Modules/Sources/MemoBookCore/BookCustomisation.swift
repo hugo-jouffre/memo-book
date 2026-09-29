@@ -8,7 +8,7 @@ import Foundation
 // (`memos`, migration M4) ; cette structure n'en est que la lecture.
 //
 // ⚠️ **Règle de survie** (`docs/reglages-utilisateur.md`) : aucun réglage n'est
-// exposé dans l'app avant d'exister dans `templates/travel-journal/LAYOUT_KB.md`.
+// exposé dans l'app avant d'exister dans `MemoBook Generator/templates/travel-journal/LAYOUT_KB.md`.
 // Une option que le gabarit ignore ferait croire au voyageur qu'il a réglé
 // quelque chose.
 
@@ -113,7 +113,7 @@ public enum BookCustomisationEdit: Sendable, Hashable {
     case decorationQuota(Int)
     /// La typographie des **titres** du carnet, qui vit dans `fontDisplay` :
     /// c'est le token `--mb-font-display` du gabarit. Voir la table de
-    /// `templates/travel-journal/LAYOUT_KB.md`, et ``BookFontRole`` pour le
+    /// `MemoBook Generator/templates/travel-journal/LAYOUT_KB.md`, et ``BookFontRole`` pour le
     /// croisement des noms.
     case fontDisplay(String)
     /// Celle des **sous-titres** — `fontTitle`, token `--mb-font-title`.
@@ -140,7 +140,7 @@ public enum BookCustomisationEdit: Sendable, Hashable {
 /// Une police proposée par une feuille de typographie.
 ///
 /// Un **nom de famille**, celui que `memos.font*` porte et que le gabarit
-/// d'impression résout (`templates/travel-journal/`) ; un **libellé**, celui
+/// d'impression résout (`MemoBook Generator/templates/travel-journal/`) ; un **libellé**, celui
 /// que la maquette écrit — « Playfair » pour Playfair Display — ; et une
 /// phrase. L'app ne fait que montrer le libellé et renvoyer le nom.
 public struct BookFontOption: Sendable, Hashable, Identifiable {
@@ -219,7 +219,7 @@ public struct BookFontOption: Sendable, Hashable, Identifiable {
 /// ⚠️ **Le croisement des noms est volontaire.** « Typographie des titres »
 /// écrit `fontDisplay` — le token `--mb-font-display` du gabarit —, et « des
 /// sous-titres » écrit `fontTitle` (`--mb-font-title`). Voir la table de
-/// `templates/travel-journal/LAYOUT_KB.md`.
+/// `MemoBook Generator/templates/travel-journal/LAYOUT_KB.md`.
 public enum BookFontRole: String, Sendable, Hashable, CaseIterable, Identifiable {
     case titles
     case subtitles
@@ -289,7 +289,7 @@ public enum BookFontRole: String, Sendable, Hashable, CaseIterable, Identifiable
 /// ⚠️ **Deux des cinq familles ne sont pas encore dans le gabarit.** `fonts.css`
 /// n'inline que Playfair Display et Gloria Hallelujah ; Hansley est versionné
 /// sans être inliné, Alegreya et Montserrat ne sont pas là du tout — voir
-/// `templates/travel-journal/LAYOUT_KB.md` § Polices. Rien n'échoue : la page
+/// `MemoBook Generator/templates/travel-journal/LAYOUT_KB.md` § Polices. Rien n'échoue : la page
 /// retombe sur une police système. C'était déjà vrai des quatre lignes que ces
 /// combos remplacent ; ce n'est donc pas une régression, c'est une dette
 /// nommée.

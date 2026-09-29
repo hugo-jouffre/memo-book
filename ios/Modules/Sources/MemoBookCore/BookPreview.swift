@@ -10,7 +10,7 @@ import Foundation
 // en SwiftUI demanderait de réimplémenter le template et de le maintenir en
 // double.
 //
-// Voir `docs/apitemplate.md` pour la composition, et `templates/travel-journal/`
+// Voir `docs/apitemplate.md` pour la composition, et `MemoBook Generator/templates/travel-journal/`
 // pour le template lui-même.
 
 /// Où en est la composition du carnet.

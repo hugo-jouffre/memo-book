@@ -5,7 +5,7 @@
 //   1. `redact` écrit le texte d'une étape, une étape à la fois, en suivant
 //      `agents/agent-transcription.md`. L'utilisateur relit et corrige.
 //   2. `structure` met en page le texte *validé*, en suivant
-//      `templates/travel-journal/LAYOUT_KB.md`. Il ne réécrit rien.
+//      `MemoBook Generator/templates/travel-journal/LAYOUT_KB.md`. Il ne réécrit rien.
 
 generator client {
   provider = "prisma-client-js"
@@ -542,7 +542,7 @@ model Memo {
   // « pas encore de réglages » à traiter partout.
   //
   // Règle de survie du document : aucun réglage n'est exposé dans l'app avant
-  // d'exister dans `templates/travel-journal/LAYOUT_KB.md`. Une colonne que le
+  // d'exister dans `MemoBook Generator/templates/travel-journal/LAYOUT_KB.md`. Une colonne que le
   // gabarit ignore ferait croire à l'utilisateur qu'il a réglé quelque chose.
 
   /// Nombre de pages visé. Pilote le niveau de détail de la rédaction et le
@@ -579,7 +579,7 @@ model Memo {
 
   /// Les quatre axes typographiques, indépendants. Des chaînes et non une
   /// énumération : la liste est fermée, mais elle est fermée par ce que
-  /// `templates/travel-journal/assets/fonts/` embarque réellement, et ajouter
+  /// `MemoBook Generator/templates/travel-journal/assets/fonts/` embarque réellement, et ajouter
   /// une police ne doit pas demander une migration.
   fontDisplay String @default("Playfair Display")
   fontTitle   String @default("Hansley")
@@ -1076,7 +1076,7 @@ model Render {
   memo   Memo   @relation(fields: [memoId], references: [id], onDelete: Cascade)
 
   status                   Status  @default(pending)
-  /// Payload conforme à templates/travel-journal/gpt_image_schema.yaml.
+  /// Payload conforme à MemoBook Generator/templates/travel-journal/gpt_image_schema.yaml.
   payload                  Json?
   /// Identifiant de transaction renvoyé par APITemplate.io.
   apitemplateTransactionId String?

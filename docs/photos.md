@@ -87,5 +87,5 @@ transcribe → structure → [enhance] → render
 
 Le job `enhance` n'existe pas encore. Il se déclarerait dans
 `backend/src/jobs/queue.ts` à côté des trois autres, et lirait les seuils dans
-`templates/travel-journal/print.json` — c'est le layout qui fixe l'exigence de
+`MemoBook Generator/templates/travel-journal/print.json` — c'est le layout qui fixe l'exigence de
 résolution, donc elle vit avec la géométrie.

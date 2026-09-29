@@ -49,7 +49,7 @@ Puis :
 cd backend && npm run icons:build
 ```
 
-Le script réécrit le bloc de sprite dans `templates/travel-journal/index.html`,
+Le script réécrit le bloc de sprite dans `MemoBook Generator/templates/travel-journal/index.html`,
 entre les marqueurs `mb:icons:start` / `mb:icons:end`. Le template reste un
 fichier unique, prêt à partir chez APITemplate.
 
@@ -89,6 +89,6 @@ Le grain du papier actuel n'est pas ici : il est généré en `feTurbulence` dan
 
 - **Les photos des voyageurs** — elles transitent par le pipeline
   (`backend/src/services/webflow.ts`) et ne sont jamais versionnées.
-- **Les polices** — `templates/travel-journal/assets/fonts/`, parce qu'elles
+- **Les polices** — `MemoBook Generator/templates/travel-journal/assets/fonts/`, parce qu'elles
   sont propres à un style de carnet et embarquées dans son CSS.
 - **Les substituts de test** — `backend/test/fixtures/offline/`.

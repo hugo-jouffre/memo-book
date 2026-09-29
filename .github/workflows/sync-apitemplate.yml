@@ -5,9 +5,9 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'templates/travel-journal/index.html'
-      - 'templates/travel-journal/style.css'
-      - 'templates/travel-journal/fonts.css'
+      - 'MemoBook Generator/templates/travel-journal/index.html'
+      - 'MemoBook Generator/templates/travel-journal/style.css'
+      - 'MemoBook Generator/templates/travel-journal/fonts.css'
 
 jobs:
   sync-template:
@@ -49,10 +49,10 @@ jobs:
           # reste. APITemplate ne reçoit qu'un seul champ `css` : on concatène
           # exactement comme le fait loadTemplateCss() côté back-end, sinon le
           # rendu de production perdrait ses polices.
-          cat templates/travel-journal/fonts.css \
-              templates/travel-journal/style.css > /tmp/memobook.css
+          cat "MemoBook Generator/templates/travel-journal/fonts.css" \
+              "MemoBook Generator/templates/travel-journal/style.css" > /tmp/memobook.css
 
-          HTML=$(jq -Rs . < templates/travel-journal/index.html)
+          HTML=$(jq -Rs . < "MemoBook Generator/templates/travel-journal/index.html")
           CSS=$(jq -Rs . < /tmp/memobook.css)
 
           PAYLOAD=$(jq -n \

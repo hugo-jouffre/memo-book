@@ -7,10 +7,10 @@
 #
 #     docker build -f backend/Dockerfile -t memobook-api .
 #
-# `src/lib/templates.ts` résout `templates/` et `agents/` en remontant de trois
-# crans depuis `dist/lib/`, c'est-à-dire à la racine du dépôt. Une image
-# construite depuis `backend/` se construirait sans broncher et tomberait au
-# premier carnet, faute de gabarit et de règles de rédaction.
+# `src/lib/templates.ts` résout `MemoBook Generator/templates/` et `agents/`
+# en remontant de trois crans depuis `dist/lib/`, c'est-à-dire à la racine du
+# dépôt. Une image construite depuis `backend/` se construirait sans broncher
+# et tomberait au premier carnet, faute de gabarit et de règles de rédaction.
 
 # ---------------------------------------------------------------- construction
 
@@ -60,13 +60,17 @@ COPY --from=build /app/backend/dist ./dist
 COPY backend/prisma ./prisma
 
 # Ce que le code lit à la racine du dépôt : voir l'avertissement en tête de
-# fichier. Trois chemins aujourd'hui — `templates/` et `agents/` par
-# `lib/templates.ts`, `assets/maps/countries.json` par `services/mapSvg.ts`.
+# fichier. Trois chemins aujourd'hui — `MemoBook Generator/templates/` et
+# `agents/` par `lib/templates.ts`, `assets/maps/countries.json` par
+# `services/mapSvg.ts`.
 #
 # `assets/` est copié en entier (2,5 Mo) plutôt que le seul `maps/` : le
 # couplage à la racine a déjà surpris trois fois, et une copie exhaustive coûte
 # moins cher qu'un quatrième chemin découvert en production.
-COPY templates /app/templates
+#
+# `.dockerignore` exclut le reste de `MemoBook Generator/` (l'app front-end
+# n'a rien à faire dans l'image du back-end) mais laisse passer `templates/`.
+COPY "MemoBook Generator/templates" "/app/MemoBook Generator/templates"
 COPY agents /app/agents
 COPY assets /app/assets
 

@@ -16,9 +16,16 @@
 **/*.log
 
 # L'app iOS n'a rien à faire dans une image de serveur. Pas de guillemets
-# autour du nom à espace : `.dockerignore` les prendrait au pied de la lettre.
+# autour des noms à espace : `.dockerignore` les prendrait au pied de la
+# lettre. Le reste de « MemoBook Generator » est exclu pièce par pièce plutôt
+# qu'en bloc : `templates/` doit rester inclus, et Docker ne sait pas
+# ré-inclure un chemin dont un dossier parent est déjà exclu.
 ios
-MemoBook Generator
+MemoBook Generator/atelier.sh
+MemoBook Generator/transcribe-whatsapp.sh
+MemoBook Generator/server.mjs
+MemoBook Generator/public
+MemoBook Generator/*.md
 
 # Sorties de rendu local et d'outillage.
 backend/.render-out
