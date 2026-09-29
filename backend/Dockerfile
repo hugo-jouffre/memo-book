@@ -46,6 +46,11 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/package.json backend/package-lock.json ./
+# `prisma` — le CLI — est une dépendance d'exécution, pas de développement :
+# Railway lance `prisma migrate deploy` **dans cette image** avant chaque
+# déploiement (`preDeployCommand`, `railway.json`). Sans lui, le code partait
+# en production avant son schéma, et l'API rendait 500 (deux fois, les 22 et
+# 27/09/2026).
 RUN npm ci --omit=dev && npm cache clean --force
 
 # Le client Prisma engendré vit dans `node_modules` et ne survit pas au
