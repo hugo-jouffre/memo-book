@@ -288,22 +288,33 @@ const etat = {
 
 const conteneur = (id) => etat.etapes.find((e) => e.id === id);
 
+// Les photos ont une deuxième « étape » possible : `null` désigne la boîte
+// d'attente (`etat.photosAttente`), pour qu'une photo puisse y retourner.
+const listePhotos = (id) => (id ? conteneur(id)?.photos : etat.photosAttente);
+
 function deplacer(genre, itemId, deId, versId) {
   if (deId === versId) return;
-  const source = conteneur(deId);
-  const item = source?.[genre].find((x) => x.id === itemId);
-  if (!item) return;
-  source[genre] = source[genre].filter((x) => x.id !== itemId);
-  conteneur(versId)?.[genre].push(item);
+  const source = genre === "photos" ? listePhotos(deId) : conteneur(deId)?.[genre];
+  const index = source ? source.findIndex((x) => x.id === itemId) : -1;
+  if (index === -1) return;
+  const cible = genre === "photos" ? listePhotos(versId) : conteneur(versId)?.[genre];
+  if (!cible) return;
+  cible.push(source.splice(index, 1)[0]);
   apresChangement();
 }
 
 function modifier(genre, itemId, conteneurId, patch) {
-  const item = conteneur(conteneurId)?.[genre].find((x) => x.id === itemId);
+  const liste = genre === "photos" ? listePhotos(conteneurId) : conteneur(conteneurId)?.[genre];
+  const item = liste?.find((x) => x.id === itemId);
   if (item) Object.assign(item, patch);
 }
 
 function retirer(genre, itemId, conteneurId) {
+  if (genre === "photos" && !conteneurId) {
+    etat.photosAttente = etat.photosAttente.filter((x) => x.id !== itemId);
+    apresChangement();
+    return;
+  }
   const c = conteneur(conteneurId);
   if (!c) return;
   c[genre] = c[genre].filter((x) => x.id !== itemId);
@@ -1953,6 +1964,28 @@ function selecteurDeplacement(genre, itemId, conteneurId) {
   return select;
 }
 
+/**
+ * Le menu qui associe une photo à son étape. Contrairement à
+ * `selecteurDeplacement`, il affiche l'étape actuelle (ou « En attente ») au
+ * lieu de revenir à un intitulé neutre : c'est une affectation, pas un geste
+ * ponctuel.
+ */
+function selecteurEtapePhoto(photoId, etapeIdActuelle) {
+  const select = h(
+    "select",
+    {
+      title: "Étape associée à cette photo",
+      onchange: (ev) => deplacer("photos", photoId, etapeIdActuelle, ev.target.value || null),
+    },
+    h("option", { value: "" }, "En attente"),
+    etat.etapes.map((e, i) =>
+      h("option", { value: e.id }, `${i + 1}. ${e.titre || e.lieu || "Étape sans titre"}`),
+    ),
+  );
+  select.value = etapeIdActuelle || "";
+  return select;
+}
+
 function carteSouvenir(s, conteneurId) {
   return h(
     "div",
@@ -2033,7 +2066,7 @@ function cartePhoto(p, conteneurId) {
       h(
         "div",
         { class: "rangee" },
-        selecteurDeplacement("photos", p.id, conteneurId),
+        selecteurEtapePhoto(p.id, conteneurId),
         h(
           "button",
           {
@@ -2377,7 +2410,7 @@ function rendreBoitePhotos() {
       importerPhotos,
     ),
     entree,
-    h("div", { class: "vignettes-attente", id: "attente-photos", hidden: true }),
+    h("div", { class: "grille-photos", id: "attente-photos", hidden: true }),
     h("p", { class: "aide", id: "aide-photos" }),
   );
   majBoitePhotos();
@@ -2389,18 +2422,14 @@ function majBoitePhotos() {
     zone.hidden = etat.photosAttente.length === 0;
     remplir(
       zone,
-      etat.photosAttente.map((p) =>
-        p.data
-          ? h("img", { src: p.data, alt: p.nomFichier, title: p.nomFichier })
-          : h("span", { class: "vide" }, p.nomFichier || "photo manquante"),
-      ),
+      etat.photosAttente.map((p) => cartePhoto(p, null)),
     );
   }
   const aide = $("aide-photos");
   if (aide) {
     aide.textContent = etat.photosAttente.length
-      ? "Ces photos attendent une étape dont la date les accueille. Crée une étape, ou fais-les glisser toi-même."
-      : "Chaque photo rejoint l'étape qui couvre sa date de fichier, ou la plus proche.";
+      ? "Choisis une étape dans le menu de chaque photo, ou attends qu'une étape corresponde à sa date."
+      : "Chaque photo rejoint l'étape qui couvre sa date de fichier, ou la plus proche ; le menu sur chaque photo permet de changer.";
   }
   majBadge(boitePhotos, etat.photosAttente.length ? `${etat.photosAttente.length}` : "", true);
 }
