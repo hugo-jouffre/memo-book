@@ -155,10 +155,10 @@ public struct WalletView: View {
         }
         .padding(.horizontal, MemoBookSpacing.screenMargin)
         .padding(.vertical, MemoBookSpacing.snug)
-        // Le fond de la barre reprend celui de l'écran, en matériau : le
-        // contenu passe dessous et se laisse deviner, ce qui dit que la liste
-        // continue.
-        .background(.thinMaterial)
+        // **Le voile crème de l'accueil**, et non le matériau gris (Hugo,
+        // 29/09/2026) : le même dégradé que sous « Créer un nouveau voyage »,
+        // du crème transparent au crème plein — voir ``BrandFooterScrim``.
+        .brandFooterScrim()
     }
 
 }

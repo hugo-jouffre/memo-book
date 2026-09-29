@@ -75,9 +75,11 @@ bouton de l'e-mail :
 xcrun simctl openurl <device> 'memobook://password/reset?token=…'
 ```
 
-L'app doit être **déconnectée** : déjà entré, le lien ne fait rien (voir
-`RootView.onOpenURL`). Le simulateur garde le trousseau à la désinstallation —
-pour sortir, passer par Profil ▸ Me déconnecter.
+Déconnectée, l'app ouvre l'écran du nouveau mot de passe ; **déjà entrée**,
+elle ouvre la même feuille par-dessus l'écran où l'on est — c'est le chemin de
+« Mot de passe oublié ? » sur la feuille « Modifier mon mot de passe » du profil
+(29/09/2026, voir `RootView.onOpenURL`). Le simulateur garde le trousseau à la
+désinstallation — pour sortir, passer par Profil ▸ Me déconnecter.
 
 ⚠️ Ne **jamais** poser un réglage de test avec
 `xcrun simctl spawn <device> defaults write com.memobook.app …` : ça écrit dans
@@ -308,8 +310,12 @@ police ou marge codée en dur ailleurs.
   retirer un co-voyageur), qui arrivent en quinconce avec le doigt ; l'appui
   long ouvre le menu contextuel du système, VoiceOver reçoit le rotor
   d'actions. Une carte qui a des gestes cachés passe par lui, elle ne réécrit
-  pas le geste — et il pose son `DragGesture` en `highPriorityGesture`, sans
-  quoi le `Button` de la carte prend le doigt.
+  pas le geste. **C'est une `ScrollView` horizontale à deux positions d'arrêt**
+  (29/09/2026), et non un `DragGesture` : la bande se verrouille par sens avec
+  la liste qui la porte — le vertical à la liste, l'horizontal au tiroir —, le
+  `Button` de la carte ne prend plus un doigt qui glisse, et l'arrêt est celui
+  du système, sans saut. Le `DragGesture` prioritaire d'avant volait le
+  défilement vertical et sautait d'une frame à chaque ouverture.
 - `PhotoFlow` (`Feature`) est **le** parcours de choix d'une photo —
   autorisation, « Prendre une photo / Choisir dans la galerie », photothèque
   ou appareil : la conversation et la photo de profil le partagent.

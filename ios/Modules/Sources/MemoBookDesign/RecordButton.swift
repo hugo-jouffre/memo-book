@@ -5,8 +5,14 @@ import SwiftUI
 /// Un disque vert, le micro du jeu de marque, et un mot dessous. **Il ne change
 /// pas de couleur en enregistrant** : le rouge de Dictaphone dit « attention,
 /// ça tourne », alors que dans MemoBook enregistrer est l'état normal, celui
-/// qu'on cherche. Ce qui change, c'est le mot — « Start » puis « Stop » — et le
-/// fait que le disque se met à respirer.
+/// qu'on cherche. Ce qui change, c'est le mot — « Start », puis « Envoyer » —
+/// et le fait que le disque se met à respirer.
+///
+/// **« Envoyer », pas « Stop ».** Appuyer sur le disque pendant qu'on parle
+/// referme le micro *et* envoie le vocal dans la conversation : un « Stop »
+/// laissait croire qu'on ne faisait que s'arrêter, et l'envoi surprenait
+/// (Hugo, 29/09/2026). En pause, le disque dit « Reprendre » — et il reprend,
+/// il n'envoie pas : c'est la feuille qui fait la différence, pas le bouton.
 ///
 /// **Le micro reste le micro**, même en enregistrement : le carré « arrêter »
 /// des apps d'enregistrement ferait croire qu'on manipule un magnétophone. Ici
@@ -68,7 +74,12 @@ public struct RecordButton: View {
 
     private var label: String {
         if isPaused { return "Reprendre" }
-        return isRecording ? "Stop" : "Start"
+        return isRecording ? "Envoyer" : "Start"
+    }
+
+    private var accessibilityLabel: String {
+        if isPaused { return "Reprendre l’enregistrement" }
+        return isRecording ? "Envoyer le vocal" : "Enregistrer un souvenir"
     }
 
     public var body: some View {
@@ -93,7 +104,7 @@ public struct RecordButton: View {
         }
         .buttonStyle(PressBounce())
         .disabled(isBusy)
-        .accessibilityLabel(isRecording ? "Arrêter l’enregistrement" : "Enregistrer un souvenir")
+        .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(.isButton)
         .onChange(of: isCapturing) { _, capturing in
             guard capturing, !reduceMotion else {

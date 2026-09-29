@@ -6,7 +6,9 @@ import { accountIdOf } from "../plugins/auth.js";
 import { connectorByKey } from "../services/connectorCatalog.js";
 import { findShippingCountry } from "../services/shippingCountries.js";
 import { linkDeviceToAccount, visibleToAccount } from "../services/memoOwnership.js";
-import { hashDeviceToken } from "../lib/auth.js";
+import { hashDeviceToken, hashSessionToken, parseBearerToken } from "../lib/auth.js";
+import { hashPassword, verifyPassword } from "../lib/password.js";
+import { pushCancellationToSheet } from "../services/statsExport.js";
 import {
   aggregateTravelStatistics,
   memoStatisticsSelect,
@@ -115,6 +117,20 @@ const cancelSubscriptionBody = z.object({
 });
 
 /**
+ * Changer son mot de passe : l'actuel pour preuve, le nouveau aux mêmes règles
+ * que l'inscription (`PasswordRule`, dans `MemoBookCore`).
+ */
+const changePasswordBody = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z
+    .string()
+    .min(8)
+    .refine((value) => /\p{L}/u.test(value) && /\d/.test(value), {
+      message: "Le mot de passe doit contenir au moins une lettre et un chiffre.",
+    }),
+});
+
+/**
  * Les voyages du compte, réduits à ce que la carte de chiffres du profil
  * regarde : combien il y en a, et lequel est en cours. Rien de plus — c'est un
  * comptage, pas une seconde liste d'accueil.
@@ -156,6 +172,9 @@ const profileInclude = {
   subscriptions: {
     orderBy: { startedAt: "desc" as const },
     take: 5,
+    // Le voyage qu'il finance, pour l'écrire sur les feuilles de l'abonnement
+    // (T71). `null` tant qu'aucun abonnement n'est rattaché.
+    include: { memo: { select: { title: true, destinationCity: true } } },
   },
   identities: { orderBy: { createdAt: "asc" as const }, take: 1 },
 };
@@ -313,6 +332,90 @@ export function registerProfileRoutes(app: FastifyInstance, context: AppContext)
   });
 
   /**
+   * Retire la photo de profil : le rond revient aux initiales (Hugo,
+   * 29/09/2026). L'objet part du stockage dans la foulée — personne ne le
+   * lira plus —, et la réponse est le profil relu, comme après un envoi.
+   */
+  app.delete("/v1/profile/avatar", async (request) => {
+    const accountId = accountIdOf(request);
+
+    const previous = await context.prisma.account.findUniqueOrThrow({
+      where: { id: accountId },
+      select: { avatarStorageKey: true },
+    });
+
+    await context.prisma.account.update({
+      where: { id: accountId },
+      data: { avatarStorageKey: null, avatarUrl: null },
+    });
+
+    if (previous.avatarStorageKey) {
+      await context.storage.remove([previous.avatarStorageKey]).catch((cause: unknown) => {
+        request.log.warn({ cause }, "Photo de profil non retirée du stockage");
+      });
+    }
+
+    return readProfile(context, accountId);
+  });
+
+  /**
+   * Change le mot de passe du compte (Hugo, 29/09/2026).
+   *
+   * Trois refus, chacun avec son code pour que la feuille dise la bonne
+   * phrase sous le bon champ : `no_password` (409) pour un compte entré par
+   * Apple ou Google seul, `wrong_password` (400) quand l'actuel ne colle pas,
+   * `same_password` (400) quand le nouveau est l'ancien. Les autres sessions
+   * du compte sont fermées — un mot de passe qu'on change est peut-être un mot
+   * de passe qu'on croit compromis —, la sienne reste ouverte.
+   */
+  app.post("/v1/profile/password", async (request, reply) => {
+    const accountId = accountIdOf(request);
+    const body = changePasswordBody.parse(request.body ?? {});
+
+    const account = await context.prisma.account.findUniqueOrThrow({
+      where: { id: accountId },
+      select: { passwordHash: true },
+    });
+    if (!account.passwordHash) {
+      throw new HttpError(
+        409,
+        "Ce compte s’ouvre avec Apple ou Google : il n’a pas de mot de passe à modifier.",
+        "no_password",
+      );
+    }
+
+    if (!(await verifyPassword(body.currentPassword, account.passwordHash))) {
+      throw HttpError.badRequest(
+        "Mot de passe incorrect. Vérifie ton mot de passe et réessaie.",
+        "wrong_password",
+      );
+    }
+
+    if (body.currentPassword === body.newPassword) {
+      throw HttpError.badRequest(
+        "Ton nouveau mot de passe doit être différent de l’ancien.",
+        "same_password",
+      );
+    }
+
+    const token = parseBearerToken(request.headers.authorization);
+    await context.prisma.$transaction([
+      context.prisma.account.update({
+        where: { id: accountId },
+        data: { passwordHash: await hashPassword(body.newPassword) },
+      }),
+      context.prisma.session.deleteMany({
+        where: {
+          accountId,
+          ...(token ? { NOT: { tokenHash: hashSessionToken(token) } } : {}),
+        },
+      }),
+    ]);
+
+    return reply.code(204).send();
+  });
+
+  /**
    * Résilie l'abonnement — **et ça tient**.
    *
    * Jusqu'au 19/09/2026, les trois feuilles de résiliation ne touchaient que
@@ -349,13 +452,21 @@ export function registerProfileRoutes(app: FastifyInstance, context: AppContext)
     const accountId = accountIdOf(request);
     const { reason } = cancelSubscriptionBody.parse(request.body ?? {});
 
-    await context.prisma.subscription.updateMany({
+    const { count } = await context.prisma.subscription.updateMany({
       where: { accountId, status: { in: ["active", "trialing", "past_due"] } },
       data: {
         status: "cancelled",
         cancelledAt: new Date(),
         ...(reason === undefined ? {} : { cancellationReason: reason }),
       },
+    });
+
+    // La raison part aussi dans la feuille de bord (T72) — sans attendre, et
+    // sans faire échouer la résiliation si la feuille ne répond pas.
+    void pushCancellationToSheet(context, {
+      accountId,
+      reason: reason ?? null,
+      hadActiveSubscription: count > 0,
     });
 
     return readProfile(context, accountId);

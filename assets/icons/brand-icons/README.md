@@ -34,6 +34,7 @@ la teinter la réduirait à une silhouette pleine et lui ferait perdre son aplat
 **Capture** — `Mic` `Ringtone` `Import` `Export` `Plus` `Plus Outlined`
 **Commande** — `Cart` `Cart Pending` `Deliver`
 **Compte** — `User` `Settings` `Locker` `Locker Outlined` `Locker checked`
+**Personnalisations du carnet** (29/09/2026, nœud `3595:23807`, monochromes seules) — `Category Ratio` `Category Pages` `Category Decorations` `Category Typos` `Category Extras`
 **Divers** — `Globe` `Link` `Magnifier` `Mountain` `Question` `Star` `Trash`
 `Desktop PC Checked` `Desktop PC Checked-1`
 

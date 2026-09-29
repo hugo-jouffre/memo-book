@@ -322,14 +322,13 @@ struct TripInviteSheet: View {
             VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
                 list
 
-                if let code = settings?.accessCode {
+                // Un seul bouton, « Partager » (Hugo, 29/09/2026) : la feuille
+                // du système, WhatsApp compris. Le code attend sa barre.
+                if settings?.accessCode != nil || model.isLoading {
                     TripAccessCode(
-                        code: code,
-                        tripTitle: settings?.name ?? "",
-                        showsSystemShare: true
+                        code: settings?.accessCode,
+                        tripTitle: settings?.name ?? ""
                     )
-                } else if model.isLoading {
-                    BrandSkeleton(height: MemoBookSpacing.controlHeight)
                 }
 
                 if let confirmation = model.confirmation {

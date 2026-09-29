@@ -24,6 +24,7 @@ import { registerBookPreviewRoutes } from "./routes/bookPreview.js";
 import { registerChatRoutes } from "./routes/chat.js";
 import { registerTripSettingsRoutes } from "./routes/tripSettings.js";
 import { registerWalletRoutes } from "./routes/wallet.js";
+import { registerCoverPhotoRoutes, registerCoverRoutes } from "./routes/covers.js";
 
 export async function buildApp(context: AppContext): Promise<FastifyInstance> {
   // Fastify construit son propre logger de requêtes ; `context.logger` reste le
@@ -124,6 +125,7 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
     registerRenderRoutes(accountRoutes, context);
     registerOrderRoutes(accountRoutes, context);
     registerTripSettingsRoutes(accountRoutes, context);
+    registerCoverRoutes(accountRoutes, context);
     registerChatRoutes(accountRoutes, context);
     registerBookPreviewRoutes(accountRoutes, context);
     registerWalletRoutes(accountRoutes, context);
@@ -135,6 +137,7 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
   // Les photos de profil, en HTTP simple : `AsyncImage` n'envoie pas de
   // session, et un avatar se montre à ceux qui partagent le voyage.
   registerAvatarRoutes(app, context);
+  registerCoverPhotoRoutes(app, context);
 
   return app;
 }

@@ -237,6 +237,19 @@ public actor MemoBookAPIClient: MemoBookAPI {
         return try await perform(request, credential: .session)
     }
 
+    public func removeAvatar() async throws -> TravellerProfile {
+        try await send(method: "DELETE", path: "/v1/profile/avatar", credential: .session)
+    }
+
+    public func changePassword(current: String, new: String) async throws {
+        try await sendIgnoringResponse(
+            method: "POST",
+            path: "/v1/profile/password",
+            body: ["currentPassword": current, "newPassword": new],
+            credential: .session
+        )
+    }
+
     public func cancelSubscription(
         reason: SubscriptionCancellationReason?
     ) async throws -> TravellerProfile {
@@ -607,6 +620,77 @@ public actor MemoBookAPIClient: MemoBookAPI {
 
     public func tripSettings(id: String) async throws -> TripSettings {
         try await send(method: "GET", path: "/v1/trips/\(id)/settings")
+    }
+
+    public func bookCovers(tripId: String) async throws -> BookCovers {
+        try await send(method: "GET", path: "/v1/trips/\(tripId)/covers")
+    }
+
+    public func updateBookCovers(tripId: String, edit: BookCoverEdit) async throws -> BookCovers {
+        try await send(
+            method: "PATCH",
+            path: "/v1/trips/\(tripId)/covers",
+            encodableBody: CoverEditBody(edit),
+            credential: .session
+        )
+    }
+
+    public func uploadCoverPhoto(tripId: String, data: Data) async throws -> CoverPhoto {
+        struct Response: Decodable { let photo: CoverPhoto }
+        var form = MultipartFormData()
+        form.addFile(name: "file", filename: "cover.jpg", mimeType: "image/jpeg", data: data)
+        let response: Response = try await postForm(form, path: "/v1/trips/\(tripId)/covers/photos")
+        return response.photo
+    }
+
+    /// Le corps du `PATCH` des couvertures : le plat, et **un seul geste** —
+    /// c'est ce que `BookCoverEdit` porte, et le serveur ne touche à rien
+    /// d'autre.
+    private struct CoverEditBody: Encodable {
+        let face: String
+        var styleId: String?
+        var photoId: String??
+        var title: String?
+        var subtitle: String?
+        var statIds: [String]?
+
+        init(_ edit: BookCoverEdit) {
+            switch edit {
+            case .style(let face, let styleId):
+                self.face = face.rawValue
+                self.styleId = styleId
+            case .photo(let face, let photoId):
+                self.face = face.rawValue
+                self.photoId = .some(photoId)
+            case .texts(let face, let title, let subtitle):
+                self.face = face.rawValue
+                self.title = title
+                self.subtitle = subtitle
+            case .stats(let ids):
+                self.face = CoverFace.back.rawValue
+                self.statIds = ids
+            }
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case face, styleId, photoId, title, subtitle, statIds
+        }
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(face, forKey: .face)
+            try container.encodeIfPresent(styleId, forKey: .styleId)
+            // « Retirer la photo » est un `null` explicite, que `encodeIfPresent`
+            // aurait avalé : le double optionnel distingue « pas touché » de
+            // « effacée ».
+            if let photoId {
+                if let photoId { try container.encode(photoId, forKey: .photoId) }
+                else { try container.encodeNil(forKey: .photoId) }
+            }
+            try container.encodeIfPresent(title, forKey: .title)
+            try container.encodeIfPresent(subtitle, forKey: .subtitle)
+            try container.encodeIfPresent(statIds, forKey: .statIds)
+        }
     }
 
     public func updateTripSettings(id: String, edit: TripSettingsEdit) async throws -> TripSettings {

@@ -349,7 +349,9 @@ public struct BookFontCombo: Sendable, Hashable, Identifiable {
     public static let travelJournal = BookFontCombo(
         id: "travel-journal",
         name: "Carnet de voyage",
-        detail: "Le choix de nos équipes : une serif de caractère, et le récit écrit à la main.",
+        // La phrase de la V3 (`3595:24014`), au caractère près — « La
+        // recommandations » y est au pluriel, voir T199.
+        detail: "La recommandations de nos équipes",
         fonts: [
             .titles: "Playfair Display",
             .subtitles: "Hansley",
@@ -362,7 +364,9 @@ public struct BookFontCombo: Sendable, Hashable, Identifiable {
     public static let editorial = BookFontCombo(
         id: "editorial",
         name: "Éditorial",
-        detail: "Tout en serif, comme un roman. Le plus sobre des trois.",
+        // « Playfair » seule dans la V3 (`3595:24024`), avec cette phrase ;
+        // ici Playfair et Alegreya, voir T199.
+        detail: "La plus classique",
         fonts: [
             .titles: "Playfair Display",
             .subtitles: "Playfair Display",
@@ -375,7 +379,7 @@ public struct BookFontCombo: Sendable, Hashable, Identifiable {
     public static let handwritten = BookFontCombo(
         id: "handwritten",
         name: "Manuscrit",
-        detail: "Entièrement écrit à la main, comme un carnet qu'on aurait tenu soi-même.",
+        detail: "Pour des livres plus fun",
         fonts: [
             .titles: "Hansley",
             .subtitles: "Hansley",
@@ -390,7 +394,8 @@ public struct BookFontCombo: Sendable, Hashable, Identifiable {
     /// est retiré le 18/09/2026 (Hugo). Un carnet réglé dessus reste tel quel —
     /// ses quatre polices sont en base, le gabarit les résout — et la feuille
     /// l'écrit « Personnalisé », comme tout carnet composé hors de ces trois.
-    public static let all: [BookFontCombo] = [travelJournal, editorial, handwritten]
+    /// Dans l'ordre de la V3 : le défaut, le manuscrit, le classique.
+    public static let all: [BookFontCombo] = [travelJournal, handwritten, editorial]
 
     /// L'assortiment d'un carnet, ou `nil` s'il n'en porte aucun.
     ///

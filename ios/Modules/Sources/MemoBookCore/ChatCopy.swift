@@ -344,6 +344,8 @@ public enum ChatCopy {
     public enum Photos {
         public static let title = "Ajouter une photo"
         public static let takeOne = "Prendre une photo"
+        /// Retirer la photo de profil — la feuille de choix du profil seulement.
+        public static let remove = "Supprimer la photo"
         public static let fromLibrary = "Choisir dans la galerie"
         public static let cancel = "Annuler"
 

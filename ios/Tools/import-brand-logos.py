@@ -46,7 +46,10 @@ CATALOG = REPO / "ios/Modules/Sources/MemoBookDesign/Resources/MemoBookAssets.xc
 # (`assets/logos/connectors`) ont les leurs et ne passent pas par ici.
 NAMES = {
     "Apple Icon": "LogoApple",
-    "Google Icon": "LogoGoogle",
+    # Le vectoriel déposé dans GitHub le 27/09/2026 (`Google Icon2.svg`), à la
+    # place de l'export d'image de la maquette : un seul tracé, net à toutes
+    # les tailles (Hugo, 29/09/2026).
+    "Google Icon2": "LogoGoogle",
     "Apple Pay": "LogoApplePay",
     "Memobook Creme": "LogoMemobookCreme",
     # Le logo d'un service tiers, fourni par lui en PNG (361 × 361) : il

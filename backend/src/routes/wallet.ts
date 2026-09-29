@@ -67,6 +67,8 @@ const financedTripSelect = {
   destinationCity: true,
   targetPageCount: true,
   pageCount: true,
+  startDate: true,
+  endDate: true,
 } as const;
 
 /**

@@ -166,6 +166,15 @@ const schema = z.object({
   APP_LINK_BASE_URL: z.string().default("memobook://"),
 
   /**
+   * La feuille de bord Google Sheets (T72) : l'adresse du script Apps Script
+   * déployé en application web (`backend/scripts/apps-script/StatsSheet.gs`),
+   * et le secret qu'il attend dans chaque envoi. Vides, rien ne part et rien
+   * n'échoue : le job quotidien se contente de journaliser.
+   */
+  STATS_SHEET_WEBHOOK_URL: z.string().default(""),
+  STATS_SHEET_SECRET: z.string().default(""),
+
+  /**
    * Stripe — encaissement des carnets imprimés et des recharges de cagnotte.
    *
    * **Jamais l'abonnement.** Celui-là est un service numérique : Apple impose

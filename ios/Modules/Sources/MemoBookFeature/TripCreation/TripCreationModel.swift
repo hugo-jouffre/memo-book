@@ -48,10 +48,12 @@ public enum TripCreationStep: Int, CaseIterable, Sendable, Hashable {
         self == .companions ? "Commencer !" : "Valider"
     }
 
-    /// L'étape a un « Passer ». Toutes, sauf la dernière : le voyage existe
-    /// déjà, et il n'y a rien à éviter sur un écran qui ne fait que montrer son
-    /// code d'accès — Hugo, 14/09/2026.
-    var canBeSkipped: Bool { self != .companions }
+    /// L'étape a un « Passer ». Toutes, sauf deux : la dernière — le voyage
+    /// existe déjà, et il n'y a rien à éviter sur un écran qui ne fait que
+    /// montrer son code d'accès (Hugo, 14/09/2026) — et **le nom**, que la base
+    /// exige et qu'on ne remplace pas par « Mon voyage » en douce (Hugo,
+    /// 29/09/2026) : le bouton du bas reste éteint tant qu'il est vide.
+    var canBeSkipped: Bool { self != .companions && self != .name }
 
     /// L'étape après laquelle le voyage **existe**.
     ///

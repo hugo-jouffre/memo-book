@@ -129,7 +129,7 @@ public enum TermsOfUse {
         number: 7,
         title: "Données personnelles",
         blocks: [
-            .paragraph("Vos données sont traitées conformément à notre Politique de confidentialité et à notre Politique de cookies, disponibles sur ce site. Vous disposez d’un droit d’accès, de rectification et de suppression de vos données en écrivant à \(contactLink)."),
+            .paragraph("Vos données sont traitées conformément à notre Politique de confidentialité, disponible dans l’app. Vous disposez d’un droit d’accès, de rectification et de suppression de vos données en écrivant à \(contactLink)."),
         ]
     )
 

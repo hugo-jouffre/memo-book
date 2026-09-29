@@ -23,6 +23,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:themes": "tsx prisma/seed-trip-themes.ts",
     "db:sessions": "tsx --env-file=.env scripts/db-sessions.ts",
+    "stats:push": "tsx --env-file=.env scripts/push-stats.ts",
+    "stats:show": "tsx --env-file=.env scripts/push-stats.ts --dry-run",
     "supabase:setup": "tsx scripts/setup-supabase.ts",
     "supabase:check": "tsx scripts/setup-supabase.ts --check",
     "render:local": "tsx scripts/render-local.ts",

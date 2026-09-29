@@ -1,29 +1,14 @@
 import SwiftUI
 
-/// Une action qu'un glissé vers la gauche découvre derrière une carte.
-///
-/// Un rond cerclé de sa couleur, une icône du jeu de marque, et ce que
-/// VoiceOver en dit. La couleur dit le geste : le rouge sémantique pour ce qui
-/// défait, le vert d'action pour le reste.
+/// Une action du tiroir d'une carte : son icône, sa couleur et ce qu'elle fait.
 public struct BrandSwipeAction: Identifiable {
     public let id: String
     let icon: String
     let tint: Color
     let label: String
-    /// De combien le glyphe grandit dans son rond, à corriger **au cas par
-    /// cas**. Les tracés du jeu de marque n'occupent pas tous la même part de
-    /// leur boîte : l'imprimante y est dessinée plus petite que la croix et la
-    /// flèche de partage, et à taille égale elle se lisait comme une icône plus
-    /// petite (Hugo, 19/09/2026). C'est un rattrapage optique, pas une mesure —
-    /// d'où le réglage sur l'action et non sur le tiroir.
     let iconScale: CGFloat
     let action: () -> Void
 
-    /// - Parameters:
-    ///   - icon: le nom d'une icône monochrome du catalogue (`IconCross`).
-    ///   - tint: la couleur du rond et de l'icône.
-    ///   - label: ce que VoiceOver lit — le rond ne porte pas de mot.
-    ///   - iconScale: voir ``iconScale``. 1 pour la quasi-totalité des tracés.
     public init(
         id: String? = nil,
         icon: String,
@@ -41,51 +26,51 @@ public struct BrandSwipeAction: Identifiable {
     }
 }
 
-/// **Le** tiroir d'actions de MemoBook : une carte qu'on glisse vers la gauche
-/// pour découvrir ses gestes — retirer un co-voyageur, supprimer un voyage,
-/// le partager, le prévisualiser.
+/// Une carte qui glisse vers la gauche pour découvrir ses actions — celles
+/// des voyages de l'accueil, des co-voyageurs de « Inviter un proche ».
 ///
-/// C'est le glissé des listes d'iOS, transposé aux cartes de l'app, qui ne
-/// vivent pas dans une `List`. Trois choses le rendent honnête :
+/// **C'est une bande qui défile, et non un geste posé sur la carte** (Hugo,
+/// 29/09/2026). Le tiroir était un `DragGesture` prioritaire sur la carte, et
+/// il avait deux défauts qu'aucun réglage ne rattrapait :
 ///
-/// - **Vers la gauche seulement, et franchement horizontal** : l'écran défile
-///   verticalement sous ce geste, et un glissé un peu de travers ne doit pas
-///   ouvrir un tiroir au milieu d'une lecture.
-/// - **Les actions n'existent que découvertes** : posées en permanence sous la
-///   carte, elles resteraient tapables à travers elle.
-/// - **Deux autres chemins vers les mêmes gestes** : l'appui long ouvre le menu
-///   contextuel du système, et VoiceOver reçoit le rotor d'actions — un geste
-///   continu n'existe pas pour ces deux-là.
+/// - **il accrochait à l'ouverture et à la fermeture** : le glissé se
+///   remettait à zéro d'un coup pendant que la carte, elle, s'animait vers sa
+///   place, d'où un saut d'une frame à chaque geste ;
+/// - **il volait le défilement vertical** : un doigt posé sur une carte qui
+///   part vers le haut franchissait les douze points du geste, et la liste ne
+///   bougeait plus. « Le scroll vertical est inactif si on commence depuis un
+///   voyage. »
 ///
-/// **Rien n'est rogné** (Hugo, 19/09/2026). Le tiroir rognait à la forme de la
-/// carte : la carte disparaissait au ras de la marge, les icônes apparaissaient
-/// au ras du bord droit, et le scotch qui dépasse en haut des cartes de
-/// l'accueil était coupé net. Le geste se lit mieux sans : la carte **sort de
-/// l'écran** par la gauche et les icônes **y entrent** par la droite, chacune
-/// n'étant plus arrêtée que par le bord de la dalle. C'est aussi ce que fait
-/// une ligne de `List` d'iOS, qui glisse hors de l'écran et non hors de sa
-/// cellule.
+/// Une `ScrollView` horizontale, elle, sait faire les deux depuis toujours :
+/// une bande dans une liste **se verrouille par sens** — vertical pour la
+/// liste, horizontal pour la bande — et son arrêt sur une position est celui
+/// du système, sans saut. Le bouton de la carte n'attrape plus le doigt qui
+/// glisse : c'est la règle des boutons dans une bande qui défile.
 ///
-/// ```swift
-/// BrandSwipeDrawer(actions: [
-///     BrandSwipeAction(icon: "IconCross", tint: MemoBookColor.error, label: "Supprimer") { … },
-/// ]) {
-///     FeaturedTripCard(…)
-/// }
-/// ```
+/// Deux positions d'arrêt (`viewAligned`) : la carte en pleine largeur, ou le
+/// tiroir. Les icônes arrivent en quinconce avec le glissé, comme avant.
+/// L'espace de coordonnées de la bande, pour lire son défilement.
+private let brandSwipeDrawerSpace = "brand-swipe-drawer"
+
 public struct BrandSwipeDrawer<Content: View>: View {
     private let actions: [BrandSwipeAction]
     private let content: Content
 
-    /// De combien la carte est décalée vers la gauche. `0` au repos, la largeur
-    /// du tiroir quand il est ouvert.
-    @State private var offset: CGFloat = 0
-    @GestureState private var drag: CGFloat = 0
+    /// Ce qui est calé à gauche de la bande : la carte, ou son tiroir.
+    private enum Slot: Hashable {
+        case card
+        case drawer
+    }
+
+    /// La position d'arrêt de la bande. `nil` tant qu'elle ne s'est pas posée.
+    @State private var slot: Slot? = .card
+
+    /// De combien la bande a défilé, en points, lue sur la bande elle-même :
+    /// c'est ce qui fait arriver les icônes l'une après l'autre.
+    @State private var scrolled: CGFloat = 0
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// - Parameter actions: les gestes, de gauche à droite. Vide, la carte ne
-    ///   glisse pas.
     public init(
         actions: [BrandSwipeAction],
         @ViewBuilder content: () -> Content
@@ -94,30 +79,19 @@ public struct BrandSwipeDrawer<Content: View>: View {
         self.content = content()
     }
 
-    /// Largeur du tiroir : une cible tactile par action, et leurs gouttières.
     private var drawerWidth: CGFloat {
         guard !actions.isEmpty else { return 0 }
         return MemoBookSpacing.minimumTapTarget * CGFloat(actions.count)
             + MemoBookSpacing.xs * CGFloat(actions.count + 1)
     }
 
-    private var translation: CGFloat {
-        (offset + drag).clampedToDrawer(drawerWidth)
-    }
-
-    private var isOpen: Bool { translation < -MemoBookSpacing.xs }
-
     public var body: some View {
-        ZStack(alignment: .trailing) {
-            if !actions.isEmpty { drawer }
-
-            content
-                .offset(x: translation)
-                // **Prioritaire sur le bouton de la carte** : une carte de
-                // l'accueil est un `Button`, et avec un `.gesture` ordinaire
-                // c'est lui qui prenait le doigt — le glissé ouvrait le voyage.
-                // Le seuil de 12 pt laisse le tapotis au bouton.
-                .highPriorityGesture(swipe)
+        Group {
+            if actions.isEmpty {
+                content
+            } else {
+                band
+            }
         }
         .contextMenu {
             ForEach(actions) { action in
@@ -133,11 +107,52 @@ public struct BrandSwipeDrawer<Content: View>: View {
         }
     }
 
+    // MARK: La bande
+
+    private var band: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 0) {
+                content
+                    // La carte prend exactement la largeur de la bande : c'est
+                    // ce qui fait du tiroir la seule autre position.
+                    .containerRelativeFrame(.horizontal)
+                    .id(Slot.card)
+
+                drawer
+                    .frame(width: drawerWidth)
+                    .id(Slot.drawer)
+            }
+            .scrollTargetLayout()
+            // Pas d'élastique : ni avant la carte ni après le tiroir, il n'y a
+            // rien à découvrir, et le rebond faisait trembler les icônes. Posé
+            // sur le contenu, il remonte jusqu'à la bande — la plus proche.
+            .brandScrollWithoutBounce()
+            // Le défilement se lit sur la bande, dans son propre espace : la
+            // position de son bord gauche dit de combien on a tiré.
+            .background {
+                GeometryReader { proxy in
+                    let x = -proxy.frame(in: .named(brandSwipeDrawerSpace)).minX
+                    Color.clear.onChange(of: x, initial: true) { _, value in
+                        scrolled = max(0, value)
+                    }
+                }
+            }
+        }
+        .coordinateSpace(name: brandSwipeDrawerSpace)
+        .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
+        .scrollPosition(id: $slot)
+        .scrollIndicators(.hidden)
+        // La carte de l'accueil est un `Button` : dans une bande qui défile, le
+        // système ne le déclenche pas au bout d'un glissé, sans rien à régler.
+    }
+
     // MARK: Le tiroir
 
-    /// Ce qu'il reste à découvrir du tiroir, de sa largeur (fermé) à zéro
-    /// (ouvert). C'est lui qui déplace les icônes.
-    private var remaining: CGFloat { max(0, drawerWidth + translation) }
+    /// Ce qui reste à tirer avant que le tiroir soit ouvert, de sa largeur à 0.
+    private var remaining: CGFloat { max(0, drawerWidth - scrolled) }
+
+    /// Le tiroir est là, au moins en partie : ses boutons se touchent.
+    private var isOpen: Bool { scrolled > MemoBookSpacing.xs }
 
     private var drawer: some View {
         HStack(spacing: MemoBookSpacing.xs) {
@@ -171,51 +186,21 @@ public struct BrandSwipeDrawer<Content: View>: View {
                 // lieu d'être découvertes déjà en place. Le retard est un
                 // rapport, pas une durée : pas d'animation à couper quand on
                 // relâche à mi-chemin.
-                .offset(x: remaining * (0.35 + 0.35 * CGFloat(index)))
+                .offset(x: reduceMotion ? 0 : remaining * (0.35 + 0.35 * CGFloat(index)))
                 .opacity(1 - Double(min(1, remaining / max(drawerWidth, 1))) * 0.6)
             }
         }
-        .padding(.trailing, MemoBookSpacing.xs)
-        // Elles n'existent que lorsqu'on les a fait apparaître : posées en
-        // permanence sous la carte, elles resteraient tapables à travers elle.
-        .opacity(isOpen ? 1 : 0)
+        .padding(.horizontal, MemoBookSpacing.xs)
+        .frame(maxHeight: .infinity)
+        // Elles n'existent que lorsqu'on les a fait apparaître : un tiroir
+        // fermé n'a rien à offrir au doigt ni à VoiceOver, qui passe par le
+        // rotor d'actions.
         .allowsHitTesting(isOpen)
-        // VoiceOver passe par le rotor d'actions, pas par le tiroir.
         .accessibilityHidden(true)
     }
 
-    // MARK: Le geste
-
-    private var swipe: some Gesture {
-        DragGesture(minimumDistance: 12)
-            .updating($drag) { value, state, _ in
-                guard !actions.isEmpty, abs(value.translation.width) > abs(value.translation.height) else {
-                    return
-                }
-                state = value.translation.width
-            }
-            .onEnded { value in
-                guard !actions.isEmpty, abs(value.translation.width) > abs(value.translation.height) else {
-                    return
-                }
-                let settled = (offset + value.translation.width).clampedToDrawer(drawerWidth)
-                withAnimation(reduceMotion ? .none : .snappy(duration: 0.25)) {
-                    offset = settled < -drawerWidth / 2 ? -drawerWidth : 0
-                }
-            }
-    }
-
     private func close() {
-        withAnimation(reduceMotion ? .none : .snappy(duration: 0.25)) { offset = 0 }
-    }
-}
-
-private extension CGFloat {
-    /// Le tiroir ne s'ouvre que vers la gauche, et pas au-delà de sa largeur.
-    func clampedToDrawer(_ width: CGFloat) -> CGFloat {
-        // `Swift.min` / `Swift.max` explicitement : dans une extension de
-        // `CGFloat`, `min` et `max` désignent d'abord les bornes du type.
-        Swift.min(0, Swift.max(-width, self))
+        withAnimation(reduceMotion ? .none : .snappy(duration: 0.25)) { slot = .card }
     }
 }
 

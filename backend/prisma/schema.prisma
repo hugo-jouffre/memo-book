@@ -602,6 +602,9 @@ model Memo {
   expenses     Expense[]
   categories   MemoGalleryCategory[]
   chatMessages ChatMessage[]
+  coverPhotos  CoverPhoto[]
+  /// Les abonnements qui ont financé ce voyage — voir `Subscription.memoId`.
+  subscriptions Subscription[]
 
   @@index([ownerAccountId, createdAt])
   /// La galerie lit **tous** les carnets publics, quel qu'en soit le
@@ -1358,6 +1361,17 @@ model Subscription {
   accountId String
   account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
+  /// **Le voyage que l'abonnement finance** (T71, 29/09/2026). Un abonnement
+  /// ne court que pendant un récit ; le rattacher au carnet est ce qui permet
+  /// d'écrire « ton abonnement pour Rome » sur les cinq feuilles de
+  /// l'abonnement, et de déduire ses semaines du prix de **ce** carnet-là.
+  ///
+  /// Nullable : aucune route ne crée encore d'abonnement (StoreKit n'est pas
+  /// branché), et les lignes du jeu d'essai n'en ont pas. En `SetNull` : un
+  /// voyage supprimé n'emporte pas l'historique de facturation.
+  memoId String?
+  memo   Memo?   @relation(fields: [memoId], references: [id], onDelete: SetNull)
+
   provider SubscriptionProvider
   status   SubscriptionStatus   @default(active)
 
@@ -1391,7 +1405,30 @@ model Subscription {
   updatedAt DateTime @updatedAt
 
   @@index([accountId, status])
+  @@index([memoId])
   @@map("subscriptions")
+}
+
+/// Une photo importée pour la couverture d'un carnet (T88, 29/09/2026).
+///
+/// À côté des photos du voyage, et non dedans : une photo choisie pour la
+/// couverture n'est pas un souvenir raconté — elle n'a pas d'étape, pas de
+/// transcription, et ne compte pas dans les limites de souvenirs. Stockée
+/// comme une photo de profil (clé seule, adresse calculée à la lecture), servie
+/// par `GET /v1/cover-photos/:file`.
+model CoverPhoto {
+  id     String @id @default(uuid())
+  memoId String
+  memo   Memo   @relation(fields: [memoId], references: [id], onDelete: Cascade)
+
+  storageKey String @unique
+  mimeType   String
+  bytes      Int
+
+  createdAt DateTime @default(now())
+
+  @@index([memoId, createdAt])
+  @@map("cover_photos")
 }
 
 /// Une application tierce que MemoBook peut interroger pour enrichir un carnet.

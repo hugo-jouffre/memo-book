@@ -90,6 +90,11 @@ public struct RootView: View {
     /// que ``AuthView`` soit là, et se perdrait s'il l'attendait.
     @State private var pendingResetToken: String?
 
+    /// Un lien de réinitialisation ouvert **depuis l'app entrée** — après
+    /// « Mot de passe oublié ? » sur la feuille du profil (Hugo, 29/09/2026).
+    /// Il ouvre la feuille du nouveau mot de passe par-dessus ce qu'on faisait.
+    @State private var signedInResetToken: ResetLinkToken?
+
     public init() {}
 
     public var body: some View {
@@ -114,15 +119,20 @@ public struct RootView: View {
         // Le profil, à portée du paywall — voir
         // ``SwiftUI/EnvironmentValues/profileModelFactory``.
         .environment(\.profileModelFactory, { dependencies.profileModel() })
+        .environment(\.walletSource, { [api = dependencies.api] tripId in try await api.wallet(tripId: tripId) })
         // Le support **de la session**, à portée du paywall : « Besoin d'aide ? »
         // l'ouvre par-dessus l'offre au lieu de la refermer, pour que la flèche
         // de retour ramène à l'étape qu'on regardait (Hugo, 16/09/2026).
         .environment(\.supportModel, support)
         .onOpenURL { url in
             guard let token = PasswordResetLink.token(from: url) else { return }
-            // Déjà entré : le mot de passe se change depuis le profil, et un
-            // lien reçu pour un compte où l'on est déjà n'a rien à ouvrir.
-            if case .signedIn = stage { return }
+            // Déjà entré : c'est le lien de « Mot de passe oublié ? » de la
+            // feuille du profil — il ouvre la même feuille, en mode nouveau
+            // mot de passe, par-dessus l'écran où l'on est.
+            if case .signedIn = stage {
+                signedInResetToken = ResetLinkToken(value: token)
+                return
+            }
             pendingResetToken = token
             // C'est l'écran d'entrée par e-mail qui le consomme. Depuis
             // l'accueil, ou à froid, il n'est pas là : on le pousse — le
@@ -183,6 +193,17 @@ public struct RootView: View {
         // comprises — plus bas, les coins arrondis couperaient le fond au ras de
         // la barre d'état.
         .brandSheetPresenter(isPresented: sheets.isPresenting)
+        .brandSheet(item: $signedInResetToken) { token in
+            PasswordChangeSheet(
+                model: PasswordChangeModel(
+                    mode: .reset(token: token.value),
+                    email: "",
+                    reset: { [api = dependencies.api] token, password in
+                        _ = try await api.resetPassword(token: token, password: password)
+                    }
+                )
+            )
+        }
         // L'accueil se pose **derrière** le tracé du M, pas après lui : sans
         // cette information, sa cascade se jouait entièrement sous le voile et
         // l'écran apparaissait déjà en place.
@@ -524,6 +545,13 @@ public struct RootView: View {
             path.append(.legal(.termsOfUse))
         case .openPrivacyPolicy:
             path.append(.legal(.privacyPolicy))
+        case .orderBook(let memoId):
+            guard UUID(uuidString: memoId) != nil else {
+                routingProblem =
+                    "Ce voyage n’existe pas encore sur ton compte : il n’y a rien à commander."
+                return
+            }
+            path.append(.order(memoId: memoId))
         }
     }
 
@@ -945,4 +973,11 @@ enum LegalRoute: Hashable {
         case .privacyPolicy: PrivacyPolicy.document
         }
     }
+}
+
+/// Le secret d'un lien de réinitialisation reçu quand on est déjà entré, tel
+/// que la feuille du nouveau mot de passe le présente.
+struct ResetLinkToken: Identifiable {
+    let value: String
+    var id: String { value }
 }

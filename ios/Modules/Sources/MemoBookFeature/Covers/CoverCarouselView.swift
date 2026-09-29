@@ -1,6 +1,7 @@
 import MemoBookCore
 import MemoBookDesign
 import PhotosUI
+import UIKit
 import SwiftUI
 
 /// Les deux carrousels : celui des styles et celui des photos.
@@ -304,20 +305,22 @@ struct CoverCarouselView: View {
         }
     }
 
-    /// Range la photo importée à côté des autres, et la choisit.
+    /// Envoie la photo importée, la range à côté des autres, et la choisit.
     ///
-    /// Elle est enregistrée dans les **caches** comme les photos du chat : ce
-    /// n'est que du transit tant que la route qui les envoie n'existe pas, et le
-    /// système peut reprendre la place s'il en manque.
+    /// Elle est d'abord écrite dans les **caches**, comme les photos du chat :
+    /// c'est ce qu'on montre pendant que le serveur la reçoit, et ce qui reste
+    /// en aperçu, où rien ne part. Réduite à 1 600 px de côté avant l'envoi —
+    /// un carnet se compose sur une image bien plus petite qu'une photo
+    /// d'iPhone (T88, 29/09/2026).
     private func importPhoto(_ item: PhotosPickerItem) async {
         defer { pickedItem = nil }
 
         do {
             guard let data = try await item.loadTransferable(type: Data.self) else { return }
             let id = "cover-\(UUID().uuidString)"
-            let url = try CoverPhotoFile.save(data, id: id)
-            let photo = CoverPhoto(id: id, url: url)
-            model.add(photo)
+            let jpeg = CoverPhotoFile.jpeg(from: data) ?? data
+            let url = try CoverPhotoFile.save(jpeg, id: id)
+            let photo = try await model.importPhoto(jpeg, fallback: CoverPhoto(id: id, url: url))
             model.preview(photo: photo)
             centred = photo.id
             importProblem = nil
@@ -417,6 +420,24 @@ private struct CoverImportSlot: View {
 /// même raison : tant que la route qui l'envoie n'existe pas, ce n'est que du
 /// transit, et rien de tout cela n'a à partir dans iCloud.
 enum CoverPhotoFile {
+    /// Le plus grand côté envoyé au serveur.
+    private static let uploadSide: CGFloat = 1600
+
+    /// Réduit la photo choisie en JPEG, à ce dont une couverture a besoin.
+    /// `nil` si ce n'est pas une image lisible.
+    static func jpeg(from data: Data) -> Data? {
+        guard let image = UIImage(data: data) else { return nil }
+        let longest = max(image.size.width, image.size.height)
+        let scale = min(1, uploadSide / max(longest, 1))
+        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let resized = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
+        return resized.jpegData(compressionQuality: 0.85)
+    }
+
     private static var directory: URL {
         URL.cachesDirectory.appending(path: "CoverPhotos", directoryHint: .isDirectory)
     }

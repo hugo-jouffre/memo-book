@@ -12,15 +12,17 @@ import Foundation
 public enum PrivacyPolicy {
     private static let contactLink = LegalContact.emailLink
 
-    /// Le document : le titre de l'écran et les onze chapitres, dans l'ordre du
-    /// site. Le titre est celui de la page du site, là où la ligne du profil
+    /// Le document : le titre de l'écran et les dix chapitres, dans l'ordre du
+    /// site — moins « Cookies » : une app n'en pose pas, et Apple ne demande
+    /// aucune politique de cookies, seulement celle-ci (Hugo, 29/09/2026,
+    /// T154). Voir `docs/ui-development.md` § 32. Le titre est celui de la page du site, là où la ligne du profil
     /// qui y mène dit seulement « Confidentialité ».
     public static let document = LegalDocument(
         id: "confidentialite",
         title: "Politique de confidentialité",
         chapters: [
             introduction, collectedData, recipients, transfers, security, rights,
-            complaint, cookies, minors, changes, contact,
+            complaint, minors, changes, contact,
         ]
     )
 
@@ -154,44 +156,33 @@ public enum PrivacyPolicy {
         ]
     )
 
-    // MARK: - 8. Cookies
-
-    public static let cookies = LegalChapter(
-        id: "confidentialite.cookies",
-        number: 8,
-        title: "Cookies",
-        blocks: [
-            .paragraph("Pour des informations détaillées sur les cookies utilisés par MemoBook, veuillez consulter notre Politique de cookies, disponible sur ce site."),
-        ]
-    )
-
-    // MARK: - 9. Mineurs
+    // MARK: - 8. Mineurs
 
     public static let minors = LegalChapter(
         id: "confidentialite.mineurs",
-        number: 9,
+        number: 8,
         title: "Mineurs",
         blocks: [
             .paragraph("MemoBook est accessible à partir de 4 ans. Dans le cadre du RGPD, le traitement des données d’un enfant de moins de 16 ans n’est licite que si le titulaire de la responsabilité parentale a donné son consentement. En soumettant un numéro de téléphone via notre formulaire pour un enfant de moins de 16 ans, le parent ou tuteur légal confirme avoir donné son accord."),
         ]
     )
 
-    // MARK: - 10. Modifications de la politique
+    // MARK: - 9. Modifications de la politique
 
     public static let changes = LegalChapter(
         id: "confidentialite.modifications",
-        number: 10,
+        number: 9,
         title: "Modifications de la politique",
         blocks: [
             .paragraph("Cette politique peut être mise à jour à tout moment pour refléter des changements dans nos pratiques ou la réglementation applicable. La date de mise à jour est systématiquement indiquée en haut de la page. Nous vous encourageons à la consulter régulièrement."),
         ]
     )
 
-    // MARK: - 11. Contact
+    // MARK: - 10. Contact
 
     public static let contact = LegalChapter(
         id: "confidentialite.contact",
-        number: 11,
+        number: 10,
         title: "Contact",
         blocks: [
             .paragraph("Pour toute question relative à la protection de vos données personnelles :"),

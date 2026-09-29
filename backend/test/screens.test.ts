@@ -355,6 +355,9 @@ describe("le profil", () => {
       // aujourd'hui ».
       paidThrough: null,
       hasEndedBefore: false,
+      // Aucun abonnement, donc aucun voyage rattaché (T71).
+      tripTitle: null,
+      tripDestination: null,
     });
     expect(body.orders).toEqual([]);
   });

@@ -19,6 +19,10 @@ struct TripCreationStepContent: View {
     @Bindable var model: TripCreationModel
     var focus: FocusState<TripCreationField?>.Binding
 
+    /// Valider l'étape depuis son contenu — le rythme des relances avance dès
+    /// qu'une option est choisie (Hugo, 29/09/2026), sans passer par le bouton.
+    var onAdvance: () -> Void = {}
+
     var body: some View {
         switch model.step {
         case .theme: theme
@@ -113,11 +117,20 @@ struct TripCreationStepContent: View {
     /// la création, on ajuste finement plus tard (Hugo, 17/09/2026, T122).
     /// C'est la clé du rythme qui part en base, comme depuis la feuille des
     /// réglages ; trois libellés libres y écrivaient une autre langue.
+    ///
+    /// **Choisir, c'est valider** (Hugo, 29/09/2026) : la carte touchée se
+    /// cerne le temps qu'on la voie cochée, puis l'étape passe à la suivante.
+    /// Le bouton « Valider » reste là pour qui a déjà une option cochée en
+    /// revenant en arrière.
     private var notifications: some View {
         VStack(spacing: MemoBookSpacing.xs + 4) {
             ForEach(TripCreationStepContent.paces, id: \.self) { pace in
                 TripCreationCard(isSelected: model.draft.narrationPace == pace.rawValue) {
                     model.draft.narrationPace = pace.rawValue
+                    Task {
+                        try? await Task.sleep(for: BrandOptionRow.lingerBeforeDismiss)
+                        onAdvance()
+                    }
                 } label: {
                     Text(pace.displayName)
                         .font(MemoBookFont.body)
@@ -177,11 +190,16 @@ struct TripCreationStepContent: View {
 
     /// Le code d'accès, et de quoi l'envoyer. Rien à valider ici : le voyage
     /// existe déjà, c'est la validation de l'étape précédente qui l'a créé.
-    @ViewBuilder
+    ///
+    /// **L'étape se dessine pendant que le voyage part** (Hugo, 29/09/2026) :
+    /// seul le code porte une barre d'attente, et « Partager » reste gris tant
+    /// qu'il n'y a rien à partager. Le squelette entier de l'écran ne se pose
+    /// plus ici — voir ``TripCreationView/showsSkeleton``.
     private var companions: some View {
-        if let created = model.created {
-            TripAccessCode(code: created.accessCode, tripTitle: created.trip.title)
-        }
+        TripAccessCode(
+            code: model.created?.accessCode,
+            tripTitle: model.created?.trip.title ?? model.draft.title
+        )
     }
 }
 
@@ -566,93 +584,72 @@ struct TripDateRangeRow: View {
 /// « Code d'accès : JHKFDA », et de quoi l'envoyer.
 ///
 /// Le code se **copie** d'un geste — c'est ce que dit le petit pictogramme de
-/// la maquette — et se partage par le sélecteur du système. Le bouton nomme
-/// WhatsApp parce que la maquette le nomme, et il l'ouvre vraiment quand il est
-/// installé ; sinon il retombe sur le partage du système, qui propose tout le
-/// reste. Un bouton qui promet WhatsApp et ouvre autre chose sans le dire
-/// serait pire qu'un bouton générique.
+/// la maquette — et se partage par la feuille du système. **Un seul bouton,
+/// « Partager »** (Hugo, 29/09/2026) : il disait « Partager via WhatsApp » et
+/// ouvrait WhatsApp directement, avec un second bouton pour tout le reste sur
+/// la feuille « Inviter un proche ». La feuille d'iOS propose WhatsApp parmi
+/// les autres, et c'est le même geste partout dans l'app.
+///
+/// Le même bloc sert la dernière étape de la création et « Inviter un
+/// proche » : c'est le même code d'accès, le même presse-papiers et la même
+/// invitation.
 struct TripAccessCode: View {
-    let code: String
+    /// Le code, ou `nil` tant que le voyage n'est pas revenu du serveur : la
+    /// ligne porte alors une barre d'attente et « Partager » reste gris.
+    let code: String?
     let tripTitle: String
-
-    /// Le second bouton, « Partager », qui ouvre le sélecteur du système.
-    ///
-    /// Absent de la dernière étape de la création — la maquette n'y met que
-    /// WhatsApp —, présent sur la feuille « Inviter un proche », qui les pose
-    /// tous les deux. Le même bloc sert les deux écrans : c'est le même code
-    /// d'accès, le même presse-papiers et la même invitation.
-    var showsSystemShare = false
 
     @State private var hasCopied = false
 
     private var invitation: String {
-        "Rejoins-moi sur MemoBook pour raconter « \(tripTitle) ». Code d’accès : \(code)"
+        "Rejoins-moi sur MemoBook pour raconter « \(tripTitle) ». Code d’accès : \(code ?? "")"
     }
 
     var body: some View {
         VStack(spacing: MemoBookSpacing.l) {
             Button(action: copy) {
                 HStack(spacing: MemoBookSpacing.xs) {
-                    Text("Code d’accès : \(code)")
-                        .font(MemoBookFont.body)
-                        .foregroundStyle(MemoBookColor.inkMuted)
+                    if let code {
+                        Text("Code d’accès : \(code)")
+                            .font(MemoBookFont.body)
+                            .foregroundStyle(MemoBookColor.inkMuted)
 
-                    Image(systemName: hasCopied ? "checkmark" : "doc.on.doc")
-                        .font(.system(size: 15))
-                        .foregroundStyle(hasCopied ? MemoBookColor.valid : MemoBookColor.inkMuted)
+                        Image(systemName: hasCopied ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 15))
+                            .foregroundStyle(hasCopied ? MemoBookColor.valid : MemoBookColor.inkMuted)
+                    } else {
+                        Text("Code d’accès :")
+                            .font(MemoBookFont.body)
+                            .foregroundStyle(MemoBookColor.inkMuted)
+                        BrandSkeleton(width: 88)
+                    }
                 }
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Copier le code d’accès \(code)")
+            .disabled(code == nil)
+            .accessibilityLabel(code.map { "Copier le code d’accès \($0)" } ?? "Code d’accès en cours de création")
 
-            VStack(spacing: MemoBookSpacing.s) {
-                BrandButton(
-                    "Partager via WhatsApp",
-                    // Le logo WhatsApp, en **vert foncé** : `BrandButton` le
-                    // teinte comme n'importe quelle icône de la marque (Hugo,
-                    // 17/09/2026, T121). Il vient de `assets/logos/whatsapp.svg`
-                    // par `import-brand-logos.py`.
-                    icon: Image(brand: "LogoWhatsApp"),
-                    style: showsSystemShare ? .primary : .secondary,
-                    fillsWidth: true,
-                    action: share
-                )
-
-                if showsSystemShare {
-                    BrandButton(
-                        "Partager",
-                        icon: Image(brand: "IconShareSystem"),
-                        style: .secondary,
-                        fillsWidth: true,
-                        action: presentSystemShare
-                    )
-                }
-            }
+            BrandButton(
+                "Partager",
+                icon: Image(brand: "IconShareSystem"),
+                style: .primary,
+                fillsWidth: true,
+                action: presentSystemShare
+            )
+            .disabled(code == nil)
         }
+        .animation(.snappy(duration: 0.25), value: code)
     }
 
     private func copy() {
+        guard let code else { return }
         UIPasteboard.general.string = code
         withAnimation(.smooth(duration: 0.2)) { hasCopied = true }
     }
 
-    /// WhatsApp s'il est là, le partage du système sinon.
-    private func share() {
-        let encoded =
-            invitation.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
-
-        if let whatsapp = URL(string: "whatsapp://send?text=\(encoded)"),
-            UIApplication.shared.canOpenURL(whatsapp)
-        {
-            UIApplication.shared.open(whatsapp)
-            return
-        }
-
-        presentSystemShare()
-    }
-
     private func presentSystemShare() {
+        guard code != nil else { return }
         let scene = UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .first { $0.activationState == .foregroundActive }
