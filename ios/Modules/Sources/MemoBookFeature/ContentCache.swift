@@ -18,6 +18,7 @@ import MemoBookCore
 ///
 /// | Gardé | Pourquoi |
 /// |---|---|
+/// | le compte (``Slot/account``) | rouvrir l'app quand `GET /v1/auth/me` ne répond pas — voir ``SessionRestore`` |
 /// | l'accueil (``Slot/home``) | le premier écran, et le seul qui doit s'ouvrir sans réseau |
 /// | le profil (``Slot/profile``) | son quota, son abonnement et son adresse changent rarement |
 /// | un voyage (``Slot/trip``) | on y revient dix fois par jour pendant un voyage |
@@ -43,6 +44,7 @@ actor ContentCache {
     /// sous la même clé se recouvriraient l'un l'autre, et le compilateur ne
     /// dirait rien.
     enum Slot: Hashable {
+        case account
         case home
         case profile
         case statistics
@@ -55,6 +57,7 @@ actor ContentCache {
         /// pas d'identifiants de ressources dans l'arborescence d'un appareil.
         var filename: String {
             switch self {
+            case .account: "account.json"
             case .home: "home.json"
             case .profile: "profile.json"
             case .statistics: "statistics.json"

@@ -96,6 +96,27 @@ public final class AppDependencies {
         await content.clearAll()
     }
 
+    /// Relit la session gardée au trousseau — voir ``SessionRestore``.
+    ///
+    /// Une session refusée emporte ce qu'on gardait du compte, comme une
+    /// déconnexion : l'écran d'entrée qui suit peut accueillir quelqu'un
+    /// d'autre.
+    public func restoreSession() async -> SessionRestore {
+        let restore = await SessionRestore.resolve(
+            verify: { [api] in try await api.currentAccount() },
+            isStillStored: { [api] in await api.hasStoredSession() },
+            remembered: { [content] in await content.read(.account, as: Account.self) }
+        )
+        if restore == .closed { await content.clearAll() }
+        return restore
+    }
+
+    /// Garde le compte de la session ouverte, pour rouvrir l'app le jour où
+    /// le serveur ne répond pas. Effacé avec le reste à la déconnexion.
+    public func rememberAccount(_ account: Account) async {
+        await content.write(.account, account)
+    }
+
     /// Garantit que l'appareil est enregistré avant un appel réseau.
     ///
     /// Idempotent, et rejouable : après une panne réseau, l'appel suivant
