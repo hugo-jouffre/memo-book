@@ -130,6 +130,9 @@ public struct ChatView: View {
     /// exactement ce que Hugo décrit — elle allait et venait toute seule.
     @State private var showsPreviewBanner = true
 
+    /// La fiche du contexte du voyage, ouverte depuis sa pastille.
+    @State private var showsTripContext = false
+
     /// Le retrait différé de la bannière. Une tâche et non un minuteur : elle
     /// s'annule quand on quitte le fil, et se relance à chaque remontée.
     @State private var bannerLingerTask: Task<Void, Never>?
@@ -267,7 +270,9 @@ public struct ChatView: View {
             // glisse vers le haut avec un rebond quand elle s'en va, et revient
             // de la même façon. En Reduce Motion, un fondu.
             .overlay(alignment: .top) {
-                if showsPreviewBanner, let preview = thread.preview {
+                // Pendant le contexte du voyage, sa pastille tient la place :
+                // deux capsules l'une sur l'autre se liraient comme une pile.
+                if showsPreviewBanner, !isGatheringContext, let preview = thread.preview {
                     GeometryReader { proxy in
                         ChatPreviewBanner(preview: preview) { onIntent(.openBookPreview(memoId: tripId)) }
                             .frame(maxWidth: .infinity)
@@ -297,13 +302,46 @@ public struct ChatView: View {
                 bannerLingerTask = nil
             }
             .safeAreaInset(edge: .top, spacing: 0) {
-                header(thread)
-                    .onGeometryChange(for: CGFloat.self, of: { $0.frame(in: .global).maxY }) {
-                        headerBottom = $0
+                VStack(spacing: 0) {
+                    header(thread)
+                        .onGeometryChange(for: CGFloat.self, of: { $0.frame(in: .global).maxY }) {
+                            headerBottom = $0
+                        }
+                    // **Dans** la marge du haut et non en calque : le fil se
+                    // décale d'autant, et la pastille ne recouvre jamais la
+                    // première bulle. Elle ne s'efface pas au défilement — elle
+                    // dit ce qui manque tant qu'il manque quelque chose.
+                    if let tripContext = thread.tripContext, tripContext.isGathering {
+                        ChatTripContextBanner(context: tripContext) { showsTripContext = true }
+                            .padding(.horizontal, MemoBookSpacing.screenMargin)
+                            .padding(.bottom, MemoBookSpacing.xs)
+                            .frame(maxWidth: .infinity)
+                            // Le verre de l'en-tête, prolongé : le fil passe
+                            // **dessous** en se floutant, jamais à côté de la
+                            // capsule en restant lisible.
+                            .background(ChatMetrics.barMaterial)
+                            .transition(
+                                reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity)
+                            )
                     }
+                }
+                .animation(
+                    reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.55, bounce: 0.3),
+                    value: isGatheringContext
+                )
+            }
+            .sheet(isPresented: $showsTripContext) {
+                if let tripContext = thread.tripContext {
+                    ChatTripContextSheet(context: tripContext)
+                }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) { footer(proxy) }
         }
+    }
+
+    /// MEMO recueille le contexte du voyage : sa pastille est posée.
+    private var isGatheringContext: Bool {
+        model.thread?.tripContext?.isGathering == true
     }
 
     /// Ce que le défilement fait à la bannière — voir ``showsPreviewBanner``.

@@ -12,7 +12,10 @@ import {
   type ConversationInput,
   type ConversationReply,
   type MemoResponder,
+  type TripContextTurnInput,
+  type TripContextTurnReply,
 } from "./conversation.js";
+import { describeTripContext, questionFor, type TripContextUpdate } from "./tripContext.js";
 import {
   OPENING_TEXT,
   SUGGESTIONS,
@@ -87,6 +90,55 @@ export class AnthropicResponder implements MemoResponder {
     if (!text) throw new Error("Le modèle n'a produit aucun texte exploitable.");
 
     return validateReply(toReply(JSON.parse(text) as RawReply, received, this.model), input);
+  }
+
+  /**
+   * Écoute un tour du contexte du voyage. Le modèle **extrait** ce qui a été
+   * dit et le reformule en une phrase ; il ne pose aucune question — c'est le
+   * code qui sait ce qui manque et qui demande (`tripContext.questionFor`).
+   */
+  async gatherContext(input: TripContextTurnInput): Promise<TripContextTurnReply> {
+    const response = await this.client.messages.create({
+      model: this.model,
+      max_tokens: 2_000,
+      thinking: { type: "adaptive" },
+      output_config: {
+        effort: "low",
+        format: { type: "json_schema", schema: tripContextSchema() },
+      },
+      system: [{ type: "text", text: TRIP_CONTEXT_SYSTEM, cache_control: { type: "ephemeral" } }],
+      messages: [{ role: "user", content: buildTripContextPrompt(input) }],
+    });
+
+    if (response.stop_reason === "refusal") throw new Error("Le modèle a refusé ce tour de contexte.");
+    if (response.stop_reason === "max_tokens") throw new Error("La réponse s'est arrêtée avant la fin.");
+    const text = response.content.find((block) => block.type === "text")?.text;
+    if (!text) throw new Error("Le modèle n'a produit aucun texte exploitable.");
+
+    const raw = JSON.parse(text) as RawTripContext;
+    const acknowledgement = raw.acknowledgement?.trim() ?? "";
+    return {
+      update: {
+        departureCountry: raw.departureCountry,
+        travellerCount: raw.travellerCount,
+        companions: raw.companions,
+        dates: raw.dates,
+        tripType: raw.tripType,
+        itinerary: raw.itinerary,
+        occasion: raw.occasion,
+        narrationMoment: raw.narrationMoment,
+        notes: raw.notes,
+      },
+      // L'accusé ne pose pas de question — la question est au code. Une
+      // phrase qui en pose une, ou trop longue, est jetée : le code accuse.
+      acknowledgement:
+        acknowledgement.length > 0 &&
+        acknowledgement.length <= REFORMULATION_LIMIT &&
+        !/[?？]/.test(acknowledgement)
+          ? acknowledgement
+          : null,
+      model: this.model,
+    };
   }
 
   private buildSystemPrompt(): Anthropic.TextBlockParam[] {
@@ -203,6 +255,17 @@ export function buildUserPrompt(input: ConversationInput): string {
       "## L'étape en cours",
       `Étape n°${step.number}${step.placeName ? ` — ${step.placeName}` : ""}`,
       `Du ${dayOf(step.startDate)} au ${dayOf(step.endDate)}`,
+    );
+  }
+
+  const known = describeTripContext(memo.tripContext, traveller.firstName);
+  if (known.length > 0) {
+    lines.push(
+      "",
+      "## Le contexte du voyage",
+      "_Posé par le voyageur avant la première étape. Ne redemande rien de ce qui est ici :",
+      "ces compagnons sont connus, ces dates aussi._",
+      ...known,
     );
   }
 
@@ -402,4 +465,120 @@ export function toReply(raw: RawReply, received: string, model: string): Convers
     asksRoseEpineGraine: raw.asksRoseEpineGraine === true,
     model,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Le contexte du voyage
+// ---------------------------------------------------------------------------
+
+const TRIP_CONTEXT_SYSTEM = [
+  "Tu es MEMO, la voix de MemoBook. Avant la première étape de son carnet, le voyageur te",
+  "raconte le contexte de son voyage. Ton travail : **extraire** ce qu'il a dit, et le lui",
+  "redire en une phrase. Tu ne poses aucune question : le code demandera ce qui manque.",
+  "",
+  "Règles, sans exception :",
+  "- N'invente rien. Un champ que le message ne dit pas vaut `null` (ou une liste vide).",
+  "- Ne redis pas ce qui est déjà connu : ne renvoie que ce que **ce** message apprend.",
+  "- `travellerCount` compte **le narrateur compris**. « Je pars avec Clara et Léo » = 3.",
+  "  « Seul », « en solo » = 1. « En couple » = 2.",
+  "- `companions` : les autres voyageurs, **jamais le narrateur**. Le prénom exactement",
+  "  comme il est dit, sans le compléter ni le corriger. `relation` : ce qu'il dit du lien",
+  "  (« ma femme », « un ami d'enfance »), sinon `null`.",
+  "- `departureCountry` : le **pays** d'où il part, en français (« France »). Une ville de",
+  "  départ donne son pays seulement si c'est sans ambiguïté (Lyon → France).",
+  "- `dates` : les dates comme il les dit, en clair (« du 12 au 26 septembre 2026 »).",
+  "  Tu peux compléter l'année avec la date du jour si elle est évidente.",
+  "- `tripType` : quelques mots (« road trip en van », « trek », « city trip »).",
+  "- `narrationMoment` : `before` s'il n'est pas encore parti, `during` s'il y est,",
+  "  `after` s'il est rentré — seulement si c'est dit ou évident.",
+  "- `notes` : ce qui éclaire le récit et n'entre nulle part ailleurs, une ou deux phrases.",
+  "- `acknowledgement` : une phrase, tutoiement, 160 caractères au plus, qui reprend ses",
+  "  mots. Pas de question, pas d'emoji, pas de Markdown. Si le message ne dit rien du",
+  "  contexte, dis simplement que tu as noté.",
+  "",
+  "Tu réponds uniquement par l'objet JSON demandé.",
+].join("\n");
+
+export function buildTripContextPrompt(input: TripContextTurnInput): string {
+  const lines: string[] = ["## Le carnet", `Titre : ${input.memo.title}`];
+  const destination = [input.memo.destinationCity, input.memo.destinationName].filter(Boolean).join(", ");
+  if (destination) lines.push(`Destination : ${destination}`);
+  lines.push(`Aujourd'hui : ${dayOf(input.now)}`);
+  lines.push("", "## Le narrateur", input.travellerFirstName ? `Prénom : ${input.travellerFirstName}` : "Prénom : inconnu");
+
+  const known = describeTripContext(input.context, input.travellerFirstName);
+  lines.push("", "## Ce qu'on sait déjà du voyage", ...(known.length > 0 ? known : ["_Rien encore._"]));
+  if (input.context.awaiting) {
+    lines.push(
+      "",
+      "## La question que MEMO vient de poser",
+      questionFor(input.context.awaiting, input.context),
+      "_Le message y répond probablement._",
+    );
+  }
+
+  const recent = input.history.slice(-6);
+  if (recent.length > 0) {
+    lines.push("", "## Les derniers tours du fil");
+    for (const turn of recent) {
+      const who = turn.author === "memo" ? "MEMO" : (turn.authorName ?? "Le voyageur");
+      if (turn.text) lines.push(`- **${who}** : ${truncate(turn.text, 400)}`);
+    }
+  }
+
+  lines.push("", "## Le message à écouter", `> ${input.text.replace(/\n+/g, "\n> ")}`);
+  return lines.join("\n");
+}
+
+/** Même prudence que `replySchema` : aucune borne de tableau dans le schéma, l'API les refuse. */
+export function tripContextSchema() {
+  const nullableString = (description: string) => ({ type: ["string", "null"], description });
+  return {
+    type: "object",
+    properties: {
+      acknowledgement: { type: "string", description: "Une phrase qui reprend ses mots, sans question." },
+      departureCountry: nullableString("Le pays de départ, en français."),
+      travellerCount: { type: ["integer", "null"], description: "Voyageurs, narrateur compris." },
+      companions: {
+        type: "array",
+        description: "Les autres voyageurs, jamais le narrateur.",
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            relation: { type: ["string", "null"] },
+          },
+          required: ["name", "relation"],
+          additionalProperties: false,
+        },
+      },
+      dates: nullableString("Les dates du voyage, en clair."),
+      tripType: nullableString("Le genre de voyage, en quelques mots."),
+      itinerary: nullableString("Les lieux prévus, dans l'ordre."),
+      occasion: nullableString("L'occasion : lune de miel, anniversaire…"),
+      narrationMoment: {
+        type: ["string", "null"],
+        enum: ["before", "during", "after", null],
+        description: "Avant, pendant ou après le voyage.",
+      },
+      notes: nullableString("Ce qui éclaire le récit et n'entre nulle part ailleurs."),
+    },
+    required: [
+      "acknowledgement",
+      "departureCountry",
+      "travellerCount",
+      "companions",
+      "dates",
+      "tripType",
+      "itinerary",
+      "occasion",
+      "narrationMoment",
+      "notes",
+    ],
+    additionalProperties: false,
+  } as const;
+}
+
+interface RawTripContext extends Required<{ [K in keyof TripContextUpdate]: TripContextUpdate[K] }> {
+  acknowledgement: string;
 }

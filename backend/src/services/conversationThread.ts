@@ -189,7 +189,9 @@ function truncateForHistory(text: string | null): string | null {
 export function historyTextOf(message: ChatMessageRow): string | null {
   if (message.kind === "photos") return null;
   if (message.kind === "text") return message.text;
-  return message.entry ? finalTextOf(message.entry) : null;
+  // Un vocal du contexte du voyage n'a pas de souvenir : sa transcription est
+  // gardée sur le message lui-même.
+  return message.entry ? finalTextOf(message.entry) : message.text;
 }
 
 /** Les vingt tours qui précèdent `beforeSeq`, du plus ancien au plus récent. */

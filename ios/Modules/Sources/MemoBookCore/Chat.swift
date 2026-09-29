@@ -805,6 +805,9 @@ public struct ChatThreadUpdate: Codable, Sendable, Hashable {
     public let messages: [ChatMessage]
     public let suggestions: [ChatSuggestion]
     public let preview: ChatBookPreview?
+    /// Toujours servi, pas seulement quand il change : la pastille se remplit
+    /// à chaque réponse de MEMO.
+    public let tripContext: ChatTripContext?
     public let turn: ChatTurnStatus
     /// L'heure du serveur à la lecture : le curseur de la lecture suivante.
     public let now: Date
@@ -813,12 +816,14 @@ public struct ChatThreadUpdate: Codable, Sendable, Hashable {
         messages: [ChatMessage],
         suggestions: [ChatSuggestion] = [],
         preview: ChatBookPreview? = nil,
+        tripContext: ChatTripContext? = nil,
         turn: ChatTurnStatus = .idle,
         now: Date
     ) {
         self.messages = messages
         self.suggestions = suggestions
         self.preview = preview
+        self.tripContext = tripContext
         self.turn = turn
         self.now = now
     }
@@ -957,6 +962,10 @@ public struct ChatThread: Codable, Sendable, Hashable, Identifiable {
     public var messages: [ChatMessage]
     public var suggestions: [ChatSuggestion]
 
+    /// Le contexte du voyage — ``ChatTripContext``. `nil` tant que le voyageur
+    /// n'a pas commencé à le raconter.
+    public var tripContext: ChatTripContext?
+
     /// Un tour du voyageur attend encore MEMO — le serveur le sait, l'app le
     /// sonde. `idle` pour un jeu d'essai.
     public var turn: ChatTurnStatus
@@ -979,10 +988,12 @@ public struct ChatThread: Codable, Sendable, Hashable, Identifiable {
         context: ChatContext,
         messages: [ChatMessage] = [],
         suggestions: [ChatSuggestion] = [],
+        tripContext: ChatTripContext? = nil,
         turn: ChatTurnStatus = .idle,
         canClear: Bool = true,
         now: Date? = nil
     ) {
+        self.tripContext = tripContext
         self.id = id
         self.title = title
         self.avatarUrl = avatarUrl
@@ -999,7 +1010,7 @@ public struct ChatThread: Codable, Sendable, Hashable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case id, title, avatarUrl, destination, greeting, preview, context, messages, suggestions
-        case turn, canClear, now
+        case tripContext, turn, canClear, now
     }
 
     public init(from decoder: any Decoder) throws {
@@ -1014,6 +1025,7 @@ public struct ChatThread: Codable, Sendable, Hashable, Identifiable {
             context: try container.decode(ChatContext.self, forKey: .context),
             messages: try container.decodeIfPresent([ChatMessage].self, forKey: .messages) ?? [],
             suggestions: try container.decodeIfPresent([ChatSuggestion].self, forKey: .suggestions) ?? [],
+            tripContext: try container.decodeIfPresent(ChatTripContext.self, forKey: .tripContext),
             turn: try container.decodeIfPresent(ChatTurnStatus.self, forKey: .turn) ?? .idle,
             canClear: try container.decodeIfPresent(Bool.self, forKey: .canClear) ?? true,
             now: try container.decodeIfPresent(Date.self, forKey: .now)

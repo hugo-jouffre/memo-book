@@ -210,6 +210,10 @@ extension PreviewAPI {
     public func entryMedia(id: String) async throws -> Data {
         throw APIError.server(statusCode: 404, code: "not_found", message: "Média introuvable.")
     }
+
+    public func chatMessageMedia(id: String) async throws -> Data {
+        throw APIError.server(statusCode: 404, code: "not_found", message: "Média introuvable.")
+    }
 }
 
 extension ChatMessage {

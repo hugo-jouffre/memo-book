@@ -1,6 +1,7 @@
 import type { ChatDisposition, Prisma } from "@prisma/client";
 import type { AppContext } from "../context.js";
 import {
+  composeBeats,
   dayKeyOf,
   fallbackResponder,
   nextConversationState,
@@ -9,7 +10,19 @@ import {
   type ConversationInput,
   type ConversationReply,
 } from "../services/conversation.js";
-import { ROSE_EPINE_GRAINE } from "../services/conversationCopy.js";
+import { ROSE_EPINE_GRAINE, SUGGESTION_SETS } from "../services/conversationCopy.js";
+import {
+  CONTEXT_COMPLETE,
+  CONTEXT_NOTED,
+  EMPTY_TRIP_CONTEXT,
+  advance,
+  contextVoiceOf,
+  isGathering,
+  mergeTripContext,
+  parseTripContext,
+  questionFor,
+  type TripContext,
+} from "../services/tripContext.js";
 import {
   activeStepOf,
   allowsRoseEpineGraine,
@@ -56,10 +69,7 @@ function entryIdsOf(payload: unknown): string[] {
 export async function converseTurn(context: AppContext, { messageId }: ConverseJob): Promise<void> {
   const { prisma, responder, logger, queue } = context;
 
-  const message = await prisma.chatMessage.findUnique({
-    where: { id: messageId },
-    include: { ...chatMessageInclude, memo: { include: { steps: true } } },
-  });
+  const message = await loadTurn(context, messageId);
 
   if (!message || message.author !== "traveller") {
     logger.warn({ messageId }, "Tour introuvable, job de conversation ignoré");
@@ -73,6 +83,15 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
   const now = new Date();
   const memo = message.memo;
   const state = conversationStateOf(memo);
+  const tripContext = parseTripContext(memo.tripContext);
+
+  // Le voyageur raconte le contexte de son voyage : un tour à part, qui
+  // n'écrit aucun souvenir — `services/tripContext.ts`. Les photos restent
+  // des souvenirs, et une puce se répond toujours par le catalogue.
+  if (isGathering(tripContext) && !message.suggestionId && message.kind !== "photos") {
+    await converseTripContextTurn(context, message, tripContext!, now);
+    return;
+  }
 
   const [history, currentEntry, recentEntries, activeMembers] = await Promise.all([
     loadHistory(prisma, memo.id, message.seq),
@@ -101,6 +120,7 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
       prompt: memo.prompt,
       coherenceSheet: parseCoherenceSheet(memo.coherenceSheet),
       state,
+      tripContext,
     },
     traveller: {
       firstName: message.account?.firstName?.trim() || null,
@@ -244,6 +264,7 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
       where: { id: memo.id },
       data: {
         ...(reply.prompt ? { prompt: reply.prompt } : {}),
+        ...contextChangeFor(message.suggestionId, tripContext),
         conversationState: nextConversationState(
           state,
           reply,
@@ -261,6 +282,146 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
     { messageId, memoId: memo.id, model: reply.model, disposition, beats: reply.beats.length },
     "MEMO a répondu",
   );
+}
+
+/**
+ * Ce que les deux puces du contexte font au voyage : « Je te raconte le
+ * contexte » ouvre le recueil (en gardant ce qui était déjà su), « Je
+ * compléterai plus tard » le referme sans insister.
+ */
+function contextChangeFor(
+  suggestionId: string | null,
+  current: TripContext | null,
+): { tripContext?: Prisma.InputJsonObject } {
+  if (suggestionId === "context") {
+    const opened = advance({ ...(current ?? EMPTY_TRIP_CONTEXT), status: "gathering" });
+    // Rien de su encore : la première réponse est une description libre, pas
+    // la réponse à une question précise.
+    const reopened = { ...opened, status: "gathering" as const, awaiting: current ? opened.awaiting : null };
+    return { tripContext: reopened as unknown as Prisma.InputJsonObject };
+  }
+  if (suggestionId === "context-later" && current) {
+    return { tripContext: { ...current, status: "skipped", awaiting: null } as unknown as Prisma.InputJsonObject };
+  }
+  return {};
+}
+
+/**
+ * Un tour du contexte du voyage. MEMO écoute (le vocal se transcrit ici : il
+ * n'a pas de souvenir où le faire), le répondeur extrait, le code fond, voit
+ * ce qui manque et pose **la** question suivante — ou dit que c'est posé.
+ */
+async function converseTripContextTurn(
+  context: AppContext,
+  message: NonNullable<Awaited<ReturnType<typeof loadTurn>>>,
+  tripContext: TripContext,
+  now: Date,
+): Promise<void> {
+  const { prisma, responder, logger } = context;
+  const memo = message.memo;
+
+  let text = message.text ?? "";
+  let heard = true;
+  const voice = message.kind === "voice" ? contextVoiceOf(message.payload) : null;
+  if (voice) {
+    try {
+      const audio = await context.storage.get(voice.storageKey);
+      const result = await context.transcriber.transcribe({
+        audio,
+        filename: voice.storageKey.split("/").pop() ?? "contexte.m4a",
+        mimeType: voice.mimeType,
+      });
+      text = result.text;
+    } catch (cause) {
+      logger.warn({ messageId: message.id, err: cause }, "Vocal du contexte non transcrit");
+      heard = false;
+    }
+  }
+
+  const history = await loadHistory(prisma, memo.id, message.seq);
+  const travellerFirstName = message.account?.firstName?.trim() || null;
+
+  let merged = tripContext;
+  let acknowledgement: string | null = null;
+  let model = "scripted";
+  if (heard && text.trim().length > 0) {
+    const input = {
+      context: tripContext,
+      memo: { title: memo.title, destinationName: memo.destinationName, destinationCity: memo.destinationCity },
+      travellerFirstName,
+      history,
+      text,
+      now,
+    };
+    let reply;
+    try {
+      reply = await responder.gatherContext(input);
+    } catch (cause) {
+      logger.warn({ messageId: message.id, err: cause }, "Le répondeur n'a pas écouté le contexte, repli");
+      reply = await fallbackResponder().gatherContext(input);
+    }
+    merged = advance(mergeTripContext(tripContext, reply.update));
+    acknowledgement = reply.acknowledgement;
+    model = reply.model;
+  } else {
+    merged = advance(tripContext);
+  }
+
+  const complete = merged.status === "complete";
+  const next = complete ? CONTEXT_COMPLETE : questionFor(merged.awaiting!, merged);
+  // Une reformulation du modèle mérite sa bulle ; l'accusé du code, non —
+  // « C'est noté. » seul dans une bulle, cinq fois de suite, sonne comme une
+  // machine. Il se pose alors devant la question, dans la même bulle.
+  const texts = !heard
+    ? ["Je n’ai pas réussi à écouter ce vocal.", "Tu peux me le réécrire ici ?"]
+    : acknowledgement
+      ? [acknowledgement, next]
+      : [`${CONTEXT_NOTED} ${next}`];
+  const beats = composeBeats(text, texts);
+  const suggestions = complete ? SUGGESTION_SETS.afterContext : SUGGESTION_SETS.gatheringContext;
+
+  await prisma.$transaction(async (tx) => {
+    for (const [index, beat] of beats.entries()) {
+      await tx.chatMessage.create({
+        data: {
+          memoId: memo.id,
+          author: "memo",
+          kind: "text",
+          text: beat.text,
+          replyToId: message.id,
+          stepId: message.stepId,
+          pauseMilliseconds: beat.pauseMilliseconds,
+          model,
+          payload: index === beats.length - 1 ? { suggestions: [...suggestions] } : undefined,
+        },
+      });
+    }
+    await tx.chatMessage.update({
+      where: { id: message.id },
+      data: {
+        disposition: "trip_context",
+        repliedAt: new Date(),
+        // Le vocal garde sa transcription sur lui : c'est ce que relit l'historique.
+        ...(voice && heard ? { text } : {}),
+      },
+    });
+    await tx.memo.update({
+      where: { id: memo.id },
+      data: { tripContext: merged as unknown as Prisma.InputJsonObject },
+    });
+  });
+
+  logger.info(
+    { messageId: message.id, memoId: memo.id, model, complete, awaiting: merged.awaiting },
+    "MEMO a écouté le contexte du voyage",
+  );
+}
+
+function loadTurn(context: AppContext, messageId: string) {
+  return context.prisma.chatMessage.findUnique({
+    where: { id: messageId },
+    include: { ...chatMessageInclude, memo: { include: { steps: true } } },
+  });
 }
 
 /**

@@ -14,6 +14,7 @@ import {
   isSuggestionId,
   type SuggestionId,
 } from "./conversationCopy.js";
+import { updateByRules, type TripContext, type TripContextUpdate } from "./tripContext.js";
 
 /**
  * MEMO, côté serveur — `docs/conversation.md`.
@@ -93,6 +94,8 @@ export interface ConversationInput {
     prompt: string | null;
     coherenceSheet: CoherenceSheet;
     state: ConversationState;
+    /** Ce que le voyageur a posé avant la première étape — `tripContext.ts`. */
+    tripContext: TripContext | null;
   };
   traveller: {
     firstName: string | null;
@@ -149,10 +152,35 @@ export interface ConversationReply {
   model: string;
 }
 
+/** Un tour du contexte du voyage, tel que le répondeur le lit. */
+export interface TripContextTurnInput {
+  context: TripContext;
+  memo: { title: string; destinationName: string | null; destinationCity: string | null };
+  travellerFirstName: string | null;
+  /** Les tours précédents du fil — ce qui a déjà été dit du contexte. */
+  history: ConversationHistoryTurn[];
+  /** Ce que le voyageur vient de dire, tapé ou transcrit. */
+  text: string;
+  now: Date;
+}
+
+export interface TripContextTurnReply {
+  /** Ce que le tour a appris. Le code fond, vérifie ce qui manque, et pose la question. */
+  update: TripContextUpdate;
+  /** Une phrase qui reformule ce qui vient d'être dit, **sans question**. `null` : l'accusé du code. */
+  acknowledgement: string | null;
+  model: string;
+}
+
 export interface MemoResponder {
   /** L'ouverture : une copie fixe, sans modèle. Sur l'interface pour refléter `MemoResponder.swift`. */
   opening(): { text: string; suggestionIds: SuggestionId[] };
   reply(input: ConversationInput): Promise<ConversationReply>;
+  /**
+   * Écoute un tour du contexte du voyage — `tripContext.ts`. Le répondeur
+   * extrait ; **le code** décide de ce qui manque et de la question suivante.
+   */
+  gatherContext(input: TripContextTurnInput): Promise<TripContextTurnReply>;
 }
 
 // ---------------------------------------------------------------------------
@@ -361,6 +389,15 @@ export class FakeResponder implements MemoResponder {
 
     const override = this.scripted.shift();
     return validateReply({ ...base, ...override }, input);
+  }
+
+  async gatherContext(input: TripContextTurnInput): Promise<TripContextTurnReply> {
+    this.calls += 1;
+    return {
+      update: updateByRules(input.context, input.text, input.travellerFirstName),
+      acknowledgement: null,
+      model: "fake",
+    };
   }
 
   /** Vocal et photo = souvenir ; puce = commande ; texte court sur un souvenir en cours = précision. */

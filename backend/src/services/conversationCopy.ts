@@ -1,3 +1,5 @@
+import { CONTEXT_INVITATION, CONTEXT_SKIPPED } from "./tripContext.js";
+
 /**
  * Ce que MEMO dit, et les puces qu'il propose — `docs/conversation.md`.
  *
@@ -262,6 +264,21 @@ export const SUGGESTIONS = {
   resume: { id: "resume", label: "Je reprends mon récit", symbol: "📖", intent: "send_then_speak" },
   split: { id: "split", label: "Découpe en deux étapes", symbol: "✂️", intent: "send" },
   keep: { id: "keep", label: "Garde d’un seul tenant", symbol: "🧩", intent: "send" },
+  // Le contexte du voyage — `services/tripContext.ts`. « send » et non
+  // « send_then_speak » : on le raconte aussi bien au clavier, et le composeur
+  // offre les deux sous la bulle d'invitation.
+  context: {
+    id: "context",
+    label: "Je te raconte le contexte de mon voyage",
+    symbol: "🧭",
+    intent: "send",
+  },
+  "context-later": {
+    id: "context-later",
+    label: "Je compléterai plus tard",
+    symbol: "⏭️",
+    intent: "send",
+  },
 } as const satisfies Record<string, Suggestion>;
 
 export type SuggestionId = keyof typeof SUGGESTIONS;
@@ -302,7 +319,17 @@ export function suggestionsFor(ids: readonly string[]): Suggestion[] {
 export const SUGGESTION_SETS = {
   trio: ["accept", "edit-hand", "edit-voice"],
   withoutTranscript: ["rewrite", "record-again", "later"],
-  opening: ["start", "photos", "dictate"],
+  /**
+   * L'ouverture d'un voyage dont le contexte n'est pas posé : **une seule**
+   * puce. Le contexte d'abord, les étapes ensuite — c'est lui qui fait qu'un
+   * carnet parle de Clara et non d'« une amie » (Paul, 28/09/2026).
+   */
+  opening: ["context"],
+  /** L'ouverture une fois le contexte posé — après « Supprimer la conversation ». */
+  openingWithContext: ["start", "photos", "dictate"],
+  /** Pendant le contexte, une fois qu'une première réponse est venue : la sortie, jamais imposée. */
+  gatheringContext: ["context-later"],
+  afterContext: ["dictate", "write", "photos"],
   neutral: ["voice", "write", "later"],
   afterAnswer: ["clear", "another", "resume"],
   afterRefusal: ["tomorrow", "else"],
@@ -334,6 +361,10 @@ export const SCRIPTED_ANSWERS: Partial<
   // de commencer son carnet est le détail qui dit qu'il n'y a personne en face.
   start: { text: OPENING_WITHOUT_PROMPT, suggestions: "afterAccept" },
   dictate: { text: LISTENING, suggestions: "none" },
+  // Le contexte : la réponse est écrite ici, l'état du voyage change dans le
+  // job (`converse.ts`) — une puce ne fait jamais que parler.
+  context: { text: CONTEXT_INVITATION, suggestions: "none" },
+  "context-later": { text: CONTEXT_SKIPPED, suggestions: "afterContext" },
 };
 
 /**

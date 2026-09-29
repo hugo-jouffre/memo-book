@@ -59,6 +59,60 @@ reste la règle. Ce chantier ne touche pas à ce prompt.
   sa fiche, dans l'ordre des dates. Les réponses passées de MEMO n'existent pas ;
   seule l'ouverture précède.
 
+## 2 bis. Le contexte du voyage, avant la première étape
+
+**Décidé par Paul le 28/09/2026.** À la première ouverture du fil, une seule
+puce : **« Je te raconte le contexte de mon voyage »** 🧭. On pose le décor
+avant de raconter la première journée ; c'est ce qui fait écrire « Clara » et
+non « une amie » à la page 2, et ce qui évite à MEMO de demander « qui est
+Léo ? » à la dixième étape.
+
+**Ce qu'il faut pour que le contexte soit posé** — cinq lignes, dans cet ordre :
+
+| Ligne | Complète quand |
+|---|---|
+| Pays de départ | un pays est dit |
+| Voyageurs | un nombre, narrateur compris (« seul » = 1, « en couple » = 2) |
+| Compagnons de route | **un prénom par compagnon** — « on est quatre » avec deux prénoms, ce n'est pas fini |
+| Dates | les dates du voyage, telles que dites |
+| Genre de voyage | road trip, city trip, trek, farniente… |
+
+Et, s'ils viennent, sans jamais les réclamer : l'itinéraire prévu, le lien avec
+chaque compagnon (« ma femme », « un ami d'enfance »), l'occasion (lune de
+miel, anniversaire), le moment où l'on raconte (avant, pendant, après).
+
+**Comment ça se passe.**
+
+1. La puce : MEMO invite à tout raconter d'un coup, comme à un ami, à l'oral
+   ou au clavier. Pas de puce sous l'invitation — le composeur suffit.
+2. Chaque tour du voyageur est **écouté** : le modèle extrait ce qui a été dit
+   et le reformule en une phrase, sans question. **Le code** voit ce qui
+   manque et pose **la** question de la première ligne vide. Une question par
+   tour, jamais deux, jamais une déjà répondue.
+3. Tant qu'il manque une ligne, la puce **« Je compléterai plus tard »** ⏭️
+   referme le contexte sans insister ; il se complète au fil du récit.
+4. Tout y est : MEMO le dit, et propose de raconter la première journée.
+
+**Rien de ce qui se dit ici n'est un souvenir** (disposition `trip_context`) :
+pas d'`Entry`, pas de fiche de retranscription, pas d'étape offerte consommée,
+pas de limite de souvenirs entamée. Un vocal est transcrit par le job
+`converse` lui-même et son fichier pend au message
+(`GET /v1/chat-messages/:id/media`). Des photos restent des souvenirs.
+
+**Où ça vit.** `memos.tripContext` (JSON, forme dans
+`backend/src/services/tripContext.ts`). MEMO le relit à chaque tour (« Le
+contexte du voyage » dans son prompt, les compagnons sont connus du repli) et
+l'écrivain à chaque rédaction. Il survit à « Supprimer la conversation » :
+l'ouverture propose alors les puces habituelles.
+
+**Ce que l'app en montre.** Une pastille « Contexte du voyage 3/5 » sous
+l'en-tête du fil, qui se remplit à chaque réponse ; un appui ouvre la fiche,
+ligne à ligne. On n'y corrige rien : on le dit à MEMO.
+
+**Sans modèle**, le repli range la réponse dans la ligne que MEMO venait de
+demander ; une première description libre est gardée pour l'écrivain, et MEMO
+demande ensuite ligne à ligne.
+
 ## 3. Le tour type
 
 Le voyageur raconte — un vocal, un texte, des photos. MEMO répond en **trois
@@ -218,9 +272,8 @@ métro ; ce qu'on y a dit avant la coupure, en revanche, reste sous les yeux.
 
 - La réponse **mot à mot** (streaming) : la bulle s'écrit sous les yeux.
 - **Proposer des photos** au souvenir (Agent Photo).
-- **L'interview avant le départ** : pour un voyage à venir, MEMO pose les
-  questions de contexte (rythme, avec qui, ce qu'on attend) qui donnent le ton
-  du carnet — le cahier des charges le voulait.
+- **L'interview avant le départ**, au-delà du contexte du voyage (§ 2 bis) :
+  le rythme, ce qu'on attend du voyage, le ton voulu pour le carnet.
 - **« À l'oral » comme révision** d'un souvenir existant.
 - **La notification** de relance, cadencée par le rythme du récit.
 - Une **seconde réponse** quand le modèle finit après le repli.
@@ -372,4 +425,6 @@ exactement ce que le modèle doit faire mieux.
 | 22/09/2026 | Tout ce qu'on envoie passe par la file de l'accueil ; un vocal de l'accueil va à un seul carnet, le premier en cours | reco Claude |
 | 22/09/2026 | `agents/agent-conversation.md` **est** le prompt système, comme `agent-transcription.md` pour la rédaction : on change ce que MEMO dit en éditant du Markdown | reco Claude |
 | 22/09/2026 | Le modèle écrit des phrases ; le rythme, le catalogue de puces et la rose/épine/graine restent au code. Une réponse hors contrat est refusée, pas rattrapée | reco Claude |
+| 28/09/2026 | Le contexte du voyage avant la première étape : une seule puce à l'ouverture, cinq lignes obligatoires, rien ne devient souvenir ni ne coûte (§ 2 bis) | Paul |
+| 28/09/2026 | Le modèle extrait le contexte, le code tient la liste et pose la question — une par tour | reco Claude |
 | 22/09/2026 | Effort de réflexion bas pour la conversation (quelqu'un attend), élevé pour la rédaction (personne ne la regarde écrire) | reco Claude |

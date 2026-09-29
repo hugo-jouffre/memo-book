@@ -384,6 +384,7 @@ public struct LocalMemoResponder: MemoResponder {
         // qui dit qu'il n'y a personne en face.
         ChatCopy.Suggest.start: (ChatCopy.openingWithoutPrompt, Suggestions.afterAccept),
         ChatCopy.Suggest.dictate: (ChatCopy.listening, []),
+        ChatCopy.Suggest.tellContext: (ChatCopy.contextInvitation, []),
     ]
 
     private static func answer(for subject: ChatSignals.Subject?) -> String {
@@ -461,24 +462,14 @@ public struct LocalMemoResponder: MemoResponder {
             ChatSuggestion(id: "later", label: ChatCopy.Suggest.later, symbol: ChatCopy.Suggest.laterSymbol, intent: .send),
         ]
 
+        /// Une seule puce tant que le contexte du voyage n'est pas posé — le
+        /// serveur décide, ceci n'en est que le reflet pour les aperçus.
         static let opening = [
             ChatSuggestion(
-                id: "start",
-                label: ChatCopy.Suggest.start,
-                symbol: ChatCopy.Suggest.startSymbol,
-                intent: .sendThenSpeak
-            ),
-            ChatSuggestion(
-                id: "photos",
-                label: ChatCopy.Suggest.importPhotos,
-                symbol: ChatCopy.Suggest.importPhotosSymbol,
-                intent: .importPhotos
-            ),
-            ChatSuggestion(
-                id: "dictate",
-                label: ChatCopy.Suggest.dictate,
-                symbol: ChatCopy.Suggest.dictateSymbol,
-                intent: .sendThenSpeak
+                id: "context",
+                label: ChatCopy.Suggest.tellContext,
+                symbol: ChatCopy.Suggest.tellContextSymbol,
+                intent: .send
             ),
         ]
 

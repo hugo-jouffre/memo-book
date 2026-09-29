@@ -39,6 +39,7 @@ function turn(
       prompt: null,
       coherenceSheet: EMPTY_COHERENCE_SHEET,
       state: EMPTY_CONVERSATION_STATE,
+      tripContext: null,
     },
     traveller: { firstName: "Hugo", memberCount: 1 },
     step: null,
