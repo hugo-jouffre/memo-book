@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * Fabrique le bloc `@font-face` embarqué de `templates/travel-journal/fonts.css`.
+ * Fabrique le bloc `@font-face` embarqué de `MemoBook Generator/templates/travel-journal/fonts.css`.
  *
  * Les polices sont inlinées en base64 plutôt que référencées par URL : APITemplate
  * ne reçoit que deux chaînes (`body` + `css`), donc aucun chemin relatif n'y

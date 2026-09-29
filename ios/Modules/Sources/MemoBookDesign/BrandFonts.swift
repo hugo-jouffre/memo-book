@@ -30,7 +30,7 @@ public enum BrandFonts {
     ///
     /// C'est déjà la police manuscrite du template d'impression
     /// (`memos.fontHand`), livrée en `woff2` dans
-    /// `templates/travel-journal/assets/fonts/`. CoreText ne sait pas lire le
+    /// `MemoBook Generator/templates/travel-journal/assets/fonts/`. CoreText ne sait pas lire le
     /// woff2 : le fichier embarqué ici est le **même** dessin converti en TTF,
     /// pas une seconde police.
     ///

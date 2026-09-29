@@ -33,21 +33,21 @@ parfois corrigé au clavier par le voyageur. Le réécrire effacerait ce travail
   libres, mot fléché (`docs/reglages-utilisateur.md`)
 
 ## Sorties
-- Un payload conforme à `templates/travel-journal/gpt_image_schema.yaml`
+- Un payload conforme à `MemoBook Generator/templates/travel-journal/gpt_image_schema.yaml`
   (propriété `apitemplate_payload`)
 - Signal des textes trop longs / trop courts pour la mise en page choisie
   (retour à l'Agent Transcription si besoin)
 
 ## Le contrat fait autorité, pas ce fichier
 
-**`templates/travel-journal/LAYOUT_KB.md`** est la référence : liste des
+**`MemoBook Generator/templates/travel-journal/LAYOUT_KB.md`** est la référence : liste des
 layouts réellement implémentés, champs de chaque journée, limites de longueur,
 règles d'images. Elle vit à côté du template parce qu'elle doit changer dans le
 même commit que lui.
 
 Les deux autres fichiers à connaître :
-- `templates/travel-journal/print.json` — géométrie de page (A5, 420 × 595 pt)
-- `templates/travel-journal/gpt_image_schema.yaml` — le schéma JSON qui valide
+- `MemoBook Generator/templates/travel-journal/print.json` — géométrie de page (A5, 420 × 595 pt)
+- `MemoBook Generator/templates/travel-journal/gpt_image_schema.yaml` — le schéma JSON qui valide
   la sortie
 
 ## Instructions

@@ -376,7 +376,7 @@ réellement cités dans les `days[]`.
 Dans `intro_text`, dans `back_cover`, ou dans un `fun_facts` intitulé
 « Chiffres clés ». **Ne pas produire `global_stats`** : le champ est accepté par
 le schéma mais n'est rendu par aucun layout — le calcul disparaîtrait
-silencieusement. Voir `templates/travel-journal/LAYOUT_KB.md`.
+silencieusement. Voir `MemoBook Generator/templates/travel-journal/LAYOUT_KB.md`.
 
 ### Le relevé de l'étape (`insights`)
 
@@ -584,7 +584,7 @@ la validation, pas un avertissement (`backend/src/services/payloadValidator.ts`)
 Balises autorisées dans `body_html` : `<p>`, `<br>`, `<b>`, `<i>`, `<ul>`,
 `<li>`. Rien d'autre — pas de titre, pas de style en ligne. Un `<p>` par idée.
 Ne jamais produire `null` : omettre la clé. Le contrat complet fait autorité :
-**`templates/travel-journal/LAYOUT_KB.md`**.
+**`MemoBook Generator/templates/travel-journal/LAYOUT_KB.md`**.
 
 **Le nombre de pages cible est un réglage du voyageur** (soixante par défaut).
 Il ne déplace aucune limite du tableau : il change le **niveau de détail**. Un

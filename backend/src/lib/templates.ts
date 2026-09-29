@@ -6,11 +6,11 @@ import { parse as parseYaml } from "yaml";
 const here = dirname(fileURLToPath(import.meta.url));
 
 /**
- * `templates/travel-journal/` est la source de vérité du format du carnet : le
+ * `MemoBook Generator/templates/travel-journal/` est la source de vérité du format du carnet : le
  * même dossier alimente APITemplate.io via la CI. Le back-end le lit, il ne le
  * duplique pas — toute évolution du template se propage sans changement de code.
  */
-export const TEMPLATE_DIR = resolve(here, "../../../templates/travel-journal");
+export const TEMPLATE_DIR = resolve(here, "../../../MemoBook Generator/templates/travel-journal");
 
 /**
  * `agents/` décrit ce que chaque agent doit faire. Comme `templates/`, le
@@ -26,7 +26,7 @@ function readRepoFile(directory: string, name: string): string {
   } catch (cause) {
     throw new Error(
       `Impossible de lire ${path}. Le back-end doit tourner depuis le monorepo, ` +
-        `à côté des dossiers templates/ et agents/.`,
+        `à côté des dossiers agents/ et MemoBook Generator/templates/.`,
       { cause },
     );
   }
@@ -121,7 +121,7 @@ export function loadSamplePayload(): Record<string, unknown> {
 }
 
 /**
- * Un payload de `templates/travel-journal/samples/`.
+ * Un payload de `MemoBook Generator/templates/travel-journal/samples/`.
  *
  * `data.json` n'exerce qu'une partie du gabarit : ni carte de chapitre, ni
  * photo enrichie par l'analyse d'image. Les échantillons couvrent le reste, et

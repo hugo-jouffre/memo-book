@@ -317,7 +317,7 @@ rebond — donc aucun moyen d'alimenter `email_suppressions`.
 ## 9. Les gabarits
 
 Ils vivent dans **`templates/emails/`**, à la racine du dépôt, pour la même
-raison que `templates/travel-journal/` : le back-end les lit, il ne les duplique
+raison que `MemoBook Generator/templates/travel-journal/` : le back-end les lit, il ne les duplique
 pas, et corriger un texte n'est pas une modification de TypeScript.
 
 - `layout.njk` — l'en-tête, le pied, la palette, les parades de compatibilité.
@@ -352,7 +352,7 @@ par le back-end dès qu'une valeur peut manquer) et qui impose **un gabarit par
 état** : « expédié » et « livré » sont deux gabarits, pas un avec un drapeau.
 Voir `templates/emails/README.md`.
 
-**Le rendu suit ce que fait déjà `templates/travel-journal/`** — mêmes tokens
+**Le rendu suit ce que fait déjà `MemoBook Generator/templates/travel-journal/`** — mêmes tokens
 que `agents/design.md`, et des tests visuels sur le modèle de
 `backend/test/visual/` : chaque gabarit rendu avec ses données d'exemple,
 capturé, comparé. C'est ce qui empêche un bouton de disparaître chez Outlook

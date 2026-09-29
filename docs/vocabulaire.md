@@ -74,7 +74,7 @@ Côté serveur (`backend/src/`) :
 | **Service** | une règle métier qu'une route ou un job appelle | `services/` — `quota.ts`, `deletion.ts`, `billing.ts` |
 | **Job** | une étape du pipeline, exécutée par le worker | `jobs/` — `transcribe`, `structure`, `redact`, `render` |
 | **Sérialiseur** | ce qu'une route rend, et rien de plus | `routes/appSerializers.ts`, `serializers.ts` |
-| **Gabarit** | le modèle du carnet imprimé, source de vérité de ce qu'un réglage peut faire | `templates/travel-journal/`, `LAYOUT_KB.md` |
+| **Gabarit** | le modèle du carnet imprimé, source de vérité de ce qu'un réglage peut faire | `MemoBook Generator/templates/travel-journal/`, `LAYOUT_KB.md` |
 
 ### Voyage, carnet, `memo` — le même objet, trois noms
 

@@ -10,7 +10,7 @@ const addFormats = addFormatsModule as unknown as typeof addFormatsModule.defaul
 /**
  * Deux niveaux de contrôle sur le payload produit par le modèle :
  *
- * 1. le JSON Schema de `templates/travel-journal/gpt_image_schema.yaml`, qui
+ * 1. le JSON Schema de `MemoBook Generator/templates/travel-journal/gpt_image_schema.yaml`, qui
  *    dit ce qui existe ;
  * 2. les règles éditoriales de `LAYOUT_KB.md`, qui disent ce qui tient dans la
  *    page. Ces limites de longueur existent pour éviter le débordement à

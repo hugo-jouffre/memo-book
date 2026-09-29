@@ -12,7 +12,7 @@ export interface StructureJob {
 
 /**
  * Étape 3 : les textes validés deviennent un payload de carnet conforme au
- * schéma de `templates/travel-journal/`. Le payload est validé ici, avant
+ * schéma de `MemoBook Generator/templates/travel-journal/`. Le payload est validé ici, avant
  * d'atteindre APITemplate — un payload hors limites produit un PDF qui déborde
  * de la page, ce qui ne se voit qu'à l'impression.
  *

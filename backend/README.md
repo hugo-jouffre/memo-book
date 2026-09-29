@@ -14,7 +14,7 @@ Entry ──transcribe──▶ transcript ──redact──▶ texte ──str
 **Deux passes de modèle, volontairement séparées.** `redact` écrit le texte d'une
 étape, une étape à la fois, en suivant `agents/agent-transcription.md` — pendant que
 l'utilisateur est là pour relire. `structure` met en page l'ensemble du carnet à la
-prévisualisation, en suivant `templates/travel-journal/LAYOUT_KB.md`, et **ne réécrit
+prévisualisation, en suivant `MemoBook Generator/templates/travel-journal/LAYOUT_KB.md`, et **ne réécrit
 rien**. Les fusionner reviendrait à réécrire, à chaque aperçu PDF, un texte que
 l'utilisateur a corrigé à la main.
 
@@ -56,13 +56,13 @@ npm run smoke                 # le parcours complet, tout simulé
 npm run smoke -- --live       # le même parcours contre OpenAI + APITemplate, affiche l'URL du PDF
 ```
 
-Le test le plus important fait passer `templates/travel-journal/data.json` — le payload qui
+Le test le plus important fait passer `MemoBook Generator/templates/travel-journal/data.json` — le payload qui
 alimente APITemplate aujourd'hui — dans le validateur. S'il cesse d'être accepté, c'est le
 validateur qui a tort.
 
 ## Travailler sur la mise en page du carnet
 
-Le template vit dans `templates/travel-journal/`. Pour l'itérer sans appeler APITemplate :
+Le template vit dans `MemoBook Generator/templates/travel-journal/`. Pour l'itérer sans appeler APITemplate :
 
 ```bash
 npm run template:lint                       # dialecte Jinja + invariants CSS
@@ -82,7 +82,7 @@ carnet rendu et, au survol de n'importe quel élément, donne son nom, son séle
 champs JSON qui l'alimentent et les variables CSS en jeu. Elle sert à formuler des demandes de
 retouche précises plutôt que « le bloc avec la pince est trop haut ». Le dictionnaire des
 composants vit dans `scripts/build-inspector.ts` : il se met à jour en même temps que le
-template, et `templates/travel-journal/samples/showcase.json` est le payload qui exerce tous
+template, et `MemoBook Generator/templates/travel-journal/samples/showcase.json` est le payload qui exerce tous
 les layouts d'un coup.
 
 Les sorties atterrissent dans `.render-out/` (ignoré par Git).

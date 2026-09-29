@@ -7,7 +7,7 @@ export interface RenderJob {
 
 /**
  * Étape 3 : le payload part chez APITemplate.io, qui compose le PDF avec le
- * template HTML/CSS de `templates/travel-journal/`. On stocke l'URL du PDF et
+ * template HTML/CSS de `MemoBook Generator/templates/travel-journal/`. On stocke l'URL du PDF et
  * la référence de transaction, seule trace exploitable en cas de litige avec
  * le fournisseur.
  */

@@ -417,7 +417,7 @@ tout injecté verbatim. `npm run template:lint` refuse toute autre forme.
 
 `fonts.css` porte les `@font-face` en **base64**, générés par
 `npm run fonts:build` (`backend/scripts/build-font-css.ts`) depuis les `.woff2`
-versionnés dans `templates/travel-journal/assets/fonts/`. C'est la forme
+versionnés dans `MemoBook Generator/templates/travel-journal/assets/fonts/`. C'est la forme
 retenue en production : elle supprime la dépendance réseau au moment du rendu
 et garantit le même tirage à chaque impression.
 

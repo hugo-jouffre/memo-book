@@ -2868,7 +2868,7 @@ C'est la note « Logique » du nœud `3443:10070`.
 
 **« Typographie des titres » écrit `fontDisplay`, pas `fontTitle`**, et le
 croisement est volontaire : c'est le token `--mb-font-display` du gabarit. Voir
-la table de `templates/travel-journal/LAYOUT_KB.md`.
+la table de `MemoBook Generator/templates/travel-journal/LAYOUT_KB.md`.
 
 **Les deux pages du carnet** (`BookPagesPeek`) sont les **vraies** : rendues du
 PDF du dernier carnet composé, servi avec les réglages (`bookPdfUrl`). Pas de
