@@ -873,6 +873,12 @@ textarea {
   font-weight: 600;
 }
 
+/* L'échec de génération doit se voir sans chercher : même rouge que les autres erreurs. */
+.resultat-carnet.erreur {
+  color: var(--danger);
+  font-weight: 500;
+}
+
 .ajout-etape {
   display: flex;
   justify-content: center;
