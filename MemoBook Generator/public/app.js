@@ -255,6 +255,8 @@ const etat = {
   rencontres: [],
   /** Dernier PDF rendu par APITemplate, pour garder le lien sous la main. */
   pdf: null,
+  /** Message sous « Générer le carnet » : { type: "info" | "erreur", texte }. */
+  carnetStatut: null,
   etapes: [],
   /** Vocaux déposés mais pas encore transcrits — ils vivent dans leur boîte. */
   vocauxAttente: [],
@@ -286,22 +288,33 @@ const etat = {
 
 const conteneur = (id) => etat.etapes.find((e) => e.id === id);
 
+// Les photos ont une deuxième « étape » possible : `null` désigne la boîte
+// d'attente (`etat.photosAttente`), pour qu'une photo puisse y retourner.
+const listePhotos = (id) => (id ? conteneur(id)?.photos : etat.photosAttente);
+
 function deplacer(genre, itemId, deId, versId) {
   if (deId === versId) return;
-  const source = conteneur(deId);
-  const item = source?.[genre].find((x) => x.id === itemId);
-  if (!item) return;
-  source[genre] = source[genre].filter((x) => x.id !== itemId);
-  conteneur(versId)?.[genre].push(item);
+  const source = genre === "photos" ? listePhotos(deId) : conteneur(deId)?.[genre];
+  const index = source ? source.findIndex((x) => x.id === itemId) : -1;
+  if (index === -1) return;
+  const cible = genre === "photos" ? listePhotos(versId) : conteneur(versId)?.[genre];
+  if (!cible) return;
+  cible.push(source.splice(index, 1)[0]);
   apresChangement();
 }
 
 function modifier(genre, itemId, conteneurId, patch) {
-  const item = conteneur(conteneurId)?.[genre].find((x) => x.id === itemId);
+  const liste = genre === "photos" ? listePhotos(conteneurId) : conteneur(conteneurId)?.[genre];
+  const item = liste?.find((x) => x.id === itemId);
   if (item) Object.assign(item, patch);
 }
 
 function retirer(genre, itemId, conteneurId) {
+  if (genre === "photos" && !conteneurId) {
+    etat.photosAttente = etat.photosAttente.filter((x) => x.id !== itemId);
+    apresChangement();
+    return;
+  }
   const c = conteneur(conteneurId);
   if (!c) return;
   c[genre] = c[genre].filter((x) => x.id !== itemId);
@@ -1408,8 +1421,8 @@ function dateLongue(iso) {
  * par `templates/travel-journal/data.json`. Conversion **mécanique** : elle
  * n'écrit pas à la place du voyageur, elle habille son texte.
  */
-function construirePayloadCarnet() {
-  const toutesPhotos = etat.etapes.flatMap((e) => e.photos.map((p) => p.data).filter(Boolean));
+function construirePayloadCarnet(photoDe = (data) => data) {
+  const toutesPhotos = etat.etapes.flatMap((e) => e.photos.map((p) => photoDe(p.data)).filter(Boolean));
   const dates = etat.etapes.flatMap((e) => [e.dateDebut, e.dateFin]).filter(Boolean).sort();
   const premiere = dates[0];
   const derniere = dates[dates.length - 1];
@@ -1429,7 +1442,7 @@ function construirePayloadCarnet() {
     footer_tagline: "Racontez. Revivez. Partagez.",
     intro_text: "",
     days: etat.etapes.map((etape, index) => {
-      const photos = etape.photos.map((p) => p.data).filter(Boolean);
+      const photos = etape.photos.map((p) => (p.data ? photoDe(p.data) : "")).filter(Boolean);
       const recit = etape.souvenirs.map((s) => s.texte.trim()).filter(Boolean).join(" ");
       const layout = layoutPour(photos.length, index === 0);
       return {
@@ -1457,6 +1470,8 @@ function construirePayloadCarnet() {
         fun_facts: [],
         highlights: etape.photos.map((p) => p.legende).filter(Boolean).slice(0, 3),
         photos,
+        // Le template itère dessus : une liste vide vaut mieux qu'une clé absente.
+        sticker_groups: [],
         tag: etape.lieu || "",
       };
     }),
@@ -1473,89 +1488,261 @@ function construirePayloadCarnet() {
   };
 }
 
+/* ------------------------------------------------ envoi vers APITemplate --- */
+
+/**
+ * Plafonds de charge d'APITemplate, requête ET réponse comprises
+ * (README officiel du client JavaScript, section « Regional API endpoints ») :
+ *   rest(-de|-us).apitemplate.io      → 1 Mo, 100 s de délai
+ *   rest-alt(-de|-us).apitemplate.io  → 6 Mo, 30 s de délai
+ * Au-delà, le serveur coupe sans en-têtes CORS : le navigateur ne voit qu'un
+ * « Failed to fetch ». C'est ce qui faisait échouer le bouton en silence dès
+ * qu'une étape portait quelques photos en base64 pleine résolution.
+ * On garde une marge pour les en-têtes et l'enveloppe JSON.
+ */
+const PLAFOND_STANDARD = 0.9 * 1024 * 1024;
+const PLAFOND_ALTERNATIF = 5.5 * 1024 * 1024;
+
+/**
+ * Paliers de compression, du plus fin au plus léger. `cote` est le plus grand
+ * côté en pixels. Le template imprime en A5 et le rendu est en profil
+ * « preview » : 1600 px suffisent largement, 500 px restent lisibles.
+ */
+const PALIERS_PHOTOS = [
+  { cote: 1600, qualite: 0.8 },
+  { cote: 1200, qualite: 0.72 },
+  { cote: 900, qualite: 0.66 },
+  { cote: 700, qualite: 0.6 },
+  { cote: 500, qualite: 0.55 },
+];
+
+/** En dessous de ce palier, on préfère l'endpoint alternatif (6 Mo) pour garder de la qualité. */
+const COTE_MINI_STANDARD = 900;
+
+/** Cache : une photo n'est recompressée qu'une fois par palier, même si on regénère. */
+const cachePhotos = new Map();
+
+const debugCarnet = (...args) => console.debug("[carnet]", ...args);
+
+/** Transforme `rest-de.apitemplate.io/v2` en `rest-alt-de.apitemplate.io/v2`. */
+function baseAlternative(base) {
+  const url = new URL(base);
+  if (!url.hostname.includes("-alt")) {
+    url.hostname = url.hostname.replace(/^rest(-|\.)/, (_, sep) => (sep === "." ? "rest-alt." : "rest-alt-"));
+  }
+  return url.toString().replace(/\/$/, "");
+}
+
+/** Redimensionne et réencode une photo en JPEG. Renvoie une data URL. */
+function compresserPhoto(dataUrl, { cote, qualite }) {
+  const cle = `${cote}|${qualite}|${dataUrl.length}|${dataUrl.slice(-64)}`;
+  if (cachePhotos.has(cle)) return Promise.resolve(cachePhotos.get(cle));
+  return new Promise((resoudre) => {
+    const img = new Image();
+    img.onload = () => {
+      const ratio = Math.min(1, cote / Math.max(img.naturalWidth, img.naturalHeight));
+      const largeur = Math.max(1, Math.round(img.naturalWidth * ratio));
+      const hauteur = Math.max(1, Math.round(img.naturalHeight * ratio));
+      const toile = document.createElement("canvas");
+      toile.width = largeur;
+      toile.height = hauteur;
+      const ctx = toile.getContext("2d");
+      // Fond blanc : un PNG transparent passé en JPEG virerait au noir.
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, largeur, hauteur);
+      ctx.drawImage(img, 0, 0, largeur, hauteur);
+      const sortie = toile.toDataURL("image/jpeg", qualite);
+      cachePhotos.set(cle, sortie);
+      resoudre(sortie);
+    };
+    // Une image illisible ne bloque pas le carnet : elle est simplement omise.
+    img.onerror = () => {
+      debugCarnet("photo illisible, ignorée");
+      resoudre("");
+    };
+    img.src = dataUrl;
+  });
+}
+
+/** Compresse toutes les photos des étapes à un palier donné. Map data d'origine → data compressée. */
+async function photosAuPalier(palier) {
+  const originales = [
+    ...new Set(etat.etapes.flatMap((e) => e.photos.map((p) => p.data)).filter(Boolean)),
+  ];
+  const table = new Map();
+  for (const data of originales) table.set(data, await compresserPhoto(data, palier));
+  return table;
+}
+
+/**
+ * Cherche la meilleure qualité qui passe. Deux passes :
+ * 1. un palier ≥ 900 px qui tient dans 1 Mo → endpoint standard (délai de 100 s) ;
+ * 2. sinon le meilleur palier qui tient dans 5,5 Mo → endpoint alternatif (30 s).
+ */
+async function preparerEnvoi() {
+  const baseStandard = (etat.reglages.baseApitemplate || "https://rest-de.apitemplate.io/v2").replace(/\/$/, "");
+  const sansPhoto = !etat.etapes.some((e) => e.photos.some((p) => p.data));
+
+  if (sansPhoto) {
+    const payload = construirePayloadCarnet();
+    const poids = new Blob([JSON.stringify(payload)]).size;
+    debugCarnet("aucune photo, poids", poids, "octets");
+    return { payload, poids, base: poids <= PLAFOND_STANDARD ? baseStandard : baseAlternative(baseStandard), palier: null };
+  }
+
+  const essais = [];
+  for (const palier of PALIERS_PHOTOS) {
+    const table = await photosAuPalier(palier);
+    const payload = construirePayloadCarnet((data) => table.get(data) || "");
+    const poids = new Blob([JSON.stringify(payload)]).size;
+    essais.push({ palier, payload, poids });
+    debugCarnet(`palier ${palier.cote}px q${palier.qualite} → ${(poids / 1024).toFixed(0)} Ko`);
+    if (poids <= PLAFOND_STANDARD && palier.cote >= COTE_MINI_STANDARD) {
+      return { payload, poids, base: baseStandard, palier };
+    }
+  }
+
+  const alternatif = essais.find((e) => e.poids <= PLAFOND_ALTERNATIF);
+  if (alternatif) return { ...alternatif, base: baseAlternative(baseStandard) };
+
+  const plusLeger = essais[essais.length - 1];
+  throw new Error(
+    `même compressées, les photos pèsent ${(plusLeger.poids / 1024 / 1024).toFixed(1)} Mo ` +
+      "et APITemplate refuse au-delà de 6 Mo. Retire des photos de quelques étapes et relance.",
+  );
+}
+
+/** Traduit les erreurs réseau opaques en quelque chose d'actionnable. */
+function messageLisible(erreur, statut) {
+  const brut = String(erreur?.message || erreur || "");
+  if (/failed to fetch|networkerror|load failed/i.test(brut)) {
+    return "APITemplate n'a pas répondu (charge trop lourde, délai dépassé ou coupure réseau). Relance ; si ça persiste, retire des photos.";
+  }
+  if (statut === 401) return "clé APITemplate refusée. Vérifie qu'elle correspond bien au compte de la région choisie (DE par défaut).";
+  if (statut === 403) return "la clé est valide mais n'a pas accès à ce template.";
+  if (statut === 413) return "charge trop lourde pour APITemplate. Retire des photos et relance.";
+  if (statut === 429) return "trop de demandes d'affilée. Attends dix secondes et relance.";
+  return brut;
+}
+
 /**
  * Envoie le carnet à APITemplate et ouvre le PDF.
  *
- * Beta assumée : la conversion vers le contrat du template est mécanique, et
- * les photos partent en base64 dans la requête — au-delà de quelques dizaines,
- * APITemplate refusera la charge. Le pipeline du back-end reste la voie
- * sérieuse ; ceci sert à voir tout de suite à quoi le carnet ressemble.
+ * Beta assumée : la conversion vers le contrat du template est mécanique. Le
+ * pipeline du back-end reste la voie sérieuse ; ceci sert à voir tout de
+ * suite à quoi le carnet ressemble.
+ *
+ * Trois corrections par rapport à la première version :
+ * - les erreurs s'affichent sous le bouton (avant, elles n'apparaissaient que
+ *   dans la carte « Étapes groupées », cachée quand il n'y a pas d'étape) ;
+ * - les photos sont compressées pour tenir dans le plafond d'APITemplate ;
+ * - l'onglet du PDF est ouvert au clic, avant tout `await`, sinon Safari et
+ *   Chrome le bloquent comme une popup.
  */
 async function genererCarnet(bouton) {
   if (bouton.disabled) return;
+  debugCarnet("clic sur Générer le carnet", {
+    etapes: etat.etapes.length,
+    photos: etat.etapes.reduce((n, e) => n + e.photos.length, 0),
+    mode: etat.mode,
+  });
+
   if (!etat.etapes.length) {
-    etat.erreur = "Aucune étape : il n'y a rien à mettre en page.";
-    rendreColonne();
+    etat.carnetStatut = { type: "erreur", texte: "Aucune étape : dépose et transcris des vocaux avant de générer le carnet." };
+    rendreResultatPdf();
     return;
   }
   const cle = (etat.reglages.cleApitemplate || "").trim();
   if (!cle) {
-    etat.erreur = "Aucune clé APITemplate : colle-la dans « Clés et réglages » pour générer le PDF.";
+    etat.carnetStatut = { type: "erreur", texte: "Aucune clé APITemplate : colle-la dans « Clés et réglages », puis relance." };
     etat.boites.reglages = true;
+    rendreResultatPdf();
     rendreColonne();
     return;
+  }
+
+  // Ouvert tout de suite, pendant que le geste de l'utilisateur est encore « frais ».
+  const onglet = window.open("", "_blank");
+  if (onglet) {
+    onglet.opener = null;
+    onglet.document.title = "Carnet en cours de génération";
+    onglet.document.body.style.cssText = "font-family:system-ui,sans-serif;padding:2rem;color:#2d231a";
+    onglet.document.body.textContent = "Génération du carnet en cours, cet onglet affichera le PDF dès qu'il sera prêt.";
+  } else {
+    debugCarnet("onglet bloqué par le navigateur, le lien restera sous le bouton");
   }
 
   const contenu = [...bouton.childNodes];
   bouton.disabled = true;
   bouton.textContent = "Génération en cours…";
-  etat.erreur = "";
   etat.pdf = null;
+  etat.carnetStatut = { type: "info", texte: "Préparation des photos…" };
+  rendreResultatPdf();
 
+  let statut = 0;
   try {
-    const payload = construirePayloadCarnet();
-    const poids = JSON.stringify(payload).length;
-    if (poids > 20 * 1024 * 1024) {
-      throw new Error(
-        `la charge fait ${(poids / 1024 / 1024).toFixed(1)} Mo, trop de photos en base64 pour un envoi direct`,
-      );
-    }
+    const { payload, poids, base, palier } = await preparerEnvoi();
+    debugCarnet("envoi", { base, poids, palier });
 
-    const url = new URL(
-      `${etat.reglages.baseApitemplate || "https://rest-de.apitemplate.io/v2"}/create-pdf`,
-    );
+    etat.carnetStatut = {
+      type: "info",
+      texte: `Envoi à APITemplate (${(poids / 1024).toFixed(0)} Ko${palier ? `, photos en ${palier.cote} px` : ""})… compte 10 à 40 secondes.`,
+    };
+    rendreResultatPdf();
+
+    const url = new URL(`${base}/create-pdf`);
     url.searchParams.set("template_id", etat.reglages.templateApitemplate || "7a177b23210099d6");
 
+    const debut = performance.now();
     const reponse = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json", "X-API-KEY": cle },
       body: JSON.stringify(payload),
     });
+    statut = reponse.status;
     const donnees = await reponse.json().catch(() => null);
+    debugCarnet("réponse", { statut, duree_ms: Math.round(performance.now() - debut), donnees });
 
     if (!reponse.ok || donnees?.status !== "success") {
-      throw new Error(donnees?.message || `APITemplate a refusé le rendu (HTTP ${reponse.status})`);
+      throw new Error(donnees?.message || `APITemplate a refusé le rendu (HTTP ${statut})`);
     }
     if (!donnees.download_url) {
       throw new Error("APITemplate a répondu « success » sans lien de téléchargement");
     }
 
     etat.pdf = { url: donnees.download_url, quand: new Date() };
-    window.open(donnees.download_url, "_blank", "noopener");
+    etat.carnetStatut = null;
+    if (onglet && !onglet.closed) onglet.location.href = donnees.download_url;
   } catch (erreur) {
-    etat.erreur = `Le carnet n'a pas pu être généré : ${erreur.message}`;
+    console.error("[carnet] échec", erreur);
+    etat.carnetStatut = { type: "erreur", texte: `Le carnet n'a pas pu être généré : ${messageLisible(erreur, statut)}` };
+    if (onglet && !onglet.closed) onglet.close();
   } finally {
     bouton.disabled = false;
     bouton.replaceChildren(...contenu);
     rendreResultatPdf();
-    rendreColonne();
   }
 }
 
-/** Le lien vers le dernier PDF rendu, sous les boutons de l'en-tête. */
+/** Sous les boutons de l'en-tête : l'avancement, l'erreur, ou le lien vers le dernier PDF. */
 function rendreResultatPdf() {
   let zone = $("resultat-carnet");
   if (!zone) {
-    zone = h("p", { class: "resultat-carnet", id: "resultat-carnet" });
+    zone = h("p", { class: "resultat-carnet", id: "resultat-carnet", role: "status", "aria-live": "polite" });
     $("champs-carnet").before(zone);
   }
   zone.replaceChildren();
-  zone.hidden = !etat.pdf;
+  zone.classList.toggle("erreur", etat.carnetStatut?.type === "erreur");
+  zone.hidden = !etat.pdf && !etat.carnetStatut;
+  if (etat.carnetStatut) {
+    zone.append(etat.carnetStatut.texte);
+    return;
+  }
   if (!etat.pdf) return;
   zone.append(
     "Carnet généré à ",
     etat.pdf.quand.toLocaleTimeString("fr-FR"),
-    " — ",
+    ", ",
     h("a", { href: etat.pdf.url, target: "_blank", rel: "noopener" }, "ouvrir le PDF"),
   );
 }
@@ -1777,6 +1964,28 @@ function selecteurDeplacement(genre, itemId, conteneurId) {
   return select;
 }
 
+/**
+ * Le menu qui associe une photo à son étape. Contrairement à
+ * `selecteurDeplacement`, il affiche l'étape actuelle (ou « En attente ») au
+ * lieu de revenir à un intitulé neutre : c'est une affectation, pas un geste
+ * ponctuel.
+ */
+function selecteurEtapePhoto(photoId, etapeIdActuelle) {
+  const select = h(
+    "select",
+    {
+      title: "Étape associée à cette photo",
+      onchange: (ev) => deplacer("photos", photoId, etapeIdActuelle, ev.target.value || null),
+    },
+    h("option", { value: "" }, "En attente"),
+    etat.etapes.map((e, i) =>
+      h("option", { value: e.id }, `${i + 1}. ${e.titre || e.lieu || "Étape sans titre"}`),
+    ),
+  );
+  select.value = etapeIdActuelle || "";
+  return select;
+}
+
 function carteSouvenir(s, conteneurId) {
   return h(
     "div",
@@ -1857,7 +2066,7 @@ function cartePhoto(p, conteneurId) {
       h(
         "div",
         { class: "rangee" },
-        selecteurDeplacement("photos", p.id, conteneurId),
+        selecteurEtapePhoto(p.id, conteneurId),
         h(
           "button",
           {
@@ -2201,7 +2410,7 @@ function rendreBoitePhotos() {
       importerPhotos,
     ),
     entree,
-    h("div", { class: "vignettes-attente", id: "attente-photos", hidden: true }),
+    h("div", { class: "grille-photos", id: "attente-photos", hidden: true }),
     h("p", { class: "aide", id: "aide-photos" }),
   );
   majBoitePhotos();
@@ -2213,18 +2422,14 @@ function majBoitePhotos() {
     zone.hidden = etat.photosAttente.length === 0;
     remplir(
       zone,
-      etat.photosAttente.map((p) =>
-        p.data
-          ? h("img", { src: p.data, alt: p.nomFichier, title: p.nomFichier })
-          : h("span", { class: "vide" }, p.nomFichier || "photo manquante"),
-      ),
+      etat.photosAttente.map((p) => cartePhoto(p, null)),
     );
   }
   const aide = $("aide-photos");
   if (aide) {
     aide.textContent = etat.photosAttente.length
-      ? "Ces photos attendent une étape dont la date les accueille. Crée une étape, ou fais-les glisser toi-même."
-      : "Chaque photo rejoint l'étape qui couvre sa date de fichier, ou la plus proche.";
+      ? "Choisis une étape dans le menu de chaque photo, ou attends qu'une étape corresponde à sa date."
+      : "Chaque photo rejoint l'étape qui couvre sa date de fichier, ou la plus proche ; le menu sur chaque photo permet de changer.";
   }
   majBadge(boitePhotos, etat.photosAttente.length ? `${etat.photosAttente.length}` : "", true);
 }
