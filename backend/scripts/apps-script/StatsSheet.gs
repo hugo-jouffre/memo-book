@@ -7,7 +7,14 @@
  *
  * Mise en place, une fois :
  *
- *   1. Crée un Google Sheet vide — « MemoBook · Tableau de bord ».
+ *   1. Importe « MemoBook - Tableau de bord.xlsx » dans Google Drive
+ *      (Nouveau → Importer un fichier), ouvre-le avec Sheets et enregistre-le
+ *      au format Google Sheets. Le classeur sort de
+ *      `backend/scripts/apps-script/build-dashboard-workbook.py` — ses trois
+ *      onglets de données portent déjà les en-têtes ci-dessous, aux couleurs
+ *      et en Poppins ; ce script les retrouve et pose ses lignes dessous.
+ *      Un Sheet vide marche aussi : les onglets sont alors créés au premier
+ *      envoi, sans mise en forme.
  *   2. Extensions → Apps Script, colle ce fichier à la place de `Code.gs`.
  *   3. Dans « Paramètres du projet » → « Propriétés du script », ajoute
  *      `SECRET` avec une longue chaîne au hasard.
@@ -18,18 +25,22 @@
  *   6. `npm run stats:push` depuis `backend/` pour remplir les onglets sans
  *      attendre le passage de 4 h 20.
  *
- * Trois onglets, créés au premier envoi :
+ * Trois onglets de données :
  *
  *   - **Relevés** : une ligne par jour, une colonne par chiffre — de quoi
  *     tracer des courbes avec un graphique Sheets ordinaire ;
  *   - **Résiliations** : une ligne par raison de départ, à l'instant où elle
- *     est donnée ;
+ *     est donnée, et le cumul par raison en F:G ;
  *   - **Carnets à livrer** : réécrit à chaque relevé — les commandes parties et
  *     pas encore livrées, avec leur adresse et leur suivi.
  *
- * Un quatrième onglet, **Tableau de bord**, est laissé à la main : des
- * formules sur « Relevés » (`=INDEX(Relevés!B:B; COUNTA(Relevés!B:B))` pour
- * la dernière valeur), et les graphiques qu'on veut.
+ * Le quatrième, **Tableau de bord**, vient avec le classeur : des formules
+ * sur les trois autres, et trois courbes. **Ne pas renommer les onglets ni
+ * les colonnes** : le script écrit par position, le tableau de bord lit par
+ * position.
+ *
+ * Le menu « MemoBook » de la feuille (`onOpen`) vérifie onglets, en-têtes et
+ * secret ; l'URL du déploiement, ouverte dans un navigateur, répond `ok`.
  */
 
 var SNAPSHOT_COLUMNS = [
@@ -112,6 +123,43 @@ function doPost(request) {
 /** Un GET dit seulement que le script est là — pratique pour vérifier l'URL. */
 function doGet() {
   return reply({ ok: true, message: "MemoBook · feuille de bord" });
+}
+
+/** Un menu dans la feuille : vérifier que les onglets attendus sont là. */
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu("MemoBook")
+    .addItem("Vérifier les onglets", "checkSheets")
+    .addToUi();
+}
+
+function checkSheets() {
+  var expected = [
+    ["Relevés", SNAPSHOT_COLUMNS.map(function (column) { return column[1]; })],
+    ["Résiliations", CANCELLATION_COLUMNS],
+    ["Carnets à livrer", DELIVERY_COLUMNS],
+  ];
+  var problems = [];
+  expected.forEach(function (entry) {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(entry[0]);
+    if (!sheet) {
+      problems.push("Onglet « " + entry[0] + " » absent : il sera créé au premier envoi.");
+      return;
+    }
+    var headers = sheet.getRange(1, 1, 1, entry[1].length).getValues()[0];
+    entry[1].forEach(function (header, index) {
+      if (headers[index] !== header) {
+        problems.push("« " + entry[0] + " », colonne " + (index + 1) + " : attendu « " + header + " », trouvé « " + headers[index] + " ».");
+      }
+    });
+  });
+  var secret = PropertiesService.getScriptProperties().getProperty("SECRET");
+  if (!secret) problems.push("Propriété de script SECRET absente : le script acceptera tout envoi.");
+  SpreadsheetApp.getUi().alert(
+    problems.length === 0
+      ? "Tout est en place : trois onglets, en-têtes conformes, secret défini."
+      : problems.join("\n")
+  );
 }
 
 function reply(body) {

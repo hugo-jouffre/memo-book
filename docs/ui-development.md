@@ -4075,12 +4075,27 @@ Trois onglets, créés au premier envoi :
 | **Résiliations** | une ligne par raison de départ, à l'instant où elle est donnée (`POST /v1/profile/subscription/cancel`), et le cumul par raison recalculé à chaque relevé |
 | **Carnets à livrer** | réécrit à chaque relevé : les commandes soumises, en production ou expédiées et pas encore livrées — voyage, exemplaires, pages, montant, destinataire, ville, pays, lien de suivi, dates |
 
-Un quatrième onglet, « Tableau de bord », se fait à la main avec des formules
-sur « Relevés » et les graphiques de Sheets. `npm run stats:show` affiche le
-relevé du jour sans rien envoyer, `npm run stats:push` l'envoie — pour remplir
-la feuille le jour où on la branche (`STATS_SHEET_WEBHOOK_URL` et
-`STATS_SHEET_SECRET` sur Railway). `collectStats` est testé sur une base
-peuplée ; `postToSheet` sur un `fetch` simulé.
+**Le classeur à importer** (Hugo, 29/09/2026) :
+`backend/scripts/apps-script/MemoBook - Tableau de bord.xlsx`, produit par
+`build-dashboard-workbook.py` (openpyxl, dans le même dossier). Les trois
+onglets de données portent déjà les en-têtes que le script écrit, aux couleurs
+de l'app (vert `#28654B`, crème `#FCF2E9`, blanc cassé `#FFFCF8`, beige
+`#F9E6D6`) et en Poppins ; un quatrième, « Tableau de bord », ne contient que
+des formules sur les trois autres — la dernière valeur de chaque chiffre,
+l'écart avec le relevé d'il y a sept jours (`COUNTIF` sur les dates, pas de
+`MATCH` approché sur des blancs), le cumul des raisons de départ, trois
+courbes — et un cinquième, « Mode d'emploi », répète les sept étapes de
+branchement. Importé dans Drive puis enregistré au format Sheets, le script
+retrouve les onglets et pose ses lignes dessous ; son menu « MemoBook →
+Vérifier les onglets » confirme en-têtes et secret. Les formules ont été
+recalculées hors ligne sur une copie garnie de dix relevés fictifs (paquet
+`formulas`), pas encore dans Google Sheets lui-même.
+
+`npm run stats:show` affiche le relevé du jour sans rien envoyer, `npm run
+stats:push` l'envoie — pour remplir la feuille le jour où on la branche
+(`STATS_SHEET_WEBHOOK_URL` et `STATS_SHEET_SECRET` sur Railway).
+`collectStats` est testé sur une base peuplée ; `postToSheet` sur un `fetch`
+simulé.
 
 ### 32.5 À trancher
 
