@@ -13,9 +13,22 @@ struct ChatComposer: View {
     @FocusState.Binding var isWriting: Bool
     let onAddPhotos: () -> Void
 
+    /// La puce en vol vers le fil, s'il y en a une : la bande la cache, c'est
+    /// sa copie en vol qu'on regarde. Voir ``ChatView/launch(_:from:)``.
+    var flyingSuggestionId: String? = nil
+
+    /// Ce qu'une puce fait quand on la touche, avec son cadre à l'écran. `nil`
+    /// envoie tout de suite, sans vol.
+    var onLaunch: ((ChatSuggestion, CGRect) -> Void)? = nil
+
     var body: some View {
         VStack(spacing: 0) {
-            ChatSuggestionRail(model: model, onAddPhotos: onAddPhotos)
+            ChatSuggestionRail(
+                model: model,
+                onAddPhotos: onAddPhotos,
+                flyingSuggestionId: flyingSuggestionId,
+                onLaunch: onLaunch
+            )
             ChatSendingBar(model: model, isWriting: $isWriting, onAddPhotos: onAddPhotos)
         }
         .background(ChatMetrics.barMaterial)
@@ -47,15 +60,23 @@ struct ChatComposer: View {
 struct ChatSuggestionRail: View {
     @Bindable var model: ChatModel
     let onAddPhotos: () -> Void
+    var flyingSuggestionId: String? = nil
+    var onLaunch: ((ChatSuggestion, CGRect) -> Void)? = nil
 
-    /// La hauteur d'une ligne de puce, qui suit le corps du texte.
-    @ScaledMetric(relativeTo: .body) private var lineHeight: CGFloat = MemoBookSpacing.m
+    /// La hauteur d'une puce : **plus basse qu'une bulle du fil** (Hugo,
+    /// 29/09/2026) — 2 rem, en corps d'accroche — pour qu'on lise une
+    /// proposition et non un message déjà dit. Elle suit le corps du texte.
+    @ScaledMetric(relativeTo: .subheadline) private var chipHeight: CGFloat = MemoBookSpacing.l
 
-    /// La hauteur de la bande : une ligne et ses marges, jamais moins qu'une
-    /// cible tactile.
+    /// La hauteur de la bande : la puce et ses marges, jamais moins qu'une
+    /// cible tactile — la puce est plus basse que 2.75 rem, la bande non.
     private var railHeight: CGFloat {
-        max(MemoBookSpacing.minimumTapTarget, lineHeight + MemoBookSpacing.s)
+        max(MemoBookSpacing.minimumTapTarget, chipHeight + MemoBookSpacing.xs)
     }
+
+    /// Les cadres des puces à l'écran, par identifiant : le point de départ du
+    /// vol quand on en touche une.
+    @State private var frames: [String: CGRect] = [:]
 
     var body: some View {
         let suggestions = model.visibleSuggestions
@@ -84,17 +105,27 @@ struct ChatSuggestionRail: View {
     }
 
     private func chip(_ suggestion: ChatSuggestion) -> some View {
-        Button {
-            model.choose(suggestion, addPhotos: onAddPhotos)
+        let isFlying = flyingSuggestionId == suggestion.id
+
+        return Button {
+            if let onLaunch, let frame = frames[suggestion.id] {
+                onLaunch(suggestion, frame)
+            } else {
+                model.choose(suggestion, addPhotos: onAddPhotos)
+            }
         } label: {
             HStack(spacing: MemoBookSpacing.xs / 2) {
                 if let symbol = suggestion.symbol {
                     // L'emoji est porté à part du libellé : il ne part pas dans
                     // le message envoyé, et VoiceOver ne le lit pas.
-                    Text(symbol).accessibilityHidden(true)
+                    Text(symbol)
+                        .font(MemoBookFont.taglineRegular)
+                        .accessibilityHidden(true)
                 }
                 Text(suggestion.label)
-                    .font(MemoBookFont.bubble)
+                    // Le corps d'accroche (14) et non celui des bulles (17) :
+                    // une proposition se lit plus petit que ce qu'on a dit.
+                    .font(MemoBookFont.taglineRegular)
                     .foregroundStyle(MemoBookColor.ink)
                     // Une ligne, jamais tronquée : la puce s'allonge autant
                     // qu'il faut, et c'est la bande qui défile.
@@ -102,14 +133,23 @@ struct ChatSuggestionRail: View {
                     .fixedSize()
             }
             .padding(.horizontal, MemoBookSpacing.snug)
-            .frame(height: railHeight)
+            .frame(height: chipHeight)
             // **Une capsule**, blanche, l'émoji devant : c'est la bulle des
             // propositions de la maquette de Hugo (`3520:35958`, 17/09/2026),
             // et non le rectangle arrondi des bulles du fil.
             .background(MemoBookColor.surface, in: .capsule)
+            .overlay { Capsule().strokeBorder(MemoBookColor.hairline, lineWidth: 1) }
+            // La cible reste à 2.75 rem, la puce dessinée plus basse (R7).
+            .frame(height: railHeight)
+            .contentShape(.capsule)
         }
         .buttonStyle(CardPressStyle())
-        .contentShape(.capsule)
+        // Pendant son vol, la puce laisse sa place vide : c'est sa copie en
+        // vol qu'on regarde, et elle part d'ici.
+        .opacity(isFlying ? 0 : 1)
+        .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) {
+            frames[suggestion.id] = $0
+        }
         .accessibilityLabel(suggestion.label)
     }
 }

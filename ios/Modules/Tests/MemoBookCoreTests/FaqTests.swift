@@ -78,11 +78,17 @@ struct FaqTests {
 
     /// R9 : l'app tutoie, sans exception. Le vouvoiement se glisse par les
     /// formes en « vous » et « votre », qui sont les plus fréquentes.
+    ///
+    /// **Un « vous » pluriel n'est pas un vouvoiement** : « si vous êtes
+    /// plusieurs sur le voyage » (`faq.raconter.plusieurs-voix`) s'adresse aux
+    /// co-voyageurs ensemble, et c'est le texte de la page Notion (29/09/2026).
     @Test("Aucune réponse ne vouvoie")
     func nothingIsFormal() {
         let formal = [" vous ", " votre ", " vos ", "Vous ", "Votre "]
+        let plural = ["si vous êtes plusieurs"]
         for entry in Faq.entries {
-            let text = ([entry.question] + entry.answer).joined(separator: " ")
+            var text = ([entry.question] + entry.answer).joined(separator: " ")
+            for phrase in plural { text = text.replacingOccurrences(of: phrase, with: "") }
             for form in formal {
                 #expect(!text.contains(form), "\(entry.id) vouvoie : \(text)")
             }
@@ -127,10 +133,16 @@ struct FaqTests {
         }
     }
 
+    /// Sauf les deux entrées d'aide, « de type action » sur la page Notion :
+    /// elles ouvrent la modale « Nous contacter » et n'ont pas de corps de
+    /// réponse (29/09/2026).
     @Test("Aucune réponse n’est vide")
     func noAnswerIsEmpty() {
+        let actions = Set(Faq.contact.entries.map(\.id))
         for entry in Faq.entries {
-            #expect(!entry.answer.isEmpty, "\(entry.id) n’a pas de réponse")
+            if !actions.contains(entry.id) {
+                #expect(!entry.answer.isEmpty, "\(entry.id) n’a pas de réponse")
+            }
             #expect(!entry.question.isEmpty)
         }
     }

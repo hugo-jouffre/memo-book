@@ -46,7 +46,12 @@ public struct TripCreationView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var showsSkeleton: Bool { !hasSettled || model.isSaving }
+    /// Le squelette : le temps de la poussée, et celui de l'enregistrement —
+    /// sauf sur la dernière étape, qui se dessine entière et n'attend que son
+    /// code d'accès (Hugo, 29/09/2026).
+    private var showsSkeleton: Bool {
+        !hasSettled || (model.isSaving && model.step != .companions)
+    }
 
     public var body: some View {
         VStack(spacing: 0) {
@@ -105,6 +110,9 @@ public struct TripCreationView: View {
             // d'accès est là, il n'y a plus que « Commencer ! » — Hugo,
             // 14/09/2026. Un « Passer » à côté laissait croire qu'on pouvait
             // encore éviter quelque chose.
+            // Le nom non plus : la base l'exige, et un « Passer » qui posait
+            // « Mon voyage » à sa place trompait sur ce qu'on venait de faire
+            // (Hugo, 29/09/2026).
             if model.step.canBeSkipped {
                 Button("Passer") {
                     direction = .forward
@@ -180,8 +188,11 @@ public struct TripCreationView: View {
                     .id("title-\(model.step.rawValue)")
                     .transition(.opacity)
 
-                TripCreationStepContent(model: model, focus: $focus)
-                    .padding(.horizontal, MemoBookSpacing.screenMargin)
+                TripCreationStepContent(model: model, focus: $focus) {
+                    direction = .forward
+                    Task { await model.validate() }
+                }
+                .padding(.horizontal, MemoBookSpacing.screenMargin)
                     .padding(.top, MemoBookSpacing.m)
                     .padding(.bottom, MemoBookSpacing.s)
                     .id("content-\(model.step.rawValue)")

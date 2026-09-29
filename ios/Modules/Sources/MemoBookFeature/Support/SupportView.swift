@@ -52,6 +52,11 @@ public struct SupportView: View {
             .padding(.bottom, MemoBookSpacing.l)
         }
         .scrollIndicators(.hidden)
+        // Le clavier de la recherche se range d'un geste ou depuis sa barre
+        // (Hugo, 29/09/2026) : sans ça, il restait levé sur une liste qu'il
+        // cachait à moitié.
+        .scrollDismissesKeyboard(.interactively)
+        .brandKeyboardDismissBar()
         .background(MemoBookColor.background.ignoresSafeArea())
         .brandHiddenNavigationBar()
         // Le crème de la marque ne se retourne pas en sombre — voir

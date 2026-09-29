@@ -347,7 +347,9 @@ export function serializeTripStep(
 type AccountForProfile = Account & {
   cards?: PaymentCard[];
   connectors?: AccountConnector[];
-  subscriptions?: Subscription[];
+  subscriptions?: (Subscription & {
+    memo?: { title: string; destinationCity: string | null } | null;
+  })[];
   identities?: { provider: string }[];
 };
 
@@ -481,6 +483,11 @@ export function serializeProfile(
     // Décide d'une chose et d'une seule côté app : l'adresse ne se corrige pas.
     // Elle appartient au compte Apple ou Google.
     signInProvider: account.identities?.[0]?.provider ?? null,
+    // Le compte a un mot de passe à lui : c'est ce qui fait exister la ligne
+    // « Mot de passe » du profil (Hugo, 29/09/2026). `signInProvider` ne
+    // suffisait pas — un compte entré par e-mail puis rattaché à Apple a les
+    // deux.
+    hasPassword: account.passwordHash !== null,
     phoneNumber: account.phoneNumber,
     // Le jour, `AAAA-MM-JJ` — pas un instant, qui se relirait dans le fuseau de
     // l'appareil et pourrait reculer d'un jour.
@@ -512,6 +519,10 @@ export function serializeProfile(
       // — l'app comme le serveur laissent raconter jusque-là (Hugo,
       // 16/09/2026). Nul quand rien n'a été payé.
       paidThrough: iso(subscription?.renewsAt ?? null),
+      // Le voyage qu'il finance (T71) : la ville pour « ton carnet de Rome »,
+      // le titre pour le reste. Nuls tant que rien n'est rattaché.
+      tripTitle: subscription?.memo?.title ?? null,
+      tripDestination: subscription?.memo?.destinationCity ?? null,
       // **Déduit, pas stocké** : un abonnement terminé dans l'historique du
       // compte, et aucun en cours. C'est ce qui fait voir le paywall de retour
       // — deux écrans au lieu de trois — à quelqu'un qui repart en voyage.
@@ -714,7 +725,10 @@ type WalletEntryRow = {
 export function serializeWallet(
   balanceCents: number,
   entries: WalletEntryRow[],
-  trip: Pick<Memo, "id" | "title" | "destinationCity" | "targetPageCount" | "pageCount"> | null
+  trip: Pick<
+    Memo,
+    "id" | "title" | "destinationCity" | "targetPageCount" | "pageCount" | "startDate" | "endDate"
+  > | null,
 ) {
   return {
     // Le carnet que cette cagnotte finance — celui qu'on a demandé, ou celui
@@ -748,9 +762,34 @@ export function serializeWallet(
  * annoncer le coût des deux pages actuelles ferait une promesse qu'on ne
  * tiendra pas.
  */
-function serializeWalletEstimate(trip: Pick<Memo, "targetPageCount" | "pageCount">) {
+function serializeWalletEstimate(
+  trip: Pick<Memo, "targetPageCount" | "pageCount" | "startDate" | "endDate">,
+) {
   const pages = Math.max(trip.targetPageCount, trip.pageCount);
-  return { pageCount: pages, cost: euros(unitPriceCents(pages)) };
+  return {
+    pageCount: pages,
+    cost: euros(unitPriceCents(pages)),
+    // Les dates du voyage et ses semaines **entamées** : c'est sur elles que
+    // la feuille « Estimation » du paywall compte les abonnements (T127). Un
+    // voyage sans date de fin court encore : on compte jusqu'à aujourd'hui.
+    startDate: iso(trip.startDate),
+    endDate: iso(trip.endDate),
+    weeks: subscriptionWeeks(trip.startDate, trip.endDate),
+  };
+}
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Combien de semaines d'abonnement un voyage demande, entamée comprise. */
+export function subscriptionWeeks(
+  startDate: Date | null,
+  endDate: Date | null,
+  now: Date = new Date(),
+): number | null {
+  if (!startDate) return null;
+  const end = endDate ?? now;
+  const span = Math.max(0, end.getTime() - startDate.getTime());
+  return Math.max(1, Math.ceil(span / WEEK_MS));
 }
 
 type MemoForPreview = Memo & {

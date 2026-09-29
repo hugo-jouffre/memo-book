@@ -264,11 +264,15 @@ public struct TripSettingsView: View {
                 )
             }
 
-            TricountCallout(
-                connected: settings?.tricountLabel,
-                isLoading: isLoading,
-                action: { onIntent(.connectTricount) }
-            )
+            #if DEBUG
+                // Comme la carte des connecteurs du profil : en Debug seulement
+                // tant que rien ne se branche (Hugo, 29/09/2026 ; T76).
+                TricountCallout(
+                    connected: settings?.tricountLabel,
+                    isLoading: isLoading,
+                    action: { onIntent(.connectTricount) }
+                )
+            #endif
         }
     }
 

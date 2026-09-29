@@ -103,6 +103,16 @@ public protocol MemoBookAPI: Sendable {
     /// Renvoie le profil relu, dont `avatarUrl` pointe désormais sur elle.
     func uploadAvatar(data: Data, mimeType: String) async throws -> TravellerProfile
 
+    /// Retire la photo de profil — `DELETE /v1/profile/avatar`. Renvoie le
+    /// profil relu, sans `avatarUrl`.
+    func removeAvatar() async throws -> TravellerProfile
+
+    /// Change le mot de passe du compte — `POST /v1/profile/password`, avec
+    /// l'actuel pour preuve. Codes : `wrong_password`, `same_password`,
+    /// `no_password` (compte Apple ou Google). Les autres sessions du compte
+    /// sont fermées ; la sienne reste.
+    func changePassword(current: String, new: String) async throws
+
     /// Résilie l'abonnement, au bout des trois confirmations de la feuille.
     ///
     /// Rend le profil relu : c'est lui qui porte l'abonnement fermé, la date de
@@ -304,6 +314,18 @@ public protocol MemoBookAPI: Sendable {
     /// voyagent avec, parce qu'il y en a un jeu par voyage et qu'aucune requête
     /// ne les interroge seules.
     func tripSettings(id: String) async throws -> TripSettings
+
+    /// Les deux plats du carnet — `GET /v1/trips/:id/covers` : ce qu'on a
+    /// choisi, les styles, les photos du voyage et les chiffres du dos (T88).
+    func bookCovers(tripId: String) async throws -> BookCovers
+
+    /// Un geste sur un plat — `PATCH /v1/trips/:id/covers`. Rend les plats relus.
+    func updateBookCovers(tripId: String, edit: BookCoverEdit) async throws -> BookCovers
+
+    /// Une photo importée pour la couverture — `POST /v1/trips/:id/covers/photos`,
+    /// en JPEG. Elle entre dans les photos du voyage ; la poser sur un plat est
+    /// un `updateBookCovers` de plus.
+    func uploadCoverPhoto(tripId: String, data: Data) async throws -> CoverPhoto
 
     /// Change **un** réglage, et relit tout.
     ///

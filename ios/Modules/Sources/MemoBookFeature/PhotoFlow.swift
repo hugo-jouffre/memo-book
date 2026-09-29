@@ -129,13 +129,25 @@ extension View {
     ///   - title: ce que la feuille de choix annonce — « Ajouter une photo »
     ///     dans la conversation, « Photo de profil » sur le profil.
     ///   - maxSelection: combien de photos la photothèque laisse choisir.
+    ///   - onRemove: **retirer la photo en place**, quand il y en a une — le
+    ///     profil revient alors à ses initiales (Hugo, 29/09/2026). `nil`
+    ///     n'ajoute rien à la feuille.
     func photoFlow(
         _ flow: PhotoFlow,
         title: String = ChatCopy.Photos.title,
         maxSelection: Int = ChatMetrics.visiblePhotoCount,
+        onRemove: (() -> Void)? = nil,
         onPicked: @escaping ([Data]) -> Void
     ) -> some View {
-        modifier(PhotoFlowModifier(flow: flow, title: title, maxSelection: maxSelection, onPicked: onPicked))
+        modifier(
+            PhotoFlowModifier(
+                flow: flow,
+                title: title,
+                maxSelection: maxSelection,
+                onRemove: onRemove,
+                onPicked: onPicked
+            )
+        )
     }
 }
 
@@ -143,6 +155,7 @@ private struct PhotoFlowModifier: ViewModifier {
     @Bindable var flow: PhotoFlow
     let title: String
     let maxSelection: Int
+    let onRemove: (() -> Void)?
     let onPicked: ([Data]) -> Void
 
     @State private var selection: [PhotosPickerItem] = []
@@ -160,6 +173,11 @@ private struct PhotoFlowModifier: ViewModifier {
                     Button(ChatCopy.Photos.takeOne) { flow.chooseCamera() }
                 }
                 Button(ChatCopy.Photos.fromLibrary) { flow.chooseLibrary() }
+                // Retirer vient en dernier, et en rouge : c'est l'action qui
+                // défait, et la feuille du système la place ainsi.
+                if let onRemove {
+                    Button(ChatCopy.Photos.remove, role: .destructive, action: onRemove)
+                }
                 Button(ChatCopy.Photos.cancel, role: .cancel) {}
             }
             .photosPicker(

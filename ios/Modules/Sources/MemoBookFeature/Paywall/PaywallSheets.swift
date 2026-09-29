@@ -32,6 +32,15 @@ struct PaywallEstimation {
     /// Le prix d'un exemplaire de plus : -20 %.
     var extraCopyPrice: Decimal { bookPrice * 0.8 }
 
+    init(weeks: Int, start: Date, end: Date, pageCount: Int, bookPrice: Decimal, weeklyPrice: Decimal) {
+        self.weeks = weeks
+        self.start = start
+        self.end = end
+        self.pageCount = pageCount
+        self.bookPrice = bookPrice
+        self.weeklyPrice = weeklyPrice
+    }
+
     /// « 15 sept. - 6 oct. » — les bornes, écrites court.
     var periodLabel: String {
         let short = Date.FormatStyle.dateTime.day().month(.abbreviated)
@@ -39,6 +48,26 @@ struct PaywallEstimation {
     }
 
     /// Les chiffres de la maquette, sur trois semaines à partir d'aujourd'hui.
+    /// L'estimation **du carnet qu'on finance**, lue sur `GET /v1/wallet`
+    /// (T127, 29/09/2026) : ses dates, ses semaines, son nombre de pages visé
+    /// et son coût. `nil` quand le serveur ne connaît pas encore les dates du
+    /// voyage — la feuille retombe alors sur l'exemple.
+    init?(wallet: Wallet, weeklyPrice: Decimal) {
+        guard let estimate = wallet.estimate,
+            let start = estimate.startDate,
+            let end = estimate.endDate,
+            let weeks = estimate.weeks
+        else { return nil }
+        self.init(
+            weeks: max(1, weeks),
+            start: start,
+            end: end,
+            pageCount: estimate.pageCount,
+            bookPrice: estimate.cost,
+            weeklyPrice: weeklyPrice
+        )
+    }
+
     static func example(weeklyPrice: Decimal) -> PaywallEstimation {
         let start = Date.now
         return PaywallEstimation(

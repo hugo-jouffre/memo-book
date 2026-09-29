@@ -220,6 +220,11 @@ public final class AppDependencies {
             uploadAvatar: { [api] data, mimeType in
                 try await api.uploadAvatar(data: data, mimeType: mimeType)
             },
+            deleteAvatar: { [api] in try await api.removeAvatar() },
+            changePassword: { [api] current, new in
+                try await api.changePassword(current: current, new: new)
+            },
+            requestPasswordReset: { [api] email in try await api.requestPasswordReset(email: email) },
             // La résiliation, qui ne partait nulle part avant le 19/09/2026 —
             // voir ``ProfileModel/cancelSubscription(reason:)``.
             cancelSubscription: { [api] reason in
@@ -373,17 +378,19 @@ public final class AppDependencies {
         )
     }
 
-    /// Les deux plats du carnet.
-    ///
-    /// ⚠️ **Sur le jeu d'essai**, et plus complètement que les autres écrans du
-    /// carnet : `GET` et `PATCH /v1/trips/:id/covers` n'existent ni l'un ni
-    /// l'autre, et la base n'a aujourd'hui qu'un booléen sur le sujet
-    /// (`memos.hasConfiguredCovers`). Il manque le style, la photo retenue, les
-    /// deux textes et les chiffres choisis — cinq colonnes, une route, un
-    /// sérialiseur. Tant qu'ils ne sont pas là, choisir une couverture ne
-    /// survit pas à la fermeture de l'écran, et c'est écrit dans la fiche.
+    /// Les deux plats du carnet, servis par `GET /v1/trips/:id/covers` et
+    /// corrigés par son `PATCH` ; les photos importées partent par
+    /// `POST /v1/trips/:id/covers/photos` (T88, 29/09/2026). Le style, la
+    /// photo retenue, les deux textes et les chiffres du dos tiennent dans
+    /// `memos.coverFront` et `coverBack` : choisir une couverture survit à la
+    /// fermeture de l'écran.
     public func coversModel(tripId: String) -> CoversModel {
-        CoversModel(tripId: tripId)
+        CoversModel(
+            tripId: tripId,
+            source: { [api] id in try await api.bookCovers(tripId: id) },
+            persist: { [api] id, edit in try await api.updateBookCovers(tripId: id, edit: edit) },
+            upload: { [api] id, data in try await api.uploadCoverPhoto(tripId: id, data: data) }
+        )
     }
 
     /// L'aperçu du carnet.
@@ -543,6 +550,12 @@ extension EnvironmentValues {
     /// fabrique branchée sur l'API ; un aperçu n'en pose aucune et le paywall
     /// retombe sur le jeu d'essai.
     @Entry public var profileModelFactory: (@MainActor () -> ProfileModel)?
+
+    /// La cagnotte d'un voyage, pour le paywall — qui n'a pas accès aux
+    /// dépendances non plus. C'est elle qui porte l'estimation du carnet
+    /// (`GET /v1/wallet?tripId=…`, T127). `nil` en aperçu : la feuille
+    /// « Estimation » garde alors les chiffres de la maquette.
+    @Entry public var walletSource: (@MainActor (String?) async throws -> Wallet)?
 
     /// Le support de la session, pour un écran qui doit l'ouvrir **par-dessus
     /// lui** au lieu de le faire pousser par ``RootView``.

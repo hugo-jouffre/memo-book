@@ -36,7 +36,9 @@ public struct BrandDateField: View {
     /// La croix qui efface la date. Faux là où une date posée se **change**
     /// mais ne se retire plus — les dates d'un voyage, dans ses réglages
     /// (Clara, 26/09/2026) : un voyage configuré sans date de départ n'a plus
-    /// ni compte à rebours ni rythme de relance.
+    /// ni compte à rebours ni rythme de relance. La ligne porte alors **un
+    /// crayon** à la place de la croix (Hugo, 29/09/2026) : le même que celui
+    /// des textes de couverture, qui dit « ça se corrige » sans rien retirer.
     private let isClearable: Bool
 
     public init(
@@ -102,7 +104,11 @@ public struct BrandDateField: View {
 
                 Spacer(minLength: MemoBookSpacing.xs)
 
-                if date != nil, isClearable { clearButton }
+                if date != nil, isClearable {
+                    clearButton
+                } else if !isClearable {
+                    pencil
+                }
             }
             .padding(.horizontal, MemoBookSpacing.s)
             .padding(.vertical, MemoBookSpacing.snug)
@@ -120,6 +126,22 @@ public struct BrandDateField: View {
         // dessous ne rapetisse pas. Un sélecteur de date n'est pas une étape
         // de plus dans un chemin, c'est un accessoire de la ligne qu'on touche.
         .sheet(isPresented: $isPicking) { picker }
+    }
+
+    /// Le crayon d'une date qui se change sans s'effacer. Décoratif : c'est la
+    /// ligne entière qui ouvre le sélecteur.
+    private var pencil: some View {
+        Image(brand: "IconPen")
+            .resizable()
+            .renderingMode(.template)
+            .scaledToFit()
+            .frame(width: MemoBookSpacing.s, height: MemoBookSpacing.s)
+            .foregroundStyle(MemoBookColor.inkMuted)
+            .frame(
+                width: MemoBookSpacing.minimumTapTarget,
+                height: MemoBookSpacing.minimumTapTarget
+            )
+            .accessibilityHidden(true)
     }
 
     private var clearButton: some View {

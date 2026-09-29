@@ -52,7 +52,7 @@ struct RecordingSheet: View {
 
                 elapsed
                 BrandWaveform(live: model.levels, isDimmed: model.isPaused)
-                transcript
+                status
                 secondaryControls
             }
             .frame(maxWidth: .infinity)
@@ -73,6 +73,8 @@ struct RecordingSheet: View {
         .onDisappear { model.discard() }
     }
 
+    /// Le geste du disque. Il ne referme la feuille que lorsqu'un vocal en
+    /// sort : en pause, le disque reprend et la feuille reste.
     private func toggle() async {
         // Le relevé **entier**, et non la frise : `levels` ne garde que les
         // quarante dernières barres, celles qui défilent sous le micro. La
@@ -107,68 +109,25 @@ struct RecordingSheet: View {
         }
     }
 
-    /// Les mots, à mesure qu'ils sortent.
+    /// Ce que l'app fait, dit en un mot sous la frise : elle attend, elle
+    /// enregistre, elle est en pause.
     ///
-    /// Ils viennent de la reconnaissance vocale d'iOS et ne servent qu'à **se
-    /// voir parler** — c'est le serveur qui transcrira le vocal pour de bon.
-    /// D'où le gris : ce n'est pas encore du texte de carnet.
-    ///
-    /// Le bloc garde sa hauteur, pleine ou vide, et montre la **fin** du texte
-    /// avec un « … » devant : on lit ce qu'on vient de dire, pas le début de
-    /// l'enregistrement.
-    private var transcript: some View {
-        Text(model.transcript.isEmpty ? placeholder : model.transcript)
+    /// Il n'y a plus de mots transcrits à mesure qu'on parle : la
+    /// reconnaissance vocale d'iOS faisait disparaître l'app sur l'iPhone de
+    /// Hugo dès l'ouverture de la feuille, et la conversation prouve qu'on
+    /// enregistre très bien sans elle (T176). C'est le serveur qui transcrit
+    /// le vocal, une fois envoyé.
+    private var status: some View {
+        Text(statusLabel)
             .font(MemoBookFont.body)
             .foregroundStyle(MemoBookColor.inkMuted)
             .multilineTextAlignment(.center)
-            .lineLimit(2, reservesSpace: true)
-            .truncationMode(.head)
             .frame(maxWidth: .infinity)
-            .mask { readingMask }
             .contentTransition(.opacity)
-            .animation(.easeOut(duration: 0.25), value: model.transcript)
-            .accessibilityLabel(model.transcript)
+            .animation(.easeOut(duration: 0.25), value: statusLabel)
     }
 
-    /// Ce qui estompe le texte transcrit — et **seulement** lui.
-    ///
-    /// Les mots ne s'arrêtent pas au bord du bloc : il y en avait avant, il y
-    /// en aura après. Le dégradé éteint donc le **début** et la **fin** du
-    /// texte, et laisse le milieu à pleine encre : on lit ce qui vient d'être
-    /// dit, et on voit que ça continue des deux côtés.
-    ///
-    /// Il va en diagonale parce que le texte, lui, va en diagonale : son début
-    /// est en haut à gauche, sa fin en bas à droite. Un dégradé vertical
-    /// éteindrait des **lignes** entières, ce qui n'est pas la même idée.
-    ///
-    /// Rien de tout ça pour le texte d'attente : ce n'est pas un extrait, c'est
-    /// une phrase entière qu'on doit pouvoir lire d'un bloc.
-    @ViewBuilder
-    private var readingMask: some View {
-        if model.transcript.isEmpty {
-            Color.black
-        } else {
-            LinearGradient(
-                stops: [
-                    .init(color: .black.opacity(0.2), location: 0),
-                    .init(color: .black, location: 0.3),
-                    .init(color: .black, location: 0.7),
-                    .init(color: .black.opacity(0.2), location: 1),
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        }
-    }
-
-    /// Ce qui tient la place du texte tant qu'il n'y en a pas.
-    ///
-    /// Trois états, et **aucun ne promet de transcription** : la reconnaissance
-    /// vocale a le droit d'être refusée ou indisponible, et une phrase du genre
-    /// « MemoBook t'écoute » ferait alors passer une absence pour une panne. On
-    /// dit ce que l'app fait — elle attend, elle enregistre, elle est en pause —
-    /// et les mots arrivent en plus quand ils arrivent.
-    private var placeholder: String {
+    private var statusLabel: String {
         if model.isPaused { return "En pause" }
         return model.isRecording ? "MemoBook enregistre" : "Prêt à enregistrer…"
     }

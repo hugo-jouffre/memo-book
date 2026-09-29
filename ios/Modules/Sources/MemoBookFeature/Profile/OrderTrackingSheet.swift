@@ -9,14 +9,24 @@ import SwiftUI
 struct OrderTrackingSheet: View {
     let orders: [OrderTracking]
 
+    /// Le voyage en cours, s'il y en a un : sans commande, c'est **lui** que la
+    /// feuille propose de commander (Hugo, 29/09/2026), plutôt que d'envoyer
+    /// planifier un prochain voyage quelqu'un qui en raconte un.
+    var ongoingTrip: CurrentTrip? = nil
+
     /// Ce que fait la carte de l'état vide : aller voir les carnets de la
     /// communauté, comme la maquette l'écrit dessus.
     let onPlanTrip: () -> Void
 
+    /// « Commander mon carnet » : le tunnel de commande du voyage en cours.
+    var onOrder: (CurrentTrip) -> Void = { _ in }
+
     var body: some View {
         BrandSheet("Suivi des commandes") {
             VStack(spacing: MemoBookSpacing.s) {
-                if orders.isEmpty {
+                if orders.isEmpty, let ongoingTrip {
+                    orderInvitation(ongoingTrip)
+                } else if orders.isEmpty {
                     // **La maquette existe** — `Modale – Profile PAS de
                     // commande`, `3162:34917` : la même carte en pointillés que
                     // l'accueil sans voyage à venir, « Commence à planifier ton
@@ -36,6 +46,33 @@ struct OrderTrackingSheet: View {
                         OrderCard(order: order)
                     }
                 }
+            }
+        }
+    }
+}
+
+extension OrderTrackingSheet {
+    /// Aucune commande, mais un voyage en cours : le carnet se commande d'ici.
+    private func orderInvitation(_ trip: CurrentTrip) -> some View {
+        VStack(spacing: MemoBookSpacing.s) {
+            VStack(spacing: MemoBookSpacing.xs / 2) {
+                Text("Aucune commande pour le moment")
+                    .font(MemoBookFont.bodySemibold)
+                    .foregroundStyle(MemoBookColor.ink)
+                Text("Ton carnet est en cours d’écriture : commande-le dès que tu es prêt.")
+                    .font(MemoBookFont.caption)
+                    .foregroundStyle(MemoBookColor.inkMuted)
+            }
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity)
+
+            BrandButton(
+                "Commander mon carnet",
+                icon: Image(brand: "IconDeliver"),
+                fillsWidth: true
+            ) {
+                onOrder(trip)
             }
         }
     }

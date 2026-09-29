@@ -31,17 +31,43 @@ public final class CoversModel {
 
     private let source: (String) async throws -> BookCovers
     private let persist: ((String, BookCoverEdit) async throws -> BookCovers)?
+    /// Envoie une photo importée. `nil` en aperçu : la photo reste sur l'appareil.
+    private let upload: ((String, Data) async throws -> CoverPhoto)?
+
+    /// Une photo est en route : le carrousel le montre sur sa case d'import.
+    public private(set) var isUploadingPhoto = false
 
     private var pendingSave: Task<Void, Never>?
 
     public init(
         tripId: String,
         source: @escaping (String) async throws -> BookCovers = { _ in .fixture },
-        persist: ((String, BookCoverEdit) async throws -> BookCovers)? = nil
+        persist: ((String, BookCoverEdit) async throws -> BookCovers)? = nil,
+        upload: ((String, Data) async throws -> CoverPhoto)? = nil
     ) {
         self.tripId = tripId
         self.source = source
         self.persist = persist
+        self.upload = upload
+    }
+
+    /// L'app envoie les photos importées : sinon, elles ne vivent que dans les
+    /// caches de l'appareil.
+    public var canUploadPhotos: Bool { upload != nil }
+
+    /// Envoie une photo importée, la range à côté des autres et rend ce que le
+    /// serveur en a fait — son identifiant, son adresse durable (T88). Sans
+    /// serveur, la photo garde l'identifiant et l'adresse locale qu'on lui donne.
+    public func importPhoto(_ data: Data, fallback: CoverPhoto) async throws -> CoverPhoto {
+        guard let upload else {
+            add(fallback)
+            return fallback
+        }
+        isUploadingPhoto = true
+        defer { isUploadingPhoto = false }
+        let photo = try await upload(tripId, data)
+        add(photo)
+        return photo
     }
 
     public var isLoading: Bool { covers == nil && errorMessage == nil }
@@ -108,9 +134,8 @@ public final class CoversModel {
     /// toujours la dernière du carrousel, et une photo posée après elle serait
     /// hors de portée du geste qui vient de l'ajouter.
     ///
-    /// ⚠️ Elle ne part nulle part tant que la route des couvertures n'existe
-    /// pas : la photo vit dans les caches de l'appareil, et un
-    /// réenregistrement de l'écran la perd. Signalé (T88).
+    /// Elle part au serveur par ``importPhoto(_:fallback:)`` (T88, 29/09/2026) ;
+    /// ici on ne fait que la ranger.
     public func add(_ photo: CoverPhoto) {
         guard var covers else { return }
         guard !covers.photos.contains(where: { $0.id == photo.id }) else { return }
