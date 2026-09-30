@@ -75,7 +75,10 @@ extension TripDetail {
                 // avec une seule personne : la ligne « avec … » doit se voir
                 // dans ses deux formes.
                 companions: index == 0 ? companions : Array(companions.prefix(1)),
-                transport: transports[index % transports.count]
+                transport: transports[index % transports.count],
+                // La première étape est déjà validée, les autres non : les deux
+                // états (coche vs. geste de validation) se voient sans manipuler.
+                validatedAt: index == 0 ? start.adding(days: 4) : nil
             )
         }
     }

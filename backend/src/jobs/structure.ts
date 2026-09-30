@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import type { AppContext } from "../context.js";
 import { validatePayload } from "../services/payloadValidator.js";
 import type { StructuringEntry } from "../services/structuring.js";
+import { parseTripContext } from "../services/tripContext.js";
 import { JOB_NAMES } from "./queue.js";
 import { finalTextOf } from "./redact.js";
 import type { RenderJob } from "./render.js";
@@ -120,6 +121,7 @@ export async function structureRender(
       theme: memo.theme,
       coverPhotoUrl: memo.coverPhotoUrl,
       entries: structuringEntries,
+      tripContext: parseTripContext(memo.tripContext),
     });
 
     const validation = validatePayload(payload);

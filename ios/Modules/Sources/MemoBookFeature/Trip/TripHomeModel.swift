@@ -31,14 +31,25 @@ public final class TripHomeModel {
     /// voir ``SwiftUI/View/brandRefreshFlash(_:)``.
     public private(set) var freshness: ContentFreshness = .unknown
 
+    /// « Valider cette étape ». `nil` en aperçu, où le geste reste possible
+    /// mais ne parle à aucun serveur.
+    private let validateStepRemotely: ((String, String) async throws -> TripDetail)?
+    private var pendingValidation: Task<Void, Never>?
+
+    /// Un mot qui s'efface tout seul, après une validation réussie — même
+    /// motif que `TripSettingsModel.confirm(_:)`.
+    public private(set) var confirmation: String?
+
     public init(
         tripId: String,
         source: @escaping (String) async throws -> TripDetail = { .fixture(id: $0) },
-        cached: CachedValue<TripDetail>? = nil
+        cached: CachedValue<TripDetail>? = nil,
+        validateStep: ((String, String) async throws -> TripDetail)? = nil
     ) {
         self.tripId = tripId
         self.source = source
         self.cached = cached
+        self.validateStepRemotely = validateStep
     }
 
     /// `true` tant qu'on n'a rien à montrer. L'écran ne dessine alors rien
@@ -90,6 +101,53 @@ public final class TripHomeModel {
     public func clearFilters() {
         country = nil
         transport = nil
+    }
+
+    // MARK: - Valider une étape
+
+    /// « Valider cette étape » : confirme l'étape et déclenche en fond une
+    /// nouvelle génération du carnet — l'écran n'a rien d'autre à faire que le
+    /// dire.
+    ///
+    /// **L'écran a déjà bougé** quand la requête part : une coche qui attend un
+    /// aller-retour réseau pour apparaître se lit comme cassée. Un échec revient
+    /// à l'état du serveur (`load()`), pas seulement à celui d'avant — une
+    /// deuxième validation pourrait avoir eu lieu entre-temps.
+    public func validateStep(_ step: TripStep) {
+        guard let validateStepRemotely, step.validatedAt == nil, let current = detail else { return }
+        guard current.steps.contains(where: { $0.id == step.id }) else { return }
+
+        detail = TripDetail(
+            trip: current.trip,
+            prompt: current.prompt,
+            steps: current.steps.map { $0.id == step.id ? $0.validated() : $0 }
+        )
+
+        pendingValidation?.cancel()
+        pendingValidation = Task {
+            do {
+                let updated = try await validateStepRemotely(tripId, step.id)
+                guard !Task.isCancelled else { return }
+                detail = updated
+                errorMessage = nil
+                confirm("Étape validée. Ton carnet va se mettre à jour.")
+            } catch {
+                guard !Task.isCancelled else { return }
+                errorMessage = error.localizedDescription
+                await load()
+            }
+        }
+    }
+
+    /// Un mot qui s'efface tout seul, quatre secondes après une validation —
+    /// même motif que `TripSettingsModel.confirm(_:)`.
+    private func confirm(_ message: String) {
+        confirmation = message
+        Task {
+            try? await Task.sleep(for: .seconds(4))
+            guard confirmation == message else { return }
+            confirmation = nil
+        }
     }
 }
 

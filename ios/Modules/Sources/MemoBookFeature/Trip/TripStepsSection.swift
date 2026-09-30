@@ -15,6 +15,7 @@ import SwiftUI
 struct TripStepsSection: View {
     @Bindable var model: TripHomeModel
     let onOpenStep: (TripStep) -> Void
+    let onValidateStep: (TripStep) -> Void
 
     private var detail: TripDetail? { model.detail }
 
@@ -142,7 +143,11 @@ struct TripStepsSection: View {
         } else {
             LazyVStack(spacing: MemoBookSpacing.s) {
                 ForEach(visible) { step in
-                    TripStepCard(step: step) { onOpenStep(step) }
+                    TripStepCard(
+                        step: step,
+                        onOpen: { onOpenStep(step) },
+                        onValidate: { onValidateStep(step) }
+                    )
                 }
             }
             .padding(.horizontal, MemoBookSpacing.screenMargin)
@@ -151,14 +156,39 @@ struct TripStepsSection: View {
 }
 
 /// Une étape : sa vignette, son rang, ses dates, et qui y était.
+///
+/// **Non validée, elle porte un geste caché** — glisser vers la gauche pour
+/// « Valider cette étape », le même tiroir que les cartes de l'accueil
+/// (`BrandSwipeDrawer`). Une fois validée, plus de tiroir : le geste n'a plus
+/// de raison d'être offert, une coche discrète le dit à la place — même parti
+/// pris que « Ça me convient » sur un souvenir (`ChatBubbles`).
 struct TripStepCard: View {
     let step: TripStep
     let onOpen: () -> Void
+    let onValidate: () -> Void
 
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .body) private var thumbnailSide: CGFloat = 76
 
+    private var swipeActions: [BrandSwipeAction] {
+        guard step.validatedAt == nil else { return [] }
+        return [
+            BrandSwipeAction(
+                icon: "IconLucideCheck",
+                tint: MemoBookColor.valid,
+                label: "Valider cette étape",
+                action: onValidate
+            )
+        ]
+    }
+
     var body: some View {
+        BrandSwipeDrawer(actions: swipeActions) {
+            card
+        }
+    }
+
+    private var card: some View {
         Button(action: onOpen) {
             content
                 .padding(MemoBookSpacing.xs + 2)
@@ -219,9 +249,21 @@ struct TripStepCard: View {
 
     private var text: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(step.title)
-                .font(MemoBookFont.bodySemibold)
-                .foregroundStyle(MemoBookColor.ink)
+            HStack(spacing: MemoBookSpacing.xs / 2) {
+                Text(step.title)
+                    .font(MemoBookFont.bodySemibold)
+                    .foregroundStyle(MemoBookColor.ink)
+
+                if step.validatedAt != nil {
+                    Image(brand: "IconLucideCheck")
+                        .resizable()
+                        .renderingMode(.template)
+                        .scaledToFit()
+                        .frame(width: MemoBookSpacing.s, height: MemoBookSpacing.s)
+                        .foregroundStyle(MemoBookColor.valid)
+                        .accessibilityHidden(true)
+                }
+            }
 
             if let dates = step.dateRangeLabel {
                 Text(dates)

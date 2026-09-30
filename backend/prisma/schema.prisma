@@ -785,6 +785,11 @@ model MemoStep {
   /// Comment on est arrivé jusqu'ici.
   transport TripTransport?
 
+  /// « Valider cette étape » : le voyageur confirme l'étape et déclenche en
+  /// fond une nouvelle génération du carnet. Même geste qu'`Entry.validatedAt`
+  /// (« Ça me convient »), à l'échelle de l'étape.
+  validatedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -232,7 +232,8 @@ public final class AppDependencies {
         return TripHomeModel(
             tripId: id,
             source: { _ in try await read() },
-            cached: { [content] in await content.read(.trip(id), as: TripDetail.self) }
+            cached: { [content] in await content.read(.trip(id), as: TripDetail.self) },
+            validateStep: { [api] tripId, stepId in try await api.validateStep(tripId: tripId, stepId: stepId) }
         )
     }
 
@@ -365,23 +366,14 @@ public final class AppDependencies {
         CoversModel(tripId: tripId)
     }
 
-    /// L'aperçu du carnet.
-    ///
-    /// ⚠️ **Sur le jeu d'essai** : `GET /v1/memos/:id/preview` et
-    /// `POST /v1/memos/:id/share-link` restent à écrire. Les routes de rendu
-    /// (`POST /v1/memos/:id/renders`, `GET /v1/renders/:id`) existent, elles,
-    /// mais rendent un ``Render`` et non un ``BookPreview`` — il manque le
-    /// titre du carnet, l'extrait et l'état des couvertures, que l'écran
-    /// affiche tous les trois.
-    ///
-    /// **« Partager ma cagnotte », lui, parle au serveur** (26/09/2026) : le
-    /// titre vient de la cagnotte (`GET /v1/wallet`) et le lien de
-    /// `POST /v1/memos/:id/share-link`, qui existent. Le partager depuis le jeu
-    /// d'essai aurait envoyé « Rome et la Dolce Vita » aux proches de tout le
-    /// monde.
+    /// L'aperçu du carnet, branché sur le serveur (26/09/2026 pour la cagnotte,
+    /// 30/09/2026 pour le reste) : `GET /v1/memos/:id/preview` pour suivre la
+    /// composition, `POST /v1/memos/:id/share-link` pour le lien de partage.
     public func bookPreviewModel(memoId: String) -> BookPreviewModel {
         BookPreviewModel(
             memoId: memoId,
+            source: { [api] id in try await api.bookPreview(memoId: id) },
+            requestLink: { [api] id in try await api.bookShareLink(memoId: id) },
             walletShare: { [api] memoId in
                 async let wallet = api.wallet(tripId: memoId)
                 async let link = api.bookShareLink(memoId: memoId)

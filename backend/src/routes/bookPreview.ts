@@ -48,13 +48,27 @@ const previewInclude = {
 };
 
 async function readPreview(context: AppContext, accountId: string, memoId: string) {
-  const memo = await context.prisma.memo.findFirst({
-    where: { id: memoId, ...visibleToAccount(accountId) },
-    include: previewInclude,
-  });
+  // Le dernier rendu **prêt**, distinct du dernier rendu tout court (ci-dessous,
+  // dans `previewInclude`) : une régénération en fond (étape validée) enfile un
+  // nouveau rendu `pending` sans `pdfUrl` — l'aperçu ne doit pas perdre le PDF
+  // déjà affiché le temps qu'elle aboutisse. Indexé par
+  // `@@index([memoId, createdAt])`, donc bon marché même interrogé toutes les
+  // deux secondes ; menée en parallèle du reste, les deux requêtes sont
+  // indépendantes.
+  const [memo, lastReady] = await Promise.all([
+    context.prisma.memo.findFirst({
+      where: { id: memoId, ...visibleToAccount(accountId) },
+      include: previewInclude,
+    }),
+    context.prisma.render.findFirst({
+      where: { memoId, status: "ready" },
+      orderBy: { createdAt: "desc" },
+      select: { pdfUrl: true },
+    }),
+  ]);
 
   if (!memo) throw new HttpError(404, "Ce carnet n’existe pas.");
-  return serializeBookPreview(memo, context.env.SHARE_PUBLIC_BASE_URL);
+  return serializeBookPreview(memo, lastReady?.pdfUrl ?? null, context.env.SHARE_PUBLIC_BASE_URL);
 }
 
 /**

@@ -87,6 +87,37 @@ const joinBody = z.object({ code: z.string().trim().min(1).max(40) });
 // est écrite à la création, mais c'est sur les **dates** que l'état se lit
 // ensuite — un voyage se termine par le calendrier, pas par un geste.
 
+/**
+ * Un voyage ouvert, tel que `GET /v1/trips/:id` le répond.
+ *
+ * Extrait pour être réutilisé par la validation d'une étape
+ * (`routes/steps.ts`) : on modifie une chose, on relit tout — même contrat que
+ * `tripSettings.ts`'s `readSettings`.
+ */
+export async function loadTripDetail(context: AppContext, accountId: string, memoId: string) {
+  // Postgres refuse de comparer une colonne `uuid` à une chaîne qui n'en est
+  // pas une : sans ce garde-fou, la requête lève au lieu de ne rien trouver.
+  if (!UUID_PATTERN.test(memoId)) throw HttpError.notFound("Voyage introuvable.");
+
+  const memo = await context.prisma.memo.findFirst({
+    where: { id: memoId, ...visibleToAccount(accountId) },
+    include: {
+      ...tripInclude,
+      steps: { orderBy: { number: "asc" } },
+    },
+  });
+
+  if (!memo) throw HttpError.notFound("Voyage introuvable.");
+
+  const trip = serializeTrip(memo);
+
+  return {
+    trip,
+    prompt: memo.prompt,
+    steps: memo.steps.map((step) => serializeTripStep(step, trip.companions)),
+  };
+}
+
 export function registerHomeRoutes(app: FastifyInstance, context: AppContext): void {
   /**
    * Tout ce qu'il faut pour dessiner l'accueil.
@@ -144,28 +175,7 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
   app.get("/v1/trips/:id", async (request) => {
     const accountId = accountIdOf(request);
     const { id } = idParams.parse(request.params);
-
-    // Postgres refuse de comparer une colonne `uuid` à une chaîne qui n'en est
-    // pas une : sans ce garde-fou, la requête lève au lieu de ne rien trouver.
-    if (!UUID_PATTERN.test(id)) throw HttpError.notFound("Voyage introuvable.");
-
-    const memo = await context.prisma.memo.findFirst({
-      where: { id, ...visibleToAccount(accountId) },
-      include: {
-        ...tripInclude,
-        steps: { orderBy: { number: "asc" } },
-      },
-    });
-
-    if (!memo) throw HttpError.notFound("Voyage introuvable.");
-
-    const trip = serializeTrip(memo);
-
-    return {
-      trip,
-      prompt: memo.prompt,
-      steps: memo.steps.map((step) => serializeTripStep(step, trip.companions)),
-    };
+    return loadTripDetail(context, accountId, id);
   });
 
   /**
