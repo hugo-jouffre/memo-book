@@ -1396,17 +1396,94 @@ const enHtml = (texte) =>
     .join("");
 
 /**
+ * Combien de photos chaque gabarit **rend réellement**, d'après le catalogue de
+ * `MemoBook Generator/templates/travel-journal/LAYOUT_KB.md`. Au-delà de ce
+ * nombre, les photos envoyées ne sont pas dessinées : elles disparaissent du
+ * carnet sans que rien ne le signale. C'est ce qui justifie le report sur des
+ * pages de photos (voir `pagesDePhotos`).
+ */
+const PHOTOS_RENDUES = {
+  layout_story_facts: 0,
+  layout_story_opener: 1,
+  layout_hero_top: 1,
+  layout_split_left: 2,
+  layout_collage: 3,
+  layout_photo_page: 5,
+};
+
+/** Le gabarit « page pleine de photos » exige au moins trois images. */
+const MIN_PAGE_PHOTOS = 3;
+
+/**
  * Choix de la mise en page, repris de la table de
  * `MemoBook Generator/templates/travel-journal/LAYOUT_KB.md` : c'est elle qui dit combien de
  * photos chaque gabarit sait tenir.
+ *
+ * **`layout_photo_page` ne rend ni bandeau ni récit** — c'est écrit dans le
+ * catalogue. Le choisir sur le seul nombre de photos effaçait donc le texte
+ * d'une étape dès qu'elle portait quatre images : le voyageur retrouvait une
+ * planche photo muette à la place de sa journée. Une étape qui a un récit garde
+ * toujours un gabarit qui l'affiche ; ses photos en trop partent sur des pages
+ * de photos à la suite.
  */
-function layoutPour(nbPhotos, premiere) {
+function layoutPour(nbPhotos, premiere, aUnRecit) {
+  if (!aUnRecit) return nbPhotos >= MIN_PAGE_PHOTOS ? "layout_photo_page" : "layout_story_facts";
   if (premiere) return "layout_story_opener";
   if (nbPhotos === 0) return "layout_story_facts";
   if (nbPhotos === 1) return "layout_hero_top";
   if (nbPhotos === 2) return "layout_split_left";
-  if (nbPhotos === 3) return "layout_collage";
-  return "layout_photo_page";
+  return "layout_collage";
+}
+
+/**
+ * Découpe les photos qu'aucun gabarit de récit n'a pu poser en pages de photos
+ * de 3 à 5 images.
+ *
+ * Un reliquat de une ou deux photos ne peut pas faire une page — le gabarit en
+ * exige trois — alors il rejoint la page précédente au lieu d'être perdu : sept
+ * photos donnent 4 + 3, jamais 5 + 2. Quand il n'y a pas de page précédente où
+ * les verser, une ou deux photos restent non rendues : c'est la seule perte que
+ * le gabarit impose, et elle vaut mieux qu'une page aux trois quarts vide.
+ */
+function pagesDePhotos(restantes) {
+  const pages = [];
+  for (let i = 0; i < restantes.length; i += PHOTOS_RENDUES.layout_photo_page) {
+    pages.push(restantes.slice(i, i + PHOTOS_RENDUES.layout_photo_page));
+  }
+  const derniere = pages[pages.length - 1];
+  if (pages.length > 1 && derniere.length < MIN_PAGE_PHOTOS) {
+    const avant = pages[pages.length - 2];
+    while (derniere.length < MIN_PAGE_PHOTOS) derniere.unshift(avant.pop());
+  }
+  return pages.length === 1 && pages[0].length < MIN_PAGE_PHOTOS ? [] : pages;
+}
+
+/**
+ * Le lieu affiché dans le bandeau : celui de l'étape, complété par la
+ * destination du carnet.
+ *
+ * Les deux se recoupent le plus souvent — une étape à « Paros, Grèce » dans un
+ * carnet dont la destination est « Paros, Grèce » — et les coller bout à bout
+ * écrivait « Paros, Grèce, Paros, Grèce » sur deux lignes dans l'encart. On
+ * compare donc composante par composante, sans tenir compte de la casse ni des
+ * accents, et on ne garde chaque nom qu'une fois.
+ */
+function lieuComplet(lieu, destination) {
+  const normaliser = (t) =>
+    t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  const vus = new Set();
+  return [lieu, destination]
+    .filter(Boolean)
+    .flatMap((valeur) => String(valeur).split(","))
+    .map((part) => part.trim())
+    .filter((part) => {
+      if (!part) return false;
+      const cle = normaliser(part);
+      if (vus.has(cle)) return false;
+      vus.add(cle);
+      return true;
+    })
+    .join(", ");
 }
 
 const MOIS = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
@@ -1441,39 +1518,64 @@ function construirePayloadCarnet(photoDe = (data) => data) {
     year: String(new Date().getFullYear()),
     footer_tagline: "Racontez. Revivez. Partagez.",
     intro_text: "",
-    days: etat.etapes.map((etape, index) => {
+    // `flatMap` et non `map` : une étape riche en photos occupe plusieurs pages.
+    // La première porte le bandeau et le récit, les suivantes sont des pages de
+    // photos — c'est la règle « une étape peut occuper plusieurs pages » de
+    // LAYOUT_KB, et c'est ce qui évite de perdre du texte ou des images.
+    days: etat.etapes.flatMap((etape, index) => {
       const photos = etape.photos.map((p) => (p.data ? photoDe(p.data) : "")).filter(Boolean);
       const recit = etape.souvenirs.map((s) => s.texte.trim()).filter(Boolean).join(" ");
-      const layout = layoutPour(photos.length, index === 0);
-      return {
+      const layout = layoutPour(photos.length, index === 0, Boolean(recit));
+      const posees = Math.min(photos.length, PHOTOS_RENDUES[layout]);
+
+      const drapeaux = (actif) => ({
+        // Un seul gabarit est vrai à la fois : le template lit des booléens.
+        layout_story_opener: actif === "layout_story_opener",
+        layout_story_facts: actif === "layout_story_facts",
+        layout_hero_top: actif === "layout_hero_top",
+        layout_split_left: actif === "layout_split_left",
+        layout_collage: actif === "layout_collage",
+        layout_photo_page: actif === "layout_photo_page",
+      });
+
+      const page = {
         title: etape.titre || `Étape ${index + 1}`,
         date: dateLongue(etape.dateDebut),
         city: etape.lieu || "",
         country: etat.carnet.destination || "",
         day_intro: {
           day_number: String(index + 1).padStart(2, "0"),
-          location: [etape.lieu, etat.carnet.destination].filter(Boolean).join(", "),
+          location: lieuComplet(etape.lieu, etat.carnet.destination),
           date: dateLongue(etape.dateDebut),
           weather_key: "sun",
         },
-        // Un seul gabarit est vrai à la fois : le template lit des booléens.
-        layout_story_opener: layout === "layout_story_opener",
-        layout_story_facts: layout === "layout_story_facts",
-        layout_hero_top: layout === "layout_hero_top",
-        layout_split_left: layout === "layout_split_left",
-        layout_collage: layout === "layout_collage",
-        layout_photo_page: layout === "layout_photo_page",
+        ...drapeaux(layout),
         opener_kicker: index === 0 ? etape.lieu || "" : "",
         opener_body_html: index === 0 ? enHtml(recit) : "",
         opener_photos: index === 0 ? photos.slice(0, 2) : [],
         body_html: enHtml(recit),
         fun_facts: [],
         highlights: etape.photos.map((p) => p.legende).filter(Boolean).slice(0, 3),
-        photos,
+        photos: photos.slice(0, posees),
         // Le template itère dessus : une liste vide vaut mieux qu'une clé absente.
         sticker_groups: [],
         tag: etape.lieu || "",
       };
+
+      // Les pages de suite n'ont ni bandeau ni récit : c'est ce qui les rattache
+      // à l'étape précédente. Sur une page de photos, `title` devient la légende
+      // manuscrite du bas — on ne la répète pas de page en page.
+      const suites = pagesDePhotos(photos.slice(posees)).map((lot, rang) => ({
+        title: rang === 0 ? etape.titre || "" : "",
+        body_html: "",
+        ...drapeaux("layout_photo_page"),
+        photos: lot,
+        fun_facts: [],
+        highlights: [],
+        sticker_groups: [],
+      }));
+
+      return [page, ...suites];
     }),
     back_cover: {
       closing_text: "À suivre.",
