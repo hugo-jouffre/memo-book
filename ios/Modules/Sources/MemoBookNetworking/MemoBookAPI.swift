@@ -218,6 +218,10 @@ public protocol MemoBookAPI: Sendable {
     /// avec la session : une URL nue ne suffirait pas.
     func entryMedia(id: String) async throws -> Data
 
+    /// Le fichier d'un vocal du **contexte du voyage** : il n'est pas un
+    /// souvenir, son fichier pend au message (`/v1/chat-messages/:id/media`).
+    func chatMessageMedia(id: String) async throws -> Data
+
     /// Lance la génération du carnet. Le résultat arrive de façon asynchrone :
     /// suivre ensuite avec `render(id:)`.
     func startRender(memoId: String) async throws -> Render

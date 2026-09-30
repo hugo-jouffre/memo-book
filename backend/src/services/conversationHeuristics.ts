@@ -31,8 +31,11 @@ import {
   validateReply,
   type ConversationInput,
   type ConversationReply,
+  type TripContextTurnInput,
+  type TripContextTurnReply,
   type MemoResponder,
 } from "./conversation.js";
+import { updateByRules } from "./tripContext.js";
 
 /**
  * MEMO sans modèle — le portage de `MemoBookCore/ChatAnalysis.swift` et de
@@ -426,6 +429,15 @@ export class HeuristicResponder implements MemoResponder {
     return { text: OPENING_TEXT, suggestionIds: [...SUGGESTION_SETS.opening] };
   }
 
+  /** Le repli ne découpe pas une description libre : il range la réponse à la question posée. */
+  async gatherContext(input: TripContextTurnInput): Promise<TripContextTurnReply> {
+    return {
+      update: updateByRules(input.context, input.text, input.travellerFirstName),
+      acknowledgement: null,
+      model: "heuristic",
+    };
+  }
+
   async reply(input: ConversationInput): Promise<ConversationReply> {
     const received = input.message.text ?? "";
 
@@ -613,7 +625,9 @@ export class HeuristicResponder implements MemoResponder {
 
   /** Les prénoms déjà passés dans le fil : « qui est-ce ? » ou « et Camille ? ». */
   private peopleAlreadyMentioned(input: ConversationInput): Set<string> {
-    const names = new Set<string>();
+    // Les compagnons du contexte du voyage sont connus d'avance : « Clara
+    // apparaît pour la première fois » après qu'on l'a présentée serait faux.
+    const names = new Set<string>(input.memo.tripContext?.companions.map((companion) => companion.name) ?? []);
     for (const turn of input.history) {
       if (turn.author !== "traveller" || !turn.text) continue;
       for (const name of readSignals(turn.text).people) names.add(name);

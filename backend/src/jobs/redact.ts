@@ -8,6 +8,8 @@ import {
   type RedactionPrecision,
 } from "../services/redaction.js";
 
+import { describeTripContext, parseTripContext } from "../services/tripContext.js";
+
 export interface RedactJob {
   entryId: string;
 }
@@ -133,6 +135,7 @@ export async function redactEntry(
         authors: entry.memo.authors,
         theme: entry.memo.theme,
         styleKey: entry.memo.styleKey,
+        tripContext: describeTripContext(parseTripContext(entry.memo.tripContext)),
       },
       entry: {
         transcript: entry.transcript,

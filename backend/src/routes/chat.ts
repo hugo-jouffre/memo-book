@@ -21,6 +21,7 @@ import {
 import { visibleToAccount } from "../services/memoOwnership.js";
 import { TEXT_MEMORY_COST, consumeMemory, voiceCost } from "../services/memoryAllowance.js";
 import { assertCanRecord, validateEntry } from "../services/quota.js";
+import { contextVoiceOf, isGathering, parseTripContext } from "../services/tripContext.js";
 import {
   serializeChatReceipt,
   serializeChatThread,
@@ -248,6 +249,9 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
     const memo = await loadChatMemo(context, request, memoId);
     const now = new Date();
     const showsAuthors = memo.members.length > 0;
+    // Le voyageur raconte le contexte de son voyage : ce qu'il dit ne devient
+    // pas un souvenir, et ne coûte donc ni étape ni limite — `tripContext.ts`.
+    const gatheringContext = isGathering(parseTripContext(memo.tripContext));
 
     const receipt = (written: ChatMessageRow[], turn: ChatTurnStatus) =>
       serializeChatReceipt({
@@ -312,7 +316,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
         validatedEntryId = entry.id;
       }
 
-      if (!command) {
+      if (!command && !gatheringContext) {
         await assertCanRecord(context.prisma, accountId);
         await consumeMemory(context.prisma, accountId, TEXT_MEMORY_COST);
       }
@@ -403,12 +407,56 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
     const stepId = rawStepId && z.string().uuid().safeParse(rawStepId).success ? rawStepId : null;
     const levels = parseLevels(fields["levels"]?.value);
 
-    await assertCanRecord(context.prisma, accountId);
-    await consumeMemory(context.prisma, accountId, isAudio ? voiceCost(duration) : 0);
+    // Un vocal du contexte du voyage : pas de souvenir, pas de fiche, pas de
+    // coût. Des photos restent des souvenirs, contexte ou non.
+    const contextVoice = isAudio && gatheringContext;
+
+    if (!contextVoice) {
+      await assertCanRecord(context.prisma, accountId);
+      await consumeMemory(context.prisma, accountId, isAudio ? voiceCost(duration) : 0);
+    }
 
     const stored = await Promise.all(
       files.map((file) => context.storage.put(isAudio ? "audio" : "photo", file.filename, file.buffer, file.mimeType)),
     );
+
+    if (contextVoice) {
+      const [object] = stored;
+      if (!object) throw new Error("Aucun vocal enregistré.");
+      const written = await context.prisma.$transaction(async (tx) => {
+        await lockThread(tx, memoId);
+        const ids: string[] = [];
+        const opening = await ensureOpening(tx, memoId, context.responder);
+        if (opening) ids.push(opening.id);
+        const message = await tx.chatMessage.create({
+          data: {
+            id: messageId,
+            memoId,
+            author: "traveller",
+            kind: "voice",
+            accountId,
+            disposition: "trip_context",
+            stepId,
+            payload: {
+              levels,
+              contextVoice: {
+                storageKey: object.storageKey,
+                mimeType: object.mimeType,
+                durationSeconds: duration,
+              },
+            },
+          },
+        });
+        ids.push(message.id);
+        return ids;
+      });
+      // Le job écoute lui-même : pas de souvenir à transcrire, donc pas de
+      // job `transcribe`.
+      await context.queue.publish<ConverseJob>(JOB_NAMES.converse, { messageId });
+      return reply
+        .code(201)
+        .send(receipt(await loadRows(context, written), { status: "replying", messageId }));
+    }
 
     let entryIdForTranscription: string | null = null;
 
@@ -496,6 +544,32 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
     return reply
       .code(201)
       .send(receipt(await loadRows(context, written), { status: "replying", messageId }));
+  });
+
+  /**
+   * Le fichier d'un vocal du contexte du voyage — le pendant de
+   * `GET /v1/entries/:id/media` pour un vocal qui n'est pas un souvenir. Mêmes
+   * règles : visible par qui voit le voyage, cache privé et long.
+   */
+  app.get("/v1/chat-messages/:id/media", async (request, reply) => {
+    const { id } = idParams.parse(request.params);
+    const message = await context.prisma.chatMessage.findFirst({
+      where: { id, memo: visibleToAccount(accountIdOf(request)) },
+      select: { payload: true },
+    });
+    const voice = message ? contextVoiceOf(message.payload) : null;
+    if (!voice) throw HttpError.notFound("Média introuvable.");
+
+    let body: Buffer;
+    try {
+      body = await context.storage.get(voice.storageKey);
+    } catch {
+      throw HttpError.notFound("Média introuvable.");
+    }
+    return reply
+      .header("Cache-Control", "private, max-age=2592000, immutable")
+      .type(voice.mimeType)
+      .send(body);
   });
 
   /**

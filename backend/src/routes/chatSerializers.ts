@@ -11,6 +11,13 @@ import {
 } from "../services/conversationCopy.js";
 import { firstNameOf, type ChatMessageRow, type EntryWithMedia } from "../services/conversationThread.js";
 import { avatarUrlOf } from "../services/avatars.js";
+import {
+  contextVoiceOf,
+  isGathering,
+  parseTripContext,
+  serializeTripContext,
+  type TripContext,
+} from "../services/tripContext.js";
 
 /**
  * Ce que l'écran de conversation reçoit.
@@ -121,9 +128,15 @@ function serializeBody(message: ChatMessageRow, publicBaseUrl: string) {
         kind: "voice" as const,
         voice: {
           id: message.id,
-          duration: entry?.media?.durationSeconds ?? 0,
+          duration: entry?.media?.durationSeconds ?? contextVoiceOf(message.payload)?.durationSeconds ?? 0,
           levels: levelsOf(message.payload),
-          remoteUrl: entry ? mediaUrlOf(publicBaseUrl, entry.id) : null,
+          // Un vocal du contexte du voyage n'a pas de souvenir : son fichier
+          // pend au message (`contextVoiceOf`).
+          remoteUrl: entry
+            ? mediaUrlOf(publicBaseUrl, entry.id)
+            : contextVoiceOf(message.payload)
+              ? `${publicBaseUrl}/v1/chat-messages/${message.id}/media`
+              : null,
         },
       };
     }
@@ -236,9 +249,28 @@ export interface SerializeThreadOptions {
  * qui clôt le fil (un souvenir reconstruit), le trio de validation tant
  * qu'elle n'est pas relue, puis de quoi continuer ; rien pendant un tour en vol.
  */
-export function currentSuggestionIds(messages: ChatMessageRow[], turn: ChatTurnStatus): string[] {
+export function currentSuggestionIds(
+  messages: ChatMessageRow[],
+  turn: ChatTurnStatus,
+  tripContext: TripContext | null,
+): string[] {
   if (turn.status === "replying") return [];
-  if (messages.length === 0) return [...SUGGESTION_SETS.opening];
+  // Rien encore dit par le voyageur : l'ouverture, décidée **à la lecture**
+  // et non figée dans la bulle — un voyage ouvert avant le contexte du voyage
+  // doit proposer lui aussi de le raconter, et un contexte déjà posé (après
+  // « Supprimer la conversation ») ne se redemande pas.
+  if (!messages.some((message) => message.author === "traveller")) {
+    return tripContext && tripContext.status !== "gathering"
+      ? [...SUGGESTION_SETS.openingWithContext]
+      : [...SUGGESTION_SETS.opening];
+  }
+  // Pendant le contexte, les puces sont celles que MEMO a posées sous sa
+  // dernière bulle — aucune sous l'invitation. Remonter plus haut ferait
+  // ressortir « Plus tard », qui ne referme pas le contexte.
+  if (isGathering(tripContext)) {
+    const last = [...messages].reverse().find((message) => message.author === "memo" && message.kind === "text");
+    return last ? suggestionIdsOf(last.payload) : [];
+  }
 
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index]!;
@@ -267,6 +299,7 @@ export function serializeChatThread(options: SerializeThreadOptions) {
     .map((message) => serializeChatMessage(message, messageOptions))
     .filter((message) => message !== null);
 
+  const tripContext = parseTripContext(memo.tripContext);
   const flag = flagOf(memo.destinationCountryCode);
   const placeName = activeStep?.placeName ?? memo.destinationCity ?? null;
   const pageCount = memo.pageCount > 0 ? memo.pageCount : options.memoryCount * 2;
@@ -306,7 +339,8 @@ export function serializeChatThread(options: SerializeThreadOptions) {
       memberCount,
     },
     messages,
-    suggestions: serializeChatSuggestions(currentSuggestionIds(options.messages, options.turn)),
+    suggestions: serializeChatSuggestions(currentSuggestionIds(options.messages, options.turn, tripContext)),
+    tripContext: serializeTripContext(tripContext),
     turn: options.turn,
     canClear: memo.ownerAccountId === viewer.id,
     now: options.now.toISOString(),
@@ -333,12 +367,18 @@ export function serializeChatUpdate(options: {
   };
   const pageCount =
     options.memo.pageCount > 0 ? options.memo.pageCount : options.memoryCount * 2;
+  const tripContext = parseTripContext(options.memo.tripContext);
 
   return {
     messages: options.changed
       .map((message) => serializeChatMessage(message, messageOptions))
       .filter((message) => message !== null),
-    suggestions: serializeChatSuggestions(currentSuggestionIds(options.allMessages, options.turn)),
+    suggestions: serializeChatSuggestions(
+      currentSuggestionIds(options.allMessages, options.turn, tripContext),
+    ),
+    // Toujours rendu, pas seulement quand il change : il est petit, et la
+    // pastille se remplit sous les yeux à chaque réponse.
+    tripContext: serializeTripContext(tripContext),
     preview:
       options.memoryCount > 0
         ? { memoryCount: options.memoryCount, pageCount, isOpenable: options.hasReadyRender }

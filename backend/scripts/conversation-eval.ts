@@ -103,6 +103,7 @@ function toInput(scene: Scene): ConversationInput {
         places: (memo.places ?? []).map((canonicalName) => ({ canonicalName, notes: "" })),
       },
       state: EMPTY_CONVERSATION_STATE,
+      tripContext: null,
     },
     traveller: {
       firstName: scene.traveller?.firstName ?? "Hugo",

@@ -2,6 +2,14 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { FakeResponder } from "../src/services/conversation.js";
 import { OPENING_TEXT, SUGGESTIONS } from "../src/services/conversationCopy.js";
+import {
+  CONTEXT_COMPLETE,
+  CONTEXT_INVITATION,
+  CONTEXT_NOTED,
+  CONTEXT_SKIPPED,
+  questionFor,
+  EMPTY_TRIP_CONTEXT,
+} from "../src/services/tripContext.js";
 import { FakeTranscriber } from "../src/services/transcription.js";
 import {
   createHarness,
@@ -65,6 +73,12 @@ interface ChatThreadJson {
   suggestions: { id: string; label: string; symbol: string | null; intent: string }[];
   turn: { status: "idle" } | { status: "replying"; messageId: string };
   canClear: boolean;
+  tripContext: {
+    status: string;
+    filledCount: number;
+    requiredCount: number;
+    items: { key: string; label: string; value: string | null; isRequired: boolean; isFilled: boolean }[];
+  } | null;
   now: string;
 }
 
@@ -197,8 +211,10 @@ describe("lire le fil", () => {
     const thread = await readThread(memo.id);
 
     expect(thread.messages).toEqual([]);
-    expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["start", "photos", "dictate"]);
-    expect(thread.suggestions[0]?.label).toBe(SUGGESTIONS.start.label);
+    // Une seule puce : le contexte du voyage d'abord (Paul, 28/09/2026).
+    expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["context"]);
+    expect(thread.suggestions[0]?.label).toBe(SUGGESTIONS.context.label);
+    expect(thread.tripContext).toBeNull();
     expect(thread.turn).toEqual({ status: "idle" });
     expect(thread.canClear).toBe(true);
     expect(thread.preview).toBeNull();
@@ -357,6 +373,130 @@ describe("parler à MEMO", () => {
     const stranger = await registerAccount(harness.app, "inconnu@memobook.app");
     const { response: refused } = await say(memo.id, "Bonjour", { authorization: stranger.authorization });
     expect(refused.statusCode).toBe(404);
+  });
+});
+
+describe("le contexte du voyage", () => {
+  const lastMemoText = (thread: ChatThreadJson) => {
+    const bubbles = memoBubbles(thread);
+    const last = bubbles[bubbles.length - 1];
+    return last?.body.kind === "text" ? last.body.text : null;
+  };
+  const chipIds = (thread: ChatThreadJson) => thread.suggestions.map((suggestion) => suggestion.id);
+
+  it("se recueille ligne à ligne, sans créer de souvenir ni coûter d'étape", async () => {
+    const memo = await seedTrip(owner.accountId);
+
+    await say(memo.id, SUGGESTIONS.context.label, { suggestionId: "context" });
+    let thread = await readThread(memo.id);
+    expect(lastMemoText(thread)).toBe(CONTEXT_INVITATION);
+    // Sous l'invitation, rien : le composeur suffit, et « Plus tard » n'y a pas sa place.
+    expect(chipIds(thread)).toEqual([]);
+    expect(thread.tripContext).toMatchObject({ status: "gathering", filledCount: 0, requiredCount: 5 });
+
+    // La description libre : le repli la garde et compte les voyageurs.
+    await say(memo.id, "On part à 3 en Malaisie, trois semaines.");
+    thread = await readThread(memo.id);
+    // Sans modèle, l'accusé et la question tiennent dans une seule bulle.
+    expect(lastMemoText(thread)).toBe(`${CONTEXT_NOTED} ${questionFor("departureCountry", EMPTY_TRIP_CONTEXT)}`);
+    expect(chipIds(thread)).toEqual(["context-later"]);
+
+    await say(memo.id, "De France");
+    thread = await readThread(memo.id);
+    expect(lastMemoText(thread)).toBe(`${CONTEXT_NOTED} Tu me donnes le prénom de chacun de tes compagnons de route ?`);
+
+    await say(memo.id, "Clara et Léo");
+    await say(memo.id, "Du 12 au 26 septembre 2026");
+    await say(memo.id, "Un road trip en van");
+    thread = await readThread(memo.id);
+    expect(lastMemoText(thread)).toBe(`${CONTEXT_NOTED} ${CONTEXT_COMPLETE}`);
+    expect(chipIds(thread)).toEqual(["dictate", "write", "photos"]);
+    expect(thread.tripContext).toMatchObject({ status: "complete", filledCount: 5 });
+    expect(thread.tripContext?.items.find((item) => item.key === "companions")?.value).toBe("Clara, Léo");
+
+    // Sept tours, aucun souvenir : le contexte n'entre pas dans le carnet.
+    expect(await harness.prisma.entry.count({ where: { memoId: memo.id } })).toBe(0);
+    const travellerTurns = thread.messages.filter((message) => message.author === "traveller");
+    expect(travellerTurns.slice(1).every((message) => message.disposition === "trip_context")).toBe(true);
+
+    // Et ensuite, on raconte pour de vrai.
+    await say(memo.id, "Premier jour à Kuala Lumpur, on a grimpé aux tours Petronas au lever du soleil.");
+    expect(await harness.prisma.entry.count({ where: { memoId: memo.id } })).toBe(1);
+
+    // MEMO et l'écrivain le relisent : il est en base, au propre.
+    const stored = await harness.prisma.memo.findUniqueOrThrow({ where: { id: memo.id } });
+    expect(stored.tripContext).toMatchObject({
+      departureCountry: "France",
+      travellerCount: 3,
+      dates: "Du 12 au 26 septembre 2026",
+      tripType: "Un road trip en van",
+    });
+  });
+
+  it("ne consomme aucune étape offerte, même au-delà des trois", async () => {
+    const memo = await seedTrip(owner.accountId);
+    await say(memo.id, SUGGESTIONS.context.label, { suggestionId: "context" });
+    for (const text of ["Je pars seul", "Je pars de France", "En octobre", "Un trek", "Et j'adore marcher"]) {
+      const { response } = await say(memo.id, text);
+      expect(response.statusCode).toBe(201);
+    }
+    const account = await harness.prisma.account.findUniqueOrThrow({ where: { id: owner.accountId } });
+    expect(account.remainingSteps).toBe(3);
+  });
+
+  it("se referme sans insister sur « Je compléterai plus tard »", async () => {
+    const memo = await seedTrip(owner.accountId);
+    await say(memo.id, SUGGESTIONS.context.label, { suggestionId: "context" });
+    await say(memo.id, "On est deux");
+    await say(memo.id, SUGGESTIONS["context-later"].label, { suggestionId: "context-later" });
+
+    const thread = await readThread(memo.id);
+    expect(lastMemoText(thread)).toBe(CONTEXT_SKIPPED);
+    expect(thread.tripContext?.status).toBe("skipped");
+
+    await say(memo.id, "Première soirée à Penang, des nouilles au marché de nuit.");
+    expect(await harness.prisma.entry.count({ where: { memoId: memo.id } })).toBe(1);
+  });
+
+  it("écoute un vocal du contexte sans en faire un souvenir, et en sert le fichier", async () => {
+    const memo = await seedTrip(owner.accountId);
+    await say(memo.id, SUGGESTIONS.context.label, { suggestionId: "context" });
+    const { id, response } = await sendVoice(memo.id);
+    expect(response.statusCode).toBe(201);
+    // Ni fiche de retranscription, ni souvenir.
+    expect(response.json<{ messages: ChatMessageJson[] }>().messages.map((message) => message.body.kind)).toEqual([
+      "voice",
+    ]);
+
+    const thread = await readThread(memo.id);
+    const voice = thread.messages.find((message) => message.id === id);
+    expect(voice?.disposition).toBe("trip_context");
+    expect(thread.messages.some((message) => message.body.kind === "transcript")).toBe(false);
+    expect(await harness.prisma.entry.count({ where: { memoId: memo.id } })).toBe(0);
+
+    const url = voice?.body.kind === "voice" ? voice.body.voice.remoteUrl : null;
+    expect(url).toContain(`/v1/chat-messages/${id}/media`);
+    const media = await harness.app.inject({
+      method: "GET",
+      url: new URL(url!).pathname,
+      headers: { authorization: owner.authorization },
+    });
+    expect(media.statusCode).toBe(200);
+    expect(media.body).toBe("audio");
+
+    // Ce qu'il a dit est gardé sur le message, pour l'historique de MEMO.
+    const stored = await harness.prisma.chatMessage.findUniqueOrThrow({ where: { id } });
+    expect(stored.text).toBeTruthy();
+  });
+
+  it("n'est plus proposé à l'ouverture une fois posé", async () => {
+    const memo = await seedTrip(owner.accountId);
+    await harness.prisma.memo.update({
+      where: { id: memo.id },
+      data: { tripContext: { status: "complete", departureCountry: "France" } },
+    });
+    const thread = await readThread(memo.id);
+    expect(chipIds(thread)).toEqual(["start", "photos", "dictate"]);
   });
 });
 

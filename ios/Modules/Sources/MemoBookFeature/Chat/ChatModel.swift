@@ -598,6 +598,12 @@ public final class ChatModel {
         }
 
         if let preview = update.preview { thread?.preview = preview }
+        // Posé **après** les bulles : la pastille se remplit au moment où MEMO
+        // dit ce qu'il a compris, pas avant qu'il l'ait dit.
+        if let tripContext = update.tripContext, tripContext != thread?.tripContext {
+            thread?.tripContext = tripContext
+            changed = true
+        }
 
         if update.turn.isReplying {
             turn = .thinking

@@ -118,6 +118,10 @@ enum ChatDisposition {
   memory
   context
   command
+  /// Un tour du **contexte du voyage** (`Memo.tripContext`) : d'où l'on part,
+  /// avec qui, quand, quel genre de voyage. Rien n'entre dans le carnet et
+  /// rien ne coûte — c'est ce qui permet à tout le reste d'être cohérent.
+  trip_context
 }
 
 /// La nature d'une écriture de cagnotte. Il n'y a pas d'état « en attente » :
@@ -414,6 +418,19 @@ model Memo {
   /// défensivement, comme `coherenceSheet` — forme : `ConversationState` dans
   /// `services/conversation.ts`.
   conversationState Json?
+
+  /// Le contexte du voyage, recueilli par MEMO **avant la première étape** —
+  /// `docs/conversation.md` § 2 bis. Pays de départ, nombre de voyageurs, le
+  /// prénom de chaque compagnon, les dates, le genre de voyage ; et, s'ils
+  /// viennent, l'itinéraire, les liens entre voyageurs, l'occasion, le moment
+  /// où l'on raconte.
+  ///
+  /// Nul tant que le voyageur n'a pas commencé à le raconter. JSON relu
+  /// défensivement, comme `coherenceSheet` — forme : `TripContext` dans
+  /// `services/tripContext.ts`, au champ près de `TripContext.swift`. Il
+  /// survit à « Supprimer la conversation » : on efface ce qu'on s'est dit,
+  /// pas ce que MEMO sait du voyage.
+  tripContext Json?
 
   /// « Supprimer la conversation » : depuis quand le fil repart de la bulle
   /// d'ouverture. Les souvenirs d'avant restent dans le carnet mais ne

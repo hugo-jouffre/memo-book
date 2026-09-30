@@ -5,7 +5,9 @@ import {
   buildUserPrompt,
   suggestionCatalogue,
   toReply,
+  tripContextSchema,
 } from "./conversationAnthropic.js";
+import { EMPTY_TRIP_CONTEXT, questionFor } from "./tripContext.js";
 import {
   EMPTY_CONVERSATION_STATE,
   InvalidReplyError,
@@ -38,6 +40,7 @@ function turn(overrides: Partial<ConversationInput> = {}): ConversationInput {
         places: [{ canonicalName: "Testaccio", notes: "" }],
       },
       state: EMPTY_CONVERSATION_STATE,
+      tripContext: null,
     },
     traveller: { firstName: "Hugo", memberCount: 1 },
     step: null,
@@ -236,5 +239,65 @@ describe("un tour", () => {
     await expect(
       new AnthropicResponder(garbage.anthropic, "claude-sonnet-5").reply(turn()),
     ).rejects.toThrow();
+  });
+});
+
+describe("le contexte du voyage", () => {
+  const contextTurn = (text: string) => ({
+    context: { ...EMPTY_TRIP_CONTEXT, departureCountry: "France", awaiting: "companions" as const },
+    memo: { title: "Malaisie 2026", destinationName: "Malaisie", destinationCity: "Kuala Lumpur" },
+    travellerFirstName: "Hugo",
+    history: [],
+    text,
+    now: new Date("2026-09-28T10:00:00Z"),
+  });
+
+  const EXTRACTED = {
+    acknowledgement: "Clara et Léo t’accompagnent, je note.",
+    departureCountry: null,
+    travellerCount: 3,
+    companions: [
+      { name: "Clara", relation: "ma femme" },
+      { name: "Léo", relation: null },
+    ],
+    dates: null,
+    tripType: null,
+    itinerary: null,
+    occasion: null,
+    narrationMoment: "during",
+    notes: null,
+  };
+
+  it("extrait et reformule, en disant au modèle ce qui est su et ce qui vient d'être demandé", async () => {
+    const { anthropic, calls } = client(EXTRACTED);
+    const reply = await new AnthropicResponder(anthropic, "claude-sonnet-5").gatherContext(
+      contextTurn("Je pars avec ma femme Clara et Léo"),
+    );
+
+    expect(reply.update.companions).toEqual(EXTRACTED.companions);
+    expect(reply.update.travellerCount).toBe(3);
+    expect(reply.acknowledgement).toBe(EXTRACTED.acknowledgement);
+
+    const prompt = calls[0]!.messages[0]!.content as string;
+    expect(prompt).toContain("Pays de départ : France");
+    expect(prompt).toContain(questionFor("companions", contextTurn("").context));
+    expect(prompt).toContain("> Je pars avec ma femme Clara et Léo");
+  });
+
+  it("jette un accusé qui pose une question : la question appartient au code", async () => {
+    const { anthropic } = client({ ...EXTRACTED, acknowledgement: "Clara et Léo, super ! Vous partez quand ?" });
+    const reply = await new AnthropicResponder(anthropic, "claude-sonnet-5").gatherContext(contextTurn("Clara et Léo"));
+    expect(reply.acknowledgement).toBeNull();
+  });
+
+  it("lève sur un refus : le job passe au repli", async () => {
+    const { anthropic } = client(EXTRACTED, { stopReason: "refusal" });
+    await expect(
+      new AnthropicResponder(anthropic, "claude-sonnet-5").gatherContext(contextTurn("Clara")),
+    ).rejects.toThrow();
+  });
+
+  it("n'emploie aucune borne de tableau dans le schéma, que l'API refuse", () => {
+    expect(JSON.stringify(tripContextSchema())).not.toMatch(/minItems|maxItems/);
   });
 });

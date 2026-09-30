@@ -81,6 +81,13 @@ public enum ChatCopy {
         voyage ? Cela m’aidera à garder de la cohérence tout le long du récit.
         """
 
+    /// La réponse à « Je te raconte le contexte de mon voyage » — au caractère
+    /// près de `tripContext.ts` (`CONTEXT_INVITATION`).
+    public static let contextInvitation =
+        "Avec plaisir ! Raconte-moi ton voyage comme à un ami : d’où tu pars, à combien vous " +
+        "êtes et leurs prénoms, les dates, et quel genre de voyage c’est. À l’oral ou au " +
+        "clavier, comme tu préfères."
+
     /// La réponse à « Commencer mon carnet » : une invitation à raconter, sans
     /// reproposer les puces d'ouverture à qui vient de commencer.
     public static let openingWithoutPrompt =
@@ -277,6 +284,22 @@ public enum ChatCopy {
     // ouvre derrière. Deux ou trois par tour, jamais quatre, et aucune
     // ponctuation finale.
 
+    /// La pastille et la fiche du contexte du voyage — ``ChatTripContext``.
+    public enum TripContext {
+        public static let title = "Contexte du voyage"
+        public static let gatheringSubtitle =
+            "Ce que MEMO a compris de ton voyage. Raconte-lui ce qui manque dans la conversation."
+        public static let doneSubtitle =
+            "Ce que MEMO sait de ton voyage. Pour corriger une ligne, dis-le-lui dans la conversation."
+        public static let extrasTitle = "En plus"
+        public static let missingValue = "À raconter"
+        public static let accessibilityHint = "Montre ce que MEMO a compris de ton voyage"
+
+        public static func accessibilityLabel(filled: Int, of total: Int) -> String {
+            "\(title), \(filled) sur \(total)"
+        }
+    }
+
     public enum Suggest {
         // **Chaque proposition porte un émoji devant** — c'est la maquette de
         // Hugo (`3520:35958`), et il est porté à part du libellé : il ne part
@@ -300,6 +323,15 @@ public enum ChatCopy {
         /// porté séparément pour qu'il ne partre pas dans le message.
         public static let start = "Commencer mon carnet"
         public static let startSymbol = "🚀"
+
+        /// **La** puce d'ouverture tant que le contexte du voyage n'est pas
+        /// posé : on raconte d'où l'on part, avec qui, quand, et quel genre
+        /// de voyage, avant la première étape (Paul, 28/09/2026). Au
+        /// caractère près de `conversationCopy.ts`.
+        public static let tellContext = "Je te raconte le contexte de mon voyage"
+        public static let tellContextSymbol = "🧭"
+        public static let contextLater = "Je compléterai plus tard"
+        public static let contextLaterSymbol = "⏭️"
         public static let importPhotos = "Importer des photos"
         public static let importPhotosSymbol = "📷"
         public static let dictate = "Raconter à l’oral"

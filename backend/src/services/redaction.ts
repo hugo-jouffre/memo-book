@@ -62,6 +62,12 @@ export interface RedactionInput {
     authors: string | null;
     theme: string | null;
     styleKey: string | null;
+    /**
+     * Le contexte du voyage en lignes lisibles (`describeTripContext`) : qui
+     * voyage avec qui, d'où, quand, et quel genre de voyage. Vide s'il n'a pas
+     * été raconté. C'est ce qui fait écrire « Clara » et non « une amie ».
+     */
+    tripContext?: string[];
   };
   entry: {
     transcript: string;
@@ -477,6 +483,14 @@ export class AnthropicRedactor implements Redactor {
     if (memo.authors) lines.push(`Voyageurs : ${memo.authors}`);
     if (memo.theme) lines.push(`Thème : ${memo.theme}`);
     if (memo.styleKey) lines.push(`Style de carnet : ${memo.styleKey}`);
+    if (memo.tripContext && memo.tripContext.length > 0) {
+      lines.push(
+        "",
+        "## Le contexte du voyage",
+        "_Raconté par le voyageur avant la première étape. Les prénoms s'écrivent comme ici._",
+        ...memo.tripContext,
+      );
+    }
 
     lines.push(
       "",

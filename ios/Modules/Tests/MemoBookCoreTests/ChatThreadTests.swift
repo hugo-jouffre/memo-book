@@ -250,6 +250,34 @@ final class ChatThreadDecodingTests: XCTestCase {
         XCTAssertEqual(phase, .unknown("dreaming"))
     }
 
+    /// Le contexte du voyage, tel que `serializeTripContext` le sert : la
+    /// pastille lit le compte, la fiche lit les lignes. Un statut inconnu ne
+    /// casse rien.
+    func testDecodesTheTripContext() throws {
+        let json = Data(
+            """
+            { "messages": [], "suggestions": [], "turn": { "status": "idle" },
+              "now": "2026-09-28T10:00:00.000Z",
+              "tripContext": {
+                "status": "gathering", "filledCount": 2, "requiredCount": 5,
+                "items": [
+                  { "key": "departureCountry", "label": "Pays de départ", "value": "France",
+                    "isRequired": true, "isFilled": true },
+                  { "key": "companions", "label": "Compagnons de route", "value": null,
+                    "isRequired": true, "isFilled": false }
+                ] } }
+            """.utf8)
+        let update = try JSONDecoder.memoBook.decode(ChatThreadUpdate.self, from: json)
+        let context = try XCTUnwrap(update.tripContext)
+        XCTAssertTrue(context.isGathering)
+        XCTAssertEqual(context.progress, 0.4, accuracy: 0.001)
+        XCTAssertEqual(context.items.map(\.isFilled), [true, false])
+        XCTAssertNil(context.items[1].value)
+
+        let status = try JSONDecoder.memoBook.decode(ChatTripContext.Status.self, from: Data("\"paused\"".utf8))
+        XCTAssertEqual(status, .unknown("paused"))
+    }
+
     /// La suite du fil et le reçu d'un tour, tels que l'app les sonde et les reçoit.
     func testDecodesAnUpdateAndAReceipt() throws {
         let update = try JSONDecoder.memoBook.decode(

@@ -157,13 +157,21 @@ public struct ChatTransport: Sendable {
                 try await api.updateEntry(id: entryId, edit: EntryEdit.text(text))
             },
             media: { url in
-                // `/v1/entries/<id>/media` : l'identifiant est l'avant-dernier
-                // segment. Une URL d'une autre forme ne se télécharge pas ici.
+                // `/v1/entries/<id>/media` pour un souvenir,
+                // `/v1/chat-messages/<id>/media` pour un vocal du contexte du
+                // voyage, qui n'en est pas un. L'identifiant est l'avant-dernier
+                // segment, la ressource celui d'avant. Une URL d'une autre forme
+                // ne se télécharge pas ici.
                 let parts = url.pathComponents
-                guard parts.count >= 2, parts.last == "media", let entryId = parts.dropLast().last else {
+                guard parts.count >= 3, parts.last == "media" else {
                     throw APIError.server(statusCode: 0, code: nil, message: "Média inconnu.")
                 }
-                return try await api.entryMedia(id: entryId)
+                let id = parts[parts.count - 2]
+                switch parts[parts.count - 3] {
+                case "entries": return try await api.entryMedia(id: id)
+                case "chat-messages": return try await api.chatMessageMedia(id: id)
+                default: throw APIError.server(statusCode: 0, code: nil, message: "Média inconnu.")
+                }
             }
         )
     }

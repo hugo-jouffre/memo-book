@@ -507,6 +507,11 @@ public actor MemoBookAPIClient: MemoBookAPI {
         return try await performRaw(request, credential: .session)
     }
 
+    public func chatMessageMedia(id: String) async throws -> Data {
+        let request = try makeRequest(method: "GET", path: "/v1/chat-messages/\(id)/media")
+        return try await performRaw(request, credential: .session)
+    }
+
     // MARK: - Génération
 
     public func startRender(memoId: String) async throws -> Render {
