@@ -123,6 +123,59 @@ final class ChatThreadTests: XCTestCase {
         XCTAssertFalse(text.contains("/tmp/"), text)
     }
 
+    /// Le reçu du serveur rend les photos sous l'identifiant de leur souvenir,
+    /// pas sous celui de la bulle posée avant l'envoi : elles gardent quand
+    /// même leur fichier local, retrouvé par son rang (30/09/2026).
+    func testPhotosKeepTheirLocalFilesWhenTheServerRenamesThem() {
+        let sent = ChatMessage(
+            id: "tour",
+            author: .traveller,
+            body: .photos([
+                PhotoAttachment(id: "tour-0", localUrl: URL(filePath: "/tmp/tour-0.jpg")),
+                PhotoAttachment(id: "tour-1", localUrl: URL(filePath: "/tmp/tour-1.jpg")),
+            ]),
+            sentAt: .distantPast,
+            delivery: .sending
+        )
+        let received = ChatMessage(
+            id: "tour",
+            author: .traveller,
+            body: .photos([
+                PhotoAttachment(id: "souvenir-a", remoteUrl: URL(string: "https://api.test/v1/entries/souvenir-a/media")),
+                PhotoAttachment(id: "souvenir-b", remoteUrl: URL(string: "https://api.test/v1/entries/souvenir-b/media")),
+            ]),
+            sentAt: .distantPast
+        )
+
+        guard case .photos(let merged) = received.keepingLocalFiles(of: sent).body else {
+            return XCTFail("des photos")
+        }
+        XCTAssertEqual(merged.map(\.localUrl?.lastPathComponent), ["tour-0.jpg", "tour-1.jpg"])
+        XCTAssertEqual(merged.map(\.id), ["souvenir-a", "souvenir-b"], "L'identifiant du serveur fait foi.")
+    }
+
+    /// Des listes de longueurs différentes ne se rapprochent pas au rang : ce
+    /// ne sont plus les mêmes photos.
+    func testPhotosAreNotMatchedByRankWhenTheCountsDiffer() {
+        let sent = ChatMessage(
+            id: "tour",
+            author: .traveller,
+            body: .photos([PhotoAttachment(id: "tour-0", localUrl: URL(filePath: "/tmp/tour-0.jpg"))]),
+            sentAt: .distantPast
+        )
+        let received = ChatMessage(
+            id: "tour",
+            author: .traveller,
+            body: .photos([PhotoAttachment(id: "a"), PhotoAttachment(id: "b")]),
+            sentAt: .distantPast
+        )
+
+        guard case .photos(let merged) = received.keepingLocalFiles(of: sent).body else {
+            return XCTFail("des photos")
+        }
+        XCTAssertTrue(merged.allSatisfy { $0.localUrl == nil })
+    }
+
     // MARK: - Outils
 
     private func makeThread(_ entries: (id: String, stepId: String?)...) -> ChatThread {

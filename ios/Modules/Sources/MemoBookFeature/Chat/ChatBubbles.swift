@@ -113,7 +113,7 @@ struct ChatMessageRow: View {
             )
 
         case .photos(let attachments):
-            ChatPhotosBubble(attachments: attachments, author: message.author)
+            ChatPhotosBubble(attachments: attachments, author: message.author, model: model)
         }
     }
 
@@ -278,6 +278,8 @@ private struct ChatActionButton: View {
 struct ChatPhotosBubble: View {
     let attachments: [PhotoAttachment]
     let author: ChatAuthor
+    /// C'est le modèle qui charge les photos — voir ``ChatModel/loadImage(_:)``.
+    let model: ChatModel
 
     @ScaledMetric(relativeTo: .body) private var thumbnail: CGFloat = 76
 
@@ -317,19 +319,31 @@ struct ChatPhotosBubble: View {
         .accessibilityLabel(ChatCopy.Voice.photos(count: attachments.count))
     }
 
+    /// Une vignette : le fichier local tant qu'il est là, sinon le média du
+    /// serveur — **avec la session**, par le modèle. Un `AsyncImage` n'envoyait
+    /// pas d'en-tête et `/v1/entries/:id/media` le refusait (T206).
+    ///
+    /// La photo se pose en calque d'un cadre vide : `scaledToFill` ne se laisse
+    /// pas contraindre en largeur et ferait déborder la grille.
     private func photo(_ attachment: PhotoAttachment, side: CGFloat) -> some View {
-        AsyncImage(url: attachment.displayUrl) { phase in
-            if let image = phase.image {
-                image.resizable().scaledToFill()
-            } else {
-                // La même trame que les vignettes d'étape : une image qui
-                // charge ne doit pas laisser un trou de la couleur du fond.
-                TripCoverPlaceholder(seed: attachment.id)
+        let url = attachment.displayUrl
+
+        return Color.clear
+            .frame(height: side)
+            .frame(maxWidth: .infinity)
+            .overlay {
+                if let image = url.flatMap({ model.images[$0] }) {
+                    Image(uiImage: image).resizable().scaledToFill()
+                } else {
+                    // La même trame que les vignettes d'étape : une image qui
+                    // charge ne doit pas laisser un trou de la couleur du fond.
+                    TripCoverPlaceholder(seed: attachment.id)
+                }
             }
-        }
-        .frame(height: side)
-        .frame(maxWidth: .infinity)
-        .clipShape(.rect(cornerRadius: MemoBookSpacing.snug))
+            .clipShape(.rect(cornerRadius: MemoBookSpacing.snug))
+            .task(id: url) {
+                if let url { model.loadImage(url) }
+            }
     }
 }
 
@@ -450,11 +464,11 @@ struct ChatVoiceBubble: View {
             if let portrait {
                 ChatPortraitDisc(
                     portrait: portrait,
-                    image: portrait.url.flatMap { model.portraitImages[$0] },
+                    image: portrait.url.flatMap { model.images[$0] },
                     side: markSide
                 )
                 .task(id: portrait.url) {
-                    if let url = portrait.url { model.loadPortrait(url) }
+                    if let url = portrait.url { model.loadImage(url) }
                 }
             } else {
                 // Un `BrandMarkDrawing` et non une image : le M du dépôt est un
@@ -497,7 +511,7 @@ struct ChatVoiceBubble: View {
 /// la marque le détache : sans lui, le rond bleu se fondait dans la bulle bleue
 /// du voyageur, et il ne restait que deux lettres qui flottaient.
 ///
-/// La photo arrive **déjà chargée**, par ``ChatModel/loadPortrait(_:)`` : un
+/// La photo arrive **déjà chargée**, par ``ChatModel/loadImage(_:)`` : un
 /// `AsyncImage` ici repartait de zéro à chaque recomposition du fil, et restait
 /// sur les initiales dès qu'une requête était annulée.
 struct ChatPortraitDisc: View {

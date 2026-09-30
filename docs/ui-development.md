@@ -4142,10 +4142,24 @@ forme JSON (`COPY ["…", "…"]`). Au premier déploiement réussi, le
 | Accueil — « Voir des exemples de carnets » | une coupure beige sur l'illustration | L'image embarquée était **déjà** `assets/illustrations/Carnets Example Homepage.png`, détourée. La coupure venait du fondu que l'app peignait par-dessus : un aplat crème opaque, qui remplissait les vides de l'illustration et cachait le motif de la marque passant sous la carte translucide. Le fondu devient un **masque d'opacité** : aucune couleur posée, c'est la carte qui se voit au travers |
 | Conversation — puce de suggestion en vol | la bulle qui monte ne doit pas passer sur le dernier message : le fil se lève dès le départ | Le fil se lève de la hauteur de la bulle **au décollage**, par un décalage de dessin, et la bulle se pose dans le creux. À l'atterrissage, le décalage et le vrai message s'échangent dans la même image, sans animation propre. Une première version insérait une ligne vide dans le fil : épinglé en bas, il sautait d'abord de 52 pt vers le bas avant de remonter — vu en vidéo image par image, et abandonné |
 
-### 33.2 À trancher
+### 33.2 Le soir même — les photos du fil (T206)
+
+Branche `photos-du-chat-avec-la-session`, empilée sur la précédente. Les deux
+`401` de 15 h 15 avaient **deux** causes, et la seconde n'était pas celle que
+le ticket nommait.
+
+| Écran / parcours | Ce qui n'allait pas | Ce qui a été fait |
+|---|---|---|
+| Conversation — photos | **Juste après l'envoi**, la photo perdait son fichier local : la bulle posée avant l'envoi numérote ses photos (`<tour>-0`, `<tour>-1`…), le reçu du serveur les rend sous l'identifiant de leur souvenir, et `ChatMessage.keepingLocalFiles` ne les rapprochait que par identifiant. La bulle allait donc chercher l'adresse distante une seconde après l'envoi — le premier `401` suit le `POST` d'une seconde | Rapprochées par identifiant, **sinon par rang** quand les deux listes ont la même longueur : le serveur écrit les souvenirs dans l'ordre des fichiers reçus |
+| Conversation — photos | **Plus tard**, sans fichier local, l'adresse distante (`/v1/entries/:id/media`) demande la session, et un `AsyncImage` n'envoie pas d'en-tête | Les photos passent par le chargeur des portraits, élargi en `ChatModel.loadImage(_:)` : le disque pour une photo qui vient d'être choisie, **le transport — avec la session —** pour un média du voyage, une requête nue pour un avatar. Décodées à 1 024 px au plus (`ChatImage`, ImageIO) : un fil de vingt photos d'iPhone ne garde plus leurs pixels entiers en mémoire |
+
+Vérifié en simulateur (deux photos envoyées dans le bac à sable : la bulle,
+puis la réponse de MEMO) ; le chemin du serveur, que le bac à sable n'a pas,
+est couvert par `ChatImagesTests` et `ChatThreadTests`.
+
+### 33.3 À trancher
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
-| T206 | **Les photos du fil se chargent sans session** : la bulle photo lit `/v1/entries/:id/media` par un `AsyncImage`, qui n'envoie pas d'en-tête, et la route demande la session — deux `401` d'Hugo le 30/09 à 15 h 15, juste après l'envoi d'une photo. D'après le code, une photo qui vient d'être envoyée s'affiche depuis le disque, mais relue plus tard — sans fichier local — elle resterait sur sa trame ; pas vérifié en production. À brancher sur `transport.media`, comme l'écoute d'un vocal | Conversation |
 | T207 | **À l'atterrissage d'une puce, le fil se tasse** d'une trentaine de points : la bande de suggestions disparaît pendant que MEMO répond (et le composeur change pour « Raconter à l'oral »), le fil épinglé en bas descend d'autant, puis remonte quand les trois points arrivent. C'était déjà le cas avant ce lot. Garder la place de la bande pendant le tour, ou l'effacer en fondu, le rendrait invisible — à décider | Conversation |
 | T208 | **Le micro de la bulle vocale** : la maquette `3627:31695` le dessine nu, vert, au pied du rond ; l'app garde la pastille détourée que Clara a demandée le 26/09 (« mieux intégré »). À départager | Conversation |
