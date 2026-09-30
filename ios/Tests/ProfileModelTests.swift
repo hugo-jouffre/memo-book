@@ -104,6 +104,41 @@ final class ProfileModelTests: XCTestCase {
         XCTAssertNil(model.justSaved)
     }
 
+    /// « Supprimer la photo » qui échoue le dit **sous le rond**, là où l'on a
+    /// touché, et non au pied de la page (Hugo, 30/09/2026 : l'API rendait 404
+    /// et rien ne bougeait à l'écran). La photo reste : c'est le profil relu
+    /// qui fait foi.
+    func testAFailedPhotoRemovalIsSaidUnderThePhotoAndKeepsIt() async {
+        struct NotFound: LocalizedError {
+            var errorDescription: String? { "Route introuvable." }
+        }
+        var withPhoto = TravellerProfile.fixture
+        withPhoto.avatarUrl = URL(string: "https://api.test/v1/avatars/photo.jpg")
+        let model = ProfileModel(source: { withPhoto }, deleteAvatar: { throw NotFound() })
+        await model.load()
+
+        await model.removeAvatar()
+
+        XCTAssertEqual(model.avatarErrorMessage, "Route introuvable.")
+        XCTAssertNil(model.errorMessage, "Le bandeau du bas de page, lui, reste pour le chargement.")
+        XCTAssertEqual(model.profile?.avatarUrl, withPhoto.avatarUrl)
+    }
+
+    func testARemovedPhotoGivesBackTheInitials() async {
+        var withPhoto = TravellerProfile.fixture
+        withPhoto.avatarUrl = URL(string: "https://api.test/v1/avatars/photo.jpg")
+        var withoutPhoto = withPhoto
+        withoutPhoto.avatarUrl = nil
+        let model = ProfileModel(source: { withPhoto }, deleteAvatar: { withoutPhoto })
+        await model.load()
+
+        await model.removeAvatar()
+
+        XCTAssertNil(model.profile?.avatarUrl)
+        XCTAssertNil(model.avatarErrorMessage)
+        XCTAssertEqual(model.justSaved, .avatar)
+    }
+
     private func waitUntil(
         timeout: Duration = .seconds(2),
         _ condition: () -> Bool

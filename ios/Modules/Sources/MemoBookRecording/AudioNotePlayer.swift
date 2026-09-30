@@ -141,6 +141,15 @@ public enum VoiceNoteFile {
         URL.cachesDirectory.appending(path: "VoiceNotes", directoryHint: .isDirectory)
     }
 
+    /// Le vocal déjà écrit pour cet identifiant, s'il est encore là — iOS vide
+    /// les caches sous pression disque. C'est ce qui évite de retélécharger un
+    /// vocal à chaque ouverture du fil, pour l'écouter comme pour relire sa
+    /// forme d'onde (``VoiceLevels``).
+    public static func existing(id: String) -> URL? {
+        let url = directory.appending(path: "\(id).m4a")
+        return FileManager.default.fileExists(atPath: url.path()) ? url : nil
+    }
+
     /// Écrit le vocal et rend son URL.
     public static func save(_ audio: RecordedAudio, id: String) throws -> URL {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

@@ -210,29 +210,21 @@ struct ShowcaseCard: View {
         }
         .frame(maxHeight: .infinity)
         .clipped()
-        // **Le bleu de la carte se fond dans l'image par la gauche.** L'image
-        // livrée n'a pas de dégradé (elle se coupait net sur le beige) ; c'est
-        // l'app qui le dessine, du bleu de la carte au transparent sur le
-        // premier tiers, pour que le texte puisse mordre un peu sur elle sans
-        // perdre en lisibilité (Hugo, 17/09/2026). L'export du 19/09 fait
-        // 444 × 340 px pour un cadre de 124 pt — net jusqu'en 3×.
-        .overlay {
-            // Les deux couches de la carte — le crème, puis le bleu à 22 % —
-            // fondues de la même façon : le dégradé part exactement de la
-            // couleur de la carte, sans en inventer une.
-            ZStack {
-                LinearGradient(
-                    colors: [MemoBookColor.background, MemoBookColor.background.opacity(0.6), .clear],
-                    startPoint: .leading,
-                    endPoint: Self.fadeEnd
-                )
-                LinearGradient(
-                    colors: [MemoBookColor.outline.opacity(0.22), MemoBookColor.outline.opacity(0.13), .clear],
-                    startPoint: .leading,
-                    endPoint: Self.fadeEnd
-                )
-            }
-            .allowsHitTesting(false)
+        // **L'image s'efface par la gauche, elle ne se recouvre pas.** L'app
+        // peignait le fondu par-dessus — le crème de l'écran, puis le bleu à
+        // 22 % de la carte. Mais l'illustration est détourée : ce crème opaque
+        // remplissait ses vides, et cachait le motif de la marque qui passe
+        // sous la carte translucide. Une bande beige coupait donc l'image à
+        // gauche (Hugo, 30/09/2026). Un masque d'opacité ne pose aucune
+        // couleur : l'image devient transparente, et c'est la carte qui se
+        // voit au travers. L'export du 19/09 fait 444 × 340 px pour un cadre
+        // de 124 pt — net jusqu'en 3×.
+        .mask {
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.4), .black],
+                startPoint: .leading,
+                endPoint: Self.fadeEnd
+            )
         }
         .accessibilityHidden(true)
     }

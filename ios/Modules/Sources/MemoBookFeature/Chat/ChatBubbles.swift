@@ -1,6 +1,7 @@
 import MemoBookCore
 import MemoBookDesign
 import SwiftUI
+import UIKit
 
 /// Une réplique du fil : la bulle, et les deux commandes posées à côté d'elle.
 ///
@@ -355,20 +356,18 @@ struct ChatVoiceBubble: View {
 
     var body: some View {
         BrandChatBubble(author: author) {
-            // Tout sur **une ligne, centrée** : le bouton, l'onde, le chrono et
-            // la signature partagent le même axe. L'onde vivait au-dessus du
-            // chrono, et se retrouvait au-dessus du milieu de la bulle
-            // (Clara, 17/09/2026).
-            HStack(alignment: .center, spacing: MemoBookSpacing.snug) {
+            // Le bouton, l'onde et la signature partagent **le même axe**, et le
+            // chrono pend sous l'onde (Hugo, 30/09/2026, maquette
+            // `3627:31695`). C'est l'onde, et non le bloc onde + chrono, qui se
+            // centre sur la bulle — voir ``VerticalAlignment/voiceAxis`` :
+            // c'est ce que Clara reprochait le 17/09 à la version en deux
+            // lignes, dont l'onde remontait au-dessus du milieu.
+            HStack(alignment: .voiceAxis, spacing: MemoBookSpacing.snug) {
                 playButton
 
-                HStack(alignment: .center, spacing: MemoBookSpacing.xs) {
-                    BrandWaveform(
-                        levels: note.levels,
-                        progress: isPlaying ? model.player.progress : 0,
-                        tint: MemoBookColor.inkMuted,
-                        playedTint: MemoBookColor.ink
-                    )
+                VStack(alignment: .leading, spacing: 2) {
+                    track
+                        .alignmentGuide(.voiceAxis) { $0[VerticalAlignment.center] }
                     Text(elapsedLabel)
                         .font(MemoBookFont.caption)
                         .foregroundStyle(MemoBookColor.ink)
@@ -390,6 +389,35 @@ struct ChatVoiceBubble: View {
         .accessibilityLabel(ChatCopy.Voice.voiceNote(duration: note.duration.chatSpokenDurationLabel))
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { model.togglePlayback(of: note) }
+        .task(id: note.id) { await model.deriveLevelsIfNeeded(for: note) }
+    }
+
+    /// L'onde, et la tête de lecture posée dessus : le point de la maquette,
+    /// au début de l'onde au repos, qui avance avec la lecture.
+    private var track: some View {
+        let progress = isPlaying ? model.player.progress : 0
+
+        return BrandWaveform(
+            // Le relevé du serveur, ou celui relu dans le fichier quand le
+            // vocal est arrivé sans — voir ``ChatModel/deriveLevelsIfNeeded(for:)``.
+            levels: model.levels(of: note),
+            progress: progress,
+            tint: MemoBookColor.inkMuted,
+            playedTint: MemoBookColor.ink
+        )
+        .overlay {
+            GeometryReader { proxy in
+                let dot = MemoBookSpacing.snug
+                Circle()
+                    .fill(MemoBookColor.ink)
+                    .frame(width: dot, height: dot)
+                    .position(
+                        x: dot / 2 + (proxy.size.width - dot) * progress,
+                        y: proxy.size.height / 2
+                    )
+            }
+            .allowsHitTesting(false)
+        }
     }
 
     /// Le chrono compte **en avançant** pendant la lecture, et affiche la durée
@@ -420,7 +448,14 @@ struct ChatVoiceBubble: View {
     private var signature: some View {
         Group {
             if let portrait {
-                ChatPortraitDisc(portrait: portrait, side: markSide)
+                ChatPortraitDisc(
+                    portrait: portrait,
+                    image: portrait.url.flatMap { model.portraitImages[$0] },
+                    side: markSide
+                )
+                .task(id: portrait.url) {
+                    if let url = portrait.url { model.loadPortrait(url) }
+                }
             } else {
                 // Un `BrandMarkDrawing` et non une image : le M du dépôt est un
                 // tracé, il se met à l'échelle sans se pixelliser.
@@ -461,14 +496,19 @@ struct ChatVoiceBubble: View {
 /// la page de profil** — le même bleu d'aplat, l'encre. Un cerne du papier de
 /// la marque le détache : sans lui, le rond bleu se fondait dans la bulle bleue
 /// du voyageur, et il ne restait que deux lettres qui flottaient.
+///
+/// La photo arrive **déjà chargée**, par ``ChatModel/loadPortrait(_:)`` : un
+/// `AsyncImage` ici repartait de zéro à chaque recomposition du fil, et restait
+/// sur les initiales dès qu'une requête était annulée.
 struct ChatPortraitDisc: View {
     let portrait: ChatPortrait
+    let image: UIImage?
     let side: CGFloat
 
     var body: some View {
-        AsyncImage(url: portrait.url) { phase in
-            if let image = phase.image {
-                image.resizable().scaledToFill()
+        Group {
+            if let image {
+                Image(uiImage: image).resizable().scaledToFill()
             } else {
                 Text(portrait.initials)
                     .font(MemoBookFont.cardTitle)
@@ -490,6 +530,19 @@ struct ChatPortraitDisc: View {
 struct ChatPortrait: Hashable {
     let url: URL?
     let initials: String
+}
+
+extension VerticalAlignment {
+    /// L'axe d'une bulle de vocal : le milieu de l'onde, sur lequel le bouton
+    /// de lecture et le portrait se centrent. Le chrono pend dessous sans
+    /// déplacer l'axe.
+    private enum VoiceAxis: AlignmentID {
+        static func defaultValue(in dimensions: ViewDimensions) -> CGFloat {
+            dimensions[VerticalAlignment.center]
+        }
+    }
+
+    static let voiceAxis = VerticalAlignment(VoiceAxis.self)
 }
 
 // MARK: - La retranscription

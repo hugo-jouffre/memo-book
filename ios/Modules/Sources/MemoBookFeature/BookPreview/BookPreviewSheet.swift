@@ -46,8 +46,10 @@ struct BookPreviewSheet: View {
                         // sortir pour y entrer, et on ne reviendrait pas à
                         // l'offre. La commande est donc absente, et non
                         // désactivée — un bouton qui ne fait rien est pire que
-                        // pas de bouton.
-                        BookSheetView(model: model, onExpand: nil, onConfigureCovers: {})
+                        // pas de bouton. Même chose pour « Configurer » : les
+                        // couvertures sont un écran, et la feuille n'a pas de
+                        // pile où le poser.
+                        BookSheetView(model: model, onExpand: nil, onConfigureCovers: nil)
                             .transition(.opacity)
                     }
                 }

@@ -70,7 +70,13 @@ COPY backend/prisma ./prisma
 #
 # `.dockerignore` exclut le reste de `MemoBook Generator/` (l'app front-end
 # n'a rien à faire dans l'image du back-end) mais laisse passer `templates/`.
-COPY "MemoBook Generator/templates" "/app/MemoBook Generator/templates"
+#
+# ⚠️ Un chemin à espace ne passe **que** par la forme JSON. La forme courte
+# coupe la ligne aux espaces avant de lire les guillemets : `COPY "MemoBook
+# Generator/…"` a fait échouer tous les builds de l'API et du worker du 29 au
+# 30/09/2026 (« unexpected end of statement while looking for matching
+# double-quote »), et la production est restée sur la PR #61.
+COPY ["MemoBook Generator/templates", "/app/MemoBook Generator/templates"]
 COPY agents /app/agents
 COPY assets /app/assets
 

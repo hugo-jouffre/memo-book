@@ -193,7 +193,11 @@ struct ChatPreviewBanner: View {
             .contentShape(.capsule)
         }
         .buttonStyle(CardPressStyle())
-        .disabled(!preview.isOpenable)
+        // **Toujours tapable** (Hugo, 30/09/2026). Elle se désactivait tant
+        // que le serveur n'avait pas de PDF prêt (`isOpenable`) — donc presque
+        // toujours, sans rien dire, alors que l'icône de carnet de l'en-tête
+        // ouvre le même aperçu sans condition. C'est l'aperçu qui dit où en
+        // est le carnet, pas la capsule.
         .accessibilityLabel(
             "\(ChatCopy.previewTitle). \(ChatCopy.previewSubtitle(memories: preview.memoryCount, pages: preview.pageCount))"
         )

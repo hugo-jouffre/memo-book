@@ -3949,7 +3949,7 @@ portraits. Côté app : `CalendarDayTests` (Core), `LastQuestionsModelTests` et
 | T191 | **Les titres sont recopiés tels quels** : « Ton Nom et Prénom », « Ta Date de Naissance », « Ton Numéro Whatsapp » — des majuscules de titre à l'anglaise, et « Whatsapp » pour WhatsApp. Le texte indicatif « XX/XX/XXXX » aussi : « JJ/MM/AAAA » se lirait mieux ? | Entrée — Dernières questions |
 | T192 | **La flèche du premier écran ramène à l'écran d'entrée**, ce qui ferme la session tout juste ouverte : c'est l'écran d'avant. À valider, ou à retirer du premier écran | Entrée — Dernières questions |
 | T193 | **La feuille de partage ne porte ni « Imprimer » ni « Modifier le ratio image/texte »** de la maquette : « Imprimer » n'apparaît que pour un PDF, et le ratio n'a plus d'écran où mener une fois le voyage créé. « Partager sur Whatsapp » n'apparaît que si WhatsApp est installé | Partager |
-| T194 | **L'aperçu PDF est encore sur le jeu d'essai dans l'app** : `GET /v1/memos/:id/preview` et `POST /v1/memos/:id/share-link` existent depuis le 11/09, mais l'écran ne les appelle pas. Il montre « Rome et la Dolce Vita » à tout le monde, et son partage par l'en-tête n'a pas de lien. Le brancher demande de décider **quand une composition se lance** (`POST /v1/memos/:id/renders`, payante) : sans elle, l'écran resterait sur « On compose ton Carnet ». « Partager ma cagnotte », lui, lit déjà le serveur | Aperçu PDF |
+| T194 | **L'aperçu PDF est encore sur le jeu d'essai dans l'app** : `GET /v1/memos/:id/preview` et `POST /v1/memos/:id/share-link` existent depuis le 11/09, mais l'écran ne les appelle pas. Il montre « Rome et la Dolce Vita » à tout le monde, et son partage par l'en-tête n'a pas de lien. Le brancher demande de décider **quand une composition se lance** (`POST /v1/memos/:id/renders`, payante) : sans elle, l'écran resterait sur « On compose ton Carnet ». « Partager ma cagnotte », lui, lit déjà le serveur. C'est aussi ce jeu d'essai **sans PDF** qui cachait « Configurer » : le bouton attendait un document qui ne descend jamais. Depuis le 30/09 il se pose sans lui (§ 33), sur une page encore en papier nu | Aperçu PDF |
 | T195 | **« Hotter Ltd »** dans la liste des prestataires a été lu **Hotjar Ltd**, l'éditeur de Hotjar que le ticket citait. À confirmer | Politique de confidentialité |
 | T196 | **Le flou et le voile de la carte** (flou de 16, voile noir à 18 %) sont relevés sur l'export de la maquette, comme `MemoBookFont.headingLight` (Sora Regular 20) : pas de variable Figma derrière | Accueil — voyages à venir |
 
@@ -4101,7 +4101,7 @@ simulé.
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
-| T197 | **Plus rien ne mène aux couvertures depuis les personnalisations** : la V3 de la maquette ne dessine pas la ligne « Couvertures (1ère & 4e) », et elle est partie avec la réécriture. Le chemin qui reste est « Configurer » sur la première page de l'aperçu PDF. À valider, ou à dessiner une sixième pastille | Personnalisations du carnet |
+| T197 | **Plus rien ne mène aux couvertures depuis les personnalisations** : la V3 de la maquette ne dessine pas la ligne « Couvertures (1ère & 4e) », et elle est partie avec la réécriture. Le chemin qui reste est « Configurer » sur la première et la dernière page de l'aperçu PDF (§ 33). À valider, ou à dessiner une sixième pastille | Personnalisations du carnet |
 | T199 | **Les assortiments de typographies et la V3** : la maquette écrit « La recommandations de nos équipes » (au pluriel, recopié tel quel, R8), et son troisième assortiment est « Playfair » seule (« La plus classique »), là où l'app propose Playfair et Alegreya (« Éditorial », T118). Le nom reste écrit dans les deux polices. À aligner d'un côté ou de l'autre | Personnalisations du carnet |
 | T200 | **La carte de l'écran d'entrée sur iPhone SE est mesurée, pas vue** : les hauteurs additionnées tiennent dans 667 pt en compact, mais aucun simulateur SE n'est installé sur cette machine (T146, encore). À regarder au premier build TestFlight sur un SE | Entrée |
 | T201 | **« Ajouter » et « Partager » de la cagnotte** : rien dans le code ne les désactive, et les deux mènent quelque part depuis le 26/09. Si le build de ce lot les montre encore inertes, c'est autre chose — à revérifier avec la trace réseau | Ma cagnotte |
@@ -4109,3 +4109,43 @@ simulé.
 | T203 | **Le chapitre 2 de la politique de confidentialité décrit le site**, pas l'app : Google Analytics, Hotjar, le pixel Meta, les cookies de Webflow. L'app n'en pose aucun, et ne dit rien de ce qu'elle collecte vraiment (les enregistrements, les photos, la position des étapes). C'est le texte du site recopié (§ 23). À réécrire pour l'app, avec les étiquettes de confidentialité de la fiche App Store | Politique de confidentialité |
 | T204 | **Les DNS du domaine d'envoi** (SPF, DKIM, DMARC) et le sous-domaine `tx.memo-book.com` sont à poser chez Resend et au registrar — voir § 32.3. Sans eux, l'e-mail de réinitialisation restera un candidat aux indésirables quoi que le code fasse | Entrée — mot de passe oublié |
 | T205 | **La bulle en vol atterrit « à peu près » où la vraie bulle apparaît** : le coin bas droit du fil, au-dessus de la barre, sans connaître la hauteur exacte de la ligne à venir. Sur un long libellé qui passe sur deux lignes, le raccord se voit d'un ou deux points. Un `matchedGeometryEffect` entre la puce et la bulle le ferait au pixel, au prix d'un espace de noms traversant la liste paresseuse — à décider si ça vaut le coup | Conversation |
+
+## 33. Retours de Hugo du 30/09/2026 — huit demandes, et le build qui ne partait plus
+
+Branche `retours-du-30-septembre`. Huit demandes sur l'app, et les e-mails
+« Build failed » de Railway reçus depuis trois fusions. Deux nœuds Figma lus
+(`3545:21634`, l'aperçu PDF ; `3627:31695`, la bulle d'un vocal). La capture
+jointe à la demande n'est pas arrivée jusqu'à la session.
+
+**Le build d'abord, parce qu'il explique une partie du reste.** Depuis la PR
+#60 (29/09), `backend/Dockerfile` copiait `"MemoBook Generator/templates"` en
+forme courte : Docker coupe la ligne aux espaces avant de lire les guillemets,
+et **tous** les builds de l'API et du worker échouaient avant la première
+étape. La production tournait encore sur la PR #61 — sans les PR #60, #62,
+#56, #63 ni #64. C'est pour ça que « Supprimer la photo » ne faisait rien : la
+route `DELETE /v1/profile/avatar` (PR #62) n'existait pas en production, et les
+journaux de Railway montrent cinq `404` d'Hugo à 13 h 10. La ligne passe en
+forme JSON (`COPY ["…", "…"]`). Au premier déploiement réussi, le
+`preDeployCommand` appliquera la migration en attente,
+`20260928120000_contexte_du_voyage`.
+
+### 33.1 Ce qui a changé, écran par écran
+
+| Écran / parcours | Demande | Ce qui a été fait |
+|---|---|---|
+| Profil — photo | « Supprimer la photo » ne fait rien | La route manquait en production (voir plus haut). Et l'échec **se voit** désormais : `ProfileModel.avatarErrorMessage` pose un `ErrorBanner` **sous le rond**, là où l'on a touché — l'erreur partait dans le bandeau du bas de page, sous les mentions légales, hors de vue |
+| Aperçu PDF | un bouton pour aller aux couvertures, posé sur la 1ère et la dernière page (`3545:21634`) — « ça fait plusieurs fois » | **Le blocage** : le bouton existait depuis le 11/09, mais ne se posait qu'une fois le PDF descendu, et l'écran de l'app vit encore sur son jeu d'essai **sans PDF** (T194) — il n'apparaissait donc jamais. `coverCallToAction` se règle maintenant sur le compte de feuilles : le voile, la phrase au centre et « Configurer » dans le bas de la page tant que les couvertures ne sont pas choisies ; « Configurer » seul ensuite — **sur la première et la dernière page**, la quatrième de couverture n'ayant plus de chemin depuis le 26/09. La feuille « Prévisualisation » du paywall ne le porte pas : elle n'a pas de pile où pousser l'écran des couvertures |
+| Conversation — vocaux | l'onde ne se voit pas, la photo de profil n'est pas à jour (`3627:31695`) | **L'onde** : seuls les vocaux envoyés depuis le chat portaient leurs niveaux ; ceux des voyages passés, ou partis de l'accueil par la file, n'avaient qu'une ligne plate. `VoiceLevels` relit le fichier (une valeur tous les 90 ms, l'échelle du micro), que `ChatModel.deriveLevelsIfNeeded` descend une fois par écran — et garde dans les caches pour l'écoute. **La photo** : les journaux montrent les requêtes d'avatar du fil **annulées en 5 ms** (`499`) à l'ouverture d'un voyage passé — l'`AsyncImage` des bulles repartait de zéro à chaque recomposition et restait sur les initiales. `ChatModel.loadPortrait` charge chaque adresse une fois, hors des bulles. **La bulle** suit la maquette : ▶, la tête de lecture (le point) qui avance sur l'onde, la durée dessous — l'onde, elle, reste sur l'axe de la bulle (`VerticalAlignment.voiceAxis`), ce que Clara demandait le 17/09 |
+| Conversation — « Ton carnet prend forme » | la capsule ne se touche pas | Elle se désactivait tant que le serveur n'avait pas de rendu prêt (`isOpenable`), c'est-à-dire presque toujours, sans rien dire — l'icône de carnet de l'en-tête ouvrait pourtant le même aperçu. Elle y mène dans tous les cas |
+| Commande — 5/7 Récapitulatif | « Livre broché » → « Livre relié » | `BOOK_SPECIFICATIONS` (serveur) et le jeu d'essai du tunnel |
+| Exemples de carnets | la bande de filtres défile aussi verticalement | Deux causes. `refreshable` était posé sur l'écran entier : il passe par l'environnement, et la bande **horizontale** recevait elle aussi un contrôle de rafraîchissement — elle rebondissait verticalement sous le doigt, jusqu'à relancer le chargement. Il est posé sur la grille seule. Et l'en-tête et la bande quittent l'encart (`safeAreaInset`) du défilement vertical pour une pile au-dessus de lui : chaque doigt n'a plus qu'un défilement sous lui. Vérifié en simulateur : glissé en biais et glissé vertical sur les pastilles, la grille ne bouge plus ; tirer la grille rafraîchit toujours |
+| Accueil — « Voir des exemples de carnets » | une coupure beige sur l'illustration | L'image embarquée était **déjà** `assets/illustrations/Carnets Example Homepage.png`, détourée. La coupure venait du fondu que l'app peignait par-dessus : un aplat crème opaque, qui remplissait les vides de l'illustration et cachait le motif de la marque passant sous la carte translucide. Le fondu devient un **masque d'opacité** : aucune couleur posée, c'est la carte qui se voit au travers |
+| Conversation — puce de suggestion en vol | la bulle qui monte ne doit pas passer sur le dernier message : le fil se lève dès le départ | Le fil se lève de la hauteur de la bulle **au décollage**, par un décalage de dessin, et la bulle se pose dans le creux. À l'atterrissage, le décalage et le vrai message s'échangent dans la même image, sans animation propre. Une première version insérait une ligne vide dans le fil : épinglé en bas, il sautait d'abord de 52 pt vers le bas avant de remonter — vu en vidéo image par image, et abandonné |
+
+### 33.2 À trancher
+
+| # | Sujet | Écran / parcours |
+|---|---|---|
+| T206 | **Les photos du fil se chargent sans session** : la bulle photo lit `/v1/entries/:id/media` par un `AsyncImage`, qui n'envoie pas d'en-tête, et la route demande la session — deux `401` d'Hugo le 30/09 à 15 h 15, juste après l'envoi d'une photo. D'après le code, une photo qui vient d'être envoyée s'affiche depuis le disque, mais relue plus tard — sans fichier local — elle resterait sur sa trame ; pas vérifié en production. À brancher sur `transport.media`, comme l'écoute d'un vocal | Conversation |
+| T207 | **À l'atterrissage d'une puce, le fil se tasse** d'une trentaine de points : la bande de suggestions disparaît pendant que MEMO répond (et le composeur change pour « Raconter à l'oral »), le fil épinglé en bas descend d'autant, puis remonte quand les trois points arrivent. C'était déjà le cas avant ce lot. Garder la place de la bande pendant le tour, ou l'effacer en fondu, le rendrait invisible — à décider | Conversation |
+| T208 | **Le micro de la bulle vocale** : la maquette `3627:31695` le dessine nu, vert, au pied du rond ; l'app garde la pastille détourée que Clara a demandée le 26/09 (« mieux intégré »). À départager | Conversation |

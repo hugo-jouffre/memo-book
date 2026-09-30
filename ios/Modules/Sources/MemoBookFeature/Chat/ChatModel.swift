@@ -907,33 +907,126 @@ public final class ChatModel {
     public func togglePlayback(of note: VoiceNote) {
         reader.stop()
 
-        if let url = note.localUrl {
+        if let url = cachedAudio(of: note) {
             play(note.id, at: url)
             return
         }
 
-        guard let remote = note.remoteUrl else {
+        guard note.remoteUrl != nil else {
             errorMessage = MemoResponderError.transcriptionUnavailable.localizedDescription
             return
         }
 
         Task {
-            do {
-                let data = try await transport.media(remote)
-                let audio = RecordedAudio(
-                    data: data,
-                    filename: "\(note.id).m4a",
-                    mimeType: "audio/mp4",
-                    duration: note.duration,
-                    recordedAt: .now
-                )
-                let url = try VoiceNoteFile.save(audio, id: note.id)
-                localVoiceUrls[note.id] = url
-                rememberLocalUrl(url, forVoice: note.id)
-                play(note.id, at: url)
-            } catch {
+            guard let url = await downloadAudio(of: note) else {
                 errorMessage = MemoResponderError.transcriptionUnavailable.localizedDescription
+                return
             }
+            rememberLocalUrl(url, forVoice: note.id)
+            play(note.id, at: url)
+        }
+    }
+
+    /// Le fichier d'un vocal déjà sur l'appareil : celui de la bulle, celui
+    /// qu'on a écrit pendant cette session, ou celui qu'une session d'avant a
+    /// laissé dans les caches.
+    private func cachedAudio(of note: VoiceNote) -> URL? {
+        note.localUrl ?? localVoiceUrls[note.id] ?? VoiceNoteFile.existing(id: note.id)
+    }
+
+    /// Descend le vocal du serveur et l'écrit dans les caches. `nil` si le
+    /// serveur ne le rend pas.
+    private func downloadAudio(of note: VoiceNote) async -> URL? {
+        guard let remote = note.remoteUrl else { return nil }
+        do {
+            let data = try await transport.media(remote)
+            let audio = RecordedAudio(
+                data: data,
+                filename: "\(note.id).m4a",
+                mimeType: "audio/mp4",
+                duration: note.duration,
+                recordedAt: .now
+            )
+            let url = try VoiceNoteFile.save(audio, id: note.id)
+            localVoiceUrls[note.id] = url
+            return url
+        } catch {
+            return nil
+        }
+    }
+
+    // MARK: - La forme d'onde d'un vocal qui n'en a pas
+
+    /// Les niveaux **relus dans le fichier** des vocaux arrivés sans relevé —
+    /// voir ``VoiceLevels``. Gardés ici et non dans le fil : chaque relecture
+    /// du serveur rend ces vocaux sans niveaux, et les écraserait.
+    private var derivedLevels: [String: [Double]] = [:]
+    private var derivingLevels: Set<String> = []
+
+    /// Ce que la bulle dessine : le relevé du serveur, sinon celui qu'on a relu
+    /// dans le fichier, sinon rien — la ligne plate, le temps de le relire.
+    public func levels(of note: VoiceNote) -> [Double] {
+        note.levels.isEmpty ? derivedLevels[note.id] ?? [] : note.levels
+    }
+
+    /// Relit la forme d'onde d'un vocal qui n'en a pas (Hugo, 30/09/2026 : les
+    /// vocaux des voyages passés n'avaient plus qu'une ligne plate). Une fois
+    /// par vocal et par écran ; le fichier descendu sert ensuite à l'écoute.
+    public func deriveLevelsIfNeeded(for note: VoiceNote) async {
+        guard note.levels.isEmpty,
+            derivedLevels[note.id] == nil,
+            !derivingLevels.contains(note.id)
+        else { return }
+
+        derivingLevels.insert(note.id)
+        defer { derivingLevels.remove(note.id) }
+
+        let file: URL?
+        if let cached = cachedAudio(of: note) {
+            file = cached
+        } else {
+            file = await downloadAudio(of: note)
+        }
+        guard let file else { return }
+
+        let levels = await VoiceLevels.read(from: file)
+        guard !levels.isEmpty else { return }
+        derivedLevels[note.id] = levels
+    }
+
+    // MARK: - Les portraits
+
+    /// Les photos des portraits de vocaux, chargées **par le modèle** et non
+    /// par un `AsyncImage` dans la bulle.
+    ///
+    /// Le fil se recompose en s'ouvrant — il relit, fusionne, anime — et chaque
+    /// recomposition recréait les `AsyncImage` des bulles : leurs requêtes
+    /// partaient annulées en 5 ms (des 499 dans les journaux de Railway, le
+    /// 30/09/2026), et le rond restait sur les initiales pour de bon. La photo
+    /// qu'on venait de changer ne s'y voyait jamais. Ici, une seule requête par
+    /// adresse, qui survit aux recompositions, et un résultat gardé tant que
+    /// l'écran est ouvert.
+    public private(set) var portraitImages: [URL: UIImage] = [:]
+    private var loadingPortraits: Set<URL> = []
+
+    /// Charge la photo d'un portrait, une fois. Les avatars se servent **sans
+    /// session** (`GET /v1/avatars/:file`) : ce n'est pas un média du voyage.
+    public func loadPortrait(_ url: URL) {
+        guard portraitImages[url] == nil, !loadingPortraits.contains(url) else { return }
+        loadingPortraits.insert(url)
+
+        Task { [weak self] in
+            let image: UIImage?
+            if url.isFileURL {
+                image = UIImage(contentsOfFile: url.path())
+            } else if let (data, _) = try? await URLSession.shared.data(from: url) {
+                image = UIImage(data: data)
+            } else {
+                image = nil
+            }
+            guard let self else { return }
+            self.loadingPortraits.remove(url)
+            if let image { self.portraitImages[url] = image }
         }
     }
 

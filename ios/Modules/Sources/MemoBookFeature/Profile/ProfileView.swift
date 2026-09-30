@@ -403,6 +403,13 @@ public struct ProfileView: View {
                 if let denied = avatarPhotos.deniedMessage {
                     BrandNotice(denied, tone: .information)
                 }
+
+                // L'échec se dit là où l'on a touché — voir
+                // ``ProfileModel/avatarErrorMessage``. « Réessayer » rouvre la
+                // feuille : on ne sait pas si c'était un envoi ou un retrait.
+                if let failure = model.avatarErrorMessage {
+                    ErrorBanner(message: failure, retry: avatarPhotos.begin)
+                }
             }
 
             if let profile = model.profile {

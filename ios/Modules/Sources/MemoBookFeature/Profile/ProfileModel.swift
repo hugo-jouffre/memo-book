@@ -58,6 +58,14 @@ public final class ProfileModel {
     /// La photo est en route vers le serveur : l'avatar le montre.
     public private(set) var isUploadingAvatar = false
 
+    /// Ce qui a raté en envoyant ou en retirant la photo, dit **sous le rond**.
+    ///
+    /// Pas dans ``errorMessage`` : celui-là s'affiche au pied de la page, sous
+    /// les mentions légales, et on touche la photo tout en haut. « Supprimer la
+    /// photo » échouait donc sans que rien ne bouge à l'écran (Hugo,
+    /// 30/09/2026 — la route n'était pas encore déployée, l'API rendait 404).
+    public private(set) var avatarErrorMessage: String?
+
     /// Ce qu'on avait sur le disque — voir ``ContentCache``. `nil` en aperçu.
     private let cached: CachedValue<TravellerProfile>?
 
@@ -259,6 +267,7 @@ public final class ProfileModel {
         isUploadingAvatar = true
         defer { isUploadingAvatar = false }
 
+        avatarErrorMessage = nil
         do {
             let saved = try await uploadAvatar(data, mimeType)
             #if DEBUG
@@ -266,16 +275,15 @@ public final class ProfileModel {
             #else
                 profile = saved
             #endif
-            errorMessage = nil
             confirm(.avatar)
         } catch {
-            errorMessage = error.localizedDescription
+            avatarErrorMessage = error.localizedDescription
         }
     }
 
     /// Retire la photo de profil : le rond revient aux initiales (Hugo,
     /// 29/09/2026). Même contrat que l'envoi — c'est le profil relu qui fait
-    /// foi, et un échec laisse la photo avec le reproche au-dessus.
+    /// foi, et un échec laisse la photo avec le reproche dessous.
     public func removeAvatar() async {
         guard let deleteAvatar else {
             // En aperçu : on retire sur place.
@@ -286,6 +294,7 @@ public final class ProfileModel {
         isUploadingAvatar = true
         defer { isUploadingAvatar = false }
 
+        avatarErrorMessage = nil
         do {
             let saved = try await deleteAvatar()
             #if DEBUG
@@ -293,10 +302,9 @@ public final class ProfileModel {
             #else
                 profile = saved
             #endif
-            errorMessage = nil
             confirm(.avatar)
         } catch {
-            errorMessage = error.localizedDescription
+            avatarErrorMessage = error.localizedDescription
         }
     }
 
