@@ -257,6 +257,21 @@ public final class ChatModel {
         turn == .idle ? suggestions : []
     }
 
+    /// La bande de suggestions **garde sa place** pendant le tour : ses puces
+    /// s'effacent, sa hauteur reste. Sans ça, la barre du bas raccourcissait au
+    /// moment même où le message partait, et le fil, épinglé en bas, se tassait
+    /// d'autant sous le message qu'on venait de poser — puis remontait quand
+    /// MEMO répondait (Hugo, 30/09/2026, T207).
+    public var reservesSuggestionRail: Bool {
+        turn != .idle && railWasShowing
+    }
+
+    /// La bande montrait des puces quand le tour est parti. Retenu à part :
+    /// l'envoi vide les suggestions du fil dès le départ — celles du tour
+    /// d'avant ne veulent plus rien dire —, et la bande n'aurait plus de
+    /// raison de garder sa place.
+    private var railWasShowing = false
+
     public var canSendDraft: Bool {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && isComposerEnabled
     }
@@ -455,6 +470,11 @@ public final class ChatModel {
 
     private func run(_ outgoing: OutgoingTurn) async {
         guard var thread else { return }
+
+        // La bande garde sa place si elle montrait des puces — ou si elle la
+        // gardait déjà, pour un renvoi après un échec. Voir
+        // ``reservesSuggestionRail``.
+        railWasShowing = !thread.suggestions.isEmpty || (railWasShowing && turn != .idle)
 
         // Les suggestions du tour précédent ne veulent plus rien dire.
         thread.suggestions = []

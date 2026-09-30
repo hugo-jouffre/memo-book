@@ -355,7 +355,9 @@ public struct ProfileView: View {
 
         // Sous clé — ou sans voyage en cours — la ligne ne mène nulle part : un
         // chevron promettrait un écran qu'on n'a pas le droit d'ouvrir.
-        let openStatistics: (() -> Void)? = isSubscriber ? { notYetRouted() } : nil
+        // ⚠️ La feuille existait et ne s'ouvrait plus : la ligne était
+        // revenue sur `notYetRouted()` (constaté en recette le 30/09/2026).
+        let openStatistics: (() -> Void)? = isSubscriber ? { sheet = .statistics } : nil
         // Le voyage en cours s'ouvre depuis sa ligne — l'accueil du voyage,
         // celui de la carte de l'accueil (Clara, 17/09/2026).
         let openCurrentTrip: (() -> Void)? = profile?.currentTrip.map { trip in

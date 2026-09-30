@@ -120,7 +120,7 @@ public struct BrandWaveform: View {
         /// et la forme d'onde a l'air rognée.
         static let minimumHeight: CGFloat = 3
         /// La maquette dessine 22,6 pt ; on prend le cran de l'échelle juste
-        /// au-dessus (§2.2 de `docs/ui-development.md`).
+        /// au-dessus (§2.2 de `docs/archive/ui-development-journal.md`).
         static let height = MemoBookSpacing.m
     }
 

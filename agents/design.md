@@ -6,7 +6,8 @@
 >
 > Relevé le 20/08/2026 sur la page *Design System* et sur les écrans du lot 1.
 > Pour la **méthode** d'implémentation (unités, fidélité, fiches écran), voir
-> [`docs/ui-development.md`](../docs/ui-development.md).
+> [`docs/ui-development.md`](../docs/ui-development.md) (règles) et son journal
+> [`docs/archive/ui-development-journal.md`](../docs/archive/ui-development-journal.md).
 
 ## Scheme (usage sémantique dans l'app)
 
@@ -91,7 +92,7 @@ texte et l'icône.
 | Heading 1 | 56 |
 
 `Text Regular` = 16 est la **racine typographique** : c'est elle qui définit 1 rem dans
-l'app (voir `docs/ui-development.md` §2).
+l'app (voir `docs/archive/ui-development-journal.md` §2).
 
 ## Typographies
 
