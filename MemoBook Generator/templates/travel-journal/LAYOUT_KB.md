@@ -12,9 +12,16 @@ Base de connaissance de l'agent qui produit le JSON envoyé au moteur PDF.
 
 - Page **A5 : 420 × 595 pt** (1 unité Figma = 1 pt), sans fond perdu.
   Géométrie dans `print.json`, maquette Figma `geIpjYxG3WCkGrgJFpkuVC`.
+  En millimètres — l'unité que demande le panneau d'APITemplate — c'est
+  **148 × 210 mm** : l'A5 exact vaut 419,53 × 595,28 pt, soit un demi-point
+  d'écart. Les deux écritures désignent la même feuille, et doivent rester
+  d'accord (voir § « Pas de marges blanches »).
 - Marge de contenu : 30 pt. Les décors (tracé pointillé, stickers) débordent
   volontairement.
 - Une page de carnet = un élément `.page`. Une entrée de `days[]` = une page.
+- **La page remplit la feuille, bord à bord.** Pas de marge d'impression, pas
+  de conteneur centré, pas de `padding` autour des `.page` : la couleur du
+  papier va jusqu'au bord coupé. Ce que ça impose est détaillé plus bas.
 
 ## Structure du payload
 
@@ -179,7 +186,7 @@ tranche : le premier actif l'emporte.
 
 | Drapeau | Rendu | Quand le choisir | Photos |
 |---|---|---|---|
-| `layout_chapter_map` | Carte de la région à droite, récit et carte info à gauche, photos en bas | Ouverture d'un chapitre — voir la table plus haut | 0–2 |
+| `layout_chapter_map` | Carte de la région à droite, récit et carte info à gauche, photos en bas | Ouverture d'un chapitre, **quand un lieu est nommé dans le récit** — voir la table plus haut | 0–2 |
 | `layout_hero_top` | Grande photo en tête, récit dessous | Une photo iconique porte la journée | 1 |
 | `layout_split_left` | Carte info à gauche, récit en colonne à droite, puis deux photos en bas | Un fait à mettre en avant et deux belles images | 2 |
 | `layout_collage` | Récit pleine largeur puis 2 ou 3 photos inclinées en bas | Journée dense visuellement | 2–3 |
@@ -188,6 +195,14 @@ tranche : le premier actif l'emporte.
 
 Le cas par défaut couvre aussi `layout_story_opener` et `layout_story_facts` :
 le validateur exige au moins un drapeau, n'importe lequel de ces deux convient.
+
+**La condition du lieu sur `layout_chapter_map`.** Ce layout se choisit à
+l'ouverture d'un chapitre, mais seulement **si le récit nomme un lieu** : c'est
+ce lieu qui alimente `map.points`, et le layout exige `map`. Un chapitre qui
+s'ouvre sans lieu identifiable n'a rien à cartographier — une carte sans point,
+ou pointée au hasard, se repère immédiatement quand on connaît le pays. Dans ce
+cas, ouvrir le chapitre avec un autre layout et garder `layout_chapter_map`
+pour le premier chapitre où un lieu est nommé.
 
 ## Le tracé pointillé du voyage
 
@@ -412,6 +427,89 @@ erreur.
 Conséquence sur `style.css` : ce n'est pas du CSS nu mais un **fragment HTML**
 — un `<meta name="viewport">` puis exactement une paire `<style>…</style>`, le
 tout injecté verbatim. `npm run template:lint` refuse toute autre forme.
+
+### Pas de marges blanches : les deux moitiés du réglage
+
+Le carnet doit sortir **bord à bord**. Une bande blanche sur une feuille, c'est
+un carnet bon à jeter chez l'imprimeur, et ça ne se voit qu'une fois le PDF
+ouvert — l'API répond `success` dans tous les cas.
+
+Le réglage vit à **deux endroits qui ne se parlent pas**, et les deux doivent
+dire la même chose.
+
+#### 1. Le panneau *Settings* du template hébergé — **jamais synchronisé**
+
+`.github/workflows/sync-apitemplate.yml` pousse exactement trois champs :
+`template_id`, `body` et `css`. **La géométrie de page n'en fait pas partie.**
+Elle n'existe que dans l'interface d'APITemplate, onglet *Settings*, et elle
+survit à toutes les synchros — y compris à celle qui vient de corriger le CSS.
+
+À régler à la main, une fois, et **à revérifier après toute duplication de
+template** (un template dupliqué repart des réglages par défaut) :
+
+| Réglage | Valeur | Pourquoi |
+|---|---|---|
+| Paper Size | `Custom` | Aucun format prédéfini ne tombe sur la feuille voulue |
+| Custom Paper Size | **148mm** × **210mm** | L'A5 de `print.json`, dans l'unité du panneau. Le champ accepte aussi `px`, mais un `px` y vaut 1/96ᵉ de pouce : `839px` donnerait 222 mm de large |
+| Orientation | `Portrait` | La largeur est inférieure à la hauteur. Le panneau le rappelle : largeur > hauteur impose `Landscape` |
+| Print background | `Yes` | Sans ça, aplats crème, ruban, étiquettes et grain **disparaissent** — la page sort blanche et les formes ne tiennent plus que par leur contour |
+| Margin | `0` / `0` / `0` / `0` | **La cause n°1 des marges blanches.** Cette marge s'ajoute par-dessus le `@page` du CSS ; le contenu est alors réduit et recentré sur la feuille |
+
+Ces valeurs sont le miroir exact de `print.json` (`widthPt` 420, `heightPt` 595,
+`marginPt` tout à zéro, `printBackground` true). Si l'un des deux bouge, l'autre
+doit bouger dans le même commit — c'est la même règle que pour le reste du
+contrat.
+
+#### 2. Les invariants CSS qui font qu'une page remplit sa feuille
+
+Côté `style.css`, quatre règles portent tout le reste. Elles sont mesurées, pas
+supposées : les valeurs ci-dessous sortent d'une mesure de la boîte `.page` en
+média `print`, où la feuille vaut 560 × 793,3 px CSS.
+
+```css
+@page { size: 420pt 595pt; margin: 0; }   /* la feuille, et aucune marge */
+html, body { margin: 0; padding: 0; }     /* rien autour des pages */
+.page { width: 420pt; height: 595pt; }    /* hauteur FIXE, jamais un pourcentage */
+```
+
+| Ce qu'on écrit | Ce que la page mesure | Résultat imprimé |
+|---|---|---|
+| `height: 595pt` | 560 × **793,3** px | Correct, bord à bord |
+| `height: 100%` | 560 × **0** px | **Le carnet s'effondre** |
+| `padding` sur le conteneur | page décalée de 64 px | **Bande blanche en haut de chaque feuille** |
+
+**Pourquoi `height: 100%` ne marche pas ici**, alors qu'il a l'air plus souple :
+un pourcentage se résout contre la hauteur du parent, et `html` / `body` n'en
+déclarent aucune — le pourcentage retombe donc sur `auto`. Or tous les enfants
+de `.page` sont en `position: absolute` (`.page__content`, `.page__decor`) :
+il ne reste **aucun contenu en flux** pour donner une hauteur au bloc, qui
+tombe à zéro. Une hauteur de page doit être une longueur absolue, comme la
+feuille qu'elle représente.
+
+De la même famille, à ne jamais introduire autour des pages :
+
+- un **conteneur flex** avec `padding`, `gap` ou `align-items: center` : chaque
+  valeur devient une bande blanche ou un décalage ;
+- une **largeur en `px`** sur `.page` : la feuille est décrite en points, un
+  mélange d'unités fait dériver la page d'un format à l'autre ;
+- une **`box-shadow`** sur `.page` : inutile sur du papier, et un flou est de
+  toute façon interdit ici (§ Règles d'images — il sort en aplat gris chez
+  certains lecteurs PDF) ;
+- une **`background-image`** sur `.page` pour « faire le papier » : elle est
+  rastérisée entre 63 et 148 dpi. Le papier se fait avec un aplat, une teinte
+  et le grain SVG inline, déjà en place dans `.page::before` / `.page::after`.
+
+#### Vérifier
+
+```bash
+cd backend
+npm run render:local -- --offline --png    # puis regarder les PNG
+```
+
+Le script compare la géométrie du PDF à `print.json` et échoue si elle s'en
+écarte de plus d'un point. Une page qui sort à autre chose que 420 × 595 pt,
+ou un PNG qui montre une bande claire sur un bord, se règle **toujours** par
+l'une des deux moitiés ci-dessus.
 
 ### Polices — déjà inlinées, ne rien ajouter
 
