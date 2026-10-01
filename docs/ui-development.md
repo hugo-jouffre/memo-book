@@ -145,7 +145,7 @@ Dans la PR de ce lot, vérifié en simulateur :
 | T141 | Le plafond du palier « étendu » (8 000) est écrit dans l'app ; le serveur ne rend que le palier du compte. Si le barème change, la feuille mentira jusqu'à la mise à jour. La sortie : `GET /v1/catalog` | Réglages — limites de souvenirs |
 | T164 | Les « Valider » des feuilles de personnalisation semblent inutiles à Clara. Sans bouton, la feuille se referme au choix ; avec, elle reste ouverte. À trancher avec Hugo et Paul | Personnalisations |
 | T197 | Plus rien ne mène aux couvertures depuis les personnalisations (la V3 ne dessine pas la ligne). Il reste « Configurer » sur l'aperçu PDF. À valider, ou une sixième pastille | Personnalisations |
-| T199 | Les assortiments de typographies : la V3 écrit « La recommandations de nos équipes » et propose Playfair seule là où l'app a Playfair + Alegreya (« Éditorial »). À aligner | Personnalisations — typographies |
+| T199 | Les assortiments de typographies : la V3 écrit « La recommandations de nos équipes » (sic), et l'app le recopie. Corriger en « La recommandation » ? | Personnalisations — typographies |
 
 ### Couvertures
 
