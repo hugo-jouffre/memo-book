@@ -139,6 +139,16 @@ délivrent le token.
 | `POST /v1/auth/google` | Entre par Google. Attend `identityToken` |
 | `GET /v1/auth/me` | Le compte de la session en cours |
 | `POST /v1/auth/signout` | Ferme la session présentée, et elle seule |
+| `DELETE /v1/accounts/me` | Supprime le compte et ce qui n'est qu'à lui ; un voyage partagé passe au co-voyageur le plus ancien |
+| `POST /v1/accounts/me/export` | « Exporter mes données » : envoie à l'adresse du compte un lien valable 7 jours (`202`) |
+| `GET /data-export?token=…` | **Publique** : la page du lien, qui résume l'archive |
+| `GET /data-export/archive?token=…` | **Publique** : le ZIP de toutes les données, composé à la volée |
+
+L'archive ne se prépare pas à l'avance : elle se compose au téléchargement,
+depuis la base et le stockage, un fichier après l'autre — JSON, un récit en
+texte simple par voyage, les médias d'origine, les carnets en PDF, un
+`LISEZ-MOI.txt`. Voir `services/dataExport.ts`, et `docs/emails.md` § 5 pour
+le pourquoi.
 
 Le jeton d'identité envoyé par l'app n'est **jamais** cru sur parole : il est
 vérifié contre les clés publiques du fournisseur — signature, émetteur,

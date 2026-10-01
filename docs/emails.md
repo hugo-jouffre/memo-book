@@ -159,33 +159,56 @@ qui manque **côté serveur** — l'e-mail n'est jamais que le dernier mètre.
 | Livré | `print_order.delivered` | `deliveredAt` | 2 | Webhook imprimeur |
 | Reçu de paiement | `payment.receipt` | Webhook Stripe | 1 | Arrive avec Stripe |
 | Cagnotte rechargée | `wallet.credited` | `WalletEntry` | 1 | Prêt |
-| Export de données | `account.data_export` | Job d'export terminé | 1 | **À construire** : il n'y a que la suppression |
+| Export de données | `account.data_export` | `POST /v1/accounts/me/export` | 1 | **Fait** (01/10/2026) — voir plus bas |
 | Compte supprimé | `account.deleted` | `DELETE /v1/accounts/me` | 1 | Prêt |
 | Abonnement : renouvellement, échec, fin | `subscription.*` | `Subscription` | 2 | Modèle prêt |
 | Newsletter | `news.*` | Le CRM | 3 | Consentement à horodater |
 | Réactivation, relances | `lifecycle.*` | Le CRM, sur segment | 3 | Dépend de `contact_sync` |
 | Enquête de satisfaction | `feedback.campaign` | `FeedbackCampaign` | 3 | Modèle prêt |
 
-**Trois flux sur cinq de ta liste n'ont pas encore de socle serveur.** La
-vérification d'adresse, le mot de passe oublié et l'export de données n'existent
-nulle part dans l'API : l'authentification est maison (`jose` + `scrypt`), donc
-rien ne vient gratuitement — Supabase Auth, qui aurait fourni ces trois écrans
-et leurs e-mails, n'est pas utilisé ici, et le back-end ne s'en sert que comme
-Postgres et stockage. Ce sont des routes à écrire avant de parler de gabarit.
+**Un flux sur cinq de ta liste n'a pas encore de socle serveur** : la
+vérification d'adresse. Le mot de passe oublié (15/09/2026) et l'export de
+données (01/10/2026) existent désormais. L'authentification est maison (`jose`
++ `scrypt`), donc rien ne vient gratuitement — Supabase Auth, qui aurait fourni
+ces écrans et leurs e-mails, n'est pas utilisé ici, et le back-end ne s'en sert
+que comme Postgres et stockage.
 
-### Ce qu'un export de données demande, précisément
+### L'export de données, tel qu'il est construit
 
-C'est le point le plus sous-estimé de la liste, et le plus réglementé — le RGPD
-donne un mois pour répondre, dans un format lisible par machine.
+C'est le point le plus réglementé de la liste — le RGPD donne un mois pour
+répondre, dans un format lisible par machine (articles 15 et 20). Construit le
+01/10/2026, depuis « Exporter mes données » en bas du profil :
 
-1. Une route `POST /v1/accounts/me/export` qui publie un job, et rien d'autre :
-   assembler les carnets, les souvenirs, les médias et les commandes de
-   quelqu'un prend des minutes, pas des millisecondes.
-2. Un job qui écrit un `.zip` dans S3 — JSON pour les données, les fichiers
-   d'origine pour les médias.
-3. Un lien **signé et périmable** (7 jours) dans l'e-mail. Jamais la pièce
-   jointe : elle pèse des centaines de mégaoctets, et un e-mail se transfère.
-4. L'e-mail part à l'adresse **vérifiée** du compte, et à elle seule.
+1. `POST /v1/accounts/me/export` tire un secret, n'en garde que l'empreinte
+   (`data_exports`), et envoie l'e-mail. **Rien n'est préparé à ce moment-là.**
+2. Le bouton de l'e-mail mène à une page de l'API, `GET /data-export?token=…`,
+   qui résume l'archive. Son bouton à elle, `GET /data-export/archive`, compose
+   le ZIP **à la volée** et l'envoie au fil de l'eau : JSON pour les données,
+   un récit en texte simple par voyage, les fichiers d'origine pour les médias,
+   les carnets en PDF, un `LISEZ-MOI.txt`.
+3. Le lien vaut **7 jours**, sert plusieurs fois (vingt téléchargements au
+   plus), et une nouvelle demande remplace la précédente. Jamais de pièce
+   jointe : elle pèserait des centaines de mégaoctets, et un e-mail se
+   transfère.
+4. L'e-mail part à l'adresse **du compte**, et à elle seule : la requête n'en
+   porte aucune. « Vérifiée » attendra la vérification d'adresse, qui n'existe
+   pas encore (ci-dessus) — refuser les comptes ouverts par adresse et mot de
+   passe, c'était refuser l'export à la plupart d'entre eux.
+
+**Pourquoi pas un job et un ZIP dans le stockage**, comme prévu ici d'abord :
+le plan gratuit de Supabase refuse tout fichier de plus de 50 Mo ; une archive
+préparée est une copie de tout ce qu'on sait de quelqu'un, qui dort sept jours
+dans un bucket et que la suppression du compte doit retrouver ; et elle est
+périmée dès qu'elle est écrite. La limite de l'approche retenue : chaque
+téléchargement repasse par l'API, et Railway coupe une requête au bout de
+quinze minutes — plus d'un gigaoctet sur une connexion lente. Le lien
+resservant, un téléchargement interrompu se relance. Le détail est dans
+`backend/src/services/dataExport.ts` et `dataExportArchive.ts`.
+
+**Pourquoi une page entre l'e-mail et l'archive** : les messageries
+d'entreprise et certains antivirus ouvrent les liens d'un e-mail pour les
+inspecter. Un lien qui composait l'archive l'aurait composée pour eux, à
+chaque fois.
 
 ---
 
@@ -368,9 +391,9 @@ L'ordre compte : chaque étape rend la suivante vérifiable.
    chauffe qu'on ne rattrape pas. À faire avant d'écrire une ligne de code.
 2. **`EmailSender`, `outbound_messages` et le job `memobook.email`.** Le socle,
    avec un `FakeSender` qui écrit dans les journaux — comme `FakeRedactor`.
-3. **Les routes manquantes** : vérification d'adresse, mot de passe oublié,
-   export de données. C'est du travail d'API, pas d'e-mail, et c'est le plus
-   long des trois.
+3. **Les routes manquantes** : vérification d'adresse — le mot de passe oublié
+   et l'export de données sont faits. C'est du travail d'API, pas d'e-mail, et
+   c'est le plus long des trois.
 4. **Les gabarits de niveau 1**, et leurs tests visuels.
 5. **Les consentements et les suppressions**, avant la première campagne — pas
    après.
