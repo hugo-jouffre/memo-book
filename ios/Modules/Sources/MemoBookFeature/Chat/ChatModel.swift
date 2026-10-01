@@ -309,10 +309,16 @@ public final class ChatModel {
     /// Le serveur reçoit aussi son identifiant : c'est lui qui dit qu'une puce
     /// est une commande, sans modèle et sans souvenir. Seul l'import de photos
     /// n'envoie rien : on ne dit pas « j'importe des photos », on les importe.
-    public func choose(_ suggestion: ChatSuggestion, addPhotos: () -> Void) {
+    public func choose(
+        _ suggestion: ChatSuggestion,
+        addPhotos: () -> Void,
+        openPreview: () -> Void = {}
+    ) {
         switch suggestion.intent {
         case .importPhotos:
             addPhotos()
+        case .openPreview:
+            openPreview()
         case .send, .unknown:
             composer = .tools
             // « Ça me convient » vise la dernière fiche du fil : c'est elle
@@ -1030,6 +1036,37 @@ public final class ChatModel {
         }
     }
 
+    // MARK: - Les photos du fil
+
+    /// Les vignettes des photos jointes, chargées **par le modèle**.
+    ///
+    /// `GET /v1/entries/:id/media` exige la session : un `AsyncImage` y part
+    /// sans elle et prend un 401 (01/10/2026, les vignettes restaient sur leur
+    /// trame). Le transport, lui, signe la requête — le chemin des vocaux.
+    /// Une photo qui vient d'être choisie s'affiche depuis son fichier local.
+    public private(set) var photoImages: [String: UIImage] = [:]
+    private var loadingPhotos: Set<String> = []
+
+    public func loadPhoto(_ attachment: PhotoAttachment) {
+        guard photoImages[attachment.id] == nil, !loadingPhotos.contains(attachment.id) else { return }
+        guard let url = attachment.displayUrl else { return }
+        loadingPhotos.insert(attachment.id)
+
+        Task { [weak self] in
+            guard let self else { return }
+            let image: UIImage?
+            if url.isFileURL {
+                image = UIImage(contentsOfFile: url.path())
+            } else if let data = try? await self.transport.media(url) {
+                image = UIImage(data: data)
+            } else {
+                image = nil
+            }
+            self.loadingPhotos.remove(attachment.id)
+            if let image { self.photoImages[attachment.id] = image }
+        }
+    }
+
     private func play(_ id: String, at url: URL) {
         do {
             try player.toggle(id: id, url: url)
@@ -1084,7 +1121,7 @@ public final class ChatModel {
         let id = UUID().uuidString.lowercased()
 
         var uploads: [ChatPhotoUpload] = []
-        for (index, data) in images.prefix(4).enumerated() {
+        for (index, data) in images.prefix(ChatMetrics.visiblePhotoCount).enumerated() {
             let photoId = "\(id)-\(index)"
             guard let url = try? ChatPhotoFile.save(data, id: photoId) else { continue }
             localPhotoUrls[photoId] = url

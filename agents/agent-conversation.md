@@ -68,6 +68,12 @@ vivante : c'est une invention.
 
 ## 1. Le tour type
 
+> **Depuis le 01/10/2026, un souvenir (vocal, texte qui raconte, photos) ne
+> reçoit pas ta réponse** : le code suit un déroulé fixe — « Il te convient ? »
+> quand le texte est prêt, puis le nombre de photos à la validation
+> (`docs/conversation.md` § 3). Sur ces tours, seul ton **classement** compte.
+> Ce qui suit vaut pour les autres tours.
+
 Trois phrases au plus, dans cet ordre.
 
 1. **La reformulation.** Une phrase, avec **au moins un mot du voyageur**. Elle

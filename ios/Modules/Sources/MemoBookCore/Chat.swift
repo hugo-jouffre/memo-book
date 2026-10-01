@@ -90,6 +90,11 @@ public struct TranscriptCard: Sendable, Hashable {
     /// été retranscrit, et que ça change d'un tour à l'autre.
     public let title: String
 
+    /// Le titre du récit, donné par la rédaction — celui de l'étape dans le
+    /// carnet (« Dernier brunch à Paros »). `nil` tant que le texte n'est pas
+    /// rédigé (Hugo, 01/10/2026).
+    public let heading: String?
+
     /// Le jour dont on parle, pas celui de l'envoi : quelqu'un raconte souvent
     /// sa journée le soir, ou trois jours plus tard. C'est
     /// ``RecordedAudio/recordedAt`` qui le porte, comme
@@ -148,6 +153,7 @@ public struct TranscriptCard: Sendable, Hashable {
 
     public init(
         title: String,
+        heading: String? = nil,
         capturedAt: Date,
         placeLabel: String? = nil,
         duration: TimeInterval? = nil,
@@ -159,6 +165,7 @@ public struct TranscriptCard: Sendable, Hashable {
         isValidated: Bool = false
     ) {
         self.title = title
+        self.heading = heading
         self.capturedAt = capturedAt
         self.placeLabel = placeLabel
         self.duration = duration
@@ -174,6 +181,7 @@ public struct TranscriptCard: Sendable, Hashable {
     public func filled(with text: String, isSimulated: Bool) -> TranscriptCard {
         TranscriptCard(
             title: title,
+            heading: heading,
             capturedAt: capturedAt,
             placeLabel: placeLabel,
             duration: duration,
@@ -198,7 +206,7 @@ public struct TranscriptCard: Sendable, Hashable {
 
 extension TranscriptCard: Codable {
     private enum CodingKeys: String, CodingKey {
-        case title, capturedAt, placeLabel, duration, text, isSimulated, entryId, footnote
+        case title, heading, capturedAt, placeLabel, duration, text, isSimulated, entryId, footnote
         case phase, isValidated
     }
 
@@ -206,6 +214,7 @@ extension TranscriptCard: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
             title: try container.decode(String.self, forKey: .title),
+            heading: try container.decodeIfPresent(String.self, forKey: .heading),
             capturedAt: try container.decode(Date.self, forKey: .capturedAt),
             placeLabel: try container.decodeIfPresent(String.self, forKey: .placeLabel),
             duration: try container.decodeIfPresent(TimeInterval.self, forKey: .duration),
@@ -221,6 +230,7 @@ extension TranscriptCard: Codable {
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(title, forKey: .title)
+        try container.encodeIfPresent(heading, forKey: .heading)
         try container.encode(capturedAt, forKey: .capturedAt)
         try container.encodeIfPresent(placeLabel, forKey: .placeLabel)
         try container.encodeIfPresent(duration, forKey: .duration)
@@ -582,6 +592,10 @@ public struct ChatSuggestion: Codable, Sendable, Hashable, Identifiable {
         /// dit pas « j'importe des photos », on les importe.
         case importPhotos
 
+        /// Ouvrir l'aperçu du carnet. N'envoie rien non plus : « Voir ma
+        /// page », une fois les photos d'une étape validées (Hugo, 01/10/2026).
+        case openPreview
+
         /// Une intention que le serveur connaît et pas cette version de l'app.
         /// Elle se comporte alors comme `send` — la puce marche, elle en fait
         /// juste un peu moins. Même parti pris que ``Status/unknown``.
@@ -617,6 +631,7 @@ extension ChatSuggestion.Intent: Codable {
             case "send_then_edit_transcript": .sendThenEditTranscript
             case "send_then_speak": .sendThenSpeak
             case "import_photos": .importPhotos
+            case "open_preview": .openPreview
             default: .unknown(raw)
             }
     }
@@ -633,6 +648,7 @@ extension ChatSuggestion.Intent: Codable {
         case .sendThenEditTranscript: "send_then_edit_transcript"
         case .sendThenSpeak: "send_then_speak"
         case .importPhotos: "import_photos"
+        case .openPreview: "open_preview"
         case .unknown(let raw): raw
         }
     }

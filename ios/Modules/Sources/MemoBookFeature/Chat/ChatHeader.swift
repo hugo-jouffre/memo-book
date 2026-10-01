@@ -36,10 +36,11 @@ enum ChatMetrics {
     // tenir, et c'est ce qui l'empêche à la fois de s'arrêter avant le bord et
     // de faire grandir la barre qui la porte — voir ``BrandWaveform``.
 
-    /// Combien de vignettes une bulle de photos montre avant de compter le
-    /// reste. Quatre, comme `agents/agent-conversation.md` le demande — « 2 à 4
-    /// photos par souvenir maximum ».
-    static let visiblePhotoCount = 4
+    /// Combien de photos un envoi porte, et combien de vignettes sa bulle
+    /// montre : six, le plus que MEMO demande pour une étape sur deux pages
+    /// (`backend/src/services/photoBudget.ts`, Hugo, 01/10/2026). Le serveur
+    /// applique la même borne (`MAX_PHOTOS`, `routes/chat.ts`).
+    static let visiblePhotoCount = 6
 }
 
 /// L'en-tête du chat : d'où l'on vient, de quoi on parle, et les deux réglages

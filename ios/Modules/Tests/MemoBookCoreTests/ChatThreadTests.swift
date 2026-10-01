@@ -235,6 +235,23 @@ final class ChatThreadDecodingTests: XCTestCase {
         XCTAssertFalse(card.isSettling)
     }
 
+    /// La fiche porte le titre du récit, et « Voir ma page » ouvre l'aperçu
+    /// sans rien envoyer (Hugo, 01/10/2026).
+    func testDecodesTheStoryHeadingAndThePreviewIntent() throws {
+        let json = Data(
+            """
+            { "title": "Retranscription étape 2", "heading": "Dernier brunch à Paros",
+              "capturedAt": "2026-09-21T08:00:00.000Z", "text": "…", "phase": "ready" }
+            """.utf8)
+        let card = try JSONDecoder.memoBook.decode(TranscriptCard.self, from: json)
+        XCTAssertEqual(card.title, "Retranscription étape 2")
+        XCTAssertEqual(card.heading, "Dernier brunch à Paros")
+        XCTAssertEqual(card.filled(with: "…", isSimulated: false).heading, "Dernier brunch à Paros")
+
+        let intent = try JSONDecoder.memoBook.decode(ChatSuggestion.Intent.self, from: Data("\"open_preview\"".utf8))
+        XCTAssertEqual(intent, .openPreview)
+    }
+
     /// Un temps ou un classement que cette version ne connaît pas ne casse pas
     /// le fil — même parti que `Status.unknown`.
     func testUnknownPhaseAndDispositionSurvive() throws {

@@ -108,7 +108,10 @@ export function createBookRenderer(env: Env): BookRenderer {
         env.RENDER_PROFILE,
       );
     default:
-      // `auto` : le comportement historique, piloté par PIPELINE_MODE.
-      return env.live ? apiTemplateRenderer(env) : new FakeBookRenderer();
+      // `auto` : APITemplate quand le pipeline est réel et que sa clé est là,
+      // sinon un rendu simulé — le reste du pipeline n'en dépend pas.
+      return env.live && env.APITEMPLATE_API_KEY !== ""
+        ? apiTemplateRenderer(env)
+        : new FakeBookRenderer();
   }
 }

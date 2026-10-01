@@ -234,15 +234,17 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   }
 
   const env = parsed.data;
-  const hasLiveKeys = env.OPENAI_API_KEY !== "" && env.APITEMPLATE_API_KEY !== "";
+  // Seule OpenAI décide de `live` : la transcription et la structuration n'ont
+  // besoin que d'elle. Le PDF a sa propre clé et son propre axe (`RENDERER`) —
+  // sans clé APITemplate, `auto` simule le rendu au lieu de simuler tout le
+  // pipeline (Hugo, 01/10/2026 : tester le chat sans se soucier du PDF).
+  const hasLiveKeys = env.OPENAI_API_KEY !== "";
 
   let live: boolean;
   switch (env.PIPELINE_MODE) {
     case "live":
       if (!hasLiveKeys) {
-        throw new Error(
-          "PIPELINE_MODE=live mais OPENAI_API_KEY et/ou APITEMPLATE_API_KEY sont vides.",
-        );
+        throw new Error("PIPELINE_MODE=live mais OPENAI_API_KEY est vide.");
       }
       live = true;
       break;

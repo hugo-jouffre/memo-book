@@ -10,7 +10,18 @@ import {
   type ConversationInput,
   type ConversationReply,
 } from "../services/conversation.js";
-import { ROSE_EPINE_GRAINE, SUGGESTION_SETS } from "../services/conversationCopy.js";
+import {
+  ACKNOWLEDGED,
+  PRECISION_NOTED,
+  ROSE_EPINE_GRAINE,
+  SUGGESTION_SETS,
+  fallbackPrompt,
+  photosToValidate,
+  photosWanted,
+} from "../services/conversationCopy.js";
+import { photoBudgetFor } from "../services/photoBudget.js";
+import { ensureRenderInProgress } from "../services/renderTrigger.js";
+import { samplePhotoJpegs } from "../services/samplePhotos.js";
 import {
   CONTEXT_COMPLETE,
   CONTEXT_NOTED,
@@ -33,7 +44,7 @@ import {
   loadRecentEntries,
   REPLY_TIMEOUT_MS,
 } from "../services/conversationThread.js";
-import { parseCoherenceSheet, type RedactJob } from "./redact.js";
+import { finalTextOf, parseCoherenceSheet, type RedactJob } from "./redact.js";
 import { JOB_NAMES } from "./queue.js";
 
 export interface ConverseJob {
@@ -90,6 +101,11 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
   // des souvenirs, et une puce se répond toujours par le catalogue.
   if (isGathering(tripContext) && !message.suggestionId && message.kind !== "photos") {
     await converseTripContextTurn(context, message, tripContext!, now);
+    return;
+  }
+
+  if (message.suggestionId === "photos-sample") {
+    await attachSamplePhotos(context, message, now);
     return;
   }
 
@@ -152,9 +168,25 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
     now,
   };
 
-  // Une commande connue se répond sans modèle. Sinon le répondeur, et le
-  // repli s'il tombe : la panne se lit dans `model`, jamais dans un silence.
-  let reply: ConversationReply | null = scriptedReply(message.suggestionId, text ?? "");
+  // Une commande connue se répond sans modèle. Un vocal entendu et des photos
+  // aussi : le déroulé est fixe (`docs/conversation.md` § 3). Sinon le
+  // répondeur, et le repli s'il tombe : la panne se lit dans `model`, jamais
+  // dans un silence.
+  let reply: ConversationReply | null =
+    message.suggestionId === "accept"
+      ? await acceptReply(context, message.entryId, text ?? "")
+      : scriptedReply(message.suggestionId, text ?? "");
+  if (!reply && !message.suggestionId && kind === "voice" && !transcriptFailed) {
+    reply = flowReply([], [], "memory", step?.placeName ?? memo.destinationCity);
+  }
+  if (!reply && !message.suggestionId && kind === "photos") {
+    reply = flowReply(
+      composeBeats("", [photosToValidate(input.message.photoCount)]),
+      [...SUGGESTION_SETS.afterPhotos],
+      "memory",
+      step?.placeName ?? memo.destinationCity,
+    );
+  }
   if (!reply) {
     try {
       reply = await responder.reply(input);
@@ -172,6 +204,22 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
   else if (kind !== "text") disposition = "memory";
   else if (reply.disposition === "context" && !currentEntry) disposition = "memory";
   else disposition = reply.disposition;
+
+  // Le déroulé d'un souvenir (Hugo, 01/10/2026) : un souvenir raconté ne
+  // reçoit **aucune** bulle tout de suite — « Il te convient ? » viendra du job
+  // de rédaction, quand le texte sera prêt. Une précision reçoit un accusé, et
+  // la question reviendra avec le texte réécrit. Le modèle ne sert ici qu'à
+  // classer le texte libre.
+  if (!message.suggestionId && kind === "text" && disposition === "memory") {
+    reply = { ...reply, beats: [], suggestionIds: [], asksRoseEpineGraine: false };
+  } else if (!message.suggestionId && kind === "text" && disposition === "context") {
+    reply = {
+      ...reply,
+      beats: composeBeats(text ?? "", [PRECISION_NOTED]),
+      suggestionIds: [],
+      asksRoseEpineGraine: false,
+    };
+  }
 
   const answersRoseEpineGraine =
     disposition === "context" &&
@@ -278,10 +326,142 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
     await queue.publish<RedactJob>(JOB_NAMES.redact, { entryId });
   }
 
+  if (message.suggestionId === "photos-ok") await validatePhotos(context, memo.id, now);
+
   logger.info(
     { messageId, memoId: memo.id, model: reply.model, disposition, beats: reply.beats.length },
     "MEMO a répondu",
   );
+}
+
+/**
+ * « Je valide mes photos » : les photos en attente sont validées, et le carnet
+ * se recompose en fond pour que la page de l'étape apparaisse dans l'aperçu —
+ * le même déclencheur que « Valider cette étape » (`renderTrigger.ts`). Une
+ * panne du rendu ne coupe pas la parole à MEMO : elle se journalise.
+ */
+async function validatePhotos(context: AppContext, memoId: string, now: Date): Promise<void> {
+  await context.prisma.entry.updateMany({
+    where: { memoId, kind: "photo", validatedAt: null },
+    data: { validatedAt: now },
+  });
+  try {
+    await ensureRenderInProgress(context, memoId);
+  } catch (cause) {
+    context.logger.warn({ memoId, err: cause }, "Photos validées, mais le carnet n'a pas pu se recomposer");
+  }
+}
+
+/** Une réponse écrite par le déroulé, sans modèle. */
+function flowReply(
+  beats: ConversationReply["beats"],
+  suggestionIds: ConversationReply["suggestionIds"],
+  disposition: ChatDisposition,
+  placeName: string | null,
+): ConversationReply {
+  return {
+    beats,
+    disposition,
+    suggestionIds,
+    prompt: fallbackPrompt(placeName),
+    asksRoseEpineGraine: false,
+    model: "scripted",
+  };
+}
+
+/**
+ * « Ça me convient » : c'est enregistré, et MEMO demande le nombre **exact**
+ * de photos qui remplit l'étape, calculé sur le texte validé — la correction
+ * à la main si elle existe, sinon le texte rédigé (`photoBudget.ts`).
+ */
+async function acceptReply(
+  context: AppContext,
+  entryId: string | null,
+  received: string,
+): Promise<ConversationReply> {
+  const entry = entryId ? await context.prisma.entry.findUnique({ where: { id: entryId } }) : null;
+  const validated = entry ? finalTextOf(entry) : null;
+  if (!validated) {
+    return flowReply(composeBeats(received, [ACKNOWLEDGED]), [...SUGGESTION_SETS.afterAccept], "command", null);
+  }
+  const budget = photoBudgetFor(validated.trim().length);
+  return flowReply(
+    composeBeats(received, [ACKNOWLEDGED, photosWanted(budget.photos, budget.pages)]),
+    [
+      ...SUGGESTION_SETS.askPhotos,
+      ...(context.env.NODE_ENV === "production" ? [] : (["photos-sample"] as const)),
+    ],
+    "command",
+    null,
+  );
+}
+
+/**
+ * « Photos de test » (hors production) : joint, au nom du voyageur, le nombre
+ * exact de photos que le dernier souvenir demande, puis laisse le tour de ces
+ * photos suivre le chemin normal — un job `converse` qui demande de les
+ * valider. La puce elle-même ne reçoit pas de bulle : les photos parlent.
+ */
+async function attachSamplePhotos(
+  context: AppContext,
+  message: NonNullable<Awaited<ReturnType<typeof loadTurn>>>,
+  now: Date,
+): Promise<void> {
+  const { prisma, storage, queue, env } = context;
+  if (env.NODE_ENV === "production") {
+    await prisma.chatMessage.update({
+      where: { id: message.id },
+      data: { disposition: "command", repliedAt: now },
+    });
+    return;
+  }
+
+  const current = await loadCurrentEntry(prisma, message.memoId, message.seq);
+  const count = photoBudgetFor((current?.text ?? "").trim().length).photos;
+  const jpegs = await samplePhotoJpegs(count);
+  const stored = await Promise.all(
+    jpegs.map((jpeg, index) => storage.put("photo", `test-${index + 1}.jpg`, jpeg, "image/jpeg")),
+  );
+
+  const photosMessageId = await prisma.$transaction(async (tx) => {
+    const entries = [];
+    for (const object of stored) {
+      entries.push(
+        await tx.entry.create({
+          data: {
+            memo: { connect: { id: message.memoId } },
+            kind: "photo",
+            status: "ready",
+            capturedAt: now,
+            ...(message.stepId ? { step: { connect: { id: message.stepId } } } : {}),
+            media: {
+              create: { storageKey: object.storageKey, mimeType: object.mimeType, bytes: object.bytes },
+            },
+          },
+        }),
+      );
+    }
+    await tx.chatMessage.update({
+      where: { id: message.id },
+      data: { disposition: "command", repliedAt: now },
+    });
+    const photos = await tx.chatMessage.create({
+      data: {
+        memoId: message.memoId,
+        author: "traveller",
+        kind: "photos",
+        accountId: message.accountId,
+        entryId: entries[0]!.id,
+        disposition: "memory",
+        stepId: message.stepId,
+        payload: { entryIds: entries.map((entry) => entry.id) },
+      },
+    });
+    return photos.id;
+  });
+
+  await queue.publish<ConverseJob>(JOB_NAMES.converse, { messageId: photosMessageId });
+  context.logger.info({ memoId: message.memoId, count }, "Photos de test jointes");
 }
 
 /**

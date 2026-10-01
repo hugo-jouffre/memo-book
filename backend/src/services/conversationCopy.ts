@@ -53,7 +53,16 @@ export const OPENING_WITHOUT_PROMPT =
 // La fiche de retranscription
 // ---------------------------------------------------------------------------
 
-export const TRANSCRIPT_TITLE = "Retranscription du contexte";
+export const TRANSCRIPT_TITLE = "Retranscription";
+
+/**
+ * L'intitulé de la fiche d'un souvenir : « Retranscription étape 2 ». Le
+ * numéro est le rang de la fiche dans le fil — une étape = un souvenir (Hugo,
+ * 01/10/2026). Sans numéro connu, l'intitulé nu.
+ */
+export function transcriptTitle(stepNumber: number | null): string {
+  return stepNumber ? `${TRANSCRIPT_TITLE} étape ${stepNumber}` : TRANSCRIPT_TITLE;
+}
 
 /** La mention « généré par IA » qu'exige `docs/reglages-utilisateur.md`. */
 export const TRANSCRIPT_FOOTNOTE = "Texte proposé par MEMO — tu peux le corriger.";
@@ -62,6 +71,27 @@ export const TRANSCRIPT_FOOTNOTE = "Texte proposé par MEMO — tu peux le corri
 export const AFTER_TRANSCRIPT =
   "Voilà ce que j’ai compris de ton vocal. Je le garde tel quel pour ton carnet, ou tu " +
   "veux le retoucher ?";
+
+/**
+ * La seule question qui suit un souvenir, une fois son texte rédigé : le texte
+ * convient-il ? Rien d'autre — ni reformulation, ni question sur le lieu ou
+ * les gens. Trop de questions fatiguent (Hugo, 01/10/2026). Posée par le job
+ * de rédaction quand le texte est prêt (`askValidation`), jamais avant.
+ */
+export const VALIDATION_QUESTION = "Voilà ton texte pour le carnet. Il te convient ?";
+
+/** La réponse à une précision : le texte se réécrit, la question reviendra avec lui. */
+export const PRECISION_NOTED = "C’est noté, je reprends le texte avec ça.";
+
+/**
+ * Une fois le texte validé : le nombre **exact** de photos qui remplit l'étape,
+ * calculé par `photoBudgetFor` sur le texte validé.
+ */
+export function photosWanted(count: number, pages: number): string {
+  const photos = count === 1 ? "une photo" : `${count} photos`;
+  const where = pages > 1 ? "ses deux pages" : "sa page";
+  return `Illustre ce souvenir avec ${photos} : c’est ce qu’il faut pour remplir ${where}.`;
+}
 
 export const TRANSCRIPT_UNAVAILABLE =
   "Je n’ai pas réussi à écouter ce vocal. Tu peux me le réécrire ici, ou le " +
@@ -147,6 +177,28 @@ export function figure(value: string): string {
   return `${value}, c’est noté : ça ira dans les compteurs du voyage. Ça t’a pris combien de temps ?`;
 }
 
+/**
+ * Les photos d'un souvenir reçues : MEMO demande de les valider, et dit ce que
+ * ça fait — la page de l'étape se crée dans le carnet, et se prévisualise.
+ * L'étape suivante ne vient qu'après (Hugo, 01/10/2026).
+ */
+export function photosToValidate(count: number): string {
+  const photos = count === 1 ? "ta photo" : `tes ${count} photos`;
+  return (
+    `J’ai bien reçu ${photos}. Si tu les valides, je crée la page de cette étape dans ` +
+    "ton carnet, et tu pourras la prévisualiser. Tu les valides ?"
+  );
+}
+
+/** Les photos validées : la page se compose, l'étape suivante peut venir. */
+export const PHOTOS_VALIDATED =
+  "C’est fait : je crée la page de cette étape dans ton carnet. Tu peux la " +
+  "prévisualiser, puis me raconter l’étape suivante.";
+
+/** Une app trop ancienne pour ouvrir l'aperçu depuis la puce : MEMO dit où il est. */
+export const WHERE_IS_PREVIEW =
+  "Ta page est dans l’aperçu du carnet : appuie sur « Ton carnet prend forme », en haut du fil.";
+
 /** MEMO recompte ce qu'il a reçu ; il n'a pas regardé les images, et ne prétend pas le contraire. */
 export function photosReceived(count: number): string {
   return count === 1
@@ -209,7 +261,8 @@ export type SuggestionIntent =
   | "send_then_write"
   | "send_then_edit_transcript"
   | "send_then_speak"
-  | "import_photos";
+  | "import_photos"
+  | "open_preview";
 
 export interface Suggestion {
   id: string;
@@ -248,6 +301,19 @@ export const SUGGESTIONS = {
   },
   start: { id: "start", label: "Commencer mon carnet", symbol: "🚀", intent: "send_then_speak" },
   photos: { id: "photos", label: "Importer des photos", symbol: "📷", intent: "import_photos" },
+  "photos-ok": { id: "photos-ok", label: "Je valide mes photos", symbol: "✅", intent: "send" },
+  // Hors production seulement : joint le nombre exact de photos factices
+  // demandé, pour dérouler le chat sans photothèque (`samplePhotos.ts`).
+  "photos-sample": { id: "photos-sample", label: "Photos de test", symbol: "🧪", intent: "send" },
+  "photos-more": {
+    id: "photos-more",
+    label: "Ajouter d’autres photos",
+    symbol: "📷",
+    intent: "import_photos",
+  },
+  // N'envoie rien : ouvre l'aperçu du carnet. Une app qui ne connaît pas
+  // l'intention l'envoie comme un texte — MEMO dit alors où trouver l'aperçu.
+  preview: { id: "preview", label: "Voir ma page", symbol: "👀", intent: "open_preview" },
   dictate: { id: "dictate", label: "Raconter à l’oral", symbol: "🎙", intent: "send_then_speak" },
   voice: { id: "voice", label: "Je te raconte à l’oral", symbol: "🎙", intent: "send_then_speak" },
   write: { id: "write", label: "Je préfère écrire", symbol: "✍️", intent: "send_then_write" },
@@ -334,6 +400,12 @@ export const SUGGESTION_SETS = {
   afterAnswer: ["clear", "another", "resume"],
   afterRefusal: ["tomorrow", "else"],
   afterAccept: ["dictate", "photos", "later"],
+  /** Le texte validé, les photos demandées : les importer, ou passer à la suite. */
+  askPhotos: ["photos", "dictate"],
+  afterPhotos: ["photos-ok", "photos-more"],
+  afterPhotosValidated: ["preview", "dictate", "write"],
+  /** Après une correction au clavier : il reste à valider pour passer aux photos. */
+  afterEdit: ["accept", "edit-hand"],
   split: ["split", "keep"],
   none: [],
 } as const satisfies Record<string, readonly SuggestionId[]>;
@@ -360,6 +432,10 @@ export const SCRIPTED_ANSWERS: Partial<
   // Pas `opening` : reproposer « Commencer mon carnet » à quelqu'un qui vient
   // de commencer son carnet est le détail qui dit qu'il n'y a personne en face.
   start: { text: OPENING_WITHOUT_PROMPT, suggestions: "afterAccept" },
+  // Valider les photos recompose le carnet : l'effet vit dans le job
+  // (`converse.ts`), la puce ne fait ici que parler.
+  "photos-ok": { text: PHOTOS_VALIDATED, suggestions: "afterPhotosValidated" },
+  preview: { text: WHERE_IS_PREVIEW, suggestions: "afterPhotosValidated" },
   dictate: { text: LISTENING, suggestions: "none" },
   // Le contexte : la réponse est écrite ici, l'état du voyage change dans le
   // job (`converse.ts`) — une puce ne fait jamais que parler.
@@ -373,10 +449,17 @@ export const SCRIPTED_ANSWERS: Partial<
  * puces, pour la même raison — répondre sans modèle et sans compter un souvenir.
  */
 export const SILENT_COMMANDS = {
-  transcript_edited: { text: EDITED_BY_HAND, suggestions: "afterAccept" },
+  transcript_edited: { text: EDITED_BY_HAND, suggestions: "afterEdit" },
 } as const satisfies Record<string, { text: string; suggestions: SuggestionSet }>;
 
 export type SilentCommandId = keyof typeof SILENT_COMMANDS;
+
+/**
+ * Les puces que le job traite lui-même, sans réponse écrite d'avance : elles
+ * restent des commandes — gratuites, jamais un souvenir — même si
+ * `SCRIPTED_ANSWERS` ne les connaît pas.
+ */
+export const FLOW_COMMANDS: readonly SuggestionId[] = ["photos-sample"];
 
 export function isSilentCommand(value: string): value is SilentCommandId {
   return Object.prototype.hasOwnProperty.call(SILENT_COMMANDS, value);

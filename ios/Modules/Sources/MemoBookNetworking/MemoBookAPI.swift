@@ -211,7 +211,7 @@ public protocol MemoBookAPI: Sendable {
     /// Un vocal : le souvenir est créé, sa fiche posée, la transcription enfilée.
     func sendChatVoice(tripId: String, turn: ChatVoiceTurn) async throws -> ChatTurnReceipt
 
-    /// Une à quatre photos : un souvenir par image, une seule bulle.
+    /// Une à six photos : un souvenir par image, une seule bulle.
     func sendChatPhotos(tripId: String, turn: ChatPhotosTurn) async throws -> ChatTurnReceipt
 
     /// « Ça me convient » : le souvenir est relu, l'étape offerte confirmée.
