@@ -50,6 +50,7 @@ public final class AppDependencies {
     ///   - connectivity: d'où l'app apprend qu'elle a du réseau. Le vrai
     ///     moniteur par défaut ; un test en fournit un qu'il pilote.
     ///   - pendingRecordings: où dorment les vocaux qui n'ont pas pu partir.
+    ///   - pendingTrips: où dorment les voyages créés hors ligne.
     ///   - payments: qui ouvre la feuille de paiement. La vraie par défaut ;
     ///     une preview Xcode — et le lancement `-previewSignedIn` — passe
     ///     ``StubPaymentPresenter``, qui n'appelle personne.
@@ -57,6 +58,7 @@ public final class AppDependencies {
         api: any MemoBookAPI,
         connectivity: Connectivity = .system,
         pendingRecordings: PendingRecordingStore = .inLibrary(),
+        pendingTrips: PendingTripStore = .inLibrary(),
         payments: (any PaymentPresenter)? = nil,
     ) {
         self.api = api
@@ -70,9 +72,17 @@ public final class AppDependencies {
         // un tour comme un autre, avec l'identifiant de sa bulle. La durée
         // voyage avec (`PendingTurn.duration`), donc un vocal parti trois
         // jours plus tard décompte la même chose.
-        outbox = RecordingOutbox(store: pendingRecordings, connectivity: connectivity) { turn, tripId in
-            try await ChatTransport.sendNow(turn, to: tripId, api: api)
-        }
+        //
+        // Les voyages créés hors ligne passent par elle aussi, et **avant** ce
+        // qu'on y raconte : la création se rejoue sur l'identifiant que l'app
+        // a tiré (`POST /v1/trips`), celui que les tours en attente portent.
+        outbox = RecordingOutbox(
+            store: pendingRecordings,
+            trips: pendingTrips,
+            connectivity: connectivity,
+            send: { turn, tripId in try await ChatTransport.sendNow(turn, to: tripId, api: api) },
+            createTrip: { draft in try await api.createTrip(draft) }
+        )
 
         // Au démarrage, et pas à l'ouverture d'un écran : c'est ce qui permet
         // de savoir qu'on est hors ligne **avant** de dessiner l'accueil, et de
@@ -94,6 +104,10 @@ public final class AppDependencies {
     /// serait le seul geste irréversible du lot.
     public func forgetAccountContent() async {
         await content.clearAll()
+        // Les voyages créés hors ligne restent sur le disque, comme les
+        // vocaux : ils ne se montrent plus, et ne partent plus, tant que leur
+        // compte n'est pas revenu.
+        outbox.setAccount(nil)
     }
 
     /// Relit la session gardée au trousseau — voir ``SessionRestore``.
@@ -115,6 +129,9 @@ public final class AppDependencies {
     /// le serveur ne répond pas. Effacé avec le reste à la déconnexion.
     public func rememberAccount(_ account: Account) async {
         await content.write(.account, account)
+        // Ses voyages créés hors ligne réapparaissent, et partent s'il y a du
+        // réseau.
+        outbox.setAccount(account.id)
     }
 
     /// Garantit que l'appareil est enregistré avant un appel réseau.
@@ -162,12 +179,29 @@ public final class AppDependencies {
     ///
     /// Le lieu est laissé vide : l'app ne demande pas encore la position, et
     /// inventer un libellé serait pire que de n'en donner aucun.
+    ///
+    /// **Les voyages créés hors ligne s'y ajoutent**, devant ceux du serveur :
+    /// on vient de les créer, et ils doivent être là — sur le cache comme sur
+    /// la réponse fraîche, tant que le serveur ne les a pas reçus. En
+    /// supprimer un l'oublie sur le téléphone, avec ce qu'on y avait raconté :
+    /// personne d'autre ne l'a jamais vu.
     public func homeModel() -> HomeModel {
-        HomeModel(
-            source: cachedSource(.home) { [api] in try await api.homeFeed() },
-            cached: { [content] in await content.read(.home, as: HomeFeed.self) },
+        let read = cachedSource(.home) { [api] in try await api.homeFeed() }
+
+        return HomeModel(
+            source: { [outbox] in
+                let feed = try await read()
+                return await outbox.mergingLocalTrips(into: feed)
+            },
+            cached: { [content, outbox] in
+                guard let stored = await content.read(.home, as: HomeFeed.self) else { return nil }
+                return await outbox.mergingLocalTrips(into: stored)
+            },
             outbox: outbox,
-            remove: { [api] id in try await api.deleteMemo(id: id) },
+            remove: { [api, outbox] id in
+                if await outbox.discardLocalTrip(id) { return }
+                try await api.deleteMemo(id: id)
+            },
             join: { [api] code in try await api.joinTrip(code: code) }
         )
     }
@@ -249,6 +283,10 @@ public final class AppDependencies {
     }
 
     /// Un voyage ouvert, servi par `GET /v1/trips/:id`.
+    ///
+    /// Un voyage créé hors ligne n'y est pas encore — le serveur répond par
+    /// une panne de transport, ou par un 404 tant que la création n'est pas
+    /// arrivée. Il s'ouvre alors sur ce que l'app en sait : son brouillon.
     public func tripModel(id: String) -> TripHomeModel {
         // La source est construite **ici**, une fois, parce que le voyage est
         // fixé à la construction du modèle : c'est ce qui permet au cache
@@ -257,8 +295,18 @@ public final class AppDependencies {
 
         return TripHomeModel(
             tripId: id,
-            source: { _ in try await read() },
-            cached: { [content] in await content.read(.trip(id), as: TripDetail.self) }
+            source: { [outbox] _ in
+                do {
+                    return try await read()
+                } catch {
+                    guard let waiting = await outbox.localTrip(id) else { throw error }
+                    return TripDetail(trip: waiting.trip)
+                }
+            },
+            cached: { [content, outbox] in
+                if let stored = await content.read(.trip(id), as: TripDetail.self) { return stored }
+                return await outbox.localTrip(id).map { TripDetail(trip: $0.trip) }
+            }
         )
     }
 
@@ -296,6 +344,28 @@ public final class AppDependencies {
         }
         transport.waiting = { [outbox] in await outbox.waiting(for: tripId) }
         transport.deliveries = { [outbox] in await outbox.turnDeliveries() }
+        // Sans réseau, ou pour un voyage que le serveur n'a pas encore reçu :
+        // un fil **local** — l'accueil de MEMO, et ce qui attend d'être envoyé.
+        // Pas une copie de l'ancien fil : un fil périmé se lit comme un message
+        // perdu (`ios/CLAUDE.md`, « Le cache local »).
+        transport.offlineThread = { [outbox, content] error in
+            let traveller = await content.read(.home, as: HomeFeed.self)?.traveller
+            if let waiting = await outbox.localTrip(tripId) {
+                return .offline(trip: waiting.trip, traveller: traveller, isNew: true)
+            }
+            guard (error as? APIError)?.isTransport == true else { return nil }
+            // Le titre du voyage, depuis ce qu'on en a gardé : l'écran du
+            // voyage, à défaut l'accueil.
+            var known = await content.read(.trip(tripId), as: TripDetail.self)?.trip
+            if known == nil {
+                known = await content.read(.home, as: HomeFeed.self)?.trips.first { $0.id == tripId }
+            }
+            return .offline(
+                trip: known ?? Trip(id: tripId, title: TripDraft.untitled, stage: .ongoing),
+                traveller: traveller,
+                isNew: false
+            )
+        }
         return ChatModel(transport: transport, focusStepId: stepId)
     }
 
@@ -310,10 +380,16 @@ public final class AppDependencies {
     /// Les six étapes de « Créer un voyage ». Deux routes et non une : la
     /// seconde sert la flèche de retour, qui ne doit pas créer un second
     /// voyage — voir ``TripCreationModel``.
+    ///
+    /// **Une seule fonction pour les deux, désormais** (01/10/2026) : le
+    /// voyage part par la file, sous l'identifiant que l'app a tiré, et la
+    /// création se rejoue sur lui — corriger, c'est la renvoyer. Le code
+    /// d'accès arrive quand le serveur l'a créé, hors ligne au retour du
+    /// réseau.
     public func tripCreationModel() -> TripCreationModel {
         TripCreationModel(
-            create: { [api] draft in try await api.createTrip(draft) },
-            update: { [api] id, draft in try await api.updateTrip(id: id, draft: draft) },
+            save: { [outbox] draft in try await outbox.saveTrip(draft) },
+            sync: { [outbox] id in await outbox.tripSync(for: id) },
             themes: { [api] in try await api.tripThemes() }
         )
     }

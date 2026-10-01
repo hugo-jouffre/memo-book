@@ -126,6 +126,8 @@ Dans la PR de ce lot, vérifié en simulateur :
 | T168 | Le tiroir des cartes (croix, flèche, imprimante cerclées) n'a pas de maquette. À dessiner, ou à valider tel quel | Accueil |
 | T170 | La boîte hors ligne parle de « vocal » alors que la file porte aussi les textes et les photos : « Ton vocal enregistré hors ligne est bien conservé » après un texte. Généraliser le libellé dans Figma d'abord | Accueil — hors ligne |
 | T196 | Le flou (16) et le voile (18 %) de la carte « à venir » sont relevés sur l'export : aucune variable Figma derrière | Accueil — voyage à venir |
+| T238 | Un voyage qu'on vient de créer **sans dates** se range en bas de « Tes voyages », pas en grande carte : la grande carte va au voyage commencé le plus récemment, et un voyage sans date passe après tous les autres (même règle que pour un voyage du serveur). Le mettre en tête juste après sa création ? | Accueil — Tes voyages |
+| T240 | Créé hors ligne, le voyage montre sa barre d'attente à la place du code **jusqu'à la reconnexion**, sans un mot — comme demandé : seul le code attend, « Partager » reste gris. Ajouter une ligne (« Ton code arrivera dès ta reconnexion ») ou garder la barre seule ? | Création — co-voyageurs |
 
 ### Conversation
 
@@ -139,6 +141,7 @@ Dans la PR de ce lot, vérifié en simulateur :
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
+| T239 | Tant que le serveur n'a pas reçu un voyage créé hors ligne, ses **réglages**, « Inviter un proche », l'aperçu et la commande ne s'ouvrent pas : ils lisent le serveur, et montrent son erreur. Les griser avec une phrase (« disponible dès ta reconnexion »), ou les ouvrir sur le brouillon ? | Réglages du voyage — hors ligne |
 | T141 | Le plafond du palier « étendu » (8 000) est écrit dans l'app ; le serveur ne rend que le palier du compte. Si le barème change, la feuille mentira jusqu'à la mise à jour. La sortie : `GET /v1/catalog` | Réglages — limites de souvenirs |
 | T164 | Les « Valider » des feuilles de personnalisation semblent inutiles à Clara. Sans bouton, la feuille se referme au choix ; avec, elle reste ouverte. À trancher avec Hugo et Paul | Personnalisations |
 | T197 | Plus rien ne mène aux couvertures depuis les personnalisations (la V3 ne dessine pas la ligne). Il reste « Configurer » sur l'aperçu PDF. À valider, ou une sixième pastille | Personnalisations |

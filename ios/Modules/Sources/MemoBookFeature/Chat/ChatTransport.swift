@@ -124,6 +124,13 @@ public struct ChatTransport: Sendable {
     /// file.
     public var deliveries: @Sendable () async -> AsyncStream<ChatTurnDelivery>
 
+    /// Le fil à ouvrir quand ``load`` a échoué — sans réseau, ou pour un
+    /// voyage créé hors ligne que le serveur n'a pas encore reçu. `nil` : il
+    /// n'y en a pas, et l'échec se dit. Le modèle reçoit l'erreur pour que la
+    /// décision reste ici : une panne du serveur ne se cache pas derrière un
+    /// fil local.
+    public var offlineThread: @Sendable (any Error) async -> ChatThread?
+
     public init(
         load: @escaping @Sendable () async throws -> ChatThread,
         poll: @escaping @Sendable (Date) async throws -> ChatThreadUpdate,
@@ -131,7 +138,8 @@ public struct ChatTransport: Sendable {
         editTranscript: @escaping @Sendable (String, String) async throws -> Entry,
         media: @escaping @Sendable (URL) async throws -> Data,
         waiting: @escaping @Sendable () async -> [OutgoingTurn] = { [] },
-        deliveries: @escaping @Sendable () async -> AsyncStream<ChatTurnDelivery> = { AsyncStream { $0.finish() } }
+        deliveries: @escaping @Sendable () async -> AsyncStream<ChatTurnDelivery> = { AsyncStream { $0.finish() } },
+        offlineThread: @escaping @Sendable (any Error) async -> ChatThread? = { _ in nil }
     ) {
         self.load = load
         self.poll = poll
@@ -140,6 +148,7 @@ public struct ChatTransport: Sendable {
         self.media = media
         self.waiting = waiting
         self.deliveries = deliveries
+        self.offlineThread = offlineThread
     }
 
     // MARK: - Le vrai serveur

@@ -34,6 +34,23 @@ public actor PreviewChatBox {
 
     public init() {}
 
+    /// Ouvre le fil d'un voyage créé dans le bac à sable : **vide**, sur
+    /// l'accueil de MEMO et la puce du contexte, comme le serveur ouvre celui
+    /// d'un carnet neuf — et non sur l'histoire de Rome du jeu d'essai.
+    public func open(_ trip: Trip) {
+        guard threads[trip.id] == nil else { return }
+        var fresh = ChatThread.offline(trip: trip, traveller: HomeFeed.fixture.traveller, isNew: true)
+        fresh = ChatThread(
+            id: fresh.id,
+            title: fresh.title,
+            greeting: fresh.greeting,
+            context: fresh.context,
+            suggestions: responder.opening(for: fresh.context).suggestions
+        )
+        threads[trip.id] = fresh
+        stamps[trip.id] = [:]
+    }
+
     public func read(tripId: String) -> ChatThread {
         var thread = thread(for: tripId)
         thread = thread.stamped(now: .now)
@@ -139,11 +156,13 @@ public actor PreviewChatBox {
 
 extension PreviewAPI {
     public func chatThread(tripId: String) async throws -> ChatThread {
-        await chat.read(tripId: tripId)
+        try SandboxNetwork.failIfOffline()
+        return await chat.read(tripId: tripId)
     }
 
     public func chatUpdates(tripId: String, since: Date) async throws -> ChatThreadUpdate {
-        await chat.updates(tripId: tripId, since: since)
+        try SandboxNetwork.failIfOffline()
+        return await chat.updates(tripId: tripId, since: since)
     }
 
     public func sendChatText(tripId: String, turn: ChatTextTurn) async throws -> ChatTurnReceipt {

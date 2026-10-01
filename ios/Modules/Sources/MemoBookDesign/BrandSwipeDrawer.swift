@@ -69,6 +69,14 @@ public struct BrandSwipeDrawer<Content: View>: View {
     /// c'est ce qui fait arriver les icônes l'une après l'autre.
     @State private var scrolled: CGFloat = 0
 
+    /// Ce qu'il y a entre la bande et les bords de l'écran, à gauche et à
+    /// droite — la marge de l'écran, d'ordinaire. C'est jusque-là que la carte
+    /// se dessine quand elle glisse. Voir ``band``.
+    @State private var reach = HorizontalReach(
+        leading: MemoBookSpacing.screenMargin,
+        trailing: MemoBookSpacing.screenMargin
+    )
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(
@@ -142,16 +150,28 @@ public struct BrandSwipeDrawer<Content: View>: View {
         .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
         .scrollPosition(id: $slot)
         .scrollIndicators(.hidden)
-        // ⚠️ **Rognée sur les côtés seulement.** Une `ScrollView` coupe tout
-        // ce qui sort de son cadre, dessus et dessous compris : le scotch des
+        // ⚠️ **Rognée aux bords de l'écran, pas à ceux de la carte.** Une
+        // `ScrollView` coupe tout ce qui sort de son cadre : le scotch des
         // cartes de l'accueil, qui chevauche leur bord haut, était tranché au
-        // ras de la carte depuis que le tiroir est une bande qui défile (Hugo,
-        // 30/09/2026). La découpe du système est levée, et un masque la
-        // remplace : aux bords de la bande à gauche et à droite — le tiroir
-        // fermé reste caché —, avec de la marge en haut et en bas.
+        // ras de la carte (Hugo, 30/09/2026) ; et une carte qu'on fait glisser
+        // disparaissait à la marge, bien avant le bord de l'écran (01/10). La
+        // découpe du système est levée, et un masque la remplace : de la marge
+        // en haut et en bas, et **jusqu'aux bords de l'écran** à gauche et à
+        // droite. Le tiroir fermé n'a pas besoin de la découpe pour rester
+        // caché : il s'efface tant qu'on n'a pas tiré — voir ``drawer``.
         .scrollClipDisabled()
+        .onGeometryChange(for: HorizontalReach.self) { proxy in
+            let frame = proxy.frame(in: .global)
+            return HorizontalReach(
+                leading: max(0, frame.minX.rounded()),
+                trailing: max(0, (DeviceScreen.width - frame.maxX).rounded())
+            )
+        } action: { reach = $0 }
         .mask {
-            Rectangle().padding(.vertical, -Self.verticalOverhang)
+            Rectangle()
+                .padding(.vertical, -Self.verticalOverhang)
+                .padding(.leading, -reach.leading)
+                .padding(.trailing, -reach.trailing)
         }
         // La carte de l'accueil est un `Button` : dans une bande qui défile, le
         // système ne le déclenche pas au bout d'un glissé, sans rien à régler.
@@ -160,6 +180,14 @@ public struct BrandSwipeDrawer<Content: View>: View {
     /// Ce qu'une carte peut faire dépasser au-dessus et au-dessous d'elle sans
     /// être rognée : son scotch, son ombre.
     private static var verticalOverhang: CGFloat { MemoBookSpacing.m }
+
+    /// La place libre à gauche et à droite de la bande, jusqu'aux bords de
+    /// l'écran. Lue sur l'axe horizontal seulement : faire défiler l'accueil
+    /// ne la change pas, et ne réécrit donc rien.
+    private struct HorizontalReach: Equatable {
+        let leading: CGFloat
+        let trailing: CGFloat
+    }
 
     // MARK: Le tiroir
 
@@ -207,6 +235,10 @@ public struct BrandSwipeDrawer<Content: View>: View {
         }
         .padding(.horizontal, MemoBookSpacing.xs)
         .frame(maxHeight: .infinity)
+        // **Fermé, il ne se voit pas** — même dans la marge de l'écran, où la
+        // bande dessine désormais : la carte glisse jusqu'au bord, ses icônes
+        // n'y attendent pas.
+        .opacity(scrolled > 0.5 ? 1 : 0)
         // Elles n'existent que lorsqu'on les a fait apparaître : un tiroir
         // fermé n'a rien à offrir au doigt ni à VoiceOver, qui passe par le
         // rotor d'actions.

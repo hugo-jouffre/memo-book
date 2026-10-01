@@ -2,6 +2,7 @@ import Foundation
 import MemoBookCore
 import MemoBookNetworking
 import MemoBookPayments
+import os
 
 extension AppDependencies {
     /// Le graphe **sans serveur et sans argent** : previews Xcode, tests
@@ -22,6 +23,26 @@ extension AppDependencies {
 /// Il garde son état en mémoire : ajouter un souvenir dans un aperçu met
 /// vraiment la liste à jour, ce qui rend les aperçus utilisables pour
 /// travailler les écrans sans back-end lancé.
+/// Le « Passer hors ligne » du bac à sable, tel que le double de l'API le
+/// voit.
+///
+/// Sans lui, le bouton ne coupait que la file : l'accueil, le voyage et la
+/// conversation continuaient de se lire comme en ligne, et le parcours hors
+/// ligne d'un voyage créé dans l'avion ne se rejouait pas (01/10/2026). Le
+/// double répond désormais comme un réseau absent — une panne de
+/// **transport** — sur les lectures que ce parcours traverse, et sur la
+/// création. Posé par ``RecordingOutbox/debugSetOffline(_:)``, qui n'existe
+/// pas dans l'app livrée : là, il reste faux.
+enum SandboxNetwork {
+    static let isOffline = OSAllocatedUnfairLock(initialState: false)
+
+    static func failIfOffline() throws {
+        if isOffline.withLock({ $0 }) {
+            throw APIError.transport(URLError(.notConnectedToInternet), url: nil)
+        }
+    }
+}
+
 public actor PreviewAPI: MemoBookAPI {
     private var memosById: [String: MemoDetail] = [:]
     private var rendersById: [String: Render] = [:]
@@ -32,6 +53,10 @@ public actor PreviewAPI: MemoBookAPI {
     private var walletSandbox: Wallet = .fixture
     /// Nul tant que rien n'a été corrigé : le profil est alors le jeu d'essai.
     private var editedProfile: TravellerProfile?
+
+    /// Les voyages créés dans le bac à sable, le plus récent d'abord : ils
+    /// restent sur l'accueil une fois « arrivés », comme sur le serveur.
+    private var createdTrips: [Trip] = []
 
     /// Les fils de conversation du double, un par voyage — voir `PreviewChat.swift`.
     let chat = PreviewChatBox()
@@ -180,9 +205,19 @@ public actor PreviewAPI: MemoBookAPI {
     // Les jeux d'essai déjà écrits pour les aperçus font l'affaire : le double
     // n'a pas à réinventer un contenu que `HomeFeed.fixture` porte déjà.
 
-    public func homeFeed() async throws -> HomeFeed { .fixture }
+    public func homeFeed() async throws -> HomeFeed {
+        try SandboxNetwork.failIfOffline()
+        let fixture = HomeFeed.fixture
+        guard !createdTrips.isEmpty else { return fixture }
+        return HomeFeed(traveller: fixture.traveller, trips: createdTrips + fixture.trips, showcase: fixture.showcase)
+    }
 
-    public func tripDetail(id: String) async throws -> TripDetail { .fixture(id: id) }
+    public func tripDetail(id: String) async throws -> TripDetail {
+        try SandboxNetwork.failIfOffline()
+        // Un voyage créé ici est lui-même, pas le voyage de Rome du jeu d'essai.
+        if let created = createdTrips.first(where: { $0.id == id }) { return TripDetail(trip: created) }
+        return .fixture(id: id)
+    }
 
     public func gallery() async throws -> Gallery { .fixture }
 
@@ -190,8 +225,15 @@ public actor PreviewAPI: MemoBookAPI {
 
     /// La création rend un voyage qui ressemble au brouillon, et le code
     /// d'accès de la maquette : de quoi traverser les six étapes sans serveur.
+    /// Sous **l'identifiant que l'app a tiré**, comme le serveur.
     public func createTrip(_ draft: TripDraft) async throws -> CreatedTrip {
-        .fixture(draft)
+        try SandboxNetwork.failIfOffline()
+        let created = CreatedTrip.fixture(draft, id: draft.id)
+        // Rejouée, la création corrige le voyage au lieu d'en ajouter un.
+        createdTrips.removeAll { $0.id == created.trip.id }
+        createdTrips.insert(created.trip, at: 0)
+        await chat.open(created.trip)
+        return created
     }
 
     public func updateTrip(id: String, draft: TripDraft) async throws -> CreatedTrip {
