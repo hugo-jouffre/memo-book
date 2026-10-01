@@ -114,7 +114,8 @@ public struct TripCreationView: View {
             // encore éviter quelque chose.
             // Le nom non plus : la base l'exige, et un « Passer » qui posait
             // « Mon voyage » à sa place trompait sur ce qu'on venait de faire
-            // (Hugo, 29/09/2026).
+            // (Hugo, 29/09/2026). Les dates non plus (01/10/2026) : « Valider »
+            // reste gris tant que le départ n'est pas posé.
             if model.step.canBeSkipped {
                 Button("Passer") {
                     direction = .forward
