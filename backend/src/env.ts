@@ -196,6 +196,32 @@ const schema = z.object({
   STRIPE_SECRET_KEY: z.string().default(""),
   STRIPE_PUBLISHABLE_KEY: z.string().default(""),
   STRIPE_WEBHOOK_SECRET: z.string().default(""),
+
+  /**
+   * L'App Store — **l'abonnement**, acheté par StoreKit. Voir
+   * `services/appStore.ts`.
+   *
+   * Aucun secret : vérifier une transaction ne demande que le certificat racine
+   * d'Apple (`certs/apple/`), l'identifiant de l'app (`APPLE_BUNDLE_ID`, le
+   * même que pour « Continuer avec Apple ») et, pour la production, son
+   * identifiant numérique — *App Store Connect ▸ App Information ▸ Apple ID*.
+   * Vide, les achats de production sont refusés et ceux du sandbox passent :
+   * c'est l'état d'un serveur de développement.
+   */
+  APP_STORE_APP_APPLE_ID: optional(z.coerce.number().int().positive()),
+
+  /**
+   * Accepte les achats faits **dans Xcode**, avec le fichier `MemoBook.storekit`.
+   *
+   * 🚨 **Jamais en production.** Une transaction Xcode n'est signée par
+   * personne : la bibliothèque d'Apple saute la vérification de signature pour
+   * cet environnement, et n'importe qui pourrait s'en fabriquer une. Le serveur
+   * refuse de démarrer si on l'active avec `NODE_ENV=production`.
+   */
+  APP_STORE_ALLOW_XCODE: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
 });
 
 export type Env = z.infer<typeof schema> & {
@@ -273,6 +299,15 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
           "Reprends les deux sur le même écran du tableau de bord.",
       );
     }
+  }
+
+  // Un achat Xcode n'est pas signé : l'accepter en production ouvrirait
+  // l'abonnement à quiconque sait écrire un JSON. Voir `APP_STORE_ALLOW_XCODE`.
+  if (env.APP_STORE_ALLOW_XCODE && env.NODE_ENV === "production") {
+    throw new Error(
+      "APP_STORE_ALLOW_XCODE=true en production : les achats Xcode ne sont pas signés. " +
+        "Retire la variable du service.",
+    );
   }
 
   return { ...env, live, stripeLive: secretLive };

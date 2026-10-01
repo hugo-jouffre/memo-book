@@ -35,13 +35,22 @@ public struct Traveller: Codable, Sendable, Hashable, Identifiable {
     /// un serveur plus ancien ne sert pas le champ.
     public let subscriptionEndedOn: Date?
 
+    /// **Le rappel de fin de voyage** (01/10/2026) : l'abonnement App Store va
+    /// se renouveler alors qu'aucun voyage ne court plus.
+    ///
+    /// C'est ce qui reste de « l'arrêt automatique » : Apple ne laisse pas
+    /// l'app résilier à la place de la personne, alors l'accueil le lui propose,
+    /// en un geste. Faux quand un serveur plus ancien ne sert pas le champ.
+    public let subscriptionOutlivesTrip: Bool
+
     public init(
         id: String,
         firstName: String,
         avatarUrl: URL? = nil,
         offeredSteps: Int? = nil,
         remainingSteps: Int? = nil,
-        subscriptionEndedOn: Date? = nil
+        subscriptionEndedOn: Date? = nil,
+        subscriptionOutlivesTrip: Bool = false
     ) {
         self.id = id
         self.firstName = firstName
@@ -49,6 +58,7 @@ public struct Traveller: Codable, Sendable, Hashable, Identifiable {
         self.offeredSteps = offeredSteps
         self.remainingSteps = remainingSteps
         self.subscriptionEndedOn = subscriptionEndedOn
+        self.subscriptionOutlivesTrip = subscriptionOutlivesTrip
     }
 
     /// Décodage tolérant sur le champ ajouté avec le sursis de la semaine
@@ -64,6 +74,8 @@ public struct Traveller: Codable, Sendable, Hashable, Identifiable {
         subscriptionEndedOn = try container.decodeIfPresent(
             Date.self, forKey: .subscriptionEndedOn
         )
+        subscriptionOutlivesTrip =
+            try container.decodeIfPresent(Bool.self, forKey: .subscriptionOutlivesTrip) ?? false
     }
 }
 

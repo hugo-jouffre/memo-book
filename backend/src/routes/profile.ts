@@ -187,7 +187,7 @@ const profileInclude = {
  * partie du profil — ce qui était le cas des commandes et l'aurait été des
  * chiffres — corriger un numéro de téléphone effacerait le reste de la page.
  */
-async function readProfile(context: AppContext, accountId: string) {
+export async function readProfile(context: AppContext, accountId: string) {
   const [account, orders, trips] = await Promise.all([
     context.prisma.account.findUniqueOrThrow({
       where: { id: accountId },
@@ -440,26 +440,33 @@ export function registerProfileRoutes(app: FastifyInstance, context: AppContext)
    * rejouée — n'est pas une erreur : la seconde ne trouve plus d'abonnement
    * vivant et rend le profil tel quel.
    *
-   * ⚠️ **Rien n'est annulé chez le fournisseur**, parce qu'il n'y en a pas
-   * encore : aucune route ne crée de ligne `subscriptions`, et StoreKit n'est
-   * pas branché. Le jour où il le sera, la vraie résiliation restera **un geste
-   * de l'utilisateur** dans les réglages iOS — Apple ne laisse aucune app
-   * résilier à la place de son client — et c'est le webhook App Store qui
-   * fermera cette ligne. Cette route deviendra alors ce qu'elle décrit déjà :
-   * l'enregistrement d'une intention, et la raison qui l'accompagne.
+   * 🚨 **Un abonnement StoreKit ne se résilie pas ici** (01/10/2026). Apple ne
+   * laisse aucune app résilier à la place de son client : c'est l'app qui
+   * ouvre ensuite la feuille de gestion des abonnements d'iOS, et c'est la
+   * notification d'Apple (`AUTO_RENEW_DISABLED`) qui fermera la ligne. La
+   * fermer d'ici ferait croire l'abonnement arrêté pendant qu'Apple continue de
+   * prélever. Pour lui, cette route n'enregistre que **la raison**.
    */
   app.post("/v1/profile/subscription/cancel", async (request) => {
     const accountId = accountIdOf(request);
     const { reason } = cancelSubscriptionBody.parse(request.body ?? {});
+    const living = ["active", "trialing", "past_due"] as const;
 
-    const { count } = await context.prisma.subscription.updateMany({
-      where: { accountId, status: { in: ["active", "trialing", "past_due"] } },
-      data: {
-        status: "cancelled",
-        cancelledAt: new Date(),
-        ...(reason === undefined ? {} : { cancellationReason: reason }),
-      },
-    });
+    const [{ count: storeKit }, { count: others }] = await Promise.all([
+      context.prisma.subscription.updateMany({
+        where: { accountId, provider: "storekit", status: { in: [...living] } },
+        data: reason === undefined ? {} : { cancellationReason: reason },
+      }),
+      context.prisma.subscription.updateMany({
+        where: { accountId, provider: { not: "storekit" }, status: { in: [...living] } },
+        data: {
+          status: "cancelled",
+          cancelledAt: new Date(),
+          ...(reason === undefined ? {} : { cancellationReason: reason }),
+        },
+      }),
+    ]);
+    const count = storeKit + others;
 
     // La raison part aussi dans la feuille de bord (T72) — sans attendre, et
     // sans faire échouer la résiliation si la feuille ne répond pas.

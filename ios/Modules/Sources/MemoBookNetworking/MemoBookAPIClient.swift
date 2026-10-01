@@ -263,6 +263,23 @@ public actor MemoBookAPIClient: MemoBookAPI {
         )
     }
 
+    public func syncAppStoreTransaction(
+        signedTransaction: String,
+        memoId: String?
+    ) async throws -> TravellerProfile {
+        struct Body: Encodable {
+            let signedTransaction: String
+            let memoId: String?
+        }
+
+        return try await send(
+            method: "POST",
+            path: "/v1/subscriptions/app-store",
+            encodableBody: Body(signedTransaction: signedTransaction, memoId: memoId),
+            credential: .session
+        )
+    }
+
     public func updateProfile(_ edit: ProfileEdit) async throws -> TravellerProfile {
         try await send(
             method: "PATCH",

@@ -123,6 +123,18 @@ public protocol MemoBookAPI: Sendable {
         reason: SubscriptionCancellationReason?
     ) async throws -> TravellerProfile
 
+    /// Remet au serveur une transaction App Store — l'achat qui vient d'avoir
+    /// lieu, une restauration, ou ce que StoreKit rend au lancement.
+    ///
+    /// Le serveur vérifie la signature d'Apple et ouvre l'abonnement : c'est ce
+    /// qui laisse raconter dans la seconde, sans attendre la notification
+    /// d'Apple. `memoId` rattache l'achat au voyage qu'il finance. Rend le
+    /// profil relu, comme la résiliation.
+    func syncAppStoreTransaction(
+        signedTransaction: String,
+        memoId: String?
+    ) async throws -> TravellerProfile
+
     /// Branche ou débranche un connecteur.
     func setConnector(key: String, isEnabled: Bool) async throws
 

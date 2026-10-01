@@ -389,9 +389,17 @@ struct PaywallOffer: View {
     /// détaille le calcul. L'écran ne la présente pas lui-même — elle se pose
     /// **par-dessus le paywall entier**, comme l'aperçu.
     let onEstimate: () -> Void
-    /// « Choisis ton mode de paiement » : la feuille de paiement, présentée par
-    /// le paywall pour la même raison.
+    /// La feuille d'Apple est ouverte, ou le serveur n'a pas encore répondu.
+    var isPurchasing = false
+    /// La restauration est en cours : l'App Store se resynchronise.
+    var isRestoring = false
+    /// « S'abonner » : la feuille d'Apple, ouverte par le paywall.
     let onSubscribe: () -> Void
+    /// « Restaurer mes achats » — exigé par App Review sur l'écran d'achat.
+    var onRestore: () -> Void = {}
+    /// Les conditions ou la politique de confidentialité, exigées à côté du
+    /// bouton d'un abonnement (règle 3.1.2).
+    var onShowLegal: (LegalRoute) -> Void = { _ in }
 
     /// Le tapotis sur la moitié gauche : **reculer d'un écran**, comme sur les
     /// deux premiers (T132, T135). La `ScrollView` prend le doigt avant les
@@ -442,6 +450,8 @@ struct PaywallOffer: View {
                             .allowsHitTesting(argument.pill != nil)
                         }
                     }
+
+                    storeSection
 
                     Spacer(minLength: 0)
                 }
@@ -518,6 +528,7 @@ struct PaywallOffer: View {
                 PaywallCopy.offerCallToAction,
                 icon: Image(brand: "IconArrowForward"),
                 iconPlacement: .trailing,
+                isLoading: isPurchasing,
                 fillsWidth: true,
                 action: onSubscribe
             )
@@ -529,6 +540,52 @@ struct PaywallOffer: View {
         .padding(.top, MemoBookSpacing.s)
         .padding(.bottom, MemoBookSpacing.xs)
         .brandFooterScrim()
+    }
+
+    /// **Sous les quatre cartes** (Hugo, 01/10/2026) : « Restaurer mes achats »,
+    /// puis les conditions et la confidentialité en petit. C'est ce qu'App
+    /// Review cherche sur l'écran d'un abonnement (règles 3.1.1 et 3.1.2) :
+    /// un moyen de retrouver un abonnement déjà payé — sur un autre iPhone,
+    /// après une réinstallation —, et les deux documents qu'on accepte en
+    /// s'abonnant. Posés dans la page et non dans le pied, ils ne disputent pas
+    /// le bouton de l'offre et ne font pas grandir le voile sur les cartes.
+    private var storeSection: some View {
+        VStack(spacing: MemoBookSpacing.xs) {
+            BrandButton(
+                PaywallCopy.Purchase.restore,
+                style: .secondary,
+                size: .medium,
+                isLoading: isRestoring,
+                action: onRestore
+            )
+            .disabled(isPurchasing)
+
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: MemoBookSpacing.m) { legalLinks }
+                // En très grand texte seulement : la ligne ne tient plus.
+                VStack(spacing: 0) { legalLinks }
+            }
+            .font(MemoBookFont.taglineRegular)
+            .foregroundStyle(MemoBookColor.ink)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, MemoBookSpacing.xs)
+    }
+
+    @ViewBuilder private var legalLinks: some View {
+        legalLink(PaywallCopy.Purchase.terms) { onShowLegal(.termsOfUse) }
+        legalLink(PaywallCopy.Purchase.privacy) { onShowLegal(.privacyPolicy) }
+    }
+
+    /// Souligné pour se lire comme un lien, et aussi haut qu'un doigt : le
+    /// dessin est plus petit que le geste (R7).
+    private func legalLink(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).underline()
+        }
+        .buttonStyle(.plain)
+        .frame(minHeight: MemoBookSpacing.minimumTapTarget)
+        .contentShape(.rect)
     }
 }
 

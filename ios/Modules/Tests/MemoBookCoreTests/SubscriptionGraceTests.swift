@@ -121,4 +121,32 @@ final class SubscriptionGraceTests: XCTestCase {
         // Un vrai prix, lui, passe tel quel.
         XCTAssertEqual(Subscription(weeklyPrice: 2.99).displayedWeeklyPrice, 2.99)
     }
+
+    // MARK: Apple tient l'abonnement (01/10/2026)
+
+    func testAnAppStoreSubscriptionSaysSo() throws {
+        let json = #"{ "weeklyPrice": 1.99, "isActive": true, "managedByAppStore": true }"#
+        let subscription = try JSONDecoder.memoBook.decode(Subscription.self, from: Data(json.utf8))
+        XCTAssertTrue(subscription.managedByAppStore)
+    }
+
+    func testAnOlderServerIsNotTakenForApple() throws {
+        // Sans le champ, la résiliation reste celle d'avant : une route d'ici,
+        // pas la feuille d'iOS.
+        let json = #"{ "weeklyPrice": 1.99, "isActive": true }"#
+        let subscription = try JSONDecoder.memoBook.decode(Subscription.self, from: Data(json.utf8))
+        XCTAssertFalse(subscription.managedByAppStore)
+    }
+
+    func testTheTripEndReminderIsReadFromTheHome() throws {
+        let json = #"{ "id": "t", "firstName": "Camille", "subscriptionOutlivesTrip": true }"#
+        let traveller = try JSONDecoder.memoBook.decode(Traveller.self, from: Data(json.utf8))
+        XCTAssertTrue(traveller.subscriptionOutlivesTrip)
+
+        // Et un serveur qui ne le sert pas ne rappelle rien à personne.
+        let older = #"{ "id": "t", "firstName": "Camille" }"#
+        XCTAssertFalse(
+            try JSONDecoder.memoBook.decode(Traveller.self, from: Data(older.utf8)).subscriptionOutlivesTrip
+        )
+    }
 }

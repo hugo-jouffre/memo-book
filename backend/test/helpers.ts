@@ -65,42 +65,61 @@ export async function createHarness(
  * qui passe seul et échoue en série.
  */
 export async function resetDatabase(prisma: PrismaClient): Promise<void> {
-  await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE ' +
-      [
-        "feedback_answers",
-        "feedback_responses",
-        "feedback_questions",
-        "feedback_campaigns",
-        "showcases",
-        "memo_gallery_categories",
-        "gallery_categories",
-        "trip_themes",
-        "wallet_entries",
-        "payment_cards",
-        "subscriptions",
-        "cover_photos",
-        "account_connectors",
-        "print_order_copies",
-        "print_orders",
-        "renders",
-        "chat_messages",
-        "entries",
-        "media_assets",
-        "expenses",
-        "memo_steps",
-        "memo_members",
-        "memos",
-        "devices",
-        "sessions",
-        "password_resets",
-        "identities",
-        "accounts",
-      ]
-        .map((table) => `"${table}"`)
-        .join(", ") +
-      " RESTART IDENTITY CASCADE",
-  );
+  // **Un interblocage se rejoue** (01/10/2026). Le `TRUNCATE … CASCADE` prend
+  // un verrou exclusif table par table ; une requête restée en vol du test
+  // précédent — un envoi sans attente, une cascade de suppression — peut tenir
+  // une table que le `TRUNCATE` attend, et attendre celle qu'il tient déjà.
+  // Postgres en tue un (40P01) : c'est arrivé une fois en CI, sur #74. Le
+  // rejouer après un instant suffit, la requête en vol a fini.
+  const truncate = () =>
+    prisma.$executeRawUnsafe(
+      'TRUNCATE TABLE ' +
+        [
+          "feedback_answers",
+          "feedback_responses",
+          "feedback_questions",
+          "feedback_campaigns",
+          "showcases",
+          "memo_gallery_categories",
+          "gallery_categories",
+          "trip_themes",
+          "wallet_entries",
+          "payment_cards",
+          "subscription_transactions",
+          "subscriptions",
+          "cover_photos",
+          "account_connectors",
+          "print_order_copies",
+          "print_orders",
+          "renders",
+          "chat_messages",
+          "entries",
+          "media_assets",
+          "expenses",
+          "memo_steps",
+          "memo_members",
+          "memos",
+          "devices",
+          "sessions",
+          "password_resets",
+          "identities",
+          "accounts",
+        ]
+          .map((table) => `"${table}"`)
+          .join(", ") +
+        " RESTART IDENTITY CASCADE",
+    );
+
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await truncate();
+      return;
+    } catch (cause) {
+      const deadlocked = JSON.stringify(cause).includes("40P01");
+      if (!deadlocked || attempt >= 3) throw cause;
+      await new Promise((resolve) => setTimeout(resolve, 200 * attempt));
+    }
+  }
 }
 
 /** Ouvre un compte et renvoie l'en-tête d'autorisation de sa session. */

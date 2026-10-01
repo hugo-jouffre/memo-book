@@ -258,7 +258,14 @@ export function serializeShowcase(showcase: Showcase) {
 
 type AccountWithSubscriptions = Account & { subscriptions?: Subscription[] };
 
-export function serializeTraveller(account: AccountWithSubscriptions) {
+/**
+ * `trips` : les voyages que l'accueil montre. Ils disent s'il en reste un en
+ * cours — ce qui décide du rappel `subscriptionOutlivesTrip`.
+ */
+export function serializeTraveller(
+  account: AccountWithSubscriptions,
+  trips: { endDate: Date | null }[] = [],
+) {
   return {
     id: account.id,
     // Le prénom porte la salutation de l'accueil. À défaut, la partie locale de
@@ -271,7 +278,31 @@ export function serializeTraveller(account: AccountWithSubscriptions) {
     // vient de s'achever. C'est ce qui permet à l'accueil d'ouvrir l'alerte
     // système « ton abonnement s'est arrêté » — voir `justEndedSubscription`.
     subscriptionEndedOn: iso(justEndedSubscription(account.subscriptions ?? [])),
+    // **Le rappel de fin de voyage** (01/10/2026) : l'abonnement App Store se
+    // renouvelle encore alors qu'aucun voyage ne court. Apple ne laisse pas
+    // l'app le couper à la place de la personne ; l'accueil le lui propose,
+    // en un geste. C'est ce qui reste de « l'arrêt automatique ».
+    subscriptionOutlivesTrip: outlivesEveryTrip(account.subscriptions ?? [], trips),
   };
+}
+
+/**
+ * Un abonnement App Store **qui va se renouveler**, et plus aucun voyage en
+ * cours. Un voyage sans date de fin compte comme en cours, comme pour
+ * `endSubscriptionsWithoutRunningTrip` : on ne pousse pas à résilier
+ * quelqu'un qui n'a pas dit quand il rentrait.
+ */
+function outlivesEveryTrip(
+  subscriptions: Subscription[],
+  trips: { endDate: Date | null }[],
+): boolean {
+  const renews = subscriptions.some(
+    (entry) => entry.provider === "storekit" && entry.status === "active" && entry.autoRenews !== false,
+  );
+  if (!renews) return false;
+
+  const now = Date.now();
+  return !trips.some((trip) => trip.endDate === null || trip.endDate.getTime() >= now);
 }
 
 /**
@@ -526,6 +557,10 @@ export function serializeProfile(
       // **Déduit, pas stocké** : un abonnement terminé dans l'historique du
       // compte, et aucun en cours. C'est ce qui fait voir le paywall de retour
       // — deux écrans au lieu de trois — à quelqu'un qui repart en voyage.
+      // **Apple tient l'abonnement** : la résiliation passe par la feuille
+      // d'abonnements d'iOS, pas par une route d'ici — voir
+      // `POST /v1/profile/subscription/cancel`.
+      managedByAppStore: subscription?.provider === "storekit",
       hasEndedBefore:
         !isSubscribed &&
         (account.subscriptions ?? []).some(
