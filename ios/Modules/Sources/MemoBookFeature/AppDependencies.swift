@@ -40,6 +40,10 @@ public final class AppDependencies {
     /// feuille Stripe ferait rejeter le binaire (règle 3.1.1).
     public let subscriptions: any SubscriptionStore
 
+    /// Qui ouvre la feuille « Moyens de paiement » de Stripe, depuis le profil.
+    /// La vraie par défaut ; un aperçu passe ``StubPaymentMethodsPresenter``.
+    public let paymentMethods: any PaymentMethodsPresenter
+
     /// Ce que l'app garde du serveur sur l'appareil — voir ``ContentCache``.
     ///
     /// **Deux usages pour une seule pièce** : relire hors ligne, ce pour quoi
@@ -70,6 +74,7 @@ public final class AppDependencies {
         pendingTrips: PendingTripStore = .inLibrary(),
         payments: (any PaymentPresenter)? = nil,
         subscriptions: (any SubscriptionStore)? = nil,
+        paymentMethods: (any PaymentMethodsPresenter)? = nil,
     ) {
         self.api = api
         // La vraie feuille Stripe par défaut ; un aperçu passe la sienne.
@@ -78,6 +83,7 @@ public final class AppDependencies {
         // bouton Apple Pay qui échouerait au moment de payer.
         self.payments = payments ?? StripePaymentSheetPresenter()
         self.subscriptions = subscriptions ?? StoreKitSubscriptionStore()
+        self.paymentMethods = paymentMethods ?? StripeCustomerSheetPresenter()
         // Tout ce qu'on dit part par la file, et la file parle à la
         // conversation (`POST /v1/trips/:id/chat`) : le vocal de l'accueil est
         // un tour comme un autre, avec l'identifiant de sa bulle. La durée
@@ -588,7 +594,10 @@ public final class AppDependencies {
                 let before = try await api.wallet(tripId: trip).balance
 
                 let cents = NSDecimalNumber(decimal: amount * 100).intValue
-                let ticket = try await api.startWalletTopUp(amountCents: cents)
+                let ticket = try await api.startWalletTopUp(
+                    amountCents: cents,
+                    stripeApiVersion: StripeSDK.apiVersion
+                )
 
                 switch await payments.present(ticket) {
                 case .cancelled:
@@ -640,10 +649,35 @@ public final class AppDependencies {
                 try await api.orderQuote(memoId: id, copies: copies, shippingSpeed: speed)
             },
             submit: { [api] id, request in
-                try await api.createPrintOrder(memoId: id, order: request)
+                // La version du SDK Stripe part avec la commande : c'est elle
+                // qui fait revenir une clé éphémère, et donc les cartes du
+                // compte dans la feuille.
+                var request = request
+                request.stripeApiVersion = StripeSDK.apiVersion
+                return try await api.createPrintOrder(memoId: id, order: request)
+            },
+            // Le lien et le suivi WhatsApp de la confirmation n'étaient pas
+            // branchés : la confirmation partageait un lien fabriqué par l'app,
+            // qui ne menait nulle part.
+            shareLink: { [api] memoId in try await api.bookShareLink(memoId: memoId) },
+            setWhatsApp: { [api] orderId, phone in
+                try await api.setOrderWhatsApp(orderId: orderId, phone: phone)
             },
             presentPayment: { [payments] ticket in await payments.present(ticket) },
-            reloadOrder: { [api] orderId in try await api.printOrder(id: orderId) }
+            reloadOrder: { [api] orderId in try await api.printOrder(id: orderId) },
+            resumePayment: { [api] orderId in
+                try await api.resumePrintOrderPayment(orderId: orderId, stripeApiVersion: StripeSDK.apiVersion)
+            },
+            cancelOrder: { [api] orderId in try await api.cancelPrintOrder(orderId: orderId) }
+        )
+    }
+
+    /// Ouvre la feuille « Moyens de paiement » de Stripe — les cartes du compte,
+    /// à ajouter ou à retirer. Rend un message si elle n'a pas pu s'ouvrir.
+    public func managePaymentMethods() async -> String? {
+        await paymentMethods.present(
+            key: { [api] in try await api.paymentMethodsKey(stripeApiVersion: StripeSDK.apiVersion) },
+            setupIntent: { [api] in try await api.paymentMethodsSetupIntent() }
         )
     }
 
@@ -681,6 +715,10 @@ public final class AppDependencies {
 }
 
 extension EnvironmentValues {
+    /// La feuille « Moyens de paiement » de Stripe, pour le profil — posée par
+    /// `RootView`. `nil` en aperçu, où la ligne ne fait rien.
+    @Entry public var managePaymentMethods: (@MainActor () async -> String?)?
+
     /// La cagnotte d'un voyage, pour le paywall — qui n'a pas accès aux
     /// dépendances non plus. C'est elle qui porte l'estimation du carnet
     /// (`GET /v1/wallet?tripId=…`, T127). `nil` en aperçu : la feuille

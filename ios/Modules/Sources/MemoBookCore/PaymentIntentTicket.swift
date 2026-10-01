@@ -15,11 +15,28 @@ public struct PaymentIntentTicket: Codable, Sendable, Hashable {
     public let amountCents: Int
     public let currency: String
 
-    public init(clientSecret: String, publishableKey: String, amountCents: Int, currency: String) {
+    /// **Le client Stripe du compte, et la clé qui ouvre ses cartes** — pour un
+    /// court moment, et pour ce client seulement. Avec eux, la feuille montre
+    /// les cartes déjà enregistrées, propose d'enregistrer la nouvelle, et
+    /// laisse en retirer une. Absents d'un serveur plus ancien : la feuille
+    /// s'ouvre alors sans cartes enregistrées, et on paie quand même.
+    public let customerId: String?
+    public let ephemeralKeySecret: String?
+
+    public init(
+        clientSecret: String,
+        publishableKey: String,
+        amountCents: Int,
+        currency: String,
+        customerId: String? = nil,
+        ephemeralKeySecret: String? = nil
+    ) {
         self.clientSecret = clientSecret
         self.publishableKey = publishableKey
         self.amountCents = amountCents
         self.currency = currency
+        self.customerId = customerId
+        self.ephemeralKeySecret = ephemeralKeySecret
     }
 
     /// Le montant tel qu'on l'écrit à l'écran — « 107,88 € ».
@@ -30,5 +47,19 @@ public struct PaymentIntentTicket: Codable, Sendable, Hashable {
         formatter.locale = Locale(identifier: "fr_FR")
         let euros = NSDecimalNumber(value: amountCents).dividing(by: 100)
         return formatter.string(from: euros) ?? "\(euros) \(currency.uppercased())"
+    }
+}
+
+/// Ce qui ouvre la feuille « Moyens de paiement » de Stripe, depuis le profil :
+/// le client du compte et une clé éphémère dans la version d'API du SDK.
+public struct CustomerPaymentKey: Decodable, Sendable, Hashable {
+    public let customerId: String
+    public let ephemeralKeySecret: String
+    public let publishableKey: String
+
+    public init(customerId: String, ephemeralKeySecret: String, publishableKey: String) {
+        self.customerId = customerId
+        self.ephemeralKeySecret = ephemeralKeySecret
+        self.publishableKey = publishableKey
     }
 }

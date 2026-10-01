@@ -312,13 +312,34 @@ public protocol MemoBookAPI: Sendable {
 
     func printOrders(memoId: String) async throws -> [PrintOrder]
 
+    /// Reprend le paiement d'une commande déjà passée, **sur la même
+    /// intention** — `POST /v1/orders/:id/payment`. « Payer » après une feuille
+    /// refermée créait une seconde commande, et un second débit de cagnotte.
+    /// Une commande expirée répond 409 (`order_expired`).
+    func resumePrintOrderPayment(
+        orderId: String,
+        stripeApiVersion: String?
+    ) async throws -> ResumedOrderPayment
+
+    /// Abandonne une commande pas encore payée : elle rend sa part de
+    /// cagnotte. Idempotente ; 409 si elle vient d'être payée.
+    func cancelPrintOrder(orderId: String) async throws -> PrintOrder
+
     /// Ouvre une recharge de cagnotte.
     ///
     /// **Ne crédite rien.** Elle rend de quoi présenter une feuille de
     /// paiement ; le solde ne bougera qu'une fois l'argent encaissé, sur retour
     /// de Stripe au serveur. D'où le fait qu'elle rende un ticket et non une
     /// ``Wallet`` : l'appelant doit relire la cagnotte après le paiement.
-    func startWalletTopUp(amountCents: Int) async throws -> PaymentIntentTicket
+    func startWalletTopUp(amountCents: Int, stripeApiVersion: String?) async throws -> PaymentIntentTicket
+
+    /// Ce qui ouvre la feuille « Moyens de paiement » de Stripe — le client du
+    /// compte et une clé éphémère dans la version d'API du SDK.
+    func paymentMethodsKey(stripeApiVersion: String) async throws -> CustomerPaymentKey
+
+    /// Une intention d'enregistrement de carte, demandée par la feuille
+    /// « Moyens de paiement » au moment où l'on en ajoute une.
+    func paymentMethodsSetupIntent() async throws -> String
 
     // MARK: - Les réglages d'un voyage
 

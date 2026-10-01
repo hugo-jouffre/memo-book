@@ -1,5 +1,6 @@
 import MemoBookCore
 import MemoBookDesign
+import MemoBookPayments
 import SwiftUI
 
 /// Point d'entrée de l'interface, et le seul endroit qui décide de l'étape où
@@ -122,6 +123,11 @@ public struct RootView: View {
         // de retour ramène à l'étape qu'on regardait (Hugo, 16/09/2026).
         .environment(\.supportModel, support)
         .onOpenURL { url in
+            // **Stripe d'abord** : le retour d'un paiement passé par une autre
+            // app ou une page (3-D Secure, Klarna) revient par
+            // `memobook://stripe-redirect`, et la feuille l'attend. Il n'était
+            // rendu à personne, et le paiement restait suspendu.
+            if StripeSDK.handle(url) { return }
             guard let token = PasswordResetLink.token(from: url) else { return }
             // Déjà entré : c'est le lien de « Mot de passe oublié ? » de la
             // feuille du profil — il ouvre la même feuille, en mode nouveau
@@ -183,6 +189,7 @@ public struct RootView: View {
                 // L'achat de l'abonnement, au nom de **ce** compte : son
                 // identifiant part dans chaque transaction Apple.
                 .environment(\.subscriptionPurchase, dependencies.subscriptionPurchase(accountId: account.id))
+                .environment(\.managePaymentMethods, { await dependencies.managePaymentMethods() })
                 // Ce que StoreKit a gardé pendant que personne n'était
                 // connecté — un renouvellement, une validation parentale —
                 // part maintenant qu'une session peut le remettre.
