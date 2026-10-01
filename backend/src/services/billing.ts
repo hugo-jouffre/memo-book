@@ -55,3 +55,38 @@ export async function ensureStripeCustomer(
 
   return customerId;
 }
+
+/**
+ * Ce que la feuille de paiement de l'app reçoit : l'intention à régler, la clé
+ * publique, et **le client Stripe du compte avec sa session** — c'est elle qui
+ * fait apparaître les cartes déjà enregistrées, proposer « Enregistrer pour la
+ * prochaine fois », et retirer une carte, sans que l'app touche jamais un
+ * numéro (01/10/2026 : l'app avait son propre formulaire de carte, qui ne
+ * servait à rien et n'aurait jamais dû exister).
+ *
+ * Une session qui échoue ne fait pas échouer le paiement : la feuille s'ouvre
+ * alors sans cartes enregistrées, et on peut toujours payer.
+ */
+export async function paymentTicket(
+  context: AppContext,
+  input: { customerId: string | null; clientSecret: string; amountCents: number },
+) {
+  let customerSessionClientSecret: string | null = null;
+  if (input.customerId) {
+    try {
+      customerSessionClientSecret = await context.payments.createCustomerSession(input.customerId);
+    } catch (cause) {
+      context.logger.warn({ err: cause }, "Session client Stripe indisponible : feuille sans cartes enregistrées");
+    }
+  }
+
+  return {
+    paidFromWallet: false,
+    clientSecret: input.clientSecret,
+    amountCents: input.amountCents,
+    currency: "eur",
+    publishableKey: context.env.STRIPE_PUBLISHABLE_KEY,
+    customerId: customerSessionClientSecret ? input.customerId : null,
+    customerSessionClientSecret,
+  };
+}

@@ -197,10 +197,11 @@ export async function readProfile(context: AppContext, accountId: string) {
     // Les commandes en cours d'acheminement, et elles seules : une commande
     // livrée il y a six mois n'a plus rien à suivre.
     //
-    // **`draft` en fait partie.** Une commande qui vient d'être passée depuis
-    // le tunnel naît en brouillon — l'encaissement n'existe pas encore — et
-    // l'exclure faisait disparaître de « Suivi des commandes » la seule que
-    // l'app sache créer : on commandait, et le suivi restait vide.
+    // **`draft` n'en fait plus partie** (01/10/2026). Il y était tant que rien
+    // n'encaissait, pour que la seule commande que l'app savait créer se voie ;
+    // depuis que Stripe encaisse, un brouillon est une commande **pas payée**,
+    // et elle s'affichait « en cours d'acheminement » avec ses jours de
+    // livraison (T232). Une commande payée passe en `submitted` en une seconde.
     //
     // **Filtré sur l'acheteur, pas sur le voyage visible.** Un co-voyageur
     // commande son propre exemplaire, à sa propre adresse, avec sa propre
@@ -209,7 +210,7 @@ export async function readProfile(context: AppContext, accountId: string) {
     // même colonne qui dira quelle cagnotte débiter.
     context.prisma.printOrder.findMany({
       where: {
-        status: { in: ["draft", "submitted", "in_production", "shipped"] },
+        status: { in: ["submitted", "in_production", "shipped"] },
         orderedByAccountId: accountId,
       },
       orderBy: { createdAt: "desc" },

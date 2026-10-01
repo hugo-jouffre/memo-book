@@ -1239,6 +1239,12 @@ model PrintOrder {
   amountCents           Int?
   stripePaymentIntentId String? @unique
 
+  /// Ce que Stripe a rendu sur la carte, en centimes — **cumulé**, comme
+  /// `charge.amount_refunded`. Un remboursement partiel ne fait qu'écrire ici ;
+  /// seul un remboursement total annule la commande et rend la part de
+  /// cagnotte (`stripeWebhook.ts`).
+  refundedCents Int @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1318,6 +1324,17 @@ model WalletEntry {
   /// commercial ou une correction, qui ne viennent pas de Stripe.
   stripeEventId String? @unique
 
+  /// **Ce qui rend l'écriture impossible à poser deux fois**, quand elle ne
+  /// vient pas d'un événement : `order-release:<commande>` pour la part de
+  /// cagnotte rendue à une commande abandonnée, `topup:<intention>` pour une
+  /// recharge. Le webhook, le job de ménage et l'annulation par l'app peuvent
+  /// arriver ensemble sur la même commande — l'unicité en laisse passer un.
+  idempotencyKey String? @unique
+
+  /// L'intention Stripe d'où vient l'argent d'une recharge. C'est elle que
+  /// porte un `charge.refunded` : on y retrouve ce qu'il faut reprendre.
+  stripePaymentIntentId String?
+
   /// La commande que cette écriture paie ou rembourse, le cas échéant.
   printOrderId String?
   printOrder   PrintOrder? @relation(fields: [printOrderId], references: [id], onDelete: SetNull)
@@ -1325,6 +1342,7 @@ model WalletEntry {
   createdAt DateTime @default(now())
 
   @@index([accountId, createdAt])
+  @@index([stripePaymentIntentId])
   @@map("wallet_entries")
 }
 

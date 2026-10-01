@@ -30,11 +30,26 @@ export interface LedgerWrite {
   /** L'événement Stripe à l'origine. Nul pour un geste commercial. */
   stripeEventId?: string | null;
   printOrderId?: string | null;
+  /**
+   * Ce qui empêche l'écriture d'être posée deux fois quand elle ne vient pas
+   * d'un événement Stripe — voir `WalletEntry.idempotencyKey`. Un second appel
+   * avec la même clé rend `duplicate`, sans rien écrire.
+   */
+  idempotencyKey?: string | null;
+  /** L'intention d'où vient l'argent — ce qu'un remboursement retrouvera. */
+  stripePaymentIntentId?: string | null;
+  /**
+   * Un débit **plafonné au solde** au lieu d'être refusé. Pour reprendre une
+   * recharge remboursée : la carte a déjà rendu l'argent, et s'il a été
+   * dépensé entre-temps, on reprend ce qui reste — le reste se voit dans
+   * `clampedCents` et part au support.
+   */
+  clampToBalance?: boolean;
 }
 
 /** Ce qu'une écriture a produit, ou pourquoi elle n'a rien produit. */
 export type LedgerResult =
-  | { outcome: "written"; entry: WalletEntry; balanceCents: number }
+  | { outcome: "written"; entry: WalletEntry; balanceCents: number; clampedCents: number }
   /** L'événement avait déjà été écrit. Ce n'est pas une erreur. */
   | { outcome: "duplicate" }
   /** Le solde ne couvrait pas le débit. Rien n'a bougé. */
@@ -71,7 +86,13 @@ export async function writeLedgerEntry(
         throw new Error(`Compte ${write.accountId} introuvable.`);
       }
 
-      const next = current + write.amountCents;
+      // Plafonné : on ne reprend jamais plus que ce qu'il y a.
+      const amountCents =
+        write.clampToBalance && write.amountCents < 0
+          ? Math.max(write.amountCents, -current)
+          : write.amountCents;
+      const clampedCents = amountCents - write.amountCents;
+      const next = current + amountCents;
 
       if (next < 0) {
         return {
@@ -84,12 +105,14 @@ export async function writeLedgerEntry(
       const entry = await tx.walletEntry.create({
         data: {
           accountId: write.accountId,
-          amountCents: write.amountCents,
+          amountCents,
           balanceAfterCents: next,
           kind: write.kind,
           label: write.label ?? null,
           stripeEventId: write.stripeEventId ?? null,
           printOrderId: write.printOrderId ?? null,
+          idempotencyKey: write.idempotencyKey ?? null,
+          stripePaymentIntentId: write.stripePaymentIntentId ?? null,
         },
       });
 
@@ -98,7 +121,7 @@ export async function writeLedgerEntry(
         data: { walletBalanceCents: next },
       });
 
-      return { outcome: "written" as const, entry, balanceCents: next };
+      return { outcome: "written" as const, entry, balanceCents: next, clampedCents };
     });
   } catch (cause) {
     // P2002 sur `stripeEventId` : le même événement a déjà été écrit. C'est le
@@ -107,7 +130,7 @@ export async function writeLedgerEntry(
     if (
       cause instanceof Prisma.PrismaClientKnownRequestError &&
       cause.code === "P2002" &&
-      write.stripeEventId
+      (write.stripeEventId || write.idempotencyKey)
     ) {
       return { outcome: "duplicate" };
     }

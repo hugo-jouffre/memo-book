@@ -190,8 +190,10 @@ const schema = z.object({
    *   point de terminaison. Celui de `stripe listen` en local n'est pas celui
    *   de la production.
    *
-   * Vides, les routes de paiement échouent explicitement plutôt que de laisser
-   * croire qu'une commande est payée.
+   * En production, l'API refuse de démarrer sans les trois, et le worker sans
+   * la clé secrète (`assertApiPaymentsConfigured`). Ailleurs, vides, c'est
+   * l'encaissement simulé — qui ne croit aucun webhook hors de la suite de
+   * tests.
    */
   STRIPE_SECRET_KEY: z.string().default(""),
   STRIPE_PUBLISHABLE_KEY: z.string().default(""),
@@ -301,6 +303,19 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     }
   }
 
+  // **En production, pas d'encaissement simulé.** Sans clé, le serveur
+  // basculait sur le simulé : les commandes recevaient un secret factice, et le
+  // webhook n'aurait vérifié aucune signature. Mieux vaut un déploiement qui
+  // échoue qu'une API qui encaisse pour de faux (audit du 01/10/2026). La clé
+  // secrète suffit ici — le worker n'a qu'elle, et n'a besoin que d'elle ; les
+  // deux autres sont exigées par l'API seule, voir `assertApiPaymentsConfigured`.
+  if (env.NODE_ENV === "production" && env.STRIPE_SECRET_KEY === "") {
+    throw new Error(
+      "Encaissement non configuré en production : STRIPE_SECRET_KEY est vide. " +
+        "Voir docs/paiements.md § Configuration.",
+    );
+  }
+
   // Un achat Xcode n'est pas signé : l'accepter en production ouvrirait
   // l'abonnement à quiconque sait écrire un JSON. Voir `APP_STORE_ALLOW_XCODE`.
   if (env.APP_STORE_ALLOW_XCODE && env.NODE_ENV === "production") {
@@ -311,4 +326,24 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   }
 
   return { ...env, live, stripeLive: secretLive };
+}
+
+/**
+ * Ce que **l'API** exige de plus en production : la clé publique, que l'app
+ * reçoit avec chaque paiement, et le secret du webhook, sans lequel aucune
+ * commande ne sortirait de `draft`. Le worker ne sert ni l'un ni l'autre, et
+ * ne les a pas sur Railway — d'où un contrôle à part, appelé par `server.ts`.
+ */
+export function assertApiPaymentsConfigured(env: Env): void {
+  if (env.NODE_ENV !== "production") return;
+
+  const missing = (["STRIPE_PUBLISHABLE_KEY", "STRIPE_WEBHOOK_SECRET"] as const).filter(
+    (name) => env[name] === "",
+  );
+  if (missing.length > 0) {
+    throw new Error(
+      `Encaissement non configuré sur l'API : ${missing.join(", ")} vide(s). ` +
+        "Voir docs/paiements.md § Configuration.",
+    );
+  }
 }
