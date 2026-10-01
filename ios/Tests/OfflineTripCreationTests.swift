@@ -305,12 +305,14 @@ final class OfflineTripCreationTests: XCTestCase {
         )
     }
 
-    /// Le nom, puis « Passer » sur les dates et les notifications : la
-    /// validation de la troisième enregistre le voyage.
+    /// Le nom, le départ — les dates n'ont plus de « Passer » —, puis
+    /// « Passer » sur les notifications : la validation de la troisième
+    /// enregistre le voyage.
     private func walkToTheCodeStep(_ model: TripCreationModel, title: String?) async {
         if let title { model.draft.title = title }
         await model.validate()
-        await model.skip()
+        model.draft.startDate = .now
+        await model.validate()
         await model.skip()
     }
 

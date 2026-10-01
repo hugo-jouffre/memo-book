@@ -302,9 +302,10 @@ police ou marge codée en dur ailleurs.
 - `BrandDisclosureCard` est **la** carte qui se déplie — les chapitres des
   conditions d'utilisation et de la politique de confidentialité. Repliée,
   crème et filet, trois lignes ; dépliée, l'aplat bleu `outline` et tout le
-  texte. L'état appartient à l'écran, et c'est l'écran qui tronque — et qui
-  dit, en mesurant la troncature, si la carte a une suite (`isExpandable`) :
-  sans suite, pas de chevron, et le toucher ne fait rien.
+  texte. L'état appartient à l'écran ; le texte, lui, est **un seul contenu**
+  que la carte coupe elle-même et déroule (01/10/2026) : ce qu'on a lu reste
+  en place, seul ce qui manque arrive. Elle mesure donc aussi si elle a une
+  suite : sans suite, pas de chevron, et le toucher ne fait rien.
 - `BrandSwipeDrawer` est **le** tiroir d'actions d'une carte : un glissé vers
   la gauche découvre ses gestes (supprimer, partager, prévisualiser un voyage ;
   retirer un co-voyageur), qui arrivent en quinconce avec le doigt ; l'appui

@@ -48,12 +48,13 @@ public enum TripCreationStep: Int, CaseIterable, Sendable, Hashable {
         self == .companions ? "Commencer !" : "Valider"
     }
 
-    /// L'étape a un « Passer ». Toutes, sauf deux : la dernière — le voyage
+    /// L'étape a un « Passer ». Toutes, sauf trois : la dernière — le voyage
     /// existe déjà, et il n'y a rien à éviter sur un écran qui ne fait que
-    /// montrer son code d'accès (Hugo, 14/09/2026) — et **le nom**, que la base
+    /// montrer son code d'accès (Hugo, 14/09/2026) —, **le nom**, que la base
     /// exige et qu'on ne remplace pas par « Mon voyage » en douce (Hugo,
-    /// 29/09/2026) : le bouton du bas reste éteint tant qu'il est vide.
-    var canBeSkipped: Bool { self != .companions && self != .name }
+    /// 29/09/2026), et **les dates**, comme le nom (01/10/2026) : le bouton du
+    /// bas reste éteint tant que le départ n'est pas posé.
+    var canBeSkipped: Bool { self != .companions && self != .name && self != .dates }
 
     /// L'étape après laquelle le voyage **existe**.
     ///
@@ -197,12 +198,14 @@ public final class TripCreationModel {
 
     /// Le bouton du bas est-il allumé ?
     ///
-    /// Une seule étape peut l'éteindre : le nom, parce que c'est le seul champ
-    /// dont la base ne sait pas se passer. Partout ailleurs « Valider » vaut
-    /// « Passer », et un bouton grisé n'apprendrait rien.
+    /// Deux étapes l'éteignent, celles qui n'ont pas de « Passer » : le nom,
+    /// que la base exige, et les dates, **tant que le départ n'est pas posé**
+    /// (01/10/2026) — le retour, lui, reste facultatif. Partout ailleurs
+    /// « Valider » vaut « Passer », et un bouton grisé n'apprendrait rien.
     public var canValidate: Bool {
         switch step {
         case .name: !draft.title.trimmed.isEmpty
+        case .dates: draft.startDate != nil
         case .theme: !isFreeThemeChosen || !freeTheme.trimmed.isEmpty
         default: true
         }
@@ -233,25 +236,22 @@ public final class TripCreationModel {
 
     /// Passe l'étape sans rien en retenir — le « Passer » du coin haut droit.
     ///
-    /// Passer, c'est `nil`, jamais une valeur inventée. La seule exception est
-    /// le nom, que la base exige : il tombe alors sur ``TripDraft/untitled``,
-    /// qui se corrige ensuite dans les réglages du voyage.
+    /// Passer, c'est `nil`, jamais une valeur inventée. Une étape sans
+    /// « Passer » (``TripCreationStep/canBeSkipped``) ne se passe pas non plus
+    /// d'ici : le nom et les dates s'obtiennent par « Valider », une fois
+    /// remplis.
     public func skip() async {
+        guard step.canBeSkipped else { return }
         switch step {
         case .theme:
             selectedTheme = nil
             freeTheme = ""
             draft.theme = nil
-        case .name:
-            if draft.title.trimmed.isEmpty { draft.title = TripDraft.untitled }
-        case .dates:
-            draft.startDate = nil
-            draft.endDate = nil
         case .notifications:
             draft.narrationPace = nil
         case .ratio:
             draft.photoTextRatio = 50
-        case .companions:
+        case .name, .dates, .companions:
             break
         }
         await advance()

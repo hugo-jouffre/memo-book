@@ -103,7 +103,7 @@ permet de choisir sans connaître la typographie.
 | Assortiment | Titres | Sous-titres | Textes | Fun facts & autres |
 |---|---|---|---|---|
 | **Carnet de voyage** (défaut) | Playfair | Hansley | Gloria Hallelujah | Playfair |
-| **Éditorial** | Playfair | Playfair | Alegreya | Alegreya |
+| **Éditorial** | Playfair | Playfair | Playfair | Playfair |
 | **Manuscrit** | Hansley | Hansley | Gloria Hallelujah | Gloria Hallelujah |
 
 Le défaut est **exactement** le jeu que la base pose déjà : un carnet réglé
@@ -111,11 +111,14 @@ avant que cette feuille existe s'y reconnaît sans qu'on touche à quoi que ce
 soit. Un carnet composé police par police qui n'entre dans aucune des trois
 cases s'affiche « Personnalisé » — on ne coche pas de force.
 
+« Éditorial » est **Playfair seule** depuis le 01/10/2026, comme la V3 le
+propose ; elle mariait Playfair et Alegreya. Un carnet réglé sur l'ancien jeu
+garde ses polices et se lit « Personnalisé ».
+
 ⚠️ **Une famille n'est pas dans le gabarit.** `fonts.css` n'inline que
-Playfair Display et Gloria Hallelujah ; Hansley est versionné sans être inliné,
-Alegreya n'est pas là du tout. Rien n'échoue — la page retombe sur une police
-système —, mais « Éditorial » ne s'imprimera vraiment qu'une fois cette face
-ajoutée à `build-font-css.ts`.
+Playfair Display et Gloria Hallelujah ; Hansley est versionné sans être inliné.
+Rien n'échoue — la page retombe sur une police système —, mais Hansley ne
+s'imprimera vraiment qu'une fois cette face ajoutée à `build-font-css.ts`.
 
 ---
 
