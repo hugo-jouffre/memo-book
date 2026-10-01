@@ -352,6 +352,12 @@ public actor PreviewAPI: MemoBookAPI {
     public func linkCurrentDevice() async throws {}
     public func deleteAccount() async throws {}
 
+    /// Le lien « part » à l'adresse du profil du jeu d'essai : rien ne sort du
+    /// bac à sable, et la feuille montre sa confirmation.
+    public func requestDataExport() async throws -> DataExportReceipt {
+        .fixture(email: (editedProfile ?? .fixture).email ?? "ton adresse e-mail")
+    }
+
     // MARK: - Carnets
 
     public func memos() async throws -> [MemoSummary] {

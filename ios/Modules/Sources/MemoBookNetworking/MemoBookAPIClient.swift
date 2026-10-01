@@ -334,6 +334,10 @@ public actor MemoBookAPIClient: MemoBookAPI {
         tokenStore.clear()
     }
 
+    public func requestDataExport() async throws -> DataExportReceipt {
+        try await send(method: "POST", path: "/v1/accounts/me/export", credential: .session)
+    }
+
     // MARK: - Carnets
 
     public func memos() async throws -> [MemoSummary] {

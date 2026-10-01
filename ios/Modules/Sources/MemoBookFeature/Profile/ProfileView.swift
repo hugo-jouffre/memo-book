@@ -588,9 +588,12 @@ public struct ProfileView: View {
                 // d'en dessous, le signe seul dans sa teinte (Hugo, 18/09/2026).
                 icon: Image(brand: "IconExportData"),
                 title: "Exporter mes données",
-                tint: MemoBookColor.warning,
-                action: notYetRouted
-            )
+                tint: MemoBookColor.warning
+            ) {
+                // Le lien part par e-mail ; l'archive se compose quand on
+                // l'ouvre — voir ``DataExportSheet``.
+                sheet = .dataExport
+            }
             ProfileExitAction(
                 icon: Image(brand: "IconExit"),
                 title: "Me déconnecter",
@@ -702,6 +705,8 @@ public struct ProfileView: View {
             ConnectorsSheet(model: model)
         case .statistics:
             StatisticsSheet(model: statistics)
+        case .dataExport:
+            DataExportSheet(model: model)
         case .orderTracking:
             OrderTrackingSheet(
                 orders: model.profile?.orders ?? [],
@@ -740,14 +745,6 @@ public struct ProfileView: View {
             set: { model.setPhoneNumber($0) }
         )
     }
-
-    /// Les lignes dont l'écran n'est pas encore dessiné.
-    ///
-    /// Elles gardent leur chevron parce que la maquette le montre, et ne mènent
-    /// nulle part parce que rien n'existe derrière — même parti pris que les
-    /// intentions non routées de l'accueil, et il se voit ici, en un seul
-    /// endroit, plutôt que dispersé dans l'écran.
-    private func notYetRouted() {}
 }
 
 /// Où mène chaque ligne du profil.
@@ -759,6 +756,7 @@ enum ProfileSheet: String, Identifiable, CaseIterable {
     case connectors
     case orderTracking
     case statistics
+    case dataExport
 
     var id: String { rawValue }
 }

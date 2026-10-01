@@ -1,5 +1,6 @@
 import MemoBookCore
 @testable import MemoBookFeature
+import MemoBookNetworking
 import XCTest
 
 /// Ce que le profil fait d'une adresse validée dans sa feuille : il la pose
@@ -204,5 +205,81 @@ final class ProfileModelTests: XCTestCase {
         model.acknowledgeAppStoreRenewal(true)
         XCTAssertEqual(model.profile?.subscription.isActive, true)
         XCTAssertNil(model.profile?.subscription.cancelledAt)
+    }
+
+    // MARK: - Exporter ses données
+
+    private func receipt(alreadyRequested: Bool = false) -> DataExportReceipt {
+        DataExportReceipt(
+            email: "hugo@memobook.app",
+            requestedAt: Date(timeIntervalSince1970: 1_790_870_000),
+            expiresAt: Date(timeIntervalSince1970: 1_790_870_000 + 7 * 24 * 3600),
+            alreadyRequested: alreadyRequested
+        )
+    }
+
+    func testTheExportSaysWhereTheLinkWent() async {
+        let sent = receipt()
+        let model = ProfileModel(source: { .fixture }, exportData: { sent })
+        await model.load()
+
+        await model.requestDataExport()
+
+        XCTAssertEqual(model.dataExport, .sent(sent))
+    }
+
+    /// Le refus du serveur est dit avec ses mots — « Ton compte n'a pas
+    /// d'adresse… » — et la feuille reste sur la proposition.
+    func testARefusedExportIsSaidInTheServerWords() async {
+        let model = ProfileModel(
+            source: { .fixture },
+            exportData: {
+                throw APIError.server(statusCode: 409, code: "no_email", message: "Ton compte n’a pas d’adresse e-mail.")
+            }
+        )
+
+        await model.requestDataExport()
+
+        XCTAssertEqual(model.dataExport, .failed("Ton compte n’a pas d’adresse e-mail."))
+    }
+
+    /// Un serveur qui ne connaît pas encore la route répond le 404 de Fastify,
+    /// en anglais : la feuille dit autre chose.
+    func testAServerWithoutTheRouteIsNotQuotedInEnglish() async {
+        let model = ProfileModel(
+            source: { .fixture },
+            exportData: {
+                throw APIError.server(
+                    statusCode: 404,
+                    code: "Not Found",
+                    message: "Route POST:/v1/accounts/me/export not found"
+                )
+            }
+        )
+
+        await model.requestDataExport()
+
+        XCTAssertEqual(model.dataExport, .failed(DataExportCopy.notYetAvailable))
+    }
+
+    func testClosingTheSheetGoesBackToTheOffer() async {
+        let sent = receipt(alreadyRequested: true)
+        let model = ProfileModel(source: { .fixture }, exportData: { sent })
+        await model.requestDataExport()
+        XCTAssertEqual(model.dataExport, .sent(sent))
+
+        model.resetDataExport()
+
+        XCTAssertEqual(model.dataExport, .idle)
+    }
+
+    /// « 1er », que le format de date ne sait pas écrire seul.
+    func testTheExpiryReadsInFrench() {
+        let noon = ISO8601DateFormatter.memoBookDate(from: "2026-10-01T12:00:00.000Z")!
+        XCTAssertEqual(DataExportCopy.day(noon), "jeudi 1er octobre")
+        XCTAssertEqual(
+            DataExportCopy.sentParagraphs(receipt()).last,
+            "Rien dans ta boîte d’ici quelques minutes ? Regarde dans tes indésirables."
+        )
     }
 }
