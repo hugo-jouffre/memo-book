@@ -72,6 +72,43 @@ dépend de la forme du voyage :
 | 5 pays et plus (tour du monde) | Idem itinérant | Idem itinérant |
 | Petits villages, à pied (randonnée) | Semaines / mois / villes | Zoom permanent sur le chemin, une carte à chaque chapitre **et** sous-chapitre |
 
+### Chapitre ou journée ordinaire : comment l'ouverture est arbitrée
+
+`layout_chapter_map` et le layout par défaut se disputent la même page — celle
+qui ouvre un chapitre. Le départage se fait dans cet ordre, et il s'arrête au
+premier « non ».
+
+1. **Est-ce une ouverture de chapitre ?** La table ci-dessus le dit, selon la
+   forme du voyage. Si non, layout par défaut, et la question ne se pose pas.
+2. **Le récit nomme-t-il un lieu cartographiable ?** `layout_chapter_map` exige
+   `map`, et `map` exige un code ISO et des coordonnées justes au dixième de
+   degré. Un chapitre qui s'ouvre sur « quelque part dans les terres » n'a rien
+   à cartographier : layout par défaut. Une carte sans point, ou pointée au
+   hasard, se repère immédiatement quand on connaît le pays — c'est pire que
+   pas de carte.
+3. **Le récit tient-il dans ce que la carte laisse ?** C'est le point qu'on
+   oublie. La carte occupe 176 pt à droite, et la colonne de récit tombe à ~24
+   caractères par ligne. Les plafonds mesurés :
+
+   | Ouverture de chapitre | Plafond |
+   |---|---|
+   | carte seule, pas de bande d'images | 560 |
+   | carte + 2 photos | 320 |
+   | carte + 2 photos + un `fun_facts` | 120 |
+
+   Si le récit dépasse, **on allège la page avant de renoncer à la carte**,
+   dans cet ordre : retirer le `fun_facts` (120 → 320), puis descendre sous
+   deux photos (320 → 560). Une ouverture de chapitre vaut mieux sans encart
+   que sans carte.
+4. **Si le récit ne tient toujours pas**, layout par défaut, et le chapitre
+   s'ouvre sans carte. On ne scinde pas une ouverture de chapitre en deux pages
+   pour sauver la carte : le bandeau et la carte sur une page, la suite du
+   récit sur une autre, ça ne se lit plus comme une ouverture.
+
+En résumé : **la carte gagne sur l'encart et sur les photos, et perd sur le
+récit.** Le texte du voyageur ne se raccourcit jamais pour faire entrer un
+décor.
+
 ## Les cartes
 
 L'agent **décrit** la carte, il ne la dessine pas :
@@ -198,7 +235,7 @@ tranche : le premier actif l'emporte.
 | `layout_hero_top` | Grande photo en tête, récit dessous | Une photo iconique porte la journée | 1 | sous S, S |
 | `layout_split_left` | Carte info à gauche, récit en colonne à droite, puis deux photos en bas | Un fait à mettre en avant et deux belles images | 2 | S, M — **S seulement avec un fun fact** |
 | `layout_collage` | Récit pleine largeur puis 2 ou 3 photos inclinées en bas | Journée dense visuellement | 2–3 | S, M |
-| `layout_photo_page` | **Page pleine de photos**, sans récit ni bandeau. `title` devient une légende manuscrite en bas | Étape très visuelle. En placer régulièrement : c'est la page que les lecteurs préfèrent | 3–5 | aucune — le récit n'est pas rendu |
+| `layout_photo_page` | **Page pleine de photos**, sans récit ni bandeau. `title` devient une légende manuscrite en bas | Étape très visuelle. En placer régulièrement — mais **jamais deux de suite**, voir § « La répartition sur une étape à plusieurs pages » | 3–5 | aucune — le récit n'est pas rendu |
 | *(par défaut)* | Récit, puis carte info et photo flottantes en bas de page | Ouverture de journée, cas le plus courant | 0–1 | S, M |
 
 Les tailles exactes, et le plafond mesuré de chaque configuration, sont en
@@ -312,7 +349,7 @@ traitements :
 
 Au-dessus de 1440, refus : il faut **deux étapes**, pas une étape plus longue.
 
-### Une étape sur deux pages
+### Une étape sur plusieurs pages
 
 L et XL ne tiennent pas sur une feuille. L'étape se scinde en **deux entrées
 consécutives de `days[]`** :
@@ -328,6 +365,47 @@ sans `day_intro` prolonge la précédente.
 caractères en 360 + 360 laisse deux pages à moitié pleines et un blanc au milieu
 de chacune ; 560 + 160 en laisse une pleine et une aérée, ce qui est le rythme
 d'un carnet. La coupe se fait sur une fin de phrase, jamais au milieu d'une idée.
+
+### La répartition sur une étape à plusieurs pages
+
+Une étape qui couvre trois pages doit se lire comme **trois pages de carnet**,
+pas comme une page de texte suivie d'un album photo. C'est exactement ce qui
+arrivait : une étape à neuf photos sortait en une page de récit portant **une**
+image, puis deux planches de photos muettes à la suite. Le lecteur y voit deux
+objets différents collés l'un à l'autre, et le récit perd ses illustrations.
+
+Trois règles, dans cet ordre de priorité.
+
+**1. Jamais deux `layout_photo_page` consécutifs.** Deux planches à la suite,
+c'est un album inséré au milieu du carnet : la respiration visuelle que ce
+gabarit apporte vient de ce qu'il **surprend**, et deux fois de suite il ne
+surprend plus. S'il reste assez de photos pour deux planches, c'est qu'elles
+devaient être réparties sur les pages de récit, ou que l'étape en porte plus que
+le carnet n'en demande — mieux vaut en laisser de côté qu'aligner les planches.
+
+**2. Chaque page de récit prend ses photos avant qu'une planche s'ouvre.** Une
+page de récit en pose une à trois selon son gabarit ; on sert d'abord toutes les
+pages de récit de l'étape, et seule la **surabondance** va sur une planche. Garder
+les images pour la fin, c'est se retrouver avec un récit nu puis une pile
+d'images sans légende.
+
+**3. Le texte se répartit pour qu'aucune page de l'étape ne soit maigre.** La
+règle du « remplir la première d'abord » vaut tant qu'il reste de quoi tenir la
+suivante au-dessus du minimum de S. Trois pages à 400 caractères valent mieux
+que 560 + 560 + 80, où la dernière n'est qu'un reliquat.
+
+**Le cas qui a motivé ces règles.** L'étape du 22, neuf photos et 756 caractères,
+sortait ainsi :
+
+| | Rendu avant |
+|---|---|
+| page 1 | layout par défaut — récit entier, **1 photo** |
+| page 2 | `layout_photo_page` — 5 photos |
+| page 3 | `layout_photo_page` — 3 photos |
+
+Deux planches de suite, et huit photos sur neuf coupées du texte qu'elles
+illustrent. Ce qu'il fallait : deux pages de récit se partageant le texte **et**
+leurs photos, puis au plus une planche pour le surplus.
 
 ### Les autres champs
 
