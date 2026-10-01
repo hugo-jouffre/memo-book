@@ -161,6 +161,23 @@ final class OfflineTripCreationTests: XCTestCase {
         XCTAssertEqual(outbox.localTrips.map(\.id), [stuck.id], "Le voyage attend encore, avec son tour.")
     }
 
+    /// Un serveur qui n'a pas encore la création rejouable tire son propre
+    /// identifiant : ce qu'on a raconté part vers **son** carnet.
+    func testTurnsFollowTheServerIdentifierWhenItDiffers() async throws {
+        let server = FakeServer()
+        await server.ignoreClientIdentifiers()
+        let outbox = outbox(server)
+        outbox.debugSetOffline(true)
+
+        let trip = try await outbox.saveTrip(TripDraft(title: "Lisbonne"))
+        await outbox.submit(OutgoingTurn(body: .text("On est arrivés")), to: trip.id)
+        outbox.debugSetOffline(false)
+        try await until("tout est parti") { outbox.pending == 0 && outbox.localTrips.isEmpty }
+
+        let log = await server.log
+        XCTAssertEqual(log, ["trip:serveur-1:Lisbonne", "turn:serveur-1"])
+    }
+
     // MARK: - Où le voyage se montre
 
     func testTheHomeShowsATripCreatedOfflineFirst() async throws {
@@ -319,8 +336,10 @@ private actor FakeServer {
     private var unreachable = false
     private var tripsUnreachable = false
     private var tripRefusal: String?
+    private var ignoresClientIdentifiers = false
 
     func setUnreachable(_ value: Bool) { unreachable = value }
+    func ignoreClientIdentifiers() { ignoresClientIdentifiers = true }
     func setTripsUnreachable(_ value: Bool) { tripsUnreachable = value }
     func refuseTrips(_ message: String) { tripRefusal = message }
 
@@ -328,7 +347,7 @@ private actor FakeServer {
         if unreachable { throw APIError.transport(URLError(.notConnectedToInternet), url: nil) }
         if tripsUnreachable { throw APIError.server(statusCode: 503, code: nil, message: "Saturé.") }
         if let tripRefusal { throw APIError.server(statusCode: 400, code: "bad_request", message: tripRefusal) }
-        let id = draft.id ?? "sans-identifiant"
+        let id = ignoresClientIdentifiers ? "serveur-\(log.count + 1)" : (draft.id ?? "sans-identifiant")
         log.append("trip:\(id):\(draft.title)")
         return CreatedTrip(trip: .local(draft, id: id), accessCode: "ABC123")
     }

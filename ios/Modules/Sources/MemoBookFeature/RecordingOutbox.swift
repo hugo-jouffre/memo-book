@@ -524,6 +524,15 @@ public final class RecordingOutbox {
                 // correction faite entre-temps doit partir à son tour.
                 await trips.remove(id: waiting.id, ifDraftIs: waiting.draft)
                 createdTrips[waiting.id] = created
+                // Un serveur d'avant le 01/10 ignore l'identifiant de l'app et
+                // en tire un autre : ce qu'on a raconté le suit, au lieu de
+                // partir vers un carnet qui n'existe pas — et d'y être perdu.
+                if created.trip.id != waiting.id {
+                    for var record in await store.all() where record.tripId == waiting.id {
+                        record.tripId = created.trip.id
+                        try? await store.update(record)
+                    }
+                }
                 publish(TripSyncEvent(tripId: waiting.id, sync: .created(created)))
             case .deferred:
                 storedTrips = await trips.all()
