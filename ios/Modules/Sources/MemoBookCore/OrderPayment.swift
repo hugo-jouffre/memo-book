@@ -41,6 +41,31 @@ public struct PlacedPrintOrder: Decodable, Sendable, Hashable {
 /// avec quoi ». C'est ce qui évite qu'un écran conclue « rien à payer » d'un
 /// `clientSecret` absent, alors que son absence peut aussi vouloir dire que le
 /// serveur est mal configuré.
+/// La reprise du paiement d'une commande déjà passée —
+/// `POST /v1/orders/:id/payment`. La commande à la racine, comme
+/// ``PlacedPrintOrder`` ; `payment` est nul quand il n'y a plus rien à régler :
+/// payée, en cours, ou plus un brouillon. L'app relit alors la commande.
+public struct ResumedOrderPayment: Decodable, Sendable, Hashable {
+    public let order: PrintOrder
+    public let payment: OrderPayment?
+
+    public init(order: PrintOrder, payment: OrderPayment?) {
+        self.order = order
+        self.payment = payment
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case payment
+    }
+
+    public init(from decoder: any Decoder) throws {
+        order = try PrintOrder(from: decoder)
+        payment = try decoder
+            .container(keyedBy: CodingKeys.self)
+            .decodeIfPresent(OrderPayment.self, forKey: .payment)
+    }
+}
+
 public struct OrderPayment: Decodable, Sendable, Hashable {
     /// La cagnotte a tout couvert. Le serveur a **déjà** fait passer la commande
     /// en `submitted` : il n'y a rien à encaisser, et ouvrir une feuille pour
@@ -55,18 +80,26 @@ public struct OrderPayment: Decodable, Sendable, Hashable {
     public let clientSecret: String?
     public let publishableKey: String?
 
+    /// Les cartes du compte, pour la feuille — voir ``PaymentIntentTicket``.
+    public let customerId: String?
+    public let ephemeralKeySecret: String?
+
     public init(
         paidFromWallet: Bool,
         amountCents: Int,
         currency: String,
         clientSecret: String? = nil,
-        publishableKey: String? = nil
+        publishableKey: String? = nil,
+        customerId: String? = nil,
+        ephemeralKeySecret: String? = nil
     ) {
         self.paidFromWallet = paidFromWallet
         self.amountCents = amountCents
         self.currency = currency
         self.clientSecret = clientSecret
         self.publishableKey = publishableKey
+        self.customerId = customerId
+        self.ephemeralKeySecret = ephemeralKeySecret
     }
 
     /// Ce qu'il reste à faire pour que la commande soit payée.
@@ -90,7 +123,9 @@ public struct OrderPayment: Decodable, Sendable, Hashable {
                 clientSecret: clientSecret,
                 publishableKey: publishableKey,
                 amountCents: amountCents,
-                currency: currency
+                currency: currency,
+                customerId: customerId,
+                ephemeralKeySecret: ephemeralKeySecret
             )
         )
     }

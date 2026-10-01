@@ -17,7 +17,8 @@ extension AppDependencies {
         AppDependencies(
             api: PreviewAPI(),
             payments: StubPaymentPresenter(),
-            subscriptions: StubSubscriptionStore()
+            subscriptions: StubSubscriptionStore(),
+            paymentMethods: StubPaymentMethodsPresenter()
         )
     }
 }
@@ -696,13 +697,44 @@ public actor PreviewAPI: MemoBookAPI {
     /// Le `clientSecret` fabriqué ne monte **aucune** feuille de paiement, et
     /// c'est voulu : un aperçu ne doit pas pouvoir ouvrir Stripe, même par
     /// accident.
-    public func startWalletTopUp(amountCents: Int) async throws -> PaymentIntentTicket {
-        PaymentIntentTicket(
+    public func startWalletTopUp(
+        amountCents: Int,
+        stripeApiVersion: String?
+    ) async throws -> PaymentIntentTicket {
+        _ = stripeApiVersion
+        return PaymentIntentTicket(
             clientSecret: "pi_preview_secret",
             publishableKey: "pk_test_preview",
             amountCents: amountCents,
             currency: "eur"
         )
+    }
+
+    /// Le double n'a pas d'intention à reprendre : ses commandes naissent
+    /// payées. Il rend donc la commande, sans rien à régler.
+    public func resumePrintOrderPayment(
+        orderId: String,
+        stripeApiVersion: String?
+    ) async throws -> ResumedOrderPayment {
+        _ = stripeApiVersion
+        return ResumedOrderPayment(order: try await printOrder(id: orderId), payment: nil)
+    }
+
+    public func cancelPrintOrder(orderId: String) async throws -> PrintOrder {
+        try await printOrder(id: orderId)
+    }
+
+    public func paymentMethodsKey(stripeApiVersion: String) async throws -> CustomerPaymentKey {
+        _ = stripeApiVersion
+        return CustomerPaymentKey(
+            customerId: "cus_preview",
+            ephemeralKeySecret: "ek_test_preview",
+            publishableKey: "pk_test_preview"
+        )
+    }
+
+    public func paymentMethodsSetupIntent() async throws -> String {
+        "seti_preview_secret_preview"
     }
 
     // MARK: - La cagnotte

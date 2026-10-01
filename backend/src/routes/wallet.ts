@@ -4,7 +4,12 @@ import { z } from "zod";
 import type { AppContext } from "../context.js";
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
-import { PAYMENT_KIND, ensureStripeCustomer } from "../services/billing.js";
+import {
+  PAYMENT_KIND,
+  ensureStripeCustomer,
+  paymentTicket,
+  stripeApiVersionSchema,
+} from "../services/billing.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
 import { serializeWallet } from "./appSerializers.js";
 
@@ -59,6 +64,8 @@ const TOPUP_MAX_CENTS = 50_000;
 
 const topupBody = z.object({
   amountCents: z.number().int().min(TOPUP_MIN_CENTS).max(TOPUP_MAX_CENTS),
+  /** La version d'API du SDK Stripe de l'app — voir `paymentTicket`. */
+  stripeApiVersion: stripeApiVersionSchema.optional(),
 });
 
 const financedTripSelect = {
@@ -222,17 +229,14 @@ export function registerWalletRoutes(app: FastifyInstance, context: AppContext) 
    * légitime, et deux appels doivent donner deux paiements.
    */
   app.post("/v1/wallet/topup", async (request, reply) => {
-    const { amountCents } = topupBody.parse(request.body ?? {});
+    const { amountCents, stripeApiVersion } = topupBody.parse(request.body ?? {});
     const accountId = accountIdOf(request);
 
-    if (context.env.STRIPE_SECRET_KEY === "" && context.env.NODE_ENV === "production") {
-      throw HttpError.badRequest(
-        "L'encaissement n'est pas configuré sur ce serveur.",
-        "payments_unavailable",
-      );
-    }
-
     const customerId = await ensureStripeCustomer(context, accountId);
+    const account = await context.prisma.account.findUnique({
+      where: { id: accountId },
+      select: { email: true },
+    });
 
     const intent = await context.payments.createIntent({
       idempotencyKey: `topup:${randomUUID()}`,
@@ -240,6 +244,8 @@ export function registerWalletRoutes(app: FastifyInstance, context: AppContext) 
       currency: "eur",
       customerId,
       metadata: { kind: PAYMENT_KIND.walletTopup, accountId },
+      description: "Recharge de la cagnotte MemoBook",
+      receiptEmail: account?.email ?? null,
     });
 
     context.logger.info(
@@ -247,11 +253,17 @@ export function registerWalletRoutes(app: FastifyInstance, context: AppContext) 
       "Recharge de cagnotte ouverte",
     );
 
-    return reply.code(201).send({
-      clientSecret: intent.clientSecret,
-      amountCents,
-      currency: "eur",
-      publishableKey: context.env.STRIPE_PUBLISHABLE_KEY,
-    });
+    // Le même billet que pour une commande : les cartes du compte s'affichent
+    // dans la feuille — voir `paymentTicket`.
+    return reply
+      .code(201)
+      .send(
+        await paymentTicket(context, {
+          customerId,
+          clientSecret: intent.clientSecret,
+          amountCents,
+          stripeApiVersion,
+        }),
+      );
   });
 }

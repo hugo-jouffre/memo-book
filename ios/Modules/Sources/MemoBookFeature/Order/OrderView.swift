@@ -25,9 +25,6 @@ public struct OrderView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var focus: OrderField?
 
-    /// La feuille de choix du moyen de paiement.
-    @State private var isChoosingPayment = false
-
     /// La feuille de partage du système, une fois le lien obtenu.
     @State private var systemShare: BookSharePayload?
 
@@ -42,9 +39,6 @@ public struct OrderView: View {
         // Le crème de la marque ne se retourne pas en sombre — voir
         // `MemoBookColor`.
         .environment(\.colorScheme, .light)
-        .brandSheet(isPresented: $isChoosingPayment) {
-            OrderPaymentSheet(model: model) { isChoosingPayment = false }
-        }
         .sheet(item: $systemShare) { BookShareSheet(payload: $0) }
         .task { await model.load() }
     }
@@ -85,7 +79,7 @@ public struct OrderView: View {
             case .summary:
                 OrderSummaryStep(model: model)
             case .payment:
-                OrderPaymentStep(model: model, onChoosePayment: { isChoosingPayment = true })
+                OrderPaymentStep(model: model)
             case .confirmation:
                 OrderConfirmationStep(
                     model: model,

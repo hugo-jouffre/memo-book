@@ -18,6 +18,8 @@ export const JOB_NAMES = {
   endSubscriptions: "memobook.end-subscriptions",
   /** L'envoi quotidien des chiffres de l'app à la feuille de bord (T72). */
   exportStats: "memobook.export-stats",
+  /** Le ménage horaire des commandes jamais payées — voir `orderPayments.ts`. */
+  releaseAbandonedOrders: "memobook.release-abandoned-orders",
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];

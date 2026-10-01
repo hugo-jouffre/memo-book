@@ -46,6 +46,12 @@ public struct ProfileView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.subscriptionSession) private var subscriptionSession
 
+    /// La feuille « Moyens de paiement » de Stripe — posée par `RootView`.
+    @Environment(\.managePaymentMethods) private var managePaymentMethods
+
+    /// Ce qui a empêché la feuille de Stripe de s'ouvrir.
+    @State private var paymentMethodsError: String?
+
     public init(
         model: ProfileModel = ProfileModel(),
         statistics: StatisticsModel = StatisticsModel(),
@@ -531,23 +537,35 @@ public struct ProfileView: View {
         }
     }
 
+    /// **Les cartes du compte, chez Stripe** (01/10/2026). La ligne ouvrait un
+    /// formulaire fait main qui demandait le numéro complet et ne parlait à
+    /// personne ; elle ouvre désormais la feuille « Moyens de paiement » de
+    /// Stripe, qui tient les cartes, en ajoute et en retire. L'app ne voit plus
+    /// passer un seul numéro — et ne sait donc plus en afficher un ici : la
+    /// ligne **invite**, comme celle de l'adresse (T22).
     private var paymentGroup: some View {
-        let profile = model.profile
-
-        // Sans carte, la ligne **invite** à en ajouter une, comme celle de
-        // l'adresse — Hugo, 14/09/2026 (T22).
-        let hasCard = profile?.selectedCard != nil
-
-        return BrandRowGroup {
+        BrandRowGroup {
             BrandRow(
-                "Carte bancaire enregistrée",
-                value: profile.map { $0.selectedCard?.maskedNumber ?? "Ajouter une carte" },
+                "Cartes bancaires",
+                value: "Gérer mes cartes",
                 valuePlacement: .below,
-                valueTone: hasCard ? .plain : .invitation,
-                isValueLoading: profile == nil
+                valueTone: .invitation,
+                isValueLoading: model.profile == nil
             ) {
-                sheet = .paymentMethod
+                guard let managePaymentMethods else { return }
+                Task { paymentMethodsError = await managePaymentMethods() }
             }
+        }
+        .alert(
+            "Moyens de paiement indisponibles",
+            isPresented: Binding(
+                get: { paymentMethodsError != nil },
+                set: { if !$0 { paymentMethodsError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(paymentMethodsError ?? "")
         }
     }
 
@@ -644,8 +662,6 @@ public struct ProfileView: View {
                     requestReset: model.requestPasswordReset
                 )
             )
-        case .paymentMethod:
-            PaymentMethodSheet(model: model)
         case .subscription:
             SubscriptionSheet(
                 subscription: effectiveSubscription,
@@ -739,7 +755,6 @@ enum ProfileSheet: String, Identifiable, CaseIterable {
     case postalAddress
     case gender
     case password
-    case paymentMethod
     case subscription
     case connectors
     case orderTracking

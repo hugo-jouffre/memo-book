@@ -397,24 +397,22 @@ public struct PrintOrderDraft: Sendable, Hashable {
     public var shipping: ShippingAddress
     /// Un jeu d'options par exemplaire, dans l'ordre des rangs.
     public var copyOptions: [PrintedCopyOptions]
-    public var paymentCardId: String?
-    /// Apple Pay a été choisi plutôt qu'une carte enregistrée.
-    public var usesApplePay: Bool
+
+    // **Pas de moyen de paiement ici** (01/10/2026). Le brouillon portait une
+    // carte et un « Apple Pay », que l'app fabriquait elle-même et que le
+    // serveur ne connaissait pas (T225). La carte se choisit dans la feuille de
+    // Stripe, qui tient celles du compte.
 
     public init(
         copies: Int = 1,
         shippingSpeed: ShippingSpeed = .standard,
         shipping: ShippingAddress,
-        copyOptions: [PrintedCopyOptions] = [],
-        paymentCardId: String? = nil,
-        usesApplePay: Bool = false
+        copyOptions: [PrintedCopyOptions] = []
     ) {
         self.copies = copies
         self.shippingSpeed = shippingSpeed
         self.shipping = shipping
         self.copyOptions = copyOptions
-        self.paymentCardId = paymentCardId
-        self.usesApplePay = usesApplePay
     }
 
     /// L'adresse est-elle complète ? C'est ce qui allume « Continuer » à
@@ -427,9 +425,6 @@ public struct PrintOrderDraft: Sendable, Hashable {
             && !shipping.city.trimmed.isEmpty
             && !shipping.country.trimmed.isEmpty
     }
-
-    /// Un moyen de paiement a-t-il été choisi ? C'est ce qui allume « Payer ».
-    public var hasPaymentMethod: Bool { usesApplePay || paymentCardId != nil }
 
     /// Ramène la liste d'options à `copies` entrées, en recopiant celles du
     /// premier exemplaire pour tout rang qui vient d'apparaître.
@@ -549,7 +544,11 @@ public struct NewPrintOrderRequest: Encodable, Sendable, Hashable {
     public var shippingSpeed: ShippingSpeed
     public var shipping: ShippingAddress
     public var copyOptions: [PrintedCopyOptions]
-    public var paymentCardId: String?
+    /// La version d'API du SDK Stripe de l'app : c'est elle qui permet au
+    /// serveur de rendre une clé éphémère lisible par la feuille, et donc les
+    /// cartes du compte. Posée par `AppDependencies` — ce module ne connaît pas
+    /// Stripe.
+    public var stripeApiVersion: String?
 
     public init(
         renderId: String,
@@ -557,14 +556,14 @@ public struct NewPrintOrderRequest: Encodable, Sendable, Hashable {
         shippingSpeed: ShippingSpeed,
         shipping: ShippingAddress,
         copyOptions: [PrintedCopyOptions],
-        paymentCardId: String?
+        stripeApiVersion: String? = nil
     ) {
         self.renderId = renderId
         self.copies = copies
         self.shippingSpeed = shippingSpeed
         self.shipping = shipping
         self.copyOptions = copyOptions
-        self.paymentCardId = paymentCardId
+        self.stripeApiVersion = stripeApiVersion
     }
 
     public init(renderId: String, draft: PrintOrderDraft) {
@@ -573,11 +572,7 @@ public struct NewPrintOrderRequest: Encodable, Sendable, Hashable {
             copies: draft.copies,
             shippingSpeed: draft.shippingSpeed,
             shipping: draft.shipping,
-            copyOptions: draft.copyOptions,
-            // Apple Pay n'enregistre aucune carte : la commande n'en porte
-            // alors aucune, et c'est le paiement qui dira par quoi elle est
-            // passée.
-            paymentCardId: draft.usesApplePay ? nil : draft.paymentCardId
+            copyOptions: draft.copyOptions
         )
     }
 }

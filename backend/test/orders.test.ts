@@ -287,7 +287,9 @@ describe("la commande", () => {
    * Le suivi du profil filtre sur **l'acheteur** et accepte les brouillons :
    * sans ça, la seule commande que l'app sache créer n'apparaissait nulle part.
    */
-  it("apparaît aussitôt dans le suivi des commandes", async () => {
+  it("n'apparaît dans le suivi qu'une fois payée", async () => {
+    // Un brouillon est une commande **pas payée** : elle s'affichait « en
+    // cours d'acheminement », avec ses jours de livraison (T232).
     const account = await registerAccount(harness.app);
     const { memo, renderId } = await printableTrip(account.accountId);
 
@@ -302,15 +304,21 @@ describe("la commande", () => {
 
     expect(order.status).toBe("draft");
 
-    const profile = (
-      await harness.app.inject({
-        method: "GET",
-        url: "/v1/profile",
-        headers: { authorization: account.authorization },
-      })
-    ).json<ProfileBody>();
+    const tracked = async () =>
+      (
+        await harness.app.inject({
+          method: "GET",
+          url: "/v1/profile",
+          headers: { authorization: account.authorization },
+        })
+      )
+        .json<ProfileBody>()
+        .orders.map((o) => o.id);
 
-    expect(profile.orders.map((o) => o.id)).toContain(order.id);
+    expect(await tracked()).not.toContain(order.id);
+
+    await harness.prisma.printOrder.update({ where: { id: order.id }, data: { status: "submitted" } });
+    expect(await tracked()).toContain(order.id);
   });
 });
 

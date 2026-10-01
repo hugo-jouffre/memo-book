@@ -72,6 +72,16 @@ public final class OrderModel {
     /// pas de serveur à qui demander — la commande y est réglée d'avance.
     private let reloadOrder: ((String) async throws -> PrintOrder)?
 
+    /// Rouvre la feuille sur **la même** intention, et abandonne un brouillon
+    /// qui ne correspond plus — voir ``pay()``. `nil` en aperçu.
+    private let resumePayment: ((String) async throws -> ResumedOrderPayment)?
+    private let cancelOrder: ((String) async throws -> PrintOrder)?
+
+    /// Ce que la commande en cours a été passée avec. C'est ce qui dit si
+    /// « Payer » peut la reprendre, ou si l'adresse, les exemplaires ou la
+    /// rapidité ont changé depuis.
+    private var placedRequest: NewPrintOrderRequest?
+
     /// L'accord de suivi est en train de partir. Le bouton tourne plutôt que de
     /// basculer avant que le serveur ait confirmé.
     public private(set) var isSavingWhatsApp = false
@@ -110,7 +120,9 @@ public final class OrderModel {
         presentPayment: @escaping (PaymentIntentTicket) async -> PaymentOutcome = { _ in
             .succeeded
         },
-        reloadOrder: ((String) async throws -> PrintOrder)? = nil
+        reloadOrder: ((String) async throws -> PrintOrder)? = nil,
+        resumePayment: ((String) async throws -> ResumedOrderPayment)? = nil,
+        cancelOrder: ((String) async throws -> PrintOrder)? = nil
     ) {
         self.memoId = memoId
         self.email = email
@@ -121,6 +133,8 @@ public final class OrderModel {
         self.setWhatsApp = setWhatsApp
         self.presentPayment = presentPayment
         self.reloadOrder = reloadOrder
+        self.resumePayment = resumePayment
+        self.cancelOrder = cancelOrder
         self.draft = PrintOrderDraft(shipping: .empty)
     }
 
@@ -136,15 +150,13 @@ public final class OrderModel {
             context = loaded
 
             // Le brouillon part de ce que le serveur propose : l'adresse du
-            // profil, la carte par défaut, le style du carnet. Personne ne
-            // ressaisit ce qu'on sait déjà.
+            // profil et le style du carnet. Personne ne ressaisit ce qu'on sait
+            // déjà. La carte, elle, se choisit dans la feuille de Stripe.
             draft = PrintOrderDraft(
                 copies: 1,
                 shippingSpeed: .standard,
                 shipping: loaded.shipping,
-                copyOptions: [loaded.options.moved(to: 1)],
-                paymentCardId: loaded.selectedCardId,
-                usesApplePay: false
+                copyOptions: [loaded.options.moved(to: 1)]
             )
             phase = .ready
 
@@ -187,7 +199,9 @@ public final class OrderModel {
         case .copies: draft.copies >= 1
         case .speed: true
         case .summary: quote != nil
-        case .payment: draft.hasPaymentMethod || quote?.isFullyCovered == true
+        // Rien à choisir avant « Payer » : la feuille de Stripe porte le moyen
+        // de paiement, cartes enregistrées comprises.
+        case .payment: true
         case .confirmation: false
         }
     }
@@ -306,51 +320,6 @@ public final class OrderModel {
 
     // MARK: - Étape 6 — payer
 
-    public func select(cardId: String) {
-        draft.paymentCardId = cardId
-        draft.usesApplePay = false
-        paymentError = nil
-    }
-
-    public func selectApplePay() {
-        draft.usesApplePay = true
-        paymentError = nil
-    }
-
-    /// Les cartes enregistrées **plus celles ajoutées pendant le parcours**.
-    ///
-    /// Une carte saisie ici ne descend pas en base : aucune route ne crée un
-    /// moyen de paiement, et il n'en existera pas avant Stripe — c'est lui qui
-    /// détiendra le numéro. Elle vaut donc pour cette commande, exactement
-    /// comme celle qu'on ajoute depuis le profil. **Les quatre derniers
-    /// chiffres et rien d'autre** — voir ``PaymentCard``.
-    public var cards: [PaymentCard] { (context?.cards ?? []) + addedCards }
-
-    private var addedCards: [PaymentCard] = []
-
-    /// Enregistre une carte saisie dans la feuille du profil, et la choisit.
-    ///
-    /// Le numéro complet, la date et le cryptogramme ne sont ni gardés ni
-    /// journalisés : seuls les quatre derniers chiffres entrent dans le modèle.
-    public func addCard(number: String, label: String) {
-        let digits = number.filter(\.isNumber)
-        guard digits.count >= 4 else { return }
-
-        let card = PaymentCard(
-            id: UUID().uuidString,
-            label: label.trimmingCharacters(in: .whitespaces).isEmpty ? "Carte" : label,
-            last4: String(digits.suffix(4))
-        )
-        addedCards.append(card)
-        select(cardId: card.id)
-    }
-
-    /// La carte présentée à l'étape 6.
-    public var selectedCard: PaymentCard? {
-        guard !draft.usesApplePay, let id = draft.paymentCardId else { return nil }
-        return cards.first { $0.id == id }
-    }
-
     /// Enregistre la commande, l'encaisse, puis ouvre la confirmation.
     ///
     /// Le montant n'est **pas** envoyé : le serveur le recalcule. Ce que l'app
@@ -364,6 +333,13 @@ public final class OrderModel {
     /// - il reste à payer et le serveur n'a pas donné de quoi le faire → on le
     ///   dit. C'est une panne de configuration, et afficher la confirmation
     ///   annoncerait une commande payée qui ne l'est pas.
+    ///
+    /// **Une commande déjà passée se reprend** (01/10/2026). « Payer » après une
+    /// feuille refermée ou une carte refusée créait une seconde commande, et
+    /// débitait la cagnotte une seconde fois. Si rien n'a changé depuis, on
+    /// rouvre la feuille sur **la même** intention ; si l'adresse, les
+    /// exemplaires ou la rapidité ont changé, l'ancienne commande est
+    /// abandonnée — elle rend sa réservation — avant d'en passer une neuve.
     public func pay() async {
         guard !isSubmitting, let renderId = context?.renderId else { return }
 
@@ -371,14 +347,30 @@ public final class OrderModel {
         paymentError = nil
         defer { isSubmitting = false }
 
-        do {
-            let placed = try await submit(
-                memoId,
-                NewPrintOrderRequest(renderId: renderId, draft: draft)
-            )
-            order = placed.order
+        let request = NewPrintOrderRequest(renderId: renderId, draft: draft)
 
-            switch placed.payment.settlement {
+        do {
+            let payment: OrderPayment
+            if let resumed = try await resumeIfUnchanged(request) {
+                order = resumed.order
+                guard let resumedPayment = resumed.payment else {
+                    // Plus rien à régler : payée entre-temps, ou en cours.
+                    order = await settled(resumed.order)
+                    showConfirmation()
+                    return
+                }
+                payment = resumedPayment
+            } else {
+                await abandonPlacedOrder()
+                let placed = try await submit(memoId, request)
+                order = placed.order
+                placedRequest = request
+                payment = placed.payment
+            }
+
+            guard let placedOrder = order else { return }
+
+            switch payment.settlement {
             case .wallet:
                 break
 
@@ -390,9 +382,8 @@ public final class OrderModel {
                 switch await presentPayment(ticket) {
                 case .cancelled:
                     // Pas une erreur, un choix — donc pas de message. La
-                    // commande reste en brouillon et « Payer » la reprendra :
-                    // la clé d'idempotence étant son identifiant, Stripe rendra
-                    // **la même** intention plutôt qu'un second débit.
+                    // commande reste en brouillon, et « Payer » la reprendra
+                    // sur la même intention : pas de second débit.
                     return
 
                 case .failed(let message):
@@ -400,15 +391,47 @@ public final class OrderModel {
                     return
 
                 case .succeeded:
-                    order = await settled(placed.order)
+                    order = await settled(placedOrder)
                 }
             }
 
-            isAdvancing = true
-            step = .confirmation
+            showConfirmation()
         } catch {
             paymentError = error.localizedDescription
         }
+    }
+
+    /// La commande déjà passée, rouverte — si elle existe, si elle attend
+    /// encore d'être payée, et si rien n'a changé depuis. `nil` sinon : il
+    /// faut en passer une neuve.
+    private func resumeIfUnchanged(_ request: NewPrintOrderRequest) async throws -> ResumedOrderPayment? {
+        guard let order, order.status == .draft, request == placedRequest, let resumePayment else {
+            return nil
+        }
+        do {
+            return try await resumePayment(order.id)
+        } catch {
+            // Expirée (409) ou introuvable : on repart d'une commande neuve.
+            // L'ancienne a rendu sa réservation de son côté.
+            placedRequest = nil
+            self.order = nil
+            return nil
+        }
+    }
+
+    /// Abandonne la commande en brouillon qui ne correspond plus — elle rend sa
+    /// part de cagnotte avant qu'une neuve n'en réserve une. Sans réponse du
+    /// serveur, le ménage des brouillons s'en chargera.
+    private func abandonPlacedOrder() async {
+        guard let stale = order, stale.status == .draft else { return }
+        _ = try? await cancelOrder?(stale.id)
+        order = nil
+        placedRequest = nil
+    }
+
+    private func showConfirmation() {
+        isAdvancing = true
+        step = .confirmation
     }
 
     /// Combien de fois relire la commande avant de passer à la confirmation.

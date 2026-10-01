@@ -1,6 +1,9 @@
 import type { FastifyInstance } from "fastify";
+import Stripe from "stripe";
 import type { AppContext } from "../context.js";
+import { isDatabaseUnavailable } from "../lib/databasePool.js";
 import { PAYMENT_KIND } from "../services/billing.js";
+import { recordOrderRefund, releaseUnpaidOrder } from "../services/orderPayments.js";
 import type { PaymentEvent } from "../services/payments.js";
 import { writeLedgerEntry } from "../services/walletLedger.js";
 
@@ -22,6 +25,12 @@ import { writeLedgerEntry } from "../services/walletLedger.js";
  * 2. **Une erreur non gérée est une boucle.** Un 500 fait rejouer, et un bug
  *    qui lève à chaque fois fait rejouer indéfiniment. On acquitte donc tout ce
  *    qu'on ne sait pas traiter, au lieu de le faire échouer.
+ *
+ *    **Sauf une panne passagère** (01/10/2026) : la base saturée (le pooler
+ *    Supabase plafonne à quinze clients), Stripe injoignable. Acquitter celle-là
+ *    perdait l'événement — une commande payée restait en `draft` pour toujours,
+ *    une recharge n'était jamais créditée. Elle répond 500, et Stripe rejoue
+ *    plus tard ; les écritures étant sûres à répéter, le rejeu ne coûte rien.
  */
 
 /** L'en-tête que Stripe pose, et qui porte la signature. */
@@ -78,6 +87,12 @@ export async function registerStripeWebhookRoutes(
       try {
         await handleEvent(context, event, log);
       } catch (cause) {
+        if (isTransient(cause)) {
+          // La base ou Stripe ne répondent pas : ce n'est pas l'événement qui
+          // est en cause, c'est le moment. Stripe rejouera.
+          log.warn({ err: cause }, "Webhook Stripe : panne passagère, Stripe rejouera");
+          return reply.code(500).send({ error: "temporarily_unavailable" });
+        }
         // On journalise et on acquitte. Un 500 ferait rejouer, et si le bug est
         // déterministe le rejeu ne réussira jamais : on aurait juste un
         // événement qui revient toutes les heures pendant trois jours. La trace
@@ -92,6 +107,16 @@ export async function registerStripeWebhookRoutes(
 
 type EventLogger = Pick<FastifyInstance["log"], "info" | "warn" | "error">;
 
+/** Ce qui vaut un rejeu : la base saturée ou injoignable, Stripe hors d'atteinte. */
+function isTransient(cause: unknown): boolean {
+  return (
+    isDatabaseUnavailable(cause) ||
+    cause instanceof Stripe.errors.StripeConnectionError ||
+    cause instanceof Stripe.errors.StripeAPIError ||
+    cause instanceof Stripe.errors.StripeRateLimitError
+  );
+}
+
 async function handleEvent(
   context: AppContext,
   event: PaymentEvent,
@@ -101,13 +126,13 @@ async function handleEvent(
 
   // Une recharge de cagnotte n'a pas de commande : elle se reconnaît à son
   // `metadata.kind` et se traite à part, avant toute recherche de commande.
-  if (event.kind === PAYMENT_KIND.walletTopup) {
+  if (event.kind === PAYMENT_KIND.walletTopup && event.type.startsWith("payment_intent.")) {
     await handleTopup(context, event, log);
     return;
   }
 
   // `metadata.orderId` d'abord — c'est nous qui l'avons posé. L'intention
-  // ensuite, parce qu'un `charge.*` ne porte pas nos métadonnées.
+  // ensuite, parce qu'un `charge.*` ne porte pas forcément nos métadonnées.
   const order = event.orderId
     ? await prisma.printOrder.findUnique({ where: { id: event.orderId } })
     : event.intentId
@@ -117,14 +142,47 @@ async function handleEvent(
       : null;
 
   if (!order) {
+    // Une charge de recharge remboursée ou contestée : elle se retrouve par
+    // son intention, au registre de la cagnotte.
+    if (event.type === "charge.refunded" || event.type === "charge.dispute.created") {
+      await handleTopupCharge(context, event, log);
+      return;
+    }
     // Pas une erreur : le compte Stripe reçoit aussi les événements d'autres
-    // produits, et un paiement de cagnotte n'a pas de commande.
+    // produits.
     log.info("Webhook Stripe sans commande correspondante, ignoré");
     return;
   }
 
   switch (event.type) {
     case "payment_intent.succeeded": {
+      // **Ce qui a été payé, et pas ce qu'on croit avoir demandé.** Une
+      // intention modifiée à la main dans le tableau de bord, ou une devise
+      // inattendue, ne doit pas faire partir un carnet payé à moitié.
+      if (
+        order.amountCents !== null &&
+        (event.amountCents !== order.amountCents || (event.currency ?? "eur") !== "eur")
+      ) {
+        log.error(
+          {
+            orderId: order.id,
+            expectedCents: order.amountCents,
+            receivedCents: event.amountCents,
+            currency: event.currency,
+          },
+          "Paiement d'un montant inattendu : commande laissée en brouillon, à vérifier",
+        );
+        return;
+      }
+
+      if (order.status === "cancelled") {
+        // Ne devrait pas arriver : une commande ne se ferme qu'après que Stripe
+        // a accepté d'annuler son intention. Si ça arrive, l'argent est pris
+        // pour une commande fermée — le support doit rembourser.
+        log.error({ orderId: order.id }, "Paiement reçu pour une commande annulée : à rembourser");
+        return;
+      }
+
       // `updateMany` avec `status: "draft"` dans le `where` : c'est la base qui
       // décide, en une instruction, si la transition a déjà eu lieu. Lire puis
       // écrire laisserait la place à deux rejeux simultanés — Stripe en envoie,
@@ -152,6 +210,9 @@ async function handleEvent(
     }
 
     case "payment_intent.payment_failed": {
+      // La feuille de paiement réessaie sur **la même** intention : la
+      // commande reste ouverte, avec sa réservation. C'est le ménage qui la
+      // fermera si personne ne revient.
       await prisma.printOrder.updateMany({
         where: { id: order.id, status: "draft" },
         data: { error: "Le paiement a été refusé." },
@@ -160,15 +221,37 @@ async function handleEvent(
       return;
     }
 
+    case "payment_intent.canceled": {
+      // Annulée chez Stripe — par le ménage, par l'app, ou à la main dans le
+      // tableau de bord : la commande se ferme et rend sa part de cagnotte.
+      const outcome = await releaseUnpaidOrder(context, order.id, "Paiement annulé.");
+      log.info({ orderId: order.id, outcome }, "Intention annulée");
+      return;
+    }
+
     case "charge.refunded": {
-      // Remboursement d'une carte : l'argent repart d'où il vient, il ne
-      // devient pas du crédit de cagnotte. Écrire une `WalletEntry` ici
-      // créditerait une somme que l'utilisateur n'a jamais eue sur sa cagnotte.
-      await prisma.printOrder.updateMany({
-        where: { id: order.id, status: { not: "cancelled" } },
-        data: { status: "cancelled", error: "Commande remboursée." },
+      // Le cumul remboursé, et si c'est tout : voir `recordOrderRefund`. La
+      // carte est remboursée par Stripe ; la part de cagnotte, elle, revient
+      // ici, et seulement sur un remboursement total avant l'impression.
+      const outcome = await recordOrderRefund(
+        context,
+        order,
+        event.amountCents ?? 0,
+        event.fullyRefunded,
+      );
+      log.info({ orderId: order.id, refundedCents: event.amountCents, outcome }, "Commande remboursée");
+      return;
+    }
+
+    case "charge.dispute.created": {
+      // Un litige : la banque reprend l'argent le temps de trancher. Rien ne
+      // se décide automatiquement — mais rien ne doit partir sans que le
+      // support l'ait vu.
+      await prisma.printOrder.update({
+        where: { id: order.id },
+        data: { error: "Litige bancaire ouvert." },
       });
-      log.info({ orderId: order.id }, "Commande remboursée et annulée");
+      log.error({ orderId: order.id, status: order.status }, "Litige ouvert sur une commande");
       return;
     }
 
@@ -180,10 +263,11 @@ async function handleEvent(
 /**
  * Créditer une cagnotte après un encaissement réussi.
  *
- * L'idempotence tient sur `wallet_entries.stripeEventId`, qui est unique : un
- * rejeu bute sur la contrainte et ne crédite pas deux fois. C'est la base qui
- * arbitre, pas une lecture préalable — celle-ci aurait sa propre fenêtre de
- * course entre deux livraisons simultanées.
+ * **Une seule fois par intention** (`topup:<intention>`), et plus seulement par
+ * événement : Stripe peut envoyer deux événements distincts pour le même
+ * paiement, et l'ancienne clé — l'identifiant de l'événement — les aurait
+ * crédités deux fois. L'intention est gardée sur l'écriture : c'est elle qu'un
+ * remboursement retrouvera.
  */
 async function handleTopup(
   context: AppContext,
@@ -195,8 +279,8 @@ async function handleTopup(
     return;
   }
 
-  if (!event.accountId || !event.amountCents) {
-    log.warn("Recharge sans compte ou sans montant, ignorée");
+  if (!event.accountId || !event.amountCents || !event.intentId) {
+    log.warn("Recharge sans compte, sans montant ou sans intention, ignorée");
     return;
   }
 
@@ -206,6 +290,8 @@ async function handleTopup(
     kind: "topup",
     label: "Recharge de la cagnotte",
     stripeEventId: event.id,
+    idempotencyKey: `topup:${event.intentId}`,
+    stripePaymentIntentId: event.intentId,
   });
 
   if (result.outcome === "duplicate") {
@@ -218,5 +304,77 @@ async function handleTopup(
       { accountId: event.accountId, amountCents: event.amountCents, balance: result.balanceCents },
       "Cagnotte créditée",
     );
+  }
+}
+
+/**
+ * Une recharge remboursée ou contestée.
+ *
+ * **Remboursée : la cagnotte rend ce que la carte a récupéré** (01/10/2026). La
+ * carte retrouvait son argent et la cagnotte gardait le crédit — de l'argent
+ * qui sortait deux fois. On reprend ce qui n'a pas encore été repris, plafonné
+ * au solde : s'il a déjà été dépensé dans un carnet, on reprend ce qui reste,
+ * et le support voit le reste.
+ */
+async function handleTopupCharge(
+  context: AppContext,
+  event: PaymentEvent,
+  log: EventLogger,
+): Promise<void> {
+  if (!event.intentId) {
+    log.info("Charge sans intention, ignorée");
+    return;
+  }
+
+  const { prisma } = context;
+  const credit = await prisma.walletEntry.findFirst({
+    where: { stripePaymentIntentId: event.intentId, kind: "topup", amountCents: { gt: 0 } },
+  });
+
+  if (!credit) {
+    log.info("Charge sans commande ni recharge correspondante, ignorée");
+    return;
+  }
+
+  if (event.type === "charge.dispute.created") {
+    log.error(
+      { accountId: credit.accountId, intentId: event.intentId, amountCents: credit.amountCents },
+      "Litige ouvert sur une recharge de cagnotte : à trancher par le support",
+    );
+    return;
+  }
+
+  // Ce qui a déjà été repris pour cette intention, par les remboursements
+  // précédents — le cumul de Stripe moins ce qu'on a déjà inscrit.
+  const taken = await prisma.walletEntry.aggregate({
+    where: { stripePaymentIntentId: event.intentId, kind: "adjustment" },
+    _sum: { amountCents: true },
+  });
+  const refunded = Math.min(event.amountCents ?? 0, credit.amountCents);
+  const due = refunded + (taken._sum.amountCents ?? 0);
+  if (due <= 0) {
+    log.info({ intentId: event.intentId }, "Remboursement de recharge déjà repris");
+    return;
+  }
+
+  const result = await writeLedgerEntry(prisma, {
+    accountId: credit.accountId,
+    amountCents: -due,
+    kind: "adjustment",
+    label: "Recharge remboursée sur ta carte",
+    stripeEventId: event.id,
+    stripePaymentIntentId: event.intentId,
+    clampToBalance: true,
+  });
+
+  if (result.outcome === "written") {
+    if (result.clampedCents > 0) {
+      log.error(
+        { accountId: credit.accountId, intentId: event.intentId, missingCents: result.clampedCents },
+        "Recharge remboursée déjà dépensée : le reste est à reprendre par le support",
+      );
+    } else {
+      log.info({ accountId: credit.accountId, takenCents: due }, "Recharge remboursée reprise");
+    }
   }
 }

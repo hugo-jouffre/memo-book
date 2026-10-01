@@ -16,6 +16,7 @@ import { registerHomeRoutes, registerWelcomeRoutes } from "./routes/home.js";
 import { registerLocalRenderRoutes } from "./routes/localRenders.js";
 import { registerMemoRoutes } from "./routes/memos.js";
 import { registerOrderRoutes } from "./routes/orders.js";
+import { registerPaymentMethodRoutes } from "./routes/paymentMethods.js";
 import { registerPasswordResetPageRoutes } from "./routes/passwordResetPage.js";
 import { registerAvatarRoutes, registerProfileRoutes } from "./routes/profile.js";
 import { configureAvatarUrls } from "./services/avatars.js";
@@ -131,6 +132,7 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
     registerBookPreviewRoutes(accountRoutes, context);
     registerWalletRoutes(accountRoutes, context);
     registerAppStoreRoutes(accountRoutes, context);
+    registerPaymentMethodRoutes(accountRoutes, context);
   });
 
   // Uniquement en mode de rendu local : sert les PDF produits sur le disque.

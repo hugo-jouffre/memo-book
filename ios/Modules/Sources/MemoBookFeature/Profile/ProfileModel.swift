@@ -231,10 +231,6 @@ public final class ProfileModel {
         }
     }
 
-    public func selectCard(id: String) {
-        mutate { $0.selectedCardId = id }
-    }
-
     /// Enregistre l'adresse que la feuille a validée — la première comme une
     /// correction : c'est le même geste, sur les mêmes quatre lignes.
     ///
@@ -314,27 +310,6 @@ public final class ProfileModel {
         guard gender != profile?.gender else { return }
         mutate { $0.gender = gender }
         save(ProfileEdit(gender: gender), confirming: .gender)
-    }
-
-    /// Enregistre une carte à partir du formulaire.
-    ///
-    /// **Seuls les quatre derniers chiffres sont conservés** — voir
-    /// ``PaymentCard``. Le numéro complet, la date et le cryptogramme ne sont ni
-    /// gardés ni journalisés : le jour où le paiement existe, ils partiront
-    /// directement au prestataire sans passer par nos modèles.
-    public func addCard(number: String, label: String) {
-        let digits = number.filter(\.isNumber)
-        guard digits.count >= 4 else { return }
-
-        mutate { profile in
-            let card = PaymentCard(
-                id: UUID().uuidString,
-                label: label,
-                last4: String(digits.suffix(4))
-            )
-            profile.cards.append(card)
-            profile.selectedCardId = card.id
-        }
     }
 
     /// Souscrire, ou re-souscrire après une résiliation — et **cesser d'être un

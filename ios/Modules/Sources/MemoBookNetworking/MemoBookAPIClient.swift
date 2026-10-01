@@ -866,14 +866,51 @@ public actor MemoBookAPIClient: MemoBookAPI {
     /// entier de centimes — le passer en texte le rendrait arrondissable.
     private struct TopUpBody: Encodable {
         let amountCents: Int
+        let stripeApiVersion: String?
     }
 
-    public func startWalletTopUp(amountCents: Int) async throws -> PaymentIntentTicket {
+    public func startWalletTopUp(
+        amountCents: Int,
+        stripeApiVersion: String?
+    ) async throws -> PaymentIntentTicket {
         try await send(
             method: "POST",
             path: "/v1/wallet/topup",
-            encodableBody: TopUpBody(amountCents: amountCents)
+            encodableBody: TopUpBody(amountCents: amountCents, stripeApiVersion: stripeApiVersion)
         )
+    }
+
+    private struct StripeVersionBody: Encodable {
+        let stripeApiVersion: String?
+    }
+
+    public func resumePrintOrderPayment(
+        orderId: String,
+        stripeApiVersion: String?
+    ) async throws -> ResumedOrderPayment {
+        try await send(
+            method: "POST",
+            path: "/v1/orders/\(orderId)/payment",
+            encodableBody: StripeVersionBody(stripeApiVersion: stripeApiVersion)
+        )
+    }
+
+    public func cancelPrintOrder(orderId: String) async throws -> PrintOrder {
+        try await send(method: "POST", path: "/v1/orders/\(orderId)/cancel")
+    }
+
+    public func paymentMethodsKey(stripeApiVersion: String) async throws -> CustomerPaymentKey {
+        try await send(
+            method: "POST",
+            path: "/v1/payments/ephemeral-key",
+            encodableBody: StripeVersionBody(stripeApiVersion: stripeApiVersion)
+        )
+    }
+
+    public func paymentMethodsSetupIntent() async throws -> String {
+        struct Response: Decodable { let clientSecret: String }
+        let response: Response = try await send(method: "POST", path: "/v1/payments/setup-intent")
+        return response.clientSecret
     }
 
     public func printOrders(memoId: String) async throws -> [PrintOrder] {

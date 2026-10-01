@@ -22,12 +22,33 @@ deux valeurs, toutes deux physiques.
 
 ```
 POST /memos/:id/orders
-  └─ la cagnotte couvre ce qu'elle peut → WalletEntry (débit), immédiate
+  └─ la cagnotte couvre ce qu'elle peut → WalletEntry (débit = réservation)
        ├─ reste 0 € ─────────────────────────────────────────→ submitted
        └─ reste > 0 € → PaymentIntent → feuille → webhook ────→ submitted
+                          │
+                          ├─ « Payer » à nouveau → POST /orders/:id/payment (même intention)
+                          └─ abandonnée, annulée, 24 h sans paiement
+                               → intention annulée → réservation rendue → cancelled
 
 POST /wallet/topup ──→ PaymentIntent ─→ feuille ─→ webhook ─→ WalletEntry + solde
 ```
+
+**La part de cagnotte est réservée à la création** — débitée tout de suite, pour
+qu'une seconde commande partie en parallèle ne dépense pas la même somme — et
+**elle revient toujours, une seule fois**, quand la commande n'est pas payée
+(`services/orderPayments.ts`) :
+
+| Ce qui ferme la commande | Qui |
+|---|---|
+| On change d'adresse, d'exemplaires ou de rapidité après une tentative | l'app, `POST /v1/orders/:id/cancel` |
+| L'intention ne peut pas s'ouvrir chez Stripe | la route de commande, aussitôt |
+| L'intention est annulée (tableau de bord, ménage) | le webhook `payment_intent.canceled` |
+| Personne ne revient payer | la tâche horaire, au-delà de 24 h |
+| Remboursement **total** avant l'impression | le webhook `charge.refunded` |
+
+> ⚠️ **L'intention s'annule toujours avant que la réservation revienne.** Stripe
+> refuse d'annuler une intention payée : c'est lui qui tranche la course entre
+> le ménage et un paiement validé à la même seconde.
 
 > ⚠️ **La cagnotte n'est pas un mode de paiement qu'on choisit.** Il n'y a pas
 > de drapeau `payWithWallet` : elle s'applique toujours, à hauteur de ce qu'elle
@@ -51,9 +72,32 @@ SwiftUI ne puisse pas ouvrir une feuille, même par accident.
 
 | Étape | Qui | Ce qui se passe |
 |---|---|---|
-| Commander | `OrderModel.pay()` | `POST /orders` → `PlacedPrintOrder` |
-| Régler | `PaymentPresenter.present` | la feuille, montée sur `clientSecret` |
+| Commander | `OrderModel.pay()` | `POST /orders` → `PlacedPrintOrder` — ou `POST /orders/:id/payment` si la commande existe déjà et que rien n'a changé |
+| Régler | `PaymentPresenter.present` | la feuille, montée sur `clientSecret`, **avec les cartes du compte** |
 | Conclure | `OrderModel.settled(_:)` | relit `GET /orders/:id` jusqu'à sortir de `draft` |
+
+**Le moyen de paiement se choisit dans la feuille de Stripe** (01/10/2026).
+L'app avait son propre formulaire de carte — numéro, échéance, cryptogramme —
+qui ne gardait que quatre chiffres en mémoire et ne parlait à personne ; une
+carte ajoutée là faisait répondre 404 à la commande (T225). Il n'existe plus :
+
+- chaque billet de paiement porte le **client Stripe du compte et une clé
+  éphémère** — la feuille montre les cartes enregistrées, propose
+  « Enregistrer pour la prochaine fois », et en retire une ;
+- « Cartes bancaires » dans le profil ouvre `CustomerSheet`, la feuille
+  « Moyens de paiement » de Stripe (`POST /v1/payments/ephemeral-key` et
+  `/setup-intent`).
+
+> ⚠️ **Une clé éphémère, pas une session client.** Dans stripe-ios 24, les
+> sessions client sont réservées à un accès bêta
+> (`@_spi(CustomerSessionBetaAccess)`). La clé éphémère est le chemin stable, à
+> une condition : être créée dans **la version d'API du SDK**, que l'app envoie
+> (`stripeApiVersion`, `StripeSDK.apiVersion`, « 2020-08-27 »). Le jour où le
+> SDK passe en 25, il faudra repasser aux sessions client.
+
+> ⚠️ **Le retour d'un paiement qui sort de l'app** (3-D Secure, Klarna) revient
+> par `memobook://stripe-redirect`, et `RootView.onOpenURL` le rend à Stripe
+> (`StripeSDK.handle`). Sans ça, la feuille attendait indéfiniment.
 
 `OrderPayment.settlement` tranche en un seul endroit ce que l'app doit faire :
 `.wallet` (rien à encaisser), `.card` (feuille), ou `.unavailable`. Ce dernier
@@ -67,8 +111,9 @@ une commande non payée ne doit jamais ressembler à une commande passée.
 > le webhook écrit au registre, une seconde ou deux plus tard.
 
 > ⚠️ Annuler la feuille **n'est pas une erreur** : la commande reste en
-> brouillon et « Payer » la reprend. La clé d'idempotence étant l'identifiant de
-> la commande, Stripe rend la même intention — pas un second débit.
+> brouillon et « Payer » la reprend **sur la même intention**
+> (`POST /v1/orders/:id/payment`) — pas de seconde commande, pas de second
+> débit de cagnotte. Jusqu'au 01/10/2026, chaque « Payer » en créait une neuve.
 
 ## Ce qui rend le rejeu inoffensif
 
@@ -82,9 +127,29 @@ la base de données plutôt que par du code applicatif :
 | `print_orders.stripePaymentIntentId` unique | schéma | Deux intentions sur une commande |
 | `updateMany where status: "draft"` | `stripeWebhook.ts` | Réécrire `submittedAt` au rejeu |
 | `SELECT … FOR UPDATE` sur le compte | `walletLedger.ts` | Deux débits concurrents qui passeraient tous les deux |
+| `wallet_entries.idempotencyKey` unique | schéma | Rendre deux fois une réservation ; créditer deux fois une recharge vue par deux événements (`topup:<intention>`) |
+| Montant reçu = montant de la commande | `stripeWebhook.ts` | Envoyer à l'impression un carnet payé à moitié |
 
 Une erreur de traitement est **journalisée puis acquittée** (200) : un 500 ferait
 rejouer, et un bug déterministe reviendrait toutes les heures pendant trois jours.
+**Sauf une panne passagère** — base saturée, Stripe injoignable — qui répond
+500 : l'acquitter perdait l'événement, et une commande payée restait en `draft`.
+
+### Les remboursements
+
+`charge.refunded` porte le **cumul** remboursé, inscrit dans
+`print_orders.refundedCents` :
+
+- **partiel** : inscrit, rien d'autre — un geste sur les frais de port n'annule
+  pas un carnet ;
+- **total, avant l'impression** : la commande est annulée et sa part de cagnotte
+  revient ;
+- **total, une fois imprimée ou expédiée** : le statut ne bouge pas, et le log
+  demande au support de trancher pour la cagnotte.
+
+Une **recharge** remboursée est reprise sur la cagnotte, plafonnée au solde ; si
+elle a déjà été dépensée, le log dit ce qui manque. Un litige
+(`charge.dispute.created`) est journalisé en erreur et posé sur la commande.
 
 ## Vérifier en local
 
@@ -103,6 +168,15 @@ cd backend && npm run dev
 
 ```bash
 cd backend && npm run stripe:e2e
+```
+
+Et, sans serveur ni base, **ce que le simulé ne peut pas prouver** — que Stripe
+accepte nos appels : client, clé éphémère dans la version du SDK iOS,
+intention d'enregistrement, intention avec reçu et adresse, annulation, refus
+d'annuler une intention payée.
+
+```bash
+cd backend && npm run stripe:gateway-check
 ```
 
 Le dernier déroule tout le parcours avec le **vrai** Stripe en mode test :
@@ -149,7 +223,20 @@ Les trois mêmes variables, **en mode test** — le compte est le bac à sable
 |---|---|
 | Identifiant | `we_1UG765BknFHnQoHL2aidvVgI` |
 | URL | `https://api-production-9f35a.up.railway.app/v1/webhooks/stripe` |
-| Événements | `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.refunded` |
+| Événements | `payment_intent.succeeded`, `payment_intent.payment_failed`, `payment_intent.canceled`, `charge.refunded`, `charge.dispute.created` |
+
+> 🚨 **`payment_intent.canceled` et `charge.dispute.created` sont à ajouter au
+> point de terminaison** (01/10/2026). Sans le premier, une intention annulée
+> dans le tableau de bord ne rend pas sa réservation avant le ménage horaire :
+>
+> ```bash
+> stripe webhook_endpoints update we_1UG765BknFHnQoHL2aidvVgI \
+>   -d "enabled_events[]=payment_intent.succeeded" \
+>   -d "enabled_events[]=payment_intent.payment_failed" \
+>   -d "enabled_events[]=payment_intent.canceled" \
+>   -d "enabled_events[]=charge.refunded" \
+>   -d "enabled_events[]=charge.dispute.created"
+> ```
 
 Ce sont exactement les `HANDLED_EVENTS` de `services/payments.ts` : s'y abonner
 plus largement ferait livrer des événements qu'on acquitte sans rien en faire.
@@ -170,6 +257,11 @@ Une réponse qui parle de signature invalide veut dire que le secret est posé.
 Si elle dit « `STRIPE_WEBHOOK_SECRET` est vide », c'est que la variable manque —
 et à ce moment-là **aucune commande ne peut sortir de `draft` en production**.
 
+**En production, l'API refuse de démarrer sans ses trois clés, et le worker sans
+la clé secrète** (01/10/2026) : sans elles, le serveur passait sur l'encaissement
+simulé, qui aurait accepté un webhook non signé. Le simulé, lui, ne croit plus
+aucun webhook hors de la suite de tests.
+
 Le serveur **refuse de démarrer** si les deux clés ne sont pas du même mode
 (`sk_live_` avec `pk_test_`, ou l'inverse) : le mélange fait échouer le paiement
 *après* que l'utilisateur a validé Face ID.
@@ -181,6 +273,8 @@ Le serveur **refuse de démarrer** si les deux clés ne sont pas du même mode
 | **Adresse du siège** | Tableau de bord → Tax → Settings | `status: pending` — **aucune taxe n'est calculée** |
 | **Immatriculation TVA** | Tax → Registrations | Stripe ne collecte rien, **et ne lève aucune erreur** |
 | **Identifiant marchand Apple Pay** | Portail Apple + Stripe | La feuille montre les cartes seules |
+| **Événements du webhook** | Développeurs ▸ Webhooks (commande ci-dessus) | Une intention annulée à la main ne rend sa réservation qu'au ménage horaire |
+| **Reçus par e-mail** | Paramètres ▸ E-mails clients ▸ Paiements réussis | Les intentions portent `receipt_email`, mais Stripe n'envoie rien tant que la case n'est pas cochée — et jamais en mode test |
 | Clé restreinte (`rk_`) | Développeurs → Clés API | — (bonne pratique avant la production) |
 
 > 🚨 **Le piège de Stripe Tax.** Sans immatriculation active, Stripe ne

@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { AppContext } from "../context.js";
 
 /**
@@ -54,4 +55,56 @@ export async function ensureStripeCustomer(
   });
 
   return customerId;
+}
+
+/**
+ * La version d'API Stripe que l'app annonce — celle de son SDK. Une clé
+ * éphémère n'est lisible que dans cette version-là : en créer une dans une
+ * autre ferait échouer la feuille au chargement.
+ */
+export const stripeApiVersionSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}(\.[a-z]+)?$/, "Version d'API Stripe invalide.");
+
+/**
+ * Ce que la feuille de paiement de l'app reçoit : l'intention à régler, la clé
+ * publique, et **le client Stripe du compte avec une clé éphémère** — c'est
+ * elle qui fait apparaître les cartes déjà enregistrées, proposer
+ * « Enregistrer pour la prochaine fois », et retirer une carte, sans que l'app
+ * touche jamais un numéro (01/10/2026 : l'app avait son propre formulaire de
+ * carte, qui ne servait à rien et n'aurait jamais dû exister).
+ *
+ * Sans version d'API — une app plus ancienne —, ou si la clé échoue, la feuille
+ * s'ouvre sans cartes enregistrées, et on peut toujours payer.
+ */
+export async function paymentTicket(
+  context: AppContext,
+  input: {
+    customerId: string | null;
+    clientSecret: string;
+    amountCents: number;
+    stripeApiVersion?: string | undefined;
+  },
+) {
+  let ephemeralKeySecret: string | null = null;
+  if (input.customerId && input.stripeApiVersion) {
+    try {
+      ephemeralKeySecret = await context.payments.createEphemeralKey(
+        input.customerId,
+        input.stripeApiVersion,
+      );
+    } catch (cause) {
+      context.logger.warn({ err: cause }, "Clé client Stripe indisponible : feuille sans cartes enregistrées");
+    }
+  }
+
+  return {
+    paidFromWallet: false,
+    clientSecret: input.clientSecret,
+    amountCents: input.amountCents,
+    currency: "eur",
+    publishableKey: context.env.STRIPE_PUBLISHABLE_KEY,
+    customerId: ephemeralKeySecret ? input.customerId : null,
+    ephemeralKeySecret,
+  };
 }
