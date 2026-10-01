@@ -221,6 +221,9 @@ public struct BrandSheet<Content: View>: View {
         // Une feuille présentée par cette feuille-ci sera d'un cran plus
         // profonde.
         .environment(\.brandSheetDepth, depth + 1)
+        // Les champs savent sur quoi ils sont posés : leur intitulé flottant
+        // s'y découpe, et leur contour s'y voit dès le repos.
+        .environment(\.brandFieldBackdrop, surfaceColor)
         // Elle recule à son tour quand une autre s'ouvre par-dessus : le recul
         // ne s'arrête pas à l'app, il traverse la pile de feuilles.
         .scaleEffect(isCoveredByAnotherSheet ? 0.94 : 1, anchor: .top)

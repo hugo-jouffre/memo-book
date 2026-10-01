@@ -13,6 +13,11 @@ import SwiftUI
 /// L'entaille dans le contour n'est pas dessinée : l'étiquette porte une
 /// pastille de la couleur du fond d'écran, qui masque le trait derrière elle.
 ///
+/// **Dans une feuille, le fond n'est plus le crème** mais le papier de
+/// ``BrandSheet``, qui le dit par ``EnvironmentValues/brandFieldBackdrop``.
+/// La pastille en prend la couleur, et le contour se dessine dès le repos —
+/// voir ``isOutlined``.
+///
 /// Le focus appartient à l'écran, pas au champ : c'est ce qui permet à la
 /// touche « suivant » du clavier de passer d'un champ à l'autre.
 ///
@@ -119,6 +124,7 @@ public struct BrandTextField<Field: Hashable>: View {
     @State private var isRevealed = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.brandFieldBackdrop) private var backdrop
     @ScaledMetric(relativeTo: .body) private var height = MemoBookSpacing.fieldHeight
 
     /// Taille de l'étiquette flottante. Suivie à la trace parce que le
@@ -131,7 +137,12 @@ public struct BrandTextField<Field: Hashable>: View {
     /// L'aplat blanc du repos n'appartient qu'à l'étiquette flottante : c'est
     /// lui qui fait exister le champ avant qu'on le touche. Étiquette au-dessus,
     /// c'est le mot qui remplit ce rôle, et le contour suffit.
-    private var isOutlined: Bool { labelPlacement != .floating || isActive }
+    ///
+    /// **Sauf sur le papier d'une feuille** (01/10/2026) : il est du même
+    /// blanc que l'aplat, et un champ au repos y disparaissait — la feuille
+    /// « Modifier mon mot de passe » montrait trois intitulés flottant dans le
+    /// vide. Le contour gris prend alors le rôle de l'aplat.
+    private var isOutlined: Bool { labelPlacement != .floating || isActive || backdrop != nil }
 
     private var showsPlaceholder: Bool {
         switch labelPlacement {
@@ -274,9 +285,11 @@ public struct BrandTextField<Field: Hashable>: View {
                 .font(MemoBookFont.caption)
                 .foregroundStyle(isFocused ? MemoBookColor.action : MemoBookColor.inkMuted)
                 // La pastille prend la couleur du fond d'écran : c'est elle qui
-                // « coupe » le contour pour laisser passer l'étiquette.
+                // « coupe » le contour pour laisser passer l'étiquette. Dans
+                // une feuille, celle du papier — le crème de l'écran y faisait
+                // une bulle orangée derrière l'intitulé.
                 .padding(.horizontal, 6)
-                .background(MemoBookColor.background)
+                .background(backdrop ?? MemoBookColor.background)
                 .padding(.leading, 14)
                 // Un `alignmentGuide(.top)` serait le geste idiomatique, mais
                 // il reste sans effet sur le contenu d'un `overlay` : l'étiquette
@@ -288,4 +301,11 @@ public struct BrandTextField<Field: Hashable>: View {
                 .transition(.opacity.combined(with: .offset(y: 6)))
         }
     }
+}
+
+extension EnvironmentValues {
+    /// L'aplat sur lequel les champs sont posés, **quand ce n'est pas le crème
+    /// de l'écran** : le papier d'une ``BrandSheet``, qui le pose ici. `nil`
+    /// sur un écran. Voir ``BrandTextField``.
+    @Entry public var brandFieldBackdrop: Color? = nil
 }
