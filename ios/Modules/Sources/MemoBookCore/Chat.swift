@@ -446,6 +446,15 @@ public struct ChatMessage: Sendable, Hashable, Identifiable {
 
     /// La même bulle, avec ce que l'app sait et que le serveur ne rend pas : le
     /// fichier local d'un vocal ou d'une photo, le temps qu'il soit parti.
+    ///
+    /// Une photo se retrouve par son identifiant, **sinon par son rang**. La
+    /// bulle posée avant l'envoi numérote ses photos (`<tour>-0`, `<tour>-1`…),
+    /// le serveur les rend sous l'identifiant de leur souvenir : rapprochées
+    /// par identifiant seulement, elles perdaient leur fichier dès le reçu, et
+    /// la bulle allait chercher une adresse distante qui demande la session
+    /// (deux `401` le 30/09/2026, une seconde après l'envoi). Le serveur écrit
+    /// les souvenirs dans l'ordre des fichiers reçus : le rang est sûr quand
+    /// les deux listes ont la même longueur.
     public func keepingLocalFiles(of previous: ChatMessage) -> ChatMessage {
         var merged = self
         switch (body, previous.body) {
@@ -453,10 +462,13 @@ public struct ChatMessage: Sendable, Hashable, Identifiable {
             note.localUrl = known.localUrl ?? note.localUrl
             merged.body = .voice(note)
         case (.photos(let attachments), .photos(let known)):
+            let sameCount = attachments.count == known.count
             merged.body = .photos(
-                attachments.map { attachment in
+                attachments.enumerated().map { rank, attachment in
                     var copy = attachment
-                    copy.localUrl = known.first { $0.id == attachment.id }?.localUrl ?? copy.localUrl
+                    let byId = known.first { $0.id == attachment.id }?.localUrl
+                    let byRank = sameCount ? known[rank].localUrl : nil
+                    copy.localUrl = byId ?? byRank ?? copy.localUrl
                     return copy
                 }
             )
