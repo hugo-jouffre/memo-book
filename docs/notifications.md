@@ -23,7 +23,7 @@ touche une notification. Les règles vivent dans un seul fichier pur,
 
 Les textes sont dans `backend/src/services/notificationCopy.ts`. **Aucun ne vient
 d'une maquette** : la feuille donne l'objectif et le ton, pas les mots. Clara
-doit les relire (T241).
+doit les relire (T242).
 
 Deux précisions sur la fin du voyage, parce que les deux cas sont réels :
 
@@ -102,7 +102,7 @@ Côté app (`ios/Modules/Sources/MemoBookFeature/Notifications/`) :
   posée sur le voyage. Il prévient aussi le serveur
   (`POST /v1/notifications/:id/opened`), qui en tient compte dans le rythme.
 - Si tout est coupé dans les Réglages d'iOS, la feuille « Notifications » le dit
-  et propose d'y aller (T244).
+  et propose d'y aller (T245).
 
 ## 5. Configuration (Hugo)
 
@@ -135,13 +135,13 @@ telle quelle. **Chaque choix fait est une constante, facile à changer.**
 
 | Point | Choix fait | Où le changer |
 |---|---|---|
-| **Source de la zone scolaire** (feuille, § 5) | Le code postal de l'adresse du profil, puis le département et l'académie. Qui n'a pas donné d'adresse (on la demande à la commande) ne reçoit pas les vacances scolaires. Demander la zone ailleurs reste à décider (T242) | `schoolZoneOf`, `services/schoolHolidays.ts` |
+| **Source de la zone scolaire** (feuille, § 5) | Le code postal de l'adresse du profil, puis le département et l'académie. Qui n'a pas donné d'adresse (on la demande à la commande) ne reçoit pas les vacances scolaires. Demander la zone ailleurs reste à décider (T243) | `schoolZoneOf`, `services/schoolHolidays.ts` |
 | **Seuil d'historique** du comportement appris | Un voyage, comme tranché | `notificationPlanner.ts` |
 | **Pondération déclaré / observé** (feuille, § 5) | 0,7 / 0,3 | `DECLARED_WEIGHT`, `notificationRhythm.ts` |
 | **J-7, J-3, J *et* une seule notification Vacances par semaine** : impossible d'avoir les deux, J-3 tombe 4 jours après J-7 | Le plafond l'emporte : **J-7 puis le jour J**. J-3 ne part que si J-7 n'est pas parti (voyageur arrivé entre les deux, passe manquée) | `HOLIDAY_COOLDOWN_DAYS`, `notificationPlanner.ts` |
 | **« Fin des 3 jours offerts »** : l'app offre aujourd'hui trois **étapes**, pas trois jours | J+3 du premier voyage, comme la feuille le demande. Le texte reste vrai dans les deux modèles : il ne dit pas « ton essai est fini » | `trialEndText`, `notificationCopy.ts` |
 | **2,99 €/semaine** dans la feuille, **1,99 €** dans le catalogue | Le texte lit le catalogue (`SUBSCRIPTION_WEEKLY_CENTS`) : il dira toujours le prix réel | `subscriptionCatalog.ts` |
 | **Rythmes modéré et léger : « uniquement les essentielles »** | Le modéré reçoit aussi les relances d'écriture **qu'il a demandées** en choisissant « Une fois par semaine ». Ne lui en envoyer aucune contredirait l'étape « Notifications » | `TIER_ALLOWS`, `notificationPlanner.ts` |
-| **« Rarement »**, quatrième réponse de la feuille | Comprise par le serveur (`rarely`), absente de l'étape de création tant que la maquette ne la dessine pas (R3, T243) | `TripCreationStepContent.paces` |
+| **« Rarement »**, quatrième réponse de la feuille | Comprise par le serveur (`rarely`), absente de l'étape de création tant que la maquette ne la dessine pas (R3, T244) | `TripCreationStepContent.paces` |
 | **« Arrêt au milieu du userflow : ?? »** | Deux cas couverts : carnet arrêté (relance d'écriture), carnet terminé mais pas commandé | `notificationPlanner.ts` |
 | **Nouveau récit, résumé hebdomadaire** (deux des quatre alertes de la feuille du voyage) | Pas dans la spec, rien ne les envoie encore | — |

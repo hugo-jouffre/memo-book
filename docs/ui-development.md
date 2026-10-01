@@ -141,11 +141,11 @@ Voir [`notifications.md`](notifications.md) pour les règles et les choix faits.
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
-| T241 | **Les textes des notifications sont à relire** : la feuille Notion donne l'objectif et le ton, pas les mots. Ils sont tous dans `backend/src/services/notificationCopy.ts` (fin d'essai, fin de voyage, relance d'écriture, carnet pas commandé, vacances, l'an dernier, anniversaire) | Notifications |
-| T242 | **La zone scolaire** se déduit du code postal de l'adresse du profil, demandée seulement à la commande : sans adresse, pas de notification de vacances scolaires. La demander ailleurs (dernières questions, feuille « Notifications ») ? | Notifications — vacances |
-| T243 | La feuille propose quatre fréquences, dont « **Rarement** » ; l'étape « Notifications » de la création n'en dessine que trois (tous les jours, tous les 2 jours, une fois par semaine). Le serveur comprend `rarely` : il manque la carte dans la maquette | Création — notifications |
-| T244 | Quand tout est coupé dans les Réglages d'iOS, la feuille « Notifications » le dit et propose « Ouvrir les réglages ». **Ni le message ni le bouton ne sont dans `3023:15042`** : à dessiner, ou à valider tels quels | Réglages — notifications |
-| T245 | La maquette dessine une bulle de MEMO « Suggestions - activer les notifs » avec un bouton « Activer notif » dans la conversation. Pas faite : l'autorisation se demande à l'étape « Notifications » de la création. La garder pour qui a passé l'étape ? | Conversation |
+| T242 | **Les textes des notifications sont à relire** : la feuille Notion donne l'objectif et le ton, pas les mots. Ils sont tous dans `backend/src/services/notificationCopy.ts` (fin d'essai, fin de voyage, relance d'écriture, carnet pas commandé, vacances, l'an dernier, anniversaire) | Notifications |
+| T243 | **La zone scolaire** se déduit du code postal de l'adresse du profil, demandée seulement à la commande : sans adresse, pas de notification de vacances scolaires. La demander ailleurs (dernières questions, feuille « Notifications ») ? | Notifications — vacances |
+| T244 | La feuille propose quatre fréquences, dont « **Rarement** » ; l'étape « Notifications » de la création n'en dessine que trois (tous les jours, tous les 2 jours, une fois par semaine). Le serveur comprend `rarely` : il manque la carte dans la maquette | Création — notifications |
+| T245 | Quand tout est coupé dans les Réglages d'iOS, la feuille « Notifications » le dit et propose « Ouvrir les réglages ». **Ni le message ni le bouton ne sont dans `3023:15042`** : à dessiner, ou à valider tels quels | Réglages — notifications |
+| T246 | La maquette dessine une bulle de MEMO « Suggestions - activer les notifs » avec un bouton « Activer notif » dans la conversation. Pas faite : l'autorisation se demande à l'étape « Notifications » de la création. La garder pour qui a passé l'étape ? | Conversation |
 
 ### Réglages du voyage et personnalisations
 
