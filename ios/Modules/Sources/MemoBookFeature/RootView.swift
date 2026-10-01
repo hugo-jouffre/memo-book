@@ -116,9 +116,6 @@ public struct RootView: View {
         // feuilles** : c'est lui qui les relie.
         .environment(\.brandSheetPresentation, sheets)
         .environment(\.subscriptionSession, subscription)
-        // Le profil, à portée du paywall — voir
-        // ``SwiftUI/EnvironmentValues/profileModelFactory``.
-        .environment(\.profileModelFactory, { dependencies.profileModel() })
         .environment(\.walletSource, { [api = dependencies.api] tripId in try await api.wallet(tripId: tripId) })
         // Le support **de la session**, à portée du paywall : « Besoin d'aide ? »
         // l'ouvre par-dessus l'offre au lieu de la refermer, pour que la flèche
@@ -183,6 +180,13 @@ public struct RootView: View {
                 // posé** — celui-ci écrivait donc « Hello, » à tout le monde
                 // en dehors des aperçus.
                 .environment(\.travellerFirstName, account.firstName)
+                // L'achat de l'abonnement, au nom de **ce** compte : son
+                // identifiant part dans chaque transaction Apple.
+                .environment(\.subscriptionPurchase, dependencies.subscriptionPurchase(accountId: account.id))
+                // Ce que StoreKit a gardé pendant que personne n'était
+                // connecté — un renouvellement, une validation parentale —
+                // part maintenant qu'une session peut le remettre.
+                .task(id: account.id) { await dependencies.deliverUnfinishedTransactions() }
             }
         }
         .animation(.snappy, value: stage)

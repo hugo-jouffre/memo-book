@@ -14,7 +14,11 @@ extension AppDependencies {
     /// garantit qu'une preview Xcode n'ouvre jamais Stripe.
     @MainActor
     public static func preview() -> AppDependencies {
-        AppDependencies(api: PreviewAPI(), payments: StubPaymentPresenter())
+        AppDependencies(
+            api: PreviewAPI(),
+            payments: StubPaymentPresenter(),
+            subscriptions: StubSubscriptionStore()
+        )
     }
 }
 
@@ -292,6 +296,23 @@ public actor PreviewAPI: MemoBookAPI {
         var profile = editedProfile ?? .fixture
         profile.subscription.isActive = false
         profile.subscription.cancelledAt = .now
+        editedProfile = profile
+        return profile
+    }
+
+    /// L'achat ouvre l'abonnement **dans le double** : rouvrir le profil doit
+    /// montrer un abonné, tenu par Apple — sans qu'aucune signature soit lue.
+    public func syncAppStoreTransaction(
+        signedTransaction: String,
+        memoId: String?
+    ) async throws -> TravellerProfile {
+        _ = (signedTransaction, memoId)
+        var profile = editedProfile ?? .fixture
+        profile.subscription.isActive = true
+        profile.subscription.cancelledAt = nil
+        profile.subscription.managedByAppStore = true
+        profile.offeredSteps = nil
+        profile.remainingSteps = nil
         editedProfile = profile
         return profile
     }

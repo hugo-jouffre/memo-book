@@ -249,11 +249,12 @@ paywall et « 3 × 0,00 € » sur l'estimation. Un prix ne dépend pas de ce qu
 personne a déjà acheté : c'est un tarif, il vit dans un catalogue. Côté app,
 `Subscription.displayedWeeklyPrice` est le second filet — il ne rend jamais zéro.
 
-⚠️ **Ni l'un ni l'autre ne s'encaisse aujourd'hui.** Apple impose l'achat
-intégré pour un service numérique : les deux passeront par **StoreKit**, et
-`PAYMENT_KIND` ne porte donc aucune valeur d'abonnement (voir `billing.ts`).
-Les références Stripe existent pour le jour où l'offre se vend aussi hors de
-l'app — le web —, et pour que le back-end sache de quel prix il parle.
+⚠️ **L'abonnement s'encaisse par StoreKit, l'extension pas encore** (01/10/2026).
+Apple impose l'achat intégré pour un service numérique : `PAYMENT_KIND` ne
+porte donc aucune valeur d'abonnement (voir `billing.ts`), et c'est la section
+[L'abonnement App Store](#labonnement-app-store-storekit) qui dit comment il
+s'achète. Les références Stripe existent pour le jour où l'offre se vend aussi
+hors de l'app — le web —, et pour que le back-end sache de quel prix il parle.
 
 **Les deux prix vivent sous le même produit Stripe**, « Abonnement MemoBook »
 (`prod_VGyIuAiG0DcXLa`) : l'extension n'est pas une seconde offre, c'est une
@@ -290,11 +291,139 @@ Le dernier jour, rien ne change : la résiliation garde sa phrase d'avant,
 « l'abonnement s'arrête aujourd'hui ». Il n'y a pas de sursis à annoncer pour un
 jour qui est déjà là.
 
+## L'abonnement App Store (StoreKit)
+
+1,99 €/semaine, produit **`com.memobook.app.subscription.weekly`**, groupe
+d'abonnements « MemoBook ». L'identifiant est écrit trois fois et doit rester
+le même partout : `APP_STORE_PRODUCT_IDS` (`subscriptionCatalog.ts`),
+`StoreKitCatalog` (`MemoBookPayments`) et `ios/Config/MemoBook.storekit`.
+Apple ne le laisse ni modifier ni réutiliser.
+
+```
+App ─ Product.purchase(appAccountToken: id du compte)
+  └─ feuille d'Apple ─ Face ID ─→ transaction signée (JWS)
+       └─ POST /v1/subscriptions/app-store ─→ vérifiée ─→ subscriptions + registre
+            └─ 2xx ─→ transaction.finish()           (sinon : rejouée au lancement)
+
+Apple ─ POST /v1/webhooks/app-store (notifications v2)
+  └─ renouvellement, renouvellement coupé, délai de grâce, expiration, remboursement
+```
+
+**Deux portes, la même écriture** (`services/appStoreSubscriptions.ts`) : l'app
+ouvre le micro dans la seconde qui suit l'achat, Apple dit tout le reste — y
+compris ce qui se passe app fermée. Une ligne `subscriptions` par
+`originalTransactionId` (rouverte quand on se réabonne au voyage suivant), une
+ligne `subscription_transactions` par semaine payée.
+
+| Chez Apple | `subscriptions.status` | Accès |
+|---|---|---|
+| actif, renouvellement armé | `active` | oui |
+| actif, renouvellement coupé dans iOS | `cancelled` | jusqu'à `renewsAt` |
+| délai de grâce | `past_due` | oui, Apple l'accorde |
+| nouvelle tentative de prélèvement | `expired` | non |
+| expiré | `expired` | non |
+| remboursé, révoqué | `expired` | non, dès la révocation |
+
+### Ce qui rend le rejeu inoffensif, ici aussi
+
+| Garde-fou | Où | Ce qu'il empêche |
+|---|---|---|
+| `subscriptions.providerSubscriptionId` unique | schéma | Deux abonnements pour un paiement |
+| `subscription_transactions.transactionId` unique | schéma | Inscrire deux fois une semaine |
+| `providerUpdatedAt` | `appStoreSubscriptions.ts` | Un événement en retard qui rouvrirait un abonnement coupé |
+| `finish()` après le 2xx seulement | `SubscriptionStore.swift` | Perdre un achat fait dans un tunnel |
+
+### 🚨 Apple seul résilie
+
+**Aucune app ne peut résilier à la place de son client.** C'est pourquoi la
+promesse « arrêt automatique à la fin du voyage » est devenue un **rappel**
+(Hugo, 01/10/2026) :
+
+- la passe de fin de voyage (`sweepEndedSubscriptions`) **ignore** les lignes
+  StoreKit — les fermer pendant qu'Apple prélève, c'était faire payer
+  quelqu'un dont le micro est fermé ;
+- `GET /v1/home` rend `traveller.subscriptionOutlivesTrip` quand l'abonnement va
+  se renouveler sans voyage en cours, et l'accueil propose de résilier — une
+  fois par jour au plus ;
+- `POST /v1/profile/subscription/cancel` n'enregistre que la **raison** d'un
+  abonnement StoreKit ; l'app ouvre ensuite la feuille de gestion des
+  abonnements d'iOS, et c'est `AUTO_RENEW_DISABLED` qui ferme la ligne.
+
+### Trois pièges
+
+> 🚨 **App Review achète en sandbox, contre le serveur de production.** Le
+> serveur garde un vérificateur par environnement ; un serveur qui ne
+> connaîtrait que la production refuserait l'achat du testeur, et Apple
+> rejetterait l'app pour « achat qui ne marche pas ».
+
+> 🚨 **Une transaction Xcode n'est signée par personne.** La bibliothèque d'Apple
+> saute la vérification pour `Xcode` et `LocalTesting`. Ces environnements ne
+> passent qu'avec `APP_STORE_ALLOW_XCODE=true`, et le serveur **refuse de
+> démarrer** avec cette valeur en production.
+
+> ⚠️ **Sans contrat *Paid Apps* actif, aucun produit ne revient.**
+> `Product.products(for:)` rend une liste vide, même en sandbox, et le paywall
+> dit « L'abonnement n'est pas disponible pour le moment ». Ce n'est pas le code.
+
+### Configuration
+
+| Variable | Où | Note |
+|---|---|---|
+| `APPLE_BUNDLE_ID` | Railway, `.env` | Déjà posée pour « Continuer avec Apple » : la même |
+| `APP_STORE_APP_APPLE_ID` | Railway | *App Store Connect ▸ App Information ▸ Apple ID*. Vide : seuls les achats sandbox passent |
+| `APP_STORE_ALLOW_XCODE` | `.env` local seulement | Jamais en production |
+
+Aucun secret : vérifier une signature ne demande que le certificat racine
+d'Apple, rangé dans `backend/certs/apple/` et copié dans l'image Docker.
+
+Vérifier que le déployé reçoit, sans rien écrire :
+
+```bash
+curl -s -X POST https://api-production-9f35a.up.railway.app/v1/webhooks/app-store \
+  -H 'content-type: application/json' -d '{"signedPayload":"x.e30.y"}'
+```
+
+`invalid_signature` : la route est là et refuse ce qu'Apple n'a pas signé.
+
+### Ce qui se fait dans App Store Connect
+
+Dans cet ordre — les deux premiers prennent des jours :
+
+1. **Business ▸ Agreements** : contrat *Paid Apps*, compte bancaire, formulaires
+   fiscaux. Attendre le statut *Active*.
+2. **Small Business Program** (developer.apple.com) : 15 % de commission au lieu
+   de 30 %.
+3. **Monetization ▸ Subscriptions** : groupe « MemoBook », abonnement
+   `com.memobook.app.subscription.weekly`, 1 semaine, France 1,99 €,
+   localisation française, capture du paywall pour la revue, partage familial
+   désactivé.
+4. **App Information ▸ App Store Server Notifications** : la même URL en
+   production et en sandbox, **version 2** —
+   `https://api-production-9f35a.up.railway.app/v1/webhooks/app-store`. Puis
+   *Request a Test Notification* : le log `Notification App Store de test
+   reçue.` le confirme.
+5. **Users and Access ▸ Sandbox** : un compte de test à une adresse jamais
+   utilisée chez Apple.
+6. **À la soumission** : l'abonnement se joint à une **nouvelle version** de
+   l'app (section *In-App Purchases and Subscriptions*), et la description de
+   l'App Store porte un lien vers les conditions d'utilisation.
+
+Côté Xcode, **rien à cocher** : l'achat intégré n'a pas d'entitlement.
+
+### Vérifier, dans l'ordre
+
+1. **Simulateur, ⌘R** : le schéma charge `ios/Config/MemoBook.storekit` — on
+   achète sans App Store Connect. Le serveur de production refuse ces achats
+   (non signés) : l'app l'affiche. Pour aller jusqu'au serveur, back-end local
+   avec `APP_STORE_ALLOW_XCODE=true`. *Debug ▸ StoreKit ▸ Manage Transactions*
+   rembourse ou expire à la main.
+2. **iPhone, compte sandbox** (*Réglages ▸ Développeur ▸ Compte sandbox*), schéma
+   sans fichier StoreKit : **une semaine dure 3 minutes**, on voit arriver les
+   renouvellements, la coupure et l'expiration dans les logs de Railway.
+3. **TestFlight** : le même sandbox, sur le binaire de production.
+
 ## Ce qui n'existe pas encore
 
-- **L'abonnement StoreKit** — colonnes (`Subscription`), paywall,
-  `FreemiumStatus`, catalogue et sursis de la semaine payée sont prêts ; la
-  plomberie d'achat ne l'est pas.
 - **L'extension des limites de souvenirs** — `POST /v1/trips/:id/memory-plan`
   pose le palier et laisse dérouler le parcours de bout en bout, mais
   n'encaisse rien. C'est le reçu StoreKit qui l'appellera.

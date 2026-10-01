@@ -697,8 +697,8 @@ public enum Faq {
                 id: "faq.prix.abonnement",
                 question: "Comment marche l’abonnement ?",
                 answer: [
-                    "Il coûte {{prix_abo_hebdo}} par semaine. Il démarre une fois tes trois étapes offertes enregistrées, et il ne court que pendant un récit en cours.",
-                    "Dès que tu clôtures le récit de ton Carnet, il se résilie automatiquement. Tu peux aussi le résilier toi-même à tout moment.",
+                    "Il coûte {{prix_abo_hebdo}} par semaine. Il démarre une fois tes trois étapes offertes enregistrées, pour que ton récit continue.",
+                    "Il se renouvelle chaque semaine par ton identifiant Apple. À la fin de ton voyage, on te propose de le résilier en un geste, et tu peux le faire toi-même à tout moment, depuis ton profil ou les réglages de ton iPhone.",
                     "Chaque semaine payée est déduite du prix final de ton Carnet.",
                 ]
             ),

@@ -1,5 +1,6 @@
 import MemoBookCore
 import MemoBookDesign
+import StoreKit
 import SwiftUI
 
 /// L'abonnement, de bout en bout : ce qu'il coûte, ce qu'il rend, et les trois
@@ -31,6 +32,13 @@ import SwiftUI
 /// À chaque étape, le bouton vert **garde** l'abonnement et le bouton rouge
 /// avance vers la sortie : c'est la seule chose qu'on n'a pas eu à décider, la
 /// maquette la répète trois fois.
+///
+/// **Un abonnement tenu par Apple se résilie chez Apple** (01/10/2026). Apple
+/// ne laisse aucune app le faire à la place de son client : « Confirmer ma
+/// résiliation » envoie la raison, puis ouvre la feuille de gestion des
+/// abonnements d'iOS. C'est au retour de celle-ci, d'après ce que StoreKit dit
+/// du renouvellement, qu'on passe à « C'est validé » — ou qu'on revient à
+/// « Mon Abonnement » si la personne n'y a rien coupé.
 struct SubscriptionSheet: View {
     let subscription: Subscription?
     let onActivate: () -> Void
@@ -38,6 +46,14 @@ struct SubscriptionSheet: View {
     /// « En savoir plus » ouvre le paywall — trois écrans qui déroulent l'offre
     /// en entier, là où la feuille n'en donne que le principe.
     let onLearnMore: () -> Void
+
+    /// La raison, seule, pour un abonnement tenu par Apple — la résiliation
+    /// elle-même se fait dans la feuille d'iOS.
+    var onRecordReason: (SubscriptionCancellationReason?) -> Void = { _ in }
+
+    /// Ce que StoreKit dit du renouvellement au retour de la feuille d'iOS :
+    /// `false`, il est coupé ; `true`, il court encore.
+    var onAppStoreRenewal: (Bool) -> Void = { _ in }
 
     /// « Voir ma cagnotte » mène à la page de la cagnotte (Hugo, 17/09/2026,
     /// T74). C'est l'écran qui présente qui la pousse : la feuille se referme
@@ -77,7 +93,15 @@ struct SubscriptionSheet: View {
     /// repart d'où l'on venait.
     @State private var showsPreview = false
 
+    /// La feuille de gestion des abonnements d'iOS, pour un abonnement tenu
+    /// par Apple.
+    @State private var managesAtApple = false
+
+    @Environment(\.subscriptionPurchase) private var subscriptionPurchase
+
     @Environment(\.dismiss) private var dismiss
+
+    private var isManagedByAppStore: Bool { subscription?.managedByAppStore == true }
 
     enum Step: Hashable {
         case pitch
@@ -121,6 +145,22 @@ struct SubscriptionSheet: View {
         .brandSheet(isPresented: $showsPreview) {
             BookPreviewSheet(memoId: previewMemoId)
         }
+        .manageSubscriptionsSheet(isPresented: $managesAtApple)
+        .onChange(of: managesAtApple) { _, isOpen in
+            guard !isOpen else { return }
+            Task { await settleAppStoreManagement() }
+        }
+    }
+
+    /// La feuille d'iOS vient de se refermer : on lit sur l'appareil si le
+    /// renouvellement court encore, et on avance d'après ce qu'Apple dit — pas
+    /// d'après le bouton qu'on a touché. `nil` (StoreKit ne sait pas) ne change
+    /// rien : mieux vaut rester sur place qu'annoncer une résiliation qui n'a
+    /// pas eu lieu.
+    private func settleAppStoreManagement() async {
+        guard let renews = await subscriptionPurchase?.willAutoRenew() else { return }
+        onAppStoreRenewal(renews)
+        step = renews ? .current : .done
     }
 
     // MARK: - « Comment ça fonctionne ? » — pas encore abonné
@@ -261,8 +301,13 @@ struct SubscriptionSheet: View {
                         style: .destructive,
                         fillsWidth: true
                     ) {
-                        onCancel(reason)
-                        step = .done
+                        if isManagedByAppStore {
+                            onRecordReason(reason)
+                            managesAtApple = true
+                        } else {
+                            onCancel(reason)
+                            step = .done
+                        }
                     }
                     // Grisé tant qu'aucune raison n'est cochée — Hugo,
                     // 14/09/2026. La question est posée pour être répondue :
@@ -285,8 +330,14 @@ struct SubscriptionSheet: View {
                 BrandButton(SubscriptionCopy.backHome, fillsWidth: true) { dismiss() }
 
                 BrandButton(SubscriptionCopy.subscribeAgain, style: .accent, fillsWidth: true) {
-                    onActivate()
-                    step = .current
+                    // Chez Apple, se réabonner pendant la semaine payée, c'est
+                    // **réarmer** le renouvellement — dans la même feuille d'iOS.
+                    if isManagedByAppStore {
+                        managesAtApple = true
+                    } else {
+                        onActivate()
+                        step = .current
+                    }
                 }
             }
         }
@@ -498,13 +549,16 @@ enum SubscriptionCopy {
         "Envoi illimité d’étapes et mise en page illimitée de tes souvenirs pour \(price)/semaine"
     }
 
-    static let offerCadence = "Résiliation automatique à la fin du voyage"
+    /// **Un rappel, pas un arrêt** (01/10/2026) : Apple seul résilie, à la
+    /// demande de la personne. L'accueil le lui propose dès que plus aucun
+    /// voyage ne court.
+    static let offerCadence = "Rappel pour résilier à la fin du voyage"
     static let previewPill = "Voir un aperçu de ton carnet →"
 
     static let howToCancelTitle = "Comment résilier ?"
     static let howToCancelParagraphs = [
         "L’abonnement est sans engagement. Tu l’annules quand tu veux sans perdre tes créations.",
-        "Surtout, il s’arrête tout seul à la fin de ton voyage !",
+        "Et à la fin de ton voyage, on te le rappelle : tu le coupes en un geste.",
     ]
 
     static let learnMore = "En savoir plus"
@@ -523,16 +577,16 @@ enum SubscriptionCopy {
     /// fiche écran.
     static func autoCancelTitle(destination: String?) -> String {
         guard let destination, !destination.isEmpty else {
-            return "Résiliation automatique à la fin de ton voyage."
+            return "Un rappel à la fin de ton voyage."
         }
-        return "Résiliation automatique à la fin de ton voyage à \(destination)."
+        return "Un rappel à la fin de ton voyage à \(destination)."
     }
 
     /// ⚠️ **État non maquetté** : sans date de fin, on promet la même chose sans
     /// avancer de délai — plutôt qu'un « dans 0 jour ».
     static func autoCancelBody(endsOn: Date?) -> String {
         let opening =
-            "Parce que l’on sait que tu n’as pas besoin de notre application en dehors de tes voyages, ton abonnement sera résilié automatiquement"
+            "Parce que l’on sait que tu n’as pas besoin de notre application en dehors de tes voyages, on te proposera de résilier ton abonnement"
         guard let endsOn else { return "\(opening) à la fin de ton voyage." }
         return "\(opening) \(endsOn.relativeDelay)."
     }
@@ -569,11 +623,11 @@ enum SubscriptionCopy {
         return [
             opening,
             consequence,
-            "Pour rappel, ton abonnement sera résilié automatiquement à ton retour.",
+            "Pour rappel, on te proposera de le résilier à ton retour, en un geste.",
         ]
     }
 
-    static let waitForAutoCancel = "Attendre la résiliation automatique"
+    static let waitForAutoCancel = "Attendre la fin du voyage"
     static let cancel = "Résilier"
 
     // — Feuille 4 : « Pourquoi nous quittes-tu ? »
@@ -660,6 +714,13 @@ enum SubscriptionCopy {
     }
 
     static let endedDismiss = "D’accord"
+
+    // — Le rappel de fin de voyage, sur l'accueil
+    static let tripEndTitle = "Ton voyage est terminé"
+    static let tripEndMessage =
+        "Ton abonnement MemoBook va se renouveler, alors que tu n’en as pas besoin entre deux voyages. Tu peux le résilier maintenant, tes carnets restent à toi."
+    static let tripEndCancel = "Résilier mon abonnement"
+    static let tripEndKeep = "Le garder"
     static let endedResubscribe = "Me réabonner"
     static let backHome = "Revenir à l’accueil"
     static let subscribeAgain = "S’inscrire à nouveau"

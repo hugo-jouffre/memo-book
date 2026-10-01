@@ -1,5 +1,6 @@
 import MemoBookCore
 import MemoBookDesign
+import MemoBookPayments
 import SwiftUI
 
 /// Le paywall : des écrans qui se suivent tout seuls, comme des stories.
@@ -58,10 +59,30 @@ struct PaywallView: View {
     @State private var estimation: PaywallEstimation?
     @Environment(\.walletSource) private var walletSource
 
-    /// La feuille « Choisis ton mode de paiement », ouverte par le bouton de
-    /// l'offre — et le modèle du profil qu'elle pilote, fabriqué à l'ouverture.
-    @State private var showsPayment = false
-    @State private var paymentModel: ProfileModel?
+    /// **L'achat passe par Apple, et par Apple seul** (01/10/2026). Le bouton
+    /// de l'offre ouvrait une feuille de cartes et d'Apple Pay — un paiement
+    /// hors achat intégré pour un service numérique, ce qu'App Review rejette
+    /// (règle 3.1.1). C'est désormais la feuille d'Apple qui s'ouvre, et le
+    /// serveur qui ouvre l'abonnement — voir ``SubscriptionPurchase``.
+    @Environment(\.subscriptionPurchase) private var subscriptionPurchase
+
+    /// La feuille d'Apple est ouverte, ou le serveur n'a pas encore répondu :
+    /// le bouton attend, et un second tapotis ne lance pas un second achat.
+    @State private var isPurchasing = false
+
+    /// Ce qu'il faut dire quand l'achat n'a pas ouvert l'abonnement — refusé,
+    /// en attente d'un parent, rien à restaurer.
+    @State private var purchaseNotice: PurchaseNotice?
+
+    /// Le prix tel qu'Apple le facture dans le pays du compte. **C'est lui qui
+    /// s'affiche dès qu'il est là** : App Store Connect a le dernier mot sur le
+    /// montant, et l'écran ne doit pas annoncer autre chose que ce que la
+    /// feuille d'Apple demandera.
+    @State private var applePrice: String?
+
+    /// Les conditions ou la politique de confidentialité, ouvertes depuis le
+    /// pied de l'offre — exigées à côté du bouton d'un abonnement (règle 3.1.2).
+    @State private var legalDocument: LegalRoute?
 
     /// Le support, ouvert **par-dessus** le paywall par « Besoin d'aide ? ».
     @State private var showsHelp = false
@@ -78,10 +99,6 @@ struct PaywallView: View {
     /// la page sur la même date de départ.
     @State private var fill: PaywallFill = .held(0)
 
-    /// Le profil, pour la feuille de paiement — posé par `RootView`, absent en
-    /// aperçu, où le jeu d'essai le remplace.
-    @Environment(\.profileModelFactory) private var makeProfileModel
-
     private var pageCount: Int { variant.pageCount }
 
     /// L'opacité du M derrière le paywall.
@@ -91,7 +108,7 @@ struct PaywallView: View {
     /// se sentir bousculé, assez court pour qu'on n'attende pas la suite.
     private static let pageDuration: Duration = .seconds(6)
 
-    private var price: String { subscription.displayedWeeklyPrice.euros }
+    private var price: String { applePrice ?? subscription.displayedWeeklyPrice.euros }
 
     var body: some View {
         ZStack {
@@ -142,7 +159,10 @@ struct PaywallView: View {
                             price: price,
                             title: variant.offerTitle,
                             onEstimate: { showsEstimation = true },
-                            onSubscribe: openPayment,
+                            isPurchasing: isPurchasing,
+                            onSubscribe: purchase,
+                            onRestore: restore,
+                            onShowLegal: { legalDocument = $0 },
                             onBack: { turn(-1) }
                         )
                     }
@@ -203,26 +223,77 @@ struct PaywallView: View {
             guard let walletSource, let wallet = try? await walletSource(previewMemoId) else { return }
             estimation = PaywallEstimation(wallet: wallet, weeklyPrice: subscription.displayedWeeklyPrice)
         }
-        .brandSheet(isPresented: $showsPayment) {
-            if let paymentModel {
-                PaywallPaymentSheet(model: paymentModel, price: price) {
-                    // Payé : la feuille se referme, l'abonnement est posé, et
-                    // c'est l'écran qui a présenté le paywall qui le referme —
-                    // on revient là d'où l'on venait, l'accueil le plus souvent.
-                    showsPayment = false
-                    onSubscribe()
-                }
+        .task { applePrice = await subscriptionPurchase?.displayPrice() }
+        // Un écran, comme le support : son en-tête porte la flèche qui ramène
+        // à l'offre.
+        .fullScreenCover(item: $legalDocument) { route in
+            NavigationStack {
+                LegalDocumentView(document: route.content, showsHelp: false)
+            }
+            .tint(MemoBookColor.action)
+        }
+        .alert(
+            purchaseNotice?.title ?? "",
+            isPresented: Binding(
+                get: { purchaseNotice != nil },
+                set: { if !$0 { purchaseNotice = nil } }
+            ),
+            presenting: purchaseNotice
+        ) { _ in
+            Button(PaywallCopy.Purchase.ok, role: .cancel) {}
+        } message: { notice in
+            Text(notice.message)
+        }
+    }
+
+    /// Achète l'abonnement. **Payé, c'est l'écran qui a présenté le paywall qui
+    /// le referme** : on revient là d'où l'on venait, l'accueil le plus souvent.
+    ///
+    /// Sans achat possible — un aperçu isolé, sans compte —, l'offre fait comme
+    /// si c'était fait : c'est ce qu'elle faisait avant StoreKit, et un aperçu
+    /// n'a rien à encaisser.
+    private func purchase() {
+        guard !isPurchasing else { return }
+        guard let subscriptionPurchase else {
+            onSubscribe()
+            return
+        }
+
+        isPurchasing = true
+        Task {
+            let outcome = await subscriptionPurchase.purchase(previewMemoId)
+            isPurchasing = false
+
+            switch outcome {
+            case .subscribed, .awaitingServer:
+                onSubscribe()
+            case .pending:
+                purchaseNotice = .pending
+            case .cancelled:
+                break
+            case .failed(let message):
+                purchaseNotice = .failed(message)
             }
         }
     }
 
-    /// Ouvre la feuille de paiement, sur un modèle du profil fabriqué par l'app
-    /// — ou sur le jeu d'essai, en aperçu.
-    private func openPayment() {
-        if paymentModel == nil {
-            paymentModel = makeProfileModel?() ?? ProfileModel()
+    /// « Restaurer mes achats » : un abonnement pris sur un autre iPhone, ou
+    /// avant une réinstallation, se retrouve ici.
+    private func restore() {
+        guard !isPurchasing, let subscriptionPurchase else { return }
+
+        isPurchasing = true
+        Task {
+            defer { isPurchasing = false }
+            do {
+                switch try await subscriptionPurchase.restore() {
+                case .restored: onSubscribe()
+                case .nothingToRestore: purchaseNotice = .nothingToRestore
+                }
+            } catch {
+                purchaseNotice = .failed(error.localizedDescription)
+            }
         }
-        showsPayment = true
     }
 
     /// Ce qui décide de relancer le minuteur : la page qu'on regarde, et le fait
@@ -489,10 +560,16 @@ enum PaywallCopy {
     /// est hebdomadaire — la feuille d’abonnement l’écrit, l’estimation compte
     /// trois semaines —, et ce pied de page seul promettait un prélèvement
     /// mensuel : il annonçait donc un quart du prix réel.
+    ///
+    /// **La seconde ligne ne promet plus d'arrêt automatique** (01/10/2026).
+    /// Apple ne laisse aucune app résilier à la place de son client : promettre
+    /// « automatiquement à la fin du voyage » aurait fait payer des semaines
+    /// qu'on croyait arrêtées. Elle dit ce qui est vrai — où l'on résilie, et
+    /// le rappel qu'on reçoit au retour.
     static func offerFootnote(price: String) -> [String] {
         [
             "Renouvellement automatique pour \(price)/semaine",
-            "résilie à tout moment ou automatiquement à la fin du voyage",
+            "résiliable à tout moment, rappel à la fin du voyage",
         ]
     }
 
@@ -502,10 +579,10 @@ enum PaywallCopy {
     static func offerFootnotePrice(price: String) -> (lead: String, price: String) {
         ("Renouvellement automatique pour ", "\(price)/semaine")
     }
-    /// Le bouton de l'offre ouvre la feuille de paiement, et le dit — Hugo,
-    /// 15/09/2026. « Envoyer des vocaux en illimité » promettait le résultat
-    /// sans nommer le geste.
-    static let offerCallToAction = "Choisis ton mode de paiement"
+    /// Le bouton de l'offre nomme le geste — Hugo, 15/09/2026. « Choisis ton
+    /// mode de paiement » ouvrait une feuille de cartes ; c'est désormais la
+    /// feuille d'Apple qui s'ouvre, et l'on s'y abonne.
+    static let offerCallToAction = "S’abonner"
 
     // — La feuille « Estimation » (`3469:14105`)
     enum Estimation {
@@ -525,9 +602,26 @@ enum PaywallCopy {
         static func perCopy(_ price: String) -> String { "\(price)/carnet" }
     }
 
-    // — La feuille de paiement, ouverte par le bouton de l'offre
-    enum Payment {
-        static func pay(_ price: String) -> String { "Payer \(price)" }
+    // — L'achat, par la feuille d'Apple
+    enum Purchase {
+        static let ok = "OK"
+        /// **Courts, pour tenir sur une ligne** sous le bouton : en entier, les
+        /// trois liens s'empilaient et le pied montait sur la moitié des
+        /// cartes. VoiceOver lit les noms complets.
+        static let restore = "Restaurer"
+        static let restoreSpoken = "Restaurer mes achats"
+        static let terms = "Conditions"
+        static let termsSpoken = "Conditions d’utilisation"
+        static let privacy = "Confidentialité"
+        static let privacySpoken = "Politique de confidentialité"
+
+        static let pendingTitle = "Achat en attente"
+        static let pendingMessage =
+            "Ton achat attend une validation — celle d’un parent, ou de ta banque. Ton abonnement s’ouvrira tout seul dès qu’elle arrivera."
+        static let failedTitle = "Achat impossible"
+        static let nothingTitle = "Rien à restaurer"
+        static let nothingMessage =
+            "Aucun abonnement MemoBook en cours sur cet identifiant Apple."
     }
 
     struct Argument {
@@ -561,8 +655,12 @@ enum PaywallCopy {
         ),
         Argument(
             icon: "IconLockerChecked",
-            title: "Arrêt automatique de l’abonnement",
-            detail: "Parce que tu n’as pas besoin de notre application en dehors de tes voyages",
+            // **Un rappel, pas un arrêt** (01/10/2026) : Apple seul résilie,
+            // à la demande de la personne. L'accueil le propose en un geste
+            // dès que plus aucun voyage ne court.
+            title: "On te rappelle de résilier",
+            detail:
+                "À la fin de ton voyage, tu coupes l’abonnement en un geste : pas besoin de nous entre deux voyages",
             pill: nil,
             tilt: -1
         ),
@@ -575,4 +673,31 @@ enum PaywallCopy {
             tilt: 1
         ),
     ]
+}
+
+/// Ce que l'offre dit quand l'achat n'a pas ouvert l'abonnement.
+enum PurchaseNotice: Hashable {
+    case pending
+    case failed(String)
+    case nothingToRestore
+
+    var title: String {
+        switch self {
+        case .pending: PaywallCopy.Purchase.pendingTitle
+        case .failed: PaywallCopy.Purchase.failedTitle
+        case .nothingToRestore: PaywallCopy.Purchase.nothingTitle
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .pending: PaywallCopy.Purchase.pendingMessage
+        case .failed(let message): message
+        case .nothingToRestore: PaywallCopy.Purchase.nothingMessage
+        }
+    }
+}
+
+extension LegalRoute: Identifiable {
+    var id: Self { self }
 }

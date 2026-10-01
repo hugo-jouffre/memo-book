@@ -665,6 +665,13 @@ public struct ProfileView: View {
                     sheet = nil
                     showsPaywall = true
                 },
+                onRecordReason: { model.recordCancellationReason($0) },
+                onAppStoreRenewal: { renews in
+                    model.acknowledgeAppStoreRenewal(renews)
+                    // Même règle qu'au-dessus : la semaine payée garde le micro
+                    // ouvert, même renouvellement coupé.
+                    subscriptionSession?.record(isSubscribed: model.subscriptionGrantsAccess)
+                },
                 onSeeWallet: {
                     // La feuille se referme **avant** que la cagnotte s'ouvre :
                     // c'est un écran poussé sur la pile du profil, comme la

@@ -33,6 +33,13 @@ public final class AppDependencies {
     /// de cagnotte se relit sans compte Stripe.
     public let payments: any PaymentPresenter
 
+    /// Qui achète l'abonnement — StoreKit, ou un double qui n'appelle personne.
+    ///
+    /// **À part de ``payments``, et pour de bon** : l'abonnement est un service
+    /// numérique, Apple impose l'achat intégré, et le faire passer par la
+    /// feuille Stripe ferait rejeter le binaire (règle 3.1.1).
+    public let subscriptions: any SubscriptionStore
+
     /// Ce que l'app garde du serveur sur l'appareil — voir ``ContentCache``.
     ///
     /// **Deux usages pour une seule pièce** : relire hors ligne, ce pour quoi
@@ -54,12 +61,15 @@ public final class AppDependencies {
     ///   - payments: qui ouvre la feuille de paiement. La vraie par défaut ;
     ///     une preview Xcode — et le lancement `-previewSignedIn` — passe
     ///     ``StubPaymentPresenter``, qui n'appelle personne.
+    ///   - subscriptions: qui achète l'abonnement. StoreKit par défaut ; un
+    ///     aperçu passe ``StubSubscriptionStore``.
     public init(
         api: any MemoBookAPI,
         connectivity: Connectivity = .system,
         pendingRecordings: PendingRecordingStore = .inLibrary(),
         pendingTrips: PendingTripStore = .inLibrary(),
         payments: (any PaymentPresenter)? = nil,
+        subscriptions: (any SubscriptionStore)? = nil,
     ) {
         self.api = api
         // La vraie feuille Stripe par défaut ; un aperçu passe la sienne.
@@ -67,6 +77,7 @@ public final class AppDependencies {
         // pas posé : la feuille montre alors les cartes seules, au lieu d'un
         // bouton Apple Pay qui échouerait au moment de payer.
         self.payments = payments ?? StripePaymentSheetPresenter()
+        self.subscriptions = subscriptions ?? StoreKitSubscriptionStore()
         // Tout ce qu'on dit part par la file, et la file parle à la
         // conversation (`POST /v1/trips/:id/chat`) : le vocal de l'accueil est
         // un tour comme un autre, avec l'identifiant de sa bulle. La durée
@@ -88,6 +99,64 @@ public final class AppDependencies {
         // de savoir qu'on est hors ligne **avant** de dessiner l'accueil, et de
         // repartir avec ce qu'un lancement précédent avait laissé en file.
         outbox.start()
+
+        // **Au lancement, et pas à l'ouverture du paywall** : un renouvellement,
+        // une validation parentale ou un remboursement arrivent quand ils
+        // veulent, et StoreKit garde ceux qu'on n'écoute pas.
+        self.subscriptions.startListening(deliver: Self.deliveringTransaction(to: api, memoId: nil))
+    }
+
+    /// Remet une transaction App Store au serveur — voir
+    /// ``MemoBookAPI/syncAppStoreTransaction(signedTransaction:memoId:)``.
+    ///
+    /// **Un refus définitif devient ``TransactionRefused``** : un achat fait
+    /// depuis un autre compte MemoBook (403), un abonnement déjà rattaché
+    /// ailleurs (409), une transaction que le serveur ne sait pas vérifier
+    /// (400 — un achat Xcode envoyé à la production). StoreKit la finit alors,
+    /// et l'écran affiche le message du serveur au lieu d'un abonnement qui
+    /// n'existe pas. Tout le reste — pas de réseau, pas de session, une panne —
+    /// lève tel quel, et la transaction reste ouverte pour la prochaine fois.
+    nonisolated static func deliveringTransaction(
+        to api: any MemoBookAPI,
+        memoId: String?
+    ) -> TransactionDelivery {
+        { signed in
+            do {
+                _ = try await api.syncAppStoreTransaction(signedTransaction: signed.jws, memoId: memoId)
+            } catch APIError.server(let statusCode, _, let message)
+                where [400, 403, 409].contains(statusCode)
+            {
+                throw TransactionRefused(message: message)
+            }
+        }
+    }
+
+    /// Remet au serveur ce que StoreKit garde encore — à la connexion : un
+    /// renouvellement arrivé pendant que personne n'était connecté n'a pas pu
+    /// partir.
+    func deliverUnfinishedTransactions() async {
+        await subscriptions.deliverUnfinished(deliver: Self.deliveringTransaction(to: api, memoId: nil))
+    }
+
+    /// Ce que l'offre sait faire de l'App Store, pour **ce** compte — posé par
+    /// `RootView` une fois connecté. L'identifiant du compte devient
+    /// l'`appAccountToken` de l'achat : c'est lui qui permet au serveur de
+    /// rattacher chaque renouvellement sans que l'app soit ouverte.
+    func subscriptionPurchase(accountId: String) -> SubscriptionPurchase {
+        let token = UUID(uuidString: accountId)
+        return SubscriptionPurchase(
+            displayPrice: { [subscriptions] in await subscriptions.displayPrice() },
+            purchase: { [subscriptions, api] memoId in
+                await subscriptions.purchase(
+                    appAccountToken: token,
+                    deliver: Self.deliveringTransaction(to: api, memoId: memoId)
+                )
+            },
+            restore: { [subscriptions, api] in
+                try await subscriptions.restore(deliver: Self.deliveringTransaction(to: api, memoId: nil))
+            },
+            willAutoRenew: { [subscriptions] in await subscriptions.willAutoRenew() }
+        )
     }
 
     public convenience init(configuration: APIConfiguration = .localDevelopment) {
@@ -549,10 +618,6 @@ public final class AppDependencies {
     /// Le tunnel de commande, **entièrement servi par le serveur** — c'est ce
     /// qui le distingue des quatre écrans ci-dessus.
     ///
-    /// Voir aussi ``SwiftUI/EnvironmentValues/profileModelFactory`` : le paywall
-    /// a besoin du profil pour sa feuille de paiement, et il se présente depuis
-    /// des écrans qui ne tiennent pas de dépendances.
-    ///
     /// Quatre routes : `GET /v1/memos/:id/order-context` ouvre les sept étapes
     /// d'un seul appel, `POST /v1/memos/:id/orders/quote` compte le
     /// récapitulatif, `POST /v1/memos/:id/orders` enregistre **et rend de quoi
@@ -616,17 +681,6 @@ public final class AppDependencies {
 }
 
 extension EnvironmentValues {
-    /// Fabrique le modèle du profil, pour un écran qui n'a pas d'accès aux
-    /// dépendances et en a pourtant besoin d'un.
-    ///
-    /// Le paywall est présenté par l'accueil, par un voyage et par le profil ;
-    /// sa feuille « Choisis ton mode de paiement » lit et écrit les cartes du
-    /// compte, ce que seul ``ProfileModel`` sait faire. Plutôt que de faire
-    /// remonter `AppDependencies` dans trois écrans, `RootView` pose ici la
-    /// fabrique branchée sur l'API ; un aperçu n'en pose aucune et le paywall
-    /// retombe sur le jeu d'essai.
-    @Entry public var profileModelFactory: (@MainActor () -> ProfileModel)?
-
     /// La cagnotte d'un voyage, pour le paywall — qui n'a pas accès aux
     /// dépendances non plus. C'est elle qui porte l'estimation du carnet
     /// (`GET /v1/wallet?tripId=…`, T127). `nil` en aperçu : la feuille
