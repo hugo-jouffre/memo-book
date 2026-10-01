@@ -234,7 +234,10 @@ public final class AudioRecorder {
     /// `averagePower` va de -160 dB (silence) à 0 dB (saturation). En dessous de
     /// -50 dB il n'y a rien d'audible : on écrase cette plage pour que la
     /// waveform réagisse à la voix, pas au bruit de fond.
-    static func normalize(decibels: Float) -> Double {
+    ///
+    /// `nonisolated` : une fonction pure, que ``VoiceLevels`` appelle hors de
+    /// l'acteur principal en relisant un fichier.
+    nonisolated static func normalize(decibels: Float) -> Double {
         let floor: Float = -50
         guard decibels.isFinite else { return 0 }
         guard decibels > floor else { return 0 }

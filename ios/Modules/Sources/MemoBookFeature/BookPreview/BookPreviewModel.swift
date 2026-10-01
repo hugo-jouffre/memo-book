@@ -219,28 +219,38 @@ public final class BookPreviewModel {
         isFullScreen = isOn
     }
 
-    /// La feuille regardée se configure : c'est la première ou la dernière, les
-    /// couvertures n'ont pas encore été choisies, **et il y a une page dessous**.
+    /// La feuille regardée se configure : c'est la première ou la dernière, et
+    /// les couvertures n'ont pas encore été choisies. C'est ce qui pose le
+    /// voile.
     ///
-    /// La dernière condition n'est pas un détail : sans elle, l'invitation se
-    /// posait sur un aplat vide tant que le PDF n'était pas descendu, et
-    /// proposait de configurer une couverture qu'on ne voyait pas.
+    /// **Le compte de feuilles, pas le PDF** (Hugo, 30/09/2026). Jusqu'ici il
+    /// fallait aussi que le document soit descendu, pour ne pas voiler un
+    /// aplat vide. Mais l'écran de l'app n'a pas encore de PDF — il vit sur son
+    /// jeu d'essai tant que T194 n'est pas tranché —, et le garde-fou effaçait
+    /// donc l'invitation **partout, tout le temps** : Hugo l'a redemandée
+    /// plusieurs fois sans jamais la voir. Une page papier voilée qui mène aux
+    /// couvertures vaut mieux qu'une page sans chemin.
     public var isOnConfigurableCover: Bool {
-        guard renderer.sheetCount > 0 else { return false }
-        return preview?.isConfigurableCover(page: sheetIndex, in: sheetCount) ?? false
+        preview?.isConfigurableCover(page: sheetIndex, in: sheetCount) ?? false
+    }
+
+    /// La feuille regardée est la première ou la dernière du carnet : celles
+    /// qu'on règle depuis les couvertures.
+    public var isOnCover: Bool {
+        sheetCount > 0 && (sheetIndex == 0 || sheetIndex == sheetCount - 1)
     }
 
     /// Ce que la page regardée porte pour aller aux couvertures.
     ///
-    /// **La première page en porte toujours un** (Clara, 26/09/2026) : le voile
-    /// et son invitation tant que les couvertures ne sont pas choisies, la
-    /// pastille « Configurer » seule ensuite. Le 19/09, le lien sous l'aperçu
-    /// était parti au profit du voile — et une fois les couvertures choisies,
-    /// plus rien ne ramenait à elles depuis l'aperçu.
+    /// **La première et la dernière page en portent toujours un** (Hugo,
+    /// 30/09/2026, maquette `3545:21634`) : le voile et son invitation tant que
+    /// les couvertures ne sont pas choisies, le bouton « Configurer » seul,
+    /// posé sur la page, ensuite. Le 26/09, seule la première le gardait une
+    /// fois les couvertures choisies — et la quatrième de couverture n'avait
+    /// plus de chemin vers son écran.
     public var coverCallToAction: CoverCallToAction? {
-        guard renderer.sheetCount > 0 else { return nil }
-        if isOnConfigurableCover { return .invitation }
-        return sheetIndex == 0 ? .edit : nil
+        guard isOnCover else { return nil }
+        return isOnConfigurableCover ? .invitation : .edit
     }
 
     // MARK: - Partager
