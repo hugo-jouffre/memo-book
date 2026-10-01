@@ -57,6 +57,20 @@ public struct ChatView: View {
     /// Le paywall, ouvert par le micro quand les étapes offertes sont épuisées
     /// — le même verrou que sur l'accueil et sur un voyage.
     @State private var showsPaywall = false
+
+    /// Le fil est posé : ce qui arrive **ensuite** est un envoi ou une
+    /// réponse, et se dessine comme tel (voir ``rowTransition(for:)``). À
+    /// l'ouverture, les messages déjà là ne rejouent pas leur arrivée.
+    @State private var isSettled = false
+
+    /// La puce de suggestion en vol : elle quitte la barre, devient bleue et
+    /// monte se poser en bulle du voyageur (Hugo, 29/09/2026). `nil` le reste
+    /// du temps. Voir ``launch(_:from:)``.
+    @State private var flight: SuggestionFlight?
+
+    /// Le haut de la barre d'envoi, en coordonnées globales : c'est là que la
+    /// puce en vol atterrit, juste au-dessus.
+    @State private var footerTop: CGFloat = 0
     @Environment(\.subscriptionSession) private var subscriptionSession
 
     /// L'étape sur laquelle il reste à se poser en arrivant. Consommée **une
@@ -183,7 +197,12 @@ public struct ChatView: View {
         // n'est jamais mis en cache — « un fil périmé se lit comme un message
         // perdu ». Pas de second rechargement en `onAppear` : deux lectures au
         // même instant, c'est deux reconstructions (22/09/2026).
-        .task { await model.load() }
+        .task {
+            await model.load()
+            // Les bulles qu'on vient de lire sont posées ; celles qui suivent
+            // arrivent.
+            isSettled = true
+        }
         // Un écran de chat laissé derrière soi ne doit ni parler ni enregistrer.
         .onDisappear { model.teardown() }
         // Le verrou des étapes offertes : le micro mène au paywall au lieu de
@@ -224,6 +243,7 @@ public struct ChatView: View {
                             onToggleExpansion: { toggleExpansion(of: message.id) }
                         )
                         .id(message.id)
+                        .transition(rowTransition(for: message))
                     }
 
                     if model.isThinking {
@@ -242,6 +262,15 @@ public struct ChatView: View {
                     reduceMotion ? nil : .smooth(duration: 0.3),
                     value: model.messages.count
                 )
+                // **Le fil se lève dès que la puce décolle** (Hugo,
+                // 30/09/2026) : la bulle qui monte se pose dans le creux qu'il
+                // laisse au lieu de passer sur le dernier message. Un décalage
+                // **de dessin**, et non une ligne de plus : insérer une ligne
+                // dans le fil épinglé en bas le faisait d'abord sauter de sa
+                // hauteur vers le bas, puis remonter. À l'atterrissage, le vrai
+                // message prend la place du décalage dans la même image — voir
+                // ``launch(_:from:)``.
+                .offset(y: -(flight?.lift ?? 0))
                 // De combien le fil a défilé, lu sur le haut de son contenu.
                 // Un `GeometryReader` en fond, et non `onScrollGeometryChange`
                 // : celui-là est iOS 18, l'app cible iOS 17.
@@ -335,7 +364,129 @@ public struct ChatView: View {
                     ChatTripContextSheet(context: tripContext)
                 }
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) { footer(proxy) }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                footer(proxy)
+                    .onGeometryChange(for: CGFloat.self, of: { $0.frame(in: .global).minY }) {
+                        footerTop = $0
+                    }
+            }
+            // La puce en vol, par-dessus le fil et la barre : elle part de la
+            // barre et se pose au bas du fil, là où sa bulle va apparaître.
+            .overlay { flyingSuggestion }
+        }
+    }
+
+    // MARK: - L'arrivée d'une bulle
+
+    /// Comment une bulle entre dans le fil : **elle grandit depuis son coin
+    /// bas** — droit pour le voyageur, gauche pour MEMO —, comme si elle
+    /// partait du point d'où on l'envoie (Hugo, 29/09/2026). Rien pour les
+    /// bulles déjà là à l'ouverture, ni en Reduce Motion, ni pour la bulle qui
+    /// prend la place d'une puce en vol, déjà posée par l'animation.
+    private func rowTransition(for message: ChatMessage) -> AnyTransition {
+        guard isSettled, !reduceMotion else { return .identity }
+        // La bulle qui prend la place d'une puce en vol **y est déjà** : elle
+        // apparaît sans transition, dans l'image où la puce disparaît. Un
+        // fondu laissait voir les deux à la fois.
+        if flight != nil, message.author.isTraveller { return .identity }
+        let anchor: UnitPoint = message.author.isTraveller ? .bottomTrailing : .bottomLeading
+        return .scale(scale: 0.35, anchor: anchor).combined(with: .opacity)
+    }
+
+    /// La puce qu'on vient de toucher, en vol.
+    ///
+    /// Elle se dessine **comme la bulle qu'elle va devenir** — bleue, en corps
+    /// de bulle —, part du cadre de la puce et monte jusqu'au coin bas droit
+    /// du fil. Arrivée, le vrai message est posé dessous et elle s'efface dans
+    /// la même image : la bulle du fil prend le relais sans qu'on voie la
+    /// couture.
+    @ViewBuilder
+    private var flyingSuggestion: some View {
+        if let flight {
+            GeometryReader { proxy in
+                let origin = proxy.frame(in: .global).origin
+                // La place du prochain message au bas du fil : sous elle,
+                // l'espacement des bulles, le repère d'un point et la marge
+                // du fil.
+                let landing = CGPoint(
+                    x: proxy.size.width - MemoBookSpacing.snug - flight.size.width / 2,
+                    y: footerTop - origin.y - MemoBookSpacing.s - 1 - ChatMetrics.messageSpacing
+                        - flight.size.height / 2
+                )
+                let start = CGPoint(
+                    x: flight.from.midX - origin.x,
+                    y: flight.from.midY - origin.y
+                )
+                let progress = flight.progress
+
+                BrandChatBubble(author: .traveller) {
+                    Text(flight.suggestion.label)
+                        .font(MemoBookFont.bubble)
+                        .foregroundStyle(MemoBookColor.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .onGeometryChange(for: CGSize.self, of: \.size) { self.flight?.size = $0 }
+                .scaleEffect(0.7 + 0.3 * progress)
+                // Posée : le vrai message est dessous, elle s'efface d'un coup.
+                .opacity(flight.hasLanded ? 0 : 1)
+                .position(
+                    x: start.x + (landing.x - start.x) * progress,
+                    y: start.y + (landing.y - start.y) * progress
+                )
+            }
+            .allowsHitTesting(false)
+            .transition(.opacity)
+        }
+    }
+
+    /// Fait décoller une puce : le vol, puis l'envoi.
+    ///
+    /// L'envoi attend la fin du vol pour que la bulle n'apparaisse pas en bas
+    /// pendant que la puce est encore à mi-chemin. En Reduce Motion, on envoie
+    /// tout de suite.
+    ///
+    /// **Le fil se lève au décollage** (Hugo, 30/09/2026). Il ne montait
+    /// qu'à l'arrivée du vrai message, et pendant le vol la bulle passait sur
+    /// le dernier message du fil. Le fil se lève donc de la hauteur de la
+    /// bulle en même temps qu'elle part, et c'est dans le creux qu'elle se
+    /// pose. À l'atterrissage, le décalage et le vrai message s'échangent
+    /// **sans animation propre** : l'un part, l'autre arrive à la même place.
+    private func launch(_ suggestion: ChatSuggestion, from frame: CGRect) {
+        guard !reduceMotion, flight == nil else {
+            model.choose(suggestion, addPhotos: photos.begin)
+            return
+        }
+
+        flight = SuggestionFlight(suggestion: suggestion, from: frame)
+        // « Ajouter des photos » ne devient pas une bulle : rien à lever pour
+        // elle. Et on ne lève que le bas du fil : remonté dans les anciens
+        // messages, c'est ``follow(_:)`` qui ramène en bas à l'arrivée.
+        let lifts = suggestion.intent != .importPhotos && isAtBottom
+        Task { @MainActor in
+            // Un tour de boucle pour que la bulle en vol soit mesurée et
+            // posée sur la puce avant de partir.
+            try? await Task.sleep(for: .milliseconds(30))
+            withAnimation(.smooth(duration: 0.5)) {
+                flight?.progress = 1
+                if lifts, let size = flight?.size {
+                    flight?.lift = size.height + ChatMetrics.messageSpacing
+                }
+            }
+            try? await Task.sleep(for: .milliseconds(480))
+            // L'échange, sans animation à lui : le fil retombe de ce qu'il
+            // s'était levé au moment où le vrai message l'agrandit d'autant —
+            // l'ancre du bas le garde épinglé —, et la puce s'efface. Seule la
+            // barre bouge encore : elle perd ses suggestions pendant que MEMO
+            // répond, et le fil se tasse d'autant (T207).
+            var swap = Transaction()
+            swap.disablesAnimations = true
+            withTransaction(swap) {
+                flight?.lift = 0
+                flight?.hasLanded = true
+                model.choose(suggestion, addPhotos: photos.begin)
+            }
+            try? await Task.sleep(for: .milliseconds(220))
+            flight = nil
         }
     }
 
@@ -421,7 +572,13 @@ public struct ChatView: View {
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
 
-            ChatComposer(model: model, isWriting: $isWriting, onAddPhotos: photos.begin)
+            ChatComposer(
+                model: model,
+                isWriting: $isWriting,
+                onAddPhotos: photos.begin,
+                flyingSuggestionId: flight?.suggestion.id,
+                onLaunch: launch
+            )
         }
         .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: isAtBottom)
     }
@@ -628,4 +785,20 @@ public enum ChatIntent: Sendable, Hashable {
     /// voulu : la bannière se voit quand on lit le fil, l'icône quand on ne
     /// l'a pas sous les yeux.
     case openBookPreview(memoId: String)
+}
+
+/// Une puce de suggestion en vol vers le fil — voir ``ChatView/launch(_:from:)``.
+struct SuggestionFlight: Equatable {
+    let suggestion: ChatSuggestion
+    /// Le cadre de la puce au départ, en coordonnées globales.
+    let from: CGRect
+    /// La taille de la bulle en vol, mesurée une fois posée.
+    var size: CGSize = .zero
+    /// De 0 (sur la puce) à 1 (posée au bas du fil).
+    var progress: CGFloat = 0
+    /// De combien le fil se lève pour laisser la place à la bulle : sa
+    /// hauteur et l'espacement des bulles. Zéro quand rien ne se lève.
+    var lift: CGFloat = 0
+    /// Le vrai message a pris sa place : la puce s'efface.
+    var hasLanded = false
 }

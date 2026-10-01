@@ -647,8 +647,9 @@ public struct ChatBookPreview: Codable, Sendable, Hashable {
     public let memoryCount: Int
     public let pageCount: Int
 
-    /// L'aperçu est prêt à s'ouvrir. Faux tant qu'il n'y a rien à montrer : la
-    /// bannière se lit alors comme un compteur, pas comme une porte.
+    /// Un PDF composé existe. La capsule ne s'en sert plus pour se
+    /// désactiver (30/09/2026) : elle mène à l'aperçu dans tous les cas, et
+    /// c'est lui qui dit si le carnet se compose encore.
     public let isOpenable: Bool
 
     public init(memoryCount: Int, pageCount: Int, isOpenable: Bool = true) {

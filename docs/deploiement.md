@@ -54,9 +54,37 @@ chaîne Supabase, celle qui est déjà dans le `.env` local.
 > deux fois. `npm run supabase:setup` le vérifie activement et refuse de
 > continuer sur le mauvais port.
 
-Les migrations ne tournent pas au démarrage : l'image d'exécution est construite
-avec `npm ci --omit=dev`, elle n'embarque donc pas le CLI Prisma. On les applique
-depuis le Mac, `.env` rempli :
+**Les migrations partent avec le code, et avant lui.** `railway.json` pose un
+`preDeployCommand` — `npx prisma migrate deploy` — que Railway lance dans la
+nouvelle image, avec les variables du service, **avant** de lui envoyer le
+moindre trafic. Si la migration échoue, le déploiement échoue avec elle et
+l'ancienne version reste en ligne, cohérente avec l'ancien schéma. C'est pour ça
+que `prisma` (le CLI) est dans `dependencies` et non `devDependencies` : l'image
+d'exécution est construite avec `npm ci --omit=dev`.
+
+Pourquoi : Railway déploie chaque fusion sur `main` tout seul, mais rien ne
+migrait. Deux fois en une semaine, le code est parti sans son schéma et l'API a
+rendu 500 — le 22/09/2026 (`conversation_avec_memo`, quatre jours de pannes sur
+l'accueil) puis le 27/09 (`date_de_naissance`) : cette fois `GET /v1/auth/me`
+**et** les entrées Apple et Google tombaient, l'app renvoyait chacun sur l'écran
+d'entrée, et personne ne pouvait plus y rentrer.
+
+Deux limites à connaître :
+
+- **Seul le service `api` lit `railway.json`**, et c'est lui qui migre : la
+  configuration du `worker` n'a ni son contrôle de santé ni sa commande
+  (relevé le 29/09/2026). Le `worker` part en même temps : pendant les quelques
+  secondes de la migration, il peut tomber sur une colonne qui n'existe pas
+  encore, et pg-boss rejoue le job.
+- La migration prend **un créneau** du pooler, qui en a quinze pour tout le
+  projet. Un pooler plein fait échouer le déploiement (`EMAXCONNSESSION` dans
+  les logs *pre-deploy*) : sans conséquence, l'ancienne version reste, mais le
+  code neuf ne part pas tant qu'on n'a pas relancé. Voir `docs/debogage.md`, § 4.
+
+Le schéma de **test** (`memobook_test`) ne se migre toujours qu'à la main — voir
+plus bas.
+
+À la main, depuis le Mac, `.env` rempli :
 
     cd backend
     npm run supabase:setup
@@ -67,8 +95,11 @@ un aller-retour complet dessus (écriture, lecture, URL signée, suppression),
 puis mesure ce qui est consommé face au plan gratuit. Idempotent, il ne supprime
 jamais rien. `npm run supabase:check` fait les vérifications sans rien changer.
 
-À relancer **à chaque fois qu'une migration est ajoutée**, avant de déployer le
-code qui en dépend.
+Ce n'est plus lui qui migre la production. Il sert au premier branchement d'un
+projet Supabase, et au schéma `memobook_test`, que personne d'autre ne migre :
+
+    DATABASE_URL="$(grep -E '^TEST_DATABASE_URL=' .env | cut -d= -f2-)" \
+      npx prisma migrate deploy
 
 Le plan gratuit met le projet en pause après 7 jours sans requête, et le réveil
 prend quelques minutes. Tant que le `worker` tourne, la pause ne se déclenche

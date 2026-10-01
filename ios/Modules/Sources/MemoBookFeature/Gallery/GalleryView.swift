@@ -66,48 +66,60 @@ public struct GalleryView: View {
         .task { await model.load() }
         .brandRefreshFlash(model.freshness.isUpdated)
         .animation(.smooth(duration: 0.35), value: model.gallery)
-        .refreshable { await model.load() }
     }
 
     private var scrollingContent: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
-                if let message = model.errorMessage {
-                    ErrorBanner(message: message) {
-                        Task { await model.load() }
-                    }
-                    .padding(.horizontal, MemoBookSpacing.screenMargin)
-                }
-
-                grid
-            }
-            .padding(.top, MemoBookSpacing.xs)
-            .padding(.bottom, MemoBookSpacing.m)
-        }
-        .scrollIndicators(.hidden)
-        .scrollBounceBehavior(.basedOnSize)
         // L'en-tête et la barre de filtres restent en haut pendant que la
         // mosaïque défile dessous : c'est la barre qui commande la grille, elle
         // ne doit pas partir avec elle.
-        .safeAreaInset(edge: .top, spacing: MemoBookSpacing.s) {
+        //
+        // ⚠️ **Au-dessus du défilement, pas dans son encart** (Hugo,
+        // 30/09/2026). Posée en `safeAreaInset` du `ScrollView` vertical, la
+        // barre restait dans sa zone de geste : faire glisser les pastilles
+        // vers la gauche faisait aussi monter ou descendre la mosaïque, et
+        // tirer vers le bas lançait le rafraîchissement. Une pile, et chaque
+        // doigt n'a plus qu'un seul défilement sous lui.
+        VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
                 header
                 filters
             }
             .padding(.top, MemoBookSpacing.xs)
             .padding(.bottom, MemoBookSpacing.xs)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
+                    if let message = model.errorMessage {
+                        ErrorBanner(message: message) {
+                            Task { await model.load() }
+                        }
+                        .padding(.horizontal, MemoBookSpacing.screenMargin)
+                    }
+
+                    grid
+                }
+                // L'écart de l'ancien encart (16) plus la marge du contenu (8).
+                .padding(.top, MemoBookSpacing.s + MemoBookSpacing.xs)
+                .padding(.bottom, MemoBookSpacing.m)
+            }
+            .scrollIndicators(.hidden)
+            .scrollBounceBehavior(.basedOnSize)
+            // ⚠️ **Sur la grille seule**, pas sur l'écran : `refreshable` passe
+            // par l'environnement, et tout `ScrollView` qui le reçoit prend un
+            // contrôle de rafraîchissement — la bande **horizontale** des
+            // filtres aussi. Elle se mettait alors à rebondir verticalement
+            // sous le doigt, jusqu'à relancer le chargement : c'était le
+            // défilement vertical parasite (Hugo, 30/09/2026).
+            .refreshable { await model.load() }
             // Le voile pend **sous** la barre, et c'est ce qui fait passer les
-            // vignettes derrière elle au lieu de les couper net. Il est posé
-            // avant l'aplat pour rester derrière la barre, et déborde de sa
-            // propre hauteur pour tomber dans la zone qui défile.
-            .background(alignment: .bottom) { topScrim.offset(y: topScrimHeight) }
-            .background(MemoBookColor.background)
-        }
-        // Le bouton est dessiné par la pile, pas ici : cet encart ne sert qu'à
-        // lui **réserver sa place**, pour que la dernière vignette puisse
-        // défiler jusqu'au-dessus de lui.
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            callToAction.hidden()
+            // vignettes derrière elle au lieu de les couper net.
+            .overlay(alignment: .top) { topScrim }
+            // Le bouton est dessiné par la pile, pas ici : cet encart ne sert
+            // qu'à lui **réserver sa place**, pour que la dernière vignette
+            // puisse défiler jusqu'au-dessus de lui.
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                callToAction.hidden()
+            }
         }
     }
 

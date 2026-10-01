@@ -81,7 +81,14 @@ public struct ProfileView: View {
                 servicesGroup
                 paymentGroup
                 legalGroup
-                ConnectorsCallout { sheet = .connectors }
+
+                #if DEBUG
+                    // **Chantier** : les connecteurs ne se branchent pas encore
+                    // au serveur, et Tricount attend son intégration (T76). La
+                    // carte reste visible en Debug, pas dans la version livrée
+                    // (Hugo, 29/09/2026).
+                    ConnectorsCallout { sheet = .connectors }
+                #endif
 
                 if let message = model.errorMessage {
                     ErrorBanner(message: message) {
@@ -108,7 +115,19 @@ public struct ProfileView: View {
         // attente pendant qu'on lit le bas de l'écran.
         .scrollDismissesKeyboard(.immediately)
         .brandKeyboardDismissBar()
-        .photoFlow(avatarPhotos, title: "Photo de profil", maxSelection: 1) { images in
+        .photoFlow(
+            avatarPhotos,
+            title: "Photo de profil",
+            maxSelection: 1,
+            // « Supprimer la photo » n'est proposé que s'il y en a une : le
+            // rond revient alors aux initiales (Hugo, 29/09/2026).
+            onRemove: model.profile?.avatarUrl != nil || pendingAvatar != nil
+                ? {
+                    pendingAvatar = nil
+                    Task { await model.removeAvatar() }
+                }
+                : nil
+        ) { images in
             guard let data = images.first, let jpeg = ProfileAvatar.jpeg(from: data) else { return }
             // Le rond porte la photo **avant** l'aller-retour — voir
             // ``ProfileAvatar/pending``.
@@ -384,6 +403,13 @@ public struct ProfileView: View {
                 if let denied = avatarPhotos.deniedMessage {
                     BrandNotice(denied, tone: .information)
                 }
+
+                // L'échec se dit là où l'on a touché — voir
+                // ``ProfileModel/avatarErrorMessage``. « Réessayer » rouvre la
+                // feuille : on ne sait pas si c'était un envoi ou un retrait.
+                if let failure = model.avatarErrorMessage {
+                    ErrorBanner(message: failure, retry: avatarPhotos.begin)
+                }
             }
 
             if let profile = model.profile {
@@ -429,6 +455,12 @@ public struct ProfileView: View {
                 isValueLoading: profile == nil,
                 note: profile?.signInProvider.map { "Compte \($0.displayName)" }
             )
+            // Sous l'adresse, **quand le compte a un mot de passe** (Hugo,
+            // 29/09/2026) : un compte entré par Apple ou Google seul n'en a pas
+            // à changer. La valeur est un masque — on ne montre jamais rien.
+            if profile?.hasPassword ?? false {
+                BrandRow("Mot de passe", value: "••••••••") { sheet = .password }
+            }
             BrandRow(
                 "Téléphone",
                 text: phoneBinding,
@@ -602,6 +634,14 @@ public struct ProfileView: View {
             GenderSheet(current: model.profile?.gender ?? .undisclosed) {
                 model.setGender($0)
             }
+        case .password:
+            PasswordChangeSheet(
+                model: PasswordChangeModel(
+                    email: model.profile?.email ?? "",
+                    change: model.changePassword,
+                    requestReset: model.requestPasswordReset
+                )
+            )
         case .paymentMethod:
             PaymentMethodSheet(model: model)
         case .subscription:
@@ -638,13 +678,21 @@ public struct ProfileView: View {
         case .statistics:
             StatisticsSheet(model: statistics)
         case .orderTracking:
-            OrderTrackingSheet(orders: model.profile?.orders ?? []) {
-                // La feuille se referme **avant** que la galerie s'ouvre : c'est
-                // un écran poussé sur la pile du profil, pas une feuille de
-                // plus.
-                sheet = nil
-                onIntent(.openGallery)
-            }
+            OrderTrackingSheet(
+                orders: model.profile?.orders ?? [],
+                ongoingTrip: model.profile?.currentTrip,
+                onPlanTrip: {
+                    // La feuille se referme **avant** que la galerie s'ouvre :
+                    // c'est un écran poussé sur la pile du profil, pas une
+                    // feuille de plus.
+                    sheet = nil
+                    onIntent(.openGallery)
+                },
+                onOrder: { trip in
+                    sheet = nil
+                    onIntent(.orderBook(memoId: trip.id))
+                }
+            )
         }
     }
 
@@ -681,6 +729,7 @@ public struct ProfileView: View {
 enum ProfileSheet: String, Identifiable, CaseIterable {
     case postalAddress
     case gender
+    case password
     case paymentMethod
     case subscription
     case connectors
@@ -893,7 +942,7 @@ private struct ProfileAvatar: View {
         .buttonStyle(.plain)
         .disabled(isUploading || profile == nil)
         .accessibilityLabel("Photo de profil")
-        .accessibilityHint("Prendre une photo, ou en choisir une dans la galerie")
+        .accessibilityHint("Prendre une photo, en choisir une dans la galerie, ou retirer celle-ci")
     }
 
     /// Réduit la photo choisie à ce que le serveur a besoin de garder, en
@@ -1083,4 +1132,6 @@ public enum ProfileIntent: Sendable, Hashable {
     /// se ferme d'un glissé sans qu'on l'ait voulu.
     case openTermsOfUse
     case openPrivacyPolicy
+    /// « Commander mon carnet », depuis le suivi des commandes sans commande.
+    case orderBook(memoId: String)
 }

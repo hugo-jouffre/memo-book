@@ -23,6 +23,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:themes": "tsx prisma/seed-trip-themes.ts",
     "db:sessions": "tsx --env-file=.env scripts/db-sessions.ts",
+    "stats:push": "tsx --env-file=.env scripts/push-stats.ts",
+    "stats:show": "tsx --env-file=.env scripts/push-stats.ts --dry-run",
     "supabase:setup": "tsx scripts/setup-supabase.ts",
     "supabase:check": "tsx scripts/setup-supabase.ts --check",
     "render:local": "tsx scripts/render-local.ts",
@@ -38,6 +40,7 @@
     "test:visual": "vitest run test/visual",
     "test:visual:update": "UPDATE_GOLDENS=1 vitest run test/visual",
     "inspector": "tsx scripts/build-inspector.ts",
+    "calibrate": "tsx scripts/calibrate-lengths.ts",
     "icons:build": "tsx scripts/build-icons.ts",
     "icons:check": "tsx scripts/build-icons.ts --check"
   },
@@ -59,6 +62,7 @@
     "openai": "^4.77.0",
     "pg-boss": "^10.1.5",
     "pino": "^9.5.0",
+    "prisma": "^6.1.0",
     "stripe": "^22.6.2",
     "yaml": "^2.6.1",
     "zod": "^3.24.1"
@@ -72,7 +76,6 @@
     "pixelmatch": "^7.2.0",
     "playwright-core": "1.56.0",
     "pngjs": "^7.0.0",
-    "prisma": "^6.1.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.1",

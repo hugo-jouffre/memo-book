@@ -155,7 +155,7 @@ extension OrderQuote {
             specifications: [
                 "80g. non couché ivoire",
                 "Couverture rigide & matte",
-                "Livre broché",
+                "Livre relié",
             ],
             fulfilment: OrderQuoteGroup(
                 lines: [

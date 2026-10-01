@@ -697,8 +697,8 @@ public struct HomeView: View {
     /// d'accès d'iOS montait par-dessus. Le premier appui ne fait donc que
     /// poser la question — l'app ne touche pas au micro avant la réponse — et
     /// c'est le second qui ouvre la feuille ; avec l'accès déjà accordé, le
-    /// premier appui l'ouvre directement. La reconnaissance vocale est
-    /// demandée dans la foulée, pour que la feuille n'ait plus rien à demander.
+    /// premier appui l'ouvre directement. La reconnaissance vocale n'est plus
+    /// demandée : la feuille ne l'emploie plus (T176, 29/09/2026).
     ///
     /// Refusé, iOS ne repose jamais la question : la boîte le dit et mène aux
     /// Réglages, comme le micro barré de la conversation.
@@ -713,7 +713,6 @@ public struct HomeView: View {
                     showsMicrophoneDenied = true
                     return
                 }
-                _ = await SpeechTranscriber.requestAuthorization()
             }
         case .denied:
             showsMicrophoneDenied = true

@@ -42,6 +42,14 @@ public final class ProfileModel {
     private let remove: (() async throws -> Void)?
     /// Envoie la photo de profil. `nil` en aperçu : la photo reste sur place.
     private let uploadAvatar: ((Data, String) async throws -> TravellerProfile)?
+    /// Retire la photo de profil. `nil` en aperçu.
+    private let deleteAvatar: (() async throws -> TravellerProfile)?
+
+    /// Change le mot de passe, et envoie l'e-mail de « mot de passe oublié ».
+    /// Les deux vont à la feuille « Modifier mon mot de passe » (Hugo,
+    /// 29/09/2026) ; `nil` en aperçu, où la feuille joue la réussite.
+    let changePassword: ((String, String) async throws -> Void)?
+    let requestPasswordReset: ((String) async throws -> Void)?
 
     /// Ferme l'abonnement côté serveur. `nil` en aperçu.
     private let cancelSubscriptionRemotely:
@@ -49,6 +57,14 @@ public final class ProfileModel {
 
     /// La photo est en route vers le serveur : l'avatar le montre.
     public private(set) var isUploadingAvatar = false
+
+    /// Ce qui a raté en envoyant ou en retirant la photo, dit **sous le rond**.
+    ///
+    /// Pas dans ``errorMessage`` : celui-là s'affiche au pied de la page, sous
+    /// les mentions légales, et on touche la photo tout en haut. « Supprimer la
+    /// photo » échouait donc sans que rien ne bouge à l'écran (Hugo,
+    /// 30/09/2026 — la route n'était pas encore déployée, l'API rendait 404).
+    public private(set) var avatarErrorMessage: String?
 
     /// Ce qu'on avait sur le disque — voir ``ContentCache``. `nil` en aperçu.
     private let cached: CachedValue<TravellerProfile>?
@@ -77,6 +93,9 @@ public final class ProfileModel {
         persist: ((ProfileEdit) async throws -> TravellerProfile)? = nil,
         remove: (() async throws -> Void)? = nil,
         uploadAvatar: ((Data, String) async throws -> TravellerProfile)? = nil,
+        deleteAvatar: (() async throws -> TravellerProfile)? = nil,
+        changePassword: ((String, String) async throws -> Void)? = nil,
+        requestPasswordReset: ((String) async throws -> Void)? = nil,
         cancelSubscription: (
             (SubscriptionCancellationReason?) async throws -> TravellerProfile
         )? = nil,
@@ -87,6 +106,9 @@ public final class ProfileModel {
         self.persist = persist
         self.remove = remove
         self.uploadAvatar = uploadAvatar
+        self.deleteAvatar = deleteAvatar
+        self.changePassword = changePassword
+        self.requestPasswordReset = requestPasswordReset
         self.cancelSubscriptionRemotely = cancelSubscription
     }
 
@@ -245,6 +267,7 @@ public final class ProfileModel {
         isUploadingAvatar = true
         defer { isUploadingAvatar = false }
 
+        avatarErrorMessage = nil
         do {
             let saved = try await uploadAvatar(data, mimeType)
             #if DEBUG
@@ -252,10 +275,36 @@ public final class ProfileModel {
             #else
                 profile = saved
             #endif
-            errorMessage = nil
             confirm(.avatar)
         } catch {
-            errorMessage = error.localizedDescription
+            avatarErrorMessage = error.localizedDescription
+        }
+    }
+
+    /// Retire la photo de profil : le rond revient aux initiales (Hugo,
+    /// 29/09/2026). Même contrat que l'envoi — c'est le profil relu qui fait
+    /// foi, et un échec laisse la photo avec le reproche dessous.
+    public func removeAvatar() async {
+        guard let deleteAvatar else {
+            // En aperçu : on retire sur place.
+            profile?.avatarUrl = nil
+            return
+        }
+
+        isUploadingAvatar = true
+        defer { isUploadingAvatar = false }
+
+        avatarErrorMessage = nil
+        do {
+            let saved = try await deleteAvatar()
+            #if DEBUG
+                profile = SandboxPersona.current?.applied(to: saved) ?? saved
+            #else
+                profile = saved
+            #endif
+            confirm(.avatar)
+        } catch {
+            avatarErrorMessage = error.localizedDescription
         }
     }
 

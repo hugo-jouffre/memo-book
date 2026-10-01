@@ -493,7 +493,9 @@ struct BookSheetView: View {
     /// reviendrait pas à l'offre. Retirée, et non désactivée — un bouton qui ne
     /// fait rien est pire que pas de bouton.
     let onExpand: (() -> Void)?
-    let onConfigureCovers: () -> Void
+    /// `nil` retire le chemin vers les couvertures, pour la même raison : la
+    /// feuille du paywall n'a pas de pile où pousser leur écran.
+    let onConfigureCovers: (() -> Void)?
 
     @Environment(\.displayScale) private var displayScale
 
@@ -512,19 +514,21 @@ struct BookSheetView: View {
                 .animation(.easeInOut(duration: 0.18), value: model.sheetIndex)
 
             // L'invitation à choisir ses couvertures couvre la première et la
-            // dernière page tant qu'elles ne sont pas choisies ; la première
-            // garde ensuite sa pastille « Configurer » — voir
+            // dernière page tant qu'elles ne sont pas choisies ; les deux
+            // gardent ensuite leur bouton « Configurer » — voir
             // ``BookPreviewModel/coverCallToAction``.
-            switch model.coverCallToAction {
-            case .invitation:
-                CoverInvitation(action: onConfigureCovers)
-                    .clipShape(.rect(cornerRadius: MemoBookSpacing.pageCornerRadius))
-                    .transition(.opacity)
-            case .edit:
-                CoverEditButton(action: onConfigureCovers)
-                    .transition(.opacity)
-            case nil:
-                EmptyView()
+            if let onConfigureCovers {
+                switch model.coverCallToAction {
+                case .invitation:
+                    CoverInvitation(action: onConfigureCovers)
+                        .clipShape(.rect(cornerRadius: MemoBookSpacing.pageCornerRadius))
+                        .transition(.opacity)
+                case .edit:
+                    CoverEditButton(action: onConfigureCovers)
+                        .transition(.opacity)
+                case nil:
+                    EmptyView()
+                }
             }
 
             if let onExpand {
@@ -550,6 +554,10 @@ struct BookSheetView: View {
 /// Le voile est celui de la maquette : la page passe en luminosité à 30 % sous
 /// un aplat noir à 40 %. C'est assez pour qu'on voie qu'il y a une page dessous,
 /// et pas assez pour qu'on la prenne pour la couverture définitive.
+///
+/// **La phrase au centre de la page, le bouton dans son bas** — comme
+/// `3545:21634`, où ils ne forment pas un bloc : le bouton tombe à la place
+/// exacte qu'il garde une fois le voile parti (``CoverEditButton``).
 private struct CoverInvitation: View {
     let action: () -> Void
 
@@ -557,30 +565,24 @@ private struct CoverInvitation: View {
         ZStack {
             Color.black.opacity(0.4)
 
-            VStack(spacing: MemoBookSpacing.s) {
-                Text(BookCopy.Preview.configureCover)
-                    .font(MemoBookFont.body)
-                    .foregroundStyle(MemoBookColor.onAction)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
+            Text(BookCopy.Preview.configureCover)
+                .font(MemoBookFont.body)
+                .foregroundStyle(MemoBookColor.onAction)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, MemoBookSpacing.s)
+                .accessibilityHidden(true)
 
-                BrandButton(
-                    BookCopy.Preview.configureCoverAction,
-                    style: .raised,
-                    size: .small,
-                    action: action
-                )
-            }
-            .padding(MemoBookSpacing.s)
+            CoverEditButton(action: action)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityElement(children: .combine)
     }
 }
 
-/// La pastille « Configurer » d'une première page dont les couvertures sont
-/// déjà choisies : pas de voile, la couverture se voit, et le chemin reste.
-/// Même bouton, même place que dans l'invitation — seul le voile est parti.
+/// Le bouton « Configurer », posé **sur** la première et la dernière page : il
+/// mène aux écrans des couvertures (Hugo, 30/09/2026). Seul quand les
+/// couvertures sont choisies — pas de voile, la couverture se voit, et le
+/// chemin reste ; sous l'invitation sinon, à la même place.
 private struct CoverEditButton: View {
     let action: () -> Void
 
@@ -592,7 +594,8 @@ private struct CoverEditButton: View {
             action: action
         )
         .accessibilityLabel(BookCopy.Preview.configureCovers)
-        .padding(.bottom, MemoBookSpacing.m)
+        // 40 pt du bas d'une page de 357 : le bas du bouton de la maquette.
+        .padding(.bottom, MemoBookSpacing.xl)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 }

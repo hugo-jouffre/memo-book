@@ -255,6 +255,8 @@ const etat = {
   rencontres: [],
   /** Dernier PDF rendu par APITemplate, pour garder le lien sous la main. */
   pdf: null,
+  /** Message sous « Générer le carnet » : { type: "info" | "erreur", texte }. */
+  carnetStatut: null,
   etapes: [],
   /** Vocaux déposés mais pas encore transcrits — ils vivent dans leur boîte. */
   vocauxAttente: [],
@@ -286,22 +288,33 @@ const etat = {
 
 const conteneur = (id) => etat.etapes.find((e) => e.id === id);
 
+// Les photos ont une deuxième « étape » possible : `null` désigne la boîte
+// d'attente (`etat.photosAttente`), pour qu'une photo puisse y retourner.
+const listePhotos = (id) => (id ? conteneur(id)?.photos : etat.photosAttente);
+
 function deplacer(genre, itemId, deId, versId) {
   if (deId === versId) return;
-  const source = conteneur(deId);
-  const item = source?.[genre].find((x) => x.id === itemId);
-  if (!item) return;
-  source[genre] = source[genre].filter((x) => x.id !== itemId);
-  conteneur(versId)?.[genre].push(item);
+  const source = genre === "photos" ? listePhotos(deId) : conteneur(deId)?.[genre];
+  const index = source ? source.findIndex((x) => x.id === itemId) : -1;
+  if (index === -1) return;
+  const cible = genre === "photos" ? listePhotos(versId) : conteneur(versId)?.[genre];
+  if (!cible) return;
+  cible.push(source.splice(index, 1)[0]);
   apresChangement();
 }
 
 function modifier(genre, itemId, conteneurId, patch) {
-  const item = conteneur(conteneurId)?.[genre].find((x) => x.id === itemId);
+  const liste = genre === "photos" ? listePhotos(conteneurId) : conteneur(conteneurId)?.[genre];
+  const item = liste?.find((x) => x.id === itemId);
   if (item) Object.assign(item, patch);
 }
 
 function retirer(genre, itemId, conteneurId) {
+  if (genre === "photos" && !conteneurId) {
+    etat.photosAttente = etat.photosAttente.filter((x) => x.id !== itemId);
+    apresChangement();
+    return;
+  }
   const c = conteneur(conteneurId);
   if (!c) return;
   c[genre] = c[genre].filter((x) => x.id !== itemId);
@@ -1383,17 +1396,94 @@ const enHtml = (texte) =>
     .join("");
 
 /**
- * Choix de la mise en page, repris de la table de
- * `templates/travel-journal/LAYOUT_KB.md` : c'est elle qui dit combien de
- * photos chaque gabarit sait tenir.
+ * Combien de photos chaque gabarit **rend réellement**, d'après le catalogue de
+ * `MemoBook Generator/templates/travel-journal/LAYOUT_KB.md`. Au-delà de ce
+ * nombre, les photos envoyées ne sont pas dessinées : elles disparaissent du
+ * carnet sans que rien ne le signale. C'est ce qui justifie le report sur des
+ * pages de photos (voir `pagesDePhotos`).
  */
-function layoutPour(nbPhotos, premiere) {
+const PHOTOS_RENDUES = {
+  layout_story_facts: 0,
+  layout_story_opener: 1,
+  layout_hero_top: 1,
+  layout_split_left: 2,
+  layout_collage: 3,
+  layout_photo_page: 5,
+};
+
+/** Le gabarit « page pleine de photos » exige au moins trois images. */
+const MIN_PAGE_PHOTOS = 3;
+
+/**
+ * Choix de la mise en page, repris de la table de
+ * `MemoBook Generator/templates/travel-journal/LAYOUT_KB.md` : c'est elle qui dit combien de
+ * photos chaque gabarit sait tenir.
+ *
+ * **`layout_photo_page` ne rend ni bandeau ni récit** — c'est écrit dans le
+ * catalogue. Le choisir sur le seul nombre de photos effaçait donc le texte
+ * d'une étape dès qu'elle portait quatre images : le voyageur retrouvait une
+ * planche photo muette à la place de sa journée. Une étape qui a un récit garde
+ * toujours un gabarit qui l'affiche ; ses photos en trop partent sur des pages
+ * de photos à la suite.
+ */
+function layoutPour(nbPhotos, premiere, aUnRecit) {
+  if (!aUnRecit) return nbPhotos >= MIN_PAGE_PHOTOS ? "layout_photo_page" : "layout_story_facts";
   if (premiere) return "layout_story_opener";
   if (nbPhotos === 0) return "layout_story_facts";
   if (nbPhotos === 1) return "layout_hero_top";
   if (nbPhotos === 2) return "layout_split_left";
-  if (nbPhotos === 3) return "layout_collage";
-  return "layout_photo_page";
+  return "layout_collage";
+}
+
+/**
+ * Découpe les photos qu'aucun gabarit de récit n'a pu poser en pages de photos
+ * de 3 à 5 images.
+ *
+ * Un reliquat de une ou deux photos ne peut pas faire une page — le gabarit en
+ * exige trois — alors il rejoint la page précédente au lieu d'être perdu : sept
+ * photos donnent 4 + 3, jamais 5 + 2. Quand il n'y a pas de page précédente où
+ * les verser, une ou deux photos restent non rendues : c'est la seule perte que
+ * le gabarit impose, et elle vaut mieux qu'une page aux trois quarts vide.
+ */
+function pagesDePhotos(restantes) {
+  const pages = [];
+  for (let i = 0; i < restantes.length; i += PHOTOS_RENDUES.layout_photo_page) {
+    pages.push(restantes.slice(i, i + PHOTOS_RENDUES.layout_photo_page));
+  }
+  const derniere = pages[pages.length - 1];
+  if (pages.length > 1 && derniere.length < MIN_PAGE_PHOTOS) {
+    const avant = pages[pages.length - 2];
+    while (derniere.length < MIN_PAGE_PHOTOS) derniere.unshift(avant.pop());
+  }
+  return pages.length === 1 && pages[0].length < MIN_PAGE_PHOTOS ? [] : pages;
+}
+
+/**
+ * Le lieu affiché dans le bandeau : celui de l'étape, complété par la
+ * destination du carnet.
+ *
+ * Les deux se recoupent le plus souvent — une étape à « Paros, Grèce » dans un
+ * carnet dont la destination est « Paros, Grèce » — et les coller bout à bout
+ * écrivait « Paros, Grèce, Paros, Grèce » sur deux lignes dans l'encart. On
+ * compare donc composante par composante, sans tenir compte de la casse ni des
+ * accents, et on ne garde chaque nom qu'une fois.
+ */
+function lieuComplet(lieu, destination) {
+  const normaliser = (t) =>
+    t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  const vus = new Set();
+  return [lieu, destination]
+    .filter(Boolean)
+    .flatMap((valeur) => String(valeur).split(","))
+    .map((part) => part.trim())
+    .filter((part) => {
+      if (!part) return false;
+      const cle = normaliser(part);
+      if (vus.has(cle)) return false;
+      vus.add(cle);
+      return true;
+    })
+    .join(", ");
 }
 
 const MOIS = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
@@ -1405,11 +1495,11 @@ function dateLongue(iso) {
 
 /**
  * Traduit l'état de l'atelier vers le contrat attendu par le template, décrit
- * par `templates/travel-journal/data.json`. Conversion **mécanique** : elle
+ * par `MemoBook Generator/templates/travel-journal/data.json`. Conversion **mécanique** : elle
  * n'écrit pas à la place du voyageur, elle habille son texte.
  */
-function construirePayloadCarnet() {
-  const toutesPhotos = etat.etapes.flatMap((e) => e.photos.map((p) => p.data).filter(Boolean));
+function construirePayloadCarnet(photoDe = (data) => data) {
+  const toutesPhotos = etat.etapes.flatMap((e) => e.photos.map((p) => photoDe(p.data)).filter(Boolean));
   const dates = etat.etapes.flatMap((e) => [e.dateDebut, e.dateFin]).filter(Boolean).sort();
   const premiere = dates[0];
   const derniere = dates[dates.length - 1];
@@ -1428,37 +1518,64 @@ function construirePayloadCarnet() {
     year: String(new Date().getFullYear()),
     footer_tagline: "Racontez. Revivez. Partagez.",
     intro_text: "",
-    days: etat.etapes.map((etape, index) => {
-      const photos = etape.photos.map((p) => p.data).filter(Boolean);
+    // `flatMap` et non `map` : une étape riche en photos occupe plusieurs pages.
+    // La première porte le bandeau et le récit, les suivantes sont des pages de
+    // photos — c'est la règle « une étape peut occuper plusieurs pages » de
+    // LAYOUT_KB, et c'est ce qui évite de perdre du texte ou des images.
+    days: etat.etapes.flatMap((etape, index) => {
+      const photos = etape.photos.map((p) => (p.data ? photoDe(p.data) : "")).filter(Boolean);
       const recit = etape.souvenirs.map((s) => s.texte.trim()).filter(Boolean).join(" ");
-      const layout = layoutPour(photos.length, index === 0);
-      return {
+      const layout = layoutPour(photos.length, index === 0, Boolean(recit));
+      const posees = Math.min(photos.length, PHOTOS_RENDUES[layout]);
+
+      const drapeaux = (actif) => ({
+        // Un seul gabarit est vrai à la fois : le template lit des booléens.
+        layout_story_opener: actif === "layout_story_opener",
+        layout_story_facts: actif === "layout_story_facts",
+        layout_hero_top: actif === "layout_hero_top",
+        layout_split_left: actif === "layout_split_left",
+        layout_collage: actif === "layout_collage",
+        layout_photo_page: actif === "layout_photo_page",
+      });
+
+      const page = {
         title: etape.titre || `Étape ${index + 1}`,
         date: dateLongue(etape.dateDebut),
         city: etape.lieu || "",
         country: etat.carnet.destination || "",
         day_intro: {
           day_number: String(index + 1).padStart(2, "0"),
-          location: [etape.lieu, etat.carnet.destination].filter(Boolean).join(", "),
+          location: lieuComplet(etape.lieu, etat.carnet.destination),
           date: dateLongue(etape.dateDebut),
           weather_key: "sun",
         },
-        // Un seul gabarit est vrai à la fois : le template lit des booléens.
-        layout_story_opener: layout === "layout_story_opener",
-        layout_story_facts: layout === "layout_story_facts",
-        layout_hero_top: layout === "layout_hero_top",
-        layout_split_left: layout === "layout_split_left",
-        layout_collage: layout === "layout_collage",
-        layout_photo_page: layout === "layout_photo_page",
+        ...drapeaux(layout),
         opener_kicker: index === 0 ? etape.lieu || "" : "",
         opener_body_html: index === 0 ? enHtml(recit) : "",
         opener_photos: index === 0 ? photos.slice(0, 2) : [],
         body_html: enHtml(recit),
         fun_facts: [],
         highlights: etape.photos.map((p) => p.legende).filter(Boolean).slice(0, 3),
-        photos,
+        photos: photos.slice(0, posees),
+        // Le template itère dessus : une liste vide vaut mieux qu'une clé absente.
+        sticker_groups: [],
         tag: etape.lieu || "",
       };
+
+      // Les pages de suite n'ont ni bandeau ni récit : c'est ce qui les rattache
+      // à l'étape précédente. Sur une page de photos, `title` devient la légende
+      // manuscrite du bas — on ne la répète pas de page en page.
+      const suites = pagesDePhotos(photos.slice(posees)).map((lot, rang) => ({
+        title: rang === 0 ? etape.titre || "" : "",
+        body_html: "",
+        ...drapeaux("layout_photo_page"),
+        photos: lot,
+        fun_facts: [],
+        highlights: [],
+        sticker_groups: [],
+      }));
+
+      return [page, ...suites];
     }),
     back_cover: {
       closing_text: "À suivre.",
@@ -1473,91 +1590,345 @@ function construirePayloadCarnet() {
   };
 }
 
+/* ------------------------------------------------ envoi vers APITemplate --- */
+
+/**
+ * Plafonds de charge d'APITemplate, requête ET réponse comprises
+ * (README officiel du client JavaScript, section « Regional API endpoints ») :
+ *   rest(-de|-us).apitemplate.io      → 1 Mo, 100 s de délai
+ *   rest-alt(-de|-us).apitemplate.io  → 6 Mo, 30 s de délai
+ * Au-delà, le serveur coupe sans en-têtes CORS : le navigateur ne voit qu'un
+ * « Failed to fetch ». C'est ce qui faisait échouer le bouton en silence dès
+ * qu'une étape portait quelques photos en base64 pleine résolution.
+ * On garde une marge pour les en-têtes et l'enveloppe JSON.
+ */
+const PLAFOND_STANDARD = 0.9 * 1024 * 1024;
+const PLAFOND_ALTERNATIF = 5.5 * 1024 * 1024;
+
+/**
+ * Paliers de compression, du plus fin au plus léger. `cote` est le plus grand
+ * côté en pixels. Le template imprime en A5 et le rendu est en profil
+ * « preview » : 1600 px suffisent largement, 500 px restent lisibles.
+ */
+const PALIERS_PHOTOS = [
+  { cote: 1600, qualite: 0.8 },
+  { cote: 1200, qualite: 0.72 },
+  { cote: 900, qualite: 0.66 },
+  { cote: 700, qualite: 0.6 },
+  { cote: 500, qualite: 0.55 },
+];
+
+/** En dessous de ce palier, on préfère l'endpoint alternatif (6 Mo) pour garder de la qualité. */
+const COTE_MINI_STANDARD = 900;
+
+/** Cache : une photo n'est recompressée qu'une fois par palier, même si on regénère. */
+const cachePhotos = new Map();
+
+const debugCarnet = (...args) => console.debug("[carnet]", ...args);
+
+/** Transforme `rest-de.apitemplate.io/v2` en `rest-alt-de.apitemplate.io/v2`. */
+function baseAlternative(base) {
+  const url = new URL(base);
+  if (!url.hostname.includes("-alt")) {
+    url.hostname = url.hostname.replace(/^rest(-|\.)/, (_, sep) => (sep === "." ? "rest-alt." : "rest-alt-"));
+  }
+  return url.toString().replace(/\/$/, "");
+}
+
+/** Redimensionne et réencode une photo en JPEG. Renvoie une data URL. */
+function compresserPhoto(dataUrl, { cote, qualite }) {
+  const cle = `${cote}|${qualite}|${dataUrl.length}|${dataUrl.slice(-64)}`;
+  if (cachePhotos.has(cle)) return Promise.resolve(cachePhotos.get(cle));
+  return new Promise((resoudre) => {
+    const img = new Image();
+    img.onload = () => {
+      const ratio = Math.min(1, cote / Math.max(img.naturalWidth, img.naturalHeight));
+      const largeur = Math.max(1, Math.round(img.naturalWidth * ratio));
+      const hauteur = Math.max(1, Math.round(img.naturalHeight * ratio));
+      const toile = document.createElement("canvas");
+      toile.width = largeur;
+      toile.height = hauteur;
+      const ctx = toile.getContext("2d");
+      // Fond blanc : un PNG transparent passé en JPEG virerait au noir.
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, largeur, hauteur);
+      ctx.drawImage(img, 0, 0, largeur, hauteur);
+      const sortie = toile.toDataURL("image/jpeg", qualite);
+      cachePhotos.set(cle, sortie);
+      resoudre(sortie);
+    };
+    // Une image illisible ne bloque pas le carnet : elle est simplement omise.
+    img.onerror = () => {
+      debugCarnet("photo illisible, ignorée");
+      resoudre("");
+    };
+    img.src = dataUrl;
+  });
+}
+
+/** Compresse toutes les photos des étapes à un palier donné. Map data d'origine → data compressée. */
+async function photosAuPalier(palier) {
+  const originales = [
+    ...new Set(etat.etapes.flatMap((e) => e.photos.map((p) => p.data)).filter(Boolean)),
+  ];
+  const table = new Map();
+  for (const data of originales) table.set(data, await compresserPhoto(data, palier));
+  return table;
+}
+
+/**
+ * Cherche la meilleure qualité qui passe. Deux passes :
+ * 1. un palier ≥ 900 px qui tient dans 1 Mo → endpoint standard (délai de 100 s) ;
+ * 2. sinon le meilleur palier qui tient dans 5,5 Mo → endpoint alternatif (30 s).
+ */
+async function preparerEnvoi() {
+  const baseStandard = (etat.reglages.baseApitemplate || "https://rest-de.apitemplate.io/v2").replace(/\/$/, "");
+  const sansPhoto = !etat.etapes.some((e) => e.photos.some((p) => p.data));
+
+  if (sansPhoto) {
+    const payload = construirePayloadCarnet();
+    const poids = new Blob([JSON.stringify(payload)]).size;
+    debugCarnet("aucune photo, poids", poids, "octets");
+    return { payload, poids, base: poids <= PLAFOND_STANDARD ? baseStandard : baseAlternative(baseStandard), palier: null };
+  }
+
+  const essais = [];
+  for (const palier of PALIERS_PHOTOS) {
+    const table = await photosAuPalier(palier);
+    const payload = construirePayloadCarnet((data) => table.get(data) || "");
+    const poids = new Blob([JSON.stringify(payload)]).size;
+    essais.push({ palier, payload, poids });
+    debugCarnet(`palier ${palier.cote}px q${palier.qualite} → ${(poids / 1024).toFixed(0)} Ko`);
+    if (poids <= PLAFOND_STANDARD && palier.cote >= COTE_MINI_STANDARD) {
+      return { payload, poids, base: baseStandard, palier };
+    }
+  }
+
+  const alternatif = essais.find((e) => e.poids <= PLAFOND_ALTERNATIF);
+  if (alternatif) return { ...alternatif, base: baseAlternative(baseStandard) };
+
+  const plusLeger = essais[essais.length - 1];
+  throw new Error(
+    `même compressées, les photos pèsent ${(plusLeger.poids / 1024 / 1024).toFixed(1)} Mo ` +
+      "et APITemplate refuse au-delà de 6 Mo. Retire des photos de quelques étapes et relance.",
+  );
+}
+
+/** Traduit les erreurs réseau opaques en quelque chose d'actionnable. */
+function messageLisible(erreur, statut) {
+  const brut = String(erreur?.message || erreur || "");
+  if (/failed to fetch|networkerror|load failed/i.test(brut)) {
+    return "APITemplate n'a pas répondu (charge trop lourde, délai dépassé ou coupure réseau). Relance ; si ça persiste, retire des photos.";
+  }
+  if (statut === 401) return "clé APITemplate refusée. Vérifie qu'elle correspond bien au compte de la région choisie (DE par défaut).";
+  if (statut === 403) return "la clé est valide mais n'a pas accès à ce template.";
+  if (statut === 413) return "charge trop lourde pour APITemplate. Retire des photos et relance.";
+  if (statut === 429) return "trop de demandes d'affilée. Attends dix secondes et relance.";
+  return brut;
+}
+
 /**
  * Envoie le carnet à APITemplate et ouvre le PDF.
  *
- * Beta assumée : la conversion vers le contrat du template est mécanique, et
- * les photos partent en base64 dans la requête — au-delà de quelques dizaines,
- * APITemplate refusera la charge. Le pipeline du back-end reste la voie
- * sérieuse ; ceci sert à voir tout de suite à quoi le carnet ressemble.
+ * Beta assumée : la conversion vers le contrat du template est mécanique. Le
+ * pipeline du back-end reste la voie sérieuse ; ceci sert à voir tout de
+ * suite à quoi le carnet ressemble.
+ *
+ * Trois corrections par rapport à la première version :
+ * - les erreurs s'affichent sous le bouton (avant, elles n'apparaissaient que
+ *   dans la carte « Étapes groupées », cachée quand il n'y a pas d'étape) ;
+ * - les photos sont compressées pour tenir dans le plafond d'APITemplate ;
+ * - l'onglet du PDF est ouvert au clic, avant tout `await`, sinon Safari et
+ *   Chrome le bloquent comme une popup.
  */
 async function genererCarnet(bouton) {
   if (bouton.disabled) return;
+  debugCarnet("clic sur Générer le carnet", {
+    etapes: etat.etapes.length,
+    photos: etat.etapes.reduce((n, e) => n + e.photos.length, 0),
+    mode: etat.mode,
+  });
+
   if (!etat.etapes.length) {
-    etat.erreur = "Aucune étape : il n'y a rien à mettre en page.";
-    rendreColonne();
+    etat.carnetStatut = { type: "erreur", texte: "Aucune étape : dépose et transcris des vocaux avant de générer le carnet." };
+    rendreResultatPdf();
     return;
   }
   const cle = (etat.reglages.cleApitemplate || "").trim();
   if (!cle) {
-    etat.erreur = "Aucune clé APITemplate : colle-la dans « Clés et réglages » pour générer le PDF.";
+    etat.carnetStatut = { type: "erreur", texte: "Aucune clé APITemplate : colle-la dans « Clés et réglages », puis relance." };
     etat.boites.reglages = true;
+    rendreResultatPdf();
     rendreColonne();
     return;
+  }
+
+  // Ouvert tout de suite, pendant que le geste de l'utilisateur est encore « frais ».
+  const onglet = window.open("", "_blank");
+  if (onglet) {
+    onglet.opener = null;
+    onglet.document.title = "Carnet en cours de génération";
+    onglet.document.body.style.cssText = "font-family:system-ui,sans-serif;padding:2rem;color:#2d231a";
+    onglet.document.body.textContent = "Génération du carnet en cours, cet onglet affichera le PDF dès qu'il sera prêt.";
+  } else {
+    debugCarnet("onglet bloqué par le navigateur, le lien restera sous le bouton");
   }
 
   const contenu = [...bouton.childNodes];
   bouton.disabled = true;
   bouton.textContent = "Génération en cours…";
-  etat.erreur = "";
   etat.pdf = null;
+  etat.carnetStatut = { type: "info", texte: "Préparation des photos…" };
+  rendreResultatPdf();
 
+  let statut = 0;
   try {
-    const payload = construirePayloadCarnet();
-    const poids = JSON.stringify(payload).length;
-    if (poids > 20 * 1024 * 1024) {
-      throw new Error(
-        `la charge fait ${(poids / 1024 / 1024).toFixed(1)} Mo, trop de photos en base64 pour un envoi direct`,
-      );
-    }
+    const { payload, poids, base, palier } = await preparerEnvoi();
+    debugCarnet("envoi", { base, poids, palier });
 
-    const url = new URL(
-      `${etat.reglages.baseApitemplate || "https://rest-de.apitemplate.io/v2"}/create-pdf`,
-    );
+    etat.carnetStatut = {
+      type: "info",
+      texte: `Envoi à APITemplate (${(poids / 1024).toFixed(0)} Ko${palier ? `, photos en ${palier.cote} px` : ""})… compte 10 à 40 secondes.`,
+    };
+    rendreResultatPdf();
+
+    const url = new URL(`${base}/create-pdf`);
     url.searchParams.set("template_id", etat.reglages.templateApitemplate || "7a177b23210099d6");
 
+    const debut = performance.now();
     const reponse = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json", "X-API-KEY": cle },
       body: JSON.stringify(payload),
     });
+    statut = reponse.status;
     const donnees = await reponse.json().catch(() => null);
+    debugCarnet("réponse", { statut, duree_ms: Math.round(performance.now() - debut), donnees });
 
     if (!reponse.ok || donnees?.status !== "success") {
-      throw new Error(donnees?.message || `APITemplate a refusé le rendu (HTTP ${reponse.status})`);
+      throw new Error(donnees?.message || `APITemplate a refusé le rendu (HTTP ${statut})`);
     }
     if (!donnees.download_url) {
       throw new Error("APITemplate a répondu « success » sans lien de téléchargement");
     }
 
     etat.pdf = { url: donnees.download_url, quand: new Date() };
-    window.open(donnees.download_url, "_blank", "noopener");
+    etat.carnetStatut = null;
+    if (onglet && !onglet.closed) onglet.location.href = donnees.download_url;
   } catch (erreur) {
-    etat.erreur = `Le carnet n'a pas pu être généré : ${erreur.message}`;
+    console.error("[carnet] échec", erreur);
+    etat.carnetStatut = { type: "erreur", texte: `Le carnet n'a pas pu être généré : ${messageLisible(erreur, statut)}` };
+    if (onglet && !onglet.closed) onglet.close();
   } finally {
     bouton.disabled = false;
     bouton.replaceChildren(...contenu);
     rendreResultatPdf();
-    rendreColonne();
   }
 }
 
-/** Le lien vers le dernier PDF rendu, sous les boutons de l'en-tête. */
+/** Sous les boutons de l'en-tête : l'avancement, l'erreur, ou le lien vers le dernier PDF. */
 function rendreResultatPdf() {
   let zone = $("resultat-carnet");
   if (!zone) {
-    zone = h("p", { class: "resultat-carnet", id: "resultat-carnet" });
+    zone = h("p", { class: "resultat-carnet", id: "resultat-carnet", role: "status", "aria-live": "polite" });
     $("champs-carnet").before(zone);
   }
   zone.replaceChildren();
-  zone.hidden = !etat.pdf;
+  zone.classList.toggle("erreur", etat.carnetStatut?.type === "erreur");
+  zone.hidden = !etat.pdf && !etat.carnetStatut;
+  if (etat.carnetStatut) {
+    zone.append(etat.carnetStatut.texte);
+    return;
+  }
   if (!etat.pdf) return;
   zone.append(
     "Carnet généré à ",
     etat.pdf.quand.toLocaleTimeString("fr-FR"),
-    " — ",
+    ", ",
     h("a", { href: etat.pdf.url, target: "_blank", rel: "noopener" }, "ouvrir le PDF"),
   );
+}
+
+/**
+ * Le gabarit tel que GitHub le sert, branche `main`. `raw.githubusercontent.com`
+ * répond avec des en-têtes CORS permissifs : pas besoin de passer par un
+ * serveur pour le lire depuis le navigateur.
+ */
+const GITHUB_TEMPLATE_BASE =
+  "https://raw.githubusercontent.com/hugo-jouffre/memo-book/main/MemoBook%20Generator/templates/travel-journal";
+
+async function recupererFichierTemplate(nom) {
+  const reponse = await fetch(`${GITHUB_TEMPLATE_BASE}/${nom}`, { cache: "no-store" });
+  if (!reponse.ok) throw new Error(`${nom} : GitHub a répondu HTTP ${reponse.status}`);
+  return reponse.text();
+}
+
+/**
+ * Pousse le gabarit de `MemoBook Generator/templates/travel-journal/` (sur
+ * GitHub, branche main) vers APITemplate via `POST /update-template`, pour
+ * que le rendu utilise exactement ces fichiers-là au lieu d'une version
+ * éditée à la main dans leur tableau de bord.
+ *
+ * Même logique que `.github/workflows/sync-apitemplate.yml`, qui fait ce même
+ * appel côté CI — mais celui-ci est gardé par un secret GitHub qui n'est pas
+ * toujours posé. Ce bouton utilise la clé déjà présente dans les réglages, ce
+ * qui marche même sans toucher à la configuration du dépôt.
+ *
+ * `css` est la concaténation de `fonts.css` puis `style.css`, dans cet ordre
+ * — comme `loadTemplateCss()` côté back-end. Envoyer `style.css` seul ferait
+ * perdre toutes les polices, sans la moindre erreur visible.
+ */
+async function synchroniserTemplate(bouton) {
+  if (bouton.disabled) return;
+  const cle = (etat.reglages.cleApitemplate || "").trim();
+  const templateId = (etat.reglages.templateApitemplate || "").trim();
+  const statut = $("statut-template");
+  const ecrire = (texte, erreur = false) => {
+    if (!statut) return;
+    statut.textContent = texte;
+    statut.classList.toggle("erreur", erreur);
+  };
+
+  if (!cle || !templateId) {
+    ecrire("Clé APITemplate et identifiant du template requis avant de synchroniser.", true);
+    return;
+  }
+
+  const contenu = [...bouton.childNodes];
+  bouton.disabled = true;
+
+  try {
+    bouton.textContent = "Récupération sur GitHub…";
+    ecrire("Récupération de index.html, style.css et fonts.css depuis GitHub…");
+    const [html, style, fonts] = await Promise.all([
+      recupererFichierTemplate("index.html"),
+      recupererFichierTemplate("style.css"),
+      recupererFichierTemplate("fonts.css"),
+    ]);
+
+    bouton.textContent = "Envoi à APITemplate…";
+    ecrire("Envoi à APITemplate…");
+    const base = (etat.reglages.baseApitemplate || "https://rest-de.apitemplate.io/v2").replace(/\/$/, "");
+    const reponse = await fetch(`${base}/update-template`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "X-API-KEY": cle },
+      body: JSON.stringify({ template_id: templateId, body: html, css: `${fonts}\n${style}` }),
+    });
+    const donnees = await reponse.json().catch(() => null);
+    // Ce point de terminaison ne renvoie pas de champ `status` : le 2xx fait foi,
+    // exactement comme le vérifie déjà le workflow de synchronisation.
+    if (!reponse.ok) {
+      throw new Error(donnees?.message || `APITemplate a refusé la mise à jour (HTTP ${reponse.status})`);
+    }
+
+    ecrire(`Gabarit synchronisé avec APITemplate à ${new Date().toLocaleTimeString("fr-FR")}.`);
+  } catch (erreur) {
+    console.error("[template] échec de synchronisation", erreur);
+    ecrire(`Échec : ${erreur.message}`, true);
+  } finally {
+    bouton.disabled = false;
+    bouton.replaceChildren(...contenu);
+  }
 }
 
 /* ---------------------------------------- sauvegarde et reprise du travail --- */
@@ -1777,6 +2148,28 @@ function selecteurDeplacement(genre, itemId, conteneurId) {
   return select;
 }
 
+/**
+ * Le menu qui associe une photo à son étape. Contrairement à
+ * `selecteurDeplacement`, il affiche l'étape actuelle (ou « En attente ») au
+ * lieu de revenir à un intitulé neutre : c'est une affectation, pas un geste
+ * ponctuel.
+ */
+function selecteurEtapePhoto(photoId, etapeIdActuelle) {
+  const select = h(
+    "select",
+    {
+      title: "Étape associée à cette photo",
+      onchange: (ev) => deplacer("photos", photoId, etapeIdActuelle, ev.target.value || null),
+    },
+    h("option", { value: "" }, "En attente"),
+    etat.etapes.map((e, i) =>
+      h("option", { value: e.id }, `${i + 1}. ${e.titre || e.lieu || "Étape sans titre"}`),
+    ),
+  );
+  select.value = etapeIdActuelle || "";
+  return select;
+}
+
 function carteSouvenir(s, conteneurId) {
   return h(
     "div",
@@ -1857,7 +2250,7 @@ function cartePhoto(p, conteneurId) {
       h(
         "div",
         { class: "rangee" },
-        selecteurDeplacement("photos", p.id, conteneurId),
+        selecteurEtapePhoto(p.id, conteneurId),
         h(
           "button",
           {
@@ -1988,6 +2381,22 @@ function rendreReglages() {
         sauverReglages();
       },
     }),
+    h(
+      "div",
+      { class: "rangee" },
+      h(
+        "button",
+        {
+          class: "btn btn-petit",
+          id: "btn-sync-template",
+          "data-action": "sync-template",
+          title:
+            "Récupère index.html, style.css et fonts.css de templates/travel-journal (branche main) sur GitHub, et les pousse vers APITemplate",
+        },
+        "Synchroniser le gabarit depuis GitHub",
+      ),
+    ),
+    h("p", { class: "aide", id: "statut-template" }),
     h(
       "div",
       { class: "rangee" },
@@ -2201,7 +2610,7 @@ function rendreBoitePhotos() {
       importerPhotos,
     ),
     entree,
-    h("div", { class: "vignettes-attente", id: "attente-photos", hidden: true }),
+    h("div", { class: "grille-photos", id: "attente-photos", hidden: true }),
     h("p", { class: "aide", id: "aide-photos" }),
   );
   majBoitePhotos();
@@ -2213,18 +2622,14 @@ function majBoitePhotos() {
     zone.hidden = etat.photosAttente.length === 0;
     remplir(
       zone,
-      etat.photosAttente.map((p) =>
-        p.data
-          ? h("img", { src: p.data, alt: p.nomFichier, title: p.nomFichier })
-          : h("span", { class: "vide" }, p.nomFichier || "photo manquante"),
-      ),
+      etat.photosAttente.map((p) => cartePhoto(p, null)),
     );
   }
   const aide = $("aide-photos");
   if (aide) {
     aide.textContent = etat.photosAttente.length
-      ? "Ces photos attendent une étape dont la date les accueille. Crée une étape, ou fais-les glisser toi-même."
-      : "Chaque photo rejoint l'étape qui couvre sa date de fichier, ou la plus proche.";
+      ? "Choisis une étape dans le menu de chaque photo, ou attends qu'une étape corresponde à sa date."
+      : "Chaque photo rejoint l'étape qui couvre sa date de fichier, ou la plus proche ; le menu sur chaque photo permet de changer.";
   }
   majBadge(boitePhotos, etat.photosAttente.length ? `${etat.photosAttente.length}` : "", true);
 }
@@ -2434,10 +2839,25 @@ function rendreGroupe() {
     id: "texte-groupe",
     value: etat.texteGroupe,
     spellcheck: true,
+    // Ne touche qu'au strict nécessaire : reconstruire toute la carte comme
+    // `rendreGroupe()` le ferait couperait le curseur au milieu de la frappe.
     oninput: (ev) => {
       etat.texteGroupe = ev.target.value;
       etat.groupeModifie = true;
       $("etat-groupe").textContent = "modifications non appliquées";
+      const appliquer = $("btn-appliquer-groupe");
+      if (appliquer) appliquer.disabled = false;
+      if (!$("btn-annuler-groupe")) {
+        $("actions-groupe")?.append(
+          bouton("Annuler mes modifications", {
+            id: "btn-annuler-groupe",
+            surClic: () => {
+              etat.groupeModifie = false;
+              rendreGroupe();
+            },
+          }),
+        );
+      }
     },
   });
 
@@ -2478,8 +2898,9 @@ function rendreGroupe() {
       zone,
       h(
         "div",
-        { class: "rangee" },
+        { class: "rangee", id: "actions-groupe" },
         bouton("Appliquer aux étapes", {
+          id: "btn-appliquer-groupe",
           ton: "lime",
           desactive: !etat.groupeModifie,
           titre: "Réécrit les étapes à partir du texte relu",
@@ -2492,6 +2913,7 @@ function rendreGroupe() {
         }),
         etat.groupeModifie &&
           bouton("Annuler mes modifications", {
+            id: "btn-annuler-groupe",
             surClic: () => {
               etat.groupeModifie = false;
               rendreGroupe();
@@ -2579,6 +3001,7 @@ document.addEventListener("click", (ev) => {
   if (action === "generer-carnet") genererCarnet(bouton);
   if (action === "sauvegarder") sauvegarderAvancement(bouton);
   if (action === "ouvrir") $("fichier-avancement").click();
+  if (action === "sync-template") synchroniserTemplate(bouton);
 });
 
 /** Les boutons à icône de l'en-tête, garnis une fois le DOM prêt. */

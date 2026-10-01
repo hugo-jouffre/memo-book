@@ -448,6 +448,12 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
     /// Elle appartient au compte Apple ou Google, et la changer ici ne ferait
     /// que la désaccorder de celle avec laquelle on se reconnecte.
     public var signInProvider: AuthProvider?
+
+    /// Le compte a un mot de passe à lui — entré par e-mail, ou l'ayant posé
+    /// depuis. C'est ce qui décide si la ligne « Mot de passe » du profil
+    /// existe : un compte Apple ou Google seul n'a rien à changer ici (Hugo,
+    /// 29/09/2026). Vrai par défaut sur un serveur qui ne le dit pas encore.
+    public var hasPassword: Bool
     public var phoneNumber: String?
     /// La date de naissance, demandée à la fin de l'onboarding. Un jour, pas un
     /// instant — voir ``CalendarDay``.
@@ -488,6 +494,7 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         fullName: String,
         email: String? = nil,
         signInProvider: AuthProvider? = nil,
+        hasPassword: Bool = true,
         phoneNumber: String? = nil,
         birthDate: CalendarDay? = nil,
         gender: Gender = .undisclosed,
@@ -509,6 +516,7 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         self.fullName = fullName
         self.email = email
         self.signInProvider = signInProvider
+        self.hasPassword = hasPassword
         self.phoneNumber = phoneNumber
         self.birthDate = birthDate
         self.gender = gender
@@ -540,6 +548,9 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         fullName = try container.decode(String.self, forKey: .fullName)
         email = try container.decodeIfPresent(String.self, forKey: .email)
         signInProvider = try container.decodeIfPresent(AuthProvider.self, forKey: .signInProvider)
+        // Un serveur d'avant ne le dit pas : un compte sans fournisseur est
+        // alors entré par mot de passe.
+        hasPassword = try container.decodeIfPresent(Bool.self, forKey: .hasPassword) ?? (signInProvider == nil)
         phoneNumber = try container.decodeIfPresent(String.self, forKey: .phoneNumber)
         // Un serveur d'avant la date de naissance ne la rend pas, et une valeur
         // illisible ne doit pas emporter le profil entier.

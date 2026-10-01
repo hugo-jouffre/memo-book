@@ -102,16 +102,30 @@ public enum SupportCopy {
         /// questions de « Nous contacter » — plus court que la réponse qu'elles
         /// ouvraient : **les trois lignes de la section ouvrent le formulaire**
         /// (Hugo, 17/09/2026), et l'explication tient en une phrase.
-        public static func brief(for entryId: String) -> String? {
+        ///
+        /// Les deux chapeaux sont ceux de la page Notion (29/09/2026), au
+        /// caractère près, variables résolues à l'affichage — « Notre
+        /// application est {{statut_developpement}} ».
+        public static func brief(
+            for entryId: String,
+            variables: FaqVariables = .current
+        ) -> String? {
             switch entryId {
             case "faq.aide.probleme":
-                "Décris ce que tu faisais au moment du souci : le diagnostic technique est joint, sans tes souvenirs."
+                "Décris nous ton problème. Nous reviendrons vers toi dans les plus brefs délais par mail ou par Whatsapp si tu as renseigné ton numéro."
             case "faq.aide.suggestion":
-                "Dis-nous ce qui te manque : les demandes qui reviennent orientent les prochaines évolutions."
+                variables.resolve(
+                    "Notre application est {{statut_developpement}}. N’hésite pas à nous envoyer tes retours. On travaille en continu pour rendre ton expérience plus fluide. Les demandes récurrentes orientent directement les prochaines évolutions."
+                )
             default:
                 nil
             }
         }
+
+        /// Sous le champ, sur les deux entrées comme sur le formulaire seul :
+        /// c'est le même envoi.
+        public static let diagnosticMention =
+            "Un diagnostic technique est joint automatiquement à ton message, sans le contenu de tes souvenirs."
 
         public static let placeholder = "Ton message…"
         public static let send = "Envoyer"

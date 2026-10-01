@@ -69,6 +69,13 @@ public struct WelcomeView: View {
     @MainActor
     private static var cardUnderrun: CGFloat { DeviceScreen.height }
 
+    /// En deçà de cette hauteur de dalle — l'iPhone SE et ses 667 pt —, la
+    /// carte se resserre pour **tenir entière sans défiler** (Hugo, 29/09/2026,
+    /// T146) : moins de photo au-dessus, des écarts de section plus courts. Au
+    /// format de référence et au-delà, rien ne change.
+    private static let compactHeight: CGFloat = 700
+    private static let compactHeroRevealRatio: CGFloat = 0.11
+
     public var body: some View {
         // Le modèle a besoin de l'API, qui arrive par l'environnement : il ne
         // peut pas naître dans un initialiseur de propriété.
@@ -88,6 +95,9 @@ public struct WelcomeView: View {
 
     private func content(_ model: AuthModel) -> some View {
         GeometryReader { proxy in
+            let isCompact = proxy.size.height < Self.compactHeight
+            let revealRatio = isCompact ? Self.compactHeroRevealRatio : Self.heroRevealRatio
+
             ZStack(alignment: .top) {
                 hero
 
@@ -96,12 +106,13 @@ public struct WelcomeView: View {
                         // Ce qu'on laisse voir de la photo. `Color` est gourmand :
                         // sur un grand écran il prend tout le reste et la carte se
                         // pose au bas de la dalle ; sur un petit il tombe à son
-                        // minimum et la carte défile.
+                        // minimum et la carte défile — sauf en compact, où elle
+                        // tient (voir ``compactHeight``).
                         Color.clear
-                            .frame(minHeight: proxy.size.height * Self.heroRevealRatio)
+                            .frame(minHeight: proxy.size.height * revealRatio)
                             .accessibilityHidden(true)
 
-                        card(model)
+                        card(model, isCompact: isCompact)
                     }
                     .frame(minHeight: proxy.size.height, alignment: .bottom)
                     // **La carte bloque en bas** (Clara, 17/09/2026) : une fois
@@ -161,15 +172,15 @@ public struct WelcomeView: View {
 
     // MARK: - La carte
 
-    private func card(_ model: AuthModel) -> some View {
-        VStack(alignment: .leading, spacing: MemoBookSpacing.l) {
+    private func card(_ model: AuthModel, isCompact: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: isCompact ? MemoBookSpacing.s : MemoBookSpacing.l) {
             titleBlock
             featuresBlock
             authBlock(model)
         }
         .padding(.horizontal, MemoBookSpacing.screenMargin)
-        .padding(.top, MemoBookSpacing.m)
-        .padding(.bottom, MemoBookSpacing.l)
+        .padding(.top, isCompact ? MemoBookSpacing.s : MemoBookSpacing.m)
+        .padding(.bottom, isCompact ? MemoBookSpacing.s : MemoBookSpacing.l)
         .frame(maxWidth: Self.contentWidth)
         .frame(maxWidth: .infinity)
         .background {

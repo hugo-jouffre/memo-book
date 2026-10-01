@@ -265,6 +265,15 @@ public actor PreviewAPI: MemoBookAPI {
 
     /// La photo reste sur le disque de l'aperçu, et le profil pointe dessus :
     /// c'est ce qui permet de voir sa photo changer sans serveur.
+    public func changePassword(current: String, new: String) async throws {}
+
+    public func removeAvatar() async throws -> TravellerProfile {
+        var profile = editedProfile ?? .fixture
+        profile.avatarUrl = nil
+        editedProfile = profile
+        return profile
+    }
+
     public func uploadAvatar(data: Data, mimeType: String) async throws -> TravellerProfile {
         var profile = editedProfile ?? .fixture
         let url = URL.cachesDirectory.appending(path: "preview-avatar-\(UUID().uuidString).jpg")
@@ -658,6 +667,27 @@ public actor PreviewAPI: MemoBookAPI {
     /// à la première relecture, et on croirait l'écran cassé. C'est la même
     /// mécanique que `memosById` pour les carnets.
     private static let settingsBox = SettingsBox()
+
+    public func bookCovers(tripId: String) async throws -> BookCovers { .fixture }
+
+    public func updateBookCovers(tripId: String, edit: BookCoverEdit) async throws -> BookCovers {
+        var covers = BookCovers.fixture
+        switch edit {
+        case .style(let face, let styleId): covers[face].styleId = styleId
+        case .photo(let face, let photoId): covers[face].photoId = photoId
+        case .texts(let face, let title, let subtitle):
+            covers[face].title = title
+            covers[face].subtitle = subtitle
+        case .stats(let ids): covers.back.statIds = ids
+        }
+        return covers
+    }
+
+    public func uploadCoverPhoto(tripId: String, data: Data) async throws -> CoverPhoto {
+        let url = URL.cachesDirectory.appending(path: "preview-cover-\(UUID().uuidString).jpg")
+        try data.write(to: url, options: .atomic)
+        return CoverPhoto(id: "cover-\(UUID().uuidString)", url: url)
+    }
 
     public func tripSettings(id: String) async throws -> TripSettings {
         await Self.settingsBox.read()

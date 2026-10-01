@@ -57,11 +57,20 @@ describe("groupEntriesByDay", () => {
 
 describe("pickLayout", () => {
   it("suit l'heuristique de LAYOUT_KB", () => {
-    expect(pickLayout(0, 200)).toBe("layout_story_facts");
-    expect(pickLayout(1, 100)).toBe("layout_postcard");
-    expect(pickLayout(1, 900)).toBe("layout_hero_top");
-    expect(pickLayout(2, 300)).toBe("layout_modern_journal");
-    expect(pickLayout(4, 300)).toBe("layout_gallery_stack");
+    // Sous le minimum de S, c'est l'image qui porte la page.
+    expect(pickLayout(4, 100)).toBe("layout_photo_page");
+    expect(pickLayout(1, 100)).toBe("layout_hero_top");
+    // Sans photo ni carte, aucun layout ne respire : on reste sur le récit.
+    expect(pickLayout(0, 100)).toBe("layout_story_facts");
+
+    // Au-dessus, le plus visuel de ceux qui tiennent le texte.
+    expect(pickLayout(0, 200)).toBe("layout_story_opener");
+    expect(pickLayout(2, 300)).toBe("layout_split_left");
+    expect(pickLayout(4, 300)).toBe("layout_collage");
+    // `layout_hero_top` plafonne à 380 caractères : au-delà il faut du récit
+    // pleine largeur.
+    expect(pickLayout(1, 300)).toBe("layout_hero_top");
+    expect(pickLayout(1, 900)).toBe("layout_story_opener");
   });
 });
 

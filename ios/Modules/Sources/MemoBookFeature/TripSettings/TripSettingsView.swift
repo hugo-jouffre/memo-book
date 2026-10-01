@@ -264,11 +264,15 @@ public struct TripSettingsView: View {
                 )
             }
 
-            TricountCallout(
-                connected: settings?.tricountLabel,
-                isLoading: isLoading,
-                action: { onIntent(.connectTricount) }
-            )
+            #if DEBUG
+                // Comme la carte des connecteurs du profil : en Debug seulement
+                // tant que rien ne se branche (Hugo, 29/09/2026 ; T76).
+                TricountCallout(
+                    connected: settings?.tricountLabel,
+                    isLoading: isLoading,
+                    action: { onIntent(.connectTricount) }
+                )
+            #endif
         }
     }
 
@@ -620,7 +624,7 @@ private struct PdfPreviewRow: View {
     let action: () -> Void
 
     /// La vignette garde le rapport d'une page A5 — c'est le format du carnet
-    /// (voir `templates/travel-journal/print.json`). Fixe, hors Dynamic Type :
+    /// (voir `MemoBook Generator/templates/travel-journal/print.json`). Fixe, hors Dynamic Type :
     /// une image n'est pas du texte.
     private static let thumbnailWidth: CGFloat = 56
     private static let thumbnailRatio: CGFloat = 1.414

@@ -5,7 +5,7 @@
  *   npm run smoke -- --live  → OpenAI + APITemplate pour de vrai, affiche l'URL du PDF
  *
  * Utile pour vérifier d'un coup que la chaîne rejoint bien le template
- * `templates/travel-journal/` après un changement de schéma ou de prompt.
+ * `MemoBook Generator/templates/travel-journal/` après un changement de schéma ou de prompt.
  */
 import { buildApp } from "../src/app.js";
 import { createContext } from "../src/context.js";

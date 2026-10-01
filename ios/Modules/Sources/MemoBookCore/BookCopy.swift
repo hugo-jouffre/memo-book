@@ -147,6 +147,15 @@ public enum BookCopy {
 
         public static let extrasSection = "Extras"
 
+        /// Les cinq pastilles de la tête de l'écran (V3, `3595:23807`), **au
+        /// caractère près** : « Nmb de pages » et « Typos » sont des
+        /// abréviations de la maquette, pas les nôtres (R8).
+        public static let categoryRatio = "Ratio media"
+        public static let categoryPages = "Nmb de pages"
+        public static let categoryDecorations = "Décorations & stickers"
+        public static let categoryFonts = "Typos"
+        public static let categoryExtras = "Extras"
+
         public static let quizTitle = "Quiz intégrés à l’histoire"
         public static let quizDetail =
             "MemoBook génère des mini quiz au fur et à mesure du récit. Découvre-les et répond lors de la réception de ton carnet."
@@ -665,7 +674,6 @@ public enum BookCopy {
 
         public static let more = "Plus de photos"
         public static let less = "Plus de texte"
-        public static let validate = "Valider"
 
         /// « 50 / 50 », la valeur en grand au-dessus du curseur.
         public static func value(_ photos: Int) -> String { "\(photos) / \(100 - photos)" }
@@ -687,9 +695,11 @@ public enum BookCopy {
     public enum Pages {
         public static let title = "Nombre de page"
 
-        /// **Corrigée au tutoiement** — voir ``Customisation/intro``.
+        /// La phrase de la V3 (`3595:23920`), telle quelle : elle tutoie
+        /// désormais dans Figma. « plus de page » au singulier est celui de la
+        /// maquette (R8).
         public static let subtitle =
-            "Gère le niveau de détail de ton carnet en laissant notre outil utiliser plus de pages."
+            "Gère le niveau de détails de ton carnet en permettant à notre outil d’utiliser plus de page."
 
         /// La ligne verte sous le chapeau. Elle dit **sur quoi** les
         /// projections sont faites — la maquette écrit « 2 mois » en dur, l'app
@@ -710,7 +720,6 @@ public enum BookCopy {
         /// **Corrigée au tutoiement** — voir ``Customisation/intro``.
         public static let detail =
             "Encarts de culture générale toutes les 3 pages pour agrémenter tes récits."
-        public static let validate = "Valider"
     }
 
     /// « Pointillés » — `3443:10126`.
@@ -720,7 +729,6 @@ public enum BookCopy {
 
         /// **Corrigée au tutoiement** — voir ``Customisation/intro``.
         public static let detail = "Lignes en pointillé sous le texte dans ton carnet"
-        public static let validate = "Valider"
     }
 
     /// « Typographies du carnet » — l'héritière de « Titres du carnet »
@@ -733,9 +741,9 @@ public enum BookCopy {
     /// libres sont ratés. À reprendre dans Figma.
     public enum Fonts {
         public static let title = "Typographies du carnet"
+        /// La phrase de la V3 (`3595:24009`).
         public static let subtitle =
-            "Choisis l’assortiment qui habillera ton carnet. Chacun est pensé pour tenir de bout en bout."
-        public static let validate = "Valider"
+            "Choisis la typographie de tes titres, sous-titres, paragraphes et fun facts"
 
         /// Ce que la ligne de l'écran affiche quand le carnet ne porte aucun
         /// des quatre assortiments — un carnet composé police par police avant
@@ -750,6 +758,5 @@ public enum BookCopy {
         /// **Corrigée au tutoiement** — voir ``Customisation/intro``.
         public static let subtitle = "Détermine la quantité de décorations dans tes pages"
         public static let sliderLabel = "Quantité de décorations par paragraphe ou image"
-        public static let validate = "Valider"
     }
 }

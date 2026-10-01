@@ -5,17 +5,20 @@ import Observation
 /// Ce que la feuille d'enregistrement sait faire : ouvrir le micro, le
 /// suspendre, tout reprendre depuis le début, et rendre le vocal.
 ///
-/// Il tient **deux** choses côte à côte, et l'ordre entre elles n'est pas
-/// négociable : l'``AudioRecorder`` d'abord — c'est lui qui obtient le micro et
-/// pose la session —, le ``SpeechTranscriber`` ensuite, en second et sans
-/// conséquence. Si la reconnaissance vocale ne démarre pas, le vocal se capture
-/// quand même : c'est le vocal qui fait le carnet, le texte à l'écran n'est
-/// qu'un retour.
+/// Il ne tient plus que l'``AudioRecorder`` — celui-là même que la conversation
+/// emploie, et qui n'a jamais fait tomber l'app. Le ``SpeechTranscriber``, qui
+/// écrivait les mots à mesure qu'on parlait, **n'est plus branché ici** : c'est
+/// lui qui faisait disparaître l'app à l'ouverture de la feuille sur l'iPhone
+/// de Hugo (iPhone 13, iOS 18.7.2), et jamais sur le simulateur, où la
+/// reconnaissance vocale n'est pas disponible et où il ne démarrait donc pas.
+/// Trois verrous posés le 19/09 n'ont pas suffi : `installTap` lève une
+/// exception Objective-C que Swift ne rattrape pas, et il reste des formats de
+/// matériel qu'on ne sait pas prévoir. Le texte n'était qu'un retour visuel —
+/// c'est le vocal qui fait le carnet, et le serveur qui le transcrit (T176).
 @MainActor
 @Observable
 public final class RecordingModel {
     public let recorder: AudioRecorder
-    public let transcriber: SpeechTranscriber
 
     /// Les niveaux relevés depuis le début, pour la frise. On n'en garde que ce
     /// qui se voit : la frise n'est pas un historique, et une heure de vocal ne
@@ -49,12 +52,8 @@ public final class RecordingModel {
     /// long, elle saute d'une barre à l'autre.
     private static let samplingInterval = Duration.milliseconds(80)
 
-    public init(
-        recorder: AudioRecorder = AudioRecorder(),
-        transcriber: SpeechTranscriber = SpeechTranscriber()
-    ) {
+    public init(recorder: AudioRecorder = AudioRecorder()) {
         self.recorder = recorder
-        self.transcriber = transcriber
     }
 
     public var isRecording: Bool { recorder.isRecording }
@@ -62,7 +61,6 @@ public final class RecordingModel {
     public var isCapturing: Bool { recorder.isCapturing }
     public var elapsed: TimeInterval { recorder.elapsed }
     public var level: Double { recorder.level }
-    public var transcript: String { transcriber.transcript }
 
     /// Rien n'a encore été enregistré : ni son, ni temps. C'est l'état
     /// d'ouverture de la feuille, et celui où « Recommencer » n'a rien à faire.
@@ -77,8 +75,18 @@ public final class RecordingModel {
 
     // MARK: - Les gestes
 
-    /// Le geste du gros bouton : ouvrir le micro, ou refermer.
+    /// Le geste du gros bouton : ouvrir le micro, reprendre après une pause,
+    /// ou refermer et envoyer.
+    ///
+    /// **En pause, il reprend.** Il disait « Reprendre » et envoyait le vocal
+    /// (Hugo, 29/09/2026) : `isRecording` reste vrai pendant une pause, et le
+    /// geste tombait dans « refermer ». La pause se lève d'abord ; envoyer
+    /// demande alors un second appui, sur un disque qui dit « Envoyer ».
     public func toggle() async -> RecordedAudio? {
+        if isPaused {
+            togglePause()
+            return nil
+        }
         if isRecording { return finish() }
         await start()
         return nil
@@ -102,17 +110,6 @@ public final class RecordingModel {
         levels = []
         capturedLevels = []
         startSampling()
-
-        // La reconnaissance vocale démarre **après**, et son échec ne remonte
-        // pas : elle demande sa propre autorisation, et un refus ne doit pas
-        // arrêter un enregistrement qui tourne déjà.
-        //
-        // Et seulement si le micro capte vraiment : le moteur de
-        // reconnaissance pose une prise sur la même entrée, et le faire avant
-        // que la session soit posée est exactement ce qui fait disparaître
-        // l'app (voir ``SpeechTranscriber``).
-        guard recorder.isCapturing else { return }
-        await transcriber.start()
     }
 
     public func togglePause() {
@@ -121,22 +118,16 @@ public final class RecordingModel {
         if isPaused {
             recorder.resume()
             startSampling()
-            Task { await transcriber.start() }
         } else {
             recorder.pause()
             stopSampling()
-            // Le moteur de reconnaissance se referme sur la pause : le laisser
-            // ouvert sur du silence le fait expirer tout seul, et on perdrait
-            // le texte déjà écrit.
-            transcriber.stop()
         }
     }
 
-    /// Tout jeter et repartir de zéro : le vocal en cours, la frise, le texte.
+    /// Tout jeter et repartir de zéro : le vocal en cours et la frise.
     /// C'est le geste qu'on fait quand on s'est emmêlé dans sa phrase.
     public func restart() async {
         recorder.cancel()
-        transcriber.reset()
         stopSampling()
         levels = []
         capturedLevels = []
@@ -147,7 +138,6 @@ public final class RecordingModel {
     /// Referme tout et rend le vocal. `nil` si rien n'a été capturé.
     public func finish() -> RecordedAudio? {
         stopSampling()
-        transcriber.stop()
 
         do {
             return try recorder.stop()
@@ -161,7 +151,6 @@ public final class RecordingModel {
     /// souvenir à partir d'un enregistrement abandonné.
     public func discard() {
         stopSampling()
-        transcriber.reset()
         recorder.cancel()
         levels = []
         capturedLevels = []

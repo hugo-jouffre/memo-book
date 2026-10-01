@@ -3,7 +3,7 @@ name: Aperçu du carnet
 on:
   pull_request:
     paths:
-      - 'templates/travel-journal/**'
+      - 'MemoBook Generator/templates/travel-journal/**'
       - 'backend/src/services/bookPdf.ts'
       - 'backend/src/lib/templates.ts'
       - 'backend/scripts/**'

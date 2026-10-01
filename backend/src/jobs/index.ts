@@ -1,6 +1,7 @@
 import type { AppContext } from "../context.js";
 import { converseTurn, type ConverseJob } from "./converse.js";
 import { endSubscriptions, type EndSubscriptionsJob } from "./endSubscriptions.js";
+import { exportStats, type ExportStatsJob } from "./exportStats.js";
 import { JOB_NAMES } from "./queue.js";
 import { redactEntry, type RedactJob } from "./redact.js";
 import { renderBook, type RenderJob } from "./render.js";
@@ -15,6 +16,13 @@ import { transcribeEntry, type TranscribeJob } from "./transcribe.js";
  * monde programme ses tâches.
  */
 export const END_SUBSCRIPTIONS_CRON = "10 3 * * *";
+
+/**
+ * L'heure de la feuille de bord : 4 h 20 UTC, après le ménage des
+ * abonnements, pour que le relevé du jour compte ceux qui viennent de
+ * s'arrêter.
+ */
+export const EXPORT_STATS_CRON = "20 4 * * *";
 
 /**
  * Branche les étapes du pipeline sur la file, et pose la tâche quotidienne. À
@@ -40,11 +48,21 @@ export function registerJobs(context: AppContext): void {
   context.queue.register<EndSubscriptionsJob>(JOB_NAMES.endSubscriptions, () =>
     endSubscriptions(context),
   );
+  context.queue.register<ExportStatsJob>(JOB_NAMES.exportStats, () => exportStats(context));
 
-  // L'horaire est demandé ici et posé au démarrage de la file. Idempotent :
-  // relancer le serveur ne crée pas un second passage quotidien.
+  // Les horaires sont demandés ici et posés au démarrage de la file.
+  // Idempotents : relancer le serveur ne crée pas un second passage quotidien.
   void context.queue.schedule(JOB_NAMES.endSubscriptions, END_SUBSCRIPTIONS_CRON);
+  void context.queue.schedule(JOB_NAMES.exportStats, EXPORT_STATS_CRON);
 }
 
 export { JOB_NAMES };
-export type { ConverseJob, EndSubscriptionsJob, RedactJob, RenderJob, StructureJob, TranscribeJob };
+export type {
+  ConverseJob,
+  EndSubscriptionsJob,
+  ExportStatsJob,
+  RedactJob,
+  RenderJob,
+  StructureJob,
+  TranscribeJob,
+};

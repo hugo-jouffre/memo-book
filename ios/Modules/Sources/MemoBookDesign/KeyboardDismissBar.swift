@@ -10,7 +10,9 @@ extension View {
     /// l'enregistrement se fait tout seul à la sortie du champ, ce faux bouton
     /// de validation est un contresens. `IconKeyboardDown` dit ce qu'il fait :
     /// le clavier descend. C'est l'icône dessinée pour ça, arrivée dans le jeu
-    /// de marque à la place du double chevron provisoire (T27).
+    /// de marque à la place du double chevron provisoire (T27) — **la bichrome**
+    /// (`keyboard down 2.svg`) depuis le 29/09/2026 (Hugo) : son aplat bleu
+    /// se voit sur la barre d'accessoires, là où le trait seul se perdait.
     ///
     /// Il est **centré sur la barre, quel que soit l'iOS** (Hugo, 16/09/2026).
     /// Il flottait de 8 pt au-dessus des touches — pour qu'on ne le vise pas
@@ -25,12 +27,12 @@ extension View {
                 Button {
                     KeyboardDismissal.resignFirstResponder()
                 } label: {
-                    Image(brand: "IconKeyboardDown")
+                    // Sans `renderingMode(.template)` : la bichrome porte ses
+                    // couleurs, la teinter l'aplatirait en silhouette.
+                    Image(brand: "IconKeyboardDownDuo")
                         .resizable()
-                        .renderingMode(.template)
                         .scaledToFit()
                         .frame(width: MemoBookSpacing.m, height: MemoBookSpacing.m)
-                        .foregroundStyle(MemoBookColor.action)
                         .frame(
                             minWidth: MemoBookSpacing.minimumTapTarget,
                             minHeight: MemoBookSpacing.minimumTapTarget

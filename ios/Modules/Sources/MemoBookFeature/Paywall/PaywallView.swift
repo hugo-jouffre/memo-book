@@ -52,6 +52,12 @@ struct PaywallView: View {
     /// de l'offre.
     @State private var showsEstimation = false
 
+    /// L'estimation du carnet qu'on finance, lue sur la cagnotte dès que
+    /// l'offre s'ouvre — sur les chiffres de la maquette tant qu'elle n'est
+    /// pas là (T127). Voir ``SwiftUI/EnvironmentValues/walletSource``.
+    @State private var estimation: PaywallEstimation?
+    @Environment(\.walletSource) private var walletSource
+
     /// La feuille « Choisis ton mode de paiement », ouverte par le bouton de
     /// l'offre — et le modèle du profil qu'elle pilote, fabriqué à l'ouverture.
     @State private var showsPayment = false
@@ -190,8 +196,12 @@ struct PaywallView: View {
         // aussi : on les referme et on retrouve l'offre.
         .brandSheet(isPresented: $showsEstimation) {
             PaywallEstimationSheet(
-                estimation: .example(weeklyPrice: subscription.displayedWeeklyPrice)
+                estimation: estimation ?? .example(weeklyPrice: subscription.displayedWeeklyPrice)
             )
+        }
+        .task(id: previewMemoId) {
+            guard let walletSource, let wallet = try? await walletSource(previewMemoId) else { return }
+            estimation = PaywallEstimation(wallet: wallet, weeklyPrice: subscription.displayedWeeklyPrice)
         }
         .brandSheet(isPresented: $showsPayment) {
             if let paymentModel {

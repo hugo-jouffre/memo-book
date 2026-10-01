@@ -26,6 +26,7 @@ tourner » plus bas.
 | `public/` | La page elle-même — c'est ce dossier qui est publié en ligne |
 | `public/partage.js` | Ce qui doit rester identique en local et en ligne : renommage, format du fichier groupé, consigne de découpage |
 | `public/moteur-navigateur.js` | La transcription sans serveur, pour la version hébergée |
+| `templates/travel-journal/` | Le gabarit du PDF envoyé à APITemplate — voir plus bas et [`docs/apitemplate.md`](../docs/apitemplate.md) |
 | `TRANSCRIPTION.md` | Le script en ligne de commande : options, coût, alternative gratuite en local |
 
 ## La boucle de travail
@@ -62,6 +63,23 @@ tourner » plus bas.
    vient d'être écrit.
 8. **Génère le carnet** *(Beta)* — le JSON part chez APITemplate, sur le
    template de `templates/travel-journal/`, et le PDF s'ouvre dans un onglet.
+
+### Garder le gabarit à jour côté APITemplate
+
+APITemplate ne lit pas `templates/travel-journal/` directement : il garde sa
+propre copie de `index.html` et `style.css`, poussée par
+`POST /update-template`. Deux façons de la mettre à jour :
+
+- **`.github/workflows/sync-apitemplate.yml`**, automatiquement à chaque
+  `push` sur `main` qui touche le template — s'il porte le secret
+  `APITEMPLATE_API_KEY`.
+- **Le bouton « Synchroniser le gabarit depuis GitHub »**, dans « Clés et
+  réglages ». Il récupère `index.html`, `style.css` et `fonts.css` sur GitHub
+  (branche `main`) et les pousse avec la clé déjà collée dans les réglages —
+  utile si le secret côté CI n'est pas posé.
+
+Dans les deux cas, `templates/travel-journal/` reste l'unique source de
+vérité : ce qu'il contient est ce qui part chez APITemplate, tel quel.
 
 ### Sauvegarder et reprendre
 
@@ -244,12 +262,12 @@ fois la page chargée.
 ## Générer le carnet, et pourquoi c'est Beta
 
 Le bouton « Générer le carnet » traduit l'état de l'atelier vers le contrat du
-template — celui décrit par `templates/travel-journal/data.json` — et l'envoie à
+template — celui décrit par `MemoBook Generator/templates/travel-journal/data.json` — et l'envoie à
 APITemplate. Il faut pour cela une **clé APITemplate** dans les réglages ;
 l'identifiant du template est prérempli avec celui du dépôt.
 
 Le choix du gabarit de chaque étape suit la table de
-[`LAYOUT_KB.md`](../templates/travel-journal/LAYOUT_KB.md), qui dit combien de
+[`LAYOUT_KB.md`](templates/travel-journal/LAYOUT_KB.md), qui dit combien de
 photos chacun sait tenir :
 
 | Photos dans l'étape | Gabarit |
@@ -294,5 +312,5 @@ rendu, le chemin reste le pipeline.
 - [`TRANSCRIPTION.md`](TRANSCRIPTION.md) —
   le script en ligne de commande, ses options, son coût, et l'alternative
   gratuite en local (`whisper-cpp`)
-- [`templates/travel-journal/LAYOUT_KB.md`](../templates/travel-journal/LAYOUT_KB.md) —
+- [`templates/travel-journal/LAYOUT_KB.md`](templates/travel-journal/LAYOUT_KB.md) —
   ce que la mise en page attend du carnet

@@ -52,7 +52,7 @@ export const SHIPPING_DAYS: Record<ShippingSpeed, { min: number; max: number }> 
 export const BOOK_SPECIFICATIONS = [
   "80g. non couché ivoire",
   "Couverture rigide & matte",
-  "Livre broché",
+  "Livre relié",
 ] as const;
 
 /**

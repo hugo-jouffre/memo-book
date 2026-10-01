@@ -52,7 +52,7 @@ if (values.help) {
     [
       "Usage : npm run render:local -- [options]",
       "",
-      "  --data <fichier>   payload JSON (défaut : templates/travel-journal/data.json)",
+      "  --data <fichier>   payload JSON (défaut : MemoBook Generator/templates/travel-journal/data.json)",
       "  --out <dossier>    dossier de sortie (défaut : .render-out)",
       "  --profile <p>      print | preview (défaut : preview)",
       "  --offline          sert les hôtes injoignables depuis le bundle local",

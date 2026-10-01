@@ -5,7 +5,7 @@ Ce que le dépôt utilise de l'API, et pourquoi.
 > ⚠️ **Statut de vérification.** Les sessions Claude Code sur ce dépôt ont
 > `apitemplate.io` bloqué par le proxy réseau : la documentation officielle
 > n'a pas pu être lue directement. Ce qui suit vient de
-> `templates/travel-journal/gpt_image_schema.yaml`, du workflow de
+> `MemoBook Generator/templates/travel-journal/gpt_image_schema.yaml`, du workflow de
 > synchronisation et du code du back-end. Les points marqués **À VÉRIFIER**
 > doivent être confirmés sur <https://apitemplate.io/apiv2/> depuis un poste
 > non filtré, puis corrigés ici.
@@ -58,7 +58,7 @@ Implémenté par `ApiTemplateRenderer` dans
 curl -X POST "https://rest-de.apitemplate.io/v2/create-pdf?template_id=7a177b23210099d6" \
   -H "Content-Type: application/json" \
   -H "X-API-KEY: $APITEMPLATE_API_KEY" \
-  -d @templates/travel-journal/data.json
+  -d "@MemoBook Generator/templates/travel-journal/data.json"
 ```
 
 Réponse attendue :
@@ -83,8 +83,15 @@ bord ne la surcharge pas — voir « Calibration » plus bas.
 
 ### `POST /v2/update-template`
 
-Pousse le template. Appelé par `.github/workflows/sync-apitemplate.yml` sur
-chaque `push` vers `main` touchant le template.
+Pousse le template. Deux appelants :
+
+- `.github/workflows/sync-apitemplate.yml`, à chaque `push` vers `main`
+  touchant le template — mais gardé par le secret `APITEMPLATE_API_KEY`, qui
+  n'est pas toujours posé (voir « Secrets » plus haut).
+- Le bouton « Synchroniser le gabarit depuis GitHub » de l'atelier
+  (`MemoBook Generator/public/app.js`, `synchroniserTemplate()`), qui refait
+  le même appel depuis le navigateur avec la clé déjà présente dans les
+  réglages. Utile quand le secret CI n'est pas configuré.
 
 ```json
 { "template_id": "...", "body": "<html>…", "css": "<style>…" }
@@ -138,7 +145,7 @@ Procédure, dès que la clé est posée :
    `@page` du template — pas l'inverse : la géométrie doit vivre dans
    l'artefact que les deux moteurs consomment.
 4. Passer `apitemplate.calibrated` à `true` dans
-   `templates/travel-journal/print.json`.
+   `MemoBook Generator/templates/travel-journal/print.json`.
 
 ## Ce que le rendu local ne garantit pas
 

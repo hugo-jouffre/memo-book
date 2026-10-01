@@ -11,8 +11,9 @@ import SwiftUI
 ///
 /// La seule exception est la **restauration de session** : elle décide de
 /// l'écran à montrer, donc elle doit répondre avant qu'on montre quoi que ce
-/// soit. Elle est bornée par le délai du client d'API, et son échec ouvre
-/// simplement l'écran d'entrée plutôt qu'un mur d'erreur.
+/// soit. Elle est bornée par le délai du client d'API ; une panne ouvre
+/// l'accueil avec le compte d'hier, et seul un refus de la session ouvre
+/// l'écran d'entrée — voir ``SessionRestore``.
 public struct RootView: View {
     @Environment(AppDependencies.self) private var dependencies
     @Environment(\.scenePhase) private var scenePhase
@@ -89,6 +90,11 @@ public struct RootView: View {
     /// que ``AuthView`` soit là, et se perdrait s'il l'attendait.
     @State private var pendingResetToken: String?
 
+    /// Un lien de réinitialisation ouvert **depuis l'app entrée** — après
+    /// « Mot de passe oublié ? » sur la feuille du profil (Hugo, 29/09/2026).
+    /// Il ouvre la feuille du nouveau mot de passe par-dessus ce qu'on faisait.
+    @State private var signedInResetToken: ResetLinkToken?
+
     public init() {}
 
     public var body: some View {
@@ -113,15 +119,20 @@ public struct RootView: View {
         // Le profil, à portée du paywall — voir
         // ``SwiftUI/EnvironmentValues/profileModelFactory``.
         .environment(\.profileModelFactory, { dependencies.profileModel() })
+        .environment(\.walletSource, { [api = dependencies.api] tripId in try await api.wallet(tripId: tripId) })
         // Le support **de la session**, à portée du paywall : « Besoin d'aide ? »
         // l'ouvre par-dessus l'offre au lieu de la refermer, pour que la flèche
         // de retour ramène à l'étape qu'on regardait (Hugo, 16/09/2026).
         .environment(\.supportModel, support)
         .onOpenURL { url in
             guard let token = PasswordResetLink.token(from: url) else { return }
-            // Déjà entré : le mot de passe se change depuis le profil, et un
-            // lien reçu pour un compte où l'on est déjà n'a rien à ouvrir.
-            if case .signedIn = stage { return }
+            // Déjà entré : c'est le lien de « Mot de passe oublié ? » de la
+            // feuille du profil — il ouvre la même feuille, en mode nouveau
+            // mot de passe, par-dessus l'écran où l'on est.
+            if case .signedIn = stage {
+                signedInResetToken = ResetLinkToken(value: token)
+                return
+            }
             pendingResetToken = token
             // C'est l'écran d'entrée par e-mail qui le consomme. Depuis
             // l'accueil, ou à froid, il n'est pas là : on le pousse — le
@@ -182,6 +193,17 @@ public struct RootView: View {
         // comprises — plus bas, les coins arrondis couperaient le fond au ras de
         // la barre d'état.
         .brandSheetPresenter(isPresented: sheets.isPresenting)
+        .brandSheet(item: $signedInResetToken) { token in
+            PasswordChangeSheet(
+                model: PasswordChangeModel(
+                    mode: .reset(token: token.value),
+                    email: "",
+                    reset: { [api = dependencies.api] token, password in
+                        _ = try await api.resetPassword(token: token, password: password)
+                    }
+                )
+            )
+        }
         // L'accueil se pose **derrière** le tracé du M, pas après lui : sans
         // cette information, sa cascade se jouait entièrement sous le voile et
         // l'écran apparaissait déjà en place.
@@ -206,6 +228,7 @@ public struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
             Task { await dependencies.outbox.flush() }
+            Task { await leaveIfSessionWasRefused() }
         }
     }
 
@@ -250,10 +273,12 @@ public struct RootView: View {
     /// Décide de l'écran d'ouverture.
     ///
     /// Une session périmée ou révoquée renvoie 401, que le client traduit en
-    /// oubli du jeton : on repart proprement sur l'écran d'entrée. Une panne
-    /// réseau y mène aussi — se retrouver devant le formulaire est désagréable,
-    /// mais moins que de bloquer quelqu'un derrière un écran d'attente sans
-    /// issue.
+    /// oubli du jeton : on repart proprement sur l'écran d'entrée. **Une panne
+    /// n'y mène plus** — un 500, un délai, un réseau coupé : on entre avec le
+    /// compte gardé la dernière fois, et l'accueil dit lui-même ce qui ne
+    /// répond pas. Les deux cas se confondaient, et trois jours de 500 sur
+    /// `GET /v1/auth/me` ont sorti les testeurs de leur compte à chaque
+    /// lancement (``SessionRestore``, 29/09/2026).
     private func restore() async {
         guard stage == .restoring else { return }
 
@@ -276,12 +301,12 @@ public struct RootView: View {
         // à s'écrire **maintenant**, et la vérification se fait dessous.
         isLaunching = true
 
-        do {
-            let account = try await dependencies.api.currentAccount()
+        switch await dependencies.restoreSession() {
+        case .verified(let account), .remembered(let account):
             enterApp(as: account)
-        } catch {
-            // La session ne valait plus rien, ou le réseau n'a pas répondu : le
-            // voile se lève sur l'écran d'entrée, que le tracé soit fini ou non.
+        case .closed, .unreachable:
+            // La session a été refusée, ou rien ne permet d'entrer : le voile
+            // se lève sur l'écran d'entrée, que le tracé soit fini ou non.
             stage = .signedOut
             endLaunch()
         }
@@ -295,6 +320,8 @@ public struct RootView: View {
     /// qu'il ait jamais eu à couvrir. L'écran d'accueil du tout premier
     /// démarrage, lui, ne passe pas par là et n'a donc pas d'animation devant.
     private func enterApp(as account: Account) {
+        remember(account)
+
         // Un compte qui vient d'être ouvert passe d'abord par les « Dernières
         // questions » (Clara, 26/09/2026) — une seule fois, et jamais dans le
         // bac à sable.
@@ -310,10 +337,21 @@ public struct RootView: View {
         openApp(as: account)
     }
 
+    /// Garde le compte pour le prochain lancement — voir
+    /// ``AppDependencies/rememberAccount(_:)``. Jamais celui du bac à sable :
+    /// il n'a pas de jeton, et un lancement normal ne doit pas le retrouver.
+    private func remember(_ account: Account) {
+        guard !OnboardingStorage.isPreviewingSignedIn else { return }
+        Task { await dependencies.rememberAccount(account) }
+    }
+
     /// Les trois questions sont passées ou validées : on ne les reposera plus
     /// à ce compte, et l'on entre — avec le prénom qu'on vient de confirmer.
     private func finishLastQuestions(as account: Account) {
         LastQuestionsModel.markAnswered(account)
+        // Le prénom vient peut-être de changer : c'est ce compte-là qu'on
+        // relira le jour où le serveur ne répond pas.
+        remember(account)
         openApp(as: account)
     }
 
@@ -351,6 +389,19 @@ public struct RootView: View {
         // Court : le voile se lève pendant que l'accueil se pose, au lieu de
         // le cacher jusqu'à ce que tout soit déjà en place.
         withAnimation(.smooth(duration: 0.45)) { isLaunching = false }
+    }
+
+    /// Un appel a reçu un 401 pendant qu'on était dans l'app : le client a
+    /// effacé le jeton, et plus rien ne passera. Sans ça, chaque écran
+    /// répondait « Cet appareil n'est pas encore enregistré. » et rien ne
+    /// ramenait vers l'entrée. On y retourne au retour dans l'app, comme après
+    /// une déconnexion.
+    private func leaveIfSessionWasRefused() async {
+        guard case .signedIn = stage, !OnboardingStorage.isPreviewingSignedIn else { return }
+        guard !(await dependencies.api.hasStoredSession()) else { return }
+        await dependencies.forgetAccountContent()
+        path.removeAll()
+        stage = .signedOut
     }
 
     /// Ferme la session.
@@ -494,6 +545,13 @@ public struct RootView: View {
             path.append(.legal(.termsOfUse))
         case .openPrivacyPolicy:
             path.append(.legal(.privacyPolicy))
+        case .orderBook(let memoId):
+            guard UUID(uuidString: memoId) != nil else {
+                routingProblem =
+                    "Ce voyage n’existe pas encore sur ton compte : il n’y a rien à commander."
+                return
+            }
+            path.append(.order(memoId: memoId))
         }
     }
 
@@ -915,4 +973,11 @@ enum LegalRoute: Hashable {
         case .privacyPolicy: PrivacyPolicy.document
         }
     }
+}
+
+/// Le secret d'un lien de réinitialisation reçu quand on est déjà entré, tel
+/// que la feuille du nouveau mot de passe le présente.
+struct ResetLinkToken: Identifiable {
+    let value: String
+    var id: String { value }
 }

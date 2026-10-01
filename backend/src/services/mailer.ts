@@ -94,6 +94,12 @@ export function createLoggingMailer(env: Env, logger: Logger): Mailer {
  * Resend, par son API HTTP. Un `fetch` et rien d'autre : le SDK n'apporterait
  * qu'une dépendance pour un seul appel.
  */
+/** L'adresse seule de `MAIL_FROM` — « MemoBook <bonjour@memo-book.com> » → `bonjour@memo-book.com`. */
+export function replyToOf(mailFrom: string): string {
+  const match = /<([^>]+)>/.exec(mailFrom);
+  return (match?.[1] ?? mailFrom).trim();
+}
+
 export function createResendMailer(env: Env): Mailer {
   return mailerOver(env, {
     async send(to, mail) {
@@ -106,6 +112,10 @@ export function createResendMailer(env: Env): Mailer {
         body: JSON.stringify({
           from: env.MAIL_FROM,
           to: [to],
+          // Une vraie boîte en réponse : les filtres antispam le regardent,
+          // et quelqu'un qui répond à l'e-mail doit tomber sur nous
+          // (docs/emails.md § 7 ; Hugo, 29/09/2026).
+          reply_to: replyToOf(env.MAIL_FROM),
           subject: mail.subject,
           html: mail.html,
           text: mail.text,

@@ -4,12 +4,12 @@ on:
   push:
     paths:
       - 'backend/**'
-      - 'templates/travel-journal/**'
+      - 'MemoBook Generator/templates/travel-journal/**'
       - '.github/workflows/ci-backend.yml'
   pull_request:
     paths:
       - 'backend/**'
-      - 'templates/travel-journal/**'
+      - 'MemoBook Generator/templates/travel-journal/**'
       - '.github/workflows/ci-backend.yml'
 
 defaults:
