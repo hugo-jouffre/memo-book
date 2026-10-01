@@ -102,6 +102,7 @@ export async function resetDatabase(prisma: PrismaClient): Promise<void> {
           "devices",
           "sessions",
           "password_resets",
+          "data_exports",
           "identities",
           "accounts",
         ]
