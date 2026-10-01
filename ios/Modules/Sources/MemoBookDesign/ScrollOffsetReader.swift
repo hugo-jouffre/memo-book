@@ -60,10 +60,15 @@ private struct ScrollOffsetProbe: UIViewRepresentable {
             observation = scrollView.observe(\.contentOffset, options: [.initial, .new]) {
                 [weak self] scrollView, _ in
                 // L'observation arrive sur le fil principal — c'est lui qui fait
-                // défiler —, mais le compilateur ne le sait pas.
-                let top = -(scrollView.contentOffset.y + scrollView.adjustedContentInset.top)
-                let byUser = scrollView.isDragging || scrollView.isDecelerating
-                MainActor.assumeIsolated { self?.onChange(top, byUser) }
+                // défiler —, mais le compilateur ne le sait pas. **Tout** se lit
+                // donc dans `assumeIsolated`, et pas seulement le rappel : les
+                // propriétés d'une `UIScrollView` sont isolées au fil principal
+                // elles aussi.
+                MainActor.assumeIsolated {
+                    let top = -(scrollView.contentOffset.y + scrollView.adjustedContentInset.top)
+                    let byUser = scrollView.isDragging || scrollView.isDecelerating
+                    self?.onChange(top, byUser)
+                }
             }
         }
 
