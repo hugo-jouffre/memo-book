@@ -355,7 +355,12 @@ public struct HomeView: View {
 
         if typeSize.isAccessibilitySize {
             VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
+                // L'avatar reste **à droite** : sa pastille d'étapes, plus
+                // large que lui, s'accroche à son bord droit et s'étend vers
+                // la gauche. Posé à gauche, il la faisait sortir de l'écran
+                // (recette du 30/09/2026).
                 avatarButton
+                    .frame(maxWidth: .infinity, alignment: .trailing)
                 Text(title).font(MemoBookFont.greeting).foregroundStyle(MemoBookColor.ink)
             }
         } else {

@@ -257,6 +257,21 @@ public final class ChatModel {
         turn == .idle ? suggestions : []
     }
 
+    /// La bande de suggestions **garde sa place** pendant le tour : ses puces
+    /// s'effacent, sa hauteur reste. Sans ça, la barre du bas raccourcissait au
+    /// moment même où le message partait, et le fil, épinglé en bas, se tassait
+    /// d'autant sous le message qu'on venait de poser — puis remontait quand
+    /// MEMO répondait (Hugo, 30/09/2026, T207).
+    public var reservesSuggestionRail: Bool {
+        turn != .idle && railWasShowing
+    }
+
+    /// La bande montrait des puces quand le tour est parti. Retenu à part :
+    /// l'envoi vide les suggestions du fil dès le départ — celles du tour
+    /// d'avant ne veulent plus rien dire —, et la bande n'aurait plus de
+    /// raison de garder sa place.
+    private var railWasShowing = false
+
     public var canSendDraft: Bool {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && isComposerEnabled
     }
@@ -455,6 +470,11 @@ public final class ChatModel {
 
     private func run(_ outgoing: OutgoingTurn) async {
         guard var thread else { return }
+
+        // La bande garde sa place si elle montrait des puces — ou si elle la
+        // gardait déjà, pour un renvoi après un échec. Voir
+        // ``reservesSuggestionRail``.
+        railWasShowing = !thread.suggestions.isEmpty || (railWasShowing && turn != .idle)
 
         // Les suggestions du tour précédent ne veulent plus rien dire.
         thread.suggestions = []
@@ -994,40 +1014,47 @@ public final class ChatModel {
         derivedLevels[note.id] = levels
     }
 
-    // MARK: - Les portraits
+    // MARK: - Les images du fil
 
-    /// Les photos des portraits de vocaux, chargées **par le modèle** et non
-    /// par un `AsyncImage` dans la bulle.
+    /// Les images du fil — les portraits des vocaux, les photos —, chargées
+    /// **par le modèle** et non par un `AsyncImage` dans la bulle.
     ///
-    /// Le fil se recompose en s'ouvrant — il relit, fusionne, anime — et chaque
-    /// recomposition recréait les `AsyncImage` des bulles : leurs requêtes
-    /// partaient annulées en 5 ms (des 499 dans les journaux de Railway, le
-    /// 30/09/2026), et le rond restait sur les initiales pour de bon. La photo
-    /// qu'on venait de changer ne s'y voyait jamais. Ici, une seule requête par
-    /// adresse, qui survit aux recompositions, et un résultat gardé tant que
-    /// l'écran est ouvert.
-    public private(set) var portraitImages: [URL: UIImage] = [:]
-    private var loadingPortraits: Set<URL> = []
+    /// Deux raisons, vues dans les journaux de Railway le 30/09/2026.
+    /// **Les annulations** : le fil se recompose en s'ouvrant — il relit,
+    /// fusionne, anime — et chaque recomposition recréait les `AsyncImage` des
+    /// bulles ; leurs requêtes partaient annulées en 5 ms (des `499`) et le rond
+    /// restait sur ses initiales pour de bon. **La session** : une photo du
+    /// voyage se sert par `/v1/entries/:id/media`, qui la demande, et un
+    /// `AsyncImage` n'envoie aucun en-tête — des `401`, et la bulle restait sur
+    /// sa trame. Ici, une requête par adresse, qui survit aux recompositions,
+    /// par le bon chemin, et un résultat gardé tant que l'écran est ouvert.
+    public private(set) var images: [URL: UIImage] = [:]
+    private var loadingImages: Set<URL> = []
 
-    /// Charge la photo d'un portrait, une fois. Les avatars se servent **sans
-    /// session** (`GET /v1/avatars/:file`) : ce n'est pas un média du voyage.
-    public func loadPortrait(_ url: URL) {
-        guard portraitImages[url] == nil, !loadingPortraits.contains(url) else { return }
-        loadingPortraits.insert(url)
+    /// Charge une image du fil, une fois. Un échec n'est pas retenu : la bulle
+    /// garde sa trame ou ses initiales, et redemande en réapparaissant.
+    public func loadImage(_ url: URL) {
+        guard images[url] == nil, !loadingImages.contains(url) else { return }
+        loadingImages.insert(url)
 
         Task { [weak self] in
-            let image: UIImage?
-            if url.isFileURL {
-                image = UIImage(contentsOfFile: url.path())
-            } else if let (data, _) = try? await URLSession.shared.data(from: url) {
-                image = UIImage(data: data)
-            } else {
-                image = nil
-            }
             guard let self else { return }
-            self.loadingPortraits.remove(url)
-            if let image { self.portraitImages[url] = image }
+            let data = await self.imageData(at: url)
+            let image = await ChatImage.decode(data)
+            self.loadingImages.remove(url)
+            if let image { self.images[url] = image }
         }
+    }
+
+    /// Les octets d'une image, par le chemin qu'elle demande : le disque pour
+    /// une photo qui vient d'être choisie ; **le transport, avec la session**,
+    /// pour un média du voyage (`…/media`) — comme l'écoute d'un vocal ; une
+    /// requête nue pour un avatar (`GET /v1/avatars/:file`), servi sans session
+    /// parce qu'il se montre à ceux qui partagent le voyage.
+    private func imageData(at url: URL) async -> Data? {
+        if url.isFileURL { return try? Data(contentsOf: url) }
+        if url.lastPathComponent == "media" { return try? await transport.media(url) }
+        return try? await URLSession.shared.data(from: url).0
     }
 
     private func play(_ id: String, at url: URL) {

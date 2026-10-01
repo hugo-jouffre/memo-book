@@ -9,7 +9,7 @@ pas tout : ni les catégories de la galerie, ni la moitié des commandes de
 l'écran de chat. Elles sont donc empruntées à Lucide (licence ISC) en attendant
 les exports Figma — chaque icône remplacée ici doit disparaître de son dossier
 le jour où Clara la dessine. C'est la seule exception à la règle « les assets
-viennent de Figma », nommée dans ``docs/ui-development.md`` §13.
+viennent de Figma », nommée dans ``docs/archive/ui-development-journal.md`` §13.
 
 **Deux dossiers, deux façons de nommer**, et la différence est voulue :
 

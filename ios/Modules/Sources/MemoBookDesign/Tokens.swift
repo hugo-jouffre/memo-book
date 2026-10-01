@@ -242,13 +242,13 @@ public enum MemoBookSpacing {
     public static let screenMargin: CGFloat = 16
 
     /// Espacement interne serré — le cran de 0.75 rem de l'échelle de
-    /// `docs/ui-development.md` (§2.2), entre ``xs`` et ``s``. Les marges d'une
+    /// `docs/archive/ui-development-journal.md` (§2.2), entre ``xs`` et ``s``. Les marges d'une
     /// carte de texte posée dans une feuille.
     public static let snug: CGFloat = 12
 
     /// L'espacement entre deux entrées d'une même liste — les trois temps du
     /// mode d'emploi de l'abonnement, par exemple. Le cran de 1.25 rem de
-    /// l'échelle de `docs/ui-development.md` (§2.2, « espacement de section
+    /// l'échelle de `docs/archive/ui-development-journal.md` (§2.2, « espacement de section
     /// court »), qui manquait entre ``s`` et ``m``.
     public static let sectionGap: CGFloat = 20
 
@@ -278,7 +278,7 @@ public enum MemoBookSpacing {
     public static let avatarSide: CGFloat = 40
 
     /// Le rayon d'une bulle de conversation. — Figma dessine 11 ; R2 arrondit au
-    /// cran de l'échelle (§2.2 de `docs/ui-development.md`).
+    /// cran de l'échelle (§2.2 de `docs/archive/ui-development-journal.md`).
     ///
     /// Plus serré que ``cornerRadius`` (14) et que ``largeCornerRadius`` (20),
     /// et c'est voulu : une bulle est une réplique, pas une carte. C'est ce
@@ -381,7 +381,7 @@ public enum MemoBookSpacing {
     /// que ``BrandProgressBar`` posait sur les cartes de l'accueil. Les deux
     /// tombent au même endroit, la constante ne fait que leur donner un nom.
     ///
-    /// ⚠️ Le § 2.3 de `docs/ui-development.md` annonce 0.25 rem (4 pt) pour ce
+    /// ⚠️ Le § 2.3 de `docs/archive/ui-development-journal.md` annonce 0.25 rem (4 pt) pour ce
     /// cran, au motif que Figma dessinait alors 7. Les maquettes disent 6
     /// depuis, et le code aussi : c'est **le document** qui est en retard, pas
     /// la valeur. Signalé plutôt que corrigé des deux côtés à la fois.

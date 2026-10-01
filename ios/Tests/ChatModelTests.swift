@@ -251,6 +251,47 @@ final class ChatModelTests: XCTestCase {
         XCTAssertEqual(entryId, "e2")
     }
 
+    /// La bande de suggestions garde sa place pendant le tour : ses puces
+    /// s'effacent, sa hauteur reste — sinon le fil se tassait sous le message
+    /// qu'on venait de poser (T207, 30/09/2026).
+    func testTheSuggestionRailKeepsItsPlaceWhileMemoAnswers() async throws {
+        let script = Script(
+            thread: thread(suggestions: [ChatSuggestion(id: "accept", label: "Ça me convient")])
+        )
+        await script.answerSends { turn in
+            ChatTurnReceipt(
+                messages: [ChatMessage(id: turn.id, author: .traveller, body: .text("Ça me convient"), sentAt: .now, seq: 1)],
+                turn: .replying(messageId: turn.id),
+                now: .now
+            )
+        }
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+        XCTAssertFalse(model.reservesSuggestionRail, "Au repos, la bande montre ses puces.")
+
+        model.choose(ChatSuggestion(id: "accept", label: "Ça me convient")) { XCTFail("pas de photos") }
+        try await until("le tour") { model.turn != .idle }
+
+        XCTAssertTrue(model.visibleSuggestions.isEmpty, "Les puces s'effacent pendant le tour.")
+        XCTAssertTrue(model.reservesSuggestionRail, "Mais la bande garde sa hauteur.")
+    }
+
+    /// Sans puces au départ du tour, il n'y a pas de place à garder.
+    func testNoRailSpaceIsKeptWhenThereWereNoSuggestions() async throws {
+        let script = Script(thread: thread())
+        await script.answerSends { turn in
+            ChatTurnReceipt(messages: [], turn: .replying(messageId: turn.id), now: .now)
+        }
+        let model = ChatModel(transport: transport(script))
+        await model.load()
+
+        model.draft = "Une journée à Rome."
+        model.sendDraft()
+        try await until("le tour") { model.turn != .idle }
+
+        XCTAssertFalse(model.reservesSuggestionRail)
+    }
+
     /// « À la main » : le texte de la fiche est dans le champ ; envoyer corrige
     /// le souvenir, redessine la fiche, puis fait accuser réception à MEMO.
     func testEditingByHandPatchesTheEntryThenAcknowledges() async throws {

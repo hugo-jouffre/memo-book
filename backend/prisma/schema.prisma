@@ -959,7 +959,7 @@ model Entry {
 /// Un tour de la conversation avec MEMO — ce que le voyageur a dit, ou ce que
 /// MEMO lui a répondu. `docs/conversation.md`.
 ///
-/// **Un fil par voyage**, adossé à `memos` (§ 14.4 de `docs/ui-development.md`) :
+/// **Un fil par voyage**, adossé à `memos` (§ 14.4 de `docs/archive/ui-development-journal.md`) :
 /// les messages portent leur étape, ils ne sont pas rangés par étape. Le fil
 /// est **commun aux co-voyageurs** — c'est le récit du voyage —, et chaque
 /// bulle bleue retient qui l'a dite, là où `entries` reste sans auteur : le

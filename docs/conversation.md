@@ -7,7 +7,7 @@
 > et des décisions listées en fin de fichier. Le ticket Notion « Module
 > Conversation avec MEMO » renvoie ici : **ce fichier fait foi**, Notion en est
 > la copie que Hugo partage. La fiche d'écran (mesures, composants, états) reste
-> dans `ui-development.md` § 14 ; ce document dit le **produit** et le
+> dans `archive/ui-development-journal.md` § 14 ; ce document dit le **produit** et le
 > **contrat**, pas le dessin.
 
 ## 1. Qui parle
@@ -293,7 +293,7 @@ métro ; ce qu'on y a dit avant la coupure, en revanche, reste sous les yeux.
 
 Le détail — champs, codes d'erreur, tests, phasage en quatre PR — est dans le
 plan de la branche `atelier-conversation` et sera reporté dans
-`ui-development.md` § 14.1 à mesure. Le choix du moteur lui-même — pourquoi
+`archive/ui-development-journal.md` § 14.1 à mesure. Le choix du moteur lui-même — pourquoi
 Sonnet 5 ici et Opus 5 pour la rédaction, ce que ça coûte, et ce qui ferait
 changer d'avis — est dans [`modeles-ia.md`](modeles-ia.md) (23/09/2026).
 

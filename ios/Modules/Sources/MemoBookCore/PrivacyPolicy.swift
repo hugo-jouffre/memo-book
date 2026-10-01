@@ -15,7 +15,7 @@ public enum PrivacyPolicy {
     /// Le document : le titre de l'écran et les dix chapitres, dans l'ordre du
     /// site — moins « Cookies » : une app n'en pose pas, et Apple ne demande
     /// aucune politique de cookies, seulement celle-ci (Hugo, 29/09/2026,
-    /// T154). Voir `docs/ui-development.md` § 32. Le titre est celui de la page du site, là où la ligne du profil
+    /// T154). Voir `docs/archive/ui-development-journal.md` § 32. Le titre est celui de la page du site, là où la ligne du profil
     /// qui y mène dit seulement « Confidentialité ».
     public static let document = LegalDocument(
         id: "confidentialite",

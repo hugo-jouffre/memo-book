@@ -55,6 +55,13 @@ final class PhotoFlow {
     /// Ce qui manque, dit à l'utilisateur. Affiché en bandeau par l'écran.
     private(set) var deniedMessage: String?
 
+    /// La feuille propose aussi de **retirer** la photo en place — posé par
+    /// ``SwiftUI/View/photoFlow(_:title:maxSelection:onRemove:onPicked:)``.
+    /// C'est ce qui garde la feuille ouverte quand la photothèque est refusée :
+    /// retirer sa photo de profil ne demande aucun accès, et le refus la
+    /// rendait inaccessible (recette du 30/09/2026).
+    var offersRemoval = false
+
     /// L'appareil photo existe. Faux sur un simulateur, et sur un appareil qui
     /// n'en a pas : proposer « Prendre une photo » là-dessus ouvrirait un écran
     /// noir.
@@ -71,6 +78,7 @@ final class PhotoFlow {
             isChoosing = true
         case .denied, .restricted:
             deniedMessage = ChatCopy.Photos.libraryDenied
+            isChoosing = offersRemoval
         case .notDetermined:
             Task {
                 // C'est **cette** demande qui affiche « Tout » ou
@@ -79,7 +87,9 @@ final class PhotoFlow {
                 let status = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
                 switch status {
                 case .authorized, .limited: isChoosing = true
-                default: deniedMessage = ChatCopy.Photos.libraryDenied
+                default:
+                    deniedMessage = ChatCopy.Photos.libraryDenied
+                    isChoosing = offersRemoval
                 }
             }
         @unknown default:
@@ -162,6 +172,9 @@ private struct PhotoFlowModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            .onChange(of: onRemove != nil, initial: true) { _, offers in
+                flow.offersRemoval = offers
+            }
             .confirmationDialog(
                 title,
                 isPresented: $flow.isChoosing,

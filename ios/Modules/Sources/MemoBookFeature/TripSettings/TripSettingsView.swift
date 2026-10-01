@@ -470,6 +470,7 @@ private struct MemoryAllowanceRow: View {
     let action: () -> Void
 
     @ScaledMetric(relativeTo: .body) private var chevronSide: CGFloat = 14
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private var shape: RoundedRectangle {
         .rect(cornerRadius: MemoBookSpacing.largeCornerRadius)
@@ -488,18 +489,17 @@ private struct MemoryAllowanceRow: View {
                         Text(MemoryCopy.rowCaption)
                             .font(MemoBookFont.caption)
                             .foregroundStyle(MemoBookColor.inkMuted)
+                        // Aux tailles accessibles, le compteur passe **sous**
+                        // l'intitulé, comme la valeur des lignes d'à côté : à
+                        // côté, il gardait sa largeur et coupait les mots en
+                        // deux (« souveni / rs », recette du 30/09/2026).
+                        if typeSize.isAccessibilitySize { value }
                     }
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    Text(MemoryCopy.rowValue(used: memory.used, allowance: memory.allowance))
-                        .font(MemoBookFont.label)
-                        .foregroundStyle(
-                            memory.isExhausted ? MemoBookColor.error : MemoBookColor.inkMuted
-                        )
-                        .monospacedDigit()
-                        .fixedSize()
+                    if !typeSize.isAccessibilitySize { value }
 
                     Image(brand: "IconChevron")
                         .resizable()
@@ -531,6 +531,14 @@ private struct MemoryAllowanceRow: View {
         .accessibilityLabel(
             "\(MemoryCopy.rowTitle), \(MemoryCopy.rowCaption). \(MemoryCopy.remaining(memory.remaining, renewsOn: nil))"
         )
+    }
+
+    private var value: some View {
+        Text(MemoryCopy.rowValue(used: memory.used, allowance: memory.allowance))
+            .font(MemoBookFont.label)
+            .foregroundStyle(memory.isExhausted ? MemoBookColor.error : MemoBookColor.inkMuted)
+            .monospacedDigit()
+            .fixedSize()
     }
 }
 

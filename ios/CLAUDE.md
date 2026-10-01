@@ -262,7 +262,7 @@ police ou marge codée en dur ailleurs.
   empilement de fenêtres au lieu d'un chemin. **Une exception, voulue** :
   l'aperçu du carnet se pose *sur* la feuille d'abonnement (`BookPreviewSheet`
   depuis `SubscriptionSheet`), parce qu'on y va voir et qu'on revient — un seul
-  recul, pas un chemin (Hugo, 16/09/2026 ; `docs/ui-development.md` § 16.9).
+  recul, pas un chemin (Hugo, 16/09/2026 ; `docs/archive/ui-development-journal.md` § 16.9).
 - Le focus appartient à l'écran, pas au champ : un `@FocusState` sur une énum
   passé aux `BrandTextField`, pour que le clavier enchaîne les champs.
 - `BrandChatBubble` est **la** bulle de conversation (fond, queue, marges,
@@ -397,7 +397,7 @@ dans un SVG, et les embarquer recopierait toute la planche dans chaque icône.
 Le second sert les **remplaçants** : les pictogrammes que le jeu de marque n'a
 pas — les catégories de la galerie, le train du filtre « Transports ». Ils
 viennent de Lucide et non de Figma, la seule exception à la règle « les assets
-viennent de Figma », nommée dans `docs/ui-development.md` §13. Leur clé est
+viennent de Figma », nommée dans `docs/archive/ui-development-journal.md` §13. Leur clé est
 résolue par `MemoBookDesign/LucideIcon.swift`, qui retombe sur une boussole pour
 une clé inconnue : ajouter une catégorie en base ne demande pas de livrer une
 version.
@@ -604,7 +604,7 @@ Trois règles portent tout le reste :
    renvoyer mettrait le souvenir deux fois dans le carnet.
 
 Ce que l'écran en montre — une boîte, quatre états, et les boutons de bac à
-sable qui les rejouent — est dans `docs/ui-development.md` §9.3.
+sable qui les rejouent — est dans `docs/archive/ui-development-journal.md` §9.3.
 
 ⚠️ **Un envoi ne survit pas encore à la mise en arrière-plan.** `URLSession` en
 tâche de fond serait la réponse complète, et demande un envoi par fichier et une

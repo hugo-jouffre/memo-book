@@ -15,7 +15,7 @@ Ce repo contient le code de l'**app iOS native MemoBook**, développée en Swift
 | `MemoBook Generator/templates/travel-journal/` | Le template PDF et les schémas qui décrivent le format du carnet. **Source de vérité** : le back-end les lit, il ne les duplique pas |
 | `agents/` | Configuration des agents IA et référence du design system. **Source de vérité** : `agent-transcription.md` est chargé tel quel comme prompt système de la rédaction, `agent-conversation.md` comme celui de MEMO dans le chat |
 | `MemoBook Generator/` | Le générateur de carnets : l'outil de composition à la main, en attendant l'app. Vocaux WhatsApp transcrits, récit découpé en étapes, JSON et PDF générés. [Documentation](MemoBook%20Generator/README.md) |
-| `docs/` | Documentation transverse : [`modeles-ia.md`](docs/modeles-ia.md) pour quel modèle fait quoi et ce que ça coûte, [`ui-development.md`](docs/ui-development.md) pour les règles d'implémentation des écrans depuis Figma, [`reglages-utilisateur.md`](docs/reglages-utilisateur.md) pour ce que le voyageur peut régler dans son carnet et qui l'applique, [`vocabulaire.md`](docs/vocabulaire.md) pour les mots — écran, feuille, parcours, fonctionnalité — et ce qu'ils désignent dans le code |
+| `docs/` | Documentation transverse : [`modeles-ia.md`](docs/modeles-ia.md) pour quel modèle fait quoi et ce que ça coûte, [`ui-development.md`](docs/ui-development.md) pour les règles des écrans et ce qui reste à régler, [`reglages-utilisateur.md`](docs/reglages-utilisateur.md) pour ce que le voyageur peut régler dans son carnet et qui l'applique, [`vocabulaire.md`](docs/vocabulaire.md) pour les mots — écran, feuille, parcours, fonctionnalité — et ce qu'ils désignent dans le code |
 
 Clara et Paul n'ont rien à installer : tout se lit sur GitHub, et l'app se teste via TestFlight.
 
@@ -112,9 +112,10 @@ Les données vocales sont des données personnelles (RGPD) :
 
 ## Documentation
 
-- [`docs/ui-development.md`](docs/ui-development.md) — **règles de développement des
-  écrans** : unités (tout en rem), fidélité au Figma, rituel écran par écran, fiches et
-  checklist. À lire avant de toucher à un écran
+- [`docs/ui-development.md`](docs/ui-development.md) — **les règles des écrans** (R1 à
+  R12) et **ce qui reste à régler** : les tickets ouverts écran par écran, et la dernière
+  recette. À lire avant de toucher à un écran. Les fiches écran, lots et décisions passées
+  sont dans [`docs/archive/ui-development-journal.md`](docs/archive/ui-development-journal.md)
 - [`docs/vocabulaire.md`](docs/vocabulaire.md) — **le vocabulaire** : comment on nomme les
   pages, écrans, feuilles, étapes, parcours, fonctionnalités, lots… en français, en anglais
   et en Swift, et ce que « voyage », « carnet » et `memo` désignent selon l'endroit
