@@ -1,8 +1,11 @@
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import type { AppContext } from "../context.js";
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
-import { ensureStripeCustomer } from "../services/billing.js";
+import { ensureStripeCustomer, stripeApiVersionSchema } from "../services/billing.js";
+
+const ephemeralKeyBody = z.object({ stripeApiVersion: stripeApiVersionSchema });
 
 /**
  * Les moyens de paiement du compte — **tenus par Stripe, montrés par Stripe**.
@@ -15,15 +18,17 @@ import { ensureStripeCustomer } from "../services/billing.js";
  */
 export function registerPaymentMethodRoutes(app: FastifyInstance, context: AppContext): void {
   /**
-   * La session qui laisse la feuille lister, ajouter et retirer les cartes du
-   * compte. Le client Stripe est créé s'il n'existe pas encore : ouvrir cette
-   * feuille, c'est vouloir en enregistrer une.
+   * La clé qui laisse la feuille lister, ajouter et retirer les cartes du
+   * compte — dans la version d'API du SDK de l'app (voir `paymentTicket`). Le
+   * client Stripe est créé s'il n'existe pas encore : ouvrir cette feuille,
+   * c'est vouloir en enregistrer une.
    */
-  app.post("/v1/payments/customer-session", async (request) => {
+  app.post("/v1/payments/ephemeral-key", async (request) => {
+    const { stripeApiVersion } = ephemeralKeyBody.parse(request.body ?? {});
     const customerId = await customerOf(context, accountIdOf(request));
     return {
       customerId,
-      customerSessionClientSecret: await context.payments.createCustomerSession(customerId),
+      ephemeralKeySecret: await context.payments.createEphemeralKey(customerId, stripeApiVersion),
       publishableKey: context.env.STRIPE_PUBLISHABLE_KEY,
     };
   });

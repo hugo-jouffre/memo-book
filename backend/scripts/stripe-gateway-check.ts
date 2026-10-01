@@ -8,8 +8,8 @@ import { StripePaymentGateway } from "../src/services/payments.js";
  *
  * Les tests passent par `FakePaymentGateway`, qui ne valide aucun paramètre. Ce
  * script joue chaque méthode du vrai gateway contre le compte de la clé posée
- * (en mode test seulement) : client, session client avec les composants de la
- * feuille et de `CustomerSheet`, intention d'enregistrement, intention de
+ * (en mode test seulement) : client, clé éphémère dans la version d'API du
+ * SDK iOS, intention d'enregistrement, intention de
  * paiement avec reçu et adresse, relecture, annulation, annulation refusée
  * d'une intention payée.
  *
@@ -31,9 +31,10 @@ async function main(): Promise<void> {
   });
   step(`client ${customerId}`);
 
-  const session = await gateway.createCustomerSession(customerId);
-  if (!session.startsWith("cuss_")) throw new Error(`Session inattendue : ${session.slice(0, 8)}…`);
-  step("session client (feuille de paiement + CustomerSheet)");
+  // La version d'API que pin stripe-ios 24 (`STPAPIClient.apiVersion`).
+  const key = await gateway.createEphemeralKey(customerId, "2020-08-27");
+  if (!key.startsWith("ek_")) throw new Error("Clé éphémère inattendue.");
+  step("clé éphémère du client (feuille de paiement + CustomerSheet)");
 
   const setup = await gateway.createSetupIntent(customerId);
   if (!setup.startsWith("seti_")) throw new Error("Intention d'enregistrement inattendue.");

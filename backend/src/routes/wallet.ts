@@ -4,7 +4,12 @@ import { z } from "zod";
 import type { AppContext } from "../context.js";
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
-import { PAYMENT_KIND, ensureStripeCustomer, paymentTicket } from "../services/billing.js";
+import {
+  PAYMENT_KIND,
+  ensureStripeCustomer,
+  paymentTicket,
+  stripeApiVersionSchema,
+} from "../services/billing.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
 import { serializeWallet } from "./appSerializers.js";
 
@@ -59,6 +64,8 @@ const TOPUP_MAX_CENTS = 50_000;
 
 const topupBody = z.object({
   amountCents: z.number().int().min(TOPUP_MIN_CENTS).max(TOPUP_MAX_CENTS),
+  /** La version d'API du SDK Stripe de l'app — voir `paymentTicket`. */
+  stripeApiVersion: stripeApiVersionSchema.optional(),
 });
 
 const financedTripSelect = {
@@ -222,7 +229,7 @@ export function registerWalletRoutes(app: FastifyInstance, context: AppContext) 
    * légitime, et deux appels doivent donner deux paiements.
    */
   app.post("/v1/wallet/topup", async (request, reply) => {
-    const { amountCents } = topupBody.parse(request.body ?? {});
+    const { amountCents, stripeApiVersion } = topupBody.parse(request.body ?? {});
     const accountId = accountIdOf(request);
 
     const customerId = await ensureStripeCustomer(context, accountId);
@@ -250,6 +257,13 @@ export function registerWalletRoutes(app: FastifyInstance, context: AppContext) 
     // dans la feuille — voir `paymentTicket`.
     return reply
       .code(201)
-      .send(await paymentTicket(context, { customerId, clientSecret: intent.clientSecret, amountCents }));
+      .send(
+        await paymentTicket(context, {
+          customerId,
+          clientSecret: intent.clientSecret,
+          amountCents,
+          stripeApiVersion,
+        }),
+      );
   });
 }

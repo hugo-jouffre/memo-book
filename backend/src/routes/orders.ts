@@ -3,7 +3,12 @@ import { z } from "zod";
 import type { AppContext } from "../context.js";
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
-import { PAYMENT_KIND, ensureStripeCustomer, paymentTicket } from "../services/billing.js";
+import {
+  PAYMENT_KIND,
+  ensureStripeCustomer,
+  paymentTicket,
+  stripeApiVersionSchema,
+} from "../services/billing.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
 import { releaseUnpaidOrder } from "../services/orderPayments.js";
 import { quote as computeQuote, shippingCents, SHIPPING_DAYS, unitPriceCents } from "../services/printPricing.js";
@@ -80,7 +85,11 @@ const createOrderBody = z.object({
    * dans la feuille Stripe, qui tient les cartes du compte.
    */
   paymentCardId: z.string().nullish(),
+  /** La version d'API du SDK Stripe de l'app — voir `paymentTicket`. */
+  stripeApiVersion: stripeApiVersionSchema.optional(),
 });
+
+const resumePaymentBody = z.object({ stripeApiVersion: stripeApiVersionSchema.optional() });
 
 /**
  * Le suivi par WhatsApp, accepté ou refusé depuis l'écran de confirmation.
@@ -520,6 +529,7 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
         customerId,
         clientSecret: intent.clientSecret,
         amountCents: priced.totalCents,
+        stripeApiVersion: body.stripeApiVersion,
       }),
     });
   });
@@ -540,6 +550,7 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
    */
   app.post("/v1/orders/:id/payment", async (request) => {
     const { id } = orderIdParams.parse(request.params);
+    const { stripeApiVersion } = resumePaymentBody.parse(request.body ?? {});
     const accountId = accountIdOf(request);
 
     const order = await context.prisma.printOrder.findFirst({
@@ -574,6 +585,7 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
         customerId,
         clientSecret: intent.clientSecret,
         amountCents: order.amountCents,
+        stripeApiVersion,
       }),
     };
   });

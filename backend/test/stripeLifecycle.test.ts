@@ -30,6 +30,9 @@ afterAll(async () => {
 
 const fake = () => harness.context.payments as FakePaymentGateway;
 
+/** La version d'API que pin le SDK iOS (`STPAPIClient.apiVersion`). */
+const STRIPE_IOS_API_VERSION = "2020-08-27";
+
 const SHIPPING = {
   name: "Clara Martin",
   line1: "12 rue des Lilas",
@@ -46,7 +49,7 @@ type OrderBody = {
     clientSecret?: string;
     amountCents: number;
     customerId?: string | null;
-    customerSessionClientSecret?: string | null;
+    ephemeralKeySecret?: string | null;
   } | null;
 };
 
@@ -84,7 +87,13 @@ async function placeOrder(): Promise<OrderBody> {
     method: "POST",
     url: `/v1/memos/${memo.id}/orders`,
     headers: { authorization },
-    payload: { renderId, copies: 1, shippingSpeed: "standard", shipping: SHIPPING },
+    payload: {
+      renderId,
+      copies: 1,
+      shippingSpeed: "standard",
+      shipping: SHIPPING,
+      stripeApiVersion: STRIPE_IOS_API_VERSION,
+    },
   });
   expect(response.statusCode).toBe(201);
   return response.json<OrderBody>();
@@ -326,18 +335,34 @@ describe("les remboursements", () => {
 });
 
 describe("les cartes du compte", () => {
-  it("passent par la session du client Stripe, dans la feuille", async () => {
+  it("passent par le client Stripe du compte, dans la feuille", async () => {
     const order = await placeOrder();
 
     expect(order.payment?.customerId).toMatch(/^cus_fake_/);
-    expect(order.payment?.customerSessionClientSecret).toMatch(/^cuss_fake_/);
+    expect(order.payment?.ephemeralKeySecret).toMatch(/^ek_test_fake_/);
+  });
+
+  it("restent hors de la feuille d'une app qui ne dit pas sa version de SDK", async () => {
+    // Une clé éphémère n'est lisible que dans la version d'API du SDK : sans
+    // elle, pas de clé, et la feuille s'ouvre quand même.
+    const { memo, renderId } = await printableTrip();
+    const response = await harness.app.inject({
+      method: "POST",
+      url: `/v1/memos/${memo.id}/orders`,
+      headers: { authorization },
+      payload: { renderId, copies: 1, shippingSpeed: "standard", shipping: SHIPPING },
+    });
+
+    expect(response.json<OrderBody>().payment?.ephemeralKeySecret).toBeNull();
+    expect(response.json<OrderBody>().payment?.clientSecret).toMatch(/^pi_fake_/);
   });
 
   it("se gèrent par Stripe depuis le profil", async () => {
     const session = await harness.app.inject({
       method: "POST",
-      url: "/v1/payments/customer-session",
+      url: "/v1/payments/ephemeral-key",
       headers: { authorization },
+      payload: { stripeApiVersion: STRIPE_IOS_API_VERSION },
     });
     const setup = await harness.app.inject({
       method: "POST",
@@ -346,9 +371,7 @@ describe("les cartes du compte", () => {
     });
 
     expect(session.statusCode).toBe(200);
-    expect(session.json<{ customerSessionClientSecret: string }>().customerSessionClientSecret).toMatch(
-      /^cuss_fake_/,
-    );
+    expect(session.json<{ ephemeralKeySecret: string }>().ephemeralKeySecret).toMatch(/^ek_test_fake_/);
     expect(setup.json<{ clientSecret: string }>().clientSecret).toMatch(/^seti_fake_/);
   });
 

@@ -119,10 +119,15 @@ export interface PaymentGateway {
   cancelIntent(intentId: string): Promise<boolean>;
   /**
    * Ce qui laisse la feuille de paiement **montrer, enregistrer et retirer**
-   * les cartes du compte. Le secret ne vaut que trente minutes et que pour ce
-   * client.
+   * les cartes du compte. La clé ne vaut que pour ce client, et peu de temps.
+   *
+   * **Une clé éphémère, et pas une session client** : avec la version du SDK
+   * iOS du dépôt (stripe-ios 24), les sessions client sont réservées à un
+   * accès bêta (`@_spi(CustomerSessionBetaAccess)`). La clé éphémère est le
+   * chemin stable — à condition d'être créée dans **la version d'API du SDK**,
+   * que l'app envoie (`STPAPIClient.apiVersion`, « 2020-08-27 »).
    */
-  createCustomerSession(customerId: string): Promise<string>;
+  createEphemeralKey(customerId: string, apiVersion: string): Promise<string>;
   /**
    * Enregistrer une carte sans payer — la gestion des moyens de paiement du
    * profil. Rend le secret de l'intention.
@@ -235,29 +240,10 @@ export class StripePaymentGateway implements PaymentGateway {
     }
   }
 
-  async createCustomerSession(customerId: string): Promise<string> {
-    const session = await this.stripe.customerSessions.create({
-      customer: customerId,
-      components: {
-        // La feuille de paiement : les cartes enregistrées s'y affichent, la
-        // case « Enregistrer pour la prochaine fois » y est proposée, et une
-        // carte s'y retire.
-        mobile_payment_element: {
-          enabled: true,
-          features: {
-            payment_method_save: "enabled",
-            payment_method_redisplay: "enabled",
-            payment_method_remove: "enabled",
-          },
-        },
-        // La feuille « Moyens de paiement » du profil.
-        customer_sheet: {
-          enabled: true,
-          features: { payment_method_remove: "enabled" },
-        },
-      },
-    });
-    return session.client_secret;
+  async createEphemeralKey(customerId: string, apiVersion: string): Promise<string> {
+    const key = await this.stripe.ephemeralKeys.create({ customer: customerId }, { apiVersion });
+    if (!key.secret) throw new Error("Stripe a créé une clé éphémère sans secret.");
+    return key.secret;
   }
 
   async createSetupIntent(customerId: string): Promise<string> {
@@ -410,8 +396,8 @@ export class FakePaymentGateway implements PaymentGateway {
     return true;
   }
 
-  async createCustomerSession(customerId: string): Promise<string> {
-    return `cuss_fake_${customerId}`;
+  async createEphemeralKey(customerId: string): Promise<string> {
+    return `ek_test_fake_${customerId}`;
   }
 
   async createSetupIntent(customerId: string): Promise<string> {
