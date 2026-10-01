@@ -191,7 +191,8 @@ public final class AppDependencies {
         return HomeModel(
             source: { [outbox] in
                 let feed = try await read()
-                return await outbox.mergingLocalTrips(into: feed)
+                // Sur le fil principal, comme la file : rien à attendre.
+                return outbox.mergingLocalTrips(into: feed)
             },
             cached: { [content, outbox] in
                 guard let stored = await content.read(.home, as: HomeFeed.self) else { return nil }
@@ -299,7 +300,7 @@ public final class AppDependencies {
                 do {
                     return try await read()
                 } catch {
-                    guard let waiting = await outbox.localTrip(id) else { throw error }
+                    guard let waiting = outbox.localTrip(id) else { throw error }
                     return TripDetail(trip: waiting.trip)
                 }
             },
