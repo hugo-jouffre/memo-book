@@ -327,6 +327,32 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(body as? [String: String], ["email": "hugo@memobook.app"])
     }
 
+    /// Le téléphone dit où le joindre : le jeton, son serveur APNs, son fuseau
+    /// — au nom de la session, puisque le jeton part avec elle.
+    func testPushTokenIsSentWithTheSession() async throws {
+        let client = makeClient()
+        respond(status: 204, json: "")
+
+        try await client.registerPushToken(
+            PushTokenRegistration(
+                token: "00ab10ff",
+                environment: .sandbox,
+                timeZone: "Europe/Paris",
+                appVersion: "0.1.0 (8)"
+            )
+        )
+
+        let request = try XCTUnwrap(StubURLProtocol.lastRequest)
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.url?.path, "/v1/push-tokens")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer jeton-de-session")
+        let body = try JSONSerialization.jsonObject(with: XCTUnwrap(StubURLProtocol.lastBody))
+        XCTAssertEqual(
+            body as? [String: String],
+            ["token": "00ab10ff", "environment": "sandbox", "timeZone": "Europe/Paris", "appVersion": "0.1.0 (8)"]
+        )
+    }
+
     /// Le nouveau mot de passe répond comme une connexion : la session rendue
     /// est **gardée**, pour que l'app entre sans rien retaper.
     func testResetPasswordStoresTheNewSession() async throws {

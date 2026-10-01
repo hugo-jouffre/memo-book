@@ -350,6 +350,8 @@ public actor PreviewAPI: MemoBookAPI {
     }
 
     public func linkCurrentDevice() async throws {}
+    public func registerPushToken(_ registration: PushTokenRegistration) async throws {}
+    public func markNotificationOpened(id: String) async throws {}
     public func deleteAccount() async throws {}
 
     // MARK: - Carnets

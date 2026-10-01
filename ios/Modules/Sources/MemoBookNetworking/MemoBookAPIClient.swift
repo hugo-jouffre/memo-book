@@ -318,6 +318,23 @@ public actor MemoBookAPIClient: MemoBookAPI {
         )
     }
 
+    public func registerPushToken(_ registration: PushTokenRegistration) async throws {
+        try await sendIgnoringResponse(
+            method: "POST",
+            path: "/v1/push-tokens",
+            body: registration.body,
+            credential: .session
+        )
+    }
+
+    public func markNotificationOpened(id: String) async throws {
+        try await sendIgnoringResponse(
+            method: "POST",
+            path: "/v1/notifications/\(id)/opened",
+            credential: .session
+        )
+    }
+
     public func deleteAccount() async throws {
         try await sendIgnoringResponse(
             method: "DELETE",

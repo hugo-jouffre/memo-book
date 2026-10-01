@@ -146,6 +146,18 @@ public protocol MemoBookAPI: Sendable {
     /// quelles installations le compte est ouvert.
     func linkCurrentDevice() async throws
 
+    /// Dit au serveur où joindre ce téléphone — `POST /v1/push-tokens`.
+    ///
+    /// À chaque entrée dans l'app, une fois l'autorisation donnée : Apple peut
+    /// changer le jeton, et le fuseau suit le voyageur d'un pays à l'autre. Le
+    /// jeton est rattaché à **la session** : se déconnecter le fait oublier au
+    /// serveur, sans appel de plus.
+    func registerPushToken(_ registration: PushTokenRegistration) async throws
+
+    /// On a touché une notification — `POST /v1/notifications/:id/opened`.
+    /// C'est le « comportement réel » qui ajuste le rythme des relances.
+    func markNotificationOpened(id: String) async throws
+
     /// Supprime le compte et **tout** ce qui est à lui : ses carnets, leurs
     /// souvenirs et leurs médias, ses commandes, sa cagnotte, ses moyens de
     /// paiement, ses connecteurs et ses appareils.

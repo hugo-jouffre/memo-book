@@ -96,6 +96,18 @@ public struct RootView: View {
     /// Il ouvre la feuille du nouveau mot de passe par-dessus ce qu'on faisait.
     @State private var signedInResetToken: ResetLinkToken?
 
+    /// L'offre, ouverte par la notification de fin des 3 jours offerts. Les
+    /// autres écrans présentent la leur ; celle-ci n'a pas d'écran d'attache,
+    /// puisqu'on arrive de l'écran verrouillé.
+    @State private var showsNotificationPaywall = false
+
+    /// Les notifications de l'app — le jeton, l'autorisation, le toucher. Jamais
+    /// branchées dans le bac à sable : il n'a pas de session à qui remettre un
+    /// jeton.
+    private var push: PushNotifications? {
+        OnboardingStorage.isPreviewingSignedIn ? nil : PushNotifications.shared
+    }
+
     public init() {}
 
     public var body: some View {
@@ -122,12 +134,19 @@ public struct RootView: View {
         // l'ouvre par-dessus l'offre au lieu de la refermer, pour que la flèche
         // de retour ramène à l'étape qu'on regardait (Hugo, 16/09/2026).
         .environment(\.supportModel, support)
+        .environment(\.pushNotifications, push)
         .onOpenURL { url in
             // **Stripe d'abord** : le retour d'un paiement passé par une autre
             // app ou une page (3-D Secure, Klarna) revient par
             // `memobook://stripe-redirect`, et la feuille l'attend. Il n'était
             // rendu à personne, et le paiement restait suspendu.
             if StripeSDK.handle(url) { return }
+            // Les liens des notifications marchent aussi d'ailleurs : ils
+            // passent par le même chemin que le toucher.
+            if let link = NotificationLink(url: url) {
+                push?.pendingLink = link
+                return
+            }
             guard let token = PasswordResetLink.token(from: url) else { return }
             // Déjà entré : c'est le lien de « Mot de passe oublié ? » de la
             // feuille du profil — il ouvre la même feuille, en mode nouveau
@@ -145,8 +164,13 @@ public struct RootView: View {
         // Un lien reçu pendant qu'on restaurait la session, et la session a
         // tenu : il ne doit pas ressortir à la prochaine déconnexion.
         .onChange(of: stage) { _, stage in
-            if case .signedIn = stage { pendingResetToken = nil }
+            if case .signedIn = stage {
+                pendingResetToken = nil
+                // Une notification touchée app fermée attendait l'accueil.
+                openPendingNotification()
+            }
         }
+        .onChange(of: push?.pendingLink) { _, _ in openPendingNotification() }
     }
 
     @ViewBuilder
@@ -194,6 +218,19 @@ public struct RootView: View {
                 // connecté — un renouvellement, une validation parentale —
                 // part maintenant qu'une session peut le remettre.
                 .task(id: account.id) { await dependencies.deliverUnfinishedTransactions() }
+                // Le jeton APNs, au serveur de **cette** session — sans poser
+                // la question de l'autorisation, qui attend l'étape
+                // « Notifications » de la création d'un voyage.
+                .task(id: account.id) { await push?.connect(api: dependencies.api) }
+                .fullScreenCover(isPresented: $showsNotificationPaywall) {
+                    PaywallView(
+                        subscription: .offer,
+                        onSubscribe: {
+                            subscription.record(isSubscribed: true)
+                            showsNotificationPaywall = false
+                        }
+                    )
+                }
             }
         }
         .animation(.snappy, value: stage)
@@ -411,6 +448,7 @@ public struct RootView: View {
         guard case .signedIn = stage, !OnboardingStorage.isPreviewingSignedIn else { return }
         guard !(await dependencies.api.hasStoredSession()) else { return }
         await dependencies.forgetAccountContent()
+        push?.disconnect()
         path.removeAll()
         stage = .signedOut
     }
@@ -429,8 +467,40 @@ public struct RootView: View {
             // dort sur le disque pour être relu hors ligne, il ne doit pas
             // attendre la personne suivante sur ce téléphone.
             await dependencies.forgetAccountContent()
+            // Le serveur a oublié le jeton avec la session ; l'app oublie la
+            // session à qui elle l'avait remis.
+            push?.disconnect()
             path.removeAll()
             stage = .signedOut
+        }
+    }
+
+    /// Ouvre l'écran d'une notification touchée — ou d'un lien `memobook://`.
+    ///
+    /// **Une pile neuve**, posée sur le voyage : la flèche de retour ramène au
+    /// voyage, puis à l'accueil, comme si on y était allé à la main — et non à
+    /// l'écran qu'on regardait avant de toucher la notification, qui n'a rien à
+    /// voir avec elle. Hors session, le lien attend : l'entrée le rouvrira.
+    private func openPendingNotification() {
+        guard case .signedIn = stage, let push, let link = push.pendingLink else { return }
+        push.pendingLink = nil
+
+        switch link {
+        case .paywall:
+            showsNotificationPaywall = true
+        case .newTrip:
+            path = [.tripCreation]
+        case .chat(let tripId), .wallet(let tripId), .bookPreview(let tripId):
+            // Même garde-fou que depuis l'accueil : un identifiant qui n'est
+            // pas celui d'une ressource n'ouvre rien.
+            guard UUID(uuidString: tripId) != nil else { return }
+            let screen: HomeRoute =
+                switch link {
+                case .wallet: .wallet(tripId: tripId)
+                case .bookPreview: .bookPreview(memoId: tripId)
+                default: .chat(tripId: tripId, stepId: nil)
+                }
+            path = [.trip(id: tripId), screen]
         }
     }
 

@@ -75,6 +75,9 @@ export async function resetDatabase(prisma: PrismaClient): Promise<void> {
     prisma.$executeRawUnsafe(
       'TRUNCATE TABLE ' +
         [
+          "notification_deliveries",
+          "push_tokens",
+          "school_holidays",
           "feedback_answers",
           "feedback_responses",
           "feedback_questions",

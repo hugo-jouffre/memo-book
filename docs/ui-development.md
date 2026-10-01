@@ -79,7 +79,6 @@ tâches qui n'ont jamais été écrites.
 | T231 | « **Exporter mes données** » ne fait rien, et aucune route d'export n'existe (le RGPD la demande) | Profil |
 | T232 | Le suivi des commandes liste aussi les commandes dont le paiement a été abandonné (`draft`), comme si elles allaient partir | Profil — suivi des commandes |
 | T233 | Un **co-voyageur voit « Supprimer le voyage »** (réglages et tiroir de l'accueil), et le serveur lui répond 404. Il manque un `canDelete`, comme `canClearConversation` | Réglages du voyage, accueil |
-| T234 | **Les notifications ne partent pas** : les préférences s'enregistrent, mais rien n'envoie (ni APNs, ni tâche), et l'appareil n'est jamais enregistré (`ensureRegistered` n'a aucun appelant). C'est aussi ce qu'attend T184 | Réglages — notifications |
 | T235 | On ne peut pas **supprimer un souvenir** (`DELETE /v1/entries/:id` existe, l'app ne l'appelle pas), ni une photo de couverture importée | Conversation, couvertures |
 | T236 | La galerie : les cartes ne s'ouvrent pas (pas d'écran ni de route pour lire un carnet public), et le résumé et les catégories des vrais carnets ne sont écrits que par le seed — filtres vides | Exemples de carnets |
 | T237 | Les photos de la conversation proposées pour une couverture passent par un lien signé d'une heure : l'écran laissé ouvert plus longtemps montre des images cassées | Couvertures |
@@ -135,7 +134,18 @@ Dans la PR de ce lot, vérifié en simulateur :
 |---|---|---|
 | T205 | La puce en vol se pose dans le creux que le fil lui ouvre, puis le fil **monte d'une ligne** au moment où les trois points de MEMO apparaissent dessous (vu en vidéo le 30/09). Et sur un libellé de deux lignes, le raccord se voit d'un point ou deux. Faire la place des trois points dès le décollage, ou un `matchedGeometryEffect` au pixel — à décider si ça vaut le coût | Conversation |
 | T208 | Le micro de la bulle vocale : nu et vert au pied du rond dans `3627:31695`, en pastille détourée dans l'app (Clara, 26/09). À départager | Conversation |
-| T184 | La notification de relance n'existe pas : c'est le rythme du récit (« Tous les 2 jours ») qui devrait la cadencer | Conversation — relance |
+
+### Notifications
+
+Voir [`notifications.md`](notifications.md) pour les règles et les choix faits.
+
+| # | Sujet | Écran / parcours |
+|---|---|---|
+| T241 | **Les textes des notifications sont à relire** : la feuille Notion donne l'objectif et le ton, pas les mots. Ils sont tous dans `backend/src/services/notificationCopy.ts` (fin d'essai, fin de voyage, relance d'écriture, carnet pas commandé, vacances, l'an dernier, anniversaire) | Notifications |
+| T242 | **La zone scolaire** se déduit du code postal de l'adresse du profil, demandée seulement à la commande : sans adresse, pas de notification de vacances scolaires. La demander ailleurs (dernières questions, feuille « Notifications ») ? | Notifications — vacances |
+| T243 | La feuille propose quatre fréquences, dont « **Rarement** » ; l'étape « Notifications » de la création n'en dessine que trois (tous les jours, tous les 2 jours, une fois par semaine). Le serveur comprend `rarely` : il manque la carte dans la maquette | Création — notifications |
+| T244 | Quand tout est coupé dans les Réglages d'iOS, la feuille « Notifications » le dit et propose « Ouvrir les réglages ». **Ni le message ni le bouton ne sont dans `3023:15042`** : à dessiner, ou à valider tels quels | Réglages — notifications |
+| T245 | La maquette dessine une bulle de MEMO « Suggestions - activer les notifs » avec un bouton « Activer notif » dans la conversation. Pas faite : l'autorisation se demande à l'étape « Notifications » de la création. La garder pour qui a passé l'étape ? | Conversation |
 
 ### Réglages du voyage et personnalisations
 

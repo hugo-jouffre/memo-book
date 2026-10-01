@@ -1,6 +1,7 @@
 import MemoBookCore
 import MemoBookDesign
 import SwiftUI
+import UIKit
 
 /// Les cinq feuilles des paramètres d'un voyage.
 ///
@@ -133,7 +134,14 @@ struct TripPaceSheet: View {
 struct TripNotificationsSheet: View {
     let model: TripSettingsModel
 
+    @Environment(\.pushNotifications) private var pushNotifications
+    @Environment(\.openURL) private var openURL
+
     private var settings: TripSettings? { model.settings }
+
+    /// Tout est coupé dans les Réglages de l'iPhone : les quatre cartes
+    /// enregistrent toujours, mais rien n'arrivera tant qu'on n'y retourne pas.
+    private var isBlockedBySystem: Bool { pushNotifications?.authorization == .denied }
 
     var body: some View {
         BrandSheet(
@@ -145,7 +153,17 @@ struct TripNotificationsSheet: View {
                 // réglables — on prépare ce qu'on recevra —, mais l'écran dit
                 // que rien ne partira d'ici là. Sans cette phrase, on croit à
                 // quatre interrupteurs morts.
-                if settings?.wantsNotifications == false {
+                if isBlockedBySystem {
+                    BrandNotice(BookCopy.Notifications.systemDeniedNotice) {
+                        Button(BookCopy.Notifications.openSettings) {
+                            if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
+                                openURL(url)
+                            }
+                        }
+                        .font(MemoBookFont.bodySemibold)
+                        .foregroundStyle(MemoBookColor.action)
+                    }
+                } else if settings?.wantsNotifications == false {
                     BrandNotice(BookCopy.Notifications.mutedNotice)
                 }
 
@@ -174,6 +192,8 @@ struct TripNotificationsSheet: View {
             // réglages soient là enverrait un état qu'on n'a pas lu.
             .disabled(settings == nil)
         }
+        // On revient peut-être des Réglages : ce qu'iOS autorise a pu changer.
+        .task { await pushNotifications?.refreshAuthorization() }
     }
 
     /// La liaison d'une alerte : elle lit le modèle et lui repasse le bloc
@@ -193,6 +213,12 @@ struct TripNotificationsSheet: View {
                 guard var preferences = model.settings?.notifications else { return }
                 set(&preferences, isOn)
                 model.setNotificationPreferences(preferences)
+                // Allumer une alerte sans avoir jamais répondu à iOS : c'est
+                // le moment de lui poser la question — sans quoi l'alerte
+                // serait réglée pour rien.
+                if isOn, pushNotifications?.authorization == .notDetermined {
+                    Task { await pushNotifications?.requestAuthorization() }
+                }
             }
         )
     }
