@@ -66,6 +66,8 @@ public enum PurchaseOutcome: Sendable, Hashable {
 public enum RestoreOutcome: Sendable, Hashable {
     case restored
     case nothingToRestore
+    /// La personne a refermé la demande de mot de passe de l'App Store.
+    case cancelled
 }
 
 public enum SubscriptionStoreError: LocalizedError {
@@ -193,8 +195,13 @@ public final class StoreKitSubscriptionStore: SubscriptionStore {
 
     public func restore(deliver: @escaping TransactionDelivery) async throws -> RestoreOutcome {
         // Demande l'identifiant Apple si besoin : c'est le geste que la personne
-        // vient de faire, elle s'y attend.
-        try await AppStore.sync()
+        // vient de faire, elle s'y attend. **Jamais sans ce geste** — Apple le
+        // réserve au bouton « Restaurer », pas au lancement.
+        do {
+            try await AppStore.sync()
+        } catch StoreKitError.userCancelled {
+            return .cancelled
+        }
 
         var restored = false
         var undelivered = false

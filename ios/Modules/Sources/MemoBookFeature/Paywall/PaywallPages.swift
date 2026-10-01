@@ -391,6 +391,8 @@ struct PaywallOffer: View {
     let onEstimate: () -> Void
     /// La feuille d'Apple est ouverte, ou le serveur n'a pas encore répondu.
     var isPurchasing = false
+    /// La restauration est en cours : l'App Store se resynchronise.
+    var isRestoring = false
     /// « S'abonner » : la feuille d'Apple, ouverte par le paywall.
     let onSubscribe: () -> Void
     /// « Restaurer mes achats » — exigé par App Review sur l'écran d'achat.
@@ -448,6 +450,8 @@ struct PaywallOffer: View {
                             .allowsHitTesting(argument.pill != nil)
                         }
                     }
+
+                    storeSection
 
                     Spacer(minLength: 0)
                 }
@@ -531,8 +535,6 @@ struct PaywallOffer: View {
             // Même limite que les CTA de l'accueil et du voyage : au-delà
             // d'AX1, une barre ancrée en bas prend la moitié de l'écran.
             .dynamicTypeSize(...DynamicTypeSize.accessibility1)
-
-            storeLinks
         }
         .padding(.horizontal, PaywallMetrics.margin)
         .padding(.top, MemoBookSpacing.s)
@@ -540,47 +542,50 @@ struct PaywallOffer: View {
         .brandFooterScrim()
     }
 
-    /// Restaurer, les conditions, la confidentialité : **les trois liens
-    /// qu'App Review cherche sous le bouton d'un abonnement**. En petit, sur une
-    /// ligne — ils doivent être là et lisibles, pas disputer l'offre.
-    private var storeLinks: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: MemoBookSpacing.m) { storeLinkButtons }
-            // En très grand texte seulement : la ligne ne tient plus.
-            VStack(spacing: 0) { storeLinkButtons }
+    /// **Sous les quatre cartes** (Hugo, 01/10/2026) : « Restaurer mes achats »,
+    /// puis les conditions et la confidentialité en petit. C'est ce qu'App
+    /// Review cherche sur l'écran d'un abonnement (règles 3.1.1 et 3.1.2) :
+    /// un moyen de retrouver un abonnement déjà payé — sur un autre iPhone,
+    /// après une réinstallation —, et les deux documents qu'on accepte en
+    /// s'abonnant. Posés dans la page et non dans le pied, ils ne disputent pas
+    /// le bouton de l'offre et ne font pas grandir le voile sur les cartes.
+    private var storeSection: some View {
+        VStack(spacing: MemoBookSpacing.xs) {
+            BrandButton(
+                PaywallCopy.Purchase.restore,
+                style: .secondary,
+                size: .medium,
+                isLoading: isRestoring,
+                action: onRestore
+            )
+            .disabled(isPurchasing)
+
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: MemoBookSpacing.m) { legalLinks }
+                // En très grand texte seulement : la ligne ne tient plus.
+                VStack(spacing: 0) { legalLinks }
+            }
+            .font(MemoBookFont.taglineRegular)
+            .foregroundStyle(MemoBookColor.ink)
         }
-        // Le bouton a déjà son souffle au-dessus ; la ligne de liens le
-        // reprend en partie, pour que le pied ne grandisse que d'une ligne.
-        .padding(.top, -MemoBookSpacing.xs)
-        .font(MemoBookFont.taglineRegular)
-        .foregroundStyle(MemoBookColor.ink)
-        .disabled(isPurchasing)
+        .frame(maxWidth: .infinity)
+        .padding(.top, MemoBookSpacing.xs)
     }
 
-    @ViewBuilder private var storeLinkButtons: some View {
-        storeLink(PaywallCopy.Purchase.restore, spoken: PaywallCopy.Purchase.restoreSpoken, action: onRestore)
-        storeLink(PaywallCopy.Purchase.terms, spoken: PaywallCopy.Purchase.termsSpoken) {
-            onShowLegal(.termsOfUse)
-        }
-        storeLink(PaywallCopy.Purchase.privacy, spoken: PaywallCopy.Purchase.privacySpoken) {
-            onShowLegal(.privacyPolicy)
-        }
+    @ViewBuilder private var legalLinks: some View {
+        legalLink(PaywallCopy.Purchase.terms) { onShowLegal(.termsOfUse) }
+        legalLink(PaywallCopy.Purchase.privacy) { onShowLegal(.privacyPolicy) }
     }
 
     /// Souligné pour se lire comme un lien, et aussi haut qu'un doigt : le
     /// dessin est plus petit que le geste (R7).
-    private func storeLink(
-        _ title: String,
-        spoken: String,
-        action: @escaping () -> Void
-    ) -> some View {
+    private func legalLink(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title).underline()
         }
         .buttonStyle(.plain)
         .frame(minHeight: MemoBookSpacing.minimumTapTarget)
         .contentShape(.rect)
-        .accessibilityLabel(spoken)
     }
 }
 

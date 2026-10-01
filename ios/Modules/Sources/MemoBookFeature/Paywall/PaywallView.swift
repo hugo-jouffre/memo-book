@@ -70,6 +70,10 @@ struct PaywallView: View {
     /// le bouton attend, et un second tapotis ne lance pas un second achat.
     @State private var isPurchasing = false
 
+    /// « Restaurer mes achats » attend l'App Store — qui peut demander le mot
+    /// de passe de l'identifiant Apple.
+    @State private var isRestoring = false
+
     /// Ce qu'il faut dire quand l'achat n'a pas ouvert l'abonnement — refusé,
     /// en attente d'un parent, rien à restaurer.
     @State private var purchaseNotice: PurchaseNotice?
@@ -160,6 +164,7 @@ struct PaywallView: View {
                             title: variant.offerTitle,
                             onEstimate: { showsEstimation = true },
                             isPurchasing: isPurchasing,
+                            isRestoring: isRestoring,
                             onSubscribe: purchase,
                             onRestore: restore,
                             onShowLegal: { legalDocument = $0 },
@@ -253,7 +258,7 @@ struct PaywallView: View {
     /// si c'était fait : c'est ce qu'elle faisait avant StoreKit, et un aperçu
     /// n'a rien à encaisser.
     private func purchase() {
-        guard !isPurchasing else { return }
+        guard !isPurchasing, !isRestoring else { return }
         guard let subscriptionPurchase else {
             onSubscribe()
             return
@@ -279,16 +284,30 @@ struct PaywallView: View {
 
     /// « Restaurer mes achats » : un abonnement pris sur un autre iPhone, ou
     /// avant une réinstallation, se retrouve ici.
+    ///
+    /// **Ce que demande Apple** : un geste explicite, qui resynchronise avec
+    /// l'App Store (`AppStore.sync()`, qui peut demander le mot de passe), puis
+    /// rend l'accès à ce qui est encore payé. Retrouvé : l'abonnement s'ouvre et
+    /// l'offre se referme, comme après un achat. Rien de payé : on le dit. La
+    /// personne referme la demande de mot de passe : on ne dit rien, c'est un
+    /// choix. Un abonnement payé depuis un autre compte MemoBook : le message
+    /// du serveur le dit.
     private func restore() {
-        guard !isPurchasing, let subscriptionPurchase else { return }
+        guard !isPurchasing, !isRestoring else { return }
+        guard let subscriptionPurchase else {
+            // Un aperçu isolé n'a pas d'App Store à interroger.
+            purchaseNotice = .nothingToRestore
+            return
+        }
 
-        isPurchasing = true
+        isRestoring = true
         Task {
-            defer { isPurchasing = false }
+            defer { isRestoring = false }
             do {
                 switch try await subscriptionPurchase.restore() {
                 case .restored: onSubscribe()
                 case .nothingToRestore: purchaseNotice = .nothingToRestore
+                case .cancelled: break
                 }
             } catch {
                 purchaseNotice = .failed(error.localizedDescription)
@@ -605,15 +624,9 @@ enum PaywallCopy {
     // — L'achat, par la feuille d'Apple
     enum Purchase {
         static let ok = "OK"
-        /// **Courts, pour tenir sur une ligne** sous le bouton : en entier, les
-        /// trois liens s'empilaient et le pied montait sur la moitié des
-        /// cartes. VoiceOver lit les noms complets.
-        static let restore = "Restaurer"
-        static let restoreSpoken = "Restaurer mes achats"
-        static let terms = "Conditions"
-        static let termsSpoken = "Conditions d’utilisation"
+        static let restore = "Restaurer mes achats"
+        static let terms = "Conditions d’utilisation"
         static let privacy = "Confidentialité"
-        static let privacySpoken = "Politique de confidentialité"
 
         static let pendingTitle = "Achat en attente"
         static let pendingMessage =
@@ -621,7 +634,7 @@ enum PaywallCopy {
         static let failedTitle = "Achat impossible"
         static let nothingTitle = "Rien à restaurer"
         static let nothingMessage =
-            "Aucun abonnement MemoBook en cours sur cet identifiant Apple."
+            "Aucun abonnement MemoBook en cours sur cet identifiant Apple. S’il en existe un sur un autre identifiant, connecte-toi avec lui dans les réglages de l’App Store, puis réessaie."
     }
 
     struct Argument {
