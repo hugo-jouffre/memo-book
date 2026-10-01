@@ -27,16 +27,29 @@ mieux ici, exécuter deux conteneurs sans état.
 
 ## 1. Le projet Railway
 
-Le dépôt contient déjà `railway.json` à sa racine : Railway construit
-`backend/Dockerfile` **depuis la racine du dépôt**, ce dont le Dockerfile a
-besoin (il copie `templates/`, `agents/` et `assets/`). Ne pas régler le
-« Root Directory » du service sur `backend/`, l'image se construirait sans
-broncher et tomberait au premier carnet.
+**La configuration des deux services vit dans Railway, pas dans le dépôt.**
+Le dépôt a porté un `railway.json` jusqu'au 01/10/2026 ; Railway ne le lisait
+pas. Sa « Config as Code » est dépréciée, et un service qui ne l'utilisait pas
+déjà ne peut plus y entrer : nos deux services ont toujours tourné sur les
+réglages du tableau de bord. Ça se voyait au `worker`, qui lance
+`node dist/worker.js` quand le fichier disait `node dist/server.js`. Rien de
+ce qu'il déclarait n'a jamais servi, ni le `preDeployCommand` (voir plus bas),
+ni la politique de redémarrage. Le remplaçant de Railway, `.railway/railway.ts`,
+ne s'applique que par sa CLI : tant qu'on ne l'adopte pas, **le tableau de bord
+fait foi**, et les réglages attendus sont listés ici.
+
+Railway construit `backend/Dockerfile` **depuis la racine du dépôt**, ce dont
+le Dockerfile a besoin (il copie `templates/`, `agents/` et `assets/`). Ne pas
+régler le « Root Directory » du service sur `backend/`, l'image se construirait
+sans broncher et tomberait au premier carnet.
 
 1. New Project ▸ Deploy from GitHub repo ▸ `hugo-jouffre/memo-book`.
-2. Le service détecte `railway.json` et construit l'image. Vérifier dans les
-   logs de build qu'il utilise bien `backend/Dockerfile`.
-3. Settings ▸ Networking ▸ Generate Domain. Railway donne une adresse du type
+2. Settings ▸ Build ▸ Dockerfile Path : `backend/Dockerfile`.
+3. Settings ▸ Deploy :
+   - **Pre-deploy Command : `npx prisma migrate deploy`** ;
+   - Custom Start Command : `node dist/server.js` ;
+   - Healthcheck Path : `/health`, délai 60 s.
+4. Settings ▸ Networking ▸ Generate Domain. Railway donne une adresse du type
    `memo-book-production.up.railway.app`. **C'est déjà assez pour un TestFlight
    qui marche** : le domaine personnalisé peut attendre.
 
@@ -54,28 +67,39 @@ chaîne Supabase, celle qui est déjà dans le `.env` local.
 > deux fois. `npm run supabase:setup` le vérifie activement et refuse de
 > continuer sur le mauvais port.
 
-**Les migrations partent avec le code, et avant lui.** `railway.json` pose un
-`preDeployCommand` — `npx prisma migrate deploy` — que Railway lance dans la
-nouvelle image, avec les variables du service, **avant** de lui envoyer le
-moindre trafic. Si la migration échoue, le déploiement échoue avec elle et
-l'ancienne version reste en ligne, cohérente avec l'ancien schéma. C'est pour ça
-que `prisma` (le CLI) est dans `dependencies` et non `devDependencies` : l'image
-d'exécution est construite avec `npm ci --omit=dev`.
+**Les migrations partent avec le code, et avant lui.** La *Pre-deploy
+Command* des deux services, `npx prisma migrate deploy`, tourne dans la
+nouvelle image, avec les variables du service, **avant** que le déploiement
+reçoive le moindre trafic. Si la migration échoue, le déploiement échoue avec
+elle et l'ancienne version reste en ligne, cohérente avec l'ancien schéma.
+C'est pour ça que `prisma` (le CLI) est dans `dependencies` et non
+`devDependencies` : l'image d'exécution est construite avec `npm ci --omit=dev`.
+Les deux services peuvent migrer en même temps : Prisma pose un verrou, et le
+second trouve le travail fait.
 
 Pourquoi : Railway déploie chaque fusion sur `main` tout seul, mais rien ne
-migrait. Deux fois en une semaine, le code est parti sans son schéma et l'API a
-rendu 500 — le 22/09/2026 (`conversation_avec_memo`, quatre jours de pannes sur
-l'accueil) puis le 27/09 (`date_de_naissance`) : cette fois `GET /v1/auth/me`
-**et** les entrées Apple et Google tombaient, l'app renvoyait chacun sur l'écran
-d'entrée, et personne ne pouvait plus y rentrer.
+migrait. Trois fois, le code est parti sans son schéma et l'API a rendu 500 :
+- le 22/09/2026 (`conversation_avec_memo`), quatre jours de pannes sur
+  l'accueil ;
+- le 27/09 (`date_de_naissance`) : `GET /v1/auth/me` **et** les entrées Apple
+  et Google tombaient, l'app renvoyait chacun sur l'écran d'entrée, et personne
+  ne pouvait plus y rentrer ;
+- le 01/10 (`contexte_du_voyage`) : l'accueil, alors que la commande de
+  pré-déploiement était censée exister. Elle n'était que dans `railway.json`,
+  que Railway ne lisait pas.
 
-Deux limites à connaître :
+**Le filet, si la commande manque encore** (service recréé, réglage effacé) :
+`/health` compare les migrations de l'image à `_prisma_migrations`, et répond
+**503** tant qu'il en manque une (`checks.schema: "behind"`, avec la liste dans
+`pendingMigrations`). Railway ne bascule le trafic qu'après un contrôle de santé
+réussi, donc le déploiement échoue : l'ancienne version reste en ligne, et
+Railway envoie son e-mail « Deploy failed » au lieu d'une API qui rend 500. Le
+`worker`, qui n'a pas de contrôle de santé, attend : il ne prend aucun job tant
+que le schéma manque, et le dit dans ses logs toutes les 30 s. Voir
+`backend/src/lib/schemaGuard.ts`.
 
-- **Seul le service `api` lit `railway.json`**, et c'est lui qui migre : la
-  configuration du `worker` n'a ni son contrôle de santé ni sa commande
-  (relevé le 29/09/2026). Le `worker` part en même temps : pendant les quelques
-  secondes de la migration, il peut tomber sur une colonne qui n'existe pas
-  encore, et pg-boss rejoue le job.
+Une limite à connaître :
+
 - La migration prend **un créneau** du pooler, qui en a quinze pour tout le
   projet. Un pooler plein fait échouer le déploiement (`EMAXCONNSESSION` dans
   les logs *pre-deploy*) : sans conséquence, l'ancienne version reste, mais le
@@ -111,9 +135,11 @@ La transcription d'un vocal ne doit jamais tenir une requête HTTP. C'est un
 second service, la même image, une autre commande :
 
 1. New ▸ GitHub Repo ▸ le même dépôt, dans le même projet.
-2. Settings ▸ Deploy ▸ Custom Start Command : `node dist/worker.js`.
-3. Settings ▸ Networking : aucun domaine, il n'écoute rien.
-4. Les mêmes variables d'environnement que l'API.
+2. Settings ▸ Build ▸ Dockerfile Path : `backend/Dockerfile`.
+3. Settings ▸ Deploy ▸ Custom Start Command : `node dist/worker.js`, et la même
+   **Pre-deploy Command** que l'API : `npx prisma migrate deploy`.
+4. Settings ▸ Networking : aucun domaine, il n'écoute rien.
+5. Les mêmes variables d'environnement que l'API.
 
 ## 4. Supabase Storage
 

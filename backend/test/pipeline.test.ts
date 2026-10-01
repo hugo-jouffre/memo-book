@@ -313,14 +313,33 @@ describe("cloisonnement entre comptes", () => {
 });
 
 describe("santé du service", () => {
-  it("rapporte la base, la file et le mode du pipeline", async () => {
+  it("rapporte la base, la file, le schéma et le mode du pipeline", async () => {
     const response = await harness.app.inject({ method: "GET", url: "/health" });
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
       status: "ok",
-      checks: { database: "ok", queue: "ok" },
+      checks: { database: "ok", queue: "ok", schema: "ok" },
       pipelineMode: "fake",
     });
+  });
+
+  it("refuse le trafic quand la base n'a pas le schéma du code", async () => {
+    const behind = await createHarness({
+      schema: { pending: async () => ["20991231000000_pas_encore_appliquee"] } as never,
+    });
+
+    try {
+      const response = await behind.app.inject({ method: "GET", url: "/health" });
+
+      expect(response.statusCode).toBe(503);
+      expect(response.json()).toMatchObject({
+        status: "degraded",
+        checks: { database: "ok", schema: "behind" },
+        pendingMigrations: ["20991231000000_pas_encore_appliquee"],
+      });
+    } finally {
+      await behind.close();
+    }
   });
 });
