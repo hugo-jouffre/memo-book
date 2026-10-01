@@ -50,3 +50,19 @@ export const STRIPE_LOOKUP_KEYS = {
   weeklySubscription: "memobook_subscription_weekly",
   memoryUpgrade: "memobook_memory_upgrade_weekly",
 } as const;
+
+/**
+ * Les produits App Store — **ceux qui encaissent vraiment**, dans l'app.
+ *
+ * L'identifiant est posé dans *App Store Connect ▸ Abonnements* et ne se
+ * change plus jamais : Apple ne le laisse ni modifier ni réutiliser, même après
+ * suppression. L'app porte la même valeur (`StoreKitCatalog.weeklySubscription`)
+ * et `MemoBook.storekit` aussi ; les trois doivent rester identiques.
+ *
+ * Une transaction d'un autre produit est refusée : le jour où l'extension des
+ * limites de souvenirs s'achètera, elle aura sa ligne ici et son propre
+ * traitement — elle ne doit pas ouvrir l'abonnement par accident.
+ */
+export const APP_STORE_PRODUCT_IDS = {
+  weeklySubscription: "com.memobook.app.subscription.weekly",
+} as const;

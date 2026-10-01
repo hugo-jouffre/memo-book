@@ -223,9 +223,9 @@ export function registerTripSettingsRoutes(app: FastifyInstance, context: AppCon
     });
 
     // Une date de fin qui recule dans le passé **ferme le voyage**, et un
-    // compte sans voyage en cours n'a plus d'abonnement à payer. C'est la
-    // promesse de l'offre — « Arrêt automatique de l'abonnement » —, et c'est
-    // ici qu'elle se tient le plus tôt : au moment où la dernière date bouge.
+    // compte sans voyage en cours n'a plus d'abonnement à payer. Un abonnement
+    // App Store n'est pas éteint ici — Apple seul le peut, à la demande de la
+    // personne : l'accueil le lui rappelle (`subscriptionOutlivesTrip`).
     if (body.endDate !== undefined) {
       await endSubscriptionsWithoutRunningTrip(context, accountId);
     }

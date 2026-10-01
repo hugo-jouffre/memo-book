@@ -58,6 +58,10 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/backend/node_modules/.prisma ./node_modules/.prisma
 COPY --from=build /app/backend/dist ./dist
 COPY backend/prisma ./prisma
+# Le certificat racine d'Apple, lu par `services/appStore.ts` pour vérifier
+# chaque achat d'abonnement. Absent, le serveur démarre mais refuse tous les
+# achats — en toutes lettres, pas en 500.
+COPY backend/certs ./certs
 
 # Ce que le code lit à la racine du dépôt : voir l'avertissement en tête de
 # fichier. Trois chemins aujourd'hui — `MemoBook Generator/templates/` et

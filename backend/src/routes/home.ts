@@ -141,7 +141,7 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
     ]);
 
     return {
-      traveller: serializeTraveller(account),
+      traveller: serializeTraveller(account, memos),
       trips: memos.map(serializeTrip),
       showcase: showcase ? serializeShowcase(showcase) : null,
     };

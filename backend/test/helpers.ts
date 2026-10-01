@@ -78,6 +78,7 @@ export async function resetDatabase(prisma: PrismaClient): Promise<void> {
         "trip_themes",
         "wallet_entries",
         "payment_cards",
+        "subscription_transactions",
         "subscriptions",
         "cover_photos",
         "account_connectors",
