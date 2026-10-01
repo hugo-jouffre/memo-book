@@ -798,7 +798,7 @@ function readme(email: string | null, now: Date, missing: readonly string[]): st
     "",
     "",
     "Ce qui n’y est pas, et pourquoi",
-    "──────────────────────────────",
+    "───────────────────────────────",
     "",
     "- Ton mot de passe et tes jetons de connexion : nous n’en gardons qu’une empreinte, qui ne sert à rien hors de MemoBook.",
     "- Les clés d’accès des connecteurs : ce sont des clés de tes comptes chez d’autres services.",
