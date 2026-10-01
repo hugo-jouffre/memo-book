@@ -58,9 +58,10 @@ public enum TripCreationStep: Int, CaseIterable, Sendable, Hashable {
     /// L'étape après laquelle le voyage **existe**.
     ///
     /// La création ne se fait pas au « Commencer ! » de la fin : la dernière
-    /// étape ne montre que le code d'accès, et un code d'accès désigne un
-    /// voyage. Le carnet part donc à la validation de l'avant-dernière — de
-    /// celles qu'on traverse.
+    /// étape montre le code d'accès, et un code d'accès désigne un voyage. Le
+    /// carnet est donc enregistré à la validation de l'avant-dernière — de
+    /// celles qu'on traverse — **sur le téléphone d'abord** : le serveur
+    /// l'apprend quand il peut (Hugo, 01/10/2026).
     static var lastBeforeSave: TripCreationStep {
         let index = active.firstIndex(of: .companions) ?? active.endIndex
         return active[max(0, index - 1)]
@@ -90,20 +91,26 @@ public enum TripCreationStep: Int, CaseIterable, Sendable, Hashable {
 }
 
 /// Ce que sait faire la création d'un voyage : garder le brouillon des six
-/// étapes, aller d'une étape à l'autre, et l'envoyer.
+/// étapes, aller d'une étape à l'autre, et l'enregistrer.
+///
+/// **Rien n'y attend le réseau, sauf le code d'accès** (Hugo, 01/10/2026). On
+/// crée un voyage dans l'avion de bout en bout : la validation garde le
+/// brouillon sur le téléphone et passe à l'étape suivante ; « Commencer ! »
+/// ouvre le voyage ; le serveur le reçoit au retour du réseau, et c'est lui qui
+/// tire le code — la seule chose de l'écran qu'il faut lui demander.
 ///
 /// Même construction que ``HomeModel`` et ``TripHomeModel`` : le modèle ne
-/// connaît pas l'API, il reçoit **deux fonctions** — une qui crée, une qui
-/// corrige. Les aperçus n'en fournissent aucune et traversent le formulaire
-/// sans serveur.
+/// connaît ni l'API ni la file, il reçoit **deux fonctions** — une qui
+/// enregistre, une qui attend le code. Les aperçus n'en fournissent aucune et
+/// traversent le formulaire sans serveur.
 @MainActor
 @Observable
 public final class TripCreationModel {
     public private(set) var step: TripCreationStep = TripCreationStep.active[0]
 
-    /// Le brouillon, rempli étape par étape. Il ne part **qu'une fois**, à la
-    /// fin de l'avant-dernière : six requêtes pour un formulaire qu'on peut
-    /// remonter donneraient six façons de le laisser à moitié écrit.
+    /// Le brouillon, rempli étape par étape. Il ne s'enregistre **qu'une
+    /// fois**, à la fin de l'avant-dernière : six requêtes pour un formulaire
+    /// qu'on peut remonter donneraient six façons de le laisser à moitié écrit.
     public var draft = TripDraft()
 
     /// Les thèmes de la rangée, **tels que le serveur les sert** — « Autre » en
@@ -128,30 +135,47 @@ public final class TripCreationModel {
     /// sur l'étape ne l'efface pas quand on repasse par un émoji.
     public var freeTheme = ""
 
-    /// Le voyage, une fois créé, et son code d'accès. C'est lui qui distingue
-    /// une première validation d'un retour en arrière : tant qu'il est `nil`,
-    /// on crée ; ensuite, on corrige.
-    public private(set) var created: CreatedTrip?
+    /// Le voyage, une fois enregistré sur le téléphone. C'est ce que
+    /// « Commencer ! » ouvre, que le serveur l'ait reçu ou non.
+    public private(set) var trip: Trip?
 
+    /// Le code d'accès, quand le serveur a créé le voyage. `nil` jusque-là :
+    /// la ligne du code porte une barre d'attente et « Partager » reste gris —
+    /// c'est la seule chose de l'écran qui attend le réseau.
+    public private(set) var accessCode: String?
+
+    /// L'enregistrement local est en cours — l'affaire d'un instant.
     public private(set) var isSaving = false
     public private(set) var errorMessage: String?
 
-    private let create: @Sendable (TripDraft) async throws -> CreatedTrip
-    private let update: @Sendable (String, TripDraft) async throws -> CreatedTrip
+    /// Le serveur a refusé le voyage : il n'y a plus rien à ouvrir.
+    public private(set) var wasRejected = false
+
+    private let save: @Sendable (TripDraft) async throws -> Trip
+    private let sync: @Sendable (String) async -> TripSync?
     private let readThemes: @Sendable () async throws -> [TripTheme]
 
-    /// - Parameter themes: d'où viennent les thèmes de la première étape. Par
-    ///   défaut la liste du jeu d'essai, pour les aperçus ; l'app y branche
-    ///   `GET /v1/trip-themes`.
+    /// - Parameters:
+    ///   - save: garde le brouillon — l'app y branche la file de départ
+    ///     (``RecordingOutbox/saveTrip(_:)``), qui l'envoie quand elle peut.
+    ///     Le brouillon porte déjà son identifiant ; la même fonction sert la
+    ///     création et la correction qui suit un retour en arrière.
+    ///   - sync: attend ce que le serveur a fait du voyage — son code d'accès,
+    ///     ou son refus (``RecordingOutbox/tripSync(for:)``).
+    ///   - themes: d'où viennent les thèmes de la première étape. Par défaut la
+    ///     liste du jeu d'essai, pour les aperçus ; l'app y branche
+    ///     `GET /v1/trip-themes`.
     public init(
-        create: @escaping @Sendable (TripDraft) async throws -> CreatedTrip = { .fixture($0) },
-        update: @escaping @Sendable (String, TripDraft) async throws -> CreatedTrip = { id, draft in
-            .fixture(draft, id: id)
+        save: @escaping @Sendable (TripDraft) async throws -> Trip = { draft in
+            .local(draft, id: draft.id ?? UUID().uuidString.lowercased())
+        },
+        sync: @escaping @Sendable (String) async -> TripSync? = { id in
+            .created(CreatedTrip(trip: Trip(id: id, title: TripDraft.untitled, stage: .ongoing), accessCode: "JHKFDA"))
         },
         themes: @escaping @Sendable () async throws -> [TripTheme] = { TripTheme.fixtures }
     ) {
-        self.create = create
-        self.update = update
+        self.save = save
+        self.sync = sync
         self.readThemes = themes
     }
 
@@ -243,14 +267,15 @@ public final class TripCreationModel {
         return true
     }
 
-    // MARK: - L'envoi
+    // MARK: - L'enregistrement
 
     /// Enregistre le brouillon puis avance, ou avance seulement.
     ///
-    /// Le voyage part **une fois** — à la fin de l'avant-dernière étape. Y
-    /// revenir et revalider ne crée pas un second voyage : on corrige celui
-    /// qui existe, et son code d'accès ne bouge pas, parce qu'il a peut-être
-    /// déjà été envoyé à quelqu'un.
+    /// Le voyage s'enregistre **une fois** — à la fin de l'avant-dernière
+    /// étape. Y revenir et revalider ne crée pas un second voyage : le
+    /// brouillon garde son identifiant, on corrige celui qui existe, et son
+    /// code d'accès ne bouge pas, parce qu'il a peut-être déjà été envoyé à
+    /// quelqu'un.
     private func advance() async {
         errorMessage = nil
 
@@ -258,27 +283,48 @@ public final class TripCreationModel {
         if step == .name { draft.title = draft.title.trimmed }
 
         if step == .lastBeforeSave {
-            guard await save() else { return }
+            guard await persist() else { return }
         }
 
         guard let next = step.next else { return }
         step = next
     }
 
-    private func save() async -> Bool {
+    private func persist() async -> Bool {
         isSaving = true
         defer { isSaving = false }
 
+        // L'identifiant est tiré **ici**, une fois : c'est celui que le serveur
+        // reprendra, et celui sous lequel ce qu'on racontera attendra le réseau.
+        if draft.id == nil { draft.id = UUID().uuidString.lowercased() }
+
         do {
-            if let existing = created {
-                created = try await update(existing.trip.id, draft)
-            } else {
-                created = try await create(draft)
-            }
+            trip = try await save(draft)
+            wasRejected = false
             return true
         } catch {
             errorMessage = error.localizedDescription
             return false
+        }
+    }
+
+    /// Attend ce que le serveur fait du voyage. À lancer **par l'écran**, sur
+    /// l'identifiant du voyage (`.task(id:)`) : quitter l'écran annule
+    /// l'attente, pas l'envoi — le voyage reste dans la file.
+    ///
+    /// Le code arrive tout de suite en ligne, au retour du réseau sinon. Un
+    /// refus se dit sur l'étape, et « Commencer ! » n'ouvre plus rien.
+    public func awaitAccessCode() async {
+        guard let id = trip?.id, accessCode == nil else { return }
+
+        switch await sync(id) {
+        case .created(let created):
+            accessCode = created.accessCode
+        case .rejected(let message):
+            errorMessage = message
+            wasRejected = true
+        case nil:
+            break
         }
     }
 }

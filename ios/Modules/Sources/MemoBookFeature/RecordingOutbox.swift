@@ -18,11 +18,18 @@ import Observation
 /// l'identifiant que le serveur reprendra, donc un tour parti deux fois n'est
 /// jamais dans le fil deux fois.
 ///
+/// **Et les voyages créés hors ligne** (Hugo, 01/10/2026) : on crée un voyage
+/// dans l'avion, on l'ouvre, on y raconte, et tout part à l'atterrissage. Le
+/// voyage passe **avant** ce qu'on y a dit — un vocal envoyé à un carnet que
+/// le serveur ne connaît pas encore serait refusé (404) et perdu. Voir
+/// ``saveTrip(_:)``.
+///
 /// Elle tient trois choses, et rien d'autre :
 ///
 /// 1. **l'état du réseau** (``Connectivity``), pour savoir s'il faut essayer ;
-/// 2. **la file sur le disque** (``PendingRecordingStore``), pour que ce qui
-///    n'est pas parti survive à la fermeture de l'app ;
+/// 2. **la file sur le disque** (``PendingRecordingStore`` pour les tours,
+///    ``PendingTripStore`` pour les voyages), pour que ce qui n'est pas parti
+///    survive à la fermeture de l'app ;
 /// 3. **l'envoi lui-même**, une fonction qui rend le reçu du serveur — elle ne
 ///    connaît pas `MemoBookAPI`, comme les modèles d'écran ne connaissent pas
 ///    leur route.
@@ -94,6 +101,26 @@ public final class RecordingOutbox {
     private let connectivity: Connectivity
     private let send: @Sendable (OutgoingTurn, String) async throws -> ChatTurnReceipt
 
+    /// Les voyages créés sur le téléphone que le serveur n'a pas encore vus,
+    /// **tous comptes confondus** — voir ``localTrips``.
+    private var storedTrips: [PendingTrip] = []
+    private let trips: PendingTripStore
+    private let createTrip: @Sendable (TripDraft) async throws -> CreatedTrip
+
+    /// Les voyages arrivés pendant cette session, avec leur code d'accès :
+    /// revenir sur la création ne fait pas attendre un code déjà reçu.
+    private var createdTrips: [String: CreatedTrip] = [:]
+    private var tripListeners: [UUID: AsyncStream<TripSyncEvent>.Continuation] = [:]
+
+    /// Le compte ouvert : ses voyages en attente sont les seuls qu'on montre
+    /// et qu'on envoie. `nil` avant l'ouverture de la session, et dans le bac à
+    /// sable.
+    private var accountId: String?
+
+    /// Un vidage a été demandé pendant qu'un autre tournait : il repassera,
+    /// pour prendre ce qui est arrivé entre-temps.
+    private var drainsAgain = false
+
     /// Les conversations à l'écoute — voir ``turnDeliveries()``.
     private var listeners: [UUID: AsyncStream<ChatTurnDelivery>.Continuation] = [:]
 
@@ -117,14 +144,20 @@ public final class RecordingOutbox {
 
     public init(
         store: PendingRecordingStore = .temporary(),
+        trips: PendingTripStore = .temporary(),
         connectivity: Connectivity = .online,
         send: @escaping @Sendable (OutgoingTurn, String) async throws -> ChatTurnReceipt = { _, _ in
             ChatTurnReceipt(messages: [], turn: .idle, now: .now)
+        },
+        createTrip: @escaping @Sendable (TripDraft) async throws -> CreatedTrip = { draft in
+            .fixture(draft, id: draft.id)
         }
     ) {
         self.store = store
+        self.trips = trips
         self.connectivity = connectivity
         self.send = send
+        self.createTrip = createTrip
     }
 
     /// Ouvre la file et se met à l'écoute du réseau. Idempotent : l'appeler
@@ -140,6 +173,7 @@ public final class RecordingOutbox {
         // l'objet vit aussi longtemps que l'app.
         monitor = Task {
             pending = await store.count()
+            storedTrips = await trips.all()
 
             var isFirstPath = true
             for await isUp in connectivity.updates() {
@@ -211,7 +245,9 @@ public final class RecordingOutbox {
     }
 
     private func deliverOrQueue(_ turn: OutgoingTurn, to tripId: String) async -> Delivery {
-        guard isOnline else { return await queue(turn, for: tripId) }
+        // Un carnet que le serveur ne connaît pas encore : le tour attend son
+        // voyage, qui partira avant lui.
+        guard isOnline, !isWaitingForServer(tripId) else { return await queue(turn, for: tripId) }
 
         sending += 1
         let outcome = await deliver(turn, to: tripId)
@@ -251,12 +287,27 @@ public final class RecordingOutbox {
     /// déclencheurs simultanés — le retour du réseau et le retour dans l'app —
     /// ne doivent pas envoyer deux fois le même souvenir.
     public func flush() async {
-        if let flushing { return await flushing.value }
+        // Un vidage déjà en cours repassera pour ce qui vient d'arriver — et
+        // celui qui attend attend **tous** les passages : rendre la main avant
+        // le dernier, ce serait dire « parti » d'un voyage encore sur le disque.
+        if let flushing {
+            drainsAgain = true
+            return await flushing.value
+        }
 
-        let task = Task { await drain() }
+        let task = Task {
+            repeat {
+                drainsAgain = false
+                await drain()
+            } while drainsAgain && isOnline
+            // **Ici**, dans la même foulée que le dernier passage : levé après
+            // coup par l'appelant, il laissait un instant où un vidage tout
+            // juste demandé attendait une tâche déjà finie — et ne repassait
+            // pas.
+            flushing = nil
+        }
         flushing = task
         await task.value
-        flushing = nil
     }
 
     /// Oublie le dernier refus. C'est ce que demande « Réessayer » du bandeau
@@ -271,6 +322,12 @@ public final class RecordingOutbox {
     private func drain() async {
         guard isOnline else { return }
 
+        // Les voyages d'abord : ce qu'on y a raconté ne peut partir qu'après.
+        // Un voyage qui n'est pas passé ne retient que ses propres tours — ceux
+        // des carnets que le serveur connaît partent quand même.
+        await drainTrips()
+        guard isOnline else { return }
+
         let waiting = await store.all()
         pending = waiting.count
         guard !waiting.isEmpty else { return }
@@ -282,6 +339,9 @@ public final class RecordingOutbox {
 
         for record in waiting {
             guard isOnline else { break }
+
+            // Son voyage attend encore : il partira au prochain vidage, après lui.
+            if isWaitingForServer(record.tripId) { continue }
 
             guard let files = try? await store.files(for: record),
                 let turn = Self.turn(from: record, files: files)
@@ -353,6 +413,165 @@ public final class RecordingOutbox {
         #else
             isOnline = networkIsUp
         #endif
+    }
+
+    // MARK: - Les voyages créés hors ligne
+
+    /// Les voyages du compte ouvert que le serveur n'a pas encore vus. C'est ce
+    /// que l'accueil, l'écran du voyage et la conversation montrent à leur
+    /// place, en attendant — voir ``mergingLocalTrips(into:)``.
+    public var localTrips: [PendingTrip] {
+        storedTrips.filter { $0.accountId == accountId }
+    }
+
+    /// Le voyage en attente qui porte cet identifiant, s'il y en a un.
+    public func localTrip(_ id: String) -> PendingTrip? {
+        localTrips.first { $0.id == id }
+    }
+
+    /// Le serveur ne connaît pas encore ce carnet : rien de ce qu'on y dit ne
+    /// doit partir avant lui. Tous comptes confondus — le vocal d'un voyage
+    /// qu'un autre compte a créé attend que ce compte revienne.
+    private func isWaitingForServer(_ tripId: String) -> Bool {
+        storedTrips.contains { $0.id == tripId }
+    }
+
+    /// Le compte de la session ouverte — ``nil`` à la déconnexion. Ses voyages
+    /// en attente partent alors, s'il y a du réseau.
+    public func setAccount(_ id: String?) {
+        guard id != accountId else { return }
+        accountId = id
+        if id != nil, isOnline { Task { await flush() } }
+    }
+
+    /// Confie un voyage à la file — la création, et chaque correction qui la
+    /// suit.
+    ///
+    /// Le voyage est **gardé sur le disque d'abord**, et la fonction rend dès
+    /// que c'est fait : la création passe à l'étape du code d'accès sans
+    /// attendre personne, réseau ou pas. L'envoi part derrière ; son issue —
+    /// le code d'accès, ou un refus — arrive par ``tripSync(for:)``.
+    ///
+    /// Corriger un voyage déjà parti le remet dans la file : `POST /v1/trips`
+    /// se rejoue sur son identifiant, et pose le dernier brouillon.
+    ///
+    /// - Throws: ``Rejection`` quand le disque refuse — le seul cas où le
+    ///   voyage se perdrait, et il faut le dire tant qu'on est sur l'écran.
+    @discardableResult
+    public func saveTrip(_ draft: TripDraft) async throws -> Trip {
+        var draft = draft
+        let id = draft.id ?? UUID().uuidString.lowercased()
+        draft.id = id
+
+        do {
+            try await trips.save(PendingTrip(id: id, draft: draft, accountId: accountId))
+        } catch {
+            throw Rejection(message: "Ton voyage n’a pas pu être gardé sur ton téléphone. Réessaie.")
+        }
+        storedTrips = await trips.all()
+
+        if isOnline { Task { await flush() } }
+        return .local(draft, id: id)
+    }
+
+    /// Ce que le serveur a fait du voyage : son code d'accès, ou son refus.
+    ///
+    /// **Attend** tant que le voyage n'est pas parti — hors ligne, jusqu'au
+    /// retour du réseau. Rend `nil` quand la tâche qui attend est annulée :
+    /// l'écran a été quitté, le voyage, lui, reste dans la file.
+    public func tripSync(for id: String) async -> TripSync? {
+        if let created = createdTrips[id] { return .created(created) }
+
+        for await event in tripEvents() where event.tripId == id {
+            return event.sync
+        }
+        return nil
+    }
+
+    /// Oublie un voyage que le serveur n'a jamais vu, et ce qu'on y a raconté
+    /// en attendant. `false` quand il n'est pas en attente : c'est alors au
+    /// serveur de le supprimer.
+    public func discardLocalTrip(_ id: String) async -> Bool {
+        guard localTrip(id) != nil else { return false }
+
+        await trips.remove(id: id)
+        for record in await store.all() where record.tripId == id {
+            await store.remove(record)
+        }
+        storedTrips = await trips.all()
+        pending = await store.count()
+        return true
+    }
+
+    /// L'accueil du serveur, et les voyages qu'il ne connaît pas encore
+    /// devant : ils viennent d'être créés.
+    public func mergingLocalTrips(into feed: HomeFeed) -> HomeFeed {
+        let known = Set(feed.trips.map(\.id))
+        let waiting = localTrips.filter { !known.contains($0.id) }.map(\.trip)
+        guard !waiting.isEmpty else { return feed }
+        return HomeFeed(traveller: feed.traveller, trips: waiting + feed.trips, showcase: feed.showcase)
+    }
+
+    /// Envoie les voyages qui attendent, le plus ancien d'abord. S'arrête au
+    /// premier qui ne passe pas : le suivant n'aurait pas plus de chance.
+    private func drainTrips() async {
+        for waiting in localTrips {
+            guard isOnline else { break }
+
+            switch await deliver(waiting.draft) {
+            case .created(let created):
+                // Retiré **seulement** s'il n'a pas changé pendant l'envoi : une
+                // correction faite entre-temps doit partir à son tour.
+                await trips.remove(id: waiting.id, ifDraftIs: waiting.draft)
+                createdTrips[waiting.id] = created
+                publish(TripSyncEvent(tripId: waiting.id, sync: .created(created)))
+            case .deferred:
+                storedTrips = await trips.all()
+                return
+            case .rejected(let reason):
+                await trips.remove(id: waiting.id)
+                let message = "Ton voyage « \(waiting.draft.title) » n’a pas pu être créé. \(reason)"
+                rejection = message
+                publish(TripSyncEvent(tripId: waiting.id, sync: .rejected(message)))
+            }
+        }
+
+        storedTrips = await trips.all()
+    }
+
+    private func deliver(_ draft: TripDraft) async -> TripOutcome {
+        do {
+            return .created(try await createTrip(draft))
+        } catch {
+            switch Self.outcome(for: error) {
+            case .deferred: return .deferred
+            case .rejected(let reason): return .rejected(reason)
+            // L'appel a abouti, la réponse ne s'est pas lue : le voyage existe,
+            // mais sans code à montrer. Il se rejoue sans risque — la création
+            // reconnaît son identifiant — donc on retentera.
+            case .sent: return .deferred
+            }
+        }
+    }
+
+    private enum TripOutcome {
+        case created(CreatedTrip)
+        case deferred
+        case rejected(String)
+    }
+
+    private func tripEvents() -> AsyncStream<TripSyncEvent> {
+        AsyncStream { continuation in
+            let key = UUID()
+            tripListeners[key] = continuation
+            continuation.onTermination = { [weak self] _ in
+                Task { @MainActor [weak self] in self?.tripListeners[key] = nil }
+            }
+        }
+    }
+
+    private func publish(_ event: TripSyncEvent) {
+        for listener in tripListeners.values { listener.yield(event) }
     }
 
     // MARK: - Entre la file et le disque
@@ -496,6 +715,20 @@ public final class RecordingOutbox {
     }
 }
 
+/// Ce que le serveur a fait d'un voyage créé sur le téléphone.
+public enum TripSync: Sendable, Equatable {
+    /// Il existe, et voici son code d'accès.
+    case created(CreatedTrip)
+    /// Il a été refusé, et le redire ne changerait rien. Le libellé est écrit
+    /// pour l'utilisateur.
+    case rejected(String)
+}
+
+struct TripSyncEvent: Sendable {
+    let tripId: String
+    let sync: TripSync
+}
+
 #if DEBUG
 
     // MARK: - Bac à sable
@@ -516,6 +749,7 @@ public final class RecordingOutbox {
         /// vraiment repartir. C'est le même chemin que sous un tunnel.
         public func debugSetOffline(_ offline: Bool) {
             forcedOffline = offline
+            SandboxNetwork.isOffline.withLock { $0 = offline }
             refreshOnline()
             if isOnline { Task { await flush() } }
         }
@@ -542,6 +776,7 @@ public final class RecordingOutbox {
         /// Repart d'une file vide, en ligne, sans message.
         public func debugReset() async {
             forcedOffline = false
+            SandboxNetwork.isOffline.withLock { $0 = false }
             refreshOnline()
             confirmation?.cancel()
             justDelivered = nil
@@ -549,6 +784,8 @@ public final class RecordingOutbox {
             sending = 0
             await store.removeAll()
             pending = 0
+            await trips.removeAll()
+            storedTrips = []
         }
     }
 

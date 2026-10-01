@@ -608,6 +608,12 @@ public struct ChatView: View {
     /// contexte de sa conversation.
     @ViewBuilder
     private var notices: some View {
+        // Un fil local, sans le serveur : on peut raconter quand même, et
+        // c'est ce que la boîte dit d'abord.
+        if model.isOffline {
+            BrandNotice(ChatCopy.offline)
+        }
+
         if model.microphoneIsDenied {
             ErrorBanner(message: RecordingErrorCopy.permissionDenied) {
                 openSettings()

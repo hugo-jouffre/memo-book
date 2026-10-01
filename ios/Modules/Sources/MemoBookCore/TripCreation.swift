@@ -9,6 +9,16 @@ import Foundation
 /// C'est le contrat exact de `POST /v1/trips` — au nom près, comme le veut
 /// `backend/src/routes/appSerializers.ts`.
 public struct TripDraft: Codable, Sendable, Hashable {
+    /// L'identifiant du voyage, **tiré par l'app** au moment où on valide.
+    ///
+    /// Un voyage se crée hors ligne de bout en bout (Hugo, 01/10/2026) : on
+    /// l'ouvre, on y raconte, et tout part au retour du réseau. Ce qu'on y dit
+    /// attend donc dans la file **sous cet identifiant**, et le serveur le
+    /// reprend tel quel (`POST /v1/trips`). En minuscules : c'est la forme que
+    /// Postgres rend, et deux écritures d'un même UUID feraient deux voyages
+    /// aux yeux de l'app. `nil` jusqu'à la validation.
+    public var id: String?
+
     /// Le thème narratif : « Gastronomie », « Tour du monde », ou la phrase
     /// libre saisie derrière « Autre ». Du texte et non une clé — il part tel
     /// quel dans le contexte de l'agent de rédaction.
@@ -36,6 +46,7 @@ public struct TripDraft: Codable, Sendable, Hashable {
     public static let untitled = "Mon voyage"
 
     public init(
+        id: String? = nil,
         theme: String? = nil,
         title: String = "",
         startDate: Date? = nil,
@@ -43,12 +54,44 @@ public struct TripDraft: Codable, Sendable, Hashable {
         narrationPace: String? = nil,
         photoTextRatio: Int = 50
     ) {
+        self.id = id
         self.theme = theme
         self.title = title
         self.startDate = startDate
         self.endDate = endDate
         self.narrationPace = narrationPace
         self.photoTextRatio = photoTextRatio
+    }
+}
+
+extension Trip {
+    /// Le voyage tel que l'app le connaît **avant** que le serveur l'ait vu :
+    /// ce que le brouillon dit, et rien d'autre — pas de photo, pas de
+    /// compteur, pas de co-voyageur.
+    ///
+    /// L'état se lit sur les dates, comme `services/tripStage.ts` le fait côté
+    /// serveur : le dernier jour compte en entier, et un voyage sans date
+    /// commence maintenant.
+    public static func local(_ draft: TripDraft, id: String, now: Date = .now) -> Trip {
+        let stage: TripStage
+        if let end = draft.endDate, end.addingTimeInterval(24 * 60 * 60) <= now {
+            stage = .past
+        } else if let start = draft.startDate, start > now {
+            stage = .upcoming
+        } else {
+            stage = .ongoing
+        }
+
+        return Trip(
+            id: id,
+            title: draft.title.isEmpty ? TripDraft.untitled : draft.title,
+            stage: stage,
+            startDate: draft.startDate,
+            endDate: draft.endDate,
+            // La jauge du serveur pour un voyage en cours qui n'a encore rien :
+            // zéro sur l'objectif par défaut d'un carnet.
+            progress: stage == .upcoming ? nil : TripProgress(memoryCount: 0, pageCount: 0, targetPageCount: 60)
+        )
     }
 }
 

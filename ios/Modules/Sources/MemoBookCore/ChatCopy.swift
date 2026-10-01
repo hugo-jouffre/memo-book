@@ -39,6 +39,14 @@ public enum ChatCopy {
         return "\(souvenirs) - \(composed)"
     }
 
+    // MARK: - Hors ligne
+
+    /// Le fil s'est ouvert sans le serveur — voir `ChatModel.isOffline`. Même
+    /// phrase que la boîte de l'accueil, et le même gras : ce qui est garanti
+    /// malgré la panne.
+    public static let offline =
+        "Tu sembles hors ligne. **Ce que tu racontes est gardé sur ton téléphone**, et partira dès ta reconnexion."
+
     // MARK: - L'accueil d'une conversation vide
 
     /// « Nouveau voyage à Rome ! 🇮🇹 » — le drapeau vient de ``Destination/flag``,

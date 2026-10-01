@@ -569,7 +569,8 @@ responsabilité :
 |---|---|---|
 | `Connectivity` | `Networking` | une **valeur** — une fonction qui rend un flux « en ligne / hors ligne », `NWPathMonitor` derrière. Un test en fabrique une qu'il pilote |
 | `PendingRecordingStore` | `Recording` | la file **sur le disque**, un acteur — un `PendingTurn` par tour : vocal, texte ou photos, avec ses fichiers à côté |
-| `RecordingOutbox` | `Feature` | décide d'envoyer ou de garder, vide la file au retour du réseau, et **dit le sort de chaque tour** (`turnDeliveries()`) à la conversation |
+| `PendingTripStore` | `Feature` | les voyages créés hors ligne, **sur le disque** — un `PendingTrip` par voyage : son brouillon entier et le compte qui l'a créé |
+| `RecordingOutbox` | `Feature` | décide d'envoyer ou de garder, vide la file au retour du réseau — **les voyages d'abord, ce qu'on y a raconté ensuite** —, et dit le sort de chaque tour (`turnDeliveries()`) et de chaque voyage (`tripSync(for:)`) |
 
 `AppDependencies` monte la file au démarrage (`outbox.start()`), pas à
 l'ouverture d'un écran : c'est ce qui permet de savoir qu'on est hors ligne
@@ -586,6 +587,29 @@ d'échouer), `waiting` (ce qui attend pour ce fil, reposé en bulles à
 l'ouverture) et `deliveries` (le flux des tours partis, avec le reçu du
 serveur). Le vocal de l'accueil va à **un** carnet, le premier en cours — celui
 dont la conversation s'ouvre avec la bulle déjà posée.
+
+**Un voyage se crée hors ligne de bout en bout** (Hugo, 01/10/2026). L'app
+tire son UUID (en minuscules) à la validation de l'avant-dernière étape, le
+garde sur le disque (`outbox.saveTrip`) et passe tout de suite au code d'accès :
+**seul le code attend le serveur** — barre d'attente, « Partager » gris.
+« Commencer ! » ouvre le voyage quand même : l'accueil
+(`mergingLocalTrips(into:)`), l'écran du voyage et la conversation le montrent
+d'après son brouillon tant que le serveur ne l'a pas. `POST /v1/trips` reprend
+l'identifiant et **se rejoue** (même voyage, même code, dernier brouillon) : un
+retour en arrière renvoie simplement la création. Un tour destiné à un voyage en
+attente attend avec lui — envoyé avant, il rendrait 404 et serait perdu. Un
+voyage en attente appartient au compte qui l'a créé (`outbox.setAccount`) :
+un autre compte ne le voit ni ne l'envoie.
+
+**La conversation s'ouvre sans réseau** sur un fil **local**
+(`ChatTransport.offlineThread`, `ChatThread.offline`) : l'accueil de MEMO, ce
+qui attend, et une boîte « Tu sembles hors ligne ». Ce n'est pas un cache — le
+fil n'en a toujours pas, voir plus haut. Seule une panne de transport l'ouvre
+(ou un voyage pas encore reçu) ; une erreur du serveur se dit.
+
+Dans le bac à sable, « Passer hors ligne » coupe aussi le double de l'API
+(`SandboxNetwork`) : l'accueil, le voyage et le fil répondent comme sans
+réseau, et le parcours se rejoue entier.
 
 Trois règles portent tout le reste :
 

@@ -68,6 +68,16 @@ public final class ChatModel {
     public private(set) var errorMessage: String?
     public private(set) var turn: ChatTurnState = .idle
 
+    /// Le fil affiché n'est pas celui du serveur, mais le fil **local** —
+    /// sans réseau, ou pour un voyage créé hors ligne que le serveur n'a pas
+    /// encore reçu (``ChatThread/offline(trip:traveller:isNew:)``). On y raconte
+    /// quand même : tout part dans la file. L'écran le dit, et le vrai fil
+    /// revient dès qu'un message est arrivé.
+    public private(set) var isOffline = false
+
+    /// Le vrai fil est en cours de relecture, après un fil local.
+    private var isReloading = false
+
     /// L'enregistrement a été refusé par iOS. La demande ne se présente qu'une
     /// fois : le seul recours est l'app Réglages, et l'écran doit le dire au
     /// lieu de redemander en boucle.
@@ -166,7 +176,18 @@ public final class ChatModel {
 
     public func load() async {
         do {
-            let loaded = try await transport.load()
+            let loaded: ChatThread
+            do {
+                loaded = try await transport.load()
+                isOffline = false
+            } catch {
+                // Sans réseau, ou sur un voyage que le serveur n'a pas encore
+                // reçu : on raconte quand même, dans un fil local. Le transport
+                // décide s'il y en a un — une panne du serveur ne se cache pas.
+                guard let local = await transport.offlineThread(error) else { throw error }
+                loaded = local
+                isOffline = true
+            }
             thread = loaded
             cursor = loaded.now
             errorMessage = nil
@@ -793,6 +814,21 @@ public final class ChatModel {
             } else {
                 mark(delivery.id, as: .sent)
             }
+            // Un message est arrivé : le serveur répond, et il connaît le
+            // voyage. Le fil local cède la place au vrai.
+            if isOffline { reloadFromServer() }
+        }
+    }
+
+    /// Relit le fil du serveur après un fil local. Une fois à la fois : trois
+    /// tours qui arrivent ensemble au retour du réseau ne font qu'une lecture.
+    private func reloadFromServer() {
+        guard !isReloading else { return }
+        isReloading = true
+        Task { [weak self] in
+            guard let self else { return }
+            await self.load()
+            self.isReloading = false
         }
     }
 
