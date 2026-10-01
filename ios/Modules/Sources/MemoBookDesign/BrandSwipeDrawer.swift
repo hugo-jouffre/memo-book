@@ -142,9 +142,24 @@ public struct BrandSwipeDrawer<Content: View>: View {
         .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
         .scrollPosition(id: $slot)
         .scrollIndicators(.hidden)
+        // ⚠️ **Rognée sur les côtés seulement.** Une `ScrollView` coupe tout
+        // ce qui sort de son cadre, dessus et dessous compris : le scotch des
+        // cartes de l'accueil, qui chevauche leur bord haut, était tranché au
+        // ras de la carte depuis que le tiroir est une bande qui défile (Hugo,
+        // 30/09/2026). La découpe du système est levée, et un masque la
+        // remplace : aux bords de la bande à gauche et à droite — le tiroir
+        // fermé reste caché —, avec de la marge en haut et en bas.
+        .scrollClipDisabled()
+        .mask {
+            Rectangle().padding(.vertical, -Self.verticalOverhang)
+        }
         // La carte de l'accueil est un `Button` : dans une bande qui défile, le
         // système ne le déclenche pas au bout d'un glissé, sans rien à régler.
     }
+
+    /// Ce qu'une carte peut faire dépasser au-dessus et au-dessous d'elle sans
+    /// être rognée : son scotch, son ombre.
+    private static var verticalOverhang: CGFloat { MemoBookSpacing.m }
 
     // MARK: Le tiroir
 

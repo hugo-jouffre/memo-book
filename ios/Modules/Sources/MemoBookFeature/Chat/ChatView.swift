@@ -157,14 +157,10 @@ public struct ChatView: View {
     /// soixante points trop bas.
     @State private var headerBottom: CGFloat = 0
 
-    /// Le haut du contenu dans l'espace du fil, à la dernière mesure. `nil`
-    /// avant la première : la première mesure n'est pas un mouvement.
-    @State private var lastContentTop: CGFloat?
-
-    /// De combien on a remonté (vers les anciens messages) sans redescendre,
-    /// et l'inverse. Un changement de sens remet l'autre compteur à zéro.
-    @State private var scrolledUp: CGFloat = 0
-    @State private var scrolledDown: CGFloat = 0
+    /// Ce que le défilement a parcouru — voir ``ChatScrollTracker``. Un
+    /// objet **non observé** gardé par `@State` : ses compteurs changent à
+    /// chaque image de défilement, et rien à l'écran n'en dépend directement.
+    @State private var scroll = ChatScrollTracker()
 
     /// Les seuils de la bannière — voir ``showsPreviewBanner``.
     ///
@@ -271,13 +267,17 @@ public struct ChatView: View {
                 // message prend la place du décalage dans la même image — voir
                 // ``launch(_:from:)``.
                 .offset(y: -(flight?.lift ?? 0))
-                // De combien le fil a défilé, lu sur le haut de son contenu.
-                // Un `GeometryReader` en fond, et non `onScrollGeometryChange`
-                // : celui-là est iOS 18, l'app cible iOS 17.
-                .background {
-                    GeometryReader { proxy in
-                        let top = proxy.frame(in: .named(Self.scrollSpace)).minY
-                        Color.clear.onChange(of: top) { _, value in trackScroll(to: value) }
+                // De combien le fil a défilé, lu sur l'`UIScrollView` et non
+                // par un `GeometryReader` : celui-là faisait boucler la liste
+                // paresseuse sur un iPhone SE — voir ``brandScrollOffset(_:)``.
+                // Seul le doigt compte : la liste qui se cale en bas à
+                // l'ouverture remontait d'assez pour rappeler la bannière, qui
+                // ne repartait plus.
+                .brandScrollOffset { top, byUser in
+                    if byUser {
+                        trackScroll(to: top)
+                    } else {
+                        scroll.lastContentTop = top
                     }
                 }
             }
@@ -407,11 +407,13 @@ public struct ChatView: View {
                 let origin = proxy.frame(in: .global).origin
                 // La place du prochain message au bas du fil : sous elle,
                 // l'espacement des bulles, le repère d'un point et la marge
-                // du fil.
+                // du fil. La bulle se centre sur sa **ligne**, qui ne descend
+                // pas sous la hauteur de ses boutons d'action.
+                let row = max(flight.size.height, MemoBookSpacing.minimumTapTarget)
                 let landing = CGPoint(
                     x: proxy.size.width - MemoBookSpacing.snug - flight.size.width / 2,
                     y: footerTop - origin.y - MemoBookSpacing.s - 1 - ChatMetrics.messageSpacing
-                        - flight.size.height / 2
+                        - row / 2
                 )
                 let start = CGPoint(
                     x: flight.from.midX - origin.x,
@@ -466,18 +468,25 @@ public struct ChatView: View {
             // Un tour de boucle pour que la bulle en vol soit mesurée et
             // posée sur la puce avant de partir.
             try? await Task.sleep(for: .milliseconds(30))
-            withAnimation(.smooth(duration: 0.5)) {
-                flight?.progress = 1
-                if lifts, let size = flight?.size {
-                    flight?.lift = size.height + ChatMetrics.messageSpacing
+            // **Le creux s'ouvre avant que la bulle arrive** (Hugo,
+            // 30/09/2026 : « pas suffisamment tôt »). Il se lève en un quart
+            // de seconde, vif, pendant que la bulle part doucement et met une
+            // demi-seconde : elle trouve toujours la place faite. Et il prend
+            // la hauteur d'une **ligne** du fil, pas celle de la bulle — la
+            // ligne ne descend jamais sous ses boutons d'action.
+            if lifts, let size = flight?.size {
+                withAnimation(.snappy(duration: 0.25)) {
+                    flight?.lift = max(size.height, MemoBookSpacing.minimumTapTarget)
+                        + ChatMetrics.messageSpacing
                 }
             }
+            withAnimation(.smooth(duration: 0.5)) { flight?.progress = 1 }
             try? await Task.sleep(for: .milliseconds(480))
             // L'échange, sans animation à lui : le fil retombe de ce qu'il
             // s'était levé au moment où le vrai message l'agrandit d'autant —
-            // l'ancre du bas le garde épinglé —, et la puce s'efface. Seule la
-            // barre bouge encore : elle perd ses suggestions pendant que MEMO
-            // répond, et le fil se tasse d'autant (T207).
+            // l'ancre du bas le garde épinglé —, et la puce s'efface. La barre,
+            // elle, garde la place de ses suggestions pendant que MEMO répond
+            // (``ChatModel/reservesSuggestionRail``) : rien ne se tasse.
             var swap = Transaction()
             swap.disablesAnimations = true
             withTransaction(swap) {
@@ -503,21 +512,21 @@ public struct ChatView: View {
     /// remet l'autre compteur à zéro, pour qu'un tremblement du doigt ne
     /// compte pas.
     private func trackScroll(to top: CGFloat) {
-        defer { lastContentTop = top }
-        guard let previous = lastContentTop else { return }
+        defer { scroll.lastContentTop = top }
+        guard let previous = scroll.lastContentTop else { return }
 
         let delta = top - previous
         if delta > 0 {
-            scrolledDown = 0
-            scrolledUp += delta
+            scroll.scrolledDown = 0
+            scroll.scrolledUp += delta
             // On remonte : elle vient, et le délai repart de zéro tant que le
             // geste dure. C'est ce qui la fait **rester** pendant qu'on
             // remonte, au lieu de repartir au milieu du mouvement.
-            if scrolledUp >= Self.bannerRevealDistance { revealBanner() }
+            if scroll.scrolledUp >= Self.bannerRevealDistance { revealBanner() }
         } else if delta < 0 {
-            scrolledUp = 0
-            scrolledDown -= delta
-            if scrolledDown >= Self.bannerDismissDistance { hideBanner() }
+            scroll.scrolledUp = 0
+            scroll.scrolledDown -= delta
+            if scroll.scrolledDown >= Self.bannerDismissDistance { hideBanner() }
         }
     }
 
@@ -527,10 +536,18 @@ public struct ChatView: View {
     ///   ``bannerLinger``. Vrai **à l'arrivée seulement** : c'est une
     ///   présentation, pas une invitation qu'on garde sous les yeux. Rappelée
     ///   au doigt, elle attend qu'on redescende.
+    ///
+    /// ⚠️ **N'écrit que ce qui change.** Elle est appelée à chaque image d'une
+    /// remontée : réécrire la même valeur dans un `@State` à chaque fois
+    /// redessinait tout le fil, et sur un iPhone SE la liste paresseuse
+    /// bougeait d'un cheveu en retour — une boucle, l'app à 100 % d'un cœur
+    /// conversation ouverte et personne ne la touchant (recette du 30/09/2026).
     private func revealBanner(withdrawing: Bool = false) {
-        showsPreviewBanner = true
-        bannerLingerTask?.cancel()
-        bannerLingerTask = nil
+        if !showsPreviewBanner { showsPreviewBanner = true }
+        if bannerLingerTask != nil {
+            bannerLingerTask?.cancel()
+            bannerLingerTask = nil
+        }
 
         guard withdrawing else { return }
         bannerLingerTask = Task {
@@ -541,9 +558,11 @@ public struct ChatView: View {
     }
 
     private func hideBanner() {
-        bannerLingerTask?.cancel()
-        bannerLingerTask = nil
-        showsPreviewBanner = false
+        if bannerLingerTask != nil {
+            bannerLingerTask?.cancel()
+            bannerLingerTask = nil
+        }
+        if showsPreviewBanner { showsPreviewBanner = false }
     }
 
     private func header(_ thread: ChatThread) -> some View {
@@ -672,7 +691,12 @@ public struct ChatView: View {
     }
 
     private func scrollToBottom(_ proxy: ScrollViewProxy) {
-        withAnimation(reduceMotion ? nil : .smooth(duration: 0.3)) {
+        // Quand une puce vient d'atterrir, le fil est **déjà** à sa place : le
+        // décalage qui l'avait levé retombe dans l'image où le vrai message
+        // arrive. Animer ce défilement-là le faisait plonger de la hauteur de
+        // la bulle, puis remonter en 0,3 s (vu en vidéo, 30/09/2026).
+        let landing = flight?.hasLanded == true
+        withAnimation(reduceMotion || landing ? nil : .smooth(duration: 0.3)) {
             proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
         }
     }
@@ -788,6 +812,17 @@ public enum ChatIntent: Sendable, Hashable {
 }
 
 /// Une puce de suggestion en vol vers le fil — voir ``ChatView/launch(_:from:)``.
+/// Les compteurs du défilement de la conversation : de combien on a remonté
+/// ou redescendu sans changer de sens, depuis le haut du contenu mesuré en
+/// dernier. Une classe **sans observation** : les écrire ne redessine rien —
+/// seule la bannière qu'ils décident de montrer est un état de l'écran.
+final class ChatScrollTracker {
+    /// `nil` avant la première mesure : la première n'est pas un mouvement.
+    var lastContentTop: CGFloat?
+    var scrolledUp: CGFloat = 0
+    var scrolledDown: CGFloat = 0
+}
+
 struct SuggestionFlight: Equatable {
     let suggestion: ChatSuggestion
     /// Le cadre de la puce au départ, en coordonnées globales.
