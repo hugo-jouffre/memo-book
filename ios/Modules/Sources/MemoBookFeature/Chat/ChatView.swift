@@ -227,6 +227,8 @@ public struct ChatView: View {
                 LazyVStack(spacing: ChatMetrics.messageSpacing) {
                     notices
 
+                    ChatPrivacyNote()
+
                     if thread.isEmpty, let greeting = thread.greeting {
                         ChatGreetingView(greeting: greeting)
                     }
