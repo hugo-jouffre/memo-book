@@ -276,9 +276,16 @@ export class DisabledPushSender implements PushSender {
 /**
  * Le contenu d'un `.p8` tel qu'une variable d'environnement le rend : les
  * retours à la ligne écrits `\n` par Railway redeviennent de vrais retours.
+ *
+ * Et une clé collée **sans ses lignes d'en-tête** — les quatre lignes du
+ * milieu seulement, vu sur Railway le 02/10/2026 — retrouve son armure PEM :
+ * sans elle, `importPKCS8` ne la lit pas et rien ne part.
  */
 export function normalizePrivateKey(raw: string): string {
-  return raw.includes("\\n") ? raw.replace(/\\n/g, "\n").trim() : raw.trim();
+  const key = raw.includes("\\n") ? raw.replace(/\\n/g, "\n").trim() : raw.trim();
+  if (key === "" || key.includes("-----BEGIN")) return key;
+  const body = key.replace(/\s+/g, "").match(/.{1,64}/g)?.join("\n") ?? "";
+  return `-----BEGIN PRIVATE KEY-----\n${body}\n-----END PRIVATE KEY-----`;
 }
 
 export function createPushSender(env: Env, logger: Logger): PushSender {

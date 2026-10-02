@@ -33,4 +33,14 @@ describe("la clé .p8 lue dans une variable d'environnement", () => {
     expect(decodeProtectedHeader(token)).toEqual({ alg: "ES256", kid: "ABC123DEFG" });
     expect(decodeJwt(token)).toMatchObject({ iss: "HP2A94889S" });
   });
+
+  it("rend son armure PEM à une clé collée sans ses lignes d'en-tête", () => {
+    const { privateKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
+    const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString().trim();
+    const bodyOnly = pem.split("\n").slice(1, -1).join("\n");
+
+    expect(normalizePrivateKey(bodyOnly)).toBe(pem);
+    expect(normalizePrivateKey(bodyOnly.replace(/\n/g, "\\n"))).toBe(pem);
+    expect(normalizePrivateKey("")).toBe("");
+  });
 });

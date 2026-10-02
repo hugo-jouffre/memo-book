@@ -173,7 +173,7 @@ Sur les deux services, API et worker. La liste commentée est dans
 | `S3_*` | voir ci-dessus | Sans elles, le serveur ne démarre pas en production. |
 | `APPLE_BUNDLE_ID` | `com.memobook.app` | Sans elle, « Continuer avec Apple » échoue. |
 | `GOOGLE_IOS_CLIENT_ID` | le client iOS, voir `ios/Config/Base.xcconfig` | Sans elle, « Continuer avec Google » échoue. |
-| `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_PRIVATE_KEY` | la clé `.p8` d'Apple Developer ▸ Keys | Sans elles, aucune notification ne part — la passe horaire le dit dans les logs. Voir `docs/notifications.md` § 5. |
+| `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_PRIVATE_KEY` | la clé `.p8` d'Apple Developer ▸ Keys | Sans elles, aucune notification ne part — la passe horaire le dit dans les logs. Ces trois noms exactement, sur `api` **et** `worker` ; `npm run apns:check` (via `railway run`) dit si Apple accepte la clé. Voir `docs/notifications.md` § 5. |
 
 Aujourd'hui la valeur est
 `1022603657545-ehn9lik23bgu7m9h28a01b271lft0u2h.apps.googleusercontent.com`.
