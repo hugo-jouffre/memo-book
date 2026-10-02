@@ -19,6 +19,10 @@ struct TripCreationStepContent: View {
     @Bindable var model: TripCreationModel
     var focus: FocusState<TripCreationField?>.Binding
 
+    /// Qui demande à iOS l'autorisation d'envoyer des notifications — `nil`
+    /// dans un aperçu, où aucune question système ne doit s'ouvrir.
+    @Environment(\.pushNotifications) private var pushNotifications
+
     /// Valider l'étape depuis son contenu — le rythme des relances avance dès
     /// qu'une option est choisie (Hugo, 29/09/2026), sans passer par le bouton.
     var onAdvance: () -> Void = {}
@@ -122,6 +126,12 @@ struct TripCreationStepContent: View {
     /// cerne le temps qu'on la voie cochée, puis l'étape passe à la suivante.
     /// Le bouton « Valider » reste là pour qui a déjà une option cochée en
     /// revenant en arrière.
+    ///
+    /// **C'est ici que l'app demande l'autorisation des notifications** — le
+    /// « au bon moment » de l'onboarding : on vient de dire à quel rythme on
+    /// veut être relancé, la question d'iOS en est la suite logique. Une seule
+    /// fois dans la vie de l'app : iOS ne la repose jamais. Passer l'étape ne
+    /// demande rien. Voir `docs/notifications.md`.
     private var notifications: some View {
         VStack(spacing: MemoBookSpacing.xs + 4) {
             ForEach(TripCreationStepContent.paces, id: \.self) { pace in
@@ -129,6 +139,9 @@ struct TripCreationStepContent: View {
                     model.draft.narrationPace = pace.rawValue
                     Task {
                         try? await Task.sleep(for: BrandOptionRow.lingerBeforeDismiss)
+                        // L'étape attend la réponse : la question d'iOS se
+                        // pose sur l'écran qui l'a amenée, pas sur le suivant.
+                        await pushNotifications?.requestAuthorization()
                         onAdvance()
                     }
                 } label: {

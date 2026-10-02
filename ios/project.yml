@@ -166,6 +166,16 @@ targets:
       properties:
         com.apple.developer.applesignin:
           - Default
+        # Les notifications (APNs) — `docs/notifications.md`. `development`
+        # ici : c'est ce que signe un build Xcode, dont le jeton vient du
+        # sandbox d'Apple. Une archive envoyée à App Store Connect repasse
+        # d'elle-même en `production` à l'export, avec le profil de
+        # distribution — rien à changer avant TestFlight.
+        #
+        # Comme pour Sign in with Apple, la capability « Push Notifications »
+        # doit être cochée sur l'App ID `com.memobook.app` dans le portail
+        # Apple Developer, sinon la signature automatique échoue.
+        aps-environment: development
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.memobook.app

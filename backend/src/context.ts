@@ -15,6 +15,7 @@ import { createMediaStorage, type MediaStorage } from "./services/storage.js";
 import { createStructurer, type Structurer } from "./services/structuring.js";
 import { createTranscriber, type Transcriber } from "./services/transcription.js";
 import { createAssetPublisher, type AssetPublisher } from "./services/webflow.js";
+import { createPushSender, type PushSender } from "./services/apns.js";
 
 /**
  * Toutes les dépendances du back-end, résolues une fois au démarrage. Les
@@ -45,6 +46,8 @@ export interface AppContext {
   payments: PaymentGateway;
   /** L'abonnement : vérifie ce qu'Apple signe — voir `services/appStore.ts`. */
   appStore: AppStoreVerifier;
+  /** Les notifications, par APNs — voir `services/apns.ts`. */
+  push: PushSender;
 }
 
 export interface CreateContextOptions {
@@ -87,6 +90,7 @@ export function createContext(env: Env, options: CreateContextOptions = {}): App
     renderer: createBookRenderer(env),
     payments: createPaymentGateway(env),
     appStore: createAppStoreVerifier(env),
+    push: createPushSender(env, logger),
   };
 
   const context = { ...base, ...options.overrides };

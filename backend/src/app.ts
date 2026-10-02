@@ -16,6 +16,7 @@ import { registerHealthRoutes } from "./routes/health.js";
 import { registerHomeRoutes, registerWelcomeRoutes } from "./routes/home.js";
 import { registerLocalRenderRoutes } from "./routes/localRenders.js";
 import { registerMemoRoutes } from "./routes/memos.js";
+import { registerNotificationRoutes } from "./routes/notifications.js";
 import { registerOrderRoutes } from "./routes/orders.js";
 import { registerPaymentMethodRoutes } from "./routes/paymentMethods.js";
 import { registerPasswordResetPageRoutes } from "./routes/passwordResetPage.js";
@@ -141,6 +142,7 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
     registerWalletRoutes(accountRoutes, context);
     registerAppStoreRoutes(accountRoutes, context);
     registerPaymentMethodRoutes(accountRoutes, context);
+    registerNotificationRoutes(accountRoutes, context);
   });
 
   // Uniquement en mode de rendu local : sert les PDF produits sur le disque.

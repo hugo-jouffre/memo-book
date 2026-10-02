@@ -609,6 +609,16 @@ public enum BookCopy {
         /// quatre alertes restent lisibles, mais aucune ne partira.
         public static let mutedNotice =
             "Les notifications de ce voyage sont coupées : ces alertes reprendront quand tu les rallumeras."
+
+        /// Ce que la feuille dit quand iOS refuse tout — la personne a dit non
+        /// à la question du système, ou a tout coupé dans les Réglages. Les
+        /// alertes s'enregistrent, mais aucune n'arrivera.
+        ///
+        /// ⚠️ **Pas dans la maquette** : la feuille `3023:15042` ne dessine que
+        /// les quatre cartes. Texte à relire par Clara.
+        public static let systemDeniedNotice =
+            "Les notifications de MemoBook sont coupées dans les réglages de ton iPhone : aucune de ces alertes ne t’arrivera."
+        public static let openSettings = "Ouvrir les réglages"
     }
 
     /// « Thème de l’aventure » — `3443:9937`.

@@ -18,6 +18,7 @@
     "smoke": "tsx test/smoke.ts",
     "stripe:e2e": "tsx --env-file=.env scripts/stripe-e2e.ts",
     "stripe:gateway-check": "tsx --env-file=.env scripts/stripe-gateway-check.ts",
+    "apns:check": "tsx scripts/apns-check.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
