@@ -27,6 +27,12 @@ MemoBook Generator/server.mjs
 MemoBook Generator/public
 MemoBook Generator/*.md
 
+# Les exports Figma des aperçus de personnalisation : 146 Mo que le serveur ne
+# lit jamais. L'app les reçoit du bucket public, réduits — voir
+# `backend/scripts/customisation-previews.ts`. Un joker plutôt que le nom :
+# il porte une cédille et une espace.
+assets/illustrations/aper*
+
 # Sorties de rendu local et d'outillage.
 backend/.render-out
 backend/test

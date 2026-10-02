@@ -79,6 +79,61 @@ l'URL CDN.
 Le fichier reste ici pour qu'on sache ce qui existe et qu'on puisse le
 régénérer ; l'`url` est ce que l'agent met dans le JSON du carnet.
 
+## `assets/illustrations/aperçu personnalisation/` — l'aperçu de l'écran « Personnalisations »
+
+200 exports Figma et une image de repli, ~800 Ko pièce. **Ce sont les sources,
+pas ce que l'app affiche.** Quelle image pour quels réglages :
+`docs/apercu-personnalisation.md`. Ici, comment elles arrivent sur le
+téléphone.
+
+```bash
+cd backend
+npm run previews:build     # prépare dans .previews-out/, ne publie rien
+npm run previews:publish   # publie ce qui manque, puis le manifeste
+```
+
+La chaîne (`backend/scripts/customisation-previews.ts`) recale chaque export
+sur le centre de ses pages, le réduit à **900×840** (~300 pt de large à
+l'écran, en @3x) et l'encode en **WebP** avec sa transparence : ~110 Ko au
+lieu de 800. Toutes les images ont la même
+taille et les pages au même endroit, au demi-pixel près : l'aperçu ne saute
+pas quand un curseur bouge.
+
+Le manifeste en ligne, celui que l'app lit :
+`https://pjmetjdnajskijoljulc.supabase.co/storage/v1/object/public/memobook-public/apercus/manifest.json`.
+
+Elles partent dans le bucket Supabase **public** `memobook-public`, sous
+`apercus/`, à côté des images d'e-mail, derrière le CDN de Supabase. Jamais
+dans `memobook-media`, qui est privé et porte les médias des voyageurs.
+
+| Objet | Nom | Cache |
+|---|---|---|
+| Une image | empreinte de sa source et de la recette, `<hash>.webp` | un an, immuable |
+| Le manifeste | `apercus/manifest.json` | cinq minutes |
+
+Le nom d'une image ne change que si sa source ou la recette change, et un nom
+déjà en ligne n'est pas renvoyé : **relancer la chaîne sur des sources
+inchangées ne publie rien.** Rien n'est jamais supprimé du bucket.
+
+**`assets/illustrations/apercus-personnalisation.manifest.json` est le
+contrat du sélecteur**, publié tel quel en ligne. Il vit à côté du dossier et
+non dedans : le dossier ne contient que des aperçus. Une entrée
+par aperçu, dans les noms de `BookCustomisation` (`rulesEnabled`,
+`photoTextRatio`, `funFactsEnabled`, `decorationQuota`) et l'identifiant de
+`BookFontCombo` (`fontCombo`) : la faute « Hellelujah » des noms Figma ne sort
+pas du script. Chaque `file` se résout contre l'adresse du manifeste ; une
+combinaison absente prend `fallback`. `width` et `height` permettent de
+réserver la place avant que l'image arrive.
+
+**Ajouter un aperçu** : déposer le PNG, nommé comme les autres, lancer
+`npm run previews:publish`, commiter le manifeste. Aucun code à toucher,
+sauf pour un assortiment typographique nouveau (`FONT_COMBOS` dans le
+script). Un PNG déposé sans relancer la chaîne fait échouer la CI back-end
+(`test/customisationPreviews.test.ts`).
+
+Le dossier est exclu de l'image Docker du serveur (`.dockerignore`) : le
+back-end ne le lit pas.
+
 ## `assets/textures/`
 
 Grains de papier, scotch, papiers déchirés. Même logique que les illustrations.
