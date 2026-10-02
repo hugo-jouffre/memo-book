@@ -176,13 +176,6 @@ ouvre l'écran.
 | « Arrêt au milieu du userflow : ?? » | Les deux cas couverts suffisent : carnet arrêté, carnet terminé pas commandé | `notificationPlanner.ts` |
 | « Rarement », quatrième réponse de la feuille | On garde **les rythmes de l'app** — ceux des réglages du voyage, plus nombreux que ceux de la création ; `rarely` n'est plus lu | `DECLARED_SCORE`, `notificationRhythm.ts` |
 | Nouveau récit, résumé hebdomadaire | **Créés**, et chacun doublé d'une bulle de MEMO dans le fil du voyage | `newStoryText`, `weeklyDigestText`, `postToThread` |
-
-**Choisis en les créant, à valider** :
-
-- **Nouveau récit au rythme soutenu seulement.** Il suit chaque récit d'un
-  co-voyageur ; le rythme modéré en a le résumé une fois par semaine
-  (`TIER_ALLOWS`).
-- **Le point de la semaine tous les 7 jours depuis le départ**, à 18 h, et
-  seulement si la semaine a capturé quelque chose. Un voyage de moins d'une
-  semaine n'en reçoit pas : la fin du voyage fait ce point-là.
-- **Les mots des deux bulles** (T242).
+| Qui reçoit « Nouveau récit » | Le rythme soutenu seulement ; le modéré en a le point de la semaine (validé par Hugo le 02/10/2026) | `TIER_ALLOWS` |
+| Le point de la semaine | Tous les 7 jours depuis le départ, à 18 h, si la semaine a capturé quelque chose ; aucun pour un voyage de moins d'une semaine, la fin du voyage fait ce point-là (validé le 02/10/2026) | `WEEKLY_DIGEST_EVERY_DAYS`, `notificationPlanner.ts` |
+| Les mots de « Nouveau récit », du point de la semaine et de leurs bulles | Validés tels quels le 02/10/2026 | `newStoryText`, `weeklyDigestText` |

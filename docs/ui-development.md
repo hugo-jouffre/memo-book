@@ -140,7 +140,7 @@ Voir [`notifications.md`](notifications.md) pour les règles et les choix faits.
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
-| T242 | **Les textes des notifications sont à relire** : la feuille Notion donne l'objectif et le ton, pas les mots. Ils sont tous dans `backend/src/services/notificationCopy.ts` (fin des étapes offertes, fin de voyage, relance d'écriture, nouveau récit, point de la semaine, carnet pas commandé, vacances, l'an dernier, anniversaire) — et les bulles de MEMO qui prolongent dans le fil « Nouveau récit » et « Le point de la semaine » | Notifications |
+| T242 | **Les textes des notifications sont à relire** : la feuille Notion donne l'objectif et le ton, pas les mots. Ils sont tous dans `backend/src/services/notificationCopy.ts` (fin des étapes offertes, fin de voyage, relance d'écriture, carnet pas commandé, vacances, l'an dernier, anniversaire). Ceux de « Nouveau récit » et du point de la semaine, bulles comprises, sont validés | Notifications |
 | T245 | Quand tout est coupé dans les Réglages d'iOS, la feuille « Notifications » le dit et propose « Ouvrir les réglages ». **Ni le message ni le bouton ne sont dans `3023:15042`** : à dessiner, ou à valider tels quels | Réglages — notifications |
 | T246 | La maquette dessine une bulle de MEMO « Suggestions - activer les notifs » avec un bouton « Activer notif » dans la conversation. Pas faite : l'autorisation se demande à l'étape « Notifications » de la création. La garder pour qui a passé l'étape ? | Conversation |
 
