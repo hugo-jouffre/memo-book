@@ -242,6 +242,7 @@ de son porteur précédent.
 | `src/services/apitemplate.ts` | Payload → PDF via APITemplate, et choix du moteur de rendu |
 | `src/services/bookPdf.ts` | Payload → PDF en local (Nunjucks + Chromium) |
 | `src/services/localRenderer.ts` | Le moteur local branché sur le pipeline (`RENDERER=local`) |
+| `scripts/redaction-eval.ts` | `npm run redaction:eval` — rédige un voyage entier de vrais vocaux, et compare deux versions des règles (`agents/agent-transcription.md` § 12) |
 | `scripts/render-local.ts` | La commande d'itération sur la mise en page |
 | `scripts/lint-template.ts` | Empêche le gabarit de diverger entre Jinja2 et Nunjucks |
 | `scripts/build-icons.ts` | Embarque `assets/icons/` dans le gabarit — voir `assets/README.md` |

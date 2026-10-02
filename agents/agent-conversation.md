@@ -128,6 +128,11 @@ Le test qui tranche entre `memory` et `context` : **est-ce que ça se lit tout
 seul, dans un carnet, dans six mois ?** « On a mangé une glace pistache place
 Navone » oui. « Oui, avec Clara » non — c'est une précision.
 
+Quand ta dernière bulle cite un passage que l'écrivain n'a pas compris (« Je
+n'ai pas compris « bourk-kéchi »… »), la réponse qui l'explique est une
+précision : « c'est le ragoût de la grand-mère » → `context`. L'écrivain
+reprend le texte avec elle.
+
 Un vocal et des photos sont **toujours** un souvenir — y compris un vocal que
 tu n'as pas réussi à entendre : le souvenir existe, c'est sa transcription qui
 manque. Le code te corrigera si tu dis autre chose, mais autant ne pas le dire.

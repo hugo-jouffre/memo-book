@@ -45,7 +45,7 @@ extension TravelFigures {
     /// La maquette écrit « 2.280km », collé et avec un point. On passe par le
     /// formateur du système, comme pour les euros du profil : c'est lui qui
     /// sait comment la région de l'utilisateur sépare les milliers, et l'unité
-    /// prend son espace comme le veut `agents/agent-transcription.md` § 6.
+    /// prend son espace comme le veut `agents/agent-transcription.md` § 8.6.
     /// L'écart est signalé dans la fiche écran.
     var distanceLabel: String {
         "\(distanceKilometres.formatted(.number.grouping(.automatic))) km"

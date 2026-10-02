@@ -9,7 +9,9 @@ import {
   PHOTOS_VALIDATED,
   photosToValidate,
   photosWanted,
+  validationQuestionFor,
 } from "../src/services/conversationCopy.js";
+import { FakeRedactor, type RedactionInput, type RedactionResult } from "../src/services/redaction.js";
 import { photoBudgetFor } from "../src/services/photoBudget.js";
 import {
   CONTEXT_COMPLETE,
@@ -93,16 +95,31 @@ interface ChatThreadJson {
   now: string;
 }
 
+/**
+ * Le faux écrivain, qui garde ce qu'on lui a donné et peut douter sur
+ * commande : ce que le job sait de l'étape, et ce que MEMO fait d'un doute.
+ */
+class ScriptedRedactor extends FakeRedactor {
+  doubts: string[] = [];
+  inputs: RedactionInput[] = [];
+
+  override async redact(input: RedactionInput): Promise<RedactionResult> {
+    this.inputs.push(input);
+    return { ...(await super.redact(input)), doubts: this.doubts };
+  }
+}
+
 let harness: TestHarness;
 let responder: FakeResponder;
+let redactor: ScriptedRedactor;
+let transcriber: FakeTranscriber;
 let owner: { accountId: string; authorization: string };
 
 beforeAll(async () => {
   responder = new FakeResponder();
-  harness = await createHarness({
-    transcriber: new FakeTranscriber([TRANSCRIPT, TRANSCRIPT, TRANSCRIPT]),
-    responder,
-  });
+  redactor = new ScriptedRedactor();
+  transcriber = new FakeTranscriber([TRANSCRIPT, TRANSCRIPT, TRANSCRIPT]);
+  harness = await createHarness({ transcriber, responder, redactor });
 });
 
 afterAll(async () => {
@@ -115,6 +132,8 @@ beforeEach(async () => {
   await resetDatabase(harness.prisma);
   owner = await registerAccount(harness.app, "hugo@memobook.app");
   responder.calls = 0;
+  redactor.doubts = [];
+  redactor.inputs = [];
 });
 
 async function seedTrip(ownerId: string) {
@@ -310,6 +329,31 @@ describe("parler à MEMO", () => {
     expect(responder.calls).toBe(1);
   });
 
+  it("cite dans la question ce que l'écrivain n'a pas compris", async () => {
+    const memo = await seedTrip(owner.accountId);
+    redactor.doubts = ["je tarbé"];
+    const { id } = await say(memo.id, "Le soir on a fini en boîte avec des Australiens totalement je tarbé.");
+
+    const thread = await readThread(memo.id);
+    const mine = thread.messages.find((message) => message.id === id);
+    const replies = memoBubbles(thread).filter((message) => message.seq > (mine?.seq ?? 0));
+    // Toujours une seule bulle : le doute s'y dit, il n'en ajoute pas une.
+    expect(replies.map((message) => message.body)).toEqual([
+      { kind: "text", text: validationQuestionFor(["je tarbé"]) },
+    ]);
+    expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["accept", "edit-hand", "edit-voice"]);
+  });
+
+  it("dit à l'écrivain qui raconte, et ce que le carnet sait du voyage", async () => {
+    const memo = await seedTrip(owner.accountId);
+    await say(memo.id, "Ce matin on est partis tôt pour éviter la chaleur et on a marché longtemps.");
+
+    const input = redactor.inputs.at(-1);
+    expect(input?.narrator).toEqual({ firstName: "Hugo", companions: [] });
+    expect(input?.memo.destination).toBe("Rome, Italie");
+    expect(input?.earlier).toEqual({ titles: [], funFacts: [] });
+  });
+
   it("rattache une précision au souvenir en cours, et la rédaction la relit", async () => {
     const memo = await seedTrip(owner.accountId);
     await say(memo.id, "Ce matin on est partis tôt pour éviter la chaleur et on a marché longtemps.");
@@ -354,6 +398,8 @@ describe("parler à MEMO", () => {
     expect(card?.body.kind === "transcript" && card.body.transcript.text).toContain("Bogotá");
     // La première fiche du fil est l'étape 1, et le récit porte son titre.
     expect(card?.body.kind === "transcript" && card.body.transcript.title).toBe("Retranscription étape 1");
+    // Le transcripteur a reçu les noms que le carnet connaît : qui raconte, et où.
+    expect(transcriber.hints.at(-1)).toBe("Récit de voyage de Hugo (Rome).");
     expect(card?.body.kind === "transcript" && card.body.transcript.heading).toBeTruthy();
     expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["accept", "edit-hand", "edit-voice"]);
   });
