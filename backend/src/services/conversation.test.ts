@@ -225,7 +225,7 @@ describe("les commandes et les garde-fous", () => {
     const accept = scriptedReply("accept", SUGGESTIONS.accept.label);
     expect(accept?.beats[0]?.text).toBe("C’est enregistré. Ton carnet compte une étape de plus.");
     expect(accept?.disposition).toBe("command");
-    expect(scriptedReply("transcript_edited", "")?.suggestionIds).toEqual(["dictate", "photos", "later"]);
+    expect(scriptedReply("transcript_edited", "")?.suggestionIds).toEqual(["accept", "edit-hand"]);
     expect(scriptedReply("else", "")).toBeNull();
     expect(scriptedReply(null, "")).toBeNull();
   });

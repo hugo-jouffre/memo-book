@@ -72,7 +72,7 @@ public struct BrandSwipeDrawer<Content: View>: View {
     /// Ce qu'il y a entre la bande et les bords de l'écran, à gauche et à
     /// droite — la marge de l'écran, d'ordinaire. C'est jusque-là que la carte
     /// se dessine quand elle glisse. Voir ``band``.
-    @State private var reach = HorizontalReach(
+    @State private var reach = SwipeDrawerReach(
         leading: MemoBookSpacing.screenMargin,
         trailing: MemoBookSpacing.screenMargin
     )
@@ -160,11 +160,14 @@ public struct BrandSwipeDrawer<Content: View>: View {
         // droite. Le tiroir fermé n'a pas besoin de la découpe pour rester
         // caché : il s'efface tant qu'on n'a pas tiré — voir ``drawer``.
         .scrollClipDisabled()
-        .onGeometryChange(for: HorizontalReach.self) { proxy in
+        .onGeometryChange(for: SwipeDrawerReach.self) { [screenWidth = DeviceScreen.width] proxy in
+            // La largeur de l'écran est lue **ici, sur le fil principal**, et
+            // passée par valeur : la mesure, elle, ne tourne pas sur le fil
+            // principal, et `DeviceScreen` y est isolé.
             let frame = proxy.frame(in: .global)
-            return HorizontalReach(
+            return SwipeDrawerReach(
                 leading: max(0, frame.minX.rounded()),
-                trailing: max(0, (DeviceScreen.width - frame.maxX).rounded())
+                trailing: max(0, (screenWidth - frame.maxX).rounded())
             )
         } action: { reach = $0 }
         .mask {
@@ -180,14 +183,6 @@ public struct BrandSwipeDrawer<Content: View>: View {
     /// Ce qu'une carte peut faire dépasser au-dessus et au-dessous d'elle sans
     /// être rognée : son scotch, son ombre.
     private static var verticalOverhang: CGFloat { MemoBookSpacing.m }
-
-    /// La place libre à gauche et à droite de la bande, jusqu'aux bords de
-    /// l'écran. Lue sur l'axe horizontal seulement : faire défiler l'accueil
-    /// ne la change pas, et ne réécrit donc rien.
-    private struct HorizontalReach: Equatable {
-        let leading: CGFloat
-        let trailing: CGFloat
-    }
 
     // MARK: Le tiroir
 
@@ -273,4 +268,17 @@ public struct BrandSwipeDrawer<Content: View>: View {
     .padding(MemoBookSpacing.screenMargin)
     .background(MemoBookColor.background)
     .environment(\.colorScheme, .light)
+}
+
+/// La place libre à gauche et à droite de la bande, jusqu'aux bords de
+/// l'écran. Lue sur l'axe horizontal seulement : faire défiler l'accueil ne la
+/// change pas, et ne réécrit donc rien.
+///
+/// **Hors de ``BrandSwipeDrawer``**, et pas pour l'ordre : imbriqué dans un type
+/// générique, le nommer dans la mesure de `onGeometryChange` — qui ne tourne
+/// pas sur le fil principal — y emportait `Content.Type`, que Swift 6 refuse de
+/// voir traverser.
+private struct SwipeDrawerReach: Equatable {
+    let leading: CGFloat
+    let trailing: CGFloat
 }

@@ -4,7 +4,7 @@ import {
   GREETING_MESSAGE,
   SUGGESTION_SETS,
   TRANSCRIPT_FOOTNOTE,
-  TRANSCRIPT_TITLE,
+  transcriptTitle,
   greetingTitle,
   suggestionsFor,
   type Suggestion,
@@ -115,9 +115,21 @@ export interface SerializeMessageOptions {
   /** Le fil est-il à plusieurs ? Seul, personne n'a besoin d'une légende. */
   showsAuthors: boolean;
   publicBaseUrl: string;
+  /** Le numéro d'étape de chaque fiche, par identifiant de message — ``stepNumbersOf``. */
+  stepNumbers?: ReadonlyMap<string, number>;
 }
 
-function serializeBody(message: ChatMessageRow, publicBaseUrl: string) {
+/**
+ * « Retranscription étape N » : une fiche par souvenir, une étape par
+ * souvenir — la N-ième fiche du fil est l'étape N. Calculé sur le fil entier,
+ * jamais sur une page de messages.
+ */
+export function stepNumbersOf(messages: readonly Pick<ChatMessageRow, "id" | "kind" | "seq">[]): Map<string, number> {
+  const cards = messages.filter((message) => message.kind === "transcript").sort((a, b) => a.seq - b.seq);
+  return new Map(cards.map((card, index) => [card.id, index + 1]));
+}
+
+function serializeBody(message: ChatMessageRow, publicBaseUrl: string, stepNumbers?: ReadonlyMap<string, number>) {
   switch (message.kind) {
     case "text":
       return { kind: "text" as const, text: message.text ?? "" };
@@ -159,7 +171,9 @@ function serializeBody(message: ChatMessageRow, publicBaseUrl: string) {
       return {
         kind: "transcript" as const,
         transcript: {
-          title: TRANSCRIPT_TITLE,
+          title: transcriptTitle(stepNumbers?.get(message.id) ?? null),
+          // Le titre que la rédaction a donné au récit — celui de l'étape dans le carnet.
+          heading: phase === "ready" || phase === "failed" ? entry.suggestedTitle : null,
           capturedAt: entry.capturedAt.toISOString(),
           placeLabel: entry.placeLabel,
           duration: entry.media?.durationSeconds ?? null,
@@ -184,7 +198,7 @@ function serializeBody(message: ChatMessageRow, publicBaseUrl: string) {
  * raconté. Les bulles de MEMO et les textes datent de leur écriture.
  */
 export function serializeChatMessage(message: ChatMessageRow, options: SerializeMessageOptions) {
-  const body = serializeBody(message, options.publicBaseUrl);
+  const body = serializeBody(message, options.publicBaseUrl, options.stepNumbers);
   if (!body) return null;
 
   const isOtherTraveller =
@@ -293,6 +307,7 @@ export function serializeChatThread(options: SerializeThreadOptions) {
     viewerAccountId: viewer.id,
     showsAuthors: memberCount > 1,
     publicBaseUrl: options.publicBaseUrl,
+    stepNumbers: stepNumbersOf(options.messages),
   };
 
   const messages = options.messages
@@ -364,6 +379,7 @@ export function serializeChatUpdate(options: {
     viewerAccountId: options.viewer.id,
     showsAuthors: memberCount > 1,
     publicBaseUrl: options.publicBaseUrl,
+    stepNumbers: stepNumbersOf(options.allMessages),
   };
   const pageCount =
     options.memo.pageCount > 0 ? options.memo.pageCount : options.memoryCount * 2;
@@ -394,6 +410,8 @@ export function serializeChatReceipt(options: {
   viewerAccountId: string;
   showsAuthors: boolean;
   publicBaseUrl: string;
+  /** Les fiches du fil entier (`id`, `kind`, `seq`), pour numéroter celles du reçu. */
+  cards: Pick<ChatMessageRow, "id" | "kind" | "seq">[];
   turn: ChatTurnStatus;
   now: Date;
 }) {
@@ -401,6 +419,7 @@ export function serializeChatReceipt(options: {
     viewerAccountId: options.viewerAccountId,
     showsAuthors: options.showsAuthors,
     publicBaseUrl: options.publicBaseUrl,
+    stepNumbers: stepNumbersOf(options.cards),
   };
   return {
     messages: options.written

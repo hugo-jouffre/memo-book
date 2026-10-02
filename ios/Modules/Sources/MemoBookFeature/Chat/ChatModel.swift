@@ -345,10 +345,16 @@ public final class ChatModel {
     /// Le serveur reçoit aussi son identifiant : c'est lui qui dit qu'une puce
     /// est une commande, sans modèle et sans souvenir. Seul l'import de photos
     /// n'envoie rien : on ne dit pas « j'importe des photos », on les importe.
-    public func choose(_ suggestion: ChatSuggestion, addPhotos: () -> Void) {
+    public func choose(
+        _ suggestion: ChatSuggestion,
+        addPhotos: () -> Void,
+        openPreview: () -> Void = {}
+    ) {
         switch suggestion.intent {
         case .importPhotos:
             addPhotos()
+        case .openPreview:
+            openPreview()
         case .send, .unknown:
             composer = .tools
             // « Ça me convient » vise la dernière fiche du fil : c'est elle
@@ -1147,7 +1153,7 @@ public final class ChatModel {
         let id = UUID().uuidString.lowercased()
 
         var uploads: [ChatPhotoUpload] = []
-        for (index, data) in images.prefix(4).enumerated() {
+        for (index, data) in images.prefix(ChatMetrics.visiblePhotoCount).enumerated() {
             let photoId = "\(id)-\(index)"
             guard let url = try? ChatPhotoFile.save(data, id: photoId) else { continue }
             localPhotoUrls[photoId] = url

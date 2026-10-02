@@ -14,13 +14,13 @@ import type { AppContext } from "../context.js";
  * de fin est passée hier reste `ongoing` tant que personne ne l'a rouvert. On
  * lit donc les **dates**, qui, elles, ne mentent pas.
  *
- * ⚠️ **Rien n'est annulé chez Apple.** L'abonnement passe par StoreKit, qui
- * n'est pas encore branché : ce qui s'éteint ici, c'est la ligne
- * `subscriptions` — ce que l'app lit pour savoir s'il faut remontrer l'offre.
- * Le jour où StoreKit sera là, la vraie annulation reste **un geste de
- * l'utilisateur** dans les réglages iOS : Apple ne laisse aucune app résilier à
- * la place de son client. C'est alors le webhook App Store qui fermera cette
- * ligne, et cette fonction deviendra le filet plutôt que la règle.
+ * 🚨 **Un abonnement StoreKit n'est jamais éteint ici** (01/10/2026). Apple ne
+ * laisse aucune app résilier à la place de son client : fermer la ligne
+ * pendant qu'Apple continue de prélever, c'était **faire payer quelqu'un dont
+ * le micro est fermé**. Pour lui, la fin du voyage est un **rappel** — l'accueil
+ * propose de couper le renouvellement en un geste (`subscriptionOutlivesTrip`,
+ * `appSerializers.ts`) — et c'est la notification d'Apple qui fermera la ligne.
+ * Cette passe ne touche donc plus que les autres fournisseurs.
  */
 export async function endSubscriptionsWithoutRunningTrip(
   context: AppContext,
@@ -30,7 +30,7 @@ export async function endSubscriptionsWithoutRunningTrip(
   if (running > 0) return 0;
 
   const { count } = await context.prisma.subscription.updateMany({
-    where: { accountId, status: { in: ["active", "trialing"] } },
+    where: { accountId, provider: { not: "storekit" }, status: { in: ["active", "trialing"] } },
     // `expired` et non `cancelled` : personne n'a résilié, c'est le voyage qui
     // s'est terminé. La distinction se lit dans l'historique, et elle dira un
     // jour pourquoi quelqu'un est parti.
@@ -54,7 +54,7 @@ export async function endSubscriptionsWithoutRunningTrip(
  */
 export async function sweepEndedSubscriptions(context: AppContext): Promise<number> {
   const accounts = await context.prisma.subscription.findMany({
-    where: { status: { in: ["active", "trialing"] } },
+    where: { provider: { not: "storekit" }, status: { in: ["active", "trialing"] } },
     select: { accountId: true },
     distinct: ["accountId"],
   });

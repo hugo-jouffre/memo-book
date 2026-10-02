@@ -317,6 +317,12 @@ public enum BookCopy {
         /// intitule l'invitation posée sur la page.
         public static let configureCovers = "Configurer mes couvertures"
 
+        /// Sous l'en-tête de l'aperçu, tant qu'une étape validée recompose le
+        /// carnet en fond — voir `BookPreviewModel.isRecomposing`. Léger et
+        /// temporaire : les pages déjà là restent feuilletables pendant ce
+        /// temps.
+        public static let recomposing = "On remet à jour ton carnet…"
+
         /// Ce qu'on lit dans le PDF d'attente, celui que l'app compose quand le
         /// carnet du serveur n'est pas chargé — voir `BookPreviewModel`.
         public static let placeholderPdfBody = """

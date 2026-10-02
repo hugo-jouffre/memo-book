@@ -242,6 +242,21 @@ async function seedTraveller(
       narrationPace: "Tous les 2 jours",
       prompt: "Comment ça se passe à Trastevere ?",
       members: { create: [guest] },
+      // Le contexte du voyage, posé pour voir l'intro du carnet sans repasser
+      // par tout le chat — forme de `services/tripContext.ts`.
+      tripContext: {
+        status: "complete",
+        departureCountry: "France",
+        travellerCount: 2,
+        companions: [{ name: "Clara", relation: "ma compagne" }],
+        dates: "du 26 août au 15 septembre",
+        tripType: "city trip",
+        itinerary: null,
+        occasion: null,
+        narrationMoment: "during",
+        notes: null,
+        awaiting: null,
+      },
     },
   });
 
@@ -258,6 +273,9 @@ async function seedTraveller(
         startDate: step.startDate,
         endDate: step.endDate,
         transport: step.transport,
+        // La première étape est déjà validée, pour voir les deux états (coche
+        // vs. geste de validation) sans manipulation.
+        validatedAt: step.number === 1 ? step.endDate : null,
       },
     });
 

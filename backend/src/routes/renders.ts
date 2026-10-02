@@ -1,9 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppContext } from "../context.js";
-import { JOB_NAMES, type StructureJob } from "../jobs/index.js";
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
+import { ensureRenderInProgress } from "../services/renderTrigger.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
 import { loadVisibleMemo } from "./memos.js";
 import { serializeRender } from "./serializers.js";
@@ -27,26 +27,11 @@ export function registerRenderRoutes(app: FastifyInstance, context: AppContext):
 
     // Une génération déjà en cours est renvoyée telle quelle : deux appels
     // rapprochés depuis l'app ne doivent pas produire deux PDF facturés.
-    const inFlight = await context.prisma.render.findFirst({
-      where: { memoId, status: { in: ["pending", "processing"] } },
-      orderBy: { createdAt: "desc" },
-    });
+    const { render, created } = await ensureRenderInProgress(context, memoId);
 
-    if (inFlight) {
-      return reply.code(200).send(serializeRender(inFlight));
-    }
-
-    const render = await context.prisma.render.create({ data: { memoId } });
-
-    await context.queue.publish<StructureJob>(JOB_NAMES.structure, {
-      renderId: render.id,
-    });
-
-    // 202 : accepté, le résultat arrivera de façon asynchrone.
-    const current = await context.prisma.render.findUniqueOrThrow({
-      where: { id: render.id },
-    });
-    return reply.code(202).send(serializeRender(current));
+    // 202 : accepté, le résultat arrivera de façon asynchrone. 200 quand une
+    // génération était déjà en cours — ce n'est pas une nouvelle acceptation.
+    return reply.code(created ? 202 : 200).send(serializeRender(render));
   });
 
   app.get("/v1/renders/:id", async (request) => {

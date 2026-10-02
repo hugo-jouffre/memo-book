@@ -170,6 +170,14 @@ public actor MemoBookAPIClient: MemoBookAPI {
         try await send(method: "GET", path: "/v1/trips/\(id)", credential: .session)
     }
 
+    public func validateStep(tripId: String, stepId: String) async throws -> TripDetail {
+        try await send(
+            method: "POST",
+            path: "/v1/trips/\(tripId)/steps/\(stepId)/validate",
+            credential: .session
+        )
+    }
+
     public func createTrip(_ draft: TripDraft) async throws -> CreatedTrip {
         try await send(method: "POST", path: "/v1/trips", encodableBody: draft, credential: .session)
     }
@@ -263,6 +271,23 @@ public actor MemoBookAPIClient: MemoBookAPI {
         )
     }
 
+    public func syncAppStoreTransaction(
+        signedTransaction: String,
+        memoId: String?
+    ) async throws -> TravellerProfile {
+        struct Body: Encodable {
+            let signedTransaction: String
+            let memoId: String?
+        }
+
+        return try await send(
+            method: "POST",
+            path: "/v1/subscriptions/app-store",
+            encodableBody: Body(signedTransaction: signedTransaction, memoId: memoId),
+            credential: .session
+        )
+    }
+
     public func updateProfile(_ edit: ProfileEdit) async throws -> TravellerProfile {
         try await send(
             method: "PATCH",
@@ -315,6 +340,10 @@ public actor MemoBookAPIClient: MemoBookAPI {
         // expliquer.
         sessionStore.clear()
         tokenStore.clear()
+    }
+
+    public func requestDataExport() async throws -> DataExportReceipt {
+        try await send(method: "POST", path: "/v1/accounts/me/export", credential: .session)
     }
 
     // MARK: - Carnets
@@ -595,6 +624,10 @@ public actor MemoBookAPIClient: MemoBookAPI {
         )
     }
 
+    public func bookPreview(memoId: String) async throws -> BookPreview {
+        try await send(method: "GET", path: "/v1/memos/\(memoId)/preview")
+    }
+
     public func bookShareLink(memoId: String) async throws -> URL {
         struct Response: Decodable { let url: URL }
         let response: Response = try await send(
@@ -849,14 +882,51 @@ public actor MemoBookAPIClient: MemoBookAPI {
     /// entier de centimes — le passer en texte le rendrait arrondissable.
     private struct TopUpBody: Encodable {
         let amountCents: Int
+        let stripeApiVersion: String?
     }
 
-    public func startWalletTopUp(amountCents: Int) async throws -> PaymentIntentTicket {
+    public func startWalletTopUp(
+        amountCents: Int,
+        stripeApiVersion: String?
+    ) async throws -> PaymentIntentTicket {
         try await send(
             method: "POST",
             path: "/v1/wallet/topup",
-            encodableBody: TopUpBody(amountCents: amountCents)
+            encodableBody: TopUpBody(amountCents: amountCents, stripeApiVersion: stripeApiVersion)
         )
+    }
+
+    private struct StripeVersionBody: Encodable {
+        let stripeApiVersion: String?
+    }
+
+    public func resumePrintOrderPayment(
+        orderId: String,
+        stripeApiVersion: String?
+    ) async throws -> ResumedOrderPayment {
+        try await send(
+            method: "POST",
+            path: "/v1/orders/\(orderId)/payment",
+            encodableBody: StripeVersionBody(stripeApiVersion: stripeApiVersion)
+        )
+    }
+
+    public func cancelPrintOrder(orderId: String) async throws -> PrintOrder {
+        try await send(method: "POST", path: "/v1/orders/\(orderId)/cancel")
+    }
+
+    public func paymentMethodsKey(stripeApiVersion: String) async throws -> CustomerPaymentKey {
+        try await send(
+            method: "POST",
+            path: "/v1/payments/ephemeral-key",
+            encodableBody: StripeVersionBody(stripeApiVersion: stripeApiVersion)
+        )
+    }
+
+    public func paymentMethodsSetupIntent() async throws -> String {
+        struct Response: Decodable { let clientSecret: String }
+        let response: Response = try await send(method: "POST", path: "/v1/payments/setup-intent")
+        return response.clientSecret
     }
 
     public func printOrders(memoId: String) async throws -> [PrintOrder] {

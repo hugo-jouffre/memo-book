@@ -138,11 +138,13 @@ describe("payer une commande par carte", () => {
 
   it("passe en submitted quand le paiement réussit", async () => {
     const { memo, renderId } = await printableTrip();
-    const orderId = (await placeOrder(memo.id, renderId)).json<OrderBody>().id;
+    const placed = (await placeOrder(memo.id, renderId)).json<OrderBody>();
+    const orderId = placed.id;
 
     const hook = await postWebhook("payment_intent.succeeded", {
       id: "pi_order",
-      amount: 10_000,
+      amount: placed.payment.amountCents,
+      currency: "eur",
       metadata: { orderId },
     });
     expect(hook.statusCode).toBe(200);
@@ -154,8 +156,9 @@ describe("payer une commande par carte", () => {
 
   it("rejoué, le même webhook ne repose pas la date de commande", async () => {
     const { memo, renderId } = await printableTrip();
-    const orderId = (await placeOrder(memo.id, renderId)).json<OrderBody>().id;
-    const event = { id: "pi_order", amount: 10_000, metadata: { orderId } };
+    const placed = (await placeOrder(memo.id, renderId)).json<OrderBody>();
+    const orderId = placed.id;
+    const event = { id: "pi_order", amount: placed.payment.amountCents, metadata: { orderId } };
 
     await postWebhook("payment_intent.succeeded", event);
     const first = await harness.prisma.printOrder.findUniqueOrThrow({ where: { id: orderId } });
@@ -178,11 +181,13 @@ describe("payer une commande par carte", () => {
     const intentId = created.payment.clientSecret!.split("_secret")[0];
 
     // Un `charge.refunded` ne porte pas `metadata.orderId` : il ne donne que
-    // l'intention. C'est le second chemin de résolution.
+    // l'intention. C'est le second chemin de résolution. Remboursée **en
+    // entier** : c'est ce qui annule — voir `stripeLifecycle.test.ts`.
     const hook = await postWebhook("charge.refunded", {
       id: "ch_1",
       payment_intent: intentId,
-      amount_refunded: 10_000,
+      amount_refunded: created.payment.amountCents,
+      refunded: true,
     });
     expect(hook.statusCode).toBe(200);
 

@@ -76,7 +76,6 @@ tâches qui n'ont jamais été écrites.
 | T228 | **Le bouton imprimante des voyages passés n'apparaît jamais** : rien n'écrit `memos.isPrintable`, pas même la fin d'un rendu | Accueil |
 | T229 | La commande : « Recevoir sur WhatsApp » n'appelle pas `POST /v1/orders/:id/whatsapp` ; le lien partagé de la confirmation est un lien mort (`/c/<uuid>` au lieu du vrai lien) ; Apple Pay est proposé, mais sans identifiant marchand il n'apparaît pas dans la feuille de Stripe | Commande — confirmation, paiement |
 | T230 | **Un proche ne peut pas contribuer** : le lien de la cagnotte mène à `/c/<lien>`, mais aucune page publique ne prend un don | Cagnotte |
-| T231 | « **Exporter mes données** » ne fait rien, et aucune route d'export n'existe (le RGPD la demande) | Profil |
 | T232 | Le suivi des commandes liste aussi les commandes dont le paiement a été abandonné (`draft`), comme si elles allaient partir | Profil — suivi des commandes |
 | T233 | Un **co-voyageur voit « Supprimer le voyage »** (réglages et tiroir de l'accueil), et le serveur lui répond 404. Il manque un `canDelete`, comme `canClearConversation` | Réglages du voyage, accueil |
 | T234 | **Les notifications ne partent pas** : les préférences s'enregistrent, mais rien n'envoie (ni APNs, ni tâche), et l'appareil n'est jamais enregistré (`ensureRegistered` n'a aucun appelant). C'est aussi ce qu'attend T184 | Réglages — notifications |
@@ -145,7 +144,7 @@ Dans la PR de ce lot, vérifié en simulateur :
 | T141 | Le plafond du palier « étendu » (8 000) est écrit dans l'app ; le serveur ne rend que le palier du compte. Si le barème change, la feuille mentira jusqu'à la mise à jour. La sortie : `GET /v1/catalog` | Réglages — limites de souvenirs |
 | T164 | Les « Valider » des feuilles de personnalisation semblent inutiles à Clara. Sans bouton, la feuille se referme au choix ; avec, elle reste ouverte. À trancher avec Hugo et Paul | Personnalisations |
 | T197 | Plus rien ne mène aux couvertures depuis les personnalisations (la V3 ne dessine pas la ligne). Il reste « Configurer » sur l'aperçu PDF. À valider, ou une sixième pastille | Personnalisations |
-| T199 | Les assortiments de typographies : la V3 écrit « La recommandations de nos équipes » et propose Playfair seule là où l'app a Playfair + Alegreya (« Éditorial »). À aligner | Personnalisations — typographies |
+| T199 | Les assortiments de typographies : la V3 écrit « La recommandations de nos équipes » (sic), et l'app le recopie. Corriger en « La recommandation » ? | Personnalisations — typographies |
 
 ### Couvertures
 
@@ -180,6 +179,7 @@ Dans la PR de ce lot, vérifié en simulateur :
 | T179 | La pastille dit encore « Abonnée » pendant la semaine déjà payée après une résiliation. Juste, mais ça se lit comme un geste sans effet. Un quatrième état toucherait accueil, conversation et paywall | Profil |
 | T209 | Le genre deviné est une liste d'environ 600 prénoms ; un prénom absent (ou mixte) accorde au masculin (« Abonné »). *(Portait par erreur le numéro T170, déjà pris.)* | Profil |
 | T169 | La feuille « Genre » n'a pas de maquette | Profil |
+| T241 | La feuille « **Exporter mes données** » n'a pas de maquette : une proposition (ce que contient l'archive, l'adresse où part le lien, « M'envoyer le lien ») puis une confirmation (la coche du support, « Regarde ta boîte mail »). À dessiner, ou à valider telle quelle — mots compris | Profil |
 | T159 | Les lieux et rencontres des **Statistiques** ne comptent que les souvenirs rédigés depuis le 18/09 : les vieux voyages sont sous-comptés. Relancer une relecture générale (quelques centimes d'IA par souvenir) ? | Statistiques |
 | T161 | La feuille « Statistiques » n'a été vue que sur iPhone 17 (texte moyen et AX3) : à regarder sur SE, où elle doit défiler | Statistiques |
 | T69 | Les cartes d'options divergent (rayon 8 / 14 / 12 contre 16 / 8 / 8 sur la feuille du moyen de paiement) pour le même motif. À harmoniser dans Figma | Abonnement |
@@ -213,7 +213,7 @@ Dans la PR de ce lot, vérifié en simulateur :
 | T139 | **Rien ne s'encaisse** pour l'abonnement ni l'extension : Apple impose l'achat intégré, c'est **StoreKit** qui portera les deux (et fermera l'abonnement par son webhook, ex-T116). « Payer » du paywall pose l'abonnement sans rien prélever (ex-T126). Le prix `memobook_memory_upgrade_monthly` (3,99 €/mois) reste à créer chez Stripe | Abonnement, paywall |
 | T133 | La feuille d'ajout de carte s'ouvre **par-dessus** (paywall, profil, commande) : trois écarts à « une feuille ne s'empile pas ». Si Clara les accepte, la règle devient « une feuille ne s'empile que pour aller voir et revenir » | Paiement |
 | T140 | Le barème des souvenirs (1 par message, 10 par minute de vocal) est un ordre de grandeur : à réétalonner sur un mois de factures OpenAI et Anthropic (`services/memoryAllowance.ts`) | Back-end |
-| T204 | L'e-mail de réinitialisation arrive en indésirables : SPF, DKIM, DMARC et le sous-domaine `tx.memo-book.com` à poser chez Resend et au registrar (ex-T145) | Entrée — mot de passe oublié |
+| T204 | L'e-mail de réinitialisation arrive en indésirables : SPF, DKIM, DMARC et le sous-domaine `tx.memo-book.com` à poser chez Resend et au registrar (ex-T145). Même domaine, même sort pour l'e-mail « Tes données MemoBook sont prêtes » (01/10/2026) | Entrée — mot de passe oublié, Profil — export |
 
 ### En pause — v2
 

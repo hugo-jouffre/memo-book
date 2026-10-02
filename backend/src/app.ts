@@ -7,6 +7,8 @@ import { isDatabaseUnavailable } from "./lib/databasePool.js";
 import { HttpError } from "./lib/httpError.js";
 import { createRequireAccount, registerAuthDecorator } from "./plugins/auth.js";
 import { registerAccountRoutes } from "./routes/accounts.js";
+import { registerDataExportPageRoutes } from "./routes/dataExportPage.js";
+import { registerAppStoreRoutes, registerAppStoreWebhookRoutes } from "./routes/appStore.js";
 import { registerAuthRoutes, registerSessionRoutes } from "./routes/auth.js";
 import { registerDeviceRoutes } from "./routes/devices.js";
 import { registerEntryRoutes } from "./routes/entries.js";
@@ -15,8 +17,10 @@ import { registerHomeRoutes, registerWelcomeRoutes } from "./routes/home.js";
 import { registerLocalRenderRoutes } from "./routes/localRenders.js";
 import { registerMemoRoutes } from "./routes/memos.js";
 import { registerOrderRoutes } from "./routes/orders.js";
+import { registerPaymentMethodRoutes } from "./routes/paymentMethods.js";
 import { registerPasswordResetPageRoutes } from "./routes/passwordResetPage.js";
 import { registerAvatarRoutes, registerProfileRoutes } from "./routes/profile.js";
+import { registerStepRoutes } from "./routes/steps.js";
 import { configureAvatarUrls } from "./services/avatars.js";
 import { registerRenderRoutes } from "./routes/renders.js";
 import { registerStripeWebhookRoutes } from "./routes/stripeWebhook.js";
@@ -94,9 +98,9 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
   await registerStripeWebhookRoutes(app, context);
   registerDeviceRoutes(app, context);
 
-  // Stripe n'a pas de compte MemoBook : son webhook ne peut pas passer par
-  // l'identification. C'est la signature de l'en-tête `stripe-signature` qui
-  // l'authentifie, et elle vaut mieux qu'un jeton — elle porte sur le corps.
+  // Apple non plus : ses notifications d'abonnement sont des JWS, et c'est leur
+  // chaîne de certificats qui les authentifie.
+  registerAppStoreWebhookRoutes(app, context);
 
   // L'écran de bienvenue s'affiche avant toute connexion : sa route ne peut pas
   // en exiger une.
@@ -111,6 +115,11 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
   // sans session, c'est pour en ouvrir une.
   registerPasswordResetPageRoutes(app);
 
+  // La page du lien « Télécharger mes données », et l'archive derrière son
+  // bouton. Publiques aussi : on y arrive depuis une boîte mail, et c'est le
+  // secret du lien qui ouvre — pas une session.
+  registerDataExportPageRoutes(app, context);
+
   // Tout ce qui appartient à quelqu'un, sous **une seule** identification : la
   // session de compte. Le token d'appareil n'ouvre plus rien — un carnet a
   // toujours un propriétaire, et c'est un compte.
@@ -123,12 +132,15 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
     registerMemoRoutes(accountRoutes, context);
     registerEntryRoutes(accountRoutes, context);
     registerRenderRoutes(accountRoutes, context);
+    registerStepRoutes(accountRoutes, context);
     registerOrderRoutes(accountRoutes, context);
     registerTripSettingsRoutes(accountRoutes, context);
     registerCoverRoutes(accountRoutes, context);
     registerChatRoutes(accountRoutes, context);
     registerBookPreviewRoutes(accountRoutes, context);
     registerWalletRoutes(accountRoutes, context);
+    registerAppStoreRoutes(accountRoutes, context);
+    registerPaymentMethodRoutes(accountRoutes, context);
   });
 
   // Uniquement en mode de rendu local : sert les PDF produits sur le disque.

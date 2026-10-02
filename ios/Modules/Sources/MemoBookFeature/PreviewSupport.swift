@@ -14,7 +14,12 @@ extension AppDependencies {
     /// garantit qu'une preview Xcode n'ouvre jamais Stripe.
     @MainActor
     public static func preview() -> AppDependencies {
-        AppDependencies(api: PreviewAPI(), payments: StubPaymentPresenter())
+        AppDependencies(
+            api: PreviewAPI(),
+            payments: StubPaymentPresenter(),
+            subscriptions: StubSubscriptionStore(),
+            paymentMethods: StubPaymentMethodsPresenter()
+        )
     }
 }
 
@@ -219,6 +224,15 @@ public actor PreviewAPI: MemoBookAPI {
         return .fixture(id: id)
     }
 
+    public func validateStep(tripId: String, stepId: String) async throws -> TripDetail {
+        let detail = TripDetail.fixture(id: tripId)
+        return TripDetail(
+            trip: detail.trip,
+            prompt: detail.prompt,
+            steps: detail.steps.map { $0.id == stepId ? $0.validated() : $0 }
+        )
+    }
+
     public func gallery() async throws -> Gallery { .fixture }
 
     public func tripThemes() async throws -> [TripTheme] { TripTheme.fixtures }
@@ -296,6 +310,23 @@ public actor PreviewAPI: MemoBookAPI {
         return profile
     }
 
+    /// L'achat ouvre l'abonnement **dans le double** : rouvrir le profil doit
+    /// montrer un abonné, tenu par Apple — sans qu'aucune signature soit lue.
+    public func syncAppStoreTransaction(
+        signedTransaction: String,
+        memoId: String?
+    ) async throws -> TravellerProfile {
+        _ = (signedTransaction, memoId)
+        var profile = editedProfile ?? .fixture
+        profile.subscription.isActive = true
+        profile.subscription.cancelledAt = nil
+        profile.subscription.managedByAppStore = true
+        profile.offeredSteps = nil
+        profile.remainingSteps = nil
+        editedProfile = profile
+        return profile
+    }
+
     /// La photo reste sur le disque de l'aperçu, et le profil pointe dessus :
     /// c'est ce qui permet de voir sa photo changer sans serveur.
     public func changePassword(current: String, new: String) async throws {}
@@ -329,6 +360,12 @@ public actor PreviewAPI: MemoBookAPI {
 
     public func linkCurrentDevice() async throws {}
     public func deleteAccount() async throws {}
+
+    /// Le lien « part » à l'adresse du profil du jeu d'essai : rien ne sort du
+    /// bac à sable, et la feuille montre sa confirmation.
+    public func requestDataExport() async throws -> DataExportReceipt {
+        .fixture(email: (editedProfile ?? .fixture).email ?? "ton adresse e-mail")
+    }
 
     // MARK: - Carnets
 
@@ -602,6 +639,10 @@ public actor PreviewAPI: MemoBookAPI {
         throw APIError.server(statusCode: 404, code: "not_found", message: "Commande introuvable.")
     }
 
+    public func bookPreview(memoId: String) async throws -> BookPreview {
+        .fixture
+    }
+
     public func bookShareLink(memoId: String) async throws -> URL {
         // Les voyages du jeu d'essai de l'accueil portent le carnet du même
         // identifiant, comme sur le serveur : leur partage (la cagnotte,
@@ -675,13 +716,44 @@ public actor PreviewAPI: MemoBookAPI {
     /// Le `clientSecret` fabriqué ne monte **aucune** feuille de paiement, et
     /// c'est voulu : un aperçu ne doit pas pouvoir ouvrir Stripe, même par
     /// accident.
-    public func startWalletTopUp(amountCents: Int) async throws -> PaymentIntentTicket {
-        PaymentIntentTicket(
+    public func startWalletTopUp(
+        amountCents: Int,
+        stripeApiVersion: String?
+    ) async throws -> PaymentIntentTicket {
+        _ = stripeApiVersion
+        return PaymentIntentTicket(
             clientSecret: "pi_preview_secret",
             publishableKey: "pk_test_preview",
             amountCents: amountCents,
             currency: "eur"
         )
+    }
+
+    /// Le double n'a pas d'intention à reprendre : ses commandes naissent
+    /// payées. Il rend donc la commande, sans rien à régler.
+    public func resumePrintOrderPayment(
+        orderId: String,
+        stripeApiVersion: String?
+    ) async throws -> ResumedOrderPayment {
+        _ = stripeApiVersion
+        return ResumedOrderPayment(order: try await printOrder(id: orderId), payment: nil)
+    }
+
+    public func cancelPrintOrder(orderId: String) async throws -> PrintOrder {
+        try await printOrder(id: orderId)
+    }
+
+    public func paymentMethodsKey(stripeApiVersion: String) async throws -> CustomerPaymentKey {
+        _ = stripeApiVersion
+        return CustomerPaymentKey(
+            customerId: "cus_preview",
+            ephemeralKeySecret: "ek_test_preview",
+            publishableKey: "pk_test_preview"
+        )
+    }
+
+    public func paymentMethodsSetupIntent() async throws -> String {
+        "seti_preview_secret_preview"
     }
 
     // MARK: - La cagnotte

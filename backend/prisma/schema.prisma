@@ -271,6 +271,7 @@ model Account {
   sessions       Session[]
   devices        Device[]
   passwordResets PasswordReset[]
+  dataExports    DataExport[]
 
   ownedMemos        Memo[]             @relation("MemoOwner")
   printOrders       PrintOrder[]       @relation("PrintOrderBuyer")
@@ -305,6 +306,46 @@ model PasswordReset {
 
   @@index([accountId])
   @@map("password_resets")
+}
+
+/// « Exporter mes données » : le lien qui permet de télécharger tout ce que
+/// MemoBook garde d'un compte — RGPD, articles 15 (accès) et 20
+/// (portabilité). Voir `services/dataExport.ts`.
+///
+/// **Aucune archive n'est stockée.** L'e-mail porte un lien, et c'est en
+/// l'ouvrant que l'API compose le ZIP, à la volée, depuis la base et le
+/// stockage. Pas de copie de tout ce qu'on sait de quelqu'un qui dort sept
+/// jours dans un bucket, rien à nettoyer après, et aucune limite de taille :
+/// le plan gratuit de Supabase refuse tout fichier de plus de 50 Mo.
+///
+/// Le secret est haché comme un token de session : la base n'en connaît que
+/// l'empreinte, l'e-mail seul porte le clair. Une nouvelle demande **retire**
+/// les précédentes (`revokedAt`), comme un mot de passe oublié : un seul lien
+/// vaut à la fois, le dernier envoyé.
+model DataExport {
+  id        String  @id @default(uuid())
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  /// SHA-256 du secret envoyé — le secret en clair n'existe que dans l'e-mail.
+  tokenHash String @unique
+  /// L'adresse à laquelle le lien est parti : celle du compte au moment de la
+  /// demande. Gardée pour le support — « à quelle adresse est-ce parti ? ».
+  email     String
+
+  expiresAt DateTime
+  /// Remplacée par une demande plus récente.
+  revokedAt DateTime?
+
+  /// Combien de fois l'archive a été téléchargée, et quand pour la dernière
+  /// fois. Un lien qui a fuité se reconnaît ici ; il est aussi plafonné.
+  downloadCount    Int       @default(0)
+  lastDownloadedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([accountId, createdAt])
+  @@map("data_exports")
 }
 
 /// Le lien entre un compte et un fournisseur tiers. Un compte peut en avoir
@@ -611,17 +652,19 @@ model Memo {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  entries      Entry[]
-  renders      Render[]
-  orders       PrintOrder[]
-  members      MemoMember[]
-  steps        MemoStep[]
-  expenses     Expense[]
-  categories   MemoGalleryCategory[]
-  chatMessages ChatMessage[]
-  coverPhotos  CoverPhoto[]
+  entries                  Entry[]
+  renders                  Render[]
+  orders                   PrintOrder[]
+  members                  MemoMember[]
+  steps                    MemoStep[]
+  expenses                 Expense[]
+  categories               MemoGalleryCategory[]
+  chatMessages             ChatMessage[]
+  coverPhotos              CoverPhoto[]
   /// Les abonnements qui ont financé ce voyage — voir `Subscription.memoId`.
-  subscriptions Subscription[]
+  subscriptions            Subscription[]
+  /// Les semaines payées chez Apple pour ce voyage — voir `SubscriptionTransaction`.
+  subscriptionTransactions SubscriptionTransaction[]
 
   @@index([ownerAccountId, createdAt])
   /// La galerie lit **tous** les carnets publics, quel qu'en soit le
@@ -788,10 +831,15 @@ model MemoStep {
   /// Comment on est arrivé jusqu'ici.
   transport TripTransport?
 
+  /// « Valider cette étape » : le voyageur confirme l'étape et déclenche en
+  /// fond une nouvelle génération du carnet. Même geste qu'`Entry.validatedAt`
+  /// (« Ça me convient »), à l'échelle de l'étape.
+  validatedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  entries Entry[]
+  entries      Entry[]
   chatMessages ChatMessage[]
 
   @@unique([memoId, number])
@@ -956,6 +1004,7 @@ model Entry {
   @@index([stepId])
   @@map("entries")
 }
+
 /// Un tour de la conversation avec MEMO — ce que le voyageur a dit, ou ce que
 /// MEMO lui a répondu. `docs/conversation.md`.
 ///
@@ -1058,7 +1107,6 @@ model ChatMessage {
   @@index([entryId])
   @@map("chat_messages")
 }
-
 
 /// Un fichier stocké. `storageKey` pointe vers S3 (audio brut, photo originale),
 /// `cdnUrl` vers Webflow une fois la photo publiée — c'est cette URL publique
@@ -1237,6 +1285,12 @@ model PrintOrder {
   amountCents           Int?
   stripePaymentIntentId String? @unique
 
+  /// Ce que Stripe a rendu sur la carte, en centimes — **cumulé**, comme
+  /// `charge.amount_refunded`. Un remboursement partiel ne fait qu'écrire ici ;
+  /// seul un remboursement total annule la commande et rend la part de
+  /// cagnotte (`stripeWebhook.ts`).
+  refundedCents Int @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1316,6 +1370,17 @@ model WalletEntry {
   /// commercial ou une correction, qui ne viennent pas de Stripe.
   stripeEventId String? @unique
 
+  /// **Ce qui rend l'écriture impossible à poser deux fois**, quand elle ne
+  /// vient pas d'un événement : `order-release:<commande>` pour la part de
+  /// cagnotte rendue à une commande abandonnée, `topup:<intention>` pour une
+  /// recharge. Le webhook, le job de ménage et l'annulation par l'app peuvent
+  /// arriver ensemble sur la même commande — l'unicité en laisse passer un.
+  idempotencyKey String? @unique
+
+  /// L'intention Stripe d'où vient l'argent d'une recharge. C'est elle que
+  /// porte un `charge.refunded` : on y retrouve ce qu'il faut reprendre.
+  stripePaymentIntentId String?
+
   /// La commande que cette écriture paie ou rembourse, le cas échéant.
   printOrderId String?
   printOrder   PrintOrder? @relation(fields: [printOrderId], references: [id], onDelete: SetNull)
@@ -1323,6 +1388,7 @@ model WalletEntry {
   createdAt DateTime @default(now())
 
   @@index([accountId, createdAt])
+  @@index([stripePaymentIntentId])
   @@map("wallet_entries")
 }
 
@@ -1401,7 +1467,29 @@ model Subscription {
 
   /// La référence chez le fournisseur : abonnement Stripe, ou transaction
   /// d'origine StoreKit.
+  ///
+  /// ⚠️ **Chez Apple, elle survit aux interruptions.** Un identifiant Apple qui
+  /// se réabonne au voyage suivant garde le même `originalTransactionId` : la
+  /// ligne est **rouverte**, pas recréée — et c'est `subscription_transactions`
+  /// qui garde l'historique de chaque semaine payée.
   providerSubscriptionId String? @unique
+
+  /// Le produit App Store (`com.memobook.app.subscription.weekly`). Nul pour
+  /// une ligne qui ne vient pas de StoreKit.
+  productId         String?
+  /// Le renouvellement est-il encore armé chez Apple ? `false` dès que la
+  /// personne l'a coupé dans les réglages iOS — l'abonnement court alors
+  /// jusqu'à `renewsAt`, puis s'arrête. Nul quand on ne le sait pas.
+  autoRenews        Boolean?
+  /// `Production` ou `Sandbox` : App Review achète en sandbox **contre le
+  /// serveur de production**, et ses lignes doivent se reconnaître.
+  environment       String?
+  /// La date de signature du dernier événement Apple appliqué. Apple ne promet
+  /// aucun ordre : un événement plus ancien que celui-ci est ignoré, sinon un
+  /// renouvellement en retard rouvrirait un abonnement déjà expiré.
+  providerUpdatedAt DateTime?
+
+  transactions SubscriptionTransaction[]
 
   startedAt   DateTime  @default(now())
   renewsAt    DateTime?
@@ -1424,6 +1512,51 @@ model Subscription {
   @@index([accountId, status])
   @@index([memoId])
   @@map("subscriptions")
+}
+
+/// Une semaine payée chez Apple : l'achat, puis chaque renouvellement.
+///
+/// **Le registre de l'abonnement**, comme `wallet_entries` est celui de la
+/// cagnotte. Il existe pour deux raisons :
+///
+/// 1. **Le rejeu.** Apple renvoie une notification jusqu'à obtenir un 2xx, et
+///    l'app renvoie la même transaction à chaque lancement tant qu'elle ne l'a
+///    pas finie. `transactionId` unique : une semaine ne s'inscrit qu'une fois.
+/// 2. **La promesse « Tes abonnements sont déduits ! ».** Le cumul à retirer du
+///    prix d'un carnet se lit ici, au centime et par voyage — pas dans un
+///    nombre de semaines calculé sur des dates.
+model SubscriptionTransaction {
+  id             String       @id @default(uuid())
+  subscriptionId String
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  /// Le voyage que **cette semaine-là** finançait. `SetNull` : un voyage
+  /// supprimé n'emporte pas l'historique de facturation.
+  memoId String?
+  memo   Memo?   @relation(fields: [memoId], references: [id], onDelete: SetNull)
+
+  transactionId         String @unique
+  originalTransactionId String
+  productId             String
+
+  purchasedAt DateTime
+  expiresAt   DateTime?
+
+  /// Ce que la personne a payé, TTC, en centimes. Apple l'envoie en
+  /// millièmes (`1990` pour 1,99 €). Nul pour les transactions d'avant
+  /// iOS 16, qui ne le portaient pas.
+  priceCents Int?
+  currency   String?
+
+  environment String
+  /// Remboursée ou révoquée par Apple : la semaine ne se déduit plus.
+  revokedAt   DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([subscriptionId, purchasedAt])
+  @@index([memoId])
+  @@map("subscription_transactions")
 }
 
 /// Une photo importée pour la couverture d'un carnet (T88, 29/09/2026).

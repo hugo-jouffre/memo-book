@@ -115,6 +115,60 @@ demande ensuite ligne à ligne.
 
 ## 3. Le tour type
 
+### Le déroulé d'un souvenir — décidé par Hugo le 01/10/2026
+
+« Poser trop de questions fatigue l'utilisateur. » Un souvenir suit désormais
+un déroulé fixe, écrit par le code, sans modèle :
+
+1. **Le voyageur raconte** (vocal ou texte) → la fiche de retranscription
+   tombe. MEMO ne dit **rien d'autre** : ni reformulation, ni question sur le
+   lieu, les gens, un détail.
+2. **Le texte est prêt** (rédigé — ou brut si la rédaction a échoué) → une
+   seule bulle : « Voilà ton texte pour le carnet. Il te convient ? », avec le
+   trio de validation (§ 6). C'est le job de rédaction qui la pose
+   (`askValidation`), parce que lui seul sait quand le texte est là.
+3. **On attend la validation.** Une précision tapée entre-temps (« c'était
+   avec Clara ») reçoit « C'est noté, je reprends le texte avec ça. », le
+   texte se réécrit, et la question revient avec lui. Une correction à la main
+   reçoit l'accusé habituel et propose encore « Ça me convient ».
+4. **« Ça me convient »** → « C'est enregistré… », puis **le nombre exact de
+   photos** qui remplit l'étape : « Illustre ce souvenir avec 3 photos : c'est
+   ce qu'il faut pour remplir sa page. » Puces : importer des photos, ou
+   raconter la suite.
+5. **Les photos arrivent** → MEMO demande de les valider, et dit ce que ça
+   fait : « Si tu les valides, je crée la page de cette étape dans ton carnet,
+   et tu pourras la prévisualiser. » Puces : « Je valide mes photos », « Ajouter
+   d'autres photos ». Moins de photos que demandé : accepté sans redemander, la
+   mise en page s'adapte.
+6. **« Je valide mes photos »** → les photos sont validées et le carnet se
+   recompose en fond (`ensureRenderInProgress`, le même déclencheur que
+   « Valider cette étape »). MEMO le dit ; puces : « Voir ma page » (ouvre
+   l'aperçu, n'envoie rien — intention `open_preview`), raconter à l'oral, à
+   l'écrit. **L'étape suivante ne vient qu'ici.**
+
+**La fiche** s'intitule « Retranscription étape N » — la N-ième fiche du fil
+est l'étape N — et le récit prêt porte au-dessus de lui le titre que la
+rédaction lui a donné (`suggestedTitle`, celui de l'étape dans le carnet).
+
+**Le nombre de photos** (`backend/src/services/photoBudget.ts`) : le layout le
+plus riche en photos qui tient **tout** le texte validé, à son maximum. Un
+chiffre, jamais une fourchette.
+
+| Texte validé | Mise en page | Photos |
+|---|---|---|
+| sous S (< 200 caractères) | 1 page `layout_hero_top` | **1** |
+| S ou M (200 → 559) | 1 page `layout_collage` | **3** |
+| L ou XL (560 → 1440) | 2 pages `layout_collage` (bandeau + suite) | **6** |
+
+Le modèle ne sert plus, sur ces tours, qu'à **classer** un texte libre
+(souvenir, précision, commande). Le contexte du voyage (§ 2 bis) n'est pas
+concerné : ce n'est pas un souvenir.
+
+Ce qui suit décrit les autres tours — une question au voyageur, une réponse à
+une question sur l'app.
+
+### Les autres tours
+
 Le voyageur raconte — un vocal, un texte, des photos. MEMO répond en **trois
 phrases au plus** :
 
@@ -162,7 +216,7 @@ caractères dans le carnet.
 
 ## 5. La fiche de retranscription
 
-Après un vocal, MEMO pose une fiche « Retranscription du contexte » — date,
+Après un vocal, MEMO pose une fiche « Retranscription étape N » — date,
 lieu, durée — **tout de suite**, avant même d'avoir écouté. Elle passe par
 trois temps :
 
@@ -184,7 +238,7 @@ Sous une fiche prête, trois puces :
 
 | Puce | Ce que ça fait |
 |---|---|
-| **Ça me convient** 👌 | Le souvenir est **validé** (`validatedAt`). MEMO : « C'est enregistré. Ton carnet compte une étape de plus. » |
+| **Ça me convient** 👌 | Le souvenir est **validé** (`validatedAt`). MEMO : « C'est enregistré. Ton carnet compte une étape de plus. », puis le nombre exact de photos à ajouter (§ 3) |
 | **J'aimerais faire des modifications à la main** ✍️ | Le texte de la fiche est déjà dans le champ, qui prend toute la barre. Envoyer **corrige le souvenir** (`editedText`) : la fiche change, MEMO dit « Je te laisse la main. Ta version fait autorité sur la mienne, je n'y retouche plus. » Un texte corrigé est intouchable (ADR-007) |
 | **J'aimerais faire des modifications à l'oral** 🎙 | **Phase 2.** Aujourd'hui MEMO dit « Je t'écoute » et le vocal suivant est un **nouveau** souvenir, pas une révision. Le dire, pour que personne ne le prenne pour un bug |
 

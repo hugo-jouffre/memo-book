@@ -4,6 +4,7 @@ import type { Env } from "./env.js";
 import { InlineQueue, PgBossQueue, type JobQueue } from "./jobs/queue.js";
 import { splitPoolBudget, withConnectionLimit } from "./lib/databasePool.js";
 import { SchemaGuard } from "./lib/schemaGuard.js";
+import { createAppStoreVerifier, type AppStoreVerifier } from "./services/appStore.js";
 import { createBookRenderer, type BookRenderer } from "./services/apitemplate.js";
 import { createRedactor, type Redactor } from "./services/redaction.js";
 import { createResponder, type MemoResponder } from "./services/conversation.js";
@@ -31,7 +32,7 @@ export interface AppContext {
   storage: MediaStorage;
   /** Vérifie les jetons d'identité Apple et Google. */
   socialVerifier: SocialVerifier;
-  /** Envoie les e-mails de l'app — aujourd'hui, celui du mot de passe oublié. */
+  /** Envoie les e-mails de l'app : le mot de passe oublié, et l'export des données. */
   mailer: Mailer;
   transcriber: Transcriber;
   redactor: Redactor;
@@ -42,6 +43,8 @@ export interface AppContext {
   renderer: BookRenderer;
   /** Encaissement Stripe : carnets imprimés et cagnotte. Jamais l'abonnement. */
   payments: PaymentGateway;
+  /** L'abonnement : vérifie ce qu'Apple signe — voir `services/appStore.ts`. */
+  appStore: AppStoreVerifier;
 }
 
 export interface CreateContextOptions {
@@ -83,6 +86,7 @@ export function createContext(env: Env, options: CreateContextOptions = {}): App
     publisher: createAssetPublisher(env),
     renderer: createBookRenderer(env),
     payments: createPaymentGateway(env),
+    appStore: createAppStoreVerifier(env),
   };
 
   const context = { ...base, ...options.overrides };

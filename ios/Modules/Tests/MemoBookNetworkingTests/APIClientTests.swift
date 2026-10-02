@@ -310,6 +310,31 @@ final class APIClientTests: XCTestCase {
         XCTAssertNil(deviceStore.read())
     }
 
+    /// « Exporter mes données » part avec la session, **sans corps** : la
+    /// requête ne porte aucune adresse, le serveur n'écrit qu'à celle du
+    /// compte. La réponse dit où le lien est parti, et jusqu'à quand.
+    func testDataExportIsRequestedWithTheSessionAndNoAddress() async throws {
+        let client = makeClient()
+        respond(
+            status: 202,
+            json: """
+                {"email":"hugo@memobook.app","requestedAt":"2026-10-01T16:02:00.000Z",\
+                "expiresAt":"2026-10-08T16:02:00.000Z","alreadyRequested":false}
+                """
+        )
+
+        let receipt = try await client.requestDataExport()
+
+        let request = try XCTUnwrap(StubURLProtocol.lastRequest)
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.url?.path, "/v1/accounts/me/export")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer jeton-de-session")
+        XCTAssertNil(StubURLProtocol.lastBody)
+        XCTAssertEqual(receipt.email, "hugo@memobook.app")
+        XCTAssertEqual(receipt.expiresAt, ISO8601DateFormatter.memoBookDate(from: "2026-10-08T16:02:00.000Z"))
+        XCTAssertFalse(receipt.alreadyRequested)
+    }
+
     /// « Mot de passe oublié » part **sans** jeton : c'est parce qu'on ne peut
     /// pas entrer qu'on l'appelle. Un client sans aucune session doit donc
     /// pouvoir l'envoyer, et l'adresse voyage dans le corps.

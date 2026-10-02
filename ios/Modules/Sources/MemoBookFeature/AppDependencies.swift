@@ -33,6 +33,17 @@ public final class AppDependencies {
     /// de cagnotte se relit sans compte Stripe.
     public let payments: any PaymentPresenter
 
+    /// Qui achète l'abonnement — StoreKit, ou un double qui n'appelle personne.
+    ///
+    /// **À part de ``payments``, et pour de bon** : l'abonnement est un service
+    /// numérique, Apple impose l'achat intégré, et le faire passer par la
+    /// feuille Stripe ferait rejeter le binaire (règle 3.1.1).
+    public let subscriptions: any SubscriptionStore
+
+    /// Qui ouvre la feuille « Moyens de paiement » de Stripe, depuis le profil.
+    /// La vraie par défaut ; un aperçu passe ``StubPaymentMethodsPresenter``.
+    public let paymentMethods: any PaymentMethodsPresenter
+
     /// Ce que l'app garde du serveur sur l'appareil — voir ``ContentCache``.
     ///
     /// **Deux usages pour une seule pièce** : relire hors ligne, ce pour quoi
@@ -54,12 +65,16 @@ public final class AppDependencies {
     ///   - payments: qui ouvre la feuille de paiement. La vraie par défaut ;
     ///     une preview Xcode — et le lancement `-previewSignedIn` — passe
     ///     ``StubPaymentPresenter``, qui n'appelle personne.
+    ///   - subscriptions: qui achète l'abonnement. StoreKit par défaut ; un
+    ///     aperçu passe ``StubSubscriptionStore``.
     public init(
         api: any MemoBookAPI,
         connectivity: Connectivity = .system,
         pendingRecordings: PendingRecordingStore = .inLibrary(),
         pendingTrips: PendingTripStore = .inLibrary(),
         payments: (any PaymentPresenter)? = nil,
+        subscriptions: (any SubscriptionStore)? = nil,
+        paymentMethods: (any PaymentMethodsPresenter)? = nil,
     ) {
         self.api = api
         // La vraie feuille Stripe par défaut ; un aperçu passe la sienne.
@@ -67,6 +82,8 @@ public final class AppDependencies {
         // pas posé : la feuille montre alors les cartes seules, au lieu d'un
         // bouton Apple Pay qui échouerait au moment de payer.
         self.payments = payments ?? StripePaymentSheetPresenter()
+        self.subscriptions = subscriptions ?? StoreKitSubscriptionStore()
+        self.paymentMethods = paymentMethods ?? StripeCustomerSheetPresenter()
         // Tout ce qu'on dit part par la file, et la file parle à la
         // conversation (`POST /v1/trips/:id/chat`) : le vocal de l'accueil est
         // un tour comme un autre, avec l'identifiant de sa bulle. La durée
@@ -88,6 +105,64 @@ public final class AppDependencies {
         // de savoir qu'on est hors ligne **avant** de dessiner l'accueil, et de
         // repartir avec ce qu'un lancement précédent avait laissé en file.
         outbox.start()
+
+        // **Au lancement, et pas à l'ouverture du paywall** : un renouvellement,
+        // une validation parentale ou un remboursement arrivent quand ils
+        // veulent, et StoreKit garde ceux qu'on n'écoute pas.
+        self.subscriptions.startListening(deliver: Self.deliveringTransaction(to: api, memoId: nil))
+    }
+
+    /// Remet une transaction App Store au serveur — voir
+    /// ``MemoBookAPI/syncAppStoreTransaction(signedTransaction:memoId:)``.
+    ///
+    /// **Un refus définitif devient ``TransactionRefused``** : un achat fait
+    /// depuis un autre compte MemoBook (403), un abonnement déjà rattaché
+    /// ailleurs (409), une transaction que le serveur ne sait pas vérifier
+    /// (400 — un achat Xcode envoyé à la production). StoreKit la finit alors,
+    /// et l'écran affiche le message du serveur au lieu d'un abonnement qui
+    /// n'existe pas. Tout le reste — pas de réseau, pas de session, une panne —
+    /// lève tel quel, et la transaction reste ouverte pour la prochaine fois.
+    nonisolated static func deliveringTransaction(
+        to api: any MemoBookAPI,
+        memoId: String?
+    ) -> TransactionDelivery {
+        { signed in
+            do {
+                _ = try await api.syncAppStoreTransaction(signedTransaction: signed.jws, memoId: memoId)
+            } catch APIError.server(let statusCode, _, let message)
+                where [400, 403, 409].contains(statusCode)
+            {
+                throw TransactionRefused(message: message)
+            }
+        }
+    }
+
+    /// Remet au serveur ce que StoreKit garde encore — à la connexion : un
+    /// renouvellement arrivé pendant que personne n'était connecté n'a pas pu
+    /// partir.
+    func deliverUnfinishedTransactions() async {
+        await subscriptions.deliverUnfinished(deliver: Self.deliveringTransaction(to: api, memoId: nil))
+    }
+
+    /// Ce que l'offre sait faire de l'App Store, pour **ce** compte — posé par
+    /// `RootView` une fois connecté. L'identifiant du compte devient
+    /// l'`appAccountToken` de l'achat : c'est lui qui permet au serveur de
+    /// rattacher chaque renouvellement sans que l'app soit ouverte.
+    func subscriptionPurchase(accountId: String) -> SubscriptionPurchase {
+        let token = UUID(uuidString: accountId)
+        return SubscriptionPurchase(
+            displayPrice: { [subscriptions] in await subscriptions.displayPrice() },
+            purchase: { [subscriptions, api] memoId in
+                await subscriptions.purchase(
+                    appAccountToken: token,
+                    deliver: Self.deliveringTransaction(to: api, memoId: memoId)
+                )
+            },
+            restore: { [subscriptions, api] in
+                try await subscriptions.restore(deliver: Self.deliveringTransaction(to: api, memoId: nil))
+            },
+            willAutoRenew: { [subscriptions] in await subscriptions.willAutoRenew() }
+        )
     }
 
     public convenience init(configuration: APIConfiguration = .localDevelopment) {
@@ -191,7 +266,8 @@ public final class AppDependencies {
         return HomeModel(
             source: { [outbox] in
                 let feed = try await read()
-                return await outbox.mergingLocalTrips(into: feed)
+                // Sur le fil principal, comme la file : rien à attendre.
+                return outbox.mergingLocalTrips(into: feed)
             },
             cached: { [content, outbox] in
                 guard let stored = await content.read(.home, as: HomeFeed.self) else { return nil }
@@ -264,6 +340,9 @@ public final class AppDependencies {
             cancelSubscription: { [api] reason in
                 try await api.cancelSubscription(reason: reason)
             },
+            // « Exporter mes données » : le lien part par e-mail, l'archive se
+            // compose à son ouverture — voir ``DataExportSheet``.
+            exportData: { [api] in try await api.requestDataExport() },
             cached: { [content] in await content.read(.profile, as: TravellerProfile.self) }
         )
     }
@@ -299,14 +378,15 @@ public final class AppDependencies {
                 do {
                     return try await read()
                 } catch {
-                    guard let waiting = await outbox.localTrip(id) else { throw error }
+                    guard let waiting = outbox.localTrip(id) else { throw error }
                     return TripDetail(trip: waiting.trip)
                 }
             },
             cached: { [content, outbox] in
                 if let stored = await content.read(.trip(id), as: TripDetail.self) { return stored }
                 return await outbox.localTrip(id).map { TripDetail(trip: $0.trip) }
-            }
+            },
+            validateStep: { [api] tripId, stepId in try await api.validateStep(tripId: tripId, stepId: stepId) }
         )
     }
 
@@ -469,23 +549,14 @@ public final class AppDependencies {
         )
     }
 
-    /// L'aperçu du carnet.
-    ///
-    /// ⚠️ **Sur le jeu d'essai** : `GET /v1/memos/:id/preview` et
-    /// `POST /v1/memos/:id/share-link` restent à écrire. Les routes de rendu
-    /// (`POST /v1/memos/:id/renders`, `GET /v1/renders/:id`) existent, elles,
-    /// mais rendent un ``Render`` et non un ``BookPreview`` — il manque le
-    /// titre du carnet, l'extrait et l'état des couvertures, que l'écran
-    /// affiche tous les trois.
-    ///
-    /// **« Partager ma cagnotte », lui, parle au serveur** (26/09/2026) : le
-    /// titre vient de la cagnotte (`GET /v1/wallet`) et le lien de
-    /// `POST /v1/memos/:id/share-link`, qui existent. Le partager depuis le jeu
-    /// d'essai aurait envoyé « Rome et la Dolce Vita » aux proches de tout le
-    /// monde.
+    /// L'aperçu du carnet, branché sur le serveur (26/09/2026 pour la cagnotte,
+    /// 30/09/2026 pour le reste) : `GET /v1/memos/:id/preview` pour suivre la
+    /// composition, `POST /v1/memos/:id/share-link` pour le lien de partage.
     public func bookPreviewModel(memoId: String) -> BookPreviewModel {
         BookPreviewModel(
             memoId: memoId,
+            source: { [api] id in try await api.bookPreview(memoId: id) },
+            requestLink: { [api] id in try await api.bookShareLink(memoId: id) },
             walletShare: { [api] memoId in
                 async let wallet = api.wallet(tripId: memoId)
                 async let link = api.bookShareLink(memoId: memoId)
@@ -519,7 +590,10 @@ public final class AppDependencies {
                 let before = try await api.wallet(tripId: trip).balance
 
                 let cents = NSDecimalNumber(decimal: amount * 100).intValue
-                let ticket = try await api.startWalletTopUp(amountCents: cents)
+                let ticket = try await api.startWalletTopUp(
+                    amountCents: cents,
+                    stripeApiVersion: StripeSDK.apiVersion
+                )
 
                 switch await payments.present(ticket) {
                 case .cancelled:
@@ -549,10 +623,6 @@ public final class AppDependencies {
     /// Le tunnel de commande, **entièrement servi par le serveur** — c'est ce
     /// qui le distingue des quatre écrans ci-dessus.
     ///
-    /// Voir aussi ``SwiftUI/EnvironmentValues/profileModelFactory`` : le paywall
-    /// a besoin du profil pour sa feuille de paiement, et il se présente depuis
-    /// des écrans qui ne tiennent pas de dépendances.
-    ///
     /// Quatre routes : `GET /v1/memos/:id/order-context` ouvre les sept étapes
     /// d'un seul appel, `POST /v1/memos/:id/orders/quote` compte le
     /// récapitulatif, `POST /v1/memos/:id/orders` enregistre **et rend de quoi
@@ -575,10 +645,35 @@ public final class AppDependencies {
                 try await api.orderQuote(memoId: id, copies: copies, shippingSpeed: speed)
             },
             submit: { [api] id, request in
-                try await api.createPrintOrder(memoId: id, order: request)
+                // La version du SDK Stripe part avec la commande : c'est elle
+                // qui fait revenir une clé éphémère, et donc les cartes du
+                // compte dans la feuille.
+                var request = request
+                request.stripeApiVersion = StripeSDK.apiVersion
+                return try await api.createPrintOrder(memoId: id, order: request)
+            },
+            // Le lien et le suivi WhatsApp de la confirmation n'étaient pas
+            // branchés : la confirmation partageait un lien fabriqué par l'app,
+            // qui ne menait nulle part.
+            shareLink: { [api] memoId in try await api.bookShareLink(memoId: memoId) },
+            setWhatsApp: { [api] orderId, phone in
+                try await api.setOrderWhatsApp(orderId: orderId, phone: phone)
             },
             presentPayment: { [payments] ticket in await payments.present(ticket) },
-            reloadOrder: { [api] orderId in try await api.printOrder(id: orderId) }
+            reloadOrder: { [api] orderId in try await api.printOrder(id: orderId) },
+            resumePayment: { [api] orderId in
+                try await api.resumePrintOrderPayment(orderId: orderId, stripeApiVersion: StripeSDK.apiVersion)
+            },
+            cancelOrder: { [api] orderId in try await api.cancelPrintOrder(orderId: orderId) }
+        )
+    }
+
+    /// Ouvre la feuille « Moyens de paiement » de Stripe — les cartes du compte,
+    /// à ajouter ou à retirer. Rend un message si elle n'a pas pu s'ouvrir.
+    public func managePaymentMethods() async -> String? {
+        await paymentMethods.present(
+            key: { [api] in try await api.paymentMethodsKey(stripeApiVersion: StripeSDK.apiVersion) },
+            setupIntent: { [api] in try await api.paymentMethodsSetupIntent() }
         )
     }
 
@@ -616,16 +711,9 @@ public final class AppDependencies {
 }
 
 extension EnvironmentValues {
-    /// Fabrique le modèle du profil, pour un écran qui n'a pas d'accès aux
-    /// dépendances et en a pourtant besoin d'un.
-    ///
-    /// Le paywall est présenté par l'accueil, par un voyage et par le profil ;
-    /// sa feuille « Choisis ton mode de paiement » lit et écrit les cartes du
-    /// compte, ce que seul ``ProfileModel`` sait faire. Plutôt que de faire
-    /// remonter `AppDependencies` dans trois écrans, `RootView` pose ici la
-    /// fabrique branchée sur l'API ; un aperçu n'en pose aucune et le paywall
-    /// retombe sur le jeu d'essai.
-    @Entry public var profileModelFactory: (@MainActor () -> ProfileModel)?
+    /// La feuille « Moyens de paiement » de Stripe, pour le profil — posée par
+    /// `RootView`. `nil` en aperçu, où la ligne ne fait rien.
+    @Entry public var managePaymentMethods: (@MainActor () async -> String?)?
 
     /// La cagnotte d'un voyage, pour le paywall — qui n'a pas accès aux
     /// dépendances non plus. C'est elle qui porte l'estimation du carnet

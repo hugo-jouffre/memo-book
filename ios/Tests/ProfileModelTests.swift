@@ -1,5 +1,6 @@
 import MemoBookCore
 @testable import MemoBookFeature
+import MemoBookNetworking
 import XCTest
 
 /// Ce que le profil fait d'une adresse validée dans sa feuille : il la pose
@@ -155,4 +156,130 @@ final class ProfileModelTests: XCTestCase {
     }
 
     private struct TimedOut: Error {}
+
+    // MARK: - Un abonnement tenu par Apple (01/10/2026)
+
+    /// Un abonné App Store, dans sa semaine payée.
+    private func appStoreSubscriber() -> TravellerProfile {
+        var profile = TravellerProfile.fixture
+        profile.subscription.isActive = true
+        profile.subscription.cancelledAt = nil
+        profile.subscription.managedByAppStore = true
+        profile.subscription.paidThrough = Date.now.addingTimeInterval(5 * 86_400)
+        return profile
+    }
+
+    func testTheReasonLeavesWithoutClosingTheSubscription() async throws {
+        // Apple seul résilie : la raison part, l'abonnement reste ouvert à
+        // l'écran tant que la feuille d'iOS n'a rien coupé.
+        var sent: SubscriptionCancellationReason?
+        let subscriber = appStoreSubscriber()
+        let model = ProfileModel(
+            source: { subscriber },
+            cancelSubscription: { reason in
+                sent = reason
+                return subscriber
+            }
+        )
+        await model.load()
+
+        model.recordCancellationReason(.tooExpensive)
+
+        XCTAssertEqual(model.profile?.subscription.isActive, true)
+        try await waitUntil { sent == .tooExpensive }
+        XCTAssertEqual(model.profile?.subscription.isActive, true)
+    }
+
+    func testARenewalCutInIOSKeepsThePaidWeek() async {
+        let subscriber = appStoreSubscriber()
+        let model = ProfileModel(source: { subscriber })
+        await model.load()
+
+        model.acknowledgeAppStoreRenewal(false)
+
+        XCTAssertEqual(model.profile?.subscription.isActive, false)
+        XCTAssertNotNil(model.profile?.subscription.cancelledAt)
+        // La semaine est réglée : le micro reste ouvert jusqu'à son terme.
+        XCTAssertTrue(model.subscriptionGrantsAccess)
+
+        model.acknowledgeAppStoreRenewal(true)
+        XCTAssertEqual(model.profile?.subscription.isActive, true)
+        XCTAssertNil(model.profile?.subscription.cancelledAt)
+    }
+
+    // MARK: - Exporter ses données
+
+    private func receipt(alreadyRequested: Bool = false) -> DataExportReceipt {
+        DataExportReceipt(
+            email: "hugo@memobook.app",
+            requestedAt: Date(timeIntervalSince1970: 1_790_870_000),
+            expiresAt: Date(timeIntervalSince1970: 1_790_870_000 + 7 * 24 * 3600),
+            alreadyRequested: alreadyRequested
+        )
+    }
+
+    func testTheExportSaysWhereTheLinkWent() async {
+        let sent = receipt()
+        let model = ProfileModel(source: { .fixture }, exportData: { sent })
+        await model.load()
+
+        await model.requestDataExport()
+
+        XCTAssertEqual(model.dataExport, .sent(sent))
+    }
+
+    /// Le refus du serveur est dit avec ses mots — « Ton compte n'a pas
+    /// d'adresse… » — et la feuille reste sur la proposition.
+    func testARefusedExportIsSaidInTheServerWords() async {
+        let model = ProfileModel(
+            source: { .fixture },
+            exportData: {
+                throw APIError.server(statusCode: 409, code: "no_email", message: "Ton compte n’a pas d’adresse e-mail.")
+            }
+        )
+
+        await model.requestDataExport()
+
+        XCTAssertEqual(model.dataExport, .failed("Ton compte n’a pas d’adresse e-mail."))
+    }
+
+    /// Un serveur qui ne connaît pas encore la route répond le 404 de Fastify,
+    /// en anglais : la feuille dit autre chose.
+    func testAServerWithoutTheRouteIsNotQuotedInEnglish() async {
+        let model = ProfileModel(
+            source: { .fixture },
+            exportData: {
+                throw APIError.server(
+                    statusCode: 404,
+                    code: "Not Found",
+                    message: "Route POST:/v1/accounts/me/export not found"
+                )
+            }
+        )
+
+        await model.requestDataExport()
+
+        XCTAssertEqual(model.dataExport, .failed(DataExportCopy.notYetAvailable))
+    }
+
+    func testClosingTheSheetGoesBackToTheOffer() async {
+        let sent = receipt(alreadyRequested: true)
+        let model = ProfileModel(source: { .fixture }, exportData: { sent })
+        await model.requestDataExport()
+        XCTAssertEqual(model.dataExport, .sent(sent))
+
+        model.resetDataExport()
+
+        XCTAssertEqual(model.dataExport, .idle)
+    }
+
+    /// « 1er », que le format de date ne sait pas écrire seul.
+    func testTheExpiryReadsInFrench() {
+        let noon = ISO8601DateFormatter.memoBookDate(from: "2026-10-01T12:00:00.000Z")!
+        XCTAssertEqual(DataExportCopy.day(noon), "jeudi 1er octobre")
+        XCTAssertEqual(
+            DataExportCopy.sentParagraphs(receipt()).last,
+            "Rien dans ta boîte d’ici quelques minutes ? Regarde dans tes indésirables."
+        )
+    }
 }
