@@ -376,9 +376,18 @@ function substitute(text: string, sample: Record<string, string | number>): stri
   );
 }
 
-async function call(path: string, apiKey: string, body?: unknown) {
+/**
+ * Un appel à l'API de Resend. Sans corps, c'est une lecture (`GET`) ; avec,
+ * une écriture — `POST` par défaut, `PATCH` pour mettre à jour un gabarit.
+ */
+async function call(
+  path: string,
+  apiKey: string,
+  body?: unknown,
+  method: "POST" | "PATCH" = "POST",
+) {
   const response = await fetch(`${API}${path}`, {
-    method: body === undefined ? "GET" : "POST",
+    method: body === undefined ? "GET" : method,
     headers: {
       Authorization: `Bearer ${apiKey}`,
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
@@ -412,9 +421,13 @@ async function sync(rendered: RenderedTemplate, apiKey: string): Promise<void> {
     variables: definition.variables,
   };
 
+  // **Un gabarit existant se met à jour en `PATCH`**, pas en `POST` : c'est
+  // ce que l'API de Resend attend sur `/templates/{id}` (relu dans sa
+  // documentation le 02/10/2026). Un `POST` sur ce chemin n'est pas une mise
+  // à jour : la synchronisation créait les gabarits, sans pouvoir les corriger.
   const existing = await findByAlias(apiKey, definition.alias);
   const result = existing
-    ? await call(`/templates/${existing}`, apiKey, body)
+    ? await call(`/templates/${existing}`, apiKey, body, "PATCH")
     : await call("/templates", apiKey, body);
 
   const id = (result.id as string | undefined) ?? existing;
