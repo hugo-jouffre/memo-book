@@ -5,11 +5,12 @@ import {
   parseInsights,
   type CoherenceSheet,
   type RedactedNeighbour,
+  type RedactionInput,
   type RedactionPrecision,
 } from "../services/redaction.js";
 
 import { describeTripContext, parseTripContext } from "../services/tripContext.js";
-import { askValidation } from "../services/conversationThread.js";
+import { askValidation, firstNameOf } from "../services/conversationThread.js";
 
 export interface RedactJob {
   entryId: string;
@@ -43,8 +44,30 @@ export function parseCoherenceSheet(value: unknown): CoherenceSheet {
         ? candidate.narration
         : EMPTY_COHERENCE_SHEET.narration,
     figures: Array.isArray(candidate.figures) ? candidate.figures : [],
+    voice: Array.isArray(candidate.voice)
+      ? candidate.voice.filter((line): line is string => typeof line === "string")
+      : [],
   };
 }
+
+/**
+ * Ce que la rédaction lit d'une entrée : son carnet, avec de quoi savoir qui
+ * raconte et avec qui, et l'étape du voyage à laquelle elle appartient.
+ */
+export const ENTRY_FOR_REDACTION = {
+  memo: {
+    include: {
+      owner: { select: { firstName: true, lastName: true } },
+      members: {
+        where: { status: "active" },
+        select: { accountId: true, displayName: true, account: { select: { firstName: true, lastName: true } } },
+      },
+    },
+  },
+  step: true,
+} satisfies Prisma.EntryInclude;
+
+export type EntryForRedaction = Prisma.EntryGetPayload<{ include: typeof ENTRY_FOR_REDACTION }>;
 
 /**
  * Étape 2 : la transcription brute devient un texte de carnet.
@@ -63,7 +86,7 @@ export async function redactEntry(
 
   const entry = await prisma.entry.findUnique({
     where: { id: entryId },
-    include: { memo: true },
+    include: ENTRY_FOR_REDACTION,
   });
 
   if (!entry) {
@@ -129,23 +152,44 @@ export async function redactEntry(
       return [{ text: row.text, topic: typeof rawTopic === "string" && rawTopic ? rawTopic : null }];
     });
 
+    const narrator = await narratorOf(context, entry);
+    const memo = entry.memo;
     const result = await redactor.redact({
       memo: {
-        title: entry.memo.title,
-        subtitle: entry.memo.subtitle,
-        authors: entry.memo.authors,
-        theme: entry.memo.theme,
-        styleKey: entry.memo.styleKey,
-        tripContext: describeTripContext(parseTripContext(entry.memo.tripContext)),
+        title: memo.title,
+        subtitle: memo.subtitle,
+        authors: memo.authors,
+        theme: memo.theme,
+        styleKey: memo.styleKey,
+        tripContext: describeTripContext(parseTripContext(memo.tripContext), narrator.firstName),
+        startDate: memo.startDate,
+        endDate: memo.endDate,
+        destination: [...new Set([memo.destinationCity, memo.destinationName].filter(Boolean))].join(", ") || null,
+        narrationPace: memo.narrationPace,
       },
+      narrator,
       entry: {
         transcript: entry.transcript,
         capturedAt: entry.capturedAt,
         placeLabel: entry.placeLabel,
         precisions,
+        step: entry.step
+          ? {
+              number: entry.step.number,
+              placeName: entry.step.placeName,
+              startDate: entry.step.startDate,
+              endDate: entry.step.endDate,
+            }
+          : null,
       },
-      coherenceSheet: parseCoherenceSheet(entry.memo.coherenceSheet),
+      coherenceSheet: parseCoherenceSheet(memo.coherenceSheet),
       previous,
+      // Tout le carnet, pas seulement les trois dernières étapes : un encart
+      // ne se répète pas à dix étapes d'écart non plus.
+      earlier: {
+        titles: earlier.flatMap((neighbour) => (neighbour.suggestedTitle ? [neighbour.suggestedTitle] : [])),
+        funFacts: earlier.flatMap((neighbour) => (neighbour.funFact ? [neighbour.funFact] : [])),
+      },
     });
 
     // La fiche et le texte sont écrits ensemble : une fiche mise à jour pour
@@ -179,7 +223,7 @@ export async function redactEntry(
       { entryId, model: result.model, characters: result.text.length },
       "Souvenir rédigé",
     );
-    await askValidation(prisma, entryId);
+    await askValidation(prisma, entryId, result.doubts);
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
     await prisma.entry.update({
@@ -190,4 +234,34 @@ export async function redactEntry(
     await askValidation(prisma, entryId).catch(() => false);
     throw cause;
   }
+}
+
+/**
+ * Qui raconte : le compte qui a envoyé le vocal — la bulle du voyageur qui
+ * porte ce souvenir —, à défaut le propriétaire du carnet. Les autres membres
+ * du carnet sont ses compagnons, sous le nom qu'ils y portent.
+ */
+export async function narratorOf(
+  context: AppContext,
+  entry: EntryForRedaction,
+): Promise<NonNullable<RedactionInput["narrator"]>> {
+  const { memo } = entry;
+  const message = await context.prisma.chatMessage.findFirst({
+    where: { entryId: entry.id, author: "traveller", accountId: { not: null } },
+    orderBy: { seq: "asc" },
+    select: { accountId: true, account: { select: { firstName: true, lastName: true } } },
+  });
+  const narratorAccountId = message?.accountId ?? memo.ownerAccountId;
+  const firstName = message?.account ? firstNameOf(message.account) : firstNameOf(memo.owner);
+
+  const others = [
+    narratorAccountId === memo.ownerAccountId ? null : firstNameOf(memo.owner),
+    ...memo.members
+      .filter((member) => member.accountId !== narratorAccountId)
+      .map((member) => member.displayName?.trim() || firstNameOf(member.account)),
+  ];
+  const companions = [...new Set(others)].filter(
+    (name): name is string => Boolean(name) && name !== firstName,
+  );
+  return { firstName, companions };
 }

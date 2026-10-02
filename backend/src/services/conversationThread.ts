@@ -12,7 +12,7 @@ import {
   type CurrentEntry,
   type MemoResponder,
 } from "./conversation.js";
-import { OPENING_PAUSE_MS, SUGGESTION_SETS, VALIDATION_QUESTION } from "./conversationCopy.js";
+import { OPENING_PAUSE_MS, SUGGESTION_SETS, validationQuestionFor } from "./conversationCopy.js";
 import type { RedactedNeighbour } from "./redaction.js";
 
 /**
@@ -369,8 +369,11 @@ export function conversationStateOf(memo: Pick<Memo, "conversationState">): Conv
  * si la dernière bulle de MEMO pose déjà la question pour ce souvenir — une
  * rédaction rejouée après un échec —, on ne la repose pas. Une précision qui
  * fait réécrire le texte, elle, la fait revenir : le texte a changé.
+ *
+ * `doubts` : les passages que l'écrivain n'a pas compris. La bulle les cite,
+ * dans la même question (`validationQuestionFor`).
  */
-export async function askValidation(db: Db, entryId: string): Promise<boolean> {
+export async function askValidation(db: Db, entryId: string, doubts: readonly string[] = []): Promise<boolean> {
   const card = await db.chatMessage.findFirst({
     where: { entryId, author: "memo", kind: "transcript" },
     include: { entry: { select: { validatedAt: true } } },
@@ -395,15 +398,16 @@ export async function askValidation(db: Db, entryId: string): Promise<boolean> {
     if (since === 0) return false;
   }
 
+  const question = validationQuestionFor(doubts);
   await db.chatMessage.create({
     data: {
       memoId: card.memoId,
       author: "memo",
       kind: "text",
-      text: VALIDATION_QUESTION,
+      text: question,
       replyToId: card.replyToId,
       stepId: card.stepId,
-      pauseMilliseconds: pauseBeforeSaying(VALIDATION_QUESTION),
+      pauseMilliseconds: pauseBeforeSaying(question),
       model: "scripted",
       payload: { suggestions: [...SUGGESTION_SETS.trio], asksValidationFor: entryId },
     },

@@ -1,0 +1,139 @@
+{
+  "name": "Grèce 2026 — les neuf vocaux de Maxime",
+  "why": "Vrais vocaux d'un bêta-testeur, enregistrés pendant le voyage (Paros, Naxos, Ios, Mykonos) avec Fanny. Ils portent tout ce qui fait rater une rédaction : erreurs de transcription, blagues, corrections à voix haute, deux jours dans un vocal, troisième personne par jeu.",
+  "memo": {
+    "title": "Grèce 2026",
+    "startDate": "2026-08-26",
+    "endDate": "2026-09-05",
+    "destination": "Cyclades, Grèce",
+    "narrationPace": "daily",
+    "tripContext": []
+  },
+  "narrator": {
+    "firstName": "Maxime",
+    "companions": [
+      "Fanny"
+    ]
+  },
+  "steps": [
+    {
+      "id": "11-dernier-jour-avant-transfert",
+      "recordedAt": "2026-08-26T21:10:00Z",
+      "place": "Paros",
+      "transcript": "Mercredi 26 août, donc on s'est levé, on a été rendre notre super scooter qu'on avait nommé Kane, en référence à The 100 qu'on est en train de regarder en ce moment. Ensuite on a fait un bon petit stop avant de prendre le ferry et on s'est fait un super brunch excellent sur le port pour notre dernière journée à Paros qui était exceptionnelle, très belle ville. Et ensuite du coup on a pris le bateau, sieste bien méritée pour Max parce qu'après il savait qu'il allait devoir tirer la valise pendant 20 minutes pour arriver à l'hôtel à Naxos. On est ensuite arrivé à l'hôtel avec pas mal de peine mais on est arrivé et on a ensuite été se balader, on s'est posé sur une plage, on a pris des petits transats kiff toute l'après-midi. On est ensuite rentré et on s'est préparé pour aller au repas, on a mangé encore une fois un excellent repas avec des gens très sympathiques, le restaurant était super et des mezedes, c'était super bon.",
+      "watch": [
+        "« Kane, en référence à The 100 » : le scooter porte le nom d'un personnage de la série — la référence se garde ou se tait, elle ne se déforme pas",
+        "« sieste bien méritée pour Max, parce qu'après il savait… » : Maxime parle de lui à la troisième personne, par jeu",
+        "« des gens très sympathiques » : on ne sait pas qui — ne pas inventer « nos voisins de table » ni « le patron »",
+        "« kiff toute l'après-midi » : le plaisir se garde, l'après-midi est masculin",
+        "la sieste, la valise, le brunch : son humour, sans bon mot ajouté (« sieste stratégique », « ce brave Kane »)"
+      ]
+    },
+    {
+      "id": "12-scooter-et-plage",
+      "recordedAt": "2026-08-27T21:30:00Z",
+      "place": "Naxos",
+      "transcript": "Le jeudi 27 août, on est donc à Naxos. On a été louer un scooter le matin, un superbe scooter chez Toto Scooter. Ensuite on est parti, on a fait deux villages grecs très sympas et ensuite on a fait la plage qui s'appelle la plage Hawaii qui est vraiment magnifique. Il y avait un petit peu beaucoup de vent mais c'était quand même très sympa. Ensuite on est rentré à la maison. Non, on n'est pas rentré à la maison, on est allé boire un verre dans un super beau restaurant avec un magnifique coucher de soleil. Du coup on a voulu manger là-bas mais c'était pas possible, il n'y avait plus de place, tout était réservé et du coup on a réservé pour le lendemain. Ensuite on est rentré à la maison, on s'est préparé et puis on est allé boire un verre à notre nouveau bar préféré, le Prime.",
+      "watch": [
+        "« Ensuite on est rentré à la maison. Non, on n'est pas rentré » : il se corrige à voix haute — seule la version corrigée existe",
+        "« un petit peu beaucoup de vent » : à rendre lisible sans perdre le sourire",
+        "le restaurant complet, réservé pour le lendemain : un fil que l'étape suivante reprend",
+        "« Toto Scooter », « le Prime » : des noms propres entendus clairement — gardés, jamais mis en doute"
+      ]
+    },
+    {
+      "id": "13-deux-jours-fusionnes",
+      "recordedAt": "2026-08-29T19:00:00Z",
+      "place": "Naxos",
+      "transcript": "Vendredi 28 août et samedi 29 août parce que du coup le samedi 29 août il n'y avait pas grand chose à dire étant donné qu'on est sorti le 28 août. Donc le vendredi 28 août on est allé faire une activité, l'activité préférée sur l'île. On a dû se lever aux aurores pour les vacances c'est à dire 8h. C'était très tôt et on est ensuite parti faire une activité qui était de faire de la cuisine avec une famille grecque qui avait en fait une ferme. Du coup on est allé dans leur ferme, on a nourri les animaux, on a récolté, cueilli nous-mêmes les différents légumes, les tomates, les concombres, les oignons etc. Pour ensuite se faire un excellent plat, enfin plein de plats différents. On a du coup nourri les poules à la main, on a nourri les vaches, les animaux, on a trait les chèvres. C'était vraiment incroyable, super bonne activité et Fanny était super bonne, super forte en équitation sur ce super beau âne. Ensuite après on est parti, on est allé direction la maison pour se changer et on est ensuite retourné manger dans le fameux restaurant Pieds dans le sable qui était exceptionnel, magnifique, très très très bon, tarama excellent et coucher de soleil juste sublime. Ensuite on est rentré, c'était une grosse journée, on est ensuite rentré et puis on s'est dit pourquoi pas et du coup on est parti au Prime qui était notre nouveau bar comme dit précédemment. Et on s'est donc éclaté la gueule au Prime puis ensuite dans un bar grec, on a rencontré un peu de monde c'était super sympa et puis après on a fait une soirée, on est parti en boîte et on a rencontré des australiens là-bas totalement je tarbé mais qui étaient vraiment très très cool. Du coup on est rentré un peu tard et le lendemain c'était un petit peu compliqué.",
+      "watch": [
+        "« l'activité préférée sur l'île » = LEUR activité préférée du séjour à Naxos — jamais « l'activité préférée de l'île »",
+        "le cœur de la journée : cuisiner avec une famille grecque, dans sa ferme — pas une liste de corvées",
+        "« Fanny était super forte en équitation sur ce super beau âne » : une blague, qui doit rester drôle",
+        "« Pieds dans le sable » : le restaurant complet de la veille — la boucle se referme",
+        "« on s'est dit pourquoi pas » : ressortir malgré la fatigue — la phrase doit avoir un sens à l'écrit",
+        "« des australiens totalement je tarbé » : sans doute « chtarbés » (fous, en argot) — rétabli si l'écrivain en est sûr, sinon signalé en doute ; jamais imprimé tel quel, jamais remplacé par un mot qui change le sens",
+        "« on s'est éclaté la gueule » : l'énergie reste, le registre s'adoucit",
+        "le samedi 29 « sans rien à dire » : ne se raconte pas"
+      ]
+    },
+    {
+      "id": "14-rectification-vocal-precedent",
+      "recordedAt": "2026-08-29T21:45:00Z",
+      "place": "Naxos",
+      "transcript": "Bon rectification par rapport à mon vocal précédent. Du coup on va parler quand même du 29 août. Donc on s'est réveillé un petit peu fatigué au vu de la soirée, mais on a ensuite décidé de prendre le taureau par les cornes, on s'est fait un bon brunch, très sympa, on s'est ensuite reposé, balade dans la ville de Naxos. On a trouvé un super beau restaurant avec un magnifique rooftop sur la ville, le port etc. Ensuite du coup je suis allé me faire coiffer, donc Maxime s'est fait coiffer avec une nouvelle coupe à la grecque, rien d'autre à dire, très sympa. Et ensuite on a mangé le meilleur restaurant de ce voyage avec une excellente moussaka qui était exceptionnelle. Et ensuite on est rentré à la maison tranquillou.",
+      "watch": [
+        "« rectification par rapport à mon vocal précédent » : s'adresse à l'app, ne s'écrit pas",
+        "« je suis allé me faire coiffer, donc Maxime s'est fait coiffer » : une seule personne, un seul fait",
+        "« prendre le taureau par les cornes » : son expression, à garder",
+        "« on a mangé le meilleur restaurant de ce voyage » : on a dîné dans le meilleur restaurant — et la moussaka",
+        "« rentrés tranquillou » : un mot de sa voix"
+      ]
+    },
+    {
+      "id": "15-arrivee-nouvelle-ile",
+      "recordedAt": "2026-08-30T21:20:00Z",
+      "place": "Ios",
+      "transcript": "Alors dimanche 30 août, on est parti de Naxos direction Ios, notre dernière île des Cyclades. On a pris le bateau, on est ensuite arrivé. Ios est beaucoup plus petit comme ville, comme île pardon. Et on s'est pris vraiment à un hôtel pour se faire kiffer les cinq dernières nuits pour vraiment se reposer avec Sunbed et hôtel incroyable avec piscine, très bon etc. Donc on a mangé en arrivant, il était genre une heure, on a mangé, après on a profité un peu de la plage et ensuite on s'est préparé, on a bu un petit verre pour le coucher de soleil encore une fois, j'ai l'impression que c'est un rituel. On a fait un tennis avant, avant ça on avait fait un tennis, ensuite coucher de soleil avec du coup le petit verre et ensuite du coup on était un petit peu patrac de toutes ces aventures et donc on est allé manger un thaïlandais. Rien à voir avec la grecque consommation, mais c'était vraiment très cool.",
+      "watch": [
+        "« Ios est beaucoup plus petit comme ville, comme île pardon » : il se corrige — c'est l'île",
+        "« On a fait un tennis avant, avant ça on avait fait un tennis » : remettre dans l'ordre, tennis puis coucher de soleil",
+        "« un petit verre pour le coucher de soleil encore une fois, j'ai l'impression que c'est un rituel » : le clin d'œil, à garder",
+        "« patrac » = patraque ; « rien à voir avec la grecque consommation » = rien à voir avec la cuisine grecque",
+        "« notre dernière île des Cyclades » : faux dans les faits (Mykonos suit) mais c'est ce qu'il dit — on ne le corrige pas"
+      ]
+    },
+    {
+      "id": "16-detail-historique",
+      "recordedAt": "2026-08-31T21:30:00Z",
+      "place": "Ios",
+      "transcript": "Lundi 31 août, alors on s'est levé tranquillement, on est allé manger le petit déjeuner qui était excellent de l'hôtel. On a ensuite loué un super gros scooter de 200 cm cube. Maxime était super content. Tout ça pour visiter Ios, ce qui était quand même assez compliqué étant donné qu'il y a très peu de routes, de réelles routes avec beaucoup de montagnes. Donc 200 cm cube est très sympa. On est allé voir la tombe d'Homère. Il n'y avait vraiment pas grand chose. Donc Homère, l'écrivain de l'Odyssée. Et ensuite, on s'est baladé dans l'île. On a fait l'île de fond en comble et on s'est retrouvé à faire une dégustation en haut d'une montagne dans une ancienne fromagerie. Enfin, dans une fromagerie tout court. Et du coup, on a dégusté du vin, du fromage. Elle nous a expliqué l'histoire de Ios, de ses habitants, de comment ils vivaient avant, etc. On est ensuite rentré. On n'a pas rendu le scooter. On est ensuite rentré. Maxime s'est fait un super massage pendant que Fanny visitait Cora, la ville principale d'Ios. Et ensuite, on s'est fait un super restaurant avec vue sur la mer. On a loupé le coup de soleil, mais on a quand même réussi à manger dans ce super bon restaurant.",
+      "watch": [
+        "« la tombe d'Homère… il n'y avait vraiment pas grand-chose » : une déception assumée, avec humour",
+        "« Cora » = Chora, la ville principale d'Ios",
+        "« on a loupé le coup de soleil » = le coucher de soleil",
+        "« Maxime était super content » du scooter de 200 cm³ : sa joie, en troisième personne",
+        "« On n'a pas rendu le scooter » : détail sans suite, peut sauter"
+      ]
+    },
+    {
+      "id": "17-soiree-anecdote",
+      "recordedAt": "2026-09-02T10:00:00Z",
+      "place": "Ios",
+      "transcript": "Mardi 1er septembre, c'est the place to be, the journée, the soirée, on dirait même. Donc activité surprise préparée par Fanny qui arrive fin de journée. Du coup, on s'est dit que la journée on allait se lever, donc on s'est réveillé tranquillement, on a profité de la plage, des sunbeds, on a free un super bon burger de notre hôtel qui est vraiment très très bon, avec des potatoes. On s'est ensuite posé à la piscine, on a failli adopter un nouveau chat qui s'est posé dans notre sac, un tout bébé chat qui doit avoir littéralement deux mois. On a joué aux échecs avec un super échec qui est offert par Fabien, encore une fois trop forte. Et ensuite, on est parti à l'activité surprise qui était grosse soirée le mardi soir au Far Out Beach Bar. Donc ça a fini vers 18h, on est allé s'installer au bar et là au bar on a rencontré deux grecs, on leur a donné 65 ans, ils en avaient 50, c'était l'enfer, mais très sympa, on a bien discuté. Et ensuite on est allé dans d'autres bars avec des Australiens, etc. On a bien profité de la journée et on est rentré encore une fois un peu tard, donc très fatigué.",
+      "watch": [
+        "« the place to be, the journée, the soirée » : son enthousiasme, à rendre en français",
+        "l'activité surprise préparée par Fanny : le fil de la journée, révélée le soir",
+        "« on a free un super bon burger » : erreur de transcription — dévoré, pris ?",
+        "« un super échec qui est offert par Fabien, encore une fois trop forte » = Fanny (accord féminin) : erreur de transcription",
+        "« on leur a donné 65 ans, ils en avaient 50, c'était l'enfer » : la blague",
+        "« ça a fini vers 18h » : ambigu (une fête de plage l'après-midi ?) — se rend sans inventer d'heure ni d'enchaînement"
+      ]
+    },
+    {
+      "id": "18-jour-repos-et-activite",
+      "recordedAt": "2026-09-03T20:30:00Z",
+      "place": "Ios",
+      "transcript": "Mercredi 2 septembre, journée repos. On va pas se mentir, on est rentré, on était très fatigué, surtout Maxime qui a enchaîné les jeans toniques. Mais très fatigué, on s'est levé, on n'a pas fait grand-chose, on a juste profité de la piscine, à l'ombre, très tranquille. Voilà, on a joué aux échecs, après on a été manger dans un restaurant le soir. Vraiment notre vie ces derniers jours se résume à manger au restaurant et faire des échecs et profiter de la piscine. Et du coup le jeudi 3 septembre qu'on va enchaîner tout de suite, là c'était jeudi 3 septembre, on est allé faire le petit déjeuner le matin qui était toujours aussi bon, et ensuite on est parti et on a fait une activité bateau. On a découvert plein de petites criques très sympas avec des coins de snorkeling très cool. On a pris très peu de photos étant donné qu'on est fatigué et qu'on s'est beaucoup reposé. Du coup on n'a pas du tout pris notre téléphone, il y avait beaucoup de vent. Mais voilà, très sympa. Comme d'habitude on profite et c'est nos derniers jours, donc on espère que nos deux derniers jours en Grèce vont être tout aussi sympas que toutes les semaines qui sont passées avant.",
+      "watch": [
+        "« surtout Maxime qui a enchaîné les jeans toniques » = les gin tonics",
+        "deux journées dans un vocal : mercredi repos, jeudi bateau",
+        "« notre vie ces derniers jours se résume à… » : le ton, à garder",
+        "« on a pris très peu de photos… on n'a pas du tout pris notre téléphone » : vrai et touchant, à garder"
+      ]
+    },
+    {
+      "id": "19-dernier-jour-voyage",
+      "recordedAt": "2026-09-05T15:00:00Z",
+      "place": "Mykonos",
+      "transcript": "Vendredi 4 septembre, on est parti de notre super beau resort pour aller au port et du coup direction Mykonos pour 1h30 de bateau. Bateau rapide avec beaucoup de vagues, c'était un peu laborieux, on a cru mourir mais c'était sans problème. On est ensuite arrivé du coup à Mykonos, on a récupéré notre hôtel, on se baladait rapidement dans la ville, on a essayé des petits pantalons pour Maxime, des petits pantalons en lin qu'on n'a pas trouvé et on a vu le coucher de soleil, c'était vraiment magnifique. Ensuite on a mangé dans le pire restaurant qu'on a fait parce qu'on a fait le pire choix, Mykonos, il faut savoir que c'était l'endroit où on a eu aucune chance sur les choix qu'on a fait, Famine a perdu son radar et du coup là on a mangé, ensuite on est rentré à l'hôtel, on a dormi et puis le lendemain on est parti, enfin on devait partir pour l'aéroport vers 17h, du coup on a profité toute la journée à Mykonos, on a fait une grande balade dans Mykonos pour visiter un peu tous les autres quartiers qu'on n'avait pas vu, c'est très sympa, une ville très sympa mais beaucoup plus fancy par rapport au reste de la Grèce qu'on a pu faire. Et donc du coup voilà, là on a trouvé pour le coup un pantalon pour Max et puis après on est rentré tranquillement à l'hôtel, on a pris le navette et puis on est allé au lounge de l'aéroport pour profiter une dernière fois des feuilles de vignes et puis de l'alcool à la gratte quoi. Voilà, c'était la fin de nos deux semaines en Grèce.",
+      "watch": [
+        "« on a cru mourir mais c'était sans problème » : exagération comique",
+        "« Famine a perdu son radar » = Fanny a perdu son radar (à restaurants) : erreur de transcription",
+        "« des petits pantalons en lin qu'on n'a pas trouvé » puis « on a trouvé un pantalon pour Max » : une boucle qui se referme",
+        "« de l'alcool à la gratte » = gratuit ; « le navette » = la navette",
+        "« c'était la fin de nos deux semaines en Grèce » : la dernière page du voyage"
+      ]
+    }
+  ]
+}
