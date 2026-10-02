@@ -21,6 +21,8 @@ struct ChatComposer: View {
     /// envoie tout de suite, sans vol.
     var onLaunch: ((ChatSuggestion, CGRect) -> Void)? = nil
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         VStack(spacing: 0) {
             ChatSuggestionRail(
@@ -31,6 +33,9 @@ struct ChatComposer: View {
             )
             ChatSendingBar(model: model, isWriting: $isWriting, onAddPhotos: onAddPhotos)
         }
+        // La place gardée de la bande se rend en douceur quand MEMO a répondu
+        // sans nouvelles puces — voir ``ChatModel/reservesSuggestionRail``.
+        .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: model.reservesSuggestionRail)
         .background(ChatMetrics.barMaterial)
     }
 }
@@ -101,6 +106,13 @@ struct ChatSuggestionRail: View {
             .frame(height: railHeight)
             .padding(.vertical, MemoBookSpacing.xs / 2)
             .transition(.opacity)
+        } else if model.reservesSuggestionRail {
+            // La place de la bande, vide, le temps que MEMO réponde — voir
+            // ``ChatModel/reservesSuggestionRail``.
+            Color.clear
+                .frame(height: railHeight)
+                .padding(.vertical, MemoBookSpacing.xs / 2)
+                .accessibilityHidden(true)
         }
     }
 
@@ -299,18 +311,33 @@ struct ChatSendingBar: View {
                 keyboardButton(fills: false)
 
                 // « Record » dans la maquette ; « Enregistrer » dans l'app
-                // (T51).
-                BrandButton(
-                    ChatCopy.record,
-                    icon: Image(brand: "IconMic"),
-                    iconPlacement: .trailing,
-                    style: .secondary,
-                    isRound: true,
-                    fillsWidth: true,
-                    action: model.startRecording
-                )
-                .brandShadow(.raised)
-                .accessibilityLabel(ChatCopy.Voice.microphone)
+                // (T51). Aux tailles accessibles, le micro seul : à côté de
+                // deux boutons ronds, le libellé se coupait lettre par lettre
+                // sur cinq lignes (recette du 30/09/2026). VoiceOver dit
+                // toujours ce qu'il fait.
+                if typeSize.isAccessibilitySize {
+                    BrandButton(
+                        icon: Image(brand: "IconMic"),
+                        style: .secondary,
+                        isRound: true,
+                        fillsWidth: true,
+                        action: model.startRecording
+                    )
+                    .brandShadow(.raised)
+                    .accessibilityLabel(ChatCopy.Voice.microphone)
+                } else {
+                    BrandButton(
+                        ChatCopy.record,
+                        icon: Image(brand: "IconMic"),
+                        iconPlacement: .trailing,
+                        style: .secondary,
+                        isRound: true,
+                        fillsWidth: true,
+                        action: model.startRecording
+                    )
+                    .brandShadow(.raised)
+                    .accessibilityLabel(ChatCopy.Voice.microphone)
+                }
             }
         }
     }

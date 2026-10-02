@@ -1,6 +1,7 @@
 import MemoBookCore
 import MemoBookDesign
 import MemoBookRecording
+import StoreKit
 import SwiftUI
 
 /// L'accueil : où on en est de ses voyages, et le micro toujours à portée de
@@ -72,6 +73,20 @@ public struct HomeView: View {
     /// d'**affichage**, propre à cet appareil. Deux téléphones du même compte
     /// doivent chacun l'apprendre.
     @AppStorage("subscription.endAnnounced") private var announcedEnd: Double = 0
+
+    /// **Le rappel de fin de voyage** (01/10/2026) — ce qui reste de « l'arrêt
+    /// automatique » de l'offre. Apple ne laisse pas l'app résilier à la place
+    /// de la personne : quand l'abonnement va se renouveler sans voyage en
+    /// cours (`Traveller.subscriptionOutlivesTrip`), l'accueil le lui propose,
+    /// et « Résilier » ouvre la feuille de gestion des abonnements d'iOS.
+    @State private var showsTripEndReminder = false
+    @State private var managesSubscription = false
+
+    /// Le jour du dernier rappel, `AAAA-MM-JJ`. **Une fois par jour au plus** :
+    /// un rappel à chaque ouverture deviendrait une alerte qu'on ferme sans la
+    /// lire ; une fois par jour, il reste un rappel. Sur l'appareil, comme
+    /// ``announcedEnd``.
+    @AppStorage("subscription.tripEndReminded") private var remindedDay = ""
 
     /// La feuille « Nouveau carnet » est ouverte.
     ///
@@ -183,6 +198,22 @@ public struct HomeView: View {
             guard let feed else { return }
             subscriptionSession?.learn(feed.traveller.freemiumStatus(override: nil))
             announceSubscriptionEndIfNeeded(feed.traveller.subscriptionEndedOn)
+            remindTripEndIfNeeded(feed.traveller.subscriptionOutlivesTrip)
+        }
+        .alert(
+            SubscriptionCopy.tripEndTitle,
+            isPresented: $showsTripEndReminder
+        ) {
+            Button(SubscriptionCopy.tripEndCancel) { managesSubscription = true }
+            Button(SubscriptionCopy.tripEndKeep, role: .cancel) {}
+        } message: {
+            Text(SubscriptionCopy.tripEndMessage)
+        }
+        .manageSubscriptionsSheet(isPresented: $managesSubscription)
+        // Au retour de la feuille d'iOS, l'accueil se relit : le serveur aura
+        // appris d'Apple ce qui a été coupé, et le rappel cesse.
+        .onChange(of: managesSubscription) { _, isOpen in
+            if !isOpen { Task { await model.load() } }
         }
         // **L'alerte de fin d'abonnement.** Elle ne propose que deux gestes :
         // en prendre acte, ou se réabonner — et le second ouvre le paywall, où
@@ -355,7 +386,12 @@ public struct HomeView: View {
 
         if typeSize.isAccessibilitySize {
             VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
+                // L'avatar reste **à droite** : sa pastille d'étapes, plus
+                // large que lui, s'accroche à son bord droit et s'étend vers
+                // la gauche. Posé à gauche, il la faisait sortir de l'écran
+                // (recette du 30/09/2026).
                 avatarButton
+                    .frame(maxWidth: .infinity, alignment: .trailing)
                 Text(title).font(MemoBookFont.greeting).foregroundStyle(MemoBookColor.ink)
             }
         } else {
@@ -630,6 +666,14 @@ public struct HomeView: View {
     /// à l'app de se souvenir qu'elle l'a annoncé. D'où la date retenue plutôt
     /// qu'un drapeau — le prochain abonnement qui s'arrêtera portera une autre
     /// date, et l'alerte reviendra.
+    private func remindTripEndIfNeeded(_ outlivesTrip: Bool) {
+        guard outlivesTrip else { return }
+        let today = Date.now.formatted(.iso8601.year().month().day())
+        guard remindedDay != today else { return }
+        remindedDay = today
+        showsTripEndReminder = true
+    }
+
     private func announceSubscriptionEndIfNeeded(_ endedOn: Date?) {
         guard let endedOn else { return }
         let stamp = endedOn.timeIntervalSince1970

@@ -31,10 +31,10 @@ public struct TripCreationView: View {
     /// La charpente n'est pas encore posée.
     ///
     /// C'est l'état de la première maquette de la série : le squelette de
-    /// l'étape, avant l'étape. Il couvre les deux seuls moments où l'écran n'a
-    /// rien de vrai à montrer — la poussée depuis l'accueil, pendant laquelle
-    /// une illustration qui arrive à mi-course saute, et l'aller-retour réseau
-    /// qui crée le voyage entre l'avant-dernière étape et la dernière.
+    /// l'étape, avant l'étape. Il ne couvre plus qu'un moment — la poussée
+    /// depuis l'accueil, pendant laquelle une illustration qui arrive à
+    /// mi-course saute. L'enregistrement du voyage, lui, n'attend plus le
+    /// réseau (Hugo, 01/10/2026) : il n'a plus de squelette.
     @State private var hasSettled = false
 
     /// Le sens du dernier mouvement : en avant sur « Valider » et « Passer »,
@@ -46,12 +46,10 @@ public struct TripCreationView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// Le squelette : le temps de la poussée, et celui de l'enregistrement —
-    /// sauf sur la dernière étape, qui se dessine entière et n'attend que son
-    /// code d'accès (Hugo, 29/09/2026).
-    private var showsSkeleton: Bool {
-        !hasSettled || (model.isSaving && model.step != .companions)
-    }
+    /// Le squelette : le temps de la poussée, et rien d'autre. La dernière
+    /// étape se dessine entière dès la validation de la précédente, et seul son
+    /// code d'accès attend le serveur (Hugo, 29/09 puis 01/10/2026).
+    private var showsSkeleton: Bool { !hasSettled }
 
     public var body: some View {
         VStack(spacing: 0) {
@@ -75,6 +73,10 @@ public struct TripCreationView: View {
         // Les thèmes de la première étape viennent du serveur, et se lisent
         // **en même temps** que la charpente se pose — pas après.
         .task { await model.loadThemes() }
+        // Le code d'accès, dès que le voyage est enregistré : tout de suite en
+        // ligne, au retour du réseau sinon. Quitter l'écran annule l'attente,
+        // pas l'envoi.
+        .task(id: model.trip?.id) { await model.awaitAccessCode() }
     }
 
     // MARK: - L'en-tête
@@ -112,7 +114,8 @@ public struct TripCreationView: View {
             // encore éviter quelque chose.
             // Le nom non plus : la base l'exige, et un « Passer » qui posait
             // « Mon voyage » à sa place trompait sur ce qu'on venait de faire
-            // (Hugo, 29/09/2026).
+            // (Hugo, 29/09/2026). Les dates non plus (01/10/2026) : « Valider »
+            // reste gris tant que le départ n'est pas posé.
             if model.step.canBeSkipped {
                 Button("Passer") {
                     direction = .forward
@@ -252,7 +255,7 @@ public struct TripCreationView: View {
             direction = .forward
             Task { await model.validate() }
         }
-        .disabled(!model.canValidate)
+        .disabled(!model.canValidate || model.isSaving)
     }
 
     /// D'où l'illustration arrive, par où elle repart — de la largeur de
@@ -288,15 +291,15 @@ public struct TripCreationView: View {
     /// laissent une page blanche. C'est `RootView` qui remplace l'étape par le
     /// voyage, en une seule écriture. La vue annonce, elle ne navigue pas.
     ///
-    /// Le carnet, lui, existe déjà : il a été créé à la validation de l'étape
-    /// précédente. Sans lui — un « Commencer ! » qui n'aurait rien à ouvrir —
-    /// il ne reste qu'à refermer.
+    /// Le carnet, lui, existe déjà : il a été enregistré à la validation de
+    /// l'étape précédente — sur le téléphone, que le serveur l'ait reçu ou non.
+    /// Sans lui, ou refusé par le serveur, il ne reste qu'à refermer.
     private func finish() {
-        guard let created = model.created else {
+        guard let trip = model.trip, !model.wasRejected else {
             dismiss()
             return
         }
-        onIntent(.openTrip(id: created.trip.id))
+        onIntent(.openTrip(id: trip.id))
     }
 }
 

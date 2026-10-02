@@ -3,8 +3,14 @@ import { z } from "zod";
 import type { AppContext } from "../context.js";
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
-import { PAYMENT_KIND, ensureStripeCustomer } from "../services/billing.js";
+import {
+  PAYMENT_KIND,
+  ensureStripeCustomer,
+  paymentTicket,
+  stripeApiVersionSchema,
+} from "../services/billing.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
+import { releaseUnpaidOrder } from "../services/orderPayments.js";
 import { quote as computeQuote, shippingCents, SHIPPING_DAYS, unitPriceCents } from "../services/printPricing.js";
 import {
   SHIPPING_COUNTRIES,
@@ -71,9 +77,19 @@ const createOrderBody = z.object({
    * « Par défaut, nous appliquons la même version que ton 1er carnet ».
    */
   copyOptions: z.array(copyOptionsSchema).max(MAX_COPIES).optional(),
-  /** La carte présentée. Nulle pour Apple Pay, qui n'en enregistre aucune. */
-  paymentCardId: z.string().uuid().nullish(),
+  /**
+   * **Ignoré** (01/10/2026), et accepté pour ne pas casser les versions de
+   * l'app qui l'envoient encore. C'était l'identifiant d'une carte que l'app
+   * fabriquait elle-même, que le serveur ne connaissait pas — d'où le « Ce
+   * moyen de paiement est introuvable » (T225). Le moyen de paiement se choisit
+   * dans la feuille Stripe, qui tient les cartes du compte.
+   */
+  paymentCardId: z.string().nullish(),
+  /** La version d'API du SDK Stripe de l'app — voir `paymentTicket`. */
+  stripeApiVersion: stripeApiVersionSchema.optional(),
 });
+
+const resumePaymentBody = z.object({ stripeApiVersion: stripeApiVersionSchema.optional() });
 
 /**
  * Le suivi par WhatsApp, accepté ou refusé depuis l'écran de confirmation.
@@ -298,15 +314,14 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
    * donc qui l'a passée — c'est ce qui dira quelle cagnotte débiter, chacun
    * ayant la sienne.
    *
-   * La commande est créée en `draft` : l'envoi effectif à l'imprimeur suppose
-   * un paiement encaissé, qui n'existe pas encore (StoreKit / Stripe, voir la
-   * roadmap). Cette route pose le contrat côté app et rend la commande
-   * traçable ; le passage en `submitted` viendra du webhook de paiement.
+   * La commande est créée en `draft`, et n'en sort que payée : par la
+   * cagnotte ici même quand elle couvre tout, par le webhook de Stripe sinon.
    *
-   * ⚠️ **Aucune écriture de cagnotte n'est posée ici.** `wallet_entries` est un
-   * registre de mouvements *réellement encaissés* — il n'a pas d'état « en
-   * attente ». `walletAppliedCents` garde ce que la commande déduira le jour où
-   * elle sera payée ; la ligne, elle, s'écrira avec le webhook.
+   * ⚠️ **La part de cagnotte est débitée ici, à la création** — c'est une
+   * réservation : une seconde commande partie en parallèle ne doit pas pouvoir
+   * dépenser la même somme. Elle revient si la commande n'est pas payée
+   * (annulée par l'app, intention annulée, ménage des brouillons) ou si elle
+   * est remboursée en entier — voir `services/orderPayments.ts`.
    */
   app.post("/v1/memos/:id/orders", async (request, reply) => {
     const { id: memoId } = memoIdParams.parse(request.params);
@@ -328,16 +343,6 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
         "Ce carnet n'est pas encore généré. Prévisualise-le avant de le commander.",
         "render_not_ready",
       );
-    }
-
-    // La carte doit être **au compte qui commande**. Sans cette vérification,
-    // un identifiant deviné rattacherait la commande à la carte d'un autre.
-    if (body.paymentCardId) {
-      const card = await context.prisma.paymentCard.findFirst({
-        where: { id: body.paymentCardId, accountId },
-        select: { id: true },
-      });
-      if (!card) throw HttpError.notFound("Ce moyen de paiement est introuvable.");
     }
 
     // Le prix se **recalcule ici**, à partir de l'état du serveur. Ce que l'app
@@ -382,7 +387,6 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
         orderedByAccountId: accountId,
         copies: body.copies,
         shippingSpeed: body.shippingSpeed,
-        paymentCardId: body.paymentCardId ?? null,
         shippingName: body.shipping.name,
         shippingLine1: body.shipping.line1,
         shippingLine2: body.shipping.line2 ?? null,
@@ -466,41 +470,155 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
 
     // Reste à payer : Stripe prend la main. L'intention est créée **après** la
     // commande — sa clé d'idempotence est l'identifiant de celle-ci, donc elle
-    // doit exister. Un échec ici laisse une commande en `draft`, ce qui est le
-    // bon état à laisser derrière soi : l'app la reprend.
-    const customerId = await ensureStripeCustomer(context, accountId);
+    // doit exister.
+    //
+    // **Un échec ici rend la réservation** (01/10/2026). La part de cagnotte
+    // vient d'être débitée ; laisser la commande sans intention gardait cet
+    // argent sur un brouillon que personne ne pouvait plus payer.
+    let intent;
+    let customerId: string | null = null;
+    try {
+      customerId = await ensureStripeCustomer(context, accountId);
+      const buyer = await context.prisma.account.findUnique({
+        where: { id: accountId },
+        select: { email: true },
+      });
+      const title = memo.bookTitle?.trim() || memo.title;
 
-    const intent = await context.payments.createIntent({
-      idempotencyKey: `order:${order.id}`,
-      amountCents: priced.totalCents,
-      currency: "eur",
-      customerId,
-      metadata: {
-        kind: PAYMENT_KIND.bookOrder,
-        orderId: order.id,
-        memoId,
-        renderId: render.id,
-        accountId,
-      },
-    });
+      intent = await context.payments.createIntent({
+        idempotencyKey: `order:${order.id}`,
+        amountCents: priced.totalCents,
+        currency: "eur",
+        customerId,
+        metadata: {
+          kind: PAYMENT_KIND.bookOrder,
+          orderId: order.id,
+          memoId,
+          renderId: render.id,
+          accountId,
+        },
+        description:
+          order.copies > 1
+            ? `Carnet « ${title} » — ${order.copies} exemplaires`
+            : `Carnet « ${title} »`,
+        receiptEmail: buyer?.email ?? null,
+        shipping: {
+          name: body.shipping.name,
+          line1: body.shipping.line1,
+          line2: body.shipping.line2 ?? null,
+          postalCode: body.shipping.postalCode,
+          city: body.shipping.city,
+          country: body.shipping.country,
+        },
+      });
 
-    await context.prisma.printOrder.update({
-      where: { id: order.id },
-      data: { stripePaymentIntentId: intent.intentId },
-    });
+      await context.prisma.printOrder.update({
+        where: { id: order.id },
+        data: { stripePaymentIntentId: intent.intentId },
+      });
+    } catch (cause) {
+      await releaseUnpaidOrder(context, order.id, "Le paiement n'a pas pu s'ouvrir.");
+      throw cause;
+    }
 
     return reply.code(201).send({
       ...serializePrintOrder(order),
       // Ce que la feuille de paiement consomme. `clientSecret` n'ouvre que
       // cette intention-là, mais il n'entre jamais dans un journal.
-      payment: {
-        paidFromWallet: false,
+      payment: await paymentTicket(context, {
+        customerId,
         clientSecret: intent.clientSecret,
         amountCents: priced.totalCents,
-        currency: "eur",
-        publishableKey: context.env.STRIPE_PUBLISHABLE_KEY,
-      },
+        stripeApiVersion: body.stripeApiVersion,
+      }),
     });
+  });
+
+  /**
+   * **Reprendre le paiement d'une commande déjà passée** (01/10/2026).
+   *
+   * « Payer », après une feuille refermée ou une carte refusée, créait une
+   * **nouvelle** commande — une nouvelle intention, et un second débit de
+   * cagnotte. L'app reprend désormais celle qu'elle a : cette route rend de
+   * quoi rouvrir la feuille sur **la même** intention.
+   *
+   * Trois réponses, selon ce que Stripe en dit :
+   * - à régler (`requires_payment_method`, `requires_action`…) → la feuille ;
+   * - réglée ou en cours (`succeeded`, `processing`) → la commande, que l'app
+   *   relit jusqu'à ce que le webhook l'ait passée ;
+   * - annulée → 409 : le brouillon est fermé, il faut repasser commande.
+   */
+  app.post("/v1/orders/:id/payment", async (request) => {
+    const { id } = orderIdParams.parse(request.params);
+    const { stripeApiVersion } = resumePaymentBody.parse(request.body ?? {});
+    const accountId = accountIdOf(request);
+
+    const order = await context.prisma.printOrder.findFirst({
+      where: { id, orderedByAccountId: accountId },
+      include: { copyOptions: true },
+    });
+    if (!order) throw HttpError.notFound("Commande introuvable.");
+
+    if (order.status !== "draft" || !order.stripePaymentIntentId || order.amountCents === null) {
+      return { ...serializePrintOrder(order), payment: null };
+    }
+
+    const intent = await context.payments.retrieveIntent(order.stripePaymentIntentId);
+
+    if (intent.status === "canceled") {
+      await releaseUnpaidOrder(context, order.id, "Paiement annulé.");
+      throw new HttpError(
+        409,
+        "Cette commande a expiré. Repasse-la : rien n'a été prélevé.",
+        "order_expired",
+      );
+    }
+
+    if (intent.status === "succeeded" || intent.status === "processing" || !intent.clientSecret) {
+      return { ...serializePrintOrder(order), payment: null };
+    }
+
+    const customerId = await ensureStripeCustomer(context, accountId);
+    return {
+      ...serializePrintOrder(order),
+      payment: await paymentTicket(context, {
+        customerId,
+        clientSecret: intent.clientSecret,
+        amountCents: order.amountCents,
+        stripeApiVersion,
+      }),
+    };
+  });
+
+  /**
+   * Abandonner une commande pas encore payée — l'app le fait quand on change
+   * d'adresse, d'exemplaires ou de rapidité après une première tentative :
+   * l'ancienne commande ne correspond plus, elle rend sa réservation et la
+   * nouvelle repart d'un devis frais.
+   *
+   * Idempotente : une commande déjà fermée se rend telle quelle. Une commande
+   * payée entre-temps ne s'annule pas — 409, et l'app relit.
+   */
+  app.post("/v1/orders/:id/cancel", async (request) => {
+    const { id } = orderIdParams.parse(request.params);
+    const accountId = accountIdOf(request);
+
+    const order = await context.prisma.printOrder.findFirst({
+      where: { id, orderedByAccountId: accountId },
+      select: { id: true },
+    });
+    if (!order) throw HttpError.notFound("Commande introuvable.");
+
+    const outcome = await releaseUnpaidOrder(context, order.id, "Commande abandonnée.");
+    if (outcome === "paid") {
+      throw new HttpError(409, "Cette commande vient d'être payée.", "order_paid");
+    }
+
+    const fresh = await context.prisma.printOrder.findUniqueOrThrow({
+      where: { id: order.id },
+      include: { copyOptions: true },
+    });
+    return serializePrintOrder(fresh);
   });
 
   /**

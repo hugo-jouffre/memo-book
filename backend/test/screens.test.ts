@@ -355,6 +355,8 @@ describe("le profil", () => {
       // aujourd'hui ».
       paidThrough: null,
       hasEndedBefore: false,
+      // Rien de souscrit : ni Apple ni personne ne tient l'abonnement.
+      managedByAppStore: false,
       // Aucun abonnement, donc aucun voyage rattaché (T71).
       tripTitle: null,
       tripDestination: null,
@@ -878,6 +880,58 @@ describe("un co-voyageur", () => {
 
     expect(refused.statusCode).toBe(404);
     expect(await harness.prisma.memo.findUnique({ where: { id: memo.id } })).not.toBeNull();
+  });
+});
+
+describe("créer un voyage", () => {
+  const create = (authorization: string, payload: Record<string, unknown>) =>
+    harness.app.inject({ method: "POST", url: "/v1/trips", headers: { authorization }, payload });
+
+  it("garde l'identifiant que l'app a choisi hors ligne", async () => {
+    const account = await registerAccount(harness.app);
+    const id = "5b0f7c1e-2a4d-4c7e-9f3a-1d2e3f4a5b6c";
+
+    const response = await create(account.authorization, { id, title: "Lisbonne" });
+
+    expect(response.statusCode).toBe(201);
+    const body = response.json<{ trip: TripBody; accessCode: string }>();
+    expect(body.trip.id).toBe(id);
+    expect(body.accessCode).toMatch(/^[A-Z0-9]{6}$/);
+  });
+
+  it("se rejoue : même voyage, même code, et le dernier brouillon", async () => {
+    const account = await registerAccount(harness.app);
+    const id = "6c1a8d2f-3b5e-4d8f-8a4b-2e3f4a5b6c7d";
+
+    const first = await create(account.authorization, { id, title: "Lisbonne" });
+    // La réponse s'est perdue, et on a corrigé le titre avant le retour du réseau.
+    const replayed = await create(account.authorization, { id, title: "Lisbonne et Porto" });
+
+    expect(replayed.statusCode).toBe(200);
+    const body = replayed.json<{ trip: TripBody; accessCode: string }>();
+    expect(body.trip.title).toBe("Lisbonne et Porto");
+    expect(body.accessCode).toBe(first.json<{ accessCode: string }>().accessCode);
+    expect(await harness.prisma.memo.count({ where: { ownerAccountId: account.accountId } })).toBe(1);
+  });
+
+  it("refuse l'identifiant du voyage de quelqu'un d'autre, sans y toucher", async () => {
+    const owner = await registerAccount(harness.app, "proprietaire@memobook.app");
+    const stranger = await registerAccount(harness.app, "inconnu@memobook.app");
+    const memo = await seedTrip(owner.accountId);
+
+    const response = await create(stranger.authorization, { id: memo.id, title: "Pris" });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json<{ accessCode?: string }>().accessCode).toBeUndefined();
+    const untouched = await harness.prisma.memo.findUniqueOrThrow({ where: { id: memo.id } });
+    expect(untouched.title).toBe("Rome 2026");
+  });
+
+  it("tire un identifiant quand l'app n'en donne pas, et refuse un identifiant mal formé", async () => {
+    const account = await registerAccount(harness.app);
+
+    expect((await create(account.authorization, { title: "Sans identifiant" })).statusCode).toBe(201);
+    expect((await create(account.authorization, { id: "pas-un-uuid", title: "Rome" })).statusCode).toBe(400);
   });
 });
 

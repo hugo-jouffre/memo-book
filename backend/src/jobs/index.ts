@@ -2,6 +2,10 @@ import type { AppContext } from "../context.js";
 import { converseTurn, type ConverseJob } from "./converse.js";
 import { endSubscriptions, type EndSubscriptionsJob } from "./endSubscriptions.js";
 import { exportStats, type ExportStatsJob } from "./exportStats.js";
+import {
+  releaseAbandonedOrders,
+  type ReleaseAbandonedOrdersJob,
+} from "./releaseAbandonedOrders.js";
 import { JOB_NAMES } from "./queue.js";
 import { redactEntry, type RedactJob } from "./redact.js";
 import { renderBook, type RenderJob } from "./render.js";
@@ -16,6 +20,12 @@ import { transcribeEntry, type TranscribeJob } from "./transcribe.js";
  * monde programme ses tâches.
  */
 export const END_SUBSCRIPTIONS_CRON = "10 3 * * *";
+
+/**
+ * Le ménage des commandes jamais payées : à la 25e minute de chaque heure. Une
+ * réservation de cagnotte ne doit pas attendre une nuit de plus qu'il ne faut.
+ */
+export const RELEASE_ABANDONED_ORDERS_CRON = "25 * * * *";
 
 /**
  * L'heure de la feuille de bord : 4 h 20 UTC, après le ménage des
@@ -49,11 +59,15 @@ export function registerJobs(context: AppContext): void {
     endSubscriptions(context),
   );
   context.queue.register<ExportStatsJob>(JOB_NAMES.exportStats, () => exportStats(context));
+  context.queue.register<ReleaseAbandonedOrdersJob>(JOB_NAMES.releaseAbandonedOrders, () =>
+    releaseAbandonedOrders(context),
+  );
 
   // Les horaires sont demandés ici et posés au démarrage de la file.
   // Idempotents : relancer le serveur ne crée pas un second passage quotidien.
   void context.queue.schedule(JOB_NAMES.endSubscriptions, END_SUBSCRIPTIONS_CRON);
   void context.queue.schedule(JOB_NAMES.exportStats, EXPORT_STATS_CRON);
+  void context.queue.schedule(JOB_NAMES.releaseAbandonedOrders, RELEASE_ABANDONED_ORDERS_CRON);
 }
 
 export { JOB_NAMES };
@@ -62,6 +76,7 @@ export type {
   EndSubscriptionsJob,
   ExportStatsJob,
   RedactJob,
+  ReleaseAbandonedOrdersJob,
   RenderJob,
   StructureJob,
   TranscribeJob,

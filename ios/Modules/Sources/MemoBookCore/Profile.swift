@@ -236,6 +236,14 @@ public struct Subscription: Codable, Sendable, Hashable {
     /// n'importe qui entre deux voyages, pas celui d'un mécontent.
     public var hasEndedBefore: Bool
 
+    /// **Apple tient l'abonnement** (01/10/2026) : il a été acheté par StoreKit.
+    ///
+    /// Ça décide de la résiliation : Apple ne laisse aucune app la faire à la
+    /// place de son client, donc la feuille enregistre la raison puis ouvre la
+    /// gestion des abonnements d'iOS. Faux pour un compte qui n'a rien souscrit,
+    /// ou quand un serveur plus ancien ne sert pas le champ.
+    public var managedByAppStore: Bool
+
     public init(
         weeklyPrice: Decimal,
         isActive: Bool = false,
@@ -244,7 +252,8 @@ public struct Subscription: Codable, Sendable, Hashable {
         endsOn: Date? = nil,
         cancelledAt: Date? = nil,
         paidThrough: Date? = nil,
-        hasEndedBefore: Bool = false
+        hasEndedBefore: Bool = false,
+        managedByAppStore: Bool = false
     ) {
         self.weeklyPrice = weeklyPrice
         self.isActive = isActive
@@ -254,6 +263,7 @@ public struct Subscription: Codable, Sendable, Hashable {
         self.cancelledAt = cancelledAt
         self.paidThrough = paidThrough
         self.hasEndedBefore = hasEndedBefore
+        self.managedByAppStore = managedByAppStore
     }
 
     /// Décodage tolérant sur le drapeau ajouté avec le paywall de retour : un
@@ -269,6 +279,8 @@ public struct Subscription: Codable, Sendable, Hashable {
         cancelledAt = try container.decodeIfPresent(Date.self, forKey: .cancelledAt)
         paidThrough = try container.decodeIfPresent(Date.self, forKey: .paidThrough)
         hasEndedBefore = try container.decodeIfPresent(Bool.self, forKey: .hasEndedBefore) ?? false
+        managedByAppStore =
+            try container.decodeIfPresent(Bool.self, forKey: .managedByAppStore) ?? false
     }
 
     /// **L'offre**, telle que le paywall la présente à quelqu'un qui n'a pas

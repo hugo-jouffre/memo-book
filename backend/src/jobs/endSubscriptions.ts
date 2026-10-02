@@ -8,8 +8,8 @@ import { sweepEndedSubscriptions } from "../services/subscriptions.js";
  * autres : ceux-là traitent un souvenir ou un rendu précis, celui-ci balaie.
  * pg-boss lui en passe une vide ; on l'ignore.
  *
- * Voir `services/subscriptions.ts` pour la règle, et pour ce qui reste à faire
- * le jour où StoreKit sera branché.
+ * Voir `services/subscriptions.ts` pour la règle — et pourquoi elle ne touche
+ * plus aux abonnements App Store, qu'Apple seul peut arrêter.
  */
 export type EndSubscriptionsJob = Record<string, never>;
 

@@ -360,18 +360,21 @@ public struct BookFontCombo: Sendable, Hashable, Identifiable {
         ]
     )
 
-    /// Tout en serif : un vrai livre, celui qu'on range dans une bibliothèque.
+    /// **Playfair seule**, sur les quatre rôles : un vrai livre, celui qu'on
+    /// range dans une bibliothèque. C'est ce que la V3 propose (`3595:24024`),
+    /// et c'est tranché le 01/10/2026 — l'app y mariait Alegreya au récit.
+    ///
+    /// Un carnet réglé sur l'ancien assortiment garde ses polices et se lit
+    /// « Personnalisé », comme ceux de « Moderne ».
     public static let editorial = BookFontCombo(
         id: "editorial",
         name: "Éditorial",
-        // « Playfair » seule dans la V3 (`3595:24024`), avec cette phrase ;
-        // ici Playfair et Alegreya, voir T199.
         detail: "La plus classique",
         fonts: [
             .titles: "Playfair Display",
             .subtitles: "Playfair Display",
-            .texts: "Alegreya",
-            .funFacts: "Alegreya",
+            .texts: "Playfair Display",
+            .funFacts: "Playfair Display",
         ]
     )
 

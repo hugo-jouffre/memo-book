@@ -22,12 +22,33 @@ deux valeurs, toutes deux physiques.
 
 ```
 POST /memos/:id/orders
-  └─ la cagnotte couvre ce qu'elle peut → WalletEntry (débit), immédiate
+  └─ la cagnotte couvre ce qu'elle peut → WalletEntry (débit = réservation)
        ├─ reste 0 € ─────────────────────────────────────────→ submitted
        └─ reste > 0 € → PaymentIntent → feuille → webhook ────→ submitted
+                          │
+                          ├─ « Payer » à nouveau → POST /orders/:id/payment (même intention)
+                          └─ abandonnée, annulée, 24 h sans paiement
+                               → intention annulée → réservation rendue → cancelled
 
 POST /wallet/topup ──→ PaymentIntent ─→ feuille ─→ webhook ─→ WalletEntry + solde
 ```
+
+**La part de cagnotte est réservée à la création** — débitée tout de suite, pour
+qu'une seconde commande partie en parallèle ne dépense pas la même somme — et
+**elle revient toujours, une seule fois**, quand la commande n'est pas payée
+(`services/orderPayments.ts`) :
+
+| Ce qui ferme la commande | Qui |
+|---|---|
+| On change d'adresse, d'exemplaires ou de rapidité après une tentative | l'app, `POST /v1/orders/:id/cancel` |
+| L'intention ne peut pas s'ouvrir chez Stripe | la route de commande, aussitôt |
+| L'intention est annulée (tableau de bord, ménage) | le webhook `payment_intent.canceled` |
+| Personne ne revient payer | la tâche horaire, au-delà de 24 h |
+| Remboursement **total** avant l'impression | le webhook `charge.refunded` |
+
+> ⚠️ **L'intention s'annule toujours avant que la réservation revienne.** Stripe
+> refuse d'annuler une intention payée : c'est lui qui tranche la course entre
+> le ménage et un paiement validé à la même seconde.
 
 > ⚠️ **La cagnotte n'est pas un mode de paiement qu'on choisit.** Il n'y a pas
 > de drapeau `payWithWallet` : elle s'applique toujours, à hauteur de ce qu'elle
@@ -51,9 +72,32 @@ SwiftUI ne puisse pas ouvrir une feuille, même par accident.
 
 | Étape | Qui | Ce qui se passe |
 |---|---|---|
-| Commander | `OrderModel.pay()` | `POST /orders` → `PlacedPrintOrder` |
-| Régler | `PaymentPresenter.present` | la feuille, montée sur `clientSecret` |
+| Commander | `OrderModel.pay()` | `POST /orders` → `PlacedPrintOrder` — ou `POST /orders/:id/payment` si la commande existe déjà et que rien n'a changé |
+| Régler | `PaymentPresenter.present` | la feuille, montée sur `clientSecret`, **avec les cartes du compte** |
 | Conclure | `OrderModel.settled(_:)` | relit `GET /orders/:id` jusqu'à sortir de `draft` |
+
+**Le moyen de paiement se choisit dans la feuille de Stripe** (01/10/2026).
+L'app avait son propre formulaire de carte — numéro, échéance, cryptogramme —
+qui ne gardait que quatre chiffres en mémoire et ne parlait à personne ; une
+carte ajoutée là faisait répondre 404 à la commande (T225). Il n'existe plus :
+
+- chaque billet de paiement porte le **client Stripe du compte et une clé
+  éphémère** — la feuille montre les cartes enregistrées, propose
+  « Enregistrer pour la prochaine fois », et en retire une ;
+- « Cartes bancaires » dans le profil ouvre `CustomerSheet`, la feuille
+  « Moyens de paiement » de Stripe (`POST /v1/payments/ephemeral-key` et
+  `/setup-intent`).
+
+> ⚠️ **Une clé éphémère, pas une session client.** Dans stripe-ios 24, les
+> sessions client sont réservées à un accès bêta
+> (`@_spi(CustomerSessionBetaAccess)`). La clé éphémère est le chemin stable, à
+> une condition : être créée dans **la version d'API du SDK**, que l'app envoie
+> (`stripeApiVersion`, `StripeSDK.apiVersion`, « 2020-08-27 »). Le jour où le
+> SDK passe en 25, il faudra repasser aux sessions client.
+
+> ⚠️ **Le retour d'un paiement qui sort de l'app** (3-D Secure, Klarna) revient
+> par `memobook://stripe-redirect`, et `RootView.onOpenURL` le rend à Stripe
+> (`StripeSDK.handle`). Sans ça, la feuille attendait indéfiniment.
 
 `OrderPayment.settlement` tranche en un seul endroit ce que l'app doit faire :
 `.wallet` (rien à encaisser), `.card` (feuille), ou `.unavailable`. Ce dernier
@@ -67,8 +111,9 @@ une commande non payée ne doit jamais ressembler à une commande passée.
 > le webhook écrit au registre, une seconde ou deux plus tard.
 
 > ⚠️ Annuler la feuille **n'est pas une erreur** : la commande reste en
-> brouillon et « Payer » la reprend. La clé d'idempotence étant l'identifiant de
-> la commande, Stripe rend la même intention — pas un second débit.
+> brouillon et « Payer » la reprend **sur la même intention**
+> (`POST /v1/orders/:id/payment`) — pas de seconde commande, pas de second
+> débit de cagnotte. Jusqu'au 01/10/2026, chaque « Payer » en créait une neuve.
 
 ## Ce qui rend le rejeu inoffensif
 
@@ -82,9 +127,29 @@ la base de données plutôt que par du code applicatif :
 | `print_orders.stripePaymentIntentId` unique | schéma | Deux intentions sur une commande |
 | `updateMany where status: "draft"` | `stripeWebhook.ts` | Réécrire `submittedAt` au rejeu |
 | `SELECT … FOR UPDATE` sur le compte | `walletLedger.ts` | Deux débits concurrents qui passeraient tous les deux |
+| `wallet_entries.idempotencyKey` unique | schéma | Rendre deux fois une réservation ; créditer deux fois une recharge vue par deux événements (`topup:<intention>`) |
+| Montant reçu = montant de la commande | `stripeWebhook.ts` | Envoyer à l'impression un carnet payé à moitié |
 
 Une erreur de traitement est **journalisée puis acquittée** (200) : un 500 ferait
 rejouer, et un bug déterministe reviendrait toutes les heures pendant trois jours.
+**Sauf une panne passagère** — base saturée, Stripe injoignable — qui répond
+500 : l'acquitter perdait l'événement, et une commande payée restait en `draft`.
+
+### Les remboursements
+
+`charge.refunded` porte le **cumul** remboursé, inscrit dans
+`print_orders.refundedCents` :
+
+- **partiel** : inscrit, rien d'autre — un geste sur les frais de port n'annule
+  pas un carnet ;
+- **total, avant l'impression** : la commande est annulée et sa part de cagnotte
+  revient ;
+- **total, une fois imprimée ou expédiée** : le statut ne bouge pas, et le log
+  demande au support de trancher pour la cagnotte.
+
+Une **recharge** remboursée est reprise sur la cagnotte, plafonnée au solde ; si
+elle a déjà été dépensée, le log dit ce qui manque. Un litige
+(`charge.dispute.created`) est journalisé en erreur et posé sur la commande.
 
 ## Vérifier en local
 
@@ -103,6 +168,15 @@ cd backend && npm run dev
 
 ```bash
 cd backend && npm run stripe:e2e
+```
+
+Et, sans serveur ni base, **ce que le simulé ne peut pas prouver** — que Stripe
+accepte nos appels : client, clé éphémère dans la version du SDK iOS,
+intention d'enregistrement, intention avec reçu et adresse, annulation, refus
+d'annuler une intention payée.
+
+```bash
+cd backend && npm run stripe:gateway-check
 ```
 
 Le dernier déroule tout le parcours avec le **vrai** Stripe en mode test :
@@ -149,7 +223,20 @@ Les trois mêmes variables, **en mode test** — le compte est le bac à sable
 |---|---|
 | Identifiant | `we_1UG765BknFHnQoHL2aidvVgI` |
 | URL | `https://api-production-9f35a.up.railway.app/v1/webhooks/stripe` |
-| Événements | `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.refunded` |
+| Événements | `payment_intent.succeeded`, `payment_intent.payment_failed`, `payment_intent.canceled`, `charge.refunded`, `charge.dispute.created` |
+
+> 🚨 **`payment_intent.canceled` et `charge.dispute.created` sont à ajouter au
+> point de terminaison** (01/10/2026). Sans le premier, une intention annulée
+> dans le tableau de bord ne rend pas sa réservation avant le ménage horaire :
+>
+> ```bash
+> stripe webhook_endpoints update we_1UG765BknFHnQoHL2aidvVgI \
+>   -d "enabled_events[]=payment_intent.succeeded" \
+>   -d "enabled_events[]=payment_intent.payment_failed" \
+>   -d "enabled_events[]=payment_intent.canceled" \
+>   -d "enabled_events[]=charge.refunded" \
+>   -d "enabled_events[]=charge.dispute.created"
+> ```
 
 Ce sont exactement les `HANDLED_EVENTS` de `services/payments.ts` : s'y abonner
 plus largement ferait livrer des événements qu'on acquitte sans rien en faire.
@@ -170,6 +257,11 @@ Une réponse qui parle de signature invalide veut dire que le secret est posé.
 Si elle dit « `STRIPE_WEBHOOK_SECRET` est vide », c'est que la variable manque —
 et à ce moment-là **aucune commande ne peut sortir de `draft` en production**.
 
+**En production, l'API refuse de démarrer sans ses trois clés, et le worker sans
+la clé secrète** (01/10/2026) : sans elles, le serveur passait sur l'encaissement
+simulé, qui aurait accepté un webhook non signé. Le simulé, lui, ne croit plus
+aucun webhook hors de la suite de tests.
+
 Le serveur **refuse de démarrer** si les deux clés ne sont pas du même mode
 (`sk_live_` avec `pk_test_`, ou l'inverse) : le mélange fait échouer le paiement
 *après* que l'utilisateur a validé Face ID.
@@ -181,6 +273,8 @@ Le serveur **refuse de démarrer** si les deux clés ne sont pas du même mode
 | **Adresse du siège** | Tableau de bord → Tax → Settings | `status: pending` — **aucune taxe n'est calculée** |
 | **Immatriculation TVA** | Tax → Registrations | Stripe ne collecte rien, **et ne lève aucune erreur** |
 | **Identifiant marchand Apple Pay** | Portail Apple + Stripe | La feuille montre les cartes seules |
+| **Événements du webhook** | Développeurs ▸ Webhooks (commande ci-dessus) | Une intention annulée à la main ne rend sa réservation qu'au ménage horaire |
+| **Reçus par e-mail** | Paramètres ▸ E-mails clients ▸ Paiements réussis | Les intentions portent `receipt_email`, mais Stripe n'envoie rien tant que la case n'est pas cochée — et jamais en mode test |
 | Clé restreinte (`rk_`) | Développeurs → Clés API | — (bonne pratique avant la production) |
 
 > 🚨 **Le piège de Stripe Tax.** Sans immatriculation active, Stripe ne
@@ -249,11 +343,12 @@ paywall et « 3 × 0,00 € » sur l'estimation. Un prix ne dépend pas de ce qu
 personne a déjà acheté : c'est un tarif, il vit dans un catalogue. Côté app,
 `Subscription.displayedWeeklyPrice` est le second filet — il ne rend jamais zéro.
 
-⚠️ **Ni l'un ni l'autre ne s'encaisse aujourd'hui.** Apple impose l'achat
-intégré pour un service numérique : les deux passeront par **StoreKit**, et
-`PAYMENT_KIND` ne porte donc aucune valeur d'abonnement (voir `billing.ts`).
-Les références Stripe existent pour le jour où l'offre se vend aussi hors de
-l'app — le web —, et pour que le back-end sache de quel prix il parle.
+⚠️ **L'abonnement s'encaisse par StoreKit, l'extension pas encore** (01/10/2026).
+Apple impose l'achat intégré pour un service numérique : `PAYMENT_KIND` ne
+porte donc aucune valeur d'abonnement (voir `billing.ts`), et c'est la section
+[L'abonnement App Store](#labonnement-app-store-storekit) qui dit comment il
+s'achète. Les références Stripe existent pour le jour où l'offre se vend aussi
+hors de l'app — le web —, et pour que le back-end sache de quel prix il parle.
 
 **Les deux prix vivent sous le même produit Stripe**, « Abonnement MemoBook »
 (`prod_VGyIuAiG0DcXLa`) : l'extension n'est pas une seconde offre, c'est une
@@ -290,11 +385,139 @@ Le dernier jour, rien ne change : la résiliation garde sa phrase d'avant,
 « l'abonnement s'arrête aujourd'hui ». Il n'y a pas de sursis à annoncer pour un
 jour qui est déjà là.
 
+## L'abonnement App Store (StoreKit)
+
+1,99 €/semaine, produit **`com.memobook.app.subscription.weekly`**, groupe
+d'abonnements « MemoBook ». L'identifiant est écrit trois fois et doit rester
+le même partout : `APP_STORE_PRODUCT_IDS` (`subscriptionCatalog.ts`),
+`StoreKitCatalog` (`MemoBookPayments`) et `ios/Config/MemoBook.storekit`.
+Apple ne le laisse ni modifier ni réutiliser.
+
+```
+App ─ Product.purchase(appAccountToken: id du compte)
+  └─ feuille d'Apple ─ Face ID ─→ transaction signée (JWS)
+       └─ POST /v1/subscriptions/app-store ─→ vérifiée ─→ subscriptions + registre
+            └─ 2xx ─→ transaction.finish()           (sinon : rejouée au lancement)
+
+Apple ─ POST /v1/webhooks/app-store (notifications v2)
+  └─ renouvellement, renouvellement coupé, délai de grâce, expiration, remboursement
+```
+
+**Deux portes, la même écriture** (`services/appStoreSubscriptions.ts`) : l'app
+ouvre le micro dans la seconde qui suit l'achat, Apple dit tout le reste — y
+compris ce qui se passe app fermée. Une ligne `subscriptions` par
+`originalTransactionId` (rouverte quand on se réabonne au voyage suivant), une
+ligne `subscription_transactions` par semaine payée.
+
+| Chez Apple | `subscriptions.status` | Accès |
+|---|---|---|
+| actif, renouvellement armé | `active` | oui |
+| actif, renouvellement coupé dans iOS | `cancelled` | jusqu'à `renewsAt` |
+| délai de grâce | `past_due` | oui, Apple l'accorde |
+| nouvelle tentative de prélèvement | `expired` | non |
+| expiré | `expired` | non |
+| remboursé, révoqué | `expired` | non, dès la révocation |
+
+### Ce qui rend le rejeu inoffensif, ici aussi
+
+| Garde-fou | Où | Ce qu'il empêche |
+|---|---|---|
+| `subscriptions.providerSubscriptionId` unique | schéma | Deux abonnements pour un paiement |
+| `subscription_transactions.transactionId` unique | schéma | Inscrire deux fois une semaine |
+| `providerUpdatedAt` | `appStoreSubscriptions.ts` | Un événement en retard qui rouvrirait un abonnement coupé |
+| `finish()` après le 2xx seulement | `SubscriptionStore.swift` | Perdre un achat fait dans un tunnel |
+
+### 🚨 Apple seul résilie
+
+**Aucune app ne peut résilier à la place de son client.** C'est pourquoi la
+promesse « arrêt automatique à la fin du voyage » est devenue un **rappel**
+(Hugo, 01/10/2026) :
+
+- la passe de fin de voyage (`sweepEndedSubscriptions`) **ignore** les lignes
+  StoreKit — les fermer pendant qu'Apple prélève, c'était faire payer
+  quelqu'un dont le micro est fermé ;
+- `GET /v1/home` rend `traveller.subscriptionOutlivesTrip` quand l'abonnement va
+  se renouveler sans voyage en cours, et l'accueil propose de résilier — une
+  fois par jour au plus ;
+- `POST /v1/profile/subscription/cancel` n'enregistre que la **raison** d'un
+  abonnement StoreKit ; l'app ouvre ensuite la feuille de gestion des
+  abonnements d'iOS, et c'est `AUTO_RENEW_DISABLED` qui ferme la ligne.
+
+### Trois pièges
+
+> 🚨 **App Review achète en sandbox, contre le serveur de production.** Le
+> serveur garde un vérificateur par environnement ; un serveur qui ne
+> connaîtrait que la production refuserait l'achat du testeur, et Apple
+> rejetterait l'app pour « achat qui ne marche pas ».
+
+> 🚨 **Une transaction Xcode n'est signée par personne.** La bibliothèque d'Apple
+> saute la vérification pour `Xcode` et `LocalTesting`. Ces environnements ne
+> passent qu'avec `APP_STORE_ALLOW_XCODE=true`, et le serveur **refuse de
+> démarrer** avec cette valeur en production.
+
+> ⚠️ **Sans contrat *Paid Apps* actif, aucun produit ne revient.**
+> `Product.products(for:)` rend une liste vide, même en sandbox, et le paywall
+> dit « L'abonnement n'est pas disponible pour le moment ». Ce n'est pas le code.
+
+### Configuration
+
+| Variable | Où | Note |
+|---|---|---|
+| `APPLE_BUNDLE_ID` | Railway, `.env` | Déjà posée pour « Continuer avec Apple » : la même |
+| `APP_STORE_APP_APPLE_ID` | Railway | *App Store Connect ▸ App Information ▸ Apple ID*. Vide : seuls les achats sandbox passent |
+| `APP_STORE_ALLOW_XCODE` | `.env` local seulement | Jamais en production |
+
+Aucun secret : vérifier une signature ne demande que le certificat racine
+d'Apple, rangé dans `backend/certs/apple/` et copié dans l'image Docker.
+
+Vérifier que le déployé reçoit, sans rien écrire :
+
+```bash
+curl -s -X POST https://api-production-9f35a.up.railway.app/v1/webhooks/app-store \
+  -H 'content-type: application/json' -d '{"signedPayload":"x.e30.y"}'
+```
+
+`invalid_signature` : la route est là et refuse ce qu'Apple n'a pas signé.
+
+### Ce qui se fait dans App Store Connect
+
+Dans cet ordre — les deux premiers prennent des jours :
+
+1. **Business ▸ Agreements** : contrat *Paid Apps*, compte bancaire, formulaires
+   fiscaux. Attendre le statut *Active*.
+2. **Small Business Program** (developer.apple.com) : 15 % de commission au lieu
+   de 30 %.
+3. **Monetization ▸ Subscriptions** : groupe « MemoBook », abonnement
+   `com.memobook.app.subscription.weekly`, 1 semaine, France 1,99 €,
+   localisation française, capture du paywall pour la revue, partage familial
+   désactivé.
+4. **App Information ▸ App Store Server Notifications** : la même URL en
+   production et en sandbox, **version 2** —
+   `https://api-production-9f35a.up.railway.app/v1/webhooks/app-store`. Puis
+   *Request a Test Notification* : le log `Notification App Store de test
+   reçue.` le confirme.
+5. **Users and Access ▸ Sandbox** : un compte de test à une adresse jamais
+   utilisée chez Apple.
+6. **À la soumission** : l'abonnement se joint à une **nouvelle version** de
+   l'app (section *In-App Purchases and Subscriptions*), et la description de
+   l'App Store porte un lien vers les conditions d'utilisation.
+
+Côté Xcode, **rien à cocher** : l'achat intégré n'a pas d'entitlement.
+
+### Vérifier, dans l'ordre
+
+1. **Simulateur, ⌘R** : le schéma charge `ios/Config/MemoBook.storekit` — on
+   achète sans App Store Connect. Le serveur de production refuse ces achats
+   (non signés) : l'app l'affiche. Pour aller jusqu'au serveur, back-end local
+   avec `APP_STORE_ALLOW_XCODE=true`. *Debug ▸ StoreKit ▸ Manage Transactions*
+   rembourse ou expire à la main.
+2. **iPhone, compte sandbox** (*Réglages ▸ Développeur ▸ Compte sandbox*), schéma
+   sans fichier StoreKit : **une semaine dure 3 minutes**, on voit arriver les
+   renouvellements, la coupure et l'expiration dans les logs de Railway.
+3. **TestFlight** : le même sandbox, sur le binaire de production.
+
 ## Ce qui n'existe pas encore
 
-- **L'abonnement StoreKit** — colonnes (`Subscription`), paywall,
-  `FreemiumStatus`, catalogue et sursis de la semaine payée sont prêts ; la
-  plomberie d'achat ne l'est pas.
 - **L'extension des limites de souvenirs** — `POST /v1/trips/:id/memory-plan`
   pose le palier et laisse dérouler le parcours de bout en bout, mais
   n'encaisse rien. C'est le reçu StoreKit qui l'appellera.

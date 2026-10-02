@@ -155,4 +155,54 @@ final class ProfileModelTests: XCTestCase {
     }
 
     private struct TimedOut: Error {}
+
+    // MARK: - Un abonnement tenu par Apple (01/10/2026)
+
+    /// Un abonné App Store, dans sa semaine payée.
+    private func appStoreSubscriber() -> TravellerProfile {
+        var profile = TravellerProfile.fixture
+        profile.subscription.isActive = true
+        profile.subscription.cancelledAt = nil
+        profile.subscription.managedByAppStore = true
+        profile.subscription.paidThrough = Date.now.addingTimeInterval(5 * 86_400)
+        return profile
+    }
+
+    func testTheReasonLeavesWithoutClosingTheSubscription() async throws {
+        // Apple seul résilie : la raison part, l'abonnement reste ouvert à
+        // l'écran tant que la feuille d'iOS n'a rien coupé.
+        var sent: SubscriptionCancellationReason?
+        let subscriber = appStoreSubscriber()
+        let model = ProfileModel(
+            source: { subscriber },
+            cancelSubscription: { reason in
+                sent = reason
+                return subscriber
+            }
+        )
+        await model.load()
+
+        model.recordCancellationReason(.tooExpensive)
+
+        XCTAssertEqual(model.profile?.subscription.isActive, true)
+        try await waitUntil { sent == .tooExpensive }
+        XCTAssertEqual(model.profile?.subscription.isActive, true)
+    }
+
+    func testARenewalCutInIOSKeepsThePaidWeek() async {
+        let subscriber = appStoreSubscriber()
+        let model = ProfileModel(source: { subscriber })
+        await model.load()
+
+        model.acknowledgeAppStoreRenewal(false)
+
+        XCTAssertEqual(model.profile?.subscription.isActive, false)
+        XCTAssertNotNil(model.profile?.subscription.cancelledAt)
+        // La semaine est réglée : le micro reste ouvert jusqu'à son terme.
+        XCTAssertTrue(model.subscriptionGrantsAccess)
+
+        model.acknowledgeAppStoreRenewal(true)
+        XCTAssertEqual(model.profile?.subscription.isActive, true)
+        XCTAssertNil(model.profile?.subscription.cancelledAt)
+    }
 }

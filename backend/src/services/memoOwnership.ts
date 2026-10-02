@@ -39,9 +39,22 @@ export async function createMemoFor(
     } catch (error) {
       const isCollision =
         error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
-      if (!isCollision || attempt >= 4) throw error;
+      // Seul le code d'accès se retire au sort. Un identifiant déjà pris —
+      // celui que l'app a choisi pour un voyage créé hors ligne — ne changera
+      // pas au prochain essai : c'est à l'appelant de reconnaître le voyage.
+      if (!isCollision || isTakenId(error) || attempt >= 4) throw error;
     }
   }
+}
+
+/** L'erreur dit que l'identifiant du carnet est déjà pris, et non son code d'accès. */
+export function isTakenId(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") return false;
+  // Prisma nomme la contrainte par ses colonnes (`["id"]`), ou par son nom
+  // (`memos_pkey`) selon le moteur.
+  const target: unknown = error.meta?.["target"];
+  const fields = Array.isArray(target) ? target : [target];
+  return fields.some((field) => field === "id" || field === "memos_pkey");
 }
 
 /**

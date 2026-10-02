@@ -7,7 +7,7 @@
 > et des décisions listées en fin de fichier. Le ticket Notion « Module
 > Conversation avec MEMO » renvoie ici : **ce fichier fait foi**, Notion en est
 > la copie que Hugo partage. La fiche d'écran (mesures, composants, états) reste
-> dans `ui-development.md` § 14 ; ce document dit le **produit** et le
+> dans `archive/ui-development-journal.md` § 14 ; ce document dit le **produit** et le
 > **contrat**, pas le dessin.
 
 ## 1. Qui parle
@@ -306,9 +306,23 @@ répond à chacune, dans l'ordre. Le vocal enregistré depuis l'accueil suit
 exactement le même chemin, vers **un** carnet — celui dont la conversation
 s'ouvre.
 
-Ce que le fil ne fait pas : s'ouvrir sans réseau. Il n'est jamais mis en cache
-(§ 2), donc un fil qu'on n'a pas encore chargé ne se charge pas dans le
-métro ; ce qu'on y a dit avant la coupure, en revanche, reste sous les yeux.
+**Le fil s'ouvre aussi sans réseau** (Hugo, 01/10/2026 : « créer un voyage
+doit être possible hors ligne de bout en bout ; pareil pour les vocaux et les
+textes »). Il n'est toujours pas mis en cache (§ 2) : ce qui s'ouvre est un fil
+**local** — l'accueil de MEMO, ce qui attend d'être envoyé, et une boîte qui le
+dit (« Tu sembles hors ligne. **Ce que tu racontes est gardé sur ton
+téléphone**… »). On y raconte comme d'habitude, tout part dans la file. Le
+premier message arrivé au retour du réseau fait relire le vrai fil.
+
+Deux cas l'ouvrent : une panne de **transport**, et un voyage **créé hors
+ligne** que le serveur n'a pas encore reçu — celui-là s'ouvre comme un carnet
+neuf, sur la puce du contexte. Un refus du serveur (5xx, 4xx) ne s'efface pas
+derrière un fil local : il se dit.
+
+Le voyage créé hors ligne passe **avant** ce qu'on y raconte : il porte
+l'identifiant que l'app a tiré, et `POST /v1/trips` le reprend tel quel (et se
+rejoue sans doublon). Un vocal pour un carnet que le serveur ne connaît pas
+attend donc son voyage au lieu d'être refusé — et perdu.
 
 ## 10. Ce que MEMO ne fait jamais
 
@@ -347,7 +361,7 @@ métro ; ce qu'on y a dit avant la coupure, en revanche, reste sous les yeux.
 
 Le détail — champs, codes d'erreur, tests, phasage en quatre PR — est dans le
 plan de la branche `atelier-conversation` et sera reporté dans
-`ui-development.md` § 14.1 à mesure. Le choix du moteur lui-même — pourquoi
+`archive/ui-development-journal.md` § 14.1 à mesure. Le choix du moteur lui-même — pourquoi
 Sonnet 5 ici et Opus 5 pour la rédaction, ce que ça coûte, et ce qui ferait
 changer d'avis — est dans [`modeles-ia.md`](modeles-ia.md) (23/09/2026).
 

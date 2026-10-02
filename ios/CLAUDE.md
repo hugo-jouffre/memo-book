@@ -262,7 +262,7 @@ police ou marge codée en dur ailleurs.
   empilement de fenêtres au lieu d'un chemin. **Une exception, voulue** :
   l'aperçu du carnet se pose *sur* la feuille d'abonnement (`BookPreviewSheet`
   depuis `SubscriptionSheet`), parce qu'on y va voir et qu'on revient — un seul
-  recul, pas un chemin (Hugo, 16/09/2026 ; `docs/ui-development.md` § 16.9).
+  recul, pas un chemin (Hugo, 16/09/2026 ; `docs/archive/ui-development-journal.md` § 16.9).
 - Le focus appartient à l'écran, pas au champ : un `@FocusState` sur une énum
   passé aux `BrandTextField`, pour que le clavier enchaîne les champs.
 - `BrandChatBubble` est **la** bulle de conversation (fond, queue, marges,
@@ -302,9 +302,10 @@ police ou marge codée en dur ailleurs.
 - `BrandDisclosureCard` est **la** carte qui se déplie — les chapitres des
   conditions d'utilisation et de la politique de confidentialité. Repliée,
   crème et filet, trois lignes ; dépliée, l'aplat bleu `outline` et tout le
-  texte. L'état appartient à l'écran, et c'est l'écran qui tronque — et qui
-  dit, en mesurant la troncature, si la carte a une suite (`isExpandable`) :
-  sans suite, pas de chevron, et le toucher ne fait rien.
+  texte. L'état appartient à l'écran ; le texte, lui, est **un seul contenu**
+  que la carte coupe elle-même et déroule (01/10/2026) : ce qu'on a lu reste
+  en place, seul ce qui manque arrive. Elle mesure donc aussi si elle a une
+  suite : sans suite, pas de chevron, et le toucher ne fait rien.
 - `BrandSwipeDrawer` est **le** tiroir d'actions d'une carte : un glissé vers
   la gauche découvre ses gestes (supprimer, partager, prévisualiser un voyage ;
   retirer un co-voyageur), qui arrivent en quinconce avec le doigt ; l'appui
@@ -397,7 +398,7 @@ dans un SVG, et les embarquer recopierait toute la planche dans chaque icône.
 Le second sert les **remplaçants** : les pictogrammes que le jeu de marque n'a
 pas — les catégories de la galerie, le train du filtre « Transports ». Ils
 viennent de Lucide et non de Figma, la seule exception à la règle « les assets
-viennent de Figma », nommée dans `docs/ui-development.md` §13. Leur clé est
+viennent de Figma », nommée dans `docs/archive/ui-development-journal.md` §13. Leur clé est
 résolue par `MemoBookDesign/LucideIcon.swift`, qui retombe sur une boussole pour
 une clé inconnue : ajouter une catégorie en base ne demande pas de livrer une
 version.
@@ -569,7 +570,8 @@ responsabilité :
 |---|---|---|
 | `Connectivity` | `Networking` | une **valeur** — une fonction qui rend un flux « en ligne / hors ligne », `NWPathMonitor` derrière. Un test en fabrique une qu'il pilote |
 | `PendingRecordingStore` | `Recording` | la file **sur le disque**, un acteur — un `PendingTurn` par tour : vocal, texte ou photos, avec ses fichiers à côté |
-| `RecordingOutbox` | `Feature` | décide d'envoyer ou de garder, vide la file au retour du réseau, et **dit le sort de chaque tour** (`turnDeliveries()`) à la conversation |
+| `PendingTripStore` | `Feature` | les voyages créés hors ligne, **sur le disque** — un `PendingTrip` par voyage : son brouillon entier et le compte qui l'a créé |
+| `RecordingOutbox` | `Feature` | décide d'envoyer ou de garder, vide la file au retour du réseau — **les voyages d'abord, ce qu'on y a raconté ensuite** —, et dit le sort de chaque tour (`turnDeliveries()`) et de chaque voyage (`tripSync(for:)`) |
 
 `AppDependencies` monte la file au démarrage (`outbox.start()`), pas à
 l'ouverture d'un écran : c'est ce qui permet de savoir qu'on est hors ligne
@@ -586,6 +588,29 @@ d'échouer), `waiting` (ce qui attend pour ce fil, reposé en bulles à
 l'ouverture) et `deliveries` (le flux des tours partis, avec le reçu du
 serveur). Le vocal de l'accueil va à **un** carnet, le premier en cours — celui
 dont la conversation s'ouvre avec la bulle déjà posée.
+
+**Un voyage se crée hors ligne de bout en bout** (Hugo, 01/10/2026). L'app
+tire son UUID (en minuscules) à la validation de l'avant-dernière étape, le
+garde sur le disque (`outbox.saveTrip`) et passe tout de suite au code d'accès :
+**seul le code attend le serveur** — barre d'attente, « Partager » gris.
+« Commencer ! » ouvre le voyage quand même : l'accueil
+(`mergingLocalTrips(into:)`), l'écran du voyage et la conversation le montrent
+d'après son brouillon tant que le serveur ne l'a pas. `POST /v1/trips` reprend
+l'identifiant et **se rejoue** (même voyage, même code, dernier brouillon) : un
+retour en arrière renvoie simplement la création. Un tour destiné à un voyage en
+attente attend avec lui — envoyé avant, il rendrait 404 et serait perdu. Un
+voyage en attente appartient au compte qui l'a créé (`outbox.setAccount`) :
+un autre compte ne le voit ni ne l'envoie.
+
+**La conversation s'ouvre sans réseau** sur un fil **local**
+(`ChatTransport.offlineThread`, `ChatThread.offline`) : l'accueil de MEMO, ce
+qui attend, et une boîte « Tu sembles hors ligne ». Ce n'est pas un cache — le
+fil n'en a toujours pas, voir plus haut. Seule une panne de transport l'ouvre
+(ou un voyage pas encore reçu) ; une erreur du serveur se dit.
+
+Dans le bac à sable, « Passer hors ligne » coupe aussi le double de l'API
+(`SandboxNetwork`) : l'accueil, le voyage et le fil répondent comme sans
+réseau, et le parcours se rejoue entier.
 
 Trois règles portent tout le reste :
 
@@ -604,7 +629,7 @@ Trois règles portent tout le reste :
    renvoyer mettrait le souvenir deux fois dans le carnet.
 
 Ce que l'écran en montre — une boîte, quatre états, et les boutons de bac à
-sable qui les rejouent — est dans `docs/ui-development.md` §9.3.
+sable qui les rejouent — est dans `docs/archive/ui-development-journal.md` §9.3.
 
 ⚠️ **Un envoi ne survit pas encore à la mise en arrière-plan.** `URLSession` en
 tâche de fond serait la réponse complète, et demande un envoi par fichier et une

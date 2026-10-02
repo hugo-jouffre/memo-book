@@ -2,6 +2,7 @@ import Foundation
 import MemoBookCore
 import MemoBookNetworking
 import MemoBookPayments
+import os
 
 extension AppDependencies {
     /// Le graphe **sans serveur et sans argent** : previews Xcode, tests
@@ -13,7 +14,12 @@ extension AppDependencies {
     /// garantit qu'une preview Xcode n'ouvre jamais Stripe.
     @MainActor
     public static func preview() -> AppDependencies {
-        AppDependencies(api: PreviewAPI(), payments: StubPaymentPresenter())
+        AppDependencies(
+            api: PreviewAPI(),
+            payments: StubPaymentPresenter(),
+            subscriptions: StubSubscriptionStore(),
+            paymentMethods: StubPaymentMethodsPresenter()
+        )
     }
 }
 
@@ -22,6 +28,26 @@ extension AppDependencies {
 /// Il garde son état en mémoire : ajouter un souvenir dans un aperçu met
 /// vraiment la liste à jour, ce qui rend les aperçus utilisables pour
 /// travailler les écrans sans back-end lancé.
+/// Le « Passer hors ligne » du bac à sable, tel que le double de l'API le
+/// voit.
+///
+/// Sans lui, le bouton ne coupait que la file : l'accueil, le voyage et la
+/// conversation continuaient de se lire comme en ligne, et le parcours hors
+/// ligne d'un voyage créé dans l'avion ne se rejouait pas (01/10/2026). Le
+/// double répond désormais comme un réseau absent — une panne de
+/// **transport** — sur les lectures que ce parcours traverse, et sur la
+/// création. Posé par ``RecordingOutbox/debugSetOffline(_:)``, qui n'existe
+/// pas dans l'app livrée : là, il reste faux.
+enum SandboxNetwork {
+    static let isOffline = OSAllocatedUnfairLock(initialState: false)
+
+    static func failIfOffline() throws {
+        if isOffline.withLock({ $0 }) {
+            throw APIError.transport(URLError(.notConnectedToInternet), url: nil)
+        }
+    }
+}
+
 public actor PreviewAPI: MemoBookAPI {
     private var memosById: [String: MemoDetail] = [:]
     private var rendersById: [String: Render] = [:]
@@ -32,6 +58,10 @@ public actor PreviewAPI: MemoBookAPI {
     private var walletSandbox: Wallet = .fixture
     /// Nul tant que rien n'a été corrigé : le profil est alors le jeu d'essai.
     private var editedProfile: TravellerProfile?
+
+    /// Les voyages créés dans le bac à sable, le plus récent d'abord : ils
+    /// restent sur l'accueil une fois « arrivés », comme sur le serveur.
+    private var createdTrips: [Trip] = []
 
     /// Les fils de conversation du double, un par voyage — voir `PreviewChat.swift`.
     let chat = PreviewChatBox()
@@ -180,9 +210,19 @@ public actor PreviewAPI: MemoBookAPI {
     // Les jeux d'essai déjà écrits pour les aperçus font l'affaire : le double
     // n'a pas à réinventer un contenu que `HomeFeed.fixture` porte déjà.
 
-    public func homeFeed() async throws -> HomeFeed { .fixture }
+    public func homeFeed() async throws -> HomeFeed {
+        try SandboxNetwork.failIfOffline()
+        let fixture = HomeFeed.fixture
+        guard !createdTrips.isEmpty else { return fixture }
+        return HomeFeed(traveller: fixture.traveller, trips: createdTrips + fixture.trips, showcase: fixture.showcase)
+    }
 
-    public func tripDetail(id: String) async throws -> TripDetail { .fixture(id: id) }
+    public func tripDetail(id: String) async throws -> TripDetail {
+        try SandboxNetwork.failIfOffline()
+        // Un voyage créé ici est lui-même, pas le voyage de Rome du jeu d'essai.
+        if let created = createdTrips.first(where: { $0.id == id }) { return TripDetail(trip: created) }
+        return .fixture(id: id)
+    }
 
     public func validateStep(tripId: String, stepId: String) async throws -> TripDetail {
         let detail = TripDetail.fixture(id: tripId)
@@ -199,8 +239,15 @@ public actor PreviewAPI: MemoBookAPI {
 
     /// La création rend un voyage qui ressemble au brouillon, et le code
     /// d'accès de la maquette : de quoi traverser les six étapes sans serveur.
+    /// Sous **l'identifiant que l'app a tiré**, comme le serveur.
     public func createTrip(_ draft: TripDraft) async throws -> CreatedTrip {
-        .fixture(draft)
+        try SandboxNetwork.failIfOffline()
+        let created = CreatedTrip.fixture(draft, id: draft.id)
+        // Rejouée, la création corrige le voyage au lieu d'en ajouter un.
+        createdTrips.removeAll { $0.id == created.trip.id }
+        createdTrips.insert(created.trip, at: 0)
+        await chat.open(created.trip)
+        return created
     }
 
     public func updateTrip(id: String, draft: TripDraft) async throws -> CreatedTrip {
@@ -259,6 +306,23 @@ public actor PreviewAPI: MemoBookAPI {
         var profile = editedProfile ?? .fixture
         profile.subscription.isActive = false
         profile.subscription.cancelledAt = .now
+        editedProfile = profile
+        return profile
+    }
+
+    /// L'achat ouvre l'abonnement **dans le double** : rouvrir le profil doit
+    /// montrer un abonné, tenu par Apple — sans qu'aucune signature soit lue.
+    public func syncAppStoreTransaction(
+        signedTransaction: String,
+        memoId: String?
+    ) async throws -> TravellerProfile {
+        _ = (signedTransaction, memoId)
+        var profile = editedProfile ?? .fixture
+        profile.subscription.isActive = true
+        profile.subscription.cancelledAt = nil
+        profile.subscription.managedByAppStore = true
+        profile.offeredSteps = nil
+        profile.remainingSteps = nil
         editedProfile = profile
         return profile
     }
@@ -646,13 +710,44 @@ public actor PreviewAPI: MemoBookAPI {
     /// Le `clientSecret` fabriqué ne monte **aucune** feuille de paiement, et
     /// c'est voulu : un aperçu ne doit pas pouvoir ouvrir Stripe, même par
     /// accident.
-    public func startWalletTopUp(amountCents: Int) async throws -> PaymentIntentTicket {
-        PaymentIntentTicket(
+    public func startWalletTopUp(
+        amountCents: Int,
+        stripeApiVersion: String?
+    ) async throws -> PaymentIntentTicket {
+        _ = stripeApiVersion
+        return PaymentIntentTicket(
             clientSecret: "pi_preview_secret",
             publishableKey: "pk_test_preview",
             amountCents: amountCents,
             currency: "eur"
         )
+    }
+
+    /// Le double n'a pas d'intention à reprendre : ses commandes naissent
+    /// payées. Il rend donc la commande, sans rien à régler.
+    public func resumePrintOrderPayment(
+        orderId: String,
+        stripeApiVersion: String?
+    ) async throws -> ResumedOrderPayment {
+        _ = stripeApiVersion
+        return ResumedOrderPayment(order: try await printOrder(id: orderId), payment: nil)
+    }
+
+    public func cancelPrintOrder(orderId: String) async throws -> PrintOrder {
+        try await printOrder(id: orderId)
+    }
+
+    public func paymentMethodsKey(stripeApiVersion: String) async throws -> CustomerPaymentKey {
+        _ = stripeApiVersion
+        return CustomerPaymentKey(
+            customerId: "cus_preview",
+            ephemeralKeySecret: "ek_test_preview",
+            publishableKey: "pk_test_preview"
+        )
+    }
+
+    public func paymentMethodsSetupIntent() async throws -> String {
+        "seti_preview_secret_preview"
     }
 
     // MARK: - La cagnotte

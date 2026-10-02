@@ -18,6 +18,23 @@ public protocol PaymentPresenter: Sendable {
     func present(_ ticket: PaymentIntentTicket) async -> PaymentOutcome
 }
 
+/// La version d'API Stripe que pin le SDK de l'app — « 2020-08-27 » pour
+/// stripe-ios 24. Le serveur en a besoin pour créer une clé éphémère que la
+/// feuille sache lire ; ce module est le seul à connaître le SDK, d'où cette
+/// constante plutôt qu'une valeur écrite ailleurs.
+public enum StripeSDK {
+    public static var apiVersion: String { STPAPIClient.apiVersion }
+
+    /// Rend à Stripe un lien qui lui revient — le retour d'un paiement qui
+    /// passe par une autre app ou une page web (3-D Secure, Klarna…). Sans
+    /// ça, la feuille attendait un retour qui n'arrivait jamais. Rend `true`
+    /// quand le lien était pour lui.
+    @discardableResult
+    public static func handle(_ url: URL) -> Bool {
+        StripeAPI.handleURLCallback(with: url)
+    }
+}
+
 /// La vraie feuille Stripe.
 @MainActor
 public final class StripePaymentSheetPresenter: PaymentPresenter {
@@ -63,7 +80,16 @@ public final class StripePaymentSheetPresenter: PaymentPresenter {
             )
         }
 
-        guard let presenter = Self.topViewController() else {
+        // **Les cartes du compte.** Avec le client et sa clé éphémère, la
+        // feuille montre les cartes déjà enregistrées, propose « Enregistrer
+        // pour la prochaine fois », et laisse en retirer une — tout ce que
+        // l'app faisait semblant de faire avec son propre formulaire. Sans
+        // eux (un serveur plus ancien), on paie quand même, carte saisie.
+        if let customerId = ticket.customerId, let key = ticket.ephemeralKeySecret {
+            configuration.customer = .init(id: customerId, ephemeralKeySecret: key)
+        }
+
+        guard let presenter = UIApplication.topViewController() else {
             return .failed(PaymentError.noPresenter.localizedDescription)
         }
 
@@ -84,28 +110,6 @@ public final class StripePaymentSheetPresenter: PaymentPresenter {
                 }
             }
         }
-    }
-
-    /// Le contrôleur au-dessus de la pile, celui qui peut présenter.
-    ///
-    /// L'app est en SwiftUI : il n'y a pas de contrôleur sous la main, et
-    /// Stripe en exige un. On remonte donc depuis la fenêtre active, en
-    /// traversant les feuilles déjà présentées — sans quoi la feuille de
-    /// paiement s'ouvrirait derrière celle de la commande.
-    private static func topViewController() -> UIViewController? {
-        let scene = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first { $0.activationState == .foregroundActive }
-
-        guard var top = scene?.windows.first(where: \.isKeyWindow)?.rootViewController else {
-            return nil
-        }
-
-        while let presented = top.presentedViewController {
-            top = presented
-        }
-
-        return top
     }
 }
 

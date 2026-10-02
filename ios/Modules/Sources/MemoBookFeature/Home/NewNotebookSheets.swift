@@ -53,7 +53,7 @@ struct NewNotebookSheet: View {
                     title: "Rejoins une aventure",
                     // ⚠️ La maquette vouvoie ici (« Écrivez »), alors que l'app
                     // tutoie partout ailleurs. Même cas que les cartes du
-                    // Welcome (T8 de `docs/ui-development.md`) : on implémente
+                    // Welcome (T8 de `docs/archive/ui-development-journal.md`) : on implémente
                     // la copie de Figma en l'état, la correction se fait dans
                     // Figma.
                     detail: "Écrivez l’aventure à plusieurs"
@@ -205,7 +205,7 @@ struct NewNotebookOptionCard: View {
     }
 
     /// La plaque d'icône du design system : 44 × 40, rayon 12, bleu à 30 %.
-    /// Voir « Fond d'icône » dans `docs/ui-development.md`.
+    /// Voir « Fond d'icône » dans `docs/archive/ui-development-journal.md`.
     @ScaledMetric(relativeTo: .body) private var plateWidth: CGFloat = 44
     @ScaledMetric(relativeTo: .body) private var plateHeight: CGFloat = 40
     /// Le glyphe remplit presque la plaque : dessiné à 20, il n'en faisait que

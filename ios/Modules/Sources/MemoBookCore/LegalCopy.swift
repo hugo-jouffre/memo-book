@@ -17,8 +17,4 @@ public enum LegalCopy {
     /// Le pied de page : la question, puis le lien vers le support.
     public static let helpPrompt = "Besoin d’aide ?"
     public static let helpLink = "Découvrir notre FAQ"
-
-    /// Ce que VoiceOver dit du geste sur une carte.
-    public static let expandHint = "Déplier"
-    public static let collapseHint = "Replier"
 }

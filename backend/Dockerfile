@@ -48,9 +48,9 @@ RUN apt-get update \
 COPY backend/package.json backend/package-lock.json ./
 # `prisma` — le CLI — est une dépendance d'exécution, pas de développement :
 # Railway lance `prisma migrate deploy` **dans cette image** avant chaque
-# déploiement (`preDeployCommand`, `railway.json`). Sans lui, le code partait
-# en production avant son schéma, et l'API rendait 500 (deux fois, les 22 et
-# 27/09/2026).
+# déploiement (la « Pre-deploy Command » des deux services, réglée dans
+# Railway : voir docs/deploiement.md). Sans lui, le code partait en production
+# avant son schéma, et l'API rendait 500 (les 22/09, 27/09 et 01/10/2026).
 RUN npm ci --omit=dev && npm cache clean --force
 
 # Le client Prisma engendré vit dans `node_modules` et ne survit pas au
@@ -58,6 +58,10 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/backend/node_modules/.prisma ./node_modules/.prisma
 COPY --from=build /app/backend/dist ./dist
 COPY backend/prisma ./prisma
+# Le certificat racine d'Apple, lu par `services/appStore.ts` pour vérifier
+# chaque achat d'abonnement. Absent, le serveur démarre mais refuse tous les
+# achats — en toutes lettres, pas en 500.
+COPY backend/certs ./certs
 
 # Ce que le code lit à la racine du dépôt : voir l'avertissement en tête de
 # fichier. Trois chemins aujourd'hui — `MemoBook Generator/templates/` et

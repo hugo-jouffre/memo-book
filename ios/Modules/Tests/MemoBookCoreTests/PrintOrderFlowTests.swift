@@ -137,23 +137,21 @@ final class PrintOrderFlowTests: XCTestCase {
         XCTAssertTrue(draft.hasCompleteAddress)
     }
 
-    func testApplePayCountsAsAPaymentMethod() {
-        var draft = self.draft(copies: 1)
-        XCTAssertFalse(draft.hasPaymentMethod)
+    /// **La commande ne porte plus de carte** (01/10/2026) : elle se choisit
+    /// dans la feuille de Stripe. Ce qui part au serveur, c'est le brouillon —
+    /// et la version du SDK, posée par l'app, qui fait revenir les cartes du
+    /// compte.
+    func testTheRequestCarriesTheDraftAndNoCard() throws {
+        var request = NewPrintOrderRequest(renderId: "render-1", draft: self.draft(copies: 2))
+        XCTAssertEqual(request.copies, 2)
+        XCTAssertNil(request.stripeApiVersion)
 
-        draft.usesApplePay = true
-        XCTAssertTrue(draft.hasPaymentMethod)
-    }
-
-    /// Apple Pay n'enregistre aucune carte : la commande ne doit pas en porter
-    /// une restée sélectionnée avant qu'on en change.
-    func testApplePayDropsThePreviouslySelectedCard() {
-        var draft = self.draft(copies: 1)
-        draft.paymentCardId = "card-perso"
-        draft.usesApplePay = true
-
-        let request = NewPrintOrderRequest(renderId: "render-1", draft: draft)
-        XCTAssertNil(request.paymentCardId)
+        request.stripeApiVersion = "2020-08-27"
+        let json = try XCTUnwrap(
+            String(data: try JSONEncoder().encode(request), encoding: .utf8)
+        )
+        XCTAssertTrue(json.contains("\"stripeApiVersion\":\"2020-08-27\""))
+        XCTAssertFalse(json.contains("paymentCardId"))
     }
 
     // MARK: - Ce qui se lit

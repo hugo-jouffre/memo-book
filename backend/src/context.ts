@@ -3,6 +3,8 @@ import pino, { type Logger } from "pino";
 import type { Env } from "./env.js";
 import { InlineQueue, PgBossQueue, type JobQueue } from "./jobs/queue.js";
 import { splitPoolBudget, withConnectionLimit } from "./lib/databasePool.js";
+import { SchemaGuard } from "./lib/schemaGuard.js";
+import { createAppStoreVerifier, type AppStoreVerifier } from "./services/appStore.js";
 import { createBookRenderer, type BookRenderer } from "./services/apitemplate.js";
 import { createRedactor, type Redactor } from "./services/redaction.js";
 import { createResponder, type MemoResponder } from "./services/conversation.js";
@@ -24,6 +26,8 @@ export interface AppContext {
   env: Env;
   logger: Logger;
   prisma: PrismaClient;
+  /** Dit si la base a toutes les migrations que ce code attend — voir `lib/schemaGuard.ts`. */
+  schema: SchemaGuard;
   queue: JobQueue;
   storage: MediaStorage;
   /** Vérifie les jetons d'identité Apple et Google. */
@@ -39,6 +43,8 @@ export interface AppContext {
   renderer: BookRenderer;
   /** Encaissement Stripe : carnets imprimés et cagnotte. Jamais l'abonnement. */
   payments: PaymentGateway;
+  /** L'abonnement : vérifie ce qu'Apple signe — voir `services/appStore.ts`. */
+  appStore: AppStoreVerifier;
 }
 
 export interface CreateContextOptions {
@@ -63,7 +69,7 @@ export function createContext(env: Env, options: CreateContextOptions = {}): App
     queue.onError = (error) => logger.error({ err: error }, "Panne de la file de travaux.");
   }
 
-  const base: AppContext = {
+  const base: Omit<AppContext, "schema"> = {
     env,
     logger,
     prisma: new PrismaClient({
@@ -80,7 +86,10 @@ export function createContext(env: Env, options: CreateContextOptions = {}): App
     publisher: createAssetPublisher(env),
     renderer: createBookRenderer(env),
     payments: createPaymentGateway(env),
+    appStore: createAppStoreVerifier(env),
   };
 
-  return { ...base, ...options.overrides };
+  const context = { ...base, ...options.overrides };
+  // Construit après les surcharges : le garde lit la base que le reste lit.
+  return { ...context, schema: options.overrides?.schema ?? new SchemaGuard(context.prisma) };
 }

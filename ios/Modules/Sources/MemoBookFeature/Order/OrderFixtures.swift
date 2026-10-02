@@ -206,8 +206,7 @@ extension NewPrintOrderRequest {
             copies: 1,
             shippingSpeed: .standard,
             shipping: OrderContext.fixture.shipping,
-            copyOptions: [PrintedCopyOptions(position: 1)],
-            paymentCardId: nil
+            copyOptions: [PrintedCopyOptions(position: 1)]
         )
     }
 }

@@ -13,7 +13,9 @@ import SwiftUI
 /// réponses du support : un contrat se lit d'une traite, chapitre après
 /// chapitre, et ouvrir onze feuilles pour le parcourir en ferait un
 /// formulaire. Repliée, la carte montre les trois premières lignes du
-/// chapitre.
+/// chapitre — **du chapitre lui-même**, intertitres et puces compris, et non
+/// d'un résumé : c'est ce qui permet à la carte de dérouler la suite sans
+/// redessiner ce qu'on a lu (01/10/2026, voir ``BrandDisclosureCard``).
 ///
 /// **Rien n'est ouvert à l'arrivée, et un seul chapitre l'est à la fois**
 /// (Clara, 26/09/2026). Le premier s'ouvrait tout seul, et les cartes bleues
@@ -34,16 +36,6 @@ public struct LegalDocumentView: View {
 
     /// « Besoin d'aide ? Découvrir notre FAQ ». Faux depuis l'écran d'entrée.
     private let showsHelp: Bool
-
-    /// Les chapitres dont l'aperçu **tient** en trois lignes, mesurés à
-    /// l'affichage. Un chapitre qui y tient et qui n'a qu'un paragraphe n'a
-    /// rien à déplier : sa carte perd son chevron — « si le contenu est trop
-    /// long, on peut appuyer » (Hugo, 17/09/2026), et pas autrement.
-    ///
-    /// Mesuré et non deviné : le nombre de lignes dépend de la largeur de
-    /// l'écran et de la taille de texte, et un chapitre qui tient sur un
-    /// 17 Pro Max déborde à AX3.
-    @State private var fittingChapters: Set<String> = []
 
     public init(
         document: LegalDocument,
@@ -80,43 +72,26 @@ public struct LegalDocumentView: View {
     private var chapters: some View {
         VStack(spacing: MemoBookSpacing.s) {
             ForEach(document.chapters) { chapter in
-                let isExpandable = isExpandable(chapter)
+                let isExpanded = expandedChapter == chapter.id
 
+                // **Un chapitre qui tient en trois lignes n'a rien à
+                // déplier** : la carte le mesure elle-même et retire son
+                // chevron — « si le contenu est trop long, on peut appuyer »
+                // (Hugo, 17/09/2026), et pas autrement.
                 BrandDisclosureCard(
                     title: LegalCopy.chapterTitle(chapter),
-                    isExpandable: isExpandable,
-                    isExpanded: binding(for: chapter)
+                    isExpanded: binding(for: chapter),
+                    collapsedLineCount: Self.previewLineCount,
+                    lineFont: LegalText.font
                 ) {
-                    LegalText(chapter.preview, tone: .preview, lineLimit: Self.previewLineCount) { isTruncated in
-                        if isTruncated {
-                            fittingChapters.remove(chapter.id)
-                        } else {
-                            fittingChapters.insert(chapter.id)
-                        }
-                    }
-                } expanded: {
-                    LegalChapterBody(chapter: chapter)
+                    LegalChapterBody(chapter: chapter, isExpanded: isExpanded)
                 }
-                .accessibilityHint(
-                    isExpandable
-                        ? (expandedChapter == chapter.id ? LegalCopy.collapseHint : LegalCopy.expandHint)
-                        : ""
-                )
             }
         }
     }
 
     /// Ce qu'une carte repliée laisse voir : trois lignes, comme la maquette.
     private static let previewLineCount = 3
-
-    /// Y a-t-il une suite à montrer ? Oui si l'aperçu est tronqué, ou si le
-    /// chapitre a une **structure** que l'aperçu aplatit — des intertitres,
-    /// des puces, des lignes : trois lignes d'adresse jointes par des espaces
-    /// tiennent en trois lignes et ne sont pas pour autant le chapitre.
-    private func isExpandable(_ chapter: LegalChapter) -> Bool {
-        if !fittingChapters.contains(chapter.id) { return true }
-        return chapter.blocks.count > 1
-    }
 
     private func binding(for chapter: LegalChapter) -> Binding<Bool> {
         Binding(
@@ -165,8 +140,15 @@ public enum LegalIntent: Sendable, Hashable {
 // MARK: - Le corps d'un chapitre
 
 /// Les blocs d'un chapitre, les uns sous les autres.
+///
+/// Les mêmes dans les deux états de la carte : seule la couleur change — en
+/// sourdine replié, comme sur la maquette ; à l'encre déplié, pour le contraste
+/// sur l'aplat bleu.
 private struct LegalChapterBody: View {
     let chapter: LegalChapter
+    let isExpanded: Bool
+
+    private var tone: LegalText.Tone { isExpanded ? .full : .preview }
 
     var body: some View {
         VStack(alignment: .leading, spacing: MemoBookSpacing.snug) {
@@ -175,18 +157,18 @@ private struct LegalChapterBody: View {
                 case .heading(let text):
                     Text(text)
                         .font(MemoBookFont.tagline)
-                        .foregroundStyle(MemoBookColor.ink)
+                        .foregroundStyle(isExpanded ? MemoBookColor.ink : MemoBookColor.inkMuted)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityAddTraits(.isHeader)
                         // Un intertitre se rapproche de ce qu'il annonce, pas
                         // de ce qui le précède.
                         .padding(.top, MemoBookSpacing.xs)
                 case .paragraph(let text):
-                    LegalText(text, tone: .full)
+                    LegalText(text, tone: tone)
                 case .lines(let lines):
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(lines, id: \.self) { line in
-                            LegalText(line, tone: .full)
+                            LegalText(line, tone: tone)
                         }
                     }
                 case .bullets(let items):
@@ -194,10 +176,10 @@ private struct LegalChapterBody: View {
                         ForEach(items, id: \.self) { item in
                             HStack(alignment: .top, spacing: MemoBookSpacing.xs) {
                                 Text("•")
-                                    .font(MemoBookFont.taglineRegular)
-                                    .foregroundStyle(MemoBookColor.ink)
+                                    .font(LegalText.font)
+                                    .foregroundStyle(isExpanded ? MemoBookColor.ink : MemoBookColor.inkMuted)
                                     .accessibilityHidden(true)
-                                LegalText(item, tone: .full)
+                                LegalText(item, tone: tone)
                             }
                         }
                     }
@@ -221,65 +203,22 @@ private struct LegalText: View {
         case full
     }
 
+    /// 14 et non 16 : c'est un texte qu'on parcourt, et onze chapitres au
+    /// corps de texte feraient trois écrans de plus. C'est aussi la police
+    /// dont la carte compte les lignes repliées.
+    static let font = MemoBookFont.taglineRegular
+
     private let text: AttributedString
     private let tone: Tone
-    private let lineLimit: Int?
-    private let onTruncation: ((Bool) -> Void)?
 
-    /// La hauteur du texte limité, et celle qu'il aurait sans limite. Quand
-    /// les deux sont connues, leur écart dit si quelque chose a été coupé.
-    @State private var limitedHeight: CGFloat?
-    @State private var fullHeight: CGFloat?
-
-    /// - Parameters:
-    ///   - lineLimit: le nombre de lignes au-delà duquel le texte se coupe.
-    ///     `nil` ne coupe rien.
-    ///   - onTruncation: appelé avec `true` si la limite a coupé quelque chose,
-    ///     `false` sinon — et **à nouveau** quand la largeur ou la taille de
-    ///     texte change la réponse.
-    init(
-        _ markup: String,
-        tone: Tone,
-        lineLimit: Int? = nil,
-        onTruncation: ((Bool) -> Void)? = nil
-    ) {
+    init(_ markup: String, tone: Tone) {
         self.tone = tone
-        self.lineLimit = lineLimit
-        self.onTruncation = onTruncation
         text = Self.resolved(markup)
     }
 
     var body: some View {
-        styled
-            .lineLimit(lineLimit)
-            .background {
-                if onTruncation != nil {
-                    // Le même texte, sans limite, dessiné caché sous le
-                    // premier : la seule façon en SwiftUI de savoir si
-                    // `lineLimit` a coupé, c'est de comparer avec ce qu'il
-                    // aurait fait sans. Le fond reçoit la largeur du texte
-                    // visible et prend sa propre hauteur — celle qui compte.
-                    styled
-                        .hidden()
-                        .onGeometryChange(for: CGFloat.self, of: \.size.height) { fullHeight = $0 }
-                }
-            }
-            .onGeometryChange(for: CGFloat.self, of: \.size.height) { limitedHeight = $0 }
-            .onChange(of: limitedHeight) { report() }
-            .onChange(of: fullHeight) { report() }
-    }
-
-    private func report() {
-        guard let onTruncation, let limitedHeight, let fullHeight else { return }
-        // Un demi-point d'écart, c'est l'arrondi d'une ligne, pas une ligne.
-        onTruncation(fullHeight > limitedHeight + 0.5)
-    }
-
-    private var styled: some View {
         Text(text)
-            // 14 et non 16 : c'est un texte qu'on parcourt, et onze chapitres
-            // au corps de texte feraient trois écrans de plus.
-            .font(MemoBookFont.taglineRegular)
+            .font(Self.font)
             .foregroundStyle(tone == .preview ? MemoBookColor.inkMuted : MemoBookColor.ink)
             // Le lien seul est vert : c'est la couleur de ce qu'on peut
             // toucher, partout dans l'app.

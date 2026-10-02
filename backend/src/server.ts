@@ -1,6 +1,6 @@
 import { buildApp } from "./app.js";
 import { createContext, type AppContext } from "./context.js";
-import { loadEnv } from "./env.js";
+import { assertApiPaymentsConfigured, loadEnv } from "./env.js";
 import { startQueueWhenPossible } from "./jobs/queue.js";
 
 /**
@@ -53,6 +53,7 @@ async function listen(
  */
 async function main(): Promise<void> {
   const env = loadEnv();
+  assertApiPaymentsConfigured(env);
   const isDevelopment = env.NODE_ENV === "development";
   const context = createContext(env);
   const app = await buildApp(context);

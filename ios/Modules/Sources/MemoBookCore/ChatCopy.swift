@@ -39,6 +39,26 @@ public enum ChatCopy {
         return "\(souvenirs) - \(composed)"
     }
 
+    // MARK: - Hors ligne
+
+    /// Le fil s'est ouvert sans le serveur — voir `ChatModel.isOffline`. Même
+    /// phrase que la boîte de l'accueil, et le même gras : ce qui est garanti
+    /// malgré la panne.
+    public static let offline =
+        "Tu sembles hors ligne. **Ce que tu racontes est gardé sur ton téléphone**, et partira dès ta reconnexion."
+
+    // MARK: - La mention de confidentialité
+
+    /// Le premier mot du fil, en gris au-dessus de toute bulle (01/10/2026) :
+    /// on y raconte des choses intimes, et il faut le savoir à l'abri.
+    ///
+    /// ⚠️ **« Et tes co-voyageurs », pas « toi seul ».** Sur un voyage partagé,
+    /// le fil est commun — chaque bulle y porte le prénom de celui qui parle
+    /// (FAQ, `ChatContext.memberCount`) —, et un fil solo le devient dès
+    /// qu'on invite quelqu'un. La phrase reste vraie dans les deux cas.
+    public static let privacyNote =
+        "Ta conversation est privée : seuls toi et tes co-voyageurs pouvez la lire."
+
     // MARK: - L'accueil d'une conversation vide
 
     /// « Nouveau voyage à Rome ! 🇮🇹 » — le drapeau vient de ``Destination/flag``,

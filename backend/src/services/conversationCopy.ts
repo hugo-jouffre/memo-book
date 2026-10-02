@@ -32,7 +32,7 @@ export const GREETING_MESSAGE =
 /**
  * La première bulle blanche, celle que la maquette dessine en entier — et
  * **elle seule** : elle se termine déjà sur une question, rien ne vient la
- * recouvrir (§ 26 de `docs/ui-development.md`).
+ * recouvrir (§ 26 de `docs/archive/ui-development-journal.md`).
  */
 export const OPENING_TEXT =
   "Bonjour 👋\n" +

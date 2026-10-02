@@ -191,14 +191,16 @@ struct TripCreationStepContent: View {
     /// Le code d'accès, et de quoi l'envoyer. Rien à valider ici : le voyage
     /// existe déjà, c'est la validation de l'étape précédente qui l'a créé.
     ///
-    /// **L'étape se dessine pendant que le voyage part** (Hugo, 29/09/2026) :
-    /// seul le code porte une barre d'attente, et « Partager » reste gris tant
-    /// qu'il n'y a rien à partager. Le squelette entier de l'écran ne se pose
-    /// plus ici — voir ``TripCreationView/showsSkeleton``.
+    /// **L'étape se dessine pendant que le voyage part** (Hugo, 29/09/2026) —
+    /// et même sans réseau du tout (01/10/2026) : tout ce qu'elle montre est
+    /// sur le téléphone, sauf le code, que seul le serveur tire. Le code porte
+    /// donc la seule barre d'attente de l'écran, et « Partager » reste gris
+    /// tant qu'il n'y a rien à partager. Hors ligne, l'attente dure jusqu'au
+    /// retour du réseau ; « Commencer ! », lui, ouvre le voyage tout de suite.
     private var companions: some View {
         TripAccessCode(
-            code: model.created?.accessCode,
-            tripTitle: model.created?.trip.title ?? model.draft.title
+            code: model.accessCode,
+            tripTitle: model.trip?.title ?? model.draft.title
         )
     }
 }
@@ -627,7 +629,10 @@ struct TripAccessCode: View {
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .disabled(code == nil)
+            // Pas `.disabled` : il pâlit aussi « Code d’accès : », et seule la
+            // barre d'attente doit dire qu'on attend (Hugo, 01/10/2026). Sans
+            // code, la ligne ne répond simplement pas au doigt.
+            .allowsHitTesting(code != nil)
             .accessibilityLabel(code.map { "Copier le code d’accès \($0)" } ?? "Code d’accès en cours de création")
 
             BrandButton(

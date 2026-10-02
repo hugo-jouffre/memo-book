@@ -4,7 +4,7 @@ import type { AppContext } from "../context.js";
 import { normalizeAccessCode } from "../lib/accessCode.js";
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
-import { createMemoFor, visibleToAccount } from "../services/memoOwnership.js";
+import { createMemoFor, isTakenId, visibleToAccount } from "../services/memoOwnership.js";
 import { normalizeNarrationPace } from "../services/narrationPace.js";
 import { effectiveStage, stageFromDates } from "../services/tripStage.js";
 import {
@@ -78,6 +78,19 @@ const tripDraft = z.object({
   // clé à l'entrée — voir `services/narrationPace.ts`.
   narrationPace: z.string().trim().min(1).max(100).nullish(),
   photoTextRatio: z.number().int().min(0).max(100).optional(),
+});
+
+/**
+ * La création, c'est le brouillon **et l'identifiant que l'app a choisi**.
+ *
+ * Un voyage se crée hors ligne de bout en bout (Hugo, 01/10/2026) : l'app
+ * tire son UUID au moment où on valide, ouvre le voyage, y fait raconter, et
+ * n'envoie le tout qu'au retour du réseau. L'identifiant doit donc être le
+ * même avant et après — les vocaux en file le portent déjà. Il est optionnel :
+ * un client d'avant le 01/10 n'en envoie pas, et le serveur en tire un.
+ */
+const newTrip = tripDraft.extend({
+  id: z.string().regex(UUID_PATTERN, "identifiant de voyage invalide").optional(),
 });
 
 /** « Rejoins une aventure » : le code tel qu'il a été collé. */
@@ -159,7 +172,7 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
     ]);
 
     return {
-      traveller: serializeTraveller(account),
+      traveller: serializeTraveller(account, memos),
       trips: memos.map(serializeTrip),
       showcase: showcase ? serializeShowcase(showcase) : null,
     };
@@ -188,16 +201,23 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
    * La création se fait à la validation de l'avant-dernière étape, et non au
    * « Commencer ! » de la fin : le code se partage avant que le voyage ne
    * s'ouvre, donc le voyage doit exister avant l'écran qui le partage.
+   *
+   * **Elle se rejoue.** L'app crée hors ligne et envoie plus tard, depuis une
+   * file : un envoi dont la réponse s'est perdue repart sous le même
+   * identifiant. Le serveur reconnaît alors le voyage de ce compte, y pose le
+   * dernier brouillon — on a pu corriger les dates entre-temps — et rend le
+   * **même** code d'accès, en 200. Un identifiant qui désigne le voyage de
+   * quelqu'un d'autre est refusé (409) sans rien dire de ce voyage.
    */
   app.post("/v1/trips", async (request, reply) => {
     const accountId = accountIdOf(request);
-    const draft = tripDraft.parse(request.body ?? {});
+    const { id, ...draft } = newTrip.parse(request.body ?? {});
 
     if (draft.startDate && draft.endDate && draft.endDate < draft.startDate) {
       throw HttpError.badRequest("La date de fin précède la date de début.");
     }
 
-    const memo = await createMemoFor(context.prisma, accountId, {
+    const fields = {
       title: draft.title,
       theme: draft.theme ?? null,
       startDate: draft.startDate ?? null,
@@ -205,12 +225,44 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
       narrationPace: normalizeNarrationPace(draft.narrationPace),
       ...(draft.photoTextRatio === undefined ? {} : { photoTextRatio: draft.photoTextRatio }),
       stage: stageFromDates(draft.startDate ?? null, draft.endDate ?? null),
-    });
+    };
 
-    return reply.code(201).send({
-      trip: serializeTrip({ ...memo, members: [] }),
-      accessCode: memo.accessCode,
-    });
+    const replay = async () => {
+      if (!id) return null;
+      const existing = await context.prisma.memo.findUnique({
+        where: { id },
+        select: { ownerAccountId: true },
+      });
+      if (!existing) return null;
+      if (existing.ownerAccountId !== accountId) {
+        throw HttpError.conflict("Ce voyage existe déjà.");
+      }
+      const memo = await context.prisma.memo.update({
+        where: { id },
+        data: fields,
+        include: tripInclude,
+      });
+      return reply.code(200).send({ trip: serializeTrip(memo), accessCode: memo.accessCode });
+    };
+
+    const replayed = await replay();
+    if (replayed) return replayed;
+
+    try {
+      const memo = await createMemoFor(context.prisma, accountId, { ...(id ? { id } : {}), ...fields });
+      return reply.code(201).send({
+        trip: serializeTrip({ ...memo, members: [] }),
+        accessCode: memo.accessCode,
+      });
+    } catch (error) {
+      // Deux envois du même voyage dans la même seconde — le retour du réseau
+      // et le retour dans l'app : le second trouve la ligne du premier.
+      if (id && isTakenId(error)) {
+        const replayedLate = await replay();
+        if (replayedLate) return replayedLate;
+      }
+      throw error;
+    }
   });
 
   /**

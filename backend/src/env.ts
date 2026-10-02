@@ -190,12 +190,40 @@ const schema = z.object({
    *   point de terminaison. Celui de `stripe listen` en local n'est pas celui
    *   de la production.
    *
-   * Vides, les routes de paiement échouent explicitement plutôt que de laisser
-   * croire qu'une commande est payée.
+   * En production, l'API refuse de démarrer sans les trois, et le worker sans
+   * la clé secrète (`assertApiPaymentsConfigured`). Ailleurs, vides, c'est
+   * l'encaissement simulé — qui ne croit aucun webhook hors de la suite de
+   * tests.
    */
   STRIPE_SECRET_KEY: z.string().default(""),
   STRIPE_PUBLISHABLE_KEY: z.string().default(""),
   STRIPE_WEBHOOK_SECRET: z.string().default(""),
+
+  /**
+   * L'App Store — **l'abonnement**, acheté par StoreKit. Voir
+   * `services/appStore.ts`.
+   *
+   * Aucun secret : vérifier une transaction ne demande que le certificat racine
+   * d'Apple (`certs/apple/`), l'identifiant de l'app (`APPLE_BUNDLE_ID`, le
+   * même que pour « Continuer avec Apple ») et, pour la production, son
+   * identifiant numérique — *App Store Connect ▸ App Information ▸ Apple ID*.
+   * Vide, les achats de production sont refusés et ceux du sandbox passent :
+   * c'est l'état d'un serveur de développement.
+   */
+  APP_STORE_APP_APPLE_ID: optional(z.coerce.number().int().positive()),
+
+  /**
+   * Accepte les achats faits **dans Xcode**, avec le fichier `MemoBook.storekit`.
+   *
+   * 🚨 **Jamais en production.** Une transaction Xcode n'est signée par
+   * personne : la bibliothèque d'Apple saute la vérification de signature pour
+   * cet environnement, et n'importe qui pourrait s'en fabriquer une. Le serveur
+   * refuse de démarrer si on l'active avec `NODE_ENV=production`.
+   */
+  APP_STORE_ALLOW_XCODE: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
 });
 
 export type Env = z.infer<typeof schema> & {
@@ -277,5 +305,47 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     }
   }
 
+  // **En production, pas d'encaissement simulé.** Sans clé, le serveur
+  // basculait sur le simulé : les commandes recevaient un secret factice, et le
+  // webhook n'aurait vérifié aucune signature. Mieux vaut un déploiement qui
+  // échoue qu'une API qui encaisse pour de faux (audit du 01/10/2026). La clé
+  // secrète suffit ici — le worker n'a qu'elle, et n'a besoin que d'elle ; les
+  // deux autres sont exigées par l'API seule, voir `assertApiPaymentsConfigured`.
+  if (env.NODE_ENV === "production" && env.STRIPE_SECRET_KEY === "") {
+    throw new Error(
+      "Encaissement non configuré en production : STRIPE_SECRET_KEY est vide. " +
+        "Voir docs/paiements.md § Configuration.",
+    );
+  }
+
+  // Un achat Xcode n'est pas signé : l'accepter en production ouvrirait
+  // l'abonnement à quiconque sait écrire un JSON. Voir `APP_STORE_ALLOW_XCODE`.
+  if (env.APP_STORE_ALLOW_XCODE && env.NODE_ENV === "production") {
+    throw new Error(
+      "APP_STORE_ALLOW_XCODE=true en production : les achats Xcode ne sont pas signés. " +
+        "Retire la variable du service.",
+    );
+  }
+
   return { ...env, live, stripeLive: secretLive };
+}
+
+/**
+ * Ce que **l'API** exige de plus en production : la clé publique, que l'app
+ * reçoit avec chaque paiement, et le secret du webhook, sans lequel aucune
+ * commande ne sortirait de `draft`. Le worker ne sert ni l'un ni l'autre, et
+ * ne les a pas sur Railway — d'où un contrôle à part, appelé par `server.ts`.
+ */
+export function assertApiPaymentsConfigured(env: Env): void {
+  if (env.NODE_ENV !== "production") return;
+
+  const missing = (["STRIPE_PUBLISHABLE_KEY", "STRIPE_WEBHOOK_SECRET"] as const).filter(
+    (name) => env[name] === "",
+  );
+  if (missing.length > 0) {
+    throw new Error(
+      `Encaissement non configuré sur l'API : ${missing.join(", ")} vide(s). ` +
+        "Voir docs/paiements.md § Configuration.",
+    );
+  }
 }

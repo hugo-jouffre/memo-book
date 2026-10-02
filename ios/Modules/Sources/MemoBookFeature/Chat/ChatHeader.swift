@@ -238,3 +238,22 @@ struct ChatGreetingView: View {
         .padding(.vertical, MemoBookSpacing.xl)
     }
 }
+
+/// « Ta conversation est privée… » — la mention posée **en tête du fil**,
+/// avant le premier message.
+///
+/// **Dans le fil, pas par-dessus** : elle défile avec la conversation, comme
+/// le début d'une page, au lieu de flotter sous l'en-tête et de cacher une
+/// bulle. En gris, en petit : elle rassure sans prendre la parole.
+struct ChatPrivacyNote: View {
+    var body: some View {
+        Text(ChatCopy.privacyNote)
+            .font(MemoBookFont.caption)
+            .foregroundStyle(MemoBookColor.inkMuted)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, MemoBookSpacing.screenMargin)
+            .padding(.vertical, MemoBookSpacing.xs)
+    }
+}

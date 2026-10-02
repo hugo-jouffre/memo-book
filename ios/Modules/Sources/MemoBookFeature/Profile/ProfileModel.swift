@@ -231,10 +231,6 @@ public final class ProfileModel {
         }
     }
 
-    public func selectCard(id: String) {
-        mutate { $0.selectedCardId = id }
-    }
-
     /// Enregistre l'adresse que la feuille a validée — la première comme une
     /// correction : c'est le même geste, sur les mêmes quatre lignes.
     ///
@@ -316,27 +312,6 @@ public final class ProfileModel {
         save(ProfileEdit(gender: gender), confirming: .gender)
     }
 
-    /// Enregistre une carte à partir du formulaire.
-    ///
-    /// **Seuls les quatre derniers chiffres sont conservés** — voir
-    /// ``PaymentCard``. Le numéro complet, la date et le cryptogramme ne sont ni
-    /// gardés ni journalisés : le jour où le paiement existe, ils partiront
-    /// directement au prestataire sans passer par nos modèles.
-    public func addCard(number: String, label: String) {
-        let digits = number.filter(\.isNumber)
-        guard digits.count >= 4 else { return }
-
-        mutate { profile in
-            let card = PaymentCard(
-                id: UUID().uuidString,
-                label: label,
-                last4: String(digits.suffix(4))
-            )
-            profile.cards.append(card)
-            profile.selectedCardId = card.id
-        }
-    }
-
     /// Souscrire, ou re-souscrire après une résiliation — et **cesser d'être un
     /// compte à quota dans le même geste**.
     ///
@@ -344,8 +319,10 @@ public final class ProfileModel {
     /// vraie souscription : un abonné n'a plus d'étapes offertes à compter, et
     /// laisser la pastille se vider derrière lui serait un décompte sans objet.
     ///
-    /// ⚠️ **Aucun achat n'a lieu.** Le jour où StoreKit sera branché, c'est ici
-    /// que se posera la transaction, et le reste de la feuille ne bougera pas.
+    /// ⚠️ **Aucun achat n'a lieu ici.** L'achat passe par le paywall et
+    /// StoreKit (``SubscriptionPurchase``) ; ceci ne reste que pour un
+    /// abonnement qui n'est pas tenu par Apple — un abonnement App Store se
+    /// réarme dans la feuille d'iOS, voir ``acknowledgeAppStoreRenewal(_:)``.
     public func activateSubscription() {
         mutate { profile in
             profile.subscription.isActive = true
@@ -405,6 +382,33 @@ public final class ProfileModel {
                 // encore ouvert, et l'écran doit le dire.
                 await load()
             }
+        }
+    }
+
+    /// Résilier un abonnement **tenu par Apple** (01/10/2026) : seule la raison
+    /// part d'ici.
+    ///
+    /// Apple ne laisse aucune app résilier à la place de son client : c'est la
+    /// feuille de gestion des abonnements d'iOS qui coupe le renouvellement, et
+    /// la notification d'Apple qui ferme la ligne côté serveur. Fermer
+    /// l'abonnement ici l'aurait fait croire arrêté pendant qu'Apple
+    /// continuait de prélever. L'écran ne bouge donc qu'au retour de la
+    /// feuille d'iOS — voir ``acknowledgeAppStoreRenewal(_:)``.
+    public func recordCancellationReason(_ reason: SubscriptionCancellationReason?) {
+        guard let cancelSubscriptionRemotely else { return }
+        // Sans attendre, et sans message en cas d'échec : c'est une réponse de
+        // sondage, pas un état du compte.
+        Task { _ = try? await cancelSubscriptionRemotely(reason) }
+    }
+
+    /// Ce qu'Apple dit du renouvellement, lu **sur l'appareil** au retour de la
+    /// feuille d'iOS. L'écran suit tout de suite ; le serveur l'apprend par la
+    /// notification d'Apple, quelques secondes plus tard, et le prochain
+    /// chargement le confirme. La semaine payée (`paidThrough`) ne bouge pas.
+    public func acknowledgeAppStoreRenewal(_ renews: Bool) {
+        mutate {
+            $0.subscription.isActive = renews
+            $0.subscription.cancelledAt = renews ? nil : .now
         }
     }
 

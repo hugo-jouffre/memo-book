@@ -112,8 +112,11 @@ extension BookCopy {
 
         public enum Payment {
             public static let title = "Méthode de Paiement"
-            public static let change = "Changer de mode de paiement"
-            public static let choose = "Choisir un mode de paiement"
+            /// Ce que dit l'étape à la place d'un choix de carte : il se fait
+            /// dans la feuille de Stripe, en payant.
+            public static let inStripeSheet =
+                "Tu choisis ta carte en payant, dans la fenêtre sécurisée de Stripe : "
+                + "**tes cartes enregistrées y sont**, et tu peux en ajouter une."
             public static let address = "Adresse de livraison"
             public static let total = "Total"
             public static let cta = "Payer"
@@ -122,15 +125,6 @@ extension BookCopy {
             /// de zéro ferait craindre un prélèvement.
             public static let free = "Ta cagnotte couvre la totalité"
             public static let freeCta = "Valider la commande"
-
-            public static let sheetTitle = "Choisis ton mode de paiement"
-            public static let sheetSubtitle =
-                "Sélectionne une carte ou ajoute un nouveau moyen."
-            public static let addCard = "Ajouter une carte"
-            public static let confirm = "Valider"
-            public static let applePay = "ApplePay"
-            public static let applePayAvailable = "disponible"
-            public static let defaultCard = "défaut"
 
             public static let failure =
                 "Le paiement a échoué, merci de choisir une autre option."
