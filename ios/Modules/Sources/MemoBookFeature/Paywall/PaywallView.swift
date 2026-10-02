@@ -16,8 +16,11 @@ import SwiftUI
 /// remplit à vue d'œil et fait passer à la suite quand elle est pleine ; un
 /// tapotis à droite avance, à gauche revient — c'est le geste que tout le monde
 /// connaît d'Instagram, et il faut qu'il marche pour que l'attente ne soit
-/// jamais subie. Le dernier écran, lui, **ne se referme pas** : c'est celui qui
-/// porte l'offre, il attend qu'on décide.
+/// jamais subie. **Un doigt posé arrête le temps** (Hugo, 02/10/2026) : sur les
+/// écrans qui tournent tout seuls, la barre se fige, la page ne tourne plus, et
+/// tout repart quand il se lève — voir ``PaywallStoryTouch``. Le dernier écran,
+/// lui, **ne se referme pas** : c'est celui qui porte l'offre, il attend qu'on
+/// décide.
 ///
 /// **Rien ne bouge en Reduce Motion.** Les barres sont remplies d'avance, les
 /// traits déjà tracés, et l'avancement se fait au doigt : une page qui se
@@ -49,8 +52,9 @@ struct PaywallView: View {
     @State private var page = 0
     @State private var showsPreview = false
 
-    /// La feuille « Estimation », ouverte par la pastille de la quatrième carte
-    /// de l'offre.
+    /// La feuille « Estimation », ouverte par la pastille de la carte « Tes
+    /// abonnements sont déduits ! » — en pause, voir
+    /// ``PaywallCopy/deductedSubscriptions``.
     @State private var showsEstimation = false
 
     /// L'estimation du carnet qu'on finance, lue sur la cagnotte dès que
@@ -102,6 +106,13 @@ struct PaywallView: View {
     /// que le segment lit à chaque image ; le minuteur de ``runPage()`` tourne
     /// la page sur la même date de départ.
     @State private var fill: PaywallFill = .held(0)
+
+    /// Un doigt est posé sur la page — voir ``PaywallStoryTouch``.
+    @State private var isHeld = false
+
+    /// Le temps ne passe que si l'on regarde l'écran : rien par-dessus, et pas
+    /// de doigt qui le tient.
+    private var isPaused: Bool { showsPreview || showsHelp || isHeld }
 
     private var pageCount: Int { variant.pageCount }
 
@@ -198,7 +209,7 @@ struct PaywallView: View {
         // le refermer en démarre une neuve. Un `onChange` qui relançait
         // `runPage()` à la fermeture a été essayé — il faisait cohabiter deux
         // minuteurs, et les écrans défilaient deux fois plus vite.
-        .task(id: PageTimer(page: page, isPaused: showsPreview || showsHelp)) { await runPage() }
+        .task(id: PageTimer(page: page, isPaused: isPaused)) { await runPage() }
         // **Le support, par-dessus l'offre.** Un `fullScreenCover` et non une
         // feuille : c'est un écran, avec son en-tête et sa flèche — et cette
         // flèche, qui appelle `dismiss()`, ramène donc à l'étape du paywall
@@ -316,7 +327,7 @@ struct PaywallView: View {
     }
 
     /// Ce qui décide de relancer le minuteur : la page qu'on regarde, et le fait
-    /// qu'une feuille soit ouverte par-dessus.
+    /// qu'une feuille soit ouverte par-dessus ou qu'un doigt la tienne.
     ///
     /// Les deux ensemble, dans une seule identité, parce que `task(id:)` n'en
     /// accepte qu'une — et parce que c'est exactement la règle : le temps ne
@@ -381,12 +392,24 @@ struct PaywallView: View {
     /// Deux moitiés d'écran, comme dans une story : à droite on avance, à
     /// gauche on revient. Elles ne couvrent pas le bas de l'écran, où vivent le
     /// bouton d'abonnement et les pastilles.
+    ///
+    /// **Un doigt posé arrête le temps partout**, bande basse comprise : elle
+    /// ne tourne rien, mais un doigt qui se pose à côté du bouton pour finir sa
+    /// lecture doit tenir la page comme ailleurs. Le bouton, lui, garde le
+    /// doigt pour lui et avance comme avant.
     private var tapZones: some View {
-        HStack(spacing: 0) {
-            Color.clear.contentShape(.rect).onTapGesture { turn(-1) }
-            Color.clear.contentShape(.rect).onTapGesture { turn(+1) }
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                Color.clear.contentShape(.rect)
+                    .paywallStoryTouch(onTap: { turn(-1) }, onHold: { isHeld = $0 })
+                Color.clear.contentShape(.rect)
+                    .paywallStoryTouch(onTap: { turn(+1) }, onHold: { isHeld = $0 })
+            }
+
+            Color.clear.contentShape(.rect)
+                .paywallStoryTouch(onHold: { isHeld = $0 })
+                .frame(height: PaywallMetrics.untappableFooter)
         }
-        .padding(.bottom, PaywallMetrics.untappableFooter)
         .accessibilityHidden(true)
     }
 
@@ -406,10 +429,16 @@ struct PaywallView: View {
     /// secondes en vol à couper au changement de page — c'était elle qui,
     /// coupée trop tard, remplissait deux barres à la fois.
     private func runPage() async {
-        // Une feuille est ouverte par-dessus : le temps s'arrête, et la barre
-        // se **fige** là où elle en était. Une page qui tourne derrière un
-        // aperçu fait retrouver un autre écran en le refermant.
-        guard !showsPreview else {
+        // Une feuille est ouverte par-dessus, ou un doigt tient la page : le
+        // temps s'arrête, et la barre se **fige** là où elle en était. Une page
+        // qui tourne derrière un aperçu fait retrouver un autre écran en le
+        // refermant ; une page qui tourne sous le doigt, c'est ce qu'on
+        // voulait éviter en le posant.
+        //
+        // Le support en fait partie : il n'était que dans l'identité de la
+        // tâche, pas ici, et l'ouvrir faisait repartir la barre de zéro au lieu
+        // de la figer.
+        guard !isPaused else {
             if case .running(let since) = fill {
                 fill = .held(
                     PaywallFill.fraction(since: since, at: .now, duration: Self.pageDuration.seconds)
@@ -431,8 +460,9 @@ struct PaywallView: View {
         // avait l'air de se recharger tout seul (Hugo, 19/09/2026).
         if case .held(let value) = fill, value >= 1 { return }
 
-        // La barre repart d'où elle s'était figée — un aperçu refermé reprend
-        // le décompte, il ne le recommence pas — et de zéro partout ailleurs.
+        // La barre repart d'où elle s'était figée — un aperçu refermé, un
+        // doigt levé reprennent le décompte, ils ne le recommencent pas — et de
+        // zéro partout ailleurs.
         let seconds = Self.pageDuration.seconds
         var since = Date.now
         if case .held(let value) = fill, value > 0, value < 1 {
@@ -528,6 +558,12 @@ enum PaywallMetrics {
 
     /// Épaisseur d'un segment de la barre de stories.
     static let storyBarHeight: CGFloat = 4
+
+    /// Au-delà, un doigt posé ne tapote plus : il tient la page, et ne la
+    /// tourne pas en se levant. Un tapotis dure un ou deux dixièmes de
+    /// seconde ; un quart laisse passer les plus appuyés sans faire attendre
+    /// qui veut lire. La barre, elle, se fige dès le contact.
+    static let holdDelay: Double = 0.25
 }
 
 enum PaywallCopy {
@@ -644,11 +680,13 @@ enum PaywallCopy {
         let title: String
         let detail: String
         let pill: String?
-        /// L'inclinaison de la carte, en degrés. Les quatre alternent, comme des
+        /// L'inclinaison de la carte, en degrés. Elles alternent, comme des
         /// papiers posés à la main.
         let tilt: Double
     }
 
+    /// Les cartes de l'offre, de haut en bas. **Trois depuis le 02/10/2026** :
+    /// la quatrième, ``deductedSubscriptions``, est en pause.
     static let arguments: [Argument] = [
         Argument(
             icon: "IconPictureFrame",
@@ -679,15 +717,23 @@ enum PaywallCopy {
             pill: nil,
             tilt: -1
         ),
-        Argument(
-            icon: "IconMoneyBag",
-            title: "Tes abonnements sont déduits !",
-            detail:
-                "Le coût cumulé de tes semaines d’abonnement sera déduit du prix final de ton carnet",
-            pill: estimationPill,
-            tilt: 1
-        ),
     ]
+
+    /// « Tes abonnements sont déduits ! » — **en pause** (Hugo, 02/10/2026).
+    ///
+    /// Rien ne crédite encore la cagnotte des semaines payées chez Apple : la
+    /// carte promettait une déduction que la commande ne fait pas. Elle sort de
+    /// l'offre, et la feuille « Estimation » que sa pastille ouvrait n'a plus
+    /// d'entrée. Les deux restent écrites et branchées : pour les rallumer,
+    /// remettre cette carte au bout d'``arguments``.
+    static let deductedSubscriptions = Argument(
+        icon: "IconMoneyBag",
+        title: "Tes abonnements sont déduits !",
+        detail:
+            "Le coût cumulé de tes semaines d’abonnement sera déduit du prix final de ton carnet",
+        pill: estimationPill,
+        tilt: 1
+    )
 }
 
 /// Ce que l'offre dit quand l'achat n'a pas ouvert l'abonnement.

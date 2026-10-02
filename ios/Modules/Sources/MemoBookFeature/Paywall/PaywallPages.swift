@@ -200,6 +200,95 @@ private struct BleedingShape<Base: Shape>: Shape {
 /// Les **contrôles** ne le portent jamais : ce sont eux qui doivent gagner.
 extension View {
     func paywallProse() -> some View { allowsHitTesting(false) }
+
+    /// Un doigt sur la page : **bref, il tourne la page ; posé, il arrête le
+    /// temps** — voir ``PaywallStoryTouch``.
+    ///
+    /// - Parameters:
+    ///   - onTap: ce que fait un tapotis ; `nil` pour une zone qui ne tourne
+    ///     rien, où le doigt ne fait qu'arrêter le temps.
+    ///   - onHold: le doigt se pose (`true`) ou se lève (`false`).
+    func paywallStoryTouch(onTap: (() -> Void)? = nil, onHold: @escaping (Bool) -> Void) -> some View {
+        modifier(PaywallStoryTouch(onTap: onTap, onHold: onHold))
+    }
+}
+
+/// Le geste des stories d'Instagram (Hugo, 02/10/2026) : un tapotis tourne la
+/// page, un doigt posé la tient.
+///
+/// **La barre se fige dès que le doigt se pose**, et repart d'où elle s'était
+/// arrêtée quand il se lève : on relit un écran aussi longtemps qu'on veut, il
+/// ne tourne pas sous le doigt. Et un doigt qui s'est attardé au-delà de
+/// ``PaywallMetrics/holdDelay`` **ne tourne pas la page en se levant** : il
+/// voulait lire, pas avancer.
+///
+/// **Le tapotis reste celui d'avant ; l'appui le suit à côté.** L'appui est un
+/// geste *simultané* : il commence au contact et, passé le délai, suit le doigt
+/// jusqu'à ce qu'il se lève. Le tapotis, lui, regarde si le doigt a tenu la
+/// page avant de la tourner. Les deux ont d'abord été un seul geste exclusif,
+/// l'appui prioritaire — et plus aucun tapotis ne passait, ni à droite ni à
+/// gauche (recette du 02/10/2026).
+///
+/// ⚠️ **Jamais dans le contenu d'une `ScrollView`.** Un appui posé là — même un
+/// `LongPressGesture` seul, sans glissé derrière — prend le doigt avant elle, et
+/// la page ne défile plus : vu sur l'offre en très grand texte, le même jour.
+/// C'est pourquoi l'offre n'arrête pas le temps sous le doigt. Elle n'en a pas
+/// besoin : elle ne tourne jamais toute seule, sa barre se remplit puis reste
+/// pleine.
+///
+/// L'état du doigt est un `@GestureState`, que SwiftUI remet à zéro quand le
+/// geste finit — levé, glissé ou interrompu par le système. La barre ne peut
+/// donc pas rester figée sur un geste qui n'aurait pas dit qu'il s'arrêtait.
+private struct PaywallStoryTouch: ViewModifier {
+    let onTap: (() -> Void)?
+    let onHold: (Bool) -> Void
+
+    private enum Press: Equatable {
+        case none
+        /// Le doigt vient de se poser : tapotis ou appui, on ne sait pas encore.
+        case down
+        /// Il est resté au-delà du délai : il tient la page.
+        case holding
+    }
+
+    @GestureState private var press: Press = .none
+
+    /// Le doigt a tenu la page : le tapotis qui arrive en le levant ne compte
+    /// pas. Remis à zéro au contact suivant.
+    @State private var didHold = false
+
+    func body(content: Content) -> some View {
+        content
+            .onTapGesture {
+                guard !didHold, press != .holding else {
+                    didHold = false
+                    return
+                }
+                onTap?()
+            }
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: PaywallMetrics.holdDelay)
+                    .sequenced(before: DragGesture(minimumDistance: 0))
+                    .updating($press) { value, state, _ in
+                        switch value {
+                        case .first(true): state = .down
+                        case .second(true, _): state = .holding
+                        default: break
+                        }
+                    }
+            )
+            .onChange(of: press) { _, current in
+                switch current {
+                case .down: didHold = false
+                case .holding: didHold = true
+                case .none: break
+                }
+                onHold(current != .none)
+            }
+            // Ce qui recouvre la page — le support, plein écran — la retire
+            // sous le doigt, qui ne dirait alors jamais qu'il s'est levé.
+            .onDisappear { onHold(false) }
+    }
 }
 
 // MARK: - Écran 1 — « Bravo ! »
@@ -380,14 +469,16 @@ struct PaywallReturning: View {
 struct PaywallOffer: View {
     let price: String
     /// Le titre, qui change avec la version — voir ``PaywallVariant/offerTitle``.
-    /// Le surtitre, les quatre arguments et le bouton, eux, sont les mêmes :
-    /// c'est la **même offre**, pas une seconde.
+    /// Le surtitre, les arguments et le bouton, eux, sont les mêmes : c'est la
+    /// **même offre**, pas une seconde.
     var title: (lead: String, strong: String) = (
         PaywallCopy.offerTitleLead, PaywallCopy.offerTitleStrong
     )
-    /// « Voir une estimation → », sur la quatrième carte : la feuille qui
-    /// détaille le calcul. L'écran ne la présente pas lui-même — elle se pose
-    /// **par-dessus le paywall entier**, comme l'aperçu.
+    /// « Voir une estimation → », sur la carte qui porte la pastille : la
+    /// feuille qui détaille le calcul. Plus aucune ne la porte depuis que « Tes
+    /// abonnements sont déduits ! » est en pause (02/10/2026). L'écran ne la
+    /// présente pas lui-même — elle se pose **par-dessus le paywall entier**,
+    /// comme l'aperçu.
     let onEstimate: () -> Void
     /// La feuille d'Apple est ouverte, ou le serveur n'a pas encore répondu.
     var isPurchasing = false
@@ -416,7 +507,7 @@ struct PaywallOffer: View {
     @State private var footerHeight: CGFloat = 0
 
     var body: some View {
-        // **Une `ScrollView`, et non une pile qui répartit l'espace.** Quatre
+        // **Une `ScrollView`, et non une pile qui répartit l'espace.** Les
         // cartes, un titre de deux lignes et le pied ne tiennent pas sur un
         // iPhone SE — ni sur un grand écran en taille de texte agrandie —, et
         // la pile faisait remonter le tout **sous** la barre de stories, jusque
@@ -434,10 +525,11 @@ struct PaywallOffer: View {
                     }
                     .paywallProse()
 
-                    // Les quatre cartes se chevauchent de 4 pt et penchent
-                    // chacune de son côté : c'est une pile de papiers posés à la
-                    // main, pas une liste. La quatrième porte la seule action du
-                    // bloc, la pastille « Voir une estimation ».
+                    // Les cartes se chevauchent de 4 pt et penchent chacune de
+                    // son côté : c'est une pile de papiers posés à la main, pas
+                    // une liste. Une carte à pastille garde le doigt pour elle
+                    // — il n'y en a plus aucune depuis que « Tes abonnements
+                    // sont déduits ! » est en pause.
                     VStack(spacing: -4) {
                         ForEach(Array(PaywallCopy.arguments.enumerated()), id: \.offset) { _, argument in
                             PaywallArgumentCard(
@@ -464,6 +556,9 @@ struct PaywallOffer: View {
                 // La moitié gauche recule d'un écran ; la droite ne fait rien,
                 // c'est le dernier. Derrière le contenu, pour que la pastille
                 // et le bouton gagnent toujours.
+                //
+                // Un simple tapotis, et pas ``PaywallStoryTouch`` : dans une
+                // `ScrollView`, l'appui empêchait de faire défiler l'offre.
                 .background {
                     HStack(spacing: 0) {
                         Color.clear.contentShape(.rect).onTapGesture(perform: onBack)
@@ -542,7 +637,7 @@ struct PaywallOffer: View {
         .brandFooterScrim()
     }
 
-    /// **Sous les quatre cartes** (Hugo, 01/10/2026) : « Restaurer mes achats »,
+    /// **Sous les cartes** (Hugo, 01/10/2026) : « Restaurer mes achats »,
     /// puis les conditions et la confidentialité en petit. C'est ce qu'App
     /// Review cherche sur l'écran d'un abonnement (règles 3.1.1 et 3.1.2) :
     /// un moyen de retrouver un abonnement déjà payé — sur un autre iPhone,
@@ -589,7 +684,7 @@ struct PaywallOffer: View {
     }
 }
 
-/// Une des quatre promesses de l'offre : une pastille d'icône, deux lignes, et
+/// Une des promesses de l'offre : une pastille d'icône, deux lignes, et
 /// parfois un lien.
 struct PaywallArgumentCard: View {
     let argument: PaywallCopy.Argument
