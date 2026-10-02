@@ -63,15 +63,18 @@ Aucun aperçu n'existe pour `Pointillés=on` hors de l'assortiment par défaut.
 L'aperçu affiché est alors toujours celui, existant, de la variante sans
 pointillés.
 
-⚠️ **Reste à trancher avec la contrainte : les carnets d'avant elle.** Elle
-agit au *changement* de typographie. Or les assortiments existent depuis le
-16/09/2026, et `rulesEnabled` vaut `true` par défaut : un carnet passé sur
-*Manuscrit* ou *Éditorial* sans toucher aux pointillés les a encore allumés, et
-personne ne retouchera sa typographie pour le corriger. Une ancienne version de
-l'app, sans verrou, peut aussi les rallumer. Ces carnets tombent sur le repli
-(étape 5 ci-dessous). Les remettre dans le rang — éteindre leurs pointillés à
-l'ouverture de l'écran, donc écrire au serveur — est une décision, pas un
-détail d'implémentation.
+**Les carnets d'avant le verrou sont remis dans le rang à l'ouverture**
+(décision du 02/10/2026, Hugo). La contrainte agit au *changement* de
+typographie ; or les assortiments existent depuis le 16/09/2026, et
+`rulesEnabled` vaut `true` par défaut : un carnet passé sur *Manuscrit* ou
+*Éditorial* sans toucher aux pointillés les a encore allumés. Une ancienne
+version de l'app, sans verrou, peut aussi les rallumer. L'écran des
+personnalisations les éteint donc à son ouverture, et mémorise qu'ils étaient
+allumés — sauf si ce téléphone garde déjà la valeur d'avant le verrou : c'est
+elle que le retour au défaut rendra. C'est la seule écriture au serveur qu'il
+fasse sans geste du voyageur ; si elle échoue, il ne la retente pas avant la
+prochaine ouverture, et l'interrupteur reste libre de les éteindre : le verrou
+interdit de les rallumer, pas de les éteindre.
 
 ⚠️ `rulesEnabled` n'est pas un réglage d'aperçu : c'est celui des lignes
 pointillées **du carnet imprimé** (`BookCopy` : « Lignes en pointillé sous le
@@ -85,7 +88,36 @@ pointillés reprennent la valeur qu'ils avaient avant le verrouillage (décision
 01/10/2026, Hugo) — et non `false`, que personne n'aurait choisi. L'écran mémorise
 donc la valeur d'avant le premier changement de typographie, et la rend telle
 quelle ; un aller-retour entre deux assortiments doit laisser le carnet
-exactement dans l'état où il était.
+exactement dans l'état où il était. Un second changement de typographie, verrou
+posé (*Manuscrit* → *Éditorial*), ne touche pas à la mémoire.
+
+**La mémoire vit sur l'appareil** (décision du 02/10/2026, Hugo) : une clé par
+voyage dans `UserDefaults`, qui survit à la fermeture de l'écran et de l'app, et
+s'efface dès que le serveur rend un carnet déverrouillé. Ce qu'elle ne couvre
+pas, et c'est accepté : un autre téléphone, ou un co-voyageur, ne la connaît
+pas — le retour au défaut y **rallume** les pointillés, la valeur par défaut.
+
+**Le verrou se voit, et se dit** (copie validée le 02/10/2026, Hugo) :
+
+- dans **Extras**, l'interrupteur des pointillés éteints pâlit et reste
+  tapable ; l'appui pose une note d'information : « Les pointillés ne s’impriment qu’avec la
+  typographie Carnet de voyage. Choisis-la dans Typos pour les retrouver. » ;
+- dans **Typos**, au geste qui vient d'éteindre des pointillés allumés, une note
+  sous les assortiments : « Manuscrit s’imprime sans pointillés : on les a
+  retirés. Ils reviendront si tu repasses sur Carnet de voyage. » (ou
+  *Éditorial*). L'écran défile jusqu'à elle — sous les trois assortiments, elle
+  tombe sous le bas de l'écran de la plupart des iPhone —, et elle disparaît au
+  geste suivant.
+
+VoiceOver annonce l'une et l'autre au moment où elles paraissent.
+
+**Dans le code.** `BookFontCombo.allowsRules` dit quels assortiments permettent
+les pointillés — le défaut seul. `BookRulesLock` (`MemoBookCore`) en tire la
+règle, en fonctions pures ; `BookCustomisationModel` l'applique, et envoie
+l'assortiment **et** les pointillés dans une seule édition
+(`.fontCombo(_:rulesEnabled:)`) : le serveur ne passe jamais par un
+*Manuscrit* aux pointillés allumés. Le jour où les rendus manquants arrivent,
+`allowsRules` rend `true` partout, et c'est tout.
 
 ## La règle
 
@@ -94,9 +126,10 @@ exactement dans l'état où il était.
 3. Assortiment autre que celui par défaut → `Pointillés=off`. C'est **l'écran**
    qui l'a posé en appliquant la contrainte (ci-dessus) : la sélection lit
    `rulesEnabled` tel quel et ne force rien. Un carnet que la contrainte n'a pas
-   touché — *Manuscrit* avec pointillés — n'a pas d'image et tombe sur le repli à
-   l'étape 5, plutôt que sur un aperçu sans les pointillés qu'il imprimera. Le
-   jour où la contrainte saute, la sélection n'a donc pas à bouger.
+   encore touché — *Manuscrit* avec pointillés, que l'écran n'a pas pu remettre
+   dans le rang — n'a pas d'image et tombe sur le repli à l'étape 5, plutôt que
+   sur un aperçu sans les pointillés qu'il imprimera. Le jour où la contrainte
+   saute, la sélection n'a donc pas à bouger.
 4. Composer le nom de fichier, dans cet ordre strict, séparateur `, ` :
    `Pointillés={on|off}, Ratio image={n}%, Fun fact={on|off}, Stickers={n}, Typos={assortiment}.png`
 5. Ce fichier existe → l'afficher. Sinon → **repli**.
@@ -171,8 +204,8 @@ ceux que la contrainte typographie → pointillés rend inatteignables
 **Une fois la contrainte posée, les 200 états atteignables ont tous leur
 aperçu** — vérifié sur le dossier. Le repli ne sert donc plus que pour l'état
 « Personnalisé » : quatre polices qui ne forment aucun des trois assortiments.
-Et, tant que ce n'est pas tranché, pour les carnets d'avant la contrainte
-(voir plus haut).
+Et, si sa remise dans le rang échoue, pour un carnet d'avant la contrainte,
+jusqu'à la prochaine ouverture de l'écran (voir plus haut).
 
 Le lot du 02/10/2026 a réglé ce qui manquait : les douze fichiers autrefois
 suffixés `-1` étaient mal nommés — ils portent les pointillés éteints, et non

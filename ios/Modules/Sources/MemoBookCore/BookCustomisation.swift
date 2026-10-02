@@ -129,7 +129,12 @@ public enum BookCustomisationEdit: Sendable, Hashable {
     /// intermédiaires qui n'ont jamais été choisis — dont un, si le réseau
     /// coupe au milieu, resterait. Les quatre colonnes voyagent déjà ensemble
     /// dans le corps de la requête, il n'y avait qu'à les y mettre.
-    case fontCombo(BookFontCombo)
+    ///
+    /// **Et les pointillés avec** (02/10/2026) : un assortiment décide aussi
+    /// d'eux — voir ``BookRulesLock``. Les envoyer à part laisserait le serveur,
+    /// le temps d'un aller-retour ou pour de bon si le second échoue, avec un
+    /// *Manuscrit* aux pointillés allumés que l'écran ne montre pas.
+    case fontCombo(BookFontCombo, rulesEnabled: Bool)
     case quiz(Bool)
     case freeZones(Bool)
     case crossword(Bool)

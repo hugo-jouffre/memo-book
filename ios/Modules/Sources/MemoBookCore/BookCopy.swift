@@ -739,6 +739,22 @@ public enum BookCopy {
 
         /// **Corrigée au tutoiement** — voir ``Customisation/intro``.
         public static let detail = "Lignes en pointillé sous le texte dans ton carnet"
+
+        /// Ce que dit l'interrupteur grisé quand on le touche : la cause, et la
+        /// sortie (Hugo, 02/10/2026). Il nomme l'assortiment par défaut et la
+        /// pastille des typographies — un test vérifie que les deux noms
+        /// suivent ``BookFontCombo/travelJournal`` et
+        /// ``Customisation/categoryFonts``.
+        public static let locked =
+            "Les pointillés ne s’impriment qu’avec la typographie Carnet de voyage. Choisis-la dans Typos pour les retrouver."
+
+        /// Ce que dit la feuille des typographies, quand l'assortiment qu'on
+        /// vient de choisir a éteint des pointillés allumés (Hugo, 02/10/2026).
+        /// L'interrupteur est dans une autre pastille : sans cette phrase, le
+        /// voyageur ne saurait pas qu'il a perdu quelque chose.
+        public static func withdrawn(by combo: BookFontCombo) -> String {
+            "\(combo.name) s’imprime sans pointillés : on les a retirés. Ils reviendront si tu repasses sur \(BookFontCombo.travelJournal.name)."
+        }
     }
 
     /// « Typographies du carnet » — l'héritière de « Titres du carnet »

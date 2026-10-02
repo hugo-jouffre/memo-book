@@ -838,7 +838,8 @@ public actor PreviewAPI: MemoBookAPI {
             case .fontTitle(let value): customisation.fontTitle = value
             case .fontHand(let value): customisation.fontHand = value
             case .fontFacts(let value): customisation.fontFacts = value
-            case .fontCombo(let combo):
+            case .fontCombo(let combo, let rules):
+                customisation.rulesEnabled = rules
                 customisation.fontDisplay = combo.font(.titles)
                 customisation.fontTitle = combo.font(.subtitles)
                 customisation.fontHand = combo.font(.texts)

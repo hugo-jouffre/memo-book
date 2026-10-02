@@ -845,7 +845,8 @@ public actor MemoBookAPIClient: MemoBookAPI {
             case .fontTitle(let value): fontTitle = value
             case .fontHand(let value): fontHand = value
             case .fontFacts(let value): fontFacts = value
-            case .fontCombo(let combo):
+            case .fontCombo(let combo, let rules):
+                rulesEnabled = rules
                 fontDisplay = combo.font(.titles)
                 fontTitle = combo.font(.subtitles)
                 fontHand = combo.font(.texts)

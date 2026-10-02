@@ -225,6 +225,10 @@ struct BookDecorationsPanel: View {
 struct BookFontsPanel: View {
     let model: BookCustomisationModel
 
+    /// Le repère de la note des pointillés retirés : elle paraît sous la carte,
+    /// souvent sous le bas de l'écran, et l'écran défile jusqu'à elle.
+    static let withdrawnNoticeAnchor = "rules-withdrawn"
+
     var body: some View {
         VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
             BookPanelLead(BookCopy.Fonts.subtitle)
@@ -236,6 +240,21 @@ struct BookFontsPanel: View {
                     }
                 }
             }
+
+            // L'interrupteur des pointillés est dans une autre pastille : c'est
+            // ici, au geste, qu'on apprend qu'ils viennent de s'éteindre.
+            if let combo = model.rulesWithdrawnBy {
+                BrandNotice(BookCopy.Rules.withdrawn(by: combo), tone: .information)
+                    .id(Self.withdrawnNoticeAnchor)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.snappy(duration: 0.25), value: model.rulesWithdrawnBy)
+        // Sans annonce, VoiceOver resterait sur la ligne touchée, et la note
+        // qui dit ce qu'on vient de perdre serait plus bas, à balayer.
+        .onChange(of: model.rulesWithdrawnBy) { _, combo in
+            guard let combo else { return }
+            AccessibilityNotification.Announcement(BookCopy.Rules.withdrawn(by: combo)).post()
         }
         .disabled(model.customisation == nil)
     }
@@ -414,13 +433,29 @@ private struct FlowRow: Layout {
 struct BookExtrasPanel: View {
     let model: BookCustomisationModel
 
+    /// Le repère de la note du verrou : aux tailles de texte accessibles, elle
+    /// paraît sous le bas de l'écran, et l'écran défile jusqu'à elle.
+    static let lockedNoticeAnchor = "rules-locked"
+
     var body: some View {
         BookPanelCard {
+            // Verrouillés par *Manuscrit* ou *Éditorial* : l'interrupteur pâlit,
+            // et l'appui dit pourquoi et comment en sortir.
             BrandToggleCard(
                 title: BookCopy.Rules.toggle,
                 detail: BookCopy.Rules.detail,
-                isOn: binding(\.rulesEnabled, model.setRules)
+                isOn: binding(\.rulesEnabled, model.setRules),
+                isAvailable: !model.isRulesSwitchLocked,
+                onUnavailable: {
+                    model.explainRulesLock()
+                    AccessibilityNotification.Announcement(BookCopy.Rules.locked).post()
+                }
             )
+            if model.showsRulesLockNotice {
+                BrandNotice(BookCopy.Rules.locked, tone: .information)
+                    .id(Self.lockedNoticeAnchor)
+                    .transition(.opacity)
+            }
             BrandToggleCard(
                 title: BookCopy.FunFacts.toggle,
                 detail: BookCopy.FunFacts.detail,
@@ -442,6 +477,7 @@ struct BookExtrasPanel: View {
                 isOn: binding(\.crosswordEnabled, model.setCrossword)
             )
         }
+        .animation(.snappy(duration: 0.25), value: model.showsRulesLockNotice)
         // Les interrupteurs **agissent** : les basculer avant que les valeurs
         // soient là enverrait un état qu'on n'a pas lu.
         .disabled(model.customisation == nil)

@@ -19,11 +19,28 @@ public struct BrandToggleCard: View {
     private let title: String
     private let detail: String
     @Binding private var isOn: Bool
+    private let isAvailable: Bool
+    private let onUnavailable: (() -> Void)?
 
-    public init(title: String, detail: String, isOn: Binding<Bool>) {
+    /// - Parameters:
+    ///   - isAvailable: l'option peut-elle basculer. Indisponible, la carte
+    ///     **pâlit et reste tapable** : l'appui appelle `onUnavailable` au lieu
+    ///     de basculer — même contrat que ``BrandSegmentedPicker``, et pour la
+    ///     même raison : un `disabled` avale le geste et n'explique rien.
+    ///   - onUnavailable: ce qu'on fait de cet appui. Poser un message,
+    ///     toujours.
+    public init(
+        title: String,
+        detail: String,
+        isOn: Binding<Bool>,
+        isAvailable: Bool = true,
+        onUnavailable: (() -> Void)? = nil
+    ) {
         self.title = title
         self.detail = detail
         _isOn = isOn
+        self.isAvailable = isAvailable
+        self.onUnavailable = onUnavailable
     }
 
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -31,7 +48,10 @@ public struct BrandToggleCard: View {
     public var body: some View {
         let shape = RoundedRectangle(cornerRadius: MemoBookSpacing.snug)
 
-        return content
+        let card = content
+            // Le contenu pâlit, pas la carte : son aplat et son filet restent
+            // ceux des autres, elle est toujours là.
+            .opacity(isAvailable ? 1 : 0.45)
             .padding(MemoBookSpacing.s)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(MemoBookColor.surface, in: shape)
@@ -39,6 +59,19 @@ public struct BrandToggleCard: View {
             // qui tombe à #E6DFD8 sur le crème. Trois points d'écart sur un
             // canal : on garde le token plutôt qu'une sixième valeur de filet.
             .overlay { shape.strokeBorder(MemoBookColor.hairline, lineWidth: 1) }
+
+        if isAvailable {
+            card
+        } else {
+            // Toute la carte répond, l'interrupteur compris : il ne prend plus
+            // le doigt (voir `toggle`), c'est elle qui le reçoit.
+            Button { onUnavailable?() } label: { card.contentShape(shape) }
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(title)
+                .accessibilityValue(isOn ? "Activé, non disponible" : "Désactivé, non disponible")
+                .accessibilityHint(detail)
+        }
     }
 
     /// En taille accessible, l'interrupteur passe **sous** le texte : à côté
@@ -83,6 +116,9 @@ public struct BrandToggleCard: View {
         Toggle(title, isOn: $isOn)
             .labelsHidden()
             .tint(MemoBookColor.action)
+            // Indisponible, il ne bascule pas sous le doigt : un `UISwitch` qui
+            // glisse puis revient se lirait comme un réglage qui n'a pas pris.
+            .allowsHitTesting(isAvailable)
             .accessibilityLabel(title)
             .accessibilityHint(detail)
     }
@@ -101,6 +137,13 @@ public struct BrandToggleCard: View {
             title: "Rappel d’écriture",
             detail: "Alerte selon le rythme du récit choisi",
             isOn: $isOn
+        )
+        BrandToggleCard(
+            title: "Pointillés",
+            detail: "Lignes en pointillé sous le texte dans ton carnet",
+            isOn: .constant(false),
+            isAvailable: false,
+            onUnavailable: {}
         )
     }
     .padding(MemoBookSpacing.screenMargin)
