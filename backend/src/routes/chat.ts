@@ -7,7 +7,7 @@ import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
 import { publicApiBaseUrl } from "../services/avatars.js";
 import { pauseBeforeTranscript, scriptedReply } from "../services/conversation.js";
-import { isSilentCommand, isSuggestionId, suggestionIdForLabel } from "../services/conversationCopy.js";
+import { FLOW_COMMANDS, isSilentCommand, isSuggestionId, suggestionIdForLabel } from "../services/conversationCopy.js";
 import {
   activeStepOf,
   chatMessageInclude,
@@ -21,6 +21,7 @@ import {
 import { visibleToAccount } from "../services/memoOwnership.js";
 import { TEXT_MEMORY_COST, consumeMemory, voiceCost } from "../services/memoryAllowance.js";
 import { assertCanRecord, validateEntry } from "../services/quota.js";
+import { MAX_PHOTOS_PER_STEP } from "../services/photoBudget.js";
 import { contextVoiceOf, isGathering, parseTripContext } from "../services/tripContext.js";
 import {
   serializeChatReceipt,
@@ -67,7 +68,8 @@ const textTurnBody = z.object({
 
 /** ~25 Mo : un vocal long, une photo pleine résolution. */
 const MAX_MEDIA_BYTES = 25 * 1024 * 1024;
-const MAX_PHOTOS = 4;
+/** Le plus que MEMO demande pour une étape — `photoBudget.ts`. */
+const MAX_PHOTOS = MAX_PHOTOS_PER_STEP;
 const MAX_LEVELS = 4_000;
 
 const chatMemoInclude = {
@@ -134,7 +136,29 @@ async function hasReadyRender(context: AppContext, memoId: string): Promise<bool
 
 /** Une puce ou une commande silencieuse que le catalogue sait traiter sans modèle. */
 function isCommand(suggestionId: string | null): boolean {
-  return suggestionId !== null && scriptedReply(suggestionId, "") !== null;
+  if (suggestionId === null) return false;
+  return scriptedReply(suggestionId, "") !== null || (FLOW_COMMANDS as readonly string[]).includes(suggestionId);
+}
+
+/**
+ * Le souvenir sur lequel MEMO vient de demander « Il te convient ? », s'il
+ * n'est pas encore validé. C'est lui que « Ça me convient » valide : l'app
+ * envoie la fiche qu'elle croit la dernière, et s'est déjà trompée de fiche
+ * (01/10/2026 — l'étape 1 validée deux fois, l'étape 2 jamais).
+ */
+async function pendingValidationEntryId(context: AppContext, memoId: string): Promise<string | null> {
+  const question = await context.prisma.chatMessage.findFirst({
+    where: { memoId, author: "memo", kind: "text", payload: { path: ["asksValidationFor"], not: Prisma.AnyNull } },
+    orderBy: { seq: "desc" },
+    select: { payload: true },
+  });
+  const entryId = (question?.payload as { asksValidationFor?: unknown } | null)?.asksValidationFor;
+  if (typeof entryId !== "string") return null;
+  const entry = await context.prisma.entry.findFirst({
+    where: { id: entryId, memoId, validatedAt: null },
+    select: { id: true },
+  });
+  return entry?.id ?? null;
 }
 
 function parseLevels(raw: unknown): number[] {
@@ -253,12 +277,16 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
     // pas un souvenir, et ne coûte donc ni étape ni limite — `tripContext.ts`.
     const gatheringContext = isGathering(parseTripContext(memo.tripContext));
 
-    const receipt = (written: ChatMessageRow[], turn: ChatTurnStatus) =>
+    const receipt = async (written: ChatMessageRow[], turn: ChatTurnStatus) =>
       serializeChatReceipt({
         written,
         viewerAccountId: accountId,
         showsAuthors,
         publicBaseUrl,
+        cards: await context.prisma.chatMessage.findMany({
+          where: { memoId, kind: "transcript" },
+          select: { id: true, kind: true, seq: true },
+        }),
         turn,
         now,
       });
@@ -292,16 +320,17 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
       if (existing) {
         if (existing.memoId !== memoId) throw HttpError.conflict("Ce message appartient à un autre carnet.");
         const rows = await loadRows(context, [existing.id]);
-        return reply.code(200).send(receipt(rows, await turnStatusOf(context, memoId, now)));
+        return reply.code(200).send(await receipt(rows, await turnStatusOf(context, memoId, now)));
       }
 
       let validatedEntryId: string | null = null;
       if (suggestionId === "accept") {
         // « Ça me convient » valide **dans la même requête** : la fiche passe
         // validée avant même que MEMO ait accusé réception.
-        const entry = body.entryId
+        const targetId = (await pendingValidationEntryId(context, memoId)) ?? body.entryId;
+        const entry = targetId
           ? await context.prisma.entry.findFirst({
-              where: { id: body.entryId, memoId, kind: { not: "photo" } },
+              where: { id: targetId, memoId, kind: { not: "photo" } },
               select: { id: true },
             })
           : null;
@@ -350,7 +379,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
       const rows = await loadRows(context, written);
       return reply
         .code(201)
-        .send(receipt(rows, { status: "replying", messageId: body.id }));
+        .send(await receipt(rows, { status: "replying", messageId: body.id }));
     }
 
     // --- Multipart : un vocal, ou des photos -------------------------------
@@ -380,7 +409,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
         select: { id: true },
       });
       if (card) ids.push(card.id);
-      return reply.code(200).send(receipt(await loadRows(context, ids), await turnStatusOf(context, memoId, now)));
+      return reply.code(200).send(await receipt(await loadRows(context, ids), await turnStatusOf(context, memoId, now)));
     }
 
     const isAudio = files.every((file) => file.mimeType.startsWith("audio/"));
@@ -391,7 +420,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
       );
     }
     if (isAudio && files.length > 1) throw HttpError.badRequest("Un seul vocal par message.");
-    if (isImages && files.length > MAX_PHOTOS) throw HttpError.badRequest("Quatre photos au plus par message.");
+    if (isImages && files.length > MAX_PHOTOS) throw HttpError.badRequest("Six photos au plus par message.");
 
     const rawCapturedAt = fieldOf(fields, "capturedAt");
     const capturedAt = rawCapturedAt ? new Date(rawCapturedAt) : now;
@@ -455,7 +484,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
       await context.queue.publish<ConverseJob>(JOB_NAMES.converse, { messageId });
       return reply
         .code(201)
-        .send(receipt(await loadRows(context, written), { status: "replying", messageId }));
+        .send(await receipt(await loadRows(context, written), { status: "replying", messageId }));
     }
 
     let entryIdForTranscription: string | null = null;
@@ -543,7 +572,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
 
     return reply
       .code(201)
-      .send(receipt(await loadRows(context, written), { status: "replying", messageId }));
+      .send(await receipt(await loadRows(context, written), { status: "replying", messageId }));
   });
 
   /**

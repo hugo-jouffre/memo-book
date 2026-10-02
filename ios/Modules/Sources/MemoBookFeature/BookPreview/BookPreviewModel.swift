@@ -38,6 +38,18 @@ public final class BookPreviewModel {
     /// change, sinon un morceau resterait en vol.
     public private(set) var compositionProgress: Double = 0
 
+    /// Une régénération (étape validée) tourne en fond **derrière** l'aperçu
+    /// déjà affiché — jamais pendant la toute première composition, qui reste
+    /// sur ``Stage/composing``. C'est ce qui distingue « le carnet n'existe pas
+    /// encore » de « le carnet existe, une version plus à jour arrive ».
+    public private(set) var isRecomposing = false
+
+    /// Ce que le dernier sondage a appris. Ne s'anime que sur un vrai
+    /// changement — voir ``ContentFreshness`` — pour que le flash de
+    /// rafraîchissement ne se joue jamais sur une confirmation « toujours
+    /// pareil ».
+    public private(set) var freshness: ContentFreshness = .unknown
+
     /// Le PDF et ses pages rendues.
     ///
     /// `internal` : le rendu est un détail de ces écrans-là, pas une API du
@@ -93,6 +105,21 @@ public final class BookPreviewModel {
     /// même réponse.
     private static let pollInterval: Duration = .seconds(2)
 
+    /// L'intervalle entre deux sondages pendant une régénération en fond.
+    ///
+    /// Plus large que ``pollInterval`` : une régénération refait tout le
+    /// travail (LLM puis rendu), elle prend donc plus que quelques dizaines de
+    /// secondes — sonder aussi souvent que la première composition ne ferait
+    /// que payer des allers-retours pour la même réponse.
+    private static let recompositionPollInterval: Duration = .seconds(4)
+
+    /// Combien de sondages **sans changement** avant de laisser tomber — deux
+    /// minutes, à quatre secondes l'un. Même raisonnement que
+    /// `StatisticsModel.maxUnchangedPolls` : un rendu peut rester bloqué pour
+    /// de mauvaises raisons, et l'écran ne doit pas sonder indéfiniment un
+    /// aperçu resté ouvert. Revenir sur l'écran relance un sondage.
+    private static let maxUnchangedRecompositionPolls = 30
+
     public init(
         memoId: String,
         source: @escaping (String) async throws -> BookPreview = { _ in .fixture },
@@ -110,15 +137,36 @@ public final class BookPreviewModel {
     /// Le parcours entier : monter la page, suivre la composition, ouvrir le
     /// PDF, et passer à l'aperçu quand les deux sont prêts.
     ///
-    /// Les deux attentes sont menées **en parallèle** et non l'une après
+    /// Un premier sondage décide s'il y a vraiment une composition à suivre :
+    /// un carnet déjà prêt — réouverture d'un aperçu déjà vu — passe direct à
+    /// l'aperçu, sans cascade ni plancher de 2,6 s. Le temps de chargement le
+    /// plus court possible, c'est ne pas en inventer un.
+    ///
+    /// Sinon, les deux attentes sont menées **en parallèle** et non l'une après
     /// l'autre : la cascade et la composition du serveur n'ont aucune raison de
     /// s'attendre, et c'est la plus longue des deux qui décide.
     public func run() async {
         guard stage == .composing else { return }
 
+        let first: BookPreview
+        do {
+            first = try await source(memoId)
+        } catch {
+            errorMessage = error.localizedDescription
+            return
+        }
+
+        guard case .composing = first.status else {
+            await apply(first)
+            if case .failed(let message) = first.status { errorMessage = message }
+            guard errorMessage == nil else { return }
+            stage = .preview
+            return
+        }
+
         await withTaskGroup(of: Void.self) { group in
             group.addTask { [weak self] in await self?.playComposition() }
-            group.addTask { [weak self] in await self?.followComposition() }
+            group.addTask { [weak self] in await self?.followComposition(firstLoad: first) }
         }
 
         // Un échec de composition laisse l'écran où il est : le message dit ce
@@ -145,18 +193,28 @@ public final class BookPreviewModel {
 
     /// Interroge le serveur jusqu'à ce que le carnet soit composé, puis ouvre
     /// son PDF.
-    private func followComposition() async {
+    ///
+    /// - Parameter firstLoad: la réponse déjà en main, pour ne pas la
+    ///   redemander — ``run()`` l'a lue pour décider s'il y avait une
+    ///   composition à suivre.
+    private func followComposition(firstLoad: BookPreview? = nil) async {
+        var next = firstLoad
+
         while !Task.isCancelled {
             do {
-                let loaded = try await source(memoId)
-                preview = loaded
+                let loaded: BookPreview
+                if let value = next {
+                    loaded = value
+                    next = nil
+                } else {
+                    loaded = try await source(memoId)
+                }
+
                 errorMessage = nil
+                await apply(loaded)
 
                 switch loaded.status {
                 case .ready:
-                    if let url = loaded.pdfUrl {
-                        await renderer.load(from: url)
-                    }
                     return
                 case .failed(let message):
                     errorMessage = message
@@ -169,6 +227,74 @@ public final class BookPreviewModel {
                 return
             }
         }
+    }
+
+    /// Le point unique où une réponse du serveur devient de l'état affiché.
+    ///
+    /// Une régénération en fond ne doit jamais faire régresser un aperçu déjà
+    /// affiché : ``errorMessage`` n'est posé ni ici ni pour un échec de
+    /// régénération — c'est aux appelants de la toute première composition de
+    /// le faire, eux qui savent qu'il n'y a encore rien à montrer à la place.
+    private func apply(_ loaded: BookPreview) async {
+        freshness = contentFreshness(of: loaded, replacing: preview)
+        let wasRecomposing = isRecomposing
+        preview = loaded
+
+        switch loaded.status {
+        case .ready:
+            isRecomposing = false
+            // Un poll qui confirme « toujours prêt » ne doit pas retélécharger
+            // le même PDF ; seule une sortie de régénération, ou l'absence de
+            // tout document, justifie un rechargement.
+            if (wasRecomposing || renderer.sheetCount == 0), let url = loaded.pdfUrl {
+                await renderer.load(from: url)
+            }
+        case .composing:
+            isRecomposing = true
+        case .failed:
+            isRecomposing = false
+        }
+    }
+
+    /// Un sondage léger, pour capter une régénération déclenchée ailleurs
+    /// (« Valider cette étape » sur l'écran du voyage) pendant que l'aperçu
+    /// était déjà ouvert ou en arrière-plan.
+    ///
+    /// Sans effet hors de ``Stage/preview`` — la toute première composition
+    /// passe par ``run()`` — et sans effet si une veille tourne déjà.
+    public func refreshIfNeeded() async {
+        guard stage == .preview, !isRecomposing else { return }
+
+        do {
+            let loaded = try await source(memoId)
+            await apply(loaded)
+            if isRecomposing {
+                await watchRecomposition()
+            }
+        } catch {
+            // Un sondage silencieux qui échoue ne doit rien afficher sur un
+            // aperçu déjà là — même règle que dans `apply(_:)`.
+        }
+    }
+
+    /// Sonde à intervalle large tant qu'une régénération tourne, et s'arrête
+    /// d'elle-même — même motif que `StatisticsModel.watch()`. Jamais de
+    /// boucle infinie sur un rendu qui ne reviendra pas : au bout du compte,
+    /// on laisse tomber, et une prochaine ouverture pourra resonder.
+    private func watchRecomposition() async {
+        var unchanged = 0
+        while !Task.isCancelled, isRecomposing, unchanged < Self.maxUnchangedRecompositionPolls {
+            try? await Task.sleep(for: Self.recompositionPollInterval)
+            guard !Task.isCancelled else { return }
+            do {
+                let loaded = try await source(memoId)
+                await apply(loaded)
+                unchanged = freshness.isUpdated ? 0 : unchanged + 1
+            } catch {
+                unchanged += 1
+            }
+        }
+        isRecomposing = false
     }
 
     /// Relance le parcours après un échec — la composition **et** la cascade.

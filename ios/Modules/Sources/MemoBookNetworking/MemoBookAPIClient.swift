@@ -170,6 +170,14 @@ public actor MemoBookAPIClient: MemoBookAPI {
         try await send(method: "GET", path: "/v1/trips/\(id)", credential: .session)
     }
 
+    public func validateStep(tripId: String, stepId: String) async throws -> TripDetail {
+        try await send(
+            method: "POST",
+            path: "/v1/trips/\(tripId)/steps/\(stepId)/validate",
+            credential: .session
+        )
+    }
+
     public func createTrip(_ draft: TripDraft) async throws -> CreatedTrip {
         try await send(method: "POST", path: "/v1/trips", encodableBody: draft, credential: .session)
     }
@@ -614,6 +622,10 @@ public actor MemoBookAPIClient: MemoBookAPI {
             path: "/v1/orders/\(orderId)/whatsapp",
             encodableBody: Disabled()
         )
+    }
+
+    public func bookPreview(memoId: String) async throws -> BookPreview {
+        try await send(method: "GET", path: "/v1/memos/\(memoId)/preview")
     }
 
     public func bookShareLink(memoId: String) async throws -> URL {

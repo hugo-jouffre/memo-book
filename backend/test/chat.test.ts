@@ -1,7 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { FakeResponder } from "../src/services/conversation.js";
-import { OPENING_TEXT, SUGGESTIONS } from "../src/services/conversationCopy.js";
+import {
+  OPENING_TEXT,
+  PRECISION_NOTED,
+  SUGGESTIONS,
+  VALIDATION_QUESTION,
+  PHOTOS_VALIDATED,
+  photosToValidate,
+  photosWanted,
+} from "../src/services/conversationCopy.js";
+import { photoBudgetFor } from "../src/services/photoBudget.js";
 import {
   CONTEXT_COMPLETE,
   CONTEXT_INVITATION,
@@ -43,6 +52,8 @@ interface ChatMessageJson {
     | {
         kind: "transcript";
         transcript: {
+          title: string;
+          heading: string | null;
           text: string | null;
           entryId: string;
           phase: string;
@@ -279,11 +290,12 @@ describe("parler à MEMO", () => {
     expect(mine?.disposition).toBe("memory");
     expect(thread.turn).toEqual({ status: "idle" });
 
-    // Les temps de MEMO arrivent **après** le message, avec leur rythme.
+    // Une seule bulle après un souvenir : « Il te convient ? », posée quand le
+    // texte est rédigé — ni reformulation, ni question sur le lieu.
     const replies = memoBubbles(thread).filter((message) => message.seq > (mine?.seq ?? 0));
-    expect(replies.length).toBeGreaterThanOrEqual(1);
+    expect(replies.map((message) => message.body)).toEqual([{ kind: "text", text: VALIDATION_QUESTION }]);
     expect(replies.every((message) => (message.pauseMilliseconds ?? 0) >= 450)).toBe(true);
-    expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["voice", "write", "later"]);
+    expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["accept", "edit-hand", "edit-voice"]);
 
     // Le souvenir existe, rédigé, avec sa fiche dans le fil.
     const card = thread.messages.find((message) => message.body.kind === "transcript");
@@ -311,6 +323,14 @@ describe("parler à MEMO", () => {
     const entries = await harness.prisma.entry.findMany({ where: { memoId: memo.id } });
     expect(entries).toHaveLength(1);
     expect(entries[0]?.redactedText).toContain("C'était avec Clara.");
+
+    // Un accusé, puis la question revient avec le texte réécrit.
+    const after = await readThread(memo.id);
+    const replies = memoBubbles(after).filter((message) => message.seq > (precision?.seq ?? 0));
+    expect(replies.map((message) => message.body)).toEqual([
+      { kind: "text", text: PRECISION_NOTED },
+      { kind: "text", text: VALIDATION_QUESTION },
+    ]);
   });
 
   it("reçoit un vocal : la fiche tombe tout de suite, puis passe prête", async () => {
@@ -332,6 +352,9 @@ describe("parler à MEMO", () => {
     const card = thread.messages.find((message) => message.body.kind === "transcript");
     expect(card?.body.kind === "transcript" && card.body.transcript.phase).toBe("ready");
     expect(card?.body.kind === "transcript" && card.body.transcript.text).toContain("Bogotá");
+    // La première fiche du fil est l'étape 1, et le récit porte son titre.
+    expect(card?.body.kind === "transcript" && card.body.transcript.title).toBe("Retranscription étape 1");
+    expect(card?.body.kind === "transcript" && card.body.transcript.heading).toBeTruthy();
     expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["accept", "edit-hand", "edit-voice"]);
   });
 
@@ -351,7 +374,22 @@ describe("parler à MEMO", () => {
     const photos = thread.messages.find((message) => message.id === id);
     expect(photos?.body.kind === "photos" && photos.body.photos).toHaveLength(2);
     expect(await harness.prisma.entry.count({ where: { memoId: memo.id, kind: "photo" } })).toBe(2);
-    expect(memoBubbles(thread).length).toBeGreaterThanOrEqual(2);
+    // MEMO demande de valider les photos, et dit que ça crée la page.
+    expect(memoBubbles(thread).at(-1)?.body).toEqual({ kind: "text", text: photosToValidate(2) });
+    expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["photos-ok", "photos-more"]);
+
+    // « Je valide mes photos » : les photos sont validées, le carnet se recompose.
+    const { response: validation } = await say(memo.id, SUGGESTIONS["photos-ok"].label, {
+      suggestionId: "photos-ok",
+    });
+    expect(validation.statusCode).toBe(201);
+    const after = await readThread(memo.id);
+    expect(memoBubbles(after).at(-1)?.body).toEqual({ kind: "text", text: PHOTOS_VALIDATED });
+    expect(after.suggestions.map((suggestion) => suggestion.id)).toEqual(["preview", "dictate", "write"]);
+    expect(
+      await harness.prisma.entry.count({ where: { memoId: memo.id, kind: "photo", validatedAt: null } }),
+    ).toBe(0);
+    expect(await harness.prisma.render.count({ where: { memoId: memo.id } })).toBe(1);
   });
 
   it("ne double pas un message renvoyé avec le même identifiant", async () => {
@@ -521,16 +559,52 @@ describe("valider", () => {
     const thread = await readThread(memo.id);
     const card = thread.messages.find((message) => message.body.kind === "transcript");
     expect(card?.body.kind === "transcript" && card.body.transcript.isValidated).toBe(true);
-    expect(memoBubbles(thread).at(-1)?.body).toEqual({
-      kind: "text",
-      text: "C’est enregistré. Ton carnet compte une étape de plus.",
-    });
+    // Validé : MEMO demande le nombre exact de photos qui remplit l'étape.
+    const budget = photoBudgetFor((validated.editedText ?? validated.redactedText ?? "").trim().length);
+    expect(memoBubbles(thread).slice(-2).map((message) => message.body)).toEqual([
+      { kind: "text", text: "C’est enregistré. Ton carnet compte une étape de plus." },
+      { kind: "text", text: photosWanted(budget.photos, budget.pages) },
+    ]);
+    // Hors production, « Photos de test » s'ajoute aux deux puces.
+    expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["photos", "dictate", "photos-sample"]);
+
+    // « Photos de test » joint le nombre exact demandé, et MEMO demande de les valider.
+    await say(memo.id, SUGGESTIONS["photos-sample"].label, { suggestionId: "photos-sample" });
+    const withPhotos = await readThread(memo.id);
+    const photos = withPhotos.messages.filter((message) => message.body.kind === "photos").at(-1);
+    expect(photos?.body.kind === "photos" && photos.body.photos).toHaveLength(budget.photos);
+    expect(memoBubbles(withPhotos).at(-1)?.body).toEqual({ kind: "text", text: photosToValidate(budget.photos) });
     // Une commande se répond sans modèle.
     expect(responder.calls).toBe(callsBefore);
 
     await say(memo.id, SUGGESTIONS.accept.label, { suggestionId: "accept", entryId: entry.id });
     account = await harness.prisma.account.findUniqueOrThrow({ where: { id: owner.accountId } });
     expect(account.remainingSteps).toBe(2);
+  });
+
+  it("« Ça me convient » valide le souvenir que MEMO vient de soumettre, pas une fiche plus ancienne", async () => {
+    const memo = await seedTrip(owner.accountId);
+    await sendVoice(memo.id);
+    const [first] = await harness.prisma.entry.findMany({ where: { memoId: memo.id }, orderBy: { createdAt: "asc" } });
+    await say(memo.id, SUGGESTIONS.accept.label, { suggestionId: "accept", entryId: first!.id });
+    await sendVoice(memo.id);
+    const second = await harness.prisma.entry.findFirstOrThrow({
+      where: { memoId: memo.id, id: { not: first!.id } },
+    });
+
+    // L'app se trompe de fiche et envoie la première : c'est la seconde qui est validée.
+    await say(memo.id, SUGGESTIONS.accept.label, { suggestionId: "accept", entryId: first!.id });
+    const validated = await harness.prisma.entry.findUniqueOrThrow({ where: { id: second.id } });
+    expect(validated.validatedAt).not.toBeNull();
+  });
+
+  it("« Photos de test » est une commande : gratuite, même étapes offertes épuisées", async () => {
+    const memo = await seedTrip(owner.accountId);
+    await harness.prisma.account.update({ where: { id: owner.accountId }, data: { remainingSteps: 0 } });
+    const { response } = await say(memo.id, SUGGESTIONS["photos-sample"].label, { suggestionId: "photos-sample" });
+    expect(response.statusCode).toBe(201);
+    expect(await harness.prisma.entry.count({ where: { memoId: memo.id, kind: "photo" } })).toBe(1);
+    expect(await harness.prisma.entry.count({ where: { memoId: memo.id, kind: { not: "photo" } } })).toBe(0);
   });
 
   it("ne décompte rien à un compte sans quota", async () => {

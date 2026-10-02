@@ -368,6 +368,7 @@ export function serializeTripStep(
     companions,
     photoUrl: step.photoUrl,
     transport: step.transport,
+    validatedAt: iso(step.validatedAt),
   };
 }
 
@@ -833,7 +834,11 @@ type MemoForPreview = Memo & {
 };
 
 /** L'aperçu du carnet : le PDF composé, et de quoi le partager. */
-export function serializeBookPreview(memo: MemoForPreview, publicBaseUrl: string) {
+export function serializeBookPreview(
+  memo: MemoForPreview,
+  lastReadyPdfUrl: string | null,
+  publicBaseUrl: string,
+) {
   const render = memo.renders?.[0];
   const excerpt = serializeExcerpt(memo.entries ?? []);
 
@@ -841,8 +846,13 @@ export function serializeBookPreview(memo: MemoForPreview, publicBaseUrl: string
     memoId: memo.id,
     // Le titre du récit s'il s'en est donné un, celui du voyage sinon.
     title: memo.bookTitle?.trim() || memo.title,
+    // Le statut vient du dernier rendu, même en cours — c'est lui qui annonce
+    // une régénération. Le PDF, lui, vient du dernier rendu **prêt** : sans
+    // ça, une régénération en fond ferait disparaître le carnet déjà affiché
+    // (`renders.take: 1` ne voit que le rendu en cours, `pdfUrl: null`) le
+    // temps qu'elle aboutisse.
     status: serializeRenderStatus(render?.status),
-    pdfUrl: render?.pdfUrl ?? null,
+    pdfUrl: lastReadyPdfUrl,
     pageCount: memo.pageCount,
     // Nul tant que personne n'a demandé à partager : c'est un lien public.
     shareUrl: memo.shareSlug ? `${publicBaseUrl}/c/${memo.shareSlug}` : null,

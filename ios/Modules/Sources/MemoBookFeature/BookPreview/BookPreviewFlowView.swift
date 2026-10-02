@@ -38,6 +38,10 @@ public struct BookPreviewFlowView: View {
     @Environment(\.supportModel) private var sessionSupport
     @State private var previewSupport: SupportModel?
 
+    /// Capte une étape validée pendant que l'aperçu était en arrière-plan —
+    /// voir `BookPreviewModel.refreshIfNeeded()`.
+    @Environment(\.scenePhase) private var scenePhase
+
     /// Combien de temps l'aperçu tourne avant que le mot des fondateurs
     /// s'invite.
     ///
@@ -67,6 +71,9 @@ public struct BookPreviewFlowView: View {
             // `MemoBookColor`.
             .environment(\.colorScheme, .light)
             .task { await model.run() }
+            .task(id: scenePhase) {
+                if scenePhase == .active { await model.refreshIfNeeded() }
+            }
             .task(id: model.stage) { await inviteFoundersNoteIfNeeded() }
             .brandSheet(isPresented: $showsFoundersNote) {
                 FoundersNoteSheet(
@@ -384,6 +391,14 @@ private struct BookReaderView: View {
                     )
                 }
 
+                // Une régénération en fond (étape validée) ne doit jamais
+                // reprendre l'écran plein de composition : les pages déjà là
+                // restent feuilletables, ce bandeau discret suffit à le dire.
+                if model.isRecomposing {
+                    BrandNotice(BookCopy.Preview.recomposing)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+
                 BookPageStage {
                     BookSheetView(
                         model: model,
@@ -397,6 +412,10 @@ private struct BookReaderView: View {
                 // qui sert aussi la feuille du paywall — celle-là n'a pas de
                 // pages à tourner.
                 .highPriorityGesture(pageTurn)
+                // Le crochet réservé pour « l'aperçu PDF qui se recompose » —
+                // voir `BrandRefreshFlash`. Ne se joue jamais à la première
+                // arrivée ni sur un sondage sans changement.
+                .brandRefreshFlash(model.freshness.isUpdated, showsBadge: true)
 
                 BookPageStepper(model: model)
 
@@ -428,6 +447,7 @@ private struct BookReaderView: View {
             .padding(.horizontal, MemoBookSpacing.screenMargin)
             .padding(.top, MemoBookSpacing.xs)
             .padding(.bottom, MemoBookSpacing.l)
+            .animation(.snappy(duration: 0.25), value: model.isRecomposing)
         }
         .scrollIndicators(.hidden)
     }

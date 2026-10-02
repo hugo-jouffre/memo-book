@@ -122,6 +122,15 @@ public struct TripHomeView: View {
                 .padding(.horizontal, MemoBookSpacing.screenMargin)
             }
 
+            if let confirmation = model.confirmation {
+                Text(confirmation)
+                    .font(MemoBookFont.caption)
+                    .foregroundStyle(MemoBookColor.valid)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, MemoBookSpacing.screenMargin)
+                    .transition(.opacity)
+            }
+
             if let detail = model.detail {
                 header(detail)
                     .padding(.horizontal, MemoBookSpacing.screenMargin)
@@ -130,7 +139,8 @@ public struct TripHomeView: View {
                     model: model,
                     onOpenStep: { step in
                         onIntent(.openStep(tripId: detail.trip.id, stepId: step.id))
-                    }
+                    },
+                    onValidateStep: { step in model.validateStep(step) }
                 )
             } else if model.errorMessage == nil {
                 loadingHeader
@@ -149,6 +159,7 @@ public struct TripHomeView: View {
                 topTrailingRadius: MemoBookSpacing.overlayCornerRadius
             )
         )
+        .animation(.snappy(duration: 0.25), value: model.confirmation)
         // Le panneau mord sur la photo : c'est ce chevauchement qui fait qu'il
         // la recouvre au lieu d'être posé en dessous.
         //

@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { stringify as stringifyYaml } from "yaml";
 import type { Env } from "../env.js";
+import { escapeHtml } from "../lib/html.js";
 import { loadLayoutKnowledgeBase, loadPayloadSchema } from "../lib/templates.js";
 import {
   EDITORIAL_LIMITS,
@@ -9,6 +10,7 @@ import {
   validatePayload,
   type ValidationIssue,
 } from "./payloadValidator.js";
+import { describeTripContext, introTextFor, introTitleFor, type TripContext } from "./tripContext.js";
 
 /** Une entrée du carnet telle que la voit l'étape de structuration. */
 export interface StructuringEntry {
@@ -43,6 +45,8 @@ export interface StructuringInput {
   theme: string | null;
   coverPhotoUrl: string | null;
   entries: StructuringEntry[];
+  /** Le contexte du voyage — seule matière de la page d'introduction. */
+  tripContext: TripContext | null;
 }
 
 export type BookPayload = Record<string, unknown>;
@@ -96,13 +100,6 @@ function formatDateRange(days: { date: Date }[]): string {
   if (!first || !last) return "";
   if (days.length === 1) return DATE_FORMATTER.format(first.date);
   return `${DATE_FORMATTER.format(first.date)} – ${DATE_FORMATTER.format(last.date)}`;
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
 }
 
 /** Découpe un texte long en paragraphes qui tiennent dans la page. */
@@ -295,6 +292,13 @@ export class HeuristicStructurer implements Structurer {
     if (input.subtitle) payload["book_subtitle"] = input.subtitle;
     if (input.coverPhotoUrl) payload["cover_photo"] = input.coverPhotoUrl;
 
+    // La seule prose que ce structureur compose lui-même : une intro assemblée
+    // directement depuis les champs du contexte, sans appel modèle.
+    if (input.tripContext) {
+      payload["intro_title"] = introTitleFor(input.tripContext);
+      payload["intro_text"] = introTextFor(input.tripContext);
+    }
+
     return payload;
   }
 }
@@ -338,6 +342,14 @@ export class LlmStructurer implements Structurer {
       "  plusieurs entrées plutôt que de la raccourcir.",
       "- N'invente aucun texte : ni titre, ni encart, ni transition, ni légende.",
       "",
+      "## Une exception : la page d'introduction",
+      "",
+      "`intro_title` et `intro_text` sont la seule prose que tu composes toi-même —",
+      "et seulement à partir du « Contexte du voyage » donné plus bas (pays de",
+      "départ, voyageurs, compagnons, dates, genre de voyage), jamais à partir du",
+      "récit des étapes. Deux à quatre phrases, dans un seul `<p>`. Si aucun contexte",
+      "n'est donné, n'écris ni l'un ni l'autre.",
+      "",
       "Tu réponds UNIQUEMENT par un objet JSON conforme au schéma ci-dessous.",
       "",
       "## Schéma du payload",
@@ -359,9 +371,14 @@ export class LlmStructurer implements Structurer {
       input.authors ? `Auteurs : ${input.authors}` : "",
       input.theme ? `Thème : ${input.theme}` : "",
       input.coverPhotoUrl ? `Photo de couverture : ${input.coverPhotoUrl}` : "",
-      "",
-      `Matière brute — ${groups.length} journée(s) :`,
     ].filter(Boolean);
+
+    if (input.tripContext) {
+      lines.push("", "Contexte du voyage (pour la seule page d'introduction) :");
+      lines.push(...describeTripContext(input.tripContext));
+    }
+
+    lines.push("", `Matière brute — ${groups.length} journée(s) :`);
 
     for (const [index, group] of groups.entries()) {
       lines.push("", `### Journée ${index + 1} — ${DATE_FORMATTER.format(group.date)}`);

@@ -456,6 +456,11 @@ public struct ChatView: View {
     /// pose. À l'atterrissage, le décalage et le vrai message s'échangent
     /// **sans animation propre** : l'un part, l'autre arrive à la même place.
     private func launch(_ suggestion: ChatSuggestion, from frame: CGRect) {
+        // « Voir ma page » ouvre l'aperçu : rien ne part dans le fil, rien ne vole.
+        if suggestion.intent == .openPreview {
+            onIntent(.openBookPreview(memoId: tripId))
+            return
+        }
         guard !reduceMotion, flight == nil else {
             model.choose(suggestion, addPhotos: photos.begin)
             return

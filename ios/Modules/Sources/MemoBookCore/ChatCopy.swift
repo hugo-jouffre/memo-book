@@ -115,7 +115,10 @@ public enum ChatCopy {
 
     // MARK: - La fiche de retranscription
 
-    public static let transcriptTitle = "Retranscription du contexte"
+    /// L'intitulé d'une fiche que le serveur n'a pas numérotée (jeu d'essai,
+    /// moteur local). Le vrai fil dit « Retranscription étape 2 » —
+    /// `transcriptTitle` dans `backend/src/services/conversationCopy.ts`.
+    public static let transcriptTitle = "Retranscription étape 1"
 
     /// La mention « généré par IA » qu'exige `docs/reglages-utilisateur.md`.
     public static let transcriptFootnote = "Texte proposé par MEMO — tu peux le corriger."
@@ -465,8 +468,8 @@ public enum ChatCopy {
             "Vocal de \(duration)"
         }
 
-        public static func transcript(day: String) -> String {
-            "Retranscription du contexte, \(day)"
+        public static func transcript(title: String, day: String) -> String {
+            "\(title), \(day)"
         }
 
         public static func photos(count: Int) -> String {

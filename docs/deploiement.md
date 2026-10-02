@@ -184,7 +184,9 @@ Les clés du pipeline (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`,
 `APITEMPLATE_API_KEY`, `WEBFLOW_*`) ne sont pas nécessaires pour se connecter :
 sans elles, `PIPELINE_MODE=auto` bascule sur les implémentations simulées. La
 connexion, les comptes et les voyages fonctionnent ; seuls la transcription
-réelle et le PDF sont simulés. À renseigner dès qu'on veut un vrai carnet.
+réelle et le PDF sont simulés. Les deux axes sont indépendants :
+`OPENAI_API_KEY` seule rend la transcription réelle (le PDF reste simulé) ;
+`APITEMPLATE_API_KEY` en plus donne le vrai PDF.
 
 ## 6. Apple et Google
 

@@ -224,6 +224,15 @@ public actor PreviewAPI: MemoBookAPI {
         return .fixture(id: id)
     }
 
+    public func validateStep(tripId: String, stepId: String) async throws -> TripDetail {
+        let detail = TripDetail.fixture(id: tripId)
+        return TripDetail(
+            trip: detail.trip,
+            prompt: detail.prompt,
+            steps: detail.steps.map { $0.id == stepId ? $0.validated() : $0 }
+        )
+    }
+
     public func gallery() async throws -> Gallery { .fixture }
 
     public func tripThemes() async throws -> [TripTheme] { TripTheme.fixtures }
@@ -628,6 +637,10 @@ public actor PreviewAPI: MemoBookAPI {
         }
 
         throw APIError.server(statusCode: 404, code: "not_found", message: "Commande introuvable.")
+    }
+
+    public func bookPreview(memoId: String) async throws -> BookPreview {
+        .fixture
     }
 
     public func bookShareLink(memoId: String) async throws -> URL {

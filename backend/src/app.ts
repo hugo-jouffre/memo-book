@@ -20,6 +20,7 @@ import { registerOrderRoutes } from "./routes/orders.js";
 import { registerPaymentMethodRoutes } from "./routes/paymentMethods.js";
 import { registerPasswordResetPageRoutes } from "./routes/passwordResetPage.js";
 import { registerAvatarRoutes, registerProfileRoutes } from "./routes/profile.js";
+import { registerStepRoutes } from "./routes/steps.js";
 import { configureAvatarUrls } from "./services/avatars.js";
 import { registerRenderRoutes } from "./routes/renders.js";
 import { registerStripeWebhookRoutes } from "./routes/stripeWebhook.js";
@@ -131,6 +132,7 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
     registerMemoRoutes(accountRoutes, context);
     registerEntryRoutes(accountRoutes, context);
     registerRenderRoutes(accountRoutes, context);
+    registerStepRoutes(accountRoutes, context);
     registerOrderRoutes(accountRoutes, context);
     registerTripSettingsRoutes(accountRoutes, context);
     registerCoverRoutes(accountRoutes, context);

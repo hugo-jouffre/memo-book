@@ -83,6 +83,10 @@ public struct TripStep: Codable, Sendable, Hashable, Identifiable {
     public let photoUrl: URL?
     public let transport: TripTransport?
 
+    /// « Valider cette étape » : le voyageur l'a confirmée. `nil` tant que ce
+    /// n'est pas fait.
+    public let validatedAt: Date?
+
     public init(
         id: String,
         number: Int,
@@ -92,7 +96,8 @@ public struct TripStep: Codable, Sendable, Hashable, Identifiable {
         endDate: Date? = nil,
         companions: [Companion] = [],
         photoUrl: URL? = nil,
-        transport: TripTransport? = nil
+        transport: TripTransport? = nil,
+        validatedAt: Date? = nil
     ) {
         self.id = id
         self.number = number
@@ -103,6 +108,24 @@ public struct TripStep: Codable, Sendable, Hashable, Identifiable {
         self.companions = companions
         self.photoUrl = photoUrl
         self.transport = transport
+        self.validatedAt = validatedAt
+    }
+
+    /// Cette étape, validée. Sert la mise à jour optimiste de « Valider cette
+    /// étape » côté app, et les jeux d'essai qui simulent la même réponse.
+    public func validated(at date: Date = .now) -> TripStep {
+        TripStep(
+            id: id,
+            number: number,
+            placeName: placeName,
+            destination: destination,
+            startDate: startDate,
+            endDate: endDate,
+            companions: companions,
+            photoUrl: photoUrl,
+            transport: transport,
+            validatedAt: date
+        )
     }
 }
 

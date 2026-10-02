@@ -561,7 +561,7 @@ extension VerticalAlignment {
 
 // MARK: - La retranscription
 
-/// La fiche « Retranscription du contexte » : ce que MEMO a compris d'un vocal.
+/// La fiche « Retranscription étape N » : ce que MEMO a compris d'un vocal.
 ///
 /// Elle a la forme d'une **fiche** et non d'une réplique, parce qu'elle n'est
 /// pas de la même nature : on la relit, on la corrige, elle finira dans le
@@ -627,13 +627,13 @@ struct ChatTranscriptBubble: View {
     }
 
     private var accessibilityText: String {
-        let day = ChatCopy.Voice.transcript(day: card.capturedAt.chatFullDayLabel)
+        let day = ChatCopy.Voice.transcript(title: card.title, day: card.capturedAt.chatFullDayLabel)
         let state: String
         switch stage {
         case .listening: state = ChatCopy.transcriptPending
         case .writing: state = "\(ChatCopy.transcriptWriting) \(card.text ?? "")"
         case .failed: state = "\(ChatCopy.transcriptFailed) \(card.text ?? "")"
-        case .ready: state = card.text ?? ""
+        case .ready: state = [card.heading, card.text].compactMap { $0 }.joined(separator: ". ")
         }
         let validated = card.isValidated ? " \(ChatCopy.Voice.validated)." : ""
         return "\(day). \(state)\(validated)"
@@ -735,7 +735,16 @@ struct ChatTranscriptBubble: View {
             }
 
         case .ready:
-            narrative(card.text ?? "", tint: MemoBookColor.ink)
+            VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
+                if let title = card.heading, !title.isEmpty {
+                    Text(title)
+                        .font(MemoBookFont.sectionTitle)
+                        .foregroundStyle(MemoBookColor.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
+                }
+                narrative(card.text ?? "", tint: MemoBookColor.ink)
+            }
         }
     }
 
