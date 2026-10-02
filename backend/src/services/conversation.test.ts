@@ -14,7 +14,14 @@ import {
   type ConversationInput,
   type ConversationReply,
 } from "./conversation.js";
-import { ANSWERS, REFUSAL, ROTATION, SUGGESTIONS } from "./conversationCopy.js";
+import {
+  ANSWERS,
+  REFUSAL,
+  ROTATION,
+  SUGGESTIONS,
+  VALIDATION_QUESTION,
+  validationQuestionFor,
+} from "./conversationCopy.js";
 import { HeuristicResponder, readSignals } from "./conversationHeuristics.js";
 import { EMPTY_COHERENCE_SHEET } from "./redaction.js";
 
@@ -303,5 +310,26 @@ describe("les commandes et les garde-fous", () => {
     // valide, mais pas de clé OpenAI, donc `live` faux. MEMO parle quand même.
     expect(createResponder(env("auto", false, "sk-test")).constructor.name).toBe("AnthropicResponder");
     expect(createResponder(env("auto", false, "")).constructor.name).toBe("FakeResponder");
+  });
+});
+
+describe("la question de validation", () => {
+  it("reste la même quand l'écrivain a tout compris", () => {
+    expect(validationQuestionFor([])).toBe(VALIDATION_QUESTION);
+  });
+
+  it("cite dans la même bulle ce qu'il a laissé de côté", () => {
+    expect(validationQuestionFor(["je tarbé"])).toBe(
+      "Voilà ton texte pour le carnet. Je n’ai pas compris « je tarbé » : je l’ai laissé de côté. " +
+        "Redis-le-moi autrement si tu veux qu’il y soit. Il te convient ?",
+    );
+  });
+
+  it("n'en cite jamais plus de deux", () => {
+    const question = validationQuestionFor(["Famine", "jeans toniques", "Cora"]);
+
+    expect(question).toContain("Je n’ai compris ni « Famine » ni « jeans toniques »");
+    expect(question).not.toContain("Cora");
+    expect(question.endsWith("Il te convient ?")).toBe(true);
   });
 });

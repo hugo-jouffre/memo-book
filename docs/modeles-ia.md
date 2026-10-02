@@ -237,6 +237,15 @@ cd backend && npm run conversation:eval                  # le modèle en place
 cd backend && npm run conversation:eval -- --heuristic   # l'étalon sans modèle
 ```
 
+Pour la rédaction aussi, depuis le 02/10/2026 — c'est lui qui dira si Opus 5.5
+tient la plume aussi bien qu'Opus 5 :
+
+```bash
+cd backend && npm run redaction:eval -- --label opus-5
+cd backend && npm run redaction:eval -- --label opus-5-5 --model claude-opus-5-5
+cd backend && npm run redaction:eval -- --compare opus-5 opus-5-5 --judge
+```
+
 ## 8. Décisions
 
 | Date | Décision | Par |

@@ -1,7 +1,9 @@
 import type { AppContext } from "../context.js";
 import type { ConverseJob } from "./converse.js";
 import { JOB_NAMES } from "./queue.js";
-import type { RedactJob } from "./redact.js";
+import { transcriptionHintFor } from "../services/transcription.js";
+import { parseTripContext } from "../services/tripContext.js";
+import { ENTRY_FOR_REDACTION, narratorOf, parseCoherenceSheet, type RedactJob } from "./redact.js";
 
 export interface TranscribeJob {
   entryId: string;
@@ -28,7 +30,7 @@ export async function transcribeEntry(
 
   const entry = await prisma.entry.findUnique({
     where: { id: entryId },
-    include: { media: true },
+    include: { ...ENTRY_FOR_REDACTION, media: true },
   });
 
   if (!entry) {
@@ -55,10 +57,29 @@ export async function transcribeEntry(
 
   try {
     const audio = await storage.get(entry.media.storageKey);
+    // Les noms que le carnet connaît déjà : la machine les épelle alors comme
+    // lui, au lieu d'écrire « Famine » pour Fanny.
+    const narrator = await narratorOf(context, entry);
+    const sheet = parseCoherenceSheet(entry.memo.coherenceSheet);
+    const hint = transcriptionHintFor({
+      narrator: narrator.firstName,
+      companions: [
+        ...narrator.companions,
+        ...(parseTripContext(entry.memo.tripContext)?.companions.map((companion) => companion.name) ?? []),
+      ],
+      destination: entry.memo.destinationCity ?? entry.memo.destinationName,
+      people: sheet.people.map((person) => person.canonicalName),
+      // Dans l'ordre d'apparition, l'étape en cours en dernier : l'indice
+      // garde les plus récents quand il faut couper.
+      places: [...sheet.places.map((place) => place.canonicalName), entry.step?.placeName ?? null].filter(
+        (place): place is string => Boolean(place),
+      ),
+    });
     const result = await transcriber.transcribe({
       audio,
       filename: entry.media.storageKey.split("/").pop() ?? "memo.m4a",
       mimeType: entry.media.mimeType,
+      hint,
     });
 
     await prisma.entry.update({

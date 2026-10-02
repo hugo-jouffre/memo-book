@@ -80,6 +80,23 @@ export const AFTER_TRANSCRIPT =
  */
 export const VALIDATION_QUESTION = "Voilà ton texte pour le carnet. Il te convient ?";
 
+/**
+ * La même bulle, quand l'écrivain a laissé de côté un passage qu'il n'a pas
+ * compris (`RedactionResult.doubts`) — « des Australiens totalement je tarbé ».
+ * Ce n'est pas une question de plus : c'est la même, qui dit ce qui manque, pour
+ * que le voyageur le redonne s'il y tient. Sa réponse est une précision, et la
+ * rédaction reprend le texte avec elle (`docs/conversation.md` § 3). Deux
+ * passages au plus : au-delà, la bulle devient un questionnaire.
+ */
+export function validationQuestionFor(doubts: readonly string[]): string {
+  const [first, second] = doubts.map((doubt) => `« ${doubt} »`);
+  if (!first) return VALIDATION_QUESTION;
+  const missing = second
+    ? `Je n’ai compris ni ${first} ni ${second} : je les ai laissés de côté. Redis-les-moi autrement si tu veux qu’ils y soient.`
+    : `Je n’ai pas compris ${first} : je l’ai laissé de côté. Redis-le-moi autrement si tu veux qu’il y soit.`;
+  return `Voilà ton texte pour le carnet. ${missing} Il te convient ?`;
+}
+
 /** La réponse à une précision : le texte se réécrit, la question reviendra avec lui. */
 export const PRECISION_NOTED = "C’est noté, je reprends le texte avec ça.";
 
