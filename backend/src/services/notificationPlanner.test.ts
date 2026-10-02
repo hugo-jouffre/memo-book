@@ -21,6 +21,8 @@ function trip(overrides: Partial<PlannerTrip> = {}): PlannerTrip {
     narrationPace: "every_two_days",
     notificationsEnabled: true,
     notifyWritingReminder: true,
+    notifyNewStory: true,
+    notifyWeeklyDigest: true,
     notifyTripEnd: true,
     prompt: null,
     storyCount: 2,
@@ -29,6 +31,10 @@ function trip(overrides: Partial<PlannerTrip> = {}): PlannerTrip {
     hasOrder: false,
     paidCents: 0,
     estimateCents: 4290,
+    memberCount: 1,
+    newFromOthers: null,
+    weekStories: 0,
+    weekPhotos: 0,
     ...overrides,
   };
 }
@@ -37,8 +43,10 @@ function account(overrides: Partial<PlannerAccount> = {}): PlannerAccount {
   return {
     id: "camille",
     birthDate: null,
-    schoolZone: null,
+    schoolCalendar: null,
+    offeredSteps: 3,
     remainingSteps: 3,
+    stepsExhaustedOn: null,
     isSubscribed: false,
     renewsAtApple: false,
     stopsAutomatically: false,
@@ -59,31 +67,44 @@ const toussaintB: SchoolHolidayPeriod = {
   endsOn: "2026-11-02",
 };
 
-describe("la fin des 3 jours offerts", () => {
-  it("part à J+3 du premier voyage, une fois", () => {
-    const camille = account({ trips: [trip({ createdOn: "2026-10-01", lastStoryOn: "2026-10-04" })] });
+/** L'hiver, étalé sur trois semaines : A part la deuxième, B la première, C la troisième. */
+const winter = (["A", "B", "C"] as const).map(
+  (zone, index): SchoolHolidayPeriod => ({
+    zone,
+    label: "Vacances d'Hiver",
+    schoolYear: "2026-2027",
+    startsOn: ["2027-02-13", "2027-02-06", "2027-02-20"][index]!,
+    endsOn: ["2027-03-01", "2027-02-22", "2027-03-08"][index]!,
+  }),
+);
 
-    expect(kinds(planNotifications(camille, [], "2026-10-03"))).not.toContain("trial_end");
-    const due = planNotifications(camille, [], "2026-10-04").find((n) => n.kind === "trial_end");
+describe("la fin des 3 étapes offertes", () => {
+  const exhausted = { remainingSteps: 0, stepsExhaustedOn: "2026-10-04" };
+
+  it("part le lendemain de la dernière étape, une fois, et parle d'étapes", () => {
+    const camille = account(exhausted);
+
+    expect(kinds(planNotifications(camille, [], "2026-10-04"))).not.toContain("trial_end");
+    const due = planNotifications(camille, [], "2026-10-05").find((n) => n.kind === "trial_end");
     expect(due).toMatchObject({ dedupeKey: "camille:trial_end:once", link: "memobook://paywall" });
+    expect(due?.title).toBe("Tes 3 étapes offertes sont racontées");
     expect(due?.body).toContain("1,99");
     expect(due?.body).toContain("déduite du prix de ton carnet");
-    expect(kinds(planNotifications(camille, [], "2026-10-05"))).not.toContain("trial_end");
+    expect(`${due?.title} ${due?.body}`).not.toMatch(/jours?\b/);
   });
 
-  it("ne part ni pour un abonné, ni pour un compte sans quota", () => {
-    const base = { trips: [trip({ createdOn: "2026-10-01" })] };
-    expect(kinds(planNotifications(account({ ...base, isSubscribed: true }), [], "2026-10-04"))).not.toContain(
-      "trial_end",
-    );
-    expect(kinds(planNotifications(account({ ...base, remainingSteps: null }), [], "2026-10-04"))).not.toContain(
-      "trial_end",
-    );
+  it("ne rattrape pas un compte épuisé depuis plus d'une semaine", () => {
+    expect(kinds(planNotifications(account(exhausted), [], "2026-10-11"))).toContain("trial_end");
+    expect(kinds(planNotifications(account(exhausted), [], "2026-10-12"))).not.toContain("trial_end");
   });
 
-  it("se compte depuis un voyage qu'on possède, pas depuis un voyage rejoint", () => {
-    const joined = account({ trips: [trip({ createdOn: "2026-10-01", isOwner: false })] });
-    expect(kinds(planNotifications(joined, [], "2026-10-04"))).not.toContain("trial_end");
+  it("ne part ni tant qu'il reste une étape, ni pour un abonné, ni pour un compte sans quota", () => {
+    const on = (overrides: Partial<PlannerAccount>) =>
+      kinds(planNotifications(account({ ...exhausted, ...overrides }), [], "2026-10-05"));
+    expect(on({ remainingSteps: 1 })).not.toContain("trial_end");
+    expect(on({ isSubscribed: true })).not.toContain("trial_end");
+    expect(on({ remainingSteps: null, offeredSteps: null })).not.toContain("trial_end");
+    expect(on({ stepsExhaustedOn: null })).not.toContain("trial_end");
   });
 });
 
@@ -172,6 +193,16 @@ describe("la relance d'écriture", () => {
     expect(kinds(planNotifications(camille, [], "2026-10-05"))).toContain("writing_reminder");
   });
 
+  it("relance moins le rythme modéré — une fois par silence, à l'intervalle choisi", () => {
+    // Une fois par semaine, dernier récit le 3 : une relance le 10, et c'est tout.
+    const camille = account({ trips: [trip({ narrationPace: "weekly", endsOn: "2026-10-31" })] });
+    const on = (date: string) => planNotifications(camille, [], date).filter((n) => n.kind === "writing_reminder");
+
+    expect(on("2026-10-09")).toHaveLength(0);
+    expect(on("2026-10-10")[0]?.dedupeKey).toBe("camille:writing_reminder:rome:2026-10-03:1");
+    expect(on("2026-10-17")).toHaveLength(0);
+  });
+
   it("respecte l'alerte « Rappel d'écriture » du voyage", () => {
     const off = account({ trips: [trip({ notifyWritingReminder: false })] });
     expect(kinds(planNotifications(off, [], "2026-10-05"))).not.toContain("writing_reminder");
@@ -205,38 +236,138 @@ describe("le carnet terminé mais pas commandé", () => {
 
 describe("les vacances scolaires", () => {
   const sustained = { trips: [trip({ narrationPace: "daily", startsOn: "2026-06-01", endsOn: "2026-06-10" })] };
+  const holidayOn = (who: PlannerAccount, holidays: SchoolHolidayPeriod[], date: string) =>
+    planNotifications(who, holidays, date).find((n) => n.kind === "school_holidays");
 
-  it("partent à J-7, J-3 et le jour J, dans la zone du voyageur", () => {
-    const camille = account({ ...sustained, schoolZone: "B" });
+  it("partent à J-7 et le jour J, dans la zone du voyageur — plus à J-3", () => {
+    const camille = account({ ...sustained, schoolCalendar: "B" });
     for (const [date, label] of [
       ["2026-10-10", "J-7"],
-      ["2026-10-14", "J-3"],
       ["2026-10-17", "J-0"],
     ] as const) {
-      const due = planNotifications(camille, [toussaintB], date).find((n) => n.kind === "school_holidays");
-      expect(due?.dedupeKey).toBe(`camille:school_holidays:B:2026-2027:Vacances de la Toussaint:${label}`);
+      const due = holidayOn(camille, [toussaintB], date);
+      expect(due?.dedupeKey).toBe(`camille:school_holidays:2026-2027:Vacances de la Toussaint:${label}`);
       expect(due?.link).toBe("memobook://trips/new");
     }
-    expect(
-      planNotifications(camille, [toussaintB], "2026-10-10").find((n) => n.kind === "school_holidays")?.title,
-    ).toBe("Vacances de la Toussaint dans une semaine");
+    expect(holidayOn(camille, [toussaintB], "2026-10-14")).toBeUndefined();
+    expect(holidayOn(camille, [toussaintB], "2026-10-10")?.title).toBe("Vacances de la Toussaint dans une semaine");
   });
 
-  it("ne partent pas sans zone, dans une autre zone, ou au rythme modéré", () => {
+  it("sans code postal, suivent les premières vacances de chaque période", () => {
+    const camille = account({ ...sustained, schoolCalendar: "earliest" });
+    // L'hiver de la zone B, la première partie : J-7 le 30 janvier.
+    expect(holidayOn(camille, winter, "2027-01-30")?.dedupeKey).toBe(
+      "camille:school_holidays:2026-2027:Vacances d'Hiver:J-7",
+    );
+    expect(holidayOn(camille, winter, "2027-02-06")?.title).toBe("C’est le début des vacances d’hiver !");
+    // Ni la zone A, ni la zone C ne parlent une seconde fois.
+    expect(holidayOn(camille, winter, "2027-02-13")).toBeUndefined();
+    expect(holidayOn(camille, winter, "2027-02-20")).toBeUndefined();
+  });
+
+  it("ne partent pas hors calendrier, dans une autre zone, ou au rythme modéré", () => {
     expect(kinds(planNotifications(account(sustained), [toussaintB], "2026-10-10"))).not.toContain("school_holidays");
-    expect(
-      kinds(planNotifications(account({ ...sustained, schoolZone: "A" }), [toussaintB], "2026-10-10")),
-    ).not.toContain("school_holidays");
-    const moderate = account({ schoolZone: "B", trips: [trip({ narrationPace: "weekly", endsOn: "2026-06-10" })] });
-    expect(kinds(planNotifications(moderate, [toussaintB], "2026-10-10"))).not.toContain("school_holidays");
+    expect(holidayOn(account({ ...sustained, schoolCalendar: "A" }), [toussaintB], "2026-10-10")).toBeUndefined();
+    const moderate = account({
+      schoolCalendar: "B",
+      trips: [trip({ narrationPace: "weekly", endsOn: "2026-06-10" })],
+    });
+    expect(holidayOn(moderate, [toussaintB], "2026-10-10")).toBeUndefined();
   });
 
   it("ne suggèrent pas un voyage à qui en a déjà un pendant ces vacances", () => {
     const camille = account({
-      schoolZone: "B",
+      schoolCalendar: "B",
       trips: [...sustained.trips, trip({ id: "lisbonne", startsOn: "2026-10-20", endsOn: "2026-10-25" })],
     });
     expect(kinds(planNotifications(camille, [toussaintB], "2026-10-10"))).not.toContain("school_holidays");
+  });
+});
+
+describe("le nouveau récit d'un co-voyageur", () => {
+  const news = { names: ["Clara"], stories: 2, photos: 0, latestMessageId: "msg-9" };
+
+  it("annonce ce qu'un co-voyageur a raconté, vers le fil, avec la bulle de MEMO qui le reprend", () => {
+    const camille = account({ trips: [trip({ narrationPace: "daily", memberCount: 2, newFromOthers: news })] });
+    const due = planNotifications(camille, [], "2026-10-04").find((n) => n.kind === "new_story");
+
+    expect(due).toMatchObject({
+      dedupeKey: "camille:new_story:rome:msg-9",
+      link: "memobook://trips/rome/chat",
+      memoId: "rome",
+      title: "Nouveau récit à Rome",
+      body: "Clara a ajouté 2 souvenirs au carnet. Viens voir, et raconte la suite à ton tour.",
+    });
+    // Une clé sans le compte, une par jour : le fil est commun, la bulle ne s'y écrit qu'une fois.
+    expect(due?.chat).toEqual({
+      key: "new_story:rome:2026-10-04",
+      text: "Nouveau récit dans le carnet : Clara a ajouté 2 souvenirs. Qui raconte la suite ?",
+    });
+  });
+
+  it("dit les photos et les auteurs, accordés", () => {
+    const camille = account({
+      trips: [
+        trip({
+          narrationPace: "daily",
+          newFromOthers: { names: ["Clara", "Paul"], stories: 1, photos: 3, latestMessageId: "m" },
+        }),
+      ],
+    });
+    expect(planNotifications(camille, [], "2026-10-04").find((n) => n.kind === "new_story")?.body).toBe(
+      "Clara et Paul ont ajouté un souvenir et 3 photos au carnet. Viens voir, et raconte la suite à ton tour.",
+    );
+  });
+
+  it("se tait au rythme modéré, ou si l'alerte « Nouveau récit » est coupée", () => {
+    const moderate = account({ trips: [trip({ narrationPace: "weekly", newFromOthers: news })] });
+    expect(kinds(planNotifications(moderate, [], "2026-10-04"))).not.toContain("new_story");
+    const off = account({ trips: [trip({ narrationPace: "daily", newFromOthers: news, notifyNewStory: false })] });
+    expect(kinds(planNotifications(off, [], "2026-10-04"))).not.toContain("new_story");
+  });
+});
+
+describe("le résumé de la semaine", () => {
+  // Départ le 1er octobre : le point tombe le 8, le 15…, dans une fenêtre de trois jours.
+  const busy = { weekStories: 5, weekPhotos: 12 };
+
+  it("fait le point tous les sept jours, le soir, vers le fil, avec sa bulle", () => {
+    const camille = account({ trips: [trip({ ...busy, endsOn: "2026-10-31" })] });
+    const on = (date: string) => planNotifications(camille, [], date).find((n) => n.kind === "weekly_digest");
+
+    expect(on("2026-10-07")).toBeUndefined();
+    expect(on("2026-10-08")).toMatchObject({
+      dedupeKey: "camille:weekly_digest:rome:week-1",
+      link: "memobook://trips/rome/chat",
+      earliestHour: 18,
+      title: "Le point de la semaine à Rome",
+      body: "5 souvenirs et 12 photos capturés cette semaine. Ton carnet prend forme : viens voir où il en est.",
+      chat: {
+        key: "weekly_digest:rome:week-1",
+        text: "Le point de la semaine : 5 souvenirs et 12 photos capturés cette semaine. Le carnet prend forme ! On continue ?",
+      },
+    });
+    expect(on("2026-10-10")?.dedupeKey).toBe("camille:weekly_digest:rome:week-1");
+    expect(on("2026-10-11")).toBeUndefined();
+    expect(on("2026-10-15")?.dedupeKey).toBe("camille:weekly_digest:rome:week-2");
+  });
+
+  it("dit « votre » carnet à plusieurs, et part aussi au rythme modéré", () => {
+    const shared = account({
+      trips: [trip({ ...busy, narrationPace: "weekly", memberCount: 3, endsOn: "2026-10-31" })],
+    });
+    expect(planNotifications(shared, [], "2026-10-08").find((n) => n.kind === "weekly_digest")?.body).toContain(
+      "Votre carnet prend forme",
+    );
+  });
+
+  it("se tait pour une semaine sans souvenir, un voyage fini, ou l'alerte coupée", () => {
+    const on = (overrides: Partial<PlannerTrip>, date = "2026-10-08") =>
+      kinds(planNotifications(account({ trips: [trip({ ...busy, endsOn: "2026-10-31", ...overrides })] }), [], date));
+    expect(on({ weekStories: 0, weekPhotos: 0 })).not.toContain("weekly_digest");
+    expect(on({ endsOn: "2026-10-06" })).not.toContain("weekly_digest");
+    expect(on({ notifyWeeklyDigest: false })).not.toContain("weekly_digest");
+    expect(on({ weekStories: 1, weekPhotos: 0 })).toContain("weekly_digest");
   });
 });
 

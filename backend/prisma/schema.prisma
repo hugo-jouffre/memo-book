@@ -169,7 +169,8 @@ enum PushEnvironment {
 /// énumération et non du texte libre : chacune a sa règle, son plafond et son
 /// lien, et une faute de frappe ne doit pas en inventer une huitième.
 enum NotificationKind {
-  /// Facturation — J+3 après le premier voyage : la suite passe par l'abonnement.
+  /// Facturation — le lendemain de la dernière des 3 étapes offertes : la
+  /// suite passe par l'abonnement.
   trial_end
   /// Facturation — le jour de la date de fin : l'abonnement, ce qui est déjà
   /// versé, et l'estimation du carnet.
@@ -178,7 +179,13 @@ enum NotificationKind {
   writing_reminder
   /// Rythme — le voyage est fini, le carnet n'est pas commandé.
   unordered_book
-  /// Vacances — J-7, J-3 et le jour J d'une période de vacances scolaires.
+  /// Rythme — un co-voyageur a alimenté le carnet (alerte « Nouveau récit »).
+  /// Doublée d'une bulle de MEMO dans le fil du voyage.
+  new_story
+  /// Rythme — le point de la semaine sur les souvenirs capturés (alerte
+  /// « Résumé hebdomadaire »). Doublé d'une bulle de MEMO dans le fil.
+  weekly_digest
+  /// Vacances — J-7 et le jour J d'une période de vacances scolaires.
   school_holidays
   /// Vacances — la période où le voyageur est parti l'an dernier revient.
   learned_period

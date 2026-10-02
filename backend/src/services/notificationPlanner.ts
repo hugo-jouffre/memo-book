@@ -2,17 +2,20 @@ import type { NotificationKind } from "@prisma/client";
 import {
   birthdayText,
   learnedPeriodText,
+  newStoryText,
   schoolHolidaysText,
   trialEndText,
   tripEndText,
   unorderedBookText,
+  weeklyDigestText,
   writingReminderText,
   type NotificationText,
   type SubscriptionAtTripEnd,
+  type ThreadedNotificationText,
 } from "./notificationCopy.js";
 import { addDays, daysBetween, sameDayInYear, yearOf, type LocalDate } from "./localCalendar.js";
 import { reminderIntervalDays, rhythmOf, type Rhythm, type RhythmTier } from "./notificationRhythm.js";
-import type { SchoolHolidayPeriod, SchoolZone } from "./schoolHolidays.js";
+import { periodsOf, type SchoolCalendar, type SchoolHolidayPeriod } from "./schoolHolidays.js";
 
 /**
  * **Quoi envoyer, à qui, quel jour** — la feuille « Notifications » traduite
@@ -39,6 +42,8 @@ export const FAMILY_OF: Record<NotificationKind, NotificationFamily> = {
   trip_end: "billing",
   writing_reminder: "engagement",
   unordered_book: "engagement",
+  new_story: "engagement",
+  weekly_digest: "engagement",
   school_holidays: "holiday",
   learned_period: "holiday",
   birthday: "holiday",
@@ -46,16 +51,23 @@ export const FAMILY_OF: Record<NotificationKind, NotificationFamily> = {
 
 /**
  * Ce que chaque palier reçoit. **L'essentiel pour tous** — fin d'essai, fin
- * de voyage —, les relances d'écriture dès le rythme modéré, et le reste au
+ * de voyage —, puis au rythme modéré les relances d'écriture (moins souvent,
+ * `MAX_REMINDERS_PER_SILENCE`) et le résumé de la semaine, et le reste au
  * rythme soutenu. Voir `notificationRhythm.ts` pour les paliers.
+ *
+ * « Nouveau récit » est au rythme soutenu seulement : il suit chaque récit
+ * d'un co-voyageur, quand le résumé de la semaine en fait le point une fois
+ * par semaine — c'est lui que reçoit le rythme modéré.
  */
 const TIER_ALLOWS: Record<RhythmTier, ReadonlySet<NotificationKind>> = {
   light: new Set(["trial_end", "trip_end"]),
-  moderate: new Set(["trial_end", "trip_end", "writing_reminder"]),
+  moderate: new Set(["trial_end", "trip_end", "writing_reminder", "weekly_digest"]),
   sustained: new Set([
     "trial_end",
     "trip_end",
     "writing_reminder",
+    "new_story",
+    "weekly_digest",
     "unordered_book",
     "school_holidays",
     "learned_period",
@@ -66,7 +78,8 @@ const TIER_ALLOWS: Record<RhythmTier, ReadonlySet<NotificationKind>> = {
 /**
  * Quand départager deux candidates du même jour, la plus pertinente gagne.
  * La facturation d'abord, toujours (feuille, § 3). Puis ce qui touche un
- * voyage réel — un carnet qui se tait, un carnet pas commandé —, puis les
+ * voyage réel — un co-voyageur qui vient de raconter, un carnet qui se tait,
+ * le point de la semaine, un carnet pas commandé —, puis les
  * signaux personnels avant le calendrier de tout le monde : l'an dernier à
  * la même époque dit plus qu'un anniversaire, qui dit plus que les vacances
  * scolaires d'une zone entière.
@@ -74,7 +87,9 @@ const TIER_ALLOWS: Record<RhythmTier, ReadonlySet<NotificationKind>> = {
 const PRIORITY: Record<NotificationKind, number> = {
   trip_end: 100,
   trial_end: 90,
+  new_story: 60,
   writing_reminder: 50,
+  weekly_digest: 45,
   unordered_book: 40,
   learned_period: 30,
   birthday: 20,
@@ -84,12 +99,15 @@ const PRIORITY: Record<NotificationKind, number> = {
 /**
  * L'heure, chez le voyageur, à partir de laquelle une notification peut
  * partir. 10 h pour tout, sauf la relance d'écriture : elle part le soir,
- * quand on a sa journée à raconter (« Une entrée chaque soir »).
+ * quand on a sa journée à raconter (« Une entrée chaque soir ») — et le point
+ * de la semaine juste avant, en fin de journée.
  */
 const EARLIEST_HOUR: Record<NotificationKind, number> = {
   trial_end: 10,
   trip_end: 10,
   writing_reminder: 19,
+  new_story: 10,
+  weekly_digest: 18,
   unordered_book: 10,
   school_holidays: 10,
   learned_period: 10,
@@ -102,17 +120,38 @@ export const LATEST_HOUR = 21;
 /** La première heure où quoi que ce soit peut partir — la tâche saute les comptes avant. */
 export const FIRST_SENDING_HOUR = Math.min(...Object.values(EARLIEST_HOUR));
 
-/** « Fin des 3 jours offerts » : envoyée à J+3 du premier voyage. */
-const TRIAL_LENGTH_DAYS = 3;
+/**
+ * « Fin des 3 étapes offertes » : le **lendemain** du jour où la dernière est
+ * racontée — le jour même, le paywall vient de le dire dans l'app. Une
+ * semaine au plus : un compte épuisé depuis longtemps ne la reçoit pas au
+ * premier passage du serveur.
+ */
+const TRIAL_END_DAYS_AFTER = { from: 1, to: 7 } as const;
 
-/** Au plus trois relances d'écriture d'affilée sur un même silence. */
-const MAX_REMINDERS_PER_SILENCE = 3;
+/**
+ * Combien de relances d'écriture d'affilée sur un même silence. Le rythme
+ * modéré en reçoit **moins**, pas aucune : il les a demandées en choisissant
+ * un rythme (Clara, 02/10/2026). Une seule, à l'intervalle qu'il a choisi.
+ */
+const MAX_REMINDERS_PER_SILENCE: Record<RhythmTier, number> = { sustained: 3, moderate: 1, light: 0 };
 
 /** Le carnet pas commandé : trois jours après la fin, puis dix. */
 const UNORDERED_BOOK_DAYS = [3, 10] as const;
 
-/** Vacances scolaires : une semaine avant, trois jours avant, le jour même. */
-const SCHOOL_HOLIDAY_DAYS_BEFORE = [7, 3, 0] as const;
+/**
+ * Vacances scolaires : une semaine avant, puis le jour même (Clara,
+ * 02/10/2026). Sept jours d'écart : c'est le plafond d'une notification
+ * vacances par semaine, et rien ne tombe entre les deux.
+ */
+const SCHOOL_HOLIDAY_DAYS_BEFORE = [7, 0] as const;
+
+/**
+ * Le point de la semaine : tous les sept jours depuis le départ, dans une
+ * fenêtre de trois jours — une passe manquée, ou un jour déjà pris par une
+ * autre notification, ne le perd pas.
+ */
+const WEEKLY_DIGEST_EVERY_DAYS = 7;
+const WEEKLY_DIGEST_WINDOW_DAYS = 3;
 
 /** Comportement appris : quinze jours avant le retour de la période. */
 const LEARNED_PERIOD_DAYS_BEFORE = 14;
@@ -140,6 +179,8 @@ export interface PlannerTrip {
   narrationPace: string | null;
   notificationsEnabled: boolean;
   notifyWritingReminder: boolean;
+  notifyNewStory: boolean;
+  notifyWeeklyDigest: boolean;
   notifyTripEnd: boolean;
   /** La relance écrite d'après le récit — « Comment ça se passe à Trastevere ? ». */
   prompt: string | null;
@@ -154,6 +195,25 @@ export interface PlannerTrip {
   paidCents: number;
   /** Le prix estimé du carnet, en centimes. */
   estimateCents: number;
+  /** Le propriétaire et les co-voyageurs actifs. */
+  memberCount: number;
+  /**
+   * Ce que **les autres** ont raconté depuis la dernière notification
+   * « Nouveau récit » de ce voyage — deux jours au plus. Nul s'il n'y a rien.
+   */
+  newFromOthers: NewFromOthers | null;
+  /** Ce que le voyage a capturé ces sept derniers jours, tout le monde confondu. */
+  weekStories: number;
+  weekPhotos: number;
+}
+
+export interface NewFromOthers {
+  /** Les prénoms de ceux qui ont raconté, dans l'ordre du fil. */
+  names: string[];
+  stories: number;
+  photos: number;
+  /** Le dernier message compté : la clé de la notification et de sa bulle. */
+  latestMessageId: string;
 }
 
 export interface PlannerDelivery {
@@ -166,9 +226,14 @@ export interface PlannerDelivery {
 export interface PlannerAccount {
   id: string;
   birthDate: LocalDate | null;
-  schoolZone: SchoolZone | null;
+  /** La zone, ou les premières vacances tant qu'il n'a pas de code postal. */
+  schoolCalendar: SchoolCalendar | null;
+  /** Les étapes offertes à l'ouverture ; `null` pour un compte sans quota. */
+  offeredSteps: number | null;
   /** Les étapes offertes qui restent ; `null` pour un compte sans quota. */
   remainingSteps: number | null;
+  /** Le jour où la dernière étape offerte a été validée, quand elles le sont toutes. */
+  stepsExhaustedOn: LocalDate | null;
   /** Un abonnement vivant, ou résilié dont la semaine payée court encore. */
   isSubscribed: boolean;
   /** Un abonnement App Store vivant dont le renouvellement est armé. */
@@ -193,6 +258,12 @@ export interface PlannedNotification extends NotificationText {
   link: string;
   priority: number;
   earliestHour: number;
+  /**
+   * La bulle que MEMO pose dans le fil du voyage quand la notification part.
+   * `key` est **la même pour tous les destinataires** : le fil est commun, la
+   * bulle ne s'y écrit qu'une fois.
+   */
+  chat?: { key: string; text: string };
 }
 
 // ---------------------------------------------------------------------------
@@ -269,7 +340,7 @@ function planned(
   key: string,
   memoId: string | null,
   link: string,
-  text: NotificationText,
+  text: NotificationText | ThreadedNotificationText,
   priorityBonus = 0,
 ): PlannedNotification {
   return {
@@ -281,7 +352,10 @@ function planned(
     link,
     priority: PRIORITY[kind] + priorityBonus,
     earliestHour: EARLIEST_HOUR[kind],
-    ...text,
+    title: text.title,
+    body: text.body,
+    // Sans le compte : une seule bulle pour tous ceux qui la reçoivent.
+    ...("chat" in text ? { chat: { key: `${kind}:${key}`, text: text.chat } } : {}),
   };
 }
 
@@ -300,17 +374,21 @@ export function planNotifications(
 
   // --- Facturation ---------------------------------------------------------
 
-  // Fin des 3 jours offerts : J+3 du premier voyage créé. Pas pour un abonné,
-  // ni pour un compte sans quota (`remainingSteps` nul) : il n'a pas d'essai.
-  const ownedCreations = account.trips.filter((trip) => trip.isOwner).map((trip) => trip.createdOn).sort();
-  const trialStartedOn = ownedCreations[0];
+  // Fin des 3 étapes offertes : le lendemain de la dernière. Pas pour un
+  // abonné, ni pour un compte sans quota (`remainingSteps` nul) : il n'a pas
+  // d'étapes offertes à épuiser.
   if (
-    trialStartedOn &&
     !account.isSubscribed &&
-    account.remainingSteps !== null &&
-    addDays(trialStartedOn, TRIAL_LENGTH_DAYS) === today
+    account.offeredSteps &&
+    account.remainingSteps === 0 &&
+    account.stepsExhaustedOn
   ) {
-    candidates.push(planned(account, "trial_end", "once", null, NOTIFICATION_LINKS.paywall, trialEndText()));
+    const since = daysBetween(account.stepsExhaustedOn, today);
+    if (since >= TRIAL_END_DAYS_AFTER.from && since <= TRIAL_END_DAYS_AFTER.to) {
+      candidates.push(
+        planned(account, "trial_end", "once", null, NOTIFICATION_LINKS.paywall, trialEndText(account.offeredSteps)),
+      );
+    }
   }
 
   for (const trip of account.trips) {
@@ -369,7 +447,7 @@ export function planNotifications(
     const silence = daysBetween(lastActivity, today);
     const interval = reminderIntervalDays(trip.narrationPace, rhythm.openRate);
     const rank = Math.floor(silence / interval);
-    if (rank < 1 || rank > MAX_REMINDERS_PER_SILENCE) continue;
+    if (rank < 1 || rank > MAX_REMINDERS_PER_SILENCE[rhythm.tier]) continue;
 
     candidates.push(
       planned(
@@ -379,6 +457,59 @@ export function planNotifications(
         trip.id,
         NOTIFICATION_LINKS.chat(trip.id),
         writingReminderText({ trip, prompt: trip.prompt, hasStories: trip.storyCount > 0 }),
+      ),
+    );
+  }
+
+  // --- Rythme : ce que le voyage raconte --------------------------------------
+
+  for (const trip of account.trips) {
+    if (!trip.notificationsEnabled) continue;
+    const rhythm = rhythmFor(account, trip.narrationPace);
+
+    // Nouveau récit : un co-voyageur a alimenté le carnet. Le voyage peut
+    // être fini — on raconte aussi en rentrant.
+    const news = trip.newFromOthers;
+    if (news && trip.notifyNewStory && allowed("new_story", rhythm.tier)) {
+      const notification = planned(
+        account,
+        "new_story",
+        `${trip.id}:${news.latestMessageId}`,
+        trip.id,
+        NOTIFICATION_LINKS.chat(trip.id),
+        newStoryText({ trip, names: news.names, stories: news.stories, photos: news.photos }),
+      );
+      // **Une bulle par voyage et par jour.** Chaque membre a ses « autres » —
+      // Clara est prévenue du récit de Paul, Paul de celui de Clara : des
+      // clés par récit poseraient deux bulles à dix minutes d'écart dans un
+      // fil que tous lisent. La première notification du jour écrit la bulle.
+      candidates.push({
+        ...notification,
+        chat: notification.chat && { ...notification.chat, key: `new_story:${trip.id}:${today}` },
+      });
+    }
+
+    // Le point de la semaine : tous les sept jours depuis le départ, tant
+    // que le voyage est en cours et que la semaine a capturé quelque chose.
+    if (!trip.notifyWeeklyDigest || !allowed("weekly_digest", rhythm.tier) || !isOngoing(trip, today)) continue;
+    if (trip.weekStories + trip.weekPhotos === 0) continue;
+    const sinceStart = daysBetween(trip.startsOn ?? trip.createdOn, today);
+    const week = Math.floor(sinceStart / WEEKLY_DIGEST_EVERY_DAYS);
+    if (week < 1 || sinceStart % WEEKLY_DIGEST_EVERY_DAYS >= WEEKLY_DIGEST_WINDOW_DAYS) continue;
+
+    candidates.push(
+      planned(
+        account,
+        "weekly_digest",
+        `${trip.id}:week-${week}`,
+        trip.id,
+        NOTIFICATION_LINKS.chat(trip.id),
+        weeklyDigestText({
+          trip,
+          stories: trip.weekStories,
+          photos: trip.weekPhotos,
+          shared: trip.memberCount > 1,
+        }),
       ),
     );
   }
@@ -411,9 +542,8 @@ export function planNotifications(
 
   // --- Vacances -----------------------------------------------------------
 
-  if (allowed("school_holidays") && account.schoolZone) {
-    for (const period of holidays) {
-      if (period.zone !== account.schoolZone) continue;
+  if (allowed("school_holidays") && account.schoolCalendar) {
+    for (const period of periodsOf(account.schoolCalendar, holidays)) {
       const daysBefore = SCHOOL_HOLIDAY_DAYS_BEFORE.find((days) => addDays(period.startsOn, -days) === today);
       if (daysBefore === undefined) continue;
       if (hasTripDuring(account.trips, period.startsOn, addDays(period.endsOn, -1), today)) continue;
@@ -422,11 +552,13 @@ export function planNotifications(
         planned(
           account,
           "school_holidays",
-          `${period.zone}:${period.schoolYear}:${period.label}:J-${daysBefore}`,
+          // Sans la zone : qui donne son code postal entre J-7 et le jour J ne
+          // reçoit pas une seconde fois J-7, à la date de sa vraie zone.
+          `${period.schoolYear}:${period.label}:J-${daysBefore}`,
           null,
           NOTIFICATION_LINKS.newTrip,
           schoolHolidaysText(period.label, daysBefore),
-          // Le jour J l'emporte sur J-3, qui l'emporte sur J-7.
+          // Le jour J l'emporte sur J-7.
           7 - daysBefore,
         ),
       );
@@ -497,11 +629,9 @@ export function planNotifications(
  *   qui règle les déclencheurs simultanés (anniversaire et vacances la même
  *   semaine : une seule part).
  * - **Jamais plus d'une notification vacances sur sept jours glissants**, quel
- *   que soit le rythme. ⚠️ Conséquence à connaître : J-3 tombe toujours à
- *   quatre jours de J-7, donc **J-3 ne part que si J-7 n'est pas parti** —
- *   sur une même période, J-7 puis le jour J. La feuille demande les trois
- *   *et* ce plafond ; c'est le plafond qui l'emporte, voir
- *   `docs/notifications.md` § Points ouverts.
+ *   que soit le rythme. C'est ce plafond qui a fait renoncer à J-3, qui
+ *   tombait à quatre jours de J-7 : les vacances s'annoncent à J-7 puis le
+ *   jour J, sept jours plus tard (Clara, 02/10/2026).
  * - Rien avant l'heure de la notification (10 h, 19 h pour la relance
  *   d'écriture), rien après 21 h, chez le voyageur.
  *

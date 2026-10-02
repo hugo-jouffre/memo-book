@@ -96,7 +96,7 @@ public struct RootView: View {
     /// Il ouvre la feuille du nouveau mot de passe par-dessus ce qu'on faisait.
     @State private var signedInResetToken: ResetLinkToken?
 
-    /// L'offre, ouverte par la notification de fin des 3 jours offerts. Les
+    /// L'offre, ouverte par la notification de fin des 3 étapes offertes. Les
     /// autres écrans présentent la leur ; celle-ci n'a pas d'écran d'attache,
     /// puisqu'on arrive de l'écran verrouillé.
     @State private var showsNotificationPaywall = false

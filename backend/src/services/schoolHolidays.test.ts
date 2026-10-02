@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCalendar, schoolZoneOf } from "./schoolHolidays.js";
+import { earliestPeriods, parseCalendar, schoolCalendarOf, schoolZoneOf } from "./schoolHolidays.js";
 
 describe("la zone scolaire, d'après l'adresse du profil", () => {
   it("lit le département dans le code postal", () => {
@@ -16,6 +16,37 @@ describe("la zone scolaire, d'après l'adresse du profil", () => {
     expect(schoolZoneOf("75011", "BE")).toBeNull();
     expect(schoolZoneOf(null, "FR")).toBeNull();
     expect(schoolZoneOf("ABCDE", "FR")).toBeNull();
+  });
+});
+
+describe("le calendrier suivi, avant et après le code postal", () => {
+  it("suit les premières vacances tant qu'aucun code postal n'est donné", () => {
+    expect(schoolCalendarOf(null, null)).toBe("earliest");
+    expect(schoolCalendarOf("  ", "FR")).toBe("earliest");
+    expect(schoolCalendarOf("69003", "FR")).toBe("A");
+  });
+
+  it("ne suit rien quand l'adresse dit que ces dates ne sont pas les siennes", () => {
+    expect(schoolCalendarOf(null, "BE")).toBeNull();
+    expect(schoolCalendarOf("97400", "FR")).toBeNull();
+  });
+
+  it("garde, pour chaque période, la zone de la métropole qui part la première", () => {
+    const period = (zone: "A" | "B" | "C" | "Corse", startsOn: string) => ({
+      zone,
+      label: "Vacances d'Hiver",
+      schoolYear: "2026-2027",
+      startsOn,
+      endsOn: "2027-03-08",
+    });
+    const earliest = earliestPeriods([
+      period("A", "2027-02-13"),
+      period("Corse", "2027-02-01"),
+      period("B", "2027-02-06"),
+      period("C", "2027-02-20"),
+    ]);
+    expect(earliest).toHaveLength(1);
+    expect(earliest[0]).toMatchObject({ zone: "B", startsOn: "2027-02-06" });
   });
 });
 

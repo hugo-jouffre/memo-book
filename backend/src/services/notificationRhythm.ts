@@ -8,9 +8,10 @@
  *    « Notifications » de la création d'un voyage, qui écrit le **rythme du
  *    récit** (`memos.narrationPace`) — « Tous les jours », « Tous les 2 jours »,
  *    « Une fois par semaine ». On le relit ici plutôt que de poser une seconde
- *    question qui dirait la même chose. La feuille propose aussi « rarement » :
- *    la clé `rarely` est comprise, mais l'écran ne la propose pas tant que la
- *    maquette ne l'a pas dessinée.
+ *    question qui dirait la même chose. **Les réponses sont celles de l'app** —
+ *    la feuille « Rythme du récit » des réglages du voyage, plus fournie que
+ *    l'étape de création, et c'est normal. Le « rarement » de la feuille
+ *    Notion n'y est pas, et n'est donc pas lu ici (Clara, 02/10/2026).
  * 2. **Ce qu'il fait vraiment** — ouvre-t-il ce qu'on lui envoie, se sert-il
  *    de l'app ? La feuille laisse la pondération à définir ; elle vit dans
  *    `DECLARED_WEIGHT`, une ligne à changer.
@@ -20,7 +21,8 @@
  *
  * - `sustained` — rythme soutenu : tout, vacances comprises ;
  * - `moderate` — rythme modéré : l'essentiel, plus les relances d'écriture
- *   qu'il a lui-même demandées en choisissant un rythme ;
+ *   qu'il a lui-même demandées en choisissant un rythme — **moins** qu'au
+ *   rythme soutenu (Clara, 02/10/2026) —, et le résumé de la semaine ;
  * - `light` — rythme léger : l'essentiel seulement, fin d'essai et fin de
  *   voyage.
  */
@@ -38,7 +40,6 @@ const DECLARED_SCORE: Record<string, number> = {
   by_place: 0.65,
   custom: 0.5,
   weekly: 0.4,
-  rarely: 0.1,
 };
 
 /**
@@ -126,7 +127,6 @@ const REMINDER_INTERVAL_DAYS: Record<string, number> = {
   by_place: 2,
   custom: 3,
   weekly: 7,
-  rarely: 14,
 };
 
 const DEFAULT_REMINDER_INTERVAL_DAYS = 3;

@@ -10,12 +10,19 @@ import { findShippingCountry } from "./shippingCountries.js";
  * La feuille « Notifications » laisse ouverte la source de la donnée. Celle
  * qu'on prend : **le code postal de l'adresse du profil**. Ses deux premiers
  * chiffres donnent le département, le département donne l'académie, et
- * l'académie la zone. Rien de plus à demander au voyageur — mais rien non plus
- * pour qui n'a pas encore donné d'adresse (elle n'est demandée qu'à la
- * commande, ou depuis le profil). Celui-là ne reçoit pas de notification de
- * vacances scolaires, plutôt qu'une notification calée sur la zone d'un autre.
- * Demander la zone ailleurs (onboarding, feuille des notifications) reste à
- * trancher — `docs/notifications.md` § Points ouverts.
+ * l'académie la zone. Rien de plus à demander au voyageur.
+ *
+ * **Qui n'a pas encore donné d'adresse** (elle n'est demandée qu'à la
+ * commande, ou depuis le profil) suit les vacances **les plus communes** : pour
+ * chaque période, celle de la zone qui part la première (`earliestPeriods`).
+ * La Toussaint, Noël et l'été tombent aux mêmes dates partout ; l'hiver et le
+ * printemps, étalés sur trois semaines, s'annoncent à la date de la première
+ * zone. Mieux vaut prévenir une semaine trop tôt que jamais : le code postal
+ * finira par arriver (Clara, 02/10/2026).
+ *
+ * Une adresse **donnée** mais hors de la métropole — l'étranger, l'outre-mer,
+ * dont les calendriers sont à part — ne reçoit rien : on sait alors que ces
+ * dates ne sont pas les siennes.
  *
  * ## Les dates
  *
@@ -65,6 +72,45 @@ export function schoolZoneOf(
   const department = digits.slice(0, 2);
   if (department === "20") return "Corse";
   return ZONE_BY_DEPARTMENT[department] ?? null;
+}
+
+/**
+ * Le calendrier qu'un compte suit : sa zone, ou `earliest` — les premières
+ * vacances de chaque période — tant qu'il n'a pas donné de code postal.
+ * `null` quand l'adresse dit que ces dates ne sont pas les siennes.
+ */
+export type SchoolCalendar = SchoolZone | "earliest";
+
+export function schoolCalendarOf(
+  postalCode: string | null | undefined,
+  country: string | null | undefined,
+): SchoolCalendar | null {
+  if (!postalCode?.trim()) {
+    return country && findShippingCountry(country)?.code !== "FR" ? null : "earliest";
+  }
+  return schoolZoneOf(postalCode, country);
+}
+
+/**
+ * Les vacances qu'un calendrier annonce. Pour `earliest`, une période par
+ * libellé et année scolaire : celle de la zone A, B ou C qui commence la
+ * première. La Corse n'y entre pas — son calendrier est le sien, pas le plus
+ * commun.
+ */
+export function periodsOf(calendar: SchoolCalendar, holidays: SchoolHolidayPeriod[]): SchoolHolidayPeriod[] {
+  if (calendar !== "earliest") return holidays.filter((period) => period.zone === calendar);
+  return earliestPeriods(holidays);
+}
+
+export function earliestPeriods(holidays: SchoolHolidayPeriod[]): SchoolHolidayPeriod[] {
+  const earliest = new Map<string, SchoolHolidayPeriod>();
+  for (const period of holidays) {
+    if (period.zone === "Corse") continue;
+    const key = `${period.schoolYear}|${period.label}`;
+    const current = earliest.get(key);
+    if (!current || period.startsOn < current.startsOn) earliest.set(key, period);
+  }
+  return [...earliest.values()].sort((a, b) => a.startsOn.localeCompare(b.startsOn));
 }
 
 /** Une période de vacances, telle que le planificateur la lit. */

@@ -15,7 +15,7 @@ import Foundation
 /// Un lien qu'on ne sait pas lire donne `nil` : l'app s'ouvre là où elle était,
 /// au lieu d'aller vers un écran deviné.
 public enum NotificationLink: Equatable, Sendable {
-    /// `memobook://paywall` — la fin des 3 jours offerts : l'offre.
+    /// `memobook://paywall` — la fin des 3 étapes offertes : l'offre.
     case paywall
     /// `memobook://trips/new` — les vacances, l'anniversaire : créer un voyage.
     case newTrip

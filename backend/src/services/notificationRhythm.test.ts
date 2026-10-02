@@ -8,8 +8,9 @@ describe("le rythme du voyageur", () => {
     expect(rhythmOf({ ...quiet, declaredPace: "daily" }).tier).toBe("sustained");
     expect(rhythmOf({ ...quiet, declaredPace: "every_two_days" }).tier).toBe("sustained");
     expect(rhythmOf({ ...quiet, declaredPace: "weekly" }).tier).toBe("moderate");
-    expect(rhythmOf({ ...quiet, declaredPace: "rarely" }).tier).toBe("light");
     expect(rhythmOf({ ...quiet, declaredPace: null }).tier).toBe("light");
+    // Une réponse que l'app ne propose pas vaut une question passée.
+    expect(rhythmOf({ ...quiet, declaredPace: "rarely" }).tier).toBe("light");
   });
 
   it("monte avec l'usage et les notifications ouvertes, descend avec celles qu'on ignore", () => {

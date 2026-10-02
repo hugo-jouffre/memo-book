@@ -39,19 +39,17 @@ function atPlace(trip: { city: string | null; title: string }): string {
 }
 
 /**
- * **Fin des 3 jours offerts** — J+3 après le premier voyage. Ton pédagogique,
- * et le rappel que les semaines payées sont déduites du carnet.
+ * **Fin des 3 étapes offertes** — le lendemain de la dernière. Ton
+ * pédagogique, et le rappel que les semaines payées sont déduites du carnet.
  *
- * Le texte ne dit pas « ton essai est fini » : l'app offre aujourd'hui trois
- * **étapes**, pas trois jours, et quelqu'un qui n'a raconté qu'une étape en
- * trois jours en a encore deux. Il dit ce qui est vrai dans les deux cas — la
- * suite passe par l'abonnement. Voir `docs/notifications.md` § Points ouverts.
+ * Des **étapes**, jamais des jours : c'est ce que l'app offre, et ce que
+ * l'accueil compte (Clara, 02/10/2026). Le prix vient du catalogue.
  */
-export function trialEndText(): NotificationText {
+export function trialEndText(offeredSteps: number): NotificationText {
   return {
-    title: "Ton carnet ne fait que commencer",
+    title: `Tes ${offeredSteps} étapes offertes sont racontées`,
     body:
-      `Pour continuer à raconter ton voyage à voix haute, l’abonnement est à ` +
+      `Ton carnet ne fait que commencer : pour continuer à le raconter, l’abonnement est à ` +
       `${formatEuros(SUBSCRIPTION_WEEKLY_CENTS)}/semaine. Et chaque semaine payée ` +
       `est déduite du prix de ton carnet.`,
   };
@@ -140,6 +138,94 @@ export function unorderedBookText(trip: { city: string | null; title: string }):
 }
 
 /**
+ * Une notification qui **se prolonge dans le fil du voyage** : MEMO y pose une
+ * bulle qui reprend ses mots, pour qu'en touchant la notification on retrouve
+ * dans la conversation ce qu'on vient de lire (Clara, 02/10/2026).
+ *
+ * Le fil est **commun** aux co-voyageurs (`ChatCopy.privacyNote`) : la bulle
+ * est écrite pour tous ceux qui le lisent — l'auteur du récit compris —, la
+ * notification pour celui qui la reçoit.
+ */
+export interface ThreadedNotificationText extends NotificationText {
+  chat: string;
+}
+
+/** « un souvenir », « 3 photos ». */
+function countOf(count: number, noun: "souvenir" | "photo"): string {
+  if (count === 1) return noun === "photo" ? "une photo" : "un souvenir";
+  return `${count} ${noun}s`;
+}
+
+/** « 2 souvenirs et 5 photos », « un souvenir », « une photo ». */
+function captureOf(stories: number, photos: number): string {
+  if (stories > 0 && photos > 0) return `${countOf(stories, "souvenir")} et ${countOf(photos, "photo")}`;
+  return stories > 0 ? countOf(stories, "souvenir") : countOf(photos, "photo");
+}
+
+/** « capturés », accordé à ce qu'il qualifie — le masculin l'emporte. */
+function capturedOf(stories: number, photos: number): string {
+  const plural = stories + photos > 1 ? "s" : "";
+  return stories > 0 ? `capturé${plural}` : `capturée${plural}`;
+}
+
+/** « Clara », « Clara et Paul », « Clara et 2 autres co-voyageurs ». */
+function authorsOf(names: string[]): { who: string; plural: boolean } {
+  const known = names.map((name) => name.trim()).filter(Boolean);
+  if (known.length === 0) return { who: "Un co-voyageur", plural: false };
+  if (known.length === 1) return { who: known[0]!, plural: false };
+  if (known.length === 2) return { who: `${known[0]} et ${known[1]}`, plural: true };
+  return { who: `${known[0]} et ${known.length - 1} autres co-voyageurs`, plural: true };
+}
+
+/** « à Rome », sinon « dans « Notre tour du monde » ». */
+function inPlace(trip: { city: string | null; title: string }): string {
+  return trip.city?.trim() ? `à ${trip.city.trim()}` : `dans « ${trip.title.trim()} »`;
+}
+
+function upperFirst(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/**
+ * **Nouveau récit** — un co-voyageur a alimenté le carnet. `names` : les
+ * prénoms de ceux qui ont raconté depuis la dernière fois, sans le
+ * destinataire.
+ */
+export function newStoryText(input: {
+  trip: { city: string | null; title: string };
+  names: string[];
+  stories: number;
+  photos: number;
+}): ThreadedNotificationText {
+  const { who, plural } = authorsOf(input.names);
+  const added = `${who} ${plural ? "ont" : "a"} ajouté ${captureOf(input.stories, input.photos)}`;
+  return {
+    title: `Nouveau récit ${inPlace(input.trip)}`,
+    body: `${added} au carnet. Viens voir, et raconte la suite à ton tour.`,
+    chat: `Nouveau récit dans le carnet : ${added}. Qui raconte la suite ?`,
+  };
+}
+
+/**
+ * **Résumé hebdomadaire** — le point sur ce que le voyage a capturé en sept
+ * jours, tous les co-voyageurs confondus. `shared` : un voyage à plusieurs,
+ * dont le carnet est « votre » carnet.
+ */
+export function weeklyDigestText(input: {
+  trip: { city: string | null; title: string };
+  stories: number;
+  photos: number;
+  shared: boolean;
+}): ThreadedNotificationText {
+  const captured = `${captureOf(input.stories, input.photos)} ${capturedOf(input.stories, input.photos)} cette semaine`;
+  return {
+    title: `Le point de la semaine ${inPlace(input.trip)}`,
+    body: `${upperFirst(captured)}. ${input.shared ? "Votre" : "Ton"} carnet prend forme : viens voir où il en est.`,
+    chat: `Le point de la semaine : ${captured}. Le carnet prend forme ! On continue ?`,
+  };
+}
+
+/**
  * « vacances de la Toussaint », « vacances d’été » — le libellé du ministère,
  * mis en minuscule pour entrer dans une phrase.
  */
@@ -154,7 +240,7 @@ export function holidayName(label: string): string {
   return cleaned.charAt(0).toLowerCase() + cleaned.slice(1);
 }
 
-/** **Vacances scolaires** — J-7, J-3, jour J. */
+/** **Vacances scolaires** — J-7 et le jour J. */
 export function schoolHolidaysText(label: string, daysBefore: number): NotificationText {
   const name = holidayName(label);
   const capitalised = name.charAt(0).toUpperCase() + name.slice(1);
