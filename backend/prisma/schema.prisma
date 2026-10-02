@@ -157,6 +157,42 @@ enum ExpenseSource {
   tricount
 }
 
+/// Le serveur APNs qui connaît un jeton : un build Xcode reçoit un jeton du
+/// **sandbox**, TestFlight et l'App Store un jeton de **production**. Envoyer à
+/// l'un un jeton de l'autre rend `BadDeviceToken` — c'est l'app qui le dit.
+enum PushEnvironment {
+  sandbox
+  production
+}
+
+/// Les notifications que le serveur envoie — `docs/notifications.md`. Une
+/// énumération et non du texte libre : chacune a sa règle, son plafond et son
+/// lien, et une faute de frappe ne doit pas en inventer une huitième.
+enum NotificationKind {
+  /// Facturation — le lendemain de la dernière des 3 étapes offertes : la
+  /// suite passe par l'abonnement.
+  trial_end
+  /// Facturation — le jour de la date de fin : l'abonnement, ce qui est déjà
+  /// versé, et l'estimation du carnet.
+  trip_end
+  /// Rythme — le carnet d'un voyage en cours s'est tu depuis quelques jours.
+  writing_reminder
+  /// Rythme — le voyage est fini, le carnet n'est pas commandé.
+  unordered_book
+  /// Rythme — un co-voyageur a alimenté le carnet (alerte « Nouveau récit »).
+  /// Doublée d'une bulle de MEMO dans le fil du voyage.
+  new_story
+  /// Rythme — le point de la semaine sur les souvenirs capturés (alerte
+  /// « Résumé hebdomadaire »). Doublé d'une bulle de MEMO dans le fil.
+  weekly_digest
+  /// Vacances — J-7 et le jour J d'une période de vacances scolaires.
+  school_holidays
+  /// Vacances — la période où le voyageur est parti l'an dernier revient.
+  learned_period
+  /// Vacances — l'anniversaire approche.
+  birthday
+}
+
 /// La forme d'une question de la modale d'avis — voir `feedback_campaigns`.
 enum FeedbackQuestionKind {
   /// Zone de texte libre.
@@ -264,6 +300,13 @@ model Account {
   /// qu'un compte ouvert le 28 n'ait pas trois jours de budget.
   memoryPeriodStart DateTime   @default(now())
 
+  /// Le fuseau du téléphone (`Europe/Paris`), envoyé avec chaque jeton APNs.
+  /// C'est lui qui fait partir une notification à 10 h **chez le voyageur**,
+  /// et qui dit quel jour il est pour lui — un voyage finit le 15 à Tokyo
+  /// avant de finir le 15 à Paris. Nul tant que l'app ne l'a pas dit : on
+  /// suppose alors Paris.
+  timeZone String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -271,6 +314,8 @@ model Account {
   sessions       Session[]
   devices        Device[]
   passwordResets PasswordReset[]
+  pushTokens     PushToken[]
+  notifications  NotificationDelivery[]
   dataExports    DataExport[]
 
   ownedMemos        Memo[]             @relation("MemoOwner")
@@ -384,8 +429,107 @@ model Session {
   lastSeenAt DateTime @default(now())
   expiresAt  DateTime
 
+  pushTokens PushToken[]
+
   @@index([accountId])
   @@map("sessions")
+}
+
+/// Un téléphone qui accepte les notifications, tel qu'Apple le désigne.
+///
+/// **Rattaché à la session, pas seulement au compte.** Se déconnecter supprime
+/// la session, donc le jeton avec elle : un téléphone rendu, prêté ou partagé
+/// ne reçoit plus les relances de la personne qui en est sortie. Quand elle
+/// revient, l'app renvoie son jeton à l'entrée — il n'y a rien à rattraper.
+///
+/// Le jeton est unique : Apple n'en donne qu'un par app et par téléphone.
+/// Une autre personne qui se connecte sur le même téléphone **reprend** la
+/// ligne au lieu d'en créer une seconde, sans quoi le téléphone recevrait les
+/// notifications des deux.
+model PushToken {
+  id        String  @id @default(uuid())
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  sessionId String
+  session   Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  /// Le jeton APNs, en hexadécimal, tel que `didRegisterForRemoteNotifications`
+  /// le donne. Ce n'est pas un secret : il ne sert qu'avec la clé du serveur.
+  token       String          @unique
+  environment PushEnvironment
+  /// La version de l'app qui l'a envoyé (`0.1.0 (8)`), pour le support.
+  appVersion  String?
+
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  @@index([accountId])
+  @@index([sessionId])
+  @@map("push_tokens")
+}
+
+/// Une notification envoyée — **le journal, et la mémoire des règles**.
+///
+/// Trois usages pour une table :
+///
+/// 1. **« Une seule fois. »** `dedupeKey` est unique : la fin d'essai d'un
+///    compte, la fin d'un voyage, le J-3 d'une période de vacances ne
+///    s'inscrivent qu'une fois, même si la tâche horaire repasse.
+/// 2. **Les plafonds.** « Jamais plus d'une notification vacances par
+///    semaine » se lit ici, pas dans une mémoire du process.
+/// 3. **Le comportement réel.** `openedAt`, posé quand on touche la
+///    notification, entre dans le rythme du voyageur — voir
+///    `services/notificationRhythm.ts`.
+model NotificationDelivery {
+  id        String  @id @default(uuid())
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  /// Le voyage dont parle la notification, s'il y en a un. `SetNull` : un
+  /// voyage supprimé n'efface pas ce qu'on a envoyé au voyageur.
+  memoId    String?
+  memo      Memo?   @relation(fields: [memoId], references: [id], onDelete: SetNull)
+
+  kind      NotificationKind
+  dedupeKey String           @unique
+  title     String
+  body      String
+  /// Le lien `memobook://` que l'app ouvre au toucher.
+  link      String?
+
+  /// Combien de téléphones l'ont reçue. Zéro : tous les jetons étaient morts.
+  deliveredCount Int @default(0)
+
+  sentAt   DateTime  @default(now())
+  openedAt DateTime?
+
+  @@index([accountId, sentAt])
+  @@map("notification_deliveries")
+}
+
+/// Une période de vacances scolaires, telle que l'Éducation nationale la
+/// publie (`fr-en-calendrier-scolaire`, data.education.gouv.fr).
+///
+/// **Recopiée chaque jour, pas écrite à la main** : le ministère publie les
+/// années à venir bien à l'avance, et une table tenue à la main aurait un
+/// jour une année de retard. La tâche `syncSchoolHolidays` la remet à jour ;
+/// si le site ne répond pas, on garde ce qu'on a.
+model SchoolHoliday {
+  id         String   @id @default(uuid())
+  /// `A`, `B`, `C` ou `Corse`. L'outre-mer a ses propres calendriers et
+  /// n'est pas repris — voir `services/schoolHolidays.ts`.
+  zone       String
+  /// « Vacances de la Toussaint », tel que le ministère l'écrit.
+  label      String
+  /// « 2026-2027 ».
+  schoolYear String
+  /// Le premier jour de vacances, et le jour de la reprise.
+  startsOn   DateTime @db.Date
+  endsOn     DateTime @db.Date
+  updatedAt  DateTime @updatedAt
+
+  @@unique([zone, label, schoolYear])
+  @@index([zone, startsOn])
+  @@map("school_holidays")
 }
 
 /// Identité provisoire, le temps que la vraie authentification arrive.
@@ -665,6 +809,8 @@ model Memo {
   subscriptions            Subscription[]
   /// Les semaines payées chez Apple pour ce voyage — voir `SubscriptionTransaction`.
   subscriptionTransactions SubscriptionTransaction[]
+  /// Les notifications qui ont parlé de ce voyage.
+  notifications            NotificationDelivery[]
 
   @@index([ownerAccountId, createdAt])
   /// La galerie lit **tous** les carnets publics, quel qu'en soit le

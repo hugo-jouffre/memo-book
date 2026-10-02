@@ -7,6 +7,10 @@ import SwiftUI
 struct MemoBookApp: App {
     @State private var dependencies = AppDependencies.forLaunch()
 
+    /// Ce que SwiftUI ne sait pas recevoir seul : le jeton APNs et le toucher
+    /// d'une notification. Tout passe ensuite par `PushNotifications`.
+    @UIApplicationDelegateAdaptor(NotificationAppDelegate.self) private var notificationDelegate
+
     init() {
         // Sora et General Sans sont des ressources du module design : c'est du
         // code, pas `UIAppFonts`, qui les déclare à iOS. Voir `BrandFonts`.

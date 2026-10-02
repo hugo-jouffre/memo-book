@@ -224,6 +224,30 @@ const schema = z.object({
     .enum(["true", "false"])
     .default("false")
     .transform((value) => value === "true"),
+
+  /**
+   * Les notifications — APNs, le service de notifications d'Apple. Voir
+   * `services/apns.ts` et `docs/notifications.md`.
+   *
+   * Une **clé d'authentification** (`.p8`), créée une fois dans *Apple
+   * Developer ▸ Certificates, IDs & Profiles ▸ Keys* en cochant « Apple Push
+   * Notifications service ». Elle vaut pour le sandbox comme pour la
+   * production, et ne se télécharge **qu'une fois** :
+   * - `APNS_KEY_ID` — les dix caractères affichés à côté de la clé ;
+   * - `APNS_TEAM_ID` — l'équipe, `HP2A94889S` (le même que `project.yml`) ;
+   * - `APNS_PRIVATE_KEY` — le contenu du fichier `.p8`, en-têtes compris.
+   *   Les retours à la ligne peuvent s'écrire `\n` : Railway garde mal une
+   *   valeur sur plusieurs lignes.
+   *
+   * Vides, rien ne part : en développement les notifications sont
+   * **journalisées** (titre, texte, lien) ; en production la tâche d'envoi ne
+   * fait rien et le dit dans les logs — un serveur qui ne sait pas encore
+   * notifier ne doit pas refuser de démarrer, ni marquer comme envoyé ce qui
+   * n'est jamais parti.
+   */
+  APNS_KEY_ID: z.string().default(""),
+  APNS_TEAM_ID: z.string().default(""),
+  APNS_PRIVATE_KEY: z.string().default(""),
 });
 
 export type Env = z.infer<typeof schema> & {

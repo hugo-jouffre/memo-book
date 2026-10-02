@@ -20,6 +20,10 @@ export const JOB_NAMES = {
   exportStats: "memobook.export-stats",
   /** Le ménage horaire des commandes jamais payées — voir `orderPayments.ts`. */
   releaseAbandonedOrders: "memobook.release-abandoned-orders",
+  /** La passe horaire des notifications — voir `services/notifications.ts`. */
+  sendNotifications: "memobook.send-notifications",
+  /** Le calendrier scolaire du ministère, recopié chaque jour. */
+  syncSchoolHolidays: "memobook.sync-school-holidays",
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];

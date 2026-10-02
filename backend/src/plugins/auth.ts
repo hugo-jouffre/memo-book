@@ -7,11 +7,17 @@ declare module "fastify" {
   interface FastifyRequest {
     /** Renseigné par `requireAccount`. */
     accountId?: string;
+    /**
+     * La session présentée, renseignée par `requireAccount`. Seuls les jetons
+     * APNs s'y rattachent : se déconnecter les emporte avec elle.
+     */
+    sessionId?: string;
   }
 }
 
 export function registerAuthDecorator(app: FastifyInstance): void {
   app.decorateRequest("accountId", undefined);
+  app.decorateRequest("sessionId", undefined);
 }
 
 /**
@@ -43,6 +49,7 @@ export function createRequireAccount(context: AppContext) {
     }
 
     request.accountId = session.accountId;
+    request.sessionId = session.id;
 
     // Session glissante : chaque usage repousse l'échéance. Quelqu'un qui
     // ouvre l'app toutes les semaines ne se fait jamais déconnecter ; celui qui
@@ -56,6 +63,12 @@ export function createRequireAccount(context: AppContext) {
         context.logger.debug({ cause }, "Prolongation de session ignorée");
       });
   };
+}
+
+/** La session d'une requête déjà passée par `requireAccount`. */
+export function sessionIdOf(request: FastifyRequest): string {
+  if (!request.sessionId) throw HttpError.unauthorized();
+  return request.sessionId;
 }
 
 /** Récupère le compte d'une requête déjà passée par `requireAccount`. */
