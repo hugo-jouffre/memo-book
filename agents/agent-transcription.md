@@ -11,7 +11,8 @@
 >
 > Les règles des textes du carnet entier — quiz, mot fléché, intro, chiffres du
 > voyage — sont dans `agent-transcription-carnet.md`, qu'aucun agent ne charge
-> aujourd'hui.
+> aujourd'hui. L'historique de ce fichier et ses décisions sont dans
+> `docs/redaction.md`, jamais ici : tu relis ce fichier à chaque vocal.
 
 ## Ton rôle
 

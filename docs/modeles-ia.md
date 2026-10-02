@@ -5,7 +5,8 @@
 > quatre fournisseurs ; ils bougent, et ce fichier avec eux.
 >
 > Les agents sont décrits dans `agents/` ; la conversation a sa fiche produit
-> dans [`conversation.md`](conversation.md). Ici, on ne parle que du **choix du
+> dans [`conversation.md`](conversation.md), la rédaction dans
+> [`redaction.md`](redaction.md). Ici, on ne parle que du **choix du
 > moteur**.
 >
 > Réécrit le 23/09/2026 : **il n'y a plus de compte OpenAI** (Hugo). Deux postes
@@ -208,7 +209,7 @@ toujours pas en CI.
 | Besoin | Où | Pourquoi ça bloque si ça manque |
 |---|---|---|
 | Sortie **JSON contrainte par schéma** | rédaction, conversation, structuration | Sans elle, on reparse du texte libre et on réintroduit les pannes qu'on a supprimées |
-| **Cache de prompt système** | rédaction (12 530 jetons), conversation (3 900) | Sans lui, les prix du § 2 sont faux : le système se repaie à chaque appel |
+| **Cache de prompt système** | rédaction (~9 600 jetons depuis le 02/10/2026, 12 530 avant), conversation (3 900) | Sans lui, les prix du § 2 sont faux : le système se repaie à chaque appel |
 | Un **refus** distinguable d'une réponse | les deux | Sans lui, un refus se lit comme une réponse vide et l'écran ment |
 | Un **effort de réflexion réglable** | bas pour MEMO, haut pour la rédaction | C'est ce qui sépare « MEMO répond en 2 s » de « MEMO réfléchit dix secondes » |
 
@@ -259,6 +260,7 @@ cd backend && npm run redaction:eval -- --compare opus-5 opus-5-5 --judge
 | 23/09/2026 | La conversation reste sur Sonnet 5 ; descendre à Haiku 4.5 avant d'envisager un autre fournisseur | reco Claude |
 | 24/09/2026 | `env.live` ne décide plus qui parle : MEMO répond dès qu'il a **sa** clé, même sans clé OpenAI. Seul `PIPELINE_MODE=fake` le coupe | fait |
 | 23/09/2026 | « Vos souvenirs ne quittent pas l'Europe » : argument commercial à trancher **avant** de rebrancher la transcription | à trancher — Hugo |
+| 02/10/2026 | La rédaction a son banc (`npm run redaction:eval`) : Opus 5.5 se juge dessus, sur les neuf vocaux de Grèce. Compter 1 à 2 $ par passage complet — voir [`redaction.md`](redaction.md) § 3 | reco Claude |
 
 ## Sources
 

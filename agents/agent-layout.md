@@ -158,8 +158,8 @@ Barème et cas limites dans `LAYOUT_KB.md`.
 L'agent ne les écrit pas, mais **il est le dernier à les voir côte à côte**.
 Deux encarts identiques, ou deux encarts du même registre à quelques pages
 d'écart (deux étymologies, deux superficies, deux dates), n'arrivent pas jusqu'à
-l'impression : il en omet un et le signale à la rédaction, qui tient le registre
-des encarts déjà écrits.
+l'impression : il en omet un et le signale à la rédaction, qui relit tous les
+encarts déjà écrits du carnet avant d'en écrire un.
 
 ## Occuper les blancs
 Ni emoji ni illustration de remplissage : un `prompt` (champ à remplir) ou un
