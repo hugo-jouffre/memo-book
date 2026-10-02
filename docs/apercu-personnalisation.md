@@ -39,9 +39,10 @@ Le segment `Typos=` ne nomme pas quatre polices mais l'assortiment
 - **`Hellelujah`**, et non `Hallelujah`, dans le segment de l'assortiment
   *Manuscrit* — une faute de frappe figée dans 50 noms de fichiers. La table de
   correspondance doit la reproduire telle quelle.
-- **`Éditorial` ne cite pas Alegreya**, qui est pourtant sa police de texte. Le
-  segment se réduit à `Playfair Display`. Correspondance vérifiée sur le rendu :
-  le texte courant y est bien en serif.
+- **`Éditorial` se réduit à `Playfair Display`**, et c'est exact : depuis le
+  01/10/2026, l'assortiment met Playfair sur les quatre rôles. Un carnet réglé
+  sur l'ancien *Éditorial*, qui mariait Alegreya au récit, garde ses polices :
+  il est « Personnalisé », et tombe sur le repli.
 - Un carnet dont les quatre polices ne forment **aucun** des trois assortiments
   (l'état « Personnalisé », atteignable rôle par rôle depuis un catalogue de
   cinq familles) n'a pas d'aperçu : il tombe sur le repli.
@@ -62,6 +63,16 @@ Aucun aperçu n'existe pour `Pointillés=on` hors de l'assortiment par défaut.
 L'aperçu affiché est alors toujours celui, existant, de la variante sans
 pointillés.
 
+⚠️ **Reste à trancher avec la contrainte : les carnets d'avant elle.** Elle
+agit au *changement* de typographie. Or les assortiments existent depuis le
+16/09/2026, et `rulesEnabled` vaut `true` par défaut : un carnet passé sur
+*Manuscrit* ou *Éditorial* sans toucher aux pointillés les a encore allumés, et
+personne ne retouchera sa typographie pour le corriger. Une ancienne version de
+l'app, sans verrou, peut aussi les rallumer. Ces carnets tombent sur le repli
+(étape 5 ci-dessous). Les remettre dans le rang — éteindre leurs pointillés à
+l'ouverture de l'écran, donc écrire au serveur — est une décision, pas un
+détail d'implémentation.
+
 ⚠️ `rulesEnabled` n'est pas un réglage d'aperçu : c'est celui des lignes
 pointillées **du carnet imprimé** (`BookCopy` : « Lignes en pointillé sous le
 texte dans ton carnet »). Cette règle fait donc qu'un choix de police retire une
@@ -80,7 +91,12 @@ exactement dans l'état où il était.
 
 1. Lire les cinq propriétés sur le carnet.
 2. Résoudre l'assortiment typographique ; aucun ne correspond → **repli**.
-3. Assortiment autre que celui par défaut → forcer `Pointillés=off` (ci-dessus).
+3. Assortiment autre que celui par défaut → `Pointillés=off`. C'est **l'écran**
+   qui l'a posé en appliquant la contrainte (ci-dessus) : la sélection lit
+   `rulesEnabled` tel quel et ne force rien. Un carnet que la contrainte n'a pas
+   touché — *Manuscrit* avec pointillés — n'a pas d'image et tombe sur le repli à
+   l'étape 5, plutôt que sur un aperçu sans les pointillés qu'il imprimera. Le
+   jour où la contrainte saute, la sélection n'a donc pas à bouger.
 4. Composer le nom de fichier, dans cet ordre strict, séparateur `, ` :
    `Pointillés={on|off}, Ratio image={n}%, Fun fact={on|off}, Stickers={n}, Typos={assortiment}.png`
 5. Ce fichier existe → l'afficher. Sinon → **repli**.
@@ -90,6 +106,34 @@ renommé le 01/10/2026 pour cette raison : il était le seul des 201 fichiers é
 en Unicode NFD (`c` + U+0327) là où tous les autres sont en NFC, et le nom
 « évident » renvoyait un 404. Le dossier est désormais homogène ; garder ce nom
 en ASCII le maintient hors de portée du problème.
+
+### Dans le code
+
+`BookCustomisationPreview.fileName(for:)` (`MemoBookCore`) applique les étapes
+1, 2, 4 et 5 : une fonction pure, qui rend un nom de fichier et ne charge rien.
+
+« Ce fichier existe » ne se demande pas au disque : la liste des aperçus est
+une **donnée**, `BookCustomisationPreview.availableFileNames`, écrite par un
+script depuis le dossier. Après tout ajout, retrait ou renommage :
+
+```bash
+python3 ios/Tools/make-customisation-preview-manifest.py
+```
+
+Le script refuse un nom en NFD, un nom qui ne suit pas la forme des cinq
+segments, et l'absence du repli ; la valeur de `Typos=`, elle, n'est vérifiée
+que par les tests, qui tiennent la table des assortiments.
+`BookCustomisationPreviewTests` compare le manifeste au dossier **octet par
+octet** — Swift tient « é » et « e + accent » pour la même chaîne, une URL
+non ; c'est aussi pourquoi `fileName(for:)` rend l'élément du manifeste et non
+le nom qu'il a composé. Les tests vérifient encore la couverture ci-dessous :
+tout fichier est composable, tout état atteignable a son image, et les 100
+états que la contrainte écarte n'en ont pas. Ce dernier test cassera le jour où
+les rendus manquants arriveront : c'est le signal pour lever la contrainte.
+
+⚠️ La CI iOS ne surveille encore que `ios/` : un rendu téléversé ou renommé
+seul — c'est ainsi que le repli est arrivé — ne lance pas ces tests. Après
+tout changement du dossier, `make test-modules` dans `ios/`.
 
 ## Les aperçus « composition trop chargée »
 
@@ -127,6 +171,8 @@ ceux que la contrainte typographie → pointillés rend inatteignables
 **Une fois la contrainte posée, les 200 états atteignables ont tous leur
 aperçu** — vérifié sur le dossier. Le repli ne sert donc plus que pour l'état
 « Personnalisé » : quatre polices qui ne forment aucun des trois assortiments.
+Et, tant que ce n'est pas tranché, pour les carnets d'avant la contrainte
+(voir plus haut).
 
 Le lot du 02/10/2026 a réglé ce qui manquait : les douze fichiers autrefois
 suffixés `-1` étaient mal nommés — ils portent les pointillés éteints, et non
