@@ -89,7 +89,8 @@ téléphone.
 ```bash
 cd backend
 npm run previews:build     # prépare dans .previews-out/, ne publie rien
-npm run previews:publish   # publie ce qui manque, puis le manifeste
+npm run previews:publish   # publie ce qui manque, puis le manifeste en ligne,
+                           # et seulement alors réécrit le manifeste versionné
 ```
 
 La chaîne (`backend/scripts/customisation-previews.ts`) recale chaque export
@@ -99,8 +100,11 @@ lieu de 800. Toutes les images ont la même
 taille et les pages au même endroit, au demi-pixel près : l'aperçu ne saute
 pas quand un curseur bouge.
 
-Le manifeste en ligne, celui que l'app lit :
+Le manifeste en ligne :
 `https://pjmetjdnajskijoljulc.supabase.co/storage/v1/object/public/memobook-public/apercus/manifest.json`.
+**L'app ne le lit pas** : elle embarque la même correspondance, écrite par
+`ios/Tools/make-customisation-preview-manifest.py` depuis le manifeste versionné,
+et ne télécharge que l'image (décision du 02/10/2026, Hugo).
 
 Elles partent dans le bucket Supabase **public** `memobook-public`, sous
 `apercus/`, à côté des images d'e-mail, derrière le CDN de Supabase. Jamais
@@ -116,20 +120,31 @@ déjà en ligne n'est pas renvoyé : **relancer la chaîne sur des sources
 inchangées ne publie rien.** Rien n'est jamais supprimé du bucket.
 
 **`assets/illustrations/apercus-personnalisation.manifest.json` est le
-contrat du sélecteur**, publié tel quel en ligne. Il vit à côté du dossier et
-non dedans : le dossier ne contient que des aperçus. Une entrée
-par aperçu, dans les noms de `BookCustomisation` (`rulesEnabled`,
+contrat entre la chaîne et l'app**, publié tel quel en ligne. Il vit à côté du
+dossier et non dedans : le dossier ne contient que des aperçus. Une entrée par
+aperçu : ses réglages dans les noms de `BookCustomisation` (`rulesEnabled`,
 `photoTextRatio`, `funFactsEnabled`, `decorationQuota`) et l'identifiant de
-`BookFontCombo` (`fontCombo`) : la faute « Hellelujah » des noms Figma ne sort
-pas du script. Chaque `file` se résout contre l'adresse du manifeste ; une
-combinaison absente prend `fallback`. `width` et `height` permettent de
-réserver la place avant que l'image arrive.
+`BookFontCombo` (`fontCombo`), le fichier publié (`file`, à résoudre contre
+l'adresse du manifeste) et le nom Figma de la source (`source`) ; une
+combinaison absente prend `fallback`.
+
+L'app, elle, ne lit **que** `source` et `file` : son sélecteur rend le nom
+Figma — faute « Hellelujah » comprise —, et
+`ios/Tools/make-customisation-preview-manifest.py` en tire la copie embarquée
+« nom Figma → fichier publié ». Elle ne réserve pas la place d'après `width` et
+`height`, mais d'après la tête de l'écran (`BookPagesPeek.headerSize`).
 
 **Ajouter un aperçu** : déposer le PNG, nommé comme les autres, lancer
-`npm run previews:publish`, commiter le manifeste. Aucun code à toucher,
-sauf pour un assortiment typographique nouveau (`FONT_COMBOS` dans le
-script). Un PNG déposé sans relancer la chaîne fait échouer la CI back-end
-(`test/customisationPreviews.test.ts`).
+`npm run previews:publish`, puis `python3 ios/Tools/make-customisation-preview-manifest.py`,
+et commiter les deux manifestes. Il ne paraît dans l'app qu'avec la version
+suivante. Aucun autre code à toucher, sauf pour un assortiment typographique
+nouveau (`FONT_COMBOS` dans le script, et la table des segments de
+`BookCustomisationPreview`). Un PNG déposé sans relancer la chaîne fait échouer
+`npm run previews:check` et `test/customisationPreviews.test.ts` côté back-end,
+et `BookCustomisationPreviewTests` côté iOS. ⚠️ En CI, seulement si la PR
+touche aussi `backend/` ou `ios/` : les deux workflows ne surveillent pas
+encore `assets/illustrations/` — le correctif attend un jeton qui puisse
+modifier `.github/workflows/`.
 
 Le dossier est exclu de l'image Docker du serveur (`.dockerignore`) : le
 back-end ne le lit pas.

@@ -5,12 +5,14 @@ import SwiftUI
 /// Deux pages du carnet, l'une sur l'autre, un peu de travers — ce qu'on
 /// regarde pendant qu'on règle ce qui les change.
 ///
-/// **Elles vivent en tête de l'écran des personnalisations** depuis le
-/// 29/09/2026 (V3 de la maquette, `3595:23801`) : fixes au-dessus des
-/// pastilles de catégorie, et le reste de l'écran défile derrière elles. Elles
-/// flottaient jusque-là au-dessus des feuilles de réglage, ce qui reste
-/// possible — voir ``SwiftUI/View/bookPagesPeek(pdfUrl:isVisible:)`` — pour une
-/// feuille qui en aurait besoin.
+/// **En tête de l'écran des personnalisations, elles ne sont plus que le
+/// papier nu** qui attend l'aperçu de personnalisation (02/10/2026, voir
+/// ``BookCustomisationPreviewView``) : le temps que l'image arrive, ou quand
+/// elle n'arrive pas. Elles y étaient arrivées le 29/09/2026 (V3 de la
+/// maquette, `3595:23801`), et flottaient avant au-dessus des feuilles de
+/// réglage, ce qui reste possible — voir
+/// ``SwiftUI/View/bookPagesPeek(pdfUrl:isVisible:)`` — pour une feuille qui en
+/// aurait besoin.
 ///
 /// **Sans carnet composé, deux feuilles de papier nues** : la maquette dessine
 /// toujours ses deux pages, et un bloc qui disparaît ferait sauter les

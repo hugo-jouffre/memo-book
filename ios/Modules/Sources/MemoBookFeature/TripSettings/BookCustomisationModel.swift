@@ -45,10 +45,10 @@ public final class BookCustomisationModel {
     private let persist: ((String, BookCustomisationEdit) async throws -> TripSettings)?
     private let rulesMemory: BookRulesMemory
 
-    /// L'envoi en cours. Le garder permet d'annuler celui d'avant quand deux
-    /// gestes s'enchaînent — un curseur qu'on pousse d'un cran à l'autre en
-    /// envoie un par cran, et c'est le dernier qui compte.
-    private var pendingSave: Task<Void, Never>?
+    /// Les réglages qui attendent leur tour, envoyés **un par un**, dans
+    /// l'ordre — voir ``save(_:)``.
+    private var queue: [BookCustomisationEdit] = []
+    private var isSending = false
 
     public init(
         tripId: String,
@@ -117,13 +117,16 @@ public final class BookCustomisationModel {
         errorAdvice = nil
     }
 
-    /// Le PDF du carnet composé, pour les deux pages qui flottent au-dessus des
-    /// feuilles. `nil` tant qu'aucun carnet n'a été composé.
+    /// L'image de l'aperçu de personnalisation, en tête de l'écran — voir
+    /// ``BookCustomisationPreview/imageURL(for:)``. `nil` tant que les
+    /// réglages ne sont pas lus.
     ///
-    /// **Il arrive avec les réglages**, sans second appel : la route lit déjà le
-    /// dernier rendu prêt pour en tirer la vignette de couverture. Un appel de
-    /// plus n'aurait servi qu'à redemander ce qu'on avait.
-    public var bookPdfUrl: URL? { settings?.bookPdfUrl }
+    /// Elle ne dépend que des cinq réglages qui la pilotent : l'écran peut
+    /// suivre cette adresse sans jamais recharger pour le nombre de pages, le
+    /// quiz, les zones libres ou le mot fléché.
+    public var previewURL: URL? {
+        customisation.map(BookCustomisationPreview.imageURL(for:))
+    }
 
     // MARK: - Ce qu'on change depuis les feuilles
 
@@ -217,22 +220,50 @@ public final class BookCustomisationModel {
     }
 
     /// Envoie un réglage, et remplace l'écran par ce que le serveur relit.
+    ///
+    /// **En file, et non en annulant l'envoi d'avant** (02/10/2026). Annuler
+    /// valait pour les crans d'un même curseur, mais pas pour deux réglages
+    /// voisins : éteindre les fun facts puis le quiz annulait l'envoi des fun
+    /// facts, la réponse du quiz les rendait allumés, et l'aperçu de
+    /// personnalisation bougeait après un geste qui ne le concerne pas. Donc :
+    ///
+    /// - un envoi part quand le précédent a répondu ;
+    /// - un réglage qui attend encore est remplacé par un plus récent **du même
+    ///   champ** : un curseur qu'on fait glisser n'envoie que son premier cran
+    ///   et celui où il s'arrête ;
+    /// - seule la réponse du dernier envoi remplace l'écran — elle a vu tous
+    ///   les gestes d'avant, les autres seraient déjà périmées.
     private func save(_ change: BookCustomisationEdit) {
+        guard persist != nil else { return }
+        queue.removeAll { $0.field == change.field }
+        queue.append(change)
+        // Posé ici, sans attendre que la tâche démarre : deux gestes dans la
+        // même image lanceraient sinon deux envois côte à côte.
+        guard !isSending else { return }
+        isSending = true
+        Task { await sendQueue() }
+    }
+
+    private func sendQueue() async {
+        defer { isSending = false }
         guard let persist else { return }
 
-        pendingSave?.cancel()
-        pendingSave = Task {
+        while !queue.isEmpty {
+            let change = queue.removeFirst()
             do {
                 let updated = try await persist(tripId, change)
-                guard !Task.isCancelled else { return }
+                guard queue.isEmpty else { continue }
                 settings = updated
                 clearError()
                 forgetRulesIfUnlocked()
                 forgetLockNoticeIfUnlocked()
             } catch {
-                guard !Task.isCancelled else { return }
+                // Ce qui attendait derrière part avec : l'écran relit le
+                // serveur, et montre ce qu'il a vraiment.
+                queue.removeAll()
                 report(error)
                 await reload()
+                return
             }
         }
     }
@@ -264,5 +295,28 @@ public final class BookCustomisationModel {
     private func forgetRulesIfUnlocked() {
         guard let customisation, !BookRulesLock.isLocked(customisation) else { return }
         rulesMemory.write(tripId, nil)
+    }
+}
+
+private extension BookCustomisationEdit {
+    /// Le champ que cette édition écrit : deux éditions du même champ en file,
+    /// seule la dernière part. `.fontCombo` et `.rules` restent deux champs —
+    /// l'un porte les polices, et la file les envoie dans l'ordre.
+    var field: String {
+        switch self {
+        case .photoTextRatio: "photoTextRatio"
+        case .targetPageCount: "targetPageCount"
+        case .funFacts: "funFacts"
+        case .rules: "rules"
+        case .decorationQuota: "decorationQuota"
+        case .fontDisplay: "fontDisplay"
+        case .fontTitle: "fontTitle"
+        case .fontHand: "fontHand"
+        case .fontFacts: "fontFacts"
+        case .fontCombo: "fontCombo"
+        case .quiz: "quiz"
+        case .freeZones: "freeZones"
+        case .crossword: "crossword"
+        }
     }
 }
