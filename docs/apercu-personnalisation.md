@@ -111,9 +111,11 @@ Soit, par assortiment : 4 pour la typographie par défaut (les deux états des
 pointillés), 2 pour *Manuscrit*, 2 pour *Éditorial* à 100 % ; plus un chacun à
 75 % avec fun fact.
 
-À noter pour l'écran : si cet avertissement doit faire plus que s'afficher —
-bloquer la commande, pousser vers un réglage — c'est une décision produit qui ne
-se lit pas dans l'image, et que la règle de sélection n'a pas à porter.
+**Cet avertissement ne déclenche rien** (décision du 02/10/2026, Hugo). Il ne
+bloque pas la commande, ne renvoie vers aucun réglage, n'allume aucun état
+particulier dans l'écran : le message vit dans l'image et nulle part ailleurs.
+Pour le code, ces douze fichiers sont des aperçus comme les autres — rien dans
+la règle de sélection ni dans l'écran ne doit chercher à les reconnaître.
 
 ## Couverture : complète
 
