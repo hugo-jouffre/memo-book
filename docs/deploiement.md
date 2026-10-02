@@ -260,6 +260,14 @@ Le lien universel, plus tard, demande de servir un `apple-app-site-association`
 depuis ce domaine et d'ajouter l'*Associated Domain* dans `project.yml` : le
 lien de l'e-mail ne changera pas, iOS ouvrira l'app avant d'arriver sur la page.
 
+L'e-mail « **Exporter mes données** » (01/10/2026) part par la même clé Resend,
+et **ne demande aucune variable de plus** : son lien vise la page
+`GET /data-export` de l'API, sur l'adresse que Railway pose seul
+(`RAILWAY_PUBLIC_DOMAIN`), ou `API_PUBLIC_BASE_URL` le jour d'un domaine à
+nous. C'est l'API qui envoie l'e-mail, pas le worker — qui n'a pas de domaine.
+L'archive se compose au téléchargement : rien de neuf dans le stockage, et la
+migration `export_des_donnees` part avec le code par la *Pre-deploy Command*.
+
 ### Côté Google Cloud
 
 Le client iOS existe déjà. Ce qui manque souvent, c'est l'**écran de

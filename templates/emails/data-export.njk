@@ -1,0 +1,92 @@
+{#
+  « Tes données MemoBook sont prêtes » — `account.data_export`.
+
+  Déclenché par `POST /v1/accounts/me/export` (« Exporter mes données », en bas
+  du profil). Le lien porte un secret qui ouvre **toutes** les données du compte
+  pendant sept jours : c'est un e-mail de **niveau 1** au sens de
+  `docs/emails.md` — son texte vit dans le dépôt, personne ne l'édite dans un
+  outil visuel.
+
+  Rien en pièce jointe : l'archive pèse des centaines de mégaoctets, et un
+  e-mail se transfère. Le bouton mène à la page de téléchargement de l'API
+  (`GET /data-export`), qui compose l'archive quand on la demande.
+
+  Sans image héros, comme le mot de passe oublié : un e-mail de sécurité se lit
+  en trois secondes, et le bouton est la seule chose qui compte.
+#}
+{% extends "layout.njk" %}
+
+{% block subject %}Tes données MemoBook sont prêtes{% endblock %}
+
+{% block preheader %}Le lien de téléchargement est valable jusqu'au {{ export.until }}. Ne le transfère à personne.{% endblock %}
+
+{% block content %}
+
+<!-- Titre et message -->
+<tr>
+  <td class="mb-pad" bgcolor="#FFFCF8" style="background-color:#FFFCF8; padding:36px 36px 0;">
+    <h1 class="mb-h1" style="margin:0 0 18px; font-family:'Sora',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif; font-size:30px; line-height:36px; font-weight:700; color:#2D231A; letter-spacing:-0.4px;">
+      Tes données sont prêtes
+    </h1>
+    <p style="margin:0 0 14px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:16px; line-height:25px; color:#2D231A;">
+      {{ recipient.greeting }}
+    </p>
+    <p style="margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:16px; line-height:25px; color:#2D231A;">
+      Tu as demandé une copie de tes données MemoBook. Le bouton ci-dessous ouvre la page où la télécharger.
+    </p>
+  </td>
+</tr>
+
+<!-- Bouton principal -->
+<tr>
+  <td class="mb-pad" align="center" bgcolor="#FFFCF8" style="background-color:#FFFCF8; padding:28px 36px 6px;">
+    <!--[if mso]>
+    <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{{ export.url }}" style="height:50px; v-text-anchor:middle; width:330px;" arcsize="24%" strokecolor="#28654B" fillcolor="#28654B">
+      <w:anchorlock/><center style="color:#FFFCF8; font-family:Arial,sans-serif; font-size:16px; font-weight:bold;">Télécharger mes données</center>
+    </v:roundrect>
+    <![endif]-->
+    <!--[if !mso]><!-- -->
+    <a class="mb-btn" href="{{ export.url }}" style="display:inline-block; background-color:#28654B; color:#FFFCF8; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:16px; font-weight:600; line-height:20px; padding:15px 32px; border-radius:12px; text-decoration:none;">Télécharger mes données</a>
+    <!--<![endif]-->
+    <p style="margin:14px 0 0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; line-height:18px; color:#8A7F73;">
+      Le lien est valable jusqu'au {{ export.until }}, et sert plusieurs fois.
+    </p>
+  </td>
+</tr>
+
+<!-- Ce que contient l'archive -->
+<tr>
+  <td class="mb-pad" bgcolor="#FFFCF8" style="background-color:#FFFCF8; padding:24px 36px 0;">
+    <p style="margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:15px; line-height:23px; color:#2D231A;">
+      Dans l'archive : ton compte, tes voyages et leurs récits, chaque souvenir tel que tu l'as raconté et tel que MEMO l'a écrit, tes photos et tes vocaux d'origine, tes carnets en PDF, tes commandes, ta cagnotte et ton abonnement. Des fichiers JSON, lisibles par n'importe quel logiciel, et un récit en texte simple pour chaque voyage.
+    </p>
+  </td>
+</tr>
+
+<!-- Le lien en toutes lettres : tous les clients n'ouvrent pas les boutons -->
+<tr>
+  <td class="mb-pad" bgcolor="#FFFCF8" style="background-color:#FFFCF8; padding:24px 36px 0;">
+    <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#FCF2E9" style="background-color:#FCF2E9; border-radius:14px;">
+      <tr>
+        <td style="padding:16px 20px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; line-height:20px; color:#8A7F73;">
+          Le bouton ne s'ouvre pas&nbsp;? Copie cette adresse dans ton navigateur&nbsp;:<br />
+          <span style="color:#2D231A; word-break:break-all;">{{ export.url }}</span>
+        </td>
+      </tr>
+    </table>
+  </td>
+</tr>
+
+<!-- La phrase qui compte vraiment -->
+<tr>
+  <td class="mb-pad" bgcolor="#FFFCF8" style="background-color:#FFFCF8; padding:24px 36px 34px;">
+    <p style="margin:0 0 14px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:15px; line-height:23px; color:#2D231A;">
+      <strong style="font-weight:600;">Ce lien ouvre toutes tes données&nbsp;:</strong> ne le transfère à personne.
+    </p>
+    <p style="margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:15px; line-height:23px; color:#8A7F73;">
+      Tu n'as rien demandé&nbsp;? N'ouvre pas le lien, et réponds à cet e-mail : on regardera ce qui se passe sur ton compte.
+    </p>
+  </td>
+</tr>
+
+{% endblock %}

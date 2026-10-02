@@ -157,6 +157,15 @@ public protocol MemoBookAPI: Sendable {
     /// demandé confirmation.
     func deleteAccount() async throws
 
+    /// « Exporter mes données » : le serveur envoie à l'adresse du compte le
+    /// lien d'une page où télécharger toutes ses données — RGPD, droit d'accès
+    /// et portabilité. Valable sept jours.
+    ///
+    /// Une seconde demande dans les cinq minutes n'envoie rien et le dit
+    /// (`alreadyRequested`). Codes : `no_email` (le compte n'a pas d'adresse),
+    /// `email_unavailable` (l'envoi a échoué, rien n'est parti).
+    func requestDataExport() async throws -> DataExportReceipt
+
     // MARK: - Carnets
 
     func memos() async throws -> [MemoSummary]

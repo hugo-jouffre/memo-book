@@ -340,6 +340,9 @@ public final class AppDependencies {
             cancelSubscription: { [api] reason in
                 try await api.cancelSubscription(reason: reason)
             },
+            // « Exporter mes données » : le lien part par e-mail, l'archive se
+            // compose à son ouverture — voir ``DataExportSheet``.
+            exportData: { [api] in try await api.requestDataExport() },
             cached: { [content] in await content.read(.profile, as: TravellerProfile.self) }
         )
     }

@@ -272,6 +272,62 @@ const TEMPLATES: TemplateDefinition[] = [
       VALIDITY: "30 minutes",
     },
   },
+
+  {
+    alias: "data-export",
+    name: "Export des données du compte",
+    file: "data-export.njk",
+    context: {
+      brand: { ...BRAND, assetsBaseUrl: v("ASSETS_BASE_URL") },
+      message: {
+        class: "transactional",
+        reason: "tu as demandé une copie de tes données depuis l'app",
+      },
+      links: { web: BRAND.web, preferences: v("PREFERENCES_URL") },
+      recipient: { greeting: v("GREETING") },
+      // L'échéance arrive **écrite** — « mercredi 8 octobre 2026 » : un
+      // gabarit Resend ne sait pas formater une date.
+      export: { url: v("DOWNLOAD_URL"), until: v("EXPIRES_ON") },
+    },
+    variables: [
+      ...COMMON_VARIABLES,
+      { key: "GREETING", type: "string", fallback_value: "Bonjour," },
+      { key: "DOWNLOAD_URL", type: "string" },
+      { key: "EXPIRES_ON", type: "string" },
+    ],
+    text: [
+      "MemoBook",
+      "",
+      "TES DONNÉES SONT PRÊTES",
+      "",
+      v("GREETING"),
+      "",
+      "Tu as demandé une copie de tes données MemoBook. Ouvre ce lien pour la",
+      "télécharger :",
+      "",
+      v("DOWNLOAD_URL"),
+      "",
+      `Le lien est valable jusqu'au ${v("EXPIRES_ON")}, et sert plusieurs fois.`,
+      "",
+      "Dans l'archive : ton compte, tes voyages et leurs récits, chaque souvenir",
+      "tel que tu l'as raconté et tel que MEMO l'a écrit, tes photos et tes vocaux",
+      "d'origine, tes carnets en PDF, tes commandes, ta cagnotte et ton abonnement.",
+      "",
+      "Ce lien ouvre toutes tes données : ne le transfère à personne.",
+      "",
+      "Tu n'as rien demandé ? N'ouvre pas le lien, et réponds à cet e-mail : on",
+      "regardera ce qui se passe sur ton compte.",
+      "",
+      `MemoBook — ${BRAND.address}`,
+    ].join("\n"),
+    sample: {
+      ASSETS_BASE_URL: ".",
+      PREFERENCES_URL: `${BRAND.web}/preferences?t=jeton`,
+      GREETING: "Bonjour Clara,",
+      DOWNLOAD_URL: "https://api-production-9f35a.up.railway.app/data-export?token=8f2c4e1a9b7d3056",
+      EXPIRES_ON: "jeudi 8 octobre 2026",
+    },
+  },
 ];
 
 interface RenderedTemplate {

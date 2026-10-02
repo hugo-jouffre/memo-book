@@ -32,7 +32,7 @@ export interface AppContext {
   storage: MediaStorage;
   /** Vérifie les jetons d'identité Apple et Google. */
   socialVerifier: SocialVerifier;
-  /** Envoie les e-mails de l'app — aujourd'hui, celui du mot de passe oublié. */
+  /** Envoie les e-mails de l'app : le mot de passe oublié, et l'export des données. */
   mailer: Mailer;
   transcriber: Transcriber;
   redactor: Redactor;

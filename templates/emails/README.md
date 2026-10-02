@@ -50,6 +50,19 @@ Le gabarit d'exemple. Tout vient de `print_orders`, déjà en base.
 | `order.shipping.name` · `.line1` · `.cityLine` · `.city` | `shippingName`, `shippingLine1` (+ `line2` replié dedans), `shippingPostalCode` + `shippingCity` | La copie figée de la commande, pas l'adresse du profil. Trois lignes distinctes, et non un bloc d'adresse déjà balisé : une adresse vient de l'utilisateur, elle n'a pas à pouvoir injecter du HTML |
 | `order.tracking[]` | Calculé | `{ label, detail, state }`, `state` ∈ `done` \| `current` \| `todo`. La machine à états reste dans le code ; le gabarit ne fait qu'afficher |
 
+## Variables de `account.data_export`
+
+« Tes données MemoBook sont prêtes » — `data-export.njk`, déclenché par
+`POST /v1/accounts/me/export`. Niveau 1 : le lien porte un secret.
+
+| Variable | Source | Note |
+|---|---|---|
+| `recipient.greeting` | `accounts.firstName` | « Bonjour Clara, » ou « Bonjour, » — composé par le back-end |
+| `export.url` | `dataExportUrl()` | La page `GET /data-export?token=…` de l'API, jamais l'archive elle-même |
+| `export.until` | `data_exports.expiresAt` | **Écrite** : « jeudi 8 octobre 2026 ». Un gabarit Resend ne formate pas une date |
+
+Chez Resend : `GREETING`, `DOWNLOAD_URL`, `EXPIRES_ON`.
+
 > **`recipient.greeting`, et non `recipient.firstName`.** Le prénom est
 > facultatif — un compte ouvert par Apple n'en a pas toujours — et le gabarit
 > hébergé chez Resend ne sait pas écrire de condition. Le back-end compose donc
@@ -98,7 +111,7 @@ vérifier ce qui sera poussé, illisible pour juger d'un texte.
 
 ## Les gabarits chez Resend
 
-Les deux gabarits vivent **aussi** dans le compte Resend, en tant que
+Les trois gabarits vivent **aussi** dans le compte Resend, en tant que
 *templates* hébergés (`POST /templates`). L'envoi ne transporte alors que des
 variables, et la copie devient modifiable sans déploiement — c'est le niveau 2
 de [`docs/emails.md`](../../docs/emails.md).
@@ -107,6 +120,7 @@ de [`docs/emails.md`](../../docs/emails.md).
 |---|---|---|
 | `print-order-shipped` | `print-order-shipped.njk` | Ton carnet « … » est en route |
 | `password-reset` | `password-reset.njk` | Réinitialise ton mot de passe MemoBook |
+| `data-export` | `data-export.njk` | Tes données MemoBook sont prêtes |
 
 ```bash
 npm run emails:sync      # crée ou met à jour, puis publie. Exige RESEND_API_KEY
@@ -128,7 +142,7 @@ elles expliquent la forme des variables ci-dessus :
    étapes figées — deux faites, une en cours, une à venir — parce que c'est ce
    que « expédié » veut dire. La livraison sera `print-order-delivered`, pas une
    condition dans celui-ci.
-3. **Le pied de page est figé au moment de la synchronisation.** Les deux
+3. **Le pied de page est figé au moment de la synchronisation.** Les trois
    gabarits sont transactionnels : ni lien de désinscription, ni en-tête
    `List-Unsubscribe`. Une campagne passera par un gabarit à part.
 
@@ -138,7 +152,7 @@ Le gabarit Resend est **dérivé**, jamais écrit à la main : `emails:sync` le 
 depuis le `.njk` et l'écrase. Une modification faite dans l'interface Resend
 survit donc jusqu'à la prochaine synchronisation, et pas plus.
 
-C'est voulu tant que ces deux e-mails sont de niveau 1 et 2 avec la copie au
+C'est voulu tant que ces trois e-mails sont de niveau 1 et 2 avec la copie au
 dépôt. Le jour où une équipe CRM prend la main sur `print-order-shipped`, c'est
 ce fichier-ci qu'il faudra retirer de la liste de `resend-templates.ts` — sans
 quoi la première synchronisation effacera son travail.
