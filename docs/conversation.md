@@ -49,7 +49,7 @@ reste la règle. Ce chantier ne touche pas à ce prompt.
 - **Le fil est commun aux co-voyageurs.** C'est le récit du voyage, pas une
   messagerie privée. Dès qu'ils sont deux, chaque bulle bleue porte le prénom de
   qui parle. Les **souvenirs**, eux, restent sans auteur : le carnet parle d'une
-  seule voix (`agent-transcription.md` § 2).
+  seule voix (`agent-transcription.md` § 3).
 - **MEMO parle le premier**, une seule bulle d'ouverture, qui se termine déjà
   par une question. La relance du jour (« Comment ça se passe à Trastevere ? »)
   ne vient **jamais** dans le fil : elle est faite pour la carte de l'accueil du
@@ -127,6 +127,12 @@ un déroulé fixe, écrit par le code, sans modèle :
    seule bulle : « Voilà ton texte pour le carnet. Il te convient ? », avec le
    trio de validation (§ 6). C'est le job de rédaction qui la pose
    (`askValidation`), parce que lui seul sait quand le texte est là.
+   **Si l'écrivain a laissé de côté un passage qu'il n'a pas compris** — un
+   mot mal transcrit, que le contexte ne permet pas de rétablir —, la même
+   bulle le dit, deux passages au plus : « … Je n'ai pas compris « je tarbé » :
+   je l'ai laissé de côté. Redis-le-moi autrement si tu veux qu'il y soit. Il
+   te convient ? » Ce n'est pas une question de plus ; la réponse est une
+   précision, et le texte se réécrit avec elle (point 3).
 3. **On attend la validation.** Une précision tapée entre-temps (« c'était
    avec Clara ») reçoit « C'est noté, je reprends le texte avec ça. », le
    texte se réécrit, et la question revient avec lui. Une correction à la main
@@ -190,8 +196,8 @@ une réponse à une question.
 **une seule bulle** le meilleur moment, le pire, et ce qu'on retient. Une fois
 par journée, jamais avant que le souvenir en cours soit validé, jamais avant
 17 h heure du voyageur sauf si l'étape se termine. Les réponses sont des
-précisions marquées `rose_epine_graine` ; la rédaction en fait l'encart prévu
-(`agent-transcription.md` § 5).
+précisions marquées `rose_epine_graine` ; la rédaction les traite comme le reste
+du souvenir (`agent-transcription.md` § 1.6).
 
 **Quand on ne demande rien.** Un refus (« plus tard », « pas envie ») : MEMO
 garde et s'arrête — c'est la règle la plus dure du contrat de l'agent. Une
@@ -496,3 +502,4 @@ exactement ce que le modèle doit faire mieux.
 | 28/09/2026 | Le contexte du voyage avant la première étape : une seule puce à l'ouverture, cinq lignes obligatoires, rien ne devient souvenir ni ne coûte (§ 2 bis) | Paul |
 | 28/09/2026 | Le modèle extrait le contexte, le code tient la liste et pose la question — une par tour | reco Claude |
 | 22/09/2026 | Effort de réflexion bas pour la conversation (quelqu'un attend), élevé pour la rédaction (personne ne la regarde écrire) | reco Claude |
+| 02/10/2026 | Un passage que l'écrivain n'a pas compris ne s'imprime pas : il se cite dans la bulle « Il te convient ? », jamais dans une question de plus | reco Claude |
