@@ -98,6 +98,7 @@ describe("HeuristicStructurer", () => {
           placeLabel: "Nara",
         }),
       ],
+      tripContext: null,
     });
 
     expect(validatePayload(payload)).toMatchObject({ valid: true, errors: [] });
@@ -116,6 +117,7 @@ describe("HeuristicStructurer", () => {
       theme: null,
       coverPhotoUrl: null,
       entries: [entry({ transcript: longSentence })],
+      tripContext: null,
     });
 
     // La preuve utile n'est pas le nombre de paragraphes mais le fait que le
@@ -139,6 +141,7 @@ describe("HeuristicStructurer", () => {
           photoUrl: "https://cdn.example.test/jour-2.jpg",
         }),
       ],
+      tripContext: null,
     });
 
     const days = payload["days"] as Record<string, unknown>[];
@@ -154,10 +157,55 @@ describe("HeuristicStructurer", () => {
       theme: null,
       coverPhotoUrl: null,
       entries: [entry({ transcript: "On a vu un <script>alert(1)</script> panneau." })],
+      tripContext: null,
     });
 
     const days = payload["days"] as Record<string, unknown>[];
     expect(days[0]?.["body_html"]).not.toContain("<script>");
     expect(days[0]?.["body_html"]).toContain("&lt;script&gt;");
+  });
+
+  it("compose l'intro depuis le contexte du voyage, quand il existe", async () => {
+    const payload = await structurer.structure({
+      title: "Carnet",
+      subtitle: null,
+      authors: null,
+      theme: null,
+      coverPhotoUrl: null,
+      entries: [entry({})],
+      tripContext: {
+        status: "complete",
+        departureCountry: "France",
+        travellerCount: 2,
+        companions: [{ name: "Clara", relation: "ma compagne" }],
+        dates: "du 12 au 26 septembre",
+        tripType: "road trip en van",
+        itinerary: null,
+        occasion: null,
+        narrationMoment: null,
+        notes: null,
+        awaiting: null,
+      },
+    });
+
+    expect(payload["intro_title"]).toBe("Road trip en van");
+    expect(payload["intro_text"]).toContain("Clara");
+    expect(payload["intro_text"]).toContain("<p>");
+    expect(validatePayload(payload)).toMatchObject({ valid: true, errors: [] });
+  });
+
+  it("ne pose aucune intro sans contexte du voyage", async () => {
+    const payload = await structurer.structure({
+      title: "Carnet",
+      subtitle: null,
+      authors: null,
+      theme: null,
+      coverPhotoUrl: null,
+      entries: [entry({})],
+      tripContext: null,
+    });
+
+    expect(payload["intro_title"]).toBeUndefined();
+    expect(payload["intro_text"]).toBeUndefined();
   });
 });

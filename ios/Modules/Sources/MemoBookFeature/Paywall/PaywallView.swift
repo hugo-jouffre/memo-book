@@ -499,8 +499,8 @@ enum PaywallVariant: Sendable, Hashable {
     }
 
     /// Le titre de l'écran d'offre. Il change avec la version : la première fois
-    /// il vend le carnet (« Ce carnet que tu relieras peut-être encore dans
-    /// 30 ans »), au retour il rassure (« On a pas changé la recette ! »).
+    /// il vend le carnet (« Ce carnet que tu relieras encore dans 30 ans »),
+    /// au retour il rassure (« On a pas changé la recette ! »).
     var offerTitle: (lead: String, strong: String) {
         switch self {
         case .firstTime:
@@ -572,7 +572,9 @@ enum PaywallCopy {
 
     // — Écran 3
     static let offerEyebrow = "Abonne toi pour continuer"
-    static let offerTitleLead = "Ce carnet que tu relieras peut-être encore "
+    /// **Sans « peut-être »** (01/10/2026) : le titre doit tenir sur trois
+    /// lignes, et le mot l'emmenait sur une quatrième.
+    static let offerTitleLead = "Ce carnet que tu relieras encore "
     static let offerTitleStrong = "dans 30 ans"
     static let estimationPill = "Voir une estimation →"
     /// ⚠️ **« /semaine » et non « /mois »** (Hugo, 17/09/2026). L’abonnement

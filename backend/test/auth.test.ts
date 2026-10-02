@@ -37,6 +37,7 @@ function fakeMailer(): Mailer & { sent: PasswordResetMail[] } {
     async sendPasswordReset(message) {
       sent.push(message);
     },
+    async sendDataExport() {},
   };
 }
 

@@ -4,6 +4,8 @@ import {
   advance,
   companionNamesIn,
   describeTripContext,
+  introTextFor,
+  introTitleFor,
   isComplete,
   mergeTripContext,
   missingFields,
@@ -155,5 +157,50 @@ describe("pour les autres lecteurs", () => {
   it("compte ce qui est rempli pour la pastille de l'app", () => {
     const serialized = serializeTripContext({ ...EMPTY_TRIP_CONTEXT, departureCountry: "France" });
     expect(serialized).toMatchObject({ status: "gathering", filledCount: 1, requiredCount: 5 });
+  });
+});
+
+describe("l'intro du carnet", () => {
+  it("titre l'intro d'après le genre de voyage", () => {
+    expect(introTitleFor(full)).toBe("Road trip en van");
+  });
+
+  it("titre l'intro d'après l'occasion, à défaut de genre de voyage", () => {
+    expect(introTitleFor({ ...EMPTY_TRIP_CONTEXT, occasion: "lune de miel" })).toBe("Lune de miel");
+  });
+
+  it("retombe sur un titre générique sans contexte", () => {
+    expect(introTitleFor(null)).toBe("Avant de commencer");
+    expect(introTitleFor(EMPTY_TRIP_CONTEXT)).toBe("Avant de commencer");
+  });
+
+  it("compose un texte d'intro dans un seul paragraphe HTML", () => {
+    const text = introTextFor(full);
+    expect(text.startsWith("<p>")).toBe(true);
+    expect(text.endsWith("</p>")).toBe(true);
+    expect(text).toContain("France");
+    expect(text).toContain("Clara");
+    expect(text).toContain("road trip en van");
+  });
+
+  it("échappe le HTML d'un champ libre", () => {
+    const text = introTextFor({ ...full, tripType: "<script>alert(1)</script>" });
+    expect(text).not.toContain("<script>");
+    expect(text).toContain("&lt;script&gt;");
+  });
+
+  it("rend une chaîne vide sans contexte", () => {
+    expect(introTextFor(null)).toBe("");
+  });
+
+  it("respecte la limite éditoriale d'un paragraphe d'intro", () => {
+    const text = introTextFor({
+      ...full,
+      notes: null,
+      tripType: "a".repeat(600),
+    });
+    // 700 caractères par paragraphe (LAYOUT_KB), balises HTML non comprises.
+    const inner = text.slice("<p>".length, -"</p>".length);
+    expect(inner.length).toBeLessThanOrEqual(700);
   });
 });

@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import {
   DeleteObjectsCommand,
   GetObjectCommand,
@@ -135,6 +137,54 @@ export class InMemoryMediaStorage extends MediaStorage {
   }
 }
 
+/**
+ * Stockage sur disque, pour `npm run dev` sans S3 : les vocaux et les photos
+ * survivent aux redémarrages de `tsx watch` — en mémoire, chaque modification
+ * du code effaçait les médias déjà envoyés, et le fil se remplissait de
+ * vignettes vides (01/10/2026). Jamais en production.
+ */
+export class DiskMediaStorage extends MediaStorage {
+  constructor(private readonly root: string) {
+    super(null as unknown as S3Client, "disk");
+  }
+
+  private pathFor(storageKey: string): string {
+    const path = resolve(this.root, storageKey);
+    if (!path.startsWith(resolve(this.root))) throw new Error(`Clé de stockage invalide : ${storageKey}`);
+    return path;
+  }
+
+  override async put(
+    prefix: string,
+    filename: string,
+    body: Buffer,
+    mimeType: string,
+  ): Promise<StoredObject> {
+    const extension = filename.includes(".") ? filename.split(".").pop() : "bin";
+    const storageKey = `${prefix}/${randomUUID()}.${extension}`;
+    const path = this.pathFor(storageKey);
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, body);
+    return { storageKey, bytes: body.byteLength, mimeType };
+  }
+
+  override async get(storageKey: string): Promise<Buffer> {
+    try {
+      return await readFile(this.pathFor(storageKey));
+    } catch {
+      throw new Error(`Objet introuvable dans le stockage : ${storageKey}`);
+    }
+  }
+
+  override async signedReadUrl(storageKey: string): Promise<string> {
+    return `file://${this.pathFor(storageKey)}`;
+  }
+
+  override async remove(storageKeys: readonly string[]): Promise<void> {
+    for (const key of storageKeys) await rm(this.pathFor(key), { force: true });
+  }
+}
+
 export function createMediaStorage(env: Env): MediaStorage {
   if (env.NODE_ENV === "test") return new InMemoryMediaStorage();
 
@@ -165,14 +215,14 @@ export function createMediaStorage(env: Env): MediaStorage {
       );
     }
 
-    // Ailleurs, on retombe sur la mémoire pour que `npm run dev` et
-    // `npm run smoke` fonctionnent sans rien installer. Les médias ne survivent
-    // pas au redémarrage — d'où l'avertissement.
+    // Ailleurs, on retombe sur le disque pour que `npm run dev` et
+    // `npm run smoke` fonctionnent sans rien installer.
+    const root = join(process.cwd(), ".media-dev");
     console.warn(
-      `[storage] ${missing.join(", ")} absent(s) : stockage EN MÉMOIRE, ` +
-        "les médias seront perdus au redémarrage. Voir .env.example.",
+      `[storage] ${missing.join(", ")} absent(s) : stockage SUR DISQUE dans ${root}. ` +
+        "Voir .env.example pour brancher S3.",
     );
-    return new InMemoryMediaStorage();
+    return new DiskMediaStorage(root);
   }
 
   const client = new S3Client({

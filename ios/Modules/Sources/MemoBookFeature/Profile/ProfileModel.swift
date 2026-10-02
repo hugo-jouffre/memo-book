@@ -1,5 +1,6 @@
 import Foundation
 import MemoBookCore
+import MemoBookNetworking
 import Observation
 
 /// Ce que l'écran de profil sait faire : charger le profil, et enregistrer ce
@@ -55,6 +56,10 @@ public final class ProfileModel {
     private let cancelSubscriptionRemotely:
         ((SubscriptionCancellationReason?) async throws -> TravellerProfile)?
 
+    /// Demande le lien d'export des données. `nil` en aperçu : la feuille joue
+    /// la réussite.
+    private let exportData: (() async throws -> DataExportReceipt)?
+
     /// La photo est en route vers le serveur : l'avatar le montre.
     public private(set) var isUploadingAvatar = false
 
@@ -99,6 +104,7 @@ public final class ProfileModel {
         cancelSubscription: (
             (SubscriptionCancellationReason?) async throws -> TravellerProfile
         )? = nil,
+        exportData: (() async throws -> DataExportReceipt)? = nil,
         cached: CachedValue<TravellerProfile>? = nil
     ) {
         self.cached = cached
@@ -110,6 +116,7 @@ public final class ProfileModel {
         self.changePassword = changePassword
         self.requestPasswordReset = requestPasswordReset
         self.cancelSubscriptionRemotely = cancelSubscription
+        self.exportData = exportData
     }
 
     /// `true` tant qu'on n'a rien à montrer. L'écran se dessine quand même —
@@ -168,6 +175,57 @@ public final class ProfileModel {
             errorMessage = error.localizedDescription
             return false
         }
+    }
+
+    // MARK: - Exporter ses données
+
+    /// Où en est « Exporter mes données » — voir ``DataExportSheet``.
+    public enum DataExportState: Sendable, Equatable {
+        /// Rien de demandé : la feuille propose.
+        case idle
+        /// La demande est partie, le bouton tourne.
+        case requesting
+        /// Le lien est parti — ou l'était déjà, voir
+        /// ``DataExportReceipt/alreadyRequested``.
+        case sent(DataExportReceipt)
+        /// Rien n'est parti, et voici pourquoi.
+        case failed(String)
+    }
+
+    public private(set) var dataExport: DataExportState = .idle
+
+    /// Demande au serveur d'envoyer le lien d'export à l'adresse du compte.
+    ///
+    /// **Rien à confirmer avant** : la demande ne détruit rien, ne coûte rien,
+    /// et le lien ne part qu'à l'adresse du compte. La feuille dit ce qui va se
+    /// passer, et un seul bouton le fait.
+    public func requestDataExport() async {
+        if case .requesting = dataExport { return }
+
+        guard let exportData else {
+            dataExport = .sent(.fixture(email: profile?.email ?? "ton adresse e-mail"))
+            return
+        }
+
+        dataExport = .requesting
+        do {
+            dataExport = .sent(try await exportData())
+        } catch APIError.server(statusCode: 404, code: _, message: _) {
+            // Le serveur en ligne ne connaît pas encore la route : il a
+            // répondu par le 404 de Fastify, en anglais, qui ne parle à
+            // personne.
+            dataExport = .failed(DataExportCopy.notYetAvailable)
+        } catch {
+            dataExport = .failed(error.localizedDescription)
+        }
+    }
+
+    /// La feuille se referme : la prochaine ouverture repart de la
+    /// proposition, pas de la confirmation d'hier. Une demande en vol, elle,
+    /// va à son terme.
+    public func resetDataExport() {
+        if case .requesting = dataExport { return }
+        dataExport = .idle
     }
 
     // MARK: - Ce qu'on change depuis l'écran

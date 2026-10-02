@@ -36,10 +36,11 @@ enum ChatMetrics {
     // tenir, et c'est ce qui l'empêche à la fois de s'arrêter avant le bord et
     // de faire grandir la barre qui la porte — voir ``BrandWaveform``.
 
-    /// Combien de vignettes une bulle de photos montre avant de compter le
-    /// reste. Quatre, comme `agents/agent-conversation.md` le demande — « 2 à 4
-    /// photos par souvenir maximum ».
-    static let visiblePhotoCount = 4
+    /// Combien de photos un envoi porte, et combien de vignettes sa bulle
+    /// montre : six, le plus que MEMO demande pour une étape sur deux pages
+    /// (`backend/src/services/photoBudget.ts`, Hugo, 01/10/2026). Le serveur
+    /// applique la même borne (`MAX_PHOTOS`, `routes/chat.ts`).
+    static let visiblePhotoCount = 6
 }
 
 /// L'en-tête du chat : d'où l'on vient, de quoi on parle, et les deux réglages
@@ -235,5 +236,24 @@ struct ChatGreetingView: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, MemoBookSpacing.screenMargin)
         .padding(.vertical, MemoBookSpacing.xl)
+    }
+}
+
+/// « Ta conversation est privée… » — la mention posée **en tête du fil**,
+/// avant le premier message.
+///
+/// **Dans le fil, pas par-dessus** : elle défile avec la conversation, comme
+/// le début d'une page, au lieu de flotter sous l'en-tête et de cacher une
+/// bulle. En gris, en petit : elle rassure sans prendre la parole.
+struct ChatPrivacyNote: View {
+    var body: some View {
+        Text(ChatCopy.privacyNote)
+            .font(MemoBookFont.caption)
+            .foregroundStyle(MemoBookColor.inkMuted)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, MemoBookSpacing.screenMargin)
+            .padding(.vertical, MemoBookSpacing.xs)
     }
 }

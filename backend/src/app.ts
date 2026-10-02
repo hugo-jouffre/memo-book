@@ -7,6 +7,7 @@ import { isDatabaseUnavailable } from "./lib/databasePool.js";
 import { HttpError } from "./lib/httpError.js";
 import { createRequireAccount, registerAuthDecorator } from "./plugins/auth.js";
 import { registerAccountRoutes } from "./routes/accounts.js";
+import { registerDataExportPageRoutes } from "./routes/dataExportPage.js";
 import { registerAppStoreRoutes, registerAppStoreWebhookRoutes } from "./routes/appStore.js";
 import { registerAuthRoutes, registerSessionRoutes } from "./routes/auth.js";
 import { registerDeviceRoutes } from "./routes/devices.js";
@@ -20,6 +21,7 @@ import { registerOrderRoutes } from "./routes/orders.js";
 import { registerPaymentMethodRoutes } from "./routes/paymentMethods.js";
 import { registerPasswordResetPageRoutes } from "./routes/passwordResetPage.js";
 import { registerAvatarRoutes, registerProfileRoutes } from "./routes/profile.js";
+import { registerStepRoutes } from "./routes/steps.js";
 import { configureAvatarUrls } from "./services/avatars.js";
 import { registerRenderRoutes } from "./routes/renders.js";
 import { registerStripeWebhookRoutes } from "./routes/stripeWebhook.js";
@@ -114,6 +116,11 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
   // sans session, c'est pour en ouvrir une.
   registerPasswordResetPageRoutes(app);
 
+  // La page du lien « Télécharger mes données », et l'archive derrière son
+  // bouton. Publiques aussi : on y arrive depuis une boîte mail, et c'est le
+  // secret du lien qui ouvre — pas une session.
+  registerDataExportPageRoutes(app, context);
+
   // Tout ce qui appartient à quelqu'un, sous **une seule** identification : la
   // session de compte. Le token d'appareil n'ouvre plus rien — un carnet a
   // toujours un propriétaire, et c'est un compte.
@@ -126,6 +133,7 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
     registerMemoRoutes(accountRoutes, context);
     registerEntryRoutes(accountRoutes, context);
     registerRenderRoutes(accountRoutes, context);
+    registerStepRoutes(accountRoutes, context);
     registerOrderRoutes(accountRoutes, context);
     registerTripSettingsRoutes(accountRoutes, context);
     registerCoverRoutes(accountRoutes, context);

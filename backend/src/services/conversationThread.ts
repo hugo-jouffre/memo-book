@@ -4,6 +4,7 @@ import {
   HISTORY_LIMIT,
   HISTORY_TEXT_LIMIT,
   dayKeyOf,
+  pauseBeforeSaying,
   parseConversationState,
   pauseBeforeTranscript,
   type ConversationHistoryTurn,
@@ -11,7 +12,7 @@ import {
   type CurrentEntry,
   type MemoResponder,
 } from "./conversation.js";
-import { OPENING_PAUSE_MS } from "./conversationCopy.js";
+import { OPENING_PAUSE_MS, SUGGESTION_SETS, VALIDATION_QUESTION } from "./conversationCopy.js";
 import type { RedactedNeighbour } from "./redaction.js";
 
 /**
@@ -130,7 +131,23 @@ export async function materializeEntriesWithoutMessages(
     orderBy: { capturedAt: "asc" },
   });
 
-  for (const entry of orphans) {
+  // Plusieurs photos envoyées ensemble partagent **une** bulle : seule la
+  // première y est rattachée par `entryId`, les autres par `payload.entryIds`.
+  // Sans ce filtre, chaque relecture du fil leur fabriquait une bulle de plus.
+  const grouped = new Set<string>();
+  if (orphans.some((entry) => entry.kind === "photo")) {
+    const photoMessages = await db.chatMessage.findMany({
+      where: { memoId: memo.id, kind: "photos" },
+      select: { payload: true },
+    });
+    for (const { payload } of photoMessages) {
+      const ids = payload && typeof payload === "object" ? (payload as { entryIds?: unknown }).entryIds : undefined;
+      if (Array.isArray(ids)) for (const id of ids) if (typeof id === "string") grouped.add(id);
+    }
+  }
+
+  const toMaterialize = orphans.filter((candidate) => !grouped.has(candidate.id));
+  for (const entry of toMaterialize) {
     const kind = messageKindFor(entry.kind);
     const bubble = await db.chatMessage.create({
       data: {
@@ -163,7 +180,7 @@ export async function materializeEntriesWithoutMessages(
     }
   }
 
-  return orphans.length;
+  return toMaterialize.length;
 }
 
 // ---------------------------------------------------------------------------
@@ -340,4 +357,56 @@ export function allowsRoseEpineGraine(
 
 export function conversationStateOf(memo: Pick<Memo, "conversationState">): ConversationState {
   return parseConversationState(memo.conversationState);
+}
+
+/**
+ * « Il te convient ? » — la seule question qui suit un souvenir, posée quand
+ * son texte est prêt (rédigé, ou brut si la rédaction a échoué). Appelée par le
+ * job de rédaction, qui sait seul quand le texte est là.
+ *
+ * Rien à demander pour un souvenir sans fiche dans le fil (raconté depuis
+ * l'accueil), ni pour un souvenir déjà validé. Et jamais deux fois de suite :
+ * si la dernière bulle de MEMO pose déjà la question pour ce souvenir — une
+ * rédaction rejouée après un échec —, on ne la repose pas. Une précision qui
+ * fait réécrire le texte, elle, la fait revenir : le texte a changé.
+ */
+export async function askValidation(db: Db, entryId: string): Promise<boolean> {
+  const card = await db.chatMessage.findFirst({
+    where: { entryId, author: "memo", kind: "transcript" },
+    include: { entry: { select: { validatedAt: true } } },
+    orderBy: { seq: "desc" },
+  });
+  if (!card || card.entry?.validatedAt) return false;
+
+  const lastMemo = await db.chatMessage.findFirst({
+    where: { memoId: card.memoId, author: "memo", kind: "text" },
+    orderBy: { seq: "desc" },
+    select: { payload: true, seq: true },
+  });
+  const lastAsked =
+    lastMemo?.payload && typeof lastMemo.payload === "object"
+      ? (lastMemo.payload as { asksValidationFor?: unknown }).asksValidationFor
+      : undefined;
+  if (lastAsked === entryId) {
+    // Déjà posée, et aucun tour du voyageur depuis : rien de neuf à demander.
+    const since = await db.chatMessage.count({
+      where: { memoId: card.memoId, author: "traveller", seq: { gt: lastMemo!.seq } },
+    });
+    if (since === 0) return false;
+  }
+
+  await db.chatMessage.create({
+    data: {
+      memoId: card.memoId,
+      author: "memo",
+      kind: "text",
+      text: VALIDATION_QUESTION,
+      replyToId: card.replyToId,
+      stepId: card.stepId,
+      pauseMilliseconds: pauseBeforeSaying(VALIDATION_QUESTION),
+      model: "scripted",
+      payload: { suggestions: [...SUGGESTION_SETS.trio], asksValidationFor: entryId },
+    },
+  });
+  return true;
 }

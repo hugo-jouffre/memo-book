@@ -3,7 +3,11 @@ import { resolve } from "node:path";
 import type { Logger } from "pino";
 import type { Env } from "../env.js";
 import { publicApiBaseUrl } from "./avatars.js";
-import { renderPasswordResetMail, type RenderedMail } from "./mailTemplates.js";
+import {
+  renderDataExportMail,
+  renderPasswordResetMail,
+  type RenderedMail,
+} from "./mailTemplates.js";
 
 /**
  * Ce que le back-end sait envoyer par e-mail. Un message par cas d'usage, et
@@ -18,11 +22,27 @@ export interface Mailer {
    * l'empreinte. Tout ce qui le reçoit doit le traiter comme un mot de passe.
    */
   sendPasswordReset(message: PasswordResetMail): Promise<void>;
+
+  /**
+   * « Exporter mes données » : le lien de la page où les télécharger.
+   *
+   * Même précaution que le mot de passe oublié : le secret du lien part **en
+   * clair** et une seule fois — il ouvre toutes les données du compte pendant
+   * sept jours, la base n'en garde que l'empreinte.
+   */
+  sendDataExport(message: DataExportMail): Promise<void>;
 }
 
 export interface PasswordResetMail {
   to: string;
   /** Le prénom, pour ouvrir le message — `null` quand le compte n'en a pas. */
+  firstName: string | null;
+  token: string;
+  expiresAt: Date;
+}
+
+export interface DataExportMail {
+  to: string;
   firstName: string | null;
   token: string;
   expiresAt: Date;
@@ -49,6 +69,16 @@ export function passwordResetUrl(env: Env, token: string): string {
   return `${base}password/reset?token=${encodeURIComponent(token)}`;
 }
 
+/**
+ * Le lien du bouton « Télécharger mes données ». Il mène à la page
+ * `GET /data-export` **de l'API** (`routes/dataExportPage.ts`) — c'est elle qui
+ * compose l'archive, il n'y a pas d'app à ouvrir : le téléchargement se fait
+ * dans le navigateur, sur n'importe quel appareil.
+ */
+export function dataExportUrl(env: Env, token: string): string {
+  return `${publicApiBaseUrl(env)}/data-export?token=${encodeURIComponent(token)}`;
+}
+
 interface Transport {
   send(to: string, mail: RenderedMail): Promise<void>;
 }
@@ -57,6 +87,10 @@ function mailerOver(env: Env, transport: Transport): Mailer {
   return {
     async sendPasswordReset(message) {
       const mail = renderPasswordResetMail(message, passwordResetUrl(env, message.token));
+      await transport.send(message.to, mail);
+    },
+    async sendDataExport(message) {
+      const mail = renderDataExportMail(message, dataExportUrl(env, message.token));
       await transport.send(message.to, mail);
     },
   };

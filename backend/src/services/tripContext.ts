@@ -15,6 +15,9 @@
  * Forme au champ près de `MemoBookCore/TripContext.swift`.
  */
 
+import { escapeHtml } from "../lib/html.js";
+import { EDITORIAL_LIMITS } from "./payloadValidator.js";
+
 // ---------------------------------------------------------------------------
 // La forme
 // ---------------------------------------------------------------------------
@@ -467,6 +470,61 @@ export function describeTripContext(context: TripContext | null, travellerFirstN
   if (context.narrationMoment) lines.push(`Le voyageur raconte ${MOMENT_LABELS[context.narrationMoment]}`);
   if (context.notes) lines.push(`Ce qu'il a ajouté : ${context.notes}`);
   return lines;
+}
+
+// ---------------------------------------------------------------------------
+// L'intro du carnet, sans appel modèle
+// ---------------------------------------------------------------------------
+
+function capitalize(text: string): string {
+  return text.length === 0 ? text : text[0]!.toLocaleUpperCase("fr") + text.slice(1);
+}
+
+/**
+ * Le titre de la page d'intro, quand c'est le structureur déterministe qui la
+ * compose (mode `fake`, tests, ou filet de sécurité du structureur par
+ * modèle). Jamais vide : un contexte incomplet garde un titre générique
+ * plutôt que d'inventer.
+ */
+export function introTitleFor(context: TripContext | null): string {
+  if (context?.tripType) return capitalize(context.tripType);
+  if (context?.occasion) return capitalize(context.occasion);
+  return "Avant de commencer";
+}
+
+function travellersSentence(context: TripContext): string | null {
+  const from = context.departureCountry ? ` depuis ${context.departureCountry}` : "";
+  if (context.travellerCount === 1) return `Départ en solo${from}.`;
+  if (context.travellerCount === null) return context.departureCountry ? `Départ${from}.` : null;
+
+  const names = context.companions.map((companion) => companion.name);
+  const withNames = names.length > 0 ? `, avec ${names.join(", ")}` : "";
+  return `Départ${from} à ${context.travellerCount}${withNames}.`;
+}
+
+/**
+ * L'intro du carnet, assemblée directement depuis le contexte — sans appel
+ * modèle. C'est le repli du structureur déterministe (`HeuristicStructurer`)
+ * et le filet de sécurité du structureur par modèle en cas d'échec. `""`
+ * quand il n'y a rien à dire, pour que l'appelant omette la clé plutôt que de
+ * poser un `<p>` vide.
+ */
+export function introTextFor(context: TripContext | null): string {
+  if (!context) return "";
+
+  const sentences: string[] = [];
+  const travellers = travellersSentence(context);
+  if (travellers) sentences.push(travellers);
+  if (context.dates) sentences.push(`Le voyage se déroule ${context.dates}.`);
+  if (context.tripType) sentences.push(`Au programme : ${context.tripType}.`);
+  if (context.occasion) sentences.push(`L'occasion : ${context.occasion}.`);
+
+  if (sentences.length === 0) return "";
+
+  const text = sentences.slice(0, 4).join(" ");
+  const limit = EDITORIAL_LIMITS.introTextCharsPerParagraph;
+  const trimmed = text.length > limit ? `${text.slice(0, limit - 1).trimEnd()}…` : text;
+  return `<p>${escapeHtml(trimmed)}</p>`;
 }
 
 /**

@@ -61,6 +61,12 @@ public protocol MemoBookAPI: Sendable {
     /// Un voyage ouvert : sa couverture, la relance et ses étapes.
     func tripDetail(id: String) async throws -> TripDetail
 
+    /// « Valider cette étape » : confirme l'étape et déclenche en fond une
+    /// nouvelle génération du carnet — sauf la première fois sur un mémo
+    /// encore vide. Idempotente : revalider une étape déjà validée ne fait
+    /// rien de plus. Rend le voyage entier, comme ``tripDetail(id:)``.
+    func validateStep(tripId: String, stepId: String) async throws -> TripDetail
+
     /// Crée un voyage à partir des six étapes de « Créer un voyage ». Rend le
     /// voyage **et son code d'accès**, que la dernière étape affiche.
     func createTrip(_ draft: TripDraft) async throws -> CreatedTrip
@@ -169,6 +175,15 @@ public protocol MemoBookAPI: Sendable {
     /// demandé confirmation.
     func deleteAccount() async throws
 
+    /// « Exporter mes données » : le serveur envoie à l'adresse du compte le
+    /// lien d'une page où télécharger toutes ses données — RGPD, droit d'accès
+    /// et portabilité. Valable sept jours.
+    ///
+    /// Une seconde demande dans les cinq minutes n'envoie rien et le dit
+    /// (`alreadyRequested`). Codes : `no_email` (le compte n'a pas d'adresse),
+    /// `email_unavailable` (l'envoi a échoué, rien n'est parti).
+    func requestDataExport() async throws -> DataExportReceipt
+
     // MARK: - Carnets
 
     func memos() async throws -> [MemoSummary]
@@ -229,7 +244,7 @@ public protocol MemoBookAPI: Sendable {
     /// Un vocal : le souvenir est créé, sa fiche posée, la transcription enfilée.
     func sendChatVoice(tripId: String, turn: ChatVoiceTurn) async throws -> ChatTurnReceipt
 
-    /// Une à quatre photos : un souvenir par image, une seule bulle.
+    /// Une à six photos : un souvenir par image, une seule bulle.
     func sendChatPhotos(tripId: String, turn: ChatPhotosTurn) async throws -> ChatTurnReceipt
 
     /// « Ça me convient » : le souvenir est relu, l'étape offerte confirmée.
@@ -295,6 +310,11 @@ public protocol MemoBookAPI: Sendable {
         orderId: String,
         phone: String?
     ) async throws -> PrintOrder
+
+    /// L'aperçu du carnet : son statut de composition, le PDF une fois prêt,
+    /// et de quoi remplir la carte de partage. Pensée pour être interrogée en
+    /// boucle pendant la composition — la réponse est volontairement petite.
+    func bookPreview(memoId: String) async throws -> BookPreview
 
     /// Le lien public de prévisualisation du carnet, créé au premier appel et
     /// rendu tel quel ensuite.

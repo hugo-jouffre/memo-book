@@ -47,6 +47,18 @@ public enum ChatCopy {
     public static let offline =
         "Tu sembles hors ligne. **Ce que tu racontes est gardé sur ton téléphone**, et partira dès ta reconnexion."
 
+    // MARK: - La mention de confidentialité
+
+    /// Le premier mot du fil, en gris au-dessus de toute bulle (01/10/2026) :
+    /// on y raconte des choses intimes, et il faut le savoir à l'abri.
+    ///
+    /// ⚠️ **« Et tes co-voyageurs », pas « toi seul ».** Sur un voyage partagé,
+    /// le fil est commun — chaque bulle y porte le prénom de celui qui parle
+    /// (FAQ, `ChatContext.memberCount`) —, et un fil solo le devient dès
+    /// qu'on invite quelqu'un. La phrase reste vraie dans les deux cas.
+    public static let privacyNote =
+        "Ta conversation est privée : seuls toi et tes co-voyageurs pouvez la lire."
+
     // MARK: - L'accueil d'une conversation vide
 
     /// « Nouveau voyage à Rome ! 🇮🇹 » — le drapeau vient de ``Destination/flag``,
@@ -103,7 +115,10 @@ public enum ChatCopy {
 
     // MARK: - La fiche de retranscription
 
-    public static let transcriptTitle = "Retranscription du contexte"
+    /// L'intitulé d'une fiche que le serveur n'a pas numérotée (jeu d'essai,
+    /// moteur local). Le vrai fil dit « Retranscription étape 2 » —
+    /// `transcriptTitle` dans `backend/src/services/conversationCopy.ts`.
+    public static let transcriptTitle = "Retranscription étape 1"
 
     /// La mention « généré par IA » qu'exige `docs/reglages-utilisateur.md`.
     public static let transcriptFootnote = "Texte proposé par MEMO — tu peux le corriger."
@@ -453,8 +468,8 @@ public enum ChatCopy {
             "Vocal de \(duration)"
         }
 
-        public static func transcript(day: String) -> String {
-            "Retranscription du contexte, \(day)"
+        public static func transcript(title: String, day: String) -> String {
+            "\(title), \(day)"
         }
 
         public static func photos(count: Int) -> String {

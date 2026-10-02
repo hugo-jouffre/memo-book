@@ -185,7 +185,9 @@ Les clés du pipeline (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`,
 `APITEMPLATE_API_KEY`, `WEBFLOW_*`) ne sont pas nécessaires pour se connecter :
 sans elles, `PIPELINE_MODE=auto` bascule sur les implémentations simulées. La
 connexion, les comptes et les voyages fonctionnent ; seuls la transcription
-réelle et le PDF sont simulés. À renseigner dès qu'on veut un vrai carnet.
+réelle et le PDF sont simulés. Les deux axes sont indépendants :
+`OPENAI_API_KEY` seule rend la transcription réelle (le PDF reste simulé) ;
+`APITEMPLATE_API_KEY` en plus donne le vrai PDF.
 
 ## 6. Apple et Google
 
@@ -260,6 +262,14 @@ Le lien devient `https://…/password/reset?token=…` : une page servie par l'A
 Le lien universel, plus tard, demande de servir un `apple-app-site-association`
 depuis ce domaine et d'ajouter l'*Associated Domain* dans `project.yml` : le
 lien de l'e-mail ne changera pas, iOS ouvrira l'app avant d'arriver sur la page.
+
+L'e-mail « **Exporter mes données** » (01/10/2026) part par la même clé Resend,
+et **ne demande aucune variable de plus** : son lien vise la page
+`GET /data-export` de l'API, sur l'adresse que Railway pose seul
+(`RAILWAY_PUBLIC_DOMAIN`), ou `API_PUBLIC_BASE_URL` le jour d'un domaine à
+nous. C'est l'API qui envoie l'e-mail, pas le worker — qui n'a pas de domaine.
+L'archive se compose au téléchargement : rien de neuf dans le stockage, et la
+migration `export_des_donnees` part avec le code par la *Pre-deploy Command*.
 
 ### Côté Google Cloud
 

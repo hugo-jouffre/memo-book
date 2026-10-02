@@ -272,6 +272,62 @@ const TEMPLATES: TemplateDefinition[] = [
       VALIDITY: "30 minutes",
     },
   },
+
+  {
+    alias: "data-export",
+    name: "Export des données du compte",
+    file: "data-export.njk",
+    context: {
+      brand: { ...BRAND, assetsBaseUrl: v("ASSETS_BASE_URL") },
+      message: {
+        class: "transactional",
+        reason: "tu as demandé une copie de tes données depuis l'app",
+      },
+      links: { web: BRAND.web, preferences: v("PREFERENCES_URL") },
+      recipient: { greeting: v("GREETING") },
+      // L'échéance arrive **écrite** — « mercredi 8 octobre 2026 » : un
+      // gabarit Resend ne sait pas formater une date.
+      export: { url: v("DOWNLOAD_URL"), until: v("EXPIRES_ON") },
+    },
+    variables: [
+      ...COMMON_VARIABLES,
+      { key: "GREETING", type: "string", fallback_value: "Bonjour," },
+      { key: "DOWNLOAD_URL", type: "string" },
+      { key: "EXPIRES_ON", type: "string" },
+    ],
+    text: [
+      "MemoBook",
+      "",
+      "TES DONNÉES SONT PRÊTES",
+      "",
+      v("GREETING"),
+      "",
+      "Tu as demandé une copie de tes données MemoBook. Ouvre ce lien pour la",
+      "télécharger :",
+      "",
+      v("DOWNLOAD_URL"),
+      "",
+      `Le lien est valable jusqu'au ${v("EXPIRES_ON")}, et sert plusieurs fois.`,
+      "",
+      "Dans l'archive : ton compte, tes voyages et leurs récits, chaque souvenir",
+      "tel que tu l'as raconté et tel que MEMO l'a écrit, tes photos et tes vocaux",
+      "d'origine, tes carnets en PDF, tes commandes, ta cagnotte et ton abonnement.",
+      "",
+      "Ce lien ouvre toutes tes données : ne le transfère à personne.",
+      "",
+      "Tu n'as rien demandé ? N'ouvre pas le lien, et réponds à cet e-mail : on",
+      "regardera ce qui se passe sur ton compte.",
+      "",
+      `MemoBook — ${BRAND.address}`,
+    ].join("\n"),
+    sample: {
+      ASSETS_BASE_URL: ".",
+      PREFERENCES_URL: `${BRAND.web}/preferences?t=jeton`,
+      GREETING: "Bonjour Clara,",
+      DOWNLOAD_URL: "https://api-production-9f35a.up.railway.app/data-export?token=8f2c4e1a9b7d3056",
+      EXPIRES_ON: "jeudi 8 octobre 2026",
+    },
+  },
 ];
 
 interface RenderedTemplate {
@@ -320,9 +376,18 @@ function substitute(text: string, sample: Record<string, string | number>): stri
   );
 }
 
-async function call(path: string, apiKey: string, body?: unknown) {
+/**
+ * Un appel à l'API de Resend. Sans corps, c'est une lecture (`GET`) ; avec,
+ * une écriture — `POST` par défaut, `PATCH` pour mettre à jour un gabarit.
+ */
+async function call(
+  path: string,
+  apiKey: string,
+  body?: unknown,
+  method: "POST" | "PATCH" = "POST",
+) {
   const response = await fetch(`${API}${path}`, {
-    method: body === undefined ? "GET" : "POST",
+    method: body === undefined ? "GET" : method,
     headers: {
       Authorization: `Bearer ${apiKey}`,
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
@@ -356,9 +421,13 @@ async function sync(rendered: RenderedTemplate, apiKey: string): Promise<void> {
     variables: definition.variables,
   };
 
+  // **Un gabarit existant se met à jour en `PATCH`**, pas en `POST` : c'est
+  // ce que l'API de Resend attend sur `/templates/{id}` (relu dans sa
+  // documentation le 02/10/2026). Un `POST` sur ce chemin n'est pas une mise
+  // à jour : la synchronisation créait les gabarits, sans pouvoir les corriger.
   const existing = await findByAlias(apiKey, definition.alias);
   const result = existing
-    ? await call(`/templates/${existing}`, apiKey, body)
+    ? await call(`/templates/${existing}`, apiKey, body, "PATCH")
     : await call("/templates", apiKey, body);
 
   const id = (result.id as string | undefined) ?? existing;

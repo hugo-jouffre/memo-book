@@ -309,6 +309,7 @@ model Account {
   passwordResets PasswordReset[]
   pushTokens     PushToken[]
   notifications  NotificationDelivery[]
+  dataExports    DataExport[]
 
   ownedMemos        Memo[]             @relation("MemoOwner")
   printOrders       PrintOrder[]       @relation("PrintOrderBuyer")
@@ -343,6 +344,46 @@ model PasswordReset {
 
   @@index([accountId])
   @@map("password_resets")
+}
+
+/// « Exporter mes données » : le lien qui permet de télécharger tout ce que
+/// MemoBook garde d'un compte — RGPD, articles 15 (accès) et 20
+/// (portabilité). Voir `services/dataExport.ts`.
+///
+/// **Aucune archive n'est stockée.** L'e-mail porte un lien, et c'est en
+/// l'ouvrant que l'API compose le ZIP, à la volée, depuis la base et le
+/// stockage. Pas de copie de tout ce qu'on sait de quelqu'un qui dort sept
+/// jours dans un bucket, rien à nettoyer après, et aucune limite de taille :
+/// le plan gratuit de Supabase refuse tout fichier de plus de 50 Mo.
+///
+/// Le secret est haché comme un token de session : la base n'en connaît que
+/// l'empreinte, l'e-mail seul porte le clair. Une nouvelle demande **retire**
+/// les précédentes (`revokedAt`), comme un mot de passe oublié : un seul lien
+/// vaut à la fois, le dernier envoyé.
+model DataExport {
+  id        String  @id @default(uuid())
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  /// SHA-256 du secret envoyé — le secret en clair n'existe que dans l'e-mail.
+  tokenHash String @unique
+  /// L'adresse à laquelle le lien est parti : celle du compte au moment de la
+  /// demande. Gardée pour le support — « à quelle adresse est-ce parti ? ».
+  email     String
+
+  expiresAt DateTime
+  /// Remplacée par une demande plus récente.
+  revokedAt DateTime?
+
+  /// Combien de fois l'archive a été téléchargée, et quand pour la dernière
+  /// fois. Un lien qui a fuité se reconnaît ici ; il est aussi plafonné.
+  downloadCount    Int       @default(0)
+  lastDownloadedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([accountId, createdAt])
+  @@map("data_exports")
 }
 
 /// Le lien entre un compte et un fournisseur tiers. Un compte peut en avoir
@@ -928,6 +969,11 @@ model MemoStep {
 
   /// Comment on est arrivé jusqu'ici.
   transport TripTransport?
+
+  /// « Valider cette étape » : le voyageur confirme l'étape et déclenche en
+  /// fond une nouvelle génération du carnet. Même geste qu'`Entry.validatedAt`
+  /// (« Ça me convient »), à l'échelle de l'étape.
+  validatedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
