@@ -1,0 +1,68 @@
+/**
+ * Le catalogue de l'abonnement : ce que ça coûte, écrit **une seule fois**.
+ *
+ * **Il existe parce qu'un prix absent n'est pas un prix nul.** `GET /v1/profile`
+ * rendait `weeklyPrice: 0` à qui n'est pas encore abonné — il n'y a pas de ligne
+ * `subscriptions` à lire tant qu'on n'a rien souscrit — et l'app affichait donc
+ * « 0,00 €/semaine » sur la feuille d'offre, sur le paywall, et « 3 x 0,00 € »
+ * sur la feuille d'estimation. Le prix de l'offre ne dépend pas de ce que la
+ * personne a déjà acheté : c'est un tarif, il vit dans un catalogue.
+ *
+ * ⚠️ **Ce catalogue ne remplace pas le fournisseur, il le double.** L'abonnement
+ * s'achète par StoreKit — Apple impose l'achat intégré pour un service
+ * numérique, voir `PAYMENT_KIND` dans `billing.ts` —, et c'est App Store Connect
+ * qui aura le dernier mot sur le montant affiché dans l'app. Les références
+ * Stripe sont là pour le jour où l'offre se vend aussi hors de l'app (le web),
+ * et pour que le back-end sache de quel prix il parle ; le sandbox Stripe du
+ * projet porte déjà le prix hebdomadaire sous la clé
+ * `memobook_subscription_weekly`.
+ */
+
+/** Le prix de l'abonnement hebdomadaire, en centimes. */
+export const SUBSCRIPTION_WEEKLY_CENTS = 199;
+
+/**
+ * Le supplément **hebdomadaire** qui relève les limites de souvenirs, en
+ * centimes.
+ *
+ * Hebdomadaire comme l'abonnement, et pour la même raison : c'est une **option
+ * du même produit**, pas une seconde offre (Hugo, 17/09/2026). Un voyage se
+ * compte en semaines, l'abonnement se facture à la semaine, et une extension
+ * facturée au mois aurait survécu au voyage qu'elle servait.
+ *
+ * ⚠️ La période des limites suit la facturation — voir `PERIOD_DAYS` dans
+ * `memoryAllowance.ts`. Les désaccorder ferait annoncer un plafond mensuel pour
+ * un prix hebdomadaire, soit quatre fois le montant affiché.
+ */
+export const MEMORY_UPGRADE_WEEKLY_CENTS = 399;
+
+/** La devise du catalogue. Une seule pour l'instant. */
+export const CATALOG_CURRENCY = "EUR";
+
+/**
+ * Les clés de recherche Stripe, stables d'un environnement à l'autre.
+ *
+ * Une `lookup_key` et non un identifiant de prix : celui-ci change entre le
+ * sandbox et la production, celle-là non. C'est ce qui permet de poser la même
+ * valeur dans les deux comptes sans variable d'environnement de plus.
+ */
+export const STRIPE_LOOKUP_KEYS = {
+  weeklySubscription: "memobook_subscription_weekly",
+  memoryUpgrade: "memobook_memory_upgrade_weekly",
+} as const;
+
+/**
+ * Les produits App Store — **ceux qui encaissent vraiment**, dans l'app.
+ *
+ * L'identifiant est posé dans *App Store Connect ▸ Abonnements* et ne se
+ * change plus jamais : Apple ne le laisse ni modifier ni réutiliser, même après
+ * suppression. L'app porte la même valeur (`StoreKitCatalog.weeklySubscription`)
+ * et `MemoBook.storekit` aussi ; les trois doivent rester identiques.
+ *
+ * Une transaction d'un autre produit est refusée : le jour où l'extension des
+ * limites de souvenirs s'achètera, elle aura sa ligne ici et son propre
+ * traitement — elle ne doit pas ouvrir l'abonnement par accident.
+ */
+export const APP_STORE_PRODUCT_IDS = {
+  weeklySubscription: "com.memobook.app.subscription.weekly",
+} as const;

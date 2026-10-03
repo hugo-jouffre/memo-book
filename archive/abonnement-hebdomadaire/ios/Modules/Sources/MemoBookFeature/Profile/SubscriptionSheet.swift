@@ -1,0 +1,765 @@
+import MemoBookCore
+import MemoBookDesign
+import StoreKit
+import SwiftUI
+
+/// L'abonnement, de bout en bout : ce qu'il coûte, ce qu'il rend, et les trois
+/// portes qu'il faut pousser pour en sortir.
+///
+/// **Cinq feuilles, une seule présentation.** La ligne « Mon abonnement » du
+/// profil n'ouvre qu'une feuille ; c'est son contenu qui change. Empiler cinq
+/// `sheet` aurait fait reculer l'app cinq fois — ``BrandSheet`` recule d'un cran
+/// à chaque feuille ouverte par-dessus — et une confirmation en trois temps se
+/// serait lue comme un empilement de fenêtres au lieu d'un chemin.
+///
+/// Le chemin, justement :
+///
+/// ```
+///                    ┌─ pas abonné ─→ .pitch  (« Comment ça fonctionne ? »)
+/// « Mon abonnement » ┤
+///                    └─ abonné ─────→ .current (« Mon Abonnement »)
+///                                        │ Résilier mon abonnement
+///                                        ▼
+///                                     .keepGoing (« Ton voyage continue »)
+///                                        │ Résilier
+///                                        ▼
+///                                     .reason  (« Pourquoi nous quittes-tu ? »)
+///                                        │ Confirmer ma résiliation
+///                                        ▼
+///                                     .done    (« C'est validé »)
+/// ```
+///
+/// À chaque étape, le bouton vert **garde** l'abonnement et le bouton rouge
+/// avance vers la sortie : c'est la seule chose qu'on n'a pas eu à décider, la
+/// maquette la répète trois fois.
+///
+/// **Un abonnement tenu par Apple se résilie chez Apple** (01/10/2026). Apple
+/// ne laisse aucune app le faire à la place de son client : « Confirmer ma
+/// résiliation » envoie la raison, puis ouvre la feuille de gestion des
+/// abonnements d'iOS. C'est au retour de celle-ci, d'après ce que StoreKit dit
+/// du renouvellement, qu'on passe à « C'est validé » — ou qu'on revient à
+/// « Mon Abonnement » si la personne n'y a rien coupé.
+struct SubscriptionSheet: View {
+    let subscription: Subscription?
+    let onActivate: () -> Void
+    let onCancel: (SubscriptionCancellationReason?) -> Void
+    /// « En savoir plus » ouvre le paywall — trois écrans qui déroulent l'offre
+    /// en entier, là où la feuille n'en donne que le principe.
+    let onLearnMore: () -> Void
+
+    /// La raison, seule, pour un abonnement tenu par Apple — la résiliation
+    /// elle-même se fait dans la feuille d'iOS.
+    var onRecordReason: (SubscriptionCancellationReason?) -> Void = { _ in }
+
+    /// Ce que StoreKit dit du renouvellement au retour de la feuille d'iOS :
+    /// `false`, il est coupé ; `true`, il court encore.
+    var onAppStoreRenewal: (Bool) -> Void = { _ in }
+
+    /// « Voir ma cagnotte » mène à la page de la cagnotte (Hugo, 17/09/2026,
+    /// T74). C'est l'écran qui présente qui la pousse : la feuille se referme
+    /// d'abord, une page ne s'ouvre pas sous une feuille.
+    var onSeeWallet: () -> Void = {}
+
+    /// Le carnet que l'aperçu montre. `nil` — un compte sans voyage en cours —
+    /// ouvre le jeu d'essai : l'aperçu est là pour montrer à quoi ça ressemble.
+    var previewMemoId: String?
+
+    /// À qui la pastille s'adresse : « Abonnée » ou « Abonné » (T76). La forme
+    /// non marquée quand on ne sait pas.
+    var gender: Gender = .undisclosed
+
+    /// Où on en est du chemin. `nil` tant qu'on n'a rien poussé : l'étape de
+    /// départ se **déduit** alors de l'abonnement, pour qu'elle suive le profil
+    /// s'il arrive après l'ouverture de la feuille. Dès qu'un bouton est
+    /// touché, c'est cette valeur qui commande — sans quoi la dernière feuille
+    /// disparaîtrait à l'instant même où la résiliation a lieu.
+    @State private var step: Step?
+
+    /// La raison choisie. Volontairement `nil` au départ : la maquette montre
+    /// une carte sélectionnée, mais c'est l'état d'une carte qu'elle
+    /// documente, pas une réponse cochée d'avance. En pré-cocher une
+    /// fausserait le compteur qu'elle alimentera.
+    @State private var reason: SubscriptionCancellationReason?
+
+    /// L'aperçu du carnet, ouvert par la pastille « Voir un aperçu ».
+    ///
+    /// **Une feuille par-dessus celle-ci, et non une étape** — l'exception
+    /// voulue à la règle des feuilles enchaînées (Hugo, 16/09/2026). L'aperçu
+    /// était une étape : on y allait, et « Comment ça fonctionne » disparaissait
+    /// derrière lui ; le refermer ramenait au profil. Posé par-dessus, il fait
+    /// reculer l'offre d'un cran — le petit zoom que fait toute feuille de
+    /// l'app — et la rend telle qu'on l'a laissée quand on le referme. C'est
+    /// exactement le geste attendu : on est venu voir ce qu'on achète, on
+    /// repart d'où l'on venait.
+    @State private var showsPreview = false
+
+    /// La feuille de gestion des abonnements d'iOS, pour un abonnement tenu
+    /// par Apple.
+    @State private var managesAtApple = false
+
+    @Environment(\.subscriptionPurchase) private var subscriptionPurchase
+
+    @Environment(\.dismiss) private var dismiss
+
+    private var isManagedByAppStore: Bool { subscription?.managedByAppStore == true }
+
+    enum Step: Hashable {
+        case pitch
+        case current
+        case keepGoing
+        case reason
+        case done
+    }
+
+    private var currentStep: Step {
+        step ?? (subscription?.isActive == true ? .current : .pitch)
+    }
+
+    private var price: String { subscription.displayedWeeklyPrice.euros }
+
+    /// Le dernier jour de la semaine déjà payée, quand il en reste un.
+    ///
+    /// **Relevé sur l'abonnement tel qu'il était en entrant dans la feuille**,
+    /// et gardé : `onCancel` met `isActive` à `false`, et
+    /// ``Subscription/graceEnd(on:)`` ne rend une date que sur un abonnement
+    /// résilié — les deux feuilles doivent donc lire la même chose avant et
+    /// après le geste, sans quoi le chapeau de l'avant-dernière changerait sous
+    /// les yeux au moment où on confirme.
+    private var graceEnd: Date? {
+        guard let subscription else { return nil }
+        return subscription.isWithinPaidWeek() ? subscription.paidThrough : nil
+    }
+
+    var body: some View {
+        Group {
+            switch currentStep {
+            case .pitch: pitch
+            case .current: current
+            case .keepGoing: keepGoing
+            case .reason: reasons
+            case .done: done
+            }
+        }
+        .animation(.smooth(duration: 0.3), value: currentStep)
+        // L'aperçu se pose **sur** l'offre : voir ``showsPreview``.
+        .brandSheet(isPresented: $showsPreview) {
+            BookPreviewSheet(memoId: previewMemoId)
+        }
+        .manageSubscriptionsSheet(isPresented: $managesAtApple)
+        .onChange(of: managesAtApple) { _, isOpen in
+            guard !isOpen else { return }
+            Task { await settleAppStoreManagement() }
+        }
+    }
+
+    /// La feuille d'iOS vient de se refermer : on lit sur l'appareil si le
+    /// renouvellement court encore, et on avance d'après ce qu'Apple dit — pas
+    /// d'après le bouton qu'on a touché. `nil` (StoreKit ne sait pas) ne change
+    /// rien : mieux vaut rester sur place qu'annoncer une résiliation qui n'a
+    /// pas eu lieu.
+    private func settleAppStoreManagement() async {
+        guard let renews = await subscriptionPurchase?.willAutoRenew() else { return }
+        onAppStoreRenewal(renews)
+        step = renews ? .current : .done
+    }
+
+    // MARK: - « Comment ça fonctionne ? » — pas encore abonné
+
+    private var pitch: some View {
+        BrandSheet(SubscriptionCopy.pitchTitle) {
+            VStack(alignment: .leading, spacing: MemoBookSpacing.m) {
+                VStack(alignment: .leading, spacing: MemoBookSpacing.l) {
+                    SubscriptionTimeline()
+                    offer
+                    HowToCancelCard()
+                }
+
+                BrandButton(
+                    SubscriptionCopy.learnMore,
+                    icon: Image(brand: "IconArrowForward"),
+                    iconPlacement: .trailing,
+                    fillsWidth: true,
+                    action: onLearnMore
+                )
+            }
+        }
+    }
+
+    /// L'argument de vente : deux lignes vertes centrées, et la pastille qui
+    /// promet un aperçu.
+    private var offer: some View {
+        VStack(spacing: MemoBookSpacing.s) {
+            VStack(spacing: 0) {
+                Text(SubscriptionCopy.offerHeadline(price: price))
+                    .font(MemoBookFont.bodySemibold)
+                Text(SubscriptionCopy.offerCadence)
+                    .font(MemoBookFont.body)
+            }
+            .foregroundStyle(MemoBookColor.action)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityElement(children: .combine)
+
+            // Elle garde son dessin de pastille, comme la maquette, mais elle
+            // **ouvre** désormais l'aperçu : c'est une proposition posée dans
+            // une phrase, pas l'appel à l'action de la feuille.
+            Button { showsPreview = true } label: {
+                BrandTagPill(
+                    SubscriptionCopy.previewPill,
+                    tone: .accentOutlined,
+                    isUppercased: true
+                )
+            }
+            .buttonStyle(.plain)
+            // La cible tactile monte à 2.75 rem même si la pastille est plus
+            // courte : le dessin est plus petit que le geste (R7).
+            .frame(minHeight: MemoBookSpacing.minimumTapTarget)
+            .contentShape(.rect)
+            .accessibilityAddTraits(.isButton)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - « Mon Abonnement » — déjà abonné
+
+    private var current: some View {
+        BrandSheet(
+            SubscriptionCopy.currentTitle,
+            badge: SubscriptionCopy.currentBadge(for: gender),
+            subtitle: SubscriptionCopy.currentSubtitle
+        ) {
+            VStack(alignment: .leading, spacing: MemoBookSpacing.m) {
+                SubscriptionCallout(
+                    title: SubscriptionCopy.autoCancelTitle(destination: subscription?.tripDestination),
+                    message: SubscriptionCopy.autoCancelBody(endsOn: subscription?.endsOn)
+                )
+
+                VStack(spacing: MemoBookSpacing.s) {
+                    BrandButton(SubscriptionCopy.seeWallet, style: .secondary, fillsWidth: true) {
+                        onSeeWallet()
+                    }
+
+                    BrandButton(SubscriptionCopy.cancelSubscription, style: .destructive, fillsWidth: true) {
+                        step = .keepGoing
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Résiliation 1 — « Ton voyage continue »
+
+    private var keepGoing: some View {
+        BrandSheet(
+            SubscriptionCopy.keepGoingTitle,
+            paragraphs: SubscriptionCopy.keepGoingParagraphs(
+                tripTitle: subscription?.tripTitle,
+                graceEnd: graceEnd
+            )
+        ) {
+            VStack(spacing: MemoBookSpacing.s) {
+                BrandButton(SubscriptionCopy.waitForAutoCancel, fillsWidth: true) { dismiss() }
+
+                BrandButton(
+                    SubscriptionCopy.cancel,
+                    icon: Image(brand: "IconArrowForward"),
+                    iconPlacement: .trailing,
+                    style: .destructive,
+                    fillsWidth: true
+                ) {
+                    step = .reason
+                }
+            }
+        }
+    }
+
+    // MARK: - Résiliation 2 — « Pourquoi nous quittes-tu ? »
+
+    private var reasons: some View {
+        BrandSheet(
+            SubscriptionCopy.reasonTitle,
+            paragraphs: SubscriptionCopy.reasonParagraphs(graceEnd: graceEnd)
+        ) {
+            VStack(spacing: MemoBookSpacing.m) {
+                BrandOptionGroup {
+                    ForEach(SubscriptionCancellationReason.allCases) { candidate in
+                        BrandOptionRow(candidate.label, isSelected: reason == candidate) {
+                            reason = candidate
+                        }
+                    }
+                }
+
+                VStack(spacing: MemoBookSpacing.s) {
+                    BrandButton(SubscriptionCopy.stayAWhile, fillsWidth: true) { dismiss() }
+
+                    // La résiliation a lieu **ici**, pas sur la feuille
+                    // suivante : celle-ci annonce ce qui vient d'arriver, elle
+                    // ne le demande plus.
+                    BrandButton(
+                        SubscriptionCopy.confirmCancellation,
+                        icon: Image(brand: "IconCross"),
+                        style: .destructive,
+                        fillsWidth: true
+                    ) {
+                        if isManagedByAppStore {
+                            onRecordReason(reason)
+                            managesAtApple = true
+                        } else {
+                            onCancel(reason)
+                            step = .done
+                        }
+                    }
+                    // Grisé tant qu'aucune raison n'est cochée — Hugo,
+                    // 14/09/2026. La question est posée pour être répondue :
+                    // confirmer sans raison passait à côté du seul retour que
+                    // cette feuille rapporte.
+                    .disabled(reason == nil)
+                }
+            }
+        }
+    }
+
+    // MARK: - Résiliation 3 — « C'est validé »
+
+    private var done: some View {
+        BrandSheet(
+            SubscriptionCopy.doneTitle,
+            paragraphs: SubscriptionCopy.doneParagraphs(graceEnd: graceEnd)
+        ) {
+            VStack(spacing: MemoBookSpacing.s) {
+                BrandButton(SubscriptionCopy.backHome, fillsWidth: true) { dismiss() }
+
+                BrandButton(SubscriptionCopy.subscribeAgain, style: .accent, fillsWidth: true) {
+                    // Chez Apple, se réabonner pendant la semaine payée, c'est
+                    // **réarmer** le renouvellement — dans la même feuille d'iOS.
+                    if isManagedByAppStore {
+                        managesAtApple = true
+                    } else {
+                        onActivate()
+                        step = .current
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Les morceaux de la première feuille
+
+/// Les trois temps de l'abonnement, le long d'un rail qui s'éteint.
+///
+/// **Le rail est un fond, pas une colonne d'icônes.** Il est posé derrière la
+/// pile entière : il prend donc sa hauteur exacte sans que personne ait à la
+/// mesurer, et les icônes tombent d'elles-mêmes en face de leur titre.
+private struct SubscriptionTimeline: View {
+    /// Le rail et ses icônes grandissent avec le texte, ensemble : un rail figé
+    /// derrière des lignes deux fois plus hautes ne relierait plus rien.
+    @ScaledMetric(relativeTo: .body) private var railWidth: CGFloat = 20
+    @ScaledMetric(relativeTo: .body) private var iconSide: CGFloat = 16
+
+    /// Où le vert s'arrête et où le lime commence à disparaître, en fraction de
+    /// la hauteur du rail. Relevés sur le nœud : le vert couvre 207,7 des 255,5
+    /// du rail, et le lime s'efface à partir de 69,5 % de sa propre hauteur.
+    private static let greenShare: CGFloat = 0.813
+    private static let limeSolidShare: CGFloat = 0.695
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: MemoBookSpacing.sectionGap) {
+            ForEach(SubscriptionCopy.timeline, id: \.title) { item in
+                HStack(alignment: .top, spacing: MemoBookSpacing.s) {
+                    // **L'icône se centre sur la ligne du titre**, pas sur le
+                    // haut du bloc. Le gabarit est une ligne de texte invisible
+                    // dans la police du titre : il en donne la hauteur exacte
+                    // et la suit au Dynamic Type, ce qu'une constante ne
+                    // saurait pas faire.
+                    Text(verbatim: "A")
+                        .font(MemoBookFont.bodySemibold)
+                        .hidden()
+                        .frame(width: railWidth)
+                        .overlay {
+                            Image(brand: item.icon)
+                                .resizable()
+                                .renderingMode(.template)
+                                .scaledToFit()
+                                .frame(width: iconSide, height: iconSide)
+                                .foregroundStyle(MemoBookColor.onAction)
+                        }
+                        .accessibilityHidden(true)
+
+                    VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
+                        Text(item.title)
+                            .font(MemoBookFont.bodySemibold)
+                            .foregroundStyle(MemoBookColor.ink)
+                        Text(item.detail)
+                            .font(MemoBookFont.taglineRegular)
+                            .foregroundStyle(MemoBookColor.inkMuted)
+                    }
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityElement(children: .combine)
+                }
+            }
+        }
+        .background(alignment: .topLeading) { rail }
+    }
+
+    /// Deux capsules superposées, comme la maquette les empile — et non un seul
+    /// dégradé.
+    ///
+    /// **Le vert a son propre bout rond.** Peint en dégradé dans une capsule
+    /// unique, la frontière vert → lime était un trait horizontal net : le vert
+    /// se terminait au carré. C'est une capsule à part entière, posée par-dessus
+    /// le lime, qui lui rend son extrémité arrondie.
+    ///
+    /// Le lime, lui, est plein jusqu'aux deux tiers puis s'efface sur le crème
+    /// de la feuille.
+    private var rail: some View {
+        Capsule()
+            .fill(
+                LinearGradient(
+                    stops: [
+                        .init(color: MemoBookColor.accent, location: 0),
+                        .init(color: MemoBookColor.accent, location: Self.limeSolidShare),
+                        .init(color: MemoBookColor.accent.opacity(0), location: 1),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .overlay(alignment: .top) {
+                // Le `GeometryReader` pose son contenu en haut à gauche : la
+                // capsule verte part donc du sommet du rail et s'arrête à sa
+                // part, bout rond compris.
+                GeometryReader { proxy in
+                    Capsule()
+                        .fill(MemoBookColor.action)
+                        .frame(height: proxy.size.height * Self.greenShare)
+                }
+            }
+            .frame(width: railWidth)
+            .accessibilityHidden(true)
+    }
+}
+
+/// « Comment résilier ? » — la promesse, sur l'aplat bleu de la marque.
+private struct HowToCancelCard: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
+            Text(SubscriptionCopy.howToCancelTitle)
+                .font(MemoBookFont.cardTitle)
+                .foregroundStyle(MemoBookColor.ink)
+
+            ForEach(SubscriptionCopy.howToCancelParagraphs, id: \.self) { paragraph in
+                Text(paragraph)
+                    .font(MemoBookFont.taglineRegular)
+                    .foregroundStyle(MemoBookColor.inkMuted)
+            }
+        }
+        .multilineTextAlignment(.leading)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, MemoBookSpacing.snug)
+        .padding(.vertical, MemoBookSpacing.s)
+        .background(
+            MemoBookColor.outline.opacity(0.5),
+            in: .rect(cornerRadius: MemoBookSpacing.controlCornerRadius)
+        )
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// L'encadré bleu de la feuille « Mon Abonnement » : ce qui va se passer tout
+/// seul, et pourquoi.
+private struct SubscriptionCallout: View {
+    let title: String
+    let message: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: MemoBookSpacing.xs / 2) {
+            Text(title)
+                .font(MemoBookFont.calloutTitle)
+            Text(message)
+                .font(MemoBookFont.taglineRegular)
+        }
+        // Le corps est à l'encre pleine et non en gris : ce n'est pas une
+        // légende, c'est l'explication qu'on est venu chercher.
+        .foregroundStyle(MemoBookColor.ink)
+        .multilineTextAlignment(.leading)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, MemoBookSpacing.s)
+        .padding(.vertical, MemoBookSpacing.m)
+        .background(
+            MemoBookColor.outline.opacity(0.5),
+            in: .rect(cornerRadius: MemoBookSpacing.controlCornerRadius)
+        )
+        .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - La copie
+
+/// Tous les libellés des cinq feuilles, en un seul endroit.
+///
+/// La maquette porte neuf fautes de français et deux formes d'apostrophe ; **Hugo
+/// a tranché de toutes les corriger** (D12, T66) plutôt que de les recopier
+/// comme R8 le veut par défaut. C'est donc l'un des rares endroits où le code
+/// s'écarte volontairement de Figma, et la liste des écarts vit dans la fiche
+/// écran pour que Clara les reprenne à la source.
+///
+/// L'apostrophe est **partout typographique** (’), y compris dans les trois
+/// feuilles de résiliation et les quatre raisons, où Figma emploie la droite.
+enum SubscriptionCopy {
+    struct TimelineItem {
+        let icon: String
+        let title: String
+        let detail: String
+    }
+
+    // — Feuille 1 : « Comment ça fonctionne ? »
+
+    static let pitchTitle = "Comment ça fonctionne ?"
+
+    static let timeline: [TimelineItem] = [
+        TimelineItem(
+            icon: "IconPlus",
+            title: "Création du voyage",
+            detail: "Configure ton voyage et attends le jour du départ pour commencer"
+        ),
+        TimelineItem(
+            icon: "IconBubble",
+            title: "Raconte tes 3 premières étapes",
+            detail:
+                "Une étape c’est une journée, une semaine, un lot d’ajouts à ton voyage (vocaux + photos)"
+        ),
+        TimelineItem(
+            icon: "IconLockerOutlined",
+            title: "Tu atteins la limite gratuite",
+            detail:
+                "Préparer ton carnet demande de l’énergie, l’abonnement fait donc vivre notre application"
+        ),
+    ]
+
+    /// Le prix est **écrit une seule fois**, et il vient de l'abonnement. La
+    /// maquette le colle au symbole (« 1,99€/semaine ») ; on passe par le
+    /// formateur du système comme partout ailleurs — même écart qu'à la ligne
+    /// « Ma cagnotte », signalé (T20).
+    static func offerHeadline(price: String) -> String {
+        "Envoi illimité d’étapes et mise en page illimitée de tes souvenirs pour \(price)/semaine"
+    }
+
+    /// **Un rappel, pas un arrêt** (01/10/2026) : Apple seul résilie, à la
+    /// demande de la personne. L'accueil le lui propose dès que plus aucun
+    /// voyage ne court.
+    static let offerCadence = "Rappel pour résilier à la fin du voyage"
+    static let previewPill = "Voir un aperçu de ton carnet →"
+
+    static let howToCancelTitle = "Comment résilier ?"
+    static let howToCancelParagraphs = [
+        "L’abonnement est sans engagement. Tu l’annules quand tu veux sans perdre tes créations.",
+        "Et à la fin de ton voyage, on te le rappelle : tu le coupes en un geste.",
+    ]
+
+    static let learnMore = "En savoir plus"
+
+    // — Feuille 2 : « Mon Abonnement »
+
+    static let currentTitle = "Mon Abonnement"
+    /// La maquette écrit « Abonnée » ; l'app accorde sur ce que le profil sait
+    /// de la personne (T76).
+    static func currentBadge(for gender: Gender) -> String { gender.agreed("Abonné") }
+    static let currentSubtitle =
+        "Tu as déjà souscrit à ton abonnement MemoBook, tu peux mettre en page tes récits de manière illimitée."
+
+    /// ⚠️ **État non maquetté** : sans destination, la phrase s'arrête au
+    /// voyage. Le back-end ne rattache encore aucun voyage à un abonnement —
+    /// fiche écran.
+    static func autoCancelTitle(destination: String?) -> String {
+        guard let destination, !destination.isEmpty else {
+            return "Un rappel à la fin de ton voyage."
+        }
+        return "Un rappel à la fin de ton voyage à \(destination)."
+    }
+
+    /// ⚠️ **État non maquetté** : sans date de fin, on promet la même chose sans
+    /// avancer de délai — plutôt qu'un « dans 0 jour ».
+    static func autoCancelBody(endsOn: Date?) -> String {
+        let opening =
+            "Parce que l’on sait que tu n’as pas besoin de notre application en dehors de tes voyages, on te proposera de résilier ton abonnement"
+        guard let endsOn else { return "\(opening) à la fin de ton voyage." }
+        return "\(opening) \(endsOn.relativeDelay)."
+    }
+
+    static let seeWallet = "Voir ma cagnotte"
+    static let cancelSubscription = "Résilier mon abonnement"
+
+    // — Feuille 3 : « Ton voyage continue »
+
+    static let keepGoingTitle = "Ton voyage continue"
+
+    /// ⚠️ **État non maquetté** : sans titre de voyage, la première phrase se
+    /// passe des guillemets.
+    ///
+    /// **La deuxième phrase dit *quand*** (Hugo, 19/09/2026). Elle annonçait
+    /// « tu ne pourras plus dicter tes derniers souvenirs » sans date, ce qui
+    /// se lisait « tout s'arrête maintenant » — alors que la semaine déjà
+    /// réglée continue. Elle nomme donc le jour, comme les deux feuilles
+    /// suivantes. Sans semaine réglée, elle reste la phrase d'avant : il n'y a
+    /// pas de date à promettre.
+    static func keepGoingParagraphs(tripTitle: String?, graceEnd: Date?) -> [String] {
+        let opening =
+            if let tripTitle, !tripTitle.isEmpty {
+                "Il te reste encore quelques jours dans ton voyage “\(tripTitle)”."
+            } else {
+                "Il te reste encore quelques jours dans ton voyage."
+            }
+        let consequence =
+            if let graceEnd {
+                "Si tu coupes maintenant, tu ne pourras plus dicter tes derniers souvenirs à la fin de la semaine d’abonnement actuelle, soit à partir du \(graceEnd.dayAndMonth)."
+            } else {
+                "Si tu coupes maintenant, tu ne pourras plus dicter tes derniers souvenirs."
+            }
+        return [
+            opening,
+            consequence,
+            "Pour rappel, on te proposera de le résilier à ton retour, en un geste.",
+        ]
+    }
+
+    static let waitForAutoCancel = "Attendre la fin du voyage"
+    static let cancel = "Résilier"
+
+    // — Feuille 4 : « Pourquoi nous quittes-tu ? »
+
+    static let reasonTitle = "Pourquoi nous quittes-tu ?"
+
+    /// Le chapeau de l'avant-dernière feuille — **et c'est ici que se dit le
+    /// sursis** (Hugo, 16/09/2026).
+    ///
+    /// Ici, et pas sur la dernière : c'est la feuille où l'on est encore en
+    /// train de décider. Apprendre après coup qu'on gardait sa semaine est une
+    /// bonne nouvelle qui arrive trop tard — on a hésité pour rien.
+    ///
+    /// Sans semaine restante — elle se termine aujourd'hui, ou rien n'a été
+    /// payé —, la phrase ne s'écrit pas : promettre « jusqu'au 16 septembre »
+    /// le 16 septembre ne promet rien.
+    static func reasonParagraphs(graceEnd: Date?) -> [String] {
+        var paragraphs = [
+            "Aide-nous à faire évoluer l’application.",
+            "Choisis la raison principale.",
+        ]
+        if let graceEnd {
+            paragraphs.append(
+                "Ta semaine est déjà réglée : tu continues de raconter et de mettre en page jusqu’au \(graceEnd.dayAndMonth) inclus."
+            )
+        }
+        return paragraphs
+    }
+
+    static let stayAWhile = "Rester abonné encore quelques jours"
+    static let confirmCancellation = "Confirmer ma résiliation"
+
+    // — Feuille 5 : « C'est validé »
+
+    static let doneTitle = "C’est validé"
+
+    /// Ce que la dernière feuille annonce.
+    ///
+    /// **Deux versions, et la première est celle d'avant.** Quand la semaine
+    /// payée se termine aujourd'hui — ou qu'il n'y en a pas —, rien ne change :
+    /// « L'abonnement s'arrête aujourd'hui ». C'est exactement ce que Hugo a
+    /// demandé de garder. Quand il reste des jours réglés, la phrase les nomme
+    /// plutôt que de mentir d'une semaine.
+    static func doneParagraphs(graceEnd: Date?) -> [String] {
+        // En minuscule : la phrase se poursuit après « mais ». Elle s'écrivait
+        // « mais Tu gardes accès… », majuscule comprise (Hugo, 19/09/2026).
+        let keepsBook =
+            "tu gardes accès à ton carnet de bord pour le relire quand tu veux."
+        guard let graceEnd else {
+            return [
+                "L’abonnement s’arrête aujourd’hui.",
+                "Tu ne pourras plus dicter tes souvenirs, mais \(keepsBook)",
+            ]
+        }
+        return [
+            "L’abonnement ne se renouvellera pas.",
+            "Ta semaine est réglée jusqu’au \(graceEnd.dayAndMonth) : d’ici là, rien ne change — tu racontes et tu mets en page comme avant.",
+            "Ensuite, tu ne pourras plus dicter tes souvenirs, mais \(keepsBook)",
+        ]
+    }
+
+    // — L'alerte du système, quand le sursis s'achève
+
+    /// Le titre de l'alerte native qui s'ouvre le jour où la semaine payée
+    /// s'achève.
+    ///
+    /// **Une alerte du système et non une feuille de la marque**, et c'est
+    /// voulu : elle n'arrive pas au bout d'un geste qu'on vient de faire, elle
+    /// tombe à l'ouverture de l'app, des jours plus tard. Une feuille qui monte
+    /// toute seule se lit comme un écran de l'app ; une alerte se lit comme une
+    /// nouvelle. C'est la même raison qui fait qu'iOS annonce lui-même la fin
+    /// d'un abonnement.
+    static let endedTitle = "Ton abonnement MemoBook s’est arrêté"
+
+    static func endedMessage(tripTitle: String?) -> String {
+        let opening =
+            if let tripTitle, !tripTitle.isEmpty {
+                "Ta semaine réglée est terminée, et l’abonnement de « \(tripTitle) » ne s’est pas renouvelé."
+            } else {
+                "Ta semaine réglée est terminée, et l’abonnement ne s’est pas renouvelé."
+            }
+        return
+            "\(opening) Tu gardes ton carnet et tous tes souvenirs ; pour en dicter de nouveaux, il faut te réabonner."
+    }
+
+    static let endedDismiss = "D’accord"
+
+    // — Le rappel de fin de voyage, sur l'accueil
+    static let tripEndTitle = "Ton voyage est terminé"
+    static let tripEndMessage =
+        "Ton abonnement MemoBook va se renouveler, alors que tu n’en as pas besoin entre deux voyages. Tu peux le résilier maintenant, tes carnets restent à toi."
+    static let tripEndCancel = "Résilier mon abonnement"
+    static let tripEndKeep = "Le garder"
+    static let endedResubscribe = "Me réabonner"
+    static let backHome = "Revenir à l’accueil"
+    static let subscribeAgain = "S’inscrire à nouveau"
+}
+
+// MARK: - Aperçus
+
+private struct SubscriptionSheetPreview: View {
+    let subscription: Subscription?
+    var typeSize: DynamicTypeSize = .large
+
+    var body: some View {
+        Color.clear
+            .background(MemoBookColor.background)
+            .sheet(isPresented: .constant(true)) {
+                SubscriptionSheet(subscription: subscription, onActivate: {}, onCancel: { _ in }, onLearnMore: {})
+                    .environment(\.dynamicTypeSize, typeSize)
+            }
+    }
+}
+
+#Preview("Comment ça fonctionne ? — pas abonné") {
+    SubscriptionSheetPreview(subscription: Subscription(weeklyPrice: 1.99))
+}
+
+#Preview("Mon Abonnement — abonné") {
+    SubscriptionSheetPreview(subscription: TravellerProfile.fixture.subscription)
+}
+
+#Preview("Pas abonné — Dynamic Type AX3") {
+    SubscriptionSheetPreview(
+        subscription: Subscription(weeklyPrice: 1.99),
+        typeSize: .accessibility3
+    )
+}
+
+#Preview("Abonné — Dynamic Type AX3") {
+    SubscriptionSheetPreview(
+        subscription: TravellerProfile.fixture.subscription,
+        typeSize: .accessibility3
+    )
+}

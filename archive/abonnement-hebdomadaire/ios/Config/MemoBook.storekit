@@ -1,0 +1,64 @@
+{
+  "identifier" : "6F3C2A1E",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+
+  ],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_locale" : "fr_FR",
+    "_storefront" : "FRA",
+    "_storeKitErrors" : [
+
+    ]
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21540001",
+      "localizations" : [
+        {
+          "description" : "",
+          "displayName" : "Abonnement MemoBook",
+          "locale" : "fr_FR"
+        }
+      ],
+      "name" : "MemoBook",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "1.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6754000001",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Raconte ton voyage sans limite, mis en page au fil des étapes.",
+              "displayName" : "Abonnement hebdomadaire",
+              "locale" : "fr_FR"
+            }
+          ],
+          "productID" : "com.memobook.app.subscription.weekly",
+          "recurringSubscriptionPeriod" : "P1W",
+          "referenceName" : "Abonnement hebdomadaire",
+          "subscriptionGroupID" : "21540001",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}
