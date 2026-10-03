@@ -204,14 +204,9 @@ final class BookCustomisationPreviewTests: XCTestCase {
             .filter { BookCustomisationPreview.fileName(for: $0) == fallback }
             .map { BookCustomisationPreview.composedFileName(for: $0) ?? "sans assortiment : \($0)" }
         XCTAssertEqual(missing, [])
-
-        // Et le nom rendu s'écrit comme sur le disque, octet pour octet : c'est
-        // lui qui deviendra une URL.
-        let listed = Set(BookCustomisationPreview.availableFileNames.map { Array($0.utf8) })
-        let misspelt = reachable
-            .map { BookCustomisationPreview.fileName(for: $0) }
-            .filter { !listed.contains(Array($0.utf8)) }
-        XCTAssertEqual(misspelt, [])
+        // Que ces noms s'écrivent comme sur le disque, octet pour octet, c'est
+        // `testTheManifestIsTheFolder` qui le tient : `fileName(for:)` rend un
+        // élément du manifeste, le comparer au manifeste ne prouverait rien.
     }
 
     func testTheConstraintStillMatchesTheFolder() {

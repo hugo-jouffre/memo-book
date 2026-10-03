@@ -124,6 +124,9 @@ final class BookCustomisationPreviewLoader {
         if !isFirst {
             do { try await Task.sleep(for: settle) } catch { return }
         }
+        // L'attente a pu finir à l'instant où un autre réglage l'annulait :
+        // l'image en cache serait alors celle d'un réglage déjà quitté.
+        guard !Task.isCancelled else { return }
 
         if let cached = decoded.object(forKey: url as NSURL) {
             present(cached, from: url)
