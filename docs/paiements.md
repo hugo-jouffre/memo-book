@@ -309,10 +309,17 @@ défaut) compte **quinze** moyens actifs, dont `card`, `link`, `klarna`,
 `stripe get /v1/payment_method_configurations`.
 
 > ⚠️ **`apple_pay` est actif chez Stripe et n'apparaîtra pourtant pas.** Ce
-> n'est pas le tableau de bord qui bloque, c'est l'app : sans identifiant
-> marchand Apple, `StripePaymentSheetPresenter` reçoit `applePayMerchantId:
-> nil` et ne configure pas `configuration.applePay` — la feuille montre alors
-> les cartes seules. Le manque est du côté du portail Apple, pas de Stripe.
+> n'est pas le tableau de bord qui bloque, c'est l'app : `StripePaymentSheetPresenter`
+> reçoit `applePayMerchantId: nil` et ne configure pas `configuration.applePay`
+> — la feuille montre alors les cartes seules.
+>
+> L'identifiant marchand existe depuis le 02/10/2026 (`merchant.com.tonapp.memobook`),
+> et l'app le porte : capability Apple Pay déclarée dans `ios/project.yml`, profil
+> de développement régénéré avec lui. Il reste deux gestes, dans cet ordre : le
+> **certificat Apple Pay** de Stripe sur cet identifiant (tableau de bord Stripe ▸
+> Apple Pay ▸ la demande de certificat à signer dans le portail Apple), puis
+> passer l'identifiant à `StripePaymentSheetPresenter`. Dans l'autre ordre, le
+> bouton paraît et le paiement échoue.
 
 ## Le prix
 

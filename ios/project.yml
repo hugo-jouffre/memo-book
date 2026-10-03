@@ -176,6 +176,18 @@ targets:
         # doit être cochée sur l'App ID `com.memobook.app` dans le portail
         # Apple Developer, sinon la signature automatique échoue.
         aps-environment: development
+        # Apple Pay — « + Capability ▸ Apple Pay » dans Xcode, avec
+        # l'identifiant marchand créé par Hugo le 02/10/2026. Il sert à la
+        # **commande du carnet**, un objet imprimé que la feuille de Stripe
+        # peut encaisser par Apple Pay ; l'abonnement, lui, passe par l'achat
+        # intégré et n'en a pas besoin.
+        #
+        # Cocher la capability ne suffit pas à faire paraître le bouton : il
+        # faut aussi passer cet identifiant à `StripePaymentSheetPresenter`
+        # (`applePayMerchantId`), une fois le certificat Apple Pay de Stripe
+        # posé sur cet identifiant — voir `docs/paiements.md`.
+        com.apple.developer.in-app-payments:
+          - merchant.com.tonapp.memobook
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.memobook.app
