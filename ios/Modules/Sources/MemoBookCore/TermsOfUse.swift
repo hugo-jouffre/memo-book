@@ -107,7 +107,7 @@ public enum TermsOfUse {
             .paragraph("Conformément à l’article L221-28 du Code de la consommation, le droit de rétractation de 14 jours ne s’applique pas aux biens personnalisés fabriqués sur mesure selon les spécifications du consommateur. Chaque carnet étant produit à la demande et personnalisé, il ne peut être ni repris ni échangé sauf en cas de défaut de fabrication avéré."),
 
             .heading("Produit défectueux ou non conforme"),
-            .paragraph("Si vous recevez un produit endommagé ou non conforme à votre commande, vous devez nous contacter sous 14 jours calendaires après réception à l’adresse \(contactLink), en joignant des photos du défaut. Nous procéderons alors à un réimpression ou un remboursement à notre discrétion."),
+            .paragraph("Si vous recevez un produit endommagé ou non conforme à votre commande, vous devez nous contacter sous 14 jours calendaires après réception à l’adresse \(contactLink), en joignant des photos du défaut. Nous procéderons alors à une réimpression ou un remboursement à notre discrétion."),
         ]
     )
 
