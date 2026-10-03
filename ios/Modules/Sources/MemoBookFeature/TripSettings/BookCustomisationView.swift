@@ -128,7 +128,9 @@ public struct BookCustomisationView: View {
                 .padding(.horizontal, MemoBookSpacing.screenMargin)
                 .padding(.top, MemoBookSpacing.xs)
 
-            BookPagesPeek(pdfUrl: model.bookPdfUrl)
+            // L'aperçu de personnalisation, et non plus les pages du PDF
+            // composé : c'est lui qui suit les réglages (Hugo, 02/10/2026).
+            BookCustomisationPreviewView(url: model.previewURL)
                 .frame(maxWidth: .infinity)
 
             categories

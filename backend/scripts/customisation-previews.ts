@@ -3,8 +3,9 @@
  * La chaîne des aperçus de personnalisation : des PNG du dépôt aux images que
  * l'app affiche en tête de l'écran « Personnalisations ».
  *
- *   npm run previews:build     prépare les images et le manifeste, ne publie rien
- *   npm run previews:publish   publie ce qui manque, puis le manifeste
+ *   npm run previews:build     prépare les images dans .previews-out/, ne publie rien
+ *   npm run previews:publish   publie ce qui manque, puis le manifeste, et
+ *                              seulement alors réécrit le manifeste versionné
  *   npm run previews:check     échoue si le manifeste versionné est périmé (CI)
  *
  * **La source** reste `assets/illustrations/aperçu personnalisation/` : 200
@@ -17,10 +18,12 @@
  * est un asset produit, le même pour tout le monde, lu sans session.
  *
  * Ajouter un aperçu, c'est déposer son PNG dans le dossier — nommé comme les
- * autres, voir `docs/apercu-personnalisation.md` — puis lancer
- * `previews:publish` et commiter `apercus-personnalisation.manifest.json`.
- * Aucune ligne de code à toucher, sauf pour un assortiment typographique
- * nouveau (`FONT_COMBOS`).
+ * autres, voir `docs/apercu-personnalisation.md` —, lancer `previews:publish`,
+ * puis `python3 ios/Tools/make-customisation-preview-manifest.py`, et commiter
+ * les deux manifestes. **L'app embarque la correspondance** (Hugo,
+ * 02/10/2026) : l'aperçu n'y paraît qu'avec la version suivante. Aucune autre
+ * ligne de code à toucher, sauf pour un assortiment typographique nouveau
+ * (`FONT_COMBOS` ici, et la table des segments de `BookCustomisationPreview`).
  *
  * ## Ce que la chaîne fait à chaque image
  *
@@ -50,9 +53,11 @@
  *
  * Le manifeste est le seul objet qui change d'adresse fixe. Il n'est renvoyé
  * que si son contenu diffère, et part **après** les images : il ne désigne
- * jamais un fichier pas encore en ligne. Rien n'est jamais supprimé du bucket :
- * une app qui a gardé l'ancien manifeste en cache doit encore trouver ses
- * images.
+ * jamais un fichier pas encore en ligne. Le manifeste **versionné** suit la
+ * même règle : il n'est réécrit qu'une fois la publication réussie, parce que
+ * l'app en embarque une copie et irait sinon chercher des images absentes.
+ * Rien n'est jamais supprimé du bucket : une version précédente de l'app
+ * embarque les anciens noms, et doit encore trouver ses images.
  */
 
 import { createHash } from "node:crypto";
@@ -117,7 +122,10 @@ const RECIPE = [
 ].join(" · ");
 
 const IMMUTABLE = "public, max-age=31536000, immutable";
-/** Un aperçu ajouté arrive sur les téléphones au plus tard cinq minutes après. */
+/**
+ * Le manifeste en ligne n'est pas lu par l'app, qui embarque sa copie
+ * (02/10/2026) ; il reste à jour, à cinq minutes près, pour qui le consulte.
+ */
 const MANIFEST_CACHE = "public, max-age=300";
 
 // ---------------------------------------------------------------- les noms
@@ -520,7 +528,11 @@ async function publish(manifest: PreviewManifest): Promise<void> {
     }
     console.log(`  ✓ ${response.status} ${cache}  ${url}`);
   }
-  console.log(`\nL'adresse du manifeste, celle que l'app lit :\n  ${base}/manifest.json`);
+  console.log(
+    `\nLe manifeste en ligne :\n  ${base}/manifest.json\n` +
+      "L'app n'en lit qu'une copie embarquée : relancer " +
+      "`python3 ios/Tools/make-customisation-preview-manifest.py`, puis livrer une version.",
+  );
 }
 
 // --------------------------------------------------------------------- main
@@ -539,7 +551,8 @@ async function main(): Promise<void> {
     if (committed !== serialized) {
       console.error(
         "Le manifeste des aperçus ne correspond plus aux PNG du dossier.\n" +
-          "Lancer `npm run previews:publish` dans backend/, puis commiter manifest.json.",
+          "Lancer `npm run previews:publish` dans backend/, puis " +
+          "`python3 ios/Tools/make-customisation-preview-manifest.py`, et commiter les deux manifestes.",
       );
       process.exit(1);
     }
@@ -548,13 +561,17 @@ async function main(): Promise<void> {
   }
 
   const rendered = await renderAll(sources, manifest);
-  writeFileSync(MANIFEST_FILE, serialized);
   console.log(
     `${manifest.previews.length} aperçus et un repli, ${OUTPUT.width}×${OUTPUT.height} — ` +
       `${rendered} préparé(s), les autres déjà dans ${basename(OUT_DIR)}/.`,
   );
+  if (!values.publish) return;
 
-  if (values.publish) await publish(manifest);
+  await publish(manifest);
+  // Seulement maintenant : le manifeste versionné est celui que l'app embarque,
+  // et il ne doit désigner que des images déjà en ligne.
+  writeFileSync(MANIFEST_FILE, serialized);
+  console.log(`Manifeste versionné écrit : ${basename(MANIFEST_FILE)}.`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

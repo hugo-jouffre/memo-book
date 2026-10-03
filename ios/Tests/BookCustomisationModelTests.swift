@@ -119,6 +119,49 @@ final class BookCustomisationModelTests: XCTestCase {
         XCTAssertEqual(model.customisation, server.settings.customisation)
     }
 
+    // MARK: Les envois, un par un
+
+    func testANeighbouringSettingDoesNotUndoTheOneBefore() async throws {
+        // Fun facts éteints, puis le quiz dans la foulée, pendant que le
+        // serveur fait attendre la première requête. Annuler l'envoi des fun
+        // facts laissait la réponse du quiz les rallumer — et l'aperçu bougeait
+        // pour un réglage qu'il ne montre pas.
+        let (model, server, _) = await open(rules: true)
+        server.holdsNext = true
+
+        model.setFunFacts(false)
+        let shown = model.previewURL
+        model.setQuiz(false)
+        try await waitUntil { server.attempts == 1 }
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(server.attempts, 1, "le quiz est parti avant la réponse des fun facts")
+
+        server.release()
+        try await waitUntil { server.received.count == 2 && model.customisation == server.settings.customisation }
+
+        XCTAssertEqual(server.received, [.funFacts(false), .quiz(false)])
+        XCTAssertEqual(model.customisation?.funFactsEnabled, false)
+        XCTAssertEqual(model.previewURL, shown)
+    }
+
+    func testASliderDragSendsItsFirstAndLastSteps() async throws {
+        // Un cran part ; ceux qui suivent attendent sa réponse, et seul le
+        // dernier part après elle.
+        let (model, server, _) = await open(rules: true)
+        server.holdsNext = true
+
+        model.setPhotoTextRatio(25)
+        try await waitUntil { server.attempts == 1 }
+        model.setPhotoTextRatio(50)
+        model.setPhotoTextRatio(75)
+
+        server.release()
+        try await waitUntil { server.received.count == 2 && model.customisation == server.settings.customisation }
+
+        XCTAssertEqual(server.received, [.photoTextRatio(25), .photoTextRatio(75)])
+        XCTAssertEqual(model.customisation?.photoTextRatio, 75)
+    }
+
     // MARK: Les carnets d'avant le verrou
 
     func testABookLockedBeforeTheLockIsPutBackInLineOnOpening() async throws {
@@ -251,11 +294,16 @@ final class BookCustomisationModelTests: XCTestCase {
 
     /// Le serveur, en mémoire : il applique chaque édition comme la route
     /// `PATCH /v1/trips/:id/settings`, et rend ce qu'il a.
+    @MainActor
     private final class Server {
         var settings: TripSettings
         private(set) var received: [BookCustomisationEdit] = []
         private(set) var attempts = 0
         var isFailing = false
+        /// La prochaine requête attend ``release()`` avant d'être traitée :
+        /// une connexion lente, ou un pooler qui fait patienter.
+        var holdsNext = false
+        private var held: CheckedContinuation<Void, Never>?
 
         init(rules: Bool, combo: BookFontCombo = .travelJournal) {
             var customisation = BookCustomisation.fixture
@@ -267,8 +315,17 @@ final class BookCustomisationModelTests: XCTestCase {
             settings.customisation = customisation
         }
 
-        func patch(_ edit: BookCustomisationEdit) throws -> TripSettings {
+        func release() {
+            held?.resume()
+            held = nil
+        }
+
+        func patch(_ edit: BookCustomisationEdit) async throws -> TripSettings {
             attempts += 1
+            if holdsNext {
+                holdsNext = false
+                await withCheckedContinuation { held = $0 }
+            }
             if isFailing { throw Refused() }
             received.append(edit)
             var customisation = settings.customisation ?? .fixture
@@ -310,7 +367,7 @@ final class BookCustomisationModelTests: XCTestCase {
         let model = BookCustomisationModel(
             tripId: Self.tripId,
             source: { _ in server.settings },
-            persist: { _, edit in try server.patch(edit) },
+            persist: { _, edit in try await server.patch(edit) },
             rulesMemory: memory
         )
         await model.load()
