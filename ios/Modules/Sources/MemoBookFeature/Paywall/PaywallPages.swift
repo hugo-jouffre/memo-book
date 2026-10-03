@@ -776,9 +776,14 @@ struct PaywallTitle: View {
             // Sur leur ligne, la question ne se pose plus : le trait fait leur
             // largeur, sous eux. Et la phrase se lit mieux — c'est bien la fin
             // qui pèse.
+            // Le trait **derrière** les mots, et non par-dessus : posé en
+            // surcouche, il recouvrait les jambages qui descendent le plus —
+            // « en quelques jours » se lisait « en quelaues iours » (recette du
+            // 03/10/2026). Dessous, le dessin est le même et les lettres
+            // passent devant.
             Text(strong)
                 .font(MemoBookFont.h1)
-                .overlay(alignment: .bottom) { underline }
+                .background(alignment: .bottom) { underline }
         }
         .foregroundStyle(MemoBookColor.ink)
         .tracking(-0.41)

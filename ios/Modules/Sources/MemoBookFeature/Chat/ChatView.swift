@@ -48,6 +48,13 @@ public struct ChatView: View {
     /// apparaît.
     @State private var isAtBottom = true
 
+    /// L'instant où le bas du fil a quitté l'écran. Le pied qui grandit le
+    /// recouvre **dans la même passe** que celle où sa hauteur est relevée :
+    /// sans ce souvenir, ``keepPinned(_:footerHeight:)`` croyait qu'on avait
+    /// remonté le fil, et le bandeau du crédit cachait la dernière bulle d'un
+    /// fil long (recette du 03/10/2026).
+    @State private var bottomLeftAt: Date?
+
     @FocusState private var isWriting: Bool
 
     /// Le parcours d'ajout de photos : autorisation, feuille de choix,
@@ -256,8 +263,14 @@ public struct ChatView: View {
                     Color.clear
                         .frame(height: 1)
                         .id(Self.bottomAnchor)
-                        .onAppear { isAtBottom = true }
-                        .onDisappear { isAtBottom = false }
+                        .onAppear {
+                            isAtBottom = true
+                            bottomLeftAt = nil
+                        }
+                        .onDisappear {
+                            isAtBottom = false
+                            bottomLeftAt = .now
+                        }
                 }
                 .padding(.horizontal, MemoBookSpacing.snug)
                 .padding(.vertical, MemoBookSpacing.s)
@@ -725,11 +738,21 @@ public struct ChatView: View {
         // Le premier relevé n'est pas un changement ; une puce en vol et
         // l'arrivée sur une étape tiennent déjà le défilement ; un fil vide
         // n'a pas de bas, il a un centre.
-        guard previous > 0, abs(height - previous) > 0.5, isAtBottom, pendingFocus == nil, flight == nil,
-            !model.messages.isEmpty
+        // « En bas », ou à l'instant encore : le pied qui vient de grandir a
+        // pu recouvrir le repère du bas avant ce relevé.
+        let leftJustNow = bottomLeftAt.map { Date.now.timeIntervalSince($0) < 0.5 } ?? false
+        guard previous > 0, abs(height - previous) > 0.5, isAtBottom || leftJustNow, pendingFocus == nil,
+            flight == nil, !model.messages.isEmpty
         else { return }
-        withAnimation(reduceMotion ? nil : .smooth(duration: 0.3)) {
-            proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
+        // **Une image plus tard** : ce relevé arrive pendant la mise en page,
+        // avant que le nouvel encart du bas ne soit appliqué au défilement. Un
+        // `scrollTo` immédiat visait l'ancien bas — juste sur un fil court, où
+        // il reste de la place, faux sur un fil long.
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(40))
+            withAnimation(reduceMotion ? nil : .smooth(duration: 0.3)) {
+                proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
+            }
         }
     }
 

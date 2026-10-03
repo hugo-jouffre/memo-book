@@ -127,7 +127,16 @@ public final class ProfileModel {
     public func load() async {
         // Ce qu'on avait, tout de suite, et seulement au premier chargement.
         if profile == nil, let stored = await cached?() {
-            profile = stored
+            #if DEBUG
+                // Le personnage du bac à sable vaut aussi pour la copie du
+                // disque : sans lui, le profil gardé — abonné — repassait à la
+                // session « a déjà été abonné » à l'ouverture, et « Jamais
+                // abonné » ne montrait jamais le paywall de découverte
+                // (recette du 03/10/2026).
+                profile = SandboxPersona.current?.applied(to: stored) ?? stored
+            #else
+                profile = stored
+            #endif
             freshness = .restored
         }
 
