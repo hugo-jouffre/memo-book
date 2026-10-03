@@ -62,7 +62,7 @@ Et les mots des pièces d'un écran, pour décrire une maquette sans la montrer 
 | **Édition** | un seul réglage envoyé au serveur, tel qu'on l'a touché | `<Nom>Edit` — `TripSettingsEdit`, `BookCustomisationEdit` ; un `PATCH` à un champ |
 | **Jeu d'essai** | les valeurs de la maquette, qui font vivre un écran sans serveur | `.fixture`, `<Domaine>Fixtures.swift` |
 | **Bac à sable** | l'app entière branchée sur le jeu d'essai, en mémoire | `PreviewAPI`, `-previewSignedIn`, `SandboxPersona` (DEBUG seulement) |
-| **Aperçu** | ⚠️ deux sens. Pour l'utilisateur, **l'aperçu du carnet** (`BookPreview/`, « Voir un aperçu »). Pour le développeur, les **previews Xcode** (`#Preview`). Dans une fiche, « aperçu » seul désigne toujours celui du carnet ; l'autre s'écrit « preview Xcode » | `BookPreviewSheet` · `#Preview` |
+| **Aperçu** | ⚠️ deux sens. Pour l'utilisateur, **l'aperçu du carnet** (`BookPreview/`, « Voir un aperçu »). Pour le développeur, les **previews Xcode** (`#Preview`). Dans une fiche, « aperçu » seul désigne toujours celui du carnet ; l'autre s'écrit « preview Xcode ». L'image déjà rendue qui surmonte les personnalisations est l'**aperçu de personnalisation** : ce n'est pas le carnet, c'est une image parmi deux cents. Sa fiche (`docs/apercu-personnalisation.md`) et `BookCustomisationPreview` disent « aperçu » tout court ; partout ailleurs, le nom entier | `BookPreviewSheet` · `#Preview` · `BookCustomisationPreview` |
 | **Sections**, **en-tête**, **pages** d'un écran | les morceaux d'un écran trop long pour un fichier, gardés à côté de lui | `HomeSections.swift`, `TripHeader.swift`, `PaywallPages.swift` |
 | **Client** | ce qui parle au serveur ; la seule chose qui fabrique une `URLRequest` | `MemoBookAPIClient`, protocole `MemoBookAPI` |
 
