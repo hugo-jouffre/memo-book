@@ -280,13 +280,6 @@ model Account {
   /// pas dérivé.
   walletBalanceCents Int @default(0)
 
-  // `offeredSteps`, `remainingSteps`, `memoryPlan`, `memoryUsed` et
-  // `memoryPeriodStart` sont sortis du schéma le 03/10/2026 avec les étapes
-  // offertes et les limites de souvenirs. **Les colonnes existent encore en
-  // base** le temps qu'aucun code déployé ne les lise : la migration qui les
-  // supprime part dans la PR suivante (voir l'en-tête de
-  // `20261003090000_credit_du_jour`). Ne pas les recréer ici.
-
   /// Le fuseau du téléphone (`Europe/Paris`), envoyé avec chaque jeton APNs
   /// **et dans l'en-tête `X-Time-Zone` de chaque appel** (03/10/2026). C'est
   /// lui qui fait partir une notification à 10 h **chez le voyageur**, qui dit
