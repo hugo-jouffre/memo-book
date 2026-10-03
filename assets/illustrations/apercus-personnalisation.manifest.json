@@ -1,0 +1,1812 @@
+{
+  "$comment": "Engendré par `npm run previews:build` (backend/scripts/customisation-previews.ts), ne pas éditer à la main. Chaque `file` se résout contre l'adresse de ce manifeste ; une combinaison absente prend `fallback`.",
+  "version": 1,
+  "width": 900,
+  "height": 840,
+  "fallback": {
+    "file": "87a586551c2a4c74a6a1.webp",
+    "source": "apercu non existant.png"
+  },
+  "previews": [
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": false,
+      "decorationQuota": 0,
+      "fontCombo": "editorial",
+      "file": "b13105b7893cfc776047.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=off, Stickers=0, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": false,
+      "decorationQuota": 1,
+      "fontCombo": "editorial",
+      "file": "c761aca635d3bd0d32ba.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=off, Stickers=1, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": false,
+      "decorationQuota": 2,
+      "fontCombo": "editorial",
+      "file": "ee763eca9b76a6b749ac.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=off, Stickers=2, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": false,
+      "decorationQuota": 3,
+      "fontCombo": "editorial",
+      "file": "786c4f8fcd73146d8841.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=off, Stickers=3, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": false,
+      "decorationQuota": 4,
+      "fontCombo": "editorial",
+      "file": "7a0c0e05db4a66add95b.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=off, Stickers=4, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": true,
+      "decorationQuota": 0,
+      "fontCombo": "editorial",
+      "file": "b5e430ec74f82bc80757.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=on, Stickers=0, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": true,
+      "decorationQuota": 1,
+      "fontCombo": "editorial",
+      "file": "49a5bff346a3543d1b8a.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=on, Stickers=1, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": true,
+      "decorationQuota": 2,
+      "fontCombo": "editorial",
+      "file": "4a778cd20aa29b444b19.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=on, Stickers=2, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": true,
+      "decorationQuota": 3,
+      "fontCombo": "editorial",
+      "file": "6b00bfb7451f474a9d58.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=on, Stickers=3, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": true,
+      "decorationQuota": 4,
+      "fontCombo": "editorial",
+      "file": "a4968665f182809940f1.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=on, Stickers=4, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": false,
+      "decorationQuota": 0,
+      "fontCombo": "editorial",
+      "file": "16d4fea71077ca6d4a6a.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=off, Stickers=0, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": false,
+      "decorationQuota": 1,
+      "fontCombo": "editorial",
+      "file": "01c82031ab890bbb0196.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=off, Stickers=1, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": false,
+      "decorationQuota": 2,
+      "fontCombo": "editorial",
+      "file": "38ccfef77ef7a3719004.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=off, Stickers=2, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": false,
+      "decorationQuota": 3,
+      "fontCombo": "editorial",
+      "file": "d77057230c560b20379f.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=off, Stickers=3, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": false,
+      "decorationQuota": 4,
+      "fontCombo": "editorial",
+      "file": "17e95a3d39b6e57e5eb5.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=off, Stickers=4, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": true,
+      "decorationQuota": 0,
+      "fontCombo": "editorial",
+      "file": "3325a22fd66aa6e9b316.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=on, Stickers=0, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": true,
+      "decorationQuota": 1,
+      "fontCombo": "editorial",
+      "file": "05a1c97a358978f0aa46.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=on, Stickers=1, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": true,
+      "decorationQuota": 2,
+      "fontCombo": "editorial",
+      "file": "fdeabcf5432e93d78bab.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=on, Stickers=2, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": true,
+      "decorationQuota": 3,
+      "fontCombo": "editorial",
+      "file": "8c41a6073448e1b1a266.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=on, Stickers=3, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": true,
+      "decorationQuota": 4,
+      "fontCombo": "editorial",
+      "file": "c1d196c432429942d306.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=on, Stickers=4, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": false,
+      "decorationQuota": 0,
+      "fontCombo": "editorial",
+      "file": "d09f9a9032df84b6633f.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=off, Stickers=0, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": false,
+      "decorationQuota": 1,
+      "fontCombo": "editorial",
+      "file": "ccdc13b6ea9d5ea19b04.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=off, Stickers=1, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": false,
+      "decorationQuota": 2,
+      "fontCombo": "editorial",
+      "file": "697418a20cf68df697a6.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=off, Stickers=2, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": false,
+      "decorationQuota": 3,
+      "fontCombo": "editorial",
+      "file": "90d54c1aaab716e33c65.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=off, Stickers=3, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": false,
+      "decorationQuota": 4,
+      "fontCombo": "editorial",
+      "file": "b1d3784ba8d45728b3fd.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=off, Stickers=4, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": true,
+      "decorationQuota": 0,
+      "fontCombo": "editorial",
+      "file": "b7ce26e46fed11579e26.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=on, Stickers=0, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": true,
+      "decorationQuota": 1,
+      "fontCombo": "editorial",
+      "file": "4f9a077ade18eeffb8b4.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=on, Stickers=1, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": true,
+      "decorationQuota": 2,
+      "fontCombo": "editorial",
+      "file": "52db1136b42b1b95f67a.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=on, Stickers=2, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": true,
+      "decorationQuota": 3,
+      "fontCombo": "editorial",
+      "file": "26eade21b777bdf53777.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=on, Stickers=3, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": true,
+      "decorationQuota": 4,
+      "fontCombo": "editorial",
+      "file": "c1d4d13456cab6c4f6ea.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=on, Stickers=4, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": false,
+      "decorationQuota": 0,
+      "fontCombo": "editorial",
+      "file": "2f527bfd3a2d6fe93f3c.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=off, Stickers=0, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": false,
+      "decorationQuota": 1,
+      "fontCombo": "editorial",
+      "file": "df1b8076cd2ec28bfb9c.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=off, Stickers=1, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": false,
+      "decorationQuota": 2,
+      "fontCombo": "editorial",
+      "file": "1d10a73dc016d550b862.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=off, Stickers=2, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": false,
+      "decorationQuota": 3,
+      "fontCombo": "editorial",
+      "file": "2235eb8a593c1d22b3f2.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=off, Stickers=3, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": false,
+      "decorationQuota": 4,
+      "fontCombo": "editorial",
+      "file": "31e0fb68638dfc669280.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=off, Stickers=4, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": true,
+      "decorationQuota": 0,
+      "fontCombo": "editorial",
+      "file": "8b080379feeebae30eab.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=on, Stickers=0, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": true,
+      "decorationQuota": 1,
+      "fontCombo": "editorial",
+      "file": "7d4abf1e995fbe1567be.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=on, Stickers=1, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": true,
+      "decorationQuota": 2,
+      "fontCombo": "editorial",
+      "file": "d60e782a016e625906f1.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=on, Stickers=2, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": true,
+      "decorationQuota": 3,
+      "fontCombo": "editorial",
+      "file": "52623fc4cb68fb49e08b.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=on, Stickers=3, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": true,
+      "decorationQuota": 4,
+      "fontCombo": "editorial",
+      "file": "204f610227be72c92cd7.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=on, Stickers=4, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": false,
+      "decorationQuota": 0,
+      "fontCombo": "editorial",
+      "file": "546dc66ec4776c28cbbc.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=off, Stickers=0, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": false,
+      "decorationQuota": 1,
+      "fontCombo": "editorial",
+      "file": "db2727eca68daa46085a.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=off, Stickers=1, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": false,
+      "decorationQuota": 2,
+      "fontCombo": "editorial",
+      "file": "8aa4bb0589af35d56115.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=off, Stickers=2, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": false,
+      "decorationQuota": 3,
+      "fontCombo": "editorial",
+      "file": "67bf44de332b369b36b3.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=off, Stickers=3, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": false,
+      "decorationQuota": 4,
+      "fontCombo": "editorial",
+      "file": "30b738e854b2be974da8.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=off, Stickers=4, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": true,
+      "decorationQuota": 0,
+      "fontCombo": "editorial",
+      "file": "c7690c72f87a21c67176.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=on, Stickers=0, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": true,
+      "decorationQuota": 1,
+      "fontCombo": "editorial",
+      "file": "4de8592a3a077c93450b.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=on, Stickers=1, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": true,
+      "decorationQuota": 2,
+      "fontCombo": "editorial",
+      "file": "74a7d58840874694f700.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=on, Stickers=2, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": true,
+      "decorationQuota": 3,
+      "fontCombo": "editorial",
+      "file": "3879ebd15a3714656764.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=on, Stickers=3, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": true,
+      "decorationQuota": 4,
+      "fontCombo": "editorial",
+      "file": "f2f033eb211c238e879c.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=on, Stickers=4, Typos=Playfair Display.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": false,
+      "decorationQuota": 0,
+      "fontCombo": "handwritten",
+      "file": "74a713ac036479d36875.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=off, Stickers=0, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": false,
+      "decorationQuota": 1,
+      "fontCombo": "handwritten",
+      "file": "083839b031054bf64563.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=off, Stickers=1, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": false,
+      "decorationQuota": 2,
+      "fontCombo": "handwritten",
+      "file": "a76996941b3c3b172686.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=off, Stickers=2, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": false,
+      "decorationQuota": 3,
+      "fontCombo": "handwritten",
+      "file": "30653fe9bd2efbb20528.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=off, Stickers=3, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": false,
+      "decorationQuota": 4,
+      "fontCombo": "handwritten",
+      "file": "eb6eaeef44b3a6106575.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=off, Stickers=4, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": true,
+      "decorationQuota": 0,
+      "fontCombo": "handwritten",
+      "file": "71e8d55cd52604a1dad8.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=on, Stickers=0, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": true,
+      "decorationQuota": 1,
+      "fontCombo": "handwritten",
+      "file": "6929927b4b23f99fe818.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=on, Stickers=1, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": true,
+      "decorationQuota": 2,
+      "fontCombo": "handwritten",
+      "file": "ee624154bf9a8bb8967c.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=on, Stickers=2, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": true,
+      "decorationQuota": 3,
+      "fontCombo": "handwritten",
+      "file": "6451713166c769de92df.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=on, Stickers=3, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": true,
+      "decorationQuota": 4,
+      "fontCombo": "handwritten",
+      "file": "9e2b7eda4555c1c63132.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=on, Stickers=4, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": false,
+      "decorationQuota": 0,
+      "fontCombo": "handwritten",
+      "file": "42f1e7d41569e6299c01.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=off, Stickers=0, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": false,
+      "decorationQuota": 1,
+      "fontCombo": "handwritten",
+      "file": "e0b47c34fd3883ed115e.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=off, Stickers=1, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": false,
+      "decorationQuota": 2,
+      "fontCombo": "handwritten",
+      "file": "b219e5251e9c56208117.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=off, Stickers=2, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": false,
+      "decorationQuota": 3,
+      "fontCombo": "handwritten",
+      "file": "bbea716803a98911dad5.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=off, Stickers=3, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": false,
+      "decorationQuota": 4,
+      "fontCombo": "handwritten",
+      "file": "771b12c3ce37b7ffa900.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=off, Stickers=4, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": true,
+      "decorationQuota": 0,
+      "fontCombo": "handwritten",
+      "file": "322f22c3a700644ff8ef.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=on, Stickers=0, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": true,
+      "decorationQuota": 1,
+      "fontCombo": "handwritten",
+      "file": "a92b77ce08a3cc1d0bf2.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=on, Stickers=1, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": true,
+      "decorationQuota": 2,
+      "fontCombo": "handwritten",
+      "file": "0de1514ddbd3296b8322.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=on, Stickers=2, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": true,
+      "decorationQuota": 3,
+      "fontCombo": "handwritten",
+      "file": "244de4dc44433e102c87.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=on, Stickers=3, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": true,
+      "decorationQuota": 4,
+      "fontCombo": "handwritten",
+      "file": "635665eccee3da6121cc.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=on, Stickers=4, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": false,
+      "decorationQuota": 0,
+      "fontCombo": "handwritten",
+      "file": "89362bd42cc5910c3b53.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=off, Stickers=0, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": false,
+      "decorationQuota": 1,
+      "fontCombo": "handwritten",
+      "file": "e9397639cb2cd0876881.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=off, Stickers=1, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": false,
+      "decorationQuota": 2,
+      "fontCombo": "handwritten",
+      "file": "4bcbb2ea76ae59d705ba.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=off, Stickers=2, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": false,
+      "decorationQuota": 3,
+      "fontCombo": "handwritten",
+      "file": "9ad7a671e7a7f45aec1b.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=off, Stickers=3, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": false,
+      "decorationQuota": 4,
+      "fontCombo": "handwritten",
+      "file": "22ba572aa403e781741d.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=off, Stickers=4, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": true,
+      "decorationQuota": 0,
+      "fontCombo": "handwritten",
+      "file": "b58baacd3ab84e7901d9.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=on, Stickers=0, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": true,
+      "decorationQuota": 1,
+      "fontCombo": "handwritten",
+      "file": "7802b3df98c1abff0647.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=on, Stickers=1, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": true,
+      "decorationQuota": 2,
+      "fontCombo": "handwritten",
+      "file": "a383196534b96a1f38ac.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=on, Stickers=2, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": true,
+      "decorationQuota": 3,
+      "fontCombo": "handwritten",
+      "file": "1549b3536313c662f8eb.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=on, Stickers=3, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": true,
+      "decorationQuota": 4,
+      "fontCombo": "handwritten",
+      "file": "1da9f202df7402cbf21f.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=on, Stickers=4, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": false,
+      "decorationQuota": 0,
+      "fontCombo": "handwritten",
+      "file": "933bf4dde25617c7d4db.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=off, Stickers=0, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": false,
+      "decorationQuota": 1,
+      "fontCombo": "handwritten",
+      "file": "18b2b0332bc95bfdcab0.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=off, Stickers=1, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": false,
+      "decorationQuota": 2,
+      "fontCombo": "handwritten",
+      "file": "7ba44ec0fcd9dd1fbc06.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=off, Stickers=2, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": false,
+      "decorationQuota": 3,
+      "fontCombo": "handwritten",
+      "file": "af5d8ffabed6a4ac01f6.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=off, Stickers=3, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": false,
+      "decorationQuota": 4,
+      "fontCombo": "handwritten",
+      "file": "fb68376986648f246ed0.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=off, Stickers=4, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": true,
+      "decorationQuota": 0,
+      "fontCombo": "handwritten",
+      "file": "d83d095fd46614879a82.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=on, Stickers=0, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": true,
+      "decorationQuota": 1,
+      "fontCombo": "handwritten",
+      "file": "76b54cc9a13910ce40eb.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=on, Stickers=1, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": true,
+      "decorationQuota": 2,
+      "fontCombo": "handwritten",
+      "file": "99773ab907dd53bea0cd.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=on, Stickers=2, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": true,
+      "decorationQuota": 3,
+      "fontCombo": "handwritten",
+      "file": "a8a663e4d4d365d08738.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=on, Stickers=3, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": true,
+      "decorationQuota": 4,
+      "fontCombo": "handwritten",
+      "file": "5812cb1b530b6a565bba.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=on, Stickers=4, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": false,
+      "decorationQuota": 0,
+      "fontCombo": "handwritten",
+      "file": "903399e44a098ab8d828.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=off, Stickers=0, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": false,
+      "decorationQuota": 1,
+      "fontCombo": "handwritten",
+      "file": "51a230b08de8990cdf84.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=off, Stickers=1, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": false,
+      "decorationQuota": 2,
+      "fontCombo": "handwritten",
+      "file": "d24d7f1868f79429114b.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=off, Stickers=2, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": false,
+      "decorationQuota": 3,
+      "fontCombo": "handwritten",
+      "file": "c0876b2edea30e99dc80.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=off, Stickers=3, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": false,
+      "decorationQuota": 4,
+      "fontCombo": "handwritten",
+      "file": "2abe4f9b71e80b1b6608.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=off, Stickers=4, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": true,
+      "decorationQuota": 0,
+      "fontCombo": "handwritten",
+      "file": "d0729d160aa9e874f518.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=on, Stickers=0, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": true,
+      "decorationQuota": 1,
+      "fontCombo": "handwritten",
+      "file": "78cc55f2b3fba7100091.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=on, Stickers=1, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": true,
+      "decorationQuota": 2,
+      "fontCombo": "handwritten",
+      "file": "421dd219c88735095134.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=on, Stickers=2, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": true,
+      "decorationQuota": 3,
+      "fontCombo": "handwritten",
+      "file": "db34172f2e0c3349ec1d.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=on, Stickers=3, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": true,
+      "decorationQuota": 4,
+      "fontCombo": "handwritten",
+      "file": "6b9464cb6f92b9c7e94e.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=on, Stickers=4, Typos=Hansley - Gloria Hellelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": false,
+      "decorationQuota": 0,
+      "fontCombo": "travel-journal",
+      "file": "c2846c0445edb63ec426.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=off, Stickers=0, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": false,
+      "decorationQuota": 1,
+      "fontCombo": "travel-journal",
+      "file": "fcc7f4c74ebe84723b48.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=off, Stickers=1, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": false,
+      "decorationQuota": 2,
+      "fontCombo": "travel-journal",
+      "file": "7d66c0ef4631b6d1e0db.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=off, Stickers=2, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": false,
+      "decorationQuota": 3,
+      "fontCombo": "travel-journal",
+      "file": "d71f8ce325aea4ea978a.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=off, Stickers=3, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": false,
+      "decorationQuota": 4,
+      "fontCombo": "travel-journal",
+      "file": "c6d36b0a081df60dacef.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=off, Stickers=4, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": true,
+      "decorationQuota": 0,
+      "fontCombo": "travel-journal",
+      "file": "468bbbf8384da4143571.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=on, Stickers=0, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": true,
+      "decorationQuota": 1,
+      "fontCombo": "travel-journal",
+      "file": "c7520402706b20b490f6.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=on, Stickers=1, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": true,
+      "decorationQuota": 2,
+      "fontCombo": "travel-journal",
+      "file": "5d949ce0751be6e22e4b.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=on, Stickers=2, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": true,
+      "decorationQuota": 3,
+      "fontCombo": "travel-journal",
+      "file": "97a046d0a7b92bba1ba7.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=on, Stickers=3, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 0,
+      "funFactsEnabled": true,
+      "decorationQuota": 4,
+      "fontCombo": "travel-journal",
+      "file": "3285f79bede614a15670.webp",
+      "source": "Pointillés=off, Ratio image=0%, Fun fact=on, Stickers=4, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": false,
+      "decorationQuota": 0,
+      "fontCombo": "travel-journal",
+      "file": "69c16ad87ffd9a90d409.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=off, Stickers=0, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": false,
+      "decorationQuota": 1,
+      "fontCombo": "travel-journal",
+      "file": "858246e9420135d97be4.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=off, Stickers=1, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": false,
+      "decorationQuota": 2,
+      "fontCombo": "travel-journal",
+      "file": "747fdc1639f9ec298285.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=off, Stickers=2, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": false,
+      "decorationQuota": 3,
+      "fontCombo": "travel-journal",
+      "file": "15c78a51d6871578561a.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=off, Stickers=3, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": false,
+      "decorationQuota": 4,
+      "fontCombo": "travel-journal",
+      "file": "0c64dbbc181fbc15bada.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=off, Stickers=4, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": true,
+      "decorationQuota": 0,
+      "fontCombo": "travel-journal",
+      "file": "d4420b4b1904c6674aee.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=on, Stickers=0, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": true,
+      "decorationQuota": 1,
+      "fontCombo": "travel-journal",
+      "file": "f57fb4ea4967d678756b.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=on, Stickers=1, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": true,
+      "decorationQuota": 2,
+      "fontCombo": "travel-journal",
+      "file": "7c26db2d0735a5605bbf.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=on, Stickers=2, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": true,
+      "decorationQuota": 3,
+      "fontCombo": "travel-journal",
+      "file": "fc629a124ca7d5b09278.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=on, Stickers=3, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 25,
+      "funFactsEnabled": true,
+      "decorationQuota": 4,
+      "fontCombo": "travel-journal",
+      "file": "6bfb36e038660ae14cbf.webp",
+      "source": "Pointillés=off, Ratio image=25%, Fun fact=on, Stickers=4, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": false,
+      "decorationQuota": 0,
+      "fontCombo": "travel-journal",
+      "file": "7b92a5d7120f7a8ebb7a.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=off, Stickers=0, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": false,
+      "decorationQuota": 1,
+      "fontCombo": "travel-journal",
+      "file": "a4c859930f69763f14d7.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=off, Stickers=1, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": false,
+      "decorationQuota": 2,
+      "fontCombo": "travel-journal",
+      "file": "438f01563deb1292e64b.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=off, Stickers=2, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": false,
+      "decorationQuota": 3,
+      "fontCombo": "travel-journal",
+      "file": "05ff5c300259ac2bb392.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=off, Stickers=3, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": false,
+      "decorationQuota": 4,
+      "fontCombo": "travel-journal",
+      "file": "877e1ab340ff11719f39.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=off, Stickers=4, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": true,
+      "decorationQuota": 0,
+      "fontCombo": "travel-journal",
+      "file": "e29ec2eb3bd3cb1bfa9c.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=on, Stickers=0, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": true,
+      "decorationQuota": 1,
+      "fontCombo": "travel-journal",
+      "file": "203a7e2b65679fab6002.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=on, Stickers=1, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": true,
+      "decorationQuota": 2,
+      "fontCombo": "travel-journal",
+      "file": "009b951ec07ade39aac4.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=on, Stickers=2, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": true,
+      "decorationQuota": 3,
+      "fontCombo": "travel-journal",
+      "file": "5c1cb0c5682b0aff1f7a.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=on, Stickers=3, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 50,
+      "funFactsEnabled": true,
+      "decorationQuota": 4,
+      "fontCombo": "travel-journal",
+      "file": "bbbe6229341fa40d6954.webp",
+      "source": "Pointillés=off, Ratio image=50%, Fun fact=on, Stickers=4, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": false,
+      "decorationQuota": 0,
+      "fontCombo": "travel-journal",
+      "file": "ef6ade098b46d24b7ddb.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=off, Stickers=0, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": false,
+      "decorationQuota": 1,
+      "fontCombo": "travel-journal",
+      "file": "37a2f4e4f33480e7f770.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=off, Stickers=1, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": false,
+      "decorationQuota": 2,
+      "fontCombo": "travel-journal",
+      "file": "d77c872924709d2083b4.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=off, Stickers=2, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": false,
+      "decorationQuota": 3,
+      "fontCombo": "travel-journal",
+      "file": "f25b55819666244f133c.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=off, Stickers=3, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": false,
+      "decorationQuota": 4,
+      "fontCombo": "travel-journal",
+      "file": "c569c2dcd132739b84ba.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=off, Stickers=4, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": true,
+      "decorationQuota": 0,
+      "fontCombo": "travel-journal",
+      "file": "c0dae0f88e2c55f8fc3e.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=on, Stickers=0, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": true,
+      "decorationQuota": 1,
+      "fontCombo": "travel-journal",
+      "file": "5e6de889105061a33e28.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=on, Stickers=1, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": true,
+      "decorationQuota": 2,
+      "fontCombo": "travel-journal",
+      "file": "18eb5bfe86b070659957.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=on, Stickers=2, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": true,
+      "decorationQuota": 3,
+      "fontCombo": "travel-journal",
+      "file": "2f131dab7994f490a7b3.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=on, Stickers=3, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 75,
+      "funFactsEnabled": true,
+      "decorationQuota": 4,
+      "fontCombo": "travel-journal",
+      "file": "dc095c3e11bb49bda435.webp",
+      "source": "Pointillés=off, Ratio image=75%, Fun fact=on, Stickers=4, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": false,
+      "decorationQuota": 0,
+      "fontCombo": "travel-journal",
+      "file": "9c4c79aaff96fd8365b6.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=off, Stickers=0, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": false,
+      "decorationQuota": 1,
+      "fontCombo": "travel-journal",
+      "file": "85362bdbd04e819b602b.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=off, Stickers=1, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": false,
+      "decorationQuota": 2,
+      "fontCombo": "travel-journal",
+      "file": "f751b61ecd25925dd28c.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=off, Stickers=2, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": false,
+      "decorationQuota": 3,
+      "fontCombo": "travel-journal",
+      "file": "2af8acb7ad69a406d490.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=off, Stickers=3, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": false,
+      "decorationQuota": 4,
+      "fontCombo": "travel-journal",
+      "file": "89f3b9c03aac6381be49.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=off, Stickers=4, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": true,
+      "decorationQuota": 0,
+      "fontCombo": "travel-journal",
+      "file": "eea161b886760e3466c4.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=on, Stickers=0, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": true,
+      "decorationQuota": 1,
+      "fontCombo": "travel-journal",
+      "file": "4c94875d44a7b4c58470.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=on, Stickers=1, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": true,
+      "decorationQuota": 2,
+      "fontCombo": "travel-journal",
+      "file": "6b55f7a8c87032edcb66.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=on, Stickers=2, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": true,
+      "decorationQuota": 3,
+      "fontCombo": "travel-journal",
+      "file": "72971825fdd9928189b7.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=on, Stickers=3, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": false,
+      "photoTextRatio": 100,
+      "funFactsEnabled": true,
+      "decorationQuota": 4,
+      "fontCombo": "travel-journal",
+      "file": "d439a3a1d0a189e5e51c.webp",
+      "source": "Pointillés=off, Ratio image=100%, Fun fact=on, Stickers=4, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 0,
+      "funFactsEnabled": false,
+      "decorationQuota": 0,
+      "fontCombo": "travel-journal",
+      "file": "b70b009e2d026df0b49d.webp",
+      "source": "Pointillés=on, Ratio image=0%, Fun fact=off, Stickers=0, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 0,
+      "funFactsEnabled": false,
+      "decorationQuota": 1,
+      "fontCombo": "travel-journal",
+      "file": "b75223a9ed53b953b0cd.webp",
+      "source": "Pointillés=on, Ratio image=0%, Fun fact=off, Stickers=1, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 0,
+      "funFactsEnabled": false,
+      "decorationQuota": 2,
+      "fontCombo": "travel-journal",
+      "file": "03285ae7ae56d3d8a99f.webp",
+      "source": "Pointillés=on, Ratio image=0%, Fun fact=off, Stickers=2, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 0,
+      "funFactsEnabled": false,
+      "decorationQuota": 3,
+      "fontCombo": "travel-journal",
+      "file": "2d2895178bce1d4c8555.webp",
+      "source": "Pointillés=on, Ratio image=0%, Fun fact=off, Stickers=3, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 0,
+      "funFactsEnabled": false,
+      "decorationQuota": 4,
+      "fontCombo": "travel-journal",
+      "file": "427b08824992ced4507a.webp",
+      "source": "Pointillés=on, Ratio image=0%, Fun fact=off, Stickers=4, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 0,
+      "funFactsEnabled": true,
+      "decorationQuota": 0,
+      "fontCombo": "travel-journal",
+      "file": "8406bf60fc06a0f42135.webp",
+      "source": "Pointillés=on, Ratio image=0%, Fun fact=on, Stickers=0, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 0,
+      "funFactsEnabled": true,
+      "decorationQuota": 1,
+      "fontCombo": "travel-journal",
+      "file": "365ffc14262273a8ff5b.webp",
+      "source": "Pointillés=on, Ratio image=0%, Fun fact=on, Stickers=1, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 0,
+      "funFactsEnabled": true,
+      "decorationQuota": 2,
+      "fontCombo": "travel-journal",
+      "file": "c32b4680b42109bd448e.webp",
+      "source": "Pointillés=on, Ratio image=0%, Fun fact=on, Stickers=2, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 0,
+      "funFactsEnabled": true,
+      "decorationQuota": 3,
+      "fontCombo": "travel-journal",
+      "file": "56dc2265a71ff1509c55.webp",
+      "source": "Pointillés=on, Ratio image=0%, Fun fact=on, Stickers=3, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 0,
+      "funFactsEnabled": true,
+      "decorationQuota": 4,
+      "fontCombo": "travel-journal",
+      "file": "7f1f5398f4e2e36c90a7.webp",
+      "source": "Pointillés=on, Ratio image=0%, Fun fact=on, Stickers=4, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 25,
+      "funFactsEnabled": false,
+      "decorationQuota": 0,
+      "fontCombo": "travel-journal",
+      "file": "838d862df2fdbf5b3454.webp",
+      "source": "Pointillés=on, Ratio image=25%, Fun fact=off, Stickers=0, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 25,
+      "funFactsEnabled": false,
+      "decorationQuota": 1,
+      "fontCombo": "travel-journal",
+      "file": "f6a64f474cb20fc39000.webp",
+      "source": "Pointillés=on, Ratio image=25%, Fun fact=off, Stickers=1, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 25,
+      "funFactsEnabled": false,
+      "decorationQuota": 2,
+      "fontCombo": "travel-journal",
+      "file": "3ae2dee914997e77ff6f.webp",
+      "source": "Pointillés=on, Ratio image=25%, Fun fact=off, Stickers=2, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 25,
+      "funFactsEnabled": false,
+      "decorationQuota": 3,
+      "fontCombo": "travel-journal",
+      "file": "e7c42b2de81f17eb1bf3.webp",
+      "source": "Pointillés=on, Ratio image=25%, Fun fact=off, Stickers=3, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 25,
+      "funFactsEnabled": false,
+      "decorationQuota": 4,
+      "fontCombo": "travel-journal",
+      "file": "e1ea1c0badbac9997c94.webp",
+      "source": "Pointillés=on, Ratio image=25%, Fun fact=off, Stickers=4, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 25,
+      "funFactsEnabled": true,
+      "decorationQuota": 0,
+      "fontCombo": "travel-journal",
+      "file": "0907e0230f3b39d8f2af.webp",
+      "source": "Pointillés=on, Ratio image=25%, Fun fact=on, Stickers=0, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 25,
+      "funFactsEnabled": true,
+      "decorationQuota": 1,
+      "fontCombo": "travel-journal",
+      "file": "e9f7c482da4291c60756.webp",
+      "source": "Pointillés=on, Ratio image=25%, Fun fact=on, Stickers=1, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 25,
+      "funFactsEnabled": true,
+      "decorationQuota": 2,
+      "fontCombo": "travel-journal",
+      "file": "aa91e6ad3097f4bf9bd2.webp",
+      "source": "Pointillés=on, Ratio image=25%, Fun fact=on, Stickers=2, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 25,
+      "funFactsEnabled": true,
+      "decorationQuota": 3,
+      "fontCombo": "travel-journal",
+      "file": "2e9c529ade0c2ab9e792.webp",
+      "source": "Pointillés=on, Ratio image=25%, Fun fact=on, Stickers=3, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 25,
+      "funFactsEnabled": true,
+      "decorationQuota": 4,
+      "fontCombo": "travel-journal",
+      "file": "7aacfe1f3cb4eec6a1c6.webp",
+      "source": "Pointillés=on, Ratio image=25%, Fun fact=on, Stickers=4, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 50,
+      "funFactsEnabled": false,
+      "decorationQuota": 0,
+      "fontCombo": "travel-journal",
+      "file": "42cabfd956b8ac83ecb3.webp",
+      "source": "Pointillés=on, Ratio image=50%, Fun fact=off, Stickers=0, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 50,
+      "funFactsEnabled": false,
+      "decorationQuota": 1,
+      "fontCombo": "travel-journal",
+      "file": "c3dfd4d307806aecea16.webp",
+      "source": "Pointillés=on, Ratio image=50%, Fun fact=off, Stickers=1, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 50,
+      "funFactsEnabled": false,
+      "decorationQuota": 2,
+      "fontCombo": "travel-journal",
+      "file": "4d0ea41b641758eb8d1d.webp",
+      "source": "Pointillés=on, Ratio image=50%, Fun fact=off, Stickers=2, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 50,
+      "funFactsEnabled": false,
+      "decorationQuota": 3,
+      "fontCombo": "travel-journal",
+      "file": "097a13975d8f8f27ceac.webp",
+      "source": "Pointillés=on, Ratio image=50%, Fun fact=off, Stickers=3, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 50,
+      "funFactsEnabled": false,
+      "decorationQuota": 4,
+      "fontCombo": "travel-journal",
+      "file": "43c3bc907a6a518d8320.webp",
+      "source": "Pointillés=on, Ratio image=50%, Fun fact=off, Stickers=4, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 50,
+      "funFactsEnabled": true,
+      "decorationQuota": 0,
+      "fontCombo": "travel-journal",
+      "file": "0ca82387f7a263e4e918.webp",
+      "source": "Pointillés=on, Ratio image=50%, Fun fact=on, Stickers=0, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 50,
+      "funFactsEnabled": true,
+      "decorationQuota": 1,
+      "fontCombo": "travel-journal",
+      "file": "8b838037cf05bec7463a.webp",
+      "source": "Pointillés=on, Ratio image=50%, Fun fact=on, Stickers=1, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 50,
+      "funFactsEnabled": true,
+      "decorationQuota": 2,
+      "fontCombo": "travel-journal",
+      "file": "5993259f3718f4ec060c.webp",
+      "source": "Pointillés=on, Ratio image=50%, Fun fact=on, Stickers=2, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 50,
+      "funFactsEnabled": true,
+      "decorationQuota": 3,
+      "fontCombo": "travel-journal",
+      "file": "0968c2abb79e0f19ba76.webp",
+      "source": "Pointillés=on, Ratio image=50%, Fun fact=on, Stickers=3, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 50,
+      "funFactsEnabled": true,
+      "decorationQuota": 4,
+      "fontCombo": "travel-journal",
+      "file": "838ecbd7a6607ae6b678.webp",
+      "source": "Pointillés=on, Ratio image=50%, Fun fact=on, Stickers=4, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 75,
+      "funFactsEnabled": false,
+      "decorationQuota": 0,
+      "fontCombo": "travel-journal",
+      "file": "8be3b5d7490029a0be2d.webp",
+      "source": "Pointillés=on, Ratio image=75%, Fun fact=off, Stickers=0, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 75,
+      "funFactsEnabled": false,
+      "decorationQuota": 1,
+      "fontCombo": "travel-journal",
+      "file": "0d2d31c03b3282322c58.webp",
+      "source": "Pointillés=on, Ratio image=75%, Fun fact=off, Stickers=1, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 75,
+      "funFactsEnabled": false,
+      "decorationQuota": 2,
+      "fontCombo": "travel-journal",
+      "file": "4a1031cc9bc7b71f2242.webp",
+      "source": "Pointillés=on, Ratio image=75%, Fun fact=off, Stickers=2, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 75,
+      "funFactsEnabled": false,
+      "decorationQuota": 3,
+      "fontCombo": "travel-journal",
+      "file": "62b9c56a5d2e100a0f8d.webp",
+      "source": "Pointillés=on, Ratio image=75%, Fun fact=off, Stickers=3, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 75,
+      "funFactsEnabled": false,
+      "decorationQuota": 4,
+      "fontCombo": "travel-journal",
+      "file": "d252ce4a06ba06202ae7.webp",
+      "source": "Pointillés=on, Ratio image=75%, Fun fact=off, Stickers=4, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 75,
+      "funFactsEnabled": true,
+      "decorationQuota": 0,
+      "fontCombo": "travel-journal",
+      "file": "efb8535e349d4cca0275.webp",
+      "source": "Pointillés=on, Ratio image=75%, Fun fact=on, Stickers=0, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 75,
+      "funFactsEnabled": true,
+      "decorationQuota": 1,
+      "fontCombo": "travel-journal",
+      "file": "463528964a71e126fc37.webp",
+      "source": "Pointillés=on, Ratio image=75%, Fun fact=on, Stickers=1, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 75,
+      "funFactsEnabled": true,
+      "decorationQuota": 2,
+      "fontCombo": "travel-journal",
+      "file": "7fcfd46ec60179b75ab3.webp",
+      "source": "Pointillés=on, Ratio image=75%, Fun fact=on, Stickers=2, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 75,
+      "funFactsEnabled": true,
+      "decorationQuota": 3,
+      "fontCombo": "travel-journal",
+      "file": "4a0af8e0af83267e1856.webp",
+      "source": "Pointillés=on, Ratio image=75%, Fun fact=on, Stickers=3, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 75,
+      "funFactsEnabled": true,
+      "decorationQuota": 4,
+      "fontCombo": "travel-journal",
+      "file": "0eee74345eeb313ecc84.webp",
+      "source": "Pointillés=on, Ratio image=75%, Fun fact=on, Stickers=4, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 100,
+      "funFactsEnabled": false,
+      "decorationQuota": 0,
+      "fontCombo": "travel-journal",
+      "file": "cbc6832299f673602e25.webp",
+      "source": "Pointillés=on, Ratio image=100%, Fun fact=off, Stickers=0, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 100,
+      "funFactsEnabled": false,
+      "decorationQuota": 1,
+      "fontCombo": "travel-journal",
+      "file": "d51022705bcc6929d9da.webp",
+      "source": "Pointillés=on, Ratio image=100%, Fun fact=off, Stickers=1, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 100,
+      "funFactsEnabled": false,
+      "decorationQuota": 2,
+      "fontCombo": "travel-journal",
+      "file": "3dd7aec6e0d40652ddbc.webp",
+      "source": "Pointillés=on, Ratio image=100%, Fun fact=off, Stickers=2, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 100,
+      "funFactsEnabled": false,
+      "decorationQuota": 3,
+      "fontCombo": "travel-journal",
+      "file": "53db9f6ad03864257454.webp",
+      "source": "Pointillés=on, Ratio image=100%, Fun fact=off, Stickers=3, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 100,
+      "funFactsEnabled": false,
+      "decorationQuota": 4,
+      "fontCombo": "travel-journal",
+      "file": "12842d9b680ccda53ffc.webp",
+      "source": "Pointillés=on, Ratio image=100%, Fun fact=off, Stickers=4, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 100,
+      "funFactsEnabled": true,
+      "decorationQuota": 0,
+      "fontCombo": "travel-journal",
+      "file": "cff5676199c4886e2807.webp",
+      "source": "Pointillés=on, Ratio image=100%, Fun fact=on, Stickers=0, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 100,
+      "funFactsEnabled": true,
+      "decorationQuota": 1,
+      "fontCombo": "travel-journal",
+      "file": "04de40f1a603b290ab7b.webp",
+      "source": "Pointillés=on, Ratio image=100%, Fun fact=on, Stickers=1, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 100,
+      "funFactsEnabled": true,
+      "decorationQuota": 2,
+      "fontCombo": "travel-journal",
+      "file": "b159871c67e051f0a9c9.webp",
+      "source": "Pointillés=on, Ratio image=100%, Fun fact=on, Stickers=2, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 100,
+      "funFactsEnabled": true,
+      "decorationQuota": 3,
+      "fontCombo": "travel-journal",
+      "file": "93939ed68e99e9aa46c0.webp",
+      "source": "Pointillés=on, Ratio image=100%, Fun fact=on, Stickers=3, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    },
+    {
+      "rulesEnabled": true,
+      "photoTextRatio": 100,
+      "funFactsEnabled": true,
+      "decorationQuota": 4,
+      "fontCombo": "travel-journal",
+      "file": "ed6985961586220e6014.webp",
+      "source": "Pointillés=on, Ratio image=100%, Fun fact=on, Stickers=4, Typos=Playfair Display - Hansley - Gloria Hallelujah.png"
+    }
+  ]
+}

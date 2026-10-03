@@ -3,6 +3,7 @@
 > L'image qui surmonte l'écran « Personnalisations » et se réactualise à chaque
 > réglage touché. Ce fichier dit **quelle image** afficher pour un état donné du
 > carnet, et rien d'autre : ni où elle est hébergée, ni comment elle s'anime.
+> L'hébergement et le manifeste que lit l'app : `assets/README.md`.
 
 Les visuels vivent dans `assets/illustrations/aperçu personnalisation/` :
 200 aperçus plus une image de repli. Chaque nom de fichier porte, en clair, la
