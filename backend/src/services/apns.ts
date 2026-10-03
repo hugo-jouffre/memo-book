@@ -35,7 +35,7 @@ export interface PushMessage {
   link: string | null;
   /**
    * Regroupe les notifications d'un même voyage dans le centre de
-   * notifications (`thread-id`). Celles du compte (vacances, essai) restent
+   * notifications (`thread-id`). Celles du compte (vacances, renouvellement) restent
    * entre elles.
    */
   threadId: string;
