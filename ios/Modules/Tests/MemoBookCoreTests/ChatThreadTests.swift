@@ -372,5 +372,118 @@ final class ChatThreadDecodingTests: XCTestCase {
         )
         XCTAssertEqual(receipt.turn, .replying(messageId: "m9"))
         XCTAssertEqual(receipt.messages.first?.seq, 9)
+        XCTAssertNil(receipt.dailyCredit, "Un serveur d'avant le crédit du jour : rien à compter.")
+        XCTAssertNil(update.dailyCredit)
+    }
+
+    // MARK: - Le crédit du jour et le bouton d'une bulle (03/10/2026)
+
+    /// Le crédit du jour voyage avec le fil, la suite du fil et le reçu — tel
+    /// que `services/dailyCredit.ts` le sert.
+    func testDecodesTheDailyCreditEverywhereItIsServed() throws {
+        let credit = """
+            "dailyCredit": { "isUnlimited": false, "limitMs": 300000, "usedMs": 120000,
+              "remainingMs": 180000, "textMsPerCharacter": 75, "warningRemainingMs": 30000,
+              "urgentRemainingMs": 5000, "day": "2026-10-03", "resetsAt": "2026-10-03T22:00:00.000Z" }
+            """
+        let thread = try JSONDecoder.memoBook.decode(
+            ChatThread.self,
+            from: Data((#"{ "id": "t", "title": "T", "context": { "tripId": "t" }, "# + credit + "}").utf8)
+        )
+        XCTAssertEqual(thread.dailyCredit?.remainingMs, 180_000)
+        XCTAssertEqual(thread.dailyCredit?.day, "2026-10-03")
+        XCTAssertNotNil(thread.dailyCredit?.resetsAt)
+
+        let update = try JSONDecoder.memoBook.decode(
+            ChatThreadUpdate.self,
+            from: Data(
+                (#"{ "messages": [], "suggestions": [], "turn": { "status": "idle" }, "now": "2026-10-03T10:00:00.000Z", "#
+                    + credit + "}").utf8
+            )
+        )
+        XCTAssertEqual(update.dailyCredit?.usedMs, 120_000)
+
+        let receipt = try JSONDecoder.memoBook.decode(
+            ChatTurnReceipt.self,
+            from: Data((#"{ "messages": [], "turn": { "status": "idle" }, "now": "2026-10-03T10:00:00.000Z", "# + credit + "}").utf8)
+        )
+        XCTAssertEqual(receipt.dailyCredit?.textMsPerCharacter, 75)
+    }
+
+    /// Un crédit illisible ne coûte jamais le fil : la barre ne compte pas,
+    /// le serveur tranche.
+    func testAnUnreadableCreditDoesNotBreakTheThread() throws {
+        let thread = try JSONDecoder.memoBook.decode(
+            ChatThread.self,
+            from: Data(#"{ "id": "t", "title": "T", "context": { "tripId": "t" }, "dailyCredit": "beaucoup" }"#.utf8)
+        )
+        XCTAssertNil(thread.dailyCredit)
+    }
+
+    /// Le bouton d'une bulle de MEMO : une clé optionnelle du message, jamais
+    /// un `body.kind` — un genre inconnu survit en `.unknown`, un bouton
+    /// illisible laisse la bulle intacte, et le message aller-retour le garde.
+    func testDecodesTheCallToActionOfABubble() throws {
+        let json = Data(
+            """
+            [
+              { "id": "a", "seq": 1, "author": "memo", "body": { "kind": "text", "text": "Quelle journée !" },
+                "sentAt": "2026-10-03T20:00:00.000Z",
+                "callToAction": { "id": "daily_credit_subscribe", "kind": "subscribe", "label": "Raconter sans limite",
+                                  "eyebrow": "Crédit du jour épuisé", "dismissible": true } },
+              { "id": "b", "seq": 2, "author": "memo", "body": { "kind": "text", "text": "Un jour." },
+                "sentAt": "2026-10-03T20:00:01.000Z",
+                "callToAction": { "id": "future", "kind": "open_map", "label": "Voir la carte" } },
+              { "id": "c", "seq": 3, "author": "memo", "body": { "kind": "text", "text": "Toujours là." },
+                "sentAt": "2026-10-03T20:00:02.000Z", "callToAction": { "kind": 42 } },
+              { "id": "d", "seq": 4, "author": "memo", "body": { "kind": "text", "text": "Sans bouton." },
+                "sentAt": "2026-10-03T20:00:03.000Z" }
+            ]
+            """.utf8)
+        let messages = try JSONDecoder.memoBook.decode([ChatMessage].self, from: json)
+
+        XCTAssertEqual(messages[0].callToAction, .dailyCreditSubscribe)
+        XCTAssertEqual(messages[1].callToAction?.kind, .unknown("open_map"))
+        XCTAssertEqual(messages[1].callToAction?.kind.isSupported, false)
+        XCTAssertTrue(messages[1].callToAction?.dismissible ?? false, "« Ignorer » par défaut.")
+        XCTAssertNil(messages[2].callToAction, "Un bouton illisible : la bulle reste, sans bouton.")
+        XCTAssertEqual(messages[2].spokenText, "Toujours là.")
+        XCTAssertNil(messages[3].callToAction)
+
+        let roundTrip = try JSONDecoder.memoBook.decode(
+            ChatMessage.self,
+            from: JSONEncoder.memoBook.encode(messages[0])
+        )
+        XCTAssertEqual(roundTrip.callToAction, .dailyCreditSubscribe)
+    }
+
+    /// « Ça me convient » ne rend plus que le souvenir : les étapes offertes
+    /// d'un ancien serveur sont ignorées.
+    func testAValidationIgnoresTheOldOfferedSteps() throws {
+        let json = Data(
+            """
+            { "entry": { "id": "e1", "memoId": "m", "kind": "audio", "status": "ready", "redactionStatus": "ready",
+                         "capturedAt": "2026-10-03T10:00:00.000Z", "createdAt": "2026-10-03T10:00:00.000Z" },
+              "offeredSteps": 3, "remainingSteps": 1 }
+            """.utf8)
+        let validation = try JSONDecoder.memoBook.decode(EntryValidation.self, from: json)
+        XCTAssertEqual(validation.entry.id, "e1")
+    }
+
+    /// Un tour qui attend le crédit de demain n'est ni envoyé, ni en échec.
+    func testWaitingForCreditIsNeitherSentNorFailed() {
+        let delivery = ChatDelivery.waitingForCredit(until: nil)
+        XCTAssertTrue(delivery.isWaitingForCredit)
+        XCTAssertFalse(delivery.hasFailed)
+        XCTAssertFalse(ChatDelivery.failed("non").isWaitingForCredit)
+    }
+
+    /// Un tour qui attend l'illimité n'attend pas demain, et n'a pas échoué.
+    func testWaitingForUnlimitedIsNeitherTomorrowNorFailed() {
+        let delivery = ChatDelivery.waitingForUnlimited
+        XCTAssertTrue(delivery.isWaitingForUnlimited)
+        XCTAssertFalse(delivery.isWaitingForCredit)
+        XCTAssertFalse(delivery.hasFailed)
+        XCTAssertFalse(ChatDelivery.waitingForCredit(until: nil).isWaitingForUnlimited)
     }
 }

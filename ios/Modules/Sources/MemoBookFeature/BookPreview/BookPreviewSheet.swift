@@ -4,8 +4,9 @@ import SwiftUI
 
 /// « Prévisualisation » : le carnet qu'on feuillette, **sans quitter l'offre**.
 ///
-/// C'est ce que les deux pastilles « Voir un aperçu » ouvrent — celle du
-/// paywall et celle de la feuille d'abonnement. Une feuille et non un écran
+/// C'est ce qu'ouvre la pastille « Voir un aperçu » du paywall — la feuille
+/// d'abonnement en portait une aussi, partie avec sa page « Comment ça
+/// fonctionne ? » (03/10/2026). Une feuille et non un écran
 /// poussé, et c'est tout le sujet : quelqu'un à qui l'on est en train de
 /// proposer un abonnement veut voir ce qu'il achète, puis **revenir à l'offre**.
 /// Un écran poussé l'aurait sorti du parcours de vente, et la flèche de retour

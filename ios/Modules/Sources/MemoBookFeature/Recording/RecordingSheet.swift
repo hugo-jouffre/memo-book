@@ -1,3 +1,4 @@
+import MemoBookCore
 import MemoBookDesign
 import MemoBookRecording
 import SwiftUI
@@ -19,26 +20,63 @@ import SwiftUI
 /// - la **flèche circulaire** jette ce qui vient d'être dit et recommence ;
 /// - les **deux barres** suspendent, pour reprendre son souffle ;
 /// - le **rond de fermeture** de la feuille abandonne tout.
+///
+/// **Le crédit du jour du voyage en cours** (Hugo, 03/10/2026) : le bandeau
+/// rouge doux se pose au-dessus du disque — à trente secondes de la limite,
+/// puis il pulse, et l'enregistrement s'arrête net à zéro (le vocal part, et
+/// la conversation s'ouvre dessus). Crédit déjà épuisé, le disque pâlit et le
+/// bandeau « Crédit du jour épuisé » mène à l'offre — la feuille se referme
+/// d'abord : une feuille ne s'empile pas sous un plein écran.
 struct RecordingSheet: View {
-    /// Le vocal, une fois terminé, et les niveaux relevés pendant qu'on
-    /// parlait. La feuille ne l'envoie nulle part : elle le rend, et c'est
-    /// l'écran qui l'a présentée qui décide de son sort — l'envoyer, et
-    /// l'emporter dans la conversation (``RecordingHandoff``).
-    let onFinish: (RecordedAudio, [Double]) -> Void
+    /// Le crédit du jour du voyage en cours, tel que l'accueil le tient.
+    let credit: DailyCredit?
 
-    @State private var model = RecordingModel()
+    /// Ce que fait le bandeau « épuisé » : ouvrir l'offre, **une fois la
+    /// feuille refermée**.
+    let onSubscribe: () -> Void
+
+    /// Le vocal, une fois terminé, les niveaux relevés pendant qu'on parlait,
+    /// et si c'est la limite du jour qui l'a coupé. La feuille ne l'envoie
+    /// nulle part : elle le rend, et c'est l'écran qui l'a présentée qui
+    /// décide de son sort — l'envoyer, et l'emporter dans la conversation
+    /// (``RecordingHandoff``).
+    let onFinish: (RecordedAudio, [Double], Bool) -> Void
+
+    @State private var model: RecordingModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Le bandeau « épuisé » a été touché : l'offre s'ouvrira quand la feuille
+    /// aura fini de descendre.
+    @State private var opensOfferOnClose = false
+
+    init(
+        credit: DailyCredit? = nil,
+        onSubscribe: @escaping () -> Void = {},
+        onFinish: @escaping (RecordedAudio, [Double], Bool) -> Void
+    ) {
+        self.credit = credit
+        self.onSubscribe = onSubscribe
+        self.onFinish = onFinish
+        _model = State(initialValue: RecordingModel(credit: credit))
+    }
 
     var body: some View {
         BrandSheet(
             "Enregistrement",
-            subtitle: "Enregistre tout ce que tu veux et MemoBook l’attribuera automatiquement",
+            subtitle: RecordingCopy.subtitle(for: model.currentCredit),
             titleAlignment: .centered,
             surface: .listening
         ) {
             VStack(spacing: MemoBookSpacing.m) {
                 if let message = model.errorMessage {
                     ErrorBanner(message: message)
+                }
+
+                // Au-dessus du disque, **dans la pile** : il se touche.
+                if let banner = model.creditBanner {
+                    DailyCreditBannerView(banner: banner, onSubscribe: openOffer)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                 }
 
                 RecordButton(
@@ -49,6 +87,8 @@ struct RecordingSheet: View {
                 ) {
                     Task { await toggle() }
                 }
+                // Pâli, pas désactivé : le toucher dit pourquoi rien ne s'ouvre.
+                .opacity(model.isCreditExhausted ? 0.45 : 1)
 
                 elapsed
                 BrandWaveform(live: model.levels, isDimmed: model.isPaused)
@@ -56,6 +96,7 @@ struct RecordingSheet: View {
                 secondaryControls
             }
             .frame(maxWidth: .infinity)
+            .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: bannerState)
         }
         // **On appuie une fois, pas deux.** « Commencer à enregistrer » est déjà
         // la décision de parler : demander un second appui sur le disque faisait
@@ -66,11 +107,42 @@ struct RecordingSheet: View {
         // C'est aussi ici qu'apparaît la demande d'accès au micro, à la première
         // ouverture. `start()` ne fait rien si l'enregistrement tourne déjà :
         // rouvrir la feuille ne peut pas en lancer deux.
-        .task { await model.start() }
+        .task {
+            // L'arrêt net rend le vocal comme « Envoyer » : il part, et la
+            // conversation s'ouvre dessus.
+            model.onLimitReached = { audio, levels in
+                dismiss()
+                onFinish(audio, levels, true)
+            }
+            await model.start()
+        }
         // Quitter la feuille au glissé, c'est renoncer : le micro se referme et
         // rien n'est gardé. Sans ça, l'enregistrement continuait de tourner
         // derrière un écran qu'on croyait avoir fermé.
-        .onDisappear { model.discard() }
+        .onDisappear {
+            model.discard()
+            if opensOfferOnClose {
+                opensOfferOnClose = false
+                onSubscribe()
+            }
+        }
+    }
+
+    /// « Crédit du jour épuisé » touché : la feuille descend, puis l'offre
+    /// monte en plein écran.
+    private func openOffer() {
+        opensOfferOnClose = true
+        dismiss()
+    }
+
+    /// L'état du bandeau sans son chiffre — ce sur quoi il s'anime.
+    private var bannerState: Int {
+        switch model.creditBanner {
+        case nil: 0
+        case .warning: 1
+        case .urgent: 2
+        case .exhausted: 3
+        }
     }
 
     /// Le geste du disque. Il ne referme la feuille que lorsqu'un vocal en
@@ -87,7 +159,7 @@ struct RecordingSheet: View {
         let levels = model.capturedLevels
         guard let audio = await model.toggle() else { return }
         dismiss()
-        onFinish(audio, levels)
+        onFinish(audio, levels, false)
     }
 
     /// Le chrono. Il n'apparaît qu'une fois qu'il y a quelque chose à compter :
@@ -187,10 +259,49 @@ struct RecordingSheet: View {
     }
 }
 
+/// Les textes de la feuille qui dépendent du crédit du jour.
+enum RecordingCopy {
+    /// Le sous-titre. « Enregistre tout ce que tu veux » ne se dit plus qu'à
+    /// un abonné : à un voyage qui a cinq minutes par jour, ce serait mentir
+    /// (Hugo, 03/10/2026).
+    ///
+    /// **Pas de chiffre** pour qui a encore du crédit (03/10/2026) : lu à
+    /// l'ouverture, il restait figé pendant que le bandeau, juste dessous,
+    /// compte à rebours — et « Il te reste 3 min 20 aujourd’hui, et MemoBook
+    /// l’attribuera » donnait à MemoBook le temps restant à ranger. C'est le
+    /// bandeau qui dit ce qui reste, à trente secondes de la limite.
+    static func subtitle(for credit: DailyCredit?) -> String {
+        guard let credit else { return storyline }
+        if credit.isUnlimited { return "Enregistre tout ce que tu veux et MemoBook l’attribuera automatiquement" }
+        if credit.isExhausted { return "Ce voyage a raconté ses \(DailyCreditCopy.duration(credit.limitMs)) du jour" }
+        return storyline
+    }
+
+    /// La promesse de la feuille : on raconte, MemoBook range — « l’ »
+    /// reprend la journée qu'on raconte.
+    static let storyline = "Raconte ta journée et MemoBook l’attribuera automatiquement"
+}
+
 #Preview("Enregistrement") {
     Color.clear
         .background(MemoBookColor.background)
         .sheet(isPresented: .constant(true)) {
-            RecordingSheet { _, _ in }
+            RecordingSheet(credit: ChatCreditFixture.fresh) { _, _, _ in }
+        }
+}
+
+#Preview("Enregistrement — crédit épuisé") {
+    Color.clear
+        .background(MemoBookColor.background)
+        .sheet(isPresented: .constant(true)) {
+            RecordingSheet(credit: ChatCreditFixture.exhausted) { _, _, _ in }
+        }
+}
+
+#Preview("Enregistrement — abonné") {
+    Color.clear
+        .background(MemoBookColor.background)
+        .sheet(isPresented: .constant(true)) {
+            RecordingSheet(credit: ChatCreditFixture.unlimited) { _, _, _ in }
         }
 }

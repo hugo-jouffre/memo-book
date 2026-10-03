@@ -138,6 +138,40 @@ final class TripTests: XCTestCase {
         XCTAssertEqual(TripProgress(memoryCount: 9, pageCount: 12, targetPageCount: 0).fraction, 0)
     }
 
+    // MARK: - Le crédit du jour (Hugo, 03/10/2026)
+
+    /// Le serveur sert le crédit sur chaque voyage **en cours** de l'accueil :
+    /// c'est celui que vise le vocal de l'accueil.
+    func testAnOngoingTripCarriesItsDailyCredit() throws {
+        let json = #"""
+        {
+          "id": "rome", "title": "Rome", "stage": "ongoing",
+          "stats": { "dayCount": 3, "distanceKilometres": 0, "photoCount": 0 },
+          "companions": [], "isPrintable": false,
+          "dailyCredit": { "isUnlimited": false, "limitMs": 300000, "usedMs": 270000, "remainingMs": 30000,
+                           "textMsPerCharacter": 75, "warningRemainingMs": 30000, "urgentRemainingMs": 5000,
+                           "day": "2026-10-03", "resetsAt": "2026-10-03T22:00:00.000Z" }
+        }
+        """#
+        let trip = try JSONDecoder.memoBook.decode(Trip.self, from: Data(json.utf8))
+        XCTAssertEqual(trip.dailyCredit?.remainingMs, 30_000)
+        XCTAssertEqual(trip.dailyCredit?.phase, .warning)
+    }
+
+    /// Un voyage passé, ou un serveur d'avant le crédit : pas de crédit, et le
+    /// voyage se décode comme avant.
+    func testATripWithoutCreditStillDecodes() throws {
+        let json = #"""
+        {
+          "id": "rome", "title": "Rome", "stage": "past",
+          "stats": { "dayCount": 3, "distanceKilometres": 0, "photoCount": 0 },
+          "companions": [], "isPrintable": true
+        }
+        """#
+        let trip = try JSONDecoder.memoBook.decode(Trip.self, from: Data(json.utf8))
+        XCTAssertNil(trip.dailyCredit)
+    }
+
     // MARK: - Fabriques
 
     private func makeFeed(_ trips: [Trip]) -> HomeFeed {

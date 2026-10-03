@@ -9,9 +9,8 @@ import Foundation
 /// utile à savoir : ce qui part maintenant, puis ce qui attend, puis ce qui
 /// vient d'arriver, puis l'absence de réseau.
 ///
-/// Les messages sont ici et non dans la vue, pour la même raison que les
-/// libellés du palier freemium sont dans ``FreemiumStatus`` : ils dépendent
-/// d'un état, et un état se teste.
+/// Les messages sont ici et non dans la vue : ils dépendent d'un état, et un
+/// état se teste.
 public enum HomeNotice: Equatable, Sendable {
     /// Pas de réseau, et rien en attente : on prévient que l'app continue de
     /// marcher, ce qui est l'information utile.

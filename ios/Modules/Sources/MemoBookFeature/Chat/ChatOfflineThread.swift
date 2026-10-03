@@ -16,6 +16,16 @@ extension ChatThread {
     /// un message perdu (`ios/CLAUDE.md`, « Le cache local »). L'écran dit
     /// qu'il est hors ligne, et le vrai fil revient avec le réseau.
     ///
+    /// **Le crédit du jour** suit le voyage tel que l'accueil l'a gardé
+    /// (``Trip/dailyCredit``) : dans le métro, la barre continue de compter
+    /// au lieu de laisser parler sans limite jusqu'à un refus. Passé sa
+    /// recharge, il repart **plein** (``DailyCredit/refreshed(now:calendar:)``,
+    /// 03/10/2026) plutôt que de ne plus rien dire : un fil ouvert le
+    /// lendemain dans l'avion coupe toujours à la limite, au lieu de laisser
+    /// dicter un vocal que le serveur refuserait chaque jour. Sans heure de
+    /// recharge — un cache d'avant —, on ne sait pas de quel jour il est : il
+    /// n'en dit rien.
+    ///
     /// - Parameter isNew: le voyage vient d'être créé et n'a rien raconté. Il
     ///   s'ouvre alors comme le serveur l'ouvrirait, sur la puce du contexte —
     ///   celle qu'un carnet neuf propose en premier (`SUGGESTION_SETS.opening`
@@ -52,7 +62,11 @@ extension ChatThread {
                 ]
                 : [],
             // Personne ne peut effacer un fil qu'on ne tient pas.
-            canClear: false
+            canClear: false,
+            dailyCredit: trip.dailyCredit.flatMap { credit in
+                guard credit.resetsAt != nil else { return nil }
+                return credit.refreshed(now: .now)
+            }
         )
     }
 }

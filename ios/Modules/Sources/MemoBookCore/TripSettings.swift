@@ -168,16 +168,21 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
     /// ``Wallet``). Elle apparaît ici parce que c'est là qu'on la remplit.
     public var walletBalance: Decimal
 
-    /// Les **limites de souvenirs** du compte — voir ``MemoryAllowance``.
+    /// Le **crédit du jour** de ce voyage, lu par ce compte — voir
+    /// ``DailyCredit``.
     ///
-    /// Elles appartiennent au compte comme la cagnotte, et elles voyagent ici
-    /// pour la même raison : c'est **le seul écran qui les montre** (Hugo,
-    /// 16/09/2026). Elles n'ont rien à faire sur l'accueil, où elles feraient
-    /// du bruit pour une limite que personne n'atteint.
+    /// Il appartient au voyage (5 minutes par jour, partagées entre les
+    /// co-voyageurs non abonnés), et `isUnlimited` dit si **celui qui lit** est
+    /// abonné. Les réglages en portent la ligne « Crédit du jour » : c'est
+    /// désormais le levier de l'abonnement, toujours visible pour un
+    /// non-abonné (Hugo, 03/10/2026).
     ///
-    /// Optionnelle le temps qu'un serveur plus ancien la serve : la ligne
-    /// disparaît alors, au lieu d'annoncer un budget inventé.
-    public var memory: MemoryAllowance?
+    /// **Une clé neuve**, et non l'ancienne `memory` remplie autrement : le
+    /// cache disque garde des réglages lus avant ce changement, et le
+    /// décodeur tolérant aurait relu ces limites de l'ancien modèle comme un
+    /// crédit plein inventé. Optionnel le temps qu'un serveur plus ancien le
+    /// serve : la ligne disparaît alors, au lieu d'annoncer un reste faux.
+    public var dailyCredit: DailyCredit?
 
     public var startDate: Date?
     public var endDate: Date?
@@ -263,7 +268,7 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
         tripId: String,
         name: String,
         walletBalance: Decimal = 0,
-        memory: MemoryAllowance? = nil,
+        dailyCredit: DailyCredit? = nil,
         startDate: Date? = nil,
         endDate: Date? = nil,
         narrationPace: NarrationPace? = nil,
@@ -283,7 +288,7 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
         self.tripId = tripId
         self.name = name
         self.walletBalance = walletBalance
-        self.memory = memory
+        self.dailyCredit = dailyCredit
         self.startDate = startDate
         self.endDate = endDate
         self.narrationPace = narrationPace

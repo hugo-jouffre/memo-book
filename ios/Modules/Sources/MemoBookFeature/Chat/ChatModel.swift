@@ -1,5 +1,6 @@
 import Foundation
 import MemoBookCore
+import MemoBookNetworking
 import MemoBookRecording
 import Observation
 import UIKit
@@ -87,6 +88,124 @@ public final class ChatModel {
     /// pendant une seconde — voir ``copy(_:)``.
     public private(set) var copiedMessageId: String?
 
+    // MARK: Le crédit du jour
+
+    /// **Le crédit du jour du voyage** (Hugo, 03/10/2026) — ``DailyCredit`` :
+    /// celui que le serveur a servi en dernier (``servedCredit``), rechargé si
+    /// minuit est passé depuis (``DailyCredit/refreshed(now:calendar:)``), et
+    /// **décompté ici** des tours partis d'ici que le serveur n'a pas encore
+    /// reçus (``unreceivedCosts``). Le serveur tranche, l'app prévient : ce
+    /// chiffre fait compter la barre pendant qu'on parle et pâlir le micro et
+    /// l'envoi quand il n'y a plus rien — jamais il ne décide seul.
+    ///
+    /// `nil` : on ne sait rien — un serveur d'avant, un fil local ouvert sans
+    /// souvenir du crédit. Le serveur refusera ce qui dépasse
+    /// (``ChatDelivery/waitingForCredit(until:)``) ; hors ligne, l'écran
+    /// plafonne quand même au crédit du catalogue (``credit``).
+    public var dailyCredit: DailyCredit? {
+        servedCredit?.refreshed(now: .now).consuming(unreceivedCosts.values.reduce(0, +))
+    }
+
+    /// **Le crédit servi**, et lui seul : le fil, une mise à jour, un reçu, un
+    /// refus — ou, sans réseau, le dernier qu'on a connu pour ce voyage. Les
+    /// estimations ne s'y mêlent jamais (03/10/2026) : un fil rouvert hors
+    /// ligne repart de ce chiffre-ci, moins ce qui attend dans la file, et
+    /// rouvrir dix fois ne décompte pas dix fois le même vocal.
+    private var servedCredit: DailyCredit?
+
+    /// Ce que coûte chaque tour parti d'ici que le serveur n'a **pas encore
+    /// reçu** — en vol, ou en file —, par identifiant de bulle. Le serveur le
+    /// comptera en le recevant : d'ici là, le crédit qu'il sert ne le contient
+    /// pas, et la barre ne doit pas promettre ce qu'il prendra. Un tour sort
+    /// d'ici à son reçu, à son refus, ou quand une lecture du fil le rend.
+    /// Un dictionnaire et non un total : le même tour vu deux fois — rouvert
+    /// depuis la file, renvoyé — ne coûte qu'une fois.
+    private var unreceivedCosts: [String: Int] = [:]
+
+    /// L'abonnement de la session, posé par l'écran : un achat fait passer en
+    /// illimité **tout de suite**, sans attendre que le serveur le redise —
+    /// ``SubscriptionSession/applied(to:)``.
+    var subscription: SubscriptionSession?
+
+    /// Le crédit qui fait foi à l'écran : celui du serveur, relu avec le
+    /// dernier geste de la session.
+    ///
+    /// **Hors ligne et sans rien savoir du crédit, le pot du catalogue**
+    /// (03/10/2026) : cinq minutes pleines, moins ce qui attend dans la file,
+    /// tant que la session ne sait pas le compte illimité — elle l'apprend
+    /// au lancement du cache de l'accueil, ou du profil. Ne rien compter
+    /// laissait dicter un vocal de six minutes, sans bandeau ni coupure, que
+    /// le serveur aurait refusé chaque jour ; plafonner à la limite ne retire
+    /// rien qu'une journée aurait laissé passer. En ligne, le serveur sert
+    /// toujours le sien : un serveur qui n'en sert pas ne compte pas, et
+    /// l'app non plus.
+    public var credit: DailyCredit? {
+        if let known = dailyCredit { return subscription?.applied(to: known) ?? known }
+        guard isOffline, thread != nil, subscription?.isUnlimited != true else { return nil }
+        return DailyCredit(resetsAt: RecordingOutbox.creditReturns(nil))
+            .consuming(unreceivedCosts.values.reduce(0, +))
+    }
+
+    /// Le bandeau « Crédit du jour épuisé » est demandé : on a touché le micro
+    /// ou le clavier pâlis. **Il passe, il ne reste pas** (recette du
+    /// 03/10/2026) : au repos, il s'efface après quelques secondes ou au geste
+    /// suivant — une puce, des photos, la croix —, et le crédit qui revient
+    /// l'emporte aussi. Voir ``showExhaustedNotice()``.
+    public private(set) var showsExhaustedNotice = false
+
+    /// Le retrait différé du bandeau « épuisé ».
+    private var exhaustedNoticeTimer: Task<Void, Never>?
+
+    /// Combien de temps le bandeau « épuisé » reste, une fois paru : de quoi
+    /// le lire et le toucher, pas de quoi encombrer le pied. Une variable pour
+    /// qu'un test n'attende pas cinq secondes.
+    var exhaustedNoticeLinger = Duration.seconds(5)
+
+    /// La phase du bandeau au dernier relevé, pour ne faire vibrer qu'à son
+    /// apparition — voir ``watchCredit()``.
+    private var lastRecordingPhase: DailyCredit.Phase = .calm
+
+    /// Le vocal que la limite vient de couper. Hors ligne, il n'y a pas de
+    /// reçu pour apporter la bulle de MEMO : l'app pose la sienne — voir
+    /// ``postLocalExhaustedNotice()``.
+    private var limitTurnId: String?
+
+    /// Le texte de la fiche qu'on corrige « à la main », tel qu'il était : le
+    /// serveur ne fait payer que ce qu'une correction **ajoute**.
+    private var editingOriginalText: String?
+
+    /// Ce qu'on a fait des boutons posés sous les bulles de MEMO — touché,
+    /// ignoré —, par identifiant de bulle. Retenu sur l'appareil
+    /// (``ChatCallToActionMemory``) : c'est l'état d'un geste, pas un fait du
+    /// récit.
+    public private(set) var callToActionStates: [String: ChatCallToActionState] = [:]
+    private let callToActionMemory: ChatCallToActionMemory
+
+    /// Le dernier crédit **servi** de chaque voyage, le temps que l'app vive :
+    /// un fil rouvert sans réseau dans le métro garde de quoi compter, au lieu
+    /// de laisser parler sans limite jusqu'à un refus. En mémoire seulement,
+    /// et jamais une estimation (``servedCredit``) : ce qui attend dans la
+    /// file se redécompte à chaque ouverture, depuis ce chiffre-ci.
+    ///
+    /// **Il appartient au compte qui l'a lu** (03/10/2026) : il porte son
+    /// `isUnlimited`. Oublié à chaque changement de compte —
+    /// ``forgetRememberedCredits()`` —, sans quoi le fil hors ligne de B,
+    /// connecté après A sur le même iPhone, se croyait illimité et apprenait
+    /// à la session un abonnement que B n'a jamais pris.
+    private static var rememberedCredits: [String: DailyCredit] = [:]
+
+    /// Oublie le dernier crédit servi de chaque voyage — à chaque changement
+    /// de compte, avec ce que l'app garde du compte qui s'en va
+    /// (``AppDependencies/forgetAccountContent()``), là même où la session
+    /// d'abonnement est remise à zéro.
+    public static func forgetRememberedCredits() {
+        rememberedCredits = [:]
+    }
+
+    /// Ce que le bandeau du crédit montre dans un aperçu, où le micro ne tourne
+    /// pas. Jamais posé hors de ``preview(thread:turn:composer:draft:microphoneIsDenied:focusStepId:dailyCredit:showsExhaustedNotice:creditBanner:)``.
+    private var previewCreditBanner: DailyCreditBanner?
+
     public var composer: ChatComposerMode = .tools
     public var draft: String = ""
 
@@ -142,9 +261,16 @@ public final class ChatModel {
     ///     moteur local des aperçus. Voir ``ChatTransport``.
     ///   - focusStepId: l'étape sur laquelle le fil s'ouvre, quand on vient
     ///     d'une carte d'étape.
-    public init(transport: ChatTransport, focusStepId: String? = nil) {
+    ///   - callToActionMemory: où retenir ce qu'on a fait des boutons des
+    ///     bulles — les réglages de l'appareil, sauf dans un test.
+    public init(
+        transport: ChatTransport,
+        focusStepId: String? = nil,
+        callToActionMemory: ChatCallToActionMemory = .standard
+    ) {
         self.transport = transport
         self.focusStepId = focusStepId
+        self.callToActionMemory = callToActionMemory
     }
 
     /// L'étape sur laquelle le fil s'est ouvert, quand on vient d'une carte
@@ -191,6 +317,21 @@ public final class ChatModel {
             thread = loaded
             cursor = loaded.now
             errorMessage = nil
+            // Ce que le serveur rend, il l'a reçu : son crédit le compte déjà.
+            if !isOffline { forgetCosts(of: loaded.messages) }
+            // Le crédit du serveur ; sans lui — un fil local —, **le plus
+            // avancé** de ce qu'on sait : le dernier servi ici pour ce voyage,
+            // et celui des caches de l'écran du voyage et de l'accueil, que le
+            // fil local porte (``DailyCredit/merged(with:)``, 03/10/2026). Le
+            // premier passait devant d'office : retenu à 9 h, il effaçait ce
+            // que l'accueil avait relu à 14 h après le vocal d'un co-voyageur.
+            // Rechargé à la lecture s'il date d'hier (``dailyCredit``).
+            setServerCredit(
+                isOffline
+                    ? Self.rememberedCredits[loaded.context.tripId]?.merged(with: loaded.dailyCredit)
+                        ?? loaded.dailyCredit
+                    : loaded.dailyCredit
+            )
 
             // Le serveur dit si un tour est encore en vol — on l'a quitté au
             // milieu d'une réponse, ou un co-voyageur vient de parler.
@@ -214,11 +355,18 @@ public final class ChatModel {
             for turn in await transport.waiting() where !messages.contains(where: { $0.id == turn.id }) {
                 keepLocalFiles(of: turn)
                 append(optimisticMessage(for: turn))
+                // Le serveur ne l'a pas encore compté : il le comptera en le
+                // recevant, et la barre ne doit pas promettre ce qu'il prendra.
+                // Sauf ce qui est retenu — demain, ou l'illimité : ce n'est pas
+                // le crédit d'aujourd'hui. Une attente échue, elle, ne retient
+                // plus : le tour partira aujourd'hui, il compte aujourd'hui.
+                if turn.isOnHold { unreceivedCosts[turn.id] = nil } else { expectCost(of: turn) }
             }
 
             // Et si la file a parlé pendant qu'on chargeait, on l'écoute
-            // maintenant — puis on l'écoute tout court.
-            if let latestDelivery { markDelivery(latestDelivery) }
+            // maintenant — puis on l'écoute tout court. Un mot déjà entendu
+            // avant cette lecture : son crédit ne passe pas devant elle.
+            if let latestDelivery { markDelivery(latestDelivery.replayed) }
             watchDeliveries()
         } catch {
             errorMessage = error.localizedDescription
@@ -274,8 +422,13 @@ public final class ChatModel {
 
     /// Les suggestions ne s'affichent qu'au repos. Un rail encore tapable
     /// pendant que MEMO réfléchit invite au double envoi.
+    ///
+    /// Crédit épuisé, « Raconter à l'oral » se tait (03/10/2026) : elle
+    /// n'armerait qu'un micro qui ne s'ouvre pas.
     public var visibleSuggestions: [ChatSuggestion] {
-        turn == .idle ? suggestions : []
+        guard turn == .idle else { return [] }
+        guard isCreditExhausted else { return suggestions }
+        return suggestions.filter { $0.intent != .sendThenSpeak }
     }
 
     /// La bande de suggestions **garde sa place** pendant le tour : ses puces
@@ -294,21 +447,208 @@ public final class ChatModel {
     private var railWasShowing = false
 
     public var canSendDraft: Bool {
-        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && isComposerEnabled
+        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && isComposerEnabled && !draftExceedsCredit
+    }
+
+    // MARK: - Le crédit du jour, à l'écran
+
+    /// Le crédit est épuisé pour aujourd'hui : le micro et le clavier
+    /// pâlissent — **sans se désactiver** (règle du design system) : les
+    /// toucher dit pourquoi. Jamais pour un abonné.
+    public var isCreditExhausted: Bool { credit?.isExhausted == true }
+
+    /// Ce que le brouillon coûterait au crédit : ses caractères, ou — pour
+    /// une fiche corrigée « à la main » — ce que la correction ajoute.
+    private var draftCost: Int {
+        guard let credit else { return 0 }
+        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let original = editingOriginalText else { return credit.cost(ofText: text) }
+        let growth = max(0, text.unicodeScalars.count - original.unicodeScalars.count)
+        return growth * credit.textMsPerCharacter
+    }
+
+    /// Le brouillon dépasse ce qu'il reste aujourd'hui : l'envoi pâlit, et une
+    /// boîte d'information dit combien de caractères il reste. Le serveur le
+    /// refuserait en entier — l'app l'en empêche avant (Hugo, 03/10/2026).
+    public var draftExceedsCredit: Bool {
+        guard let credit, !credit.isUnlimited else { return false }
+        return draftCost > credit.remainingMs
+    }
+
+    /// La boîte d'information au-dessus du champ, quand on écrit : le
+    /// brouillon est trop long (``DailyCreditCopy/textTooLong(charactersLeft:)``),
+    /// ou — plus discret — il reste moins d'une minute de crédit, et on dit
+    /// combien de caractères cela fait. `nil` le reste du temps, et toujours
+    /// pour un abonné.
+    public var creditTextNotice: ChatCreditTextNotice? {
+        guard composer == .writing, let credit, !credit.isUnlimited, !credit.isExhausted else { return nil }
+        if draftExceedsCredit {
+            return .tooLong(DailyCreditCopy.textTooLong(charactersLeft: credit.charactersLeft))
+        }
+        if credit.remainingMs < Self.characterReminderBelowMs {
+            return .reminder(ChatCopy.Credit.charactersLeft(credit.charactersLeft))
+        }
+        return nil
+    }
+
+    /// Sous une minute de crédit, le champ rappelle ce qu'il reste.
+    private static let characterReminderBelowMs = 60_000
+
+    /// Le bandeau rouge doux au-dessus de la barre — ``DailyCreditBanner`` :
+    /// pendant qu'on parle, le compte à rebours à partir de 30 secondes, qui
+    /// pulse sous 5 ; à l'arrêt, « Crédit du jour épuisé » quand on a touché
+    /// le micro ou le clavier pâlis, ou qu'on écrit. Rien pour un abonné.
+    public var creditBanner: DailyCreditBanner? {
+        if let previewCreditBanner { return previewCreditBanner }
+        guard let credit, !credit.isUnlimited else { return nil }
+        if recorder.isRecording {
+            return DailyCreditBanner.whileRecording(credit: credit, elapsedMs: recorder.elapsedMilliseconds)
+        }
+        guard credit.isExhausted, showsExhaustedNotice || composer == .writing else { return nil }
+        return .exhausted
+    }
+
+    /// Le micro ou le clavier pâlis ont été touchés : le bandeau « épuisé »
+    /// paraît, avec un retour haptique — on a voulu faire quelque chose, et
+    /// il se passe quelque chose.
+    ///
+    /// VoiceOver l'**annonce à chaque toucher** : le bandeau s'insère ailleurs
+    /// dans la pile, et sans annonce le micro resterait muet. Le bandeau
+    /// s'efface seul après quelques secondes — sauf sous VoiceOver, où il
+    /// faut le temps d'aller le toucher : il attend alors le geste suivant.
+    public func showExhaustedNotice() {
+        if !showsExhaustedNotice {
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+        }
+        showsExhaustedNotice = true
+        UIAccessibility.post(notification: .announcement, argument: ChatCopy.Credit.exhaustedAnnouncement)
+
+        exhaustedNoticeTimer?.cancel()
+        exhaustedNoticeTimer = nil
+        guard !UIAccessibility.isVoiceOverRunning else { return }
+        exhaustedNoticeTimer = Task { [weak self, linger = exhaustedNoticeLinger] in
+            try? await Task.sleep(for: linger)
+            guard !Task.isCancelled, let self else { return }
+            self.showsExhaustedNotice = false
+            self.exhaustedNoticeTimer = nil
+        }
+    }
+
+    /// Le geste suivant emporte le bandeau « épuisé ».
+    private func hideExhaustedNotice() {
+        exhaustedNoticeTimer?.cancel()
+        exhaustedNoticeTimer = nil
+        showsExhaustedNotice = false
+    }
+
+    /// Le micro de la barre au repos : il arme l'enregistrement, ou — crédit
+    /// épuisé — dit pourquoi il ne le fait pas.
+    public func tapMicrophone() {
+        guard !isCreditExhausted else {
+            showExhaustedNotice()
+            return
+        }
+        composer = .speaking
+        startRecording()
+    }
+
+    /// Le clavier de la barre au repos : il ouvre le champ, ou — crédit
+    /// épuisé — dit pourquoi écrire ne mènerait nulle part.
+    ///
+    /// - Returns: le champ s'est ouvert, et l'écran peut lui donner le clavier.
+    @discardableResult
+    public func tapKeyboard() -> Bool {
+        guard !isCreditExhausted else {
+            showExhaustedNotice()
+            return false
+        }
+        composer = .writing
+        return true
+    }
+
+    /// Un abonnement vient d'être pris : on relit le crédit du serveur —
+    /// la session a déjà basculé l'écran en illimité, le serveur le confirme.
+    public func refreshAfterSubscribing() {
+        hideExhaustedNotice()
+        refreshOnce()
+    }
+
+    /// **Le seul chemin du crédit servi** (03/10/2026) : le fil, une mise à
+    /// jour, un reçu, un refus. Retenu pour ce voyage, le temps que l'app
+    /// vive ; l'écran, lui, le lit décompté de ce qui n'est pas encore arrivé
+    /// (``dailyCredit``).
+    private func setServerCredit(_ served: DailyCredit?) {
+        servedCredit = served
+        if let served, let tripId = thread?.context.tripId {
+            Self.rememberedCredits[tripId] = served
+        }
+        // Le serveur dit « illimité » et la session ne le tenait pas de lui —
+        // un achat restauré, un abonnement pris sur un autre appareil, ou un
+        // achat que le serveur vient seulement d'apprendre : elle l'apprend,
+        // et ce qui attendait dans la file repart (``RootView``).
+        if served?.isUnlimited == true, let subscription, subscription.known != true {
+            subscription.learn(isUnlimited: true, hasSubscribedBefore: true)
+        }
+        if dailyCredit?.isExhausted != true { hideExhaustedNotice() }
+    }
+
+    /// Un tour part, ou se rouvre depuis la file : son coût attend le reçu.
+    private func expectCost(of turn: OutgoingTurn) {
+        unreceivedCosts[turn.id] = turn.creditCost(in: servedCredit ?? DailyCredit())
+    }
+
+    /// Le serveur a ces bulles : leur coût est dans son crédit, plus dans le
+    /// nôtre.
+    private func forgetCosts(of messages: [ChatMessage]) {
+        for message in messages { unreceivedCosts[message.id] = nil }
+    }
+
+    /// Le crédit d'un mot **rejoué** par la file (03/10/2026) : le reçu ou le
+    /// refus du dernier tour parti de cet appareil, qu'elle redonne à chaque
+    /// fil qui s'ouvre. Il ne remplace pas ce que le fil vient de lire —
+    /// rejoué à 15 h, le reçu de 10 h rendait 4:00 à qui n'avait plus que
+    /// 0:30, et un vocal de 2:00 partait sans avertissement vers un refus.
+    ///
+    /// Un reçu plus ancien que la dernière lecture (`servedAt` avant
+    /// `lastRead`, deux heures du serveur) ne dit rien de neuf : ignoré.
+    /// Sinon — un refus, qui n'a pas d'heure ; un fil local, qui n'a pas lu le
+    /// serveur —, il se fond dans le crédit tenu (``DailyCredit/merged(with:)``)
+    /// : le jour le plus tardif, le plus consommé. Un refus d'aujourd'hui dit
+    /// toujours « épuisé », un reçu d'hier ne dit plus rien.
+    private func takeReplayedCredit(_ replayed: DailyCredit?, servedAt: Date? = nil, before lastRead: Date? = nil) {
+        guard let replayed else { return }
+        if let servedAt, let lastRead, servedAt < lastRead { return }
+        setServerCredit(servedCredit.map { $0.merged(with: replayed) } ?? replayed)
+    }
+
+    /// Le serveur a dit « plus rien aujourd'hui » : son solde s'il l'a rendu,
+    /// sinon le dernier qu'il a servi, vidé.
+    private func exhaustCredit(with served: DailyCredit?) {
+        if let served {
+            setServerCredit(served)
+        } else if var known = servedCredit?.refreshed(now: .now) {
+            known.usedMs = known.limitMs
+            setServerCredit(known)
+        }
     }
 
     // MARK: - Envoyer
 
     public func sendDraft() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
+        // Trop long pour ce qu'il reste aujourd'hui : le serveur le refuserait
+        // en entier. Le brouillon reste, la boîte d'information dit pourquoi.
+        guard !text.isEmpty, !draftExceedsCredit else { return }
+        let cost = draftCost
+        let original = editingOriginalText
         draft = ""
         isEditingTranscript = false
+        editingOriginalText = nil
 
         // « À la main » : la correction va au souvenir, pas dans le fil.
         if let entryId = editingEntryId {
             editingEntryId = nil
-            submitTranscriptEdit(entryId: entryId, text: text)
+            submitTranscriptEdit(entryId: entryId, text: text, original: original, growthCost: cost)
             return
         }
 
@@ -328,6 +668,8 @@ public final class ChatModel {
         draft = ""
         isEditingTranscript = false
         editingEntryId = nil
+        editingOriginalText = nil
+        hideExhaustedNotice()
         composer = .tools
     }
 
@@ -350,6 +692,8 @@ public final class ChatModel {
         addPhotos: () -> Void,
         openPreview: () -> Void = {}
     ) {
+        // Une puce est le geste suivant : le bandeau « épuisé » s'en va.
+        hideExhaustedNotice()
         switch suggestion.intent {
         case .importPhotos:
             addPhotos()
@@ -374,11 +718,15 @@ public final class ChatModel {
                 draft = text
                 isEditingTranscript = true
                 editingEntryId = card.entryId
+                editingOriginalText = text
             }
             composer = .writing
             send(.text(suggestion.label, suggestionId: suggestion.id))
         case .sendThenSpeak:
-            composer = .speaking
+            // Crédit épuisé, elle est cachée ; et si elle part quand même — une
+            // puce en vol au moment où le crédit tombe —, elle n'arme pas un
+            // micro qui ne s'ouvrirait pas.
+            composer = isCreditExhausted ? .tools : .speaking
             send(.text(suggestion.label, suggestionId: suggestion.id))
         }
     }
@@ -427,8 +775,20 @@ public final class ChatModel {
             body: body,
             sentAt: .now,
             stepId: outgoing.stepId,
-            delivery: .sending
+            delivery: Self.delivery(of: outgoing)
         )
+    }
+
+    /// Ce qui attend le crédit de demain, ou l'illimité, le dit dès
+    /// l'ouverture du fil. Une attente **échue** — refusé hier soir, rouvert
+    /// ce matin — ne dit plus « Partira demain » : le tour partira à la
+    /// reconnexion, il est « en cours d'envoi » (03/10/2026).
+    private static func delivery(of outgoing: OutgoingTurn) -> ChatDelivery {
+        if outgoing.waitingForUnlimited { return .waitingForUnlimited }
+        if outgoing.isWaitingForCredit(), let until = outgoing.waitingForCreditUntil {
+            return .waitingForCredit(until: until)
+        }
+        return .sending
     }
 
     /// Les fichiers écrits dans les caches pour ce qu'on vient d'envoyer, par
@@ -491,6 +851,10 @@ public final class ChatModel {
 
     private func start(_ outgoing: OutgoingTurn) {
         pending = outgoing
+        // Décompté **ici**, sans attendre le reçu : hors ligne, il n'y en aura
+        // pas avant longtemps, et la barre doit savoir ce qui reste pour le
+        // prochain vocal. Le reçu remettra le chiffre du serveur.
+        expectCost(of: outgoing)
         exchange?.cancel()
         exchange = Task { await run(outgoing) }
     }
@@ -517,17 +881,50 @@ public final class ChatModel {
             switch outcome {
             case .received(let receipt):
                 accept(receipt, for: outgoing.id)
+                if limitTurnId == outgoing.id { limitTurnId = nil }
             case .queued:
                 // Le tour attend le réseau sur le disque. Ce n'est pas un
                 // échec : la bulle reste « en cours d'envoi », le composeur se
                 // rouvre, et c'est la file qui la terminera — par son
                 // identifiant, voir ``markDelivery(_:)``.
                 turn = .idle
+                // Le vocal que la limite a coupé, parti dans la file : pas de
+                // reçu pour apporter la bulle de MEMO, l'app pose la sienne.
+                if limitTurnId == outgoing.id {
+                    limitTurnId = nil
+                    postLocalExhaustedNotice()
+                }
             }
         } catch is CancellationError {
             // L'écran s'est refermé, ou un nouveau tour a démarré. Rien à dire.
             turn = .idle
+        } catch let error as APIError
+            where error.isDailyCreditTooLong
+            || (error.isDailyCreditExhausted && RecordingOutbox.neverFitsADay(outgoing, refusal: error.dailyCredit))
+        {
+            // Plus long qu'une journée de crédit : demain n'y changerait rien.
+            // La bulle propose l'illimité, comme la file la ferait attendre.
+            pending = nil
+            unreceivedCosts[outgoing.id] = nil
+            if let served = error.dailyCredit { setServerCredit(served) }
+            mark(outgoing.id, as: .waitingForUnlimited)
+            turn = .idle
+        } catch let error as APIError where error.isDailyCreditExhausted {
+            // Un transport sans file — les aperçus — rend le refus tel quel.
+            // Ce n'est pas un échec à réessayer : la bulle attend demain,
+            // comme la file la ferait attendre.
+            pending = nil
+            unreceivedCosts[outgoing.id] = nil
+            exhaustCredit(with: error.dailyCredit)
+            mark(outgoing.id, as: .waitingForCredit(until: RecordingOutbox.creditReturns(error.dailyCredit?.resetsAt)))
+            turn = .idle
+            if limitTurnId == outgoing.id {
+                limitTurnId = nil
+                postLocalExhaustedNotice()
+            }
+            refreshOnce()
         } catch {
+            unreceivedCosts[outgoing.id] = nil
             mark(outgoing.id, as: .failed(error.localizedDescription))
             turn = .failed(messageId: outgoing.id, message: error.localizedDescription)
         }
@@ -541,10 +938,25 @@ public final class ChatModel {
     /// Le curseur ne recule jamais : un reçu arrivé en retard — un tour parti
     /// de la file après une lecture plus récente — ne fait pas relire ce qu'on
     /// a déjà.
-    private func accept(_ receipt: ChatTurnReceipt, for id: String) {
+    ///
+    /// - Parameter isReplay: le reçu vient d'un mot **rejoué** par la file —
+    ///   le dernier tour parti de cet appareil, peut-être ce matin. Voir
+    ///   ``takeReplayedCredit(_:servedAt:before:)``.
+    private func accept(_ receipt: ChatTurnReceipt, for id: String, isReplay: Bool = false) {
         merge(receipt.messages)
         mark(id, as: .sent)
+        let lastRead = cursor
         cursor = max(cursor ?? .distantPast, receipt.now)
+        // Le crédit **après** ce tour, tel que le serveur l'a compté — il
+        // remplace l'estimation faite à l'envoi, et ne garde que celle des
+        // tours qu'il n'a pas encore reçus.
+        unreceivedCosts[id] = nil
+        forgetCosts(of: receipt.messages)
+        if isReplay {
+            takeReplayedCredit(receipt.dailyCredit, servedAt: receipt.now, before: lastRead)
+        } else if let credit = receipt.dailyCredit {
+            setServerCredit(credit)
+        }
 
         if receipt.turn.isReplying {
             turn = .thinking
@@ -645,6 +1057,12 @@ public final class ChatModel {
         }
 
         if let preview = update.preview { thread?.preview = preview }
+        // Ce qu'un co-voyageur vient de raconter a pu entamer le pot commun.
+        // Le chiffre servi ne compte pas ce qui est encore en route d'ici —
+        // un vocal qui monte en 3G, un tour en file : ``dailyCredit`` le
+        // retire toujours, la barre ne remonte pas d'autant.
+        forgetCosts(of: update.messages)
+        if let credit = update.dailyCredit { setServerCredit(credit) }
         // Posé **après** les bulles : la pastille se remplit au moment où MEMO
         // dit ce qu'il a compris, pas avant qu'il l'ait dit.
         if let tripContext = update.tripContext, tripContext != thread?.tripContext {
@@ -684,6 +1102,11 @@ public final class ChatModel {
 
     private func insert(_ message: ChatMessage) {
         guard var thread else { return }
+        // La bulle « reviens demain » du serveur remplace celle que l'app
+        // avait posée hors ligne : une seule, et la vraie.
+        if message.callToAction?.id == ChatCallToAction.dailyCreditSubscribe.id {
+            thread.messages.removeAll { $0.id.hasPrefix(Self.localNoticePrefix) && $0.id != message.id }
+        }
         thread.messages.append(message)
         thread.messages.sort(by: Self.byRank)
         self.thread = thread
@@ -706,7 +1129,13 @@ public final class ChatModel {
     /// La correction part au souvenir ; la fiche se redessine avec elle ; puis
     /// une commande silencieuse fait accuser réception à MEMO — sans modèle,
     /// sans souvenir de plus.
-    private func submitTranscriptEdit(entryId: String, text: String) {
+    ///
+    /// **Un refus garde le brouillon** (03/10/2026) : le champ a été vidé à
+    /// l'envoi, et un `429` — un co-voyageur a raconté entre-temps — ou une
+    /// panne le remettent sous les doigts, tel qu'il était, avec la fiche
+    /// qu'il corrige. Jamais une correction tapée ne se perd parce que le
+    /// serveur a dit non.
+    private func submitTranscriptEdit(entryId: String, text: String, original: String?, growthCost: Int = 0) {
         exchange?.cancel()
         turn = .sending(messageId: entryId)
         exchange = Task {
@@ -714,11 +1143,27 @@ public final class ChatModel {
                 let entry = try await transport.editTranscript(entryId, text)
                 try Task.checkCancellation()
                 refreshCard(for: entry)
+                // Ce que la correction ajoute se paie, comme un texte — et le
+                // serveur l'a déjà compté : c'est son chiffre, pas une attente.
+                if growthCost > 0, let served = servedCredit {
+                    setServerCredit(served.refreshed(now: .now).consuming(growthCost))
+                }
                 turn = .idle
                 send(.text(ChatCopy.editedByHand, suggestionId: "transcript_edited", entryId: entryId))
             } catch is CancellationError {
                 turn = .idle
             } catch {
+                if let apiError = error as? APIError, apiError.isDailyCreditExhausted {
+                    exhaustCredit(with: apiError.dailyCredit)
+                }
+                // Le brouillon revient — sauf si l'on s'est déjà remis à écrire.
+                if draft.isEmpty {
+                    draft = text
+                    editingEntryId = entryId
+                    editingOriginalText = original
+                    isEditingTranscript = true
+                    composer = .writing
+                }
                 errorMessage = error.localizedDescription
                 turn = .idle
             }
@@ -777,6 +1222,17 @@ public final class ChatModel {
             return
         }
 
+        // Le serveur ne l'a pas encore compté : la barre le décompte d'avance.
+        // Coupé par la limite, il a vidé le crédit — et sans réseau, aucun
+        // reçu n'apportera la bulle de MEMO : l'app pose la sienne.
+        let spent = Int((handoff.audio.duration * 1000).rounded())
+        unreceivedCosts[handoff.id] =
+            handoff.stoppedAtLimit ? max(spent, servedCredit?.limitMs ?? spent) : spent
+        if handoff.stoppedAtLimit {
+            limitTurnId = handoff.id
+            if isOffline { postLocalExhaustedNoticeAfterHandoff = true }
+        }
+
         append(
             ChatMessage(
                 id: handoff.id,
@@ -794,7 +1250,17 @@ public final class ChatModel {
                 delivery: .sending
             )
         )
+        // Après la bulle du vocal, et pas avant : MEMO répond à ce qu'on a dit.
+        if postLocalExhaustedNoticeAfterHandoff {
+            postLocalExhaustedNoticeAfterHandoff = false
+            limitTurnId = nil
+            postLocalExhaustedNotice()
+        }
     }
+
+    /// Le vocal de l'accueil a été coupé par la limite, sans réseau : la bulle
+    /// « reviens demain » se pose juste après lui.
+    private var postLocalExhaustedNoticeAfterHandoff = false
 
     /// Ce que la file dit d'un tour — le vocal de l'accueil, ou un message
     /// d'ici qui attendait le réseau. La bulle suit **la file**, pas l'écran :
@@ -813,16 +1279,46 @@ public final class ChatModel {
         case .sending:
             mark(delivery.id, as: .sending)
         case .failed(let message):
+            unreceivedCosts[delivery.id] = nil
             mark(delivery.id, as: .failed(message))
+        case .waitingForUnlimited:
+            // Plus long qu'une journée : la bulle propose l'illimité. Le crédit
+            // d'aujourd'hui n'est pas pour autant épuisé — le solde rendu le dit.
+            unreceivedCosts[delivery.id] = nil
+            mark(delivery.id, as: .waitingForUnlimited)
+            if delivery.isReplay {
+                takeReplayedCredit(delivery.credit)
+            } else if let served = delivery.credit {
+                setServerCredit(served)
+            }
+        case .waitingForCredit(let until):
+            // Refusé faute de crédit : la bulle attend demain, la barre passe à
+            // « épuisé », et la bulle « reviens demain » que le serveur vient
+            // de poser se lit tout de suite. Rejoué à l'ouverture d'un fil, le
+            // refus ne fait que se fondre dans ce que le fil vient de lire.
+            unreceivedCosts[delivery.id] = nil
+            mark(delivery.id, as: .waitingForCredit(until: until))
+            if delivery.isReplay {
+                takeReplayedCredit(delivery.credit)
+            } else {
+                exhaustCredit(with: delivery.credit)
+            }
+            if limitTurnId == delivery.id {
+                limitTurnId = nil
+                if isOffline { postLocalExhaustedNotice() }
+            }
+            if !delivery.isReplay { refreshOnce() }
         case .sent:
             if let receipt = delivery.receipt {
-                accept(receipt, for: delivery.id)
+                accept(receipt, for: delivery.id, isReplay: delivery.isReplay)
             } else {
+                unreceivedCosts[delivery.id] = nil
                 mark(delivery.id, as: .sent)
             }
             // Un message est arrivé : le serveur répond, et il connaît le
-            // voyage. Le fil local cède la place au vrai.
-            if isOffline { reloadFromServer() }
+            // voyage. Le fil local cède la place au vrai. Pas sur un mot
+            // rejoué : il date d'avant la lecture qui vient d'échouer.
+            if isOffline, !delivery.isReplay { reloadFromServer() }
         }
     }
 
@@ -864,20 +1360,11 @@ public final class ChatModel {
         }
     }
 
-    /// Les étapes offertes sont épuisées : le micro ne s'ouvre plus, il mène au
-    /// paywall — voir ``SubscriptionSession/isBlocked``. Posé par l'écran, qui
-    /// seul connaît la session.
-    public var isRecordingLocked = false
-
-    /// Ce que fait le micro quand il est verrouillé : l'écran y ouvre le
-    /// paywall.
-    public var onRecordingLocked: (() -> Void)?
-
     public func startRecording() {
-        // Le verrou passe avant tout : ni micro, ni niveaux, ni permission
-        // demandée pour rien.
-        if isRecordingLocked {
-            onRecordingLocked?()
+        // Plus de crédit aujourd'hui : ni micro, ni niveaux, ni permission
+        // demandée pour rien — le bandeau dit pourquoi.
+        guard !isCreditExhausted else {
+            showExhaustedNotice()
             return
         }
         guard !recorder.isRecording else { return }
@@ -886,6 +1373,7 @@ public final class ChatModel {
             do {
                 try await recorder.start()
                 microphoneIsDenied = false
+                lastRecordingPhase = .calm
                 startSamplingLevels()
             } catch RecordingError.permissionDenied {
                 microphoneIsDenied = true
@@ -896,12 +1384,19 @@ public final class ChatModel {
     }
 
     public func finishRecording() {
+        finishRecording(atLimit: false)
+    }
+
+    /// - Parameter atLimit: c'est la limite du jour qui coupe, pas le
+    ///   voyageur — voir ``stopAtLimit()``.
+    private func finishRecording(atLimit: Bool) {
         levelSampler?.cancel()
         let levels = capturedLevels
 
         do {
             guard let audio = try recorder.stop() else { return }
             let id = UUID().uuidString.lowercased()
+            if atLimit { limitTurnId = id }
 
             // `AudioRecorder.stop()` efface son fichier temporaire et ne rend
             // que des octets : sans cette écriture, le vocal ne serait plus
@@ -950,6 +1445,11 @@ public final class ChatModel {
     /// Onze relevés par seconde : assez pour dessiner le grain d'une voix,
     /// assez peu pour qu'un vocal de trois minutes reste un tableau de deux
     /// mille valeurs.
+    ///
+    /// La même boucle **guette le crédit du jour** : c'est elle qui fait vibrer
+    /// le bandeau à son apparition et qui coupe net à zéro — voir
+    /// ``watchCredit()``. 90 ms de grain : le serveur tolère trois secondes
+    /// au-delà du reste (`VOICE_TOLERANCE_MS`), la coupure tombe bien avant.
     private func startSamplingLevels(resetting: Bool = true) {
         if resetting { capturedLevels = [] }
         levelSampler = Task { [weak self] in
@@ -957,8 +1457,44 @@ public final class ChatModel {
                 try? await Task.sleep(for: .milliseconds(90))
                 guard let self, self.recorder.isRecording, !self.recorder.isPaused else { return }
                 self.capturedLevels.append(self.recorder.level)
+                self.watchCredit()
             }
         }
+    }
+
+    /// Ce que le crédit du jour fait à l'enregistrement en cours, à chaque
+    /// relevé : un léger retour haptique et une annonce VoiceOver quand le
+    /// bandeau paraît (30 s), un second quand il se met à pulser (5 s), et
+    /// l'**arrêt net** à zéro. Rien pour un abonné, rien sans crédit connu.
+    private func watchCredit() {
+        guard let credit, !credit.isUnlimited, recorder.isCapturing else { return }
+        let remaining = credit.remainingMs(whileRecording: recorder.elapsedMilliseconds)
+        let phase = credit.phase(remainingMs: remaining)
+        guard phase != lastRecordingPhase else { return }
+        lastRecordingPhase = phase
+
+        switch phase {
+        case .calm:
+            break
+        case .warning:
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            UIAccessibility.post(notification: .announcement, argument: DailyCreditCopy.warning(remainingMs: remaining))
+        case .urgent:
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        case .exhausted:
+            stopAtLimit()
+        }
+    }
+
+    /// **L'arrêt net**, à zéro (Hugo, 03/10/2026) : ce qui a été dit **part**
+    /// — jamais on ne jette la fin d'un récit parce que la minute est passée.
+    /// Le serveur répond avec sa bulle « reviens demain » dans le reçu ; hors
+    /// ligne, l'app pose la sienne (``postLocalExhaustedNotice()``).
+    private func stopAtLimit() {
+        guard recorder.isRecording else { return }
+        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+        UIAccessibility.post(notification: .announcement, argument: ChatCopy.Credit.stoppedAnnouncement)
+        finishRecording(atLimit: true)
     }
 
     // MARK: - Les commandes d'un message
@@ -1150,6 +1686,7 @@ public final class ChatModel {
     /// à chaque photo, et les perdrait au premier retour d'arrière-plan.
     public func sendPhotos(_ images: [Data]) {
         guard !images.isEmpty else { return }
+        hideExhaustedNotice()
         let id = UUID().uuidString.lowercased()
 
         var uploads: [ChatPhotoUpload] = []
@@ -1174,12 +1711,119 @@ public final class ChatModel {
     /// corrige le souvenir. Sur une bulle de texte, c'est un nouveau message.
     public func edit(_ message: ChatMessage) {
         guard let text = message.spokenText else { return }
+        hideExhaustedNotice()
         draft = text
         if case .transcript(let card) = message.body {
             isEditingTranscript = true
             editingEntryId = card.entryId
+            editingOriginalText = text
         }
         composer = .writing
+    }
+
+    // MARK: - Le bouton sous une bulle de MEMO
+
+    /// Le bouton d'une bulle se montre-t-il ? Jamais pour un genre que cette
+    /// version ne sait pas ouvrir ; et « s'abonner » pas à qui l'est déjà —
+    /// le serveur le taira à la prochaine lecture, l'écran n'attend pas.
+    public func showsCallToAction(_ callToAction: ChatCallToAction?) -> Bool {
+        guard let callToAction, callToAction.kind.isSupported else { return false }
+        if callToAction.kind == .subscribe, credit?.isUnlimited == true || subscription?.isUnlimited == true {
+            return false
+        }
+        return true
+    }
+
+    /// Où en est le bouton d'une bulle : rien encore, touché, ignoré.
+    public func callToActionState(for messageId: String) -> ChatCallToActionState {
+        if let known = callToActionStates[messageId] { return known }
+        return callToActionMemory.state(for: messageId)
+    }
+
+    /// Le bouton a été touché — l'écran a ouvert ce qu'il ouvre. Il passe au
+    /// bleu, « Ignorer » s'en va, et c'est retenu.
+    public func followCallToAction(of messageId: String) {
+        remember(.followed, for: messageId)
+    }
+
+    /// « Ignorer » : le bouton et « Ignorer » s'en vont, la bulle redevient une
+    /// bulle — et le reste.
+    public func dismissCallToAction(of messageId: String) {
+        remember(.dismissed, for: messageId)
+    }
+
+    private func remember(_ state: ChatCallToActionState, for messageId: String) {
+        callToActionStates[messageId] = state
+        callToActionMemory.remember(state, for: messageId)
+    }
+
+    // MARK: - Supprimer un tour qui attend l'illimité
+
+    /// « Supprimer », sous une bulle « Trop long pour une journée », une fois
+    /// confirmé (03/10/2026) : sans abonnement, rien ne la ferait jamais
+    /// partir. Le tour quitte la file — fiche et fichiers — et la bulle le
+    /// fil. Jamais une autre bulle : un tour qui part, ou qui attend le
+    /// réseau, ne se supprime pas d'ici.
+    public func discardWaitingTurn(_ id: String) {
+        guard let message = messages.first(where: { $0.id == id }), message.delivery.isWaitingForUnlimited else { return }
+        thread?.messages.removeAll { $0.id == id }
+        unreceivedCosts[id] = nil
+        if pending?.id == id { pending = nil }
+        Task { [transport] in _ = await transport.discard(id) }
+    }
+
+    // MARK: - La bulle « reviens demain », hors ligne
+
+    /// Le début de l'identifiant d'une bulle « reviens demain » posée par
+    /// l'app — jamais par le serveur, qui tire des UUID.
+    static let localNoticePrefix = "local-daily-credit-"
+
+    /// Pose la bulle « reviens demain » **sans le serveur** : la limite vient
+    /// de couper un vocal parti dans la file, et aucun reçu n'apportera celle
+    /// de MEMO. Le même texte et le même bouton que le serveur
+    /// (``DailyCreditCopy/exhaustedMessage``, ``ChatCallToAction/dailyCreditSubscribe``)
+    /// ; **jamais gardée** — le vrai fil la remplace au retour du réseau, et la
+    /// bulle du serveur la chasse dès qu'elle arrive (``insert(_:)``).
+    ///
+    /// Une par jour : l'identifiant porte le jour du crédit, pour qu'un
+    /// « Ignorer » d'hier ne fasse pas disparaître le bouton de demain.
+    private func postLocalExhaustedNotice() {
+        guard thread != nil, !hasExhaustedNoticeToday else { return }
+        let day = credit?.day ?? Self.localDay(.now)
+        append(
+            ChatMessage(
+                id: Self.localNoticePrefix + day,
+                author: .memo,
+                body: .text(DailyCreditCopy.exhaustedMessage),
+                sentAt: .now,
+                callToAction: .dailyCreditSubscribe
+            )
+        )
+    }
+
+    /// Le fil porte déjà une bulle « reviens demain » d'aujourd'hui.
+    private var hasExhaustedNoticeToday: Bool {
+        messages.contains {
+            $0.callToAction?.id == ChatCallToAction.dailyCreditSubscribe.id && Calendar.current.isDateInToday($0.sentAt)
+        }
+    }
+
+    /// `AAAA-MM-JJ`, le jour local — le format du `day` du serveur.
+    private static func localDay(_ date: Date) -> String {
+        let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+    }
+
+    /// Une lecture de la suite du fil, hors du sondage : après un refus de
+    /// crédit (la bulle de MEMO vient d'être posée), après un achat (le crédit
+    /// devient illimité). Rien hors ligne, rien si le sondage tourne déjà.
+    private func refreshOnce() {
+        guard !isOffline, poller == nil, thread != nil else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            guard let update = try? await self.transport.poll(self.cursor ?? .distantPast) else { return }
+            _ = await self.apply(update)
+        }
     }
 
     /// La dernière fiche remplie du fil — celle que le trio « Ça me convient /
@@ -1217,20 +1861,36 @@ extension ChatModel {
     /// alors que la compilation de debug passait. C'est la règle du paquet —
     /// les jeux d'essai des aperçus (`ChatThread.fixture`, `HomeFeed.emptyFixture`)
     /// se compilent partout ; seuls les panneaux du bac à sable sont en `#if DEBUG`.
+    ///
+    /// - Parameters:
+    ///   - dailyCredit: le crédit du jour ; à défaut, celui du fil.
+    ///   - showsExhaustedNotice: le bandeau « épuisé » est déjà demandé.
+    ///   - creditBanner: le bandeau à montrer comme si le micro tournait —
+    ///     un aperçu n'enregistre pas.
     static func preview(
         thread: ChatThread,
         turn: ChatTurnState = .idle,
         composer: ChatComposerMode = .tools,
         draft: String = "",
         microphoneIsDenied: Bool = false,
-        focusStepId: String? = nil
+        focusStepId: String? = nil,
+        dailyCredit: DailyCredit? = nil,
+        showsExhaustedNotice: Bool = false,
+        creditBanner: DailyCreditBanner? = nil
     ) -> ChatModel {
-        let model = ChatModel(transport: .local(tripId: thread.id), focusStepId: focusStepId)
+        let model = ChatModel(
+            transport: .local(tripId: thread.id),
+            focusStepId: focusStepId,
+            callToActionMemory: .inMemory()
+        )
         model.thread = thread
         model.turn = turn
         model.composer = composer
         model.draft = draft
         model.microphoneIsDenied = microphoneIsDenied
+        model.servedCredit = dailyCredit ?? thread.dailyCredit
+        model.showsExhaustedNotice = showsExhaustedNotice
+        model.previewCreditBanner = creditBanner
         return model
     }
 }

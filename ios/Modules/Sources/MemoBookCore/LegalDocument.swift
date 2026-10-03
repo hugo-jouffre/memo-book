@@ -62,7 +62,7 @@ public struct LegalChapter: Sendable, Hashable, Identifiable {
     /// Tout le texte et non le premier paragraphe : celui du chapitre 4 des
     /// CGU tient en deux lignes et s'arrête sur deux-points — une carte qui
     /// montrerait ça seul aurait l'air vide. Les intertitres n'y sont pas :
-    /// « 4.1 Phase bêta » au milieu d'une phrase ne se lit pas.
+    /// « 4.1 Utilisation gratuite » au milieu d'une phrase ne se lit pas.
     public var preview: String {
         texts(includingHeadings: false).joined(separator: " ")
     }
@@ -85,7 +85,7 @@ public struct LegalChapter: Sendable, Hashable, Identifiable {
 /// lien (`[…](mailto:…)`, `[…](https://…)`) et un demi-gras (`**…**`) pour
 /// l'étiquette d'une ligne — « **Finalité :** … ».
 public enum LegalBlock: Sendable, Hashable {
-    /// Un intertitre — « 4.1 Phase bêta gratuite », « Droit de rétractation ».
+    /// Un intertitre — « 4.1 Utilisation gratuite et crédit du jour », « Droit de rétractation ».
     case heading(String)
     /// Un paragraphe.
     case paragraph(String)

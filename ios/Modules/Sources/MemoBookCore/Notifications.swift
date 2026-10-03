@@ -15,8 +15,14 @@ import Foundation
 /// Un lien qu'on ne sait pas lire donne `nil` : l'app s'ouvre là où elle était,
 /// au lieu d'aller vers un écran deviné.
 public enum NotificationLink: Equatable, Sendable {
-    /// `memobook://paywall` — la fin des 3 étapes offertes : l'offre.
+    /// `memobook://paywall` — l'offre. Le serveur ne l'envoie plus (la
+    /// notification de fin de l'essai gratuit est partie avec lui, Hugo,
+    /// 03/10/2026), mais des notifications déjà livrées et des e-mails le
+    /// portent encore : il ouvre toujours le paywall.
     case paywall
+    /// `memobook://subscription` — le rappel de résiliation à la fin du voyage
+    /// (`renewal_reminder`) : la gestion de l'abonnement, là où on le coupe.
+    case subscription
     /// `memobook://trips/new` — les vacances, l'anniversaire : créer un voyage.
     case newTrip
     /// `memobook://trips/<id>/chat` — un carnet qui se tait : la conversation.
@@ -38,6 +44,8 @@ public enum NotificationLink: Equatable, Sendable {
         switch segments.count {
         case 1 where segments[0] == "paywall":
             self = .paywall
+        case 1 where segments[0] == "subscription":
+            self = .subscription
         case 2 where segments[0] == "trips" && segments[1] == "new":
             self = .newTrip
         case 3 where segments[0] == "trips":

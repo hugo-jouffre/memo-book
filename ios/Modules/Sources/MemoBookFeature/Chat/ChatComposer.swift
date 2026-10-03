@@ -8,10 +8,24 @@ import SwiftUI
 /// Les deux bandes flottent au-dessus du fil sur le même matériau que
 /// l'en-tête : la conversation passe dessous et se laisse deviner, ce qui dit
 /// qu'elle continue au-delà du bord.
+///
+/// **Le crédit du jour** (Hugo, 03/10/2026) : pendant qu'on parle, le bandeau
+/// rouge doux paraît à trente secondes de la limite **à la place des puces**
+/// — qui n'ont rien à faire sous un micro ouvert. Au repos, « Crédit du jour
+/// épuisé » se pose **au-dessus** d'elles quand on touche le micro ou le
+/// clavier pâlis, et s'en va de lui-même : les puces sont gratuites, et c'est
+/// avec elles qu'on valide une fiche (recette du 03/10/2026). **Dans la pile,
+/// jamais en calque** : sinon il ne se toucherait pas (voir la note de
+/// ``ChatView``). Quand on écrit, la boîte « trop long » prend la place des
+/// puces ; le rappel discret des caractères qui restent se glisse, lui, juste
+/// au-dessus du champ.
 struct ChatComposer: View {
     @Bindable var model: ChatModel
     @FocusState.Binding var isWriting: Bool
     let onAddPhotos: () -> Void
+
+    /// Ce que fait le bandeau « Crédit du jour épuisé » : ouvrir l'offre.
+    var onSubscribe: () -> Void = {}
 
     /// La puce en vol vers le fil, s'il y en a une : la bande la cache, c'est
     /// sa copie en vol qu'on regarde. Voir ``ChatView/launch(_:from:)``.
@@ -25,18 +39,80 @@ struct ChatComposer: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ChatSuggestionRail(
-                model: model,
-                onAddPhotos: onAddPhotos,
-                flyingSuggestionId: flyingSuggestionId,
-                onLaunch: onLaunch
-            )
+            aboveTheBar
+
+            if case .reminder(let reminder) = model.creditTextNotice {
+                Text(reminder)
+                    .font(MemoBookFont.caption)
+                    .foregroundStyle(MemoBookColor.inkMuted)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.horizontal, MemoBookSpacing.screenMargin)
+                    .padding(.top, MemoBookSpacing.xs / 2)
+                    .transition(.opacity)
+            }
+
             ChatSendingBar(model: model, isWriting: $isWriting, onAddPhotos: onAddPhotos)
         }
         // La place gardée de la bande se rend en douceur quand MEMO a répondu
         // sans nouvelles puces — voir ``ChatModel/reservesSuggestionRail``.
         .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: model.reservesSuggestionRail)
+        // Le bandeau arrive et s'en va en douceur — sur son **état**, pas sur
+        // son compte à rebours, qui change chaque seconde.
+        .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: bannerState)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: model.creditTextNotice)
         .background(ChatMetrics.barMaterial)
+    }
+
+    /// Ce qui se pose au-dessus de la barre. Pendant qu'on parle, le bandeau
+    /// du compte à rebours **à la place** des puces, muettes de toute façon.
+    /// Sinon, le bandeau « épuisé » quand il est demandé, **au-dessus** de la
+    /// boîte « trop long » ou des puces — jamais à leur place : « Ça me
+    /// convient » doit rester à portée de doigt, crédit ou pas.
+    @ViewBuilder
+    private var aboveTheBar: some View {
+        if model.recorder.isRecording, let banner = model.creditBanner {
+            creditBanner(banner)
+        } else {
+            if let banner = model.creditBanner { creditBanner(banner) }
+            noticeOrSuggestions
+        }
+    }
+
+    private func creditBanner(_ banner: DailyCreditBanner) -> some View {
+        DailyCreditBannerView(banner: banner, onSubscribe: onSubscribe)
+            .padding(.horizontal, MemoBookSpacing.snug)
+            .padding(.top, MemoBookSpacing.xs)
+            .transition(.opacity.combined(with: .move(edge: .bottom)))
+    }
+
+    /// La boîte « trop long », sinon les puces — qui gardent leur place,
+    /// vides, pendant qu'on parle.
+    @ViewBuilder
+    private var noticeOrSuggestions: some View {
+        if case .tooLong(let message) = model.creditTextNotice {
+            BrandNotice(message, tone: .information) { EmptyView() }
+                .padding(.horizontal, MemoBookSpacing.snug)
+                .padding(.top, MemoBookSpacing.xs)
+                .transition(.opacity)
+        } else {
+            ChatSuggestionRail(
+                model: model,
+                onAddPhotos: onAddPhotos,
+                flyingSuggestionId: flyingSuggestionId,
+                onLaunch: onLaunch,
+                isMuted: model.recorder.isRecording
+            )
+        }
+    }
+
+    /// L'état du bandeau sans son chiffre — ce sur quoi il s'anime.
+    private var bannerState: Int {
+        switch model.creditBanner {
+        case nil: 0
+        case .warning: 1
+        case .urgent: 2
+        case .exhausted: 3
+        }
     }
 }
 
@@ -68,6 +144,12 @@ struct ChatSuggestionRail: View {
     var flyingSuggestionId: String? = nil
     var onLaunch: ((ChatSuggestion, CGRect) -> Void)? = nil
 
+    /// Un micro est ouvert : les puces s'effacent mais **gardent leur place**.
+    /// Une puce touchée pendant qu'on parle partirait par-dessus le vocal, et
+    /// la bande qui disparaîtrait ferait sauter le fil au premier mot ; c'est
+    /// aussi là que le bandeau du crédit viendra se poser.
+    var isMuted = false
+
     /// La hauteur d'une puce : **plus basse qu'une bulle du fil** (Hugo,
     /// 29/09/2026) — 2 rem, en corps d'accroche — pour qu'on lise une
     /// proposition et non un message déjà dit. Elle suit le corps du texte.
@@ -86,7 +168,14 @@ struct ChatSuggestionRail: View {
     var body: some View {
         let suggestions = model.visibleSuggestions
 
-        if !suggestions.isEmpty {
+        if isMuted {
+            if !suggestions.isEmpty || model.reservesSuggestionRail {
+                Color.clear
+                    .frame(height: railHeight)
+                    .padding(.vertical, MemoBookSpacing.xs / 2)
+                    .accessibilityHidden(true)
+            }
+        } else if !suggestions.isEmpty {
             ScrollView(.horizontal) {
                 HStack(alignment: .center, spacing: MemoBookSpacing.xs) {
                     ForEach(suggestions, content: chip)
@@ -225,6 +314,23 @@ struct ChatSendingBar: View {
         .animation(bounce, value: model.recorder.isPaused)
         .animation(bounce, value: model.microphoneIsDenied)
         .animation(bounce, value: model.canSendDraft)
+        .animation(bounce, value: model.isCreditExhausted)
+    }
+
+    /// **Pâli, pas désactivé** (règle du design system) : le micro et le
+    /// clavier d'un crédit épuisé gardent leur place et répondent au doigt —
+    /// le toucher fait paraître le bandeau « Crédit du jour épuisé » au lieu de
+    /// ne rien faire. Un bouton désactivé ne dirait pas pourquoi.
+    private var creditOpacity: Double { model.isCreditExhausted ? 0.45 : 1 }
+
+    /// Ce que VoiceOver dit d'un micro, d'un clavier ou d'un champ pâlis : la
+    /// pâleur ne s'entend pas (03/10/2026). Vide quand il reste du crédit.
+    private var creditAccessibilityValue: String {
+        model.isCreditExhausted ? DailyCreditCopy.exhaustedTitle : ""
+    }
+
+    private var creditAccessibilityHint: String {
+        model.isCreditExhausted ? DailyCreditCopy.exhaustedDetail : ""
     }
 
     private var isAtRest: Bool {
@@ -324,7 +430,10 @@ struct ChatSendingBar: View {
                         action: model.startRecording
                     )
                     .brandShadow(.raised)
+                    .opacity(creditOpacity)
                     .accessibilityLabel(ChatCopy.Voice.microphone)
+                    .accessibilityValue(creditAccessibilityValue)
+                    .accessibilityHint(creditAccessibilityHint)
                 } else {
                     BrandButton(
                         ChatCopy.record,
@@ -336,7 +445,10 @@ struct ChatSendingBar: View {
                         action: model.startRecording
                     )
                     .brandShadow(.raised)
+                    .opacity(creditOpacity)
                     .accessibilityLabel(ChatCopy.Voice.microphone)
+                    .accessibilityValue(creditAccessibilityValue)
+                    .accessibilityHint(creditAccessibilityHint)
                 }
             }
         }
@@ -388,6 +500,10 @@ struct ChatSendingBar: View {
             sendButton
         }
         .padding(.horizontal, MemoBookSpacing.s)
+        // Pâli, comme le micro, quand le crédit est épuisé : on peut encore y
+        // toucher, le bandeau au-dessus dit pourquoi rien ne partira.
+        .opacity(creditOpacity)
+        .accessibilityValue(creditAccessibilityValue)
         // 8 pt et non 12 : à 21 pt de corps, douze points en haut et en bas
         // faisaient un champ d'une ligne haut de 49 pt — plus haut que la
         // cible tactile qui le borne, donc plus haut que tout le reste de la
@@ -526,9 +642,11 @@ struct ChatSendingBar: View {
             style: .raised,
             fills: fills
         ) {
-            model.composer = .writing
-            isWriting = true
+            if model.tapKeyboard() { isWriting = true }
         }
+        .opacity(creditOpacity)
+        .accessibilityValue(creditAccessibilityValue)
+        .accessibilityHint(creditAccessibilityHint)
     }
 
     /// Le micro, dans ses deux états.
@@ -552,11 +670,12 @@ struct ChatSendingBar: View {
                 "IconMic",
                 label: ChatCopy.Voice.microphone,
                 style: .secondary,
-                fills: fills
-            ) {
-                model.composer = .speaking
-                model.startRecording()
-            }
+                fills: fills,
+                action: model.tapMicrophone
+            )
+            .opacity(creditOpacity)
+            .accessibilityValue(creditAccessibilityValue)
+            .accessibilityHint(creditAccessibilityHint)
         }
     }
 
@@ -692,6 +811,79 @@ struct ChatBackToBottomPill: View {
     ChatSendingBarGallery()
         .environment(\.colorScheme, .light)
         .environment(\.dynamicTypeSize, .accessibility3)
+}
+
+#Preview("Barre d’envoi — le crédit du jour") {
+    ChatCreditGallery()
+        .environment(\.colorScheme, .light)
+}
+
+/// Le crédit du jour dans le pied du chat : les trois phases du bandeau, le
+/// micro pâli, la boîte « trop long » et le rappel des caractères. Le micro
+/// ne tourne pas dans un aperçu : le bandeau d'enregistrement y est posé tel
+/// quel (``ChatModel/preview(thread:turn:composer:draft:microphoneIsDenied:focusStepId:dailyCredit:showsExhaustedNotice:creditBanner:)``).
+private struct ChatCreditGallery: View {
+    var body: some View {
+        ScrollView {
+            VStack(spacing: MemoBookSpacing.s) {
+                composer(
+                    "Plus que 24 secondes",
+                    .preview(thread: .fixture(tripId: "trip-rome"), dailyCredit: ChatCreditFixture.lastSeconds, creditBanner: .warning(remainingMs: 24_000))
+                )
+                composer(
+                    "Les 5 dernières secondes, qui pulsent",
+                    .preview(thread: .fixture(tripId: "trip-rome"), dailyCredit: ChatCreditFixture.lastSeconds, creditBanner: .urgent(remainingMs: 3_000))
+                )
+                composer(
+                    "Épuisé : micro et clavier pâlis, bandeau touché",
+                    .preview(thread: .fixture(tripId: "trip-rome"), dailyCredit: ChatCreditFixture.exhausted, showsExhaustedNotice: true)
+                )
+                composer(
+                    "Au clavier, message trop long",
+                    .preview(
+                        thread: .fixture(tripId: "trip-rome"),
+                        composer: .writing,
+                        draft: String(repeating: "On a marché jusqu’au marché. ", count: 30),
+                        dailyCredit: ChatCreditFixture.lastSeconds
+                    )
+                )
+                composer(
+                    "Au clavier, moins d’une minute de crédit",
+                    .preview(
+                        thread: .fixture(tripId: "trip-rome"),
+                        composer: .writing,
+                        draft: "On a marché jusqu’au marché",
+                        dailyCredit: ChatCreditFixture.lastSeconds
+                    )
+                )
+                composer(
+                    "Abonné : rien de tout ça",
+                    .preview(thread: .fixture(tripId: "trip-rome"), dailyCredit: ChatCreditFixture.unlimited)
+                )
+            }
+            .padding(.vertical, MemoBookSpacing.s)
+        }
+        .background(MemoBookColor.background)
+    }
+
+    private func composer(_ title: String, _ model: ChatModel) -> some View {
+        VStack(alignment: .leading, spacing: MemoBookSpacing.xs / 2) {
+            Text(title)
+                .font(MemoBookFont.caption)
+                .foregroundStyle(MemoBookColor.inkMuted)
+                .padding(.horizontal, MemoBookSpacing.screenMargin)
+            PreviewComposer(model: model)
+        }
+    }
+
+    private struct PreviewComposer: View {
+        @Bindable var model: ChatModel
+        @FocusState private var isWriting: Bool
+
+        var body: some View {
+            ChatComposer(model: model, isWriting: $isWriting, onAddPhotos: {})
+        }
+    }
 }
 
 /// Les dispositions de la barre, empilées comme le nœud Figma les aligne.

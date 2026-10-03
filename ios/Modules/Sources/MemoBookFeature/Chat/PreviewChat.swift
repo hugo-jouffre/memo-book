@@ -17,6 +17,10 @@ public actor PreviewChatBox {
     private var stamps: [String: [String: Date]] = [:]
     private let responder = LocalMemoResponder()
 
+    /// Le jour où la bulle « reviens demain » de chaque voyage a été posée :
+    /// une fois par voyage et par jour, comme le serveur (`limitNotifiedAt`).
+    private var noticedDays: [String: String] = [:]
+
     private func thread(for tripId: String) -> ChatThread {
         if let existing = threads[tripId] { return existing }
         var fresh = ChatThread.fixture(tripId: tripId)
@@ -113,6 +117,33 @@ public actor PreviewChatBox {
         return ChatTurnReceipt(messages: written, turn: .replying(messageId: message.id), now: now)
     }
 
+    /// **La bulle « reviens demain »** (03/10/2026), posée comme le serveur
+    /// la pose : quand un tour fait tomber le crédit du jour à zéro, ou quand
+    /// un tour est refusé faute de crédit. Une fois par voyage et par jour ;
+    /// `nil` quand elle l'est déjà. Datée d'un instant plus tard que le tour,
+    /// pour que le sondage la trouve après lui.
+    public func noteCreditExhausted(tripId: String, credit: DailyCredit) -> ChatMessage? {
+        let now = Date.now
+        let day = credit.day ?? ISO8601DateFormatter.memoBookString(from: now).prefix(10).description
+        guard noticedDays[tripId] != day else { return nil }
+        noticedDays[tripId] = day
+
+        var thread = thread(for: tripId)
+        let later = now.addingTimeInterval(0.002)
+        let notice = ChatMessage(
+            id: "memo-daily-credit-\(tripId)-\(day)",
+            author: .memo,
+            body: .text(DailyCreditCopy.exhaustedMessage),
+            sentAt: later,
+            pauseMilliseconds: 900,
+            callToAction: .dailyCreditSubscribe
+        )
+        thread.messages.append(notice)
+        stamp(notice, in: tripId, at: later)
+        threads[tripId] = thread
+        return notice
+    }
+
     public func validate(entryId: String) -> Bool {
         var found = false
         for (tripId, var thread) in threads {
@@ -155,17 +186,27 @@ public actor PreviewChatBox {
 }
 
 extension PreviewAPI {
+    // Le crédit du jour voyage avec le fil, ses mises à jour et chaque reçu,
+    // comme sur le serveur — voir `SandboxCredit` (PreviewSupport.swift).
+
     public func chatThread(tripId: String) async throws -> ChatThread {
         try SandboxNetwork.failIfOffline()
-        return await chat.read(tripId: tripId)
+        var thread = await chat.read(tripId: tripId)
+        thread.dailyCredit = sandboxCredit(tripId: tripId)
+        return thread
     }
 
     public func chatUpdates(tripId: String, since: Date) async throws -> ChatThreadUpdate {
         try SandboxNetwork.failIfOffline()
-        return await chat.updates(tripId: tripId, since: since)
+        var update = await chat.updates(tripId: tripId, since: since)
+        update.dailyCredit = sandboxCredit(tripId: tripId)
+        return update
     }
 
     public func sendChatText(tripId: String, turn: ChatTextTurn) async throws -> ChatTurnReceipt {
+        let credit = try await chargingCredit(tripId: tripId) {
+            try chargeSandboxText(turn.text, suggestionId: turn.suggestionId, turnId: turn.id, tripId: tripId)
+        }
         let message = ChatMessage(
             id: turn.id,
             author: .traveller,
@@ -177,10 +218,13 @@ extension PreviewAPI {
         if turn.suggestionId == "accept", let entryId = turn.entryId {
             _ = await chat.validate(entryId: entryId)
         }
-        return await chat.send(tripId: tripId, message: message)
+        return await receipt(of: chat.send(tripId: tripId, message: message), tripId: tripId, credit: credit)
     }
 
     public func sendChatVoice(tripId: String, turn: ChatVoiceTurn) async throws -> ChatTurnReceipt {
+        let credit = try await chargingCredit(tripId: tripId) {
+            try chargeSandboxVoice(seconds: turn.durationSeconds, turnId: turn.id, tripId: tripId)
+        }
         let message = ChatMessage(
             id: turn.id,
             author: .traveller,
@@ -189,7 +233,32 @@ extension PreviewAPI {
             stepId: turn.stepId,
             disposition: .memory
         )
-        return await chat.send(tripId: tripId, message: message)
+        return await receipt(of: chat.send(tripId: tripId, message: message), tripId: tripId, credit: credit)
+    }
+
+    /// Décompte un tour ; refusé faute de crédit, la bulle « reviens demain »
+    /// se pose avant que le refus ne remonte — comme le serveur, qui l'écrit
+    /// dans sa propre petite transaction avant de lever le `429`.
+    private func chargingCredit(
+        tripId: String,
+        _ charge: () throws -> DailyCredit
+    ) async throws -> DailyCredit {
+        do {
+            return try charge()
+        } catch let error as APIError where error.isDailyCreditExhausted {
+            _ = await chat.noteCreditExhausted(tripId: tripId, credit: error.dailyCredit ?? sandboxCredit(tripId: tripId))
+            throw error
+        }
+    }
+
+    /// Le reçu, le crédit compté — et, quand ce tour l'a vidé, la bulle
+    /// « reviens demain » avec lui, comme sur le serveur.
+    private func receipt(of receipt: ChatTurnReceipt, tripId: String, credit: DailyCredit) async -> ChatTurnReceipt {
+        var messages = receipt.messages
+        if credit.isExhausted, let notice = await chat.noteCreditExhausted(tripId: tripId, credit: credit) {
+            messages.append(notice)
+        }
+        return ChatTurnReceipt(messages: messages, turn: receipt.turn, now: receipt.now, dailyCredit: credit)
     }
 
     public func sendChatPhotos(tripId: String, turn: ChatPhotosTurn) async throws -> ChatTurnReceipt {
@@ -204,7 +273,9 @@ extension PreviewAPI {
             stepId: turn.stepId,
             disposition: .memory
         )
-        return await chat.send(tripId: tripId, message: message)
+        var receipt = await chat.send(tripId: tripId, message: message)
+        receipt.dailyCredit = sandboxCredit(tripId: tripId)
+        return receipt
     }
 
     public func validateEntry(id: String) async throws -> EntryValidation {
@@ -219,7 +290,7 @@ extension PreviewAPI {
             capturedAt: .now,
             createdAt: .now
         )
-        return EntryValidation(entry: entry, offeredSteps: 3, remainingSteps: 2)
+        return EntryValidation(entry: entry)
     }
 
     public func clearChat(tripId: String) async throws {
@@ -245,7 +316,9 @@ extension ChatMessage {
             body: body,
             sentAt: sentAt,
             stepId: stepId,
-            pauseMilliseconds: pause
+            pauseMilliseconds: pause,
+            // Le bouton que le répondeur a posé reste sur la bulle.
+            callToAction: callToAction
         )
     }
 }

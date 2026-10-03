@@ -247,7 +247,8 @@ schemes:
       commandLineArguments:
         "-resetOnboarding": false
       # L'abonnement, sans App Store Connect : ⌘R achète sur ce fichier, avec
-      # le prix et la durée d'une semaine qu'il déclare. Ses transactions ne
+      # le prix et la durée d'un mois qu'il déclare (4,99 €, P1M — l'ancien
+      # produit hebdomadaire n'y est plus : l'app ne le vend plus). Ses transactions ne
       # sont **pas signées par Apple** — le serveur de production les refuse,
       # et c'est voulu. Pour aller jusqu'au serveur, lancer un back-end local
       # avec `APP_STORE_ALLOW_XCODE=true`, ou passer par un compte sandbox

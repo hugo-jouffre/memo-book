@@ -105,9 +105,12 @@ public enum MemoBookColor {
     /// `Scheme/Accent`.
     ///
     /// Arbitrage de Hugo, 14/09/2026 (T7) : tout ce qui touche à l'abonnement
-    /// est en lime — le bouton qui y invite, la pastille « Abonné », le solde
-    /// d'étapes offertes, l'écriture « ABONNEMENT » de la cagnotte — et le
-    /// reste de l'app n'y touche pas. Sa couleur d'accent, c'est le bleu
+    /// est en lime — le bouton qui y invite (« Passer en illimité »), la
+    /// pastille « Abonné » — et le
+    /// reste de l'app n'y touche pas. Depuis le crédit du jour (03/10/2026),
+    /// l'abonnement n'ouvre plus que le récit illimité : le lime ne verrouille
+    /// rien, et le bandeau d'un crédit épuisé est rouge doux (``errorSoft``),
+    /// pas lime. Sa couleur d'accent, c'est le bleu
     /// (``outline``). Quand on hésite, la question est : « est-ce que ça parle
     /// de l'abonnement ? » Si non, c'est bleu.
     ///
@@ -214,6 +217,17 @@ public enum MemoBookColor {
 
     /// Échec. — Figma `Error`.
     public static let error = Color(hex: 0xDE2B2E)
+
+    /// **Le rouge doux** : l'aplat sous un texte ``error`` qui prévient sans
+    /// accuser — la variante douce de Danger (`agents/design.md`). Un seul
+    /// emploi pour l'instant : le bandeau du crédit du jour, au-dessus de la
+    /// barre d'enregistrement, qui compte les dernières secondes puis dit
+    /// « épuisé » (Hugo, 03/10/2026, ``BrandLimitBanner``). Le rouge porte le
+    /// sens, l'aplat ne fait que le poser. **Contraste** : le rouge `0xDE2B2E`
+    /// n'y fait que 3,7:1. Le titre semi-gras le garde — la couleur que le
+    /// contrat a fixée, à revoir avec la maquette (T249) ; le détail, texte
+    /// courant qui demande 4,5:1, se pose à l'encre (``ink``, 12:1).
+    public static let errorSoft = Color(hex: 0xFBDDDD)
 
     /// Information neutre, sans jugement. — Figma `Information`.
     public static let information = Color(hex: 0x4A8FE0)
@@ -587,7 +601,7 @@ public enum MemoBookFont {
     public static let sectionOverline = Font.custom(BrandFonts.soraSemiBold, size: 12, relativeTo: .caption)
 
     /// La pastille minuscule qui qualifie une écriture de cagnotte — « DON »,
-    /// « ABONNEMENT ».
+    /// « RECHARGE ».
     ///
     /// ⚠️ La maquette descend à 9 pt. L'app ne va pas sous 11
     /// (``mention``) : à 9 pt le mot n'est plus lisible, et il porte pourtant
@@ -596,12 +610,15 @@ public enum MemoBookFont {
     public static let microBadge = Font.custom(BrandFonts.generalSansSemibold, size: 11, relativeTo: .caption2)
 
     /// Une ligne écrite **à la main dans le carnet**, reprise dans l'app : la
-    /// phrase verte du mot des fondateurs, et le titre des fiches de la
-    /// conversation — « Retranscription du contexte » (Clara, 17/09/2026, T54).
+    /// phrase verte du mot des fondateurs, le titre des fiches de la
+    /// conversation — « Retranscription du contexte » (Clara, 17/09/2026, T54)
+    /// —, et l'en-tête des cartes de MEMO, « ✦ Crédit du jour épuisé », au-dessus
+    /// d'une bulle qui porte un bouton (maquette `3653:17090`, 03/10/2026).
     ///
-    /// Deux emplois, et pas un de plus. La manuscrite dit « ceci n'est pas de
+    /// Trois emplois, et pas un de plus. La manuscrite dit « ceci n'est pas de
     /// l'interface, c'est le carnet qui s'écrit » — la multiplier lui
-    /// retirerait exactement ça.
+    /// retirerait exactement ça. Le troisième tient la règle : c'est MEMO qui
+    /// annote sa propre bulle, comme on écrit un mot dans la marge.
     public static let handwriting = Font.custom(BrandFonts.gloriaHallelujah, size: 16, relativeTo: .body)
 
     /// Titres de **carnet** uniquement, jamais les titres d'écran système.

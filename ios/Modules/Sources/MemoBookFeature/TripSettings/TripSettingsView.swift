@@ -21,10 +21,24 @@ public struct TripSettingsView: View {
 
     @State private var model: TripSettingsModel
 
-    /// La feuille ouverte, s'il y en a une. Cinq des dix lignes de l'écran en
-    /// ouvrent une désormais ; les autres remontent toujours une intention à
+    /// La feuille ouverte, s'il y en a une. Six lignes de l'écran en ouvrent
+    /// une désormais ; les autres remontent toujours une intention à
     /// ``RootView``, qui seul tient la pile.
     @State private var sheet: TripSettingsSheet?
+
+    /// Le paywall, en plein écran par-dessus les réglages — ouvert par
+    /// « Passer en illimité » dans la feuille du crédit du jour, **après**
+    /// l'avoir refermée : une feuille ne s'empile pas sur une autre.
+    ///
+    /// Présenté ici plutôt que remonté à ``RootView`` : c'est le motif de
+    /// l'accueil du voyage et du profil, et une intention qui remonte pour
+    /// redescendre aussitôt n'apprendrait rien à personne.
+    @State private var showsPaywall = false
+
+    /// L'abonnement tel que la session le connaît : la version du paywall à
+    /// montrer, et le geste d'achat qui rend la ligne « Illimité » tout de
+    /// suite. `nil` dans un aperçu isolé.
+    @Environment(\.subscriptionSession) private var subscriptionSession
 
     /// La feuille qui confirme la suppression du voyage — une feuille de
     /// l'app, comme celle du compte, et non une alerte : le paragraphe qui dit
@@ -126,8 +140,31 @@ public struct TripSettingsView: View {
             case .notifications: TripNotificationsSheet(model: model)
             case .theme: TripThemeSheet(model: model)
             case .companions: TripInviteSheet(model: model)
-            case .memory: MemoryAllowanceSheet(model: model)
+            case .dailyCredit:
+                DailyCreditSheet(
+                    model: model,
+                    onSubscribe: {
+                        sheet = nil
+                        showsPaywall = true
+                    }
+                )
             }
+        }
+        .fullScreenCover(isPresented: $showsPaywall) {
+            PaywallView(
+                subscription: .offer,
+                variant: subscriptionSession?.paywallVariant ?? .firstTime,
+                previewMemoId: model.settings?.tripId,
+                onSubscribe: {
+                    subscriptionSession?.record(isSubscribed: true)
+                    showsPaywall = false
+                    // Le geste a déjà rendu la ligne « Illimité » (voir
+                    // ``SubscriptionSession/applied(to:)``) ; les réglages
+                    // relus le font dire au serveur, qui seul sait que
+                    // l'achat est passé.
+                    Task { await model.load() }
+                }
+            )
         }
         .brandSheet(isPresented: $isConfirmingConversationClearing) {
             ClearConversationSheet(
@@ -203,14 +240,14 @@ public struct TripSettingsView: View {
                 )
             }
 
-            // **Les limites de souvenirs, et cet écran seul** (Hugo,
-            // 16/09/2026). Elles appartiennent au compte comme la cagnotte
-            // juste au-dessus, et n'apparaissent nulle part ailleurs : c'est un
-            // garde-fou, pas un décompte qu'on suit. Quelqu'un qui raconte
-            // normalement ne doit jamais avoir à y penser — d'où la ligne
-            // discrète, et la jauge seulement quand elle commence à compter.
-            if let memory = settings?.memory {
-                MemoryAllowanceRow(memory: memory) { sheet = .memory }
+            // **Le crédit du jour, toujours visible** (Hugo, 03/10/2026). Ce
+            // n'est plus un garde-fou discret qu'on ne remarque qu'au seuil :
+            // c'est le levier de l'abonnement. Un non-abonné y lit en
+            // permanence ce que le voyage peut encore raconter aujourd'hui, la
+            // jauge comprise ; un abonné y lit « Illimité ». Sans crédit servi
+            // (un serveur plus ancien), la ligne se tait plutôt que d'inventer.
+            if let credit = dailyCredit {
+                DailyCreditRow(credit: credit) { sheet = .dailyCredit }
             }
 
             BrandRowGroup {
@@ -307,6 +344,15 @@ public struct TripSettingsView: View {
             .foregroundStyle(MemoBookColor.inkMuted)
             .textCase(.uppercase)
             .accessibilityAddTraits(.isHeader)
+    }
+
+    /// Le crédit servi avec les réglages, relu avec le dernier geste de la
+    /// session : la ligne passe à « Illimité » dès l'achat, avant même que les
+    /// réglages soient relus.
+    private var dailyCredit: DailyCredit? {
+        // Par le modèle, qui recharge le crédit d'hier passé minuit.
+        let served = model.dailyCredit
+        return subscriptionSession?.applied(to: served) ?? served
     }
 
     private var helpLink: some View {
@@ -449,24 +495,27 @@ public enum TripSettingsIntent: Sendable, Hashable {
 
 // MARK: - Les blocs qui ne sont pas des lignes
 
-/// La ligne des **limites de souvenirs** : le solde, et la jauge quand elle
-/// commence à compter.
+/// La ligne du **crédit du jour** : ce qui reste aujourd'hui sur ce voyage, et
+/// la jauge qui le montre.
 ///
-/// **Elle se tait tant qu'il reste de la marge**, et c'est le point de tout le
-/// réglage : ces limites sont un garde-fou contre l'usage qui coûterait plus
-/// cher que l'abonnement, pas un levier commercial. Une jauge posée en
-/// permanence à 4 % ferait compter des souvenirs à quelqu'un qui devrait
-/// compter des jours de voyage. Elle n'apparaît qu'au seuil — voir
-/// ``MemoryAllowance/isRunningLow``.
+/// **Elle parle tout le temps**, et c'est le changement de fond (Hugo,
+/// 03/10/2026) : la ligne des limites de souvenirs se taisait tant qu'il
+/// restait de la marge, parce qu'elle n'était qu'un garde-fou de coût. Le
+/// crédit du jour, lui, est ce que l'abonnement lève — un non-abonné doit
+/// pouvoir le lire d'un regard, à 4 min comme à 30 s. La jauge est donc
+/// toujours là : elle montre **ce qui reste**, comme le chiffre — pleine au
+/// matin, elle se vide, verte, et rougit à zéro (``BrandGauge`` n'a que ces
+/// deux couleurs). Un abonné lit « Illimité », sans jauge : il n'a rien à
+/// compter.
 ///
-/// Ce n'est donc pas une ``BrandRow`` : celle-ci porte un intitulé et une
-/// valeur, et n'a pas de place pour une barre qui pousse sous elle.
+/// Ce n'est pas une ``BrandRow`` : celle-ci porte un intitulé et une valeur,
+/// et n'a pas de place pour une barre qui pousse sous elle. Elle en reprend la
+/// coque — même fond, même filet, même chevron.
 ///
-/// ⚠️ **Aucune maquette ne la dessine** (Hugo, 16/09/2026). Elle reprend le
-/// dessin des lignes d'à côté — même coque, même filet, même chevron — et reste
-/// à valider dans Figma.
-private struct MemoryAllowanceRow: View {
-    let memory: MemoryAllowance
+/// ⚠️ **Aucune maquette ne la dessine** (T248) : elle reste à valider dans
+/// Figma, avec la feuille qu'elle ouvre.
+private struct DailyCreditRow: View {
+    let credit: DailyCredit
     let action: () -> Void
 
     @ScaledMetric(relativeTo: .body) private var chevronSide: CGFloat = 14
@@ -481,18 +530,18 @@ private struct MemoryAllowanceRow: View {
             VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
                 HStack(spacing: MemoBookSpacing.s) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(MemoryCopy.rowTitle)
+                        Text(DailyCreditCopy.title)
                             .font(MemoBookFont.body)
                             .foregroundStyle(MemoBookColor.ink)
-                        // Ce que ça coûte, avant qu'on le demande : rien de
-                        // plus que l'abonnement (Clara, 26/09/2026).
-                        Text(MemoryCopy.rowCaption)
+                        // La règle avant qu'on la demande : la durée du
+                        // crédit, et qu'elle se partage.
+                        Text(caption)
                             .font(MemoBookFont.caption)
                             .foregroundStyle(MemoBookColor.inkMuted)
-                        // Aux tailles accessibles, le compteur passe **sous**
-                        // l'intitulé, comme la valeur des lignes d'à côté : à
-                        // côté, il gardait sa largeur et coupait les mots en
-                        // deux (« souveni / rs », recette du 30/09/2026).
+                        // Aux tailles accessibles, la valeur passe **sous**
+                        // l'intitulé, comme celle des lignes d'à côté : à
+                        // côté, elle gardait sa largeur et coupait les mots en
+                        // deux (recette du 30/09/2026).
                         if typeSize.isAccessibilitySize { value }
                     }
                     .multilineTextAlignment(.leading)
@@ -509,13 +558,17 @@ private struct MemoryAllowanceRow: View {
                         .foregroundStyle(MemoBookColor.inkMuted)
                 }
 
-                // La barre n'apparaît qu'au seuil : voir l'en-tête.
-                if memory.isRunningLow || memory.isExhausted {
+                if !credit.isUnlimited {
+                    // Ce qui **reste**, comme le chiffre d'à côté : pleine au
+                    // matin, elle se vide, et rougit à zéro (recette du
+                    // 03/10/2026). VoiceOver lit déjà le reste dans le libellé
+                    // de la ligne ; la jauge ne le redit pas.
                     BrandGauge(
-                        fraction: memory.fraction,
-                        isExhausted: memory.isExhausted,
-                        accessibilityLabel: MemoryCopy.rowTitle
+                        fraction: credit.gaugeFraction,
+                        isExhausted: credit.isExhausted,
+                        accessibilityLabel: DailyCreditCopy.title
                     )
+                    .accessibilityHidden(true)
                 }
             }
             .padding(.horizontal, MemoBookSpacing.s)
@@ -528,15 +581,19 @@ private struct MemoryAllowanceRow: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
-        .accessibilityLabel(
-            "\(MemoryCopy.rowTitle), \(MemoryCopy.rowCaption). \(MemoryCopy.remaining(memory.remaining, renewsOn: nil))"
-        )
+        .accessibilityLabel(DailyCreditCopy.rowAccessibilityLabel(credit))
+    }
+
+    private var caption: String {
+        credit.isUnlimited
+            ? DailyCreditCopy.rowCaptionUnlimited
+            : DailyCreditCopy.rowCaption(limitMs: credit.limitMs)
     }
 
     private var value: some View {
-        Text(MemoryCopy.rowValue(used: memory.used, allowance: memory.allowance))
+        Text(DailyCreditCopy.rowValue(credit))
             .font(MemoBookFont.label)
-            .foregroundStyle(memory.isExhausted ? MemoBookColor.error : MemoBookColor.inkMuted)
+            .foregroundStyle(credit.isExhausted ? MemoBookColor.error : MemoBookColor.inkMuted)
             .monospacedDigit()
             .fixedSize()
     }

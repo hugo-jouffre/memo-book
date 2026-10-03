@@ -4,14 +4,15 @@ import SwiftUI
 /// ce qu'il qualifie.
 ///
 /// C'est **la** pastille de l'app. Elle en portait trois dessins écrits chacun
-/// de son côté — l'état d'un voyage, le compteur d'une section, le solde
-/// d'étapes de l'accueil — qui divergeaient déjà sur le rayon et la graisse.
+/// de son côté — l'état d'un voyage, le compteur d'une section, et le solde
+/// d'étapes offertes de l'accueil, parti avec elles au passage au crédit du
+/// jour (Hugo, 03/10/2026) — qui divergeaient déjà sur le rayon et la graisse.
 ///
 /// Quatre tons, et quatre seulement :
 ///
 /// | Ton | Dessin | Ce qu'il dit |
 /// |---|---|---|
-/// | ``Tone/accent`` | aplat lime | **l'abonnement** — le solde d'étapes offertes, ce qu'il reste à raconter avant de s'abonner |
+/// | ``Tone/accent`` | aplat lime | **l'abonnement** — « Illimité », ce que l'abonnement ouvre. Plus de solde d'étapes à décompter depuis le crédit du jour (Hugo, 03/10/2026) |
 /// | ``Tone/outlined`` | contour vert | un état — ce que le voyage fait en ce moment |
 /// | ``Tone/info`` | contour bleu | un décompte, une précision — « ×3 », « À VENIR » |
 /// | ``Tone/accentOutlined`` | lime cerclé de vert | l'abonnement, quand il doit se voir de loin |
@@ -238,7 +239,7 @@ extension View {
 #Preview("Pastilles et jauge") {
     VStack(alignment: .leading, spacing: MemoBookSpacing.m) {
         HStack(spacing: MemoBookSpacing.xs) {
-            BrandTagPill("3 étapes offertes")
+            BrandTagPill("Illimité")
             BrandTagPill("×1")
             BrandTagPill("En cours", tone: .outlined, isUppercased: true)
             BrandTagPill("Bientôt", tone: .info)

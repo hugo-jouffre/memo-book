@@ -2,8 +2,8 @@ import Foundation
 import MemoBookCore
 
 // Mise en forme des valeurs du profil. Les règles vivent ici, pas dans les
-// vues : un montant s'écrit pareil dans la ligne « Ma cagnotte » et dans le
-// libellé du bouton d'abonnement.
+// vues : un montant s'écrit pareil dans la ligne « Ma cagnotte » et sur l'offre
+// du paywall.
 
 extension Decimal {
     /// Un montant en euros, écrit selon la région de l'utilisateur.
@@ -40,7 +40,7 @@ extension Date {
     /// butoir**, elle, répond à « jusqu'à quand », et on la vérifie sur son
     /// calendrier : « dans 5 jours » se recompte, « le 22 septembre » se lit.
     ///
-    /// Sans l'année : la semaine payée se compte en jours, et personne ne se
+    /// Sans l'année : le mois payé se compte en jours, et personne ne se
     /// demande de quelle année on parle.
     var dayAndMonth: String {
         formatted(.dateTime.day().month(.wide))

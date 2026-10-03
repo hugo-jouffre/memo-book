@@ -49,6 +49,10 @@ public struct ProfileView: View {
     /// La feuille « Moyens de paiement » de Stripe — posée par `RootView`.
     @Environment(\.managePaymentMethods) private var managePaymentMethods
 
+    /// L'App Store, pour remettre au serveur un achat qu'il n'a pas encore
+    /// reçu — voir ``loadProfile()``.
+    @Environment(\.subscriptionPurchase) private var subscriptionPurchase
+
     /// Ce qui a empêché la feuille de Stripe de s'ouvrir.
     @State private var paymentMethodsError: String?
 
@@ -73,10 +77,11 @@ public struct ProfileView: View {
             // d'attente — voir ``BrandSkeleton``.
             //
             // Trois blocs font exception et n'apparaissent qu'une fois le
-            // profil connu, parce qu'ils **existent ou non** selon le palier du
-            // compte : la pastille d'état, le bouton d'abonnement et la ligne
-            // « Mon abonnement ». Les montrer par défaut puis les retirer
-            // serait pire que de les voir arriver.
+            // profil connu, parce qu'ils **existent ou non** selon que le
+            // compte est abonné : la pastille « Abonné(e) », le bouton
+            // « Découvrir l'abonnement » et la ligne « Mon abonnement ». Les
+            // montrer par défaut puis les retirer serait pire que de les voir
+            // arriver.
             VStack(alignment: .leading, spacing: MemoBookSpacing.m) {
                 header
 
@@ -149,7 +154,13 @@ public struct ProfileView: View {
         // Le crème de la marque ne se retourne pas en sombre — voir
         // `MemoBookColor`.
         .environment(\.colorScheme, .light)
-        .task { await model.load() }
+        .task { await loadProfile() }
+        // Ce que le profil sait de l'abonnement sert aux autres écrans : la
+        // version du paywall, et l'illimité, qu'on ouvre l'offre depuis la
+        // conversation ou les réglages d'un voyage.
+        .onChange(of: model.profile, initial: true) { _, profile in
+            if let profile { subscriptionSession?.learn(profile) }
+        }
         .brandRefreshFlash(model.freshness.isUpdated)
         .brandSheet(item: $sheet) { destination in
             sheetContent(destination)
@@ -160,9 +171,17 @@ public struct ProfileView: View {
                 variant: paywallVariant,
                 previewMemoId: model.profile?.currentTrip?.id,
                 onSubscribe: {
-                    model.activateSubscription()
+                    // **Le geste, pas une copie locale** (03/10/2026) : la
+                    // session fait l'écran d'un abonné tout de suite (voir
+                    // ``effectiveSubscription``), et le profil se relit pour
+                    // que le serveur le confirme — c'est cette confirmation
+                    // qui rend la main au serveur. Retoucher le profil sur
+                    // place l'aurait « confirmé » sans lui, et un serveur qui
+                    // n'avait pas encore reçu l'achat aurait fait recompter un
+                    // abonné qui paie.
                     subscriptionSession?.record(isSubscribed: true)
                     showsPaywall = false
+                    Task { await model.load() }
                 }
             )
         }
@@ -173,6 +192,7 @@ public struct ProfileView: View {
         .brandSheet(isPresented: $isConfirmingDeletion) {
             DeleteAccountSheet(
                 hasOngoingTrip: model.profile?.currentTrip != nil,
+                mentionsSubscription: renewsAtApple,
                 isDeleting: model.isDeletingAccount,
                 onKeep: { isConfirmingDeletion = false },
                 onDelete: {
@@ -200,34 +220,85 @@ public struct ProfileView: View {
     /// ⚠️ **Elle ne l'a plus sur une résiliation** (Hugo, 19/09/2026), et c'est
     /// la seconde moitié du défaut qu'il a vu : après avoir confirmé trois
     /// fois, la feuille rouvrait sur « ABONNÉE ». La session ne sait pas si on
-    /// est abonné, elle sait si le micro s'ouvre — et pendant la semaine déjà
-    /// réglée, il s'ouvre encore (``ProfileModel/subscriptionGrantsAccess``).
+    /// est abonné, elle sait si l'on raconte sans limite — et pendant le mois
+    /// déjà réglé, on le peut encore (``ProfileModel/subscriptionGrantsAccess``).
     /// Elle répondait donc « abonné » à une question qu'on ne lui posait pas,
     /// et ressuscitait l'abonnement qu'on venait de fermer.
     ///
-    /// Elle peut toujours en **donner** un — le bac à sable fait jouer un
-    /// abonné à un compte qui n'en a pas —, jamais en **rendre** un : un
-    /// abonnement résilié porte sa date, et cette date fait foi.
+    /// Elle peut toujours en **donner** un — un achat que le serveur n'a pas
+    /// encore reçu, le bac à sable qui fait jouer un abonné —, jamais en
+    /// **rendre** un : un abonnement résilié dans son mois payé raconte encore
+    /// sans limite, et elle n'a rien à y ajouter.
+    ///
+    /// **Ce qu'elle donne est tenu par Apple** (03/10/2026). Tout achat fait
+    /// dans l'app passe par StoreKit ; un abonnement que le serveur n'a pas
+    /// encore vu (`awaitingServer`) gardait pourtant `managedByAppStore` faux,
+    /// et « Mon abonnement » le résiliait « localement » par une route qui ne
+    /// coupe rien chez Apple — pendant qu'Apple continuait de prélever et que
+    /// la conversation recomptait les secondes d'un abonné qui paie. La
+    /// résiliation passe donc par la feuille d'iOS, et son issue se lit sur
+    /// StoreKit.
     private var effectiveSubscription: Subscription? {
         guard var subscription = model.profile?.subscription else { return nil }
-        if freemiumStatus == .subscriber, subscription.cancelledAt == nil {
+        if model.isHeldByAppleOnly(subscriptionSession) {
             subscription.isActive = true
+            subscription.cancelledAt = nil
+            subscription.managedByAppStore = true
         }
         return subscription
     }
 
-    /// Le palier du compte, lu sur le modèle **et** sur la session.
-    private var freemiumStatus: FreemiumStatus {
-        model.profile?.freemiumStatus(override: subscriptionSession?.override) ?? .subscriber
+    /// L'abonnement va se renouveler chez Apple : supprimer le compte ne
+    /// l'arrêtera pas, et la feuille de suppression doit le dire — **à lui
+    /// seul** (03/10/2026). Le dire à un compte qui n'a jamais souscrit, la
+    /// plupart depuis le crédit du jour, lui demandait de couper ce qu'il n'a
+    /// pas. Sans profil chargé, on le dit, par prudence.
+    private var renewsAtApple: Bool {
+        guard let subscription = effectiveSubscription else { return true }
+        return subscription.managedByAppStore && subscription.cancelledAt == nil && subscription.isUnlimited
+    }
+
+    /// Charge le profil — et, **quand un achat attend encore le serveur**,
+    /// remet d'abord la transaction qu'Apple garde ouverte, puis relit
+    /// (03/10/2026).
+    ///
+    /// La session dit « acheté » et le serveur ne connaît pas d'abonnement :
+    /// c'est un achat encaissé par Apple que l'API n'a pas pris
+    /// (`awaitingServer`). StoreKit ne le redonne de lui-même qu'au prochain
+    /// lancement ; l'ouverture du profil est le moment où l'on vient vérifier.
+    private func loadProfile() async {
+        await model.load()
+        guard model.isHeldByAppleOnly(subscriptionSession) else { return }
+        await deliverPurchaseAndReload()
+    }
+
+    /// Remet à l'API l'achat qu'Apple garde ouvert, puis relit le profil : le
+    /// serveur tranche.
+    private func deliverPurchaseAndReload() async {
+        guard let subscriptionPurchase else { return }
+        await subscriptionPurchase.deliverUnfinished()
+        await model.load()
+    }
+
+    /// Le compte raconte-t-il sans limite — lu sur le modèle **et** sur le
+    /// dernier geste de la session (un achat, une résiliation, le bac à
+    /// sable). Vrai tant que le profil n'est pas là : les trois blocs qui en
+    /// dépendent attendent de le savoir plutôt que d'apparaître puis partir.
+    private var isSubscriber: Bool {
+        guard let profile = model.profile else { return true }
+        return subscriptionSession?.override ?? profile.isSubscriber
     }
 
     /// Quelle version du paywall montrer.
     ///
-    /// Un ancien abonné revoit **deux** écrans au lieu de trois : il connaît
-    /// déjà le produit, et l'abonnement s'arrête tout seul à la fin de chaque
-    /// voyage — repasser par là est donc le cas ordinaire, pas l'exception.
+    /// Qui a déjà été abonné revoit **deux** écrans au lieu de trois : il
+    /// connaît déjà le produit, et l'app lui propose de résilier à la fin de
+    /// chaque voyage — repasser par là est donc le cas ordinaire, pas
+    /// l'exception. Le profil le sait par `hasEndedBefore`, la session par
+    /// ce que l'accueil lui a appris.
     private var paywallVariant: PaywallVariant {
-        (model.profile?.subscription.hasEndedBefore ?? false) ? .returning : .firstTime
+        if model.profile?.subscription.hasEndedBefore == true { return .returning }
+        return subscriptionSession?.paywallVariant ?? .firstTime
     }
 
     // MARK: - En-tête
@@ -267,50 +338,32 @@ public struct ProfileView: View {
 
             Spacer(minLength: 0)
 
-            statusPill
+            subscriberPill
         }
     }
 
-    /// Ce que vaut le compte, dit en un mot sur la ligne du titre.
+    /// « ABONNÉ(E) », sur la ligne du titre — **pour un abonné seulement**
+    /// (Hugo, 03/10/2026). Il n'y a plus d'étapes à décompter : sans
+    /// abonnement, c'est le bouton « Découvrir l'abonnement » qui parle, et la
+    /// pastille se tait. Un constat, qui ne mène nulle part.
     ///
     /// **Elle partage la ligne du titre et ne flotte pas dans le coin** : c'est
-    /// une étiquette posée sur l'écran. Droite, contrairement à celle de
-    /// l'accueil : celle-ci est alignée sur un titre, et un libellé de travers
-    /// à côté d'un mot horizontal se lit comme un défaut de rendu, pas comme un
-    /// geste. L'accueil, lui, la pose sur un avatar, où rien n'impose
-    /// l'horizontale.
+    /// une étiquette posée sur l'écran, droite parce qu'alignée sur un titre —
+    /// un libellé de travers à côté d'un mot horizontal se lit comme un défaut
+    /// de rendu.
     @ViewBuilder
-    private var statusPill: some View {
-        if model.profile != nil {
-            let pill = BrandTagPill(
-                freemiumStatus.profilePillLabel(for: model.profile?.gender ?? .undisclosed),
+    private var subscriberPill: some View {
+        if let profile = model.profile, isSubscriber {
+            BrandTagPill(
+                SubscriptionCopy.currentBadge(for: profile.gender),
                 tone: .accentOutlined,
                 isUppercased: true,
-                // « 3 ÉTAPES GRATUITES RESTANTES » est plus large que ce que la
-                // ligne lui laisse : elle se resserre plutôt que de renvoyer
-                // « Profile » à la ligne.
+                // Elle se resserre plutôt que de renvoyer « Profil » à la ligne.
                 shrinksToFit: true
             )
-            // Le libellé du palier gratuit est long : à partir d'AX1 il prendrait
-            // la ligne entière et pousserait le titre hors de l'écran. Il garde
-            // alors sa taille, et lui seul.
+            // À partir d'AX1 elle prendrait la ligne entière et pousserait le
+            // titre hors de l'écran. Elle garde alors sa taille, et elle seule.
             .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-
-            // **« ABONNE-TOI » se touche.** Tant qu'il y a quelque chose à
-            // vendre, la pastille ouvre la même feuille que le gros bouton lime
-            // juste en dessous : c'est la même proposition, et quelqu'un qui
-            // vise le mot y a autant droit que celui qui vise le bouton.
-            // « ABONNÉ », lui, est un constat — il ne mène nulle part.
-            if freemiumStatus.wantsSubscription {
-                Button { sheet = .subscription } label: { pill }
-                    .buttonStyle(.plain)
-                    .frame(minHeight: MemoBookSpacing.minimumTapTarget)
-                    .contentShape(.rect)
-                    .accessibilityAddTraits(.isButton)
-                    .accessibilityHint("Découvrir l’abonnement")
-            } else {
-                pill
-            }
         }
     }
 
@@ -320,11 +373,15 @@ public struct ProfileView: View {
     ///
     /// Il disparaît une fois abonné, où la ligne « Mon abonnement » des services
     /// suffit : on ne revend pas ce qui est déjà acheté. C'est aussi ce qui fait
-    /// que **résilier le fait revenir** — la feuille se referme sur un profil
-    /// qui n'a plus d'abonnement, et l'offre reprend sa place.
+    /// que **résilier le fait revenir** — une fois le mois payé écoulé, le
+    /// profil n'a plus d'abonnement, et l'offre reprend sa place.
+    ///
+    /// **Il ouvre le paywall directement** (Hugo, 03/10/2026) : la feuille
+    /// « Comment ça fonctionne ? » qui le précédait racontait l'essai gratuit
+    /// d'avant le crédit du jour, et elle est partie avec lui.
     @ViewBuilder
     private var subscriptionCallToAction: some View {
-        if freemiumStatus.wantsSubscription {
+        if !isSubscriber {
             BrandButton(
                 "Découvrir l’abonnement",
                 icon: Image(brand: "IconArrowForward"),
@@ -332,8 +389,13 @@ public struct ProfileView: View {
                 style: .accent,
                 fillsWidth: true
             ) {
-                sheet = .subscription
+                showsPaywall = true
             }
+            // La même limite que les autres CTA de l'app (accueil, offre) :
+            // en très grand texte, « Découvrir l’abonnement » se coupait en
+            // plein mot (recette du 03/10/2026). VoiceOver lit le libellé
+            // entier quelle que soit la taille.
+            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         }
     }
 
@@ -341,29 +403,25 @@ public struct ProfileView: View {
     ///
     /// **Le seul groupe cerclé de vert de l'écran.** C'est ce qu'on vient
     /// chercher du regard en ouvrant son profil ; tout le reste se range.
-    /// Sans abonnement, la première ligne dit qu'elle est sous clé plutôt que
-    /// de disparaître : une case vide n'explique pas ce qu'on gagnerait.
+    ///
+    /// **Les statistiques sont à tout le monde** (Hugo, 03/10/2026) : elles
+    /// étaient « Réservé aux abonnés », sous un badge « Locked ». L'abonnement
+    /// n'ouvre plus que l'illimité.
     private var statsGroup: some View {
         let profile = model.profile
         let isLoading = profile == nil
 
-        // Les valeurs sont préparées ici plutôt que dans les appels : trois
+        // Les valeurs sont préparées ici plutôt que dans les appels : des
         // ternaires imbriqués dans une liste de lignes, et l'inférence de type
         // de Swift rend les armes sans rien dire d'utile.
-        let isSubscriber = freemiumStatus == .subscriber
-        let statistics: String? = profile.map {
-            isSubscriber ? $0.tripCountLabel : "Réservé aux abonnés"
-        }
-        let lockBadge: String? = profile != nil && !isSubscriber ? "Locked" : nil
+        let statistics: String? = profile?.tripCountLabel
         let currentTrip: String? = profile.map {
             $0.currentTrip?.dateRangeLabel ?? "Aucun pour l’instant"
         }
 
-        // Sous clé — ou sans voyage en cours — la ligne ne mène nulle part : un
-        // chevron promettrait un écran qu'on n'a pas le droit d'ouvrir.
         // ⚠️ La feuille existait et ne s'ouvrait plus : la ligne était
         // revenue sur `notYetRouted()` (constaté en recette le 30/09/2026).
-        let openStatistics: (() -> Void)? = isSubscriber ? { sheet = .statistics } : nil
+        let openStatistics: (() -> Void)? = { sheet = .statistics }
         // Le voyage en cours s'ouvre depuis sa ligne — l'accueil du voyage,
         // celui de la carte de l'accueil (Clara, 17/09/2026).
         let openCurrentTrip: (() -> Void)? = profile?.currentTrip.map { trip in
@@ -375,7 +433,6 @@ public struct ProfileView: View {
                 "Statistiques",
                 value: statistics,
                 titleTone: .accent,
-                badge: lockBadge,
                 isValueLoading: isLoading,
                 action: openStatistics
             )
@@ -527,7 +584,7 @@ public struct ProfileView: View {
             // Elle ne s'affiche qu'une fois abonné : sans abonnement, c'est le
             // bouton lime du haut qui porte la proposition, et deux entrées vers
             // la même feuille sur un même écran se marcheraient dessus.
-            if freemiumStatus == .subscriber {
+            if model.profile != nil, isSubscriber {
                 BrandRow("Mon abonnement") { sheet = .subscription }
             }
             BrandRow("Suivi des commandes") { sheet = .orderTracking }
@@ -674,31 +731,24 @@ public struct ProfileView: View {
                 },
                 onCancel: {
                     model.cancelSubscription(reason: $0)
-                    // **La semaine payée compte comme un abonnement** pour tout
-                    // ce qui ouvre un micro : la session retient donc l'accès
-                    // réel, pas le geste. Sans ça, l'accueil reproposait l'offre
-                    // à quelqu'un qui a encore cinq jours réglés devant lui.
+                    // **Le mois payé compte comme un abonnement** : l'illimité
+                    // reste ouvert jusqu'à sa fin. La session retient donc
+                    // l'accès réel, pas le geste — sans ça, la conversation
+                    // recompterait les secondes de quelqu'un qui a encore trois
+                    // semaines réglées devant lui.
                     subscriptionSession?.record(isSubscribed: model.subscriptionGrantsAccess)
-                },
-                onLearnMore: {
-                    sheet = nil
-                    showsPaywall = true
                 },
                 onRecordReason: { model.recordCancellationReason($0) },
                 onAppStoreRenewal: { renews in
-                    model.acknowledgeAppStoreRenewal(renews)
-                    // Même règle qu'au-dessus : la semaine payée garde le micro
-                    // ouvert, même renouvellement coupé.
-                    subscriptionSession?.record(isSubscribed: model.subscriptionGrantsAccess)
+                    // Même règle qu'au-dessus — le mois payé garde l'illimité,
+                    // même renouvellement coupé —, sauf pour un achat que le
+                    // serveur n'a pas encore reçu : Apple tient la période, la
+                    // ligne du serveur n'en sait rien. On remet la transaction
+                    // et on relit. Voir ``ProfileModel/settleAppStoreRenewal(_:session:)``.
+                    if model.settleAppStoreRenewal(renews, session: subscriptionSession) {
+                        Task { await deliverPurchaseAndReload() }
+                    }
                 },
-                onSeeWallet: {
-                    // La feuille se referme **avant** que la cagnotte s'ouvre :
-                    // c'est un écran poussé sur la pile du profil, comme la
-                    // galerie depuis la feuille des commandes.
-                    sheet = nil
-                    onIntent(.openWallet)
-                },
-                previewMemoId: model.profile?.currentTrip?.id,
                 gender: model.profile?.gender ?? .undisclosed
             )
         case .connectors:
@@ -1098,6 +1148,12 @@ private struct ProfileExitAction: View {
 #Preview("Profil") {
     NavigationStack {
         ProfileView {}
+    }
+}
+
+#Preview("Profil — sans abonnement") {
+    NavigationStack {
+        ProfileView(model: ProfileModel { .freeFixture }) {}
     }
 }
 

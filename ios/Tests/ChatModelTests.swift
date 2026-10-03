@@ -1,6 +1,7 @@
 @testable import MemoBookFeature
 import MemoBookCore
 import MemoBookNetworking
+import MemoBookRecording
 import XCTest
 
 /// Le déroulé d'un tour, avec un transport scripté : ce que le modèle fait du
@@ -19,23 +20,35 @@ final class ChatModelTests: XCTestCase {
         var edited: [(entryId: String, text: String)] = []
         var polls = 0
         var failsSending: (any Error)?
+        var failsEditing: (any Error)?
+        /// Le tour met ce temps à monter — un vocal en 3G.
+        var sendDelay: Duration?
         /// La file dit que le tour attend le réseau, au lieu de le livrer.
         var queuesSends = false
+        /// Le serveur est injoignable : le fil s'ouvre en local.
+        var isOffline = false
         /// Ce qui attend sur le disque pour ce fil.
         var waiting: [OutgoingTurn] = []
+        /// Les tours que l'écran a demandé à la file d'oublier.
+        var discarded: [String] = []
         /// La file, telle que le modèle l'écoute.
         private let deliveryStream = AsyncStream.makeStream(of: ChatTurnDelivery.self)
 
         init(thread: ChatThread) { self.thread = thread }
 
-        func send(_ turn: OutgoingTurn) throws -> ChatSendOutcome {
+        func send(_ turn: OutgoingTurn) async throws -> ChatSendOutcome {
             sent.append(turn)
+            if let sendDelay { try await Task.sleep(for: sendDelay) }
             if let failsSending { throw failsSending }
             if queuesSends { return .queued }
             return .received(receiptFor?(turn) ?? ChatTurnReceipt(messages: [], turn: .idle, now: .now))
         }
 
         func deliveries() -> AsyncStream<ChatTurnDelivery> { deliveryStream.stream }
+        func discard(_ id: String) -> Bool {
+            discarded.append(id)
+            return true
+        }
         func deliver(_ delivery: ChatTurnDelivery) { deliveryStream.continuation.yield(delivery) }
 
         func poll() -> ChatThreadUpdate {
@@ -45,8 +58,9 @@ final class ChatModelTests: XCTestCase {
                 : updates.removeFirst()
         }
 
-        func edit(_ entryId: String, _ text: String) -> Entry {
+        func edit(_ entryId: String, _ text: String) throws -> Entry {
             edited.append((entryId, text))
+            if let failsEditing { throw failsEditing }
             return Entry(
                 id: entryId,
                 memoId: "trip",
@@ -63,32 +77,59 @@ final class ChatModelTests: XCTestCase {
         func answerSends(with factory: @escaping @Sendable (OutgoingTurn) -> ChatTurnReceipt) { receiptFor = factory }
         func queueUpdate(_ update: ChatThreadUpdate) { updates.append(update) }
         func failSending(with error: any Error) { failsSending = error }
+        func failEditing(with error: (any Error)?) { failsEditing = error }
+        func delaySends(by delay: Duration?) { sendDelay = delay }
         func succeedSending() { failsSending = nil }
         func queueSends() { queuesSends = true }
         func deliverSends() { queuesSends = false }
         func setWaiting(_ turns: [OutgoingTurn]) { waiting = turns }
+        func goOffline() { isOffline = true }
+        func goOnline(with thread: ChatThread) {
+            isOffline = false
+            self.thread = thread
+        }
     }
 
     private func transport(_ script: Script) -> ChatTransport {
         ChatTransport(
-            load: { await script.thread },
+            load: {
+                if await script.isOffline { throw APIError.transport(URLError(.notConnectedToInternet), url: nil) }
+                return await script.thread
+            },
             poll: { _ in await script.poll() },
             send: { turn in try await script.send(turn) },
-            editTranscript: { entryId, text in await script.edit(entryId, text) },
+            editTranscript: { entryId, text in try await script.edit(entryId, text) },
             media: { _ in Data() },
             waiting: { await script.waiting },
-            deliveries: { await script.deliveries() }
+            deliveries: { await script.deliveries() },
+            offlineThread: { _ in await script.isOffline ? await script.thread : nil },
+            discard: { id in await script.discard(id) }
         )
     }
 
-    private func thread(messages: [ChatMessage] = [], suggestions: [ChatSuggestion] = []) -> ChatThread {
+    private func thread(
+        messages: [ChatMessage] = [],
+        suggestions: [ChatSuggestion] = [],
+        credit: DailyCredit? = nil
+    ) -> ChatThread {
         ChatThread(
             id: "trip",
             title: "Rome 2026",
             context: ChatContext(tripId: "trip", stepId: "step-3"),
             messages: messages,
             suggestions: suggestions,
-            now: .now
+            now: .now,
+            dailyCredit: credit
+        )
+    }
+
+    /// Un crédit du jour dont il reste `remainingMs`.
+    private func credit(remainingMs: Int, isUnlimited: Bool = false) -> DailyCredit {
+        DailyCredit(
+            isUnlimited: isUnlimited,
+            usedMs: DailyCredit.Catalog.limitMs - remainingMs,
+            day: "2026-10-03",
+            resetsAt: .now.addingTimeInterval(3_600)
         )
     }
 
@@ -439,6 +480,634 @@ final class ChatModelTests: XCTestCase {
         let resent = await script.sent.map(\.id)
         XCTAssertEqual(resent.count, 2)
         XCTAssertEqual(Set(resent).count, 1)
+    }
+
+    // MARK: - Le crédit du jour
+
+    /// Le crédit du fil se décompte **à l'envoi**, sans attendre le reçu — un
+    /// texte, 75 ms par caractère ; une puce, rien —, et le reçu remet le
+    /// chiffre du serveur.
+    func testTheCreditIsSpentLocallyThenTakenFromTheReceipt() async throws {
+        let script = Script(thread: thread(credit: credit(remainingMs: 200_000)))
+        await script.queueSends()
+        let model = ChatModel(transport: transport(script), callToActionMemory: .inMemory())
+        await model.load()
+        XCTAssertEqual(model.dailyCredit?.remainingMs, 200_000)
+
+        model.draft = "Dix lettres"
+        model.sendDraft()
+        XCTAssertEqual(model.dailyCredit?.remainingMs, 200_000 - 11 * 75, "Onze caractères, décomptés tout de suite.")
+
+        model.choose(
+            ChatSuggestion(id: "later", label: "Plus tard", symbol: nil, intent: .send),
+            addPhotos: {}
+        )
+        XCTAssertEqual(model.dailyCredit?.remainingMs, 200_000 - 11 * 75, "Une puce ne coûte rien.")
+
+        await script.deliverSends()
+        let served = credit(remainingMs: 150_000)
+        await script.answerSends { turn in
+            ChatTurnReceipt(messages: [], turn: .idle, now: .now, dailyCredit: served)
+        }
+        model.draft = "Encore"
+        model.sendDraft()
+        // Le chiffre du serveur, moins le premier texte — toujours en file :
+        // le serveur ne l'a pas reçu, son crédit ne le compte pas.
+        try await until("le reçu remet le chiffre du serveur") {
+            model.dailyCredit?.remainingMs == 150_000 - 11 * 75
+        }
+    }
+
+    /// Un brouillon plus long que le reste du jour ne part pas : l'envoi
+    /// pâlit et la boîte dit combien il reste. Sous une minute de crédit, un
+    /// brouillon qui passe porte le rappel discret des caractères.
+    func testADraftLongerThanTheCreditCannotBeSent() async throws {
+        let script = Script(thread: thread(credit: credit(remainingMs: 1_500)))  // 20 caractères
+        let model = ChatModel(transport: transport(script), callToActionMemory: .inMemory())
+        await model.load()
+        model.composer = .writing
+
+        model.draft = String(repeating: "a", count: 30)
+        XCTAssertTrue(model.draftExceedsCredit)
+        XCTAssertFalse(model.canSendDraft)
+        XCTAssertEqual(model.creditTextNotice, .tooLong(DailyCreditCopy.textTooLong(charactersLeft: 20)))
+        model.sendDraft()
+        let nothingSent = await script.sent
+        XCTAssertTrue(nothingSent.isEmpty, "Le serveur le refuserait en entier : l'app l'en empêche avant.")
+        XCTAssertEqual(model.draft.count, 30, "Le brouillon reste, rien n'est perdu.")
+
+        model.draft = "Court"
+        XCTAssertTrue(model.canSendDraft)
+        XCTAssertEqual(model.creditTextNotice, .reminder(ChatCopy.Credit.charactersLeft(20)))
+    }
+
+    /// Crédit épuisé : le micro et le clavier ne s'ouvrent pas, ils font
+    /// paraître le bandeau « épuisé » — qui **passe** : il s'efface au geste
+    /// suivant, ou de lui-même. Les puces, gratuites, restent là ; « Raconter
+    /// à l'oral », qui n'armerait qu'un micro fermé, se tait.
+    func testAnExhaustedCreditShowsTheBannerInsteadOfOpeningTheMicrophone() async throws {
+        let accept = ChatSuggestion(id: "accept", label: "Ça me convient", intent: .send)
+        let speak = ChatSuggestion(id: "edit-voice", label: "Je raconte à l’oral", intent: .sendThenSpeak)
+        let script = Script(thread: thread(suggestions: [accept, speak], credit: credit(remainingMs: 0)))
+        let model = ChatModel(transport: transport(script), callToActionMemory: .inMemory())
+        await model.load()
+
+        XCTAssertTrue(model.isCreditExhausted)
+        XCTAssertNil(model.creditBanner, "Rien tant qu'on n'a rien touché.")
+        XCTAssertEqual(model.visibleSuggestions.map(\.id), ["accept"], "Pas de micro à armer.")
+
+        model.tapMicrophone()
+        XCTAssertEqual(model.composer, .tools, "Le micro ne s'arme pas.")
+        XCTAssertFalse(model.recorder.isRecording)
+        XCTAssertEqual(model.creditBanner, .exhausted)
+        XCTAssertEqual(model.visibleSuggestions.map(\.id), ["accept"], "Les puces restent à portée de doigt.")
+
+        // Le geste suivant l'emporte : une puce.
+        model.choose(accept, addPhotos: {})
+        XCTAssertNil(model.creditBanner)
+
+        // Et seul, il s'en va aussi.
+        model.exhaustedNoticeLinger = .milliseconds(50)
+        XCTAssertFalse(model.tapKeyboard(), "Le clavier ne s'ouvre pas sur un texte qui ne partirait pas.")
+        XCTAssertEqual(model.creditBanner, .exhausted)
+        try await until("le bandeau s'efface de lui-même") { model.creditBanner == nil }
+    }
+
+    /// Un abonné ne voit rien de tout ça : ni bandeau, ni limite de texte.
+    func testASubscriberSeesNoneOfIt() async throws {
+        let script = Script(thread: thread(credit: credit(remainingMs: 0, isUnlimited: true)))
+        let model = ChatModel(transport: transport(script), callToActionMemory: .inMemory())
+        await model.load()
+        model.composer = .writing
+        model.draft = String(repeating: "a", count: 10_000)
+
+        XCTAssertFalse(model.isCreditExhausted)
+        XCTAssertFalse(model.draftExceedsCredit)
+        XCTAssertNil(model.creditTextNotice)
+        XCTAssertNil(model.creditBanner)
+        XCTAssertTrue(model.canSendDraft)
+    }
+
+    /// La file a vu le serveur refuser faute de crédit : la bulle attend
+    /// demain — pas de « Non envoyé », pas de renvoi en boucle — et la barre
+    /// passe à « épuisé ».
+    func testACreditRefusalWaitsForTomorrowInsteadOfFailing() async throws {
+        let script = Script(thread: thread(credit: credit(remainingMs: 2_000)))
+        await script.queueSends()
+        let model = ChatModel(transport: transport(script), callToActionMemory: .inMemory())
+        await model.load()
+
+        model.draft = "Un mot"
+        model.sendDraft()
+        let id = try XCTUnwrap(model.messages.last?.id)
+        try await until("le composeur se rouvre") { model.turn == .idle }
+
+        let tomorrow = Date.now.addingTimeInterval(7_200)
+        await script.deliver(
+            ChatTurnDelivery(
+                id: id,
+                tripId: "trip",
+                state: .waitingForCredit(until: tomorrow),
+                credit: credit(remainingMs: 0)
+            )
+        )
+        try await until("la bulle attend demain") { model.messages.last?.delivery.isWaitingForCredit == true }
+        XCTAssertFalse(model.messages.last?.delivery.hasFailed ?? true)
+        XCTAssertTrue(model.isCreditExhausted)
+
+        model.retry()
+        try await Task.sleep(for: .milliseconds(100))
+        let sent = await script.sent
+        XCTAssertEqual(sent.count, 1, "Rien à réessayer : la file le renverra à la recharge.")
+    }
+
+    /// Un transport sans file — les aperçus — rend le refus tel quel : la
+    /// bulle attend demain plutôt que d'échouer.
+    func testADirectCreditRefusalIsNotAFailure() async throws {
+        let script = Script(thread: thread(credit: credit(remainingMs: 1_000)))
+        await script.failSending(
+            with: APIError.dailyCreditExhausted(message: "Épuisé.", credit: credit(remainingMs: 0))
+        )
+        let model = ChatModel(transport: transport(script), callToActionMemory: .inMemory())
+        await model.load()
+
+        model.draft = "Un"
+        model.sendDraft()
+        try await until("la bulle attend demain") { model.messages.last?.delivery.isWaitingForCredit == true }
+        XCTAssertEqual(model.turn, .idle)
+        XCTAssertTrue(model.isCreditExhausted)
+    }
+
+    /// Ce qui attend le crédit de demain sur le disque se rouvre en « Partira
+    /// demain », et ne se décompte pas du crédit d'aujourd'hui.
+    func testATurnWaitingForCreditReopensAsLeavingTomorrow() async throws {
+        let tomorrow = Date.now.addingTimeInterval(3_600)
+        let script = Script(thread: thread(credit: credit(remainingMs: 60_000)))
+        await script.setWaiting([
+            OutgoingTurn(id: "w-1", body: .text("Hier soir"), waitingForCreditUntil: tomorrow),
+            OutgoingTurn(id: "w-2", body: .text("Ce matin")),
+        ])
+        let model = ChatModel(transport: transport(script), callToActionMemory: .inMemory())
+        await model.load()
+
+        XCTAssertEqual(model.messages.map(\.delivery), [.waitingForCredit(until: tomorrow), .sending])
+        XCTAssertEqual(model.dailyCredit?.remainingMs, 60_000 - 8 * 75, "Seul « Ce matin » entame aujourd'hui.")
+    }
+
+    /// Refusé hier soir jusqu'à minuit, rouvert ce matin : l'attente est
+    /// échue. La bulle n'est plus « Partira demain » — la file l'enverra dès
+    /// la reconnexion —, et son coût entame le crédit d'aujourd'hui, celui du
+    /// jour où il part.
+    func testATurnWhoseWaitIsOverReopensAsSendingAndCountsToday() async throws {
+        let midnight = Date.now.addingTimeInterval(-8 * 3_600)
+        let script = Script(thread: thread(credit: credit(remainingMs: 300_000)))
+        await script.setWaiting([
+            OutgoingTurn(id: "hier", body: .text(String(repeating: "a", count: 2_400)), waitingForCreditUntil: midnight),
+        ])
+        let model = ChatModel(transport: transport(script), callToActionMemory: .inMemory())
+        await model.load()
+
+        XCTAssertEqual(model.messages.map(\.delivery), [.sending], "Plus « Partira demain » : il part à la reconnexion.")
+        XCTAssertEqual(model.dailyCredit?.remainingMs, 120_000, "Trois minutes de texte, comptées aujourd'hui.")
+    }
+
+    /// Le reçu du tour qui vide le crédit apporte la bulle « reviens demain »
+    /// et son bouton ; touché ou ignoré, c'est retenu par bulle, d'un écran à
+    /// l'autre.
+    func testTheExhaustedNoticeCarriesACallToActionWhoseStateIsRemembered() async throws {
+        let script = Script(thread: thread(credit: credit(remainingMs: 1_000)))
+        await script.answerSends { turn in
+            ChatTurnReceipt(
+                messages: [
+                    ChatMessage(id: turn.id, author: .traveller, body: .text("Fin"), sentAt: .now, seq: 1),
+                    ChatMessage(
+                        id: "notice",
+                        author: .memo,
+                        body: .text(DailyCreditCopy.exhaustedMessage),
+                        sentAt: .now,
+                        seq: 2,
+                        callToAction: .dailyCreditSubscribe
+                    ),
+                ],
+                turn: .idle,
+                now: .now,
+                dailyCredit: DailyCredit(usedMs: DailyCredit.Catalog.limitMs)
+            )
+        }
+        let memory = ChatCallToActionMemory.inMemory()
+        let model = ChatModel(transport: transport(script), callToActionMemory: memory)
+        await model.load()
+
+        model.draft = "Fin"
+        model.sendDraft()
+        try await until("la bulle de MEMO arrive") { model.messages.contains { $0.id == "notice" } }
+        XCTAssertEqual(model.messages.last?.callToAction, .dailyCreditSubscribe)
+        XCTAssertTrue(model.isCreditExhausted)
+        XCTAssertEqual(model.callToActionState(for: "notice"), .pending)
+
+        model.followCallToAction(of: "notice")
+        XCTAssertEqual(model.callToActionState(for: "notice"), .followed)
+
+        let reopened = ChatModel(transport: transport(script), callToActionMemory: memory)
+        XCTAssertEqual(reopened.callToActionState(for: "notice"), .followed, "Retenu sur l'appareil, pas sur l'écran.")
+        reopened.dismissCallToAction(of: "notice")
+        XCTAssertEqual(memory.state(for: "notice"), .dismissed)
+    }
+
+    /// Hors ligne, le vocal de l'accueil coupé par la limite arrive avec la
+    /// bulle « reviens demain » de l'app ; celle du serveur la remplace au
+    /// retour — une seule, et la vraie.
+    func testTheLocalNoticeIsReplacedByTheServers() async throws {
+        // Un voyage à part : le dernier crédit connu de chaque voyage se garde
+        // le temps que l'app vive, et les autres tests en laissent sur « trip ».
+        let offlineThread = ChatThread(
+            id: "trip-offline",
+            title: "Rome 2026",
+            context: ChatContext(tripId: "trip-offline", stepId: nil),
+            now: .now,
+            dailyCredit: credit(remainingMs: 4_000)
+        )
+        let script = Script(thread: offlineThread)
+        await script.goOffline()
+        let model = ChatModel(transport: transport(script), callToActionMemory: .inMemory())
+        let audio = RecordedAudio(data: Data("vocal".utf8), filename: "v.m4a", mimeType: "audio/mp4", duration: 4, recordedAt: .now)
+        let handoff = RecordingHandoff(audio: audio, levels: [], stoppedAtLimit: true)
+        model.expect(handoff)
+        await model.load()
+
+        XCTAssertTrue(model.isOffline)
+        XCTAssertEqual(model.messages.map(\.id).first, handoff.id)
+        let local = try XCTUnwrap(model.messages.last)
+        XCTAssertTrue(local.id.hasPrefix(ChatModel.localNoticePrefix))
+        XCTAssertEqual(local.callToAction, .dailyCreditSubscribe)
+        XCTAssertTrue(model.isCreditExhausted, "Le vocal coupé a vidé le crédit.")
+
+        // Le réseau revient : le vocal arrive, avec la bulle du serveur.
+        let serverNotice = ChatMessage(
+            id: "server-notice",
+            author: .memo,
+            body: .text(DailyCreditCopy.exhaustedMessage),
+            sentAt: .now,
+            seq: 9,
+            callToAction: .dailyCreditSubscribe
+        )
+        var online = offlineThread
+        online.messages = [serverNotice]
+        await script.goOnline(with: online)
+        await script.deliver(
+            ChatTurnDelivery(
+                id: handoff.id,
+                tripId: "trip-offline",
+                state: .sent,
+                receipt: ChatTurnReceipt(messages: [serverNotice], turn: .idle, now: .now)
+            )
+        )
+        try await until("la bulle du serveur chasse celle de l'app") {
+            model.messages.contains { $0.id == "server-notice" }
+                && !model.messages.contains { $0.id.hasPrefix(ChatModel.localNoticePrefix) }
+        }
+    }
+
+    // MARK: - Le crédit servi et le crédit estimé
+
+    /// Rouvrir le fil hors ligne repart du dernier crédit **servi**, moins ce
+    /// qui attend dans la file — une fois. Le décompte n'est pas retenu : trois
+    /// réouvertures ne retirent pas trois fois le même texte.
+    func testReopeningOfflineDoesNotSpendTheQueueTwice() async throws {
+        let tripId = "trip-reopened-offline"
+        let offline = ChatThread(
+            id: tripId,
+            title: "Rome 2026",
+            context: ChatContext(tripId: tripId, stepId: nil),
+            now: .now,
+            dailyCredit: credit(remainingMs: 300_000)
+        )
+        for opening in 1...3 {
+            // Un transport neuf à chaque ouverture, comme l'écran en reçoit un
+            // d'`AppDependencies` ; le dernier crédit servi, lui, se garde
+            // d'un écran à l'autre.
+            let script = Script(thread: offline)
+            await script.goOffline()
+            // Mille six cents caractères : deux minutes de crédit.
+            await script.setWaiting([OutgoingTurn(id: "queued", body: .text(String(repeating: "a", count: 1_600)))])
+            let model = ChatModel(transport: transport(script), callToActionMemory: .inMemory())
+            await model.load()
+            XCTAssertTrue(model.isOffline)
+            XCTAssertEqual(model.dailyCredit?.remainingMs, 180_000, "Ouverture n° \(opening) : le texte en file, une fois.")
+            await model.load()
+            XCTAssertEqual(model.dailyCredit?.remainingMs, 180_000, "Recharger le même écran non plus.")
+            model.teardown()
+        }
+    }
+
+    /// Hors ligne, le dernier crédit retenu par un fil ne passe plus devant
+    /// un cache plus récent : retenu à 9 h (rien consommé), il cède devant
+    /// celui que l'accueil a relu à 14 h, après les 4 minutes d'un
+    /// co-voyageur.
+    func testOfflineTheFresherOfRememberedAndCachedCreditWins() async throws {
+        let tripId = "trip-retenu-puis-relu"
+        ChatModel.forgetRememberedCredits()
+        let online = ChatThread(
+            id: tripId,
+            title: "Rome 2026",
+            context: ChatContext(tripId: tripId, stepId: nil),
+            now: .now,
+            dailyCredit: credit(remainingMs: 300_000)
+        )
+        let morning = ChatModel(transport: transport(Script(thread: online)), callToActionMemory: .inMemory())
+        await morning.load()
+        XCTAssertEqual(morning.dailyCredit?.remainingMs, 300_000)
+        morning.teardown()
+
+        // Dans le métro : le fil local porte le crédit des caches, plus avancé.
+        var cached = online
+        cached.dailyCredit = credit(remainingMs: 60_000)
+        let script = Script(thread: cached)
+        await script.goOffline()
+        let afternoon = ChatModel(transport: transport(script), callToActionMemory: .inMemory())
+        await afternoon.load()
+        XCTAssertTrue(afternoon.isOffline)
+        XCTAssertEqual(afternoon.dailyCredit?.remainingMs, 60_000, "Le plus consommé du jour, pas le premier retenu.")
+    }
+
+    /// Le crédit retenu appartient au compte qui l'a lu : déconnecté, il est
+    /// oublié. B, connecté après A (abonné) sur le même iPhone, ne se croit
+    /// pas illimité hors ligne, et sa session n'apprend rien.
+    func testTheRememberedCreditDoesNotFollowTheNextAccount() async throws {
+        let tripId = "trip-partage-entre-comptes"
+        ChatModel.forgetRememberedCredits()
+        let thread = ChatThread(
+            id: tripId,
+            title: "Rome 2026",
+            context: ChatContext(tripId: tripId, stepId: nil),
+            now: .now,
+            dailyCredit: credit(remainingMs: 300_000, isUnlimited: true)
+        )
+        let alice = ChatModel(transport: transport(Script(thread: thread)), callToActionMemory: .inMemory())
+        await alice.load()
+        XCTAssertEqual(alice.credit?.isUnlimited, true)
+        alice.teardown()
+
+        // A se déconnecte — ce que fait `AppDependencies.forgetAccountContent()`.
+        ChatModel.forgetRememberedCredits()
+
+        var offline = thread
+        offline.dailyCredit = credit(remainingMs: 180_000)
+        let script = Script(thread: offline)
+        await script.goOffline()
+        let session = SubscriptionSession()
+        let bob = ChatModel(transport: transport(script), callToActionMemory: .inMemory())
+        bob.subscription = session
+        await bob.load()
+
+        XCTAssertEqual(bob.credit?.isUnlimited, false, "Le fil de B compte.")
+        XCTAssertEqual(bob.credit?.remainingMs, 180_000)
+        XCTAssertNil(session.known, "La session de B n'apprend pas l'abonnement de A.")
+        XCTAssertEqual(session.paywallVariant, .firstTime)
+    }
+
+    /// Une lecture du fil pendant qu'un tour monte ne rend pas son coût : le
+    /// serveur ne l'a pas encore reçu, son chiffre ne le compte pas. Le reçu,
+    /// lui, remet le chiffre du serveur.
+    func testAReadDuringASendKeepsTheTurnCounted() async throws {
+        let script = Script(thread: thread(credit: credit(remainingMs: 200_000)))
+        await script.delaySends(by: .milliseconds(400))
+        let cost = 11 * 75
+        let afterTheTurn = credit(remainingMs: 200_000 - cost)
+        await script.answerSends { _ in ChatTurnReceipt(messages: [], turn: .idle, now: .now, dailyCredit: afterTheTurn) }
+        await script.queueUpdate(
+            ChatThreadUpdate(messages: [], turn: .idle, now: .now, dailyCredit: credit(remainingMs: 200_000))
+        )
+        let model = ChatModel(transport: transport(script), callToActionMemory: .inMemory())
+        await model.load()
+
+        model.draft = "Dix lettres"
+        model.sendDraft()
+        XCTAssertEqual(model.dailyCredit?.remainingMs, 200_000 - cost)
+
+        // Une lecture pendant que le tour monte : le chiffre servi, sans lui.
+        model.refreshAfterSubscribing()
+        try await until("la lecture est passée") { await script.polls == 1 }
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(model.dailyCredit?.remainingMs, 200_000 - cost, "La barre ne remonte pas de ce qui est en route.")
+
+        try await until("le reçu") { model.messages.last?.delivery == .sent }
+        XCTAssertEqual(model.dailyCredit?.remainingMs, 200_000 - cost, "Le reçu le compte, une fois.")
+    }
+
+    /// Une correction « à la main » refusée — faute de crédit, ou autrement —
+    /// garde son brouillon : le texte revient dans le champ, sur la même
+    /// fiche, et le renvoyer la corrige bien.
+    func testARefusedHandEditKeepsItsDraft() async throws {
+        let script = Script(
+            thread: thread(
+                messages: [card("c", entryId: "e1", text: "le texte de MEMO", phase: .ready, seq: 1)],
+                credit: credit(remainingMs: 60_000)
+            )
+        )
+        await script.failEditing(with: APIError.dailyCreditExhausted(message: "Épuisé.", credit: credit(remainingMs: 0)))
+        let model = ChatModel(transport: transport(script), callToActionMemory: .inMemory())
+        await model.load()
+
+        model.edit(model.messages[0])
+        model.draft = "le texte de MEMO, et la suite que j’ai tapée"
+        model.sendDraft()
+
+        try await until("le refus") { model.errorMessage != nil }
+        XCTAssertEqual(model.draft, "le texte de MEMO, et la suite que j’ai tapée", "Rien de ce qu'on a tapé ne se perd.")
+        XCTAssertTrue(model.isEditingTranscript)
+        XCTAssertEqual(model.composer, .writing)
+        XCTAssertTrue(model.isCreditExhausted, "Le solde du refus fait foi.")
+
+        // Le crédit revient (un abonnement, minuit) : le même brouillon corrige
+        // la même fiche.
+        await script.failEditing(with: nil)
+        await script.queueUpdate(ChatThreadUpdate(messages: [], turn: .idle, now: .now, dailyCredit: credit(remainingMs: 60_000)))
+        model.refreshAfterSubscribing()
+        try await until("le crédit revient") { !model.isCreditExhausted }
+        model.sendDraft()
+        try await until("la correction repart") { await script.edited.count == 2 }
+        let edited = await script.edited
+        XCTAssertEqual(edited.last?.entryId, "e1")
+    }
+
+    /// La file rejoue son dernier mot à chaque fil qui s'ouvre — ici le reçu
+    /// d'un tour parti ce matin. Le fil vient de lire un crédit plus frais :
+    /// le vieux reçu ne le défait pas. Un refus rejoué ne retire pas non plus
+    /// l'illimité que le fil vient de lire.
+    func testAReplayedReceiptDoesNotUndoAFresherCredit() async throws {
+        let script = Script(thread: thread(credit: credit(remainingMs: 30_000)))
+        let model = ChatModel(transport: transport(script), callToActionMemory: .inMemory())
+        await model.load()
+        XCTAssertEqual(model.dailyCredit?.remainingMs, 30_000)
+
+        let morning = ChatTurnReceipt(
+            messages: [],
+            turn: .idle,
+            now: Date.now.addingTimeInterval(-5 * 3_600),
+            dailyCredit: credit(remainingMs: 240_000)
+        )
+        await script.deliver(ChatTurnDelivery(id: "matin", tripId: "trip", state: .sent, receipt: morning).replayed)
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(model.dailyCredit?.remainingMs, 30_000, "Le reçu de 10 h ne rend pas 4:00 à 15 h.")
+
+        // Le même mot, s'il était neuf, ferait foi : c'est le rejeu seul
+        // qui ne passe pas.
+        await script.deliver(ChatTurnDelivery(id: "neuf", tripId: "trip", state: .sent, receipt: ChatTurnReceipt(
+            messages: [], turn: .idle, now: .now, dailyCredit: credit(remainingMs: 20_000)
+        )))
+        try await until("le reçu neuf fait foi") { model.dailyCredit?.remainingMs == 20_000 }
+    }
+
+    /// Hors ligne, le fil n'a pas lu le serveur : un mot rejoué se fond dans
+    /// ce qu'il tient — le plus consommé du jour, et l'illimité s'il est su.
+    func testAReplayedWordMergesIntoTheOfflineCredit() async throws {
+        let tripId = "trip-rejeu-hors-ligne"
+        ChatModel.forgetRememberedCredits()
+        let offline = ChatThread(
+            id: tripId,
+            title: "Rome 2026",
+            context: ChatContext(tripId: tripId, stepId: nil),
+            dailyCredit: credit(remainingMs: 30_000, isUnlimited: true)
+        )
+        let script = Script(thread: offline)
+        await script.goOffline()
+        let model = ChatModel(transport: transport(script), callToActionMemory: .inMemory())
+        await model.load()
+        XCTAssertTrue(model.isOffline)
+
+        await script.deliver(
+            ChatTurnDelivery(
+                id: "refus",
+                tripId: tripId,
+                state: .waitingForCredit(until: .now.addingTimeInterval(3_600)),
+                credit: credit(remainingMs: 0)
+            ).replayed
+        )
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(model.dailyCredit?.isUnlimited, true, "Un refus rejoué ne retire pas l'illimité.")
+        XCTAssertEqual(model.dailyCredit?.remainingMs, 0, "Le plus consommé du jour.")
+    }
+
+    // MARK: - Trop long pour une journée
+
+    /// La file dit qu'un tour coûte plus qu'une journée : sa bulle propose
+    /// l'illimité, ne se décompte pas, et le crédit d'aujourd'hui n'est pas
+    /// déclaré épuisé pour autant.
+    func testATurnLongerThanADayWaitsForUnlimited() async throws {
+        let script = Script(thread: thread(credit: credit(remainingMs: 240_000)))
+        await script.queueSends()
+        let model = ChatModel(transport: transport(script), callToActionMemory: .inMemory())
+        await model.load()
+
+        model.draft = String(repeating: "a", count: 3_000)  // 3:45, dans le reste
+        model.sendDraft()
+        let id = try XCTUnwrap(model.messages.last?.id)
+        try await until("le composeur se rouvre") { model.turn == .idle }
+
+        await script.deliver(
+            ChatTurnDelivery(id: id, tripId: "trip", state: .waitingForUnlimited, credit: credit(remainingMs: 240_000))
+        )
+        try await until("la bulle attend l'illimité") { model.messages.last?.delivery == .waitingForUnlimited }
+        XCTAssertFalse(model.isCreditExhausted)
+        XCTAssertEqual(model.dailyCredit?.remainingMs, 240_000, "Il ne part pas aujourd'hui : il ne coûte rien aujourd'hui.")
+
+        // L'abonnement le libère : la file le dit, la bulle repart.
+        await script.deliver(ChatTurnDelivery(id: id, tripId: "trip", state: .sending))
+        try await until("la bulle repart") { model.messages.last?.delivery == .sending }
+    }
+
+    /// Ce qui attend l'illimité sur le disque se rouvre comme tel ; un refus
+    /// direct « trop long » — sans file — aussi.
+    func testATurnWaitingForUnlimitedReopensAsSuch() async throws {
+        let script = Script(thread: thread(credit: credit(remainingMs: 60_000)))
+        await script.setWaiting([OutgoingTurn(id: "long", body: .text("…"), waitingForUnlimited: true)])
+        await script.failSending(
+            with: APIError.server(statusCode: 422, code: APIError.dailyCreditTooLongCode, message: "Trop long.")
+        )
+        let model = ChatModel(transport: transport(script), callToActionMemory: .inMemory())
+        await model.load()
+
+        XCTAssertEqual(model.messages.map(\.delivery), [.waitingForUnlimited])
+        XCTAssertEqual(model.dailyCredit?.remainingMs, 60_000)
+
+        model.draft = "Encore"
+        model.sendDraft()
+        try await until("la bulle attend l'illimité") { model.messages.last?.delivery == .waitingForUnlimited }
+        XCTAssertEqual(model.turn, .idle)
+        XCTAssertNil(model.errorMessage, "Pas un échec à réessayer.")
+        XCTAssertEqual(model.dailyCredit?.remainingMs, 60_000)
+    }
+
+    /// « Supprimer », sous une bulle qui attend l'illimité, une fois
+    /// confirmé : la bulle quitte le fil, et la file oublie le tour. Une
+    /// bulle qui attend le réseau — peut-être déjà en route — ne se supprime
+    /// pas d'ici.
+    func testATurnWaitingForUnlimitedCanBeDiscarded() async throws {
+        let script = Script(thread: thread(credit: credit(remainingMs: 60_000)))
+        await script.setWaiting([
+            OutgoingTurn(id: "long", body: .text("…"), waitingForUnlimited: true),
+            OutgoingTurn(id: "metro", body: .text("Dans le métro")),
+        ])
+        let model = ChatModel(transport: transport(script), callToActionMemory: .inMemory())
+        await model.load()
+
+        model.discardWaitingTurn("metro")
+        XCTAssertEqual(model.messages.map(\.id), ["long", "metro"], "Une bulle en route ne se supprime pas.")
+
+        model.discardWaitingTurn("long")
+        XCTAssertEqual(model.messages.map(\.id), ["metro"])
+        try await until("la file l'oublie") { await script.discarded == ["long"] }
+    }
+
+    /// Hors ligne, sans rien savoir du crédit — un voyage que les caches ne
+    /// chiffrent pas —, l'écran plafonne au pot du catalogue, moins ce qui
+    /// attend dans la file : un vocal coupe à la limite, un texte trop long
+    /// ne part pas. Un abonné que la session connaît ne compte rien ; en
+    /// ligne, sans crédit servi, rien non plus.
+    func testOfflineWithoutAKnownCreditCapsAtTheCatalogue() async throws {
+        let tripId = "trip-sans-credit"
+        ChatModel.forgetRememberedCredits()
+        let unknown = ChatThread(id: tripId, title: "Rome 2026", context: ChatContext(tripId: tripId, stepId: nil))
+        let script = Script(thread: unknown)
+        await script.goOffline()
+        await script.setWaiting([OutgoingTurn(id: "queued", body: .text(String(repeating: "a", count: 800)))])
+        let model = ChatModel(transport: transport(script), callToActionMemory: .inMemory())
+        await model.load()
+
+        XCTAssertTrue(model.isOffline)
+        XCTAssertNil(model.dailyCredit, "Rien de servi.")
+        XCTAssertEqual(model.credit?.remainingMs, 240_000, "Cinq minutes, moins la minute qui attend.")
+        XCTAssertEqual(model.credit?.isUnlimited, false)
+        model.composer = .writing
+        model.draft = String(repeating: "a", count: 3_201)
+        XCTAssertTrue(model.draftExceedsCredit)
+        model.draft = "Court"
+        XCTAssertFalse(model.draftExceedsCredit)
+
+        let session = SubscriptionSession()
+        session.learn(isUnlimited: true, hasSubscribedBefore: true)
+        model.subscription = session
+        XCTAssertNil(model.credit, "Un abonné connu de la session ne compte rien.")
+
+        let online = ChatModel(transport: transport(Script(thread: unknown)), callToActionMemory: .inMemory())
+        await online.load()
+        XCTAssertFalse(online.isOffline)
+        XCTAssertNil(online.credit, "En ligne, un serveur qui ne sert pas de crédit ne fait pas compter.")
+    }
+
+    /// Le fil hors ligne reprend le crédit que l'accueil a gardé — rechargé
+    /// s'il date d'hier : épuisé la veille, il est plein ce matin.
+    func testTheOfflineThreadRefreshesYesterdaysCredit() {
+        let yesterday = DailyCredit(usedMs: DailyCredit.Catalog.limitMs, resetsAt: Date.now.addingTimeInterval(-3_600))
+        let trip = Trip(id: "trip-hier", title: "Rome 2026", stage: .ongoing, dailyCredit: yesterday)
+        let offline = ChatThread.offline(trip: trip, traveller: nil, isNew: false)
+        XCTAssertEqual(offline.dailyCredit?.isExhausted, false)
+        XCTAssertEqual(offline.dailyCredit?.remainingMs, DailyCredit.Catalog.limitMs)
+
+        let today = DailyCredit(usedMs: 120_000, resetsAt: Date.now.addingTimeInterval(3_600))
+        let tripToday = Trip(id: "trip-jour", title: "Rome 2026", stage: .ongoing, dailyCredit: today)
+        XCTAssertEqual(ChatThread.offline(trip: tripToday, traveller: nil, isNew: false).dailyCredit, today)
     }
 
     // MARK: -

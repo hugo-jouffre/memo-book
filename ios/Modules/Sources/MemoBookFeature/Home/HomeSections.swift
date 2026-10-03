@@ -3,8 +3,8 @@ import MemoBookDesign
 import SwiftUI
 
 /// Le titre d'une section de l'accueil, avec ses deux décorations possibles :
-/// le point vert qui signale « en ce moment », et la pastille lime qui compte
-/// ce que la section contient.
+/// le point vert qui signale « en ce moment », et la pastille qui compte ce que
+/// la section contient (``CountBadge``).
 struct HomeSectionHeading: View {
     let title: String
     var showsLiveDot = false

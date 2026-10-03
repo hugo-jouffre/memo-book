@@ -22,6 +22,12 @@ struct DeleteAccountSheet: View {
     /// de tout effacer.
     let hasOngoingTrip: Bool
 
+    /// Un abonnement App Store va se renouveler : la feuille rappelle que
+    /// supprimer le compte ne l'arrête pas. **À lui seul** (03/10/2026) — le
+    /// dire à tout le monde demandait à un compte gratuit de couper un
+    /// abonnement qu'il n'a pas.
+    var mentionsSubscription = true
+
     /// La suppression est partie. Le bouton rouge tourne et plus rien ne se
     /// touche : la demande est définitive, elle ne part pas deux fois.
     let isDeleting: Bool
@@ -32,7 +38,7 @@ struct DeleteAccountSheet: View {
     var body: some View {
         BrandSheet(DeleteAccountCopy.title) {
             VStack(alignment: .leading, spacing: MemoBookSpacing.m) {
-                Text(hasOngoingTrip ? DeleteAccountCopy.bodyWithTrip : DeleteAccountCopy.body)
+                Text(DeleteAccountCopy.body(hasOngoingTrip: hasOngoingTrip, mentionsSubscription: mentionsSubscription))
                     .font(MemoBookFont.body)
                     .foregroundStyle(MemoBookColor.ink)
                     .multilineTextAlignment(.leading)
@@ -64,13 +70,26 @@ struct DeleteAccountSheet: View {
 enum DeleteAccountCopy {
     static let title = "Tu es sûr de vouloir supprimer ton compte MemoBook ?"
 
-    static let body =
-        "Tes voyages, tes souvenirs et tes carnets seront effacés, ainsi que tes commandes. Les voyages que tu partages restent à tes co-voyageurs, avec les souvenirs que tu y as racontés. Ta cagnotte et tes abonnements sont supprimés. C’est immédiat et sans retour."
+    static let erasure =
+        "Tes voyages, tes souvenirs et tes carnets seront effacés, ainsi que tes commandes. Les voyages que tu partages restent à tes co-voyageurs, avec les souvenirs que tu y as racontés. Ta cagnotte est supprimée. C’est immédiat et sans retour."
 
-    /// La même phrase, et la porte de sortie qui n'existe que s'il y a un
-    /// voyage en cours à clore.
-    static let bodyWithTrip =
-        body + " Tu veux seulement clore ton voyage en cours ? Termine-le : ton compte et tes carnets restent."
+    /// Pour qui a un abonnement App Store qui va se renouveler — voir
+    /// ``DeleteAccountSheet/mentionsSubscription``.
+    static let subscriptionWarning =
+        "Ton abonnement, lui, se résilie chez Apple : supprimer ton compte ne l’arrête pas, pense à le couper dans les réglages de ton iPhone."
+
+    /// La porte de sortie qui n'existe que s'il y a un voyage en cours à clore.
+    static let closeTripInstead =
+        "Tu veux seulement clore ton voyage en cours ? Termine-le : ton compte et tes carnets restent."
+
+    /// Le paragraphe de la feuille : ce qui s'efface, l'abonnement à couper
+    /// chez Apple s'il y en a un, et la porte de sortie s'il y a un voyage.
+    static func body(hasOngoingTrip: Bool, mentionsSubscription: Bool) -> String {
+        var sentences = [erasure]
+        if mentionsSubscription { sentences.append(subscriptionWarning) }
+        if hasOngoingTrip { sentences.append(closeTripInstead) }
+        return sentences.joined(separator: " ")
+    }
 
     static let keep = "Garder mon compte"
     static let delete = "Supprimer définitivement mon compte"
@@ -79,7 +98,13 @@ enum DeleteAccountCopy {
 #Preview("Suppression — sans voyage") {
     Color.clear
         .brandSheet(isPresented: .constant(true)) {
-            DeleteAccountSheet(hasOngoingTrip: false, isDeleting: false, onKeep: {}, onDelete: {})
+            DeleteAccountSheet(
+                hasOngoingTrip: false,
+                mentionsSubscription: false,
+                isDeleting: false,
+                onKeep: {},
+                onDelete: {}
+            )
         }
 }
 

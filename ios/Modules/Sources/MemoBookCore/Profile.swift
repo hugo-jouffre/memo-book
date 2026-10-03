@@ -179,15 +179,29 @@ public struct Connector: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
-/// L'abonnement hebdomadaire, tel que les feuilles le présentent.
+/// L'abonnement, tel que les feuilles le présentent.
 ///
-/// **Il ne se résilie pas d'un coup : il s'éteint tout seul.** C'est la promesse
-/// que trois des cinq feuilles répètent, et c'est pour ça que ce modèle porte le
-/// voyage autant que le prix — sans le voyage, « résiliation automatique à la
-/// fin de ton voyage à Rome » n'a rien à écrire.
+/// **4,99 € par mois, et l'illimité pour l'abonné seul** (Hugo, 03/10/2026) :
+/// sans abonnement, chaque voyage raconte cinq minutes par jour (voir
+/// ``DailyCredit``) ; abonné, on raconte sans compter. Il ne se coupe pas tout
+/// seul — Apple le renouvelle —, alors l'app propose de le résilier à la fin du
+/// voyage, et c'est pour ça que ce modèle porte le voyage autant que le prix :
+/// sans lui, « un rappel à la fin de ton voyage à Rome » n'a rien à écrire.
 public struct Subscription: Codable, Sendable, Hashable {
-    public let weeklyPrice: Decimal
-    public var isActive: Bool
+    /// Ce que l'abonnement coûte par période. En euros, `Decimal` : de l'argent.
+    public let price: Decimal
+
+    /// La période que ``price`` paie. Le mois, désormais ; la semaine reste
+    /// lisible pour les abonnés de l'ancienne formule, honorés jusqu'à
+    /// l'expiration de ce qu'ils ont payé — et pour un serveur plus ancien.
+    public let interval: Interval
+
+    /// Un geste fait dans l'app — souscrire, résilier, le bac à sable — le
+    /// retouche sur place : le verdict du serveur (``servedIsUnlimited``), qui
+    /// datait d'avant, ne vaut plus, et l'app recompte (03/10/2026).
+    public var isActive: Bool {
+        didSet { if isActive != oldValue { servedIsUnlimited = nil } }
+    }
 
     /// Le voyage qui porte l'abonnement, sous ses deux noms — les feuilles
     /// emploient les deux et ce ne sont pas les mêmes mots.
@@ -199,7 +213,8 @@ public struct Subscription: Codable, Sendable, Hashable {
     public var tripDestination: String?
     public var tripTitle: String?
 
-    /// Le jour où l'abonnement s'arrête de lui-même : la fin du voyage.
+    /// Le dernier jour du voyage qui porte l'abonnement : c'est là que l'app
+    /// propose de le résilier.
     ///
     /// C'est de lui que sort le « dans 3 semaines » de la feuille — jamais d'un
     /// nombre écrit à la main quelque part dans une vue.
@@ -208,32 +223,45 @@ public struct Subscription: Codable, Sendable, Hashable {
     /// Le jour où il a été résilié à la main, s'il l'a été.
     public var cancelledAt: Date?
 
-    /// **Jusqu'où la semaine payée porte.** La fin de la période déjà réglée —
+    /// **Jusqu'où la période payée porte.** La fin du mois déjà réglé —
     /// `subscriptions.renewsAt` côté serveur.
     ///
-    /// C'est ce qui rend vraie la promesse de la résiliation : une semaine
-    /// commencée est une semaine payée, et résilier au lendemain d'un
-    /// prélèvement ne doit pas fermer le micro six jours plus tôt que prévu
-    /// (Hugo, 16/09/2026). L'abonnement passe donc par un **sursis** :
-    /// `isActive` tombe, `paidThrough` reste, et l'app comme le serveur
-    /// continuent d'ouvrir l'enregistrement jusqu'à cette date.
+    /// C'est ce qui rend vraie la promesse de la résiliation : un mois commencé
+    /// est un mois payé, et résilier au lendemain d'un prélèvement ne doit pas
+    /// refermer l'illimité des semaines plus tôt que prévu (Hugo, 16/09/2026,
+    /// règle tenue au passage au mois le 03/10/2026). L'abonnement passe donc
+    /// par un **sursis** : `isActive` tombe, `paidThrough` reste, et l'app
+    /// comme le serveur laissent raconter sans compter jusqu'à cette date.
     ///
     /// `nil` quand rien n'a été payé — un compte qui n'a jamais souscrit —, ou
     /// quand un serveur plus ancien ne sert pas le champ : on retombe alors sur
-    /// l'ancien comportement, l'arrêt le jour même.
-    public var paidThrough: Date?
+    /// l'arrêt le jour même.
+    public var paidThrough: Date? {
+        didSet { if paidThrough != oldValue { servedIsUnlimited = nil } }
+    }
+
+    /// **Ce que le serveur a tranché** : `subscription.isUnlimited` de
+    /// `GET /v1/profile`, calculé par `hasUnlimitedAccess` à l'instant près
+    /// (`renewsAt > now`, délai de grâce d'Apple compris).
+    ///
+    /// C'est lui que ``isUnlimited`` lit d'abord (03/10/2026). L'app recomptait
+    /// au jour près, et se contredisait avec le serveur le dernier jour payé
+    /// ou pendant un délai de grâce de facturation. `nil` d'un serveur plus
+    /// ancien, ou dès qu'un geste local a retouché ``isActive`` ou
+    /// ``paidThrough`` : le recalcul local reprend alors la main.
+    public private(set) var servedIsUnlimited: Bool?
 
     /// Ce compte a **déjà** été abonné, et ne l'est plus.
     ///
-    /// C'est ce qui décide de la version du paywall : quelqu'un qui revient pour
-    /// un nouveau voyage a déjà vu les trois écrans de découverte, et on lui en
-    /// montre deux — voir `PaywallVariant`. Il se lit sur l'existence d'un
-    /// abonnement terminé, pas sur une colonne de plus : le serveur garde
-    /// l'historique des abonnements d'un compte (`subscriptions`).
+    /// C'est ce qui décide de la version du paywall : quelqu'un qui revient a
+    /// déjà vu les trois écrans de découverte, et on lui en montre deux — voir
+    /// `PaywallVariant`. Il se lit sur l'existence d'un abonnement terminé, pas
+    /// sur une colonne de plus : le serveur garde l'historique des abonnements
+    /// d'un compte (`subscriptions`).
     ///
-    /// **L'abonnement s'arrête tout seul à la fin du voyage**, c'est la
-    /// troisième promesse de l'offre. Ce drapeau est donc l'état normal de
-    /// n'importe qui entre deux voyages, pas celui d'un mécontent.
+    /// L'app propose de résilier à la fin de chaque voyage : ce drapeau est donc
+    /// l'état normal de n'importe qui entre deux voyages, pas celui d'un
+    /// mécontent.
     public var hasEndedBefore: Bool
 
     /// **Apple tient l'abonnement** (01/10/2026) : il a été acheté par StoreKit.
@@ -244,8 +272,23 @@ public struct Subscription: Codable, Sendable, Hashable {
     /// ou quand un serveur plus ancien ne sert pas le champ.
     public var managedByAppStore: Bool
 
+    /// La période qu'un prix paie.
+    public enum Interval: String, Codable, Sendable, Hashable {
+        case month
+        case week
+
+        /// Le mot qui suit la barre oblique : « 4,99 €/**mois** ».
+        public var label: String {
+            switch self {
+            case .month: "mois"
+            case .week: "semaine"
+            }
+        }
+    }
+
     public init(
-        weeklyPrice: Decimal,
+        price: Decimal,
+        interval: Interval = .month,
         isActive: Bool = false,
         tripDestination: String? = nil,
         tripTitle: String? = nil,
@@ -253,9 +296,11 @@ public struct Subscription: Codable, Sendable, Hashable {
         cancelledAt: Date? = nil,
         paidThrough: Date? = nil,
         hasEndedBefore: Bool = false,
-        managedByAppStore: Bool = false
+        managedByAppStore: Bool = false,
+        servedIsUnlimited: Bool? = nil
     ) {
-        self.weeklyPrice = weeklyPrice
+        self.price = price
+        self.interval = interval
         self.isActive = isActive
         self.tripDestination = tripDestination
         self.tripTitle = tripTitle
@@ -264,14 +309,35 @@ public struct Subscription: Codable, Sendable, Hashable {
         self.paidThrough = paidThrough
         self.hasEndedBefore = hasEndedBefore
         self.managedByAppStore = managedByAppStore
+        self.servedIsUnlimited = servedIsUnlimited
     }
 
-    /// Décodage tolérant sur le drapeau ajouté avec le paywall de retour : un
-    /// serveur qui ne le sert pas encore fait voir la version de découverte,
-    /// jamais un écran vide.
+    private enum CodingKeys: String, CodingKey {
+        case price, interval, isActive, tripDestination, tripTitle, endsOn
+        case cancelledAt, paidThrough, hasEndedBefore, managedByAppStore
+        /// Le verdict du serveur — ``servedIsUnlimited``.
+        case isUnlimited
+        /// L'ancien nom du prix, lu seulement : un serveur d'avant le mois ne
+        /// sert que lui. Le serveur d'aujourd'hui le remplit encore du même
+        /// prix, pour les apps installées qui le décodent en obligatoire.
+        case weeklyPrice
+    }
+
+    /// Décodage tolérant : un serveur qui ne sert pas encore un drapeau fait
+    /// voir la version de découverte du paywall, jamais un écran vide.
+    ///
+    /// **Le prix** se lit sur `price`, sinon sur l'ancien `weeklyPrice` — et la
+    /// période avec lui : un serveur qui ne connaît que `weeklyPrice` ne vend
+    /// que la semaine.
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        weeklyPrice = try container.decode(Decimal.self, forKey: .weeklyPrice)
+        if let price = try container.decodeIfPresent(Decimal.self, forKey: .price) {
+            self.price = price
+            interval = (try? container.decodeIfPresent(Interval.self, forKey: .interval)) ?? .month
+        } else {
+            price = try container.decode(Decimal.self, forKey: .weeklyPrice)
+            interval = .week
+        }
         isActive = try container.decode(Bool.self, forKey: .isActive)
         tripDestination = try container.decodeIfPresent(String.self, forKey: .tripDestination)
         tripTitle = try container.decodeIfPresent(String.self, forKey: .tripTitle)
@@ -281,68 +347,135 @@ public struct Subscription: Codable, Sendable, Hashable {
         hasEndedBefore = try container.decodeIfPresent(Bool.self, forKey: .hasEndedBefore) ?? false
         managedByAppStore =
             try container.decodeIfPresent(Bool.self, forKey: .managedByAppStore) ?? false
+        servedIsUnlimited = try container.decodeIfPresent(Bool.self, forKey: .isUnlimited)
     }
 
-    /// **L'offre**, telle que le paywall la présente à quelqu'un qui n'a pas
-    /// encore d'abonnement : 1,99 € par semaine, le prix de la maquette, du
-    /// seed et du catalogue serveur (`backend/src/services/subscriptionCatalog.ts`).
-    ///
-    /// Le serveur sert désormais ce tarif à qui n'est pas abonné, au lieu d'un
-    /// zéro. Ce prix-ci reste le filet : l'accueil, un voyage ou la conversation
-    /// ouvrent le paywall sans avoir lu de profil, et StoreKit aura le dernier
-    /// mot le jour où il sera branché.
-    public static let offer = Subscription(weeklyPrice: 1.99)
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(price, forKey: .price)
+        try container.encode(interval, forKey: .interval)
+        try container.encode(isActive, forKey: .isActive)
+        try container.encodeIfPresent(tripDestination, forKey: .tripDestination)
+        try container.encodeIfPresent(tripTitle, forKey: .tripTitle)
+        try container.encodeIfPresent(endsOn, forKey: .endsOn)
+        try container.encodeIfPresent(cancelledAt, forKey: .cancelledAt)
+        try container.encodeIfPresent(paidThrough, forKey: .paidThrough)
+        try container.encode(hasEndedBefore, forKey: .hasEndedBefore)
+        try container.encode(managedByAppStore, forKey: .managedByAppStore)
+        try container.encodeIfPresent(servedIsUnlimited, forKey: .isUnlimited)
+    }
 
-    // MARK: Le sursis de la semaine payée
-
-    /// La semaine payée court-elle encore, à cette date ?
+    /// **L'offre**, telle que le paywall la présente quand StoreKit n'a pas
+    /// encore rendu la sienne : 4,99 € par mois, le prix du catalogue serveur
+    /// (`SUBSCRIPTION_MONTHLY_CENTS`, `backend/src/services/subscriptionCatalog.ts`)
+    /// et du produit `com.memobook.app.subscription.monthly`.
     ///
-    /// **Strictement après**, et non « à partir de » : une semaine qui se
+    /// C'est le filet, pas la vérité : le paywall écrit le prix et la période
+    /// que l'App Store déclare dès qu'il les a (règle 3.1.2 — l'écran d'achat et
+    /// la feuille d'Apple ne doivent pas dire deux prix).
+    public static let offer = Subscription(price: 4.99, interval: .month)
+
+    // MARK: Le sursis de la période payée
+
+    /// La période payée court-elle encore, à cette date ?
+    ///
+    /// **Strictement après**, et non « à partir de » : une période qui se
     /// termine aujourd'hui se termine aujourd'hui. C'est le cas que Hugo a
     /// nommément épargné — « si le dernier jour est aujourd'hui, le processus
     /// reste celui d'avant » —, et c'est aussi le plus simple à tenir : il n'y
     /// a pas de sursis à annoncer pour un jour qui est déjà là.
-    public func isWithinPaidWeek(on date: Date = .now) -> Bool {
+    public func isWithinPaidPeriod(on date: Date = .now) -> Bool {
         guard let paidThrough else { return false }
         return Calendar.current.startOfDay(for: paidThrough)
             > Calendar.current.startOfDay(for: date)
     }
 
-    /// Le compte a-t-il encore le droit de raconter : abonné, **ou** résilié
-    /// mais dans sa semaine payée.
+    /// Le compte raconte-t-il sans limite : abonné, **ou** résilié mais dans
+    /// sa période payée — **recalculé ici, au jour près**.
     ///
     /// C'est cette question-là que posent l'app et le serveur, jamais
-    /// `isActive` seul. Le pendant côté serveur est `assertCanRecord`, qui
-    /// accepte un abonnement `cancelled` dont le `renewsAt` n'est pas passé.
+    /// `isActive` seul. Le serveur y répond à l'instant près
+    /// (`hasUnlimitedAccess`, `services/subscriptions.ts` : `renewsAt > now`) ;
+    /// ce recalcul-ci compare des jours, et ne sert qu'à défaut de sa réponse
+    /// — voir ``isUnlimited``. Passer à l'instant près est une règle à
+    /// demander à Hugo, qui a voulu le jour (16/09/2026).
     public func grantsAccess(on date: Date = .now) -> Bool {
-        isActive || isWithinPaidWeek(on: date)
+        isActive || isWithinPaidPeriod(on: date)
+    }
+
+    /// Le compte raconte-t-il sans limite : **le verdict du serveur quand il
+    /// l'a servi** (``servedIsUnlimited``), sinon ``grantsAccess(on:)``.
+    ///
+    /// Le recalcul ne reprend la main que d'un serveur plus ancien, ou quand un
+    /// achat, une résiliation ou le bac à sable ont retouché ``isActive`` ou
+    /// ``paidThrough`` sur place : la réponse doit alors suivre le geste sans
+    /// attendre une relecture (03/10/2026).
+    public var isUnlimited: Bool { isUnlimited(at: .now) }
+
+    /// Le même, à un instant donné.
+    ///
+    /// **Un « oui » servi se périme avec la période qu'il couvrait**
+    /// (03/10/2026). Le verdict voyage dans le cache du profil : reçu le 1er
+    /// pour un mois résilié payé jusqu'au 5, il disait encore « illimité » le
+    /// 7 dans l'avion — pastille « Abonné(e) », « Résilier mon abonnement »,
+    /// et une session qui l'apprenait. On ne le croit donc que tant qu'il
+    /// tient avec la date : abonnement vivant, ou fin de période encore à
+    /// venir (`renewsAt > now`, la règle du serveur, à l'instant près — le
+    /// dernier jour payé reste ouvert jusqu'à son heure). Sans date servie —
+    /// le délai de grâce d'Apple, qui n'en annonce pas toujours —, il tient.
+    /// Un « non » servi reste un non.
+    public func isUnlimited(at date: Date) -> Bool {
+        guard let servedIsUnlimited else { return grantsAccess(on: date) }
+        return servedIsUnlimited && (isActive || paidThrough.map { $0 > date } ?? true)
     }
 
     /// Le jour où le sursis s'arrête, quand il y en a un à annoncer. `nil`
-    /// quand l'abonnement est encore actif, ou quand la semaine payée se
+    /// quand l'abonnement est encore actif, ou quand la période payée se
     /// termine aujourd'hui ou est déjà passée.
     public func graceEnd(on date: Date = .now) -> Date? {
-        guard !isActive, isWithinPaidWeek(on: date) else { return nil }
+        guard !isActive, isWithinPaidPeriod(on: date) else { return nil }
         return paidThrough
     }
+
+    // MARK: Le prix à écrire
 
     /// Le prix à **écrire**, qui n'est jamais zéro.
     ///
     /// ⚠️ Un abonnement à zéro euro n'existe pas : c'est la marque d'un serveur
-    /// qui n'a pas de ligne à lire — l'ancien comportement de `GET /v1/profile`,
-    /// et celui de tout back-end plus ancien que le catalogue. L'app affichait
-    /// alors « 0,00 €/semaine » sur la feuille d'offre et « 3 x 0,00 € » sur
-    /// l'estimation (Hugo, 16/09/2026). On retombe sur le tarif de l'offre.
-    public var displayedWeeklyPrice: Decimal {
-        weeklyPrice > 0 ? weeklyPrice : Self.offer.weeklyPrice
+    /// qui n'a pas de ligne à lire — l'ancien comportement de `GET /v1/profile`.
+    /// L'app affichait alors « 0,00 € » sur la feuille d'offre (Hugo,
+    /// 16/09/2026). On retombe sur le tarif de l'offre, et sur sa période.
+    public var displayedPrice: Decimal {
+        price > 0 ? price : Self.offer.price
+    }
+
+    /// La période qui va avec ``displayedPrice`` : « mois », ou « semaine »
+    /// pour un abonné de l'ancienne formule.
+    public var periodLabel: String { paidInterval.label }
+
+    /// La période que l'abonné a payée — celle des phrases de la résiliation
+    /// et de l'alerte de fin : un ancien abonné à la semaine n'a pas payé un
+    /// mois (03/10/2026). Le mois de l'offre quand il n'y a pas de prix à lire.
+    public var paidInterval: Interval {
+        price > 0 ? interval : Self.offer.interval
+    }
+
+    /// Le prix de **ce que le paywall vend** — le mois —, quand StoreKit ne l'a
+    /// pas encore dit.
+    ///
+    /// Distinct de ``displayedPrice`` : un ancien abonné à la semaine garde son
+    /// ancien tarif dans « Mon abonnement », mais l'offre qu'on lui présente
+    /// est la mensuelle. On ne lit donc le prix servi que s'il est mensuel.
+    public var offeredPrice: Decimal {
+        interval == .month && price > 0 ? price : Self.offer.price
     }
 }
 
 public extension Optional where Wrapped == Subscription {
-    /// Le même prix, pour les écrans qui n'ont pas d'abonnement sous la main —
-    /// le paywall ouvert depuis l'accueil ou la conversation.
-    var displayedWeeklyPrice: Decimal {
-        self?.displayedWeeklyPrice ?? Subscription.offer.weeklyPrice
+    /// Le prix de l'offre, pour les écrans qui n'ont pas d'abonnement sous la
+    /// main — le paywall ouvert depuis l'accueil ou la conversation.
+    var offeredPrice: Decimal {
+        self?.offeredPrice ?? Subscription.offer.price
     }
 }
 
@@ -487,14 +620,6 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
     public var subscription: Subscription
     public var orders: [OrderTracking]
 
-    /// Les étapes offertes à l'ouverture du compte, et celles qui restent.
-    ///
-    /// Le même couple que ``Traveller``, et la même règle : `nil` quand le
-    /// compte n'a pas de quota — un abonné. C'est lui qui porte la pastille du
-    /// haut de l'écran, comme il porte celle de l'accueil.
-    public var offeredSteps: Int?
-    public var remainingSteps: Int?
-
     /// Combien de voyages en tout. La carte de chiffres l'affiche, et c'est
     /// tout ce qu'elle en fait.
     public var tripCount: Int
@@ -518,10 +643,8 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         cards: [PaymentCard] = [],
         selectedCardId: String? = nil,
         connectors: [Connector] = [],
-        subscription: Subscription = Subscription(weeklyPrice: 0),
+        subscription: Subscription = Subscription(price: 0),
         orders: [OrderTracking] = [],
-        offeredSteps: Int? = nil,
-        remainingSteps: Int? = nil,
         tripCount: Int = 0,
         currentTrip: CurrentTrip? = nil
     ) {
@@ -542,14 +665,13 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         self.connectors = connectors
         self.subscription = subscription
         self.orders = orders
-        self.offeredSteps = offeredSteps
-        self.remainingSteps = remainingSteps
         self.tripCount = tripCount
         self.currentTrip = currentTrip
     }
 
-    /// Décodage tolérant sur les quatre champs de l'abonnement freemium et
-    /// sur la liste des pays.
+    /// Décodage tolérant sur les champs ajoutés au fil des versions — le
+    /// fournisseur, la date de naissance, le genre, la liste des pays, les
+    /// chiffres.
     ///
     /// Même raison que ``Entry`` : une app déjà installée ne doit pas cesser
     /// d'afficher un profil parce qu'un serveur plus ancien ne connaît pas
@@ -582,8 +704,6 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         subscription = try container.decode(Subscription.self, forKey: .subscription)
         orders = try container.decode([OrderTracking].self, forKey: .orders)
 
-        offeredSteps = try container.decodeIfPresent(Int.self, forKey: .offeredSteps)
-        remainingSteps = try container.decodeIfPresent(Int.self, forKey: .remainingSteps)
         tripCount = try container.decodeIfPresent(Int.self, forKey: .tripCount) ?? 0
         currentTrip = try container.decodeIfPresent(CurrentTrip.self, forKey: .currentTrip)
     }
@@ -606,17 +726,17 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
     }
 
     /// **La** question qui départage les deux profils de la maquette : celui
-    /// qui paie, et celui qui use ses étapes offertes.
+    /// qui raconte sans compter, et celui qui raconte dans le crédit du jour.
     ///
-    /// Elle se lit sur l'abonnement et non sur le quota d'étapes : un compte
-    /// peut très bien n'avoir ni l'un ni l'autre — un ancien abonné qui a
-    /// résilié — et il faut alors lui reproposer l'abonnement, pas lui
-    /// inventer des étapes.
-    /// **La semaine payée compte.** Quelqu'un qui vient de résilier garde
+    /// **La période payée compte.** Quelqu'un qui vient de résilier garde
     /// l'écran d'un abonné jusqu'au bout de ce qu'il a réglé : lui remontrer
-    /// l'offre le jour du geste, alors qu'il a encore cinq jours ouverts,
+    /// l'offre le jour du geste, alors qu'il a encore des semaines ouvertes,
     /// reviendrait à lui vendre ce qu'il possède déjà.
-    public var isSubscriber: Bool { subscription.grantsAccess() }
+    ///
+    /// **Le serveur tranche quand il l'a dit** (``Subscription/isUnlimited``) :
+    /// le dernier jour payé, ou pendant le délai de grâce d'Apple, le profil
+    /// ne contredit plus la conversation (03/10/2026).
+    public var isSubscriber: Bool { subscription.isUnlimited }
 
     /// Une ou deux initiales, quand la photo manque. Même règle que
     /// ``Companion``.

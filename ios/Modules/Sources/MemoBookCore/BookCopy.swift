@@ -270,8 +270,8 @@ public enum BookCopy {
     public enum Preview {
         public static let title = "Aperçu PDF"
 
-        /// Le titre de la **feuille** d'aperçu, celle qu'ouvrent les deux
-        /// pastilles « Voir un aperçu » du parcours d'abonnement.
+        /// Le titre de la **feuille** d'aperçu, celle qu'ouvre la pastille
+        /// « Voir un aperçu » du paywall.
         ///
         /// Différent de ``title``, et c'est la maquette qui le veut : l'écran
         /// annonce un format (« Aperçu PDF »), la feuille annonce un geste
@@ -497,8 +497,6 @@ public enum BookCopy {
 
         /// « 60 € offerts par tes proches ».
         public static let giftedTile = "offerts par tes proches"
-
-        public static let subscriptionTile = "grâce à ton abonnement"
 
         public static let faqTitle = "Si je n’utilise pas toute ma cagnotte ?"
         public static let faqMessage =

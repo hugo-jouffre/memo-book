@@ -21,8 +21,9 @@ public enum WalletEntryKind: Sendable, Hashable {
     /// Ce qu'un proche a offert. C'est **la** raison d'être de la cagnotte, et
     /// la seule écriture qui porte un nom de personne.
     case gift
-    /// Un rechargement encaissé — la part de l'abonnement qui tombe dans la
-    /// cagnotte chaque semaine, ou une recharge faite à la main.
+    /// Une recharge de la cagnotte, payée par carte (« Recharge de la
+    /// cagnotte »). L'abonnement n'y verse plus rien : il n'est plus déduit du
+    /// carnet (Hugo, 03/10/2026).
     case topup
     /// Le remboursement d'une commande annulée.
     case refund
@@ -32,7 +33,7 @@ public enum WalletEntryKind: Sendable, Hashable {
     case adjustment
     case unknown(String)
 
-    /// La pastille qui qualifie la ligne — « DON », « ABONNEMENT ».
+    /// La pastille qui qualifie la ligne — « DON », « RECHARGE ».
     ///
     /// `nil` pour les écritures qui se lisent d'elles-mêmes : un remboursement
     /// ou un paiement portent déjà leur motif dans leur libellé, et une nature
@@ -40,7 +41,7 @@ public enum WalletEntryKind: Sendable, Hashable {
     public var badge: String? {
         switch self {
         case .gift: "Don"
-        case .topup: "Abonnement"
+        case .topup: "Recharge"
         case .refund: "Remboursement"
         case .orderPayment: nil
         case .adjustment: nil
@@ -194,17 +195,13 @@ public struct Wallet: Codable, Sendable, Hashable {
     /// mérite d'être montré. C'est donc l'absence d'écritures qui décide.
     public var isEmpty: Bool { entries.isEmpty }
 
-    /// Ce que les proches ont offert, et ce que l'abonnement a versé. Les deux
-    /// pastilles de synthèse, sous l'historique.
+    /// Ce que les proches ont offert : la pastille de synthèse, sous
+    /// l'historique.
     ///
     /// Seuls les **crédits** comptent : un paiement d'impression ne retire pas
     /// rétroactivement un cadeau reçu.
     public var giftedTotal: Decimal {
         entries.filter { $0.kind.isFromSomeoneElse && $0.amount > 0 }.reduce(0) { $0 + $1.amount }
-    }
-
-    public var subscriptionTotal: Decimal {
-        entries.filter { $0.kind == .topup && $0.amount > 0 }.reduce(0) { $0 + $1.amount }
     }
 }
 
@@ -215,34 +212,15 @@ public struct WalletEstimate: Codable, Sendable, Hashable {
     /// Le coût estimé de l'impression, en euros.
     public let cost: Decimal
 
-    /// Les dates du voyage et sa durée en semaines entamées — ce que la feuille
-    /// « Estimation » du paywall lit pour compter les abonnements (T127).
-    /// Absents d'un serveur plus ancien, et d'un voyage sans dates.
-    public let startDate: Date?
-    public let endDate: Date?
-    public let weeks: Int?
+    // Les dates du voyage et ses semaines entamées (`startDate`, `endDate`,
+    // `weeks`) ne se lisent plus : elles comptaient les abonnements à déduire
+    // pour la feuille « Estimation » du paywall, partie avec la déduction
+    // (Hugo, 03/10/2026). Un serveur qui les sert encore n'y perd rien — une
+    // clé inconnue s'ignore au décodage.
 
-    public init(
-        pageCount: Int,
-        cost: Decimal,
-        startDate: Date? = nil,
-        endDate: Date? = nil,
-        weeks: Int? = nil
-    ) {
+    public init(pageCount: Int, cost: Decimal) {
         self.pageCount = pageCount
         self.cost = cost
-        self.startDate = startDate
-        self.endDate = endDate
-        self.weeks = weeks
-    }
-
-    public init(from decoder: any Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        pageCount = try container.decode(Int.self, forKey: .pageCount)
-        cost = try container.decode(Decimal.self, forKey: .cost)
-        startDate = try container.decodeIfPresent(Date.self, forKey: .startDate)
-        endDate = try container.decodeIfPresent(Date.self, forKey: .endDate)
-        weeks = try container.decodeIfPresent(Int.self, forKey: .weeks)
     }
 
     /// De 0 à 1 : la part du coût que la cagnotte couvre déjà.

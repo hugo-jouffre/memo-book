@@ -130,11 +130,9 @@ extension OrderQuote {
         let due = items + shipping
 
         // La cagnotte ne rend pas la monnaie : elle est plafonnée au montant dû.
+        // Une seule déduction : l'abonnement n'est plus déduit du carnet (Hugo,
+        // 03/10/2026).
         let applied = min(walletBalance, due)
-        // La répartition du serveur, rejouée : les dons d'un côté, les
-        // versements d'abonnement de l'autre.
-        let subscription = min(applied, Decimal(199) / 100 * 4)
-        let gifts = applied - subscription
 
         return OrderQuote(
             bookTitle: "Rome et la Dolce Vita",
@@ -175,15 +173,10 @@ extension OrderQuote {
             ),
             deductions: [
                 OrderDeduction(
-                    id: "subscription",
-                    label: "Déduction abonnements hebdomadaires versés",
-                    amount: subscription
-                ),
-                OrderDeduction(
                     id: "wallet",
-                    label: "Déduction de la cagnotte de tes proches",
-                    amount: gifts
-                ),
+                    label: "Déduction de ta cagnotte",
+                    amount: applied
+                )
             ].filter { $0.amount > 0 },
             total: max(due - applied, 0),
             estimatedMinDays: speed == .express ? 2 : 5,

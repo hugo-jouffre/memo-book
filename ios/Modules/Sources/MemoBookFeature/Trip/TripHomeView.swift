@@ -23,13 +23,6 @@ public struct TripHomeView: View {
     private let onIntent: (TripIntent) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.subscriptionSession) private var subscriptionSession
-
-    /// Le paywall, ouvert par le micro quand les étapes offertes sont épuisées
-    /// — le même verrou que sur l'accueil, voir ``SubscriptionSession/isBlocked``.
-    @State private var showsPaywall = false
-
-    private var isBlocked: Bool { subscriptionSession?.isBlocked == true }
 
     /// Le libellé du bouton vert. « Continuer à enregistrer » disait le micro ;
     /// le bouton ouvre la conversation — Hugo a changé d'avis le 15/09/2026.
@@ -100,16 +93,6 @@ public struct TripHomeView: View {
         // plus — une étape de plus, des pages composées —, ça s'anime.
         .brandRefreshFlash(model.freshness.isUpdated)
         .animation(.smooth(duration: 0.35), value: model.detail)
-        .fullScreenCover(isPresented: $showsPaywall) {
-            PaywallView(
-                subscription: .offer,
-                previewMemoId: model.detail?.trip.id,
-                onSubscribe: {
-                    subscriptionSession?.record(isSubscribed: true)
-                    showsPaywall = false
-                }
-            )
-        }
     }
 
     /// Le panneau crème qui recouvre le bas de la photo.
@@ -226,22 +209,17 @@ public struct TripHomeView: View {
             // libellé — la flèche disait « plus loin », la bulle dit « la
             // conversation » (Hugo, 17/09/2026). Le bouton mène à la
             // conversation, il n'ouvre pas le micro — c'est là-bas qu'on
-            // enregistre (Hugo, 15/09/2026). Verrouillé, il passe au lime et
-            // au cadenas, et ouvre le paywall au lieu de la conversation —
-            // exactement comme le CTA de l'accueil (Hugo, 14/09/2026).
+            // enregistre (Hugo, 15/09/2026). **Jamais verrouillé** (Hugo,
+            // 03/10/2026) : il passait au lime et au cadenas une fois l'essai
+            // gratuit d'avant épuisé ; avec le crédit du jour, la
+            // conversation s'ouvre toujours — on y lit, on y envoie des
+            // photos, et c'est elle qui dit ce qu'il reste à raconter.
             BrandButton(
                 Self.callToAction,
-                icon: Image(brand: isBlocked ? "IconLocker" : "IconBubble"),
-                iconPlacement: isBlocked ? .leading : .trailing,
-                style: isBlocked ? .accent : .primary,
+                icon: Image(brand: "IconBubble"),
+                iconPlacement: .trailing,
                 fillsWidth: true,
-                action: {
-                    if isBlocked {
-                        showsPaywall = true
-                    } else {
-                        onIntent(.tellMore(tripId: detail.trip.id))
-                    }
-                }
+                action: { onIntent(.tellMore(tripId: detail.trip.id)) }
             )
             // Le libellé suit le Dynamic Type, mais s'arrête à AX1 : au-delà,
             // « enregistrer » est plus large que le bouton entier et se coupe

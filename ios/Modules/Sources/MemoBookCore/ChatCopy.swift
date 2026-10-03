@@ -185,9 +185,17 @@ public enum ChatCopy {
             l’aies validé.
             """
 
+        /// La réponse à toute question sur le prix, l'abonnement ou la limite
+        /// du jour. **La même phrase que le serveur** (`ANSWERS.subscription`,
+        /// `conversationCopy.ts`), au caractère près (Hugo, 03/10/2026) : elle
+        /// renvoie à « Découvrir l’abonnement », la ligne que tout le monde a
+        /// dans son profil — « Mon abonnement » n'existait que pour un abonné.
         public static let subscription = """
-            Tu retrouves le prix et l’état de ton abonnement dans ton profil, à \
-            la ligne « Mon abonnement ».
+            Chaque voyage a 5 minutes de récit par jour, partagées entre les \
+            co-voyageurs qui ne sont pas abonnés : l’écrit compte aussi, pas les \
+            photos, et le crédit se recharge à minuit. L’abonnement, à 4,99 € par \
+            mois, rend ton récit illimité ; tu le trouves dans ton profil, à \
+            « Découvrir l’abonnement ».
             """
 
         public static let photos =
@@ -392,6 +400,47 @@ public enum ChatCopy {
 
     public static let composerPlaceholder = "Raconte-moi…"
 
+    // MARK: - Le crédit du jour
+
+    /// Ce que la barre du chat dit du crédit du jour, en plus de
+    /// ``DailyCreditCopy`` — les phrases que la barre seule prononce (Hugo,
+    /// 03/10/2026).
+    public enum Credit {
+        /// Le rappel discret sous une minute de crédit, au-dessus du champ.
+        /// « Environ » : le compte se fait en scalaires Unicode, et personne
+        /// ne compte ainsi ses lettres.
+        public static func charactersLeft(_ count: Int) -> String {
+            "Encore environ \(DailyCreditCopy.characters(count)) aujourd’hui"
+        }
+
+        /// Ce que VoiceOver annonce quand l'enregistrement s'arrête net : ce
+        /// qui a été dit part quand même, il faut le savoir sans le voir.
+        public static let stoppedAnnouncement =
+            "Limite du jour atteinte. Ton vocal est envoyé."
+
+        /// L'indice du bandeau « Crédit du jour épuisé », qui ouvre l'offre.
+        public static let exhaustedHint = "Ouvre l’offre illimitée"
+
+        /// Ce que VoiceOver annonce quand le micro ou le clavier pâlis sont
+        /// touchés : le bandeau paraît ailleurs dans la pile, et rien ne le
+        /// dirait sans cette annonce. À chaque toucher, pas seulement au
+        /// premier (03/10/2026).
+        public static let exhaustedAnnouncement =
+            "\(DailyCreditCopy.exhaustedTitle). \(DailyCreditCopy.exhaustedDetail)"
+    }
+
+    // MARK: - Le bouton sous une bulle de MEMO
+
+    /// La carte d'appel à l'action — ``ChatCallToAction``.
+    public enum CallToAction {
+        /// L'étoile manuscrite devant l'en-tête de la carte (maquette
+        /// `3653:17090`).
+        public static let star = "✦"
+        public static let dismiss = "Ignorer"
+        /// Ce que VoiceOver dit d'un bouton déjà touché, passé au bleu.
+        public static let followed = "Déjà ouvert"
+    }
+
     // MARK: - Les photos
 
     /// Ce que le sélecteur de photos propose. Les libellés d'une
@@ -431,6 +480,35 @@ public enum ChatCopy {
     public static let notSent = "Non envoyé"
     public static let retry = "Réessayer"
 
+    /// Sous une bulle que le serveur a refusée faute de crédit du jour : elle
+    /// attend sur le téléphone et repart toute seule à minuit. Gris, sans
+    /// « Réessayer » : il n'y a rien à faire (Hugo, 03/10/2026).
+    public static let leavesTomorrow = "Partira demain"
+
+    /// Sous une bulle qui coûte plus qu'une journée entière de crédit — un
+    /// vocal de plus de 5 minutes, un texte de plus de 4 000 caractères :
+    /// demain n'y changerait rien. Tapable, suivi de
+    /// ``DailyCreditCopy/unlimitedCallToAction`` : elle ouvre l'offre, et la
+    /// bulle part dès que le compte raconte sans limite (03/10/2026).
+    public static let tooLongForADay = "Trop long pour une journée"
+
+    /// « Supprimer », à côté de « Passer en illimité » sous une bulle « Trop
+    /// long pour une journée » (03/10/2026) : sans abonnement, rien ne la
+    /// ferait jamais partir, et elle se reposait à chaque ouverture du fil.
+    /// Une confirmation d'abord — c'est un souvenir qui n'existe encore que
+    /// sur ce téléphone.
+    public enum DiscardWaiting {
+        public static let action = "Supprimer"
+        public static let voiceTitle = "Supprimer ce vocal ?"
+        public static let textTitle = "Supprimer ce message ?"
+        public static let body =
+            "Il n’est pas encore parti : supprimé, il ne rejoindra jamais ton carnet. C’est sans retour."
+        public static let confirm = "Supprimer"
+        public static let keep = "Le garder"
+        /// Ce que VoiceOver dit du lien, en plus de son libellé.
+        public static let hint = "Le retire de ton téléphone sans l’envoyer"
+    }
+
     // MARK: - Ce que VoiceOver annonce
     //
     // Tout élément interactif sans libellé visible en porte un, en français et
@@ -449,6 +527,12 @@ public enum ChatCopy {
         /// La bulle en retrait : ce que VoiceOver dit à la place de la
         /// transparence.
         public static let sending = "Envoi en cours"
+        /// La bulle « Partira demain », dite en entier.
+        public static let leavesTomorrow =
+            "Gardé sur ton téléphone : partira demain, quand le crédit du jour se rechargera"
+        /// La bulle « Trop long pour une journée », dite en entier.
+        public static let tooLongForADay =
+            "Trop long pour le crédit d’une journée. Gardé sur ton téléphone : il partira dès que tu passeras en illimité"
         public static let collapse = "Revenir aux trois boutons"
         public static let camera = "Ajouter une photo"
         public static let keyboard = "Écrire au clavier"

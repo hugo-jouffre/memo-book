@@ -66,6 +66,45 @@ struct FaqTests {
         #expect(resolved.contains { $0.contains("minimum de 24 pages") })
     }
 
+    /// Le prix et le crédit du jour vivent dans ``FaqVariables`` : changer le
+    /// barème ne demande pas de relire les réponses.
+    @Test("Le prix et le crédit du jour se résolvent à la valeur en vigueur")
+    func pricingVariablesResolve() {
+        let variables = FaqVariables(
+            minimumPageCount: 16,
+            monthlyPrice: "5,49 €",
+            dailyCredit: "6 minutes",
+            charactersPerMinute: "900 caractères"
+        )
+        let app = Faq.entry(id: "faq.prix.app")?.answer(with: variables) ?? []
+        #expect(app.contains { $0.contains("5,49 € par mois") })
+        #expect(app.contains { $0.contains("6 minutes par jour") })
+
+        let credit = Faq.entry(id: "faq.prix.credit-du-jour")?.answer(with: variables) ?? []
+        #expect(credit.contains { $0.contains("900 caractères écrits valent une minute") })
+
+        let subscription = Faq.entry(id: "faq.prix.abonnement")?.answer(with: variables) ?? []
+        #expect(subscription.contains { $0.contains("5,49 € par mois") })
+    }
+
+    /// Le crédit du jour a remplacé les étapes offertes et l'abonnement à la
+    /// semaine (Hugo, 03/10/2026). Une réponse oubliée promettrait un modèle
+    /// qui n'existe plus — et c'est ce qu'App Review lit aussi.
+    @Test("Plus un mot de l’ancien modèle d’abonnement")
+    func noTraceOfTheWeeklyModel() {
+        let gone = [
+            "étapes offertes", "étape offerte", "par semaine", "chaque semaine",
+            "1,99", "abonnements déduits", "limites de souvenirs",
+        ]
+        for entry in Faq.entries {
+            let text = ([entry.question] + entry.answer(with: .current)).joined(separator: " ")
+            for phrase in gone {
+                #expect(!text.contains(phrase), "\(entry.id) parle encore de « \(phrase) » : \(text)")
+            }
+        }
+        #expect(Faq.pricing.entries.contains { $0.id == "faq.prix.credit-du-jour" })
+    }
+
     /// Une variable qu'on ne sait pas résoudre reste **visible**. Une phrase
     /// amputée passerait inaperçue ; « {{delai}} » dans l'app se corrige.
     @Test("Une variable inconnue reste écrite plutôt qu’effacée")

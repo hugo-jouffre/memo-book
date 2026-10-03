@@ -20,10 +20,75 @@ public struct OutgoingTurn: Sendable, Hashable, Identifiable {
     public let stepId: String?
     public let body: Body
 
-    public init(id: String = UUID().uuidString.lowercased(), stepId: String? = nil, body: Body) {
+    /// Le tour attend, sur le disque de la file, que le crédit du jour se
+    /// recharge — ``PendingTurn/waitingForCreditUntil``. `nil` pour un tour
+    /// qu'on vient de dire, ou qui n'attend que le réseau. C'est ce qui fait
+    /// rouvrir le fil sur une bulle « Partira demain » plutôt que sur « en
+    /// cours d'envoi ».
+    public let waitingForCreditUntil: Date?
+
+    /// Le tour attend, sur le disque de la file, que le compte passe en
+    /// illimité : il coûte plus qu'une journée entière de crédit —
+    /// ``PendingTurn/waitingForUnlimited``. Le fil se rouvre alors sur une
+    /// bulle « Trop long pour une journée ».
+    public let waitingForUnlimited: Bool
+
+    public init(
+        id: String = UUID().uuidString.lowercased(),
+        stepId: String? = nil,
+        body: Body,
+        waitingForCreditUntil: Date? = nil,
+        waitingForUnlimited: Bool = false
+    ) {
         self.id = id
         self.stepId = stepId
         self.body = body
+        self.waitingForCreditUntil = waitingForCreditUntil
+        self.waitingForUnlimited = waitingForUnlimited
+    }
+
+    /// Le tour est retenu sur le disque — par le crédit de demain, ou par
+    /// l'illimité. Ni l'un ni l'autre n'entame le crédit d'aujourd'hui.
+    ///
+    /// **Une attente échue ne retient plus rien** (03/10/2026) : refusé hier
+    /// à 22 h jusqu'à minuit, le tour repart au prochain vidage, sur le crédit
+    /// du jour où il part — comme ``PendingTurn/isOnHold(at:)`` côté disque.
+    /// Lu sans la date, il se rouvrait le lendemain en « Partira demain »,
+    /// hors du décompte du jour, alors que la file l'enverrait dès la
+    /// reconnexion.
+    public var isOnHold: Bool { waitingForUnlimited || isWaitingForCredit() }
+
+    /// Le tour attend encore le crédit du jour à cet instant.
+    public func isWaitingForCredit(at now: Date = .now) -> Bool {
+        guard let waitingForCreditUntil else { return false }
+        return waitingForCreditUntil > now
+    }
+
+    /// Ce que ce tour coûtera au crédit du jour, d'après ce que l'app en sait
+    /// — l'estimation qu'elle tient entre deux réponses du serveur, qui
+    /// tranche (`services/dailyCredit.ts`). Un vocal, sa durée ; un texte libre,
+    /// ses caractères ; une puce ou une commande silencieuse (`suggestionId`),
+    /// rien — le serveur ne fait payer qu'un texte qui n'est pas exactement
+    /// son libellé, et l'app envoie toujours le libellé ; des photos, rien.
+    public func creditCost(in credit: DailyCredit) -> Int {
+        switch body {
+        case .text(let text, let suggestionId, _):
+            suggestionId == nil ? credit.cost(ofText: text) : 0
+        case .voice(let audio):
+            Int((audio.durationSeconds * 1000).rounded())
+        case .photos:
+            0
+        }
+    }
+
+    /// Le tour coûte **plus qu'une journée entière** de crédit : le serveur
+    /// le refusera même pot plein — un vocal au-delà de la limite et de la
+    /// tolérance, un texte libre au-delà de la limite. Attendre demain ne
+    /// servirait à rien (03/10/2026). Jamais une puce ni des photos.
+    public func exceedsAWholeDay(in credit: DailyCredit) -> Bool {
+        guard !credit.isUnlimited else { return false }
+        let isVoice = if case .voice = body { true } else { false }
+        return creditCost(in: credit) > credit.limitWithTolerance(forVoice: isVoice)
     }
 }
 
@@ -75,12 +140,41 @@ public struct ChatTurnDelivery: Sendable, Equatable {
     public let tripId: String
     public let state: ChatDelivery
     public let receipt: ChatTurnReceipt?
+    /// Le crédit du jour que le serveur a rendu avec un refus faute de crédit
+    /// (``ChatDelivery/waitingForCredit(until:)``) : la barre passe à
+    /// « épuisé » sans attendre de relire le fil. `nil` le reste du temps — un
+    /// reçu porte le sien.
+    public let credit: DailyCredit?
 
-    public init(id: String, tripId: String, state: ChatDelivery, receipt: ChatTurnReceipt? = nil) {
+    /// Ce mot n'est pas nouveau : la file le **rejoue** à qui se met à
+    /// l'écoute (``RecordingOutbox/turnDeliveries()``), pour qu'un écran
+    /// ouvert après l'arrivée d'un vocal ne l'attende pas pour rien. Son état
+    /// vaut toujours pour la bulle ; son crédit, lui, peut dater de l'envoi
+    /// d'il y a des heures — il ne remplace jamais celui que le fil vient de
+    /// lire (03/10/2026).
+    public var isReplay: Bool
+
+    public init(
+        id: String,
+        tripId: String,
+        state: ChatDelivery,
+        receipt: ChatTurnReceipt? = nil,
+        credit: DailyCredit? = nil,
+        isReplay: Bool = false
+    ) {
         self.id = id
         self.tripId = tripId
         self.state = state
         self.receipt = receipt
+        self.credit = credit
+        self.isReplay = isReplay
+    }
+
+    /// Le même mot, marqué comme rejoué.
+    public var replayed: ChatTurnDelivery {
+        var copy = self
+        copy.isReplay = true
+        return copy
     }
 }
 
@@ -131,6 +225,13 @@ public struct ChatTransport: Sendable {
     /// fil local.
     public var offlineThread: @Sendable (any Error) async -> ChatThread?
 
+    /// Oublie un tour qui attend sur le disque — « Supprimer », sous une
+    /// bulle qui attend l'illimité (03/10/2026) : sans abonnement, rien ne le
+    /// ferait jamais partir, et sa bulle se reposerait à chaque ouverture.
+    /// `false` quand la file ne le retient pas — il n'y est pas, ou il est en
+    /// train de partir. Rien sans file.
+    public var discard: @Sendable (_ turnId: String) async -> Bool
+
     public init(
         load: @escaping @Sendable () async throws -> ChatThread,
         poll: @escaping @Sendable (Date) async throws -> ChatThreadUpdate,
@@ -139,7 +240,8 @@ public struct ChatTransport: Sendable {
         media: @escaping @Sendable (URL) async throws -> Data,
         waiting: @escaping @Sendable () async -> [OutgoingTurn] = { [] },
         deliveries: @escaping @Sendable () async -> AsyncStream<ChatTurnDelivery> = { AsyncStream { $0.finish() } },
-        offlineThread: @escaping @Sendable (any Error) async -> ChatThread? = { _ in nil }
+        offlineThread: @escaping @Sendable (any Error) async -> ChatThread? = { _ in nil },
+        discard: @escaping @Sendable (String) async -> Bool = { _ in false }
     ) {
         self.load = load
         self.poll = poll
@@ -149,6 +251,7 @@ public struct ChatTransport: Sendable {
         self.waiting = waiting
         self.deliveries = deliveries
         self.offlineThread = offlineThread
+        self.discard = discard
     }
 
     // MARK: - Le vrai serveur

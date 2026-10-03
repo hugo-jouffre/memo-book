@@ -302,6 +302,148 @@ enum Extraction {
         return false
     }
 
+    /// `needle` apparaît **au début d'un mot** de `folded` — le jumeau exact de
+    /// `startsAWord` du serveur (`conversationHeuristics.ts`) : « coute » est
+    /// dans « tu m’écoutes ? », et ce n'est pas une question de prix.
+    /// `wholeWord` exige aussi qu'il le finisse : « euro » est dans « Europe ».
+    static func startsAWord(_ needle: String, in folded: String, wholeWord: Bool = false) -> Bool {
+        var searchRange = folded.startIndex..<folded.endIndex
+        while let found = folded.range(of: needle, range: searchRange) {
+            let startsHere =
+                found.lowerBound == folded.startIndex
+                || !folded[folded.index(before: found.lowerBound)].isLetter
+            let endsHere = found.upperBound == folded.endIndex || !folded[found.upperBound].isLetter
+            if startsHere && (!wholeWord || endsHere) { return true }
+            searchRange = folded.index(after: found.lowerBound)..<folded.endIndex
+        }
+        return false
+    }
+
+    static func isAWord(_ needle: String, in folded: String) -> Bool {
+        startsAWord(needle, in: folded, wholeWord: true)
+    }
+
+    /// Où finit chaque occurrence de `needle` en mot entier dans `folded` —
+    /// l'endroit d'où lire la suite. Le jumeau de `wholeWordEnds` du serveur.
+    static func wholeWordEnds(_ needle: String, in folded: String) -> [String.Index] {
+        var ends: [String.Index] = []
+        var searchRange = folded.startIndex..<folded.endIndex
+        while let found = folded.range(of: needle, range: searchRange) {
+            let startsHere =
+                found.lowerBound == folded.startIndex
+                || !folded[folded.index(before: found.lowerBound)].isLetter
+            let endsHere = found.upperBound == folded.endIndex || !folded[found.upperBound].isLetter
+            if startsHere && endsHere { ends.append(found.upperBound) }
+            searchRange = folded.index(after: found.lowerBound)..<folded.endIndex
+        }
+        return ends
+    }
+
+    /// Une question sans sa ponctuation finale ni son interpellation : « Ça
+    /// coûte combien, MEMO ? » rend « ca coute combien ». Le nom seul ne laisse
+    /// rien.
+    static func questionCore(_ folded: String) -> String {
+        var rest = Substring(folded.trimmingCharacters(in: .whitespacesAndNewlines))
+        while let last = rest.last, last.isWhitespace || "?!.…".contains(last) { rest = rest.dropLast() }
+        for name in ["memobook", "memo"] {
+            if rest == name { return "" }
+            guard rest.hasSuffix(" \(name)") || rest.hasSuffix(",\(name)") else { continue }
+            rest = rest.dropLast(name.count)
+            while let last = rest.last, last.isWhitespace || last == "," { rest = rest.dropLast() }
+            break
+        }
+        return String(rest)
+    }
+
+    /// Le texte parle du récit, de l'app ou de la journée de crédit
+    /// (``Lexicon/creditAnchors``).
+    static func isAnchoredToTheStory(_ folded: String) -> Bool {
+        Lexicon.creditAnchors.contains(where: { startsAWord($0, in: folded) })
+            || Lexicon.appReferences.contains(where: { isAWord($0, in: folded) })
+    }
+
+    static func mentionsATrip(_ folded: String) -> Bool {
+        Lexicon.travelMarkers.contains(where: { isAWord($0, in: folded) })
+    }
+
+    /// Le crédit du téléphone, de la carte, de la banque — pas celui du récit.
+    static func talksAboutAnotherCredit(_ folded: String) -> Bool {
+        if Lexicon.otherCreditWords.contains(where: { isAWord($0, in: folded) }) { return true }
+        return Lexicon.rechargeWords.contains(where: { isAWord($0, in: folded) })
+            && !folded.contains("se recharg")
+    }
+
+    /// « Il me reste combien ? » vise le crédit si ce qui suit n'est rien, un
+    /// objet de crédit (« de temps », « de crédit ») suivi de rien, ou d'une fin
+    /// admise (« aujourd’hui », « pour raconter »), ou d'une suite qui parle du
+    /// récit sans trajet. « de jours de voyage », « avant l’embarquement » : non.
+    static func asksWhatRemains(_ folded: String) -> Bool {
+        for question in Lexicon.remainingQuestions {
+            for end in wholeWordEnds(question, in: folded) {
+                var after = folded[end...]
+                while let first = after.first, first.isWhitespace || first == "," { after = after.dropFirst() }
+                var tail = questionCore(String(after))
+                for object in Lexicon.remainingObjects where tail == object || tail.hasPrefix("\(object) ") {
+                    tail = String(tail.dropFirst(object.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+                    break
+                }
+                if Lexicon.remainingTails.contains(tail) { return true }
+                if isAnchoredToTheStory(tail) && !mentionsATrip(tail) { return true }
+            }
+        }
+        return false
+    }
+
+    /// Le message parle-t-il de l'abonnement, du crédit du jour, de la limite
+    /// du récit ou du temps qui reste pour raconter ? Le même jugement que
+    /// `talksAboutSubscription` du serveur, mot pour mot (03/10/2026) : le prix
+    /// d'un billet, un musée gratuit, la limite de vitesse, le temps d'un
+    /// trajet, le crédit du téléphone ou le wifi illimité parlent du voyage, et
+    /// MEMO n'y pose pas l'offre — jamais spontanément.
+    static func talksAboutSubscription(_ folded: String) -> Bool {
+        let otherOffer = Lexicon.otherOffers.contains(where: { isAWord($0, in: folded) })
+        // 1. L'offre nommée — pas le wifi illimité ni l'abonnement de métro.
+        if !otherOffer, Lexicon.subscriptionWords.contains(where: { startsAWord($0, in: folded) }) {
+            return true
+        }
+        // 2. Le crédit du jour, la limite du récit, le temps qui reste — pas le
+        //    crédit du téléphone ni le temps de trajet.
+        if !talksAboutAnotherCredit(folded) {
+            if Lexicon.creditPhrases.contains(where: { isAWord($0, in: folded) }) { return true }
+            if Lexicon.anchoredCreditPhrases.contains(where: { isAWord($0, in: folded) }),
+                isAnchoredToTheStory(folded),
+                !mentionsATrip(folded)
+            {
+                return true
+            }
+            if asksWhatRemains(folded) { return true }
+        }
+        // 3. Une question de prix ou de limite qui est tout le message.
+        if isBarePriceQuestion(folded) { return true }
+        // 4. Un prix qui nomme l'app — mais « le carnet MemoBook » coûte le prix
+        //    du carnet, et « une app gratuite pour le métro » en est une autre.
+        return !otherOffer
+            && Lexicon.priceWords.contains(where: { isAWord($0, in: folded) })
+            && Lexicon.appReferences.contains(where: { isAWord($0, in: folded) })
+            && !Lexicon.bookWords.contains(where: folded.contains)
+    }
+
+    /// Le message entier, sans ses ouvertures (« et », « est-ce que »…) ni sa
+    /// ponctuation finale, est une question de prix ou de limite sans objet.
+    static func isBarePriceQuestion(_ folded: String) -> Bool {
+        var rest = Substring(questionCore(folded))
+        var opened = true
+        while opened {
+            opened = false
+            for opener in Lexicon.bareQuestionOpeners where rest.hasPrefix("\(opener) ") {
+                rest = rest.dropFirst(opener.count + 1)
+                while let first = rest.first, first.isWhitespace { rest = rest.dropFirst() }
+                opened = true
+            }
+        }
+        return Lexicon.barePriceQuestions.contains(String(rest))
+    }
+
     // MARK: La question
 
     static func isQuestion(_ text: String, folded: String) -> Bool {
@@ -313,7 +455,7 @@ enum Extraction {
         // L'ordre compte : « corriger mon carnet » parle de correction, pas de
         // carnet. Le sujet le plus spécifique passe donc en premier.
         if Lexicon.correctionWords.contains(where: folded.contains) { return .corrections }
-        if Lexicon.subscriptionWords.contains(where: folded.contains) { return .subscription }
+        if talksAboutSubscription(folded) { return .subscription }
         if Lexicon.paceWords.contains(where: folded.contains) { return .pace }
         if Lexicon.photoWords.contains(where: folded.contains) { return .photos }
         if Lexicon.bookWords.contains(where: folded.contains) { return .book }
@@ -465,9 +607,135 @@ enum Lexicon {
         "carnet", "imprim", "livre", "reliure", "pages", "pdf", "apercu",
     ]
 
-    static let subscriptionWords: Set<String> = [
-        "abonnement", "prix", "coute", "tarif", "payer", "paiement", "resilier",
-        "euros",
+    // L'abonnement, le crédit du jour, la limite du récit et le temps qui reste
+    // pour raconter — et rien d'autre : pas le prix d'un billet ni la limite de
+    // vitesse (03/10/2026). Les mêmes listes que le serveur
+    // (`conversationHeuristics.ts`), lues par
+    // ``Extraction/talksAboutSubscription(_:)``.
+
+    /// Les mots qui nomment l'offre à eux seuls, cherchés **en début de mot** :
+    /// « abonnement », « s’abonner », « résilier », « illimité ».
+    static let subscriptionWords: Set<String> = ["abonn", "resili", "illimit"]
+
+    /// Ce qui fait d'« illimité », d'« abonnement » ou d'un prix d'app une
+    /// autre offre que la nôtre, en mots entiers : le wifi illimité, le
+    /// kilométrage illimité, l'abonnement de métro, le forfait qu'on résilie.
+    static let otherOffers: Set<String> = [
+        "wifi", "wi-fi", "internet", "data", "forfait", "forfaits", "telephone", "telephonique",
+        "mobile", "kilometrage", "location", "metro", "transport", "transports", "navigo",
+        "bus", "tram", "train", "trains", "pass", "parking", "velo", "velos", "ski", "musee",
+        "musees", "buffet", "boisson", "boissons", "salle de sport", "piscine",
+    ]
+
+    /// Le crédit qui n'est pas le nôtre, en mots entiers : celui du téléphone,
+    /// de la carte, de la banque.
+    static let otherCreditWords: Set<String> = [
+        "telephone", "telephones", "telephonique", "portable", "mobile", "sim", "forfait",
+        "forfaits", "carte", "cartes", "bancaire", "banque", "operateur", "distributeur",
+        "retrait", "data", "internet",
+    ]
+
+    /// Recharger un téléphone, en mots entiers — sauf le crédit qui « se
+    /// recharge » à minuit, qui est le nôtre.
+    static let rechargeWords: Set<String> = ["recharger", "recharge", "recharges", "rechargement"]
+
+    /// Le crédit du jour et la limite du récit, en locutions et en mots
+    /// entiers, qui n'ont pas d'autre sens en voyage. « crédit » ou « limite »
+    /// seuls n'y sont pas : « carte de crédit » et « limite de vitesse »
+    /// parlent du voyage.
+    static let creditPhrases: Set<String> = [
+        "credit du jour", "credit restant", "credit quotidien", "credit de temps",
+        "credit de recit", "mon credit", "ton credit", "notre credit", "votre credit",
+        "combien de credit", "de credit il reste", "de credit il me reste",
+        "limite du jour", "limite de recit", "limite du recit", "limite de minutes",
+        "limite quotidienne", "limite par jour", "limite du credit",
+        "raconter sans limite", "parler sans limite", "minutes de recit", "temps de recit",
+        "raconter combien de temps", "parler combien de temps",
+    ]
+
+    /// Les locutions du temps et du crédit qui disent aussi le voyage :
+    /// « combien de minutes » est « à combien de minutes à pied », « limite de
+    /// temps » celle du Louvre. Elles ne visent l'offre que **rattachées au
+    /// récit** (``creditAnchors``, ``appReferences``) et loin d'un trajet
+    /// (``travelMarkers``).
+    static let anchoredCreditPhrases: Set<String> = [
+        "le credit", "du credit", "plus de credit", "de credit",
+        "limite de temps", "sans limite de temps", "est limite", "c'est limite a",
+        "suis limite", "suis limitee", "suis bloque", "suis bloquee",
+        "combien de minutes", "combien de temps", "minutes par jour", "minutes aujourd",
+        "minutes du jour", "minutes restantes", "temps restant",
+    ]
+
+    /// Ce qui rattache une locution au récit, cherché **en début de mot**.
+    static let creditAnchors: Set<String> = [
+        "racont", "recit", "enregistr", "vocal", "vocaux", "abonn", "illimit", "aujourd",
+        "par jour", "du jour", "minuit", "se recharg", "5 minutes", "cinq minutes",
+    ]
+
+    /// Un trajet, une visite, un départ — en mots entiers : le temps qu'il
+    /// faut, pas celui qui reste pour raconter.
+    static let travelMarkers: Set<String> = [
+        "a pied", "de marche", "marche", "marcher", "pour aller", "pour rejoindre", "pour arriver",
+        "en voiture", "en taxi", "en bus", "en train", "en metro", "en avion", "en bateau",
+        "embarquement", "depart", "vol", "vols", "train", "bus", "metro", "avion", "bateau",
+        "ferry", "trajet", "visite", "visiter", "attente", "escale", "correspondance", "check-in",
+    ]
+
+    /// « Il me reste combien ? » — la question d'exemple du prompt. Elle ne
+    /// vise le crédit que si rien ne la suit, hors ``remainingObjects`` puis
+    /// ``remainingTails`` (ou un mot du récit) — voir
+    /// ``Extraction/asksWhatRemains(_:)``.
+    static let remainingQuestions: [String] = [
+        "il me reste combien", "il nous reste combien", "il reste combien",
+        "combien il me reste", "combien il nous reste", "combien il reste",
+        "combien me reste-t-il", "combien nous reste-t-il", "combien reste-t-il",
+        "combien de temps il me reste", "combien de temps il nous reste", "combien de temps il reste",
+        "combien de minutes il me reste", "combien de minutes il nous reste",
+        "combien de minutes il reste", "temps qu'il me reste", "temps qu'il nous reste",
+    ]
+
+    static let remainingObjects: [String] = ["de temps", "de minutes", "de credit", "en credit"]
+
+    static let remainingTails: Set<String> = [
+        "", "aujourd'hui", "pour aujourd'hui", "ce soir", "pour ce soir", "pour raconter",
+        "a raconter", "pour parler", "pour enregistrer", "a enregistrer",
+    ]
+
+    /// Le prix, en mots entiers. Seul, il parle d'un billet, d'un musée ou du
+    /// carnet : il ne vise l'offre que s'il nomme l'app (``appReferences``), ou
+    /// dans une question nue (``barePriceQuestions``).
+    static let priceWords: Set<String> = [
+        "prix", "cout", "couts", "coute", "coutent", "couter", "coutera", "tarif", "tarifs",
+        "payer", "payant", "payante", "paiement", "gratuit", "gratuite", "euro", "euros",
+    ]
+
+    /// L'app elle-même, en mots entiers : « l’app », « ton appli »,
+    /// « MemoBook ». « une app gratuite pour le métro » en est une autre.
+    static let appReferences: Set<String> = [
+        "memobook", "memo", "l'app", "l'appli", "l'application", "ton app", "ton appli",
+        "ton application", "votre app", "votre appli", "votre application", "cette app",
+        "cette appli", "cette application",
+    ]
+
+    /// Une question de prix ou de limite **qui est tout le message** : sans
+    /// objet, elle ne peut viser que l'app. « Le musée, c'est payant ? » a un
+    /// objet, et n'y est pas.
+    static let barePriceQuestions: Set<String> = [
+        "combien ca coute", "ca coute combien", "combien ca coute par mois",
+        "ca coute combien par mois", "c'est combien", "c'est combien par mois", "combien c'est",
+        "combien ca fait", "c'est payant", "c'est gratuit", "payant", "gratuit",
+        "c'est quoi le prix", "quel est le prix", "quel prix", "il faut payer", "faut payer",
+        "c'est quoi la limite", "quelle est la limite", "il y a une limite", "y a une limite",
+        "c'est quoi la limite de temps", "quelle est la limite de temps",
+        "il y a une limite de temps", "y a une limite de temps", "c'est limite",
+        "c'est limite a combien", "pourquoi c'est limite", "je suis limite", "je suis limitee",
+        "pourquoi je suis limite", "pourquoi je suis limitee", "je suis bloque", "je suis bloquee",
+        "pourquoi je suis bloque", "pourquoi je suis bloquee",
+    ]
+
+    /// Ce qui peut précéder une question nue sans lui donner d'objet.
+    static let bareQuestionOpeners: [String] = [
+        "memo,", "et", "mais", "alors", "du coup", "sinon", "est-ce que",
     ]
 
     static let photoWords: Set<String> = ["photo", "pellicule", "image", "cliche"]

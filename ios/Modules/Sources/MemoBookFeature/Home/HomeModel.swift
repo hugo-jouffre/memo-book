@@ -135,6 +135,45 @@ public final class HomeModel {
     /// le premier.
     public var resumableTrip: Trip? { ongoingTrips.first ?? upcomingTrips.first }
 
+    /// **Le crédit du jour du voyage que vise le vocal de l'accueil** — le
+    /// premier voyage en cours, celui où ``upload(_:levels:handoffId:)``
+    /// envoie (Hugo, 03/10/2026). La feuille d'enregistrement s'en sert pour
+    /// prévenir à 4:30 et couper à 5:00, comme la barre de la conversation.
+    /// `nil` sans voyage en cours, ou d'un serveur qui ne le sert pas encore.
+    ///
+    /// **Passé minuit, le crédit d'hier se recharge** (03/10/2026) —
+    /// `DailyCredit.refreshed(now:)`, la règle de la conversation. Le flux
+    /// gardé sur le disque, ou laissé en mémoire la nuit, portait le crédit
+    /// épuisé de la veille : le micro de l'accueil refusait de s'ouvrir le
+    /// lendemain, toute la journée hors ligne, alors que la file aurait gardé
+    /// le vocal.
+    ///
+    /// **Moins ce qui attend encore dans la file** (``unreceivedCosts``) : le
+    /// crédit servi — le serveur, ou hors ligne le cache que la lecture rend —
+    /// ne compte pas un vocal que le serveur n'a pas reçu. C'est la règle de
+    /// la conversation (``ChatModel/dailyCredit``).
+    public var ongoingTripCredit: DailyCredit? { ongoingTripCredit(at: .now) }
+
+    /// Le même, à une heure donnée — pour les tests.
+    func ongoingTripCredit(at now: Date) -> DailyCredit? {
+        guard let trip = ongoingTrips.first else { return nil }
+        return trip.dailyCredit?.refreshed(now: now).consuming(unreceivedCosts[trip.id] ?? 0)
+    }
+
+    /// Ce que coûtent, par voyage en cours, les tours que la file garde sur le
+    /// disque et que le serveur n'a **pas encore reçus** — relu de la file
+    /// après chaque lecture de l'accueil (``countWaitingTurns(now:)``), jamais
+    /// mêlé au crédit servi.
+    ///
+    /// À part, et recalculé en entier plutôt qu'additionné (03/10/2026) : le
+    /// décompte d'un vocal en file vivait dans le crédit du voyage, en
+    /// mémoire seulement. La relecture suivante — au retour de la
+    /// conversation que l'accueil ouvre après chaque vocal —, hors ligne,
+    /// rendait le cache et l'effaçait : un second vocal repartait de 5:00, ni
+    /// prévenu ni coupé, et le serveur le refusait au retour du réseau.
+    /// Relire la file, c'est aussi ne jamais compter deux fois le même vocal.
+    private var unreceivedCosts: [String: Int] = [:]
+
     /// Range le contenu reçu. Les trois listes sont triées **une fois**, ici, et
     /// pas à chaque passage dans `body` : trier dans une vue, c'est trier à
     /// chaque image d'animation.
@@ -174,8 +213,12 @@ public final class HomeModel {
 
         let turn = OutgoingTurn.voice(audio, levels: levels, id: handoffId ?? UUID().uuidString.lowercased())
         switch await outbox.submit(turn, to: tripId) {
-        case .delivered:
+        case .delivered(let receipt):
             loadFailure = nil
+            // Le reçu porte le crédit **après** ce tour ; sans lui, on le
+            // décompte ici. La feuille suivante part du bon reste même si la
+            // relecture qui suit échoue.
+            settleCredit(of: tripId, served: receipt?.dailyCredit, spentMs: audio.creditMs)
             // Le carnet vient de grossir : ses compteurs et sa jauge sont
             // périmés. On recharge plutôt que de les corriger à la main ici —
             // c'est le serveur qui sait ce que le souvenir a produit.
@@ -184,10 +227,52 @@ public final class HomeModel {
             // Rien à dire de plus : la boîte d'information le dit déjà, et
             // mieux qu'un bandeau d'erreur — il ne s'est rien passé de mal.
             loadFailure = nil
+            // **Le vocal en file compte déjà** (03/10/2026) : sans ce décompte,
+            // un second vocal de l'accueil, hors ligne, partait d'un reste
+            // trop haut — ni prévenu à 4:30, ni coupé à 5:00 — et le serveur le
+            // refusait au retour du réseau. Il est sur le disque de la file :
+            // on la relit, comme après chaque lecture de l'accueil.
+            await countWaitingTurns()
         case .rejected:
             // Le message est déjà posé par la file, ``errorMessage`` le lit.
             break
         }
+    }
+
+    /// Le crédit du voyage après un vocal **arrivé** : celui du reçu quand le
+    /// serveur l'a rendu, sinon le reste d'avant **rechargé** (un vocal du
+    /// matin ne se retire pas du crédit d'hier) moins ce vocal. Un abonné ne
+    /// décompte rien — ``DailyCredit/consuming(_:)`` le sait.
+    private func settleCredit(of tripId: String, served: DailyCredit?, spentMs: Int) {
+        guard let index = ongoingTrips.firstIndex(where: { $0.id == tripId }) else { return }
+        if let served {
+            ongoingTrips[index].dailyCredit = served
+        } else if let credit = ongoingTrips[index].dailyCredit?.refreshed(now: .now) {
+            ongoingTrips[index].dailyCredit = credit.consuming(spentMs)
+        }
+    }
+
+    /// Relit ce que la file garde pour chaque voyage en cours, et ce que ça
+    /// coûtera au crédit d'aujourd'hui — ``unreceivedCosts``.
+    ///
+    /// Après une lecture **seulement** : le crédit qu'elle vient de poser ne
+    /// connaît pas ces tours. Si la lecture a échoué, l'ancien décompte reste
+    /// juste — un tour parti entre-temps compterait sinon pour rien.
+    ///
+    /// Le total est posé d'un coup, après les lectures du disque : deux
+    /// relectures qui se croisent ne s'additionnent pas.
+    private func countWaitingTurns(now: Date = .now) async {
+        var costs: [String: Int] = [:]
+        for trip in ongoingTrips {
+            guard let credit = trip.dailyCredit?.refreshed(now: now), !credit.isUnlimited else { continue }
+            // Ce qui attend l'illimité, ou une recharge encore à venir, prendra
+            // un autre crédit que celui d'aujourd'hui (``OutgoingTurn/isOnHold``).
+            let waiting = await outbox.waiting(for: trip.id).filter {
+                !$0.waitingForUnlimited && !$0.isWaitingForCredit(at: now)
+            }
+            costs[trip.id] = waiting.reduce(0) { $0 + $1.creditCost(in: credit) }
+        }
+        unreceivedCosts = costs
     }
 
     /// Supprime un voyage depuis le tiroir de sa carte (Hugo, 17/09/2026).
@@ -270,6 +355,7 @@ public final class HomeModel {
         if feed == nil, let stored = await cached?() {
             apply(stored)
             freshness = .restored
+            await countWaitingTurns()
         }
 
         do {
@@ -279,16 +365,20 @@ public final class HomeModel {
             freshness = contentFreshness(of: loaded, replacing: feed)
 
             #if DEBUG
-                // Le personnage du bac à sable survit à un rechargement : sans
-                // ça, tirer sur la liste pour la rafraîchir remettait le palier
-                // du serveur et le profil, lui, gardait le sien. Deux écrans qui
-                // ne racontaient plus la même histoire. Absent de l'app livrée.
-                apply(SandboxPersona.current?.applied(to: loaded) ?? loaded)
+                // Le personnage et le crédit du bac à sable survivent à un
+                // rechargement : sans ça, tirer sur la liste pour la rafraîchir
+                // remettait l'abonnement du serveur et le profil, lui, gardait
+                // le sien. Deux écrans qui ne racontaient plus la même
+                // histoire. Absent de l'app livrée.
+                apply(debugSandboxed(loaded))
             #else
                 apply(loaded)
             #endif
 
             loadFailure = nil
+            // Hors ligne, la lecture rend le cache sans lever : son crédit ne
+            // compte pas plus que celui du serveur ce qui attend dans la file.
+            await countWaitingTurns()
         } catch {
             // Hors ligne **avec** du contenu déjà à l'écran, on se tait : la
             // boîte d'information dit déjà pourquoi rien ne bouge, et un
@@ -298,6 +388,12 @@ public final class HomeModel {
             loadFailure = isOffline && feed != nil ? nil : error.localizedDescription
         }
     }
+}
+
+extension RecordedAudio {
+    /// Ce que ce vocal consomme du crédit du jour, en millisecondes — sa
+    /// durée, comme le serveur la mesure.
+    var creditMs: Int { Int((max(0, duration) * 1000).rounded()) }
 }
 
 /// Ce qu'a donné un code d'accès — voir ``HomeModel/join(code:)``.
@@ -355,11 +451,13 @@ public enum HomeIntent: Sendable, Hashable {
     // le contenu, une vue ne le peut pas.
 
     extension HomeModel {
-        /// Repart du jeu d'essai complet, personnage compris — et remet le
-        /// réseau, la file et les messages à zéro.
+        /// Repart du jeu d'essai complet, personnage et crédit compris — et
+        /// remet le réseau, la file et les messages à zéro.
         public func debugReset() {
             SandboxPersona.current = nil
+            SandboxCredit.reset()
             loadFailure = nil
+            unreceivedCosts = [:]
             apply(.fixture)
             Task { await outbox.debugReset() }
         }
@@ -385,35 +483,39 @@ public enum HomeIntent: Sendable, Hashable {
             )
         }
 
-        /// Devenir un abonné : plus de quota d'étapes, donc plus de pastille sur
-        /// l'avatar ni de lime sur le CTA — et, dans le profil, la carte de
-        /// chiffres ouverte et la ligne « Mon abonnement ».
+        /// Devenir un abonné : il raconte sans limite — plus de crédit compté
+        /// dans la conversation ni dans les réglages — et, dans le profil, la
+        /// pastille « Abonné(e) » et la ligne « Mon abonnement ».
         public func debugBecomeSubscriber() {
             debugPlay(.subscriber)
         }
 
-        /// Première connexion : le quota d'étapes au complet. La pastille
-        /// annonce ce qui reste, le CTA passe au lime et au cadenas, et le
-        /// profil repropose l'abonnement.
+        /// Sans abonnement : le crédit du jour compte, et le profil propose
+        /// « Découvrir l'abonnement ».
+        public func debugBecomeFree() {
+            debugPlay(.free)
+        }
+
+        /// Quelqu'un qui n'a **jamais** été abonné : le paywall s'ouvre sur la
+        /// découverte en trois écrans. Le profil du jeu d'essai démarre abonné,
+        /// et « Sans abonnement » en fait un ancien abonné : sans ce
+        /// personnage, la découverte était inatteignable dans le bac à sable
+        /// (recette du 03/10/2026). Le panneau remet aussi la session à zéro.
+        public func debugBecomeNeverSubscribed() {
+            debugPlay(.neverSubscribed)
+        }
+
+        /// Fait servir ce crédit du jour à chaque voyage — « Crédit neuf »,
+        /// « Plus que 30 s », « Crédit épuisé » —, par le double d'API (fil de
+        /// la conversation, ses mises à jour, le reçu d'un tour, réglages du
+        /// voyage) et sur l'accueil tout de suite. Le crédit ne compte que pour
+        /// qui n'est pas abonné : le personnage passe donc sans abonnement.
         ///
-        /// Les trois étapes sont **le quota d'ouverture d'un compte**, pas un
-        /// chiffre d'interface : c'est le serveur qui le pose, et il descend
-        /// ensuite d'une unité par étape racontée.
-        public func debugFirstConnection() {
-            debugPlay(.freeTrial(remainingSteps: 3))
-        }
-
-        /// Le mur : plus une seule étape offerte. La pastille passe à
-        /// « Abonne-toi », le CTA au lime et au cadenas, et le profil garde son
-        /// bouton d'abonnement — c'est le seul état qui bloque quelque chose.
-        public func debugReachFreeLimit() {
-            debugPlay(.freeTrial(remainingSteps: 0))
-        }
-
-        /// Un quota déjà entamé : c'est l'état où la pastille **décompte**, et
-        /// il ne se voit ni à la première connexion ni au mur.
-        public func debugStartedQuota() {
-            debugPlay(.freeTrial(remainingSteps: 2))
+        /// Avec un vrai serveur, seul l'accueil se retouche : la conversation
+        /// et les réglages lisent le crédit du serveur.
+        public func debugPlayCredit(_ preset: SandboxCredit.Preset) {
+            SandboxCredit.play(preset)
+            debugPlay(.free)
         }
 
         /// Fait jouer un personnage à l'app entière — l'accueil tout de suite,
@@ -423,12 +525,22 @@ public enum HomeIntent: Sendable, Hashable {
             loadFailure = nil
 
             apply(
-                HomeFeed(
-                    traveller: persona.applied(to: debugTraveller),
-                    trips: feed?.trips ?? [],
-                    showcase: feed?.showcase
+                debugSandboxed(
+                    HomeFeed(
+                        traveller: debugTraveller,
+                        trips: feed?.trips ?? [],
+                        showcase: feed?.showcase
+                    )
                 )
             )
+        }
+
+        /// Ce que le bac à sable retouche sur un accueil reçu : le crédit des
+        /// voyages en cours d'abord — seulement si un réglage est joué, pour ne
+        /// jamais maquiller celui d'un vrai serveur —, puis le personnage.
+        fileprivate func debugSandboxed(_ loaded: HomeFeed) -> HomeFeed {
+            let credited = SandboxCredit.isPlaying ? SandboxCredit.applied(to: loaded) : loaded
+            return SandboxPersona.current?.applied(to: credited) ?? credited
         }
 
         /// Montre l'état d'erreur, sans toucher au contenu.
