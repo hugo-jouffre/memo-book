@@ -49,6 +49,11 @@ public final class BookCustomisationModel {
     /// l'ordre — voir ``save(_:)``.
     private var queue: [BookCustomisationEdit] = []
     private var isSending = false
+    /// Un envoi est parti, et le serveur n'a pas encore répondu.
+    private var isAwaitingResponse = false
+    /// Compte les gestes et les réponses : une relecture partie avant l'un
+    /// d'eux est périmée — voir ``reload()``.
+    private var revision = 0
 
     public init(
         tripId: String,
@@ -88,10 +93,20 @@ public final class BookCustomisationModel {
     /// Lit les réglages, sans rien renvoyer. C'est la relecture d'après un
     /// envoi raté : y remettre les pointillés dans le rang renverrait le même
     /// envoi, qui raterait de la même façon, sans fin.
+    ///
+    /// **Une lecture que croise un geste n'est pas montrée** : elle a été
+    /// prise avant lui, et la poser effacerait à l'écran un réglage qui part
+    /// encore — ou effacerait la mémoire du verrou qu'il vient d'écrire. Pareil
+    /// tant qu'un envoi attend sa réponse : c'est elle qui remettra l'écran
+    /// d'accord avec le serveur. Rend `false` dans ces deux cas, comme à
+    /// l'échec — ``load()`` ne remet alors rien dans le rang.
     @discardableResult
     private func reload() async -> Bool {
+        let before = revision
         do {
-            settings = try await source(tripId)
+            let fresh = try await source(tripId)
+            guard revision == before, !isAwaitingResponse, queue.isEmpty else { return false }
+            settings = fresh
             clearError()
             forgetRulesIfUnlocked()
             // Relu après un envoi raté, le carnet peut être revenu sur Carnet de
@@ -180,8 +195,12 @@ public final class BookCustomisationModel {
     /// **Les pointillés partent avec elles** : *Manuscrit* et *Éditorial* les
     /// éteignent, le retour au défaut rend ceux d'avant — ``BookRulesLock``
     /// décide, et la même édition porte les cinq valeurs.
+    ///
+    /// Retoucher l'assortiment déjà choisi n'envoie rien : l'édition porterait
+    /// les pointillés de l'écran, et rallumerait ceux qu'un co-voyageur vient
+    /// d'éteindre.
     public func setFontCombo(_ combo: BookFontCombo) {
-        guard let current = customisation else { return }
+        guard let current = customisation, !combo.matches(current) else { return }
         let change = BookRulesLock.choosing(combo, in: current, remembered: rulesMemory.read(tripId))
         if let remember = change.remember { rulesMemory.write(tripId, remember) }
 
@@ -211,6 +230,7 @@ public final class BookCustomisationModel {
         _ apply: (inout BookCustomisation) -> Void
     ) {
         guard var current = settings, var customisation = current.customisation else { return }
+        revision += 1
         rulesWithdrawnBy = nil
         apply(&customisation)
         current.customisation = customisation
@@ -232,7 +252,11 @@ public final class BookCustomisationModel {
     ///   champ** : un curseur qu'on fait glisser n'envoie que son premier cran
     ///   et celui où il s'arrête ;
     /// - seule la réponse du dernier envoi remplace l'écran — elle a vu tous
-    ///   les gestes d'avant, les autres seraient déjà périmées.
+    ///   les gestes d'avant, les autres seraient déjà périmées ;
+    /// - un envoi raté ne retient pas ceux qui attendent derrière : ce sont
+    ///   d'autres réglages, ils partent quand même, et la réponse du dernier
+    ///   montre ce que le serveur a vraiment — le réglage raté compris. Quand
+    ///   c'est le dernier qui rate, l'écran relit le serveur.
     private func save(_ change: BookCustomisationEdit) {
         guard persist != nil else { return }
         queue.removeAll { $0.field == change.field }
@@ -250,20 +274,27 @@ public final class BookCustomisationModel {
 
         while !queue.isEmpty {
             let change = queue.removeFirst()
+            isAwaitingResponse = true
             do {
                 let updated = try await persist(tripId, change)
+                isAwaitingResponse = false
+                revision += 1
                 guard queue.isEmpty else { continue }
                 settings = updated
                 clearError()
                 forgetRulesIfUnlocked()
                 forgetLockNoticeIfUnlocked()
             } catch {
-                // Ce qui attendait derrière part avec : l'écran relit le
-                // serveur, et montre ce qu'il a vraiment.
-                queue.removeAll()
+                isAwaitingResponse = false
+                revision += 1
                 report(error)
+                // D'autres réglages attendent : ils partent, et la réponse du
+                // dernier remettra l'écran d'accord avec le serveur.
+                guard queue.isEmpty else { continue }
+                // Rien derrière : l'écran relit le serveur, et montre ce qu'il
+                // a vraiment. Un geste fait pendant cette relecture entre dans
+                // la file — la boucle l'envoie au lieu de l'y laisser.
                 await reload()
-                return
             }
         }
     }

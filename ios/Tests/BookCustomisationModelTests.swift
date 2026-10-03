@@ -52,6 +52,17 @@ final class BookCustomisationModelTests: XCTestCase {
         XCTAssertEqual(server.received.count, 1, "un rallumage verrouillé est parti au serveur")
     }
 
+    func testTappingTheChosenComboAgainSendsNothing() async throws {
+        // L'édition porterait les pointillés de l'écran : sur un écran resté
+        // ouvert, elle rallumerait ceux qu'un co-voyageur vient d'éteindre.
+        let (model, server, _) = await open(rules: true)
+
+        model.setFontCombo(.travelJournal)
+
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(server.attempts, 0)
+    }
+
     // MARK: Le retour au défaut
 
     func testBackToDefaultRelightsRulesThatWereOn() async throws {
@@ -160,6 +171,61 @@ final class BookCustomisationModelTests: XCTestCase {
 
         XCTAssertEqual(server.received, [.photoTextRatio(25), .photoTextRatio(75)])
         XCTAssertEqual(model.customisation?.photoTextRatio, 75)
+    }
+
+    func testAFailedSettingDoesNotTakeTheNextOnesWithIt() async throws {
+        // Les fun facts échouent pendant que le quiz attend derrière : le quiz
+        // part quand même, et l'écran finit sur ce que le serveur a vraiment.
+        let (model, server, _) = await open(rules: true)
+        let funFacts = !(model.customisation?.funFactsEnabled ?? true)
+        let quiz = !(model.customisation?.quizEnabled ?? true)
+        server.holdsNext = true
+        server.failsNext = true
+
+        model.setFunFacts(funFacts)
+        try await waitUntil { server.attempts == 1 }
+        model.setQuiz(quiz)
+        server.release()
+
+        try await waitUntil { server.received.count == 1 && model.customisation == server.settings.customisation }
+        XCTAssertEqual(server.received, [.quiz(quiz)])
+        XCTAssertEqual(model.customisation?.quizEnabled, quiz)
+        XCTAssertEqual(model.customisation?.funFactsEnabled, !funFacts, "le réglage raté reste affiché")
+    }
+
+    func testAGestureDuringTheRereadAfterAFailureIsSent() async throws {
+        // L'envoi échoue, l'écran relit le serveur — lentement — et le
+        // voyageur touche au quiz pendant ce temps. Le geste restait en file
+        // sans partir, et la relecture l'effaçait de l'écran.
+        let (model, server, _) = await open(rules: true)
+        let quiz = !(model.customisation?.quizEnabled ?? true)
+        server.failsNext = true
+        server.holdsNextRead = true
+
+        model.setFunFacts(!(model.customisation?.funFactsEnabled ?? true))
+        try await waitUntil { server.attempts == 1 && server.reads == 2 }
+        model.setQuiz(quiz)
+        server.releaseRead()
+
+        try await waitUntil { server.received.count == 1 && model.customisation == server.settings.customisation }
+        XCTAssertEqual(server.received, [.quiz(quiz)])
+        XCTAssertEqual(model.customisation?.quizEnabled, quiz)
+    }
+
+    func testARereadDoesNotUndoASettingOnItsWay() async throws {
+        // « Réessayer », ou l'écran qui réapparaît, relit le serveur pendant
+        // qu'un envoi attend sa réponse : la lecture est d'avant le geste.
+        let (model, server, _) = await open(rules: true)
+        let quiz = !(model.customisation?.quizEnabled ?? true)
+        server.holdsNext = true
+
+        model.setQuiz(quiz)
+        try await waitUntil { server.attempts == 1 }
+        await model.load()
+        XCTAssertEqual(model.customisation?.quizEnabled, quiz, "la relecture a défait le geste")
+
+        server.release()
+        try await settled(model, server, edits: 1, shown: model.customisation)
     }
 
     // MARK: Les carnets d'avant le verrou
@@ -300,10 +366,17 @@ final class BookCustomisationModelTests: XCTestCase {
         private(set) var received: [BookCustomisationEdit] = []
         private(set) var attempts = 0
         var isFailing = false
+        /// La prochaine requête échoue, et elle seule.
+        var failsNext = false
         /// La prochaine requête attend ``release()`` avant d'être traitée :
         /// une connexion lente, ou un pooler qui fait patienter.
         var holdsNext = false
         private var held: CheckedContinuation<Void, Never>?
+        /// La prochaine lecture attend ``releaseRead()`` : une relecture
+        /// lente, pendant laquelle le voyageur continue de régler.
+        var holdsNextRead = false
+        private(set) var reads = 0
+        private var heldRead: CheckedContinuation<Void, Never>?
 
         init(rules: Bool, combo: BookFontCombo = .travelJournal) {
             var customisation = BookCustomisation.fixture
@@ -320,6 +393,23 @@ final class BookCustomisationModelTests: XCTestCase {
             held = nil
         }
 
+        func releaseRead() {
+            heldRead?.resume()
+            heldRead = nil
+        }
+
+        /// `GET /v1/trips/:id/settings` : ce que le serveur a **au moment où
+        /// la lecture part** — une lecture retenue rend un état d'avant.
+        func read() async -> TripSettings {
+            reads += 1
+            let snapshot = settings
+            if holdsNextRead {
+                holdsNextRead = false
+                await withCheckedContinuation { heldRead = $0 }
+            }
+            return snapshot
+        }
+
         func patch(_ edit: BookCustomisationEdit) async throws -> TripSettings {
             attempts += 1
             if holdsNext {
@@ -327,6 +417,10 @@ final class BookCustomisationModelTests: XCTestCase {
                 await withCheckedContinuation { held = $0 }
             }
             if isFailing { throw Refused() }
+            if failsNext {
+                failsNext = false
+                throw Refused()
+            }
             received.append(edit)
             var customisation = settings.customisation ?? .fixture
             switch edit {
@@ -366,7 +460,7 @@ final class BookCustomisationModelTests: XCTestCase {
     private func open(_ server: Server, _ memory: BookRulesMemory) async -> BookCustomisationModel {
         let model = BookCustomisationModel(
             tripId: Self.tripId,
-            source: { _ in server.settings },
+            source: { _ in await server.read() },
             persist: { _, edit in try await server.patch(edit) },
             rulesMemory: memory
         )
