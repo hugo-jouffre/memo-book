@@ -47,7 +47,8 @@ En deux temps, pour que l'ancien code tourne encore pendant la bascule :
 - **`20261003090000_credit_du_jour`** (ce lot) a retiré la valeur `trial_end` de
   `NotificationKind`, avec les lignes de `notification_deliveries` qui la
   portaient (le journal de ses envois) ;
-- **la migration suivante** (PR livrée après celle-ci) supprime les colonnes
+- **`20261004090000_retire_les_colonnes_de_l_ancien_modele`** (la PR d'après)
+  supprime les colonnes
   `accounts.offeredSteps`, `accounts.remainingSteps`, `accounts.memoryPlan`,
   `accounts.memoryUsed`, `accounts.memoryPeriodStart` et l'énumération
   `MemoryPlan`. Le schéma Prisma ne les connaît déjà plus.
