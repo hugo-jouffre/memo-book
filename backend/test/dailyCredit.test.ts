@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { converseTurn } from "../src/jobs/converse.js";
+import { JOB_NAMES } from "../src/jobs/queue.js";
 import {
   FakeResponder,
   validateReply,
@@ -282,6 +283,9 @@ describe("le barème", () => {
       { status: "active", renewsAt: null },
       { status: "trialing", renewsAt: null },
       { status: "past_due", renewsAt: new Date(now.getTime() - DAY) },
+      // Vivant mais muet depuis une semaine : un `EXPIRED` s'est perdu.
+      { status: "active", renewsAt: new Date(now.getTime() - 7 * DAY) },
+      { status: "past_due", renewsAt: new Date(now.getTime() - 7 * DAY) },
       { status: "cancelled", renewsAt: new Date(now.getTime() + DAY) },
       { status: "cancelled", renewsAt: new Date(now.getTime() - DAY) },
       { status: "expired", renewsAt: new Date(now.getTime() + DAY) },
@@ -1184,5 +1188,61 @@ describe("le bouton sous la réponse de MEMO", () => {
     expect(input?.message.id).toBe(theirs.id);
     expect(input?.traveller.isUnlimited).toBe(true);
     expect(input?.history.map((turn) => turn.text)).not.toContain(DAILY_CREDIT_EXHAUSTED_MESSAGE);
+  });
+});
+
+describe("le tour de MEMO après un vocal", () => {
+  let responder: OfferingResponder;
+  let original: TestHarness["context"]["responder"];
+
+  beforeEach(() => {
+    original = harness.context.responder;
+    responder = new OfferingResponder();
+    harness.context.responder = responder;
+  });
+
+  afterEach(() => {
+    harness.context.responder = original;
+  });
+
+  async function voiceTurn(memoId: string, entry: { transcript: string; redactionStatus?: "pending" | "ready" }) {
+    const created = await harness.prisma.entry.create({
+      data: {
+        memoId,
+        kind: "audio",
+        status: "ready",
+        transcript: entry.transcript,
+        redactionStatus: entry.redactionStatus ?? "ready",
+        capturedAt: new Date(),
+      },
+    });
+    return harness.prisma.chatMessage.create({
+      data: { memoId, author: "traveller", kind: "voice", accountId: owner.accountId, entryId: created.id },
+    });
+  }
+
+  it("dit qu'il n'a rien entendu quand la transcription est vide, au lieu de se taire", async () => {
+    const memo = await tripOf(owner.accountId);
+    const message = await voiceTurn(memo.id, { transcript: "   " });
+
+    await converseTurn(harness.context, { messageId: message.id });
+
+    const input = responder.inputs.at(-1);
+    expect(input?.message.id).toBe(message.id);
+    expect(input?.message.transcriptFailed).toBe(true);
+  });
+
+  it("republie la rédaction restée en attente quand le tour est rejoué après sa réponse", async () => {
+    // La transaction du tour est passée, la publication de la rédaction non :
+    // pg-boss rejoue le job, qui trouve `repliedAt` posé.
+    const memo = await tripOf(owner.accountId);
+    const message = await voiceTurn(memo.id, { transcript: "Le Colisée au lever du jour.", redactionStatus: "pending" });
+    await harness.prisma.chatMessage.update({ where: { id: message.id }, data: { repliedAt: new Date() } });
+    const publish = vi.spyOn(harness.context.queue, "publish").mockResolvedValue();
+
+    await converseTurn(harness.context, { messageId: message.id });
+
+    expect(publish).toHaveBeenCalledWith(JOB_NAMES.redact, { entryId: message.entryId });
+    publish.mockRestore();
   });
 });
