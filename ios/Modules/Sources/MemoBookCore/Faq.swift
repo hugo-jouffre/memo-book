@@ -690,7 +690,6 @@ public enum Faq {
                 answer: [
                     "L’app est gratuite au téléchargement, et tes trois premières étapes sont offertes pour que tu puisses tester l’expérience.",
                     "Au-delà, un abonnement de {{prix_abo_hebdo}} par semaine prend le relais tant que ton récit est en cours.",
-                    "Tout ce que tu paies en abonnement est déduit du prix final de ton Carnet au moment de le commander.",
                 ]
             ),
             FaqEntry(
@@ -699,7 +698,6 @@ public enum Faq {
                 answer: [
                     "Il coûte {{prix_abo_hebdo}} par semaine. Il démarre une fois tes trois étapes offertes enregistrées, pour que ton récit continue.",
                     "Il se renouvelle chaque semaine par ton identifiant Apple. À la fin de ton voyage, on te propose de le résilier en un geste, et tu peux le faire toi-même à tout moment, depuis ton profil ou les réglages de ton iPhone.",
-                    "Chaque semaine payée est déduite du prix final de ton Carnet.",
                 ]
             ),
             FaqEntry(
@@ -707,7 +705,7 @@ public enum Faq {
                 question: "Combien coûte un Carnet ?",
                 answer: [
                     "Le prix dépend du nombre de pages et des options choisies.",
-                    "Les semaines d’abonnement déjà payées pendant ton récit en sont déduites.",
+                    "Ce que ta cagnotte a reçu en est déduit.",
                     "Le montant restant t’est affiché en clair avant le paiement, sans surprise à l’étape suivante.",
                 ]
             ),

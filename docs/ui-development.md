@@ -196,7 +196,7 @@ Voir [`notifications.md`](notifications.md) pour les règles et les choix faits.
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
-| T167 | « Voir une estimation » sur la 3e story : la pastille ouvre la feuille depuis le 15/09. À revérifier par Clara sur ce build | Paywall |
+| T167 | « Voir une estimation » sur la 3e story : la pastille ouvre la feuille depuis le 15/09. **En pause avec la carte qui la portait**, « Tes abonnements sont déduits ! » (PR #87, 02/10/2026) : plus rien ne l'affiche. À revérifier par Clara le jour où la carte revient | Paywall |
 
 ### Aide, FAQ, textes légaux
 

@@ -92,6 +92,28 @@ export function transcriptionHintFor(known: {
 }
 
 /**
+ * La transcription, sans ce que le transcripteur a recopié de son indice.
+ *
+ * Sur un vocal muet ou couvert par le bruit, `gpt-4o-transcribe` rend parfois
+ * son `prompt` — ou sa dernière phrase — au lieu de rien : « Lieux : Ios,
+ * Naxos, Paros. ». L'écrivain prendrait ces mots pour ceux du voyageur et en
+ * ferait une page. Une phrase de l'indice retrouvée **mot pour mot**, ponctuation
+ * comprise, n'a pas été dite : personne ne prononce « Lieux : » avec ses
+ * deux-points. Une transcription qui n'était que l'indice devient vide, et la
+ * rédaction la traite comme un vocal muet.
+ */
+export function withoutHintEcho(text: string, hint: string | undefined): string {
+  if (!hint) return text;
+  const sentences = [hint, ...hint.split(/(?<=\.)\s+/)]
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length >= 12);
+  if (!sentences.some((sentence) => text.includes(sentence))) return text;
+  let cleaned = text;
+  for (const sentence of sentences) cleaned = cleaned.split(sentence).join(" ");
+  return cleaned.replace(/\s{2,}/g, " ").trim();
+}
+
+/**
  * Transcription déterministe pour les tests et le smoke local : aucun appel
  * réseau, aucune clé. Le texte produit dépend du contenu de l'audio, ce qui
  * permet de vérifier que la bonne pièce jointe traverse bien le pipeline.

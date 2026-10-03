@@ -104,7 +104,8 @@ public struct BookCustomisation: Codable, Sendable, Hashable {
 ///
 /// Un réglage à la fois, comme ``TripSettingsEdit`` et pour la même raison :
 /// l'écran ne renvoie que ce qu'on a touché, ce qui évite d'écraser ce qu'un
-/// co-voyageur aurait changé entre-temps.
+/// co-voyageur aurait changé entre-temps. Seul ``fontCombo(_:rulesEnabled:)``
+/// porte plusieurs colonnes — les quatre polices et les pointillés.
 public enum BookCustomisationEdit: Sendable, Hashable {
     case photoTextRatio(Int)
     case targetPageCount(Int)

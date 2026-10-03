@@ -204,14 +204,9 @@ final class BookCustomisationPreviewTests: XCTestCase {
             .filter { BookCustomisationPreview.fileName(for: $0) == fallback }
             .map { BookCustomisationPreview.composedFileName(for: $0) ?? "sans assortiment : \($0)" }
         XCTAssertEqual(missing, [])
-
-        // Et le nom rendu s'écrit comme sur le disque, octet pour octet : c'est
-        // lui qui deviendra une URL.
-        let listed = Set(BookCustomisationPreview.availableFileNames.map { Array($0.utf8) })
-        let misspelt = reachable
-            .map { BookCustomisationPreview.fileName(for: $0) }
-            .filter { !listed.contains(Array($0.utf8)) }
-        XCTAssertEqual(misspelt, [])
+        // Que ces noms s'écrivent comme sur le disque, octet pour octet, c'est
+        // `testTheManifestIsTheFolder` qui le tient : `fileName(for:)` rend un
+        // élément du manifeste, le comparer au manifeste ne prouverait rien.
     }
 
     func testTheConstraintStillMatchesTheFolder() {
@@ -228,7 +223,69 @@ final class BookCustomisationPreviewTests: XCTestCase {
         XCTAssertEqual(present, [])
     }
 
+    // MARK: L'image publiée
+
+    func testTheUntouchedBookPointsAtItsPublishedImage() throws {
+        let url = BookCustomisationPreview.imageURL(for: BookCustomisation())
+        let file = try XCTUnwrap(
+            BookCustomisationPreview.publishedFiles[BookCustomisationPreview.fileName(for: BookCustomisation())]
+        )
+        XCTAssertEqual(url, BookCustomisationPreview.publicBaseURL.appending(path: file))
+        XCTAssertEqual(url.host(), "pjmetjdnajskijoljulc.supabase.co")
+        XCTAssertTrue(url.path().hasPrefix("/storage/v1/object/public/memobook-public/apercus/"), url.path())
+        XCTAssertEqual(url.pathExtension, "webp")
+    }
+
+    func testAHandComposedBookPointsAtThePublishedFallback() {
+        var custom = BookCustomisation(rulesEnabled: false)
+        custom.fontHand = "Montserrat"
+        XCTAssertEqual(
+            BookCustomisationPreview.imageURL(for: custom),
+            BookCustomisationPreview.publicBaseURL.appending(path: BookCustomisationPreview.publishedFallback)
+        )
+    }
+
+    func testEveryReachableStateHasItsOwnPublishedImage() {
+        // Deux cents états, deux cents images distinctes, et aucune n'est le
+        // repli : une empreinte partagée voudrait dire deux réglages qui
+        // montrent la même page.
+        let reachable = Self.everyState.filter { !$0.rulesEnabled || Self.allowsRules($0) }
+        let urls = reachable.map(BookCustomisationPreview.imageURL(for:))
+        let fallback = BookCustomisationPreview.publicBaseURL.appending(path: BookCustomisationPreview.publishedFallback)
+
+        XCTAssertFalse(urls.contains(fallback))
+        XCTAssertEqual(Set(urls).count, 200)
+    }
+
+    func testTheEmbeddedManifestIsThePublishedOne() throws {
+        // `npm run previews:publish` réécrit le manifeste publié ; s'il est
+        // commité sans relancer le script iOS, l'app pointerait des images
+        // d'avant. La correspondance embarquée doit être la sienne, au nom près.
+        let data = try Data(contentsOf: Self.publishedManifest)
+        let manifest = try JSONDecoder().decode(PublishedManifest.self, from: data)
+
+        XCTAssertEqual(manifest.version, 1)
+        XCTAssertEqual(manifest.fallback.source, fallback)
+        XCTAssertEqual(manifest.fallback.file, BookCustomisationPreview.publishedFallback)
+
+        let published = Dictionary(uniqueKeysWithValues: manifest.previews.map { ($0.source, $0.file) })
+        let rerun = "relancer `python3 ios/Tools/make-customisation-preview-manifest.py`"
+        XCTAssertEqual(published, BookCustomisationPreview.publishedFiles, rerun)
+    }
+
     // MARK: Outils
+
+    /// Ce que l'app lit du manifeste réécrit par `npm run previews:publish`.
+    private struct PublishedManifest: Decodable {
+        struct Entry: Decodable {
+            let source: String
+            let file: String
+        }
+
+        let version: Int
+        let fallback: Entry
+        let previews: [Entry]
+    }
 
     /// Un carnet réglé sur cet assortiment, le reste aux valeurs par défaut.
     private func book(
@@ -278,14 +335,22 @@ final class BookCustomisationPreviewTests: XCTestCase {
         BookFontCombo.matching(book)?.allowsRules ?? false
     }
 
-    /// `assets/illustrations/aperçu personnalisation/`, depuis ce fichier.
-    private static let previewFolder = URL(fileURLWithPath: #filePath)
+    /// `assets/illustrations/`, depuis ce fichier.
+    private static let illustrations = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent() // MemoBookCoreTests
         .deletingLastPathComponent() // Tests
         .deletingLastPathComponent() // Modules
         .deletingLastPathComponent() // ios
         .deletingLastPathComponent() // la racine du dépôt
-        .appending(path: "assets/illustrations/aperçu personnalisation", directoryHint: .isDirectory)
+        .appending(path: "assets/illustrations", directoryHint: .isDirectory)
+
+    /// Les exports Figma : `assets/illustrations/aperçu personnalisation/`.
+    private static let previewFolder = illustrations
+        .appending(path: "aperçu personnalisation", directoryHint: .isDirectory)
+
+    /// Le manifeste publié, à côté du dossier et non dedans.
+    private static let publishedManifest = illustrations
+        .appending(path: "apercus-personnalisation.manifest.json")
 
     private static func names(_ spellings: Set<[UInt8]>) -> [String] {
         spellings.map { String(decoding: $0, as: UTF8.self) }.sorted()

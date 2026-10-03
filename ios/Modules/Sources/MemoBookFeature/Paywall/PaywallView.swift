@@ -48,6 +48,8 @@ struct PaywallView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    @Environment(\.accessibilitySwitchControlEnabled) private var switchControlEnabled
 
     @State private var page = 0
     @State private var showsPreview = false
@@ -107,8 +109,12 @@ struct PaywallView: View {
     /// la page sur la même date de départ.
     @State private var fill: PaywallFill = .held(0)
 
-    /// Un doigt est posé sur la page — voir ``PaywallStoryTouch``.
-    @State private var isHeld = false
+    /// Les zones où un doigt est posé — voir ``PaywallStoryTouch``. Un
+    /// ensemble et non un booléen : un pouce posé sur la bande basse et un
+    /// tapotis sur une moitié, le tapotis levé ne doit pas relancer le temps
+    /// sous le pouce.
+    @State private var heldZones: Set<HoldZone> = []
+    private var isHeld: Bool { !heldZones.isEmpty }
 
     /// Le temps ne passe que si l'on regarde l'écran : rien par-dessus, et pas
     /// de doigt qui le tient.
@@ -236,6 +242,11 @@ struct PaywallView: View {
             )
         }
         .task(id: previewMemoId) {
+            // Plus aucune carte ne porte la pastille qui ouvre l'estimation
+            // (« Tes abonnements sont déduits ! » est en pause) : pas d'appel
+            // à la cagnotte pour une feuille que rien n'ouvre. Il revient avec
+            // la carte.
+            guard PaywallCopy.arguments.contains(where: { $0.pill != nil }) else { return }
             guard let walletSource, let wallet = try? await walletSource(previewMemoId) else { return }
             estimation = PaywallEstimation(wallet: wallet, weeklyPrice: subscription.displayedWeeklyPrice)
         }
@@ -401,16 +412,23 @@ struct PaywallView: View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
                 Color.clear.contentShape(.rect)
-                    .paywallStoryTouch(onTap: { turn(-1) }, onHold: { isHeld = $0 })
+                    .paywallStoryTouch(onTap: { turn(-1) }, onHold: { hold(.back, $0) })
                 Color.clear.contentShape(.rect)
-                    .paywallStoryTouch(onTap: { turn(+1) }, onHold: { isHeld = $0 })
+                    .paywallStoryTouch(onTap: { turn(+1) }, onHold: { hold(.forward, $0) })
             }
 
             Color.clear.contentShape(.rect)
-                .paywallStoryTouch(onHold: { isHeld = $0 })
+                .paywallStoryTouch(onHold: { hold(.footer, $0) })
                 .frame(height: PaywallMetrics.untappableFooter)
         }
         .accessibilityHidden(true)
+    }
+
+    /// Les trois zones qui tiennent la page sous le doigt.
+    private enum HoldZone { case back, forward, footer }
+
+    private func hold(_ zone: HoldZone, _ isDown: Bool) {
+        if isDown { heldZones.insert(zone) } else { heldZones.remove(zone) }
     }
 
     // MARK: - Le temps qui passe
@@ -448,8 +466,12 @@ struct PaywallView: View {
         }
 
         // En Reduce Motion, aucune page ne tourne toute seule — on remplit la
-        // barre pour dire où on en est, et c'est le doigt qui avance.
-        guard !reduceMotion else {
+        // barre pour dire où on en est, et c'est le doigt qui avance. Pareil
+        // sous VoiceOver ou Switch Control : on ne peut pas y poser le doigt
+        // pour tenir la page (les zones sont cachées à l'accessibilité), et
+        // une page qui tourne pendant la lecture coupe la phrase. « Continuer »
+        // et la flèche avancent comme avant.
+        guard !reduceMotion, !voiceOverEnabled, !switchControlEnabled else {
             fill = .held(1)
             return
         }

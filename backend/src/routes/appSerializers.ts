@@ -717,9 +717,13 @@ export function serializeBookCustomisation(memo: Memo) {
  * qu'il y a quelque chose à régler — d'où le repli.
  */
 function styleSummaryOf(memo: Memo): string {
+  // Les pointillés sont `rulesEnabled`, les lignes sous le texte ; les cadres,
+  // les zones libres pour écrire à la main. Les deux étaient croisés : depuis
+  // le verrou des pointillés, un carnet *Manuscrit* — sans pointillés —
+  // s'annonçait « Pointillés, … » sur la ligne « Style du carnet ».
   const active = [
-    memo.freeZonesEnabled ? "Pointillés" : null,
-    memo.rulesEnabled ? "cadres" : null,
+    memo.rulesEnabled ? "Pointillés" : null,
+    memo.freeZonesEnabled ? "cadres" : null,
     memo.funFactsEnabled ? "anecdotes" : null,
     memo.quizEnabled ? "quiz" : null,
     memo.crosswordEnabled ? "mots croisés" : null,

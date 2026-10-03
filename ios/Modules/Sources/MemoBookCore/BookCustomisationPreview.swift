@@ -5,8 +5,9 @@ import Foundation
 //
 // Ce n'est pas l'aperçu du carnet (`BookPreview`, le PDF composé) : c'est une
 // image **déjà rendue**, choisie parmi deux cents d'après cinq réglages. Ce
-// fichier dit laquelle, et rien d'autre — ni où elle est hébergée, ni comment
-// elle s'anime. `docs/apercu-personnalisation.md` fait foi.
+// fichier dit laquelle, et où la lire — pas comment elle s'anime, qui est
+// l'affaire de l'écran. `docs/apercu-personnalisation.md` fait foi ;
+// l'hébergement est décrit dans `assets/README.md`.
 
 /// Quelle image d'aperçu montrer pour un état du carnet.
 ///
@@ -22,6 +23,27 @@ public enum BookCustomisationPreview {
     /// Unicode décomposé, et le nom « évident » renvoyait un 404. L'ASCII le
     /// tient hors de portée du problème.
     public static let fallbackFileName = "apercu non existant.png"
+
+    /// Où vivent les images publiées : le bucket **public** `memobook-public`,
+    /// sous `apercus/`, derrière le CDN de Supabase (`assets/README.md`). Le
+    /// même pour tous les environnements — ce sont les mêmes images pour tout
+    /// le monde, lues sans session.
+    public static let publicBaseURL = URL(
+        string: "https://pjmetjdnajskijoljulc.supabase.co/storage/v1/object/public/memobook-public/apercus/"
+    )!
+
+    /// L'adresse de l'image à afficher pour ce carnet : celle de
+    /// ``fileName(for:among:)``, publiée.
+    ///
+    /// Les exports Figma pèsent 800 Ko ; l'app lit leur version publiée, en
+    /// WebP à 900 × 840. La correspondance est **embarquée** (Hugo,
+    /// 02/10/2026) : un seul appel réseau, celui de l'image, et aucun manifeste
+    /// à attendre. Le repli a sa propre image publiée, comme les autres.
+    public static func imageURL(for customisation: BookCustomisation) -> URL {
+        let name = fileName(for: customisation)
+        let file = publishedFiles[name] ?? publishedFallback
+        return publicBaseURL.appending(path: file)
+    }
 
     /// Le nom du fichier d'aperçu à afficher pour ce carnet.
     ///

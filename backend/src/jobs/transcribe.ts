@@ -1,7 +1,7 @@
 import type { AppContext } from "../context.js";
 import type { ConverseJob } from "./converse.js";
 import { JOB_NAMES } from "./queue.js";
-import { transcriptionHintFor } from "../services/transcription.js";
+import { transcriptionHintFor, withoutHintEcho } from "../services/transcription.js";
 import { parseTripContext } from "../services/tripContext.js";
 import { ENTRY_FOR_REDACTION, narratorOf, parseCoherenceSheet, type RedactJob } from "./redact.js";
 
@@ -82,9 +82,14 @@ export async function transcribeEntry(
       hint,
     });
 
+    const transcript = withoutHintEcho(result.text, hint);
+    if (transcript !== result.text) {
+      logger.warn({ entryId }, "Le transcripteur a recopié son indice : retiré de la transcription");
+    }
+
     await prisma.entry.update({
       where: { id: entryId },
-      data: { transcript: result.text, status: "ready", error: null },
+      data: { transcript, status: "ready", error: null },
     });
 
     if (result.durationSeconds !== undefined) {
@@ -94,7 +99,7 @@ export async function transcribeEntry(
       });
     }
 
-    logger.info({ entryId, characters: result.text.length }, "Entrée transcrite");
+    logger.info({ entryId, characters: transcript.length }, "Entrée transcrite");
 
     await context.queue.publish<RedactJob>(JOB_NAMES.redact, { entryId });
     // MEMO répond sur la transcription brute, pendant que la rédaction écrit.

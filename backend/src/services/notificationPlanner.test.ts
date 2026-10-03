@@ -89,7 +89,9 @@ describe("la fin des 3 étapes offertes", () => {
     expect(due).toMatchObject({ dedupeKey: "camille:trial_end:once", link: "memobook://paywall" });
     expect(due?.title).toBe("Tes 3 étapes offertes sont racontées");
     expect(due?.body).toContain("1,99");
-    expect(due?.body).toContain("déduite du prix de ton carnet");
+    // La déduction des semaines payées est en pause (02/10/2026) : rien ne
+    // la promet tant que rien ne la fait.
+    expect(due?.body).not.toContain("dédui");
     expect(`${due?.title} ${due?.body}`).not.toMatch(/jours?\b/);
   });
 
@@ -109,14 +111,17 @@ describe("la fin des 3 étapes offertes", () => {
 });
 
 describe("la fin du voyage", () => {
-  it("part le jour de la date de fin, vers la cagnotte du voyage, avec ce qui est déjà versé", () => {
+  it("part le jour de la date de fin, vers la cagnotte du voyage, avec l'estimation du carnet", () => {
     const camille = account({ stopsAutomatically: true, trips: [trip({ paidCents: 597 })] });
     const due = planNotifications(camille, [], "2026-10-12").find((n) => n.kind === "trip_end");
 
     expect(due).toMatchObject({ link: "memobook://trips/rome/wallet", memoId: "rome", family: "billing" });
     expect(due?.title).toBe("Ton voyage à Rome se termine aujourd’hui");
     expect(due?.body).toContain("Ton abonnement s’arrête automatiquement.");
-    expect(due?.body).toMatch(/Tu as déjà versé 5,97\s€, déduits de ton carnet estimé à 42,90\s€/);
+    expect(due?.body).toMatch(/Ton carnet est estimé à 42,90\s€/);
+    // Les semaines déjà payées ne sont pas déduites tant que la déduction est
+    // en pause : la notification ne le promet pas.
+    expect(due?.body).not.toContain("dédui");
   });
 
   it("n'écrit pas « arrêté automatiquement » à un abonné App Store : il l'invite à le couper", () => {

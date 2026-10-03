@@ -787,7 +787,9 @@ public actor MemoBookAPIClient: MemoBookAPI {
         )
     }
 
-    /// Le corps du `PATCH` des réglages : **un seul champ rempli à la fois**.
+    /// Le corps du `PATCH` des réglages : **un seul réglage à la fois** — un
+    /// champ, sauf l'assortiment de typographies, qui pose ses quatre polices
+    /// et les pointillés ensemble (`BookCustomisationEdit.fontCombo`).
     ///
     /// Tous optionnels, et l'encodeur ne pose que ceux qui valent quelque chose
     /// (`encodeIfPresent`) : le serveur ne touche qu'aux champs présents, et
