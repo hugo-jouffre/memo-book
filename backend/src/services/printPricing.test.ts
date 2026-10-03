@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { quote, splitWalletCredit, unitPriceCents } from "./printPricing.js";
+import { quote, unitPriceCents } from "./printPricing.js";
 
 describe("le tarif d'un carnet", () => {
   it("garde l'ancre commerciale : 50 pages font 89,90 €", () => {
@@ -18,25 +18,6 @@ describe("le tarif d'un carnet", () => {
   });
 });
 
-describe("la répartition de la cagnotte", () => {
-  it("retombe exactement sur le montant déduit, sans dérive d'arrondi", () => {
-    // Un tiers / deux tiers sur un montant impair : c'est là qu'un arrondi
-    // naïf perdrait un centime en route.
-    const split = splitWalletCredit(1_001, 1_000, 2_000);
-    expect(split.giftCents + split.subscriptionCents).toBe(1_001);
-  });
-
-  it("ne répartit rien quand il n'y a rien à déduire", () => {
-    expect(splitWalletCredit(0, 3_000, 800)).toEqual({ giftCents: 0, subscriptionCents: 0 });
-  });
-
-  it("ne répartit rien quand la cagnotte n'a jamais reçu de crédit", () => {
-    // Le solde peut être positif sans crédit connu — un ajustement du support,
-    // par exemple. Mieux vaut ne rien ventiler que d'inventer une provenance.
-    expect(splitWalletCredit(500, 0, 0)).toEqual({ giftCents: 0, subscriptionCents: 0 });
-  });
-});
-
 describe("le récapitulatif", () => {
   const base = {
     bookTitle: "Rome et la Dolce Vita",
@@ -44,8 +25,6 @@ describe("le récapitulatif", () => {
     copies: 2,
     speed: "standard" as const,
     walletBalanceCents: 0,
-    giftCreditCents: 0,
-    topupCreditCents: 0,
   };
 
   it("multiplie le prix unitaire par le nombre d'exemplaires", () => {
@@ -60,15 +39,22 @@ describe("le récapitulatif", () => {
   });
 
   it("plafonne la cagnotte au montant dû : elle ne rend pas la monnaie", () => {
-    const result = quote({ ...base, walletBalanceCents: 100_000, giftCreditCents: 100_000 });
+    const result = quote({ ...base, walletBalanceCents: 100_000 });
     expect(result.walletAppliedCents).toBe(result.dueCents);
     expect(result.totalCents).toBe(0);
   });
 
   it("ne montre pas une déduction nulle", () => {
     // « - 0,00 € » ferait croire à une réduction qui n'a pas eu lieu.
-    const result = quote({ ...base, walletBalanceCents: 3_000, giftCreditCents: 3_000 });
-    expect(result.deductions.map((line) => line.id)).toEqual(["wallet"]);
+    expect(quote(base).deductions).toEqual([]);
+  });
+
+  it("ne déduit que la cagnotte : l'abonnement ne se déduit plus du carnet", () => {
+    const result = quote({ ...base, walletBalanceCents: 3_199 });
+    expect(result.deductions).toEqual([
+      { id: "wallet", label: "Déduction de ta cagnotte", amountCents: 3_199 },
+    ]);
+    expect(result.deductions.some((line) => line.label.includes("abonnement"))).toBe(false);
   });
 
   it("boucle : total = articles + livraison - cagnotte", () => {
@@ -76,13 +62,11 @@ describe("le récapitulatif", () => {
       ...base,
       speed: "express",
       walletBalanceCents: 3_199,
-      giftCreditCents: 3_000,
-      topupCreditCents: 199,
     });
     expect(result.totalCents).toBe(
       result.itemsCents + result.shippingCents - result.walletAppliedCents,
     );
-    // Et les deux lignes affichées rendent bien ce qui a été déduit.
+    // Et la ligne affichée rend bien ce qui a été déduit.
     const shown = result.deductions.reduce((sum, line) => sum + line.amountCents, 0);
     expect(shown).toBe(result.walletAppliedCents);
   });

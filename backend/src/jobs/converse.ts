@@ -1,12 +1,14 @@
-import type { ChatDisposition, Prisma } from "@prisma/client";
+import { Prisma, type ChatDisposition } from "@prisma/client";
 import type { AppContext } from "../context.js";
 import {
+  callsToActionAllowed,
   composeBeats,
   dayKeyOf,
   fallbackResponder,
   nextConversationState,
   pauseBeforeTranscript,
   scriptedReply,
+  type ConversationHistoryTurn,
   type ConversationInput,
   type ConversationReply,
 } from "../services/conversation.js";
@@ -19,9 +21,11 @@ import {
   photosToValidate,
   photosWanted,
 } from "../services/conversationCopy.js";
+import { DAILY_CREDIT_CALL_TO_ACTION, DAILY_CREDIT_EXHAUSTED } from "../services/dailyCredit.js";
 import { photoBudgetFor } from "../services/photoBudget.js";
 import { ensureRenderInProgress } from "../services/renderTrigger.js";
 import { samplePhotoJpegs } from "../services/samplePhotos.js";
+import { hasUnlimitedAccess } from "../services/subscriptions.js";
 import {
   CONTEXT_COMPLETE,
   CONTEXT_NOTED,
@@ -57,6 +61,14 @@ const ORDERING_STEP_MS = 1_000;
 
 /** Le sujet posé sur une précision qui répond à la rose, l'épine et la graine. */
 export const ROSE_EPINE_GRAINE_TOPIC = "rose_epine_graine";
+
+/** L'identifiant du bouton rangé sur une bulle (`payload.callToAction.id`), ou `null`. */
+function callToActionIdOf(payload: Prisma.JsonValue | null): string | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const callToAction = payload.callToAction;
+  if (!callToAction || typeof callToAction !== "object" || Array.isArray(callToAction)) return null;
+  return typeof callToAction.id === "string" ? callToAction.id : null;
+}
 
 function entryIdsOf(payload: unknown): string[] {
   const ids =
@@ -109,12 +121,89 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
     return;
   }
 
-  const [history, currentEntry, recentEntries, activeMembers] = await Promise.all([
+  // L'abonnement de celui qui parle : MEMO ne décrit pas les 5 minutes du jour
+  // à qui raconte sans limite, et ne lui tend pas l'offre. L'état du rendu ne
+  // sert qu'au bouton de l'aperçu, qui ne se pose que sous un texte libre
+  // (`callsToActionAllowed`) : on ne le lit que là.
+  const freeText = message.kind === "text" && !message.suggestionId;
+  const [
+    history,
+    currentEntry,
+    recentEntries,
+    activeMembers,
+    authorIsUnlimited,
+    renderReady,
+    postedNotice,
+    lastButton,
+  ] = await Promise.all([
     loadHistory(prisma, memo.id, message.seq),
     loadCurrentEntry(prisma, memo.id, message.seq),
     loadRecentEntries(prisma, memo.id),
     prisma.memoMember.count({ where: { memoId: memo.id, status: "active" } }),
+    // Sans auteur connu, on ne sait pas : MEMO parle comme à un non-abonné,
+    // et `subscribe` reste possible — c'est le sérialiseur qui le masque à un
+    // lecteur abonné.
+    message.accountId ? hasUnlimitedAccess(prisma, message.accountId, now) : false,
+    freeText ? hasReadyRender(context, memo.id) : false,
+    // La bulle « reviens demain » que la route a posée dans ce tour, ou
+    // qu'un tour plus récent a posée depuis : son `seq` suit celui du
+    // message, et l'historique (`seq` plus petit) ne la voit pas.
+    prisma.chatMessage.findFirst({
+      where: {
+        memoId: memo.id,
+        author: "memo",
+        seq: { gt: message.seq },
+        payload: { path: ["notice"], string_starts_with: `${DAILY_CREDIT_EXHAUSTED}:` },
+      },
+      orderBy: { seq: "asc" },
+      select: { text: true, createdAt: true },
+    }),
+    // La dernière bulle de MEMO qui porte un bouton, avant ce tour : on ne
+    // pose pas deux fois de suite le même (`callsToActionAllowed`). Seul un
+    // texte libre peut en recevoir un — inutile de la lire ailleurs.
+    freeText
+      ? prisma.chatMessage.findFirst({
+          where: {
+            memoId: memo.id,
+            author: "memo",
+            seq: { lt: message.seq },
+            payload: { path: ["callToAction"], not: Prisma.AnyNull },
+          },
+          orderBy: { seq: "desc" },
+          select: { payload: true },
+        })
+      : null,
   ]);
+
+  // **Pas pour un abonné** (03/10/2026) : la bulle porte `audience: "limited"`,
+  // il ne la voit pas dans son fil — et quand elle vient d'un tour plus récent
+  // d'un co-voyageur, ce tour-là n'est pas dans l'historique : le répondeur
+  // lirait un « reviens demain » qui ne suit rien, et pourrait y faire
+  // allusion. Son bouton, lui, ne le concerne pas : l'offre lui est fermée.
+  const creditNotice = authorIsUnlimited ? null : postedNotice;
+
+  // Quand elle est posée, MEMO répond **après** elle, et sa carte « Raconter
+  // sans limite » est juste au-dessus (03/10/2026) : c'est elle, le dernier
+  // bouton du fil — `subscribe` sort des boutons permis, le modèle comme le
+  // repli ne posent pas une seconde offre —, et la bulle passe dans le fil que
+  // lit le répondeur, comme la dernière chose que MEMO a dite : il répond à la
+  // question sans revenir à l'offre (`agents/agent-conversation.md` § 3 bis).
+  const lastCallToActionId = creditNotice
+    ? DAILY_CREDIT_CALL_TO_ACTION
+    : callToActionIdOf(lastButton?.payload ?? null);
+  const historyWithNotice: ConversationHistoryTurn[] = creditNotice
+    ? [
+        ...history,
+        {
+          author: "memo",
+          authorName: null,
+          kind: "text",
+          text: creditNotice.text,
+          disposition: null,
+          sentAt: creditNotice.createdAt,
+        },
+      ]
+    : history;
 
   const step =
     (message.stepId ? memo.steps.find((candidate) => candidate.id === message.stepId) : null) ??
@@ -141,6 +230,7 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
     traveller: {
       firstName: message.account?.firstName?.trim() || null,
       memberCount: 1 + activeMembers,
+      isUnlimited: authorIsUnlimited,
     },
     step: step
       ? {
@@ -151,7 +241,7 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
           endDate: step.endDate,
         }
       : null,
-    history,
+    history: historyWithNotice,
     message: {
       id: message.id,
       kind,
@@ -164,7 +254,21 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
     },
     currentEntry,
     recentEntries,
-    allows: { roseEpineGraine: allowsRoseEpineGraine(currentEntry, state, step, now) },
+    allows: {
+      roseEpineGraine: allowsRoseEpineGraine(currentEntry, state, step, now),
+      // `subscribe` seulement pour qui n'a pas l'illimité **et** parle de
+      // l'abonnement, du crédit ou de la limite (Hugo, 03/10/2026) — et jamais
+      // deux fois de suite le même bouton, la bulle « reviens demain » comptant
+      // comme l'offre.
+      callsToAction: callsToActionAllowed({
+        kind,
+        text,
+        suggestionId: message.suggestionId,
+        authorIsUnlimited,
+        hasPreview: renderReady,
+        lastCallToActionId,
+      }),
+    },
     now,
   };
 
@@ -210,14 +314,19 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
   // de rédaction, quand le texte sera prêt. Une précision reçoit un accusé, et
   // la question reviendra avec le texte réécrit. Le modèle ne sert ici qu'à
   // classer le texte libre.
+  //
+  // Le bouton du modèle tombe avec ses bulles, **explicitement** : sinon il
+  // partirait sans bulle où se poser, ou atterrirait sous « C’est noté, je
+  // reprends le texte avec ça » — une offre d'abonnement sous une précision.
   if (!message.suggestionId && kind === "text" && disposition === "memory") {
-    reply = { ...reply, beats: [], suggestionIds: [], asksRoseEpineGraine: false };
+    reply = { ...reply, beats: [], suggestionIds: [], asksRoseEpineGraine: false, callToActionId: null };
   } else if (!message.suggestionId && kind === "text" && disposition === "context") {
     reply = {
       ...reply,
       beats: composeBeats(text ?? "", [PRECISION_NOTED]),
       suggestionIds: [],
       asksRoseEpineGraine: false,
+      callToActionId: null,
     };
   }
 
@@ -281,6 +390,9 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
       }
     }
 
+    // Les puces et le bouton vont sur la **dernière** bulle du tour : c'est
+    // sous elle que l'app les dessine, et le sérialiseur résout le bouton pour
+    // chaque lecteur (`resolveCallToAction` — un abonné ne voit pas l'offre).
     for (const [index, beat] of reply.beats.entries()) {
       const isLast = index === reply.beats.length - 1;
       await tx.chatMessage.create({
@@ -293,7 +405,12 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
           stepId: message.stepId,
           pauseMilliseconds: beat.pauseMilliseconds,
           model: reply.model,
-          payload: isLast ? { suggestions: reply.suggestionIds } : undefined,
+          payload: isLast
+            ? {
+                suggestions: reply.suggestionIds,
+                ...(reply.callToActionId ? { callToAction: { id: reply.callToActionId } } : {}),
+              }
+            : undefined,
         },
       });
     }
@@ -329,7 +446,14 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
   if (message.suggestionId === "photos-ok") await validatePhotos(context, memo.id, now);
 
   logger.info(
-    { messageId, memoId: memo.id, model: reply.model, disposition, beats: reply.beats.length },
+    {
+      messageId,
+      memoId: memo.id,
+      model: reply.model,
+      disposition,
+      beats: reply.beats.length,
+      callToAction: reply.callToActionId,
+    },
     "MEMO a répondu",
   );
 }
@@ -365,8 +489,18 @@ function flowReply(
     suggestionIds,
     prompt: fallbackPrompt(placeName),
     asksRoseEpineGraine: false,
+    callToActionId: null,
     model: "scripted",
   };
+}
+
+/** Un rendu prêt : sans lui, le bouton « Voir l’aperçu du carnet » ouvrirait une page vide. */
+async function hasReadyRender(context: AppContext, memoId: string): Promise<boolean> {
+  const render = await context.prisma.render.findFirst({
+    where: { memoId, status: "ready" },
+    select: { id: true },
+  });
+  return render !== null;
 }
 
 /**

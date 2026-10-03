@@ -9,6 +9,7 @@ import { linkDeviceToAccount, visibleToAccount } from "../services/memoOwnership
 import { hashDeviceToken, hashSessionToken, parseBearerToken } from "../lib/auth.js";
 import { hashPassword, verifyPassword } from "../lib/password.js";
 import { pushCancellationToSheet } from "../services/statsExport.js";
+import { LIVING_SUBSCRIPTION_STATUSES } from "../services/subscriptions.js";
 import {
   aggregateTravelStatistics,
   memoStatisticsSelect,
@@ -163,8 +164,6 @@ async function readTravelStatistics(
 const profileInclude = {
   cards: { orderBy: [{ isDefault: "desc" as const }, { createdAt: "asc" as const }] },
   connectors: true,
-  // Un seul abonnement compte : le vivant. Les résiliés restent en base pour
-  // l'historique de facturation, ils n'ont rien à faire à l'écran.
   // **Tout l'historique récent, pas seulement l'abonnement en cours.** Le
   // paywall de retour se déduit d'un abonnement *terminé* : filtrer sur les
   // seuls actifs revenait à ne jamais pouvoir le montrer. Cinq suffisent — au
@@ -426,16 +425,16 @@ export function registerProfileRoutes(app: FastifyInstance, context: AppContext)
    * personne se retrouvait abonnée — après avoir confirmé trois fois.
    *
    * **`cancelled`, pas `expired`.** Les deux ferment l'abonnement et les deux
-   * gardent la semaine réglée (`PAID_THROUGH_SUBSCRIPTION`, `quota.ts`), mais
-   * ils ne disent pas la même chose : `expired` est le voyage qui se termine
-   * (`endSubscriptionsWithoutRunningTrip`), `cancelled` est quelqu'un qui s'en
-   * va. La distinction se lit dans l'historique, et c'est elle qui fera voir le
-   * paywall de retour.
+   * gardent la période réglée (`PAID_THROUGH_SUBSCRIPTION_STATUSES`,
+   * `subscriptions.ts`), mais ils ne disent pas la même chose : `expired` est
+   * une période qui finit sans renouvellement, `cancelled` est quelqu'un qui
+   * s'en va. La distinction se lit dans l'historique, et c'est elle qui fera
+   * voir le paywall de retour.
    *
-   * **La semaine payée n'est pas rendue.** `renewsAt` reste tel quel : c'est
-   * lui qui porte le sursis, côté app comme côté verrou d'enregistrement.
-   * Résilier le lundi ne rembourse pas les six jours suivants, et ne ferme donc
-   * pas le micro non plus (Hugo, 16/09/2026).
+   * **Le mois payé n'est pas rendu.** `renewsAt` reste tel quel : c'est lui
+   * qui porte le sursis, côté app comme côté crédit du jour. Résilier le 3 ne
+   * rembourse pas la fin du mois, et ne referme donc pas l'illimité non plus
+   * (Hugo, 16/09/2026, redit le 03/10/2026).
    *
    * **Idempotent.** Résilier deux fois — un double tapotis, une requête
    * rejouée — n'est pas une erreur : la seconde ne trouve plus d'abonnement
@@ -451,7 +450,7 @@ export function registerProfileRoutes(app: FastifyInstance, context: AppContext)
   app.post("/v1/profile/subscription/cancel", async (request) => {
     const accountId = accountIdOf(request);
     const { reason } = cancelSubscriptionBody.parse(request.body ?? {});
-    const living = ["active", "trialing", "past_due"] as const;
+    const living = LIVING_SUBSCRIPTION_STATUSES;
 
     const [{ count: storeKit }, { count: others }] = await Promise.all([
       context.prisma.subscription.updateMany({

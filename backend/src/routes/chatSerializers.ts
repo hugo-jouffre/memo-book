@@ -1,5 +1,6 @@
 import type { Account, Memo, MemoMember, MemoStep } from "@prisma/client";
 import { finalTextOf } from "../jobs/redact.js";
+import { resolveCallToAction } from "../services/callsToAction.js";
 import {
   GREETING_MESSAGE,
   SUGGESTION_SETS,
@@ -11,6 +12,7 @@ import {
 } from "../services/conversationCopy.js";
 import { firstNameOf, type ChatMessageRow, type EntryWithMedia } from "../services/conversationThread.js";
 import { avatarUrlOf } from "../services/avatars.js";
+import { LIMITED_AUDIENCE, serializeDailyCredit, type DailyCredit } from "../services/dailyCredit.js";
 import {
   contextVoiceOf,
   isGathering,
@@ -30,8 +32,9 @@ import {
  *
  * Ce qui s'ajoute par rapport au jeu d'essai de l'app — `seq`, `authorName`,
  * `pauseMilliseconds`, `disposition`, `phase`, `isValidated`, `turn`,
- * `canClear`, `now` — est **optionnel au décodage** côté Swift : un fil
- * d'aperçu qui ne les porte pas décode encore.
+ * `canClear`, `now`, `callToAction`, `dailyCredit` — est **optionnel au
+ * décodage** côté Swift : un fil d'aperçu qui ne les porte pas décode encore,
+ * et une app installée qui ne les connaît pas les ignore.
  */
 
 export type ChatTurnStatus =
@@ -97,6 +100,22 @@ function entryIdsOf(payload: unknown, fallback: string | null): string[] {
   return fallback ? [fallback] : [];
 }
 
+/** Un champ du payload d'une bulle, sans faire confiance à sa forme. */
+function payloadField(payload: unknown, key: string): unknown {
+  return payload && typeof payload === "object" ? (payload as Record<string, unknown>)[key] : undefined;
+}
+
+/**
+ * Cette bulle est-elle pour ce lecteur ? Une bulle `audience: "limited"` — la
+ * bulle « reviens demain » du crédit du jour — ne parle qu'à ceux qui
+ * comptent leur crédit : un abonné n'a pas à lire « reviens demain » dans un
+ * fil qu'il partage avec ses co-voyageurs (Hugo, 03/10/2026).
+ */
+export function isVisibleTo(message: Pick<ChatMessageRow, "author" | "payload">, viewerIsUnlimited: boolean): boolean {
+  if (message.author !== "memo") return true;
+  return !(viewerIsUnlimited && payloadField(message.payload, "audience") === LIMITED_AUDIENCE);
+}
+
 export function suggestionIdsOf(payload: unknown): string[] {
   const ids =
     payload && typeof payload === "object"
@@ -117,6 +136,12 @@ export interface SerializeMessageOptions {
   publicBaseUrl: string;
   /** Le numéro d'étape de chaque fiche, par identifiant de message — ``stepNumbersOf``. */
   stepNumbers?: ReadonlyMap<string, number>;
+  /**
+   * Celui qui lit raconte-t-il sans limite ? Il décide de ce qu'il voit : ni
+   * la bulle « reviens demain » (`isVisibleTo`), ni une offre d'abonnement
+   * (`resolveCallToAction`).
+   */
+  viewerIsUnlimited: boolean;
 }
 
 /**
@@ -191,13 +216,15 @@ function serializeBody(message: ChatMessageRow, publicBaseUrl: string, stepNumbe
 
 /**
  * Une bulle, ou `null` pour une fiche dont le souvenir a disparu — le fil
- * reste lisible sans elle.
+ * reste lisible sans elle — et pour une bulle qui ne s'adresse pas à ce
+ * lecteur (`isVisibleTo`).
  *
  * `sentAt` d'une bulle du voyageur est la date **du souvenir**, pas celle de
  * l'écriture : un vocal reconstruit depuis l'accueil garde le jour où il a été
  * raconté. Les bulles de MEMO et les textes datent de leur écriture.
  */
 export function serializeChatMessage(message: ChatMessageRow, options: SerializeMessageOptions) {
+  if (!isVisibleTo(message, options.viewerIsUnlimited)) return null;
   const body = serializeBody(message, options.publicBaseUrl, options.stepNumbers);
   if (!body) return null;
 
@@ -211,6 +238,17 @@ export function serializeChatMessage(message: ChatMessageRow, options: Serialize
     message.author === "traveller" && message.entry && message.kind !== "text"
       ? message.entry.capturedAt
       : message.createdAt;
+
+  // Le bouton sous une bulle de MEMO, résolu **à la lecture** et pour ce
+  // lecteur : le payload ne garde que son identifiant (`callsToAction.ts`).
+  // Absent plutôt que nul : la clé est neuve, et la plupart des bulles n'en
+  // ont pas.
+  const callToAction =
+    message.author === "memo" && message.kind === "text"
+      ? resolveCallToAction(payloadField(message.payload, "callToAction"), {
+          isUnlimited: options.viewerIsUnlimited,
+        })
+      : null;
 
   return {
     id: message.id,
@@ -228,6 +266,7 @@ export function serializeChatMessage(message: ChatMessageRow, options: Serialize
     stepId: message.stepId,
     disposition: message.disposition,
     pauseMilliseconds: message.pauseMilliseconds,
+    ...(callToAction ? { callToAction } : {}),
   };
 }
 
@@ -256,6 +295,8 @@ export interface SerializeThreadOptions {
   turn: ChatTurnStatus;
   publicBaseUrl: string;
   now: Date;
+  /** Le crédit du jour du voyage, vu par celui qui lit. */
+  dailyCredit: DailyCredit;
 }
 
 /**
@@ -308,6 +349,7 @@ export function serializeChatThread(options: SerializeThreadOptions) {
     showsAuthors: memberCount > 1,
     publicBaseUrl: options.publicBaseUrl,
     stepNumbers: stepNumbersOf(options.messages),
+    viewerIsUnlimited: options.dailyCredit.isUnlimited,
   };
 
   const messages = options.messages
@@ -358,6 +400,9 @@ export function serializeChatThread(options: SerializeThreadOptions) {
     tripContext: serializeTripContext(tripContext),
     turn: options.turn,
     canClear: memo.ownerAccountId === viewer.id,
+    // Ce que la barre d'enregistrement compte pendant qu'on parle : le reste,
+    // les seuils et le barème, sans appel de plus.
+    dailyCredit: serializeDailyCredit(options.dailyCredit),
     now: options.now.toISOString(),
   };
 }
@@ -373,6 +418,7 @@ export function serializeChatUpdate(options: {
   turn: ChatTurnStatus;
   publicBaseUrl: string;
   now: Date;
+  dailyCredit: DailyCredit;
 }) {
   const memberCount = 1 + options.memo.members.filter((member) => member.status === "active").length;
   const messageOptions: SerializeMessageOptions = {
@@ -380,6 +426,7 @@ export function serializeChatUpdate(options: {
     showsAuthors: memberCount > 1,
     publicBaseUrl: options.publicBaseUrl,
     stepNumbers: stepNumbersOf(options.allMessages),
+    viewerIsUnlimited: options.dailyCredit.isUnlimited,
   };
   const pageCount =
     options.memo.pageCount > 0 ? options.memo.pageCount : options.memoryCount * 2;
@@ -400,11 +447,18 @@ export function serializeChatUpdate(options: {
         ? { memoryCount: options.memoryCount, pageCount, isOpenable: options.hasReadyRender }
         : null,
     turn: options.turn,
+    // Rendu à chaque sondage : un co-voyageur raconte peut-être en même temps,
+    // et c'est le même pot.
+    dailyCredit: serializeDailyCredit(options.dailyCredit),
     now: options.now.toISOString(),
   };
 }
 
-/** Ce qu'un `POST` rend : les bulles qu'il vient d'écrire, et l'état du tour. */
+/**
+ * Ce qu'un `POST` rend : les bulles qu'il vient d'écrire — la bulle « reviens
+ * demain » comprise quand ce tour a vidé le pot —, l'état du tour, et le
+ * crédit du jour **après** ce tour.
+ */
 export function serializeChatReceipt(options: {
   written: ChatMessageRow[];
   viewerAccountId: string;
@@ -414,18 +468,21 @@ export function serializeChatReceipt(options: {
   cards: Pick<ChatMessageRow, "id" | "kind" | "seq">[];
   turn: ChatTurnStatus;
   now: Date;
+  dailyCredit: DailyCredit;
 }) {
   const messageOptions: SerializeMessageOptions = {
     viewerAccountId: options.viewerAccountId,
     showsAuthors: options.showsAuthors,
     publicBaseUrl: options.publicBaseUrl,
     stepNumbers: stepNumbersOf(options.cards),
+    viewerIsUnlimited: options.dailyCredit.isUnlimited,
   };
   return {
     messages: options.written
       .map((message) => serializeChatMessage(message, messageOptions))
       .filter((message) => message !== null),
     turn: options.turn,
+    dailyCredit: serializeDailyCredit(options.dailyCredit),
     now: options.now.toISOString(),
   };
 }

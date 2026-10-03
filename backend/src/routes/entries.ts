@@ -4,9 +4,19 @@ import type { AppContext } from "../context.js";
 import { JOB_NAMES, type RedactJob, type TranscribeJob } from "../jobs/index.js";
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
+import { lockThread } from "../services/conversationThread.js";
+import {
+  chargeDailyCredit,
+  countCharacters,
+  exceedsDailyCredit,
+  loadSpeaker,
+  measureVoiceMs,
+  readDailyCredit,
+  refuseForDailyCredit,
+  withDailyCredit,
+} from "../services/dailyCredit.js";
+import { finalTextOf } from "../jobs/redact.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
-import { TEXT_MEMORY_COST, consumeMemory, voiceCost } from "../services/memoryAllowance.js";
-import { assertCanRecord, validateEntry } from "../services/quota.js";
 import { loadVisibleMemo } from "./memos.js";
 import { serializeEntry } from "./serializers.js";
 
@@ -47,33 +57,54 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
    *
    * L'app enfile l'entrée dès la fin de l'enregistrement ; la transcription se
    * fait en tâche de fond et l'app suit le `status`.
+   *
+   * **La route ancienne** — l'écran d'un carnet hors du chat l'appelle encore.
+   * Elle se décompte du crédit du jour comme le chat (Hugo, 03/10/2026) : un
+   * texte ses caractères, un vocal sa durée mesurée, une photo rien. Sans ça,
+   * elle aurait été la porte de derrière des 5 minutes. Pas d'identifiant
+   * client ici, donc pas d'idempotence : un envoi rejoué compte deux fois,
+   * comme il écrit deux souvenirs.
+   *
+   * **Aucun client ne garde ici un tour refusé** : l'écran du carnet affiche
+   * le message et lâche l'enregistrement, et aucune file ne passe par cette
+   * route. Son refus ne promet donc jamais « il partira demain »
+   * (`holdsTurn: false`), même avec `X-Time-Zone`.
    */
   app.post("/v1/memos/:id/entries", async (request, reply) => {
     const { id: memoId } = memoIdParams.parse(request.params);
+    const accountId = accountIdOf(request);
     await loadVisibleMemo(context, request, memoId);
-
-    // Le verrou des étapes offertes, **avant** de lire le fichier : à quota
-    // épuisé et sans abonnement, rien n'entre — voir `services/quota.ts`.
-    await assertCanRecord(context.prisma, accountIdOf(request));
+    const now = new Date();
+    const refusal = { holdsTurn: false };
 
     if (!request.isMultipart()) {
       const body = textEntryBody.parse(request.body ?? {});
+      const speaker = await loadSpeaker(context.prisma, accountId, now);
 
-      // Les limites de souvenirs, **avant** d'écrire : un message coûte une
-      // unité. Le refus porte `memory_limit_reached`, que l'app traduit en
-      // feuille d'extension plutôt qu'en bandeau rouge.
-      await consumeMemory(context.prisma, accountIdOf(request), TEXT_MEMORY_COST);
-
-      const entry = await context.prisma.entry.create({
-        data: {
-          memoId,
-          kind: "text",
-          status: "ready",
-          transcript: body.transcript,
-          capturedAt: body.capturedAt ?? new Date(),
-          placeLabel: body.placeLabel ?? null,
-        },
-      });
+      // Le décompte dans la transaction qui écrit le souvenir, sous le verrou
+      // du voyage — voir `services/dailyCredit.ts`.
+      const entry = await withDailyCredit(context.prisma, memoId, refusal, () =>
+        context.prisma.$transaction(async (tx) => {
+          await lockThread(tx, memoId);
+          const created = await tx.entry.create({
+            data: {
+              memoId,
+              kind: "text",
+              status: "ready",
+              transcript: body.transcript,
+              capturedAt: body.capturedAt ?? now,
+              placeLabel: body.placeLabel ?? null,
+            },
+          });
+          await chargeDailyCredit(tx, {
+            memoId,
+            ...speaker,
+            charge: { kind: "text", characters: countCharacters(body.transcript) },
+            now,
+          });
+          return created;
+        }),
+      );
 
       // Un souvenir tapé au clavier n'a pas de transcription à faire, mais il a
       // la même rédaction à subir qu'un vocal : sans cette ligne il reste à
@@ -116,22 +147,24 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
       throw HttpError.badRequest("`capturedAt` n'est pas une date ISO 8601 valide.");
     }
 
-    // La durée réellement capturée, pauses déduites, telle que l'app l'envoie.
-    // Absente — un client plus ancien —, `voiceCost` compte une minute.
-    const rawDuration = fields["durationSeconds"]?.value;
-    const durationSeconds =
-      typeof rawDuration === "string" && rawDuration.length > 0
-        ? Number.parseFloat(rawDuration)
-        : null;
-    const duration =
-      durationSeconds !== null && Number.isFinite(durationSeconds) && durationSeconds > 0
-        ? durationSeconds
-        : null;
-
-    // Un vocal décompte ses minutes ; une photo, rien — elle ne passe ni par la
-    // transcription ni par la rédaction, qui sont ce que les limites de
-    // souvenirs financent.
-    await consumeMemory(context.prisma, accountIdOf(request), isAudio ? voiceCost(duration) : 0);
+    // La durée **mesurée** dans le fichier, jamais celle que l'app déclare
+    // (`durationSeconds` n'est plus lu) : c'est elle qui se décompte et qui
+    // s'affiche. Une photo ne consomme rien.
+    const durationMs = isAudio ? measureVoiceMs(buffer) : null;
+    const speaker = durationMs === null ? null : await loadSpeaker(context.prisma, accountId, now);
+    if (durationMs !== null && speaker) {
+      // Un vocal refusé ne se stocke pas.
+      const before = await readDailyCredit(context.prisma, {
+        memoId,
+        viewer: speaker.account,
+        isUnlimited: speaker.isUnlimited,
+        now,
+      });
+      const charge = { kind: "voice" as const, durationMs };
+      if (exceedsDailyCredit(before, charge)) {
+        await refuseForDailyCredit(context.prisma, memoId, before, charge, { ...refusal, now });
+      }
+    }
 
     const stored = await context.storage.put(
       isAudio ? "audio" : "photo",
@@ -140,27 +173,33 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
       mimeType,
     );
 
-    const entry = await context.prisma.entry.create({
-      data: {
-        memo: { connect: { id: memoId } },
-        kind: isAudio ? "audio" : "photo",
-        status: isAudio ? "pending" : "ready",
-        capturedAt,
-        placeLabel: typeof rawPlaceLabel === "string" ? rawPlaceLabel : null,
-        media: {
-          create: {
-            storageKey: stored.storageKey,
-            mimeType: stored.mimeType,
-            bytes: stored.bytes,
-            // Elle était nulle depuis toujours : l'app ne l'envoyait pas. Elle
-            // sert maintenant au décompte des limites de souvenirs, et elle
-            // servira à afficher la durée d'un vocal dans le fil.
-            durationSeconds: isAudio ? duration : null,
+    const entry = await withDailyCredit(context.prisma, memoId, refusal, () =>
+      context.prisma.$transaction(async (tx) => {
+        await lockThread(tx, memoId);
+        const created = await tx.entry.create({
+          data: {
+            memo: { connect: { id: memoId } },
+            kind: isAudio ? "audio" : "photo",
+            status: isAudio ? "pending" : "ready",
+            capturedAt,
+            placeLabel: typeof rawPlaceLabel === "string" ? rawPlaceLabel : null,
+            media: {
+              create: {
+                storageKey: stored.storageKey,
+                mimeType: stored.mimeType,
+                bytes: stored.bytes,
+                durationSeconds: durationMs === null ? null : durationMs / 1000,
+              },
+            },
           },
-        },
-      },
-      include: { media: true },
-    });
+          include: { media: true },
+        });
+        if (durationMs !== null && speaker) {
+          await chargeDailyCredit(tx, { memoId, ...speaker, charge: { kind: "voice", durationMs }, now });
+        }
+        return created;
+      }),
+    );
 
     if (isAudio) {
       await context.queue.publish<TranscribeJob>(JOB_NAMES.transcribe, {
@@ -190,13 +229,21 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
    * la version du modèle reste consultable, et « revenir à la version
    * proposée » est un simple `null`. À partir de là, la mise en page reprend
    * la correction au mot près.
+   *
+   * **Ce qu'une correction ajoute se décompte** du crédit du jour (Hugo,
+   * 03/10/2026) : `max(0, nouveau − ancien)` caractères, l'ancien étant le
+   * texte que la fiche montrait. Corriger, raccourcir, revenir à la version
+   * proposée ne coûtent rien ; récrire un récit deux fois plus long au clavier,
+   * si — sinon le clavier contournerait les 5 minutes.
    */
   app.patch("/v1/entries/:id", async (request) => {
     const { id } = entryIdParams.parse(request.params);
     const body = updateEntryBody.parse(request.body ?? {});
+    const accountId = accountIdOf(request);
+    const now = new Date();
 
     const entry = await context.prisma.entry.findFirst({
-      where: { id, memo: visibleToAccount(accountIdOf(request)) },
+      where: { id, memo: visibleToAccount(accountId) },
     });
     if (!entry) throw HttpError.notFound("Entrée introuvable.");
 
@@ -209,18 +256,47 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
     // n'aiderait pas ici, c'est la sémantique JSON qui compte.
     const clearsEdit = "editedText" in body && body.editedText === null;
     const hasNewText = typeof body.editedText === "string";
+    // Le compte qui corrige se lit **avant** la transaction, dès qu'un texte
+    // arrive : on ne sait pas encore s'il grandit — ça se tranche sous le
+    // verrou.
+    const speaker = hasNewText ? await loadSpeaker(context.prisma, accountId, now) : null;
 
-    const updated = await context.prisma.entry.update({
-      where: { id },
-      data: {
-        ...(hasNewText ? { editedText: body.editedText, editedAt: new Date() } : {}),
-        ...(clearsEdit ? { editedText: null, editedAt: null } : {}),
-        ...(body.placeLabel !== undefined ? { placeLabel: body.placeLabel } : {}),
-        ...(body.suggestedTitle !== undefined ? { suggestedTitle: body.suggestedTitle } : {}),
-        ...(body.weatherKey !== undefined ? { weatherKey: body.weatherKey } : {}),
-      },
-      include: { media: true },
-    });
+    // Une correction a ses propres phrases, qui ne promettent aucun renvoi :
+    // aucune file ne la garde.
+    const updated = await withDailyCredit(context.prisma, entry.memoId, { holdsTurn: false }, () =>
+      context.prisma.$transaction(async (tx) => {
+        await lockThread(tx, entry.memoId);
+        // **La croissance se mesure sous le verrou du voyage** (03/10/2026),
+        // contre le texte tel qu'il est maintenant : deux corrections envoyées
+        // au même instant (deux appareils, un renvoi après un délai réseau) ne
+        // paient plus chacune contre le même ancien texte. La seconde ne paie
+        // que ce qu'elle ajoute à la première — rien, si c'est la même.
+        const current = hasNewText ? await tx.entry.findUniqueOrThrow({ where: { id } }) : null;
+        const growth = current
+          ? Math.max(0, countCharacters(body.editedText ?? "") - countCharacters(finalTextOf(current) ?? ""))
+          : 0;
+        const saved = await tx.entry.update({
+          where: { id },
+          data: {
+            ...(hasNewText ? { editedText: body.editedText, editedAt: now } : {}),
+            ...(clearsEdit ? { editedText: null, editedAt: null } : {}),
+            ...(body.placeLabel !== undefined ? { placeLabel: body.placeLabel } : {}),
+            ...(body.suggestedTitle !== undefined ? { suggestedTitle: body.suggestedTitle } : {}),
+            ...(body.weatherKey !== undefined ? { weatherKey: body.weatherKey } : {}),
+          },
+          include: { media: true },
+        });
+        if (speaker && growth > 0) {
+          await chargeDailyCredit(tx, {
+            memoId: entry.memoId,
+            ...speaker,
+            charge: { kind: "text", characters: growth, correction: true },
+            now,
+          });
+        }
+        return saved;
+      }),
+    );
 
     return serializeEntry(updated);
   });
@@ -287,7 +363,7 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
 
   /**
    * « Ça me convient » — `docs/conversation.md` § 6. Le souvenir est relu et
-   * gardé tel quel ; l'étape offerte qu'il réservait est confirmée. Idempotent.
+   * gardé tel quel. Idempotent : valider deux fois ne pose la date qu'une fois.
    *
    * La route du chat l'appelle elle-même quand la puce arrive en message ; elle
    * existe aussi seule pour que l'aperçu du carnet puisse valider une fiche.
@@ -303,13 +379,16 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
     if (!entry) throw HttpError.notFound("Entrée introuvable.");
     if (entry.kind === "photo") throw HttpError.badRequest("Une photo n'a rien à valider.");
 
-    const steps = await validateEntry(context.prisma, id, accountId);
+    await context.prisma.entry.updateMany({
+      where: { id, validatedAt: null },
+      data: { validatedAt: new Date() },
+    });
     const validated = await context.prisma.entry.findUniqueOrThrow({
       where: { id },
       include: { media: true },
     });
 
-    return { entry: serializeEntry(validated), ...steps };
+    return { entry: serializeEntry(validated) };
   });
 
   /**

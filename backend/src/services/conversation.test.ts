@@ -3,6 +3,7 @@ import type { Env } from "../env.js";
 import {
   EMPTY_CONVERSATION_STATE,
   FakeResponder,
+  callsToActionAllowed,
   createResponder,
   InvalidReplyError,
   composeBeats,
@@ -22,7 +23,7 @@ import {
   VALIDATION_QUESTION,
   validationQuestionFor,
 } from "./conversationCopy.js";
-import { HeuristicResponder, readSignals } from "./conversationHeuristics.js";
+import { HeuristicResponder, mentionsSubscription, readSignals } from "./conversationHeuristics.js";
 import { EMPTY_COHERENCE_SHEET } from "./redaction.js";
 
 /**
@@ -48,7 +49,7 @@ function turn(
       state: EMPTY_CONVERSATION_STATE,
       tripContext: null,
     },
-    traveller: { firstName: "Hugo", memberCount: 1 },
+    traveller: { firstName: "Hugo", memberCount: 1, isUnlimited: false },
     step: null,
     history: [],
     message: {
@@ -63,7 +64,7 @@ function turn(
     },
     currentEntry: null,
     recentEntries: [],
-    allows: { roseEpineGraine: false },
+    allows: { roseEpineGraine: false, callsToAction: [] },
     now: new Date("2026-09-21T10:00:00Z"),
     ...overrides,
   };
@@ -134,6 +135,84 @@ describe("le moteur de règles", () => {
     const reply = await memo.reply(turn("Combien coûte l'abonnement ?"));
     expect(reply.beats[0]?.text).toBe(ANSWERS.subscription);
     expect(reply.suggestionIds).toEqual(["clear", "another", "resume"]);
+  });
+
+  it("dit les faits du crédit et de l'abonnement, et pose le bouton quand le code le permet", async () => {
+    const reply = await memo.reply(
+      turn("Combien coûte l'abonnement ?", {
+        allows: { roseEpineGraine: false, callsToAction: ["subscribe", "open_trip_settings"] },
+      }),
+    );
+    expect(reply.beats[0]?.text).toContain("5 minutes de récit par jour");
+    expect(reply.beats[0]?.text).toContain("4,99 €");
+    expect(reply.beats[0]?.text).toContain("« Découvrir l’abonnement »");
+    // Plus rien de l'ancien modèle.
+    expect(reply.beats[0]?.text).not.toMatch(/étapes? offertes?|limites? de souvenirs|Mon abonnement/);
+    expect(reply.callToActionId).toBe("subscribe");
+  });
+
+  it("ne pose pas le bouton que le tour ne permet pas", async () => {
+    const reply = await memo.reply(turn("Combien coûte l'abonnement ?"));
+    expect(reply.beats[0]?.text).toBe(ANSWERS.subscription);
+    expect(reply.callToActionId).toBeNull();
+  });
+
+  it("répond à un abonné qu'il raconte sans limite, sans lui vendre l'offre", async () => {
+    const reply = await memo.reply(
+      turn("Il me reste combien de temps aujourd'hui ?", {
+        traveller: { firstName: "Hugo", memberCount: 1, isUnlimited: true },
+        allows: { roseEpineGraine: false, callsToAction: ["open_trip_settings"] },
+      }),
+    );
+    expect(reply.beats[0]?.text).toBe(ANSWERS.subscriptionUnlimited);
+    expect(reply.callToActionId).toBeNull();
+  });
+
+  it("répond au prix du carnet par le carnet, et à l'Europe sans offre", async () => {
+    const allowsEverything = {
+      allows: { roseEpineGraine: false, callsToAction: ["subscribe" as const] },
+    };
+    const book = await memo.reply(turn("Combien coûte le carnet imprimé ?", allowsEverything));
+    expect(book.beats[0]?.text).toBe(ANSWERS.book);
+    expect(book.callToActionId).toBeNull();
+
+    const europe = await memo.reply(turn("Tu connais des bons restos en Europe ?", allowsEverything));
+    expect(europe.beats[0]?.text).toBe(ANSWERS.unknown);
+    expect(europe.callToActionId).toBeNull();
+  });
+
+  it("entend une question sur le temps qui reste comme une question sur la limite", async () => {
+    const reply = await memo.reply(turn("il me reste combien de temps aujourd'hui ?"));
+    expect(reply.beats[0]?.text).toBe(ANSWERS.subscription);
+    expect(reply.disposition).toBe("command");
+  });
+
+  // S09 (03/10/2026) : la question d'exemple du prompt
+  // (`agents/agent-conversation.md`) n'ouvrait plus rien.
+  it("répond à « Il me reste combien aujourd’hui ? » par le crédit, et pose le bouton", async () => {
+    const reply = await memo.reply(
+      turn("Il me reste combien aujourd’hui ?", {
+        allows: { roseEpineGraine: false, callsToAction: ["subscribe"] },
+      }),
+    );
+    expect(reply.beats[0]?.text).toBe(ANSWERS.subscription);
+    expect(reply.callToActionId).toBe("subscribe");
+  });
+
+  // S02 (03/10/2026) : Claude en panne, une question de trajet recevait
+  // l'offre et son bouton.
+  it("ne récite pas l'offre à une question de trajet, même quand le bouton serait permis", async () => {
+    for (const travel of [
+      "C’est à combien de minutes à pied, le Colisée ?",
+      "Il me reste combien de temps avant l’embarquement ?",
+      "Je n’ai plus de crédit sur mon téléphone, tu sais où recharger ?",
+    ]) {
+      const reply = await memo.reply(
+        turn(travel, { allows: { roseEpineGraine: false, callsToAction: ["subscribe"] } }),
+      );
+      expect(reply.beats[0]?.text, travel).not.toBe(ANSWERS.subscription);
+      expect(reply.callToActionId, travel).toBeNull();
+    }
   });
 
   it("accuse une émotion difficile avant toute demande", async () => {
@@ -219,7 +298,7 @@ describe("le moteur de règles", () => {
   it("pose la rose, l'épine et la graine quand le code l'autorise", async () => {
     const reply = await memo.reply(
       turn("On a fini la journée sur une terrasse, tranquilles.", {
-        allows: { roseEpineGraine: true },
+        allows: { roseEpineGraine: true, callsToAction: [] },
       }),
     );
     expect(reply.asksRoseEpineGraine).toBe(true);
@@ -235,6 +314,8 @@ describe("les commandes et les garde-fous", () => {
     expect(scriptedReply("transcript_edited", "")?.suggestionIds).toEqual(["accept", "edit-hand"]);
     expect(scriptedReply("else", "")).toBeNull();
     expect(scriptedReply(null, "")).toBeNull();
+    // Une réponse écrite d'avance ne porte jamais de bouton.
+    expect(accept?.callToActionId).toBeNull();
   });
 
   it("refuse deux questions dans un tour, et borne la relance", () => {
@@ -244,6 +325,7 @@ describe("les commandes et les garde-fous", () => {
       suggestionIds: ["voice", "inconnue" as never],
       prompt: "x".repeat(200),
       asksRoseEpineGraine: true,
+      callToActionId: null,
       model: "test",
     };
     expect(() => validateReply(base, turn("x"))).toThrow(InvalidReplyError);
@@ -255,6 +337,61 @@ describe("les commandes et les garde-fous", () => {
     expect(valid.suggestionIds).toEqual(["voice"]);
     expect(valid.prompt).toHaveLength(90);
     expect(valid.asksRoseEpineGraine).toBe(false);
+  });
+
+  it("jette « Photos de test » : seul le code la pose, hors production", () => {
+    const reply = validateReply(
+      {
+        beats: composeBeats("x", ["Je note."]),
+        disposition: "command",
+        suggestionIds: ["photos-sample", "photos"],
+        prompt: null,
+        asksRoseEpineGraine: false,
+        callToActionId: null,
+        model: "test",
+      },
+      turn("x"),
+    );
+    expect(reply.suggestionIds).toEqual(["photos"]);
+  });
+
+  it("jette un bouton que le tour ne permet pas — le modèle propose, le code dispose", () => {
+    const base: ConversationReply = {
+      beats: composeBeats("x", ["L’abonnement est à 4,99 € par mois."]),
+      disposition: "command",
+      suggestionIds: [],
+      prompt: null,
+      asksRoseEpineGraine: false,
+      callToActionId: "subscribe",
+      model: "test",
+    };
+    const allowing = (callsToAction: ConversationInput["allows"]["callsToAction"]) =>
+      turn("Combien ça coûte ?", { allows: { roseEpineGraine: false, callsToAction } });
+
+    expect(validateReply(base, allowing(["subscribe"])).callToActionId).toBe("subscribe");
+    expect(validateReply(base, allowing(["open_trip_settings"])).callToActionId).toBeNull();
+    expect(validateReply(base, allowing([])).callToActionId).toBeNull();
+    // Un bouton réservé au code ne passe jamais, même si `allows` le listait.
+    expect(
+      validateReply(
+        { ...base, callToActionId: "daily_credit_subscribe" },
+        allowing(["daily_credit_subscribe"]),
+      ).callToActionId,
+    ).toBeNull();
+  });
+
+  it("le répondeur simulé pose un bouton seulement s'il est permis", async () => {
+    const allowed = await new FakeResponder([{ callToActionId: "open_trip_settings" }]).reply(
+      turn("Où je change le rythme des relances ?", {
+        allows: { roseEpineGraine: false, callsToAction: ["open_trip_settings"] },
+      }),
+    );
+    expect(allowed.callToActionId).toBe("open_trip_settings");
+
+    const refused = await new FakeResponder([{ callToActionId: "subscribe" }]).reply(
+      turn("Une longue journée à marcher dans Rome sous le soleil."),
+    );
+    expect(refused.callToActionId).toBeNull();
   });
 
   it("relit l'état de conversation sans se laisser casser", () => {
@@ -310,6 +447,146 @@ describe("les commandes et les garde-fous", () => {
     // valide, mais pas de clé OpenAI, donc `live` faux. MEMO parle quand même.
     expect(createResponder(env("auto", false, "sk-test")).constructor.name).toBe("AnthropicResponder");
     expect(createResponder(env("auto", false, "")).constructor.name).toBe("FakeResponder");
+  });
+});
+
+describe("les boutons qu'un tour permet", () => {
+  const text = (value: string, overrides: Partial<Parameters<typeof callsToActionAllowed>[0]> = {}) =>
+    callsToActionAllowed({
+      kind: "text",
+      text: value,
+      suggestionId: null,
+      authorIsUnlimited: false,
+      hasPreview: false,
+      ...overrides,
+    });
+
+  it("ne permet l'abonnement qu'à qui en parle, et n'a pas déjà l'illimité", () => {
+    expect(text("Combien coûte l'abonnement ?")).toContain("subscribe");
+    expect(text("il me reste combien de temps aujourd'hui ?")).toContain("subscribe");
+    expect(text("C'est quoi la limite du crédit ?")).toContain("subscribe");
+    expect(text("Combien coûte l'abonnement ?", { authorIsUnlimited: true })).not.toContain("subscribe");
+    expect(text("On a mangé une glace pistache place Navone.")).not.toContain("subscribe");
+  });
+
+  // R53 (03/10/2026) : la bulle « reviens demain » s'écrit avec le tour du
+  // voyageur, avant la réponse de MEMO — qui ne pose pas une seconde offre.
+  it("ne permet pas l'abonnement quand la bulle « reviens demain » est le dernier bouton du fil", () => {
+    const posted = text("Combien coûte l'abonnement ?", { lastCallToActionId: "daily_credit_subscribe" });
+    expect(posted).not.toContain("subscribe");
+    expect(posted).toEqual(["open_trip_settings", "import_photos"]);
+  });
+
+  // S10 (03/10/2026) : « jamais deux fois de suite le même bouton dans le fil ».
+  it("ne repose pas le bouton de la dernière bulle de MEMO qui en portait un", () => {
+    const question = "Combien coûte l'abonnement ?";
+    expect(text(question, { lastCallToActionId: "subscribe" })).toEqual(["open_trip_settings", "import_photos"]);
+    // Un autre bouton avant : l'offre reste permise, ce bouton-là non.
+    expect(text(question, { hasPreview: true, lastCallToActionId: "open_preview" })).toEqual([
+      "subscribe",
+      "open_trip_settings",
+      "import_photos",
+    ]);
+    // Un identifiant que le catalogue ne connaît plus ne retient rien.
+    expect(text(question, { lastCallToActionId: "ancien_bouton" })).toContain("subscribe");
+    expect(text(question, { lastCallToActionId: null })).toContain("subscribe");
+  });
+
+  it("ne prend pas « tu m’écoutes ? » pour une question de prix", () => {
+    expect(mentionsSubscription("Tu m’écoutes ?")).toBe(false);
+    expect(mentionsSubscription("Ça coûte combien ?")).toBe(true);
+    expect(mentionsSubscription("C’est illimité ?")).toBe(true);
+  });
+
+  // R27 (03/10/2026) : « euro » attrapait « Europe », « limit » la limite de
+  // vitesse, « prix » le prix du carnet — et le repli posait l'offre dessous.
+  it("ne prend pas une question de voyage pour une question d'abonnement", () => {
+    for (const travel of [
+      "Tu connais des bons restos en Europe ?",
+      "On a pris l’Eurostar ce matin, tu savais ?",
+      "Le musée est gratuit le dimanche ?",
+      "Quelle est la limite de vitesse en Italie ?",
+      "Il fallait payer l’entrée du Colisée ?",
+      "Combien coûte le carnet imprimé ?",
+      "Combien coûte le carnet MemoBook ?",
+      "Le billet de train coûte combien ?",
+      "Quel est le prix du billet pour le Vatican ?",
+      "J’ai payé par carte de crédit, c’est grave ?",
+      "Le musée, c’est payant ?",
+      "Il me reste combien de jours de voyage ?",
+      // S02 (03/10/2026) : le temps d'un trajet, le crédit du téléphone, le
+      // wifi illimité, une autre app.
+      "C’est à combien de minutes à pied, le Colisée ?",
+      "Il y a une limite de temps pour visiter le Louvre ?",
+      "Il me reste combien de temps avant l’embarquement ?",
+      "Il reste combien de minutes avant le départ du train ?",
+      "Combien de temps pour aller au Colisée ?",
+      "Je n’ai plus de crédit sur mon téléphone, tu sais où recharger ?",
+      "Il me reste du crédit sur ma carte SIM ?",
+      "On a eu le wifi illimité ?",
+      "La voiture de location a le kilométrage illimité ?",
+      "L’abonnement de métro vaut le coup ?",
+      "Je dois résilier mon forfait téléphone ?",
+      "Il y a une app gratuite pour le métro de Rome ?",
+      "Tu connais une appli gratuite pour traduire ?",
+      "Je suis bloqué à l’aéroport, tu sais quoi faire ?",
+      "Il me reste combien jusqu’à Florence ?",
+    ]) {
+      expect(mentionsSubscription(travel), travel).toBe(false);
+      expect(readSignals(travel).subject, travel).not.toBe("subscription");
+      expect(text(travel), travel).not.toContain("subscribe");
+    }
+  });
+
+  it("entend l'abonnement, le crédit du jour, la limite du récit et le temps qui reste", () => {
+    for (const question of [
+      "Combien coûte l'abonnement ?",
+      "Comment je résilie ?",
+      "C’est illimité ?",
+      "C'est quoi la limite du crédit ?",
+      "Mon crédit du jour est fini ?",
+      "il me reste combien de temps aujourd'hui ?",
+      "Combien de minutes je peux raconter ?",
+      "Ça coûte combien ?",
+      "Est-ce que c’est payant ?",
+      "Ça coûte combien, MEMO ?",
+      "MemoBook, c'est gratuit ?",
+      "Il y a une limite ?",
+      // S09 (03/10/2026) : ce qui reste, et pourquoi on est limité.
+      "Il me reste combien aujourd’hui ?",
+      "Il me reste combien ?",
+      "Il me reste combien de temps ?",
+      "Combien de temps il me reste ?",
+      "Il me reste combien, MEMO ?",
+      "Il reste combien de crédit ?",
+      "Combien de crédit il reste ?",
+      "Pourquoi je suis limité ?",
+      "Il y a une limite de temps ?",
+      "Combien de minutes par jour ?",
+      "Combien de temps je peux raconter par jour ?",
+      "Il me reste combien de temps pour raconter le Colisée ?",
+      "Le crédit se recharge quand ?",
+      "Je n’ai plus de crédit pour raconter ?",
+      "L’appli est payante ?",
+    ]) {
+      expect(mentionsSubscription(question), question).toBe(true);
+      expect(readSignals(question).subject, question).toBe("subscription");
+    }
+  });
+
+  it("n'ouvre l'aperçu que si un rendu est prêt", () => {
+    expect(text("Je peux voir mon carnet ?")).not.toContain("open_preview");
+    expect(text("Je peux voir mon carnet ?", { hasPreview: true })).toContain("open_preview");
+  });
+
+  it("ne permet rien sous un vocal, des photos ou une puce, ni jamais un bouton du code", () => {
+    expect(text("Combien ça coûte ?", { kind: "voice" })).toEqual([]);
+    expect(text("", { kind: "photos" })).toEqual([]);
+    expect(text("Ça me convient", { suggestionId: "accept" })).toEqual([]);
+    const all = text("Combien coûte l'abonnement ?", { hasPreview: true });
+    expect(all).toEqual(["subscribe", "open_trip_settings", "open_preview", "import_photos"]);
+    expect(all).not.toContain("daily_credit_subscribe");
+    expect(all).not.toContain("open_photo_settings");
   });
 });
 

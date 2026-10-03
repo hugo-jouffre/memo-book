@@ -11,11 +11,6 @@ export const JOB_NAMES = {
   converse: "memobook.converse",
   structure: "memobook.structure",
   render: "memobook.render",
-  /**
-   * Le ménage des abonnements sans voyage. Le seul job **du calendrier** et non
-   * d'un geste : un voyage se termine à une date, pas quand on ouvre l'app.
-   */
-  endSubscriptions: "memobook.end-subscriptions",
   /** L'envoi quotidien des chiffres de l'app à la feuille de bord (T72). */
   exportStats: "memobook.export-stats",
   /** Le ménage horaire des commandes jamais payées — voir `orderPayments.ts`. */
@@ -27,6 +22,17 @@ export const JOB_NAMES = {
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
+
+/**
+ * Les tâches planifiées **qui n'existent plus**, et dont pg-boss garde
+ * l'horaire dans sa table tant qu'on ne le lui retire pas : sans ça, il
+ * continuerait d'enfiler chaque nuit un job que plus personne ne traite.
+ *
+ * - `memobook.end-subscriptions` : le ménage qui éteignait les abonnements à la
+ *   fin du voyage. Aucun abonnement ne s'arrête plus avec le voyage — l'illimité
+ *   court jusqu'à ce qu'on le résilie (Hugo, 03/10/2026).
+ */
+export const RETIRED_SCHEDULES = ["memobook.end-subscriptions"] as const;
 
 export type JobHandler<T> = (payload: T) => Promise<void>;
 
@@ -160,6 +166,13 @@ export class PgBossQueue implements JobQueue {
       await this.schedule(name, cron);
     }
     this.pendingSchedules.clear();
+
+    // Idempotent : retirer un horaire déjà retiré ne fait rien. Un échec ne
+    // doit pas empêcher la file de tourner — le job orphelin n'a pas de
+    // gestionnaire, il ne fait que traîner dans la table.
+    for (const name of RETIRED_SCHEDULES) {
+      await this.boss.unschedule(name).catch((error: unknown) => this.onError?.(error));
+    }
   }
 
   async stop(): Promise<void> {

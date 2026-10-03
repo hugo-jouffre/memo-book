@@ -1,4 +1,4 @@
-import { SUBSCRIPTION_WEEKLY_CENTS } from "./subscriptionCatalog.js";
+import type { LocalDate } from "./localCalendar.js";
 
 /**
  * Les mots des notifications — **ici et nulle part ailleurs**, comme
@@ -20,9 +20,23 @@ export interface NotificationText {
 
 const euroFormatter = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" });
 
-/** « 1,99 € ». */
+/** « 42,90 € ». */
 export function formatEuros(cents: number): string {
   return euroFormatter.format(cents / 100);
+}
+
+/**
+ * Un jour du calendrier du voyageur, déjà calculé dans son fuseau : on le lit
+ * donc en UTC, pour qu'aucun décalage ne le fasse glisser d'un jour.
+ */
+const dayFormatter = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long", timeZone: "UTC" });
+
+/**
+ * « 12 novembre », « 1er novembre » — sans l'année : une notification parle
+ * des semaines qui viennent. `Intl` ne sait pas écrire « 1er ».
+ */
+export function dayOf(date: LocalDate): string {
+  return dayFormatter.format(new Date(`${date}T00:00:00Z`)).replace(/^1 /, "1er ");
 }
 
 /** « Rome », sinon le nom du voyage — « Notre tour du monde ». */
@@ -39,83 +53,84 @@ function atPlace(trip: { city: string | null; title: string }): string {
 }
 
 /**
- * « Chaque semaine payée est déduite du prix du carnet » — **en pause** depuis
- * le 02/10/2026 (Hugo), comme la carte « Tes abonnements sont déduits ! » du
- * paywall (`PaywallCopy.deductedSubscriptions`, côté app) : rien ne crédite
- * encore la cagnotte des semaines payées chez Apple, et `printPricing.ts` ne
- * déduit que la cagnotte. Les deux textes qui le promettaient se taisent tant
- * que ce drapeau est faux ; il se rallume avec la carte.
- */
-const SUBSCRIPTION_WEEKS_DEDUCTED = false;
-
-/**
- * **Fin des 3 étapes offertes** — le lendemain de la dernière. Ton
- * pédagogique, et — quand la déduction reviendra — le rappel que les semaines
- * payées sont déduites du carnet.
+ * Un abonnement App Store **dont le renouvellement est armé** — le seul dont
+ * une notification parle (Hugo, 03/10/2026).
  *
- * Des **étapes**, jamais des jours : c'est ce que l'app offre, et ce que
- * l'accueil compte (Clara, 02/10/2026). Le prix vient du catalogue.
+ * Plus aucun abonnement ne s'arrête seul : l'abonnement est mensuel, et c'est
+ * Apple qui le renouvelle. Apple ne laisse aucune app résilier à la place de
+ * son client : on ne peut que **l'inviter** à le couper — l'accueil le propose
+ * en un geste (`subscriptionOutlivesTrip`), la feuille de l'abonnement aussi.
  */
-export function trialEndText(offeredSteps: number): NotificationText {
-  return {
-    title: `Tes ${offeredSteps} étapes offertes sont racontées`,
-    body:
-      `Ton carnet ne fait que commencer : pour continuer à le raconter, l’abonnement est à ` +
-      `${formatEuros(SUBSCRIPTION_WEEKLY_CENTS)}/semaine.` +
-      (SUBSCRIPTION_WEEKS_DEDUCTED ? ` Et chaque semaine payée est déduite du prix de ton carnet.` : ""),
-  };
+export interface ArmedRenewal {
+  /**
+   * Le jour où il se renouvelle, chez le voyageur (`subscriptions.renewsAt`).
+   * C'est aussi le dernier jour de l'illimité s'il le coupe : résilié, il
+   * court jusqu'au bout de la période payée. Nul tant qu'Apple ne l'a pas dit.
+   */
+  renewsOn: LocalDate | null;
 }
 
-/** Où en est l'abonnement le jour où le voyage se termine. */
-export type SubscriptionAtTripEnd =
-  /** Pas d'abonnement : rien à arrêter. */
-  | "none"
-  /** Un abonnement que **le serveur** arrête — tout ce qui n'est pas Apple. */
-  | "stops_automatically"
-  /**
-   * Un abonnement App Store dont le renouvellement est armé. Apple ne laisse
-   * aucune app résilier à la place de son client : on ne peut pas écrire
-   * « arrêté automatiquement », on l'invite à le couper — l'accueil le
-   * propose en un geste (`subscriptionOutlivesTrip`).
-   */
-  | "renews_at_apple";
+/**
+ * « jusqu’au 12 novembre » — la fin de la période payée. Sans la date, on la
+ * nomme sans la chiffrer : c'est juste aussi pour un ancien abonné à la
+ * semaine.
+ */
+function unlimitedUntil(renewsOn: LocalDate | null): string {
+  return renewsOn ? `jusqu’au ${dayOf(renewsOn)}` : "jusqu’à la fin de la période payée";
+}
 
 /**
- * **Fin du voyage** — le jour de la date de fin. L'abonnement, ce qui est déjà
- * versé, l'estimation du carnet ; le toucher ouvre la cagnotte du voyage, qui
- * porte les mêmes chiffres.
+ * **Fin du voyage** — le jour de la date de fin. L'abonnement s'il court
+ * encore, puis l'estimation du carnet ; le toucher ouvre la cagnotte du
+ * voyage, qui porte la même estimation.
+ *
+ * L'abonnement est mensuel (Hugo, 03/10/2026) : la fin du voyage tombe
+ * n'importe où dans le mois payé. On l'invite donc **doucement** à le couper,
+ * en lui disant ce qu'il ne perd pas — l'illimité reste ouvert jusqu'au bout
+ * de ce qu'il a payé. `renewal` est nul quand il n'y a rien à couper, ou
+ * qu'un autre voyage le fait encore servir.
  */
 export function tripEndText(input: {
   trip: { city: string | null; title: string };
-  subscription: SubscriptionAtTripEnd;
-  paidCents: number;
+  renewal: ArmedRenewal | null;
   estimateCents: number;
   /** Un carnet vide n'a ni estimation à donner, ni commande à proposer. */
   hasStories: boolean;
 }): NotificationText {
   const sentences: string[] = [];
 
-  if (input.subscription === "stops_automatically") {
-    sentences.push("Ton abonnement s’arrête automatiquement.");
-  } else if (input.subscription === "renews_at_apple") {
-    sentences.push("Ton abonnement n’a plus de raison de courir : coupe-le en un geste depuis l’accueil.");
+  if (input.renewal) {
+    sentences.push(
+      `Ton abonnement ne te sert plus d’ici ton prochain voyage ? Coupe-le en un geste depuis l’accueil, ` +
+        `tu gardes l’illimité ${unlimitedUntil(input.renewal.renewsOn)}.`,
+    );
   }
 
   if (input.hasStories) {
-    if (SUBSCRIPTION_WEEKS_DEDUCTED && input.paidCents > 0) {
-      sentences.push(
-        `Tu as déjà versé ${formatEuros(input.paidCents)}, déduits de ton carnet estimé à ` +
-          `${formatEuros(input.estimateCents)}.`,
-      );
-    } else {
-      sentences.push(`Ton carnet est estimé à ${formatEuros(input.estimateCents)}.`);
-    }
+    sentences.push(`Ton carnet est estimé à ${formatEuros(input.estimateCents)}.`);
     sentences.push("Il n’attend plus que ta commande.");
   }
 
   return {
     title: `Ton voyage ${atPlace(input.trip)} se termine aujourd’hui`,
     body: sentences.join(" "),
+  };
+}
+
+/**
+ * **Avant le renouvellement** — trois jours avant (deux si la passe l'a
+ * manqué), quand aucun voyage ne court (Hugo, 03/10/2026). Le toucher ouvre
+ * la feuille de l'abonnement, où il se coupe en un geste.
+ *
+ * Le ton est celui d'un service rendu, pas d'une relance : on prévient avant
+ * qu'Apple ne prélève, et on dit ce qu'il garde s'il coupe.
+ */
+export function renewalReminderText(input: { renewsOn: LocalDate; daysBefore: number }): NotificationText {
+  return {
+    title: `Ton abonnement se renouvelle dans ${input.daysBefore} jours`,
+    body:
+      `Pas de voyage en cours : si tu n’en as plus besoin, coupe-le en un geste. ` +
+      `Tu gardes l’illimité ${unlimitedUntil(input.renewsOn)}.`,
   };
 }
 

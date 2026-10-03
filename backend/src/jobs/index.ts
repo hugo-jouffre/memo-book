@@ -1,6 +1,5 @@
 import type { AppContext } from "../context.js";
 import { converseTurn, type ConverseJob } from "./converse.js";
-import { endSubscriptions, type EndSubscriptionsJob } from "./endSubscriptions.js";
 import { exportStats, type ExportStatsJob } from "./exportStats.js";
 import {
   releaseAbandonedOrders,
@@ -15,24 +14,14 @@ import { structureRender, type StructureJob } from "./structure.js";
 import { transcribeEntry, type TranscribeJob } from "./transcribe.js";
 
 /**
- * L'heure du ménage des abonnements : 3 h 10 UTC, tous les jours.
- *
- * Tôt, parce qu'un voyage se termine à minuit et que l'abonnement ne doit pas
- * survivre à la journée qui suit ; et **pas à une heure ronde**, où tout le
- * monde programme ses tâches.
- */
-export const END_SUBSCRIPTIONS_CRON = "10 3 * * *";
-
-/**
  * Le ménage des commandes jamais payées : à la 25e minute de chaque heure. Une
  * réservation de cagnotte ne doit pas attendre une nuit de plus qu'il ne faut.
  */
 export const RELEASE_ABANDONED_ORDERS_CRON = "25 * * * *";
 
 /**
- * L'heure de la feuille de bord : 4 h 20 UTC, après le ménage des
- * abonnements, pour que le relevé du jour compte ceux qui viennent de
- * s'arrêter.
+ * L'heure de la feuille de bord : 4 h 20 UTC, tous les jours — et **pas à une
+ * heure ronde**, où tout le monde programme ses tâches.
  */
 export const EXPORT_STATS_CRON = "20 4 * * *";
 
@@ -70,9 +59,6 @@ export function registerJobs(context: AppContext): void {
   context.queue.register<RenderJob>(JOB_NAMES.render, (payload) =>
     renderBook(context, payload),
   );
-  context.queue.register<EndSubscriptionsJob>(JOB_NAMES.endSubscriptions, () =>
-    endSubscriptions(context),
-  );
   context.queue.register<ExportStatsJob>(JOB_NAMES.exportStats, () => exportStats(context));
   context.queue.register<ReleaseAbandonedOrdersJob>(JOB_NAMES.releaseAbandonedOrders, () =>
     releaseAbandonedOrders(context),
@@ -86,7 +72,6 @@ export function registerJobs(context: AppContext): void {
 
   // Les horaires sont demandés ici et posés au démarrage de la file.
   // Idempotents : relancer le serveur ne crée pas un second passage quotidien.
-  void context.queue.schedule(JOB_NAMES.endSubscriptions, END_SUBSCRIPTIONS_CRON);
   void context.queue.schedule(JOB_NAMES.exportStats, EXPORT_STATS_CRON);
   void context.queue.schedule(JOB_NAMES.releaseAbandonedOrders, RELEASE_ABANDONED_ORDERS_CRON);
   void context.queue.schedule(JOB_NAMES.sendNotifications, SEND_NOTIFICATIONS_CRON);
@@ -96,7 +81,6 @@ export function registerJobs(context: AppContext): void {
 export { JOB_NAMES };
 export type {
   ConverseJob,
-  EndSubscriptionsJob,
   ExportStatsJob,
   RedactJob,
   ReleaseAbandonedOrdersJob,

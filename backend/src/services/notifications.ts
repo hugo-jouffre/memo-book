@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, type NotificationKind, type SubscriptionProvider, type SubscriptionStatus } from "@prisma/client";
 import type { AppContext } from "../context.js";
 import type { PushSender } from "./apns.js";
 import {
@@ -15,20 +15,27 @@ import {
   localDate,
   localHour,
 } from "./localCalendar.js";
+import { APPLE_SUBSCRIPTIONS_URL, type SubscriptionReminderMail } from "./mailer.js";
+import { SUBSCRIPTION_REMINDER_SUBJECT } from "./mailTemplates.js";
 import { visibleToAccount } from "./memoOwnership.js";
 import {
   accountRhythm,
   FIRST_SENDING_HOUR,
   LATEST_HOUR,
   planNotifications,
+  planTripEndEmail,
   selectNotifications,
+  TRIP_END_EMAIL_EARLIEST_HOUR,
   type NewFromOthers,
   type PlannedNotification,
+  type PlannedTripEndEmail,
   type PlannerAccount,
   type PlannerTrip,
+  type PushKind,
 } from "./notificationPlanner.js";
 import { unitPriceCents } from "./printPricing.js";
 import { schoolCalendarOf, type SchoolHolidayPeriod, type SchoolZone } from "./schoolHolidays.js";
+import { LIVING_SUBSCRIPTION_STATUSES } from "./subscriptions.js";
 
 /**
  * La passe d'envoi : **charger, décider, envoyer, retenir**. Appelée toutes
@@ -39,6 +46,10 @@ import { schoolCalendarOf, type SchoolHolidayPeriod, type SchoolZone } from "./s
  * moment à Paris et à Montréal. Chaque passe ne regarde que les comptes chez
  * qui il est entre 10 h et 21 h, et `dedupeKey` garantit qu'une notification
  * déjà partie ne repart pas à la passe suivante.
+ *
+ * La même tâche envoie aussi **l'e-mail de fin de voyage** (`sendTripEndEmails`,
+ * 03/10/2026) : mêmes heures, même journal, mais ni APNs ni jeton — il est
+ * fait pour ceux que les notifications n'atteignent pas.
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -62,7 +73,45 @@ const WEEK_DAYS = 7;
 /** Les statuts d'une commande vraiment partie — ni brouillon, ni annulée. */
 const PLACED_ORDER = ["submitted", "in_production", "shipped"] as const;
 
-const LIVING_SUBSCRIPTION = ["active", "trialing", "past_due"] as const;
+/**
+ * L'abonnement App Store qui **va se renouveler** : vivant
+ * (`LIVING_SUBSCRIPTION_STATUSES`, la règle de `services/subscriptions.ts`),
+ * chez Apple, renouvellement armé — `autoRenews` nul veut dire qu'Apple ne
+ * l'a pas encore dit, et un abonnement vivant se renouvelle par défaut. Le
+ * seul dont les notifications et l'e-mail de fin de voyage parlent : plus
+ * aucun abonnement ne s'arrête seul (Hugo, 03/10/2026).
+ *
+ * Rend le prochain renouvellement encore à venir — le plus proche s'il y en a
+ * deux, nul tant qu'Apple ne l'a pas daté —, ou `null` sans abonnement armé.
+ */
+export function armedAppleRenewal(
+  subscriptions: ReadonlyArray<{
+    provider: SubscriptionProvider;
+    status: SubscriptionStatus;
+    autoRenews: boolean | null;
+    renewsAt: Date | null;
+  }>,
+  now: Date,
+): { renewsAt: Date | null } | null {
+  const armed = subscriptions.filter(
+    (subscription) =>
+      subscription.provider === "storekit" &&
+      (LIVING_SUBSCRIPTION_STATUSES as readonly string[]).includes(subscription.status) &&
+      subscription.autoRenews !== false,
+  );
+  if (armed.length === 0) return null;
+
+  const upcoming = armed
+    .map((subscription) => subscription.renewsAt)
+    .filter((renewsAt): renewsAt is Date => renewsAt !== null && renewsAt > now)
+    .sort((a, b) => a.getTime() - b.getTime());
+  return { renewsAt: upcoming[0] ?? null };
+}
+
+/** Ce que le planificateur relit de l'historique : tout, sauf l'e-mail. */
+function isPushKind(kind: NotificationKind): kind is PushKind {
+  return kind !== "trip_end_email";
+}
 
 export interface NotificationRunReport {
   /** Les comptes chez qui c'était l'heure. */
@@ -163,11 +212,10 @@ export async function loadPlannerAccount(
   const account = await prisma.account.findUniqueOrThrow({
     where: { id: accountId },
     select: {
+      email: true,
       birthDate: true,
       addressPostalCode: true,
       addressCountry: true,
-      offeredSteps: true,
-      remainingSteps: true,
       subscriptions: {
         select: { provider: true, status: true, autoRenews: true, renewsAt: true },
       },
@@ -205,7 +253,7 @@ export async function loadPlannerAccount(
   });
   const memoIds = memos.map((memo) => memo.id);
 
-  const [lastEntries, lastTurns, payments, deliveries, recentTurns, othersTold, weekEntries, exhaustion] = await Promise.all([
+  const [lastEntries, lastTurns, deliveries, recentTurns, othersTold, weekEntries] = await Promise.all([
     prisma.entry.groupBy({
       by: ["memoId"],
       where: { memoId: { in: memoIds }, kind: { not: "photo" } },
@@ -218,14 +266,16 @@ export async function loadPlannerAccount(
       where: { memoId: { in: memoIds }, author: "traveller" },
       _max: { createdAt: true },
     }),
-    // Ce que **ce compte** a payé d'abonnement pour chaque voyage.
-    prisma.subscriptionTransaction.groupBy({
-      by: ["memoId"],
-      where: { memoId: { in: memoIds }, revokedAt: null, subscription: { accountId } },
-      _sum: { priceCents: true },
-    }),
+    // Les notifications seulement : l'e-mail de fin de voyage partage le
+    // journal, mais il ne s'ouvre pas dans l'app — compté ici, il ferait
+    // baisser le taux d'ouverture, et sa journée bloquerait les autres
+    // notifications comme une facturation.
     prisma.notificationDelivery.findMany({
-      where: { accountId, sentAt: { gte: new Date(now.getTime() - HISTORY_DAYS * DAY_MS) } },
+      where: {
+        accountId,
+        kind: { not: "trip_end_email" },
+        sentAt: { gte: new Date(now.getTime() - HISTORY_DAYS * DAY_MS) },
+      },
       select: { kind: true, memoId: true, dedupeKey: true, sentAt: true, openedAt: true },
     }),
     prisma.chatMessage.count({
@@ -261,19 +311,6 @@ export async function loadPlannerAccount(
       where: { memoId: { in: memoIds }, createdAt: { gte: new Date(now.getTime() - WEEK_DAYS * DAY_MS) } },
       _count: { _all: true },
     }),
-    // Le jour où la dernière étape offerte a été prise : la dernière
-    // validation d'un souvenir que **ce compte** a raconté — c'est elle qui
-    // décompte (`validateEntry`).
-    account.remainingSteps === 0
-      ? prisma.entry.aggregate({
-          where: {
-            validatedAt: { not: null },
-            kind: { not: "photo" },
-            chatMessages: { some: { accountId, disposition: "memory" } },
-          },
-          _max: { validatedAt: true },
-        })
-      : null,
   ]);
 
   const newFromOthers = (memoId: string): NewFromOthers | null => {
@@ -332,7 +369,6 @@ export async function loadPlannerAccount(
     lastStoryOn: day(latest(memo.id)),
     isOwner: memo.ownerAccountId === accountId,
     hasOrder: memo.orders.length > 0,
-    paidCents: payments.find((row) => row.memoId === memo.id)?._sum.priceCents ?? 0,
     // La même estimation que la cagnotte (`serializeWalletEstimate`) : celle
     // que le toucher de la notification de fin de voyage va montrer.
     estimateCents: unitPriceCents(Math.max(memo.targetPageCount, memo.pageCount)),
@@ -342,43 +378,30 @@ export async function loadPlannerAccount(
     weekPhotos: weekCount(memo.id, true),
   }));
 
-  const exhaustedAt = exhaustion?._max.validatedAt ?? null;
-
-  const living = account.subscriptions.filter((subscription) =>
-    (LIVING_SUBSCRIPTION as readonly string[]).includes(subscription.status),
-  );
-  // La semaine payée court encore après une résiliation — la règle de
-  // `assertCanRecord` (`quota.ts`) : ce compte peut encore raconter.
-  const paidThrough = account.subscriptions.some(
-    (subscription) =>
-      (subscription.status === "cancelled" || subscription.status === "expired") &&
-      subscription.renewsAt !== null &&
-      subscription.renewsAt > now,
-  );
+  const renewal = armedAppleRenewal(account.subscriptions, now);
 
   return {
     id: accountId,
     birthDate: account.birthDate ? calendarDate(account.birthDate) : null,
     schoolCalendar: schoolCalendarOf(account.addressPostalCode, account.addressCountry),
-    offeredSteps: account.offeredSteps,
-    remainingSteps: account.remainingSteps,
-    stepsExhaustedOn: exhaustedAt ? localDate(exhaustedAt, timeZone) : null,
-    isSubscribed: living.length > 0 || paidThrough,
-    renewsAtApple: living.some(
-      (subscription) => subscription.provider === "storekit" && subscription.autoRenews !== false,
-    ),
-    stopsAutomatically: living.some(
-      (subscription) =>
-        subscription.provider !== "storekit" && (subscription.status === "active" || subscription.status === "trialing"),
-    ),
+    renewsAtApple: renewal !== null,
+    renewsOn: day(renewal?.renewsAt ?? null),
+    // La même condition que `sendTripEndEmails` (`!row.email`) : une adresse vide n'en est pas une.
+    hasEmail: Boolean(account.email),
     usedRecently: recentTurns > 0,
     trips,
-    deliveries: deliveries.map((delivery) => ({
-      kind: delivery.kind,
-      dedupeKey: delivery.dedupeKey,
-      sentOn: localDate(delivery.sentAt, timeZone),
-      opened: delivery.openedAt !== null,
-    })),
+    deliveries: deliveries.flatMap((delivery) =>
+      isPushKind(delivery.kind)
+        ? [
+            {
+              kind: delivery.kind,
+              dedupeKey: delivery.dedupeKey,
+              sentOn: localDate(delivery.sentAt, timeZone),
+              opened: delivery.openedAt !== null,
+            },
+          ]
+        : [],
+    ),
   };
 }
 
@@ -529,4 +552,142 @@ export async function postToThread(
       },
     });
   });
+}
+
+// ---------------------------------------------------------------------------
+// L'e-mail de fin de voyage
+// ---------------------------------------------------------------------------
+
+export interface TripEndEmailReport {
+  /** Les comptes à l'abonnement armé chez qui c'était l'heure. */
+  evaluated: number;
+  /** Les e-mails partis. */
+  sent: number;
+}
+
+/**
+ * **L'e-mail de fin de voyage** : le lendemain de la fin d'un voyage, le
+ * rappel de couper l'abonnement s'il ne sert plus (Hugo, 03/10/2026). La
+ * règle est dans `planTripEndEmail`, les mots dans `mailTemplates.ts`.
+ *
+ * Il ne passe **pas** par `sendDueNotifications` : celle-ci ne regarde que les
+ * comptes qui ont un téléphone, et s'arrête sans APNs. L'e-mail est fait pour
+ * les autres — ceux qui ont refusé les notifications, ou changé de téléphone.
+ *
+ * Seuls les comptes dont un abonnement App Store est vivant sont lus : ils se
+ * comptent en dizaines, et c'est la première condition de la règle.
+ */
+export async function sendTripEndEmails(
+  context: AppContext,
+  now: Date = new Date(),
+): Promise<TripEndEmailReport> {
+  const report: TripEndEmailReport = { evaluated: 0, sent: 0 };
+
+  const accounts = await context.prisma.account.findMany({
+    where: {
+      email: { not: null },
+      subscriptions: { some: { provider: "storekit", status: { in: [...LIVING_SUBSCRIPTION_STATUSES] } } },
+    },
+    select: {
+      id: true,
+      email: true,
+      firstName: true,
+      timeZone: true,
+      subscriptions: { select: { provider: true, status: true, autoRenews: true, renewsAt: true } },
+    },
+  });
+
+  for (const row of accounts) {
+    const renewal = armedAppleRenewal(row.subscriptions, now);
+    if (!renewal || !row.email) continue;
+
+    const zone = row.timeZone && isValidTimeZone(row.timeZone) ? row.timeZone : DEFAULT_TIME_ZONE;
+    const hour = localHour(now, zone);
+    if (hour < TRIP_END_EMAIL_EARLIEST_HOUR || hour >= LATEST_HOUR) continue;
+
+    report.evaluated += 1;
+    try {
+      const account = await loadPlannerAccount(context, row.id, zone, now);
+      const planned = planTripEndEmail(account, localDate(now, zone), hour);
+      if (!planned) continue;
+
+      const sent = await deliverTripEndEmail(
+        context,
+        { id: row.id, email: row.email, firstName: row.firstName },
+        planned,
+        renewal.renewsAt,
+        now,
+      );
+      if (sent) report.sent += 1;
+    } catch (cause) {
+      // Un compte qui casse n'arrête pas la passe des autres.
+      context.logger.error({ err: cause, accountId: row.id }, "E-mail de fin de voyage : compte ignoré sur erreur.");
+    }
+  }
+
+  return report;
+}
+
+/**
+ * Envoie l'e-mail, et le retient — comme `deliver` pour une notification.
+ *
+ * La ligne s'écrit **avant** l'envoi : c'est elle qui réserve la clé, et deux
+ * passes qui se chevaucheraient n'enverraient pas deux e-mails. Elle est
+ * retirée si l'envoi échoue, pour que la passe suivante le retente : un
+ * e-mail qui n'est pas parti ne doit pas compter comme envoyé.
+ */
+async function deliverTripEndEmail(
+  context: AppContext,
+  recipient: { id: string; email: string; firstName: string | null },
+  planned: PlannedTripEndEmail,
+  unlimitedUntil: Date | null,
+  now: Date,
+): Promise<boolean> {
+  const { prisma } = context;
+  const { trip } = planned;
+
+  let deliveryId: string;
+  try {
+    const delivery = await prisma.notificationDelivery.create({
+      data: {
+        accountId: recipient.id,
+        memoId: trip.id,
+        kind: planned.kind,
+        dedupeKey: planned.dedupeKey,
+        title: SUBSCRIPTION_REMINDER_SUBJECT,
+        // Pas le corps de l'e-mail — il vit dans `mailTemplates.ts` : de quoi
+        // reconnaître l'envoi en lisant le journal.
+        body: `Rappel de couper l’abonnement, après « ${trip.title.trim()} ».`,
+        link: APPLE_SUBSCRIPTIONS_URL,
+        sentAt: now,
+      },
+      select: { id: true },
+    });
+    deliveryId = delivery.id;
+  } catch (cause) {
+    if (cause instanceof Prisma.PrismaClientKnownRequestError && cause.code === "P2002") return false;
+    throw cause;
+  }
+
+  const message: SubscriptionReminderMail = {
+    to: recipient.email,
+    firstName: recipient.firstName,
+    trip: { title: trip.title, city: trip.city },
+    unlimitedUntil,
+    bookEstimateCents: trip.storyCount > 0 && !trip.hasOrder ? trip.estimateCents : null,
+  };
+
+  try {
+    await context.mailer.sendSubscriptionReminder(message);
+  } catch (cause) {
+    await prisma.notificationDelivery.delete({ where: { id: deliveryId } }).catch(() => {});
+    context.logger.warn(
+      { err: cause, accountId: recipient.id, memoId: trip.id },
+      "E-mail de fin de voyage non envoyé : la passe suivante le retentera.",
+    );
+    return false;
+  }
+
+  await prisma.notificationDelivery.update({ where: { id: deliveryId }, data: { deliveredCount: 1 } });
+  return true;
 }

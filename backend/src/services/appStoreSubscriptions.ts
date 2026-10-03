@@ -3,11 +3,7 @@ import type { AppContext } from "../context.js";
 import { HttpError } from "../lib/httpError.js";
 import type { AppStoreRenewal, AppStoreStatus, AppStoreTransaction } from "./appStore.js";
 import { visibleToAccount } from "./memoOwnership.js";
-import {
-  APP_STORE_PRODUCT_IDS,
-  CATALOG_CURRENCY,
-  SUBSCRIPTION_WEEKLY_CENTS,
-} from "./subscriptionCatalog.js";
+import { APP_STORE_PRODUCTS, CATALOG_CURRENCY, isAcceptedAppStoreProduct } from "./subscriptionCatalog.js";
 
 /**
  * L'abonnement StoreKit, recopié dans `subscriptions` — **Apple a le dernier
@@ -18,31 +14,37 @@ import {
  * - **l'app**, juste après l'achat (`POST /v1/subscriptions/app-store`) : c'est
  *   ce qui ouvre le micro dans la seconde, sans attendre Apple ;
  * - **Apple**, à chaque événement (`POST /v1/webhooks/app-store`) : le
- *   renouvellement du lundi, le renouvellement coupé dans les réglages iOS, le
+ *   renouvellement du mois, le renouvellement coupé dans les réglages iOS, le
  *   prélèvement qui échoue, le remboursement. L'app n'est pas ouverte pour ça.
  *
  * Une ligne par `originalTransactionId`, rouverte quand on se réabonne au
- * voyage suivant ; une ligne de `subscription_transactions` par semaine payée.
+ * voyage suivant ; une ligne de `subscription_transactions` par période payée
+ * — un mois, ou une semaine pour un ancien abonné de la semaine.
+ *
+ * **Passer de la semaine au mois** garde l'`originalTransactionId` (les deux
+ * produits sont dans le même groupe « MemoBook ») : c'est la même ligne, qui
+ * prend le produit, le rythme et le prix de la dernière transaction.
  */
 
 /** Ce que l'état Apple devient dans nos colonnes. */
 export interface StoreKitState {
   status: SubscriptionStatus;
-  /** La fin de l'accès : semaine payée, délai de grâce, ou révocation. */
+  /** La fin de l'accès : période payée, délai de grâce, ou révocation. */
   renewsAt: Date | null;
   autoRenews: boolean | null;
 }
 
 /**
- * Traduit l'état Apple dans les statuts que lisent déjà le verrou
- * d'enregistrement (`quota.ts`) et le profil — **sans rien leur changer** :
+ * Traduit l'état Apple dans les statuts que lisent déjà l'accès illimité
+ * (`hasUnlimitedAccess`, `subscriptions.ts`) et le profil — **sans rien leur
+ * changer** :
  *
  * | Chez Apple | Ici | Accès |
  * |---|---|---|
  * | actif, renouvellement armé | `active` | oui |
  * | actif, renouvellement coupé | `cancelled` | jusqu'à `renewsAt` |
  * | délai de grâce | `past_due` | oui, c'est Apple qui l'accorde |
- * | nouvelle tentative de prélèvement | `expired` | non, la semaine n'est pas payée |
+ * | nouvelle tentative de prélèvement | `expired` | non, la période n'est pas payée |
  * | expiré | `expired` | non |
  * | remboursé, révoqué | `expired` | non, dès la révocation |
  *
@@ -106,11 +108,11 @@ export interface ApplyStoreKitInput {
 
 /**
  * Inscrit une transaction App Store : met la ligne `subscriptions` à l'état
- * qu'Apple décrit, et la semaine payée au registre.
+ * qu'Apple décrit, et la période payée au registre.
  *
  * **Sûr à rejouer**, parce qu'il le sera : l'app renvoie sa transaction à
  * chaque lancement tant qu'elle ne l'a pas finie, et Apple renvoie sa
- * notification jusqu'au 200. La semaine ne s'inscrit qu'une fois
+ * notification jusqu'au 200. La période ne s'inscrit qu'une fois
  * (`transactionId` unique), et **un événement plus ancien que le dernier
  * appliqué ne touche pas à l'état** — Apple ne promet aucun ordre, et un
  * renouvellement arrivé en retard rouvrirait un abonnement déjà coupé.
@@ -123,7 +125,7 @@ export async function applyStoreKitTransaction(
   context: AppContext,
   input: ApplyStoreKitInput,
 ): Promise<Subscription | null> {
-  if (input.transaction.productId !== APP_STORE_PRODUCT_IDS.weeklySubscription) {
+  if (!isAcceptedAppStoreProduct(input.transaction.productId)) {
     throw HttpError.badRequest(
       `Produit App Store inconnu : ${input.transaction.productId}.`,
       "unknown_product",
@@ -196,6 +198,12 @@ async function writeStoreKitTransaction(
     existing?.providerUpdatedAt !== undefined &&
     signedAt < existing.providerUpdatedAt;
 
+  // Le rythme et le prix **du produit de cette transaction** : un abonné qui
+  // passe de la semaine au mois garde sa ligne, qui doit dire « month » et
+  // 4,99 € dès la première transaction mensuelle. Le prix d'Apple prime ; le
+  // catalogue ne sert qu'aux transactions qui ne le portent pas.
+  const product = APP_STORE_PRODUCTS[transaction.productId]!;
+
   return prisma.$transaction(async (tx) => {
     const fields = {
       status: state.status,
@@ -204,7 +212,9 @@ async function writeStoreKitTransaction(
       cancelledAt: cancelledAtFor(state.status, existing?.cancelledAt ?? null, signedAt),
       environment: transaction.environment,
       providerUpdatedAt: signedAt,
-      ...(transaction.priceCents === null ? {} : { priceCents: transaction.priceCents }),
+      productId: transaction.productId,
+      interval: product.interval,
+      priceCents: transaction.priceCents ?? product.priceCents,
       ...(transaction.currency === null ? {} : { currency: transaction.currency }),
       ...(memoId === null ? {} : { memoId }),
     };
@@ -218,16 +228,13 @@ async function writeStoreKitTransaction(
               ...fields,
               accountId,
               provider: "storekit",
-              interval: "week",
-              priceCents: transaction.priceCents ?? SUBSCRIPTION_WEEKLY_CENTS,
               currency: transaction.currency ?? CATALOG_CURRENCY,
               providerSubscriptionId: transaction.originalTransactionId,
-              productId: transaction.productId,
               startedAt: transaction.purchasedAt,
             },
           });
 
-    // La semaine payée, même quand l'événement arrive en retard : l'état ne
+    // La période payée, même quand l'événement arrive en retard : l'état ne
     // bouge pas, mais l'argent, lui, a bien été encaissé.
     await tx.subscriptionTransaction.upsert({
       where: { transactionId: transaction.transactionId },
@@ -244,8 +251,8 @@ async function writeStoreKitTransaction(
         environment: transaction.environment,
         revokedAt: transaction.revokedAt,
       },
-      // Seule la révocation change après coup : Apple rembourse une semaine
-      // déjà inscrite, et elle cesse de se déduire du carnet.
+      // Seule la révocation change après coup : Apple rembourse une période
+      // déjà inscrite.
       update: { revokedAt: transaction.revokedAt },
     });
 

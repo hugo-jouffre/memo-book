@@ -112,8 +112,6 @@ function expectedTotal(pages: number, copies: number): number {
     copies,
     speed: "standard",
     walletBalanceCents: 0,
-    giftCreditCents: 0,
-    topupCreditCents: 0,
   }).totalCents;
 }
 

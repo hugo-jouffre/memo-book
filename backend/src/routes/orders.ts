@@ -116,33 +116,20 @@ function billablePages(memo: { targetPageCount: number; pageCount: number }): nu
 }
 
 /**
- * De quoi tarifer pour **celui qui commande** : son solde, et ses crédits par
- * provenance pour la répartition d'affichage des deux déductions.
+ * De quoi tarifer pour **celui qui commande** : le solde de sa cagnotte.
  *
  * Chacun a sa cagnotte — celle du propriétaire n'a pas à régler l'exemplaire
  * d'un co-voyageur.
  */
 async function walletOf(context: AppContext, accountId: string) {
-  const [account, credits] = await Promise.all([
-    context.prisma.account.findUnique({
-      where: { id: accountId },
-      select: { walletBalanceCents: true },
-    }),
-    context.prisma.walletEntry.groupBy({
-      by: ["kind"],
-      where: { accountId, amountCents: { gt: 0 } },
-      _sum: { amountCents: true },
-    }),
-  ]);
+  // Le solde seul : le récapitulatif n'a plus qu'une déduction, la cagnotte
+  // (03/10/2026) — plus besoin de ventiler les crédits par provenance.
+  const account = await context.prisma.account.findUnique({
+    where: { id: accountId },
+    select: { walletBalanceCents: true },
+  });
 
-  const sumOf = (kind: string) =>
-    credits.find((row) => row.kind === kind)?._sum.amountCents ?? 0;
-
-  return {
-    balanceCents: account?.walletBalanceCents ?? 0,
-    giftCreditCents: sumOf("gift"),
-    topupCreditCents: sumOf("topup"),
-  };
+  return { balanceCents: account?.walletBalanceCents ?? 0 };
 }
 
 export function registerOrderRoutes(app: FastifyInstance, context: AppContext): void {
@@ -300,8 +287,6 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
         copies: body.copies,
         speed: body.shippingSpeed,
         walletBalanceCents: wallet.balanceCents,
-        giftCreditCents: wallet.giftCreditCents,
-        topupCreditCents: wallet.topupCreditCents,
       })
     );
   });
@@ -355,8 +340,6 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
       copies: body.copies,
       speed: body.shippingSpeed,
       walletBalanceCents: wallet.balanceCents,
-      giftCreditCents: wallet.giftCreditCents,
-      topupCreditCents: wallet.topupCreditCents,
     });
 
     // Les options manquantes reprennent le style du carnet, exemplaire par

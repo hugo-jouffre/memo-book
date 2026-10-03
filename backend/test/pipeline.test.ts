@@ -4,6 +4,7 @@ import { validatePayload } from "../src/services/payloadValidator.js";
 import {
   createHarness,
   multipartBody,
+  VOICE_FIXTURES,
   registerAccount,
   resetDatabase,
   type TestHarness,
@@ -59,7 +60,8 @@ async function postAudio(memoId: string, capturedAt: string, place: string) {
       field: "file",
       filename: "memo.m4a",
       contentType: "audio/mp4",
-      content: Buffer.from(`audio-${capturedAt}`),
+      // Un vrai `.m4a` : le serveur mesure la durée dans le fichier.
+      content: VOICE_FIXTURES.short,
     },
   );
 

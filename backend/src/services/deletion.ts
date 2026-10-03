@@ -172,7 +172,8 @@ export async function deleteAccountAndData(
     await deleteOrders(tx, memoIds);
 
     // Le compte emporte le reste en cascade : les voyages qui lui restent,
-    // leurs souvenirs, étapes, dépenses, rendus et invitations, puis ses
+    // leurs souvenirs, étapes, dépenses, rendus, invitations et crédits du
+    // jour (`trip_daily_usage`), puis ses
     // sessions, identités, appareils, cagnotte, cartes, abonnements,
     // connecteurs et avis.
     await tx.account.delete({ where: { id: accountId } });

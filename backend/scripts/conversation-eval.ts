@@ -6,6 +6,8 @@
  *   npm run conversation:eval -- --heuristic     le moteur de règles (sans clé)
  *   npm run conversation:eval -- --only refus    les scènes dont le nom de
  *                                                fichier contient « refus »
+ *   npm run conversation:eval -- --only credit-du-jour   les questions sur le
+ *                                                prix et la limite du jour
  *   npm run conversation:eval -- --json          la sortie brute, pour differ
  *                                                deux versions du prompt
  *
@@ -13,8 +15,8 @@
  * jamais en CI (`docs/conversation.md` § 13) : ce qui se vérifie sans lui est
  * dans `src/services/conversationAnthropic.test.ts`. Ici, une machine ne peut
  * rattraper que la forme — une question, trois bulles, le catalogue, les mots
- * interdits. Le reste se lit, avec la grille du § 13, et c'est pour ça que
- * chaque scène rappelle ce qu'elle éprouve.
+ * interdits, le bouton permis. Le reste se lit, avec la grille du § 13, et
+ * c'est pour ça que chaque scène rappelle ce qu'elle éprouve.
  *
  * Rien n'est écrit en base : le script n'appelle que le répondeur.
  */
@@ -24,9 +26,11 @@ import { basename, resolve } from "node:path";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import type { CallToActionId } from "../src/services/callsToAction.js";
 import {
   EMPTY_CONVERSATION_STATE,
   MAX_BEATS,
+  callsToActionAllowed,
   type ConversationInput,
   type ConversationReply,
   type MemoResponder,
@@ -63,7 +67,10 @@ interface Scene {
     people?: string[];
     places?: string[];
   };
-  traveller?: { firstName?: string | null; memberCount?: number };
+  /** `isUnlimited` : celui qui parle est abonné (faux par défaut). */
+  traveller?: { firstName?: string | null; memberCount?: number; isUnlimited?: boolean };
+  /** Un rendu du carnet est prêt : le bouton de l'aperçu devient possible. */
+  hasPreview?: boolean;
   step?: { number: number; placeName?: string | null } | null;
   history?: { author: "memo" | "traveller"; authorName?: string | null; text: string | null }[];
   message?: {
@@ -76,8 +83,13 @@ interface Scene {
   };
   currentEntry?: { text: string | null; validatedAt?: string | null; placeLabel?: string | null } | null;
   recentEntries?: { text: string; placeLabel?: string | null; capturedAt?: string }[];
-  allows?: { roseEpineGraine?: boolean };
-  expect?: { disposition?: ConversationReply["disposition"] };
+  /**
+   * `callsToAction` : absent, ce que le code permettrait vraiment à ce tour
+   * (`callsToActionAllowed`) — c'est presque toujours ce qu'on veut éprouver.
+   */
+  allows?: { roseEpineGraine?: boolean; callsToAction?: CallToActionId[] };
+  /** `callToActionId` : le bouton attendu, ou `null` pour « aucun ». Absent : pas vérifié. */
+  expect?: { disposition?: ConversationReply["disposition"]; callToActionId?: CallToActionId | null };
 }
 
 const NOW = new Date("2026-09-21T18:00:00Z");
@@ -86,6 +98,7 @@ const NOW = new Date("2026-09-21T18:00:00Z");
 function toInput(scene: Scene): ConversationInput {
   const memo = scene.memo ?? {};
   const message = scene.message ?? {};
+  const isUnlimited = scene.traveller?.isUnlimited ?? false;
 
   return {
     memo: {
@@ -108,6 +121,7 @@ function toInput(scene: Scene): ConversationInput {
     traveller: {
       firstName: scene.traveller?.firstName ?? "Hugo",
       memberCount: scene.traveller?.memberCount ?? 1,
+      isUnlimited,
     },
     step: scene.step
       ? {
@@ -153,7 +167,18 @@ function toInput(scene: Scene): ConversationInput {
       title: null,
       text: entry.text,
     })),
-    allows: { roseEpineGraine: scene.allows?.roseEpineGraine ?? false },
+    allows: {
+      roseEpineGraine: scene.allows?.roseEpineGraine ?? false,
+      callsToAction:
+        scene.allows?.callsToAction ??
+        callsToActionAllowed({
+          kind: message.kind ?? "text",
+          text: message.text ?? null,
+          suggestionId: message.suggestionId ?? null,
+          authorIsUnlimited: isUnlimited,
+          hasPreview: scene.hasPreview ?? false,
+        }),
+    },
     now: NOW,
   };
 }
@@ -172,7 +197,13 @@ const FORBIDDEN = [
   "token",
   "jeton",
   "quota",
-  "crédit",
+  // « crédit » n'y est plus (03/10/2026) : « le crédit du jour » est le mot
+  // de l'app, et MEMO le dit quand on lui demande ce qu'il reste. L'ancien
+  // modèle, lui, ne doit plus jamais revenir dans sa bouche.
+  "étape offerte",
+  "étapes offertes",
+  "limite de souvenirs",
+  "limites de souvenirs",
   "intelligence artificielle",
   "prompt",
   "utilisateur",
@@ -294,6 +325,18 @@ function automaticChecks(
   if (!input.allows.roseEpineGraine) {
     checks.push({ label: "Pas de rose/épine/graine non autorisée", ok: !reply.asksRoseEpineGraine });
   }
+  // `validateReply` jette déjà un bouton non permis : la ligne dit qu'il a
+  // tenu, et le cas qu'aucune machine ne filtre — un bouton après un refus.
+  if (reply.callToActionId !== null) {
+    checks.push({
+      label: "Bouton permis ce tour-ci",
+      ok: input.allows.callsToAction.includes(reply.callToActionId),
+      detail: reply.callToActionId,
+    });
+  }
+  if (refused) {
+    checks.push({ label: "Aucun bouton après un refus", ok: reply.callToActionId === null });
+  }
 
   return checks;
 }
@@ -381,14 +424,22 @@ async function main(): Promise<void> {
     }
 
     const checks = automaticChecks(reply, input, file);
-    const dispositionCheck: Check | null = scene.expect?.disposition
-      ? {
-          label: `Classement attendu : ${scene.expect.disposition}`,
-          ok: reply.disposition === scene.expect.disposition,
-          detail: reply.disposition,
-        }
-      : null;
-    const all = dispositionCheck ? [...checks, dispositionCheck] : checks;
+    const expected: Check[] = [];
+    if (scene.expect?.disposition) {
+      expected.push({
+        label: `Classement attendu : ${scene.expect.disposition}`,
+        ok: reply.disposition === scene.expect.disposition,
+        detail: reply.disposition,
+      });
+    }
+    if (scene.expect?.callToActionId !== undefined) {
+      expected.push({
+        label: `Bouton attendu : ${scene.expect.callToActionId ?? "aucun"}`,
+        ok: reply.callToActionId === scene.expect.callToActionId,
+        detail: reply.callToActionId ?? "aucun",
+      });
+    }
+    const all = [...checks, ...expected];
     failures += all.filter((check) => !check.ok).length;
 
     if (values.json) {
@@ -407,7 +458,9 @@ async function main(): Promise<void> {
     }
     console.log("");
     console.log(
-      `  classement : ${reply.disposition}   puces : ${reply.suggestionIds.join(", ") || "aucune"}`,
+      `  classement : ${reply.disposition}   puces : ${reply.suggestionIds.join(", ") || "aucune"}` +
+        `   bouton : ${reply.callToActionId ?? "aucun"}` +
+        ` (permis : ${input.allows.callsToAction.join(", ") || "aucun"})`,
     );
     console.log(`  relance : ${reply.prompt ?? "(inchangée)"}`);
     console.log("");

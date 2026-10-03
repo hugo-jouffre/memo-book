@@ -12,14 +12,11 @@ import type {
   TripTheme,
 } from "@prisma/client";
 import { CONNECTOR_CATALOG } from "../services/connectorCatalog.js";
+import { serializeDailyCredit, type DailyCredit } from "../services/dailyCredit.js";
 import { unitPriceCents } from "../services/printPricing.js";
-import type { MemorySnapshot } from "../services/memoryAllowance.js";
-import {
-  TEXT_MEMORY_COST,
-  VOICE_MEMORY_COST_PER_MINUTE,
-} from "../services/memoryAllowance.js";
 import { findShippingCountry, SHIPPING_COUNTRIES } from "../services/shippingCountries.js";
-import { SUBSCRIPTION_WEEKLY_CENTS } from "../services/subscriptionCatalog.js";
+import { SUBSCRIPTION_MONTHLY_CENTS } from "../services/subscriptionCatalog.js";
+import { grantsUnlimitedAccess } from "../services/subscriptions.js";
 import { avatarUrlOf } from "../services/avatars.js";
 import { effectiveGender } from "../services/genderInference.js";
 import { effectiveStage } from "../services/tripStage.js";
@@ -116,7 +113,13 @@ function serializeOwner(owner: Account) {
   };
 }
 
-export function serializeTrip(memo: MemoForTrip) {
+/**
+ * Une carte de voyage. `dailyCredit` n'est passé que pour un voyage **en
+ * cours** de l'accueil : c'est le crédit que vise le vocal de l'accueil, et
+ * la carte le porte pour que la feuille d'enregistrement sache où elle en est
+ * sans un appel de plus (03/10/2026).
+ */
+export function serializeTrip(memo: MemoForTrip, dailyCredit?: DailyCredit) {
   // Les co-voyageurs sont les *autres* : le propriétaire est déjà le titulaire
   // de l'écran, sa pastille sur sa propre couverture n'apprend rien. Il n'a
   // d'ailleurs pas de ligne dans `memo_members`, qui ne porte que les autres.
@@ -160,6 +163,7 @@ export function serializeTrip(memo: MemoForTrip) {
             targetPageCount: memo.targetPageCount,
           },
     isPrintable: memo.isPrintable,
+    ...(dailyCredit ? { dailyCredit: serializeDailyCredit(dailyCredit) } : {}),
   };
 }
 
@@ -261,36 +265,47 @@ type AccountWithSubscriptions = Account & { subscriptions?: Subscription[] };
 /**
  * `trips` : les voyages que l'accueil montre. Ils disent s'il en reste un en
  * cours — ce qui décide du rappel `subscriptionOutlivesTrip`.
+ *
+ * **Plus de pastille d'étapes** (Hugo, 03/10/2026) : `offeredSteps` et
+ * `remainingSteps` sont **omis**, jamais rendus à 3 ou à 0 — une app installée
+ * lit un champ nul comme « abonné », et c'est la lecture la plus juste de ce
+ * qui est devenu un crédit du jour par voyage.
  */
 export function serializeTraveller(
   account: AccountWithSubscriptions,
   trips: { endDate: Date | null }[] = [],
+  now: Date = new Date(),
 ) {
+  const subscriptions = account.subscriptions ?? [];
   return {
     id: account.id,
     // Le prénom porte la salutation de l'accueil. À défaut, la partie locale de
     // l'adresse vaut mieux qu'un « Bonjour  » avec un trou dedans.
     firstName: account.firstName?.trim() || account.email?.split("@")[0] || "voyageur",
     avatarUrl: avatarUrlOf(account),
-    offeredSteps: account.offeredSteps,
-    remainingSteps: account.remainingSteps,
-    // **Déduit, pas stocké** : la semaine payée du dernier abonnement, si elle
+    // **Déduit, pas stocké** : la période payée du dernier abonnement, si elle
     // vient de s'achever. C'est ce qui permet à l'accueil d'ouvrir l'alerte
     // système « ton abonnement s'est arrêté » — voir `justEndedSubscription`.
-    subscriptionEndedOn: iso(justEndedSubscription(account.subscriptions ?? [])),
+    subscriptionEndedOn: iso(justEndedSubscription(subscriptions)),
     // **Le rappel de fin de voyage** (01/10/2026) : l'abonnement App Store se
     // renouvelle encore alors qu'aucun voyage ne court. Apple ne laisse pas
     // l'app le couper à la place de la personne ; l'accueil le lui propose,
-    // en un geste. C'est ce qui reste de « l'arrêt automatique ».
-    subscriptionOutlivesTrip: outlivesEveryTrip(account.subscriptions ?? [], trips),
+    // en un geste. L'abonnement ne s'arrête jamais de lui-même.
+    subscriptionOutlivesTrip: outlivesEveryTrip(subscriptions, trips),
+    // Raconte-t-il sans limite ? La même règle que le crédit du jour
+    // (`grantsUnlimitedAccess`) : le verrou du micro et le paywall de l'accueil
+    // en dépendent.
+    isUnlimited: subscriptions.some((entry) => grantsUnlimitedAccess(entry, now)),
+    // A-t-il déjà été abonné ? C'est ce qui choisit la version « retour » du
+    // paywall, d'où qu'on l'ouvre.
+    hasSubscribedBefore: subscriptions.length > 0,
   };
 }
 
 /**
  * Un abonnement App Store **qui va se renouveler**, et plus aucun voyage en
- * cours. Un voyage sans date de fin compte comme en cours, comme pour
- * `endSubscriptionsWithoutRunningTrip` : on ne pousse pas à résilier
- * quelqu'un qui n'a pas dit quand il rentrait.
+ * cours. Un voyage sans date de fin compte comme en cours : on ne pousse pas
+ * à résilier quelqu'un qui n'a pas dit quand il rentrait.
  */
 function outlivesEveryTrip(
   subscriptions: Subscription[],
@@ -306,7 +321,7 @@ function outlivesEveryTrip(
 }
 
 /**
- * Le jour où la semaine payée du dernier abonnement s'est achevée, quand c'est
+ * Le jour où la période payée du dernier abonnement s'est achevée, quand c'est
  * **récent**.
  *
  * `null` le reste du temps, et c'est tout l'intérêt : ce champ sert à ouvrir une
@@ -317,8 +332,8 @@ function outlivesEveryTrip(
  *
  * On lit `renewsAt` — la fin de la période réglée — et non `cancelledAt` : c'est
  * la date jusqu'à laquelle l'accès a duré, pas celle du geste de résiliation.
- * Un abonnement résilié le 1er avec une semaine payée jusqu'au 7 s'arrête
- * *pour de bon* le 7, et c'est ce jour-là qui s'annonce.
+ * Un abonnement résilié le 3 avec un mois payé jusqu'au 31 s'arrête *pour de
+ * bon* le 31, et c'est ce jour-là qui s'annonce.
  */
 const RECENTLY_ENDED_DAYS = 14;
 
@@ -491,6 +506,7 @@ export function serializeProfile(
   account: AccountForProfile,
   orders: OrderForTracking[],
   trips: TripForProfileStats[] = [],
+  now: Date = new Date(),
 ) {
   const fullName =
     [account.firstName, account.lastName]
@@ -507,6 +523,12 @@ export function serializeProfile(
   );
   const subscription = active ?? subscriptions[0];
   const isSubscribed = active !== undefined;
+  // L'abonnement qui ouvre l'illimité aujourd'hui — vivant, ou résilié avec
+  // un mois encore payé. C'est **lui seul** qui porte un prix à afficher :
+  // un ancien abonné de la semaine revoit l'offre du mois, pas l'ancien tarif.
+  const granting = subscriptions.find((entry) => grantsUnlimitedAccess(entry, now));
+  const priceCents = granting?.priceCents ?? SUBSCRIPTION_MONTHLY_CENTS;
+  const interval = granting?.interval === "week" ? "week" : "month";
   const defaultCard = account.cards?.find((card) => card.isDefault);
 
   return {
@@ -539,17 +561,28 @@ export function serializeProfile(
     selectedCardId: defaultCard?.id ?? account.cards?.[0]?.id ?? null,
     connectors: serializeConnectors(account.connectors ?? []),
     subscription: {
-      // **Le tarif du catalogue quand rien n'a encore été souscrit.** Un compte
-      // sans ligne `subscriptions` n'a pas un abonnement à zéro euro : il n'en a
-      // pas. Rendre 0 faisait écrire « 0,00 €/semaine » à la feuille d'offre, au
-      // paywall et à l'estimation — voir `subscriptionCatalog.ts`.
-      weeklyPrice: euros(subscription?.priceCents ?? SUBSCRIPTION_WEEKLY_CENTS),
+      // **Le tarif du catalogue quand rien n'est en cours.** Un compte sans
+      // abonnement n'a pas un abonnement à zéro euro : il n'en a pas. Rendre 0
+      // faisait écrire « 0,00 € » à la feuille d'offre et au paywall — voir
+      // `subscriptionCatalog.ts`. Le paywall lit d'abord le prix de StoreKit ;
+      // celui-ci est son repli.
+      price: euros(priceCents),
+      interval,
+      // **Le même prix, sous l'ancien nom** : les apps installées décodent
+      // `weeklyPrice` comme obligatoire. Elles écriront « /semaine » derrière
+      // 4,99 € jusqu'à leur mise à jour — mieux qu'un profil qui ne s'ouvre
+      // plus (Hugo, 03/10/2026).
+      weeklyPrice: euros(priceCents),
       isActive: isSubscribed,
+      // Raconte-t-il sans limite aujourd'hui ? Plus large qu'`isActive` : un
+      // abonnement résilié reste illimité jusqu'au bout du mois payé, et un
+      // prélèvement en retard aussi, le temps qu'Apple tranche.
+      isUnlimited: granting !== undefined,
       cancelledAt: iso(subscription?.cancelledAt ?? null),
-      // **Jusqu'où la semaine payée porte.** `renewsAt` est la fin de la
+      // **Jusqu'où la période payée porte.** `renewsAt` est la fin de la
       // période déjà réglée : c'est elle qui donne son sursis à une résiliation
-      // — l'app comme le serveur laissent raconter jusque-là (Hugo,
-      // 16/09/2026). Nul quand rien n'a été payé.
+      // — l'app comme le serveur laissent raconter sans limite jusque-là
+      // (Hugo, 16/09/2026). Nul quand rien n'a été payé.
       paidThrough: iso(subscription?.renewsAt ?? null),
       // Le voyage qu'il finance (T71) : la ville pour « ton carnet de Rome »,
       // le titre pour le reste. Nuls tant que rien n'est rattaché.
@@ -569,11 +602,6 @@ export function serializeProfile(
         ),
     },
     orders: orders.map(serializeOrderTracking),
-    // Le quota d'étapes offertes est **le même couple que sur l'accueil**, et
-    // pour la même raison : c'est lui qui porte la pastille des deux écrans.
-    // Nul pour un abonné, qui n'a rien à décompter.
-    offeredSteps: account.offeredSteps,
-    remainingSteps: account.remainingSteps,
     ...serializeProfileStats(trips),
   };
 }
@@ -585,26 +613,6 @@ export function serializeProfile(
 // Les trois écrans de « 🤖 Claude Import ». Même règle que ci-dessus : la forme
 // suit `TripSettings`, `Wallet` et `BookPreview` de `MemoBookCore` au champ
 // près.
-
-/**
- * Les limites de souvenirs, au champ près de `MemoryAllowance` côté Swift.
- *
- * **Les deux coûts voyagent avec le solde**, et ce n'est pas du remplissage :
- * la feuille explique *pourquoi* un vocal pèse plus qu'un message, et elle doit
- * pouvoir le chiffrer. Écrire « 10 » dans l'app en aurait fait une seconde
- * vérité, qui se serait désaccordée au premier réétalonnage.
- */
-function serializeMemoryAllowance(memory: MemorySnapshot) {
-  return {
-    plan: memory.plan,
-    used: memory.used,
-    allowance: memory.allowance,
-    renewsOn: iso(memory.renewsOn),
-    upgradeWeeklyPrice: euros(memory.upgradeWeeklyPrice),
-    textCost: TEXT_MEMORY_COST,
-    voiceCostPerMinute: VOICE_MEMORY_COST_PER_MINUTE,
-  };
-}
 
 type MemoForSettings = Memo & {
   members?: (MemoMember & { account?: Account | null })[];
@@ -622,18 +630,18 @@ type MemoForSettings = Memo & {
 export function serializeTripSettings(
   memo: MemoForSettings,
   walletBalanceCents: number,
-  memory: MemorySnapshot,
+  dailyCredit: DailyCredit,
   viewerAccountId?: string,
 ) {
   return {
     tripId: memo.id,
     name: memo.title,
     walletBalance: euros(walletBalanceCents),
-    // **Les limites de souvenirs** — du compte, comme la cagnotte, et servies
-    // avec le voyage pour la même raison : c'est le seul écran qui les montre
-    // (Hugo, 16/09/2026), et un second appel pour quatre nombres aurait été un
-    // aller-retour pour rien.
-    memory: serializeMemoryAllowance(memory),
+    // **Le crédit du jour du voyage**, vu par celui qui lit (Hugo,
+    // 03/10/2026) — la ligne « Crédit du jour » des réglages. Il remplace la
+    // clé `memory` des limites de souvenirs, qui disparaît : une app installée
+    // la lisait en optionnel, la ligne s'efface proprement.
+    dailyCredit: serializeDailyCredit(dailyCredit),
     startDate: iso(memo.startDate),
     endDate: iso(memo.endDate),
     narrationPace: memo.narrationPace,
@@ -802,34 +810,16 @@ export function serializeWallet(
  * annoncer le coût des deux pages actuelles ferait une promesse qu'on ne
  * tiendra pas.
  */
-function serializeWalletEstimate(
-  trip: Pick<Memo, "targetPageCount" | "pageCount" | "startDate" | "endDate">,
-) {
+function serializeWalletEstimate(trip: Pick<Memo, "targetPageCount" | "pageCount">) {
   const pages = Math.max(trip.targetPageCount, trip.pageCount);
   return {
     pageCount: pages,
     cost: euros(unitPriceCents(pages)),
-    // Les dates du voyage et ses semaines **entamées** : c'est sur elles que
-    // la feuille « Estimation » du paywall compte les abonnements (T127). Un
-    // voyage sans date de fin court encore : on compte jusqu'à aujourd'hui.
-    startDate: iso(trip.startDate),
-    endDate: iso(trip.endDate),
-    weeks: subscriptionWeeks(trip.startDate, trip.endDate),
+    // Plus de dates ni de semaines ici : elles servaient la feuille
+    // « Estimation » du paywall, qui déduisait les abonnements du carnet. Il
+    // n'y a plus rien à déduire (Hugo, 03/10/2026) ; les trois champs sont
+    // optionnels côté Swift.
   };
-}
-
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-
-/** Combien de semaines d'abonnement un voyage demande, entamée comprise. */
-export function subscriptionWeeks(
-  startDate: Date | null,
-  endDate: Date | null,
-  now: Date = new Date(),
-): number | null {
-  if (!startDate) return null;
-  const end = endDate ?? now;
-  const span = Math.max(0, end.getTime() - startDate.getTime());
-  return Math.max(1, Math.ceil(span / WEEK_MS));
 }
 
 type MemoForPreview = Memo & {

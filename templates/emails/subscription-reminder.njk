@@ -1,0 +1,89 @@
+{#
+  « Ton voyage est fini : pense à ton abonnement » — `subscription.reminder`.
+
+  Déclenché par la passe horaire des notifications (`sendTripEndEmails`,
+  `backend/src/services/notifications.ts`), **le lendemain de la fin d'un
+  voyage**, à un voyageur dont l'abonnement App Store va se renouveler alors
+  que plus aucun voyage ne court ni ne s'annonce (Hugo, 03/10/2026). Une seule
+  fois par voyage. Il part aussi à qui n'a pas de téléphone enregistré : c'est
+  tout son intérêt, la notification du même jour ne l'atteint pas.
+
+  C'est la promesse du paywall — « On te rappelle de résilier » — tenue par
+  e-mail. Le ton est **doux** : le voyage est fini, l'abonnement ne sert plus
+  d'ici le prochain, voici comment le couper, et ce qu'il garde. Pas
+  d'urgence, pas de reproche.
+
+  Niveau 2 au sens de `docs/emails.md` : aucun secret, le texte peut passer
+  dans un outil visuel. Le bouton mène à la page des abonnements d'Apple, la
+  seule où un abonnement App Store se coupe — aucune variable : elle ne change
+  pas d'un voyageur à l'autre.
+
+  Sans image héros : c'est un rappel, il se lit en dix secondes.
+#}
+{% extends "layout.njk" %}
+
+{% block subject %}Ton voyage est fini : pense à ton abonnement{% endblock %}
+
+{% block preheader %}Si tu n’en as plus besoin d’ici ton prochain voyage, tu peux le couper en un geste. Tu gardes l’illimité {{ subscription.until }}.{% endblock %}
+
+{% block content %}
+
+<!-- Titre et message -->
+<tr>
+  <td class="mb-pad" bgcolor="#FFFCF8" style="background-color:#FFFCF8; padding:36px 36px 0;">
+    <h1 class="mb-h1" style="margin:0 0 18px; font-family:'Sora',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif; font-size:30px; line-height:36px; font-weight:700; color:#2D231A; letter-spacing:-0.4px;">
+      Ton voyage est fini
+    </h1>
+    <p style="margin:0 0 14px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:16px; line-height:25px; color:#2D231A;">
+      {{ recipient.greeting }}
+    </p>
+    <p style="margin:0 0 14px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:16px; line-height:25px; color:#2D231A;">
+      Ton voyage {{ trip.place }} est terminé&nbsp;: on espère que tu en rapportes plein de souvenirs.
+    </p>
+    <p style="margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:16px; line-height:25px; color:#2D231A;">
+      Ton abonnement MemoBook, lui, se renouvelle tout seul. Si tu n’en as plus besoin d’ici ton prochain voyage, pense à le couper&nbsp;: tu gardes l’illimité {{ subscription.until }}.
+    </p>
+  </td>
+</tr>
+
+<!-- Le chemin dans les Réglages : la réponse à « mais où ça ? » -->
+<tr>
+  <td class="mb-pad" bgcolor="#FFFCF8" style="background-color:#FFFCF8; padding:24px 36px 0;">
+    <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#FCF2E9" style="background-color:#FCF2E9; border-radius:14px;">
+      <tr>
+        <td style="padding:16px 20px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; line-height:21px; color:#2D231A;">
+          <strong style="font-weight:600;">Sur ton iPhone</strong><br />
+          Réglages ▸ ton nom ▸ Abonnements ▸ MemoBook, puis «&nbsp;Annuler l’abonnement&nbsp;».
+        </td>
+      </tr>
+    </table>
+  </td>
+</tr>
+
+<!-- Bouton principal -->
+<tr>
+  <td class="mb-pad" align="center" bgcolor="#FFFCF8" style="background-color:#FFFCF8; padding:28px 36px 6px;">
+    <!--[if mso]>
+    <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{{ links.manage }}" style="height:50px; v-text-anchor:middle; width:330px;" arcsize="24%" strokecolor="#28654B" fillcolor="#28654B">
+      <w:anchorlock/><center style="color:#FFFCF8; font-family:Arial,sans-serif; font-size:16px; font-weight:bold;">Gérer mon abonnement</center>
+    </v:roundrect>
+    <![endif]-->
+    <!--[if !mso]><!-- -->
+    <a class="mb-btn" href="{{ links.manage }}" style="display:inline-block; background-color:#28654B; color:#FFFCF8; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:16px; font-weight:600; line-height:20px; padding:15px 32px; border-radius:12px; text-decoration:none;">Gérer mon abonnement</a>
+    <!--<![endif]-->
+    <p style="margin:14px 0 0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; line-height:18px; color:#8A7F73;">
+      Tu peux aussi le faire en un geste depuis l’accueil de l’app.
+    </p>
+  </td>
+</tr>
+
+<!-- Le carnet qui attend sa commande — ou ce qu'on garde quoi qu'on décide -->
+<tr>
+  <td class="mb-pad" bgcolor="#FFFCF8" style="background-color:#FFFCF8; padding:24px 36px 34px;">
+    <p style="margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:15px; line-height:23px; color:#2D231A;">
+      {{ book.line }}
+    </p>
+  </td>
+</tr>
+
+{% endblock %}

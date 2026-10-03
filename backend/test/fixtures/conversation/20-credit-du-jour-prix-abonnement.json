@@ -1,0 +1,13 @@
+{
+  "name": "Combien coûte l'abonnement ?",
+  "why": "On lui demande le prix : MEMO dit les faits (4,99 € par mois, le récit illimité pour qui s'abonne, sinon 5 minutes par jour et par voyage), sans vanter l'offre ni culpabiliser. C'est le cas où le bouton « Découvrir l’abonnement » a sa place.",
+  "memo": { "title": "Rome 2026", "destinationCity": "Rome", "places": ["Colisée"] },
+  "history": [
+    { "author": "traveller", "text": "On a passé la matinée au Colisée, il faisait déjà très chaud." },
+    { "author": "memo", "text": "Voilà ton texte pour le carnet. Il te convient ?" },
+    { "author": "traveller", "text": "Ça me convient" },
+    { "author": "memo", "text": "C’est enregistré. Ton carnet compte une étape de plus." }
+  ],
+  "message": { "kind": "text", "text": "au fait combien coûte l'abonnement ?" },
+  "expect": { "disposition": "command", "callToActionId": "subscribe" }
+}

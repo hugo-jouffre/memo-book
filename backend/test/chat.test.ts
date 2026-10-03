@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeResponder } from "../src/services/conversation.js";
 import {
   OPENING_TEXT,
@@ -22,7 +22,10 @@ import {
   EMPTY_TRIP_CONTEXT,
 } from "../src/services/tripContext.js";
 import { FakeTranscriber } from "../src/services/transcription.js";
+import { DAILY_CREDIT_LIMIT_MS, TEXT_MS_PER_CHARACTER } from "../src/services/dailyCredit.js";
+import { localDate } from "../src/services/localCalendar.js";
 import {
+  VOICE_FIXTURES,
   createHarness,
   multipartBody,
   registerAccount,
@@ -182,6 +185,17 @@ async function say(
   return { id, response };
 }
 
+/** Le voyage a raconté ses 5 minutes du jour (au fuseau de Paris, celui d'un compte sans fuseau). */
+async function exhaustCredit(memoId: string) {
+  await harness.prisma.tripDailyUsage.create({
+    data: {
+      memoId,
+      day: new Date(`${localDate(new Date(), "Europe/Paris")}T00:00:00Z`),
+      usedMs: DAILY_CREDIT_LIMIT_MS,
+    },
+  });
+}
+
 async function sendVoice(memoId: string, id = randomUUID()) {
   const { payload, contentType } = multipartBody(
     {
@@ -191,7 +205,9 @@ async function sendVoice(memoId: string, id = randomUUID()) {
       durationSeconds: "37",
       levels: JSON.stringify([0.2, 0.8, 0.5]),
     },
-    { field: "file", filename: "memo.m4a", contentType: "audio/mp4", content: Buffer.from("audio") },
+    // Un vrai `.m4a` : le serveur mesure la durée dans le fichier, et refuse
+    // ce qu'il ne lit pas. `durationSeconds` ci-dessus n'est plus lu.
+    { field: "file", filename: "memo.m4a", contentType: "audio/mp4", content: VOICE_FIXTURES.short },
   );
   const response = await harness.app.inject({
     method: "POST",
@@ -388,9 +404,9 @@ describe("parler à MEMO", () => {
     const thread = await readThread(memo.id);
     const voice = thread.messages.find((message) => message.id === id);
     expect(voice?.body.kind === "voice" && voice.body.voice.levels).toEqual([0.2, 0.8, 0.5]);
-    // La durée mesurée par la transcription (12 s pour `FakeTranscriber`) fait
-    // foi sur celle que l'app déclare — comme pour `POST /v1/memos/:id/entries`.
-    expect(voice?.body.kind === "voice" && voice.body.voice.duration).toBe(12);
+    // La durée **mesurée dans le fichier** (2,136 s) fait foi : ni les 37 s
+    // que l'app déclare, ni les 12 s du transcripteur simulé (03/10/2026).
+    expect(voice?.body.kind === "voice" && voice.body.voice.duration).toBeCloseTo(2.136, 3);
     expect(voice?.sentAt).toBe("2026-09-21T09:00:00.000Z");
 
     const card = thread.messages.find((message) => message.body.kind === "transcript");
@@ -468,7 +484,7 @@ describe("le contexte du voyage", () => {
   };
   const chipIds = (thread: ChatThreadJson) => thread.suggestions.map((suggestion) => suggestion.id);
 
-  it("se recueille ligne à ligne, sans créer de souvenir ni coûter d'étape", async () => {
+  it("se recueille ligne à ligne, sans créer de souvenir", async () => {
     const memo = await seedTrip(owner.accountId);
 
     await say(memo.id, SUGGESTIONS.context.label, { suggestionId: "context" });
@@ -517,15 +533,19 @@ describe("le contexte du voyage", () => {
     });
   });
 
-  it("ne consomme aucune étape offerte, même au-delà des trois", async () => {
+  it("se décompte du crédit du jour comme le reste du récit — sa puce d'entrée, non", async () => {
+    // Plus d'exemption pour le contexte (Hugo, 03/10/2026) : c'est du récit,
+    // et MEMO l'écoute. La puce « Je te raconte le contexte… », elle, est
+    // gratuite, envoyée telle quelle.
     const memo = await seedTrip(owner.accountId);
     await say(memo.id, SUGGESTIONS.context.label, { suggestionId: "context" });
-    for (const text of ["Je pars seul", "Je pars de France", "En octobre", "Un trek", "Et j'adore marcher"]) {
+    const texts = ["Je pars seul", "Je pars de France", "En octobre", "Un trek", "Et j'adore marcher"];
+    for (const text of texts) {
       const { response } = await say(memo.id, text);
       expect(response.statusCode).toBe(201);
     }
-    const account = await harness.prisma.account.findUniqueOrThrow({ where: { id: owner.accountId } });
-    expect(account.remainingSteps).toBe(3);
+    const usage = await harness.prisma.tripDailyUsage.findFirstOrThrow({ where: { memoId: memo.id } });
+    expect(usage.usedMs).toBe(texts.join("").length * TEXT_MS_PER_CHARACTER);
   });
 
   it("se referme sans insister sur « Je compléterai plus tard »", async () => {
@@ -566,7 +586,7 @@ describe("le contexte du voyage", () => {
       headers: { authorization: owner.authorization },
     });
     expect(media.statusCode).toBe(200);
-    expect(media.body).toBe("audio");
+    expect(media.rawPayload.equals(VOICE_FIXTURES.short)).toBe(true);
 
     // Ce qu'il a dit est gardé sur le message, pour l'historique de MEMO.
     const stored = await harness.prisma.chatMessage.findUniqueOrThrow({ where: { id } });
@@ -585,7 +605,7 @@ describe("le contexte du voyage", () => {
 });
 
 describe("valider", () => {
-  it("« Ça me convient » valide le souvenir et confirme une étape offerte, une seule fois", async () => {
+  it("« Ça me convient » valide le souvenir, une seule fois, sans rien coûter", async () => {
     const memo = await seedTrip(owner.accountId);
     await sendVoice(memo.id);
     const entry = await harness.prisma.entry.findFirstOrThrow({ where: { memoId: memo.id } });
@@ -599,8 +619,9 @@ describe("valider", () => {
 
     const validated = await harness.prisma.entry.findUniqueOrThrow({ where: { id: entry.id } });
     expect(validated.validatedAt).not.toBeNull();
-    let account = await harness.prisma.account.findUniqueOrThrow({ where: { id: owner.accountId } });
-    expect(account.remainingSteps).toBe(2);
+    // La puce envoyée telle quelle ne prend rien au crédit : seul le vocal compte.
+    const usageAfterAccept = await harness.prisma.tripDailyUsage.findFirstOrThrow({ where: { memoId: memo.id } });
+    expect(usageAfterAccept.usedMs).toBe(usageAfterAccept.voiceMs);
 
     const thread = await readThread(memo.id);
     const card = thread.messages.find((message) => message.body.kind === "transcript");
@@ -623,9 +644,10 @@ describe("valider", () => {
     // Une commande se répond sans modèle.
     expect(responder.calls).toBe(callsBefore);
 
+    // Valider deux fois ne repose pas la date.
     await say(memo.id, SUGGESTIONS.accept.label, { suggestionId: "accept", entryId: entry.id });
-    account = await harness.prisma.account.findUniqueOrThrow({ where: { id: owner.accountId } });
-    expect(account.remainingSteps).toBe(2);
+    const again = await harness.prisma.entry.findUniqueOrThrow({ where: { id: entry.id } });
+    expect(again.validatedAt).toEqual(validated.validatedAt);
   });
 
   it("« Ça me convient » valide le souvenir que MEMO vient de soumettre, pas une fiche plus ancienne", async () => {
@@ -644,49 +666,23 @@ describe("valider", () => {
     expect(validated.validatedAt).not.toBeNull();
   });
 
-  it("« Photos de test » est une commande : gratuite, même étapes offertes épuisées", async () => {
+  it("« Photos de test » est une commande : gratuite, même crédit du jour épuisé", async () => {
     const memo = await seedTrip(owner.accountId);
-    await harness.prisma.account.update({ where: { id: owner.accountId }, data: { remainingSteps: 0 } });
+    await exhaustCredit(memo.id);
     const { response } = await say(memo.id, SUGGESTIONS["photos-sample"].label, { suggestionId: "photos-sample" });
     expect(response.statusCode).toBe(201);
     expect(await harness.prisma.entry.count({ where: { memoId: memo.id, kind: "photo" } })).toBe(1);
     expect(await harness.prisma.entry.count({ where: { memoId: memo.id, kind: { not: "photo" } } })).toBe(0);
   });
 
-  it("ne décompte rien à un compte sans quota", async () => {
-    await harness.prisma.account.update({
-      where: { id: owner.accountId },
-      data: { offeredSteps: null, remainingSteps: null },
-    });
+  it("à crédit épuisé, un texte attend demain ; une puce passe toujours", async () => {
     const memo = await seedTrip(owner.accountId);
-    await sendVoice(memo.id);
-    const entry = await harness.prisma.entry.findFirstOrThrow({ where: { memoId: memo.id } });
+    await exhaustCredit(memo.id);
 
-    const response = await harness.app.inject({
-      method: "POST",
-      url: `/v1/entries/${entry.id}/validate`,
-      headers: { authorization: owner.authorization },
-    });
-    expect(response.statusCode).toBe(200);
-    expect(response.json<{ remainingSteps: number | null }>().remainingSteps).toBeNull();
-  });
+    const { response: refused } = await say(memo.id, "Un souvenir de plus, une longue journée.");
+    expect(refused.statusCode).toBe(429);
+    expect(refused.json<{ error: string }>().error).toBe("daily_credit_exhausted");
 
-  it("réserve une étape par souvenir non validé : le quatrième est refusé", async () => {
-    const memo = await seedTrip(owner.accountId);
-    for (const text of [
-      "Premier souvenir, une longue journée à marcher dans Rome.",
-      "Deuxième souvenir, une longue soirée sur une terrasse de Trastevere.",
-      "Troisième souvenir, une longue matinée au marché de Testaccio.",
-    ]) {
-      const { response } = await say(memo.id, text);
-      expect(response.statusCode).toBe(201);
-    }
-
-    const { response: refused } = await say(memo.id, "Quatrième souvenir, encore une longue journée.");
-    expect(refused.statusCode).toBe(403);
-    expect(refused.json<{ error: string }>().error).toBe("quota_exhausted");
-
-    // Une commande passe toujours.
     const { response: command } = await say(memo.id, SUGGESTIONS.later.label, { suggestionId: "later" });
     expect(command.statusCode).toBe(201);
   });
@@ -799,6 +795,7 @@ describe("le sondage et le plafond", () => {
 
   it("ferme la porte à un script, pas à un voyageur : 150 tours par jour", async () => {
     const memo = await seedTrip(owner.accountId);
+    const { id: sent } = await say(memo.id, "Le premier tour du jour.");
     await harness.prisma.chatMessage.createMany({
       data: Array.from({ length: 150 }, () => ({
         memoId: memo.id,
@@ -814,5 +811,92 @@ describe("le sondage et le plafond", () => {
     const { response } = await say(memo.id, "Encore un.");
     expect(response.statusCode).toBe(429);
     expect(response.json<{ error: string }>().error).toBe("chat_daily_cap");
+
+    // **L'idempotence passe avant le plafond** : la file hors ligne qui renvoie
+    // un tour déjà arrivé reçoit 200, pas un refus qui le marquerait perdu.
+    const { response: replay } = await say(memo.id, "Le premier tour du jour.", { id: sent });
+    expect(replay.statusCode).toBe(200);
+  });
+});
+
+/**
+ * **Un tour dont le job n'est jamais parti** (03/10/2026) : le tour est écrit
+ * et décompté, puis la file refuse sa publication (elle démarre encore après
+ * un déploiement). La route rend 500, la file de l'app renvoie le même `id` —
+ * et ce renvoi republie le job, au lieu d'un 200 qui laissait le tour payé
+ * sans réponse ni souvenir.
+ */
+describe("le renvoi d'un tour dont le job n'est jamais parti", () => {
+  const notStarted = () => new Error("La file de travaux n'a pas encore démarré. Réessaie dans un instant.");
+
+  it("un texte : le renvoi republie la réponse de MEMO, une seule fois", async () => {
+    const memo = await seedTrip(owner.accountId);
+    const publish = vi.spyOn(harness.context.queue, "publish").mockRejectedValueOnce(notStarted());
+    try {
+      const text = "Une longue journée de marche dans les ruelles de Rome.";
+      const { id, response } = await say(memo.id, text);
+      expect(response.statusCode).toBe(500);
+      const stranded = await harness.prisma.chatMessage.findUniqueOrThrow({ where: { id } });
+      expect(stranded).toMatchObject({ repliedAt: null, payload: { unqueued: true } });
+
+      const { response: again } = await say(memo.id, text, { id });
+      expect(again.statusCode).toBe(200);
+      expect(again.json<{ turn: unknown }>().turn).toEqual({ status: "replying", messageId: id });
+      const answered = await harness.prisma.chatMessage.findUniqueOrThrow({ where: { id } });
+      expect(answered.repliedAt).not.toBeNull();
+      expect((answered.payload as Record<string, unknown> | null)?.["unqueued"]).toBeUndefined();
+      expect(await harness.prisma.entry.count({ where: { memoId: memo.id } })).toBe(1);
+
+      // La marque levée, un renvoi de plus ne republie rien.
+      const calls = publish.mock.calls.length;
+      expect((await say(memo.id, text, { id })).response.statusCode).toBe(200);
+      expect(publish.mock.calls.length).toBe(calls);
+    } finally {
+      publish.mockRestore();
+    }
+  });
+
+  it("un vocal : le renvoi republie sa transcription, et MEMO répond", async () => {
+    const memo = await seedTrip(owner.accountId);
+    const publish = vi.spyOn(harness.context.queue, "publish").mockRejectedValueOnce(notStarted());
+    try {
+      const { id, response } = await sendVoice(memo.id);
+      expect(response.statusCode).toBe(500);
+      const entry = await harness.prisma.entry.findFirstOrThrow({ where: { memoId: memo.id, kind: "audio" } });
+      expect(entry.status).toBe("pending");
+
+      const { response: again } = await sendVoice(memo.id, id);
+      expect(again.statusCode).toBe(200);
+      expect(publish.mock.calls.at(-1)?.[0]).toBe("memobook.converse");
+      expect(publish.mock.calls.some(([name]) => name === "memobook.transcribe")).toBe(true);
+      expect((await harness.prisma.entry.findUniqueOrThrow({ where: { id: entry.id } })).status).toBe("ready");
+      expect((await harness.prisma.chatMessage.findUniqueOrThrow({ where: { id } })).repliedAt).not.toBeNull();
+    } finally {
+      publish.mockRestore();
+    }
+  });
+
+  it("si la file refuse encore, le renvoi rend 503 et garde la marque pour le suivant", async () => {
+    const memo = await seedTrip(owner.accountId);
+    const publish = vi
+      .spyOn(harness.context.queue, "publish")
+      .mockRejectedValueOnce(notStarted())
+      .mockRejectedValueOnce(notStarted());
+    try {
+      const text = "Une soirée sur la terrasse, à regarder les toits.";
+      const { id } = await say(memo.id, text);
+
+      const { response: refused } = await say(memo.id, text, { id });
+      expect(refused.statusCode).toBe(503);
+      expect(refused.json<{ error: string }>().error).toBe("turn_not_queued");
+      expect((await harness.prisma.chatMessage.findUniqueOrThrow({ where: { id } })).payload).toEqual({
+        unqueued: true,
+      });
+
+      expect((await say(memo.id, text, { id })).response.statusCode).toBe(200);
+      expect((await harness.prisma.chatMessage.findUniqueOrThrow({ where: { id } })).repliedAt).not.toBeNull();
+    } finally {
+      publish.mockRestore();
+    }
   });
 });

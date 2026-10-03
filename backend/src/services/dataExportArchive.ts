@@ -135,6 +135,9 @@ const memoInclude = {
     select: { id: true, createdAt: true, pdfUrl: true },
   },
   coverPhotos: { orderBy: { createdAt: "asc" } },
+  // Le compteur du crédit du jour, jour par jour : la politique de
+  // confidentialité dit qu'on le tient (§ 2.6), l'archive le rend.
+  dailyUsage: { orderBy: { day: "asc" } },
 } satisfies Prisma.MemoInclude;
 
 type ExportedAccount = Prisma.AccountGetPayload<{ include: typeof accountInclude }>;
@@ -459,15 +462,9 @@ function accountDocument(account: ExportedAccount, profilePhoto: string | null) 
       })),
     },
     wallet: { balanceCents: account.walletBalanceCents, currency: "EUR" },
-    freeSteps:
-      account.offeredSteps === null
-        ? null
-        : { offered: account.offeredSteps, remaining: account.remainingSteps },
-    memoryAllowance: {
-      plan: account.memoryPlan,
-      used: account.memoryUsed,
-      periodStart: iso(account.memoryPeriodStart),
-    },
+    // Le fuseau du téléphone (`X-Time-Zone`) : c'est lui qui dit quand le
+    // crédit du jour se recharge.
+    timeZone: account.timeZone,
     paymentCustomerId: account.stripeCustomerId,
     welcomeScreenSeenAt: iso(account.welcomeScreenSeenAt),
     createdAt: iso(account.createdAt),
@@ -577,6 +574,16 @@ function tripDocument(
     })),
     coverPhotos: options.coverFiles,
     books: options.bookFiles,
+    // **Le crédit du jour** (03/10/2026) : ce que le voyage a raconté chaque
+    // jour — la durée des vocaux, le nombre de caractères écrits, ce que le
+    // pot commun a perdu, et quand MEMO a dit « reviens demain ».
+    dailyCredit: memo.dailyUsage.map((usage) => ({
+      day: usage.day.toISOString().slice(0, 10),
+      usedMs: usage.usedMs,
+      voiceMs: usage.voiceMs,
+      textCharacters: usage.textCharacters,
+      limitNotifiedAt: iso(usage.limitNotifiedAt),
+    })),
     files: { story: "recit.txt", memories: "souvenirs.json", conversation: "conversation.json" },
     createdAt: iso(memo.createdAt),
     updatedAt: iso(memo.updatedAt),
@@ -772,7 +779,7 @@ function readme(email: string | null, now: Date, missing: readonly string[]): st
     "compte.json               Ton compte : identité, coordonnées, adresse, moyens de connexion, cagnotte, réglages.",
     "photo-de-profil.*         Ta photo de profil, si tu en as envoyé une.",
     "voyages/                  Un dossier par voyage — les tiens, et ceux où tu es co-voyageur :",
-    "  voyage.json             le voyage, ses réglages, ses étapes, ses dépenses, ses voyageurs ;",
+    "  voyage.json             le voyage, ses réglages, ses étapes, ses dépenses, ses voyageurs, et son crédit du jour : jour par jour, la durée des vocaux et le nombre de caractères écrits ;",
     "  recit.txt               le récit, lisible, souvenir par souvenir ;",
     "  souvenirs.json          chaque souvenir : ta transcription, le texte de MEMO, tes corrections ;",
     "  souvenirs/              tes photos et tes vocaux, tels que tu les as envoyés ;",
@@ -782,7 +789,7 @@ function readme(email: string | null, now: Date, missing: readonly string[]): st
     "  carnet*.pdf             le dernier carnet composé, et ceux que tu as commandés.",
     "commandes.json            Tes commandes de carnets imprimés.",
     "cagnotte.json             Les mouvements de ta cagnotte.",
-    "abonnements.json          Tes abonnements, et chaque semaine payée.",
+    "abonnements.json          Tes abonnements, et chaque période payée.",
     "moyens-de-paiement.json   Tes cartes : la marque, les quatre derniers chiffres, l’échéance. Jamais le numéro : nous ne l’avons pas.",
     "connecteurs.json          Les applications que tu as branchées.",
     "connexions.json           Tes appareils, tes sessions, tes demandes de mot de passe et d’export.",

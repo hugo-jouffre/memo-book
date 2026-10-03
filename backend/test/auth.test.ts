@@ -38,6 +38,7 @@ function fakeMailer(): Mailer & { sent: PasswordResetMail[] } {
       sent.push(message);
     },
     async sendDataExport() {},
+    async sendSubscriptionReminder() {},
   };
 }
 
@@ -104,32 +105,36 @@ describe("inscription et connexion par mot de passe", () => {
     expect(session).not.toBeNull();
   });
 
-  it("offre trois étapes à tout compte qui s'ouvre", async () => {
+  it("ouvre tout compte sur le crédit du jour : ni étapes offertes, ni abonnement", async () => {
+    // Plus d'étapes offertes (Hugo, 03/10/2026) : tout le monde raconte
+    // 5 minutes par jour et par voyage, quel que soit le chemin d'entrée.
+    const travellerOf = async (token: string) =>
+      (
+        await harness.app.inject({ method: "GET", url: "/v1/home", headers: { authorization: `Bearer ${token}` } })
+      ).json<{ traveller: Record<string, unknown> }>().traveller;
+
     // Par mot de passe…
-    await harness.app.inject({
+    const byPassword = await harness.app.inject({
       method: "POST",
       url: "/v1/auth/signup",
       payload: { email: "hugo@memobook.app", password: "carnet2026" },
     });
-    const byPassword = await harness.prisma.account.findUniqueOrThrow({
-      where: { email: "hugo@memobook.app" },
-    });
-    expect(byPassword.offeredSteps).toBe(3);
-    expect(byPassword.remainingSteps).toBe(3);
+    const passwordTraveller = await travellerOf(byPassword.json<{ token: string }>().token);
+    expect(passwordTraveller).not.toHaveProperty("offeredSteps");
+    expect(passwordTraveller).not.toHaveProperty("remainingSteps");
+    expect(passwordTraveller).toMatchObject({ isUnlimited: false, hasSubscribedBefore: false });
 
-    // … comme par un fournisseur : c'est l'ouverture du compte qui offre les
-    // étapes, pas la façon d'entrer.
+    // … comme par un fournisseur.
     await boot(fakeVerifier({ email: "clara@memobook.app" }));
-    await harness.app.inject({
+    const bySocial = await harness.app.inject({
       method: "POST",
       url: "/v1/auth/google",
       payload: { identityToken: "google-token" },
     });
-    const bySocial = await harness.prisma.account.findUniqueOrThrow({
-      where: { email: "clara@memobook.app" },
-    });
-    expect(bySocial.offeredSteps).toBe(3);
-    expect(bySocial.remainingSteps).toBe(3);
+    const socialTraveller = await travellerOf(bySocial.json<{ token: string }>().token);
+    expect(socialTraveller).not.toHaveProperty("remainingSteps");
+    expect(socialTraveller).toMatchObject({ isUnlimited: false });
+    expect(await harness.prisma.subscription.count()).toBe(0);
   });
 
   it("ne stocke jamais le mot de passe en clair", async () => {

@@ -1,4 +1,4 @@
-import { Prisma, type Account } from "@prisma/client";
+import { Prisma, type Account, type ChatMessage } from "@prisma/client";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { AppContext } from "../context.js";
@@ -6,6 +6,20 @@ import { JOB_NAMES, type ConverseJob, type TranscribeJob } from "../jobs/index.j
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
 import { publicApiBaseUrl } from "../services/avatars.js";
+import {
+  chargeDailyCredit,
+  countCharacters,
+  exceedsDailyCredit,
+  holdsRefusedTurns,
+  isFreeChatText,
+  loadSpeaker,
+  measureVoiceMs,
+  readDailyCredit,
+  refuseForDailyCredit,
+  withDailyCredit,
+  type DailyCharge,
+  type DailyCredit,
+} from "../services/dailyCredit.js";
 import { pauseBeforeTranscript, scriptedReply } from "../services/conversation.js";
 import { FLOW_COMMANDS, isSilentCommand, isSuggestionId, suggestionIdForLabel } from "../services/conversationCopy.js";
 import {
@@ -19,9 +33,8 @@ import {
   type ChatMessageRow,
 } from "../services/conversationThread.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
-import { TEXT_MEMORY_COST, consumeMemory, voiceCost } from "../services/memoryAllowance.js";
-import { assertCanRecord, validateEntry } from "../services/quota.js";
 import { MAX_PHOTOS_PER_STEP } from "../services/photoBudget.js";
+import { hasUnlimitedAccess } from "../services/subscriptions.js";
 import { contextVoiceOf, isGathering, parseTripContext } from "../services/tripContext.js";
 import {
   serializeChatReceipt,
@@ -180,6 +193,103 @@ function fieldOf(fields: Record<string, { value?: unknown } | undefined>, name: 
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
+/**
+ * La marque d'un tour **dont le job n'est jamais parti** (03/10/2026) :
+ * `payload.unqueued`.
+ *
+ * Le tour s'écrit — et se décompte du crédit du jour — dans sa transaction ;
+ * son job (`transcribe` ou `converse`) se publie ensuite, hors d'elle. Si la
+ * file refuse (elle démarre encore après un déploiement, ou son pool est
+ * saturé), la route rend 500, la file de l'app renvoie le même `id`… et
+ * l'idempotence rendait 200 sans rien republier : le tour restait payé, sans
+ * réponse de MEMO ni souvenir. La marque dit au renvoi qu'il doit republier.
+ *
+ * Pourquoi une marque, et pas « tout tour sans réponse » : un renvoi peut
+ * arriver pendant que le job tourne encore (une réponse perdue en route), et
+ * le republier ferait répondre MEMO deux fois — `converse` ne se garde que
+ * d'un rejeu **après** sa réponse (`repliedAt`), pas d'un rejeu simultané.
+ */
+const UNQUEUED = "unqueued";
+
+function payloadObject(payload: Prisma.JsonValue | null | undefined): Prisma.JsonObject {
+  return payload !== null && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
+}
+
+/** Publie le job d'un tour ; si la file refuse, marque le tour (`UNQUEUED`) avant de laisser la route rendre 500. */
+async function publishTurnJob(context: AppContext, messageId: string, publish: () => Promise<void>): Promise<void> {
+  try {
+    await publish();
+  } catch (cause) {
+    try {
+      const message = await context.prisma.chatMessage.findUnique({ where: { id: messageId }, select: { payload: true } });
+      await context.prisma.chatMessage.update({
+        where: { id: messageId },
+        data: { payload: { ...payloadObject(message?.payload), [UNQUEUED]: true } },
+      });
+    } catch (markFailure) {
+      context.logger.error(
+        { messageId, err: markFailure },
+        "Tour écrit sans job, et sans marque : un renvoi ne le republiera pas",
+      );
+    }
+    throw cause;
+  }
+}
+
+/**
+ * Le renvoi d'un tour marqué `UNQUEUED` republie son job : la transcription
+ * d'un vocal dont la fiche attend encore (`pending`), la réponse de MEMO pour
+ * tout le reste. Rend `true` quand il l'a fait.
+ *
+ * Seul le renvoi qui lève la marque republie (`updateMany` conditionnel) :
+ * deux renvois simultanés ne font pas deux jobs. Si la file refuse encore, la
+ * marque revient et la route rend **503** — un 200 dirait « reçu, MEMO
+ * répond » d'un tour que personne ne traitera ; la file de l'app, elle,
+ * réessaiera.
+ */
+async function republishUnqueuedTurn(context: AppContext, existing: ChatMessage): Promise<boolean> {
+  if (existing.author !== "traveller" || existing.repliedAt !== null) return false;
+  const payload = payloadObject(existing.payload);
+  if (payload[UNQUEUED] !== true) return false;
+
+  const { [UNQUEUED]: _mark, ...rest } = payload;
+  const { count } = await context.prisma.chatMessage.updateMany({
+    where: { id: existing.id, payload: { path: [UNQUEUED], equals: true } },
+    data: { payload: Object.keys(rest).length > 0 ? rest : Prisma.DbNull },
+  });
+  // Un autre renvoi vient de lever la marque : c'est lui qui republie.
+  if (count === 0) return true;
+
+  try {
+    const entry =
+      existing.kind === "voice" && existing.entryId
+        ? await context.prisma.entry.findUnique({ where: { id: existing.entryId }, select: { status: true } })
+        : null;
+    if (entry?.status === "pending" && existing.entryId) {
+      await context.queue.publish<TranscribeJob>(JOB_NAMES.transcribe, {
+        entryId: existing.entryId,
+        converseMessageId: existing.id,
+      });
+    } else {
+      await context.queue.publish<ConverseJob>(JOB_NAMES.converse, { messageId: existing.id });
+    }
+    context.logger.info({ messageId: existing.id }, "Tour renvoyé : son job, jamais parti, est republié");
+    return true;
+  } catch (cause) {
+    context.logger.warn({ messageId: existing.id, err: cause }, "Tour renvoyé : la file refuse encore son job");
+    await context.prisma.chatMessage
+      .update({ where: { id: existing.id }, data: { payload: { ...payload, [UNQUEUED]: true } } })
+      .catch((markFailure: unknown) =>
+        context.logger.error({ messageId: existing.id, err: markFailure }, "Tour renvoyé : marque perdue"),
+      );
+    throw new HttpError(
+      503,
+      "Ton message est bien arrivé, mais MEMO ne peut pas encore le lire. Il repartira tout seul dans un instant.",
+      "turn_not_queued",
+    );
+  }
+}
+
 export function registerChatRoutes(app: FastifyInstance, context: AppContext): void {
   const publicBaseUrl = publicApiBaseUrl(context.env);
 
@@ -215,13 +325,17 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
       await materializeEntriesWithoutMessages(tx, memo);
     });
 
-    const [messages, viewer, turn, memoryCount, readyRender] = await Promise.all([
+    const [messages, viewer, turn, memoryCount, readyRender, isUnlimited] = await Promise.all([
       loadMessages(context, memoId),
       loadViewer(context, accountId),
       turnStatusOf(context, memoId, now),
       memoryCountOf(context, memoId),
       hasReadyRender(context, memoId),
+      hasUnlimitedAccess(context.prisma, accountId, now),
     ]);
+    // Le crédit du jour se lit au fuseau de celui qui lit : il fallait le
+    // compte d'abord.
+    const dailyCredit = await readDailyCredit(context.prisma, { memoId, viewer, isUnlimited, now });
 
     if (query.since) {
       const since = new Date(query.since);
@@ -240,6 +354,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
         turn,
         publicBaseUrl,
         now,
+        dailyCredit,
       });
     }
 
@@ -253,6 +368,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
       turn,
       publicBaseUrl,
       now,
+      dailyCredit,
     });
   });
 
@@ -263,9 +379,15 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
    *
    * La route écrit le message du voyageur et répond **tout de suite** (201) ;
    * MEMO répond dans le job `converse`, que l'app attend en sondant le fil.
-   * Ordre des vérifications : le carnet, le plafond du jour, les étapes
-   * offertes, les limites de souvenirs, puis l'écriture. Une commande (une
-   * puce du catalogue) ne coûte rien et ne réserve rien.
+   *
+   * **L'ordre des vérifications** (Hugo, 03/10/2026) : le carnet, puis
+   * **l'idempotence d'abord** — un renvoi du même `id` rend 200 sans rien
+   * compter ni plafonner (le plafond passait avant, et la file hors ligne
+   * marquait « refusé » un tour déjà arrivé) —, puis le plafond anti-abus, la
+   * mesure du vocal, et enfin la transaction qui écrit le tour **et** le
+   * décompte du crédit du jour (`services/dailyCredit.ts`). Une puce envoyée
+   * telle quelle et les photos ne coûtent rien ; tout le reste se décompte,
+   * contexte du voyage compris.
    */
   app.post("/v1/trips/:id/chat", async (request, reply) => {
     const { id: memoId } = idParams.parse(request.params);
@@ -274,10 +396,15 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
     const now = new Date();
     const showsAuthors = memo.members.length > 0;
     // Le voyageur raconte le contexte de son voyage : ce qu'il dit ne devient
-    // pas un souvenir, et ne coûte donc ni étape ni limite — `tripContext.ts`.
+    // pas un souvenir — `tripContext.ts`. Il se décompte pourtant du crédit du
+    // jour comme le reste : c'est du récit, et MEMO l'écoute.
     const gatheringContext = isGathering(parseTripContext(memo.tripContext));
+    // La file de l'app de ce lot garde un tour refusé faute de crédit ; celle
+    // des builds installés l'efface. Le refus ne leur dit pas la même chose
+    // (`holdsRefusedTurns`).
+    const refusal = { holdsTurn: holdsRefusedTurns(request) };
 
-    const receipt = async (written: ChatMessageRow[], turn: ChatTurnStatus) =>
+    const receipt = async (written: ChatMessageRow[], turn: ChatTurnStatus, credit?: DailyCredit | null) =>
       serializeChatReceipt({
         written,
         viewerAccountId: accountId,
@@ -289,17 +416,23 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
         }),
         turn,
         now,
+        dailyCredit:
+          credit ??
+          (await readDailyCredit(context.prisma, { memoId, viewer: await loadViewer(context, accountId), now })),
       });
 
     // Le plafond anti-abus : des tours par carnet et par jour. Ferme la porte
-    // à un script, pas à un voyageur.
-    if ((await dailyTurnCount(context.prisma, memoId, now)) >= context.env.CHAT_DAILY_TURN_CAP) {
-      throw new HttpError(
-        429,
-        "MEMO a besoin d’une pause : tu as beaucoup raconté aujourd’hui. On reprend demain.",
-        "chat_daily_cap",
-      );
-    }
+    // à un script, pas à un voyageur — abonné compris. **Après**
+    // l'idempotence : un renvoi n'est pas un tour de plus.
+    const assertUnderTurnCap = async () => {
+      if ((await dailyTurnCount(context.prisma, memoId, now)) >= context.env.CHAT_DAILY_TURN_CAP) {
+        throw new HttpError(
+          429,
+          "MEMO a besoin d’une pause : tu as beaucoup raconté aujourd’hui. On reprend demain.",
+          "chat_daily_cap",
+        );
+      }
+    };
 
     if (!request.isMultipart()) {
       const body = textTurnBody.parse(request.body ?? {});
@@ -315,13 +448,20 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
 
       if (!command && text.length === 0) throw HttpError.badRequest("Le message est vide.");
 
-      // Déjà reçu : la même bulle, rien de plus. C'est l'idempotence du renvoi.
+      // Déjà reçu : la même bulle, rien de plus — sauf si son job n'est
+      // jamais parti (`republishUnqueuedTurn`). C'est l'idempotence du renvoi.
       const existing = await context.prisma.chatMessage.findUnique({ where: { id: body.id } });
       if (existing) {
         if (existing.memoId !== memoId) throw HttpError.conflict("Ce message appartient à un autre carnet.");
+        const republished = await republishUnqueuedTurn(context, existing);
         const rows = await loadRows(context, [existing.id]);
-        return reply.code(200).send(await receipt(rows, await turnStatusOf(context, memoId, now)));
+        const turn: ChatTurnStatus = republished
+          ? { status: "replying", messageId: existing.id }
+          : await turnStatusOf(context, memoId, now);
+        return reply.code(200).send(await receipt(rows, turn));
       }
+
+      await assertUnderTurnCap();
 
       let validatedEntryId: string | null = null;
       if (suggestionId === "accept") {
@@ -341,45 +481,63 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
             "entry_required",
           );
         }
-        await validateEntry(context.prisma, entry.id, accountId);
         validatedEntryId = entry.id;
       }
 
-      if (!command && !gatheringContext) {
-        await assertCanRecord(context.prisma, accountId);
-        await consumeMemory(context.prisma, accountId, TEXT_MEMORY_COST);
-      }
+      // Une puce envoyée telle quelle ne coûte rien ; un texte, 75 ms par
+      // caractère — même déguisé en puce (`isFreeChatText`).
+      const characters = isFreeChatText(text, suggestionId) ? 0 : countCharacters(text);
+      const charge: DailyCharge | null = characters > 0 ? { kind: "text", characters } : null;
+      const speaker = charge ? await loadSpeaker(context.prisma, accountId, now) : null;
 
-      const written = await context.prisma.$transaction(async (tx) => {
-        await lockThread(tx, memoId);
-        const ids: string[] = [];
-        const opening = await ensureOpening(tx, memoId, context.responder);
-        if (opening) ids.push(opening.id);
+      const written = await withDailyCredit(context.prisma, memoId, refusal, () =>
+        context.prisma.$transaction(async (tx) => {
+          await lockThread(tx, memoId);
+          const ids: string[] = [];
+          const opening = await ensureOpening(tx, memoId, context.responder);
+          if (opening) ids.push(opening.id);
 
-        const message = await tx.chatMessage.create({
-          data: {
-            id: body.id,
-            memoId,
-            author: "traveller",
-            kind: "text",
-            accountId,
-            text: command ? (text.length > 0 ? text : null) : text,
-            suggestionId,
-            entryId: validatedEntryId ?? body.entryId ?? null,
-            disposition: command ? "command" : null,
-            stepId: body.stepId ?? null,
-          },
-        });
-        ids.push(message.id);
-        return ids;
-      });
+          if (validatedEntryId) {
+            // Idempotent : valider deux fois ne pose la date qu'une fois.
+            await tx.entry.updateMany({
+              where: { id: validatedEntryId, validatedAt: null },
+              data: { validatedAt: now },
+            });
+          }
 
-      await context.queue.publish<ConverseJob>(JOB_NAMES.converse, { messageId: body.id });
+          const message = await tx.chatMessage.create({
+            data: {
+              id: body.id,
+              memoId,
+              author: "traveller",
+              kind: "text",
+              accountId,
+              text: command ? (text.length > 0 ? text : null) : text,
+              suggestionId,
+              entryId: validatedEntryId ?? body.entryId ?? null,
+              disposition: command ? "command" : null,
+              stepId: body.stepId ?? null,
+            },
+          });
+          ids.push(message.id);
 
-      const rows = await loadRows(context, written);
+          const charged =
+            charge && speaker
+              ? await chargeDailyCredit(tx, { memoId, ...speaker, charge, now })
+              : null;
+          if (charged?.notice) ids.push(charged.notice.id);
+          return { ids, credit: charged?.credit ?? null };
+        }),
+      );
+
+      await publishTurnJob(context, body.id, () =>
+        context.queue.publish<ConverseJob>(JOB_NAMES.converse, { messageId: body.id }),
+      );
+
+      const rows = await loadRows(context, written.ids);
       return reply
         .code(201)
-        .send(await receipt(rows, { status: "replying", messageId: body.id }));
+        .send(await receipt(rows, { status: "replying", messageId: body.id }, written.credit));
     }
 
     // --- Multipart : un vocal, ou des photos -------------------------------
@@ -409,8 +567,14 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
         select: { id: true },
       });
       if (card) ids.push(card.id);
-      return reply.code(200).send(await receipt(await loadRows(context, ids), await turnStatusOf(context, memoId, now)));
+      const republished = await republishUnqueuedTurn(context, existing);
+      const turn: ChatTurnStatus = republished
+        ? { status: "replying", messageId: existing.id }
+        : await turnStatusOf(context, memoId, now);
+      return reply.code(200).send(await receipt(await loadRows(context, ids), turn));
     }
+
+    await assertUnderTurnCap();
 
     const isAudio = files.every((file) => file.mimeType.startsWith("audio/"));
     const isImages = files.every((file) => file.mimeType.startsWith("image/"));
@@ -428,22 +592,38 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
       throw HttpError.badRequest("`capturedAt` n'est pas une date ISO 8601 valide.");
     }
 
-    const rawDuration = fieldOf(fields, "durationSeconds");
-    const parsedDuration = rawDuration ? Number.parseFloat(rawDuration) : Number.NaN;
-    const duration = Number.isFinite(parsedDuration) && parsedDuration > 0 ? parsedDuration : null;
+    // La durée se **mesure** dans le fichier (`lib/mp4Duration.ts`) ; le champ
+    // `durationSeconds` que l'app envoie encore n'est plus lu (Hugo,
+    // 03/10/2026). C'est la mesure qui se décompte, s'écrit dans
+    // `media_assets` et s'affiche dans la bulle.
+    const durationMs = isAudio ? measureVoiceMs(files[0]!.buffer) : null;
+    const duration = durationMs === null ? null : durationMs / 1000;
     const placeLabel = fieldOf(fields, "placeLabel");
     const rawStepId = fieldOf(fields, "stepId");
     const stepId = rawStepId && z.string().uuid().safeParse(rawStepId).success ? rawStepId : null;
     const levels = parseLevels(fields["levels"]?.value);
 
-    // Un vocal du contexte du voyage : pas de souvenir, pas de fiche, pas de
-    // coût. Des photos restent des souvenirs, contexte ou non.
-    const contextVoice = isAudio && gatheringContext;
-
-    if (!contextVoice) {
-      await assertCanRecord(context.prisma, accountId);
-      await consumeMemory(context.prisma, accountId, isAudio ? voiceCost(duration) : 0);
+    // Un vocal se décompte, contexte du voyage compris ; des photos, jamais.
+    const charge: DailyCharge | null = durationMs === null ? null : { kind: "voice", durationMs };
+    const speaker = charge ? await loadSpeaker(context.prisma, accountId, now) : null;
+    if (charge && speaker) {
+      // Un vocal refusé ne se stocke pas : le refus certain se voit **avant**
+      // l'envoi au stockage. La transaction redécompte de toute façon — c'est
+      // elle qui tranche si un co-voyageur a raconté entre-temps.
+      const before = await readDailyCredit(context.prisma, {
+        memoId,
+        viewer: speaker.account,
+        isUnlimited: speaker.isUnlimited,
+        now,
+      });
+      if (exceedsDailyCredit(before, charge)) {
+        await refuseForDailyCredit(context.prisma, memoId, before, charge, { ...refusal, now });
+      }
     }
+
+    // Un vocal du contexte du voyage : pas de souvenir, pas de fiche. Des
+    // photos restent des souvenirs, contexte ou non.
+    const contextVoice = isAudio && gatheringContext;
 
     const stored = await Promise.all(
       files.map((file) => context.storage.put(isAudio ? "audio" : "photo", file.filename, file.buffer, file.mimeType)),
@@ -452,127 +632,142 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
     if (contextVoice) {
       const [object] = stored;
       if (!object) throw new Error("Aucun vocal enregistré.");
-      const written = await context.prisma.$transaction(async (tx) => {
+      const written = await withDailyCredit(context.prisma, memoId, refusal, () =>
+        context.prisma.$transaction(async (tx) => {
+          await lockThread(tx, memoId);
+          const ids: string[] = [];
+          const opening = await ensureOpening(tx, memoId, context.responder);
+          if (opening) ids.push(opening.id);
+          const message = await tx.chatMessage.create({
+            data: {
+              id: messageId,
+              memoId,
+              author: "traveller",
+              kind: "voice",
+              accountId,
+              disposition: "trip_context",
+              stepId,
+              payload: {
+                levels,
+                contextVoice: {
+                  storageKey: object.storageKey,
+                  mimeType: object.mimeType,
+                  durationSeconds: duration,
+                },
+              },
+            },
+          });
+          ids.push(message.id);
+          const charged =
+            charge && speaker ? await chargeDailyCredit(tx, { memoId, ...speaker, charge, now }) : null;
+          if (charged?.notice) ids.push(charged.notice.id);
+          return { ids, credit: charged?.credit ?? null };
+        }),
+      );
+      // Le job écoute lui-même : pas de souvenir à transcrire, donc pas de
+      // job `transcribe`.
+      await publishTurnJob(context, messageId, () =>
+        context.queue.publish<ConverseJob>(JOB_NAMES.converse, { messageId }),
+      );
+      return reply
+        .code(201)
+        .send(await receipt(await loadRows(context, written.ids), { status: "replying", messageId }, written.credit));
+    }
+
+    let entryIdForTranscription: string | null = null;
+
+    const written = await withDailyCredit(context.prisma, memoId, refusal, () =>
+      context.prisma.$transaction(async (tx) => {
         await lockThread(tx, memoId);
         const ids: string[] = [];
         const opening = await ensureOpening(tx, memoId, context.responder);
         if (opening) ids.push(opening.id);
+
+        const entries = await Promise.all(
+          stored.map((object) =>
+            tx.entry.create({
+              data: {
+                memo: { connect: { id: memoId } },
+                kind: isAudio ? "audio" : "photo",
+                status: isAudio ? "pending" : "ready",
+                capturedAt,
+                placeLabel,
+                ...(stepId ? { step: { connect: { id: stepId } } } : {}),
+                media: {
+                  create: {
+                    storageKey: object.storageKey,
+                    mimeType: object.mimeType,
+                    bytes: object.bytes,
+                    durationSeconds: isAudio ? duration : null,
+                  },
+                },
+              },
+            }),
+          ),
+        );
+        const [first] = entries;
+        if (!first) throw new Error("Aucun souvenir créé.");
+
+        const payload: Prisma.InputJsonObject = isAudio
+          ? { levels }
+          : { entryIds: entries.map((entry) => entry.id) };
+
         const message = await tx.chatMessage.create({
           data: {
             id: messageId,
             memoId,
             author: "traveller",
-            kind: "voice",
+            kind: isAudio ? "voice" : "photos",
             accountId,
-            disposition: "trip_context",
+            entryId: first.id,
+            disposition: "memory",
             stepId,
-            payload: {
-              levels,
-              contextVoice: {
-                storageKey: object.storageKey,
-                mimeType: object.mimeType,
-                durationSeconds: duration,
-              },
-            },
+            payload,
           },
         });
         ids.push(message.id);
-        return ids;
-      });
-      // Le job écoute lui-même : pas de souvenir à transcrire, donc pas de
-      // job `transcribe`.
-      await context.queue.publish<ConverseJob>(JOB_NAMES.converse, { messageId });
-      return reply
-        .code(201)
-        .send(await receipt(await loadRows(context, written), { status: "replying", messageId }));
-    }
 
-    let entryIdForTranscription: string | null = null;
-
-    const written = await context.prisma.$transaction(async (tx) => {
-      await lockThread(tx, memoId);
-      const ids: string[] = [];
-      const opening = await ensureOpening(tx, memoId, context.responder);
-      if (opening) ids.push(opening.id);
-
-      const entries = await Promise.all(
-        stored.map((object) =>
-          tx.entry.create({
+        if (isAudio) {
+          // La fiche tombe **tout de suite**, sans texte : on ne cache pas une
+          // information réelle (date, lieu, durée) derrière une attente.
+          const card = await tx.chatMessage.create({
             data: {
-              memo: { connect: { id: memoId } },
-              kind: isAudio ? "audio" : "photo",
-              status: isAudio ? "pending" : "ready",
-              capturedAt,
-              placeLabel,
-              ...(stepId ? { step: { connect: { id: stepId } } } : {}),
-              media: {
-                create: {
-                  storageKey: object.storageKey,
-                  mimeType: object.mimeType,
-                  bytes: object.bytes,
-                  durationSeconds: isAudio ? duration : null,
-                },
-              },
+              memoId,
+              author: "memo",
+              kind: "transcript",
+              entryId: first.id,
+              replyToId: message.id,
+              stepId,
+              pauseMilliseconds: pauseBeforeTranscript(duration),
+              model: "scripted",
             },
-          }),
-        ),
-      );
-      const [first] = entries;
-      if (!first) throw new Error("Aucun souvenir créé.");
+          });
+          ids.push(card.id);
+          entryIdForTranscription = first.id;
+        }
 
-      const payload: Prisma.InputJsonObject = isAudio
-        ? { levels }
-        : { entryIds: entries.map((entry) => entry.id) };
+        // Le décompte **après** les bulles du tour : la bulle « reviens
+        // demain », s'il la faut, vient derrière elles dans le fil.
+        const charged =
+          charge && speaker ? await chargeDailyCredit(tx, { memoId, ...speaker, charge, now }) : null;
+        if (charged?.notice) ids.push(charged.notice.id);
+        return { ids, credit: charged?.credit ?? null };
+      }),
+    );
 
-      const message = await tx.chatMessage.create({
-        data: {
-          id: messageId,
-          memoId,
-          author: "traveller",
-          kind: isAudio ? "voice" : "photos",
-          accountId,
-          entryId: first.id,
-          disposition: "memory",
-          stepId,
-          payload,
-        },
-      });
-      ids.push(message.id);
-
-      if (isAudio) {
-        // La fiche tombe **tout de suite**, sans texte : on ne cache pas une
-        // information réelle (date, lieu, durée) derrière une attente.
-        const card = await tx.chatMessage.create({
-          data: {
-            memoId,
-            author: "memo",
-            kind: "transcript",
-            entryId: first.id,
-            replyToId: message.id,
-            stepId,
-            pauseMilliseconds: pauseBeforeTranscript(duration),
-            model: "scripted",
-          },
-        });
-        ids.push(card.id);
-        entryIdForTranscription = first.id;
-      }
-
-      return ids;
-    });
-
-    if (isAudio && entryIdForTranscription) {
-      await context.queue.publish<TranscribeJob>(JOB_NAMES.transcribe, {
-        entryId: entryIdForTranscription,
-        converseMessageId: messageId,
-      });
-    } else {
-      await context.queue.publish<ConverseJob>(JOB_NAMES.converse, { messageId });
-    }
+    const transcribeEntryId: string | null = entryIdForTranscription;
+    await publishTurnJob(context, messageId, () =>
+      isAudio && transcribeEntryId
+        ? context.queue.publish<TranscribeJob>(JOB_NAMES.transcribe, {
+            entryId: transcribeEntryId,
+            converseMessageId: messageId,
+          })
+        : context.queue.publish<ConverseJob>(JOB_NAMES.converse, { messageId }),
+    );
 
     return reply
       .code(201)
-      .send(await receipt(await loadRows(context, written), { status: "replying", messageId }));
+      .send(await receipt(await loadRows(context, written.ids), { status: "replying", messageId }, written.credit));
   });
 
   /**

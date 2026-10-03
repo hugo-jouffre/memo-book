@@ -63,6 +63,25 @@ Le gabarit d'exemple. Tout vient de `print_orders`, déjà en base.
 
 Chez Resend : `GREETING`, `DOWNLOAD_URL`, `EXPIRES_ON`.
 
+## Variables de `subscription.reminder`
+
+« Ton voyage est fini : pense à ton abonnement » — `subscription-reminder.njk`,
+envoyé par la passe horaire des notifications (`sendTripEndEmails`) **le
+lendemain de la fin d'un voyage**, à un voyageur dont l'abonnement App Store va
+se renouveler alors que plus aucun voyage ne court ni ne s'annonce (Hugo,
+03/10/2026). Une fois par voyage — `notification_deliveries`, kind
+`trip_end_email`. Niveau 2 : aucun secret.
+
+| Variable | Source | Note |
+|---|---|---|
+| `recipient.greeting` | `accounts.firstName` | « Bonjour Clara, » ou « Bonjour, » |
+| `trip.place` | `memos.destinationCity`, sinon `memos.title` | « à Rome », ou « « Notre tour du monde » » — composé par le back-end |
+| `subscription.until` | `subscriptions.renewsAt` | **La phrase entière** : « jusqu’au 1er novembre 2026 », ou « jusqu’à la fin de la période déjà payée » tant qu'Apple ne l'a pas datée (`subscriptionReminderUntil`) |
+| `book.line` | Estimation du carnet, commande | Le carnet qui attend sa commande et son estimation, ou — carnet vide ou déjà commandé — « Quoi que tu décides, tes carnets et tes souvenirs restent à toi. » (`subscriptionReminderBookLine`) |
+| `links.manage` | Constante | La page des abonnements d'Apple (`APPLE_SUBSCRIPTIONS_URL`) : la même pour tous, pas une variable Resend |
+
+Chez Resend : `GREETING`, `TRIP_PLACE`, `UNLIMITED_UNTIL`, `BOOK_LINE`.
+
 > **`recipient.greeting`, et non `recipient.firstName`.** Le prénom est
 > facultatif — un compte ouvert par Apple n'en a pas toujours — et le gabarit
 > hébergé chez Resend ne sait pas écrire de condition. Le back-end compose donc
@@ -111,7 +130,7 @@ vérifier ce qui sera poussé, illisible pour juger d'un texte.
 
 ## Les gabarits chez Resend
 
-Les trois gabarits vivent **aussi** dans le compte Resend, en tant que
+Les quatre gabarits vivent **aussi** dans le compte Resend, en tant que
 *templates* hébergés (`POST /templates`). L'envoi ne transporte alors que des
 variables, et la copie devient modifiable sans déploiement — c'est le niveau 2
 de [`docs/emails.md`](../../docs/emails.md).
@@ -121,6 +140,7 @@ de [`docs/emails.md`](../../docs/emails.md).
 | `print-order-shipped` | `print-order-shipped.njk` | Ton carnet « … » est en route |
 | `password-reset` | `password-reset.njk` | Réinitialise ton mot de passe MemoBook |
 | `data-export` | `data-export.njk` | Tes données MemoBook sont prêtes |
+| `subscription-reminder` | `subscription-reminder.njk` | Ton voyage est fini : pense à ton abonnement |
 
 ```bash
 npm run emails:sync      # crée ou met à jour, puis publie. Exige RESEND_API_KEY
@@ -142,7 +162,7 @@ elles expliquent la forme des variables ci-dessus :
    étapes figées — deux faites, une en cours, une à venir — parce que c'est ce
    que « expédié » veut dire. La livraison sera `print-order-delivered`, pas une
    condition dans celui-ci.
-3. **Le pied de page est figé au moment de la synchronisation.** Les trois
+3. **Le pied de page est figé au moment de la synchronisation.** Les quatre
    gabarits sont transactionnels : ni lien de désinscription, ni en-tête
    `List-Unsubscribe`. Une campagne passera par un gabarit à part.
 
@@ -152,7 +172,7 @@ Le gabarit Resend est **dérivé**, jamais écrit à la main : `emails:sync` le 
 depuis le `.njk` et l'écrase. Une modification faite dans l'interface Resend
 survit donc jusqu'à la prochaine synchronisation, et pas plus.
 
-C'est voulu tant que ces trois e-mails sont de niveau 1 et 2 avec la copie au
+C'est voulu tant que ces quatre e-mails sont de niveau 1 et 2 avec la copie au
 dépôt. Le jour où une équipe CRM prend la main sur `print-order-shipped`, c'est
 ce fichier-ci qu'il faudra retirer de la liste de `resend-templates.ts` — sans
 quoi la première synchronisation effacera son travail.

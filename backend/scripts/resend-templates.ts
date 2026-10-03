@@ -328,6 +328,82 @@ const TEMPLATES: TemplateDefinition[] = [
       EXPIRES_ON: "jeudi 8 octobre 2026",
     },
   },
+
+  {
+    alias: "subscription-reminder",
+    name: "Fin du voyage — rappel de l'abonnement",
+    file: "subscription-reminder.njk",
+    context: {
+      brand: { ...BRAND, assetsBaseUrl: v("ASSETS_BASE_URL") },
+      message: {
+        class: "transactional",
+        reason: "ton abonnement MemoBook va se renouveler alors que ton voyage est fini",
+      },
+      // La page des abonnements d'Apple (`APPLE_SUBSCRIPTIONS_URL`, `mailer.ts`) :
+      // la même pour tout le monde, donc pas une variable.
+      links: {
+        web: BRAND.web,
+        preferences: v("PREFERENCES_URL"),
+        manage: "https://apps.apple.com/account/subscriptions",
+      },
+      recipient: { greeting: v("GREETING") },
+      trip: { place: v("TRIP_PLACE") },
+      // « jusqu’au 1er novembre 2026 », ou « jusqu’à la fin de la période
+      // déjà payée » tant qu'Apple ne l'a pas datée : la phrase entière vient
+      // du back-end (`subscriptionReminderUntil`, `mailTemplates.ts`).
+      subscription: { until: v("UNLIMITED_UNTIL") },
+      // Le carnet qui attend sa commande, ou ce qu'on garde quoi qu'on décide :
+      // une condition, donc une chaîne composée (`subscriptionReminderBookLine`).
+      book: { line: v("BOOK_LINE") },
+    },
+    variables: [
+      ...COMMON_VARIABLES,
+      { key: "GREETING", type: "string", fallback_value: "Bonjour," },
+      { key: "TRIP_PLACE", type: "string" },
+      { key: "UNLIMITED_UNTIL", type: "string", fallback_value: "jusqu’à la fin de la période déjà payée" },
+      {
+        key: "BOOK_LINE",
+        type: "string",
+        fallback_value: "Quoi que tu décides, tes carnets et tes souvenirs restent à toi.",
+      },
+    ],
+    text: [
+      "MemoBook",
+      "",
+      "TON VOYAGE EST FINI",
+      "",
+      v("GREETING"),
+      "",
+      `Ton voyage ${v("TRIP_PLACE")} est terminé : on espère que tu en rapportes plein`,
+      "de souvenirs.",
+      "",
+      "Ton abonnement MemoBook, lui, se renouvelle tout seul. Si tu n’en as plus",
+      `besoin d’ici ton prochain voyage, pense à le couper : tu gardes l’illimité ${v("UNLIMITED_UNTIL")}.`,
+      "",
+      "Sur ton iPhone : Réglages ▸ ton nom ▸ Abonnements ▸ MemoBook, puis",
+      "« Annuler l’abonnement ». Ou directement ici :",
+      "",
+      "https://apps.apple.com/account/subscriptions",
+      "",
+      "Tu peux aussi le faire en un geste depuis l’accueil de l’app.",
+      "",
+      v("BOOK_LINE"),
+      "",
+      "Tu reçois cet e-mail parce que ton abonnement MemoBook va se renouveler alors",
+      "que ton voyage est fini.",
+      `Gérer mes e-mails : ${v("PREFERENCES_URL")}`,
+      `MemoBook — ${BRAND.address}`,
+    ].join("\n"),
+    sample: {
+      ASSETS_BASE_URL: ".",
+      PREFERENCES_URL: `${BRAND.web}/preferences?t=jeton`,
+      GREETING: "Bonjour Clara,",
+      TRIP_PLACE: "à Rome",
+      UNLIMITED_UNTIL: "jusqu’au 1er novembre 2026",
+      BOOK_LINE:
+        "Et ton carnet à Rome n’attend plus que ta commande : il est estimé à 42,90 €. Ouvre l’app pour le feuilleter une dernière fois avant de le commander.",
+    },
+  },
 ];
 
 interface RenderedTemplate {
