@@ -194,10 +194,10 @@ final class BookCustomisationPreviewTests: XCTestCase {
     }
 
     func testEveryReachableStateHasItsPreview() {
-        // Une fois la contrainte posée — hors de l'assortiment par défaut, pas
-        // de pointillés —, les deux cents états atteignables ont leur image :
-        // le repli ne sert plus qu'à « Personnalisé ».
-        let reachable = Self.everyState.filter { !$0.rulesEnabled || Self.isDefaultCombo($0) }
+        // Une fois la contrainte posée — `BookFontCombo.allowsRules`, que lit
+        // le verrou des pointillés —, les deux cents états atteignables ont
+        // leur image : le repli ne sert plus qu'à « Personnalisé ».
+        let reachable = Self.everyState.filter { !$0.rulesEnabled || Self.allowsRules($0) }
         XCTAssertEqual(reachable.count, 200)
 
         let missing = reachable
@@ -217,9 +217,9 @@ final class BookCustomisationPreviewTests: XCTestCase {
     func testTheConstraintStillMatchesTheFolder() {
         // Les cent états qu'elle écarte sont exactement ceux qui n'ont pas
         // d'image. Le jour où ce test casse, les rendus manquants sont
-        // arrivés : la contrainte doit sauter — elle seule, la règle ne bouge
-        // pas.
-        let excluded = Self.everyState.filter { $0.rulesEnabled && !Self.isDefaultCombo($0) }
+        // arrivés : la contrainte doit sauter — `allowsRules` à `true`, elle
+        // seule, la règle ne bouge pas.
+        let excluded = Self.everyState.filter { $0.rulesEnabled && !Self.allowsRules($0) }
         XCTAssertEqual(excluded.count, 100)
 
         let present = excluded
@@ -274,8 +274,8 @@ final class BookCustomisationPreviewTests: XCTestCase {
         }
     }
 
-    private static func isDefaultCombo(_ book: BookCustomisation) -> Bool {
-        BookFontCombo.matching(book)?.id == BookFontCombo.travelJournal.id
+    private static func allowsRules(_ book: BookCustomisation) -> Bool {
+        BookFontCombo.matching(book)?.allowsRules ?? false
     }
 
     /// `assets/illustrations/aperçu personnalisation/`, depuis ce fichier.

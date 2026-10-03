@@ -378,6 +378,30 @@ final class APIClientTests: XCTestCase {
         )
     }
 
+    /// Un assortiment de typographies part avec les pointillés qu'il décide,
+    /// dans **le même** `PATCH` : le serveur ne passe jamais par un Manuscrit
+    /// aux pointillés allumés, et rien d'autre n'est réécrit.
+    func testAFontComboCarriesItsRulesInTheSamePatch() async throws {
+        let client = makeClient()
+        respond(status: 500, json: #"{"error":"Indisponible"}"#)
+
+        _ = try? await client.updateBookCustomisation(
+            tripId: "trip-1",
+            edit: .fontCombo(.handwritten, rulesEnabled: false)
+        )
+
+        let request = try XCTUnwrap(StubURLProtocol.lastRequest)
+        XCTAssertEqual(request.httpMethod, "PATCH")
+        XCTAssertEqual(request.url?.path, "/v1/trips/trip-1/settings")
+        let body = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: XCTUnwrap(StubURLProtocol.lastBody)) as? [String: Any]
+        )
+        XCTAssertEqual(Set(body.keys), ["rulesEnabled", "fontDisplay", "fontTitle", "fontHand", "fontFacts"])
+        XCTAssertEqual(body["rulesEnabled"] as? Bool, false)
+        XCTAssertEqual(body["fontDisplay"] as? String, "Hansley")
+        XCTAssertEqual(body["fontHand"] as? String, "Gloria Hallelujah")
+    }
+
     /// Le nouveau mot de passe répond comme une connexion : la session rendue
     /// est **gardée**, pour que l'app entre sans rien retaper.
     func testResetPasswordStoresTheNewSession() async throws {

@@ -290,7 +290,8 @@ police ou marge codée en dur ailleurs.
   avale le geste et n'explique rien ; l'app passe le contrôle à 40–45 %, le
   laisse **tapable**, et l'appui pose un `BrandNotice(tone: .information)` qui
   nomme la cause *et* donne la sortie. C'est ce que font
-  `BrandSegmentedPicker(isAvailable:onUnavailable:)`, les lignes d'action des
+  `BrandSegmentedPicker(isAvailable:onUnavailable:)`,
+  `BrandToggleCard(isAvailable:onUnavailable:)`, les lignes d'action des
   couvertures, et la carte « Bientôt disponible » de la feuille « Nouveau
   carnet » — celle-ci au **beige** et non au gris, parce qu'elle n'est pas
   cassée, elle n'est pas encore là.

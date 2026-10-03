@@ -530,7 +530,10 @@ public final class AppDependencies {
             source: { [api] id in try await api.tripSettings(id: id) },
             persist: { [api] id, edit in
                 try await api.updateBookCustomisation(tripId: id, edit: edit)
-            }
+            },
+            // Les pointillés d'avant le verrou, gardés sur le téléphone : ils
+            // doivent survivre à la fermeture de l'écran (Hugo, 02/10/2026).
+            rulesMemory: .device()
         )
     }
 

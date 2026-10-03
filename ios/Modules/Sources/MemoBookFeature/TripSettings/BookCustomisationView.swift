@@ -86,6 +86,25 @@ public struct BookCustomisationView: View {
                     proxy.scrollTo(Self.topAnchor, anchor: .top)
                 }
             }
+            // La note des pointillés retirés paraît sous les trois assortiments,
+            // plus bas que l'écran sur la plupart des iPhone : on la montre au
+            // moment où l'on choisit, sinon le choix n'a l'air de rien.
+            .onChange(of: model.rulesWithdrawnBy) { _, combo in
+                guard combo != nil else { return }
+                withAnimation(reduceMotion ? nil : .smooth(duration: 0.3)) {
+                    proxy.scrollTo(BookFontsPanel.withdrawnNoticeAnchor, anchor: .bottom)
+                }
+            }
+            // Même chose pour la note du verrou, dans Extras : en taille de texte
+            // accessible, elle tombe sous l'écran. Déjà visible, elle descend
+            // au plus au bas de l'écran — et en haut du panneau, où l'on est en
+            // taille courante, rien ne bouge : il n'y a pas de quoi remonter.
+            .onChange(of: model.showsRulesLockNotice) { _, isShown in
+                guard isShown else { return }
+                withAnimation(reduceMotion ? nil : .smooth(duration: 0.3)) {
+                    proxy.scrollTo(BookExtrasPanel.lockedNoticeAnchor, anchor: .bottom)
+                }
+            }
             }
 
             header

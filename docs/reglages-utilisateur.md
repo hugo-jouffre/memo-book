@@ -68,6 +68,10 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
   le réglage autorise, il n'oblige pas. Une page sans encart reste normale.
 - **Pointillés.** La réglure du papier, sous le texte. À OFF, la page reste
   blanche sous le récit ; le rythme vertical, lui, ne change pas.
+  **Verrouillés à OFF sur *Manuscrit* et *Éditorial*** (02/10/2026) : ces deux
+  assortiments n'ont pas d'aperçu avec pointillés, ils les éteignent. Un carnet
+  « Personnalisé » n'est pas verrouillé. Voir `docs/apercu-personnalisation.md`
+  § La contrainte.
 - **Décorations & stickers.** La quantité n'est plus un jugement de l'agent :
   elle est réglée par le voyageur. **Le scotch des photos compte dans le
   quota.** À 0, aucun décor — et la page se remplit autrement, ou pas du tout.
