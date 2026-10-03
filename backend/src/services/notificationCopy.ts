@@ -39,8 +39,19 @@ function atPlace(trip: { city: string | null; title: string }): string {
 }
 
 /**
+ * « Chaque semaine payée est déduite du prix du carnet » — **en pause** depuis
+ * le 02/10/2026 (Hugo), comme la carte « Tes abonnements sont déduits ! » du
+ * paywall (`PaywallCopy.deductedSubscriptions`, côté app) : rien ne crédite
+ * encore la cagnotte des semaines payées chez Apple, et `printPricing.ts` ne
+ * déduit que la cagnotte. Les deux textes qui le promettaient se taisent tant
+ * que ce drapeau est faux ; il se rallume avec la carte.
+ */
+const SUBSCRIPTION_WEEKS_DEDUCTED = false;
+
+/**
  * **Fin des 3 étapes offertes** — le lendemain de la dernière. Ton
- * pédagogique, et le rappel que les semaines payées sont déduites du carnet.
+ * pédagogique, et — quand la déduction reviendra — le rappel que les semaines
+ * payées sont déduites du carnet.
  *
  * Des **étapes**, jamais des jours : c'est ce que l'app offre, et ce que
  * l'accueil compte (Clara, 02/10/2026). Le prix vient du catalogue.
@@ -50,8 +61,8 @@ export function trialEndText(offeredSteps: number): NotificationText {
     title: `Tes ${offeredSteps} étapes offertes sont racontées`,
     body:
       `Ton carnet ne fait que commencer : pour continuer à le raconter, l’abonnement est à ` +
-      `${formatEuros(SUBSCRIPTION_WEEKLY_CENTS)}/semaine. Et chaque semaine payée ` +
-      `est déduite du prix de ton carnet.`,
+      `${formatEuros(SUBSCRIPTION_WEEKLY_CENTS)}/semaine.` +
+      (SUBSCRIPTION_WEEKS_DEDUCTED ? ` Et chaque semaine payée est déduite du prix de ton carnet.` : ""),
   };
 }
 
@@ -91,7 +102,7 @@ export function tripEndText(input: {
   }
 
   if (input.hasStories) {
-    if (input.paidCents > 0) {
+    if (SUBSCRIPTION_WEEKS_DEDUCTED && input.paidCents > 0) {
       sentences.push(
         `Tu as déjà versé ${formatEuros(input.paidCents)}, déduits de ton carnet estimé à ` +
           `${formatEuros(input.estimateCents)}.`,
