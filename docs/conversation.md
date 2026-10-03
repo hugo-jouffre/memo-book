@@ -94,8 +94,9 @@ miel, anniversaire), le moment où l'on raconte (avant, pendant, après).
 4. Tout y est : MEMO le dit, et propose de raconter la première journée.
 
 **Rien de ce qui se dit ici n'est un souvenir** (disposition `trip_context`) :
-pas d'`Entry`, pas de fiche de retranscription, pas d'étape offerte consommée,
-pas de limite de souvenirs entamée. Un vocal est transcrit par le job
+pas d'`Entry`, pas de fiche de retranscription. Ce qu'on y raconte compte en
+revanche sur le **crédit du jour** comme tout récit, vocal ou texte — plus
+d'exemption depuis le 03/10/2026 (§ 6 bis). Un vocal est transcrit par le job
 `converse` lui-même et son fichier pend au message
 (`GET /v1/chat-messages/:id/media`). Des photos restent des souvenirs.
 
@@ -252,19 +253,124 @@ Sous une fiche prête, trois puces :
 souvenirs ; l'aperçu signale ceux qui n'ont pas été relus. Un voyageur qui
 oublie de valider n'a pas un carnet vide.
 
-**Les étapes offertes.** Un compte gratuit a trois étapes offertes. **Une étape
-= un souvenir.** Elle est **réservée à la création** du souvenir et **confirmée
-à la validation** : avec trois offertes, le quatrième souvenir est refusé même
-si aucun n'a été validé (« Tes étapes offertes sont toutes racontées :
-abonne-toi pour continuer ton carnet. »). Valider décrémente le compteur.
-Une précision, une photo, une commande ne coûtent rien. Un abonné n'a pas de
-compteur.
+**Valider ne coûte rien et ne décompte rien** : ce qu'on raconte se paie au
+moment où on le raconte, sur le crédit du jour (§ 6 bis).
 
-**Les limites de souvenirs** (le garde-fou de coût, hebdomadaire) ne changent
-pas : un texte vaut 1, une minute entamée de vocal vaut 10, une photo rien —
-et **les réponses de MEMO sont incluses**, le voyageur paie ce qu'il raconte,
-jamais ce qu'on lui répond. Un plafond anti-abus par carnet et par jour (150
-tours) ferme la porte à un script, pas à un voyageur.
+## 6 bis. Le crédit du jour, l'abonnement, et les boutons sous les bulles
+
+Décidé par Hugo le 03/10/2026. L'ancien modèle — trois étapes offertes, limites
+de souvenirs hebdomadaires, abonnement à la semaine — est archivé sur la branche
+`icebox/abonnement-hebdomadaire`.
+
+### Le crédit du jour, par voyage
+
+**Chaque voyage peut raconter 5 minutes par jour**, partagées entre ses
+co-voyageurs qui ne sont pas abonnés. **Un seul crédit** pour l'oral et l'écrit :
+
+| Ce qu'on envoie | Ce que ça consomme |
+|---|---|
+| Un vocal — chat, accueil, contexte du voyage compris | Sa durée, **mesurée par le serveur** dans le fichier (jamais celle que l'app déclare) |
+| Un texte libre — récit, précision, contexte du voyage | 75 ms par caractère : **800 caractères = 1 minute**, 4 000 = 5 minutes |
+| Un texte corrigé à la main | Ce qu'il gagne en longueur, seulement |
+| Une puce envoyée telle quelle, une commande silencieuse, des photos | Rien |
+
+Le jour est celui de **qui raconte**, à son fuseau, et ne recule jamais ; le
+crédit **se recharge à minuit**. Un vocal peut dépasser le reste de 3 secondes
+au plus ; au-delà, ou crédit épuisé, le tour est refusé (`429
+daily_credit_exhausted`) et l'app le garde en file pour le lendemain. Un tour
+qui coûte plus que la journée entière — un vocal de plus de 5 min 03, un texte
+de plus de 4 000 caractères — ne passera jamais : il est refusé à part (`429
+daily_credit_too_long`), et l'app le garde jusqu'à ce que le compte passe en
+illimité au lieu de le renvoyer chaque nuit ; sa bulle propose aussi de le
+supprimer, après confirmation. « Il partira demain » et « dès que
+tu passes en illimité » ne se disent qu'à un client qui garde le tour : celui
+qui envoie `X-Time-Zone`, pour le chat (`holdsRefusedTurns`). Un build installé
+avant le crédit du jour efface le tour refusé ; la route ancienne
+`POST /v1/memos/:id/entries` n'a pas de file : leur refus dit ce qui reste et
+de redire plus court, sans promettre de renvoi (03/10/2026). Le
+**serveur est souverain** (`backend/src/services/dailyCredit.ts`, décompte sous
+le verrou du voyage, dans la transaction qui écrit la bulle) ; l'app lit
+l'objet `dailyCredit` servi avec le fil, le reçu d'un tour, les réglages du
+voyage et l'accueil, pour prévenir à 30 secondes et couper net à zéro. Un
+plafond anti-abus par carnet et par jour (150 tours, pour tous) ferme toujours
+la porte à un script, pas à un voyageur.
+
+### L'abonnement
+
+**4,99 € par mois.** Il rend le récit **illimité pour l'abonné seul** : ses
+tours ne consomment pas le crédit du voyage, et il n'ouvre rien à ses
+co-voyageurs. Résilié, l'illimité reste ouvert jusqu'à la fin de la période
+payée. On le découvre dans le profil (« Découvrir l’abonnement ») ; un abonné y
+voit « Mon abonnement ».
+
+### La bulle « reviens demain »
+
+Quand un tour fait tomber le crédit du voyage à zéro, **ou** quand un tour est
+refusé faute de crédit, **le serveur** — pas le modèle — pose une bulle de MEMO
+(`model: "scripted"`), une fois par voyage et par jour (`limitNotifiedAt`) :
+
+> Quelle journée ! Ce voyage a déjà raconté ses 5 minutes du jour. Je garde tout
+> précieusement : reviens demain pour la suite, le crédit se recharge à minuit.
+
+Elle porte le bouton `daily_credit_subscribe` (« Raconter sans limite », sous
+l'en-tête « Crédit du jour épuisé ») et
+`payload { notice: "daily_credit_exhausted:<AAAA-MM-JJ>", audience: "limited" }` :
+un lecteur abonné ne la voit pas — il n'a pas à lire « reviens demain ». Le reçu
+du tour la contient quand elle y naît. La réponse de MEMO à ce tour vient donc
+**après** elle : le job `converse` la relit, retire `subscribe` des boutons
+permis (pas de seconde offre sous la première) et la passe au répondeur comme
+la dernière chose que MEMO a dite — sauf à un auteur abonné, qui ne la voit pas
+(03/10/2026). Hors ligne, l'app pose la même, au mot
+près (`DailyCreditCopy.exhaustedMessage`), en attendant celle du serveur.
+
+### Ce que MEMO en dit
+
+**Seulement quand on le lui demande** : le prix, l'abonnement, ce qu'il reste,
+la limite. Il dit les faits ci-dessus, sans vendre — ni superlatif, ni urgence,
+ni culpabilité (« tu as beaucoup parlé » ne se dit pas). Il ne connaît pas le
+reste chiffré du jour : il renvoie aux réglages du voyage. À un abonné, il ne
+décrit pas les 5 minutes comme une règle qui le concerne. Le moteur de règles
+répond la même chose (`ANSWERS.subscription`, `ANSWERS.subscriptionUnlimited`).
+Le détail est dans `agents/agent-conversation.md` § 3 bis.
+
+### Les boutons sous une bulle
+
+Une bulle de MEMO porte **au plus un bouton** — une carte sous son texte, avec
+« Ignorer » si on peut l'écarter. Le catalogue est **fermé** :
+`backend/src/services/callsToAction.ts` (et `ChatCallToAction.Kind` dans l'app).
+Il se range dans `chat_messages.payload.callToAction = { id }` et se **résout à
+la lecture, pour chaque lecteur** (`resolveCallToAction`) : une offre
+d'abonnement n'est jamais montrée à quelqu'un qui raconte déjà sans limite.
+
+Deux origines :
+
+- **Le code** pose `daily_credit_subscribe` (la bulle « reviens demain ») et
+  `open_photo_settings` (l'accès aux photos limité, que seule l'app connaît).
+- **L'IA** choisit, rarement, un bouton parmi ceux que **le code autorise ce
+  tour-ci** (`callsToActionAllowed`, `conversation.ts`) — le modèle propose, le
+  code dispose :
+
+| Bouton | Autorisé quand |
+|---|---|
+| `subscribe` | Un texte libre qui parle de l'abonnement, du crédit du jour, de la limite du récit ou du temps qui reste pour raconter (`mentionsSubscription` — pas du prix d'un billet ou du carnet, d'un musée gratuit, de la limite de vitesse, du temps d'un trajet, du crédit du téléphone, du wifi illimité ni d'une autre app), **et** son auteur n'a pas l'accès illimité |
+| `open_trip_settings` | Un texte libre |
+| `open_preview` | Un texte libre, et un rendu du carnet est prêt |
+| `import_photos` | Un texte libre |
+
+Et **jamais deux fois de suite le même bouton** : le bouton de la dernière bulle
+de MEMO qui en porte un — la bulle « reviens demain » de ce tour d'abord — sort
+des boutons permis, avec tout bouton qui fait la même chose (`daily_credit_subscribe`
+et `subscribe` sont la même offre). Le repli suit : `validateReply` jette ce
+qui n'est pas permis (03/10/2026).
+
+Jamais sous un vocal, des photos ou une puce. `validateReply` jette un bouton
+non autorisé ; le job le range sur la **dernière** bulle du tour, et le remet
+à `null` quand les bulles disparaissent (un souvenir) ou sont remplacées par
+« C’est noté, je reprends le texte avec ça » (une précision). Un bouton ne
+passe **jamais** par un nouveau `body.kind` ni par une puce : les apps déjà
+installées casseraient sur l'un et enverraient l'autre comme un texte. Elles
+ignorent la clé `callToAction` — **le texte de la bulle doit donc se suffire**
+et dire où trouver ce que le bouton ouvre.
 
 ## 7. Supprimer la conversation
 
@@ -338,8 +444,9 @@ attend donc son voyage au lieu d'être refusé — et perdu.
 - Insister après un refus.
 - Rédiger le carnet (c'est l'écrivain), le mettre en page (c'est la mise en
   page), choisir des photos (phase 2).
-- Parler d'argent, de quota, de jetons. Le mot « token » n'existe pas dans
-  l'app.
+- Parler d'argent, du crédit du jour ou de l'abonnement sans qu'on le lui
+  demande, ni culpabiliser quelqu'un d'avoir beaucoup raconté (§ 6 bis). Les
+  mots « quota », « jeton », « token » n'existent pas dans l'app.
 - Vouvoyer.
 
 ## 11. Phase 2 — explicitement pas maintenant
@@ -359,10 +466,12 @@ attend donc son voyage au lieu d'être refusé — et perdu.
 | Le fil | `backend/prisma/schema.prisma` → `chat_messages` | Un message par tour, adossé au carnet et au souvenir. `seq` est la seule vérité sur l'ordre |
 | Lire le fil | `GET /v1/trips/:id/chat` (+ `?since=`) | Le `ChatThread` de `MemoBookCore/Chat.swift`, au champ près ; la fiche recalculée depuis `entries` ; les souvenirs sans message reconstruits |
 | Un tour | `POST /v1/trips/:id/chat` | JSON pour un texte ou une puce, multipart pour un vocal ou des photos ; `id` fourni par l'app (idempotent) ; 201 tout de suite |
-| Valider | `POST /v1/entries/:id/validate` | `validatedAt`, décrémente l'étape offerte |
+| Valider | `POST /v1/entries/:id/validate` | `validatedAt` ; rend `{ entry }` |
 | Corriger | `PATCH /v1/entries/:id` (existe) | `editedText` |
 | Supprimer | `DELETE /v1/trips/:id/chat` | Propriétaire seul, 403 sinon |
-| Répondre | job `memobook.converse` | `AnthropicResponder` (Sonnet 5, prompt = `agents/agent-conversation.md`, sortie JSON contrainte) → repli `HeuristicResponder` sans clé Anthropic → `FakeResponder` sous `PIPELINE_MODE=fake`, en CI et dans les tests |
+| Répondre | job `memobook.converse` | `AnthropicResponder` (Sonnet 5, prompt = `agents/agent-conversation.md`, sortie JSON contrainte : bulles, classement, puces, relance, rose/épine/graine, `callToActionId`) → repli `HeuristicResponder` sans clé Anthropic → `FakeResponder` sous `PIPELINE_MODE=fake`, en CI et dans les tests |
+| Le crédit du jour | `backend/src/services/dailyCredit.ts`, table `trip_daily_usage` | Décompté sous le verrou du voyage ; servi en `dailyCredit` ; refus `429 daily_credit_exhausted` (§ 6 bis) |
+| Un bouton | `payload.callToAction = { id }` → `message.callToAction` | Catalogue `callsToAction.ts`, résolu pour chaque lecteur (§ 6 bis) |
 | Écrire | jobs `transcribe` → `redact` (existent) | La rédaction relit les précisions du fil |
 
 Le détail — champs, codes d'erreur, tests, phasage en quatre PR — est dans le
@@ -459,15 +568,16 @@ Le script (`backend/scripts/conversation-eval.ts`) fait parler MEMO sur les
 scènes de `backend/test/fixtures/conversation/` — dix situations du contrat :
 un vocal riche, une précision courte, un refus, une journée difficile, une
 question sur le produit, une transcription échouée, des photos, la
-rose/épine/graine, une question déjà répondue, un carnet à plusieurs. Il
-n'écrit rien en base, et **ce n'est pas un test** : il n'appelle que le
-répondeur.
+rose/épine/graine, une question déjà répondue, un carnet à plusieurs ; et,
+depuis le 03/10/2026, deux questions sur le prix et sur ce qu'il reste du
+crédit du jour (`--only credit-du-jour`). Il n'écrit rien en base, et **ce
+n'est pas un test** : il n'appelle que le répondeur.
 
 Quatre des sept lignes de la grille se vérifient à la machine, et le script les
 coche tout seul : une seule question, trois bulles au plus, le tutoiement, la
 relance qui se lit seule — plus les mots interdits, le Markdown, les puces hors
-catalogue, le classement attendu, et « la reformulation garde un mot du
-voyageur ». Les trois qui restent se lisent : **aucun fait inventé**, **la
+catalogue, le classement attendu, le bouton permis (et aucun après un refus),
+et « la reformulation garde un mot du voyageur ». Les trois qui restent se lisent : **aucun fait inventé**, **la
 question n'est pas déjà répondue**, **c'est la question la plus utile au
 carnet**. Elles s'impriment sous chaque réponse, en cases vides.
 
@@ -488,18 +598,22 @@ exactement ce que le modèle doit faire mieux.
 | 21/09/2026 | MEMO classe chaque tour : souvenir / précision / commande | Hugo |
 | 21/09/2026 | Fil commun aux co-voyageurs, avec les prénoms ; souvenirs sans auteur | Hugo |
 | 21/09/2026 | « Ça me convient » = `validatedAt` ; le carnet compose tout, l'aperçu signale | Hugo |
-| 21/09/2026 | Une étape offerte = un souvenir validé | Hugo |
+| 21/09/2026 | ~~Une étape offerte = un souvenir validé~~ — remplacée le 03/10/2026 par le crédit du jour (§ 6 bis) | Hugo |
 | 21/09/2026 | Accusé immédiat + sondage 2 s ; streaming en phase 2 | Hugo |
-| 21/09/2026 | Sonnet 5 converse, Opus 5 rédige ; réponses incluses ; plafond par jour | Hugo |
+| 21/09/2026 | Sonnet 5 converse, Opus 5 rédige ; plafond par jour. (« Réponses incluses » dans les limites de souvenirs : remplacé le 03/10/2026 par le crédit du jour) | Hugo |
 | 21/09/2026 | Fiche : le brut d'abord, puis le rédigé | Hugo |
 | 21/09/2026 | Un voyage qui a déjà des souvenirs les retrouve dans son fil | Hugo |
-| 22/09/2026 | Étape réservée à la création du souvenir, confirmée à la validation — sinon un compte gratuit raconte sans fin | Hugo |
+| 22/09/2026 | ~~Étape réservée à la création du souvenir, confirmée à la validation~~ — remplacée le 03/10/2026 par le crédit du jour (§ 6 bis) | Hugo |
 | 22/09/2026 | Supprimer la conversation : propriétaire seul, 403 pour un co-voyageur | reco Claude |
 | 22/09/2026 | Repli heuristique côté serveur ; le moteur local de l'app ne sert plus qu'aux aperçus et aux tests | reco Claude |
 | 22/09/2026 | Tout ce qu'on envoie passe par la file de l'accueil ; un vocal de l'accueil va à un seul carnet, le premier en cours | reco Claude |
 | 22/09/2026 | `agents/agent-conversation.md` **est** le prompt système, comme `agent-transcription.md` pour la rédaction : on change ce que MEMO dit en éditant du Markdown | reco Claude |
 | 22/09/2026 | Le modèle écrit des phrases ; le rythme, le catalogue de puces et la rose/épine/graine restent au code. Une réponse hors contrat est refusée, pas rattrapée | reco Claude |
-| 28/09/2026 | Le contexte du voyage avant la première étape : une seule puce à l'ouverture, cinq lignes obligatoires, rien ne devient souvenir ni ne coûte (§ 2 bis) | Paul |
+| 28/09/2026 | Le contexte du voyage avant la première étape : une seule puce à l'ouverture, cinq lignes obligatoires, rien ne devient souvenir (§ 2 bis). Il compte sur le crédit du jour depuis le 03/10/2026 | Paul |
 | 28/09/2026 | Le modèle extrait le contexte, le code tient la liste et pose la question — une par tour | reco Claude |
 | 22/09/2026 | Effort de réflexion bas pour la conversation (quelqu'un attend), élevé pour la rédaction (personne ne la regarde écrire) | reco Claude |
 | 02/10/2026 | Un passage que l'écrivain n'a pas compris ne s'imprime pas : il se cite dans la bulle « Il te convient ? », jamais dans une question de plus | reco Claude |
+| 03/10/2026 | Crédit du jour par voyage (5 minutes, oral et écrit, photos gratuites, recharge à minuit) ; abonnement à 4,99 €/mois, illimité pour l'abonné seul ; plus d'étapes offertes, de limites de souvenirs ni d'abonnement à la semaine | Hugo |
+| 03/10/2026 | La bulle « reviens demain » est posée par le serveur, une fois par voyage et par jour, avec le bouton `daily_credit_subscribe` ; un abonné ne la voit pas | Hugo |
+| 03/10/2026 | MEMO dit les faits du crédit et de l'abonnement quand on les lui demande, jamais de lui-même, sans culpabiliser | Hugo |
+| 03/10/2026 | Un bouton au plus sous une bulle, pris dans un catalogue fermé ; l'IA ne choisit que parmi ceux que le code autorise au tour, le code jette le reste | Hugo |

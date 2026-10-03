@@ -178,7 +178,7 @@ champ près — `test/screens.test.ts` est ce qui les tient ensemble.
 | `GET /v1/profile/statistics` | Les chiffres de la feuille « Statistiques » : pays, régions, villes, rencontres, km, transports, additionnés à la lecture depuis les relevés de la rédaction (`entries.insights`). `pendingDetections` dit combien de souvenirs attendent encore leur relevé — l'app relit tant qu'il y en a |
 | `PUT /v1/profile/connectors/:key` | Branche ou débranche un connecteur |
 | `POST /v1/profile/link-device` | Rattache l'appareil au compte et lui transfère ses carnets |
-| `GET /v1/trips/:id/settings` | Les réglages d'un voyage : nom, dates, rythme, co-voyageurs, solde, style, aperçu |
+| `GET /v1/trips/:id/settings` | Les réglages d'un voyage : nom, dates, rythme, co-voyageurs, solde, style, aperçu, crédit du jour (`dailyCredit`) |
 | `PATCH /v1/trips/:id/settings` | Corrige un réglage. Même sémantique que `PATCH /v1/profile` |
 | `GET /v1/wallet` | La cagnotte du **compte** et son historique. `?tripId=` ajoute l'estimation du carnet |
 | `GET /v1/memos/:id/preview` | L'aperçu du carnet : état de composition, PDF, extrait, couvertures |
@@ -234,6 +234,8 @@ de son porteur précédent.
 | `../docs/supabase.md` | **L'hébergement** : configurer Supabase, brancher l'app, et en partir |
 | `scripts/setup-supabase.ts` | `npm run supabase:setup` — applique et vérifie tout l'hébergement |
 | `src/routes/appSerializers.ts` | La frontière avec les modèles Swift des trois écrans |
+| `src/services/dailyCredit.ts` | Le crédit du jour : 5 minutes de récit par voyage et par jour, décomptées sous le verrou du voyage ; `429 daily_credit_exhausted` au-delà, `429 daily_credit_too_long` pour un tour plus long qu'une journée, sauf pour un abonné — voir `../docs/paiements.md` |
+| `src/lib/mp4Duration.ts` | La durée d'un vocal, lue dans le fichier et recoupée (une piste AAC-LC, paquets de `stts` = `stsz`, échelle = fréquence, débit plausible) : les en-têtes seuls se falsifient |
 | `src/lib/templates.ts` | Charge `gpt_image_schema.yaml` et `LAYOUT_KB.md` depuis `templates/`, et les règles de rédaction depuis `agents/` |
 | `src/services/payloadValidator.ts` | Valide le carnet — schéma **et** limites de longueur de LAYOUT_KB |
 | `src/services/redaction.ts` | Transcription → texte de carnet (Claude, piloté par `agents/agent-transcription.md`) |

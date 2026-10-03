@@ -13,8 +13,8 @@ touche une notification. Les règles vivent dans un seul fichier pur,
 
 | Notification | Famille | Quand | Qui | Le toucher ouvre |
 |---|---|---|---|---|
-| **Fin des 3 étapes offertes** | Facturation | Le lendemain de la validation de la dernière étape offerte, une fois (une semaine au plus après) | Pas abonné, étapes offertes épuisées | L'offre (`memobook://paywall`) |
-| **Fin du voyage** | Facturation | Le jour de la date de fin, une fois | Propriétaire et co-voyageurs, alerte « Rappel de fin de voyage » allumée | La cagnotte du voyage : ce qui est déjà versé, l'estimation du carnet |
+| **Fin du voyage** | Facturation | Le jour de la date de fin, une fois | Propriétaire et co-voyageurs, alerte « Rappel de fin de voyage » allumée | La cagnotte du voyage et l'estimation du carnet |
+| **Avant le renouvellement** | Facturation | 3 jours avant le renouvellement de l'abonnement (2 si la passe l'a manqué, jamais la veille), une fois par période | Abonnement App Store au renouvellement armé, aucun voyage en cours ni prévu d'ici le renouvellement, pas de « Fin du voyage » ces 3 derniers jours, pas dans les jours de l'e-mail de fin de voyage (de la fin à J+3), pas d'autre rappel ces 25 derniers jours | La feuille de l'abonnement (`memobook://subscription`), où il se coupe en un geste |
 | **Relance d'écriture** (le carnet est arrêté) | Rythme | Après *n* jours de silence, *n* étant le rythme du récit du voyage ; au plus 3 relances par silence au rythme soutenu, **une** au rythme modéré ; à 19 h | Voyage en cours, alerte « Rappel d'écriture » allumée, rythme modéré ou soutenu | La conversation du voyage |
 | **Nouveau récit** 💬 | Rythme | Dès qu'un co-voyageur a raconté un souvenir (texte, vocal, photos) et que MEMO lui a répondu ; une par nouveauté | Les **autres** membres du voyage, alerte « Nouveau récit » allumée, rythme soutenu | La conversation du voyage |
 | **Le point de la semaine** 💬 | Rythme | Tous les 7 jours depuis le départ (fenêtre de 3 jours), à 18 h, si la semaine a capturé quelque chose | Propriétaire et co-voyageurs, voyage en cours, alerte « Résumé hebdomadaire » allumée, rythme modéré ou soutenu | La conversation du voyage |
@@ -40,14 +40,49 @@ qui le lisent, l'auteur du récit compris. Elle attend que MEMO ait fini de rép
 fil est remis à jour avant elle, comme à sa lecture — l'ouverture, les
 souvenirs qui n'y étaient pas encore.
 
-Deux précisions sur la fin du voyage, parce que les deux cas sont réels :
+Trois précisions sur la fin du voyage et l'abonnement, qui est **mensuel**
+depuis le 03/10/2026 (4,99 €/mois, l'illimité pour l'abonné seul) :
 
-- un abonnement **App Store** n'est jamais arrêté par le serveur : Apple ne
-  laisse aucune app résilier à la place de son client. La notification ne dit
-  donc pas « arrêté automatiquement » : elle invite à couper le renouvellement,
-  que l'accueil propose en un geste (`subscriptionOutlivesTrip`) ;
-- si un autre voyage est à venir ou en cours, l'abonnement continue : la
-  notification n'en parle pas.
+- **plus aucun abonnement ne s'arrête seul**, et le serveur ne peut pas en
+  arrêter un : Apple ne laisse aucune app résilier à la place de son client. La
+  notification **invite doucement** à couper le renouvellement, que l'accueil
+  propose en un geste (`subscriptionOutlivesTrip`) — « Ton abonnement ne te sert
+  plus d’ici ton prochain voyage ? Coupe-le en un geste depuis l’accueil, tu
+  gardes l’illimité jusqu’au 1er novembre. » —, puis donne l'estimation du
+  carnet. La date est celle du renouvellement (`subscriptions.renewsAt`) : résilié,
+  l'illimité court jusqu'au bout de la période payée ;
+- si un autre voyage est à venir ou en cours, l'abonnement sert encore : la
+  notification n'en parle pas ;
+- la fin du voyage tombe n'importe où dans le mois payé : d'où **le rappel
+  avant le renouvellement**, trois jours avant qu'Apple ne prélève, quand plus
+  aucun voyage ne court. Jamais la veille : Apple demande de résilier au moins
+  vingt-quatre heures avant. Il se tait quand la fin du voyage vient de le
+  dire — la notification de fin ces trois derniers jours, **ou l'e-mail de fin
+  de voyage**, de la date de fin à J+3 : l'e-mail n'est pas dans l'historique
+  que relit le planificateur, la règle se lit donc sur la date de fin, et elle
+  tient même quand « Rappel de fin de voyage » est coupé. Et jamais deux rappels
+  à moins de 25 jours : l'ancien abonnement à la semaine, encore honoré, n'en
+  reçoit qu'un toutes les quatre semaines au lieu d'un chaque semaine
+  (03/10/2026).
+
+### L'e-mail de fin de voyage
+
+Le **lendemain** de la fin d'un voyage (jusqu'à J+3 si la passe l'a manqué),
+entre 10 h et 21 h chez le voyageur, un e-mail redit le rappel à qui a un
+abonnement App Store au renouvellement armé et plus aucun voyage en cours ou
+prévu : « Ton voyage est fini : pense à ton abonnement », le chemin dans les
+Réglages de l'iPhone (Réglages ▸ ton nom ▸ Abonnements), la date jusqu'à laquelle
+l'illimité reste ouvert, et le carnet qui attend sa commande.
+
+Il part **aussi aux comptes sans téléphone enregistré** — c'est tout son
+intérêt — et ne dépend ni des alertes du voyage ni du rythme : c'est la promesse
+du paywall, « On te rappelle de résilier », pas une relance. Une fois par voyage :
+il est journalisé dans `notification_deliveries` (kind `trip_end_email`, clé
+`<compte>:trip_end_email:<voyage>`), mais le planificateur ne le relit pas — il
+ne compte ni dans le taux d'ouverture, ni dans « une notification par jour ».
+La règle est `planTripEndEmail`, l'envoi `sendTripEndEmails`, le texte
+`renderSubscriptionReminderMail` et le gabarit Resend `subscription-reminder`
+(voir `docs/emails.md`).
 
 ## 2. Le rythme du voyageur
 
@@ -73,7 +108,7 @@ question qui dirait la même chose.
 | Palier | Score | Reçoit |
 |---|---|---|
 | Soutenu | ≥ 0,6 | Tout |
-| Modéré | ≥ 0,3 | Facturation, relances d'écriture (une par silence au lieu de trois) et le point de la semaine |
+| Modéré | ≥ 0,3 | Facturation (fin du voyage, rappel avant le renouvellement), relances d'écriture (une par silence au lieu de trois) et le point de la semaine |
 | Léger | < 0,3 | Facturation seulement |
 
 La relance d'écriture suit le rythme choisi (« tous les 2 jours » : après deux
@@ -104,7 +139,7 @@ d'une notification sur quatre est ouverte.
 | Jetons des téléphones | `push_tokens`, rattachés **à la session** : se déconnecter les supprime |
 | Journal des envois | `notification_deliveries` : les clés uniques, les plafonds, `openedAt` |
 | Calendrier scolaire | `school_holidays`, recopié chaque jour depuis data.education.gouv.fr (`fr-en-calendrier-scolaire`, Licence Ouverte), qui publie déjà l'année suivante |
-| Passe d'envoi | tâche pg-boss `memobook.send-notifications`, à la 35e minute de chaque heure (`services/notifications.ts`) |
+| Passe d'envoi | tâche pg-boss `memobook.send-notifications`, à la 35e minute de chaque heure (`services/notifications.ts`). Elle envoie aussi l'e-mail de fin de voyage (`sendTripEndEmails`), indépendamment d'APNs |
 | Recopie du calendrier | tâche `memobook.sync-school-holidays`, à 5 h 40 UTC. Une panne du site garde le calendrier de la veille |
 | Envoi APNs | `services/apns.ts` : HTTP/2 et JWT ES256, sans dépendance. Un jeton qu'Apple ne connaît plus est supprimé ; une panne passagère libère la clé pour que la passe suivante réessaie |
 
@@ -148,9 +183,11 @@ Côté app (`ios/Modules/Sources/MemoBookFeature/Notifications/`) :
    accepté la clé et refusé seulement le faux téléphone du test.
    `InvalidProviderToken`, c'est la clé : le Key ID n'est pas celui de ce
    `.p8`, ou la clé n'a pas le service APNs.
-5. **Les migrations** `20261002090000_notifications_push` et
-   `20261002130000_notifications_recit_et_resume` s'appliquent seules au
-   déploiement (Pre-deploy Command, `docs/deploiement.md`).
+5. **Les migrations** `20261002090000_notifications_push`,
+   `20261002130000_notifications_recit_et_resume` et
+   `20261003090000_credit_du_jour` (qui retire `trial_end` et ajoute
+   `renewal_reminder` et `trip_end_email`) s'appliquent seules au déploiement
+   (Pre-deploy Command, `docs/deploiement.md`).
 
 Sans clé, rien ne casse : en développement les notifications sont journalisées
 au lieu de partir, en production la passe ne fait rien et le dit dans les logs,
@@ -158,8 +195,8 @@ au lieu de partir, en production la passe ne fait rien et le dit dans les logs,
 
 Pour essayer dans le simulateur, sans serveur : glisser sur le simulateur un
 fichier `.apns` qui contient `"Simulator Target Bundle": "com.memobook.app"`, un
-`aps.alert` et une clé `link` (par exemple `memobook://paywall`). Le toucher
-ouvre l'écran.
+`aps.alert` et une clé `link` (par exemple `memobook://subscription`). Le
+toucher ouvre l'écran.
 
 ## 6. Les choix tranchés, et ce qui reste ouvert
 
@@ -168,8 +205,6 @@ ouvre l'écran.
 | Point | Décision | Où |
 |---|---|---|
 | J-7, J-3, J *et* une seule notification Vacances par semaine | **J-7 et le jour J**, plus de J-3 | `SCHOOL_HOLIDAY_DAYS_BEFORE`, `notificationPlanner.ts` |
-| « Fin des 3 jours offerts », alors que l'app offre trois étapes | On parle **d'étapes** : la notification part le lendemain de la dernière étape offerte | `TRIAL_END_DAYS_AFTER`, `trialEndText` |
-| 2,99 €/semaine dans la feuille, 1,99 € dans le catalogue | **1,99 €/semaine** — le texte lit le catalogue | `subscriptionCatalog.ts` |
 | Rythmes modéré et léger : « uniquement les essentielles » | Le modéré reçoit quand même ses relances d'écriture, **moins** : une par silence au lieu de trois | `MAX_REMINDERS_PER_SILENCE` |
 | Source de la zone scolaire | Le code postal du profil ; **sans lui, les premières vacances** de chaque période (zones A, B, C), en attendant qu'il arrive | `schoolCalendarOf`, `earliestPeriods` (`schoolHolidays.ts`) |
 | Pondération déclaré / observé | **0,7 / 0,3**, validé | `DECLARED_WEIGHT`, `notificationRhythm.ts` |
@@ -179,3 +214,16 @@ ouvre l'écran.
 | Qui reçoit « Nouveau récit » | Le rythme soutenu seulement ; le modéré en a le point de la semaine (validé par Hugo le 02/10/2026) | `TIER_ALLOWS` |
 | Le point de la semaine | Tous les 7 jours depuis le départ, à 18 h, si la semaine a capturé quelque chose ; aucun pour un voyage de moins d'une semaine, la fin du voyage fait ce point-là (validé le 02/10/2026) | `WEEKLY_DIGEST_EVERY_DAYS`, `notificationPlanner.ts` |
 | Les mots de « Nouveau récit », du point de la semaine et de leurs bulles | Validés tels quels le 02/10/2026 | `newStoryText`, `weeklyDigestText` |
+
+**Tranché par Hugo le 03/10/2026** — le crédit du jour remplace les étapes
+offertes, l'abonnement devient mensuel (le code d'avant est sur la branche
+`icebox/abonnement-hebdomadaire`) :
+
+| Point | Décision | Où |
+|---|---|---|
+| « Fin des 3 étapes offertes » (`trial_end`) | **Retirée** : il n'y a plus d'étapes offertes. Ses envois journalisés partent avec la valeur de l'énumération | migration `20261003090000_credit_du_jour` |
+| « Ton abonnement s’arrête automatiquement » | **Retiré** : plus aucun abonnement ne s'arrête seul. La fin du voyage n'invite à couper que l'abonnement App Store au renouvellement armé | `tripEndText`, `ArmedRenewal` |
+| La déduction des semaines payées du prix du carnet | **Retirée**, avec ses phrases et le calcul de ce qui était versé | `notificationCopy.ts` |
+| Le texte de la fin du voyage | Invite doucement à couper l'abonnement en un geste depuis l'accueil, et dit jusqu'à quand l'illimité reste ouvert | `tripEndText` |
+| Un rappel avant le renouvellement | **Créé** (`renewal_reminder`) : J-3, ou J-2 en rattrapage, une fois par période et jamais deux à moins de 25 jours, vers `memobook://subscription` ; muet les jours de l'e-mail de fin de voyage | `RENEWAL_REMINDER_DAYS_BEFORE`, `RENEWAL_REMINDER_MIN_GAP_DAYS`, `tripEndEmailWindow`, `renewalReminderText` |
+| Le même rappel par e-mail | **Créé** (`trip_end_email`) : le lendemain de la fin du voyage, aussi sans téléphone enregistré | `planTripEndEmail`, `sendTripEndEmails` |

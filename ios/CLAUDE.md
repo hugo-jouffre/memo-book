@@ -234,7 +234,11 @@ police ou marge codée en dur ailleurs.
   porte le rouge sémantique sans fond ni contour — c'est l'action qui défait,
   jamais un `link` ; `accent` est le seul aplat large que porte le lime, et **le
   lime ne dit que l'abonnement** (T7) — l'accent de tout le reste est le bleu
-  `outline`.
+  `outline`. Depuis le crédit du jour (03/10/2026), l'abonnement n'ouvre plus
+  que l'illimité : le lime porte « Passer en illimité » (feuille « Crédit du
+  jour » des réglages du voyage), « S’abonner » et « Découvrir l'abonnement »,
+  la pastille « Abonné(e) » — et rien qui verrouille : plus de micro ni de CTA
+  fermés au lime.
 - Une icône de contenu du jeu de marque se dessine à `MemoBookSpacing.contentIcon`
   (2 rem), pas à 24 : les glyphes n'occupent qu'une part de leur boîte, et à 24 pt
   ils faisaient 9 à 12 pt d'encre. La flèche de retour (`navigationIcon`), le
@@ -299,7 +303,11 @@ police ou marge codée en dur ailleurs.
   `BrandTextField` : l'un filtre ce qui est en dessous, l'autre saisit une
   valeur dans un formulaire. `BrandGauge` est **la** jauge — elle se lit, elle
   ne se règle pas, et elle n'a que deux couleurs : le vert d'action, et le rouge
-  sémantique à zéro.
+  sémantique à zéro. Elle sert au crédit du jour (ligne et feuille des réglages
+  du voyage), toujours visible pour un non-abonné, et **montre ce qui reste** :
+  pleine le matin, elle se vide en racontant (`DailyCredit.gaugeFraction`) ; à
+  zéro, c'est son rail qui passe au rouge doux. L'avertissement des 30
+  dernières secondes vit dans la barre d'enregistrement, pas sur la jauge.
 - `BrandDisclosureCard` est **la** carte qui se déplie — les chapitres des
   conditions d'utilisation et de la politique de confidentialité. Repliée,
   crème et filet, trois lignes ; dépliée, l'aplat bleu `outline` et tout le
@@ -341,6 +349,12 @@ est faux, et **deux dates différentes cohabitent** : `openedAt` date l'ouvertur
 du vocal — c'est le `recordedAt` du fichier —, tandis que `accumulated` plus le
 segment en cours donnent le temps **réellement capturé**, pauses déduites.
 C'est cette seconde valeur que publie `elapsed`.
+
+C'est aussi elle — fidèle au fichier, pas à l'horloge murale — qui fait
+descendre le **crédit du jour** pendant qu'on parle
+(`DailyCredit.remainingMs(whileRecording:)`) : l'avertissement à 30 s, la
+pulsation à 5 s et l'arrêt net à zéro se règlent sur ce que le serveur mesurera
+dans le fichier.
 
 ### Aux tailles de texte accessibles
 
@@ -449,20 +463,24 @@ fait jamais. Toute session qui touche `Chat/` la lit d'abord.
 `npm run db:seed` (dans `backend/`) pose **deux** comptes, mot de passe
 `memobook2026` pour les deux :
 
-| Adresse | Palier |
+| Adresse | Compte |
 |---|---|
-| `demo@memo-book.com` | gratuit — c'est là que mène « Testing mode » |
-| `demo@memobook.app` | abonné |
+| `demo@memo-book.com` | gratuit, crédit du jour — c'est là que mène « Testing mode » |
+| `demo@memobook.app` | abonné, récit illimité |
 
-Deux, parce que le produit a deux paliers et qu'ils ne montrent pas le même
-écran : la pastille d'étapes offertes, le CTA lime de l'accueil et le bouton
-d'abonnement n'existent que sur un compte à quota, et la carte de statistiques
-ne s'ouvre que pour un abonné. Vérifier un écran sur un seul des deux, c'est
-n'en avoir vu que la moitié.
+Deux, parce qu'ils ne montrent pas le même écran (modèle du 03/10/2026). **Le
+compte gratuit** porte tout ce que le crédit du jour dessine : la ligne
+« Crédit du jour » des réglages du voyage avec sa jauge et « Passer en
+illimité », le bandeau rouge doux de la barre d'enregistrement (30 s, 5 s,
+épuisé), la bulle « reviens demain » de MEMO et son appel à l'action, le
+paywall depuis « Découvrir l'abonnement » du profil. **Le compte abonné** lit
+« Illimité » dans les réglages, ne voit ni bandeau ni compteur, et porte la
+pastille « Abonné(e) » du profil. Les statistiques s'ouvrent pour les deux.
+Vérifier un écran sur un seul des deux, c'est n'en avoir vu que la moitié.
 
-Le bac à sable de l'accueil bascule d'un palier à l'autre **sans changer de
-compte** — « Devenir un abonné » et « Première connexion » — pour comparer les
-deux états sans se déconnecter. Voir `SandboxPersona`.
+Le bac à sable de l'accueil bascule de l'un à l'autre **sans changer de
+compte** — voir `SandboxPersona` — et celui des réglages du voyage rejoue le
+crédit : neuf, 30 s, épuisé, abonné (`TripSettingsDebugPanel`).
 
 ## Réseau
 
@@ -589,6 +607,12 @@ d'échouer), `waiting` (ce qui attend pour ce fil, reposé en bulles à
 l'ouverture) et `deliveries` (le flux des tours partis, avec le reçu du
 serveur). Le vocal de l'accueil va à **un** carnet, le premier en cours — celui
 dont la conversation s'ouvre avec la bulle déjà posée.
+
+**Un refus faute de crédit n'est pas un refus définitif** (03/10/2026) : un
+`429 daily_credit_exhausted` garde le tour sur le disque jusqu'à `resetsAt`
+(lu dans le corps du refus), et il repart tout seul ; la bulle dit « Partira
+demain », en gris, et non « Non envoyé · Réessayer ». Les autres 4xx gardent
+leur sort.
 
 **Un voyage se crée hors ligne de bout en bout** (Hugo, 01/10/2026). L'app
 tire son UUID (en minuscules) à la validation de l'avant-dernière étape, le
