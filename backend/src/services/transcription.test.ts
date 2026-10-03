@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TRANSCRIPTION_HINT_MAX_CHARS, transcriptionHintFor } from "./transcription.js";
+import { TRANSCRIPTION_HINT_MAX_CHARS, transcriptionHintFor, withoutHintEcho } from "./transcription.js";
 
 /**
  * L'indice du transcripteur : sans lui, la machine écrit « Famine » pour
@@ -34,5 +34,31 @@ describe("transcriptionHintFor", () => {
     expect(
       transcriptionHintFor({ narrator: null, companions: [], destination: null, people: [], places: [] }),
     ).toBeUndefined();
+  });
+});
+
+/**
+ * Sur un vocal muet ou bruité, le transcripteur rend parfois son indice au
+ * lieu de rien : l'écrivain en aurait fait une page.
+ */
+describe("withoutHintEcho", () => {
+  const hint = "Récit de voyage de Maxime et Fanny (Cyclades, Grèce). Lieux : Ios, Naxos, Paros.";
+
+  it("vide une transcription qui n'était que l'indice", () => {
+    expect(withoutHintEcho(hint, hint)).toBe("");
+    expect(withoutHintEcho(` ${hint}\n`, hint)).toBe("");
+  });
+
+  it("retire la dernière phrase de l'indice, recopiée seule", () => {
+    expect(withoutHintEcho("Lieux : Ios, Naxos, Paros.", hint)).toBe("");
+    expect(withoutHintEcho("On a pris le bateau pour Naxos. Lieux : Ios, Naxos, Paros.", hint)).toBe(
+      "On a pris le bateau pour Naxos.",
+    );
+  });
+
+  it("laisse intact ce que le voyageur a dit, noms de l'indice compris", () => {
+    const said = "Avec Fanny, on a fini la journée à Ios, et Naxos demain.";
+    expect(withoutHintEcho(said, hint)).toBe(said);
+    expect(withoutHintEcho(said, undefined)).toBe(said);
   });
 });

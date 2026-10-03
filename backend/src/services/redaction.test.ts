@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { Env } from "../env.js";
 import { finalTextOf, parseCoherenceSheet } from "../jobs/redact.js";
 import { loadWritingRules } from "../lib/templates.js";
 import {
@@ -6,6 +7,7 @@ import {
   EMPTY_COHERENCE_SHEET,
   FakeRedactor,
   buildRedactionPrompt,
+  createRedactor,
   parseDoubts,
   withinFunFactLimit,
   type RedactionInput,
@@ -270,5 +272,26 @@ describe("withinFunFactLimit", () => {
       funFact: null,
       funFactTitle: null,
     });
+  });
+});
+
+describe("createRedactor", () => {
+  it("choisit qui rédige selon sa propre clé", () => {
+    const env = (mode: string, live: boolean, key: string) =>
+      ({
+        PIPELINE_MODE: mode,
+        live,
+        ANTHROPIC_API_KEY: key,
+        ANTHROPIC_REDACTION_MODEL: "claude-opus-5",
+      }) as Env;
+
+    // « Personne n'appelle personne » : la seule chose qui coupe Claude.
+    expect(createRedactor(env("fake", false, "sk-test")).constructor.name).toBe("FakeRedactor");
+    expect(createRedactor(env("auto", true, "")).constructor.name).toBe("FakeRedactor");
+    expect(createRedactor(env("auto", true, "sk-test")).constructor.name).toBe("AnthropicRedactor");
+
+    // Le piège de `docs/modeles-ia.md` § 5 : une clé Anthropic valide, mais
+    // pas de clé OpenAI, donc `live` faux. La rédaction comprend quand même.
+    expect(createRedactor(env("auto", false, "sk-test")).constructor.name).toBe("AnthropicRedactor");
   });
 });

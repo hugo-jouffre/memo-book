@@ -202,6 +202,13 @@ Seul `PIPELINE_MODE=fake` — « personne n'appelle personne » — coupe encore
 Claude ; c'est ce que posent la CI et `test/helpers.ts`, donc le modèle n'entre
 toujours pas en CI.
 
+**La rédaction était restée dans le piège** jusqu'au 03/10/2026 :
+`createRedactor` rendait encore `FakeRedactor` dès que `!env.live`. En
+production rien ne se voyait — le `worker` a ses deux clés —, mais le jour où
+la transcription quitte OpenAI, chaque souvenir serait sorti du faux
+rédacteur. Elle suit désormais la même règle que la conversation
+(`src/services/redaction.ts`, testée dans `redaction.test.ts`).
+
 ## 6. Ce qu'un fournisseur doit savoir faire pour entrer ici
 
 À vérifier **avant** d'écrire la classe :

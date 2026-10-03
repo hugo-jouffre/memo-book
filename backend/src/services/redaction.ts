@@ -369,6 +369,7 @@ const PACE_LABELS: Record<string, string> = {
   every_two_days: "un récit tous les deux jours",
   every_three_days: "un récit tous les trois jours",
   weekly: "un récit par semaine",
+  custom: "un rythme personnalisé",
   by_place: "un récit à chaque lieu",
 };
 
@@ -932,8 +933,18 @@ export class FakeRedactor implements Redactor {
   }
 }
 
+/**
+ * Qui rédige : Claude dès qu'il a **sa** clé, comme MEMO (`createResponder`).
+ *
+ * `env.live` ne dépend que de la clé OpenAI, celle de la transcription. S'y
+ * fier ici remettait la rédaction en simulé — tics retirés, coupe à la
+ * longueur, rien de compris — le jour où cette clé manque, avec une clé
+ * Anthropic valide, et sans que rien ne le dise : c'est le piège de
+ * `docs/modeles-ia.md` § 5, corrigé pour la conversation le 24/09/2026.
+ * Seul `PIPELINE_MODE=fake` coupe Claude.
+ */
 export function createRedactor(env: Env): Redactor {
-  if (!env.live || env.ANTHROPIC_API_KEY === "") return new FakeRedactor();
+  if (env.PIPELINE_MODE === "fake" || env.ANTHROPIC_API_KEY === "") return new FakeRedactor();
   return new AnthropicRedactor(
     new Anthropic({ apiKey: env.ANTHROPIC_API_KEY }),
     env.ANTHROPIC_REDACTION_MODEL,
