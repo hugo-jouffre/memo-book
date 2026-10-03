@@ -454,8 +454,8 @@ model PushToken {
 ///
 /// Trois usages pour une table :
 ///
-/// 1. **« Une seule fois. »** `dedupeKey` est unique : la fin d'essai d'un
-///    compte, la fin d'un voyage, le J-3 d'une période de vacances ne
+/// 1. **« Une seule fois. »** `dedupeKey` est unique : le rappel de
+///    renouvellement d'un compte, la fin d'un voyage, le J-3 d'une période de vacances ne
 ///    s'inscrivent qu'une fois, même si la tâche horaire repasse.
 /// 2. **Les plafonds.** « Jamais plus d'une notification vacances par
 ///    semaine » se lit ici, pas dans une mémoire du process.
@@ -1600,14 +1600,13 @@ model Subscription {
   accountId String
   account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
-  /// **Le voyage que l'abonnement finance** (T71, 29/09/2026). Un abonnement
-  /// ne court que pendant un récit ; le rattacher au carnet est ce qui permet
-  /// d'écrire « ton abonnement pour Rome » sur les cinq feuilles de
-  /// l'abonnement, et de déduire ses semaines du prix de **ce** carnet-là.
+  /// **Le voyage d'où l'abonnement a été pris**, quand l'app le dit (T71).
+  /// L'abonnement mensuel vaut pour tous les voyages (03/10/2026) : ce lien ne
+  /// sert plus qu'à dire « ton abonnement, pris pendant Rome ».
   ///
-  /// Nullable : aucune route ne crée encore d'abonnement (StoreKit n'est pas
-  /// branché), et les lignes du jeu d'essai n'en ont pas. En `SetNull` : un
-  /// voyage supprimé n'emporte pas l'historique de facturation.
+  /// Nullable : un achat fait hors d'un voyage, ou une ligne du jeu d'essai.
+  /// En `SetNull` : un voyage supprimé n'emporte pas l'historique de
+  /// facturation.
   memoId String?
   memo   Memo?   @relation(fields: [memoId], references: [id], onDelete: SetNull)
 
@@ -1625,9 +1624,9 @@ model Subscription {
   /// d'origine StoreKit.
   ///
   /// ⚠️ **Chez Apple, elle survit aux interruptions.** Un identifiant Apple qui
-  /// se réabonne au voyage suivant garde le même `originalTransactionId` : la
-  /// ligne est **rouverte**, pas recréée — et c'est `subscription_transactions`
-  /// qui garde l'historique de chaque semaine payée.
+  /// se réabonne plus tard garde le même `originalTransactionId` : la ligne
+  /// est **rouverte**, pas recréée — et c'est `subscription_transactions` qui
+  /// garde l'historique de chaque période payée.
   providerSubscriptionId String? @unique
 
   /// Le produit App Store (`com.memobook.app.subscription.weekly`). Nul pour
@@ -1670,17 +1669,17 @@ model Subscription {
   @@map("subscriptions")
 }
 
-/// Une semaine payée chez Apple : l'achat, puis chaque renouvellement.
+/// Une période payée chez Apple (un mois, ou une semaine de l'ancienne
+/// offre) : l'achat, puis chaque renouvellement.
 ///
 /// **Le registre de l'abonnement**, comme `wallet_entries` est celui de la
 /// cagnotte. Il existe pour deux raisons :
 ///
 /// 1. **Le rejeu.** Apple renvoie une notification jusqu'à obtenir un 2xx, et
 ///    l'app renvoie la même transaction à chaque lancement tant qu'elle ne l'a
-///    pas finie. `transactionId` unique : une semaine ne s'inscrit qu'une fois.
-/// 2. **La promesse « Tes abonnements sont déduits ! ».** Le cumul à retirer du
-///    prix d'un carnet se lit ici, au centime et par voyage — pas dans un
-///    nombre de semaines calculé sur des dates.
+///    pas finie. `transactionId` unique : une période ne s'inscrit qu'une fois.
+/// 2. **L'historique.** Ce qui a été encaissé, au centime — l'export des
+///    données le rend, et un remboursement s'y lit (`revokedAt`).
 model SubscriptionTransaction {
   id             String       @id @default(uuid())
   subscriptionId String
@@ -1705,7 +1704,7 @@ model SubscriptionTransaction {
   currency   String?
 
   environment String
-  /// Remboursée ou révoquée par Apple : la semaine ne se déduit plus.
+  /// Remboursée ou révoquée par Apple.
   revokedAt   DateTime?
 
   createdAt DateTime @default(now())

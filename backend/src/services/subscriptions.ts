@@ -20,6 +20,16 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 export const LIVING_SUBSCRIPTION_STATUSES = ["active", "trialing", "past_due"] as const;
 
 /**
+ * Combien de temps un abonnement **vivant** reste ouvert après sa date de
+ * renouvellement sans nouvelles du fournisseur. Le renouvellement ou
+ * l'expiration arrivent d'ordinaire dans l'heure ; trois jours couvrent une
+ * panne de webhook. Au-delà, un `EXPIRED` s'est perdu en route, et la ligne
+ * aurait ouvert l'illimité à vie. Un abonné réellement renouvelé le
+ * retrouve dès que l'app renvoie sa transaction (`Transaction.updates`).
+ */
+export const LIVING_SUBSCRIPTION_SLACK_MS = 3 * 24 * 60 * 60 * 1000;
+
+/**
  * Les statuts d'un abonnement **terminé mais encore payé** : résilié le 3, un
  * mois réglé le 1er reste illimité jusqu'au 31 (Hugo, 03/10/2026 — c'était
  * déjà la règle de la semaine payée). Le sursis court jusqu'à `renewsAt`.
@@ -36,7 +46,10 @@ export const PAID_THROUGH_SUBSCRIPTION_STATUSES = ["cancelled", "expired"] as co
 export function unlimitedAccessWhere(now: Date = new Date()): Prisma.SubscriptionWhereInput {
   return {
     OR: [
-      { status: { in: [...LIVING_SUBSCRIPTION_STATUSES] } },
+      {
+        status: { in: [...LIVING_SUBSCRIPTION_STATUSES] },
+        OR: [{ renewsAt: null }, { renewsAt: { gt: new Date(now.getTime() - LIVING_SUBSCRIPTION_SLACK_MS) } }],
+      },
       { status: { in: [...PAID_THROUGH_SUBSCRIPTION_STATUSES] }, renewsAt: { gt: now } },
     ],
   };
@@ -52,7 +65,12 @@ export function grantsUnlimitedAccess(
   subscription: { status: string; renewsAt: Date | null },
   now: Date = new Date(),
 ): boolean {
-  if ((LIVING_SUBSCRIPTION_STATUSES as readonly string[]).includes(subscription.status)) return true;
+  if ((LIVING_SUBSCRIPTION_STATUSES as readonly string[]).includes(subscription.status)) {
+    return (
+      subscription.renewsAt === null ||
+      subscription.renewsAt.getTime() > now.getTime() - LIVING_SUBSCRIPTION_SLACK_MS
+    );
+  }
   return (
     (PAID_THROUGH_SUBSCRIPTION_STATUSES as readonly string[]).includes(subscription.status) &&
     subscription.renewsAt !== null &&
@@ -73,19 +91,4 @@ export async function hasUnlimitedAccess(
     select: { id: true },
   });
   return found !== null;
-}
-
-/** Parmi ces comptes, ceux qui racontent sans limite — en une requête. */
-export async function unlimitedAccountIds(
-  prisma: SubscriptionReader,
-  accountIds: readonly string[],
-  now: Date = new Date(),
-): Promise<Set<string>> {
-  if (accountIds.length === 0) return new Set();
-  const rows = await prisma.subscription.findMany({
-    where: { accountId: { in: [...accountIds] }, ...unlimitedAccessWhere(now) },
-    select: { accountId: true },
-    distinct: ["accountId"],
-  });
-  return new Set(rows.map((row) => row.accountId));
 }

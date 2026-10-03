@@ -302,6 +302,8 @@ export function serializeTraveller(
   };
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 /**
  * Un abonnement App Store **qui va se renouveler**, et plus aucun voyage en
  * cours. Un voyage sans date de fin compte comme en cours : on ne pousse pas
@@ -316,8 +318,10 @@ function outlivesEveryTrip(
   );
   if (!renews) return false;
 
+  // `endDate` est le minuit local du dernier jour : le voyage court encore
+  // tout ce jour-là, d'où le jour ajouté.
   const now = Date.now();
-  return !trips.some((trip) => trip.endDate === null || trip.endDate.getTime() >= now);
+  return !trips.some((trip) => trip.endDate === null || trip.endDate.getTime() + DAY_MS >= now);
 }
 
 /**
@@ -518,8 +522,11 @@ export function serializeProfile(
   // L'abonnement en cours s'il y en a un, le plus récent sinon : c'est lui qui
   // porte le prix affiché, et un ancien abonné doit revoir le sien.
   const subscriptions = account.subscriptions ?? [];
+  // `past_due` compris : pendant le délai de grâce, Apple garde l'accès ouvert
+  // et retente le prélèvement — la feuille ne dit pas « résilié » à un abonné
+  // dont la carte a seulement expiré.
   const active = subscriptions.find(
-    (entry) => entry.status === "active" || entry.status === "trialing",
+    (entry) => entry.status === "active" || entry.status === "trialing" || entry.status === "past_due",
   );
   const subscription = active ?? subscriptions[0];
   const isSubscribed = active !== undefined;
