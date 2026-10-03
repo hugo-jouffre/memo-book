@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppContext } from "../context.js";
+import { isDatabaseUnavailable } from "../lib/databasePool.js";
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
 import { AppStoreVerificationError, type AppStoreNotification } from "../services/appStore.js";
@@ -108,6 +109,12 @@ export function registerAppStoreWebhookRoutes(app: FastifyInstance, context: App
       await handleNotification(context, notification, log);
     } catch (cause) {
       log.error({ err: cause }, "Notification App Store : traitement échoué");
+      // Base saturée ou injoignable : on le dit à Apple, qui renverra
+      // l'événement. Acquitter ici perdait un `EXPIRED` ou un `REFUND` pour de
+      // bon. Une erreur qui se reproduirait à l'identique, elle, est acquittée.
+      if (isDatabaseUnavailable(cause)) {
+        return reply.code(503).send({ error: "database_unavailable" });
+      }
     }
 
     return reply.code(200).send({ received: true });

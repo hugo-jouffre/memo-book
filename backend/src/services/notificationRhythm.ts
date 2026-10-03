@@ -23,8 +23,8 @@
  * - `moderate` — rythme modéré : l'essentiel, plus les relances d'écriture
  *   qu'il a lui-même demandées en choisissant un rythme — **moins** qu'au
  *   rythme soutenu (Clara, 02/10/2026) —, et le résumé de la semaine ;
- * - `light` — rythme léger : l'essentiel seulement, fin d'essai et fin de
- *   voyage.
+ * - `light` — rythme léger : l'essentiel seulement, fin de voyage et rappel
+ *   de renouvellement.
  */
 
 export type RhythmTier = "sustained" | "moderate" | "light";

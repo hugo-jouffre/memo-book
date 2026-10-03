@@ -45,49 +45,22 @@ Les modèles de vue dépendent du protocole `MemoBookAPI`, pas du client HTTP : 
 (dans `MemoBookFeature`) en fournit une implémentation en mémoire, ce qui permet de
 travailler les écrans et de les tester sans back-end lancé.
 
-## Les trois écrans
+## Les écrans
 
-1. **`MemoListView`** — les carnets, bouton `+` en position fixe en haut à droite.
-2. **`MemoDetailView`** — l'écran central : le bouton d'enregistrement, la waveform, les
-   souvenirs avec leur statut de transcription, et la carte de génération du carnet.
-3. **`BookPreviewView`** — le PDF, dans QuickLook.
+Ils vivent dans `Modules/Sources/MemoBookFeature`, un dossier par écran ou par parcours
+(`Home`, `Trip`, `Chat`, `TripSettings`, `Paywall`, `Profile`, `Order`…). Leurs noms, et
+ce qu'ils désignent dans le code, sont dans [`docs/vocabulaire.md`](../docs/vocabulaire.md) ;
+les règles qu'ils suivent et les tickets encore ouverts, dans
+[`docs/ui-development.md`](../docs/ui-development.md).
 
 ## Design tokens
 
-> ### ⚠️ La palette n'est pas encore posée
->
-> Les couleurs de l'app et des mises en page vont changer prochainement. En attendant,
-> **aucun token de `MemoBookDesign/Tokens.swift` ne porte de couleur de marque** : ils
-> pointent tous vers des couleurs système iOS, et chacun porte un `TODO(design)`.
->
-> C'est délibéré. L'app est cohérente et utilisable, mais visiblement **non brandée** —
-> impossible de confondre ces valeurs avec le design final, et on ne fige pas une palette
-> qu'on sait déjà fausse.
->
-> Les deux sources existantes se contredisent et sont toutes deux en sursis :
-> `agents/design.md` fait de Carrot `#F86015` la seule couleur d'accent et exclut Forest
-> Green de l'UI, là où `critique_design_memobook.md` (Drive) recommandait l'inverse. Rien
-> n'a été tranché dans le code.
->
-> **Le jour venu** : remplacer les valeurs de ce seul fichier, plus l'asset d'accent si
-> besoin. Aucune couleur n'est codée en dur ailleurs dans l'app — c'est ce qui rend la
-> bascule triviale.
+La palette et la typographie de la marque (Sora, crème, vert `#28654B`…) sont posées dans
+`MemoBookDesign/Tokens.swift`, recopiées des variables Figma du fichier « MemoBook —
+Product ». C'est la seule source dans le code : aucune couleur ni police n'est codée en dur
+ailleurs. Les mesures sont en **rem** (1 rem = 16 pt) et Figma fait foi (règles R1 à R4 de
+`docs/ui-development.md`). Les composants partagés, préfixés `Brand`, sont dans le même
+module.
 
-Ce qui est en revanche déjà stable, parce que ça vient des conventions iOS et non d'un
-choix de marque :
-
-- marge horizontale unique de 20 pt, espacements verticaux sur une échelle de 8 pt ;
-- cibles tactiles de 44 pt minimum ;
-- serif pour les titres de **carnet**, jamais pour le chrome système — un carnet ne se lit
-  pas comme une barre de navigation ;
-- SF Symbols en trait fin, pas de rendu 3D.
-
-Les typographies sont elles aussi provisoires : le README du dépôt les liste comme « à
-documenter dès qu'elles sont figées en Phase 2/3 ». Tout passe pour l'instant par les
-styles système, ce qui donne Dynamic Type et accessibilité gratuitement.
-
-## Ce qui n'est pas encore là
-
-Pas d'authentification utilisateur (l'app s'enregistre comme un appareil anonyme), pas de
-wizard d'onboarding, pas d'écran de chat, pas de paiement. Ces écrans dépendent d'arbitrages
-Figma encore ouverts — notamment l'unification des deux versions de l'accueil.
+Les couleurs sont volontairement fixes : MemoBook est un carnet de papier crème, les
+écrans forcent `.colorScheme(.light)`.

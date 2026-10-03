@@ -124,8 +124,9 @@ public struct BrandLimitBanner: View {
         .contentShape(.rect(cornerRadius: MemoBookSpacing.cornerRadius, style: .continuous))
         // **La pulsation** : 1,00 ↔ 1,03 en 0,9 s, aller et retour, tant qu'il
         // reste moins de cinq secondes. Un `PhaseAnimator` sans déclencheur
-        // tourne en boucle ; la phase ne sert que si le bandeau pulse.
-        .phaseAnimator([false, true]) { view, swollen in
+        // tourne en boucle : hors pulsation, une seule phase l'arrête — le
+        // bandeau « épuisé » peut rester affiché des heures.
+        .phaseAnimator(isPulsing ? [false, true] : [false]) { view, swollen in
             view
                 .scaleEffect(isPulsing && !reduceMotion && swollen ? 1.03 : 1)
                 .opacity(isPulsing && reduceMotion && swollen ? 0.9 : 1)

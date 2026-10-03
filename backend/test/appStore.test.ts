@@ -255,6 +255,19 @@ describe("l'achat depuis l'app", () => {
     expect(await harness.prisma.subscription.count()).toBe(0);
   });
 
+  it("restaure sur un nouveau compte un achat fait depuis un compte supprimé", async () => {
+    // Le compte supprimé emporte sa ligne ; Apple, lui, continue de prélever.
+    const gone = await registerAccount(harness.app, "parti@memobook.app");
+    await purchase(gone.authorization, transaction({ appAccountToken: gone.accountId }));
+    await harness.prisma.account.delete({ where: { id: gone.accountId } });
+
+    const account = await registerAccount(harness.app);
+    const response = await purchase(account.authorization, transaction({ appAccountToken: gone.accountId }));
+
+    expect(response.statusCode).toBe(200);
+    expect(await isUnlimited(account.accountId)).toBe(true);
+  });
+
   it("refuse un abonnement Apple déjà rattaché à un autre compte", async () => {
     // Même identifiant Apple, deux comptes MemoBook : un paiement n'ouvre qu'un abonnement.
     const first = await registerAccount(harness.app);
@@ -412,6 +425,50 @@ describe("les notifications d'Apple", () => {
 
     const row = await harness.prisma.subscription.findFirstOrThrow({ where: { accountId: account.accountId } });
     expect(row.status).toBe("cancelled");
+  });
+
+  it("ne laissent pas un vieux renouvellement rejoué par l'app raccourcir le mois payé", async () => {
+    // `Transaction.unfinished` : l'app renvoie, sans statut, une période déjà
+    // passée — signée après le dernier événement d'Apple.
+    const { account, tx } = await subscribedAccount();
+    const renewal = transaction({
+      ...tx,
+      transactionId: "2000000000000002",
+      purchasedAt: tx.expiresAt!,
+      expiresAt: new Date(tx.expiresAt!.getTime() + 30 * DAY),
+      signedAt: new Date(),
+    });
+    await notify(notification("DID_RENEW", renewal));
+
+    const old = transaction({
+      ...tx,
+      transactionId: "2000000000000003",
+      purchasedAt: new Date(Date.now() - 40 * DAY),
+      expiresAt: new Date(Date.now() - 10 * DAY),
+      signedAt: new Date(Date.now() + 1000),
+    });
+    expect((await purchase(account.authorization, old)).statusCode).toBe(200);
+
+    const row = await harness.prisma.subscription.findFirstOrThrow({ where: { accountId: account.accountId } });
+    expect(row.status).toBe("active");
+    expect(row.renewsAt).toEqual(renewal.expiresAt);
+    expect(await isUnlimited(account.accountId)).toBe(true);
+  });
+
+  it("ferment l'illimité d'un abonnement resté « actif » sans nouvelles bien après sa date", async () => {
+    // L'`EXPIRED` d'Apple s'est perdu : la ligne dit encore « active ».
+    const account = await registerAccount(harness.app);
+    await harness.prisma.subscription.create({
+      data: {
+        accountId: account.accountId,
+        provider: "storekit",
+        status: "active",
+        priceCents: 499,
+        renewsAt: new Date(Date.now() - 7 * DAY),
+      },
+    });
+
+    expect(await isUnlimited(account.accountId)).toBe(false);
   });
 
   it("retrouvent le compte par l'appAccountToken, sans que l'app ait parlé", async () => {

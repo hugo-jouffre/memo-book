@@ -59,6 +59,18 @@ export function calendarDate(column: Date): LocalDate {
   return column.toISOString().slice(0, 10);
 }
 
+/**
+ * Une date de voyage ou d'étape. L'app les envoie comme des **minuits locaux**
+ * du fuseau où on les a choisies : le 20 octobre saisi à Paris arrive le 19 à
+ * 22 h UTC. Les lire au fuseau d'aujourd'hui les décale d'un jour dès que le
+ * voyageur est plus à l'ouest qu'à la saisie (Londres, Lisbonne, New York) :
+ * on les ramène donc au minuit UTC le plus proche, comme `calendarDay` de la
+ * rédaction. Tient pour tout fuseau de saisie entre UTC-12 et UTC+12.
+ */
+export function tripDate(stored: Date): LocalDate {
+  return new Date(stored.getTime() + DAY_MS / 2).toISOString().slice(0, 10);
+}
+
 /** Le jour, `days` plus tard (ou plus tôt, en négatif). */
 export function addDays(date: LocalDate, days: number): LocalDate {
   return new Date(Date.parse(`${date}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);

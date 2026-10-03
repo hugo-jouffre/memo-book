@@ -162,7 +162,16 @@ async function writeStoreKitTransaction(
     // L'achat a été fait **depuis un autre compte MemoBook** sur le même
     // téléphone : l'`appAccountToken` est celui du compte qui a payé. Ouvrir
     // l'abonnement à celui-ci en ferait deux pour un seul paiement.
-    if (transaction.appAccountToken !== null && transaction.appAccountToken !== input.accountId) {
+    // Un compte **supprimé** depuis ne compte pas : Apple continue de prélever
+    // l'identifiant Apple, et le nouveau compte doit pouvoir le restaurer.
+    if (
+      transaction.appAccountToken !== null &&
+      transaction.appAccountToken !== input.accountId &&
+      (await prisma.account.findUnique({
+        where: { id: transaction.appAccountToken },
+        select: { id: true },
+      })) !== null
+    ) {
       throw new HttpError(
         403,
         "Cet achat a été fait depuis un autre compte MemoBook.",
@@ -179,6 +188,8 @@ async function writeStoreKitTransaction(
   }
 
   const accountId = existing?.accountId ?? input.accountId ?? transaction.appAccountToken;
+  // (Quand c'est l'app qui envoie, `input.accountId` passe avant le jeton d'un
+  // compte supprimé.)
   if (!accountId) return null;
 
   const account = await prisma.account.findUnique({ where: { id: accountId }, select: { id: true } });
@@ -193,10 +204,20 @@ async function writeStoreKitTransaction(
     now: new Date(),
   });
 
+  // Une transaction **sans statut** (l'app rejoue `Transaction.unfinished` :
+  // un vieux renouvellement) ne raccourcit jamais la période connue. Seule
+  // une révocation, ou un statut d'Apple, peut la faire reculer.
+  const shortensKnownPeriod =
+    input.status === null &&
+    transaction.revokedAt === null &&
+    existing?.renewsAt != null &&
+    (state.renewsAt === null || state.renewsAt < existing.renewsAt);
+
   const isStale =
-    existing?.providerUpdatedAt !== null &&
-    existing?.providerUpdatedAt !== undefined &&
-    signedAt < existing.providerUpdatedAt;
+    shortensKnownPeriod ||
+    (existing?.providerUpdatedAt !== null &&
+      existing?.providerUpdatedAt !== undefined &&
+      signedAt < existing.providerUpdatedAt);
 
   // Le rythme et le prix **du produit de cette transaction** : un abonné qui
   // passe de la semaine au mois garde sa ligne, qui doit dire « month » et

@@ -14,6 +14,7 @@ import {
   isValidTimeZone,
   localDate,
   localHour,
+  tripDate,
 } from "./localCalendar.js";
 import { APPLE_SUBSCRIPTIONS_URL, type SubscriptionReminderMail } from "./mailer.js";
 import { SUBSCRIPTION_REMINDER_SUBJECT } from "./mailTemplates.js";
@@ -96,7 +97,9 @@ export function armedAppleRenewal(
   const armed = subscriptions.filter(
     (subscription) =>
       subscription.provider === "storekit" &&
-      (LIVING_SUBSCRIPTION_STATUSES as readonly string[]).includes(subscription.status) &&
+      // `past_due` : Apple tente encore de prélever, et `renewsAt` est la fin
+      // du délai de grâce — « se renouvelle dans 3 jours » serait faux.
+      subscription.status === "active" &&
       subscription.autoRenews !== false,
   );
   if (armed.length === 0) return null;
@@ -354,8 +357,8 @@ export async function loadPlannerAccount(
     id: memo.id,
     title: memo.title,
     city: memo.destinationCity,
-    startsOn: day(memo.startDate),
-    endsOn: day(memo.endDate),
+    startsOn: memo.startDate ? tripDate(memo.startDate) : null,
+    endsOn: memo.endDate ? tripDate(memo.endDate) : null,
     createdOn: localDate(memo.createdAt, timeZone),
     storedStage: memo.stage,
     narrationPace: memo.narrationPace,

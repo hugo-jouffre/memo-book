@@ -15,6 +15,7 @@ import {
   type TripContextTurnInput,
   type TripContextTurnReply,
 } from "./conversation.js";
+import { tripDate } from "./localCalendar.js";
 import { describeTripContext, questionFor, type TripContextUpdate } from "./tripContext.js";
 import {
   CALLS_TO_ACTION,
@@ -288,7 +289,7 @@ export function buildUserPrompt(input: ConversationInput): string {
   if (memo.theme) lines.push(`Thème : ${memo.theme}`);
   if (memo.destinationCity) lines.push(`Destination : ${memo.destinationCity}`);
   if (memo.startDate || memo.endDate) {
-    lines.push(`Dates : ${dayOf(memo.startDate)} → ${dayOf(memo.endDate)}`);
+    lines.push(`Dates : ${tripDayOf(memo.startDate)} → ${tripDayOf(memo.endDate)}`);
   }
   if (memo.narrationPace) lines.push(`Rythme de récit choisi : ${memo.narrationPace}`);
   lines.push(`Aujourd'hui : ${dayOf(input.now)}`);
@@ -310,7 +311,7 @@ export function buildUserPrompt(input: ConversationInput): string {
       "",
       "## L'étape en cours",
       `Étape n°${step.number}${step.placeName ? ` — ${step.placeName}` : ""}`,
-      `Du ${dayOf(step.startDate)} au ${dayOf(step.endDate)}`,
+      `Du ${tripDayOf(step.startDate)} au ${tripDayOf(step.endDate)}`,
     );
   }
 
@@ -441,6 +442,11 @@ const REDACTION_LABELS: Record<string, string> = {
 
 function dayOf(date: Date | null): string {
   return date ? date.toISOString().slice(0, 10) : "inconnue";
+}
+
+/** Une date de voyage ou d'étape : un minuit local, pas un instant (`tripDate`). */
+function tripDayOf(date: Date | null): string {
+  return date ? tripDate(date) : "inconnue";
 }
 
 function truncate(text: string, limit: number): string {

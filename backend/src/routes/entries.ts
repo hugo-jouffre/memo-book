@@ -332,13 +332,20 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
       );
     }
 
-    if (entry.redactionStatus === "processing") {
+    // Une rédaction déjà en file ou en cours ne se relance pas : chaque
+    // relance est un appel d'IA payé, et dix touches rapides en mettaient dix
+    // en file. La bascule est atomique — deux requêtes simultanées n'en
+    // lancent qu'une.
+    const claimed = await context.prisma.entry.updateMany({
+      where: { id, redactionStatus: { in: ["ready", "failed"] } },
+      data: { redactionStatus: "pending", redactionError: null },
+    });
+    if (claimed.count === 0) {
       return reply.code(200).send(serializeEntry(entry));
     }
 
-    const queued = await context.prisma.entry.update({
+    const queued = await context.prisma.entry.findUniqueOrThrow({
       where: { id },
-      data: { redactionStatus: "pending", redactionError: null },
       include: { media: true },
     });
 
