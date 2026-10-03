@@ -1,5 +1,5 @@
 import multipart from "@fastify/multipart";
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 import { ZodError } from "zod";
 import type { AppContext } from "./context.js";
 import { registerJobs } from "./jobs/index.js";
@@ -23,6 +23,7 @@ import { registerPasswordResetPageRoutes } from "./routes/passwordResetPage.js";
 import { registerAvatarRoutes, registerProfileRoutes } from "./routes/profile.js";
 import { registerStepRoutes } from "./routes/steps.js";
 import { configureAvatarUrls } from "./services/avatars.js";
+import { isValidTimeZone } from "./services/localCalendar.js";
 import { registerRenderRoutes } from "./routes/renders.js";
 import { registerStripeWebhookRoutes } from "./routes/stripeWebhook.js";
 import { registerBookPreviewRoutes } from "./routes/bookPreview.js";
@@ -30,6 +31,52 @@ import { registerChatRoutes } from "./routes/chat.js";
 import { registerTripSettingsRoutes } from "./routes/tripSettings.js";
 import { registerWalletRoutes } from "./routes/wallet.js";
 import { registerCoverPhotoRoutes, registerCoverRoutes } from "./routes/covers.js";
+
+/** Combien de temps un fuseau confirmé dispense de le réécrire. */
+const TIME_ZONE_MEMO_MS = 10 * 60 * 1000;
+
+/**
+ * **L'en-tête `X-Time-Zone`** (Hugo, 03/10/2026) : l'app envoie le fuseau du
+ * téléphone (`Europe/Paris`) sur chaque appel, et le compte le retient.
+ *
+ * Il ne venait jusqu'ici qu'avec le jeton APNs : un voyageur qui refusait les
+ * notifications n'avait jamais de fuseau, et vivait à l'heure de Paris. Or le
+ * crédit du jour se recharge **à minuit chez celui qui raconte**
+ * (`services/dailyCredit.ts`) — à Tokyo comme à Montréal.
+ *
+ * Une écriture **seulement quand il change** : l'`UPDATE` est conditionnel, et
+ * un fuseau déjà confirmé par ce process n'est pas réécrit avant dix minutes
+ * (la mémoire est par process ; au pire, un autre serveur réécrit une fois).
+ * Un en-tête absent, ou un fuseau qu'`Intl` ne connaît pas, ne change rien. Un
+ * échec d'écriture ne fait jamais échouer la requête.
+ */
+function createTimeZoneSync(context: AppContext) {
+  const confirmed = new Map<string, { timeZone: string; at: number }>();
+
+  return async function syncTimeZone(request: FastifyRequest): Promise<void> {
+    const accountId = request.accountId;
+    const header = request.headers["x-time-zone"];
+    const raw = typeof header === "string" ? header.trim() : "";
+    if (!accountId || raw.length === 0 || raw.length > 64 || !isValidTimeZone(raw)) return;
+
+    // La forme canonique : « europe/paris » est le même fuseau, et ne doit pas
+    // réécrire la colonne à chaque appel.
+    const timeZone = new Intl.DateTimeFormat("en-US", { timeZone: raw }).resolvedOptions().timeZone;
+    const known = confirmed.get(accountId);
+    if (known && known.timeZone === timeZone && Date.now() - known.at < TIME_ZONE_MEMO_MS) return;
+
+    try {
+      await context.prisma.account.updateMany({
+        where: { id: accountId, OR: [{ timeZone: null }, { timeZone: { not: timeZone } }] },
+        data: { timeZone },
+      });
+      if (confirmed.size > 10_000) confirmed.clear();
+      confirmed.set(accountId, { timeZone, at: Date.now() });
+    } catch (cause) {
+      request.log.warn({ err: cause }, "Fuseau du compte non enregistré");
+    }
+  };
+}
 
 export async function buildApp(context: AppContext): Promise<FastifyInstance> {
   // Fastify construit son propre logger de requêtes ; `context.logger` reste le
@@ -48,7 +95,7 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
     if (error instanceof HttpError) {
       return reply
         .code(error.statusCode)
-        .send({ error: error.code ?? "error", message: error.message });
+        .send({ ...error.details, error: error.code ?? "error", message: error.message });
     }
 
     if (error instanceof ZodError) {
@@ -126,6 +173,8 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
   // toujours un propriétaire, et c'est un compte.
   await app.register(async (accountRoutes) => {
     accountRoutes.addHook("preHandler", createRequireAccount(context));
+    // Après l'identification : il faut savoir à quel compte parle le fuseau.
+    accountRoutes.addHook("preHandler", createTimeZoneSync(context));
     registerSessionRoutes(accountRoutes, context);
     registerAccountRoutes(accountRoutes, context);
     registerHomeRoutes(accountRoutes, context);

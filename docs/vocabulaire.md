@@ -17,9 +17,9 @@
 | Mot | Ce que c'est | Exemples | Dans le code |
 |---|---|---|---|
 | **Écran** | Une vue qui prend toute la dalle et occupe une place dans la pile de navigation. Un écran a sa fiche (`archive/ui-development-journal.md` § 5) et son nœud Figma | l'accueil, l'accueil d'un voyage, les paramètres du voyage, les personnalisations du carnet, la conversation, le profil | `<Nom>View` dans `MemoBookFeature/<Dossier>/` — `HomeView`, `TripHomeView`, `TripSettingsView`, `BookCustomisationView`, `ProfileView` |
-| **Feuille** (on dit aussi *modale*) | Ce qui se pose **sur** un écran sans le quitter : hauteur calée sur son contenu, geste du système, dessin de la marque. « Modale » est le mot de Figma et de Hugo, « feuille » celui du code et des fiches — c'est la même chose | « Supprimer ce voyage », « Estimation », les neuf feuilles de la personnalisation, les cinq de l'abonnement | `<Nom>Sheet`, rangées dans `<Domaine>Sheets.swift` quand elles sont plusieurs ; toujours une `BrandSheet`. Une feuille ne s'empile pas sur une autre — sauf l'aperçu du carnet sur l'offre, l'exception voulue (`ios/CLAUDE.md`) |
+| **Feuille** (on dit aussi *modale*) | Ce qui se pose **sur** un écran sans le quitter : hauteur calée sur son contenu, geste du système, dessin de la marque. « Modale » est le mot de Figma et de Hugo, « feuille » celui du code et des fiches — c'est la même chose | « Supprimer ce voyage », « Crédit du jour », les neuf feuilles de la personnalisation, les cinq de l'abonnement | `<Nom>Sheet`, rangées dans `<Domaine>Sheets.swift` quand elles sont plusieurs ; toujours une `BrandSheet`. Une feuille ne s'empile pas sur une autre — sauf l'aperçu du carnet sur l'offre, l'exception voulue (`ios/CLAUDE.md`) |
 | **Étape** | Un des états successifs d'une même feuille ou d'un même tunnel : le contenu change, le cadre reste | les cinq temps de la feuille d'abonnement (l'offre, l'abonnement en cours, « continuer », la raison, « c'est fait ») ; les sept étapes du tunnel de commande ; les trois de « Mot de passe oublié » | un `enum Step` dans la feuille ou le modèle (`SubscriptionSheet.Step`, `PasswordRecoveryModel`) |
-| **Écran du paywall** | Chacun des trois panneaux du paywall de retour, qu'on parcourt comme des stories | l'accroche, l'estimation, l'offre | `PaywallView.page` est l'**index** du segment de la barre — le mot *page* n'y désigne pas un écran de l'app |
+| **Écran du paywall** | Chacun des panneaux du paywall, qu'on parcourt comme des stories : trois la première fois, deux au retour d'un ancien abonné | la découverte : l'envie de raconter, les détails qui s'effacent, l'offre ; le retour : le mot de retour, l'offre | `PaywallView.page` est l'**index** du segment de la barre — le mot *page* n'y désigne pas un écran de l'app ; `PaywallVariant.firstTime` / `.returning` |
 | **Page** | Réservé au **carnet** — les pages du livre imprimé — et au web. Jamais un écran de l'app | « Nombre de pages cible », les deux pages du carnet au-dessus d'une feuille (`BookPagesPeek`) | `targetPageCount`, `BookPagesPeek`, `BookPageStage` |
 | **Parcours** | Une suite d'écrans et de feuilles qu'on traverse dans l'ordre, avec une entrée et une sortie | l'entrée dans l'app (accueil, inscription, mot des fondateurs), la création d'un voyage, les couvertures, la résiliation, le paywall de retour | pas de suffixe : c'est le **dossier** qui le tient (`TripCreation/`, `Covers/`, `Paywall/`), et sa première vue porte le nom du domaine |
 | **Tunnel** | Un parcours dont on ne saute aucune étape et qui se termine par un paiement | le tunnel de commande du carnet imprimé | `Order/`, `OrderView` et ses étapes ; `PrintOrderFlow` dans `MemoBookCore` en porte l'état |
@@ -37,6 +37,7 @@ Et les mots des pièces d'un écran, pour décrire une maquette sans la montrer 
 | Mot | Ce que c'est | Composant |
 |---|---|---|
 | **Appel à l'action** (on dit aussi *CTA*) | le bouton plein, pleine largeur, souvent en pied d'écran | `BrandButton(fillsWidth: true)` |
+| **Appel à l'action de bulle** | la carte qui termine une bulle de MEMO : un surtitre manuscrit, une ligne d'action (« Raconter sans limite »), « Ignorer ». Décidée par le serveur, jamais une puce ni un nouveau type de bulle | `ChatCallToAction` (`MemoBookCore`), catalogue `services/callsToAction.ts`, clé `callToAction` du message |
 | **Ligne** · **groupe de lignes** | une entrée d'un écran de réglages — intitulé, valeur, chevron ou interrupteur — et le bloc qui en empile plusieurs | `BrandRow` · `BrandRowGroup` |
 | **Option** · **groupe d'options** | une ligne encadrée d'un choix unique | `BrandOptionRow` · `BrandOptionGroup` |
 | **Interrupteur** | ce qu'on bascule | `BrandToggleCard`, `Toggle` |
@@ -71,7 +72,7 @@ Côté serveur (`backend/src/`) :
 | Mot | Ce que c'est | Où |
 |---|---|---|
 | **Route** | un point d'entrée HTTP, un fichier par ressource, sa validation `zod` avec | `routes/` — `tripSettings.ts`, `memos.ts`, `wallet.ts` |
-| **Service** | une règle métier qu'une route ou un job appelle | `services/` — `quota.ts`, `deletion.ts`, `billing.ts` |
+| **Service** | une règle métier qu'une route ou un job appelle | `services/` — `dailyCredit.ts`, `deletion.ts`, `billing.ts` |
 | **Job** | une étape du pipeline, exécutée par le worker | `jobs/` — `transcribe`, `structure`, `redact`, `render` |
 | **Sérialiseur** | ce qu'une route rend, et rien de plus | `routes/appSerializers.ts`, `serializers.ts` |
 | **Gabarit** | le modèle du carnet imprimé, source de vérité de ce qu'un réglage peut faire | `MemoBook Generator/templates/travel-journal/`, `LAYOUT_KB.md` |
@@ -94,7 +95,8 @@ Les autres noms de la base, et leur mot dans l'app :
 | `entry` | un souvenir — un vocal, une photo, et ce qu'on en a tiré |
 | `member`, `guest` | un co-voyageur (invité tant qu'il n'a pas rejoint) |
 | `wallet` | la cagnotte |
-| `subscription` | l'abonnement |
+| `subscription` | l'abonnement — mensuel, il rend le récit **illimité** à l'abonné seul |
+| `dailyCredit`, `trip_daily_usage` | le **crédit du jour** — les 5 minutes de récit qu'un voyage peut raconter chaque jour, partagées entre ses co-voyageurs non abonnés. On ne dit ni « quota », ni « limite de souvenirs », ni « jeton » : dans l'app, il se compte en minutes et en secondes |
 | `order` | la commande du carnet imprimé |
 | `render` | le rendu — le PDF composé |
 | `showcase`, `gallery` | la galerie, l'écran « Exemples de carnets » |
@@ -152,6 +154,10 @@ Pour lire une demande écrite en anglais, et y répondre avec les mots d'ici.
 | companion, guest, member | **co-voyageur** |
 | wallet, pot | **cagnotte** |
 | order | **commande** |
+| daily credit, daily limit, allowance, quota | **crédit du jour** |
+| unlimited | **illimité** |
+| subscription, paywall | **abonnement**, **paywall** |
+| call to action (in a chat bubble) | **appel à l'action de bulle** |
 | render, PDF | **rendu** |
 | template | **gabarit** |
 | back-end, API, server | **serveur** pour l'utilisateur ; **back-end** ou **API** entre nous |

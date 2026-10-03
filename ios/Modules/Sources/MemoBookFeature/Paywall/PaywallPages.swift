@@ -291,9 +291,13 @@ private struct PaywallStoryTouch: ViewModifier {
     }
 }
 
-// MARK: - Écran 1 — « Bravo ! »
+// MARK: - Écran 1 — « On adore t'écouter ! »
 
-struct PaywallCongratulations: View {
+/// Le premier écran de la découverte. Il s'ouvre **sur une envie**, pas sur une
+/// limite (Hugo, 03/10/2026) : on arrive souvent ici parce que le crédit du
+/// jour vient de tomber, et l'écran dit ce que ça veut dire — qu'on avait
+/// beaucoup à raconter.
+struct PaywallStoriesToTell: View {
     let onContinue: () -> Void
 
     var body: some View {
@@ -301,10 +305,10 @@ struct PaywallCongratulations: View {
             Spacer(minLength: 0)
 
             VStack(spacing: MemoBookSpacing.s) {
-                PaywallEyebrow(PaywallCopy.bravoEyebrow)
-                PaywallTitle(lead: PaywallCopy.bravoTitleLead, strong: PaywallCopy.bravoTitleStrong)
+                PaywallEyebrow(PaywallCopy.storiesEyebrow)
+                PaywallTitle(lead: PaywallCopy.storiesTitleLead, strong: PaywallCopy.storiesTitleStrong)
 
-                (Text(PaywallCopy.bravoBodyLead) + Text(PaywallCopy.bravoBodyStrong).font(MemoBookFont.tagline))
+                (Text(PaywallCopy.storiesBodyLead) + Text(PaywallCopy.storiesBodyStrong).font(MemoBookFont.tagline))
                     .font(MemoBookFont.taglineRegular)
                     .foregroundStyle(MemoBookColor.ink)
                     .multilineTextAlignment(.center)
@@ -327,9 +331,12 @@ struct PaywallCongratulations: View {
     }
 }
 
-// MARK: - Écran 2 — « Selon nos calculs... »
+// MARK: - Écran 2 — « Les détails s'effacent en quelques jours »
 
-struct PaywallEstimate: View {
+/// Pourquoi raconter tout de suite, et ce que chaque formule permet. Il garde
+/// la pastille « Voir un aperçu → » : montrer le carnet reste le meilleur
+/// argument.
+struct PaywallFadingDetails: View {
     let onContinue: () -> Void
     /// Ouvre la feuille « Prévisualisation ». L'écran ne la présente pas
     /// lui-même : elle doit se poser **par-dessus le paywall entier**, et c'est
@@ -342,17 +349,17 @@ struct PaywallEstimate: View {
 
             VStack(spacing: MemoBookSpacing.s) {
                 Group {
-                    PaywallEyebrow(PaywallCopy.estimateEyebrow)
+                    PaywallEyebrow(PaywallCopy.detailsEyebrow)
                     PaywallTitle(
-                        lead: PaywallCopy.estimateTitleLead,
-                        strong: PaywallCopy.estimateTitleStrong,
+                        lead: PaywallCopy.detailsTitleLead,
+                        strong: PaywallCopy.detailsTitleStrong,
                         isUnderlined: true
                     )
                 }
                 .paywallProse()
 
                 VStack(spacing: MemoBookSpacing.xs) {
-                    ForEach(PaywallCopy.estimateBody, id: \.self) { line in
+                    ForEach(PaywallCopy.detailsBody, id: \.self) { line in
                         Text(line)
                             .font(MemoBookFont.taglineRegular)
                             .foregroundStyle(MemoBookColor.ink)
@@ -394,7 +401,7 @@ struct PaywallEstimate: View {
 
             VStack(spacing: MemoBookSpacing.s) {
                 VStack(spacing: MemoBookSpacing.xs / 2) {
-                    ForEach(PaywallCopy.estimateFootnote, id: \.self) { line in
+                    ForEach(PaywallCopy.detailsFootnote, id: \.self) { line in
                         Text(line)
                             .font(MemoBookFont.taglineRegular)
                             .foregroundStyle(MemoBookColor.inkMuted)
@@ -414,11 +421,10 @@ struct PaywallEstimate: View {
 
 /// L'écran qui ouvre le paywall d'un ancien abonné.
 ///
-/// **Il remplace deux écrans à lui seul.** La version de découverte félicite
-/// (« Tu as enregistré tes 3 premières étapes ! ») puis projette un nombre de
-/// pages ; celui-ci ne fait ni l'un ni l'autre, et le dit : « on ne t'embête pas
-/// plus ». C'est le seul écran de l'app dont la raison d'être est d'en économiser
-/// un autre.
+/// **Il remplace deux écrans à lui seul.** La version de découverte dit l'envie
+/// de raconter puis explique les deux formules ; celui-ci ne réexplique rien, et
+/// le dit : « on ne t'embête pas plus ». C'est le seul écran de l'app dont la
+/// raison d'être est d'en économiser un autre.
 struct PaywallReturning: View {
     let onContinue: () -> Void
 
@@ -467,19 +473,16 @@ struct PaywallReturning: View {
 // MARK: - Écran 3 — l'offre
 
 struct PaywallOffer: View {
+    /// Le prix, tel qu'Apple le facture — « 4,99 € ».
     let price: String
+    /// La période qu'il paie — « mois » —, lue sur le produit.
+    let period: String
     /// Le titre, qui change avec la version — voir ``PaywallVariant/offerTitle``.
     /// Le surtitre, les arguments et le bouton, eux, sont les mêmes : c'est la
     /// **même offre**, pas une seconde.
     var title: (lead: String, strong: String) = (
         PaywallCopy.offerTitleLead, PaywallCopy.offerTitleStrong
     )
-    /// « Voir une estimation → », sur la carte qui porte la pastille : la
-    /// feuille qui détaille le calcul. Plus aucune ne la porte depuis que « Tes
-    /// abonnements sont déduits ! » est en pause (02/10/2026). L'écran ne la
-    /// présente pas lui-même — elle se pose **par-dessus le paywall entier**,
-    /// comme l'aperçu.
-    let onEstimate: () -> Void
     /// La feuille d'Apple est ouverte, ou le serveur n'a pas encore répondu.
     var isPurchasing = false
     /// La restauration est en cours : l'App Store se resynchronise.
@@ -495,8 +498,7 @@ struct PaywallOffer: View {
     /// Le tapotis sur la moitié gauche : **reculer d'un écran**, comme sur les
     /// deux premiers (T132, T135). La `ScrollView` prend le doigt avant les
     /// zones que le paywall pose sous lui ; la zone vit donc **dans** son
-    /// contenu, derrière les cartes, qui laissent passer le tapotis partout
-    /// sauf sur leur pastille.
+    /// contenu, derrière les cartes, qui laissent passer le tapotis.
     var onBack: () -> Void = {}
 
     /// La hauteur du pied, mesurée : c'est elle qu'il faut retirer de la page
@@ -527,19 +529,13 @@ struct PaywallOffer: View {
 
                     // Les cartes se chevauchent de 4 pt et penchent chacune de
                     // son côté : c'est une pile de papiers posés à la main, pas
-                    // une liste. Une carte à pastille garde le doigt pour elle
-                    // — il n'y en a plus aucune depuis que « Tes abonnements
-                    // sont déduits ! » est en pause.
+                    // une liste.
                     VStack(spacing: -4) {
                         ForEach(Array(PaywallCopy.arguments.enumerated()), id: \.offset) { _, argument in
-                            PaywallArgumentCard(
-                                argument: argument,
-                                onPill: argument.pill == nil ? nil : onEstimate
-                            )
-                            // Une carte de décor laisse passer le tapotis
-                            // jusqu'à la zone de retour ; celle qui porte la
-                            // pastille garde le doigt pour elle.
-                            .allowsHitTesting(argument.pill != nil)
+                            PaywallArgumentCard(argument: argument)
+                                // Des cartes de décor : elles laissent passer le
+                                // tapotis jusqu'à la zone de retour.
+                                .allowsHitTesting(false)
                         }
                     }
 
@@ -554,8 +550,8 @@ struct PaywallOffer: View {
                 // dans la zone visible quand il y tient ; au-delà, il défile.
                 .frame(minHeight: max(0, proxy.size.height - footerHeight))
                 // La moitié gauche recule d'un écran ; la droite ne fait rien,
-                // c'est le dernier. Derrière le contenu, pour que la pastille
-                // et le bouton gagnent toujours.
+                // c'est le dernier. Derrière le contenu, pour que les boutons
+                // gagnent toujours.
                 //
                 // Un simple tapotis, et pas ``PaywallStoryTouch`` : dans une
                 // `ScrollView`, l'appui empêchait de faire défiler l'offre.
@@ -603,20 +599,18 @@ struct PaywallOffer: View {
     private var footer: some View {
         VStack(spacing: MemoBookSpacing.s) {
             VStack(spacing: MemoBookSpacing.xs / 2) {
-                let renewal = PaywallCopy.offerFootnotePrice(price: price)
+                let renewal = PaywallCopy.offerFootnotePrice(price: price, period: period)
                 (Text(renewal.lead).font(MemoBookFont.taglineRegular)
                     + Text(renewal.price).font(MemoBookFont.tagline))
                     .foregroundStyle(MemoBookColor.ink)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
 
-                ForEach(PaywallCopy.offerFootnote(price: price).dropFirst(), id: \.self) { line in
-                    Text(line)
-                        .font(MemoBookFont.taglineRegular)
-                        .foregroundStyle(MemoBookColor.ink)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text(PaywallCopy.offerFootnoteDetail)
+                    .font(MemoBookFont.taglineRegular)
+                    .foregroundStyle(MemoBookColor.ink)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             BrandButton(
@@ -627,10 +621,14 @@ struct PaywallOffer: View {
                 fillsWidth: true,
                 action: onSubscribe
             )
-            // Même limite que les CTA de l'accueil et du voyage : au-delà
-            // d'AX1, une barre ancrée en bas prend la moitié de l'écran.
-            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         }
+        // **Le pied entier s'arrête à AX1**, et plus seulement son bouton
+        // (recette du 03/10/2026) : en très grand texte, la mention seule
+        // prenait 40 % de l'écran, le prix se coupait sur deux lignes et les
+        // cartes se lisaient sous le voile. C'était déjà le cas avant le mois.
+        // Au-delà d'AX1, une barre ancrée en bas cache ce qu'elle sert à
+        // vendre ; les cartes, elles, grandissent et défilent dessus.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         .padding(.horizontal, PaywallMetrics.margin)
         .padding(.top, MemoBookSpacing.s)
         .padding(.bottom, MemoBookSpacing.xs)
@@ -684,14 +682,9 @@ struct PaywallOffer: View {
     }
 }
 
-/// Une des promesses de l'offre : une pastille d'icône, deux lignes, et
-/// parfois un lien.
+/// Une des promesses de l'offre : une pastille d'icône et deux lignes.
 struct PaywallArgumentCard: View {
     let argument: PaywallCopy.Argument
-
-    /// Ce que la pastille ouvre, quand la carte en porte une. `nil` la laisse
-    /// muette — une carte de décor.
-    var onPill: (() -> Void)? = nil
 
     @ScaledMetric(relativeTo: .body) private var badgeSide: CGFloat = 34
     /// Presque la plaque entière : le glyphe du jeu de marque n'occupe qu'une
@@ -724,30 +717,6 @@ struct PaywallArgumentCard: View {
                     .font(MemoBookFont.tagline)
                 Text(argument.detail)
                     .font(MemoBookFont.caption)
-
-                if let pill = argument.pill {
-                    if let onPill {
-                        // La pastille **ouvre** la feuille « Estimation »
-                        // (`3469:14105`). Elle garde son dessin de pastille,
-                        // comme celle de l'écran 2 : une proposition posée
-                        // dans une phrase, pas l'appel à l'action de l'écran.
-                        Button(action: onPill) {
-                            BrandTagPill(pill, tone: .accentOutlined, isUppercased: true)
-                        }
-                        .buttonStyle(.plain)
-                        // La cible monte au seuil de R7 sans que la carte
-                        // grandisse : la marge négative rend à la mise en page
-                        // ce que le cadre a pris.
-                        .frame(minHeight: MemoBookSpacing.minimumTapTarget)
-                        .padding(.vertical, -(MemoBookSpacing.minimumTapTarget - 24) / 2)
-                        .contentShape(.rect)
-                        .accessibilityAddTraits(.isButton)
-                        .padding(.top, MemoBookSpacing.xs / 2)
-                    } else {
-                        BrandTagPill(pill, tone: .accentOutlined, isUppercased: true)
-                            .padding(.top, MemoBookSpacing.xs / 2)
-                    }
-                }
             }
             .foregroundStyle(MemoBookColor.ink)
             .multilineTextAlignment(.leading)
@@ -755,16 +724,14 @@ struct PaywallArgumentCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, MemoBookSpacing.xs)
-        // 10 pt et non 14 : les quatre cartes empilées prenaient assez de
-        // hauteur pour pousser le titre hors de l'écran sur un iPhone SE, et
-        // l'offre se lit d'un bloc ou ne se lit pas (Hugo, 19/09/2026).
+        // 10 pt et non 14 : les cartes empilées prenaient assez de hauteur
+        // pour pousser le titre hors de l'écran sur un iPhone SE, et l'offre se
+        // lit d'un bloc ou ne se lit pas (Hugo, 19/09/2026).
         .padding(.vertical, MemoBookSpacing.xs + 2)
         .background(MemoBookColor.background, in: shape)
         .overlay { shape.strokeBorder(MemoBookColor.outline, lineWidth: 1) }
         .rotationEffect(.degrees(argument.tilt))
-        // Une carte qui porte un bouton garde ses enfants pour VoiceOver : les
-        // fondre avalerait la pastille.
-        .accessibilityElement(children: onPill == nil ? .combine : .contain)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -809,9 +776,14 @@ struct PaywallTitle: View {
             // Sur leur ligne, la question ne se pose plus : le trait fait leur
             // largeur, sous eux. Et la phrase se lit mieux — c'est bien la fin
             // qui pèse.
+            // Le trait **derrière** les mots, et non par-dessus : posé en
+            // surcouche, il recouvrait les jambages qui descendent le plus —
+            // « en quelques jours » se lisait « en quelaues iours » (recette du
+            // 03/10/2026). Dessous, le dessin est le même et les lettres
+            // passent devant.
             Text(strong)
                 .font(MemoBookFont.h1)
-                .overlay(alignment: .bottom) { underline }
+                .background(alignment: .bottom) { underline }
         }
         .foregroundStyle(MemoBookColor.ink)
         .tracking(-0.41)

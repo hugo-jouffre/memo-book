@@ -26,9 +26,21 @@ public struct RecordingHandoff: Sendable, Hashable {
     /// forme d'onde de la bulle. Sans eux, elle serait une ligne plate.
     public let levels: [Double]
 
-    public init(id: String = UUID().uuidString.lowercased(), audio: RecordedAudio, levels: [Double]) {
+    /// C'est la limite du jour qui a coupé ce vocal, pas le voyageur (Hugo,
+    /// 03/10/2026). La conversation sait alors qu'il a vidé le crédit : la
+    /// barre arrive pâlie, et — sans réseau, faute de reçu pour apporter la
+    /// bulle de MEMO — l'app pose elle-même la bulle « reviens demain ».
+    public let stoppedAtLimit: Bool
+
+    public init(
+        id: String = UUID().uuidString.lowercased(),
+        audio: RecordedAudio,
+        levels: [Double],
+        stoppedAtLimit: Bool = false
+    ) {
         self.id = id
         self.audio = audio
         self.levels = levels
+        self.stoppedAtLimit = stoppedAtLimit
     }
 }

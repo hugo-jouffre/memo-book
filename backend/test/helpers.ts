@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import pino from "pino";
@@ -95,6 +98,7 @@ export async function resetDatabase(prisma: PrismaClient): Promise<void> {
           "print_order_copies",
           "print_orders",
           "renders",
+          "trip_daily_usage",
           "chat_messages",
           "entries",
           "media_assets",
@@ -185,3 +189,16 @@ export function multipartBody(
     contentType: `multipart/form-data; boundary=${boundary}`,
   };
 }
+
+const fixtures = resolve(dirname(fileURLToPath(import.meta.url)), "fixtures/audio");
+
+/**
+ * **Un vrai vocal**, et non quelques octets : le serveur mesure la durée dans
+ * le fichier (`lib/mp4Duration.ts`) et refuse ce qu'il ne lit pas. Deux `.m4a`
+ * AAC encodés par `afconvert` — ~2,1 s et ~7,1 s une fois l'amorce de
+ * l'encodeur comptée.
+ */
+export const VOICE_FIXTURES = {
+  short: readFileSync(resolve(fixtures, "vocal-2s.m4a")),
+  long: readFileSync(resolve(fixtures, "vocal-7s.m4a")),
+} as const;

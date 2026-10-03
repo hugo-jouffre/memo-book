@@ -1,6 +1,8 @@
 import Foundation
+import MemoBookCore
 import MemoBookRecording
 import Observation
+import UIKit
 
 /// Ce que la feuille d'enregistrement sait faire : ouvrir le micro, le
 /// suspendre, tout reprendre depuis le début, et rendre le vocal.
@@ -15,6 +17,12 @@ import Observation
 /// exception Objective-C que Swift ne rattrape pas, et il reste des formats de
 /// matériel qu'on ne sait pas prévoir. Le texte n'était qu'un retour visuel —
 /// c'est le vocal qui fait le carnet, et le serveur qui le transcrit (T176).
+///
+/// **Le crédit du jour s'y applique comme dans la conversation** (Hugo,
+/// 03/10/2026) : le vocal de l'accueil vise le voyage en cours, et consomme
+/// son crédit. Mêmes règles que la barre du chat — le bandeau rouge doux à
+/// trente secondes, qui pulse sous cinq, l'arrêt net à zéro (le vocal part),
+/// et rien à enregistrer quand le crédit est déjà épuisé.
 @MainActor
 @Observable
 public final class RecordingModel {
@@ -47,13 +55,39 @@ public final class RecordingModel {
 
     private var sampler: Task<Void, Never>?
 
+    /// Le crédit du jour du voyage visé, lu sur le flux d'accueil
+    /// (``Trip/dailyCredit``) et relu avec le dernier geste d'abonnement de la
+    /// session. `nil` : on ne sait rien, on enregistre sans compter et le
+    /// serveur tranche. Lu **rechargé** — voir ``currentCredit``.
+    public var credit: DailyCredit?
+
+    /// Le crédit tel qu'il vaut maintenant : celui de l'accueil vient souvent
+    /// du cache, et épuisé hier soir, il est plein ce matin — même dans
+    /// l'avion, où la file gardera le vocal (03/10/2026,
+    /// ``DailyCredit/refreshed(now:calendar:)``).
+    var currentCredit: DailyCredit? { credit?.refreshed(now: .now) }
+
+    /// Le disque pâli a été touché, crédit épuisé : le bandeau dit pourquoi.
+    public private(set) var showsExhaustedNotice = false
+
+    /// La limite a coupé le dernier vocal — il est parti quand même.
+    public private(set) var stoppedAtLimit = false
+
+    /// Ce que fait l'arrêt net : rendre le vocal capturé et ses niveaux, pour
+    /// qu'il parte comme si on avait touché « Envoyer ». Posé par la feuille.
+    public var onLimitReached: ((RecordedAudio, [Double]) -> Void)?
+
+    /// La phase du bandeau au dernier relevé — on ne vibre qu'aux changements.
+    private var lastPhase: DailyCredit.Phase = .calm
+
     /// Un échantillon toutes les 80 ms. C'est la cadence de la frise, et donc
     /// sa vitesse : plus court, elle défile trop vite pour qu'on suive ; plus
     /// long, elle saute d'une barre à l'autre.
     private static let samplingInterval = Duration.milliseconds(80)
 
-    public init(recorder: AudioRecorder = AudioRecorder()) {
+    public init(recorder: AudioRecorder = AudioRecorder(), credit: DailyCredit? = nil) {
         self.recorder = recorder
+        self.credit = credit
     }
 
     public var isRecording: Bool { recorder.isRecording }
@@ -65,6 +99,20 @@ public final class RecordingModel {
     /// Rien n'a encore été enregistré : ni son, ni temps. C'est l'état
     /// d'ouverture de la feuille, et celui où « Recommencer » n'a rien à faire.
     public var isUntouched: Bool { !isRecording && levels.isEmpty }
+
+    /// Plus de crédit aujourd'hui pour ce voyage : le disque pâlit — sans se
+    /// désactiver — et le toucher montre le bandeau. Jamais pour un abonné.
+    public var isCreditExhausted: Bool { currentCredit?.isExhausted == true }
+
+    /// Le bandeau au-dessus du disque — ``DailyCreditBanner``. Pendant qu'on
+    /// parle, le compte à rebours ; crédit épuisé, « Crédit du jour épuisé ».
+    public var creditBanner: DailyCreditBanner? {
+        guard let credit = currentCredit, !credit.isUnlimited else { return nil }
+        if isRecording {
+            return DailyCreditBanner.whileRecording(credit: credit, elapsedMs: recorder.elapsedMilliseconds)
+        }
+        return credit.isExhausted ? .exhausted : nil
+    }
 
     /// Le chrono, en `m:ss`. Les minutes ne sont pas complétées à deux
     /// chiffres : la maquette écrit « 0:06 », pas « 00:06 ».
@@ -94,6 +142,15 @@ public final class RecordingModel {
 
     public func start() async {
         guard !isRecording, !isBusy else { return }
+        // Plus de crédit : ni micro, ni demande d'accès pour rien. Le bandeau
+        // est déjà là ; le toucher du disque le fait vibrer.
+        guard !isCreditExhausted else {
+            if showsExhaustedNotice {
+                UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            }
+            showsExhaustedNotice = true
+            return
+        }
 
         isBusy = true
         defer { isBusy = false }
@@ -109,6 +166,8 @@ public final class RecordingModel {
         errorMessage = nil
         levels = []
         capturedLevels = []
+        lastPhase = .calm
+        stoppedAtLimit = false
         startSampling()
     }
 
@@ -171,8 +230,46 @@ public final class RecordingModel {
                 if self.levels.count > BrandWaveformCapacity.maximum {
                     self.levels.removeFirst(self.levels.count - BrandWaveformCapacity.maximum)
                 }
+                self.watchCredit()
             }
         }
+    }
+
+    // MARK: - Le crédit du jour
+
+    /// Ce que le crédit fait à l'enregistrement, à chaque relevé — la même
+    /// règle que ``ChatModel`` : un retour haptique et une annonce quand le
+    /// bandeau paraît, un autre quand il pulse, l'arrêt net à zéro.
+    private func watchCredit() {
+        guard let credit = currentCredit, !credit.isUnlimited, isCapturing else { return }
+        let remaining = credit.remainingMs(whileRecording: recorder.elapsedMilliseconds)
+        let phase = credit.phase(remainingMs: remaining)
+        guard phase != lastPhase else { return }
+        lastPhase = phase
+
+        switch phase {
+        case .calm:
+            break
+        case .warning:
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            UIAccessibility.post(notification: .announcement, argument: DailyCreditCopy.warning(remainingMs: remaining))
+        case .urgent:
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        case .exhausted:
+            stopAtLimit()
+        }
+    }
+
+    /// **L'arrêt net** : ce qui a été dit part — jamais on ne jette la fin
+    /// d'un récit parce que la minute est passée. Les niveaux sont lus avant
+    /// de refermer, comme pour « Envoyer ».
+    private func stopAtLimit() {
+        let levels = capturedLevels
+        guard let audio = finish() else { return }
+        stoppedAtLimit = true
+        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+        UIAccessibility.post(notification: .announcement, argument: ChatCopy.Credit.stoppedAnnouncement)
+        onLimitReached?(audio, levels)
     }
 
     private func stopSampling() {

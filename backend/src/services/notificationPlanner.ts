@@ -3,14 +3,13 @@ import {
   birthdayText,
   learnedPeriodText,
   newStoryText,
+  renewalReminderText,
   schoolHolidaysText,
-  trialEndText,
   tripEndText,
   unorderedBookText,
   weeklyDigestText,
   writingReminderText,
   type NotificationText,
-  type SubscriptionAtTripEnd,
   type ThreadedNotificationText,
 } from "./notificationCopy.js";
 import { addDays, daysBetween, sameDayInYear, yearOf, type LocalDate } from "./localCalendar.js";
@@ -37,9 +36,18 @@ import { periodsOf, type SchoolCalendar, type SchoolHolidayPeriod } from "./scho
 /** Les trois familles de la feuille. */
 export type NotificationFamily = "billing" | "engagement" | "holiday";
 
-export const FAMILY_OF: Record<NotificationKind, NotificationFamily> = {
-  trial_end: "billing",
+/**
+ * Ce qui part **par APNs** : toutes les valeurs de `NotificationKind`, sauf
+ * l'e-mail de fin de voyage. Lui n'emprunte que le journal
+ * (`notification_deliveries`), pour son « une seule fois » ; il n'a ni heure
+ * de notification, ni palier, ni place dans les plafonds — voir
+ * `planTripEndEmail`.
+ */
+export type PushKind = Exclude<NotificationKind, "trip_end_email">;
+
+export const FAMILY_OF: Record<PushKind, NotificationFamily> = {
   trip_end: "billing",
+  renewal_reminder: "billing",
   writing_reminder: "engagement",
   unordered_book: "engagement",
   new_story: "engagement",
@@ -50,21 +58,22 @@ export const FAMILY_OF: Record<NotificationKind, NotificationFamily> = {
 };
 
 /**
- * Ce que chaque palier reçoit. **L'essentiel pour tous** — fin d'essai, fin
- * de voyage —, puis au rythme modéré les relances d'écriture (moins souvent,
- * `MAX_REMINDERS_PER_SILENCE`) et le résumé de la semaine, et le reste au
- * rythme soutenu. Voir `notificationRhythm.ts` pour les paliers.
+ * Ce que chaque palier reçoit. **L'essentiel pour tous** — la fin du voyage
+ * et le rappel avant le renouvellement de l'abonnement —, puis au rythme
+ * modéré les relances d'écriture (moins souvent, `MAX_REMINDERS_PER_SILENCE`)
+ * et le résumé de la semaine, et le reste au rythme soutenu. Voir
+ * `notificationRhythm.ts` pour les paliers.
  *
  * « Nouveau récit » est au rythme soutenu seulement : il suit chaque récit
  * d'un co-voyageur, quand le résumé de la semaine en fait le point une fois
  * par semaine — c'est lui que reçoit le rythme modéré.
  */
-const TIER_ALLOWS: Record<RhythmTier, ReadonlySet<NotificationKind>> = {
-  light: new Set(["trial_end", "trip_end"]),
-  moderate: new Set(["trial_end", "trip_end", "writing_reminder", "weekly_digest"]),
+const TIER_ALLOWS: Record<RhythmTier, ReadonlySet<PushKind>> = {
+  light: new Set(["trip_end", "renewal_reminder"]),
+  moderate: new Set(["trip_end", "renewal_reminder", "writing_reminder", "weekly_digest"]),
   sustained: new Set([
-    "trial_end",
     "trip_end",
+    "renewal_reminder",
     "writing_reminder",
     "new_story",
     "weekly_digest",
@@ -84,9 +93,9 @@ const TIER_ALLOWS: Record<RhythmTier, ReadonlySet<NotificationKind>> = {
  * la même époque dit plus qu'un anniversaire, qui dit plus que les vacances
  * scolaires d'une zone entière.
  */
-const PRIORITY: Record<NotificationKind, number> = {
+const PRIORITY: Record<PushKind, number> = {
   trip_end: 100,
-  trial_end: 90,
+  renewal_reminder: 90,
   new_story: 60,
   writing_reminder: 50,
   weekly_digest: 45,
@@ -102,9 +111,9 @@ const PRIORITY: Record<NotificationKind, number> = {
  * quand on a sa journée à raconter (« Une entrée chaque soir ») — et le point
  * de la semaine juste avant, en fin de journée.
  */
-const EARLIEST_HOUR: Record<NotificationKind, number> = {
-  trial_end: 10,
+const EARLIEST_HOUR: Record<PushKind, number> = {
   trip_end: 10,
+  renewal_reminder: 10,
   writing_reminder: 19,
   new_story: 10,
   weekly_digest: 18,
@@ -121,12 +130,43 @@ export const LATEST_HOUR = 21;
 export const FIRST_SENDING_HOUR = Math.min(...Object.values(EARLIEST_HOUR));
 
 /**
- * « Fin des 3 étapes offertes » : le **lendemain** du jour où la dernière est
- * racontée — le jour même, le paywall vient de le dire dans l'app. Une
- * semaine au plus : un compte épuisé depuis longtemps ne la reçoit pas au
- * premier passage du serveur.
+ * Le rappel avant le renouvellement : **trois jours avant**, ou deux si la
+ * passe de la veille l'a manqué. Jamais la veille : Apple demande de résilier
+ * au moins vingt-quatre heures avant le renouvellement, et un rappel qui
+ * arrive trop tard pour servir n'est qu'un reproche (Hugo, 03/10/2026).
  */
-const TRIAL_END_DAYS_AFTER = { from: 1, to: 7 } as const;
+const RENEWAL_REMINDER_DAYS_BEFORE = [3, 2] as const;
+
+/**
+ * Le rappel avant le renouvellement se tait quand la fin d'un voyage vient
+ * de le dire : « coupe-le en un geste » deux jours de suite, c'est insister.
+ */
+const RENEWAL_REMINDER_QUIET_AFTER_TRIP_END_DAYS = 3;
+
+/**
+ * Deux rappels avant le renouvellement sont espacés d'au moins ce nombre de
+ * jours. Un abonnement mensuel n'en perd aucun — deux renouvellements sont à
+ * vingt-huit jours au moins, vingt-sept quand le premier rappel a été
+ * rattrapé à J-2 —, et l'ancien abonnement à la semaine, encore honoré, n'en
+ * reçoit qu'un toutes les quatre semaines au lieu d'un chaque semaine, qui
+ * ferait en plus taire toute autre notification ce jour-là (03/10/2026).
+ */
+const RENEWAL_REMINDER_MIN_GAP_DAYS = 25;
+
+/**
+ * L'e-mail de fin de voyage : le **lendemain** de la date de fin — le jour
+ * même, la notification et l'accueil viennent de le dire —, ou dans les deux
+ * jours qui suivent si la passe l'a manqué. Au-delà, il arriverait trop loin
+ * du voyage pour qu'on comprenne pourquoi il arrive.
+ */
+const TRIP_END_EMAIL_DAYS_AFTER = { from: 1, to: 3 } as const;
+
+/**
+ * L'e-mail part aux heures des notifications : pas avant 10 h chez le
+ * voyageur, rien après 21 h (`LATEST_HOUR`). Un rappel d'argent lu au réveil
+ * ou à minuit se lit mal.
+ */
+export const TRIP_END_EMAIL_EARLIEST_HOUR = 10;
 
 /**
  * Combien de relances d'écriture d'affilée sur un même silence. Le rythme
@@ -191,8 +231,6 @@ export interface PlannerTrip {
   isOwner: boolean;
   /** Une commande d'impression partie (ni brouillon, ni annulée). */
   hasOrder: boolean;
-  /** Ce que **ce voyageur** a payé d'abonnement pour ce voyage, en centimes. */
-  paidCents: number;
   /** Le prix estimé du carnet, en centimes. */
   estimateCents: number;
   /** Le propriétaire et les co-voyageurs actifs. */
@@ -217,7 +255,7 @@ export interface NewFromOthers {
 }
 
 export interface PlannerDelivery {
-  kind: NotificationKind;
+  kind: PushKind;
   dedupeKey: string;
   sentOn: LocalDate;
   opened: boolean;
@@ -228,18 +266,22 @@ export interface PlannerAccount {
   birthDate: LocalDate | null;
   /** La zone, ou les premières vacances tant qu'il n'a pas de code postal. */
   schoolCalendar: SchoolCalendar | null;
-  /** Les étapes offertes à l'ouverture ; `null` pour un compte sans quota. */
-  offeredSteps: number | null;
-  /** Les étapes offertes qui restent ; `null` pour un compte sans quota. */
-  remainingSteps: number | null;
-  /** Le jour où la dernière étape offerte a été validée, quand elles le sont toutes. */
-  stepsExhaustedOn: LocalDate | null;
-  /** Un abonnement vivant, ou résilié dont la semaine payée court encore. */
-  isSubscribed: boolean;
-  /** Un abonnement App Store vivant dont le renouvellement est armé. */
+  /**
+   * Un abonnement App Store vivant dont le renouvellement est armé — le seul
+   * dont on parle : plus aucun abonnement ne s'arrête seul (03/10/2026).
+   */
   renewsAtApple: boolean;
-  /** Un abonnement vivant hors App Store — le serveur l'arrête seul. */
-  stopsAutomatically: boolean;
+  /**
+   * Le jour où cet abonnement se renouvelle, chez le voyageur — le plus proche
+   * s'il en a deux. Nul sans abonnement armé, ou tant qu'Apple ne l'a pas dit.
+   */
+  renewsOn: LocalDate | null;
+  /**
+   * Une adresse où écrire. Sans elle — une entrée par Apple qui ne la
+   * certifie pas —, l'e-mail de fin de voyage ne part pas (`sendTripEndEmails`
+   * ne lit que les comptes qui en ont une), et rien ne doit compter dessus.
+   */
+  hasEmail: boolean;
   /** A-t-il écrit à MEMO ces quatorze derniers jours ? */
   usedRecently: boolean;
   /** Ses voyages : ceux qu'il possède et ceux où il est co-voyageur. */
@@ -249,7 +291,7 @@ export interface PlannerAccount {
 }
 
 export interface PlannedNotification extends NotificationText {
-  kind: NotificationKind;
+  kind: PushKind;
   family: NotificationFamily;
   /** Unique pour tout le serveur : « une seule fois » se lit ici. */
   dedupeKey: string;
@@ -271,7 +313,8 @@ export interface PlannedNotification extends NotificationText {
 // ---------------------------------------------------------------------------
 
 export const NOTIFICATION_LINKS = {
-  paywall: "memobook://paywall",
+  /** La feuille de l'abonnement, où il se coupe en un geste (03/10/2026). */
+  subscription: "memobook://subscription",
   newTrip: "memobook://trips/new",
   chat: (tripId: string) => `memobook://trips/${tripId}/chat`,
   wallet: (tripId: string) => `memobook://trips/${tripId}/wallet`,
@@ -294,6 +337,31 @@ function isOngoing(trip: PlannerTrip, today: LocalDate): boolean {
 function isPast(trip: PlannerTrip, today: LocalDate): boolean {
   if (hasNoDates(trip)) return trip.storedStage === "past";
   return trip.endsOn !== null && trip.endsOn < today;
+}
+
+/**
+ * Un voyage court encore ou s'annonce : l'abonnement sert, l'e-mail de fin de
+ * voyage n'en dit rien. Un voyage sans date de fin court encore, sauf s'il
+ * n'a aucune date et que son étape dit qu'il est passé.
+ */
+function hasTripStillRunning(trips: PlannerTrip[], today: LocalDate): boolean {
+  return trips.some((trip) => (trip.endsOn === null ? !isPast(trip, today) : trip.endsOn >= today));
+}
+
+/**
+ * Les jours où l'e-mail de fin de voyage part, est parti ou va partir : de la
+ * fin d'un voyage à J+3 (`TRIP_END_EMAIL_DAYS_AFTER`), quand plus aucun voyage
+ * ne court — les conditions de `planTripEndEmail`, sans l'heure ni le journal.
+ * Jamais pour un compte sans adresse (03/10/2026) : l'e-mail n'y part pas, et
+ * le rappel qui se tairait pour lui laisserait le voyageur sans rien.
+ */
+function tripEndEmailWindow(account: PlannerAccount, today: LocalDate): boolean {
+  if (!account.hasEmail || !account.renewsAtApple || hasTripStillRunning(account.trips, today)) return false;
+  return account.trips.some((trip) => {
+    if (trip.endsOn === null) return false;
+    const sinceEnd = daysBetween(trip.endsOn, today);
+    return sinceEnd >= 0 && sinceEnd <= TRIP_END_EMAIL_DAYS_AFTER.to;
+  });
 }
 
 /**
@@ -336,7 +404,7 @@ function rhythmFor(account: PlannerAccount, declaredPace: string | null): Rhythm
 
 function planned(
   account: PlannerAccount,
-  kind: NotificationKind,
+  kind: PushKind,
   key: string,
   memoId: string | null,
   link: string,
@@ -370,48 +438,24 @@ export function planNotifications(
 ): PlannedNotification[] {
   const candidates: PlannedNotification[] = [];
   const accountTier = accountRhythm(account).tier;
-  const allowed = (kind: NotificationKind, tier: RhythmTier = accountTier) => TIER_ALLOWS[tier].has(kind);
+  const allowed = (kind: PushKind, tier: RhythmTier = accountTier) => TIER_ALLOWS[tier].has(kind);
 
   // --- Facturation ---------------------------------------------------------
-
-  // Fin des 3 étapes offertes : le lendemain de la dernière. Pas pour un
-  // abonné, ni pour un compte sans quota (`remainingSteps` nul) : il n'a pas
-  // d'étapes offertes à épuiser.
-  if (
-    !account.isSubscribed &&
-    account.offeredSteps &&
-    account.remainingSteps === 0 &&
-    account.stepsExhaustedOn
-  ) {
-    const since = daysBetween(account.stepsExhaustedOn, today);
-    if (since >= TRIAL_END_DAYS_AFTER.from && since <= TRIAL_END_DAYS_AFTER.to) {
-      candidates.push(
-        planned(account, "trial_end", "once", null, NOTIFICATION_LINKS.paywall, trialEndText(account.offeredSteps)),
-      );
-    }
-  }
 
   for (const trip of account.trips) {
     // Fin du voyage : le jour de la date de fin renseignée.
     if (trip.endsOn !== today || !trip.notificationsEnabled || !trip.notifyTripEnd) continue;
 
-    // L'abonnement ne s'arrête que s'il n'y a plus d'autre voyage à venir ou
-    // en cours — la règle même de `countRunningTrips` (`subscriptions.ts`) :
-    // sinon il sert encore, et on n'en dit rien.
+    // On ne parle de l'abonnement que s'il n'y a plus d'autre voyage à venir
+    // ou en cours : sinon il sert encore, et on n'en dit rien.
     const otherTripRunning = account.trips.some(
       (other) => other.id !== trip.id && (other.endsOn === null || other.endsOn > today),
     );
-    const subscription: SubscriptionAtTripEnd = otherTripRunning
-      ? "none"
-      : account.renewsAtApple
-        ? "renews_at_apple"
-        : account.stopsAutomatically
-          ? "stops_automatically"
-          : "none";
+    const renewal = !otherTripRunning && account.renewsAtApple ? { renewsOn: account.renewsOn } : null;
 
     // Un voyage où rien n'a été raconté et sans abonnement à couper : il n'y
     // a rien à dire, ni commande à proposer.
-    if (trip.storyCount === 0 && subscription === "none") continue;
+    if (trip.storyCount === 0 && renewal === null) continue;
 
     candidates.push(
       planned(
@@ -420,15 +464,51 @@ export function planNotifications(
         trip.id,
         trip.id,
         NOTIFICATION_LINKS.wallet(trip.id),
-        tripEndText({
-          trip,
-          subscription,
-          paidCents: trip.paidCents,
-          estimateCents: trip.estimateCents,
-          hasStories: trip.storyCount > 0,
-        }),
+        tripEndText({ trip, renewal, estimateCents: trip.estimateCents, hasStories: trip.storyCount > 0 }),
       ),
     );
+  }
+
+  // Avant le renouvellement : l'abonnement va repartir pour une période,
+  // alors qu'aucun voyage ne court ni ne commence d'ici là — le jour du
+  // renouvellement compris, puisqu'un voyage qui part ce jour-là s'en sert.
+  // **Une fois par période** : la clé porte la date du renouvellement — et
+  // jamais deux à moins de `RENEWAL_REMINDER_MIN_GAP_DAYS`.
+  if (account.renewsAtApple && account.renewsOn) {
+    const daysBefore = daysBetween(today, account.renewsOn);
+    const tripEndJustSaidIt =
+      account.deliveries.some(
+        (delivery) =>
+          delivery.kind === "trip_end" && daysBetween(delivery.sentOn, today) < RENEWAL_REMINDER_QUIET_AFTER_TRIP_END_DAYS,
+      ) ||
+      // L'e-mail de fin de voyage n'est pas dans `deliveries` (il fausserait
+      // le taux d'ouverture et les plafonds) : on le lit sur la date de fin.
+      // Il dit la même chose que ce rappel, du lendemain de la fin à J+3, et
+      // il part même quand « Rappel de fin de voyage » est coupé — le rappel
+      // se tait donc dans ces jours-là, notification de fin partie ou non.
+      // Seulement s'il part vraiment : un compte sans adresse garde son rappel.
+      tripEndEmailWindow(account, today);
+    const remindedRecently = account.deliveries.some(
+      (delivery) =>
+        delivery.kind === "renewal_reminder" && daysBetween(delivery.sentOn, today) < RENEWAL_REMINDER_MIN_GAP_DAYS,
+    );
+    if (
+      (RENEWAL_REMINDER_DAYS_BEFORE as readonly number[]).includes(daysBefore) &&
+      !hasTripDuring(account.trips, today, account.renewsOn, today) &&
+      !tripEndJustSaidIt &&
+      !remindedRecently
+    ) {
+      candidates.push(
+        planned(
+          account,
+          "renewal_reminder",
+          account.renewsOn,
+          null,
+          NOTIFICATION_LINKS.subscription,
+          renewalReminderText({ renewsOn: account.renewsOn, daysBefore }),
+        ),
+      );
+    }
   }
 
   // --- Rythme : les carnets qui se taisent ---------------------------------
@@ -614,6 +694,61 @@ export function planNotifications(
   }
 
   return candidates;
+}
+
+// ---------------------------------------------------------------------------
+// L'e-mail de fin de voyage
+// ---------------------------------------------------------------------------
+
+/** L'e-mail de fin de voyage qu'un compte doit recevoir aujourd'hui. */
+export interface PlannedTripEndEmail {
+  kind: "trip_end_email";
+  /** Une fois par voyage, dans le même journal que les notifications. */
+  dedupeKey: string;
+  trip: PlannerTrip;
+}
+
+/**
+ * **L'e-mail de fin de voyage** (Hugo, 03/10/2026) — le rappel de couper
+ * l'abonnement, pour qui ne lit pas les notifications.
+ *
+ * C'est la promesse du paywall, « On te rappelle de résilier » : une
+ * notification refusée ne doit pas la rompre. Il part donc aussi aux comptes
+ * **sans** téléphone enregistré, et ne dépend ni des alertes du voyage ni du
+ * rythme du récit — ce n'est pas une relance, c'est l'argent du voyageur.
+ *
+ * Le lendemain de la fin d'un voyage (jusqu'à J+3), à un compte dont
+ * l'abonnement App Store va se renouveler, quand plus aucun voyage ne court
+ * ni ne s'annonce — sinon l'abonnement sert encore, et on n'en dit rien,
+ * comme la notification du jour de la fin. S'il y en a deux, le voyage fini
+ * le plus récemment : un e-mail par jour suffit à le dire.
+ *
+ * `today` et `hour` sont ceux du voyageur. « Une seule fois », c'est la clé
+ * unique du journal qui le tient (`sendTripEndEmails`).
+ */
+export function planTripEndEmail(
+  account: PlannerAccount,
+  today: LocalDate,
+  hour: number,
+): PlannedTripEndEmail | null {
+  if (hour < TRIP_END_EMAIL_EARLIEST_HOUR || hour >= LATEST_HOUR) return null;
+  if (!account.hasEmail || !account.renewsAtApple) return null;
+  if (hasTripStillRunning(account.trips, today)) return null;
+
+  const justEnded = account.trips
+    .filter((trip) => {
+      if (trip.endsOn === null) return false;
+      const sinceEnd = daysBetween(trip.endsOn, today);
+      return sinceEnd >= TRIP_END_EMAIL_DAYS_AFTER.from && sinceEnd <= TRIP_END_EMAIL_DAYS_AFTER.to;
+    })
+    .sort((a, b) => b.endsOn!.localeCompare(a.endsOn!))[0];
+  if (!justEnded) return null;
+
+  return {
+    kind: "trip_end_email",
+    dedupeKey: `${account.id}:trip_end_email:${justEnded.id}`,
+    trip: justEnded,
+  };
 }
 
 // ---------------------------------------------------------------------------

@@ -26,6 +26,7 @@ function recordingMailer() {
       if (state.failing) throw new Error("Resend a refusé l’envoi (422) : domaine non vérifié");
       sent.push(message);
     },
+    async sendSubscriptionReminder() {},
   };
   return { mailer, sent, state };
 }
@@ -356,6 +357,18 @@ describe("L’archive", () => {
     await prisma.render.create({
       data: { memoId: rome.id, status: "ready", pdfUrl: "https://pdf.memobook.test/rome.pdf" },
     });
+    // Le compteur du crédit du jour (politique de confidentialité, § 2.6).
+    await prisma.tripDailyUsage.create({
+      data: {
+        memoId: rome.id,
+        day: new Date("2026-08-27T00:00:00Z"),
+        usedMs: 300_000,
+        voiceMs: 240_000,
+        textCharacters: 800,
+        limitNotifiedAt: new Date("2026-08-27T19:00:00Z"),
+      },
+    });
+    await prisma.account.update({ where: { id: me.accountId }, data: { timeZone: "Europe/Rome" } });
     await prisma.accountConnector.create({
       data: {
         accountId: me.accountId,
@@ -413,22 +426,39 @@ describe("L’archive", () => {
     const json = <T>(path: string) => JSON.parse(read(path) ?? "null") as T;
 
     // Le compte.
-    const account = json<{ email: string; phoneNumber: string; birthDate: string; signIn: { hasPassword: boolean } }>(
-      "compte.json",
-    );
+    const account = json<{
+      email: string;
+      phoneNumber: string;
+      birthDate: string;
+      timeZone: string | null;
+      signIn: { hasPassword: boolean };
+    }>("compte.json");
     expect(account.email).toBe("hugo@memobook.app");
     expect(account.phoneNumber).toBe("+33 6 22 22 22 22");
     expect(account.birthDate).toBe("1994-05-12");
     expect(account.signIn.hasPassword).toBe(true);
+    expect(account.timeZone).toBe("Europe/Rome");
 
     // Ses deux voyages, dans l'ordre, et pas celui d'un autre.
     const trips = [...new Set([...files.keys()].filter((name) => name.includes("/voyages/")).map((name) => name.split("/")[2]))];
     expect(trips).toEqual(["01-rome-2026-trastevere", "02-lisbonne"]);
 
-    const romeTrip = json<{ yourRole: string; books: { file: string; orderedByYou: boolean }[] }>(
-      "voyages/01-rome-2026-trastevere/voyage.json",
-    );
+    const romeTrip = json<{
+      yourRole: string;
+      books: { file: string; orderedByYou: boolean }[];
+      dailyCredit: unknown[];
+    }>("voyages/01-rome-2026-trastevere/voyage.json");
     expect(romeTrip.yourRole).toBe("owner");
+    // Le crédit du jour, jour par jour (03/10/2026).
+    expect(romeTrip.dailyCredit).toEqual([
+      {
+        day: "2026-08-27",
+        usedMs: 300_000,
+        voiceMs: 240_000,
+        textCharacters: 800,
+        limitNotifiedAt: "2026-08-27T19:00:00.000Z",
+      },
+    ]);
     expect(romeTrip.books.map((book) => [book.file, book.orderedByYou])).toEqual([["carnet.pdf", false]]);
     expect(json<{ yourRole: string }>("voyages/02-lisbonne/voyage.json").yourRole).toBe("coTraveller");
 
@@ -462,6 +492,7 @@ describe("L’archive", () => {
     // Le fichier disparu n'empêche rien : il est nommé dans le LISEZ-MOI.
     const readme = read("LISEZ-MOI.txt") ?? "";
     expect(readme).toContain("Fichiers absents");
+    expect(readme).toContain("son crédit du jour");
     expect(readme).toMatch(/voyages\/01-rome-2026-trastevere\/souvenirs\/2026-08-28_20-00_vocal_[0-9a-f]{8}\.m4a/);
 
     // Ce qui ne doit jamais sortir.

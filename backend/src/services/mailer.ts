@@ -6,6 +6,7 @@ import { publicApiBaseUrl } from "./avatars.js";
 import {
   renderDataExportMail,
   renderPasswordResetMail,
+  renderSubscriptionReminderMail,
   type RenderedMail,
 } from "./mailTemplates.js";
 
@@ -31,6 +32,17 @@ export interface Mailer {
    * sept jours, la base n'en garde que l'empreinte.
    */
   sendDataExport(message: DataExportMail): Promise<void>;
+
+  /**
+   * Le lendemain de la fin d'un voyage : le rappel de couper l'abonnement
+   * s'il ne sert plus d'ici le prochain (`subscription.reminder`, Hugo,
+   * 03/10/2026). C'est la promesse du paywall, « On te rappelle de
+   * résilier », tenue aussi pour qui a refusé les notifications.
+   *
+   * Pas de secret ici : le bouton mène à la page des abonnements d'Apple, la
+   * seule où un abonnement App Store se coupe.
+   */
+  sendSubscriptionReminder(message: SubscriptionReminderMail): Promise<void>;
 }
 
 export interface PasswordResetMail {
@@ -47,6 +59,31 @@ export interface DataExportMail {
   token: string;
   expiresAt: Date;
 }
+
+export interface SubscriptionReminderMail {
+  to: string;
+  firstName: string | null;
+  /** Le voyage qui vient de finir. */
+  trip: { title: string; city: string | null };
+  /**
+   * La fin de la période payée (`subscriptions.renewsAt`) : résilié
+   * aujourd'hui, l'illimité court jusque-là. Nulle tant qu'Apple ne l'a pas
+   * dite — l'e-mail parle alors de « la période déjà payée ».
+   */
+  unlimitedUntil: Date | null;
+  /**
+   * L'estimation du carnet qui attend sa commande, en centimes. Nulle pour un
+   * carnet vide ou déjà commandé : il n'y a rien à proposer.
+   */
+  bookEstimateCents: number | null;
+}
+
+/**
+ * La page des abonnements d'Apple — sur un iPhone, elle ouvre Réglages ▸ ton
+ * nom ▸ Abonnements. Un abonnement App Store ne se coupe que là : Apple ne
+ * laisse aucune app résilier à la place de son client.
+ */
+export const APPLE_SUBSCRIPTIONS_URL = "https://apps.apple.com/account/subscriptions";
 
 /**
  * Le lien du bouton « Réinitialiser mon mot de passe ». En production, il mène
@@ -91,6 +128,10 @@ function mailerOver(env: Env, transport: Transport): Mailer {
     },
     async sendDataExport(message) {
       const mail = renderDataExportMail(message, dataExportUrl(env, message.token));
+      await transport.send(message.to, mail);
+    },
+    async sendSubscriptionReminder(message) {
+      const mail = renderSubscriptionReminderMail(message, APPLE_SUBSCRIPTIONS_URL);
       await transport.send(message.to, mail);
     },
   };

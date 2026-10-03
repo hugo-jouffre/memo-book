@@ -139,8 +139,10 @@ Le seed pose un compte de démonstration et de quoi remplir les trois écrans :
 
 Trois voyages — un en cours avec ses trois étapes et ses souvenirs, un terminé
 et imprimable avec une commande en production, un à venir — une cagnotte
-alimentée par son registre, un abonnement actif, les mises en avant de l'écran
-de bienvenue et la modale d'avis.
+alimentée par son registre, un abonnement mensuel actif (récit illimité), les
+mises en avant de l'écran de bienvenue et la modale d'avis. Un second compte,
+`demo@memo-book.com` (même mot de passe), reste **gratuit** : c'est lui qui
+montre le crédit du jour — 5 minutes de récit par voyage et par jour.
 
 Vérifie côté serveur avant de lancer Xcode :
 

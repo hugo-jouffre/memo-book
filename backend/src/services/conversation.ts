@@ -2,14 +2,21 @@ import type { ChatDisposition, ChatMessageKind } from "@prisma/client";
 import type { Env } from "../env.js";
 import type { CoherenceSheet, RedactedNeighbour } from "./redaction.js";
 import Anthropic from "@anthropic-ai/sdk";
+import {
+  CALLS_TO_ACTION,
+  MODEL_CALL_TO_ACTION_IDS,
+  isCallToActionId,
+  type CallToActionId,
+} from "./callsToAction.js";
 import { AnthropicResponder } from "./conversationAnthropic.js";
-import { HeuristicResponder } from "./conversationHeuristics.js";
+import { HeuristicResponder, mentionsSubscription } from "./conversationHeuristics.js";
 import {
   OPENING_TEXT,
   SCRIPTED_ANSWERS,
   SILENT_COMMANDS,
   SUGGESTION_SETS,
   fallbackPrompt,
+  isModelSuggestionId,
   isSilentCommand,
   isSuggestionId,
   type SuggestionId,
@@ -101,6 +108,12 @@ export interface ConversationInput {
     firstName: string | null;
     /** Propriétaire compris. Au-delà de un, MEMO sait qu'il parle à plusieurs. */
     memberCount: number;
+    /**
+     * Celui qui vient de parler raconte sans limite (abonnement vivant, ou
+     * résilié mais payé jusqu'à `renewsAt` — `hasUnlimitedAccess`). MEMO ne
+     * décrit pas les 5 minutes du jour à qui ne les compte plus.
+     */
+    isUnlimited: boolean;
   };
   step: {
     id: string;
@@ -128,7 +141,14 @@ export interface ConversationInput {
   /** Les trois derniers souvenirs rédigés — ce que reçoit déjà la rédaction. */
   recentEntries: RedactedNeighbour[];
   /** Ce que le code autorise ce tour-ci. Le modèle propose, le code dispose. */
-  allows: { roseEpineGraine: boolean };
+  allows: {
+    roseEpineGraine: boolean;
+    /**
+     * Les boutons que MEMO peut poser sous sa dernière bulle ce tour-ci, pris
+     * dans `callsToAction.ts` — voir `callsToActionAllowed`. Vide : aucun.
+     */
+    callsToAction: CallToActionId[];
+  };
   now: Date;
 }
 
@@ -148,6 +168,12 @@ export interface ConversationReply {
   prompt: string | null;
   /** MEMO vient de poser la rose, l'épine et la graine — à retenir dans l'état. */
   asksRoseEpineGraine: boolean;
+  /**
+   * Le bouton sous la dernière bulle — un identifiant de `callsToAction.ts`,
+   * jamais un libellé ni une adresse — ou `null`. Le job le range dans
+   * `payload.callToAction` ; le sérialiseur le résout pour chaque lecteur.
+   */
+  callToActionId: CallToActionId | null;
   /** Qui a parlé : `claude-sonnet-5`, `heuristic`, `fake`. Tracé sur la bulle. */
   model: string;
 }
@@ -250,6 +276,13 @@ const QUESTION_MARKS = /[?？]/g;
  * ce qu'on sait vérifier : une question au plus, trois bulles au plus, des
  * puces du catalogue, pas de relance quand rien ne l'autorise. Une réponse qui
  * les viole n'est pas corrigée — elle est refusée, et le repli parle.
+ *
+ * Ce qui n'est qu'en trop est jeté sans refuser la réponse : une puce hors
+ * catalogue (ou réservée au code, comme « Photos de test »), la rose/épine/
+ * graine non autorisée, un bouton que ce tour ne permet pas. Le modèle
+ * propose, le code dispose : un bouton « Découvrir l’abonnement » glissé sous
+ * le récit d'un abonné, ou sous une réponse qui ne parlait pas d'argent,
+ * tombe ici, quelle que soit la phrase qui l'a fait proposer.
  */
 export function validateReply(reply: ConversationReply, input: ConversationInput): ConversationReply {
   if (reply.beats.length === 0) throw new InvalidReplyError("Réponse vide.");
@@ -268,7 +301,7 @@ export function validateReply(reply: ConversationReply, input: ConversationInput
     }
   }
 
-  const suggestionIds = reply.suggestionIds.filter(isSuggestionId).slice(0, 3);
+  const suggestionIds = reply.suggestionIds.filter(isModelSuggestionId).slice(0, 3);
   const prompt =
     typeof reply.prompt === "string" && reply.prompt.trim().length > 0
       ? reply.prompt.trim().slice(0, PROMPT_LIMIT)
@@ -279,7 +312,63 @@ export function validateReply(reply: ConversationReply, input: ConversationInput
     suggestionIds,
     prompt,
     asksRoseEpineGraine: reply.asksRoseEpineGraine && input.allows.roseEpineGraine,
+    callToActionId:
+      reply.callToActionId !== null &&
+      input.allows.callsToAction.includes(reply.callToActionId) &&
+      MODEL_CALL_TO_ACTION_IDS.includes(reply.callToActionId)
+        ? reply.callToActionId
+        : null,
   };
+}
+
+/**
+ * Les boutons que MEMO a le droit de poser sous sa réponse à ce tour — calculé
+ * par le code, jamais par le modèle (`docs/conversation.md` § 6 bis).
+ *
+ * - **Seulement sous un texte libre.** Un vocal, des photos, une puce suivent
+ *   un déroulé écrit d'avance : personne n'y a rien demandé.
+ * - `subscribe` : **seulement si celui qui parle n'a pas déjà l'illimité, et
+ *   seulement quand son message parle du prix, de l'abonnement, du crédit ou
+ *   de la limite** (`mentionsSubscription`). MEMO ne pousse jamais
+ *   l'abonnement de lui-même (Hugo, 03/10/2026) : le lexique est la porte, le
+ *   prompt dit le reste (une question, pas une plainte ; jamais après un refus).
+ * - `open_preview` : seulement quand un rendu est prêt — sinon le bouton
+ *   ouvrirait un aperçu vide.
+ * - `open_trip_settings` et `import_photos` : sous tout texte libre ; c'est au
+ *   modèle de juger que la question porte sur un réglage ou sur les photos.
+ * - **Jamais deux fois de suite le même bouton dans le fil**
+ *   (`agents/agent-conversation.md` § 6 bis, 03/10/2026) : le bouton de la
+ *   dernière bulle de MEMO qui en porte un (`lastCallToActionId`) sort des
+ *   boutons permis — et tout bouton qui fait la même chose (`kind`) : la
+ *   bulle « reviens demain » (`daily_credit_subscribe`) porte déjà « Raconter
+ *   sans limite », et deux offres l'une sous l'autre, c'est insister. Le
+ *   repli suit de lui-même : `validateReply` jette tout bouton non permis.
+ *
+ * `daily_credit_subscribe` et `open_photo_settings` n'y sont jamais : seul le
+ * code les pose (`allowedForModel: false`).
+ */
+export function callsToActionAllowed(turn: {
+  kind: "text" | "voice" | "photos";
+  text: string | null;
+  suggestionId: string | null;
+  authorIsUnlimited: boolean;
+  hasPreview: boolean;
+  /**
+   * Le bouton de la dernière bulle de MEMO qui en porte un — la bulle
+   * « reviens demain » de ce tour d'abord, si elle est posée. `null` : aucun.
+   */
+  lastCallToActionId?: string | null;
+}): CallToActionId[] {
+  if (turn.kind !== "text" || turn.suggestionId || !turn.text?.trim()) return [];
+
+  const allowed = new Set<CallToActionId>(["open_trip_settings", "import_photos"]);
+  if (turn.hasPreview) allowed.add("open_preview");
+  if (!turn.authorIsUnlimited && mentionsSubscription(turn.text)) allowed.add("subscribe");
+
+  // Un identifiant que le catalogue ne connaît plus ne retient rien : l'app ne
+  // l'a pas affiché.
+  const last = isCallToActionId(turn.lastCallToActionId) ? CALLS_TO_ACTION[turn.lastCallToActionId].kind : null;
+  return MODEL_CALL_TO_ACTION_IDS.filter((id) => allowed.has(id) && CALLS_TO_ACTION[id].kind !== last);
 }
 
 /** L'état du carnet après un tour : la journée de la rose/épine/graine, si elle vient d'être posée. */
@@ -325,6 +414,7 @@ export function scriptedReply(
     suggestionIds: [...SUGGESTION_SETS[scripted.suggestions]],
     prompt: null,
     asksRoseEpineGraine: false,
+    callToActionId: null,
     model: "scripted",
   };
 }
@@ -384,6 +474,9 @@ export class FakeResponder implements MemoResponder {
           : [...SUGGESTION_SETS.neutral],
       prompt: `Et ensuite, à ${placeName ?? "cette étape"} ?`,
       asksRoseEpineGraine: false,
+      // Un bouton se pilote comme le reste : `new FakeResponder([{ callToActionId: "subscribe" }])`,
+      // et `validateReply` le jette si le tour ne le permettait pas.
+      callToActionId: null,
       model: "fake",
     };
 

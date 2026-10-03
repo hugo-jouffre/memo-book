@@ -30,7 +30,7 @@ type QuoteBody = {
   book: { lines: { label: string; amount: number }[]; subtotal: number };
   specifications: string[];
   fulfilment: { subtotal: number };
-  deductions: { amount: number }[];
+  deductions: { id: string; label: string; amount: number }[];
   total: number;
 };
 
@@ -223,7 +223,13 @@ describe("le récapitulatif", () => {
       method: "POST",
       url: "/v1/wallet/debug-entry",
       headers: { authorization: account.authorization },
-      payload: { amount: 25, kind: "gift", label: "Marie D." },
+      payload: { amount: 20, kind: "gift", label: "Marie D." },
+    });
+    await harness.app.inject({
+      method: "POST",
+      url: "/v1/wallet/debug-entry",
+      headers: { authorization: account.authorization },
+      payload: { amount: 5, kind: "topup", label: "Recharge" },
     });
 
     const quote = (
@@ -235,8 +241,11 @@ describe("le récapitulatif", () => {
       })
     ).json<QuoteBody>();
 
-    const deducted = quote.deductions.reduce((sum, line) => sum + line.amount, 0);
-    expect(deducted).toBeCloseTo(25, 2);
+    // **Une seule ligne, la cagnotte** (03/10/2026) : plus de « Déduction
+    // abonnements hebdomadaires versés », l'abonnement ne se déduit plus.
+    expect(quote.deductions).toEqual([
+      { id: "wallet", label: "Déduction de ta cagnotte", amount: 25 },
+    ]);
     expect(quote.total).toBeCloseTo(quote.fulfilment.subtotal - 25, 2);
   });
 });
@@ -388,7 +397,7 @@ describe("le bac à sable de la cagnotte", () => {
       method: "POST",
       url: "/v1/wallet/debug-entry",
       headers: { authorization: account.authorization },
-      payload: { amount: 1.99, kind: "topup", label: "Abonnement MB" },
+      payload: { amount: 1.99, kind: "topup", label: "Recharge" },
     });
     const second = await harness.app.inject({
       method: "POST",

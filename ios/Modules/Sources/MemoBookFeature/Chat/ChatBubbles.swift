@@ -15,7 +15,16 @@ struct ChatMessageRow: View {
     let isExpanded: Bool
     let onToggleExpansion: () -> Void
 
+    /// Ce que fait le bouton posé sous une bulle de MEMO — ``ChatCallToAction``.
+    /// C'est l'écran qui ouvre ce qu'il ouvre (le paywall, les réglages du
+    /// voyage, l'aperçu…) ; la rangée ne fait que transmettre.
+    var onCallToAction: (ChatCallToAction) -> Void = { _ in }
+
     @Environment(\.dynamicTypeSize) private var typeSize
+
+    /// « Supprimer » a été touché sous une bulle qui attend l'illimité : la
+    /// confirmation est ouverte.
+    @State private var confirmsDiscard = false
 
     var body: some View {
         VStack(alignment: alignment, spacing: MemoBookSpacing.xs / 2) {
@@ -82,16 +91,48 @@ struct ChatMessageRow: View {
     /// ni libellé : la bulle d'un texte dit dans le métro ne doit pas avoir
     /// l'air cassée, juste pas encore arrivée. VoiceOver le dit en toutes
     /// lettres.
+    ///
+    /// Une bulle qui attend le crédit de demain, ou l'illimité, reste en
+    /// retrait de la même façon : elle n'est pas partie non plus. C'est la
+    /// mention dessous qui dit pourquoi — voir ``deliveryNotice``.
     private var bubble: some View {
         bubbleBody
-            .opacity(message.delivery == .sending ? 0.6 : 1)
+            .opacity(isWaiting ? 0.6 : 1)
             .animation(.smooth(duration: 0.3), value: message.delivery)
-            .accessibilityHint(message.delivery == .sending ? ChatCopy.Voice.sending : "")
+            .accessibilityHint(waitingHint)
+    }
+
+    /// La bulle n'est pas encore chez le serveur : en route, attendant demain
+    /// ou l'illimité.
+    private var isWaiting: Bool {
+        message.delivery == .sending || message.delivery.isWaitingForCredit
+            || message.delivery.isWaitingForUnlimited
+    }
+
+    private var waitingHint: String {
+        if message.delivery.isWaitingForCredit { return ChatCopy.Voice.leavesTomorrow }
+        if message.delivery.isWaitingForUnlimited { return ChatCopy.Voice.tooLongForADay }
+        return message.delivery == .sending ? ChatCopy.Voice.sending : ""
     }
 
     @ViewBuilder
     private var bubbleBody: some View {
         switch message.body {
+        case .text(let text) where !isTraveller && model.showsCallToAction(message.callToAction):
+            // Une bulle de MEMO qui porte un bouton se dessine en carte.
+            if let callToAction = message.callToAction {
+                ChatCallToActionCard(
+                    text: text,
+                    callToAction: callToAction,
+                    state: model.callToActionState(for: message.id),
+                    onFollow: {
+                        model.followCallToAction(of: message.id)
+                        onCallToAction(callToAction)
+                    },
+                    onDismiss: { model.dismissCallToAction(of: message.id) }
+                )
+            }
+
         case .text(let text):
             BrandChatBubble(author: message.author) {
                 Text(text)
@@ -158,9 +199,73 @@ struct ChatMessageRow: View {
 
     /// « Non envoyé », sous la bulle qui n'est pas passée. La bulle reste :
     /// perdre le message serait perdre ce qu'il racontait.
+    ///
+    /// **« Partira demain »**, en gris et sans « Réessayer », sous une bulle que
+    /// le serveur a refusée faute de crédit du jour (Hugo, 03/10/2026) : elle
+    /// attend sur le téléphone et repart toute seule à la recharge. Un
+    /// « Réessayer » rouge ferait renvoyer en boucle vers le même refus.
+    ///
+    /// **« Trop long pour une journée · Passer en illimité »** sous une bulle
+    /// qui coûte plus qu'une journée entière de crédit (03/10/2026) : demain
+    /// ne la ferait pas passer, l'illimité si. Gris comme « Partira demain »,
+    /// l'offre soulignée en vert d'action ; le toucher ouvre le paywall, et la
+    /// bulle part dès que le compte raconte sans limite. **« Supprimer »** à
+    /// côté, en gris : sans abonnement, c'est la seule autre sortie — après
+    /// confirmation, le tour quitte le téléphone et la bulle le fil.
     @ViewBuilder
     private var deliveryNotice: some View {
-        if message.delivery.hasFailed {
+        if message.delivery.isWaitingForCredit {
+            Text(ChatCopy.leavesTomorrow)
+                .font(MemoBookFont.caption)
+                .foregroundStyle(MemoBookColor.inkMuted)
+                .padding(.horizontal, MemoBookSpacing.snug)
+                .accessibilityHidden(true)
+        } else if message.delivery.isWaitingForUnlimited {
+            // Côte à côte ; l'un sous l'autre en très grand texte, où deux
+            // cibles sur une ligne ne laisseraient qu'un mot par ligne.
+            let layout = typeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .trailing, spacing: 0))
+                : AnyLayout(HStackLayout(spacing: MemoBookSpacing.xs))
+            layout {
+                Button {
+                    onCallToAction(.dailyCreditSubscribe)
+                } label: {
+                    // Une seule phrase, qui se replie en très grand texte au
+                    // lieu de couper trois morceaux côte à côte.
+                    (Text(ChatCopy.tooLongForADay + " · ").foregroundStyle(MemoBookColor.inkMuted)
+                        + Text(DailyCreditCopy.unlimitedCallToAction).foregroundStyle(MemoBookColor.action).underline())
+                    .font(MemoBookFont.caption)
+                    .multilineTextAlignment(.trailing)
+                    .frame(minHeight: MemoBookSpacing.minimumTapTarget)
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(ChatCopy.tooLongForADay). \(DailyCreditCopy.unlimitedCallToAction)")
+                .accessibilityHint(ChatCopy.Credit.exhaustedHint)
+
+                Button {
+                    confirmsDiscard = true
+                } label: {
+                    (Text(typeSize.isAccessibilitySize ? "" : "· ") + Text(ChatCopy.DiscardWaiting.action).underline())
+                        .font(MemoBookFont.caption)
+                        .foregroundStyle(MemoBookColor.inkMuted)
+                        .frame(minHeight: MemoBookSpacing.minimumTapTarget)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(ChatCopy.DiscardWaiting.action)
+                .accessibilityHint(ChatCopy.DiscardWaiting.hint)
+            }
+            .padding(.horizontal, MemoBookSpacing.snug)
+            .confirmationDialog(discardTitle, isPresented: $confirmsDiscard, titleVisibility: .visible) {
+                Button(ChatCopy.DiscardWaiting.confirm, role: .destructive) {
+                    model.discardWaitingTurn(message.id)
+                }
+                Button(ChatCopy.DiscardWaiting.keep, role: .cancel) {}
+            } message: {
+                Text(ChatCopy.DiscardWaiting.body)
+            }
+        } else if message.delivery.hasFailed {
             Button(action: model.retry) {
                 HStack(spacing: MemoBookSpacing.xs / 2) {
                     Text(ChatCopy.notSent)
@@ -172,6 +277,15 @@ struct ChatMessageRow: View {
             .padding(.horizontal, MemoBookSpacing.snug)
             .accessibilityLabel("\(ChatCopy.notSent). \(ChatCopy.retry)")
         }
+    }
+}
+
+extension ChatMessageRow {
+    /// Le titre de la confirmation de « Supprimer » : un vocal, ou un texte —
+    /// rien d'autre n'attend l'illimité.
+    fileprivate var discardTitle: String {
+        if case .voice = message.body { return ChatCopy.DiscardWaiting.voiceTitle }
+        return ChatCopy.DiscardWaiting.textTitle
     }
 }
 

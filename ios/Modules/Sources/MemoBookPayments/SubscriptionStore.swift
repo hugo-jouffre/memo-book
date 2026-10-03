@@ -8,8 +8,26 @@ import UIKit
 /// plus jamais : Apple ne le laisse ni modifier ni réutiliser. Le serveur porte
 /// la même valeur (`APP_STORE_PRODUCT_IDS`, `subscriptionCatalog.ts`), et
 /// `MemoBook.storekit` aussi ; les trois doivent rester identiques.
+///
+/// **Le mois remplace la semaine** (Hugo, 03/10/2026) : 4,99 € par mois, dans
+/// le même groupe d'abonnements « MemoBook », pour qu'Apple traite le passage
+/// de l'un à l'autre comme un changement de formule et non comme un second
+/// abonnement. Un nouvel identifiant, puisque l'ancien ne se modifie pas.
 public enum StoreKitCatalog {
-    public static let weeklySubscription = "com.memobook.app.subscription.weekly"
+    /// Le seul produit que l'app **vend**.
+    public static let monthlySubscription = "com.memobook.app.subscription.monthly"
+
+    /// L'ancien abonnement à la semaine. **Plus vendu nulle part**, mais
+    /// toujours **accepté** : un abonné en cours se renouvelle, restaure ou
+    /// rachète sur un autre appareil, et ignorer ses transactions les laisserait
+    /// non finies sur l'appareil — « Restaurer mes achats » lui répondrait
+    /// « Rien à restaurer » alors qu'Apple le prélève.
+    public static let legacyWeeklySubscription = "com.memobook.app.subscription.weekly"
+
+    /// Les produits dont l'app remet les transactions au serveur.
+    public static let acceptedSubscriptions: Set<String> = [
+        monthlySubscription, legacyWeeklySubscription,
+    ]
 }
 
 /// Une transaction signée par l'App Store — un JWS que le serveur vérifie
@@ -99,9 +117,15 @@ public enum SubscriptionStoreError: LocalizedError {
 /// personne, et le paywall ne doit pas savoir comment on paie.
 @MainActor
 public protocol SubscriptionStore: AnyObject, Sendable {
-    /// Le prix tel qu'Apple l'affiche dans le pays du compte — « 1,99 € » en
+    /// Le prix tel qu'Apple l'affiche dans le pays du compte — « 4,99 € » en
     /// France. `nil` tant que le produit n'est pas revenu de l'App Store.
     func displayPrice() async -> String?
+
+    /// La période que ce prix paie, telle qu'elle suit la barre oblique —
+    /// « mois », « 3 mois », « an ». Lue sur le produit (`subscriptionPeriod`),
+    /// pour que l'écran d'achat ne puisse pas annoncer une autre durée que la
+    /// feuille d'Apple. `nil` tant que le produit n'est pas revenu.
+    func displayPeriod() async -> String?
 
     /// Achète l'abonnement. `appAccountToken` est l'identifiant du compte
     /// MemoBook : Apple le recopie dans chaque transaction, et c'est ce qui
@@ -131,16 +155,30 @@ public protocol SubscriptionStore: AnyObject, Sendable {
 /// Le vrai StoreKit 2.
 @MainActor
 public final class StoreKitSubscriptionStore: SubscriptionStore {
+    /// Le produit vendu.
     private let productId: String
+    /// Les produits dont on remet les transactions — le vendu, et l'ancien.
+    private let acceptedProductIds: Set<String>
     private var product: Product?
     private var listener: Task<Void, Never>?
 
-    public init(productId: String = StoreKitCatalog.weeklySubscription) {
+    public init(
+        productId: String = StoreKitCatalog.monthlySubscription,
+        acceptedProductIds: Set<String> = StoreKitCatalog.acceptedSubscriptions
+    ) {
         self.productId = productId
+        self.acceptedProductIds = acceptedProductIds.union([productId])
     }
 
     public func displayPrice() async -> String? {
         try? await loadProduct()?.displayPrice
+    }
+
+    public func displayPeriod() async -> String? {
+        guard let period = try? await loadProduct()?.subscription?.subscriptionPeriod else {
+            return nil
+        }
+        return Self.label(of: period)
     }
 
     public func purchase(
@@ -260,9 +298,10 @@ public final class StoreKitSubscriptionStore: SubscriptionStore {
         deliver: TransactionDelivery
     ) async -> Settlement {
         guard case .verified(let transaction) = verification else { return .unverified }
-        // Un autre produit — l'extension des limites, un jour — aura son propre
-        // chemin. Il reste ouvert d'ici là.
-        guard transaction.productID == productId else { return .ignored }
+        // L'abonnement mensuel, ou l'ancien hebdomadaire d'un abonné en cours.
+        // Un produit inconnu de cette version reste ouvert : une version plus
+        // récente saura quoi en faire.
+        guard acceptedProductIds.contains(transaction.productID) else { return .ignored }
 
         do {
             try await deliver(SignedTransaction(jws: verification.jwsRepresentation))
@@ -281,6 +320,20 @@ public final class StoreKitSubscriptionStore: SubscriptionStore {
         let loaded = try await Product.products(for: [productId]).first
         product = loaded
         return loaded
+    }
+
+    /// « mois », « semaine », « 3 mois », « an » — le mot qui suit « 4,99 €/ ».
+    /// Écrit ici plutôt que par `formatted()` : celui-ci rend « 1 mois », et
+    /// « 4,99 €/1 mois » n'est pas ce qu'on lit sur un prix.
+    static func label(of period: Product.SubscriptionPeriod) -> String {
+        let value = period.value
+        switch period.unit {
+        case .day: return value == 1 ? "jour" : "\(value) jours"
+        case .week: return value == 1 ? "semaine" : "\(value) semaines"
+        case .month: return value == 1 ? "mois" : "\(value) mois"
+        case .year: return value == 1 ? "an" : "\(value) ans"
+        @unknown default: return "mois"
+        }
     }
 
     private static func activeScene() -> UIWindowScene? {
@@ -310,10 +363,27 @@ public final class StubSubscriptionStore: SubscriptionStore {
     /// `nil` : l'écran garde le prix du catalogue, celui des maquettes.
     public func displayPrice() async -> String? { nil }
 
+    /// `nil` : l'écran garde la période du catalogue, le mois.
+    public func displayPeriod() async -> String? { nil }
+
+    /// **Un achat réussi passe par la même remise que le vrai** (03/10/2026) :
+    /// le bac à sable disait « illimité » à l'écran pendant que son double
+    /// d'API, qui n'avait rien reçu, continuait de compter le crédit du jour et
+    /// de refuser les tours. La transaction factice part donc au double
+    /// (`syncAppStoreTransaction`), qui ouvre l'abonnement chez lui ; un refus
+    /// s'y lit comme un refus du serveur, une panne comme un serveur muet.
     public func purchase(appAccountToken: UUID?, deliver: @escaping TransactionDelivery) async
         -> PurchaseOutcome
     {
-        outcome
+        guard outcome == .subscribed else { return outcome }
+        do {
+            try await deliver(SignedTransaction(jws: "preview"))
+            return .subscribed
+        } catch let refusal as TransactionRefused {
+            return .failed(refusal.message)
+        } catch {
+            return .awaitingServer
+        }
     }
 
     public func restore(deliver: @escaping TransactionDelivery) async throws -> RestoreOutcome {

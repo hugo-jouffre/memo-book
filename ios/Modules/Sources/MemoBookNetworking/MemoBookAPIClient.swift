@@ -10,6 +10,10 @@ public actor MemoBookAPIClient: MemoBookAPI {
     private let decoder = JSONDecoder.memoBook
     private let encoder = JSONEncoder.memoBook
 
+    /// L'en-tête qui porte le fuseau de l'appareil (identifiant IANA), posé
+    /// sur chaque appel — voir ``makeRequest(method:path:credential:)``.
+    public static let timeZoneHeader = "X-Time-Zone"
+
     /// Qui parle.
     ///
     /// **La session de compte, pour tout ce qui appartient à quelqu'un.** Le
@@ -498,7 +502,10 @@ public actor MemoBookAPIClient: MemoBookAPI {
         var form = MultipartFormData()
         form.addField(name: "id", value: turn.id)
         form.addField(name: "capturedAt", value: ISO8601DateFormatter.memoBookString(from: turn.capturedAt))
-        // Arrondie à la seconde : le serveur compte en minutes entamées.
+        // Arrondie à la seconde, et **pour mémoire** : depuis le crédit du jour
+        // (03/10/2026), le serveur relit la durée dans le fichier et ne croit
+        // plus celle-ci. Elle part quand même, inoffensive — un serveur d'avant
+        // la lit encore.
         form.addField(name: "durationSeconds", value: String(Int(turn.durationSeconds.rounded())))
         if let placeLabel = turn.placeLabel {
             form.addField(name: "placeLabel", value: placeLabel)
@@ -756,15 +763,6 @@ public actor MemoBookAPIClient: MemoBookAPI {
         )
     }
 
-    public func setMemoryPlan(tripId: String, plan: MemoryPlan) async throws -> TripSettings {
-        struct Body: Encodable { let plan: MemoryPlan }
-        return try await send(
-            method: "POST",
-            path: "/v1/trips/\(tripId)/memory-plan",
-            encodableBody: Body(plan: plan)
-        )
-    }
-
     public func updateBookCustomisation(
         tripId: String,
         edit: BookCustomisationEdit
@@ -978,6 +976,13 @@ public actor MemoBookAPIClient: MemoBookAPI {
         var request = URLRequest(url: url, timeoutInterval: configuration.timeout)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        // **Le fuseau de l'appareil, sur chaque appel** (03/10/2026) : le
+        // crédit du jour se recharge à minuit **chez celui qui raconte**, et le
+        // voyageur change de fuseau avec son voyage. Le serveur met à jour le
+        // compte quand il change — une écriture, pas une par requête. Lu à
+        // chaque appel et non une fois pour toutes : l'avion atterrit pendant
+        // que l'app est ouverte.
+        request.setValue(TimeZone.current.identifier, forHTTPHeaderField: Self.timeZoneHeader)
 
         if let store = store(for: credential) {
             guard let token = store.read() else { throw APIError.notAuthenticated }
@@ -1083,12 +1088,23 @@ public actor MemoBookAPIClient: MemoBookAPI {
         #endif
 
         guard (200..<300).contains(http.statusCode) else {
-            let body = try? JSONDecoder().decode(APIErrorBody.self, from: data)
+            // Le décodeur de l'app, et non un `JSONDecoder()` nu : le solde
+            // d'un refus de crédit porte une date (`resetsAt`) en ISO 8601.
+            let body = try? decoder.decode(APIErrorBody.self, from: data)
 
             // Un jeton refusé ne vaudra pas mieux au prochain essai : on efface
             // celui qui a été présenté.
             if http.statusCode == 401 {
                 store(for: credential)?.clear()
+            }
+
+            // Le crédit du jour épuisé garde son solde jusqu'à la file — voir
+            // ``APIError/dailyCreditExhausted(message:credit:)``.
+            if body?.error == APIError.dailyCreditExhaustedCode {
+                throw APIError.dailyCreditExhausted(
+                    message: body?.message ?? DailyCreditCopy.exhaustedTitle,
+                    credit: body?.dailyCredit
+                )
             }
 
             throw APIError.server(

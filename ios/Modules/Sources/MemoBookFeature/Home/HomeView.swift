@@ -49,12 +49,13 @@ public struct HomeView: View {
     /// carnet : une feuille propose, elle ne navigue pas.
     @State private var isRecording = false
 
-    /// Le paywall est ouvert — par le CTA verrouillé, quand les étapes offertes
-    /// sont épuisées. Plein écran, comme depuis le profil.
+    /// Le paywall est ouvert — par « Me réabonner », dans l'alerte de fin
+    /// d'abonnement. Plein écran, comme depuis le profil. Le CTA, lui, ne mène
+    /// plus jamais au paywall : tout le monde raconte (Hugo, 03/10/2026).
     @State private var showsPaywall = false
 
     /// L'alerte système « Ton abonnement MemoBook s'est arrêté », ouverte quand
-    /// la semaine payée s'est achevée depuis la dernière ouverture.
+    /// le mois payé s'est achevé depuis la dernière ouverture.
     ///
     /// **Une alerte du système et non une feuille de la marque** : elle
     /// n'arrive au bout d'aucun geste — on ouvre l'app, et on l'apprend. Une
@@ -85,8 +86,17 @@ public struct HomeView: View {
     /// Le jour du dernier rappel, `AAAA-MM-JJ`. **Une fois par jour au plus** :
     /// un rappel à chaque ouverture deviendrait une alerte qu'on ferme sans la
     /// lire ; une fois par jour, il reste un rappel. Sur l'appareil, comme
-    /// ``announcedEnd``.
-    @AppStorage("subscription.tripEndReminded") private var remindedDay = ""
+    /// ``announcedEnd``. Le lien de la notification de rappel le pose aussi,
+    /// dans `RootView` : il ouvre déjà la feuille d'Apple (03/10/2026).
+    @AppStorage(TripEndReminder.storageKey) private var remindedDay = ""
+
+    /// `RootView` demande une relecture — la feuille d'Apple ouverte par la
+    /// notification de rappel vient de se refermer.
+    @Environment(\.homeReloadRequest) private var reloadRequest
+
+    /// Revenir dans l'app relit l'accueil (03/10/2026) : le crédit du jour
+    /// d'hier, épuisé, ne doit pas attendre un « tirer pour rafraîchir ».
+    @Environment(\.scenePhase) private var scenePhase
 
     /// La feuille « Nouveau carnet » est ouverte.
     ///
@@ -164,39 +174,52 @@ public struct HomeView: View {
             // l'écran, comme son chargement — la file décide d'envoyer ou de
             // garder. Et **on arrive dans la conversation, le vocal déjà
             // posé** (Hugo, 14/09/2026) : c'est ça qui se route.
-            RecordingSheet { audio, levels in
+            //
+            // Le crédit du jour est celui du voyage en cours, relu avec le
+            // dernier geste d'abonnement de la session ; « Crédit du jour
+            // épuisé » ouvre l'offre une fois la feuille refermée (03/10/2026).
+            // **Un seul point d'accès**, ``HomeModel/ongoingTripCredit`` : il
+            // recharge le crédit d'hier passé minuit, cache compris.
+            RecordingSheet(
+                credit: subscriptionSession?.applied(to: model.ongoingTripCredit)
+                    ?? model.ongoingTripCredit,
+                onSubscribe: { showsPaywall = true }
+            ) { audio, levels, stoppedAtLimit in
                 // Un seul identifiant pour les deux : la bulle le porte, et la
                 // file s'en sert pour dire où en est **cet** envoi-là. Sans
                 // lui, la conversation devrait deviner — et elle devinerait
                 // « envoyé » dès que MEMO répond, même sur un vocal qui attend
                 // encore le réseau.
-                let handoff = RecordingHandoff(audio: audio, levels: levels)
+                let handoff = RecordingHandoff(audio: audio, levels: levels, stoppedAtLimit: stoppedAtLimit)
                 Task { await model.upload(audio, levels: levels, handoffId: handoff.id) }
                 if let tripId = ongoingTripId {
                     onIntent(.openConversation(tripId: tripId, handoff: handoff))
                 }
             }
         }
-        // **Le paywall, à la place du micro**, quand les étapes offertes sont
-        // épuisées : on s'abonne avant de continuer — Hugo, 14/09/2026. Le
-        // même écran que celui du profil, ouvert sur « Tu as enregistré tes
-        // 3 premières étapes ».
+        // **Le paywall, par « Me réabonner ».** Le même écran que celui du
+        // profil, dans la version que la session a apprise de l'accueil : un
+        // ancien abonné y revoit les deux écrans du retour, pas la découverte.
         .fullScreenCover(isPresented: $showsPaywall) {
             PaywallView(
                 subscription: .offer,
+                variant: subscriptionSession?.paywallVariant ?? .firstTime,
                 previewMemoId: ongoingTripId,
                 onSubscribe: {
                     subscriptionSession?.record(isSubscribed: true)
                     showsPaywall = false
+                    // L'accueil relu, le serveur confirme l'achat — et la
+                    // session lui rend la main (03/10/2026).
+                    Task { await model.load() }
                 }
             )
         }
-        // Ce que le serveur dit du palier, la session le retient : c'est ce qui
-        // permet à un voyage ou à la conversation — qui n'ont pas de quota dans
-        // leur réponse — de verrouiller leur micro aussi.
+        // Ce que le serveur dit de l'abonnement, la session le retient : c'est
+        // ce qui permet à la conversation et aux réglages d'un voyage de savoir
+        // s'il faut compter, et quelle version du paywall ouvrir.
         .onChange(of: model.feed, initial: true) { _, feed in
             guard let feed else { return }
-            subscriptionSession?.learn(feed.traveller.freemiumStatus(override: nil))
+            subscriptionSession?.learn(feed.traveller)
             announceSubscriptionEndIfNeeded(feed.traveller.subscriptionEndedOn)
             remindTripEndIfNeeded(feed.traveller.subscriptionOutlivesTrip)
         }
@@ -214,6 +237,18 @@ public struct HomeView: View {
         // appris d'Apple ce qui a été coupé, et le rappel cesse.
         .onChange(of: managesSubscription) { _, isOpen in
             if !isOpen { Task { await model.load() } }
+        }
+        // La même relecture quand c'est la notification de rappel qui a ouvert
+        // la feuille d'Apple — depuis `RootView`.
+        .onChange(of: reloadRequest) { _, _ in
+            Task { await model.load() }
+        }
+        // **Au retour dans l'app**, l'accueil se relit (03/10/2026). Il ne le
+        // faisait qu'en réapparaissant derrière un écran poussé : laissé en
+        // arrière-plan le soir, il rouvrait le lendemain sur le crédit épuisé
+        // de la veille. Au premier passage, c'est `.task` qui charge.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active, isLoaded { Task { await model.load() } }
         }
         // **L'alerte de fin d'abonnement.** Elle ne propose que deux gestes :
         // en prendre acte, ou se réabonner — et le second ouvre le paywall, où
@@ -241,7 +276,7 @@ public struct HomeView: View {
         // **L'accueil s'ouvre sur ce qu'on avait, et le dit quand ça change.**
         // C'est l'écran qui gagne le plus au cache — c'est le premier — et
         // celui qui risque le plus de changer sous les yeux : une étape de
-        // plus, un vocal transcrit, un solde d'étapes qui descend.
+        // plus, un vocal transcrit, une photo arrivée d'un co-voyageur.
         .brandRefreshFlash(model.freshness.isUpdated)
         // Deux conditions, dans n'importe quel ordre : le contenu est là, et le
         // tracé du M ne couvre plus l'écran. C'est la seconde qui manquait —
@@ -386,10 +421,8 @@ public struct HomeView: View {
 
         if typeSize.isAccessibilitySize {
             VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
-                // L'avatar reste **à droite** : sa pastille d'étapes, plus
-                // large que lui, s'accroche à son bord droit et s'étend vers
-                // la gauche. Posé à gauche, il la faisait sortir de l'écran
-                // (recette du 30/09/2026).
+                // L'avatar reste **à droite**, comme hors des grandes tailles :
+                // c'est là que le pouce le cherche.
                 avatarButton
                     .frame(maxWidth: .infinity, alignment: .trailing)
                 Text(title).font(MemoBookFont.greeting).foregroundStyle(MemoBookColor.ink)
@@ -423,10 +456,10 @@ public struct HomeView: View {
             .frame(width: HomeMetrics.avatarSide, height: HomeMetrics.avatarSide)
             .background(MemoBookColor.outline, in: .circle)
             .clipShape(.circle)
-            // La pastille déborde de l'avatar par le haut : c'est ce
-            // chevauchement qui la rattache à lui plutôt que de la faire flotter
-            // dans le coin de l'écran.
-            .overlay(alignment: .topTrailing) { freeStepsPill }
+            // **Plus de pastille sur l'avatar** (Hugo, 03/10/2026) : elle
+            // décomptait l'essai gratuit d'avant, qui n'existe plus. Le crédit du
+            // jour se lit là où l'on raconte — la barre d'enregistrement —, et
+            // dans les réglages du voyage.
         }
         .frame(
             minWidth: MemoBookSpacing.minimumTapTarget,
@@ -434,41 +467,6 @@ public struct HomeView: View {
         )
         .contentShape(.circle)
         .accessibilityLabel("Ton profil")
-    }
-
-    /// Le palier du compte. `nil` tant que l'accueil n'a rien reçu : on ne
-    /// décide alors de rien, et surtout pas de peindre le CTA en lime.
-    ///
-    /// La session prime sur ce que le serveur a rendu : elle a pu voir une
-    /// résiliation qu'aucune route ne sait encore écrire. Voir
-    /// ``SubscriptionSession``.
-    private var status: FreemiumStatus? {
-        model.feed?.traveller.freemiumStatus(override: subscriptionSession?.override)
-    }
-
-    /// Le solde d'étapes offertes, et l'invitation qui le remplace quand il
-    /// tombe à zéro.
-    ///
-    /// **Un seul message, un décompte** : « 3 étapes restantes », qui descend à
-    /// chaque étape racontée, puis « Abonne-toi » quand il n'en reste plus. La
-    /// pastille annonçait un cadeau (« 3 étapes offertes ») tant que rien
-    /// n'était consommé ; deux formulations pour un même chiffre faisaient
-    /// hésiter sur ce qu'il fallait lire. Arbitrage de Hugo, 07/09/2026.
-    @ViewBuilder
-    private var freeStepsPill: some View {
-        if let label = status?.homePillLabel {
-            BrandTagPill(label)
-                .fixedSize()
-                // De travers, comme le scotch des cartes : c'est une étiquette
-                // collée sur l'avatar, pas un libellé d'interface.
-                .rotationEffect(.degrees(-5))
-                // Elle glisse vers le bord droit, au-delà de la marge de la
-                // colonne. Alignée sur l'avatar, elle poussait sa moitié gauche
-                // sous la Dynamic Island, où la fin du décompte devenait
-                // illisible ; à droite, elle passe dessous et non dedans.
-                .offset(x: MemoBookSpacing.s, y: -MemoBookSpacing.s - 4)
-                .allowsHitTesting(false)
-        }
     }
 
     // MARK: - Les voyages
@@ -659,21 +657,23 @@ public struct HomeView: View {
     /// `nil` quand il n'y en a pas — la phrase se replie alors.
     private var ongoingTripTitle: String? { model.ongoingTrips.first?.title }
 
-    /// Ouvre l'alerte **une seule fois par arrêt d'abonnement**.
-    ///
-    /// Le serveur ne dit que « la semaine payée s'est achevée ce jour-là », et
-    /// il le dira à chaque chargement de l'accueil pendant quinze jours : c'est
-    /// à l'app de se souvenir qu'elle l'a annoncé. D'où la date retenue plutôt
-    /// qu'un drapeau — le prochain abonnement qui s'arrêtera portera une autre
-    /// date, et l'alerte reviendra.
+    /// Propose de résilier **une fois par jour au plus**, tant que
+    /// l'abonnement survit à tous les voyages — voir ``remindedDay``.
     private func remindTripEndIfNeeded(_ outlivesTrip: Bool) {
         guard outlivesTrip else { return }
-        let today = Date.now.formatted(.iso8601.year().month().day())
+        let today = TripEndReminder.today()
         guard remindedDay != today else { return }
         remindedDay = today
         showsTripEndReminder = true
     }
 
+    /// Ouvre l'alerte **une seule fois par arrêt d'abonnement**.
+    ///
+    /// Le serveur ne dit que « le mois payé s'est achevé ce jour-là », et il
+    /// le dira à chaque chargement de l'accueil pendant quinze jours : c'est à
+    /// l'app de se souvenir qu'elle l'a annoncé. D'où la date retenue plutôt
+    /// qu'un drapeau — le prochain abonnement qui s'arrêtera portera une autre
+    /// date, et l'alerte reviendra.
     private func announceSubscriptionEndIfNeeded(_ endedOn: Date?) {
         guard let endedOn else { return }
         let stamp = endedOn.timeIntervalSince1970
@@ -682,36 +682,25 @@ public struct HomeView: View {
         showsSubscriptionEnded = true
     }
 
-    /// Le CTA change de couleur et de destination, pas de place ni de taille.
+    /// Le CTA : un voyage ouvert, on raconte ; aucun, on en crée un.
     ///
-    /// Il passe au lime et prend le cadenas **quand, et seulement quand, les
-    /// étapes offertes sont épuisées** : la couleur dit « c'est fini, il faut
-    /// s'abonner », la même que le bouton d'abonnement du profil — et il ouvre
-    /// alors **le paywall, jamais le micro** (Hugo, 14/09/2026). Tant qu'il
-    /// reste des étapes, il n'y a rien de bloqué et le parcours est celui de
-    /// tout le monde — vert plein, et le micro.
-    ///
-    /// La feuille d'enregistrement ne s'ouvre donc **que** par ce chemin, et ce
-    /// chemin vérifie le verrou : il n'y a pas de seconde porte. Le serveur
-    /// referme la sienne de son côté (`quota_exhausted`).
-    private var isBlocked: Bool { status?.isBlocked == true }
-
+    /// **Toujours vert, toujours le micro** (Hugo, 03/10/2026). Il passait au
+    /// lime avec un cadenas et ouvrait le paywall une fois l'essai gratuit
+    /// épuisé ; avec le crédit du jour, personne n'est jamais bloqué
+    /// d'avance — la feuille d'enregistrement prévient à 4:30 et coupe à 5:00,
+    /// et le serveur tranche (`daily_credit_exhausted`).
     private var recordCallToAction: some View {
         BrandButton(
             hasOngoingTrip ? "Commencer à enregistrer" : "Créer un nouveau voyage",
-            // Le micro et le cadenas du jeu d'icônes de la marque, pas
-            // l'illustration du Welcome : `BrandButton` teinte l'icône, il lui
-            // faut un tracé plein d'une seule couleur.
-            icon: callToActionIcon,
-            style: isBlocked ? .accent : .primary,
+            // Le micro du jeu d'icônes de la marque, pas l'illustration du
+            // Welcome : `BrandButton` teinte l'icône, il lui faut un tracé
+            // plein d'une seule couleur.
+            icon: hasOngoingTrip ? Image(brand: "IconMic") : nil,
             fillsWidth: true
         ) {
-            // Verrouillé : le paywall, et rien d'autre. Sinon, un voyage
-            // ouvert : on raconte. Aucun : il faut d'abord un carnet, et c'est
-            // la feuille qui demande lequel.
-            if isBlocked {
-                showsPaywall = true
-            } else if hasOngoingTrip {
+            // Un voyage ouvert : on raconte. Aucun : il faut d'abord un carnet,
+            // et c'est la feuille qui demande lequel.
+            if hasOngoingTrip {
                 startRecording()
             } else {
                 isCreatingNotebook = true
@@ -725,11 +714,6 @@ public struct HomeView: View {
         .padding(.horizontal, MemoBookSpacing.screenMargin)
         .padding(.top, MemoBookSpacing.s)
         .padding(.bottom, MemoBookSpacing.xs)
-    }
-
-    private var callToActionIcon: Image? {
-        if isBlocked { return Image(brand: "IconLocker") }
-        return hasOngoingTrip ? Image(brand: "IconMic") : nil
     }
 
     // MARK: - Le micro
@@ -778,6 +762,19 @@ public struct HomeView: View {
     }
 }
 
+/// Le rappel « Ton voyage est terminé » : une fois par jour au plus, retenu sur
+/// l'appareil. Deux écrans l'écrivent — l'accueil quand il l'ouvre, `RootView`
+/// quand la notification de rappel arrive — et doivent lire la même clé et le
+/// même jour.
+enum TripEndReminder {
+    static let storageKey = "subscription.tripEndReminded"
+
+    /// Aujourd'hui, `AAAA-MM-JJ`.
+    static func today(_ now: Date = .now) -> String {
+        now.formatted(.iso8601.year().month().day())
+    }
+}
+
 /// Les mesures de l'accueil.
 enum HomeMetrics {
     /// L'avatar est **le** diamètre du design system : le chat pose le même
@@ -795,6 +792,12 @@ extension EnvironmentValues {
     /// un rang suffit alors sur le lieu d'appel (`.rising(3)`), et aucun
     /// élément ne peut se retrouver oublié hors de la cascade.
     @Entry var homeContentHasAppeared: Bool = false
+
+    /// Un compteur que `RootView` fait monter pour que l'accueil se relise —
+    /// au retour de la feuille de gestion des abonnements ouverte par la
+    /// notification de rappel (03/10/2026). `RootView` ne tient pas le modèle
+    /// de l'accueil ; il ne peut que le lui demander.
+    @Entry var homeReloadRequest: Int = 0
 }
 
 extension View {

@@ -53,12 +53,84 @@ extension ChatThread {
 
         thread.messages = history(of: detail)
         thread.suggestions = thread.messages.isEmpty ? [] : afterAcceptTrio
+        // Trois minutes de crédit devant soi : assez pour raconter, et la
+        // barre ne prévient de rien tant qu'on ne parle pas longtemps.
+        thread.dailyCredit = ChatCreditFixture.fresh
         return thread
     }
 
     /// La même conversation. Le nom reste, employé par les aperçus.
     public static func conversationFixture(tripId: String) -> ChatThread {
         fixture(tripId: tripId)
+    }
+
+    /// L'identifiant de la bulle « reviens demain » du jeu d'essai — pour
+    /// qu'un aperçu montre son bouton déjà touché.
+    public static let exhaustedNoticeFixtureId = "memo-daily-credit-exhausted"
+
+    /// **Le crédit du jour épuisé** (03/10/2026) : la conversation, puis un
+    /// vocal qui a fait tomber le crédit à zéro, la bulle « reviens demain » de
+    /// MEMO avec son bouton « Raconter sans limite », et un message écrit
+    /// ensuite hors ligne que le serveur a refusé — il attend demain, en gris.
+    /// Le micro et le clavier sont pâlis.
+    public static func creditExhaustedFixture(tripId: String) -> ChatThread {
+        var thread = fixture(tripId: tripId)
+        let now = Date.fixture(27, 8, 2026)
+        let stepId = thread.context.stepId
+
+        thread.messages.append(
+            ChatMessage(
+                id: "voice-daily-credit-last",
+                author: .traveller,
+                body: .voice(VoiceNote(id: "voice-daily-credit-last", duration: 64, levels: BrandWaveform.sampleLevels)),
+                sentAt: now,
+                stepId: stepId
+            )
+        )
+        thread.messages.append(
+            ChatMessage(
+                id: exhaustedNoticeFixtureId,
+                author: .memo,
+                body: .text(DailyCreditCopy.exhaustedMessage),
+                sentAt: now,
+                stepId: stepId,
+                callToAction: .dailyCreditSubscribe
+            )
+        )
+        thread.messages.append(
+            ChatMessage(
+                id: "text-daily-credit-tomorrow",
+                author: .traveller,
+                body: .text("Et le soir, un dernier verre sur la terrasse de l’hôtel."),
+                sentAt: now,
+                stepId: stepId,
+                delivery: .waitingForCredit(until: Date.fixture(28, 8, 2026))
+            )
+        )
+        thread.suggestions = []
+        thread.dailyCredit = ChatCreditFixture.exhausted
+        return thread
+    }
+
+    /// **Un vocal plus long qu'une journée de crédit** (03/10/2026) : sept
+    /// minutes dites hors ligne, que le serveur refusera même pot plein. La
+    /// bulle attend l'illimité — « Trop long pour une journée · Passer en
+    /// illimité » — et le crédit du jour, lui, reste entier.
+    public static func tooLongForADayFixture(tripId: String) -> ChatThread {
+        var thread = fixture(tripId: tripId)
+        thread.messages.append(
+            ChatMessage(
+                id: "voice-too-long-for-a-day",
+                author: .traveller,
+                body: .voice(VoiceNote(id: "voice-too-long-for-a-day", duration: 420, levels: BrandWaveform.sampleLevels)),
+                sentAt: Date.fixture(27, 8, 2026),
+                stepId: thread.context.stepId,
+                delivery: .waitingForUnlimited
+            )
+        )
+        thread.suggestions = []
+        thread.dailyCredit = ChatCreditFixture.fresh
+        return thread
     }
 
     // MARK: - Ce qui a déjà été raconté
@@ -222,4 +294,46 @@ extension ChatThread {
         mangé sur le pouce et on a regardé les gens danser
         """,
     ]
+}
+
+/// Des crédits du jour pour les aperçus et le bac à sable : frais, presque
+/// épuisé, épuisé, illimité (03/10/2026). Un espace de noms et non des
+/// constantes sur ``DailyCredit`` : d'autres écrans tiennent les leurs.
+public enum ChatCreditFixture {
+    /// Trois minutes de crédit devant soi.
+    public static let fresh = credit(usedMs: 120_000)
+
+    /// Vingt-quatre secondes : le bandeau paraît dès qu'on parle.
+    public static let lastSeconds = credit(usedMs: 276_000)
+
+    /// Plus rien : micro et clavier pâlis.
+    public static let exhausted = credit(usedMs: DailyCredit.Catalog.limitMs)
+
+    /// Un abonné : rien ne compte.
+    public static let unlimited = DailyCredit(isUnlimited: true, usedMs: 276_000, day: "2026-08-27")
+
+    private static func credit(usedMs: Int) -> DailyCredit {
+        DailyCredit(
+            usedMs: usedMs,
+            day: "2026-08-27",
+            resetsAt: Date.fixture(28, 8, 2026)
+        )
+    }
+}
+
+/// Les textes des bulles d'exemple qui portent un bouton.
+public enum ChatFixtureCopy {
+    /// La bulle de la maquette `3653:17090`, sous laquelle MEMO propose
+    /// « Modifier l’autorisation ».
+    public static let limitedPhotosMessage =
+        "MemoBook ne voit qu’une partie de tes photos. Autorise l’accès complet pour retrouver automatiquement les photos de chaque étape."
+
+    /// Le bouton du catalogue du serveur (`open_photo_settings`,
+    /// `services/callsToAction.ts`), recopié pour l'aperçu.
+    public static let limitedPhotosCallToAction = ChatCallToAction(
+        id: "open_photo_settings",
+        kind: .openPhotoSettings,
+        label: "Modifier l’autorisation",
+        eyebrow: "Accès aux photos limité"
+    )
 }

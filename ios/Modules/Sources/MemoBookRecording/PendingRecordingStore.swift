@@ -36,7 +36,9 @@ public struct PendingTurn: Sendable, Hashable, Identifiable {
     public let filenames: [String]
     public let mimeTypes: [String]
 
-    /// La durée réellement capturée d'un vocal — c'est elle qui décompte.
+    /// La durée capturée d'un vocal, mesurée par l'app. Elle dessine la bulle
+    /// en attendant le serveur, qui relit la sienne dans le fichier — c'est
+    /// celle-là qui décompte le crédit du jour (03/10/2026).
     public let duration: TimeInterval?
 
     /// La forme d'onde relevée pendant l'enregistrement, pour la bulle.
@@ -53,6 +55,23 @@ public struct PendingTurn: Sendable, Hashable, Identifiable {
     /// d'abord — et à rien d'autre.
     public let queuedAt: Date
 
+    /// **Il attend le crédit du jour**, jusqu'à cette heure (Hugo,
+    /// 03/10/2026). Le serveur l'a refusé faute de crédit (`429
+    /// daily_credit_exhausted`) : ce n'est pas un refus définitif, le tour
+    /// repartira tout seul quand le crédit se recharge — le `resetsAt` du
+    /// serveur, à défaut le minuit local suivant. `nil` : il n'attend que le
+    /// réseau. Écrit sur la fiche pour qu'une app relancée ne le renvoie pas
+    /// au serveur toutes les dix secondes jusqu'à minuit.
+    public var waitingForCreditUntil: Date?
+
+    /// **Il attend l'illimité** (03/10/2026) : il coûte plus qu'une journée
+    /// entière de crédit — un vocal de plus de 5:03, un texte de plus de
+    /// 4 000 caractères —, et le serveur le refusera chaque jour, pot plein
+    /// compris. Ni renvoyé, ni réveillé à minuit : il repart quand le compte
+    /// passe en illimité (``RecordingOutbox/releaseCreditHolds()``). Jamais
+    /// jeté — ce serait perdre ce qu'on a raconté.
+    public var waitingForUnlimited: Bool
+
     public init(
         id: String,
         tripId: String,
@@ -67,7 +86,9 @@ public struct PendingTurn: Sendable, Hashable, Identifiable {
         levels: [Double] = [],
         placeLabel: String? = nil,
         recordedAt: Date,
-        queuedAt: Date = .now
+        queuedAt: Date = .now,
+        waitingForCreditUntil: Date? = nil,
+        waitingForUnlimited: Bool = false
     ) {
         self.id = id
         self.tripId = tripId
@@ -83,6 +104,20 @@ public struct PendingTurn: Sendable, Hashable, Identifiable {
         self.placeLabel = placeLabel
         self.recordedAt = recordedAt
         self.queuedAt = queuedAt
+        self.waitingForCreditUntil = waitingForCreditUntil
+        self.waitingForUnlimited = waitingForUnlimited
+    }
+
+    /// Le tour attend encore le crédit du jour à cet instant.
+    public func isWaitingForCredit(at now: Date = .now) -> Bool {
+        guard let waitingForCreditUntil else { return false }
+        return waitingForCreditUntil > now
+    }
+
+    /// Le tour est **retenu** à cet instant — le crédit de demain, ou
+    /// l'illimité : un vidage ne le renvoie pas.
+    public func isOnHold(at now: Date = .now) -> Bool {
+        waitingForUnlimited || isWaitingForCredit(at: now)
     }
 }
 
@@ -90,6 +125,7 @@ extension PendingTurn: Codable {
     private enum CodingKeys: String, CodingKey {
         case id, tripId, kind, text, suggestionId, entryId, stepId
         case filenames, mimeTypes, duration, levels, placeLabel, recordedAt, queuedAt
+        case waitingForCreditUntil, waitingForUnlimited
         // La fiche d'avant le 22/09/2026 : un vocal, plusieurs carnets.
         case tripIds, filename, mimeType
     }
@@ -131,7 +167,10 @@ extension PendingTurn: Codable {
             levels: try container.decodeIfPresent([Double].self, forKey: .levels) ?? [],
             placeLabel: try container.decodeIfPresent(String.self, forKey: .placeLabel),
             recordedAt: try container.decode(Date.self, forKey: .recordedAt),
-            queuedAt: try container.decode(Date.self, forKey: .queuedAt)
+            queuedAt: try container.decode(Date.self, forKey: .queuedAt),
+            // Une date illisible ne garde pas le tour en otage : il repart.
+            waitingForCreditUntil: (try? container.decodeIfPresent(Date.self, forKey: .waitingForCreditUntil)) ?? nil,
+            waitingForUnlimited: (try? container.decodeIfPresent(Bool.self, forKey: .waitingForUnlimited)) ?? false
         )
     }
 
@@ -151,6 +190,10 @@ extension PendingTurn: Codable {
         try container.encodeIfPresent(placeLabel, forKey: .placeLabel)
         try container.encode(recordedAt, forKey: .recordedAt)
         try container.encode(queuedAt, forKey: .queuedAt)
+        try container.encodeIfPresent(waitingForCreditUntil, forKey: .waitingForCreditUntil)
+        // Écrit seulement quand il est vrai : la fiche d'un tour ordinaire ne
+        // change pas d'une ligne.
+        if waitingForUnlimited { try container.encode(true, forKey: .waitingForUnlimited) }
     }
 }
 

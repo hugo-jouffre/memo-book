@@ -1,4 +1,5 @@
 import type { ChatDisposition } from "@prisma/client";
+import type { CallToActionId } from "./callsToAction.js";
 import {
   AFTER_TRANSCRIPT,
   ANSWERS,
@@ -270,7 +271,7 @@ function isQuestion(text: string, folded: string): boolean {
 function subjectOf(folded: string): Subject | null {
   const has = (words: Set<string>) => [...words].some((word) => folded.includes(word));
   if (has(Lexicon.correctionWords)) return "corrections";
-  if (has(Lexicon.subscriptionWords)) return "subscription";
+  if (talksAboutSubscription(folded)) return "subscription";
   if (has(Lexicon.paceWords)) return "pace";
   if (has(Lexicon.photoWords)) return "photos";
   if (has(Lexicon.bookWords)) return "book";
@@ -371,9 +372,144 @@ export const Lexicon = {
     "quand est-ce", "c'est quoi", "qui est-ce",
   ]),
   bookWords: new Set(["carnet", "imprim", "livre", "reliure", "pages", "pdf", "apercu"]),
-  subscriptionWords: new Set([
-    "abonnement", "prix", "coute", "tarif", "payer", "paiement", "resilier", "euros",
+  /**
+   * Les mots qui nomment l'offre à eux seuls, cherchés **en début de mot**
+   * (`startsAWord`) : « abonnement », « s’abonner », « résilier »,
+   * « illimité ». Ces listes ouvrent la porte du bouton `subscribe`
+   * (`mentionsSubscription`) : elles ne visent que l'abonnement, le crédit du
+   * jour, la limite du récit et le temps qui reste pour raconter — **pas le
+   * prix d'un billet ni la limite de vitesse** (03/10/2026). L'app en garde
+   * la copie exacte (`ChatAnalysis.swift`).
+   */
+  subscriptionWords: new Set(["abonn", "resili", "illimit"]),
+  /**
+   * Ce qui fait d'« illimité », d'« abonnement » ou d'un prix d'app une autre
+   * offre que la nôtre, en mots entiers : le wifi illimité, le kilométrage
+   * illimité, l'abonnement de métro, le forfait qu'on résilie (03/10/2026).
+   */
+  otherOffers: new Set([
+    "wifi", "wi-fi", "internet", "data", "forfait", "forfaits", "telephone", "telephonique",
+    "mobile", "kilometrage", "location", "metro", "transport", "transports", "navigo",
+    "bus", "tram", "train", "trains", "pass", "parking", "velo", "velos", "ski", "musee",
+    "musees", "buffet", "boisson", "boissons", "salle de sport", "piscine",
   ]),
+  /**
+   * Le crédit qui n'est pas le nôtre, en mots entiers : celui du téléphone, de
+   * la carte, de la banque. « Je n’ai plus de crédit sur mon téléphone » n'est
+   * pas une question sur le récit.
+   */
+  otherCreditWords: new Set([
+    "telephone", "telephones", "telephonique", "portable", "mobile", "sim", "forfait",
+    "forfaits", "carte", "cartes", "bancaire", "banque", "operateur", "distributeur",
+    "retrait", "data", "internet",
+  ]),
+  /**
+   * Recharger un téléphone, en mots entiers — sauf le crédit qui « se
+   * recharge » à minuit, qui est le nôtre (`DAILY_CREDIT_EXHAUSTED_MESSAGE`).
+   */
+  rechargeWords: new Set(["recharger", "recharge", "recharges", "rechargement"]),
+  /**
+   * Le crédit du jour et la limite du récit, en locutions et en mots entiers
+   * (`isAWord`), qui n'ont pas d'autre sens en voyage. « crédit » ou « limite »
+   * seuls n'y sont pas : « carte de crédit » et « limite de vitesse » parlent
+   * du voyage.
+   */
+  creditPhrases: new Set([
+    "credit du jour", "credit restant", "credit quotidien", "credit de temps",
+    "credit de recit", "mon credit", "ton credit", "notre credit", "votre credit",
+    "combien de credit", "de credit il reste", "de credit il me reste",
+    "limite du jour", "limite de recit", "limite du recit", "limite de minutes",
+    "limite quotidienne", "limite par jour", "limite du credit",
+    "raconter sans limite", "parler sans limite", "minutes de recit", "temps de recit",
+    "raconter combien de temps", "parler combien de temps",
+  ]),
+  /**
+   * Les locutions du temps et du crédit qui disent aussi le voyage :
+   * « combien de minutes » est « à combien de minutes à pied », « limite de
+   * temps » celle du Louvre, « plus de crédit » celui du téléphone. Elles ne
+   * visent l'offre que **rattachées au récit** (`creditAnchors`, `appReferences`)
+   * et loin d'un trajet (`travelMarkers`) — 03/10/2026.
+   */
+  anchoredCreditPhrases: new Set([
+    "le credit", "du credit", "plus de credit", "de credit",
+    "limite de temps", "sans limite de temps", "est limite", "c'est limite a",
+    "suis limite", "suis limitee", "suis bloque", "suis bloquee",
+    "combien de minutes", "combien de temps", "minutes par jour", "minutes aujourd",
+    "minutes du jour", "minutes restantes", "temps restant",
+  ]),
+  /**
+   * Ce qui rattache une locution au récit, cherché **en début de mot** :
+   * raconter, le récit, un vocal, l'abonnement, la journée de crédit.
+   */
+  creditAnchors: new Set([
+    "racont", "recit", "enregistr", "vocal", "vocaux", "abonn", "illimit", "aujourd",
+    "par jour", "du jour", "minuit", "se recharg", "5 minutes", "cinq minutes",
+  ]),
+  /** Un trajet, une visite, un départ — en mots entiers : le temps qu'il faut, pas celui qui reste pour raconter. */
+  travelMarkers: new Set([
+    "a pied", "de marche", "marche", "marcher", "pour aller", "pour rejoindre", "pour arriver",
+    "en voiture", "en taxi", "en bus", "en train", "en metro", "en avion", "en bateau",
+    "embarquement", "depart", "vol", "vols", "train", "bus", "metro", "avion", "bateau",
+    "ferry", "trajet", "visite", "visiter", "attente", "escale", "correspondance", "check-in",
+  ]),
+  /**
+   * « Il me reste combien ? » — la question d'exemple du prompt
+   * (`agents/agent-conversation.md`). Elle ne vise le crédit que si rien ne la
+   * suit, hors `remainingObjects` puis `remainingTails` (ou un mot du récit) :
+   * « de jours de voyage », « avant l’embarquement », « jusqu’à Florence »
+   * parlent du voyage (`asksWhatRemains`).
+   */
+  remainingQuestions: [
+    "il me reste combien", "il nous reste combien", "il reste combien",
+    "combien il me reste", "combien il nous reste", "combien il reste",
+    "combien me reste-t-il", "combien nous reste-t-il", "combien reste-t-il",
+    "combien de temps il me reste", "combien de temps il nous reste", "combien de temps il reste",
+    "combien de minutes il me reste", "combien de minutes il nous reste",
+    "combien de minutes il reste", "temps qu'il me reste", "temps qu'il nous reste",
+  ],
+  remainingObjects: ["de temps", "de minutes", "de credit", "en credit"],
+  remainingTails: new Set([
+    "", "aujourd'hui", "pour aujourd'hui", "ce soir", "pour ce soir", "pour raconter",
+    "a raconter", "pour parler", "pour enregistrer", "a enregistrer",
+  ]),
+  /**
+   * Le prix, en mots entiers. Seul, il parle d'un billet, d'un musée ou du
+   * carnet (« Combien coûte le carnet imprimé ? » va à `ANSWERS.book`) : il ne
+   * vise l'offre que s'il nomme l'app (`appReferences`), ou dans une question
+   * nue (`barePriceQuestions`). « euro » en mot entier : « Europe », « Eurostar ».
+   */
+  priceWords: new Set([
+    "prix", "cout", "couts", "coute", "coutent", "couter", "coutera", "tarif", "tarifs",
+    "payer", "payant", "payante", "paiement", "gratuit", "gratuite", "euro", "euros",
+  ]),
+  /**
+   * L'app elle-même, en mots entiers : « l’app », « ton appli », « MemoBook ».
+   * « une app gratuite pour le métro » en est une autre (03/10/2026).
+   */
+  appReferences: new Set([
+    "memobook", "memo", "l'app", "l'appli", "l'application", "ton app", "ton appli",
+    "ton application", "votre app", "votre appli", "votre application", "cette app",
+    "cette appli", "cette application",
+  ]),
+  /**
+   * Une question de prix ou de limite **qui est tout le message** : sans
+   * objet, elle ne peut viser que l'app. « Le musée, c'est payant ? » a un
+   * objet, et n'y est pas.
+   */
+  barePriceQuestions: new Set([
+    "combien ca coute", "ca coute combien", "combien ca coute par mois",
+    "ca coute combien par mois", "c'est combien", "c'est combien par mois", "combien c'est",
+    "combien ca fait", "c'est payant", "c'est gratuit", "payant", "gratuit",
+    "c'est quoi le prix", "quel est le prix", "quel prix", "il faut payer", "faut payer",
+    "c'est quoi la limite", "quelle est la limite", "il y a une limite", "y a une limite",
+    "c'est quoi la limite de temps", "quelle est la limite de temps",
+    "il y a une limite de temps", "y a une limite de temps", "c'est limite",
+    "c'est limite a combien", "pourquoi c'est limite", "je suis limite", "je suis limitee",
+    "pourquoi je suis limite", "pourquoi je suis limitee", "je suis bloque", "je suis bloquee",
+    "pourquoi je suis bloque", "pourquoi je suis bloquee",
+  ]),
+  /** Ce qui peut précéder une question nue sans lui donner d'objet. */
+  bareQuestionOpeners: ["memo,", "et", "mais", "alors", "du coup", "sinon", "est-ce que"],
   photoWords: new Set(["photo", "pellicule", "image", "cliche"]),
   correctionWords: new Set([
     "corriger", "corrige", "modifier", "modifie", "changer", "change", "retoucher",
@@ -412,6 +548,168 @@ export const Lexicon = {
   ]),
 };
 
+const LETTER = /\p{L}/u;
+
+/**
+ * `needle` commence un mot de `folded` : « coute » est dans « tu m’écoutes ? »,
+ * et ce n'est pas une question de prix. `wholeWord` exige aussi qu'il le
+ * finisse : « euro » est dans « Europe ». Écrit à la main plutôt qu'en
+ * expression régulière pour rester le jumeau exact de
+ * `Extraction.startsAWord` (`ChatAnalysis.swift`).
+ */
+function startsAWord(needle: string, folded: string, wholeWord = false): boolean {
+  let from = 0;
+  for (;;) {
+    const found = folded.indexOf(needle, from);
+    if (found === -1) return false;
+    const end = found + needle.length;
+    const startsHere = found === 0 || !LETTER.test(folded.charAt(found - 1));
+    const endsHere = end === folded.length || !LETTER.test(folded.charAt(end));
+    if (startsHere && (!wholeWord || endsHere)) return true;
+    from = found + 1;
+  }
+}
+
+function isAWord(needle: string, folded: string): boolean {
+  return startsAWord(needle, folded, true);
+}
+
+/** Où finit chaque occurrence de `needle` en mot entier dans `folded` — l'endroit d'où lire la suite. */
+function wholeWordEnds(needle: string, folded: string): number[] {
+  const ends: number[] = [];
+  let from = 0;
+  for (;;) {
+    const found = folded.indexOf(needle, from);
+    if (found === -1) return ends;
+    const end = found + needle.length;
+    const startsHere = found === 0 || !LETTER.test(folded.charAt(found - 1));
+    const endsHere = end === folded.length || !LETTER.test(folded.charAt(end));
+    if (startsHere && endsHere) ends.push(end);
+    from = found + 1;
+  }
+}
+
+/**
+ * Une question sans sa ponctuation finale ni son interpellation : « Ça coûte
+ * combien, MEMO ? » rend « ca coute combien ». Le nom seul ne laisse rien.
+ */
+function questionCore(folded: string): string {
+  let rest = folded.trim().replace(/[\s?!.…]+$/u, "");
+  for (const name of ["memobook", "memo"]) {
+    if (rest === name) return "";
+    if (rest.endsWith(` ${name}`) || rest.endsWith(`,${name}`)) {
+      rest = rest.slice(0, -name.length).replace(/[\s,]+$/u, "");
+      break;
+    }
+  }
+  return rest;
+}
+
+/** Le message entier, sans ses ouvertures (« et », « est-ce que »…) ni sa ponctuation finale. */
+function isBarePriceQuestion(folded: string): boolean {
+  let rest = questionCore(folded);
+  let opened = true;
+  while (opened) {
+    opened = false;
+    for (const opener of Lexicon.bareQuestionOpeners) {
+      if (rest.startsWith(`${opener} `)) {
+        rest = rest.slice(opener.length + 1).trimStart();
+        opened = true;
+      }
+    }
+  }
+  return Lexicon.barePriceQuestions.has(rest);
+}
+
+const any = (words: Iterable<string>, test: (word: string) => boolean) => [...words].some(test);
+
+/** Le texte parle du récit, de l'app ou de la journée de crédit (`creditAnchors`). */
+function isAnchoredToTheStory(folded: string): boolean {
+  return (
+    any(Lexicon.creditAnchors, (anchor) => startsAWord(anchor, folded)) ||
+    any(Lexicon.appReferences, (word) => isAWord(word, folded))
+  );
+}
+
+function mentionsATrip(folded: string): boolean {
+  return any(Lexicon.travelMarkers, (marker) => isAWord(marker, folded));
+}
+
+/** Le crédit du téléphone, de la carte, de la banque — pas celui du récit. */
+function talksAboutAnotherCredit(folded: string): boolean {
+  if (any(Lexicon.otherCreditWords, (word) => isAWord(word, folded))) return true;
+  return any(Lexicon.rechargeWords, (word) => isAWord(word, folded)) && !folded.includes("se recharg");
+}
+
+/**
+ * « Il me reste combien ? » vise le crédit si ce qui suit n'est rien, un objet
+ * de crédit (« de temps », « de crédit ») suivi de rien, ou d'une fin admise
+ * (« aujourd’hui », « pour raconter »), ou d'une suite qui parle du récit sans
+ * trajet. « de jours de voyage », « avant l’embarquement » : non.
+ */
+function asksWhatRemains(folded: string): boolean {
+  for (const question of Lexicon.remainingQuestions) {
+    for (const end of wholeWordEnds(question, folded)) {
+      let tail = questionCore(folded.slice(end).replace(/^[\s,]+/u, ""));
+      for (const object of Lexicon.remainingObjects) {
+        if (tail === object || tail.startsWith(`${object} `)) {
+          tail = tail.slice(object.length).trim();
+          break;
+        }
+      }
+      if (Lexicon.remainingTails.has(tail)) return true;
+      if (isAnchoredToTheStory(tail) && !mentionsATrip(tail)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Le cœur de `subjectOf` et de `mentionsSubscription`, sur un texte déjà
+ * replié. **Jamais spontanément** (Hugo, 03/10/2026) : c'est la porte du bouton
+ * `subscribe`, et du repli qui récite l'offre. Une question de voyage qui
+ * frôle le vocabulaire — « à combien de minutes à pied », « le wifi
+ * illimité », « plus de crédit sur mon téléphone » — ne l'ouvre pas.
+ */
+function talksAboutSubscription(folded: string): boolean {
+  const otherOffer = any(Lexicon.otherOffers, (word) => isAWord(word, folded));
+  // 1. L'offre nommée — pas le wifi illimité ni l'abonnement de métro.
+  if (!otherOffer && any(Lexicon.subscriptionWords, (word) => startsAWord(word, folded))) return true;
+  // 2. Le crédit du jour, la limite du récit, le temps qui reste — pas le
+  //    crédit du téléphone ni le temps de trajet.
+  if (!talksAboutAnotherCredit(folded)) {
+    if (any(Lexicon.creditPhrases, (phrase) => isAWord(phrase, folded))) return true;
+    if (
+      any(Lexicon.anchoredCreditPhrases, (phrase) => isAWord(phrase, folded)) &&
+      isAnchoredToTheStory(folded) &&
+      !mentionsATrip(folded)
+    ) {
+      return true;
+    }
+    if (asksWhatRemains(folded)) return true;
+  }
+  // 3. Une question de prix ou de limite qui est tout le message.
+  if (isBarePriceQuestion(folded)) return true;
+  // 4. Un prix qui nomme l'app — mais « le carnet MemoBook » coûte le prix du
+  //    carnet, et « une app gratuite pour le métro » en est une autre.
+  return (
+    !otherOffer &&
+    any(Lexicon.priceWords, (word) => isAWord(word, folded)) &&
+    any(Lexicon.appReferences, (word) => isAWord(word, folded)) &&
+    !any(Lexicon.bookWords, (word) => folded.includes(word))
+  );
+}
+
+/**
+ * Le message parle-t-il de l'abonnement, du crédit du jour, de la limite du
+ * récit ou du temps qui reste pour raconter ? C'est la porte du bouton
+ * `subscribe` (`callsToActionAllowed`) : MEMO ne propose l'abonnement qu'à qui
+ * en parle (Hugo, 03/10/2026). Le même jugement que `subjectOf`.
+ */
+export function mentionsSubscription(text: string): boolean {
+  return talksAboutSubscription(fold(text.trim()));
+}
+
 // ---------------------------------------------------------------------------
 // Le répondeur
 // ---------------------------------------------------------------------------
@@ -420,6 +718,8 @@ interface Candidate {
   family: string;
   text: string;
   suggestions: SuggestionSet;
+  /** Le bouton sous la bulle — `validateReply` le jette si le tour ne le permet pas. */
+  callToActionId?: CallToActionId;
 }
 
 export class HeuristicResponder implements MemoResponder {
@@ -470,6 +770,7 @@ export class HeuristicResponder implements MemoResponder {
         suggestionIds: [...SUGGESTION_SETS.withoutTranscript],
         prompt: null,
         asksRoseEpineGraine: false,
+        callToActionId: null,
       };
     }
 
@@ -479,6 +780,7 @@ export class HeuristicResponder implements MemoResponder {
       suggestionIds: [...SUGGESTION_SETS.trio],
       prompt: this.promptFor(input),
       asksRoseEpineGraine: false,
+      callToActionId: null,
     };
   }
 
@@ -496,6 +798,7 @@ export class HeuristicResponder implements MemoResponder {
       suggestionIds: [...SUGGESTION_SETS.neutral],
       prompt: null,
       asksRoseEpineGraine: false,
+      callToActionId: null,
     };
   }
 
@@ -517,6 +820,7 @@ export class HeuristicResponder implements MemoResponder {
         suggestionIds: [...SUGGESTION_SETS.neutral],
         prompt: this.promptFor(input),
         asksRoseEpineGraine: true,
+        callToActionId: null,
       };
     }
 
@@ -529,6 +833,7 @@ export class HeuristicResponder implements MemoResponder {
       suggestionIds: [...SUGGESTION_SETS[chosen.suggestions]],
       prompt: this.promptFor(input),
       asksRoseEpineGraine: false,
+      callToActionId: chosen.callToActionId ?? null,
     };
   }
 
@@ -545,7 +850,21 @@ export class HeuristicResponder implements MemoResponder {
     }
 
     // 2. Une question obtient une réponse. Relancer par-dessus prouve que rien n'a été lu.
+    //    Sur le prix ou la limite : les faits, et le bouton qui mène à l'offre —
+    //    sauf à un abonné, qui n'a rien à découvrir.
     if (signals.isQuestion) {
+      if (signals.subject === "subscription") {
+        return input.traveller.isUnlimited
+          ? [{ family: "answer", text: ANSWERS.subscriptionUnlimited, suggestions: "afterAnswer" }]
+          : [
+              {
+                family: "answer",
+                text: ANSWERS.subscription,
+                suggestions: "afterAnswer",
+                callToActionId: "subscribe",
+              },
+            ];
+      }
       return [
         {
           family: "answer",

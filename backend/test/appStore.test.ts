@@ -7,9 +7,8 @@ import {
   type AppStoreVerifier,
 } from "../src/services/appStore.js";
 import { storeKitState } from "../src/services/appStoreSubscriptions.js";
-import { assertCanRecord } from "../src/services/quota.js";
 import { APP_STORE_PRODUCT_IDS } from "../src/services/subscriptionCatalog.js";
-import { sweepEndedSubscriptions } from "../src/services/subscriptions.js";
+import { hasUnlimitedAccess } from "../src/services/subscriptions.js";
 import { createHarness, registerAccount, resetDatabase, type TestHarness } from "./helpers.js";
 
 /**
@@ -61,12 +60,12 @@ function transaction(overrides: Partial<AppStoreTransaction> = {}): AppStoreTran
   return {
     transactionId: "2000000000000001",
     originalTransactionId: "2000000000000001",
-    productId: APP_STORE_PRODUCT_IDS.weeklySubscription,
+    productId: APP_STORE_PRODUCT_IDS.monthlySubscription,
     appAccountToken: null,
     purchasedAt,
-    expiresAt: new Date(purchasedAt.getTime() + 7 * DAY),
+    expiresAt: new Date(purchasedAt.getTime() + 30 * DAY),
     revokedAt: null,
-    priceCents: 199,
+    priceCents: 499,
     currency: "EUR",
     environment: "Sandbox",
     signedAt: purchasedAt,
@@ -114,32 +113,41 @@ async function tripOf(accountId: string, endDate: Date | null = new Date(Date.no
   });
 }
 
-/** Un compte qui a raconté ses trois étapes offertes : seul l'abonnement le laisse continuer. */
-async function exhaustedAccount() {
-  const account = await registerAccount(harness.app);
-  await harness.prisma.account.update({
-    where: { id: account.accountId },
-    data: { remainingSteps: 0 },
-  });
-  return account;
+/** Ce compte raconte-t-il sans limite ? La règle du crédit du jour (`subscriptions.ts`). */
+async function isUnlimited(accountId: string): Promise<boolean> {
+  return hasUnlimitedAccess(harness.prisma, accountId);
 }
 
 type ProfileBody = {
-  subscription: { isActive: boolean; paidThrough: string | null; managedByAppStore: boolean };
+  subscription: {
+    price: number;
+    interval: "month" | "week";
+    weeklyPrice: number;
+    isActive: boolean;
+    isUnlimited: boolean;
+    paidThrough: string | null;
+    managedByAppStore: boolean;
+  };
+  offeredSteps?: unknown;
+  remainingSteps?: unknown;
 };
 
 describe("l'achat depuis l'app", () => {
   it("ouvre l'abonnement, l'inscrit au registre, et le rattache au voyage", async () => {
-    const account = await exhaustedAccount();
+    const account = await registerAccount(harness.app);
     const memo = await tripOf(account.accountId);
-    await expect(assertCanRecord(harness.prisma, account.accountId)).rejects.toThrow();
+    expect(await isUnlimited(account.accountId)).toBe(false);
 
     const tx = transaction({ appAccountToken: account.accountId });
     const response = await purchase(account.authorization, tx, memo.id);
 
     expect(response.statusCode).toBe(200);
     expect(response.json<ProfileBody>().subscription).toMatchObject({
+      price: 4.99,
+      interval: "month",
+      weeklyPrice: 4.99,
       isActive: true,
+      isUnlimited: true,
       paidThrough: tx.expiresAt?.toISOString(),
       managedByAppStore: true,
     });
@@ -153,17 +161,78 @@ describe("l'achat depuis l'app", () => {
       status: "active",
       providerSubscriptionId: tx.originalTransactionId,
       memoId: memo.id,
-      priceCents: 199,
+      priceCents: 499,
+      interval: "month",
+      productId: APP_STORE_PRODUCT_IDS.monthlySubscription,
       environment: "Sandbox",
     });
     expect(row.transactions).toHaveLength(1);
-    expect(row.transactions[0]).toMatchObject({ memoId: memo.id, priceCents: 199 });
+    expect(row.transactions[0]).toMatchObject({ memoId: memo.id, priceCents: 499 });
 
-    // Le micro s'ouvre dans la seconde, sans attendre la notification d'Apple.
-    await expect(assertCanRecord(harness.prisma, account.accountId)).resolves.toBeUndefined();
+    // L'illimité s'ouvre dans la seconde, sans attendre la notification d'Apple.
+    expect(await isUnlimited(account.accountId)).toBe(true);
   });
 
-  it("se rejoue sans inscrire deux fois la même semaine", async () => {
+  it("accepte encore l'ancien abonnement hebdomadaire, à son rythme et à son prix", async () => {
+    // Plus vendu dans l'app, mais un abonné de la semaine qui restaure son
+    // achat reste illimité jusqu'au bout de ce qu'il a payé (03/10/2026).
+    const account = await registerAccount(harness.app);
+    const tx = transaction({
+      appAccountToken: account.accountId,
+      productId: APP_STORE_PRODUCT_IDS.legacyWeeklySubscription,
+      expiresAt: new Date(Date.now() + 7 * DAY),
+      priceCents: 199,
+    });
+
+    const response = await purchase(account.authorization, tx);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json<ProfileBody>().subscription).toMatchObject({
+      price: 1.99,
+      interval: "week",
+      weeklyPrice: 1.99,
+      isUnlimited: true,
+    });
+    const row = await harness.prisma.subscription.findFirstOrThrow({ where: { accountId: account.accountId } });
+    expect(row).toMatchObject({ interval: "week", priceCents: 199, productId: tx.productId });
+  });
+
+  it("passe de la semaine au mois sur la même ligne, qui prend le produit, le rythme et le prix", async () => {
+    const account = await registerAccount(harness.app);
+    const weekly = transaction({
+      appAccountToken: account.accountId,
+      productId: APP_STORE_PRODUCT_IDS.legacyWeeklySubscription,
+      purchasedAt: new Date(Date.now() - 2 * DAY),
+      expiresAt: new Date(Date.now() + 5 * DAY),
+      priceCents: 199,
+    });
+    await purchase(account.authorization, weekly);
+
+    // Même groupe d'abonnements chez Apple : l'`originalTransactionId` reste.
+    const monthly = transaction({
+      transactionId: "2000000000000002",
+      originalTransactionId: weekly.originalTransactionId,
+      appAccountToken: account.accountId,
+      purchasedAt: new Date(),
+      signedAt: new Date(),
+    });
+    expect((await notify(notification("DID_CHANGE_RENEWAL_PREF", monthly))).statusCode).toBe(200);
+
+    expect(await harness.prisma.subscription.count()).toBe(1);
+    const row = await harness.prisma.subscription.findFirstOrThrow({
+      where: { accountId: account.accountId },
+      include: { transactions: true },
+    });
+    expect(row).toMatchObject({
+      productId: APP_STORE_PRODUCT_IDS.monthlySubscription,
+      interval: "month",
+      priceCents: 499,
+      renewsAt: monthly.expiresAt,
+    });
+    expect(row.transactions).toHaveLength(2);
+  });
+
+  it("se rejoue sans inscrire deux fois la même période", async () => {
     // L'app renvoie sa transaction à chaque lancement tant qu'elle ne l'a pas finie.
     const account = await registerAccount(harness.app);
     const tx = transaction({ appAccountToken: account.accountId });
@@ -228,7 +297,7 @@ describe("l'achat depuis l'app", () => {
 
 describe("les notifications d'Apple", () => {
   async function subscribedAccount() {
-    const account = await exhaustedAccount();
+    const account = await registerAccount(harness.app);
     const tx = transaction({ appAccountToken: account.accountId, purchasedAt: new Date(Date.now() - DAY) });
     await purchase(account.authorization, tx);
     return { account, tx };
@@ -240,7 +309,7 @@ describe("les notifications d'Apple", () => {
       ...tx,
       transactionId: "2000000000000002",
       purchasedAt: tx.expiresAt!,
-      expiresAt: new Date(tx.expiresAt!.getTime() + 7 * DAY),
+      expiresAt: new Date(tx.expiresAt!.getTime() + 30 * DAY),
       signedAt: new Date(),
     });
 
@@ -255,7 +324,7 @@ describe("les notifications d'Apple", () => {
     expect(row.transactions).toHaveLength(2);
   });
 
-  it("gardent la semaine payée quand le renouvellement est coupé dans iOS", async () => {
+  it("gardent le mois payé quand le renouvellement est coupé dans iOS", async () => {
     const { account, tx } = await subscribedAccount();
 
     await notify(
@@ -269,11 +338,22 @@ describe("les notifications d'Apple", () => {
     expect(row).toMatchObject({ status: "cancelled", autoRenews: false, renewsAt: tx.expiresAt });
     expect(row.cancelledAt).not.toBeNull();
 
-    // Une semaine commencée est une semaine réglée : le micro reste ouvert.
-    await expect(assertCanRecord(harness.prisma, account.accountId)).resolves.toBeUndefined();
+    // Un mois commencé est un mois réglé : l'illimité reste ouvert jusqu'au bout.
+    expect(await isUnlimited(account.accountId)).toBe(true);
+    const profile = await harness.app.inject({
+      method: "GET",
+      url: "/v1/profile",
+      headers: { authorization: account.authorization },
+    });
+    expect(profile.json<ProfileBody>().subscription).toMatchObject({
+      isActive: false,
+      isUnlimited: true,
+      price: 4.99,
+      interval: "month",
+    });
   });
 
-  it("ferment le micro à l'expiration", async () => {
+  it("ferment l'illimité à l'expiration", async () => {
     const { account, tx } = await subscribedAccount();
     const ended = { ...tx, expiresAt: new Date(Date.now() - 1000), signedAt: new Date() };
 
@@ -281,7 +361,26 @@ describe("les notifications d'Apple", () => {
 
     const row = await harness.prisma.subscription.findFirstOrThrow({ where: { accountId: account.accountId } });
     expect(row.status).toBe("expired");
-    await expect(assertCanRecord(harness.prisma, account.accountId)).rejects.toThrow();
+    expect(await isUnlimited(account.accountId)).toBe(false);
+  });
+
+  it("écrivent encore la ligne d'un ancien abonné de la semaine", async () => {
+    // Ignorer ses renouvellements et ses expirations le laisserait illimité à vie.
+    const account = await registerAccount(harness.app);
+    const weekly = transaction({
+      appAccountToken: account.accountId,
+      productId: APP_STORE_PRODUCT_IDS.legacyWeeklySubscription,
+      purchasedAt: new Date(Date.now() - 8 * DAY),
+      expiresAt: new Date(Date.now() - DAY),
+      priceCents: 199,
+      signedAt: new Date(Date.now() - 8 * DAY),
+    });
+    await notify(notification("SUBSCRIBED", weekly));
+    await notify(notification("EXPIRED", { ...weekly, signedAt: new Date() }, { status: "expired" }));
+
+    const row = await harness.prisma.subscription.findFirstOrThrow({ where: { accountId: account.accountId } });
+    expect(row).toMatchObject({ status: "expired", interval: "week" });
+    expect(await isUnlimited(account.accountId)).toBe(false);
   });
 
   it("retirent l'accès et la semaine du registre au remboursement", async () => {
@@ -296,7 +395,7 @@ describe("les notifications d'Apple", () => {
     });
     expect(row.status).toBe("expired");
     expect(row.transactions[0]?.revokedAt).toEqual(revokedAt);
-    await expect(assertCanRecord(harness.prisma, account.accountId)).rejects.toThrow();
+    expect(await isUnlimited(account.accountId)).toBe(false);
   });
 
   it("ignorent un événement plus ancien que le dernier appliqué", async () => {
@@ -349,17 +448,27 @@ describe("les notifications d'Apple", () => {
   });
 });
 
-describe("la fin du voyage, avec un abonnement Apple", () => {
-  it("n'éteint pas un abonnement qu'Apple continue de prélever", async () => {
-    // Le contraire faisait payer quelqu'un dont le micro était fermé.
+describe("la fin du voyage", () => {
+  it("n'arrête aucun abonnement, pas même hors d'Apple", async () => {
+    // L'illimité court jusqu'à ce qu'on le résilie (Hugo, 03/10/2026) : fermer
+    // le voyage n'éteint plus rien.
     const account = await registerAccount(harness.app);
-    await tripOf(account.accountId, new Date(Date.now() - DAY));
+    const memo = await tripOf(account.accountId);
     await purchase(account.authorization, transaction({ appAccountToken: account.accountId }));
+    await harness.prisma.subscription.create({
+      data: { accountId: account.accountId, provider: "stripe", status: "active", priceCents: 499 },
+    });
 
-    expect(await sweepEndedSubscriptions(harness.context)).toBe(0);
+    const closed = await harness.app.inject({
+      method: "PATCH",
+      url: `/v1/trips/${memo.id}/settings`,
+      headers: { authorization: account.authorization },
+      payload: { endDate: new Date(Date.now() - 2 * DAY).toISOString() },
+    });
+    expect(closed.statusCode).toBe(200);
 
-    const row = await harness.prisma.subscription.findFirstOrThrow({ where: { accountId: account.accountId } });
-    expect(row.status).toBe("active");
+    const rows = await harness.prisma.subscription.findMany({ where: { accountId: account.accountId } });
+    expect(rows.map((row) => row.status)).toEqual(["active", "active"]);
   });
 
   it("propose de couper le renouvellement sur l'accueil", async () => {
@@ -404,6 +513,53 @@ describe("la fin du voyage, avec un abonnement Apple", () => {
     expect(response.statusCode).toBe(200);
     const row = await harness.prisma.subscription.findFirstOrThrow({ where: { accountId: account.accountId } });
     expect(row).toMatchObject({ status: "active", cancellationReason: "tooExpensive" });
+  });
+});
+
+describe("le profil, sans abonnement", () => {
+  it("propose l'offre du catalogue : 4,99 € par mois, et plus d'étapes offertes", async () => {
+    const account = await registerAccount(harness.app);
+    const response = await harness.app.inject({
+      method: "GET",
+      url: "/v1/profile",
+      headers: { authorization: account.authorization },
+    });
+
+    const body = response.json<ProfileBody>();
+    expect(body.subscription).toMatchObject({
+      price: 4.99,
+      interval: "month",
+      weeklyPrice: 4.99,
+      isActive: false,
+      isUnlimited: false,
+    });
+    expect(body).not.toHaveProperty("offeredSteps");
+    expect(body).not.toHaveProperty("remainingSteps");
+  });
+
+  it("ne reprend pas l'ancien tarif d'un abonné de la semaine qui ne l'est plus", async () => {
+    const account = await registerAccount(harness.app);
+    await harness.prisma.subscription.create({
+      data: {
+        accountId: account.accountId,
+        provider: "storekit",
+        status: "expired",
+        priceCents: 199,
+        interval: "week",
+        renewsAt: new Date(Date.now() - 30 * DAY),
+      },
+    });
+
+    const response = await harness.app.inject({
+      method: "GET",
+      url: "/v1/profile",
+      headers: { authorization: account.authorization },
+    });
+    expect(response.json<ProfileBody>().subscription).toMatchObject({
+      price: 4.99,
+      interval: "month",
+      isUnlimited: false,
+    });
   });
 });
 

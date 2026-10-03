@@ -125,6 +125,18 @@ export const REFUSAL =
 
 export const ACKNOWLEDGED = "C’est enregistré. Ton carnet compte une étape de plus.";
 
+/**
+ * La bulle de MEMO quand le crédit du jour du voyage tombe à zéro
+ * (`services/dailyCredit.ts`, Hugo, 03/10/2026). Douce, et qui se suffit à
+ * elle-même : une app trop ancienne n'affichera pas le bouton
+ * `daily_credit_subscribe` posé dessous.
+ *
+ * **Au mot près celle de l'app** (`DailyCreditCopy.exhaustedMessage`), qui la
+ * pose elle-même quand elle coupe le micro hors ligne.
+ */
+export const DAILY_CREDIT_EXHAUSTED_MESSAGE =
+  "Quelle journée ! Ce voyage a déjà raconté ses 5 minutes du jour. Je garde tout précieusement : reviens demain pour la suite, le crédit se recharge à minuit.";
+
 export const HANDING_OVER =
   "Je te laisse la main. Ta version fait autorité sur la mienne, je n’y retouche plus.";
 
@@ -138,9 +150,31 @@ export const ANSWERS = {
   book:
     "Ton carnet se met en page tout seul à partir de ce que tu racontes. Tu le relis en " +
     "aperçu, et rien ne part à l’impression sans que tu l’aies validé.",
+  /**
+   * Les faits du crédit du jour et de l'abonnement, **parce qu'on les a
+   * demandés** — jamais une offre glissée dans une autre réponse (Hugo,
+   * 03/10/2026). Elle renvoyait à la ligne « Mon abonnement » du profil, qui
+   * n'existe que pour un abonné : celui qui demande le prix voit « Découvrir
+   * l’abonnement ». Le moteur de règles y joint le bouton `subscribe` quand le
+   * code le permet (`callsToActionAllowed`, `conversation.ts`). Le crédit
+   * n'est partagé qu'entre les co-voyageurs **qui ne sont pas abonnés** : un
+   * abonné n'y puise pas (03/10/2026). L'app en garde la copie exacte
+   * (`ChatCopy.Answer.subscription`).
+   */
   subscription:
-    "Tu retrouves le prix et l’état de ton abonnement dans ton profil, à la ligne « Mon " +
-    "abonnement ».",
+    "Chaque voyage a 5 minutes de récit par jour, partagées entre les co-voyageurs qui ne " +
+    "sont pas abonnés : l’écrit compte aussi, pas les photos, et le crédit se recharge à " +
+    "minuit. L’abonnement, à 4,99 € par mois, rend ton récit illimité ; tu le trouves dans " +
+    "ton profil, à « Découvrir l’abonnement ».",
+  /**
+   * La même question, posée par un abonné : lui raconte sans limite, et son
+   * profil porte la ligne « Mon abonnement ». Lui parler des 5 minutes serait
+   * lui décrire une règle qui ne le concerne plus. Tournure sans genre, comme
+   * `newPerson` : MEMO ne sait pas s'il parle à une abonnée ou à un abonné.
+   */
+  subscriptionUnlimited:
+    "Avec ton abonnement, ton récit est illimité, sur tous tes voyages. Tu retrouves son " +
+    "état dans ton profil, à la ligne « Mon abonnement ».",
   photos: "Ajoute tes photos quand tu veux : je les range avec le souvenir du jour.",
   corrections:
     "Tout se corrige. Tu relis chaque texte avant l’impression, et ta version fait " +
@@ -370,6 +404,22 @@ export const SUGGESTION_IDS = Object.keys(SUGGESTIONS) as SuggestionId[];
 
 export function isSuggestionId(value: string): value is SuggestionId {
   return Object.prototype.hasOwnProperty.call(SUGGESTIONS, value);
+}
+
+/**
+ * Les puces que **seul le code** pose. « Photos de test » ne sert qu'hors
+ * production, et c'est `acceptReply` (`jobs/converse.ts`) qui la propose,
+ * en lisant l'environnement — le modèle, lui, ne le sait pas. Elle figurait
+ * dans le catalogue qu'on lui donnait et dans l'enum de sa sortie : rien
+ * n'empêchait MEMO de la tendre à un vrai voyageur (03/10/2026).
+ */
+const CODE_ONLY_SUGGESTIONS: readonly SuggestionId[] = ["photos-sample"];
+
+/** Les puces qu'un répondeur — modèle, moteur de règles ou simulé — a le droit de proposer. */
+export const MODEL_SUGGESTION_IDS = SUGGESTION_IDS.filter((id) => !CODE_ONLY_SUGGESTIONS.includes(id));
+
+export function isModelSuggestionId(value: string): value is SuggestionId {
+  return isSuggestionId(value) && !CODE_ONLY_SUGGESTIONS.includes(value);
 }
 
 /** Retrouve une puce par son libellé exact — un client qui n'envoie pas l'identifiant. */

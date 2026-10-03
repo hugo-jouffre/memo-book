@@ -36,19 +36,20 @@ extension TravellerProfile {
         connectors: Connector.fixtures,
         // Abonnée, sur le voyage de la maquette : c'est l'état que montrent la
         // feuille « Mon Abonnement » et les trois feuilles de résiliation. Le
-        // compte neuf, lui, n'est pas abonné et ouvre la feuille du mode
-        // d'emploi.
+        // compte neuf, lui, n'est pas abonné : le profil lui propose
+        // « Découvrir l'abonnement », qui ouvre le paywall.
         subscription: Subscription(
-            weeklyPrice: 1.99,
+            price: 4.99,
+            interval: .month,
             isActive: true,
             tripDestination: "Rome",
             tripTitle: "Rome entre amis",
             endsOn: Calendar.current.date(byAdding: .day, value: 21, to: .now),
-            // La semaine en cours est réglée jusque dans cinq jours : c'est ce
-            // qui fait voir le sursis sur les deux dernières feuilles de
+            // Le mois en cours est réglé jusque dans douze jours : c'est ce qui
+            // fait voir le sursis sur les deux dernières feuilles de
             // résiliation. À zéro, elles retombent sur « l'abonnement s'arrête
             // aujourd'hui », qui est l'autre cas à vérifier.
-            paidThrough: Calendar.current.date(byAdding: .day, value: 5, to: .now)
+            paidThrough: Calendar.current.date(byAdding: .day, value: 12, to: .now)
         ),
         orders: [
             OrderTracking(
@@ -59,8 +60,6 @@ extension TravellerProfile {
                 pageCount: 50
             )
         ],
-        offeredSteps: 3,
-        remainingSteps: 2,
         tripCount: 5,
         currentTrip: CurrentTrip(
             id: "trip-rome",
@@ -77,17 +76,19 @@ extension TravellerProfile {
         return profile
     }
 
-    /// Le profil de quelqu'un qui paie : plus de quota d'étapes, la carte de
-    /// chiffres ouverte, et la ligne « Mon abonnement » dans les services.
-    ///
-    /// Le quota repasse à `nil` **et** l'abonnement à actif : les deux ensemble,
-    /// parce que c'est ce que le serveur écrit le jour d'une souscription. Un
-    /// abonné qui garderait ses étapes offertes n'existe pas.
+    /// Le profil de quelqu'un qui paie : la pastille « Abonnée », et la ligne
+    /// « Mon abonnement » dans les services.
     public static var subscriberFixture: TravellerProfile {
         var profile = fixture
         profile.subscription.isActive = true
-        profile.offeredSteps = nil
-        profile.remainingSteps = nil
+        return profile
+    }
+
+    /// Le même profil, sans abonnement — jamais souscrit : le bouton
+    /// « Découvrir l'abonnement » et la version de découverte du paywall.
+    public static var freeFixture: TravellerProfile {
+        var profile = fixture
+        profile.subscription = Subscription(price: 4.99, interval: .month)
         return profile
     }
 
@@ -111,11 +112,11 @@ extension TravellerProfile {
             )
         },
         // **Ancien abonné, entre deux voyages.** C'est l'état le plus courant
-        // après un premier carnet — l'abonnement s'éteint tout seul à la fin du
+        // après un premier carnet — l'app propose de résilier à la fin du
         // voyage —, et c'est lui qui fait voir le paywall de **retour**, deux
         // écrans au lieu de trois. Le seed pose le même état sur le compte de
         // test gratuit.
-        subscription: Subscription(weeklyPrice: 1.99, hasEndedBefore: true)
+        subscription: Subscription(price: 4.99, interval: .month, hasEndedBefore: true)
     )
 }
 

@@ -42,7 +42,7 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
 | **Style du carnet** | Pointillés, cadres, etc. | Le fichier de `agents/carnet-styles/` appliqué de bout en bout |
 | **Partager sur la galerie** | Désactivé | Un carnet public passe une modération plus stricte (→ Agent Modération) |
 | **Ma cagnotte** · **Tricount** | 67,88 € | Une dépense est une **métadonnée vérifiable** : elle situe une date et un lieu. Elle ne raconte rien — le souvenir doit venir du voyageur |
-| **Limites de souvenirs** | 312 / 2 000 | Rien pour les agents, et c'est le but : c'est un **garde-fou de coût**, pas un réglage de contenu. Voir plus bas |
+| **Crédit du jour** | 3 min 20 / 5 min · « Illimité » pour un abonné | Rien pour les agents : ce n'est pas un réglage de contenu, c'est ce que le voyage peut encore raconter aujourd'hui — et le levier de l'abonnement. Voir plus bas |
 
 ---
 
@@ -127,53 +127,51 @@ s'imprimera vraiment qu'une fois cette face ajoutée à `build-font-css.ts`.
 
 ---
 
-## Les limites de souvenirs
+## Le crédit du jour
 
-**Ce n'est pas le quota d'étapes offertes.** Celui-là est le palier d'entrée :
-trois étapes, une fois, puis l'abonnement. Les limites de souvenirs sont le
-budget **hebdomadaire** de quelqu'un qui raconte déjà — elles se rechargent, et
-se relèvent contre 3,99 €/semaine.
+**Chaque voyage peut raconter 5 minutes par jour**, partagées entre ses
+co-voyageurs qui ne sont pas abonnés (Hugo, 03/10/2026). Il remplace à la fois
+les trois étapes offertes et les limites de souvenirs hebdomadaires : il n'y a
+plus de palier d'entrée, ni d'extension à acheter.
 
-| | Compris | Étendu |
+| | Sans abonnement | Abonné (4,99 €/mois) |
 |---|---|---|
-| Par semaine | 2 000 souvenirs | 8 000 souvenirs |
-| Prix | inclus dans l'abonnement | 3,99 €/semaine |
+| Récit | 5 minutes par jour et par voyage, à partager | Illimité — et il ne prend rien au pot commun |
+| Ce qui consomme | un vocal : sa durée ; un texte : 75 ms par caractère (800 caractères = 1 min) | rien |
+| Photos | libres | libres |
 
-**La semaine, parce que tout le produit est à la semaine** (Hugo, 17/09/2026) :
-l'abonnement se facture ainsi, un voyage se compte ainsi, et l'extension est une
-**option du même produit** — pas une seconde offre. Elle vit d'ailleurs sous le
-même produit Stripe.
+**Un seul crédit pour l'oral et l'écrit.** Deux compteurs (des secondes et des
+caractères) auraient demandé deux jauges et une règle de plus à expliquer ; un
+texte se convertit en temps, et la ligne dit une seule chose. Une puce envoyée
+telle quelle et les commandes silencieuses ne consomment rien ; le contexte du
+voyage et les précisions comptent comme le reste.
 
-Le barème, et lui seul, décide de ce que chaque geste consomme :
+**Par voyage, pas par compte.** Le crédit est le pot commun du voyage : ses
+co-voyageurs non abonnés le partagent. L'abonnement est personnel — il rend
+l'illimité à l'abonné seul, et n'ouvre rien à ses co-voyageurs.
 
-| Geste | Coût |
-|---|---|
-| Un message écrit | 1 souvenir |
-| Une **minute entamée** de vocal | 10 souvenirs |
-| Une photo | rien |
+**Il se recharge à minuit**, à l'heure de celui qui raconte (`accounts.timeZone`,
+tenu à jour par l'en-tête `X-Time-Zone`). Le jour ne recule jamais : changer de
+fuseau ne rouvre pas une journée déjà consommée.
 
-**Un vocal coûte plus cher parce qu'il coûte plus cher** : transcription,
-rédaction, relecture. Une photo ne passe par aucune des trois. La minute est
-*entamée* et non écoulée — c'est la règle la plus facile à expliquer, et la
-seule qui ne récompense pas le découpage d'un vocal en morceaux de 59 secondes.
-
-**Elles ne se voient que dans les paramètres du voyage**, et la ligne reste
-muette tant qu'il reste de la marge : la jauge n'apparaît qu'à 80 %. Cette
-limite est un garde-fou contre l'usage qui coûterait plus cher que
-l'abonnement, pas un levier commercial — quelqu'un qui raconte normalement ne
-doit jamais la voir bouger.
-
-Le compte est vite fait : 2 000 souvenirs par semaine, c'est **200 minutes de
-vocal**, soit près de 30 minutes par jour. Un voyageur bavard qui raconte
-20 minutes quotidiennes en consomme 1 400. La limite ne mord pas.
+**Il se voit en permanence dans les paramètres du voyage**, à la ligne « Crédit
+du jour » : le reste (« 3 min 20 / 5 min »), la jauge de ce qui reste — pleine au
+matin, elle se vide en vert et rougit à zéro (recette du 03/10/2026) —, et
+la feuille qui explique la règle et propose « Passer en illimité ». Ce n'est
+plus un garde-fou discret qui ne se montre qu'au seuil : c'est ce que
+l'abonnement lève, il doit se lire d'un regard. Un abonné y lit « Illimité ».
+Pendant un enregistrement, la barre prévient à 30 s du bout, pulse à 5 s, et
+coupe net à zéro — ce qui a été dit est envoyé, jamais jeté.
 
 ⚠️ **Le mot « jeton » — et le mot « token » — n'apparaissent nulle part dans
-l'app.** L'unité s'appelle un souvenir, et l'app compte en souvenirs.
+l'app.** On compte en minutes et en secondes ; « souvenir » n'est plus une unité
+de compte.
 
-⚠️ Le barème est un **ordre de grandeur, pas une mesure** : il est à réétalonner
-sur les factures OpenAI et Anthropic d'un mois plein. Les deux constantes vivent
-dans `backend/src/services/memoryAllowance.ts`, et voyagent jusqu'à l'app — qui
-n'en écrit aucune.
+⚠️ **Le serveur tranche, l'app prévient.** Les constantes vivent dans
+`backend/src/services/dailyCredit.ts` (`DAILY_CREDIT_LIMIT_MS`,
+`TEXT_MS_PER_CHARACTER`, les seuils de 30 s et 5 s) et voyagent jusqu'à l'app
+avec le solde — qui n'en écrit aucune. Le détail des garde-fous est dans
+[`paiements.md`](paiements.md#le-crédit-du-jour-sans-abonnement).
 
 ---
 

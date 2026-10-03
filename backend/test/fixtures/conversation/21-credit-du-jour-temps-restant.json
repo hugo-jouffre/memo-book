@@ -1,0 +1,14 @@
+{
+  "name": "Il me reste combien de temps aujourd'hui ?",
+  "why": "MEMO ne connaît pas le reste du jour : il dit la règle (5 minutes par jour pour le voyage, partagées entre les co-voyageurs qui ne sont pas abonnés, l'écrit compte, recharge à minuit) et où voir ce qui reste, sans inventer de chiffre ni dire avec qui le crédit est partagé — il ne sait pas si Clara est abonnée. L'abonnement se mentionne sans insister ; le bouton est permis, pas exigé.",
+  "memo": { "title": "Rome 2026", "destinationCity": "Rome", "people": ["Clara"] },
+  "traveller": { "firstName": "Hugo", "memberCount": 2 },
+  "history": [
+    { "author": "traveller", "text": "Ce soir on a dîné à Trastevere avec Clara, une carbonara incroyable." },
+    { "author": "memo", "text": "Voilà ton texte pour le carnet. Il te convient ?" },
+    { "author": "traveller", "text": "Ça me convient" },
+    { "author": "memo", "text": "C’est enregistré. Ton carnet compte une étape de plus." }
+  ],
+  "message": { "kind": "text", "text": "il me reste combien de temps aujourd'hui pour raconter ?" },
+  "expect": { "disposition": "command" }
+}

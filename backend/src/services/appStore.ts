@@ -32,7 +32,7 @@ import type { Env } from "../env.js";
  *    vérification pour `Xcode` et `LocalTesting` ; ces environnements ne sont
  *    donc acceptés que si `APP_STORE_ALLOW_XCODE` l'autorise, et `env.ts` refuse
  *    cette valeur en production.
- * 3. **Le prix est en millièmes.** `1990` veut dire 1,99 €.
+ * 3. **Le prix est en millièmes.** `4990` veut dire 4,99 €.
  */
 
 /** Une transaction App Store vérifiée, dans nos mots. */
@@ -44,9 +44,9 @@ export interface AppStoreTransaction {
   /** L'identifiant du compte MemoBook que l'app a posé à l'achat, s'il y en a un. */
   appAccountToken: string | null;
   purchasedAt: Date;
-  /** La fin de la semaine payée. */
+  /** La fin de la période payée — le mois, ou la semaine d'un ancien abonné. */
   expiresAt: Date | null;
-  /** Remboursée ou révoquée : la semaine ne compte plus. */
+  /** Remboursée ou révoquée : la période ne compte plus. */
   revokedAt: Date | null;
   /** TTC, en centimes. Nul pour les transactions qui ne le portaient pas. */
   priceCents: number | null;
@@ -274,7 +274,7 @@ function toTransaction(decoded: JWSTransactionDecodedPayload): AppStoreTransacti
     purchasedAt: new Date(purchaseDate),
     expiresAt: decoded.expiresDate ? new Date(decoded.expiresDate) : null,
     revokedAt: decoded.revocationDate ? new Date(decoded.revocationDate) : null,
-    // Des millièmes vers des centimes : 1990 → 199.
+    // Des millièmes vers des centimes : 4990 → 499.
     priceCents: decoded.price === undefined ? null : Math.round(decoded.price / 10),
     currency: decoded.currency ?? null,
     environment,

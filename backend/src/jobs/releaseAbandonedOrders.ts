@@ -4,7 +4,7 @@ import { releaseAbandonedOrders as release } from "../services/orderPayments.js"
 /**
  * Le ménage des commandes jamais payées : chaque heure, les brouillons de plus
  * de 24 h annulent leur intention et rendent leur part de cagnotte. Sans charge
- * utile, comme `endSubscriptions`. Voir `services/orderPayments.ts`.
+ * utile, comme `exportStats`. Voir `services/orderPayments.ts`.
  */
 export type ReleaseAbandonedOrdersJob = Record<string, never>;
 

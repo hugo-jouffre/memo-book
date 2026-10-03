@@ -97,6 +97,119 @@ final class ChatResponderTests: XCTestCase {
         XCTAssertEqual(text(of: reply), ChatCopy.Answer.corrections)
     }
 
+    /// Le prix, l'abonnement, la limite du jour : la même réponse que le
+    /// serveur, avec le bouton « Découvrir l’abonnement » sous la bulle.
+    func testASubscriptionQuestionGetsTheAnswerAndItsButton() async throws {
+        for question in [
+            "Combien coûte l'abonnement ?",
+            "Il me reste combien de temps aujourd'hui ?",
+            "C'est quoi la limite du crédit ?",
+        ] {
+            let reply = try await responder.reply(to: turn(question))
+            XCTAssertEqual(text(of: reply), ChatCopy.Answer.subscription, question)
+            XCTAssertEqual(reply.beats.last?.message.callToAction?.kind, .subscribe, question)
+        }
+    }
+
+    /// « coute » est dans « tu m'écoutes ? » : le lexique se lit en début de
+    /// mot, comme sur le serveur.
+    func testListeningIsNotAPriceQuestion() async throws {
+        let reply = try await responder.reply(to: turn("Est-ce que tu m'écoutes ?"))
+        XCTAssertNotEqual(text(of: reply), ChatCopy.Answer.subscription)
+        XCTAssertNil(reply.beats.last?.message.callToAction)
+    }
+
+    /// « euro » attrapait « Europe », « limit » la limite de vitesse, « prix »
+    /// le prix du carnet — et MEMO posait l'offre dessous (03/10/2026). Les
+    /// mêmes phrases que `conversation.test.ts`.
+    func testATravelQuestionIsNotASubscriptionQuestion() async throws {
+        for question in [
+            "Tu connais des bons restos en Europe ?",
+            "On a pris l’Eurostar ce matin, tu savais ?",
+            "Le musée est gratuit le dimanche ?",
+            "Quelle est la limite de vitesse en Italie ?",
+            "Il fallait payer l’entrée du Colisée ?",
+            "Combien coûte le carnet MemoBook ?",
+            "Le billet de train coûte combien ?",
+            "Quel est le prix du billet pour le Vatican ?",
+            "J’ai payé par carte de crédit, c’est grave ?",
+            "Le musée, c’est payant ?",
+            "Il me reste combien de jours de voyage ?",
+            // S02 (03/10/2026) : le temps d'un trajet, le crédit du téléphone,
+            // le wifi illimité, une autre app.
+            "C’est à combien de minutes à pied, le Colisée ?",
+            "Il y a une limite de temps pour visiter le Louvre ?",
+            "Il me reste combien de temps avant l’embarquement ?",
+            "Il reste combien de minutes avant le départ du train ?",
+            "Combien de temps pour aller au Colisée ?",
+            "Je n’ai plus de crédit sur mon téléphone, tu sais où recharger ?",
+            "Il me reste du crédit sur ma carte SIM ?",
+            "On a eu le wifi illimité ?",
+            "La voiture de location a le kilométrage illimité ?",
+            "L’abonnement de métro vaut le coup ?",
+            "Je dois résilier mon forfait téléphone ?",
+            "Il y a une app gratuite pour le métro de Rome ?",
+            "Tu connais une appli gratuite pour traduire ?",
+            "Je suis bloqué à l’aéroport, tu sais quoi faire ?",
+            "Il me reste combien jusqu’à Florence ?",
+        ] {
+            XCTAssertNotEqual(ChatSignals.read(question).subject, .subscription, question)
+            let reply = try await responder.reply(to: turn(question))
+            XCTAssertNil(reply.beats.last?.message.callToAction, question)
+        }
+        XCTAssertEqual(ChatSignals.read("Combien coûte le carnet imprimé ?").subject, .book)
+    }
+
+    func testTheSubscriptionTheCreditAndTheTimeLeftAreSubscriptionQuestions() {
+        for question in [
+            "Comment je résilie ?",
+            "C’est illimité ?",
+            "Mon crédit du jour est fini ?",
+            "Combien de minutes je peux raconter ?",
+            "Ça coûte combien ?",
+            "Est-ce que c’est payant ?",
+            "Ça coûte combien, MEMO ?",
+            "MemoBook, c'est gratuit ?",
+            "Il y a une limite ?",
+            // S09 (03/10/2026) : ce qui reste, et pourquoi on est limité.
+            "Il me reste combien aujourd’hui ?",
+            "Il me reste combien ?",
+            "Il me reste combien de temps ?",
+            "Combien de temps il me reste ?",
+            "Il me reste combien, MEMO ?",
+            "Il reste combien de crédit ?",
+            "Combien de crédit il reste ?",
+            "Pourquoi je suis limité ?",
+            "Il y a une limite de temps ?",
+            "Combien de minutes par jour ?",
+            "Combien de temps je peux raconter par jour ?",
+            "Il me reste combien de temps pour raconter le Colisée ?",
+            "Le crédit se recharge quand ?",
+            "Je n’ai plus de crédit pour raconter ?",
+            "L’appli est payante ?",
+        ] {
+            XCTAssertEqual(ChatSignals.read(question).subject, .subscription, question)
+        }
+    }
+
+    /// La question d'exemple du prompt reçoit la réponse et son bouton ; une
+    /// question de trajet, ni l'une ni l'autre (S02, S09 — 03/10/2026).
+    func testWhatRemainsGetsTheOfferAndATripDoesNot() async throws {
+        let remains = try await responder.reply(to: turn("Il me reste combien aujourd’hui ?"))
+        XCTAssertEqual(text(of: remains), ChatCopy.Answer.subscription)
+        XCTAssertEqual(remains.beats.last?.message.callToAction?.kind, .subscribe)
+
+        for question in [
+            "C’est à combien de minutes à pied, le Colisée ?",
+            "Il me reste combien de temps avant l’embarquement ?",
+            "Je n’ai plus de crédit sur mon téléphone, tu sais où recharger ?",
+        ] {
+            let reply = try await responder.reply(to: turn(question))
+            XCTAssertNotEqual(text(of: reply), ChatCopy.Answer.subscription, question)
+            XCTAssertNil(reply.beats.last?.message.callToAction, question)
+        }
+    }
+
     func testAnUnknownQuestionGetsTheHonestFallback() async throws {
         let reply = try await responder.reply(to: turn("Est-ce que tu sais faire la cuisine ?"))
 

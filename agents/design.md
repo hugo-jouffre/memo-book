@@ -67,6 +67,12 @@
 Les variantes *soft* servent de fond de bandeau ou de badge ; la couleur pleine porte le
 texte et l'icône.
 
+**Danger doux** (#FBDDDD) est le fond du bandeau qui prévient, dans la barre
+d'enregistrement, que le crédit du jour touche à sa fin (30 secondes, puis la
+pulsation à 5) ; le texte et le picto y sont en Danger. C'est un retour système, et
+rien d'autre ne le porte. Côté app : `MemoBookColor.errorSoft` (`Tokens.swift`), à
+caler sur la variable Figma (R4, T249).
+
 ## Tailles et traits
 
 | Variable | Valeur |
@@ -128,10 +134,11 @@ Styles observés :
 - Les surfaces utilisent **White** (#FFFCF8), jamais un blanc pur (#FFFFFF)
 - **Green** (#28654B) porte l'action principale : boutons primaires et CTA
 - **Lime** (#E2F32B) est la couleur de **l'abonnement, et de rien d'autre** : le bouton
-  qui y invite, la pastille « Abonné », le solde d'étapes offertes, l'écriture
-  « ABONNEMENT » de la cagnotte. Quand on hésite : « est-ce que ça parle de
-  l'abonnement ? » Si non, c'est bleu. En aplat de bouton, le libellé et le filet sont
-  verts, jamais l'encre (D13)
+  qui y invite (« Passer en illimité », « S’abonner », « Découvrir l'abonnement »), la
+  pastille « Abonné ». Depuis le crédit du jour (03/10/2026), l'abonnement n'ouvre plus
+  que le récit illimité : le lime ne verrouille rien. Quand on hésite : « est-ce que ça
+  parle de l'abonnement ? » Si non, c'est bleu. En aplat de bouton, le libellé et le
+  filet sont verts, jamais l'encre (D13)
 - **Blue** (#AFD2F0) est **la couleur d'accent de l'app** : bordures de cartes, pastilles
   numérotées, fonds d'icônes à 30 %, ronds de confirmation, pastilles de compte. C'est
   un aplat : le texte qu'il porte est Black, jamais du bleu

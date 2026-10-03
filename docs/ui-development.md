@@ -132,6 +132,7 @@ Dans la PR de ce lot, vérifié en simulateur :
 | # | Sujet | Écran / parcours |
 |---|---|---|
 | T205 | La puce en vol se pose dans le creux que le fil lui ouvre, puis le fil **monte d'une ligne** au moment où les trois points de MEMO apparaissent dessous (vu en vidéo le 30/09). Et sur un libellé de deux lignes, le raccord se voit d'un point ou deux. Faire la place des trois points dès le décollage, ou un `matchedGeometryEffect` au pixel — à décider si ça vaut le coût | Conversation |
+| T249 | Le **bandeau d'avertissement** de la barre d'enregistrement n'a pas de maquette : rouge doux (`MemoBookColor.errorSoft`, la version douce de Danger de `agents/design.md`, `#FBDDDD`) au-dessus de la barre à 30 s du bout du crédit du jour, compte à rebours « Plus que 30 secondes avant la limite du jour », pulsation de la taille à 5 s, état « Crédit du jour épuisé » tapable vers le paywall. À dessiner, ou à valider tel quel — la variable Figma du rouge doux comprise (R4) | Conversation — enregistrement |
 | T208 | Le micro de la bulle vocale : nu et vert au pied du rond dans `3627:31695`, en pastille détourée dans l'app (Clara, 26/09). À départager | Conversation |
 
 ### Notifications
@@ -140,7 +141,7 @@ Voir [`notifications.md`](notifications.md) pour les règles et les choix faits.
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
-| T242 | **Les textes des notifications sont à relire** : la feuille Notion donne l'objectif et le ton, pas les mots. Ils sont tous dans `backend/src/services/notificationCopy.ts` (fin des étapes offertes, fin de voyage, relance d'écriture, carnet pas commandé, vacances, l'an dernier, anniversaire). Ceux de « Nouveau récit » et du point de la semaine, bulles comprises, sont validés | Notifications |
+| T242 | **Les textes des notifications sont à relire** : la feuille Notion donne l'objectif et le ton, pas les mots. Ils sont tous dans `backend/src/services/notificationCopy.ts` (fin de voyage, relance d'écriture, carnet pas commandé, vacances, l'an dernier, anniversaire). Ceux de « Nouveau récit » et du point de la semaine, bulles comprises, sont validés | Notifications |
 | T245 | Quand tout est coupé dans les Réglages d'iOS, la feuille « Notifications » le dit et propose « Ouvrir les réglages ». **Ni le message ni le bouton ne sont dans `3023:15042`** : à dessiner, ou à valider tels quels | Réglages — notifications |
 | T246 | La maquette dessine une bulle de MEMO « Suggestions - activer les notifs » avec un bouton « Activer notif » dans la conversation. Pas faite : l'autorisation se demande à l'étape « Notifications » de la création. La garder pour qui a passé l'étape ? | Conversation |
 
@@ -149,7 +150,7 @@ Voir [`notifications.md`](notifications.md) pour les règles et les choix faits.
 | # | Sujet | Écran / parcours |
 |---|---|---|
 | T239 | Tant que le serveur n'a pas reçu un voyage créé hors ligne, ses **réglages**, « Inviter un proche », l'aperçu et la commande ne s'ouvrent pas : ils lisent le serveur, et montrent son erreur. Les griser avec une phrase (« disponible dès ta reconnexion »), ou les ouvrir sur le brouillon ? | Réglages du voyage — hors ligne |
-| T141 | Le plafond du palier « étendu » (8 000) est écrit dans l'app ; le serveur ne rend que le palier du compte. Si le barème change, la feuille mentira jusqu'à la mise à jour. La sortie : `GET /v1/catalog` | Réglages — limites de souvenirs |
+| T248 | La ligne et la feuille « **Crédit du jour** » n'ont pas de maquette : la ligne reprend la coque des lignes d'à côté avec une jauge toujours visible (vert, rouge à zéro), la feuille dit le reste du jour, sa valeur à l'écrit, les trois règles (partage, ce qui consomme, recharge à minuit) et « Passer en illimité » en lime ; « Illimité » et un paragraphe pour un abonné. À dessiner dans Figma, ou à valider tel quel | Réglages du voyage — crédit du jour |
 | T164 | Les « Valider » des feuilles de personnalisation semblent inutiles à Clara. Sans bouton, la feuille se referme au choix ; avec, elle reste ouverte. À trancher avec Hugo et Paul | Personnalisations |
 | T197 | Plus rien ne mène aux couvertures depuis les personnalisations (la V3 ne dessine pas la ligne). Il reste « Configurer » sur l'aperçu PDF. À valider, ou une sixième pastille | Personnalisations |
 | T199 | Les assortiments de typographies : la V3 écrit « La recommandations de nos équipes » (sic), et l'app le recopie. Corriger en « La recommandation » ? | Personnalisations — typographies |
@@ -184,7 +185,6 @@ Voir [`notifications.md`](notifications.md) pour les règles et les choix faits.
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
-| T179 | La pastille dit encore « Abonnée » pendant la semaine déjà payée après une résiliation. Juste, mais ça se lit comme un geste sans effet. Un quatrième état toucherait accueil, conversation et paywall | Profil |
 | T209 | Le genre deviné est une liste d'environ 600 prénoms ; un prénom absent (ou mixte) accorde au masculin (« Abonné »). *(Portait par erreur le numéro T170, déjà pris.)* | Profil |
 | T169 | La feuille « Genre » n'a pas de maquette | Profil |
 | T241 | La feuille « **Exporter mes données** » n'a pas de maquette : une proposition (ce que contient l'archive, l'adresse où part le lien, « M'envoyer le lien ») puis une confirmation (la coche du support, « Regarde ta boîte mail »). À dessiner, ou à valider telle quelle — mots compris | Profil |
@@ -196,7 +196,7 @@ Voir [`notifications.md`](notifications.md) pour les règles et les choix faits.
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
-| T167 | « Voir une estimation » sur la 3e story : la pastille ouvre la feuille depuis le 15/09. **En pause avec la carte qui la portait**, « Tes abonnements sont déduits ! » (PR #87, 02/10/2026) : plus rien ne l'affiche. À revérifier par Clara le jour où la carte revient | Paywall |
+| T247 | **Les textes du nouveau modèle sont à valider avec Clara** (03/10/2026) : les écrans du paywall (découverte et retour), la bulle « reviens demain » de MEMO et son appel à l'action « Raconter sans limite », le bandeau de la barre d'enregistrement, la ligne et la feuille « Crédit du jour », le paquet « Prix et paiement » de la FAQ. Les CGU et la politique de confidentialité, elles, sont à relire par Hugo et à publier à l'identique sur memobook.fr | Paywall, conversation, réglages du voyage, FAQ |
 
 ### Aide, FAQ, textes légaux
 
@@ -211,16 +211,16 @@ Voir [`notifications.md`](notifications.md) pour les règles et les choix faits.
 | # | Sujet | Écran / parcours |
 |---|---|---|
 | T174 | `Beige Darker` (`#CFBBAA`) est `MemoBookColor.separator`, et il sert à 22 endroits (séparateurs, scotch, filets Apple/Google). Veut-on plus clair ? Une ligne dans `Tokens.swift` et la variable Figma | Partout |
-| T143 | Blocs **sans maquette**, écrits sur les motifs existants : limites de souvenirs (ligne et feuille), assortiments, recherche du support, messages d'information des couvertures, « Bientôt disponible », « Commander sans attendre », « Supprimer la conversation » et sa feuille (ex-T185) | Partout |
+| T143 | Blocs **sans maquette**, écrits sur les motifs existants : assortiments, recherche du support, messages d'information des couvertures, « Bientôt disponible », « Commander sans attendre », « Supprimer la conversation » et sa feuille (ex-T185) | Partout |
 | T121 | L'icône « Renvoyer » emprunte `IconTeleverser`, faute d'un envoi dans le jeu de marque | Création — invitation |
 
 ### Hors de l'app : paiements, e-mails
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
-| T139 | **Rien ne s'encaisse** pour l'abonnement ni l'extension : Apple impose l'achat intégré, c'est **StoreKit** qui portera les deux (et fermera l'abonnement par son webhook, ex-T116). « Payer » du paywall pose l'abonnement sans rien prélever (ex-T126). Le prix `memobook_memory_upgrade_monthly` (3,99 €/mois) reste à créer chez Stripe | Abonnement, paywall |
+| T250 | **Le produit mensuel reste à poser chez Apple et chez Stripe** : `com.memobook.app.subscription.monthly` à 4,99 € dans App Store Connect (groupe « MemoBook »), l'hebdomadaire retiré de la vente sans être supprimé ; chez Stripe, le prix `memobook_subscription_monthly` est créé dans le bac à sable (`price_1UMIMLBknFHnQoHL2aPelZqm`, 03/10/2026), `memobook_subscription_weekly` et `memobook_memory_upgrade_weekly` restent à désactiver à la main (le sandbox refuse les `update` à Claude), et le prix mensuel à créer dans le compte de production le jour où il existera. Voir `docs/paiements.md` | Abonnement, paywall |
+| T251 | **Le pied de l'offre du paywall laisse voir les cartes en très grand texte** (déjà le cas sur `main` avant le crédit du jour, relevé à la recette du 03/10/2026) : en AX XL, le texte des cartes se lit sous les lignes du pied à travers le voile `BrandFooterScrim` (aplat à 90 %), et le bas d'une carte dépasse sous « S’abonner » tant que l'offre n'est pas défilée. Au repos, sur iPhone 17, « Conditions d’utilisation » et « Confidentialité » sont estompés par le même voile dans la version découverte (titre sur trois lignes). Le voile est celui de toute l'app : à trancher — aplat plein sous le pied du paywall seulement, ou liens remontés au-dessus du voile | Paywall |
 | T133 | La feuille d'ajout de carte s'ouvre **par-dessus** (paywall, profil, commande) : trois écarts à « une feuille ne s'empile pas ». Si Clara les accepte, la règle devient « une feuille ne s'empile que pour aller voir et revenir » | Paiement |
-| T140 | Le barème des souvenirs (1 par message, 10 par minute de vocal) est un ordre de grandeur : à réétalonner sur un mois de factures OpenAI et Anthropic (`services/memoryAllowance.ts`) | Back-end |
 | T204 | L'e-mail de réinitialisation arrive en indésirables : SPF, DKIM, DMARC et le sous-domaine `tx.memo-book.com` à poser chez Resend et au registrar (ex-T145). Même domaine, même sort pour l'e-mail « Tes données MemoBook sont prêtes » (01/10/2026) | Entrée — mot de passe oublié, Profil — export |
 
 ### En pause — v2

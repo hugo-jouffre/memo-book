@@ -30,13 +30,15 @@
                 .buttonStyle(.bordered)
                 .tint(MemoBookColor.action)
 
-                // Les deux seuils des limites de souvenirs : celui où la jauge
-                // apparaît, et celui où tout est consommé. Aucun des deux ne se
-                // voit en ouvrant l'écran — le jeu d'essai est à 10 %.
+                // Le crédit du jour : le neuf, les 30 dernières secondes,
+                // l'épuisé et l'abonné. Le jeu d'essai n'en montre qu'un (un
+                // voyage entamé, 3 min 20 devant soi) ; la jauge rouge et la
+                // ligne « Illimité » ne se voient qu'ici.
                 HStack(spacing: MemoBookSpacing.xs) {
-                    Button("Souvenirs ~ 10 %") { model.debugPlayMemory(fraction: 0.1) }
-                    Button("~ 90 %") { model.debugPlayMemory(fraction: 0.9) }
-                    Button("Épuisées") { model.debugPlayMemory(fraction: 1) }
+                    Button("Crédit neuf") { model.debugPlayDailyCredit(.fresh) }
+                    Button("30 s") { model.debugPlayDailyCredit(.lastSeconds) }
+                    Button("Épuisé") { model.debugPlayDailyCredit(.exhausted) }
+                    Button("Abonné") { model.debugPlayDailyCredit(.unlimited) }
                 }
                 .font(MemoBookFont.caption)
                 .buttonStyle(.bordered)

@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   AnthropicResponder,
   buildUserPrompt,
+  callToActionCatalogue,
+  replySchema,
   suggestionCatalogue,
   toReply,
   tripContextSchema,
@@ -42,7 +44,7 @@ function turn(overrides: Partial<ConversationInput> = {}): ConversationInput {
       state: EMPTY_CONVERSATION_STATE,
       tripContext: null,
     },
-    traveller: { firstName: "Hugo", memberCount: 1 },
+    traveller: { firstName: "Hugo", memberCount: 1, isUnlimited: false },
     step: null,
     history: [],
     message: {
@@ -57,7 +59,7 @@ function turn(overrides: Partial<ConversationInput> = {}): ConversationInput {
     },
     currentEntry: null,
     recentEntries: [],
-    allows: { roseEpineGraine: false },
+    allows: { roseEpineGraine: false, callsToAction: [] },
     now: new Date("2026-09-21T10:00:00Z"),
     ...overrides,
   };
@@ -69,6 +71,21 @@ const ANSWER = {
   suggestionIds: ["voice", "write"],
   prompt: "Et ce marché avec Clara, ça a donné quoi ?",
   asksRoseEpineGraine: false,
+  callToActionId: null,
+};
+
+/** Une question sur le prix, et la réponse du modèle qui pose le bouton. */
+const PRICE_QUESTION = {
+  ...turn().message,
+  text: "Combien coûte l’abonnement ?",
+};
+const PRICE_ANSWER = {
+  beats: ["L’abonnement est à 4,99 € par mois : ton récit devient illimité."],
+  disposition: "command",
+  suggestionIds: ["clear", "another"],
+  prompt: null,
+  asksRoseEpineGraine: false,
+  callToActionId: "subscribe",
 };
 
 /** Un client qui rend ce qu'on lui dit de rendre, et garde ce qu'on lui a demandé. */
@@ -104,6 +121,41 @@ describe("le prompt", () => {
     expect(catalogue).not.toContain("`inexistante`");
   });
 
+  it("donne à chaque puce son effet — « Voir ma page » n'ouvre plus « undefined »", () => {
+    const catalogue = suggestionCatalogue();
+    expect(catalogue).not.toContain("undefined");
+    expect(catalogue).toContain("| `preview` | « Voir ma page » | ouvre l'aperçu du carnet, sans rien envoyer |");
+  });
+
+  it("ne tend jamais « Photos de test » au modèle", () => {
+    expect(suggestionCatalogue()).not.toContain("photos-sample");
+    expect(JSON.stringify(replySchema())).not.toContain("photos-sample");
+  });
+
+  it("donne le catalogue des boutons depuis le code, sans ceux que seul le code pose", () => {
+    const catalogue = callToActionCatalogue();
+    expect(catalogue).toContain("`subscribe`");
+    expect(catalogue).toContain("« Découvrir l’abonnement »");
+    expect(catalogue).toContain("`open_trip_settings`");
+    expect(catalogue).not.toContain("daily_credit_subscribe");
+    expect(catalogue).not.toContain("open_photo_settings");
+  });
+
+  it("dit au modèle quels boutons ce tour permet, ou qu'il n'y en a aucun", () => {
+    expect(buildUserPrompt(turn())).toContain("Les boutons : **aucun** ce tour-ci");
+    const allowing = buildUserPrompt(
+      turn({ allows: { roseEpineGraine: false, callsToAction: ["subscribe", "open_trip_settings"] } }),
+    );
+    expect(allowing).toContain("Les boutons : `subscribe`, `open_trip_settings`");
+  });
+
+  it("dit au modèle si celui qui parle raconte déjà sans limite", () => {
+    expect(buildUserPrompt(turn())).toContain("Abonnement : non");
+    expect(
+      buildUserPrompt(turn({ traveller: { firstName: "Hugo", memberCount: 1, isUnlimited: true } })),
+    ).toContain("Abonnement : oui");
+  });
+
   it("porte ce qui empêche de redemander ce qu'on sait déjà", () => {
     const prompt = buildUserPrompt(
       turn({
@@ -135,7 +187,9 @@ describe("le prompt", () => {
 
   it("dit noir sur blanc quand la rose, l'épine et la graine est interdite", () => {
     expect(buildUserPrompt(turn())).toContain("**interdite**");
-    expect(buildUserPrompt(turn({ allows: { roseEpineGraine: true } }))).toContain("**autorisée**");
+    expect(buildUserPrompt(turn({ allows: { roseEpineGraine: true, callsToAction: [] } }))).toContain(
+      "**autorisée**",
+    );
   });
 
   it("dit qu'un vocal n'a pas été entendu au lieu de le laisser inventer", () => {
@@ -149,9 +203,9 @@ describe("le prompt", () => {
   });
 
   it("dit à MEMO qu'ils sont plusieurs sur le carnet", () => {
-    expect(buildUserPrompt(turn({ traveller: { firstName: "Hugo", memberCount: 3 } }))).toContain(
-      "Ils sont 3 sur ce carnet",
-    );
+    expect(
+      buildUserPrompt(turn({ traveller: { firstName: "Hugo", memberCount: 3, isUnlimited: false } })),
+    ).toContain("Ils sont 3 sur ce carnet");
   });
 });
 
@@ -212,6 +266,36 @@ describe("un tour", () => {
     const { anthropic } = client({ ...ANSWER, asksRoseEpineGraine: true });
     const reply = await new AnthropicResponder(anthropic, "claude-sonnet-5").reply(turn());
     expect(reply.asksRoseEpineGraine).toBe(false);
+  });
+
+  it("garde le bouton quand le tour le permet", async () => {
+    const { anthropic, calls } = client(PRICE_ANSWER);
+    const reply = await new AnthropicResponder(anthropic, "claude-sonnet-5").reply(
+      turn({
+        message: PRICE_QUESTION,
+        allows: { roseEpineGraine: false, callsToAction: ["subscribe", "open_trip_settings"] },
+      }),
+    );
+    expect(reply.callToActionId).toBe("subscribe");
+    // Le catalogue des boutons voyage avec les règles, dans le prompt système en cache.
+    const system = calls[0]!.system as Anthropic.TextBlockParam[];
+    expect(system[0]!.text).toContain("## Les boutons que tu peux poser sous ta réponse");
+  });
+
+  it("jette un bouton que le tour ne permet pas, ou que le catalogue ne connaît pas", async () => {
+    const notAllowed = client(PRICE_ANSWER);
+    const reply = await new AnthropicResponder(notAllowed.anthropic, "claude-sonnet-5").reply(
+      turn({ message: PRICE_QUESTION, allows: { roseEpineGraine: false, callsToAction: ["open_trip_settings"] } }),
+    );
+    expect(reply.callToActionId).toBeNull();
+    // La réponse elle-même reste : ce qui est en trop tombe, le reste parle.
+    expect(reply.beats).toHaveLength(1);
+
+    const invented = client({ ...PRICE_ANSWER, callToActionId: "open_url" });
+    const replyInvented = await new AnthropicResponder(invented.anthropic, "claude-sonnet-5").reply(
+      turn({ message: PRICE_QUESTION, allows: { roseEpineGraine: false, callsToAction: ["subscribe"] } }),
+    );
+    expect(replyInvented.callToActionId).toBeNull();
   });
 
   it("refuse deux questions dans un même tour — le repli parlera", async () => {
@@ -299,5 +383,23 @@ describe("le contexte du voyage", () => {
 
   it("n'emploie aucune borne de tableau dans le schéma, que l'API refuse", () => {
     expect(JSON.stringify(tripContextSchema())).not.toMatch(/minItems|maxItems/);
+  });
+});
+
+describe("le schéma de la réponse", () => {
+  it("n'emploie aucune borne de tableau, que l'API refuse", () => {
+    expect(JSON.stringify(replySchema())).not.toMatch(/minItems|maxItems/);
+  });
+
+  it("exige le bouton, choisi parmi ceux du modèle ou `null`", () => {
+    const schema = replySchema();
+    expect(schema.required).toContain("callToActionId");
+    expect(schema.properties.callToActionId.enum).toEqual([
+      "subscribe",
+      "open_trip_settings",
+      "open_preview",
+      "import_photos",
+      null,
+    ]);
   });
 });

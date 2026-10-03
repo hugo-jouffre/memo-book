@@ -1,7 +1,8 @@
 import { PrismaClient } from "@prisma/client";
 import { generateDeviceToken, hashDeviceToken } from "../src/lib/auth.js";
 import { hashPassword } from "../src/lib/password.js";
-import { SUBSCRIPTION_WEEKLY_CENTS } from "../src/services/subscriptionCatalog.js";
+import { DEFAULT_TIME_ZONE, localDate } from "../src/services/localCalendar.js";
+import { APP_STORE_PRODUCT_IDS, SUBSCRIPTION_MONTHLY_CENTS } from "../src/services/subscriptionCatalog.js";
 import { seedTripThemes } from "./tripThemes.js";
 
 /**
@@ -15,10 +16,12 @@ import { seedTripThemes } from "./tripThemes.js";
  * Idempotent : relancé, il repart des mêmes comptes plutôt que d'en empiler
  * d'autres. Les carnets, eux, sont refaits à neuf.
  *
- * **Deux comptes, parce que le produit a deux paliers.** Le parcours freemium
- * ne se lit pas sur un seul profil : la pastille d'étapes offertes, le CTA lime
- * de l'accueil et le bouton d'abonnement n'existent que sur un compte à quota,
- * et la carte de statistiques ne s'ouvre que pour un abonné. Les avoir tous les
+ * **Deux comptes, parce que le produit a deux paliers** (Hugo, 03/10/2026).
+ * Le compte gratuit raconte dans la limite du crédit du jour — 5 minutes par
+ * jour et par voyage —, et c'est lui qui montre la ligne « Crédit du jour »,
+ * l'avertissement de la barre d'enregistrement et le bouton « Découvrir
+ * l'abonnement ». L'abonné raconte sans limite, et c'est lui qui montre la
+ * pastille « Abonné(e) » et la feuille de son abonnement. Les avoir tous les
  * deux en base évite de croire qu'un écran est cassé alors qu'il montre l'autre
  * palier.
  */
@@ -35,8 +38,8 @@ const prisma = new PrismaClient();
  */
 const TEST_PASSWORD = "memobook2026";
 
-/** Le palier d'un compte : ce qui le fait payer, ou compter ses étapes. */
-type Plan = "freeTrial" | "subscriber";
+/** Le palier d'un compte : gratuit (le crédit du jour), ou abonné (illimité). */
+type Plan = "free" | "subscriber";
 
 type TravellerSeed = {
   email: string;
@@ -67,9 +70,10 @@ const TRAVELLERS: TravellerSeed[] = [
     email: TEST_ACCOUNT_EMAIL,
     firstName: "Hugo",
     lastName: "Jouffre",
-    plan: "freeTrial",
+    plan: "free",
     codeSuffix: "",
-    purpose: "compte de test de l'app — palier gratuit, celui de « Testing mode »",
+    purpose:
+      "compte de test de l'app — palier gratuit, celui de « Testing mode » ; 2 min du crédit du jour de Rome déjà racontées",
   },
   {
     email: "demo@memobook.app",
@@ -77,16 +81,42 @@ const TRAVELLERS: TravellerSeed[] = [
     lastName: "Jouffre",
     plan: "subscriber",
     codeSuffix: "B",
-    purpose: "le même contenu, vu par un abonné",
+    purpose: "le même contenu, vu par un abonné (StoreKit, mensuel)",
   },
 ];
+
+/**
+ * **Rome est toujours en cours**, quel que soit le jour où l'on lance le seed.
+ *
+ * Ses dates étaient écrites en dur (du 26 août au 15 septembre 2026) : passé le
+ * 16 septembre, le voyage se lisait « terminé » sur ses dates
+ * (`services/tripStage.ts`), et le compte de test n'avait plus de voyage en
+ * cours — donc plus de crédit du jour à montrer. On garde le récit et ses
+ * écarts, et on le **décale** pour que le voyage ait commencé il y a huit jours.
+ */
+const ROME_WRITTEN_START = Date.parse("2026-08-26T00:00:00Z");
+const ROME_SHIFT_MS = (() => {
+  const today = new Date();
+  const startOfToday = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+  return startOfToday - 8 * 86_400_000 - ROME_WRITTEN_START;
+})();
+
+/** Une date du récit de Rome, ramenée au voyage en cours. */
+function romeDate(iso: string): Date {
+  return new Date(Date.parse(iso) + ROME_SHIFT_MS);
+}
+
+/** « 26 août », pour la phrase des dates du contexte du voyage. */
+function frenchDay(date: Date): string {
+  return new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long", timeZone: "UTC" }).format(date);
+}
 
 const ROME_STEPS = [
   {
     number: 1,
     placeName: "Trastevere",
-    startDate: new Date("2026-08-26T10:00:00Z"),
-    endDate: new Date("2026-08-28T18:00:00Z"),
+    startDate: romeDate("2026-08-26T10:00:00Z"),
+    endDate: romeDate("2026-08-28T18:00:00Z"),
     transport: "plane" as const,
     souvenirs: [
       {
@@ -104,8 +134,8 @@ const ROME_STEPS = [
   {
     number: 2,
     placeName: "Le Colisée",
-    startDate: new Date("2026-08-29T09:00:00Z"),
-    endDate: new Date("2026-08-30T19:00:00Z"),
+    startDate: romeDate("2026-08-29T09:00:00Z"),
+    endDate: romeDate("2026-08-30T19:00:00Z"),
     transport: "walk" as const,
     souvenirs: [
       {
@@ -118,8 +148,8 @@ const ROME_STEPS = [
   {
     number: 3,
     placeName: "Ostie antique",
-    startDate: new Date("2026-09-01T10:00:00Z"),
-    endDate: new Date("2026-09-01T17:00:00Z"),
+    startDate: romeDate("2026-09-01T10:00:00Z"),
+    endDate: romeDate("2026-09-01T17:00:00Z"),
     transport: "train" as const,
     souvenirs: [
       {
@@ -148,31 +178,10 @@ async function seedTraveller(
   // Le compte, et l'appareil qui lui est rattaché
   // ---------------------------------------------------------------------
 
-  // Le quota d'étapes et l'abonnement sont **les deux faces d'une seule
-  // question** : un abonné n'a rien à décompter, un compte gratuit n'a rien à
-  // facturer. Ils se posent donc ensemble, jamais l'un sans l'autre.
+  // Plus d'étapes offertes ni de limites de souvenirs (03/10/2026) : ce qui
+  // distingue les deux comptes, c'est l'abonnement, posé plus bas, et le
+  // crédit du jour de Rome que le compte gratuit a déjà entamé.
   const isSubscriber = seed.plan === "subscriber";
-  // Trois offertes, trois restantes : le compte de test s'ouvre sur une
-  // **première connexion**, rien de consommé. C'est l'état par lequel tout le
-  // monde passe, et donc celui qu'on doit voir sans rien faire ; le bac à sable
-  // de l'accueil rejoue les autres sans changer de compte.
-  const quota = isSubscriber
-    ? { offeredSteps: null, remainingSteps: null }
-    : { offeredSteps: 3, remainingSteps: 3 };
-
-  // Les **limites de souvenirs**, remises à plat à chaque passage du seed. Un
-  // usage normal : un dixième consommé, donc la jauge reste cachée et la ligne
-  // ne montre que son solde. C'est l'état de tout le monde, et donc celui qu'on
-  // doit voir sans rien faire — le bac à sable des réglages rejoue les deux
-  // seuils (80 % et épuisé) sans toucher à la base.
-  const memory = {
-    memoryPlan: "included" as const,
-    memoryUsed: 312,
-    // **Deux jours**, pas huit : la période est une semaine glissante, et un
-    // début plus ancien remettrait le compteur à zéro à la première lecture —
-    // le seed ne montrerait alors rien du tout.
-    memoryPeriodStart: new Date(Date.now() - 2 * 86_400_000),
-  };
 
   const identity = {
     emailVerifiedAt: new Date(),
@@ -189,8 +198,6 @@ async function seedTraveller(
     // avec son nom, et la commande le lit tel quel.
     addressCountry: "FR",
     wantsNewsletter: true,
-    ...quota,
-    ...memory,
   };
 
   const account = await prisma.account.upsert({
@@ -235,8 +242,8 @@ async function seedTraveller(
       destinationName: "Italie",
       destinationCountryCode: "IT",
       destinationCity: "Rome",
-      startDate: new Date("2026-08-26T00:00:00Z"),
-      endDate: new Date("2026-09-15T00:00:00Z"),
+      startDate: romeDate("2026-08-26T00:00:00Z"),
+      endDate: romeDate("2026-09-15T00:00:00Z"),
       dayCount: 13,
       distanceKilometres: 87.4,
       narrationPace: "Tous les 2 jours",
@@ -249,7 +256,7 @@ async function seedTraveller(
         departureCountry: "France",
         travellerCount: 2,
         companions: [{ name: "Clara", relation: "ma compagne" }],
-        dates: "du 26 août au 15 septembre",
+        dates: `du ${frenchDay(romeDate("2026-08-26T00:00:00Z"))} au ${frenchDay(romeDate("2026-09-15T00:00:00Z"))}`,
         tripType: "city trip",
         itinerary: null,
         occasion: null,
@@ -302,6 +309,24 @@ async function seedTraveller(
     where: { id: rome.id },
     data: { memoryCount, pageCount: memoryCount * 2 },
   });
+
+  // **Le crédit du jour de Rome, déjà entamé** pour le compte gratuit : 2 min
+  // racontées sur 5 — un vocal d'une minute et demie, 400 caractères écrits
+  // (30 s à 75 ms le caractère). La ligne des réglages montre « 3 min / 5 min »
+  // sans rien faire ; un vocal de plus de 2 min 30 fait paraître
+  // l'avertissement de la barre d'enregistrement. Le jour est celui du compte,
+  // à son fuseau (`services/dailyCredit.ts`). L'abonné, lui, ne consomme rien.
+  if (!isSubscriber) {
+    await prisma.tripDailyUsage.create({
+      data: {
+        memoId: rome.id,
+        day: new Date(`${localDate(new Date(), account.timeZone ?? DEFAULT_TIME_ZONE)}T00:00:00Z`),
+        usedMs: 120_000,
+        voiceMs: 90_000,
+        textCharacters: 400,
+      },
+    });
+  }
 
   // ---------------------------------------------------------------------
   // Un voyage terminé et imprimable, et un voyage à venir
@@ -372,24 +397,31 @@ async function seedTraveller(
 
   // Un abonnement **seulement** pour le compte abonné. Le compte gratuit n'en a
   // pas du tout : c'est l'absence de ligne, et non un statut « résilié », qui
-  // fait que l'app lui repropose l'offre.
+  // fait que l'app lui propose la version découverte du paywall.
   if (isSubscriber) {
     await prisma.subscription.create({
       data: {
         accountId: account.id,
-        provider: "stripe",
+        // **Par StoreKit, comme un vrai abonné** : c'est Apple qui tient
+        // l'abonnement, et le profil renvoie à la feuille d'abonnements d'iOS
+        // pour le couper (`managedByAppStore`).
+        provider: "storekit",
         status: "active",
-        // **199 et non 299** : le tarif de l'offre, celui du catalogue
-        // (`services/subscriptionCatalog.ts`), de la maquette et du prix Stripe
-        // `memobook_subscription_weekly`. Le seed en annonçait un troisième,
-        // et le compte abonné voyait donc « 2,99 € » là où le compte gratuit
-        // voit « 1,99 € ».
-        priceCents: SUBSCRIPTION_WEEKLY_CENTS,
-        interval: "week",
-        // La fin de la **période payée**. C'est elle qui donne son sursis à une
-        // résiliation — sept jours devant soi, de quoi voir les deux dernières
-        // feuilles annoncer « jusqu'au … » plutôt que « aujourd'hui ».
-        renewsAt: new Date(Date.now() + 7 * 86_400_000),
+        productId: APP_STORE_PRODUCT_IDS.monthlySubscription,
+        // Une référence à lui : `providerSubscriptionId` est unique, et le
+        // seed se rejoue. Aucune transaction Apple ne la portera jamais.
+        providerSubscriptionId: `seed-${seed.email}`,
+        environment: "Xcode",
+        autoRenews: true,
+        // Le tarif de l'offre, celui du catalogue
+        // (`services/subscriptionCatalog.ts`) et du produit App Store.
+        priceCents: SUBSCRIPTION_MONTHLY_CENTS,
+        interval: "month",
+        startedAt: new Date(Date.now() - 3 * 86_400_000),
+        // La fin du **mois payé**. C'est elle qui donne son sursis à une
+        // résiliation — de quoi voir les feuilles annoncer « jusqu'au … »
+        // plutôt que « aujourd'hui ».
+        renewsAt: new Date(Date.now() + 27 * 86_400_000),
       },
     });
   }

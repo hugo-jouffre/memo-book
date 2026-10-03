@@ -12,16 +12,22 @@ public struct Traveller: Codable, Sendable, Hashable, Identifiable {
     public let firstName: String
     public let avatarUrl: URL?
 
-    /// Les étapes offertes à l'ouverture du compte, et celles qui restent.
+    /// Ce compte raconte sans limite : il est abonné, ou résilié mais encore
+    /// dans sa période payée (Hugo, 03/10/2026).
     ///
-    /// Les deux, et non un seul : c'est leur **écart** qui change le message.
-    /// Rien de consommé, on annonce un cadeau (« 3 étapes offertes ») ; une
-    /// fois entamé, on annonce un solde (« 2 étapes restantes »). `nil` quand
-    /// le compte n'a pas de quota — un abonné, par exemple.
-    public let offeredSteps: Int?
-    public let remainingSteps: Int?
+    /// **Explicite**, et plus déduit d'un quota absent comme sous l'ancien
+    /// essai gratuit : c'est ce que ``SubscriptionSession`` apprend de
+    /// l'accueil pour que la conversation et les réglages sachent, sans
+    /// relire le profil, s'il faut compter. Faux quand un serveur plus ancien
+    /// ne sert pas le champ — le serveur tranche de toute façon.
+    public let isUnlimited: Bool
 
-    /// Le jour où la **semaine payée** du dernier abonnement s'est achevée,
+    /// Ce compte a déjà été abonné, en ce moment ou par le passé. Il choisit la
+    /// version du paywall (découverte ou retour) partout où on l'ouvre, et plus
+    /// seulement depuis le profil.
+    public let hasSubscribedBefore: Bool
+
+    /// Le jour où la **période payée** du dernier abonnement s'est achevée,
     /// quand c'est récent.
     ///
     /// C'est ce qui ouvre l'alerte système « Ton abonnement MemoBook s'est
@@ -47,30 +53,30 @@ public struct Traveller: Codable, Sendable, Hashable, Identifiable {
         id: String,
         firstName: String,
         avatarUrl: URL? = nil,
-        offeredSteps: Int? = nil,
-        remainingSteps: Int? = nil,
+        isUnlimited: Bool = false,
+        hasSubscribedBefore: Bool = false,
         subscriptionEndedOn: Date? = nil,
         subscriptionOutlivesTrip: Bool = false
     ) {
         self.id = id
         self.firstName = firstName
         self.avatarUrl = avatarUrl
-        self.offeredSteps = offeredSteps
-        self.remainingSteps = remainingSteps
+        self.isUnlimited = isUnlimited
+        self.hasSubscribedBefore = hasSubscribedBefore
         self.subscriptionEndedOn = subscriptionEndedOn
         self.subscriptionOutlivesTrip = subscriptionOutlivesTrip
     }
 
-    /// Décodage tolérant sur le champ ajouté avec le sursis de la semaine
-    /// payée : un serveur qui ne le sert pas encore ne doit pas faire échouer
-    /// tout l'accueil.
+    /// Décodage tolérant sur les champs de l'abonnement : un serveur qui ne
+    /// les sert pas encore ne doit pas faire échouer tout l'accueil.
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         firstName = try container.decode(String.self, forKey: .firstName)
         avatarUrl = try container.decodeIfPresent(URL.self, forKey: .avatarUrl)
-        offeredSteps = try container.decodeIfPresent(Int.self, forKey: .offeredSteps)
-        remainingSteps = try container.decodeIfPresent(Int.self, forKey: .remainingSteps)
+        isUnlimited = try container.decodeIfPresent(Bool.self, forKey: .isUnlimited) ?? false
+        hasSubscribedBefore =
+            try container.decodeIfPresent(Bool.self, forKey: .hasSubscribedBefore) ?? false
         subscriptionEndedOn = try container.decodeIfPresent(
             Date.self, forKey: .subscriptionEndedOn
         )
@@ -320,6 +326,16 @@ public struct Trip: Codable, Sendable, Hashable, Identifiable {
     /// allume le bouton imprimante sur les voyages passés.
     public let isPrintable: Bool
 
+    /// **Le crédit du jour de ce voyage** (Hugo, 03/10/2026), servi sur chaque
+    /// voyage **en cours** de l'accueil : c'est celui que vise le vocal de
+    /// l'accueil, et la feuille d'enregistrement s'en sert pour prévenir à
+    /// 4:30 et couper à 5:00 comme la barre de la conversation.
+    ///
+    /// `nil` pour un voyage à venir ou passé, et quand un serveur plus ancien
+    /// ne le sert pas — on enregistre alors sans compter, et le serveur
+    /// tranche. Une variable, pour que l'app le décompte entre deux lectures.
+    public var dailyCredit: DailyCredit?
+
     public init(
         id: String,
         title: String,
@@ -331,7 +347,8 @@ public struct Trip: Codable, Sendable, Hashable, Identifiable {
         stats: TripStats = TripStats(),
         companions: [Companion] = [],
         progress: TripProgress? = nil,
-        isPrintable: Bool = false
+        isPrintable: Bool = false,
+        dailyCredit: DailyCredit? = nil
     ) {
         self.id = id
         self.title = title
@@ -344,6 +361,7 @@ public struct Trip: Codable, Sendable, Hashable, Identifiable {
         self.companions = companions
         self.progress = progress
         self.isPrintable = isPrintable
+        self.dailyCredit = dailyCredit
     }
 }
 

@@ -17,11 +17,18 @@ import {
 } from "./conversation.js";
 import { describeTripContext, questionFor, type TripContextUpdate } from "./tripContext.js";
 import {
+  CALLS_TO_ACTION,
+  MODEL_CALL_TO_ACTION_IDS,
+  isCallToActionId,
+  type CallToActionKind,
+} from "./callsToAction.js";
+import {
+  MODEL_SUGGESTION_IDS,
   OPENING_TEXT,
   SUGGESTIONS,
-  SUGGESTION_IDS,
   SUGGESTION_SETS,
   type SuggestionId,
+  type SuggestionIntent,
 } from "./conversationCopy.js";
 
 /**
@@ -35,7 +42,9 @@ import {
  * **Le modèle écrit des phrases ; le code garde tout le reste.** Les silences
  * entre deux bulles se calculent sur la longueur du texte (`composeBeats`), le
  * catalogue de puces est injecté depuis `conversationCopy.ts` et filtré au
- * retour, la rose/épine/graine n'est retenue que si le code l'autorisait, et
+ * retour, celui des boutons depuis `callsToAction.ts` (un identifiant, jamais
+ * un libellé : le modèle ne choisit que parmi ceux que le tour permet), la
+ * rose/épine/graine n'est retenue que si le code l'autorisait, et
  * une réponse qui sort du contrat est **refusée** — pas rattrapée. Un modèle
  * qui déciderait du rythme ou inventerait une puce ferait un écran qui ment,
  * et on ne saurait pas lequel des deux côtés a tort.
@@ -163,6 +172,8 @@ export class AnthropicResponder implements MemoResponder {
           "---",
           "",
           suggestionCatalogue(),
+          "",
+          callToActionCatalogue(),
         ].join("\n"),
         // Les règles et le catalogue sont identiques d'un tour à l'autre : mis
         // en cache, ils ne sont facturés plein tarif qu'au premier tour de la
@@ -183,6 +194,8 @@ export class AnthropicResponder implements MemoResponder {
  * Écrit depuis `SUGGESTIONS` et non recopié dans le prompt : une puce ajoutée
  * au catalogue est immédiatement proposable, et une puce retirée disparaît du
  * prompt le jour même. Un catalogue recopié à la main dérive en une semaine.
+ * Sans « Photos de test », que seul le code pose, hors production
+ * (`MODEL_SUGGESTION_IDS`).
  */
 export function suggestionCatalogue(): string {
   const lines = [
@@ -194,7 +207,7 @@ export function suggestionCatalogue(): string {
     "| Identifiant | Ce que le voyageur lit | Ce que ça déclenche |",
     "|---|---|---|",
   ];
-  for (const id of SUGGESTION_IDS) {
+  for (const id of MODEL_SUGGESTION_IDS) {
     lines.push(`| \`${id}\` | « ${SUGGESTIONS[id].label} » | ${INTENT_LABELS[SUGGESTIONS[id].intent]} |`);
   }
   lines.push(
@@ -206,12 +219,52 @@ export function suggestionCatalogue(): string {
   return lines.join("\n");
 }
 
-const INTENT_LABELS: Record<string, string> = {
+/**
+ * Typé sur `SuggestionIntent` : une intention ajoutée au catalogue sans sa
+ * ligne ici ne compile plus. `open_preview` manquait, et la puce « Voir ma
+ * page » arrivait au modèle avec « undefined » pour effet (03/10/2026).
+ */
+const INTENT_LABELS: Record<SuggestionIntent, string> = {
   send: "envoie le libellé, sans rien ouvrir",
   send_then_write: "envoie, puis ouvre le clavier",
   send_then_speak: "envoie, puis arme le micro",
   send_then_edit_transcript: "envoie, puis ouvre le texte de la fiche à corriger",
   import_photos: "ouvre la photothèque, sans rien envoyer",
+  open_preview: "ouvre l'aperçu du carnet, sans rien envoyer",
+};
+
+/**
+ * Les boutons que le modèle peut poser sous sa dernière bulle, écrits depuis
+ * `CALLS_TO_ACTION` pour la même raison que les puces. Seulement ceux qu'il a
+ * le droit de choisir (`allowedForModel`) ; **quand** les poser est dans
+ * `agents/agent-conversation.md`, et **lesquels ce tour-ci** dans le prompt du
+ * tour — le code les a déjà filtrés (`callsToActionAllowed`).
+ */
+export function callToActionCatalogue(): string {
+  const lines = [
+    "## Les boutons que tu peux poser sous ta réponse",
+    "",
+    "Un au plus, rarement, par son identifiant exact dans `callToActionId` — et",
+    "seulement s'il figure parmi les boutons que le code autorise ce tour-ci. Sinon",
+    "`null`. Tu n'écris ni le libellé ni l'action : l'app les connaît. Un identifiant",
+    "non autorisé est jeté sans avertissement.",
+    "",
+    "| Identifiant | Ce que le voyageur lit | Ce que ça ouvre |",
+    "|---|---|---|",
+  ];
+  for (const id of MODEL_CALL_TO_ACTION_IDS) {
+    const definition = CALLS_TO_ACTION[id];
+    lines.push(`| \`${id}\` | « ${definition.label} » | ${KIND_LABELS[definition.kind]} |`);
+  }
+  return lines.join("\n");
+}
+
+const KIND_LABELS: Record<CallToActionKind, string> = {
+  subscribe: "l'offre d'abonnement",
+  open_trip_settings: "les réglages du voyage (rythme des relances, crédit du jour, co-voyageurs)",
+  open_preview: "l'aperçu du carnet",
+  import_photos: "la photothèque, pour ajouter des photos",
+  open_photo_settings: "les Réglages de l'iPhone, pour l'accès aux photos",
 };
 
 // ---------------------------------------------------------------------------
@@ -247,6 +300,9 @@ export function buildUserPrompt(input: ConversationInput): string {
     traveller.memberCount > 1
       ? `Ils sont ${traveller.memberCount} sur ce carnet : le fil est commun, chacun lit ce que tu écris.`
       : "Il est seul sur ce carnet.",
+    traveller.isUnlimited
+      ? "Abonnement : oui — son récit est illimité, le crédit du jour ne le concerne pas."
+      : "Abonnement : non — il raconte sur le crédit du jour du voyage.",
   );
 
   if (step) {
@@ -351,6 +407,10 @@ export function buildUserPrompt(input: ConversationInput): string {
     allows.roseEpineGraine
       ? "La rose, l'épine et la graine : **autorisée**. À poser en une seule bulle, si le moment s'y prête."
       : "La rose, l'épine et la graine : **interdite** ce tour-ci. `asksRoseEpineGraine` doit rester `false`.",
+    allows.callsToAction.length > 0
+      ? `Les boutons : ${allows.callsToAction.map((id) => `\`${id}\``).join(", ")} — un au plus, et ` +
+          "seulement si ta réponse l'appelle. Le plus souvent, aucun."
+      : "Les boutons : **aucun** ce tour-ci. `callToActionId` doit rester `null`.",
   );
 
   lines.push(
@@ -365,6 +425,8 @@ export function buildUserPrompt(input: ConversationInput): string {
     "  **seule**. `null` pour laisser celle en place" +
       (memo.prompt ? ` (aujourd'hui : « ${memo.prompt} »).` : "."),
     "- `asksRoseEpineGraine` : `true` seulement si tu viens de la poser.",
+    "- `callToActionId` : un bouton parmi ceux que le code autorise ce tour-ci, ou `null` —",
+    "  presque toujours `null`.",
   );
 
   return lines.join("\n");
@@ -425,7 +487,7 @@ export function replySchema() {
       },
       suggestionIds: {
         type: "array",
-        items: { type: "string", enum: SUGGESTION_IDS },
+        items: { type: "string", enum: MODEL_SUGGESTION_IDS },
         description: "Trois identifiants du catalogue au plus, jamais des libellés.",
       },
       prompt: {
@@ -438,8 +500,25 @@ export function replySchema() {
         type: "boolean",
         description: "Vrai seulement si cette réponse pose la rose, l'épine et la graine.",
       },
+      // Même forme que `narrationMoment` : une chaîne de l'enum, ou `null`.
+      // L'enum ne contient que les boutons que le modèle a le droit de choisir ;
+      // ceux de **ce** tour, c'est `validateReply` qui les fait respecter.
+      callToActionId: {
+        type: ["string", "null"],
+        enum: [...MODEL_CALL_TO_ACTION_IDS, null],
+        description:
+          "Le bouton sous ta dernière bulle, parmi ceux que le code autorise ce tour-ci. " +
+          "Presque toujours null.",
+      },
     },
-    required: ["beats", "disposition", "suggestionIds", "prompt", "asksRoseEpineGraine"],
+    required: [
+      "beats",
+      "disposition",
+      "suggestionIds",
+      "prompt",
+      "asksRoseEpineGraine",
+      "callToActionId",
+    ],
     additionalProperties: false,
   } as const;
 }
@@ -450,6 +529,7 @@ interface RawReply {
   suggestionIds: string[];
   prompt: string | null;
   asksRoseEpineGraine: boolean;
+  callToActionId: string | null;
 }
 
 /**
@@ -463,6 +543,8 @@ export function toReply(raw: RawReply, received: string, model: string): Convers
     suggestionIds: (raw.suggestionIds ?? []) as SuggestionId[],
     prompt: raw.prompt,
     asksRoseEpineGraine: raw.asksRoseEpineGraine === true,
+    // Inconnu → `null` ici ; non permis ce tour-ci → `null` dans `validateReply`.
+    callToActionId: isCallToActionId(raw.callToActionId) ? raw.callToActionId : null,
     model,
   };
 }

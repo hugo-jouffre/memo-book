@@ -3,10 +3,9 @@ import { z } from "zod";
 import type { AppContext } from "../context.js";
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
-import { readMemoryAllowance, setMemoryPlan } from "../services/memoryAllowance.js";
+import { readDailyCredit } from "../services/dailyCredit.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
 import { normalizeNarrationPace } from "../services/narrationPace.js";
-import { endSubscriptionsWithoutRunningTrip } from "../services/subscriptions.js";
 import { stageFromDates } from "../services/tripStage.js";
 import { serializeTripSettings } from "./appSerializers.js";
 
@@ -28,8 +27,6 @@ import { serializeTripSettings } from "./appSerializers.js";
  * `ownedByAccount`. C'est la règle de tout le voyage — seule la suppression
  * reste au propriétaire (voir `ios/CLAUDE.md`).
  */
-
-const memoryPlanBody = z.object({ plan: z.enum(["included", "extended"]) });
 
 const params = z.object({ id: z.string().uuid() });
 
@@ -110,49 +107,33 @@ const settingsInclude = {
 };
 
 async function readSettings(context: AppContext, accountId: string, memoId: string) {
-  const [memo, account, memory] = await Promise.all([
+  const [memo, account] = await Promise.all([
     context.prisma.memo.findFirst({
       where: { id: memoId, ...visibleToAccount(accountId) },
       include: settingsInclude,
     }),
     // Le solde vient du **compte** et non du voyage : la cagnotte n'appartient
     // pas au carnet. C'est la même somme que celle du profil, et c'est voulu.
-    context.prisma.account.findUnique({
+    // Le fuseau aussi : le crédit du jour se lit à la minuit de celui qui lit.
+    context.prisma.account.findUniqueOrThrow({
       where: { id: accountId },
-      select: { walletBalanceCents: true },
+      select: { id: true, walletBalanceCents: true, timeZone: true },
     }),
-    // Les limites de souvenirs pendent du compte elles aussi. La lecture remet
-    // la période à zéro si le mois est écoulé — voir `readMemoryAllowance`.
-    readMemoryAllowance(context.prisma, accountId),
   ]);
 
   if (!memo) throw new HttpError(404, "Ce voyage n’existe pas.");
 
-  return serializeTripSettings(memo, account?.walletBalanceCents ?? 0, memory, accountId);
+  // Le crédit du jour **du voyage** — partagé entre ses co-voyageurs —, vu par
+  // celui qui lit : illimité s'il est abonné.
+  const dailyCredit = await readDailyCredit(context.prisma, { memoId: memo.id, viewer: account });
+
+  return serializeTripSettings(memo, account.walletBalanceCents, dailyCredit, accountId);
 }
 
 export function registerTripSettingsRoutes(app: FastifyInstance, context: AppContext) {
   app.get("/v1/trips/:id/settings", async (request) => {
     const { id } = params.parse(request.params);
     return readSettings(context, accountIdOf(request), id);
-  });
-
-  /**
-   * Étendre — ou remettre — les limites de souvenirs.
-   *
-   * **Sur le voyage et non sur le compte**, alors que le palier appartient au
-   * compte : c'est l'écran des réglages d'un voyage qui l'ouvre, et la réponse
-   * est le jeu de réglages entier, que l'app remplace tel quel. Une route
-   * `/v1/account/memory` aurait rendu quatre nombres que l'écran aurait dû
-   * recoller à la main dans ce qu'il avait déjà.
-   */
-  app.post("/v1/trips/:id/memory-plan", async (request) => {
-    const { id } = params.parse(request.params);
-    const { plan } = memoryPlanBody.parse(request.body);
-    const accountId = accountIdOf(request);
-
-    await setMemoryPlan(context.prisma, accountId, plan);
-    return readSettings(context, accountId, id);
   });
 
   app.patch("/v1/trips/:id/settings", async (request) => {
@@ -222,13 +203,10 @@ export function registerTripSettingsRoutes(app: FastifyInstance, context: AppCon
       },
     });
 
-    // Une date de fin qui recule dans le passé **ferme le voyage**, et un
-    // compte sans voyage en cours n'a plus d'abonnement à payer. Un abonnement
-    // App Store n'est pas éteint ici — Apple seul le peut, à la demande de la
-    // personne : l'accueil le lui rappelle (`subscriptionOutlivesTrip`).
-    if (body.endDate !== undefined) {
-      await endSubscriptionsWithoutRunningTrip(context, accountId);
-    }
+    // Une date de fin qui recule dans le passé ferme le voyage, mais
+    // **n'arrête aucun abonnement** (Hugo, 03/10/2026) : l'illimité court
+    // jusqu'à ce qu'on le résilie. L'accueil rappelle qu'on peut le couper
+    // (`subscriptionOutlivesTrip`).
 
     // On relit tout plutôt que de rendre ce qu'on vient d'écrire : la réponse
     // est ce que l'app garde à l'écran, et une réponse partielle effacerait le

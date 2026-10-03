@@ -301,7 +301,8 @@ public struct OrderQuoteGroup: Codable, Sendable, Hashable {
 /// Ce que la cagnotte retire du montant dû.
 ///
 /// Le montant est **positif** : c'est l'écran qui pose le signe moins, comme il
-/// pose l'euro.
+/// pose l'euro. Une seule nature depuis le 03/10/2026 — la cagnotte (`wallet`) :
+/// l'abonnement n'est plus déduit du carnet (Hugo).
 public struct OrderDeduction: Codable, Sendable, Hashable, Identifiable {
     public let id: String
     public let label: String
@@ -312,10 +313,6 @@ public struct OrderDeduction: Codable, Sendable, Hashable, Identifiable {
         self.label = label
         self.amount = amount
     }
-
-    /// Les versements d'abonnement portent le lime, les dons le bleu — les deux
-    /// aplats de la maquette, et les deux natures de ``WalletEntryKind``.
-    public var isFromSubscription: Bool { id == "subscription" }
 }
 
 /// Le récapitulatif complet, tel que le serveur l'a compté.

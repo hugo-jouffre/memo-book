@@ -110,17 +110,15 @@ struct OrderSummaryStep: View {
         }
     }
 
-    /// Une déduction, sur son aplat : le lime pour ce que l'abonnement a versé,
-    /// le bleu pour ce que les proches ont offert — les deux natures de
-    /// ``WalletEntryKind``, et les deux couleurs de la maquette.
+    /// Une déduction, sur l'aplat bleu de la cagnotte. Il y avait aussi un
+    /// aplat lime, pour ce que l'abonnement avait versé ; l'abonnement n'est
+    /// plus déduit du carnet (Hugo, 03/10/2026), et le lime ne dit que lui.
     private func deduction(_ deduction: OrderDeduction) -> some View {
         OrderPriceRow(label: deduction.label, amount: deduction.amount, isNegative: true)
             .padding(.horizontal, MemoBookSpacing.snug)
             .padding(.vertical, MemoBookSpacing.snug)
             .background(
-                deduction.isFromSubscription
-                    ? MemoBookColor.accent.opacity(0.45)
-                    : MemoBookColor.outline.opacity(0.45),
+                MemoBookColor.outline.opacity(0.45),
                 in: .rect(cornerRadius: MemoBookSpacing.cornerRadius)
             )
     }

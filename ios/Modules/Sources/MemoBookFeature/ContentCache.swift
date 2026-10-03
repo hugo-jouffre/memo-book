@@ -20,7 +20,7 @@ import MemoBookCore
 /// |---|---|
 /// | le compte (``Slot/account``) | rouvrir l'app quand `GET /v1/auth/me` ne répond pas — voir ``SessionRestore`` |
 /// | l'accueil (``Slot/home``) | le premier écran, et le seul qui doit s'ouvrir sans réseau |
-/// | le profil (``Slot/profile``) | son quota, son abonnement et son adresse changent rarement |
+/// | le profil (``Slot/profile``) | son abonnement et son adresse changent rarement |
 /// | un voyage (``Slot/trip``) | on y revient dix fois par jour pendant un voyage |
 /// | ses réglages (``Slot/tripSettings``) | trente valeurs pour un écran qu'on ouvre pour en changer une |
 /// | la galerie (``Slot/gallery``) | des carnets publics, qui bougent à l'échelle de la semaine |

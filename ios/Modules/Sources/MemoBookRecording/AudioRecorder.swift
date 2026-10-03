@@ -66,7 +66,19 @@ public final class AudioRecorder {
 
     /// Niveau normalisé entre 0 et 1, pour la waveform.
     public private(set) var level: Double = 0
+
+    /// Ce que le **fichier** contient déjà, en secondes, pauses déduites.
+    ///
+    /// Lu sur `AVAudioRecorder.currentTime`, et non plus à l'horloge murale
+    /// (03/10/2026) : le crédit du jour se compte sur ce chiffre pendant qu'on
+    /// parle, et le serveur relit la durée dans le fichier. Un appel qui
+    /// interrompt la session, un passage en arrière-plan, un enregistreur qui
+    /// démarre avec un temps de retard — l'horloge les comptait, le fichier
+    /// non, et la barre aurait coupé trop tôt.
     public private(set) var elapsed: TimeInterval = 0
+
+    /// ``elapsed`` en millisecondes — l'unité du crédit du jour.
+    public var elapsedMilliseconds: Int { Int((elapsed * 1000).rounded(.down)) }
 
     /// Le micro capte en ce moment : ni arrêté, ni en pause. C'est ce que
     /// l'interface anime.
@@ -74,11 +86,7 @@ public final class AudioRecorder {
 
     private var recorder: AVAudioRecorder?
 
-    /// Début du **segment** en cours. Une pause le remet à zéro et verse sa
-    /// durée dans ``accumulated`` : sans ça, le temps continuait de courir
-    /// pendant la pause.
-    private var startedAt: Date?
-    private var accumulated: TimeInterval = 0
+    /// Le jour raconté : l'instant où l'enregistrement s'est ouvert.
     private var openedAt: Date?
 
     private var meterTask: Task<Void, Never>?
@@ -120,9 +128,7 @@ public final class AudioRecorder {
         }
 
         fileURL = url
-        startedAt = .now
         openedAt = .now
-        accumulated = 0
         isRecording = true
         isPaused = false
         elapsed = 0
@@ -135,10 +141,11 @@ public final class AudioRecorder {
     public func pause() {
         guard isRecording, !isPaused else { return }
 
+        // Le temps du fichier relevé **avant** la pause : c'est lui que la
+        // barre affiche pendant qu'elle dure, et la reprise repart de là.
+        refreshElapsed()
         recorder?.pause()
         stopMetering()
-        accumulated += elapsedInCurrentSegment
-        startedAt = nil
         isPaused = true
         // Le niveau retombe : une waveform figée à mi-hauteur laisserait croire
         // que le micro entend encore quelque chose.
@@ -149,30 +156,31 @@ public final class AudioRecorder {
         guard isRecording, isPaused else { return }
 
         recorder?.record()
-        startedAt = .now
         isPaused = false
         startMetering()
     }
 
-    private var elapsedInCurrentSegment: TimeInterval {
-        guard let startedAt else { return 0 }
-        return Date.now.timeIntervalSince(startedAt)
+    /// Relève le temps du fichier. Seulement pendant que l'enregistreur
+    /// tourne : en pause ou arrêté, `currentTime` n'a pas toujours de sens —
+    /// on garde alors le dernier relevé, qui ne bouge pas plus que le fichier.
+    private func refreshElapsed() {
+        guard let recorder, recorder.isRecording else { return }
+        elapsed = max(elapsed, recorder.currentTime)
     }
 
     /// Arrête et renvoie le vocal. `nil` si aucun enregistrement n'était en cours.
     public func stop() throws -> RecordedAudio? {
         guard let recorder, let url = fileURL, let openedAt else { return nil }
 
-        let duration = accumulated + elapsedInCurrentSegment
+        refreshElapsed()
+        let duration = elapsed
 
         recorder.stop()
         stopMetering()
 
         self.recorder = nil
         fileURL = nil
-        startedAt = nil
         self.openedAt = nil
-        accumulated = 0
         isRecording = false
         isPaused = false
         level = 0
@@ -190,8 +198,8 @@ public final class AudioRecorder {
             data: data,
             filename: url.lastPathComponent,
             mimeType: "audio/mp4",
-            // La durée **enregistrée**, pauses déduites : c'est celle du
-            // fichier, et c'est elle que le serveur retrouvera.
+            // La durée **du fichier**, pauses déduites : c'est elle que le
+            // serveur retrouvera en le relisant.
             duration: duration,
             recordedAt: openedAt
         )
@@ -204,9 +212,7 @@ public final class AudioRecorder {
         if let fileURL { try? FileManager.default.removeItem(at: fileURL) }
         recorder = nil
         fileURL = nil
-        startedAt = nil
         openedAt = nil
-        accumulated = 0
         isRecording = false
         isPaused = false
         level = 0
@@ -221,7 +227,7 @@ public final class AudioRecorder {
 
                 recorder.updateMeters()
                 self.level = Self.normalize(decibels: recorder.averagePower(forChannel: 0))
-                self.elapsed = self.accumulated + self.elapsedInCurrentSegment
+                self.refreshElapsed()
             }
         }
     }

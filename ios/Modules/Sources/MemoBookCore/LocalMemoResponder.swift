@@ -199,7 +199,8 @@ public struct LocalMemoResponder: MemoResponder {
                 beat(
                     chosen.text,
                     id: "memo-\(turn.history.count)-\(chosen.family)",
-                    pause: pause(forReading: text)
+                    pause: pause(forReading: text),
+                    callToAction: chosen.callToAction
                 )
             ],
             suggestions: chosen.suggestions,
@@ -213,7 +214,21 @@ public struct LocalMemoResponder: MemoResponder {
         let family: String
         let text: String
         let suggestions: [ChatSuggestion]
+        /// Le bouton sous la bulle — ``ChatCallToAction``. `nil` presque
+        /// toujours : un bouton se mérite.
+        var callToAction: ChatCallToAction? = nil
     }
+
+    /// Le bouton que le serveur pose sous la réponse à une question de prix
+    /// ou de limite (`subscribe`, `services/callsToAction.ts`) — recopié pour
+    /// que l'aperçu montre la même carte. Le serveur le tait à un abonné ; le
+    /// moteur local, qui ne sait pas qui lit, le pose toujours.
+    static let subscribeCallToAction = ChatCallToAction(
+        id: "subscribe",
+        kind: .subscribe,
+        label: "Découvrir l’abonnement",
+        eyebrow: "Raconter sans limite"
+    )
 
     /// **La priorité.** C'est le cœur du moteur, et le seul endroit où l'ordre
     /// compte : chaque cran est là parce que l'ignorer produit une réponse à
@@ -234,7 +249,8 @@ public struct LocalMemoResponder: MemoResponder {
                 Candidate(
                     family: "answer",
                     text: Self.answer(for: signals.subject),
-                    suggestions: Suggestions.afterAnswer
+                    suggestions: Suggestions.afterAnswer,
+                    callToAction: signals.subject == .subscription ? Self.subscribeCallToAction : nil
                 )
             ]
         }
@@ -342,12 +358,23 @@ public struct LocalMemoResponder: MemoResponder {
         min(1_800, 700 + text.count * 14)
     }
 
-    private func beat(_ text: String, id: String, pause: Int) -> MemoBeat {
+    private func beat(
+        _ text: String,
+        id: String,
+        pause: Int,
+        callToAction: ChatCallToAction? = nil
+    ) -> MemoBeat {
         // `sentAt` reste celui du répondeur distant le jour venu ; ici c'est le
         // modèle qui l'horodate en posant la bulle, parce qu'un moteur
         // déterministe n'a pas le droit de lire l'horloge.
         MemoBeat(
-            message: ChatMessage(id: id, author: .memo, body: .text(text), sentAt: .distantPast),
+            message: ChatMessage(
+                id: id,
+                author: .memo,
+                body: .text(text),
+                sentAt: .distantPast,
+                callToAction: callToAction
+            ),
             pauseMilliseconds: pause
         )
     }

@@ -8,7 +8,7 @@ Ce que le dépôt encaisse, par quel rail, et comment le vérifier.
 >
 > | Ce qu'on vend | Rail | Pourquoi |
 > |---|---|---|
-> | Abonnement hebdomadaire | **StoreKit 2** | Service numérique → Apple impose l'achat intégré |
+> | Abonnement mensuel (récit illimité) | **StoreKit 2** | Service numérique → Apple impose l'achat intégré |
 > | Carnet imprimé | **Stripe** | Bien physique → l'achat intégré est **interdit** |
 > | Cagnotte | **Stripe** | Elle ne finance que du physique |
 
@@ -333,72 +333,152 @@ vérifie qu'ils sont égaux au centime.
 > `Memo.pageCount` n'est jamais écrit par le back-end. Les deux sont signalés
 > dans le code.
 
-## L'abonnement, et les limites de souvenirs
+## L'abonnement, et le crédit du jour
 
-Deux choses à vendre, un seul tarif chacune, **écrites une fois** dans
-`src/services/subscriptionCatalog.ts` :
+**Depuis le 03/10/2026 (Hugo), une seule chose se vend en numérique : le récit
+illimité.** Tout le monde raconte gratuitement, dans la limite du **crédit du
+jour** de chaque voyage ; l'abonnement mensuel lève cette limite pour celui qui
+s'abonne. Plus d'étapes offertes, plus de limites de souvenirs ni d'extension,
+plus d'abonnement à la semaine, plus de déduction des abonnements du prix du
+carnet. L'ancien modèle est archivé sur la branche `icebox/abonnement-hebdomadaire`
+(= `main` à `0b34857`) et dans `archive/`.
 
-| | Prix | Clé Stripe |
-|---|---|---|
-| Abonnement | **1,99 €/semaine** | `memobook_subscription_weekly` |
-| Limites de souvenirs étendues | **3,99 €/semaine** | `memobook_memory_upgrade_weekly` |
+Le tarif est **écrit une fois** dans `src/services/subscriptionCatalog.ts` :
 
-**Le tarif est servi même à qui n'a rien souscrit** (16/09/2026). Il ne l'était
-pas : `GET /v1/profile` rendait `weeklyPrice: 0` faute de ligne `subscriptions`
-à lire, et l'app écrivait donc « 0,00 €/semaine » sur la feuille d'offre, sur le
-paywall et « 3 × 0,00 € » sur l'estimation. Un prix ne dépend pas de ce que la
-personne a déjà acheté : c'est un tarif, il vit dans un catalogue. Côté app,
-`Subscription.displayedWeeklyPrice` est le second filet — il ne rend jamais zéro.
+| | Prix | Produit App Store | Clé Stripe |
+|---|---|---|---|
+| Abonnement | **4,99 €/mois** (`SUBSCRIPTION_MONTHLY_CENTS = 499`) | `com.memobook.app.subscription.monthly` | `memobook_subscription_monthly` |
 
-⚠️ **L'abonnement s'encaisse par StoreKit, l'extension pas encore** (01/10/2026).
-Apple impose l'achat intégré pour un service numérique : `PAYMENT_KIND` ne
-porte donc aucune valeur d'abonnement (voir `billing.ts`), et c'est la section
+**Le tarif est servi même à qui n'a rien souscrit** (16/09/2026) : un prix ne
+dépend pas de ce que la personne a déjà acheté, c'est un tarif, il vit dans un
+catalogue. `GET /v1/profile` rend `subscription.price` (euros) et
+`subscription.interval` (`"month"`, `"week"` pour un ancien abonné
+hebdomadaire), et garde `weeklyPrice` **rempli avec le même prix** : les apps
+installées le décodent en obligatoire. Côté app, le paywall affiche le prix et
+la période de StoreKit (`displayPrice`, `subscriptionPeriod`), avec `4,99 €` /
+`mois` en repli.
+
+⚠️ **L'abonnement s'encaisse par StoreKit, et par lui seul.** Apple impose
+l'achat intégré pour un service numérique : `PAYMENT_KIND` ne porte aucune
+valeur d'abonnement (voir `billing.ts`), et c'est la section
 [L'abonnement App Store](#labonnement-app-store-storekit) qui dit comment il
-s'achète. Les références Stripe existent pour le jour où l'offre se vend aussi
-hors de l'app — le web —, et pour que le back-end sache de quel prix il parle.
+s'achète. La clé Stripe n'existe que pour que le back-end sache de quel prix il
+parle, et pour le jour où l'offre se vendrait hors de l'app : **aucun
+encaissement Stripe de l'abonnement**.
 
-**Les deux prix vivent sous le même produit Stripe**, « Abonnement MemoBook »
-(`prod_VGyIuAiG0DcXLa`) : l'extension n'est pas une seconde offre, c'est une
-option de l'abonnement (Hugo, 17/09/2026).
-
-État du sandbox Stripe (`acct_1UFioWBknFHnQoHL`, *MemoBook Test*) :
+État du sandbox Stripe (`acct_1UFioWBknFHnQoHL`, *MemoBook Test*), produit
+« Abonnement MemoBook » (`prod_VGyIuAiG0DcXLa`) :
 
 | Prix | | `lookup_key` | |
 |---|---|---|---|
-| `price_1UGQMe…` | 1,99 €/semaine | `memobook_subscription_weekly` | actif |
-| `price_1UGRnH…` | 3,99 €/semaine | `memobook_memory_upgrade_weekly` | actif |
-| `price_1UGRhK…` | 3,99 €/**mois** | `memobook_memory_upgrade_monthly` | **désactivé** |
+| `price_1UMIML…` | 4,99 €/**mois** | `memobook_subscription_monthly` | actif (créé le 03/10/2026) |
+| `price_1UGQMe…` | 1,99 €/semaine | `memobook_subscription_weekly` | à désactiver à la main |
+| `price_1UGRnH…` | 3,99 €/semaine | `memobook_memory_upgrade_weekly` | à désactiver à la main (extension abandonnée) |
+| `price_1UGRhK…` | 3,99 €/mois | `memobook_memory_upgrade_monthly` | désactivé |
 
-⚠️ **L'intervalle d'un prix Stripe ne se modifie pas.** Le mensuel avait été créé
-par erreur ; on ne le corrige pas, on en crée un neuf à la bonne cadence et on
-désactive l'ancien — un prix ne se supprime jamais, il se désactive.
+⚠️ **L'intervalle d'un prix Stripe ne se modifie pas, et un prix ne se supprime
+jamais : il se désactive.** Le sandbox refuse les `update` à l'outil (voir la
+mémoire « Stripe : sandbox MemoBook Test ») : les désactivations se font dans
+le tableau de bord, ou par Hugo en ligne de commande :
+
+```bash
+stripe prices update price_1UGQMeBknFHnQoHLYno3hvG4 --active=false
+stripe prices update price_1UGRnHBknFHnQoHLM4oVaJkV --active=false
+stripe products update prod_VGyIuAiG0DcXLa -d "description=Vocaux et textes illimités, 4,99 € par mois."
+```
 
 Une **`lookup_key` et non un identifiant de prix** : celui-ci change entre le
 sandbox et la production, celle-là non. C'est ce qui permet de poser la même
 valeur dans les deux comptes sans variable d'environnement de plus.
 
-### La semaine payée va à son terme
+### Le crédit du jour (sans abonnement)
 
-Une semaine commencée est une semaine réglée : résilier le lundi ne rend pas les
-six jours suivants, donc ça ne ferme pas le micro non plus (Hugo, 16/09/2026).
+Chaque voyage peut raconter **5 minutes par jour**, partagées entre ses
+co-voyageurs **non abonnés**. Un seul crédit pour l'oral et l'écrit : un vocal
+consomme sa **durée mesurée par le serveur**, un texte **75 ms par caractère**
+(800 caractères = 1 min). Les photos ne consomment rien. Les constantes vivent
+dans `src/services/dailyCredit.ts` et **voyagent avec le solde** jusqu'à l'app
+(objet `dailyCredit`) : il n'y a qu'une vérité.
 
-`subscriptions.renewsAt` est la fin de la période payée. Elle sort dans
-`subscription.paidThrough`, et **deux verrous la lisent** : `assertCanRecord`
-côté serveur, qui accepte un abonnement `cancelled` ou `expired` dont la période
-court encore ; et `Subscription.grantsAccess()` côté app, que lisent
-`freemiumStatus` et `isSubscriber` — jamais `isActive` seul.
+| Constante | Valeur | Ce qu'elle fait |
+|---|---|---|
+| `DAILY_CREDIT_LIMIT_MS` | 300 000 | 5 minutes par voyage et par jour |
+| `TEXT_MS_PER_CHARACTER` | 75 | Le coût d'un caractère écrit |
+| `WARNING_REMAINING_MS` | 30 000 | L'app prévient au-dessus de la barre d'enregistrement (4:30) |
+| `URGENT_REMAINING_MS` | 5 000 | L'avertissement pulse (4:55) |
+| `VOICE_TOLERANCE_MS` | 3 000 | Un dernier vocal peut dépasser le reste de 3 s au plus |
 
-Le dernier jour, rien ne change : la résiliation garde sa phrase d'avant,
-« l'abonnement s'arrête aujourd'hui ». Il n'y a pas de sursis à annoncer pour un
-jour qui est déjà là.
+**Les garde-fous**, côté serveur — l'app prévient, elle ne décide jamais :
+
+- **Le jour** est celui de celui qui raconte (`accounts.timeZone`, mis à jour
+  par l'en-tête `X-Time-Zone` que l'app envoie sur chaque appel), et **ne
+  recule jamais** : changer de fuseau ne rouvre pas une journée.
+- **Le décompte est atomique**, dans la transaction qui écrit la bulle du
+  voyageur, sous le verrou du voyage (`memos … FOR UPDATE`) : deux envois
+  simultanés ne passent pas tous les deux. Un échec plus loin annule le
+  décompte.
+- **La durée d'un vocal est mesurée** dans le conteneur MPEG-4
+  (`src/lib/mp4Duration.ts`) : le `durationSeconds` déclaré par le client n'est
+  plus cru. **Et les en-têtes ne sont pas crus seuls** : un client peut les
+  réécrire en quatre octets, alors que le transcripteur décode tous les paquets.
+  Le fichier doit avoir une seule piste, audio, en AAC-LC, non fragmentée ; le
+  nombre de paquets de `stts` doit égaler celui de `stsz` ; l'échelle de `mdhd`
+  doit égaler la fréquence de l'`AudioSpecificConfig` ; la durée retenue est la
+  plus longue de Σ`stts` et de `paquets × 1024 ÷ fréquence`, et un débit de plus
+  de 40 Ko/s est refusé. Tout écart : `400 unreadable_audio`.
+- **Un filet après la transcription** : si le texte rendu pèse plus du double de
+  la durée mesurée (75 ms par caractère) et l'écart plus de 15 s, l'écart est
+  décompté du crédit du voyage — sans refuser le tour — et journalisé.
+- **Au-delà du reste**, `429 daily_credit_exhausted`, avec le crédit dans le
+  corps ; le message dit « épuisé » seulement si le pot est vide, sinon « ce
+  tour dépasse le crédit qui reste aujourd'hui ». L'app garde le vocal dans sa
+  file hors ligne et le renvoie après `resetsAt` ; un texte trop long est
+  empêché avant l'envoi.
+- **Plus long qu'une journée** (vocal de plus de 5 min 03, texte de plus de
+  4 000 caractères) : `429 daily_credit_too_long`. Il ne passera jamais sans
+  abonnement : l'app le garde en « attend l'illimité » et le libère à
+  l'abonnement.
+- **Gratuit** : une puce envoyée telle quelle, une commande silencieuse, les
+  photos. Le contexte du voyage et les précisions comptent comme le reste.
+- **La bulle « reviens demain »** : quand le crédit tombe à zéro, MEMO pose une
+  fois par voyage et par jour une bulle écrite par le code, avec l'appel à
+  l'action « Raconter sans limite » vers le paywall. Un abonné ne la voit pas.
+- **Le plafond anti-abus** `CHAT_DAILY_TURN_CAP` (tours par carnet et par jour)
+  reste, pour tout le monde, abonnés compris.
+
+Le crédit est servi avec le fil (`GET /v1/trips/:id/chat`), chaque reçu de tour,
+les réglages du voyage (`GET|PATCH /v1/trips/:id/settings`) et chaque voyage en
+cours de l'accueil (`GET /v1/home`). L'app le montre dans la barre
+d'enregistrement (4:30 / 4:55 / 5:00) et dans la ligne « Crédit du jour » des
+réglages du voyage, d'où « Passer en illimité » ouvre le paywall.
+
+### L'illimité est personnel, et la période payée va à son terme
+
+**L'abonnement n'ouvre l'illimité qu'à l'abonné** : ses tours ne consomment pas
+le pot commun du voyage, et ses co-voyageurs non abonnés continuent de le
+partager. Il n'ouvre rien d'autre — les statistiques du voyage sont à tout le
+monde.
+
+Un mois commencé est un mois réglé : résilier ne coupe pas l'illimité avant la
+fin de la période payée. `subscriptions.renewsAt` en est la fin ; elle sort dans
+`subscription.paidThrough`. **Une seule source dit l'accès** :
+`hasUnlimitedAccess` (`src/services/subscriptions.ts`) — statut vivant
+(`active`, `trialing`, `past_due`), ou `cancelled` / `expired` avec `renewsAt`
+encore à venir. Côté app, `Subscription.grantsAccess()` lit la même règle.
 
 ## L'abonnement App Store (StoreKit)
 
-1,99 €/semaine, produit **`com.memobook.app.subscription.weekly`**, groupe
+4,99 €/mois, produit **`com.memobook.app.subscription.monthly`**, groupe
 d'abonnements « MemoBook ». L'identifiant est écrit trois fois et doit rester
 le même partout : `APP_STORE_PRODUCT_IDS` (`subscriptionCatalog.ts`),
 `StoreKitCatalog` (`MemoBookPayments`) et `ios/Config/MemoBook.storekit`.
 Apple ne le laisse ni modifier ni réutiliser.
+
+**L'ancien produit hebdomadaire `com.memobook.app.subscription.weekly` reste
+accepté** (Hugo, 03/10/2026) : un abonné éventuel est honoré jusqu'à
+l'expiration de sa période, et ses renouvellements comme ses notifications
+passent toujours. Il n'est plus vendu nulle part dans l'app ; à retirer de la
+vente dans App Store Connect.
 
 ```
 App ─ Product.purchase(appAccountToken: id du compte)
@@ -411,10 +491,11 @@ Apple ─ POST /v1/webhooks/app-store (notifications v2)
 ```
 
 **Deux portes, la même écriture** (`services/appStoreSubscriptions.ts`) : l'app
-ouvre le micro dans la seconde qui suit l'achat, Apple dit tout le reste — y
+rend l'illimité dans la seconde qui suit l'achat, Apple dit tout le reste — y
 compris ce qui se passe app fermée. Une ligne `subscriptions` par
 `originalTransactionId` (rouverte quand on se réabonne au voyage suivant), une
-ligne `subscription_transactions` par semaine payée.
+ligne `subscription_transactions` par période payée (un mois ; une semaine pour
+l'ancien produit).
 
 | Chez Apple | `subscriptions.status` | Accès |
 |---|---|---|
@@ -430,7 +511,7 @@ ligne `subscription_transactions` par semaine payée.
 | Garde-fou | Où | Ce qu'il empêche |
 |---|---|---|
 | `subscriptions.providerSubscriptionId` unique | schéma | Deux abonnements pour un paiement |
-| `subscription_transactions.transactionId` unique | schéma | Inscrire deux fois une semaine |
+| `subscription_transactions.transactionId` unique | schéma | Inscrire deux fois une période |
 | `providerUpdatedAt` | `appStoreSubscriptions.ts` | Un événement en retard qui rouvrirait un abonnement coupé |
 | `finish()` après le 2xx seulement | `SubscriptionStore.swift` | Perdre un achat fait dans un tunnel |
 
@@ -442,7 +523,7 @@ promesse « arrêt automatique à la fin du voyage » est devenue un **rappel**
 
 - la passe de fin de voyage (`sweepEndedSubscriptions`) **ignore** les lignes
   StoreKit — les fermer pendant qu'Apple prélève, c'était faire payer
-  quelqu'un dont le micro est fermé ;
+  quelqu'un qui n'a plus l'illimité ;
 - `GET /v1/home` rend `traveller.subscriptionOutlivesTrip` quand l'abonnement va
   se renouveler sans voyage en cours, et l'accueil propose de résilier — une
   fois par jour au plus ;
@@ -495,9 +576,11 @@ Dans cet ordre — les deux premiers prennent des jours :
 2. **Small Business Program** (developer.apple.com) : 15 % de commission au lieu
    de 30 %.
 3. **Monetization ▸ Subscriptions** : groupe « MemoBook », abonnement
-   `com.memobook.app.subscription.weekly`, 1 semaine, France 1,99 €,
+   `com.memobook.app.subscription.monthly`, 1 mois, France 4,99 €,
    localisation française, capture du paywall pour la revue, partage familial
-   désactivé.
+   désactivé. L'hebdomadaire `com.memobook.app.subscription.weekly` se retire
+   de la vente (*Remove from Sale*) sans être supprimé : ses abonnés vont au
+   bout de leur période.
 4. **App Information ▸ App Store Server Notifications** : la même URL en
    production et en sandbox, **version 2** —
    `https://api-production-9f35a.up.railway.app/v1/webhooks/app-store`. Puis
@@ -519,15 +602,12 @@ Côté Xcode, **rien à cocher** : l'achat intégré n'a pas d'entitlement.
    avec `APP_STORE_ALLOW_XCODE=true`. *Debug ▸ StoreKit ▸ Manage Transactions*
    rembourse ou expire à la main.
 2. **iPhone, compte sandbox** (*Réglages ▸ Développeur ▸ Compte sandbox*), schéma
-   sans fichier StoreKit : **une semaine dure 3 minutes**, on voit arriver les
+   sans fichier StoreKit : **un mois dure 5 minutes**, on voit arriver les
    renouvellements, la coupure et l'expiration dans les logs de Railway.
 3. **TestFlight** : le même sandbox, sur le binaire de production.
 
 ## Ce qui n'existe pas encore
 
-- **L'extension des limites de souvenirs** — `POST /v1/trips/:id/memory-plan`
-  pose le palier et laisse dérouler le parcours de bout en bout, mais
-  n'encaisse rien. C'est le reçu StoreKit qui l'appellera.
 - **L'imprimeur** — une commande payée reste en `submitted` jusqu'à ce qu'un
   humain la traite. `in_production` et `shipped` attendent un fournisseur.
 - **La contribution d'un proche** — la page web derrière `shareSlug`.

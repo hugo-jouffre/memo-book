@@ -210,11 +210,19 @@ public actor PreviewAPI: MemoBookAPI {
     // Les jeux d'essai déjà écrits pour les aperçus font l'affaire : le double
     // n'a pas à réinventer un contenu que `HomeFeed.fixture` porte déjà.
 
+    /// L'accueil du jeu d'essai, et ce que le serveur y ajoute depuis le
+    /// crédit du jour : le voyageur abonné ou non, et le crédit de chaque voyage
+    /// en cours — voir ``SandboxCredit``.
     public func homeFeed() async throws -> HomeFeed {
         try SandboxNetwork.failIfOffline()
         let fixture = HomeFeed.fixture
-        guard !createdTrips.isEmpty else { return fixture }
-        return HomeFeed(traveller: fixture.traveller, trips: createdTrips + fixture.trips, showcase: fixture.showcase)
+        let isUnlimited = SandboxCredit.isUnlimited(profileIsUnlimited: sandboxProfileIsUnlimited)
+        let feed = HomeFeed(
+            traveller: fixture.traveller.replacing(isUnlimited: isUnlimited),
+            trips: createdTrips + fixture.trips,
+            showcase: fixture.showcase
+        )
+        return SandboxCredit.applied(to: feed, profileIsUnlimited: sandboxProfileIsUnlimited)
     }
 
     public func tripDetail(id: String) async throws -> TripDetail {
@@ -297,8 +305,9 @@ public actor PreviewAPI: MemoBookAPI {
 
     /// L'abonnement se referme **dans le double**, comme le reste : rouvrir la
     /// feuille doit montrer quelqu'un de résilié, pas l'abonné du jeu d'essai.
-    /// La semaine réglée (`paidThrough`) ne bouge pas — c'est elle qui donne
-    /// son sursis, et c'est ce qu'on vient vérifier à l'écran.
+    /// Le mois réglé (`paidThrough`) ne bouge pas — c'est lui qui donne son
+    /// sursis (« illimité jusqu'au … »), et c'est ce qu'on vient vérifier à
+    /// l'écran.
     public func cancelSubscription(
         reason: SubscriptionCancellationReason?
     ) async throws -> TravellerProfile {
@@ -311,7 +320,8 @@ public actor PreviewAPI: MemoBookAPI {
     }
 
     /// L'achat ouvre l'abonnement **dans le double** : rouvrir le profil doit
-    /// montrer un abonné, tenu par Apple — sans qu'aucune signature soit lue.
+    /// montrer un abonné, tenu par Apple — sans qu'aucune signature soit lue —,
+    /// et le crédit du jour passe à l'illimité, sur le fil comme sur l'accueil.
     public func syncAppStoreTransaction(
         signedTransaction: String,
         memoId: String?
@@ -321,9 +331,17 @@ public actor PreviewAPI: MemoBookAPI {
         profile.subscription.isActive = true
         profile.subscription.cancelledAt = nil
         profile.subscription.managedByAppStore = true
-        profile.offeredSteps = nil
-        profile.remainingSteps = nil
         editedProfile = profile
+        SandboxCredit.setUnlimited(true)
+        #if DEBUG
+            // Un personnage joué par le bac à sable (« Sans abonnement »,
+            // « Jamais abonné ») retoucherait l'accueil et le profil en non
+            // abonné au prochain rechargement : l'achat en fait un abonné,
+            // comme le serveur le ferait (03/10/2026).
+            await MainActor.run {
+                if SandboxPersona.current != nil { SandboxPersona.current = .subscriber }
+            }
+        #endif
         return profile
     }
 
@@ -792,21 +810,22 @@ public actor PreviewAPI: MemoBookAPI {
         return CoverPhoto(id: "cover-\(UUID().uuidString)", url: url)
     }
 
+    /// Les réglages du jeu d'essai, **avec le crédit du jour de ce voyage** :
+    /// la ligne « Crédit du jour » lit le même reste que la barre de la
+    /// conversation — voir ``SandboxCredit``.
     public func tripSettings(id: String) async throws -> TripSettings {
-        await Self.settingsBox.read()
-    }
-
-    public func setMemoryPlan(tripId: String, plan: MemoryPlan) async throws -> TripSettings {
-        await Self.settingsBox.apply { settings in
-            var memory = settings.memory ?? MemoryAllowance()
-            memory.plan = plan
-            // Le palier étendu ouvre quatre fois plus, comme le barème serveur.
-            memory.allowance = plan == .extended ? 8_000 : 2_000
-            settings.memory = memory
-        }
+        var settings = await Self.settingsBox.read()
+        settings.dailyCredit = sandboxCredit(tripId: id)
+        return settings
     }
 
     public func updateTripSettings(id: String, edit: TripSettingsEdit) async throws -> TripSettings {
+        var settings = try await applyTripSettings(edit)
+        settings.dailyCredit = sandboxCredit(tripId: id)
+        return settings
+    }
+
+    private func applyTripSettings(_ edit: TripSettingsEdit) async throws -> TripSettings {
         await Self.settingsBox.apply { settings in
             switch edit {
             case .name(let value): settings.name = value
@@ -977,6 +996,269 @@ extension Entry {
     }
 }
 
+
+/// **Le crédit du jour du bac à sable** (03/10/2026) : ce que le double d'API
+/// sert comme `dailyCredit` — sur le fil de la conversation, ses mises à jour,
+/// le reçu d'un tour (qu'il décompte), les réglages du voyage et l'accueil.
+///
+/// Les trois réglages du panneau de l'accueil y posent un reste de départ :
+/// « Crédit neuf », « Plus que 30 s » (4:30 consommées : l'avertissement
+/// paraît dès qu'on parle), « Crédit épuisé ». Ensuite, chaque tour envoyé le
+/// fait descendre, et le double refuse comme le serveur
+/// (`429 daily_credit_exhausted`) — de quoi rejouer l'avertissement, la
+/// pulsation, l'arrêt net et le « Partira demain » de la file sans back-end.
+///
+/// Un verrou et non un acteur, comme ``SandboxNetwork`` : le panneau (sur le
+/// fil principal) et `PreviewAPI` (son propre acteur) le lisent tous deux sans
+/// attendre. Compilé dans l'app livrée parce que `PreviewAPI` l'est (les
+/// aperçus) ; seul le panneau, sous `#if DEBUG`, le règle.
+public enum SandboxCredit {
+    /// Les trois réglages du panneau.
+    public enum Preset: String, CaseIterable, Sendable {
+        case fresh
+        case lastThirtySeconds
+        case exhausted
+
+        public var label: String {
+            switch self {
+            case .fresh: "Crédit neuf"
+            case .lastThirtySeconds: "Plus que 30 s"
+            case .exhausted: "Crédit épuisé"
+            }
+        }
+
+        /// Ce que le voyage a déjà raconté aujourd'hui.
+        public var usedMs: Int {
+            switch self {
+            case .fresh: 0
+            case .lastThirtySeconds: DailyCredit.Catalog.limitMs - DailyCredit.Catalog.warningRemainingMs
+            case .exhausted: DailyCredit.Catalog.limitMs
+            }
+        }
+    }
+
+    /// Le refus du serveur, au mot près (`DAILY_CREDIT_EXHAUSTED_MESSAGE` est
+    /// la bulle ; ceci est le corps du 429).
+    static let refusal =
+        "Le crédit du jour de ce voyage est épuisé. Reviens demain pour continuer, ou passe en illimité."
+
+    /// La marge d'un dernier vocal, comme `VOICE_TOLERANCE_MS` côté serveur.
+    static let voiceToleranceMs = 3_000
+
+    private struct State: Sendable {
+        /// Le réglage joué, `nil` tant que le panneau n'a rien touché : le
+        /// double sert alors un crédit neuf qui descend, et l'accueil d'un vrai
+        /// serveur n'est jamais retouché.
+        var preset: Preset?
+        /// Ce que chaque voyage a consommé, depuis le réglage ou le jour.
+        var usedMsByTrip: [String: Int] = [:]
+        /// Le jour de ces chiffres : passé minuit, tout repart à zéro, comme
+        /// sur le serveur — sans quoi un tour « parti demain » serait refusé
+        /// une seconde fois.
+        var day = SandboxCredit.today()
+        /// Abonné (`true`), sans abonnement (`false`), ou `nil` pour suivre le
+        /// profil du double.
+        var isUnlimited: Bool?
+        /// Les tours déjà décomptés : un rejeu de la file (même identifiant)
+        /// ne compte pas deux fois — l'idempotence du serveur.
+        var chargedTurnIds: Set<String> = []
+    }
+
+    private static let state = OSAllocatedUnfairLock(initialState: State())
+
+    // MARK: Le panneau
+
+    /// Pose un réglage : chaque voyage repart de ce reste.
+    public static func play(_ preset: Preset) {
+        state.withLock {
+            $0.preset = preset
+            $0.usedMsByTrip = [:]
+            $0.day = today()
+        }
+    }
+
+    /// Abonné ou non, d'après le personnage du bac à sable. `nil` rend la main
+    /// au profil du double.
+    public static func setUnlimited(_ isUnlimited: Bool?) {
+        state.withLock { $0.isUnlimited = isUnlimited }
+    }
+
+    /// Le jeu d'essai : plus de réglage, plus de personnage.
+    public static func reset() {
+        state.withLock { $0 = State() }
+    }
+
+    /// Un réglage est-il joué ? C'est seulement alors que l'accueil d'un vrai
+    /// serveur se laisse retoucher.
+    public static var isPlaying: Bool { state.withLock { $0.preset != nil } }
+
+    /// Abonné ou non : le personnage s'il y en a un, sinon le profil.
+    public static func isUnlimited(profileIsUnlimited: Bool) -> Bool {
+        state.withLock { $0.isUnlimited } ?? profileIsUnlimited
+    }
+
+    // MARK: Le double
+
+    /// Le crédit de ce voyage, aujourd'hui. `profileIsUnlimited` dit ce que
+    /// le profil du double sait quand aucun personnage n'est joué.
+    public static func credit(for tripId: String, profileIsUnlimited: Bool = false) -> DailyCredit {
+        state.withLock { state in
+            rollOver(&state)
+            return make(state, tripId: tripId, profileIsUnlimited: profileIsUnlimited)
+        }
+    }
+
+    /// Ce que coûte un tour.
+    enum Cost: Sendable {
+        case voice(milliseconds: Int)
+        case text(String)
+        case free
+    }
+
+    /// Décompte un tour, **ou le refuse comme le serveur** : un vocal quand il
+    /// ne reste rien, ou qu'il dépasse le reste de plus de 3 s ; un texte plus
+    /// long que le reste. Un abonné ne consomme rien.
+    static func charge(
+        _ cost: Cost,
+        turnId: String,
+        tripId: String,
+        profileIsUnlimited: Bool
+    ) throws -> DailyCredit {
+        // Le refus se lève **hors** du verrou : on n'y garde que des valeurs.
+        let (credit, isRefused): (DailyCredit, Bool) = state.withLock { state in
+            rollOver(&state)
+            let credit = make(state, tripId: tripId, profileIsUnlimited: profileIsUnlimited)
+            guard !credit.isUnlimited, !state.chargedTurnIds.contains(turnId) else {
+                return (credit, false)
+            }
+
+            let milliseconds: Int
+            switch cost {
+            case .free:
+                return (credit, false)
+            case .voice(let duration):
+                guard credit.remainingMs > 0, duration <= credit.remainingMs + voiceToleranceMs else {
+                    return (credit, true)
+                }
+                milliseconds = duration
+            case .text(let text):
+                let price = credit.cost(ofText: text)
+                guard price <= credit.remainingMs else { return (credit, true) }
+                milliseconds = price
+            }
+
+            let charged = credit.consuming(milliseconds)
+            state.usedMsByTrip[tripId] = charged.usedMs
+            state.chargedTurnIds.insert(turnId)
+            return (charged, false)
+        }
+        if isRefused { throw APIError.dailyCreditExhausted(message: refusal, credit: credit) }
+        return credit
+    }
+
+    /// Le flux d'accueil, ses voyages en cours garnis de leur crédit.
+    public static func applied(to feed: HomeFeed, profileIsUnlimited: Bool = false) -> HomeFeed {
+        let trips = feed.trips.map { trip in
+            guard trip.stage.isOngoing else { return trip }
+            var trip = trip
+            trip.dailyCredit = credit(for: trip.id, profileIsUnlimited: profileIsUnlimited)
+            return trip
+        }
+        return HomeFeed(traveller: feed.traveller, trips: trips, showcase: feed.showcase)
+    }
+
+    // MARK: -
+
+    private static func make(_ state: State, tripId: String, profileIsUnlimited: Bool) -> DailyCredit {
+        DailyCredit(
+            isUnlimited: state.isUnlimited ?? profileIsUnlimited,
+            usedMs: state.usedMsByTrip[tripId] ?? state.preset?.usedMs ?? 0,
+            day: state.day,
+            resetsAt: Calendar.current.date(
+                byAdding: .day,
+                value: 1,
+                to: Calendar.current.startOfDay(for: .now)
+            )
+        )
+    }
+
+    private static func rollOver(_ state: inout State) {
+        let now = today()
+        guard state.day != now else { return }
+        state.day = now
+        state.usedMsByTrip = [:]
+        state.preset = state.preset.map { _ in .fresh }
+    }
+
+    /// Le jour **de l'appareil** : celui dont ``make(_:tripId:profileIsUnlimited:)``
+    /// annonce la recharge à minuit, et où l'app recharge le crédit
+    /// (``DailyCredit/refreshed(now:calendar:)``).
+    ///
+    /// Pas le jour UTC (03/10/2026) : `ISO8601FormatStyle` écrit en UTC par
+    /// défaut, et le double changeait de jour à minuit UTC. Entre les deux
+    /// minuits — de 0 h à 2 h à Paris l'été —, l'app repartait de 5:00 pendant
+    /// que le double gardait l'usage de la veille et refusait un vocal d'une
+    /// minute, « Partira demain » à tort.
+    static func today(now: Date = .now, calendar: Calendar = .current) -> String {
+        CalendarDay(now, calendar: calendar).iso
+    }
+}
+
+// MARK: - Le crédit du jour, servi par le double
+
+extension PreviewAPI {
+    /// Le profil du double est-il abonné ? C'est ce que le crédit suit tant
+    /// qu'aucun personnage du bac à sable n'est joué.
+    var sandboxProfileIsUnlimited: Bool { (editedProfile ?? .fixture).isSubscriber }
+
+    /// Le crédit de ce voyage, tel que le double le sert.
+    func sandboxCredit(tripId: String) -> DailyCredit {
+        SandboxCredit.credit(for: tripId, profileIsUnlimited: sandboxProfileIsUnlimited)
+    }
+
+    /// Décompte un vocal de cette durée, ou le refuse comme le serveur.
+    func chargeSandboxVoice(seconds: TimeInterval, turnId: String, tripId: String) throws -> DailyCredit {
+        try SandboxCredit.charge(
+            .voice(milliseconds: Int((seconds * 1000).rounded())),
+            turnId: turnId,
+            tripId: tripId,
+            profileIsUnlimited: sandboxProfileIsUnlimited
+        )
+    }
+
+    /// Décompte un texte, ou le refuse. Une puce du catalogue (`suggestionId`)
+    /// ne coûte rien, comme sur le serveur.
+    func chargeSandboxText(
+        _ text: String,
+        suggestionId: String?,
+        turnId: String,
+        tripId: String
+    ) throws -> DailyCredit {
+        try SandboxCredit.charge(
+            suggestionId == nil ? .text(text) : .free,
+            turnId: turnId,
+            tripId: tripId,
+            profileIsUnlimited: sandboxProfileIsUnlimited
+        )
+    }
+}
+
+extension Traveller {
+    /// Le même voyageur, abonné ou non — pour le double et le bac à sable, qui
+    /// retouchent l'abonnement sans perdre le reste (les deux alertes de
+    /// l'accueil comprises).
+    func replacing(isUnlimited: Bool, hasSubscribedBefore: Bool? = nil) -> Traveller {
+        Traveller(
+            id: id,
+            firstName: firstName,
+            avatarUrl: avatarUrl,
+            isUnlimited: isUnlimited,
+            hasSubscribedBefore: hasSubscribedBefore ?? self.hasSubscribedBefore,
+            subscriptionEndedOn: subscriptionEndedOn,
+            subscriptionOutlivesTrip: subscriptionOutlivesTrip
+        )
+    }
+}
 
 /// Les réglages d'un voyage, gardés le temps d'un aperçu.
 ///

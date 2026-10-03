@@ -111,7 +111,7 @@ et personne ne s'en aperçoit avant le support.
 ### Niveau 2 — déclenché par l'app, rédigé par le CRM
 
 Suivi de commande, « ton carnet est prêt », invitation à un voyage, relances
-d'onboarding, fin d'abonnement.
+d'onboarding, rappel de l'abonnement à la fin d'un voyage.
 
 L'API émet l'événement avec ses données (`order.tracking`, `memo.title`…). Le
 gabarit, lui, vit dans le CRM sous la même clé (`print_order.shipped`). Le CRM
@@ -161,7 +161,7 @@ qui manque **côté serveur** — l'e-mail n'est jamais que le dernier mètre.
 | Cagnotte rechargée | `wallet.credited` | `WalletEntry` | 1 | Prêt |
 | Export de données | `account.data_export` | `POST /v1/accounts/me/export` | 1 | **Fait** (01/10/2026) — voir plus bas |
 | Compte supprimé | `account.deleted` | `DELETE /v1/accounts/me` | 1 | Prêt |
-| Abonnement : renouvellement, échec, fin | `subscription.*` | `Subscription` | 2 | Modèle prêt |
+| Abonnement : rappel à la fin du voyage | `subscription.reminder` | Le lendemain de la fin d'un voyage, abonnement App Store au renouvellement armé (`sendTripEndEmails`) | 2 | **Fait** (03/10/2026) — voir plus bas |
 | Newsletter | `news.*` | Le CRM | 3 | Consentement à horodater |
 | Réactivation, relances | `lifecycle.*` | Le CRM, sur segment | 3 | Dépend de `contact_sync` |
 | Enquête de satisfaction | `feedback.campaign` | `FeedbackCampaign` | 3 | Modèle prêt |
@@ -172,6 +172,34 @@ données (01/10/2026) existent désormais. L'authentification est maison (`jose`
 + `scrypt`), donc rien ne vient gratuitement — Supabase Auth, qui aurait fourni
 ces écrans et leurs e-mails, n'est pas utilisé ici, et le back-end ne s'en sert
 que comme Postgres et stockage.
+
+### Le rappel de l'abonnement, tel qu'il est construit
+
+Le seul e-mail d'abonnement, et il n'en faut pas d'autre : l'abonnement se prend
+dans l'app, chez Apple, et **Apple envoie lui-même** les reçus, les
+renouvellements et les échecs de paiement. Ce qu'Apple n'envoie pas, c'est le
+rappel que l'abonnement ne sert plus — la promesse du paywall, « On te rappelle
+de résilier » (Hugo, 03/10/2026).
+
+1. La passe horaire des notifications (`memobook.send-notifications`) appelle
+   aussi `sendTripEndEmails` (`backend/src/services/notifications.ts`). Elle ne
+   lit que les comptes dont un abonnement App Store est vivant.
+2. La règle est pure, `planTripEndEmail` (`notificationPlanner.ts`) : le
+   **lendemain** de la fin d'un voyage (jusqu'à J+3), entre 10 h et 21 h chez le
+   voyageur, renouvellement armé, plus aucun voyage en cours ni prévu. Elle ne
+   dépend ni des alertes du voyage, ni d'un téléphone enregistré : l'e-mail est
+   fait pour ceux que la notification du même jour n'atteint pas.
+3. **Une fois par voyage**, sans table de plus : l'envoi est journalisé dans
+   `notification_deliveries` (kind `trip_end_email`), dont la clé unique tient
+   déjà le « une seule fois » des notifications. La ligne s'écrit avant l'envoi
+   et s'efface s'il échoue — la passe suivante le retente. `outbound_messages`
+   le reprendra le jour où elle existera.
+4. Le texte est dans `mailTemplates.ts` (`renderSubscriptionReminderMail`), le
+   gabarit Resend dans `templates/emails/subscription-reminder.njk` (alias
+   `subscription-reminder`). Le bouton mène à la page des abonnements d'Apple —
+   un abonnement App Store ne se coupe que là — et le texte donne le chemin dans
+   les Réglages de l'iPhone. **Le gabarit Resend attend que Hugo le pousse**
+   (`npm run emails:sync`, la clé n'est que sur Railway).
 
 ### L'export de données, tel qu'il est construit
 
@@ -355,7 +383,8 @@ Nunjucks est déjà une dépendance du back-end : rien à installer.
 Le dépôt n'est pas le seul endroit où ils vivent. `npm run emails:sync`
 (`backend/scripts/resend-templates.ts`) les pousse aussi dans le compte Resend
 en *templates* (`POST /templates`, puis `publish`), sous un alias stable :
-`print-order-shipped` et `password-reset`.
+`print-order-shipped`, `password-reset`, `data-export` et
+`subscription-reminder`.
 
 C'est ce qui rend le niveau 2 réel plutôt que théorique. L'envoi devient
 `template: { id: "<alias>", variables: { … } }` : le déclencheur reste dans

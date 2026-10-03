@@ -1,6 +1,7 @@
 import MemoBookCore
 import MemoBookDesign
 import MemoBookPayments
+import StoreKit
 import SwiftUI
 
 /// Point d'entrée de l'interface, et le seul endroit qui décide de l'étape où
@@ -96,10 +97,36 @@ public struct RootView: View {
     /// Il ouvre la feuille du nouveau mot de passe par-dessus ce qu'on faisait.
     @State private var signedInResetToken: ResetLinkToken?
 
-    /// L'offre, ouverte par la notification de fin des 3 étapes offertes. Les
-    /// autres écrans présentent la leur ; celle-ci n'a pas d'écran d'attache,
-    /// puisqu'on arrive de l'écran verrouillé.
+    /// L'offre, ouverte par un lien `memobook://paywall` — une notification
+    /// déjà livrée, un e-mail. Les autres écrans présentent la leur ; celle-ci
+    /// n'a pas d'écran d'attache.
     @State private var showsNotificationPaywall = false
+
+    /// La gestion des abonnements d'iOS, ouverte par le rappel de résiliation
+    /// de fin de voyage (`memobook://subscription`, Hugo, 03/10/2026).
+    ///
+    /// **La feuille d'Apple et non « Mon abonnement »** : le rappel ne vise
+    /// que des abonnements App Store qui vont se renouveler, et c'est là, et
+    /// seulement là, qu'on les coupe — la feuille du profil y renvoie de toute
+    /// façon, après trois confirmations qu'on n'a pas à refaire depuis une
+    /// notification. C'est aussi ce que fait l'alerte de l'accueil.
+    @State private var managesSubscriptionFromNotification = false
+
+    /// Le jour où l'accueil a proposé de résilier — la même clé que son alerte
+    /// « Ton voyage est terminé » (``TripEndReminder``).
+    ///
+    /// **Le lien du rappel le marque fait** (03/10/2026) : toucher la
+    /// notification ouvre déjà la feuille d'Apple, et l'accueil qui se charge
+    /// au même moment ouvrait aussi son alerte. Deux présentations se
+    /// disputaient l'écran — l'une échouait, ou l'alerte redemandait de
+    /// résilier juste après qu'on l'avait fait.
+    @AppStorage(TripEndReminder.storageKey) private var tripEndRemindedDay = ""
+
+    /// Fait relire l'accueil quand la feuille d'Apple ouverte par le rappel se
+    /// referme : le serveur aura appris ce qui a été coupé. L'accueil a son
+    /// modèle à lui, que ce niveau ne tient pas — voir
+    /// ``SwiftUI/EnvironmentValues/homeReloadRequest``.
+    @State private var homeReloadRequest = 0
 
     /// Les notifications de l'app — le jeton, l'autorisation, le toucher. Jamais
     /// branchées dans le bac à sable : il n'a pas de session à qui remettre un
@@ -129,7 +156,6 @@ public struct RootView: View {
         // feuilles** : c'est lui qui les relie.
         .environment(\.brandSheetPresentation, sheets)
         .environment(\.subscriptionSession, subscription)
-        .environment(\.walletSource, { [api = dependencies.api] tripId in try await api.wallet(tripId: tripId) })
         // Le support **de la session**, à portée du paywall : « Besoin d'aide ? »
         // l'ouvre par-dessus l'offre au lieu de la refermer, pour que la flèche
         // de retour ramène à l'étape qu'on regardait (Hugo, 16/09/2026).
@@ -170,7 +196,13 @@ public struct RootView: View {
                 openPendingNotification()
             }
         }
-        .onChange(of: push?.pendingLink) { _, _ in openPendingNotification() }
+        // `initial` : une notification touchée app fermée pose son lien avant
+        // que cette vue existe. Le rappel du jour se marque **dès l'arrivée du
+        // lien**, avant que l'accueil se charge et décide de son alerte.
+        .onChange(of: push?.pendingLink, initial: true) { _, link in
+            if link == .subscription { tripEndRemindedDay = TripEndReminder.today() }
+            openPendingNotification()
+        }
     }
 
     @ViewBuilder
@@ -196,6 +228,7 @@ public struct RootView: View {
                 NavigationStack(path: $path) {
                     HomeView(model: dependencies.homeModel(), onIntent: handle)
                         .navigationDestination(for: HomeRoute.self, destination: destination)
+                        .environment(\.homeReloadRequest, homeReloadRequest)
                 }
                 .tint(MemoBookColor.action)
                 // Le vocal en route vers la conversation ne vit que le temps
@@ -225,11 +258,19 @@ public struct RootView: View {
                 .fullScreenCover(isPresented: $showsNotificationPaywall) {
                     PaywallView(
                         subscription: .offer,
+                        variant: subscription.paywallVariant,
                         onSubscribe: {
                             subscription.record(isSubscribed: true)
                             showsNotificationPaywall = false
+                            homeReloadRequest += 1
                         }
                     )
+                }
+                .manageSubscriptionsSheet(isPresented: $managesSubscriptionFromNotification)
+                // Comme la feuille de l'accueil : au retour de celle d'Apple,
+                // l'accueil se relit et le rappel cesse.
+                .onChange(of: managesSubscriptionFromNotification) { _, isOpen in
+                    if !isOpen { homeReloadRequest += 1 }
                 }
             }
         }
@@ -277,6 +318,25 @@ public struct RootView: View {
             guard phase == .active else { return }
             Task { await dependencies.outbox.flush() }
             Task { await leaveIfSessionWasRefused() }
+            // Même raison pour un achat qu'Apple a encaissé et que le serveur
+            // n'a pas reçu (`awaitingServer`) : StoreKit garde la transaction
+            // ouverte, mais ne la redonne d'elle-même qu'au prochain lancement
+            // (03/10/2026). Sans effet quand rien n'attend.
+            if case .signedIn = stage, !OnboardingStorage.isPreviewingSignedIn {
+                Task { await dependencies.deliverUnfinishedTransactions() }
+            }
+        }
+        // **L'illimité libère la file** (03/10/2026) : un achat, une
+        // restauration, un abonnement pris sur un autre appareil et que
+        // l'accueil vient d'apprendre — ce qui attendait le crédit de demain
+        // ou l'illimité repart tout de suite, au lieu d'attendre minuit. Une
+        // seconde fois quand **le serveur** le confirme : juste après l'achat,
+        // il peut ne pas le savoir encore, et refuser de nouveau. La session
+        // ne connaît pas la file, ni la file la session : c'est ici, où vivent
+        // les deux, qu'on les relie.
+        .onChange(of: [subscription.isUnlimited, subscription.known == true]) { before, now in
+            guard zip(before, now).contains(where: { !$0 && $1 }) else { return }
+            Task { await dependencies.outbox.releaseCreditHolds() }
         }
     }
 
@@ -448,6 +508,9 @@ public struct RootView: View {
         guard case .signedIn = stage, !OnboardingStorage.isPreviewingSignedIn else { return }
         guard !(await dependencies.api.hasStoredSession()) else { return }
         await dependencies.forgetAccountContent()
+        // L'abonnement de ce compte ne doit pas suivre le prochain — voir
+        // ``SubscriptionSession/reset()``.
+        subscription.reset()
         push?.disconnect()
         path.removeAll()
         stage = .signedOut
@@ -467,6 +530,10 @@ public struct RootView: View {
             // dort sur le disque pour être relu hors ligne, il ne doit pas
             // attendre la personne suivante sur ce téléphone.
             await dependencies.forgetAccountContent()
+            // Ce que la session savait de l'abonnement — un achat, une
+            // résiliation, « déjà abonné » — appartient à ce compte. La
+            // suppression du compte passe aussi par ici (03/10/2026).
+            subscription.reset()
             // Le serveur a oublié le jeton avec la session ; l'app oublie la
             // session à qui elle l'avait remis.
             push?.disconnect()
@@ -488,6 +555,11 @@ public struct RootView: View {
         switch link {
         case .paywall:
             showsNotificationPaywall = true
+        case .subscription:
+            // Déjà marqué à l'arrivée du lien ; redit ici pour un lien posé
+            // par un autre chemin que `pendingLink`.
+            tripEndRemindedDay = TripEndReminder.today()
+            managesSubscriptionFromNotification = true
         case .newTrip:
             path = [.tripCreation]
         case .chat(let tripId), .wallet(let tripId), .bookPreview(let tripId):

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   planNotifications,
+  planTripEndEmail,
   selectNotifications,
   type PlannedNotification,
   type PlannerAccount,
@@ -29,7 +30,6 @@ function trip(overrides: Partial<PlannerTrip> = {}): PlannerTrip {
     lastStoryOn: "2026-10-03",
     isOwner: true,
     hasOrder: false,
-    paidCents: 0,
     estimateCents: 4290,
     memberCount: 1,
     newFromOthers: null,
@@ -44,12 +44,9 @@ function account(overrides: Partial<PlannerAccount> = {}): PlannerAccount {
     id: "camille",
     birthDate: null,
     schoolCalendar: null,
-    offeredSteps: 3,
-    remainingSteps: 3,
-    stepsExhaustedOn: null,
-    isSubscribed: false,
     renewsAtApple: false,
-    stopsAutomatically: false,
+    renewsOn: null,
+    hasEmail: true,
     usedRecently: false,
     trips: [trip()],
     deliveries: [],
@@ -78,67 +75,54 @@ const winter = (["A", "B", "C"] as const).map(
   }),
 );
 
-describe("la fin des 3 étapes offertes", () => {
-  const exhausted = { remainingSteps: 0, stepsExhaustedOn: "2026-10-04" };
-
-  it("part le lendemain de la dernière étape, une fois, et parle d'étapes", () => {
-    const camille = account(exhausted);
-
-    expect(kinds(planNotifications(camille, [], "2026-10-04"))).not.toContain("trial_end");
-    const due = planNotifications(camille, [], "2026-10-05").find((n) => n.kind === "trial_end");
-    expect(due).toMatchObject({ dedupeKey: "camille:trial_end:once", link: "memobook://paywall" });
-    expect(due?.title).toBe("Tes 3 étapes offertes sont racontées");
-    expect(due?.body).toContain("1,99");
-    // La déduction des semaines payées est en pause (02/10/2026) : rien ne
-    // la promet tant que rien ne la fait.
-    expect(due?.body).not.toContain("dédui");
-    expect(`${due?.title} ${due?.body}`).not.toMatch(/jours?\b/);
-  });
-
-  it("ne rattrape pas un compte épuisé depuis plus d'une semaine", () => {
-    expect(kinds(planNotifications(account(exhausted), [], "2026-10-11"))).toContain("trial_end");
-    expect(kinds(planNotifications(account(exhausted), [], "2026-10-12"))).not.toContain("trial_end");
-  });
-
-  it("ne part ni tant qu'il reste une étape, ni pour un abonné, ni pour un compte sans quota", () => {
-    const on = (overrides: Partial<PlannerAccount>) =>
-      kinds(planNotifications(account({ ...exhausted, ...overrides }), [], "2026-10-05"));
-    expect(on({ remainingSteps: 1 })).not.toContain("trial_end");
-    expect(on({ isSubscribed: true })).not.toContain("trial_end");
-    expect(on({ remainingSteps: null, offeredSteps: null })).not.toContain("trial_end");
-    expect(on({ stepsExhaustedOn: null })).not.toContain("trial_end");
-  });
-});
+/** Un abonnement App Store qui se renouvellera le 1er novembre. */
+const armed = { renewsAtApple: true, renewsOn: "2026-11-01" };
 
 describe("la fin du voyage", () => {
   it("part le jour de la date de fin, vers la cagnotte du voyage, avec l'estimation du carnet", () => {
-    const camille = account({ stopsAutomatically: true, trips: [trip({ paidCents: 597 })] });
-    const due = planNotifications(camille, [], "2026-10-12").find((n) => n.kind === "trip_end");
+    const due = planNotifications(account(), [], "2026-10-12").find((n) => n.kind === "trip_end");
 
     expect(due).toMatchObject({ link: "memobook://trips/rome/wallet", memoId: "rome", family: "billing" });
     expect(due?.title).toBe("Ton voyage à Rome se termine aujourd’hui");
-    expect(due?.body).toContain("Ton abonnement s’arrête automatiquement.");
-    expect(due?.body).toMatch(/Ton carnet est estimé à 42,90\s€/);
-    // Les semaines déjà payées ne sont pas déduites tant que la déduction est
-    // en pause : la notification ne le promet pas.
+    expect(due?.body).toMatch(/^Ton carnet est estimé à 42,90\s€\. Il n’attend plus que ta commande\.$/);
+    // Sans abonnement, rien à couper — et plus rien n'est déduit du carnet.
+    expect(due?.body).not.toContain("abonnement");
     expect(due?.body).not.toContain("dédui");
   });
 
-  it("n'écrit pas « arrêté automatiquement » à un abonné App Store : il l'invite à le couper", () => {
+  it("invite doucement l'abonné App Store à couper son abonnement, et dit jusqu'à quand il garde l'illimité", () => {
+    const due = planNotifications(account(armed), [], "2026-10-12").find((n) => n.kind === "trip_end");
+
+    expect(due?.body).toMatch(
+      /^Ton abonnement ne te sert plus d’ici ton prochain voyage \? Coupe-le en un geste depuis l’accueil, tu gardes l’illimité jusqu’au 1er novembre\. Ton carnet est estimé à 42,90\s€\./,
+    );
+    // Plus aucun abonnement ne s'arrête seul (03/10/2026).
+    expect(due?.body).not.toContain("automatiquement");
+  });
+
+  it("nomme la fin de la période payée sans la chiffrer, tant qu'Apple ne l'a pas datée", () => {
     const due = planNotifications(account({ renewsAtApple: true }), [], "2026-10-12").find(
       (n) => n.kind === "trip_end",
     );
-    expect(due?.body).not.toContain("automatiquement");
-    expect(due?.body).toContain("coupe-le en un geste");
+    expect(due?.body).toContain("tu gardes l’illimité jusqu’à la fin de la période payée.");
   });
 
-  it("ne parle pas de l'abonnement quand un autre voyage le fait encore courir", () => {
+  it("ne parle pas de l'abonnement quand un autre voyage le fait encore servir", () => {
     const camille = account({
-      stopsAutomatically: true,
+      ...armed,
       trips: [trip(), trip({ id: "lisbonne", startsOn: "2026-11-02", endsOn: "2026-11-09" })],
     });
     const due = planNotifications(camille, [], "2026-10-12").find((n) => n.kind === "trip_end");
     expect(due?.body).not.toContain("abonnement");
+  });
+
+  it("part pour un carnet vide s'il y a un abonnement à couper, et se tait sinon", () => {
+    const empty = { trips: [trip({ storyCount: 0, lastStoryOn: null })] };
+    const due = planNotifications(account({ ...armed, ...empty }), [], "2026-10-12").find((n) => n.kind === "trip_end");
+    expect(due?.body).toBe(
+      "Ton abonnement ne te sert plus d’ici ton prochain voyage ? Coupe-le en un geste depuis l’accueil, tu gardes l’illimité jusqu’au 1er novembre.",
+    );
+    expect(kinds(planNotifications(account(empty), [], "2026-10-12"))).not.toContain("trip_end");
   });
 
   it("se tait si l'alerte de fin de voyage est coupée, ou le voyage muet", () => {
@@ -148,6 +132,179 @@ describe("la fin du voyage", () => {
     expect(
       kinds(planNotifications(account({ trips: [trip({ notificationsEnabled: false })] }), [], "2026-10-12")),
     ).not.toContain("trip_end");
+  });
+});
+
+describe("le rappel avant le renouvellement", () => {
+  // Rome a fini le 12 ; l'abonnement se renouvelle le 20.
+  const renewing = { renewsAtApple: true, renewsOn: "2026-10-20" };
+  const reminderOn = (overrides: Partial<PlannerAccount>, date: string) =>
+    planNotifications(account({ ...renewing, ...overrides }), [], date).find((n) => n.kind === "renewal_reminder");
+
+  it("part trois jours avant, une fois par période, vers la feuille de l'abonnement", () => {
+    expect(reminderOn({}, "2026-10-17")).toMatchObject({
+      dedupeKey: "camille:renewal_reminder:2026-10-20",
+      link: "memobook://subscription",
+      memoId: null,
+      family: "billing",
+      earliestHour: 10,
+      title: "Ton abonnement se renouvelle dans 3 jours",
+      body: "Pas de voyage en cours : si tu n’en as plus besoin, coupe-le en un geste. Tu gardes l’illimité jusqu’au 20 octobre.",
+    });
+  });
+
+  it("rattrape une passe manquée deux jours avant, jamais la veille : Apple veut vingt-quatre heures", () => {
+    const twoDaysBefore = reminderOn({}, "2026-10-18");
+    expect(twoDaysBefore?.title).toBe("Ton abonnement se renouvelle dans 2 jours");
+    // La même clé : s'il est parti à J-3, il ne repart pas à J-2.
+    expect(twoDaysBefore?.dedupeKey).toBe("camille:renewal_reminder:2026-10-20");
+    expect(reminderOn({}, "2026-10-19")).toBeUndefined();
+    expect(reminderOn({}, "2026-10-16")).toBeUndefined();
+  });
+
+  it("se tait quand un voyage court, ou commence avant le renouvellement — le jour même compris", () => {
+    const running = { trips: [trip({ endsOn: "2026-10-18" })] };
+    expect(reminderOn(running, "2026-10-17")).toBeUndefined();
+
+    const next = (startsOn: string) => ({
+      trips: [trip(), trip({ id: "lisbonne", startsOn, endsOn: "2026-10-27" })],
+    });
+    expect(reminderOn(next("2026-10-20"), "2026-10-17")).toBeUndefined();
+    expect(reminderOn(next("2026-10-21"), "2026-10-17")).toBeDefined();
+  });
+
+  it("se tait quand la fin d'un voyage vient de le dire", () => {
+    const told = (sentOn: string): Partial<PlannerAccount> => ({
+      deliveries: [{ kind: "trip_end", dedupeKey: "camille:trip_end:rome", sentOn, opened: false }],
+    });
+    expect(reminderOn(told("2026-10-15"), "2026-10-17")).toBeUndefined();
+    expect(reminderOn(told("2026-10-14"), "2026-10-17")).toBeDefined();
+  });
+
+  // R51 (03/10/2026) : l'e-mail de fin de voyage n'est pas dans le journal que
+  // lit le planificateur. Notification de fin coupée, le rappel tombait le
+  // jour même de l'e-mail.
+  it("se tait les jours de l'e-mail de fin de voyage, même quand la notification de fin est coupée", () => {
+    // Rome finit le 3 novembre, alerte de fin coupée ; renouvellement le 7.
+    const ended = { renewsOn: "2026-11-07", trips: [trip({ endsOn: "2026-11-03", notifyTripEnd: false })] };
+    expect(kinds(planNotifications(account({ ...renewing, ...ended }), [], "2026-11-03"))).not.toContain("trip_end");
+    expect(planTripEndEmail(account({ ...renewing, ...ended }), "2026-11-04", 10)?.trip.id).toBe("rome");
+    expect(reminderOn(ended, "2026-11-04")).toBeUndefined();
+    expect(reminderOn(ended, "2026-11-05")).toBeUndefined();
+
+    // Quatre jours après la fin, l'e-mail ne part plus : le rappel reprend.
+    expect(reminderOn({ ...ended, renewsOn: "2026-11-10" }, "2026-11-07")).toBeDefined();
+
+    // Un voyage qui s'annonce après le renouvellement : pas d'e-mail, et le
+    // rappel est seul à parler.
+    const next = {
+      ...ended,
+      trips: [...ended.trips, trip({ id: "lisbonne", startsOn: "2026-11-08", endsOn: "2026-11-15" })],
+    };
+    expect(planTripEndEmail(account({ ...renewing, ...next }), "2026-11-04", 10)).toBeNull();
+    expect(reminderOn(next, "2026-11-04")).toBeDefined();
+  });
+
+  // S08 (03/10/2026) : un compte entré par Apple sans adresse certifiée ne
+  // reçoit jamais l'e-mail — le rappel ne se tait pas pour lui.
+  it("parle quand même les jours de l'e-mail à un compte sans adresse, qui ne le recevra pas", () => {
+    // Rome finit le 3 novembre, alerte de fin coupée ; renouvellement le 7.
+    const silent = {
+      hasEmail: false,
+      renewsOn: "2026-11-07",
+      trips: [trip({ endsOn: "2026-11-03", notifyTripEnd: false })],
+    };
+    expect(planTripEndEmail(account({ ...renewing, ...silent }), "2026-11-04", 10)).toBeNull();
+    expect(reminderOn(silent, "2026-11-04")).toMatchObject({
+      dedupeKey: "camille:renewal_reminder:2026-11-07",
+      title: "Ton abonnement se renouvelle dans 3 jours",
+    });
+  });
+
+  // R52 (03/10/2026) : l'ancien abonnement à la semaine, encore honoré, se
+  // renouvelle tous les sept jours — un rappel par période en ferait un par
+  // semaine, et ce jour-là rien d'autre ne partirait.
+  describe("espacé de quatre semaines", () => {
+    const sent = (sentOn: string, renewsOn: string): PlannerDelivery => ({
+      kind: "renewal_reminder",
+      dedupeKey: `camille:renewal_reminder:${renewsOn}`,
+      sentOn,
+      opened: false,
+    });
+
+    it("n'en envoie qu'un toutes les quatre semaines à l'ancien abonnement à la semaine", () => {
+      expect(reminderOn({}, "2026-10-17")).toBeDefined();
+      const deliveries = [sent("2026-10-17", "2026-10-20")];
+      for (const [renewsOn, today] of [
+        ["2026-10-27", "2026-10-24"],
+        ["2026-11-03", "2026-10-31"],
+        ["2026-11-10", "2026-11-07"],
+      ] as const) {
+        expect(reminderOn({ renewsOn, deliveries }, today), renewsOn).toBeUndefined();
+      }
+      expect(reminderOn({ renewsOn: "2026-11-17", deliveries }, "2026-11-14")).toBeDefined();
+    });
+
+    it("n'en fait perdre aucun à l'abonnement mensuel, même rattrapé à J-2 en février", () => {
+      // Rattrapé le 26 février pour le 28, puis le 25 mars pour le 28 : 27 jours.
+      const deliveries = [sent("2027-02-26", "2027-02-28")];
+      expect(reminderOn({ renewsOn: "2027-03-28", deliveries }, "2027-03-25")).toBeDefined();
+    });
+  });
+
+  it("ne vise qu'un abonnement App Store armé et daté, et passe à tous les rythmes", () => {
+    expect(reminderOn({ renewsAtApple: false, renewsOn: null }, "2026-10-17")).toBeUndefined();
+    expect(reminderOn({ renewsOn: null }, "2026-10-17")).toBeUndefined();
+    // La question du rythme passée : le palier léger reçoit la facturation.
+    expect(reminderOn({ trips: [trip({ narrationPace: null })] }, "2026-10-17")).toBeDefined();
+  });
+});
+
+describe("l'e-mail de fin de voyage", () => {
+  it("part le lendemain de la fin, entre 10 h et 21 h, une fois par voyage", () => {
+    const camille = account(armed);
+
+    expect(planTripEndEmail(camille, "2026-10-12", 10)).toBeNull();
+    expect(planTripEndEmail(camille, "2026-10-13", 10)).toEqual({
+      kind: "trip_end_email",
+      dedupeKey: "camille:trip_end_email:rome",
+      trip: camille.trips[0],
+    });
+    expect(planTripEndEmail(camille, "2026-10-13", 9)).toBeNull();
+    expect(planTripEndEmail(camille, "2026-10-13", 21)).toBeNull();
+  });
+
+  it("rattrape une passe manquée jusqu'à J+3, pas au-delà", () => {
+    expect(planTripEndEmail(account(armed), "2026-10-15", 12)?.trip.id).toBe("rome");
+    expect(planTripEndEmail(account(armed), "2026-10-16", 12)).toBeNull();
+  });
+
+  it("ne vise qu'un abonnement App Store qui va se renouveler", () => {
+    expect(planTripEndEmail(account(), "2026-10-13", 10)).toBeNull();
+  });
+
+  it("ne vise qu'un compte qui a une adresse", () => {
+    expect(planTripEndEmail(account({ ...armed, hasEmail: false }), "2026-10-13", 10)).toBeNull();
+  });
+
+  it("se tait tant qu'un voyage court ou s'annonce : l'abonnement sert encore", () => {
+    const next = account({ ...armed, trips: [trip(), trip({ id: "lisbonne", startsOn: "2026-11-02", endsOn: "2026-11-09" })] });
+    expect(planTripEndEmail(next, "2026-10-13", 10)).toBeNull();
+
+    const undated = (storedStage: PlannerTrip["storedStage"]) =>
+      account({ ...armed, trips: [trip(), trip({ id: "sans-date", startsOn: null, endsOn: null, storedStage })] });
+    expect(planTripEndEmail(undated("ongoing"), "2026-10-13", 10)).toBeNull();
+    expect(planTripEndEmail(undated("past"), "2026-10-13", 10)?.trip.id).toBe("rome");
+  });
+
+  it("ne dépend pas des alertes du voyage : c'est la promesse du paywall, pas une relance", () => {
+    const muted = account({ ...armed, trips: [trip({ notificationsEnabled: false, notifyTripEnd: false })] });
+    expect(planTripEndEmail(muted, "2026-10-13", 10)?.trip.id).toBe("rome");
+  });
+
+  it("ne parle que du voyage fini le plus récemment, s'il y en a deux", () => {
+    const two = account({ ...armed, trips: [trip({ id: "naples", endsOn: "2026-10-11" }), trip()] });
+    expect(planTripEndEmail(two, "2026-10-13", 10)?.dedupeKey).toBe("camille:trip_end_email:rome");
   });
 });
 
@@ -439,9 +596,17 @@ describe("les règles anti-saturation", () => {
   it("fait passer la facturation, seule, un jour où elle parle", () => {
     expect(kinds(selectNotifications([birthday, tripEnd], [], "2026-10-21", 10))).toEqual(["trip_end"]);
     const billedThisMorning: PlannerDelivery[] = [
-      { kind: "trial_end", dedupeKey: "x", sentOn: "2026-10-21", opened: false },
+      { kind: "renewal_reminder", dedupeKey: "x", sentOn: "2026-10-21", opened: false },
     ];
     expect(selectNotifications([birthday], billedThisMorning, "2026-10-21", 15)).toEqual([]);
+  });
+
+  it("laisse partir ensemble deux notifications de facturation du même jour", () => {
+    const reminder = candidate("renewal_reminder", 90, "billing");
+    expect(kinds(selectNotifications([birthday, reminder, tripEnd], [], "2026-10-21", 10))).toEqual([
+      "renewal_reminder",
+      "trip_end",
+    ]);
   });
 
   it("ne laisse partir qu'une notification de vacances par semaine glissante", () => {

@@ -39,11 +39,11 @@
                 .fixedSize(horizontal: false, vertical: true)
 
                 FlowLayout(spacing: MemoBookSpacing.xs) {
-                    action("+ 1,99 € · abonnement") {
-                        await model.debugContribute(1.99, from: "Abonnement MB", kind: .topup)
-                    }
-                    action("+ 9,95 € · 5 semaines") {
-                        await model.debugContribute(9.95, from: "Abonnement MB", kind: .topup)
+                    // Une recharge par carte, comme celle que le serveur écrit
+                    // au retour de Stripe. L'abonnement, lui, ne verse plus
+                    // rien dans la cagnotte (Hugo, 03/10/2026).
+                    action("+ 10 € · recharge") {
+                        await model.debugContribute(10, from: "Recharge de la cagnotte", kind: .topup)
                     }
 
                     action("+ 10 € · Marie D.") {

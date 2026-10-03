@@ -86,9 +86,10 @@ public final class AppDependencies {
         self.paymentMethods = paymentMethods ?? StripeCustomerSheetPresenter()
         // Tout ce qu'on dit part par la file, et la file parle à la
         // conversation (`POST /v1/trips/:id/chat`) : le vocal de l'accueil est
-        // un tour comme un autre, avec l'identifiant de sa bulle. La durée
-        // voyage avec (`PendingTurn.duration`), donc un vocal parti trois
-        // jours plus tard décompte la même chose.
+        // un tour comme un autre, avec l'identifiant de sa bulle. Le serveur
+        // relit la durée dans le fichier et la décompte du crédit du jour où
+        // le tour **arrive** ; un refus faute de crédit le garde sur le disque
+        // jusqu'à la recharge (03/10/2026).
         //
         // Les voyages créés hors ligne passent par elle aussi, et **avant** ce
         // qu'on y raconte : la création se rejoue sur l'identifiant que l'app
@@ -152,6 +153,7 @@ public final class AppDependencies {
         let token = UUID(uuidString: accountId)
         return SubscriptionPurchase(
             displayPrice: { [subscriptions] in await subscriptions.displayPrice() },
+            displayPeriod: { [subscriptions] in await subscriptions.displayPeriod() },
             purchase: { [subscriptions, api] memoId in
                 await subscriptions.purchase(
                     appAccountToken: token,
@@ -161,7 +163,10 @@ public final class AppDependencies {
             restore: { [subscriptions, api] in
                 try await subscriptions.restore(deliver: Self.deliveringTransaction(to: api, memoId: nil))
             },
-            willAutoRenew: { [subscriptions] in await subscriptions.willAutoRenew() }
+            willAutoRenew: { [subscriptions] in await subscriptions.willAutoRenew() },
+            deliverUnfinished: { [subscriptions, api] in
+                await subscriptions.deliverUnfinished(deliver: Self.deliveringTransaction(to: api, memoId: nil))
+            }
         )
     }
 
@@ -179,6 +184,12 @@ public final class AppDependencies {
     /// serait le seul geste irréversible du lot.
     public func forgetAccountContent() async {
         await content.clearAll()
+        // Le dernier crédit du jour que chaque conversation a lu porte
+        // l'abonnement de ce compte : il ne suit pas le prochain. Ici, et donc
+        // juste avant `SubscriptionSession.reset()` — déconnexion, session
+        // refusée (`RootView`) — et à une session refusée au lancement
+        // (``restoreSession()``).
+        ChatModel.forgetRememberedCredits()
         // Les voyages créés hors ligne restent sur le disque, comme les
         // vocaux : ils ne se montrent plus, et ne partent plus, tant que leur
         // compte n'est pas revenu.
@@ -196,7 +207,10 @@ public final class AppDependencies {
             isStillStored: { [api] in await api.hasStoredSession() },
             remembered: { [content] in await content.read(.account, as: Account.self) }
         )
-        if restore == .closed { await content.clearAll() }
+        if restore == .closed {
+            await content.clearAll()
+            ChatModel.forgetRememberedCredits()
+        }
         return restore
     }
 
@@ -424,22 +438,36 @@ public final class AppDependencies {
         }
         transport.waiting = { [outbox] in await outbox.waiting(for: tripId) }
         transport.deliveries = { [outbox] in await outbox.turnDeliveries() }
+        // « Supprimer », sous une bulle qui attend l'illimité : le tour quitte
+        // la file, fiche et fichiers.
+        transport.discard = { [outbox] id in await outbox.discardTurn(id: id) }
         // Sans réseau, ou pour un voyage que le serveur n'a pas encore reçu :
         // un fil **local** — l'accueil de MEMO, et ce qui attend d'être envoyé.
         // Pas une copie de l'ancien fil : un fil périmé se lit comme un message
         // perdu (`ios/CLAUDE.md`, « Le cache local »).
         transport.offlineThread = { [outbox, content] error in
-            let traveller = await content.read(.home, as: HomeFeed.self)?.traveller
+            let home = await content.read(.home, as: HomeFeed.self)
+            let traveller = home?.traveller
             if let waiting = await outbox.localTrip(tripId) {
-                return .offline(trip: waiting.trip, traveller: traveller, isNew: true)
+                // Un voyage neuf a son pot plein : le fil compte dès le premier
+                // vocal dicté dans l'avion, illimité si l'accueil gardé dit que
+                // le compte l'est (03/10/2026).
+                let trip = RecordingOutbox.withFreshCredit(waiting.trip, isUnlimited: traveller?.isUnlimited ?? false)
+                return .offline(trip: trip, traveller: traveller, isNew: true)
             }
             guard (error as? APIError)?.isTransport == true else { return nil }
             // Le titre du voyage, depuis ce qu'on en a gardé : l'écran du
-            // voyage, à défaut l'accueil.
-            var known = await content.read(.trip(tripId), as: TripDetail.self)?.trip
-            if known == nil {
-                known = await content.read(.home, as: HomeFeed.self)?.trips.first { $0.id == tripId }
-            }
+            // voyage, à défaut l'accueil. **Le crédit du jour, le plus avancé
+            // des deux** (``DailyCredit/merged(with:)``, 03/10/2026) : le
+            // serveur sert le crédit d'un voyage en cours sur l'un comme sur
+            // l'autre, et chacun date de sa dernière lecture. Le premier trouvé
+            // gagnait — celui de l'écran du voyage, souvent le plus vieux : lu
+            // le matin à 5:00, il passait devant l'accueil relu après un vocal
+            // de 4 minutes.
+            let homeTrip = home?.trips.first { $0.id == tripId }
+            var known = await content.read(.trip(tripId), as: TripDetail.self)?.trip ?? homeTrip
+            let detailCredit = known?.dailyCredit
+            known?.dailyCredit = detailCredit.map { $0.merged(with: homeTrip?.dailyCredit) } ?? homeTrip?.dailyCredit
             return .offline(
                 trip: known ?? Trip(id: tripId, title: TripDraft.untitled, stage: .ongoing),
                 traveller: traveller,
@@ -503,10 +531,6 @@ public final class AppDependencies {
             // l'ouverture. Propriétaire seul — il refuse (403) à un co-voyageur,
             // et l'écran l'a déjà dit en pâlissant le lien.
             clearConversation: { [api] id in try await api.clearChat(tripId: id) },
-            // Les limites de souvenirs : le seul « achat » que cet écran porte.
-            setMemoryPlan: { [api] id, plan in
-                try await api.setMemoryPlan(tripId: id, plan: plan)
-            },
             cached: { [content] in
                 await content.read(.tripSettings(tripId), as: TripSettings.self)
             },
@@ -717,12 +741,6 @@ extension EnvironmentValues {
     /// La feuille « Moyens de paiement » de Stripe, pour le profil — posée par
     /// `RootView`. `nil` en aperçu, où la ligne ne fait rien.
     @Entry public var managePaymentMethods: (@MainActor () async -> String?)?
-
-    /// La cagnotte d'un voyage, pour le paywall — qui n'a pas accès aux
-    /// dépendances non plus. C'est elle qui porte l'estimation du carnet
-    /// (`GET /v1/wallet?tripId=…`, T127). `nil` en aperçu : la feuille
-    /// « Estimation » garde alors les chiffres de la maquette.
-    @Entry public var walletSource: (@MainActor (String?) async throws -> Wallet)?
 
     /// Le support de la session, pour un écran qui doit l'ouvrir **par-dessus
     /// lui** au lieu de le faire pousser par ``RootView``.

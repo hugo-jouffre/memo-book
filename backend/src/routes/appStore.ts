@@ -5,7 +5,7 @@ import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
 import { AppStoreVerificationError, type AppStoreNotification } from "../services/appStore.js";
 import { applyStoreKitTransaction } from "../services/appStoreSubscriptions.js";
-import { APP_STORE_PRODUCT_IDS } from "../services/subscriptionCatalog.js";
+import { isAcceptedAppStoreProduct } from "../services/subscriptionCatalog.js";
 import { readProfile } from "./profile.js";
 
 /**
@@ -14,7 +14,8 @@ import { readProfile } from "./profile.js";
  * Deux routes, et ce n'est pas un doublon : **l'app** dit ce qu'elle vient
  * d'acheter, pour que le micro s'ouvre tout de suite ; **Apple** dit tout le
  * reste, y compris ce qui se passe quand l'app est fermée. L'une sans l'autre
- * laisserait soit attendre après avoir payé, soit raconter après avoir résilié.
+ * laisserait soit attendre après avoir payé, soit raconter sans limite après
+ * avoir résilié.
  */
 
 const purchaseBody = z.object({
@@ -30,7 +31,8 @@ const notificationBody = z.object({ signedPayload: z.string().min(1) });
 export function registerAppStoreRoutes(app: FastifyInstance, context: AppContext): void {
   /**
    * L'app vient d'acheter, de restaurer, ou retrouve au lancement une
-   * transaction qu'elle n'a pas encore finie.
+   * transaction qu'elle n'a pas encore finie. Le récit devient illimité dans
+   * la seconde, sans attendre Apple.
    *
    * ⚠️ **L'app ne finit la transaction (`transaction.finish()`) qu'après un 2xx
    * d'ici.** Tant qu'elle ne l'a pas fait, StoreKit la lui rend à chaque
@@ -132,9 +134,11 @@ async function handleNotification(
     return;
   }
 
-  // Un autre produit — l'extension des limites, un jour — n'ouvre pas
-  // l'abonnement. On l'acquitte sans rien en faire tant qu'il n'a pas sa route.
-  if (transaction.productId !== APP_STORE_PRODUCT_IDS.weeklySubscription) {
+  // Un produit que le catalogue ne connaît pas n'ouvre pas l'abonnement : on
+  // l'acquitte sans rien en faire. Le mensuel **et l'ancien hebdomadaire**
+  // passent — les renouvellements, expirations et remboursements d'un abonné
+  // de la semaine doivent continuer d'écrire sa ligne (03/10/2026).
+  if (!isAcceptedAppStoreProduct(transaction.productId)) {
     log.info({ productId: transaction.productId }, "Produit App Store non traité, ignoré.");
     return;
   }

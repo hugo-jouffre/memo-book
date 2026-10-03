@@ -24,6 +24,18 @@ import Observation
 /// le serveur ne connaît pas encore serait refusé (404) et perdu. Voir
 /// ``saveTrip(_:)``.
 ///
+/// **Et le crédit du jour** (Hugo, 03/10/2026) : un `429
+/// daily_credit_exhausted` n'est pas un refus définitif. Le tour reste sur le
+/// disque, marqué « attend le crédit » jusqu'à l'heure où il se recharge
+/// (``PendingTurn/waitingForCreditUntil``), puis repart tout seul ; sa bulle
+/// dit « Partira demain » (``ChatDelivery/waitingForCredit(until:)``). Un tour
+/// qui coûte **plus qu'une journée entière** — ou que le serveur refuse en
+/// `daily_credit_too_long` — n'attend pas demain, qui ne changerait rien : il
+/// attend l'illimité (``PendingTurn/waitingForUnlimited``). Et tout ce qui est
+/// retenu repart dès que le compte passe en illimité
+/// (``releaseCreditHolds()``) — ou se supprime, si la personne le demande
+/// depuis sa bulle (``discardTurn(id:)``).
+///
 /// Elle tient trois choses, et rien d'autre :
 ///
 /// 1. **l'état du réseau** (``Connectivity``), pour savoir s'il faut essayer ;
@@ -50,6 +62,14 @@ public final class RecordingOutbox {
         case delivered(ChatTurnReceipt?)
         /// Il attend le réseau, sur le disque. Ce n'est **pas** un échec : la
         /// boîte d'information de l'accueil le dit, il n'y a rien à faire.
+        ///
+        /// C'est aussi ce que rend un tour que le serveur a refusé **faute de
+        /// crédit du jour** : il attend sur le disque, comme sous un tunnel,
+        /// seulement plus longtemps — jusqu'à minuit, ou jusqu'à l'illimité
+        /// s'il est plus long qu'une journée. La différence voyage par
+        /// ``turnDeliveries()`` (``ChatDelivery/waitingForCredit(until:)``,
+        /// ``ChatDelivery/waitingForUnlimited``) — un cas de plus ici aurait
+        /// obligé chaque appelant à le traiter pour faire la même chose.
         case queued
         /// Le serveur a dit non, et le redire ne changerait rien.
         case rejected(String)
@@ -59,8 +79,19 @@ public final class RecordingOutbox {
     /// pas parlé, on n'affiche pas « hors ligne » à quelqu'un qui ne l'est pas.
     public private(set) var isOnline = true
 
-    /// Combien de tours attendent sur le disque.
+    /// Combien de tours attendent **le réseau** sur le disque.
     public private(set) var pending = 0
+
+    /// Combien de tours attendent **le crédit de demain** sur le disque — voir
+    /// ``PendingTurn/waitingForCreditUntil``. Comptés à part de ``pending`` :
+    /// la boîte de l'accueil promet de les envoyer « dès la reconnexion », et
+    /// eux partiront à minuit, réseau ou pas.
+    public private(set) var waitingForCredit = 0
+
+    /// Combien de tours attendent **l'illimité** sur le disque — voir
+    /// ``PendingTurn/waitingForUnlimited``. Ni le réseau ni minuit ne les
+    /// feront partir : comptés à part, eux aussi.
+    public private(set) var waitingForUnlimited = 0
 
     /// Combien de tours sont en train de partir. Zéro quand rien n'est en vol.
     public private(set) var sending = 0
@@ -91,10 +122,18 @@ public final class RecordingOutbox {
     public private(set) var lastDelivery: ChatTurnDelivery?
 
     /// Un refus définitif, tel que la conversation le reçoit : le libellé est
-    /// déjà écrit pour l'utilisateur.
+    /// déjà écrit pour l'utilisateur, le code du serveur suit quand il y en a
+    /// un — l'écran peut ainsi distinguer un refus d'un autre sans relire la
+    /// phrase.
     public struct Rejection: LocalizedError, Sendable, Hashable {
         public let message: String
+        public var code: String? = nil
         public var errorDescription: String? { message }
+
+        public init(message: String, code: String? = nil) {
+            self.message = message
+            self.code = code
+        }
     }
 
     private let store: PendingRecordingStore
@@ -127,6 +166,11 @@ public final class RecordingOutbox {
     private var monitor: Task<Void, Never>?
     private var flushing: Task<Void, Never>?
     private var confirmation: Task<Void, Never>?
+
+    /// Le réveil des tours qui attendent le crédit du jour : une tâche qui
+    /// dort jusqu'à la plus proche recharge, puis vide la file. Une seule à la
+    /// fois — voir ``scheduleCreditWake()``.
+    private var creditWake: Task<Void, Never>?
 
     /// Ce que dit le moniteur, avant que le bac à sable ne s'en mêle.
     private var networkIsUp = true
@@ -172,8 +216,11 @@ public final class RecordingOutbox {
         // `self` est retenu volontairement : cette boucle ne s'arrête pas, et
         // l'objet vit aussi longtemps que l'app.
         monitor = Task {
-            pending = await store.count()
+            await refreshCounts()
             storedTrips = await trips.all()
+            // Un tour mis de côté hier soir faute de crédit repart à l'heure
+            // dite, même si l'app a été relancée entre-temps.
+            await scheduleCreditWake()
 
             var isFirstPath = true
             for await isUp in connectivity.updates() {
@@ -214,10 +261,14 @@ public final class RecordingOutbox {
     /// ni l'autre. Il commence par le dernier connu : un écran ouvert après
     /// l'arrivée du vocal de l'accueil ne l'attend pas pour rien. Le flux
     /// s'arrête quand la tâche qui le lit s'arrête.
+    ///
+    /// Ce premier mot est **marqué rejoué** (``ChatTurnDelivery/isReplay``) :
+    /// il vit autant que l'app, et son reçu peut dater du matin — le fil qui
+    /// vient de lire un crédit plus frais ne doit pas le reprendre.
     public func turnDeliveries() -> AsyncStream<ChatTurnDelivery> {
         AsyncStream { continuation in
             let key = UUID()
-            if let lastDelivery { continuation.yield(lastDelivery) }
+            if let lastDelivery { continuation.yield(lastDelivery.replayed) }
             listeners[key] = continuation
             continuation.onTermination = { [weak self] _ in
                 Task { @MainActor [weak self] in self?.listeners[key] = nil }
@@ -259,6 +310,23 @@ public final class RecordingOutbox {
             return .delivered(receipt)
         case .deferred:
             return await queue(turn, for: tripId)
+        case .waitingForCredit(let until, let credit):
+            // Pas un refus : le tour attend sur le disque, marqué, et sa bulle
+            // dit « Partira demain ». Le disque qui refuse, lui, reste le seul
+            // cas où il se perdrait — et ``queue`` le dit.
+            let delivery = await queue(turn, for: tripId, waitingForCreditUntil: until)
+            if delivery == .queued {
+                publish(ChatTurnDelivery(id: turn.id, tripId: tripId, state: .waitingForCredit(until: until), credit: credit))
+            }
+            return delivery
+        case .waitingForUnlimited(let credit):
+            // Plus long qu'une journée : gardé, marqué, et sa bulle propose
+            // l'illimité au lieu de promettre demain.
+            let delivery = await queue(turn, for: tripId, waitingForUnlimited: true)
+            if delivery == .queued {
+                publish(ChatTurnDelivery(id: turn.id, tripId: tripId, state: .waitingForUnlimited, credit: credit))
+            }
+            return delivery
         case .rejected(let reason):
             let message = Self.message(for: turn, reason: reason)
             rejection = message
@@ -328,14 +396,26 @@ public final class RecordingOutbox {
         await drainTrips()
         guard isOnline else { return }
 
-        let waiting = await store.all()
-        pending = waiting.count
+        // Ce qui attend le crédit de demain reste de côté jusqu'à l'heure dite,
+        // ce qui attend l'illimité jusqu'à l'abonnement : le renvoyer
+        // maintenant, c'est le même refus — et une requête de plus à chaque
+        // retour dans l'app.
+        let now = Date.now
+        let waiting = await store.all().filter { !$0.isOnHold(at: now) }
+        await refreshCounts()
         guard !waiting.isEmpty else { return }
 
         sending += waiting.count
         defer { sending -= waiting.count }
 
         var delivered = 0
+
+        /// Les voyages refusés faute de crédit pendant ce vidage, avec l'heure
+        /// de la recharge et le solde que le serveur a rendu. Leurs tours
+        /// suivants ne partent que s'ils tiennent dans ce reste — une puce, des
+        /// photos, un texte assez court ; les autres sont marqués « Partira
+        /// demain » tout de suite, sans un aller-retour pour le même refus.
+        var heldTrips: [String: (until: Date, credit: DailyCredit?)] = [:]
 
         for record in waiting {
             guard isOnline else { break }
@@ -351,11 +431,68 @@ public final class RecordingOutbox {
                 continue
             }
 
+            // Le voyage vient d'être refusé, et ce tour-ci coûte plus qu'une
+            // journée entière : demain ne le ferait pas passer non plus. Il
+            // attend l'illimité tout de suite, comme si le serveur l'avait dit
+            // — annoncé « Partira demain », il l'aurait été toute la journée
+            // avant d'être reconnu trop long au renvoi de minuit (03/10/2026).
+            if let held = heldTrips[record.tripId], turn.exceedsAWholeDay(in: held.credit ?? DailyCredit()) {
+                var marked = record
+                marked.waitingForCreditUntil = nil
+                marked.waitingForUnlimited = true
+                try? await store.update(marked)
+                publish(
+                    ChatTurnDelivery(id: record.id, tripId: record.tripId, state: .waitingForUnlimited, credit: held.credit)
+                )
+                continue
+            }
+
+            // Le voyage vient d'être refusé : ce tour-ci tient-il encore dans
+            // ce qui reste ? Sinon il attend demain, marqué et dit comme tel —
+            // laissé sans marque, il resterait compté « hors ligne » et sa
+            // bulle « en cours d'envoi », alors qu'on est en ligne.
+            if let held = heldTrips[record.tripId], !Self.fits(turn, in: held.credit) {
+                var marked = record
+                marked.waitingForCreditUntil = held.until
+                try? await store.update(marked)
+                publish(
+                    ChatTurnDelivery(
+                        id: record.id,
+                        tripId: record.tripId,
+                        state: .waitingForCredit(until: held.until),
+                        credit: held.credit
+                    )
+                )
+                continue
+            }
+
             switch await deliver(turn, to: record.tripId) {
             case .sent(let receipt):
                 await store.remove(record)
                 delivered += 1
                 note(.delivered(receipt), of: record.id, to: record.tripId)
+            case .waitingForCredit(let until, let credit):
+                // Gardé, marqué, et sa bulle passe à « Partira demain ».
+                var marked = record
+                marked.waitingForCreditUntil = until
+                try? await store.update(marked)
+                heldTrips[record.tripId] = (until, credit)
+                publish(
+                    ChatTurnDelivery(
+                        id: record.id,
+                        tripId: record.tripId,
+                        state: .waitingForCredit(until: until),
+                        credit: credit
+                    )
+                )
+            case .waitingForUnlimited(let credit):
+                // Plus long qu'une journée : il attend l'illimité. Le voyage,
+                // lui, n'est pas retenu — le reste du jour sert aux suivants.
+                var marked = record
+                marked.waitingForCreditUntil = nil
+                marked.waitingForUnlimited = true
+                try? await store.update(marked)
+                publish(ChatTurnDelivery(id: record.id, tripId: record.tripId, state: .waitingForUnlimited, credit: credit))
             case .rejected(let reason):
                 await store.remove(record)
                 let message = Self.message(for: turn, reason: reason)
@@ -364,27 +501,112 @@ public final class RecordingOutbox {
             case .deferred:
                 // Rien n'est passé : le réseau est reparti. Inutile de faire
                 // subir la même attente aux suivants.
-                pending = await store.count()
+                await refreshCounts()
+                await scheduleCreditWake()
                 return
             }
         }
 
-        pending = await store.count()
+        await refreshCounts()
+        await scheduleCreditWake()
         if delivered > 0 { noteDelivery(of: delivered) }
     }
+
+    /// Recompte la file : ce qui attend le réseau, ce qui attend le crédit,
+    /// ce qui attend l'illimité.
+    private func refreshCounts() async {
+        let now = Date.now
+        let all = await store.all()
+        waitingForUnlimited = all.filter(\.waitingForUnlimited).count
+        waitingForCredit = all.filter { !$0.waitingForUnlimited && $0.isWaitingForCredit(at: now) }.count
+        pending = all.count - waitingForCredit - waitingForUnlimited
+    }
+
+    /// **Le compte vient de passer en illimité** (03/10/2026) : ce qui
+    /// attendait le crédit de demain ou l'illimité repart tout de suite. On
+    /// vient de payer pour raconter sans limite — le vocal refusé à 15 h ne
+    /// doit pas attendre minuit pour autant.
+    ///
+    /// Les bulles quittent « Partira demain » et « Trop long pour une
+    /// journée » pour « en cours d'envoi », puis la file se vide — hors ligne,
+    /// elles partiront au retour du réseau. Tout est relâché, sans trier par
+    /// compte : un tour d'un autre compte resté sans abonnement reprendra son
+    /// refus, et sa marque, au premier envoi.
+    public func releaseCreditHolds() async {
+        var released: [PendingTurn] = []
+        for record in await store.all() where record.waitingForCreditUntil != nil || record.waitingForUnlimited {
+            var freed = record
+            freed.waitingForCreditUntil = nil
+            freed.waitingForUnlimited = false
+            try? await store.update(freed)
+            released.append(freed)
+        }
+        guard !released.isEmpty else { return }
+
+        await refreshCounts()
+        await scheduleCreditWake()
+        for record in released {
+            publish(ChatTurnDelivery(id: record.id, tripId: record.tripId, state: .sending))
+        }
+        if isOnline { await flush() }
+    }
+
+    /// Pose le réveil des tours qui attendent le crédit du jour : à la plus
+    /// proche recharge, la file se vide d'elle-même — pas besoin de rouvrir
+    /// l'app ni de toucher « Réessayer ». Quelques secondes de marge : le
+    /// serveur tranche le jour à son horloge, et arriver une seconde trop tôt
+    /// ferait reposer le tour pour une nuit de plus.
+    ///
+    /// Une app suspendue ne se réveille pas pour autant : la tâche repart au
+    /// retour au premier plan, et ``RootView`` vide la file à ce moment-là de
+    /// toute façon.
+    private func scheduleCreditWake() async {
+        creditWake?.cancel()
+        creditWake = nil
+
+        let now = Date.now
+        let next = await store.all().compactMap(\.waitingForCreditUntil).filter { $0 > now }.min()
+        guard let next else { return }
+
+        creditWake = Task { [weak self] in
+            let delay = max(0, next.timeIntervalSinceNow) + Self.creditWakeMargin
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled, let self else { return }
+            await self.refreshCounts()
+            if self.isOnline { await self.flush() }
+        }
+    }
+
+    /// La marge du réveil, après l'heure de recharge annoncée par le serveur.
+    private static let creditWakeMargin: TimeInterval = 5
 
     private func deliver(_ turn: OutgoingTurn, to tripId: String) async -> Outcome {
         do {
             return .sent(try await send(turn, tripId))
         } catch {
-            return Self.outcome(for: error)
+            let outcome = Self.outcome(for: error)
+            // Un refus faute de crédit pour un tour qu'aucune journée ne
+            // laissera passer : demain donnerait le même refus.
+            if case .waitingForCredit(_, let credit) = outcome, Self.neverFitsADay(turn, refusal: credit) {
+                return .waitingForUnlimited(credit: credit)
+            }
+            return outcome
         }
     }
 
-    private func queue(_ turn: OutgoingTurn, for tripId: String) async -> Delivery {
+    private func queue(
+        _ turn: OutgoingTurn,
+        for tripId: String,
+        waitingForCreditUntil: Date? = nil,
+        waitingForUnlimited: Bool = false
+    ) async -> Delivery {
         do {
-            try await store.enqueue(Self.record(for: turn, tripId: tripId), files: Self.files(of: turn))
-            pending = await store.count()
+            var record = Self.record(for: turn, tripId: tripId)
+            record.waitingForCreditUntil = waitingForCreditUntil
+            record.waitingForUnlimited = waitingForUnlimited
+            try await store.enqueue(record, files: Self.files(of: turn))
+            await refreshCounts()
+            if waitingForCreditUntil != nil { await scheduleCreditWake() }
             return .queued
         } catch {
             // Le disque a refusé : c'est le seul cas où un tour se perd, et il
@@ -499,17 +721,59 @@ public final class RecordingOutbox {
             await store.remove(record)
         }
         storedTrips = await trips.all()
-        pending = await store.count()
+        await refreshCounts()
+        return true
+    }
+
+    /// **Oublie un tour retenu** (03/10/2026) — « Supprimer », sous une bulle
+    /// qui attend l'illimité : sans abonnement, rien ne le ferait jamais
+    /// partir, et il resterait sur le disque, compté, sa bulle reposée à
+    /// chaque ouverture du fil. La personne l'a demandé, et confirmé.
+    ///
+    /// Seulement un tour **retenu** — par l'illimité ou par le crédit de
+    /// demain : un tour qui n'attend que le réseau peut être en train de
+    /// partir, et l'effacer sous un envoi ne le rattraperait pas. `false`
+    /// quand il n'y est pas, ou ne l'est plus.
+    @discardableResult
+    public func discardTurn(id: String) async -> Bool {
+        guard let record = await store.all().first(where: { $0.id == id }), record.isOnHold(at: .now) else {
+            return false
+        }
+        await store.remove(record)
+        await refreshCounts()
+        await scheduleCreditWake()
         return true
     }
 
     /// L'accueil du serveur, et les voyages qu'il ne connaît pas encore
-    /// devant : ils viennent d'être créés.
+    /// devant : ils viennent d'être créés — avec leur crédit du jour, plein
+    /// (``withFreshCredit(_:isUnlimited:now:)``) : la feuille d'enregistrement
+    /// de l'accueil compte et coupe à la limite sur un voyage créé hors ligne
+    /// comme sur les autres.
     public func mergingLocalTrips(into feed: HomeFeed) -> HomeFeed {
         let known = Set(feed.trips.map(\.id))
-        let waiting = localTrips.filter { !known.contains($0.id) }.map(\.trip)
+        let waiting = localTrips.filter { !known.contains($0.id) }.map {
+            Self.withFreshCredit($0.trip, isUnlimited: feed.traveller.isUnlimited)
+        }
         guard !waiting.isEmpty else { return feed }
         return HomeFeed(traveller: feed.traveller, trips: waiting + feed.trips, showcase: feed.showcase)
+    }
+
+    /// Un voyage que le serveur n'a jamais vu, avec **son crédit du jour**
+    /// (03/10/2026) : plein — rien de ce qu'on y a dit n'est encore arrivé,
+    /// et ce qui attend dans la file se décompte à part —, rechargé au minuit
+    /// local suivant, illimité si le compte l'est. Un voyage qui porte déjà
+    /// un crédit le garde.
+    ///
+    /// Sans lui, le carnet créé à l'aéroport s'ouvrait sans rien compter : ni
+    /// bandeau à 4:30, ni arrêt à 5:00, et un vocal de 6 minutes ne se savait
+    /// trop long qu'au retour du réseau. L'objection « un abonné verrait le
+    /// bandeau » ne tient pas : l'accueil gardé dit s'il l'est.
+    nonisolated static func withFreshCredit(_ trip: Trip, isUnlimited: Bool, now: Date = .now) -> Trip {
+        guard trip.dailyCredit == nil else { return trip }
+        var trip = trip
+        trip.dailyCredit = DailyCredit(isUnlimited: isUnlimited, resetsAt: creditReturns(nil, now: now))
+        return trip
     }
 
     /// Envoie les voyages qui attendent, le plus ancien d'abord. S'arrête au
@@ -553,7 +817,9 @@ public final class RecordingOutbox {
             return .created(try await createTrip(draft))
         } catch {
             switch Self.outcome(for: error) {
-            case .deferred: return .deferred
+            // Une création de voyage ne consomme aucun crédit : un refus de
+            // crédit ici ne peut venir que d'un serveur confus — on retentera.
+            case .deferred, .waitingForCredit, .waitingForUnlimited: return .deferred
             case .rejected(let reason): return .rejected(reason)
             // L'appel a abouti, la réponse ne s'est pas lue : le voyage existe,
             // mais sans code à montrer. Il se rejoue sans risque — la création
@@ -635,14 +901,22 @@ public final class RecordingOutbox {
 
     /// Le tour relu du disque. `nil` quand la fiche ne dit plus ce qu'elle
     /// promettait — une version d'avant sans fichier, par exemple.
-    nonisolated private static func turn(from record: PendingTurn, files: [Data]) -> OutgoingTurn? {
+    ///
+    /// Une attente du crédit **échue** ne se recopie pas : la fiche garde sa
+    /// date jusqu'au prochain envoi, mais le tour, lui, n'attend plus rien —
+    /// la conversation le rouvre « en cours d'envoi » et le décompte du jour
+    /// où il partira, au lieu de « Partira demain » (03/10/2026).
+    nonisolated private static func turn(from record: PendingTurn, files: [Data], now: Date = .now) -> OutgoingTurn? {
+        let waitingForCreditUntil = record.isWaitingForCredit(at: now) ? record.waitingForCreditUntil : nil
         switch record.kind {
         case .text:
             guard let text = record.text else { return nil }
             return OutgoingTurn(
                 id: record.id,
                 stepId: record.stepId,
-                body: .text(text, suggestionId: record.suggestionId, entryId: record.entryId)
+                body: .text(text, suggestionId: record.suggestionId, entryId: record.entryId),
+                waitingForCreditUntil: waitingForCreditUntil,
+                waitingForUnlimited: record.waitingForUnlimited
             )
         case .voice:
             guard let data = files.first, let filename = record.filenames.first,
@@ -661,7 +935,9 @@ public final class RecordingOutbox {
                         levels: record.levels,
                         placeLabel: record.placeLabel
                     )
-                )
+                ),
+                waitingForCreditUntil: waitingForCreditUntil,
+                waitingForUnlimited: record.waitingForUnlimited
             )
         case .photos:
             guard files.count == record.filenames.count, files.count == record.mimeTypes.count, !files.isEmpty
@@ -669,7 +945,13 @@ public final class RecordingOutbox {
             let photos = zip(files, zip(record.filenames, record.mimeTypes)).map { data, names in
                 ChatPhotoUpload(data: data, filename: names.0, mimeType: names.1)
             }
-            return OutgoingTurn(id: record.id, stepId: record.stepId, body: .photos(photos, capturedAt: record.recordedAt))
+            return OutgoingTurn(
+                id: record.id,
+                stepId: record.stepId,
+                body: .photos(photos, capturedAt: record.recordedAt),
+                waitingForCreditUntil: waitingForCreditUntil,
+                waitingForUnlimited: record.waitingForUnlimited
+            )
         }
     }
 
@@ -690,6 +972,10 @@ public final class RecordingOutbox {
     private enum Outcome: Sendable {
         case sent(ChatTurnReceipt?)
         case deferred
+        /// Refusé faute de crédit du jour : on retentera à `until`.
+        case waitingForCredit(until: Date, credit: DailyCredit?)
+        /// Plus long qu'une journée de crédit : on attendra l'illimité.
+        case waitingForUnlimited(credit: DailyCredit?)
         case rejected(String)
     }
 
@@ -697,20 +983,30 @@ public final class RecordingOutbox {
     ///
     /// Elle tient en une question — est-ce que réessayer a une chance ? Une
     /// panne de transport, oui, c'est même exactement ce pour quoi la file
-    /// existe. Un 4xx, non : le carnet n'existe plus, le quota est atteint, le
-    /// fichier est trop gros. Garder un tour que le serveur refusera à chaque
-    /// fois, c'est promettre une arrivée qui n'aura jamais lieu.
+    /// existe. Un 4xx, non : le carnet n'existe plus, le fichier est trop
+    /// gros. Garder un tour que le serveur refusera à chaque fois, c'est
+    /// promettre une arrivée qui n'aura jamais lieu.
+    ///
+    /// **Sauf le crédit du jour** (03/10/2026) : réessayer a une chance —
+    /// demain. Le tour attend l'heure que le serveur donne (`resetsAt`), et à
+    /// défaut le minuit local suivant. Et un tour plus long qu'une journée
+    /// (`daily_credit_too_long`) a une chance aussi : l'illimité. Il reste sur
+    /// le disque — le jeter, ce serait perdre ce qu'on a raconté.
     ///
     /// Le cas tordu est le décodage : l'appel **a abouti**, c'est la réponse
     /// qu'on n'a pas su lire. Le tour est donc bien arrivé, et le renvoyer
     /// le mettrait deux fois dans le carnet. On le compte comme parti — sans
     /// reçu.
-    nonisolated private static func outcome(for error: any Error) -> Outcome {
+    nonisolated private static func outcome(for error: any Error, now: Date = .now) -> Outcome {
         switch error {
         case let error as APIError:
             switch error {
             case .transport, .notAuthenticated:
                 .deferred
+            case .dailyCreditExhausted(_, let credit):
+                .waitingForCredit(until: creditReturns(credit?.resetsAt, now: now), credit: credit)
+            case .server(_, APIError.dailyCreditTooLongCode, _):
+                .waitingForUnlimited(credit: nil)
             case .server(let statusCode, _, let message):
                 statusCode >= 500 ? .deferred : .rejected(message)
             case .decoding:
@@ -721,6 +1017,43 @@ public final class RecordingOutbox {
         default:
             .rejected(error.localizedDescription)
         }
+    }
+
+    /// L'heure à laquelle le crédit revient : celle du serveur quand elle est
+    /// à venir, sinon le minuit local qui suit — un `resetsAt` absent ou déjà
+    /// passé (horloge du téléphone en avance, serveur d'avant) ne doit ni
+    /// bloquer le tour pour toujours, ni le renvoyer en boucle.
+    /// Un refus faute de crédit pour ce tour se répétera-t-il **chaque
+    /// jour** ? Oui quand il coûte plus qu'une journée entière
+    /// (``OutgoingTurn/exceedsAWholeDay(in:)``), ou quand le serveur l'a
+    /// refusé pot plein — sa mesure du vocal fait foi, pas la nôtre. Sans
+    /// solde rendu, le barème du catalogue.
+    nonisolated static func neverFitsADay(_ turn: OutgoingTurn, refusal credit: DailyCredit?) -> Bool {
+        if let credit, !credit.isUnlimited, credit.limitMs > 0, credit.remainingMs >= credit.limitMs {
+            return turn.creditCost(in: credit) > 0
+        }
+        return turn.exceedsAWholeDay(in: credit ?? DailyCredit())
+    }
+
+    /// Ce tour tient-il dans le reste d'un voyage qui vient d'être refusé ?
+    /// Ce qui ne coûte rien — une puce, des photos — part toujours ; le reste
+    /// seulement s'il tient dans le solde rendu, le serveur tranchant de
+    /// nouveau. Sans solde, rien ne passe qui coûte.
+    nonisolated static func fits(_ turn: OutgoingTurn, in credit: DailyCredit?) -> Bool {
+        let cost = turn.creditCost(in: credit ?? DailyCredit())
+        guard cost > 0 else { return true }
+        guard let credit else { return false }
+        return cost <= credit.remainingMs
+    }
+
+    nonisolated static func creditReturns(
+        _ resetsAt: Date?,
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) -> Date {
+        if let resetsAt, resetsAt > now { return resetsAt }
+        let today = calendar.startOfDay(for: now)
+        return calendar.date(byAdding: .day, value: 1, to: today) ?? now.addingTimeInterval(86_400)
     }
 }
 
@@ -791,8 +1124,12 @@ struct TripSyncEvent: Sendable {
             justDelivered = nil
             rejection = nil
             sending = 0
+            creditWake?.cancel()
+            creditWake = nil
             await store.removeAll()
             pending = 0
+            waitingForCredit = 0
+            waitingForUnlimited = 0
             await trips.removeAll()
             storedTrips = []
         }

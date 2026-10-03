@@ -364,9 +364,37 @@ public enum ChatDelivery: Sendable, Hashable {
     /// ce qu'il a raconté.
     case failed(String)
 
+    /// Le serveur l'a refusé **faute de crédit du jour** (`429
+    /// daily_credit_exhausted`) : ce n'est pas un échec, c'est un rendez-vous.
+    /// Le tour attend sur le disque et repart tout seul quand le crédit se
+    /// recharge (`until`, le `resetsAt` du serveur — à défaut, le minuit local
+    /// suivant). La bulle dit « Partira demain », en gris : un « Non envoyé ·
+    /// Réessayer » rouge ferait renvoyer en boucle vers le même refus (Hugo,
+    /// 03/10/2026).
+    case waitingForCredit(until: Date?)
+
+    /// Le tour coûte **plus qu'une journée entière** de crédit — un vocal de
+    /// plus de 5:03, un texte de plus de 4 000 caractères —, ou le serveur l'a
+    /// dit (`daily_credit_too_long`). Attendre demain n'y changerait rien : le
+    /// pot plein le refuserait encore. Il reste sur le téléphone, la bulle dit
+    /// « Trop long pour une journée · Passer en illimité », et il repart dès
+    /// que le compte raconte sans limite (03/10/2026).
+    case waitingForUnlimited
+
     public var hasFailed: Bool {
         if case .failed = self { return true }
         return false
+    }
+
+    /// Le tour attend le crédit de demain — voir ``waitingForCredit(until:)``.
+    public var isWaitingForCredit: Bool {
+        if case .waitingForCredit = self { return true }
+        return false
+    }
+
+    /// Le tour attend l'illimité — voir ``waitingForUnlimited``.
+    public var isWaitingForUnlimited: Bool {
+        self == .waitingForUnlimited
     }
 }
 
@@ -415,6 +443,17 @@ public struct ChatMessage: Sendable, Hashable, Identifiable {
     /// une bulle de MEMO, ou tant qu'il n'a pas répondu.
     public let disposition: ChatDisposition?
 
+    /// Le bouton posé sous une bulle de MEMO — ``ChatCallToAction`` : « Raconter
+    /// sans limite » sous la bulle « reviens demain », « Modifier
+    /// l’autorisation » sous celle des photos… `nil` le plus souvent.
+    ///
+    /// Une **clé optionnelle du message**, et non un nouveau `body.kind` ni une
+    /// puce (03/10/2026) : un `kind` inconnu ferait tomber tout le fil sur les
+    /// versions déjà installées, et une puce s'envoie comme un message — un
+    /// bouton, lui, ouvre un écran. Le serveur le résout pour **celui qui lit** :
+    /// un abonné ne reçoit jamais « Raconter sans limite ».
+    public let callToAction: ChatCallToAction?
+
     public init(
         id: String,
         author: ChatAuthor,
@@ -427,7 +466,8 @@ public struct ChatMessage: Sendable, Hashable, Identifiable {
         authorAvatarUrl: URL? = nil,
         seq: Int? = nil,
         pauseMilliseconds: Int? = nil,
-        disposition: ChatDisposition? = nil
+        disposition: ChatDisposition? = nil,
+        callToAction: ChatCallToAction? = nil
     ) {
         self.id = id
         self.author = author
@@ -441,6 +481,7 @@ public struct ChatMessage: Sendable, Hashable, Identifiable {
         self.seq = seq
         self.pauseMilliseconds = pauseMilliseconds
         self.disposition = disposition
+        self.callToAction = callToAction
     }
 
     /// Le texte qu'on peut copier ou faire lire à voix haute. `nil` pour un
@@ -531,6 +572,7 @@ extension ChatMessage: Codable {
     private enum CodingKeys: String, CodingKey {
         case id, author, body, sentAt, stepId
         case authorName, authorInitials, authorAvatarUrl, seq, pauseMilliseconds, disposition
+        case callToAction
     }
 
     /// L'acheminement n'est **pas** décodé : un message qui arrive du serveur
@@ -551,7 +593,10 @@ extension ChatMessage: Codable {
             authorAvatarUrl: try? container.decodeIfPresent(URL.self, forKey: .authorAvatarUrl),
             seq: try container.decodeIfPresent(Int.self, forKey: .seq),
             pauseMilliseconds: try container.decodeIfPresent(Int.self, forKey: .pauseMilliseconds),
-            disposition: try container.decodeIfPresent(ChatDisposition.self, forKey: .disposition)
+            disposition: try container.decodeIfPresent(ChatDisposition.self, forKey: .disposition),
+            // Un bouton illisible ne fait jamais tomber la bulle : son texte
+            // se suffit à lui-même, le bouton n'est qu'un raccourci.
+            callToAction: (try? container.decodeIfPresent(ChatCallToAction.self, forKey: .callToAction)) ?? nil
         )
     }
 
@@ -568,6 +613,7 @@ extension ChatMessage: Codable {
         try container.encodeIfPresent(seq, forKey: .seq)
         try container.encodeIfPresent(pauseMilliseconds, forKey: .pauseMilliseconds)
         try container.encodeIfPresent(disposition, forKey: .disposition)
+        try container.encodeIfPresent(callToAction, forKey: .callToAction)
     }
 }
 
@@ -840,6 +886,10 @@ public struct ChatThreadUpdate: Codable, Sendable, Hashable {
     public let turn: ChatTurnStatus
     /// L'heure du serveur à la lecture : le curseur de la lecture suivante.
     public let now: Date
+    /// Le crédit du jour du voyage, à jour de ce qu'un co-voyageur vient de
+    /// raconter — voir ``ChatThread/dailyCredit``. `nil` d'un serveur qui ne
+    /// le sert pas encore : l'app garde alors celui qu'elle tenait.
+    public var dailyCredit: DailyCredit?
 
     public init(
         messages: [ChatMessage],
@@ -847,7 +897,8 @@ public struct ChatThreadUpdate: Codable, Sendable, Hashable {
         preview: ChatBookPreview? = nil,
         tripContext: ChatTripContext? = nil,
         turn: ChatTurnStatus = .idle,
-        now: Date
+        now: Date,
+        dailyCredit: DailyCredit? = nil
     ) {
         self.messages = messages
         self.suggestions = suggestions
@@ -855,35 +906,72 @@ public struct ChatThreadUpdate: Codable, Sendable, Hashable {
         self.tripContext = tripContext
         self.turn = turn
         self.now = now
+        self.dailyCredit = dailyCredit
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case messages, suggestions, preview, tripContext, turn, now, dailyCredit
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            messages: try container.decode([ChatMessage].self, forKey: .messages),
+            suggestions: try container.decode([ChatSuggestion].self, forKey: .suggestions),
+            preview: try container.decodeIfPresent(ChatBookPreview.self, forKey: .preview),
+            tripContext: try container.decodeIfPresent(ChatTripContext.self, forKey: .tripContext),
+            turn: try container.decode(ChatTurnStatus.self, forKey: .turn),
+            now: try container.decode(Date.self, forKey: .now),
+            // Un crédit illisible ne fait pas tomber la suite du fil : la barre
+            // garde le dernier connu, le serveur tranche de toute façon.
+            dailyCredit: (try? container.decodeIfPresent(DailyCredit.self, forKey: .dailyCredit)) ?? nil
+        )
     }
 }
 
 /// Ce que `POST /v1/trips/:id/chat` rend : les bulles qu'il vient d'écrire —
 /// l'ouverture si elle vient d'être posée, le message du voyageur avec son
 /// `seq`, la fiche pour un vocal — et l'état du tour.
+///
+/// Il porte aussi le crédit du jour **après** décompte de ce tour, et, quand
+/// ce tour l'a épuisé, la bulle « reviens demain » de MEMO parmi ses messages.
 public struct ChatTurnReceipt: Codable, Sendable, Hashable {
     public let messages: [ChatMessage]
     public let turn: ChatTurnStatus
     public let now: Date
+    /// Le crédit du jour du voyage, ce tour compté. `nil` d'un serveur qui ne
+    /// le sert pas encore.
+    public var dailyCredit: DailyCredit?
 
-    public init(messages: [ChatMessage], turn: ChatTurnStatus, now: Date) {
+    public init(messages: [ChatMessage], turn: ChatTurnStatus, now: Date, dailyCredit: DailyCredit? = nil) {
         self.messages = messages
         self.turn = turn
         self.now = now
+        self.dailyCredit = dailyCredit
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case messages, turn, now, dailyCredit
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            messages: try container.decode([ChatMessage].self, forKey: .messages),
+            turn: try container.decode(ChatTurnStatus.self, forKey: .turn),
+            now: try container.decode(Date.self, forKey: .now),
+            dailyCredit: (try? container.decodeIfPresent(DailyCredit.self, forKey: .dailyCredit)) ?? nil
+        )
     }
 }
 
-/// Ce que « Ça me convient » rend : le souvenir validé, et où en sont les
-/// étapes offertes.
+/// Ce que « Ça me convient » rend : le souvenir validé, et rien d'autre
+/// (03/10/2026). Un champ de plus servi par un ancien serveur est ignoré.
 public struct EntryValidation: Codable, Sendable, Hashable {
     public let entry: Entry
-    public let offeredSteps: Int?
-    public let remainingSteps: Int?
 
-    public init(entry: Entry, offeredSteps: Int? = nil, remainingSteps: Int? = nil) {
+    public init(entry: Entry) {
         self.entry = entry
-        self.offeredSteps = offeredSteps
-        self.remainingSteps = remainingSteps
     }
 }
 
@@ -1007,6 +1095,13 @@ public struct ChatThread: Codable, Sendable, Hashable, Identifiable {
     /// jeu d'essai.
     public let now: Date?
 
+    /// **Le crédit du jour du voyage** (Hugo, 03/10/2026) — ``DailyCredit`` :
+    /// ce que la barre d'enregistrement compte pendant qu'on parle, ce qui
+    /// pâlit le micro et l'envoi quand il n'y a plus rien. `nil` pour un fil
+    /// local, ou d'un serveur qui ne le sert pas encore : l'app ne prévient
+    /// alors de rien, et le serveur tranche seul.
+    public var dailyCredit: DailyCredit?
+
     public init(
         id: String,
         title: String,
@@ -1020,8 +1115,10 @@ public struct ChatThread: Codable, Sendable, Hashable, Identifiable {
         tripContext: ChatTripContext? = nil,
         turn: ChatTurnStatus = .idle,
         canClear: Bool = true,
-        now: Date? = nil
+        now: Date? = nil,
+        dailyCredit: DailyCredit? = nil
     ) {
+        self.dailyCredit = dailyCredit
         self.tripContext = tripContext
         self.id = id
         self.title = title
@@ -1039,7 +1136,7 @@ public struct ChatThread: Codable, Sendable, Hashable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case id, title, avatarUrl, destination, greeting, preview, context, messages, suggestions
-        case tripContext, turn, canClear, now
+        case tripContext, turn, canClear, now, dailyCredit
     }
 
     public init(from decoder: any Decoder) throws {
@@ -1057,7 +1154,9 @@ public struct ChatThread: Codable, Sendable, Hashable, Identifiable {
             tripContext: try container.decodeIfPresent(ChatTripContext.self, forKey: .tripContext),
             turn: try container.decodeIfPresent(ChatTurnStatus.self, forKey: .turn) ?? .idle,
             canClear: try container.decodeIfPresent(Bool.self, forKey: .canClear) ?? true,
-            now: try container.decodeIfPresent(Date.self, forKey: .now)
+            now: try container.decodeIfPresent(Date.self, forKey: .now),
+            // Tolérant : un crédit illisible ne doit pas coûter le fil entier.
+            dailyCredit: (try? container.decodeIfPresent(DailyCredit.self, forKey: .dailyCredit)) ?? nil
         )
     }
 
@@ -1132,7 +1231,12 @@ public struct ChatVoiceTurn: Sendable, Hashable {
     public let mimeType: String
     /// Le jour raconté — `RecordedAudio.recordedAt`.
     public let capturedAt: Date
-    /// La durée réellement capturée, pauses déduites : c'est elle qui décompte.
+    /// La durée capturée, pauses déduites, telle que l'app l'a mesurée.
+    ///
+    /// **Le serveur ne la croit plus** (03/10/2026) : il relit la durée dans le
+    /// fichier, et c'est elle qui décompte le crédit du jour et s'affiche dans
+    /// la bulle une fois le reçu arrivé. Elle part quand même — inoffensive, et
+    /// lue par un serveur d'avant.
     public let durationSeconds: TimeInterval
     /// La forme d'onde relevée pendant l'enregistrement, pour la bulle.
     public let levels: [Double]

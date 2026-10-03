@@ -17,9 +17,9 @@
     struct HomeDebugPanel: View {
         let model: HomeModel
 
-        /// Ce que la feuille d'abonnement a imposé à la session. Le panneau ne
-        /// s'en sert que pour l'**effacer** : c'est ``SandboxPersona`` qui fait
-        /// jouer un palier aux deux écrans, et une résiliation restée dans la
+        /// Ce qu'un achat ou une résiliation ont imposé à la session. Le panneau
+        /// ne s'en sert que pour l'**effacer** : c'est ``SandboxPersona`` qui
+        /// fait jouer l'abonnement aux écrans, et un geste resté dans la
         /// session prendrait le pas sur lui.
         @Environment(\.subscriptionSession) private var session
 
@@ -39,9 +39,20 @@
                     action("+ voyage passé") { model.debugAddTrip(stage: .past) }
 
                     action("Devenir un abonné") { play(model.debugBecomeSubscriber) }
-                    action("Première connexion") { play(model.debugFirstConnection) }
-                    action("Quota entamé") { play(model.debugStartedQuota) }
-                    action("Limite atteinte") { play(model.debugReachFreeLimit) }
+                    action("Sans abonnement") { play(model.debugBecomeFree) }
+                    // La découverte en trois écrans : il faut oublier aussi
+                    // que la session a déjà vu un abonné — elle ne l'oublie
+                    // d'elle-même qu'en changeant de compte.
+                    action("Jamais abonné") {
+                        session?.reset()
+                        model.debugBecomeNeverSubscribed()
+                    }
+                    // Le crédit du jour du voyage, servi par le double d'API au
+                    // fil de la conversation, à ses reçus, aux réglages et à
+                    // l'accueil — voir ``SandboxCredit``.
+                    ForEach(SandboxCredit.Preset.allCases, id: \.self) { preset in
+                        action(preset.label) { play { model.debugPlayCredit(preset) } }
+                    }
                     action("Erreur", model.debugShowError)
 
                     // Le hors-ligne coupe **vraiment** le réseau de l'app, et le
@@ -56,7 +67,7 @@
                     action("Vocal envoyé", model.debugShowDelivered)
 
                     action("Jeu d’essai") {
-                        session?.play(nil)
+                        session?.play(isUnlimited: nil)
                         model.debugReset()
                     }
                 }
@@ -67,12 +78,11 @@
         }
 
         /// Fait jouer un personnage — et **efface d'abord ce que la session
-        /// impose**. Sans ça, une résiliation faite dans la feuille
-        /// d'abonnement primait sur le personnage (voir
-        /// ``Traveller/freemiumStatus(override:)``), et les boutons du bac à
-        /// sable n'avaient plus l'air de marcher.
+        /// impose**. Sans ça, un achat ou une résiliation faits plus tôt
+        /// primaient sur le personnage (voir ``SubscriptionSession/isUnlimited``),
+        /// et les boutons du bac à sable n'avaient plus l'air de marcher.
         private func play(_ persona: () -> Void) {
-            session?.play(nil)
+            session?.play(isUnlimited: nil)
             persona()
         }
 

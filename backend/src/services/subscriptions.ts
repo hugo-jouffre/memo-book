@@ -1,94 +1,91 @@
-import type { AppContext } from "../context.js";
+import type { Prisma, PrismaClient } from "@prisma/client";
 
 /**
- * L'abonnement s'arrête quand il n'y a plus de voyage à raconter.
+ * L'abonnement, vu du serveur : **qui raconte sans limite**.
  *
- * **C'est une promesse de l'offre, pas une optimisation.** Le troisième argument
- * du paywall dit « Arrêt automatique de l'abonnement — parce que tu n'as pas
- * besoin de notre application en dehors de tes voyages », et c'est ce qui rend
- * acceptable de se réabonner au voyage suivant. Une promesse tenue par un
- * humain qui pense à résilier n'est pas une promesse.
- *
- * **Ce qui compte, c'est la date, pas le `stage`.** `memos.stage` est figé à la
- * création et à chaque modification (`stageFromDates`) : un voyage dont la date
- * de fin est passée hier reste `ongoing` tant que personne ne l'a rouvert. On
- * lit donc les **dates**, qui, elles, ne mentent pas.
- *
- * 🚨 **Un abonnement StoreKit n'est jamais éteint ici** (01/10/2026). Apple ne
- * laisse aucune app résilier à la place de son client : fermer la ligne
- * pendant qu'Apple continue de prélever, c'était **faire payer quelqu'un dont
- * le micro est fermé**. Pour lui, la fin du voyage est un **rappel** — l'accueil
- * propose de couper le renouvellement en un geste (`subscriptionOutlivesTrip`,
- * `appSerializers.ts`) — et c'est la notification d'Apple qui fermera la ligne.
- * Cette passe ne touche donc plus que les autres fournisseurs.
+ * Il ne s'arrête plus avec le voyage (Hugo, 03/10/2026). L'ancien ménage
+ * quotidien éteignait les abonnements hors App Store dès qu'aucun voyage ne
+ * courait ; l'abonnement mensuel, lui, court jusqu'à ce qu'on le résilie, et
+ * l'illimité reste ouvert jusqu'au bout du mois payé. Ce qui reste de la fin
+ * de voyage, c'est un **rappel** : l'accueil propose de couper le
+ * renouvellement (`subscriptionOutlivesTrip`, `appSerializers.ts`) et les
+ * notifications le redisent.
  */
-export async function endSubscriptionsWithoutRunningTrip(
-  context: AppContext,
-  accountId: string,
-): Promise<number> {
-  const running = await countRunningTrips(context, accountId);
-  if (running > 0) return 0;
 
-  const { count } = await context.prisma.subscription.updateMany({
-    where: { accountId, provider: { not: "storekit" }, status: { in: ["active", "trialing"] } },
-    // `expired` et non `cancelled` : personne n'a résilié, c'est le voyage qui
-    // s'est terminé. La distinction se lit dans l'historique, et elle dira un
-    // jour pourquoi quelqu'un est parti.
-    data: { status: "expired", cancelledAt: new Date() },
-  });
+/**
+ * Les statuts d'un abonnement **vivant** : il ouvre l'illimité. Un abonnement
+ * en retard de paiement (`past_due`) aussi — c'est Apple qui accorde le délai
+ * de grâce, et qui tranchera.
+ */
+export const LIVING_SUBSCRIPTION_STATUSES = ["active", "trialing", "past_due"] as const;
 
-  return count;
+/**
+ * Les statuts d'un abonnement **terminé mais encore payé** : résilié le 3, un
+ * mois réglé le 1er reste illimité jusqu'au 31 (Hugo, 03/10/2026 — c'était
+ * déjà la règle de la semaine payée). Le sursis court jusqu'à `renewsAt`.
+ */
+export const PAID_THROUGH_SUBSCRIPTION_STATUSES = ["cancelled", "expired"] as const;
+
+/**
+ * La condition Prisma « cet abonnement ouvre l'illimité aujourd'hui ».
+ *
+ * **La seule**, et c'est voulu : le profil, l'accueil, le crédit du jour et
+ * les notifications en avaient chacun leur copie, et trois copies d'une règle
+ * d'argent finissent toujours par dire trois choses.
+ */
+export function unlimitedAccessWhere(now: Date = new Date()): Prisma.SubscriptionWhereInput {
+  return {
+    OR: [
+      { status: { in: [...LIVING_SUBSCRIPTION_STATUSES] } },
+      { status: { in: [...PAID_THROUGH_SUBSCRIPTION_STATUSES] }, renewsAt: { gt: now } },
+    ],
+  };
 }
 
 /**
- * Le même ménage, pour **tous** les comptes qui portent un abonnement en cours.
- *
- * Appelé par la tâche quotidienne : un voyage se termine par le calendrier, pas
- * par un geste, et personne n'ouvre l'app le jour où sa date de fin passe.
- * Sans cette passe, l'abonnement d'un compte inactif durerait indéfiniment.
- *
- * Les comptes sont traités un par un plutôt qu'en une requête : décider demande
- * de compter les voyages **encore en cours** de chacun, et un `updateMany`
- * global ne sait pas poser cette condition. Ils se comptent en dizaines, pas en
- * millions.
+ * La même règle, sur une ligne déjà chargée — pour l'accueil et le profil, qui
+ * lisent les abonnements avec le compte et n'ont pas à refaire une requête.
+ * **Doit dire exactement ce que dit `unlimitedAccessWhere`** : un test les
+ * confronte (`test/dailyCredit.test.ts`).
  */
-export async function sweepEndedSubscriptions(context: AppContext): Promise<number> {
-  const accounts = await context.prisma.subscription.findMany({
-    where: { provider: { not: "storekit" }, status: { in: ["active", "trialing"] } },
+export function grantsUnlimitedAccess(
+  subscription: { status: string; renewsAt: Date | null },
+  now: Date = new Date(),
+): boolean {
+  if ((LIVING_SUBSCRIPTION_STATUSES as readonly string[]).includes(subscription.status)) return true;
+  return (
+    (PAID_THROUGH_SUBSCRIPTION_STATUSES as readonly string[]).includes(subscription.status) &&
+    subscription.renewsAt !== null &&
+    subscription.renewsAt.getTime() > now.getTime()
+  );
+}
+
+type SubscriptionReader = Pick<PrismaClient, "subscription"> | Prisma.TransactionClient;
+
+/** Ce compte raconte-t-il sans limite ? */
+export async function hasUnlimitedAccess(
+  prisma: SubscriptionReader,
+  accountId: string,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const found = await prisma.subscription.findFirst({
+    where: { accountId, ...unlimitedAccessWhere(now) },
+    select: { id: true },
+  });
+  return found !== null;
+}
+
+/** Parmi ces comptes, ceux qui racontent sans limite — en une requête. */
+export async function unlimitedAccountIds(
+  prisma: SubscriptionReader,
+  accountIds: readonly string[],
+  now: Date = new Date(),
+): Promise<Set<string>> {
+  if (accountIds.length === 0) return new Set();
+  const rows = await prisma.subscription.findMany({
+    where: { accountId: { in: [...accountIds] }, ...unlimitedAccessWhere(now) },
     select: { accountId: true },
     distinct: ["accountId"],
   });
-
-  let ended = 0;
-  for (const { accountId } of accounts) {
-    ended += await endSubscriptionsWithoutRunningTrip(context, accountId);
-  }
-
-  return ended;
-}
-
-/**
- * Combien de voyages de ce compte **ne sont pas finis**.
- *
- * Un voyage sans date de fin compte comme en cours : c'est le cas de quelqu'un
- * qui part sans savoir quand il rentre, et lui couper son abonnement pour ça
- * serait exactement le contraire du service rendu.
- *
- * Les voyages où l'on est **co-voyageur** comptent aussi : on y raconte, donc
- * on s'en sert. `visibleToAccount` n'est pas réemployé ici parce qu'il faut
- * croiser l'appartenance avec les dates, et que la condition se lit mieux
- * écrite en entier.
- */
-async function countRunningTrips(context: AppContext, accountId: string): Promise<number> {
-  const now = new Date();
-
-  return context.prisma.memo.count({
-    where: {
-      OR: [
-        { ownerAccountId: accountId },
-        { members: { some: { accountId, status: "active" } } },
-      ],
-      AND: [{ OR: [{ endDate: null }, { endDate: { gte: now } }] }],
-    },
-  });
+  return new Set(rows.map((row) => row.accountId));
 }

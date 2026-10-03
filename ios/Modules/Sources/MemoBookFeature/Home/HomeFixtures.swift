@@ -33,12 +33,7 @@ enum FixtureTripId {
 extension HomeFeed {
     /// Le contenu de la maquette d'accueil.
     public static let fixture = HomeFeed(
-        traveller: Traveller(
-            id: "traveller-1",
-            firstName: "Camille",
-            offeredSteps: 3,
-            remainingSteps: 2
-        ),
+        traveller: Traveller(id: "traveller-1", firstName: "Camille"),
         trips: [
             Trip(
                 id: FixtureTripId.rome,
@@ -52,7 +47,10 @@ extension HomeFeed {
                     Companion(id: "c-1", name: "Léa Marchand"),
                     Companion(id: "c-2", name: "Tom Marchand"),
                 ],
-                progress: TripProgress(memoryCount: 5, pageCount: 2, targetPageCount: 80)
+                progress: TripProgress(memoryCount: 5, pageCount: 2, targetPageCount: 80),
+                // Deux minutes racontées aujourd'hui : il en reste trois, et
+                // l'avertissement ne paraît pas tout de suite.
+                dailyCredit: DailyCredit(usedMs: 120_000)
             ),
             Trip(
                 id: FixtureTripId.tourDuMonde,
@@ -60,7 +58,8 @@ extension HomeFeed {
                 stage: .ongoing,
                 startDate: .fixture(2, 6, 2026),
                 stats: TripStats(dayCount: 10, distanceKilometres: 37, photoCount: 24),
-                progress: TripProgress(memoryCount: 12, pageCount: 18, targetPageCount: 60)
+                progress: TripProgress(memoryCount: 12, pageCount: 18, targetPageCount: 60),
+                dailyCredit: DailyCredit()
             ),
             Trip(
                 id: FixtureTripId.philippines,
@@ -105,12 +104,7 @@ extension HomeFeed {
 
     /// Le tout premier lancement : un compte, aucun voyage.
     public static let emptyFixture = HomeFeed(
-        traveller: Traveller(
-            id: "traveller-1",
-            firstName: "Camille",
-            offeredSteps: 3,
-            remainingSteps: 2
-        ),
+        traveller: Traveller(id: "traveller-1", firstName: "Camille"),
         trips: [],
         showcase: fixture.showcase
     )

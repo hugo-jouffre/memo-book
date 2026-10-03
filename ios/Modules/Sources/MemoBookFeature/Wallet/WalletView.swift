@@ -463,12 +463,14 @@ private struct WalletEntryRow: View {
         .accessibilityLabel(accessibilityDescription)
     }
 
-    /// La pastille : l'initiale du donateur, ou l'engrenage d'un versement
-    /// automatique.
+    /// La pastille : l'initiale du donateur, ou l'engrenage d'une recharge, d'un
+    /// remboursement, d'un paiement.
     ///
-    /// **Bleue pour un don, lime pour l'abonnement.** C'est ce qui distingue
-    /// les deux natures d'un coup d'œil, sans lire la pastille de texte : le
-    /// bleu est quelqu'un, le lime est le produit.
+    /// **Bleue pour un don, beige pour le reste.** C'est ce qui distingue les
+    /// deux natures d'un coup d'œil, sans lire la pastille de texte : le bleu
+    /// est quelqu'un. Le reste était en lime quand l'abonnement versait dans la
+    /// cagnotte ; il n'y verse plus (Hugo, 03/10/2026), et le lime ne dit que
+    /// l'abonnement.
     private var badge: some View {
         Group {
             if let entry {
@@ -495,13 +497,13 @@ private struct WalletEntryRow: View {
         guard let entry else { return MemoBookColor.ink.opacity(0.06) }
         return entry.kind.isFromSomeoneElse
             ? MemoBookColor.outline.opacity(0.25)
-            : MemoBookColor.accent.opacity(0.25)
+            : MemoBookColor.separator.opacity(0.35)
     }
 
     /// Le nom, et la pastille qui dit d'où vient l'argent.
     ///
-    /// En taille accessible, la pastille passe **sous** le nom : « Abonnement »
-    /// à côté de « Abonnement MB » ne laisserait plus de place au nom.
+    /// En taille accessible, la pastille passe **sous** le nom : « Recharge » à
+    /// côté de « Recharge de la cagnotte » ne laisserait plus de place au nom.
     @ViewBuilder
     private var nameLine: some View {
         if let entry {
@@ -519,7 +521,7 @@ private struct WalletEntryRow: View {
                     .padding(.horizontal, MemoBookSpacing.xs / 2 + 2)
                     .padding(.vertical, 1)
                     .background(
-                        entry.kind.isFromSomeoneElse ? MemoBookColor.outline : MemoBookColor.accent,
+                        entry.kind.isFromSomeoneElse ? MemoBookColor.outline : MemoBookColor.separator,
                         in: .rect(cornerRadius: MemoBookSpacing.xs - 2)
                     )
 
@@ -536,8 +538,8 @@ private struct WalletEntryRow: View {
         }
     }
 
-    /// Le montant. Vert quand il vient de quelqu'un, gris quand il vient de
-    /// l'abonnement : le même écart que les pastilles, et pour la même raison.
+    /// Le montant. Vert quand il vient de quelqu'un, gris sinon : le même écart
+    /// que les pastilles, et pour la même raison.
     private var amount: some View {
         Group {
             if let entry {
@@ -561,28 +563,18 @@ private struct WalletEntryRow: View {
     }
 }
 
-/// Les deux pastilles de synthèse : ce que les proches ont offert, et ce que
-/// l'abonnement a versé.
+/// La pastille de synthèse : ce que les proches ont offert.
 ///
-/// Elles ne répètent pas l'historique, elles le résument — c'est la réponse à
+/// Elle ne répète pas l'historique, elle le résume — c'est la réponse à
 /// « combien mes proches ont donné, en tout ? », qu'on ne peut pas obtenir en
-/// lisant une liste.
+/// lisant une liste. **Seule** depuis que l'abonnement n'est plus déduit du
+/// carnet (Hugo, 03/10/2026) : sa voisine, « grâce à ton abonnement », comptait
+/// ce qu'il versait.
 private struct WalletTotals: View {
     let wallet: Wallet
 
-    @Environment(\.dynamicTypeSize) private var typeSize
-
     var body: some View {
-        let gifted = tile(wallet.giftedTotal, BookCopy.Wallet.giftedTile)
-        let subscription = tile(wallet.subscriptionTotal, BookCopy.Wallet.subscriptionTile)
-
-        return Group {
-            if typeSize.isAccessibilitySize {
-                VStack(spacing: MemoBookSpacing.snug) { gifted; subscription }
-            } else {
-                HStack(spacing: MemoBookSpacing.snug) { gifted; subscription }
-            }
-        }
+        tile(wallet.giftedTotal, BookCopy.Wallet.giftedTile)
     }
 
     private func tile(_ amount: Decimal, _ label: String) -> some View {

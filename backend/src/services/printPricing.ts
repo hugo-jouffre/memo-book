@@ -71,30 +71,6 @@ export function shippingCents(speed: ShippingSpeed): number {
   return speed === "express" ? EXPRESS_CENTS : 0;
 }
 
-/**
- * Comment la cagnotte se répartit entre ses deux provenances, à l'affichage.
- *
- * Le solde est **un seul nombre** : rien, dans le registre, ne dit quel euro
- * vient d'un don et lequel d'un versement d'abonnement. Les deux lignes du
- * récapitulatif sont donc une **répartition au prorata des crédits reçus**, et
- * pas un suivi à la pièce — le dire ici plutôt que de laisser croire à une
- * comptabilité par enveloppe.
- *
- * Le reste (`applied - gift`) va à l'abonnement, ce qui garantit que les deux
- * lignes retombent exactement sur le montant déduit, sans dérive d'arrondi.
- */
-export function splitWalletCredit(
-  appliedCents: number,
-  giftCreditCents: number,
-  topupCreditCents: number
-): { giftCents: number; subscriptionCents: number } {
-  const credits = giftCreditCents + topupCreditCents;
-  if (appliedCents <= 0 || credits <= 0) return { giftCents: 0, subscriptionCents: 0 };
-
-  const giftCents = Math.round((appliedCents * giftCreditCents) / credits);
-  return { giftCents, subscriptionCents: appliedCents - giftCents };
-}
-
 export type QuoteInput = {
   bookTitle: string;
   pageCount: number;
@@ -102,9 +78,6 @@ export type QuoteInput = {
   speed: ShippingSpeed;
   /** Le solde de la cagnotte de **celui qui commande**. Chacun a la sienne. */
   walletBalanceCents: number;
-  /** Les crédits reçus, par provenance, pour la répartition d'affichage. */
-  giftCreditCents: number;
-  topupCreditCents: number;
 };
 
 /**
@@ -113,6 +86,12 @@ export type QuoteInput = {
  *
  * La cagnotte ne peut pas rendre la monnaie : elle est plafonnée au montant dû,
  * et le total ne descend jamais sous zéro.
+ *
+ * **Une seule déduction : la cagnotte** (Hugo, 03/10/2026). La ligne
+ * « Déduction abonnements hebdomadaires versés » est partie avec l'abonnement
+ * hebdomadaire : l'abonnement ne se déduit plus du carnet. Elle n'était
+ * d'ailleurs qu'une répartition au prorata des recharges de la cagnotte, pas
+ * des abonnements réellement payés.
  */
 export function quote(input: QuoteInput) {
   const pages = Math.max(input.pageCount, 1);
@@ -124,18 +103,16 @@ export function quote(input: QuoteInput) {
   const dueCents = itemsCents + shipCents;
 
   const appliedCents = Math.max(0, Math.min(input.walletBalanceCents, dueCents));
-  const split = splitWalletCredit(appliedCents, input.giftCreditCents, input.topupCreditCents);
 
   const deductions = [
     {
-      id: "subscription",
-      label: "Déduction abonnements hebdomadaires versés",
-      amountCents: split.subscriptionCents,
-    },
-    {
       id: "wallet",
-      label: "Déduction de la cagnotte de tes proches",
-      amountCents: split.giftCents,
+      // « De ta cagnotte », pas « de tes proches » (03/10/2026) : elle reçoit
+      // aussi les recharges que le voyageur paie lui-même
+      // (`POST /v1/wallet/topup`), et l'abonnement n'est plus là pour les
+      // ranger à part. L'app affiche ce libellé tel quel.
+      label: "Déduction de ta cagnotte",
+      amountCents: appliedCents,
     },
     // Une déduction nulle ne se montre pas : « - 0,00 € » ferait croire à une
     // réduction qui n'a pas eu lieu.

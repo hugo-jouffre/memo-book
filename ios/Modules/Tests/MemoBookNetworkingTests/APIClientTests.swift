@@ -510,4 +510,114 @@ final class APIClientTests: XCTestCase {
         let body = String(decoding: StubURLProtocol.lastBody ?? Data(), as: UTF8.self)
         XCTAssertTrue(body.contains(#""kind":"text""#))
     }
+
+    // MARK: - Le crédit du jour (03/10/2026)
+
+    /// Le fuseau de l'appareil part sur **chaque** appel : le crédit du jour se
+    /// recharge à minuit chez celui qui raconte.
+    func testEveryRequestCarriesTheDeviceTimeZone() async throws {
+        let client = makeClient()
+        respond(status: 200, json: #"{"memos":[]}"#)
+
+        _ = try await client.memos()
+
+        XCTAssertEqual(
+            StubURLProtocol.lastRequest?.value(forHTTPHeaderField: MemoBookAPIClient.timeZoneHeader),
+            TimeZone.current.identifier
+        )
+        XCTAssertEqual(MemoBookAPIClient.timeZoneHeader, "X-Time-Zone")
+    }
+
+    /// Le refus faute de crédit garde son code **et son solde** jusqu'à la
+    /// file : c'est `resetsAt` qui dit quand réessayer.
+    func testACreditRefusalKeepsItsCodeAndBalance() async {
+        let client = makeClient()
+        respond(
+            status: 429,
+            json: """
+                { "error": "daily_credit_exhausted",
+                  "message": "Le crédit du jour de ce voyage est épuisé. Reviens demain pour continuer, ou passe en illimité.",
+                  "dailyCredit": { "isUnlimited": false, "limitMs": 300000, "usedMs": 300000, "remainingMs": 0,
+                                   "textMsPerCharacter": 75, "warningRemainingMs": 30000, "urgentRemainingMs": 5000,
+                                   "day": "2026-10-03", "resetsAt": "2026-10-03T22:00:00.000Z" } }
+                """
+        )
+
+        do {
+            _ = try await client.sendChatText(tripId: "t1", turn: ChatTextTurn(id: "x", text: "Encore un mot"))
+            XCTFail("Un 429 doit produire une erreur.")
+        } catch let error as APIError {
+            XCTAssertTrue(error.isDailyCreditExhausted)
+            XCTAssertEqual(error.code, "daily_credit_exhausted")
+            XCTAssertEqual(error.statusCode, 429)
+            XCTAssertEqual(error.dailyCredit?.isExhausted, true)
+            XCTAssertEqual(error.dailyCredit?.resetsAt, ISO8601DateFormatter().date(from: "2026-10-03T22:00:00Z"))
+            XCTAssertTrue(error.errorDescription?.hasPrefix("Le crédit du jour") == true, "Le mot du serveur, tel quel.")
+            XCTAssertFalse(error.isRetryable, "C'est la file qui repart, à la recharge.")
+            XCTAssertNotNil(error.recoveryAdvice)
+        } catch {
+            XCTFail("Erreur inattendue : \(error)")
+        }
+    }
+
+    /// Un solde illisible ne coûte pas le message : le refus reste un refus de
+    /// crédit, la file retombera sur le minuit suivant.
+    func testACreditRefusalWithoutABalanceIsStillACreditRefusal() async {
+        let client = makeClient()
+        respond(status: 429, json: #"{"error":"daily_credit_exhausted","message":"Épuisé.","dailyCredit":"?"}"#)
+
+        do {
+            _ = try await client.sendChatText(tripId: "t1", turn: ChatTextTurn(id: "x", text: "Un mot"))
+            XCTFail("Un 429 doit produire une erreur.")
+        } catch let error as APIError {
+            XCTAssertTrue(error.isDailyCreditExhausted)
+            XCTAssertNil(error.dailyCredit)
+            XCTAssertEqual(error.errorDescription, "Épuisé.")
+        } catch {
+            XCTFail("Erreur inattendue : \(error)")
+        }
+    }
+
+    /// Les autres refus gardent leur forme : le plafond anti-abus reste un
+    /// `.server(429, "chat_daily_cap", …)`.
+    func testOtherRefusalsKeepTheirShape() async {
+        let client = makeClient()
+        respond(status: 429, json: #"{"error":"chat_daily_cap","message":"MEMO a besoin d’une pause."}"#)
+
+        do {
+            _ = try await client.sendChatText(tripId: "t1", turn: ChatTextTurn(id: "x", text: "Un mot"))
+            XCTFail("Un 429 doit produire une erreur.")
+        } catch let error as APIError {
+            guard case .server(429, "chat_daily_cap", _) = error else { return XCTFail("Erreur inattendue : \(error)") }
+            XCTAssertFalse(error.isDailyCreditExhausted)
+            XCTAssertFalse(error.isDailyCreditTooLong)
+            XCTAssertEqual(error.code, "chat_daily_cap")
+        } catch {
+            XCTFail("Erreur inattendue : \(error)")
+        }
+    }
+
+    /// Un tour plus long qu'une journée de crédit garde son code jusqu'à la
+    /// file, quel que soit le statut : ce n'est ni « demain » — le refus de
+    /// crédit ordinaire —, ni un échec à réessayer, c'est l'illimité.
+    func testATurnLongerThanADayKeepsItsCode() async {
+        let client = makeClient()
+        respond(
+            status: 422,
+            json: #"{"error":"daily_credit_too_long","message":"Ce vocal dépasse le crédit d’une journée entière.","dailyCredit":{"usedMs":0}}"#
+        )
+
+        do {
+            _ = try await client.sendChatText(tripId: "t1", turn: ChatTextTurn(id: "x", text: "Un très long texte"))
+            XCTFail("Un refus doit produire une erreur.")
+        } catch let error as APIError {
+            XCTAssertTrue(error.isDailyCreditTooLong)
+            XCTAssertFalse(error.isDailyCreditExhausted, "Pas « demain » : demain donnerait le même refus.")
+            XCTAssertEqual(error.code, APIError.dailyCreditTooLongCode)
+            XCTAssertFalse(error.isRetryable)
+            XCTAssertTrue(error.recoveryAdvice?.contains("illimité") == true)
+        } catch {
+            XCTFail("Erreur inattendue : \(error)")
+        }
+    }
 }

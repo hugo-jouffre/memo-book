@@ -6,7 +6,9 @@ import {
   type PushOutcome,
   type PushSender,
 } from "../src/services/apns.js";
-import { sendDueNotifications } from "../src/services/notifications.js";
+import { APPLE_SUBSCRIPTIONS_URL, type Mailer, type SubscriptionReminderMail } from "../src/services/mailer.js";
+import { renderSubscriptionReminderMail } from "../src/services/mailTemplates.js";
+import { sendDueNotifications, sendTripEndEmails } from "../src/services/notifications.js";
 import { syncSchoolHolidays } from "../src/services/schoolHolidays.js";
 import { createHarness, registerAccount, resetDatabase, type TestHarness } from "./helpers.js";
 
@@ -33,12 +35,27 @@ class ScriptedPushSender implements PushSender {
   async close(): Promise<void> {}
 }
 
+/** Un expéditeur d'e-mails qui retient ce qu'on lui confie, et qu'on peut faire échouer. */
+class RecordingMailer implements Mailer {
+  readonly reminders: SubscriptionReminderMail[] = [];
+  failing = false;
+
+  async sendPasswordReset(): Promise<void> {}
+  async sendDataExport(): Promise<void> {}
+  async sendSubscriptionReminder(message: SubscriptionReminderMail): Promise<void> {
+    if (this.failing) throw new Error("Resend a refusé l’envoi (503)");
+    this.reminders.push(message);
+  }
+}
+
 let harness: TestHarness;
 let push: ScriptedPushSender;
+let mailer: RecordingMailer;
 
 beforeAll(async () => {
   push = new ScriptedPushSender();
-  harness = await createHarness({ push });
+  mailer = new RecordingMailer();
+  harness = await createHarness({ push, mailer });
 });
 
 afterAll(async () => {
@@ -49,6 +66,8 @@ beforeEach(async () => {
   await resetDatabase(harness.prisma);
   push.sent.length = 0;
   push.outcome = { kind: "sent" };
+  mailer.reminders.length = 0;
+  mailer.failing = false;
 });
 
 async function registerToken(authorization: string, token = TOKEN) {
@@ -81,6 +100,25 @@ async function tripEndingOctober12(accountId: string) {
 
 /** 10 h 35 à Paris le 12 octobre 2026 — 8 h 35 UTC, l'heure d'été court encore. */
 const OCTOBER_12_MORNING = new Date("2026-10-12T08:35:00Z");
+
+/**
+ * L'abonnement mensuel pris dans l'app, renouvellement armé : Apple le
+ * reconduira le jour de `renewsAt`.
+ */
+async function armedSubscription(accountId: string, renewsAt: Date) {
+  return harness.prisma.subscription.create({
+    data: {
+      accountId,
+      provider: "storekit",
+      status: "active",
+      priceCents: 499,
+      interval: "month",
+      productId: "com.memobook.app.subscription.monthly",
+      autoRenews: true,
+      renewsAt,
+    },
+  });
+}
 
 describe("POST /v1/push-tokens", () => {
   it("retient le téléphone et le fuseau du compte", async () => {
@@ -223,6 +261,19 @@ describe("la passe horaire", () => {
     const disabled = { ...harness.context, push: off };
     expect(await sendDueNotifications(disabled, OCTOBER_12_MORNING)).toEqual({ evaluated: 0, sent: 0 });
     expect(await harness.prisma.notificationDelivery.count()).toBe(0);
+  });
+
+  it("rappelle à l'abonné App Store, le jour de la fin, qu'il peut couper son abonnement", async () => {
+    const { accountId, authorization } = await registerAccount(harness.app);
+    await registerToken(authorization);
+    await tripEndingOctober12(accountId);
+    await armedSubscription(accountId, new Date("2026-11-01T09:00:00Z"));
+
+    expect((await sendDueNotifications(harness.context, OCTOBER_12_MORNING)).sent).toBe(1);
+    expect(push.sent[0]?.message.title).toBe("Ton voyage à Rome se termine aujourd’hui");
+    expect(push.sent[0]?.message.body).toContain(
+      "Coupe-le en un geste depuis l’accueil, tu gardes l’illimité jusqu’au 1er novembre.",
+    );
   });
 
   it("sans clé, en développement, journalise au lieu d'envoyer", async () => {
@@ -372,26 +423,226 @@ describe("le résumé de la semaine", () => {
   });
 });
 
-describe("la fin des 3 étapes offertes", () => {
-  it("part le lendemain de la dernière étape validée", async () => {
+describe("le rappel avant le renouvellement", () => {
+  it("part trois jours avant, quand aucun voyage ne court, une fois par période", async () => {
     const { accountId, authorization } = await registerAccount(harness.app);
     await registerToken(authorization);
-    const memo = await tripToRome(accountId, "daily");
-    const message = await toldInChat(memo.id, accountId, new Date("2026-10-04T15:00:00Z"));
-    await harness.prisma.entry.update({
-      where: { id: message.entryId! },
-      data: { validatedAt: new Date("2026-10-04T15:05:00Z") },
-    });
-    await harness.prisma.account.update({ where: { id: accountId }, data: { offeredSteps: 3, remainingSteps: 0 } });
+    await tripEndingOctober12(accountId);
+    await armedSubscription(accountId, new Date("2026-10-20T09:00:00Z"));
 
-    // Le soir même : le paywall vient de le dire.
-    expect((await sendDueNotifications(harness.context, new Date("2026-10-04T17:35:00Z"))).sent).toBe(0);
-
-    expect((await sendDueNotifications(harness.context, new Date("2026-10-05T08:35:00Z"))).sent).toBe(1);
+    // 10 h 35 à Paris le 17 octobre : J-3.
+    expect((await sendDueNotifications(harness.context, new Date("2026-10-17T08:35:00Z"))).sent).toBe(1);
     expect(push.sent[0]?.message).toMatchObject({
-      title: "Tes 3 étapes offertes sont racontées",
-      link: "memobook://paywall",
+      title: "Ton abonnement se renouvelle dans 3 jours",
+      body: "Pas de voyage en cours : si tu n’en as plus besoin, coupe-le en un geste. Tu gardes l’illimité jusqu’au 20 octobre.",
+      link: "memobook://subscription",
     });
+    expect(await harness.prisma.notificationDelivery.findFirstOrThrow()).toMatchObject({
+      kind: "renewal_reminder",
+      dedupeKey: `${accountId}:renewal_reminder:2026-10-20`,
+      memoId: null,
+    });
+
+    // J-2 : la même période, il ne repart pas. Une autre notification peut
+    // partir ce jour-là — le carnet du voyage fini le 12 n'est pas commandé —,
+    // c'est le rappel qu'on compte, pas les envois.
+    await sendDueNotifications(harness.context, new Date("2026-10-18T08:35:00Z"));
+    expect(
+      await harness.prisma.notificationDelivery.count({ where: { kind: "renewal_reminder" } }),
+    ).toBe(1);
+    expect(push.sent.filter((sent) => sent.message.title.includes("renouvelle"))).toHaveLength(1);
+  });
+
+  it("se tait tant qu'un voyage court", async () => {
+    const { accountId, authorization } = await registerAccount(harness.app);
+    await registerToken(authorization);
+    await tripToRome(accountId, "daily");
+    await armedSubscription(accountId, new Date("2026-10-20T09:00:00Z"));
+
+    expect((await sendDueNotifications(harness.context, new Date("2026-10-17T08:35:00Z"))).sent).toBe(0);
+  });
+
+  // R51 (03/10/2026) : « Rappel de fin de voyage » coupé, l'e-mail de fin de
+  // voyage part quand même — le rappel ne tombe pas le même jour.
+  it("se tait les jours de l'e-mail de fin de voyage, alerte de fin coupée", async () => {
+    const { accountId, authorization } = await registerAccount(harness.app);
+    await registerToken(authorization);
+    const memo = await tripEndingOctober12(accountId);
+    await harness.prisma.memo.update({ where: { id: memo.id }, data: { notifyTripEnd: false } });
+    // Renouvellement le 16 : J-3 le 13, le jour de l'e-mail ; J-2 le 14.
+    await armedSubscription(accountId, new Date("2026-10-16T09:00:00Z"));
+
+    const october13 = new Date("2026-10-13T08:35:00Z");
+    expect((await sendTripEndEmails(harness.context, october13)).sent).toBe(1);
+    await sendDueNotifications(harness.context, october13);
+    await sendDueNotifications(harness.context, new Date("2026-10-14T08:35:00Z"));
+    expect(await harness.prisma.notificationDelivery.count({ where: { kind: "renewal_reminder" } })).toBe(0);
+  });
+
+  // S08 (03/10/2026) : un compte entré par Apple sans adresse certifiée
+  // (`email` nul) ne reçoit jamais l'e-mail de fin de voyage — le rappel J-3
+  // ne doit pas se taire en comptant dessus.
+  it("parle le lendemain de la fin à un compte sans adresse, alerte de fin coupée", async () => {
+    const { accountId, authorization } = await registerAccount(harness.app);
+    await registerToken(authorization);
+    await harness.prisma.account.update({ where: { id: accountId }, data: { email: null } });
+    const memo = await tripEndingOctober12(accountId);
+    await harness.prisma.memo.update({ where: { id: memo.id }, data: { notifyTripEnd: false } });
+    // Renouvellement le 16 : J-3 le 13, le lendemain de la fin.
+    await armedSubscription(accountId, new Date("2026-10-16T09:00:00Z"));
+
+    const october13 = new Date("2026-10-13T08:35:00Z");
+    expect((await sendTripEndEmails(harness.context, october13)).sent).toBe(0);
+    await sendDueNotifications(harness.context, october13);
+    expect(await harness.prisma.notificationDelivery.findFirst({ where: { kind: "renewal_reminder" } })).toMatchObject({
+      dedupeKey: `${accountId}:renewal_reminder:2026-10-16`,
+    });
+    expect(push.sent.map((sent) => sent.message.title)).toContain("Ton abonnement se renouvelle dans 3 jours");
+  });
+
+  // R52 (03/10/2026) : l'ancien abonnement à la semaine, encore honoré, ne
+  // reçoit pas un rappel chaque semaine.
+  it("n'envoie pas un rappel par semaine à l'ancien abonnement hebdomadaire", async () => {
+    const { accountId, authorization } = await registerAccount(harness.app);
+    await registerToken(authorization);
+    await tripEndingOctober12(accountId);
+    const weekly = await harness.prisma.subscription.create({
+      data: {
+        accountId,
+        provider: "storekit",
+        status: "active",
+        priceCents: 299,
+        interval: "week",
+        productId: "com.memobook.app.subscription.weekly",
+        autoRenews: true,
+        renewsAt: new Date("2026-10-20T09:00:00Z"),
+      },
+    });
+
+    await sendDueNotifications(harness.context, new Date("2026-10-17T08:35:00Z"));
+    expect(await harness.prisma.notificationDelivery.count({ where: { kind: "renewal_reminder" } })).toBe(1);
+
+    // Apple l'a reconduit le 20 : prochain renouvellement le 27, J-3 le 24.
+    await harness.prisma.subscription.update({
+      where: { id: weekly.id },
+      data: { renewsAt: new Date("2026-10-27T09:00:00Z") },
+    });
+    await sendDueNotifications(harness.context, new Date("2026-10-24T08:35:00Z"));
+    expect(await harness.prisma.notificationDelivery.count({ where: { kind: "renewal_reminder" } })).toBe(1);
+  });
+});
+
+describe("l'e-mail de fin de voyage", () => {
+  /** 10 h 35 à Paris le 13 octobre : le lendemain de la fin du voyage à Rome. */
+  const OCTOBER_13_MORNING = new Date("2026-10-13T08:35:00Z");
+
+  it("part le lendemain de la fin, même sans téléphone enregistré, une seule fois", async () => {
+    const { accountId } = await registerAccount(harness.app);
+    const memo = await tripEndingOctober12(accountId);
+    const renewsAt = new Date("2026-11-01T09:00:00Z");
+    await armedSubscription(accountId, renewsAt);
+
+    // Le jour même : la notification et l'accueil viennent de le dire.
+    expect((await sendTripEndEmails(harness.context, OCTOBER_12_MORNING)).sent).toBe(0);
+
+    expect((await sendTripEndEmails(harness.context, OCTOBER_13_MORNING)).sent).toBe(1);
+    expect(mailer.reminders).toHaveLength(1);
+    expect(mailer.reminders[0]).toMatchObject({
+      to: "voyageur@memobook.app",
+      firstName: "Hugo",
+      trip: { title: "Rome 2026", city: "Rome" },
+      unlimitedUntil: renewsAt,
+    });
+    expect(mailer.reminders[0]?.bookEstimateCents).toBeGreaterThan(0);
+
+    expect(await harness.prisma.notificationDelivery.findFirstOrThrow()).toMatchObject({
+      accountId,
+      memoId: memo.id,
+      kind: "trip_end_email",
+      dedupeKey: `${accountId}:trip_end_email:${memo.id}`,
+      link: APPLE_SUBSCRIPTIONS_URL,
+      deliveredCount: 1,
+    });
+
+    // L'heure suivante, le lendemain : déjà parti.
+    await sendTripEndEmails(harness.context, new Date("2026-10-13T09:35:00Z"));
+    await sendTripEndEmails(harness.context, new Date("2026-10-14T08:35:00Z"));
+    expect(mailer.reminders).toHaveLength(1);
+  });
+
+  it("dit doucement comment couper l'abonnement, jusqu'à quand l'illimité reste ouvert, et le carnet qui attend", async () => {
+    const mail = renderSubscriptionReminderMail(
+      {
+        to: "voyageur@memobook.app",
+        firstName: "Hugo",
+        trip: { title: "Rome 2026", city: "Rome" },
+        unlimitedUntil: new Date("2026-11-01T09:00:00Z"),
+        bookEstimateCents: 4290,
+      },
+      APPLE_SUBSCRIPTIONS_URL,
+    );
+
+    expect(mail.subject).toBe("Ton voyage est fini : pense à ton abonnement");
+    expect(mail.text).toContain("Ton voyage à Rome est terminé");
+    expect(mail.text).toContain("tu gardes l’illimité jusqu’au 1er novembre 2026.");
+    expect(mail.text).toContain("Réglages ▸ ton nom ▸ Abonnements");
+    expect(mail.text).toMatch(/Et ton carnet à Rome n’attend plus que ta commande : il est estimé à 42,90\s€\./);
+    expect(mail.html).toContain(`href="${APPLE_SUBSCRIPTIONS_URL}"`);
+  });
+
+  it("ne part ni sans abonnement armé, ni avant 10 h, ni sans APNs pour autant", async () => {
+    const { accountId } = await registerAccount(harness.app);
+    await tripEndingOctober12(accountId);
+
+    expect((await sendTripEndEmails(harness.context, OCTOBER_13_MORNING)).sent).toBe(0);
+
+    // Résilié : le renouvellement n'est plus armé, il n'y a rien à couper.
+    const subscription = await armedSubscription(accountId, new Date("2026-11-01T09:00:00Z"));
+    await harness.prisma.subscription.update({
+      where: { id: subscription.id },
+      data: { status: "cancelled", autoRenews: false },
+    });
+    expect((await sendTripEndEmails(harness.context, OCTOBER_13_MORNING)).sent).toBe(0);
+
+    await harness.prisma.subscription.update({
+      where: { id: subscription.id },
+      data: { status: "active", autoRenews: true },
+    });
+    // 9 h 35 à Paris : trop tôt.
+    expect((await sendTripEndEmails(harness.context, new Date("2026-10-13T07:35:00Z"))).sent).toBe(0);
+
+    const off: PushSender = {
+      enabled: false,
+      send: () => Promise.resolve({ kind: "failed", reason: "APNs n'est pas configuré." }),
+      close: () => Promise.resolve(),
+    };
+    expect((await sendTripEndEmails({ ...harness.context, push: off }, OCTOBER_13_MORNING)).sent).toBe(1);
+  });
+
+  it("retente à la passe suivante un e-mail que l'envoi a refusé", async () => {
+    const { accountId } = await registerAccount(harness.app);
+    await tripEndingOctober12(accountId);
+    await armedSubscription(accountId, new Date("2026-11-01T09:00:00Z"));
+
+    mailer.failing = true;
+    expect((await sendTripEndEmails(harness.context, OCTOBER_13_MORNING)).sent).toBe(0);
+    expect(await harness.prisma.notificationDelivery.count()).toBe(0);
+
+    mailer.failing = false;
+    expect((await sendTripEndEmails(harness.context, new Date("2026-10-13T09:35:00Z"))).sent).toBe(1);
+  });
+
+  it("ne prend pas la place d'une notification : ni journée de facturation, ni « une par jour »", async () => {
+    const { accountId, authorization } = await registerAccount(harness.app);
+    await registerToken(authorization);
+    await tripEndingOctober12(accountId);
+    await armedSubscription(accountId, new Date("2026-11-01T09:00:00Z"));
+    // Un anniversaire le 20 octobre : sa notification tombe le 13, le jour de l'e-mail.
+    await harness.prisma.account.update({ where: { id: accountId }, data: { birthDate: new Date("1994-10-20") } });
+
+    expect((await sendTripEndEmails(harness.context, OCTOBER_13_MORNING)).sent).toBe(1);
+    expect((await sendDueNotifications(harness.context, new Date("2026-10-13T09:35:00Z"))).sent).toBe(1);
+    expect(push.sent.map((sent) => sent.message.title)).toEqual(["Ton anniversaire approche 🎂"]);
   });
 });
 

@@ -1,4 +1,10 @@
 import type { AppContext } from "../context.js";
+import {
+  chargeTranscriptOverrun,
+  countCharacters,
+  loadSpeaker,
+  transcriptOverrunMs,
+} from "../services/dailyCredit.js";
 import type { ConverseJob } from "./converse.js";
 import { JOB_NAMES } from "./queue.js";
 import { transcriptionHintFor, withoutHintEcho } from "../services/transcription.js";
@@ -92,7 +98,12 @@ export async function transcribeEntry(
       data: { transcript, status: "ready", error: null },
     });
 
-    if (result.durationSeconds !== undefined) {
+    // La durée **mesurée à l'arrivée** fait foi (`lib/mp4Duration.ts`) : c'est
+    // elle qui a été décomptée du crédit du jour, et la bulle l'affiche. Le
+    // transcripteur ne comble qu'un vide — un souvenir d'avant la mesure — et
+    // n'écrase jamais ce qu'on a lu dans le fichier (le simulé rend 12 s pour
+    // tout, Hugo, 03/10/2026).
+    if (result.durationSeconds !== undefined && entry.media.durationSeconds === null) {
       await prisma.mediaAsset.update({
         where: { id: entry.media.id },
         data: { durationSeconds: result.durationSeconds },
@@ -100,6 +111,11 @@ export async function transcribeEntry(
     }
 
     logger.info({ entryId, characters: transcript.length }, "Entrée transcrite");
+
+    // Le filet du crédit du jour — **une fois** : un rejeu de ce job (une
+    // publication ratée plus bas) trouve la transcription déjà posée, et ne
+    // décompte pas l'écart une seconde fois.
+    if (entry.transcript === null) await chargeTranscriptOverrunOf(context, entry, transcript);
 
     await context.queue.publish<RedactJob>(JOB_NAMES.redact, { entryId });
     // MEMO répond sur la transcription brute, pendant que la rédaction écrit.
@@ -119,5 +135,54 @@ export async function transcribeEntry(
     }
     // Relancé pour que pg-boss compte la tentative et applique son backoff.
     throw cause;
+  }
+}
+
+/**
+ * **Le filet du crédit du jour** (03/10/2026) : une transcription bien plus
+ * longue que le vocal mesuré trahit un fichier dont la durée ne dit pas ce
+ * qu'il contient (`lib/mp4Duration.ts` ne voit que le conteneur). L'écart se
+ * décompte du voyage, sans rien refuser — le souvenir est déjà là —, et se
+ * journalise : une durée forgée devient visible, et payée.
+ *
+ * Celui qui a parlé est l'auteur de la bulle du vocal ; un vocal posté hors
+ * du chat (`POST /v1/memos/:id/entries`) n'en a pas, et l'écart n'est alors
+ * que journalisé. Ne lève jamais : une panne ici ne doit pas faire rejouer la
+ * transcription, qui se paie.
+ */
+async function chargeTranscriptOverrunOf(
+  context: AppContext,
+  entry: { id: string; memoId: string; media: { durationSeconds: number | null } | null },
+  transcript: string,
+): Promise<void> {
+  const { prisma, logger } = context;
+  const seconds = entry.media?.durationSeconds;
+  if (seconds === null || seconds === undefined) return;
+
+  const measuredMs = Math.round(seconds * 1000);
+  const characters = countCharacters(transcript);
+  const overrunMs = transcriptOverrunMs({ characters, measuredMs });
+  if (overrunMs === 0) return;
+
+  const facts = { entryId: entry.id, memoId: entry.memoId, measuredMs, characters, overrunMs };
+  try {
+    const voice = await prisma.chatMessage.findFirst({
+      where: { entryId: entry.id, author: "traveller", kind: "voice" },
+      select: { accountId: true },
+    });
+    if (!voice?.accountId) {
+      logger.warn(facts, "Transcription bien plus longue que le vocal mesuré, sans auteur connu : rien décompté");
+      return;
+    }
+    const speaker = await loadSpeaker(prisma, voice.accountId);
+    const credit = await chargeTranscriptOverrun(prisma, { memoId: entry.memoId, ...speaker, overrunMs });
+    logger.warn(
+      { ...facts, accountId: voice.accountId, isUnlimited: speaker.isUnlimited, usedMs: credit?.usedMs ?? null },
+      speaker.isUnlimited
+        ? "Transcription bien plus longue que le vocal mesuré, d'un abonné : rien à décompter"
+        : "Transcription bien plus longue que le vocal mesuré : l'écart est décompté du crédit du jour",
+    );
+  } catch (cause) {
+    logger.error({ ...facts, err: cause }, "Transcription bien plus longue que le vocal mesuré : écart non décompté");
   }
 }

@@ -7,7 +7,7 @@ import {
   resetDatabase,
   type TestHarness,
 } from "./helpers.js";
-import { assertCanRecord } from "../src/services/quota.js";
+import { hasUnlimitedAccess } from "../src/services/subscriptions.js";
 
 /**
  * Les trois écrans « produit » : l'accueil, un voyage, le profil.
@@ -70,7 +70,14 @@ interface ProfileBody {
   };
   shippingCountries: { code: string; name: string }[];
   connectors: { id: string; isEnabled: boolean }[];
-  subscription: { weeklyPrice: number; isActive: boolean; hasEndedBefore: boolean };
+  subscription: {
+    price: number;
+    interval: "month" | "week";
+    weeklyPrice: number;
+    isActive: boolean;
+    isUnlimited: boolean;
+    hasEndedBefore: boolean;
+  };
   orders: unknown[];
 }
 
@@ -344,13 +351,17 @@ describe("le profil", () => {
     //
     // **Le prix est celui du catalogue, pas zéro.** Un compte sans ligne
     // `subscriptions` n'a pas un abonnement à zéro euro : il n'en a pas. Rendre
-    // 0 faisait écrire « 0,00 €/semaine » à la feuille d'offre et « 3 x 0,00 € »
-    // à l'estimation (Hugo, 16/09/2026) — voir `services/subscriptionCatalog.ts`.
+    // 0 faisait écrire « 0,00 € » à la feuille d'offre (Hugo, 16/09/2026) —
+    // voir `services/subscriptionCatalog.ts`. 4,99 € par mois depuis le
+    // 03/10/2026 ; `weeklyPrice` porte le même prix pour les apps installées.
     expect(body.subscription).toEqual({
-      weeklyPrice: 1.99,
+      price: 4.99,
+      interval: "month",
+      weeklyPrice: 4.99,
       isActive: false,
+      isUnlimited: false,
       cancelledAt: null,
-      // Rien n'a été payé, donc aucune semaine ne court : c'est le cas où la
+      // Rien n'a été payé, donc aucune période ne court : c'est le cas où la
       // résiliation garde sa phrase d'avant, « l'abonnement s'arrête
       // aujourd'hui ».
       paidThrough: null,
@@ -1209,31 +1220,23 @@ describe("les réglages d'un voyage", () => {
   });
 });
 
-describe("l'arrêt automatique de l'abonnement", () => {
+describe("la fin du voyage ne touche pas à l'abonnement", () => {
   /** Un abonnement en cours sur ce compte. */
   async function subscribe(accountId: string) {
     return harness.prisma.subscription.create({
-      data: { accountId, provider: "stripe", status: "active", priceCents: 299 },
+      data: { accountId, provider: "stripe", status: "active", priceCents: 499 },
     });
   }
 
-  it("s'éteint quand la dernière date de fin passe, et fait voir le paywall de retour", async () => {
+  it("garde l'abonnement quand la dernière date de fin passe : l'illimité court jusqu'à la résiliation", async () => {
+    // L'arrêt automatique est parti avec l'abonnement hebdomadaire (Hugo,
+    // 03/10/2026). Ce qui en reste, c'est le rappel de le couper.
     const account = await registerAccount(harness.app, "retour@memobook.app");
     await subscribe(account.accountId);
     const memo = await seedTrip(account.accountId, {
       endDate: new Date(Date.now() + 30 * 86_400_000),
     });
 
-    // Tant que le voyage court, l'abonnement tient.
-    await harness.app.inject({
-      method: "PATCH",
-      url: `/v1/trips/${memo.id}/settings`,
-      headers: { authorization: account.authorization },
-      payload: { endDate: new Date(Date.now() + 10 * 86_400_000).toISOString() },
-    });
-    expect(await activeCount(account.accountId)).toBe(1);
-
-    // La date de fin recule dans le passé : il n'y a plus de voyage à raconter.
     const closed = await harness.app.inject({
       method: "PATCH",
       url: `/v1/trips/${memo.id}/settings`,
@@ -1241,40 +1244,18 @@ describe("l'arrêt automatique de l'abonnement", () => {
       payload: { endDate: new Date(Date.now() - 86_400_000).toISOString() },
     });
     expect(closed.statusCode).toBe(200);
-    expect(await activeCount(account.accountId)).toBe(0);
+    expect(await activeCount(account.accountId)).toBe(1);
 
-    // Et le profil le dit, ce qui fait basculer le paywall sur sa version
-    // courte au voyage suivant.
     const profile = await harness.app.inject({
       method: "GET",
       url: "/v1/profile",
       headers: { authorization: account.authorization },
     });
     expect(profile.json<ProfileBody>().subscription).toMatchObject({
-      isActive: false,
-      hasEndedBefore: true,
+      isActive: true,
+      isUnlimited: true,
+      hasEndedBefore: false,
     });
-  });
-
-  it("laisse tranquille un voyage sans date de fin", async () => {
-    const account = await registerAccount(harness.app, "sansfin@memobook.app");
-    await subscribe(account.accountId);
-    const open = await seedTrip(account.accountId, { endDate: null });
-    const closed = await seedTrip(account.accountId, {
-      endDate: new Date(Date.now() - 86_400_000),
-    });
-
-    // Fermer le second ne doit rien couper : le premier court toujours.
-    // Quelqu'un qui part sans savoir quand il rentre reste un abonné.
-    await harness.app.inject({
-      method: "PATCH",
-      url: `/v1/trips/${closed.id}/settings`,
-      headers: { authorization: account.authorization },
-      payload: { endDate: new Date(Date.now() - 2 * 86_400_000).toISOString() },
-    });
-
-    expect(open.endDate).toBeNull();
-    expect(await activeCount(account.accountId)).toBe(1);
   });
 
   async function activeCount(accountId: string) {
@@ -1319,8 +1300,8 @@ describe("la résiliation depuis le profil", () => {
     });
     expect(reloaded.json<ProfileBody>().subscription.isActive).toBe(false);
 
-    // La semaine déjà réglée n'est pas rendue — c'est elle qui laisse raconter
-    // jusqu'à son terme, côté app comme côté verrou.
+    // La période déjà réglée n'est pas rendue — c'est elle qui laisse raconter
+    // sans limite jusqu'à son terme, côté app comme côté crédit du jour.
     const row = await harness.prisma.subscription.findFirstOrThrow({
       where: { accountId: account.accountId },
     });
@@ -1330,24 +1311,19 @@ describe("la résiliation depuis le profil", () => {
     expect(row.cancellationReason).toBe("tooExpensive");
   });
 
-  it("laisse encore enregistrer pendant la semaine réglée", async () => {
+  it("laisse raconter sans limite jusqu'au bout de la période réglée", async () => {
     const account = await registerAccount(harness.app, "sursis@memobook.app");
     await subscribe(account.accountId, new Date(Date.now() + 3 * 86_400_000));
-    await harness.prisma.account.update({
-      where: { id: account.accountId },
-      data: { remainingSteps: 0 },
-    });
 
-    await harness.app.inject({
+    const cancelled = await harness.app.inject({
       method: "POST",
       url: "/v1/profile/subscription/cancel",
       headers: { authorization: account.authorization },
       payload: { reason: "unused" },
     });
 
-    await expect(
-      assertCanRecord(harness.prisma, account.accountId),
-    ).resolves.toBeUndefined();
+    expect(cancelled.json<ProfileBody>().subscription).toMatchObject({ isActive: false, isUnlimited: true });
+    expect(await hasUnlimitedAccess(harness.prisma, account.accountId)).toBe(true);
   });
 
   it("se résilie deux fois sans se plaindre", async () => {

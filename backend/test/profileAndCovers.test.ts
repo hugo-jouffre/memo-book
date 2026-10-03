@@ -1,6 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { verifyPassword } from "../src/lib/password.js";
-import { subscriptionWeeks } from "../src/routes/appSerializers.js";
 import { collectStats, postToSheet } from "../src/services/statsExport.js";
 import {
   createHarness,
@@ -32,7 +31,7 @@ interface CoversBody {
 }
 
 interface WalletBody {
-  estimate: { pageCount: number; startDate: string | null; endDate: string | null; weeks: number | null } | null;
+  estimate: Record<string, unknown> | null;
 }
 
 let harness: TestHarness;
@@ -309,17 +308,10 @@ describe("les couvertures d'un carnet", () => {
   });
 });
 
-describe("l'estimation datée de la cagnotte", () => {
-  it("compte les semaines entamées du voyage", () => {
-    const start = new Date("2026-08-26T00:00:00Z");
-    expect(subscriptionWeeks(start, new Date("2026-09-15T00:00:00Z"))).toBe(3);
-    expect(subscriptionWeeks(start, new Date("2026-08-26T00:00:00Z"))).toBe(1);
-    // Sans fin : jusqu'à aujourd'hui.
-    expect(subscriptionWeeks(start, null, new Date("2026-09-29T00:00:00Z"))).toBe(5);
-    expect(subscriptionWeeks(null, null)).toBeNull();
-  });
-
-  it("rend les dates et les semaines avec l'estimation", async () => {
+describe("l'estimation de la cagnotte", () => {
+  it("ne porte plus les dates ni les semaines d'abonnement à déduire", async () => {
+    // La feuille « Estimation » du paywall comptait les semaines du voyage pour
+    // les déduire du carnet. Il n'y a plus rien à déduire (Hugo, 03/10/2026).
     const account = await registerAccount(harness.app);
     const memo = await seedTrip(account.accountId);
 
@@ -329,11 +321,11 @@ describe("l'estimation datée de la cagnotte", () => {
       headers: { authorization: account.authorization },
     });
     expect(response.statusCode).toBe(200);
-    expect(response.json<WalletBody>().estimate).toMatchObject({
-      startDate: "2026-08-26T00:00:00.000Z",
-      endDate: "2026-09-15T00:00:00.000Z",
-      weeks: 3,
-    });
+    const estimate = response.json<WalletBody>().estimate;
+    expect(estimate).toHaveProperty("pageCount");
+    expect(estimate).toHaveProperty("cost");
+    expect(estimate).not.toHaveProperty("weeks");
+    expect(estimate).not.toHaveProperty("startDate");
   });
 });
 

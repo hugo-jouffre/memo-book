@@ -5,12 +5,19 @@ import SwiftUI
 
 /// Le paywall : des écrans qui se suivent tout seuls, comme des stories.
 ///
+/// **Il vend l'illimité, pas le droit de raconter** (Hugo, 03/10/2026). Tout le
+/// monde raconte cinq minutes par jour et par voyage ; l'abonnement, 4,99 € par
+/// mois, rend le récit illimité pour l'abonné. Le paywall s'ouvre donc sur une
+/// envie — « Tu as tant de choses à raconter ! » —, jamais sur un mur : on peut
+/// le refermer et continuer demain.
+///
 /// **Deux versions, un seul mécanisme.** Celle qu'on voit la première fois
-/// compte trois écrans et explique tout ; celle qu'on revoit en revenant pour un
-/// nouveau voyage en compte deux et ne réexplique rien — « Tu connais déjà bien
-/// le fonctionnement, on ne t'embête pas plus... ». Le minuteur, les zones de
-/// tapotis, la barre du haut et le comportement du dernier écran sont les mêmes :
-/// c'est ``PaywallVariant`` qui dit lesquels, et rien d'autre ne change.
+/// compte trois écrans et explique tout ; celle qu'on revoit quand on a déjà été
+/// abonné en compte deux et ne réexplique rien — « Tu connais déjà le principe,
+/// on ne t'embête pas plus... ». Le minuteur, les zones de tapotis, la barre du
+/// haut et le comportement du dernier écran sont les mêmes : c'est
+/// ``PaywallVariant`` qui dit lesquels, et rien d'autre ne change. Qui l'ouvre la
+/// lit sur ``SubscriptionSession/paywallVariant``.
 ///
 /// **Le temps passe tout seul, mais on peut le doubler.** La barre du haut se
 /// remplit à vue d'œil et fait passer à la suite quand elle est pleine ; un
@@ -54,17 +61,6 @@ struct PaywallView: View {
     @State private var page = 0
     @State private var showsPreview = false
 
-    /// La feuille « Estimation », ouverte par la pastille de la carte « Tes
-    /// abonnements sont déduits ! » — en pause, voir
-    /// ``PaywallCopy/deductedSubscriptions``.
-    @State private var showsEstimation = false
-
-    /// L'estimation du carnet qu'on finance, lue sur la cagnotte dès que
-    /// l'offre s'ouvre — sur les chiffres de la maquette tant qu'elle n'est
-    /// pas là (T127). Voir ``SwiftUI/EnvironmentValues/walletSource``.
-    @State private var estimation: PaywallEstimation?
-    @Environment(\.walletSource) private var walletSource
-
     /// **L'achat passe par Apple, et par Apple seul** (01/10/2026). Le bouton
     /// de l'offre ouvrait une feuille de cartes et d'Apple Pay — un paiement
     /// hors achat intégré pour un service numérique, ce qu'App Review rejette
@@ -89,6 +85,11 @@ struct PaywallView: View {
     /// montant, et l'écran ne doit pas annoncer autre chose que ce que la
     /// feuille d'Apple demandera.
     @State private var applePrice: String?
+
+    /// La période que ce prix paie, lue sur le même produit — « mois ». Elle
+    /// vient avec le prix pour la même raison : l'écran ne doit pas annoncer
+    /// une autre durée que celle que la feuille d'Apple facturera.
+    @State private var applePeriod: String?
 
     /// Les conditions ou la politique de confidentialité, ouvertes depuis le
     /// pied de l'offre — exigées à côté du bouton d'un abonnement (règle 3.1.2).
@@ -129,7 +130,12 @@ struct PaywallView: View {
     /// se sentir bousculé, assez court pour qu'on n'attende pas la suite.
     private static let pageDuration: Duration = .seconds(6)
 
-    private var price: String { applePrice ?? subscription.displayedWeeklyPrice.euros }
+    /// Le prix de l'offre — celui d'Apple dès qu'il est là, sinon celui du
+    /// serveur s'il est mensuel, sinon 4,99 € (``Subscription/offer``).
+    private var price: String { applePrice ?? subscription.offeredPrice.euros }
+
+    /// Sa période — celle du produit, sinon le mois de l'offre.
+    private var period: String { applePeriod ?? Subscription.offer.periodLabel }
 
     var body: some View {
         ZStack {
@@ -167,9 +173,9 @@ struct PaywallView: View {
                 Group {
                     switch (variant, page) {
                     case (.firstTime, 0):
-                        PaywallCongratulations { turn(+1) }
+                        PaywallStoriesToTell { turn(+1) }
                     case (.firstTime, 1):
-                        PaywallEstimate(
+                        PaywallFadingDetails(
                             onContinue: { turn(+1) },
                             onPreview: { showsPreview = true }
                         )
@@ -178,8 +184,8 @@ struct PaywallView: View {
                     default:
                         PaywallOffer(
                             price: price,
+                            period: period,
                             title: variant.offerTitle,
-                            onEstimate: { showsEstimation = true },
                             isPurchasing: isPurchasing,
                             isRestoring: isRestoring,
                             onSubscribe: purchase,
@@ -234,23 +240,10 @@ struct PaywallView: View {
         .brandSheet(isPresented: $showsPreview) {
             BookPreviewSheet(memoId: previewMemoId)
         }
-        // Les deux feuilles de l'offre, par-dessus le paywall entier elles
-        // aussi : on les referme et on retrouve l'offre.
-        .brandSheet(isPresented: $showsEstimation) {
-            PaywallEstimationSheet(
-                estimation: estimation ?? .example(weeklyPrice: subscription.displayedWeeklyPrice)
-            )
+        .task {
+            applePrice = await subscriptionPurchase?.displayPrice()
+            applePeriod = await subscriptionPurchase?.displayPeriod()
         }
-        .task(id: previewMemoId) {
-            // Plus aucune carte ne porte la pastille qui ouvre l'estimation
-            // (« Tes abonnements sont déduits ! » est en pause) : pas d'appel
-            // à la cagnotte pour une feuille que rien n'ouvre. Il revient avec
-            // la carte.
-            guard PaywallCopy.arguments.contains(where: { $0.pill != nil }) else { return }
-            guard let walletSource, let wallet = try? await walletSource(previewMemoId) else { return }
-            estimation = PaywallEstimation(wallet: wallet, weeklyPrice: subscription.displayedWeeklyPrice)
-        }
-        .task { applePrice = await subscriptionPurchase?.displayPrice() }
         // Un écran, comme le support : son en-tête porte la flèche qui ramène
         // à l'offre.
         .fullScreenCover(item: $legalDocument) { route in
@@ -355,7 +348,7 @@ struct PaywallView: View {
             // La flèche **recule d'un écran**, comme le tapotis à gauche ; elle
             // ne referme le paywall que depuis le premier (Hugo, 16/09/2026).
             // Elle refermait tout, d'où qu'on soit : depuis l'offre, on
-            // retombait sur le profil au lieu de revoir l'estimation.
+            // retombait sur le profil au lieu de revoir l'écran d'avant.
             Button { turn(-1) } label: {
                 Image(brand: "IconArrow")
                     .resizable()
@@ -531,14 +524,18 @@ struct PaywallView: View {
 
 /// Qui regarde l'offre : quelqu'un qui découvre, ou quelqu'un qui revient.
 ///
-/// **La seconde existe parce que l'abonnement s'arrête tout seul.** Il s'éteint
-/// à la fin du voyage — c'est ce que promet le troisième argument de l'offre,
-/// « Parce que tu n'as pas besoin de notre application en dehors de tes
-/// voyages ». Quelqu'un qui repart doit donc se réabonner, et lui rejouer les
-/// trois écrans de découverte reviendrait à lui réexpliquer ce qu'il nous a déjà
-/// acheté une fois.
+/// **La seconde existe parce qu'on propose de résilier à la fin de chaque
+/// voyage.** Quelqu'un qui repart et retrouve l'envie de raconter sans compter
+/// se réabonne ; lui rejouer les trois écrans de découverte reviendrait à lui
+/// réexpliquer ce qu'il nous a déjà acheté une fois.
+///
+/// Elle se décide **partout** — profil, conversation, réglages du voyage,
+/// accueil — sur ``SubscriptionSession/paywallVariant``, qui la lit sur
+/// `hasSubscribedBefore` (accueil) et `hasEndedBefore` (profil) (Hugo,
+/// 03/10/2026). Seul le profil la connaissait, et « Me réabonner » sur
+/// l'accueil rejouait la découverte à un ancien abonné.
 enum PaywallVariant: Sendable, Hashable {
-    /// Trois écrans : les trois étapes franchies, l'estimation, l'offre.
+    /// Trois écrans : l'envie de raconter, les détails qui s'effacent, l'offre.
     case firstTime
     /// Deux écrans : le mot de retour, puis l'offre.
     case returning
@@ -552,7 +549,7 @@ enum PaywallVariant: Sendable, Hashable {
 
     /// Le titre de l'écran d'offre. Il change avec la version : la première fois
     /// il vend le carnet (« Ce carnet que tu relieras encore dans 30 ans »),
-    /// au retour il rassure (« On a pas changé la recette ! »).
+    /// au retour il dit ce qu'on retrouve (« Raconte de nouveau sans compter »).
     var offerTitle: (lead: String, strong: String) {
         switch self {
         case .firstTime:
@@ -588,98 +585,89 @@ enum PaywallMetrics {
     static let holdDelay: Double = 0.25
 }
 
+/// Toute la copie du paywall, **au caractère près** (Hugo, 03/10/2026 — textes
+/// décidés avec le crédit du jour : on vend l'illimité, on ne bloque personne).
 enum PaywallCopy {
     static let help = "Besoin d’aide ?"
     static let cont = "Continuer"
 
-    // — Écran 1
-    static let bravoEyebrow = "Bravo !"
-    static let bravoTitleLead = "Tu as enregistré tes "
-    static let bravoTitleStrong = "3 premières étapes !"
-    static let bravoBodyLead =
-        "Tu as passé le plus dur, prendre le rythme et commencer à conserver des souvenirs précis, "
-    static let bravoBodyStrong = "à vie !"
+    // — Écran 1 : l'envie de raconter
+    static let storiesEyebrow = "On adore t’écouter !"
+    static let storiesTitleLead = "Tu as tant de "
+    static let storiesTitleStrong = "choses à raconter !"
+    static let storiesBodyLead =
+        "Et c’est exactement ce qu’on espérait. Un voyage ne tient pas en 5 minutes par jour : chaque détail que tu racontes, c’est une page de plus "
+    static let storiesBodyStrong = "dans ton carnet."
 
-    // — Écran 2
-    static let estimateEyebrow = "Selon nos calculs..."
-    static let estimateTitleLead = "Ton carnet comptera environ "
-    static let estimateTitleStrong = "40 pages !"
-    static let estimateBody = [
-        "Nous avons hâte de te montrer le résultat final !",
-        "Notre outil de mise à page automatique est déjà au boulot...",
+    // — Écran 2 : les détails qui s'effacent
+    static let detailsEyebrow = "Raconte tout, tout de suite"
+    static let detailsTitleLead = "Les détails s’effacent "
+    static let detailsTitleStrong = "en quelques jours"
+    static let detailsBody = [
+        "Le nom de ce petit resto, la phrase du guide qui vous a fait rire, l’odeur du marché le matin...",
+        "En illimité, tu racontes tout au moment où tu le vis, sans regarder le chrono.",
     ]
     static let previewPill = "Voir un aperçu →"
-    static let estimateFootnote = [
-        "Projection par rapport à tes 3 étapes d’enregistrements.",
+    /// Les deux formules, côte à côte : ce qui reste gratuit, et ce que
+    /// l'abonnement ouvre. Le chiffre est celui du serveur
+    /// (`DAILY_CREDIT_LIMIT_MS`) ; s'il bougeait, ce texte bougerait avec.
+    static let detailsFootnote = [
+        "Gratuit : 5 minutes par jour et par voyage, à l’oral comme à l’écrit.",
         "—",
-        "Ce nombre de pages est à titre indicatif. Il peut varier en fonction de la quantité de récit que tu enregistreras.",
+        "Illimité : raconte autant que tu veux, aussi longtemps que ton voyage dure.",
     ]
 
     // — La version « retour », premier écran
     static let returnEyebrow = "C’est reparti ?"
-    static let returnTitleLead = "Tu reviens pour un "
-    static let returnTitleStrong = "nouveau voyage !"
+    static let returnTitleLead = "Tu as encore "
+    static let returnTitleStrong = "plein de choses à raconter !"
     static let returnBody = [
-        "Nous sommes ravi que tu aies apprécié MemoBook !",
-        "Tu connais déjà bien le fonctionnement, on ne t’embête pas plus...",
+        "Ravis de te retrouver !",
+        "Tu connais déjà le principe, on ne t’embête pas plus...",
     ]
 
     // — La version « retour », écran d'offre
-    static let returnOfferTitleLead = "On a pas changé "
-    static let returnOfferTitleStrong = "la recette !"
+    static let returnOfferTitleLead = "Raconte de nouveau "
+    static let returnOfferTitleStrong = "sans compter"
 
-    // — Écran 3
-    static let offerEyebrow = "Abonne toi pour continuer"
+    // — Écran 3 : l'offre
+    static let offerEyebrow = "Passe en illimité"
     /// **Sans « peut-être »** (01/10/2026) : le titre doit tenir sur trois
     /// lignes, et le mot l'emmenait sur une quatrième.
     static let offerTitleLead = "Ce carnet que tu relieras encore "
     static let offerTitleStrong = "dans 30 ans"
-    static let estimationPill = "Voir une estimation →"
-    /// ⚠️ **« /semaine » et non « /mois »** (Hugo, 17/09/2026). L’abonnement
-    /// est hebdomadaire — la feuille d’abonnement l’écrit, l’estimation compte
-    /// trois semaines —, et ce pied de page seul promettait un prélèvement
-    /// mensuel : il annonçait donc un quart du prix réel.
+
+    /// Le pied de l'offre, en deux lignes : la première en deux morceaux,
+    /// parce que **le prix se lit en gras** (Hugo, 19/09/2026) — c'est le seul
+    /// chiffre de l'écran.
     ///
-    /// **La seconde ligne ne promet plus d'arrêt automatique** (01/10/2026).
-    /// Apple ne laisse aucune app résilier à la place de son client : promettre
-    /// « automatiquement à la fin du voyage » aurait fait payer des semaines
-    /// qu'on croyait arrêtées. Elle dit ce qui est vrai — où l'on résilie, et
-    /// le rappel qu'on reçoit au retour.
-    static func offerFootnote(price: String) -> [String] {
-        [
-            "Renouvellement automatique pour \(price)/semaine",
-            "résiliable à tout moment, rappel à la fin du voyage",
-        ]
+    /// **La période vient du produit** (03/10/2026) : « /mois » se lit sur
+    /// l'App Store (`subscriptionPeriod`), et le mois de l'offre n'est que le
+    /// repli. L'abonnement a été hebdomadaire ; un pied écrit à la main a déjà
+    /// annoncé une autre durée que la feuille d'Apple (17/09/2026).
+    ///
+    /// **La seconde ligne ne promet pas d'arrêt automatique** (01/10/2026).
+    /// Apple ne laisse aucune app résilier à la place de son client : elle dit
+    /// ce qui est vrai — on résilie quand on veut, et on reçoit un rappel au
+    /// retour.
+    ///
+    /// **« 4,99 €/mois » ne se coupe pas** (recette du 03/10/2026) : la barre
+    /// oblique laisse passer à la ligne après elle, et l'espace du prix aussi
+    /// quand StoreKit ou le repli en mettent une ordinaire. On lisait
+    /// « 4,99 €/ » puis « mois » sur la ligne suivante. Espaces insécables, et
+    /// un gluon de mot (U+2060) de part et d'autre de la barre.
+    static func offerFootnotePrice(price: String, period: String) -> (lead: String, price: String) {
+        let glued = "\(price)\u{2060}/\u{2060}\(period)"
+            .replacingOccurrences(of: " ", with: "\u{00A0}")
+        return ("Renouvellement automatique pour ", glued)
     }
 
-    /// La première ligne du pied, en deux morceaux : **le prix se lit en
-    /// gras** (Hugo, 19/09/2026). C'est le seul chiffre de l'écran, et il
-    /// était écrit du même gris léger que la mention qui l'entoure.
-    static func offerFootnotePrice(price: String) -> (lead: String, price: String) {
-        ("Renouvellement automatique pour ", "\(price)/semaine")
-    }
+    static let offerFootnoteDetail = "résiliable à tout moment, rappel à la fin du voyage"
+
     /// Le bouton de l'offre nomme le geste — Hugo, 15/09/2026. « Choisis ton
     /// mode de paiement » ouvrait une feuille de cartes ; c'est désormais la
     /// feuille d'Apple qui s'ouvre, et l'on s'y abonne.
     static let offerCallToAction = "S’abonner"
-
-    // — La feuille « Estimation » (`3469:14105`)
-    enum Estimation {
-        static let title = "Estimation"
-        static func duration(weeks: Int) -> String {
-            weeks == 1 ? "1 semaine de voyage" : "\(weeks) semaines de voyage"
-        }
-        static let bookPrice = "Prix final du carnet estimé"
-        static func pages(_ count: Int) -> String { "Environ \(count) pages" }
-        static let subscriptions = "Cumul de tes abonnements"
-        static func subscriptionDetail(weeks: Int, weeklyPrice: String) -> String {
-            "\(weeks) x \(weeklyPrice)"
-        }
-        static let total = "Montant final à payer lors de la commande du carnet"
-        static let extraCopiesLead = "-20%"
-        static let extraCopies = "pour chaque carnet supplémentaire"
-        static func perCopy(_ price: String) -> String { "\(price)/carnet" }
-    }
 
     // — L'achat, par la feuille d'Apple
     enum Purchase {
@@ -701,61 +689,43 @@ enum PaywallCopy {
         let icon: String
         let title: String
         let detail: String
-        let pill: String?
         /// L'inclinaison de la carte, en degrés. Elles alternent, comme des
         /// papiers posés à la main.
         let tilt: Double
     }
 
-    /// Les cartes de l'offre, de haut en bas. **Trois depuis le 02/10/2026** :
-    /// la quatrième, ``deductedSubscriptions``, est en pause.
+    /// Les trois cartes de l'offre, de haut en bas (Hugo, 03/10/2026). La
+    /// quatrième, « Tes abonnements sont déduits ! », est partie avec la
+    /// déduction elle-même et la feuille « Estimation » qu'elle ouvrait.
     static let arguments: [Argument] = [
         Argument(
             icon: "IconPictureFrame",
-            title: "Mise en page automatique",
+            title: "Vocaux et textes illimités",
             detail:
-                "Tes audios, tes récits, tes photos sont mis en page automatiquement tout au long de ton voyage",
-            pill: nil,
+                "Raconte autant que tu veux : tout est mis en page automatiquement, tout au long de ton voyage",
             tilt: -1
         ),
         Argument(
-            // **Pleine**, comme les trois autres (Hugo, 19/09/2026) : le tracé
-            // au trait se lisait plus léger que le cadre photo, le cadenas et
-            // le sac, et la pile de cartes perdait son unité.
+            // **Pleine**, comme les deux autres (Hugo, 19/09/2026) : le tracé
+            // au trait se lisait plus léger que le cadre photo et le cadenas,
+            // et la pile de cartes perdait son unité.
             icon: "IconPrinterFilled",
             title: "Vite fait, bien fait !",
             detail: "Ton carnet est imprimé et livré chez toi quelques jours après ton retour !",
-            pill: nil,
             tilt: 1.4
         ),
         Argument(
             icon: "IconLockerChecked",
             // **Un rappel, pas un arrêt** (01/10/2026) : Apple seul résilie,
             // à la demande de la personne. L'accueil le propose en un geste
-            // dès que plus aucun voyage ne court.
+            // dès que plus aucun voyage ne court — et l'illimité reste ouvert
+            // jusqu'au bout du mois payé.
             title: "On te rappelle de résilier",
             detail:
-                "À la fin de ton voyage, tu coupes l’abonnement en un geste : pas besoin de nous entre deux voyages",
-            pill: nil,
+                "À la fin de ton voyage, tu coupes l’abonnement en un geste, et l’illimité reste ouvert jusqu’au bout du mois payé",
             tilt: -1
         ),
     ]
-
-    /// « Tes abonnements sont déduits ! » — **en pause** (Hugo, 02/10/2026).
-    ///
-    /// Rien ne crédite encore la cagnotte des semaines payées chez Apple : la
-    /// carte promettait une déduction que la commande ne fait pas. Elle sort de
-    /// l'offre, et la feuille « Estimation » que sa pastille ouvrait n'a plus
-    /// d'entrée. Les deux restent écrites et branchées : pour les rallumer,
-    /// remettre cette carte au bout d'``arguments``.
-    static let deductedSubscriptions = Argument(
-        icon: "IconMoneyBag",
-        title: "Tes abonnements sont déduits !",
-        detail:
-            "Le coût cumulé de tes semaines d’abonnement sera déduit du prix final de ton carnet",
-        pill: estimationPill,
-        tilt: 1
-    )
 }
 
 /// Ce que l'offre dit quand l'achat n'a pas ouvert l'abonnement.

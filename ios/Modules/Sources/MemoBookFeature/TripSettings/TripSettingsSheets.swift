@@ -3,7 +3,7 @@ import MemoBookDesign
 import SwiftUI
 import UIKit
 
-/// Les cinq feuilles des paramètres d'un voyage.
+/// Les six feuilles des paramètres d'un voyage.
 ///
 /// **Elles règlent sans quitter l'écran**, et c'est tout leur intérêt : on est
 /// en plein voyage, on veut décaler une date ou couper une alerte, et on ne veut
@@ -24,8 +24,9 @@ public enum TripSettingsSheet: String, Identifiable, Hashable, Sendable {
     case notifications
     case theme
     case companions
-    /// Les limites de souvenirs, et le palier étendu.
-    case memory
+    /// Le crédit du jour du voyage, et la porte de l'illimité — voir
+    /// ``DailyCreditSheet``.
+    case dailyCredit
 
     public var id: String { rawValue }
 }
@@ -661,7 +662,7 @@ struct ClearConversationSheet: View {
             case .notifications: TripNotificationsSheet(model: model)
             case .theme: TripThemeSheet(model: model)
             case .companions: TripInviteSheet(model: model)
-            case .memory: MemoryAllowanceSheet(model: model)
+            case .dailyCredit: DailyCreditSheet(model: model, onSubscribe: { sheet = nil })
             }
         }
         .environment(\.colorScheme, .light)

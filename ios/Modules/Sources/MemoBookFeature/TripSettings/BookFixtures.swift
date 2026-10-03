@@ -22,16 +22,18 @@ extension TripSettings {
             // la cagnotte appartient au compte, les trois écrans lisent la même
             // somme. Les désaccorder ferait croire à un bogue.
             walletBalance: 0,
-            // Un usage **normal** : moins d'un sixième du budget consommé,
-            // donc la jauge reste cachée et la ligne se contente de son solde.
-            // C'est l'état de tout le monde, et c'est celui qu'il faut voir par
-            // défaut. Le panneau de débogage rejoue les deux autres.
-            //
-            // Le renouvellement est à **cinq jours** : la période est une
-            // semaine, pas un mois.
-            memory: MemoryAllowance(
-                used: 312,
-                renewsOn: Calendar.current.date(byAdding: .day, value: 5, to: .now)
+            // Un voyage **entamé** : 1 min 40 racontée aujourd'hui, il en reste
+            // 3 min 20 — la jauge verte au tiers, la ligne d'un non-abonné.
+            // C'est l'état de tout le monde, celui qu'il faut voir par défaut ;
+            // le panneau de débogage rejoue le neuf, les 30 dernières secondes,
+            // l'épuisé et l'abonné. Le crédit se recharge au prochain minuit.
+            dailyCredit: DailyCredit(
+                usedMs: 100_000,
+                resetsAt: Calendar.current.date(
+                    byAdding: .day,
+                    value: 1,
+                    to: Calendar.current.startOfDay(for: .now)
+                )
             ),
             startDate: Self.day(26, 8, 2026),
             endDate: Self.day(15, 9, 2026),
@@ -96,8 +98,8 @@ extension BookCustomisation {
 extension Wallet {
     /// **La cagnotte par défaut est vide, et c'est l'état du produit.**
     ///
-    /// Une cagnotte ne se remplit que par des dons et des versements
-    /// d'abonnement : un compte neuf n'a rien reçu. Ce jeu d'essai portait un
+    /// Une cagnotte ne se remplit que par des dons et des recharges : un
+    /// compte neuf n'a rien reçu. Ce jeu d'essai portait un
     /// solde garni, et ``TripSettings/fixture`` un autre — d'où trois chiffres
     /// pour une même cagnotte selon l'écran regardé. Le solde n'a qu'une
     /// source, le registre du serveur ; à défaut de serveur, c'est zéro.
@@ -106,7 +108,8 @@ extension Wallet {
     /// sable pose à la demande.
     public static var fixture: Wallet { emptyFixture }
 
-    /// La cagnotte garnie de la maquette : cinq contributions, deux natures.
+    /// La cagnotte garnie de la maquette : des dons, et une recharge par carte —
+    /// l'abonnement n'y verse plus rien (Hugo, 03/10/2026).
     public static var filledFixture: Wallet {
         Wallet(
             balance: 65.97,
@@ -120,17 +123,10 @@ extension Wallet {
                 ),
                 WalletEntry(
                     id: "w-2",
-                    amount: 1.99,
+                    amount: 5.97,
                     kind: .topup,
-                    label: "Abonnement MB",
+                    label: "Recharge de la cagnotte",
                     date: TripSettings.day(18, 8, 2026)
-                ),
-                WalletEntry(
-                    id: "w-3",
-                    amount: 1.99,
-                    kind: .topup,
-                    label: "Abonnement MB",
-                    date: TripSettings.day(11, 8, 2026)
                 ),
                 WalletEntry(
                     id: "w-4",
@@ -145,13 +141,6 @@ extension Wallet {
                     kind: .gift,
                     label: "Julie et Tom",
                     date: TripSettings.day(8, 8, 2026)
-                ),
-                WalletEntry(
-                    id: "w-6",
-                    amount: 1.99,
-                    kind: .topup,
-                    label: "Abonnement MB",
-                    date: TripSettings.day(4, 8, 2026)
                 ),
             ],
             tripId: FixtureTripId.rome,

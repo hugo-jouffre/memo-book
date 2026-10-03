@@ -44,7 +44,7 @@ Le repo GitHub est la source de vérité du projet. Clara et Paul n'ont pas beso
 - **Rédaction** : API Anthropic (`claude-opus-5`), pilotée par `agents/agent-transcription.md`. Passe distincte de la mise en page : le texte est écrit souvenir par souvenir et relu par l'utilisateur avant d'entrer dans le carnet
 - **Conversation** : API Anthropic (`claude-sonnet-5`), pilotée par `agents/agent-conversation.md`. C'est MEMO, dans le chat : il écoute, reformule, pose **une** question et classe ce qu'on lui dit. Un moteur de règles répond à sa place quand il se tait — le fil n'est jamais muet ([`docs/conversation.md`](docs/conversation.md))
 - **Génération de PDF** : APITemplate, sur le template de `MemoBook Generator/templates/travel-journal/`
-- **Paiements** : StoreKit 2 pour les biens numériques (carnet PDF, abonnement) ; Stripe possible pour les carnets imprimés livrés physiquement — *pas encore implémenté*
+- **Paiements** : StoreKit 2 pour l'abonnement mensuel (4,99 €, récit illimité ; sans lui, chaque voyage raconte 5 minutes par jour) ; Stripe pour le carnet imprimé et la cagnotte — voir [`docs/paiements.md`](docs/paiements.md)
 - **CI** : GitHub Actions — typecheck, lint et tests du back-end à chaque PR (`.github/workflows/ci-backend.yml`). La vérification de compilation iOS reste à ajouter (elle demande un runner macOS)
 
 Les clés API (OpenAI, APITemplate, etc.) ne vivent **jamais** dans l'app ni dans ce repo — uniquement côté serveur.
@@ -59,7 +59,7 @@ Développement module par module, chaque module = une branche, une PR, un ticket
 4. **Gestion des souvenirs** — liste, lecture, transcription, édition, synchronisation en arrière-plan — 🔄 *socle posé : liste, transcription, statuts. Reste l'édition et la synchro en arrière-plan*
 5. **Génération et visualisation du carnet** — composition, génération serveur, prévisualisation PDF — 🔄 *socle posé, de bout en bout*
 6. **Partage et export** — export PDF, lien de partage, sauvegarde dans Fichiers — 🔄 *partage du PDF en place*
-7. **Paywall et achats intégrés** — StoreKit 2, achat unique et abonnement ⏳
+7. **Paywall et achats intégrés** — StoreKit 2, abonnement mensuel, crédit du jour ⏳
 8. **Réglages et compte** — profil, abonnement, confidentialité, suppression de compte ⏳
 
 ## Roadmap

@@ -127,7 +127,16 @@ public final class ProfileModel {
     public func load() async {
         // Ce qu'on avait, tout de suite, et seulement au premier chargement.
         if profile == nil, let stored = await cached?() {
-            profile = stored
+            #if DEBUG
+                // Le personnage du bac à sable vaut aussi pour la copie du
+                // disque : sans lui, le profil gardé — abonné — repassait à la
+                // session « a déjà été abonné » à l'ouverture, et « Jamais
+                // abonné » ne montrait jamais le paywall de découverte
+                // (recette du 03/10/2026).
+                profile = SandboxPersona.current?.applied(to: stored) ?? stored
+            #else
+                profile = stored
+            #endif
             freshness = .restored
         }
 
@@ -370,12 +379,8 @@ public final class ProfileModel {
         save(ProfileEdit(gender: gender), confirming: .gender)
     }
 
-    /// Souscrire, ou re-souscrire après une résiliation — et **cesser d'être un
-    /// compte à quota dans le même geste**.
-    ///
-    /// Les deux ensemble parce que c'est ce que le serveur écrira le jour d'une
-    /// vraie souscription : un abonné n'a plus d'étapes offertes à compter, et
-    /// laisser la pastille se vider derrière lui serait un décompte sans objet.
+    /// Souscrire, ou re-souscrire après une résiliation : l'écran passe à
+    /// l'illimité tout de suite, sans attendre que le serveur relise l'achat.
     ///
     /// ⚠️ **Aucun achat n'a lieu ici.** L'achat passe par le paywall et
     /// StoreKit (``SubscriptionPurchase``) ; ceci ne reste que pour un
@@ -385,22 +390,21 @@ public final class ProfileModel {
         mutate { profile in
             profile.subscription.isActive = true
             profile.subscription.cancelledAt = nil
-            profile.offeredSteps = nil
-            profile.remainingSteps = nil
         }
     }
 
     /// Résilier, au bout des trois confirmations.
     ///
-    /// **L'abonnement cesse de se renouveler ; la semaine déjà payée, elle, va
-    /// à son terme** (Hugo, 16/09/2026). `isActive` tombe, `paidThrough` reste,
-    /// et c'est ``Subscription/grantsAccess(on:)`` qui décide de ce qui est
-    /// ouvert — pas `isActive` seul. Le serveur applique la même règle sur son
-    /// verrou (`assertCanRecord`).
+    /// **L'abonnement cesse de se renouveler ; le mois déjà payé, lui, va à son
+    /// terme** (Hugo, 16/09/2026, règle tenue au passage au mois le
+    /// 03/10/2026). `isActive` tombe, `paidThrough` reste, et c'est
+    /// ``Subscription/grantsAccess(on:)`` qui décide si l'on raconte encore sans
+    /// limite — pas `isActive` seul. Le serveur applique la même règle
+    /// (`hasUnlimitedAccess`).
     ///
     /// Ça remplace « l'abonnement s'arrête aujourd'hui », qui n'était vrai que
     /// le dernier jour d'une période — et qui reste la phrase affichée dans ce
-    /// cas-là, voir ``SubscriptionCopy/doneParagraphs(graceEnd:)``.
+    /// cas-là, voir ``SubscriptionCopy/doneParagraphs(graceEnd:interval:paidAhead:)``.
     ///
     /// **Et ça part au serveur** (Hugo, 19/09/2026). Ça ne partait pas : la
     /// méthode ne touchait que la copie locale, le prochain chargement relisait
@@ -462,7 +466,7 @@ public final class ProfileModel {
     /// Ce qu'Apple dit du renouvellement, lu **sur l'appareil** au retour de la
     /// feuille d'iOS. L'écran suit tout de suite ; le serveur l'apprend par la
     /// notification d'Apple, quelques secondes plus tard, et le prochain
-    /// chargement le confirme. La semaine payée (`paidThrough`) ne bouge pas.
+    /// chargement le confirme. Le mois payé (`paidThrough`) ne bouge pas.
     public func acknowledgeAppStoreRenewal(_ renews: Bool) {
         mutate {
             $0.subscription.isActive = renews
@@ -470,10 +474,48 @@ public final class ProfileModel {
         }
     }
 
-    /// L'abonnement laisse-t-il encore raconter — actif, ou dans sa semaine
-    /// payée. C'est ce que la session doit retenir après une résiliation.
+    /// Le retour de la feuille d'Apple, pour l'écran **et** pour la session —
+    /// d'après ce que StoreKit dit du renouvellement.
+    ///
+    /// **Un achat qu'Apple tient et que le serveur n'a pas encore reçu**
+    /// (``isHeldByAppleOnly(_:)``) ne se retouche pas sur la ligne du serveur
+    /// (03/10/2026) : elle n'a ni abonnement ni période payée. Renouvellement
+    /// coupé, on y enregistrait `false` — « L’abonnement s’arrête
+    /// aujourd’hui », l'offre reproposée —, alors qu'Apple honore le mois
+    /// payé ; renouvellement armé, on y posait `isActive`, et l'écho du profil
+    /// levait le geste de la session sans que le serveur ait rien confirmé.
+    /// La session garde donc l'illimité — Apple tient la période dans les deux
+    /// cas —, et l'écran remet la transaction puis relit : le serveur
+    /// tranchera.
+    ///
+    /// Renvoie `true` dans ce cas-là, où il reste à remettre et relire.
+    func settleAppStoreRenewal(_ renews: Bool, session: SubscriptionSession?) -> Bool {
+        if isHeldByAppleOnly(session) {
+            session?.record(isSubscribed: true)
+            return true
+        }
+        acknowledgeAppStoreRenewal(renews)
+        // Le mois payé garde l'illimité, même renouvellement coupé : la
+        // session retient l'accès réel, pas le geste.
+        session?.record(isSubscribed: subscriptionGrantsAccess)
+        return false
+    }
+
+    /// La session dit « acheté », et le profil du serveur ne connaît pas
+    /// d'abonnement qui laisse raconter : un achat encaissé par Apple que
+    /// l'API n'a pas encore pris (`awaitingServer`). Faux tant que le profil
+    /// n'est pas là.
+    func isHeldByAppleOnly(_ session: SubscriptionSession?) -> Bool {
+        guard let profile else { return false }
+        return session?.override == true && !profile.subscription.isUnlimited
+    }
+
+    /// L'abonnement laisse-t-il encore raconter sans limite — actif, ou dans
+    /// son mois payé. C'est ce que la session doit retenir après une
+    /// résiliation : le geste vient de retoucher l'abonnement, donc c'est le
+    /// recalcul local qui répond (``Subscription/isUnlimited``).
     public var subscriptionGrantsAccess: Bool {
-        profile?.subscription.grantsAccess() ?? false
+        profile?.subscription.isUnlimited ?? false
     }
 
     // MARK: - L'envoi

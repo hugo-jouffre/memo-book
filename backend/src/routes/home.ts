@@ -4,8 +4,10 @@ import type { AppContext } from "../context.js";
 import { normalizeAccessCode } from "../lib/accessCode.js";
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
+import { readDailyCredits, type DailyCredit } from "../services/dailyCredit.js";
 import { createMemoFor, isTakenId, visibleToAccount } from "../services/memoOwnership.js";
 import { normalizeNarrationPace } from "../services/narrationPace.js";
+import { hasUnlimitedAccess } from "../services/subscriptions.js";
 import { effectiveStage, stageFromDates } from "../services/tripStage.js";
 import {
   serializeGalleryCategory,
@@ -122,7 +124,23 @@ export async function loadTripDetail(context: AppContext, accountId: string, mem
 
   if (!memo) throw HttpError.notFound("Voyage introuvable.");
 
-  const trip = serializeTrip(memo);
+  // **Le crédit du jour d'un voyage en cours**, comme sur l'accueil
+  // (03/10/2026) : l'app garde ce détail pour ouvrir la conversation hors
+  // ligne, et le crédit qu'elle y lit doit être là — sans lui, ni
+  // avertissement à 4:30 ni coupure à 5:00. Vu par celui qui lit : son fuseau,
+  // et s'il raconte sans limite.
+  const now = new Date();
+  let dailyCredit: DailyCredit | undefined;
+  if (effectiveStage(memo, now) === "ongoing") {
+    const [viewer, isUnlimited] = await Promise.all([
+      context.prisma.account.findUniqueOrThrow({ where: { id: accountId }, select: { id: true, timeZone: true } }),
+      hasUnlimitedAccess(context.prisma, accountId, now),
+    ]);
+    const credits = await readDailyCredits(context.prisma, { memoIds: [memo.id], viewer, isUnlimited, now });
+    dailyCredit = credits.get(memo.id);
+  }
+
+  const trip = serializeTrip(memo, dailyCredit);
 
   return {
     trip,
@@ -141,11 +159,13 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
    */
   app.get("/v1/home", async (request) => {
     const accountId = accountIdOf(request);
+    const now = new Date();
 
     const [account, memos, showcase] = await Promise.all([
       // Les abonnements viennent avec le compte : `serializeTraveller` en tire
-      // la fin de la semaine payée, qui ouvre l'alerte « ton abonnement s'est
-      // arrêté ». Un `include` et non un second appel — c'est la même ligne.
+      // l'accès illimité et la fin de la période payée, qui ouvre l'alerte
+      // « ton abonnement s'est arrêté ». Un `include` et non un second appel —
+      // c'est la même ligne.
       context.prisma.account.findUniqueOrThrow({
         where: { id: accountId },
         include: { subscriptions: { orderBy: { createdAt: "desc" } } },
@@ -171,15 +191,29 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
       }),
     ]);
 
+    const traveller = serializeTraveller(account, memos, now);
+
+    // Le crédit du jour de chaque voyage **en cours** : c'est lui que vise le
+    // vocal de l'accueil, et sa feuille d'enregistrement prévient à 4:30 comme
+    // celle du chat. Une requête pour tous, aucune s'il n'y en a pas.
+    const ongoing = memos.filter((memo) => effectiveStage(memo, now) === "ongoing").map((memo) => memo.id);
+    const credits = await readDailyCredits(context.prisma, {
+      memoIds: ongoing,
+      viewer: account,
+      isUnlimited: traveller.isUnlimited,
+      now,
+    });
+
     return {
-      traveller: serializeTraveller(account, memos),
-      trips: memos.map(serializeTrip),
+      traveller,
+      trips: memos.map((memo) => serializeTrip(memo, credits.get(memo.id))),
       showcase: showcase ? serializeShowcase(showcase) : null,
     };
   });
 
   /**
-   * Un voyage ouvert : sa couverture, la relance de MemoBook, et ses étapes.
+   * Un voyage ouvert : sa couverture, la relance de MemoBook, et ses étapes —
+   * et, en cours, le crédit du jour (`trip.dailyCredit`, comme l'accueil).
    *
    * L'accès passe par `visibleToAccount` : un invité voit le voyage, quelqu'un
    * qui n'y participe pas reçoit un 404 — et non un 403, qui confirmerait

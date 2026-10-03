@@ -48,14 +48,23 @@ public struct ChatView: View {
     /// apparaît.
     @State private var isAtBottom = true
 
+    /// L'instant où le bas du fil a quitté l'écran. Le pied qui grandit le
+    /// recouvre **dans la même passe** que celle où sa hauteur est relevée :
+    /// sans ce souvenir, ``keepPinned(_:footerHeight:)`` croyait qu'on avait
+    /// remonté le fil, et le bandeau du crédit cachait la dernière bulle d'un
+    /// fil long (recette du 03/10/2026).
+    @State private var bottomLeftAt: Date?
+
     @FocusState private var isWriting: Bool
 
     /// Le parcours d'ajout de photos : autorisation, feuille de choix,
     /// photothèque ou appareil photo. Voir ``PhotoFlow``.
     @State private var photos = PhotoFlow()
 
-    /// Le paywall, ouvert par le micro quand les étapes offertes sont épuisées
-    /// — le même verrou que sur l'accueil et sur un voyage.
+    /// Le paywall, ouvert par le bouton « Raconter sans limite » d'une bulle de
+    /// MEMO, ou par le bandeau « Crédit du jour épuisé » au-dessus de la barre
+    /// (Hugo, 03/10/2026). Plus jamais par le micro lui-même : tout le monde
+    /// raconte, cinq minutes par jour et par voyage.
     @State private var showsPaywall = false
 
     /// Le fil est posé : ce qui arrive **ensuite** est un envoi ou une
@@ -201,19 +210,21 @@ public struct ChatView: View {
         }
         // Un écran de chat laissé derrière soi ne doit ni parler ni enregistrer.
         .onDisappear { model.teardown() }
-        // Le verrou des étapes offertes : le micro mène au paywall au lieu de
-        // s'ouvrir, tant qu'on n'est pas abonné (Hugo, 14/09/2026).
-        .onAppear { model.onRecordingLocked = { showsPaywall = true } }
-        .onChange(of: subscriptionSession?.isBlocked, initial: true) { _, blocked in
-            model.isRecordingLocked = blocked == true
-        }
+        // La session d'abonnement, prêtée au modèle : un achat fait passer le
+        // crédit du jour en illimité tout de suite — plus de bandeau, plus de
+        // micro pâli —, sans attendre que le serveur le redise.
+        .onAppear { model.subscription = subscriptionSession }
         .fullScreenCover(isPresented: $showsPaywall) {
             PaywallView(
                 subscription: .offer,
+                // La version « retour » pour qui a déjà été abonné — la session
+                // l'a appris de l'accueil ou du profil.
+                variant: subscriptionSession?.paywallVariant ?? .firstTime,
                 previewMemoId: tripId,
                 onSubscribe: {
                     subscriptionSession?.record(isSubscribed: true)
                     showsPaywall = false
+                    model.refreshAfterSubscribing()
                 }
             )
         }
@@ -238,7 +249,8 @@ public struct ChatView: View {
                             message: message,
                             model: model,
                             isExpanded: expanded.contains(message.id),
-                            onToggleExpansion: { toggleExpansion(of: message.id) }
+                            onToggleExpansion: { toggleExpansion(of: message.id) },
+                            onCallToAction: perform
                         )
                         .id(message.id)
                         .transition(rowTransition(for: message))
@@ -251,8 +263,14 @@ public struct ChatView: View {
                     Color.clear
                         .frame(height: 1)
                         .id(Self.bottomAnchor)
-                        .onAppear { isAtBottom = true }
-                        .onDisappear { isAtBottom = false }
+                        .onAppear {
+                            isAtBottom = true
+                            bottomLeftAt = nil
+                        }
+                        .onDisappear {
+                            isAtBottom = false
+                            bottomLeftAt = .now
+                        }
                 }
                 .padding(.horizontal, MemoBookSpacing.snug)
                 .padding(.vertical, MemoBookSpacing.s)
@@ -370,6 +388,9 @@ public struct ChatView: View {
                 footer(proxy)
                     .onGeometryChange(for: CGFloat.self, of: { $0.frame(in: .global).minY }) {
                         footerTop = $0
+                    }
+                    .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) {
+                        keepPinned(proxy, footerHeight: $0)
                     }
             }
             // La puce en vol, par-dessus le fil et la barre : elle part de la
@@ -602,6 +623,7 @@ public struct ChatView: View {
                 model: model,
                 isWriting: $isWriting,
                 onAddPhotos: photos.begin,
+                onSubscribe: openPaywall,
                 flyingSuggestionId: flight?.suggestion.id,
                 onLaunch: launch
             )
@@ -703,6 +725,37 @@ public struct ChatView: View {
         pendingFocus = nil
     }
 
+    /// **Le fil reste collé au pied quand le pied change de hauteur**
+    /// (recette du 03/10/2026). Le bandeau du crédit qui paraît, la boîte
+    /// « trop long », un champ qui prend une ligne : la marge du bas grandit,
+    /// et le fil, lui, ne bougeait pas — en très grand texte, le bandeau
+    /// cachait la dernière bulle, celle qu'on venait de dire. Si l'on était en
+    /// bas, on y reste, au rythme du pied ; remonté dans les anciens messages,
+    /// on ne vole pas le défilement.
+    private func keepPinned(_ proxy: ScrollViewProxy, footerHeight height: CGFloat) {
+        let previous = scroll.footerHeight
+        scroll.footerHeight = height
+        // Le premier relevé n'est pas un changement ; une puce en vol et
+        // l'arrivée sur une étape tiennent déjà le défilement ; un fil vide
+        // n'a pas de bas, il a un centre.
+        // « En bas », ou à l'instant encore : le pied qui vient de grandir a
+        // pu recouvrir le repère du bas avant ce relevé.
+        let leftJustNow = bottomLeftAt.map { Date.now.timeIntervalSince($0) < 0.5 } ?? false
+        guard previous > 0, abs(height - previous) > 0.5, isAtBottom || leftJustNow, pendingFocus == nil,
+            flight == nil, !model.messages.isEmpty
+        else { return }
+        // **Une image plus tard** : ce relevé arrive pendant la mise en page,
+        // avant que le nouvel encart du bas ne soit appliqué au défilement. Un
+        // `scrollTo` immédiat visait l'ancien bas — juste sur un fil court, où
+        // il reste de la place, faux sur un fil long.
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(40))
+            withAnimation(reduceMotion ? nil : .smooth(duration: 0.3)) {
+                proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
+            }
+        }
+    }
+
     private func scrollToBottom(_ proxy: ScrollViewProxy) {
         // Quand une puce vient d'atterrir, le fil est **déjà** à sa place : le
         // décalage qui l'avait levé retombe dans l'image où le vrai message
@@ -716,6 +769,36 @@ public struct ChatView: View {
 
     // MARK: - Actions
 
+    /// Ce que le bouton d'une bulle de MEMO ouvre — ``ChatCallToAction/Kind``.
+    /// Rien ne part dans le fil : un bouton ouvre un écran, il ne dit rien à
+    /// MEMO. Chaque destination passe par le chemin qui l'ouvre déjà d'ici —
+    /// l'en-tête pour les réglages et l'aperçu, la puce pour les photos.
+    private func perform(_ callToAction: ChatCallToAction) {
+        switch callToAction.kind {
+        case .subscribe:
+            openPaywall()
+        case .openTripSettings:
+            onIntent(.openSettings(tripId: tripId))
+        case .openPreview:
+            onIntent(.openBookPreview(memoId: tripId))
+        case .importPhotos:
+            photos.begin()
+        case .openPhotoSettings:
+            openSettings()
+        case .unknown:
+            // Jamais affiché (``ChatModel/showsCallToAction(_:)``) : un bouton
+            // inconnu ne mènerait nulle part.
+            break
+        }
+    }
+
+    /// Le paywall en plein écran. Le clavier se replie d'abord : il resterait
+    /// sinon ouvert derrière l'offre, et au retour.
+    private func openPaywall() {
+        isWriting = false
+        showsPaywall = true
+    }
+
     private func toggleExpansion(of id: String) {
         withAnimation(reduceMotion ? nil : .smooth(duration: 0.25)) {
             if expanded.contains(id) {
@@ -728,7 +811,8 @@ public struct ChatView: View {
 
     /// iOS ne présente la demande de micro **qu'une fois** : une fois refusée,
     /// le seul recours est l'app Réglages, et l'écran doit y mener au lieu de
-    /// redemander en boucle.
+    /// redemander en boucle. Même chemin pour l'accès aux photos — le bouton
+    /// « Modifier l’autorisation » d'une bulle de MEMO.
     private func openSettings() {
         guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
         UIApplication.shared.open(url)
@@ -788,6 +872,26 @@ private enum RecordingErrorCopy {
     }
 }
 
+#Preview("Chat — crédit du jour épuisé") {
+    NavigationStack {
+        ChatView(model: .preview(thread: .creditExhaustedFixture(tripId: "trip-rome")))
+    }
+}
+
+#Preview("Chat — trop long pour une journée") {
+    NavigationStack {
+        ChatView(model: .preview(thread: .tooLongForADayFixture(tripId: "trip-rome")))
+    }
+}
+
+#Preview("Chat — bouton de MEMO touché") {
+    let model = ChatModel.preview(thread: .creditExhaustedFixture(tripId: "trip-rome"))
+    model.followCallToAction(of: ChatThread.exhaustedNoticeFixtureId)
+    return NavigationStack {
+        ChatView(model: model)
+    }
+}
+
 #Preview("Chat — chargement") {
     ChatSkeleton()
         .environment(\.colorScheme, .light)
@@ -834,6 +938,9 @@ final class ChatScrollTracker {
     var lastContentTop: CGFloat?
     var scrolledUp: CGFloat = 0
     var scrolledDown: CGFloat = 0
+    /// La hauteur du pied au dernier relevé — voir ``ChatView``, qui garde le
+    /// fil collé en bas quand elle change. Zéro avant la première mesure.
+    var footerHeight: CGFloat = 0
 }
 
 struct SuggestionFlight: Equatable {

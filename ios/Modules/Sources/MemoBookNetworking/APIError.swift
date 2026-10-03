@@ -1,4 +1,5 @@
 import Foundation
+import MemoBookCore
 
 /// Erreur remontée par le client d'API.
 ///
@@ -14,10 +15,60 @@ public enum APIError: Error, LocalizedError, Sendable {
     case transport(any Error, url: URL?)
     case decoding(any Error)
 
+    /// **Le crédit du jour du voyage est épuisé** — `429
+    /// daily_credit_exhausted` (Hugo, 03/10/2026), avec le solde que le corps
+    /// porte (``DailyCredit``, dont `resetsAt` : l'heure à laquelle réessayer).
+    ///
+    /// Un cas à part et non un `.server(429, …)` : le solde doit **traverser**
+    /// jusqu'à la file et jusqu'à la bulle (« Partira demain »), et `.server`
+    /// n'a pas de place pour lui — lui ajouter un champ aurait cassé chacun des
+    /// endroits de l'app qui le décompose. Le code et le statut restent lisibles
+    /// par ``code`` et ``statusCode``, comme pour un refus ordinaire.
+    case dailyCreditExhausted(message: String, credit: DailyCredit?)
+
+    /// Le code d'erreur du serveur (`error` dans le corps), quel que soit le
+    /// cas qui le porte. `nil` pour ce qui n'est pas une réponse du serveur.
+    public var code: String? {
+        switch self {
+        case .server(_, let code, _): code
+        case .dailyCreditExhausted: Self.dailyCreditExhaustedCode
+        case .notAuthenticated, .transport, .decoding: nil
+        }
+    }
+
+    /// Le statut HTTP de la réponse, quand il y en a eu une.
+    public var statusCode: Int? {
+        switch self {
+        case .server(let statusCode, _, _): statusCode
+        case .dailyCreditExhausted: 429
+        case .notAuthenticated, .transport, .decoding: nil
+        }
+    }
+
+    /// Le solde du jour qu'un refus de crédit a rendu. `nil` partout ailleurs.
+    public var dailyCredit: DailyCredit? {
+        if case .dailyCreditExhausted(_, let credit) = self { return credit }
+        return nil
+    }
+
+    /// Le code du refus faute de crédit du jour — le même que le serveur
+    /// (`services/dailyCredit.ts`).
+    public static let dailyCreditExhaustedCode = "daily_credit_exhausted"
+
+    /// Le code du refus d'un tour **plus long qu'une journée entière** de
+    /// crédit — un vocal de plus de 5:03, un texte de plus de 4 000 caractères
+    /// (03/10/2026). Il arrive en ``server(statusCode:code:message:)`` : rien
+    /// à porter d'autre que le code, et la file le reconnaît par lui — voir
+    /// ``isDailyCreditTooLong``. Attendre demain n'y changerait rien : le tour
+    /// attend l'illimité.
+    public static let dailyCreditTooLongCode = "daily_credit_too_long"
+
     public var errorDescription: String? {
         switch self {
         case .notAuthenticated:
             "Cet appareil n'est pas encore enregistré."
+        case .dailyCreditExhausted(let message, _):
+            message
         case .server(let statusCode, _, let message):
             // Un serveur déployé avant le 15/09/2026 répond encore « Erreur
             // interne du serveur. » : une phrase qui accuse sans dire à qui est
@@ -64,6 +115,19 @@ public enum APIError: Error, LocalizedError, Sendable {
         return false
     }
 
+    /// Le serveur a refusé faute de crédit du jour : ce n'est pas un échec,
+    /// c'est « demain ». Voir ``dailyCreditExhausted(message:credit:)``.
+    public var isDailyCreditExhausted: Bool {
+        if case .dailyCreditExhausted = self { true } else { false }
+    }
+
+    /// Le serveur a refusé un tour qu'aucune journée de crédit ne laissera
+    /// passer : ni un échec à réessayer, ni « demain » — l'illimité. Voir
+    /// ``dailyCreditTooLongCode``.
+    public var isDailyCreditTooLong: Bool {
+        code == Self.dailyCreditTooLongCode
+    }
+
     /// Ce qu'on peut **faire**, sous la phrase qui dit ce qui s'est passé.
     ///
     /// Une erreur qui ne propose rien laisse chercher ce qu'on a mal fait — et
@@ -77,16 +141,20 @@ public enum APIError: Error, LocalizedError, Sendable {
             "Le problème vient de notre côté, pas du tien. Réessaie dans un instant ; si ça continue, écris-nous depuis « Besoin d’aide ? » et on répare."
         case .server(404, _, _):
             "Ce voyage n’est plus sur ton compte, ou il a été supprimé : reviens à l’accueil pour le vérifier."
-        // **Avant le cas générique des 403** : un 403 se traite d'ordinaire par
-        // « reconnecte-toi », et ces deux-là n'ont rien à voir avec la session.
-        // Les placer après ferait dire à l'app exactement le contraire de ce
-        // qu'il faut faire.
-        case .server(403, "memory_limit_reached", _):
-            "Ouvre « Limites de souvenirs » dans les paramètres du voyage pour les étendre, ou attends le renouvellement du mois."
-        case .server(403, "quota_exhausted", _):
-            "Abonne-toi pour continuer à raconter : l’offre est dans ton profil, ou sur l’accueil."
+        // Le crédit du jour : ce qui a été raconté attend sur le téléphone, et
+        // il n'y a rien d'autre à faire qu'attendre minuit — ou passer en
+        // illimité.
+        case .dailyCreditExhausted:
+            "Ce que tu as raconté est gardé sur ton téléphone et partira demain. Pour continuer tout de suite, passe en illimité depuis ton profil."
+        // Plus long qu'une journée de crédit : demain ne suffira pas.
+        case .server(_, Self.dailyCreditTooLongCode, _):
+            "Ce que tu as raconté est gardé sur ton téléphone. C’est plus long que le crédit d’une journée : passe en illimité pour l’envoyer."
         case .server(429, "chat_daily_cap", _):
             "Reviens demain, ou raconte la suite au clavier dans un autre carnet."
+        // **Avant le cas générique des 403** : un 403 se traite d'ordinaire par
+        // « reconnecte-toi », et celui-ci n'a rien à voir avec la session.
+        // Le placer après ferait dire à l'app exactement le contraire de ce
+        // qu'il faut faire.
         case .server(403, "owner_only", _):
             "Seul le propriétaire du voyage peut faire ça. Demande-lui, ou continue à raconter."
         case .server(401, _, _), .server(403, _, _), .notAuthenticated:
@@ -105,7 +173,9 @@ public enum APIError: Error, LocalizedError, Sendable {
         switch self {
         case .transport: true
         case .server(let statusCode, _, _): statusCode >= 500
-        case .notAuthenticated, .decoding: false
+        // Réessayer tout de suite retomberait sur le même refus : c'est la
+        // file qui repart, d'elle-même, quand le crédit se recharge.
+        case .notAuthenticated, .decoding, .dailyCreditExhausted: false
         }
     }
 
@@ -202,7 +272,25 @@ public enum APIError: Error, LocalizedError, Sendable {
 }
 
 /// Corps d'erreur normalisé du back-end.
+///
+/// `dailyCredit` n'accompagne que le refus `429 daily_credit_exhausted` : le
+/// serveur pose les détails d'une erreur **à plat** dans le corps, à côté du
+/// code et du message (`HttpError`, 03/10/2026).
 struct APIErrorBody: Decodable {
     let error: String?
     let message: String?
+    let dailyCredit: DailyCredit?
+
+    private enum CodingKeys: String, CodingKey {
+        case error, message, dailyCredit
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        error = try? container.decodeIfPresent(String.self, forKey: .error)
+        message = try? container.decodeIfPresent(String.self, forKey: .message)
+        // Un solde illisible ne doit pas coûter le message, qui est destiné à
+        // l'utilisateur : la file retombe alors sur le minuit suivant.
+        dailyCredit = (try? container.decodeIfPresent(DailyCredit.self, forKey: .dailyCredit)) ?? nil
+    }
 }

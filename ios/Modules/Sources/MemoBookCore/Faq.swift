@@ -8,6 +8,15 @@ import Foundation
 // est prévue pour la V2 de l'app. Les deux questions qui la concernent ne sont
 // publiées qu'au moment où la carte sort. »
 //
+// **Le paquet « Prix et paiement » a été réécrit le 03/10/2026** (Hugo), avec
+// le crédit du jour : plus d'étapes offertes ni d'abonnement à la semaine. Le
+// récit est gratuit dans la limite de cinq minutes par jour et par voyage,
+// l'abonnement mensuel le rend illimité. Une question de plus
+// (`faq.prix.credit-du-jour`), deux variables de plus, et les réponses de
+// « Découvrir » et « Raconter » qui promettaient de parler sans compter
+// disent désormais où est la limite. Ce fichier se corrige directement, sans
+// repasser par la page Notion.
+//
 // **Les règles de rédaction de cette page tiennent dans le temps**, et elles
 // expliquent la forme de ce fichier :
 //
@@ -55,10 +64,22 @@ public struct FaqVariables: Sendable, Hashable {
     /// pas coudre le dos. À revoir si la reliure ou l'imprimeur change.
     public var minimumPageCount: Int
 
-    /// « 1,99 € » — le prix de l'abonnement par semaine, écrit comme on le lit.
-    /// Affiché dans `faq.prix.app` et `faq.prix.abonnement`, résolu à
-    /// l'affichage et jamais écrit en dur.
-    public var weeklyPrice: String
+    /// « 4,99 € » — le prix de l'abonnement par mois, écrit comme on le lit.
+    /// Affiché dans `faq.prix.app`, `faq.prix.credit-du-jour` et
+    /// `faq.prix.abonnement`, résolu à l'affichage et jamais écrit en dur.
+    ///
+    /// Le même que `SUBSCRIPTION_MONTHLY_CENTS` côté serveur et que le repli du
+    /// paywall ; le prix qui fait foi à l'achat est celui que StoreKit affiche.
+    public var monthlyPrice: String
+
+    /// « 5 minutes » — le crédit du jour d'un voyage, à partager entre ses
+    /// co-voyageurs non abonnés. Le même que `DAILY_CREDIT_LIMIT_MS` côté
+    /// serveur (``DailyCredit/Catalog``).
+    public var dailyCredit: String
+
+    /// « 800 caractères » — ce qui, à l'écrit, consomme une minute de crédit
+    /// (75 ms par caractère, `TEXT_MS_PER_CHARACTER`).
+    public var charactersPerMinute: String
 
     /// « 5 ans » — combien de temps les souvenirs restent accessibles après le
     /// voyage. Doit rester aligné mot pour mot avec la politique de
@@ -77,13 +98,17 @@ public struct FaqVariables: Sendable, Hashable {
 
     public init(
         minimumPageCount: Int,
-        weeklyPrice: String = "1,99 €",
+        monthlyPrice: String = "4,99 €",
+        dailyCredit: String = "5 minutes",
+        charactersPerMinute: String = "800 caractères",
         retention: String = "5 ans",
         extraCopyDiscount: String = "10 %",
         developmentStatus: String = "encore en plein développement"
     ) {
         self.minimumPageCount = minimumPageCount
-        self.weeklyPrice = weeklyPrice
+        self.monthlyPrice = monthlyPrice
+        self.dailyCredit = dailyCredit
+        self.charactersPerMinute = charactersPerMinute
         self.retention = retention
         self.extraCopyDiscount = extraCopyDiscount
         self.developmentStatus = developmentStatus
@@ -102,7 +127,9 @@ public struct FaqVariables: Sendable, Hashable {
     public func resolve(_ text: String) -> String {
         text
             .replacingOccurrences(of: "{{nb_pages_min}}", with: String(minimumPageCount))
-            .replacingOccurrences(of: "{{prix_abo_hebdo}}", with: weeklyPrice)
+            .replacingOccurrences(of: "{{prix_abo_mensuel}}", with: monthlyPrice)
+            .replacingOccurrences(of: "{{credit_jour}}", with: dailyCredit)
+            .replacingOccurrences(of: "{{caracteres_par_minute}}", with: charactersPerMinute)
             .replacingOccurrences(of: "{{duree_conservation}}", with: retention)
             .replacingOccurrences(of: "{{remise_exemplaire_sup}}", with: extraCopyDiscount)
             .replacingOccurrences(of: "{{statut_developpement}}", with: developmentStatus)
@@ -266,7 +293,7 @@ public enum Faq {
                 answer: [
                     "Pendant, idéalement le soir même ou le lendemain.",
                     "C’est là que les détails sont encore frais, et deux minutes de voix suffisent pour une étape.",
-                    "Si tu es déjà rentré, tu peux tout raconter d’un coup : le Carnet se construira de la même façon.",
+                    "Si tu es déjà rentré, tu peux tout raconter au fil des jours, ou d’un coup avec l’abonnement : le Carnet se construira de la même façon.",
                 ]
             ),
             FaqEntry(
@@ -328,8 +355,8 @@ public enum Faq {
                 id: "faq.raconter.duree",
                 question: "Combien de temps je dois parler ?",
                 answer: [
-                    "Autant que tu veux.",
-                    "Une minute donne un récit court, cinq minutes donnent une étape bien remplie.",
+                    "Autant que tu veux avec l’abonnement. Sans lui, ton voyage peut raconter {{credit_jour}} par jour, de quoi bien raconter une journée.",
+                    "Une minute donne un récit court, deux ou trois minutes donnent une étape bien remplie.",
                     "Le nombre de photos attendu dépend du ratio image/texte que tu as choisi en configurant ton voyage. Au-delà d’un certain seuil, un récit très long ne demande pas plus de photos : il crée simplement une page supplémentaire pour la même étape.",
                 ]
             ),
@@ -337,7 +364,7 @@ public enum Faq {
                 id: "faq.raconter.plusieurs-fois",
                 question: "Je peux enregistrer plusieurs fois pour la même étape ?",
                 answer: [
-                    "Oui. Tu peux ajouter autant de messages vocaux que nécessaire à une même étape avant de la valider.",
+                    "Oui. Tu peux ajouter autant de messages vocaux que nécessaire à une même étape avant de la valider, dans la limite du crédit du jour si tu n’es pas abonné.",
                     "Tout est rassemblé dans un récit cohérent.",
                 ]
             ),
@@ -347,6 +374,7 @@ public enum Faq {
                 answer: [
                     "Tes enregistrements et tes photos sont conservés sur ton téléphone et se synchronisent dès que la connexion revient.",
                     "Tu peux donc continuer à raconter en avion, en montagne ou sans forfait local.",
+                    "Si le crédit du jour est déjà épuisé quand ils arrivent, ils attendent sur ton téléphone et partent d’eux-mêmes le lendemain : rien n’est perdu.",
                 ]
             ),
             FaqEntry(
@@ -381,6 +409,7 @@ public enum Faq {
                 answer: [
                     "Oui. Le clavier est disponible partout où le micro l’est.",
                     "Le résultat est identique, seule la façon de saisir change.",
+                    "Pour le crédit du jour, {{caracteres_par_minute}} écrits valent une minute de vocal.",
                 ]
             ),
             FaqEntry(
@@ -614,7 +643,7 @@ public enum Faq {
                 question: "Je peux avoir plusieurs voyages en même temps ?",
                 answer: [
                     "Oui, autant que tu le souhaites.",
-                    "Chaque voyage a sa conversation, sa carte et son Carnet.",
+                    "Chaque voyage a sa conversation, sa carte, son Carnet et son propre crédit du jour.",
                 ]
             ),
         ]
@@ -688,16 +717,30 @@ public enum Faq {
                 id: "faq.prix.app",
                 question: "L’application est payante ?",
                 answer: [
-                    "L’app est gratuite au téléchargement, et tes trois premières étapes sont offertes pour que tu puisses tester l’expérience.",
-                    "Au-delà, un abonnement de {{prix_abo_hebdo}} par semaine prend le relais tant que ton récit est en cours.",
+                    "Non, l’app est gratuite : chaque voyage peut raconter {{credit_jour}} par jour, à partager entre ses co-voyageurs qui ne sont pas abonnés.",
+                    "Ça compte à l’oral comme à l’écrit. Tes photos, elles, ne comptent jamais.",
+                    "Pour raconter sans compter, l’abonnement à {{prix_abo_mensuel}} par mois rend ton récit illimité.",
+                    "Le Carnet imprimé se paie à part, au moment de la commande.",
+                ]
+            ),
+            FaqEntry(
+                id: "faq.prix.credit-du-jour",
+                question: "Comment marche le crédit du jour ?",
+                answer: [
+                    "Chaque voyage dispose de {{credit_jour}} de récit par jour, à partager entre les co-voyageurs qui ne sont pas abonnés.",
+                    "Un message vocal consomme sa durée, et {{caracteres_par_minute}} écrits valent une minute. Les photos ne consomment rien.",
+                    "Tu suis ce qu’il reste dans les réglages du voyage, à la ligne « Crédit du jour ». Trente secondes avant la fin, un message te prévient au-dessus du micro, et ce que tu as déjà dit est toujours gardé.",
+                    "Le crédit se recharge chaque nuit à minuit : tu reprends le lendemain, ou tu passes en illimité pour {{prix_abo_mensuel}} par mois et tu continues tout de suite.",
                 ]
             ),
             FaqEntry(
                 id: "faq.prix.abonnement",
                 question: "Comment marche l’abonnement ?",
                 answer: [
-                    "Il coûte {{prix_abo_hebdo}} par semaine. Il démarre une fois tes trois étapes offertes enregistrées, pour que ton récit continue.",
-                    "Il se renouvelle chaque semaine par ton identifiant Apple. À la fin de ton voyage, on te propose de le résilier en un geste, et tu peux le faire toi-même à tout moment, depuis ton profil ou les réglages de ton iPhone.",
+                    "Il coûte {{prix_abo_mensuel}} par mois et rend ton récit illimité, à l’oral comme à l’écrit, sur tous tes voyages.",
+                    "Il est personnel : ce que tu racontes ne prend plus rien au crédit du jour, et tes co-voyageurs qui ne sont pas abonnés continuent de partager le leur.",
+                    "Il se renouvelle chaque mois par ton identifiant Apple. Tu le résilies quand tu veux dans les réglages de ton iPhone, et l’illimité reste ouvert jusqu’à la fin du mois déjà payé.",
+                    "À la fin de ton voyage, on te rappelle que tu peux le résilier en un geste.",
                 ]
             ),
             FaqEntry(

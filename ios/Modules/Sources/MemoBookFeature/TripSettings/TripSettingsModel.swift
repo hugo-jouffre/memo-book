@@ -49,14 +49,6 @@ public final class TripSettingsModel {
     /// quand même.
     private let clearConversation: ((String) async throws -> Void)?
 
-    /// Relève le palier de limites de souvenirs. `nil` en aperçu — la feuille
-    /// travaille alors en mémoire et le parcours se déroule quand même.
-    private let setPlan: ((String, MemoryPlan) async throws -> TripSettings)?
-
-    /// `true` pendant le changement de palier. Le bouton de la feuille tourne,
-    /// et ne part pas deux fois.
-    public private(set) var isChangingMemoryPlan = false
-
     /// `true` pendant la suppression. L'écran verrouille alors la feuille : la
     /// demande est définitive, elle ne doit pas partir deux fois.
     public private(set) var isDeleting = false
@@ -110,7 +102,6 @@ public final class TripSettingsModel {
         resendInvitation: ((String, String) async throws -> Void)? = nil,
         delete: ((String) async throws -> Void)? = nil,
         clearConversation: ((String) async throws -> Void)? = nil,
-        setMemoryPlan: ((String, MemoryPlan) async throws -> TripSettings)? = nil,
         cached: CachedValue<TripSettings>? = nil,
         themes: @escaping @Sendable () async throws -> [TripTheme] = { TripTheme.fixtures }
     ) {
@@ -122,27 +113,57 @@ public final class TripSettingsModel {
         self.resendInvitation = resendInvitation
         self.remove = delete
         self.clearConversation = clearConversation
-        self.setPlan = setMemoryPlan
         self.readThemes = themes
     }
 
-    // MARK: - Les limites de souvenirs
+    // MARK: - Le crédit du jour
 
-    /// Où en est le compte. `nil` quand le serveur ne les sert pas encore : la
-    /// ligne disparaît alors, plutôt que d'annoncer un budget inventé.
-    public var memory: MemoryAllowance? { settings?.memory }
+    /// Où en est le voyage aujourd'hui, et si celui qui lit raconte sans
+    /// limite. `nil` quand le serveur ne le sert pas encore : la ligne
+    /// disparaît alors, plutôt que d'annoncer un reste inventé.
+    ///
+    /// **Il ne se rafraîchit qu'avec les réglages** : une seule source, le
+    /// `GET`. Après un abonnement, la vue appelle ``load()`` pour relire
+    /// `isUnlimited` — le serveur seul sait que l'achat est passé.
+    ///
+    /// **Passé minuit, le crédit d'hier se recharge** (03/10/2026) —
+    /// `DailyCredit.refreshed(now:)`, la règle de la conversation et de
+    /// l'accueil. Les réglages s'ouvrent sur le cache : la ligne et la feuille
+    /// y lisaient « Plus rien pour aujourd’hui » le lendemain d'un crédit
+    /// épuisé, tant que le serveur n'avait pas répondu.
+    public var dailyCredit: DailyCredit? { settings?.dailyCredit?.refreshed(now: .now) }
 
     #if DEBUG
-        /// Rejoue un état des limites de souvenirs, **sans rien envoyer**.
+        /// Les états du crédit que le panneau de bac à sable rejoue.
+        public enum DailyCreditDebugState: CaseIterable, Sendable {
+            /// Rien raconté aujourd'hui : 5 minutes devant soi.
+            case fresh
+            /// Trente secondes : le seuil où la barre d'enregistrement prévient.
+            case lastSeconds
+            /// Plus rien : la ligne passe au rouge, la feuille dit « reviens
+            /// demain ».
+            case exhausted
+            /// Abonné : « Illimité », sans jauge ni bouton.
+            case unlimited
+        }
+
+        /// Rejoue un état du crédit du jour, **sans rien envoyer**.
         ///
-        /// Les deux seuils que le jeu d'essai ne montre pas : celui où la jauge
-        /// apparaît (80 %), et celui où tout est consommé. Ce sont les deux
-        /// états dont le dessin n'existe nulle part ailleurs — le reste se voit
-        /// en ouvrant l'écran. Absent de l'app livrée.
-        public func debugPlayMemory(fraction: Double) {
-            guard var current = settings, var memory = current.memory else { return }
-            memory.used = Int(Double(memory.allowance) * fraction)
-            current.memory = memory
+        /// Le jeu d'essai n'en montre qu'un (un voyage entamé). Les trois
+        /// autres sont ceux dont le dessin n'existe nulle part ailleurs : la
+        /// jauge pleine, la jauge rouge, et la ligne d'un abonné. Si le serveur
+        /// n'a pas servi de crédit, on part du barème du catalogue. Absent de
+        /// l'app livrée.
+        public func debugPlayDailyCredit(_ state: DailyCreditDebugState) {
+            guard var current = settings else { return }
+            var credit = current.dailyCredit ?? DailyCredit()
+            credit.isUnlimited = state == .unlimited
+            switch state {
+            case .fresh, .unlimited: credit.usedMs = 0
+            case .lastSeconds: credit.usedMs = max(0, credit.limitMs - credit.warningRemainingMs)
+            case .exhausted: credit.usedMs = credit.limitMs
+            }
+            current.dailyCredit = credit
             settings = current
         }
 
@@ -174,29 +195,6 @@ public final class TripSettingsModel {
             "Camille Roux", "Sacha Blin", "Inès Fabre", "Naïm Bacri", "Lou Vidal",
         ]
     #endif
-
-    /// Passe au palier étendu, ou revient au palier compris.
-    ///
-    /// **Rien n'est posé à l'écran avant la réponse**, contrairement aux
-    /// réglages d'à côté : ceux-là sont des préférences, celui-ci est un achat.
-    /// Montrer « 12 000 souvenirs » avant que le serveur l'ait accordé serait
-    /// annoncer une limite qu'on n'a pas.
-    @discardableResult
-    public func changeMemoryPlan(to plan: MemoryPlan) async -> Bool {
-        guard let setPlan else { return false }
-
-        isChangingMemoryPlan = true
-        defer { isChangingMemoryPlan = false }
-
-        do {
-            settings = try await setPlan(tripId, plan)
-            clearError()
-            return true
-        } catch {
-            report(error)
-            return false
-        }
-    }
 
     /// Les thèmes, chargés à l'ouverture de leur feuille et pas avant : c'est
     /// un appel de plus, et la plupart des visites de cet écran ne changent pas
