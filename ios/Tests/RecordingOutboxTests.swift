@@ -148,6 +148,20 @@ final class RecordingOutboxTests: XCTestCase {
         XCTAssertNotNil(outbox.rejection)
     }
 
+    /// Une session révoquée (401) n'est pas un refus du tour : il attend la
+    /// reconnexion au lieu d'être effacé du disque.
+    func testAVocalRefusedForARevokedSessionWaitsForTheNextSignIn() async {
+        let sender = Sender()
+        await sender.setSignedOut(["trip-1"])
+        let outbox = outbox(sender: sender)
+
+        let outcome = await outbox.submit(.test, to: "trip-1")
+
+        XCTAssertEqual(outcome, .queued)
+        XCTAssertEqual(outbox.pending, 1)
+        XCTAssertNil(outbox.rejection)
+    }
+
     // MARK: - Ce que l'accueil en dit
 
     func testTheNoticeSaysTheMostUsefulThingFirst() async throws {
@@ -883,6 +897,7 @@ private actor Sender {
     private(set) var attempts: [String] = []
     private var unreachable: Set<String> = []
     private var refused: Set<String> = []
+    private var signedOut: Set<String> = []
     /// Les carnets dont le crédit du jour est épuisé, et l'heure de recharge
     /// que le serveur annonce.
     private var outOfCredit: [String: Date?] = [:]
@@ -895,6 +910,7 @@ private actor Sender {
 
     func setUnreachable(_ tripIds: [String]) { unreachable = Set(tripIds) }
     func setRefusing(_ tripIds: [String]) { refused = Set(tripIds) }
+    func setSignedOut(_ tripIds: [String]) { signedOut = Set(tripIds) }
     func setOutOfCredit(
         _ tripIds: [String],
         resetsAt: Date?,
@@ -915,6 +931,9 @@ private actor Sender {
         }
         if refused.contains(tripId) {
             throw APIError.server(statusCode: 404, code: nil, message: "Carnet introuvable.")
+        }
+        if signedOut.contains(tripId) {
+            throw APIError.server(statusCode: 401, code: "unauthorized", message: "Session expirée.")
         }
         if tooLong.contains(tripId) {
             throw APIError.server(

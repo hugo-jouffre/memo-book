@@ -249,7 +249,12 @@ public final class RecordingOutbox {
         rejection = nil
         publish(ChatTurnDelivery(id: turn.id, tripId: tripId, state: .sending))
 
-        let outcome = await deliverOrQueue(turn, to: tripId)
+        // **Une tâche à elle**, détachée de celle de l'appelant : quitter la
+        // conversation annule son tour en vol (`ChatModel.teardown()`), et
+        // l'envoi annulé avec lui retombait dans la file — où rien ne le
+        // relançait avant le prochain retour au premier plan. Le vocal part
+        // donc jusqu'au bout, écran fermé ou non.
+        let outcome = await Task { await self.deliverOrQueue(turn, to: tripId) }.value
         note(outcome, of: turn.id, to: tripId)
         return outcome
     }
@@ -1007,6 +1012,14 @@ public final class RecordingOutbox {
                 .waitingForCredit(until: creditReturns(credit?.resetsAt, now: now), credit: credit)
             case .server(_, APIError.dailyCreditTooLongCode, _):
                 .waitingForUnlimited(credit: nil)
+            // Une session révoquée n'est pas un refus du tour : il attend la
+            // reconnexion, comme `.notAuthenticated` — l'effacer perdait le vocal.
+            case .server(401, _, _):
+                .deferred
+            // Le plafond anti-abus du fil (150 tours par jour et par voyage) :
+            // « reviens demain », dit le message — le tour attend donc demain.
+            case .server(429, "chat_daily_cap", _):
+                .waitingForCredit(until: creditReturns(nil, now: now), credit: nil)
             case .server(let statusCode, _, let message):
                 statusCode >= 500 ? .deferred : .rejected(message)
             case .decoding:
