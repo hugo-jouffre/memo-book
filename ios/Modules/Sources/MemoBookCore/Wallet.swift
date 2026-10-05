@@ -101,7 +101,7 @@ public struct WalletEntry: Codable, Sendable, Hashable, Identifiable {
 
     public let kind: WalletEntryKind
 
-    /// Qui, ou quoi — « Marie D. », « Abonnement MB ». `nil` quand le serveur
+    /// Qui, ou quoi — « Marie D. », « Recharge de la cagnotte ». `nil` quand le serveur
     /// n'a pas de motif à donner ; la ligne se lit alors sur sa seule nature.
     public let label: String?
 

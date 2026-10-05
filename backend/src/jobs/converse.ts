@@ -77,6 +77,23 @@ function entryIdsOf(payload: unknown): string[] {
 }
 
 /**
+ * La rédaction d'un tour déjà répondu, quand elle n'est jamais partie : la
+ * fiche attend encore (`pending`), elle a un texte à rédiger, et personne ne
+ * l'a corrigée à la main. Une rédaction en cours ou finie ne se relance pas.
+ */
+async function republishStrandedRedaction(context: AppContext, entryId: string | null): Promise<void> {
+  if (!entryId) return;
+  const entry = await context.prisma.entry.findUnique({
+    where: { id: entryId },
+    select: { kind: true, transcript: true, editedText: true, redactionStatus: true },
+  });
+  if (!entry || entry.redactionStatus !== "pending") return;
+  if (entry.kind === "photo" || !entry.transcript || entry.editedText) return;
+  await context.queue.publish<RedactJob>(JOB_NAMES.redact, { entryId });
+  context.logger.warn({ entryId }, "Rédaction republiée au rejeu du tour de conversation");
+}
+
+/**
  * Le tour de MEMO — `docs/conversation.md` § 3 et § 4.
  *
  * Le message du voyageur est déjà écrit par la route ; ce job **répond**. Il
@@ -98,8 +115,13 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
     logger.warn({ messageId }, "Tour introuvable, job de conversation ignoré");
     return;
   }
-  // Rejoué par pg-boss après une réponse déjà écrite : rien à refaire.
-  if (message.repliedAt) return;
+  // Rejoué par pg-boss après une réponse déjà écrite : rien à refaire — sauf
+  // la rédaction, si c'est sa publication, après la transaction, qui a fait
+  // échouer le job. Sans ça, le souvenir restait « en cours » pour toujours.
+  if (message.repliedAt) {
+    await republishStrandedRedaction(context, message.entryId);
+    return;
+  }
 
   await waitForOlderUnansweredTurns(context, message.memoId, message.seq);
 
@@ -211,7 +233,13 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
 
   const kind = message.kind === "voice" ? "voice" : message.kind === "photos" ? "photos" : "text";
   const text = kind === "voice" ? (message.entry?.transcript ?? null) : message.text;
-  const transcriptFailed = kind === "voice" && message.entry?.status === "failed";
+  // Un vocal muet — un silence, ou une transcription qui n'était que l'indice
+  // recopié (`withoutHintEcho`) — arrive « prêt » mais vide. MEMO le dit comme
+  // une transcription ratée, au lieu de se taire devant une fiche blanche.
+  const transcriptFailed =
+    kind === "voice" &&
+    (message.entry?.status === "failed" ||
+      (message.entry?.status === "ready" && !(message.entry.transcript ?? "").trim()));
 
   const input: ConversationInput = {
     memo: {

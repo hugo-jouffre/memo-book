@@ -684,7 +684,7 @@ public enum Faq {
                 id: "faq.donnees.export",
                 question: "Je peux récupérer toutes mes données ?",
                 answer: [
-                    "Oui, depuis les réglages du compte, en cliquant sur \"Exporter mes données\" : tes textes, tes photos et tes Carnets te sont envoyés dans un format lisible.",
+                    "Oui, depuis les réglages du compte, en cliquant sur « Exporter mes données » : tes textes, tes photos et tes Carnets te sont envoyés dans un format lisible.",
                 ]
             ),
             FaqEntry(

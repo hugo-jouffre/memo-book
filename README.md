@@ -45,7 +45,7 @@ Le repo GitHub est la source de vérité du projet. Clara et Paul n'ont pas beso
 - **Conversation** : API Anthropic (`claude-sonnet-5`), pilotée par `agents/agent-conversation.md`. C'est MEMO, dans le chat : il écoute, reformule, pose **une** question et classe ce qu'on lui dit. Un moteur de règles répond à sa place quand il se tait — le fil n'est jamais muet ([`docs/conversation.md`](docs/conversation.md))
 - **Génération de PDF** : APITemplate, sur le template de `MemoBook Generator/templates/travel-journal/`
 - **Paiements** : StoreKit 2 pour l'abonnement mensuel (4,99 €, récit illimité ; sans lui, chaque voyage raconte 5 minutes par jour) ; Stripe pour le carnet imprimé et la cagnotte — voir [`docs/paiements.md`](docs/paiements.md)
-- **CI** : GitHub Actions — typecheck, lint et tests du back-end à chaque PR (`.github/workflows/ci-backend.yml`). La vérification de compilation iOS reste à ajouter (elle demande un runner macOS)
+- **CI** : GitHub Actions — typecheck, lint et tests du back-end à chaque PR (`.github/workflows/ci-backend.yml`), compilation et tests de l'app iOS sur un runner macOS (`.github/workflows/ci-ios.yml`). La CI iOS compile en Debug seulement : une archive Release peut casser sur du code qu'elle n'a jamais vu
 
 Les clés API (OpenAI, APITemplate, etc.) ne vivent **jamais** dans l'app ni dans ce repo — uniquement côté serveur.
 
@@ -53,14 +53,14 @@ Les clés API (OpenAI, APITemplate, etc.) ne vivent **jamais** dans l'app ni dan
 
 Développement module par module, chaque module = une branche, une PR, un ticket, une session de QA :
 
-1. **Onboarding** — présentation du concept, demande de permission micro au bon moment ⏳
-2. **Authentification** — Sign in with Apple + email (magic link), suppression de compte ⏳
+1. **Onboarding** — présentation du concept, demande de permission micro au bon moment — 🔄 *écran d'entrée, mot des fondateurs et dernières questions en place*
+2. **Authentification** — Sign in with Apple, Google, e-mail et mot de passe, suppression de compte — 🔄 *en place ; reste la délivrabilité des e-mails (T204)*
 3. **Enregistrement audio** — cœur de l'app : forme d'onde en temps réel, sauvegarde locale immédiate, reprise après crash — 🔄 *socle posé : capture, forme d'onde, upload. Reste la sauvegarde locale et la reprise après crash*
 4. **Gestion des souvenirs** — liste, lecture, transcription, édition, synchronisation en arrière-plan — 🔄 *socle posé : liste, transcription, statuts. Reste l'édition et la synchro en arrière-plan*
 5. **Génération et visualisation du carnet** — composition, génération serveur, prévisualisation PDF — 🔄 *socle posé, de bout en bout*
 6. **Partage et export** — export PDF, lien de partage, sauvegarde dans Fichiers — 🔄 *partage du PDF en place*
-7. **Paywall et achats intégrés** — StoreKit 2, abonnement mensuel, crédit du jour ⏳
-8. **Réglages et compte** — profil, abonnement, confidentialité, suppression de compte ⏳
+7. **Paywall et achats intégrés** — StoreKit 2, abonnement mensuel, crédit du jour — 🔄 *en place dans l'app et sur le serveur ; reste le produit mensuel dans App Store Connect (T250)*
+8. **Réglages et compte** — profil, abonnement, confidentialité, suppression de compte — 🔄 *en place ; tickets ouverts dans `docs/ui-development.md`*
 
 ## Roadmap
 
@@ -83,17 +83,10 @@ Le **cœur produit** est posé de bout en bout : on enregistre un vocal, il est 
 structuré en carnet, et le PDF est généré. C'est le chemin critique de l'app — le reste
 s'accroche autour.
 
-Ce qui **n'est pas encore là**, volontairement : l'onboarding, l'authentification (l'app
-s'enregistre pour l'instant comme un appareil anonyme), le paywall et les réglages. Ces
-écrans dépendent d'arbitrages design encore ouverts.
-
-Ce qui **attend une décision** :
-
-- **La palette.** Aucun token de l'app ne porte de couleur de marque pour l'instant — voir
-  l'avertissement dans [`ios/README.md`](ios/README.md#design-tokens). Les sources
-  existantes se contredisent et vont être remplacées ; rien n'a été figé dans le code.
-- **La CI iOS.** Pas encore de vérification de compilation à chaque PR : elle demande un
-  runner macOS, à arbitrer (coût en minutes).
+Autour, les écrans de la V1 sont en place : entrée et comptes, accueil, conversation
+avec MEMO, réglages et personnalisations du carnet, couvertures, paywall et crédit du jour,
+profil, commande et cagnotte. Ce qui **attend encore une réponse** — écran par écran — est
+dans [`docs/ui-development.md`](docs/ui-development.md).
 
 ## Workflow Git
 

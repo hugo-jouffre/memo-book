@@ -272,6 +272,12 @@ public struct RootView: View {
                 .onChange(of: managesSubscriptionFromNotification) { _, isOpen in
                     if !isOpen { homeReloadRequest += 1 }
                 }
+                // Une transaction remise hors du paywall (un renouvellement,
+                // un achat d'un lancement précédent) : l'accueil se relit, et
+                // l'abonnement qu'il apprend libère la file (plus bas).
+                .onChange(of: dependencies.deliveredTransactions) {
+                    homeReloadRequest += 1
+                }
             }
         }
         .animation(.snappy, value: stage)

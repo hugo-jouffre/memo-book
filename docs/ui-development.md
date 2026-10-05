@@ -103,9 +103,8 @@ Dans la PR de ce lot, vérifié en simulateur :
   était refusé.
 - **T200** — la carte de l'écran d'entrée tient sur un iPhone SE : vue, et non
   plus seulement mesurée.
-- **Très grand texte** : la pastille « étapes restantes » sortait de l'écran,
-  « Enregistrer » se coupait lettre par lettre dans le chat, et la ligne
-  « Limites de souvenirs » coupait ses mots en deux.
+- **Très grand texte** : « Enregistrer » se coupait lettre par lettre dans le
+  chat.
 
 ## Tickets ouverts, écran par écran
 

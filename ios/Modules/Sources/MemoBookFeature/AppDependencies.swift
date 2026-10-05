@@ -57,6 +57,14 @@ public final class AppDependencies {
     /// lancer un chacun.
     private var registration: Task<Void, any Error>?
 
+    /// Combien de transactions App Store **remises hors du paywall** le
+    /// serveur a acceptées : un renouvellement, une validation parentale, un
+    /// achat qu'un lancement précédent n'avait pas pu remettre. `RootView`
+    /// relit l'accueil à chaque fois — sans quoi l'abonnement restait inconnu
+    /// de l'app, et les vocaux en attente du crédit attendaient minuit alors
+    /// que le serveur était déjà en illimité.
+    public private(set) var deliveredTransactions = 0
+
     /// - Parameters:
     ///   - connectivity: d'où l'app apprend qu'elle a du réseau. Le vrai
     ///     moniteur par défaut ; un test en fournit un qu'il pilote.
@@ -110,7 +118,21 @@ public final class AppDependencies {
         // **Au lancement, et pas à l'ouverture du paywall** : un renouvellement,
         // une validation parentale ou un remboursement arrivent quand ils
         // veulent, et StoreKit garde ceux qu'on n'écoute pas.
-        self.subscriptions.startListening(deliver: Self.deliveringTransaction(to: api, memoId: nil))
+        self.subscriptions.startListening(deliver: countingDelivery())
+    }
+
+    /// ``deliveringTransaction(to:memoId:)``, qui compte en plus ce que le
+    /// serveur a accepté (``deliveredTransactions``).
+    private func countingDelivery() -> TransactionDelivery {
+        let deliver = Self.deliveringTransaction(to: api, memoId: nil)
+        return { [weak self] signed in
+            try await deliver(signed)
+            await self?.noteDeliveredTransaction()
+        }
+    }
+
+    private func noteDeliveredTransaction() {
+        deliveredTransactions += 1
     }
 
     /// Remet une transaction App Store au serveur — voir
@@ -142,7 +164,7 @@ public final class AppDependencies {
     /// renouvellement arrivé pendant que personne n'était connecté n'a pas pu
     /// partir.
     func deliverUnfinishedTransactions() async {
-        await subscriptions.deliverUnfinished(deliver: Self.deliveringTransaction(to: api, memoId: nil))
+        await subscriptions.deliverUnfinished(deliver: countingDelivery())
     }
 
     /// Ce que l'offre sait faire de l'App Store, pour **ce** compte — posé par

@@ -414,9 +414,10 @@ public enum ChatCopy {
         }
 
         /// Ce que VoiceOver annonce quand l'enregistrement s'arrête net : ce
-        /// qui a été dit part quand même, il faut le savoir sans le voir.
+        /// qui a été dit est gardé, il faut le savoir sans le voir. « Gardé »,
+        /// pas « envoyé » : hors ligne, il attend encore dans la file.
         public static let stoppedAnnouncement =
-            "Limite du jour atteinte. Ton vocal est envoyé."
+            "Limite du jour atteinte. Ton vocal est gardé."
 
         /// L'indice du bandeau « Crédit du jour épuisé », qui ouvre l'offre.
         public static let exhaustedHint = "Ouvre l’offre illimitée"

@@ -15,13 +15,22 @@ import { sendDueNotifications, sendTripEndEmails } from "../services/notificatio
 export type SendNotificationsJob = Record<string, never>;
 
 export async function sendNotifications(context: AppContext): Promise<void> {
-  const report = await sendDueNotifications(context);
-  if (report.sent > 0) {
-    context.logger.info(report, "Passe des notifications terminée.");
+  // Les deux envois sont indépendants : une panne des notifications (les
+  // vacances scolaires injoignables…) ne saute pas l'e-mail de l'heure.
+  let failure: Error | null = null;
+  try {
+    const report = await sendDueNotifications(context);
+    if (report.sent > 0) {
+      context.logger.info(report, "Passe des notifications terminée.");
+    }
+  } catch (cause) {
+    failure = cause instanceof Error ? cause : new Error(String(cause));
+    context.logger.error({ err: cause }, "Passe des notifications échouée.");
   }
 
   const emails = await sendTripEndEmails(context);
   if (emails.sent > 0) {
     context.logger.info(emails, "E-mails de fin de voyage envoyés.");
   }
+  if (failure) throw failure;
 }
