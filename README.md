@@ -19,6 +19,8 @@ Ce repo contient le code de l'**app iOS native MemoBook**, développée en Swift
 
 Clara et Paul n'ont rien à installer : tout se lit sur GitHub, et l'app se teste via TestFlight.
 
+[![Architecture diagram of hugo-jouffre/memo-book](https://gitdiagram.com/hugo-jouffre/memo-book/diagram.png)](https://gitdiagram.com/hugo-jouffre/memo-book?utm_source=readme&utm_medium=picture)
+
 ## Équipe
 
 | Rôle | Personne | Responsabilité |
