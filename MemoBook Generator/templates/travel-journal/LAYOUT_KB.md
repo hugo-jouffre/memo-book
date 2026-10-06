@@ -211,7 +211,7 @@ produit rien pour eux et l'app ne devrait pas les proposer.
 | `body_html` | requis | Récit. `<p>` par idée, `<ul>/<li>` pour les listes. Pas de `<h1>`/`<h2>` |
 | `day_intro` | optionnel | Affiche le bandeau : `{ day_number, location, date, stay, host, weather_key }` |
 | `stay`, `host` | optionnels | Nom du gîte, prénom des hôtes. **À préférer à la météo** |
-| `weather_key` | optionnel, 5 valeurs | Icône mise en avant. Sans le champ, la rangée disparaît |
+| `weather_key` | optionnel, 5 valeurs | Icône mise en avant. **Seulement si le vocal dit clairement le temps** ; sans le champ, la rangée disparaît |
 | `tag` | optionnel | Étiquette manuscrite (« Top départ »). **Trois mots max**, sinon elle déborde |
 | `fun_facts[]` | optionnel | **Seul le premier est affiché.** Dosage : voir plus bas |
 | `fun_facts_title` | optionnel | Titre de la carte. Défaut « Fun fact » ; aussi « Infos », « Culture générale » |
@@ -486,15 +486,32 @@ option. Exemple : « Fun fact et illustration générés par IA ».
 
 ## La météo du jour
 
-**Champ optionnel, et rarement utile.** Les lecteurs sont explicites : la météo
-n'est pas importante, ils préfèrent la carte, le nom de l'hôtel et l'hôte.
-Sans `weather_key`, la rangée disparaît — ce qui aère la page, autre demande du
-panel. Préférer `day_intro.stay` et `day_intro.host`.
+**La météo ne figure que si le voyageur la dit clairement dans son vocal.**
+Sinon, pas de `weather_key` : la rangée disparaît, et c'est le cas normal.
 
-Quand la météo porte vraiment la journée (mousson, tempête, premier jour de
-neige), le bandeau affiche les cinq icônes ; celle qui correspond passe en
-pastille carotte, les quatre autres restent estompées à 30 %. **Il n'y a rien
-d'autre à envoyer** — ni emoji, ni couleur, ni température.
+C'est une décision, pas un réglage par défaut. Les lecteurs sont explicites : la
+météo n'est pas importante, ils préfèrent la carte, le nom de l'hôtel et l'hôte
+— et une rangée absente aère la page, autre demande du panel. Préférer
+`day_intro.stay` et `day_intro.host`. Surtout, une météo supposée est une
+**invention** : elle imprime dans le carnet un temps que personne n'a raconté.
+
+| Le vocal dit… | `weather_key` |
+|---|---|
+| « il a plu toute la journée », « grand soleil », « tempête de neige », « ciel tout gris » | la valeur qui correspond |
+| rien sur le temps | **aucune** — même en Grèce en août |
+| « coucher de soleil », « on a bronzé », « à la plage » | **aucune** — ce sont des activités, pas une météo dite |
+| un temps qui ne se range dans aucune valeur, ou deux temps sans dominante | **aucune** — dans le doute, on omet |
+
+Quand la météo est dite, le bandeau affiche les cinq icônes ; celle qui
+correspond passe en pastille carotte, les quatre autres restent estompées à
+30 %. **Il n'y a rien d'autre à envoyer** — ni emoji, ni couleur, ni
+température.
+
+**Qui la relève.** L'Agent Transcription, à la rédaction de chaque étape : il
+lit le vocal et rend `weatherKey`, `null` le plus souvent. La mise en page la
+reprend telle quelle et n'en ajoute jamais — `structuring.ts` retire toute
+`weather_key` que la rédaction n'a pas relevée. L'atelier (MemoBook Generator)
+ne lit pas le récit : il n'en envoie jamais.
 
 | Valeur | Icône | Quand la choisir |
 |---|---|---|
@@ -504,12 +521,12 @@ d'autre à envoyer** — ni emoji, ni couleur, ni température.
 | `rain` | pluie | Averses, mousson, orage |
 | `snow` | flocon | Neige, gel, froid marquant |
 
-**Comment décider.** Prendre le temps *dominant* de la journée racontée, pas le
-plus spectaculaire : une éclaircie de dix minutes dans une journée de pluie
-reste `rain`. Si le récit ne dit rien du temps, se fier au lieu et à la saison
-plutôt que d'omettre le champ — un bandeau sans icône active a l'air cassé.
-En cas d'hésitation entre deux valeurs, `sun-wind` est le repli neutre : c'est
-la seule qui ne raconte pas un temps tranché.
+**Comment choisir la valeur**, une fois la météo dite : prendre le temps
+*dominant* que raconte le voyageur, pas le plus spectaculaire — une éclaircie
+de dix minutes dans une journée de pluie reste `rain`. Ne jamais se fier au lieu
+ni à la saison pour combler un silence, et ne pas prendre `sun-wind` comme
+repli : sans météo dite, on omet le champ. Un bandeau sans rangée météo n'a rien de
+cassé — c'est la rangée elle-même qui disparaît, pas seulement l'icône active.
 
 `weather_icon` (emoji) subsiste dans le schéma pour compatibilité mais n'est
 plus rendu. Ne pas le produire.
@@ -903,8 +920,7 @@ appels.
       "day_intro": {
         "day_number": "01",
         "location": "De Barcelone à Cebu",
-        "date": "22-23 fev 2026",
-        "weather_key": "sun"
+        "date": "22-23 fev 2026"
       },
       "tag": "Top départ",
       "layout_story_opener": true,

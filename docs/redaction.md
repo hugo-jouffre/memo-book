@@ -24,8 +24,8 @@ et avec qui, les dates du voyage et de l'étape, la fiche de cohérence du carne
 les trois dernières étapes écrites, tous les titres et encarts déjà employés.
 
 **Ce qu'il rend** : sa lecture du vocal (`understanding` — le cœur de l'étape,
-le ton, ce que veut dire chaque passage oral), le titre, le récit, la météo,
-l'encart éventuel, la fiche de cohérence mise à jour, le relevé pour les
+le ton, ce que veut dire chaque passage oral), le titre, le récit, la météo
+— seulement si le vocal la dit clairement, `null` sinon —, l'encart éventuel, la fiche de cohérence mise à jour, le relevé pour les
 statistiques, et ses doutes.
 
 ## 2. Où changer quoi

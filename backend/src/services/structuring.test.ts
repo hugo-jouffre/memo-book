@@ -5,6 +5,7 @@ import {
   HeuristicStructurer,
   pickLayout,
   type StructuringEntry,
+  withToldWeatherOnly,
 } from "./structuring.js";
 
 function entry(overrides: Partial<StructuringEntry> = {}): StructuringEntry {
@@ -207,5 +208,32 @@ describe("HeuristicStructurer", () => {
 
     expect(payload["intro_title"]).toBeUndefined();
     expect(payload["intro_text"]).toBeUndefined();
+  });
+});
+
+describe("withToldWeatherOnly", () => {
+  const day = (weather?: string) => ({
+    title: "Arrivée",
+    day_intro: { day_number: "01", location: "Paros", ...(weather ? { weather_key: weather } : {}) },
+  });
+
+  it("retire la météo qu'aucun vocal n'a dite", () => {
+    const payload = withToldWeatherOnly({ days: [day("sun"), day("rain")] }, [entry(), entry()]);
+    const days = payload["days"] as ReturnType<typeof day>[];
+
+    expect(days.map((d) => "weather_key" in d.day_intro)).toEqual([false, false]);
+  });
+
+  it("garde la météo relevée par la rédaction", () => {
+    const payload = withToldWeatherOnly({ days: [day("rain"), day("sun")] }, [entry({ weatherKey: "rain" })]);
+    const days = payload["days"] as ReturnType<typeof day>[];
+
+    expect(days[0]?.day_intro).toHaveProperty("weather_key", "rain");
+    expect(days[1]?.day_intro).not.toHaveProperty("weather_key");
+  });
+
+  it("laisse intactes les pages sans bandeau", () => {
+    const suite = { title: "", layout_photo_page: true };
+    expect(withToldWeatherOnly({ days: [suite] }, [entry()])).toEqual({ days: [suite] });
   });
 });

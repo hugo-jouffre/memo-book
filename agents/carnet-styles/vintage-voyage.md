@@ -21,13 +21,13 @@ Carnets de voyage classiques avec beaucoup d'étapes (jour par jour), envie de g
 ## Éléments graphiques caractéristiques
 - Cadre en pointillés autour de toute la page
 - Bandeau d'en-tête en 3 colonnes : jour · lieu · date, séparées par des pointillés verticaux
-- Ligne d'icônes météo avec l'icône du jour mise en évidence
+- Ligne d'icônes météo avec l'icône du jour mise en évidence — **seulement quand le voyageur a dit le temps dans son vocal** ; sinon la ligne n'apparaît pas
 - Sticker « washi tape » pour les mentions spéciales (ex. « Top départ »)
 - Encart « Fun fact » avec bordure pointillée et icône trombone
 - Illustration de carte avec trajet en pointillés et pins de localisation
 
 ## Structure de page type
-1. Cadre pointillé + bandeau jour / lieu / date + météo
+1. Cadre pointillé + bandeau jour / lieu / date (+ météo si le vocal la dit)
 2. Titre du souvenir
 3. Texte principal avec quelques passages soulignés
 4. Un ou deux encarts (fun fact et/ou carte illustrée) en bas de page
