@@ -217,8 +217,6 @@ final class RecordingOutboxTests: XCTestCase {
     }
 
     func testTheSingularIsNotWrittenAsAPlural() {
-        XCTAssertTrue(HomeNotice.waitingForConnection(count: 1).message.contains("Ton vocal"))
-        XCTAssertTrue(HomeNotice.waitingForConnection(count: 2).message.contains("Tes vocaux"))
         XCTAssertTrue(HomeNotice.delivered(count: 1).message.contains("Ton vocal"))
         XCTAssertTrue(HomeNotice.delivered(count: 5).message.contains("Tes 5 vocaux"))
     }

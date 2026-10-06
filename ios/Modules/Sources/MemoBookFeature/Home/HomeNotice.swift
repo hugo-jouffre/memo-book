@@ -35,10 +35,11 @@ public enum HomeNotice: Equatable, Sendable {
         case .offline:
             "Tu sembles hors ligne. **Tu peux consulter tes récits et enregistrer des étapes**, qui seront retranscrites plus tard."
 
-        case .waitingForConnection(let count) where count <= 1:
-            "**Ton vocal enregistré hors ligne est bien conservé.** Il sera envoyé dès ta reconnexion."
+        // La file porte aussi les textes et les photos : un message qui ne
+        // parlait que de « vocal » mentait après un texte (T170). Le texte
+        // est celui de Hugo (06/10/2026), le même quel que soit le nombre.
         case .waitingForConnection:
-            "**Tes vocaux enregistrés hors ligne sont bien conservés.** Ils seront envoyés dès ta reconnexion."
+            "**Ta connexion internet est interrompue.** Mais ne t’inquiète pas, tes messages seront envoyés une fois la connexion rétablie. En attendant, tu peux envoyer autant de messages ou de photos que tu veux, ils seront enregistrés localement sur ton téléphone\u{00A0}!"
 
         case .sending(let count) where count <= 1:
             "**Ton vocal est en cours d’envoi.** Encore un instant."
