@@ -16,7 +16,7 @@ struct SignUpFields: View {
             nameFields
                 .textInputAutocapitalization(.words)
 
-            BrandTextField("Email", text: $model.email, field: .email, focus: focus)
+            BrandTextField("E-mail", text: $model.email, field: .email, focus: focus)
                 .textContentType(.emailAddress)
                 .keyboardType(.emailAddress)
                 .textInputAutocapitalization(.never)

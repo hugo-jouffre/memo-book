@@ -24,7 +24,7 @@ import SwiftUI
 /// ```swift
 /// @FocusState private var focus: Field?
 ///
-/// BrandTextField("Email", text: $email, field: .email, focus: $focus)
+/// BrandTextField("E-mail", text: $email, field: .email, focus: $focus)
 ///     .textContentType(.emailAddress)
 /// ```
 /// Métriques verticales de General Sans, lues dans ses tables `hhea` et

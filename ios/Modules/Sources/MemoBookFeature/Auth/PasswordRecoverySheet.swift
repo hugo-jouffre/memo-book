@@ -68,7 +68,7 @@ struct PasswordRecoverySheet: View {
     private var requestStep: some View {
         VStack(spacing: MemoBookSpacing.m) {
             BrandTextField(
-                "Email",
+                "E-mail",
                 text: $model.email,
                 field: .email,
                 focus: $focus,
