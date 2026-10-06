@@ -84,6 +84,9 @@ public struct OrderPayment: Decodable, Sendable, Hashable {
     public let customerId: String?
     public let ephemeralKeySecret: String?
 
+    /// Apple Pay, quand le serveur le propose — voir ``PaymentIntentTicket``.
+    public let applePayMerchantId: String?
+
     public init(
         paidFromWallet: Bool,
         amountCents: Int,
@@ -91,7 +94,8 @@ public struct OrderPayment: Decodable, Sendable, Hashable {
         clientSecret: String? = nil,
         publishableKey: String? = nil,
         customerId: String? = nil,
-        ephemeralKeySecret: String? = nil
+        ephemeralKeySecret: String? = nil,
+        applePayMerchantId: String? = nil
     ) {
         self.paidFromWallet = paidFromWallet
         self.amountCents = amountCents
@@ -100,6 +104,7 @@ public struct OrderPayment: Decodable, Sendable, Hashable {
         self.publishableKey = publishableKey
         self.customerId = customerId
         self.ephemeralKeySecret = ephemeralKeySecret
+        self.applePayMerchantId = applePayMerchantId
     }
 
     /// Ce qu'il reste à faire pour que la commande soit payée.
@@ -125,7 +130,8 @@ public struct OrderPayment: Decodable, Sendable, Hashable {
                 amountCents: amountCents,
                 currency: currency,
                 customerId: customerId,
-                ephemeralKeySecret: ephemeralKeySecret
+                ephemeralKeySecret: ephemeralKeySecret,
+                applePayMerchantId: applePayMerchantId
             )
         )
     }

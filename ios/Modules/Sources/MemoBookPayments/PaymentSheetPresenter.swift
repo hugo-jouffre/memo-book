@@ -73,7 +73,9 @@ public final class StripePaymentSheetPresenter: PaymentPresenter {
         configuration.merchantDisplayName = merchantName
         configuration.returnURL = "memobook://stripe-redirect"
 
-        if let applePayMerchantId {
+        // Le serveur d'abord : c'est lui qui sait si le certificat Apple Pay
+        // de son compte Stripe existe.
+        if let applePayMerchantId = ticket.applePayMerchantId ?? applePayMerchantId {
             configuration.applePay = .init(
                 merchantId: applePayMerchantId,
                 merchantCountryCode: merchantCountryCode

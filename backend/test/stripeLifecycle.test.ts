@@ -50,6 +50,7 @@ type OrderBody = {
     amountCents: number;
     customerId?: string | null;
     ephemeralKeySecret?: string | null;
+    applePayMerchantId?: string | null;
   } | null;
 };
 
@@ -340,6 +341,13 @@ describe("les cartes du compte", () => {
 
     expect(order.payment?.customerId).toMatch(/^cus_fake_/);
     expect(order.payment?.ephemeralKeySecret).toMatch(/^ek_test_fake_/);
+  });
+
+  it("ne proposent pas Apple Pay tant que l'identifiant marchand n'est pas posé", async () => {
+    // Sans certificat Apple Pay chez Stripe, le bouton échouerait après Face ID.
+    const order = await placeOrder();
+
+    expect(order.payment?.applePayMerchantId ?? null).toBeNull();
   });
 
   it("restent hors de la feuille d'une app qui ne dit pas sa version de SDK", async () => {

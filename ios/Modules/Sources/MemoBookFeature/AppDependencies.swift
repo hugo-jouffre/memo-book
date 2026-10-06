@@ -86,9 +86,9 @@ public final class AppDependencies {
     ) {
         self.api = api
         // La vraie feuille Stripe par défaut ; un aperçu passe la sienne.
-        // `applePayMerchantId` reste nul tant que le certificat Apple Pay n'est
-        // pas posé : la feuille montre alors les cartes seules, au lieu d'un
-        // bouton Apple Pay qui échouerait au moment de payer.
+        // Apple Pay n'y est pas codé : l'identifiant marchand arrive avec
+        // chaque paiement (`PaymentIntentTicket.applePayMerchantId`), quand le
+        // serveur a le certificat Apple Pay de son compte Stripe.
         self.payments = payments ?? StripePaymentSheetPresenter()
         self.subscriptions = subscriptions ?? StoreKitSubscriptionStore()
         self.paymentMethods = paymentMethods ?? StripeCustomerSheetPresenter()

@@ -47,6 +47,20 @@ final class OrderPaymentResumeTests: XCTestCase {
         )
     }
 
+    /// Apple Pay arrive du serveur, avec le paiement : la feuille ne le montre
+    /// que s'il est là — un serveur sans certificat Apple Pay n'en envoie pas.
+    func testApplePayComesFromTheServerWithThePayment() throws {
+        let withApplePay = try JSONDecoder().decode(OrderPayment.self, from: Data("""
+        {"paidFromWallet":false,"amountCents":4990,"currency":"eur","clientSecret":"pi_x_secret_y",\
+        "publishableKey":"pk_test_x","applePayMerchantId":"merchant.com.tonapp.memobook"}
+        """.utf8))
+        guard case .card(let ticket) = withApplePay.settlement else { return XCTFail("carte attendue") }
+        XCTAssertEqual(ticket.applePayMerchantId, "merchant.com.tonapp.memobook")
+
+        guard case .card(let cardsOnly) = self.ticket.settlement else { return XCTFail("carte attendue") }
+        XCTAssertNil(cardsOnly.applePayMerchantId)
+    }
+
     func testAClosedSheetResumesTheSameOrder() async {
         let calls = Calls()
         let model = model(calls: calls, sheet: [.cancelled, .succeeded])

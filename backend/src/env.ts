@@ -205,6 +205,19 @@ const schema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().default(""),
 
   /**
+   * L'identifiant marchand Apple Pay (`merchant.com.tonapp.memobook`), servi à
+   * l'app avec chaque paiement. **Vide, la feuille montre les cartes seules.**
+   *
+   * À poser seulement quand le **certificat Apple Pay** de ce compte Stripe
+   * existe (tableau de bord Stripe ▸ Apple Pay ▸ certificat signé dans le
+   * portail Apple) : sans lui, le bouton paraît et le paiement échoue après
+   * Face ID. Le sandbox et le compte de production ont chacun le leur. Servi
+   * par le serveur, et non codé dans l'app : activer Apple Pay — ou le couper
+   * en urgence — est une variable Railway, pas une livraison.
+   */
+  APPLE_PAY_MERCHANT_ID: z.string().default(""),
+
+  /**
    * L'App Store — **l'abonnement**, acheté par StoreKit. Voir
    * `services/appStore.ts`.
    *

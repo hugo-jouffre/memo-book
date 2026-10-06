@@ -106,5 +106,7 @@ export async function paymentTicket(
     publishableKey: context.env.STRIPE_PUBLISHABLE_KEY,
     customerId: ephemeralKeySecret ? input.customerId : null,
     ephemeralKeySecret,
+    // Apple Pay, quand ce compte Stripe en a le certificat — voir `env.ts`.
+    applePayMerchantId: context.env.APPLE_PAY_MERCHANT_ID || null,
   };
 }

@@ -272,7 +272,7 @@ Le serveur **refuse de démarrer** si les deux clés ne sont pas du même mode
 |---|---|---|
 | **Adresse du siège** | Tableau de bord → Tax → Settings | `status: pending` — **aucune taxe n'est calculée** |
 | **Immatriculation TVA** | Tax → Registrations | Stripe ne collecte rien, **et ne lève aucune erreur** |
-| **Identifiant marchand Apple Pay** | Portail Apple + Stripe | La feuille montre les cartes seules |
+| **Certificat Apple Pay, puis `APPLE_PAY_MERCHANT_ID`** | Stripe + portail Apple + Railway (voir *Apple Pay*) | La feuille montre les cartes seules |
 | **Événements du webhook** | Développeurs ▸ Webhooks (commande ci-dessus) | Une intention annulée à la main ne rend sa réservation qu'au ménage horaire |
 | **Reçus par e-mail** | Paramètres ▸ E-mails clients ▸ Paiements réussis | Les intentions portent `receipt_email`, mais Stripe n'envoie rien tant que la case n'est pas cochée — et jamais en mode test |
 | Clé restreinte (`rk_`) | Développeurs → Clés API | — (bonne pratique avant la production) |
@@ -308,18 +308,28 @@ défaut) compte **quinze** moyens actifs, dont `card`, `link`, `klarna`,
 `amazon_pay` et `apple_pay`. À relire avec
 `stripe get /v1/payment_method_configurations`.
 
-> ⚠️ **`apple_pay` est actif chez Stripe et n'apparaîtra pourtant pas.** Ce
-> n'est pas le tableau de bord qui bloque, c'est l'app : `StripePaymentSheetPresenter`
-> reçoit `applePayMerchantId: nil` et ne configure pas `configuration.applePay`
-> — la feuille montre alors les cartes seules.
->
-> L'identifiant marchand existe depuis le 02/10/2026 (`merchant.com.tonapp.memobook`),
-> et l'app le porte : capability Apple Pay déclarée dans `ios/project.yml`, profil
-> de développement régénéré avec lui. Il reste deux gestes, dans cet ordre : le
-> **certificat Apple Pay** de Stripe sur cet identifiant (tableau de bord Stripe ▸
-> Apple Pay ▸ la demande de certificat à signer dans le portail Apple), puis
-> passer l'identifiant à `StripePaymentSheetPresenter`. Dans l'autre ordre, le
-> bouton paraît et le paiement échoue.
+### Apple Pay
+
+**C'est le serveur qui l'allume** (05/10/2026) : chaque paiement (commande,
+recharge de cagnotte) rend `applePayMerchantId`, lu dans la variable
+`APPLE_PAY_MERCHANT_ID` du service `api`. L'app ne propose Apple Pay que si
+elle le reçoit ; vide, la feuille montre les cartes seules. Allumer ou couper
+Apple Pay est donc une variable Railway, pas une livraison.
+
+L'identifiant marchand existe depuis le 02/10/2026 (`merchant.com.tonapp.memobook`),
+et l'app le porte : capability Apple Pay déclarée dans `ios/project.yml`. Dans
+cet ordre, **pour chaque compte Stripe** (le sandbox et la production ont
+chacun le leur) :
+
+1. Tableau de bord Stripe ▸ *Paramètres ▸ Moyens de paiement ▸ Apple Pay* ▸
+   *Ajouter une nouvelle application* : télécharger la demande de certificat
+   (CSR).
+2. Portail Apple ▸ *Identifiers ▸ Merchant IDs* ▸ `merchant.com.tonapp.memobook`
+   ▸ *Apple Pay Payment Processing Certificate* ▸ *Create* : déposer la CSR,
+   télécharger le `.cer`, le rendre à Stripe.
+3. Railway ▸ `api` ▸ `APPLE_PAY_MERCHANT_ID=merchant.com.tonapp.memobook`.
+
+Dans l'autre ordre, le bouton paraît et le paiement échoue après Face ID.
 
 ## Le prix
 

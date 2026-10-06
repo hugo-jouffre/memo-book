@@ -23,13 +23,20 @@ public struct PaymentIntentTicket: Codable, Sendable, Hashable {
     public let customerId: String?
     public let ephemeralKeySecret: String?
 
+    /// **Apple Pay, quand le serveur le dit** : l'identifiant marchand, posé
+    /// sur Railway une fois le certificat Apple Pay du compte Stripe en place.
+    /// Absent, la feuille montre les cartes seules — mieux qu'un bouton Apple
+    /// Pay qui échouerait après Face ID.
+    public let applePayMerchantId: String?
+
     public init(
         clientSecret: String,
         publishableKey: String,
         amountCents: Int,
         currency: String,
         customerId: String? = nil,
-        ephemeralKeySecret: String? = nil
+        ephemeralKeySecret: String? = nil,
+        applePayMerchantId: String? = nil
     ) {
         self.clientSecret = clientSecret
         self.publishableKey = publishableKey
@@ -37,6 +44,7 @@ public struct PaymentIntentTicket: Codable, Sendable, Hashable {
         self.currency = currency
         self.customerId = customerId
         self.ephemeralKeySecret = ephemeralKeySecret
+        self.applePayMerchantId = applePayMerchantId
     }
 
     /// Le montant tel qu'on l'écrit à l'écran — « 107,88 € ».
