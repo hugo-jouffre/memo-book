@@ -174,6 +174,9 @@ export function serializeTrip(
             targetPageCount: memo.targetPageCount,
           },
     isPrintable: memo.isPrintable,
+    // Le propriétaire seul supprime un voyage — `DELETE /v1/memos/:id` répond
+    // 404 à tout autre. Même règle que `canClearConversation`.
+    canDelete: memo.ownerAccountId === options.viewerAccountId,
     ...(dailyCredit ? { dailyCredit: serializeDailyCredit(dailyCredit) } : {}),
   };
 }
@@ -706,6 +709,9 @@ export function serializeTripSettings(
     // supprimer le voyage (`docs/conversation.md` § 7). L'app pâlit le lien et
     // explique ; le serveur refuse quand même (`DELETE /v1/trips/:id/chat`).
     canClearConversation: isOwner,
+    // « Supprimer le voyage » aussi (T233, 06/10/2026) : un co-voyageur ne
+    // doit même pas voir l'option — `DELETE /v1/memos/:id` lui répond 404.
+    canDelete: isOwner,
   };
 }
 

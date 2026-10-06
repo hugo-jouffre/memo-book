@@ -172,13 +172,13 @@ champ près — `test/screens.test.ts` est ce qui les tient ensemble.
 | Route | Rôle |
 | --- | --- |
 | `GET /v1/home` | Le voyageur, ses voyages et ceux où il est invité, la carte de découverte |
-| `GET /v1/trips/:id` | Un voyage ouvert : sa couverture, la relance, ses étapes |
+| `GET /v1/trips/:id` | Un voyage ouvert : sa couverture, la relance, ses étapes. Chaque `Trip` (accueil compris) porte `canDelete` : vrai pour le seul propriétaire |
 | `GET /v1/profile` | Identité, adresse, cartes, connecteurs, abonnement, commandes |
 | `PATCH /v1/profile` | Corrige le profil. Un champ absent n'est pas touché, un champ à `null` est effacé |
 | `GET /v1/profile/statistics` | Les chiffres de la feuille « Statistiques » : pays, régions, villes, rencontres, km, transports, additionnés à la lecture depuis les relevés de la rédaction (`entries.insights`). `pendingDetections` dit combien de souvenirs attendent encore leur relevé — l'app relit tant qu'il y en a |
 | `PUT /v1/profile/connectors/:key` | Branche ou débranche un connecteur |
 | `POST /v1/profile/link-device` | Rattache l'appareil au compte et lui transfère ses carnets |
-| `GET /v1/trips/:id/settings` | Les réglages d'un voyage : nom, dates, rythme, co-voyageurs, style, aperçu, crédit du jour (`dailyCredit`) |
+| `GET /v1/trips/:id/settings` | Les réglages d'un voyage : nom, dates, rythme, co-voyageurs, style, aperçu, crédit du jour (`dailyCredit`), et ce que seul le propriétaire peut faire (`canDelete`, `canClearConversation`) |
 | `PATCH /v1/trips/:id/settings` | Corrige un réglage. Même sémantique que `PATCH /v1/profile` |
 | `GET /v1/memos/:id/preview` | L'aperçu du carnet : état de composition, PDF, extrait, couvertures |
 | `POST /v1/memos/:id/share-link` | Crée le lien public de prévisualisation, ou rend celui qui existe |

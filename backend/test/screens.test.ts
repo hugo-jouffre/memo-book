@@ -894,6 +894,35 @@ describe("un co-voyageur", () => {
     expect(refused.statusCode).toBe(404);
     expect(await harness.prisma.memo.findUnique({ where: { id: memo.id } })).not.toBeNull();
   });
+  it("ne se voit même pas proposer de le supprimer (`canDelete`, T233)", async () => {
+    const owner = await registerAccount(harness.app, "proprietaire@memobook.app");
+    const coTraveller = await registerAccount(harness.app, "covoyageur@memobook.app");
+    const memo = await sharedTrip(owner.accountId, coTraveller.accountId);
+
+    const read = async (url: string, authorization: string) =>
+      (await harness.app.inject({ method: "GET", url, headers: { authorization } })).json<
+        Record<string, unknown> & { trip?: { canDelete: boolean }; trips?: { id: string; canDelete: boolean }[] }
+      >();
+
+    for (const [who, authorization, expected] of [
+      ["propriétaire", owner.authorization, true],
+      ["co-voyageur", coTraveller.authorization, false],
+    ] as const) {
+      const home = await read("/v1/home", authorization);
+      expect(home.trips?.find((trip) => trip.id === memo.id)?.canDelete, `accueil, ${who}`).toBe(expected);
+
+      const detail = await read(`/v1/trips/${memo.id}`, authorization);
+      expect(detail.trip?.canDelete, `voyage, ${who}`).toBe(expected);
+
+      const settings = await read(`/v1/trips/${memo.id}/settings`, authorization);
+      expect(settings["canDelete"], `réglages, ${who}`).toBe(expected);
+      // Même règle que « Supprimer la conversation ».
+      expect(settings["canClearConversation"], `réglages, ${who}`).toBe(expected);
+
+      const order = await read(`/v1/memos/${memo.id}/order-context`, authorization);
+      expect(order.trip?.canDelete, `commande, ${who}`).toBe(expected);
+    }
+  });
 });
 
 describe("créer un voyage", () => {
