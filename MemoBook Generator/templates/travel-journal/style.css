@@ -18,6 +18,10 @@
   /* --- Géométrie ---------------------------------------------------------- */
   --mb-page-w: 420pt;
   --mb-page-h: 595pt;
+  /* Jeu laissé sous chaque page pour qu'elle ne dépasse jamais sa feuille.
+     Voir `.page` : sans lui, APITemplate intercale une feuille blanche
+     derrière chaque page. */
+  --mb-page-slack: 1pt;
   --mb-margin: 30pt;
 
   /* --- Couleurs ----------------------------------------------------------- */
@@ -57,6 +61,15 @@
   --mb-paper-base: #ffffff;
   --mb-paper-tint: rgba(212, 136, 59, 0.1);
   --mb-grain-opacity: 0.3;
+  /* La feuille elle-même, derrière les pages. Elle ne se voit que dans le jeu
+     de `--mb-page-slack`, qui doit donc avoir la couleur du papier et non
+     celle d'une marge. C'est la couleur MOYENNE de la page, mesurée sur le
+     rendu (pixels du bas de page, 600 dpi) : la teinte seule donnerait
+     #fbf3eb, mais le grain l'assombrit, et un jeu à #fbf3eb se lisait comme
+     un liseré plus clair. `color-mix()` ne saurait de toute façon pas
+     intégrer le grain, et il n'existe pas dans le Chromium 97 d'APITemplate.
+     ⚠ À remesurer si `--mb-paper-tint` ou `--mb-grain-opacity` changent. */
+  --mb-sheet: #f5ede6;
 
   /* --- Typographie -------------------------------------------------------- */
   --mb-font-display: "Playfair Display", "Times New Roman", serif;
@@ -78,6 +91,7 @@
 body.profile-print {
   --mb-paper-tint: transparent;
   --mb-grain-opacity: 0;
+  --mb-sheet: #ffffff;
   /* Voir la règle des aplats plus haut : blanc = pas d'encre = le crème du
      papier. C'est le rendu voulu, pas une perte. */
   --mb-paper-fill: #ffffff;
@@ -87,10 +101,19 @@ body.profile-print {
 /* --- Réinitialisation ------------------------------------------------------ */
 * { box-sizing: border-box; }
 
-html, body {
+/* La couleur de la feuille est posée sur `body`, pas sur `html` : sans fond
+   sur `html`, celui de `body` s'étend à toute la toile, donc à chaque feuille
+   du PDF. Et c'est sur `body` que le profil `print` redéfinit `--mb-sheet` —
+   une variable posée là est invisible depuis `html`. */
+html {
   margin: 0;
   padding: 0;
-  background: #ffffff;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--mb-sheet);
 }
 
 body {
@@ -118,10 +141,28 @@ li { margin: 0; }
   margin: 0;
 }
 
+/* La page est plus courte que sa feuille, d'un point — et c'est voulu.
+
+   Chaque `.page` force un saut de page derrière elle. Si elle mesure ne
+   serait-ce qu'un cheveu de plus que la feuille, le moteur considère qu'elle
+   déborde sur la suivante, et le saut forcé envoie la page d'après une feuille
+   plus loin : une feuille blanche derrière chaque page, sauf la dernière, qui
+   n'a pas de saut. C'est exactement ce qu'a produit APITemplate : sa feuille
+   sort à 594,96 pt pour une page de 595 pt — 0,04 pt d'écart, quatorze
+   feuilles blanches sur vingt-neuf.
+
+   L'écart vient de l'arrondi du format par le moteur, et cet arrondi change
+   d'une version de Chromium à l'autre : le nôtre tolère l'écart, celui
+   d'APITemplate (m97) non. Plutôt que de viser une égalité exacte qu'aucun
+   moteur ne garantit, on laisse un point de jeu. Il se remplit de la couleur
+   de la feuille (`--mb-sheet`), donc ne se voit pas : 0,35 mm de papier.
+
+   `100vh` serait plus élégant, mais sa valeur à l'impression varie elle aussi
+   selon les moteurs — il a la réputation de produire exactement ce bug. */
 .page {
   position: relative;
   width: var(--mb-page-w);
-  height: var(--mb-page-h);
+  height: calc(var(--mb-page-h) - var(--mb-page-slack));
   overflow: hidden;
   background-color: var(--mb-paper-base);
   break-after: page;

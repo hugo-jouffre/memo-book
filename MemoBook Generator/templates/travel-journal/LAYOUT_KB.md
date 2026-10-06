@@ -670,16 +670,52 @@ supposées : les valeurs ci-dessous sortent d'une mesure de la boîte `.page` en
 média `print`, où la feuille vaut 560 × 793,3 px CSS.
 
 ```css
-@page { size: 420pt 595pt; margin: 0; }   /* la feuille, et aucune marge */
-html, body { margin: 0; padding: 0; }     /* rien autour des pages */
-.page { width: 420pt; height: 595pt; }    /* hauteur FIXE, jamais un pourcentage */
+@page { size: 420pt 595pt; margin: 0; }          /* la feuille, et aucune marge */
+html, body { margin: 0; padding: 0; }            /* rien autour des pages */
+body { background: var(--mb-sheet); }           /* la feuille a la couleur du papier */
+.page { width: 420pt; height: calc(595pt - 1pt); }  /* FIXE, et un point sous la feuille */
 ```
 
 | Ce qu'on écrit | Ce que la page mesure | Résultat imprimé |
 |---|---|---|
-| `height: 595pt` | 560 × **793,3** px | Correct, bord à bord |
+| `height: 594pt` (595 − 1 de jeu) | 560 × **792** px | Correct, une page par feuille dans les deux moteurs |
+| `height: 595pt` | 560 × **793,3** px | Correct en local ; **une feuille blanche derrière chaque page** chez APITemplate |
 | `height: 100%` | 560 × **0** px | **Le carnet s'effondre** |
 | `padding` sur le conteneur | page décalée de 64 px | **Bande blanche en haut de chaque feuille** |
+
+**Pourquoi un point de moins que la feuille.** Chaque `.page` force un saut de
+page derrière elle (`break-after: page`). Si elle dépasse sa feuille ne
+serait-ce que d'un cheveu, le moteur la voit déborder sur la suivante, et le saut
+forcé envoie la page d'après **une feuille plus loin**. La signature est
+reconnaissable entre toutes : une feuille blanche derrière **chaque** page, sauf
+la dernière, qui n'a pas de saut. C'est ce qu'a sorti APITemplate le 6 octobre :
+29 feuilles pour 15 pages.
+
+L'écart était de **0,04 pt**. APITemplate rend avec un **Chromium 97**, qui
+arrondit la feuille de 148 × 210 mm à **419,04 × 594,96 pt** ; la page en
+mesurait 595. Notre Chromium local, plus récent, tolère cet écart — d'où un bug
+**invisible en local** et impossible à reproduire hors d'APITemplate. Plutôt que
+de viser une égalité exacte que l'arrondi de chaque moteur remet en cause, la
+page garde un point de jeu (`--mb-page-slack`).
+
+**Le jeu ne doit pas se voir.** Il laisse apparaître la feuille, donc la feuille
+porte la couleur du papier : `--mb-sheet`, la couleur *moyenne* de la page
+mesurée sur le rendu (#f5ede6 en `preview`, grain compris ; blanc en `print`).
+Mesuré à 600 dpi, le bas de page est uniforme d'un bout à l'autre. Le seul
+endroit où ces 0,35 mm se lisent : sous une image **pleine page** (couverture,
+quatrième avec photo), qui s'arrête un point au-dessus du bord. C'est le prix du
+correctif, et il est sans commune mesure avec quatorze feuilles blanches.
+
+Quand on change ce jeu, tout ce qui est ancré en bas de page bouge avec lui —
+bande de photos, zone flottante, mur de photos — et ce qui est centré bouge de
+moitié. Rien d'autre : c'est vérifié élément par élément, ancienne CSS contre
+nouvelle. Les références visuelles changent pourtant sur toute la hauteur des
+pages, par lissage : empilées à l'écran, les pages démarrent désormais sur un
+pixel entier (792 px) au lieu d'un tiers de pixel (793,3 px).
+
+**`100vh`** semblerait plus élégant qu'une hauteur fixe moins un point. Il ne
+l'est pas : sa valeur à l'impression varie selon les moteurs, et il a la
+réputation de produire exactement ce bug-là.
 
 **Pourquoi `height: 100%` ne marche pas ici**, alors qu'il a l'air plus souple :
 un pourcentage se résout contre la hauteur du parent, et `html` / `body` n'en
@@ -708,6 +744,19 @@ De la même famille, à ne jamais introduire autour des pages :
 cd backend
 npm run render:local -- --offline --png    # puis regarder les PNG
 ```
+
+**Le rendu local ne suffit pas à valider la géométrie d'APITemplate** : ce n'est
+pas le même moteur, et il ne fait pas les mêmes arrondis. Sur un PDF sorti
+d'APITemplate, deux mesures tranchent :
+
+```bash
+pdfinfo carnet.pdf | grep -E "Pages|Page size"
+```
+
+- `Page size` doit être proche de **420 × 595 pt** — sinon c'est le panneau
+  *Settings* ;
+- `Pages` doit être égal au nombre de pages du carnet — s'il est presque double,
+  c'est le jeu de `.page` qui a disparu.
 
 Le script compare la géométrie du PDF à `print.json` et échoue si elle s'en
 écarte de plus d'un point. Une page qui sort à autre chose que 420 × 595 pt,
