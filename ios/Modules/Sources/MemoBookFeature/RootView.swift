@@ -281,6 +281,10 @@ public struct RootView: View {
             }
         }
         .animation(.snappy, value: stage)
+        // **Le voile de la barre d'état, une fois pour toute l'app** (T210) :
+        // tous les écrans sont poussés dans l'une des piles ci-dessus. Posé
+        // avant le recul des feuilles, il recule avec l'écran qu'il couvre.
+        .brandStatusBarScrim()
         // L'app entière recule pendant qu'une feuille est ouverte, comme dans
         // les Réglages. C'est ici que ça se joue et non dans l'écran qui
         // présente : le recul doit emporter la pile de navigation avec lui, et
