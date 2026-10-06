@@ -672,50 +672,70 @@ média `print`, où la feuille vaut 560 × 793,3 px CSS.
 ```css
 @page { size: 420pt 595pt; margin: 0; }          /* la feuille, et aucune marge */
 html, body { margin: 0; padding: 0; }            /* rien autour des pages */
-body { background: var(--mb-sheet); }           /* la feuille a la couleur du papier */
-.page { width: 420pt; height: calc(595pt - 1pt); }  /* FIXE, et un point sous la feuille */
+body { background: var(--mb-sheet); }            /* la feuille a la couleur du papier */
+.page {                                          /* FIXE, et un point sous la feuille */
+  width:  calc(420pt - 1pt);                     /*   dans les DEUX sens */
+  height: calc(595pt - 1pt);
+}
+.page__content {                                 /* le point rendu à la marge : */
+  padding: 30pt 29pt 29pt 30pt;                  /*   la colonne reste 360 × 535 pt */
+}
 ```
 
-| Ce qu'on écrit | Ce que la page mesure | Résultat imprimé |
+| Ce qu'on écrit | Résultat chez APITemplate (feuille 419,04 × 594,96 pt) |
+|---|---|
+| page 419 × 594 pt | Correct : la page tient dans sa feuille dans les deux sens |
+| page 420 × 595 pt | **Une feuille blanche derrière chaque page** — 29 feuilles pour 15 pages |
+| `height: 100%` | **Le carnet s'effondre** : la page mesure 0 px |
+| `padding` sur le conteneur | **Bande blanche en haut de chaque feuille** (64 px mesurés) |
+
+**Pourquoi la page doit tenir dans sa feuille, dans les deux sens.** APITemplate
+rend avec un **Chromium 97**, qui arrondit la feuille de 148 × 210 mm à
+**419,04 × 594,96 pt**. Une page de 420 pt y est trop large de 0,96 pt. Ce vieux
+moteur réagit en **réduisant tout le contenu** pour le faire tenir (−0,3 %,
+mesuré : la page de 595 pt ne descend plus qu'à 593,3 pt sur la feuille), et sur
+ce chemin il **intercale une feuille blanche derrière chaque page** qui force un
+saut — toutes sauf la dernière, qui n'en force pas.
+
+La preuve tient en deux PDF du même moteur, même gabarit, même CSS ; seule la
+feuille change :
+
+| Feuille | La page y tient ? | Feuilles produites |
 |---|---|---|
-| `height: 594pt` (595 − 1 de jeu) | 560 × **792** px | Correct, une page par feuille dans les deux moteurs |
-| `height: 595pt` | 560 × **793,3** px | Correct en local ; **une feuille blanche derrière chaque page** chez APITemplate |
-| `height: 100%` | 560 × **0** px | **Le carnet s'effondre** |
-| `padding` sur le conteneur | page décalée de 64 px | **Bande blanche en haut de chaque feuille** |
+| A4 (595 × 842 pt) | oui, dans les deux sens | **8 pour 8 pages** |
+| A5 (419,04 × 594,96 pt) | non : 0,96 pt trop large | **29 pour 15 pages** |
 
-**Pourquoi un point de moins que la feuille.** Chaque `.page` force un saut de
-page derrière elle (`break-after: page`). Si elle dépasse sa feuille ne
-serait-ce que d'un cheveu, le moteur la voit déborder sur la suivante, et le saut
-forcé envoie la page d'après **une feuille plus loin**. La signature est
-reconnaissable entre toutes : une feuille blanche derrière **chaque** page, sauf
-la dernière, qui n'a pas de saut. C'est ce qu'a sorti APITemplate le 6 octobre :
-29 feuilles pour 15 pages.
+**Le bug est invisible en local.** Notre Chromium, plus récent, ne fait ni cet
+arrondi ni cette réduction : même en lui imposant la feuille exacte d'APITemplate,
+il ne reproduit rien. Seul un PDF d'APITemplate peut valider un réglage de
+géométrie — voir « Vérifier » ci-dessous.
 
-L'écart était de **0,04 pt**. APITemplate rend avec un **Chromium 97**, qui
-arrondit la feuille de 148 × 210 mm à **419,04 × 594,96 pt** ; la page en
-mesurait 595. Notre Chromium local, plus récent, tolère cet écart — d'où un bug
-**invisible en local** et impossible à reproduire hors d'APITemplate. Plutôt que
-de viser une égalité exacte que l'arrondi de chaque moteur remet en cause, la
-page garde un point de jeu (`--mb-page-slack`).
+> **Erreur corrigée.** Une première version de ce correctif (PR #95) ne retirait
+> le point qu'à la hauteur, sur l'idée que la page dépassait de 0,04 pt vers le
+> bas. Ce n'était pas la cause : avec la réduction, la page tenait déjà en
+> hauteur, et les feuilles blanches sont restées. C'est la largeur qui dépassait.
 
 **Le jeu ne doit pas se voir.** Il laisse apparaître la feuille, donc la feuille
 porte la couleur du papier : `--mb-sheet`, la couleur *moyenne* de la page
 mesurée sur le rendu (#f5ede6 en `preview`, grain compris ; blanc en `print`).
-Mesuré à 600 dpi, le bas de page est uniforme d'un bout à l'autre. Le seul
-endroit où ces 0,35 mm se lisent : sous une image **pleine page** (couverture,
-quatrième avec photo), qui s'arrête un point au-dessus du bord. C'est le prix du
-correctif, et il est sans commune mesure avec quatorze feuilles blanches.
+Mesurés à 600 dpi, le bas et le bord droit des pages sont uniformes. Le seul
+endroit où ces 0,35 mm se lisent : à droite et sous une image **pleine page**
+(couverture, quatrième avec photo), qui s'arrête un point avant le bord. C'est
+le prix du correctif, sans commune mesure avec quatorze feuilles blanches.
 
-Quand on change ce jeu, tout ce qui est ancré en bas de page bouge avec lui —
-bande de photos, zone flottante, mur de photos — et ce qui est centré bouge de
-moitié. Rien d'autre : c'est vérifié élément par élément, ancienne CSS contre
-nouvelle. Les références visuelles changent pourtant sur toute la hauteur des
-pages, par lissage : empilées à l'écran, les pages démarrent désormais sur un
-pixel entier (792 px) au lieu d'un tiers de pixel (793,3 px).
+**Le jeu appartient à la marge, pas au texte.** `.page__content` rend le point à
+sa marge droite et basse : la colonne garde exactement ses 360 × 535 pt, à la
+même place sur la feuille. Sans cette compensation, un point de colonne en moins
+renvoyait des mots à la ligne — 13 lignes sur 317 dans les jeux de référence.
+Avec elle, vérifié mot par mot sur les deux jeux de référence et sur le carnet
+de Paros : **aucune ligne ne change**, et aucune des 925 boîtes de la colonne ne
+bouge de plus d'un dixième de pixel par rapport à la CSS d'avant tout correctif.
+Seuls bougent, d'un point, les éléments calés sur le bord de la page elle-même :
+décor, mur de photos, couverture.
 
-**`100vh`** semblerait plus élégant qu'une hauteur fixe moins un point. Il ne
-l'est pas : sa valeur à l'impression varie selon les moteurs, et il a la
-réputation de produire exactement ce bug-là.
+**`100vw` / `100vh`** sembleraient plus élégants qu'une taille fixe moins un
+point. Ils ne le sont pas : leur valeur à l'impression varie selon les moteurs,
+et ils ont la réputation de produire exactement ce bug-là.
 
 **Pourquoi `height: 100%` ne marche pas ici**, alors qu'il a l'air plus souple :
 un pourcentage se résout contre la hauteur du parent, et `html` / `body` n'en
@@ -756,7 +776,14 @@ pdfinfo carnet.pdf | grep -E "Pages|Page size"
 - `Page size` doit être proche de **420 × 595 pt** — sinon c'est le panneau
   *Settings* ;
 - `Pages` doit être égal au nombre de pages du carnet — s'il est presque double,
-  c'est le jeu de `.page` qui a disparu.
+  la page ne tient plus dans sa feuille, en largeur ou en hauteur.
+
+Et avant de conclure quoi que ce soit d'un PDF, **vérifier qu'il a été rendu avec
+le gabarit qu'on croit**. La synchro lit le gabarit sur GitHub, qui sert
+l'ancienne version d'un fichier jusqu'à cinq minutes après une fusion : un PDF
+rendu dans la foulée sort avec l'ancienne CSS. Le 6 octobre, deux PDF rendus à
+une heure d'écart, avant et après une correction, étaient identiques au pixel
+près.
 
 Le script compare la géométrie du PDF à `print.json` et échoue si elle s'en
 écarte de plus d'un point. Une page qui sort à autre chose que 420 × 595 pt,
