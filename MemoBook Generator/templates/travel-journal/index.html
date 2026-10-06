@@ -147,7 +147,10 @@
       <div class="mb-colophon__credits">
         {{ brand_name | default('MemoBook') }} © {{ year | default('2026') }}<br />
         {% if authors %}Récit de {{ authors }}<br />{% endif %}
-        Édition par {{ brand_name | default('MemoBook') }} — Illustrations par IA
+        {# « Illustrations par IA » seulement si le carnet en contient : la
+           mention était imprimée sur tous les carnets, y compris ceux qui n'ont
+           que des photos. #}
+        Édition par {{ brand_name | default('MemoBook') }}{% if ai_illustrations %} — Illustrations par IA{% endif %}
       </div>
     </div>
   </div>

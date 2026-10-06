@@ -33,10 +33,11 @@ Base de connaissance de l'agent qui produit le JSON envoyé au moteur PDF.
 | `cover_photo` | optionnel | Photo pleine page de couverture |
 | `render_profile` | `print` \| `preview` | **Fond du PDF, voir plus bas** |
 | `brand_name`, `year` | optionnels | Colophon (défauts `MemoBook` / `2026`) |
+| `ai_illustrations` | optionnel, booléen | Ajoute « Illustrations par IA » au colophon. **Seulement si le carnet contient des illustrations générées** ; absent, la mention n'est pas imprimée |
 | `intro_title`, `intro_text` | optionnels | Page d'introduction (`intro_text` en HTML) |
 | `intro_photos[]` | 0 à 2 | Photos scotchées en haut de l'introduction |
 | `days[]` | requis | **Une entrée = un bloc de récit, pas une page** — voir ci-dessous |
-| `back_cover` | optionnel | Quatrième de couverture. **Sans `image`, variante typographique** — c'est le défaut souhaité |
+| `back_cover` | optionnel | Quatrième de couverture. **Sans `image`, variante typographique** — c'est le défaut souhaité. `closing_subtext` s'adresse au lecteur : jamais le nom d'un outil interne (« MemoBook Generator ») ni un compteur de l'atelier ; sans texte à y mettre, on l'omet |
 
 Pages toujours produites, dans l'ordre : **couverture → colophon →
 introduction (si `intro_text`) → étapes → quatrième de couverture**.
@@ -212,7 +213,7 @@ produit rien pour eux et l'app ne devrait pas les proposer.
 | `day_intro` | optionnel | Affiche le bandeau : `{ day_number, location, date, stay, host, weather_key }` |
 | `stay`, `host` | optionnels | Nom du gîte, prénom des hôtes. **À préférer à la météo** |
 | `weather_key` | optionnel, 5 valeurs | Icône mise en avant. **Seulement si le vocal dit clairement le temps** ; sans le champ, la rangée disparaît |
-| `tag` | optionnel | Étiquette manuscrite (« Top départ »). **Trois mots max**, sinon elle déborde |
+| `tag` | optionnel | Étiquette manuscrite (« Top départ »). **Trois mots max**, sinon elle déborde. **Jamais le lieu** : il est déjà dans le bandeau. Sans humeur à y mettre, on l'omet |
 | `fun_facts[]` | optionnel | **Seul le premier est affiché.** Dosage : voir plus bas |
 | `fun_facts_title` | optionnel | Titre de la carte. Défaut « Fun fact » ; aussi « Infos », « Culture générale » |
 | `photos[]` | optionnel | Nombre utilisé selon le layout, voir ci-dessous |
