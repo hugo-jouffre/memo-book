@@ -212,11 +212,10 @@ public struct TripSettingsView: View {
         return VStack(alignment: .leading, spacing: MemoBookSpacing.snug) {
             sectionTitle(BookCopy.Settings.adventureSection)
 
-            // Le nom et la cagnotte ont **chacun leur carte**, et ce n'est pas
-            // un oubli de la maquette : ce sont les deux seules lignes de
-            // l'écran qui portent une valeur qu'on vient chercher du regard.
-            // Les fondre dans le groupe qui suit les aurait rangées parmi les
-            // réglages, alors qu'elles n'en sont pas.
+            // Le nom a **sa carte**, et ce n'est pas un oubli de la maquette :
+            // c'est une valeur qu'on vient chercher du regard, pas un réglage.
+            // La carte de la cagnotte, à côté, est partie avec elle (Hugo,
+            // 06/10/2026, T230).
             // Le nom se corrige **sur la ligne**, comme le téléphone du profil :
             // toucher ouvre le clavier, sortir du champ enregistre, la coche
             // verte accuse réception (Hugo, 18/09/2026). Il menait avant à une
@@ -227,16 +226,6 @@ public struct TripSettingsView: View {
                     text: nameBinding,
                     isValueLoading: isLoading,
                     isConfirmed: model.justSaved == .name
-                )
-            }
-
-            BrandRowGroup {
-                BrandRow(
-                    BookCopy.Settings.wallet,
-                    value: settings?.walletBalance.euros,
-                    valueTone: .prominent,
-                    isValueLoading: isLoading,
-                    action: { onIntent(.openWallet) }
                 )
             }
 
@@ -480,7 +469,6 @@ public struct TripSettingsView: View {
 /// une feuille **sur** cet écran (``TripSettingsSheet``). Une intention qui
 /// remonte pour redescendre aussitôt n'apprend rien à personne.
 public enum TripSettingsIntent: Sendable, Hashable {
-    case openWallet
     /// « Style du carnet » — les personnalisations de la mise en page.
     case openCustomisation
     case connectTricount

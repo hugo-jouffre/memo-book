@@ -124,8 +124,7 @@ public struct BookPreviewFlowView: View {
             BookCompositionView(
                 model: model,
                 onIntent: onIntent,
-                onShare: openShare,
-                onShareWallet: shareWallet
+                onShare: openShare
             )
                 // La composition s'efface **en montant** d'un cheveu, et
                 // l'aperçu arrive de la même façon : la page qui vient de se
@@ -142,8 +141,7 @@ public struct BookPreviewFlowView: View {
                     BookReaderView(
                         model: model,
                         onIntent: onIntent,
-                        onShare: openShare,
-                        onShareWallet: shareWallet
+                        onShare: openShare
                     )
                     .transition(.opacity)
                 }
@@ -154,20 +152,6 @@ public struct BookPreviewFlowView: View {
 
     private func openShare() {
         showsShareChoice = true
-    }
-
-    /// « Partager ma cagnotte » : **directement** la feuille du système, avec
-    /// le message et le lien (Clara, 26/09/2026). Le choix PDF ou lien reste
-    /// derrière le bouton de partage de l'en-tête ; demander de l'aide, c'est
-    /// toujours le lien.
-    private func shareWallet() {
-        Task {
-            guard let wallet = await model.prepareWalletShare() else { return }
-            showsShareChoice = false
-            // La cagnotte ne sait pas où en est le récit : le message ne compte
-            // pas les étapes.
-            systemShare = payload(title: wallet.title, steps: nil, file: nil, link: wallet.link)
-        }
     }
 
     /// Ouvre la feuille de partage du système avec ce qu'il faut dedans.
@@ -182,8 +166,8 @@ public struct BookPreviewFlowView: View {
         switch kind {
         case .pdf:
             guard let file = model.exportPdf() else { return }
-            // Le lien de la cagnotte accompagne **aussi** le PDF : c'est le
-            // message qui demande un coup de main, pas la pièce jointe.
+            // Le lien accompagne **aussi** le PDF : c'est le message qui dit
+            // où suivre le carnet, pas la pièce jointe.
             let link = await model.prepareShareLink()
             showsShareChoice = false
             systemShare = payload(title: title, steps: steps, file: file, link: link)
@@ -198,7 +182,7 @@ public struct BookPreviewFlowView: View {
     /// Le partage, habillé comme la maquette `3551:26331` : la photo et le
     /// titre du voyage en tête, « Commander » et « Partager sur Whatsapp » sous
     /// les apps.
-    private func payload(title: String, steps: Int?, file: URL?, link: URL?) -> BookSharePayload {
+    private func payload(title: String, steps: Int, file: URL?, link: URL?) -> BookSharePayload {
         var share = BookSharePayload(
             title: title,
             steps: steps,
@@ -249,8 +233,6 @@ public enum BookPreviewIntent: Sendable, Hashable {
     case customise
     /// « Commander ce carnet ».
     case order
-    /// « Voir ma cagnotte ».
-    case openWallet
     /// Configurer la première ou la quatrième de couverture.
     case configureCovers
     /// « Partager mes retours », depuis le mot des fondateurs.
@@ -262,14 +244,13 @@ public enum BookPreviewIntent: Sendable, Hashable {
 /// L'attente : une page de carnet qui se monte sous les yeux.
 ///
 /// Elle occupe exactement la place de l'aperçu qui va suivre — même en-tête,
-/// mêmes boutons, même carte de cagnotte —, et c'est ce qui fait que le
+/// mêmes boutons —, et c'est ce qui fait que le
 /// passage de l'un à l'autre ne saute pas. Seule la page change, et c'est bien
 /// la seule chose qui ait changé.
 private struct BookCompositionView: View {
     let model: BookPreviewModel
     let onIntent: (BookPreviewIntent) -> Void
     let onShare: () -> Void
-    let onShareWallet: () -> Void
 
     var body: some View {
         ScrollView {
@@ -314,11 +295,6 @@ private struct BookCompositionView: View {
                     onOrder: { onIntent(.order) }
                 )
 
-                BookOfferCard(
-                    onShare: onShareWallet,
-                    onSeeWallet: { onIntent(.openWallet) }
-                )
-
                 if let message = model.errorMessage {
                     ErrorBanner(message: message) {
                         Task { await model.retry() }
@@ -349,7 +325,6 @@ private struct BookReaderView: View {
     let model: BookPreviewModel
     let onIntent: (BookPreviewIntent) -> Void
     let onShare: () -> Void
-    let onShareWallet: () -> Void
 
     /// Tourner la page au doigt : vers la gauche on avance, vers la droite on
     /// revient (Hugo, 19/09/2026).
@@ -429,10 +404,8 @@ private struct BookReaderView: View {
                     onOrder: { onIntent(.order) }
                 )
 
-                BookOfferCard(
-                    onShare: onShareWallet,
-                    onSeeWallet: { onIntent(.openWallet) }
-                )
+                // « Fais-toi offrir ce carnet », la carte qui menait à la
+                // cagnotte, est partie avec elle (Hugo, 06/10/2026, T230).
 
                 if model.renderer.didFail {
                     ErrorBanner(message: BookCopy.Preview.loadFailed) {

@@ -7,11 +7,14 @@ import SwiftUI
 
 // MARK: - Étape 1 — Démarrage
 
-/// Ce qu'on s'apprête à commander, et avec quel argent.
+/// Ce qu'on s'apprête à commander.
 ///
-/// Les deux cartes se dessinent **tout de suite**, squelettes compris : on sait
-/// à quoi ressemble l'écran avant de savoir ce qu'il y a dessus. Voir
+/// La carte se dessine **tout de suite**, squelettes compris : on sait à quoi
+/// ressemble l'écran avant de savoir ce qu'il y a dessus. Voir
 /// ``BrandSkeleton``.
+///
+/// Elle était coiffée d'une carte de la cagnotte — « Montant disponible » et
+/// l'estimation du carnet —, partie avec elle (Hugo, 06/10/2026, T230).
 struct OrderStartStep: View {
     let model: OrderModel
     let onHelp: () -> Void
@@ -20,8 +23,6 @@ struct OrderStartStep: View {
 
     var body: some View {
         OrderStepLayout(help: onHelp) {
-            OrderHeroCard(wallet: model.context?.wallet, isLoading: isLoading)
-
             OrderTripCard(trip: model.context?.trip, isLoading: isLoading)
 
             // Le carnet n'a jamais été composé : il n'y a rien à imprimer, et
@@ -57,8 +58,7 @@ struct OrderStartStep: View {
             )
             .disabled(!model.canContinue)
         }
-        // Les deux cartes se remplissent ensemble et en douceur : c'est la même
-        // réponse, elle ne doit pas se poser en deux temps.
+        // La carte se remplit en douceur, d'un seul tenant.
         .animation(.snappy(duration: 0.3), value: model.context)
     }
 }

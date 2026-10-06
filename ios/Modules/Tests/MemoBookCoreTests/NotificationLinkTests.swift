@@ -14,8 +14,14 @@ final class NotificationLinkTests: XCTestCase {
         XCTAssertEqual(link("memobook://subscription"), .subscription)
         XCTAssertEqual(link("memobook://trips/new"), .newTrip)
         XCTAssertEqual(link("memobook://trips/\(trip)/chat"), .chat(tripId: trip))
-        XCTAssertEqual(link("memobook://trips/\(trip)/wallet"), .wallet(tripId: trip))
         XCTAssertEqual(link("memobook://trips/\(trip)/preview"), .bookPreview(tripId: trip))
+    }
+
+    /// La cagnotte est partie (T230), mais des notifications de fin de voyage
+    /// déjà livrées portent son lien : il ouvre l'aperçu du carnet.
+    func testTheFormerWalletLinkOpensTheBookPreview() {
+        let trip = "6f1c2e7a-3b2d-4c55-9a7e-0d4b8f2a1c90"
+        XCTAssertEqual(link("memobook://trips/\(trip)/wallet"), .bookPreview(tripId: trip))
     }
 
     /// Le serveur ne l'envoie plus, mais des notifications déjà livrées le

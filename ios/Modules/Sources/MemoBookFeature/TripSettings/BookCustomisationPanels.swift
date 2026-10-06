@@ -33,7 +33,7 @@ struct BookRatioPanel: View {
     private var value: some View {
         VStack(spacing: MemoBookSpacing.xs - 2) {
             Text(BookCopy.Ratio.value(ratio.wrappedValue))
-                // Sora à 24 (`3595:23828`), et non le solde de 48 des cagnottes.
+                // Sora à 24 (`3595:23828`).
                 .font(MemoBookFont.figure)
                 // Les chiffres ne dansent pas : sans chasse fixe, la valeur se
                 // décale à chaque cran du curseur.

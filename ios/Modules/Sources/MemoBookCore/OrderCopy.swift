@@ -18,14 +18,7 @@ extension BookCopy {
         // MARK: Étape 1 — Démarrage
 
         public enum Start {
-            public static let balance = "Montant disponible"
             public static let cta = "Commencer la commande"
-
-            /// « Estimation : 80 pages ». Accordé, comme
-            /// ``BookCustomisation/targetPageLabel``.
-            public static func estimate(pages: Int) -> String {
-                pages <= 1 ? "Estimation : \(pages) page" : "Estimation : \(pages) pages"
-            }
 
             /// Le carnet n'a jamais été composé : il n'y a rien à commander.
             public static let notComposed = "Ce carnet n’est pas encore généré."
@@ -120,11 +113,6 @@ extension BookCopy {
             public static let address = "Adresse de livraison"
             public static let total = "Total"
             public static let cta = "Payer"
-
-            /// Quand la cagnotte couvre tout. Présenter une carte pour un débit
-            /// de zéro ferait craindre un prélèvement.
-            public static let free = "Ta cagnotte couvre la totalité"
-            public static let freeCta = "Valider la commande"
 
             public static let failure =
                 "Le paiement a échoué, merci de choisir une autre option."

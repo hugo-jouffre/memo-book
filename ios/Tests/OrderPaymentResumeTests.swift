@@ -4,8 +4,8 @@ import MemoBookPayments
 import XCTest
 
 /// **« Payer » reprend la commande déjà passée** (01/10/2026). Il en créait une
-/// seconde à chaque tapotis — une nouvelle intention, et un second débit de
-/// cagnotte. Sans simulateur : le modèle reçoit ses fonctions, comme l'app les
+/// seconde à chaque tapotis — une nouvelle intention, et un second débit. Sans
+/// simulateur : le modèle reçoit ses fonctions, comme l'app les
 /// lui branche, et on compte ce qu'il appelle.
 @MainActor
 final class OrderPaymentResumeTests: XCTestCase {
@@ -17,7 +17,6 @@ final class OrderPaymentResumeTests: XCTestCase {
     }
 
     private let ticket = OrderPayment(
-        paidFromWallet: false,
         amountCents: 4_990,
         currency: "eur",
         clientSecret: "pi_test_secret_test",
@@ -51,7 +50,7 @@ final class OrderPaymentResumeTests: XCTestCase {
     /// que s'il est là — un serveur sans certificat Apple Pay n'en envoie pas.
     func testApplePayComesFromTheServerWithThePayment() throws {
         let withApplePay = try JSONDecoder().decode(OrderPayment.self, from: Data("""
-        {"paidFromWallet":false,"amountCents":4990,"currency":"eur","clientSecret":"pi_x_secret_y",\
+        {"amountCents":4990,"currency":"eur","clientSecret":"pi_x_secret_y",\
         "publishableKey":"pk_test_x","applePayMerchantId":"merchant.com.tonapp.memobook"}
         """.utf8))
         guard case .card(let ticket) = withApplePay.settlement else { return XCTFail("carte attendue") }

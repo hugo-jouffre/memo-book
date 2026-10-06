@@ -12,8 +12,7 @@ import UIKit
 /// - **Le PDF** est le carnet tel qu'il est aujourd'hui. Il s'ouvre hors
 ///   connexion, il s'imprime, il ne bougera plus.
 /// - **Le lien** est le carnet tel qu'il sera. Il suit la conversation : ceux
-///   qui l'ouvrent voient les étapes s'ajouter, ce qui est exactement ce qu'il
-///   faut pour donner envie d'aider à le financer.
+///   qui l'ouvrent voient les étapes s'ajouter.
 ///
 /// La carte du haut n'est pas décorative : c'est **l'aperçu de ce que le
 /// destinataire verra**. Le lien de prévisualisation porte des métadonnées Open
@@ -196,13 +195,13 @@ struct ShareBookSheet: View {
 struct BookSharePayload: Identifiable {
     let id = UUID()
     let title: String
-    /// Les étapes déjà racontées, que le message annonce. `nil` depuis la
-    /// cagnotte, qui ne sait pas où en est le récit : la phrase s'en passe.
-    let steps: Int?
+    /// Les étapes déjà racontées, que le message annonce.
+    let steps: Int
     /// Le PDF écrit sur le disque, quand c'est lui qu'on partage.
     let file: URL?
-    /// Le lien de la cagnotte. Il accompagne **les deux** modes de partage :
-    /// c'est le message qui demande un coup de main, pas la pièce jointe.
+    /// Le lien de prévisualisation. Il accompagne **les deux** modes de
+    /// partage : c'est le message qui dit où suivre le carnet, pas la pièce
+    /// jointe.
     let link: URL?
     /// La photo du voyage, en tête de la feuille — la vignette de la maquette
     /// (`3551:26331`). Sans elle, iOS pose l'icône de l'app.
@@ -213,7 +212,7 @@ struct BookSharePayload: Identifiable {
 
     init(
         title: String,
-        steps: Int?,
+        steps: Int,
         file: URL?,
         link: URL?,
         coverPhotoUrl: URL? = nil,
@@ -231,7 +230,6 @@ struct BookSharePayload: Identifiable {
     /// Snapchat dès que l'app de destination est choisie.
     var message: String? {
         guard let link else { return nil }
-        guard let steps else { return BookCopy.Share.invitation(title: title, link: link) }
         return BookCopy.Share.invitation(title: title, steps: steps, link: link)
     }
 }

@@ -29,8 +29,7 @@ public final class AppDependencies {
     /// Qui ouvre une feuille de paiement.
     ///
     /// Une dépendance injectée et non un appel direct au SDK : les aperçus
-    /// Xcode et les tests en fournissent une qui n'appelle personne, et l'écran
-    /// de cagnotte se relit sans compte Stripe.
+    /// Xcode et les tests en fournissent une qui n'appelle personne.
     public let payments: any PaymentPresenter
 
     /// Qui achète l'abonnement — StoreKit, ou un double qui n'appelle personne.
@@ -598,74 +597,14 @@ public final class AppDependencies {
         )
     }
 
-    /// L'aperçu du carnet, branché sur le serveur (26/09/2026 pour la cagnotte,
-    /// 30/09/2026 pour le reste) : `GET /v1/memos/:id/preview` pour suivre la
-    /// composition, `POST /v1/memos/:id/share-link` pour le lien de partage.
+    /// L'aperçu du carnet, branché sur le serveur (30/09/2026) :
+    /// `GET /v1/memos/:id/preview` pour suivre la composition,
+    /// `POST /v1/memos/:id/share-link` pour le lien de partage.
     public func bookPreviewModel(memoId: String) -> BookPreviewModel {
         BookPreviewModel(
             memoId: memoId,
             source: { [api] id in try await api.bookPreview(memoId: id) },
-            requestLink: { [api] id in try await api.bookShareLink(memoId: id) },
-            walletShare: { [api] memoId in
-                async let wallet = api.wallet(tripId: memoId)
-                async let link = api.bookShareLink(memoId: memoId)
-                return try await WalletShare(tripId: memoId, title: wallet.tripTitle ?? "", link: link)
-            }
-        )
-    }
-
-    /// Ma cagnotte, servie par `GET /v1/wallet`.
-    ///
-    /// La route existait déjà ; c'est l'app qui ne l'appelait pas, et chaque
-    /// écran affichait donc son propre jeu d'essai — 65,97 € ici, 67,88 € dans
-    /// les réglages du voyage, autre chose ailleurs. Une seule source
-    /// maintenant : le registre du serveur.
-    ///
-    /// `topUp` ouvre une intention côté serveur, présente la feuille, puis
-    /// **attend que la cagnotte ait bougé** — voir ``creditedWallet(after:)``.
-    ///
-    /// `sandbox` n'existe qu'en debug, et écrit une **vraie** écriture : c'est
-    /// ce qui permet de voir les déductions du tunnel de commande, que le
-    /// serveur calcule et qu'une addition locale ne pouvait pas atteindre.
-    public func walletModel(tripId: String?) -> WalletModel {
-        WalletModel(
-            tripId: tripId,
-            source: { [api] trip in try await api.wallet(tripId: trip) },
-            topUp: { [api, payments] trip, amount in
-                // Le solde d'avant, lu maintenant : c'est la référence qui dira
-                // que le webhook est passé. Le demander au serveur plutôt que
-                // de croire l'écran évite de partir d'un solde périmé, affiché
-                // avant qu'un proche ne contribue.
-                let before = try await api.wallet(tripId: trip).balance
-
-                let cents = NSDecimalNumber(decimal: amount * 100).intValue
-                let ticket = try await api.startWalletTopUp(
-                    amountCents: cents,
-                    stripeApiVersion: StripeSDK.apiVersion
-                )
-
-                switch await payments.present(ticket) {
-                case .cancelled:
-                    return nil
-                case .failed(let message):
-                    throw PaymentError.refused(message)
-                case .succeeded:
-                    return try await Self.creditedWallet(
-                        from: { try await api.wallet(tripId: trip) },
-                        above: before
-                    )
-                }
-            },
-            sandbox: {
-                #if DEBUG
-                    { [api] amount, kind, label in
-                        try await api.addWalletSandboxEntry(amount: amount, kind: kind, label: label)
-                    }
-                #else
-                    nil
-                #endif
-            }(),
-            shareLink: { [api] memoId in try await api.bookShareLink(memoId: memoId) }
+            requestLink: { [api] id in try await api.bookShareLink(memoId: id) }
         )
     }
 
@@ -724,38 +663,6 @@ public final class AppDependencies {
             key: { [api] in try await api.paymentMethodsKey(stripeApiVersion: StripeSDK.apiVersion) },
             setupIntent: { [api] in try await api.paymentMethodsSetupIntent() }
         )
-    }
-
-    /// Combien de fois relire la cagnotte après un paiement réussi.
-    ///
-    /// Une seconde entre deux lectures. Même raison que dans ``OrderModel`` :
-    /// la feuille dit que Stripe a accepté, pas que le serveur l'a appris.
-    private static let creditAttempts = 6
-
-    /// Relit la cagnotte jusqu'à ce que le solde ait monté.
-    ///
-    /// **Le solde ne bouge pas au retour de la feuille** : il bouge quand le
-    /// webhook écrit au registre, une seconde ou deux plus tard. Relire tout de
-    /// suite rendrait le montant d'avant, et la recharge aurait l'air perdue.
-    ///
-    /// Au bout du budget, on rend la dernière lecture telle quelle : l'argent
-    /// est encaissé de toute façon, et la prochaine ouverture de l'écran
-    /// montrera le bon solde. Lever ici ferait afficher une erreur sur un
-    /// paiement réussi, ce qui est la pire des deux issues.
-    private static func creditedWallet(
-        from read: () async throws -> Wallet,
-        above previous: Decimal
-    ) async throws -> Wallet {
-        var latest = try await read()
-        var attempts = 0
-
-        while latest.balance <= previous, attempts < creditAttempts {
-            try? await Task.sleep(for: .seconds(1))
-            latest = try await read()
-            attempts += 1
-        }
-
-        return latest
     }
 }
 

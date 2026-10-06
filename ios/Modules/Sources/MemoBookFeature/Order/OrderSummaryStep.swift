@@ -2,8 +2,8 @@ import MemoBookCore
 import MemoBookDesign
 import SwiftUI
 
-/// Étape 5 — le récapitulatif : ce qu'on imprime, en combien d'exemplaires, ce
-/// que la cagnotte couvre, et ce qui reste à payer.
+/// Étape 5 — le récapitulatif : ce qu'on imprime, en combien d'exemplaires, et
+/// ce qu'il y a à payer.
 ///
 /// **Aucun montant n'est calculé ici.** Tout arrive de
 /// `POST /v1/memos/:id/orders/quote`, y compris les sous-totaux : deux calculs
@@ -40,7 +40,8 @@ struct OrderSummaryStep: View {
     }
 
     /// Le bloc bleu de la maquette : deux groupes qui portent chacun leur
-    /// sous-total, les déductions, puis le total.
+    /// sous-total, puis le total. Les déductions de la cagnotte, qui se
+    /// posaient entre les deux, sont parties avec elle (T230).
     private func card(_ quote: OrderQuote) -> some View {
         VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
             Text(BookCopy.Order.Summary.book(quote.bookTitle))
@@ -60,12 +61,6 @@ struct OrderSummaryStep: View {
 
             separator
             group(quote.fulfilment)
-
-            if !quote.deductions.isEmpty {
-                VStack(spacing: MemoBookSpacing.xs) {
-                    ForEach(quote.deductions) { deduction($0) }
-                }
-            }
 
             separator
 
@@ -108,19 +103,6 @@ struct OrderSummaryStep: View {
                     .accessibilityLabel("Sous-total \(group.subtotal.euros)")
             }
         }
-    }
-
-    /// Une déduction, sur l'aplat bleu de la cagnotte. Il y avait aussi un
-    /// aplat lime, pour ce que l'abonnement avait versé ; l'abonnement n'est
-    /// plus déduit du carnet (Hugo, 03/10/2026), et le lime ne dit que lui.
-    private func deduction(_ deduction: OrderDeduction) -> some View {
-        OrderPriceRow(label: deduction.label, amount: deduction.amount, isNegative: true)
-            .padding(.horizontal, MemoBookSpacing.snug)
-            .padding(.vertical, MemoBookSpacing.snug)
-            .background(
-                MemoBookColor.outline.opacity(0.45),
-                in: .rect(cornerRadius: MemoBookSpacing.cornerRadius)
-            )
     }
 
     /// La petite boîte qui décrit le carnet, sous son prix.

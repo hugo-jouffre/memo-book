@@ -163,11 +163,6 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
     /// Le nom du voyage — « Rome 2026 ».
     public var name: String
 
-    /// Le solde de la cagnotte, en euros. **La même somme que dans le
-    /// profil** : la cagnotte appartient au compte, pas au voyage (voir
-    /// ``Wallet``). Elle apparaît ici parce que c'est là qu'on la remplit.
-    public var walletBalance: Decimal
-
     /// Le **crédit du jour** de ce voyage, lu par ce compte — voir
     /// ``DailyCredit``.
     ///
@@ -267,7 +262,6 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
     public init(
         tripId: String,
         name: String,
-        walletBalance: Decimal = 0,
         dailyCredit: DailyCredit? = nil,
         startDate: Date? = nil,
         endDate: Date? = nil,
@@ -287,7 +281,6 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
     ) {
         self.tripId = tripId
         self.name = name
-        self.walletBalance = walletBalance
         self.dailyCredit = dailyCredit
         self.startDate = startDate
         self.endDate = endDate

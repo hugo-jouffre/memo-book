@@ -35,9 +35,7 @@ struct OrderPaymentStep: View {
             }
         } actions: {
             BrandButton(
-                model.quote?.isFullyCovered == true
-                    ? BookCopy.Order.Payment.freeCta
-                    : BookCopy.Order.Payment.cta,
+                BookCopy.Order.Payment.cta,
                 isLoading: model.isSubmitting,
                 fillsWidth: true
             ) {
@@ -49,15 +47,8 @@ struct OrderPaymentStep: View {
 
     // MARK: Le moyen de paiement
 
-    @ViewBuilder
     private var method: some View {
-        if model.quote?.isFullyCovered == true {
-            // La cagnotte couvre tout : présenter une carte pour un débit
-            // de zéro ferait craindre un prélèvement.
-            BrandNotice("**\(BookCopy.Order.Payment.free)** — il n’y a rien à régler.")
-        } else {
-            BrandNotice(BookCopy.Order.Payment.inStripeSheet)
-        }
+        BrandNotice(BookCopy.Order.Payment.inStripeSheet)
     }
 
     // MARK: L'adresse

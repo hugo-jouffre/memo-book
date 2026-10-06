@@ -21,8 +21,8 @@ let package = Package(
     // même, par transitivité.
     dependencies: [
         .package(url: "https://github.com/google/GoogleSignIn-iOS", from: "9.0.0"),
-        // Stripe, pour la feuille de paiement du carnet imprimé et de la
-        // cagnotte. **Jamais pour l'abonnement** : Apple impose l'achat intégré
+        // Stripe, pour la feuille de paiement du carnet imprimé et les cartes
+        // du compte. **Jamais pour l'abonnement** : Apple impose l'achat intégré
         // pour un service numérique, et l'encaisser ici ferait rejeter le
         // binaire. Voir `MemoBookPayments`.
         .package(url: "https://github.com/stripe/stripe-ios", from: "24.0.0"),

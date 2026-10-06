@@ -67,16 +67,16 @@ public struct ResumedOrderPayment: Decodable, Sendable, Hashable {
 }
 
 public struct OrderPayment: Decodable, Sendable, Hashable {
-    /// La cagnotte a tout couvert. Le serveur a **déjà** fait passer la commande
-    /// en `submitted` : il n'y a rien à encaisser, et ouvrir une feuille pour
-    /// zéro euro ferait craindre un prélèvement.
-    public let paidFromWallet: Bool
+    // **Plus de `paidFromWallet`** (Hugo, 06/10/2026, T230) : la cagnotte qui
+    // pouvait tout couvrir est partie, et avec elle la commande réglée sans
+    // feuille. Une commande se paie par Stripe, toujours.
 
-    /// Ce qui reste à régler par carte, après déduction de la cagnotte.
+    /// Ce qui est à régler par carte.
     public let amountCents: Int
     public let currency: String
 
-    /// Absents quand la cagnotte a tout pris : il n'y a pas d'intention.
+    /// Absents seulement quand le serveur n'a pas ses clés Stripe — voir
+    /// ``OrderSettlement/unavailable``.
     public let clientSecret: String?
     public let publishableKey: String?
 
@@ -88,7 +88,6 @@ public struct OrderPayment: Decodable, Sendable, Hashable {
     public let applePayMerchantId: String?
 
     public init(
-        paidFromWallet: Bool,
         amountCents: Int,
         currency: String,
         clientSecret: String? = nil,
@@ -97,7 +96,6 @@ public struct OrderPayment: Decodable, Sendable, Hashable {
         ephemeralKeySecret: String? = nil,
         applePayMerchantId: String? = nil
     ) {
-        self.paidFromWallet = paidFromWallet
         self.amountCents = amountCents
         self.currency = currency
         self.clientSecret = clientSecret
@@ -109,10 +107,6 @@ public struct OrderPayment: Decodable, Sendable, Hashable {
 
     /// Ce qu'il reste à faire pour que la commande soit payée.
     public var settlement: OrderSettlement {
-        if paidFromWallet || amountCents == 0 {
-            return .wallet
-        }
-
         // Une chaîne vide, et pas seulement `nil` : côté serveur,
         // `STRIPE_PUBLISHABLE_KEY` vaut `""` quand elle n'est pas configurée, et
         // c'est cette valeur-là qui arrive jusqu'ici. Une feuille montée sur une
@@ -139,10 +133,6 @@ public struct OrderPayment: Decodable, Sendable, Hashable {
 
 /// Par où passe le règlement d'une commande.
 public enum OrderSettlement: Sendable, Hashable {
-    /// Rien à encaisser : la cagnotte a tout couvert et la commande est déjà
-    /// enregistrée côté serveur.
-    case wallet
-
     /// Il reste à payer, et voici de quoi ouvrir la feuille.
     case card(PaymentIntentTicket)
 

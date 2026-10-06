@@ -53,9 +53,6 @@ public actor PreviewAPI: MemoBookAPI {
     private var rendersById: [String: Render] = [:]
     private var ordersByMemoId: [String: [PrintOrder]] = [:]
 
-    /// La cagnotte du double, **vide au départ** comme celle d'un compte neuf.
-    /// Les écritures du bac à sable la font monter, ici comme sur le serveur.
-    private var walletSandbox: Wallet = .fixture
     /// Nul tant que rien n'a été corrigé : le profil est alors le jeu d'essai.
     private var editedProfile: TravellerProfile?
 
@@ -606,27 +603,6 @@ public actor PreviewAPI: MemoBookAPI {
         return render
     }
 
-    public func wallet(tripId: String?) async throws -> Wallet {
-        walletSandbox
-    }
-
-    public func addWalletSandboxEntry(
-        amount: Decimal,
-        kind: WalletEntryKind,
-        label: String
-    ) async throws -> Decimal {
-        // Le double tient un registre, comme le serveur : c'est ce qui permet
-        // aux aperçus de voir le solde monter et l'historique s'allonger.
-        let entry = WalletEntry(id: UUID().uuidString, amount: amount, kind: kind, label: label, date: .now)
-        walletSandbox = Wallet(
-            balance: walletSandbox.balance + amount,
-            entries: [entry] + walletSandbox.entries,
-            tripTitle: walletSandbox.tripTitle,
-            estimate: walletSandbox.estimate
-        )
-        return walletSandbox.balance
-    }
-
     public func setOrderWhatsApp(orderId: String, phone: String?) async throws -> PrintOrder {
         for (memoId, orders) in ordersByMemoId {
             guard let position = orders.firstIndex(where: { $0.id == orderId }) else { continue }
@@ -665,8 +641,8 @@ public actor PreviewAPI: MemoBookAPI {
 
     public func bookShareLink(memoId: String) async throws -> URL {
         // Les voyages du jeu d'essai de l'accueil portent le carnet du même
-        // identifiant, comme sur le serveur : leur partage (la cagnotte,
-        // l'aperçu) doit marcher dans le bac à sable aussi.
+        // identifiant, comme sur le serveur : leur partage doit marcher dans
+        // le bac à sable aussi.
         let isFixtureTrip = HomeFeed.fixture.trips.contains { $0.id == memoId }
         if !isFixtureTrip { _ = try existingMemo(memoId) }
         // Un lien d'aperçu, stable d'un appel à l'autre comme le vrai.
@@ -685,11 +661,13 @@ public actor PreviewAPI: MemoBookAPI {
         .fixture(copies: copies, speed: shippingSpeed)
     }
 
-    /// Une commande déjà réglée, et **sans intention de paiement**.
+    /// Une commande déjà réglée, et une intention **factice**.
     ///
-    /// `paidFromWallet` plutôt qu'un faux `clientSecret` : c'est le seul cas qui
-    /// ne monte aucune feuille. Une preview Xcode — ou un lancement `-previewSignedIn` —
-    /// ne doit pas pouvoir ouvrir Stripe, même par accident.
+    /// Elle ne monte aucune feuille : les aperçus branchent ce double avec
+    /// ``StubPaymentPresenter``, qui n'appelle personne, et un lancement
+    /// `-previewSignedIn` passe par le tunnel en mémoire de `RootView`. C'était
+    /// la cagnotte qui couvrait tout et évitait la feuille, jusqu'à ce qu'elle
+    /// parte (T230).
     public func createPrintOrder(
         memoId: String,
         order: NewPrintOrderRequest
@@ -712,7 +690,12 @@ public actor PreviewAPI: MemoBookAPI {
         ordersByMemoId[memoId, default: []].insert(created, at: 0)
         return PlacedPrintOrder(
             order: created,
-            payment: OrderPayment(paidFromWallet: true, amountCents: 0, currency: "eur")
+            payment: OrderPayment(
+                amountCents: 0,
+                currency: "eur",
+                clientSecret: "pi_preview_secret_preview",
+                publishableKey: "pk_test_preview"
+            )
         )
     }
 
@@ -729,24 +712,6 @@ public actor PreviewAPI: MemoBookAPI {
             )
         }
         return found
-    }
-
-    /// Une recharge qui n'appelle personne.
-    ///
-    /// Le `clientSecret` fabriqué ne monte **aucune** feuille de paiement, et
-    /// c'est voulu : un aperçu ne doit pas pouvoir ouvrir Stripe, même par
-    /// accident.
-    public func startWalletTopUp(
-        amountCents: Int,
-        stripeApiVersion: String?
-    ) async throws -> PaymentIntentTicket {
-        _ = stripeApiVersion
-        return PaymentIntentTicket(
-            clientSecret: "pi_preview_secret",
-            publishableKey: "pk_test_preview",
-            amountCents: amountCents,
-            currency: "eur"
-        )
     }
 
     /// Le double n'a pas d'intention à reprendre : ses commandes naissent
@@ -775,9 +740,6 @@ public actor PreviewAPI: MemoBookAPI {
     public func paymentMethodsSetupIntent() async throws -> String {
         "seti_preview_secret_preview"
     }
-
-    // MARK: - La cagnotte
-
 
     // MARK: - Les réglages d'un voyage
 

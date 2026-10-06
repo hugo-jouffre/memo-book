@@ -612,8 +612,6 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
     /// liste que celle du tunnel de commande (``OrderContext/countries``).
     public var shippingCountries: [ShippingCountry]
     public var wantsNewsletter: Bool
-    /// La cagnotte, en euros. `Decimal` et non `Double` : c'est de l'argent.
-    public var walletBalance: Decimal
     public var cards: [PaymentCard]
     public var selectedCardId: String?
     public var connectors: [Connector]
@@ -639,7 +637,6 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         address: PostalAddress = PostalAddress(),
         shippingCountries: [ShippingCountry] = [],
         wantsNewsletter: Bool = false,
-        walletBalance: Decimal = 0,
         cards: [PaymentCard] = [],
         selectedCardId: String? = nil,
         connectors: [Connector] = [],
@@ -659,7 +656,6 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         self.address = address
         self.shippingCountries = shippingCountries
         self.wantsNewsletter = wantsNewsletter
-        self.walletBalance = walletBalance
         self.cards = cards
         self.selectedCardId = selectedCardId
         self.connectors = connectors
@@ -697,7 +693,6 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         // pas le profil entier qui disparaît.
         shippingCountries = try container.decodeIfPresent([ShippingCountry].self, forKey: .shippingCountries) ?? []
         wantsNewsletter = try container.decode(Bool.self, forKey: .wantsNewsletter)
-        walletBalance = try container.decode(Decimal.self, forKey: .walletBalance)
         cards = try container.decode([PaymentCard].self, forKey: .cards)
         selectedCardId = try container.decodeIfPresent(String.self, forKey: .selectedCardId)
         connectors = try container.decode([Connector].self, forKey: .connectors)

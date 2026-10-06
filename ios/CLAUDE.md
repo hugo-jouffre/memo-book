@@ -511,10 +511,10 @@ récit de tout le monde appartient au propriétaire principal. Côté serveur, c
 `visibleToAccount` presque partout et `ownedByAccount` sur la seule route de
 suppression.
 
-Ce qui ne se partage pas non plus, c'est l'argent : **cagnotte et abonnement
-pendent d'un compte, pas d'un voyage.** Chacun a les siens, et une commande
-retient qui l'a passée (`print_orders.orderedByAccountId`) — c'est elle qui
-dira quelle cagnotte débiter quand l'encaissement existera.
+Ce qui ne se partage pas non plus, c'est l'argent : **l'abonnement pend d'un
+compte, pas d'un voyage.** Chacun a le sien, et une commande retient qui l'a
+passée (`print_orders.orderedByAccountId`). La cagnotte, qui pendait aussi du
+compte, a été retirée de l'app (Hugo, 06/10/2026, T230).
 
 Le mot est **co-voyageur** dans tout ce qui se lit. Le contrat d'API et la base
 gardent `companions` et `memo_members` : renommer un contrat n'est pas un choix
@@ -545,9 +545,8 @@ redemande. Elle s'efface à la
 déconnexion (`AppDependencies.forgetAccountContent()`).
 
 Ce qu'on ne garde **pas**, et c'est délibéré : la conversation — elle change à
-chaque phrase, et un fil périmé se lit comme un message perdu ; la cagnotte et
-les commandes — c'est de l'argent, et un solde périmé est pire qu'un solde
-absent.
+chaque phrase, et un fil périmé se lit comme un message perdu ; les commandes
+— c'est de l'argent, et un état périmé est pire qu'un état absent.
 
 Le modèle reçoit **deux** fonctions : `source` comme avant, et `cached`, qui
 rend ce qui est sur le disque tout de suite et sans pouvoir échouer. Il les

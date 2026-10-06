@@ -177,7 +177,6 @@ public struct OrderContext: Codable, Sendable, Hashable {
 
     /// La carte du voyage, celle de l'accueil. Même modèle, même composant.
     public let trip: Trip
-    public let wallet: Wallet
 
     /// Ce que coûte un exemplaire, et le supplément de l'express. Les deux
     /// arrivent d'emblée pour que les étapes 3 et 4 s'affichent sans attendre.
@@ -207,7 +206,6 @@ public struct OrderContext: Codable, Sendable, Hashable {
         bookTitle: String,
         pageCount: Int,
         trip: Trip,
-        wallet: Wallet,
         unitPrice: Decimal,
         expressPrice: Decimal,
         standardDays: DayRange,
@@ -224,7 +222,6 @@ public struct OrderContext: Codable, Sendable, Hashable {
         self.bookTitle = bookTitle
         self.pageCount = pageCount
         self.trip = trip
-        self.wallet = wallet
         self.unitPrice = unitPrice
         self.expressPrice = expressPrice
         self.standardDays = standardDays
@@ -298,23 +295,6 @@ public struct OrderQuoteGroup: Codable, Sendable, Hashable {
     }
 }
 
-/// Ce que la cagnotte retire du montant dû.
-///
-/// Le montant est **positif** : c'est l'écran qui pose le signe moins, comme il
-/// pose l'euro. Une seule nature depuis le 03/10/2026 — la cagnotte (`wallet`) :
-/// l'abonnement n'est plus déduit du carnet (Hugo).
-public struct OrderDeduction: Codable, Sendable, Hashable, Identifiable {
-    public let id: String
-    public let label: String
-    public let amount: Decimal
-
-    public init(id: String, label: String, amount: Decimal) {
-        self.id = id
-        self.label = label
-        self.amount = amount
-    }
-}
-
 /// Le récapitulatif complet, tel que le serveur l'a compté.
 public struct OrderQuote: Codable, Sendable, Hashable {
     public let bookTitle: String
@@ -339,7 +319,10 @@ public struct OrderQuote: Codable, Sendable, Hashable {
     /// Les exemplaires et l'acheminement.
     public let fulfilment: OrderQuoteGroup
 
-    public let deductions: [OrderDeduction]
+    // **Plus de déductions** (Hugo, 06/10/2026, T230) : elles ne portaient
+    // que la cagnotte, partie avec elle. Le total est ce que la carte paie. Un
+    // serveur qui enverrait encore `deductions` n'empêche rien de décoder : la
+    // clé est ignorée.
     public let total: Decimal
 
     public let estimatedMinDays: Int
@@ -354,7 +337,6 @@ public struct OrderQuote: Codable, Sendable, Hashable {
         book: OrderQuoteGroup,
         specifications: [String] = [],
         fulfilment: OrderQuoteGroup,
-        deductions: [OrderDeduction],
         total: Decimal,
         estimatedMinDays: Int,
         estimatedMaxDays: Int
@@ -367,7 +349,6 @@ public struct OrderQuote: Codable, Sendable, Hashable {
         self.book = book
         self.specifications = specifications
         self.fulfilment = fulfilment
-        self.deductions = deductions
         self.total = total
         self.estimatedMinDays = estimatedMinDays
         self.estimatedMaxDays = estimatedMaxDays
@@ -376,10 +357,6 @@ public struct OrderQuote: Codable, Sendable, Hashable {
     public var estimatedDays: DayRange {
         DayRange(min: estimatedMinDays, max: estimatedMaxDays)
     }
-
-    /// La cagnotte couvre tout : il n'y a plus rien à payer. L'étape 6 le dit
-    /// au lieu de présenter une carte pour un débit de zéro.
-    public var isFullyCovered: Bool { total <= 0 }
 }
 
 // MARK: - Ce qu'on envoie

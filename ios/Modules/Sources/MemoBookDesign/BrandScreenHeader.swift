@@ -3,8 +3,8 @@ import SwiftUI
 /// L'en-tête d'un écran secondaire : par où l'on sort, de quoi on parle, et au
 /// plus une action.
 ///
-/// Quatre écrans le dessinaient à l'identique — les paramètres d'un voyage, la
-/// composition du carnet, l'aperçu PDF et la cagnotte. C'est **le** motif de
+/// Plusieurs écrans le dessinaient à l'identique — les paramètres d'un voyage,
+/// la composition du carnet, l'aperçu PDF. C'est **le** motif de
 /// l'écran poussé, et il vit ici pour une raison précise : la flèche de retour
 /// est le même geste partout, elle doit donc tomber au même endroit et faire la
 /// même taille d'un écran à l'autre. Elle valait déjà trois valeurs différentes
@@ -12,8 +12,8 @@ import SwiftUI
 ///
 /// ```swift
 /// BrandScreenHeader(
-///     title: BookCopy.Wallet.title,
-///     subtitle: BookCopy.Wallet.subtitle(trip: "Rome")
+///     title: BookCopy.Order.title,
+///     subtitle: OrderStep.copies.progressLabel
 /// )
 /// ```
 ///
@@ -214,8 +214,8 @@ public struct BrandHeaderAction: View {
         BrandScreenHeader(title: "Paramètres du voyage")
 
         BrandScreenHeader(
-            title: "Ma Cagnotte",
-            subtitle: "Finance ton carnet de Rome"
+            title: "Commander mon Carnet",
+            subtitle: "Étape 3/7 - Exemplaires"
         )
 
         BrandScreenHeader(

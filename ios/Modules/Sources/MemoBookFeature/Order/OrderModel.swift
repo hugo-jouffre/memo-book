@@ -325,21 +325,21 @@ public final class OrderModel {
     /// Le montant n'est **pas** envoyé : le serveur le recalcule. Ce que l'app
     /// a affiché ne l'engage pas, sans quoi un total deviendrait réécrivable.
     ///
-    /// Trois chemins, et un seul ouvre une feuille :
+    /// Deux chemins :
     ///
-    /// - la cagnotte couvre tout → il n'y a rien à encaisser, le serveur a déjà
-    ///   enregistré la commande comme payée ;
-    /// - il reste à payer → feuille Stripe, puis relecture de la commande ;
-    /// - il reste à payer et le serveur n'a pas donné de quoi le faire → on le
-    ///   dit. C'est une panne de configuration, et afficher la confirmation
-    ///   annoncerait une commande payée qui ne l'est pas.
+    /// - feuille Stripe, puis relecture de la commande ;
+    /// - le serveur n'a pas donné de quoi ouvrir la feuille → on le dit. C'est
+    ///   une panne de configuration, et afficher la confirmation annoncerait
+    ///   une commande payée qui ne l'est pas.
+    ///
+    /// Le troisième — la cagnotte qui couvrait tout, sans feuille — est parti
+    /// avec elle (Hugo, 06/10/2026, T230).
     ///
     /// **Une commande déjà passée se reprend** (01/10/2026). « Payer » après une
-    /// feuille refermée ou une carte refusée créait une seconde commande, et
-    /// débitait la cagnotte une seconde fois. Si rien n'a changé depuis, on
-    /// rouvre la feuille sur **la même** intention ; si l'adresse, les
-    /// exemplaires ou la rapidité ont changé, l'ancienne commande est
-    /// abandonnée — elle rend sa réservation — avant d'en passer une neuve.
+    /// feuille refermée ou une carte refusée créait une seconde commande. Si
+    /// rien n'a changé depuis, on rouvre la feuille sur **la même** intention ;
+    /// si l'adresse, les exemplaires ou la rapidité ont changé, l'ancienne
+    /// commande est abandonnée avant d'en passer une neuve.
     public func pay() async {
         guard !isSubmitting, let renderId = context?.renderId else { return }
 
@@ -371,9 +371,6 @@ public final class OrderModel {
             guard let placedOrder = order else { return }
 
             switch payment.settlement {
-            case .wallet:
-                break
-
             case .unavailable:
                 paymentError = BookCopy.Order.Payment.unavailable
                 return
@@ -419,9 +416,9 @@ public final class OrderModel {
         }
     }
 
-    /// Abandonne la commande en brouillon qui ne correspond plus — elle rend sa
-    /// part de cagnotte avant qu'une neuve n'en réserve une. Sans réponse du
-    /// serveur, le ménage des brouillons s'en chargera.
+    /// Abandonne la commande en brouillon qui ne correspond plus, avant d'en
+    /// passer une neuve. Sans réponse du serveur, le ménage des brouillons
+    /// s'en chargera.
     private func abandonPlacedOrder() async {
         guard let stale = order, stale.status == .draft else { return }
         _ = try? await cancelOrder?(stale.id)

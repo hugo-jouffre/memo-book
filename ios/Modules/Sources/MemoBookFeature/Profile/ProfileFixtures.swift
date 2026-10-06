@@ -27,7 +27,6 @@ extension TravellerProfile {
         ),
         shippingCountries: ShippingCountry.fixtures,
         wantsNewsletter: true,
-        walletBalance: 0,
         cards: [
             PaymentCard(id: "card-business", label: "Carte business", last4: "3246"),
             PaymentCard(id: "card-perso", label: "Carte perso", last4: "1820"),
@@ -101,7 +100,6 @@ extension TravellerProfile {
         // feuille, et un compte neuf la reçoit comme les autres.
         shippingCountries: ShippingCountry.fixtures,
         wantsNewsletter: false,
-        walletBalance: 0,
         connectors: Connector.fixtures.map {
             Connector(
                 id: $0.id,
