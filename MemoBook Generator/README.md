@@ -282,7 +282,8 @@ photos chacun sait tenir :
 Trois raisons de l'appeler Beta, et de ne pas s'y fier pour un tirage :
 
 1. **La conversion est mécanique.** Elle habille le texte du voyageur, elle ne
-   l'écrit pas : pas de `fun_facts`, pas de météo réelle, pas de stickers. Le
+   l'écrit pas : pas de `fun_facts`, pas de météo (elle ne s'imprime que si le
+   vocal la dit, et l'atelier ne lit pas le récit), pas de stickers. Le
    pipeline du back-end fait ce travail-là bien mieux.
 2. **Les photos partent en base64** dans la requête. Au-delà de quelques
    dizaines, APITemplate refusera la charge ; l'outil s'arrête au-dessus de

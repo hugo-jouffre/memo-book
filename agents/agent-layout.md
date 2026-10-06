@@ -205,10 +205,13 @@ Hansley, Gloria Hallelujah, Playfair.
 élément de la page est produit par la machine.
 
 ## La météo
-**Optionnelle, et rarement utile** : les lecteurs lui préfèrent `day_intro.stay`
-(le gîte) et `day_intro.host` (les hôtes). Sans `weather_key`, la rangée
-disparaît. Quand elle porte vraiment la journée : `sun`, `sun-wind`, `cloud`,
-`rain`, `snow`. Règle de choix dans `LAYOUT_KB.md`.
+**Seulement si le voyageur l'a dite clairement dans son vocal.** C'est la
+rédaction qui la relève : une étape arrive avec sa `weather_key`, ou sans. Le
+metteur en page la reprend telle quelle et **n'en ajoute jamais** — ni d'après
+le lieu, ni d'après la saison, ni d'après une photo. Sans `weather_key`, la
+rangée disparaît, et c'est le cas normal : les lecteurs lui préfèrent
+`day_intro.stay` (le gîte) et `day_intro.host` (les hôtes). Valeurs et règle
+dans `LAYOUT_KB.md`.
 
 ## Le champ `render_profile`
 Deux sorties pour une seule template :

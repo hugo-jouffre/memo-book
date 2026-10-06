@@ -184,7 +184,7 @@ au voyageur d'arbitrer un défaut qu'il n'a pas produit.
 |---|---|---|
 | **Voix du récit** | Celle que le voyageur emploie le plus, uniformisée sur tout le carnet | Ce n'est pas un goût mais un relevé. « Je » ou « on » se déduit de ses vocaux, et se fige dans la fiche de cohérence |
 | **Niveau de lissage** | Fidèle au récit, intégralement corrigé, retravaillé pour se lire | Un vocal est très oral ; un carnet imprimé se lit. Ce peaufinage est le cœur du savoir-faire MemoBook, il s'affine avec le temps — il ne se désactive pas |
-| **Bandeau de journée** | L'agent décide ce qu'il porte ; la météo reste rare | Le panel préfère le gîte et les hôtes. Un réglage de plus pour un bandeau de quatre champs ne se justifie pas |
+| **Bandeau de journée** | L'agent décide ce qu'il porte ; la météo n'y figure que si le voyageur l'a dite clairement dans son vocal | Le panel préfère le gîte et les hôtes, et une météo supposée serait une invention. Un réglage de plus pour un bandeau de quatre champs ne se justifie pas |
 | **Rose, épine, graine** | Demandé dans le chat, pas imprimé comme bloc à remplir | La réponse devient de la matière de récit. Une question posée à froid sur le papier n'obtient rien |
 | **Mention « généré par IA »** | Toujours imprimée dès qu'un élément vient de la machine | Engagement de transparence, demandé explicitement par les lecteurs |
 | **Nom des couleurs écrit** | Toujours en toutes lettres | Accessibilité : une consigne portée par la seule couleur disparaît pour un lecteur daltonien, sur une photocopie, en noir et blanc |

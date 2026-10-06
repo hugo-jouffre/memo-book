@@ -208,9 +208,11 @@ $defs:
             type: string
             enum: [sun, sun-wind, cloud, rain, snow]
             description: >
-              Icône météo mise en avant dans la rangée du bandeau de journée. OPTIONNEL, et
-              rarement utile : les testeurs jugent la météo sans intérêt et préfèrent le
-              gîte et l'hôte. Sans ce champ la rangée disparaît, ce qui aère la page.
+              Icône météo mise en avant dans la rangée du bandeau de journée. UNIQUEMENT si
+              le voyageur dit clairement le temps dans son vocal ; jamais déduite du lieu,
+              de la saison ni d'une photo. Les testeurs jugent la météo sans intérêt et
+              préfèrent le gîte et l'hôte. Sans ce champ la rangée disparaît, ce qui aère
+              la page — c'est le cas normal.
               `weather_icon` (emoji) n'est plus rendu : il ne subsiste que pour compatibilité.
           stay:
             type: string

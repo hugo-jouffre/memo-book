@@ -1547,7 +1547,9 @@ function construirePayloadCarnet(photoDe = (data) => data) {
           day_number: String(index + 1).padStart(2, "0"),
           location: lieuComplet(etape.lieu, etat.carnet.destination),
           date: dateLongue(etape.dateDebut),
-          weather_key: "sun",
+          // Pas de `weather_key` : la météo ne s'imprime que si le vocal la dit
+          // clairement, et l'atelier ne lit pas le récit. Sans le champ, la
+          // rangée disparaît — mieux qu'un soleil inventé sur chaque étape.
         },
         ...drapeaux(layout),
         opener_kicker: index === 0 ? etape.lieu || "" : "",

@@ -288,7 +288,8 @@ export interface RedactionResult {
   understanding: RedactionUnderstanding;
   title: string;
   text: string;
-  weatherKey: "sun" | "sun-wind" | "cloud" | "rain" | "snow";
+  /** `null` sauf quand le vocal dit clairement le temps qu'il faisait. */
+  weatherKey: "sun" | "sun-wind" | "cloud" | "rain" | "snow" | null;
   funFact: string | null;
   funFactTitle: string | null;
   coherenceSheet: CoherenceSheet;
@@ -437,11 +438,12 @@ const REDACTION_SCHEMA = {
         `par une ligne vide. Taille S, M, L ou XL du barème ; ${STEP_SIZES.S.max} caractères maximum par paragraphe.`,
     },
     weatherKey: {
-      type: "string",
-      enum: ["sun", "sun-wind", "cloud", "rain", "snow"],
+      anyOf: [{ type: "string", enum: ["sun", "sun-wind", "cloud", "rain", "snow"] }, { type: "null" }],
       description:
-        "Temps dominant de l'étape. Si le récit n'en dit rien, se fier au lieu et à la saison. " +
-        "En cas d'hésitation entre deux valeurs : sun-wind.",
+        "Le temps de l'étape, UNIQUEMENT si le voyageur le dit clairement dans son vocal ou ses " +
+        "précisions (« il a plu toute la journée », « grand soleil », « tempête de neige »). " +
+        "null dans tous les autres cas : rien ne se déduit du lieu, de la saison, d'une photo ni " +
+        "d'un « coucher de soleil » — une météo supposée est une invention.",
     },
     funFact: {
       anyOf: [{ type: "string" }, { type: "null" }],
@@ -897,7 +899,8 @@ export class FakeRedactor implements Redactor {
       understanding: { heart: firstSentence, tone: "", readings: [] },
       title: firstSentence.slice(0, 60).replace(/[.!?…]+$/, ""),
       text: withPrecisions.slice(0, 420),
-      weatherKey: "sun-wind",
+      // Le faux rédacteur ne lit pas le temps dans le vocal : il n'en met pas.
+      weatherKey: null,
       funFact: null,
       funFactTitle: null,
       // La fiche est propagée telle quelle : le faux rédacteur ne prétend pas

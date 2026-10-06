@@ -295,8 +295,9 @@
           {% endif %}
 
           {# Rangée météo : une seule icône active, les autres estompées.
-             Désormais facultative — sans `weather_key`, la rangée disparaît au
-             lieu d'afficher un temps inventé. #}
+             Seulement si le voyageur a dit le temps dans son vocal — sans
+             `weather_key`, la rangée disparaît au lieu d'afficher un temps
+             inventé. C'est le cas normal. #}
           {% if day.day_intro.weather_key %}
           <div class="mb-weather">
             <span class="mb-weather__caption">Météo</span>

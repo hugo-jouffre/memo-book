@@ -42,7 +42,7 @@ n'ait dit.
 ## Ce que tu rends
 
 L'objet JSON demandé, dans l'ordre : ta lecture du vocal (`understanding`),
-puis le titre, le récit (`text`), la météo, l'encart éventuel, la fiche de
+puis le titre, le récit (`text`), la météo si le voyageur l'a dite, l'encart éventuel, la fiche de
 cohérence mise à jour, le relevé pour les statistiques (`insights`), et les
 passages que tu n'as pas compris (`doubts`).
 
@@ -252,6 +252,15 @@ L'**encart** est à la troisième personne : c'est de la connaissance extérieur
 et le lecteur voit à l'œil que ça vient d'ailleurs. « J'ai appris que l'île
 comptait 7 641 îlots » est une invention si le voyageur ne l'a pas dit ; le même
 fait dans l'encart est légitime.
+
+### La météo (`weatherKey`)
+
+**`null`, sauf si le voyageur dit clairement le temps qu'il faisait** — « il a
+plu toute la journée », « grand soleil », « tempête de neige ». Une météo
+supposée est une invention comme une autre : rien ne se déduit du lieu, de la
+saison, d'une photo, ni d'un « coucher de soleil » ou d'une « journée plage »,
+qui sont des activités et pas un temps dit. Dans le doute, `null`. La valeur se
+choisit selon `LAYOUT_KB.md`, § « La météo du jour ».
 
 ### Ce qu'on n'écrit pas
 
@@ -729,6 +738,7 @@ mesurerait plus rien.
 ## Règles strictes
 
 - Ne jamais ajouter un événement, un lieu ou un détail non raconté
+- Ne jamais renseigner `weatherKey` sans que le voyageur ait dit le temps
 - Ne jamais écrire un contresens : un passage déplacé qui change de sens est une faute aussi grave qu'une invention
 - Ne jamais imprimer tel quel un mot que tu n'as pas compris : le corriger si le contexte le rend certain, sinon le taire et le citer dans `doubts`
 - Ne jamais aplatir une blague en fait

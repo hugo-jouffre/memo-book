@@ -408,7 +408,8 @@ export class LlmStructurer implements Structurer {
       "choisis les layouts ; tu ne les réécris pas, tu ne les résumes pas, tu ne les",
       "complètes pas. N'invente aucun lieu, aucune date et aucune photo : n'utilise",
       "que les URLs listées ci-dessus. N'ajoute pas de `fun_facts` : ceux qui devaient",
-      "exister sont déjà donnés ci-dessus.",
+      "exister sont déjà donnés ci-dessus. N'ajoute pas non plus de `weather_key` : seule",
+      "une étape dont la météo est donnée ci-dessus en porte une.",
     );
 
     return lines.join("\n");
@@ -453,7 +454,7 @@ export class LlmStructurer implements Structurer {
           : candidate;
 
       const result = validatePayload(payload);
-      if (result.valid) return payload as BookPayload;
+      if (result.valid) return withToldWeatherOnly(payload as BookPayload, input.entries);
 
       if (attempt === 2) break;
 
@@ -468,6 +469,26 @@ export class LlmStructurer implements Structurer {
 
     return this.fallback.structure(input);
   }
+}
+
+/**
+ * La météo ne s'imprime que si le voyageur l'a dite clairement dans son vocal :
+ * c'est la rédaction qui la relève, étape par étape (`weatherKey`). Le metteur
+ * en page n'a que des textes rédigés sous les yeux ; une `weather_key` qu'il
+ * ajouterait serait supposée — du lieu, de la saison, d'un coucher de soleil.
+ * On retire donc toute valeur que la rédaction n'a relevée nulle part.
+ */
+export function withToldWeatherOnly(payload: BookPayload, entries: StructuringEntry[]): BookPayload {
+  const told = new Set(entries.map((entry) => entry.weatherKey).filter(Boolean));
+  const days = payload["days"];
+  if (!Array.isArray(days)) return payload;
+  for (const day of days) {
+    const intro = (day as Record<string, unknown> | null)?.["day_intro"];
+    if (!intro || typeof intro !== "object") continue;
+    const fields = intro as Record<string, unknown>;
+    if ("weather_key" in fields && !told.has(fields["weather_key"] as string)) delete fields["weather_key"];
+  }
+  return payload;
 }
 
 export function createStructurer(env: Env): Structurer {
