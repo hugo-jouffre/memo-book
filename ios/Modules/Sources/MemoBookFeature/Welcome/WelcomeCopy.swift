@@ -40,7 +40,7 @@ enum WelcomeCopy {
     ]
 
     static let rating = "🌟 4.9/5"
-    static let community = "Rejoint par 12 000+ voyageurs"
+    static let community = "Rejoint par 12\u{00A0}000+ voyageurs"
 
     static let hello = "Hello ! 👋"
     static let helloDetail = "Nous allons t'accompagner dans tes récits."
@@ -64,6 +64,6 @@ enum WelcomeCopy {
 
     enum Voice {
         static let hero = "Des carnets de voyage MemoBook posés sur une table"
-        static let rating = "Noté 4,9 sur 5, rejoint par plus de 12 000 voyageurs"
+        static let rating = "Noté 4,9 sur 5, rejoint par plus de 12\u{00A0}000 voyageurs"
     }
 }
