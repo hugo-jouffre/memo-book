@@ -218,10 +218,7 @@ public struct RootView: View {
                     model: LastQuestionsModel(account: account) { [api = dependencies.api] edit in
                         _ = try await api.updateProfile(edit)
                     },
-                    onFinished: { finishLastQuestions(as: $0) },
-                    // La flèche du premier écran ramène à l'entrée : c'est
-                    // l'écran d'avant, et y revenir veut dire sortir du compte.
-                    onLeave: signOut
+                    onFinished: { finishLastQuestions(as: $0) }
                 )
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             case .signedIn(let account):
