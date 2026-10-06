@@ -328,8 +328,10 @@ describe("le profil", () => {
     });
 
     const body = response.json<ProfileBody>();
-    // Les centimes deviennent des euros à la frontière, et nulle part avant.
-    expect(body.walletBalance).toBe(67.88);
+    // **Gelé à zéro** (06/10/2026) : la cagnotte est retirée, et un ancien
+    // solde ne s'affiche plus — le champ ne reste que pour les builds
+    // installés qui le décodent.
+    expect(body.walletBalance).toBe(0);
     expect(body.address).toEqual({
       street: "",
       postalCode: "",
@@ -850,7 +852,7 @@ describe("un co-voyageur", () => {
     expect([200, 202]).toContain(generated.statusCode);
 
     // Commander — et la commande retient que c'est lui, pas le propriétaire :
-    // chacun a sa cagnotte.
+    // c'est dans son suivi à lui qu'elle se montre.
     const render = await harness.prisma.render.create({
       data: { memoId: memo.id, status: "ready", pdfUrl: "https://pdf.test/rome.pdf" },
     });
@@ -1024,38 +1026,6 @@ describe("rejoindre un voyage par son code", () => {
     expect(refused.statusCode).toBe(403);
     const row = await harness.prisma.memoMember.findFirstOrThrow({ where: { memoId: memo.id } });
     expect(row.status).toBe("removed");
-  });
-});
-
-describe("la cagnotte, depuis le profil", () => {
-  it("nomme le carnet du moment, pour que « Prévisualiser » et « Partager » aient un voyage", async () => {
-    const account = await registerAccount(harness.app);
-    const day = 24 * 60 * 60 * 1000;
-    const finished = await seedTrip(account.accountId, {
-      title: "Lisbonne",
-      startDate: new Date(Date.now() - 30 * day),
-      endDate: new Date(Date.now() - 20 * day),
-    });
-    const current = await seedTrip(account.accountId, {
-      title: "Rome",
-      startDate: new Date(Date.now() - 2 * day),
-      endDate: new Date(Date.now() + 5 * day),
-    });
-
-    const fromProfile = await harness.app.inject({
-      method: "GET",
-      url: "/v1/wallet",
-      headers: { authorization: account.authorization },
-    });
-    expect(fromProfile.json<{ tripId: string | null }>().tripId).toBe(current.id);
-
-    // Depuis un voyage, c'est ce voyage-là, même fini.
-    const fromTrip = await harness.app.inject({
-      method: "GET",
-      url: `/v1/wallet?tripId=${finished.id}`,
-      headers: { authorization: account.authorization },
-    });
-    expect(fromTrip.json<{ tripId: string | null }>().tripId).toBe(finished.id);
   });
 });
 

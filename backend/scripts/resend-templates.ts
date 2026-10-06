@@ -311,7 +311,7 @@ const TEMPLATES: TemplateDefinition[] = [
       "",
       "Dans l'archive : ton compte, tes voyages et leurs récits, chaque souvenir",
       "tel que tu l'as raconté et tel que MEMO l'a écrit, tes photos et tes vocaux",
-      "d'origine, tes carnets en PDF, tes commandes, ta cagnotte et ton abonnement.",
+      "d'origine, tes carnets en PDF, tes commandes et ton abonnement.",
       "",
       "Ce lien ouvre toutes tes données : ne le transfère à personne.",
       "",

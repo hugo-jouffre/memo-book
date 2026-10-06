@@ -10,8 +10,10 @@ import { createHarness, registerAccount, resetDatabase, type TestHarness } from 
  * reprise du paiement, abandon, ménage, remboursements, cartes du compte. Le
  * pendant de `payments.test.ts`, qui couvre le chemin heureux.
  *
- * Le fil rouge : **la part de cagnotte réservée revient toujours, et une seule
- * fois**, quel que soit le chemin qui ferme la commande.
+ * Le fil rouge : **une commande non payée se ferme proprement, une seule
+ * fois**, quel que soit le chemin. La cagnotte est retirée depuis le
+ * 06/10/2026 : seules les commandes d'avant portent encore une part réservée,
+ * et elle revient toujours — c'est ce que vérifient les cas « d'avant ».
  */
 
 let harness: TestHarness;
@@ -72,9 +74,31 @@ async function printableTrip() {
   return { memo, renderId: memo.renders[0]!.id };
 }
 
-/** De l'argent sur la cagnotte, pour que la commande en réserve une part. */
+/** De l'argent sur l'ancienne cagnotte. */
 async function fund(cents: number) {
   await writeLedgerEntry(harness.prisma, { accountId, amountCents: cents, kind: "topup", label: "Test" });
+}
+
+/**
+ * Une commande **d'avant le 06/10/2026** : la cagnotte en avait payé une
+ * part, débitée au registre à la création. Posée en base, puisque plus
+ * aucune route ne débite la cagnotte.
+ */
+async function legacyOrderWithWalletShare(shareCents: number): Promise<OrderBody> {
+  await fund(shareCents);
+  const order = await placeOrder();
+  await harness.prisma.printOrder.update({
+    where: { id: order.id },
+    data: { walletAppliedCents: shareCents },
+  });
+  await writeLedgerEntry(harness.prisma, {
+    accountId,
+    amountCents: -shareCents,
+    kind: "order_payment",
+    printOrderId: order.id,
+  });
+  expect(await balance()).toBe(0);
+  return order;
 }
 
 async function balance() {
@@ -116,12 +140,9 @@ async function statusOf(orderId: string) {
 }
 
 describe("une commande pas encore payée", () => {
-  it("se reprend sans nouvelle commande ni second débit de cagnotte", async () => {
-    // « Payer » après une feuille refermée créait une nouvelle commande, et
-    // débitait la cagnotte une seconde fois.
-    await fund(3_000);
+  it("se reprend sans nouvelle commande", async () => {
+    // « Payer » après une feuille refermée créait une nouvelle commande.
     const order = await placeOrder();
-    expect(await balance()).toBe(0);
 
     const resumed = await harness.app.inject({
       method: "POST",
@@ -132,11 +153,9 @@ describe("une commande pas encore payée", () => {
     expect(resumed.statusCode).toBe(200);
     expect(resumed.json<OrderBody>().payment?.clientSecret).toBe(order.payment?.clientSecret);
     expect(await harness.prisma.printOrder.count()).toBe(1);
-    expect(await balance()).toBe(0);
   });
 
-  it("rend sa réservation quand l'app l'abandonne, une seule fois", async () => {
-    await fund(3_000);
+  it("se ferme quand l'app l'abandonne, une seule fois", async () => {
     const order = await placeOrder();
 
     const cancel = () =>
@@ -146,13 +165,23 @@ describe("une commande pas encore payée", () => {
     expect((await cancel()).statusCode).toBe(200);
 
     expect(await statusOf(order.id)).toBe("cancelled");
-    expect(await balance()).toBe(3_000);
     expect((await fake().retrieveIntent(intentOf(order))).status).toBe("canceled");
   });
 
-  it("rend sa réservation quand Stripe annule l'intention", async () => {
-    await fund(3_000);
-    const order = await placeOrder();
+  it("d'avant le retrait de la cagnotte, rend sa part une seule fois", async () => {
+    const order = await legacyOrderWithWalletShare(3_000);
+
+    const cancel = () =>
+      harness.app.inject({ method: "POST", url: `/v1/orders/${order.id}/cancel`, headers: { authorization } });
+    expect((await cancel()).statusCode).toBe(200);
+    expect((await cancel()).statusCode).toBe(200);
+
+    expect(await statusOf(order.id)).toBe("cancelled");
+    expect(await balance()).toBe(3_000);
+  });
+
+  it("se ferme quand Stripe annule l'intention", async () => {
+    const order = await legacyOrderWithWalletShare(3_000);
 
     const hook = await postWebhook("payment_intent.canceled", {
       id: intentOf(order),
@@ -164,8 +193,7 @@ describe("une commande pas encore payée", () => {
     expect(await balance()).toBe(3_000);
   });
 
-  it("rend sa réservation si le paiement ne peut pas s'ouvrir", async () => {
-    await fund(3_000);
+  it("se ferme si le paiement ne peut pas s'ouvrir", async () => {
     const gateway = fake();
     const original = gateway.createIntent.bind(gateway);
     gateway.createIntent = async () => {
@@ -187,11 +215,9 @@ describe("une commande pas encore payée", () => {
 
     const [order] = await harness.prisma.printOrder.findMany();
     expect(order?.status).toBe("cancelled");
-    expect(await balance()).toBe(3_000);
   });
 
   it("ne s'abandonne plus une fois payée", async () => {
-    await fund(3_000);
     const order = await placeOrder();
     fake().settle(intentOf(order), "succeeded");
 
@@ -203,11 +229,9 @@ describe("une commande pas encore payée", () => {
 
     expect(cancel.statusCode).toBe(409);
     expect(await statusOf(order.id)).toBe("draft");
-    expect(await balance()).toBe(0);
   });
 
   it("se ferme au bout de 24 h, et pas avant", async () => {
-    await fund(6_000);
     const old = await placeOrder();
     await harness.prisma.printOrder.update({
       where: { id: old.id },
@@ -252,9 +276,8 @@ describe("le paiement reçu", () => {
 });
 
 describe("les remboursements", () => {
-  async function paidOrder() {
-    await fund(3_000);
-    const order = await placeOrder();
+  async function paidOrder(walletShareCents = 0) {
+    const order = walletShareCents > 0 ? await legacyOrderWithWalletShare(walletShareCents) : await placeOrder();
     await postWebhook(
       "payment_intent.succeeded",
       { id: intentOf(order), amount: order.payment!.amountCents, metadata: { orderId: order.id } },
@@ -276,11 +299,10 @@ describe("les remboursements", () => {
     const stored = await harness.prisma.printOrder.findUniqueOrThrow({ where: { id: order.id } });
     expect(stored.status).toBe("submitted");
     expect(stored.refundedCents).toBe(500);
-    expect(await balance()).toBe(0);
   });
 
-  it("annule et rend la cagnotte sur un remboursement total, une seule fois", async () => {
-    const order = await paidOrder();
+  it("annule sur un remboursement total, et rend une ancienne part de cagnotte une seule fois", async () => {
+    const order = await paidOrder(3_000);
     const full = {
       id: "ch_1",
       payment_intent: intentOf(order),
@@ -296,7 +318,7 @@ describe("les remboursements", () => {
   });
 
   it("ne touche pas au statut d'une commande déjà expédiée", async () => {
-    const order = await paidOrder();
+    const order = await paidOrder(3_000);
     await harness.prisma.printOrder.update({ where: { id: order.id }, data: { status: "shipped" } });
 
     await postWebhook(

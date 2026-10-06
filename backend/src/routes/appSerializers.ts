@@ -114,12 +114,23 @@ function serializeOwner(owner: Account) {
 }
 
 /**
- * Une carte de voyage. `dailyCredit` n'est passé que pour un voyage **en
- * cours** de l'accueil : c'est le crédit que vise le vocal de l'accueil, et
- * la carte le porte pour que la feuille d'enregistrement sache où elle en est
- * sans un appel de plus (03/10/2026).
+ * Une carte de voyage, **vue par quelqu'un**.
+ *
+ * `viewerAccountId` : celui qui lit. Il décide de `canDelete` (T233, Hugo
+ * 06/10/2026) — supprimer un voyage n'appartient qu'à son propriétaire, et un
+ * co-voyageur ne doit même pas voir l'option : il la voyait, et le serveur lui
+ * répondait 404.
+ *
+ * `dailyCredit` n'est passé que pour un voyage **en cours** de l'accueil :
+ * c'est le crédit que vise le vocal de l'accueil, et la carte le porte pour
+ * que la feuille d'enregistrement sache où elle en est sans un appel de plus
+ * (03/10/2026).
  */
-export function serializeTrip(memo: MemoForTrip, dailyCredit?: DailyCredit) {
+export function serializeTrip(
+  memo: MemoForTrip,
+  options: { viewerAccountId: string; dailyCredit?: DailyCredit },
+) {
+  const { dailyCredit } = options;
   // Les co-voyageurs sont les *autres* : le propriétaire est déjà le titulaire
   // de l'écran, sa pastille sur sa propre couverture n'apprend rien. Il n'a
   // d'ailleurs pas de ligne dans `memo_members`, qui ne porte que les autres.
@@ -563,7 +574,10 @@ export function serializeProfile(
     // y choisit le pays, et un second appel ferait attendre un menu.
     shippingCountries: SHIPPING_COUNTRIES,
     wantsNewsletter: account.wantsNewsletter,
-    walletBalance: euros(account.walletBalanceCents),
+    // **Gelé à zéro** (06/10/2026) : la cagnotte est retirée du produit. Les
+    // builds installés décodent ce champ comme obligatoire ; à retirer quand
+    // plus aucun ne le lit.
+    walletBalance: 0,
     cards: (account.cards ?? []).map(serializeCard),
     selectedCardId: defaultCard?.id ?? account.cards?.[0]?.id ?? null,
     connectors: serializeConnectors(account.connectors ?? []),
@@ -614,12 +628,11 @@ export function serializeProfile(
 }
 
 // ---------------------------------------------------------------------------
-// Paramètres du voyage, cagnotte, aperçu du carnet
+// Paramètres du voyage, aperçu du carnet
 // ---------------------------------------------------------------------------
 //
-// Les trois écrans de « 🤖 Claude Import ». Même règle que ci-dessus : la forme
-// suit `TripSettings`, `Wallet` et `BookPreview` de `MemoBookCore` au champ
-// près.
+// Même règle que ci-dessus : la forme suit `TripSettings`, `Wallet` (gelé) et
+// `BookPreview` de `MemoBookCore` au champ près.
 
 type MemoForSettings = Memo & {
   members?: (MemoMember & { account?: Account | null })[];
@@ -628,22 +641,22 @@ type MemoForSettings = Memo & {
 };
 
 /**
- * Ce que l'écran des réglages d'un voyage montre.
- *
- * `walletBalanceCents` vient du **compte** et se passe en argument : la
- * cagnotte n'appartient pas au carnet, et lire le solde depuis le voyage
- * laisserait croire qu'il y en a un par voyage.
+ * Ce que l'écran des réglages d'un voyage montre, **vu par quelqu'un** :
+ * `viewerAccountId` décide de ce que seul le propriétaire peut faire.
  */
 export function serializeTripSettings(
   memo: MemoForSettings,
-  walletBalanceCents: number,
   dailyCredit: DailyCredit,
-  viewerAccountId?: string,
+  viewerAccountId: string,
 ) {
+  const isOwner = memo.ownerAccountId === viewerAccountId;
   return {
     tripId: memo.id,
     name: memo.title,
-    walletBalance: euros(walletBalanceCents),
+    // **Gelé à zéro** (06/10/2026) : la cagnotte est retirée du produit. Les
+    // builds installés décodent ce champ comme obligatoire ; à retirer quand
+    // plus aucun ne le lit.
+    walletBalance: 0,
     // **Le crédit du jour du voyage**, vu par celui qui lit (Hugo,
     // 03/10/2026) — la ligne « Crédit du jour » des réglages. Il remplace la
     // clé `memory` des limites de souvenirs, qui disparaît : une app installée
@@ -692,7 +705,7 @@ export function serializeTripSettings(
     // « Supprimer la conversation » n'appartient qu'au propriétaire, comme
     // supprimer le voyage (`docs/conversation.md` § 7). L'app pâlit le lien et
     // explique ; le serveur refuse quand même (`DELETE /v1/trips/:id/chat`).
-    canClearConversation: viewerAccountId === undefined || memo.ownerAccountId === viewerAccountId,
+    canClearConversation: isOwner,
   };
 }
 
@@ -772,18 +785,25 @@ type WalletEntryRow = {
 };
 
 /**
- * La cagnotte d'un compte, lue depuis l'écran d'un voyage.
- *
- * `trip` est optionnel : on arrive aussi depuis le profil, où il n'y a pas de
- * carnet à financer — seulement un solde à consulter.
+ * **La cagnotte gelée** (06/10/2026 — « on supprime la cagnotte ») : un solde
+ * à zéro, sans historique, pour le seul champ `wallet` d'`order-context` que
+ * les builds installés décodent encore comme obligatoire. Plus aucune route
+ * ne sert de cagnotte ; à retirer quand plus aucun build ne le lit.
  */
-export function serializeWallet(
+export function frozenWallet(
+  trip: Pick<Memo, "id" | "title" | "destinationCity" | "targetPageCount" | "pageCount">,
+) {
+  return serializeWallet(0, [], trip);
+}
+
+/**
+ * La forme d'une cagnotte, telle que ``Wallet`` la décode côté Swift. Ne sert
+ * plus qu'à `frozenWallet`.
+ */
+function serializeWallet(
   balanceCents: number,
   entries: WalletEntryRow[],
-  trip: Pick<
-    Memo,
-    "id" | "title" | "destinationCity" | "targetPageCount" | "pageCount" | "startDate" | "endDate"
-  > | null,
+  trip: Pick<Memo, "id" | "title" | "destinationCity" | "targetPageCount" | "pageCount"> | null,
 ) {
   return {
     // Le carnet que cette cagnotte finance — celui qu'on a demandé, ou celui

@@ -29,7 +29,6 @@ import { registerStripeWebhookRoutes } from "./routes/stripeWebhook.js";
 import { registerBookPreviewRoutes } from "./routes/bookPreview.js";
 import { registerChatRoutes } from "./routes/chat.js";
 import { registerTripSettingsRoutes } from "./routes/tripSettings.js";
-import { registerWalletRoutes } from "./routes/wallet.js";
 import { registerCoverPhotoRoutes, registerCoverRoutes } from "./routes/covers.js";
 
 /** Combien de temps un fuseau confirmé dispense de le réécrire. */
@@ -188,7 +187,6 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
     registerCoverRoutes(accountRoutes, context);
     registerChatRoutes(accountRoutes, context);
     registerBookPreviewRoutes(accountRoutes, context);
-    registerWalletRoutes(accountRoutes, context);
     registerAppStoreRoutes(accountRoutes, context);
     registerPaymentMethodRoutes(accountRoutes, context);
     registerNotificationRoutes(accountRoutes, context);

@@ -3,8 +3,8 @@ import { quote as computeQuote } from "../src/services/printPricing.js";
 import { createHarness, registerAccount, resetDatabase, type TestHarness } from "./helpers.js";
 
 /**
- * Les **rails d'argent** : l'intention de paiement, le webhook, le registre de
- * la cagnotte. Complémentaire de `orders.test.ts`, qui couvre le tunnel — ce
+ * Les **rails d'argent** : l'intention de paiement et le webhook — et ce qui
+ * reste de la cagnotte, retirée le 06/10/2026. Complémentaire de `orders.test.ts`, qui couvre le tunnel — ce
  * qu'il affiche, ce qu'il compte, ce qu'il refuse.
  *
  * Ce qui est testé en priorité ici, c'est **le rejeu**. Stripe rejoue ses
@@ -89,7 +89,10 @@ async function postWebhook(type: string, body: Record<string, unknown>, eventId 
   });
 }
 
-/** Crédite la cagnotte en passant par le webhook, comme la vraie vie. */
+/**
+ * Crédite la cagnotte en passant par le webhook : une recharge ouverte avant
+ * le retrait de la cagnotte et payée après.
+ */
 async function creditWallet(cents: number, eventId = "evt_credit") {
   const response = await postWebhook(
     "payment_intent.succeeded",
@@ -111,7 +114,6 @@ function expectedTotal(pages: number, copies: number): number {
     pageCount: pages,
     copies,
     speed: "standard",
-    walletBalanceCents: 0,
   }).totalCents;
 }
 
@@ -215,139 +217,44 @@ describe("payer une commande par carte", () => {
   });
 });
 
-describe("recharger la cagnotte", () => {
-  it("ouvre une intention sans rien créditer", async () => {
-    const response = await harness.app.inject({
-      method: "POST",
-      url: "/v1/wallet/topup",
-      headers: { authorization },
-      payload: { amountCents: 2_000 },
-    });
-
-    expect(response.statusCode).toBe(201);
-    expect(response.json<{ clientSecret: string }>().clientSecret).toMatch(/^pi_fake_/);
-
-    // Le schéma est formel : « une écriture n'existe qu'une fois l'argent
-    // réellement mouvementé ». Tant que le webhook n'est pas passé, rien.
-    expect(await balance()).toBe(0);
+describe("la cagnotte retirée (06/10/2026)", () => {
+  it("ne sert plus aucune route", async () => {
+    for (const [method, url] of [
+      ["GET", "/v1/wallet"],
+      ["POST", "/v1/wallet/topup"],
+      ["POST", "/v1/wallet/debug-entry"],
+    ] as const) {
+      const response = await harness.app.inject({ method, url, headers: { authorization }, payload: {} });
+      expect(response.statusCode, `${method} ${url}`).toBe(404);
+    }
   });
 
-  it("crédite au webhook, et tient le solde et l'écriture ensemble", async () => {
-    await creditWallet(2_000);
+  it("ne déduit plus un ancien solde : tout se paie par Stripe", async () => {
+    const { memo, renderId } = await printableTrip();
+    await creditWallet(expectedTotal(60, 1) + 5_000);
 
-    expect(await balance()).toBe(2_000);
+    const body = (await placeOrder(memo.id, renderId)).json<OrderBody>();
 
-    const entries = await harness.prisma.walletEntry.findMany({ where: { accountId } });
-    expect(entries).toHaveLength(1);
-    expect(entries[0]?.kind).toBe("topup");
-    // Le solde recopié sur l'écriture : c'est ce qui permet de détecter une
-    // dérive sans rejouer tout l'historique.
-    expect(entries[0]?.balanceAfterCents).toBe(2_000);
+    expect(body.status).toBe("draft");
+    expect(body.payment.paidFromWallet).toBe(false);
+    expect(body.payment.amountCents).toBe(expectedTotal(60, 1));
+    // Le solde ancien ne bouge pas : il n'est plus un moyen de paiement.
+    expect(await balance()).toBe(expectedTotal(60, 1) + 5_000);
+    expect(await harness.prisma.walletEntry.count({ where: { accountId, kind: "order_payment" } })).toBe(0);
+
+    const stored = await harness.prisma.printOrder.findUniqueOrThrow({ where: { id: body.id } });
+    expect(stored.walletAppliedCents).toBe(0);
+    expect(stored.amountCents).toBe(expectedTotal(60, 1));
   });
 
-  it("rejoué, le même événement ne crédite pas deux fois", async () => {
+  it("inscrit encore au registre une recharge ouverte avant, une seule fois", async () => {
+    // L'argent est arrivé chez Stripe : il doit se lire quelque part, et le
+    // journal le signale au support pour remboursement.
     await creditWallet(2_000);
     await creditWallet(2_000);
     await creditWallet(2_000);
 
     expect(await balance()).toBe(2_000);
     expect(await harness.prisma.walletEntry.count({ where: { accountId } })).toBe(1);
-  });
-
-  it("refuse une recharge sous le plancher", async () => {
-    const response = await harness.app.inject({
-      method: "POST",
-      url: "/v1/wallet/topup",
-      headers: { authorization },
-      payload: { amountCents: 100 },
-    });
-    expect(response.statusCode).toBe(400);
-  });
-});
-
-describe("la cagnotte déduite d'une commande", () => {
-  it("couvre tout : la commande part sans passer par Stripe", async () => {
-    const { memo, renderId } = await printableTrip();
-    await creditWallet(expectedTotal(60, 1) + 5_000);
-
-    const body = (await placeOrder(memo.id, renderId)).json<OrderBody>();
-
-    // Aucun aller-retour de paiement : l'argent était déjà là.
-    expect(body.status).toBe("submitted");
-    expect(body.payment.paidFromWallet).toBe(true);
-    expect(body.payment.clientSecret).toBeUndefined();
-
-    const debit = await harness.prisma.walletEntry.findFirstOrThrow({
-      where: { accountId, kind: "order_payment" },
-    });
-    expect(debit.amountCents).toBe(-expectedTotal(60, 1));
-    expect(debit.printOrderId).toBe(body.id);
-  });
-
-  it("couvre une partie : elle est débitée, la carte paie le reste", async () => {
-    const { memo, renderId } = await printableTrip();
-    await creditWallet(3_000);
-
-    const body = (await placeOrder(memo.id, renderId)).json<OrderBody>();
-
-    expect(body.status).toBe("draft");
-    expect(body.payment.paidFromWallet).toBe(false);
-    // L'intention ne porte que le reste à payer, pas le total du carnet.
-    expect(body.payment.amountCents).toBe(expectedTotal(60, 1) - 3_000);
-
-    // La cagnotte est vidée, et le registre le dit.
-    expect(await balance()).toBe(0);
-    const debit = await harness.prisma.walletEntry.findFirstOrThrow({
-      where: { accountId, kind: "order_payment" },
-    });
-    expect(debit.amountCents).toBe(-3_000);
-  });
-
-  it("ne descend jamais sous zéro, même sur deux commandes concurrentes", async () => {
-    const { memo, renderId } = await printableTrip();
-    // De quoi couvrir **une** commande entière, pas deux.
-    await creditWallet(expectedTotal(60, 1));
-
-    const responses = await Promise.all([
-      placeOrder(memo.id, renderId),
-      placeOrder(memo.id, renderId),
-    ]);
-
-    // **Deux dénouements, tous deux corrects**, et lequel survient n'est pas
-    // décidable — c'est l'entrelacement du devis et du débit qui tranche :
-    //
-    //   · la perdante a fait son devis *avant* que la gagnante ne débite. Elle
-    //     croit la cagnotte pleine, son débit trouve le solde à zéro, et
-    //     `routes/orders.ts` supprime la commande plutôt que de garder une
-    //     ligne portant un `walletAppliedCents` que le registre dément → 400 ;
-    //   · la perdante a fait son devis *après*. Elle voit zéro, ne débite rien,
-    //     et part à la carte pour le total → 201 « draft ».
-    //
-    // Fixer l'un des deux rend le test vert une fois sur deux : c'est ce qui
-    // l'a fait échouer dans les deux sens sur la CI. On vérifie donc ce qui est
-    // vrai dans les deux cas.
-    const outcomes = responses
-      .map((response) => {
-        const body = response.json<OrderBody & { error?: string }>();
-        return response.statusCode === 201
-          ? `201 ${body.status}`
-          : `${response.statusCode} ${body.error}`;
-      })
-      .sort();
-
-    expect([
-      ["201 draft", "201 submitted"],
-      ["201 submitted", "400 wallet_insufficient"],
-    ]).toContainEqual(outcomes);
-
-    // Ce que le verrou garantit vraiment, et dans les deux cas : une seule
-    // commande est payée par la cagnotte, une seule écriture la débite, et le
-    // solde s'arrête à zéro. Sans lui, les deux liraient le même solde et la
-    // cagnotte passerait en négatif.
-    expect(outcomes.filter((outcome) => outcome === "201 submitted")).toHaveLength(1);
-    expect(await balance()).toBe(0);
-    expect(
-      await harness.prisma.walletEntry.count({ where: { accountId, kind: "order_payment" } }),
-    ).toBe(1);
   });
 });

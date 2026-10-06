@@ -372,8 +372,8 @@ export async function loadPlannerAccount(
     lastStoryOn: day(latest(memo.id)),
     isOwner: memo.ownerAccountId === accountId,
     hasOrder: memo.orders.length > 0,
-    // La même estimation que la cagnotte (`serializeWalletEstimate`) : celle
-    // que le toucher de la notification de fin de voyage va montrer.
+    // Le prix d'un carnet aux pages visées — ou composées, si elles sont plus
+    // nombreuses : la règle du prix de la commande (`billablePages`).
     estimateCents: unitPriceCents(Math.max(memo.targetPageCount, memo.pageCount)),
     memberCount: 1 + memo._count.members,
     newFromOthers: newFromOthers(memo.id),

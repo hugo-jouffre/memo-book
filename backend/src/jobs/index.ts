@@ -15,7 +15,8 @@ import { transcribeEntry, type TranscribeJob } from "./transcribe.js";
 
 /**
  * Le ménage des commandes jamais payées : à la 25e minute de chaque heure. Une
- * réservation de cagnotte ne doit pas attendre une nuit de plus qu'il ne faut.
+ * intention de paiement abandonnée ne doit pas rester ouverte une nuit de plus
+ * qu'il ne faut.
  */
 export const RELEASE_ABANDONED_ORDERS_CRON = "25 * * * *";
 

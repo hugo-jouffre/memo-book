@@ -140,7 +140,7 @@ export async function loadTripDetail(context: AppContext, accountId: string, mem
     dailyCredit = credits.get(memo.id);
   }
 
-  const trip = serializeTrip(memo, dailyCredit);
+  const trip = serializeTrip(memo, { viewerAccountId: accountId, dailyCredit });
 
   return {
     trip,
@@ -206,7 +206,9 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
 
     return {
       traveller,
-      trips: memos.map((memo) => serializeTrip(memo, credits.get(memo.id))),
+      trips: memos.map((memo) =>
+        serializeTrip(memo, { viewerAccountId: accountId, dailyCredit: credits.get(memo.id) }),
+      ),
       showcase: showcase ? serializeShowcase(showcase) : null,
     };
   });
@@ -276,7 +278,9 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
         data: fields,
         include: tripInclude,
       });
-      return reply.code(200).send({ trip: serializeTrip(memo), accessCode: memo.accessCode });
+      return reply
+        .code(200)
+        .send({ trip: serializeTrip(memo, { viewerAccountId: accountId }), accessCode: memo.accessCode });
     };
 
     const replayed = await replay();
@@ -285,7 +289,7 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
     try {
       const memo = await createMemoFor(context.prisma, accountId, { ...(id ? { id } : {}), ...fields });
       return reply.code(201).send({
-        trip: serializeTrip({ ...memo, members: [] }),
+        trip: serializeTrip({ ...memo, members: [] }, { viewerAccountId: accountId }),
         accessCode: memo.accessCode,
       });
     } catch (error) {
@@ -337,7 +341,7 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
       include: tripInclude,
     });
 
-    return { trip: serializeTrip(memo), accessCode: memo.accessCode };
+    return { trip: serializeTrip(memo, { viewerAccountId: accountId }), accessCode: memo.accessCode };
   });
 
   /**
@@ -411,7 +415,7 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
       where: { id: memo.id },
       include: tripInclude,
     });
-    return { trip: serializeTrip(joined), accessCode: joined.accessCode };
+    return { trip: serializeTrip(joined, { viewerAccountId: accountId }), accessCode: joined.accessCode };
   });
 
   /**

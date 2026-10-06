@@ -17,8 +17,7 @@ import {
   SHIPPING_COUNTRY_CODES,
   toShippingCountryCode,
 } from "../services/shippingCountries.js";
-import { writeLedgerEntry } from "../services/walletLedger.js";
-import { serializeTrip, serializeWallet } from "./appSerializers.js";
+import { frozenWallet, serializeTrip } from "./appSerializers.js";
 import { loadVisibleMemo } from "./memos.js";
 import { serializeOrderQuote, serializePrintOrder } from "./serializers.js";
 
@@ -109,27 +108,10 @@ const whatsappBody = z.discriminatedUnion("enabled", [
 /**
  * Le nombre de pages qui fait foi pour le prix : celui que le voyageur vise,
  * ou celui déjà composé s'il est plus grand. Même règle que l'estimation de la
- * cagnotte — les deux doivent annoncer le même chiffre.
+ * notification de fin de voyage — les deux doivent annoncer le même chiffre.
  */
 function billablePages(memo: { targetPageCount: number; pageCount: number }): number {
   return Math.max(memo.targetPageCount, memo.pageCount, 1);
-}
-
-/**
- * De quoi tarifer pour **celui qui commande** : le solde de sa cagnotte.
- *
- * Chacun a sa cagnotte — celle du propriétaire n'a pas à régler l'exemplaire
- * d'un co-voyageur.
- */
-async function walletOf(context: AppContext, accountId: string) {
-  // Le solde seul : le récapitulatif n'a plus qu'une déduction, la cagnotte
-  // (03/10/2026) — plus besoin de ventiler les crédits par provenance.
-  const account = await context.prisma.account.findUnique({
-    where: { id: accountId },
-    select: { walletBalanceCents: true },
-  });
-
-  return { balanceCents: account?.walletBalanceCents ?? 0 };
 }
 
 export function registerOrderRoutes(app: FastifyInstance, context: AppContext): void {
@@ -145,7 +127,7 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
     const { id: memoId } = memoIdParams.parse(request.params);
     const accountId = accountIdOf(request);
 
-    const [memo, account, wallet, walletEntries] = await Promise.all([
+    const [memo, account] = await Promise.all([
       context.prisma.memo.findFirst({
         where: { id: memoId, ...visibleToAccount(accountId) },
         include: {
@@ -177,20 +159,6 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
           },
         },
       }),
-      walletOf(context, accountId),
-      // L'historique **fait partie du contrat** : ``Wallet`` le porte, et un
-      // champ non optionnel absent de la réponse fait échouer le décodage de
-      // tout l'écran, pas seulement de la ligne concernée. Servir un objet
-      // partiel « parce que le tunnel n'affiche pas l'historique » a coûté
-      // exactement ça — l'étape 1 restait en squelette sur une erreur de
-      // décodage. Voir `CLAUDE.md`, § Un choix de design ne s'arrête pas au
-      // dessin.
-      context.prisma.walletEntry.findMany({
-        where: { accountId },
-        orderBy: { createdAt: "desc" as const },
-        take: 50,
-        select: { id: true, amountCents: true, kind: true, label: true, createdAt: true },
-      }),
     ]);
 
     if (!memo) throw HttpError.notFound("Carnet introuvable.");
@@ -219,11 +187,13 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
       // Le titre du **récit** (« Rome et la Dolce Vita »), pas le nom du voyage.
       bookTitle: memo.bookTitle?.trim() || memo.title,
       pageCount: pages,
-      trip: serializeTrip(memo),
-      // Le **même** sérialiseur que `GET /v1/wallet` : un seul endroit décide
-      // de la forme d'une cagnotte, et elle ne peut donc pas diverger d'un
-      // écran à l'autre.
-      wallet: serializeWallet(wallet.balanceCents, walletEntries, memo),
+      trip: serializeTrip(memo, { viewerAccountId: accountId }),
+      // **Gelé** (06/10/2026, la cagnotte est retirée) : un solde à zéro et un
+      // historique vide. Les builds installés décodent ``Wallet`` comme
+      // obligatoire — un champ absent ferait échouer tout l'écran, l'étape 1
+      // restait en squelette pour moins que ça. À retirer quand plus aucun
+      // build ne le lit.
+      wallet: frozenWallet(memo),
       // Les deux prix que les étapes 3 et 4 affichent sans rien recalculer.
       unitPrice: Number((unitPriceCents(pages) / 100).toFixed(2)),
       expressPrice: Number((shippingCents("express") / 100).toFixed(2)),
@@ -278,7 +248,6 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
     const { id: memoId } = memoIdParams.parse(request.params);
     const memo = await loadVisibleMemo(context, request, memoId);
     const body = quoteBody.parse(request.body ?? {});
-    const wallet = await walletOf(context, accountIdOf(request));
 
     return serializeOrderQuote(
       computeQuote({
@@ -286,7 +255,6 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
         pageCount: billablePages(memo),
         copies: body.copies,
         speed: body.shippingSpeed,
-        walletBalanceCents: wallet.balanceCents,
       })
     );
   });
@@ -296,17 +264,12 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
    *
    * **Ouverte aux co-voyageurs autant qu'au propriétaire** : chacun commande
    * son exemplaire du carnet qu'ils ont écrit ensemble. La commande retient
-   * donc qui l'a passée — c'est ce qui dira quelle cagnotte débiter, chacun
-   * ayant la sienne.
+   * donc qui l'a passée — c'est à lui qu'elle appartient, et à lui seul
+   * qu'elle se montre dans le suivi.
    *
-   * La commande est créée en `draft`, et n'en sort que payée : par la
-   * cagnotte ici même quand elle couvre tout, par le webhook de Stripe sinon.
-   *
-   * ⚠️ **La part de cagnotte est débitée ici, à la création** — c'est une
-   * réservation : une seconde commande partie en parallèle ne doit pas pouvoir
-   * dépenser la même somme. Elle revient si la commande n'est pas payée
-   * (annulée par l'app, intention annulée, ménage des brouillons) ou si elle
-   * est remboursée en entier — voir `services/orderPayments.ts`.
+   * La commande est créée en `draft`, et n'en sort que payée, par le webhook
+   * de Stripe. **Tout se paie par Stripe** depuis le 06/10/2026 : la cagnotte,
+   * qui réglait une part ici même, est retirée du produit.
    */
   app.post("/v1/memos/:id/orders", async (request, reply) => {
     const { id: memoId } = memoIdParams.parse(request.params);
@@ -333,13 +296,11 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
     // Le prix se **recalcule ici**, à partir de l'état du serveur. Ce que l'app
     // a affiché ne l'engage pas : un total qui arriverait du client serait un
     // total qu'on peut réécrire.
-    const wallet = await walletOf(context, accountId);
     const priced = computeQuote({
       bookTitle: memo.bookTitle?.trim() || memo.title,
       pageCount: billablePages(memo),
       copies: body.copies,
       speed: body.shippingSpeed,
-      walletBalanceCents: wallet.balanceCents,
     });
 
     // Les options manquantes reprennent le style du carnet, exemplaire par
@@ -406,58 +367,10 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
 
     // --- L'encaissement ------------------------------------------------
     //
-    // Deux mouvements possibles, et ils ne s'excluent pas : la cagnotte couvre
-    // ce qu'elle peut, la carte paie le reste. `priced` a déjà fait le partage.
-
-    if (priced.walletAppliedCents > 0) {
-      const debit = await writeLedgerEntry(context.prisma, {
-        accountId,
-        amountCents: -priced.walletAppliedCents,
-        kind: "order_payment",
-        label: `Carnet « ${memo.bookTitle?.trim() || memo.title} »`,
-        printOrderId: order.id,
-      });
-
-      if (debit.outcome === "insufficient") {
-        // Le solde a bougé entre le devis et le débit — une seconde commande
-        // partie en parallèle. La commande vient d'être créée, personne ne l'a
-        // vue, et elle porte un `walletAppliedCents` que le registre dément :
-        // la laisser serait garder une ligne qui ment. On la retire.
-        await context.prisma.printOrder.delete({ where: { id: order.id } });
-        throw HttpError.badRequest(
-          `Il manque ${(debit.missingCents / 100).toFixed(2)} € sur ta cagnotte.`,
-          "wallet_insufficient",
-        );
-      }
-    }
-
-    // La cagnotte a tout couvert : aucun aller-retour de paiement, le débit
-    // **est** l'encaissement.
-    if (priced.totalCents === 0) {
-      const paid = await context.prisma.printOrder.update({
-        where: { id: order.id },
-        data: { status: "submitted", submittedAt: new Date() },
-        include: { copyOptions: true },
-      });
-
-      context.logger.info(
-        { orderId: order.id, memoId, walletCents: priced.walletAppliedCents, paidFrom: "wallet" },
-        "Commande payée par la cagnotte",
-      );
-
-      return reply.code(201).send({
-        ...serializePrintOrder(paid),
-        payment: { paidFromWallet: true, amountCents: 0, currency: "eur" },
-      });
-    }
-
-    // Reste à payer : Stripe prend la main. L'intention est créée **après** la
-    // commande — sa clé d'idempotence est l'identifiant de celle-ci, donc elle
-    // doit exister.
-    //
-    // **Un échec ici rend la réservation** (01/10/2026). La part de cagnotte
-    // vient d'être débitée ; laisser la commande sans intention gardait cet
-    // argent sur un brouillon que personne ne pouvait plus payer.
+    // Stripe, et rien d'autre. L'intention est créée **après** la commande —
+    // sa clé d'idempotence est l'identifiant de celle-ci, donc elle doit
+    // exister. Un échec ici ferme la commande : un brouillon sans intention ne
+    // pourrait plus être payé que par la reprise (`POST /v1/orders/:id/payment`).
     let intent;
     let customerId: string | null = null;
     try {

@@ -13,8 +13,8 @@ import { serializeTripSettings } from "./appSerializers.js";
  * Les réglages d'un voyage : ce qui se règle sur le carnet sans quitter le
  * voyage.
  *
- * Tout arrive en une réponse — nom, dates, rythme, co-voyageurs, solde de
- * cagnotte, style, aperçu — parce que l'écran les affiche ensemble. Sept
+ * Tout arrive en une réponse — nom, dates, rythme, co-voyageurs, crédit du
+ * jour, style, aperçu — parce que l'écran les affiche ensemble. Sept
  * appels feraient apparaître ses lignes une à une, ce qui est exactement ce
  * que `BrandSkeleton` cherche à éviter côté app.
  *
@@ -112,12 +112,11 @@ async function readSettings(context: AppContext, accountId: string, memoId: stri
       where: { id: memoId, ...visibleToAccount(accountId) },
       include: settingsInclude,
     }),
-    // Le solde vient du **compte** et non du voyage : la cagnotte n'appartient
-    // pas au carnet. C'est la même somme que celle du profil, et c'est voulu.
-    // Le fuseau aussi : le crédit du jour se lit à la minuit de celui qui lit.
+    // Le fuseau du lecteur : le crédit du jour se lit à la minuit de celui qui
+    // lit.
     context.prisma.account.findUniqueOrThrow({
       where: { id: accountId },
-      select: { id: true, walletBalanceCents: true, timeZone: true },
+      select: { id: true, timeZone: true },
     }),
   ]);
 
@@ -127,7 +126,7 @@ async function readSettings(context: AppContext, accountId: string, memoId: stri
   // celui qui lit : illimité s'il est abonné.
   const dailyCredit = await readDailyCredit(context.prisma, { memoId: memo.id, viewer: account });
 
-  return serializeTripSettings(memo, account.walletBalanceCents, dailyCredit, accountId);
+  return serializeTripSettings(memo, dailyCredit, accountId);
 }
 
 export function registerTripSettingsRoutes(app: FastifyInstance, context: AppContext) {

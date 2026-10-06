@@ -24,7 +24,6 @@ describe("le récapitulatif", () => {
     pageCount: 50,
     copies: 2,
     speed: "standard" as const,
-    walletBalanceCents: 0,
   };
 
   it("multiplie le prix unitaire par le nombre d'exemplaires", () => {
@@ -38,37 +37,18 @@ describe("le récapitulatif", () => {
     expect(quote({ ...base, speed: "express" }).shippingCents).toBe(990);
   });
 
-  it("plafonne la cagnotte au montant dû : elle ne rend pas la monnaie", () => {
-    const result = quote({ ...base, walletBalanceCents: 100_000 });
-    expect(result.walletAppliedCents).toBe(result.dueCents);
-    expect(result.totalCents).toBe(0);
+  it("ne montre aucune déduction : la cagnotte est retirée (06/10/2026)", () => {
+    // « - 0,00 € » ferait croire à une réduction qui n'a pas eu lieu, et il n'y
+    // a plus rien à déduire : tout se paie par Stripe.
+    const result = quote({ ...base, speed: "express" });
+    expect(result.deductions).toEqual([]);
+    expect(result.walletAppliedCents).toBe(0);
   });
 
-  it("ne montre pas une déduction nulle", () => {
-    // « - 0,00 € » ferait croire à une réduction qui n'a pas eu lieu.
-    expect(quote(base).deductions).toEqual([]);
-  });
-
-  it("ne déduit que la cagnotte : l'abonnement ne se déduit plus du carnet", () => {
-    const result = quote({ ...base, walletBalanceCents: 3_199 });
-    expect(result.deductions).toEqual([
-      { id: "wallet", label: "Déduction de ta cagnotte", amountCents: 3_199 },
-    ]);
-    expect(result.deductions.some((line) => line.label.includes("abonnement"))).toBe(false);
-  });
-
-  it("boucle : total = articles + livraison - cagnotte", () => {
-    const result = quote({
-      ...base,
-      speed: "express",
-      walletBalanceCents: 3_199,
-    });
-    expect(result.totalCents).toBe(
-      result.itemsCents + result.shippingCents - result.walletAppliedCents,
-    );
-    // Et la ligne affichée rend bien ce qui a été déduit.
-    const shown = result.deductions.reduce((sum, line) => sum + line.amountCents, 0);
-    expect(shown).toBe(result.walletAppliedCents);
+  it("boucle : total = articles + livraison", () => {
+    const result = quote({ ...base, speed: "express" });
+    expect(result.totalCents).toBe(result.itemsCents + result.shippingCents);
+    expect(result.totalCents).toBe(result.dueCents);
   });
 
   it("annonce les bornes du palier choisi", () => {

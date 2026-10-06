@@ -6,24 +6,28 @@ import { writeLedgerEntry } from "./walletLedger.js";
  * Ce qui arrive à l'argent d'une commande **après** sa création : elle est
  * abandonnée, refusée, annulée, ou remboursée.
  *
- * **La part de cagnotte est réservée à la création** (`POST /v1/memos/:id/orders`
- * écrit le débit), pour qu'une seconde commande partie en parallèle ne puisse
- * pas dépenser la même somme. Jusqu'au 01/10/2026, rien ne la rendait : une
- * feuille de paiement refermée, une carte refusée, une app tuée laissaient
- * l'argent bloqué sur un brouillon pour toujours. Tout ce qui ferme une
- * commande non payée passe désormais par `releaseUnpaidOrder`.
+ * **La cagnotte est retirée depuis le 06/10/2026** : une commande se paie
+ * entièrement par Stripe, et plus aucune ne réserve de part de cagnotte. Les
+ * commandes d'avant, elles, en portent encore une — débitée au registre à leur
+ * création — et elle doit toujours revenir si la commande se ferme sans être
+ * payée ou est remboursée en entier. C'est ce que `returnWalletShare` garde.
  *
- * **Une seule clé pour rendre la cagnotte**, quel que soit le chemin —
+ * **Une seule clé pour rendre cette part**, quel que soit le chemin —
  * annulation par l'app, intention annulée, ménage des brouillons, remboursement
  * total. Ils peuvent arriver ensemble ; l'unicité de
  * `wallet_entries.idempotencyKey` en laisse passer un.
  */
 
-/** Combien de temps un brouillon garde sa réservation avant le ménage. */
+/**
+ * Combien de temps un brouillon reste ouvert avant le ménage, qui annule son
+ * intention : un lien de paiement vieux d'une semaine ne doit pas pouvoir
+ * encaisser dans le dos de personne. La commande reste finalisable — la
+ * reprise lui ouvre une intention neuve (`POST /v1/orders/:id/payment`).
+ */
 export const ABANDONED_ORDER_HOURS = 24;
 
 export type ReleaseOutcome =
-  /** Fermée, et la part de cagnotte rendue s'il y en avait une. */
+  /** Fermée, et l'ancienne part de cagnotte rendue s'il y en avait une. */
   | "released"
   /** Stripe refuse d'annuler : payée, ou paiement en cours. Le webhook conclura. */
   | "paid"
@@ -31,7 +35,8 @@ export type ReleaseOutcome =
   | "not_draft";
 
 /**
- * Ferme une commande **qui n'a pas été payée**, et rend sa part de cagnotte.
+ * Ferme une commande **qui n'a pas été payée**, et rend son ancienne part de
+ * cagnotte s'il y en avait une (commande d'avant le 06/10/2026).
  *
  * **L'intention s'annule d'abord**, et c'est Stripe qui tranche : une intention
  * annulée ne peut plus être payée, et une intention payée ne peut plus être
@@ -68,8 +73,10 @@ export async function releaseUnpaidOrder(
 }
 
 /**
- * Le ménage : les brouillons trop vieux pour être encore payés rendent ce
- * qu'ils réservaient. Appelé par la tâche horaire.
+ * Le ménage : les brouillons de plus de 24 h ferment leur intention (et
+ * rendent une ancienne part de cagnotte). Appelé par la tâche horaire. Ils
+ * restent dans le suivi des commandes, « paiement abandonné », et se
+ * finalisent par la reprise.
  *
  * Un par un, parce que chacun demande d'abord à Stripe d'annuler son
  * intention. Ils se comptent en unités, pas en milliers.

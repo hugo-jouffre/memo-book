@@ -41,7 +41,7 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
 | **Thème de l'aventure** | City trip & découvertes | Oriente le registre des encarts et le vocabulaire du carnet |
 | **Style du carnet** | Pointillés, cadres, etc. | Le fichier de `agents/carnet-styles/` appliqué de bout en bout |
 | **Partager sur la galerie** | Désactivé | Un carnet public passe une modération plus stricte (→ Agent Modération) |
-| **Ma cagnotte** · **Tricount** | 67,88 € | Une dépense est une **métadonnée vérifiable** : elle situe une date et un lieu. Elle ne raconte rien — le souvenir doit venir du voyageur |
+| **Tricount** (la ligne « Ma cagnotte » est retirée le 06/10/2026) | Relier Tricount | Une dépense est une **métadonnée vérifiable** : elle situe une date et un lieu. Elle ne raconte rien — le souvenir doit venir du voyageur |
 | **Crédit du jour** | 3 min 20 / 5 min · « Illimité » pour un abonné | Rien pour les agents : ce n'est pas un réglage de contenu, c'est ce que le voyage peut encore raconter aujourd'hui — et le levier de l'abonnement. Voir plus bas |
 
 ---

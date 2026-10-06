@@ -28,7 +28,7 @@ const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 /**
  * L'écran de profil : ce qu'il montre, et ce qu'on y change.
  *
- * Tout arrive en une réponse — identité, adresse, cagnotte, cartes,
+ * Tout arrive en une réponse — identité, adresse, cartes,
  * connecteurs, abonnement, commandes en cours — parce que l'écran les affiche
  * ensemble. Sept appels feraient apparaître ses lignes une à une.
  */
