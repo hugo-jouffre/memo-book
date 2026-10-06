@@ -213,7 +213,8 @@ struct TripCreationStepContent: View {
     private var companions: some View {
         TripAccessCode(
             code: model.accessCode,
-            tripTitle: model.trip?.title ?? model.draft.title
+            tripTitle: model.trip?.title ?? model.draft.title,
+            waitingNote: model.awaitsReconnection ? "Ton code arrivera dès ta reconnexion" : nil
         )
     }
 }
@@ -614,6 +615,11 @@ struct TripAccessCode: View {
     let code: String?
     let tripTitle: String
 
+    /// Ce qu'on dit sous la barre d'attente, quand on sait pourquoi elle
+    /// dure — hors ligne, « Ton code arrivera dès ta reconnexion » (T240).
+    /// `nil` ailleurs : la barre seule suffit à une attente d'un instant.
+    var waitingNote: String? = nil
+
     @State private var hasCopied = false
 
     private var invitation: String {
@@ -647,6 +653,18 @@ struct TripAccessCode: View {
             // code, la ligne ne répond simplement pas au doigt.
             .allowsHitTesting(code != nil)
             .accessibilityLabel(code.map { "Copier le code d’accès \($0)" } ?? "Code d’accès en cours de création")
+
+            // Sous la barre d'attente, et seulement hors ligne : pourquoi elle
+            // dure, et quand elle cessera (T240, Hugo, 06/10/2026).
+            if code == nil, let waitingNote {
+                Text(waitingNote)
+                    .font(MemoBookFont.caption)
+                    .foregroundStyle(MemoBookColor.inkMuted)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, -MemoBookSpacing.s)
+                    .transition(.opacity)
+            }
 
             BrandButton(
                 "Partager",
