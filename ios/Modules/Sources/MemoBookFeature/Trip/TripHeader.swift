@@ -18,6 +18,10 @@ struct TripHeader: View {
     let onSettings: () -> Void
     let onInvite: () -> Void
 
+    /// Le serveur n'a pas encore reçu ce voyage : les réglages, l'aperçu et
+    /// l'invitation pâlissent — voir ``TripAwaitingServer``.
+    var isAwaitingServer = false
+
     /// Le rapport de la maquette : la photo occupe un peu plus d'un carré. Un
     /// rapport plutôt qu'une hauteur en points, pour que la couverture garde
     /// ses proportions du SE au Pro Max.
@@ -95,11 +99,13 @@ struct TripHeader: View {
             // de la conversation, et les deux écrans du voyage doivent poser
             // la roue au même endroit (Hugo, 15/09/2026).
             TripHeaderButton(icon: "IconSettings", label: "Paramètres du voyage", action: onSettings)
+                .dimmedWhileAwaitingServer(isAwaitingServer)
             TripHeaderButton(
                 icon: "IconPrinter",
                 label: "Prévisualiser et commander ce carnet",
                 action: onPrint
             )
+            .dimmedWhileAwaitingServer(isAwaitingServer)
         }
         .padding(.horizontal, MemoBookSpacing.screenMargin)
         // La photo passe sous la barre d'état ; les commandes, elles, se posent
@@ -147,6 +153,7 @@ struct TripHeader: View {
                 companions: trip.companions,
                 visibleLimit: 2,
                 onAdd: onInvite,
+                isAddDimmed: isAwaitingServer,
                 facesLabel: collaboratorsLabel
             )
 

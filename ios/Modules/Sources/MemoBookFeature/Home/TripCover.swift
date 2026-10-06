@@ -109,6 +109,10 @@ struct CompanionStack: View {
     /// se dessine par-dessus le dernier visage puisqu'elle vient en dernier.
     var onAdd: (() -> Void)?
 
+    /// Le « + » pâlit tant que le serveur n'a pas reçu le voyage — voir
+    /// ``TripAwaitingServer``. Il reste tapable : `onAdd` dit pourquoi.
+    var isAddDimmed = false
+
     /// Ce que VoiceOver annonce pour le **groupe de visages**.
     ///
     /// Posé sur les visages seuls, et non sur la pile entière : celle-ci
@@ -191,6 +195,7 @@ struct CompanionStack: View {
         .padding(.leading, -(MemoBookSpacing.minimumTapTarget - diameter) / 2)
         .contentShape(.circle)
         .accessibilityLabel("Inviter quelqu’un à raconter ce voyage")
+        .dimmedWhileAwaitingServer(isAddDimmed)
     }
 
     private func bubble(

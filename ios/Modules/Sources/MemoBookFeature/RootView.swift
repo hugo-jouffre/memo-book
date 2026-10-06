@@ -240,6 +240,10 @@ public struct RootView: View {
                 // posé** — celui-ci écrivait donc « Hello, » à tout le monde
                 // en dehors des aperçus.
                 .environment(\.travellerFirstName, account.firstName)
+                // Les voyages créés hors ligne que le serveur n'a pas encore
+                // reçus : leurs réglages, leur aperçu et leur commande
+                // pâlissent partout où on les ouvre (T239).
+                .environment(\.tripsAwaitingServer, Set(dependencies.outbox.localTrips.map(\.id)))
                 // L'achat de l'abonnement, au nom de **ce** compte : son
                 // identifiant part dans chaque transaction Apple.
                 .environment(\.subscriptionPurchase, dependencies.subscriptionPurchase(accountId: account.id))

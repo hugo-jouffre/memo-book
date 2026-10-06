@@ -166,6 +166,13 @@ public struct ChatView: View {
     /// soixante points trop bas.
     @State private var headerBottom: CGFloat = 0
 
+    /// Les voyages que le serveur n'a pas encore reçus : la roue et
+    /// l'imprimante de l'en-tête pâlissent pour celui-ci — voir
+    /// ``TripAwaitingServer`` (T239).
+    @Environment(\.tripsAwaitingServer) private var tripsAwaitingServer
+    @State private var showsAwaitingServer = false
+    private var isAwaitingServer: Bool { tripsAwaitingServer.contains(tripId) }
+
     /// Ce que le défilement a parcouru — voir ``ChatScrollTracker``. Un
     /// objet **non observé** gardé par `@State` : ses compteurs changent à
     /// chaque image de défilement, et rien à l'écran n'en dépend directement.
@@ -190,6 +197,7 @@ public struct ChatView: View {
                 failure
             }
         }
+        .awaitingServerNotice(isPresented: $showsAwaitingServer, below: headerBottom)
         .background(BrandBackdrop())
         .photoFlow(photos) { model.sendPhotos($0) }
         .brandHiddenNavigationBar()
@@ -323,7 +331,7 @@ public struct ChatView: View {
                 // deux capsules l'une sur l'autre se liraient comme une pile.
                 if showsPreviewBanner, !isGatheringContext, let preview = thread.preview {
                     GeometryReader { proxy in
-                        ChatPreviewBanner(preview: preview) { onIntent(.openBookPreview(memoId: tripId)) }
+                        ChatPreviewBanner(preview: preview) { openFromServer(.openBookPreview(memoId: tripId)) }
                             .frame(maxWidth: .infinity)
                             .padding(.top, max(0, headerBottom - proxy.frame(in: .global).minY) + MemoBookSpacing.xs)
                     }
@@ -479,7 +487,7 @@ public struct ChatView: View {
     private func launch(_ suggestion: ChatSuggestion, from frame: CGRect) {
         // « Voir ma page » ouvre l'aperçu : rien ne part dans le fil, rien ne vole.
         if suggestion.intent == .openPreview {
-            onIntent(.openBookPreview(memoId: tripId))
+            openFromServer(.openBookPreview(memoId: tripId))
             return
         }
         guard !reduceMotion, flight == nil else {
@@ -597,9 +605,21 @@ public struct ChatView: View {
         ChatHeader(
             thread: thread,
             onBack: { dismiss() },
-            onSettings: { onIntent(.openSettings(tripId: tripId)) },
-            onBook: { onIntent(.openBookPreview(memoId: tripId)) }
+            onSettings: { openFromServer(.openSettings(tripId: tripId)) },
+            onBook: { openFromServer(.openBookPreview(memoId: tripId)) },
+            isAwaitingServer: isAwaitingServer
         )
+    }
+
+    /// Les réglages et l'aperçu sont des écrans du serveur : pour un voyage
+    /// qu'il n'a pas encore reçu, l'appui dit pourquoi au lieu d'ouvrir un
+    /// écran d'erreur (T239).
+    private func openFromServer(_ intent: ChatIntent) {
+        if isAwaitingServer {
+            showsAwaitingServer = true
+        } else {
+            onIntent(intent)
+        }
     }
 
     /// La barre d'envoi, et la pastille « Retourner en bas » posée au-dessus
@@ -778,9 +798,9 @@ public struct ChatView: View {
         case .subscribe:
             openPaywall()
         case .openTripSettings:
-            onIntent(.openSettings(tripId: tripId))
+            openFromServer(.openSettings(tripId: tripId))
         case .openPreview:
-            onIntent(.openBookPreview(memoId: tripId))
+            openFromServer(.openBookPreview(memoId: tripId))
         case .importPhotos:
             photos.begin()
         case .openPhotoSettings:
