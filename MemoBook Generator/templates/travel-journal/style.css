@@ -18,9 +18,10 @@
   /* --- Géométrie ---------------------------------------------------------- */
   --mb-page-w: 420pt;
   --mb-page-h: 595pt;
-  /* Jeu laissé sous chaque page pour qu'elle ne dépasse jamais sa feuille.
-     Voir `.page` : sans lui, APITemplate intercale une feuille blanche
-     derrière chaque page. */
+  /* Jeu retiré à la page, en largeur ET en hauteur, pour qu'elle tienne
+     toujours dans sa feuille. Voir `.page` : sans lui, APITemplate intercale
+     une feuille blanche derrière chaque page. `.page__content` le rend à sa
+     marge, donc la colonne de texte n'en perd rien. */
   --mb-page-slack: 1pt;
   --mb-margin: 30pt;
 
@@ -141,27 +142,29 @@ li { margin: 0; }
   margin: 0;
 }
 
-/* La page est plus courte que sa feuille, d'un point — et c'est voulu.
+/* La page est plus petite que sa feuille, d'un point dans chaque sens — et
+   c'est voulu.
 
-   Chaque `.page` force un saut de page derrière elle. Si elle mesure ne
-   serait-ce qu'un cheveu de plus que la feuille, le moteur considère qu'elle
-   déborde sur la suivante, et le saut forcé envoie la page d'après une feuille
-   plus loin : une feuille blanche derrière chaque page, sauf la dernière, qui
-   n'a pas de saut. C'est exactement ce qu'a produit APITemplate : sa feuille
-   sort à 594,96 pt pour une page de 595 pt — 0,04 pt d'écart, quatorze
-   feuilles blanches sur vingt-neuf.
+   APITemplate rend avec un Chromium 97, qui arrondit la feuille de 148 × 210 mm
+   à 419,04 × 594,96 pt. Une page de 420 pt y dépasse de 0,96 pt en largeur.
+   Ce vieux moteur réagit en réduisant tout le contenu pour le faire tenir
+   (−0,3 %, mesuré), et sur ce chemin il intercale une feuille blanche derrière
+   chaque page qui force un saut — toutes sauf la dernière. Mesuré sur deux
+   PDF du même moteur, même gabarit : feuille A4, où la page tient → 8 feuilles
+   pour 8 pages ; feuille A5, où elle dépasse → 29 feuilles pour 15 pages.
 
-   L'écart vient de l'arrondi du format par le moteur, et cet arrondi change
-   d'une version de Chromium à l'autre : le nôtre tolère l'écart, celui
-   d'APITemplate (m97) non. Plutôt que de viser une égalité exacte qu'aucun
-   moteur ne garantit, on laisse un point de jeu. Il se remplit de la couleur
-   de la feuille (`--mb-sheet`), donc ne se voit pas : 0,35 mm de papier.
+   Notre Chromium local ne fait ni cet arrondi ni cette réduction : le bug y
+   est invisible, et seul un PDF d'APITemplate peut valider ce réglage.
 
-   `100vh` serait plus élégant, mais sa valeur à l'impression varie elle aussi
-   selon les moteurs — il a la réputation de produire exactement ce bug. */
+   Le point de jeu se remplit de la couleur de la feuille (`--mb-sheet`), donc
+   ne se voit pas, et `.page__content` le rend à sa marge, donc la colonne de
+   texte ne bouge pas d'un mot.
+
+   `100vw`/`100vh` sembleraient plus élégants, mais leur valeur à l'impression
+   varie selon les moteurs — ils ont la réputation de produire ce même bug. */
 .page {
   position: relative;
-  width: var(--mb-page-w);
+  width: calc(var(--mb-page-w) - var(--mb-page-slack));
   height: calc(var(--mb-page-h) - var(--mb-page-slack));
   overflow: hidden;
   background-color: var(--mb-paper-base);
@@ -197,13 +200,22 @@ li { margin: 0; }
   background-size: 180px 180px;
 }
 
+/* La marge de droite et celle du bas rendent le point de jeu que la page a
+   perdu (voir `.page`). La colonne garde ainsi exactement ses 360 × 535 pt, à
+   la même place sur la feuille : le jeu appartient à la marge, pas au texte.
+   Sans cette compensation, un point de colonne en moins suffit à renvoyer des
+   mots à la ligne — 13 lignes sur 317 dans les jeux de référence. */
 .page__content {
   position: absolute;
   inset: 0;
   z-index: 2;
   display: flex;
   flex-direction: column;
-  padding: var(--mb-margin);
+  padding:
+    var(--mb-margin)
+    calc(var(--mb-margin) - var(--mb-page-slack))
+    calc(var(--mb-margin) - var(--mb-page-slack))
+    var(--mb-margin);
   pointer-events: none;
 }
 
@@ -1026,8 +1038,10 @@ li { margin: 0; }
 
 .mb-ai-note--page {
   position: absolute;
-  right: var(--mb-margin);
-  bottom: 12pt;
+  /* Calée sur la marge, donc sur la feuille : elle rend le point de jeu,
+     comme `.page__content`. */
+  right: calc(var(--mb-margin) - var(--mb-page-slack));
+  bottom: calc(12pt - var(--mb-page-slack));
   z-index: 3;
 }
 
