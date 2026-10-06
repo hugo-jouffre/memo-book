@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Atelier carnet — MemoBook</title>
     <link rel="icon" href="./logo-memobook.svg" />
-    <link rel="stylesheet" href="./style.css" />
+    <link rel="stylesheet" href="./style.css?v=__VERSION__" />
   </head>
   <body>
     <header class="entete">
@@ -14,10 +14,21 @@
         <div class="titre-bloc">
           <h1>Atelier carnet</h1>
           <span class="stats" id="stats"></span>
+          <!-- Remplacé par le commit publié (pages-atelier.yml). C'est ce qui
+               permet de vérifier qu'on génère bien avec la dernière version. -->
+          <span class="version" id="version" title="Version de l'atelier : le commit publié sur GitHub Pages">__VERSION__</span>
         </div>
         <div class="entete-actions">
           <button class="btn btn-icone" data-action="sauvegarder" title="Sauvegarder l'avancement dans un fichier"></button>
           <button class="btn btn-icone" data-action="ouvrir" title="Reprendre un avancement sauvegardé"></button>
+          <a
+            class="btn"
+            href="https://claude.ai/code/artifact/5ee859cb-b6f4-43e3-aa50-268db05c3594"
+            target="_blank"
+            rel="noopener"
+            title="Ouvre l'inspecteur de mise en page : chaque layout du carnet, ses champs et ses limites"
+            >Voir les layouts</a
+          >
           <button class="btn" data-action="generer-json" id="btn-json">Générer le JSON</button>
           <button class="btn btn-lime" data-action="generer-carnet" id="btn-carnet">
             Générer le carnet<span class="beta">Beta</span>
@@ -40,8 +51,8 @@
 
     <section class="export" id="carte-export" hidden></section>
 
-    <script src="./partage.js"></script>
-    <script src="./moteur-navigateur.js"></script>
-    <script src="./app.js"></script>
+    <script src="./partage.js?v=__VERSION__"></script>
+    <script src="./moteur-navigateur.js?v=__VERSION__"></script>
+    <script src="./app.js?v=__VERSION__"></script>
   </body>
 </html>

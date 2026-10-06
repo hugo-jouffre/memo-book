@@ -291,8 +291,25 @@ textes » et § « La répartition sur une étape à plusieurs pages » :
    qui ne tient pas reste hors du carnet, et la console le signale
    (`[carnet] étape N : … photo(s) laissée(s) hors du carnet`).
 
+4. **Chaque photo va à l'emplacement qui la rogne le moins**, et n'est jamais
+   rognée de plus d'un tiers : au-delà, elle est réduite, entière. La case
+   « Photo de groupe, ne pas rogner », sous chaque photo, la fait toujours
+   réduire plutôt que rogner (LAYOUT_KB § « Rognage des photos »).
+
 Le bandeau ne porte pas d'étiquette (`tag`) : l'atelier n'avait que le lieu à y
 mettre, déjà écrit dans le bandeau.
+
+**Ces règles sont recopiées en code** dans `public/app.js`. L'atelier ne lit
+pas `LAYOUT_KB.md` — c'est l'Agent Mise en page de l'app qui le lit. Une règle
+ajoutée au KB doit donc aussi être portée ici pour changer les PDF de l'atelier.
+
+**Quelle version tourne ?** L'en-tête affiche le commit publié (« version
+abc1234 »). Chaque publication change l'adresse des scripts, si bien que le
+navigateur ne peut plus resservir un ancien `app.js` ; si la version affichée
+n'est pas celle du dernier commit de `main`, recharger la page suffit.
+
+Le bouton **« Voir les layouts »** ouvre l'inspecteur de mise en page : chaque
+layout du carnet, ses champs et ses limites.
 
 Trois raisons de l'appeler Beta, et de ne pas s'y fier pour un tirage :
 

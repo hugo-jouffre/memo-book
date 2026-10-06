@@ -135,6 +135,12 @@ h2 {
   font-weight: 500;
 }
 
+.version {
+  font-size: 0.6875rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .grille-champs {
   display: grid;
   gap: 0.625rem;
@@ -400,6 +406,12 @@ textarea {
   white-space: nowrap;
 }
 
+a.btn {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
 .btn:hover:not(:disabled) {
   opacity: 0.82;
 }
@@ -617,6 +629,19 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+}
+
+.case-groupe {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.6875rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.photo .case-groupe input {
+  padding: 0;
 }
 
 .photo input,

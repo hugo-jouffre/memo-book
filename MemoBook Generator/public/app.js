@@ -186,6 +186,8 @@ function photoVide(meta) {
     largeur: 0,
     hauteur: 0,
     orientation: "",
+    /** Photo de groupe : jamais rognée, seulement réduite (LAYOUT_KB § « Rognage des photos »). */
+    groupe: false,
     ...meta,
   };
 }
@@ -1555,7 +1557,8 @@ function partsEgales(total, parts) {
  * (`layout_photo_page`). Règles de LAYOUT_KB, dans cet ordre :
  *
  * 1. **Chaque page de récit prend ses photos avant qu'une planche s'ouvre** —
- *    jusqu'à trois, réparties à parts égales entre les pages de l'étape.
+ *    jusqu'à `maxParPage` (trois, ou deux pour une étape surtout en paysage :
+ *    voir `photosParPageDeRecit`), réparties à parts égales entre les pages.
  * 2. Seule la surabondance va sur des planches, de 3 à 5 photos. S'il en reste
  *    une ou deux, les pages de récit en cèdent pour faire une planche de trois
  *    plutôt que de les perdre.
@@ -1564,12 +1567,12 @@ function partsEgales(total, parts) {
  *    tient pas reste hors du carnet (`ecartees`) — « mieux vaut en laisser de
  *    côté qu'aligner les planches ».
  */
-function repartirPhotos(nbPhotos, nbPagesRecit) {
+function repartirPhotos(nbPhotos, nbPagesRecit, maxParPage = MAX_PHOTOS_RECIT) {
   if (nbPagesRecit === 0) {
     const planche = nbPhotos >= MIN_PAGE_PHOTOS ? Math.min(nbPhotos, PHOTOS_RENDUES.layout_photo_page) : 0;
     return { recit: [], planches: planche ? [planche] : [], ecartees: nbPhotos - planche };
   }
-  const plafondRecit = MAX_PHOTOS_RECIT * nbPagesRecit;
+  const plafondRecit = maxParPage * nbPagesRecit;
   if (nbPhotos <= plafondRecit) {
     return { recit: partsEgales(nbPhotos, nbPagesRecit), planches: [], ecartees: 0 };
   }
@@ -1590,16 +1593,112 @@ function repartirPhotos(nbPhotos, nbPagesRecit) {
 }
 
 /**
+ * Le format (largeur / hauteur) de chaque emplacement photo, gabarit par
+ * gabarit, dans l'ordre où le gabarit lit `photos[]`. Mesuré sur le rendu de
+ * `templates/travel-journal/index.html`, image seule, sans le cadre blanc —
+ * à remesurer si la géométrie d'un gabarit change (LAYOUT_KB § « Rognage des
+ * photos »).
+ */
+const FORMATS_EMPLACEMENTS = {
+  layout_story_opener: { 1: [1.02] },
+  layout_story_facts: { 1: [1.02] },
+  layout_hero_top: { 1: [1.35] },
+  layout_split_left: { 2: [0.9, 0.9] },
+  layout_collage: { 2: [0.9, 0.9], 3: [0.56, 0.56, 0.56] },
+  layout_photo_page: {
+    3: [0.73, 0.45, 1.65],
+    4: [0.73, 0.45, 0.62, 0.99],
+    5: [1.76, 1.44, 0.9, 0.9, 1.44],
+  },
+};
+
+/**
+ * Plafond de rognage : on garde toujours au moins les deux tiers de l'image.
+ * Une photo paysage 4:3 entre dans un emplacement presque carré (32 % rognés)
+ * mais pas dans une colonne étroite (58 % à 66 %), où l'on ne reconnaît plus
+ * l'image. Au-delà, la photo est réduite sans être rognée. Voir LAYOUT_KB
+ * § « Rognage des photos ».
+ */
+const MAX_ROGNAGE = 1 / 3;
+
+/** Part de l'image perdue quand une photo de format `photo` remplit un emplacement de format `cadre`. */
+function rognage(photo, cadre) {
+  if (!photo || !cadre) return 0;
+  return 1 - Math.min(cadre / photo, photo / cadre);
+}
+
+/** Toutes les permutations d'un petit tableau (cinq éléments au plus : 120). */
+function permutations(liste) {
+  if (liste.length <= 1) return [liste];
+  return liste.flatMap((x, i) =>
+    permutations([...liste.slice(0, i), ...liste.slice(i + 1)]).map((reste) => [x, ...reste]),
+  );
+}
+
+/**
+ * Place les photos d'une page dans ses emplacements, et dit comment chacune
+ * s'affiche.
+ *
+ * 1. **L'ordre** : parmi toutes les façons de répartir les photos dans les
+ *    emplacements, on retient celle qui rogne le moins — une photo paysage va
+ *    dans l'emplacement large, une portrait dans la colonne étroite. C'est ce
+ *    qui coupait la photo de groupe du 28 août : paysage, posée dans la
+ *    colonne la plus étroite de la planche.
+ * 2. **Le rendu** : une photo de groupe, ou une photo qui serait rognée de plus
+ *    d'un tiers même à la meilleure place, passe en `fit: "contain"` — réduite
+ *    proportionnellement, jamais coupée. Une photo plus haute que son
+ *    emplacement garde le haut de l'image (`focus` à 30 %) : c'est là que sont
+ *    les visages, sur la plupart des photos prises à hauteur d'homme.
+ */
+function placerPhotos(layout, photos) {
+  const formats = FORMATS_EMPLACEMENTS[layout]?.[photos.length];
+  const cout = (ordre) =>
+    ordre.reduce((total, photo, i) => total + rognage(photo.format, formats[i]), 0);
+  const ordre =
+    formats && photos.every((p) => p.format)
+      ? permutations(photos).reduce((meilleur, essai) => (cout(essai) < cout(meilleur) ? essai : meilleur))
+      : photos;
+
+  return ordre.map((photo, i) => {
+    const cadre = formats?.[i];
+    if (photo.groupe || rognage(photo.format, cadre) > MAX_ROGNAGE) return { url: photo.src, fit: "contain" };
+    if (photo.format && cadre && photo.format < cadre) return { url: photo.src, focus: "50% 30%" };
+    return photo.src;
+  });
+}
+
+/**
+ * Combien de photos une page de récit peut porter, d'après les formats de
+ * l'étape. Les trois emplacements d'un collage sont des colonnes étroites
+ * (format 0,56) : une photo paysage y perd 58 % de sa surface, bien au-delà du
+ * plafond de rognage. Une étape surtout en paysage met donc deux photos par
+ * page de récit (format 0,90 : 32 % au plus), et le surplus va sur les
+ * planches, dont les grands emplacements leur conviennent.
+ */
+function photosParPageDeRecit(photos) {
+  const paysages = photos.filter((p) => p.format > 1).length;
+  return paysages * 2 > photos.length ? 2 : MAX_PHOTOS_RECIT;
+}
+
+/**
  * Le gabarit d'une page de récit, d'après les photos qu'elle porte.
  *
- * `layout_hero_top` (grande photo en tête) tient moins de texte que les
- * autres : on ne le choisit que si le texte de la page y entre, sinon la photo
- * passe en photo flottante sous le récit, dans le layout par défaut.
+ * `layout_hero_top` (grande photo en tête, format 1,35) tient moins de texte
+ * que les autres, et ne convient qu'à une photo paysage : une portrait y
+ * perdrait 44 % de sa surface. On ne le choisit que si le texte de la page y
+ * entre et que la photo y tient sans dépasser le plafond de rognage ; sinon la
+ * photo passe en photo flottante (format 1,02) sous le récit.
  */
-function layoutDeRecit(nbPhotos, texte, sorte, premiere) {
+function layoutDeRecit(photosDeLaPage, texte, sorte, premiere) {
+  const nbPhotos = photosDeLaPage.length;
   const parDefaut = premiere ? "layout_story_opener" : "layout_story_facts";
   if (nbPhotos === 0) return parDefaut;
-  if (nbPhotos === 1) return signes(texte) <= CAPACITE_PAGE.layout_hero_top[sorte] ? "layout_hero_top" : parDefaut;
+  if (nbPhotos === 1) {
+    const [photo] = photosDeLaPage;
+    const heroLisible =
+      !photo.format || rognage(photo.format, FORMATS_EMPLACEMENTS.layout_hero_top[1][0]) <= MAX_ROGNAGE;
+    return heroLisible && signes(texte) <= CAPACITE_PAGE.layout_hero_top[sorte] ? "layout_hero_top" : parDefaut;
+  }
   if (nbPhotos === 2) return "layout_split_left";
   return "layout_collage";
 }
@@ -1670,7 +1769,15 @@ function construirePayloadCarnet(photoDe = (data) => data) {
     // planches intercalées. Règles de LAYOUT_KB, détaillées sur `pagesDeRecit`
     // et `repartirPhotos` : rien du texte ne se perd, ni rien ne déborde.
     days: etat.etapes.flatMap((etape, index) => {
-      const photos = etape.photos.map((p) => (p.data ? photoDe(p.data) : "")).filter(Boolean);
+      // Chaque photo garde son format et le drapeau « groupe » jusqu'au
+      // placement : c'est là que se décide comment elle s'affiche.
+      const photos = etape.photos
+        .map((p) => ({
+          src: p.data ? photoDe(p.data) : "",
+          format: p.largeur && p.hauteur ? p.largeur / p.hauteur : 0,
+          groupe: Boolean(p.groupe),
+        }))
+        .filter((p) => p.src);
       const recit = etape.souvenirs.map((s) => s.texte.trim()).filter(Boolean).join(" ");
       const paragraphes = enParagraphes(recit);
 
@@ -1681,7 +1788,7 @@ function construirePayloadCarnet(photoDe = (data) => data) {
         : photos.length < MIN_PAGE_PHOTOS
           ? [[]]
           : [];
-      const repartition = repartirPhotos(photos.length, textes.length);
+      const repartition = repartirPhotos(photos.length, textes.length, photosParPageDeRecit(photos));
       if (repartition.ecartees) {
         debugCarnet(
           `étape ${index + 1} : ${repartition.ecartees} photo(s) laissée(s) hors du carnet ` +
@@ -1722,7 +1829,7 @@ function construirePayloadCarnet(photoDe = (data) => data) {
             title: place.planche === 0 ? etape.titre || "" : "",
             body_html: "",
             ...drapeaux("layout_photo_page"),
-            photos: prendre(repartition.planches[place.planche]),
+            photos: placerPhotos("layout_photo_page", prendre(repartition.planches[place.planche])),
             fun_facts: [],
             sticker_groups: [],
           };
@@ -1730,12 +1837,12 @@ function construirePayloadCarnet(photoDe = (data) => data) {
 
         const texte = textes[place.recit];
         const premiere = place.recit === 0;
-        const nbPhotos = repartition.recit[place.recit];
-        const layout = layoutDeRecit(nbPhotos, texte, premiere ? "bandeau" : "suite", premiere && index === 0);
+        const photosDeLaPage = prendre(repartition.recit[place.recit]);
+        const layout = layoutDeRecit(photosDeLaPage, texte, premiere ? "bandeau" : "suite", premiere && index === 0);
         const page = {
           ...drapeaux(layout),
           body_html: paragraphesEnHtml(texte),
-          photos: prendre(nbPhotos),
+          photos: placerPhotos(layout, photosDeLaPage),
           fun_facts: [],
           // Le template itère dessus : une liste vide vaut mieux qu'une clé absente.
           sticker_groups: [],
@@ -2431,6 +2538,21 @@ function cartePhoto(p, conteneurId) {
         placeholder: "Légende",
         oninput: (ev) => modifier("photos", p.id, conteneurId, { legende: ev.target.value }),
       }),
+      h(
+        "label",
+        {
+          class: "case-groupe",
+          title:
+            "Une photo de groupe n'est jamais rognée dans le carnet : elle est seulement réduite, " +
+            "pour que personne ne sorte du cadre.",
+        },
+        h("input", {
+          type: "checkbox",
+          checked: Boolean(p.groupe),
+          onchange: (ev) => modifier("photos", p.id, conteneurId, { groupe: ev.target.checked }),
+        }),
+        " Photo de groupe, ne pas rogner",
+      ),
       h(
         "div",
         { class: "rangee" },
@@ -3213,6 +3335,13 @@ async function demarrer() {
   garnirEntete();
   rendreColonne();
   apresChangement();
+}
+
+// En local, le marqueur n'est pas remplacé : on le dit plutôt que de l'afficher.
+{
+  const version = document.getElementById("version");
+  if (version && version.textContent.includes("VERSION")) version.textContent = "version locale";
+  else if (version) version.textContent = `version ${version.textContent}`;
 }
 
 demarrer();

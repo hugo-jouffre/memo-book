@@ -8,6 +8,16 @@ Base de connaissance de l'agent qui produit le JSON envoyé au moteur PDF.
 > documentait onze layouts dont un seul existait, et l'agent produisait des
 > champs que personne ne lisait.
 
+> **Qui lit ce fichier — et qui ne le lit pas.** Il est chargé tel quel dans le
+> prompt de l'Agent Mise en page du back-end (`structuring.ts`) : une règle
+> écrite ici s'applique aux carnets de l'app dès la fusion. **L'atelier
+> (MemoBook Generator) ne le lit pas** : il n'a pas d'agent de mise en page, ses
+> règles sont recopiées en code dans `MemoBook Generator/public/app.js`
+> (`pagesDeRecit`, `repartirPhotos`, `placerPhotos`). Une règle ajoutée ici ne
+> change donc rien aux PDF de l'atelier tant qu'elle n'y est pas portée — c'est
+> ce qui s'est passé pour les trois règles de répartition, écrites le 05/10 et
+> absentes du carnet généré le 06/10.
+
 ## Format
 
 - Page **A5 : 420 × 595 pt** (1 unité Figma = 1 pt), sans fond perdu.
@@ -255,14 +265,25 @@ pour le premier chapitre où un lieu est nommé.
 
 ## Le tracé pointillé du voyage
 
-Décor de bas de page, tiré au sort parmi quatre boucles. **Il ne passe que
-derrière des photos, jamais derrière du texte**, qu'il rendrait illisible. Le
-gabarit ne le dessine donc que si le bas de la page porte une bande d'images,
-ce qui exclut :
+Décor tiré au sort parmi quatre boucles. **Il ne passe que derrière des photos,
+jamais derrière du texte**, qu'il rendrait illisible.
 
-- `layout_hero_top`, qui met la photo en haut et le récit en bas ;
-- les étapes à moins de deux photos, qui n'ont pas de bande ;
-- les étapes portant un `prompt` ou un `quiz`, qui occupent eux-mêmes le bas.
+Pour le garantir, le tracé est dessiné **dans la bande de photos** (macro
+`mb_trace`, appelée par `.mb-gallery`) et positionné par rapport à elle — pas
+par rapport à la page. Où que la bande se trouve, il la suit, et il ne monte
+jamais au-dessus de 112 pt quand la bande en fait au moins 160. Seuls les
+layouts qui ont une bande en portent donc un : `layout_split_left`,
+`layout_collage` et `layout_chapter_map` avec deux photos ou plus. Le layout par
+défaut (photo flottante), `layout_hero_top` et les pages à `prompt` ou `quiz`
+n'en ont pas.
+
+> **Pourquoi il passait sous le texte (carnet du 06/10).** Le tracé était posé
+> à hauteur fixe sur la page — 24, 48 ou 96 pt du bas — en supposant la bande
+> de photos toujours collée en bas. Mais quand un récit dépassait ce que la
+> page tient, la bande cédait la place (elle est faite pour se comprimer) ou
+> sortait de la feuille, et c'est le texte qui occupait la hauteur où le tracé
+> était dessiné. La condition du gabarit ne regardait que le nombre de photos,
+> jamais où elles étaient réellement.
 
 Rien à envoyer pour le piloter : c'est une règle du gabarit, pas un champ.
 
@@ -388,7 +409,9 @@ le carnet n'en demande — mieux vaut en laisser de côté qu'aligner les planch
 page de récit en pose une à trois selon son gabarit ; on sert d'abord toutes les
 pages de récit de l'étape, et seule la **surabondance** va sur une planche. Garder
 les images pour la fin, c'est se retrouver avec un récit nu puis une pile
-d'images sans légende.
+d'images sans légende. Le cas à proscrire : **une page entièrement couverte de texte
+suivie d'une planche entièrement couverte de photos**. Deux pages qui mêlent
+chacune texte et images valent toujours mieux.
 
 **3. Le texte se répartit pour qu'aucune page de l'étape ne soit maigre.** La
 règle du « remplir la première d'abord » vaut tant qu'il reste de quoi tenir la
@@ -583,6 +606,77 @@ gros. La variable n'est pas le nombre de pages mais le taux de compression par
 - **Pas d'illustration qui occupe une page seule.** Une photo des voyageurs
   vaut mieux qu'un dessin de remplissage : deux lecteurs le disent séparément.
 
+### Rognage des photos
+
+Chaque emplacement a son format, et une photo qui n'a pas le même est rognée
+(`object-fit: cover`). Deux PDF ont montré ce que ça donne quand rien ne le
+borne : une photo de groupe paysage posée dans la colonne étroite d'une planche,
+où il ne restait que deux personnes sur quatre ; trois photos paysage dans les
+colonnes d'un collage, réduites à des lanières méconnaissables.
+
+**On mesure le rognage comme la part de l'image perdue** :
+`1 − min(format cadre / format photo, format photo / format cadre)`, les formats
+étant largeur ÷ hauteur.
+
+**Le plafond : un tiers.** On garde toujours au moins les deux tiers de l'image.
+C'est le seuil qui laisse passer les cas qui se lisent bien et arrête ceux qui
+ne se lisent plus :
+
+| Photo (format) | Emplacement (format) | Rognage | |
+|---|---|---|---|
+| paysage 4:3 (1,33) | héro (1,35) | 1 % | ✅ |
+| portrait 3:4 (0,75) | bande de 2 (0,90) | 17 % | ✅ |
+| paysage 4:3 (1,33) | photo flottante (1,02) | 23 % | ✅ |
+| paysage 4:3 (1,33) | bande de 2 (0,90) | 32 % | ✅ juste sous le plafond |
+| portrait 3:4 (0,75) | héro (1,35) | 44 % | ❌ |
+| paysage 4:3 (1,33) | bande de 3 (0,56) | 58 % | ❌ — le jour 5 du 06/10 |
+| paysage 4:3 (1,33) | colonne de planche (0,45) | 66 % | ❌ — la photo de groupe du 06/10 |
+
+Trois règles, appliquées dans cet ordre :
+
+1. **Chaque photo va à l'emplacement qui la rogne le moins.** Sur une page qui
+   en porte plusieurs, on essaie toutes les répartitions (120 au plus, pour
+   cinq photos) et on garde celle dont le rognage total est le plus faible : la
+   paysage dans l'emplacement large, la portrait dans la colonne.
+2. **Au-delà d'un tiers, on réduit au lieu de rogner** — `fit: "contain"`. La
+   photo entre entière dans son emplacement, et le cadre blanc l'épouse : c'est
+   un petit tirage, pas une image coupée. **Une photo de groupe n'est jamais
+   rognée**, quel que soit le rognage : elle passe toujours en `contain`.
+3. **Les visages restent dans le cadre.** Une photo plus haute que son
+   emplacement est rognée en haut et en bas : on garde le haut (`focus`
+   vertical à 30 %), là où sont les visages sur une photo prise à hauteur
+   d'homme. Quand une détection de visages est disponible, ses boîtes priment :
+   le cadre doit contenir au moins chaque visage entier, et une photo dont les
+   visages ne tiennent pas dans le cadre passe en `contain`.
+
+**Les formats des emplacements**, mesurés sur le rendu (image seule, sans le
+cadre blanc), dans l'ordre où le gabarit lit `photos[]` :
+
+| Layout | Photos | Formats |
+|---|---|---|
+| par défaut (photo flottante) | 1 | 1,02 |
+| `layout_hero_top` | 1 | 1,35 |
+| `layout_split_left`, `layout_collage` | 2 | 0,90 · 0,90 |
+| `layout_collage` | 3 | 0,56 · 0,56 · 0,56 |
+| `layout_photo_page` | 3 | 0,73 · 0,45 · 1,65 |
+| `layout_photo_page` | 4 | 0,73 · 0,45 · 0,62 · 0,99 |
+| `layout_photo_page` | 5 | 1,76 · 1,44 · 0,90 · 0,90 · 1,44 |
+
+Ils sont recopiés dans `FORMATS_EMPLACEMENTS` (atelier, `app.js`) : **à
+remesurer si la géométrie d'un layout change**.
+
+**La bande de photos ne s'écrase plus sous 160 pt** (206 pt en temps normal).
+Elle cédait sans limite quand un récit débordait ; à 100 pt, trois photos ne
+sont plus que des lanières. Un récit trop long se découpe en amont, selon le
+barème — il ne se loge pas en écrasant les images.
+
+**Qui l'applique.** L'atelier, dans `placerPhotos` (`app.js`), avec une case
+« Photo de groupe, ne pas rogner » sur chaque photo : il ne sait pas compter
+les visages, c'est donc le voyageur qui le dit. Dans l'app, le back-end ne
+l'applique pas encore : il lui faut la détection de visages prévue dans
+`docs/photos.md` (Vision côté iOS), qui dira aussi qu'une photo est de groupe —
+trois visages ou plus.
+
 ### Deux formes acceptées pour une photo
 
 Une entrée de `photos[]` est soit une source nue (URL ou `data:`), soit un
@@ -601,8 +695,9 @@ tableau.
 | `url` | URL absolue, ou `data:image/…;base64,…` | La photo. Seul champ obligatoire de la forme objet |
 | `tape_corner` | `top-left`, `top-right`, `bottom-left`, `bottom-right`, `top` | Pose un scotch dans ce coin. **Absent = pas de scotch** : mieux vaut aucun scotch qu'un scotch sur un visage |
 | `focus` | deux pourcentages, ex. `17% 50%` | Point que le recadrage préserve. Absent = recadrage centré |
+| `fit` | `cover` (défaut), `contain` | `contain` : photo réduite, jamais rognée, cadre ajusté à l'image — photo de groupe, ou rognage au-delà d'un tiers. Pas de scotch sur une photo `contain` |
 
-**L'agent ne remplit pas ces deux champs à la main.** Ils sortent de
+**L'agent ne remplit pas ces champs à la main.** Ils sortent de
 `backend/src/services/photoAnalysis.ts`, qui mesure la photo : coin le plus
 calme pour le scotch, zone la plus détaillée pour le recadrage. Voir
 `docs/photos.md`.

@@ -47,6 +47,17 @@ jobs:
             exit 1
           fi
 
+      - name: Estampiller la version
+        # Chaque publication change l'adresse des scripts (`app.js?v=<commit>`) :
+        # le navigateur ne peut plus resservir un ancien `app.js` de son cache.
+        # Le carnet du 06/10 a été généré quatre heures après une fusion avec
+        # l'ancien code — météo et pastille comprises. Le commit s'affiche
+        # aussi dans l'en-tête de l'atelier, pour qu'on puisse le vérifier.
+        run: |
+          version="${GITHUB_SHA::7}"
+          sed -i "s/__VERSION__/${version}/g" "MemoBook Generator/public/index.html"
+          grep -q "app.js?v=${version}" "MemoBook Generator/public/index.html"
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3

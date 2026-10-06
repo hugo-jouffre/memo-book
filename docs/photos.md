@@ -76,6 +76,21 @@ non par l'agent :
 Sans ces champs, le gabarit retombe sur un centrage neutre et un scotch en haut
 à gauche — jamais une erreur, seulement un rendu moins fin.
 
+### Le plafond de rognage et les photos de groupe
+
+Le recadrage `cover` est borné (`LAYOUT_KB.md`, § « Rognage des photos ») :
+
+- **jamais plus d'un tiers de l'image perdu** — au-delà, la photo passe en
+  `fit: "contain"` : réduite, entière, le cadre blanc ajusté à elle ;
+- **une photo de groupe n'est jamais rognée** — trois visages ou plus, ou la
+  case « Photo de groupe » cochée dans l'atelier ;
+- **chaque visage reste entier dans le cadre** — sinon `contain`.
+
+La détection de visages est ce qui permettra d'appliquer les deux dernières
+règles sans demander au voyageur : nombre de visages (groupe ou pas) et boîtes
+à garder dans le cadre. D'ici là, l'atelier se fie à la case cochée et garde le
+haut des photos rognées verticalement (`focus` à 30 %).
+
 ## 4. Où ça se branche
 
 ```
