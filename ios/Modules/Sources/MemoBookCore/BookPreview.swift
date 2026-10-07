@@ -183,6 +183,12 @@ public struct BookPreview: Codable, Sendable, Hashable {
 
     /// Le lien de prévisualisation en ligne, à partager. `nil` tant qu'il n'a
     /// pas été demandé — c'est un lien public, il ne se crée pas tout seul.
+    ///
+    /// **Seul le serveur le fabrique** (`POST /v1/memos/:id/share-link`) : une
+    /// page publique `/c/<jeton>` servie par l'API, avec sa vignette Open
+    /// Graph pour WhatsApp et iMessage. L'app ne compose jamais d'URL — celle
+    /// qu'elle fabriquait, `memo-book.com/c/<identifiant>`, ne menait nulle
+    /// part (06/10/2026).
     public let shareUrl: URL?
 
     /// La couverture, pour la carte de partage.
@@ -251,6 +257,14 @@ public struct BookPreview: Codable, Sendable, Hashable {
         self.readyRenderId = readyRenderId
         self.isUpToDate = isUpToDate
         self.pendingMemoryCount = pendingMemoryCount
+    }
+
+    /// Le lien des jeux d'essai — bac à sable, aperçus Xcode —, à la forme de
+    /// celui du serveur (`<hôte de l'API>/c/<jeton>`) mais sur un domaine
+    /// réservé aux exemples : il ne mène nulle part, et ne fait pas croire le
+    /// contraire. Un vrai jeton ne vient que de `POST /v1/memos/:id/share-link`.
+    public static func sampleShareLink(memoId: String) -> URL {
+        URL(string: "https://api.memobook.example/c/essai-\(memoId)")!
     }
 
     /// Les pages qui se **configurent** : la première et la dernière.

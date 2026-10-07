@@ -131,7 +131,7 @@ public final class OrderModel {
             return .fixture(memoId: memoId, request: request)
         },
         shareLink: @escaping (String) async throws -> URL = { memoId in
-            URL(string: "https://memo-book.com/c/\(memoId)")!
+            BookPreview.sampleShareLink(memoId: memoId)
         },
         setWhatsApp: @escaping (String, String?) async throws -> PrintOrder = { _, _ in
             .fixture(memoId: "preview", request: .previewRequest)

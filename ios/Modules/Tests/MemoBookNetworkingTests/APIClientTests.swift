@@ -620,4 +620,47 @@ final class APIClientTests: XCTestCase {
             XCTFail("Erreur inattendue : \(error)")
         }
     }
+
+    // MARK: - Le partage et le suivi WhatsApp de la confirmation (T229)
+
+    /// Le lien partagé est **celui que le serveur rend** — page publique
+    /// `/c/<jeton>` sur l'hôte de l'API —, jamais une URL composée par l'app.
+    func testTheShareLinkIsTheOneTheServerReturns() async throws {
+        let client = makeClient()
+        respond(status: 200, json: #"{"url":"https://api.test/c/Zx81kQp2"}"#)
+
+        let link = try await client.bookShareLink(memoId: "memo-1")
+
+        XCTAssertEqual(link, URL(string: "https://api.test/c/Zx81kQp2"))
+        XCTAssertEqual(StubURLProtocol.lastRequest?.httpMethod, "POST")
+        XCTAssertEqual(StubURLProtocol.lastRequest?.url?.path, "/v1/memos/memo-1/share-link")
+    }
+
+    /// « Recevoir sur WhatsApp » part sur la commande, l'accord **et** le
+    /// numéro dans le même corps ; le refus ne porte que l'accord.
+    func testWhatsAppTrackingIsSavedOnTheOrder() async throws {
+        let client = makeClient()
+        let order = #"""
+            {"id":"o1","memoId":"memo-1","renderId":"r1","status":"submitted","copies":1,
+            "shippingSpeed":"standard","shipping":{"name":"Hugo","line1":"1 rue de Rome",
+            "postalCode":"75008","city":"Paris","country":"FR"},"copyOptions":[],
+            "notifyByWhatsApp":true,"whatsappPhone":"+33612345678",
+            "createdAt":"2026-10-07T10:00:00.000Z","updatedAt":"2026-10-07T10:00:00.000Z"}
+            """#
+        respond(status: 200, json: order)
+
+        let saved = try await client.setOrderWhatsApp(orderId: "o1", phone: "+33612345678")
+
+        XCTAssertTrue(saved.notifyByWhatsApp)
+        XCTAssertEqual(StubURLProtocol.lastRequest?.httpMethod, "POST")
+        XCTAssertEqual(StubURLProtocol.lastRequest?.url?.path, "/v1/orders/o1/whatsapp")
+        let accepted = try JSONSerialization.jsonObject(with: StubURLProtocol.lastBody ?? Data()) as? [String: Any]
+        XCTAssertEqual(accepted?["enabled"] as? Bool, true)
+        XCTAssertEqual(accepted?["phone"] as? String, "+33612345678")
+
+        _ = try await client.setOrderWhatsApp(orderId: "o1", phone: nil)
+        let declined = try JSONSerialization.jsonObject(with: StubURLProtocol.lastBody ?? Data()) as? [String: Any]
+        XCTAssertEqual(declined?["enabled"] as? Bool, false)
+        XCTAssertNil(declined?["phone"])
+    }
 }

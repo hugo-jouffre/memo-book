@@ -687,8 +687,10 @@ public actor PreviewAPI: MemoBookAPI {
         // le bac à sable aussi.
         let isFixtureTrip = HomeFeed.fixture.trips.contains { $0.id == memoId }
         if !isFixtureTrip { _ = try existingMemo(memoId) }
-        // Un lien d'aperçu, stable d'un appel à l'autre comme le vrai.
-        return URL(string: "https://memo-book.com/c/\(memoId)")!
+        // Un lien d'aperçu, stable d'un appel à l'autre comme le vrai, et de
+        // sa forme — mais sur un domaine d'exemple : seul le serveur crée un
+        // jeton.
+        return BookPreview.sampleShareLink(memoId: memoId)
     }
 
     public func orderContext(memoId: String) async throws -> OrderContext {
