@@ -48,6 +48,15 @@ struct CoverTextsView: View {
 
     @Environment(\.dismiss) private var dismiss
 
+    /// La hauteur du clavier, telle que le système l'annonce. Zéro quand il
+    /// est rangé.
+    @State private var keyboardHeight: CGFloat = 0
+
+    /// La hauteur où l'écran se dessine : elle rétrécit **quand le clavier a
+    /// pris sa place** — c'est ce moment-là, et pas une durée, qui dit quand
+    /// amener le champ au-dessus de lui (T138).
+    @State private var visibleHeight: CGFloat = 0
+
     var body: some View {
         ScrollViewReader { scroller in
             ScrollView {
@@ -116,22 +125,47 @@ struct CoverTextsView: View {
             // clavier montait par-dessus et on écrivait à l'aveugle (Hugo,
             // 16/09/2026). Le défilement automatique du système ne suffit pas
             // ici, parce que le champ n'existe pas encore quand le focus le
-            // cherche — il apparaît, puis le prend. On attend donc que le
-            // clavier soit monté, et on amène le champ juste au-dessus de lui.
-            .onChange(of: editing) { _, field in
-                guard field != nil else { return }
-                Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(350))
-                    withAnimation(.snappy(duration: 0.3)) {
-                        scroller.scrollTo(Self.fieldsAnchor, anchor: .bottom)
-                    }
-                }
+            // cherche — il apparaît, puis le prend.
+            //
+            // **On écoute le clavier** (Hugo, 06/10/2026, T138) au lieu
+            // d'attendre 350 ms au jugé : son annonce donne sa hauteur, et la
+            // hauteur de l'écran qui rétrécit dit qu'il a pris sa place. C'est
+            // là qu'on amène le champ — ni trop tôt sur un iPhone lent, ni en
+            // retard sur un rapide —, et de nouveau quand le clavier change de
+            // hauteur (barre de suggestions, clavier d'une autre langue).
+            .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { height in
+                visibleHeight = height
             }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { note in
+                let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect
+                keyboardHeight = frame?.height ?? 0
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                keyboardHeight = 0
+            }
+            .onChange(of: visibleHeight) { _, _ in revealFields(scroller) }
+            .onChange(of: keyboardHeight) { _, _ in revealFields(scroller) }
+            // Le clavier déjà monté — on passe du titre au texte de dos — :
+            // rien ne bougera de son côté, le champ s'amène tout de suite.
+            .onChange(of: editing) { _, _ in revealFields(scroller) }
         }
     }
 
     /// L'identité du bloc des champs, pour l'amener au-dessus du clavier.
     private static let fieldsAnchor = "cover-texts-fields"
+
+    /// Amène le champ ouvert juste au-dessus du clavier, s'il y a un champ
+    /// ouvert et un clavier. Après la passe en cours : un champ qui vient
+    /// d'apparaître n'a pas encore sa place.
+    private func revealFields(_ scroller: ScrollViewProxy) {
+        guard editing != nil, keyboardHeight > 0 else { return }
+        Task { @MainActor in
+            await Task.yield()
+            withAnimation(.snappy(duration: 0.3)) {
+                scroller.scrollTo(Self.fieldsAnchor, anchor: .bottom)
+            }
+        }
+    }
 
     // MARK: - Le plat, et ses crayons
 
