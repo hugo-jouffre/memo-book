@@ -51,11 +51,11 @@ enum WelcomeCopy {
     /// personne ne lit.
     static let google = "Continuer avec Google"
     static let email = "S’inscrire avec un e-mail"
-    static let legal = "En continuant, tu acceptes nos Conditions d’utilisation."
+    static let legal = "En continuant, tu acceptes nos conditions d’utilisation."
 
     /// La même phrase, en trois morceaux : le lien est le milieu (T151).
     static let legalLead = "En continuant, tu acceptes nos "
-    static let legalLink = "Conditions d’utilisation"
+    static let legalLink = "conditions d’utilisation"
     static let legalTail = "."
 
     /// La flèche de retour des écrans d'entrée par e-mail. Elle ramène ici, et

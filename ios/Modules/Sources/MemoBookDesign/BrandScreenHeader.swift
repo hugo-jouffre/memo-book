@@ -214,7 +214,7 @@ public struct BrandHeaderAction: View {
         BrandScreenHeader(title: "Paramètres du voyage")
 
         BrandScreenHeader(
-            title: "Commander mon Carnet",
+            title: "Commander mon carnet",
             subtitle: "Étape 3/7 - Exemplaires"
         )
 

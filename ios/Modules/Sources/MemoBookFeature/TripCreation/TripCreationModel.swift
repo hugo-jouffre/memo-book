@@ -24,7 +24,7 @@ public enum TripCreationStep: Int, CaseIterable, Sendable, Hashable {
         case .name: "Nom de ton aventure"
         case .dates: "Dates"
         case .notifications: "Notifications"
-        case .ratio: "Ratio Image/Texte"
+        case .ratio: "Ratio image/texte"
         case .companions: "Co-voyageur(s)"
         }
     }

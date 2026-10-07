@@ -144,7 +144,7 @@ extension Connector {
         ),
         Connector(
             id: "alltrails",
-            name: "All Trails",
+            name: "AllTrails",
             promise:
                 "MemoBook pourra récupérer tes sentiers parcourus et t’aider à raconter des souvenirs de tes randonnées",
             isEnabled: true,
@@ -162,7 +162,7 @@ extension Connector {
             id: "polarsteps",
             name: "PolarSteps",
             promise:
-                "MemoBook pourra récupérer tes récits PolarSteps et t’aider à compléter ton carnet",
+                "MemoBook pourra récupérer tes récits Polarsteps et t’aider à compléter ton carnet",
             isEnabled: true,
             logoAssetName: "ConnectorPolarSteps"
         ),

@@ -152,7 +152,7 @@ public struct PrintedCopyOptions: Codable, Sendable, Hashable, Identifiable {
 
     /// « 1er Carnet », « 2e Carnet », « 3e Carnet ».
     public var title: String {
-        position == 1 ? "1er Carnet" : "\(position)e Carnet"
+        position == 1 ? "1er carnet" : "\(position)e carnet"
     }
 }
 

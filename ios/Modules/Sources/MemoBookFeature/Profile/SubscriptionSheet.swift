@@ -15,7 +15,7 @@ import SwiftUI
 /// Le chemin, justement :
 ///
 /// ```
-/// « Mon abonnement » ─→ .current  (« Mon Abonnement »)
+/// « Mon abonnement » ─→ .current  (« Mon abonnement »)
 ///                          │ Résilier mon abonnement
 ///                          ▼
 ///                       .keepGoing (« Ton voyage continue »)
@@ -43,7 +43,7 @@ import SwiftUI
 /// résiliation » envoie la raison, puis ouvre la feuille de gestion des
 /// abonnements d'iOS. C'est au retour de celle-ci, d'après ce que StoreKit dit
 /// du renouvellement, qu'on passe à « C'est validé » — ou qu'on revient à
-/// « Mon Abonnement » si la personne n'y a rien coupé.
+/// « Mon abonnement » si la personne n'y a rien coupé.
 struct SubscriptionSheet: View {
     let subscription: Subscription?
     let onActivate: () -> Void
@@ -62,7 +62,7 @@ struct SubscriptionSheet: View {
     var gender: Gender = .undisclosed
 
     /// Où on en est du chemin. `nil` tant qu'on n'a rien poussé : on part de
-    /// « Mon Abonnement ». Dès qu'un bouton est touché, c'est cette valeur qui
+    /// « Mon abonnement ». Dès qu'un bouton est touché, c'est cette valeur qui
     /// commande — sans quoi la dernière feuille disparaîtrait à l'instant même
     /// où la résiliation a lieu.
     @State private var step: Step?
@@ -119,7 +119,7 @@ struct SubscriptionSheet: View {
         return subscription.isWithinPaidPeriod() ? subscription.paidThrough : nil
     }
 
-    /// Résilié, mais encore dans le mois payé : « Mon Abonnement » le dit, et
+    /// Résilié, mais encore dans le mois payé : « Mon abonnement » le dit, et
     /// propose de se réinscrire au lieu de résilier une seconde fois.
     ///
     /// **Résilié veut dire `cancelledAt`** (03/10/2026). Pendant le délai de
@@ -220,7 +220,7 @@ struct SubscriptionSheet: View {
         }
     }
 
-    // MARK: - « Mon Abonnement »
+    // MARK: - « Mon abonnement »
 
     private var current: some View {
         BrandSheet(
@@ -362,7 +362,7 @@ struct SubscriptionSheet: View {
     }
 }
 
-/// L'encadré bleu de la feuille « Mon Abonnement » : ce qui va se passer tout
+/// L'encadré bleu de la feuille « Mon abonnement » : ce qui va se passer tout
 /// seul, et pourquoi.
 private struct SubscriptionCallout: View {
     let title: String
@@ -466,9 +466,9 @@ enum SubscriptionCopy {
             "Ton dernier prélèvement n’est pas passé : Apple réessaie, et te laisse raconter sans limite jusqu’au \(graceEnd.dayAndMonth)."
     }
 
-    // — « Mon Abonnement »
+    // — « Mon abonnement »
 
-    static let currentTitle = "Mon Abonnement"
+    static let currentTitle = "Mon abonnement"
     /// La maquette écrit « Abonnée » ; l'app accorde sur ce que le profil sait
     /// de la personne (T76).
     static func currentBadge(for gender: Gender) -> String { gender.agreed("Abonné") }
@@ -729,11 +729,11 @@ private let cancelledInGrace = Subscription(
     managedByAppStore: true
 )
 
-#Preview("Mon Abonnement — abonné") {
+#Preview("Mon abonnement — abonné") {
     SubscriptionSheetPreview(subscription: TravellerProfile.fixture.subscription)
 }
 
-#Preview("Mon Abonnement — résilié, mois payé") {
+#Preview("Mon abonnement — résilié, mois payé") {
     SubscriptionSheetPreview(subscription: cancelledInGrace)
 }
 

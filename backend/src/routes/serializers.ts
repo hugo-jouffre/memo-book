@@ -203,7 +203,7 @@ export function serializeOrderQuote(quote: PrintQuote) {
         },
         {
           id: "shipping",
-          label: quote.speed === "express" ? "Livraison Express" : "Livraison Standard",
+          label: quote.speed === "express" ? "Livraison express" : "Livraison standard",
           detail: null,
           amount: euros(quote.shippingCents),
         },

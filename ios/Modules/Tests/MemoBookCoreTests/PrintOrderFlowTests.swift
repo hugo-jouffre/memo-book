@@ -163,8 +163,8 @@ final class PrintOrderFlowTests: XCTestCase {
     }
 
     func testCopyTitlesAreOrdinals() {
-        XCTAssertEqual(PrintedCopyOptions(position: 1).title, "1er Carnet")
-        XCTAssertEqual(PrintedCopyOptions(position: 2).title, "2e Carnet")
+        XCTAssertEqual(PrintedCopyOptions(position: 1).title, "1er carnet")
+        XCTAssertEqual(PrintedCopyOptions(position: 2).title, "2e carnet")
     }
 
     func testConfirmationAgreesInNumberOnBothSides() {

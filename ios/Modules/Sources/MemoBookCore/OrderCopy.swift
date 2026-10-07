@@ -9,7 +9,7 @@ extension BookCopy {
     public enum Order {
         /// Le titre porté par les sept étapes. Il ne change pas en cours de
         /// route : c'est le sous-titre qui dit où on en est.
-        public static let title = "Commander mon Carnet"
+        public static let title = "Commander mon carnet"
 
         public static let help = "Besoin d’aide ?"
         public static let next = "Continuer"
@@ -70,7 +70,7 @@ extension BookCopy {
 
             /// Le rang, dit comme la maquette le dit — « 1er Carnet ».
             public static func copyTitle(_ position: Int) -> String {
-                position == 1 ? "1er Carnet" : "\(position)e Carnet"
+                position == 1 ? "1er carnet" : "\(position)e carnet"
             }
 
             public static let minimumReached = "Il faut au moins un exemplaire."
@@ -111,7 +111,7 @@ extension BookCopy {
         // MARK: Étape 6 — Paiement
 
         public enum Payment {
-            public static let title = "Méthode de Paiement"
+            public static let title = "Méthode de paiement"
             /// Ce que dit l'étape à la place d'un choix de carte : il se fait
             /// dans la feuille de Stripe, en payant.
             public static let inStripeSheet =
@@ -148,7 +148,7 @@ extension BookCopy {
         // MARK: Étape 7 — Confirmation
 
         public enum Confirmation {
-            public static let title = "Ton Carnet prend la route"
+            public static let title = "Ton carnet prend la route"
             public static let delivery = "Livraison"
 
             // MARK: Le suivi par WhatsApp
@@ -173,7 +173,7 @@ extension BookCopy {
 
             public static let giftTitle = "Envie de l’offrir ?"
             public static let giftDetail =
-                "Tu peux recommander un exemplaire depuis ton Carnet à tout moment"
+                "Tu peux recommander un exemplaire depuis ton carnet à tout moment"
 
             public static let share = "Partager le lien de prévisualisation"
             public static let home = "Retour à l’accueil"

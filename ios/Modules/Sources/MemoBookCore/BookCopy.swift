@@ -254,9 +254,9 @@ public enum BookCopy {
     // MARK: - On compose ton Carnet
 
     public enum Composition {
-        public static let title = "On compose ton Carnet"
+        public static let title = "On compose ton carnet"
         public static let message =
-            "Images, Souvenirs, cartes et petits détails trouvent leur place dans une mise en page unique"
+            "Images, souvenirs, cartes et petits détails trouvent leur place dans une mise en page unique"
 
         /// Ce que VoiceOver annonce pendant la composition. L'animation, elle,
         /// est purement décorative et masquée : décrire une page qui se monte
@@ -642,7 +642,7 @@ public enum BookCopy {
 
     /// « Fun Facts » — `3443:10105`.
     public enum FunFacts {
-        public static let title = "Fun Facts"
+        public static let title = "Fun facts"
         public static let toggle = "Insérer des Fun facts"
 
         /// **Corrigée au tutoiement** — voir ``Customisation/intro``.

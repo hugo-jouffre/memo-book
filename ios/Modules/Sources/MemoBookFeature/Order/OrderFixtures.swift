@@ -152,7 +152,7 @@ extension OrderQuote {
                     ),
                     OrderQuoteLine(
                         id: "shipping",
-                        label: speed == .express ? "Livraison Express" : "Livraison Standard",
+                        label: speed == .express ? "Livraison express" : "Livraison standard",
                         amount: shipping
                     ),
                 ],
