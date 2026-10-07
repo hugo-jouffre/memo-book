@@ -557,6 +557,13 @@ plus rendu. Ne pas le produire.
 
 ## Réglure et rythme vertical
 
+**Un bandeau seul garde une ligne de réglure sous le ruban.** Quand rien ne
+s'affiche sous le bandeau — ni nuit, ni hôte, ni météo, ni étiquette —, le
+titre de l'étape descend d'une ligne (`.mb-header--seul`) : sans elle, le récit
+collait au ruban. Les rangées « nuit » ou « météo » font déjà cet écart quand
+elles sont là, et le barème a été calibré avec une rangée « nuit » : la page
+tient donc le même texte dans les deux cas.
+
 La réglure du papier est générée, pas dessinée : elle se répète tous les
 `--mb-line`. Elle n'est juste que si **tout ce qu'elle traverse occupe un
 multiple entier de cette valeur** — le titre pèse exactement deux interlignes,
@@ -701,6 +708,68 @@ tableau.
 `backend/src/services/photoAnalysis.ts`, qui mesure la photo : coin le plus
 calme pour le scotch, zone la plus détaillée pour le recadrage. Voir
 `docs/photos.md`.
+
+## Couverture imprimée (Pumbo)
+
+Le carnet se commande en **livre relié 154 × 216 mm** chez Pumbo. La
+couverture d'un relié n'est pas une page du carnet : c'est une seule feuille —
+plat verso, dos, plat recto — imprimée à part, sur un autre papier, et dont la
+largeur dépend du nombre de pages. Elle ne passe donc pas par ce gabarit ni par
+APITemplate : l'atelier la compose (`MemoBook Generator/public/couverture.js`)
+et le navigateur l'enregistre en PDF au format exact.
+
+**Les dimensions viennent de la fiche Pumbo, jamais d'un calcul.** L'outil de
+couverture de Pumbo produit, pour une commande donnée, un script InDesign
+(`.jsx`) qui donne tout ; l'atelier le lit (*Réglages → Fiche couverture
+Pumbo*). Pumbo ne publie pas de barème : la largeur du dos dépend du nombre de
+pages **et** du papier, et la seule valeur connue est celle-ci :
+
+| Fiche du 07/10/2026 — relié 154 × 216 mm, 48 pages | mm |
+|---|---|
+| Feuille complète, fond perdu compris | 370 × 266 |
+| Fond perdu, sur les quatre bords | 3 |
+| Plat verso et plat recto (chacun) | 178 × 260 |
+| Dos | 8 |
+| Zone sûre : marge haut, bas et bord extérieur des plats | 19 |
+| Côté dos (charnière) : marge imposée par MemoBook, pas par la fiche | 12 |
+
+Les plats sont plus grands que la page (178 × 260 contre 154 × 216) : le carton
+déborde du bloc et le papier se rabat dessus. D'où la zone sûre de 19 mm, qui
+couvre ce rabat. Sans fiche importée, l'atelier part de celle-ci **et le dit** :
+un dos de 8 mm sur un carnet de 80 pages serait faux. Une fiche par commande.
+
+**Un seul style : celui de la couverture intérieure.**
+
+- **Recto** — la photo de couverture en pleine page, fond perdu compris ; le
+  titre du carnet en Playfair Display Black, blanc, en haut de la zone sûre ;
+  le sous-titre sur un bandeau blanc incliné ; les voyageurs et les dates en
+  bas. Un voile sombre sur le haut seulement, pour que le titre reste lisible
+  sur un ciel clair.
+- **Dos** — aplat encre, titre et voyageurs en blanc, **lisibles de bas en
+  haut** (à la française). Pas de texte sous 6 mm de dos : il ne tiendrait pas
+  lisible. Corps : 45 % de la largeur du dos, 11 pt au plus.
+- **Verso** — le papier crème et « À suivre. », comme la quatrième intérieure,
+  avec le logo et l'adresse en bas.
+
+**La photo de couverture.** Celle que le voyageur désigne (étoile sur la
+photo), sinon la plus adaptée au recto, qui est un portrait (format 0,68) :
+jamais une photo de groupe (elle serait rognée), d'abord une photo qui tient
+sous le plafond de rognage d'un tiers — une portrait, en pratique —, puis celle
+qui atteint 300 dpi sur le recto, puis la mieux résolue. C'est **la même** que
+la photo de couverture intérieure du carnet. L'atelier prévient sous 200 dpi,
+et quand une photo de groupe désignée serait rognée.
+
+**Le fichier.** Bouton « Générer la couverture » → un onglet avec la feuille et
+ses repères (coupe, plis du dos, zone sûre — à l'écran seulement) → *Imprimer*
+→ *Enregistrer au format PDF*, marges *Aucune*, *Graphiques d'arrière-plan*
+coché. La taille de la feuille est imposée par la règle `@page`, au dixième de
+millimètre (mesuré : 370,08 × 266,02 mm pour 370 × 266).
+
+> **À trancher avant la première commande.** Le PDF intérieur rendu par
+> APITemplate contient sa propre couverture et sa quatrième (première et
+> dernière pages). Pour un relié, ces deux pages seraient imprimées *à
+> l'intérieur*, en plus de la couverture. Il faudra un rendu « imprimeur » sans
+> elles.
 
 ## Ce que le moteur de rendu reçoit
 

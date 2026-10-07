@@ -355,6 +355,15 @@ li { margin: 0; }
   flex: 0 0 auto;
 }
 
+/* Bandeau seul — ni nuit, ni hôte, ni météo, ni étiquette dessous : une ligne
+   de réglure entre la pointe du ruban et le titre. Sans elle, la première
+   ligne du récit collait au bandeau (retour de Hugo, 07/10), depuis que la
+   météo inventée et la pastille du lieu ont disparu. Les rangées « nuit » ou
+   « météo » font déjà cet écart quand elles sont là ; c'est pourquoi la marge
+   ne s'ajoute pas à elles — et pourquoi le barème, calibré avec une rangée
+   « nuit », reste juste. Un multiple de `--mb-line`, pour la réglure. */
+.mb-header--seul { margin-bottom: var(--mb-line); }
+
 .mb-stay,
 .mb-weather { flex: 0 0 auto; }
 
