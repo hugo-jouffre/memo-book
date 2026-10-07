@@ -57,6 +57,19 @@ extension TravellerProfile {
                 maximumDays: 7,
                 copies: 2,
                 pageCount: 50
+            ),
+            // Une commande laissée au moment de payer (T232) : son étiquette
+            // et « Finaliser ma commande » se vérifient dans le bac à sable.
+            OrderTracking(
+                id: "order-lisbonne",
+                status: .paymentAbandoned,
+                minimumDays: 5,
+                maximumDays: 7,
+                copies: 1,
+                pageCount: 42,
+                memoId: "trip-lisbonne",
+                tripTitle: "Lisbonne en famille",
+                total: 39.9
             )
         ],
         tripCount: 5,

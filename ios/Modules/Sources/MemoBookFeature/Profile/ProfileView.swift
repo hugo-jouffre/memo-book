@@ -764,7 +764,8 @@ public struct ProfileView: View {
                 onOrder: { trip in
                     sheet = nil
                     onIntent(.orderBook(memoId: trip.id))
-                }
+                },
+                onOrdersChanged: { Task { await model.load() } }
             )
         }
     }

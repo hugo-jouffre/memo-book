@@ -34,13 +34,6 @@ public struct PlacedPrintOrder: Decodable, Sendable, Hashable {
     }
 }
 
-/// Comment une commande se règle — la réponse du serveur, telle quelle.
-///
-/// On ne la lit jamais champ par champ depuis un écran : ``settlement`` en tire
-/// la seule question qui se pose, « faut-il ouvrir une feuille de paiement, et
-/// avec quoi ». C'est ce qui évite qu'un écran conclue « rien à payer » d'un
-/// `clientSecret` absent, alors que son absence peut aussi vouloir dire que le
-/// serveur est mal configuré.
 /// La reprise du paiement d'une commande déjà passée —
 /// `POST /v1/orders/:id/payment`. La commande à la racine, comme
 /// ``PlacedPrintOrder`` ; `payment` est nul quand il n'y a plus rien à régler :
@@ -66,6 +59,13 @@ public struct ResumedOrderPayment: Decodable, Sendable, Hashable {
     }
 }
 
+/// Comment une commande se règle — la réponse du serveur, telle quelle.
+///
+/// On ne la lit jamais champ par champ depuis un écran : ``settlement`` en tire
+/// la seule question qui se pose, « faut-il ouvrir une feuille de paiement, et
+/// avec quoi ». C'est ce qui évite qu'un écran conclue « rien à payer » d'un
+/// `clientSecret` absent, alors que son absence peut aussi vouloir dire que le
+/// serveur est mal configuré.
 public struct OrderPayment: Decodable, Sendable, Hashable {
     // **Plus de `paidFromWallet`** (Hugo, 06/10/2026, T230) : la cagnotte qui
     // pouvait tout couvrir est partie, et avec elle la commande réglée sans

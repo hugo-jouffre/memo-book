@@ -247,6 +247,7 @@ public struct RootView: View {
                 // identifiant part dans chaque transaction Apple.
                 .environment(\.subscriptionPurchase, dependencies.subscriptionPurchase(accountId: account.id))
                 .environment(\.managePaymentMethods, { await dependencies.managePaymentMethods() })
+                .environment(\.finishAbandonedOrder, { await dependencies.finishAbandonedOrder(orderId: $0) })
                 // Ce que StoreKit a gardé pendant que personne n'était
                 // connecté — un renouvellement, une validation parentale —
                 // part maintenant qu'une session peut le remettre.

@@ -759,13 +759,16 @@ public actor PreviewAPI: MemoBookAPI {
     }
 
     /// Le double n'a pas d'intention à reprendre : ses commandes naissent
-    /// payées. Il rend donc la commande, sans rien à régler.
+    /// payées. Il rend donc la commande, sans rien à régler — y compris la
+    /// commande abandonnée du profil d'essai, que « Finaliser ma commande »
+    /// rouvre (T232).
     public func resumePrintOrderPayment(
         orderId: String,
         stripeApiVersion: String?
     ) async throws -> ResumedOrderPayment {
         _ = stripeApiVersion
-        return ResumedOrderPayment(order: try await printOrder(id: orderId), payment: nil)
+        let order = (try? await printOrder(id: orderId)) ?? .fixture(memoId: "preview", request: .previewRequest)
+        return ResumedOrderPayment(order: order, payment: nil)
     }
 
     public func cancelPrintOrder(orderId: String) async throws -> PrintOrder {

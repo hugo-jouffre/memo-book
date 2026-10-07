@@ -505,9 +505,24 @@ public enum SubscriptionCancellationReason: String, Codable, Sendable, Hashable,
     }
 }
 
-/// Une commande d'impression en cours d'acheminement.
+/// Une commande d'impression du compte : en cours d'acheminement, ou laissée
+/// au moment de payer.
 public struct OrderTracking: Codable, Sendable, Hashable, Identifiable {
+    /// Où en est la commande, pour la feuille « Suivi des commandes ».
+    ///
+    /// **Une commande au paiement abandonné n'est pas en route** (T232,
+    /// 06/10/2026) : la feuille la listait comme si elle allait partir. Elle
+    /// porte désormais son étiquette et de quoi la finaliser. Le serveur n'en
+    /// rend qu'une par voyage — la dernière —, et seulement pendant 30 jours.
+    public enum Status: String, Codable, Sendable, Hashable {
+        /// Payée, en cours d'impression ou d'acheminement.
+        case inProgress = "in_progress"
+        /// Jamais payée : brouillon, ou fermée par le ménage des 24 h.
+        case paymentAbandoned = "payment_abandoned"
+    }
+
     public let id: String
+    public let status: Status
     /// Fourchette de livraison, en jours. Deux bornes plutôt qu'une date : un
     /// imprimeur annonce un délai, pas un rendez-vous.
     public let minimumDays: Int
@@ -515,22 +530,62 @@ public struct OrderTracking: Codable, Sendable, Hashable, Identifiable {
     public let copies: Int
     public let pageCount: Int
     public let coverImageUrl: URL?
+    /// Le carnet commandé. `nil` sur un serveur d'avant le 06/10/2026.
+    public let memoId: String?
+    public let tripTitle: String?
+    /// Le net à payer, figé à la commande. `nil` sur une commande d'avant la
+    /// tarification — « pas de montant à afficher », jamais zéro.
+    public let total: Decimal?
+    public let createdAt: Date?
 
     public init(
         id: String,
+        status: Status = .inProgress,
         minimumDays: Int,
         maximumDays: Int,
         copies: Int,
         pageCount: Int,
-        coverImageUrl: URL? = nil
+        coverImageUrl: URL? = nil,
+        memoId: String? = nil,
+        tripTitle: String? = nil,
+        total: Decimal? = nil,
+        createdAt: Date? = nil
     ) {
         self.id = id
+        self.status = status
         self.minimumDays = minimumDays
         self.maximumDays = maximumDays
         self.copies = copies
         self.pageCount = pageCount
         self.coverImageUrl = coverImageUrl
+        self.memoId = memoId
+        self.tripTitle = tripTitle
+        self.total = total
+        self.createdAt = createdAt
     }
+
+    /// Décodage tolérant : un serveur d'avant le 06/10/2026 ne dit ni l'état
+    /// ni le carnet — ses commandes sont alors toutes en route, comme il les
+    /// montrait. Un état inconnu d'un serveur plus récent aussi : mieux vaut
+    /// une carte de livraison qu'un profil qui ne s'affiche plus.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        status = (try? container.decodeIfPresent(Status.self, forKey: .status)) ?? .inProgress
+        minimumDays = try container.decode(Int.self, forKey: .minimumDays)
+        maximumDays = try container.decode(Int.self, forKey: .maximumDays)
+        copies = try container.decode(Int.self, forKey: .copies)
+        pageCount = try container.decode(Int.self, forKey: .pageCount)
+        coverImageUrl = try container.decodeIfPresent(URL.self, forKey: .coverImageUrl)
+        memoId = try container.decodeIfPresent(String.self, forKey: .memoId)
+        tripTitle = try container.decodeIfPresent(String.self, forKey: .tripTitle)
+        total = try container.decodeIfPresent(Decimal.self, forKey: .total)
+        createdAt = try? container.decodeIfPresent(Date.self, forKey: .createdAt)
+    }
+
+    /// Le paiement a-t-il été laissé en route ? C'est ce qui remplace le délai
+    /// par l'étiquette et « Finaliser ma commande ».
+    public var isPaymentAbandoned: Bool { status == .paymentAbandoned }
 }
 
 /// Le voyage en cours, tel que la carte de chiffres du profil le montre : un

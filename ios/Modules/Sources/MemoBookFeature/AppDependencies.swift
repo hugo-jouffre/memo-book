@@ -662,6 +662,20 @@ public final class AppDependencies {
         )
     }
 
+    /// « Finaliser ma commande » du suivi des commandes (T232) : rouvre le
+    /// paiement d'une commande abandonnée, `POST /v1/orders/:id/payment`, et
+    /// ouvre la feuille de Stripe sur la nouvelle intention.
+    public func finishAbandonedOrder(orderId: String) async -> AbandonedOrderPayment.Outcome {
+        await AbandonedOrderPayment(
+            resume: { [api] id in
+                try await api.resumePrintOrderPayment(orderId: id, stripeApiVersion: StripeSDK.apiVersion)
+            },
+            present: { [payments] ticket in await payments.present(ticket) },
+            reload: { [api] id in try await api.printOrder(id: id) }
+        )
+        .finish(orderId: orderId)
+    }
+
     /// Ouvre la feuille « Moyens de paiement » de Stripe — les cartes du compte,
     /// à ajouter ou à retirer. Rend un message si elle n'a pas pu s'ouvrir.
     public func managePaymentMethods() async -> String? {
@@ -676,6 +690,10 @@ extension EnvironmentValues {
     /// La feuille « Moyens de paiement » de Stripe, pour le profil — posée par
     /// `RootView`. `nil` en aperçu, où la ligne ne fait rien.
     @Entry public var managePaymentMethods: (@MainActor () async -> String?)?
+
+    /// « Finaliser ma commande » du suivi des commandes — posée par
+    /// `RootView`. `nil` en aperçu, où le bouton ne s'affiche pas.
+    @Entry public var finishAbandonedOrder: (@MainActor (String) async -> AbandonedOrderPayment.Outcome)?
 
     /// Le support de la session, pour un écran qui doit l'ouvrir **par-dessus
     /// lui** au lieu de le faire pousser par ``RootView``.

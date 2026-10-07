@@ -21,6 +21,19 @@ struct OrderTrackingSheet: View {
     /// « Commander mon carnet » : le tunnel de commande du voyage en cours.
     var onOrder: (CurrentTrip) -> Void = { _ in }
 
+    /// Une commande abandonnée vient d'être payée : le profil se relit, et sa
+    /// carte passe en livraison.
+    var onOrdersChanged: () -> Void = {}
+
+    /// « Finaliser ma commande » — posé par `RootView`. Absent en aperçu : le
+    /// bouton ne s'affiche alors pas, plutôt que de ne rien faire.
+    @Environment(\.finishAbandonedOrder) private var finishAbandonedOrder
+
+    /// La commande dont le paiement est en train de reprendre. Une à la fois :
+    /// deux feuilles de Stripe ne s'empilent pas.
+    @State private var finishingOrderId: String?
+    @State private var finishError: (orderId: String, message: String)?
+
     var body: some View {
         BrandSheet("Suivi des commandes") {
             VStack(spacing: MemoBookSpacing.s) {
@@ -43,7 +56,14 @@ struct OrderTrackingSheet: View {
                     )
                 } else {
                     ForEach(orders) { order in
-                        OrderCard(order: order)
+                        OrderCard(
+                            order: order,
+                            isFinishing: finishingOrderId == order.id,
+                            finishError: finishError?.orderId == order.id ? finishError?.message : nil,
+                            onFinish: order.isPaymentAbandoned && finishAbandonedOrder != nil
+                                ? { finish(order) }
+                                : nil
+                        )
                     }
                 }
             }
@@ -52,6 +72,24 @@ struct OrderTrackingSheet: View {
 }
 
 extension OrderTrackingSheet {
+    /// Reprend le paiement d'une commande abandonnée, sans repasser par le
+    /// tunnel : elle a déjà son adresse, ses exemplaires et son prix.
+    private func finish(_ order: OrderTracking) {
+        guard finishingOrderId == nil, let finishAbandonedOrder else { return }
+        finishingOrderId = order.id
+        finishError = nil
+
+        Task {
+            let outcome = await finishAbandonedOrder(order.id)
+            finishingOrderId = nil
+            switch outcome {
+            case .paid: onOrdersChanged()
+            case .cancelled: break
+            case .failed(let message): finishError = (order.id, message)
+            }
+        }
+    }
+
     /// Aucune commande, mais un voyage en cours : le carnet se commande d'ici.
     private func orderInvitation(_ trip: CurrentTrip) -> some View {
         VStack(spacing: MemoBookSpacing.s) {
@@ -78,9 +116,15 @@ extension OrderTrackingSheet {
     }
 }
 
-/// Une commande : sa couverture, son délai, et ce qu'elle contient.
+/// Une commande : sa couverture, son délai, et ce qu'elle contient — ou, quand
+/// son paiement a été laissé en route, son étiquette et « Finaliser ma
+/// commande » (T232).
 private struct OrderCard: View {
     let order: OrderTracking
+    var isFinishing = false
+    var finishError: String?
+    /// `nil` sur une commande en route, ou hors session.
+    var onFinish: (() -> Void)?
 
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .body) private var coverSide: CGFloat = 72
@@ -90,11 +134,39 @@ private struct OrderCard: View {
     }
 
     var body: some View {
-        content
-            .padding(MemoBookSpacing.xs)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .overlay { shape.strokeBorder(MemoBookColor.action, lineWidth: 1) }
-            .accessibilityElement(children: .combine)
+        VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
+            // Le bouton reste un élément à part : fondu dans la carte, il
+            // serait lu sans pouvoir être activé.
+            content
+                .accessibilityElement(children: .combine)
+
+            if let onFinish {
+                BrandButton(
+                    "Finaliser ma commande",
+                    icon: Image(brand: "IconCart"),
+                    size: .medium,
+                    isLoading: isFinishing,
+                    fillsWidth: true,
+                    action: onFinish
+                )
+                .disabled(isFinishing)
+            }
+
+            if let finishError {
+                Text(finishError)
+                    .font(MemoBookFont.caption)
+                    .foregroundStyle(MemoBookColor.error)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(MemoBookSpacing.xs)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay {
+            shape.strokeBorder(
+                order.isPaymentAbandoned ? MemoBookColor.separator : MemoBookColor.action,
+                lineWidth: 1
+            )
+        }
     }
 
     @ViewBuilder
@@ -130,13 +202,25 @@ private struct OrderCard: View {
 
     private var text: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("Livraison")
-                .font(MemoBookFont.label)
-                .foregroundStyle(MemoBookColor.action)
+            if order.isPaymentAbandoned {
+                // Pas de délai : rien n'est parti. L'étiquette dit pourquoi,
+                // le titre dit quel carnet.
+                Text("Paiement abandonné, commande non finalisée")
+                    .font(MemoBookFont.label)
+                    .foregroundStyle(MemoBookColor.error)
 
-            Text("Dans \(order.minimumDays) à \(order.maximumDays) jours")
-                .font(MemoBookFont.heading)
-                .foregroundStyle(MemoBookColor.ink)
+                Text(order.tripTitle ?? "Ton carnet")
+                    .font(MemoBookFont.heading)
+                    .foregroundStyle(MemoBookColor.ink)
+            } else {
+                Text("Livraison")
+                    .font(MemoBookFont.label)
+                    .foregroundStyle(MemoBookColor.action)
+
+                Text("Dans \(order.minimumDays) à \(order.maximumDays) jours")
+                    .font(MemoBookFont.heading)
+                    .foregroundStyle(MemoBookColor.ink)
+            }
 
             Text(contents)
                 .font(MemoBookFont.body)
@@ -148,10 +232,12 @@ private struct OrderCard: View {
 
     /// « 2 exemplaires - 50 pages ». L'accord suit le nombre : la maquette ne
     /// montre que le pluriel, une commande d'un seul exemplaire existe quand
-    /// même.
+    /// même. Une commande à finaliser dit aussi ce qu'il reste à payer.
     private var contents: String {
         let copies = order.copies == 1 ? "1 exemplaire" : "\(order.copies) exemplaires"
-        return "\(copies) - \(order.pageCount) pages"
+        let line = "\(copies) - \(order.pageCount) pages"
+        guard order.isPaymentAbandoned, let total = order.total else { return line }
+        return "\(line) - \(total.euros)"
     }
 }
 

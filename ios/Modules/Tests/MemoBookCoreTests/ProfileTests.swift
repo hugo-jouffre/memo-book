@@ -143,6 +143,33 @@ final class ProfileTests: XCTestCase {
         XCTAssertNil(profile.shippingCountry(code: "MC"))
     }
 
+    /// **Une commande au paiement abandonné n'est pas en route** (T232) : le
+    /// serveur le dit, avec le carnet et le net à payer. Celles d'un serveur
+    /// d'avant, sans état, restent des livraisons.
+    func testOrdersTellAnAbandonedPaymentFromADelivery() throws {
+        let json = Data(
+            """
+            [
+              { "id": "o1", "minimumDays": 5, "maximumDays": 7, "copies": 2, "pageCount": 50, "coverImageUrl": null },
+              { "id": "o2", "status": "payment_abandoned", "minimumDays": 5, "maximumDays": 7, "copies": 1,
+                "pageCount": 42, "coverImageUrl": null, "memoId": "m2", "tripTitle": "Rome 2026", "total": 89.9,
+                "createdAt": "2026-10-06T09:00:00.000Z" },
+              { "id": "o3", "status": "in_progress", "minimumDays": 3, "maximumDays": 4, "copies": 1, "pageCount": 30 },
+              { "id": "o4", "status": "on_the_moon", "minimumDays": 3, "maximumDays": 4, "copies": 1, "pageCount": 30 }
+            ]
+            """.utf8
+        )
+
+        let orders = try decoder.decode([OrderTracking].self, from: json)
+
+        XCTAssertEqual(orders.map(\.isPaymentAbandoned), [false, true, false, false])
+        XCTAssertEqual(orders[1].memoId, "m2")
+        XCTAssertEqual(orders[1].tripTitle, "Rome 2026")
+        XCTAssertEqual(NSDecimalNumber(decimal: orders[1].total ?? 0).doubleValue, 89.9, accuracy: 0.001)
+        XCTAssertNotNil(orders[1].createdAt)
+        XCTAssertNil(orders[0].total)
+    }
+
     /// La liste reconnaît un code comme un nom, sans tenir compte de la casse
     /// ni des accents : c'est ce qui ramène une adresse d'avant la liste sur
     /// sa ligne du menu.
