@@ -36,7 +36,7 @@ import {
 } from "./notificationPlanner.js";
 import { unitPriceCents } from "./printPricing.js";
 import { schoolCalendarOf, type SchoolHolidayPeriod, type SchoolZone } from "./schoolHolidays.js";
-import { LIVING_SUBSCRIPTION_STATUSES } from "./subscriptions.js";
+import { LIVING_SUBSCRIPTION_STATUSES, subscriptionStateOf } from "./subscriptions.js";
 
 /**
  * La passe d'envoi : **charger, décider, envoyer, retenir**. Appelée toutes
@@ -98,9 +98,11 @@ export function armedAppleRenewal(
     (subscription) =>
       subscription.provider === "storekit" &&
       // `past_due` : Apple tente encore de prélever, et `renewsAt` est la fin
-      // du délai de grâce — « se renouvelle dans 3 jours » serait faux.
-      subscription.status === "active" &&
-      subscription.autoRenews !== false,
+      // du délai de grâce — « se renouvelle dans 3 jours » serait faux. Et une
+      // ligne restée `active` sans nouvelles d'Apple trois jours après
+      // l'échéance est finie (un `EXPIRED` perdu) : « tu gardes l'illimité »
+      // serait faux aussi (07/10/2026).
+      subscriptionStateOf(subscription, now) === "active",
   );
   if (armed.length === 0) return null;
 

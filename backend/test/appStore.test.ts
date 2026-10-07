@@ -8,6 +8,7 @@ import {
 } from "../src/services/appStore.js";
 import { storeKitState } from "../src/services/appStoreSubscriptions.js";
 import { APP_STORE_PRODUCT_IDS } from "../src/services/subscriptionCatalog.js";
+import { armedAppleRenewal } from "../src/services/notifications.js";
 import { hasUnlimitedAccess } from "../src/services/subscriptions.js";
 import { createHarness, registerAccount, resetDatabase, type TestHarness } from "./helpers.js";
 
@@ -617,6 +618,185 @@ describe("le profil, sans abonnement", () => {
       interval: "month",
       isUnlimited: false,
     });
+  });
+});
+
+describe("se désabonner, partout (07/10/2026)", () => {
+  /**
+   * Hugo, 06/10/2026 : « quand quelqu'un se désabonne, tous les endroits qui
+   * indiquaient « abonné » ne doivent plus l'indiquer ». Chaque cas relit
+   * **tout ce que l'app lit** : le profil, l'accueil, la règle du crédit du jour.
+   */
+  type Seen = {
+    profile: ProfileBody["subscription"] & {
+      state: string;
+      autoRenews: boolean;
+      renewsAt: string | null;
+      endsAt: string | null;
+      hasEndedBefore: boolean;
+    };
+    traveller: {
+      isUnlimited: boolean;
+      subscriptionState: string;
+      subscriptionEndsAt: string | null;
+      subscriptionOutlivesTrip: boolean;
+      subscriptionEndedOn: string | null;
+    };
+    unlimited: boolean;
+  };
+
+  async function seen(account: { accountId: string; authorization: string }): Promise<Seen> {
+    const headers = { authorization: account.authorization };
+    const [profile, home] = await Promise.all([
+      harness.app.inject({ method: "GET", url: "/v1/profile", headers }),
+      harness.app.inject({ method: "GET", url: "/v1/home", headers }),
+    ]);
+    return {
+      profile: profile.json<{ subscription: Seen["profile"] }>().subscription,
+      traveller: home.json<{ traveller: Seen["traveller"] }>().traveller,
+      unlimited: await isUnlimited(account.accountId),
+    };
+  }
+
+  async function subscribed() {
+    const account = await registerAccount(harness.app);
+    const tx = transaction({ appAccountToken: account.accountId, purchasedAt: new Date(Date.now() - DAY) });
+    await purchase(account.authorization, tx);
+    return { account, tx };
+  }
+
+  it("abonné : armé, avec la date du prochain prélèvement", async () => {
+    const { account, tx } = await subscribed();
+    const { profile, traveller, unlimited } = await seen(account);
+    expect(profile).toMatchObject({
+      state: "active",
+      isActive: true,
+      isUnlimited: true,
+      autoRenews: true,
+      renewsAt: tx.expiresAt!.toISOString(),
+      endsAt: null,
+    });
+    expect(traveller).toMatchObject({ subscriptionState: "active", isUnlimited: true, subscriptionEndsAt: null });
+    expect(unlimited).toBe(true);
+  });
+
+  it("renouvellement coupé : plus « abonné », illimité jusqu'au bout du mois, puis plus rien", async () => {
+    const { account, tx } = await subscribed();
+    await tripOf(account.accountId, new Date(Date.now() - 2 * DAY));
+    await notify(
+      notification("DID_CHANGE_RENEWAL_STATUS", { ...tx, signedAt: new Date() }, {
+        subtype: "AUTO_RENEW_DISABLED",
+        renewal: { autoRenews: false, gracePeriodEndsAt: null },
+      }),
+    );
+
+    const during = await seen(account);
+    expect(during.profile).toMatchObject({
+      state: "ending",
+      isActive: false,
+      isUnlimited: true,
+      autoRenews: false,
+      renewsAt: null,
+      endsAt: tx.expiresAt!.toISOString(),
+    });
+    expect(during.traveller).toMatchObject({
+      subscriptionState: "ending",
+      isUnlimited: true,
+      subscriptionEndsAt: tx.expiresAt!.toISOString(),
+      // Plus rien à couper.
+      subscriptionOutlivesTrip: false,
+    });
+    expect(during.unlimited).toBe(true);
+
+    // Le mois payé s'achève — Apple confirme l'expiration.
+    await notify(
+      notification(
+        "EXPIRED",
+        { ...tx, expiresAt: new Date(Date.now() - 1000), signedAt: new Date(Date.now() + 1000) },
+        { subtype: "VOLUNTARY", status: "expired", renewal: { autoRenews: false, gracePeriodEndsAt: null } },
+      ),
+    );
+    const after = await seen(account);
+    expect(after.profile).toMatchObject({ state: "ended", isActive: false, isUnlimited: false, hasEndedBefore: true });
+    expect(after.traveller).toMatchObject({ subscriptionState: "ended", isUnlimited: false, subscriptionEndsAt: null });
+    expect(after.traveller.subscriptionEndedOn).not.toBeNull();
+    expect(after.unlimited).toBe(false);
+  });
+
+  it("remboursé : fini sur-le-champ, partout", async () => {
+    const { account, tx } = await subscribed();
+    const revokedAt = new Date();
+    await notify(notification("REFUND", { ...tx, revokedAt, signedAt: revokedAt }, { status: "revoked" }));
+
+    const { profile, traveller, unlimited } = await seen(account);
+    expect(profile).toMatchObject({ state: "ended", isActive: false, isUnlimited: false });
+    expect(traveller).toMatchObject({ subscriptionState: "ended", isUnlimited: false });
+    expect(unlimited).toBe(false);
+  });
+
+  it("sans nouvelles d'Apple trois jours après l'échéance : plus abonné nulle part", async () => {
+    // L'`EXPIRED` s'est perdu : la ligne dit encore « active », armée.
+    const account = await registerAccount(harness.app);
+    await tripOf(account.accountId, new Date(Date.now() - 20 * DAY));
+    await harness.prisma.subscription.create({
+      data: {
+        accountId: account.accountId,
+        provider: "storekit",
+        status: "active",
+        autoRenews: true,
+        priceCents: 499,
+        renewsAt: new Date(Date.now() - 5 * DAY),
+      },
+    });
+
+    const { profile, traveller, unlimited } = await seen(account);
+    expect(profile).toMatchObject({ state: "ended", isActive: false, isUnlimited: false, hasEndedBefore: true });
+    expect(traveller).toMatchObject({
+      subscriptionState: "ended",
+      isUnlimited: false,
+      // Rien à couper : l'accueil ne propose plus de résilier.
+      subscriptionOutlivesTrip: false,
+    });
+    expect(traveller.subscriptionEndedOn).not.toBeNull();
+    expect(unlimited).toBe(false);
+  });
+
+  it("délai de grâce : toujours abonné, le temps qu'Apple réessaie", async () => {
+    const { account, tx } = await subscribed();
+    const gracePeriodEndsAt = new Date(Date.now() + 5 * DAY);
+    await notify(
+      notification("DID_FAIL_TO_RENEW", { ...tx, signedAt: new Date() }, {
+        subtype: "GRACE_PERIOD",
+        status: "grace_period",
+        renewal: { autoRenews: true, gracePeriodEndsAt },
+      }),
+    );
+
+    const { profile, traveller } = await seen(account);
+    expect(profile).toMatchObject({ state: "grace", isActive: true, isUnlimited: true, endsAt: gracePeriodEndsAt.toISOString() });
+    expect(traveller).toMatchObject({ subscriptionState: "grace", isUnlimited: true });
+  });
+
+  it("ne fait plus parler les notifications d'un renouvellement qui ne viendra pas", () => {
+    const now = new Date("2026-10-07T12:00:00Z");
+    const line = (overrides: { status?: "active" | "cancelled"; autoRenews?: boolean | null; renewsAt: Date }) => ({
+      provider: "storekit" as const,
+      status: overrides.status ?? ("active" as const),
+      autoRenews: overrides.autoRenews ?? true,
+      renewsAt: overrides.renewsAt,
+    });
+    const soon = new Date("2026-10-20T12:00:00Z");
+    expect(armedAppleRenewal([line({ renewsAt: soon })], now)).toEqual({ renewsAt: soon });
+    expect(armedAppleRenewal([line({ status: "cancelled", autoRenews: false, renewsAt: soon })], now)).toBeNull();
+    // Échue depuis cinq jours, sans nouvelles : finie.
+    expect(armedAppleRenewal([line({ renewsAt: new Date("2026-10-02T12:00:00Z") })], now)).toBeNull();
+  });
+
+  it("jamais abonné : none", async () => {
+    const account = await registerAccount(harness.app);
+    const { profile, traveller } = await seen(account);
+    expect(profile).toMatchObject({ state: "none", isActive: false, isUnlimited: false, autoRenews: false });
+    expect(traveller).toMatchObject({ subscriptionState: "none", isUnlimited: false });
   });
 });
 

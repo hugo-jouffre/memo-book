@@ -538,6 +538,30 @@ l'ancien produit).
 | expiré | `expired` | non |
 | remboursé, révoqué | `expired` | non, dès la révocation |
 
+### Ce que l'app en dit : un état, en un mot (07/10/2026)
+
+Hugo, 06/10/2026 : « quand quelqu'un se désabonne, tous les endroits qui
+indiquaient « abonné » ne doivent plus l'indiquer ». Le statut en base ne
+suffisait pas — chaque écran le relisait à sa façon, et une ligne restée
+`active` après un `EXPIRED` perdu disait « abonné » pour toujours.
+`subscriptionStateOf` / `accountSubscriptionOf` (`services/subscriptions.ts`)
+en tirent **un** état, d'où tout le reste dérive :
+
+| État | Ce que c'est | Illimité | « Abonné » (`isActive`) |
+|---|---|---|---|
+| `active` | renouvellement armé | oui | oui |
+| `grace` | prélèvement en échec, délai de grâce d'Apple | oui | oui |
+| `ending` | renouvellement coupé : la période payée court encore | jusqu'à `endsAt` | non |
+| `ended` | expiré, remboursé, révoqué — ou sans nouvelles d'Apple 3 jours après l'échéance | non | non |
+| `none` | jamais abonné | non | non |
+
+Il sort dans `GET /v1/profile` → `subscription.state`, `autoRenews`,
+`renewsAt` (prochain prélèvement, `active` seulement), `endsAt` ; et dans
+`GET /v1/home` → `traveller.subscriptionState`, `subscriptionEndsAt` (pour
+`ending`). `subscriptionOutlivesTrip`, `subscriptionEndedOn`,
+`hasEndedBefore` et les notifications (`armedAppleRenewal`) le lisent aussi :
+plus rien n'invite à couper un abonnement qui ne se renouvellera pas.
+
 ### Ce qui rend le rejeu inoffensif, ici aussi
 
 | Garde-fou | Où | Ce qu'il empêche |

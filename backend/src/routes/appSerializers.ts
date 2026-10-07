@@ -17,7 +17,7 @@ import { serializeDailyCredit, type DailyCredit } from "../services/dailyCredit.
 import { unitPriceCents } from "../services/printPricing.js";
 import { findShippingCountry, SHIPPING_COUNTRIES } from "../services/shippingCountries.js";
 import { SUBSCRIPTION_MONTHLY_CENTS } from "../services/subscriptionCatalog.js";
-import { grantsUnlimitedAccess } from "../services/subscriptions.js";
+import { accountSubscriptionOf, grantsUnlimitedAccess, subscriptionStateOf } from "../services/subscriptions.js";
 import { avatarUrlOf } from "../services/avatars.js";
 import { renderPhase } from "./serializers.js";
 import { effectiveGender } from "../services/genderInference.js";
@@ -293,6 +293,7 @@ export function serializeTraveller(
   now: Date = new Date(),
 ) {
   const subscriptions = account.subscriptions ?? [];
+  const current = accountSubscriptionOf(subscriptions, now);
   return {
     id: account.id,
     // Le prénom porte la salutation de l'accueil. À défaut, la partie locale de
@@ -302,12 +303,12 @@ export function serializeTraveller(
     // **Déduit, pas stocké** : la période payée du dernier abonnement, si elle
     // vient de s'achever. C'est ce qui permet à l'accueil d'ouvrir l'alerte
     // système « ton abonnement s'est arrêté » — voir `justEndedSubscription`.
-    subscriptionEndedOn: iso(justEndedSubscription(subscriptions)),
+    subscriptionEndedOn: iso(justEndedSubscription(subscriptions, now)),
     // **Le rappel de fin de voyage** (01/10/2026) : l'abonnement App Store se
     // renouvelle encore alors qu'aucun voyage ne court. Apple ne laisse pas
     // l'app le couper à la place de la personne ; l'accueil le lui propose,
     // en un geste. L'abonnement ne s'arrête jamais de lui-même.
-    subscriptionOutlivesTrip: outlivesEveryTrip(subscriptions, trips),
+    subscriptionOutlivesTrip: outlivesEveryTrip(subscriptions, trips, now),
     // Raconte-t-il sans limite ? La même règle que le crédit du jour
     // (`grantsUnlimitedAccess`) : le verrou du micro et le paywall de l'accueil
     // en dépendent.
@@ -315,6 +316,12 @@ export function serializeTraveller(
     // A-t-il déjà été abonné ? C'est ce qui choisit la version « retour » du
     // paywall, d'où qu'on l'ouvre.
     hasSubscribedBefore: subscriptions.length > 0,
+    // **L'état de l'abonnement, en un mot** (07/10/2026) — `active`, `grace`,
+    // `ending`, `ended` ou `none` : voir `subscriptionStateOf`. « Abonné » ne
+    // se dit que pour `active` et `grace` ; `ending` raconte encore sans
+    // limite, jusqu'à `subscriptionEndsAt`.
+    subscriptionState: current.state,
+    subscriptionEndsAt: current.state === "ending" ? iso(current.endsAt) : null,
   };
 }
 
@@ -328,16 +335,18 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 function outlivesEveryTrip(
   subscriptions: Subscription[],
   trips: { endDate: Date | null }[],
+  now: Date,
 ): boolean {
+  // Armé **et vivant** : un `EXPIRED` perdu en route laisse la ligne `active`,
+  // et il n'y a rien à couper (`subscriptionStateOf`).
   const renews = subscriptions.some(
-    (entry) => entry.provider === "storekit" && entry.status === "active" && entry.autoRenews !== false,
+    (entry) => entry.provider === "storekit" && subscriptionStateOf(entry, now) === "active",
   );
   if (!renews) return false;
 
   // `endDate` est le minuit local du dernier jour : le voyage court encore
   // tout ce jour-là, d'où le jour ajouté.
-  const now = Date.now();
-  return !trips.some((trip) => trip.endDate === null || trip.endDate.getTime() + DAY_MS >= now);
+  return !trips.some((trip) => trip.endDate === null || trip.endDate.getTime() + DAY_MS >= now.getTime());
 }
 
 /**
@@ -357,18 +366,19 @@ function outlivesEveryTrip(
  */
 const RECENTLY_ENDED_DAYS = 14;
 
-function justEndedSubscription(subscriptions: Subscription[]): Date | null {
-  // Un abonnement encore vivant n'a rien à annoncer, quoi qu'en disent les
+function justEndedSubscription(subscriptions: Subscription[], at: Date): Date | null {
+  // Un abonnement qui ouvre encore l'illimité — armé, en délai de grâce, ou
+  // dans sa dernière période payée — n'a rien à annoncer, quoi qu'en disent les
   // lignes plus anciennes de l'historique.
-  if (subscriptions.some((entry) => entry.status === "active" || entry.status === "trialing")) {
-    return null;
-  }
+  if (subscriptions.some((entry) => subscriptionStateOf(entry, at) !== "ended")) return null;
 
-  const now = Date.now();
+  const now = at.getTime();
   const floor = now - RECENTLY_ENDED_DAYS * 24 * 60 * 60 * 1000;
 
+  // Tous les abonnements finis, y compris une ligne restée `active` dont Apple
+  // n'a plus rien dit depuis l'échéance (un `EXPIRED` perdu) : elle s'est
+  // arrêtée à sa date de renouvellement.
   const ended = subscriptions
-    .filter((entry) => entry.status === "cancelled" || entry.status === "expired")
     .map((entry) => entry.renewsAt)
     .filter((date): date is Date => date !== null && date.getTime() <= now && date.getTime() >= floor)
     .sort((a, b) => b.getTime() - a.getTime());
@@ -560,11 +570,15 @@ export function serializeProfile(
   // `past_due` compris : pendant le délai de grâce, Apple garde l'accès ouvert
   // et retente le prélèvement — la feuille ne dit pas « résilié » à un abonné
   // dont la carte a seulement expiré.
-  const active = subscriptions.find(
-    (entry) => entry.status === "active" || entry.status === "trialing" || entry.status === "past_due",
-  );
-  const subscription = active ?? subscriptions[0];
-  const isSubscribed = active !== undefined;
+  //
+  // **Un seul état pour tout le profil** (07/10/2026, `accountSubscriptionOf`) :
+  // « abonné » (`isActive`) seulement quand le renouvellement est armé ou en
+  // délai de grâce. Un renouvellement coupé ne l'est plus, même s'il raconte
+  // encore sans limite jusqu'au bout du mois ; une ligne `active` dont Apple
+  // n'a rien dit trois jours après l'échéance non plus.
+  const current = accountSubscriptionOf(subscriptions, now);
+  const subscription = current.subscription ?? undefined;
+  const isSubscribed = current.state === "active" || current.state === "grace";
   // L'abonnement qui ouvre l'illimité aujourd'hui — vivant, ou résilié avec
   // un mois encore payé. C'est **lui seul** qui porte un prix à afficher :
   // un ancien abonné de la semaine revoit l'offre du mois, pas l'ancien tarif.
@@ -642,9 +656,18 @@ export function serializeProfile(
       managedByAppStore: subscription?.provider === "storekit",
       hasEndedBefore:
         !isSubscribed &&
-        (account.subscriptions ?? []).some(
-          (entry) => entry.status === "cancelled" || entry.status === "expired",
-        ),
+        subscriptions.some((entry) => {
+          const state = subscriptionStateOf(entry, now);
+          return state === "ending" || state === "ended";
+        }),
+      // **L'état, en un mot** (07/10/2026) : `none`, `active`, `grace`,
+      // `ending`, `ended` — voir `subscriptionStateOf`. Avec lui, de quoi
+      // écrire « se renouvelle le 12 novembre » ou « illimité jusqu'au 12
+      // novembre, puis plus rien ».
+      state: current.state,
+      autoRenews: current.autoRenews,
+      renewsAt: iso(current.renewsAt),
+      endsAt: iso(current.endsAt),
     },
     orders: orders.map(serializeOrderTracking),
     ...serializeProfileStats(trips),
