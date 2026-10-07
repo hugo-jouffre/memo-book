@@ -3,8 +3,8 @@
     import SwiftUI
 
     // La disposition des boutons des bacs à sable. Elle vivait dans le panneau
-    // de l'accueil ; celui de la cagnotte en a eu besoin aussi, et une
-    // disposition n'appartient à aucun des deux écrans.
+    // de l'accueil ; un autre panneau en a eu besoin aussi, et une
+    // disposition n'appartient à aucun écran.
     //
     // **Absente de l'app livrée**, comme les panneaux qu'elle sert.
 

@@ -132,8 +132,8 @@ public struct Destination: Codable, Sendable, Hashable {
 ///
 /// Sur le voyage, il fait tout ce que fait le propriétaire : raconter, régler,
 /// générer le carnet, le commander. Seule la suppression du voyage reste au
-/// propriétaire. Ce qu'il ne partage pas non plus, c'est l'argent : chacun a sa
-/// cagnotte et son abonnement.
+/// propriétaire. Ce qu'il ne partage pas non plus, c'est l'argent : chacun a son
+/// abonnement.
 ///
 /// Le nom de type garde le mot du contrat d'API (`companions`), qui n'a pas
 /// bougé — c'est le vocabulaire *produit* qui a changé.

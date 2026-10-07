@@ -103,6 +103,7 @@ struct CoverCarouselView: View {
             await model.load()
             centred = currentId
         }
+        .environment(\.refreshCoverPhotos, { await model.refreshPhotoLinks() })
         .onChange(of: model.face) { _, _ in
             centred = currentId
             // L'explication parlait de l'autre plat.

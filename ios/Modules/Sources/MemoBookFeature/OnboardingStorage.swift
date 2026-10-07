@@ -88,6 +88,31 @@ public enum OnboardingStorage {
         #endif
     }
 
+    /// Argument de lancement qui **ouvre l'aperçu du carnet en pleine
+    /// composition**, sur le carnet du jeu d'essai.
+    ///
+    /// Le bac à sable sert un carnet déjà composé : l'écran « On compose ton
+    /// Carnet » — la page qui se monte, la ligne de la phase dessous — ne s'y
+    /// voyait jamais. Avec ce drapeau, le double d'aperçu joue une composition
+    /// d'une dizaine de secondes (la file, la mise en page, le PDF), puis rend
+    /// le carnet (06/10/2026, T219).
+    ///
+    /// ```bash
+    /// xcrun simctl launch <device> com.memobook.app -previewSignedIn -composeBook
+    /// ```
+    ///
+    /// Sans effet en release.
+    public static let composeBookArgument = "-composeBook"
+
+    /// `true` quand l'app a été lancée avec ``composeBookArgument``.
+    public static var isComposingBook: Bool {
+        #if DEBUG
+            ProcessInfo.processInfo.arguments.contains(composeBookArgument)
+        #else
+            false
+        #endif
+    }
+
     /// `true` quand l'app a été lancée avec ``openOrderArgument``.
     public static var isOpeningOrder: Bool {
         #if DEBUG

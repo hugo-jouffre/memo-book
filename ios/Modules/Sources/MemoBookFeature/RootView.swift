@@ -247,6 +247,7 @@ public struct RootView: View {
                 // identifiant part dans chaque transaction Apple.
                 .environment(\.subscriptionPurchase, dependencies.subscriptionPurchase(accountId: account.id))
                 .environment(\.managePaymentMethods, { await dependencies.managePaymentMethods() })
+                .environment(\.finishAbandonedOrder, { await dependencies.finishAbandonedOrder(orderId: $0) })
                 // Ce que StoreKit a gardé pendant que personne n'était
                 // connecté — un renouvellement, une validation parentale —
                 // part maintenant qu'une session peut le remettre.
@@ -486,6 +487,10 @@ public struct RootView: View {
                 // Le carnet du jeu d'essai du tunnel — voir ``OrderContext/fixture``.
                 path = [.order(memoId: "trip-rome")]
             }
+            // Voir ``OnboardingStorage/composeBookArgument``.
+            if OnboardingStorage.isComposingBook {
+                path = [.trip(id: FixtureTripId.rome), .bookPreview(memoId: FixtureTripId.rome)]
+            }
         #endif
         // Depuis le formulaire, le tracé commence ici ; depuis le trousseau, il
         // est déjà en cours — et s'il est déjà fini, le voile se lève tout de
@@ -572,13 +577,12 @@ public struct RootView: View {
             managesSubscriptionFromNotification = true
         case .newTrip:
             path = [.tripCreation]
-        case .chat(let tripId), .wallet(let tripId), .bookPreview(let tripId):
+        case .chat(let tripId), .bookPreview(let tripId):
             // Même garde-fou que depuis l'accueil : un identifiant qui n'est
             // pas celui d'une ressource n'ouvre rien.
             guard UUID(uuidString: tripId) != nil else { return }
             let screen: HomeRoute =
                 switch link {
-                case .wallet: .wallet(tripId: tripId)
                 case .bookPreview: .bookPreview(memoId: tripId)
                 default: .chat(tripId: tripId, stepId: nil)
                 }
@@ -682,15 +686,9 @@ public struct RootView: View {
         }
     }
 
-    /// Où mène l'unique intention du profil.
-    ///
-    /// La cagnotte s'ouvre **sans voyage** depuis le profil : il n'y a pas de
-    /// carnet à financer dans ce contexte, seulement un solde à consulter.
-    /// L'écran s'en accommode — voir ``BookCopy/Wallet/subtitle(trip:)``.
+    /// Où mènent les intentions du profil.
     private func handle(_ intent: ProfileIntent) {
         switch intent {
-        case .openWallet:
-            path.append(.wallet(tripId: nil))
         case .openTrip(let id):
             // Même garde-fou que depuis l'accueil : un voyage du bac à sable
             // n'a pas d'identifiant de ressource, et n'ouvre rien.
@@ -739,16 +737,14 @@ public struct RootView: View {
 
     /// Où mène chaque intention des paramètres d'un voyage.
     ///
-    /// Cinq destinations : la cagnotte, l'aperçu du carnet, les
-    /// personnalisations, le tunnel de commande, le support — et une sortie,
+    /// Quatre destinations : l'aperçu du carnet, les personnalisations, le
+    /// tunnel de commande, le support — et une sortie,
     /// quand le voyage vient d'être supprimé. Cinq lignes de plus ouvrent leur
     /// **feuille** sans passer par ici (``TripSettingsSheet``). Restent deux
     /// lignes inertes — renommer, relier un Tricount —, et elles le sont
     /// toujours faute de maquette, pas faute de branchement.
     private func handle(_ intent: TripSettingsIntent) {
         switch intent {
-        case .openWallet:
-            path.append(.wallet(tripId: currentTripId))
         case .openBookPreview:
             // Le carnet d'un voyage porte aujourd'hui le même identifiant que
             // lui : un voyage est un `memo` côté serveur. La distinction existe
@@ -778,11 +774,14 @@ public struct RootView: View {
         }
     }
 
-    /// Où mènent les deux intentions des personnalisations.
+    /// Où mènent les intentions des personnalisations.
     private func handle(_ intent: BookCustomisationIntent) {
         switch intent {
         case .openCovers:
             openCovers()
+        case .openBookPreview:
+            guard let tripId = currentTripId else { return }
+            path.append(.bookPreview(memoId: tripId))
         case .openHelp:
             path.append(.support)
         }
@@ -819,8 +818,6 @@ public struct RootView: View {
     /// Où mène chaque intention de l'aperçu du carnet.
     private func handle(_ intent: BookPreviewIntent) {
         switch intent {
-        case .openWallet:
-            path.append(.wallet(tripId: currentTripId))
         case .customise:
             // « Personnaliser mon carnet » mène aux **personnalisations du
             // carnet**, et non aux réglages du voyage : c'est le style du
@@ -864,30 +861,6 @@ public struct RootView: View {
         }
     }
 
-    /// Où mène chaque intention de la cagnotte.
-    ///
-    /// Les trois boutons de l'écran menaient nulle part — « Ajouter » et
-    /// « Partager » s'arrêtaient ici, et « Prévisualiser mon carnet » n'avait
-    /// pas de voyage depuis le profil (Clara, 26/09/2026). La cagnotte dit
-    /// désormais quel carnet elle finance (``Wallet/tripId``) : c'est lui qui
-    /// s'ouvre quand la pile n'en porte aucun.
-    private func handle(_ intent: WalletIntent) {
-        switch intent {
-        case .openBookPreview(let walletTripId):
-            guard let tripId = currentTripId ?? walletTripId else {
-                routingProblem = BookCopy.Wallet.shareUnavailable
-                return
-            }
-            path.append(.bookPreview(memoId: tripId))
-        case .addFunds(let walletTripId):
-            path.append(.walletTopUp(tripId: currentTripId ?? walletTripId))
-        case .order(let tripId):
-            path.append(.order(memoId: tripId))
-        case .openHelp:
-            path.append(.support)
-        }
-    }
-
     /// Le modèle du tunnel de commande.
     ///
     /// Sous `-previewSignedIn` il travaille **en mémoire** : aucun appel réseau
@@ -915,7 +888,7 @@ public struct RootView: View {
     /// Le voyage ouvert, s'il y en a un dans la pile.
     ///
     /// Il se lit **dans le chemin** plutôt que d'être porté par chaque écran :
-    /// la cagnotte et l'aperçu s'ouvrent depuis les réglages d'un voyage, depuis
+    /// l'aperçu et la commande s'ouvrent depuis les réglages d'un voyage, depuis
     /// sa conversation ou depuis son accueil, et tous les trois doivent revenir
     /// au même voyage. Le déduire du chemin évite de le trimballer dans quatre
     /// intentions.
@@ -928,8 +901,6 @@ public struct RootView: View {
                 return id
             case .chat(let tripId, _):
                 return tripId
-            case .wallet(let tripId), .walletTopUp(let tripId):
-                if let tripId { return tripId }
             case .profile, .gallery, .tripCreation, .memos, .support, .legal:
                 continue
             }
@@ -990,13 +961,6 @@ public struct RootView: View {
             )
         case .order(let memoId):
             OrderView(model: orderModel(memoId: memoId), onIntent: handle)
-        case .wallet(let tripId):
-            WalletView(model: dependencies.walletModel(tripId: tripId), onIntent: handle)
-        case .walletTopUp(let tripId):
-            // L'argent est arrivé : retour à la cagnotte, qui se relit.
-            WalletTopUpView(model: dependencies.walletModel(tripId: tripId)) {
-                if path.last == .walletTopUp(tripId: tripId) { path.removeLast() }
-            }
         case .bookCustomisation(let tripId):
             BookCustomisationView(
                 model: dependencies.bookCustomisationModel(tripId: tripId),
@@ -1090,12 +1054,6 @@ enum HomeRoute: Hashable {
     /// On n'y arrive **que par l'aperçu** : on ne commande pas un carnet qu'on
     /// n'a pas vu. L'identifiant est celui du carnet, comme pour l'aperçu.
     case order(memoId: String)
-    /// Ma cagnotte. `tripId` ne dit pas *quelle* cagnotte — il n'y en a qu'une
-    /// par compte — mais **quel carnet on finance**, pour l'estimation de pages
-    /// et de coût. `nil` quand on arrive du profil.
-    case wallet(tripId: String?)
-    /// « Ajouter à ma cagnotte » — la recharge, par « Ajouter ».
-    case walletTopUp(tripId: String?)
     /// Les personnalisations du carnet, ouvertes par « Style du carnet ».
     case bookCustomisation(tripId: String)
 

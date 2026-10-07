@@ -27,12 +27,15 @@ public enum NotificationLink: Equatable, Sendable {
     case newTrip
     /// `memobook://trips/<id>/chat` — un carnet qui se tait : la conversation.
     case chat(tripId: String)
-    /// `memobook://trips/<id>/wallet` — la fin du voyage : la cagnotte, avec ce
-    /// qui est déjà versé et l'estimation du carnet.
-    case wallet(tripId: String)
-    /// `memobook://trips/<id>/preview` — un carnet pas commandé : l'aperçu,
-    /// qui porte « Commander ce carnet ». On ne commande pas un carnet qu'on
-    /// n'a pas vu.
+    /// `memobook://trips/<id>/preview` — un carnet pas commandé, la fin du
+    /// voyage : l'aperçu, qui porte « Commander ce carnet ». On ne commande pas
+    /// un carnet qu'on n'a pas vu.
+    ///
+    /// `memobook://trips/<id>/wallet` y mène aussi. La fin du voyage ouvrait
+    /// la cagnotte, partie avec elle (Hugo, 06/10/2026, T230) ; les
+    /// notifications déjà livrées et les e-mails portent encore ce lien, et
+    /// l'aperçu est ce qu'il avait de plus proche à montrer : le carnet qu'on
+    /// finançait.
     case bookPreview(tripId: String)
 
     public init?(url: URL) {
@@ -52,8 +55,7 @@ public enum NotificationLink: Equatable, Sendable {
             let tripId = segments[1]
             switch segments[2] {
             case "chat": self = .chat(tripId: tripId)
-            case "wallet": self = .wallet(tripId: tripId)
-            case "preview": self = .bookPreview(tripId: tripId)
+            case "preview", "wallet": self = .bookPreview(tripId: tripId)
             default: return nil
             }
         default:

@@ -71,7 +71,7 @@ enum DeleteAccountCopy {
     static let title = "Tu es sûr de vouloir supprimer ton compte MemoBook ?"
 
     static let erasure =
-        "Tes voyages, tes souvenirs et tes carnets seront effacés, ainsi que tes commandes. Les voyages que tu partages restent à tes co-voyageurs, avec les souvenirs que tu y as racontés. Ta cagnotte est supprimée. C’est immédiat et sans retour."
+        "Tes voyages, tes souvenirs et tes carnets seront effacés, ainsi que tes commandes. Les voyages que tu partages restent à tes co-voyageurs, avec les souvenirs que tu y as racontés. C’est immédiat et sans retour."
 
     /// Pour qui a un abonnement App Store qui va se renouveler — voir
     /// ``DeleteAccountSheet/mentionsSubscription``.

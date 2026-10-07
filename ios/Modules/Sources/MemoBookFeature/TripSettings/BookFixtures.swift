@@ -15,13 +15,6 @@ extension TripSettings {
         TripSettings(
             tripId: "trip-rome",
             name: "Rome 2026",
-            // Le même solde que ``TravellerProfile/fixture`` : la cagnotte
-            // appartient au compte, les deux écrans lisent la même somme. Les
-            // désaccorder ici ferait croire à un bogue quand il n'y en a pas.
-            // Zéro, comme ``Wallet/fixture`` et ``TravellerProfile/fixture`` :
-            // la cagnotte appartient au compte, les trois écrans lisent la même
-            // somme. Les désaccorder ferait croire à un bogue.
-            walletBalance: 0,
             // Un voyage **entamé** : 1 min 40 racontée aujourd'hui, il en reste
             // 3 min 20 — la jauge verte au tiers, la ligne d'un non-abonné.
             // C'est l'état de tout le monde, celui qu'il faut voir par défaut ;
@@ -91,75 +84,6 @@ extension BookCustomisation {
             quizEnabled: true,
             freeZonesEnabled: true,
             crosswordEnabled: true
-        )
-    }
-}
-
-extension Wallet {
-    /// **La cagnotte par défaut est vide, et c'est l'état du produit.**
-    ///
-    /// Une cagnotte ne se remplit que par des dons et des recharges : un
-    /// compte neuf n'a rien reçu. Ce jeu d'essai portait un
-    /// solde garni, et ``TripSettings/fixture`` un autre — d'où trois chiffres
-    /// pour une même cagnotte selon l'écran regardé. Le solde n'a qu'une
-    /// source, le registre du serveur ; à défaut de serveur, c'est zéro.
-    ///
-    /// ``filledFixture`` reste disponible pour l'écran garni, que le bac à
-    /// sable pose à la demande.
-    public static var fixture: Wallet { emptyFixture }
-
-    /// La cagnotte garnie de la maquette : des dons, et une recharge par carte —
-    /// l'abonnement n'y verse plus rien (Hugo, 03/10/2026).
-    public static var filledFixture: Wallet {
-        Wallet(
-            balance: 65.97,
-            entries: [
-                WalletEntry(
-                    id: "w-1",
-                    amount: 10,
-                    kind: .gift,
-                    label: "Marie D.",
-                    date: TripSettings.day(19, 8, 2026)
-                ),
-                WalletEntry(
-                    id: "w-2",
-                    amount: 5.97,
-                    kind: .topup,
-                    label: "Recharge de la cagnotte",
-                    date: TripSettings.day(18, 8, 2026)
-                ),
-                WalletEntry(
-                    id: "w-4",
-                    amount: 20,
-                    kind: .gift,
-                    label: "Bruno Dupont",
-                    date: TripSettings.day(15, 8, 2026)
-                ),
-                WalletEntry(
-                    id: "w-5",
-                    amount: 30,
-                    kind: .gift,
-                    label: "Julie et Tom",
-                    date: TripSettings.day(8, 8, 2026)
-                ),
-            ],
-            tripId: FixtureTripId.rome,
-            tripTitle: "Rome",
-            estimate: WalletEstimate(pageCount: 50, cost: 89.90)
-        )
-    }
-
-    /// La cagnotte qui n'a rien reçu — l'écran « Cagnotte Vide ».
-    ///
-    /// L'estimation, elle, existe déjà : le carnet se remplit pendant que la
-    /// cagnotte reste vide, et c'est justement ce que la barre à zéro raconte.
-    public static var emptyFixture: Wallet {
-        Wallet(
-            balance: 0,
-            entries: [],
-            tripId: FixtureTripId.rome,
-            tripTitle: "Rome",
-            estimate: WalletEstimate(pageCount: 50, cost: 89.90)
         )
     }
 }

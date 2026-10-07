@@ -33,16 +33,19 @@ struct BookRatioPanel: View {
     private var value: some View {
         VStack(spacing: MemoBookSpacing.xs - 2) {
             Text(BookCopy.Ratio.value(ratio.wrappedValue))
-                // Sora à 24 (`3595:23828`), et non le solde de 48 des cagnottes.
+                // Sora à 24 (`3595:23828`).
                 .font(MemoBookFont.figure)
                 // Les chiffres ne dansent pas : sans chasse fixe, la valeur se
                 // décale à chaque cran du curseur.
                 .monospacedDigit()
                 .foregroundStyle(MemoBookColor.ink)
 
+            // **À l'encre**, comme la valeur au-dessus (Hugo, 06/10/2026,
+            // T218) : le bleu clair `outline` de la maquette ne se lisait pas
+            // sur le crème.
             Text(BookCopy.Ratio.quality(ratio.wrappedValue))
                 .font(MemoBookFont.tagline)
-                .foregroundStyle(MemoBookColor.outline)
+                .foregroundStyle(MemoBookColor.ink)
                 .contentTransition(.opacity)
         }
         .frame(maxWidth: .infinity)
@@ -73,7 +76,7 @@ struct BookRatioPanel: View {
 
 // MARK: - Nombre de pages
 
-/// « Nmb de pages » — quatre paliers, dont les projections suivent la durée
+/// « Nombre de pages » — quatre paliers, dont les projections suivent la durée
 /// du voyage (`3595:23917`).
 struct BookPagesPanel: View {
     let model: BookCustomisationModel

@@ -18,14 +18,7 @@ extension BookCopy {
         // MARK: Étape 1 — Démarrage
 
         public enum Start {
-            public static let balance = "Montant disponible"
             public static let cta = "Commencer la commande"
-
-            /// « Estimation : 80 pages ». Accordé, comme
-            /// ``BookCustomisation/targetPageLabel``.
-            public static func estimate(pages: Int) -> String {
-                pages <= 1 ? "Estimation : \(pages) page" : "Estimation : \(pages) pages"
-            }
 
             /// Le carnet n'a jamais été composé : il n'y a rien à commander.
             public static let notComposed = "Ce carnet n’est pas encore généré."
@@ -47,6 +40,9 @@ extension BookCopy {
             public static let postalCode = "Code postal"
             public static let city = "Ville"
             public static let country = "Pays"
+            /// L'invite de **tous** les champs vides de l'adresse, en gris.
+            /// Le code postal et la ville proposaient « 75015 » et « Paris »,
+            /// qu'on prenait pour des valeurs déjà remplies (Hugo, 06/10/2026).
             public static let placeholder = "Clique ici"
         }
 
@@ -57,8 +53,10 @@ extension BookCopy {
             public static let subtitle = "Plusieurs carnets pour offrir à tes proches"
             public static let unitPrice = "Prix unitaire"
 
-            public static let customiseTitle = "Personnaliser vos carnets"
-            public static let customiseSubtitle = "Rendez chaque carnet unique"
+            /// Au tutoiement (Hugo, 06/10/2026, T211) : la maquette vouvoie,
+            /// R9 l'emporte.
+            public static let customiseTitle = "Personnaliser tes carnets"
+            public static let customiseSubtitle = "Rends chaque carnet unique"
 
             public static let decorations = "Décorations & stickers"
             public static let quiz = "Quiz intégrés à l’histoire"
@@ -92,6 +90,8 @@ extension BookCopy {
         public enum Summary {
             public static let title = "Vérifications finales avant impression"
             public static let total = "Total"
+            /// Le libellé de la ligne qui ferme un groupe (T216).
+            public static let subtotal = "Sous-total"
             public static let cta = "Valider la commande"
 
             /// « Carnet - Rome et la Dolce Vita ».
@@ -121,10 +121,14 @@ extension BookCopy {
             public static let total = "Total"
             public static let cta = "Payer"
 
-            /// Quand la cagnotte couvre tout. Présenter une carte pour un débit
-            /// de zéro ferait craindre un prélèvement.
-            public static let free = "Ta cagnotte couvre la totalité"
-            public static let freeCta = "Valider la commande"
+            /// « Payer » sur un carnet qu'aucune composition n'a encore rendu
+            /// (Hugo, 06/10/2026, T224). Le bouton ne faisait **rien, sans
+            /// rien dire** : le tunnel s'ouvre sans rendu — « Commander sans
+            /// attendre la composition » —, mais on ne paie pas l'impression
+            /// d'un carnet qui n'existe pas encore. La phrase de Hugo, au mot
+            /// près.
+            public static let noRender =
+                "Aucun rendu de ton carnet n’a encore été généré, tu ne peux donc pas encore payer ton carnet physique. Retourne dans la conversation de ton voyage pour commencer à générer ton carnet."
 
             public static let failure =
                 "Le paiement a échoué, merci de choisir une autre option."

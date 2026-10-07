@@ -189,29 +189,16 @@ final class PrintOrderFlowTests: XCTestCase {
         XCTAssertTrue(withEmail.contains("a@b.com"))
     }
 
-    /// Une cagnotte qui couvre tout laisse un total nul : l'étape 6 ne présente
-    /// alors aucune carte, elle fait valider.
-    func testAFullyCoveredQuoteAsksForNoPayment() {
-        XCTAssertTrue(OrderQuote.fullyCovered.isFullyCovered)
-    }
-}
-
-extension OrderQuote {
-    /// Un devis entièrement couvert par la cagnotte, monté à la main : ce test
-    /// vérifie une règle de lecture, pas le barème du serveur.
-    fileprivate static var fullyCovered: OrderQuote {
-        OrderQuote(
-            bookTitle: "Rome",
-            pageCount: 10,
-            copies: 1,
-            shippingSpeed: .standard,
-            unitPrice: 30,
-            book: OrderQuoteGroup(lines: [], subtotal: 30),
-            fulfilment: OrderQuoteGroup(lines: [], subtotal: 30),
-            deductions: [OrderDeduction(id: "wallet", label: "Cagnotte", amount: 30)],
-            total: 0,
-            estimatedMinDays: 5,
-            estimatedMaxDays: 7
-        )
+    /// La cagnotte est partie (T230) : un serveur qui enverrait encore ses
+    /// déductions ne doit pas empêcher le récapitulatif de se lire, et le total
+    /// reste celui que la carte paiera.
+    func testAQuoteWithLeftoverDeductionsStillDecodes() throws {
+        let quote = try JSONDecoder().decode(OrderQuote.self, from: Data("""
+        {"bookTitle":"Rome","pageCount":10,"copies":1,"shippingSpeed":"standard","unitPrice":30,
+         "book":{"lines":[],"subtotal":30},"specifications":[],"fulfilment":{"lines":[],"subtotal":30},
+         "deductions":[{"id":"wallet","label":"Cagnotte","amount":30}],
+         "total":30,"estimatedMinDays":5,"estimatedMaxDays":7}
+        """.utf8))
+        XCTAssertEqual(quote.total, 30)
     }
 }

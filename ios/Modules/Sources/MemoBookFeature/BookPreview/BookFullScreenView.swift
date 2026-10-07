@@ -73,7 +73,7 @@ struct BookFullScreenView: View {
     /// d'iPhone.
     private var page: some View {
         ZStack {
-            BookSheetImage(renderer: model.renderer, index: model.sheetIndex)
+            BookSheetFace(model: model, index: model.sheetIndex)
                 .id(model.sheetIndex)
                 .transition(.opacity)
                 .animation(.easeInOut(duration: 0.18), value: model.sheetIndex)
@@ -243,7 +243,7 @@ struct BookFullScreenView: View {
         return Button {
             withAnimation(.snappy(duration: 0.25)) { model.show(sheet: index) }
         } label: {
-            BookSheetImage(renderer: model.renderer, index: index)
+            BookSheetFace(model: model, index: index)
                 .aspectRatio(model.renderer.aspectRatio, contentMode: .fit)
                 .frame(height: height)
                 .clipShape(.rect(cornerRadius: 2))

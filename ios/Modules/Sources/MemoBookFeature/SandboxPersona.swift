@@ -17,7 +17,7 @@
     ///
     /// Ce n'est pas une seconde source de vérité : le personnage **retouche**
     /// ce que la source a rendu, jeu d'essai ou serveur, au lieu de le
-    /// remplacer. Le reste — nom, adresse, cagnotte, commandes, les deux
+    /// remplacer. Le reste — nom, adresse, commandes, les deux
     /// alertes de l'accueil — continue de venir d'où il venait. Et il prévient
     /// le double d'API (``SandboxCredit``), pour que le crédit du jour qu'il
     /// sert dise « illimité » à un abonné.

@@ -16,8 +16,16 @@ import SwiftUI
 struct OrderPaymentStep: View {
     let model: OrderModel
 
+    /// La notice « aucun rendu » à amener sous les yeux quand elle apparaît :
+    /// en très grand texte, elle tombe sous le pli, et le geste semblerait
+    /// encore ne rien faire.
+    @State private var scrollTarget: Int?
+
+    /// L'identifiant de défilement de la notice. Un seul repère dans l'étape.
+    private static let missingRenderNotice = 1
+
     var body: some View {
-        OrderStepLayout {
+        OrderStepLayout(scrollTarget: $scrollTarget) {
             OrderSectionHeader(title: BookCopy.Order.Payment.title)
 
             method
@@ -33,11 +41,18 @@ struct OrderPaymentStep: View {
             if let message = model.paymentError {
                 ErrorBanner(message: message)
             }
+
+            // « Payer » sans carnet composé (T224) : la cause et la sortie, en
+            // réponse au geste — rien n'a raté, d'où l'information et non le
+            // bandeau d'erreur. Voir ``OrderModel/isMissingRender``.
+            if model.isMissingRender {
+                BrandNotice(BookCopy.Order.Payment.noRender, tone: .information)
+                    .id(Self.missingRenderNotice)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
         } actions: {
             BrandButton(
-                model.quote?.isFullyCovered == true
-                    ? BookCopy.Order.Payment.freeCta
-                    : BookCopy.Order.Payment.cta,
+                BookCopy.Order.Payment.cta,
                 isLoading: model.isSubmitting,
                 fillsWidth: true
             ) {
@@ -45,19 +60,16 @@ struct OrderPaymentStep: View {
             }
             .disabled(!model.canContinue || model.isSubmitting)
         }
+        .animation(.snappy(duration: 0.25), value: model.isMissingRender)
+        .onChange(of: model.isMissingRender) { _, isMissing in
+            if isMissing { scrollTarget = Self.missingRenderNotice }
+        }
     }
 
     // MARK: Le moyen de paiement
 
-    @ViewBuilder
     private var method: some View {
-        if model.quote?.isFullyCovered == true {
-            // La cagnotte couvre tout : présenter une carte pour un débit
-            // de zéro ferait craindre un prélèvement.
-            BrandNotice("**\(BookCopy.Order.Payment.free)** — il n’y a rien à régler.")
-        } else {
-            BrandNotice(BookCopy.Order.Payment.inStripeSheet)
-        }
+        BrandNotice(BookCopy.Order.Payment.inStripeSheet)
     }
 
     // MARK: L'adresse

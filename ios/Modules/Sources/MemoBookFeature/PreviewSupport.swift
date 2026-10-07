@@ -53,9 +53,6 @@ public actor PreviewAPI: MemoBookAPI {
     private var rendersById: [String: Render] = [:]
     private var ordersByMemoId: [String: [PrintOrder]] = [:]
 
-    /// La cagnotte du double, **vide au départ** comme celle d'un compte neuf.
-    /// Les écritures du bac à sable la font monter, ici comme sur le serveur.
-    private var walletSandbox: Wallet = .fixture
     /// Nul tant que rien n'a été corrigé : le profil est alors le jeu d'essai.
     private var editedProfile: TravellerProfile?
 
@@ -578,6 +575,14 @@ public actor PreviewAPI: MemoBookAPI {
     }
 
     public func startRender(memoId: String) async throws -> Render {
+        #if DEBUG
+            // La composition du bac à sable repart de zéro à chaque ouverture
+            // de l'aperçu — voir ``OnboardingStorage/composeBookArgument``.
+            if OnboardingStorage.isComposingBook {
+                sandboxCompositionStart = .now
+                return Render(id: "render-sandbox", memoId: memoId, status: .processing, createdAt: .now, updatedAt: .now)
+            }
+        #endif
         let memo = try existingMemo(memoId)
 
         let render = Render(
@@ -604,27 +609,6 @@ public actor PreviewAPI: MemoBookAPI {
             )
         }
         return render
-    }
-
-    public func wallet(tripId: String?) async throws -> Wallet {
-        walletSandbox
-    }
-
-    public func addWalletSandboxEntry(
-        amount: Decimal,
-        kind: WalletEntryKind,
-        label: String
-    ) async throws -> Decimal {
-        // Le double tient un registre, comme le serveur : c'est ce qui permet
-        // aux aperçus de voir le solde monter et l'historique s'allonger.
-        let entry = WalletEntry(id: UUID().uuidString, amount: amount, kind: kind, label: label, date: .now)
-        walletSandbox = Wallet(
-            balance: walletSandbox.balance + amount,
-            entries: [entry] + walletSandbox.entries,
-            tripTitle: walletSandbox.tripTitle,
-            estimate: walletSandbox.estimate
-        )
-        return walletSandbox.balance
     }
 
     public func setOrderWhatsApp(orderId: String, phone: String?) async throws -> PrintOrder {
@@ -660,17 +644,53 @@ public actor PreviewAPI: MemoBookAPI {
     }
 
     public func bookPreview(memoId: String) async throws -> BookPreview {
-        .fixture
+        #if DEBUG
+            if OnboardingStorage.isComposingBook { return composingSandboxPreview() }
+        #endif
+        return .fixture
+    }
+
+    /// Quand la composition du bac à sable a commencé — voir
+    /// ``OnboardingStorage/composeBookArgument``. Posée par la première
+    /// lecture, remise à zéro par chaque lancement de composition.
+    private var sandboxCompositionStart: Date?
+
+    /// Une composition jouée en dix secondes : la file, la mise en page, le
+    /// PDF, puis le carnet du jeu d'essai.
+    private func composingSandboxPreview() -> BookPreview {
+        let start = sandboxCompositionStart ?? .now
+        sandboxCompositionStart = start
+        let elapsed = Date.now.timeIntervalSince(start)
+
+        let phase: BookRenderPhase
+        switch elapsed {
+        case ..<2: phase = .queued
+        case ..<6: phase = .writing
+        case ..<10: phase = .composing
+        default: return .fixture
+        }
+
+        let fixture = BookPreview.fixture
+        return BookPreview(
+            memoId: fixture.memoId,
+            title: fixture.title,
+            status: .composing,
+            pageCount: 0,
+            render: BookRenderProgress(id: "render-sandbox", phase: phase),
+            pendingMemoryCount: phase == .writing && elapsed < 4 ? 1 : 0
+        )
     }
 
     public func bookShareLink(memoId: String) async throws -> URL {
         // Les voyages du jeu d'essai de l'accueil portent le carnet du même
-        // identifiant, comme sur le serveur : leur partage (la cagnotte,
-        // l'aperçu) doit marcher dans le bac à sable aussi.
+        // identifiant, comme sur le serveur : leur partage doit marcher dans
+        // le bac à sable aussi.
         let isFixtureTrip = HomeFeed.fixture.trips.contains { $0.id == memoId }
         if !isFixtureTrip { _ = try existingMemo(memoId) }
-        // Un lien d'aperçu, stable d'un appel à l'autre comme le vrai.
-        return URL(string: "https://memo-book.com/c/\(memoId)")!
+        // Un lien d'aperçu, stable d'un appel à l'autre comme le vrai, et de
+        // sa forme — mais sur un domaine d'exemple : seul le serveur crée un
+        // jeton.
+        return BookPreview.sampleShareLink(memoId: memoId)
     }
 
     public func orderContext(memoId: String) async throws -> OrderContext {
@@ -685,11 +705,13 @@ public actor PreviewAPI: MemoBookAPI {
         .fixture(copies: copies, speed: shippingSpeed)
     }
 
-    /// Une commande déjà réglée, et **sans intention de paiement**.
+    /// Une commande déjà réglée, et une intention **factice**.
     ///
-    /// `paidFromWallet` plutôt qu'un faux `clientSecret` : c'est le seul cas qui
-    /// ne monte aucune feuille. Une preview Xcode — ou un lancement `-previewSignedIn` —
-    /// ne doit pas pouvoir ouvrir Stripe, même par accident.
+    /// Elle ne monte aucune feuille : les aperçus branchent ce double avec
+    /// ``StubPaymentPresenter``, qui n'appelle personne, et un lancement
+    /// `-previewSignedIn` passe par le tunnel en mémoire de `RootView`. C'était
+    /// la cagnotte qui couvrait tout et évitait la feuille, jusqu'à ce qu'elle
+    /// parte (T230).
     public func createPrintOrder(
         memoId: String,
         order: NewPrintOrderRequest
@@ -699,7 +721,7 @@ public actor PreviewAPI: MemoBookAPI {
         let created = PrintOrder(
             id: UUID().uuidString,
             memoId: memoId,
-            renderId: order.renderId,
+            renderId: order.renderId ?? "render-preview",
             status: .submitted,
             copies: order.copies,
             shipping: order.shipping,
@@ -712,7 +734,12 @@ public actor PreviewAPI: MemoBookAPI {
         ordersByMemoId[memoId, default: []].insert(created, at: 0)
         return PlacedPrintOrder(
             order: created,
-            payment: OrderPayment(paidFromWallet: true, amountCents: 0, currency: "eur")
+            payment: OrderPayment(
+                amountCents: 0,
+                currency: "eur",
+                clientSecret: "pi_preview_secret_preview",
+                publishableKey: "pk_test_preview"
+            )
         )
     }
 
@@ -731,32 +758,17 @@ public actor PreviewAPI: MemoBookAPI {
         return found
     }
 
-    /// Une recharge qui n'appelle personne.
-    ///
-    /// Le `clientSecret` fabriqué ne monte **aucune** feuille de paiement, et
-    /// c'est voulu : un aperçu ne doit pas pouvoir ouvrir Stripe, même par
-    /// accident.
-    public func startWalletTopUp(
-        amountCents: Int,
-        stripeApiVersion: String?
-    ) async throws -> PaymentIntentTicket {
-        _ = stripeApiVersion
-        return PaymentIntentTicket(
-            clientSecret: "pi_preview_secret",
-            publishableKey: "pk_test_preview",
-            amountCents: amountCents,
-            currency: "eur"
-        )
-    }
-
     /// Le double n'a pas d'intention à reprendre : ses commandes naissent
-    /// payées. Il rend donc la commande, sans rien à régler.
+    /// payées. Il rend donc la commande, sans rien à régler — y compris la
+    /// commande abandonnée du profil d'essai, que « Finaliser ma commande »
+    /// rouvre (T232).
     public func resumePrintOrderPayment(
         orderId: String,
         stripeApiVersion: String?
     ) async throws -> ResumedOrderPayment {
         _ = stripeApiVersion
-        return ResumedOrderPayment(order: try await printOrder(id: orderId), payment: nil)
+        let order = (try? await printOrder(id: orderId)) ?? .fixture(memoId: "preview", request: .previewRequest)
+        return ResumedOrderPayment(order: order, payment: nil)
     }
 
     public func cancelPrintOrder(orderId: String) async throws -> PrintOrder {
@@ -775,9 +787,6 @@ public actor PreviewAPI: MemoBookAPI {
     public func paymentMethodsSetupIntent() async throws -> String {
         "seti_preview_secret_preview"
     }
-
-    // MARK: - La cagnotte
-
 
     // MARK: - Les réglages d'un voyage
 

@@ -597,31 +597,6 @@ public actor MemoBookAPIClient: MemoBookAPI {
         )
     }
 
-    public func wallet(tripId: String?) async throws -> Wallet {
-        let path = tripId.map { "/v1/wallet?tripId=\($0)" } ?? "/v1/wallet"
-        return try await send(method: "GET", path: path)
-    }
-
-    public func addWalletSandboxEntry(
-        amount: Decimal,
-        kind: WalletEntryKind,
-        label: String
-    ) async throws -> Decimal {
-        struct Body: Encodable {
-            let amount: Decimal
-            let kind: String
-            let label: String
-        }
-        struct Response: Decodable { let balance: Decimal }
-
-        let response: Response = try await send(
-            method: "POST",
-            path: "/v1/wallet/debug-entry",
-            encodableBody: Body(amount: amount, kind: kind.rawValue, label: label)
-        )
-        return response.balance
-    }
-
     public func setOrderWhatsApp(orderId: String, phone: String?) async throws -> PrintOrder {
         // Le corps porte **l'accord et le numéro ensemble** : le serveur refuse
         // l'un sans l'autre, et les séparer côté client laisserait composer une
@@ -893,25 +868,6 @@ public actor MemoBookAPIClient: MemoBookAPI {
             try container.encodeIfPresent(freeZonesEnabled, forKey: .freeZonesEnabled)
             try container.encodeIfPresent(crosswordEnabled, forKey: .crosswordEnabled)
         }
-    }
-
-    /// Le corps de la recharge. Une structure locale plutôt qu'un dictionnaire :
-    /// `send(method:path:body:)` ne prend que des `String`, et un montant est un
-    /// entier de centimes — le passer en texte le rendrait arrondissable.
-    private struct TopUpBody: Encodable {
-        let amountCents: Int
-        let stripeApiVersion: String?
-    }
-
-    public func startWalletTopUp(
-        amountCents: Int,
-        stripeApiVersion: String?
-    ) async throws -> PaymentIntentTicket {
-        try await send(
-            method: "POST",
-            path: "/v1/wallet/topup",
-            encodableBody: TopUpBody(amountCents: amountCents, stripeApiVersion: stripeApiVersion)
-        )
     }
 
     private struct StripeVersionBody: Encodable {

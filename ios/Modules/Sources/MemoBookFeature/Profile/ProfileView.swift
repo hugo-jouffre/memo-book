@@ -6,8 +6,8 @@ import UIKit
 /// Le profil : qui tu es pour MemoBook, ce que tu lui as confié, et par où on
 /// sort.
 ///
-/// **L'écran ne contient aucun contenu.** Nom, adresse, cagnotte, carte,
-/// connecteurs, commandes : tout vient du ``TravellerProfile`` que porte
+/// **L'écran ne contient aucun contenu.** Nom, adresse, carte, connecteurs,
+/// commandes : tout vient du ``TravellerProfile`` que porte
 /// ``ProfileModel``. Ce qui est écrit ici, ce sont les seuls libellés qui
 /// appartiennent à l'interface.
 ///
@@ -571,16 +571,9 @@ public struct ProfileView: View {
     }
 
     private var servicesGroup: some View {
-        let profile = model.profile
-
-        return BrandRowGroup {
-            BrandRow(
-                "Ma cagnotte",
-                value: profile?.walletBalance.euros,
-                valueTone: .prominent,
-                isValueLoading: profile == nil,
-                action: { onIntent(.openWallet) }
-            )
+        // « Ma cagnotte » ouvrait ce groupe ; elle est partie avec la cagnotte
+        // (Hugo, 06/10/2026, T230).
+        BrandRowGroup {
             // Elle ne s'affiche qu'une fois abonné : sans abonnement, c'est le
             // bouton lime du haut qui porte la proposition, et deux entrées vers
             // la même feuille sur un même écran se marcheraient dessus.
@@ -771,7 +764,8 @@ public struct ProfileView: View {
                 onOrder: { trip in
                     sheet = nil
                     onIntent(.orderBook(memoId: trip.id))
-                }
+                },
+                onOrdersChanged: { Task { await model.load() } }
             )
         }
     }
@@ -1188,14 +1182,9 @@ private struct ProfileExitAction: View {
     .environment(\.dynamicTypeSize, .accessibility3)
 }
 
-/// Ce que le profil demande à l'app d'ouvrir.
-///
-/// Une seule destination pour l'instant, et c'est la cagnotte : toutes les
-/// autres lignes de l'écran ouvrent des feuilles, qui vivent dans l'écran. La
-/// cagnotte, elle, est un écran entier — et le **même** que celui qu'ouvrent
-/// les paramètres d'un voyage, parce que c'est la même somme.
+/// Ce que le profil demande à l'app d'ouvrir : les écrans entiers. Les autres
+/// lignes ouvrent des feuilles, qui vivent dans l'écran.
 public enum ProfileIntent: Sendable, Hashable {
-    case openWallet
     /// Le voyage en cours, depuis sa ligne de la carte de chiffres : l'accueil
     /// du voyage, le même écran que la carte de l'accueil (Clara, 17/09/2026).
     case openTrip(id: String)

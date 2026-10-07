@@ -27,7 +27,6 @@ extension TravellerProfile {
         ),
         shippingCountries: ShippingCountry.fixtures,
         wantsNewsletter: true,
-        walletBalance: 0,
         cards: [
             PaymentCard(id: "card-business", label: "Carte business", last4: "3246"),
             PaymentCard(id: "card-perso", label: "Carte perso", last4: "1820"),
@@ -58,6 +57,19 @@ extension TravellerProfile {
                 maximumDays: 7,
                 copies: 2,
                 pageCount: 50
+            ),
+            // Une commande laissée au moment de payer (T232) : son étiquette
+            // et « Finaliser ma commande » se vérifient dans le bac à sable.
+            OrderTracking(
+                id: "order-lisbonne",
+                status: .paymentAbandoned,
+                minimumDays: 5,
+                maximumDays: 7,
+                copies: 1,
+                pageCount: 42,
+                memoId: "trip-lisbonne",
+                tripTitle: "Lisbonne en famille",
+                total: 39.9
             )
         ],
         tripCount: 5,
@@ -101,7 +113,6 @@ extension TravellerProfile {
         // feuille, et un compte neuf la reçoit comme les autres.
         shippingCountries: ShippingCountry.fixtures,
         wantsNewsletter: false,
-        walletBalance: 0,
         connectors: Connector.fixtures.map {
             Connector(
                 id: $0.id,

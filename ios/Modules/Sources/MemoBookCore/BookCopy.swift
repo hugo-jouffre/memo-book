@@ -1,9 +1,9 @@
 import Foundation
 
 // Tout ce que le parcours « carnet » écrit : les paramètres du voyage, la
-// composition du PDF, son aperçu, son partage, et la cagnotte.
+// composition du PDF, son aperçu et son partage.
 //
-// Un seul fichier pour les cinq écrans, comme ``ChatCopy`` en tient un pour le
+// Un seul fichier pour ces écrans, comme ``ChatCopy`` en tient un pour le
 // chat : ils se relisent d'un trait, et R8 (« tous les libellés passent par des
 // constantes localisables ») n'a qu'un endroit à tenir.
 //
@@ -14,7 +14,7 @@ import Foundation
 // ⚠️ **Le vouvoiement de la maquette est corrigé ici, et plus recopié**
 // (Hugo, 16/09/2026). R8 dit « la copie de Figma au caractère près », R9 dit
 // « on tutoie l'utilisateur, toujours » : les deux s'opposaient sur une dizaine
-// de phrases du carnet, du voyage et de la cagnotte, qui vouvoyaient au milieu
+// de phrases du carnet et du voyage, qui vouvoyaient au milieu
 // d'une app qui tutoie. R9 l'emporte, comme il l'emportait déjà sur les cinq
 // feuilles de l'abonnement (`SubscriptionCopy`). Chaque phrase corrigée le dit
 // dans son commentaire, et la liste des écarts vit dans la fiche écran pour que
@@ -34,7 +34,6 @@ public enum BookCopy {
         public static let quickAccessSection = "Accès rapide"
 
         public static let name = "Nom de l’aventure"
-        public static let wallet = "Ma cagnotte"
         public static let dates = "Dates du voyage"
         public static let pace = "Rythme du récit"
         public static let notifications = "Notifications"
@@ -84,8 +83,7 @@ public enum BookCopy {
 
             /// Ce qui part, dit avant plutôt qu'après. Les commandes passées
             /// pour ce carnet partent avec lui — c'est ce que fait
-            /// `services/deletion.ts` — ; la cagnotte, elle, appartient au
-            /// compte et ne bouge pas.
+            /// `services/deletion.ts`.
             ///
             /// Sans nom — les réglages n'ont pas chargé, ou le voyage n'en a
             /// pas —, la phrase dit « Ce voyage » plutôt que d'ouvrir des
@@ -93,7 +91,7 @@ public enum BookCopy {
             public static func body(trip: String?) -> String {
                 let trimmed = trip?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 let subject = trimmed.isEmpty ? "Ce voyage" : "« \(trimmed) »"
-                return "\(subject) sera effacé pour toi comme pour tes co-voyageurs : ses souvenirs, ses photos, son carnet et les commandes passées pour lui. Ta cagnotte, elle, reste sur ton compte. C’est immédiat et sans retour."
+                return "\(subject) sera effacé pour toi comme pour tes co-voyageurs : ses souvenirs, ses photos, son carnet et les commandes passées pour lui. C’est immédiat et sans retour."
             }
 
             public static let keep = "Garder ce voyage"
@@ -148,10 +146,11 @@ public enum BookCopy {
         public static let extrasSection = "Extras"
 
         /// Les cinq pastilles de la tête de l'écran (V3, `3595:23807`), **au
-        /// caractère près** : « Nmb de pages » et « Typos » sont des
-        /// abréviations de la maquette, pas les nôtres (R8).
+        /// caractère près** : « Typos » est une abréviation de la maquette, pas
+        /// la nôtre (R8). « Nmb de pages » en était une aussi ; elle s'écrit
+        /// en entier depuis le 06/10/2026 (Hugo, T214).
         public static let categoryRatio = "Ratio media"
-        public static let categoryPages = "Nmb de pages"
+        public static let categoryPages = "Nombre de pages"
         public static let categoryDecorations = "Décorations & stickers"
         public static let categoryFonts = "Typos"
         public static let categoryExtras = "Extras"
@@ -263,6 +262,31 @@ public enum BookCopy {
         /// est purement décorative et masquée : décrire une page qui se monte
         /// morceau par morceau ne dirait rien de plus que cette phrase.
         public static let voiceOverStatus = "Composition du carnet en cours"
+
+        /// Ce que la composition fait en ce moment, sous la page qui se monte
+        /// (06/10/2026). Une composition dure plusieurs minutes — la mise en
+        /// page attend jusqu'à trois minutes les souvenirs encore en
+        /// rédaction —, et une page montée en 2,6 s puis immobile se lirait
+        /// comme un écran figé. **Sans maquette** : à relire par Clara (T143).
+        ///
+        /// `nil` avant le premier sondage, et sur un serveur qui ne dit pas la
+        /// phase : la ligne reprend alors la plus générale.
+        public static func phase(_ phase: BookRenderPhase?, pendingMemories: Int) -> String {
+            switch phase {
+            case .queued:
+                return "Ton carnet attend son tour…"
+            case .writing where pendingMemories == 1:
+                return "On attend la fin de la rédaction d’un souvenir…"
+            case .writing where pendingMemories > 1:
+                return "On attend la fin de la rédaction de \(pendingMemories) souvenirs…"
+            case .writing:
+                return "On met tes souvenirs en pages…"
+            case .composing, .ready:
+                return "On fabrique le PDF de ton carnet…"
+            case .failed, .unknown, nil:
+                return "La composition de ton carnet est lancée…"
+            }
+        }
     }
 
     // MARK: - Aperçu PDF
@@ -336,19 +360,14 @@ public enum BookCopy {
         /// ⚠️ **Elle est dans la version livrée**, et pas seulement en debug
         /// (Hugo, 16/09/2026) : le tunnel de commande ne se teste pas de bout
         /// en bout autrement — il faut un TestFlight, et un TestFlight ne
-        /// compile pas `#if DEBUG`. Elle est écrite en **beige soutenu et en
-        /// petit** pour que personne ne la prenne pour l'appel à l'action, et
-        /// elle dit ce qu'elle fait plutôt que « Commander quand même ».
+        /// compile pas `#if DEBUG`. Elle est écrite en **lien souligné**, à
+        /// l'encre depuis le 06/10/2026 (T219 : le beige ne se lisait pas),
+        /// pour que personne ne la prenne pour l'appel à l'action, et elle dit
+        /// ce qu'elle fait plutôt que « Commander quand même ».
         public static let orderAnyway = "Commander sans attendre la composition"
 
         public static let configureCover = "Définis maintenant\nta 1ère et 4ème de couverture"
         public static let configureCoverAction = "Configurer"
-
-        public static let offerTitle = "Fais-toi offrir ce carnet"
-        public static let offerMessage =
-            "Envoie un message à tes proches pour qu’ils t’offrent ce carnet, ou offre-le toi-même"
-        public static let offerShare = "Partager ma cagnotte"
-        public static let offerSee = "Voir ma cagnotte"
 
         public enum Voice {
             public static let previousPage = "Page précédente"
@@ -422,31 +441,31 @@ public enum BookCopy {
         /// Le message pré-rempli dans WhatsApp, iMessage ou Snapchat.
         ///
         /// Il dit trois choses, dans cet ordre : ce qu'on prépare, où on en
-        /// est, et comment aider. C'est la troisième qui compte — un lien de
-        /// cagnotte sans le récit qui le précède se lit comme une quête.
+        /// est, et où le suivre. Il demandait d'aider à financer la version
+        /// imprimée, par la cagnotte ; elle est partie (Hugo, 06/10/2026,
+        /// T230), et le lien ne mène plus qu'au carnet.
+        ///
+        /// **Il compte des pages, et le dit** (07/10/2026). Il annonçait « mes
+        /// 10 premières étapes » en comptant les pages du carnet : l'aperçu et
+        /// la commande ne connaissent pas les étapes, seulement les pages
+        /// composées. Sans page — un carnet pas encore composé —, la phrase du
+        /// compte se tait plutôt que d'annoncer « 0 page ».
         ///
         /// Le titre du carnet est entre guillemets **français** ; la
         /// spécification de Hugo employait des guillemets anglais fermants des
         /// deux côtés, ce qui est une glissade de clavier. Signalé.
-        public static func invitation(title: String, steps: Int, link: URL) -> String {
-            let written = steps == 1 ? "ma 1ère étape" : "mes \(steps) premières étapes"
-            return """
-                Je prépare le carnet de mon voyage « \(title) ». J’ai déjà écrit \(written) ! \
-                Il est possible de m’aider à financer la version imprimée en cliquant sur ce lien : \(link.absoluteString)
-                """
+        public static func invitation(title: String, pages: Int, link: URL) -> String {
+            let opening = "Je prépare le carnet de mon voyage « \(title) »."
+            let follow = "Tu peux suivre son avancée en direct sur ce lien : \(link.absoluteString)"
+            guard pages > 0 else { return "\(opening) \(follow)" }
+            let count = pages == 1 ? "1 page" : "\(pages) pages"
+            return "\(opening) Il compte déjà \(count) ! \(follow)"
         }
 
         /// Le sujet, quand l'app de destination en demande un — le courrier
         /// électronique, essentiellement.
         public static func subject(title: String) -> String {
             "Mon carnet de voyage « \(title) »"
-        }
-
-        /// Le même message **sans le compte des étapes**, pour la cagnotte : elle
-        /// ne sait pas où en est le récit, seulement ce qu'il finance.
-        public static func invitation(title: String, link: URL) -> String {
-            "Je prépare le carnet de mon voyage « \(title) ». "
-                + "Il est possible de m’aider à financer la version imprimée en cliquant sur ce lien : \(link.absoluteString)"
         }
 
         /// Les deux gestes que la feuille du système ajoute à ses apps
@@ -459,105 +478,6 @@ public enum BookCopy {
         /// l'utilisateur, et le PDF reste partageable.
         public static let linkFailed =
             "Le lien de prévisualisation n’a pas pu se créer. Le fichier PDF, lui, reste partageable."
-    }
-
-    // MARK: - Ma cagnotte
-
-    public enum Wallet {
-        public static let title = "Ma Cagnotte"
-
-        /// « Finance ton carnet de Rome ». Sans destination nommée, la phrase
-        /// reste vraie sans nommer le vide.
-        public static func subtitle(trip: String?) -> String {
-            guard let trip, !trip.isEmpty else { return "Finance ton carnet" }
-            return "Finance ton carnet de \(trip)"
-        }
-
-        public static let available = "Montant disponible"
-
-        /// « A ce rythme, ton carnet fera probablement 50 pages ».
-        ///
-        /// ⚠️ Le « A » sans accent est celui de la maquette (R8).
-        public static func paceEstimate(pages: Int) -> String {
-            "A ce rythme, ton carnet fera probablement \(pages) pages"
-        }
-
-        public static let estimatedCost = "coût estimé"
-
-        public static let add = "Ajouter"
-        public static let share = "Partager"
-
-        public static let historySection = "Historique des contributions"
-
-        /// **Corrigée au tutoiement** — la maquette écrit « Partagez votre
-        /// cagnotte avec vos proches ». Voir ``Customisation/intro``.
-        public static let emptyTitle = "Aucune contribution pour le moment"
-        public static let emptyMessage =
-            "Partage ta cagnotte avec tes proches pour recevoir tes premières contributions !"
-
-        /// « 60 € offerts par tes proches ».
-        public static let giftedTile = "offerts par tes proches"
-
-        public static let faqTitle = "Si je n’utilise pas toute ma cagnotte ?"
-        public static let faqMessage =
-            "Ton solde restant est conservé précieusement sur ton compte. Utilise cette somme quand tu le souhaites pour imprimer des exemplaires supplémentaires ou pour financer tes prochains carnets."
-
-        public static let previewBook = "Prévisualiser mon carnet"
-        public static let help = "Besoin d’aide ?"
-
-        /// Le repli quand aucun encaissement n'est branché derrière l'écran.
-        ///
-        /// **Plus atteignable dans l'app** : depuis que ``WalletModel/topUp``
-        /// est branché sur Stripe, seules les previews Xcode passent par là.
-        /// Gardé parce que c'est le message honnête pour ce cas-là, et parce
-        /// qu'une preview Xcode doit pouvoir dire pourquoi son bouton ne fait rien.
-        public static let addUnavailable =
-            "Recharger ta cagnotte arrive bientôt : le paiement n’est pas encore branché."
-
-        /// « Partager » ou « Prévisualiser mon carnet » sans aucun voyage : il
-        /// n'y a pas encore de carnet à montrer.
-        public static let shareUnavailable =
-            "Tu n’as pas encore de carnet : crée ton premier voyage pour le partager."
-
-        // MARK: « Ajouter à ma cagnotte » — `3551:26486`, au caractère près (R8)
-
-        /// Le nom du cadre Figma, en titre : la maquette ne dessine pas
-        /// d'en-tête, et un écran poussé doit en avoir un pour sa flèche.
-        public static let topUpTitle = "Ajouter à ma cagnotte"
-
-        public static let topUpCardTitle = "Ma cagnotte"
-        /// « Carnet - Rome et la Dolce Vita ».
-        public static func topUpCardSubtitle(trip: String) -> String { "Carnet - \(trip)" }
-        public static let topUpCollected = "Collectés"
-        /// ⚠️ La maquette écrit « Prix moyen d’un carnet de voyage » face à
-        /// l'objectif. L'app connaît mieux : l'estimation de **ce** carnet
-        /// (``Wallet/estimate``). Le libellé dit donc ce que le chiffre est — à
-        /// trancher avec Clara.
-        public static let topUpGoalCaption = "Coût estimé de ton carnet"
-        public static func topUpGoal(_ amount: String) -> String { "Objectif : \(amount)" }
-        /// ⚠️ La maquette vouvoie (« Votre contribution ») : recopiée telle
-        /// quelle, et signalée (R9).
-        public static let topUpAmountCaption = "Votre contribution"
-        public static let topUpFreeAmount = "Montant libre"
-        public static let topUpFreeAmountPlaceholder = "Saisir un autre montant"
-        public static let topUpRecurringTitle = "Don récurrent"
-        public static let topUpRecurringDetail = "Contribuer automatiquement chaque mois"
-        /// L'appui sur l'interrupteur pâli : le don récurrent n'existe pas
-        /// encore côté serveur, et l'écran ne ment pas.
-        public static let topUpRecurringUnavailable =
-            "Le don récurrent arrive bientôt. En attendant, chaque contribution se fait en une fois."
-        public static let topUpPaymentSection = "Paiement"
-        /// À la place des trois champs de carte de la maquette : la carte se
-        /// saisit dans la fenêtre de Stripe, jamais dans un champ de l'app.
-        public static let topUpPaymentNote =
-            "Tu saisiras ta carte à l’étape suivante, dans la fenêtre sécurisée de Stripe."
-        public static let topUpAcceptedCards = "Cartes acceptées"
-        /// « Contribuer 10,00 € ».
-        public static func topUpCta(_ amount: String) -> String { "Contribuer \(amount)" }
-        /// Sous le bouton quand le montant sort des bornes du serveur.
-        public static func topUpBounds(min: String, max: String) -> String {
-            "Entre \(min) et \(max) par contribution."
-        }
     }
 
     // MARK: - Les feuilles des réglages du voyage

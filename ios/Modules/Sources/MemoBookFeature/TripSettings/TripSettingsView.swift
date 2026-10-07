@@ -212,11 +212,10 @@ public struct TripSettingsView: View {
         return VStack(alignment: .leading, spacing: MemoBookSpacing.snug) {
             sectionTitle(BookCopy.Settings.adventureSection)
 
-            // Le nom et la cagnotte ont **chacun leur carte**, et ce n'est pas
-            // un oubli de la maquette : ce sont les deux seules lignes de
-            // l'écran qui portent une valeur qu'on vient chercher du regard.
-            // Les fondre dans le groupe qui suit les aurait rangées parmi les
-            // réglages, alors qu'elles n'en sont pas.
+            // Le nom a **sa carte**, et ce n'est pas un oubli de la maquette :
+            // c'est une valeur qu'on vient chercher du regard, pas un réglage.
+            // La carte de la cagnotte, à côté, est partie avec elle (Hugo,
+            // 06/10/2026, T230).
             // Le nom se corrige **sur la ligne**, comme le téléphone du profil :
             // toucher ouvre le clavier, sortir du champ enregistre, la coche
             // verte accuse réception (Hugo, 18/09/2026). Il menait avant à une
@@ -227,16 +226,6 @@ public struct TripSettingsView: View {
                     text: nameBinding,
                     isValueLoading: isLoading,
                     isConfirmed: model.justSaved == .name
-                )
-            }
-
-            BrandRowGroup {
-                BrandRow(
-                    BookCopy.Settings.wallet,
-                    value: settings?.walletBalance.euros,
-                    valueTone: .prominent,
-                    isValueLoading: isLoading,
-                    action: { onIntent(.openWallet) }
                 )
             }
 
@@ -321,11 +310,7 @@ public struct TripSettingsView: View {
         return VStack(alignment: .leading, spacing: MemoBookSpacing.snug) {
             sectionTitle(BookCopy.Settings.quickAccessSection)
 
-            PdfPreviewRow(
-                coverUrl: settings?.previewCoverUrl,
-                isLoading: model.isLoading,
-                action: { onIntent(.openBookPreview) }
-            )
+            PdfPreviewRow(action: { onIntent(.openBookPreview) })
 
             // « Commander le carnet » ouvre le tunnel de commande, toujours :
             // c'est lui qui sait dire s'il y a un carnet à imprimer, et une
@@ -480,7 +465,6 @@ public struct TripSettingsView: View {
 /// une feuille **sur** cet écran (``TripSettingsSheet``). Une intention qui
 /// remonte pour redescendre aussitôt n'apprend rien à personne.
 public enum TripSettingsIntent: Sendable, Hashable {
-    case openWallet
     /// « Style du carnet » — les personnalisations de la mise en page.
     case openCustomisation
     case connectTricount
@@ -681,11 +665,16 @@ private struct TricountCallout: View {
     }
 }
 
-/// La ligne « Prévisualisation PDF » : l'intitulé, sa précision, et la couverture
-/// du carnet en vignette.
+/// La ligne « Prévisualisation PDF » : l'intitulé, sa précision, et en
+/// vignette **la page de la composition, toute montée**.
+///
+/// La vignette était un livre gris vide tant qu'aucune couverture n'était
+/// servie — c'est-à-dire presque toujours. Hugo veut à la place le squelette
+/// de chargement du PDF dans son état final, « quand tous les morceaux de la
+/// page ont fini de se placer » (06/10/2026, T220) : la même page que l'écran
+/// de composition, figée à la fin de sa cascade. La ligne annonce ainsi ce
+/// qu'elle ouvre — on y retrouve la page, cette fois en train de se monter.
 private struct PdfPreviewRow: View {
-    let coverUrl: URL?
-    let isLoading: Bool
     let action: () -> Void
 
     /// La vignette garde le rapport d'une page A5 — c'est le format du carnet
@@ -729,42 +718,15 @@ private struct PdfPreviewRow: View {
     }
 
     private var thumbnail: some View {
-        let height = Self.thumbnailWidth * Self.thumbnailRatio
-
-        return Group {
-            if isLoading {
-                BrandSkeleton(
-                    width: Self.thumbnailWidth,
-                    height: height,
-                    cornerRadius: MemoBookSpacing.pageCornerRadius
-                )
-            } else {
-                AsyncImage(url: coverUrl) { phase in
-                    if let image = phase.image {
-                        image.resizable().scaledToFill()
-                    } else {
-                        // Rien de composé encore : le papier du carnet, vide.
-                        // Pas un gris système — ce serait un champ désactivé.
-                        MemoBookColor.paper
-                            .overlay {
-                                Image(brand: "IconBookSimple")
-                                    .resizable()
-                                    .renderingMode(.template)
-                                    .scaledToFit()
-                                    .frame(width: MemoBookSpacing.m)
-                                    .foregroundStyle(MemoBookColor.inkFaint)
-                            }
-                    }
-                }
-                .frame(width: Self.thumbnailWidth, height: height)
-                .clipShape(.rect(cornerRadius: MemoBookSpacing.pageCornerRadius))
-                .overlay {
-                    RoundedRectangle(cornerRadius: MemoBookSpacing.pageCornerRadius)
-                        .strokeBorder(MemoBookColor.hairline, lineWidth: 1)
-                }
-            }
-        }
-        .accessibilityHidden(true)
+        // Pas d'attente à dessiner : la page ne dépend de rien que le serveur
+        // doive envoyer. `progress: 1`, c'est la cascade finie — chaque morceau
+        // à sa place, sans mouvement.
+        BookCompositionPage(progress: 1)
+            .frame(
+                width: Self.thumbnailWidth,
+                height: Self.thumbnailWidth * Self.thumbnailRatio
+            )
+            .accessibilityHidden(true)
     }
 }
 

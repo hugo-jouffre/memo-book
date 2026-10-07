@@ -63,14 +63,18 @@ struct BookActionsBlock: View {
             // (Hugo, 16/09/2026) : le tunnel se teste sur un TestFlight, qui
             // est un build Release — une porte compilée en debug seulement ne
             // s'ouvre nulle part où l'on en a besoin. Son dessin la range à sa
-            // place : un lien beige, au corps d'une légende, sans fond ni
-            // contour. On ne peut pas la confondre avec l'appel à l'action
-            // juste au-dessus.
+            // place : un lien souligné, sans fond ni contour. On ne peut pas
+            // la confondre avec l'appel à l'action juste au-dessus.
+            //
+            // **À l'encre, et un cran plus grande** (Hugo, 06/10/2026, T219) :
+            // en beige au corps d'une légende, elle était presque invisible
+            // pendant la composition — c'est-à-dire justement quand elle sert.
+            // 14 au lieu de 12, la graisse courante.
             if !isComposed {
                 Button(action: onOrder) {
                     Text(BookCopy.Preview.orderAnyway)
-                        .font(MemoBookFont.caption)
-                        .foregroundStyle(MemoBookColor.separator)
+                        .font(MemoBookFont.taglineRegular)
+                        .foregroundStyle(MemoBookColor.ink)
                         .underline()
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
@@ -85,81 +89,57 @@ struct BookActionsBlock: View {
     }
 }
 
-/// « Fais-toi offrir ce carnet » : la carte bleue qui mène à la cagnotte.
+/// Une feuille du carnet : la page du PDF, ou **le plat choisi** quand c'est
+/// la première ou la dernière et que les couvertures sont réglées.
 ///
-/// Bleue et non verte, et ce n'est pas un caprice de maquette : le bleu de la
-/// marque est l'aplat de ce qui **informe**, le vert celui de ce sur quoi on
-/// appuie. Cette carte propose quelque chose qui n'est pas l'action de l'écran —
-/// l'écran, c'est le carnet ; elle, c'est comment le payer.
-struct BookOfferCard: View {
-    let onShare: () -> Void
-    let onSeeWallet: () -> Void
+/// **Les couvertures se voient dans l'aperçu** (Hugo, 06/10/2026, T223) : le
+/// PDF n'imprime pas encore les plats choisis — la génération ignore les
+/// couvertures, et c'est assumé tant que cette partie n'est pas écrite —, et
+/// l'aperçu montrait donc une couverture par défaut juste après qu'on avait
+/// réglé la sienne. Le plat est celui des écrans des couvertures
+/// (``CoverPlate``), au même rapport A5 que la page : c'est la même image qui
+/// sortira du gabarit le jour où il les rendra.
+///
+/// Elle sert l'aperçu, le plein écran et sa bande de miniatures : une même
+/// feuille doit y montrer la même chose.
+struct BookSheetFace: View {
+    let model: BookPreviewModel
+    let index: Int
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: MemoBookSpacing.largeCornerRadius)
-
-        return VStack(alignment: .leading, spacing: MemoBookSpacing.snug) {
-            VStack(alignment: .leading, spacing: MemoBookSpacing.xs / 2) {
-                Text(BookCopy.Preview.offerTitle)
-                    .font(MemoBookFont.calloutTitle)
-                    .foregroundStyle(MemoBookColor.ink)
-
-                Text(BookCopy.Preview.offerMessage)
-                    .font(MemoBookFont.caption)
-                    .foregroundStyle(MemoBookColor.ink)
-            }
-            .multilineTextAlignment(.leading)
-            .fixedSize(horizontal: false, vertical: true)
-
-            actions
-        }
-        .padding(MemoBookSpacing.sectionGap)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(MemoBookColor.bubbleTraveller.opacity(0.5), in: shape)
-        .overlay { shape.strokeBorder(MemoBookColor.outline, lineWidth: 1) }
-    }
-
-    /// Les deux actions côte à côte **quand elles tiennent**, empilées sinon.
-    ///
-    /// `ViewThatFits` et non le test de taille accessible habituel : ces deux
-    /// libellés-là sont longs (« Partager ma cagnotte » et « Voir ma
-    /// cagnotte »), et ils débordaient **dès la taille par défaut** sur un
-    /// iPhone 17 — donc bien avant l'accessibilité. Le seuil ne dépend pas que
-    /// du corps du texte mais de la largeur de l'écran et de la longueur des
-    /// mots ; c'est à la disposition de trancher, pas à une condition écrite à
-    /// la main. Un libellé rogné n'est jamais acceptable : c'est justement le
-    /// mot « cagnotte » qui disparaissait.
-    private var actions: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: MemoBookSpacing.snug) {
-                shareButton
-                seeButton
-                Spacer(minLength: 0)
-            }
-
-            VStack(spacing: MemoBookSpacing.xs) {
-                shareButton.frame(maxWidth: .infinity)
-                seeButton.frame(maxWidth: .infinity)
-            }
+        if let face = model.coverFace(at: index), let covers = model.covers {
+            BookCoverSheet(covers: covers, face: face)
+        } else {
+            BookSheetImage(renderer: model.renderer, index: index)
         }
     }
+}
 
-    private var shareButton: some View {
-        BrandButton(
-            BookCopy.Preview.offerShare,
-            style: .primary,
-            size: .small,
-            action: onShare
-        )
-    }
+/// Un plat de couverture qui occupe la place d'une page, centré.
+struct BookCoverSheet: View {
+    let covers: BookCovers
+    let face: CoverFace
 
-    private var seeButton: some View {
-        BrandButton(
-            BookCopy.Preview.offerSee,
-            style: .tertiary,
-            size: .small,
-            action: onSeeWallet
-        )
+    var body: some View {
+        GeometryReader { proxy in
+            // La plus grande largeur qui tienne dans la boîte : le plat garde
+            // son rapport A5, comme la page qu'il remplace.
+            let width = min(proxy.size.width, proxy.size.height * CoverPlate.ratio)
+            let cover = covers[face]
+
+            CoverPlate(
+                cover: cover,
+                style: covers.style(id: cover.styleId),
+                photo: covers.photo(id: cover.photoId),
+                face: face,
+                stats: face == .back ? covers.statSelection : [],
+                width: width
+            )
+            .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+        // Une image de couverture : VoiceOver lit le titre de l'écran et le
+        // bouton « Configurer », pas un plat qu'il ne saurait décrire.
+        .accessibilityHidden(true)
     }
 }
 
