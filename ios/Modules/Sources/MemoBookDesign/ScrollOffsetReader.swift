@@ -50,7 +50,7 @@ private struct ScrollOffsetProbe: UIViewRepresentable {
         }
 
         @available(*, unavailable)
-        required init?(coder: NSCoder) { fatalError("init(coder:) n'est pas utilisé") }
+        required init?(coder: NSCoder) { fatalError("init(coder:) n’est pas utilisé") }
 
         override func didMoveToWindow() {
             super.didMoveToWindow()

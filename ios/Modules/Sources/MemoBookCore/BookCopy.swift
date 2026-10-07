@@ -217,7 +217,7 @@ public enum BookCopy {
 
         /// Pourquoi ce plat n'a pas de photo à choisir.
         public static func noPhotoHere(_ face: CoverFace) -> String {
-            "Le style choisi pour ta \(face.title) **ne porte aucune photo** : c'est un aplat. Change son style graphique pour en ajouter une."
+            "Le style choisi pour ta \(face.title) **ne porte aucune photo** : c’est un aplat. Change son style graphique pour en ajouter une."
         }
 
         /// Le titre par défaut d'une première de couverture qu'on n'a pas encore
@@ -500,7 +500,7 @@ public enum BookCopy {
 
         /// **Corrigée au tutoiement** — voir ``Customisation/intro``.
         public static let subtitle =
-            "Ajuste le style de narration généré par l'IA pour refléter au mieux tes émotions et ta personnalité."
+            "Ajuste le style de narration généré par l’IA pour refléter au mieux tes émotions et ta personnalité."
     }
 
     /// « Notifications » — `3443:9895`.
@@ -511,7 +511,7 @@ public enum BookCopy {
         /// du voyage est glissé dedans : la maquette écrit « Rome » en dur,
         /// l'app met celui qu'on regarde.
         public static func subtitle(trip: String) -> String {
-            "Active ou désactive les alertes d'écriture du voyage à « \(trip) » pour ne rien rater sans être dérangé non plus."
+            "Active ou désactive les alertes d’écriture du voyage à « \(trip) » pour ne rien rater sans être dérangé non plus."
         }
 
         public static let writingReminder = "Rappel d’écriture"
@@ -545,7 +545,7 @@ public enum BookCopy {
 
         /// **Corrigée au tutoiement** — voir ``Customisation/intro``.
         public static let subtitle =
-            "Le thème ajuste le vocabulaire de l'IA et l'agencement graphique de tes souvenirs imprimés."
+            "Le thème ajuste le vocabulaire de l’IA et l’agencement graphique de tes souvenirs imprimés."
 
         public static let placeholder = "Trek entre amis"
         public static let validate = "Valider"
@@ -598,7 +598,7 @@ public enum BookCopy {
 
         /// **Corrigée au tutoiement** — voir ``Customisation/intro``.
         public static let subtitle =
-            "Détermine l'importance visuelle des images par rapport aux textes générés au sein des chapitres."
+            "Détermine l’importance visuelle des images par rapport aux textes générés au sein des chapitres."
 
         public static let more = "Plus de photos"
         public static let less = "Plus de texte"

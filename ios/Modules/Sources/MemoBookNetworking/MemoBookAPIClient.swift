@@ -522,7 +522,7 @@ public actor MemoBookAPIClient: MemoBookAPI {
             URLQueryItem(name: "since", value: ISO8601DateFormatter.memoBookString(from: since))
         ]
         guard let path = components.string else {
-            throw APIError.server(statusCode: 0, code: nil, message: "Chemin d'API invalide.")
+            throw APIError.server(statusCode: 0, code: nil, message: "Chemin d’API invalide.")
         }
         return try await send(method: "GET", path: path)
     }
@@ -959,7 +959,7 @@ public actor MemoBookAPIClient: MemoBookAPI {
         credential: Credential = .session
     ) throws -> URLRequest {
         guard let url = URL(string: path, relativeTo: activeBaseURL) else {
-            throw APIError.server(statusCode: 0, code: nil, message: "Chemin d'API invalide : \(path)")
+            throw APIError.server(statusCode: 0, code: nil, message: "Chemin d’API invalide : \(path)")
         }
 
         var request = URLRequest(url: url, timeoutInterval: configuration.timeout)

@@ -13,7 +13,7 @@ enum WelcomeCopy {
     static let titleStrong = "on s’occupe du reste."
 
     static let subtitle =
-        "Crée ton journal de voyage à l'oral ou à l'écrit, et reçois un magnifique carnet imprimé !"
+        "Crée ton journal de voyage à l’oral ou à l’écrit, et reçois un magnifique carnet imprimé !"
 
     /// Les trois temps du produit, sous les trois icônes de la marque.
     ///
@@ -43,19 +43,19 @@ enum WelcomeCopy {
     static let community = "Rejoint par 12\u{00A0}000+ voyageurs"
 
     static let hello = "Hello ! 👋"
-    static let helloDetail = "Nous allons t'accompagner dans tes récits."
+    static let helloDetail = "Nous allons t’accompagner dans tes récits."
 
     /// Pas de libellé pour Apple : `SignInWithAppleButton(.continue)` écrit le
     /// sien, dans la langue de l'appareil et dans la typographie du système.
     /// Le recopier ici donnerait deux vérités pour un seul texte, dont une que
     /// personne ne lit.
     static let google = "Continuer avec Google"
-    static let email = "S'inscrire avec un e-mail"
-    static let legal = "En continuant, tu acceptes nos Conditions d'utilisation."
+    static let email = "S’inscrire avec un e-mail"
+    static let legal = "En continuant, tu acceptes nos Conditions d’utilisation."
 
     /// La même phrase, en trois morceaux : le lien est le milieu (T151).
     static let legalLead = "En continuant, tu acceptes nos "
-    static let legalLink = "Conditions d'utilisation"
+    static let legalLink = "Conditions d’utilisation"
     static let legalTail = "."
 
     /// La flèche de retour des écrans d'entrée par e-mail. Elle ramène ici, et

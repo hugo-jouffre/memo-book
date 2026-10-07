@@ -163,11 +163,11 @@ private struct StepLengthHint: View {
     private var message: String {
         if isTooShort {
             return "Encore quelques lignes : sous \(Size.s.range.lowerBound) caractères, "
-                + "l'étape laisse une page aux trois quarts vide. Raconte un détail de plus "
+                + "l’étape laisse une page aux trois quarts vide. Raconte un détail de plus "
                 + "— ce que tu as vu, mangé, entendu."
         }
         if isTooLong {
-            return "Ce souvenir dépasse ce qu'une étape peut contenir : "
+            return "Ce souvenir dépasse ce qu’une étape peut contenir : "
                 + "\(Size.xl.range.upperBound) caractères, soit deux pages de carnet. "
                 + "Coupe-le en deux étapes, chacune aura les siennes."
         }
@@ -191,7 +191,7 @@ private struct RedactionFailureNotice: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
-            Text("La rédaction n'a pas abouti")
+            Text("La rédaction n’a pas abouti")
                 .font(MemoBookFont.body.weight(.semibold))
                 .foregroundStyle(MemoBookColor.error)
 

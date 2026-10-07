@@ -89,7 +89,7 @@ extension APIConfiguration {
             if runsInSimulator { return .localDevelopment }
         #endif
         preconditionFailure(
-            "MemoBookAPIBaseURL et MemoBookProductionAPIBaseURL absentes de l'Info.plist : le build ne sait pas à quelle API parler. Voir ios/Config/Base.xcconfig."
+            "MemoBookAPIBaseURL et MemoBookProductionAPIBaseURL absentes de l’Info.plist : le build ne sait pas à quelle API parler. Voir ios/Config/Base.xcconfig."
         )
     }
 }

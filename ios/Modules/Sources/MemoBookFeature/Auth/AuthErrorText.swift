@@ -11,7 +11,7 @@ import Foundation
 func authErrorMessage(for error: any Error) -> String {
     guard let appleError = error as? ASAuthorizationError else {
         return (error as? LocalizedError)?.errorDescription
-            ?? "La connexion n'a pas abouti. Réessaie dans un instant."
+            ?? "La connexion n’a pas abouti. Réessaie dans un instant."
     }
 
     switch appleError.code {
@@ -24,10 +24,10 @@ func authErrorMessage(for error: any Error) -> String {
         // ``WelcomeSocialButtons`` filtre ce cas en amont.
         return "Connexion avec Apple abandonnée."
     case .notHandled, .notInteractive:
-        return "Apple n'a pas pu traiter la demande. Réessaie dans un instant."
+        return "Apple n’a pas pu traiter la demande. Réessaie dans un instant."
     case .invalidResponse, .failed:
         return "Apple a refusé la connexion. Réessaie dans un instant."
     default:
-        return "La connexion avec Apple n'a pas abouti. Réessaie dans un instant."
+        return "La connexion avec Apple n’a pas abouti. Réessaie dans un instant."
     }
 }

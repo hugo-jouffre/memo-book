@@ -488,7 +488,7 @@ private struct StatisticRing: View {
         }
 }
 
-#Preview("Statistiques — l'agent relit") {
+#Preview("Statistiques — l’agent relit") {
     Color.clear
         .background(MemoBookColor.background)
         .sheet(isPresented: .constant(true)) {

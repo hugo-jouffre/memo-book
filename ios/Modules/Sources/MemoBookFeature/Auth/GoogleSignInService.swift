@@ -85,11 +85,11 @@ enum GoogleSignInError: LocalizedError {
         case .missingClientID:
             // Message de développeur assumé : cet état ne peut pas arriver
             // dans une app livrée, seulement dans une build mal configurée.
-            "Le client OAuth Google n'est pas configuré (GIDClientID dans project.yml)."
+            "Le client OAuth Google n’est pas configuré (GIDClientID dans project.yml)."
         case .noPresenter:
-            "Impossible d'ouvrir la fenêtre Google. Réessaie."
+            "Impossible d’ouvrir la fenêtre Google. Réessaie."
         case .noIdentityToken:
-            "Google n'a pas transmis d'identifiant utilisable. Réessaie."
+            "Google n’a pas transmis d’identifiant utilisable. Réessaie."
         }
     }
 }

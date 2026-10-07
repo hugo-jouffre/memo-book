@@ -588,7 +588,7 @@ struct TripDateRangeRow: View {
     private var hint: String {
         switch (editing, start, end) {
         case (.start, _, _): "Touche ton jour de départ"
-        case (.end, nil, _): "Touche d'abord ton jour de départ"
+        case (.end, nil, _): "Touche d’abord ton jour de départ"
         case (.end, _, nil): "Touche ton jour de retour — ou valide sans"
         default: "Touche une case pour corriger une date"
         }

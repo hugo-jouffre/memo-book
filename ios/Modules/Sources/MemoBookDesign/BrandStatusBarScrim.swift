@@ -83,7 +83,7 @@ extension View {
     }
 }
 
-#Preview("Voile de la barre d'état") {
+#Preview("Voile de la barre d’état") {
     ScrollView {
         VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
             ForEach(0..<30) { index in

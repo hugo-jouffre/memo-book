@@ -90,12 +90,12 @@ public actor PreviewAPI: MemoBookAPI {
                 kind: .audio,
                 status: .ready,
                 transcript:
-                    "euh du coup on arrive à Bogotá après un vol de nuit, et enfin la première claque c'est l'altitude quoi",
+                    "euh du coup on arrive à Bogotá après un vol de nuit, et enfin la première claque c’est l’altitude quoi",
                 redactionStatus: .ready,
                 redactedText:
-                    "On arrive à Bogotá après un vol de nuit. La première claque, c'est l'altitude.",
+                    "On arrive à Bogotá après un vol de nuit. La première claque, c’est l’altitude.",
                 suggestedTitle: "Premier souffle à 2 600 mètres",
-                funFact: "Bogotá culmine à 2 640 m : la troisième capitale la plus haute d'Amérique du Sud.",
+                funFact: "Bogotá culmine à 2 640 m : la troisième capitale la plus haute d’Amérique du Sud.",
                 funFactTitle: "Fun fact",
                 weatherKey: "cloud",
                 capturedAt: now.addingTimeInterval(-86_400 * 2),
@@ -122,7 +122,7 @@ public actor PreviewAPI: MemoBookAPI {
         return MemoDetail(
             id: memoId,
             title: "Claire et Gus en Colombie",
-            subtitle: "Un carnet de voyage raconté à l'oral",
+            subtitle: "Un carnet de voyage raconté à l’oral",
             authors: "Claire et Augustin",
             theme: "voyage",
             startDate: nil,

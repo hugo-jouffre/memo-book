@@ -72,7 +72,7 @@
         static func fallback(from: URL?, to: URL?) {
             logger.notice(
                 """
-                ↪︎ rien n'écoute sur \(from?.host() ?? "?", privacy: .public) : \
+                ↪︎ rien n’écoute sur \(from?.host() ?? "?", privacy: .public) : \
                 bascule sur \(to?.host() ?? "?", privacy: .public) pour la suite de la session
                 """
             )
@@ -95,7 +95,7 @@
         /// s'est produite » là où le code, lui, nomme la panne.
         var shortDescription: String {
             switch code {
-            case .cannotConnectToHost: "connexion refusée (rien n'écoute)"
+            case .cannotConnectToHost: "connexion refusée (rien n’écoute)"
             case .cannotFindHost: "hôte introuvable"
             case .timedOut: "délai dépassé"
             case .networkConnectionLost: "connexion perdue en cours de route"

@@ -66,7 +66,7 @@ public enum APIError: Error, LocalizedError, Sendable {
     public var errorDescription: String? {
         switch self {
         case .notAuthenticated:
-            "Cet appareil n'est pas encore enregistré."
+            "Cet appareil n’est pas encore enregistré."
         case .dailyCreditExhausted(let message, _):
             message
         case .server(let statusCode, _, let message):
@@ -197,7 +197,7 @@ public enum APIError: Error, LocalizedError, Sendable {
             let isLocal = ["localhost", "127.0.0.1"].contains(url?.host())
 
             guard let urlError = error as? URLError else {
-                return "L'appel vers \(target) a échoué.\n\n\(error)"
+                return "L’appel vers \(target) a échoué.\n\n\(error)"
             }
 
             #if targetEnvironment(simulator)
@@ -216,18 +216,18 @@ public enum APIError: Error, LocalizedError, Sendable {
                 // quand même, c'est l'un des deux garde-fous qui a sauté.
                 isLocal && !runsInSimulator
                     ? """
-                    Ce build parle à \(target) depuis un iPhone — c'est-à-dire \
+                    Ce build parle à \(target) depuis un iPhone — c’est-à-dire \
                     au téléphone lui-même.
 
-                    Un appareil doit viser la production, ou l'IP du Mac \
+                    Un appareil doit viser la production, ou l’IP du Mac \
                     dans Config/Secrets.xcconfig (avec la condition \
                     [sdk=iphoneos*]). Voir ios/Config/Debug.xcconfig.
                     """
                     : isLocal
                         ? """
-                        Rien n'écoute sur \(target).
+                        Rien n’écoute sur \(target).
 
-                        Le back-end n'est pas lancé :
+                        Le back-end n’est pas lancé :
                             cd backend && npm run dev
 
                         Pour vérifier, dans un autre terminal :
@@ -238,33 +238,33 @@ public enum APIError: Error, LocalizedError, Sendable {
 
             case .networkConnectionLost:
                 """
-                La connexion vers \(target) s'est coupée en cours de route.
+                La connexion vers \(target) s’est coupée en cours de route.
 
                 Le serveur est mort **pendant** la requête. Regarde la fin de \
-                sa sortie : c'est là qu'est la vraie erreur.
+                sa sortie : c’est là qu’est la vraie erreur.
                 """
 
             case .timedOut:
                 """
-                \(target) n'a pas répondu à temps.
+                \(target) n’a pas répondu à temps.
 
                 Le serveur tourne mais bloque — souvent la base : vérifie que \
                 `DATABASE_URL` répond.
                 """
 
             case .notConnectedToInternet:
-                "Pas de réseau. Là, c'est vraiment le wifi."
+                "Pas de réseau. Là, c’est vraiment le wifi."
 
             case .appTransportSecurityRequiresSecureConnection:
                 """
-                ATS a bloqué l'appel en clair vers \(target).
+                ATS a bloqué l’appel en clair vers \(target).
 
                 `NSAllowsLocalNetworking` doit couvrir cet hôte — voir \
                 `project.yml`.
                 """
 
             default:
-                "L'appel vers \(target) a échoué : \(urlError.localizedDescription)"
+                "L’appel vers \(target) a échoué : \(urlError.localizedDescription)"
             }
         }
 
