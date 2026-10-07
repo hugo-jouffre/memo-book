@@ -195,7 +195,7 @@ final class PrintOrderFlowTests: XCTestCase {
     func testAQuoteWithLeftoverDeductionsStillDecodes() throws {
         let quote = try JSONDecoder().decode(OrderQuote.self, from: Data("""
         {"bookTitle":"Rome","pageCount":10,"copies":1,"shippingSpeed":"standard","unitPrice":30,
-         "book":{"lines":[],"subtotal":30},"fulfilment":{"lines":[],"subtotal":30},
+         "book":{"lines":[],"subtotal":30},"specifications":[],"fulfilment":{"lines":[],"subtotal":30},
          "deductions":[{"id":"wallet","label":"Cagnotte","amount":30}],
          "total":30,"estimatedMinDays":5,"estimatedMaxDays":7}
         """.utf8))
