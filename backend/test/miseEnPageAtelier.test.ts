@@ -12,6 +12,7 @@ const require = createRequire(import.meta.url);
 type Jour = Record<string, unknown> & { photos: (string | { url: string })[]; body_html: string };
 const M = require("../../MemoBook Generator/public/mise-en-page.js") as {
   composerJours: (etapes: unknown[], options?: Record<string, unknown>) => Jour[];
+  cadreDuVoyage: (lieux: unknown[], pays: string, contours: unknown) => [number, number, number, number] | null;
   composition: (plan: unknown) => string;
 };
 const carte = require("../../MemoBook Generator/public/carte.js") as {
@@ -124,6 +125,56 @@ describe("mise en page de l'atelier", () => {
     // Page 0 à gauche (pagesAvant = 1 : le colophon est la page 1), page 1 à droite.
     expect(comp(sans[0]!)).not.toBe(comp(sans[1]!));
     expect(sans.reduce((n, j) => n + j.photos.length, 0)).toBe(4);
+  });
+
+  describe("cadre des cartes de chapitre", () => {
+    const lieu = (nom: string, lat: number, lon: number, pays = "GR") => ({ nom, pays, lat, lon });
+
+    it("se cadre sur les lieux du voyage, pas sur le pays entier", () => {
+      const cyclades = [lieu("Paros", 37.08, 25.15), lieu("Naxos", 37.1, 25.38), lieu("Ios", 36.73, 25.28), lieu("Mykonos", 37.45, 25.33)];
+      const [o, s, e, n] = M.cadreDuVoyage(cyclades, "GR", contours)!;
+      for (const l of cyclades) {
+        expect(l.lon).toBeGreaterThan(o);
+        expect(l.lon).toBeLessThan(e);
+        expect(l.lat).toBeGreaterThan(s);
+        expect(l.lat).toBeLessThan(n);
+      }
+      // Ni Athènes ni la Crète.
+      expect(o).toBeGreaterThan(24);
+      expect(s).toBeGreaterThan(35.5);
+    });
+
+    it("garde au moins un degré de côté autour d'un lieu unique", () => {
+      const [o, s, e, n] = M.cadreDuVoyage([lieu("Ios", 36.73, 25.28)], "GR", contours)!;
+      expect(n - s).toBeCloseTo(1, 2);
+      expect(e - o).toBeGreaterThan(1);
+    });
+
+    it("ne dépasse pas le pays quand le voyage le parcourt en entier", () => {
+      const tour = [lieu("Thessalonique", 40.64, 22.94), lieu("Héraklion", 35.34, 25.13), lieu("Rhodes", 36.43, 28.22), lieu("Corfou", 39.62, 19.92)];
+      const [o, s, e, n] = M.cadreDuVoyage(tour, "GR", contours)!;
+      expect(o).toBeGreaterThanOrEqual(19);
+      expect(e).toBeLessThanOrEqual(29);
+      expect(s).toBeGreaterThanOrEqual(34);
+      expect(n).toBeLessThanOrEqual(42.2);
+    });
+
+    it("transmet le cadre du voyage, lieux des récits compris, à la carte du chapitre", () => {
+      const analyse = (nom: string, lat: number, lon: number, lieux: unknown[] = []) => ({ lieu: lieu(nom, lat, lon), lieux, photos: [] });
+      const requetes: { cadre: number[] }[] = [];
+      M.composerJours(
+        [
+          etape(paragrapheDe("le port", 1), [], analyse("Paros", 37.08, 25.15, [lieu("Antiparos", 37.04, 25.08)]), "Paros"),
+          etape(paragrapheDe("la plage", 1), [], analyse("Amorgos", 36.83, 25.9), "Amorgos"),
+        ],
+        { contours, dessinerCarte: (r: { cadre: number[] }) => (requetes.push(r), "data:image/svg+xml;base64,") },
+      );
+      expect(requetes).toHaveLength(2);
+      const [o, , e] = requetes[0]!.cadre;
+      expect(o).toBeLessThan(25.08);
+      expect(e).toBeGreaterThan(25.9);
+      expect(requetes[1]!.cadre).toEqual(requetes[0]!.cadre);
+    });
   });
 
   describe("fun facts", () => {

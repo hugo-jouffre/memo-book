@@ -165,6 +165,8 @@ Réponds uniquement par un objet JSON, sans texte autour et sans balises de code
    *
    * - où se trouve le lieu de l'étape (pays et coordonnées), pour la carte de
    *   chapitre — `null` s'il n'en est pas sûr : une épingle au hasard se voit ;
+   * - les autres lieux où le récit emmène le voyageur, pour cadrer la carte sur
+   *   la zone que le voyage parcourt ;
    * - quel paragraphe chaque photo illustre, pour qu'elle tombe sur la même
    *   page que le passage qui en parle ;
    * - quelles photos ont été prises au même endroit (même arrière-plan), pour
@@ -193,7 +195,8 @@ ${texte || "(pas de récit)"}
 
 Les photos de l'étape suivent, chacune précédée de son identifiant (${ids || "aucune"}).
 
-1. **Le lieu.** Le pays (code ISO 3166-1 alpha-2) et les coordonnées du lieu principal de l'étape, justes au dixième de degré, et le nom court à écrire sur une carte (« Paros », pas « Paros, Cyclades, Grèce »). Si tu n'es pas sûr du lieu ou de ses coordonnées, mets null : une épingle mal placée se voit immédiatement.
+1. **Le lieu.** Le pays (code ISO 3166-1 alpha-2) et les coordonnées du lieu principal de l'étape, justes au centième de degré, et le nom court à écrire sur une carte (« Paros », pas « Paros, Cyclades, Grèce »). Si tu n'es pas sûr du lieu ou de ses coordonnées, mets null : une épingle mal placée se voit immédiatement.
+   "lieux" : les autres endroits où le récit emmène le voyageur pendant l'étape — une excursion, un village, une plage, une île d'escale — avec leur pays et leurs coordonnées. Pas ceux qui sont seulement cités (la ville de départ du vol, un pays dont on parle). Ils servent à cadrer la carte sur ce que raconte le voyage : n'en mets que ceux que tu sais situer, et une liste vide si aucun.
 
 2. **Chaque photo.** Pour chaque identifiant :
    - "paragraphe" : le numéro du paragraphe dont la photo illustre le contenu — la plage pour le passage sur la plage, le plat pour le passage sur le restaurant. Juge sur ce que montre la photo et ce que raconte le texte, pas sur l'ordre des photos. null si aucun paragraphe ne s'y rattache ;
@@ -214,7 +217,7 @@ Les photos de l'étape suivent, chacune précédée de son identifiant (${ids ||
    "funFact" vaut null s'il n'y a rien de sûr et de pertinent : c'est un résultat normal.
 
 Réponds uniquement par un objet JSON, sans texte autour :
-{"lieu":{"nom":"","pays":"","lat":0,"lon":0},"photos":[{"id":"","paragraphe":0,"scene":"","sujet":"","personnes":0}],"funFact":{"texte":"","titre":"Fun fact","registre":"","paragraphe":0,"pertinence":0}}`;
+{"lieu":{"nom":"","pays":"","lat":0,"lon":0},"lieux":[{"nom":"","pays":"","lat":0,"lon":0}],"photos":[{"id":"","paragraphe":0,"scene":"","sujet":"","personnes":0}],"funFact":{"texte":"","titre":"Fun fact","registre":"","paragraphe":0,"pertinence":0}}`;
   }
 
   /**

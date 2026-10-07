@@ -305,8 +305,10 @@ mettre, déjà écrit dans le bandeau.
    visages. Chaque photo va sur la page de son passage, les photos d'une même
    scène restent ensemble, et le surplus fait une planche juste après la page
    dont il vient. Sans clé, les photos suivent l'ordre du voyage.
-6. **Chaque nouveau lieu ouvre un chapitre** sur une carte du pays
-   (`layout_chapter_map`), quand l'analyse a situé le lieu.
+6. **Chaque nouveau lieu ouvre un chapitre** sur une carte
+   (`layout_chapter_map`), quand l'analyse a situé le lieu. La carte se cadre
+   sur la zone que les récits parcourent (les îles visitées, pas tout le
+   pays), avec les contours détaillés de `assets/maps/detail/`.
 7. **Deux pages en vis-à-vis n'ont jamais la même composition**, quand une
    alternative existe.
 8. **Des fun facts tirés du récit**, si la case « Insérer des Fun facts » de

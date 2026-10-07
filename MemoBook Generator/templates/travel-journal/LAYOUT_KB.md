@@ -140,11 +140,30 @@ seul pays fait de plusieurs lieux :
   que l'étape s'en passe sans carte, elle s'ouvre sans carte. Une étape d'une
   seule page avec une ou deux photos et plus de 320 signes garde donc ses
   photos plutôt que la carte ;
-- **la carte** montre le pays, le lieu du chapitre avec son nom, et les lieux
-  des chapitres précédents en petits points sans nom, reliés par le trajet :
-  sur une carte de la Grèce entière, trois noms d'îles voisines se
-  chevaucheraient. Dessin : `MemoBook Generator/public/carte.js`, recopie de
-  `mapSvg.ts` gardée identique par `backend/test/carteAtelier.test.ts`.
+- **la carte** montre le lieu du chapitre avec son nom, et les lieux des
+  chapitres précédents en petits points sans nom, reliés par le trajet ;
+- **le cadrage suit ce que racontent les récits, pas les frontières**
+  (`cadreDuVoyage`). Un voyage aux Cyclades montrait le continent grec et la
+  Crète, avec une épingle en pleine mer : la carte se cadrait sur le pays
+  entier, et les contours de 110 m n'ont même pas les Cyclades. Désormais :
+  - **les lieux du voyage** : le lieu de chaque étape, et ceux où son récit
+    emmène le voyageur (une excursion, une île d'escale), que l'analyse
+    d'étape relève et situe (`lieux`). Une ville seulement citée ne compte pas ;
+  - **le cadre** les entoure tous, dans le pays du chapitre, avec 20 % de marge
+    de chaque côté et **un degré de côté au moins** (~110 km) : en deçà, on ne
+    sait plus où l'on est. Jamais plus grand que le pays : un tour de la Grèce
+    retrouve la carte de la Grèce ;
+  - **le même cadre** pour tous les chapitres d'un pays : d'une carte à
+    l'autre, on voit le trajet avancer ;
+  - **les contours** viennent de Natural Earth 10 m (`assets/maps/detail/`,
+    un fichier par pays, `backend/scripts/build-map-detail.ts`) : tous les
+    pays qui touchent le cadre, coupés au bord et effacés en fondu. Sans ces
+    fichiers, la carte retombe sur le pays entier.
+
+  Dessin : `MemoBook Generator/public/carte.js`. La carte du pays entier y est
+  une recopie de `mapSvg.ts`, gardée identique par
+  `backend/test/carteAtelier.test.ts` ; le back-end, lui, cadre encore sur le
+  pays.
 
 ## Les cartes
 

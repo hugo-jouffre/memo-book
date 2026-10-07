@@ -14,7 +14,8 @@
  *    d'une même scène restent ensemble (`affecterPhotos`) — d'après l'analyse
  *    d'étape faite par le modèle, à défaut dans l'ordre du voyage ;
  * 3. une étape qui arrive dans un nouveau lieu ouvre un chapitre, sur une
- *    carte (`layout_chapter_map`) ;
+ *    carte (`layout_chapter_map`) cadrée sur la zone que les récits
+ *    parcourent dans le pays (`cadreDuVoyage`) ;
  * 4. puis, sur tout le carnet, deux pages qui se font face ne gardent jamais
  *    la même composition (`varierDoublesPages`) ;
  * 5. si le carnet a ses fun facts allumés, les encarts proposés par l'analyse
@@ -348,6 +349,73 @@
     if (!contours[pays] || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
     if (lat === 0 && lon === 0) return null;
     return { pays, lat, lon, nom: String(lieu.nom || "").trim() };
+  }
+
+  /**
+   * Tous les lieux où les récits emmènent le voyageur : le lieu de chaque
+   * étape, et ceux que l'analyse a relevés dans son récit (une excursion, une
+   * traversée). Seuls ceux que l'analyse a situés avec certitude.
+   */
+  function lieuxDuVoyage(etapes, contours) {
+    const lieux = [];
+    for (const etape of etapes) {
+      const principal = lieuSitue(etape.analyse, contours);
+      if (principal) lieux.push(principal);
+      for (const lieu of etape.analyse?.lieux || []) {
+        const situe = lieuSitue({ lieu }, contours);
+        if (situe) lieux.push(situe);
+      }
+    }
+    return lieux;
+  }
+
+  /** Un degré au moins de côté (~110 km) : en deçà, la carte ne montre plus où l'on est. */
+  const CADRE_MIN_DEGRES = 1;
+  /** La marge autour des lieux, de part et d'autre : 20 % de leur étendue. */
+  const MARGE_CADRE = 0.2;
+
+  /**
+   * Le cadre d'une carte de chapitre : la zone que le voyage parcourt dans ce
+   * pays, d'après ce que racontent les récits — et non le pays entier. Un
+   * voyage dans les Cyclades se cadre sur les Cyclades ; un tour de la Grèce,
+   * sur la Grèce. Le même cadre sert à tous les chapitres du pays : d'une
+   * carte à l'autre, on voit le trajet avancer.
+   *
+   * `[ouest, sud, est, nord]` en degrés, jamais plus grand que le pays (plus
+   * une marge), ou `null` sans lieu situé.
+   */
+  function cadreDuVoyage(lieux, pays, contours) {
+    const dans = lieux.filter((l) => l.pays === pays);
+    if (!dans.length) return null;
+    let o = Math.min(...dans.map((l) => l.lon));
+    let e = Math.max(...dans.map((l) => l.lon));
+    let s = Math.min(...dans.map((l) => l.lat));
+    let n = Math.max(...dans.map((l) => l.lat));
+    // Un degré de longitude rétrécit avec la latitude : le minimum se compte
+    // en distance, pas en degrés bruts.
+    const cosLat = Math.max(0.2, Math.cos((((s + n) / 2) * Math.PI) / 180));
+    const elargir = (a, b, min) => {
+      const c = (a + b) / 2;
+      const demi = Math.max(((b - a) * (1 + 2 * MARGE_CADRE)) / 2, min / 2);
+      return [c - demi, c + demi];
+    };
+    [s, n] = elargir(s, n, CADRE_MIN_DEGRES);
+    [o, e] = elargir(o, e, CADRE_MIN_DEGRES / cosLat);
+
+    // Pas au-delà du pays : un voyage qui le parcourt en entier retrouve la
+    // carte du pays.
+    const rings = contours?.[pays]?.rings;
+    if (rings?.length) {
+      const lons = rings.flat().map((p) => p[0]);
+      const lats = rings.flat().map((p) => p[1]);
+      const marge = 0.3;
+      o = Math.max(o, Math.min(...lons) - marge);
+      e = Math.min(e, Math.max(...lons) + marge);
+      s = Math.max(s, Math.min(...lats) - marge);
+      n = Math.min(n, Math.max(...lats) + marge);
+    }
+    const arrondi = (v) => Math.round(v * 1000) / 1000;
+    return [arrondi(o), arrondi(s), arrondi(e), arrondi(n)];
   }
 
   /* ----------------------------------------------- photos ↔ passages du récit */
@@ -746,6 +814,7 @@
     const { contours = null, dessinerCarte = null, pagesAvant = 1, funFacts = false, journal = () => {} } = options;
     const plans = [];
     const chapitresPasses = [];
+    const lieux = lieuxDuVoyage(etapes, contours);
     let lieuPrecedent = null;
 
     etapes.forEach((etape, index) => {
@@ -822,6 +891,8 @@
         try {
           carte = dessinerCarte({
             regions: [situe.pays],
+            // Cadrée sur ce que le voyage parcourt dans le pays, pas sur le pays entier.
+            cadre: cadreDuVoyage(lieux, situe.pays, contours),
             points: [
               ...passes.map((c) => ({ label: c.nom, lat: c.lat, lon: c.lon, secondaire: true })),
               { label: situe.nom || etape.lieu, lat: situe.lat, lon: situe.lon },
@@ -921,6 +992,8 @@
     placerPhotos,
     varierDoublesPages,
     placerEncarts,
+    cadreDuVoyage,
+    lieuxDuVoyage,
     composition,
     composerJours,
     paragraphesEnHtml,
