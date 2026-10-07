@@ -567,7 +567,11 @@ public final class AppDependencies {
             cached: { [content] in
                 await content.read(.tripSettings(tripId), as: TripSettings.self)
             },
-            themes: { [api] in try await api.tripThemes() }
+            themes: { [api] in try await api.tripThemes() },
+            // Ce qui a été envoyé et attend la file : le crédit du jour des
+            // réglages le compte, comme la conversation et l'accueil — et
+            // rien d'autre, ni vocal en cours ni vocal en pause.
+            waitingTurns: { [outbox] in await outbox.waiting(for: tripId) }
         )
     }
 

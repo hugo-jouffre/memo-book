@@ -135,6 +135,13 @@ public struct DailyCredit: Codable, Sendable, Hashable {
     }
 
     /// Ce qu'il resterait une fois le vocal en cours compté.
+    ///
+    /// **Une projection, jamais un décompte** (Hugo, 06/10/2026) : elle ne
+    /// sert qu'au bandeau et à l'arrêt net **pendant que le vocal existe** —
+    /// en cours ou en pause. Rien ne l'écrit dans un crédit : un vocal mis en
+    /// pause puis abandonné ne coûte rien, nulle part. Seul l'envoyé compte —
+    /// le serveur à sa réception, l'app entre-temps pour ce qui attend la file
+    /// (la conversation, l'accueil, les réglages du voyage).
     public func remainingMs(whileRecording elapsedMs: Int) -> Int {
         max(0, remainingMs - max(0, elapsedMs))
     }
