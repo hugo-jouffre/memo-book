@@ -63,14 +63,18 @@ struct BookActionsBlock: View {
             // (Hugo, 16/09/2026) : le tunnel se teste sur un TestFlight, qui
             // est un build Release — une porte compilée en debug seulement ne
             // s'ouvre nulle part où l'on en a besoin. Son dessin la range à sa
-            // place : un lien beige, au corps d'une légende, sans fond ni
-            // contour. On ne peut pas la confondre avec l'appel à l'action
-            // juste au-dessus.
+            // place : un lien souligné, sans fond ni contour. On ne peut pas
+            // la confondre avec l'appel à l'action juste au-dessus.
+            //
+            // **À l'encre, et un cran plus grande** (Hugo, 06/10/2026, T219) :
+            // en beige au corps d'une légende, elle était presque invisible
+            // pendant la composition — c'est-à-dire justement quand elle sert.
+            // 14 au lieu de 12, la graisse courante.
             if !isComposed {
                 Button(action: onOrder) {
                     Text(BookCopy.Preview.orderAnyway)
-                        .font(MemoBookFont.caption)
-                        .foregroundStyle(MemoBookColor.separator)
+                        .font(MemoBookFont.taglineRegular)
+                        .foregroundStyle(MemoBookColor.ink)
                         .underline()
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)

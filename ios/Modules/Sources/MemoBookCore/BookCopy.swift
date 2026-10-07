@@ -359,9 +359,10 @@ public enum BookCopy {
         /// ⚠️ **Elle est dans la version livrée**, et pas seulement en debug
         /// (Hugo, 16/09/2026) : le tunnel de commande ne se teste pas de bout
         /// en bout autrement — il faut un TestFlight, et un TestFlight ne
-        /// compile pas `#if DEBUG`. Elle est écrite en **beige soutenu et en
-        /// petit** pour que personne ne la prenne pour l'appel à l'action, et
-        /// elle dit ce qu'elle fait plutôt que « Commander quand même ».
+        /// compile pas `#if DEBUG`. Elle est écrite en **lien souligné**, à
+        /// l'encre depuis le 06/10/2026 (T219 : le beige ne se lisait pas),
+        /// pour que personne ne la prenne pour l'appel à l'action, et elle dit
+        /// ce qu'elle fait plutôt que « Commander quand même ».
         public static let orderAnyway = "Commander sans attendre la composition"
 
         public static let configureCover = "Définis maintenant\nta 1ère et 4ème de couverture"
