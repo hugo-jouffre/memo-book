@@ -803,6 +803,41 @@ describe("les écrans", () => {
     expect(plan.statusCode).toBe(404);
   });
 
+  it("un vocal en pause, pas envoyé, ne se lit consommé nulle part ; envoyé, il compte une fois (Hugo, 06/10/2026)", async () => {
+    // Hugo : « un vocal enregistré, mis en pause et non envoyé ne consomme pas
+    // de crédit ; paramètres du voyage > crédit du jour ne le montre pas
+    // consommé ». Le serveur ne connaît que ce qu'il reçoit : tant que l'app
+    // n'a rien envoyé, aucune lecture — réglages, accueil, voyage, fil — ne
+    // décompte quoi que ce soit.
+    const memo = await tripOf(owner.accountId);
+    const headers = { authorization: owner.authorization };
+    const usedEverywhere = async () => {
+      const [settings, home, trip, thread] = await Promise.all([
+        harness.app.inject({ method: "GET", url: `/v1/trips/${memo.id}/settings`, headers }),
+        harness.app.inject({ method: "GET", url: "/v1/home", headers }),
+        harness.app.inject({ method: "GET", url: `/v1/trips/${memo.id}`, headers }),
+        harness.app.inject({ method: "GET", url: `/v1/trips/${memo.id}/chat`, headers }),
+      ]);
+      return [
+        settings.json<{ dailyCredit: SerializedDailyCredit }>().dailyCredit.usedMs,
+        home.json<{ trips: { id: string; dailyCredit?: SerializedDailyCredit }[] }>().trips.find((t) => t.id === memo.id)
+          ?.dailyCredit?.usedMs,
+        trip.json<{ trip: { dailyCredit?: SerializedDailyCredit } }>().trip.dailyCredit?.usedMs,
+        thread.json<{ dailyCredit: SerializedDailyCredit }>().dailyCredit.usedMs,
+      ];
+    };
+
+    expect(await usedEverywhere()).toEqual([0, 0, 0, 0]);
+    expect(await usedEverywhere()).toEqual([0, 0, 0, 0]);
+
+    // Envoyé — puis renvoyé par la file hors ligne avec le même identifiant.
+    const { id } = await speak(memo.id, VOICE_FIXTURES.short);
+    await speak(memo.id, VOICE_FIXTURES.short, { id });
+    const spent = [SHORT_VOICE_MS, SHORT_VOICE_MS, SHORT_VOICE_MS, SHORT_VOICE_MS];
+    expect(await usedEverywhere()).toEqual(spent);
+    expect(await usedEverywhere()).toEqual(spent);
+  });
+
   it("l'accueil n'a plus d'étapes, dit qui raconte sans limite, et porte le crédit du voyage en cours", async () => {
     const ongoing = await tripOf(owner.accountId);
     await tripOf(owner.accountId, {
