@@ -387,6 +387,10 @@ public actor MemoBookAPIClient: MemoBookAPI {
         try await sendIgnoringResponse(method: "DELETE", path: "/v1/memos/\(id)")
     }
 
+    public func deleteEntry(id: String) async throws {
+        try await sendIgnoringResponse(method: "DELETE", path: "/v1/entries/\(id)")
+    }
+
     // MARK: - Souvenirs
 
     public func addTextEntry(memoId: String, entry: NewTextEntry) async throws -> Entry {

@@ -63,6 +63,10 @@ public actor PreviewAPI: MemoBookAPI {
     /// restent sur l'accueil une fois « arrivés », comme sur le serveur.
     private var createdTrips: [Trip] = []
 
+    /// Les souvenirs effacés par la croix d'une étape : l'étape qui n'en a
+    /// plus disparaît du voyage, comme le serveur la retirera (T235).
+    private var deletedEntryIds: Set<String> = []
+
     /// Les fils de conversation du double, un par voyage — voir `PreviewChat.swift`.
     let chat = PreviewChatBox()
 
@@ -229,7 +233,15 @@ public actor PreviewAPI: MemoBookAPI {
         try SandboxNetwork.failIfOffline()
         // Un voyage créé ici est lui-même, pas le voyage de Rome du jeu d'essai.
         if let created = createdTrips.first(where: { $0.id == id }) { return TripDetail(trip: created) }
-        return .fixture(id: id)
+        let detail = TripDetail.fixture(id: id)
+        return TripDetail(
+            trip: detail.trip,
+            prompt: detail.prompt,
+            steps: detail.steps.filter { step in
+                guard let ids = step.entryIds, !ids.isEmpty else { return true }
+                return !ids.allSatisfy(deletedEntryIds.contains)
+            }
+        )
     }
 
     public func validateStep(tripId: String, stepId: String) async throws -> TripDetail {
@@ -447,6 +459,11 @@ public actor PreviewAPI: MemoBookAPI {
 
     public func deleteMemo(id: String) async throws {
         memosById[id] = nil
+    }
+
+    public func deleteEntry(id: String) async throws {
+        try SandboxNetwork.failIfOffline()
+        deletedEntryIds.insert(id)
     }
 
     public func addTextEntry(memoId: String, entry: NewTextEntry) async throws -> Entry {

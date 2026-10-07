@@ -191,6 +191,10 @@ public protocol MemoBookAPI: Sendable {
     func memo(id: String) async throws -> MemoDetail
     func deleteMemo(id: String) async throws
 
+    /// `DELETE /v1/entries/:id` — efface un souvenir, pour tous les
+    /// co-voyageurs (T235). `204` sans corps ; `404` s'il n'existe plus.
+    func deleteEntry(id: String) async throws
+
     func addTextEntry(memoId: String, entry: NewTextEntry) async throws -> Entry
 
     /// - Parameter durationSeconds: la durée **réellement capturée**, pauses

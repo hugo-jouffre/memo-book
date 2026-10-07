@@ -31,6 +31,10 @@ public struct TripHomeView: View {
     /// La boîte « Disponible dès ta reconnexion », le temps de la lire.
     @State private var showsAwaitingServer = false
 
+    /// L'étape dont la croix a été touchée : la feuille de confirmation est
+    /// ouverte sur elle (T235).
+    @State private var stepToDelete: TripStep?
+
     /// Le libellé du bouton vert. « Continuer à enregistrer » disait le micro ;
     /// le bouton ouvre la conversation — Hugo a changé d'avis le 15/09/2026.
     private static let callToAction = "Accéder au chat"
@@ -105,6 +109,20 @@ public struct TripHomeView: View {
         .environment(\.colorScheme, .light)
         .task { await model.load() }
         .refreshable { await model.load() }
+        .brandSheet(item: $stepToDelete) { step in
+            DeleteStepSheet(
+                step: step,
+                isDeleting: model.deletingStepId == step.id,
+                errorMessage: model.stepDeletionError,
+                onKeep: { stepToDelete = nil },
+                onDelete: {
+                    Task {
+                        if await model.deleteMemories(of: step) { stepToDelete = nil }
+                    }
+                }
+            )
+            .onDisappear { model.dismissStepDeletionError() }
+        }
         // L'écran s'ouvre sur le voyage qu'on avait ; quand le serveur en dit
         // plus — une étape de plus, des pages composées —, ça s'anime.
         .brandRefreshFlash(model.freshness.isUpdated)
@@ -139,7 +157,8 @@ public struct TripHomeView: View {
                     onOpenStep: { step in
                         onIntent(.openStep(tripId: detail.trip.id, stepId: step.id))
                     },
-                    onValidateStep: { step in model.validateStep(step) }
+                    onValidateStep: { step in model.validateStep(step) },
+                    onDeleteStep: { step in stepToDelete = step }
                 )
             } else if model.errorMessage == nil {
                 loadingHeader

@@ -422,7 +422,16 @@ public final class AppDependencies {
                 if let stored = await content.read(.trip(id), as: TripDetail.self) { return stored }
                 return await outbox.localTrip(id).map { TripDetail(trip: $0.trip) }
             },
-            validateStep: { [api] tripId, stepId in try await api.validateStep(tripId: tripId, stepId: stepId) }
+            validateStep: { [api] tripId, stepId in try await api.validateStep(tripId: tripId, stepId: stepId) },
+            // Un souvenir déjà effacé — par un co-voyageur, entre deux
+            // lectures — n'est pas un échec : c'est ce qu'on voulait (T235).
+            deleteEntry: { [api] id in
+                do {
+                    try await api.deleteEntry(id: id)
+                } catch let error as APIError where error.statusCode == 404 {
+                    return
+                }
+            }
         )
     }
 
