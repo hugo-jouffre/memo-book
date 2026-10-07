@@ -358,6 +358,13 @@ $defs:
                 focus:
                   type: string
                   description: "Point d'intérêt pour object-position, ex. « 62% 38% »."
+                fit:
+                  type: string
+                  enum: [cover, contain]
+                  description: >
+                    `contain` : la photo est seulement réduite, jamais rognée — photo de
+                    groupe, ou rognage au-delà du plafond de LAYOUT_KB § « Rognage des
+                    photos ». Absent ou `cover` : recadrage habituel, centré sur `focus`.
       photo_captions:
         type: array
         description: Légendes alignées avec l'ordre des photos

@@ -266,18 +266,50 @@ template — celui décrit par `MemoBook Generator/templates/travel-journal/data
 APITemplate. Il faut pour cela une **clé APITemplate** dans les réglages ;
 l'identifiant du template est prérempli avec celui du dépôt.
 
-Le choix du gabarit de chaque étape suit la table de
-[`LAYOUT_KB.md`](templates/travel-journal/LAYOUT_KB.md), qui dit combien de
-photos chacun sait tenir :
+La mise en page de chaque étape suit
+[`LAYOUT_KB.md`](templates/travel-journal/LAYOUT_KB.md) — § « Longueur des
+textes » et § « La répartition sur une étape à plusieurs pages » :
 
-| Photos dans l'étape | Gabarit |
-|---|---|
-| première étape | `layout_story_opener` |
-| 0 | `layout_story_facts` |
-| 1 | `layout_hero_top` |
-| 2 | `layout_split_left` |
-| 3 | `layout_collage` |
-| 4 et plus | `layout_photo_page` |
+1. **Le récit se découpe en pages.** Paragraphes de 379 signes au plus (taille
+   S), coupés sur une fin de phrase, ou sur une virgule quand un vocal enchaîne
+   sans point. La première page, qui porte le bandeau, tient 560 signes et
+   2 paragraphes ; chaque page de suite, sans bandeau ni titre, 880 signes et
+   4 paragraphes. La dernière page ne reste jamais sous 200 signes si la
+   précédente peut lui en céder.
+2. **Les photos vont d'abord sur les pages de récit**, jusqu'à trois chacune,
+   à parts égales. Le gabarit suit leur nombre :
+
+   | Photos sur la page | Gabarit |
+   |---|---|
+   | 0 | `layout_story_opener` (première étape) ou `layout_story_facts` |
+   | 1 | `layout_hero_top` si le texte y tient (380 / 680 signes), sinon photo flottante sous le récit |
+   | 2 | `layout_split_left` |
+   | 3 | `layout_collage` |
+
+3. **Le surplus va sur des planches** (`layout_photo_page`, 3 à 5 photos), une
+   au plus après chaque page de récit : **jamais deux planches de suite**. Ce
+   qui ne tient pas reste hors du carnet, et la console le signale
+   (`[carnet] étape N : … photo(s) laissée(s) hors du carnet`).
+
+4. **Chaque photo va à l'emplacement qui la rogne le moins**, et n'est jamais
+   rognée de plus d'un tiers : au-delà, elle est réduite, entière. La case
+   « Photo de groupe, ne pas rogner », sous chaque photo, la fait toujours
+   réduire plutôt que rogner (LAYOUT_KB § « Rognage des photos »).
+
+Le bandeau ne porte pas d'étiquette (`tag`) : l'atelier n'avait que le lieu à y
+mettre, déjà écrit dans le bandeau.
+
+**Ces règles sont recopiées en code** dans `public/app.js`. L'atelier ne lit
+pas `LAYOUT_KB.md` — c'est l'Agent Mise en page de l'app qui le lit. Une règle
+ajoutée au KB doit donc aussi être portée ici pour changer les PDF de l'atelier.
+
+**Quelle version tourne ?** L'en-tête affiche le commit publié (« version
+abc1234 »). Chaque publication change l'adresse des scripts, si bien que le
+navigateur ne peut plus resservir un ancien `app.js` ; si la version affichée
+n'est pas celle du dernier commit de `main`, recharger la page suffit.
+
+Le bouton **« Voir les layouts »** ouvre l'inspecteur de mise en page : chaque
+layout du carnet, ses champs et ses limites.
 
 Trois raisons de l'appeler Beta, et de ne pas s'y fier pour un tirage :
 
