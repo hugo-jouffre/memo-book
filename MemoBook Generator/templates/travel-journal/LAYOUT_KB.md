@@ -572,6 +572,36 @@ Quatre règles, à appliquer strictement :
 | Une donnée vraie mais sans lien avec la journée | Non — omettre |
 | Un chiffre trouvé pour meubler une page vide | Non — utiliser `prompt` ou `quiz` |
 
+**Le réglage ON/OFF est appliqué au moment de composer le carnet**, pas à la
+rédaction : la rédaction écrit l'encart de chaque étape quoi qu'il arrive, et
+`jobs/structure.ts` ne le transmet que si `funFactsEnabled` est vrai. Un
+voyageur qui rallume le réglage retrouve ses encarts sans tout relancer.
+
+### Dans l'atelier
+
+L'atelier n'a pas d'étape de rédaction : l'encart vient de l'**analyse d'étape**
+(`consigneAnalyseEtape`, `partage.js`), le même appel que celui qui situe le
+lieu et rattache les photos. Le modèle y reçoit le récit et propose **au plus
+un** encart tiré du récit, avec son registre, le paragraphe d'où il vient et une
+**note de pertinence sur 10**. La mise en page (`placerEncarts`,
+`mise-en-page.js`) décide ensuite :
+
+- **seuil** : sous 7/10, rien ; au-delà de 140 caractères, rien ;
+- **écart** : trois pages au moins d'un encart au suivant. Parmi les candidats,
+  la combinaison retenue est celle dont la somme des notes est la plus haute ;
+- **registre** : deux encarts du même registre à la suite, le moins bien noté
+  s'efface ;
+- **page hôte** : celle du paragraphe d'où vient l'encart, sinon la première
+  page de l'étape qui peut le porter sans perdre une ligne. Récit avec 0 ou 1
+  photo : la zone flottante l'accueille sans rien coûter (mesuré : 560 signes
+  sous un bandeau, 880 sur une page de suite, comme sans encart), et une grande
+  photo en tête repasse en photo flottante. Deux photos : 240 signes au plus.
+  Ouverture de chapitre avec deux photos : 120. Trois photos : jamais ;
+- **mention** : la page porte `ai_note` « Fun fact rédigé par IA ».
+
+Le réglage « Insérer des Fun facts » se coche dans la fiche du carnet de
+l'atelier, allumé par défaut comme dans l'app.
+
 ## Occuper les blancs sans les décorer
 
 Deux lecteurs reprochent aux illustrations et aux emoji de « ne servir qu'à

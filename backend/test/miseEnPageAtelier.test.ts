@@ -125,4 +125,55 @@ describe("mise en page de l'atelier", () => {
     expect(comp(sans[0]!)).not.toBe(comp(sans[1]!));
     expect(sans.reduce((n, j) => n + j.photos.length, 0)).toBe(4);
   });
+
+  describe("fun facts", () => {
+    const encart = (texte: string, pertinence: number, registre = "histoire") => ({
+      photos: [],
+      funFact: { texte, titre: "Fun fact", registre, paragraphe: 0, pertinence },
+    });
+    // Une page par étape : un paragraphe court, sans photo.
+    const etapes = (notes: [number, string?][]) =>
+      notes.map(([note, registre], i) => etape(paragrapheDe(`le lieu ${i}`, 1), [], encart(`Fait n° ${i}.`, note, registre), `Lieu ${i}`));
+    const encarts = (jours: Jour[]) => jours.map((j) => (j["fun_facts"] as string[])[0] ?? null);
+
+    it("n'en met aucun quand le réglage du carnet est coupé", () => {
+      expect(encarts(M.composerJours(etapes([[9], [9]]), { funFacts: false }))).toEqual([null, null]);
+    });
+
+    it("n'imprime ni un encart sous le seuil de pertinence, ni un encart trop long", () => {
+      const jours = M.composerJours(
+        [
+          etape(paragrapheDe("la plage", 1), [], encart("Un fait sans intérêt.", 4)),
+          etape(paragrapheDe("le port", 1), [], encart("x".repeat(141), 9)),
+        ],
+        { funFacts: true },
+      );
+      expect(encarts(jours)).toEqual([null, null]);
+    });
+
+    it("en met un toutes les trois pages au plus, les mieux notés d'abord", () => {
+      const jours = M.composerJours(
+        etapes([[7, "histoire"], [9, "vecu"], [7, "cuisine"], [7, "record"], [8, "usage-local"]]),
+        { funFacts: true },
+      );
+      // {1, 4} (17) l'emporte sur {0, 3} (14).
+      expect(encarts(jours)).toEqual([null, "Fait n° 1.", null, null, "Fait n° 4."]);
+      expect(jours[1]?.["fun_facts_title"]).toBe("Fun fact");
+      expect(jours[1]?.["ai_note"]).toBe("Fun fact rédigé par IA");
+    });
+
+    it("ne laisse pas deux encarts du même registre à la suite", () => {
+      const jours = M.composerJours(etapes([[8, "histoire"], [7], [7], [9, "histoire"]]), { funFacts: true });
+      expect(encarts(jours)).toEqual([null, null, null, "Fait n° 3."]);
+    });
+
+    it("pose l'encart à côté de la photo flottante plutôt que sous une grande photo en tête", () => {
+      const jours = M.composerJours([etape(paragrapheDe("la plage", 1), [photo("p", 1.4)], encart("Fait.", 9))], {
+        funFacts: true,
+      });
+      expect(jours[0]?.["layout_hero_top"]).toBe(false);
+      expect(jours[0]?.["layout_story_opener"]).toBe(true);
+      expect(encarts(jours)).toEqual(["Fait."]);
+    });
+  });
 });

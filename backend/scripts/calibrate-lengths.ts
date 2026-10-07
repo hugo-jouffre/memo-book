@@ -84,6 +84,7 @@ interface Config {
 const LAYOUTS: Config[] = [
   { flag: "layout_story_opener", photos: 1, funFact: true, note: "récit + carte info et photo flottantes" },
   { flag: "layout_story_opener", photos: 1, funFact: false, note: "récit + photo flottante" },
+  { flag: "layout_story_opener", photos: 0, funFact: true, note: "récit + carte info seule" },
   { flag: "layout_story_opener", photos: 1, funFact: false, bloc: "prompt", note: "récit + champ à remplir" },
   { flag: "layout_story_opener", photos: 1, funFact: false, bloc: "quiz", note: "récit + quiz" },
   { flag: "layout_hero_top", photos: 1, funFact: false, note: "photo héro en tête" },
@@ -95,6 +96,8 @@ const LAYOUTS: Config[] = [
   { flag: "layout_chapter_map", photos: 2, funFact: false, note: "carte + 2 photos" },
   { flag: "layout_chapter_map", photos: 0, funFact: false, note: "carte seule, pas de bande d'images" },
   { flag: "layout_story_opener", photos: 1, funFact: false, suite: true, note: "PAGE DE SUITE, sans bandeau" },
+  { flag: "layout_story_opener", photos: 1, funFact: true, suite: true, note: "PAGE DE SUITE, carte info et photo flottantes" },
+  { flag: "layout_story_opener", photos: 0, funFact: true, suite: true, note: "PAGE DE SUITE, carte info seule" },
   { flag: "layout_collage", photos: 3, funFact: false, suite: true, note: "PAGE DE SUITE, sans bandeau" },
   { flag: "layout_split_left", photos: 2, funFact: false, suite: true, note: "PAGE DE SUITE, sans bandeau" },
   { flag: "layout_hero_top", photos: 1, funFact: false, suite: true, note: "PAGE DE SUITE, sans bandeau" },

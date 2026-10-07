@@ -253,7 +253,8 @@ function chargerBoites() {
 }
 
 const etat = {
-  carnet: { titre: "", destination: "", dateDebut: "", dateFin: "", voyageurs: "" },
+  /** `funFacts` : le réglage « Insérer des Fun facts » de la personnalisation de l'app, allumé par défaut comme elle. */
+  carnet: { titre: "", destination: "", dateDebut: "", dateFin: "", voyageurs: "", funFacts: true },
   /** Un champ touché à la main n'est plus jamais réécrit par la déduction. */
   carnetManuel: {},
   carnetDeduit: {},
@@ -1517,6 +1518,7 @@ function construirePayloadCarnet(photoDe = (data) => data) {
       // Le colophon est la page 1 du livre imprimé : la première page d'étape
       // est à gauche.
       pagesAvant: 1,
+      funFacts: etat.carnet.funFacts !== false,
       journal: (texte) => debugCarnet(texte),
     }),
     back_cover: {
@@ -1755,6 +1757,8 @@ const CONTOURS_CARTE_URL =
  */
 function cleAnalyse(etape) {
   const contenu = [
+    // La version de la consigne : une analyse faite avant l'encart n'en a pas.
+    VERSION_ANALYSE,
     etape.lieu || "",
     etat.carnet.destination || "",
     recitDe(etape),
@@ -1764,6 +1768,9 @@ function cleAnalyse(etape) {
   for (let i = 0; i < contenu.length; i += 1) h = (Math.imul(31, h) + contenu.charCodeAt(i)) | 0;
   return `${contenu.length}-${(h >>> 0).toString(36)}`;
 }
+
+/** À changer quand `consigneAnalyseEtape` demande autre chose : les analyses gardées se refont. */
+const VERSION_ANALYSE = "2-encart";
 
 /** Vignette JPEG de 512 px au plus côté : assez pour reconnaître une scène, léger à envoyer. */
 async function vignette(dataUrl) {
@@ -1802,7 +1809,7 @@ async function analyserEtapes(statut = () => {}) {
   const aFaire = etat.etapes.filter((e) => e.analyse?.cle !== cleAnalyse(e));
   if (!aFaire.length) return { faites: 0, echecs: 0 };
   if (!avecCle) {
-    statut("Pas de clé de modèle : photos placées dans l'ordre du voyage, pas de carte de chapitre.");
+    statut("Pas de clé de modèle : photos placées dans l'ordre du voyage, ni carte de chapitre ni fun fact.");
     return { faites: 0, echecs: aFaire.length };
   }
 
@@ -2897,6 +2904,28 @@ function rendreChampsCarnet() {
       puce: etat.carnetDeduit.voyageurs,
       surSaisie: poser("voyageurs"),
     }),
+    // Le même réglage que la personnalisation du carnet dans l'app.
+    h(
+      "div",
+      { style: { gridColumn: "1 / -1" } },
+      h(
+        "label",
+        { class: "case" },
+        h("input", {
+          type: "checkbox",
+          checked: etat.carnet.funFacts !== false,
+          onchange: (ev) => {
+            etat.carnet.funFacts = ev.target.checked;
+          },
+        }),
+        " Insérer des Fun facts",
+      ),
+      h(
+        "p",
+        { class: "aide" },
+        "Un encart tiré du récit, une page sur trois au plus, et seulement quand il en vaut la peine.",
+      ),
+    ),
   );
 }
 

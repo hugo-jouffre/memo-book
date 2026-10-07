@@ -17,7 +17,9 @@
  *    carte (`layout_chapter_map`) ;
  * 4. puis, sur tout le carnet, deux pages qui se font face ne gardent jamais
  *    la même composition (`varierDoublesPages`) ;
- * 5. enfin chaque photo prend l'emplacement qui la rogne le moins
+ * 5. si le carnet a ses fun facts allumés, les encarts proposés par l'analyse
+ *    se posent, un toutes les trois pages au plus (`placerEncarts`) ;
+ * 6. enfin chaque photo prend l'emplacement qui la rogne le moins
  *    (`placerPhotos`).
  *
  * Règles et chiffres : `templates/travel-journal/LAYOUT_KB.md`.
@@ -520,12 +522,14 @@
    */
   function composition(plan) {
     if (plan.genre === "planche") return "planche";
-    if (plan.layout === "layout_chapter_map") return "carte";
+    // Un encart change la page : la carte info se voit avant le texte.
+    const encart = plan.encart ? "+encart" : "";
+    if (plan.layout === "layout_chapter_map") return `carte${encart}`;
     if (plan.layout === "layout_hero_top") return "hero";
     const n = plan.photos.length;
-    if (n === 0) return "texte";
-    if (n === 1) return "texte+photo";
-    return n === 2 ? "bande2" : "bande3";
+    if (n === 0) return `texte${encart}`;
+    if (n === 1) return `texte+photo${encart}`;
+    return (n === 2 ? "bande2" : "bande3") + encart;
   }
 
   function heroAdmis(plan) {
@@ -614,6 +618,108 @@
     return restants;
   }
 
+  /* ---------------------------------------------------------- les encarts --- */
+
+  /** 140 caractères : la limite de `payloadValidator.ts` (`funFactChars`). */
+  const MAX_SIGNES_ENCART = 140;
+  /** Sous cette note, aucun encart : un encart de remplissage coûte plus qu'il ne rapporte. */
+  const SEUIL_PERTINENCE = 7;
+  /** Un encart toutes les trois pages au plus — LAYOUT_KB, et le réglage de l'app. */
+  const ECART_ENCARTS = 3;
+  const TITRES_ENCART = ["Fun fact", "Infos", "Culture générale", "Chiffres clés"];
+
+  /** L'encart proposé par l'analyse d'étape, s'il est imprimable et assez pertinent. */
+  function encartDe(analyse) {
+    const f = analyse?.funFact;
+    const texte = typeof f?.texte === "string" ? f.texte.replace(/\s+/g, " ").trim() : "";
+    const pertinence = Number(f?.pertinence);
+    if (!texte || texte.length > MAX_SIGNES_ENCART || !(pertinence >= SEUIL_PERTINENCE)) return null;
+    return {
+      texte,
+      titre: TITRES_ENCART.includes(f.titre) ? f.titre : "Fun fact",
+      registre: normaliser(f.registre),
+      paragraphe: Number.isInteger(f.paragraphe) ? f.paragraphe : null,
+      pertinence,
+    };
+  }
+
+  /**
+   * La page peut-elle porter l'encart sans perdre une ligne de récit ? Plafonds
+   * relevés par `calibrate-lengths.ts` :
+   *
+   * - récit avec 0 ou 1 photo : l'encart se pose dans la zone flottante, à côté
+   *   de la photo, sans rien coûter (560 / 2 paragraphes sous un bandeau, 880
+   *   sur une page de suite). Une grande photo en tête n'a pas cette zone : la
+   *   page passe à la photo flottante ;
+   * - deux photos (`layout_split_left`) : la colonne de récit se rétrécit, 240 ;
+   * - ouverture de chapitre avec deux photos : 120 ;
+   * - trois photos (`layout_collage`) ou carte seule : pas de place prévue.
+   */
+  function peutPorterEncart(plan) {
+    if (plan.genre !== "recit" || !plan.texte.length) return false;
+    const n = signes(plan.texte);
+    if (plan.layout === "layout_chapter_map") return plan.photos.length === 2 && n <= 120;
+    if (plan.photos.length <= 1) return true;
+    return plan.photos.length === 2 && n <= 240;
+  }
+
+  /**
+   * Quels encarts s'impriment, et sur quelle page (LAYOUT_KB § « Les fun facts
+   * — dosage et matière ») :
+   *
+   * - un par étape au plus, sur la page du passage dont il vient quand elle peut
+   *   le porter, sinon sur la première page de l'étape qui le peut ;
+   * - trois pages au moins d'un encart au suivant : parmi les candidats, on
+   *   garde la combinaison la mieux notée qui respecte cet écart ;
+   * - jamais deux encarts du même registre à la suite : le moins bien noté
+   *   s'efface.
+   *
+   * Pose `plan.encart` sur les pages retenues et renvoie leur nombre.
+   */
+  function placerEncarts(plans, etapes) {
+    const candidats = [];
+    etapes.forEach((etape, e) => {
+      const encart = encartDe(etape.analyse);
+      if (!encart) return;
+      const pages = plans.map((plan, i) => ({ plan, i })).filter(({ plan }) => plan.etape === e && peutPorterEncart(plan));
+      const hote = pages.find(({ plan }) => plan.paragraphes.includes(encart.paragraphe)) || pages[0];
+      if (hote) candidats.push({ i: hote.i, encart });
+    });
+
+    // La meilleure somme des notes sous la contrainte d'écart : un choix
+    // pondéré d'intervalles, les candidats étant déjà dans l'ordre des pages.
+    const meilleur = [0];
+    const pris = [];
+    candidats.forEach((c, k) => {
+      let j = k - 1;
+      while (j >= 0 && candidats[j].i > c.i - ECART_ENCARTS) j -= 1;
+      const avec = c.encart.pertinence + meilleur[j + 1];
+      pris[k] = { avec: avec > meilleur[k], j };
+      meilleur[k + 1] = Math.max(meilleur[k], avec);
+    });
+    let retenus = [];
+    for (let k = candidats.length - 1; k >= 0; ) {
+      if (pris[k].avec) {
+        retenus.unshift(candidats[k]);
+        k = pris[k].j;
+      } else k -= 1;
+    }
+
+    // Deux registres identiques à la suite : on garde le mieux noté.
+    retenus = retenus.reduce((liste, c) => {
+      const avant = liste[liste.length - 1];
+      if (!avant || !c.encart.registre || avant.encart.registre !== c.encart.registre) return [...liste, c];
+      return c.encart.pertinence > avant.encart.pertinence ? [...liste.slice(0, -1), c] : liste;
+    }, []);
+
+    for (const { i, encart } of retenus) {
+      const plan = plans[i];
+      plan.encart = encart;
+      if (plan.layout === "layout_hero_top") plan.layout = plan.ouvreLeCarnet ? "layout_story_opener" : "layout_story_facts";
+    }
+    return retenus.length;
+  }
+
   /* ------------------------------------------------------------ le carnet --- */
 
   const drapeaux = (actif) => ({
@@ -632,10 +738,12 @@
    * `etapes` : `{ titre, lieu, dateLongue, numero, lieuComplet, recit,
    * photos: [{ id, src, format, groupe }], analyse }` — `analyse` est la réponse
    * de l'analyse d'étape (`consigneAnalyseEtape`), ou `null`.
-   * `options` : `{ contours, dessinerCarte, pagesAvant, journal }`.
+   * `options` : `{ contours, dessinerCarte, pagesAvant, funFacts, journal }` —
+   * `funFacts` est le réglage « Insérer des Fun facts » du carnet : coupé,
+   * aucun encart.
    */
   function composerJours(etapes, options = {}) {
-    const { contours = null, dessinerCarte = null, pagesAvant = 1, journal = () => {} } = options;
+    const { contours = null, dessinerCarte = null, pagesAvant = 1, funFacts = false, journal = () => {} } = options;
     const plans = [];
     const chapitresPasses = [];
     let lieuPrecedent = null;
@@ -764,6 +872,11 @@
     const restants = varierDoublesPages(plans, pagesAvant);
     if (restants) journal(`${restants} double(s) page(s) gardent la même composition faute d'alternative.`);
 
+    // Les encarts en dernier : ils se posent sur des pages déjà composées, sans
+    // déplacer ni photo ni ligne de récit, et ne font que distinguer davantage
+    // deux pages en vis-à-vis.
+    if (funFacts) journal(`${placerEncarts(plans, etapes)} encart(s) « fun fact » dans le carnet.`);
+
     return plans.map((plan) => {
       if (plan.genre === "planche") {
         return {
@@ -779,7 +892,10 @@
         ...drapeaux(plan.layout),
         body_html: paragraphesEnHtml(plan.texte),
         photos: placerPhotos(plan.layout, plan.photos),
-        fun_facts: [],
+        fun_facts: plan.encart ? [plan.encart.texte] : [],
+        // L'encart est écrit par le modèle : la page le dit, en petit
+        // (LAYOUT_KB § « La mention généré par IA »).
+        ...(plan.encart ? { fun_facts_title: plan.encart.titre, ai_note: "Fun fact rédigé par IA" } : {}),
         sticker_groups: [],
         ...(plan.carte ? { map_svg: plan.carte } : {}),
       };
@@ -804,6 +920,7 @@
     affecterPhotos,
     placerPhotos,
     varierDoublesPages,
+    placerEncarts,
     composition,
     composerJours,
     paragraphesEnHtml,
