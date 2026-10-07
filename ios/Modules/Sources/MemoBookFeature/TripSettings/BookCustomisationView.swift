@@ -124,9 +124,11 @@ public struct BookCustomisationView: View {
     /// qui passe dessous.
     private var header: some View {
         VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
-            BrandScreenHeader(title: BookCopy.Customisation.title)
-                .padding(.horizontal, MemoBookSpacing.screenMargin)
-                .padding(.top, MemoBookSpacing.xs)
+            BrandScreenHeader(title: BookCopy.Customisation.title) {
+                headerActions
+            }
+            .padding(.horizontal, MemoBookSpacing.screenMargin)
+            .padding(.top, MemoBookSpacing.xs)
 
             // L'aperçu de personnalisation, et non plus les pages du PDF
             // composé : c'est lui qui suit les réglages (Hugo, 02/10/2026).
@@ -150,6 +152,36 @@ public struct BookCustomisationView: View {
             .offset(y: MemoBookSpacing.s)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
+        }
+    }
+
+    /// **Deux commandes en haut à droite** (Hugo, 06/10/2026, T197 et T224) :
+    /// les couvertures, et l'aperçu PDF.
+    ///
+    /// Plus rien ne menait aux couvertures depuis cet écran (la V3 ne dessine
+    /// pas leur ligne), et l'aperçu — ce que les réglages vont changer — était
+    /// à deux écrans. Les deux prennent la forme des commandes d'en-tête de
+    /// l'app : une icône cerclée de 2.75 rem, son nom dit à VoiceOver.
+    /// L'aperçu porte **l'imprimante**, comme sur l'accueil du voyage et la
+    /// conversation : la même destination, le même signe — et l'ouvrir lance
+    /// la composition, comme partout.
+    ///
+    /// ⚠️ « Au plus une action » en tête d'écran, dit ``BrandScreenHeader`` :
+    /// l'écart est demandé. Côte à côte et non empilées, parce que la tête est
+    /// fixe — empilées, elles prendraient au réglage une ligne de hauteur ; le
+    /// titre, lui, passe à la ligne (deux lignes sur un iPhone SE).
+    private var headerActions: some View {
+        HStack(spacing: MemoBookSpacing.xs) {
+            BrandHeaderAction(
+                icon: "IconPictureFrame",
+                label: BookCopy.Preview.configureCovers,
+                action: { onIntent(.openCovers) }
+            )
+            BrandHeaderAction(
+                icon: "IconPrinter",
+                label: BookCopy.Settings.pdfPreview,
+                action: { onIntent(.openBookPreview) }
+            )
         }
     }
 
@@ -194,12 +226,13 @@ public struct BookCustomisationView: View {
 
 /// Ce que les personnalisations demandent à l'app d'ouvrir.
 public enum BookCustomisationIntent: Sendable, Hashable {
-    /// L'aperçu et la personnalisation des deux couvertures.
-    ///
-    /// ⚠️ Plus aucune ligne de cet écran n'y mène depuis la V3 (29/09/2026) :
-    /// la maquette n'en dessine pas. Le chemin reste celui de l'aperçu PDF —
-    /// « Configurer » sur la première page. Voir T197.
+    /// L'aperçu et la personnalisation des deux couvertures — la commande
+    /// d'en-tête « Configurer mes couvertures » (T197). « Configurer », sur la
+    /// première et la dernière page de l'aperçu PDF, y mène aussi.
     case openCovers
+    /// L'aperçu PDF, qui lance la composition — la commande d'en-tête à
+    /// l'imprimante (T224).
+    case openBookPreview
     /// Le support, depuis le bandeau d'erreur : quand réessayer ne suffit pas.
     case openHelp
 }

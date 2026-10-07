@@ -769,11 +769,14 @@ public struct RootView: View {
         }
     }
 
-    /// Où mènent les deux intentions des personnalisations.
+    /// Où mènent les intentions des personnalisations.
     private func handle(_ intent: BookCustomisationIntent) {
         switch intent {
         case .openCovers:
             openCovers()
+        case .openBookPreview:
+            guard let tripId = currentTripId else { return }
+            path.append(.bookPreview(memoId: tripId))
         case .openHelp:
             path.append(.support)
         }
