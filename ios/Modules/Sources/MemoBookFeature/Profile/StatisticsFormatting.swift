@@ -14,9 +14,20 @@ import MemoBookCore
 /// **Zéro prend le singulier**, comme un : « 0 jour validé », pas « 0 jours
 /// validés ». C'est la règle du français, et c'est la ligne que la feuille
 /// écrit le plus souvent au début d'un voyage.
+///
+/// **Le nombre tient à son mot** (T161, recette sur iPhone SE, 07/10/2026) :
+/// une espace insécable les lie. Sur l'écran étroit, la ligne « Transports »
+/// se coupait en « 1 avion, 2 / trains, scooter » — le chiffre d'un côté, ce
+/// qu'il compte de l'autre. La ligne ne se coupe plus qu'après une virgule.
 func counted(_ count: Int, _ singular: String, _ plural: String) -> String {
     let number = count.formatted(.number.grouping(.automatic))
-    return count <= 1 ? "\(number) \(singular)" : "\(number) \(plural)"
+    return count <= 1 ? "\(number)\u{00A0}\(singular)" : "\(number)\u{00A0}\(plural)"
+}
+
+/// Une part d'une énumération, d'un seul tenant : « 2 trains », « à pied »
+/// ne se coupent pas en fin de ligne. Voir ``counted(_:_:_:)``.
+func unbroken(_ part: String) -> String {
+    part.replacingOccurrences(of: " ", with: "\u{00A0}")
 }
 
 extension TravelFigures {
@@ -48,7 +59,7 @@ extension TravelFigures {
     /// prend son espace comme le veut `agents/agent-transcription.md` § 8.6.
     /// L'écart est signalé dans la fiche écran.
     var distanceLabel: String {
-        "\(distanceKilometres.formatted(.number.grouping(.automatic))) km"
+        "\(distanceKilometres.formatted(.number.grouping(.automatic)))\u{00A0}km"
     }
 }
 
@@ -95,7 +106,7 @@ extension CurrentTripStatistics {
     var transportsLabel: String {
         transports.isEmpty
             ? StatisticsCopy.nothingYet
-            : transports.map(\.label).joined(separator: ", ")
+            : transports.map { unbroken($0.label) }.joined(separator: ", ")
     }
 
     /// La part des pays du compte que ce voyage couvre, pour le second anneau.

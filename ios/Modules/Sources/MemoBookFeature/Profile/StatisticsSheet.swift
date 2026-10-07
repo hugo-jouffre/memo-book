@@ -294,6 +294,10 @@ private struct SectionHeader: View {
         Text(title.uppercased())
             .font(MemoBookFont.sectionOverline)
             .foregroundStyle(MemoBookColor.action)
+            // Un seul mot — « STATISTIQUES » — se resserre plutôt que de se
+            // couper en plein mot sur un écran étroit (T161, SE en AX5).
+            .lineLimit(title.contains(" ") ? nil : 1)
+            .minimumScaleFactor(title.contains(" ") ? 1 : 0.6)
             .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -377,6 +381,10 @@ private struct StatisticLine: View {
         Text(title)
             .font(MemoBookFont.body)
             .foregroundStyle(MemoBookColor.inkMuted)
+            // « Enregistrements » se coupait en « Enregistremen / ts » sur SE
+            // aux tailles accessibles (T161) : un mot seul se resserre.
+            .lineLimit(title.contains(" ") ? nil : 1)
+            .minimumScaleFactor(title.contains(" ") ? 1 : 0.6)
             .fixedSize(horizontal: false, vertical: true)
     }
 
