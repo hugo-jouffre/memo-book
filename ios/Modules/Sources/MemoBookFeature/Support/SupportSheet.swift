@@ -17,14 +17,26 @@ import SwiftUI
 struct SupportSheet: View {
     let model: SupportModel
     let route: SupportSheetRoute
+    /// D'où part le message : le support, ou « Partager mes retours » du mot
+    /// des fondateurs (T226).
+    let source: SupportMessage.Source
+    /// Le voyage d'où l'on écrit, s'il y en a un.
+    let tripId: String?
 
     @State private var step: Step
     @State private var message = ""
     @FocusState private var isWriting: Bool
 
-    init(model: SupportModel, route: SupportSheetRoute) {
+    init(
+        model: SupportModel,
+        route: SupportSheetRoute,
+        source: SupportMessage.Source = .support,
+        tripId: String? = nil
+    ) {
         self.model = model
         self.route = route
+        self.source = source
+        self.tripId = tripId
         _step = State(initialValue: Step(route))
     }
 
@@ -126,7 +138,7 @@ struct SupportSheet: View {
             ) {
                 isWriting = false
                 Task {
-                    await model.send(message)
+                    await model.send(message, source: source, topicId: topicId, tripId: tripId)
                     if model.sendState == .sent { step = .sent }
                 }
             }
@@ -134,6 +146,12 @@ struct SupportSheet: View {
             // passant au gris plutôt qu'en échouant après coup.
             .disabled(message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
+    }
+
+    /// La question de « Nous contacter » qui a ouvert le formulaire.
+    private var topicId: String? {
+        if case .contact(let entry) = step { return entry?.id }
+        return nil
     }
 
     // MARK: - La confirmation
@@ -189,6 +207,13 @@ private struct HelpfulVote: View {
     let model: SupportModel
 
     var body: some View {
+        VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
+            thumbs
+            failure
+        }
+    }
+
+    private var thumbs: some View {
         HStack(spacing: MemoBookSpacing.s) {
             Text(SupportCopy.Answer.helpful)
                 .font(MemoBookFont.label)
@@ -205,11 +230,25 @@ private struct HelpfulVote: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        // Le vote part : les pouces se figent le temps de la réponse.
+        .disabled(model.pendingVotes.contains(entry.id))
+    }
+
+    /// Le vote n'est pas parti : les pouces restent, pour réessayer.
+    @ViewBuilder
+    private var failure: some View {
+        if let failure = model.voteFailure, failure.questionId == entry.id {
+            Text(failure.message)
+                .font(MemoBookFont.caption)
+                .foregroundStyle(MemoBookColor.error)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     private func thumb(icon: String, label: String, isHelpful: Bool) -> some View {
         Button {
-            model.vote(isHelpful, on: entry)
+            Task { await model.vote(isHelpful, on: entry) }
         } label: {
             Image(brand: icon)
                 .resizable()

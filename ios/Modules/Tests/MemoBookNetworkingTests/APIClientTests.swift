@@ -511,6 +511,53 @@ final class APIClientTests: XCTestCase {
         XCTAssertTrue(body.contains(#""kind":"text""#))
     }
 
+    // MARK: - Le support (T226, 06/10/2026)
+
+    func testASupportMessageIsPostedWithItsSource() async throws {
+        let client = makeClient()
+        respond(status: 201, json: #"{"id":"s1","createdAt":"2026-10-07T10:00:00.000Z"}"#)
+
+        try await client.sendSupportMessage(
+            SupportMessage(source: .foundersNote, message: "Super carnet", appVersion: "0.1.0 (21)")
+        )
+
+        let request = try XCTUnwrap(StubURLProtocol.lastRequest)
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.url?.path, "/v1/support/messages")
+        let body = String(decoding: StubURLProtocol.lastBody ?? Data(), as: UTF8.self)
+        XCTAssertTrue(body.contains(#""source":"founders_note""#))
+        XCTAssertTrue(body.contains(#""message":"Super carnet""#))
+    }
+
+    func testAFaqVoteIsPutOnItsQuestion() async throws {
+        let client = makeClient()
+        respond(
+            status: 200,
+            json: #"{"questionId":"faq.carnet.pages","isHelpful":false,"updatedAt":"2026-10-07T10:00:00.000Z"}"#
+        )
+
+        try await client.voteOnFaq(questionId: "faq.carnet.pages", isHelpful: false, appVersion: nil)
+
+        let request = try XCTUnwrap(StubURLProtocol.lastRequest)
+        XCTAssertEqual(request.httpMethod, "PUT")
+        XCTAssertEqual(request.url?.path, "/v1/support/faq-votes/faq.carnet.pages")
+        let body = String(decoding: StubURLProtocol.lastBody ?? Data(), as: UTF8.self)
+        XCTAssertTrue(body.contains(#""isHelpful":false"#))
+    }
+
+    func testTheFaqVotesAreRead() async throws {
+        let client = makeClient()
+        respond(
+            status: 200,
+            json: #"{"votes":[{"questionId":"faq.carnet.pages","isHelpful":true,"updatedAt":"2026-10-07T10:00:00.000Z"}]}"#
+        )
+
+        let votes = try await client.faqVotes()
+
+        XCTAssertEqual(votes.map(\.questionId), ["faq.carnet.pages"])
+        XCTAssertEqual(votes.first?.isHelpful, true)
+    }
+
     // MARK: - Le crédit du jour (03/10/2026)
 
     /// Le fuseau de l'appareil part sur **chaque** appel : le crédit du jour se

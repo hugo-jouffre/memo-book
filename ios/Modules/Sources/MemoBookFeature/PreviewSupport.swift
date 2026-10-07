@@ -59,6 +59,9 @@ public actor PreviewAPI: MemoBookAPI {
     /// Nul tant que rien n'a été corrigé : le profil est alors le jeu d'essai.
     private var editedProfile: TravellerProfile?
 
+    /// Les votes « Est-ce utile ? » du bac à sable, le temps de la session.
+    private var sandboxFaqVotes: [String: Bool] = [:]
+
     /// Les voyages créés dans le bac à sable, le plus récent d'abord : ils
     /// restent sur l'accueil une fois « arrivés », comme sur le serveur.
     private var createdTrips: [Trip] = []
@@ -295,6 +298,20 @@ public actor PreviewAPI: MemoBookAPI {
     public func profile() async throws -> TravellerProfile { editedProfile ?? .fixture }
 
     public func travelStatistics() async throws -> TravelStatistics { .fixture }
+
+    /// Le bac à sable reçoit le message comme le serveur : un instant, puis
+    /// « envoyé ». Rien ne part.
+    public func sendSupportMessage(_ message: SupportMessage) async throws {
+        try await Task.sleep(for: .milliseconds(400))
+    }
+
+    public func voteOnFaq(questionId: String, isHelpful: Bool, appVersion: String?) async throws {
+        sandboxFaqVotes[questionId] = isHelpful
+    }
+
+    public func faqVotes() async throws -> [FaqVote] {
+        sandboxFaqVotes.map { FaqVote(questionId: $0.key, isHelpful: $0.value) }
+    }
 
     public func updateProfile(_ edit: ProfileEdit) async throws -> TravellerProfile {
         // Le double garde ce qu'on lui écrit : un aperçu où l'on corrige son

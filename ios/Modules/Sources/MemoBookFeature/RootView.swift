@@ -256,6 +256,9 @@ public struct RootView: View {
                 // la question de l'autorisation, qui attend l'étape
                 // « Notifications » de la création d'un voyage.
                 .task(id: account.id) { await push?.connect(api: dependencies.api) }
+                // Le support écrit et vote **au nom de ce compte** (T226) ; les
+                // votes du compte d'avant s'effacent.
+                .task(id: account.id) { await support.connect(SupportBackend(api: dependencies.api)) }
                 .fullScreenCover(isPresented: $showsNotificationPaywall) {
                     PaywallView(
                         subscription: .offer,
@@ -1050,7 +1053,8 @@ public struct RootView: View {
         case .coverTexts(let tripId):
             CoverTextsView(model: covers(for: tripId))
         case .support:
-            SupportView(model: support)
+            // Le voyage d'où l'on vient part avec le message (T226).
+            SupportView(model: support, tripId: path.lazy.reversed().compactMap(\.supportTripId).first)
         case .legal(let document):
             LegalDocumentView(document: document.content, onIntent: handle)
         }

@@ -119,6 +119,19 @@ public protocol MemoBookAPI: Sendable {
     /// sont fermées ; la sienne reste.
     func changePassword(current: String, new: String) async throws
 
+    /// Écrit à l'équipe — `POST /v1/support/messages` (T226). Ne rend rien
+    /// d'utile à l'écran : « envoyé » se dit **après** la réponse.
+    /// `429 support_rate_limited` au-delà de vingt messages en 24 h.
+    func sendSupportMessage(_ message: SupportMessage) async throws
+
+    /// « Est-ce utile ? » — `PUT /v1/support/faq-votes/:questionId`. Revoter
+    /// remplace.
+    func voteOnFaq(questionId: String, isHelpful: Bool, appVersion: String?) async throws
+
+    /// Les votes déjà donnés par ce compte — `GET /v1/support/faq-votes` —,
+    /// pour remplacer les pouces par « Merci ! ».
+    func faqVotes() async throws -> [FaqVote]
+
     /// Résilie l'abonnement, au bout des trois confirmations de la feuille.
     ///
     /// Rend le profil relu : c'est lui qui porte l'abonnement fermé, la date de

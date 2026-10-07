@@ -262,6 +262,35 @@ public actor MemoBookAPIClient: MemoBookAPI {
         )
     }
 
+    public func sendSupportMessage(_ message: SupportMessage) async throws {
+        struct Receipt: Decodable { let id: String }
+        let _: Receipt = try await send(
+            method: "POST",
+            path: "/v1/support/messages",
+            encodableBody: message,
+            credential: .session
+        )
+    }
+
+    public func voteOnFaq(questionId: String, isHelpful: Bool, appVersion: String?) async throws {
+        struct Body: Encodable {
+            let isHelpful: Bool
+            let appVersion: String?
+        }
+        let _: FaqVote = try await send(
+            method: "PUT",
+            path: "/v1/support/faq-votes/\(questionId)",
+            encodableBody: Body(isHelpful: isHelpful, appVersion: appVersion),
+            credential: .session
+        )
+    }
+
+    public func faqVotes() async throws -> [FaqVote] {
+        struct Response: Decodable { let votes: [FaqVote] }
+        let response: Response = try await send(method: "GET", path: "/v1/support/faq-votes")
+        return response.votes
+    }
+
     public func cancelSubscription(
         reason: SubscriptionCancellationReason?
     ) async throws -> TravellerProfile {
