@@ -2,6 +2,7 @@ import MemoBookCore
 import MemoBookDesign
 import SwiftUI
 import UIKit
+import UserNotifications
 
 /// La conversation avec MEMO : on raconte, il écoute, et le carnet se remplit
 /// pendant ce temps-là.
@@ -173,6 +174,27 @@ public struct ChatView: View {
     @State private var showsAwaitingServer = false
     private var isAwaitingServer: Bool { tripsAwaitingServer.contains(tripId) }
 
+    /// Ce qu'iOS a répondu pour les notifications, relu à l'ouverture et à
+    /// chaque retour au premier plan — au retour des Réglages, surtout. `nil`
+    /// tant qu'on ne l'a pas lu. Voir ``ChatNotificationsNudge`` (T246).
+    @State private var notificationAuthorization: UNAuthorizationStatus?
+    @Environment(\.scenePhase) private var scenePhase
+
+    /// La bulle « Suggestions » des notifications se montre.
+    private var showsNotificationsNudge: Bool {
+        guard let notificationAuthorization else { return false }
+        return NotificationsNudge.isShown(
+            hasPassedStep: NotificationsNudge.hasPassedStep(),
+            authorization: notificationAuthorization,
+            state: model.callToActionState(for: NotificationsNudge.bubbleId)
+        )
+    }
+
+    private func refreshNotificationAuthorization() async {
+        let status = await NotificationsNudge.systemAuthorization()
+        withAnimation(reduceMotion ? nil : .smooth(duration: 0.25)) { notificationAuthorization = status }
+    }
+
     /// Ce que le défilement a parcouru — voir ``ChatScrollTracker``. Un
     /// objet **non observé** gardé par `@State` : ses compteurs changent à
     /// chaque image de défilement, et rien à l'écran n'en dépend directement.
@@ -218,6 +240,12 @@ public struct ChatView: View {
         }
         // Un écran de chat laissé derrière soi ne doit ni parler ni enregistrer.
         .onDisappear { model.teardown() }
+        // L'autorisation des notifications, pour la bulle qui les propose :
+        // relue au retour au premier plan — des Réglages, souvent.
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            await refreshNotificationAuthorization()
+        }
         // La session d'abonnement, prêtée au modèle : un achat fait passer le
         // crédit du jour en illimité tout de suite — plus de bandeau, plus de
         // micro pâli —, sans attendre que le serveur le redise.
@@ -262,6 +290,17 @@ public struct ChatView: View {
                         )
                         .id(message.id)
                         .transition(rowTransition(for: message))
+                    }
+
+                    // Après le fil : c'est une suggestion pour la suite, pas
+                    // un message d'hier (T246).
+                    if showsNotificationsNudge, let notificationAuthorization {
+                        ChatNotificationsNudge(
+                            model: model,
+                            authorization: notificationAuthorization,
+                            onAnswered: refreshNotificationAuthorization
+                        )
+                        .transition(.opacity)
                     }
 
                     if model.isThinking {
@@ -804,6 +843,11 @@ public struct ChatView: View {
         case .importPhotos:
             photos.begin()
         case .openPhotoSettings:
+            openSettings()
+        case .enableNotifications:
+            // Posé par l'app seule (``ChatNotificationsNudge``), qui le traite
+            // elle-même ; venu du serveur, la page de MemoBook dans les
+            // Réglages, où se trouvent les notifications.
             openSettings()
         case .unknown:
             // Jamais affiché (``ChatModel/showsCallToAction(_:)``) : un bouton

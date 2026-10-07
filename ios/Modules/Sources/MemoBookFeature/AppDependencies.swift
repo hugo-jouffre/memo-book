@@ -530,7 +530,8 @@ public final class AppDependencies {
             save: { [outbox] draft in try await outbox.saveTrip(draft) },
             sync: { [outbox] id in await outbox.tripSync(for: id) },
             themes: { [api] in try await api.tripThemes() },
-            isOffline: { [outbox] in !outbox.isOnline }
+            isOffline: { [outbox] in !outbox.isOnline },
+            notificationsStepPassed: { NotificationsNudge.markStepPassed() }
         )
     }
 

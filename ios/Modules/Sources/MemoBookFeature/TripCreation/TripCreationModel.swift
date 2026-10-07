@@ -165,6 +165,7 @@ public final class TripCreationModel {
     private let sync: @Sendable (String) async -> TripSync?
     private let readThemes: @Sendable () async throws -> [TripTheme]
     private let isOffline: @MainActor () -> Bool
+    private let notificationsStepPassed: @MainActor () -> Void
 
     /// - Parameters:
     ///   - save: garde le brouillon — l'app y branche la file de départ
@@ -179,6 +180,10 @@ public final class TripCreationModel {
     ///   - isOffline: le téléphone est-il sans réseau ? L'app y branche
     ///     ``RecordingOutbox/isOnline`` — lue pendant le dessin, elle redessine
     ///     l'étape au retour du réseau. Par défaut, toujours en ligne.
+    ///   - notificationsStepPassed: l'étape « Notifications » vient d'être
+    ///     traversée — choisie ou passée. L'app le retient sur l'appareil : la
+    ///     conversation proposera d'activer les notifications à qui l'a passée
+    ///     sans les autoriser (``NotificationsNudge``, T246).
     public init(
         save: @escaping @Sendable (TripDraft) async throws -> Trip = { draft in
             .local(draft, id: draft.id ?? UUID().uuidString.lowercased())
@@ -187,12 +192,14 @@ public final class TripCreationModel {
             .created(CreatedTrip(trip: Trip(id: id, title: TripDraft.untitled, stage: .ongoing), accessCode: "JHKFDA"))
         },
         themes: @escaping @Sendable () async throws -> [TripTheme] = { TripTheme.fixtures },
-        isOffline: @escaping @MainActor () -> Bool = { false }
+        isOffline: @escaping @MainActor () -> Bool = { false },
+        notificationsStepPassed: @escaping @MainActor () -> Void = {}
     ) {
         self.save = save
         self.sync = sync
         self.readThemes = themes
         self.isOffline = isOffline
+        self.notificationsStepPassed = notificationsStepPassed
     }
 
     /// Lit les thèmes. À appeler à l'ouverture de l'écran ; relire ne fait pas
@@ -305,6 +312,8 @@ public final class TripCreationModel {
 
         if step == .name, draft.title.trimmed.isEmpty { draft.title = TripDraft.untitled }
         if step == .name { draft.title = draft.title.trimmed }
+
+        if step == .notifications { notificationsStepPassed() }
 
         if step == .lastBeforeSave {
             guard await persist() else { return }
