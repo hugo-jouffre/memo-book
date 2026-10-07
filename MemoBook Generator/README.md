@@ -299,7 +299,24 @@ textes » et § « La répartition sur une étape à plusieurs pages » :
 Le bandeau ne porte pas d'étiquette (`tag`) : l'atelier n'avait que le lieu à y
 mettre, déjà écrit dans le bandeau.
 
-**Ces règles sont recopiées en code** dans `public/app.js`. L'atelier ne lit
+5. **Les photos suivent le récit.** Avant la mise en page, une analyse d'étape
+   (même fournisseur et même modèle que le découpage) regarde les photos : le
+   passage que chacune illustre, celles prises au même endroit, le nombre de
+   visages. Chaque photo va sur la page de son passage, les photos d'une même
+   scène restent ensemble, et le surplus fait une planche juste après la page
+   dont il vient. Sans clé, les photos suivent l'ordre du voyage.
+6. **Chaque nouveau lieu ouvre un chapitre** sur une carte du pays
+   (`layout_chapter_map`), quand l'analyse a situé le lieu.
+7. **Deux pages en vis-à-vis n'ont jamais la même composition**, quand une
+   alternative existe.
+
+La case **« Version imprimeur »**, dans les réglages, produit l'intérieur du
+livre relié : sans couverture ni quatrième (imprimées sur la couverture
+rigide), avec un nombre de pages pair. Le nombre de pages intérieures s'affiche
+après le rendu : c'est celui à donner à l'outil de couverture Pumbo.
+
+**Ces règles sont recopiées en code** dans `public/mise-en-page.js` (testé par
+`backend/test/miseEnPageAtelier.test.ts`). L'atelier ne lit
 pas `LAYOUT_KB.md` — c'est l'Agent Mise en page de l'app qui le lit. Une règle
 ajoutée au KB doit donc aussi être portée ici pour changer les PDF de l'atelier.
 
@@ -310,6 +327,24 @@ n'est pas celle du dernier commit de `main`, recharger la page suffit.
 
 Le bouton **« Voir les layouts »** ouvre l'inspecteur de mise en page : chaque
 layout du carnet, ses champs et ses limites.
+
+## La couverture du livre relié
+
+Le bouton **« Générer la couverture »** compose la couverture Pumbo — plat
+verso, dos, plat recto — dans un nouvel onglet, au format exact de la fiche
+technique, avec ses repères de coupe et de pli à l'écran. *Imprimer →
+Enregistrer au format PDF* (marges *Aucune*, *Graphiques d'arrière-plan*
+coché) donne le fichier à envoyer.
+
+- **La fiche Pumbo** (le `.jsx` de leur outil de couverture) s'importe dans les
+  réglages. Elle seule donne la largeur du dos, qui dépend du nombre de pages :
+  une fiche par commande. Sans elle, l'atelier prend celle d'un relié de
+  48 pages (dos de 8 mm) et le signale.
+- **La photo de couverture** se désigne par l'étoile ☆ sous une photo ; sans
+  étoile, l'atelier choisit la plus adaptée (portrait, bien résolue, pas une
+  photo de groupe). C'est aussi celle de la couverture intérieure du carnet.
+
+Règles et cotes : `LAYOUT_KB.md`, § « Couverture imprimée (Pumbo) ».
 
 Trois raisons de l'appeler Beta, et de ne pas s'y fier pour un tirage :
 

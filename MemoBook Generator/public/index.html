@@ -29,6 +29,13 @@
             title="Ouvre l'inspecteur de mise en page : chaque layout du carnet, ses champs et ses limites"
             >Voir les layouts</a
           >
+          <button
+            class="btn"
+            data-action="generer-couverture"
+            title="Compose la couverture du livre relié Pumbo (recto, dos, verso) au format de la fiche technique, à enregistrer en PDF"
+          >
+            Générer la couverture
+          </button>
           <button class="btn" data-action="generer-json" id="btn-json">Générer le JSON</button>
           <button class="btn btn-lime" data-action="generer-carnet" id="btn-carnet">
             Générer le carnet<span class="beta">Beta</span>
@@ -53,6 +60,9 @@
 
     <script src="./partage.js?v=__VERSION__"></script>
     <script src="./moteur-navigateur.js?v=__VERSION__"></script>
+    <script src="./couverture.js?v=__VERSION__"></script>
+    <script src="./carte.js?v=__VERSION__"></script>
+    <script src="./mise-en-page.js?v=__VERSION__"></script>
     <script src="./app.js?v=__VERSION__"></script>
   </body>
 </html>
