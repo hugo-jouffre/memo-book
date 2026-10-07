@@ -373,6 +373,12 @@ describe("le profil", () => {
       // Aucun abonnement, donc aucun voyage rattaché (T71).
       tripTitle: null,
       tripDestination: null,
+      // L'état en un mot (07/10/2026) : `none`, rien qui se renouvelle ni qui
+      // s'arrête — voir `accountSubscriptionOf`.
+      state: "none",
+      autoRenews: false,
+      renewsAt: null,
+      endsAt: null,
     });
     expect(body.orders).toEqual([]);
   });
