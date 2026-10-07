@@ -933,7 +933,7 @@ describe("créer un voyage", () => {
     const account = await registerAccount(harness.app);
     const id = "5b0f7c1e-2a4d-4c7e-9f3a-1d2e3f4a5b6c";
 
-    const response = await create(account.authorization, { id, title: "Lisbonne" });
+    const response = await create(account.authorization, { id, title: "Lisbonne", startDate: "2026-11-02" });
 
     expect(response.statusCode).toBe(201);
     const body = response.json<{ trip: TripBody; accessCode: string }>();
@@ -945,9 +945,13 @@ describe("créer un voyage", () => {
     const account = await registerAccount(harness.app);
     const id = "6c1a8d2f-3b5e-4d8f-8a4b-2e3f4a5b6c7d";
 
-    const first = await create(account.authorization, { id, title: "Lisbonne" });
+    const first = await create(account.authorization, { id, title: "Lisbonne", startDate: "2026-11-02" });
     // La réponse s'est perdue, et on a corrigé le titre avant le retour du réseau.
-    const replayed = await create(account.authorization, { id, title: "Lisbonne et Porto" });
+    const replayed = await create(account.authorization, {
+      id,
+      title: "Lisbonne et Porto",
+      startDate: "2026-11-02",
+    });
 
     expect(replayed.statusCode).toBe(200);
     const body = replayed.json<{ trip: TripBody; accessCode: string }>();
@@ -961,7 +965,7 @@ describe("créer un voyage", () => {
     const stranger = await registerAccount(harness.app, "inconnu@memobook.app");
     const memo = await seedTrip(owner.accountId);
 
-    const response = await create(stranger.authorization, { id: memo.id, title: "Pris" });
+    const response = await create(stranger.authorization, { id: memo.id, title: "Pris", startDate: "2026-11-02" });
 
     expect(response.statusCode).toBe(409);
     expect(response.json<{ accessCode?: string }>().accessCode).toBeUndefined();
@@ -972,8 +976,48 @@ describe("créer un voyage", () => {
   it("tire un identifiant quand l'app n'en donne pas, et refuse un identifiant mal formé", async () => {
     const account = await registerAccount(harness.app);
 
-    expect((await create(account.authorization, { title: "Sans identifiant" })).statusCode).toBe(201);
-    expect((await create(account.authorization, { id: "pas-un-uuid", title: "Rome" })).statusCode).toBe(400);
+    expect(
+      (await create(account.authorization, { title: "Sans identifiant", startDate: "2026-11-02" })).statusCode,
+    ).toBe(201);
+    expect(
+      (await create(account.authorization, { id: "pas-un-uuid", title: "Rome", startDate: "2026-11-02" })).statusCode,
+    ).toBe(400);
+  });
+
+  it("exige une date de départ (T238), sans effacer celle d'un voyage déjà créé", async () => {
+    const account = await registerAccount(harness.app);
+    const id = "7d2b9e3a-4c6f-4e9a-9b5c-3f4a5b6c7d8e";
+
+    const refused = await create(account.authorization, { id, title: "Sans date" });
+    expect(refused.statusCode).toBe(400);
+    expect(refused.json<{ error: string }>().error).toBe("start_date_required");
+    expect(await harness.prisma.memo.count({ where: { ownerAccountId: account.accountId } })).toBe(0);
+
+    // Créé avec sa date, puis rejoué par une ancienne file qui ne l'envoie pas.
+    expect((await create(account.authorization, { id, title: "Rome", startDate: "2026-11-02" })).statusCode).toBe(201);
+    const replayed = await create(account.authorization, { id, title: "Rome !" });
+    expect(replayed.statusCode).toBe(200);
+    const stored = await harness.prisma.memo.findUniqueOrThrow({ where: { id } });
+    expect(stored.startDate?.toISOString().slice(0, 10)).toBe("2026-11-02");
+    expect(stored.title).toBe("Rome !");
+
+    // Les réglages la corrigent, ils ne l'effacent pas.
+    const cleared = await harness.app.inject({
+      method: "PATCH",
+      url: `/v1/trips/${id}/settings`,
+      headers: { authorization: account.authorization },
+      payload: { startDate: null },
+    });
+    expect(cleared.statusCode).toBe(400);
+    expect(cleared.json<{ error: string }>().error).toBe("start_date_required");
+
+    const corrected = await harness.app.inject({
+      method: "PATCH",
+      url: `/v1/trips/${id}`,
+      headers: { authorization: account.authorization },
+      payload: { title: "Rome", startDate: null },
+    });
+    expect(corrected.statusCode).toBe(400);
   });
 });
 

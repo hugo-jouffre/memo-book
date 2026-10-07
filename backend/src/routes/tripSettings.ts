@@ -8,6 +8,7 @@ import { visibleToAccount } from "../services/memoOwnership.js";
 import { normalizeNarrationPace } from "../services/narrationPace.js";
 import { stageFromDates } from "../services/tripStage.js";
 import { serializeTripSettings } from "./appSerializers.js";
+import { startDateRequired } from "./home.js";
 
 /**
  * Les réglages d'un voyage : ce qui se règle sur le carnet sans quitter le
@@ -139,6 +140,10 @@ export function registerTripSettingsRoutes(app: FastifyInstance, context: AppCon
     const { id } = params.parse(request.params);
     const body = updateBody.parse(request.body);
     const accountId = accountIdOf(request);
+
+    // Une date de départ se corrige, elle ne s'efface pas (T238) : absente,
+    // elle n'est pas touchée ; `null`, c'est un refus.
+    if (body.startDate === null) throw startDateRequired();
 
     // L'appartenance se vérifie **avant** l'écriture, et pas seulement par le
     // `where` de l'update : un `updateMany` qui ne touche aucune ligne réussit

@@ -95,6 +95,17 @@ const newTrip = tripDraft.extend({
   id: z.string().regex(UUID_PATTERN, "identifiant de voyage invalide").optional(),
 });
 
+/**
+ * **Un voyage a une date de départ** (T238, 06/10/2026) : l'app ne laisse plus
+ * créer un voyage sans elle, et le serveur le refuse aussi — c'est d'elle que
+ * dépendent l'état du voyage (à venir, en cours), le crédit du jour, les
+ * notifications et les chiffres du carnet. Un code à lui, pour que l'app
+ * pointe le champ au lieu d'afficher « Requête invalide ».
+ */
+export function startDateRequired(): HttpError {
+  return HttpError.badRequest("Choisis la date de départ de ton voyage.", "start_date_required");
+}
+
 /** « Rejoins une aventure » : le code tel qu'il a été collé. */
 const joinBody = z.object({ code: z.string().trim().min(1).max(40) });
 
@@ -267,15 +278,24 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
       if (!id) return null;
       const existing = await context.prisma.memo.findUnique({
         where: { id },
-        select: { ownerAccountId: true },
+        select: { ownerAccountId: true, startDate: true },
       });
       if (!existing) return null;
       if (existing.ownerAccountId !== accountId) {
         throw HttpError.conflict("Ce voyage existe déjà.");
       }
+      // Un renvoi d'un voyage **déjà créé** sans date de départ (une file d'un
+      // build d'avant T238) ne l'efface pas : il garde celle qu'il a.
+      const replayed = draft.startDate
+        ? fields
+        : {
+            ...fields,
+            startDate: existing.startDate,
+            stage: stageFromDates(existing.startDate, draft.endDate ?? null),
+          };
       const memo = await context.prisma.memo.update({
         where: { id },
-        data: fields,
+        data: replayed,
         include: tripInclude,
       });
       return reply
@@ -285,6 +305,8 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
 
     const replayed = await replay();
     if (replayed) return replayed;
+
+    if (!draft.startDate) throw startDateRequired();
 
     try {
       const memo = await createMemoFor(context.prisma, accountId, { ...(id ? { id } : {}), ...fields });
@@ -316,6 +338,9 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
     const draft = tripDraft.parse(request.body ?? {});
 
     if (!UUID_PATTERN.test(id)) throw HttpError.notFound("Voyage introuvable.");
+    // Les six champs repartent ensemble : un brouillon sans date de départ
+    // l'effacerait (T238).
+    if (!draft.startDate) throw startDateRequired();
 
     if (draft.startDate && draft.endDate && draft.endDate < draft.startDate) {
       throw HttpError.badRequest("La date de fin précède la date de début.");
