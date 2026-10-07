@@ -106,6 +106,7 @@ struct CoverTextsView: View {
             // `MemoBookColor`.
             .environment(\.colorScheme, .light)
             .task { await model.load() }
+            .environment(\.refreshCoverPhotos, { await model.refreshPhotoLinks() })
             .onChange(of: model.cover?.title) { _, _ in readTexts() }
             .onChange(of: model.face) { _, _ in
                 // Changer de plat ferme le champ ouvert : le titre du devant et

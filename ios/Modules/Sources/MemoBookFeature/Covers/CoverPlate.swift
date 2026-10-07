@@ -87,12 +87,21 @@ struct CoverPlate: View {
         }
     }
 
+    /// Relit les liens des photos — posé par les écrans des couvertures,
+    /// absent ailleurs (aperçu du carnet, previews).
+    @Environment(\.refreshCoverPhotos) private var refreshCoverPhotos
+
     @ViewBuilder
     private var photoLayer: some View {
         if let url = photo?.url {
             AsyncImage(url: url) { phase in
                 if let image = phase.image {
                     image.resizable().scaledToFill()
+                } else if phase.error != nil {
+                    // Le lien signé a sans doute expiré (T237) : on en
+                    // demande un neuf, et l'image se recharge avec lui.
+                    TripCoverPlaceholder(seed: photo?.id ?? cover.styleId)
+                        .task(id: url) { await refreshCoverPhotos?() }
                 } else {
                     TripCoverPlaceholder(seed: photo?.id ?? cover.styleId)
                 }
@@ -284,4 +293,10 @@ struct CoverSelectionBadge: View {
     /// 27 de dessin dans un rond de 45 sur la maquette ; le rond visible en fait
     /// 32, le reste est la marge du composant.
     private static let side: CGFloat = 32
+}
+
+extension EnvironmentValues {
+    /// Renouvelle les liens signés des photos de couverture quand l'une d'elles
+    /// ne charge plus (T237). Posé par les écrans des couvertures.
+    @Entry var refreshCoverPhotos: (@MainActor () async -> Void)?
 }

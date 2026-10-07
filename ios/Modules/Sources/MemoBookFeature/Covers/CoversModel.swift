@@ -39,6 +39,22 @@ public final class CoversModel {
 
     private var pendingSave: Task<Void, Never>?
 
+    /// Quand les adresses des photos ont été lues. Elles sont **signées pour
+    /// une heure** par le serveur (T237) : passé ce délai, elles ne chargent
+    /// plus — voir ``refreshPhotoLinks()``.
+    private var photoLinksReadAt: Date?
+
+    /// La dernière relecture faite pour une image qui n'a pas chargé. Une photo
+    /// vraiment cassée ne doit pas faire rappeler le serveur en boucle.
+    private var lastPhotoRefresh: Date?
+
+    /// Un lien signé vaut une heure ; on le renouvelle un peu avant.
+    static let photoLinkLifetime: TimeInterval = 45 * 60
+    static let photoRefreshCooldown: TimeInterval = 30
+
+    /// L'horloge, pour les tests.
+    var now: () -> Date = { .now }
+
     public init(
         tripId: String,
         source: @escaping (String) async throws -> BookCovers = { _ in .fixture },
@@ -81,7 +97,15 @@ public final class CoversModel {
     /// celui des styles effaçait le style qu'on venait d'y choisir sans
     /// valider.
     public func load() async {
-        guard covers == nil else { return }
+        guard covers == nil else {
+            // On revient sur un écran du parcours longtemps après l'avoir
+            // ouvert : les photos ont des liens périmés, on les renouvelle
+            // sans toucher au plat qu'on compose.
+            if let read = photoLinksReadAt, now().timeIntervalSince(read) > Self.photoLinkLifetime {
+                await refreshPhotoLinks(force: true)
+            }
+            return
+        }
         await reload()
     }
 
@@ -91,10 +115,37 @@ public final class CoversModel {
     public func reload() async {
         do {
             covers = try await source(tripId)
+            photoLinksReadAt = now()
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Renouvelle les adresses des photos **et rien d'autre** (T237).
+    ///
+    /// Les photos de la conversation passent par un lien signé d'une heure :
+    /// un écran resté ouvert plus longtemps montrait des images cassées. Une
+    /// image qui ne charge pas appelle ceci (voir ``CoverPlate``) ; le serveur
+    /// rend des liens neufs, qu'on pose sur les photos du même identifiant.
+    /// Le style, la photo et les textes en cours de choix restent ceux qu'on
+    /// regarde — relire tout le plat les aurait remplacés par ceux du serveur.
+    public func refreshPhotoLinks(force: Bool = false) async {
+        guard covers != nil else { return }
+        if !force, let last = lastPhotoRefresh, now().timeIntervalSince(last) < Self.photoRefreshCooldown {
+            return
+        }
+        lastPhotoRefresh = now()
+
+        guard let fresh = try? await source(tripId), var covers else { return }
+        let freshById = Dictionary(fresh.photos.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let known = Set(covers.photos.map(\.id))
+        // Une photo importée sur l'appareil et pas encore connue du serveur
+        // garde son adresse locale.
+        covers.photos = covers.photos.map { freshById[$0.id] ?? $0 }
+            + fresh.photos.filter { !known.contains($0.id) }
+        self.covers = covers
+        photoLinksReadAt = now()
     }
 
     // MARK: - Ce qu'on regarde
