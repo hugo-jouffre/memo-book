@@ -94,6 +94,12 @@ const accountInclude = {
       transactions: { orderBy: { purchasedAt: "asc" } },
     },
   },
+  // Ce qu'on a écrit à l'équipe, et ses votes de la foire aux questions (T226).
+  supportMessages: {
+    orderBy: { createdAt: "asc" },
+    include: { memo: { select: { id: true, title: true } } },
+  },
+  faqVotes: { orderBy: { questionId: "asc" } },
   feedbackResponses: {
     orderBy: { shownAt: "asc" },
     include: {
@@ -390,6 +396,23 @@ export async function planDataExport(
       replacedAt: iso(dataExport.revokedAt),
       downloads: dataExport.downloadCount,
       lastDownloadedAt: iso(dataExport.lastDownloadedAt),
+    })),
+  });
+  json("support.json", {
+    messages: account.supportMessages.map((message) => ({
+      at: iso(message.createdAt),
+      from: message.source === "founders_note" ? "Mot des fondateurs" : "Support et retours",
+      topic: message.topicId,
+      message: message.message,
+      trip: message.memo,
+      appVersion: message.appVersion,
+      diagnostics: message.diagnostics,
+      handledAt: iso(message.handledAt),
+    })),
+    faqVotes: account.faqVotes.map((vote) => ({
+      question: vote.questionId,
+      helpful: vote.isHelpful,
+      at: iso(vote.updatedAt),
     })),
   });
   json(
@@ -812,6 +835,7 @@ function readme(
     "connecteurs.json          Les applications que tu as branchées.",
     "connexions.json           Tes appareils, tes sessions, tes demandes de mot de passe et d’export.",
     "avis.json                 Tes réponses à nos questionnaires.",
+    "support.json              Ce que tu as écrit à notre équipe, et tes votes « Est-ce utile ? » de la foire aux questions.",
     "",
     "",
     "Les formats",

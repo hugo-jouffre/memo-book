@@ -182,6 +182,8 @@ champ près — `test/screens.test.ts` est ce qui les tient ensemble.
 | `PATCH /v1/trips/:id/settings` | Corrige un réglage. Même sémantique que `PATCH /v1/profile` |
 | `GET /v1/memos/:id/preview` | L'aperçu du carnet : état et phase de la dernière composition (`render`), PDF du dernier rendu prêt (`readyRenderId`), `isUpToDate`, souvenirs encore en rédaction, extrait, couvertures. Se sonde toutes les 2 s pendant une composition |
 | `POST /v1/memos/:id/share-link` | Crée le lien public de prévisualisation, ou rend celui qui existe |
+| `POST /v1/support/messages` | « Écris à notre équipe » et « Partager mes retours » (`source` : `support`, `founders_note`), enregistrés dans `support_messages` — rien n'est envoyé, l'équipe les lit en base (`handledAt` nul = à traiter). 20 par compte et par 24 h |
+| `PUT /v1/support/faq-votes/:questionId` | « Est-ce utile ? » : un vote par compte et par question (`faq_votes`), revoter remplace. `GET /v1/support/faq-votes` rend les siens |
 | `GET /v1/showcases/welcome` | Les mises en avant de l'écran de bienvenue. **Non authentifiée** |
 
 **La cagnotte est retirée** (06/10/2026) : `GET /v1/wallet`, `POST
