@@ -40,6 +40,9 @@ extension BookCopy {
             public static let postalCode = "Code postal"
             public static let city = "Ville"
             public static let country = "Pays"
+            /// L'invite de **tous** les champs vides de l'adresse, en gris.
+            /// Le code postal et la ville proposaient « 75015 » et « Paris »,
+            /// qu'on prenait pour des valeurs déjà remplies (Hugo, 06/10/2026).
             public static let placeholder = "Clique ici"
         }
 
@@ -50,8 +53,10 @@ extension BookCopy {
             public static let subtitle = "Plusieurs carnets pour offrir à tes proches"
             public static let unitPrice = "Prix unitaire"
 
-            public static let customiseTitle = "Personnaliser vos carnets"
-            public static let customiseSubtitle = "Rendez chaque carnet unique"
+            /// Au tutoiement (Hugo, 06/10/2026, T211) : la maquette vouvoie,
+            /// R9 l'emporte.
+            public static let customiseTitle = "Personnaliser tes carnets"
+            public static let customiseSubtitle = "Rends chaque carnet unique"
 
             public static let decorations = "Décorations & stickers"
             public static let quiz = "Quiz intégrés à l’histoire"
@@ -85,6 +90,8 @@ extension BookCopy {
         public enum Summary {
             public static let title = "Vérifications finales avant impression"
             public static let total = "Total"
+            /// Le libellé de la ligne qui ferme un groupe (T216).
+            public static let subtotal = "Sous-total"
             public static let cta = "Valider la commande"
 
             /// « Carnet - Rome et la Dolce Vita ».

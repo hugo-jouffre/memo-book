@@ -167,7 +167,7 @@ struct OrderShippingStep: View {
             field: OrderField.postalCode,
             focus: focus,
             labelPlacement: .above,
-            placeholder: "75015"
+            placeholder: BookCopy.Order.Shipping.placeholder
         )
         .textContentType(.postalCode)
         .keyboardType(.numbersAndPunctuation)
@@ -182,7 +182,7 @@ struct OrderShippingStep: View {
             field: OrderField.city,
             focus: focus,
             labelPlacement: .above,
-            placeholder: "Paris"
+            placeholder: BookCopy.Order.Shipping.placeholder
         )
         .textContentType(.addressCity)
         .submitLabel(.done)

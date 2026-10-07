@@ -82,11 +82,16 @@ struct OrderSummaryStep: View {
         }
     }
 
-    /// Un groupe de lignes, et le sous-total aligné à droite qui les ferme.
+    /// Un groupe de lignes, et le sous-total qui les ferme.
     ///
     /// **Le sous-total disparaît quand il ne fait que répéter.** Depuis que le
     /// carnet ne se facture qu'en une ligne, le groupe du haut affichait deux
     /// fois le même montant l'un sous l'autre — un total de rien du tout.
+    ///
+    /// **Il porte son libellé** (Hugo, 06/10/2026, T216) : un montant seul
+    /// sous « Livraison » se lisait comme le prix de la livraison. Le motif
+    /// est celui des autres lignes : le libellé à gauche, le montant en
+    /// semi-gras à droite, comme il l'était déjà.
     private func group(_ group: OrderQuoteGroup) -> some View {
         VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
             ForEach(group.lines) { line in
@@ -94,13 +99,7 @@ struct OrderSummaryStep: View {
             }
 
             if group.lines.count > 1 {
-                Text(group.subtotal.euros)
-                    .font(MemoBookFont.bodySemibold)
-                    .foregroundStyle(MemoBookColor.ink)
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .accessibilityLabel("Sous-total \(group.subtotal.euros)")
+                OrderPriceRow(label: BookCopy.Order.Summary.subtotal, amount: group.subtotal)
             }
         }
     }
