@@ -188,6 +188,8 @@ function photoVide(meta) {
     orientation: "",
     /** Photo de groupe : jamais rognée, seulement réduite (LAYOUT_KB § « Rognage des photos »). */
     groupe: false,
+    /** Désignée pour la couverture par le voyageur. Une seule à la fois. */
+    couverture: false,
     ...meta,
   };
 }
@@ -1743,22 +1745,49 @@ function dateLongue(iso) {
  * par `MemoBook Generator/templates/travel-journal/data.json`. Conversion **mécanique** : elle
  * n'écrit pas à la place du voyageur, elle habille son texte.
  */
-function construirePayloadCarnet(photoDe = (data) => data) {
-  const toutesPhotos = etat.etapes.flatMap((e) => e.photos.map((p) => photoDe(p.data)).filter(Boolean));
+/** « 22 août 2026 – 5 septembre 2026 », tiré des étapes : le même sur la couverture et dans le carnet. */
+function plageDates() {
   const dates = etat.etapes.flatMap((e) => [e.dateDebut, e.dateFin]).filter(Boolean).sort();
   const premiere = dates[0];
   const derniere = dates[dates.length - 1];
+  return premiere && derniere && premiere !== derniere
+    ? `${dateLongue(premiere)} – ${dateLongue(derniere)}`
+    : dateLongue(premiere) || "";
+}
+
+/** Le sous-titre du carnet, sur la couverture intérieure comme sur la couverture imprimée. */
+const SOUS_TITRE = "Un carnet de voyage raconté à l'oral";
+
+/** La fiche Pumbo importée, ou celle du relié de 48 pages par défaut. */
+const fichePumbo = () => etat.reglages.fichePumbo || Couverture.FICHE_DEFAUT;
+
+/** La photo de couverture : celle que le voyageur a désignée, sinon la plus adaptée au recto. */
+const photoDeCouverture = () =>
+  Couverture.choisirPhotoCouverture(
+    etat.etapes.flatMap((e) => e.photos),
+    fichePumbo(),
+  );
+
+/** Une seule photo en couverture : en désigner une retire l'étoile des autres. */
+function designerCouverture(photoId) {
+  for (const p of [...etat.photosAttente, ...etat.etapes.flatMap((e) => e.photos)]) {
+    p.couverture = p.id === photoId ? !p.couverture : false;
+  }
+  apresChangement();
+}
+
+function construirePayloadCarnet(photoDe = (data) => data) {
+  // La même photo que sur la couverture imprimée : le carnet s'ouvre sur ce
+  // qu'on a vu en le prenant en main.
+  const couverture = photoDeCouverture();
 
   return {
     render_profile: "preview",
     book_title: etat.carnet.titre || "Carnet de voyage",
-    book_subtitle: "Un carnet de voyage raconté à l'oral",
+    book_subtitle: SOUS_TITRE,
     authors: listeVoyageurs().join(" et "),
-    date_range:
-      premiere && derniere && premiere !== derniere
-        ? `${dateLongue(premiere)} – ${dateLongue(derniere)}`
-        : dateLongue(premiere) || "",
-    cover_photo: toutesPhotos[0] || "",
+    date_range: plageDates(),
+    cover_photo: couverture ? photoDe(couverture.data) : "",
     brand_name: "MemoBook",
     year: String(new Date().getFullYear()),
     footer_tagline: "Racontez. Revivez. Partagez.",
@@ -2032,6 +2061,66 @@ function messageLisible(erreur, statut) {
  * - l'onglet du PDF est ouvert au clic, avant tout `await`, sinon Safari et
  *   Chrome le bloquent comme une popup.
  */
+/**
+ * Compose la couverture du livre relié (verso, dos, recto) dans un nouvel
+ * onglet, au format de la fiche Pumbo, prête à « Enregistrer au format PDF ».
+ * Voir `couverture.js` et LAYOUT_KB § « Couverture imprimée (Pumbo) ».
+ *
+ * L'onglet s'ouvre **avant** tout `await` : ouvert plus tard, hors du geste du
+ * clic, il serait bloqué par le navigateur comme une fenêtre surgissante.
+ */
+async function genererCouverture() {
+  const onglet = window.open("", "_blank");
+  if (!onglet) {
+    etat.erreur = "Le navigateur a bloqué l'onglet de la couverture : autorise les fenêtres pour cette page.";
+    rendreColonne();
+    return;
+  }
+  onglet.document.write(
+    '<p style="font:15px system-ui,sans-serif;padding:2rem">Composition de la couverture…</p>',
+  );
+
+  // Les polices du carnet, pour que la couverture parle comme l'intérieur.
+  // Sans réseau, on retombe sur les polices du système plutôt que d'échouer.
+  let polices = "";
+  try {
+    polices = await recupererFichierTemplate("fonts.css");
+  } catch (erreur) {
+    debugCarnet("polices du gabarit indisponibles pour la couverture", erreur);
+  }
+
+  const html = Couverture.construireHtmlCouverture({
+    fiche: fichePumbo(),
+    titre: etat.carnet.titre || "Carnet de voyage",
+    sousTitre: SOUS_TITRE,
+    auteurs: listeVoyageurs().join(" et "),
+    dates: plageDates(),
+    photo: photoDeCouverture(),
+    polices,
+    logo: new URL("./logo-memobook.svg", location.href).href,
+    quatrieme: "À suivre.",
+    adresse: "memobook.fr",
+  });
+  onglet.document.open();
+  onglet.document.write(html);
+  onglet.document.close();
+}
+
+/** Lit la fiche `.jsx` de Pumbo choisie dans les réglages, et la garde pour les prochaines couvertures. */
+async function importerFichePumbo(fichier) {
+  if (!fichier) return;
+  const fiche = Couverture.lireFichePumbo(await fichier.text());
+  if (!fiche) {
+    etat.erreur = `« ${fichier.name} » n'est pas une fiche de couverture Pumbo : il faut le script .jsx de leur outil de couverture.`;
+  } else {
+    etat.reglages.fichePumbo = { ...fiche, source: `fiche Pumbo « ${fichier.name} »` };
+    sauverReglages();
+    etat.erreur = "";
+    etat.info = `Fiche Pumbo importée : plats ${fiche.largeurPlat} × ${fiche.hauteurPlat} mm, dos ${fiche.dos} mm.`;
+  }
+  rendreColonne();
+}
+
 async function genererCarnet(bouton) {
   if (bouton.disabled) return;
   debugCarnet("clic sur Générer le carnet", {
@@ -2560,6 +2649,17 @@ function cartePhoto(p, conteneurId) {
         h(
           "button",
           {
+            class: `etoile-couverture${p.couverture ? " active" : ""}`,
+            title: p.couverture
+              ? "Photo de couverture — cliquer pour revenir au choix automatique"
+              : "Mettre cette photo en couverture (sinon, l'atelier choisit la plus adaptée)",
+            onclick: () => designerCouverture(p.id),
+          },
+          p.couverture ? "★" : "☆",
+        ),
+        h(
+          "button",
+          {
             class: "icone-supprimer",
             title: "Retirer cette photo",
             onclick: () => retirer("photos", p.id, conteneurId),
@@ -2703,6 +2803,27 @@ function rendreReglages() {
       ),
     ),
     h("p", { class: "aide", id: "statut-template" }),
+    h(
+      "label",
+      { class: "champ", style: { marginTop: "0.5rem" } },
+      h("span", {}, "Fiche couverture Pumbo (.jsx)"),
+      h("input", {
+        type: "file",
+        accept: ".jsx,.js,.txt",
+        onchange: (ev) => importerFichePumbo(ev.target.files?.[0]),
+      }),
+    ),
+    h(
+      "p",
+      { class: "aide" },
+      (() => {
+        const f = fichePumbo();
+        return (
+          `Couverture : plats ${f.largeurPlat} × ${f.hauteurPlat} mm, dos ${f.dos} mm, fond perdu ${f.fondPerdu} mm — ${f.source}. ` +
+          "Le dos dépend du nombre de pages : une fiche par commande, tirée de l'outil de couverture Pumbo."
+        );
+      })(),
+    ),
     h(
       "div",
       { class: "rangee" },
@@ -3305,6 +3426,7 @@ document.addEventListener("click", (ev) => {
   if (action === "ajouter-etape") ajouterEtape();
   if (action === "generer-json") genererJson(bouton);
   if (action === "generer-carnet") genererCarnet(bouton);
+  if (action === "generer-couverture") genererCouverture();
   if (action === "sauvegarder") sauvegarderAvancement(bouton);
   if (action === "ouvrir") $("fichier-avancement").click();
   if (action === "sync-template") synchroniserTemplate(bouton);

@@ -651,6 +651,20 @@ a.btn {
   background: var(--paper);
 }
 
+.etoile-couverture {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.95rem;
+  padding: 0 0.25rem;
+  line-height: 1;
+}
+
+.etoile-couverture.active {
+  color: #d4883b;
+}
+
 .icone-supprimer {
   background: none;
   border: none;

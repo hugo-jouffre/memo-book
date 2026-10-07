@@ -311,6 +311,24 @@ n'est pas celle du dernier commit de `main`, recharger la page suffit.
 Le bouton **« Voir les layouts »** ouvre l'inspecteur de mise en page : chaque
 layout du carnet, ses champs et ses limites.
 
+## La couverture du livre relié
+
+Le bouton **« Générer la couverture »** compose la couverture Pumbo — plat
+verso, dos, plat recto — dans un nouvel onglet, au format exact de la fiche
+technique, avec ses repères de coupe et de pli à l'écran. *Imprimer →
+Enregistrer au format PDF* (marges *Aucune*, *Graphiques d'arrière-plan*
+coché) donne le fichier à envoyer.
+
+- **La fiche Pumbo** (le `.jsx` de leur outil de couverture) s'importe dans les
+  réglages. Elle seule donne la largeur du dos, qui dépend du nombre de pages :
+  une fiche par commande. Sans elle, l'atelier prend celle d'un relié de
+  48 pages (dos de 8 mm) et le signale.
+- **La photo de couverture** se désigne par l'étoile ☆ sous une photo ; sans
+  étoile, l'atelier choisit la plus adaptée (portrait, bien résolue, pas une
+  photo de groupe). C'est aussi celle de la couverture intérieure du carnet.
+
+Règles et cotes : `LAYOUT_KB.md`, § « Couverture imprimée (Pumbo) ».
+
 Trois raisons de l'appeler Beta, et de ne pas s'y fier pour un tirage :
 
 1. **La conversion est mécanique.** Elle habille le texte du voyageur, elle ne

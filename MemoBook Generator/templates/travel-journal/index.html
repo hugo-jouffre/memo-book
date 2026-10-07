@@ -250,7 +250,8 @@
 
         {% if day.day_intro %}
           <!-- Bandeau : ruban jour + lieu + date -->
-          <div class="mb-header">
+          {% set bandeau_seul = not (day.day_intro.stay or day.day_intro.host or day.day_intro.weather_key or day.tag) %}
+          <div class="mb-header{% if bandeau_seul %} mb-header--seul{% endif %}">
             <div class="mb-ribbon">
               <svg class="mb-ribbon__shape" viewBox="0 0 71 93" preserveAspectRatio="none">
                 <use href="#mb-ribbon" />

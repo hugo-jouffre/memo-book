@@ -57,12 +57,13 @@ const PARTS: Record<string, Part> = {
   "mb-split": { kind: "structure", name: "Bloc scindé", role: "Carte info d'un côté, récit de l'autre. Ne se comprime jamais : c'est la bande de photos qui cède.", },
   "mb-split__aside": { kind: "structure", name: "Colonne latérale", role: "Reçoit la carte info. Largeur fixe de 173 pt.", },
   "mb-split__main": { kind: "structure", name: "Colonne de récit", role: "Le texte manuscrit, en colonne étroite." },
-  "mb-gallery": { kind: "structure", name: "Bande de photos", role: "2 ou 3 photos alignées, calées en bas de page. Se comprime si le récit est long.", fields: ["day.photos"] },
+  "mb-gallery": { kind: "structure", name: "Bande de photos", role: "2 ou 3 photos alignées, calées en bas de page. Se comprime si le récit est long, jamais sous 160 pt. Porte le tracé pointillé.", fields: ["day.photos"] },
   "mb-day__floats": { kind: "structure", name: "Zone flottante", role: "Bas de la page de journée : carte info à gauche, photo à droite. Absorbe la hauteur restante." },
   "mb-intro__photos": { kind: "structure", name: "Photos d'introduction", role: "Deux photos inclinées, positionnées en absolu.", fields: ["intro_photos"] },
 
   // --- Composants ----------------------------------------------------------
-  "mb-header": { kind: "composant", name: "Bandeau de journée", role: "Ruban « jour NN », encart lieu, encart date. Ne s'affiche que si day_intro est présent.", fields: ["day.day_intro"] },
+  "mb-header": { kind: "composant", name: "Bandeau de journée", role: "Ruban « jour NN », encart lieu, encart date. Ne s'affiche que si day_intro est présent. Seul (sans nuit, hôte, météo ni étiquette), il garde une ligne de réglure sous le ruban.", fields: ["day.day_intro"] },
+  "mb-header--seul": { kind: "composant", name: "Bandeau seul", role: "Bandeau sans rangée dessous : une ligne de réglure le sépare du titre, pour que le récit ne colle pas au ruban.", fields: ["day.day_intro"] },
   "mb-ribbon": { kind: "composant", name: "Ruban de journée", role: "Fanion à encoche qui dépasse du bord haut et se fait couper net par la page, comme un signet glissé dans le carnet.", fields: ["day.day_intro.day_number"] },
   "mb-ribbon__number": { kind: "composant", name: "Numéro de jour", role: "Playfair Display Black 27,6 pt, légèrement pivoté.", fields: ["day.day_intro.day_number"] },
   "mb-ribbon__label": { kind: "composant", name: "Mot « jour »", role: "Playfair Display Black 10,4 pt au-dessus du numéro." },
@@ -79,7 +80,8 @@ const PARTS: Record<string, Part> = {
   "mb-card__title": { kind: "composant", name: "Bandeau de carte", role: "Fond menthe, contour plein puis liseré pointillé interne, pivoté de −1°.", fields: ["day.fun_facts_title"], vars: ["--mb-mint"] },
   "mb-card__body": { kind: "composant", name: "Texte de carte", role: "Playfair Display 12 pt. 140 caractères maximum, refusés au-delà par le validateur.", fields: ["day.fun_facts[0]"] },
   "mb-card__clip": { kind: "composant", name: "Pince", role: "Pince métallique posée sur le bord haut de la carte. SVG dessiné, pas une image." },
-  "mb-photo": { kind: "composant", name: "Photo scotchée", role: "Bord blanc, rotation légère, ombre portée. Recadrage en object-fit: cover.", fields: ["day.photos[]"], vars: ["--mb-photo-shadow"] },
+  "mb-photo": { kind: "composant", name: "Photo scotchée", role: "Bord blanc, rotation légère, ombre portée. Recadrage en object-fit: cover, centré sur focus, jamais plus d'un tiers de l'image perdu.", fields: ["day.photos[]"], vars: ["--mb-photo-shadow"] },
+  "mb-photo--contain": { kind: "composant", name: "Photo réduite, non rognée", role: "Photo de groupe, ou rognage au-delà d'un tiers : réduite entière, cadre blanc ajusté à l'image, sans scotch.", fields: ["day.photos[].fit"] },
   "mb-hero": { kind: "composant", name: "Photo héro", role: "Grande photo en tête de page, layout hero_top.", fields: ["day.photos[0]"] },
 
   // --- Couverture et dos ---------------------------------------------------
@@ -97,7 +99,7 @@ const PARTS: Record<string, Part> = {
   "mb-photo__tape": { kind: "composant", name: "Scotch", role: "Posé sur le coin le plus vide de l'image, choisi par l'analyse de détail — au hasard, il finirait un jour sur un visage.", fields: ["day.photos[].tape_corner"] },
 
   // --- Décor ---------------------------------------------------------------
-  "mb-path": { kind: "decor", name: "Tracé du voyage", role: "Pointillé carotte. Quatre variantes tirées selon le rang de la page, et une page sur cinq n'en porte aucune : un motif identique partout se lit comme une trame." },
+  "mb-path": { kind: "decor", name: "Tracé du voyage", role: "Pointillé carotte, dessiné dans la bande de photos et jamais derrière du texte. Quatre variantes tirées selon le rang de la page, et une page sur cinq n'en porte aucune : un motif identique partout se lit comme une trame." },
 };
 
 // ---------------------------------------------------------------------------
