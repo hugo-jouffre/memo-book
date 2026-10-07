@@ -122,7 +122,7 @@ public struct OrderView: View {
 
         systemShare = BookSharePayload(
             title: model.context?.bookTitle ?? "",
-            steps: model.order?.pageCount ?? model.context?.pageCount ?? 0,
+            pages: model.order?.pageCount ?? model.context?.pageCount ?? 0,
             file: nil,
             link: link
         )

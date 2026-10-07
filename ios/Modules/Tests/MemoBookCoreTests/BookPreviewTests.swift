@@ -88,3 +88,27 @@ final class BookPreviewTests: XCTestCase {
         XCTAssertEqual(Copy.phase(nil, pendingMemories: 0), "La composition de ton carnet est lancée…")
     }
 }
+
+/// Le message de partage compte des pages, et le dit — il annonçait des
+/// « étapes » en comptant les pages du carnet.
+final class ShareInvitationTests: XCTestCase {
+    private let link = URL(string: "https://api.example.test/c/abc")!
+
+    func testTheMessageCountsPages() {
+        let message = BookCopy.Share.invitation(title: "Rome", pages: 12, link: link)
+        XCTAssertTrue(message.contains("Il compte déjà 12 pages !"))
+        XCTAssertFalse(message.contains("étape"))
+        XCTAssertFalse(message.contains("financer"))
+        XCTAssertTrue(message.hasSuffix(link.absoluteString))
+    }
+
+    func testOnePageIsSingular() {
+        XCTAssertTrue(BookCopy.Share.invitation(title: "Rome", pages: 1, link: link).contains("1 page !"))
+    }
+
+    func testANotYetComposedBookSaysNoCount() {
+        let message = BookCopy.Share.invitation(title: "Rome", pages: 0, link: link)
+        XCTAssertFalse(message.contains("page"))
+        XCTAssertTrue(message.contains("« Rome »"))
+    }
+}

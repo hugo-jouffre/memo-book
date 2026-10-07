@@ -443,15 +443,21 @@ public enum BookCopy {
         /// imprimée, par la cagnotte ; elle est partie (Hugo, 06/10/2026,
         /// T230), et le lien ne mène plus qu'au carnet.
         ///
+        /// **Il compte des pages, et le dit** (07/10/2026). Il annonçait « mes
+        /// 10 premières étapes » en comptant les pages du carnet : l'aperçu et
+        /// la commande ne connaissent pas les étapes, seulement les pages
+        /// composées. Sans page — un carnet pas encore composé —, la phrase du
+        /// compte se tait plutôt que d'annoncer « 0 page ».
+        ///
         /// Le titre du carnet est entre guillemets **français** ; la
         /// spécification de Hugo employait des guillemets anglais fermants des
         /// deux côtés, ce qui est une glissade de clavier. Signalé.
-        public static func invitation(title: String, steps: Int, link: URL) -> String {
-            let written = steps == 1 ? "ma 1ère étape" : "mes \(steps) premières étapes"
-            return """
-                Je prépare le carnet de mon voyage « \(title) ». J’ai déjà écrit \(written) ! \
-                Tu peux suivre son avancée en direct sur ce lien : \(link.absoluteString)
-                """
+        public static func invitation(title: String, pages: Int, link: URL) -> String {
+            let opening = "Je prépare le carnet de mon voyage « \(title) »."
+            let follow = "Tu peux suivre son avancée en direct sur ce lien : \(link.absoluteString)"
+            guard pages > 0 else { return "\(opening) \(follow)" }
+            let count = pages == 1 ? "1 page" : "\(pages) pages"
+            return "\(opening) Il compte déjà \(count) ! \(follow)"
         }
 
         /// Le sujet, quand l'app de destination en demande un — le courrier

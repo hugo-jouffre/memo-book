@@ -195,8 +195,8 @@ struct ShareBookSheet: View {
 struct BookSharePayload: Identifiable {
     let id = UUID()
     let title: String
-    /// Les étapes déjà racontées, que le message annonce.
-    let steps: Int
+    /// Les pages déjà composées, que le message annonce.
+    let pages: Int
     /// Le PDF écrit sur le disque, quand c'est lui qu'on partage.
     let file: URL?
     /// Le lien de prévisualisation. Il accompagne **les deux** modes de
@@ -212,14 +212,14 @@ struct BookSharePayload: Identifiable {
 
     init(
         title: String,
-        steps: Int,
+        pages: Int,
         file: URL?,
         link: URL?,
         coverPhotoUrl: URL? = nil,
         actions: [ShareAction] = []
     ) {
         self.title = title
-        self.steps = steps
+        self.pages = pages
         self.file = file
         self.link = link
         self.coverPhotoUrl = coverPhotoUrl
@@ -230,7 +230,7 @@ struct BookSharePayload: Identifiable {
     /// Snapchat dès que l'app de destination est choisie.
     var message: String? {
         guard let link else { return nil }
-        return BookCopy.Share.invitation(title: title, steps: steps, link: link)
+        return BookCopy.Share.invitation(title: title, pages: pages, link: link)
     }
 }
 

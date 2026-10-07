@@ -161,7 +161,8 @@ public struct BookPreviewFlowView: View {
     /// faudrait la fermer deux fois.
     private func share(_ kind: BookShareKind) async {
         let title = model.preview?.title ?? ""
-        let steps = model.preview?.pageCount ?? 0
+        // Les pages que l'en-tête annonce — celles du PDF quand il est là.
+        let pages = model.sheetCount
 
         switch kind {
         case .pdf:
@@ -170,22 +171,22 @@ public struct BookPreviewFlowView: View {
             // où suivre le carnet, pas la pièce jointe.
             let link = await model.prepareShareLink()
             showsShareChoice = false
-            systemShare = payload(title: title, steps: steps, file: file, link: link)
+            systemShare = payload(title: title, pages: pages, file: file, link: link)
 
         case .link:
             guard let link = await model.prepareShareLink() else { return }
             showsShareChoice = false
-            systemShare = payload(title: title, steps: steps, file: nil, link: link)
+            systemShare = payload(title: title, pages: pages, file: nil, link: link)
         }
     }
 
     /// Le partage, habillé comme la maquette `3551:26331` : la photo et le
     /// titre du voyage en tête, « Commander » et « Partager sur Whatsapp » sous
     /// les apps.
-    private func payload(title: String, steps: Int, file: URL?, link: URL?) -> BookSharePayload {
+    private func payload(title: String, pages: Int, file: URL?, link: URL?) -> BookSharePayload {
         var share = BookSharePayload(
             title: title,
-            steps: steps,
+            pages: pages,
             file: file,
             link: link,
             coverPhotoUrl: model.preview?.coverPhotoUrl
