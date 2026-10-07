@@ -7,6 +7,7 @@ import type {
   MemoStep,
   PaymentCard,
   PrintOrder,
+  Render,
   Showcase,
   Subscription,
   TripTheme,
@@ -18,6 +19,7 @@ import { findShippingCountry, SHIPPING_COUNTRIES } from "../services/shippingCou
 import { SUBSCRIPTION_MONTHLY_CENTS } from "../services/subscriptionCatalog.js";
 import { grantsUnlimitedAccess } from "../services/subscriptions.js";
 import { avatarUrlOf } from "../services/avatars.js";
+import { renderPhase } from "./serializers.js";
 import { effectiveGender } from "../services/genderInference.js";
 import { effectiveStage } from "../services/tripStage.js";
 
@@ -856,18 +858,29 @@ function serializeWalletEstimate(trip: Pick<Memo, "targetPageCount" | "pageCount
 }
 
 type MemoForPreview = Memo & {
-  renders?: { id: string; status: string; pdfUrl?: string | null }[];
+  renders?: Pick<Render, "id" | "status" | "pdfUrl" | "error" | "createdAt" | "updatedAt" | "composingStartedAt">[];
   entries?: EntryTextRow[];
 };
+
+/** Ce que l'aperçu sait de la composition, au-delà du dernier rendu. */
+export interface PreviewComposition {
+  /** Le dernier rendu **prêt** : son PDF, et ce qu'il a composé. */
+  lastReady: { id: string; pdfUrl: string | null; inputFingerprint: string | null } | null;
+  /** L'empreinte du carnet aujourd'hui — voir `services/bookFingerprint.ts`. */
+  currentFingerprint: string | null;
+  /** Les souvenirs que MEMO n'a pas fini d'écrire. */
+  pendingMemoryCount: number;
+}
 
 /** L'aperçu du carnet : le PDF composé, et de quoi le partager. */
 export function serializeBookPreview(
   memo: MemoForPreview,
-  lastReadyPdfUrl: string | null,
+  composition: PreviewComposition,
   publicBaseUrl: string,
 ) {
   const render = memo.renders?.[0];
   const excerpt = serializeExcerpt(memo.entries ?? []);
+  const { lastReady } = composition;
 
   return {
     memoId: memo.id,
@@ -879,8 +892,33 @@ export function serializeBookPreview(
     // (`renders.take: 1` ne voit que le rendu en cours, `pdfUrl: null`) le
     // temps qu'elle aboutisse.
     status: serializeRenderStatus(render?.status),
-    pdfUrl: lastReadyPdfUrl,
+    pdfUrl: lastReady?.pdfUrl ?? null,
     pageCount: memo.pageCount,
+    // **De quoi suivre une composition** (T224, 07/10/2026) : la dernière,
+    // quel que soit son état — `null` si le carnet n'a jamais été composé.
+    // L'app lance `POST /v1/memos/:id/renders` à chaque ouverture de l'aperçu,
+    // puis relit cette route jusqu'à `ready` ou `failed`.
+    render: render
+      ? {
+          id: render.id,
+          status: render.status,
+          phase: renderPhase(render),
+          startedAt: render.createdAt.toISOString(),
+          updatedAt: render.updatedAt.toISOString(),
+          error: render.error,
+        }
+      : null,
+    // Le rendu derrière `pdfUrl` : c'est lui qu'on commande.
+    readyRenderId: lastReady?.id ?? null,
+    // Le PDF montre-t-il le carnet d'aujourd'hui ? Faux sans PDF, ou quand un
+    // souvenir, une étape, une personnalisation ou une couverture a changé
+    // depuis — la prochaine ouverture recomposera.
+    isUpToDate:
+      lastReady !== null &&
+      composition.currentFingerprint !== null &&
+      lastReady.inputFingerprint === composition.currentFingerprint,
+    // Ceux que la composition en cours attend avant de mettre en page.
+    pendingMemoryCount: composition.pendingMemoryCount,
     // Nul tant que personne n'a demandé à partager : c'est un lien public.
     shareUrl: memo.shareSlug ? `${publicBaseUrl}/c/${memo.shareSlug}` : null,
     coverPhotoUrl: memo.coverPhotoUrl,

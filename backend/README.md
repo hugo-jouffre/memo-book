@@ -180,7 +180,7 @@ champ près — `test/screens.test.ts` est ce qui les tient ensemble.
 | `POST /v1/profile/link-device` | Rattache l'appareil au compte et lui transfère ses carnets |
 | `GET /v1/trips/:id/settings` | Les réglages d'un voyage : nom, dates, rythme, co-voyageurs, style, aperçu, crédit du jour (`dailyCredit`), et ce que seul le propriétaire peut faire (`canDelete`, `canClearConversation`) |
 | `PATCH /v1/trips/:id/settings` | Corrige un réglage. Même sémantique que `PATCH /v1/profile` |
-| `GET /v1/memos/:id/preview` | L'aperçu du carnet : état de composition, PDF, extrait, couvertures |
+| `GET /v1/memos/:id/preview` | L'aperçu du carnet : état et phase de la dernière composition (`render`), PDF du dernier rendu prêt (`readyRenderId`), `isUpToDate`, souvenirs encore en rédaction, extrait, couvertures. Se sonde toutes les 2 s pendant une composition |
 | `POST /v1/memos/:id/share-link` | Crée le lien public de prévisualisation, ou rend celui qui existe |
 | `GET /v1/showcases/welcome` | Les mises en avant de l'écran de bienvenue. **Non authentifiée** |
 
@@ -214,8 +214,8 @@ de son porteur précédent.
 | `PATCH /v1/entries/:id` | Corrige le texte à la main. `editedText: null` revient à la version proposée |
 | `POST /v1/entries/:id/redaction` | Redemande une rédaction (refusé si le texte a été corrigé) |
 | `DELETE /v1/entries/:id` | Supprime un souvenir |
-| `POST /v1/memos/:id/renders` | Lance la génération du carnet (202, résultat asynchrone) |
-| `GET /v1/renders/:id` | Suit la génération, renvoie l'URL du PDF |
+| `POST /v1/memos/:id/renders` | **À chaque ouverture de l'aperçu** : rend la composition en cours ou le dernier PDF s'il est à jour (200), sinon en lance une (202). L'empreinte du carnet (`services/bookFingerprint.ts`) décide ; incrémenter `BOOK_LAYOUT_VERSION` quand le gabarit change |
+| `GET /v1/renders/:id` | Suit la génération (`status`, `phase` : queued, writing, composing, ready, failed), renvoie l'URL du PDF et ses pages |
 | `POST /v1/memos/:id/orders` | Commande le carnet imprimé, sur un rendu déjà généré |
 | `GET /v1/memos/:id/orders` | Les commandes d'un carnet |
 | `GET /v1/orders/:id` | Suit une commande |

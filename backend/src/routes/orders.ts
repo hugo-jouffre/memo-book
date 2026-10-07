@@ -62,11 +62,16 @@ const quoteBody = z.object({
 
 const createOrderBody = z.object({
   /**
-   * Le rendu à imprimer. Explicite, jamais « le dernier en date » : entre la
+   * Le rendu à imprimer — celui que l'aperçu a montré : entre la
    * prévisualisation et la commande, l'utilisateur a pu ajouter une étape, et
    * il doit recevoir le carnet qu'il a vu.
+   *
+   * **Facultatif depuis le 06/10/2026** (T224) : absent, c'est le dernier rendu
+   * prêt du voyage. Et s'il n'y en a aucun, le refus porte son propre code,
+   * `no_render`, que l'app traduit par « Aucun rendu de ton carnet n'a encore
+   * été généré… » — au lieu d'un « Payer » qui ne faisait rien.
    */
-  renderId: z.string().uuid(),
+  renderId: z.string().uuid().optional(),
   copies: z.number().int().min(1).max(MAX_COPIES).default(1),
   shippingSpeed: z.enum(["standard", "express"]).default("standard"),
   shipping: shippingSchema,
@@ -112,6 +117,19 @@ const whatsappBody = z.discriminatedUnion("enabled", [
  */
 function billablePages(memo: { targetPageCount: number; pageCount: number }): number {
   return Math.max(memo.targetPageCount, memo.pageCount, 1);
+}
+
+/**
+ * Le refus d'une commande sans carnet composé (T224). Un code à lui, distinct
+ * de `render_not_ready` (un rendu désigné qui n'est pas prêt) : c'est le seul
+ * que l'app traduit par « aucun rendu de ton carnet n'a encore été généré ».
+ */
+function noRender(): HttpError {
+  return new HttpError(
+    409,
+    "Aucun rendu de ton carnet n’a encore été généré. Ouvre l’aperçu pour le composer, puis reviens commander.",
+    "no_render",
+  );
 }
 
 export function registerOrderRoutes(app: FastifyInstance, context: AppContext): void {
@@ -278,11 +296,17 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
 
     const body = createOrderBody.parse(request.body ?? {});
 
-    const render = await context.prisma.render.findFirst({
-      where: { id: body.renderId, memoId },
-    });
+    // Le rendu désigné, ou à défaut le dernier prêt du voyage — et sans aucun
+    // des deux, le refus que l'app sait traduire (T224).
+    const render = body.renderId
+      ? await context.prisma.render.findFirst({ where: { id: body.renderId, memoId } })
+      : await context.prisma.render.findFirst({
+          where: { memoId, status: "ready", pdfUrl: { not: null } },
+          orderBy: { createdAt: "desc" },
+        });
 
     if (!render) {
+      if (!body.renderId) throw noRender();
       throw HttpError.notFound("Ce rendu n'appartient pas à ce carnet.");
     }
 

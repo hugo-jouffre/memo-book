@@ -4,6 +4,8 @@ import { z } from "zod";
 import type { AppContext } from "../context.js";
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
+import { pendingRedactionCount } from "../jobs/structure.js";
+import { currentBookFingerprint } from "../services/bookFingerprint.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
 import { serializeBookPreview } from "./appSerializers.js";
 
@@ -31,7 +33,15 @@ const previewInclude = {
   renders: {
     orderBy: { createdAt: "desc" as const },
     take: 1,
-    select: { id: true, status: true, pdfUrl: true },
+    select: {
+      id: true,
+      status: true,
+      pdfUrl: true,
+      error: true,
+      createdAt: true,
+      updatedAt: true,
+      composingStartedAt: true,
+    },
   },
   // De quoi tirer les deux phrases de la carte de partage. Les plus anciennes :
   // l'extrait doit ouvrir le récit, pas le finir.
@@ -55,7 +65,11 @@ async function readPreview(context: AppContext, accountId: string, memoId: strin
   // `@@index([memoId, createdAt])`, donc bon marché même interrogé toutes les
   // deux secondes ; menée en parallèle du reste, les deux requêtes sont
   // indépendantes.
-  const [memo, lastReady] = await Promise.all([
+  //
+  // L'empreinte du carnet et les souvenirs en rédaction (T224) : de quoi dire
+  // si le PDF est à jour, et ce que la composition attend. Quatre petites
+  // requêtes agrégées, pas une relecture des textes.
+  const [memo, lastReady, currentFingerprint, pendingMemoryCount] = await Promise.all([
     context.prisma.memo.findFirst({
       where: { id: memoId, ...visibleToAccount(accountId) },
       include: previewInclude,
@@ -63,12 +77,18 @@ async function readPreview(context: AppContext, accountId: string, memoId: strin
     context.prisma.render.findFirst({
       where: { memoId, status: "ready" },
       orderBy: { createdAt: "desc" },
-      select: { pdfUrl: true },
+      select: { id: true, pdfUrl: true, inputFingerprint: true },
     }),
+    currentBookFingerprint(context.prisma, memoId),
+    pendingRedactionCount(context.prisma, memoId),
   ]);
 
   if (!memo) throw new HttpError(404, "Ce carnet n’existe pas.");
-  return serializeBookPreview(memo, lastReady?.pdfUrl ?? null, context.env.SHARE_PUBLIC_BASE_URL);
+  return serializeBookPreview(
+    memo,
+    { lastReady, currentFingerprint, pendingMemoryCount },
+    context.env.SHARE_PUBLIC_BASE_URL,
+  );
 }
 
 /**

@@ -217,6 +217,44 @@ describe("payer une commande par carte", () => {
   });
 });
 
+describe("commander sans rendu désigné (T224)", () => {
+  it("prend le dernier rendu prêt quand l'app n'en désigne aucun", async () => {
+    const { memo, renderId } = await printableTrip();
+
+    const response = await harness.app.inject({
+      method: "POST",
+      url: `/v1/memos/${memo.id}/orders`,
+      headers: { authorization },
+      payload: { copies: 1, shipping: SHIPPING },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const stored = await harness.prisma.printOrder.findUniqueOrThrow({
+      where: { id: response.json<OrderBody>().id },
+    });
+    expect(stored.renderId).toBe(renderId);
+  });
+
+  it("refuse avec `no_render` un carnet jamais composé", async () => {
+    const memo = await harness.prisma.memo.create({
+      data: { ownerAccountId: accountId, title: "Lisbonne", accessCode: "NORNDR", stage: "past" },
+    });
+
+    const response = await harness.app.inject({
+      method: "POST",
+      url: `/v1/memos/${memo.id}/orders`,
+      headers: { authorization },
+      payload: { copies: 1, shipping: SHIPPING },
+    });
+
+    // Un code à lui : c'est celui que l'app traduit par « Aucun rendu de ton
+    // carnet n'a encore été généré… », distinct d'un rendu pas encore prêt.
+    expect(response.statusCode).toBe(409);
+    expect(response.json<{ error: string }>().error).toBe("no_render");
+    expect(await harness.prisma.printOrder.count()).toBe(0);
+  });
+});
+
 describe("la cagnotte retirée (06/10/2026)", () => {
   it("ne sert plus aucune route", async () => {
     for (const [method, url] of [

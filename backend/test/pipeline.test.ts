@@ -222,27 +222,121 @@ describe("garde-fous de l'API", () => {
     expect(response.json<{ error: string }>().error).toBe("empty_memo");
   });
 
-  it("ne relance pas une génération déjà en cours", async () => {
+  it("rend le dernier carnet quand rien n'a changé, et recompose après un souvenir (T224)", async () => {
     const memoId = await createMemo();
     await postAudio(memoId, "2026-01-03T09:00:00.000Z", "Bogotá");
 
-    const first = await harness.app.inject({
+    const compose = () =>
+      harness.app.inject({ method: "POST", url: `/v1/memos/${memoId}/renders`, headers: { authorization } });
+
+    // La première ouverture de l'aperçu compose (file en ligne : c'est fini).
+    const first = await compose();
+    expect(first.statusCode).toBe(202);
+    expect(first.json<{ status: string; phase: string }>()).toMatchObject({ status: "ready", phase: "ready" });
+
+    // La seconde, sans rien de neuf : le même rendu, pas un PDF de plus.
+    const second = await compose();
+    expect(second.statusCode).toBe(200);
+    expect(second.json<{ id: string }>().id).toBe(first.json<{ id: string }>().id);
+    expect(await harness.prisma.render.count({ where: { memoId } })).toBe(1);
+
+    // Un souvenir de plus : le carnet n'est plus à jour, il se recompose.
+    await postAudio(memoId, "2026-01-04T09:00:00.000Z", "Monserrate");
+    const third = await compose();
+    expect(third.statusCode).toBe(202);
+    expect(third.json<{ id: string }>().id).not.toBe(first.json<{ id: string }>().id);
+
+    // Une personnalisation aussi.
+    await harness.app.inject({
+      method: "PATCH",
+      url: `/v1/trips/${memoId}/settings`,
+      headers: { authorization },
+      payload: { quizEnabled: false },
+    });
+    expect((await compose()).statusCode).toBe(202);
+
+    // Un réglage qui ne touche pas au livre, non.
+    await harness.app.inject({
+      method: "PATCH",
+      url: `/v1/trips/${memoId}/settings`,
+      headers: { authorization },
+      payload: { notificationsEnabled: false },
+    });
+    expect((await compose()).statusCode).toBe(200);
+    expect(await harness.prisma.render.count({ where: { memoId } })).toBe(3);
+  });
+
+  it("rend la composition en cours, et remplace celle qui ne finira jamais", async () => {
+    const memoId = await createMemo();
+    await postAudio(memoId, "2026-01-03T09:00:00.000Z", "Bogotá");
+    const running = await harness.prisma.render.create({ data: { memoId, status: "processing" } });
+
+    const reused = await harness.app.inject({
       method: "POST",
       url: `/v1/memos/${memoId}/renders`,
       headers: { authorization },
     });
-    const second = await harness.app.inject({
+    expect(reused.statusCode).toBe(200);
+    expect(reused.json<{ id: string; phase: string }>()).toMatchObject({ id: running.id, phase: "writing" });
+
+    // Vingt minutes sans nouvelles : le worker est tombé.
+    await harness.prisma.$executeRaw`UPDATE renders SET "updatedAt" = now() - interval '21 minutes' WHERE id = ${running.id}`;
+    const replaced = await harness.app.inject({
       method: "POST",
       url: `/v1/memos/${memoId}/renders`,
       headers: { authorization },
     });
+    expect(replaced.statusCode).toBe(202);
+    expect(replaced.json<{ id: string; status: string }>().status).toBe("ready");
+    const stale = await harness.prisma.render.findUniqueOrThrow({ where: { id: running.id } });
+    expect(stale.status).toBe("failed");
+  });
 
-    // La première est terminée (file en ligne), la seconde crée donc bien un
-    // nouveau rendu : ce sont deux identifiants distincts.
-    expect(first.json<{ id: string }>().id).not.toBe(second.json<{ id: string }>().id);
+  it("donne à l'aperçu de quoi suivre la composition, et rend le carnet imprimable (T224, T228)", async () => {
+    const memoId = await createMemo();
+    await postAudio(memoId, "2026-01-03T09:00:00.000Z", "Bogotá");
 
-    const renders = await harness.prisma.render.count({ where: { memoId } });
-    expect(renders).toBe(2);
+    type Preview = {
+      render: { id: string; phase: string } | null;
+      readyRenderId: string | null;
+      isUpToDate: boolean;
+      pendingMemoryCount: number;
+      pdfUrl: string | null;
+      pageCount: number;
+    };
+    const preview = async () =>
+      (
+        await harness.app.inject({ method: "GET", url: `/v1/memos/${memoId}/preview`, headers: { authorization } })
+      ).json<Preview>();
+
+    const before = await preview();
+    expect(before).toMatchObject({ render: null, readyRenderId: null, isUpToDate: false, pdfUrl: null });
+    expect((await harness.prisma.memo.findUniqueOrThrow({ where: { id: memoId } })).isPrintable).toBe(false);
+
+    const composed = await harness.app.inject({
+      method: "POST",
+      url: `/v1/memos/${memoId}/renders`,
+      headers: { authorization },
+    });
+    const renderId = composed.json<{ id: string }>().id;
+
+    const after = await preview();
+    expect(after.render).toMatchObject({ id: renderId, phase: "ready" });
+    expect(after).toMatchObject({ readyRenderId: renderId, isUpToDate: true, pendingMemoryCount: 0 });
+    expect(after.pdfUrl).toMatch(/^https:\/\//);
+
+    // Le carnet existe : l'imprimante de l'accueil peut paraître, et ses pages
+    // sont celles qui ont été composées.
+    const memo = await harness.prisma.memo.findUniqueOrThrow({ where: { id: memoId } });
+    const render = await harness.prisma.render.findUniqueOrThrow({ where: { id: renderId } });
+    expect(memo.isPrintable).toBe(true);
+    expect(render.pageCount).toBeGreaterThan(0);
+    expect(memo.pageCount).toBe(render.pageCount);
+    expect(after.pageCount).toBe(render.pageCount);
+
+    // Un souvenir de plus : le PDF montré n'est plus celui d'aujourd'hui.
+    await postAudio(memoId, "2026-01-04T09:00:00.000Z", "Monserrate");
+    expect((await preview()).isUpToDate).toBe(false);
   });
 
   it("rejette un média qui n'est ni audio ni image", async () => {

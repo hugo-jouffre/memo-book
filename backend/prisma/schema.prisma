@@ -1278,15 +1278,25 @@ model Render {
   pdfUrl                   String?
   error                    String?
 
-  /// Le nombre de pages réellement composées par ce rendu.
+  /// Le nombre de pages composées par ce rendu — une par entrée de `days[]`
+  /// du payload —, écrit quand il est prêt (07/10/2026). Il est recopié sur
+  /// `memos.pageCount`, que l'accueil et le prix lisent (`billablePages`).
   ///
-  /// ⚠️ **Orpheline** : la colonne existe en base depuis le 15/09/2026, posée
-  /// par une migration dont le fichier n'a jamais été versionné, et **aucun
-  /// code ne la lit ni ne l'écrit**. Les pages facturées passent par
-  /// `memos.pageCount` et `print_orders.pageCount` (voir `billablePages`).
-  /// Elle est déclarée ici pour que le schéma dise la vérité sur la base —
-  /// sans quoi la prochaine migration proposerait de la supprimer.
+  /// La colonne existe en base depuis le 15/09/2026, posée par une migration
+  /// dont le fichier n'a jamais été versionné ; elle n'était lue par personne.
   pageCount Int?
+
+  /// L'empreinte de ce que ce rendu a composé — souvenirs, étapes,
+  /// personnalisations, couvertures, titre, dates (`services/bookFingerprint.ts`).
+  /// C'est elle qui dit qu'un rendu prêt est **à jour** : l'aperçu se recompose
+  /// à chaque ouverture, sauf si rien n'a changé (T224). Nulle pour un rendu
+  /// d'avant le 07/10/2026, toujours considéré comme périmé.
+  inputFingerprint String?
+
+  /// L'instant où le PDF part chez APITemplate, la mise en page faite. Nul
+  /// avant : c'est ce qui sépare la phase « writing » de « composing » sans
+  /// relire le payload à chaque sondage de l'aperçu.
+  composingStartedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
