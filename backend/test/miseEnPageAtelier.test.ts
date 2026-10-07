@@ -58,7 +58,7 @@ describe("mise en page de l'atelier", () => {
       ],
     };
     // Sans paragraphe, la photo du restaurant suit son rang ; on la rattache au restaurant.
-    analyse.photos[0]!.paragraphe = 2 as never;
+    analyse.photos[0]!.paragraphe = 2;
     const jours = M.composerJours([etape(recit, photos, analyse)]);
     const pageDe = (id: string) => jours.findIndex((j) => j.photos.some((p) => url(p).includes(`/${id}.`)));
     const texteDeLaPage = (i: number) => jours[i]!.body_html;
