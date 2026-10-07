@@ -216,7 +216,8 @@ enum BookCustomisationCategory: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    /// Le libellé, **au caractère près** (R8) : « Nmb de pages », « Typos ».
+    /// Le libellé, **au caractère près** (R8) : « Typos » ; « Nombre de
+    /// pages » en entier depuis T214.
     var title: String {
         switch self {
         case .ratio: BookCopy.Customisation.categoryRatio

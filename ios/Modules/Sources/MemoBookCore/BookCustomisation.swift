@@ -355,9 +355,9 @@ public struct BookFontCombo: Sendable, Hashable, Identifiable {
     public static let travelJournal = BookFontCombo(
         id: "travel-journal",
         name: "Carnet de voyage",
-        // La phrase de la V3 (`3595:24014`), au caractère près — « La
-        // recommandations » y est au pluriel, voir T199.
-        detail: "La recommandations de nos équipes",
+        // La phrase de la V3 (`3595:24014`), sa coquille corrigée : « La
+        // recommandations » y est au pluriel (Hugo, 06/10/2026, T199).
+        detail: "La recommandation de nos équipes",
         fonts: [
             .titles: "Playfair Display",
             .subtitles: "Hansley",
@@ -447,10 +447,11 @@ public enum BookPageTarget: String, Sendable, Hashable, CaseIterable, Identifiab
 
     public var detail: String {
         switch self {
-        case .compact: "Très condensé, peu impliquer des pertes de détails"
+        case .compact: "Très condensé, peut impliquer des pertes de détails"
         case .standard: "Parfait pour une aventure comme la tienne"
-        case .detailed: "Les moindre détails de tes récits seront conservés"
-        case .custom: "Définissez un nombre de pages cible"
+        case .detailed: "Les moindres détails de tes récits seront conservés"
+        // Au tutoiement (R9) : la maquette vouvoie ici, seule de la feuille.
+        case .custom: "Définis un nombre de pages cible"
         }
     }
 

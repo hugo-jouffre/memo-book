@@ -146,10 +146,11 @@ public enum BookCopy {
         public static let extrasSection = "Extras"
 
         /// Les cinq pastilles de la tête de l'écran (V3, `3595:23807`), **au
-        /// caractère près** : « Nmb de pages » et « Typos » sont des
-        /// abréviations de la maquette, pas les nôtres (R8).
+        /// caractère près** : « Typos » est une abréviation de la maquette, pas
+        /// la nôtre (R8). « Nmb de pages » en était une aussi ; elle s'écrit
+        /// en entier depuis le 06/10/2026 (Hugo, T214).
         public static let categoryRatio = "Ratio media"
-        public static let categoryPages = "Nmb de pages"
+        public static let categoryPages = "Nombre de pages"
         public static let categoryDecorations = "Décorations & stickers"
         public static let categoryFonts = "Typos"
         public static let categoryExtras = "Extras"

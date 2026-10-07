@@ -40,9 +40,12 @@ struct BookRatioPanel: View {
                 .monospacedDigit()
                 .foregroundStyle(MemoBookColor.ink)
 
+            // **À l'encre**, comme la valeur au-dessus (Hugo, 06/10/2026,
+            // T218) : le bleu clair `outline` de la maquette ne se lisait pas
+            // sur le crème.
             Text(BookCopy.Ratio.quality(ratio.wrappedValue))
                 .font(MemoBookFont.tagline)
-                .foregroundStyle(MemoBookColor.outline)
+                .foregroundStyle(MemoBookColor.ink)
                 .contentTransition(.opacity)
         }
         .frame(maxWidth: .infinity)
@@ -73,7 +76,7 @@ struct BookRatioPanel: View {
 
 // MARK: - Nombre de pages
 
-/// « Nmb de pages » — quatre paliers, dont les projections suivent la durée
+/// « Nombre de pages » — quatre paliers, dont les projections suivent la durée
 /// du voyage (`3595:23917`).
 struct BookPagesPanel: View {
     let model: BookCustomisationModel
