@@ -109,8 +109,12 @@
      d'entre eux l'avaient oubliée : la photo sortait en « [object Object] »
      dès qu'elle arrivait enrichie par l'analyse d'image.
      `item` accepte une URL nue ou un objet {url, tape_corner, focus}. #}
-  {% macro mb_photo(item, modifier) %}<div class="mb-photo mb-photo--{{ modifier }}{% if item.tape_corner %} mb-photo--tape-{{ item.tape_corner }}{% endif %}">{% if item.tape_corner %}<span class="mb-photo__tape"><svg viewBox="0 0 46 13" preserveAspectRatio="none"><use href="#mb-tape" /></svg></span>{% endif %}<img src="{{ item.url | default(item) }}" alt=""{% if item.focus %} style="object-position: {{ item.focus }}"{% endif %} /></div>{% endmacro %}
+  {% macro mb_photo(item, modifier) %}<div class="mb-photo mb-photo--{{ modifier }}{% if item.fit == 'contain' %} mb-photo--contain{% endif %}{% if item.tape_corner and item.fit != 'contain' %} mb-photo--tape-{{ item.tape_corner }}{% endif %}">{% if item.tape_corner and item.fit != 'contain' %}<span class="mb-photo__tape"><svg viewBox="0 0 46 13" preserveAspectRatio="none"><use href="#mb-tape" /></svg></span>{% endif %}<img src="{{ item.url | default(item) }}" alt=""{% if item.focus %} style="object-position: {{ item.focus }}"{% endif %} /></div>{% endmacro %}
 
+
+  {# Le tracé pointillé, dessiné derrière les photos d'une bande. `slot` vient
+     de la page : 0 à 3 choisit une variante, 4 n'en met pas. #}
+  {% macro mb_trace(slot) %}{% if slot < 4 %}<div class="mb-path mb-path--{{ ['a', 'b', 'c', 'a'][slot] }}" aria-hidden="true"><svg viewBox="0 0 500 60" preserveAspectRatio="none"><use href="#mb-path-{{ slot + 1 }}" /></svg></div>{% endif %}{% endmacro %}
 
   {# La réglure du papier, en éléments plutôt qu'en image de fond : Chromium
      rastérise les images de fond à l'export PDF (mesuré à 148 dpi, période
@@ -119,6 +123,11 @@
   {% macro mb_rules(count) %}<span class="mb-note__rules" aria-hidden="true">{% for _ in range(count) %}<i></i>{% endfor %}</span>{% endmacro %}
 
   <!-- ====================== COUVERTURE ====================== -->
+  {# `sans_couvertures` : rendu pour l'imprimeur d'un livre relié. La couverture
+     et la quatrième y sont imprimées à part, sur la couverture rigide
+     (`couverture.js` de l'atelier) : laissées ici, elles le seraient une
+     seconde fois à l'intérieur. Le livre s'ouvre alors sur le colophon. #}
+  {% if not sans_couvertures %}
   <div class="page page--cover">
     {% if cover_photo %}
       <div class="mb-cover__photo">
@@ -138,6 +147,7 @@
       </div>
     {% endif %}
   </div>
+  {% endif %}
 
   <!-- ====================== COLOPHON ====================== -->
   <div class="page page--colophon">
@@ -147,7 +157,10 @@
       <div class="mb-colophon__credits">
         {{ brand_name | default('MemoBook') }} © {{ year | default('2026') }}<br />
         {% if authors %}Récit de {{ authors }}<br />{% endif %}
-        Édition par {{ brand_name | default('MemoBook') }} — Illustrations par IA
+        {# « Illustrations par IA » seulement si le carnet en contient : la
+           mention était imprimée sur tous les carnets, y compris ceux qui n'ont
+           que des photos. #}
+        Édition par {{ brand_name | default('MemoBook') }}{% if ai_illustrations %} — Illustrations par IA{% endif %}
       </div>
     </div>
   </div>
@@ -229,30 +242,22 @@
          identique sur chaque page se remarque immédiatement.
 
          RÈGLE DURE : le tracé ne passe que derrière des PHOTOS, jamais derrière
-         du texte, qu'il rend illisible. Il faut donc que le bas de la page soit
-         occupé par une bande de photos — ce qui exclut :
-           · `layout_hero_top`, qui met la photo en haut et le récit en bas ;
-           · les étapes à moins de deux photos, qui n'ont pas de bande ;
-           · les blocs à remplir, qui occupent eux-mêmes le bas de la page. #}
-      {% set slot = (loop.index0 * 3 + 1) % 5 %}
-      {% set bande_photos = day.photos and day.photos | length >= 2
-                            and not day.layout_hero_top
-                            and not day.prompt and not day.quiz %}
-      {% if slot < 4 and bande_photos %}
-        <div class="page__decor">
-          <div class="mb-path mb-path--{{ ['a', 'b', 'c', 'a'][slot] }}">
-            <svg viewBox="0 0 500 60" preserveAspectRatio="none">
-              <use href="#mb-path-{{ slot + 1 }}" />
-            </svg>
-          </div>
-        </div>
-      {% endif %}
+         du texte, qu'il rend illisible. Il est donc dessiné **dans** la bande de
+         photos (`mb_trace`, appelé par `.mb-gallery`), positionné par rapport à
+         elle et non par rapport à la page : où que la bande se trouve, il la
+         suit. Le layout par défaut, `layout_hero_top` et les blocs à remplir
+         n'ont pas de bande, donc pas de tracé.
 
+         Il était autrefois posé à hauteur fixe sur la page (24, 48 ou 96 pt du
+         bas), en supposant la bande toujours en bas : dès qu'un récit trop long
+         repoussait ou écrasait la bande, le pointillé passait sous le texte. #}
+      {% set slot = (loop.index0 * 3 + 1) % 5 %}
       <div class="page__content">
 
         {% if day.day_intro %}
           <!-- Bandeau : ruban jour + lieu + date -->
-          <div class="mb-header">
+          {% set bandeau_seul = not (day.day_intro.stay or day.day_intro.host or day.day_intro.weather_key or day.tag) %}
+          <div class="mb-header{% if bandeau_seul %} mb-header--seul{% endif %}">
             <div class="mb-ribbon">
               <svg class="mb-ribbon__shape" viewBox="0 0 71 93" preserveAspectRatio="none">
                 <use href="#mb-ribbon" />
@@ -356,7 +361,7 @@
             {% endif %}
           </div>
           {% if day.photos and day.photos | length >= 2 %}
-            <div class="mb-gallery">
+            <div class="mb-gallery">{{ mb_trace(slot) }}
               {{ mb_photo(day.photos[0], 'tilt-left') }}
               {{ mb_photo(day.photos[1], 'tilt-right') }}
             </div>
@@ -390,7 +395,7 @@
             </div>
           </div>
           {% if day.photos and day.photos | length >= 2 %}
-            <div class="mb-gallery">
+            <div class="mb-gallery">{{ mb_trace(slot) }}
               {{ mb_photo(day.photos[0], 'tilt-left') }}
               {{ mb_photo(day.photos[1], 'tilt-right') }}
             </div>
@@ -402,7 +407,7 @@
             {{ day.body_html | safe }}
           </div>
           {% if day.photos and day.photos | length >= 2 %}
-            <div class="mb-gallery{% if day.photos | length >= 3 %} mb-gallery--three{% endif %}">
+            <div class="mb-gallery{% if day.photos | length >= 3 %} mb-gallery--three{% endif %}">{{ mb_trace(slot) }}
               {{ mb_photo(day.photos[0], 'tilt-left') }}
               {{ mb_photo(day.photos[1], 'tilt-right') }}
               {% if day.photos | length >= 3 %}
@@ -472,7 +477,13 @@
   {# Sans photo, la variante typographique : le papier du carnet reste visible
      et c'est le texte qui tient la page, comme le dos d'un livre. C'est le cas
      par défaut depuis que les testeurs ont écarté la photo pleine page. #}
-  {% if back_cover %}
+  {# Une page blanche en fin de livre quand l'intérieur compte un nombre impair
+     de pages : un livre relié s'imprime en feuillets, recto et verso. #}
+  {% if page_blanche_finale %}
+    <div class="page page--blanche"></div>
+  {% endif %}
+
+  {% if back_cover and not sans_couvertures %}
     <div class="page page--back{% if not back_cover.image %} page--back--text{% endif %}">
       {% if back_cover.image %}
         <div class="mb-back__photo"><img src="{{ back_cover.image }}" alt="" /></div>

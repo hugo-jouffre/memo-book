@@ -186,6 +186,10 @@ function photoVide(meta) {
     largeur: 0,
     hauteur: 0,
     orientation: "",
+    /** Photo de groupe : jamais rognée, seulement réduite (LAYOUT_KB § « Rognage des photos »). */
+    groupe: false,
+    /** Désignée pour la couverture par le voyageur. Une seule à la fois. */
+    couverture: false,
     ...meta,
   };
 }
@@ -206,6 +210,8 @@ const REGLAGES_DEFAUT = {
   dossierDisque: "",
   cleApitemplate: "",
   templateApitemplate: "7a177b23210099d6",
+  /** Rendu pour l'imprimeur (Pumbo) : sans couverture ni quatrième, nombre de pages pair. */
+  versionImprimeur: false,
   baseApitemplate: "https://rest-de.apitemplate.io/v2",
 };
 
@@ -255,6 +261,8 @@ const etat = {
   rencontres: [],
   /** Dernier PDF rendu par APITemplate, pour garder le lien sous la main. */
   pdf: null,
+  /** Contours des pays (`assets/maps/countries.json`), chargés à la première carte. */
+  contoursCarte: null,
   /** Message sous « Générer le carnet » : { type: "info" | "erreur", texte }. */
   carnetStatut: null,
   etapes: [],
@@ -1345,6 +1353,7 @@ async function genererJson(bouton) {
   bouton.disabled = true;
   bouton.textContent = "Génération en cours…";
   try {
+    await preparerMiseEnPage((texte) => (bouton.textContent = texte.split("…")[0] + "…"));
     const json = construireJson();
     const enregistre = await enregistrerFichier(
       json,
@@ -1366,97 +1375,9 @@ async function genererJson(bouton) {
   }
 }
 
-/** Découpe un récit en paragraphes qui tiennent dans une page du carnet. */
-function enParagraphes(texte, maxSignes = 400) {
-  const phrases = String(texte || "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .split(/(?<=[.!?…])\s+/)
-    .filter(Boolean);
-  const paragraphes = [];
-  let courant = "";
-  for (const phrase of phrases) {
-    if (!courant) courant = phrase;
-    else if (courant.length + 1 + phrase.length <= maxSignes) courant += ` ${phrase}`;
-    else {
-      paragraphes.push(courant);
-      courant = phrase;
-    }
-  }
-  if (courant) paragraphes.push(courant);
-  return paragraphes;
-}
-
-const echapperHtml = (t) =>
-  String(t || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-const enHtml = (texte) =>
-  enParagraphes(texte)
-    .map((t) => `<p>${echapperHtml(t)}</p>`)
-    .join("");
-
-/**
- * Combien de photos chaque gabarit **rend réellement**, d'après le catalogue de
- * `MemoBook Generator/templates/travel-journal/LAYOUT_KB.md`. Au-delà de ce
- * nombre, les photos envoyées ne sont pas dessinées : elles disparaissent du
- * carnet sans que rien ne le signale. C'est ce qui justifie le report sur des
- * pages de photos (voir `pagesDePhotos`).
- */
-const PHOTOS_RENDUES = {
-  layout_story_facts: 0,
-  layout_story_opener: 1,
-  layout_hero_top: 1,
-  layout_split_left: 2,
-  layout_collage: 3,
-  layout_photo_page: 5,
-};
-
-/** Le gabarit « page pleine de photos » exige au moins trois images. */
-const MIN_PAGE_PHOTOS = 3;
-
-/**
- * Choix de la mise en page, repris de la table de
- * `MemoBook Generator/templates/travel-journal/LAYOUT_KB.md` : c'est elle qui dit combien de
- * photos chaque gabarit sait tenir.
- *
- * **`layout_photo_page` ne rend ni bandeau ni récit** — c'est écrit dans le
- * catalogue. Le choisir sur le seul nombre de photos effaçait donc le texte
- * d'une étape dès qu'elle portait quatre images : le voyageur retrouvait une
- * planche photo muette à la place de sa journée. Une étape qui a un récit garde
- * toujours un gabarit qui l'affiche ; ses photos en trop partent sur des pages
- * de photos à la suite.
- */
-function layoutPour(nbPhotos, premiere, aUnRecit) {
-  if (!aUnRecit) return nbPhotos >= MIN_PAGE_PHOTOS ? "layout_photo_page" : "layout_story_facts";
-  if (premiere) return "layout_story_opener";
-  if (nbPhotos === 0) return "layout_story_facts";
-  if (nbPhotos === 1) return "layout_hero_top";
-  if (nbPhotos === 2) return "layout_split_left";
-  return "layout_collage";
-}
-
-/**
- * Découpe les photos qu'aucun gabarit de récit n'a pu poser en pages de photos
- * de 3 à 5 images.
- *
- * Un reliquat de une ou deux photos ne peut pas faire une page — le gabarit en
- * exige trois — alors il rejoint la page précédente au lieu d'être perdu : sept
- * photos donnent 4 + 3, jamais 5 + 2. Quand il n'y a pas de page précédente où
- * les verser, une ou deux photos restent non rendues : c'est la seule perte que
- * le gabarit impose, et elle vaut mieux qu'une page aux trois quarts vide.
- */
-function pagesDePhotos(restantes) {
-  const pages = [];
-  for (let i = 0; i < restantes.length; i += PHOTOS_RENDUES.layout_photo_page) {
-    pages.push(restantes.slice(i, i + PHOTOS_RENDUES.layout_photo_page));
-  }
-  const derniere = pages[pages.length - 1];
-  if (pages.length > 1 && derniere.length < MIN_PAGE_PHOTOS) {
-    const avant = pages[pages.length - 2];
-    while (derniere.length < MIN_PAGE_PHOTOS) derniere.unshift(avant.pop());
-  }
-  return pages.length === 1 && pages[0].length < MIN_PAGE_PHOTOS ? [] : pages;
-}
+// La mise en page des étapes (pagination, photos, chapitres, doubles pages)
+// vit dans `mise-en-page.js` : sans DOM ni réseau, elle se teste depuis le
+// back-end. Ici ne restent que la collecte des données et l'envoi.
 
 /**
  * Le lieu affiché dans le bandeau : celui de l'étape, complété par la
@@ -1498,98 +1419,117 @@ function dateLongue(iso) {
  * par `MemoBook Generator/templates/travel-journal/data.json`. Conversion **mécanique** : elle
  * n'écrit pas à la place du voyageur, elle habille son texte.
  */
-function construirePayloadCarnet(photoDe = (data) => data) {
-  const toutesPhotos = etat.etapes.flatMap((e) => e.photos.map((p) => photoDe(p.data)).filter(Boolean));
+/** « 22 août 2026 – 5 septembre 2026 », tiré des étapes : le même sur la couverture et dans le carnet. */
+function plageDates() {
   const dates = etat.etapes.flatMap((e) => [e.dateDebut, e.dateFin]).filter(Boolean).sort();
   const premiere = dates[0];
   const derniere = dates[dates.length - 1];
+  return premiere && derniere && premiere !== derniere
+    ? `${dateLongue(premiere)} – ${dateLongue(derniere)}`
+    : dateLongue(premiere) || "";
+}
 
-  return {
+/** Le sous-titre du carnet, sur la couverture intérieure comme sur la couverture imprimée. */
+const SOUS_TITRE = "Un carnet de voyage raconté à l'oral";
+
+/** La fiche Pumbo importée, ou celle du relié de 48 pages par défaut. */
+const fichePumbo = () => etat.reglages.fichePumbo || Couverture.FICHE_DEFAUT;
+
+/** La photo de couverture : celle que le voyageur a désignée, sinon la plus adaptée au recto. */
+const photoDeCouverture = () =>
+  Couverture.choisirPhotoCouverture(
+    etat.etapes.flatMap((e) => e.photos),
+    fichePumbo(),
+  );
+
+/** Une seule photo en couverture : en désigner une retire l'étoile des autres. */
+function designerCouverture(photoId) {
+  for (const p of [...etat.photosAttente, ...etat.etapes.flatMap((e) => e.photos)]) {
+    p.couverture = p.id === photoId ? !p.couverture : false;
+  }
+  apresChangement();
+}
+
+/**
+ * Les étapes telles que les lit `MiseEnPage.composerJours` : le récit d'un
+ * tenant, les photos avec leur format, et l'analyse d'étape si elle a été faite
+ * (`analyserEtapes`) et qu'elle correspond encore au contenu de l'étape.
+ */
+function etapesPourMiseEnPage(photoDe) {
+  return etat.etapes.map((etape, index) => ({
+    titre: etape.titre || `Étape ${index + 1}`,
+    lieu: etape.lieu || "",
+    destination: etat.carnet.destination || "",
+    numero: String(index + 1).padStart(2, "0"),
+    lieuComplet: lieuComplet(etape.lieu, etat.carnet.destination),
+    dateLongue: dateLongue(etape.dateDebut),
+    recit: recitDe(etape),
+    photos: etape.photos
+      .filter((p) => p.data)
+      .map((p) => ({
+        id: p.id,
+        src: photoDe(p.data),
+        format: p.largeur && p.hauteur ? p.largeur / p.hauteur : 0,
+        groupe: Boolean(p.groupe),
+      }))
+      .filter((p) => p.src),
+    analyse: etape.analyse?.cle === cleAnalyse(etape) ? etape.analyse.resultat : null,
+  }));
+}
+
+const recitDe = (etape) => etape.souvenirs.map((s) => s.texte.trim()).filter(Boolean).join(" ");
+
+/**
+ * Pages du livre imprimé : le colophon, puis les pages d'étape — la couverture
+ * et la quatrième sont imprimées à part sur un relié. C'est ce nombre qu'il
+ * faut donner à l'outil de couverture Pumbo pour obtenir la bonne fiche.
+ */
+const pagesInterieures = (jours) => 1 + jours.length;
+
+function construirePayloadCarnet(photoDe = (data) => data) {
+  // La même photo que sur la couverture imprimée : le carnet s'ouvre sur ce
+  // qu'on a vu en le prenant en main.
+  const couverture = photoDeCouverture();
+  const imprimeur = Boolean(etat.reglages.versionImprimeur);
+
+  const payload = {
     render_profile: "preview",
+    // Version imprimeur : le relié a sa couverture à part (`couverture.js`), et
+    // s'imprime en feuillets — un nombre de pages pair.
+    ...(imprimeur ? { sans_couvertures: true } : {}),
     book_title: etat.carnet.titre || "Carnet de voyage",
-    book_subtitle: "Un carnet de voyage raconté à l'oral",
+    book_subtitle: SOUS_TITRE,
     authors: listeVoyageurs().join(" et "),
-    date_range:
-      premiere && derniere && premiere !== derniere
-        ? `${dateLongue(premiere)} – ${dateLongue(derniere)}`
-        : dateLongue(premiere) || "",
-    cover_photo: toutesPhotos[0] || "",
+    date_range: plageDates(),
+    cover_photo: couverture ? photoDe(couverture.data) : "",
     brand_name: "MemoBook",
     year: String(new Date().getFullYear()),
     footer_tagline: "Racontez. Revivez. Partagez.",
     intro_text: "",
-    // `flatMap` et non `map` : une étape riche en photos occupe plusieurs pages.
-    // La première porte le bandeau et le récit, les suivantes sont des pages de
-    // photos — c'est la règle « une étape peut occuper plusieurs pages » de
-    // LAYOUT_KB, et c'est ce qui évite de perdre du texte ou des images.
-    days: etat.etapes.flatMap((etape, index) => {
-      const photos = etape.photos.map((p) => (p.data ? photoDe(p.data) : "")).filter(Boolean);
-      const recit = etape.souvenirs.map((s) => s.texte.trim()).filter(Boolean).join(" ");
-      const layout = layoutPour(photos.length, index === 0, Boolean(recit));
-      const posees = Math.min(photos.length, PHOTOS_RENDUES[layout]);
-
-      const drapeaux = (actif) => ({
-        // Un seul gabarit est vrai à la fois : le template lit des booléens.
-        layout_story_opener: actif === "layout_story_opener",
-        layout_story_facts: actif === "layout_story_facts",
-        layout_hero_top: actif === "layout_hero_top",
-        layout_split_left: actif === "layout_split_left",
-        layout_collage: actif === "layout_collage",
-        layout_photo_page: actif === "layout_photo_page",
-      });
-
-      const page = {
-        title: etape.titre || `Étape ${index + 1}`,
-        date: dateLongue(etape.dateDebut),
-        city: etape.lieu || "",
-        country: etat.carnet.destination || "",
-        day_intro: {
-          day_number: String(index + 1).padStart(2, "0"),
-          location: lieuComplet(etape.lieu, etat.carnet.destination),
-          date: dateLongue(etape.dateDebut),
-          // Pas de `weather_key` : la météo ne s'imprime que si le vocal la dit
-          // clairement, et l'atelier ne lit pas le récit. Sans le champ, la
-          // rangée disparaît — mieux qu'un soleil inventé sur chaque étape.
-        },
-        ...drapeaux(layout),
-        opener_kicker: index === 0 ? etape.lieu || "" : "",
-        opener_body_html: index === 0 ? enHtml(recit) : "",
-        opener_photos: index === 0 ? photos.slice(0, 2) : [],
-        body_html: enHtml(recit),
-        fun_facts: [],
-        highlights: etape.photos.map((p) => p.legende).filter(Boolean).slice(0, 3),
-        photos: photos.slice(0, posees),
-        // Le template itère dessus : une liste vide vaut mieux qu'une clé absente.
-        sticker_groups: [],
-        tag: etape.lieu || "",
-      };
-
-      // Les pages de suite n'ont ni bandeau ni récit : c'est ce qui les rattache
-      // à l'étape précédente. Sur une page de photos, `title` devient la légende
-      // manuscrite du bas — on ne la répète pas de page en page.
-      const suites = pagesDePhotos(photos.slice(posees)).map((lot, rang) => ({
-        title: rang === 0 ? etape.titre || "" : "",
-        body_html: "",
-        ...drapeaux("layout_photo_page"),
-        photos: lot,
-        fun_facts: [],
-        highlights: [],
-        sticker_groups: [],
-      }));
-
-      return [page, ...suites];
+    // Les pages d'étape : récit réparti sur ses pages, photos auprès du passage
+    // qu'elles illustrent, chapitres sur une carte, doubles pages variées.
+    // Voir `mise-en-page.js` et LAYOUT_KB.
+    days: MiseEnPage.composerJours(etapesPourMiseEnPage(photoDe), {
+      contours: etat.contoursCarte,
+      dessinerCarte: etat.contoursCarte
+        ? (requete) => Carte.renderMapDataUri(etat.contoursCarte, requete)
+        : null,
+      // Le colophon est la page 1 du livre imprimé : la première page d'étape
+      // est à gauche.
+      pagesAvant: 1,
+      journal: (texte) => debugCarnet(texte),
     }),
     back_cover: {
       closing_text: "À suivre.",
-      closing_subtext: `Carnet composé avec MemoBook Generator${
-        etat.rencontres.length
-          ? `, ${etat.rencontres.length} rencontre${etat.rencontres.length > 1 ? "s" : ""} en chemin`
-          : ""
-      }.`,
+      // Pas de `closing_subtext` : « Carnet composé avec MemoBook Generator,
+      // N rencontres en chemin » parlait de l'outil interne et d'un mot de
+      // l'atelier, pas du voyage. La quatrième garde « À suivre. » et l'adresse.
       cta: "memobook.fr",
       logo_url: "",
     },
   };
+  if (imprimeur && pagesInterieures(payload.days) % 2 === 1) payload.page_blanche_finale = true;
+  return payload;
 }
 
 /* ------------------------------------------------ envoi vers APITemplate --- */
@@ -1743,6 +1683,181 @@ function messageLisible(erreur, statut) {
  * - l'onglet du PDF est ouvert au clic, avant tout `await`, sinon Safari et
  *   Chrome le bloquent comme une popup.
  */
+/**
+ * Compose la couverture du livre relié (verso, dos, recto) dans un nouvel
+ * onglet, au format de la fiche Pumbo, prête à « Enregistrer au format PDF ».
+ * Voir `couverture.js` et LAYOUT_KB § « Couverture imprimée (Pumbo) ».
+ *
+ * L'onglet s'ouvre **avant** tout `await` : ouvert plus tard, hors du geste du
+ * clic, il serait bloqué par le navigateur comme une fenêtre surgissante.
+ */
+async function genererCouverture() {
+  const onglet = window.open("", "_blank");
+  if (!onglet) {
+    etat.erreur = "Le navigateur a bloqué l'onglet de la couverture : autorise les fenêtres pour cette page.";
+    rendreColonne();
+    return;
+  }
+  onglet.document.write(
+    '<p style="font:15px system-ui,sans-serif;padding:2rem">Composition de la couverture…</p>',
+  );
+
+  // Les polices du carnet, pour que la couverture parle comme l'intérieur.
+  // Sans réseau, on retombe sur les polices du système plutôt que d'échouer.
+  let polices = "";
+  try {
+    polices = await recupererFichierTemplate("fonts.css");
+  } catch (erreur) {
+    debugCarnet("polices du gabarit indisponibles pour la couverture", erreur);
+  }
+
+  const html = Couverture.construireHtmlCouverture({
+    fiche: fichePumbo(),
+    titre: etat.carnet.titre || "Carnet de voyage",
+    sousTitre: SOUS_TITRE,
+    auteurs: listeVoyageurs().join(" et "),
+    dates: plageDates(),
+    photo: photoDeCouverture(),
+    polices,
+    logo: new URL("./logo-memobook.svg", location.href).href,
+    quatrieme: "À suivre.",
+    adresse: "memobook.fr",
+  });
+  onglet.document.open();
+  onglet.document.write(html);
+  onglet.document.close();
+}
+
+/** Lit la fiche `.jsx` de Pumbo choisie dans les réglages, et la garde pour les prochaines couvertures. */
+async function importerFichePumbo(fichier) {
+  if (!fichier) return;
+  const fiche = Couverture.lireFichePumbo(await fichier.text());
+  if (!fiche) {
+    etat.erreur = `« ${fichier.name} » n'est pas une fiche de couverture Pumbo : il faut le script .jsx de leur outil de couverture.`;
+  } else {
+    etat.reglages.fichePumbo = { ...fiche, source: `fiche Pumbo « ${fichier.name} »` };
+    sauverReglages();
+    etat.erreur = "";
+    etat.info = `Fiche Pumbo importée : plats ${fiche.largeurPlat} × ${fiche.hauteurPlat} mm, dos ${fiche.dos} mm.`;
+  }
+  rendreColonne();
+}
+
+/* ------------------------------------------- analyse d'étape et cartes --- */
+
+const CONTOURS_CARTE_URL =
+  "https://raw.githubusercontent.com/hugo-jouffre/memo-book/main/assets/maps/countries.json";
+
+/**
+ * La clé d'une analyse : ce qui, s'il change, la rend caduque — le lieu, le
+ * récit, les photos. Une étape inchangée n'est pas réanalysée d'une génération
+ * à l'autre ; l'analyse voyage avec l'étape dans le fichier d'avancement.
+ */
+function cleAnalyse(etape) {
+  const contenu = [
+    etape.lieu || "",
+    etat.carnet.destination || "",
+    recitDe(etape),
+    ...etape.photos.filter((p) => p.data).map((p) => `${p.id}:${p.largeur}x${p.hauteur}`),
+  ].join("|");
+  let h = 0;
+  for (let i = 0; i < contenu.length; i += 1) h = (Math.imul(31, h) + contenu.charCodeAt(i)) | 0;
+  return `${contenu.length}-${(h >>> 0).toString(36)}`;
+}
+
+/** Vignette JPEG de 512 px au plus côté : assez pour reconnaître une scène, léger à envoyer. */
+async function vignette(dataUrl) {
+  const img = new Image();
+  img.src = dataUrl;
+  await img.decode();
+  const ratio = Math.min(1, 512 / Math.max(img.naturalWidth, img.naturalHeight));
+  const toile = document.createElement("canvas");
+  toile.width = Math.max(1, Math.round(img.naturalWidth * ratio));
+  toile.height = Math.max(1, Math.round(img.naturalHeight * ratio));
+  toile.getContext("2d").drawImage(img, 0, 0, toile.width, toile.height);
+  return toile.toDataURL("image/jpeg", 0.7);
+}
+
+/** Le serveur relaie en local ; en ligne la page appelle l'API elle-même. */
+async function appelAnalyse(corps) {
+  if (etat.mode === "navigateur") return MoteurNavigateur.analyser(corps);
+  return appelJson("/api/analyser", corps);
+}
+
+/**
+ * Analyse chaque étape qui ne l'a pas encore été : le lieu (pour la carte de
+ * chapitre), le passage que chaque photo illustre et les photos prises au même
+ * endroit (pour les mettre sur la même page). Voir `consigneAnalyseEtape` et
+ * LAYOUT_KB § « Associer les photos au récit ».
+ *
+ * Sans clé, ou si le modèle échoue, le carnet se fait quand même : photos dans
+ * l'ordre du voyage, pas de carte. On le dit, sans bloquer.
+ */
+async function analyserEtapes(statut = () => {}) {
+  const fournisseur = etat.reglages.fournisseurDecoupage;
+  const anthropic = fournisseur === "anthropic";
+  const avecCle =
+    (anthropic ? etat.reglages.cleAnthropic : etat.reglages.cleOpenai)?.trim() ||
+    (anthropic ? etat.config?.cleServeur?.anthropic : etat.config?.cleServeur?.openai);
+  const aFaire = etat.etapes.filter((e) => e.analyse?.cle !== cleAnalyse(e));
+  if (!aFaire.length) return { faites: 0, echecs: 0 };
+  if (!avecCle) {
+    statut("Pas de clé de modèle : photos placées dans l'ordre du voyage, pas de carte de chapitre.");
+    return { faites: 0, echecs: aFaire.length };
+  }
+
+  let faites = 0;
+  let echecs = 0;
+  const unePasse = async (etape) => {
+    const photos = etape.photos.filter((p) => p.data);
+    try {
+      const images = await Promise.all(photos.map(async (p) => ({ id: p.id, data: await vignette(p.data) })));
+      const consigne = consigneAnalyseEtape({
+        lieu: etape.lieu,
+        destination: etat.carnet.destination,
+        paragraphes: MiseEnPage.enParagraphes(recitDe(etape)),
+        photos,
+      });
+      const resultat = await appelAnalyse({
+        fournisseur,
+        modele: etat.reglages.modeleDecoupage,
+        cleOpenai: etat.reglages.cleOpenai,
+        cleAnthropic: etat.reglages.cleAnthropic,
+        consigne,
+        images,
+      });
+      etape.analyse = { cle: cleAnalyse(etape), resultat };
+      faites += 1;
+    } catch (erreur) {
+      echecs += 1;
+      debugCarnet(`analyse de l'étape « ${etape.titre || etape.lieu} » impossible`, erreur);
+    }
+    statut(`Analyse des étapes et des photos… ${faites + echecs} / ${aFaire.length}`);
+  };
+
+  // Trois à la fois : assez pour aller vite, pas assez pour se faire limiter.
+  statut(`Analyse des étapes et des photos… 0 / ${aFaire.length}`);
+  for (let i = 0; i < aFaire.length; i += 3) await Promise.all(aFaire.slice(i, i + 3).map(unePasse));
+  return { faites, echecs };
+}
+
+/** Les contours des pays, lus une fois sur GitHub pour dessiner les cartes de chapitre. */
+async function chargerContoursCarte() {
+  if (etat.contoursCarte) return;
+  try {
+    const reponse = await fetch(CONTOURS_CARTE_URL);
+    if (!reponse.ok) throw new Error(`HTTP ${reponse.status}`);
+    etat.contoursCarte = await reponse.json();
+  } catch (erreur) {
+    debugCarnet("contours de carte indisponibles : pas de carte de chapitre", erreur);
+  }
+}
+
+/** Ce qui précède la mise en page : l'analyse des étapes et les contours de carte. */
+async function preparerMiseEnPage(statut) {
+  await Promise.all([analyserEtapes(statut), chargerContoursCarte()]);
+}
+
 async function genererCarnet(bouton) {
   if (bouton.disabled) return;
   debugCarnet("clic sur Générer le carnet", {
@@ -1785,6 +1900,10 @@ async function genererCarnet(bouton) {
 
   let statut = 0;
   try {
+    await preparerMiseEnPage((texte) => {
+      etat.carnetStatut = { type: "info", texte };
+      rendreResultatPdf();
+    });
     const { payload, poids, base, palier } = await preparerEnvoi();
     debugCarnet("envoi", { base, poids, palier });
 
@@ -1815,7 +1934,13 @@ async function genererCarnet(bouton) {
     }
 
     etat.pdf = { url: donnees.download_url, quand: new Date() };
-    etat.carnetStatut = null;
+    // Le nombre de pages intérieures est celui qu'il faut donner à l'outil de
+    // couverture Pumbo : c'est lui qui fixe la largeur du dos.
+    const pages = pagesInterieures(payload.days) + (payload.page_blanche_finale ? 1 : 0);
+    etat.carnetStatut = {
+      type: "info",
+      texte: `${pages} pages intérieures${etat.reglages.versionImprimeur ? "" : " (hors couverture et quatrième)"} : c'est le nombre à donner à l'outil de couverture Pumbo pour la fiche du dos.`,
+    };
     if (onglet && !onglet.closed) onglet.location.href = donnees.download_url;
   } catch (erreur) {
     console.error("[carnet] échec", erreur);
@@ -2250,9 +2375,35 @@ function cartePhoto(p, conteneurId) {
         oninput: (ev) => modifier("photos", p.id, conteneurId, { legende: ev.target.value }),
       }),
       h(
+        "label",
+        {
+          class: "case-groupe",
+          title:
+            "Une photo de groupe n'est jamais rognée dans le carnet : elle est seulement réduite, " +
+            "pour que personne ne sorte du cadre.",
+        },
+        h("input", {
+          type: "checkbox",
+          checked: Boolean(p.groupe),
+          onchange: (ev) => modifier("photos", p.id, conteneurId, { groupe: ev.target.checked }),
+        }),
+        " Photo de groupe, ne pas rogner",
+      ),
+      h(
         "div",
         { class: "rangee" },
         selecteurEtapePhoto(p.id, conteneurId),
+        h(
+          "button",
+          {
+            class: `etoile-couverture${p.couverture ? " active" : ""}`,
+            title: p.couverture
+              ? "Photo de couverture — cliquer pour revenir au choix automatique"
+              : "Mettre cette photo en couverture (sinon, l'atelier choisit la plus adaptée)",
+            onclick: () => designerCouverture(p.id),
+          },
+          p.couverture ? "★" : "☆",
+        ),
         h(
           "button",
           {
@@ -2399,6 +2550,40 @@ function rendreReglages() {
       ),
     ),
     h("p", { class: "aide", id: "statut-template" }),
+    h(
+      "label",
+      { class: "champ", style: { marginTop: "0.5rem" } },
+      h("span", {}, "Fiche couverture Pumbo (.jsx)"),
+      h("input", {
+        type: "file",
+        accept: ".jsx,.js,.txt",
+        onchange: (ev) => importerFichePumbo(ev.target.files?.[0]),
+      }),
+    ),
+    h(
+      "p",
+      { class: "aide" },
+      (() => {
+        const f = fichePumbo();
+        return (
+          `Couverture : plats ${f.largeurPlat} × ${f.hauteurPlat} mm, dos ${f.dos} mm, fond perdu ${f.fondPerdu} mm — ${f.source}. ` +
+          "Le dos dépend du nombre de pages : une fiche par commande, tirée de l'outil de couverture Pumbo."
+        );
+      })(),
+    ),
+    h(
+      "label",
+      { class: "case", style: { marginTop: "0.5rem" } },
+      h("input", {
+        type: "checkbox",
+        checked: Boolean(r.versionImprimeur),
+        onchange: (ev) => {
+          r.versionImprimeur = ev.target.checked;
+          sauverReglages();
+        },
+      }),
+      " Version imprimeur : sans couverture ni quatrième (imprimées sur la couverture rigide)",
+    ),
     h(
       "div",
       { class: "rangee" },
@@ -3001,6 +3186,7 @@ document.addEventListener("click", (ev) => {
   if (action === "ajouter-etape") ajouterEtape();
   if (action === "generer-json") genererJson(bouton);
   if (action === "generer-carnet") genererCarnet(bouton);
+  if (action === "generer-couverture") genererCouverture();
   if (action === "sauvegarder") sauvegarderAvancement(bouton);
   if (action === "ouvrir") $("fichier-avancement").click();
   if (action === "sync-template") synchroniserTemplate(bouton);
@@ -3031,6 +3217,13 @@ async function demarrer() {
   garnirEntete();
   rendreColonne();
   apresChangement();
+}
+
+// En local, le marqueur n'est pas remplacé : on le dit plutôt que de l'afficher.
+{
+  const version = document.getElementById("version");
+  if (version && version.textContent.includes("VERSION")) version.textContent = "version locale";
+  else if (version) version.textContent = `version ${version.textContent}`;
 }
 
 demarrer();

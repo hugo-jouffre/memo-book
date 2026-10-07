@@ -8,6 +8,17 @@ Base de connaissance de l'agent qui produit le JSON envoyé au moteur PDF.
 > documentait onze layouts dont un seul existait, et l'agent produisait des
 > champs que personne ne lisait.
 
+> **Qui lit ce fichier — et qui ne le lit pas.** Il est chargé tel quel dans le
+> prompt de l'Agent Mise en page du back-end (`structuring.ts`) : une règle
+> écrite ici s'applique aux carnets de l'app dès la fusion. **L'atelier
+> (MemoBook Generator) ne le lit pas** : il n'a pas d'agent de mise en page, ses
+> règles sont recopiées en code dans `MemoBook Generator/public/mise-en-page.js`
+> (`pagesDeRecit`, `affecterPhotos`, `varierDoublesPages`, `placerPhotos`),
+> testé par `backend/test/miseEnPageAtelier.test.ts`. Une règle ajoutée ici ne
+> change donc rien aux PDF de l'atelier tant qu'elle n'y est pas portée — c'est
+> ce qui s'est passé pour les trois règles de répartition, écrites le 05/10 et
+> absentes du carnet généré le 06/10.
+
 ## Format
 
 - Page **A5 : 420 × 595 pt** (1 unité Figma = 1 pt), sans fond perdu.
@@ -33,10 +44,13 @@ Base de connaissance de l'agent qui produit le JSON envoyé au moteur PDF.
 | `cover_photo` | optionnel | Photo pleine page de couverture |
 | `render_profile` | `print` \| `preview` | **Fond du PDF, voir plus bas** |
 | `brand_name`, `year` | optionnels | Colophon (défauts `MemoBook` / `2026`) |
+| `sans_couvertures` | optionnel, booléen | Version imprimeur d'un relié : ni couverture ni quatrième, le livre s'ouvre sur le colophon. Voir § « Couverture imprimée (Pumbo) » |
+| `page_blanche_finale` | optionnel, booléen | Une page blanche en fin de livre, pour un nombre de pages pair |
+| `ai_illustrations` | optionnel, booléen | Ajoute « Illustrations par IA » au colophon. **Seulement si le carnet contient des illustrations générées** ; absent, la mention n'est pas imprimée |
 | `intro_title`, `intro_text` | optionnels | Page d'introduction (`intro_text` en HTML) |
 | `intro_photos[]` | 0 à 2 | Photos scotchées en haut de l'introduction |
 | `days[]` | requis | **Une entrée = un bloc de récit, pas une page** — voir ci-dessous |
-| `back_cover` | optionnel | Quatrième de couverture. **Sans `image`, variante typographique** — c'est le défaut souhaité |
+| `back_cover` | optionnel | Quatrième de couverture. **Sans `image`, variante typographique** — c'est le défaut souhaité. `closing_subtext` s'adresse au lecteur : jamais le nom d'un outil interne (« MemoBook Generator ») ni un compteur de l'atelier ; sans texte à y mettre, on l'omet |
 
 Pages toujours produites, dans l'ordre : **couverture → colophon →
 introduction (si `intro_text`) → étapes → quatrième de couverture**.
@@ -108,6 +122,29 @@ premier « non ».
 En résumé : **la carte gagne sur l'encart et sur les photos, et perd sur le
 récit.** Le texte du voyageur ne se raccourcit jamais pour faire entrer un
 décor.
+
+**Dans l'atelier** (`composerJours`, `mise-en-page.js`), pour un voyage dans un
+seul pays fait de plusieurs lieux :
+
+- **un chapitre s'ouvre** à la première étape, puis à chaque étape dont le lieu
+  change (Paros → Naxos → Ios) ; la page d'ouverture est la première page de
+  l'étape ;
+- **le lieu doit être situé** par l'analyse d'étape (pays, coordonnées) ; sinon,
+  page ordinaire ;
+- **plafonds** : 540 signes avec la carte seule, 320 avec deux photos — dernier
+  palier sans débordement au calibrage. Une étape L ou XL se répartit déjà sur
+  deux pages : son ouverture prend la carte et la suite du récit continue sur
+  la page d'après, ce n'est pas « scinder pour sauver la carte » ;
+- **une carte ne coûte jamais une photo**, ni une page de récit sans image à
+  côté d'une planche : si l'ouverture de chapitre provoque l'un ou l'autre et
+  que l'étape s'en passe sans carte, elle s'ouvre sans carte. Une étape d'une
+  seule page avec une ou deux photos et plus de 320 signes garde donc ses
+  photos plutôt que la carte ;
+- **la carte** montre le pays, le lieu du chapitre avec son nom, et les lieux
+  des chapitres précédents en petits points sans nom, reliés par le trajet :
+  sur une carte de la Grèce entière, trois noms d'îles voisines se
+  chevaucheraient. Dessin : `MemoBook Generator/public/carte.js`, recopie de
+  `mapSvg.ts` gardée identique par `backend/test/carteAtelier.test.ts`.
 
 ## Les cartes
 
@@ -212,7 +249,7 @@ produit rien pour eux et l'app ne devrait pas les proposer.
 | `day_intro` | optionnel | Affiche le bandeau : `{ day_number, location, date, stay, host, weather_key }` |
 | `stay`, `host` | optionnels | Nom du gîte, prénom des hôtes. **À préférer à la météo** |
 | `weather_key` | optionnel, 5 valeurs | Icône mise en avant. **Seulement si le vocal dit clairement le temps** ; sans le champ, la rangée disparaît |
-| `tag` | optionnel | Étiquette manuscrite (« Top départ »). **Trois mots max**, sinon elle déborde |
+| `tag` | optionnel | Étiquette manuscrite (« Top départ »). **Trois mots max**, sinon elle déborde. **Jamais le lieu** : il est déjà dans le bandeau. Sans humeur à y mettre, on l'omet |
 | `fun_facts[]` | optionnel | **Seul le premier est affiché.** Dosage : voir plus bas |
 | `fun_facts_title` | optionnel | Titre de la carte. Défaut « Fun fact » ; aussi « Infos », « Culture générale » |
 | `photos[]` | optionnel | Nombre utilisé selon le layout, voir ci-dessous |
@@ -254,14 +291,25 @@ pour le premier chapitre où un lieu est nommé.
 
 ## Le tracé pointillé du voyage
 
-Décor de bas de page, tiré au sort parmi quatre boucles. **Il ne passe que
-derrière des photos, jamais derrière du texte**, qu'il rendrait illisible. Le
-gabarit ne le dessine donc que si le bas de la page porte une bande d'images,
-ce qui exclut :
+Décor tiré au sort parmi quatre boucles. **Il ne passe que derrière des photos,
+jamais derrière du texte**, qu'il rendrait illisible.
 
-- `layout_hero_top`, qui met la photo en haut et le récit en bas ;
-- les étapes à moins de deux photos, qui n'ont pas de bande ;
-- les étapes portant un `prompt` ou un `quiz`, qui occupent eux-mêmes le bas.
+Pour le garantir, le tracé est dessiné **dans la bande de photos** (macro
+`mb_trace`, appelée par `.mb-gallery`) et positionné par rapport à elle — pas
+par rapport à la page. Où que la bande se trouve, il la suit, et il ne monte
+jamais au-dessus de 112 pt quand la bande en fait au moins 160. Seuls les
+layouts qui ont une bande en portent donc un : `layout_split_left`,
+`layout_collage` et `layout_chapter_map` avec deux photos ou plus. Le layout par
+défaut (photo flottante), `layout_hero_top` et les pages à `prompt` ou `quiz`
+n'en ont pas.
+
+> **Pourquoi il passait sous le texte (carnet du 06/10).** Le tracé était posé
+> à hauteur fixe sur la page — 24, 48 ou 96 pt du bas — en supposant la bande
+> de photos toujours collée en bas. Mais quand un récit dépassait ce que la
+> page tient, la bande cédait la place (elle est faite pour se comprimer) ou
+> sortait de la feuille, et c'est le texte qui occupait la hauteur où le tracé
+> était dessiné. La condition du gabarit ne regardait que le nombre de photos,
+> jamais où elles étaient réellement.
 
 Rien à envoyer pour le piloter : c'est une règle du gabarit, pas un champ.
 
@@ -387,7 +435,9 @@ le carnet n'en demande — mieux vaut en laisser de côté qu'aligner les planch
 page de récit en pose une à trois selon son gabarit ; on sert d'abord toutes les
 pages de récit de l'étape, et seule la **surabondance** va sur une planche. Garder
 les images pour la fin, c'est se retrouver avec un récit nu puis une pile
-d'images sans légende.
+d'images sans légende. Le cas à proscrire : **une page entièrement couverte de texte
+suivie d'une planche entièrement couverte de photos**. Deux pages qui mêlent
+chacune texte et images valent toujours mieux.
 
 **3. Le texte se répartit pour qu'aucune page de l'étape ne soit maigre.** La
 règle du « remplir la première d'abord » vaut tant qu'il reste de quoi tenir la
@@ -406,6 +456,67 @@ sortait ainsi :
 Deux planches de suite, et huit photos sur neuf coupées du texte qu'elles
 illustrent. Ce qu'il fallait : deux pages de récit se partageant le texte **et**
 leurs photos, puis au plus une planche pour le surplus.
+
+### Associer les photos au récit
+
+Une photo va sur **la page du passage qu'elle illustre** : si le texte d'une
+page raconte la sieste sur la plage, les photos de la plage sont sur cette page.
+Et les photos **prises au même endroit** — même arrière-plan — restent
+ensemble.
+
+Ni l'un ni l'autre ne se devine de l'ordre des fichiers. Il faut regarder les
+photos : c'est l'**analyse d'étape**, faite par le modèle avant la mise en page.
+Pour chaque étape, il reçoit le récit découpé en paragraphes numérotés et une
+vignette de chaque photo, et rend, sans rien réécrire :
+
+| Champ | Usage |
+|---|---|
+| `lieu` (`nom`, `pays`, `lat`, `lon`) | La carte de chapitre. `null` s'il n'est pas sûr : pas de carte |
+| `photos[].paragraphe` | Le passage que la photo illustre : elle vise la page qui porte ce paragraphe |
+| `photos[].scene` | Le lieu de prise de vue, même libellé pour le même arrière-plan : ces photos restent ensemble |
+| `photos[].personnes` | Trois visages ou plus : photo de groupe, jamais rognée |
+
+La répartition, dans cet ordre (`affecterPhotos`) :
+
+1. chaque groupe de scène vise la page que visent la majorité de ses photos,
+   et ne se coupe que s'il dépasse ce qu'une page porte (deux ou trois photos) ;
+2. le surplus d'une page va d'abord sur la page de récit la plus proche qui a
+   de la place — la règle 2 ci-dessus : les pages de récit se servent avant
+   qu'une planche s'ouvre ;
+3. ce qui reste, à partir de trois photos, fait une planche posée **juste après
+   la page dont elles viennent** — à côté du passage qu'elles illustrent ;
+4. une ou deux photos sans place rejoignent la planche la plus proche ; sans
+   planche, les pages en cèdent pour en former une de trois, en gardant
+   chacune au moins une photo. Ce qui ne tient vraiment nulle part reste hors du
+   carnet, signalé — jamais deux planches de suite.
+
+Sans analyse (pas de clé de modèle, ou un échec), chaque photo vise la page qui
+correspond à son rang dans l'étape, et il n'y a pas de carte : le carnet se fait
+quand même. L'analyse est gardée avec l'étape et refaite seulement si le lieu,
+le récit ou les photos changent. Consigne : `consigneAnalyseEtape`
+(`MemoBook Generator/public/partage.js`).
+
+### Deux pages en vis-à-vis
+
+**Deux pages qui se font face n'ont jamais la même composition** (« Consignes
+IA », Notion). Les doubles pages sont celles du livre imprimé : le colophon est
+la page 1, à droite, et la première page d'étape la page 2, à gauche.
+
+Une **composition**, c'est ce qu'on voit d'un coup d'œil : texte seul, texte et
+photo flottante, grande photo en tête, bande de deux photos, bande de trois,
+carte de chapitre, planche. `layout_split_left` sans fun fact et
+`layout_collage` à deux photos donnent la même page : ils comptent pour une.
+
+Quand les deux côtés se ressemblent, on essaie, dans cet ordre
+(`varierDoublesPages`) :
+
+1. une page à une photo passe de la grande photo en tête à la photo
+   flottante, ou l'inverse si la photo et le texte le permettent ;
+2. deux pages de la même étape s'échangent une photo — de préférence celle qui
+   illustre le passage de la page qui la reçoit, ou de la même scène que ses
+   photos — pour que l'une en porte une de plus que l'autre ;
+3. sinon on laisse : deux pages de texte sans photo n'ont pas d'autre
+   composition. L'atelier le signale.
 
 ### Les autres champs
 
@@ -533,6 +644,13 @@ plus rendu. Ne pas le produire.
 
 ## Réglure et rythme vertical
 
+**Un bandeau seul garde une ligne de réglure sous le ruban.** Quand rien ne
+s'affiche sous le bandeau — ni nuit, ni hôte, ni météo, ni étiquette —, le
+titre de l'étape descend d'une ligne (`.mb-header--seul`) : sans elle, le récit
+collait au ruban. Les rangées « nuit » ou « météo » font déjà cet écart quand
+elles sont là, et le barème a été calibré avec une rangée « nuit » : la page
+tient donc le même texte dans les deux cas.
+
 La réglure du papier est générée, pas dessinée : elle se répète tous les
 `--mb-line`. Elle n'est juste que si **tout ce qu'elle traverse occupe un
 multiple entier de cette valeur** — le titre pèse exactement deux interlignes,
@@ -582,6 +700,78 @@ gros. La variable n'est pas le nombre de pages mais le taux de compression par
 - **Pas d'illustration qui occupe une page seule.** Une photo des voyageurs
   vaut mieux qu'un dessin de remplissage : deux lecteurs le disent séparément.
 
+### Rognage des photos
+
+Chaque emplacement a son format, et une photo qui n'a pas le même est rognée
+(`object-fit: cover`). Deux PDF ont montré ce que ça donne quand rien ne le
+borne : une photo de groupe paysage posée dans la colonne étroite d'une planche,
+où il ne restait que deux personnes sur quatre ; trois photos paysage dans les
+colonnes d'un collage, réduites à des lanières méconnaissables.
+
+**On mesure le rognage comme la part de l'image perdue** :
+`1 − min(format cadre / format photo, format photo / format cadre)`, les formats
+étant largeur ÷ hauteur.
+
+**Le plafond : un tiers.** On garde toujours au moins les deux tiers de l'image.
+C'est le seuil qui laisse passer les cas qui se lisent bien et arrête ceux qui
+ne se lisent plus :
+
+| Photo (format) | Emplacement (format) | Rognage | |
+|---|---|---|---|
+| paysage 4:3 (1,33) | héro (1,35) | 1 % | ✅ |
+| portrait 3:4 (0,75) | bande de 2 (0,90) | 17 % | ✅ |
+| paysage 4:3 (1,33) | photo flottante (1,02) | 23 % | ✅ |
+| paysage 4:3 (1,33) | bande de 2 (0,90) | 32 % | ✅ juste sous le plafond |
+| portrait 3:4 (0,75) | héro (1,35) | 44 % | ❌ |
+| paysage 4:3 (1,33) | bande de 3 (0,56) | 58 % | ❌ — le jour 5 du 06/10 |
+| paysage 4:3 (1,33) | colonne de planche (0,45) | 66 % | ❌ — la photo de groupe du 06/10 |
+
+Trois règles, appliquées dans cet ordre :
+
+1. **Chaque photo va à l'emplacement qui la rogne le moins.** Sur une page qui
+   en porte plusieurs, on essaie toutes les répartitions (120 au plus, pour
+   cinq photos) et on garde celle dont le rognage total est le plus faible : la
+   paysage dans l'emplacement large, la portrait dans la colonne.
+2. **Au-delà d'un tiers, on réduit au lieu de rogner** — `fit: "contain"`. La
+   photo entre entière dans son emplacement, et le cadre blanc l'épouse : c'est
+   un petit tirage, pas une image coupée. **Une photo de groupe n'est jamais
+   rognée**, quel que soit le rognage : elle passe toujours en `contain`.
+3. **Les visages restent dans le cadre.** Une photo plus haute que son
+   emplacement est rognée en haut et en bas : on garde le haut (`focus`
+   vertical à 30 %), là où sont les visages sur une photo prise à hauteur
+   d'homme. Quand une détection de visages est disponible, ses boîtes priment :
+   le cadre doit contenir au moins chaque visage entier, et une photo dont les
+   visages ne tiennent pas dans le cadre passe en `contain`.
+
+**Les formats des emplacements**, mesurés sur le rendu (image seule, sans le
+cadre blanc), dans l'ordre où le gabarit lit `photos[]` :
+
+| Layout | Photos | Formats |
+|---|---|---|
+| par défaut (photo flottante) | 1 | 1,02 |
+| `layout_hero_top` | 1 | 1,35 |
+| `layout_split_left`, `layout_collage` | 2 | 0,90 · 0,90 |
+| `layout_collage` | 3 | 0,56 · 0,56 · 0,56 |
+| `layout_photo_page` | 3 | 0,73 · 0,45 · 1,65 |
+| `layout_photo_page` | 4 | 0,73 · 0,45 · 0,62 · 0,99 |
+| `layout_photo_page` | 5 | 1,76 · 1,44 · 0,90 · 0,90 · 1,44 |
+
+Ils sont recopiés dans `FORMATS_EMPLACEMENTS` (atelier, `mise-en-page.js`) : **à
+remesurer si la géométrie d'un layout change**.
+
+**La bande de photos ne s'écrase plus sous 160 pt** (206 pt en temps normal).
+Elle cédait sans limite quand un récit débordait ; à 100 pt, trois photos ne
+sont plus que des lanières. Un récit trop long se découpe en amont, selon le
+barème — il ne se loge pas en écrasant les images.
+
+**Qui l'applique.** L'atelier, dans `placerPhotos` (`mise-en-page.js`). Une
+photo est de groupe si le voyageur coche « Photo de groupe, ne pas rogner », ou
+si l'analyse d'étape y compte trois visages ou plus (§ « Associer les photos au
+récit »). Dans l'app, le back-end ne
+l'applique pas encore : il lui faut la détection de visages prévue dans
+`docs/photos.md` (Vision côté iOS), qui dira aussi qu'une photo est de groupe —
+trois visages ou plus.
+
 ### Deux formes acceptées pour une photo
 
 Une entrée de `photos[]` est soit une source nue (URL ou `data:`), soit un
@@ -600,11 +790,77 @@ tableau.
 | `url` | URL absolue, ou `data:image/…;base64,…` | La photo. Seul champ obligatoire de la forme objet |
 | `tape_corner` | `top-left`, `top-right`, `bottom-left`, `bottom-right`, `top` | Pose un scotch dans ce coin. **Absent = pas de scotch** : mieux vaut aucun scotch qu'un scotch sur un visage |
 | `focus` | deux pourcentages, ex. `17% 50%` | Point que le recadrage préserve. Absent = recadrage centré |
+| `fit` | `cover` (défaut), `contain` | `contain` : photo réduite, jamais rognée, cadre ajusté à l'image — photo de groupe, ou rognage au-delà d'un tiers. Pas de scotch sur une photo `contain` |
 
-**L'agent ne remplit pas ces deux champs à la main.** Ils sortent de
+**L'agent ne remplit pas ces champs à la main.** Ils sortent de
 `backend/src/services/photoAnalysis.ts`, qui mesure la photo : coin le plus
 calme pour le scotch, zone la plus détaillée pour le recadrage. Voir
 `docs/photos.md`.
+
+## Couverture imprimée (Pumbo)
+
+Le carnet se commande en **livre relié 154 × 216 mm** chez Pumbo. La
+couverture d'un relié n'est pas une page du carnet : c'est une seule feuille —
+plat verso, dos, plat recto — imprimée à part, sur un autre papier, et dont la
+largeur dépend du nombre de pages. Elle ne passe donc pas par ce gabarit ni par
+APITemplate : l'atelier la compose (`MemoBook Generator/public/couverture.js`)
+et le navigateur l'enregistre en PDF au format exact.
+
+**Les dimensions viennent de la fiche Pumbo, jamais d'un calcul.** L'outil de
+couverture de Pumbo produit, pour une commande donnée, un script InDesign
+(`.jsx`) qui donne tout ; l'atelier le lit (*Réglages → Fiche couverture
+Pumbo*). Pumbo ne publie pas de barème : la largeur du dos dépend du nombre de
+pages **et** du papier, et la seule valeur connue est celle-ci :
+
+| Fiche du 07/10/2026 — relié 154 × 216 mm, 48 pages | mm |
+|---|---|
+| Feuille complète, fond perdu compris | 370 × 266 |
+| Fond perdu, sur les quatre bords | 3 |
+| Plat verso et plat recto (chacun) | 178 × 260 |
+| Dos | 8 |
+| Zone sûre : marge haut, bas et bord extérieur des plats | 19 |
+| Côté dos (charnière) : marge imposée par MemoBook, pas par la fiche | 12 |
+
+Les plats sont plus grands que la page (178 × 260 contre 154 × 216) : le carton
+déborde du bloc et le papier se rabat dessus. D'où la zone sûre de 19 mm, qui
+couvre ce rabat. Sans fiche importée, l'atelier part de celle-ci **et le dit** :
+un dos de 8 mm sur un carnet de 80 pages serait faux. Une fiche par commande.
+
+**Un seul style : celui de la couverture intérieure.**
+
+- **Recto** — la photo de couverture en pleine page, fond perdu compris ; le
+  titre du carnet en Playfair Display Black, blanc, en haut de la zone sûre ;
+  le sous-titre sur un bandeau blanc incliné ; les voyageurs et les dates en
+  bas. Un voile sombre sur le haut seulement, pour que le titre reste lisible
+  sur un ciel clair.
+- **Dos** — aplat encre, titre et voyageurs en blanc, **lisibles de bas en
+  haut** (à la française). Pas de texte sous 6 mm de dos : il ne tiendrait pas
+  lisible. Corps : 45 % de la largeur du dos, 11 pt au plus.
+- **Verso** — le papier crème et « À suivre. », comme la quatrième intérieure,
+  avec le logo et l'adresse en bas.
+
+**La photo de couverture.** Celle que le voyageur désigne (étoile sur la
+photo), sinon la plus adaptée au recto, qui est un portrait (format 0,68) :
+jamais une photo de groupe (elle serait rognée), d'abord une photo qui tient
+sous le plafond de rognage d'un tiers — une portrait, en pratique —, puis celle
+qui atteint 300 dpi sur le recto, puis la mieux résolue. C'est **la même** que
+la photo de couverture intérieure du carnet. L'atelier prévient sous 200 dpi,
+et quand une photo de groupe désignée serait rognée.
+
+**Le fichier.** Bouton « Générer la couverture » → un onglet avec la feuille et
+ses repères (coupe, plis du dos, zone sûre — à l'écran seulement) → *Imprimer*
+→ *Enregistrer au format PDF*, marges *Aucune*, *Graphiques d'arrière-plan*
+coché. La taille de la feuille est imposée par la règle `@page`, au dixième de
+millimètre (mesuré : 370,08 × 266,02 mm pour 370 × 266).
+
+**L'intérieur, version imprimeur.** Le PDF du carnet contient sa propre
+couverture et sa quatrième (première et dernière pages) : pour un relié, elles
+seraient imprimées une seconde fois à l'intérieur. La **version imprimeur**
+(case dans les réglages de l'atelier) envoie `sans_couvertures: true` — le livre
+s'ouvre sur le colophon — et `page_blanche_finale: true` quand le nombre de
+pages est impair, un relié s'imprimant en feuillets. Après le rendu, l'atelier
+affiche le nombre de pages intérieures : c'est celui à donner à l'outil de
+couverture Pumbo pour obtenir la fiche, donc le dos.
 
 ## Ce que le moteur de rendu reçoit
 

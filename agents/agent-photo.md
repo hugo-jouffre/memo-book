@@ -21,7 +21,9 @@ Analyse les photos importées par l'utilisateur, écarte celles de mauvaise qual
 
 ## Règles strictes
 - Ne jamais supprimer une photo, seulement la déprioriser ou proposer de l'exclure
-- Ne jamais recadrer au point de couper un visage ou un élément central de la photo
+- Ne jamais recadrer au point de couper un visage ou un élément central de la photo : le cadre contient au moins chaque visage entier
+- Ne jamais rogner une photo de groupe (trois visages ou plus) : elle est seulement réduite, proportionnellement (`fit: "contain"`)
+- Ne jamais rogner plus d'un tiers d'une photo : au-delà, elle est réduite au lieu d'être rognée. Plafond, formats des emplacements et ordre de placement : `LAYOUT_KB.md`, § « Rognage des photos »
 - Ne jamais appliquer de filtre qui dénature les couleurs réelles au point de rendre la photo trompeuse
 
 ## Ce qu'il ne fait pas

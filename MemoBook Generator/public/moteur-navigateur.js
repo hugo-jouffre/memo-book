@@ -207,5 +207,47 @@
     };
   }
 
-  globalThis.MoteurNavigateur = { transcrire, decouper };
+  /**
+   * Analyse d'une étape pour la mise en page : la consigne, puis chaque photo
+   * précédée de son identifiant. Mêmes fournisseurs et mêmes clés que le
+   * découpage ; le corps des messages est construit par `messagesAnalyse`,
+   * partagé avec le serveur local.
+   */
+  async function analyser(corps) {
+    const anthropic = corps.fournisseur === "anthropic";
+    const cle = ((anthropic ? corps.cleAnthropic : corps.cleOpenai) || "").trim();
+    if (!cle) throw new Error(`Aucune clé ${anthropic ? "Anthropic" : "OpenAI"}`);
+    const modele = corps.modele || (anthropic ? "claude-opus-5" : "gpt-4o");
+    const contenu = globalThis.messagesAnalyse(corps.consigne, corps.images, anthropic);
+
+    const reponse = anthropic
+      ? await fetch(`${BASE_ANTHROPIC}/messages`, {
+          method: "POST",
+          headers: {
+            "x-api-key": cle,
+            "anthropic-version": "2023-06-01",
+            "anthropic-dangerous-direct-browser-access": "true",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ model: modele, max_tokens: 3000, messages: [{ role: "user", content: contenu }] }),
+        })
+      : await fetch(`${BASE_OPENAI}/chat/completions`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${cle}`, "content-type": "application/json" },
+          body: JSON.stringify({
+            model: modele,
+            messages: [{ role: "user", content: contenu }],
+            response_format: { type: "json_object" },
+          }),
+        });
+
+    if (!reponse.ok) throw new Error(await messageErreur(reponse));
+    const donnees = await reponse.json();
+    const brut = anthropic
+      ? donnees.content.filter((b) => b.type === "text").map((b) => b.text).join("\n")
+      : donnees.choices?.[0]?.message?.content || "";
+    return globalThis.extraireJson(brut);
+  }
+
+  globalThis.MoteurNavigateur = { transcrire, decouper, analyser };
 })();

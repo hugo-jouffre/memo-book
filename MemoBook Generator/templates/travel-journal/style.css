@@ -355,6 +355,15 @@ li { margin: 0; }
   flex: 0 0 auto;
 }
 
+/* Bandeau seul — ni nuit, ni hôte, ni météo, ni étiquette dessous : une ligne
+   de réglure entre la pointe du ruban et le titre. Sans elle, la première
+   ligne du récit collait au bandeau (retour de Hugo, 07/10), depuis que la
+   météo inventée et la pastille du lieu ont disparu. Les rangées « nuit » ou
+   « météo » font déjà cet écart quand elles sont là ; c'est pourquoi la marge
+   ne s'ajoute pas à elles — et pourquoi le barème, calibré avec une rangée
+   « nuit », reste juste. Un multiple de `--mb-line`, pour la réglure. */
+.mb-header--seul { margin-bottom: var(--mb-line); }
+
 .mb-stay,
 .mb-weather { flex: 0 0 auto; }
 
@@ -630,6 +639,36 @@ li { margin: 0; }
   object-fit: cover;
 }
 
+/* Photo à ne pas rogner — une photo de groupe, ou une image dont le rognage
+   dépasserait le plafond (LAYOUT_KB § « Rognage des photos »). Elle est
+   seulement réduite, proportionnellement : le cadre blanc absorbe la
+   différence de format, comme le passe-partout d'un tirage. */
+.mb-photo--contain {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+}
+
+/* Le cadre épouse l'image réduite, au lieu de laisser deux bandes blanches de
+   part et d'autre : une photo paysage dans une colonne étroite reste un petit
+   tirage paysage, centré dans son emplacement. */
+.mb-photo--contain img {
+  box-sizing: border-box;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  padding: 4pt;
+  background-color: #ffffff;
+  box-shadow: var(--mb-photo-shadow);
+}
+
+.mb-photowall__row .mb-photo--contain img { padding: 3pt; box-shadow: none; }
+
 .mb-photo--tilt-left { transform: rotate(-6.5deg); }
 .mb-photo--tilt-right { transform: rotate(5deg); }
 .mb-photo--tilt-slight { transform: rotate(-2deg); }
@@ -690,9 +729,18 @@ li { margin: 0; }
   height: 100%;
 }
 
-.mb-path--a { bottom: 48pt; left: -46pt; width: 516pt; }
-.mb-path--b { bottom: 96pt; left: -30pt; width: 494pt; transform: rotate(-1.5deg); }
-.mb-path--c { bottom: 24pt; left: -60pt; width: 540pt; transform: scaleY(-1); }
+/* Positions mesurées depuis le bas de la BANDE DE PHOTOS, dans laquelle le
+   tracé est dessiné (`mb_trace`) — pas depuis le bas de la page. Les valeurs
+   reprennent celles d'avant, quand le tracé vivait sur la page : bande posée
+   en bas de page, 29 pt au-dessus du bord, 30 pt du bord gauche. Mais le
+   tracé suit maintenant la bande où qu'elle soit, et ne peut donc plus passer
+   sous le texte. Le plus haut (b) culmine à 112 pt, sous les 160 pt minimum
+   de la bande. */
+.mb-gallery > .mb-path { z-index: 0; }
+.mb-gallery > .mb-photo { z-index: 1; }
+.mb-path--a { bottom: 19pt; left: -76pt; width: 516pt; }
+.mb-path--b { bottom: 67pt; left: -60pt; width: 494pt; transform: rotate(-1.5deg); }
+.mb-path--c { bottom: -5pt; left: -90pt; width: 540pt; transform: scaleY(-1); }
 
 /* --- Sticker illustré ------------------------------------------------------- */
 .mb-sticker {
@@ -840,10 +888,15 @@ li { margin: 0; }
 
 /* Deux photos côte à côte, légèrement inclinées. */
 .mb-gallery {
+  position: relative;          /* repère du tracé pointillé, dessiné dedans */
   display: flex;
   flex: 0 1 auto;              /* c'est la bande de photos qui cède si la page
-                                  se remplit, pas le récit */
-  min-height: 0;
+                                  se remplit, pas le récit… */
+  min-height: 160pt;           /* …mais pas au-delà : écrasée sous 160 pt, une
+                                  bande de trois photos ne montre plus que des
+                                  lanières, rognées jusqu'à l'illisible. Le
+                                  récit trop long se découpe en amont (barème),
+                                  il ne se loge pas en écrasant les images. */
   height: 206pt;
   justify-content: center;
   align-items: stretch;
