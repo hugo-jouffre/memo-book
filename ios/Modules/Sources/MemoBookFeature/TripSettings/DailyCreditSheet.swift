@@ -171,6 +171,14 @@ struct DailyCreditSheet: View {
                 .font(MemoBookFont.body)
                 .foregroundStyle(MemoBookColor.inkMuted)
                 .fixedSize(horizontal: false, vertical: true)
+
+            // Renouvellement coupé : la date où l'illimité s'arrête.
+            if let end = subscriptionSession?.endsAt {
+                Text(DailyCreditCopy.Sheet.unlimitedEnds(on: end.dayAndMonth, limitMs: credit.limitMs))
+                    .font(MemoBookFont.body)
+                    .foregroundStyle(MemoBookColor.inkMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)

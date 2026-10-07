@@ -167,6 +167,12 @@ public final class AppDependencies {
         await subscriptions.deliverUnfinished(deliver: countingDelivery())
     }
 
+    /// Ce qu'Apple tient pour cet identifiant Apple — voir
+    /// ``SubscriptionStore/hasCurrentEntitlement()``.
+    func hasCurrentEntitlement() async -> Bool? {
+        await subscriptions.hasCurrentEntitlement()
+    }
+
     /// Ce que l'offre sait faire de l'App Store, pour **ce** compte — posé par
     /// `RootView` une fois connecté. L'identifiant du compte devient
     /// l'`appAccountToken` de l'achat : c'est lui qui permet au serveur de

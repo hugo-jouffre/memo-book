@@ -49,6 +49,15 @@ public struct Traveller: Codable, Sendable, Hashable, Identifiable {
     /// en un geste. Faux quand un serveur plus ancien ne sert pas le champ.
     public let subscriptionOutlivesTrip: Bool
 
+    /// **Où en est l'abonnement** — `traveller.subscriptionState` (contrat du
+    /// 06/10/2026, point 11). `nil` d'un serveur plus ancien.
+    public let subscriptionState: Subscription.State?
+
+    /// La fin de l'illimité d'un abonnement au renouvellement coupé
+    /// (``Subscription/State/ending``) : c'est là que la session le fait
+    /// tomber, sans attendre une relecture.
+    public let subscriptionEndsAt: Date?
+
     public init(
         id: String,
         firstName: String,
@@ -56,7 +65,9 @@ public struct Traveller: Codable, Sendable, Hashable, Identifiable {
         isUnlimited: Bool = false,
         hasSubscribedBefore: Bool = false,
         subscriptionEndedOn: Date? = nil,
-        subscriptionOutlivesTrip: Bool = false
+        subscriptionOutlivesTrip: Bool = false,
+        subscriptionState: Subscription.State? = nil,
+        subscriptionEndsAt: Date? = nil
     ) {
         self.id = id
         self.firstName = firstName
@@ -65,6 +76,8 @@ public struct Traveller: Codable, Sendable, Hashable, Identifiable {
         self.hasSubscribedBefore = hasSubscribedBefore
         self.subscriptionEndedOn = subscriptionEndedOn
         self.subscriptionOutlivesTrip = subscriptionOutlivesTrip
+        self.subscriptionState = subscriptionState
+        self.subscriptionEndsAt = subscriptionEndsAt
     }
 
     /// Décodage tolérant sur les champs de l'abonnement : un serveur qui ne
@@ -82,6 +95,16 @@ public struct Traveller: Codable, Sendable, Hashable, Identifiable {
         )
         subscriptionOutlivesTrip =
             try container.decodeIfPresent(Bool.self, forKey: .subscriptionOutlivesTrip) ?? false
+        subscriptionState =
+            (try? container.decodeIfPresent(Subscription.State.self, forKey: .subscriptionState)) ?? nil
+        subscriptionEndsAt = try container.decodeIfPresent(Date.self, forKey: .subscriptionEndsAt)
+    }
+
+    /// La date où l'illimité s'arrête, quand le renouvellement est coupé et
+    /// qu'elle est encore devant soi. `nil` sinon.
+    public var unlimitedUntil: Date? {
+        guard subscriptionState == .ending else { return nil }
+        return subscriptionEndsAt
     }
 }
 

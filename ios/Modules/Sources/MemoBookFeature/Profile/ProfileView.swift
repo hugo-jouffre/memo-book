@@ -45,6 +45,7 @@ public struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.subscriptionSession) private var subscriptionSession
+    @Environment(\.scenePhase) private var scenePhase
 
     /// La feuille « Moyens de paiement » de Stripe — posée par `RootView`.
     @Environment(\.managePaymentMethods) private var managePaymentMethods
@@ -160,6 +161,19 @@ public struct ProfileView: View {
         // conversation ou les réglages d'un voyage.
         .onChange(of: model.profile, initial: true) { _, profile in
             if let profile { subscriptionSession?.learn(profile) }
+        }
+        // **Le profil suit l'abonnement réel** (Hugo, 06/10/2026 : « quand
+        // quelqu'un se désabonne, attention à ce que tous les endroits qui
+        // indiquaient “abonné” ne l'indiquent plus »). Il ne se relisait qu'à
+        // l'ouverture : la pastille « Abonné(e) » et « Mon abonnement »
+        // survivaient au retour de la feuille d'Apple, à un remboursement, à
+        // la fin du mois payé. Il se relit donc au retour au premier plan, et
+        // quand la session apprend un changement venu d'ailleurs.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active, model.profile != nil { Task { await model.load() } }
+        }
+        .onChange(of: subscriptionSession?.revision) { _, _ in
+            Task { await model.load() }
         }
         .brandRefreshFlash(model.freshness.isUpdated)
         .brandSheet(item: $sheet) { destination in
@@ -287,6 +301,18 @@ public struct ProfileView: View {
     private var isSubscriber: Bool {
         guard let profile = model.profile else { return true }
         return subscriptionSession?.override ?? profile.isSubscriber
+    }
+
+    /// « Jusqu’au 12 octobre », sur la ligne « Mon abonnement », quand le
+    /// renouvellement est coupé et que l'illimité court encore. Rien pour un
+    /// abonnement qui se renouvelle. Juste après un geste (un achat, une
+    /// résiliation), c'est la session qui sait : un achat n'a pas de fin, une
+    /// résiliation a celle du mois payé.
+    private var subscriptionEndLabel: String? {
+        let end = subscriptionSession?.override == true
+            ? subscriptionSession?.endsAt
+            : model.profile?.subscription.unlimitedUntil()
+        return end.map(SubscriptionCopy.rowUntil)
     }
 
     /// Quelle version du paywall montrer.
@@ -584,8 +610,15 @@ public struct ProfileView: View {
             // Elle ne s'affiche qu'une fois abonné : sans abonnement, c'est le
             // bouton lime du haut qui porte la proposition, et deux entrées vers
             // la même feuille sur un même écran se marcheraient dessus.
+            //
+            // **Renouvellement coupé, elle dit jusqu'à quand** (06/10/2026) :
+            // « Jusqu’au 12 octobre » — puis elle disparaît avec l'illimité.
             if model.profile != nil, isSubscriber {
-                BrandRow("Mon abonnement") { sheet = .subscription }
+                BrandRow(
+                    "Mon abonnement",
+                    value: subscriptionEndLabel,
+                    action: { sheet = .subscription }
+                )
             }
             BrandRow("Suivi des commandes") { sheet = .orderTracking }
             // « Confidentialité » n'est plus ici : la maquette la montrait dans
@@ -736,7 +769,10 @@ public struct ProfileView: View {
                     // l'accès réel, pas le geste — sans ça, la conversation
                     // recompterait les secondes de quelqu'un qui a encore trois
                     // semaines réglées devant lui.
-                    subscriptionSession?.record(isSubscribed: model.subscriptionGrantsAccess)
+                    subscriptionSession?.record(
+                        isSubscribed: model.subscriptionGrantsAccess,
+                        until: model.subscriptionUnlimitedUntil
+                    )
                 },
                 onRecordReason: { model.recordCancellationReason($0) },
                 onAppStoreRenewal: { renews in

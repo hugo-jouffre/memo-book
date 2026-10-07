@@ -314,4 +314,77 @@ final class SubscriptionGraceTests: XCTestCase {
         XCTAssertFalse(decoded.isUnlimited)
         XCTAssertFalse(decoded.hasSubscribedBefore)
     }
+
+    // MARK: L'état tranché par le serveur (contrat du 06/10/2026, point 11)
+
+    private func decodedSubscription(_ fields: String) throws -> Subscription {
+        let json = #"{ "price": 4.99, "interval": "month", "isActive": false, "#.appending(fields).appending("}")
+        return try JSONDecoder.memoBook.decode(Subscription.self, from: Data(json.utf8))
+    }
+
+    /// Renouvellement coupé : abonné jusqu'à la date de fin, puis plus du
+    /// tout — même lu dans le cache, sans relecture (Hugo, 06/10/2026).
+    func testAnEndingSubscriptionStopsAtItsDate() throws {
+        let end = days(10)
+        let subscription = try decodedSubscription(
+            #""isUnlimited": true, "state": "ending", "autoRenews": false, "endsAt": "\#(ISO8601DateFormatter().string(from: end))""#
+        )
+
+        XCTAssertEqual(subscription.servedState, .ending)
+        XCTAssertTrue(subscription.isUnlimited(at: today))
+        XCTAssertNotNil(subscription.unlimitedUntil(at: today))
+        XCTAssertTrue(subscription.isCancelled)
+        XCTAssertFalse(subscription.isInBillingRetry)
+
+        XCTAssertFalse(subscription.isUnlimited(at: days(11)))
+        XCTAssertNil(subscription.unlimitedUntil(at: days(11)))
+    }
+
+    /// Un renouvellement coupé chez Apple, sans `cancelledAt` : la lecture
+    /// d'avant y voyait un prélèvement raté. L'état du serveur tranche.
+    func testTheServedStateIsNotMistakenForABillingRetry() throws {
+        let ending = try decodedSubscription(#""isUnlimited": true, "state": "ending""#)
+        XCTAssertFalse(ending.isInBillingRetry)
+
+        let grace = try decodedSubscription(#""isUnlimited": true, "state": "grace""#)
+        XCTAssertTrue(grace.isInBillingRetry)
+        XCTAssertTrue(grace.isUnlimited(at: today))
+        XCTAssertFalse(grace.isCancelled)
+    }
+
+    func testAnEndedOrRefundedSubscriptionGrantsNothing() throws {
+        // Un remboursement : `ended`, même si une période payée traînait.
+        let ended = try decodedSubscription(
+            #""isUnlimited": false, "state": "ended", "paidThrough": "2030-01-01T00:00:00Z""#
+        )
+        XCTAssertFalse(ended.isUnlimited(at: today))
+        XCTAssertNil(ended.unlimitedUntil(at: today))
+    }
+
+    /// Une valeur inconnue de cette version ne fait pas tomber le profil : la
+    /// lecture d'avant répond.
+    func testAnUnknownStateFallsBackToTheFlags() throws {
+        let subscription = try decodedSubscription(#""isUnlimited": true, "state": "paused""#)
+        XCTAssertNil(subscription.servedState)
+        XCTAssertTrue(subscription.isUnlimited(at: today))
+    }
+
+    /// Un geste local (résilier dans l'app) retouche l'abonnement : l'état
+    /// servi avant lui ne vaut plus.
+    func testAGestureForgetsTheServedState() throws {
+        var subscription = try decodedSubscription(#""isUnlimited": true, "state": "active""#)
+        XCTAssertEqual(subscription.servedState, .active)
+        subscription.isActive = true
+        XCTAssertNil(subscription.servedState)
+    }
+
+    func testTheHomeSaysWhenTheUnlimitedEnds() throws {
+        let json = #"{ "id": "t", "firstName": "Camille", "isUnlimited": true, "subscriptionState": "ending", "subscriptionEndsAt": "2030-01-01T00:00:00Z" }"#
+        let traveller = try JSONDecoder.memoBook.decode(Traveller.self, from: Data(json.utf8))
+        XCTAssertEqual(traveller.subscriptionState, .ending)
+        XCTAssertNotNil(traveller.unlimitedUntil)
+
+        let active = #"{ "id": "t", "firstName": "Camille", "isUnlimited": true, "subscriptionState": "active" }"#
+        XCTAssertNil(try JSONDecoder.memoBook.decode(Traveller.self, from: Data(active.utf8)).unlimitedUntil)
+    }
 }

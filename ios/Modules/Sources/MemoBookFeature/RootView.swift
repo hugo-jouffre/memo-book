@@ -278,6 +278,24 @@ public struct RootView: View {
                 // l'abonnement qu'il apprend libère la file (plus bas).
                 .onChange(of: dependencies.deliveredTransactions) {
                     homeReloadRequest += 1
+                    // Le profil aussi, s'il est ouvert : un remboursement
+                    // arrive par là, et sa pastille « Abonné(e) » doit tomber.
+                    subscription.noteOutsideChange()
+                }
+                // **La fin du mois payé, à l'heure dite** (Hugo, 06/10/2026 :
+                // « attention à ce que tous les endroits qui indiquaient
+                // “abonné” ne l'indiquent plus »). Un renouvellement coupé
+                // garde l'illimité jusqu'à sa date ; l'app ouverte à ce
+                // moment-là le fait tomber partout, puis relit l'accueil pour
+                // que le serveur le confirme. Une app suspendue passe par le
+                // retour au premier plan, plus bas.
+                .task(id: subscription.endsAt) {
+                    guard let end = subscription.endsAt else { return }
+                    let wait = end.timeIntervalSinceNow
+                    if wait > 0 {
+                        do { try await Task.sleep(for: .seconds(wait)) } catch { return }
+                    }
+                    expireSubscriptionIfDue()
                 }
             }
         }
@@ -331,7 +349,9 @@ public struct RootView: View {
             // (03/10/2026). Sans effet quand rien n'attend.
             if case .signedIn = stage, !OnboardingStorage.isPreviewingSignedIn {
                 Task { await dependencies.deliverUnfinishedTransactions() }
+                Task { await withdrawPurchaseAppleNoLongerHolds() }
             }
+            if case .signedIn = stage { expireSubscriptionIfDue() }
         }
         // **L'illimité libère la file** (03/10/2026) : un achat, une
         // restauration, un abonnement pris sur un autre appareil et que
@@ -345,6 +365,28 @@ public struct RootView: View {
             guard zip(before, now).contains(where: { !$0 && $1 }) else { return }
             Task { await dependencies.outbox.releaseCreditHolds() }
         }
+    }
+
+    // MARK: - L'abonnement qui s'arrête
+
+    /// L'échéance d'un renouvellement coupé est passée : l'illimité tombe
+    /// dans la session, et l'accueil se relit — le profil, lui, suit la
+    /// session (``SubscriptionSession/revision``).
+    private func expireSubscriptionIfDue() {
+        let before = subscription.revision
+        subscription.expireIfDue()
+        if subscription.revision != before { homeReloadRequest += 1 }
+    }
+
+    /// **Un achat que le serveur n'a jamais confirmé, et qu'Apple ne tient
+    /// plus** — remboursé, révoqué, ou expiré avant d'atteindre l'API : le
+    /// geste « acheté » de la session rend la main (``Transaction.currentEntitlements``).
+    /// Rien à demander tant que le serveur a parlé : c'est lui qui fait foi.
+    private func withdrawPurchaseAppleNoLongerHolds() async {
+        guard subscription.override == true, subscription.known != true else { return }
+        guard await dependencies.hasCurrentEntitlement() == false else { return }
+        subscription.withdrawUnconfirmedPurchase()
+        homeReloadRequest += 1
     }
 
     // MARK: - Hors session

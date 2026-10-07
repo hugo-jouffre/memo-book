@@ -532,6 +532,7 @@ private struct DailyCreditRow: View {
 
     @ScaledMetric(relativeTo: .body) private var chevronSide: CGFloat = 14
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.subscriptionSession) private var subscriptionSession
 
     private var shape: RoundedRectangle {
         .rect(cornerRadius: MemoBookSpacing.largeCornerRadius)
@@ -598,7 +599,7 @@ private struct DailyCreditRow: View {
 
     private var caption: String {
         credit.isUnlimited
-            ? DailyCreditCopy.rowCaptionUnlimited
+            ? DailyCreditCopy.rowCaptionUnlimited(until: subscriptionSession?.endsAt?.dayAndMonth)
             : DailyCreditCopy.rowCaption(limitMs: credit.limitMs)
     }
 

@@ -354,6 +354,14 @@ public enum DailyCreditCopy {
 
     public static let rowCaptionUnlimited = "Tu racontes sans limite grâce à ton abonnement"
 
+    /// La même légende, **renouvellement coupé** (06/10/2026) : l'illimité a
+    /// une date de fin, et la ligne la dit — « jusqu’au 12 octobre ». `day`
+    /// arrive formaté (jour et mois) ; `nil` rend la légende d'un abonné.
+    public static func rowCaptionUnlimited(until day: String?) -> String {
+        guard let day else { return rowCaptionUnlimited }
+        return "Tu racontes sans limite jusqu’au \(day) grâce à ton abonnement"
+    }
+
     /// « 3 min 20 / 5 min ».
     public static func rowValue(_ credit: DailyCredit) -> String {
         credit.isUnlimited
