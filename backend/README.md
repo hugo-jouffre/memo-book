@@ -182,6 +182,7 @@ champ près — `test/screens.test.ts` est ce qui les tient ensemble.
 | `PATCH /v1/trips/:id/settings` | Corrige un réglage. Même sémantique que `PATCH /v1/profile` |
 | `GET /v1/memos/:id/preview` | L'aperçu du carnet : état et phase de la dernière composition (`render`), PDF du dernier rendu prêt (`readyRenderId`), `isUpToDate`, souvenirs encore en rédaction, extrait, couvertures. Se sonde toutes les 2 s pendant une composition |
 | `POST /v1/memos/:id/share-link` | Crée le lien public de prévisualisation, ou rend celui qui existe |
+| `GET /c/:jeton` | **Sans session** : la page publique d'un carnet partagé (HTML, Open Graph) ; 404 en page pour un jeton inconnu |
 | `POST /v1/support/messages` | « Écris à notre équipe » et « Partager mes retours » (`source` : `support`, `founders_note`), enregistrés dans `support_messages` — rien n'est envoyé, l'équipe les lit en base (`handledAt` nul = à traiter). 20 par compte et par 24 h |
 | `PUT /v1/support/faq-votes/:questionId` | « Est-ce utile ? » : un vote par compte et par question (`faq_votes`), revoter remplace. `GET /v1/support/faq-votes` rend les siens |
 | `GET /v1/showcases/welcome` | Les mises en avant de l'écran de bienvenue. **Non authentifiée** |
@@ -194,7 +195,12 @@ champ près — `test/screens.test.ts` est ce qui les tient ensemble.
 
 `POST /v1/memos/:id/share-link` est **idempotente** : repartager deux fois ne
 crée pas deux liens. Un lien parti dans une conversation WhatsApp ne se rattrape
-pas — celui d'hier doit marcher demain.
+pas — celui d'hier doit marcher demain. Il vit sur **l'hôte de l'API**
+(`https://<API>/c/<jeton>`, `services/shareLink.ts`), qui sert la page publique
+derrière (`GET /c/:jeton`, `routes/sharePage.ts`) : titre, dates, couverture,
+étapes, premières phrases, et les balises Open Graph de la vignette WhatsApp.
+`SHARE_PUBLIC_BASE_URL` ne sert plus qu'à forcer un autre hôte ; il valait
+`memo-book.com`, où aucune page ne répondait (T229).
 
 `link-device` mérite un mot : un carnet créé avant l'inscription appartient à
 l'appareil, pas au compte, et n'apparaîtrait donc jamais sur l'accueil. L'app

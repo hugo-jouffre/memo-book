@@ -8,6 +8,7 @@ import { HttpError } from "./lib/httpError.js";
 import { createRequireAccount, registerAuthDecorator } from "./plugins/auth.js";
 import { registerAccountRoutes } from "./routes/accounts.js";
 import { registerDataExportPageRoutes } from "./routes/dataExportPage.js";
+import { registerSharePageRoutes } from "./routes/sharePage.js";
 import { registerAppStoreRoutes, registerAppStoreWebhookRoutes } from "./routes/appStore.js";
 import { registerAuthRoutes, registerSessionRoutes } from "./routes/auth.js";
 import { registerDeviceRoutes } from "./routes/devices.js";
@@ -167,6 +168,11 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
   // bouton. Publiques aussi : on y arrive depuis une boîte mail, et c'est le
   // secret du lien qui ouvre — pas une session.
   registerDataExportPageRoutes(app, context);
+
+  // La page d'un carnet partagé (`/c/<jeton>`), celle du lien de la feuille
+  // « Partager » et de WhatsApp : ses destinataires n'ont pas de compte. Le
+  // jeton est la seule clé (T229).
+  registerSharePageRoutes(app, context);
 
   // Tout ce qui appartient à quelqu'un, sous **une seule** identification : la
   // session de compte. Le token d'appareil n'ouvre plus rien — un carnet a

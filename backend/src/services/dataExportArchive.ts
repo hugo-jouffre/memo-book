@@ -1,7 +1,6 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { Readable, type PassThrough } from "node:stream";
 import { ZipFile } from "yazl";
-import type { Env } from "../env.js";
 import {
   fileDay,
   fileStamp,
@@ -12,6 +11,7 @@ import {
 import { visibleToAccount } from "./memoOwnership.js";
 import type { MediaStorage } from "./storage.js";
 import { contextVoiceOf } from "./tripContext.js";
+import { shareBaseUrl } from "./shareLink.js";
 
 /**
  * L'archive de « Exporter mes données » : ce qu'elle contient, et comment elle
@@ -160,7 +160,7 @@ type ExportedEntry = ExportedMemo["entries"][number];
  * annoncer l'archive, le téléchargement pour l'écrire.
  */
 export async function planDataExport(
-  context: { prisma: PrismaClient; env: Pick<Env, "SHARE_PUBLIC_BASE_URL"> },
+  context: { prisma: PrismaClient; env: Parameters<typeof shareBaseUrl>[0] },
   accountId: string,
   now: Date = new Date(),
 ): Promise<ExportPlan> {
@@ -272,7 +272,7 @@ export async function planDataExport(
     json(`${folder}/voyage.json`, tripDocument(memo, {
       accountId,
       isOwner,
-      shareBaseUrl: env.SHARE_PUBLIC_BASE_URL,
+      shareBaseUrl: shareBaseUrl(env),
       coverFiles,
       bookFiles,
     }));

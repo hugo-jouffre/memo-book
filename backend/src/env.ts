@@ -117,14 +117,15 @@ const schema = z.object({
   RENDER_PROFILE: z.enum(["print", "preview"]).default("preview"),
 
   /**
-   * La racine des liens de prévisualisation publics — « https://memo-book.com ».
+   * La racine des liens de prévisualisation publics, **forcée**. Vide — le
+   * défaut depuis le 07/10/2026 — : l'hôte public de l'API, qui sert la page
+   * `/c/<jeton>` (`routes/sharePage.ts`, `services/shareLink.ts`).
    *
-   * C'est elle qui préfixe `/c/<slug>`, le lien qu'on envoie à ses proches pour
-   * qu'ils suivent le carnet en direct. La page derrière n'existe pas encore ;
-   * le lien, lui, doit déjà être stable, parce qu'il part dans des
-   * conversations WhatsApp qu'on ne rattrape pas.
+   * Elle valait « https://memo-book.com », où aucune page ne répondait : le lien
+   * partagé menait nulle part (T229). À ne poser que le jour où un autre hôte
+   * sert `/c/…` (une réécriture du site vers l'API, un domaine dédié).
    */
-  SHARE_PUBLIC_BASE_URL: z.string().default("https://memo-book.com"),
+  SHARE_PUBLIC_BASE_URL: z.string().default(""),
 
   /**
    * L'adresse publique de l'API elle-même, pour les liens qu'elle sert en

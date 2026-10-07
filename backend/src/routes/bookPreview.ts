@@ -7,6 +7,7 @@ import { accountIdOf } from "../plugins/auth.js";
 import { pendingRedactionCount } from "../jobs/structure.js";
 import { currentBookFingerprint } from "../services/bookFingerprint.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
+import { shareBaseUrl, shareUrlOf } from "../services/shareLink.js";
 import { serializeBookPreview } from "./appSerializers.js";
 
 /**
@@ -87,7 +88,7 @@ async function readPreview(context: AppContext, accountId: string, memoId: strin
   return serializeBookPreview(
     memo,
     { lastReady, currentFingerprint, pendingMemoryCount },
-    context.env.SHARE_PUBLIC_BASE_URL,
+    shareBaseUrl(context.env),
   );
 }
 
@@ -137,6 +138,8 @@ export function registerBookPreviewRoutes(app: FastifyInstance, context: AppCont
     // « voilà ton lien » et « voilà ton lien, il est neuf », et elle se lit
     // dans les journaux.
     reply.code(memo.shareSlug ? 200 : 201);
-    return { url: `${context.env.SHARE_PUBLIC_BASE_URL}/c/${slug}` };
+    // Sur l'hôte de l'API, qui sert la page (`GET /c/:jeton`) : c'est ce lien
+    // que la feuille « Partager » et « Recevoir sur WhatsApp » envoient (T229).
+    return { url: shareUrlOf(context.env, slug) };
   });
 }
