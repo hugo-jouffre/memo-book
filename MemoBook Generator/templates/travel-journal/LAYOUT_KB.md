@@ -12,8 +12,9 @@ Base de connaissance de l'agent qui produit le JSON envoyé au moteur PDF.
 > prompt de l'Agent Mise en page du back-end (`structuring.ts`) : une règle
 > écrite ici s'applique aux carnets de l'app dès la fusion. **L'atelier
 > (MemoBook Generator) ne le lit pas** : il n'a pas d'agent de mise en page, ses
-> règles sont recopiées en code dans `MemoBook Generator/public/app.js`
-> (`pagesDeRecit`, `repartirPhotos`, `placerPhotos`). Une règle ajoutée ici ne
+> règles sont recopiées en code dans `MemoBook Generator/public/mise-en-page.js`
+> (`pagesDeRecit`, `affecterPhotos`, `varierDoublesPages`, `placerPhotos`),
+> testé par `backend/test/miseEnPageAtelier.test.ts`. Une règle ajoutée ici ne
 > change donc rien aux PDF de l'atelier tant qu'elle n'y est pas portée — c'est
 > ce qui s'est passé pour les trois règles de répartition, écrites le 05/10 et
 > absentes du carnet généré le 06/10.
@@ -43,6 +44,8 @@ Base de connaissance de l'agent qui produit le JSON envoyé au moteur PDF.
 | `cover_photo` | optionnel | Photo pleine page de couverture |
 | `render_profile` | `print` \| `preview` | **Fond du PDF, voir plus bas** |
 | `brand_name`, `year` | optionnels | Colophon (défauts `MemoBook` / `2026`) |
+| `sans_couvertures` | optionnel, booléen | Version imprimeur d'un relié : ni couverture ni quatrième, le livre s'ouvre sur le colophon. Voir § « Couverture imprimée (Pumbo) » |
+| `page_blanche_finale` | optionnel, booléen | Une page blanche en fin de livre, pour un nombre de pages pair |
 | `ai_illustrations` | optionnel, booléen | Ajoute « Illustrations par IA » au colophon. **Seulement si le carnet contient des illustrations générées** ; absent, la mention n'est pas imprimée |
 | `intro_title`, `intro_text` | optionnels | Page d'introduction (`intro_text` en HTML) |
 | `intro_photos[]` | 0 à 2 | Photos scotchées en haut de l'introduction |
@@ -119,6 +122,29 @@ premier « non ».
 En résumé : **la carte gagne sur l'encart et sur les photos, et perd sur le
 récit.** Le texte du voyageur ne se raccourcit jamais pour faire entrer un
 décor.
+
+**Dans l'atelier** (`composerJours`, `mise-en-page.js`), pour un voyage dans un
+seul pays fait de plusieurs lieux :
+
+- **un chapitre s'ouvre** à la première étape, puis à chaque étape dont le lieu
+  change (Paros → Naxos → Ios) ; la page d'ouverture est la première page de
+  l'étape ;
+- **le lieu doit être situé** par l'analyse d'étape (pays, coordonnées) ; sinon,
+  page ordinaire ;
+- **plafonds** : 540 signes avec la carte seule, 320 avec deux photos — dernier
+  palier sans débordement au calibrage. Une étape L ou XL se répartit déjà sur
+  deux pages : son ouverture prend la carte et la suite du récit continue sur
+  la page d'après, ce n'est pas « scinder pour sauver la carte » ;
+- **une carte ne coûte jamais une photo**, ni une page de récit sans image à
+  côté d'une planche : si l'ouverture de chapitre provoque l'un ou l'autre et
+  que l'étape s'en passe sans carte, elle s'ouvre sans carte. Une étape d'une
+  seule page avec une ou deux photos et plus de 320 signes garde donc ses
+  photos plutôt que la carte ;
+- **la carte** montre le pays, le lieu du chapitre avec son nom, et les lieux
+  des chapitres précédents en petits points sans nom, reliés par le trajet :
+  sur une carte de la Grèce entière, trois noms d'îles voisines se
+  chevaucheraient. Dessin : `MemoBook Generator/public/carte.js`, recopie de
+  `mapSvg.ts` gardée identique par `backend/test/carteAtelier.test.ts`.
 
 ## Les cartes
 
@@ -431,6 +457,67 @@ Deux planches de suite, et huit photos sur neuf coupées du texte qu'elles
 illustrent. Ce qu'il fallait : deux pages de récit se partageant le texte **et**
 leurs photos, puis au plus une planche pour le surplus.
 
+### Associer les photos au récit
+
+Une photo va sur **la page du passage qu'elle illustre** : si le texte d'une
+page raconte la sieste sur la plage, les photos de la plage sont sur cette page.
+Et les photos **prises au même endroit** — même arrière-plan — restent
+ensemble.
+
+Ni l'un ni l'autre ne se devine de l'ordre des fichiers. Il faut regarder les
+photos : c'est l'**analyse d'étape**, faite par le modèle avant la mise en page.
+Pour chaque étape, il reçoit le récit découpé en paragraphes numérotés et une
+vignette de chaque photo, et rend, sans rien réécrire :
+
+| Champ | Usage |
+|---|---|
+| `lieu` (`nom`, `pays`, `lat`, `lon`) | La carte de chapitre. `null` s'il n'est pas sûr : pas de carte |
+| `photos[].paragraphe` | Le passage que la photo illustre : elle vise la page qui porte ce paragraphe |
+| `photos[].scene` | Le lieu de prise de vue, même libellé pour le même arrière-plan : ces photos restent ensemble |
+| `photos[].personnes` | Trois visages ou plus : photo de groupe, jamais rognée |
+
+La répartition, dans cet ordre (`affecterPhotos`) :
+
+1. chaque groupe de scène vise la page que visent la majorité de ses photos,
+   et ne se coupe que s'il dépasse ce qu'une page porte (deux ou trois photos) ;
+2. le surplus d'une page va d'abord sur la page de récit la plus proche qui a
+   de la place — la règle 2 ci-dessus : les pages de récit se servent avant
+   qu'une planche s'ouvre ;
+3. ce qui reste, à partir de trois photos, fait une planche posée **juste après
+   la page dont elles viennent** — à côté du passage qu'elles illustrent ;
+4. une ou deux photos sans place rejoignent la planche la plus proche ; sans
+   planche, les pages en cèdent pour en former une de trois, en gardant
+   chacune au moins une photo. Ce qui ne tient vraiment nulle part reste hors du
+   carnet, signalé — jamais deux planches de suite.
+
+Sans analyse (pas de clé de modèle, ou un échec), chaque photo vise la page qui
+correspond à son rang dans l'étape, et il n'y a pas de carte : le carnet se fait
+quand même. L'analyse est gardée avec l'étape et refaite seulement si le lieu,
+le récit ou les photos changent. Consigne : `consigneAnalyseEtape`
+(`MemoBook Generator/public/partage.js`).
+
+### Deux pages en vis-à-vis
+
+**Deux pages qui se font face n'ont jamais la même composition** (« Consignes
+IA », Notion). Les doubles pages sont celles du livre imprimé : le colophon est
+la page 1, à droite, et la première page d'étape la page 2, à gauche.
+
+Une **composition**, c'est ce qu'on voit d'un coup d'œil : texte seul, texte et
+photo flottante, grande photo en tête, bande de deux photos, bande de trois,
+carte de chapitre, planche. `layout_split_left` sans fun fact et
+`layout_collage` à deux photos donnent la même page : ils comptent pour une.
+
+Quand les deux côtés se ressemblent, on essaie, dans cet ordre
+(`varierDoublesPages`) :
+
+1. une page à une photo passe de la grande photo en tête à la photo
+   flottante, ou l'inverse si la photo et le texte le permettent ;
+2. deux pages de la même étape s'échangent une photo — de préférence celle qui
+   illustre le passage de la page qui la reçoit, ou de la même scène que ses
+   photos — pour que l'une en porte une de plus que l'autre ;
+3. sinon on laisse : deux pages de texte sans photo n'ont pas d'autre
+   composition. L'atelier le signale.
+
 ### Les autres champs
 
 Appliqués par `backend/src/services/payloadValidator.ts` — un dépassement est une
@@ -669,7 +756,7 @@ cadre blanc), dans l'ordre où le gabarit lit `photos[]` :
 | `layout_photo_page` | 4 | 0,73 · 0,45 · 0,62 · 0,99 |
 | `layout_photo_page` | 5 | 1,76 · 1,44 · 0,90 · 0,90 · 1,44 |
 
-Ils sont recopiés dans `FORMATS_EMPLACEMENTS` (atelier, `app.js`) : **à
+Ils sont recopiés dans `FORMATS_EMPLACEMENTS` (atelier, `mise-en-page.js`) : **à
 remesurer si la géométrie d'un layout change**.
 
 **La bande de photos ne s'écrase plus sous 160 pt** (206 pt en temps normal).
@@ -677,9 +764,10 @@ Elle cédait sans limite quand un récit débordait ; à 100 pt, trois photos ne
 sont plus que des lanières. Un récit trop long se découpe en amont, selon le
 barème — il ne se loge pas en écrasant les images.
 
-**Qui l'applique.** L'atelier, dans `placerPhotos` (`app.js`), avec une case
-« Photo de groupe, ne pas rogner » sur chaque photo : il ne sait pas compter
-les visages, c'est donc le voyageur qui le dit. Dans l'app, le back-end ne
+**Qui l'applique.** L'atelier, dans `placerPhotos` (`mise-en-page.js`). Une
+photo est de groupe si le voyageur coche « Photo de groupe, ne pas rogner », ou
+si l'analyse d'étape y compte trois visages ou plus (§ « Associer les photos au
+récit »). Dans l'app, le back-end ne
 l'applique pas encore : il lui faut la détection de visages prévue dans
 `docs/photos.md` (Vision côté iOS), qui dira aussi qu'une photo est de groupe —
 trois visages ou plus.
@@ -765,11 +853,14 @@ ses repères (coupe, plis du dos, zone sûre — à l'écran seulement) → *Imp
 coché. La taille de la feuille est imposée par la règle `@page`, au dixième de
 millimètre (mesuré : 370,08 × 266,02 mm pour 370 × 266).
 
-> **À trancher avant la première commande.** Le PDF intérieur rendu par
-> APITemplate contient sa propre couverture et sa quatrième (première et
-> dernière pages). Pour un relié, ces deux pages seraient imprimées *à
-> l'intérieur*, en plus de la couverture. Il faudra un rendu « imprimeur » sans
-> elles.
+**L'intérieur, version imprimeur.** Le PDF du carnet contient sa propre
+couverture et sa quatrième (première et dernière pages) : pour un relié, elles
+seraient imprimées une seconde fois à l'intérieur. La **version imprimeur**
+(case dans les réglages de l'atelier) envoie `sans_couvertures: true` — le livre
+s'ouvre sur le colophon — et `page_blanche_finale: true` quand le nombre de
+pages est impair, un relié s'imprimant en feuillets. Après le rendu, l'atelier
+affiche le nombre de pages intérieures : c'est celui à donner à l'outil de
+couverture Pumbo pour obtenir la fiche, donc le dos.
 
 ## Ce que le moteur de rendu reçoit
 

@@ -29,7 +29,8 @@ import partage from "./public/partage.js";
 // Le renommage des vocaux, le format du fichier groupé et la consigne de
 // découpage sont partagés avec le mode navigateur : une seule copie, une seule
 // vérité. Voir `public/partage.js`.
-const { normaliserNomAudio, decouperTexteGroupe, extraireJson, consigneDecoupage } = partage;
+const { normaliserNomAudio, decouperTexteGroupe, extraireJson, consigneDecoupage, messagesAnalyse } =
+  partage;
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = join(ICI, "public");
@@ -387,6 +388,29 @@ async function decouper(req, res) {
   });
 }
 
+/**
+ * Analyse d'une étape pour la mise en page (lieu, photo ↔ paragraphe, scènes).
+ * La consigne arrive construite par la page (`consigneAnalyseEtape`), avec les
+ * vignettes ; le serveur ne fait qu'ajouter la clé et relayer, comme pour le
+ * découpage. `appelerAnthropic` et `appelerOpenai` acceptent un contenu en
+ * plusieurs blocs, images comprises.
+ */
+async function analyser(req, res) {
+  const corps = await lireJson(req);
+  const veutAnthropic = corps.fournisseur === "anthropic";
+  const nomCle = veutAnthropic ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY";
+  const { cle } = await resoudreCle(nomCle, veutAnthropic ? corps.cleAnthropic : corps.cleOpenai);
+  if (!cle) throw new ErreurHttp(400, `Aucune clé ${veutAnthropic ? "Anthropic" : "OpenAI"}`);
+
+  const modele =
+    corps.modele || (veutAnthropic ? DEFAUTS.modeleAnthropic : DEFAUTS.modeleOpenai);
+  const contenu = messagesAnalyse(String(corps.consigne || ""), corps.images || [], veutAnthropic);
+  const brut = veutAnthropic
+    ? await appelerAnthropic(cle, modele, contenu)
+    : await appelerOpenai(cle, modele, contenu);
+  repondreJson(res, 200, extraireJson(brut));
+}
+
 /* --------------------------------------------------------------- routage --- */
 
 async function router(req, res) {
@@ -416,6 +440,7 @@ async function router(req, res) {
 
   if (req.method === "POST" && chemin === "/api/transcrire") return transcrire(req, res);
   if (req.method === "POST" && chemin === "/api/decouper") return decouper(req, res);
+  if (req.method === "POST" && chemin === "/api/analyser") return analyser(req, res);
 
   if (req.method === "GET") return servirStatique(res, chemin);
 

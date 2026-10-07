@@ -123,6 +123,11 @@
   {% macro mb_rules(count) %}<span class="mb-note__rules" aria-hidden="true">{% for _ in range(count) %}<i></i>{% endfor %}</span>{% endmacro %}
 
   <!-- ====================== COUVERTURE ====================== -->
+  {# `sans_couvertures` : rendu pour l'imprimeur d'un livre relié. La couverture
+     et la quatrième y sont imprimées à part, sur la couverture rigide
+     (`couverture.js` de l'atelier) : laissées ici, elles le seraient une
+     seconde fois à l'intérieur. Le livre s'ouvre alors sur le colophon. #}
+  {% if not sans_couvertures %}
   <div class="page page--cover">
     {% if cover_photo %}
       <div class="mb-cover__photo">
@@ -142,6 +147,7 @@
       </div>
     {% endif %}
   </div>
+  {% endif %}
 
   <!-- ====================== COLOPHON ====================== -->
   <div class="page page--colophon">
@@ -471,7 +477,13 @@
   {# Sans photo, la variante typographique : le papier du carnet reste visible
      et c'est le texte qui tient la page, comme le dos d'un livre. C'est le cas
      par défaut depuis que les testeurs ont écarté la photo pleine page. #}
-  {% if back_cover %}
+  {# Une page blanche en fin de livre quand l'intérieur compte un nombre impair
+     de pages : un livre relié s'imprime en feuillets, recto et verso. #}
+  {% if page_blanche_finale %}
+    <div class="page page--blanche"></div>
+  {% endif %}
+
+  {% if back_cover and not sans_couvertures %}
     <div class="page page--back{% if not back_cover.image %} page--back--text{% endif %}">
       {% if back_cover.image %}
         <div class="mb-back__photo"><img src="{{ back_cover.image }}" alt="" /></div>

@@ -156,6 +156,71 @@ Réponds uniquement par un objet JSON, sans texte autour et sans balises de code
  "etapes":[{"titre":"","lieu":"","date_debut":"AAAA-MM-JJ","date_fin":"AAAA-MM-JJ","debut":0,"fin":4}]}`;
   }
 
+  /**
+   * Consigne de l'analyse d'une étape, pour la mise en page du carnet.
+   *
+   * Le modèle reçoit le récit de l'étape découpé en paragraphes numérotés et
+   * les photos de l'étape, chacune précédée de son identifiant. Il ne réécrit
+   * rien et ne choisit aucun layout : il dit seulement
+   *
+   * - où se trouve le lieu de l'étape (pays et coordonnées), pour la carte de
+   *   chapitre — `null` s'il n'en est pas sûr : une épingle au hasard se voit ;
+   * - quel paragraphe chaque photo illustre, pour qu'elle tombe sur la même
+   *   page que le passage qui en parle ;
+   * - quelles photos ont été prises au même endroit (même arrière-plan), pour
+   *   qu'elles restent ensemble.
+   *
+   * La mise en page reste un calcul de l'atelier (`app.js`) : le modèle décrit,
+   * il ne compose pas. Voir LAYOUT_KB § « Associer les photos au récit ».
+   */
+  function consigneAnalyseEtape({ lieu, destination, paragraphes, photos }) {
+    const texte = (paragraphes || [])
+      .map((p, i) => `[${i}] ${String(p).replace(/\s+/g, " ").trim()}`)
+      .join("\n");
+    const ids = (photos || []).map((p) => p.id).join(", ");
+
+    return `Tu prépares la mise en page d'une étape de carnet de voyage. Tu ne réécris rien et tu ne choisis aucune mise en page : tu décris.
+
+Lieu de l'étape : ${lieu || "non précisé"}
+Destination du voyage : ${destination || "non précisée"}
+
+Récit de l'étape, en paragraphes numérotés :
+${texte || "(pas de récit)"}
+
+Les photos de l'étape suivent, chacune précédée de son identifiant (${ids || "aucune"}).
+
+1. **Le lieu.** Le pays (code ISO 3166-1 alpha-2) et les coordonnées du lieu principal de l'étape, justes au dixième de degré, et le nom court à écrire sur une carte (« Paros », pas « Paros, Cyclades, Grèce »). Si tu n'es pas sûr du lieu ou de ses coordonnées, mets null : une épingle mal placée se voit immédiatement.
+
+2. **Chaque photo.** Pour chaque identifiant :
+   - "paragraphe" : le numéro du paragraphe dont la photo illustre le contenu — la plage pour le passage sur la plage, le plat pour le passage sur le restaurant. Juge sur ce que montre la photo et ce que raconte le texte, pas sur l'ordre des photos. null si aucun paragraphe ne s'y rattache ;
+   - "scene" : un court libellé du lieu de prise de vue, identique pour toutes les photos prises au même endroit, devant le même arrière-plan (« terrasse du restaurant au port », « plage de sable blanc », « ruelle blanchie à la chaux »). Deux photos d'un même lieu portent exactement le même libellé ;
+   - "sujet" : ce que montre la photo, en quelques mots ;
+   - "personnes" : le nombre de personnes dont on voit le visage.
+
+Réponds uniquement par un objet JSON, sans texte autour :
+{"lieu":{"nom":"","pays":"","lat":0,"lon":0},"photos":[{"id":"","paragraphe":0,"scene":"","sujet":"","personnes":0}]}`;
+  }
+
+  /**
+   * Le contenu du message d'analyse : la consigne, puis chaque photo précédée
+   * d'une ligne « Photo <id> », au format du fournisseur. Les images sont des
+   * vignettes JPEG en data URL (`data:image/jpeg;base64,…`).
+   */
+  function messagesAnalyse(consigne, images, anthropic) {
+    const contenu = [{ type: "text", text: consigne }];
+    for (const image of images || []) {
+      contenu.push({ type: "text", text: `Photo ${image.id}` });
+      if (anthropic) {
+        const [entete, base64] = String(image.data).split(",");
+        const media = (entete.match(/data:([^;]+)/) || [])[1] || "image/jpeg";
+        contenu.push({ type: "image", source: { type: "base64", media_type: media, data: base64 } });
+      } else {
+        contenu.push({ type: "image_url", image_url: { url: image.data, detail: "low" } });
+      }
+    }
+    return contenu;
+  }
+
   const api = {
     MAX_OCTETS,
     normaliserNomAudio,
@@ -163,6 +228,8 @@ Réponds uniquement par un objet JSON, sans texte autour et sans balises de code
     construireTexteGroupe,
     extraireJson,
     consigneDecoupage,
+    consigneAnalyseEtape,
+    messagesAnalyse,
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;

@@ -210,6 +210,8 @@ const REGLAGES_DEFAUT = {
   dossierDisque: "",
   cleApitemplate: "",
   templateApitemplate: "7a177b23210099d6",
+  /** Rendu pour l'imprimeur (Pumbo) : sans couverture ni quatrième, nombre de pages pair. */
+  versionImprimeur: false,
   baseApitemplate: "https://rest-de.apitemplate.io/v2",
 };
 
@@ -259,6 +261,8 @@ const etat = {
   rencontres: [],
   /** Dernier PDF rendu par APITemplate, pour garder le lien sous la main. */
   pdf: null,
+  /** Contours des pays (`assets/maps/countries.json`), chargés à la première carte. */
+  contoursCarte: null,
   /** Message sous « Générer le carnet » : { type: "info" | "erreur", texte }. */
   carnetStatut: null,
   etapes: [],
@@ -1349,6 +1353,7 @@ async function genererJson(bouton) {
   bouton.disabled = true;
   bouton.textContent = "Génération en cours…";
   try {
+    await preparerMiseEnPage((texte) => (bouton.textContent = texte.split("…")[0] + "…"));
     const json = construireJson();
     const enregistre = await enregistrerFichier(
       json,
@@ -1370,340 +1375,9 @@ async function genererJson(bouton) {
   }
 }
 
-/**
- * Un paragraphe ne dépasse jamais la taille S du barème (379 signes) : c'est la
- * limite que `payloadValidator.ts` applique au carnet, et au-delà c'est un mur
- * de texte quelle que soit la taille de l'étape.
- */
-const SIGNES_PAR_PARAGRAPHE = 379;
-
-/**
- * Coupe une phrase trop longue pour un paragraphe. Un vocal transcrit en donne
- * souvent : 1 300 signes sans un point, que le découpage par phrases laissait
- * d'un bloc et qui débordaient de la page. On coupe sur la dernière virgule
- * avant la limite, à défaut sur le dernier espace — jamais au milieu d'un mot,
- * et aucun mot n'est perdu.
- */
-function couperPhrase(phrase, maxSignes) {
-  const morceaux = [];
-  let reste = phrase;
-  while (reste.length > maxSignes) {
-    const tete = reste.slice(0, maxSignes + 1);
-    let coupe = tete.lastIndexOf(", ");
-    if (coupe < maxSignes / 2) coupe = tete.lastIndexOf(" ");
-    else coupe += 1;
-    if (coupe <= 0) coupe = maxSignes;
-    morceaux.push(reste.slice(0, coupe).trim());
-    reste = reste.slice(coupe).trim();
-  }
-  if (reste) morceaux.push(reste);
-  return morceaux;
-}
-
-/** Découpe un récit en paragraphes qui tiennent dans une page du carnet. */
-function enParagraphes(texte, maxSignes = SIGNES_PAR_PARAGRAPHE) {
-  const phrases = String(texte || "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .split(/(?<=[.!?…])\s+/)
-    .filter(Boolean)
-    .flatMap((phrase) => couperPhrase(phrase, maxSignes));
-  const paragraphes = [];
-  let courant = "";
-  for (const phrase of phrases) {
-    if (!courant) courant = phrase;
-    else if (courant.length + 1 + phrase.length <= maxSignes) courant += ` ${phrase}`;
-    else {
-      paragraphes.push(courant);
-      courant = phrase;
-    }
-  }
-  if (courant) paragraphes.push(courant);
-  return paragraphes;
-}
-
-const echapperHtml = (t) =>
-  String(t || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-const enHtml = (texte) => paragraphesEnHtml(enParagraphes(texte));
-
-const paragraphesEnHtml = (paragraphes) =>
-  paragraphes.map((t) => `<p>${echapperHtml(t)}</p>`).join("");
-
-/**
- * Combien de photos chaque gabarit **rend réellement**, d'après le catalogue de
- * `MemoBook Generator/templates/travel-journal/LAYOUT_KB.md`. Au-delà de ce
- * nombre, les photos envoyées ne sont pas dessinées : elles disparaissent du
- * carnet sans que rien ne le signale.
- *
- * Le layout par défaut (`story_opener` / `story_facts`) pose une photo
- * flottante en bas de page, sous le récit.
- */
-const PHOTOS_RENDUES = {
-  layout_story_facts: 1,
-  layout_story_opener: 1,
-  layout_hero_top: 1,
-  layout_split_left: 2,
-  layout_collage: 3,
-  layout_photo_page: 5,
-};
-
-/** Une page de récit porte au plus trois photos (`layout_collage`). */
-const MAX_PHOTOS_RECIT = PHOTOS_RENDUES.layout_collage;
-
-/** Le gabarit « page pleine de photos » exige au moins trois images. */
-const MIN_PAGE_PHOTOS = 3;
-
-/**
- * Capacité d'une page de récit, recopiée de `payloadValidator.ts`
- * (`LAYOUT_CAPACITY`, `PARAGRAPHS_PER_PAGE`) : l'atelier ne passe pas par le
- * validateur, il doit donc respecter les mêmes plafonds de lui-même.
- * `bandeau` : première page de l'étape ; `suite` : pages suivantes, sans
- * bandeau ni titre, qui gagnent la place de ceux-ci.
- */
-const CAPACITE_PAGE = {
-  defaut: { bandeau: 560, suite: 880 },
-  layout_hero_top: { bandeau: 380, suite: 680 },
-};
-const PARAGRAPHES_PAR_PAGE = { bandeau: 2, suite: 4 };
-
-/** Minimum de la taille S : une page de récit plus maigre n'est qu'un reliquat. */
-const MIN_SIGNES_PAGE = 200;
-
-/** Compté comme `bodyLength` de `payloadValidator.ts` : paragraphes joints par une espace. */
-const signes = (paragraphes) => paragraphes.join(" ").length;
-
-/** En dessous, un bout de paragraphe en bas de page ne vaut pas la coupe. */
-const MIN_SIGNES_COUPE = 100;
-
-/**
- * Coupe un paragraphe pour en loger le début dans `place` signes : sur la
- * dernière fin de phrase qui tient, à défaut sur une virgule, à défaut — un
- * vocal transcrit d'un seul souffle — sur un espace. Jamais au milieu d'un mot.
- * Renvoie `null` si le début serait trop court pour valoir la coupe.
- */
-function couperAuPlus(paragraphe, place) {
-  const fenetre = paragraphe.slice(0, place + 1);
-  const derniere = (motif) => {
-    let fin = -1;
-    for (const m of fenetre.matchAll(motif)) fin = m.index + m[0].length;
-    return fin;
-  };
-  let coupe = derniere(/[.!?…]\s/g);
-  if (coupe < MIN_SIGNES_COUPE) coupe = derniere(/,\s/g);
-  if (coupe < MIN_SIGNES_COUPE) coupe = fenetre.lastIndexOf(" ");
-  if (coupe < MIN_SIGNES_COUPE) return null;
-  return [paragraphe.slice(0, coupe).trim(), paragraphe.slice(coupe).trim()];
-}
-
-/**
- * Répartit les paragraphes d'une étape sur ses pages de récit.
- *
- * C'est ce qui manquait : l'atelier posait tout le récit sur une seule page, et
- * un long vocal débordait — la fin du texte coupée net, la photo du bas poussée
- * hors de la feuille. Les règles sont celles de LAYOUT_KB, § « Longueur des
- * textes » et § « La répartition sur une étape à plusieurs pages » :
- *
- * - on remplit la première page avant d'ouvrir la suivante, sans dépasser ni
- *   les signes ni les paragraphes qu'elle tient ; un paragraphe qui ne tient
- *   plus entier se coupe, de préférence sur une fin de phrase, et la suite
- *   ouvre la page d'après ;
- * - mais la dernière page ne doit pas être un reliquat : sous la taille S, elle
- *   reprend des paragraphes à la précédente tant que celle-ci reste au-dessus.
- */
-function pagesDeRecit(paragraphes) {
-  const pages = [];
-  const file = [...paragraphes];
-  while (file.length) {
-    const paragraphe = file.shift();
-    const page = pages[pages.length - 1];
-    const sorte = pages.length <= 1 ? "bandeau" : "suite";
-    const place = page ? CAPACITE_PAGE.defaut[sorte] - signes(page) - 1 : 0;
-    if (page && page.length < PARAGRAPHES_PAR_PAGE[sorte] && paragraphe.length <= place) {
-      page.push(paragraphe);
-      continue;
-    }
-    const coupe = page && page.length < PARAGRAPHES_PAR_PAGE[sorte] ? couperAuPlus(paragraphe, place) : null;
-    if (coupe) {
-      page.push(coupe[0]);
-      file.unshift(coupe[1]);
-    } else {
-      pages.push([paragraphe]);
-    }
-  }
-
-  const derniere = pages[pages.length - 1];
-  const avant = pages[pages.length - 2];
-  while (
-    avant &&
-    avant.length > 1 &&
-    signes(derniere) < MIN_SIGNES_PAGE &&
-    signes(avant.slice(0, -1)) >= MIN_SIGNES_PAGE &&
-    signes([avant[avant.length - 1], ...derniere]) <= CAPACITE_PAGE.defaut.suite &&
-    derniere.length < PARAGRAPHES_PAR_PAGE.suite
-  ) {
-    derniere.unshift(avant.pop());
-  }
-  return pages;
-}
-
-/** Répartit `total` en `parts` entiers aussi égaux que possible, les plus gros d'abord. */
-function partsEgales(total, parts) {
-  return Array.from({ length: parts }, (_, i) =>
-    Math.floor(total / parts) + (i < total % parts ? 1 : 0),
-  );
-}
-
-/**
- * Combien de photos va sur chaque page de récit, et combien sur chaque planche
- * (`layout_photo_page`). Règles de LAYOUT_KB, dans cet ordre :
- *
- * 1. **Chaque page de récit prend ses photos avant qu'une planche s'ouvre** —
- *    jusqu'à `maxParPage` (trois, ou deux pour une étape surtout en paysage :
- *    voir `photosParPageDeRecit`), réparties à parts égales entre les pages.
- * 2. Seule la surabondance va sur des planches, de 3 à 5 photos. S'il en reste
- *    une ou deux, les pages de récit en cèdent pour faire une planche de trois
- *    plutôt que de les perdre.
- * 3. **Jamais deux planches consécutives** : une planche suit une page de
- *    récit, il y en a donc au plus autant que de pages de récit. Ce qui ne
- *    tient pas reste hors du carnet (`ecartees`) — « mieux vaut en laisser de
- *    côté qu'aligner les planches ».
- */
-function repartirPhotos(nbPhotos, nbPagesRecit, maxParPage = MAX_PHOTOS_RECIT) {
-  if (nbPagesRecit === 0) {
-    const planche = nbPhotos >= MIN_PAGE_PHOTOS ? Math.min(nbPhotos, PHOTOS_RENDUES.layout_photo_page) : 0;
-    return { recit: [], planches: planche ? [planche] : [], ecartees: nbPhotos - planche };
-  }
-  const plafondRecit = maxParPage * nbPagesRecit;
-  if (nbPhotos <= plafondRecit) {
-    return { recit: partsEgales(nbPhotos, nbPagesRecit), planches: [], ecartees: 0 };
-  }
-
-  let surplus = nbPhotos - plafondRecit;
-  let surRecit = plafondRecit;
-  if (surplus < MIN_PAGE_PHOTOS) {
-    surRecit -= MIN_PAGE_PHOTOS - surplus;
-    surplus = MIN_PAGE_PHOTOS;
-  }
-  const posables = Math.min(surplus, PHOTOS_RENDUES.layout_photo_page * nbPagesRecit);
-  const nbPlanches = Math.ceil(posables / PHOTOS_RENDUES.layout_photo_page);
-  return {
-    recit: partsEgales(surRecit, nbPagesRecit),
-    planches: partsEgales(posables, nbPlanches),
-    ecartees: surplus - posables,
-  };
-}
-
-/**
- * Le format (largeur / hauteur) de chaque emplacement photo, gabarit par
- * gabarit, dans l'ordre où le gabarit lit `photos[]`. Mesuré sur le rendu de
- * `templates/travel-journal/index.html`, image seule, sans le cadre blanc —
- * à remesurer si la géométrie d'un gabarit change (LAYOUT_KB § « Rognage des
- * photos »).
- */
-const FORMATS_EMPLACEMENTS = {
-  layout_story_opener: { 1: [1.02] },
-  layout_story_facts: { 1: [1.02] },
-  layout_hero_top: { 1: [1.35] },
-  layout_split_left: { 2: [0.9, 0.9] },
-  layout_collage: { 2: [0.9, 0.9], 3: [0.56, 0.56, 0.56] },
-  layout_photo_page: {
-    3: [0.73, 0.45, 1.65],
-    4: [0.73, 0.45, 0.62, 0.99],
-    5: [1.76, 1.44, 0.9, 0.9, 1.44],
-  },
-};
-
-/**
- * Plafond de rognage : on garde toujours au moins les deux tiers de l'image.
- * Une photo paysage 4:3 entre dans un emplacement presque carré (32 % rognés)
- * mais pas dans une colonne étroite (58 % à 66 %), où l'on ne reconnaît plus
- * l'image. Au-delà, la photo est réduite sans être rognée. Voir LAYOUT_KB
- * § « Rognage des photos ».
- */
-const MAX_ROGNAGE = 1 / 3;
-
-/** Part de l'image perdue quand une photo de format `photo` remplit un emplacement de format `cadre`. */
-function rognage(photo, cadre) {
-  if (!photo || !cadre) return 0;
-  return 1 - Math.min(cadre / photo, photo / cadre);
-}
-
-/** Toutes les permutations d'un petit tableau (cinq éléments au plus : 120). */
-function permutations(liste) {
-  if (liste.length <= 1) return [liste];
-  return liste.flatMap((x, i) =>
-    permutations([...liste.slice(0, i), ...liste.slice(i + 1)]).map((reste) => [x, ...reste]),
-  );
-}
-
-/**
- * Place les photos d'une page dans ses emplacements, et dit comment chacune
- * s'affiche.
- *
- * 1. **L'ordre** : parmi toutes les façons de répartir les photos dans les
- *    emplacements, on retient celle qui rogne le moins — une photo paysage va
- *    dans l'emplacement large, une portrait dans la colonne étroite. C'est ce
- *    qui coupait la photo de groupe du 28 août : paysage, posée dans la
- *    colonne la plus étroite de la planche.
- * 2. **Le rendu** : une photo de groupe, ou une photo qui serait rognée de plus
- *    d'un tiers même à la meilleure place, passe en `fit: "contain"` — réduite
- *    proportionnellement, jamais coupée. Une photo plus haute que son
- *    emplacement garde le haut de l'image (`focus` à 30 %) : c'est là que sont
- *    les visages, sur la plupart des photos prises à hauteur d'homme.
- */
-function placerPhotos(layout, photos) {
-  const formats = FORMATS_EMPLACEMENTS[layout]?.[photos.length];
-  const cout = (ordre) =>
-    ordre.reduce((total, photo, i) => total + rognage(photo.format, formats[i]), 0);
-  const ordre =
-    formats && photos.every((p) => p.format)
-      ? permutations(photos).reduce((meilleur, essai) => (cout(essai) < cout(meilleur) ? essai : meilleur))
-      : photos;
-
-  return ordre.map((photo, i) => {
-    const cadre = formats?.[i];
-    if (photo.groupe || rognage(photo.format, cadre) > MAX_ROGNAGE) return { url: photo.src, fit: "contain" };
-    if (photo.format && cadre && photo.format < cadre) return { url: photo.src, focus: "50% 30%" };
-    return photo.src;
-  });
-}
-
-/**
- * Combien de photos une page de récit peut porter, d'après les formats de
- * l'étape. Les trois emplacements d'un collage sont des colonnes étroites
- * (format 0,56) : une photo paysage y perd 58 % de sa surface, bien au-delà du
- * plafond de rognage. Une étape surtout en paysage met donc deux photos par
- * page de récit (format 0,90 : 32 % au plus), et le surplus va sur les
- * planches, dont les grands emplacements leur conviennent.
- */
-function photosParPageDeRecit(photos) {
-  const paysages = photos.filter((p) => p.format > 1).length;
-  return paysages * 2 > photos.length ? 2 : MAX_PHOTOS_RECIT;
-}
-
-/**
- * Le gabarit d'une page de récit, d'après les photos qu'elle porte.
- *
- * `layout_hero_top` (grande photo en tête, format 1,35) tient moins de texte
- * que les autres, et ne convient qu'à une photo paysage : une portrait y
- * perdrait 44 % de sa surface. On ne le choisit que si le texte de la page y
- * entre et que la photo y tient sans dépasser le plafond de rognage ; sinon la
- * photo passe en photo flottante (format 1,02) sous le récit.
- */
-function layoutDeRecit(photosDeLaPage, texte, sorte, premiere) {
-  const nbPhotos = photosDeLaPage.length;
-  const parDefaut = premiere ? "layout_story_opener" : "layout_story_facts";
-  if (nbPhotos === 0) return parDefaut;
-  if (nbPhotos === 1) {
-    const [photo] = photosDeLaPage;
-    const heroLisible =
-      !photo.format || rognage(photo.format, FORMATS_EMPLACEMENTS.layout_hero_top[1][0]) <= MAX_ROGNAGE;
-    return heroLisible && signes(texte) <= CAPACITE_PAGE.layout_hero_top[sorte] ? "layout_hero_top" : parDefaut;
-  }
-  if (nbPhotos === 2) return "layout_split_left";
-  return "layout_collage";
-}
+// La mise en page des étapes (pagination, photos, chapitres, doubles pages)
+// vit dans `mise-en-page.js` : sans DOM ni réseau, elle se teste depuis le
+// back-end. Ici ne restent que la collecte des données et l'envoi.
 
 /**
  * Le lieu affiché dans le bandeau : celui de l'étape, complété par la
@@ -1776,13 +1450,53 @@ function designerCouverture(photoId) {
   apresChangement();
 }
 
+/**
+ * Les étapes telles que les lit `MiseEnPage.composerJours` : le récit d'un
+ * tenant, les photos avec leur format, et l'analyse d'étape si elle a été faite
+ * (`analyserEtapes`) et qu'elle correspond encore au contenu de l'étape.
+ */
+function etapesPourMiseEnPage(photoDe) {
+  return etat.etapes.map((etape, index) => ({
+    titre: etape.titre || `Étape ${index + 1}`,
+    lieu: etape.lieu || "",
+    destination: etat.carnet.destination || "",
+    numero: String(index + 1).padStart(2, "0"),
+    lieuComplet: lieuComplet(etape.lieu, etat.carnet.destination),
+    dateLongue: dateLongue(etape.dateDebut),
+    recit: recitDe(etape),
+    photos: etape.photos
+      .filter((p) => p.data)
+      .map((p) => ({
+        id: p.id,
+        src: photoDe(p.data),
+        format: p.largeur && p.hauteur ? p.largeur / p.hauteur : 0,
+        groupe: Boolean(p.groupe),
+      }))
+      .filter((p) => p.src),
+    analyse: etape.analyse?.cle === cleAnalyse(etape) ? etape.analyse.resultat : null,
+  }));
+}
+
+const recitDe = (etape) => etape.souvenirs.map((s) => s.texte.trim()).filter(Boolean).join(" ");
+
+/**
+ * Pages du livre imprimé : le colophon, puis les pages d'étape — la couverture
+ * et la quatrième sont imprimées à part sur un relié. C'est ce nombre qu'il
+ * faut donner à l'outil de couverture Pumbo pour obtenir la bonne fiche.
+ */
+const pagesInterieures = (jours) => 1 + jours.length;
+
 function construirePayloadCarnet(photoDe = (data) => data) {
   // La même photo que sur la couverture imprimée : le carnet s'ouvre sur ce
   // qu'on a vu en le prenant en main.
   const couverture = photoDeCouverture();
+  const imprimeur = Boolean(etat.reglages.versionImprimeur);
 
-  return {
+  const payload = {
     render_profile: "preview",
+    // Version imprimeur : le relié a sa couverture à part (`couverture.js`), et
+    // s'imprime en feuillets — un nombre de pages pair.
+    ...(imprimeur ? { sans_couvertures: true } : {}),
     book_title: etat.carnet.titre || "Carnet de voyage",
     book_subtitle: SOUS_TITRE,
     authors: listeVoyageurs().join(" et "),
@@ -1792,112 +1506,18 @@ function construirePayloadCarnet(photoDe = (data) => data) {
     year: String(new Date().getFullYear()),
     footer_tagline: "Racontez. Revivez. Partagez.",
     intro_text: "",
-    // `flatMap` et non `map` : une étape occupe une ou plusieurs pages. La
-    // première porte le bandeau, le titre et le début du récit ; les pages de
-    // suite continuent le récit sans bandeau, et le surplus de photos va sur des
-    // planches intercalées. Règles de LAYOUT_KB, détaillées sur `pagesDeRecit`
-    // et `repartirPhotos` : rien du texte ne se perd, ni rien ne déborde.
-    days: etat.etapes.flatMap((etape, index) => {
-      // Chaque photo garde son format et le drapeau « groupe » jusqu'au
-      // placement : c'est là que se décide comment elle s'affiche.
-      const photos = etape.photos
-        .map((p) => ({
-          src: p.data ? photoDe(p.data) : "",
-          format: p.largeur && p.hauteur ? p.largeur / p.hauteur : 0,
-          groupe: Boolean(p.groupe),
-        }))
-        .filter((p) => p.src);
-      const recit = etape.souvenirs.map((s) => s.texte.trim()).filter(Boolean).join(" ");
-      const paragraphes = enParagraphes(recit);
-
-      // Sans récit, une ou deux photos tiennent sur la page à bandeau ; à
-      // partir de trois, l'étape devient une planche, comme avant.
-      const textes = paragraphes.length
-        ? pagesDeRecit(paragraphes)
-        : photos.length < MIN_PAGE_PHOTOS
-          ? [[]]
-          : [];
-      const repartition = repartirPhotos(photos.length, textes.length, photosParPageDeRecit(photos));
-      if (repartition.ecartees) {
-        debugCarnet(
-          `étape ${index + 1} : ${repartition.ecartees} photo(s) laissée(s) hors du carnet ` +
-            "— plus de photos que ses pages ne peuvent en porter sans aligner deux planches.",
-        );
-      }
-
-      const drapeaux = (actif) => ({
-        // Un seul gabarit est vrai à la fois : le template lit des booléens.
-        layout_story_opener: actif === "layout_story_opener",
-        layout_story_facts: actif === "layout_story_facts",
-        layout_hero_top: actif === "layout_hero_top",
-        layout_split_left: actif === "layout_split_left",
-        layout_collage: actif === "layout_collage",
-        layout_photo_page: actif === "layout_photo_page",
-      });
-
-      // L'ordre des pages : chaque planche suit une page de récit, en partant de
-      // la fin — une seule planche ferme l'étape, deux encadrent la dernière
-      // page de récit, etc. Jamais deux planches à la suite.
-      const ordre = [];
-      const premierePlanche = textes.length - repartition.planches.length;
-      textes.forEach((_, rang) => {
-        ordre.push({ recit: rang });
-        if (rang >= premierePlanche) ordre.push({ planche: rang - premierePlanche });
-      });
-      if (!textes.length) repartition.planches.forEach((_, rang) => ordre.push({ planche: rang }));
-
-      // Les photos sont distribuées dans l'ordre de lecture des pages.
-      let prochaine = 0;
-      const prendre = (n) => photos.slice(prochaine, (prochaine += n));
-
-      return ordre.map((place, rang) => {
-        if ("planche" in place) {
-          // Sur une planche, `title` devient la légende manuscrite du bas : on ne
-          // la met que sur la première, sans la répéter de page en page.
-          return {
-            title: place.planche === 0 ? etape.titre || "" : "",
-            body_html: "",
-            ...drapeaux("layout_photo_page"),
-            photos: placerPhotos("layout_photo_page", prendre(repartition.planches[place.planche])),
-            fun_facts: [],
-            sticker_groups: [],
-          };
-        }
-
-        const texte = textes[place.recit];
-        const premiere = place.recit === 0;
-        const photosDeLaPage = prendre(repartition.recit[place.recit]);
-        const layout = layoutDeRecit(photosDeLaPage, texte, premiere ? "bandeau" : "suite", premiere && index === 0);
-        const page = {
-          ...drapeaux(layout),
-          body_html: paragraphesEnHtml(texte),
-          photos: placerPhotos(layout, photosDeLaPage),
-          fun_facts: [],
-          // Le template itère dessus : une liste vide vaut mieux qu'une clé absente.
-          sticker_groups: [],
-        };
-        // Une page de suite n'a ni titre ni bandeau : c'est à ça que le
-        // validateur et le gabarit la reconnaissent comme la même étape.
-        if (!premiere) return { title: "", ...page };
-        return {
-          title: etape.titre || `Étape ${index + 1}`,
-          date: dateLongue(etape.dateDebut),
-          city: etape.lieu || "",
-          country: etat.carnet.destination || "",
-          day_intro: {
-            day_number: String(index + 1).padStart(2, "0"),
-            location: lieuComplet(etape.lieu, etat.carnet.destination),
-            date: dateLongue(etape.dateDebut),
-            // Pas de `weather_key` : la météo ne s'imprime que si le vocal la dit
-            // clairement, et l'atelier ne lit pas le récit. Sans le champ, la
-            // rangée disparaît — mieux qu'un soleil inventé sur chaque étape.
-          },
-          ...page,
-          // Pas de `tag` : l'étiquette manuscrite est une humeur (« Top départ »),
-          // et l'atelier n'avait que le lieu à y mettre — écrit deux lignes plus
-          // haut dans le bandeau.
-        };
-      });
+    // Les pages d'étape : récit réparti sur ses pages, photos auprès du passage
+    // qu'elles illustrent, chapitres sur une carte, doubles pages variées.
+    // Voir `mise-en-page.js` et LAYOUT_KB.
+    days: MiseEnPage.composerJours(etapesPourMiseEnPage(photoDe), {
+      contours: etat.contoursCarte,
+      dessinerCarte: etat.contoursCarte
+        ? (requete) => Carte.renderMapDataUri(etat.contoursCarte, requete)
+        : null,
+      // Le colophon est la page 1 du livre imprimé : la première page d'étape
+      // est à gauche.
+      pagesAvant: 1,
+      journal: (texte) => debugCarnet(texte),
     }),
     back_cover: {
       closing_text: "À suivre.",
@@ -1908,6 +1528,8 @@ function construirePayloadCarnet(photoDe = (data) => data) {
       logo_url: "",
     },
   };
+  if (imprimeur && pagesInterieures(payload.days) % 2 === 1) payload.page_blanche_finale = true;
+  return payload;
 }
 
 /* ------------------------------------------------ envoi vers APITemplate --- */
@@ -2121,6 +1743,121 @@ async function importerFichePumbo(fichier) {
   rendreColonne();
 }
 
+/* ------------------------------------------- analyse d'étape et cartes --- */
+
+const CONTOURS_CARTE_URL =
+  "https://raw.githubusercontent.com/hugo-jouffre/memo-book/main/assets/maps/countries.json";
+
+/**
+ * La clé d'une analyse : ce qui, s'il change, la rend caduque — le lieu, le
+ * récit, les photos. Une étape inchangée n'est pas réanalysée d'une génération
+ * à l'autre ; l'analyse voyage avec l'étape dans le fichier d'avancement.
+ */
+function cleAnalyse(etape) {
+  const contenu = [
+    etape.lieu || "",
+    etat.carnet.destination || "",
+    recitDe(etape),
+    ...etape.photos.filter((p) => p.data).map((p) => `${p.id}:${p.largeur}x${p.hauteur}`),
+  ].join("|");
+  let h = 0;
+  for (let i = 0; i < contenu.length; i += 1) h = (Math.imul(31, h) + contenu.charCodeAt(i)) | 0;
+  return `${contenu.length}-${(h >>> 0).toString(36)}`;
+}
+
+/** Vignette JPEG de 512 px au plus côté : assez pour reconnaître une scène, léger à envoyer. */
+async function vignette(dataUrl) {
+  const img = new Image();
+  img.src = dataUrl;
+  await img.decode();
+  const ratio = Math.min(1, 512 / Math.max(img.naturalWidth, img.naturalHeight));
+  const toile = document.createElement("canvas");
+  toile.width = Math.max(1, Math.round(img.naturalWidth * ratio));
+  toile.height = Math.max(1, Math.round(img.naturalHeight * ratio));
+  toile.getContext("2d").drawImage(img, 0, 0, toile.width, toile.height);
+  return toile.toDataURL("image/jpeg", 0.7);
+}
+
+/** Le serveur relaie en local ; en ligne la page appelle l'API elle-même. */
+async function appelAnalyse(corps) {
+  if (etat.mode === "navigateur") return MoteurNavigateur.analyser(corps);
+  return appelJson("/api/analyser", corps);
+}
+
+/**
+ * Analyse chaque étape qui ne l'a pas encore été : le lieu (pour la carte de
+ * chapitre), le passage que chaque photo illustre et les photos prises au même
+ * endroit (pour les mettre sur la même page). Voir `consigneAnalyseEtape` et
+ * LAYOUT_KB § « Associer les photos au récit ».
+ *
+ * Sans clé, ou si le modèle échoue, le carnet se fait quand même : photos dans
+ * l'ordre du voyage, pas de carte. On le dit, sans bloquer.
+ */
+async function analyserEtapes(statut = () => {}) {
+  const fournisseur = etat.reglages.fournisseurDecoupage;
+  const anthropic = fournisseur === "anthropic";
+  const avecCle =
+    (anthropic ? etat.reglages.cleAnthropic : etat.reglages.cleOpenai)?.trim() ||
+    (anthropic ? etat.config?.cleServeur?.anthropic : etat.config?.cleServeur?.openai);
+  const aFaire = etat.etapes.filter((e) => e.analyse?.cle !== cleAnalyse(e));
+  if (!aFaire.length) return { faites: 0, echecs: 0 };
+  if (!avecCle) {
+    statut("Pas de clé de modèle : photos placées dans l'ordre du voyage, pas de carte de chapitre.");
+    return { faites: 0, echecs: aFaire.length };
+  }
+
+  let faites = 0;
+  let echecs = 0;
+  const unePasse = async (etape) => {
+    const photos = etape.photos.filter((p) => p.data);
+    try {
+      const images = await Promise.all(photos.map(async (p) => ({ id: p.id, data: await vignette(p.data) })));
+      const consigne = consigneAnalyseEtape({
+        lieu: etape.lieu,
+        destination: etat.carnet.destination,
+        paragraphes: MiseEnPage.enParagraphes(recitDe(etape)),
+        photos,
+      });
+      const resultat = await appelAnalyse({
+        fournisseur,
+        modele: etat.reglages.modeleDecoupage,
+        cleOpenai: etat.reglages.cleOpenai,
+        cleAnthropic: etat.reglages.cleAnthropic,
+        consigne,
+        images,
+      });
+      etape.analyse = { cle: cleAnalyse(etape), resultat };
+      faites += 1;
+    } catch (erreur) {
+      echecs += 1;
+      debugCarnet(`analyse de l'étape « ${etape.titre || etape.lieu} » impossible`, erreur);
+    }
+    statut(`Analyse des étapes et des photos… ${faites + echecs} / ${aFaire.length}`);
+  };
+
+  // Trois à la fois : assez pour aller vite, pas assez pour se faire limiter.
+  statut(`Analyse des étapes et des photos… 0 / ${aFaire.length}`);
+  for (let i = 0; i < aFaire.length; i += 3) await Promise.all(aFaire.slice(i, i + 3).map(unePasse));
+  return { faites, echecs };
+}
+
+/** Les contours des pays, lus une fois sur GitHub pour dessiner les cartes de chapitre. */
+async function chargerContoursCarte() {
+  if (etat.contoursCarte) return;
+  try {
+    const reponse = await fetch(CONTOURS_CARTE_URL);
+    if (!reponse.ok) throw new Error(`HTTP ${reponse.status}`);
+    etat.contoursCarte = await reponse.json();
+  } catch (erreur) {
+    debugCarnet("contours de carte indisponibles : pas de carte de chapitre", erreur);
+  }
+}
+
+/** Ce qui précède la mise en page : l'analyse des étapes et les contours de carte. */
+async function preparerMiseEnPage(statut) {
+  await Promise.all([analyserEtapes(statut), chargerContoursCarte()]);
+}
+
 async function genererCarnet(bouton) {
   if (bouton.disabled) return;
   debugCarnet("clic sur Générer le carnet", {
@@ -2163,6 +1900,10 @@ async function genererCarnet(bouton) {
 
   let statut = 0;
   try {
+    await preparerMiseEnPage((texte) => {
+      etat.carnetStatut = { type: "info", texte };
+      rendreResultatPdf();
+    });
     const { payload, poids, base, palier } = await preparerEnvoi();
     debugCarnet("envoi", { base, poids, palier });
 
@@ -2193,7 +1934,13 @@ async function genererCarnet(bouton) {
     }
 
     etat.pdf = { url: donnees.download_url, quand: new Date() };
-    etat.carnetStatut = null;
+    // Le nombre de pages intérieures est celui qu'il faut donner à l'outil de
+    // couverture Pumbo : c'est lui qui fixe la largeur du dos.
+    const pages = pagesInterieures(payload.days) + (payload.page_blanche_finale ? 1 : 0);
+    etat.carnetStatut = {
+      type: "info",
+      texte: `${pages} pages intérieures${etat.reglages.versionImprimeur ? "" : " (hors couverture et quatrième)"} : c'est le nombre à donner à l'outil de couverture Pumbo pour la fiche du dos.`,
+    };
     if (onglet && !onglet.closed) onglet.location.href = donnees.download_url;
   } catch (erreur) {
     console.error("[carnet] échec", erreur);
@@ -2823,6 +2570,19 @@ function rendreReglages() {
           "Le dos dépend du nombre de pages : une fiche par commande, tirée de l'outil de couverture Pumbo."
         );
       })(),
+    ),
+    h(
+      "label",
+      { class: "case", style: { marginTop: "0.5rem" } },
+      h("input", {
+        type: "checkbox",
+        checked: Boolean(r.versionImprimeur),
+        onchange: (ev) => {
+          r.versionImprimeur = ev.target.checked;
+          sauverReglages();
+        },
+      }),
+      " Version imprimeur : sans couverture ni quatrième (imprimées sur la couverture rigide)",
     ),
     h(
       "div",

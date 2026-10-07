@@ -107,6 +107,20 @@ properties:
           Fond du PDF. `print` : blanc, pour l'imprimeur — son papier est déjà crème.
           `preview` : crème granulé, pour l'aperçu partageable dans l'app. Une seule
           template, deux sorties : c'est ce champ qui décide.
+      sans_couvertures:
+        type: boolean
+        description: >
+          Rendu pour l'imprimeur d'un livre relié : ni couverture ni quatrième dans
+          l'intérieur, elles sont imprimées sur la couverture rigide. Le livre
+          s'ouvre sur le colophon.
+      page_blanche_finale:
+        type: boolean
+        description: Ajoute une page blanche en fin de livre, pour un nombre de pages pair.
+      ai_illustrations:
+        type: boolean
+        description: >
+          Ajoute « Illustrations par IA » au colophon. Seulement si le carnet contient
+          des illustrations générées.
       brand_name: { type: string }
       year: { type: string }
       footer_tagline: { type: string }
