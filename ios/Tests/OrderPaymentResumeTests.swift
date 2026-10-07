@@ -60,6 +60,20 @@ final class OrderPaymentResumeTests: XCTestCase {
         XCTAssertNil(cardsOnly.applePayMerchantId)
     }
 
+    /// « Payer » sur un carnet qu'aucune composition n'a rendu (T224) : le
+    /// serveur répond `409 no_render`, et l'étape le dit au lieu de ne rien
+    /// faire. Le jeu d'essai du modèle répond comme le serveur.
+    func testPayingWithoutARenderSaysSo() async {
+        let model = OrderModel(memoId: "memo-1", context: { _ in .notComposedFixture })
+        await model.load()
+
+        await model.pay()
+
+        XCTAssertTrue(model.isMissingRender)
+        XCTAssertNil(model.paymentError, "Ce n'est pas une panne : pas de bandeau d'erreur.")
+        XCTAssertNotEqual(model.step, .confirmation)
+    }
+
     func testAClosedSheetResumesTheSameOrder() async {
         let calls = Calls()
         let model = model(calls: calls, sheet: [.cancelled, .succeeded])

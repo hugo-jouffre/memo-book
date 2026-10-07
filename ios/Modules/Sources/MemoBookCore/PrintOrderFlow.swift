@@ -513,7 +513,13 @@ public enum PrintedCopyOption: String, CaseIterable, Sendable, Hashable, Identif
 
 /// Paramètres d'une commande d'impression, tels qu'ils partent au serveur.
 public struct NewPrintOrderRequest: Encodable, Sendable, Hashable {
-    public var renderId: String
+    /// Le rendu à imprimer — celui que le tunnel a lu à l'ouverture. `nil`
+    /// quand il n'y en avait pas : le serveur prend alors **le dernier rendu
+    /// prêt** du voyage (06/10/2026), ce qui laisse passer une commande dont
+    /// la composition a abouti pendant qu'on remplissait son adresse, et
+    /// répond `409 no_render` s'il n'y en a toujours aucun. Absent du corps
+    /// quand il est nul.
+    public var renderId: String?
     public var copies: Int
     public var shippingSpeed: ShippingSpeed
     public var shipping: ShippingAddress
@@ -525,7 +531,7 @@ public struct NewPrintOrderRequest: Encodable, Sendable, Hashable {
     public var stripeApiVersion: String?
 
     public init(
-        renderId: String,
+        renderId: String?,
         copies: Int,
         shippingSpeed: ShippingSpeed,
         shipping: ShippingAddress,
@@ -540,7 +546,7 @@ public struct NewPrintOrderRequest: Encodable, Sendable, Hashable {
         self.stripeApiVersion = stripeApiVersion
     }
 
-    public init(renderId: String, draft: PrintOrderDraft) {
+    public init(renderId: String?, draft: PrintOrderDraft) {
         self.init(
             renderId: renderId,
             copies: draft.copies,

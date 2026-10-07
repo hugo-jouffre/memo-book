@@ -214,7 +214,7 @@ extension PrintOrder {
         return PrintOrder(
             id: UUID().uuidString,
             memoId: memoId,
-            renderId: request.renderId,
+            renderId: request.renderId ?? "render-rome",
             status: .draft,
             copies: request.copies,
             shippingSpeed: request.shippingSpeed,

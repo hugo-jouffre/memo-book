@@ -114,6 +114,15 @@ extension BookCopy {
             public static let total = "Total"
             public static let cta = "Payer"
 
+            /// « Payer » sur un carnet qu'aucune composition n'a encore rendu
+            /// (Hugo, 06/10/2026, T224). Le bouton ne faisait **rien, sans
+            /// rien dire** : le tunnel s'ouvre sans rendu — « Commander sans
+            /// attendre la composition » —, mais on ne paie pas l'impression
+            /// d'un carnet qui n'existe pas encore. La phrase de Hugo, au mot
+            /// près.
+            public static let noRender =
+                "Aucun rendu de ton carnet n’a encore été généré, tu ne peux donc pas encore payer ton carnet physique. Retourne dans la conversation de ton voyage pour commencer à générer ton carnet."
+
             public static let failure =
                 "Le paiement a échoué, merci de choisir une autre option."
 

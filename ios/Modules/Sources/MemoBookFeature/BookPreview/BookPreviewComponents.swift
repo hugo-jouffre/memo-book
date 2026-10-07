@@ -85,6 +85,60 @@ struct BookActionsBlock: View {
     }
 }
 
+/// Une feuille du carnet : la page du PDF, ou **le plat choisi** quand c'est
+/// la première ou la dernière et que les couvertures sont réglées.
+///
+/// **Les couvertures se voient dans l'aperçu** (Hugo, 06/10/2026, T223) : le
+/// PDF n'imprime pas encore les plats choisis — la génération ignore les
+/// couvertures, et c'est assumé tant que cette partie n'est pas écrite —, et
+/// l'aperçu montrait donc une couverture par défaut juste après qu'on avait
+/// réglé la sienne. Le plat est celui des écrans des couvertures
+/// (``CoverPlate``), au même rapport A5 que la page : c'est la même image qui
+/// sortira du gabarit le jour où il les rendra.
+///
+/// Elle sert l'aperçu, le plein écran et sa bande de miniatures : une même
+/// feuille doit y montrer la même chose.
+struct BookSheetFace: View {
+    let model: BookPreviewModel
+    let index: Int
+
+    var body: some View {
+        if let face = model.coverFace(at: index), let covers = model.covers {
+            BookCoverSheet(covers: covers, face: face)
+        } else {
+            BookSheetImage(renderer: model.renderer, index: index)
+        }
+    }
+}
+
+/// Un plat de couverture qui occupe la place d'une page, centré.
+struct BookCoverSheet: View {
+    let covers: BookCovers
+    let face: CoverFace
+
+    var body: some View {
+        GeometryReader { proxy in
+            // La plus grande largeur qui tienne dans la boîte : le plat garde
+            // son rapport A5, comme la page qu'il remplace.
+            let width = min(proxy.size.width, proxy.size.height * CoverPlate.ratio)
+            let cover = covers[face]
+
+            CoverPlate(
+                cover: cover,
+                style: covers.style(id: cover.styleId),
+                photo: covers.photo(id: cover.photoId),
+                face: face,
+                stats: face == .back ? covers.statSelection : [],
+                width: width
+            )
+            .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+        // Une image de couverture : VoiceOver lit le titre de l'écran et le
+        // bouton « Configurer », pas un plat qu'il ne saurait décrire.
+        .accessibilityHidden(true)
+    }
+}
+
 /// Une flèche de page : un chevron dans un rond cerclé.
 ///
 /// Elle **garde sa place quand elle ne sert à rien** — page 1 pour la

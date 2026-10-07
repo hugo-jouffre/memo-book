@@ -261,6 +261,31 @@ public enum BookCopy {
         /// est purement décorative et masquée : décrire une page qui se monte
         /// morceau par morceau ne dirait rien de plus que cette phrase.
         public static let voiceOverStatus = "Composition du carnet en cours"
+
+        /// Ce que la composition fait en ce moment, sous la page qui se monte
+        /// (06/10/2026). Une composition dure plusieurs minutes — la mise en
+        /// page attend jusqu'à trois minutes les souvenirs encore en
+        /// rédaction —, et une page montée en 2,6 s puis immobile se lirait
+        /// comme un écran figé. **Sans maquette** : à relire par Clara (T143).
+        ///
+        /// `nil` avant le premier sondage, et sur un serveur qui ne dit pas la
+        /// phase : la ligne reprend alors la plus générale.
+        public static func phase(_ phase: BookRenderPhase?, pendingMemories: Int) -> String {
+            switch phase {
+            case .queued:
+                return "Ton carnet attend son tour…"
+            case .writing where pendingMemories == 1:
+                return "On attend la fin de la rédaction d’un souvenir…"
+            case .writing where pendingMemories > 1:
+                return "On attend la fin de la rédaction de \(pendingMemories) souvenirs…"
+            case .writing:
+                return "On met tes souvenirs en pages…"
+            case .composing, .ready:
+                return "On fabrique le PDF de ton carnet…"
+            case .failed, .unknown, nil:
+                return "La composition de ton carnet est lancée…"
+            }
+        }
     }
 
     // MARK: - Aperçu PDF

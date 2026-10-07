@@ -1,5 +1,6 @@
 import Foundation
 import MemoBookCore
+import MemoBookNetworking
 import MemoBookPayments
 import Observation
 
@@ -52,6 +53,12 @@ public final class OrderModel {
     /// Ce qui a empêché de payer. Affiché **dans la feuille de paiement**, là
     /// où se corrige le choix — pas en haut d'un écran qu'on vient de quitter.
     public private(set) var paymentError: String?
+
+    /// « Payer » a été touché sur un carnet qu'aucune composition n'a rendu —
+    /// voir ``BookCopy/Order/Payment/noRender``. Ce n'est pas une panne : rien
+    /// n'a raté, il manque le carnet. L'étape le dit donc en notice
+    /// d'information, sous le geste, et non en bandeau d'erreur.
+    public private(set) var isMissingRender = false
 
     /// L'erreur d'une étape, posée en bandeau sous son en-tête.
     public private(set) var errorMessage: String?
@@ -109,7 +116,19 @@ public final class OrderModel {
             _, copies, speed in .fixture(copies: copies, speed: speed)
         },
         submit: @escaping (String, NewPrintOrderRequest) async throws -> PlacedPrintOrder = {
-            memoId, request in .fixture(memoId: memoId, request: request)
+            memoId, request in
+            // Le jeu d'essai répond comme le serveur à une commande sans
+            // rendu : c'est ce qui montre la notice dans le bac à sable.
+            // (Écrit en clair : un argument par défaut public ne voit que ce
+            // qui l'est.)
+            guard request.renderId != nil else {
+                throw APIError.server(
+                    statusCode: 409,
+                    code: "no_render",
+                    message: BookCopy.Order.Payment.noRender
+                )
+            }
+            return .fixture(memoId: memoId, request: request)
         },
         shareLink: @escaping (String) async throws -> URL = { memoId in
             URL(string: "https://memo-book.com/c/\(memoId)")!
@@ -340,14 +359,22 @@ public final class OrderModel {
     /// rien n'a changé depuis, on rouvre la feuille sur **la même** intention ;
     /// si l'adresse, les exemplaires ou la rapidité ont changé, l'ancienne
     /// commande est abandonnée avant d'en passer une neuve.
+    ///
+    /// **Sans rendu, le serveur choisit** (06/10/2026). Le tunnel peut s'ouvrir
+    /// sur un carnet pas encore composé ; la commande part alors sans
+    /// `renderId`, et le serveur prend le dernier rendu prêt — celui d'une
+    /// composition qui a pu aboutir pendant qu'on remplissait son adresse. S'il
+    /// n'y en a aucun (`409 no_render`), l'étape le dit au lieu de ne rien
+    /// faire, ce qu'elle faisait.
     public func pay() async {
-        guard !isSubmitting, let renderId = context?.renderId else { return }
+        guard !isSubmitting, context != nil else { return }
 
         isSubmitting = true
         paymentError = nil
+        isMissingRender = false
         defer { isSubmitting = false }
 
-        let request = NewPrintOrderRequest(renderId: renderId, draft: draft)
+        let request = NewPrintOrderRequest(renderId: context?.renderId, draft: draft)
 
         do {
             let payment: OrderPayment
@@ -394,8 +421,19 @@ public final class OrderModel {
 
             showConfirmation()
         } catch {
-            paymentError = error.localizedDescription
+            if Self.isMissingRender(error) {
+                isMissingRender = true
+            } else {
+                paymentError = error.localizedDescription
+            }
         }
+    }
+
+    /// Le refus du serveur quand le voyage n'a aucun rendu prêt.
+    nonisolated static let missingRenderCode = "no_render"
+
+    nonisolated static func isMissingRender(_ error: any Error) -> Bool {
+        (error as? APIError)?.code == missingRenderCode
     }
 
     /// La commande déjà passée, rouverte — si elle existe, si elle attend

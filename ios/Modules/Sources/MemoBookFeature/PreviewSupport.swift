@@ -677,7 +677,7 @@ public actor PreviewAPI: MemoBookAPI {
         let created = PrintOrder(
             id: UUID().uuidString,
             memoId: memoId,
-            renderId: order.renderId,
+            renderId: order.renderId ?? "render-preview",
             status: .submitted,
             copies: order.copies,
             shipping: order.shipping,

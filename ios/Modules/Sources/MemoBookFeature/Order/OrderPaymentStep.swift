@@ -16,8 +16,16 @@ import SwiftUI
 struct OrderPaymentStep: View {
     let model: OrderModel
 
+    /// La notice « aucun rendu » à amener sous les yeux quand elle apparaît :
+    /// en très grand texte, elle tombe sous le pli, et le geste semblerait
+    /// encore ne rien faire.
+    @State private var scrollTarget: Int?
+
+    /// L'identifiant de défilement de la notice. Un seul repère dans l'étape.
+    private static let missingRenderNotice = 1
+
     var body: some View {
-        OrderStepLayout {
+        OrderStepLayout(scrollTarget: $scrollTarget) {
             OrderSectionHeader(title: BookCopy.Order.Payment.title)
 
             method
@@ -33,6 +41,15 @@ struct OrderPaymentStep: View {
             if let message = model.paymentError {
                 ErrorBanner(message: message)
             }
+
+            // « Payer » sans carnet composé (T224) : la cause et la sortie, en
+            // réponse au geste — rien n'a raté, d'où l'information et non le
+            // bandeau d'erreur. Voir ``OrderModel/isMissingRender``.
+            if model.isMissingRender {
+                BrandNotice(BookCopy.Order.Payment.noRender, tone: .information)
+                    .id(Self.missingRenderNotice)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
         } actions: {
             BrandButton(
                 BookCopy.Order.Payment.cta,
@@ -42,6 +59,10 @@ struct OrderPaymentStep: View {
                 Task { await model.pay() }
             }
             .disabled(!model.canContinue || model.isSubmitting)
+        }
+        .animation(.snappy(duration: 0.25), value: model.isMissingRender)
+        .onChange(of: model.isMissingRender) { _, isMissing in
+            if isMissing { scrollTarget = Self.missingRenderNotice }
         }
     }
 

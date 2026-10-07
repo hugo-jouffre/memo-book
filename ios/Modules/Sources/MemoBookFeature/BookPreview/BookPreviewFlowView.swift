@@ -280,12 +280,29 @@ private struct BookCompositionView: View {
                     BookCompositionPage(progress: model.compositionProgress)
                 }
 
-                // L'indicateur de pages tient sa place pendant la composition,
-                // en barre d'attente : c'est ce qui évite que les boutons du
-                // dessous sautent de 43 pt quand l'aperçu arrive.
-                BrandSkeleton(width: 96)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, MemoBookSpacing.snug)
+                // **Où en est la composition**, à la place de l'indicateur de
+                // pages (06/10/2026) : elle dure des minutes, et une page
+                // montée puis immobile se lirait comme un écran figé. La ligne
+                // tient au moins la hauteur de l'indicateur — c'est ce qui
+                // évite que les boutons du dessous sautent quand l'aperçu
+                // arrive. Un échec la retire : c'est le bandeau qui parle.
+                Group {
+                    if model.errorMessage == nil {
+                        Text(
+                            BookCopy.Composition.phase(
+                                model.compositionPhase,
+                                pendingMemories: model.pendingMemoryCount
+                            )
+                        )
+                        .font(MemoBookFont.caption)
+                        .foregroundStyle(MemoBookColor.inkMuted)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .contentTransition(.opacity)
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: MemoBookSpacing.minimumTapTarget)
+                .animation(.easeInOut(duration: 0.25), value: model.compositionPhase)
 
                 BookActionsBlock(
                     // La composition est en cours : il n'y a rien à commander
@@ -474,7 +491,9 @@ struct BookSheetView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            BookSheetImage(renderer: model.renderer, index: model.sheetIndex)
+            // La page du PDF, ou le plat choisi sur la première et la dernière
+            // — voir ``BookSheetFace``.
+            BookSheetFace(model: model, index: model.sheetIndex)
                 .clipShape(.rect(cornerRadius: MemoBookSpacing.pageCornerRadius))
                 .overlay {
                     RoundedRectangle(cornerRadius: MemoBookSpacing.pageCornerRadius)

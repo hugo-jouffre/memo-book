@@ -597,13 +597,19 @@ public final class AppDependencies {
         )
     }
 
-    /// L'aperçu du carnet, branché sur le serveur (30/09/2026) :
-    /// `GET /v1/memos/:id/preview` pour suivre la composition,
+    /// L'aperçu du carnet, branché sur le serveur : `POST /v1/memos/:id/renders`
+    /// pour lancer la composition à l'ouverture (06/10/2026, T224),
+    /// `GET /v1/memos/:id/preview` pour la suivre, `GET /v1/trips/:id/covers`
+    /// pour les deux plats de la première et de la dernière page (T223),
     /// `POST /v1/memos/:id/share-link` pour le lien de partage.
     public func bookPreviewModel(memoId: String) -> BookPreviewModel {
         BookPreviewModel(
             memoId: memoId,
             source: { [api] id in try await api.bookPreview(memoId: id) },
+            // Le rendu que le serveur rend — en cours, à jour ou neuf — ne sert
+            // à rien ici : c'est le sondage de l'aperçu qui dit où il en est.
+            startComposition: { [api] id in _ = try await api.startRender(memoId: id) },
+            covers: { [api] id in try await api.bookCovers(tripId: id) },
             requestLink: { [api] id in try await api.bookShareLink(memoId: id) }
         )
     }
