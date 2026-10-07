@@ -55,6 +55,10 @@ struct ChatHeader: View {
     let onSettings: () -> Void
     let onBook: () -> Void
 
+    /// Le serveur n'a pas encore reçu ce voyage : la roue et l'imprimante
+    /// pâlissent — voir ``TripAwaitingServer``.
+    var isAwaitingServer = false
+
     var body: some View {
         HStack(spacing: 0) {
             ChatHeaderButton(icon: "IconArrow", label: ChatCopy.Voice.back, action: onBack)
@@ -70,11 +74,13 @@ struct ChatHeader: View {
                 label: ChatCopy.Voice.settings,
                 action: onSettings
             )
+            .dimmedWhileAwaitingServer(isAwaitingServer)
             // L'imprimante, **la même que sur l'accueil du voyage** (Hugo,
             // 17/09/2026) : les deux ouvrent l'aperçu du carnet, et deux dessins
             // pour une même porte se lisaient comme deux portes. C'est le même
             // écran que la bannière bleue du fil ouvre.
             ChatHeaderButton(icon: "IconPrinter", label: ChatCopy.Voice.openPreview, action: onBook)
+                .dimmedWhileAwaitingServer(isAwaitingServer)
         }
         .padding(.horizontal, MemoBookSpacing.xs)
         .padding(.bottom, MemoBookSpacing.xs)

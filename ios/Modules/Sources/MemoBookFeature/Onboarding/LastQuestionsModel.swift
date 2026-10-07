@@ -123,13 +123,48 @@ public final class LastQuestionsModel {
         return advance()
     }
 
-    /// La flèche de retour. `false` depuis le premier écran : il n'y a pas
-    /// d'écran avant, c'est l'entrée — à l'appelant de décider.
+    /// La flèche de retour, et le glissé vers la droite. `false` depuis le
+    /// premier écran : il n'y a pas d'écran avant — et l'écran n'y montre plus
+    /// de flèche (T192, Hugo, 06/10/2026) : elle ramenait à l'entrée, donc
+    /// refermait la session qu'on venait d'ouvrir.
+    @discardableResult
     public func goBack() -> Bool {
         guard let previous = Step(rawValue: step.rawValue - 1) else { return false }
         errorMessage = nil
         step = previous
         return true
+    }
+
+    /// Il y a un écran avant celui-ci : la flèche s'affiche, le glissé vers la
+    /// droite y ramène.
+    public var canGoBack: Bool { step.rawValue > 0 }
+
+    /// Rien n'a été tapé sur cet écran. Un prénom venu d'Apple ou de Google
+    /// compte comme tapé : il est dans le champ, sous les yeux.
+    public var isStepUntouched: Bool {
+        switch step {
+        case .name: lastName.trimmed.isEmpty && firstName.trimmed.isEmpty
+        case .birthDate: birthDateText.isEmpty
+        case .phone: phoneNumber.trimmed.isEmpty
+        }
+    }
+
+    /// Le glissé vers la gauche — l'illustration qu'on feuillette, comme à la
+    /// création d'un voyage (Hugo, 06/10/2026).
+    ///
+    /// Il vaut « Valider » quand l'écran est rempli, et « Passer » quand on n'y
+    /// a rien tapé : chaque question se passe, et un doigt qui glisse sur un
+    /// écran vide veut aller plus loin. **Un écran à moitié rempli ne bouge
+    /// pas** : le passer jetterait en silence ce qu'on vient de taper — le
+    /// bouton gris dit déjà ce qui manque.
+    ///
+    /// - Returns: comme ``validate()`` — le compte à jour après le dernier
+    ///   écran, `nil` sinon.
+    public func swipeForward() async -> Account? {
+        guard !isSaving else { return nil }
+        if canValidate { return await validate() }
+        if isStepUntouched { return skip() }
+        return nil
     }
 
     private func advance() -> Account? {
@@ -184,30 +219,35 @@ private extension String {
 }
 
 /// Les mots des trois écrans, recopiés des nœuds « Dernières questions »
-/// (`3533:14979`, `3533:15036`, `3533:15010`) au caractère près (R8) —
-/// majuscules comprises, et « Whatsapp » tel que la maquette l'écrit (signalé).
+/// (`3533:14979`, `3533:15036`, `3533:15010`) — sauf ce que Hugo a corrigé le
+/// 06/10/2026 : les majuscules à la française dans les titres (T191),
+/// « WhatsApp » avec sa casse de marque, le repère « JJ/MM/AAAA » au lieu de
+/// « XX/XX/XXXX », et les noms des champs au lieu de « Margaux » et « Dupont ».
 public enum LastQuestionsCopy {
     public static let skip = "Passer"
     public static let validate = "Valider"
 
-    public static let nameTitle = "Ton Nom et Prénom"
-    public static let lastNamePlaceholder = "Dupont"
-    public static let firstNamePlaceholder = "Margaux"
+    public static let nameTitle = "Ton nom et prénom"
+    /// Les intitulés des deux champs : au repos, ils sont le texte gris du
+    /// cadre ; au focus, ils montent sur son contour — comme à l'inscription.
+    public static let firstNameLabel = "Prénom"
+    public static let lastNameLabel = "Nom"
 
-    public static let birthDateTitle = "Ta Date de Naissance"
-    public static let birthDatePlaceholder = "XX/XX/XXXX"
+    public static let birthDateTitle = "Ta date de naissance"
+    public static let birthDateLabel = "Date de naissance"
+    public static let birthDatePlaceholder = "JJ/MM/AAAA"
 
-    public static let phoneTitle = "Ton Numéro Whatsapp"
+    public static let phoneTitle = "Ton numéro WhatsApp"
+    public static let phoneLabel = "Numéro WhatsApp"
     public static let phonePlaceholder = "+33 0 00 00 00 00"
 
     /// Pas dans la maquette : ce qu'on dit d'une date complète qui n'existe pas.
     public static let invalidBirthDate = "Cette date n’existe pas. Vérifie le jour, le mois et l’année."
 
     public enum Voice {
-        public static let lastName = "Nom"
-        public static let firstName = "Prénom"
-        public static let birthDate = "Date de naissance, jour, mois et année"
-        public static let phone = "Numéro WhatsApp"
+        /// Le format de la date, que VoiceOver ne peut pas lire dans le repère
+        /// gris (il est caché) : il l'entend en indice.
+        public static let birthDateHint = "Jour, mois et année"
         public static func progress(step: Int, of count: Int) -> String {
             "Question \(step) sur \(count)"
         }

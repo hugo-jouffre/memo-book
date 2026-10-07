@@ -24,6 +24,17 @@ public struct TripHomeView: View {
 
     @Environment(\.dismiss) private var dismiss
 
+    /// Les voyages que le serveur n'a pas encore reçus — voir
+    /// ``TripAwaitingServer``.
+    @Environment(\.tripsAwaitingServer) private var tripsAwaitingServer
+
+    /// La boîte « Disponible dès ta reconnexion », le temps de la lire.
+    @State private var showsAwaitingServer = false
+
+    /// L'étape dont la croix a été touchée : la feuille de confirmation est
+    /// ouverte sur elle (T235).
+    @State private var stepToDelete: TripStep?
+
     /// Le libellé du bouton vert. « Continuer à enregistrer » disait le micro ;
     /// le bouton ouvre la conversation — Hugo a changé d'avis le 15/09/2026.
     private static let callToAction = "Accéder au chat"
@@ -59,16 +70,20 @@ public struct TripHomeView: View {
                 // hauteur et porte la même flèche ; seules la photo et les mots
                 // arrivent après.
                 if let detail = model.detail {
+                    // Créé hors ligne et pas encore reçu : les trois portes du
+                    // serveur pâlissent, et l'appui dit pourquoi (T239).
+                    let isAwaitingServer = tripsAwaitingServer.contains(detail.trip.id)
                     TripHeader(
                         detail: detail,
                         onBack: { dismiss() },
-                        onPrint: { onIntent(.openBookPreview(tripId: detail.trip.id)) },
+                        onPrint: { open(.openBookPreview(tripId: detail.trip.id), unless: isAwaitingServer) },
                         // L'identifiant vient du voyage **chargé** et non de
                         // celui passé à l'écran : c'est le même, et celui-là
                         // est déjà en portée. En garder une copie dans la vue
                         // aurait fait deux vérités pour la même valeur.
-                        onSettings: { onIntent(.openSettings(tripId: detail.trip.id)) },
-                        onInvite: { onIntent(.inviteCompanions(tripId: detail.trip.id)) }
+                        onSettings: { open(.openSettings(tripId: detail.trip.id), unless: isAwaitingServer) },
+                        onInvite: { open(.inviteCompanions(tripId: detail.trip.id), unless: isAwaitingServer) },
+                        isAwaitingServer: isAwaitingServer
                     )
                 } else {
                     TripHeaderPlaceholder(onBack: { dismiss() })
@@ -82,6 +97,11 @@ public struct TripHomeView: View {
         // La photo monte jusqu'au bord haut de la dalle ; ce sont les commandes
         // de l'en-tête qui se posent sous la barre d'état, pas la page entière.
         .ignoresSafeArea(edges: .top)
+        // Sous les commandes de la photo, qu'elle ne doit pas recouvrir.
+        .awaitingServerNotice(
+            isPresented: $showsAwaitingServer,
+            below: DeviceScreen.topSafeInset + MemoBookSpacing.xs + MemoBookSpacing.minimumTapTarget
+        )
         .background(MemoBookColor.background.ignoresSafeArea())
         .brandHiddenNavigationBar()
         // Le crème de la marque ne se retourne pas en sombre — voir
@@ -89,6 +109,20 @@ public struct TripHomeView: View {
         .environment(\.colorScheme, .light)
         .task { await model.load() }
         .refreshable { await model.load() }
+        .brandSheet(item: $stepToDelete) { step in
+            DeleteStepSheet(
+                step: step,
+                isDeleting: model.deletingStepId == step.id,
+                errorMessage: model.stepDeletionError,
+                onKeep: { stepToDelete = nil },
+                onDelete: {
+                    Task {
+                        if await model.deleteMemories(of: step) { stepToDelete = nil }
+                    }
+                }
+            )
+            .onDisappear { model.dismissStepDeletionError() }
+        }
         // L'écran s'ouvre sur le voyage qu'on avait ; quand le serveur en dit
         // plus — une étape de plus, des pages composées —, ça s'anime.
         .brandRefreshFlash(model.freshness.isUpdated)
@@ -123,7 +157,8 @@ public struct TripHomeView: View {
                     onOpenStep: { step in
                         onIntent(.openStep(tripId: detail.trip.id, stepId: step.id))
                     },
-                    onValidateStep: { step in model.validateStep(step) }
+                    onValidateStep: { step in model.validateStep(step) },
+                    onDeleteStep: { step in stepToDelete = step }
                 )
             } else if model.errorMessage == nil {
                 loadingHeader
@@ -244,6 +279,15 @@ public struct TripHomeView: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(destination.name)
+    }
+
+    /// Ouvre une porte du serveur, ou dit pourquoi elle est fermée.
+    private func open(_ intent: TripIntent, unless isAwaitingServer: Bool) {
+        if isAwaitingServer {
+            showsAwaitingServer = true
+        } else {
+            onIntent(intent)
+        }
     }
 
     /// Les commandes dont l'écran n'est pas encore dessiné : l'impression, les

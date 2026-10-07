@@ -60,6 +60,12 @@ extension DailyCreditCopy {
             "Avec ton abonnement, tu racontes sans limite, à l’oral comme à l’écrit, et tes récits ne prennent rien au crédit du voyage. Tes co-voyageurs qui ne sont pas abonnés partagent toujours les \(spelledDuration(limitMs)) du jour."
         }
 
+        /// Sous l'explication d'un abonné, **renouvellement coupé**
+        /// (06/10/2026) : la date où l'illimité s'arrête, et ce qui revient.
+        public static func unlimitedEnds(on day: String, limitMs: Int) -> String {
+            "Ton abonnement ne se renouvellera pas : tu racontes sans limite jusqu’au \(day), puis tu retrouves les \(spelledDuration(limitMs)) du jour."
+        }
+
         /// « 5 minutes », « 1 minute » — en toutes lettres quand la durée tombe
         /// sur une minute ronde, ce qui est le cas du crédit. Sinon la forme
         /// courte de ``DailyCreditCopy/duration(_:)``.

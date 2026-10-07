@@ -380,6 +380,11 @@ public struct BrandSheet<Content: View>: View {
                 .font(MemoBookFont.h1)
                 .tracking(-0.41)
                 .foregroundStyle(MemoBookColor.ink)
+                // **Un titre d'un seul mot se resserre au lieu de se couper**
+                // (T161, iPhone SE en AX5 : « Statistiq / ues »). Plusieurs
+                // mots, eux, passent à la ligne entre deux mots, comme avant.
+                .lineLimit(title.contains(" ") ? nil : 1)
+                .minimumScaleFactor(title.contains(" ") ? 1 : 0.5)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: Alignment(horizontal: alignment, vertical: .center))
                 .padding(.horizontal, titleInset)

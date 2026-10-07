@@ -145,6 +145,15 @@ public final class TripCreationModel {
     /// c'est la seule chose de l'écran qui attend le réseau.
     public private(set) var accessCode: String?
 
+    /// Le code attend **le retour du réseau**, pas seulement le serveur : le
+    /// voyage est gardé, rien n'est revenu, et le téléphone est hors ligne.
+    /// L'étape le dit sous la barre d'attente — « Ton code arrivera dès ta
+    /// reconnexion » (T240, Hugo, 06/10/2026). En ligne, le code arrive en une
+    /// fraction de seconde : la phrase n'y aurait que le temps de clignoter.
+    public var awaitsReconnection: Bool {
+        trip != nil && accessCode == nil && !wasRejected && isOffline()
+    }
+
     /// L'enregistrement local est en cours — l'affaire d'un instant.
     public private(set) var isSaving = false
     public private(set) var errorMessage: String?
@@ -155,6 +164,8 @@ public final class TripCreationModel {
     private let save: @Sendable (TripDraft) async throws -> Trip
     private let sync: @Sendable (String) async -> TripSync?
     private let readThemes: @Sendable () async throws -> [TripTheme]
+    private let isOffline: @MainActor () -> Bool
+    private let notificationsStepPassed: @MainActor () -> Void
 
     /// - Parameters:
     ///   - save: garde le brouillon — l'app y branche la file de départ
@@ -166,6 +177,13 @@ public final class TripCreationModel {
     ///   - themes: d'où viennent les thèmes de la première étape. Par défaut la
     ///     liste du jeu d'essai, pour les aperçus ; l'app y branche
     ///     `GET /v1/trip-themes`.
+    ///   - isOffline: le téléphone est-il sans réseau ? L'app y branche
+    ///     ``RecordingOutbox/isOnline`` — lue pendant le dessin, elle redessine
+    ///     l'étape au retour du réseau. Par défaut, toujours en ligne.
+    ///   - notificationsStepPassed: l'étape « Notifications » vient d'être
+    ///     traversée — choisie ou passée. L'app le retient sur l'appareil : la
+    ///     conversation proposera d'activer les notifications à qui l'a passée
+    ///     sans les autoriser (``NotificationsNudge``, T246).
     public init(
         save: @escaping @Sendable (TripDraft) async throws -> Trip = { draft in
             .local(draft, id: draft.id ?? UUID().uuidString.lowercased())
@@ -173,11 +191,15 @@ public final class TripCreationModel {
         sync: @escaping @Sendable (String) async -> TripSync? = { id in
             .created(CreatedTrip(trip: Trip(id: id, title: TripDraft.untitled, stage: .ongoing), accessCode: "JHKFDA"))
         },
-        themes: @escaping @Sendable () async throws -> [TripTheme] = { TripTheme.fixtures }
+        themes: @escaping @Sendable () async throws -> [TripTheme] = { TripTheme.fixtures },
+        isOffline: @escaping @MainActor () -> Bool = { false },
+        notificationsStepPassed: @escaping @MainActor () -> Void = {}
     ) {
         self.save = save
         self.sync = sync
         self.readThemes = themes
+        self.isOffline = isOffline
+        self.notificationsStepPassed = notificationsStepPassed
     }
 
     /// Lit les thèmes. À appeler à l'ouverture de l'écran ; relire ne fait pas
@@ -227,7 +249,16 @@ public final class TripCreationModel {
     // MARK: - Aller et venir
 
     /// Valide l'étape courante et passe à la suivante.
+    ///
+    /// **Le modèle refuse lui-même une étape incomplète** (T238, Hugo,
+    /// 06/10/2026 : « c'est impossible de créer un voyage sans dates »). Le
+    /// bouton gris et le glissé le vérifiaient déjà, chacun de son côté ; le
+    /// dire ici ferme aussi les chemins à venir — la touche « Terminé » d'un
+    /// clavier, un raccourci — sans qu'aucun ait à s'en souvenir. Un voyage a
+    /// toujours un départ : c'est lui qui le range dans « à venir », « en
+    /// cours » ou « précédents ».
     public func validate() async {
+        guard canValidate else { return }
         if step == .theme {
             draft.theme = isFreeThemeChosen ? freeTheme.trimmed : selectedTheme?.label
         }
@@ -281,6 +312,8 @@ public final class TripCreationModel {
 
         if step == .name, draft.title.trimmed.isEmpty { draft.title = TripDraft.untitled }
         if step == .name { draft.title = draft.title.trimmed }
+
+        if step == .notifications { notificationsStepPassed() }
 
         if step == .lastBeforeSave {
             guard await persist() else { return }

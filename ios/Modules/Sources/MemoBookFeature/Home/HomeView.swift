@@ -110,6 +110,11 @@ public struct HomeView: View {
     /// voyage : le bouton plein garde, le rouge supprime.
     @State private var tripToDelete: Trip?
 
+    /// Les voyages que le serveur n'a pas encore reçus : leur partage et leur
+    /// aperçu pâlissent dans le tiroir — voir ``TripAwaitingServer`` (T239).
+    @Environment(\.tripsAwaitingServer) private var tripsAwaitingServer
+    @State private var showsAwaitingServer = false
+
     /// Le micro a été refusé dans iOS : la feuille ne s'ouvrira pas, et c'est
     /// cette boîte qui dit pourquoi, et où aller. `false` le reste du temps.
     @State private var showsMicrophoneDenied = false
@@ -143,6 +148,7 @@ public struct HomeView: View {
             .ignoresSafeArea()
         }
         .environment(\.homeContentHasAppeared, hasAppeared)
+        .awaitingServerNotice(isPresented: $showsAwaitingServer, below: DeviceScreen.topSafeInset)
         .brandSheet(isPresented: $isCreatingNotebook) {
             NewNotebookSheet(
                 resumableTrip: model.resumableTrip,
@@ -585,7 +591,7 @@ public struct HomeView: View {
                             PastTripCard(trip: trip) {
                                 onIntent(.openTrip(id: trip.id))
                             } onOrderPrint: {
-                                onIntent(.orderPrint(tripId: trip.id))
+                                openFromServer(.orderPrint(tripId: trip.id), for: trip)
                             }
                         }
                         .rising(pastHeadingOrder + 1 + index)
@@ -600,30 +606,51 @@ public struct HomeView: View {
     /// même ``BrandSwipeDrawer`` que la liste des co-voyageurs, au rayon des
     /// cartes de l'accueil. Le geste qui défait est le premier sous le doigt,
     /// et il demande confirmation ; les deux autres ouvrent l'aperçu du carnet.
+    ///
+    /// Un voyage créé hors ligne que le serveur n'a pas encore reçu garde sa
+    /// croix — il s'oublie sur le téléphone —, mais son partage et son aperçu
+    /// pâlissent et disent pourquoi (T239).
+    ///
+    /// **La croix n'est qu'au propriétaire** (T233, Hugo, 06/10/2026) : un
+    /// co-voyageur ne la voit pas, ni dans le tiroir, ni dans le menu de
+    /// l'appui long, ni dans le rotor — les trois lisent la même liste.
     private func drawer<Card: View>(for trip: Trip, @ViewBuilder card: () -> Card) -> some View {
-        BrandSwipeDrawer(
-            actions: [
-                BrandSwipeAction(
-                    icon: "IconCross",
-                    tint: MemoBookColor.error,
-                    label: "Supprimer « \(trip.title) »"
-                ) { tripToDelete = trip },
+        let serverTint = tripsAwaitingServer.contains(trip.id)
+            ? MemoBookColor.action.opacity(TripAwaitingServer.dimmedOpacity)
+            : MemoBookColor.action
+        let delete = BrandSwipeAction(
+            icon: "IconCross",
+            tint: MemoBookColor.error,
+            label: "Supprimer « \(trip.title) »"
+        ) { tripToDelete = trip }
+        return BrandSwipeDrawer(
+            actions: (trip.isDeletable ? [delete] : []) + [
                 BrandSwipeAction(
                     icon: "IconShareSystem",
-                    tint: MemoBookColor.action,
+                    tint: serverTint,
                     label: "Partager « \(trip.title) »"
-                ) { onIntent(.shareTrip(id: trip.id)) },
+                ) { openFromServer(.shareTrip(id: trip.id), for: trip) },
                 BrandSwipeAction(
                     icon: "IconPrinter",
-                    tint: MemoBookColor.action,
+                    tint: serverTint,
                     label: "Prévisualiser « \(trip.title) »",
                     // Le tracé de l'imprimante est plus petit dans sa boîte que
                     // les deux autres — voir ``BrandSwipeAction/iconScale``.
                     iconScale: 1.15
-                ) { onIntent(.orderPrint(tripId: trip.id)) },
+                ) { openFromServer(.orderPrint(tripId: trip.id), for: trip) },
             ],
             content: card
         )
+    }
+
+    /// Le partage et l'aperçu sont des écrans du serveur : pour un voyage
+    /// qu'il n'a pas encore reçu, l'appui dit pourquoi (T239).
+    private func openFromServer(_ intent: HomeIntent, for trip: Trip) {
+        if tripsAwaitingServer.contains(trip.id) {
+            showsAwaitingServer = true
+        } else {
+            onIntent(intent)
+        }
     }
 
     private var helpLink: some View {

@@ -78,7 +78,10 @@ extension TripDetail {
                 transport: transports[index % transports.count],
                 // La première étape est déjà validée, les autres non : les deux
                 // états (coche vs. geste de validation) se voient sans manipuler.
-                validatedAt: index == 0 ? start.adding(days: 4) : nil
+                validatedAt: index == 0 ? start.adding(days: 4) : nil,
+                // Deux souvenirs par étape — un vocal et ses photos : la croix
+                // du tiroir en efface deux (T235).
+                entryIds: ["\(trip.id)-step-\(index + 1)-voice", "\(trip.id)-step-\(index + 1)-photos"]
             )
         }
     }

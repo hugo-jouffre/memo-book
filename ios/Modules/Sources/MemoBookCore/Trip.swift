@@ -49,6 +49,15 @@ public struct Traveller: Codable, Sendable, Hashable, Identifiable {
     /// en un geste. Faux quand un serveur plus ancien ne sert pas le champ.
     public let subscriptionOutlivesTrip: Bool
 
+    /// **Où en est l'abonnement** — `traveller.subscriptionState` (contrat du
+    /// 06/10/2026, point 11). `nil` d'un serveur plus ancien.
+    public let subscriptionState: Subscription.State?
+
+    /// La fin de l'illimité d'un abonnement au renouvellement coupé
+    /// (``Subscription/State/ending``) : c'est là que la session le fait
+    /// tomber, sans attendre une relecture.
+    public let subscriptionEndsAt: Date?
+
     public init(
         id: String,
         firstName: String,
@@ -56,7 +65,9 @@ public struct Traveller: Codable, Sendable, Hashable, Identifiable {
         isUnlimited: Bool = false,
         hasSubscribedBefore: Bool = false,
         subscriptionEndedOn: Date? = nil,
-        subscriptionOutlivesTrip: Bool = false
+        subscriptionOutlivesTrip: Bool = false,
+        subscriptionState: Subscription.State? = nil,
+        subscriptionEndsAt: Date? = nil
     ) {
         self.id = id
         self.firstName = firstName
@@ -65,6 +76,8 @@ public struct Traveller: Codable, Sendable, Hashable, Identifiable {
         self.hasSubscribedBefore = hasSubscribedBefore
         self.subscriptionEndedOn = subscriptionEndedOn
         self.subscriptionOutlivesTrip = subscriptionOutlivesTrip
+        self.subscriptionState = subscriptionState
+        self.subscriptionEndsAt = subscriptionEndsAt
     }
 
     /// Décodage tolérant sur les champs de l'abonnement : un serveur qui ne
@@ -82,6 +95,16 @@ public struct Traveller: Codable, Sendable, Hashable, Identifiable {
         )
         subscriptionOutlivesTrip =
             try container.decodeIfPresent(Bool.self, forKey: .subscriptionOutlivesTrip) ?? false
+        subscriptionState =
+            (try? container.decodeIfPresent(Subscription.State.self, forKey: .subscriptionState)) ?? nil
+        subscriptionEndsAt = try container.decodeIfPresent(Date.self, forKey: .subscriptionEndsAt)
+    }
+
+    /// La date où l'illimité s'arrête, quand le renouvellement est coupé et
+    /// qu'elle est encore devant soi. `nil` sinon.
+    public var unlimitedUntil: Date? {
+        guard subscriptionState == .ending else { return nil }
+        return subscriptionEndsAt
     }
 }
 
@@ -336,6 +359,20 @@ public struct Trip: Codable, Sendable, Hashable, Identifiable {
     /// tranche. Une variable, pour que l'app le décompte entre deux lectures.
     public var dailyCredit: DailyCredit?
 
+    /// **Ce compte peut supprimer ce voyage** — il en est le propriétaire
+    /// (T233, Hugo, 06/10/2026). Un co-voyageur raconte, règle, commande,
+    /// mais ne détruit pas le récit de tout le monde : « Supprimer le voyage »
+    /// ne lui est même pas montré.
+    ///
+    /// `nil` quand le serveur ne l'a pas dit — un serveur d'avant le
+    /// 06/10, un accueil gardé avant, et **un voyage créé hors ligne**, qui
+    /// appartient à son créateur : on lit alors `true` (``isDeletable``), et
+    /// c'est le serveur qui refuse.
+    public let canDelete: Bool?
+
+    /// Voir ``canDelete`` : faute de réponse, la porte reste montrée.
+    public var isDeletable: Bool { canDelete ?? true }
+
     public init(
         id: String,
         title: String,
@@ -348,7 +385,8 @@ public struct Trip: Codable, Sendable, Hashable, Identifiable {
         companions: [Companion] = [],
         progress: TripProgress? = nil,
         isPrintable: Bool = false,
-        dailyCredit: DailyCredit? = nil
+        dailyCredit: DailyCredit? = nil,
+        canDelete: Bool? = nil
     ) {
         self.id = id
         self.title = title
@@ -362,6 +400,7 @@ public struct Trip: Codable, Sendable, Hashable, Identifiable {
         self.progress = progress
         self.isPrintable = isPrintable
         self.dailyCredit = dailyCredit
+        self.canDelete = canDelete
     }
 }
 

@@ -53,6 +53,24 @@ final class OfflineTripCreationTests: XCTestCase {
         XCTAssertTrue(outbox.localTrips.isEmpty, "Arrivé, le voyage ne se montre plus que depuis le serveur.")
     }
 
+    /// T238 : un voyage a toujours un départ. Ni « Valider » appelé quand même,
+    /// ni « Passer » ne franchissent l'étape des dates sans lui.
+    func testNoTripIsSavedWithoutADepartureDate() async {
+        let model = creationModel(outbox(FakeServer()))
+        model.draft.title = "Lisbonne"
+        await model.validate()
+        XCTAssertEqual(model.step, .dates)
+
+        await model.validate()
+        await model.skip()
+        XCTAssertEqual(model.step, .dates)
+        XCTAssertNil(model.trip)
+
+        model.draft.startDate = .now
+        await model.validate()
+        XCTAssertEqual(model.step, .notifications)
+    }
+
     func testTheIdentifierIsLowercasedLikeTheServerWritesIt() async {
         let model = creationModel(outbox(FakeServer()))
         await walkToTheCodeStep(model, title: "Lisbonne")

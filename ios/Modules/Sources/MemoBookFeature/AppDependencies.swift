@@ -166,6 +166,12 @@ public final class AppDependencies {
         await subscriptions.deliverUnfinished(deliver: countingDelivery())
     }
 
+    /// Ce qu'Apple tient pour cet identifiant Apple — voir
+    /// ``SubscriptionStore/hasCurrentEntitlement()``.
+    func hasCurrentEntitlement() async -> Bool? {
+        await subscriptions.hasCurrentEntitlement()
+    }
+
     /// Ce que l'offre sait faire de l'App Store, pour **ce** compte — posé par
     /// `RootView` une fois connecté. L'identifiant du compte devient
     /// l'`appAccountToken` de l'achat : c'est lui qui permet au serveur de
@@ -421,7 +427,16 @@ public final class AppDependencies {
                 if let stored = await content.read(.trip(id), as: TripDetail.self) { return stored }
                 return await outbox.localTrip(id).map { TripDetail(trip: $0.trip) }
             },
-            validateStep: { [api] tripId, stepId in try await api.validateStep(tripId: tripId, stepId: stepId) }
+            validateStep: { [api] tripId, stepId in try await api.validateStep(tripId: tripId, stepId: stepId) },
+            // Un souvenir déjà effacé — par un co-voyageur, entre deux
+            // lectures — n'est pas un échec : c'est ce qu'on voulait (T235).
+            deleteEntry: { [api] id in
+                do {
+                    try await api.deleteEntry(id: id)
+                } catch let error as APIError where error.statusCode == 404 {
+                    return
+                }
+            }
         )
     }
 
@@ -519,7 +534,9 @@ public final class AppDependencies {
         TripCreationModel(
             save: { [outbox] draft in try await outbox.saveTrip(draft) },
             sync: { [outbox] id in await outbox.tripSync(for: id) },
-            themes: { [api] in try await api.tripThemes() }
+            themes: { [api] in try await api.tripThemes() },
+            isOffline: { [outbox] in !outbox.isOnline },
+            notificationsStepPassed: { NotificationsNudge.markStepPassed() }
         )
     }
 
@@ -555,7 +572,11 @@ public final class AppDependencies {
             cached: { [content] in
                 await content.read(.tripSettings(tripId), as: TripSettings.self)
             },
-            themes: { [api] in try await api.tripThemes() }
+            themes: { [api] in try await api.tripThemes() },
+            // Ce qui a été envoyé et attend la file : le crédit du jour des
+            // réglages le compte, comme la conversation et l'accueil — et
+            // rien d'autre, ni vocal en cours ni vocal en pause.
+            waitingTurns: { [outbox] in await outbox.waiting(for: tripId) }
         )
     }
 

@@ -98,7 +98,13 @@ public struct TripSettingsView: View {
                 // pas supprimer un voyage en visant la conversation.
                 VStack(spacing: MemoBookSpacing.snug) {
                     clearConversationLink
-                    deleteLink
+                    // **Pas même montrée à un co-voyageur** (T233, Hugo,
+                    // 06/10/2026) — contrairement à la conversation, qui
+                    // pâlit et s'explique : il n'y a rien à lui expliquer,
+                    // supprimer le récit de tout le monde n'est pas à lui.
+                    if canDelete {
+                        deleteLink
+                    }
                 }
 
                 #if DEBUG
@@ -388,6 +394,12 @@ public struct TripSettingsView: View {
         model.settings?.canClearConversation ?? true
     }
 
+    /// Le serveur l'a dit (T233) ; sans réponse, on montre la ligne et c'est
+    /// lui qui refusera.
+    private var canDelete: Bool {
+        model.settings?.canDelete ?? true
+    }
+
     /// La notice posée par un co-voyageur qui a touché le lien pâli.
     @State private var explainsOwnerOnlyClearing = false
 
@@ -504,6 +516,7 @@ private struct DailyCreditRow: View {
 
     @ScaledMetric(relativeTo: .body) private var chevronSide: CGFloat = 14
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.subscriptionSession) private var subscriptionSession
 
     private var shape: RoundedRectangle {
         .rect(cornerRadius: MemoBookSpacing.largeCornerRadius)
@@ -570,7 +583,7 @@ private struct DailyCreditRow: View {
 
     private var caption: String {
         credit.isUnlimited
-            ? DailyCreditCopy.rowCaptionUnlimited
+            ? DailyCreditCopy.rowCaptionUnlimited(until: subscriptionSession?.endsAt?.dayAndMonth)
             : DailyCreditCopy.rowCaption(limitMs: credit.limitMs)
     }
 

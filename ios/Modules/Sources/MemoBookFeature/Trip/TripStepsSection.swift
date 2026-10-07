@@ -16,6 +16,8 @@ struct TripStepsSection: View {
     @Bindable var model: TripHomeModel
     let onOpenStep: (TripStep) -> Void
     let onValidateStep: (TripStep) -> Void
+    /// La croix du tiroir : l'écran demande confirmation (T235).
+    var onDeleteStep: (TripStep) -> Void = { _ in }
 
     private var detail: TripDetail? { model.detail }
 
@@ -146,7 +148,8 @@ struct TripStepsSection: View {
                     TripStepCard(
                         step: step,
                         onOpen: { onOpenStep(step) },
-                        onValidate: { onValidateStep(step) }
+                        onValidate: { onValidateStep(step) },
+                        onDelete: model.canDeleteMemories(of: step) ? { onDeleteStep(step) } : nil
                     )
                 }
             }
@@ -157,29 +160,47 @@ struct TripStepsSection: View {
 
 /// Une étape : sa vignette, son rang, ses dates, et qui y était.
 ///
-/// **Non validée, elle porte un geste caché** — glisser vers la gauche pour
-/// « Valider cette étape », le même tiroir que les cartes de l'accueil
-/// (`BrandSwipeDrawer`). Une fois validée, plus de tiroir : le geste n'a plus
-/// de raison d'être offert, une coche discrète le dit à la place — même parti
-/// pris que « Ça me convient » sur un souvenir (`ChatBubbles`).
+/// **Son tiroir** — le glissé vers la gauche, le même que les cartes de
+/// l'accueil (`BrandSwipeDrawer`) — porte deux gestes :
+///
+/// - **la croix**, en premier sous le doigt comme sur l'accueil : elle efface
+///   les souvenirs de l'étape, après confirmation (T235, Hugo, 06/10/2026) ;
+/// - **« Valider cette étape »**, tant qu'elle ne l'est pas. Une fois validée,
+///   une coche discrète le dit à la place — même parti pris que « Ça me
+///   convient » sur un souvenir (`ChatBubbles`).
 struct TripStepCard: View {
     let step: TripStep
     let onOpen: () -> Void
     let onValidate: () -> Void
+    /// `nil` : rien à effacer qu'on sache désigner — pas de croix.
+    var onDelete: (() -> Void)? = nil
 
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .body) private var thumbnailSide: CGFloat = 76
 
     private var swipeActions: [BrandSwipeAction] {
-        guard step.validatedAt == nil else { return [] }
-        return [
-            BrandSwipeAction(
-                icon: "IconLucideCheck",
-                tint: MemoBookColor.valid,
-                label: "Valider cette étape",
-                action: onValidate
+        var actions: [BrandSwipeAction] = []
+        if let onDelete {
+            actions.append(
+                BrandSwipeAction(
+                    icon: "IconCross",
+                    tint: MemoBookColor.error,
+                    label: DeleteStepCopy.action(step: step.title),
+                    action: onDelete
+                )
             )
-        ]
+        }
+        if step.validatedAt == nil {
+            actions.append(
+                BrandSwipeAction(
+                    icon: "IconLucideCheck",
+                    tint: MemoBookColor.valid,
+                    label: "Valider cette étape",
+                    action: onValidate
+                )
+            )
+        }
+        return actions
     }
 
     var body: some View {

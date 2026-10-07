@@ -87,12 +87,43 @@ final class LastQuestionsModelTests: XCTestCase {
         XCTAssertEqual(model.errorMessage, "Refusé.")
     }
 
-    func testTheArrowGoesBackThenHandsOverAtTheFirstQuestion() {
+    func testTheArrowGoesBackButNotBeforeTheFirstQuestion() {
         let model = LastQuestionsModel(account: account())
+        XCTAssertFalse(model.canGoBack)
         _ = model.skip()
+        XCTAssertTrue(model.canGoBack)
         XCTAssertTrue(model.goBack())
         XCTAssertEqual(model.step, .name)
         XCTAssertFalse(model.goBack())
+    }
+
+    /// Le glissé vers la gauche : valide un écran rempli, passe un écran vide,
+    /// et ne jette jamais un écran à moitié rempli.
+    func testTheSwipeValidatesSkipsOrStays() async {
+        var sent: [ProfileEdit] = []
+        let model = LastQuestionsModel(account: Account(id: "a", createdAt: .now)) { sent.append($0) }
+
+        // À moitié rempli : on reste, rien ne part.
+        model.firstName = "Camille"
+        _ = await model.swipeForward()
+        XCTAssertEqual(model.step, .name)
+        XCTAssertTrue(sent.isEmpty)
+
+        // Rempli : il valide.
+        model.lastName = "Dupont"
+        _ = await model.swipeForward()
+        XCTAssertEqual(model.step, .birthDate)
+        XCTAssertEqual(sent.count, 1)
+
+        // Vide : il passe, sans rien envoyer.
+        XCTAssertTrue(model.isStepUntouched)
+        _ = await model.swipeForward()
+        XCTAssertEqual(model.step, .phone)
+        XCTAssertEqual(sent.count, 1)
+
+        // Le dernier écran passé au doigt fait entrer.
+        let finished = await model.swipeForward()
+        XCTAssertNotNil(finished)
     }
 }
 

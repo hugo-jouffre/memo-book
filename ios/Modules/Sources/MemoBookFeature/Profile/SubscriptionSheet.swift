@@ -113,6 +113,9 @@ struct SubscriptionSheet: View {
     /// les yeux au moment où on confirme.
     private var graceEnd: Date? {
         guard let subscription else { return nil }
+        // Le renouvellement coupé, dit par le serveur (`ending`, 06/10/2026) :
+        // sa date de fin à lui.
+        if subscription.servedState == .ending { return subscription.unlimitedUntil() }
         return subscription.isWithinPaidPeriod() ? subscription.paidThrough : nil
     }
 
@@ -127,8 +130,13 @@ struct SubscriptionSheet: View {
     /// pose sa date — le serveur, ``ProfileModel/cancelSubscription(reason:)``,
     /// ``ProfileModel/acknowledgeAppStoreRenewal(_:)`` —, et un `past_due` se
     /// lit comme un abonnement actif.
+    ///
+    /// **Le serveur le dit désormais en un mot** (`state: "ending"`, contrat
+    /// du 06/10/2026) : un renouvellement coupé chez Apple sans `cancelledAt`
+    /// se lisait jusqu'ici comme un prélèvement raté — voir
+    /// ``Subscription/isCancelled``.
     private var isInGrace: Bool {
-        subscription?.isActive == false && subscription?.cancelledAt != nil && graceEnd != nil
+        subscription?.isCancelled == true && graceEnd != nil
     }
 
     /// La période que l'abonné a payée : un ancien abonné à la semaine lit
@@ -145,7 +153,7 @@ struct SubscriptionSheet: View {
     }
 
     static func isBillingRetry(_ subscription: Subscription?) -> Bool {
-        subscription?.isActive == false && subscription?.cancelledAt == nil
+        subscription?.isInBillingRetry == true
     }
 
     /// Ce qui reste payé devant soi — ce que les trois feuilles de la
@@ -470,6 +478,12 @@ enum SubscriptionCopy {
     /// Résilié, mais le mois payé court encore : l'illimité reste ouvert, et
     /// la phrase le date. Sans date — un serveur qui ne la sert pas —, on dit
     /// seulement ce qui vient ensuite.
+    /// La valeur de la ligne « Mon abonnement » du profil, renouvellement
+    /// coupé : « Jusqu’au 12 octobre ».
+    static func rowUntil(_ end: Date) -> String {
+        "Jusqu’au \(end.dayAndMonth)"
+    }
+
     static func graceSubtitle(until graceEnd: Date?) -> String {
         guard let graceEnd else {
             return "Tu as résilié ton abonnement : ensuite, \(dailyCreditBack)."

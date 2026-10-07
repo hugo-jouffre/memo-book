@@ -26,6 +26,10 @@ public struct ChatCallToAction: Codable, Sendable, Hashable, Identifiable {
         case importPhotos
         /// Ouvrir la page de MemoBook dans les Réglages d'iOS.
         case openPhotoSettings
+        /// Demander l'autorisation des notifications — ou, refusée, ouvrir
+        /// les Réglages. **Posé par l'app, jamais par le serveur** : seul le
+        /// téléphone sait ce qu'iOS a répondu (T246).
+        case enableNotifications
         /// Une action que le serveur connaît et pas cette version de l'app :
         /// **le bouton ne s'affiche pas**, le texte de la bulle reste. Même
         /// parti pris que ``ChatSuggestion/Intent/unknown(_:)``, mais à
@@ -40,6 +44,7 @@ public struct ChatCallToAction: Codable, Sendable, Hashable, Identifiable {
             case .openPreview: "open_preview"
             case .importPhotos: "import_photos"
             case .openPhotoSettings: "open_photo_settings"
+            case .enableNotifications: "enable_notifications"
             case .unknown(let raw): raw
             }
         }
@@ -52,6 +57,7 @@ public struct ChatCallToAction: Codable, Sendable, Hashable, Identifiable {
                 case "open_preview": .openPreview
                 case "import_photos": .importPhotos
                 case "open_photo_settings": .openPhotoSettings
+                case "enable_notifications": .enableNotifications
                 default: .unknown(rawValue)
                 }
         }

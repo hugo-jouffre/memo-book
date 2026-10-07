@@ -90,7 +90,13 @@ public struct BookPreviewFlowView: View {
             // raison d'ouvrir autre chose.
             .brandSheet(isPresented: $showsFeedback) {
                 if let support = sessionSupport ?? previewSupport {
-                    SupportSheet(model: support, route: .contact(about: nil))
+                    // « Partager mes retours » part comme tel (T226).
+                    SupportSheet(
+                        model: support,
+                        route: .contact(about: nil),
+                        source: .foundersNote,
+                        tripId: model.preview?.memoId
+                    )
                 }
             }
             .task(id: showsFeedback) {

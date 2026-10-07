@@ -56,9 +56,16 @@ public actor PreviewAPI: MemoBookAPI {
     /// Nul tant que rien n'a été corrigé : le profil est alors le jeu d'essai.
     private var editedProfile: TravellerProfile?
 
+    /// Les votes « Est-ce utile ? » du bac à sable, le temps de la session.
+    private var sandboxFaqVotes: [String: Bool] = [:]
+
     /// Les voyages créés dans le bac à sable, le plus récent d'abord : ils
     /// restent sur l'accueil une fois « arrivés », comme sur le serveur.
     private var createdTrips: [Trip] = []
+
+    /// Les souvenirs effacés par la croix d'une étape : l'étape qui n'en a
+    /// plus disparaît du voyage, comme le serveur la retirera (T235).
+    private var deletedEntryIds: Set<String> = []
 
     /// Les fils de conversation du double, un par voyage — voir `PreviewChat.swift`.
     let chat = PreviewChatBox()
@@ -226,7 +233,15 @@ public actor PreviewAPI: MemoBookAPI {
         try SandboxNetwork.failIfOffline()
         // Un voyage créé ici est lui-même, pas le voyage de Rome du jeu d'essai.
         if let created = createdTrips.first(where: { $0.id == id }) { return TripDetail(trip: created) }
-        return .fixture(id: id)
+        let detail = TripDetail.fixture(id: id)
+        return TripDetail(
+            trip: detail.trip,
+            prompt: detail.prompt,
+            steps: detail.steps.filter { step in
+                guard let ids = step.entryIds, !ids.isEmpty else { return true }
+                return !ids.allSatisfy(deletedEntryIds.contains)
+            }
+        )
     }
 
     public func validateStep(tripId: String, stepId: String) async throws -> TripDetail {
@@ -280,6 +295,20 @@ public actor PreviewAPI: MemoBookAPI {
     public func profile() async throws -> TravellerProfile { editedProfile ?? .fixture }
 
     public func travelStatistics() async throws -> TravelStatistics { .fixture }
+
+    /// Le bac à sable reçoit le message comme le serveur : un instant, puis
+    /// « envoyé ». Rien ne part.
+    public func sendSupportMessage(_ message: SupportMessage) async throws {
+        try await Task.sleep(for: .milliseconds(400))
+    }
+
+    public func voteOnFaq(questionId: String, isHelpful: Bool, appVersion: String?) async throws {
+        sandboxFaqVotes[questionId] = isHelpful
+    }
+
+    public func faqVotes() async throws -> [FaqVote] {
+        sandboxFaqVotes.map { FaqVote(questionId: $0.key, isHelpful: $0.value) }
+    }
 
     public func updateProfile(_ edit: ProfileEdit) async throws -> TravellerProfile {
         // Le double garde ce qu'on lui écrit : un aperçu où l'on corrige son
@@ -444,6 +473,11 @@ public actor PreviewAPI: MemoBookAPI {
 
     public func deleteMemo(id: String) async throws {
         memosById[id] = nil
+    }
+
+    public func deleteEntry(id: String) async throws {
+        try SandboxNetwork.failIfOffline()
+        deletedEntryIds.insert(id)
     }
 
     public func addTextEntry(memoId: String, entry: NewTextEntry) async throws -> Entry {
