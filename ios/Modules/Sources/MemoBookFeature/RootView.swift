@@ -482,6 +482,10 @@ public struct RootView: View {
                 // Le carnet du jeu d'essai du tunnel — voir ``OrderContext/fixture``.
                 path = [.order(memoId: "trip-rome")]
             }
+            // Voir ``OnboardingStorage/composeBookArgument``.
+            if OnboardingStorage.isComposingBook {
+                path = [.trip(id: FixtureTripId.rome), .bookPreview(memoId: FixtureTripId.rome)]
+            }
         #endif
         // Depuis le formulaire, le tracé commence ici ; depuis le trousseau, il
         // est déjà en cours — et s'il est déjà fini, le voile se lève tout de

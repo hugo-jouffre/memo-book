@@ -575,6 +575,14 @@ public actor PreviewAPI: MemoBookAPI {
     }
 
     public func startRender(memoId: String) async throws -> Render {
+        #if DEBUG
+            // La composition du bac à sable repart de zéro à chaque ouverture
+            // de l'aperçu — voir ``OnboardingStorage/composeBookArgument``.
+            if OnboardingStorage.isComposingBook {
+                sandboxCompositionStart = .now
+                return Render(id: "render-sandbox", memoId: memoId, status: .processing, createdAt: .now, updatedAt: .now)
+            }
+        #endif
         let memo = try existingMemo(memoId)
 
         let render = Render(
@@ -636,7 +644,41 @@ public actor PreviewAPI: MemoBookAPI {
     }
 
     public func bookPreview(memoId: String) async throws -> BookPreview {
-        .fixture
+        #if DEBUG
+            if OnboardingStorage.isComposingBook { return composingSandboxPreview() }
+        #endif
+        return .fixture
+    }
+
+    /// Quand la composition du bac à sable a commencé — voir
+    /// ``OnboardingStorage/composeBookArgument``. Posée par la première
+    /// lecture, remise à zéro par chaque lancement de composition.
+    private var sandboxCompositionStart: Date?
+
+    /// Une composition jouée en dix secondes : la file, la mise en page, le
+    /// PDF, puis le carnet du jeu d'essai.
+    private func composingSandboxPreview() -> BookPreview {
+        let start = sandboxCompositionStart ?? .now
+        sandboxCompositionStart = start
+        let elapsed = Date.now.timeIntervalSince(start)
+
+        let phase: BookRenderPhase
+        switch elapsed {
+        case ..<2: phase = .queued
+        case ..<6: phase = .writing
+        case ..<10: phase = .composing
+        default: return .fixture
+        }
+
+        let fixture = BookPreview.fixture
+        return BookPreview(
+            memoId: fixture.memoId,
+            title: fixture.title,
+            status: .composing,
+            pageCount: 0,
+            render: BookRenderProgress(id: "render-sandbox", phase: phase),
+            pendingMemoryCount: phase == .writing && elapsed < 4 ? 1 : 0
+        )
     }
 
     public func bookShareLink(memoId: String) async throws -> URL {

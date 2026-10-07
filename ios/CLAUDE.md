@@ -54,6 +54,15 @@ xcrun simctl launch <device> com.memobook.app -previewSignedIn -openOrder
 Combiné à `-previewSignedIn`, le tunnel travaille **en mémoire** : c'est ce qui
 permet de traverser ses sept étapes sans back-end. Sans effet en release.
 
+L'écran « On compose ton Carnet » ne se voit pas non plus dans le bac à sable,
+dont le carnet est déjà composé. Un troisième interrupteur ouvre l'aperçu en
+pleine composition — la page qui se monte, puis dix secondes de phases sous
+elle (la file, la mise en page, le PDF) avant le carnet :
+
+```bash
+xcrun simctl launch <device> com.memobook.app -previewSignedIn -composeBook
+```
+
 Les « Dernières questions » (nom, date de naissance, téléphone) ne se posent
 qu'à un compte ouvert il y a moins de dix minutes, une seule fois par appareil —
 et jamais dans le bac à sable. Pour les revoir :
