@@ -33,6 +33,7 @@ import {
   type ChatMessageRow,
 } from "../services/conversationThread.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
+import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import { MAX_PHOTOS_PER_STEP } from "../services/photoBudget.js";
 import { hasUnlimitedAccess } from "../services/subscriptions.js";
 import { contextVoiceOf, isGathering, parseTripContext } from "../services/tripContext.js";
@@ -756,6 +757,9 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
     );
 
     const transcribeEntryId: string | null = entryIdForTranscription;
+    // Des photos comptent tout de suite (T227) ; un vocal, à la fin de sa
+    // rédaction.
+    if (!isAudio) await refreshTripFactsQuietly(context, memoId);
     await publishTurnJob(context, messageId, () =>
       isAudio && transcribeEntryId
         ? context.queue.publish<TranscribeJob>(JOB_NAMES.transcribe, {

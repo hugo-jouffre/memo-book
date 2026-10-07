@@ -85,6 +85,8 @@ export async function resetDatabase(prisma: PrismaClient): Promise<void> {
           "feedback_responses",
           "feedback_questions",
           "feedback_campaigns",
+          "support_messages",
+          "faq_votes",
           "showcases",
           "memo_gallery_categories",
           "gallery_categories",

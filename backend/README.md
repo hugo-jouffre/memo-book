@@ -172,28 +172,35 @@ champ près — `test/screens.test.ts` est ce qui les tient ensemble.
 | Route | Rôle |
 | --- | --- |
 | `GET /v1/home` | Le voyageur, ses voyages et ceux où il est invité, la carte de découverte |
-| `GET /v1/trips/:id` | Un voyage ouvert : sa couverture, la relance, ses étapes |
-| `GET /v1/profile` | Identité, adresse, cagnotte, cartes, connecteurs, abonnement, commandes |
+| `GET /v1/trips/:id` | Un voyage ouvert : sa couverture, la relance, ses étapes. Chaque `Trip` (accueil compris) porte `canDelete` : vrai pour le seul propriétaire. Les étapes et les chiffres (`stats`, `progress.memoryCount`, destination) sont déduits des souvenirs par `services/tripFacts.ts` — une étape par lieu successif — ; chaque étape porte `entryIds`, ses souvenirs |
+| `GET /v1/profile` | Identité, adresse, cartes, connecteurs, abonnement, commandes |
 | `PATCH /v1/profile` | Corrige le profil. Un champ absent n'est pas touché, un champ à `null` est effacé |
 | `GET /v1/profile/statistics` | Les chiffres de la feuille « Statistiques » : pays, régions, villes, rencontres, km, transports, additionnés à la lecture depuis les relevés de la rédaction (`entries.insights`). `pendingDetections` dit combien de souvenirs attendent encore leur relevé — l'app relit tant qu'il y en a |
 | `PUT /v1/profile/connectors/:key` | Branche ou débranche un connecteur |
 | `POST /v1/profile/link-device` | Rattache l'appareil au compte et lui transfère ses carnets |
-| `GET /v1/trips/:id/settings` | Les réglages d'un voyage : nom, dates, rythme, co-voyageurs, solde, style, aperçu, crédit du jour (`dailyCredit`) |
+| `GET /v1/trips/:id/settings` | Les réglages d'un voyage : nom, dates, rythme, co-voyageurs, style, aperçu, crédit du jour (`dailyCredit`), et ce que seul le propriétaire peut faire (`canDelete`, `canClearConversation`) |
 | `PATCH /v1/trips/:id/settings` | Corrige un réglage. Même sémantique que `PATCH /v1/profile` |
-| `GET /v1/wallet` | La cagnotte du **compte** et son historique. `?tripId=` ajoute l'estimation du carnet |
-| `GET /v1/memos/:id/preview` | L'aperçu du carnet : état de composition, PDF, extrait, couvertures |
+| `GET /v1/memos/:id/preview` | L'aperçu du carnet : état et phase de la dernière composition (`render`), PDF du dernier rendu prêt (`readyRenderId`), `isUpToDate`, souvenirs encore en rédaction, extrait, couvertures. Se sonde toutes les 2 s pendant une composition |
 | `POST /v1/memos/:id/share-link` | Crée le lien public de prévisualisation, ou rend celui qui existe |
+| `GET /c/:jeton` | **Sans session** : la page publique d'un carnet partagé (HTML, Open Graph) ; 404 en page pour un jeton inconnu |
+| `POST /v1/support/messages` | « Écris à notre équipe » et « Partager mes retours » (`source` : `support`, `founders_note`), enregistrés dans `support_messages` — rien n'est envoyé, l'équipe les lit en base (`handledAt` nul = à traiter). 20 par compte et par 24 h |
+| `PUT /v1/support/faq-votes/:questionId` | « Est-ce utile ? » : un vote par compte et par question (`faq_votes`), revoter remplace. `GET /v1/support/faq-votes` rend les siens |
 | `GET /v1/showcases/welcome` | Les mises en avant de l'écran de bienvenue. **Non authentifiée** |
 
-`GET /v1/wallet` en mérite un aussi : la cagnotte appartient au **compte**, pas
-au voyage. Le `tripId` facultatif ne dit pas *quelle* cagnotte lire — il n'y en a
-qu'une — mais **quel carnet on finance**, ce qui ne change que l'estimation de
-pages et de coût. C'est pour ça que la même route sert la ligne « Ma cagnotte »
-du profil, où il n'y a aucun voyage à nommer.
+**La cagnotte est retirée** (06/10/2026) : `GET /v1/wallet`, `POST
+/v1/wallet/topup` et `POST /v1/wallet/debug-entry` n'existent plus. Les champs
+`walletBalance` (profil, réglages) et `wallet` (`order-context`) restent, **gelés
+à zéro**, tant que des builds installés les décodent comme obligatoires — voir
+`docs/paiements.md`.
 
 `POST /v1/memos/:id/share-link` est **idempotente** : repartager deux fois ne
 crée pas deux liens. Un lien parti dans une conversation WhatsApp ne se rattrape
-pas — celui d'hier doit marcher demain.
+pas — celui d'hier doit marcher demain. Il vit sur **l'hôte de l'API**
+(`https://<API>/c/<jeton>`, `services/shareLink.ts`), qui sert la page publique
+derrière (`GET /c/:jeton`, `routes/sharePage.ts`) : titre, dates, couverture,
+étapes, premières phrases, et les balises Open Graph de la vignette WhatsApp.
+`SHARE_PUBLIC_BASE_URL` ne sert plus qu'à forcer un autre hôte ; il valait
+`memo-book.com`, où aucune page ne répondait (T229).
 
 `link-device` mérite un mot : un carnet créé avant l'inscription appartient à
 l'appareil, pas au compte, et n'apparaîtrait donc jamais sur l'accueil. L'app
@@ -214,9 +221,9 @@ de son porteur précédent.
 | `GET /v1/entries/:id` | Statut, transcription et texte rédigé d'un souvenir |
 | `PATCH /v1/entries/:id` | Corrige le texte à la main. `editedText: null` revient à la version proposée |
 | `POST /v1/entries/:id/redaction` | Redemande une rédaction (refusé si le texte a été corrigé) |
-| `DELETE /v1/entries/:id` | Supprime un souvenir |
-| `POST /v1/memos/:id/renders` | Lance la génération du carnet (202, résultat asynchrone) |
-| `GET /v1/renders/:id` | Suit la génération, renvoie l'URL du PDF |
+| `DELETE /v1/entries/:id` | Supprime un souvenir ; les chiffres du voyage reculent, et une étape vidée de son dernier souvenir disparaît |
+| `POST /v1/memos/:id/renders` | **À chaque ouverture de l'aperçu** : rend la composition en cours ou le dernier PDF s'il est à jour (200), sinon en lance une (202). L'empreinte du carnet (`services/bookFingerprint.ts`) décide ; incrémenter `BOOK_LAYOUT_VERSION` quand le gabarit change |
+| `GET /v1/renders/:id` | Suit la génération (`status`, `phase` : queued, writing, composing, ready, failed), renvoie l'URL du PDF et ses pages |
 | `POST /v1/memos/:id/orders` | Commande le carnet imprimé, sur un rendu déjà généré |
 | `GET /v1/memos/:id/orders` | Les commandes d'un carnet |
 | `GET /v1/orders/:id` | Suit une commande |

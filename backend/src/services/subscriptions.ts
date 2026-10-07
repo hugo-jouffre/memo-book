@@ -92,3 +92,97 @@ export async function hasUnlimitedAccess(
   });
   return found !== null;
 }
+
+// ---------------------------------------------------------------------------
+// L'état d'un abonnement, en un mot (07/10/2026)
+// ---------------------------------------------------------------------------
+
+/**
+ * **Ce que l'app dit de l'abonnement**, partout où elle le dit (Hugo,
+ * 06/10/2026 — « quand quelqu'un se désabonne, tous les endroits qui
+ * indiquaient « abonné » ne doivent plus l'indiquer »).
+ *
+ * Le statut en base ne suffisait pas : chaque écran le relisait à sa façon.
+ * Un renouvellement coupé (`cancelled`) restait « abonné » ici et pas là ; un
+ * `EXPIRED` perdu en route laissait la ligne `active` pour toujours, et le
+ * profil disait « abonné » à quelqu'un dont l'illimité s'était refermé. Un mot,
+ * calculé ici, et tous les champs en dérivent :
+ *
+ * | État | Ce que c'est | Illimité | « Abonné » |
+ * |---|---|---|---|
+ * | `active` | renouvellement armé | oui | oui |
+ * | `grace` | prélèvement en échec, Apple garde l'accès le temps de réessayer | oui | oui |
+ * | `ending` | renouvellement coupé (ou résilié) : la période payée court encore | jusqu'à `endsAt` | non |
+ * | `ended` | plus rien ne court : expiré, remboursé, révoqué — ou sans nouvelles d'Apple trois jours après l'échéance | non | non |
+ * | `none` | jamais abonné | non | non |
+ *
+ * La règle d'accès reste `grantsUnlimitedAccess` : `active`, `grace` et
+ * `ending` sont exactement les abonnements qu'elle laisse passer.
+ */
+export type SubscriptionState = "none" | "active" | "ending" | "grace" | "ended";
+
+type StatefulSubscription = { status: string; renewsAt: Date | null; autoRenews: boolean | null };
+
+/** L'état d'**un** abonnement, aujourd'hui. */
+export function subscriptionStateOf(
+  subscription: StatefulSubscription,
+  now: Date = new Date(),
+): Exclude<SubscriptionState, "none"> {
+  if (!grantsUnlimitedAccess(subscription, now)) return "ended";
+  if (subscription.status === "past_due") return "grace";
+  if ((LIVING_SUBSCRIPTION_STATUSES as readonly string[]).includes(subscription.status)) {
+    return subscription.autoRenews === false ? "ending" : "active";
+  }
+  return "ending";
+}
+
+/** Du plus au moins abonné : c'est l'ordre dans lequel un compte se lit. */
+const STATE_RANK: Record<Exclude<SubscriptionState, "none">, number> = { active: 0, grace: 1, ending: 2, ended: 3 };
+
+export interface AccountSubscription<S> {
+  state: SubscriptionState;
+  /** L'abonnement qui donne cet état ; le plus récent quand tout est fini. */
+  subscription: S | null;
+  /** Le prochain prélèvement est-il armé ? */
+  autoRenews: boolean;
+  /** Le prochain prélèvement — rempli pour `active` seulement. */
+  renewsAt: Date | null;
+  /**
+   * La fin de l'accès : la période payée pour `ending`, le délai de grâce pour
+   * `grace`, le jour où il s'est arrêté pour `ended`. Nul pour `active`.
+   */
+  endsAt: Date | null;
+}
+
+/**
+ * L'état **d'un compte** : son abonnement le plus vivant. `subscriptions` dans
+ * n'importe quel ordre ; à égalité, le plus récent (`startedAt`) l'emporte.
+ */
+export function accountSubscriptionOf<S extends StatefulSubscription & { startedAt?: Date }>(
+  subscriptions: readonly S[],
+  now: Date = new Date(),
+): AccountSubscription<S> {
+  let best: { subscription: S; state: Exclude<SubscriptionState, "none"> } | null = null;
+  for (const subscription of subscriptions) {
+    const state = subscriptionStateOf(subscription, now);
+    if (
+      !best ||
+      STATE_RANK[state] < STATE_RANK[best.state] ||
+      (STATE_RANK[state] === STATE_RANK[best.state] &&
+        (subscription.startedAt?.getTime() ?? 0) > (best.subscription.startedAt?.getTime() ?? 0))
+    ) {
+      best = { subscription, state };
+    }
+  }
+
+  if (!best) return { state: "none", subscription: null, autoRenews: false, renewsAt: null, endsAt: null };
+
+  const { subscription, state } = best;
+  return {
+    state,
+    subscription,
+    autoRenews: state === "active" || (state === "grace" && subscription.autoRenews !== false),
+    renewsAt: state === "active" ? subscription.renewsAt : null,
+    endsAt: state === "active" ? null : subscription.renewsAt,
+  };
+}

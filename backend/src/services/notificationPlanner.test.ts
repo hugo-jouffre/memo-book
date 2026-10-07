@@ -79,10 +79,12 @@ const winter = (["A", "B", "C"] as const).map(
 const armed = { renewsAtApple: true, renewsOn: "2026-11-01" };
 
 describe("la fin du voyage", () => {
-  it("part le jour de la date de fin, vers la cagnotte du voyage, avec l'estimation du carnet", () => {
+  it("part le jour de la date de fin, vers l'aperçu du carnet, avec son estimation", () => {
     const due = planNotifications(account(), [], "2026-10-12").find((n) => n.kind === "trip_end");
 
-    expect(due).toMatchObject({ link: "memobook://trips/rome/wallet", memoId: "rome", family: "billing" });
+    // L'aperçu, d'où le carnet se commande : la cagnotte qui l'ouvrait est
+    // retirée (06/10/2026).
+    expect(due).toMatchObject({ link: "memobook://trips/rome/preview", memoId: "rome", family: "billing" });
     expect(due?.title).toBe("Ton voyage à Rome se termine aujourd’hui");
     expect(due?.body).toMatch(/^Ton carnet est estimé à 42,90\s€\. Il n’attend plus que ta commande\.$/);
     // Sans abonnement, rien à couper — et plus rien n'est déduit du carnet.

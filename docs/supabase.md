@@ -210,8 +210,10 @@ Ce qui manque encore, et pourquoi :
   `payment_cards` avant que Stripe ait confirmé.
 - **Les modales d'avis.** Le schéma et le seed sont là ; il manque
   `GET /v1/feedback/current` et `POST /v1/feedback/:key/responses`, et l'écran.
-- **Les compteurs de voyage** (`memoryCount`, `pageCount`, `photoCount`) sont
-  entretenus par le seed, pas encore par le pipeline.
+- ~~**Les compteurs de voyage**~~ : depuis le 07/10/2026 (T227),
+  `services/tripFacts.ts` écrit les étapes (`memo_steps`), `memoryCount`,
+  `photoCount`, `dayCount`, `distanceKilometres` et la destination déduite à
+  chaque souvenir traité ; `pageCount` vient de chaque composition réussie.
 - **La cagnotte** ne bouge que par le seed : la brancher demande le webhook
   Stripe, et l'écriture doit rester le seul chemin qui déplace un solde.
 

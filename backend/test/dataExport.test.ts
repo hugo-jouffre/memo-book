@@ -395,6 +395,12 @@ describe("L’archive", () => {
       data: { memoId: lisbon.id, author: "traveller", kind: "text", accountId: clara.accountId, text: "Coucou, c’est Clara" },
     });
 
+    // Ce qu'il a écrit à l'équipe, et un vote de la foire aux questions (T226).
+    await prisma.supportMessage.create({
+      data: { accountId: me.accountId, source: "founders_note", message: "Bravo pour le carnet !" },
+    });
+    await prisma.faqVote.create({ data: { accountId: me.accountId, questionId: "faq.carnet.pages", isHelpful: true } });
+
     // Un voyage qui n'est pas le sien.
     await prisma.memo.create({
       data: { ownerAccountId: stranger.accountId, title: "Voyage d’un autre", accessCode: "EXPAR3" },
@@ -488,6 +494,12 @@ describe("L’archive", () => {
     // Le récit partagé : les mots de Clara, et son prénom — rien d'autre d'elle.
     const thread = json<{ author: string; name: string | null; text: string }[]>("voyages/02-lisbonne/conversation.json");
     expect(thread).toContainEqual(expect.objectContaining({ author: "coTraveller", name: "Clara", text: "Coucou, c’est Clara" }));
+
+    const support = json<{ messages: { from: string; message: string }[]; faqVotes: { question: string; helpful: boolean }[] }>(
+      "support.json",
+    );
+    expect(support.messages).toEqual([expect.objectContaining({ from: "Mot des fondateurs", message: "Bravo pour le carnet !" })]);
+    expect(support.faqVotes).toEqual([expect.objectContaining({ question: "faq.carnet.pages", helpful: true })]);
 
     // Le fichier disparu n'empêche rien : il est nommé dans le LISEZ-MOI.
     const readme = read("LISEZ-MOI.txt") ?? "";

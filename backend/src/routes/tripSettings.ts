@@ -7,14 +7,16 @@ import { readDailyCredit } from "../services/dailyCredit.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
 import { normalizeNarrationPace } from "../services/narrationPace.js";
 import { stageFromDates } from "../services/tripStage.js";
+import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import { serializeTripSettings } from "./appSerializers.js";
+import { startDateRequired } from "./home.js";
 
 /**
  * Les réglages d'un voyage : ce qui se règle sur le carnet sans quitter le
  * voyage.
  *
- * Tout arrive en une réponse — nom, dates, rythme, co-voyageurs, solde de
- * cagnotte, style, aperçu — parce que l'écran les affiche ensemble. Sept
+ * Tout arrive en une réponse — nom, dates, rythme, co-voyageurs, crédit du
+ * jour, style, aperçu — parce que l'écran les affiche ensemble. Sept
  * appels feraient apparaître ses lignes une à une, ce qui est exactement ce
  * que `BrandSkeleton` cherche à éviter côté app.
  *
@@ -112,12 +114,11 @@ async function readSettings(context: AppContext, accountId: string, memoId: stri
       where: { id: memoId, ...visibleToAccount(accountId) },
       include: settingsInclude,
     }),
-    // Le solde vient du **compte** et non du voyage : la cagnotte n'appartient
-    // pas au carnet. C'est la même somme que celle du profil, et c'est voulu.
-    // Le fuseau aussi : le crédit du jour se lit à la minuit de celui qui lit.
+    // Le fuseau du lecteur : le crédit du jour se lit à la minuit de celui qui
+    // lit.
     context.prisma.account.findUniqueOrThrow({
       where: { id: accountId },
-      select: { id: true, walletBalanceCents: true, timeZone: true },
+      select: { id: true, timeZone: true },
     }),
   ]);
 
@@ -127,7 +128,7 @@ async function readSettings(context: AppContext, accountId: string, memoId: stri
   // celui qui lit : illimité s'il est abonné.
   const dailyCredit = await readDailyCredit(context.prisma, { memoId: memo.id, viewer: account });
 
-  return serializeTripSettings(memo, account.walletBalanceCents, dailyCredit, accountId);
+  return serializeTripSettings(memo, dailyCredit, accountId);
 }
 
 export function registerTripSettingsRoutes(app: FastifyInstance, context: AppContext) {
@@ -140,6 +141,10 @@ export function registerTripSettingsRoutes(app: FastifyInstance, context: AppCon
     const { id } = params.parse(request.params);
     const body = updateBody.parse(request.body);
     const accountId = accountIdOf(request);
+
+    // Une date de départ se corrige, elle ne s'efface pas (T238) : absente,
+    // elle n'est pas touchée ; `null`, c'est un refus.
+    if (body.startDate === null) throw startDateRequired();
 
     // L'appartenance se vérifie **avant** l'écriture, et pas seulement par le
     // `where` de l'update : un `updateMany` qui ne touche aucune ligne réussit
@@ -207,6 +212,9 @@ export function registerTripSettingsRoutes(app: FastifyInstance, context: AppCon
     // **n'arrête aucun abonnement** (Hugo, 03/10/2026) : l'illimité court
     // jusqu'à ce qu'on le résilie. L'accueil rappelle qu'on peut le couper
     // (`subscriptionOutlivesTrip`).
+
+    // Les jours du voyage se comptent sur ses dates (T227).
+    if (datesChanged) await refreshTripFactsQuietly(context, id);
 
     // On relit tout plutôt que de rendre ce qu'on vient d'écrire : la réponse
     // est ce que l'app garde à l'écran, et une réponse partielle effacerait le

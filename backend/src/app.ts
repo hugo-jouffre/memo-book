@@ -8,6 +8,7 @@ import { HttpError } from "./lib/httpError.js";
 import { createRequireAccount, registerAuthDecorator } from "./plugins/auth.js";
 import { registerAccountRoutes } from "./routes/accounts.js";
 import { registerDataExportPageRoutes } from "./routes/dataExportPage.js";
+import { registerSharePageRoutes } from "./routes/sharePage.js";
 import { registerAppStoreRoutes, registerAppStoreWebhookRoutes } from "./routes/appStore.js";
 import { registerAuthRoutes, registerSessionRoutes } from "./routes/auth.js";
 import { registerDeviceRoutes } from "./routes/devices.js";
@@ -22,6 +23,7 @@ import { registerPaymentMethodRoutes } from "./routes/paymentMethods.js";
 import { registerPasswordResetPageRoutes } from "./routes/passwordResetPage.js";
 import { registerAvatarRoutes, registerProfileRoutes } from "./routes/profile.js";
 import { registerStepRoutes } from "./routes/steps.js";
+import { registerSupportRoutes } from "./routes/support.js";
 import { configureAvatarUrls } from "./services/avatars.js";
 import { isValidTimeZone } from "./services/localCalendar.js";
 import { registerRenderRoutes } from "./routes/renders.js";
@@ -29,7 +31,6 @@ import { registerStripeWebhookRoutes } from "./routes/stripeWebhook.js";
 import { registerBookPreviewRoutes } from "./routes/bookPreview.js";
 import { registerChatRoutes } from "./routes/chat.js";
 import { registerTripSettingsRoutes } from "./routes/tripSettings.js";
-import { registerWalletRoutes } from "./routes/wallet.js";
 import { registerCoverPhotoRoutes, registerCoverRoutes } from "./routes/covers.js";
 
 /** Combien de temps un fuseau confirmé dispense de le réécrire. */
@@ -168,6 +169,11 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
   // secret du lien qui ouvre — pas une session.
   registerDataExportPageRoutes(app, context);
 
+  // La page d'un carnet partagé (`/c/<jeton>`), celle du lien de la feuille
+  // « Partager » et de WhatsApp : ses destinataires n'ont pas de compte. Le
+  // jeton est la seule clé (T229).
+  registerSharePageRoutes(app, context);
+
   // Tout ce qui appartient à quelqu'un, sous **une seule** identification : la
   // session de compte. Le token d'appareil n'ouvre plus rien — un carnet a
   // toujours un propriétaire, et c'est un compte.
@@ -188,10 +194,10 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
     registerCoverRoutes(accountRoutes, context);
     registerChatRoutes(accountRoutes, context);
     registerBookPreviewRoutes(accountRoutes, context);
-    registerWalletRoutes(accountRoutes, context);
     registerAppStoreRoutes(accountRoutes, context);
     registerPaymentMethodRoutes(accountRoutes, context);
     registerNotificationRoutes(accountRoutes, context);
+    registerSupportRoutes(accountRoutes, context);
   });
 
   // Uniquement en mode de rendu local : sert les PDF produits sur le disque.

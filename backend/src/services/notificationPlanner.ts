@@ -317,7 +317,6 @@ export const NOTIFICATION_LINKS = {
   subscription: "memobook://subscription",
   newTrip: "memobook://trips/new",
   chat: (tripId: string) => `memobook://trips/${tripId}/chat`,
-  wallet: (tripId: string) => `memobook://trips/${tripId}/wallet`,
   bookPreview: (tripId: string) => `memobook://trips/${tripId}/preview`,
 } as const;
 
@@ -463,7 +462,9 @@ export function planNotifications(
         "trip_end",
         trip.id,
         trip.id,
-        NOTIFICATION_LINKS.wallet(trip.id),
+        // L'aperçu du carnet, d'où il se commande : la cagnotte du voyage, qui
+        // portait la même estimation, est retirée (06/10/2026).
+        NOTIFICATION_LINKS.bookPreview(trip.id),
         tripEndText({ trip, renewal, estimateCents: trip.estimateCents, hasStories: trip.storyCount > 0 }),
       ),
     );

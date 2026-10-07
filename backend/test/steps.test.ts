@@ -42,6 +42,16 @@ async function addTextEntry(memoId: string, authorization: string) {
   expect(response.statusCode).toBe(201);
 }
 
+/**
+ * L'étape que le souvenir a fait naître : depuis T227, un souvenir range
+ * lui-même le voyage en étapes (`services/tripFacts.ts`).
+ */
+async function stepOfTheMemory(memoId: string) {
+  const steps = await harness.prisma.memoStep.findMany({ where: { memoId } });
+  expect(steps).toHaveLength(1);
+  return steps[0]!;
+}
+
 function validateStep(memoId: string, stepId: string, authorization: string) {
   return harness.app.inject({
     method: "POST",
@@ -55,9 +65,7 @@ describe("valider une étape", () => {
     const { authorization } = await registerAccount(harness.app);
     const memoId = await createMemo(authorization);
     await addTextEntry(memoId, authorization);
-    const step = await harness.prisma.memoStep.create({
-      data: { memoId, number: 1, placeName: "Trastevere" },
-    });
+    const step = await stepOfTheMemory(memoId);
 
     const response = await validateStep(memoId, step.id, authorization);
     expect(response.statusCode).toBe(200);
@@ -73,7 +81,7 @@ describe("valider une étape", () => {
     const { authorization } = await registerAccount(harness.app);
     const memoId = await createMemo(authorization);
     await addTextEntry(memoId, authorization);
-    const step = await harness.prisma.memoStep.create({ data: { memoId, number: 1 } });
+    const step = await stepOfTheMemory(memoId);
 
     const first = await validateStep(memoId, step.id, authorization);
     expect(first.statusCode).toBe(200);
@@ -100,7 +108,7 @@ describe("valider une étape", () => {
     const { authorization } = await registerAccount(harness.app);
     const memoId = await createMemo(authorization);
     await addTextEntry(memoId, authorization);
-    const step = await harness.prisma.memoStep.create({ data: { memoId, number: 1 } });
+    const step = await stepOfTheMemory(memoId);
 
     // Simule une génération déjà en cours (ex. déclenchée juste avant, par
     // `POST /renders`), sans passer par la file — la garde de

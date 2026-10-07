@@ -1,3 +1,4 @@
+import type { PrintOrder } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppContext } from "../context.js";
@@ -17,8 +18,7 @@ import {
   SHIPPING_COUNTRY_CODES,
   toShippingCountryCode,
 } from "../services/shippingCountries.js";
-import { writeLedgerEntry } from "../services/walletLedger.js";
-import { serializeTrip, serializeWallet } from "./appSerializers.js";
+import { frozenWallet, serializeTrip } from "./appSerializers.js";
 import { loadVisibleMemo } from "./memos.js";
 import { serializeOrderQuote, serializePrintOrder } from "./serializers.js";
 
@@ -63,11 +63,16 @@ const quoteBody = z.object({
 
 const createOrderBody = z.object({
   /**
-   * Le rendu à imprimer. Explicite, jamais « le dernier en date » : entre la
+   * Le rendu à imprimer — celui que l'aperçu a montré : entre la
    * prévisualisation et la commande, l'utilisateur a pu ajouter une étape, et
    * il doit recevoir le carnet qu'il a vu.
+   *
+   * **Facultatif depuis le 06/10/2026** (T224) : absent, c'est le dernier rendu
+   * prêt du voyage. Et s'il n'y en a aucun, le refus porte son propre code,
+   * `no_render`, que l'app traduit par « Aucun rendu de ton carnet n'a encore
+   * été généré… » — au lieu d'un « Payer » qui ne faisait rien.
    */
-  renderId: z.string().uuid(),
+  renderId: z.string().uuid().optional(),
   copies: z.number().int().min(1).max(MAX_COPIES).default(1),
   shippingSpeed: z.enum(["standard", "express"]).default("standard"),
   shipping: shippingSchema,
@@ -109,27 +114,85 @@ const whatsappBody = z.discriminatedUnion("enabled", [
 /**
  * Le nombre de pages qui fait foi pour le prix : celui que le voyageur vise,
  * ou celui déjà composé s'il est plus grand. Même règle que l'estimation de la
- * cagnotte — les deux doivent annoncer le même chiffre.
+ * notification de fin de voyage — les deux doivent annoncer le même chiffre.
  */
 function billablePages(memo: { targetPageCount: number; pageCount: number }): number {
   return Math.max(memo.targetPageCount, memo.pageCount, 1);
 }
 
 /**
- * De quoi tarifer pour **celui qui commande** : le solde de sa cagnotte.
- *
- * Chacun a sa cagnotte — celle du propriétaire n'a pas à régler l'exemplaire
- * d'un co-voyageur.
+ * Le refus d'une commande sans carnet composé (T224). Un code à lui, distinct
+ * de `render_not_ready` (un rendu désigné qui n'est pas prêt) : c'est le seul
+ * que l'app traduit par « aucun rendu de ton carnet n'a encore été généré ».
  */
-async function walletOf(context: AppContext, accountId: string) {
-  // Le solde seul : le récapitulatif n'a plus qu'une déduction, la cagnotte
-  // (03/10/2026) — plus besoin de ventiler les crédits par provenance.
-  const account = await context.prisma.account.findUnique({
+function noRender(): HttpError {
+  return new HttpError(
+    409,
+    "Aucun rendu de ton carnet n’a encore été généré. Ouvre l’aperçu pour le composer, puis reviens commander.",
+    "no_render",
+  );
+}
+
+/**
+ * Ouvre l'intention Stripe d'une commande — à sa création, ou quand on la
+ * finalise après un abandon (T232). Le même appel pour les deux : mêmes
+ * métadonnées (c'est par elles que le webhook retrouve la commande), même
+ * description, même reçu, même adresse figée.
+ */
+async function openOrderIntent(
+  context: AppContext,
+  input: { order: PrintOrder; accountId: string; title: string; amountCents: number; idempotencyKey: string },
+) {
+  const { order, accountId, title } = input;
+  const customerId = await ensureStripeCustomer(context, accountId);
+  const buyer = await context.prisma.account.findUnique({
     where: { id: accountId },
-    select: { walletBalanceCents: true },
+    select: { email: true },
   });
 
-  return { balanceCents: account?.walletBalanceCents ?? 0 };
+  const intent = await context.payments.createIntent({
+    idempotencyKey: input.idempotencyKey,
+    amountCents: input.amountCents,
+    currency: "eur",
+    customerId,
+    metadata: {
+      kind: PAYMENT_KIND.bookOrder,
+      orderId: order.id,
+      memoId: order.memoId,
+      renderId: order.renderId,
+      accountId,
+    },
+    description:
+      order.copies > 1 ? `Carnet « ${title} » — ${order.copies} exemplaires` : `Carnet « ${title} »`,
+    receiptEmail: buyer?.email ?? null,
+    shipping: {
+      name: order.shippingName,
+      line1: order.shippingLine1,
+      line2: order.shippingLine2,
+      postalCode: order.shippingPostalCode,
+      city: order.shippingCity,
+      country: order.shippingCountry,
+    },
+  });
+
+  return { customerId, intent };
+}
+
+/**
+ * Le prix entier d'une commande, **sans déduction** : ses articles et sa
+ * livraison, figés à la commande. Pour une commande d'avant le 06/10/2026
+ * dont la cagnotte payait une part — rendue quand elle s'est fermée —, c'est
+ * ce qu'il reste à payer par Stripe en la finalisant.
+ */
+function fullPriceCents(order: PrintOrder): number | null {
+  if (order.itemsCents !== null && order.shippingCents !== null) return order.itemsCents + order.shippingCents;
+  if (order.amountCents === null) return null;
+  return order.amountCents + (order.walletAppliedCents ?? 0);
+}
+
+/** Une commande payée un jour : soumise, en impression, expédiée — ou remboursée depuis. */
+function wasPaid(order: Pick<PrintOrder, "status" | "submittedAt">): boolean {
+  return order.status !== "draft" && (order.status !== "cancelled" || order.submittedAt !== null);
 }
 
 export function registerOrderRoutes(app: FastifyInstance, context: AppContext): void {
@@ -145,7 +208,7 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
     const { id: memoId } = memoIdParams.parse(request.params);
     const accountId = accountIdOf(request);
 
-    const [memo, account, wallet, walletEntries] = await Promise.all([
+    const [memo, account] = await Promise.all([
       context.prisma.memo.findFirst({
         where: { id: memoId, ...visibleToAccount(accountId) },
         include: {
@@ -177,20 +240,6 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
           },
         },
       }),
-      walletOf(context, accountId),
-      // L'historique **fait partie du contrat** : ``Wallet`` le porte, et un
-      // champ non optionnel absent de la réponse fait échouer le décodage de
-      // tout l'écran, pas seulement de la ligne concernée. Servir un objet
-      // partiel « parce que le tunnel n'affiche pas l'historique » a coûté
-      // exactement ça — l'étape 1 restait en squelette sur une erreur de
-      // décodage. Voir `CLAUDE.md`, § Un choix de design ne s'arrête pas au
-      // dessin.
-      context.prisma.walletEntry.findMany({
-        where: { accountId },
-        orderBy: { createdAt: "desc" as const },
-        take: 50,
-        select: { id: true, amountCents: true, kind: true, label: true, createdAt: true },
-      }),
     ]);
 
     if (!memo) throw HttpError.notFound("Carnet introuvable.");
@@ -219,11 +268,13 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
       // Le titre du **récit** (« Rome et la Dolce Vita »), pas le nom du voyage.
       bookTitle: memo.bookTitle?.trim() || memo.title,
       pageCount: pages,
-      trip: serializeTrip(memo),
-      // Le **même** sérialiseur que `GET /v1/wallet` : un seul endroit décide
-      // de la forme d'une cagnotte, et elle ne peut donc pas diverger d'un
-      // écran à l'autre.
-      wallet: serializeWallet(wallet.balanceCents, walletEntries, memo),
+      trip: serializeTrip(memo, { viewerAccountId: accountId }),
+      // **Gelé** (06/10/2026, la cagnotte est retirée) : un solde à zéro et un
+      // historique vide. Les builds installés décodent ``Wallet`` comme
+      // obligatoire — un champ absent ferait échouer tout l'écran, l'étape 1
+      // restait en squelette pour moins que ça. À retirer quand plus aucun
+      // build ne le lit.
+      wallet: frozenWallet(memo),
       // Les deux prix que les étapes 3 et 4 affichent sans rien recalculer.
       unitPrice: Number((unitPriceCents(pages) / 100).toFixed(2)),
       expressPrice: Number((shippingCents("express") / 100).toFixed(2)),
@@ -278,7 +329,6 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
     const { id: memoId } = memoIdParams.parse(request.params);
     const memo = await loadVisibleMemo(context, request, memoId);
     const body = quoteBody.parse(request.body ?? {});
-    const wallet = await walletOf(context, accountIdOf(request));
 
     return serializeOrderQuote(
       computeQuote({
@@ -286,7 +336,6 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
         pageCount: billablePages(memo),
         copies: body.copies,
         speed: body.shippingSpeed,
-        walletBalanceCents: wallet.balanceCents,
       })
     );
   });
@@ -296,17 +345,12 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
    *
    * **Ouverte aux co-voyageurs autant qu'au propriétaire** : chacun commande
    * son exemplaire du carnet qu'ils ont écrit ensemble. La commande retient
-   * donc qui l'a passée — c'est ce qui dira quelle cagnotte débiter, chacun
-   * ayant la sienne.
+   * donc qui l'a passée — c'est à lui qu'elle appartient, et à lui seul
+   * qu'elle se montre dans le suivi.
    *
-   * La commande est créée en `draft`, et n'en sort que payée : par la
-   * cagnotte ici même quand elle couvre tout, par le webhook de Stripe sinon.
-   *
-   * ⚠️ **La part de cagnotte est débitée ici, à la création** — c'est une
-   * réservation : une seconde commande partie en parallèle ne doit pas pouvoir
-   * dépenser la même somme. Elle revient si la commande n'est pas payée
-   * (annulée par l'app, intention annulée, ménage des brouillons) ou si elle
-   * est remboursée en entier — voir `services/orderPayments.ts`.
+   * La commande est créée en `draft`, et n'en sort que payée, par le webhook
+   * de Stripe. **Tout se paie par Stripe** depuis le 06/10/2026 : la cagnotte,
+   * qui réglait une part ici même, est retirée du produit.
    */
   app.post("/v1/memos/:id/orders", async (request, reply) => {
     const { id: memoId } = memoIdParams.parse(request.params);
@@ -315,11 +359,17 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
 
     const body = createOrderBody.parse(request.body ?? {});
 
-    const render = await context.prisma.render.findFirst({
-      where: { id: body.renderId, memoId },
-    });
+    // Le rendu désigné, ou à défaut le dernier prêt du voyage — et sans aucun
+    // des deux, le refus que l'app sait traduire (T224).
+    const render = body.renderId
+      ? await context.prisma.render.findFirst({ where: { id: body.renderId, memoId } })
+      : await context.prisma.render.findFirst({
+          where: { memoId, status: "ready", pdfUrl: { not: null } },
+          orderBy: { createdAt: "desc" },
+        });
 
     if (!render) {
+      if (!body.renderId) throw noRender();
       throw HttpError.notFound("Ce rendu n'appartient pas à ce carnet.");
     }
 
@@ -333,13 +383,11 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
     // Le prix se **recalcule ici**, à partir de l'état du serveur. Ce que l'app
     // a affiché ne l'engage pas : un total qui arriverait du client serait un
     // total qu'on peut réécrire.
-    const wallet = await walletOf(context, accountId);
     const priced = computeQuote({
       bookTitle: memo.bookTitle?.trim() || memo.title,
       pageCount: billablePages(memo),
       copies: body.copies,
       speed: body.shippingSpeed,
-      walletBalanceCents: wallet.balanceCents,
     });
 
     // Les options manquantes reprennent le style du carnet, exemplaire par
@@ -406,98 +454,23 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
 
     // --- L'encaissement ------------------------------------------------
     //
-    // Deux mouvements possibles, et ils ne s'excluent pas : la cagnotte couvre
-    // ce qu'elle peut, la carte paie le reste. `priced` a déjà fait le partage.
-
-    if (priced.walletAppliedCents > 0) {
-      const debit = await writeLedgerEntry(context.prisma, {
-        accountId,
-        amountCents: -priced.walletAppliedCents,
-        kind: "order_payment",
-        label: `Carnet « ${memo.bookTitle?.trim() || memo.title} »`,
-        printOrderId: order.id,
-      });
-
-      if (debit.outcome === "insufficient") {
-        // Le solde a bougé entre le devis et le débit — une seconde commande
-        // partie en parallèle. La commande vient d'être créée, personne ne l'a
-        // vue, et elle porte un `walletAppliedCents` que le registre dément :
-        // la laisser serait garder une ligne qui ment. On la retire.
-        await context.prisma.printOrder.delete({ where: { id: order.id } });
-        throw HttpError.badRequest(
-          `Il manque ${(debit.missingCents / 100).toFixed(2)} € sur ta cagnotte.`,
-          "wallet_insufficient",
-        );
-      }
-    }
-
-    // La cagnotte a tout couvert : aucun aller-retour de paiement, le débit
-    // **est** l'encaissement.
-    if (priced.totalCents === 0) {
-      const paid = await context.prisma.printOrder.update({
-        where: { id: order.id },
-        data: { status: "submitted", submittedAt: new Date() },
-        include: { copyOptions: true },
-      });
-
-      context.logger.info(
-        { orderId: order.id, memoId, walletCents: priced.walletAppliedCents, paidFrom: "wallet" },
-        "Commande payée par la cagnotte",
-      );
-
-      return reply.code(201).send({
-        ...serializePrintOrder(paid),
-        payment: { paidFromWallet: true, amountCents: 0, currency: "eur" },
-      });
-    }
-
-    // Reste à payer : Stripe prend la main. L'intention est créée **après** la
-    // commande — sa clé d'idempotence est l'identifiant de celle-ci, donc elle
-    // doit exister.
-    //
-    // **Un échec ici rend la réservation** (01/10/2026). La part de cagnotte
-    // vient d'être débitée ; laisser la commande sans intention gardait cet
-    // argent sur un brouillon que personne ne pouvait plus payer.
-    let intent;
-    let customerId: string | null = null;
+    // Stripe, et rien d'autre. L'intention est créée **après** la commande —
+    // sa clé d'idempotence est l'identifiant de celle-ci, donc elle doit
+    // exister. Un échec ici ferme la commande : un brouillon sans intention ne
+    // pourrait plus être payé que par la reprise (`POST /v1/orders/:id/payment`).
+    let opened;
     try {
-      customerId = await ensureStripeCustomer(context, accountId);
-      const buyer = await context.prisma.account.findUnique({
-        where: { id: accountId },
-        select: { email: true },
-      });
-      const title = memo.bookTitle?.trim() || memo.title;
-
-      intent = await context.payments.createIntent({
-        idempotencyKey: `order:${order.id}`,
+      opened = await openOrderIntent(context, {
+        order,
+        accountId,
+        title: memo.bookTitle?.trim() || memo.title,
         amountCents: priced.totalCents,
-        currency: "eur",
-        customerId,
-        metadata: {
-          kind: PAYMENT_KIND.bookOrder,
-          orderId: order.id,
-          memoId,
-          renderId: render.id,
-          accountId,
-        },
-        description:
-          order.copies > 1
-            ? `Carnet « ${title} » — ${order.copies} exemplaires`
-            : `Carnet « ${title} »`,
-        receiptEmail: buyer?.email ?? null,
-        shipping: {
-          name: body.shipping.name,
-          line1: body.shipping.line1,
-          line2: body.shipping.line2 ?? null,
-          postalCode: body.shipping.postalCode,
-          city: body.shipping.city,
-          country: body.shipping.country,
-        },
+        idempotencyKey: `order:${order.id}`,
       });
 
       await context.prisma.printOrder.update({
         where: { id: order.id },
-        data: { stripePaymentIntentId: intent.intentId },
+        data: { stripePaymentIntentId: opened.intent.intentId },
       });
     } catch (cause) {
       await releaseUnpaidOrder(context, order.id, "Le paiement n'a pas pu s'ouvrir.");
@@ -509,8 +482,8 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
       // Ce que la feuille de paiement consomme. `clientSecret` n'ouvre que
       // cette intention-là, mais il n'entre jamais dans un journal.
       payment: await paymentTicket(context, {
-        customerId,
-        clientSecret: intent.clientSecret,
+        customerId: opened.customerId,
+        clientSecret: opened.intent.clientSecret,
         amountCents: priced.totalCents,
         stripeApiVersion: body.stripeApiVersion,
       }),
@@ -518,18 +491,23 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
   });
 
   /**
-   * **Reprendre le paiement d'une commande déjà passée** (01/10/2026).
+   * **Reprendre le paiement d'une commande déjà passée** (01/10/2026) — et,
+   * depuis le 07/10/2026, **la finaliser après un abandon** (T232) : c'est le
+   * CTA « Finaliser ma commande » du suivi des commandes.
    *
    * « Payer », après une feuille refermée ou une carte refusée, créait une
-   * **nouvelle** commande — une nouvelle intention, et un second débit de
-   * cagnotte. L'app reprend désormais celle qu'elle a : cette route rend de
-   * quoi rouvrir la feuille sur **la même** intention.
+   * **nouvelle** commande. L'app reprend désormais celle qu'elle a :
    *
-   * Trois réponses, selon ce que Stripe en dit :
-   * - à régler (`requires_payment_method`, `requires_action`…) → la feuille ;
-   * - réglée ou en cours (`succeeded`, `processing`) → la commande, que l'app
-   *   relit jusqu'à ce que le webhook l'ait passée ;
-   * - annulée → 409 : le brouillon est fermé, il faut repasser commande.
+   * - à régler sur son intention (`requires_payment_method`,
+   *   `requires_action`…) → la feuille, **sur la même intention** ;
+   * - réglée ou en cours (`succeeded`, `processing`) → `payment: null`, et
+   *   l'app relit la commande jusqu'à ce que le webhook l'ait passée ;
+   * - **fermée sans avoir été payée** — par le ménage des 24 h, une intention
+   *   annulée, ou l'app — → elle est **rouverte** : de nouveau `draft`, avec
+   *   une intention neuve, au prix figé à la commande. Elle répondait 409
+   *   `order_expired` ; il fallait tout repasser ;
+   * - payée puis remboursée → 409 `order_refunded` : celle-là ne se rouvre
+   *   pas, il faut en repasser une.
    */
   app.post("/v1/orders/:id/payment", async (request) => {
     const { id } = orderIdParams.parse(request.params);
@@ -538,36 +516,94 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
 
     const order = await context.prisma.printOrder.findFirst({
       where: { id, orderedByAccountId: accountId },
-      include: { copyOptions: true },
+      include: { copyOptions: true, memo: { select: { title: true, bookTitle: true } } },
     });
     if (!order) throw HttpError.notFound("Commande introuvable.");
 
-    if (order.status !== "draft" || !order.stripePaymentIntentId || order.amountCents === null) {
-      return { ...serializePrintOrder(order), payment: null };
+    const settled = () => ({ ...serializePrintOrder(order), payment: null });
+
+    if (wasPaid(order)) {
+      if (order.status === "cancelled") {
+        throw new HttpError(
+          409,
+          "Cette commande a été remboursée : repasse-la depuis l’aperçu du carnet.",
+          "order_refunded",
+        );
+      }
+      return settled();
     }
 
-    const intent = await context.payments.retrieveIntent(order.stripePaymentIntentId);
+    // Une commande d'avant la tarification n'a pas de prix à demander.
+    const amountCents = fullPriceCents(order);
+    if (amountCents === null) return settled();
 
-    if (intent.status === "canceled") {
-      await releaseUnpaidOrder(context, order.id, "Paiement annulé.");
-      throw new HttpError(
-        409,
-        "Cette commande a expiré. Repasse-la : rien n'a été prélevé.",
-        "order_expired",
-      );
+    if (order.status === "draft" && order.stripePaymentIntentId) {
+      const intent = await context.payments.retrieveIntent(order.stripePaymentIntentId);
+
+      if (intent.status === "succeeded" || intent.status === "processing") return settled();
+
+      if (intent.status !== "canceled" && intent.clientSecret) {
+        const customerId = await ensureStripeCustomer(context, accountId);
+        return {
+          ...serializePrintOrder(order),
+          payment: await paymentTicket(context, {
+            customerId,
+            clientSecret: intent.clientSecret,
+            amountCents: order.amountCents ?? amountCents,
+            stripeApiVersion,
+          }),
+        };
+      }
     }
 
-    if (intent.status === "succeeded" || intent.status === "processing" || !intent.clientSecret) {
-      return { ...serializePrintOrder(order), payment: null };
+    // --- Rouvrir (T232) ------------------------------------------------
+    //
+    // Fermer d'abord, par le chemin de toujours : l'intention s'annule (Stripe
+    // tranche si elle vient d'être payée) et une ancienne part de cagnotte
+    // revient. Puis rouvrir sur une intention neuve. La clé d'idempotence
+    // porte l'instant de la dernière écriture : deux appuis simultanés sur
+    // « Finaliser » obtiennent la même intention, pas deux.
+    if (order.status === "draft") {
+      const outcome = await releaseUnpaidOrder(context, order.id, "Paiement rouvert.");
+      if (outcome === "paid") return settled();
     }
+    const closed = await context.prisma.printOrder.findUniqueOrThrow({ where: { id: order.id } });
+    if (wasPaid(closed)) return { ...serializePrintOrder({ ...closed, copyOptions: order.copyOptions }), payment: null };
 
-    const customerId = await ensureStripeCustomer(context, accountId);
+    const { customerId, intent } = await openOrderIntent(context, {
+      order: closed,
+      accountId,
+      title: order.memo.bookTitle?.trim() || order.memo.title,
+      amountCents,
+      idempotencyKey: `order:${order.id}:reopen:${closed.updatedAt.getTime()}`,
+    });
+
+    await context.prisma.printOrder.updateMany({
+      where: { id: order.id, status: { in: ["cancelled", "draft"] }, submittedAt: null },
+      data: {
+        status: "draft",
+        error: null,
+        stripePaymentIntentId: intent.intentId,
+        amountCents,
+        // La part de cagnotte d'une commande d'avant a été rendue en la
+        // fermant : tout se paie par Stripe désormais.
+        walletAppliedCents: 0,
+      },
+    });
+
+    const reopened = await context.prisma.printOrder.findUniqueOrThrow({
+      where: { id: order.id },
+      include: { copyOptions: true },
+    });
+
+    context.logger.info({ orderId: order.id, amountCents, intentId: intent.intentId }, "Commande rouverte pour être finalisée");
+
     return {
-      ...serializePrintOrder(order),
+      ...serializePrintOrder(reopened),
       payment: await paymentTicket(context, {
         customerId,
         clientSecret: intent.clientSecret,
-        amountCents: order.amountCents,
+        amountCents,
         stripeApiVersion,
       }),
     };

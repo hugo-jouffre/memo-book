@@ -43,8 +43,9 @@ type OrderBody = {
   whatsappPhone: string | null;
 };
 
-type ProfileBody = { orders: { id: string }[] };
-type BalanceBody = { balance: number };
+type ProfileBody = {
+  orders: { id: string; status: string; memoId: string; tripTitle: string | null; total: number | null }[];
+};
 
 let harness: TestHarness;
 
@@ -89,10 +90,10 @@ describe("ce que le tunnel reçoit pour s'ouvrir", () => {
    * **La régression qui a blanchi l'étape 1.** `OrderContext.wallet` est un
    * ``Wallet`` Swift, dont `entries` n'est pas optionnel : un objet partiel
    * faisait échouer le décodage de *tout* l'écran, pas seulement de la ligne
-   * concernée. Ce test fige les cinq champs du contrat — `tripId` depuis le
-   * 26/09/2026 : le carnet que la cagnotte finance, ici celui qu'on commande.
+   * concernée. La cagnotte est retirée (06/10/2026), mais les builds installés
+   * le décodent encore : il reste complet, **gelé à zéro**.
    */
-  it("rend une cagnotte complète, et pas seulement son solde", async () => {
+  it("rend une cagnotte gelée mais complète, pour les builds installés", async () => {
     const account = await registerAccount(harness.app);
     const { memo } = await printableTrip(account.accountId);
 
@@ -110,6 +111,26 @@ describe("ce que le tunnel reçoit pour s'ouvrir", () => {
     expect(body.wallet.tripId).toBe(memo.id);
     expect(body.wallet.entries).toEqual([]);
     expect(body.wallet.balance).toBe(0);
+  });
+
+  it("rend le solde à zéro même quand l'ancien registre en porte un", async () => {
+    const account = await registerAccount(harness.app);
+    const { memo } = await printableTrip(account.accountId);
+    await harness.prisma.account.update({
+      where: { id: account.accountId },
+      data: { walletBalanceCents: 2_500 },
+    });
+
+    const body = (
+      await harness.app.inject({
+        method: "GET",
+        url: `/v1/memos/${memo.id}/order-context`,
+        headers: { authorization: account.authorization },
+      })
+    ).json<ContextBody>();
+
+    expect(body.wallet.balance).toBe(0);
+    expect(body.wallet.entries).toEqual([]);
   });
 
   /**
@@ -215,21 +236,13 @@ describe("le récapitulatif", () => {
     expect(quote.total).toBe(quote.fulfilment.subtotal);
   });
 
-  it("déduit la cagnotte, et le total boucle", async () => {
+  it("ne déduit plus rien : la cagnotte est retirée (06/10/2026)", async () => {
     const account = await registerAccount(harness.app);
     const { memo } = await printableTrip(account.accountId);
-
-    await harness.app.inject({
-      method: "POST",
-      url: "/v1/wallet/debug-entry",
-      headers: { authorization: account.authorization },
-      payload: { amount: 20, kind: "gift", label: "Marie D." },
-    });
-    await harness.app.inject({
-      method: "POST",
-      url: "/v1/wallet/debug-entry",
-      headers: { authorization: account.authorization },
-      payload: { amount: 5, kind: "topup", label: "Recharge" },
+    // Un ancien solde, d'avant le retrait : il ne se déduit plus.
+    await harness.prisma.account.update({
+      where: { id: account.accountId },
+      data: { walletBalanceCents: 2_500 },
     });
 
     const quote = (
@@ -241,12 +254,8 @@ describe("le récapitulatif", () => {
       })
     ).json<QuoteBody>();
 
-    // **Une seule ligne, la cagnotte** (03/10/2026) : plus de « Déduction
-    // abonnements hebdomadaires versés », l'abonnement ne se déduit plus.
-    expect(quote.deductions).toEqual([
-      { id: "wallet", label: "Déduction de ta cagnotte", amount: 25 },
-    ]);
-    expect(quote.total).toBeCloseTo(quote.fulfilment.subtotal - 25, 2);
+    expect(quote.deductions).toEqual([]);
+    expect(quote.total).toBe(quote.fulfilment.subtotal);
   });
 });
 
@@ -296,9 +305,11 @@ describe("la commande", () => {
    * Le suivi du profil filtre sur **l'acheteur** et accepte les brouillons :
    * sans ça, la seule commande que l'app sache créer n'apparaissait nulle part.
    */
-  it("n'apparaît dans le suivi qu'une fois payée", async () => {
+  it("se montre « paiement abandonné » tant qu'elle n'est pas payée (T232)", async () => {
     // Un brouillon est une commande **pas payée** : elle s'affichait « en
-    // cours d'acheminement », avec ses jours de livraison (T232).
+    // cours d'acheminement », avec ses jours de livraison. Puis elle a
+    // disparu du suivi ; Hugo veut qu'elle y soit, étiquetée, avec de quoi la
+    // finaliser (06/10/2026).
     const account = await registerAccount(harness.app);
     const { memo, renderId } = await printableTrip(account.accountId);
 
@@ -321,13 +332,67 @@ describe("la commande", () => {
           headers: { authorization: account.authorization },
         })
       )
-        .json<ProfileBody>()
-        .orders.map((o) => o.id);
+        .json<ProfileBody>().orders;
 
-    expect(await tracked()).not.toContain(order.id);
+    expect(await tracked()).toEqual([
+      expect.objectContaining({
+        id: order.id,
+        status: "payment_abandoned",
+        memoId: memo.id,
+        tripTitle: "Lisbonne entre filles",
+        total: order.total,
+      }),
+    ]);
 
-    await harness.prisma.printOrder.update({ where: { id: order.id }, data: { status: "submitted" } });
-    expect(await tracked()).toContain(order.id);
+    // Fermée par le ménage, elle y reste : elle se finalise encore.
+    await harness.prisma.printOrder.update({ where: { id: order.id }, data: { status: "cancelled" } });
+    expect((await tracked()).map((o) => [o.id, o.status])).toEqual([[order.id, "payment_abandoned"]]);
+
+    await harness.prisma.printOrder.update({
+      where: { id: order.id },
+      data: { status: "submitted", submittedAt: new Date() },
+    });
+    expect((await tracked()).map((o) => [o.id, o.status])).toEqual([[order.id, "in_progress"]]);
+
+    // Payée puis remboursée : ni en route, ni abandonnée.
+    await harness.prisma.printOrder.update({ where: { id: order.id }, data: { status: "cancelled" } });
+    expect(await tracked()).toEqual([]);
+  });
+
+  it("ne montre que la dernière tentative d'un voyage, et plus rien une fois payée", async () => {
+    const account = await registerAccount(harness.app);
+    const { memo, renderId } = await printableTrip(account.accountId);
+    const place = async () =>
+      (
+        await harness.app.inject({
+          method: "POST",
+          url: `/v1/memos/${memo.id}/orders`,
+          headers: { authorization: account.authorization },
+          payload: { renderId, copies: 1, shipping },
+        })
+      ).json<OrderBody>();
+    const tracked = async () =>
+      (
+        await harness.app.inject({ method: "GET", url: "/v1/profile", headers: { authorization: account.authorization } })
+      ).json<ProfileBody>().orders;
+
+    // Une adresse changée au milieu du tunnel : la première est remplacée.
+    const first = await place();
+    await harness.app.inject({
+      method: "POST",
+      url: `/v1/orders/${first.id}/cancel`,
+      headers: { authorization: account.authorization },
+    });
+    const second = await place();
+    expect((await tracked()).map((o) => o.id)).toEqual([second.id]);
+
+    // Une troisième, payée : plus rien d'abandonné sur ce voyage.
+    const third = await place();
+    await harness.prisma.printOrder.update({
+      where: { id: third.id },
+      data: { status: "submitted", submittedAt: new Date() },
+    });
+    expect((await tracked()).map((o) => [o.id, o.status])).toEqual([[third.id, "in_progress"]]);
   });
 });
 
@@ -383,52 +448,6 @@ describe("le suivi par WhatsApp", () => {
       url: `/v1/orders/${order.id}/whatsapp`,
       headers: { authorization: account.authorization },
       payload: { enabled: true },
-    });
-
-    expect(refused.statusCode).toBe(400);
-  });
-});
-
-describe("le bac à sable de la cagnotte", () => {
-  it("écrit une vraie écriture, et tient le cache du solde d'accord", async () => {
-    const account = await registerAccount(harness.app);
-
-    await harness.app.inject({
-      method: "POST",
-      url: "/v1/wallet/debug-entry",
-      headers: { authorization: account.authorization },
-      payload: { amount: 1.99, kind: "topup", label: "Recharge" },
-    });
-    const second = await harness.app.inject({
-      method: "POST",
-      url: "/v1/wallet/debug-entry",
-      headers: { authorization: account.authorization },
-      payload: { amount: 30, kind: "gift", label: "Julie et Tom" },
-    });
-
-    expect(second.json<BalanceBody>().balance).toBeCloseTo(31.99, 2);
-
-    const entries = await harness.prisma.walletEntry.findMany({
-      where: { accountId: account.accountId },
-      orderBy: { createdAt: "asc" },
-    });
-    // Le registre et son cache disent la même chose — c'est toute la règle.
-    expect(entries.at(-1)?.balanceAfterCents).toBe(3_199);
-    const cached = await harness.prisma.account.findUniqueOrThrow({
-      where: { id: account.accountId },
-      select: { walletBalanceCents: true },
-    });
-    expect(cached.walletBalanceCents).toBe(3_199);
-  });
-
-  it("n'ouvre pas de découvert", async () => {
-    const account = await registerAccount(harness.app);
-
-    const refused = await harness.app.inject({
-      method: "POST",
-      url: "/v1/wallet/debug-entry",
-      headers: { authorization: account.authorization },
-      payload: { amount: -5, kind: "adjustment", label: "Correction" },
     });
 
     expect(refused.statusCode).toBe(400);

@@ -36,7 +36,7 @@ import {
 } from "./notificationPlanner.js";
 import { unitPriceCents } from "./printPricing.js";
 import { schoolCalendarOf, type SchoolHolidayPeriod, type SchoolZone } from "./schoolHolidays.js";
-import { LIVING_SUBSCRIPTION_STATUSES } from "./subscriptions.js";
+import { LIVING_SUBSCRIPTION_STATUSES, subscriptionStateOf } from "./subscriptions.js";
 
 /**
  * La passe d'envoi : **charger, décider, envoyer, retenir**. Appelée toutes
@@ -98,9 +98,11 @@ export function armedAppleRenewal(
     (subscription) =>
       subscription.provider === "storekit" &&
       // `past_due` : Apple tente encore de prélever, et `renewsAt` est la fin
-      // du délai de grâce — « se renouvelle dans 3 jours » serait faux.
-      subscription.status === "active" &&
-      subscription.autoRenews !== false,
+      // du délai de grâce — « se renouvelle dans 3 jours » serait faux. Et une
+      // ligne restée `active` sans nouvelles d'Apple trois jours après
+      // l'échéance est finie (un `EXPIRED` perdu) : « tu gardes l'illimité »
+      // serait faux aussi (07/10/2026).
+      subscriptionStateOf(subscription, now) === "active",
   );
   if (armed.length === 0) return null;
 
@@ -372,8 +374,8 @@ export async function loadPlannerAccount(
     lastStoryOn: day(latest(memo.id)),
     isOwner: memo.ownerAccountId === accountId,
     hasOrder: memo.orders.length > 0,
-    // La même estimation que la cagnotte (`serializeWalletEstimate`) : celle
-    // que le toucher de la notification de fin de voyage va montrer.
+    // Le prix d'un carnet aux pages visées — ou composées, si elles sont plus
+    // nombreuses : la règle du prix de la commande (`billablePages`).
     estimateCents: unitPriceCents(Math.max(memo.targetPageCount, memo.pageCount)),
     memberCount: 1 + memo._count.members,
     newFromOthers: newFromOthers(memo.id),

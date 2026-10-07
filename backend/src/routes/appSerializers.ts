@@ -7,6 +7,7 @@ import type {
   MemoStep,
   PaymentCard,
   PrintOrder,
+  Render,
   Showcase,
   Subscription,
   TripTheme,
@@ -16,8 +17,9 @@ import { serializeDailyCredit, type DailyCredit } from "../services/dailyCredit.
 import { unitPriceCents } from "../services/printPricing.js";
 import { findShippingCountry, SHIPPING_COUNTRIES } from "../services/shippingCountries.js";
 import { SUBSCRIPTION_MONTHLY_CENTS } from "../services/subscriptionCatalog.js";
-import { grantsUnlimitedAccess } from "../services/subscriptions.js";
+import { accountSubscriptionOf, grantsUnlimitedAccess, subscriptionStateOf } from "../services/subscriptions.js";
 import { avatarUrlOf } from "../services/avatars.js";
+import { renderPhase } from "./serializers.js";
 import { effectiveGender } from "../services/genderInference.js";
 import { effectiveStage } from "../services/tripStage.js";
 
@@ -114,12 +116,23 @@ function serializeOwner(owner: Account) {
 }
 
 /**
- * Une carte de voyage. `dailyCredit` n'est passé que pour un voyage **en
- * cours** de l'accueil : c'est le crédit que vise le vocal de l'accueil, et
- * la carte le porte pour que la feuille d'enregistrement sache où elle en est
- * sans un appel de plus (03/10/2026).
+ * Une carte de voyage, **vue par quelqu'un**.
+ *
+ * `viewerAccountId` : celui qui lit. Il décide de `canDelete` (T233, Hugo
+ * 06/10/2026) — supprimer un voyage n'appartient qu'à son propriétaire, et un
+ * co-voyageur ne doit même pas voir l'option : il la voyait, et le serveur lui
+ * répondait 404.
+ *
+ * `dailyCredit` n'est passé que pour un voyage **en cours** de l'accueil :
+ * c'est le crédit que vise le vocal de l'accueil, et la carte le porte pour
+ * que la feuille d'enregistrement sache où elle en est sans un appel de plus
+ * (03/10/2026).
  */
-export function serializeTrip(memo: MemoForTrip, dailyCredit?: DailyCredit) {
+export function serializeTrip(
+  memo: MemoForTrip,
+  options: { viewerAccountId: string; dailyCredit?: DailyCredit },
+) {
+  const { dailyCredit } = options;
   // Les co-voyageurs sont les *autres* : le propriétaire est déjà le titulaire
   // de l'écran, sa pastille sur sa propre couverture n'apprend rien. Il n'a
   // d'ailleurs pas de ligne dans `memo_members`, qui ne porte que les autres.
@@ -163,6 +176,9 @@ export function serializeTrip(memo: MemoForTrip, dailyCredit?: DailyCredit) {
             targetPageCount: memo.targetPageCount,
           },
     isPrintable: memo.isPrintable,
+    // Le propriétaire seul supprime un voyage — `DELETE /v1/memos/:id` répond
+    // 404 à tout autre. Même règle que `canClearConversation`.
+    canDelete: memo.ownerAccountId === options.viewerAccountId,
     ...(dailyCredit ? { dailyCredit: serializeDailyCredit(dailyCredit) } : {}),
   };
 }
@@ -277,6 +293,7 @@ export function serializeTraveller(
   now: Date = new Date(),
 ) {
   const subscriptions = account.subscriptions ?? [];
+  const current = accountSubscriptionOf(subscriptions, now);
   return {
     id: account.id,
     // Le prénom porte la salutation de l'accueil. À défaut, la partie locale de
@@ -286,12 +303,12 @@ export function serializeTraveller(
     // **Déduit, pas stocké** : la période payée du dernier abonnement, si elle
     // vient de s'achever. C'est ce qui permet à l'accueil d'ouvrir l'alerte
     // système « ton abonnement s'est arrêté » — voir `justEndedSubscription`.
-    subscriptionEndedOn: iso(justEndedSubscription(subscriptions)),
+    subscriptionEndedOn: iso(justEndedSubscription(subscriptions, now)),
     // **Le rappel de fin de voyage** (01/10/2026) : l'abonnement App Store se
     // renouvelle encore alors qu'aucun voyage ne court. Apple ne laisse pas
     // l'app le couper à la place de la personne ; l'accueil le lui propose,
     // en un geste. L'abonnement ne s'arrête jamais de lui-même.
-    subscriptionOutlivesTrip: outlivesEveryTrip(subscriptions, trips),
+    subscriptionOutlivesTrip: outlivesEveryTrip(subscriptions, trips, now),
     // Raconte-t-il sans limite ? La même règle que le crédit du jour
     // (`grantsUnlimitedAccess`) : le verrou du micro et le paywall de l'accueil
     // en dépendent.
@@ -299,6 +316,12 @@ export function serializeTraveller(
     // A-t-il déjà été abonné ? C'est ce qui choisit la version « retour » du
     // paywall, d'où qu'on l'ouvre.
     hasSubscribedBefore: subscriptions.length > 0,
+    // **L'état de l'abonnement, en un mot** (07/10/2026) — `active`, `grace`,
+    // `ending`, `ended` ou `none` : voir `subscriptionStateOf`. « Abonné » ne
+    // se dit que pour `active` et `grace` ; `ending` raconte encore sans
+    // limite, jusqu'à `subscriptionEndsAt`.
+    subscriptionState: current.state,
+    subscriptionEndsAt: current.state === "ending" ? iso(current.endsAt) : null,
   };
 }
 
@@ -312,16 +335,18 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 function outlivesEveryTrip(
   subscriptions: Subscription[],
   trips: { endDate: Date | null }[],
+  now: Date,
 ): boolean {
+  // Armé **et vivant** : un `EXPIRED` perdu en route laisse la ligne `active`,
+  // et il n'y a rien à couper (`subscriptionStateOf`).
   const renews = subscriptions.some(
-    (entry) => entry.provider === "storekit" && entry.status === "active" && entry.autoRenews !== false,
+    (entry) => entry.provider === "storekit" && subscriptionStateOf(entry, now) === "active",
   );
   if (!renews) return false;
 
   // `endDate` est le minuit local du dernier jour : le voyage court encore
   // tout ce jour-là, d'où le jour ajouté.
-  const now = Date.now();
-  return !trips.some((trip) => trip.endDate === null || trip.endDate.getTime() + DAY_MS >= now);
+  return !trips.some((trip) => trip.endDate === null || trip.endDate.getTime() + DAY_MS >= now.getTime());
 }
 
 /**
@@ -341,18 +366,19 @@ function outlivesEveryTrip(
  */
 const RECENTLY_ENDED_DAYS = 14;
 
-function justEndedSubscription(subscriptions: Subscription[]): Date | null {
-  // Un abonnement encore vivant n'a rien à annoncer, quoi qu'en disent les
+function justEndedSubscription(subscriptions: Subscription[], at: Date): Date | null {
+  // Un abonnement qui ouvre encore l'illimité — armé, en délai de grâce, ou
+  // dans sa dernière période payée — n'a rien à annoncer, quoi qu'en disent les
   // lignes plus anciennes de l'historique.
-  if (subscriptions.some((entry) => entry.status === "active" || entry.status === "trialing")) {
-    return null;
-  }
+  if (subscriptions.some((entry) => subscriptionStateOf(entry, at) !== "ended")) return null;
 
-  const now = Date.now();
+  const now = at.getTime();
   const floor = now - RECENTLY_ENDED_DAYS * 24 * 60 * 60 * 1000;
 
+  // Tous les abonnements finis, y compris une ligne restée `active` dont Apple
+  // n'a plus rien dit depuis l'échéance (un `EXPIRED` perdu) : elle s'est
+  // arrêtée à sa date de renouvellement.
   const ended = subscriptions
-    .filter((entry) => entry.status === "cancelled" || entry.status === "expired")
     .map((entry) => entry.renewsAt)
     .filter((date): date is Date => date !== null && date.getTime() <= now && date.getTime() >= floor)
     .sort((a, b) => b.getTime() - a.getTime());
@@ -388,6 +414,11 @@ export function serializeTripStep(
     photoUrl: step.photoUrl,
     transport: step.transport,
     validatedAt: iso(step.validatedAt),
+    // Les souvenirs que porte l'étape (T235) : un vocal, un texte, des photos.
+    // La croix du tiroir de l'étape les efface un à un
+    // (`DELETE /v1/entries/:id`) ; sans eux, elle ne paraît pas. Le dernier
+    // parti, l'étape disparaît (`services/tripFacts.ts`).
+    entryIds: (step.entries ?? []).map((entry) => entry.id),
   };
 }
 
@@ -404,7 +435,7 @@ type AccountForProfile = Account & {
   identities?: { provider: string }[];
 };
 
-type OrderForTracking = PrintOrder & { memo?: { coverPhotoUrl: string | null } | null };
+type OrderForTracking = PrintOrder & { memo?: { coverPhotoUrl: string | null; title?: string } | null };
 
 /**
  * Les voyages du compte, réduits à ce que la carte de chiffres du profil
@@ -444,9 +475,23 @@ function serializeProfileStats(trips: TripForProfileStats[]) {
 /** Fourchette de livraison par défaut, quand l'imprimeur n'a rien annoncé. */
 const DEFAULT_DELIVERY_DAYS = { min: 5, max: 10 } as const;
 
+/**
+ * Une ligne du suivi des commandes. `status` dit laquelle des deux (T232) :
+ * `in_progress`, payée et en route ; `payment_abandoned`, jamais payée — « Paiement
+ * abandonné, commande non finalisée », et le CTA « Finaliser ma commande »
+ * (`POST /v1/orders/:id/payment`). Le profil ne sert que ces deux-là.
+ */
 function serializeOrderTracking(order: OrderForTracking) {
+  const paymentAbandoned =
+    order.status === "draft" || (order.status === "cancelled" && order.submittedAt === null);
   return {
     id: order.id,
+    status: paymentAbandoned ? ("payment_abandoned" as const) : ("in_progress" as const),
+    memoId: order.memoId,
+    tripTitle: order.memo?.title ?? null,
+    // Le net à payer, en euros — `null` sur une commande d'avant la tarification.
+    total: order.amountCents === null ? null : euros(order.amountCents),
+    createdAt: order.createdAt.toISOString(),
     minimumDays: order.estimatedMinDays ?? DEFAULT_DELIVERY_DAYS.min,
     maximumDays: order.estimatedMaxDays ?? DEFAULT_DELIVERY_DAYS.max,
     copies: order.copies,
@@ -525,11 +570,15 @@ export function serializeProfile(
   // `past_due` compris : pendant le délai de grâce, Apple garde l'accès ouvert
   // et retente le prélèvement — la feuille ne dit pas « résilié » à un abonné
   // dont la carte a seulement expiré.
-  const active = subscriptions.find(
-    (entry) => entry.status === "active" || entry.status === "trialing" || entry.status === "past_due",
-  );
-  const subscription = active ?? subscriptions[0];
-  const isSubscribed = active !== undefined;
+  //
+  // **Un seul état pour tout le profil** (07/10/2026, `accountSubscriptionOf`) :
+  // « abonné » (`isActive`) seulement quand le renouvellement est armé ou en
+  // délai de grâce. Un renouvellement coupé ne l'est plus, même s'il raconte
+  // encore sans limite jusqu'au bout du mois ; une ligne `active` dont Apple
+  // n'a rien dit trois jours après l'échéance non plus.
+  const current = accountSubscriptionOf(subscriptions, now);
+  const subscription = current.subscription ?? undefined;
+  const isSubscribed = current.state === "active" || current.state === "grace";
   // L'abonnement qui ouvre l'illimité aujourd'hui — vivant, ou résilié avec
   // un mois encore payé. C'est **lui seul** qui porte un prix à afficher :
   // un ancien abonné de la semaine revoit l'offre du mois, pas l'ancien tarif.
@@ -563,7 +612,10 @@ export function serializeProfile(
     // y choisit le pays, et un second appel ferait attendre un menu.
     shippingCountries: SHIPPING_COUNTRIES,
     wantsNewsletter: account.wantsNewsletter,
-    walletBalance: euros(account.walletBalanceCents),
+    // **Gelé à zéro** (06/10/2026) : la cagnotte est retirée du produit. Les
+    // builds installés décodent ce champ comme obligatoire ; à retirer quand
+    // plus aucun ne le lit.
+    walletBalance: 0,
     cards: (account.cards ?? []).map(serializeCard),
     selectedCardId: defaultCard?.id ?? account.cards?.[0]?.id ?? null,
     connectors: serializeConnectors(account.connectors ?? []),
@@ -604,9 +656,18 @@ export function serializeProfile(
       managedByAppStore: subscription?.provider === "storekit",
       hasEndedBefore:
         !isSubscribed &&
-        (account.subscriptions ?? []).some(
-          (entry) => entry.status === "cancelled" || entry.status === "expired",
-        ),
+        subscriptions.some((entry) => {
+          const state = subscriptionStateOf(entry, now);
+          return state === "ending" || state === "ended";
+        }),
+      // **L'état, en un mot** (07/10/2026) : `none`, `active`, `grace`,
+      // `ending`, `ended` — voir `subscriptionStateOf`. Avec lui, de quoi
+      // écrire « se renouvelle le 12 novembre » ou « illimité jusqu'au 12
+      // novembre, puis plus rien ».
+      state: current.state,
+      autoRenews: current.autoRenews,
+      renewsAt: iso(current.renewsAt),
+      endsAt: iso(current.endsAt),
     },
     orders: orders.map(serializeOrderTracking),
     ...serializeProfileStats(trips),
@@ -614,12 +675,11 @@ export function serializeProfile(
 }
 
 // ---------------------------------------------------------------------------
-// Paramètres du voyage, cagnotte, aperçu du carnet
+// Paramètres du voyage, aperçu du carnet
 // ---------------------------------------------------------------------------
 //
-// Les trois écrans de « 🤖 Claude Import ». Même règle que ci-dessus : la forme
-// suit `TripSettings`, `Wallet` et `BookPreview` de `MemoBookCore` au champ
-// près.
+// Même règle que ci-dessus : la forme suit `TripSettings`, `Wallet` (gelé) et
+// `BookPreview` de `MemoBookCore` au champ près.
 
 type MemoForSettings = Memo & {
   members?: (MemoMember & { account?: Account | null })[];
@@ -628,22 +688,22 @@ type MemoForSettings = Memo & {
 };
 
 /**
- * Ce que l'écran des réglages d'un voyage montre.
- *
- * `walletBalanceCents` vient du **compte** et se passe en argument : la
- * cagnotte n'appartient pas au carnet, et lire le solde depuis le voyage
- * laisserait croire qu'il y en a un par voyage.
+ * Ce que l'écran des réglages d'un voyage montre, **vu par quelqu'un** :
+ * `viewerAccountId` décide de ce que seul le propriétaire peut faire.
  */
 export function serializeTripSettings(
   memo: MemoForSettings,
-  walletBalanceCents: number,
   dailyCredit: DailyCredit,
-  viewerAccountId?: string,
+  viewerAccountId: string,
 ) {
+  const isOwner = memo.ownerAccountId === viewerAccountId;
   return {
     tripId: memo.id,
     name: memo.title,
-    walletBalance: euros(walletBalanceCents),
+    // **Gelé à zéro** (06/10/2026) : la cagnotte est retirée du produit. Les
+    // builds installés décodent ce champ comme obligatoire ; à retirer quand
+    // plus aucun ne le lit.
+    walletBalance: 0,
     // **Le crédit du jour du voyage**, vu par celui qui lit (Hugo,
     // 03/10/2026) — la ligne « Crédit du jour » des réglages. Il remplace la
     // clé `memory` des limites de souvenirs, qui disparaît : une app installée
@@ -692,7 +752,10 @@ export function serializeTripSettings(
     // « Supprimer la conversation » n'appartient qu'au propriétaire, comme
     // supprimer le voyage (`docs/conversation.md` § 7). L'app pâlit le lien et
     // explique ; le serveur refuse quand même (`DELETE /v1/trips/:id/chat`).
-    canClearConversation: viewerAccountId === undefined || memo.ownerAccountId === viewerAccountId,
+    canClearConversation: isOwner,
+    // « Supprimer le voyage » aussi (T233, 06/10/2026) : un co-voyageur ne
+    // doit même pas voir l'option — `DELETE /v1/memos/:id` lui répond 404.
+    canDelete: isOwner,
   };
 }
 
@@ -772,18 +835,25 @@ type WalletEntryRow = {
 };
 
 /**
- * La cagnotte d'un compte, lue depuis l'écran d'un voyage.
- *
- * `trip` est optionnel : on arrive aussi depuis le profil, où il n'y a pas de
- * carnet à financer — seulement un solde à consulter.
+ * **La cagnotte gelée** (06/10/2026 — « on supprime la cagnotte ») : un solde
+ * à zéro, sans historique, pour le seul champ `wallet` d'`order-context` que
+ * les builds installés décodent encore comme obligatoire. Plus aucune route
+ * ne sert de cagnotte ; à retirer quand plus aucun build ne le lit.
  */
-export function serializeWallet(
+export function frozenWallet(
+  trip: Pick<Memo, "id" | "title" | "destinationCity" | "targetPageCount" | "pageCount">,
+) {
+  return serializeWallet(0, [], trip);
+}
+
+/**
+ * La forme d'une cagnotte, telle que ``Wallet`` la décode côté Swift. Ne sert
+ * plus qu'à `frozenWallet`.
+ */
+function serializeWallet(
   balanceCents: number,
   entries: WalletEntryRow[],
-  trip: Pick<
-    Memo,
-    "id" | "title" | "destinationCity" | "targetPageCount" | "pageCount" | "startDate" | "endDate"
-  > | null,
+  trip: Pick<Memo, "id" | "title" | "destinationCity" | "targetPageCount" | "pageCount"> | null,
 ) {
   return {
     // Le carnet que cette cagnotte finance — celui qu'on a demandé, ou celui
@@ -830,18 +900,29 @@ function serializeWalletEstimate(trip: Pick<Memo, "targetPageCount" | "pageCount
 }
 
 type MemoForPreview = Memo & {
-  renders?: { id: string; status: string; pdfUrl?: string | null }[];
+  renders?: Pick<Render, "id" | "status" | "pdfUrl" | "error" | "createdAt" | "updatedAt" | "composingStartedAt">[];
   entries?: EntryTextRow[];
 };
+
+/** Ce que l'aperçu sait de la composition, au-delà du dernier rendu. */
+export interface PreviewComposition {
+  /** Le dernier rendu **prêt** : son PDF, et ce qu'il a composé. */
+  lastReady: { id: string; pdfUrl: string | null; inputFingerprint: string | null } | null;
+  /** L'empreinte du carnet aujourd'hui — voir `services/bookFingerprint.ts`. */
+  currentFingerprint: string | null;
+  /** Les souvenirs que MEMO n'a pas fini d'écrire. */
+  pendingMemoryCount: number;
+}
 
 /** L'aperçu du carnet : le PDF composé, et de quoi le partager. */
 export function serializeBookPreview(
   memo: MemoForPreview,
-  lastReadyPdfUrl: string | null,
+  composition: PreviewComposition,
   publicBaseUrl: string,
 ) {
   const render = memo.renders?.[0];
   const excerpt = serializeExcerpt(memo.entries ?? []);
+  const { lastReady } = composition;
 
   return {
     memoId: memo.id,
@@ -853,8 +934,33 @@ export function serializeBookPreview(
     // (`renders.take: 1` ne voit que le rendu en cours, `pdfUrl: null`) le
     // temps qu'elle aboutisse.
     status: serializeRenderStatus(render?.status),
-    pdfUrl: lastReadyPdfUrl,
+    pdfUrl: lastReady?.pdfUrl ?? null,
     pageCount: memo.pageCount,
+    // **De quoi suivre une composition** (T224, 07/10/2026) : la dernière,
+    // quel que soit son état — `null` si le carnet n'a jamais été composé.
+    // L'app lance `POST /v1/memos/:id/renders` à chaque ouverture de l'aperçu,
+    // puis relit cette route jusqu'à `ready` ou `failed`.
+    render: render
+      ? {
+          id: render.id,
+          status: render.status,
+          phase: renderPhase(render),
+          startedAt: render.createdAt.toISOString(),
+          updatedAt: render.updatedAt.toISOString(),
+          error: render.error,
+        }
+      : null,
+    // Le rendu derrière `pdfUrl` : c'est lui qu'on commande.
+    readyRenderId: lastReady?.id ?? null,
+    // Le PDF montre-t-il le carnet d'aujourd'hui ? Faux sans PDF, ou quand un
+    // souvenir, une étape, une personnalisation ou une couverture a changé
+    // depuis — la prochaine ouverture recomposera.
+    isUpToDate:
+      lastReady !== null &&
+      composition.currentFingerprint !== null &&
+      lastReady.inputFingerprint === composition.currentFingerprint,
+    // Ceux que la composition en cours attend avant de mettre en page.
+    pendingMemoryCount: composition.pendingMemoryCount,
     // Nul tant que personne n'a demandé à partager : c'est un lien public.
     shareUrl: memo.shareSlug ? `${publicBaseUrl}/c/${memo.shareSlug}` : null,
     coverPhotoUrl: memo.coverPhotoUrl,

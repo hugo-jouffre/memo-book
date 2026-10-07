@@ -81,8 +81,9 @@ function unlimitedUntil(renewsOn: LocalDate | null): string {
 
 /**
  * **Fin du voyage** — le jour de la date de fin. L'abonnement s'il court
- * encore, puis l'estimation du carnet ; le toucher ouvre la cagnotte du
- * voyage, qui porte la même estimation.
+ * encore, puis l'estimation du carnet ; le toucher ouvre l'aperçu du carnet,
+ * d'où il se commande (la cagnotte du voyage, qui l'ouvrait, est retirée le
+ * 06/10/2026).
  *
  * L'abonnement est mensuel (Hugo, 03/10/2026) : la fin du voyage tombe
  * n'importe où dans le mois payé. On l'invite donc **doucement** à le couper,

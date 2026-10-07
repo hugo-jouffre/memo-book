@@ -309,6 +309,8 @@ model Account {
   connectors        AccountConnector[]
   feedbackResponses FeedbackResponse[]
   chatMessages      ChatMessage[]
+  supportMessages   SupportMessage[]
+  faqVotes          FaqVote[]
 
   @@map("accounts")
 }
@@ -621,6 +623,13 @@ model Memo {
   /// Nulle pour un carnet qui n'est pas situé dans une ville.
   destinationCity String?
 
+  /// `true` quand la destination ci-dessus a été **déduite des souvenirs**
+  /// (`services/tripFacts.ts`, T227) et non posée par quelqu'un : elle suit
+  /// alors les souvenirs — le pays le plus cité change, elle change ; le
+  /// dernier souvenir part, elle s'efface. Une destination posée (le jeu
+  /// d'essai, une future saisie dans l'app) n'est jamais touchée.
+  destinationInferred Boolean @default(false)
+
   /// Compteurs affichés sous le titre. Entretenus à l'écriture plutôt que
   /// recalculés à chaque ouverture de l'accueil, qui les demande tous d'un coup
   /// pour tous les voyages.
@@ -794,6 +803,8 @@ model Memo {
   subscriptionTransactions SubscriptionTransaction[]
   /// Les notifications qui ont parlé de ce voyage.
   notifications            NotificationDelivery[]
+  /// Les messages à l'équipe écrits depuis ce voyage.
+  supportMessages          SupportMessage[]
 
   @@index([ownerAccountId, createdAt])
   /// La galerie lit **tous** les carnets publics, quel qu'en soit le
@@ -1278,15 +1289,25 @@ model Render {
   pdfUrl                   String?
   error                    String?
 
-  /// Le nombre de pages réellement composées par ce rendu.
+  /// Le nombre de pages composées par ce rendu — une par entrée de `days[]`
+  /// du payload —, écrit quand il est prêt (07/10/2026). Il est recopié sur
+  /// `memos.pageCount`, que l'accueil et le prix lisent (`billablePages`).
   ///
-  /// ⚠️ **Orpheline** : la colonne existe en base depuis le 15/09/2026, posée
-  /// par une migration dont le fichier n'a jamais été versionné, et **aucun
-  /// code ne la lit ni ne l'écrit**. Les pages facturées passent par
-  /// `memos.pageCount` et `print_orders.pageCount` (voir `billablePages`).
-  /// Elle est déclarée ici pour que le schéma dise la vérité sur la base —
-  /// sans quoi la prochaine migration proposerait de la supprimer.
+  /// La colonne existe en base depuis le 15/09/2026, posée par une migration
+  /// dont le fichier n'a jamais été versionné ; elle n'était lue par personne.
   pageCount Int?
+
+  /// L'empreinte de ce que ce rendu a composé — souvenirs, étapes,
+  /// personnalisations, couvertures, titre, dates (`services/bookFingerprint.ts`).
+  /// C'est elle qui dit qu'un rendu prêt est **à jour** : l'aperçu se recompose
+  /// à chaque ouverture, sauf si rien n'a changé (T224). Nulle pour un rendu
+  /// d'avant le 07/10/2026, toujours considéré comme périmé.
+  inputFingerprint String?
+
+  /// L'instant où le PDF part chez APITemplate, la mise en page faite. Nul
+  /// avant : c'est ce qui sépare la phase « writing » de « composing » sans
+  /// relire le payload à chaque sondage de l'aperçu.
+  composingStartedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1949,6 +1970,86 @@ model FeedbackAnswer {
   @@unique([responseId, questionId])
   @@index([questionId])
   @@map("feedback_answers")
+}
+
+/// D'où vient un message à l'équipe — le même formulaire s'ouvre de deux
+/// endroits, et ce qu'on y écrit ne se lit pas pareil.
+enum SupportMessageSource {
+  /// « Écris à notre équipe », depuis l'écran « Support et retours » (une
+  /// question de « Nous contacter », ou le formulaire seul).
+  support
+  /// « Partager mes retours », depuis le mot des fondateurs de l'aperçu.
+  founders_note
+}
+
+/// Un message écrit à l'équipe (T226, Hugo 06/10/2026) : « les questions
+/// envoyées depuis le support ainsi que le contenu de "partager mes retours"
+/// […] ne se perdent pas mais soient bien stockés dans notre database ». Le
+/// formulaire attendait 600 ms et disait « envoyé » ; rien ne partait.
+///
+/// **Une ligne par envoi, jamais réécrite** — sauf `handledAt`, que l'équipe
+/// pose quand elle a répondu. Le message est la donnée de la personne : il
+/// part dans son export, et avec son compte (en cascade, comme un avis).
+model SupportMessage {
+  id        String  @id @default(uuid())
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  source  SupportMessageSource
+  /// L'identifiant de la question de « Nous contacter » qui a ouvert le
+  /// formulaire (`faq.aide.probleme`, `faq.aide.suggestion`) — l'identifiant
+  /// stable de `Faq.swift`, pas son libellé. Nul pour le formulaire seul.
+  topicId String?
+  /// Ce que la personne a écrit, tel quel.
+  message String
+
+  /// Le voyage d'où l'on écrit, s'il y en a un. `SetNull` : un voyage
+  /// supprimé n'efface pas ce qu'on nous a dit.
+  memoId String?
+  memo   Memo?   @relation(fields: [memoId], references: [id], onDelete: SetNull)
+
+  /// La version de l'app (`0.1.0 (21)`), et le « diagnostic technique joint
+  /// automatiquement » que le formulaire annonce : système, modèle, langue.
+  /// Jamais le contenu des souvenirs.
+  appVersion  String?
+  diagnostics Json?
+
+  /// Quand l'équipe l'a traité. Nul : à lire.
+  handledAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([accountId, createdAt])
+  /// La boîte de l'équipe : les plus récents d'abord, non traités en tête.
+  @@index([handledAt, createdAt])
+  @@map("support_messages")
+}
+
+/// « Est-ce utile ? » sous une réponse de la foire aux questions (T226) — la
+/// mesure que la page Notion demande : « clics *cette réponse t'a-t-elle aidé*
+/// par identifiant, pour repérer les questions mal formulées ».
+///
+/// **Un vote par compte et par question**, et il se change : revoter remplace.
+/// C'est ce qui rend la mesure lisible — une question compte ses lecteurs, pas
+/// leurs clics.
+model FaqVote {
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  /// L'identifiant stable de la question (`faq.carnet.pages`), celui de
+  /// `Faq.swift` — il survit à une reformulation, c'est tout son intérêt.
+  questionId String
+  isHelpful  Boolean
+
+  appVersion String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([accountId, questionId])
+  /// Le décompte par question.
+  @@index([questionId])
+  @@map("faq_votes")
 }
 
 /// Les thèmes proposés à la première étape de « Créer un voyage » — « Contexte
