@@ -336,6 +336,20 @@ public struct Trip: Codable, Sendable, Hashable, Identifiable {
     /// tranche. Une variable, pour que l'app le décompte entre deux lectures.
     public var dailyCredit: DailyCredit?
 
+    /// **Ce compte peut supprimer ce voyage** — il en est le propriétaire
+    /// (T233, Hugo, 06/10/2026). Un co-voyageur raconte, règle, commande,
+    /// mais ne détruit pas le récit de tout le monde : « Supprimer le voyage »
+    /// ne lui est même pas montré.
+    ///
+    /// `nil` quand le serveur ne l'a pas dit — un serveur d'avant le
+    /// 06/10, un accueil gardé avant, et **un voyage créé hors ligne**, qui
+    /// appartient à son créateur : on lit alors `true` (``isDeletable``), et
+    /// c'est le serveur qui refuse.
+    public let canDelete: Bool?
+
+    /// Voir ``canDelete`` : faute de réponse, la porte reste montrée.
+    public var isDeletable: Bool { canDelete ?? true }
+
     public init(
         id: String,
         title: String,
@@ -348,7 +362,8 @@ public struct Trip: Codable, Sendable, Hashable, Identifiable {
         companions: [Companion] = [],
         progress: TripProgress? = nil,
         isPrintable: Bool = false,
-        dailyCredit: DailyCredit? = nil
+        dailyCredit: DailyCredit? = nil,
+        canDelete: Bool? = nil
     ) {
         self.id = id
         self.title = title
@@ -362,6 +377,7 @@ public struct Trip: Codable, Sendable, Hashable, Identifiable {
         self.progress = progress
         self.isPrintable = isPrintable
         self.dailyCredit = dailyCredit
+        self.canDelete = canDelete
     }
 }
 

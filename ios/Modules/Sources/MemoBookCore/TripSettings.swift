@@ -264,6 +264,11 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
     /// on lit alors `true`, et c'est le serveur qui refuse.
     public var canClearConversation: Bool?
 
+    /// « Supprimer le voyage » est ouvert à ce compte — le propriétaire
+    /// (T233). Même lecture que ``canClearConversation`` : `nil` vaut `true`,
+    /// et c'est le serveur qui refuse. Un co-voyageur ne voit pas la ligne.
+    public var canDelete: Bool?
+
     public init(
         tripId: String,
         name: String,

@@ -610,17 +610,21 @@ public struct HomeView: View {
     /// Un voyage créé hors ligne que le serveur n'a pas encore reçu garde sa
     /// croix — il s'oublie sur le téléphone —, mais son partage et son aperçu
     /// pâlissent et disent pourquoi (T239).
+    ///
+    /// **La croix n'est qu'au propriétaire** (T233, Hugo, 06/10/2026) : un
+    /// co-voyageur ne la voit pas, ni dans le tiroir, ni dans le menu de
+    /// l'appui long, ni dans le rotor — les trois lisent la même liste.
     private func drawer<Card: View>(for trip: Trip, @ViewBuilder card: () -> Card) -> some View {
         let serverTint = tripsAwaitingServer.contains(trip.id)
             ? MemoBookColor.action.opacity(TripAwaitingServer.dimmedOpacity)
             : MemoBookColor.action
+        let delete = BrandSwipeAction(
+            icon: "IconCross",
+            tint: MemoBookColor.error,
+            label: "Supprimer « \(trip.title) »"
+        ) { tripToDelete = trip }
         return BrandSwipeDrawer(
-            actions: [
-                BrandSwipeAction(
-                    icon: "IconCross",
-                    tint: MemoBookColor.error,
-                    label: "Supprimer « \(trip.title) »"
-                ) { tripToDelete = trip },
+            actions: (trip.isDeletable ? [delete] : []) + [
                 BrandSwipeAction(
                     icon: "IconShareSystem",
                     tint: serverTint,
