@@ -83,8 +83,11 @@ export async function releaseUnpaidOrder(
  */
 export async function releaseAbandonedOrders(context: AppContext, now = new Date()): Promise<number> {
   const before = new Date(now.getTime() - ABANDONED_ORDER_HOURS * 3_600_000);
+  // Sur `updatedAt` et non `createdAt` : une commande **rouverte** pour être
+  // finalisée (T232) est ancienne, mais son intention est neuve — le ménage ne
+  // doit pas la refermer dans l'heure.
   const stale = await context.prisma.printOrder.findMany({
-    where: { status: "draft", createdAt: { lt: before } },
+    where: { status: "draft", updatedAt: { lt: before } },
     select: { id: true },
   });
 

@@ -420,7 +420,7 @@ type AccountForProfile = Account & {
   identities?: { provider: string }[];
 };
 
-type OrderForTracking = PrintOrder & { memo?: { coverPhotoUrl: string | null } | null };
+type OrderForTracking = PrintOrder & { memo?: { coverPhotoUrl: string | null; title?: string } | null };
 
 /**
  * Les voyages du compte, réduits à ce que la carte de chiffres du profil
@@ -460,9 +460,23 @@ function serializeProfileStats(trips: TripForProfileStats[]) {
 /** Fourchette de livraison par défaut, quand l'imprimeur n'a rien annoncé. */
 const DEFAULT_DELIVERY_DAYS = { min: 5, max: 10 } as const;
 
+/**
+ * Une ligne du suivi des commandes. `status` dit laquelle des deux (T232) :
+ * `in_progress`, payée et en route ; `payment_abandoned`, jamais payée — « Paiement
+ * abandonné, commande non finalisée », et le CTA « Finaliser ma commande »
+ * (`POST /v1/orders/:id/payment`). Le profil ne sert que ces deux-là.
+ */
 function serializeOrderTracking(order: OrderForTracking) {
+  const paymentAbandoned =
+    order.status === "draft" || (order.status === "cancelled" && order.submittedAt === null);
   return {
     id: order.id,
+    status: paymentAbandoned ? ("payment_abandoned" as const) : ("in_progress" as const),
+    memoId: order.memoId,
+    tripTitle: order.memo?.title ?? null,
+    // Le net à payer, en euros — `null` sur une commande d'avant la tarification.
+    total: order.amountCents === null ? null : euros(order.amountCents),
+    createdAt: order.createdAt.toISOString(),
     minimumDays: order.estimatedMinDays ?? DEFAULT_DELIVERY_DAYS.min,
     maximumDays: order.estimatedMaxDays ?? DEFAULT_DELIVERY_DAYS.max,
     copies: order.copies,

@@ -142,7 +142,9 @@ describe("payer une commande par carte", () => {
     const orderId = placed.id;
 
     const hook = await postWebhook("payment_intent.succeeded", {
-      id: "pi_order",
+      // L'intention de la commande, comme Stripe l'envoie : une autre serait
+      // une intention remplacée, que le webhook ignore (T232).
+      id: placed.payment.clientSecret!.split("_secret")[0],
       amount: placed.payment.amountCents,
       currency: "eur",
       metadata: { orderId },
@@ -158,7 +160,11 @@ describe("payer une commande par carte", () => {
     const { memo, renderId } = await printableTrip();
     const placed = (await placeOrder(memo.id, renderId)).json<OrderBody>();
     const orderId = placed.id;
-    const event = { id: "pi_order", amount: placed.payment.amountCents, metadata: { orderId } };
+    const event = {
+      id: placed.payment.clientSecret!.split("_secret")[0],
+      amount: placed.payment.amountCents,
+      metadata: { orderId },
+    };
 
     await postWebhook("payment_intent.succeeded", event);
     const first = await harness.prisma.printOrder.findUniqueOrThrow({ where: { id: orderId } });

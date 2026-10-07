@@ -43,7 +43,9 @@ type OrderBody = {
   whatsappPhone: string | null;
 };
 
-type ProfileBody = { orders: { id: string }[] };
+type ProfileBody = {
+  orders: { id: string; status: string; memoId: string; tripTitle: string | null; total: number | null }[];
+};
 
 let harness: TestHarness;
 
@@ -303,9 +305,11 @@ describe("la commande", () => {
    * Le suivi du profil filtre sur **l'acheteur** et accepte les brouillons :
    * sans ça, la seule commande que l'app sache créer n'apparaissait nulle part.
    */
-  it("n'apparaît dans le suivi qu'une fois payée", async () => {
+  it("se montre « paiement abandonné » tant qu'elle n'est pas payée (T232)", async () => {
     // Un brouillon est une commande **pas payée** : elle s'affichait « en
-    // cours d'acheminement », avec ses jours de livraison (T232).
+    // cours d'acheminement », avec ses jours de livraison. Puis elle a
+    // disparu du suivi ; Hugo veut qu'elle y soit, étiquetée, avec de quoi la
+    // finaliser (06/10/2026).
     const account = await registerAccount(harness.app);
     const { memo, renderId } = await printableTrip(account.accountId);
 
@@ -328,13 +332,67 @@ describe("la commande", () => {
           headers: { authorization: account.authorization },
         })
       )
-        .json<ProfileBody>()
-        .orders.map((o) => o.id);
+        .json<ProfileBody>().orders;
 
-    expect(await tracked()).not.toContain(order.id);
+    expect(await tracked()).toEqual([
+      expect.objectContaining({
+        id: order.id,
+        status: "payment_abandoned",
+        memoId: memo.id,
+        tripTitle: "Lisbonne entre filles",
+        total: order.total,
+      }),
+    ]);
 
-    await harness.prisma.printOrder.update({ where: { id: order.id }, data: { status: "submitted" } });
-    expect(await tracked()).toContain(order.id);
+    // Fermée par le ménage, elle y reste : elle se finalise encore.
+    await harness.prisma.printOrder.update({ where: { id: order.id }, data: { status: "cancelled" } });
+    expect((await tracked()).map((o) => [o.id, o.status])).toEqual([[order.id, "payment_abandoned"]]);
+
+    await harness.prisma.printOrder.update({
+      where: { id: order.id },
+      data: { status: "submitted", submittedAt: new Date() },
+    });
+    expect((await tracked()).map((o) => [o.id, o.status])).toEqual([[order.id, "in_progress"]]);
+
+    // Payée puis remboursée : ni en route, ni abandonnée.
+    await harness.prisma.printOrder.update({ where: { id: order.id }, data: { status: "cancelled" } });
+    expect(await tracked()).toEqual([]);
+  });
+
+  it("ne montre que la dernière tentative d'un voyage, et plus rien une fois payée", async () => {
+    const account = await registerAccount(harness.app);
+    const { memo, renderId } = await printableTrip(account.accountId);
+    const place = async () =>
+      (
+        await harness.app.inject({
+          method: "POST",
+          url: `/v1/memos/${memo.id}/orders`,
+          headers: { authorization: account.authorization },
+          payload: { renderId, copies: 1, shipping },
+        })
+      ).json<OrderBody>();
+    const tracked = async () =>
+      (
+        await harness.app.inject({ method: "GET", url: "/v1/profile", headers: { authorization: account.authorization } })
+      ).json<ProfileBody>().orders;
+
+    // Une adresse changée au milieu du tunnel : la première est remplacée.
+    const first = await place();
+    await harness.app.inject({
+      method: "POST",
+      url: `/v1/orders/${first.id}/cancel`,
+      headers: { authorization: account.authorization },
+    });
+    const second = await place();
+    expect((await tracked()).map((o) => o.id)).toEqual([second.id]);
+
+    // Une troisième, payée : plus rien d'abandonné sur ce voyage.
+    const third = await place();
+    await harness.prisma.printOrder.update({
+      where: { id: third.id },
+      data: { status: "submitted", submittedAt: new Date() },
+    });
+    expect((await tracked()).map((o) => [o.id, o.status])).toEqual([[third.id, "in_progress"]]);
   });
 });
 

@@ -32,8 +32,23 @@ POST /memos/:id/orders
        │
        ├─ « Payer » à nouveau → POST /orders/:id/payment (même intention)
        └─ abandonnée, annulée, 24 h sans paiement
-            → intention annulée → cancelled
+            → intention annulée → cancelled (« paiement abandonné »)
+                 └─ « Finaliser ma commande » → POST /orders/:id/payment
+                      → rouverte en draft, intention neuve, même prix
 ```
+
+**Une commande abandonnée se finalise** (T232, Hugo 06/10/2026). Le suivi des
+commandes du profil (`GET /v1/profile` → `orders[]`) montre, à côté des
+commandes en route (`status: "in_progress"`), **la dernière commande jamais
+payée de chaque voyage** de moins de 30 jours (`status: "payment_abandoned"`) :
+étiquette « Paiement abandonné, commande non finalisée », CTA « Finaliser ma
+commande ». Ce CTA appelle la reprise, qui rouvre la commande fermée (de
+nouveau `draft`, nouvelle intention, prix figé à la commande) au lieu de
+répondre `409 order_expired` comme avant. Une commande payée puis remboursée
+ne se rouvre pas (`409 order_refunded`). Le webhook ignore les événements de
+l'ancienne intention, remplacée ; le ménage des 24 h compte depuis la
+dernière écriture (`updatedAt`), pour ne pas refermer aussitôt une commande
+ancienne qu'on vient de rouvrir.
 
 Ce qui ferme une commande non payée (`services/orderPayments.ts`) :
 

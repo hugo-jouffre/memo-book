@@ -157,6 +157,30 @@ async function handleEvent(
     return;
   }
 
+  // **Une intention remplacée** (T232, 07/10/2026) : finaliser une commande
+  // abandonnée lui ouvre une intention neuve, et l'ancienne — annulée — peut
+  // encore envoyer ses événements, retrouvés par `metadata.orderId`. Ils ne
+  // parlent plus de la commande : un `canceled` tardif fermerait celle qu'on
+  // vient de rouvrir.
+  if (
+    event.type.startsWith("payment_intent.") &&
+    event.intentId &&
+    order.stripePaymentIntentId &&
+    event.intentId !== order.stripePaymentIntentId
+  ) {
+    if (event.type === "payment_intent.succeeded") {
+      // Ne devrait pas arriver : l'ancienne n'est remplacée qu'une fois
+      // annulée, et Stripe refuse d'annuler une intention payée.
+      log.error(
+        { orderId: order.id, intentId: event.intentId },
+        "Paiement reçu sur une ancienne intention d'une commande rouverte : à rembourser",
+      );
+    } else {
+      log.info({ orderId: order.id, intentId: event.intentId }, "Événement d'une intention remplacée, ignoré");
+    }
+    return;
+  }
+
   switch (event.type) {
     case "payment_intent.succeeded": {
       // **Ce qui a été payé, et pas ce qu'on croit avoir demandé.** Une

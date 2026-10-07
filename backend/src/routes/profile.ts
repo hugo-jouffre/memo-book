@@ -193,33 +193,69 @@ export async function readProfile(context: AppContext, accountId: string) {
       include: profileInclude,
     }),
 
-    // Les commandes en cours d'acheminement, et elles seules : une commande
-    // livrée il y a six mois n'a plus rien à suivre.
-    //
-    // **`draft` n'en fait plus partie** (01/10/2026). Il y était tant que rien
-    // n'encaissait, pour que la seule commande que l'app savait créer se voie ;
-    // depuis que Stripe encaisse, un brouillon est une commande **pas payée**,
-    // et elle s'affichait « en cours d'acheminement » avec ses jours de
-    // livraison (T232). Une commande payée passe en `submitted` en une seconde.
+    // Le suivi des commandes : celles en cours d'acheminement, **et celles
+    // dont le paiement a été abandonné** (T232, Hugo 06/10/2026) — étiquette
+    // « paiement abandonné, commande non finalisée » et CTA « Finaliser ma
+    // commande ». Les secondes se trient plus bas (`trackedOrders`) ; on lit
+    // ici tout ce qui pourrait en être : trente jours d'historique, plus ce qui
+    // est encore en route quel que soit son âge.
     //
     // **Filtré sur l'acheteur, pas sur le voyage visible.** Un co-voyageur
-    // commande son propre exemplaire, à sa propre adresse, avec sa propre
-    // cagnotte : son colis n'a rien à faire dans le suivi de quelqu'un d'autre.
-    // C'est `orderedByAccountId` qui dit à qui appartient la commande — la
-    // même colonne qui dira quelle cagnotte débiter.
+    // commande son propre exemplaire, à sa propre adresse : son colis n'a rien
+    // à faire dans le suivi de quelqu'un d'autre. C'est `orderedByAccountId`
+    // qui dit à qui appartient la commande.
     context.prisma.printOrder.findMany({
       where: {
-        status: { in: ["submitted", "in_production", "shipped"] },
         orderedByAccountId: accountId,
+        OR: [
+          { status: { in: [...IN_PROGRESS_STATUSES] } },
+          { createdAt: { gte: new Date(Date.now() - ABANDONED_ORDER_SHOWN_DAYS * 24 * 3_600_000) } },
+        ],
       },
       orderBy: { createdAt: "desc" },
-      include: { memo: { select: { coverPhotoUrl: true } } },
+      include: { memo: { select: { coverPhotoUrl: true, title: true } } },
     }),
 
     profileTrips(context, accountId),
   ]);
 
-  return serializeProfile(account, orders, trips);
+  return serializeProfile(account, trackedOrders(orders), trips);
+}
+
+/** Ce qui est payé et pas encore arrivé. */
+const IN_PROGRESS_STATUSES = ["submitted", "in_production", "shipped"] as const;
+
+/**
+ * Combien de temps une commande abandonnée reste dans le suivi. Au-delà, ce
+ * n'est plus une commande qu'on a oublié de finir, c'est une idée qu'on a eue.
+ */
+const ABANDONED_ORDER_SHOWN_DAYS = 30;
+
+/**
+ * Ce que le suivi montre : les commandes en route, et **la dernière commande
+ * de chaque voyage si elle n'a jamais été payée**.
+ *
+ * Jamais payée : un brouillon, ou une commande fermée sans paiement — par le
+ * ménage des 24 h, une intention annulée, l'app. Une commande remboursée a été
+ * payée : elle n'en est pas. **La dernière seulement** : changer d'adresse au
+ * milieu du tunnel ferme la commande précédente et en ouvre une neuve, et la
+ * première n'est pas « abandonnée » — elle est remplacée. Et une commande payée
+ * après l'abandon, sur le même voyage, le règle.
+ */
+function trackedOrders<T extends { memoId: string; status: string; submittedAt: Date | null; createdAt: Date }>(
+  orders: T[],
+): T[] {
+  const latestByTrip = new Map<string, T>();
+  for (const order of orders) {
+    const known = latestByTrip.get(order.memoId);
+    if (!known || order.createdAt > known.createdAt) latestByTrip.set(order.memoId, order);
+  }
+
+  return orders.filter((order) => {
+    if ((IN_PROGRESS_STATUSES as readonly string[]).includes(order.status)) return true;
+    const unpaid = order.status === "draft" || (order.status === "cancelled" && order.submittedAt === null);
+    return unpaid && latestByTrip.get(order.memoId) === order;
+  });
 }
 
 /** Une chaîne vidée redevient `null` : la base ne stocke pas de champ « présent mais vide ». */

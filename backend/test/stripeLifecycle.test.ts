@@ -233,10 +233,8 @@ describe("une commande pas encore payée", () => {
 
   it("se ferme au bout de 24 h, et pas avant", async () => {
     const old = await placeOrder();
-    await harness.prisma.printOrder.update({
-      where: { id: old.id },
-      data: { createdAt: new Date(Date.now() - 25 * 3_600_000) },
-    });
+    // Vingt-cinq heures sans nouvelles : c'est la dernière écriture qui compte.
+    await harness.prisma.$executeRaw`UPDATE print_orders SET "createdAt" = now() - interval '25 hours', "updatedAt" = now() - interval '25 hours' WHERE id = ${old.id}`;
     const recent = await placeOrder();
 
     expect(await releaseAbandonedOrders(harness.context)).toBe(1);
@@ -244,7 +242,7 @@ describe("une commande pas encore payée", () => {
     expect(await statusOf(recent.id)).toBe("draft");
   });
 
-  it("expirée, ne se reprend plus", async () => {
+  it("dont l'intention a été annulée, se rouvre sur une intention neuve (T232)", async () => {
     const order = await placeOrder();
     fake().settle(intentOf(order), "canceled");
 
@@ -254,9 +252,91 @@ describe("une commande pas encore payée", () => {
       headers: { authorization },
     });
 
-    expect(resumed.statusCode).toBe(409);
-    expect(resumed.json<{ error: string }>().error).toBe("order_expired");
+    expect(resumed.statusCode).toBe(200);
+    const body = resumed.json<OrderBody>();
+    expect(body.status).toBe("draft");
+    expect(body.payment?.clientSecret).toMatch(/^pi_fake_/);
+    expect(intentOf(body)).not.toBe(intentOf(order));
+    expect(body.payment?.amountCents).toBe(order.payment!.amountCents);
+    const stored = await harness.prisma.printOrder.findUniqueOrThrow({ where: { id: order.id } });
+    expect(stored.stripePaymentIntentId).toBe(intentOf(body));
+  });
+});
+
+describe("finaliser une commande abandonnée (T232)", () => {
+  const finalize = (orderId: string) =>
+    harness.app.inject({ method: "POST", url: `/v1/orders/${orderId}/payment`, headers: { authorization } });
+
+  it("rouvre une commande fermée par le ménage, que le ménage ne referme pas aussitôt", async () => {
+    const order = await placeOrder();
+    await harness.prisma.$executeRaw`UPDATE print_orders SET "createdAt" = now() - interval '3 days', "updatedAt" = now() - interval '3 days' WHERE id = ${order.id}`;
+    expect(await releaseAbandonedOrders(harness.context)).toBe(1);
     expect(await statusOf(order.id)).toBe("cancelled");
+
+    const reopened = await finalize(order.id);
+    expect(reopened.statusCode).toBe(200);
+    const body = reopened.json<OrderBody>();
+    expect(body.status).toBe("draft");
+    expect(body.payment?.clientSecret).toMatch(/^pi_fake_/);
+
+    // Vieille de trois jours, mais rouverte à l'instant : l'heure suivante la
+    // laisse ouverte.
+    expect(await releaseAbandonedOrders(harness.context)).toBe(0);
+    expect(await statusOf(order.id)).toBe("draft");
+
+    // L'ancienne intention annulée peut encore parler : elle ne referme rien.
+    await postWebhook("payment_intent.canceled", { id: intentOf(order), metadata: { orderId: order.id } }, "evt_old");
+    expect(await statusOf(order.id)).toBe("draft");
+
+    // Et la nouvelle se paie comme n'importe quelle autre.
+    await postWebhook(
+      "payment_intent.succeeded",
+      { id: intentOf(body), amount: body.payment!.amountCents, currency: "eur", metadata: { orderId: order.id } },
+      "evt_new",
+    );
+    expect(await statusOf(order.id)).toBe("submitted");
+  });
+
+  it("donne la même intention à deux appuis, et rien à une commande déjà payée", async () => {
+    const order = await placeOrder();
+    await harness.app.inject({ method: "POST", url: `/v1/orders/${order.id}/cancel`, headers: { authorization } });
+
+    const [a, b] = await Promise.all([finalize(order.id), finalize(order.id)]);
+    expect(intentOf(a.json<OrderBody>())).toBe(intentOf(b.json<OrderBody>()));
+
+    await postWebhook(
+      "payment_intent.succeeded",
+      { id: intentOf(a.json<OrderBody>()), amount: order.payment!.amountCents, metadata: { orderId: order.id } },
+      "evt_paid",
+    );
+    const paid = await finalize(order.id);
+    expect(paid.statusCode).toBe(200);
+    expect(paid.json<OrderBody>().payment).toBeNull();
+  });
+
+  it("d'avant le retrait de la cagnotte, se finalise au prix entier, sa part rendue", async () => {
+    const order = await legacyOrderWithWalletShare(3_000);
+    await harness.app.inject({ method: "POST", url: `/v1/orders/${order.id}/cancel`, headers: { authorization } });
+    expect(await balance()).toBe(3_000);
+
+    const body = (await finalize(order.id)).json<OrderBody>();
+    const stored = await harness.prisma.printOrder.findUniqueOrThrow({ where: { id: order.id } });
+    expect(body.payment?.amountCents).toBe(stored.itemsCents! + stored.shippingCents!);
+    expect(stored.walletAppliedCents).toBe(0);
+    // La part rendue ne revient pas une seconde fois.
+    expect(await balance()).toBe(3_000);
+  });
+
+  it("refuse une commande payée puis remboursée", async () => {
+    const order = await placeOrder();
+    await harness.prisma.printOrder.update({
+      where: { id: order.id },
+      data: { status: "cancelled", submittedAt: new Date() },
+    });
+
+    const refused = await finalize(order.id);
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json<{ error: string }>().error).toBe("order_refunded");
   });
 });
 
