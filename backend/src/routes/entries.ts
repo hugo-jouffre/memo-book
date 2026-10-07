@@ -17,6 +17,7 @@ import {
 } from "../services/dailyCredit.js";
 import { finalTextOf } from "../jobs/redact.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
+import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import { loadVisibleMemo } from "./memos.js";
 import { serializeEntry } from "./serializers.js";
 
@@ -205,6 +206,10 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
       await context.queue.publish<TranscribeJob>(JOB_NAMES.transcribe, {
         entryId: entry.id,
       });
+    } else {
+      // Une photo compte tout de suite (T227) ; un vocal, à la fin de sa
+      // rédaction — c'est elle qui dit où il se passe.
+      await refreshTripFactsQuietly(context, memoId);
     }
 
     return reply.code(201).send(serializeEntry(entry));
@@ -359,12 +364,16 @@ export function registerEntryRoutes(app: FastifyInstance, context: AppContext): 
 
     const entry = await context.prisma.entry.findFirst({
       where: { id, memo: visibleToAccount(accountIdOf(request)) },
-      select: { id: true },
+      select: { id: true, memoId: true },
     });
 
     if (!entry) throw HttpError.notFound("Entrée introuvable.");
 
     await context.prisma.entry.delete({ where: { id } });
+    // Les chiffres du voyage reculent, et une étape vidée de son dernier
+    // souvenir disparaît (T235, T227) — avant la réponse : l'app relit le
+    // voyage aussitôt après la croix.
+    await refreshTripFactsQuietly(context, entry.memoId);
     return reply.code(204).send();
   });
 

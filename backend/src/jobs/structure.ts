@@ -3,6 +3,7 @@ import type { AppContext } from "../context.js";
 import { validatePayload } from "../services/payloadValidator.js";
 import type { StructuringEntry } from "../services/structuring.js";
 import { parseTripContext } from "../services/tripContext.js";
+import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import { JOB_NAMES } from "./queue.js";
 import { finalTextOf } from "./redact.js";
 import type { RenderJob } from "./render.js";
@@ -76,6 +77,9 @@ export async function structureRender(
     // Le carnet se relit **après** l'attente : ce sont leurs textes finis qu'on
     // veut.
     await waitForRedactions(prisma, found.memoId);
+    // Les chiffres du dos de couverture à jour avant de composer — les jours
+    // d'un voyage en cours avancent sans qu'aucun souvenir n'arrive (T227).
+    await refreshTripFactsQuietly(context, found.memoId);
 
     const memo = await prisma.memo.findUniqueOrThrow({
       where: { id: found.memoId },

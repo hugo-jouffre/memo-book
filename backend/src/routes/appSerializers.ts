@@ -404,6 +404,11 @@ export function serializeTripStep(
     photoUrl: step.photoUrl,
     transport: step.transport,
     validatedAt: iso(step.validatedAt),
+    // Les souvenirs que porte l'étape (T235) : un vocal, un texte, des photos.
+    // La croix du tiroir de l'étape les efface un à un
+    // (`DELETE /v1/entries/:id`) ; sans eux, elle ne paraît pas. Le dernier
+    // parti, l'étape disparaît (`services/tripFacts.ts`).
+    entryIds: (step.entries ?? []).map((entry) => entry.id),
   };
 }
 

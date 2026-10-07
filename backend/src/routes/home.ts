@@ -9,6 +9,7 @@ import { createMemoFor, isTakenId, visibleToAccount } from "../services/memoOwne
 import { normalizeNarrationPace } from "../services/narrationPace.js";
 import { hasUnlimitedAccess } from "../services/subscriptions.js";
 import { effectiveStage, stageFromDates } from "../services/tripStage.js";
+import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import {
   serializeGalleryCategory,
   serializeGalleryTrip,
@@ -129,7 +130,10 @@ export async function loadTripDetail(context: AppContext, accountId: string, mem
     where: { id: memoId, ...visibleToAccount(accountId) },
     include: {
       ...tripInclude,
-      steps: { orderBy: { number: "asc" } },
+      steps: {
+        orderBy: { number: "asc" },
+        include: { entries: { select: { id: true }, orderBy: [{ capturedAt: "asc" }, { createdAt: "asc" }] } },
+      },
     },
   });
 
@@ -352,7 +356,7 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
     });
     if (!existing) throw HttpError.notFound("Voyage introuvable.");
 
-    const memo = await context.prisma.memo.update({
+    await context.prisma.memo.update({
       where: { id },
       data: {
         title: draft.title,
@@ -363,8 +367,11 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
         ...(draft.photoTextRatio === undefined ? {} : { photoTextRatio: draft.photoTextRatio }),
         stage: stageFromDates(draft.startDate ?? null, draft.endDate ?? null),
       },
-      include: tripInclude,
     });
+    // Les jours du voyage se comptent sur ses dates (T227) : on recompte, puis
+    // on relit ce qu'on rend.
+    await refreshTripFactsQuietly(context, id);
+    const memo = await context.prisma.memo.findUniqueOrThrow({ where: { id }, include: tripInclude });
 
     return { trip: serializeTrip(memo, { viewerAccountId: accountId }), accessCode: memo.accessCode };
   });

@@ -7,6 +7,7 @@ import { readDailyCredit } from "../services/dailyCredit.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
 import { normalizeNarrationPace } from "../services/narrationPace.js";
 import { stageFromDates } from "../services/tripStage.js";
+import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import { serializeTripSettings } from "./appSerializers.js";
 import { startDateRequired } from "./home.js";
 
@@ -211,6 +212,9 @@ export function registerTripSettingsRoutes(app: FastifyInstance, context: AppCon
     // **n'arrête aucun abonnement** (Hugo, 03/10/2026) : l'illimité court
     // jusqu'à ce qu'on le résilie. L'accueil rappelle qu'on peut le couper
     // (`subscriptionOutlivesTrip`).
+
+    // Les jours du voyage se comptent sur ses dates (T227).
+    if (datesChanged) await refreshTripFactsQuietly(context, id);
 
     // On relit tout plutôt que de rendre ce qu'on vient d'écrire : la réponse
     // est ce que l'app garde à l'écran, et une réponse partielle effacerait le

@@ -623,6 +623,13 @@ model Memo {
   /// Nulle pour un carnet qui n'est pas situé dans une ville.
   destinationCity String?
 
+  /// `true` quand la destination ci-dessus a été **déduite des souvenirs**
+  /// (`services/tripFacts.ts`, T227) et non posée par quelqu'un : elle suit
+  /// alors les souvenirs — le pays le plus cité change, elle change ; le
+  /// dernier souvenir part, elle s'efface. Une destination posée (le jeu
+  /// d'essai, une future saisie dans l'app) n'est jamais touchée.
+  destinationInferred Boolean @default(false)
+
   /// Compteurs affichés sous le titre. Entretenus à l'écriture plutôt que
   /// recalculés à chaque ouverture de l'accueil, qui les demande tous d'un coup
   /// pour tous les voyages.

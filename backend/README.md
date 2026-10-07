@@ -172,7 +172,7 @@ champ près — `test/screens.test.ts` est ce qui les tient ensemble.
 | Route | Rôle |
 | --- | --- |
 | `GET /v1/home` | Le voyageur, ses voyages et ceux où il est invité, la carte de découverte |
-| `GET /v1/trips/:id` | Un voyage ouvert : sa couverture, la relance, ses étapes. Chaque `Trip` (accueil compris) porte `canDelete` : vrai pour le seul propriétaire |
+| `GET /v1/trips/:id` | Un voyage ouvert : sa couverture, la relance, ses étapes. Chaque `Trip` (accueil compris) porte `canDelete` : vrai pour le seul propriétaire. Les étapes et les chiffres (`stats`, `progress.memoryCount`, destination) sont déduits des souvenirs par `services/tripFacts.ts` — une étape par lieu successif — ; chaque étape porte `entryIds`, ses souvenirs |
 | `GET /v1/profile` | Identité, adresse, cartes, connecteurs, abonnement, commandes |
 | `PATCH /v1/profile` | Corrige le profil. Un champ absent n'est pas touché, un champ à `null` est effacé |
 | `GET /v1/profile/statistics` | Les chiffres de la feuille « Statistiques » : pays, régions, villes, rencontres, km, transports, additionnés à la lecture depuis les relevés de la rédaction (`entries.insights`). `pendingDetections` dit combien de souvenirs attendent encore leur relevé — l'app relit tant qu'il y en a |
@@ -215,7 +215,7 @@ de son porteur précédent.
 | `GET /v1/entries/:id` | Statut, transcription et texte rédigé d'un souvenir |
 | `PATCH /v1/entries/:id` | Corrige le texte à la main. `editedText: null` revient à la version proposée |
 | `POST /v1/entries/:id/redaction` | Redemande une rédaction (refusé si le texte a été corrigé) |
-| `DELETE /v1/entries/:id` | Supprime un souvenir |
+| `DELETE /v1/entries/:id` | Supprime un souvenir ; les chiffres du voyage reculent, et une étape vidée de son dernier souvenir disparaît |
 | `POST /v1/memos/:id/renders` | **À chaque ouverture de l'aperçu** : rend la composition en cours ou le dernier PDF s'il est à jour (200), sinon en lance une (202). L'empreinte du carnet (`services/bookFingerprint.ts`) décide ; incrémenter `BOOK_LAYOUT_VERSION` quand le gabarit change |
 | `GET /v1/renders/:id` | Suit la génération (`status`, `phase` : queued, writing, composing, ready, failed), renvoie l'URL du PDF et ses pages |
 | `POST /v1/memos/:id/orders` | Commande le carnet imprimé, sur un rendu déjà généré |

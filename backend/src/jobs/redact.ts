@@ -11,6 +11,7 @@ import {
 
 import { describeTripContext, parseTripContext } from "../services/tripContext.js";
 import { askValidation, firstNameOf } from "../services/conversationThread.js";
+import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 
 export interface RedactJob {
   entryId: string;
@@ -223,6 +224,9 @@ export async function redactEntry(
       { entryId, model: result.model, characters: result.text.length },
       "Souvenir rédigé",
     );
+    // Le relevé est là : le lieu, le pays, les kilomètres — les étapes et les
+    // chiffres du voyage suivent (T227).
+    await refreshTripFactsQuietly(context, entry.memoId);
     await askValidation(prisma, entryId, result.doubts);
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
@@ -230,6 +234,8 @@ export async function redactEntry(
       where: { id: entryId },
       data: { redactionStatus: "failed", redactionError: message },
     });
+    // Sans relevé, le souvenir compte quand même (T227).
+    await refreshTripFactsQuietly(context, entry.memoId);
     // La fiche garde le texte brut : il se valide quand même.
     await askValidation(prisma, entryId).catch(() => false);
     throw cause;
