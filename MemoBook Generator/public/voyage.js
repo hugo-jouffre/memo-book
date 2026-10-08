@@ -6,7 +6,7 @@
  * Tout vient de l'analyse d'étape (`consigneAnalyseEtape`, `partage.js`) :
  *
  * - `lieu` et `lieux` : les endroits où le récit emmène le voyageur, avec leur
- *   `genre` (une ville ou un village, ou un site : une plage, un musée) ;
+ *   `genre` (une ville ou un village, une île, ou un site : une plage, un musée) ;
  * - `trajets` : les déplacements racontés, avec leur départ, leur arrivée et
  *   leur `mode` — avion, bateau ou terre.
  *
@@ -43,7 +43,7 @@
     if (!nom || !/^[A-Z]{2}$/.test(pays) || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
     if (lat === 0 && lon === 0) return null;
     if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
-    const genre = lieu.genre === "ville" || lieu.genre === "site" ? lieu.genre : null;
+    const genre = ["ville", "ile", "site"].includes(lieu.genre) ? lieu.genre : null;
     return { nom, pays, lat, lon, genre };
   }
 
@@ -151,6 +151,35 @@
   }
 
   /**
+   * Les lieux de séjour, dans l'ordre : le lieu principal de chaque étape — la
+   * ville, ou l'île pour un voyage d'île en île —, sans les sites visités en
+   * chemin (une plage, un musée, un village d'excursion), ni les escales de
+   * transit, ni la maison. C'est ce que montre la carte de la quatrième de
+   * couverture : « Paros, Naxos, Ios, Mykonos », pas chaque plage.
+   *
+   * Chaque lieu porte `mode`, le moyen de transport qui y a mené, cherché dans
+   * les trajets de son étape puis de l'étape d'avant (on raconte souvent le
+   * ferry du soir à la fin de la journée précédente).
+   */
+  function lieuxDeSejour(etapes) {
+    const maison = domicile(etapes);
+    const ordre = [];
+    const arriveeA = (analyse, cle) => {
+      const t = (analyse?.trajets || []).find((x) => normaliser(x?.arrivee?.nom) === cle);
+      return t ? modeDe(t.mode) : undefined;
+    };
+    etapes.forEach((etape, i) => {
+      const lieu = lieuValide(etape.analyse?.lieu);
+      if (!lieu) return;
+      const cle = normaliser(lieu.nom);
+      if ((maison && cle === maison) || (ordre.length && normaliser(ordre[ordre.length - 1].nom) === cle)) return;
+      const mode = arriveeA(etape.analyse, cle) ?? arriveeA(etapes[i - 1]?.analyse, cle) ?? null;
+      ordre.push({ ...lieu, mode, revisite: ordre.some((l) => normaliser(l.nom) === cle) });
+    });
+    return ordre;
+  }
+
+  /**
    * Les chiffres du voyage tirés des récits :
    *
    * - `km` : la somme des trajets racontés — à vol d'oiseau pour l'avion et le
@@ -193,6 +222,7 @@
     domicile,
     trajetsDuVoyage,
     itineraire,
+    lieuxDeSejour,
     chiffresDuVoyage,
     nombreCourt,
     normaliser,

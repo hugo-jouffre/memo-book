@@ -352,9 +352,10 @@ par défaut. L'atelier analyse d'abord les étapes et mesure les photos, puis :
   mois du voyage —, modifiables dans le panneau ;
 - **compte les chiffres de la quatrième** : jours, kilomètres parcourus (les
   trajets racontés), pays et villes visités ;
-- **dessine la carte de la quatrième** : tous les lieux visités, reliés dans
-  l'ordre, chaque trajet au trait de son moyen de transport (avion en courbe
-  pointillée, bateau en droite pointillée, terre en droite pleine).
+- **dessine la carte de la quatrième** : les villes visitées (les îles, pour un
+  voyage d'île en île), reliées dans l'ordre, chaque trajet au trait de son
+  moyen de transport (avion en courbe pointillée, bateau en droite pointillée,
+  terre en droite pleine). Le dos est du même beige que la quatrième.
 
 Deux sorties de la même maquette :
 

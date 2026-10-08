@@ -12,6 +12,7 @@ const V = require("../../MemoBook Generator/public/voyage.js") as {
   modeDe: (v: unknown) => string | null;
   distanceKm: (a: Lieu, b: Lieu) => number;
   itineraire: (etapes: unknown[]) => (Lieu & { mode: string | null; revisite: boolean })[];
+  lieuxDeSejour: (etapes: unknown[]) => (Lieu & { mode: string | null })[];
   chiffresDuVoyage: (etapes: unknown[]) => { km: number | null; pays: string[]; villes: string[] };
   nombreCourt: (n: number | null) => string;
 };
@@ -67,6 +68,13 @@ describe("le voyage raconté", () => {
     expect(ordre.map((l) => l.nom)).toEqual(["Mykonos", "Paros", "Naoussa", "Naxos", "Mykonos", "Chora"]);
     expect(ordre.map((l) => l.mode)).toEqual(["avion", "bateau", null, "bateau", "bateau", null]);
     expect(ordre[4]!.revisite).toBe(true);
+  });
+
+  it("ne garde, pour la carte de quatrième, que les villes ou les îles où le voyage a séjourné", () => {
+    const sejours = V.lieuxDeSejour(etapes);
+    // Ni Naoussa ni Chora (visités en chemin), ni la maison.
+    expect(sejours.map((l) => l.nom)).toEqual(["Paros", "Naxos", "Mykonos"]);
+    expect(sejours.map((l) => l.mode)).toEqual(["bateau", "bateau", "bateau"]);
   });
 
   it("compte les kilomètres des trajets racontés, et distingue pays et villes", () => {

@@ -949,12 +949,20 @@ plats, le fond perdu et les marges. Sans fiche importée, il prend celle-ci :
 |---|---|
 | Fond perdu, sur les quatre bords | 3 |
 | Plat verso et plat recto (chacun) | 178 × 260 |
-| Zone sûre : marge haut, bas et bord extérieur des plats | 19 |
-| Côté dos (charnière) : marge imposée par MemoBook, pas par la fiche | 12 |
+| Zone de pliage : haut, bas et bord extérieur des plats | 19 |
+| Mors (le pli d'ouverture), mesuré depuis le dos | 10 |
 
 Les plats sont plus grands que la page (178 × 260 contre 154 × 216) : le carton
-déborde du bloc et le papier se rabat dessus. D'où la zone sûre de 19 mm, qui
-couvre ce rabat.
+déborde du bloc et le papier se rabat dessus. Les 19 mm de la zone de pliage se
+rabattent sur les chants et l'intérieur du carton : ils ne se voient pas.
+
+**La face visible** d'un plat va donc de la zone de pliage **jusqu'au dos** —
+159 × 222 mm ici. Le mors n'en est pas le bord : c'est seulement là que le
+papier plie quand on ouvre le livre, il reste visible. Tout se **centre sur la
+face visible** (`Couverture.facesVisibles`) et se tient à **12 mm** de ses
+bords (`RETRAIT`) : sur la ligne de pliage, un trait passe sur l'arête du
+carton et disparaît ; contre le dos, il tombe dans le mors. C'est ce que
+vérifie l'outil de contrôle de Pumbo (repères « Zone de pliage » et « Mors »).
 
 **Le dos suit le barème Pumbo** (08/10/2026, récapitulatif tenu dans le
 tableur de l'équipe), d'après le nombre de **pages intérieures** du carnet —
@@ -979,21 +987,40 @@ les textes, ni les chiffres, ni la carte.
 - **Première** — la photo en pleine page, fond perdu compris ; en haut, le
   titre (la destination, reprise du carnet) en Playfair Display Bold, blanc,
   aussi grand que la largeur le permet (72 pt au plus) ; en bas, les voyageurs
-  et le mois du voyage (« août – septembre 2026 »). Une ombre légère sous les
-  textes, pour les ciels clairs.
-- **Dos** — aplat vert, titre et voyageurs en papier, **lisibles de bas en
-  haut** (à la française). Pas de texte sous 6 mm de dos. Corps : 45 % de la
-  largeur du dos, 11 pt au plus.
-- **Quatrième** — sur le papier, dans un cadre pointillé posé sur la zone sûre :
-  - **la carte de tous les lieux visités, reliés dans l'ordre de visite**,
-    chaque trajet au trait de son moyen de transport (§ « Les cartes ») ; les
-    côtes en trait fin, les lieux en anneaux verts, leurs noms placés là où ils
-    ne chevauchent rien, au besoin au bout d'un filet. Le cadre entoure tous les
-    lieux (une marge, un degré au moins), quel que soit le nombre de pays ;
+  et le mois du voyage (« août – septembre 2026 »). Titre et signature
+  **centrés sur la face visible** (entre le dos et la zone de pliage), à 12 mm
+  de ses bords. Une ombre légère sous les textes, pour les ciels clairs.
+- **Dos** — le **papier beige de la quatrième**, qui s'y prolonge, le texte à
+  l'encre.
+- **Quatrième** — sur le papier, dans un **cadre pointillé centré sur la face
+  visible**, à 12 mm de la zone de pliage comme du dos ; la carte, les chiffres
+  et le logo sont centrés sur l'axe du cadre :
+  - **la carte des villes visitées, reliées dans l'ordre de visite** — pour un
+    voyage d'île en île, les îles. Seulement les lieux de séjour, c'est-à-dire
+    le lieu principal de chaque étape (`Voyage.lieuxDeSejour`) : ni les sites
+    visités en chemin (une plage, un musée, un village d'excursion), ni les
+    escales de transit, ni la maison. Chaque trajet au trait de son moyen de
+    transport (§ « Les cartes ») ; les côtes en trait fin, les villes en
+    anneaux verts, leurs noms placés là où ils ne chevauchent rien, au besoin
+    au bout d'un filet. Le cadre entoure toutes ces villes (une marge, un degré
+    au moins), quel que soit le nombre de pays ;
   - **« Mon voyage en quelques chiffres »** : les jours, les kilomètres
-    parcourus, puis les pays s'il y en a plusieurs — sinon les villes ;
+    parcourus, puis les pays s'il y en a plusieurs — sinon **les lieux de la
+    carte, comptés comme elle les montre** : « 4 îles visitées » pour les
+    Cyclades, « 3 villes visitées », « 5 lieux visités » quand la carte mêle
+    villes et îles. Une île, c'est le `genre: "ile"` de l'analyse ; pour les
+    analyses plus anciennes, un site posé sur une terre qui n'est pas la plus
+    grande de son pays (`Couverture.estUneIle`) ;
   - le logo MemoBook. Pas de photo : le style par défaut n'en a pas en
     quatrième.
+
+**Le dos, dans tous les styles.** Toujours les **voyageurs, le titre du
+carnet et les dates du voyage**, à la française (**lisibles de bas en haut**) :
+les voyageurs calés en pied, le titre au milieu du dos, les dates calées en
+tête, à 10 mm des zones de pliage (`Couverture.elementsDos`, à réutiliser par
+chaque style, seule la couleur change). Corps : 45 % de la largeur du dos,
+11 pt au plus, réduit si les trois ne tiennent pas ; le titre quitte le milieu
+s'il y heurterait un voisin. Pas de texte sous 6 mm de dos.
 
 **Les chiffres du voyage** (`voyage.js`), tirés des récits par l'analyse
 d'étape :
@@ -1029,7 +1056,7 @@ intérieure du carnet.
 couverture :
 
 - **« Aperçu à imprimer (PDF) »** — un onglet avec la feuille et ses repères
-  (coupe, plis du dos, zone sûre — à l'écran seulement) → *Imprimer* →
+  (coupe, plis du dos, faces visibles — à l'écran seulement) → *Imprimer* →
   *Enregistrer au format PDF*, marges *Aucune*, *Graphiques d'arrière-plan*
   coché. La taille de la feuille est imposée par la règle `@page` ;
 - **« Fichier InDesign (.zip) »** — un dossier : `Couverture MemoBook.jsx`, le

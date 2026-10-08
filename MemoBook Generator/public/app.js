@@ -1820,6 +1820,21 @@ function chiffresDuVoyage() {
   return { ...chiffres, jours: statistiquesVoyage().jours };
 }
 
+/** Les contours de la carte de quatrième : le détail chargé pour elle, à défaut ceux du monde. */
+function contoursQuatrieme() {
+  return etat.contoursDetail && Object.keys(etat.contoursDetail).length ? etat.contoursDetail : etat.contoursCarte;
+}
+
+/** Les villes (ou les îles) où le voyage a séjourné : ce que la carte de quatrième montre, et compte. */
+function lieuxQuatrieme() {
+  return Couverture.lieuxDeQuatrieme(Voyage.lieuxDeSejour(etapesPourMiseEnPage(() => "")), contoursQuatrieme());
+}
+
+/** Les chiffres de la quatrième : les lieux comptés sont ceux de sa carte. */
+function chiffresQuatrieme() {
+  return Couverture.chiffresQuatrieme({ ...chiffresDuVoyage(), sejours: lieuxQuatrieme() });
+}
+
 /** Les textes de la couverture : ceux que le voyageur a repris, sinon ceux tirés du carnet. */
 function textesCouverture() {
   const { premiere, derniere } = bornesDuVoyage();
@@ -1867,9 +1882,9 @@ const extensionDe = (dataUrl) => (/^data:image\/png/.test(dataUrl) ? "png" : "jp
 function maquetteCouverture() {
   const fiche = ficheCouverture();
   const recto = photoDuPlat("recto");
-  const lieux = Voyage.itineraire(etapesPourMiseEnPage(() => ""));
-  const detail =
-    etat.contoursDetail && Object.keys(etat.contoursDetail).length ? etat.contoursDetail : etat.contoursCarte;
+  // Les villes (ou les îles) où le voyage a séjourné, pas chaque site visité.
+  const lieux = lieuxQuatrieme();
+  const detail = contoursQuatrieme();
   return Couverture.maquette({
     fiche,
     textes: textesCouverture(),
@@ -1881,7 +1896,7 @@ function maquetteCouverture() {
           focus: [0.5, 0.35],
         }
       : null,
-    chiffres: Couverture.chiffresQuatrieme(chiffresDuVoyage()),
+    chiffres: chiffresQuatrieme(),
     carte: lieux.length && detail ? { lieux, detail } : null,
     logo: etat.logoPng
       ? { fichier: "Liens/logo-memobook.png", src: etat.logoPng.data, px: etat.logoPng.px }
@@ -1908,7 +1923,7 @@ function alertesCouverture() {
     const p = photosPourCouverture().find((x) => x.id === recto.id);
     alertes.push(...Couverture.evaluerPhoto(p, { fiche, mesure: p.mesure, analyse: p.analyse }).alertes);
   }
-  if (!Voyage.itineraire(etapesPourMiseEnPage(() => "")).length) {
+  if (!Voyage.lieuxDeSejour(etapesPourMiseEnPage(() => "")).length) {
     alertes.push("Aucun lieu situé : la carte de la quatrième restera vide. Analyse les étapes (clé de modèle dans les réglages).");
   }
   return alertes;
@@ -2086,7 +2101,7 @@ function rendreCouverture() {
     etat.couverture.textes = { ...etat.couverture.textes, [cle]: v };
   };
   const c = chiffresDuVoyage();
-  const quatrieme = Couverture.chiffresQuatrieme(c);
+  const quatrieme = chiffresQuatrieme();
 
   remplir(
     section,
@@ -2293,7 +2308,7 @@ async function chargerContoursDetail() {
   // Les cartes de chapitre, et celle de la quatrième de couverture.
   const cadres = [
     ...MiseEnPage.cadresDesCartes(etapes, etat.contoursCarte),
-    Couverture.cadreQuatrieme(Voyage.itineraire(etapes)),
+    Couverture.cadreQuatrieme(Voyage.lieuxDeSejour(etapes)),
   ].filter(Boolean);
   if (!cadres.length) return;
   etat.contoursDetail ||= {};
@@ -3046,8 +3061,10 @@ function rendreReglages() {
       (() => {
         const f = fichePumbo();
         return (
-          `Couverture : plats ${f.largeurPlat} × ${f.hauteurPlat} mm, dos ${f.dos} mm, fond perdu ${f.fondPerdu} mm — ${f.source}. ` +
-          "Le dos, lui, se calcule d'après le nombre de pages du carnet (barème Pumbo : 8 mm jusqu'à 56 pages, puis 3 mm + 0,09 mm par page)."
+          `Facultatif. Donne les plats (${f.largeurPlat} × ${f.hauteurPlat} mm), le fond perdu (${f.fondPerdu} mm) ` +
+          `et la zone de pliage (${f.marge} mm) de la couverture — ${f.parDefaut ? "à défaut, ceux du relié 154 × 216 mm" : f.source}. ` +
+          "À n'importer que pour un autre format de livre. Le dos, lui, se calcule tout seul d'après le nombre de pages " +
+          "(barème Pumbo : 8 mm jusqu'à 56 pages, puis 3 mm + 0,09 mm par page)."
         );
       })(),
     ),
