@@ -264,6 +264,10 @@ const etat = {
   pdf: null,
   /** Contours des pays (`assets/maps/countries.json`), chargés à la première carte. */
   contoursCarte: null,
+  /** Le panneau « Couverture du livre » : ouvert ou non, textes repris par le voyageur. */
+  couverture: { ouverte: false, statut: "", textes: {}, autre: { recto: false, verso: false } },
+  /** Le logo rastérisé pour le fichier InDesign. */
+  logoPng: null,
   /** Contours détaillés par pays (`assets/maps/detail/`), chargés pour les cartes cadrées sur le voyage. */
   contoursDetail: null,
   indexDetail: null,
@@ -1161,11 +1165,19 @@ function statistiquesVoyage() {
     jours = Math.round(ms / 86400000) + 1;
   }
 
+  // Kilomètres, pays et villes : tirés des récits par l'analyse d'étape
+  // (`voyage.js`). Avant elle, on ne sait pas.
+  const tires = Voyage.chiffresDuVoyage(etapesPourMiseEnPage(() => ""));
+
   return {
     etapes: etat.etapes.length,
     jours,
     lieux: lieux.length,
     listeLieux: lieux,
+    km: tires.km,
+    pays: tires.pays,
+    villes: tires.villes,
+    analysees: tires.analysees,
     rencontres: etat.rencontres.length,
     listeRencontres: etat.rencontres,
     voyageurs: listeVoyageurs().length,
@@ -1206,9 +1218,27 @@ function rendreStats() {
     bandeau,
     tuile(nombre(s.etapes), s.etapes > 1 ? "étapes" : "étape", { pleine: true }),
     tuile(nombre(s.jours), s.jours > 1 ? "jours" : "jour"),
-    tuile(nombre(s.lieux), s.lieux > 1 ? "lieux" : "lieu", {
-      detail: s.listeLieux.join(", "),
-    }),
+    ...(() => {
+      // Avant l'analyse des étapes, les récits n'ont pas encore dit où ils
+      // vont ni comment : on l'écrit plutôt que d'afficher zéro.
+      const attente = "Calculé à l'analyse des étapes (Générer le carnet, ou Générer la couverture).";
+      const connu = s.analysees > 0;
+      return [
+        tuile(s.km === null ? "—" : nombre(s.km), "km parcourus", {
+          detail: connu
+            ? s.km === null
+              ? "Aucun trajet raconté dans les récits analysés."
+              : "Somme des trajets racontés : vol d'oiseau en avion et en bateau, 1,3 fois par la route ou le rail."
+            : attente,
+        }),
+        tuile(connu ? nombre(s.pays.length) : "—", "pays", {
+          detail: connu ? s.pays.join(", ") : attente,
+        }),
+        tuile(connu ? nombre(s.villes.length) : "—", s.villes.length > 1 ? "villes" : "ville", {
+          detail: connu ? s.villes.join(", ") : attente,
+        }),
+      ];
+    })(),
     tuile(nombre(s.rencontres), "rencontrées", {
       detail: s.listeRencontres.length
         ? s.listeRencontres.join(", ")
@@ -1439,12 +1469,8 @@ const SOUS_TITRE = "Un carnet de voyage raconté à l'oral";
 /** La fiche Pumbo importée, ou celle du relié de 48 pages par défaut. */
 const fichePumbo = () => etat.reglages.fichePumbo || Couverture.FICHE_DEFAUT;
 
-/** La photo de couverture : celle que le voyageur a désignée, sinon la plus adaptée au recto. */
-const photoDeCouverture = () =>
-  Couverture.choisirPhotoCouverture(
-    etat.etapes.flatMap((e) => e.photos),
-    fichePumbo(),
-  );
+/** La photo de couverture : celle que le voyageur a choisie pour la première, sinon la mieux notée. */
+const photoDeCouverture = () => photoDuPlat("recto");
 
 /** Une seule photo en couverture : en désigner une retire l'étoile des autres. */
 function designerCouverture(photoId) {
@@ -1452,6 +1478,7 @@ function designerCouverture(photoId) {
     p.couverture = p.id === photoId ? !p.couverture : false;
   }
   apresChangement();
+  rendreCouverture();
 }
 
 /**
@@ -1686,49 +1713,422 @@ function messageLisible(erreur, statut) {
  * - l'onglet du PDF est ouvert au clic, avant tout `await`, sinon Safari et
  *   Chrome le bloquent comme une popup.
  */
-/**
- * Compose la couverture du livre relié (verso, dos, recto) dans un nouvel
- * onglet, au format de la fiche Pumbo, prête à « Enregistrer au format PDF ».
+/* ------------------------------------------------- couverture du livre --- */
+
+/*
+ * Le panneau « Couverture du livre » : trois photos proposées pour chaque plat,
+ * le choix d'une autre avec son contrôle qualité, les textes et les chiffres
+ * du voyage, puis l'aperçu à imprimer en PDF et le fichier InDesign.
  * Voir `couverture.js` et LAYOUT_KB § « Couverture imprimée (Pumbo) ».
- *
- * L'onglet s'ouvre **avant** tout `await` : ouvert plus tard, hors du geste du
- * clic, il serait bloqué par le navigateur comme une fenêtre surgissante.
  */
-async function genererCouverture() {
+
+const DRAPEAU_PLAT = { recto: "couverture", verso: "couvertureVerso" };
+
+/** Les photos du carnet telles que les note `Couverture.evaluerPhoto` : format, mesure, analyse. */
+function photosPourCouverture() {
+  return etat.etapes.flatMap((etape) => {
+    const analyse = etape.analyse?.cle === cleAnalyse(etape) ? etape.analyse.resultat : null;
+    const parId = new Map((analyse?.photos || []).map((p) => [String(p.id), p]));
+    return etape.photos
+      .filter((p) => p.data)
+      .map((p) => ({
+        id: p.id,
+        data: p.data,
+        largeur: p.largeur,
+        hauteur: p.hauteur,
+        groupe: Boolean(p.groupe),
+        mesure: p.mesure || null,
+        analyse: parId.get(String(p.id)) || null,
+      }));
+  });
+}
+
+const propositionsCouverture = () => Couverture.proposerPhotos(photosPourCouverture(), { fiche: fichePumbo() });
+
+/** La photo d'un plat : celle que le voyageur a choisie, sinon la première proposée. */
+function photoDuPlat(plat) {
+  const toutes = photosDesEtapes().filter((p) => p.data);
+  const choisie = toutes.find((p) => p[DRAPEAU_PLAT[plat]]);
+  if (choisie) return choisie;
+  const propositions = propositionsCouverture();
+  const proposee = propositions[plat][0] || (plat === "recto" ? propositions.meilleure : null);
+  return proposee ? toutes.find((p) => p.id === proposee.photo.id) || null : null;
+}
+
+function choisirPhotoDuPlat(plat, photoId) {
+  for (const p of [...etat.photosAttente, ...photosDesEtapes()]) p[DRAPEAU_PLAT[plat]] = p.id === photoId;
+  etat.couverture.autre[plat] = false;
+  apresChangement();
+  rendreCouverture();
+}
+
+/**
+ * Ce que l'atelier mesure lui-même sur une photo, sur une vignette de 512 px :
+ * la netteté (variance du laplacien), la luminance moyenne, et la part de
+ * pixels brûlés ou bouchés. Gardé sur la photo : la mesure ne change pas.
+ */
+async function mesurerPhoto(photo) {
+  if (photo.mesure || !photo.data) return;
+  const img = new Image();
+  img.src = photo.data;
+  await img.decode();
+  const k = Math.min(1, 512 / Math.max(img.naturalWidth, img.naturalHeight));
+  const w = Math.max(3, Math.round(img.naturalWidth * k));
+  const h = Math.max(3, Math.round(img.naturalHeight * k));
+  const toile = document.createElement("canvas");
+  toile.width = w;
+  toile.height = h;
+  const ctx = toile.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(img, 0, 0, w, h);
+  const d = ctx.getImageData(0, 0, w, h).data;
+  const g = new Float32Array(w * h);
+  let somme = 0;
+  let extremes = 0;
+  for (let i = 0; i < w * h; i += 1) {
+    g[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+    somme += g[i];
+    if (g[i] > 250 || g[i] < 5) extremes += 1;
+  }
+  let s = 0;
+  let s2 = 0;
+  let n = 0;
+  for (let y = 1; y < h - 1; y += 1) {
+    for (let x = 1; x < w - 1; x += 1) {
+      const i = y * w + x;
+      const l = 4 * g[i] - g[i - 1] - g[i + 1] - g[i - w] - g[i + w];
+      s += l;
+      s2 += l * l;
+      n += 1;
+    }
+  }
+  photo.mesure = {
+    nettete: Math.round(s2 / n - (s / n) ** 2),
+    luminance: Math.round(somme / (w * h)),
+    ecretage: Math.round((extremes / (w * h)) * 100) / 100,
+  };
+}
+
+/** Les chiffres du voyage : les jours comptés sur les dates, le reste tiré des récits analysés. */
+function chiffresDuVoyage() {
+  const chiffres = Voyage.chiffresDuVoyage(etapesPourMiseEnPage(() => ""));
+  return { ...chiffres, jours: statistiquesVoyage().jours };
+}
+
+/** Les textes de la couverture : ceux que le voyageur a repris, sinon ceux tirés du carnet. */
+function textesCouverture() {
+  const { premiere, derniere } = bornesDuVoyage();
+  const defaut = Couverture.textesParDefaut({
+    destination: etat.carnet.destination,
+    titre: etat.carnet.titre,
+    voyageurs: listeVoyageurs(),
+    debut: premiere,
+    fin: derniere,
+  });
+  const repris = etat.couverture.textes || {};
+  return {
+    titre: repris.titre ?? defaut.titre,
+    voyageurs: repris.voyageurs ?? defaut.voyageurs,
+    dates: repris.dates ?? defaut.dates,
+    defaut,
+  };
+}
+
+/** Le logo en PNG haute définition : InDesign place mal le SVG selon les versions. */
+async function logoEnPng() {
+  if (etat.logoPng) return etat.logoPng;
+  const svg = await (await fetch("./logo-memobook.svg")).text();
+  const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const largeur = 1200;
+    const hauteur = Math.round((largeur * (img.naturalHeight || 1)) / (img.naturalWidth || 1));
+    const toile = document.createElement("canvas");
+    toile.width = largeur;
+    toile.height = hauteur;
+    toile.getContext("2d").drawImage(img, 0, 0, largeur, hauteur);
+    etat.logoPng = { data: toile.toDataURL("image/png"), px: [largeur, hauteur] };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+  return etat.logoPng;
+}
+
+const extensionDe = (dataUrl) => (/^data:image\/png/.test(dataUrl) ? "png" : "jpg");
+
+/** La maquette de la couverture, dans le style par défaut. */
+function maquetteCouverture() {
+  const fiche = fichePumbo();
+  const recto = photoDuPlat("recto");
+  const lieux = Voyage.itineraire(etapesPourMiseEnPage(() => ""));
+  const detail =
+    etat.contoursDetail && Object.keys(etat.contoursDetail).length ? etat.contoursDetail : etat.contoursCarte;
+  return Couverture.maquette({
+    fiche,
+    textes: textesCouverture(),
+    recto: recto
+      ? {
+          fichier: `Liens/recto.${extensionDe(recto.data)}`,
+          src: recto.data,
+          px: [recto.largeur, recto.hauteur],
+          focus: [0.5, 0.35],
+        }
+      : null,
+    chiffres: Couverture.chiffresQuatrieme(chiffresDuVoyage()),
+    carte: lieux.length && detail ? { lieux, detail } : null,
+    logo: etat.logoPng
+      ? { fichier: "Liens/logo-memobook.png", src: etat.logoPng.data, px: etat.logoPng.px }
+      : { fichier: "Liens/logo-memobook.png", src: "./logo-memobook.svg", px: [160, 160] },
+  });
+}
+
+/** Ce qu'il faut dire avant d'envoyer la couverture. */
+function alertesCouverture() {
+  const fiche = fichePumbo();
+  const alertes = [];
+  if (fiche.parDefaut) {
+    alertes.push(
+      `Dimensions de la ${fiche.source} (dos de ${fiche.dos} mm). Le dos dépend du nombre de pages : ` +
+        "importe la fiche Pumbo de cette commande dans les réglages avant d'envoyer le fichier.",
+    );
+  }
+  const recto = photoDuPlat("recto");
+  if (!recto) alertes.push("Aucune photo : la première de couverture sera un aplat vert.");
+  else {
+    const p = photosPourCouverture().find((x) => x.id === recto.id);
+    alertes.push(...Couverture.evaluerPhoto(p, { fiche, mesure: p.mesure, analyse: p.analyse }).alertes);
+  }
+  if (!Voyage.itineraire(etapesPourMiseEnPage(() => "")).length) {
+    alertes.push("Aucun lieu situé : la carte de la quatrième restera vide. Analyse les étapes (clé de modèle dans les réglages).");
+  }
+  return alertes;
+}
+
+/**
+ * Ouvre le panneau : analyse les étapes (lieux, trajets, note des photos),
+ * charge les contours de la carte et mesure les photos. Tout est gardé : la
+ * seconde ouverture est immédiate.
+ */
+async function ouvrirCouverture() {
+  etat.couverture.ouverte = true;
+  rendreCouverture();
+  $("carte-couverture")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  try {
+    await preparerMiseEnPage((texte) => {
+      etat.couverture.statut = texte;
+      rendreCouverture();
+    });
+    const photos = photosDesEtapes().filter((p) => p.data && !p.mesure);
+    for (const [i, p] of photos.entries()) {
+      etat.couverture.statut = `Mesure des photos… ${i + 1} / ${photos.length}`;
+      rendreCouverture();
+      try {
+        await mesurerPhoto(p);
+      } catch (erreur) {
+        debugCarnet("photo illisible pour la mesure", erreur);
+      }
+    }
+    await logoEnPng().catch((erreur) => debugCarnet("logo indisponible", erreur));
+  } finally {
+    etat.couverture.statut = "";
+    apresChangement();
+    rendreCouverture();
+  }
+}
+
+/**
+ * L'aperçu à imprimer en PDF, dans un nouvel onglet. L'onglet s'ouvre **avant**
+ * tout `await` : ouvert plus tard, hors du geste du clic, il serait bloqué par
+ * le navigateur comme une fenêtre surgissante.
+ */
+async function apercuCouverture() {
   const onglet = window.open("", "_blank");
   if (!onglet) {
     etat.erreur = "Le navigateur a bloqué l'onglet de la couverture : autorise les fenêtres pour cette page.";
     rendreColonne();
     return;
   }
-  onglet.document.write(
-    '<p style="font:15px system-ui,sans-serif;padding:2rem">Composition de la couverture…</p>',
-  );
-
+  onglet.document.write('<p style="font:15px system-ui,sans-serif;padding:2rem">Composition de la couverture…</p>');
   // Les polices du carnet, pour que la couverture parle comme l'intérieur.
-  // Sans réseau, on retombe sur les polices du système plutôt que d'échouer.
   let polices = "";
   try {
     polices = await recupererFichierTemplate("fonts.css");
   } catch (erreur) {
     debugCarnet("polices du gabarit indisponibles pour la couverture", erreur);
   }
-
-  const html = Couverture.construireHtmlCouverture({
-    fiche: fichePumbo(),
-    titre: etat.carnet.titre || "Carnet de voyage",
-    sousTitre: SOUS_TITRE,
-    auteurs: listeVoyageurs().join(" et "),
-    dates: plageDates(),
-    photo: photoDeCouverture(),
+  const html = Couverture.versHtml(maquetteCouverture(), {
     polices,
-    logo: new URL("./logo-memobook.svg", location.href).href,
-    quatrieme: "À suivre.",
-    adresse: "memobook.fr",
+    alertes: alertesCouverture(),
+    titre: textesCouverture().titre,
   });
   onglet.document.open();
   onglet.document.write(html);
   onglet.document.close();
+}
+
+const octetsDe = (dataUrl) => {
+  const binaire = atob(String(dataUrl).split(",")[1] || "");
+  const octets = new Uint8Array(binaire.length);
+  for (let i = 0; i < binaire.length; i += 1) octets[i] = binaire.charCodeAt(i);
+  return octets;
+};
+
+/**
+ * Le fichier InDesign : un dossier zippé — le script qui construit le document
+ * (sur le modèle de la fiche Pumbo), les photos en pleine résolution dans
+ * `Liens/`, et le mode d'emploi.
+ */
+async function fichierInDesign() {
+  await logoEnPng().catch((erreur) => debugCarnet("logo indisponible", erreur));
+  const mq = maquetteCouverture();
+  const textes = textesCouverture();
+  const dossier = "Couverture MemoBook";
+  const enc = new TextEncoder();
+  const fichiers = [
+    { nom: `${dossier}/Couverture MemoBook.jsx`, octets: enc.encode(Couverture.versJsx(mq, { titre: textes.titre })) },
+    { nom: `${dossier}/LISEZMOI.txt`, octets: enc.encode(Couverture.lisezmoi({ titre: textes.titre, fiche: mq.fiche })) },
+  ];
+  for (const e of mq.elements) {
+    if (e.type === "image" && e.src?.startsWith("data:") && !fichiers.some((f) => f.nom === `${dossier}/${e.fichier}`)) {
+      fichiers.push({ nom: `${dossier}/${e.fichier}`, octets: octetsDe(e.src) });
+    }
+  }
+  const zip = Couverture.zipper(fichiers);
+  const lien = document.createElement("a");
+  lien.href = URL.createObjectURL(new Blob([zip], { type: "application/zip" }));
+  lien.download = `couverture-${(textes.titre || "carnet").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-")}.zip`;
+  document.body.append(lien);
+  lien.click();
+  lien.remove();
+  setTimeout(() => URL.revokeObjectURL(lien.href), 10000);
+}
+
+function rendreCouverture() {
+  const section = $("carte-couverture");
+  if (!section) return;
+  section.hidden = !etat.couverture.ouverte;
+  if (section.hidden) return;
+
+  const fiche = fichePumbo();
+  const toutes = photosPourCouverture();
+  const propositions = Couverture.proposerPhotos(toutes, { fiche });
+  const pourcent = (v) => `${Math.round(v * 100)}`;
+
+  const plat = (face, titre, note) => {
+    const choisie = photoDuPlat(face);
+    const proposees = propositions[face];
+    const horsPropositions = choisie && !proposees.some((e) => e.photo.id === choisie.id);
+    const evaluee = choisie && toutes.find((p) => p.id === choisie.id);
+    const evaluation = evaluee && Couverture.evaluerPhoto(evaluee, { fiche, mesure: evaluee.mesure, analyse: evaluee.analyse });
+    const vignette = (photo, e, petite) =>
+      h(
+        "button",
+        {
+          class: `vignette-couv${petite ? " petite" : ""}${choisie?.id === photo.id ? " choisie" : ""}`,
+          title: e ? `Note ${pourcent(e.score)} / 100 — qualité ${pourcent(e.qualite)}, contenu ${pourcent(e.contenu)}, ${e.dpi} dpi` : "",
+          onclick: () => choisirPhotoDuPlat(face, photo.id),
+        },
+        h("img", { src: photo.data, alt: "" }),
+        e && !petite ? h("span", { class: "note-couv" }, `${pourcent(e.score)} · ${e.dpi} dpi`) : null,
+      );
+    return h(
+      "div",
+      { class: "plat-couv" },
+      h("h3", {}, titre),
+      note ? h("p", { class: "aide" }, note) : null,
+      h(
+        "div",
+        { class: "propositions-couv" },
+        proposees.length
+          ? proposees.map((e) => vignette(e.photo, e))
+          : h(
+              "p",
+              { class: "aide" },
+              "Aucune photo du carnet ne passe le contrôle qualité pour ce plat (résolution, netteté, exposition, format). Choisis-en une quand même avec « Autre photo… » : ses défauts s'afficheront.",
+            ),
+        horsPropositions ? vignette(evaluee, evaluation) : null,
+        bouton(etat.couverture.autre[face] ? "Fermer" : "Autre photo…", {
+          petit: true,
+          surClic: () => {
+            etat.couverture.autre[face] = !etat.couverture.autre[face];
+            rendreCouverture();
+          },
+        }),
+      ),
+      etat.couverture.autre[face]
+        ? h("div", { class: "toutes-couv" }, toutes.map((p) => vignette(p, null, true)))
+        : null,
+      evaluation && !evaluation.suffisante
+        ? h(
+            "div",
+            { class: "alerte-couv" },
+            h("strong", {}, horsPropositions ? "Contrôle qualité — cette photo pose problème :" : "À savoir :"),
+            h("ul", {}, evaluation.alertes.map((a) => h("li", {}, a))),
+          )
+        : horsPropositions
+          ? h("p", { class: "aide" }, "Contrôle qualité : rien à signaler.")
+          : null,
+    );
+  };
+
+  const t = textesCouverture();
+  const poser = (cle) => (v) => {
+    etat.couverture.textes = { ...etat.couverture.textes, [cle]: v };
+  };
+  const c = chiffresDuVoyage();
+  const quatrieme = Couverture.chiffresQuatrieme(c);
+
+  remplir(
+    section,
+    h(
+      "div",
+      { class: "contenu" },
+      h(
+        "div",
+        { class: "rangee entete-couv" },
+        h("h2", {}, "Couverture du livre"),
+        h("span", { class: "aide" }, `Style par défaut · plats ${fiche.largeurPlat} × ${fiche.hauteurPlat} mm, dos ${fiche.dos} mm`),
+        bouton("Fermer", {
+          petit: true,
+          surClic: () => {
+            etat.couverture.ouverte = false;
+            rendreCouverture();
+          },
+        }),
+      ),
+      etat.couverture.statut ? h("p", { class: "aide accent" }, etat.couverture.statut) : null,
+      plat("recto", "1re de couverture"),
+      plat(
+        "verso",
+        "4e de couverture",
+        "Le style par défaut n'a pas de photo en quatrième (la carte et les chiffres) : ce choix servira aux styles qui en ont une.",
+      ),
+      h("h3", {}, "Textes"),
+      h(
+        "div",
+        { class: "grille-champs" },
+        champ({ label: "Titre", valeur: t.titre, placeholder: t.defaut.titre, surSaisie: poser("titre") }),
+        champ({ label: "Voyageurs", valeur: t.voyageurs, placeholder: t.defaut.voyageurs, surSaisie: poser("voyageurs") }),
+        champ({ label: "Dates", valeur: t.dates, placeholder: t.defaut.dates, surSaisie: poser("dates") }),
+      ),
+      h("h3", {}, "Chiffres du voyage"),
+      h(
+        "p",
+        { class: "aide" },
+        `${nombre(c.jours)} jours · ${c.km === null ? "km inconnus (aucun trajet raconté)" : `${nombre(c.km)} km parcourus`} · ` +
+          `${c.pays.length} pays (${c.pays.join(", ") || "—"}) · ${c.villes.length} villes (${c.villes.join(", ") || "—"}). ` +
+          `En quatrième : ${quatrieme.map((q) => `${q.valeur} ${q.libelle.replace("\n", " ")}`).join(", ")}.` +
+          (c.analysees < c.etapes ? ` ${c.etapes - c.analysees} étape(s) pas encore analysée(s).` : ""),
+      ),
+      h(
+        "div",
+        { class: "rangee" },
+        bouton("Aperçu à imprimer (PDF)", { surClic: apercuCouverture }),
+        bouton("Fichier InDesign (.zip)", { ton: "solide", surClic: fichierInDesign }),
+      ),
+    ),
+  );
 }
 
 /** Lit la fiche `.jsx` de Pumbo choisie dans les réglages, et la garde pour les prochaines couvertures. */
@@ -1771,7 +2171,7 @@ function cleAnalyse(etape) {
 }
 
 /** À changer quand `consigneAnalyseEtape` demande autre chose : les analyses gardées se refont. */
-const VERSION_ANALYSE = "4-lieux-en-ville";
+const VERSION_ANALYSE = "5-trajets-couverture";
 
 /** Vignette JPEG de 512 px au plus côté : assez pour reconnaître une scène, léger à envoyer. */
 async function vignette(dataUrl) {
@@ -1872,7 +2272,12 @@ const CONTOURS_DETAIL_URL =
  */
 async function chargerContoursDetail() {
   if (!etat.contoursCarte) return;
-  const cadres = MiseEnPage.cadresDesCartes(etapesPourMiseEnPage(() => ""), etat.contoursCarte);
+  const etapes = etapesPourMiseEnPage(() => "");
+  // Les cartes de chapitre, et celle de la quatrième de couverture.
+  const cadres = [
+    ...MiseEnPage.cadresDesCartes(etapes, etat.contoursCarte),
+    Couverture.cadreQuatrieme(Voyage.itineraire(etapes)),
+  ].filter(Boolean);
   if (!cadres.length) return;
   etat.contoursDetail ||= {};
   try {
@@ -2132,6 +2537,7 @@ function construireAvancement() {
       carnetDeduit: etat.carnetDeduit,
       rencontres: etat.rencontres,
       texteGroupe: etat.texteGroupe,
+      couverture: etat.couverture.textes,
       etapes: etat.etapes.map((e) => ({
         ...e,
         souvenirs: e.souvenirs.map(({ audioUrl, fichier, ...reste }) => reste),
@@ -2171,6 +2577,7 @@ async function ouvrirAvancement(fichier) {
     etat.carnetDeduit = lu.carnetDeduit || {};
     etat.rencontres = lu.rencontres || [];
     etat.texteGroupe = lu.texteGroupe || "";
+    etat.couverture.textes = lu.couverture || {};
     etat.etapes = (lu.etapes || []).map((e) => ({
       ...e,
       souvenirs: (e.souvenirs || []).map((s) => ({ ...s, audioUrl: null, fichier: null })),
@@ -3263,7 +3670,7 @@ document.addEventListener("click", (ev) => {
   if (action === "ajouter-etape") ajouterEtape();
   if (action === "generer-json") genererJson(bouton);
   if (action === "generer-carnet") genererCarnet(bouton);
-  if (action === "generer-couverture") genererCouverture();
+  if (action === "generer-couverture") ouvrirCouverture();
   if (action === "sauvegarder") sauvegarderAvancement(bouton);
   if (action === "ouvrir") $("fichier-avancement").click();
   if (action === "sync-template") synchroniserTemplate(bouton);

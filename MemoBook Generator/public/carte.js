@@ -95,6 +95,55 @@
     return `${d}Z`;
   }
 
+  /**
+   * Les segments du trajet, chacun dessiné selon le moyen de transport qui
+   * mène à son point d'arrivée (`mode`) :
+   *
+   * - avion : une courbe en pointillés, l'arc d'un vol, bombé vers le haut ;
+   * - bateau : une ligne droite en pointillés ;
+   * - terre : une ligne droite pleine ;
+   * - inconnu : une ligne droite en pointillés, comme avant que les trajets
+   *   soient connus. `defaut` le remplace (une carte de ville se parcourt à
+   *   pied ou en métro : terre).
+   *
+   * `points` : `[{ x, y, mode }]`, déjà projetés. Renvoie `[{ mode, a, b, c }]`
+   * — `c`, le point de contrôle de la courbe d'un vol.
+   */
+  function segmentsDuTrajet(points, defaut = null) {
+    const r = (v) => Math.round(v * 10) / 10;
+    const segments = [];
+    for (let i = 1; i < points.length; i += 1) {
+      const a = [points[i - 1].x, points[i - 1].y];
+      const b = [points[i].x, points[i].y];
+      const mode = points[i].mode || defaut;
+      const l = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (l < 0.5) continue;
+      let c = null;
+      if (mode === "avion") {
+        let nx = -(b[1] - a[1]) / l;
+        let ny = (b[0] - a[0]) / l;
+        if (ny > 0 || (ny === 0 && nx > 0)) {
+          nx = -nx;
+          ny = -ny;
+        }
+        c = [r((a[0] + b[0]) / 2 + nx * l * 0.22), r((a[1] + b[1]) / 2 + ny * l * 0.22)];
+      }
+      segments.push({ mode, a, b, c });
+    }
+    return segments;
+  }
+
+  /** Le trajet en SVG : un `<path>` par segment, au style de son moyen de transport. */
+  function trajetSvg(segments, couleur, epaisseur = 0.9) {
+    return segments
+      .map(({ mode, a, b, c }) => {
+        const d = c ? `M${a[0]} ${a[1]}Q${c[0]} ${c[1]} ${b[0]} ${b[1]}` : `M${a[0]} ${a[1]}L${b[0]} ${b[1]}`;
+        const pointilles = mode === "terre" ? "" : ` stroke-dasharray="${mode === "avion" ? "1.4 1.8" : "2 2"}"`;
+        return `<path d="${d}" fill="none" stroke="${couleur}" stroke-width="${epaisseur}"${pointilles} stroke-linecap="round"/>`;
+      })
+      .join("");
+  }
+
   const escapeXml = (value) =>
     String(value)
       .replace(/&/g, "&amp;")
@@ -312,11 +361,19 @@
       }
     }
 
-    const trajet = ville || points.some((p) => p.secondaire)
-      ? `<polyline points="${points
-          .map((p) => project(frame, p.lon, p.lat).join(","))
-          .join(" ")}" fill="none" stroke="${PIN}" stroke-width="0.9" stroke-dasharray="2 2" stroke-linecap="round"/>`
-      : "";
+    const trajet =
+      ville || points.some((p) => p.secondaire || p.mode)
+        ? trajetSvg(
+            segmentsDuTrajet(
+              points.map((p) => {
+                const [x, y] = project(frame, p.lon, p.lat);
+                return { x, y, mode: p.mode };
+              }),
+              ville ? "terre" : null,
+            ),
+            PIN,
+          )
+        : "";
     // Sur une carte de ville, sans rue pour se repérer, les lieux déjà passés
     // gardent leur nom, en petit : à droite du point, à gauche s'il y
     // chevauche un autre nom, sinon tu.
@@ -416,7 +473,44 @@
     return enDataUri(renderCarteCadree(detail, request));
   }
 
-  const api = { renderMapSvg, renderMapDataUri, renderCarteCadree, renderCarteCadreeDataUri };
+  /**
+   * Le cadre élargi au format `largeur × hauteur` (n'importe quelle unité),
+   * centré : le même calcul que `renderCarteCadree`, pour les cartes dessinées
+   * ailleurs (la quatrième de couverture, `couverture.js`).
+   */
+  function cadrer(cadre, largeur, hauteur, padding = 0) {
+    let minX = mercatorX(cadre[0]);
+    let maxX = mercatorX(cadre[2]);
+    let minY = mercatorY(cadre[1]);
+    let maxY = mercatorY(cadre[3]);
+    const largeurUtile = largeur - padding * 2;
+    const hauteurUtile = hauteur - padding * 2;
+    const scale = Math.min(largeurUtile / (maxX - minX || 1e-6), hauteurUtile / (maxY - minY || 1e-6));
+    const manqueX = (largeurUtile / scale - (maxX - minX)) / 2;
+    const manqueY = (hauteurUtile / scale - (maxY - minY)) / 2;
+    minX -= manqueX;
+    maxX += manqueX;
+    minY -= manqueY;
+    maxY += manqueY;
+    const frame = { minX, maxX, minY, maxY, scale, width: largeur, height: hauteur, padding };
+    const vue = [
+      (minX * 180) / Math.PI - 0.5,
+      ((2 * Math.atan(Math.exp(minY)) - Math.PI / 2) * 180) / Math.PI - 0.5,
+      (maxX * 180) / Math.PI + 0.5,
+      ((2 * Math.atan(Math.exp(maxY)) - Math.PI / 2) * 180) / Math.PI + 0.5,
+    ];
+    // Sans l'arrondi au dixième de `project` : la quatrième se dessine en
+    // millimètres, où un dixième se verrait.
+    const projeter = (lon, lat) => [
+      padding + (mercatorX(lon) - minX) * scale,
+      padding + (maxY - mercatorY(lat)) * scale,
+    ];
+    return { frame, vue, projeter };
+  }
+
+  const outils = { cadrer, simplifier, boiteDe, seCroisent, segmentsDuTrajet };
+
+  const api = { renderMapSvg, renderMapDataUri, renderCarteCadree, renderCarteCadreeDataUri, outils };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else racine.Carte = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

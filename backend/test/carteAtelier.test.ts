@@ -129,11 +129,12 @@ describe("cartes de chapitre de l'app", () => {
     const [pays, ville, suite] = (payload["days"] as Record<string, unknown>[]).map(svgDe);
     // Le pays : la France entière, une seule épingle, ni trajet ni échelle.
     expect(pays).toContain(">Paris<");
-    expect(pays).not.toContain("<polyline");
+    expect(pays).not.toContain('fill="none" stroke="#f86015"');
     expect(pays).not.toMatch(/ km<| m</);
     // La ville : les lieux nommés, le trajet, l'échelle.
     expect(ville).toContain(">Louvre<");
-    expect(ville).toContain("<polyline");
+    // En ville, le parcours se fait à pied ou en métro : des droites pleines.
+    expect(ville).toMatch(/<path d="M[\d. ]+L[\d. ]+" fill="none" stroke="#f86015" stroke-width="0.9" stroke-linecap/);
     expect(ville).toMatch(/>\d+ (m|km)</);
     // La suite : le parcours précédent en petits points, nommés en petit.
     expect(ville).toContain(">PARIS<");
@@ -154,6 +155,27 @@ describe("cartes de chapitre de l'app", () => {
     };
     const pays = { FR: detail("FR") };
     expect(carte.renderCarteCadree(pays, request)).toBe(renderFramedMapSvg(pays, request));
+  });
+
+  it("dessine chaque trajet selon son moyen de transport, comme l'atelier", () => {
+    const request = {
+      cadre: voyageFrame(cyclades, "GR")!,
+      points: [
+        { ...cyclades[3]!, secondaire: true },
+        { ...cyclades[0]!, mode: "avion" as const },
+        { ...cyclades[1]!, mode: "bateau" as const },
+        { ...cyclades[2]!, mode: "terre" as const },
+      ],
+    };
+    const svg = renderFramedMapSvg({ GR: detail("GR") }, request);
+    const traits = svg.match(/<path d="M[^"]+" fill="none" stroke="#f86015"[^>]*>/g) ?? [];
+    expect(traits).toHaveLength(3);
+    // Avion : une courbe en pointillés ; bateau : une droite en pointillés ; terre : une droite pleine.
+    expect(traits[0]).toMatch(/d="M[\d. ]+Q[\d. ]+".*stroke-dasharray/);
+    expect(traits[1]).toMatch(/d="M[\d. ]+L[\d. ]+".*stroke-dasharray/);
+    expect(traits[2]).toMatch(/d="M[\d. ]+L[\d. ]+"/);
+    expect(traits[2]).not.toContain("stroke-dasharray");
+    expect(carte.renderCarteCadree({ GR: detail("GR") }, request)).toBe(svg);
   });
 
   it("refuse toujours une région inconnue", () => {

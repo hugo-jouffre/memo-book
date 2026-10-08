@@ -28,6 +28,16 @@
 (function (racine) {
   "use strict";
 
+  // Les trajets racontés et leurs moyens de transport (`voyage.js`).
+  const Voyage = typeof module !== "undefined" && module.exports ? require("./voyage.js") : racine.Voyage;
+
+  /** Le moyen de transport qui a mené à `nom` pendant l'étape, si le récit le raconte. */
+  function modeArrivee(analyse, nom) {
+    const cle = normaliser(nom);
+    const trajet = (analyse?.trajets || []).find((t) => normaliser(t?.arrivee?.nom) === cle);
+    return trajet ? Voyage.modeDe(trajet.mode) : null;
+  }
+
   /**
    * Un paragraphe ne dépasse jamais la taille S du barème (379 signes) : c'est la
    * limite que `payloadValidator.ts` applique au carnet, et au-delà c'est un mur
@@ -922,7 +932,8 @@
       // Chapitre : la première étape, puis chaque arrivée dans un nouveau lieu.
       // Pour un séjour en un seul lieu, chaque étape qui emmène le voyageur
       // ailleurs dans la ville : sa carte trace ses déplacements.
-      const situe = lieuSitue(etape.analyse, contours);
+      const situeBrut = lieuSitue(etape.analyse, contours);
+      const situe = situeBrut && { ...situeBrut, mode: modeArrivee(etape.analyse, situeBrut.nom) };
       const cleLieu = normaliser(situe?.nom || etape.lieu);
       const sejour = Boolean(situe && sejourUnique(lieux, situe.pays));
       let nouveauLieu = index === 0 || (cleLieu && cleLieu !== lieuPrecedent);
@@ -939,6 +950,7 @@
         const vus = new Set([villeDuSejour.get(situe.pays)]);
         nouveauxEnVille = [situe, ...(etape.analyse?.lieux || []).map((l) => lieuSitue({ lieu: l }, contours))]
           .filter((l) => l && l.pays === situe.pays)
+          .map((l) => (l === situe ? l : { ...l, mode: modeArrivee(etape.analyse, l.nom) }))
           .filter((l) => {
             const cle = normaliser(l.nom);
             if (!cle || vus.has(cle) || dejaPasses.has(cle)) return false;
@@ -1005,8 +1017,8 @@
             regions: [situe.pays],
             cadre: cadreDuVoyage(lieux, situe.pays, contours, CADRE_MIN_VILLE),
             points: [
-              ...passes.map((c) => ({ label: c.nom, lat: c.lat, lon: c.lon, secondaire: true })),
-              ...montres.map((c) => ({ label: c.nom, lat: c.lat, lon: c.lon })),
+              ...passes.map((c) => ({ label: c.nom, lat: c.lat, lon: c.lon, secondaire: true, mode: c.mode })),
+              ...montres.map((c) => ({ label: c.nom, lat: c.lat, lon: c.lon, mode: c.mode })),
             ],
             ville: true,
             titre: titreDuSejour.get(situe.pays) || "",
@@ -1020,8 +1032,8 @@
             // Cadrée sur ce que le voyage parcourt dans le pays, pas sur le pays entier.
             cadre: cadreDuVoyage(lieux, situe.pays, contours),
             points: [
-              ...passes.map((c) => ({ label: c.nom, lat: c.lat, lon: c.lon, secondaire: true })),
-              { label: situe.nom || etape.lieu, lat: situe.lat, lon: situe.lon },
+              ...passes.map((c) => ({ label: c.nom, lat: c.lat, lon: c.lon, secondaire: true, mode: c.mode })),
+              { label: situe.nom || etape.lieu, lat: situe.lat, lon: situe.lon, mode: situe.mode },
             ],
           };
         }

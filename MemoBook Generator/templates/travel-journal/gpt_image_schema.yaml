@@ -285,6 +285,14 @@ $defs:
                 label: { type: string }
                 lat: { type: number, minimum: -90, maximum: 90 }
                 lon: { type: number, minimum: -180, maximum: 180 }
+                mode:
+                  type: string
+                  enum: [avion, bateau, terre]
+                  description: >
+                    Comment le récit dit que le voyageur est arrivé à ce point
+                    depuis le précédent. Avion : courbe en pointillés ; bateau :
+                    droite en pointillés ; terre : droite pleine. Absent quand
+                    le récit ne le dit pas.
       layout_hero_top:
         type: boolean
         description: >

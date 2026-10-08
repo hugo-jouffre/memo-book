@@ -339,19 +339,36 @@ layout du carnet, ses champs et ses limites.
 
 ## La couverture du livre relié
 
-Le bouton **« Générer la couverture »** compose la couverture Pumbo — plat
-verso, dos, plat recto — dans un nouvel onglet, au format exact de la fiche
-technique, avec ses repères de coupe et de pli à l'écran. *Imprimer →
-Enregistrer au format PDF* (marges *Aucune*, *Graphiques d'arrière-plan*
-coché) donne le fichier à envoyer.
+Le bouton **« Générer la couverture »** ouvre le panneau de la couverture
+Pumbo — plat verso (la quatrième), dos, plat recto (la première) — dans le style
+par défaut. L'atelier analyse d'abord les étapes et mesure les photos, puis :
 
-- **La fiche Pumbo** (le `.jsx` de leur outil de couverture) s'importe dans les
-  réglages. Elle seule donne la largeur du dos, qui dépend du nombre de pages :
-  une fiche par commande. Sans elle, l'atelier prend celle d'un relié de
-  48 pages (dos de 8 mm) et le signale.
-- **La photo de couverture** se désigne par l'étoile ☆ sous une photo ; sans
-  étoile, l'atelier choisit la plus adaptée (portrait, bien résolue, pas une
-  photo de groupe). C'est aussi celle de la couverture intérieure du carnet.
+- **propose trois photos pour la première et trois autres pour la quatrième**,
+  les mieux notées en qualité (résolution à la taille d'impression, netteté,
+  exposition) et en contenu (paysage marquant, belle photo des voyageurs). Le
+  voyageur en choisit une, ou une autre avec **« Autre photo… »** : un contrôle
+  qualité en dit alors les défauts (résolution, flou, exposition, rognage) ;
+- **tire les textes du carnet** — la destination en titre, les voyageurs, le
+  mois du voyage —, modifiables dans le panneau ;
+- **compte les chiffres de la quatrième** : jours, kilomètres parcourus (les
+  trajets racontés), pays et villes visités ;
+- **dessine la carte de la quatrième** : tous les lieux visités, reliés dans
+  l'ordre, chaque trajet au trait de son moyen de transport (avion en courbe
+  pointillée, bateau en droite pointillée, terre en droite pleine).
+
+Deux sorties de la même maquette :
+
+- **« Aperçu à imprimer (PDF) »** — un onglet avec la feuille et ses repères ;
+  *Imprimer → Enregistrer au format PDF* (marges *Aucune*, *Graphiques
+  d'arrière-plan* coché) ;
+- **« Fichier InDesign (.zip) »** — le script `Couverture MemoBook.jsx` qui
+  construit le document dans InDesign (sur le modèle de la fiche Pumbo, en
+  objets modifiables), la photo et le logo dans `Liens/`, et le mode d'emploi.
+
+**La fiche Pumbo** (le `.jsx` de leur outil de couverture) s'importe dans les
+réglages. Elle seule donne la largeur du dos, qui dépend du nombre de pages :
+une fiche par commande. Sans elle, l'atelier prend celle d'un relié de 48 pages
+(dos de 8 mm) et le signale.
 
 Règles et cotes : `LAYOUT_KB.md`, § « Couverture imprimée (Pumbo) ».
 
