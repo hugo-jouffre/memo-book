@@ -27,6 +27,12 @@ export interface MapPoint {
   lon: number;
   /** Une étape déjà parcourue : petit point sans nom, relié par le trajet. */
   secondaire?: boolean;
+  /**
+   * Comment le voyageur est arrivé à ce point depuis le précédent : avion
+   * (courbe en pointillés), bateau (droite en pointillés), terre (droite
+   * pleine). Sans lui, une droite en pointillés.
+   */
+  mode?: TransportMode | null;
 }
 
 export interface MapRequest {
@@ -178,6 +184,61 @@ function smoothPath(points: [number, number][]): string {
     d += ` C${round(c1x)} ${round(c1y)} ${round(c2x)} ${round(c2y)} ${round(p2[0])} ${round(p2[1])}`;
   }
   return `${d}Z`;
+}
+
+/** Le moyen de transport qui mène à un point : il décide du trait du trajet. */
+export type TransportMode = "avion" | "bateau" | "terre";
+
+interface Segment {
+  mode: TransportMode | null;
+  a: [number, number];
+  b: [number, number];
+  c: [number, number] | null;
+}
+
+/**
+ * Les segments du trajet, chacun dessiné selon le moyen de transport qui mène
+ * à son point d'arrivée (`mode`) : avion, une courbe en pointillés bombée vers
+ * le haut ; bateau, une ligne droite en pointillés ; terre, une ligne droite
+ * pleine ; inconnu, une ligne droite en pointillés (`defaut` le remplace —
+ * terre sur une carte de ville). Recopie de `segmentsDuTrajet` (`carte.js`).
+ */
+function segmentsDuTrajet(
+  points: { x: number; y: number; mode?: TransportMode | null }[],
+  defaut: TransportMode | null = null,
+): Segment[] {
+  const r = (v: number): number => Math.round(v * 10) / 10;
+  const segments: Segment[] = [];
+  for (let i = 1; i < points.length; i += 1) {
+    const a: [number, number] = [points[i - 1]!.x, points[i - 1]!.y];
+    const b: [number, number] = [points[i]!.x, points[i]!.y];
+    const mode = points[i]!.mode || defaut;
+    const l = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (l < 0.5) continue;
+    let c: [number, number] | null = null;
+    if (mode === "avion") {
+      let nx = -(b[1] - a[1]) / l;
+      let ny = (b[0] - a[0]) / l;
+      if (ny > 0 || (ny === 0 && nx > 0)) {
+        nx = -nx;
+        ny = -ny;
+      }
+      c = [r((a[0] + b[0]) / 2 + nx * l * 0.22), r((a[1] + b[1]) / 2 + ny * l * 0.22)];
+    }
+    segments.push({ mode, a, b, c });
+  }
+  return segments;
+}
+
+/** Le trajet en SVG : un `<path>` par segment, au style de son moyen de transport. */
+function trajetSvg(segments: Segment[], couleur: string, epaisseur = 0.9): string {
+  return segments
+    .map(({ mode, a, b, c }) => {
+      const d = c ? `M${a[0]} ${a[1]}Q${c[0]} ${c[1]} ${b[0]} ${b[1]}` : `M${a[0]} ${a[1]}L${b[0]} ${b[1]}`;
+      const pointilles = mode === "terre" ? "" : ` stroke-dasharray="${mode === "avion" ? "1.4 1.8" : "2 2"}"`;
+      return `<path d="${d}" fill="none" stroke="${couleur}" stroke-width="${epaisseur}"${pointilles} stroke-linecap="round"/>`;
+    })
+    .join("");
 }
 
 const escapeXml = (value: string): string =>
@@ -568,11 +629,18 @@ export function renderFramedMapSvg(detail: Record<string, DetailCountry>, reques
   }
 
   const trajet =
-    ville || points.some((p) => p.secondaire)
-      ? `<polyline points="${points
-        .map((p) => project(frame, p.lon, p.lat).join(","))
-        .join(" ")}" fill="none" stroke="${PIN}" stroke-width="0.9" stroke-dasharray="2 2" stroke-linecap="round"/>`
-    : "";
+    ville || points.some((p) => p.secondaire || p.mode)
+      ? trajetSvg(
+          segmentsDuTrajet(
+            points.map((p) => {
+              const [x, y] = project(frame, p.lon, p.lat);
+              return { x, y, mode: p.mode };
+            }),
+            ville ? "terre" : null,
+          ),
+          PIN,
+        )
+      : "";
   // Sur une carte de ville, sans rue pour se repérer, les lieux déjà passés
   // gardent leur nom, en petit : à droite du point, à gauche s'il y chevauche
   // un autre nom, sinon tu.

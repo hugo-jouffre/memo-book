@@ -166,7 +166,10 @@ Réponds uniquement par un objet JSON, sans texte autour et sans balises de code
    * - où se trouve le lieu de l'étape (pays et coordonnées), pour la carte de
    *   chapitre — `null` s'il n'en est pas sûr : une épingle au hasard se voit ;
    * - les autres lieux où le récit emmène le voyageur, pour cadrer la carte sur
-   *   la zone que le voyage parcourt ;
+   *   la zone que le voyage parcourt, et leur genre (ville ou site) ;
+   * - les trajets racontés et leur moyen de transport, pour les tracer sur les
+   *   cartes et compter les kilomètres (`voyage.js`) ;
+   * - ce que vaudrait chaque photo en couverture ;
    * - quel paragraphe chaque photo illustre, pour qu'elle tombe sur la même
    *   page que le passage qui en parle ;
    * - quelles photos ont été prises au même endroit (même arrière-plan), pour
@@ -196,13 +199,17 @@ ${texte || "(pas de récit)"}
 Les photos de l'étape suivent, chacune précédée de son identifiant (${ids || "aucune"}).
 
 1. **Le lieu.** Le pays (code ISO 3166-1 alpha-2) et les coordonnées du lieu principal de l'étape, justes au centième de degré, et le nom court à écrire sur une carte (« Paros », pas « Paros, Cyclades, Grèce »). Si tu n'es pas sûr du lieu ou de ses coordonnées, mets null : une épingle mal placée se voit immédiatement.
-   "lieux" : les autres endroits où le récit emmène le voyageur pendant l'étape — une excursion, un village, une plage, une île d'escale, et dans une ville le musée, le quartier, le marché — avec leur pays et leurs coordonnées, dans l'ordre où il y passe. Pas ceux qui sont seulement cités (la ville de départ du vol, un pays dont on parle). Ils cadrent la carte et y tracent ses déplacements : un lieu en ville se situe au millième de degré, sinon il tombe dans la mauvaise rue. N'en mets que ceux que tu sais situer, et une liste vide si aucun.
+   "genre" : "ville" pour une ville ou un village, "site" pour tout le reste (une île, une plage, un musée, un parc, un quartier). Il sert à compter les villes visitées.
+   "lieux" : les autres endroits où le récit emmène le voyageur pendant l'étape — une excursion, un village, une plage, une île d'escale, et dans une ville le musée, le quartier, le marché — avec leur pays et leurs coordonnées, dans l'ordre où il y passe. Pas ceux qui sont seulement cités (la ville de départ du vol, un pays dont on parle). Ils cadrent la carte et y tracent ses déplacements : un lieu en ville se situe au millième de degré, sinon il tombe dans la mauvaise rue. N'en mets que ceux que tu sais situer, et une liste vide si aucun. Chacun porte aussi son "genre".
+
+   "trajets" : les déplacements que le récit raconte, dans l'ordre — y compris le voyage aller depuis la maison et le retour. Pour chacun, le lieu de départ et le lieu d'arrivée (nom, pays, coordonnées) et le "mode" : "avion", "bateau" (ferry, bateau, navette maritime) ou "terre" (voiture, bus, train, scooter, à pied). Seulement ce qui est raconté : on ne devine pas comment le voyageur est passé d'une île à l'autre s'il ne le dit pas. Une liste vide si aucun.
 
 2. **Chaque photo.** Pour chaque identifiant :
    - "paragraphe" : le numéro du paragraphe dont la photo illustre le contenu — la plage pour le passage sur la plage, le plat pour le passage sur le restaurant. Juge sur ce que montre la photo et ce que raconte le texte, pas sur l'ordre des photos. null si aucun paragraphe ne s'y rattache ;
    - "scene" : un court libellé du lieu de prise de vue, identique pour toutes les photos prises au même endroit, devant le même arrière-plan (« terrasse du restaurant au port », « plage de sable blanc », « ruelle blanchie à la chaux »). Deux photos d'un même lieu portent exactement le même libellé ;
    - "sujet" : ce que montre la photo, en quelques mots ;
-   - "personnes" : le nombre de personnes dont on voit le visage.
+   - "personnes" : le nombre de personnes dont on voit le visage ;
+   - "couverture" : de 0 à 10, ce que vaudrait la photo en couverture du carnet. 8 et plus pour un paysage marquant du voyage ou une belle photo où l'on voit les voyageurs, nette, lumineuse, bien cadrée. Sous 4 : un plat, un document, un intérieur sombre, une photo floue ou de travers, un détail sans contexte.
 
 3. **L'encart (« fun fact »).** Au plus un, et seulement s'il en vaut la peine :
    - son sujet vient du récit. Le voyageur raconte un trajet en jeepney : l'encart parle des jeepneys, pas du PIB du pays ;
@@ -217,7 +224,7 @@ Les photos de l'étape suivent, chacune précédée de son identifiant (${ids ||
    "funFact" vaut null s'il n'y a rien de sûr et de pertinent : c'est un résultat normal.
 
 Réponds uniquement par un objet JSON, sans texte autour :
-{"lieu":{"nom":"","pays":"","lat":0,"lon":0},"lieux":[{"nom":"","pays":"","lat":0,"lon":0}],"photos":[{"id":"","paragraphe":0,"scene":"","sujet":"","personnes":0}],"funFact":{"texte":"","titre":"Fun fact","registre":"","paragraphe":0,"pertinence":0}}`;
+{"lieu":{"nom":"","pays":"","lat":0,"lon":0,"genre":"ville"},"lieux":[{"nom":"","pays":"","lat":0,"lon":0,"genre":"site"}],"trajets":[{"depart":{"nom":"","pays":"","lat":0,"lon":0},"arrivee":{"nom":"","pays":"","lat":0,"lon":0},"mode":"avion"}],"photos":[{"id":"","paragraphe":0,"scene":"","sujet":"","personnes":0,"couverture":0}],"funFact":{"texte":"","titre":"Fun fact","registre":"","paragraphe":0,"pertinence":0}}`;
   }
 
   /**

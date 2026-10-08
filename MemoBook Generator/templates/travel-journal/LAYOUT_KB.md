@@ -216,6 +216,23 @@ C'est pourquoi les `points` comptent plus que `regions` : ce sont eux qui
 disent où le voyage se passe. Sans contour détaillé pour le pays, la carte
 retombe sur le pays entier, cadré sur le premier code de `regions`.
 
+### Le trait des trajets : le moyen de transport
+
+Chaque trajet se dessine selon la façon dont le voyageur l'a fait, telle que le
+récit la raconte (`mode` sur le point d'arrivée) :
+
+| Moyen | Trait |
+|---|---|
+| avion | **courbe en pointillés** — l'arc d'un vol, bombé vers le haut |
+| bateau (ferry, navette) | **ligne droite en pointillés** |
+| terre (voiture, bus, train, scooter, à pied) | **ligne droite pleine** |
+| inconnu | ligne droite en pointillés ; terre sur une carte de ville |
+
+On ne devine pas : si le récit ne dit pas comment on est passé d'une île à
+l'autre, le mode reste inconnu. Dans l'app, l'agent le pose sur chaque point
+(`mode`) ; dans l'atelier, il vient des `trajets` de l'analyse d'étape. Dessin :
+`segmentsDuTrajet`, dans `carte.js` et `mapSvg.ts` (gardés identiques).
+
 ### Séjour en un seul lieu : le pays, puis la ville
 
 Quand **tous les points du carnet dans un pays tiennent dans ~30 km** (0,3° de
@@ -240,6 +257,11 @@ Earth) sont trop grossières à cette échelle — la Seine y passait au nord de
 tour Eiffel. Une carte qui place un monument sur la mauvaise rive se voit plus
 qu'une carte sobre. Seuls les points, exacts, s'y dessinent ; la côte reste
 quand la ville en a une.
+
+> ⚠️ **Non validé — à reprendre.** Le 08/10/2026, le fondateur juge ces cartes
+> de ville insuffisantes sans rues ni fleuves (« ce point ne me convient pas,
+> on va sûrement revenir dessus »). La piste : des données OpenStreetMap
+> (rues, eau) à la génération, avec la mention « © OpenStreetMap » imprimée.
 
 **Quand ouvrir un chapitre** dans un tel carnet : à chaque étape dont le récit
 emmène le voyageur dans des lieux de la ville où il n'était pas encore allé,
@@ -916,54 +938,111 @@ couverture d'un relié n'est pas une page du carnet : c'est une seule feuille �
 plat verso, dos, plat recto — imprimée à part, sur un autre papier, et dont la
 largeur dépend du nombre de pages. Elle ne passe donc pas par ce gabarit ni par
 APITemplate : l'atelier la compose (`MemoBook Generator/public/couverture.js`)
-et le navigateur l'enregistre en PDF au format exact.
+et la livre en aperçu PDF au format exact et en fichier InDesign.
 
-**Les dimensions viennent de la fiche Pumbo, jamais d'un calcul.** L'outil de
-couverture de Pumbo produit, pour une commande donnée, un script InDesign
-(`.jsx`) qui donne tout ; l'atelier le lit (*Réglages → Fiche couverture
-Pumbo*). Pumbo ne publie pas de barème : la largeur du dos dépend du nombre de
-pages **et** du papier, et la seule valeur connue est celle-ci :
+**Les plats viennent de la fiche Pumbo, le dos du nombre de pages.** L'outil
+de couverture de Pumbo produit, pour une commande donnée, un script InDesign
+(`.jsx`) ; l'atelier le lit (*Réglages → Fiche couverture Pumbo*) pour les
+plats, le fond perdu et les marges. Sans fiche importée, il prend celle-ci :
 
-| Fiche du 07/10/2026 — relié 154 × 216 mm, 48 pages | mm |
+| Fiche du 07/10/2026 — relié 154 × 216 mm | mm |
 |---|---|
-| Feuille complète, fond perdu compris | 370 × 266 |
 | Fond perdu, sur les quatre bords | 3 |
 | Plat verso et plat recto (chacun) | 178 × 260 |
-| Dos | 8 |
 | Zone sûre : marge haut, bas et bord extérieur des plats | 19 |
 | Côté dos (charnière) : marge imposée par MemoBook, pas par la fiche | 12 |
 
 Les plats sont plus grands que la page (178 × 260 contre 154 × 216) : le carton
 déborde du bloc et le papier se rabat dessus. D'où la zone sûre de 19 mm, qui
-couvre ce rabat. Sans fiche importée, l'atelier part de celle-ci **et le dit** :
-un dos de 8 mm sur un carnet de 80 pages serait faux. Une fiche par commande.
+couvre ce rabat.
 
-**Un seul style : celui de la couverture intérieure.**
+**Le dos suit le barème Pumbo** (08/10/2026, récapitulatif tenu dans le
+tableur de l'équipe), d'après le nombre de **pages intérieures** du carnet —
+colophon compris, arrondi au nombre pair qui part chez l'imprimeur :
 
-- **Recto** — la photo de couverture en pleine page, fond perdu compris ; le
-  titre du carnet en Playfair Display Black, blanc, en haut de la zone sûre ;
-  le sous-titre sur un bandeau blanc incliné ; les voyageurs et les dates en
-  bas. Un voile sombre sur le haut seulement, pour que le titre reste lisible
-  sur un ciel clair.
-- **Dos** — aplat encre, titre et voyageurs en blanc, **lisibles de bas en
-  haut** (à la française). Pas de texte sous 6 mm de dos : il ne tiendrait pas
-  lisible. Corps : 45 % de la largeur du dos, 11 pt au plus.
-- **Verso** — le papier crème et « À suivre. », comme la quatrième intérieure,
-  avec le logo et l'adresse en bas.
+| Pages | Dos |
+|---|---|
+| 16 à 56 | **8,0 mm** (le minimum) |
+| au-delà | **3 mm + 0,09 mm par page**, arrondi au dixième, 8 mm au moins |
+| exemples | 100 pages → 12,0 mm ; 200 pages → 21,0 mm |
 
-**La photo de couverture.** Celle que le voyageur désigne (étoile sur la
-photo), sinon la plus adaptée au recto, qui est un portrait (format 0,68) :
-jamais une photo de groupe (elle serait rognée), d'abord une photo qui tient
-sous le plafond de rognage d'un tiers — une portrait, en pratique —, puis celle
-qui atteint 300 dpi sur le recto, puis la mieux résolue. C'est **la même** que
-la photo de couverture intérieure du carnet. L'atelier prévient sous 200 dpi,
-et quand une photo de groupe désignée serait rognée.
+La planche fait donc `2 × 178 + dos` mm de large, plus le fond perdu (370 × 266
+pour 48 pages). L'atelier compte les pages de sa propre mise en page
+(`Couverture.dosPumbo`, `ficheDuCarnet`) et le dit au voyageur ; sous 16 pages,
+il prévient que Pumbo ne relie pas un carnet aussi mince. Le carnet change de
+nombre de pages : la couverture se refait.
 
-**Le fichier.** Bouton « Générer la couverture » → un onglet avec la feuille et
-ses repères (coupe, plis du dos, zone sûre — à l'écran seulement) → *Imprimer*
-→ *Enregistrer au format PDF*, marges *Aucune*, *Graphiques d'arrière-plan*
-coché. La taille de la feuille est imposée par la règle `@page`, au dixième de
-millimètre (mesuré : 370,08 × 266,02 mm pour 370 × 266).
+**Le style par défaut** (`assets/covers/… cover_style par défaut.png`), seul
+développé pour l'instant. Rien du modèle n'est écrit en dur : ni la photo, ni
+les textes, ni les chiffres, ni la carte.
+
+- **Première** — la photo en pleine page, fond perdu compris ; en haut, le
+  titre (la destination, reprise du carnet) en Playfair Display Bold, blanc,
+  aussi grand que la largeur le permet (72 pt au plus) ; en bas, les voyageurs
+  et le mois du voyage (« août – septembre 2026 »). Une ombre légère sous les
+  textes, pour les ciels clairs.
+- **Dos** — aplat vert, titre et voyageurs en papier, **lisibles de bas en
+  haut** (à la française). Pas de texte sous 6 mm de dos. Corps : 45 % de la
+  largeur du dos, 11 pt au plus.
+- **Quatrième** — sur le papier, dans un cadre pointillé posé sur la zone sûre :
+  - **la carte de tous les lieux visités, reliés dans l'ordre de visite**,
+    chaque trajet au trait de son moyen de transport (§ « Les cartes ») ; les
+    côtes en trait fin, les lieux en anneaux verts, leurs noms placés là où ils
+    ne chevauchent rien, au besoin au bout d'un filet. Le cadre entoure tous les
+    lieux (une marge, un degré au moins), quel que soit le nombre de pays ;
+  - **« Mon voyage en quelques chiffres »** : les jours, les kilomètres
+    parcourus, puis les pays s'il y en a plusieurs — sinon les villes ;
+  - le logo MemoBook. Pas de photo : le style par défaut n'en a pas en
+    quatrième.
+
+**Les chiffres du voyage** (`voyage.js`), tirés des récits par l'analyse
+d'étape :
+
+- **kilomètres** : la somme des **trajets racontés** (`trajets` : départ,
+  arrivée, moyen de transport), aller et retour compris — à vol d'oiseau en
+  avion et en bateau, **1,3 fois** par la route ou le rail. Aucun trajet
+  raconté : pas de chiffre, plutôt qu'un chiffre inventé ;
+- **pays visités** et **villes visitées**, distincts : une ville ou un village
+  compte comme ville, une île, une plage ou un musée non (`genre`). La maison —
+  le départ du premier trajet — n'est ni un lieu visité ni un pays visité.
+
+**Les photos des plats.** L'atelier propose les **trois** photos les plus
+adaptées à la première et **trois autres** pour la quatrième ; le voyageur
+choisit parmi les six, ou en prend une autre. La note (`evaluerPhoto`) :
+
+- **qualité** (45 %) — la résolution à la taille d'impression (300 dpi visés),
+  la netteté (variance du laplacien sur une vignette de 512 px) et
+  l'exposition, mesurées dans le navigateur ;
+- **contenu** (55 %) — la note « couverture » de l'analyse d'étape : 8 et plus
+  pour un paysage marquant ou une belle photo des voyageurs ;
+- **jamais proposée** : une photo qui échoue au contrôle qualité, ou que le plat
+  rognerait de plus d'un tiers (15 % pour une photo de groupe).
+
+**Le contrôle qualité**, à chaque photo choisie — proposée ou non : alerte sous
+**200 dpi**, sous une netteté de **40** (une photo nette mesure de 170 à 3 000,
+floutée d'un pixel de 15 à 130), sous une luminance moyenne de 45 (trop sombre),
+au-dessus de 215 ou avec plus de 25 % de pixels brûlés (surexposée), et quand le
+plat rogne trop. La photo de la première est aussi celle de la couverture
+intérieure du carnet.
+
+**Les fichiers.** Bouton « Générer la couverture » → le panneau de la
+couverture :
+
+- **« Aperçu à imprimer (PDF) »** — un onglet avec la feuille et ses repères
+  (coupe, plis du dos, zone sûre — à l'écran seulement) → *Imprimer* →
+  *Enregistrer au format PDF*, marges *Aucune*, *Graphiques d'arrière-plan*
+  coché. La taille de la feuille est imposée par la règle `@page` ;
+- **« Fichier InDesign (.zip) »** — un dossier : `Couverture MemoBook.jsx`, le
+  script InDesign qui construit le document, la photo en pleine résolution et
+  le logo dans `Liens/`, et `LISEZMOI.txt`. Le script reprend **mot pour mot**
+  la mise en place de la fiche Pumbo (trois pages verso, dos, recto sur une
+  planche), puis pose chaque élément en objet InDesign modifiable : photo liée
+  et calée sur son point focal, textes en Playfair Display, carte en tracés
+  vectoriels, nuances en CMJN, trois calques (photo et fonds, carte, textes).
+  Il se lance depuis le panneau Scripts d'InDesign, comme la fiche Pumbo.
+
+L'aperçu et le script viennent de **la même maquette** (`maquette`, en
+millimètres) : ils ne peuvent pas diverger.
 
 **L'intérieur, version imprimeur.** Le PDF du carnet contient sa propre
 couverture et sa quatrième (première et dernière pages) : pour un relié, elles

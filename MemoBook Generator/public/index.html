@@ -32,7 +32,7 @@
           <button
             class="btn"
             data-action="generer-couverture"
-            title="Compose la couverture du livre relié Pumbo (recto, dos, verso) au format de la fiche technique, à enregistrer en PDF"
+            title="Couverture du livre relié Pumbo : choix des photos, aperçu PDF et fichier InDesign (recto, dos, verso)"
           >
             Générer la couverture
           </button>
@@ -50,6 +50,7 @@
       <aside class="colonne" id="colonne"></aside>
 
       <main class="principal">
+        <section class="carte couverture-livre" id="carte-couverture" hidden></section>
         <section class="bandeau-stats" id="bandeau-stats" hidden></section>
         <section class="carte" id="carte-groupe" hidden></section>
         <div id="zone-etapes"></div>
@@ -60,8 +61,9 @@
 
     <script src="./partage.js?v=__VERSION__"></script>
     <script src="./moteur-navigateur.js?v=__VERSION__"></script>
-    <script src="./couverture.js?v=__VERSION__"></script>
     <script src="./carte.js?v=__VERSION__"></script>
+    <script src="./voyage.js?v=__VERSION__"></script>
+    <script src="./couverture.js?v=__VERSION__"></script>
     <script src="./mise-en-page.js?v=__VERSION__"></script>
     <script src="./app.js?v=__VERSION__"></script>
   </body>
