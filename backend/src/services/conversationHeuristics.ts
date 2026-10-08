@@ -13,7 +13,6 @@ import {
   ROSE_EPINE_GRAINE,
   ROTATION,
   SUGGESTION_SETS,
-  TOO_SHORT,
   TRANSCRIPT_UNAVAILABLE,
   fallbackPrompt,
   figure,
@@ -22,6 +21,7 @@ import {
   knownPerson,
   newPerson,
   photosReceived,
+  tooShort,
   type SuggestionId,
   type SuggestionSet,
 } from "./conversationCopy.js";
@@ -54,6 +54,16 @@ import { updateByRules } from "./tripContext.js";
  * aucune horloge** : la mémoire du moteur est l'historique du fil — il écarte
  * toute phrase déjà dite et descend d'un cran plutôt que de se répéter.
  */
+
+/**
+ * Un texte court qui **précise** le souvenir en cours — « avec Clara »,
+ * « mardi » —, et non un message isolé : il y a un souvenir, et il n'est pas
+ * encore validé.
+ */
+function answersCurrentEntry(input: ConversationInput): boolean {
+  const current = input.currentEntry;
+  return current !== null && !current.validatedAt;
+}
 
 // ---------------------------------------------------------------------------
 // Les signaux
@@ -881,11 +891,18 @@ export class HeuristicResponder implements MemoResponder {
       );
     }
 
-    // 4. Deux mots ne font pas une page : on demande **un** détail précis.
-    if (signals.length === "tooShort") {
-      TOO_SHORT.forEach((text, index) =>
-        candidates.push({ family: `short-${index}`, text, suggestions: "neutral" }),
-      );
+    // 4. Deux mots ne font pas une page — et MEMO **le dit** (Hugo,
+    //    08/10/2026) au lieu d'enchaîner sur une question qu'il aurait
+    //    inventée : il recopie ce qu'il a reçu, dit qu'il n'a pas compris, et
+    //    demande la suite sans en choisir le sujet. Rien d'autre ne vient
+    //    après : un lieu ou une date demandés sous un « ok » supposaient un
+    //    récit que personne n'a fait.
+    if (signals.length === "tooShort" && !answersCurrentEntry(input)) {
+      return tooShort(input.message.text ?? "").map((text, index) => ({
+        family: `short-${index}`,
+        text,
+        suggestions: "neutral" as const,
+      }));
     }
 
     // 5. Le lieu ancre une page ; il passe avant la date.
@@ -961,8 +978,11 @@ export class HeuristicResponder implements MemoResponder {
    */
   private disposition(signals: ChatSignals, input: ConversationInput): ChatDisposition {
     if (signals.isRefusal || signals.isQuestion) return "command";
-    const current = input.currentEntry;
-    if (signals.length === "tooShort" && current && !current.validatedAt) return "context";
+    if (signals.length === "tooShort" && answersCurrentEntry(input)) return "context";
+    // Trop court, et rien à préciser : ce n'est pas un souvenir, c'est un
+    // message que MEMO n'a pas compris — il le dit (`tooShort`), et rien
+    // n'entre dans le carnet.
+    if (signals.length === "tooShort") return "command";
     return "memory";
   }
 

@@ -44,8 +44,9 @@ reste la règle. Ce chantier ne touche pas à ce prompt.
   ne sont pas rangés par étape. Ouvrir une carte d'étape se pose sur le dernier
   message de cette journée ; ce qu'on raconte ensuite s'y rattache.
 - **Le fil vit sur le serveur.** On le retrouve d'un autre téléphone, et un
-  co-voyageur le voit. Il n'est **jamais mis en cache** dans l'app : un fil
-  périmé se lit comme un message perdu.
+  co-voyageur le voit. L'app le relit toujours au serveur ; elle ne garde que
+  ses trente derniers messages, pour le rouvrir **sans réseau** sous le
+  bandeau « hors ligne » (08/10/2026, § 9).
 - **Le fil est commun aux co-voyageurs.** C'est le récit du voyage, pas une
   messagerie privée. Dès qu'ils sont deux, chaque bulle bleue porte le prénom de
   qui parle. Les **souvenirs**, eux, restent sans auteur : le carnet parle d'une
@@ -214,12 +215,23 @@ change, c'est ce que MEMO en fait — sa **disposition** :
 |---|---|---|
 | **souvenir** (`memory`) | Un vocal, une photo — toujours. Un texte qui raconte un moment, une journée, un lieu, un événement | Une `Entry` est créée, la rédaction l'écrit, le carnet la reçoit |
 | **précision** (`context`) | Un texte qui répond à la dernière question de MEMO ou complète le souvenir en cours : une date, un prénom, un chiffre, un ressenti. Typiquement court | Rattachée au souvenir en cours ; la rédaction relit le souvenir avec elle. S'il n'y a **pas** de souvenir en cours non validé, c'est un souvenir |
-| **commande** (`command`) | Une puce (« Ça me convient »), un refus, une question sur l'app ou le carnet | Rien n'entre dans le carnet ; MEMO répond sans modèle |
+| **commande** (`command`) | Une puce (« Ça me convient »), un refus, une question sur l'app ou le carnet — et un message **trop court ou incompris** qui ne répond à rien (08/10/2026) | Rien n'entre dans le carnet ; MEMO répond |
 
 C'est **MEMO qui classe** un texte libre. Le filet : le texte est de toute
 façon dans le fil, rien ne se perd, et un vocal est toujours un souvenir. Un
 « oui c'était mardi avec Clara » ne fera jamais un souvenir de trente
 caractères dans le carnet.
+
+**Un message qu'il n'a pas compris, MEMO le dit** (Hugo, 08/10/2026 : « le chat
+doit indiquer lorsque le message était trop court et qu'il n'a rien compris, et
+ne pas inventer une question suivante direct »). Un texte de **moins de trois
+mots** qui n'est pas une précision du souvenir en cours — « ok », « super »,
+deux lettres — ne devient jamais un souvenir, quoi qu'en dise le modèle
+(`isTooShortToKeep`, `jobs/converse.ts`) : MEMO recopie ce qu'il a reçu, dit
+que c'est trop court ou qu'il n'a pas compris, et demande la suite sans en
+choisir le sujet (`tooShort`, `conversationCopy.ts`). Au-delà de trois mots,
+c'est au modèle de juger (`agent-conversation.md` § 3). Un vocal reste un
+souvenir, même court : son fichier existe déjà.
 
 ## 5. La fiche de retranscription
 
@@ -420,11 +432,20 @@ s'ouvre.
 
 **Le fil s'ouvre aussi sans réseau** (Hugo, 01/10/2026 : « créer un voyage
 doit être possible hors ligne de bout en bout ; pareil pour les vocaux et les
-textes »). Il n'est toujours pas mis en cache (§ 2) : ce qui s'ouvre est un fil
-**local** — l'accueil de MEMO, ce qui attend d'être envoyé, et une boîte qui le
-dit (« Tu sembles hors ligne. **Ce que tu racontes est gardé sur ton
-téléphone**… »). On y raconte comme d'habitude, tout part dans la file. Le
-premier message arrivé au retour du réseau fait relire le vrai fil.
+textes »). Ce qui s'ouvre est un fil **local** — depuis le 08/10/2026, **les
+trente derniers messages arrivés** de ce fil, gardés sur le téléphone à chaque
+lecture (Hugo : « que son expérience reste super sans internet ») ; l'accueil
+de MEMO pour un voyage dont le téléphone n'a encore rien lu —, ce qui attend
+d'être envoyé, et une boîte qui le dit (« Tu sembles hors ligne. **Ce que tu
+racontes est gardé sur ton téléphone**… »). On y raconte comme d'habitude,
+tout part dans la file. Le premier message arrivé au retour du réseau fait
+relire le vrai fil.
+
+**Une coche, deux coches** (08/10/2026), sous chaque message qu'on a dit
+soi-même, grises, à la manière de WhatsApp : une, il est **gardé sur le
+téléphone** et partira tout seul ; deux, il est **arrivé chez nous**, et la
+retranscription commence. Rien sous un message qui attend le crédit de demain
+ou l'illimité — sa mention le dit —, ni sous un échec.
 
 Deux cas l'ouvrent : une panne de **transport**, et un voyage **créé hors
 ligne** que le serveur n'a pas encore reçu — celui-là s'ouvre comme un carnet

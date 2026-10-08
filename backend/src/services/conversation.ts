@@ -223,6 +223,18 @@ export const REFORMULATION_LIMIT = 160;
 export const ASIDE_LIMIT = 120;
 export const PROMPT_LIMIT = 90;
 
+/**
+ * Moins de trois mots ne font pas un souvenir qui se lise seul dans six mois
+ * (`agents/agent-conversation.md` § 2) : « ok », « trop bien ! », « asdf ».
+ * Trois mots, si — « plage de Copacabana ». Un mot, c'est une suite de lettres
+ * ou de chiffres ; la ponctuation et les emoji ne comptent pas.
+ */
+export const MIN_MEMORY_WORDS = 3;
+
+export function isTooShortToKeep(text: string): boolean {
+  return (text.match(/[\p{L}\p{N}]+/gu) ?? []).length < MIN_MEMORY_WORDS;
+}
+
 /** Le plancher que l'app applique aussi : en dessous, MEMO n'a pas eu le temps de lire. */
 export const MIN_PAUSE_MS = 450;
 

@@ -8,6 +8,7 @@ import {
   InvalidReplyError,
   composeBeats,
   firstSentence,
+  isTooShortToKeep,
   nextConversationState,
   parseConversationState,
   scriptedReply,
@@ -21,6 +22,7 @@ import {
   ROTATION,
   SUGGESTIONS,
   VALIDATION_QUESTION,
+  tooShort,
   validationQuestionFor,
 } from "./conversationCopy.js";
 import { HeuristicResponder, mentionsSubscription, readSignals } from "./conversationHeuristics.js";
@@ -244,6 +246,20 @@ describe("le moteur de règles", () => {
     expect(reply.disposition).toBe("context");
   });
 
+  it("dit qu'il n'a pas compris un message trop court, sans inventer la suite", async () => {
+    const reply = await memo.reply(turn("ok"));
+    expect(reply.beats.map((beat) => beat.text)).toEqual([tooShort("ok")[0]]);
+    expect(reply.beats[0]?.text).toContain("« ok »");
+    expect(reply.beats[0]?.text).not.toMatch(/où|qui était/);
+    // Rien n'entre dans le carnet : ce n'est pas un souvenir.
+    expect(reply.disposition).toBe("command");
+  });
+
+  it("change de tournure au second message incompris", async () => {
+    const reply = await memo.reply(turn("ok", { history: memoSaid([tooShort("ok")[0]!]) }));
+    expect(reply.beats[0]?.text).toBe(tooShort("ok")[1]);
+  });
+
   it("ne dit jamais deux fois la même relance de suite", async () => {
     const first = await memo.reply(turn("bonne journée ici aujourd'hui rien de spécial"));
     const second = await memo.reply(
@@ -303,6 +319,21 @@ describe("le moteur de règles", () => {
     );
     expect(reply.asksRoseEpineGraine).toBe(true);
     expect(reply.beats[0]?.text).toContain("la rose, l’épine et la graine");
+  });
+});
+
+describe("ce qui est trop court pour un souvenir", () => {
+  it("compte les mots, pas les signes ni la ponctuation", () => {
+    expect(isTooShortToKeep("ok")).toBe(true);
+    expect(isTooShortToKeep("Trop bien !!! 🎉")).toBe(true);
+    expect(isTooShortToKeep("  ")).toBe(true);
+    expect(isTooShortToKeep("Plage de Copacabana")).toBe(false);
+    expect(isTooShortToKeep("On a mangé une glace")).toBe(false);
+  });
+
+  it("recopie un long message coupé à quarante signes", () => {
+    const line = tooShort("x".repeat(80))[0]!;
+    expect(line).toContain(`« ${"x".repeat(39)}… »`);
   });
 });
 
