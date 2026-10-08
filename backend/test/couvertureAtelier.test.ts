@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { runInNewContext } from "node:vm";
 import { describe, expect, it } from "vitest";
+import { renderTemplateToHtml } from "../src/services/bookPdf.js";
 
 /**
  * La couverture imprimée de l'atelier (`MemoBook Generator/public/couverture.js`) :
@@ -24,6 +25,7 @@ type Photo = { id: string; largeur: number; hauteur: number; groupe?: boolean; m
 const C = require("../../MemoBook Generator/public/couverture.js") as {
   FICHE_DEFAUT: Record<string, unknown>;
   dosPumbo: (pages: number) => number;
+  pagesDuPdf: (payload: Record<string, unknown>) => number;
   ficheDuCarnet: (fiche: Record<string, unknown>, pages: number) => Record<string, unknown>;
   evaluerPhoto: (photo: Photo, options?: Record<string, unknown>) => Evaluation;
   proposerPhotos: (photos: Photo[]) => {
@@ -103,6 +105,28 @@ describe("couverture : le dos", () => {
     expect(C.dosPumbo(100)).toBe(12);
     expect(C.dosPumbo(200)).toBe(21);
     expect(C.dosPumbo(137)).toBe(15.3);
+  });
+
+  it("compte les pages comme le gabarit les rend — en version imprimeur, sans couverture ni quatrième", () => {
+    const jour = (i: number) => ({ title: `Jour ${i}`, body_html: "<p>Un récit.</p>", layout_story_opener: true, photos: [] });
+    const base = {
+      render_profile: "print",
+      book_title: "Cyclades",
+      days: [1, 2, 3, 4].map(jour),
+      back_cover: { closing_text: "À suivre.", cta: "memobook.fr" },
+    };
+    const pagesRendues = (payload: Record<string, unknown>) =>
+      (renderTemplateToHtml({ payload, profile: "print" }).match(/<div class="page[ "]/g) ?? []).length;
+    for (const payload of [
+      base,
+      { ...base, sans_couvertures: true },
+      { ...base, sans_couvertures: true, page_blanche_finale: true },
+      { ...base, sans_couvertures: true, intro_text: "<p>Avant le départ.</p>" },
+    ]) {
+      expect(C.pagesDuPdf(payload)).toBe(pagesRendues(payload));
+    }
+    // Quatre étapes, le colophon et la page blanche : six pages reliées.
+    expect(C.pagesDuPdf({ ...base, sans_couvertures: true, page_blanche_finale: true })).toBe(6);
   });
 
   it("élargit la planche du dos du carnet, plats de la fiche inchangés", () => {

@@ -1511,31 +1511,23 @@ function etapesPourMiseEnPage(photoDe) {
 const recitDe = (etape) => etape.souvenirs.map((s) => s.texte.trim()).filter(Boolean).join(" ");
 
 /**
- * Pages du livre imprimé : le colophon, puis les pages d'étape — la couverture
- * et la quatrième sont imprimées à part sur un relié. C'est ce nombre qui fixe
- * la largeur du dos (`Couverture.dosPumbo`).
- */
-const pagesInterieures = (jours) => 1 + jours.length;
-
-/**
- * Les pages intérieures du livre tel qu'il partira chez Pumbo, en nombre pair
- * (une page blanche finale au besoin) : la mise en page de l'atelier, comptée
- * comme pour la version imprimeur.
+ * Les pages du livre tel qu'il part chez Pumbo : celles du PDF **en version
+ * imprimeur** — sans couverture ni quatrième, imprimées sur la couverture
+ * rigide —, page blanche finale comprise. Compté sur ce PDF-là quel que soit
+ * le réglage « Version imprimeur » : c'est lui que Pumbo relie.
  */
 function pagesDuLivre() {
   if (!etat.etapes.length) return 0;
-  const n = pagesInterieures(construirePayloadCarnet((data) => data).days);
-  return n + (n % 2);
+  return Couverture.pagesDuPdf(construirePayloadCarnet((data) => data, { imprimeur: true }));
 }
 
 /** La fiche de la couverture : les plats de la fiche Pumbo, le dos tiré du nombre de pages. */
 const ficheCouverture = () => Couverture.ficheDuCarnet(fichePumbo(), pagesDuLivre());
 
-function construirePayloadCarnet(photoDe = (data) => data) {
+function construirePayloadCarnet(photoDe = (data) => data, { imprimeur = Boolean(etat.reglages.versionImprimeur) } = {}) {
   // La même photo que sur la couverture imprimée : le carnet s'ouvre sur ce
   // qu'on a vu en le prenant en main.
   const couverture = photoDeCouverture();
-  const imprimeur = Boolean(etat.reglages.versionImprimeur);
 
   const payload = {
     render_profile: "preview",
@@ -1572,7 +1564,7 @@ function construirePayloadCarnet(photoDe = (data) => data) {
       logo_url: "",
     },
   };
-  if (imprimeur && pagesInterieures(payload.days) % 2 === 1) payload.page_blanche_finale = true;
+  if (imprimeur && Couverture.pagesDuPdf(payload) % 2 === 1) payload.page_blanche_finale = true;
   return payload;
 }
 
@@ -2419,14 +2411,13 @@ async function genererCarnet(bouton) {
     }
 
     etat.pdf = { url: donnees.download_url, quand: new Date() };
-    // Le nombre de pages intérieures fixe la largeur du dos de la couverture.
-    const pages = pagesInterieures(payload.days) + (payload.page_blanche_finale ? 1 : 0);
-    const pagesPaires = pages + (pages % 2);
+    // Les pages du PDF en version imprimeur fixent la largeur du dos.
+    const pages = pagesDuLivre();
     etat.carnetStatut = {
       type: "info",
       texte:
-        `${pages} pages intérieures${etat.reglages.versionImprimeur ? "" : " (hors couverture et quatrième)"} : ` +
-        `dos de ${String(Couverture.dosPumbo(pagesPaires)).replace(".", ",")} mm (barème Pumbo), repris par la couverture.`,
+        `${pages} pages en version imprimeur (sans couverture ni quatrième) : ` +
+        `dos de ${String(Couverture.dosPumbo(pages)).replace(".", ",")} mm (barème Pumbo), repris par la couverture.`,
     };
     if (onglet && !onglet.closed) onglet.location.href = donnees.download_url;
   } catch (erreur) {

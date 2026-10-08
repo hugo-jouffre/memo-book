@@ -156,6 +156,26 @@
     };
   }
 
+  /**
+   * Les pages du PDF du carnet tel que le gabarit le rend, une à une :
+   * couverture, colophon, introduction, une page par entrée de `days`, page
+   * blanche finale, quatrième — le décompte de
+   * `templates/travel-journal/index.html`, que `couvertureAtelier.test.ts`
+   * vérifie sur le gabarit lui-même. Sur le payload de la **version
+   * imprimeur** (`sans_couvertures`), c'est le nombre de pages que Pumbo relie,
+   * celui qui fixe le dos.
+   */
+  function pagesDuPdf(payload) {
+    const couvertures = payload.sans_couvertures ? 0 : 1 + (payload.back_cover ? 1 : 0);
+    return (
+      couvertures +
+      1 + // le colophon
+      (payload.intro_text ? 1 : 0) +
+      (payload.days?.length || 0) +
+      (payload.page_blanche_finale ? 1 : 0)
+    );
+  }
+
   /** Toutes les cotes de la feuille, en millimètres, origine en haut à gauche du fond perdu. */
   function geometrie(fiche) {
     const f = fiche.fondPerdu;
@@ -1250,6 +1270,7 @@ var ELEMENTS = ${litteral(elements)};
     PAGES_MIN,
     dosPumbo,
     ficheDuCarnet,
+    pagesDuPdf,
     CHARNIERE,
     SEUILS,
     COULEURS,
