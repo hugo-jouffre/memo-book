@@ -102,6 +102,8 @@ const LAYOUTS: Config[] = [
   { flag: "layout_split_left", photos: 2, funFact: false, suite: true, note: "PAGE DE SUITE, sans bandeau" },
   { flag: "layout_hero_top", photos: 1, funFact: false, suite: true, note: "PAGE DE SUITE, sans bandeau" },
   { flag: "layout_chapter_map", photos: 2, funFact: false, suite: true, note: "PAGE DE SUITE, sans bandeau" },
+  { flag: "layout_trio_portrait", photos: 3, funFact: false, suite: true, note: "PAGE DE SUITE, trio portrait" },
+  { flag: "layout_trio_landscape", photos: 3, funFact: false, suite: true, note: "PAGE DE SUITE, trio paysage" },
 ];
 
 /** Plage balayée, réglable : `--from 80 --to 1200 --pas 20 --filtre suite`. */
@@ -194,6 +196,7 @@ const mesures = await page.evaluate(() => {
     ".mb-hero": 268 * PT,
     ".mb-day__floats": 175 * PT,
     ".mb-chapter__map": 176 * PT,
+    ".mb-trio": 360 * PT,
   };
 
   const pages = Array.from(document.querySelectorAll(".page--day"));
@@ -231,7 +234,7 @@ const mesures = await page.evaluate(() => {
        une boîte flex clampée garde sa hauteur pendant que son texte déborde
        par-dessous, et ce débordement-là est celui qui s'imprime. */
     let bas = content.getBoundingClientRect().top + parseFloat(style.paddingTop);
-    for (const noeud of Array.from(p.querySelectorAll(".mb-note p, .mb-note ul, .mb-note__title, .mb-card, .mb-photo, .mb-gallery, .mb-prompt, .mb-quiz"))) {
+    for (const noeud of Array.from(p.querySelectorAll(".mb-note p, .mb-note ul, .mb-note__title, .mb-card, .mb-photo, .mb-gallery, .mb-trio, .mb-prompt, .mb-quiz"))) {
       const r = (noeud as HTMLElement).getBoundingClientRect();
       if (r.height > 0) bas = Math.max(bas, r.bottom);
     }

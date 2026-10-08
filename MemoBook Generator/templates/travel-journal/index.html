@@ -401,6 +401,25 @@
             </div>
           {% endif %}
 
+        {% elif day.layout_trio_portrait or day.layout_trio_landscape %}
+          {# Trio : récit court en tête, puis trois photos en cascade — une en
+             haut (portrait ou paysage selon la variante), deux en bas. Pages
+             de suite seulement : la première page d'une étape porte le
+             bandeau, et il ne resterait plus la hauteur des photos. La réglure
+             descend jusqu'aux photos, comme sur la maquette : la page n'a pas
+             de trou entre le récit et les images. #}
+          <div class="mb-note mb-note--remplit">{{ mb_rules(36) }}
+            {% if day.title %}<span class="mb-note__title">{{ day.title }}</span>{% endif %}
+            {{ day.body_html | safe }}
+          </div>
+          {% if day.photos and day.photos | length >= 3 %}
+            <div class="mb-trio {% if day.layout_trio_landscape %}mb-trio--landscape{% else %}mb-trio--portrait{% endif %}">{{ mb_trace(slot) }}
+              {{ mb_photo(day.photos[1], 'trio-left') }}
+              {{ mb_photo(day.photos[2], 'trio-right') }}
+              {{ mb_photo(day.photos[0], 'trio-top') }}
+            </div>
+          {% endif %}
+
         {% elif day.layout_collage %}
           <div class="mb-note">{{ mb_rules(36) }}
             {% if day.title %}<span class="mb-note__title">{{ day.title }}</span>{% endif %}

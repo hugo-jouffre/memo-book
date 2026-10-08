@@ -129,6 +129,30 @@ describe("validatePayload — règles éditoriales de LAYOUT_KB", () => {
     expect(result.valid).toBe(true);
   });
 
+  it("n'accepte un trio que sur une page de suite, avec trois photos et deux paragraphes au plus", () => {
+    const photos = ["a", "b", "c"].map((id) => `https://exemple.test/${id}.jpg`);
+    const suite = (day: Record<string, unknown>) => ({
+      book_title: "Carnet",
+      days: [
+        { title: "Jour 1", day_intro: { day_number: "01" }, body_html: RECIT_S, layout_story_opener: true },
+        { title: "", body_html: "<p>Un court passage pour finir l'étape.</p>", photos, ...day },
+      ],
+    });
+    expect(validatePayload(suite({ layout_trio_portrait: true })).valid).toBe(true);
+    expect(validatePayload(suite({ layout_trio_landscape: true })).valid).toBe(true);
+
+    const sousBandeau = validatePayload(minimalPayload({ layout_hero_top: false, layout_trio_portrait: true, photos }));
+    expect(sousBandeau.errors.map((e) => e.message).join(" ")).toContain("réservé aux pages de suite");
+
+    const deuxPhotos = validatePayload(suite({ layout_trio_portrait: true, photos: photos.slice(0, 2) }));
+    expect(deuxPhotos.errors.map((e) => e.message).join(" ")).toContain("exige 3 photos");
+
+    const troisParagraphes = validatePayload(
+      suite({ layout_trio_landscape: true, body_html: "<p>Un.</p><p>Deux.</p><p>Trois.</p>" }),
+    );
+    expect(troisParagraphes.errors.map((e) => e.message).join(" ")).toContain("en tient 2 au plus");
+  });
+
   it("rejette un fun fact trop long", () => {
     const result = validatePayload(
       minimalPayload({ fun_facts: ["f".repeat(EDITORIAL_LIMITS.funFactChars + 1)] }),

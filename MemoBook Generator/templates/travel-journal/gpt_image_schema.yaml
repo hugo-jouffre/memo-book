@@ -317,6 +317,20 @@ $defs:
           mesuré : 560 caractères sur une page à bandeau. Sous 290 caractères la
           bande de photos décroche du récit et laisse un blanc au milieu de la
           page — préférer alors `layout_hero_top`.
+      layout_trio_portrait:
+        type: boolean
+        description: >
+          Page de suite seulement (jamais sous `day_intro`). Récit court en
+          tête, réglure prolongée jusqu'aux photos, puis trois photos en
+          cascade : une portrait en haut, deux portraits en bas, tracé
+          pointillé derrière. Exige 3 photos. Plafond mesuré : 420 caractères
+          en 2 paragraphes au plus.
+      layout_trio_landscape:
+        type: boolean
+        description: >
+          Comme `layout_trio_portrait`, mais la photo du haut est une paysage
+          (format 1,6) ; les deux du bas restent des portraits. `photos[0]` va
+          en haut. Exige 3 photos ; 420 caractères en 2 paragraphes au plus.
       layout_story_opener:
         type: boolean
         description: "Layout #5bis : pleine page d'ouverture de jour avec 1-3 photos (kicker + récit)."

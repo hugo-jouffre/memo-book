@@ -284,7 +284,7 @@ textes » et § « La répartition sur une étape à plusieurs pages » :
    | 0 | `layout_story_opener` (première étape) ou `layout_story_facts` |
    | 1 | `layout_hero_top` si le texte y tient (380 / 680 signes), sinon photo flottante sous le récit |
    | 2 | `layout_split_left` |
-   | 3 | `layout_collage` |
+   | 3 | `layout_collage` — sur une **page de suite** de 420 signes et 2 paragraphes au plus, un **trio** : `layout_trio_portrait` (portrait en haut) ou `layout_trio_landscape` (paysage en haut), deux portraits en bas, si aucune photo n'y est trop rognée |
 
 3. **Le surplus va sur des planches** (`layout_photo_page`, 3 à 5 photos), une
    au plus après chaque page de récit : **jamais deux planches de suite**. Ce

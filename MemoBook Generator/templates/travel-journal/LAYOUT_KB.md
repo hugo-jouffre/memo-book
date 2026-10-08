@@ -376,6 +376,8 @@ tranche : le premier actif l'emporte.
 | `layout_hero_top` | Grande photo en tête, récit dessous | Une photo iconique porte la journée | 1 | sous S, S |
 | `layout_split_left` | Carte info à gauche, récit en colonne à droite, puis deux photos en bas | Un fait à mettre en avant et deux belles images | 2 | S, M — **S seulement avec un fun fact** |
 | `layout_collage` | Récit pleine largeur puis 2 ou 3 photos inclinées en bas | Journée dense visuellement | 2–3 | S, M |
+| `layout_trio_portrait` | **Page de suite seulement.** Récit court en tête, réglure prolongée jusqu'aux photos, puis trois photos en cascade : une portrait en haut, deux portraits en bas qui la chevauchent à peine, tracé pointillé derrière | Fin d'étape courte avec trois photos en portrait | 3 | sous S, S partiel — **420 en 2 paragraphes** |
+| `layout_trio_landscape` | Le même, avec une **photo paysage en haut** (format 1,6) ; les deux du bas restent des portraits | Fin d'étape courte avec une paysage et deux portraits | 3 | idem |
 | `layout_photo_page` | **Page pleine de photos**, sans récit ni bandeau. `title` devient une légende manuscrite en bas | Étape très visuelle. En placer régulièrement — mais **jamais deux de suite**, voir § « La répartition sur une étape à plusieurs pages » | 3–5 | aucune — le récit n'est pas rendu |
 | *(par défaut)* | Récit, puis carte info et photo flottantes en bas de page | Ouverture de journée, cas le plus courant | 0–1 | S, M |
 
@@ -384,6 +386,16 @@ Les tailles exactes, et le plafond mesuré de chaque configuration, sont en
 
 Le cas par défaut couvre aussi `layout_story_opener` et `layout_story_facts` :
 le validateur exige au moins un drapeau, n'importe lequel de ces deux convient.
+
+**Les trios** (maquettes du 08/10/2026) ne s'emploient **jamais sur la
+première page d'une étape** : elle porte le bandeau jour · lieu · date, et les
+trois photos n'auraient plus leur hauteur — le validateur le refuse. L'atelier
+les choisit seul (`trioDe`, `mise-en-page.js`) : page de suite, trois photos,
+420 signes en deux paragraphes au plus, pas de photo de groupe, et une variante
+où **aucune des trois ne dépasse le plafond de rognage** — sinon la page reste
+un collage. Entre les deux variantes, celle qui rogne le moins : la paysage va
+en haut s'il y en a une. Pas de fun fact sur un trio : il n'y a pas de place
+prévue.
 
 **La condition du lieu sur `layout_chapter_map`.** Ce layout se choisit à
 l'ouverture d'un chapitre, mais seulement **si le récit nomme un lieu** : c'est
@@ -403,7 +415,8 @@ Pour le garantir, le tracé est dessiné **dans la bande de photos** (macro
 par rapport à la page. Où que la bande se trouve, il la suit, et il ne monte
 jamais au-dessus de 112 pt quand la bande en fait au moins 160. Seuls les
 layouts qui ont une bande en portent donc un : `layout_split_left`,
-`layout_collage` et `layout_chapter_map` avec deux photos ou plus. Le layout par
+`layout_collage`, les deux trios (`.mb-trio`) et `layout_chapter_map` avec deux
+photos ou plus. Le layout par
 défaut (photo flottante), `layout_hero_top` et les pages à `prompt` ou `quiz`
 n'en ont pas.
 
@@ -464,6 +477,7 @@ relancer le script.
 | `layout_split_left` + fun fact | 240 | sous S, S partiel |
 | `layout_chapter_map` + ≥ 2 photos, sans fun fact | 320 | sous S, S partiel |
 | `layout_hero_top` | 380 | sous S, S |
+| `layout_trio_portrait`, `layout_trio_landscape` — page de suite seulement | 420, **2 paragraphes** | sous S, S partiel |
 | `layout_story_*`, `layout_collage`, `layout_split_left` sans fun fact, `layout_chapter_map` sans photos | 560 | S, M |
 | `layout_story_*` portant un `prompt` | 760 | S, M |
 | **page de suite** (sans `day_intro`), tout layout de récit | 880 | complète L et XL |
@@ -608,7 +622,7 @@ la page 1, à droite, et la première page d'étape la page 2, à gauche.
 
 Une **composition**, c'est ce qu'on voit d'un coup d'œil : texte seul, texte et
 photo flottante, grande photo en tête, bande de deux photos, bande de trois,
-carte de chapitre, planche. `layout_split_left` sans fun fact et
+carte de chapitre, planche, trio portrait, trio paysage. `layout_split_left` sans fun fact et
 `layout_collage` à deux photos donnent la même page : ils comptent pour une.
 
 Quand les deux côtés se ressemblent, on essaie, dans cet ordre
@@ -886,6 +900,8 @@ cadre blanc), dans l'ordre où le gabarit lit `photos[]` :
 | `layout_hero_top` | 1 | 1,35 |
 | `layout_split_left`, `layout_collage` | 2 | 0,90 · 0,90 |
 | `layout_collage` | 3 | 0,56 · 0,56 · 0,56 |
+| `layout_trio_portrait` | 3 | 0,60 (haut) · 0,69 · 0,65 |
+| `layout_trio_landscape` | 3 | 1,60 (haut) · 0,64 · 0,64 |
 | `layout_photo_page` | 3 | 0,73 · 0,45 · 1,65 |
 | `layout_photo_page` | 4 | 0,73 · 0,45 · 0,62 · 0,99 |
 | `layout_photo_page` | 5 | 1,76 · 1,44 · 0,90 · 0,90 · 1,44 |
