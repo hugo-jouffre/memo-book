@@ -4,60 +4,49 @@ import SwiftUI
 
 /// Brancher MemoBook sur les apps qui savent déjà où tu es allé.
 ///
-/// Chaque ligne est un **consentement** : le nom de l'app, ce que MemoBook fera
-/// de l'accès, et l'interrupteur. La promesse est donc écrite en toutes lettres
-/// à côté du geste qui l'accorde, jamais renvoyée à un écran de détail.
+/// Chaque ligne était un **consentement** : le nom de l'app, ce que MemoBook
+/// fera de l'accès, et l'interrupteur. **Aucun ne se branche encore** (T76) :
+/// depuis le 08/10/2026, les six se montrent « À venir », pâlis et sans
+/// interrupteur (Hugo : « pour montrer que ce n'est pas encore disponible »).
+/// La promesse reste écrite en toutes lettres : c'est elle qu'on annonce.
 struct ConnectorsSheet: View {
     let model: ProfileModel
 
     var body: some View {
         BrandSheet(ConnectorsCopy.title, subtitle: ConnectorsCopy.promise) {
-            VStack(spacing: MemoBookSpacing.s) {
+            VStack(spacing: MemoBookSpacing.m) {
                 ForEach(model.profile?.connectors ?? []) { connector in
-                    ConnectorCard(
-                        connector: connector,
-                        isEnabled: Binding(
-                            get: { connector.isEnabled },
-                            set: { model.setConnector(id: connector.id, isEnabled: $0) }
-                        )
-                    )
+                    ConnectorCard(connector: connector)
                 }
             }
+            // La pastille du premier dépasse au-dessus de sa carte.
+            .padding(.top, MemoBookSpacing.xs)
         }
     }
 }
 
-/// Une app tierce, sa promesse, son interrupteur.
+/// Une app tierce et sa promesse, **à venir**.
+///
+/// L'interrupteur reviendra le jour où le serveur saura brancher le
+/// connecteur : un interrupteur qui bascule sans rien brancher mentirait.
 private struct ConnectorCard: View {
     let connector: Connector
-    @Binding var isEnabled: Bool
 
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        // Un `Toggle` porte l'ensemble : le libellé et la promesse deviennent
-        // son étiquette, et VoiceOver lit « Strava, MemoBook pourra…, activé,
-        // bouton interrupteur » d'un seul tenant.
-        Toggle(isOn: $isEnabled) {
-            // Toute la carte accorde ou retire l'accès, pas seulement le rail
-            // de l'interrupteur — même règle que les lignes du profil. Le
-            // tapotis est posé sur l'étiquette et non sur la carte, pour ne pas
-            // doubler celui qui tombe sur l'interrupteur.
-            content
-                .contentShape(.rect)
-                .onTapGesture { isEnabled.toggle() }
-        }
-        .toggleStyle(.switch)
-        .tint(MemoBookColor.action)
-        .padding(MemoBookSpacing.s)
-        .background(
-            MemoBookColor.surface,
-            in: .rect(cornerRadius: MemoBookSpacing.largeCornerRadius)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: MemoBookSpacing.largeCornerRadius)
-                .strokeBorder(MemoBookColor.hairline, lineWidth: 1)
-        }
+        content
+            .padding(MemoBookSpacing.s)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                MemoBookColor.surface,
+                in: .rect(cornerRadius: MemoBookSpacing.largeCornerRadius)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: MemoBookSpacing.largeCornerRadius)
+                    .strokeBorder(MemoBookColor.hairline, lineWidth: 1)
+            }
+            .brandComingSoon()
     }
 
     @ViewBuilder
