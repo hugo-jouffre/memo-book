@@ -103,11 +103,12 @@ struct DailyCreditSheet: View {
                 .monospacedDigit()
                 .fixedSize(horizontal: false, vertical: true)
 
-            // Ce qui **reste**, comme la phrase au-dessus (recette du
-            // 03/10/2026). Deux couleurs, comme partout : le vert tant qu'il
-            // reste du crédit, le rouge sémantique quand il n'y a plus rien.
+            // Ce qui est **raconté** : vide au matin, le vert avance vers la
+            // droite (Hugo, 08/10/2026) ; la phrase au-dessus dit le reste.
+            // Deux couleurs, comme partout : le vert tant qu'il reste du
+            // crédit, le rouge sémantique quand il n'y a plus rien.
             BrandGauge(
-                fraction: credit.gaugeFraction,
+                fraction: credit.fraction,
                 isExhausted: credit.isExhausted,
                 accessibilityLabel: DailyCreditCopy.title,
                 accessibilityValue: DailyCreditCopy.Sheet.gaugeAccessibilityValue(credit)
@@ -182,17 +183,6 @@ struct DailyCreditSheet: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
-    }
-}
-
-extension DailyCredit {
-    /// Ce que la jauge des réglages remplit : la part du crédit qui **reste**
-    /// (recette du 03/10/2026) — pleine au matin, elle se vide à mesure qu'on
-    /// raconte. Le chiffre posé à côté dit le reste, la barre dit la même
-    /// chose. Rien à remplir sans limite à partager.
-    var gaugeFraction: Double {
-        guard limitMs > 0 else { return 0 }
-        return min(1, Double(remainingMs) / Double(limitMs))
     }
 }
 

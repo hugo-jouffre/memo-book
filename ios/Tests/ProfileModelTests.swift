@@ -576,18 +576,17 @@ final class ProfileModelTests: XCTestCase {
         )
     }
 
-    // MARK: - La jauge du crédit (recette du 03/10/2026)
+    // MARK: - La jauge du crédit (Hugo, 08/10/2026)
 
-    /// Pleine au matin, elle se vide, et ne garde rien à zéro — le chiffre
-    /// d'à côté dit le reste, la barre aussi.
-    func testTheGaugeShowsWhatIsLeft() {
-        XCTAssertEqual(DailyCredit(usedMs: 0).gaugeFraction, 1)
-        XCTAssertEqual(DailyCredit(usedMs: 60_000).gaugeFraction, 0.8, accuracy: 0.0001)
-        XCTAssertEqual(DailyCredit(usedMs: DailyCredit.Catalog.limitMs).gaugeFraction, 0)
-        XCTAssertEqual(DailyCredit(limitMs: 0).gaugeFraction, 0)
+    /// Vide au matin, elle se remplit avec ce qui est raconté — c'est le
+    /// chiffre d'à côté qui dit le reste.
+    func testTheGaugeFillsWithWhatIsTold() {
+        XCTAssertEqual(DailyCredit(usedMs: 0).fraction, 0)
+        XCTAssertEqual(DailyCredit(usedMs: 60_000).fraction, 0.2, accuracy: 0.0001)
+        XCTAssertEqual(DailyCredit(usedMs: DailyCredit.Catalog.limitMs).fraction, 1)
         XCTAssertEqual(
             DailyCreditCopy.Sheet.gaugeAccessibilityValue(DailyCredit(usedMs: 100_000)),
-            "3 min 20 sur 5 min"
+            "3 min 20 restantes sur 5 min"
         )
     }
 

@@ -406,7 +406,10 @@ final class DailyCreditTests: XCTestCase {
     }
 
     func testRowSaysWhatIsLeftOrUnlimited() {
-        XCTAssertEqual(DailyCreditCopy.rowValue(credit(remaining: 200_000)), "3 min 20 / 5 min")
+        XCTAssertEqual(DailyCreditCopy.rowValue(credit(remaining: 200_000)), "3 min 20 restantes")
+        XCTAssertEqual(DailyCreditCopy.rowValue(credit(remaining: 60_000)), "1 min restante")
+        XCTAssertEqual(DailyCreditCopy.rowValue(credit(remaining: 45_000)), "45 s restantes")
+        XCTAssertEqual(DailyCreditCopy.rowValue(credit(remaining: 0)), "Épuisé")
         XCTAssertEqual(DailyCreditCopy.rowValue(credit(remaining: 0, isUnlimited: true)), "Illimité")
         XCTAssertEqual(
             DailyCreditCopy.rowCaption(limitMs: 300_000),
