@@ -307,7 +307,10 @@ public struct RootView: View {
         // **Le voile de la barre d'état, une fois pour toute l'app** (T210) :
         // tous les écrans sont poussés dans l'une des piles ci-dessus. Posé
         // avant le recul des feuilles, il recule avec l'écran qu'il couvre.
-        .brandStatusBarScrim()
+        // Sauf sur l'accueil d'un voyage : sa photo monte sous l'heure, pleine
+        // page, comme avant (Hugo, 08/10/2026 — le dégradé crème y faisait
+        // une bande étrange).
+        .brandStatusBarScrim(isVisible: !showsFullBleedPhoto)
         // L'app entière recule pendant qu'une feuille est ouverte, comme dans
         // les Réglages. C'est ici que ça se joue et non dans l'écran qui
         // présente : le recul doit emporter la pile de navigation avec lui, et
@@ -938,6 +941,13 @@ public struct RootView: View {
     /// sa conversation ou depuis son accueil, et tous les trois doivent revenir
     /// au même voyage. Le déduire du chemin évite de le trimballer dans quatre
     /// intentions.
+    /// L'écran du dessus pose sa photo sous la barre d'état : l'accueil d'un
+    /// voyage. Le voile de T210 s'efface alors — voir `brandStatusBarScrim`.
+    private var showsFullBleedPhoto: Bool {
+        guard case .signedIn = stage, case .trip = path.last else { return false }
+        return true
+    }
+
     private var currentTripId: String? {
         for route in path.reversed() {
             switch route {
