@@ -14,10 +14,13 @@
  *    d'une même scène restent ensemble (`affecterPhotos`) — d'après l'analyse
  *    d'étape faite par le modèle, à défaut dans l'ordre du voyage ;
  * 3. une étape qui arrive dans un nouveau lieu ouvre un chapitre, sur une
- *    carte (`layout_chapter_map`) ;
+ *    carte (`layout_chapter_map`) cadrée sur la zone que les récits
+ *    parcourent dans le pays (`cadreDuVoyage`) ;
  * 4. puis, sur tout le carnet, deux pages qui se font face ne gardent jamais
  *    la même composition (`varierDoublesPages`) ;
- * 5. enfin chaque photo prend l'emplacement qui la rogne le moins
+ * 5. si le carnet a ses fun facts allumés, les encarts proposés par l'analyse
+ *    se posent, un toutes les trois pages au plus (`placerEncarts`) ;
+ * 6. enfin chaque photo prend l'emplacement qui la rogne le moins
  *    (`placerPhotos`).
  *
  * Règles et chiffres : `templates/travel-journal/LAYOUT_KB.md`.
@@ -348,6 +351,145 @@
     return { pays, lat, lon, nom: String(lieu.nom || "").trim() };
   }
 
+  /**
+   * Tous les lieux où les récits emmènent le voyageur : le lieu de chaque
+   * étape, et ceux que l'analyse a relevés dans son récit (une excursion, une
+   * traversée). Seuls ceux que l'analyse a situés avec certitude.
+   */
+  function lieuxDuVoyage(etapes, contours) {
+    const lieux = [];
+    for (const etape of etapes) {
+      const principal = lieuSitue(etape.analyse, contours);
+      if (principal) lieux.push(principal);
+      for (const lieu of etape.analyse?.lieux || []) {
+        const situe = lieuSitue({ lieu }, contours);
+        if (situe) lieux.push(situe);
+      }
+    }
+    return lieux;
+  }
+
+  /** Un degré au moins de côté (~110 km) : en deçà, la carte ne montre plus où l'on est. */
+  const CADRE_MIN_DEGRES = 1;
+  /** La marge autour des lieux, de part et d'autre : 20 % de leur étendue. */
+  const MARGE_CADRE = 0.2;
+
+  /**
+   * Le cadre d'une carte de chapitre : la zone que le voyage parcourt dans ce
+   * pays, d'après ce que racontent les récits — et non le pays entier. Un
+   * voyage dans les Cyclades se cadre sur les Cyclades ; un tour de la Grèce,
+   * sur la Grèce. Le même cadre sert à tous les chapitres du pays : d'une
+   * carte à l'autre, on voit le trajet avancer.
+   *
+   * `[ouest, sud, est, nord]` en degrés, jamais plus grand que le pays (plus
+   * une marge), ou `null` sans lieu situé.
+   */
+  function cadreDuVoyage(lieux, pays, contours, minimum = CADRE_MIN_DEGRES) {
+    const dans = lieux.filter((l) => l.pays === pays);
+    if (!dans.length) return null;
+    let o = Math.min(...dans.map((l) => l.lon));
+    let e = Math.max(...dans.map((l) => l.lon));
+    let s = Math.min(...dans.map((l) => l.lat));
+    let n = Math.max(...dans.map((l) => l.lat));
+    // Un degré de longitude rétrécit avec la latitude : le minimum se compte
+    // en distance, pas en degrés bruts.
+    const cosLat = Math.max(0.2, Math.cos((((s + n) / 2) * Math.PI) / 180));
+    const elargir = (a, b, min) => {
+      const c = (a + b) / 2;
+      const demi = Math.max(((b - a) * (1 + 2 * MARGE_CADRE)) / 2, min / 2);
+      return [c - demi, c + demi];
+    };
+    [s, n] = elargir(s, n, minimum);
+    [o, e] = elargir(o, e, minimum / cosLat);
+
+    // Pas au-delà du pays : un voyage qui le parcourt en entier retrouve la
+    // carte du pays.
+    const rings = contours?.[pays]?.rings;
+    if (rings?.length) {
+      const lons = rings.flat().map((p) => p[0]);
+      const lats = rings.flat().map((p) => p[1]);
+      const marge = 0.3;
+      o = Math.max(o, Math.min(...lons) - marge);
+      e = Math.min(e, Math.max(...lons) + marge);
+      s = Math.max(s, Math.min(...lats) - marge);
+      n = Math.min(n, Math.max(...lats) + marge);
+    }
+    const arrondi = (v) => Math.round(v * 1000) / 1000;
+    return [arrondi(o), arrondi(s), arrondi(e), arrondi(n)];
+  }
+
+  /**
+   * Un séjour en un seul lieu — une ville, une île : tous les lieux du voyage
+   * dans le pays tiennent dans ~30 km. Sa première carte montre le pays et y
+   * situe la ville ; les suivantes zooment sur la ville et y tracent les
+   * déplacements (LAYOUT_KB § « Les cartes »).
+   */
+  const ETENDUE_SEJOUR = 0.3;
+  /** Trois kilomètres de côté au moins pour une carte de ville : deux rues voisines n'en font pas une carte. */
+  const CADRE_MIN_VILLE = 0.03;
+  /** Lieux nouveaux nommés sur une carte de ville : au-delà, les noms se chevauchent. */
+  const MAX_NOUVEAUX_VILLE = 3;
+
+  function sejourUnique(lieux, pays) {
+    const dans = lieux.filter((l) => l.pays === pays);
+    if (!dans.length) return false;
+    const lats = dans.map((l) => l.lat);
+    const lons = dans.map((l) => l.lon);
+    const cosLat = Math.max(0.2, Math.cos((((Math.min(...lats) + Math.max(...lats)) / 2) * Math.PI) / 180));
+    return (
+      Math.max(...lats) - Math.min(...lats) <= ETENDUE_SEJOUR &&
+      (Math.max(...lons) - Math.min(...lons)) * cosLat <= ETENDUE_SEJOUR
+    );
+  }
+
+  /**
+   * Le pays entier, avec la même marge que le plafond de `cadreDuVoyage` —
+   * mais le pays tel qu'on le reconnaît : son plus grand territoire et les
+   * terres à moins de deux degrés (la Corse), pas l'outre-mer (la boîte de la
+   * France va jusqu'à la Guyane). Le lieu du séjour y est toujours.
+   */
+  function cadreDuPays(pays, contours, lieu = null) {
+    const tous = contours?.[pays]?.rings;
+    if (!tous?.length) return null;
+    const boite = (ring) => [
+      Math.min(...ring.map((p) => p[0])),
+      Math.min(...ring.map((p) => p[1])),
+      Math.max(...ring.map((p) => p[0])),
+      Math.max(...ring.map((p) => p[1])),
+    ];
+    const aire = (b) => (b[2] - b[0]) * (b[3] - b[1]);
+    const boites = tous.map(boite);
+    const principal = boites.reduce((a, b) => (aire(b) > aire(a) ? b : a));
+    const proches = boites.filter(
+      (b) => b[0] <= principal[2] + 2 && principal[0] - 2 <= b[2] && b[1] <= principal[3] + 2 && principal[1] - 2 <= b[3],
+    );
+    const lons = proches.flatMap((b) => [b[0], b[2]]).concat(lieu ? [lieu.lon] : []);
+    const lats = proches.flatMap((b) => [b[1], b[3]]).concat(lieu ? [lieu.lat] : []);
+    const marge = 0.3;
+    const arrondi = (v) => Math.round(v * 1000) / 1000;
+    return [
+      arrondi(Math.min(...lons) - marge),
+      arrondi(Math.min(...lats) - marge),
+      arrondi(Math.max(...lons) + marge),
+      arrondi(Math.max(...lats) + marge),
+    ];
+  }
+
+  /** Tous les cadres dont les cartes du carnet auront besoin : de quoi charger les bons contours. */
+  function cadresDesCartes(etapes, contours) {
+    const lieux = lieuxDuVoyage(etapes, contours);
+    return [...new Set(lieux.map((l) => l.pays))]
+      .flatMap((pays) =>
+        sejourUnique(lieux, pays)
+          ? [
+              cadreDuPays(pays, contours, lieux.find((l) => l.pays === pays)),
+              cadreDuVoyage(lieux, pays, contours, CADRE_MIN_VILLE),
+            ]
+          : [cadreDuVoyage(lieux, pays, contours)],
+      )
+      .filter(Boolean);
+  }
+
   /* ----------------------------------------------- photos ↔ passages du récit */
 
   /**
@@ -520,12 +662,14 @@
    */
   function composition(plan) {
     if (plan.genre === "planche") return "planche";
-    if (plan.layout === "layout_chapter_map") return "carte";
+    // Un encart change la page : la carte info se voit avant le texte.
+    const encart = plan.encart ? "+encart" : "";
+    if (plan.layout === "layout_chapter_map") return `carte${encart}`;
     if (plan.layout === "layout_hero_top") return "hero";
     const n = plan.photos.length;
-    if (n === 0) return "texte";
-    if (n === 1) return "texte+photo";
-    return n === 2 ? "bande2" : "bande3";
+    if (n === 0) return `texte${encart}`;
+    if (n === 1) return `texte+photo${encart}`;
+    return (n === 2 ? "bande2" : "bande3") + encart;
   }
 
   function heroAdmis(plan) {
@@ -614,6 +758,108 @@
     return restants;
   }
 
+  /* ---------------------------------------------------------- les encarts --- */
+
+  /** 140 caractères : la limite de `payloadValidator.ts` (`funFactChars`). */
+  const MAX_SIGNES_ENCART = 140;
+  /** Sous cette note, aucun encart : un encart de remplissage coûte plus qu'il ne rapporte. */
+  const SEUIL_PERTINENCE = 7;
+  /** Un encart toutes les trois pages au plus — LAYOUT_KB, et le réglage de l'app. */
+  const ECART_ENCARTS = 3;
+  const TITRES_ENCART = ["Fun fact", "Infos", "Culture générale", "Chiffres clés"];
+
+  /** L'encart proposé par l'analyse d'étape, s'il est imprimable et assez pertinent. */
+  function encartDe(analyse) {
+    const f = analyse?.funFact;
+    const texte = typeof f?.texte === "string" ? f.texte.replace(/\s+/g, " ").trim() : "";
+    const pertinence = Number(f?.pertinence);
+    if (!texte || texte.length > MAX_SIGNES_ENCART || !(pertinence >= SEUIL_PERTINENCE)) return null;
+    return {
+      texte,
+      titre: TITRES_ENCART.includes(f.titre) ? f.titre : "Fun fact",
+      registre: normaliser(f.registre),
+      paragraphe: Number.isInteger(f.paragraphe) ? f.paragraphe : null,
+      pertinence,
+    };
+  }
+
+  /**
+   * La page peut-elle porter l'encart sans perdre une ligne de récit ? Plafonds
+   * relevés par `calibrate-lengths.ts` :
+   *
+   * - récit avec 0 ou 1 photo : l'encart se pose dans la zone flottante, à côté
+   *   de la photo, sans rien coûter (560 / 2 paragraphes sous un bandeau, 880
+   *   sur une page de suite). Une grande photo en tête n'a pas cette zone : la
+   *   page passe à la photo flottante ;
+   * - deux photos (`layout_split_left`) : la colonne de récit se rétrécit, 240 ;
+   * - ouverture de chapitre avec deux photos : 120 ;
+   * - trois photos (`layout_collage`) ou carte seule : pas de place prévue.
+   */
+  function peutPorterEncart(plan) {
+    if (plan.genre !== "recit" || !plan.texte.length) return false;
+    const n = signes(plan.texte);
+    if (plan.layout === "layout_chapter_map") return plan.photos.length === 2 && n <= 120;
+    if (plan.photos.length <= 1) return true;
+    return plan.photos.length === 2 && n <= 240;
+  }
+
+  /**
+   * Quels encarts s'impriment, et sur quelle page (LAYOUT_KB § « Les fun facts
+   * — dosage et matière ») :
+   *
+   * - un par étape au plus, sur la page du passage dont il vient quand elle peut
+   *   le porter, sinon sur la première page de l'étape qui le peut ;
+   * - trois pages au moins d'un encart au suivant : parmi les candidats, on
+   *   garde la combinaison la mieux notée qui respecte cet écart ;
+   * - jamais deux encarts du même registre à la suite : le moins bien noté
+   *   s'efface.
+   *
+   * Pose `plan.encart` sur les pages retenues et renvoie leur nombre.
+   */
+  function placerEncarts(plans, etapes) {
+    const candidats = [];
+    etapes.forEach((etape, e) => {
+      const encart = encartDe(etape.analyse);
+      if (!encart) return;
+      const pages = plans.map((plan, i) => ({ plan, i })).filter(({ plan }) => plan.etape === e && peutPorterEncart(plan));
+      const hote = pages.find(({ plan }) => plan.paragraphes.includes(encart.paragraphe)) || pages[0];
+      if (hote) candidats.push({ i: hote.i, encart });
+    });
+
+    // La meilleure somme des notes sous la contrainte d'écart : un choix
+    // pondéré d'intervalles, les candidats étant déjà dans l'ordre des pages.
+    const meilleur = [0];
+    const pris = [];
+    candidats.forEach((c, k) => {
+      let j = k - 1;
+      while (j >= 0 && candidats[j].i > c.i - ECART_ENCARTS) j -= 1;
+      const avec = c.encart.pertinence + meilleur[j + 1];
+      pris[k] = { avec: avec > meilleur[k], j };
+      meilleur[k + 1] = Math.max(meilleur[k], avec);
+    });
+    let retenus = [];
+    for (let k = candidats.length - 1; k >= 0; ) {
+      if (pris[k].avec) {
+        retenus.unshift(candidats[k]);
+        k = pris[k].j;
+      } else k -= 1;
+    }
+
+    // Deux registres identiques à la suite : on garde le mieux noté.
+    retenus = retenus.reduce((liste, c) => {
+      const avant = liste[liste.length - 1];
+      if (!avant || !c.encart.registre || avant.encart.registre !== c.encart.registre) return [...liste, c];
+      return c.encart.pertinence > avant.encart.pertinence ? [...liste.slice(0, -1), c] : liste;
+    }, []);
+
+    for (const { i, encart } of retenus) {
+      const plan = plans[i];
+      plan.encart = encart;
+      if (plan.layout === "layout_hero_top") plan.layout = plan.ouvreLeCarnet ? "layout_story_opener" : "layout_story_facts";
+    }
+    return retenus.length;
+  }
+
   /* ------------------------------------------------------------ le carnet --- */
 
   const drapeaux = (actif) => ({
@@ -632,13 +878,23 @@
    * `etapes` : `{ titre, lieu, dateLongue, numero, lieuComplet, recit,
    * photos: [{ id, src, format, groupe }], analyse }` — `analyse` est la réponse
    * de l'analyse d'étape (`consigneAnalyseEtape`), ou `null`.
-   * `options` : `{ contours, dessinerCarte, pagesAvant, journal }`.
+   * `options` : `{ contours, dessinerCarte, pagesAvant, funFacts, journal }` —
+   * `funFacts` est le réglage « Insérer des Fun facts » du carnet : coupé,
+   * aucun encart.
    */
   function composerJours(etapes, options = {}) {
-    const { contours = null, dessinerCarte = null, pagesAvant = 1, journal = () => {} } = options;
+    const { contours = null, dessinerCarte = null, pagesAvant = 1, funFacts = false, journal = () => {} } = options;
     const plans = [];
     const chapitresPasses = [];
+    const lieux = lieuxDuVoyage(etapes, contours);
     let lieuPrecedent = null;
+    // Séjour en un seul lieu : pays dont la carte du pays est déjà passée,
+    // lieux déjà nommés, et le parcours en ville, dans l'ordre.
+    const sejoursOuverts = new Set();
+    const villeDuSejour = new Map();
+    const titreDuSejour = new Map();
+    const dejaPasses = new Set();
+    const parcoursEnVille = [];
 
     etapes.forEach((etape, index) => {
       const analysePhotos = new Map((etape.analyse?.photos || []).map((ph) => [String(ph.id), ph]));
@@ -664,10 +920,33 @@
           : [];
 
       // Chapitre : la première étape, puis chaque arrivée dans un nouveau lieu.
+      // Pour un séjour en un seul lieu, chaque étape qui emmène le voyageur
+      // ailleurs dans la ville : sa carte trace ses déplacements.
       const situe = lieuSitue(etape.analyse, contours);
       const cleLieu = normaliser(situe?.nom || etape.lieu);
-      const nouveauLieu = index === 0 || (cleLieu && cleLieu !== lieuPrecedent);
+      const sejour = Boolean(situe && sejourUnique(lieux, situe.pays));
+      let nouveauLieu = index === 0 || (cleLieu && cleLieu !== lieuPrecedent);
       if (cleLieu) lieuPrecedent = cleLieu;
+      // Les lieux de l'étape pas encore passés, dans l'ordre du récit — sauf
+      // la ville du séjour elle-même (le lieu principal de sa première étape),
+      // que la carte du pays situe et qui n'est pas un déplacement.
+      let nouveauxEnVille = [];
+      if (sejour) {
+        if (!villeDuSejour.has(situe.pays)) {
+          villeDuSejour.set(situe.pays, cleLieu);
+          titreDuSejour.set(situe.pays, situe.nom || etape.lieu);
+        }
+        const vus = new Set([villeDuSejour.get(situe.pays)]);
+        nouveauxEnVille = [situe, ...(etape.analyse?.lieux || []).map((l) => lieuSitue({ lieu: l }, contours))]
+          .filter((l) => l && l.pays === situe.pays)
+          .filter((l) => {
+            const cle = normaliser(l.nom);
+            if (!cle || vus.has(cle) || dejaPasses.has(cle)) return false;
+            vus.add(cle);
+            return true;
+          });
+        nouveauLieu = !sejoursOuverts.has(situe.pays) || nouveauxEnVille.length > 0;
+      }
       let chapitre = Boolean(nouveauLieu && situe && dessinerCarte && pages.length && paragraphes.length);
       let capPremiere = null;
       if (chapitre) {
@@ -708,22 +987,64 @@
 
       let carte = "";
       if (chapitre) {
-        const passes = chapitresPasses
-          .filter((c) => c.pays === situe.pays && normaliser(c.nom) !== cleLieu)
-          .slice(-(MAX_POINTS_CARTE - 1));
-        try {
-          carte = dessinerCarte({
+        let requete;
+        if (sejour && !sejoursOuverts.has(situe.pays)) {
+          // Première carte d'un séjour en un seul lieu : le pays entier, la
+          // ville située dedans.
+          requete = {
             regions: [situe.pays],
+            cadre: cadreDuPays(situe.pays, contours, situe),
+            points: [{ label: situe.nom || etape.lieu, lat: situe.lat, lon: situe.lon }],
+          };
+        } else if (sejour) {
+          // Les suivantes : la ville, les lieux de l'étape nommés, ceux des
+          // étapes précédentes en petits points, et le trajet qui les relie.
+          const montres = nouveauxEnVille.slice(0, MAX_NOUVEAUX_VILLE);
+          const passes = parcoursEnVille.slice(-(MAX_POINTS_CARTE - montres.length));
+          requete = {
+            regions: [situe.pays],
+            cadre: cadreDuVoyage(lieux, situe.pays, contours, CADRE_MIN_VILLE),
+            points: [
+              ...passes.map((c) => ({ label: c.nom, lat: c.lat, lon: c.lon, secondaire: true })),
+              ...montres.map((c) => ({ label: c.nom, lat: c.lat, lon: c.lon })),
+            ],
+            ville: true,
+            titre: titreDuSejour.get(situe.pays) || "",
+          };
+        } else {
+          const passes = chapitresPasses
+            .filter((c) => c.pays === situe.pays && normaliser(c.nom) !== cleLieu)
+            .slice(-(MAX_POINTS_CARTE - 1));
+          requete = {
+            regions: [situe.pays],
+            // Cadrée sur ce que le voyage parcourt dans le pays, pas sur le pays entier.
+            cadre: cadreDuVoyage(lieux, situe.pays, contours),
             points: [
               ...passes.map((c) => ({ label: c.nom, lat: c.lat, lon: c.lon, secondaire: true })),
               { label: situe.nom || etape.lieu, lat: situe.lat, lon: situe.lon },
             ],
-          });
+          };
+        }
+        try {
+          carte = dessinerCarte(requete);
         } catch (erreur) {
           journal(`étape ${index + 1} : carte impossible (${erreur.message}), page ordinaire.`);
           chapitre = false;
         }
-        if (chapitre) chapitresPasses.push(situe);
+        if (chapitre) {
+          chapitresPasses.push(situe);
+          if (sejour) sejoursOuverts.add(situe.pays);
+        }
+      }
+
+      // Le parcours en ville avance à chaque étape, carte ou pas : une étape
+      // sans carte (faute de place) a quand même eu lieu, et la carte suivante
+      // en montre les lieux en petits points sur le trajet.
+      if (sejour) {
+        for (const l of nouveauxEnVille) {
+          parcoursEnVille.push(l);
+          dejaPasses.add(normaliser(l.nom));
+        }
       }
 
       const paragraphesDeLaPage = pages.map(() => []);
@@ -764,6 +1085,11 @@
     const restants = varierDoublesPages(plans, pagesAvant);
     if (restants) journal(`${restants} double(s) page(s) gardent la même composition faute d'alternative.`);
 
+    // Les encarts en dernier : ils se posent sur des pages déjà composées, sans
+    // déplacer ni photo ni ligne de récit, et ne font que distinguer davantage
+    // deux pages en vis-à-vis.
+    if (funFacts) journal(`${placerEncarts(plans, etapes)} encart(s) « fun fact » dans le carnet.`);
+
     return plans.map((plan) => {
       if (plan.genre === "planche") {
         return {
@@ -779,7 +1105,10 @@
         ...drapeaux(plan.layout),
         body_html: paragraphesEnHtml(plan.texte),
         photos: placerPhotos(plan.layout, plan.photos),
-        fun_facts: [],
+        fun_facts: plan.encart ? [plan.encart.texte] : [],
+        // L'encart est écrit par le modèle : la page le dit, en petit
+        // (LAYOUT_KB § « La mention généré par IA »).
+        ...(plan.encart ? { fun_facts_title: plan.encart.titre, ai_note: "Fun fact rédigé par IA" } : {}),
         sticker_groups: [],
         ...(plan.carte ? { map_svg: plan.carte } : {}),
       };
@@ -804,6 +1133,12 @@
     affecterPhotos,
     placerPhotos,
     varierDoublesPages,
+    placerEncarts,
+    cadreDuVoyage,
+    cadreDuPays,
+    cadresDesCartes,
+    sejourUnique,
+    lieuxDuVoyage,
     composition,
     composerJours,
     paragraphesEnHtml,

@@ -120,8 +120,11 @@ export async function structureRender(
         transcript: finalTextOf(entry),
         editedByUser: entry.editedText !== null,
         title: entry.suggestedTitle,
-        funFact: entry.funFact,
-        funFactTitle: entry.funFactTitle,
+        // Le réglage « Insérer des Fun facts » de la personnalisation : coupé,
+        // aucun encart n'entre au carnet. La rédaction les écrit quand même,
+        // pour qu'un réglage rallumé les retrouve sans tout relancer.
+        funFact: memo.funFactsEnabled ? entry.funFact : null,
+        funFactTitle: memo.funFactsEnabled ? entry.funFactTitle : null,
         weatherKey: entry.weatherKey,
         capturedAt: entry.capturedAt,
         placeLabel: entry.placeLabel,

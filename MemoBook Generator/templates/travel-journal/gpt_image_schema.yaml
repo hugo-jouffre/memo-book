@@ -265,13 +265,19 @@ $defs:
             type: array
             minItems: 1
             description: >
-              Codes ISO 3166-1 alpha-2. Le premier cadre la vue, les suivants
-              n'ajoutent que du contexte.
+              Codes ISO 3166-1 alpha-2. Le premier est le pays du chapitre. La
+              vue se cadre sur les points de toutes les cartes du carnet dans
+              ce pays (la zone que le voyage parcourt), pas sur le pays entier.
             items: { type: string, minLength: 2, maxLength: 2 }
           points:
             type: array
             maxItems: 6
-            description: Étapes à épingler. Les coordonnées viennent de l'agent.
+            description: >
+              Les lieux où les récits du chapitre emmènent le voyageur, dans
+              l'ordre du parcours. Ils cadrent la carte : leurs coordonnées
+              viennent de l'agent, justes au centième de degré — au millième
+              dans une ville. Séjour en un seul lieu : la première carte porte
+              la ville seule, les suivantes au plus 3 lieux de la ville.
             items:
               type: object
               required: [label, lat, lon]

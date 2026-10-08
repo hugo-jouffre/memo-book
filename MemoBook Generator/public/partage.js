@@ -165,13 +165,19 @@ Réponds uniquement par un objet JSON, sans texte autour et sans balises de code
    *
    * - où se trouve le lieu de l'étape (pays et coordonnées), pour la carte de
    *   chapitre — `null` s'il n'en est pas sûr : une épingle au hasard se voit ;
+   * - les autres lieux où le récit emmène le voyageur, pour cadrer la carte sur
+   *   la zone que le voyage parcourt ;
    * - quel paragraphe chaque photo illustre, pour qu'elle tombe sur la même
    *   page que le passage qui en parle ;
    * - quelles photos ont été prises au même endroit (même arrière-plan), pour
-   *   qu'elles restent ensemble.
+   *   qu'elles restent ensemble ;
+   * - un encart (« fun fact ») tiré du récit, noté sur 10, ou rien. C'est la
+   *   mise en page qui décide lesquels s'impriment : un toutes les trois pages
+   *   au plus, les mieux notés d'abord.
    *
-   * La mise en page reste un calcul de l'atelier (`app.js`) : le modèle décrit,
-   * il ne compose pas. Voir LAYOUT_KB § « Associer les photos au récit ».
+   * La mise en page reste un calcul de l'atelier (`mise-en-page.js`) : le
+   * modèle décrit, il ne compose pas. Voir LAYOUT_KB § « Associer les photos au
+   * récit » et § « Les fun facts — dosage et matière ».
    */
   function consigneAnalyseEtape({ lieu, destination, paragraphes, photos }) {
     const texte = (paragraphes || [])
@@ -179,7 +185,7 @@ Réponds uniquement par un objet JSON, sans texte autour et sans balises de code
       .join("\n");
     const ids = (photos || []).map((p) => p.id).join(", ");
 
-    return `Tu prépares la mise en page d'une étape de carnet de voyage. Tu ne réécris rien et tu ne choisis aucune mise en page : tu décris.
+    return `Tu prépares la mise en page d'une étape de carnet de voyage. Tu ne réécris pas le récit et tu ne choisis aucune mise en page : tu décris, et tu proposes au plus un encart.
 
 Lieu de l'étape : ${lieu || "non précisé"}
 Destination du voyage : ${destination || "non précisée"}
@@ -189,7 +195,8 @@ ${texte || "(pas de récit)"}
 
 Les photos de l'étape suivent, chacune précédée de son identifiant (${ids || "aucune"}).
 
-1. **Le lieu.** Le pays (code ISO 3166-1 alpha-2) et les coordonnées du lieu principal de l'étape, justes au dixième de degré, et le nom court à écrire sur une carte (« Paros », pas « Paros, Cyclades, Grèce »). Si tu n'es pas sûr du lieu ou de ses coordonnées, mets null : une épingle mal placée se voit immédiatement.
+1. **Le lieu.** Le pays (code ISO 3166-1 alpha-2) et les coordonnées du lieu principal de l'étape, justes au centième de degré, et le nom court à écrire sur une carte (« Paros », pas « Paros, Cyclades, Grèce »). Si tu n'es pas sûr du lieu ou de ses coordonnées, mets null : une épingle mal placée se voit immédiatement.
+   "lieux" : les autres endroits où le récit emmène le voyageur pendant l'étape — une excursion, un village, une plage, une île d'escale, et dans une ville le musée, le quartier, le marché — avec leur pays et leurs coordonnées, dans l'ordre où il y passe. Pas ceux qui sont seulement cités (la ville de départ du vol, un pays dont on parle). Ils cadrent la carte et y tracent ses déplacements : un lieu en ville se situe au millième de degré, sinon il tombe dans la mauvaise rue. N'en mets que ceux que tu sais situer, et une liste vide si aucun.
 
 2. **Chaque photo.** Pour chaque identifiant :
    - "paragraphe" : le numéro du paragraphe dont la photo illustre le contenu — la plage pour le passage sur la plage, le plat pour le passage sur le restaurant. Juge sur ce que montre la photo et ce que raconte le texte, pas sur l'ordre des photos. null si aucun paragraphe ne s'y rattache ;
@@ -197,8 +204,20 @@ Les photos de l'étape suivent, chacune précédée de son identifiant (${ids ||
    - "sujet" : ce que montre la photo, en quelques mots ;
    - "personnes" : le nombre de personnes dont on voit le visage.
 
+3. **L'encart (« fun fact »).** Au plus un, et seulement s'il en vaut la peine :
+   - son sujet vient du récit. Le voyageur raconte un trajet en jeepney : l'encart parle des jeepneys, pas du PIB du pays ;
+   - deux matières possibles. Le meilleur cas : un épisode cocasse réellement raconté, résumé en une phrase. Sinon, un fait sûr qui éclaire ce qui est raconté (histoire, origine d'un nom, usage local, tradition culinaire…), écrit à la troisième personne ;
+   - 140 caractères au plus, texte nu, sans emoji ;
+   - seulement des faits stables et sûrs : jamais de prix, d'horaire, de population à l'unité, de « plus grand du monde ». Rien qui contredise le voyageur, rien de polémique, de morbide ou de moralisateur ;
+   - le test : le lecteur pourra-t-il le raconter à quelqu'un le soir même ? « Paros est une île grecque » échoue ;
+   - "titre" : « Fun fact », « Infos », « Culture générale » ou « Chiffres clés », selon le registre ;
+   - "registre" : vecu, histoire, nom-de-lieu, record, usage-local, cuisine, litterature-cinema ou echelle ;
+   - "paragraphe" : le numéro du paragraphe d'où vient le sujet ;
+   - "pertinence" : de 0 à 10. 8 et plus pour un fait qu'on a envie de raconter et qui tient directement au récit ; sous 5, ne propose rien.
+   "funFact" vaut null s'il n'y a rien de sûr et de pertinent : c'est un résultat normal.
+
 Réponds uniquement par un objet JSON, sans texte autour :
-{"lieu":{"nom":"","pays":"","lat":0,"lon":0},"photos":[{"id":"","paragraphe":0,"scene":"","sujet":"","personnes":0}]}`;
+{"lieu":{"nom":"","pays":"","lat":0,"lon":0},"lieux":[{"nom":"","pays":"","lat":0,"lon":0}],"photos":[{"id":"","paragraphe":0,"scene":"","sujet":"","personnes":0}],"funFact":{"texte":"","titre":"Fun fact","registre":"","paragraphe":0,"pertinence":0}}`;
   }
 
   /**

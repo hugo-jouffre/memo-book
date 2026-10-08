@@ -253,7 +253,8 @@ function chargerBoites() {
 }
 
 const etat = {
-  carnet: { titre: "", destination: "", dateDebut: "", dateFin: "", voyageurs: "" },
+  /** `funFacts` : le réglage « Insérer des Fun facts » de la personnalisation de l'app, allumé par défaut comme elle. */
+  carnet: { titre: "", destination: "", dateDebut: "", dateFin: "", voyageurs: "", funFacts: true },
   /** Un champ touché à la main n'est plus jamais réécrit par la déduction. */
   carnetManuel: {},
   carnetDeduit: {},
@@ -263,6 +264,9 @@ const etat = {
   pdf: null,
   /** Contours des pays (`assets/maps/countries.json`), chargés à la première carte. */
   contoursCarte: null,
+  /** Contours détaillés par pays (`assets/maps/detail/`), chargés pour les cartes cadrées sur le voyage. */
+  contoursDetail: null,
+  indexDetail: null,
   /** Message sous « Générer le carnet » : { type: "info" | "erreur", texte }. */
   carnetStatut: null,
   etapes: [],
@@ -1511,12 +1515,11 @@ function construirePayloadCarnet(photoDe = (data) => data) {
     // Voir `mise-en-page.js` et LAYOUT_KB.
     days: MiseEnPage.composerJours(etapesPourMiseEnPage(photoDe), {
       contours: etat.contoursCarte,
-      dessinerCarte: etat.contoursCarte
-        ? (requete) => Carte.renderMapDataUri(etat.contoursCarte, requete)
-        : null,
+      dessinerCarte: etat.contoursCarte ? dessinerCarteChapitre : null,
       // Le colophon est la page 1 du livre imprimé : la première page d'étape
       // est à gauche.
       pagesAvant: 1,
+      funFacts: etat.carnet.funFacts !== false,
       journal: (texte) => debugCarnet(texte),
     }),
     back_cover: {
@@ -1755,6 +1758,8 @@ const CONTOURS_CARTE_URL =
  */
 function cleAnalyse(etape) {
   const contenu = [
+    // La version de la consigne : une analyse faite avant l'encart n'en a pas.
+    VERSION_ANALYSE,
     etape.lieu || "",
     etat.carnet.destination || "",
     recitDe(etape),
@@ -1764,6 +1769,9 @@ function cleAnalyse(etape) {
   for (let i = 0; i < contenu.length; i += 1) h = (Math.imul(31, h) + contenu.charCodeAt(i)) | 0;
   return `${contenu.length}-${(h >>> 0).toString(36)}`;
 }
+
+/** À changer quand `consigneAnalyseEtape` demande autre chose : les analyses gardées se refont. */
+const VERSION_ANALYSE = "4-lieux-en-ville";
 
 /** Vignette JPEG de 512 px au plus côté : assez pour reconnaître une scène, léger à envoyer. */
 async function vignette(dataUrl) {
@@ -1802,7 +1810,7 @@ async function analyserEtapes(statut = () => {}) {
   const aFaire = etat.etapes.filter((e) => e.analyse?.cle !== cleAnalyse(e));
   if (!aFaire.length) return { faites: 0, echecs: 0 };
   if (!avecCle) {
-    statut("Pas de clé de modèle : photos placées dans l'ordre du voyage, pas de carte de chapitre.");
+    statut("Pas de clé de modèle : photos placées dans l'ordre du voyage, ni carte de chapitre ni fun fact.");
     return { faites: 0, echecs: aFaire.length };
   }
 
@@ -1853,9 +1861,56 @@ async function chargerContoursCarte() {
   }
 }
 
+const CONTOURS_DETAIL_URL =
+  "https://raw.githubusercontent.com/hugo-jouffre/memo-book/main/assets/maps/detail/";
+
+/**
+ * Les contours détaillés (Natural Earth 10 m, un fichier par pays) des pays
+ * qui touchent le cadre d'une carte de chapitre : ceux de 110 m n'ont pas les
+ * petites îles, et une carte cadrée sur les Cyclades n'y montrerait que la mer.
+ * Chargés une fois par pays ; sans eux, la carte retombe sur le pays entier.
+ */
+async function chargerContoursDetail() {
+  if (!etat.contoursCarte) return;
+  const cadres = MiseEnPage.cadresDesCartes(etapesPourMiseEnPage(() => ""), etat.contoursCarte);
+  if (!cadres.length) return;
+  etat.contoursDetail ||= {};
+  try {
+    if (!etat.indexDetail) {
+      const reponse = await fetch(`${CONTOURS_DETAIL_URL}index.json`);
+      if (!reponse.ok) throw new Error(`HTTP ${reponse.status}`);
+      etat.indexDetail = await reponse.json();
+    }
+    // Les pays qui touchent un cadre, élargi d'un degré : la carte s'élargit
+    // au format de la page.
+    const touche = (b, c) => b[0] <= c[2] + 1 && c[0] - 1 <= b[2] && b[1] <= c[3] + 1 && c[1] - 1 <= b[3];
+    const codes = Object.entries(etat.indexDetail)
+      .filter(([code, { bbox }]) => !etat.contoursDetail[code] && cadres.some((c) => touche(bbox, c)))
+      .map(([code]) => code);
+    await Promise.all(
+      codes.map(async (code) => {
+        const reponse = await fetch(`${CONTOURS_DETAIL_URL}${code}.json`);
+        if (!reponse.ok) throw new Error(`${code} : HTTP ${reponse.status}`);
+        etat.contoursDetail[code] = await reponse.json();
+      }),
+    );
+  } catch (erreur) {
+    debugCarnet("contours détaillés indisponibles : cartes du pays entier", erreur);
+  }
+}
+
+/** La carte d'un chapitre : cadrée sur le voyage si les contours détaillés de son pays sont là. */
+function dessinerCarteChapitre(requete) {
+  if (requete.cadre && etat.contoursDetail?.[requete.regions[0]]) {
+    return Carte.renderCarteCadreeDataUri(etat.contoursDetail, requete);
+  }
+  return Carte.renderMapDataUri(etat.contoursCarte, requete);
+}
+
 /** Ce qui précède la mise en page : l'analyse des étapes et les contours de carte. */
 async function preparerMiseEnPage(statut) {
   await Promise.all([analyserEtapes(statut), chargerContoursCarte()]);
+  await chargerContoursDetail();
 }
 
 async function genererCarnet(bouton) {
@@ -2897,6 +2952,28 @@ function rendreChampsCarnet() {
       puce: etat.carnetDeduit.voyageurs,
       surSaisie: poser("voyageurs"),
     }),
+    // Le même réglage que la personnalisation du carnet dans l'app.
+    h(
+      "div",
+      { style: { gridColumn: "1 / -1" } },
+      h(
+        "label",
+        { class: "case" },
+        h("input", {
+          type: "checkbox",
+          checked: etat.carnet.funFacts !== false,
+          onchange: (ev) => {
+            etat.carnet.funFacts = ev.target.checked;
+          },
+        }),
+        " Insérer des Fun facts",
+      ),
+      h(
+        "p",
+        { class: "aide" },
+        "Un encart tiré du récit, une page sur trois au plus, et seulement quand il en vaut la peine.",
+      ),
+    ),
   );
 }
 

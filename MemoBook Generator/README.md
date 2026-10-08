@@ -305,10 +305,19 @@ mettre, déjà écrit dans le bandeau.
    visages. Chaque photo va sur la page de son passage, les photos d'une même
    scène restent ensemble, et le surplus fait une planche juste après la page
    dont il vient. Sans clé, les photos suivent l'ordre du voyage.
-6. **Chaque nouveau lieu ouvre un chapitre** sur une carte du pays
-   (`layout_chapter_map`), quand l'analyse a situé le lieu.
+6. **Chaque nouveau lieu ouvre un chapitre** sur une carte
+   (`layout_chapter_map`), quand l'analyse a situé le lieu. La carte se cadre
+   sur la zone que les récits parcourent (les îles visitées, pas tout le
+   pays), avec les contours détaillés de `assets/maps/detail/`. Un séjour
+   dans une seule ville s'ouvre sur le pays avec la ville située, puis chaque
+   étape qui va dans de nouveaux lieux montre la ville et le parcours.
 7. **Deux pages en vis-à-vis n'ont jamais la même composition**, quand une
    alternative existe.
+8. **Des fun facts tirés du récit**, si la case « Insérer des Fun facts » de
+   la fiche du carnet est cochée (par défaut, comme dans l'app). La même
+   analyse propose un encart par étape, noté sur 10. Seuls les mieux notés
+   s'impriment, un toutes les trois pages au plus, sur une page où ils ne
+   coûtent aucune ligne de récit.
 
 La case **« Version imprimeur »**, dans les réglages, produit l'intérieur du
 livre relié : sans couverture ni quatrième (imprimées sur la couverture
@@ -349,9 +358,13 @@ Règles et cotes : `LAYOUT_KB.md`, § « Couverture imprimée (Pumbo) ».
 Trois raisons de l'appeler Beta, et de ne pas s'y fier pour un tirage :
 
 1. **La conversion est mécanique.** Elle habille le texte du voyageur, elle ne
-   l'écrit pas : pas de `fun_facts`, pas de météo (elle ne s'imprime que si le
-   vocal la dit, et l'atelier ne lit pas le récit), pas de stickers. Le
-   pipeline du back-end fait ce travail-là bien mieux.
+   l'écrit pas : pas de météo (elle ne s'imprime que si le vocal la dit, et
+   l'atelier ne la cherche pas dans le récit), pas de stickers. Seule exception,
+   les encarts « fun fact » : l'analyse d'étape en propose un par étape, tiré
+   du récit, et la mise en page n'en garde qu'un toutes les trois pages au plus
+   (case « Insérer des Fun facts » de la fiche du carnet ; LAYOUT_KB § « Les
+   fun facts — dosage et matière »). Le pipeline du back-end fait le reste bien
+   mieux.
 2. **Les photos partent en base64** dans la requête. Au-delà de quelques
    dizaines, APITemplate refusera la charge ; l'outil s'arrête au-dessus de
    20 Mo plutôt que d'attendre une erreur illisible.

@@ -80,7 +80,7 @@ dépend de la forme du voyage :
 
 | Forme du voyage | Chapitres | Carte à l'ouverture |
 |---|---|---|
-| Toujours la même ville (woofing, échange, stage) | Semaines / mois / années | Toujours la même carte de ville, enrichie de nouveaux points au fil du livre |
+| Toujours la même ville, ou la même île (city trip, woofing, échange, stage) | À chaque étape qui emmène le voyageur dans de nouveaux lieux de la ville ; semaines / mois / années pour un long séjour | **La première carte montre le pays et y situe la ville. Les suivantes zooment sur la ville** : la même carte, enrichie au fil du livre, qui trace les déplacements — voir § « Les cartes », séjour en un seul lieu |
 | Plusieurs villes, un seul pays | Semaines / mois / villes | Carte du pays au début du livre, puis une carte par sous-chapitre : par ville si ≥ 500 000 habitants, sinon par région traversée |
 | 2 pays et plus (itinérant) | Semaines / mois / villes / pays | Carte du pays concerné à chaque ouverture de chapitre, puis cartes de villes pour certains sous-chapitres |
 | 5 pays et plus (tour du monde) | Idem itinérant | Idem itinérant |
@@ -140,11 +140,38 @@ seul pays fait de plusieurs lieux :
   que l'étape s'en passe sans carte, elle s'ouvre sans carte. Une étape d'une
   seule page avec une ou deux photos et plus de 320 signes garde donc ses
   photos plutôt que la carte ;
-- **la carte** montre le pays, le lieu du chapitre avec son nom, et les lieux
-  des chapitres précédents en petits points sans nom, reliés par le trajet :
-  sur une carte de la Grèce entière, trois noms d'îles voisines se
-  chevaucheraient. Dessin : `MemoBook Generator/public/carte.js`, recopie de
-  `mapSvg.ts` gardée identique par `backend/test/carteAtelier.test.ts`.
+- **la carte** montre le lieu du chapitre avec son nom, et les lieux des
+  chapitres précédents en petits points sans nom, reliés par le trajet ;
+- **le cadrage suit ce que racontent les récits, pas les frontières**
+  (`cadreDuVoyage`). Un voyage aux Cyclades montrait le continent grec et la
+  Crète, avec une épingle en pleine mer : la carte se cadrait sur le pays
+  entier, et les contours de 110 m n'ont même pas les Cyclades. Désormais :
+  - **les lieux du voyage** : le lieu de chaque étape, et ceux où son récit
+    emmène le voyageur (une excursion, une île d'escale), que l'analyse
+    d'étape relève et situe (`lieux`). Une ville seulement citée ne compte pas ;
+  - **le cadre** les entoure tous, dans le pays du chapitre, avec 20 % de marge
+    de chaque côté et **un degré de côté au moins** (~110 km) : en deçà, on ne
+    sait plus où l'on est. Jamais plus grand que le pays : un tour de la Grèce
+    retrouve la carte de la Grèce ;
+  - **le même cadre** pour tous les chapitres d'un pays : d'une carte à
+    l'autre, on voit le trajet avancer ;
+  - **les contours** viennent de Natural Earth 10 m (`assets/maps/detail/`,
+    un fichier par pays, `backend/scripts/build-map-detail.ts`) : tous les
+    pays qui touchent le cadre, coupés au bord et effacés en fondu. Sans ces
+    fichiers, la carte retombe sur le pays entier.
+
+- **séjour en un seul lieu** (tous les lieux tiennent dans ~30 km) : la
+  première ouverture de chapitre montre le pays et y situe la ville, puis
+  chaque étape qui emmène le voyageur dans de nouveaux lieux de la ville ouvre
+  un chapitre sur la carte de la ville et de son parcours (§ « Les cartes »).
+  Le parcours avance aussi aux étapes sans carte : leurs lieux reviennent en
+  petits points sur la carte suivante.
+
+  Dessin : `MemoBook Generator/public/carte.js`, recopie de `mapSvg.ts` —
+  cadrage et contours compris — gardée identique par
+  `backend/test/carteAtelier.test.ts`. Seule différence : l'atelier connaît
+  les lieux par l'analyse d'étape, l'app par les `points` que l'agent pose sur
+  chaque carte (§ « Les cartes »).
 
 ## Les cartes
 
@@ -160,14 +187,69 @@ L'agent **décrit** la carte, il ne la dessine pas :
 }
 ```
 
-- `regions` : codes **ISO 3166-1 alpha-2**. Le premier cadre la vue, les
-  suivants n'ajoutent que du contexte. 175 pays disponibles.
-- `points` : 6 maximum. Les coordonnées doivent être justes au dixième de
-  degré — un point mal placé se voit immédiatement quand on connaît le pays.
+- `regions` : codes **ISO 3166-1 alpha-2**. Le premier est le pays du
+  chapitre ; les suivants ne servent plus qu'au repli (voir plus bas). 175 pays
+  disponibles.
+- `points` : 6 maximum. **Les lieux où les récits du chapitre emmènent le
+  voyageur** — l'île où il arrive, le village visité, la plage d'excursion —
+  pas ceux qui sont seulement cités (la ville de départ du vol). Les
+  coordonnées doivent être justes au centième de degré : un point mal placé se
+  voit immédiatement, et à l'échelle d'un archipel un dixième de degré, c'est
+  une île voisine.
 
-Le back-end projette le contour et les points avec **la même** transformation
-(Mercator), puis insère le SVG dans `map_svg`. Ils ne peuvent donc pas diverger.
-Voir `backend/src/services/mapSvg.ts`.
+**Le cadrage suit ce que racontent les récits, pas les frontières.** La carte
+ne montre pas le pays entier, mais la zone que le voyage y parcourt : un voyage
+aux Cyclades se cadre sur les Cyclades, pas sur le continent grec avec les
+épingles en pleine mer. Le back-end (`expandMaps`, `voyageFrame`) :
+
+- réunit les `points` de **toutes** les cartes du carnet dans le même pays ;
+- les entoure avec 20 % de marge de chaque côté et **un degré de côté au
+  moins** (~110 km), sans dépasser le pays : un tour de la Grèce garde la
+  carte de la Grèce ;
+- garde **le même cadre** pour tous les chapitres du pays : d'une carte à
+  l'autre, on voit le trajet avancer ;
+- dessine les contours de Natural Earth 10 m (`assets/maps/detail/`, qui a les
+  petites îles) de tous les pays qui touchent le cadre, coupés au bord et
+  effacés en fondu.
+
+C'est pourquoi les `points` comptent plus que `regions` : ce sont eux qui
+disent où le voyage se passe. Sans contour détaillé pour le pays, la carte
+retombe sur le pays entier, cadré sur le premier code de `regions`.
+
+### Séjour en un seul lieu : le pays, puis la ville
+
+Quand **tous les points du carnet dans un pays tiennent dans ~30 km** (0,3° de
+côté) — un city trip, une île —, les cartes changent de rôle :
+
+1. **La première carte du pays montre le pays entier et y situe la ville.**
+   Elle porte un seul point, **la ville elle-même** (« Paris », pas « Louvre ») :
+   c'est elle qui sera épinglée et nommée. Le pays, c'est son territoire
+   principal et les terres proches (la Corse), pas l'outre-mer.
+2. **Les suivantes zooment sur la ville** : le cadre entoure tous les lieux du
+   séjour, avec **3 km de côté au moins**. Chacune porte, dans l'ordre du
+   parcours, les lieux où le récit du chapitre emmène le voyageur — **3 au
+   plus**, situés **au millième de degré** : à cette échelle, un centième de
+   degré, c'est un kilomètre, la mauvaise rue. La carte :
+   - nomme les lieux du chapitre (épingles) ;
+   - garde ceux des chapitres précédents en petits points, nommés en petit ;
+   - **trace le parcours** qui les relie, dans l'ordre ;
+   - écrit le nom de la ville en tête et pose une barre d'échelle (« 1 km »).
+
+**Ni rue ni fleuve** : les données mondiales disponibles hors ligne (Natural
+Earth) sont trop grossières à cette échelle — la Seine y passait au nord de la
+tour Eiffel. Une carte qui place un monument sur la mauvaise rive se voit plus
+qu'une carte sobre. Seuls les points, exacts, s'y dessinent ; la côte reste
+quand la ville en a une.
+
+**Quand ouvrir un chapitre** dans un tel carnet : à chaque étape dont le récit
+emmène le voyageur dans des lieux de la ville où il n'était pas encore allé,
+quand le barème le permet (§ « Chapitre ou journée ordinaire »). Une journée
+sans nouveau lieu reste une page ordinaire.
+
+Le back-end projette les contours et les points avec **la même**
+transformation (Mercator), puis insère le SVG dans `map_svg`. Ils ne peuvent
+donc pas diverger. Voir `backend/src/services/mapSvg.ts` ; l'atelier en a une
+recopie (`carte.js`), gardée identique par `backend/test/carteAtelier.test.ts`.
 
 ## Quand il manque des photos, ou du texte
 
@@ -571,6 +653,36 @@ Quatre règles, à appliquer strictement :
 | Une info qui explique ce que le voyageur vient de vivre | Oui |
 | Une donnée vraie mais sans lien avec la journée | Non — omettre |
 | Un chiffre trouvé pour meubler une page vide | Non — utiliser `prompt` ou `quiz` |
+
+**Le réglage ON/OFF est appliqué au moment de composer le carnet**, pas à la
+rédaction : la rédaction écrit l'encart de chaque étape quoi qu'il arrive, et
+`jobs/structure.ts` ne le transmet que si `funFactsEnabled` est vrai. Un
+voyageur qui rallume le réglage retrouve ses encarts sans tout relancer.
+
+### Dans l'atelier
+
+L'atelier n'a pas d'étape de rédaction : l'encart vient de l'**analyse d'étape**
+(`consigneAnalyseEtape`, `partage.js`), le même appel que celui qui situe le
+lieu et rattache les photos. Le modèle y reçoit le récit et propose **au plus
+un** encart tiré du récit, avec son registre, le paragraphe d'où il vient et une
+**note de pertinence sur 10**. La mise en page (`placerEncarts`,
+`mise-en-page.js`) décide ensuite :
+
+- **seuil** : sous 7/10, rien ; au-delà de 140 caractères, rien ;
+- **écart** : trois pages au moins d'un encart au suivant. Parmi les candidats,
+  la combinaison retenue est celle dont la somme des notes est la plus haute ;
+- **registre** : deux encarts du même registre à la suite, le moins bien noté
+  s'efface ;
+- **page hôte** : celle du paragraphe d'où vient l'encart, sinon la première
+  page de l'étape qui peut le porter sans perdre une ligne. Récit avec 0 ou 1
+  photo : la zone flottante l'accueille sans rien coûter (mesuré : 560 signes
+  sous un bandeau, 880 sur une page de suite, comme sans encart), et une grande
+  photo en tête repasse en photo flottante. Deux photos : 240 signes au plus.
+  Ouverture de chapitre avec deux photos : 120. Trois photos : jamais ;
+- **mention** : la page porte `ai_note` « Fun fact rédigé par IA ».
+
+Le réglage « Insérer des Fun facts » se coche dans la fiche du carnet de
+l'atelier, allumé par défaut comme dans l'app.
 
 ## Occuper les blancs sans les décorer
 

@@ -206,6 +206,33 @@ describe("parcours complet : raconter → transcrire → générer", () => {
       error: null,
     });
   });
+
+  it("n'imprime les fun facts que si le réglage de personnalisation est allumé", async () => {
+    const encart = "Le nom de Guatapé vient d'une langue indigène et désigne des eaux agitées.";
+
+    const carnet = async (funFactsEnabled: boolean) => {
+      const memoId = await createMemo();
+      await postAudio(memoId, "2026-01-05T09:00:00.000Z", "Guatapé");
+      await harness.prisma.entry.updateMany({
+        where: { memoId },
+        data: { funFact: encart, funFactTitle: "Fun fact" },
+      });
+      await harness.prisma.memo.update({ where: { id: memoId }, data: { funFactsEnabled } });
+
+      const render = await harness.app.inject({
+        method: "POST",
+        url: `/v1/memos/${memoId}/renders`,
+        headers: { authorization },
+      });
+      const stored = await harness.prisma.render.findUniqueOrThrow({
+        where: { id: render.json<{ id: string }>().id },
+      });
+      return stored.payload as { days: { fun_facts?: string[] }[] };
+    };
+
+    expect((await carnet(true)).days.flatMap((day) => day.fun_facts ?? [])).toEqual([encart]);
+    expect((await carnet(false)).days.flatMap((day) => day.fun_facts ?? [])).toEqual([]);
+  });
 });
 
 describe("garde-fous de l'API", () => {
