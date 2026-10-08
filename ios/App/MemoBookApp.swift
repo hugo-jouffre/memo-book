@@ -19,6 +19,14 @@ struct MemoBookApp: App {
         // Avant tout, pour que `RootView` lise des réglages déjà remis à zéro
         // si on le lui a demandé. Sans effet en release.
         OnboardingStorage.resetIfRequested()
+
+        // **Les photos sans réseau** (Hugo, 08/10/2026 : « sa photo de
+        // profil »). Toutes les images de l'app passent par le cache d'URL
+        // partagé ; celui d'iOS ne garde que 10 Mo sur disque, et refuse tout
+        // fichier de plus d'un vingtième de sa taille — une photo de profil
+        // n'y entrait pas. Servie `immutable` pour trente jours
+        // (`/v1/avatars/:file`), elle se relit désormais du disque hors ligne.
+        URLCache.shared = URLCache(memoryCapacity: 32 * 1_024 * 1_024, diskCapacity: 256 * 1_024 * 1_024)
     }
 
     var body: some Scene {

@@ -1,5 +1,14 @@
 import ImageIO
+import Observation
 import UIKit
+
+/// La case d'une image du fil : vide tant qu'elle charge. Observée **seule** —
+/// voir ``ChatModel/image(at:)``.
+@MainActor
+@Observable
+final class ChatImageSlot {
+    var image: UIImage?
+}
 
 /// Une image du fil, décodée **à la taille où elle se montre**.
 ///

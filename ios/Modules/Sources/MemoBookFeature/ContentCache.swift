@@ -24,12 +24,20 @@ import MemoBookCore
 /// | un voyage (``Slot/trip``) | on y revient dix fois par jour pendant un voyage |
 /// | ses réglages (``Slot/tripSettings``) | trente valeurs pour un écran qu'on ouvre pour en changer une |
 /// | la galerie (``Slot/gallery``) | des carnets publics, qui bougent à l'échelle de la semaine |
+/// | les derniers messages d'un fil (``Slot/chat``) | rouvrir la conversation sans réseau sur ce qu'on s'était dit |
 ///
-/// Ce qu'on **ne garde pas**, et c'est délibéré : la conversation — elle change
-/// à chaque phrase, et un fil périmé se lit comme un message perdu ; les
-/// commandes — c'est de l'argent, et un état périmé est pire qu'un état
-/// absent ; les rendus PDF — ce sont des fichiers, ils ont leur
-/// propre cache d'URL.
+/// **La conversation y est entrée le 08/10/2026** (Hugo : « que son
+/// expérience reste super sans internet ») : ses trente derniers messages
+/// **arrivés chez le serveur**, rien de ce qui est en route — la file des
+/// envois garde ceux-là. On craignait qu'un fil périmé se lise comme un
+/// message perdu ; il est rouvert sous le bandeau « hors ligne », et le vrai
+/// fil le remplace dès que le réseau revient.
+///
+/// Ce qu'on **ne garde pas**, et c'est délibéré : les commandes — c'est de
+/// l'argent, et un état périmé est pire qu'un état absent ; les rendus PDF —
+/// ce sont des fichiers, ils ont leur propre cache d'URL. Les photos (profil,
+/// couvertures) passent par le cache d'URL de l'app, agrandi pour elles — voir
+/// `MemoBookApp.init()`.
 ///
 /// ### Où ça vit
 ///
@@ -51,6 +59,7 @@ actor ContentCache {
         case gallery
         case trip(String)
         case tripSettings(String)
+        case chat(String)
 
         /// Le nom du fichier. L'identifiant du voyage y entre **haché** plutôt
         /// qu'en clair : un UUID est un nom de fichier valide, mais on ne pose
@@ -64,6 +73,7 @@ actor ContentCache {
             case .gallery: "gallery.json"
             case .trip(let id): "trip-\(Self.digest(id)).json"
             case .tripSettings(let id): "trip-settings-\(Self.digest(id)).json"
+            case .chat(let id): "chat-\(Self.digest(id)).json"
             }
         }
 

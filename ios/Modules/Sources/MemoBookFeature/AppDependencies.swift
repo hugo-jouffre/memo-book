@@ -477,10 +477,14 @@ public final class AppDependencies {
         // « Supprimer », sous une bulle qui attend l'illimité : le tour quitte
         // la file, fiche et fichiers.
         transport.discard = { [outbox] id in await outbox.discardTurn(id: id) }
+        // Les derniers messages arrivés, gardés pour rouvrir le fil sans
+        // réseau (Hugo, 08/10/2026) — voir ``ChatThread/forOfflineCache()``.
+        transport.remember = { [content] thread in
+            await content.write(.chat(tripId), thread.forOfflineCache())
+        }
         // Sans réseau, ou pour un voyage que le serveur n'a pas encore reçu :
-        // un fil **local** — l'accueil de MEMO, et ce qui attend d'être envoyé.
-        // Pas une copie de l'ancien fil : un fil périmé se lit comme un message
-        // perdu (`ios/CLAUDE.md`, « Le cache local »).
+        // un fil **local** — les derniers messages gardés s'il y en a, sinon
+        // l'accueil de MEMO —, et ce qui attend d'être envoyé.
         transport.offlineThread = { [outbox, content] error in
             let home = await content.read(.home, as: HomeFeed.self)
             let traveller = home?.traveller
@@ -504,11 +508,12 @@ public final class AppDependencies {
             var known = await content.read(.trip(tripId), as: TripDetail.self)?.trip ?? homeTrip
             let detailCredit = known?.dailyCredit
             known?.dailyCredit = detailCredit.map { $0.merged(with: homeTrip?.dailyCredit) } ?? homeTrip?.dailyCredit
-            return .offline(
-                trip: known ?? Trip(id: tripId, title: TripDraft.untitled, stage: .ongoing),
-                traveller: traveller,
-                isNew: false
-            )
+            let trip = known ?? Trip(id: tripId, title: TripDraft.untitled, stage: .ongoing)
+            // Le fil déjà lu ici : on le rouvre sur ce qu'on s'était dit.
+            if let cached = await content.read(.chat(tripId), as: ChatThread.self) {
+                return .offline(cached: cached, trip: trip)
+            }
+            return .offline(trip: trip, traveller: traveller, isNew: false)
         }
         return ChatModel(transport: transport, focusStepId: stepId)
     }
