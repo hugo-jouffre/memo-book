@@ -205,10 +205,13 @@ describe("les couvertures d'un carnet", () => {
     const body = response.json<CoversBody>();
 
     // Jamais réglé : les défauts, et rien d'inventé.
-    expect(body.front).toEqual({ styleId: "front-photo", photoId: null, title: "", subtitle: "", statIds: [] });
-    expect(body.back.styleId).toBe("back-framed");
-    expect(body.frontStyles.map((style) => style.id)).toContain("front-kraft");
-    expect(body.backStyles.map((style) => style.id)).toContain("back-sand");
+    expect(body.front).toEqual({ styleId: "front-default", photoId: null, title: "", subtitle: "", statIds: [] });
+    expect(body.back.styleId).toBe("back-default");
+    // Les sept gabarits de `assets/covers`, par paires (08/10/2026).
+    expect(body.frontStyles.map((style) => style.id)).toContain("front-drawing");
+    expect(body.backStyles.map((style) => style.id)).toContain("back-drawing");
+    expect(body.frontStyles).toHaveLength(7);
+    expect(body.backStyles).toHaveLength(7);
     expect(body.photos).toEqual([]);
 
     // 21 jours, 2,3k km, un pays.
@@ -245,10 +248,10 @@ describe("les couvertures d'un carnet", () => {
       method: "PATCH",
       url: `/v1/trips/${memo.id}/covers`,
       headers: { authorization: account.authorization },
-      payload: { face: "front", styleId: "front-framed", photoId: photo.id },
+      payload: { face: "front", styleId: "front-elegant", photoId: photo.id },
     });
     expect(styled.statusCode).toBe(200);
-    expect(styled.json<CoversBody>().front).toMatchObject({ styleId: "front-framed", photoId: photo.id });
+    expect(styled.json<CoversBody>().front).toMatchObject({ styleId: "front-elegant", photoId: photo.id });
     expect(styled.json<CoversBody>().photos.map((entry) => entry.id)).toContain(photo.id);
 
     const texts = await harness.app.inject({
@@ -259,12 +262,12 @@ describe("les couvertures d'un carnet", () => {
     });
     expect(texts.statusCode).toBe(200);
     expect(texts.json<CoversBody>().back).toMatchObject({
-      styleId: "back-framed",
+      styleId: "back-default",
       subtitle: "Quelques jours à Rome.",
       statIds: ["stat-days", "stat-countries"],
     });
     // Le devant n'a pas bougé.
-    expect(texts.json<CoversBody>().front.styleId).toBe("front-framed");
+    expect(texts.json<CoversBody>().front.styleId).toBe("front-elegant");
 
     // La photo importée devient celle du voyage sur l'accueil.
     const stored = await harness.prisma.memo.findUniqueOrThrow({

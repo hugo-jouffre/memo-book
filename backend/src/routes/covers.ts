@@ -12,6 +12,7 @@ import {
   coverPhotoMimeType,
   coverStatsOf,
   coverStylesFor,
+  currentCoverStyleId,
   readStoredCover,
   type CoverFace,
   type StoredCover,
@@ -134,10 +135,13 @@ export function registerCoverRoutes(app: FastifyInstance, context: AppContext): 
     const next: StoredCover = { ...current };
 
     if (body.styleId !== undefined) {
-      if (!coverStylesFor(which).some((style) => style.id === body.styleId)) {
+      // Un style d'avant les gabarits (08/10/2026) — une app restée hors
+      // ligne avec l'ancien catalogue — prend celui qui le remplace.
+      const styleId = currentCoverStyleId(body.styleId);
+      if (!coverStylesFor(which).some((style) => style.id === styleId)) {
         throw HttpError.badRequest("Ce style de couverture n’existe pas.", "unknown_cover_style");
       }
-      next.styleId = body.styleId;
+      next.styleId = styleId;
     }
 
     if (body.photoId !== undefined) {

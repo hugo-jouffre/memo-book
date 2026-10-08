@@ -244,6 +244,8 @@ struct CoverCarouselView: View {
             photo: photo,
             face: model.face,
             stats: model.face == .back ? model.covers?.statSelection ?? [] : [],
+            companion: model.covers?[model.face.opposite],
+            gallery: model.covers?.photos ?? [],
             width: Self.plateWidth
         )
     }

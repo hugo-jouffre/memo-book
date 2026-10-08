@@ -77,6 +77,8 @@ public struct CoversView: View {
                         photo: model.photo(of: cover),
                         face: model.face,
                         stats: model.face == .back ? model.covers?.statSelection ?? [] : [],
+                        companion: model.covers?[model.face.opposite],
+                        gallery: model.covers?.photos ?? [],
                         width: width
                     )
                 } else {

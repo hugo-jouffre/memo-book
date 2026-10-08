@@ -21,6 +21,10 @@ struct CoverPlate: View {
     let face: CoverFace
     /// Les chiffres à imprimer au dos. Vides sur la première de couverture.
     var stats: [CoverStat] = []
+    /// Le plat d'en face : le dos d'un gabarit reprend qui a voyagé, et quand.
+    var companion: BookCover? = nil
+    /// Les photos du voyage, pour les gabarits qui en posent plusieurs.
+    var gallery: [CoverPhoto] = []
     /// La largeur du plat. Sa hauteur en découle — voir ``ratio``.
     var width: CGFloat
 
@@ -59,12 +63,35 @@ struct CoverPlate: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: MemoBookSpacing.snug, style: .continuous)
 
-        return content
+        return drawing
             .frame(width: width, height: height)
-            .background(background)
             .clipShape(shape)
             .overlay { shape.strokeBorder(MemoBookColor.hairline, lineWidth: 1) }
             .brandShadow(.soft)
+    }
+
+    /// **Un des sept gabarits** quand le style en porte un (08/10/2026,
+    /// ``CoverTemplate``) ; sinon la composition d'avant, pour un style qu'un
+    /// serveur plus ancien — ou plus récent — servirait sans famille connue.
+    @ViewBuilder
+    private var drawing: some View {
+        if let family = style?.family {
+            CoverTemplate(
+                family: family,
+                face: face,
+                cover: cover,
+                companion: companion,
+                photo: photo,
+                gallery: gallery,
+                stats: stats,
+                width: width,
+                titleBadge: titleBadge,
+                subtitleBadge: subtitleBadge,
+                statsBadge: statsBadge
+            )
+        } else {
+            content.background(background)
+        }
     }
 
     // MARK: - Le fond
@@ -87,28 +114,10 @@ struct CoverPlate: View {
         }
     }
 
-    /// Relit les liens des photos — posé par les écrans des couvertures,
-    /// absent ailleurs (aperçu du carnet, previews).
-    @Environment(\.refreshCoverPhotos) private var refreshCoverPhotos
-
-    @ViewBuilder
+    /// La photo, ou la trame du voyage. Un lien signé expiré redemande des
+    /// liens neufs (T237) — voir ``CoverPhotoImage``.
     private var photoLayer: some View {
-        if let url = photo?.url {
-            AsyncImage(url: url) { phase in
-                if let image = phase.image {
-                    image.resizable().scaledToFill()
-                } else if phase.error != nil {
-                    // Le lien signé a sans doute expiré (T237) : on en
-                    // demande un neuf, et l'image se recharge avec lui.
-                    TripCoverPlaceholder(seed: photo?.id ?? cover.styleId)
-                        .task(id: url) { await refreshCoverPhotos?() }
-                } else {
-                    TripCoverPlaceholder(seed: photo?.id ?? cover.styleId)
-                }
-            }
-        } else {
-            TripCoverPlaceholder(seed: photo?.id ?? cover.styleId)
-        }
+        CoverPhotoImage(photo: photo, seed: photo?.id ?? cover.styleId)
     }
 
     private var tintColor: Color {

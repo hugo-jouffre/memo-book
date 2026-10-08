@@ -16,36 +16,23 @@ extension BookCovers {
     public static var fixture: BookCovers {
         BookCovers(
             front: BookCover(
-                styleId: "front-photo",
+                styleId: "front-default",
                 photoId: "photo-2",
-                title: "ROME",
+                title: "Rome",
                 subtitle: "Maylis, Claire et Augustin\nAoût 2026"
             ),
             back: BookCover(
-                styleId: "back-framed",
+                styleId: "back-default",
                 photoId: "photo-4",
                 subtitle:
                     "Quelques jours à la découverte de Rome, entre ruelles baignées de soleil, marchés animés, architecture baroque et longues soirées italiennes.\n\nUn carnet de voyage fait de lieux, de rencontres et de petits moments que l’on aurait aimé ne jamais oublier.",
                 statIds: ["stat-days", "stat-km", "stat-countries"]
             ),
-            frontStyles: [
-                CoverStyle(id: "front-plain", name: "Aplat", treatment: .plain, tint: .slate),
-                CoverStyle(id: "front-framed", name: "Cadre", treatment: .framed, tint: .paper),
-                CoverStyle(id: "front-photo", name: "Photo pleine page", treatment: .photo, tint: .ink),
-                CoverStyle(id: "front-sand", name: "Sable", treatment: .plain, tint: .sand),
-                CoverStyle(id: "front-kraft", name: "Kraft", treatment: .kraft, tint: .sand),
-                CoverStyle(id: "front-forest", name: "Forêt", treatment: .plain, tint: .forest),
-            ],
-            backStyles: [
-                CoverStyle(id: "back-sand", name: "Sable", treatment: .plain, tint: .sand),
-                CoverStyle(id: "back-photo", name: "Photo pleine page", treatment: .photo, tint: .ink),
-                // La pastille « Assortie à ta 1ère de couverture » se calcule
-                // sur le devant choisi : « Cadre » ici, donc ce plat-là, comme
-                // la maquette — et « Sable » si l'on choisit « Sable » devant.
-                CoverStyle(id: "back-framed", name: "Cadre", treatment: .framed, tint: .paper),
-                CoverStyle(id: "back-forest", name: "Forêt", treatment: .plain, tint: .forest),
-                CoverStyle(id: "back-kraft", name: "Kraft", treatment: .kraft, tint: .sand),
-            ],
+            // **Les sept gabarits de `assets/covers`**, par paires (08/10/2026)
+            // — les mêmes identifiants que `coverCatalogue.ts`. La pastille
+            // « Assortie à ta 1ère de couverture » suit la famille du devant.
+            frontStyles: CoverFamily.allCases.map { CoverStyle.fixture($0, face: .front) },
+            backStyles: CoverFamily.allCases.map { CoverStyle.fixture($0, face: .back) },
             // Sans URL : un jeu d'essai n'a pas de photothèque. Les plats
             // dessinent alors l'aplat de repli du voyage — le même que les
             // cartes de l'accueil, teinté d'après l'identifiant.
@@ -60,6 +47,30 @@ extension BookCovers {
                 CoverStat(id: "stat-people", value: "27", label: "personnes\nrencontrées"),
                 CoverStat(id: "stat-transport", value: "4", label: "transports\nutilisés"),
             ]
+        )
+    }
+}
+
+extension CoverStyle {
+    /// Le style d'une famille, tel que le serveur le sert — identifiant, nom,
+    /// et la composition de repli des apps d'avant les gabarits.
+    static func fixture(_ family: CoverFamily, face: CoverFace) -> CoverStyle {
+        let (name, treatment, tint): (String, CoverTreatment, CoverTint) =
+            switch family {
+            case .default: ("Par défaut", face == .front ? .photo : .plain, face == .front ? .ink : .paper)
+            case .watercolor: ("Aquarelle", .framed, .sand)
+            case .assouline: ("Assouline", .plain, .slate)
+            case .drawing: ("Dessin", .kraft, .paper)
+            case .photoDrawing: ("Photo-dessin", face == .front ? .photo : .plain, face == .front ? .ink : .paper)
+            case .travelBook: ("Travel book", .framed, .paper)
+            case .elegant: ("Élégant", .framed, .paper)
+            }
+        return CoverStyle(
+            id: "\(face.rawValue)-\(family.rawValue)",
+            name: name,
+            treatment: treatment,
+            tint: tint,
+            family: family
         )
     }
 }

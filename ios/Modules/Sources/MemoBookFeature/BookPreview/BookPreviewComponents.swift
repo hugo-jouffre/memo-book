@@ -133,6 +133,8 @@ struct BookCoverSheet: View {
                 photo: covers.photo(id: cover.photoId),
                 face: face,
                 stats: face == .back ? covers.statSelection : [],
+                companion: covers[face.opposite],
+                gallery: covers.photos,
                 width: width
             )
             .frame(width: proxy.size.width, height: proxy.size.height)

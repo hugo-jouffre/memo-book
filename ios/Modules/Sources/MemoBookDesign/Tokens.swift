@@ -231,6 +231,24 @@ public enum MemoBookColor {
 
     /// Information neutre, sans jugement. — Figma `Information`.
     public static let information = Color(hex: 0x4A8FE0)
+
+    // MARK: Les gabarits de couverture
+    //
+    // Relevés au pixel sur les plats de Hugo (`assets/covers`, 08/10/2026).
+    // Ce sont les couleurs **d'un objet imprimé**, pas de l'interface : elles
+    // ne servent qu'aux plats (`CoverTemplates.swift`). Le bleu d'Assouline et
+    // le vert des titres sont ceux de la marque — ``outline`` et ``action``.
+
+    /// Le papier crème de cinq gabarits sur sept.
+    public static let coverCream = Color(hex: 0xF5EDE5)
+    /// L'eau claire de « Photo-dessin » : l'aplat du dos, l'encre du devant.
+    public static let coverMint = Color(hex: 0xCDF9F5)
+    /// Le vert profond du cadre déchiré de « Travel book ».
+    public static let coverForest = Color(hex: 0x19532B)
+    /// Le bordeaux du tampon de « Travel book ».
+    public static let coverPostmark = Color(hex: 0x8E3343)
+    /// Les grandes taches du dos « Aquarelle ».
+    public static let coverWash = Color(hex: 0xE9DDD1)
 }
 
 /// Échelle d'espacement de 8 pt, plus les marges de référence.
