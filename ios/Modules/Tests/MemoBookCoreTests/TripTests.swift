@@ -170,6 +170,24 @@ final class TripTests: XCTestCase {
         """#
         let trip = try JSONDecoder.memoBook.decode(Trip.self, from: Data(json.utf8))
         XCTAssertNil(trip.dailyCredit)
+        // Ni `canDelete` : la croix reste montrée, et c'est le serveur qui
+        // refusera (T233).
+        XCTAssertTrue(trip.isDeletable)
+    }
+
+    /// T233 : un co-voyageur ne voit pas « Supprimer le voyage ».
+    func testACompanionsTripIsNotDeletable() throws {
+        let json = #"""
+        {
+          "id": "rome", "title": "Rome", "stage": "past",
+          "stats": { "dayCount": 3, "distanceKilometres": 0, "photoCount": 0 },
+          "companions": [], "isPrintable": true, "canDelete": false
+        }
+        """#
+        let trip = try JSONDecoder.memoBook.decode(Trip.self, from: Data(json.utf8))
+        XCTAssertFalse(trip.isDeletable)
+        // Un voyage créé hors ligne appartient à son créateur.
+        XCTAssertTrue(Trip.local(TripDraft(title: "Lisbonne"), id: "l").isDeletable)
     }
 
     // MARK: - Fabriques

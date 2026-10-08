@@ -101,19 +101,20 @@ targets:
           UIImageName: LaunchLogo
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
-        # Sans ces deux descriptions, iOS refuse l'accès et l'app est rejetée
-        # à la revue App Store.
+        # Sans ces descriptions, iOS refuse l'accès et l'app est rejetée à la
+        # revue App Store. Elles tutoient, comme le reste de l'app (R9) : ce
+        # sont les premiers mots de MemoBook qu'on lit dans une alerte d'iOS.
         NSMicrophoneUsageDescription: >-
-          MemoBook enregistre votre voix pour transformer vos souvenirs en carnet.
+          MemoBook enregistre ta voix pour transformer tes souvenirs en carnet.
         NSPhotoLibraryUsageDescription: >-
-          MemoBook ajoute vos photos aux pages de votre carnet.
+          MemoBook ajoute tes photos aux pages de ton carnet.
         NSCameraUsageDescription: >-
-          MemoBook prend vos photos de voyage pour les ranger dans votre carnet.
+          MemoBook prend tes photos de voyage pour les ranger dans ton carnet.
         # La reconnaissance vocale sert **uniquement** à écrire le texte à
         # l'écran pendant qu'on parle, pour qu'on voie que le micro entend.
         # C'est le serveur qui transcrit le vocal pour de bon.
         NSSpeechRecognitionUsageDescription: >-
-          MemoBook affiche vos mots à l'écran pendant que vous enregistrez.
+          MemoBook affiche tes mots à l’écran pendant que tu enregistres.
         # L'API tourne en HTTP en développement local. `NSAllowsLocalNetworking`
         # n'ouvre que le réseau local (`localhost`, `.local`, IP privées) : un
         # build Release qui parle à `https://api.memo-book.com` n'en dépend pas,

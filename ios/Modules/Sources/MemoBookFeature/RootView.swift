@@ -218,10 +218,7 @@ public struct RootView: View {
                     model: LastQuestionsModel(account: account) { [api = dependencies.api] edit in
                         _ = try await api.updateProfile(edit)
                     },
-                    onFinished: { finishLastQuestions(as: $0) },
-                    // La flèche du premier écran ramène à l'entrée : c'est
-                    // l'écran d'avant, et y revenir veut dire sortir du compte.
-                    onLeave: signOut
+                    onFinished: { finishLastQuestions(as: $0) }
                 )
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             case .signedIn(let account):
@@ -243,10 +240,15 @@ public struct RootView: View {
                 // posé** — celui-ci écrivait donc « Hello, » à tout le monde
                 // en dehors des aperçus.
                 .environment(\.travellerFirstName, account.firstName)
+                // Les voyages créés hors ligne que le serveur n'a pas encore
+                // reçus : leurs réglages, leur aperçu et leur commande
+                // pâlissent partout où on les ouvre (T239).
+                .environment(\.tripsAwaitingServer, Set(dependencies.outbox.localTrips.map(\.id)))
                 // L'achat de l'abonnement, au nom de **ce** compte : son
                 // identifiant part dans chaque transaction Apple.
                 .environment(\.subscriptionPurchase, dependencies.subscriptionPurchase(accountId: account.id))
                 .environment(\.managePaymentMethods, { await dependencies.managePaymentMethods() })
+                .environment(\.finishAbandonedOrder, { await dependencies.finishAbandonedOrder(orderId: $0) })
                 // Ce que StoreKit a gardé pendant que personne n'était
                 // connecté — un renouvellement, une validation parentale —
                 // part maintenant qu'une session peut le remettre.
@@ -255,6 +257,9 @@ public struct RootView: View {
                 // la question de l'autorisation, qui attend l'étape
                 // « Notifications » de la création d'un voyage.
                 .task(id: account.id) { await push?.connect(api: dependencies.api) }
+                // Le support écrit et vote **au nom de ce compte** (T226) ; les
+                // votes du compte d'avant s'effacent.
+                .task(id: account.id) { await support.connect(SupportBackend(api: dependencies.api)) }
                 .fullScreenCover(isPresented: $showsNotificationPaywall) {
                     PaywallView(
                         subscription: .offer,
@@ -277,10 +282,32 @@ public struct RootView: View {
                 // l'abonnement qu'il apprend libère la file (plus bas).
                 .onChange(of: dependencies.deliveredTransactions) {
                     homeReloadRequest += 1
+                    // Le profil aussi, s'il est ouvert : un remboursement
+                    // arrive par là, et sa pastille « Abonné(e) » doit tomber.
+                    subscription.noteOutsideChange()
+                }
+                // **La fin du mois payé, à l'heure dite** (Hugo, 06/10/2026 :
+                // « attention à ce que tous les endroits qui indiquaient
+                // “abonné” ne l'indiquent plus »). Un renouvellement coupé
+                // garde l'illimité jusqu'à sa date ; l'app ouverte à ce
+                // moment-là le fait tomber partout, puis relit l'accueil pour
+                // que le serveur le confirme. Une app suspendue passe par le
+                // retour au premier plan, plus bas.
+                .task(id: subscription.endsAt) {
+                    guard let end = subscription.endsAt else { return }
+                    let wait = end.timeIntervalSinceNow
+                    if wait > 0 {
+                        do { try await Task.sleep(for: .seconds(wait)) } catch { return }
+                    }
+                    expireSubscriptionIfDue()
                 }
             }
         }
         .animation(.snappy, value: stage)
+        // **Le voile de la barre d'état, une fois pour toute l'app** (T210) :
+        // tous les écrans sont poussés dans l'une des piles ci-dessus. Posé
+        // avant le recul des feuilles, il recule avec l'écran qu'il couvre.
+        .brandStatusBarScrim()
         // L'app entière recule pendant qu'une feuille est ouverte, comme dans
         // les Réglages. C'est ici que ça se joue et non dans l'écran qui
         // présente : le recul doit emporter la pile de navigation avec lui, et
@@ -330,7 +357,9 @@ public struct RootView: View {
             // (03/10/2026). Sans effet quand rien n'attend.
             if case .signedIn = stage, !OnboardingStorage.isPreviewingSignedIn {
                 Task { await dependencies.deliverUnfinishedTransactions() }
+                Task { await withdrawPurchaseAppleNoLongerHolds() }
             }
+            if case .signedIn = stage { expireSubscriptionIfDue() }
         }
         // **L'illimité libère la file** (03/10/2026) : un achat, une
         // restauration, un abonnement pris sur un autre appareil et que
@@ -344,6 +373,28 @@ public struct RootView: View {
             guard zip(before, now).contains(where: { !$0 && $1 }) else { return }
             Task { await dependencies.outbox.releaseCreditHolds() }
         }
+    }
+
+    // MARK: - L'abonnement qui s'arrête
+
+    /// L'échéance d'un renouvellement coupé est passée : l'illimité tombe
+    /// dans la session, et l'accueil se relit — le profil, lui, suit la
+    /// session (``SubscriptionSession/revision``).
+    private func expireSubscriptionIfDue() {
+        let before = subscription.revision
+        subscription.expireIfDue()
+        if subscription.revision != before { homeReloadRequest += 1 }
+    }
+
+    /// **Un achat que le serveur n'a jamais confirmé, et qu'Apple ne tient
+    /// plus** — remboursé, révoqué, ou expiré avant d'atteindre l'API : le
+    /// geste « acheté » de la session rend la main (``Transaction.currentEntitlements``).
+    /// Rien à demander tant que le serveur a parlé : c'est lui qui fait foi.
+    private func withdrawPurchaseAppleNoLongerHolds() async {
+        guard subscription.override == true, subscription.known != true else { return }
+        guard await dependencies.hasCurrentEntitlement() == false else { return }
+        subscription.withdrawUnconfirmedPurchase()
+        homeReloadRequest += 1
     }
 
     // MARK: - Hors session
@@ -482,6 +533,10 @@ public struct RootView: View {
                 // Le carnet du jeu d'essai du tunnel — voir ``OrderContext/fixture``.
                 path = [.order(memoId: "trip-rome")]
             }
+            // Voir ``OnboardingStorage/composeBookArgument``.
+            if OnboardingStorage.isComposingBook {
+                path = [.trip(id: FixtureTripId.rome), .bookPreview(memoId: FixtureTripId.rome)]
+            }
         #endif
         // Depuis le formulaire, le tracé commence ici ; depuis le trousseau, il
         // est déjà en cours — et s'il est déjà fini, le voile se lève tout de
@@ -568,13 +623,12 @@ public struct RootView: View {
             managesSubscriptionFromNotification = true
         case .newTrip:
             path = [.tripCreation]
-        case .chat(let tripId), .wallet(let tripId), .bookPreview(let tripId):
+        case .chat(let tripId), .bookPreview(let tripId):
             // Même garde-fou que depuis l'accueil : un identifiant qui n'est
             // pas celui d'une ressource n'ouvre rien.
             guard UUID(uuidString: tripId) != nil else { return }
             let screen: HomeRoute =
                 switch link {
-                case .wallet: .wallet(tripId: tripId)
                 case .bookPreview: .bookPreview(memoId: tripId)
                 default: .chat(tripId: tripId, stepId: nil)
                 }
@@ -678,15 +732,9 @@ public struct RootView: View {
         }
     }
 
-    /// Où mène l'unique intention du profil.
-    ///
-    /// La cagnotte s'ouvre **sans voyage** depuis le profil : il n'y a pas de
-    /// carnet à financer dans ce contexte, seulement un solde à consulter.
-    /// L'écran s'en accommode — voir ``BookCopy/Wallet/subtitle(trip:)``.
+    /// Où mènent les intentions du profil.
     private func handle(_ intent: ProfileIntent) {
         switch intent {
-        case .openWallet:
-            path.append(.wallet(tripId: nil))
         case .openTrip(let id):
             // Même garde-fou que depuis l'accueil : un voyage du bac à sable
             // n'a pas d'identifiant de ressource, et n'ouvre rien.
@@ -735,16 +783,14 @@ public struct RootView: View {
 
     /// Où mène chaque intention des paramètres d'un voyage.
     ///
-    /// Cinq destinations : la cagnotte, l'aperçu du carnet, les
-    /// personnalisations, le tunnel de commande, le support — et une sortie,
+    /// Quatre destinations : l'aperçu du carnet, les personnalisations, le
+    /// tunnel de commande, le support — et une sortie,
     /// quand le voyage vient d'être supprimé. Cinq lignes de plus ouvrent leur
     /// **feuille** sans passer par ici (``TripSettingsSheet``). Restent deux
     /// lignes inertes — renommer, relier un Tricount —, et elles le sont
     /// toujours faute de maquette, pas faute de branchement.
     private func handle(_ intent: TripSettingsIntent) {
         switch intent {
-        case .openWallet:
-            path.append(.wallet(tripId: currentTripId))
         case .openBookPreview:
             // Le carnet d'un voyage porte aujourd'hui le même identifiant que
             // lui : un voyage est un `memo` côté serveur. La distinction existe
@@ -774,11 +820,14 @@ public struct RootView: View {
         }
     }
 
-    /// Où mènent les deux intentions des personnalisations.
+    /// Où mènent les intentions des personnalisations.
     private func handle(_ intent: BookCustomisationIntent) {
         switch intent {
         case .openCovers:
             openCovers()
+        case .openBookPreview:
+            guard let tripId = currentTripId else { return }
+            path.append(.bookPreview(memoId: tripId))
         case .openHelp:
             path.append(.support)
         }
@@ -815,8 +864,6 @@ public struct RootView: View {
     /// Où mène chaque intention de l'aperçu du carnet.
     private func handle(_ intent: BookPreviewIntent) {
         switch intent {
-        case .openWallet:
-            path.append(.wallet(tripId: currentTripId))
         case .customise:
             // « Personnaliser mon carnet » mène aux **personnalisations du
             // carnet**, et non aux réglages du voyage : c'est le style du
@@ -860,30 +907,6 @@ public struct RootView: View {
         }
     }
 
-    /// Où mène chaque intention de la cagnotte.
-    ///
-    /// Les trois boutons de l'écran menaient nulle part — « Ajouter » et
-    /// « Partager » s'arrêtaient ici, et « Prévisualiser mon carnet » n'avait
-    /// pas de voyage depuis le profil (Clara, 26/09/2026). La cagnotte dit
-    /// désormais quel carnet elle finance (``Wallet/tripId``) : c'est lui qui
-    /// s'ouvre quand la pile n'en porte aucun.
-    private func handle(_ intent: WalletIntent) {
-        switch intent {
-        case .openBookPreview(let walletTripId):
-            guard let tripId = currentTripId ?? walletTripId else {
-                routingProblem = BookCopy.Wallet.shareUnavailable
-                return
-            }
-            path.append(.bookPreview(memoId: tripId))
-        case .addFunds(let walletTripId):
-            path.append(.walletTopUp(tripId: currentTripId ?? walletTripId))
-        case .order(let tripId):
-            path.append(.order(memoId: tripId))
-        case .openHelp:
-            path.append(.support)
-        }
-    }
-
     /// Le modèle du tunnel de commande.
     ///
     /// Sous `-previewSignedIn` il travaille **en mémoire** : aucun appel réseau
@@ -911,7 +934,7 @@ public struct RootView: View {
     /// Le voyage ouvert, s'il y en a un dans la pile.
     ///
     /// Il se lit **dans le chemin** plutôt que d'être porté par chaque écran :
-    /// la cagnotte et l'aperçu s'ouvrent depuis les réglages d'un voyage, depuis
+    /// l'aperçu et la commande s'ouvrent depuis les réglages d'un voyage, depuis
     /// sa conversation ou depuis son accueil, et tous les trois doivent revenir
     /// au même voyage. Le déduire du chemin évite de le trimballer dans quatre
     /// intentions.
@@ -924,8 +947,6 @@ public struct RootView: View {
                 return id
             case .chat(let tripId, _):
                 return tripId
-            case .wallet(let tripId), .walletTopUp(let tripId):
-                if let tripId { return tripId }
             case .profile, .gallery, .tripCreation, .memos, .support, .legal:
                 continue
             }
@@ -986,13 +1007,6 @@ public struct RootView: View {
             )
         case .order(let memoId):
             OrderView(model: orderModel(memoId: memoId), onIntent: handle)
-        case .wallet(let tripId):
-            WalletView(model: dependencies.walletModel(tripId: tripId), onIntent: handle)
-        case .walletTopUp(let tripId):
-            // L'argent est arrivé : retour à la cagnotte, qui se relit.
-            WalletTopUpView(model: dependencies.walletModel(tripId: tripId)) {
-                if path.last == .walletTopUp(tripId: tripId) { path.removeLast() }
-            }
         case .bookCustomisation(let tripId):
             BookCustomisationView(
                 model: dependencies.bookCustomisationModel(tripId: tripId),
@@ -1007,7 +1021,8 @@ public struct RootView: View {
         case .coverTexts(let tripId):
             CoverTextsView(model: covers(for: tripId))
         case .support:
-            SupportView(model: support)
+            // Le voyage d'où l'on vient part avec le message (T226).
+            SupportView(model: support, tripId: path.lazy.reversed().compactMap(\.supportTripId).first)
         case .legal(let document):
             LegalDocumentView(document: document.content, onIntent: handle)
         }
@@ -1086,12 +1101,6 @@ enum HomeRoute: Hashable {
     /// On n'y arrive **que par l'aperçu** : on ne commande pas un carnet qu'on
     /// n'a pas vu. L'identifiant est celui du carnet, comme pour l'aperçu.
     case order(memoId: String)
-    /// Ma cagnotte. `tripId` ne dit pas *quelle* cagnotte — il n'y en a qu'une
-    /// par compte — mais **quel carnet on finance**, pour l'estimation de pages
-    /// et de coût. `nil` quand on arrive du profil.
-    case wallet(tripId: String?)
-    /// « Ajouter à ma cagnotte » — la recharge, par « Ajouter ».
-    case walletTopUp(tripId: String?)
     /// Les personnalisations du carnet, ouvertes par « Style du carnet ».
     case bookCustomisation(tripId: String)
 

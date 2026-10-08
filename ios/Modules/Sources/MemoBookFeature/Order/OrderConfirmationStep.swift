@@ -99,13 +99,10 @@ struct OrderConfirmationStep: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// Ce qui part, quand, et en combien d'exemplaires.
-    ///
-    /// ⚠️ Le bouton « Être informé par WhatsApp » de la maquette **n'est pas
-    /// ici**, et volontairement : il n'y a ni numéro collecté pour le suivi, ni
-    /// envoi côté serveur. Une case qui ne retient rien est exactement l'écran
-    /// qui ment que `CLAUDE.md` interdit — il reviendra avec la route qui le
-    /// tient.
+    /// Ce qui part, quand, et en combien d'exemplaires — et « Être informé par
+    /// WhatsApp », qui enregistre l'accord et le numéro sur la commande
+    /// (`POST /v1/orders/:id/whatsapp`). Aucun message ne part encore : le
+    /// bouton le dit une fois accepté.
     private var deliveryCard: some View {
         HStack(alignment: .top, spacing: MemoBookSpacing.s) {
             cover

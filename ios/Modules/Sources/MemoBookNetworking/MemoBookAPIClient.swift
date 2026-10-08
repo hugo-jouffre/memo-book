@@ -262,6 +262,35 @@ public actor MemoBookAPIClient: MemoBookAPI {
         )
     }
 
+    public func sendSupportMessage(_ message: SupportMessage) async throws {
+        struct Receipt: Decodable { let id: String }
+        let _: Receipt = try await send(
+            method: "POST",
+            path: "/v1/support/messages",
+            encodableBody: message,
+            credential: .session
+        )
+    }
+
+    public func voteOnFaq(questionId: String, isHelpful: Bool, appVersion: String?) async throws {
+        struct Body: Encodable {
+            let isHelpful: Bool
+            let appVersion: String?
+        }
+        let _: FaqVote = try await send(
+            method: "PUT",
+            path: "/v1/support/faq-votes/\(questionId)",
+            encodableBody: Body(isHelpful: isHelpful, appVersion: appVersion),
+            credential: .session
+        )
+    }
+
+    public func faqVotes() async throws -> [FaqVote] {
+        struct Response: Decodable { let votes: [FaqVote] }
+        let response: Response = try await send(method: "GET", path: "/v1/support/faq-votes")
+        return response.votes
+    }
+
     public func cancelSubscription(
         reason: SubscriptionCancellationReason?
     ) async throws -> TravellerProfile {
@@ -387,6 +416,10 @@ public actor MemoBookAPIClient: MemoBookAPI {
         try await sendIgnoringResponse(method: "DELETE", path: "/v1/memos/\(id)")
     }
 
+    public func deleteEntry(id: String) async throws {
+        try await sendIgnoringResponse(method: "DELETE", path: "/v1/entries/\(id)")
+    }
+
     // MARK: - Souvenirs
 
     public func addTextEntry(memoId: String, entry: NewTextEntry) async throws -> Entry {
@@ -489,7 +522,7 @@ public actor MemoBookAPIClient: MemoBookAPI {
             URLQueryItem(name: "since", value: ISO8601DateFormatter.memoBookString(from: since))
         ]
         guard let path = components.string else {
-            throw APIError.server(statusCode: 0, code: nil, message: "Chemin d'API invalide.")
+            throw APIError.server(statusCode: 0, code: nil, message: "Chemin d’API invalide.")
         }
         return try await send(method: "GET", path: path)
     }
@@ -595,31 +628,6 @@ public actor MemoBookAPIClient: MemoBookAPI {
             path: "/v1/memos/\(memoId)/orders/quote",
             encodableBody: Body(copies: copies, shippingSpeed: shippingSpeed)
         )
-    }
-
-    public func wallet(tripId: String?) async throws -> Wallet {
-        let path = tripId.map { "/v1/wallet?tripId=\($0)" } ?? "/v1/wallet"
-        return try await send(method: "GET", path: path)
-    }
-
-    public func addWalletSandboxEntry(
-        amount: Decimal,
-        kind: WalletEntryKind,
-        label: String
-    ) async throws -> Decimal {
-        struct Body: Encodable {
-            let amount: Decimal
-            let kind: String
-            let label: String
-        }
-        struct Response: Decodable { let balance: Decimal }
-
-        let response: Response = try await send(
-            method: "POST",
-            path: "/v1/wallet/debug-entry",
-            encodableBody: Body(amount: amount, kind: kind.rawValue, label: label)
-        )
-        return response.balance
     }
 
     public func setOrderWhatsApp(orderId: String, phone: String?) async throws -> PrintOrder {
@@ -895,25 +903,6 @@ public actor MemoBookAPIClient: MemoBookAPI {
         }
     }
 
-    /// Le corps de la recharge. Une structure locale plutôt qu'un dictionnaire :
-    /// `send(method:path:body:)` ne prend que des `String`, et un montant est un
-    /// entier de centimes — le passer en texte le rendrait arrondissable.
-    private struct TopUpBody: Encodable {
-        let amountCents: Int
-        let stripeApiVersion: String?
-    }
-
-    public func startWalletTopUp(
-        amountCents: Int,
-        stripeApiVersion: String?
-    ) async throws -> PaymentIntentTicket {
-        try await send(
-            method: "POST",
-            path: "/v1/wallet/topup",
-            encodableBody: TopUpBody(amountCents: amountCents, stripeApiVersion: stripeApiVersion)
-        )
-    }
-
     private struct StripeVersionBody: Encodable {
         let stripeApiVersion: String?
     }
@@ -970,7 +959,7 @@ public actor MemoBookAPIClient: MemoBookAPI {
         credential: Credential = .session
     ) throws -> URLRequest {
         guard let url = URL(string: path, relativeTo: activeBaseURL) else {
-            throw APIError.server(statusCode: 0, code: nil, message: "Chemin d'API invalide : \(path)")
+            throw APIError.server(statusCode: 0, code: nil, message: "Chemin d’API invalide : \(path)")
         }
 
         var request = URLRequest(url: url, timeoutInterval: configuration.timeout)

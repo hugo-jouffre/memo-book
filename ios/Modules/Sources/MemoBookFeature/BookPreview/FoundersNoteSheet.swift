@@ -192,12 +192,6 @@ struct FoundersNoteSheet: View {
         .padding(.top, MemoBookSpacing.xs)
     }
 
-    /// Ouvre un courrier pré-rempli vers les fondateurs.
-    ///
-    /// Un `mailto:` et non un formulaire : il n'y a pas de back-end de retours,
-    /// et le courrier laisse une trace des deux côtés — celui qui écrit garde
-    /// ce qu'il a envoyé. L'écran remonte quand même l'intention, pour que
-    /// ``RootView`` puisse un jour la router ailleurs.
     /// **Le formulaire de l'app, et non un courrier** (Hugo, 19/09/2026).
     ///
     /// Le bouton ouvrait `mailto:` : on quittait MemoBook pour une app de mail
@@ -205,6 +199,9 @@ struct FoundersNoteSheet: View {
     /// prérempli. Or l'app a déjà un endroit où l'on écrit à l'équipe — celui
     /// du support, avec son champ, son envoi et sa confirmation. C'est lui qui
     /// s'ouvre, et la feuille se referme d'abord pour qu'il prenne sa place.
+    ///
+    /// **Et le message part vraiment** (T226, 06/10/2026) : marqué
+    /// `founders_note`, avec le voyage du carnet — voir `BookPreviewFlowView`.
     private func sendFeedback() {
         dismiss()
         onFeedback()

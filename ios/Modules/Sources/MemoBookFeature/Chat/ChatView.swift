@@ -2,6 +2,7 @@ import MemoBookCore
 import MemoBookDesign
 import SwiftUI
 import UIKit
+import UserNotifications
 
 /// La conversation avec MEMO : on raconte, il écoute, et le carnet se remplit
 /// pendant ce temps-là.
@@ -166,6 +167,34 @@ public struct ChatView: View {
     /// soixante points trop bas.
     @State private var headerBottom: CGFloat = 0
 
+    /// Les voyages que le serveur n'a pas encore reçus : la roue et
+    /// l'imprimante de l'en-tête pâlissent pour celui-ci — voir
+    /// ``TripAwaitingServer`` (T239).
+    @Environment(\.tripsAwaitingServer) private var tripsAwaitingServer
+    @State private var showsAwaitingServer = false
+    private var isAwaitingServer: Bool { tripsAwaitingServer.contains(tripId) }
+
+    /// Ce qu'iOS a répondu pour les notifications, relu à l'ouverture et à
+    /// chaque retour au premier plan — au retour des Réglages, surtout. `nil`
+    /// tant qu'on ne l'a pas lu. Voir ``ChatNotificationsNudge`` (T246).
+    @State private var notificationAuthorization: UNAuthorizationStatus?
+    @Environment(\.scenePhase) private var scenePhase
+
+    /// La bulle « Suggestions » des notifications se montre.
+    private var showsNotificationsNudge: Bool {
+        guard let notificationAuthorization else { return false }
+        return NotificationsNudge.isShown(
+            hasPassedStep: NotificationsNudge.hasPassedStep(),
+            authorization: notificationAuthorization,
+            state: model.callToActionState(for: NotificationsNudge.bubbleId)
+        )
+    }
+
+    private func refreshNotificationAuthorization() async {
+        let status = await NotificationsNudge.systemAuthorization()
+        withAnimation(reduceMotion ? nil : .smooth(duration: 0.25)) { notificationAuthorization = status }
+    }
+
     /// Ce que le défilement a parcouru — voir ``ChatScrollTracker``. Un
     /// objet **non observé** gardé par `@State` : ses compteurs changent à
     /// chaque image de défilement, et rien à l'écran n'en dépend directement.
@@ -190,6 +219,7 @@ public struct ChatView: View {
                 failure
             }
         }
+        .awaitingServerNotice(isPresented: $showsAwaitingServer, below: headerBottom)
         .background(BrandBackdrop())
         .photoFlow(photos) { model.sendPhotos($0) }
         .brandHiddenNavigationBar()
@@ -210,6 +240,12 @@ public struct ChatView: View {
         }
         // Un écran de chat laissé derrière soi ne doit ni parler ni enregistrer.
         .onDisappear { model.teardown() }
+        // L'autorisation des notifications, pour la bulle qui les propose :
+        // relue au retour au premier plan — des Réglages, souvent.
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            await refreshNotificationAuthorization()
+        }
         // La session d'abonnement, prêtée au modèle : un achat fait passer le
         // crédit du jour en illimité tout de suite — plus de bandeau, plus de
         // micro pâli —, sans attendre que le serveur le redise.
@@ -254,6 +290,17 @@ public struct ChatView: View {
                         )
                         .id(message.id)
                         .transition(rowTransition(for: message))
+                    }
+
+                    // Après le fil : c'est une suggestion pour la suite, pas
+                    // un message d'hier (T246).
+                    if showsNotificationsNudge, let notificationAuthorization {
+                        ChatNotificationsNudge(
+                            model: model,
+                            authorization: notificationAuthorization,
+                            onAnswered: refreshNotificationAuthorization
+                        )
+                        .transition(.opacity)
                     }
 
                     if model.isThinking {
@@ -323,7 +370,7 @@ public struct ChatView: View {
                 // deux capsules l'une sur l'autre se liraient comme une pile.
                 if showsPreviewBanner, !isGatheringContext, let preview = thread.preview {
                     GeometryReader { proxy in
-                        ChatPreviewBanner(preview: preview) { onIntent(.openBookPreview(memoId: tripId)) }
+                        ChatPreviewBanner(preview: preview) { openFromServer(.openBookPreview(memoId: tripId)) }
                             .frame(maxWidth: .infinity)
                             .padding(.top, max(0, headerBottom - proxy.frame(in: .global).minY) + MemoBookSpacing.xs)
                     }
@@ -479,7 +526,7 @@ public struct ChatView: View {
     private func launch(_ suggestion: ChatSuggestion, from frame: CGRect) {
         // « Voir ma page » ouvre l'aperçu : rien ne part dans le fil, rien ne vole.
         if suggestion.intent == .openPreview {
-            onIntent(.openBookPreview(memoId: tripId))
+            openFromServer(.openBookPreview(memoId: tripId))
             return
         }
         guard !reduceMotion, flight == nil else {
@@ -597,9 +644,21 @@ public struct ChatView: View {
         ChatHeader(
             thread: thread,
             onBack: { dismiss() },
-            onSettings: { onIntent(.openSettings(tripId: tripId)) },
-            onBook: { onIntent(.openBookPreview(memoId: tripId)) }
+            onSettings: { openFromServer(.openSettings(tripId: tripId)) },
+            onBook: { openFromServer(.openBookPreview(memoId: tripId)) },
+            isAwaitingServer: isAwaitingServer
         )
+    }
+
+    /// Les réglages et l'aperçu sont des écrans du serveur : pour un voyage
+    /// qu'il n'a pas encore reçu, l'appui dit pourquoi au lieu d'ouvrir un
+    /// écran d'erreur (T239).
+    private func openFromServer(_ intent: ChatIntent) {
+        if isAwaitingServer {
+            showsAwaitingServer = true
+        } else {
+            onIntent(intent)
+        }
     }
 
     /// La barre d'envoi, et la pastille « Retourner en bas » posée au-dessus
@@ -778,12 +837,17 @@ public struct ChatView: View {
         case .subscribe:
             openPaywall()
         case .openTripSettings:
-            onIntent(.openSettings(tripId: tripId))
+            openFromServer(.openSettings(tripId: tripId))
         case .openPreview:
-            onIntent(.openBookPreview(memoId: tripId))
+            openFromServer(.openBookPreview(memoId: tripId))
         case .importPhotos:
             photos.begin()
         case .openPhotoSettings:
+            openSettings()
+        case .enableNotifications:
+            // Posé par l'app seule (``ChatNotificationsNudge``), qui le traite
+            // elle-même ; venu du serveur, la page de MemoBook dans les
+            // Réglages, où se trouvent les notifications.
             openSettings()
         case .unknown:
             // Jamais affiché (``ChatModel/showsCallToAction(_:)``) : un bouton

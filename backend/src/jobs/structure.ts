@@ -3,12 +3,46 @@ import type { AppContext } from "../context.js";
 import { validatePayload } from "../services/payloadValidator.js";
 import type { StructuringEntry } from "../services/structuring.js";
 import { parseTripContext } from "../services/tripContext.js";
+import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import { JOB_NAMES } from "./queue.js";
 import { finalTextOf } from "./redact.js";
 import type { RenderJob } from "./render.js";
 
 export interface StructureJob {
   renderId: string;
+}
+
+/**
+ * Combien de temps la mise en page attend les souvenirs encore en rédaction,
+ * et à quel pas elle regarde. Une variable et non une constante : les tests la
+ * raccourcissent.
+ *
+ * **Attendre plutôt qu'échouer** (07/10/2026) : l'aperçu lance désormais une
+ * composition à chaque ouverture (T224), y compris trente secondes après le
+ * dernier vocal, quand MEMO n'a pas fini de l'écrire. Échouer aussitôt
+ * laissait l'aperçu sur « La composition n'a pas abouti » pour un souvenir
+ * qui serait prêt dans l'instant ; trois minutes couvrent une rédaction lente.
+ */
+export const STRUCTURE_TIMING = { redactionWaitMs: 3 * 60 * 1000, pollMs: 5_000 };
+
+/** Les souvenirs de ce carnet que la rédaction n'a pas encore rendus. */
+export function pendingRedactionCount(
+  prisma: AppContext["prisma"],
+  memoId: string,
+): Promise<number> {
+  return prisma.entry.count({
+    where: { memoId, kind: { not: "photo" }, redactionStatus: { in: ["pending", "processing"] } },
+  });
+}
+
+async function waitForRedactions(prisma: AppContext["prisma"], memoId: string): Promise<number> {
+  const deadline = Date.now() + STRUCTURE_TIMING.redactionWaitMs;
+  let pending = await pendingRedactionCount(prisma, memoId);
+  while (pending > 0 && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, STRUCTURE_TIMING.pollMs));
+    pending = await pendingRedactionCount(prisma, memoId);
+  }
+  return pending;
 }
 
 /**
@@ -26,21 +60,9 @@ export async function structureRender(
 ): Promise<void> {
   const { prisma, structurer, publisher, queue, logger } = context;
 
-  const render = await prisma.render.findUnique({
-    where: { id: renderId },
-    include: {
-      memo: {
-        include: {
-          entries: {
-            orderBy: { capturedAt: "asc" },
-            include: { media: true },
-          },
-        },
-      },
-    },
-  });
+  const found = await prisma.render.findUnique({ where: { id: renderId }, select: { memoId: true } });
 
-  if (!render) {
+  if (!found) {
     logger.warn({ renderId }, "Rendu introuvable, job de structuration ignoré");
     return;
   }
@@ -51,7 +73,23 @@ export async function structureRender(
   });
 
   try {
-    const { memo } = render;
+    // Les souvenirs encore en rédaction d'abord — voir `STRUCTURE_TIMING`.
+    // Le carnet se relit **après** l'attente : ce sont leurs textes finis qu'on
+    // veut.
+    await waitForRedactions(prisma, found.memoId);
+    // Les chiffres du dos de couverture à jour avant de composer — les jours
+    // d'un voyage en cours avancent sans qu'aucun souvenir n'arrive (T227).
+    await refreshTripFactsQuietly(context, found.memoId);
+
+    const memo = await prisma.memo.findUniqueOrThrow({
+      where: { id: found.memoId },
+      include: {
+        entries: {
+          orderBy: { capturedAt: "asc" },
+          include: { media: true },
+        },
+      },
+    });
 
     // Les photos doivent être publiques avant le rendu : APITemplate les
     // télécharge lui-même au moment de composer la page.
@@ -98,9 +136,8 @@ export async function structureRender(
     }
 
     // Un souvenir encore en cours de rédaction entrerait dans le PDF avec sa
-    // transcription brute — hésitations comprises. L'app empêche déjà ce cas ;
-    // le job le revérifie parce qu'un worker peut reprendre un job enfilé
-    // avant qu'une nouvelle entrée n'arrive.
+    // transcription brute — hésitations comprises. Après trois minutes
+    // d'attente, on renonce plutôt que de l'imprimer tel quel.
     const pending = memo.entries.filter(
       (entry) =>
         entry.kind !== "photo" &&
@@ -140,7 +177,8 @@ export async function structureRender(
       where: { id: renderId },
       // `BookPayload` est un `Record<string, unknown>` : Prisma attend son
       // propre type d'entrée JSON, que la validation ci-dessus garantit.
-      data: { payload: payload as Prisma.InputJsonObject },
+      // `composingStartedAt` : la phase « composing » de l'aperçu commence.
+      data: { payload: payload as Prisma.InputJsonObject, composingStartedAt: new Date() },
     });
 
     await queue.publish<RenderJob>(JOB_NAMES.render, { renderId });
@@ -150,6 +188,12 @@ export async function structureRender(
       where: { id: renderId },
       data: { status: "failed", error: message },
     });
-    throw cause;
+    // **Pas de nouvel essai automatique** (07/10/2026) : pg-boss rejouait le
+    // job trois fois, et un nouvel essai repassait le rendu de « échoué » à
+    // « en cours » sous les yeux de l'aperçu — pendant que la prochaine
+    // ouverture en lançait un autre, deux compositions payées pour une. C'est
+    // désormais l'ouverture suivante de l'aperçu qui relance
+    // (`ensureRenderInProgress`). Le journal garde l'erreur.
+    logger.error({ err: cause, renderId }, "Mise en page du carnet échouée");
   }
 }

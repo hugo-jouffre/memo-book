@@ -108,6 +108,140 @@ final class BookPreviewModelTests: XCTestCase {
         XCTAssertEqual(model.preview?.pageCount, 4)
     }
 
+    // MARK: - La composition se lance à l'ouverture (T224)
+
+    /// Ouvrir l'aperçu lance la composition **une fois**, puis la suit jusqu'au
+    /// carnet.
+    func testOpeningThePreviewLaunchesTheComposition() async throws {
+        let source = QueuedSource([preview(status: .composing), preview(status: .ready)])
+        var launches = 0
+        let model = BookPreviewModel(
+            memoId: "memo-1",
+            source: { _ in try source.next() },
+            startComposition: { _ in launches += 1 }
+        )
+
+        await model.run()
+
+        XCTAssertEqual(launches, 1)
+        XCTAssertEqual(model.stage, .preview)
+    }
+
+    /// Un carnet sans souvenir : le serveur refuse de composer (`400
+    /// empty_memo`) et rien ne tourne. L'écran le dit au lieu d'attendre une
+    /// composition qui ne viendra jamais.
+    func testARefusedLaunchOnANeverComposedBookIsShown() async throws {
+        let refusal = "Ce carnet ne contient encore aucun souvenir."
+        let source = QueuedSource([preview(status: .composing, pageCount: 0)])
+        let model = BookPreviewModel(
+            memoId: "memo-1",
+            source: { _ in try source.next() },
+            startComposition: { _ in throw Refused(message: refusal) }
+        )
+
+        await model.run()
+
+        XCTAssertEqual(model.stage, .composing)
+        XCTAssertEqual(model.errorMessage, refusal)
+    }
+
+    /// Un refus ne cache pas un carnet déjà composé : on le feuillette quand
+    /// même.
+    func testARefusedLaunchStillOpensAComposedBook() async throws {
+        let source = QueuedSource([preview(status: .ready)])
+        let model = BookPreviewModel(
+            memoId: "memo-1",
+            source: { _ in try source.next() },
+            startComposition: { _ in throw Refused(message: "Panne") }
+        )
+
+        await model.run()
+
+        XCTAssertEqual(model.stage, .preview)
+        XCTAssertNil(model.errorMessage)
+    }
+
+    /// Le récit a changé depuis le dernier rendu : la remise à jour tourne,
+    /// mais l'aperçu s'ouvre **tout de suite** sur le carnet d'avant, avec son
+    /// bandeau — et ce carnet reste commandable.
+    func testARecompositionOpensOnTheBookWeAlreadyHave() async throws {
+        let recomposing = BookPreview(
+            memoId: "memo-1",
+            title: "Rome",
+            status: .composing,
+            pageCount: 4,
+            render: BookRenderProgress(id: "r2", phase: .writing),
+            readyRenderId: "r1"
+        )
+        let model = BookPreviewModel(
+            memoId: "memo-1",
+            source: { _ in recomposing },
+            startComposition: { _ in }
+        )
+
+        let started = ContinuousClock.now
+        let task = Task { await model.run() }
+        try await waitUntil { model.stage == .preview }
+        task.cancel()
+
+        XCTAssertLessThan(ContinuousClock.now - started, .seconds(1), "Pas de cascade.")
+        XCTAssertTrue(model.isRecomposing)
+        XCTAssertTrue(model.isComposed)
+        XCTAssertEqual(model.compositionPhase, .writing)
+    }
+
+    // MARK: - Les couvertures choisies (T223)
+
+    /// Couvertures réglées : la première page montre la première de
+    /// couverture, la dernière la quatrième, et le reste les pages du carnet.
+    func testConfiguredCoversShowOnTheFirstAndLastPages() async throws {
+        let configured = BookPreview(
+            memoId: "memo-1",
+            title: "Rome",
+            status: .ready,
+            pageCount: 10,
+            hasConfiguredCovers: true
+        )
+        let model = BookPreviewModel(
+            memoId: "memo-1",
+            source: { _ in configured },
+            covers: { _ in .fixture }
+        )
+
+        await model.run()
+        try await waitUntil { model.covers != nil }
+
+        XCTAssertEqual(model.coverFace(at: 0), .front)
+        XCTAssertEqual(model.coverFace(at: 9), .back)
+        XCTAssertNil(model.coverFace(at: 4))
+        XCTAssertEqual(model.coverCallToAction, .edit, "« Configurer » reste sur la page.")
+    }
+
+    /// Pas encore réglées : la page du PDF et son invitation, sans même lire
+    /// les plats.
+    func testUnconfiguredCoversKeepThePdfPage() async throws {
+        var reads = 0
+        let model = BookPreviewModel(
+            memoId: "memo-1",
+            source: { _ in BookPreview(memoId: "memo-1", title: "Rome", status: .ready, pageCount: 10) },
+            covers: { _ in
+                reads += 1
+                return .fixture
+            }
+        )
+
+        await model.run()
+
+        XCTAssertNil(model.coverFace(at: 0))
+        XCTAssertEqual(model.coverCallToAction, .invitation)
+        XCTAssertEqual(reads, 0)
+    }
+
+    private struct Refused: LocalizedError {
+        let message: String
+        var errorDescription: String? { message }
+    }
+
     private func waitUntil(
         timeout: Duration = .seconds(2),
         _ condition: () -> Bool

@@ -13,7 +13,7 @@ touche une notification. Les règles vivent dans un seul fichier pur,
 
 | Notification | Famille | Quand | Qui | Le toucher ouvre |
 |---|---|---|---|---|
-| **Fin du voyage** | Facturation | Le jour de la date de fin, une fois | Propriétaire et co-voyageurs, alerte « Rappel de fin de voyage » allumée | La cagnotte du voyage et l'estimation du carnet |
+| **Fin du voyage** | Facturation | Le jour de la date de fin, une fois | Propriétaire et co-voyageurs, alerte « Rappel de fin de voyage » allumée | L'aperçu du carnet (`memobook://trips/:id/preview`) et l'estimation du carnet |
 | **Avant le renouvellement** | Facturation | 3 jours avant le renouvellement de l'abonnement (2 si la passe l'a manqué, jamais la veille), une fois par période | Abonnement App Store au renouvellement armé, aucun voyage en cours ni prévu d'ici le renouvellement, pas de « Fin du voyage » ces 3 derniers jours, pas dans les jours de l'e-mail de fin de voyage (de la fin à J+3), pas d'autre rappel ces 25 derniers jours | La feuille de l'abonnement (`memobook://subscription`), où il se coupe en un geste |
 | **Relance d'écriture** (le carnet est arrêté) | Rythme | Après *n* jours de silence, *n* étant le rythme du récit du voyage ; au plus 3 relances par silence au rythme soutenu, **une** au rythme modéré ; à 19 h | Voyage en cours, alerte « Rappel d'écriture » allumée, rythme modéré ou soutenu | La conversation du voyage |
 | **Nouveau récit** 💬 | Rythme | Dès qu'un co-voyageur a raconté un souvenir (texte, vocal, photos) et que MEMO lui a répondu ; une par nouveauté | Les **autres** membres du voyage, alerte « Nouveau récit » allumée, rythme soutenu | La conversation du voyage |

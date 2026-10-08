@@ -2,8 +2,8 @@ import MemoBookCore
 import MemoBookDesign
 import SwiftUI
 
-/// Étape 5 — le récapitulatif : ce qu'on imprime, en combien d'exemplaires, ce
-/// que la cagnotte couvre, et ce qui reste à payer.
+/// Étape 5 — le récapitulatif : ce qu'on imprime, en combien d'exemplaires, et
+/// ce qu'il y a à payer.
 ///
 /// **Aucun montant n'est calculé ici.** Tout arrive de
 /// `POST /v1/memos/:id/orders/quote`, y compris les sous-totaux : deux calculs
@@ -40,7 +40,8 @@ struct OrderSummaryStep: View {
     }
 
     /// Le bloc bleu de la maquette : deux groupes qui portent chacun leur
-    /// sous-total, les déductions, puis le total.
+    /// sous-total, puis le total. Les déductions de la cagnotte, qui se
+    /// posaient entre les deux, sont parties avec elle (T230).
     private func card(_ quote: OrderQuote) -> some View {
         VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
             Text(BookCopy.Order.Summary.book(quote.bookTitle))
@@ -60,12 +61,6 @@ struct OrderSummaryStep: View {
 
             separator
             group(quote.fulfilment)
-
-            if !quote.deductions.isEmpty {
-                VStack(spacing: MemoBookSpacing.xs) {
-                    ForEach(quote.deductions) { deduction($0) }
-                }
-            }
 
             separator
 
@@ -87,11 +82,16 @@ struct OrderSummaryStep: View {
         }
     }
 
-    /// Un groupe de lignes, et le sous-total aligné à droite qui les ferme.
+    /// Un groupe de lignes, et le sous-total qui les ferme.
     ///
     /// **Le sous-total disparaît quand il ne fait que répéter.** Depuis que le
     /// carnet ne se facture qu'en une ligne, le groupe du haut affichait deux
     /// fois le même montant l'un sous l'autre — un total de rien du tout.
+    ///
+    /// **Il porte son libellé** (Hugo, 06/10/2026, T216) : un montant seul
+    /// sous « Livraison » se lisait comme le prix de la livraison. Le motif
+    /// est celui des autres lignes : le libellé à gauche, le montant en
+    /// semi-gras à droite, comme il l'était déjà.
     private func group(_ group: OrderQuoteGroup) -> some View {
         VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
             ForEach(group.lines) { line in
@@ -99,28 +99,9 @@ struct OrderSummaryStep: View {
             }
 
             if group.lines.count > 1 {
-                Text(group.subtotal.euros)
-                    .font(MemoBookFont.bodySemibold)
-                    .foregroundStyle(MemoBookColor.ink)
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .accessibilityLabel("Sous-total \(group.subtotal.euros)")
+                OrderPriceRow(label: BookCopy.Order.Summary.subtotal, amount: group.subtotal)
             }
         }
-    }
-
-    /// Une déduction, sur l'aplat bleu de la cagnotte. Il y avait aussi un
-    /// aplat lime, pour ce que l'abonnement avait versé ; l'abonnement n'est
-    /// plus déduit du carnet (Hugo, 03/10/2026), et le lime ne dit que lui.
-    private func deduction(_ deduction: OrderDeduction) -> some View {
-        OrderPriceRow(label: deduction.label, amount: deduction.amount, isNegative: true)
-            .padding(.horizontal, MemoBookSpacing.snug)
-            .padding(.vertical, MemoBookSpacing.snug)
-            .background(
-                MemoBookColor.outline.opacity(0.45),
-                in: .rect(cornerRadius: MemoBookSpacing.cornerRadius)
-            )
     }
 
     /// La petite boîte qui décrit le carnet, sous son prix.

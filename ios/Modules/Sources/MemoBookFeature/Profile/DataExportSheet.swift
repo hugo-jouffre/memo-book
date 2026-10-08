@@ -110,7 +110,7 @@ enum DataExportCopy {
     /// La même phrase que l'e-mail et la page de téléchargement
     /// (`DATA_EXPORT_CONTENTS`, `backend/src/services/mailTemplates.ts`).
     static let contents =
-        "Dans l’archive : ton compte, tes voyages et leurs récits, chaque souvenir tel que tu l’as raconté et tel que MEMO l’a écrit, tes photos et tes vocaux d’origine, tes carnets en PDF, tes commandes, ta cagnotte et ton abonnement."
+        "Dans l’archive : ton compte, tes voyages et leurs récits, chaque souvenir tel que tu l’as raconté et tel que MEMO l’a écrit, tes photos et tes vocaux d’origine, tes carnets en PDF, tes commandes et ton abonnement."
 
     static func destination(_ email: String) -> String {
         "Le lien partira à \(email). Il sera valable sept jours."

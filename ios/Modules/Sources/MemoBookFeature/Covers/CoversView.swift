@@ -55,6 +55,7 @@ public struct CoversView: View {
         // `MemoBookColor`.
         .environment(\.colorScheme, .light)
         .task { await model.load() }
+        .environment(\.refreshCoverPhotos, { await model.refreshPhotoLinks() })
         // Changer de plat referme l'explication : elle parlait de l'autre.
         .onChange(of: model.face) { _, _ in blockedMessage = nil }
     }

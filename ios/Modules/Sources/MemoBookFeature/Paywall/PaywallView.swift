@@ -216,6 +216,9 @@ struct PaywallView: View {
         }
         .background(MemoBookColor.background)
         .environment(\.colorScheme, .light)
+        // Présenté en plein écran, le paywall n'est pas sous le voile de la
+        // racine : il pose le sien (T210).
+        .brandStatusBarScrim()
         // **Un seul minuteur, et il est structuré.** L'identité porte la page
         // *et* l'état de la feuille : ouvrir l'aperçu annule la tâche en cours,
         // le refermer en démarre une neuve. Un `onChange` qui relançait
@@ -232,6 +235,7 @@ struct PaywallView: View {
                     SupportView(model: support)
                 }
                 .tint(MemoBookColor.action)
+                .brandStatusBarScrim()
             }
         }
         // La feuille se pose **par-dessus le paywall entier**, et non dans une

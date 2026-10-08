@@ -24,7 +24,7 @@ import SwiftUI
 /// ```swift
 /// @FocusState private var focus: Field?
 ///
-/// BrandTextField("Email", text: $email, field: .email, focus: $focus)
+/// BrandTextField("E-mail", text: $email, field: .email, focus: $focus)
 ///     .textContentType(.emailAddress)
 /// ```
 /// Métriques verticales de General Sans, lues dans ses tables `hhea` et
@@ -81,9 +81,15 @@ public struct BrandTextField<Field: Hashable>: View {
     private let isSecure: Bool
     private let labelPlacement: LabelPlacement
 
-    /// Exemple de valeur affiché tant que le champ est vide. N'a de sens qu'en
-    /// ``LabelPlacement/above`` : en `floating`, c'est l'intitulé qui tient ce
-    /// rôle, et un second texte le recouvrirait.
+    /// Exemple de valeur affiché tant que le champ est vide.
+    ///
+    /// En ``LabelPlacement/floating``, c'est d'ordinaire l'intitulé qui tient
+    /// ce rôle, et l'on n'en passe pas. Quand on en passe un, c'est un
+    /// **repère de format** — « JJ/MM/AAAA », « +33 0 00 00 00 00 » : il
+    /// remplace l'intitulé au repos, puis **reste dans le cadre** tant qu'on n'a
+    /// rien tapé, pendant que l'intitulé monte sur le contour (les « Dernières
+    /// questions », Hugo, 06/10/2026). Sans lui, le repère disparaissait au
+    /// moment précis où l'on en a besoin : quand on commence à taper.
     private let placeholder: String?
 
     /// Texte d'aide affiché sous le champ. Contrairement à un indice glissé
@@ -146,19 +152,16 @@ public struct BrandTextField<Field: Hashable>: View {
 
     private var showsPlaceholder: Bool {
         switch labelPlacement {
-        case .floating: !isActive
+        // Un repère de format reste visible au focus, sous l'intitulé monté.
+        case .floating: !isActive || (placeholder != nil && text.isEmpty)
         case .above, .hidden: text.isEmpty
         }
     }
 
-    /// L'intitulé sert de texte indicatif en `floating`. En `above`, le texte
-    /// indicatif est un exemple de valeur — et l'intitulé, s'il n'y en a pas.
-    private var placeholderText: String {
-        switch labelPlacement {
-        case .floating: label
-        case .above, .hidden: placeholder ?? label
-        }
-    }
+    /// L'intitulé sert de texte indicatif en `floating`, sauf repère de format
+    /// (voir ``placeholder``). En `above`, le texte indicatif est un exemple de
+    /// valeur — et l'intitulé, s'il n'y en a pas.
+    private var placeholderText: String { placeholder ?? label }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {

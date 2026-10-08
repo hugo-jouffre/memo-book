@@ -12,7 +12,16 @@ const memoIdParams = z.object({ id: z.string().uuid() });
 const renderIdParams = z.object({ id: z.string().uuid() });
 
 export function registerRenderRoutes(app: FastifyInstance, context: AppContext): void {
-  /** Déclenche la génération du carnet : structuration puis rendu PDF. */
+  /**
+   * **À appeler à chaque ouverture de l'aperçu PDF** (T224, Hugo 06/10/2026)
+   * — l'imprimante de l'accueil du voyage, « Prévisualisation PDF » des
+   * paramètres, le CTA des écrans de personnalisation.
+   *
+   * Sûre à rappeler : elle ne lance une composition (IA + APITemplate) que si
+   * elle sert — voir `ensureRenderInProgress`. 202 et le nouveau rendu quand
+   * une composition part ; 200 et le rendu existant quand une composition
+   * tourne déjà, ou que le dernier PDF est à jour.
+   */
   app.post("/v1/memos/:id/renders", async (request, reply) => {
     const { id: memoId } = memoIdParams.parse(request.params);
     await loadVisibleMemo(context, request, memoId);
@@ -25,12 +34,10 @@ export function registerRenderRoutes(app: FastifyInstance, context: AppContext):
       );
     }
 
-    // Une génération déjà en cours est renvoyée telle quelle : deux appels
-    // rapprochés depuis l'app ne doivent pas produire deux PDF facturés.
     const { render, created } = await ensureRenderInProgress(context, memoId);
 
-    // 202 : accepté, le résultat arrivera de façon asynchrone. 200 quand une
-    // génération était déjà en cours — ce n'est pas une nouvelle acceptation.
+    // 202 : accepté, le résultat arrivera de façon asynchrone. 200 quand on
+    // rend une composition en cours ou un PDF à jour — rien de nouveau.
     return reply.code(created ? 202 : 200).send(serializeRender(render));
   });
 

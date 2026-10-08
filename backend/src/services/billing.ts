@@ -5,9 +5,9 @@ import type { AppContext } from "../context.js";
  * Ce qu'un paiement finance, recopié dans `metadata.kind` de chaque intention.
  *
  * **C'est le webhook qui en a besoin** : il reçoit un événement et doit savoir
- * s'il tient une commande à expédier ou une cagnotte à créditer. Le déduire de
- * la présence d'un `orderId` marcherait aujourd'hui et casserait au premier
- * troisième usage.
+ * s'il tient une commande à expédier ou une ancienne recharge de cagnotte. Le
+ * déduire de la présence d'un `orderId` marcherait aujourd'hui et casserait au
+ * premier troisième usage.
  *
  * ⚠️ **Aucune valeur d'abonnement ici, et il ne faut pas en ajouter.**
  * L'abonnement passe par StoreKit : Apple impose l'achat intégré pour un
@@ -16,7 +16,12 @@ import type { AppContext } from "../context.js";
 export const PAYMENT_KIND = {
   /** Un carnet imprimé — un bien physique, donc hors achat intégré. */
   bookOrder: "book_order",
-  /** Une recharge de cagnotte, qui ne financera que du physique. */
+  /**
+   * Une recharge de cagnotte. **Plus aucune ne s'ouvre** depuis le 06/10/2026
+   * (la cagnotte est retirée) ; la valeur reste pour que le webhook reconnaisse
+   * une intention ouverte avant, et l'inscrive au registre plutôt que de la
+   * perdre — voir `stripeWebhook.ts`.
+   */
   walletTopup: "wallet_topup",
 } as const;
 
@@ -99,6 +104,8 @@ export async function paymentTicket(
   }
 
   return {
+    // Toujours faux depuis le retrait de la cagnotte (06/10/2026) ; gardé
+    // parce que l'app le décode.
     paidFromWallet: false,
     clientSecret: input.clientSecret,
     amountCents: input.amountCents,
@@ -106,5 +113,7 @@ export async function paymentTicket(
     publishableKey: context.env.STRIPE_PUBLISHABLE_KEY,
     customerId: ephemeralKeySecret ? input.customerId : null,
     ephemeralKeySecret,
+    // Apple Pay, quand ce compte Stripe en a le certificat — voir `env.ts`.
+    applePayMerchantId: context.env.APPLE_PAY_MERCHANT_ID || null,
   };
 }

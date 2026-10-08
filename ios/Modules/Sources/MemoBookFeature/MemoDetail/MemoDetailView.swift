@@ -88,7 +88,7 @@ public struct MemoDetailView: View {
                 if model.entries.isEmpty && !model.isLoading {
                     EmptyStateView(
                         systemImage: "waveform",
-                        title: "Rien à raconter pour l'instant",
+                        title: "Rien à raconter pour l’instant",
                         message: "Appuie sur le micro et raconte ta journée. Le texte apparaîtra ici."
                     )
                     .listRowBackground(Color.clear)

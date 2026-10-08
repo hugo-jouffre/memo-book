@@ -6,8 +6,8 @@
  * des deux côtés est un prix qui finit par diverger, et c'est le client qui a
  * tort au mauvais moment — devant la personne qui paie.
  *
- * Tout est en **centimes entiers**, comme `wallet_entries`. Aucun flottant ne
- * traverse ce fichier : `euros()` n'intervient qu'à la sérialisation.
+ * Tout est en **centimes entiers**. Aucun flottant ne traverse ce fichier :
+ * `euros()` n'intervient qu'à la sérialisation.
  */
 
 import type { ShippingSpeed } from "@prisma/client";
@@ -57,7 +57,7 @@ export const BOOK_SPECIFICATIONS = [
 
 /**
  * Le prix d'**un** carnet. C'est aussi ce que l'étape 3 affiche en « prix
- * unitaire », et ce que la cagnotte estime.
+ * unitaire », et ce que la notification de fin de voyage annonce.
  *
  * La décomposition reste interne : une part qui suit les pages, deux frais
  * fixes. Elle ne sort plus vers l'app — voir ``BOOK_SPECIFICATIONS``.
@@ -76,22 +76,22 @@ export type QuoteInput = {
   pageCount: number;
   copies: number;
   speed: ShippingSpeed;
-  /** Le solde de la cagnotte de **celui qui commande**. Chacun a la sienne. */
-  walletBalanceCents: number;
 };
 
 /**
  * Le récapitulatif complet, tel que l'étape 5 le dessine : deux groupes qui
  * portent chacun leur sous-total, les déductions, puis le net à payer.
  *
- * La cagnotte ne peut pas rendre la monnaie : elle est plafonnée au montant dû,
- * et le total ne descend jamais sous zéro.
+ * **Plus aucune déduction** (Hugo, 06/10/2026 — « on supprime la cagnotte »).
+ * La cagnotte était la dernière ; la « Déduction abonnements hebdomadaires
+ * versés » était partie le 03/10 avec l'abonnement hebdomadaire. Une commande
+ * se paie désormais **entièrement par Stripe** : le net à payer est le dû.
  *
- * **Une seule déduction : la cagnotte** (Hugo, 03/10/2026). La ligne
- * « Déduction abonnements hebdomadaires versés » est partie avec l'abonnement
- * hebdomadaire : l'abonnement ne se déduit plus du carnet. Elle n'était
- * d'ailleurs qu'une répartition au prorata des recharges de la cagnotte, pas
- * des abonnements réellement payés.
+ * `deductions` reste dans la réponse, vide : l'app le décode comme un tableau
+ * obligatoire, et c'est elle qui dessine les lignes qu'on lui donne.
+ * `walletAppliedCents` aussi, à zéro : la colonne de la commande existe
+ * toujours (`print_orders.walletAppliedCents`), et les commandes d'avant le
+ * 06/10 y gardent ce que la cagnotte avait payé.
  */
 export function quote(input: QuoteInput) {
   const pages = Math.max(input.pageCount, 1);
@@ -101,22 +101,6 @@ export function quote(input: QuoteInput) {
   const itemsCents = unitCents * copies;
   const shipCents = shippingCents(input.speed);
   const dueCents = itemsCents + shipCents;
-
-  const appliedCents = Math.max(0, Math.min(input.walletBalanceCents, dueCents));
-
-  const deductions = [
-    {
-      id: "wallet",
-      // « De ta cagnotte », pas « de tes proches » (03/10/2026) : elle reçoit
-      // aussi les recharges que le voyageur paie lui-même
-      // (`POST /v1/wallet/topup`), et l'abonnement n'est plus là pour les
-      // ranger à part. L'app affiche ce libellé tel quel.
-      label: "Déduction de ta cagnotte",
-      amountCents: appliedCents,
-    },
-    // Une déduction nulle ne se montre pas : « - 0,00 € » ferait croire à une
-    // réduction qui n'a pas eu lieu.
-  ].filter((deduction) => deduction.amountCents > 0);
 
   return {
     bookTitle: input.bookTitle,
@@ -128,9 +112,9 @@ export function quote(input: QuoteInput) {
     itemsCents,
     shippingCents: shipCents,
     dueCents,
-    deductions,
-    walletAppliedCents: appliedCents,
-    totalCents: dueCents - appliedCents,
+    deductions: [] as { id: string; label: string; amountCents: number }[],
+    walletAppliedCents: 0,
+    totalCents: dueCents,
     estimatedDays: SHIPPING_DAYS[input.speed],
   };
 }

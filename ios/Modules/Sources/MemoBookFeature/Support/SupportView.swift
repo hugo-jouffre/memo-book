@@ -6,10 +6,9 @@ import SwiftUI
 /// comment nous écrire.
 ///
 /// **On y arrive de partout où l'app écrit « Besoin d'aide ? »** — le bas de
-/// l'accueil, le bas du profil, la barre du paywall, la dernière ligne des
-/// paramètres d'un voyage et celle de la cagnotte. C'est la raison d'être de
-/// l'écran : cinq liens qui ne menaient nulle part mènent maintenant au même
-/// endroit.
+/// l'accueil, le bas du profil, la barre du paywall et la dernière ligne des
+/// paramètres d'un voyage. C'est la raison d'être de l'écran : des liens qui
+/// ne menaient nulle part mènent maintenant au même endroit.
 ///
 /// L'écran ne fait que **lister** : chaque question ouvre une feuille, et c'est
 /// la feuille qui porte la réponse, le vote et le passage au formulaire. Une
@@ -25,8 +24,13 @@ public struct SupportView: View {
     /// La question dont la feuille est ouverte, ou le formulaire seul.
     @State private var sheet: SupportSheetRoute?
 
-    public init(model: SupportModel) {
+    /// Le voyage d'où l'on est venu, s'il y en a un : il part avec le message
+    /// (T226).
+    private let tripId: String?
+
+    public init(model: SupportModel, tripId: String? = nil) {
         _model = State(initialValue: model)
+        self.tripId = tripId
     }
 
     @Environment(\.travellerFirstName) private var firstName
@@ -63,8 +67,11 @@ public struct SupportView: View {
         // `MemoBookColor`.
         .environment(\.colorScheme, .light)
         .brandSheet(item: $sheet) { route in
-            SupportSheet(model: model, route: route)
+            SupportSheet(model: model, route: route, tripId: tripId)
         }
+        // Les votes déjà donnés, relus à chaque visite : un vote fait sur un
+        // autre appareil y garde son « Merci ! ».
+        .task { await model.loadVotes() }
     }
 
     // MARK: - Les deux visages, et le bonjour
@@ -255,5 +262,18 @@ enum SupportSheetRoute: Identifiable, Hashable {
         SupportView(model: SupportModel())
             .environment(\.travellerFirstName, "Margaux")
             .environment(\.dynamicTypeSize, .accessibility3)
+    }
+}
+
+extension HomeRoute {
+    /// Le voyage que cet écran montre, pour le joindre à un message au
+    /// support (T226). Le carnet porte l'identifiant de son voyage.
+    var supportTripId: String? {
+        switch self {
+        case .trip(let id), .tripSettings(let id, _): id
+        case .chat(let tripId, _), .bookCustomisation(let tripId), .covers(let tripId): tripId
+        case .bookPreview(let memoId, _), .order(let memoId): memoId
+        default: nil
+        }
     }
 }

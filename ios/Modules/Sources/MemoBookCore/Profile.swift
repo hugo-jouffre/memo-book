@@ -200,7 +200,7 @@ public struct Subscription: Codable, Sendable, Hashable {
     /// retouche sur place : le verdict du serveur (``servedIsUnlimited``), qui
     /// datait d'avant, ne vaut plus, et l'app recompte (03/10/2026).
     public var isActive: Bool {
-        didSet { if isActive != oldValue { servedIsUnlimited = nil } }
+        didSet { if isActive != oldValue { forgetServedVerdict() } }
     }
 
     /// Le voyage qui porte l'abonnement, sous ses deux noms — les feuilles
@@ -237,7 +237,7 @@ public struct Subscription: Codable, Sendable, Hashable {
     /// quand un serveur plus ancien ne sert pas le champ : on retombe alors sur
     /// l'arrêt le jour même.
     public var paidThrough: Date? {
-        didSet { if paidThrough != oldValue { servedIsUnlimited = nil } }
+        didSet { if paidThrough != oldValue { forgetServedVerdict() } }
     }
 
     /// **Ce que le serveur a tranché** : `subscription.isUnlimited` de
@@ -250,6 +250,53 @@ public struct Subscription: Codable, Sendable, Hashable {
     /// ancien, ou dès qu'un geste local a retouché ``isActive`` ou
     /// ``paidThrough`` : le recalcul local reprend alors la main.
     public private(set) var servedIsUnlimited: Bool?
+
+    /// **Où en est l'abonnement, tranché par le serveur** — `subscription.state`
+    /// de `GET /v1/profile` (contrat du 06/10/2026, point 11, « Désabonnement »).
+    ///
+    /// C'est la réponse à la remarque de Hugo : « quand quelqu'un se
+    /// désabonne, attention à ce que tous les endroits qui indiquaient
+    /// “abonné” ne l'indiquent plus ». Jusqu'ici l'app devinait l'état en
+    /// croisant `isActive`, `cancelledAt` et `paidThrough` — un renouvellement
+    /// coupé chez Apple sans `cancelledAt` se lisait comme un prélèvement raté.
+    /// Le serveur le dit désormais en un mot ; `nil` d'un serveur plus ancien
+    /// (ou d'une valeur inconnue), ou dès qu'un geste local a retouché
+    /// ``isActive`` ou ``paidThrough`` : le recalcul d'avant reprend la main.
+    public private(set) var servedState: State?
+
+    /// Le renouvellement est-il armé — `subscription.autoRenews`. `nil` quand
+    /// le serveur ne le dit pas.
+    public var autoRenews: Bool?
+
+    /// Le prochain prélèvement, pour un abonnement ``State/active``.
+    public var renewsAt: Date?
+
+    /// **La fin de l'illimité** d'un abonnement ``State/ending`` — la fin de
+    /// la période payée, après laquelle le compte retrouve le crédit du jour.
+    /// C'est le « jusqu'au … » des écrans.
+    public var endsAt: Date?
+
+    /// Les cinq états du contrat.
+    public enum State: String, Codable, Sendable, Hashable {
+        /// Jamais abonné.
+        case none
+        /// Abonné, renouvellement armé.
+        case active
+        /// **Renouvellement coupé** (ou résilié) : toujours illimité jusqu'à
+        /// ``Subscription/endsAt``, puis ``ended``.
+        case ending
+        /// Le prélèvement a échoué ; Apple garde l'accès le temps de réessayer.
+        case grace
+        /// A été abonné, plus rien ne court.
+        case ended
+    }
+
+    /// Un geste local vient de retoucher l'abonnement : ce que le serveur avait
+    /// tranché avant lui ne vaut plus.
+    private mutating func forgetServedVerdict() {
+        servedIsUnlimited = nil
+        servedState = nil
+    }
 
     /// Ce compte a **déjà** été abonné, et ne l'est plus.
     ///
@@ -297,7 +344,11 @@ public struct Subscription: Codable, Sendable, Hashable {
         paidThrough: Date? = nil,
         hasEndedBefore: Bool = false,
         managedByAppStore: Bool = false,
-        servedIsUnlimited: Bool? = nil
+        servedIsUnlimited: Bool? = nil,
+        servedState: State? = nil,
+        autoRenews: Bool? = nil,
+        renewsAt: Date? = nil,
+        endsAt: Date? = nil
     ) {
         self.price = price
         self.interval = interval
@@ -310,6 +361,10 @@ public struct Subscription: Codable, Sendable, Hashable {
         self.hasEndedBefore = hasEndedBefore
         self.managedByAppStore = managedByAppStore
         self.servedIsUnlimited = servedIsUnlimited
+        self.servedState = servedState
+        self.autoRenews = autoRenews
+        self.renewsAt = renewsAt
+        self.endsAt = endsAt
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -317,6 +372,9 @@ public struct Subscription: Codable, Sendable, Hashable {
         case cancelledAt, paidThrough, hasEndedBefore, managedByAppStore
         /// Le verdict du serveur — ``servedIsUnlimited``.
         case isUnlimited
+        /// L'état tranché par le serveur — ``servedState``.
+        case state
+        case autoRenews, renewsAt, endsAt
         /// L'ancien nom du prix, lu seulement : un serveur d'avant le mois ne
         /// sert que lui. Le serveur d'aujourd'hui le remplit encore du même
         /// prix, pour les apps installées qui le décodent en obligatoire.
@@ -348,6 +406,12 @@ public struct Subscription: Codable, Sendable, Hashable {
         managedByAppStore =
             try container.decodeIfPresent(Bool.self, forKey: .managedByAppStore) ?? false
         servedIsUnlimited = try container.decodeIfPresent(Bool.self, forKey: .isUnlimited)
+        // Une valeur que cette version ne connaît pas ne fait pas tomber le
+        // profil : le recalcul d'avant répond à sa place.
+        servedState = (try? container.decodeIfPresent(State.self, forKey: .state)) ?? nil
+        autoRenews = try container.decodeIfPresent(Bool.self, forKey: .autoRenews)
+        renewsAt = try container.decodeIfPresent(Date.self, forKey: .renewsAt)
+        endsAt = try container.decodeIfPresent(Date.self, forKey: .endsAt)
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -363,6 +427,10 @@ public struct Subscription: Codable, Sendable, Hashable {
         try container.encode(hasEndedBefore, forKey: .hasEndedBefore)
         try container.encode(managedByAppStore, forKey: .managedByAppStore)
         try container.encodeIfPresent(servedIsUnlimited, forKey: .isUnlimited)
+        try container.encodeIfPresent(servedState, forKey: .state)
+        try container.encodeIfPresent(autoRenews, forKey: .autoRenews)
+        try container.encodeIfPresent(renewsAt, forKey: .renewsAt)
+        try container.encodeIfPresent(endsAt, forKey: .endsAt)
     }
 
     /// **L'offre**, telle que le paywall la présente quand StoreKit n'a pas
@@ -425,8 +493,54 @@ public struct Subscription: Codable, Sendable, Hashable {
     /// le délai de grâce d'Apple, qui n'en annonce pas toujours —, il tient.
     /// Un « non » servi reste un non.
     public func isUnlimited(at date: Date) -> Bool {
+        // **L'état du serveur d'abord** (contrat du 06/10/2026) : il dit en un
+        // mot ce que les drapeaux laissaient deviner, et un « renouvellement
+        // coupé » s'éteint de lui-même à sa date, même lu dans le cache.
+        if let servedState {
+            switch servedState {
+            // Le serveur borne lui-même ces deux-là (trois jours sans
+            // nouvelles d'Apple après l'échéance) : son verdict fait foi.
+            case .active, .grace: return servedIsUnlimited ?? true
+            case .ending: return (endsAt ?? paidThrough).map { $0 > date } ?? (servedIsUnlimited ?? true)
+            case .none, .ended: return false
+            }
+        }
         guard let servedIsUnlimited else { return grantsAccess(on: date) }
         return servedIsUnlimited && (isActive || paidThrough.map { $0 > date } ?? true)
+    }
+
+    /// **Le renouvellement est coupé, et l'illimité court encore** : la date
+    /// où il s'arrête, pour écrire « jusqu'au … ». `nil` pour un abonnement
+    /// qui se renouvelle, pour un compte sans abonnement, une fois la date
+    /// passée — ou quand on ne la connaît pas.
+    ///
+    /// L'état du serveur quand il l'a dit (``State/ending`` et ``endsAt``) ;
+    /// sinon la lecture d'avant : résilié (`cancelledAt`), plus actif, une
+    /// période payée devant soi.
+    public func unlimitedUntil(at date: Date = .now) -> Date? {
+        if let servedState {
+            guard servedState == .ending, let end = endsAt ?? paidThrough, end > date else { return nil }
+            return end
+        }
+        guard !isActive, cancelledAt != nil, let paidThrough, paidThrough > date else { return nil }
+        return paidThrough
+    }
+
+    /// **Le dernier prélèvement n'est pas passé** et Apple réessaie : ni
+    /// actif au sens du renouvellement réussi, ni résilié.
+    ///
+    /// L'état du serveur quand il l'a dit (``State/grace``). Sinon la lecture
+    /// d'avant : plus actif, rien de résilié.
+    public var isInBillingRetry: Bool {
+        if let servedState { return servedState == .grace }
+        return !isActive && cancelledAt == nil
+    }
+
+    /// **Résilié, ou renouvellement coupé** — la feuille « Mon Abonnement »
+    /// propose alors de se réabonner au lieu de résilier une seconde fois.
+    public var isCancelled: Bool {
+        if let servedState { return servedState == .ending || servedState == .ended }
+        return !isActive && cancelledAt != nil
     }
 
     /// Le jour où le sursis s'arrête, quand il y en a un à annoncer. `nil`
@@ -505,9 +619,24 @@ public enum SubscriptionCancellationReason: String, Codable, Sendable, Hashable,
     }
 }
 
-/// Une commande d'impression en cours d'acheminement.
+/// Une commande d'impression du compte : en cours d'acheminement, ou laissée
+/// au moment de payer.
 public struct OrderTracking: Codable, Sendable, Hashable, Identifiable {
+    /// Où en est la commande, pour la feuille « Suivi des commandes ».
+    ///
+    /// **Une commande au paiement abandonné n'est pas en route** (T232,
+    /// 06/10/2026) : la feuille la listait comme si elle allait partir. Elle
+    /// porte désormais son étiquette et de quoi la finaliser. Le serveur n'en
+    /// rend qu'une par voyage — la dernière —, et seulement pendant 30 jours.
+    public enum Status: String, Codable, Sendable, Hashable {
+        /// Payée, en cours d'impression ou d'acheminement.
+        case inProgress = "in_progress"
+        /// Jamais payée : brouillon, ou fermée par le ménage des 24 h.
+        case paymentAbandoned = "payment_abandoned"
+    }
+
     public let id: String
+    public let status: Status
     /// Fourchette de livraison, en jours. Deux bornes plutôt qu'une date : un
     /// imprimeur annonce un délai, pas un rendez-vous.
     public let minimumDays: Int
@@ -515,22 +644,62 @@ public struct OrderTracking: Codable, Sendable, Hashable, Identifiable {
     public let copies: Int
     public let pageCount: Int
     public let coverImageUrl: URL?
+    /// Le carnet commandé. `nil` sur un serveur d'avant le 06/10/2026.
+    public let memoId: String?
+    public let tripTitle: String?
+    /// Le net à payer, figé à la commande. `nil` sur une commande d'avant la
+    /// tarification — « pas de montant à afficher », jamais zéro.
+    public let total: Decimal?
+    public let createdAt: Date?
 
     public init(
         id: String,
+        status: Status = .inProgress,
         minimumDays: Int,
         maximumDays: Int,
         copies: Int,
         pageCount: Int,
-        coverImageUrl: URL? = nil
+        coverImageUrl: URL? = nil,
+        memoId: String? = nil,
+        tripTitle: String? = nil,
+        total: Decimal? = nil,
+        createdAt: Date? = nil
     ) {
         self.id = id
+        self.status = status
         self.minimumDays = minimumDays
         self.maximumDays = maximumDays
         self.copies = copies
         self.pageCount = pageCount
         self.coverImageUrl = coverImageUrl
+        self.memoId = memoId
+        self.tripTitle = tripTitle
+        self.total = total
+        self.createdAt = createdAt
     }
+
+    /// Décodage tolérant : un serveur d'avant le 06/10/2026 ne dit ni l'état
+    /// ni le carnet — ses commandes sont alors toutes en route, comme il les
+    /// montrait. Un état inconnu d'un serveur plus récent aussi : mieux vaut
+    /// une carte de livraison qu'un profil qui ne s'affiche plus.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        status = (try? container.decodeIfPresent(Status.self, forKey: .status)) ?? .inProgress
+        minimumDays = try container.decode(Int.self, forKey: .minimumDays)
+        maximumDays = try container.decode(Int.self, forKey: .maximumDays)
+        copies = try container.decode(Int.self, forKey: .copies)
+        pageCount = try container.decode(Int.self, forKey: .pageCount)
+        coverImageUrl = try container.decodeIfPresent(URL.self, forKey: .coverImageUrl)
+        memoId = try container.decodeIfPresent(String.self, forKey: .memoId)
+        tripTitle = try container.decodeIfPresent(String.self, forKey: .tripTitle)
+        total = try container.decodeIfPresent(Decimal.self, forKey: .total)
+        createdAt = try? container.decodeIfPresent(Date.self, forKey: .createdAt)
+    }
+
+    /// Le paiement a-t-il été laissé en route ? C'est ce qui remplace le délai
+    /// par l'étiquette et « Finaliser ma commande ».
+    public var isPaymentAbandoned: Bool { status == .paymentAbandoned }
 }
 
 /// Le voyage en cours, tel que la carte de chiffres du profil le montre : un
@@ -612,8 +781,6 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
     /// liste que celle du tunnel de commande (``OrderContext/countries``).
     public var shippingCountries: [ShippingCountry]
     public var wantsNewsletter: Bool
-    /// La cagnotte, en euros. `Decimal` et non `Double` : c'est de l'argent.
-    public var walletBalance: Decimal
     public var cards: [PaymentCard]
     public var selectedCardId: String?
     public var connectors: [Connector]
@@ -639,7 +806,6 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         address: PostalAddress = PostalAddress(),
         shippingCountries: [ShippingCountry] = [],
         wantsNewsletter: Bool = false,
-        walletBalance: Decimal = 0,
         cards: [PaymentCard] = [],
         selectedCardId: String? = nil,
         connectors: [Connector] = [],
@@ -659,7 +825,6 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         self.address = address
         self.shippingCountries = shippingCountries
         self.wantsNewsletter = wantsNewsletter
-        self.walletBalance = walletBalance
         self.cards = cards
         self.selectedCardId = selectedCardId
         self.connectors = connectors
@@ -697,7 +862,6 @@ public struct TravellerProfile: Codable, Sendable, Hashable {
         // pas le profil entier qui disparaît.
         shippingCountries = try container.decodeIfPresent([ShippingCountry].self, forKey: .shippingCountries) ?? []
         wantsNewsletter = try container.decode(Bool.self, forKey: .wantsNewsletter)
-        walletBalance = try container.decode(Decimal.self, forKey: .walletBalance)
         cards = try container.decode([PaymentCard].self, forKey: .cards)
         selectedCardId = try container.decodeIfPresent(String.self, forKey: .selectedCardId)
         connectors = try container.decode([Connector].self, forKey: .connectors)

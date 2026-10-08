@@ -119,6 +119,19 @@ public protocol MemoBookAPI: Sendable {
     /// sont fermées ; la sienne reste.
     func changePassword(current: String, new: String) async throws
 
+    /// Écrit à l'équipe — `POST /v1/support/messages` (T226). Ne rend rien
+    /// d'utile à l'écran : « envoyé » se dit **après** la réponse.
+    /// `429 support_rate_limited` au-delà de vingt messages en 24 h.
+    func sendSupportMessage(_ message: SupportMessage) async throws
+
+    /// « Est-ce utile ? » — `PUT /v1/support/faq-votes/:questionId`. Revoter
+    /// remplace.
+    func voteOnFaq(questionId: String, isHelpful: Bool, appVersion: String?) async throws
+
+    /// Les votes déjà donnés par ce compte — `GET /v1/support/faq-votes` —,
+    /// pour remplacer les pouces par « Merci ! ».
+    func faqVotes() async throws -> [FaqVote]
+
     /// Résilie l'abonnement, au bout des trois confirmations de la feuille.
     ///
     /// Rend le profil relu : c'est lui qui porte l'abonnement fermé, la date de
@@ -165,8 +178,8 @@ public protocol MemoBookAPI: Sendable {
     func markNotificationOpened(id: String) async throws
 
     /// Supprime le compte et **tout** ce qui est à lui : ses carnets, leurs
-    /// souvenirs et leurs médias, ses commandes, sa cagnotte, ses moyens de
-    /// paiement, ses connecteurs et ses appareils.
+    /// souvenirs et leurs médias, ses commandes, ses moyens de paiement, ses
+    /// connecteurs et ses appareils.
     ///
     /// Définitif et sans retour. **Un voyage partagé, lui, n'est pas supprimé :
     /// il passe à son co-voyageur le plus ancien** — un récit écrit à plusieurs
@@ -190,6 +203,10 @@ public protocol MemoBookAPI: Sendable {
     func createMemo(_ memo: NewMemo) async throws -> Memo
     func memo(id: String) async throws -> MemoDetail
     func deleteMemo(id: String) async throws
+
+    /// `DELETE /v1/entries/:id` — efface un souvenir, pour tous les
+    /// co-voyageurs (T235). `204` sans corps ; `404` s'il n'existe plus.
+    func deleteEntry(id: String) async throws
 
     func addTextEntry(memoId: String, entry: NewTextEntry) async throws -> Entry
 
@@ -267,8 +284,8 @@ public protocol MemoBookAPI: Sendable {
     func render(id: String) async throws -> Render
 
     /// Tout ce que le tunnel de commande a besoin de savoir pour s'ouvrir :
-    /// la carte du voyage, la cagnotte, les prix, l'adresse proposée et les
-    /// moyens de paiement.
+    /// la carte du voyage, les prix, l'adresse proposée et les moyens de
+    /// paiement.
     ///
     /// **Une réponse pour les sept étapes.** Le parcours est une seule
     /// destination, et le découper ferait apparaître une attente à chaque
@@ -283,26 +300,6 @@ public protocol MemoBookAPI: Sendable {
         copies: Int,
         shippingSpeed: ShippingSpeed
     ) async throws -> OrderQuote
-
-    /// La cagnotte du compte : son solde, son historique, et l'estimation du
-    /// carnet qu'on finance.
-    ///
-    /// `tripId` ne dit pas *quelle* cagnotte — il n'y en a qu'une par compte —
-    /// mais **quel carnet on finance**, pour l'estimation de pages et de coût.
-    /// `nil` quand on arrive du profil.
-    func wallet(tripId: String?) async throws -> Wallet
-
-    /// Pose une écriture de cagnotte à la main. **Réservée au développement** :
-    /// le serveur ferme la route en production.
-    ///
-    /// Elle existe parce que sans encaissement branché, il n'y a aucun chemin
-    /// depuis l'app vers un solde non nul — donc aucun moyen de voir les
-    /// déductions du tunnel de commande, que le serveur calcule.
-    func addWalletSandboxEntry(
-        amount: Decimal,
-        kind: WalletEntryKind,
-        label: String
-    ) async throws -> Decimal
 
     /// Accepte — ou refuse — d'être prévenu par WhatsApp de l'acheminement.
     /// Le numéro remonte sur le compte quand celui-ci n'en a pas encore.
@@ -346,24 +343,16 @@ public protocol MemoBookAPI: Sendable {
 
     /// Reprend le paiement d'une commande déjà passée, **sur la même
     /// intention** — `POST /v1/orders/:id/payment`. « Payer » après une feuille
-    /// refermée créait une seconde commande, et un second débit de cagnotte.
+    /// refermée créait une seconde commande.
     /// Une commande expirée répond 409 (`order_expired`).
     func resumePrintOrderPayment(
         orderId: String,
         stripeApiVersion: String?
     ) async throws -> ResumedOrderPayment
 
-    /// Abandonne une commande pas encore payée : elle rend sa part de
-    /// cagnotte. Idempotente ; 409 si elle vient d'être payée.
+    /// Abandonne une commande pas encore payée. Idempotente ; 409 si elle
+    /// vient d'être payée.
     func cancelPrintOrder(orderId: String) async throws -> PrintOrder
-
-    /// Ouvre une recharge de cagnotte.
-    ///
-    /// **Ne crédite rien.** Elle rend de quoi présenter une feuille de
-    /// paiement ; le solde ne bougera qu'une fois l'argent encaissé, sur retour
-    /// de Stripe au serveur. D'où le fait qu'elle rende un ticket et non une
-    /// ``Wallet`` : l'appelant doit relire la cagnotte après le paiement.
-    func startWalletTopUp(amountCents: Int, stripeApiVersion: String?) async throws -> PaymentIntentTicket
 
     /// Ce qui ouvre la feuille « Moyens de paiement » de Stripe — le client du
     /// compte et une clé éphémère dans la version d'API du SDK.
@@ -376,7 +365,7 @@ public protocol MemoBookAPI: Sendable {
     // MARK: - Les réglages d'un voyage
 
     /// Les réglages d'un voyage : nom, dates, rythme, alertes, co-voyageurs,
-    /// solde, code d'accès — **et les personnalisations du carnet**.
+    /// code d'accès — **et les personnalisations du carnet**.
     ///
     /// Tout arrive en une réponse parce que l'écran les affiche ensemble : sept
     /// appels feraient apparaître ses lignes une à une. Les personnalisations

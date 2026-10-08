@@ -83,7 +83,10 @@ extension HomeFeed {
                 startDate: .fixture(3, 2, 2025),
                 endDate: .fixture(24, 2, 2025),
                 stats: TripStats(dayCount: 22, distanceKilometres: 890, photoCount: 204),
-                isPrintable: true
+                isPrintable: true,
+                // Le voyage de Claire, rejoint par son code : le tiroir n'y
+                // montre pas la croix (T233).
+                canDelete: false
             ),
             Trip(
                 id: FixtureTripId.lisbonne,

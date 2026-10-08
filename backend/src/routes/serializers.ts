@@ -77,12 +77,40 @@ export function serializeEntry(entry: Entry & { media?: MediaAsset | null }) {
   };
 }
 
+/**
+ * Où en est une composition, en un mot que l'écran sait montrer (T224) :
+ *
+ * - `queued` : en file ;
+ * - `writing` : la mise en page des textes — qui attend aussi, jusqu'à trois
+ *   minutes, les souvenirs encore en rédaction (`jobs/structure.ts`) ;
+ * - `composing` : le PDF se fabrique chez APITemplate ;
+ * - `ready`, `failed`.
+ *
+ * Se déduit de `status` et de `composingStartedAt` : pas de colonne de plus à
+ * tenir d'accord, et pas de payload à relire à chaque sondage.
+ */
+export function renderPhase(render: Pick<Render, "status" | "composingStartedAt">) {
+  switch (render.status) {
+    case "pending":
+      return "queued" as const;
+    case "processing":
+      return render.composingStartedAt ? ("composing" as const) : ("writing" as const);
+    case "ready":
+      return "ready" as const;
+    case "failed":
+      return "failed" as const;
+  }
+}
+
 export function serializeRender(render: Render) {
   return {
     id: render.id,
     memoId: render.memoId,
     status: render.status,
+    phase: renderPhase(render),
     pdfUrl: render.pdfUrl,
+    // Les pages composées, une fois prêt — `null` avant.
+    pageCount: render.pageCount,
     error: render.error,
     createdAt: render.createdAt.toISOString(),
     updatedAt: render.updatedAt.toISOString(),
@@ -175,7 +203,7 @@ export function serializeOrderQuote(quote: PrintQuote) {
         },
         {
           id: "shipping",
-          label: quote.speed === "express" ? "Livraison Express" : "Livraison Standard",
+          label: quote.speed === "express" ? "Livraison express" : "Livraison standard",
           detail: null,
           amount: euros(quote.shippingCents),
         },

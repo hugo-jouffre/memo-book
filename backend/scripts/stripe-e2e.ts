@@ -122,9 +122,6 @@ async function main() {
   });
 
   const intentId = order.payment.clientSecret.split("_secret")[0]!;
-  // Gardé pour l'étape 10 : le même carnet, commandé une seconde fois, coûte le
-  // même prix — et c'est de ce total qu'on déduira les 30 € de cagnotte.
-  const cardTotal = order.payment.amountCents;
   console.log(`   commande ${order.id} — statut « ${order.status} »`);
   console.log(
     `   intention ${intentId} — ${(order.payment.amountCents / 100).toFixed(2)} ${order.payment.currency.toUpperCase()}`,
@@ -179,124 +176,9 @@ async function main() {
       : "   idempotence : ❌ submittedAt a été réécrite",
   );
 
-  // -------------------------------------------------------------------------
-  // Deuxième scénario : la cagnotte
-  // -------------------------------------------------------------------------
-
-  step(8, "Recharger la cagnotte de 30 €");
-  const topup = await api<{ clientSecret: string; amountCents: number }>(
-    "/v1/wallet/topup",
-    { method: "POST", token: auth.token, body: { amountCents: 3000 } },
-  );
-  const topupIntent = topup.clientSecret.split("_secret")[0]!;
-  console.log(`   intention ${topupIntent} — 30,00 EUR`);
-
-  const beforeTopup = await prisma.account.findUniqueOrThrow({
-    where: { id: auth.account.id },
-  });
-  if (beforeTopup.walletBalanceCents !== 0) {
-    throw new Error("La cagnotte a bougé avant l'encaissement — elle ne devrait pas.");
-  }
-  console.log("   solde avant paiement : 0 centime ✓ (rien n'est crédité d'avance)");
-
-  step(9, "Payer la recharge, et attendre que le webhook crédite");
-  await stripe.paymentIntents.confirm(topupIntent, {
-    payment_method: "pm_card_visa",
-    return_url: "https://memo-book.com/retour",
-  });
-
-  let credited = 0;
-  for (let attempt = 1; attempt <= 20; attempt += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    const account = await prisma.account.findUniqueOrThrow({
-      where: { id: auth.account.id },
-    });
-    credited = account.walletBalanceCents;
-    process.stdout.write(`   ${attempt}s → ${credited} centimes\r`);
-    if (credited > 0) break;
-  }
-  console.log("");
-
-  if (credited !== 3000) {
-    throw new Error(`La cagnotte affiche ${credited} centimes au lieu de 3000.`);
-  }
-
-  const ledger = await prisma.walletEntry.findMany({
-    where: { accountId: auth.account.id },
-    orderBy: { createdAt: "asc" },
-  });
-  console.log(`   ✅ cagnotte créditée : ${credited} centimes`);
-  console.log(`   écritures au registre : ${ledger.length}`);
-  console.log(`   solde recopié sur l'écriture : ${ledger[0]?.balanceAfterCents}`);
-  console.log(`   événement Stripe tracé : ${ledger[0]?.stripeEventId ?? "aucun"}`);
-
-  step(10, "Commander un second carnet : 30 € de cagnotte, la carte pour le reste");
-  const second = await prisma.render.create({
-    data: { memoId: memo.id, status: "ready", pdfUrl: "https://pdf.example.test/e2e-2.pdf" },
-  });
-
-  // **Les deux rails se partagent la note.** La cagnotte n'est pas un mode de
-  // paiement qu'on choisit : elle couvre ce qu'elle peut, et l'intention Stripe
-  // ne porte que le reste. Il n'y a donc rien à refuser — 30 € sur un carnet à
-  // 103,10 € n'est pas un solde insuffisant, c'est un acompte.
-  const partial = await api<{
-    id: string;
-    status: string;
-    payment: { paidFromWallet: boolean; clientSecret?: string; amountCents: number };
-  }>(`/v1/memos/${memo.id}/orders`, {
-    method: "POST",
-    token: auth.token,
-    body: {
-      renderId: second.id,
-      copies: 1,
-      shipping: {
-        name: "Clara Martin",
-        line1: "12 rue des Lilas",
-        postalCode: "44000",
-        city: "Nantes",
-        country: "FR",
-      },
-    },
-  });
-
-  const expectedCard = cardTotal - 3000;
-  console.log(
-    `   commande ${partial.id} — ${(partial.payment.amountCents / 100).toFixed(2)} € à la carte`,
-  );
-
-  if (partial.payment.paidFromWallet) {
-    throw new Error("La cagnotte ne couvrait que 30 € : la carte devait payer le reste.");
-  }
-  if (partial.payment.amountCents !== expectedCard) {
-    throw new Error(
-      `L'intention porte ${partial.payment.amountCents} centimes au lieu de ${expectedCard} : ` +
-        "la déduction de cagnotte n'a pas été appliquée au montant débité.",
-    );
-  }
-
-  // Le débit est écrit **à la création de la commande**, pas au retour de
-  // Stripe : c'est ce qui empêche la même somme de couvrir deux commandes
-  // parties en même temps.
-  const drained = await prisma.account.findUniqueOrThrow({
-    where: { id: auth.account.id },
-  });
-  if (drained.walletBalanceCents !== 0) {
-    throw new Error(
-      `La cagnotte affiche ${drained.walletBalanceCents} centimes : les 30 € auraient dû être débités.`,
-    );
-  }
-
-  const debit = await prisma.walletEntry.findFirstOrThrow({
-    where: { accountId: auth.account.id, kind: "order_payment" },
-  });
-  if (debit.amountCents !== -3000 || debit.printOrderId !== partial.id) {
-    throw new Error("Le débit de cagnotte n'est pas rattaché à la bonne commande.");
-  }
-
-  console.log(`   cagnotte vidée : ${debit.amountCents} centimes, rattachés à la commande ✓`);
-
-  console.log(`\n\x1b[32m✅ Cagnotte : chaîne vérifiée\x1b[0m`);
-  console.log("   crédit par webhook ✓  déduction sur la commande suivante ✓");
+  // La cagnotte, qui faisait le second scénario (recharge puis déduction),
+  // est retirée du produit depuis le 06/10/2026 : une commande se paie
+  // entièrement par Stripe, et c'est ce que le premier scénario vérifie.
   console.log(`\n\x1b[1mTout le système de paiement de test est opérationnel.\x1b[0m`);
 }
 

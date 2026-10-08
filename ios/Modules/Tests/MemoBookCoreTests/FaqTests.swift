@@ -39,7 +39,7 @@ struct FaqTests {
 
     @Test("Un identifiant retrouve sa question")
     func entryIsFoundByIdentifier() {
-        #expect(Faq.entry(id: "faq.carnet.pages")?.question == "Combien de pages fait un Carnet ?")
+        #expect(Faq.entry(id: "faq.carnet.pages")?.question == "Combien de pages fait un carnet ?")
         #expect(Faq.entry(id: "faq.inconnue.jamais-ecrite") == nil)
     }
 
@@ -78,7 +78,7 @@ struct FaqTests {
         )
         let app = Faq.entry(id: "faq.prix.app")?.answer(with: variables) ?? []
         #expect(app.contains { $0.contains("5,49 € par mois") })
-        #expect(app.contains { $0.contains("6 minutes par jour") })
+        #expect(app.contains { $0.contains("6 minutes peuvent être racontées par jour") })
 
         let credit = Faq.entry(id: "faq.prix.credit-du-jour")?.answer(with: variables) ?? []
         #expect(credit.contains { $0.contains("900 caractères écrits valent une minute") })
@@ -95,6 +95,8 @@ struct FaqTests {
         let gone = [
             "étapes offertes", "étape offerte", "par semaine", "chaque semaine",
             "1,99", "abonnements déduits", "limites de souvenirs",
+            // La cagnotte est supprimée (Hugo, 06/10/2026, T230).
+            "cagnotte",
         ]
         for entry in Faq.entries {
             let text = ([entry.question] + entry.answer(with: .current)).joined(separator: " ")
@@ -134,7 +136,7 @@ struct FaqTests {
         }
     }
 
-    /// Le vocabulaire de la page Notion : « Carnet », « souvenirs »,
+    /// Le vocabulaire de la page Notion : « carnet », « souvenirs »,
     /// « voyageurs ». Jamais « livre », jamais « utilisateur », jamais
     /// « client ».
     @Test("Le vocabulaire interdit n’apparaît pas")
@@ -144,6 +146,19 @@ struct FaqTests {
             let text = ([entry.question] + entry.answer).joined(separator: " ").lowercased()
             for word in banned {
                 #expect(!text.contains(word), "\(entry.id) emploie « \(word) » : \(text)")
+            }
+        }
+    }
+
+    /// T213 (Hugo, 06/10/2026) : plus de majuscule à l'anglaise, « carnet »
+    /// compris — c'était la plus fréquente de la FAQ.
+    @Test("« Carnet » ne prend plus de majuscule")
+    func carnetIsLowercase() {
+        for category in Faq.topics + [Faq.contact] {
+            #expect(!category.title.contains("Carnet"), "\(category.id) : \(category.title)")
+            for entry in category.entries {
+                let text = ([entry.question] + entry.answer).joined(separator: " ")
+                #expect(!text.contains("Carnet"), "\(entry.id) écrit encore « Carnet » : \(text)")
             }
         }
     }

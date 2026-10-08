@@ -26,9 +26,9 @@ import MemoBookCore
 /// | la galerie (``Slot/gallery``) | des carnets publics, qui bougent à l'échelle de la semaine |
 ///
 /// Ce qu'on **ne garde pas**, et c'est délibéré : la conversation — elle change
-/// à chaque phrase, et un fil périmé se lit comme un message perdu ; la
-/// cagnotte et les commandes — c'est de l'argent, et un solde périmé est pire
-/// qu'un solde absent ; les rendus PDF — ce sont des fichiers, ils ont leur
+/// à chaque phrase, et un fil périmé se lit comme un message perdu ; les
+/// commandes — c'est de l'argent, et un état périmé est pire qu'un état
+/// absent ; les rendus PDF — ce sont des fichiers, ils ont leur
 /// propre cache d'URL.
 ///
 /// ### Où ça vit

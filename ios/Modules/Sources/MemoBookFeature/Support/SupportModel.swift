@@ -1,6 +1,8 @@
 import Foundation
 import MemoBookCore
+import MemoBookNetworking
 import Observation
+import UIKit
 
 /// Ce que l'écran de support sait faire : servir la foire aux questions, retenir
 /// si une réponse a aidé, et porter un message jusqu'à l'équipe.
@@ -41,11 +43,22 @@ public final class SupportModel {
     /// Ce que le lecteur a répondu à « Est-ce utile ? », par identifiant de
     /// question.
     ///
-    /// **Gardé pour la session seulement.** La mesure, elle, part au serveur —
-    /// c'est elle qui compte. Ceci ne sert qu'à remplacer les deux pouces par un
-    /// merci une fois qu'on a voté : les laisser actifs invite à voter deux
-    /// fois, et fausserait justement la mesure.
+    /// **Relu du serveur** à chaque compte (`GET /v1/support/faq-votes`,
+    /// T226) : une question déjà votée garde son « Merci ! » d'une session à
+    /// l'autre. Ceci ne sert qu'à remplacer les deux pouces par un merci une
+    /// fois qu'on a voté : les laisser actifs invite à voter deux fois, et
+    /// fausserait justement la mesure.
+    ///
+    /// **Le merci attend le serveur** : un vote n'entre ici qu'une fois reçu.
     public private(set) var votes: [String: Bool] = [:]
+
+    /// Les votes partis, pas encore reçus : les pouces se figent le temps de
+    /// la réponse.
+    public private(set) var pendingVotes: Set<String> = []
+
+    /// Le vote qui n'a pas pu partir, et pourquoi — sous ses pouces, rendus
+    /// actifs pour réessayer.
+    public private(set) var voteFailure: (questionId: String, message: String)?
 
     /// Ce qu'on cherche. Vide, l'écran montre les dix paquets tels quels.
     ///
@@ -83,29 +96,47 @@ public final class SupportModel {
         visibleTopics.reduce(0) { $0 + $1.entries.count } + (visibleContact?.entries.count ?? 0)
     }
 
-    private let submit: ((String) async throws -> Void)?
-    private let record: ((String, Bool) async -> Void)?
+    /// Ce qui relie le support au serveur — voir ``SupportBackend``. `nil`
+    /// pour les aperçus : la feuille fait alors comme si, ce qui permet de
+    /// dérouler les trois étapes sans réseau.
+    private var backend: SupportBackend?
 
-    /// - Parameters:
-    ///   - submit: envoie un message à l'équipe. `nil` pour les aperçus : la
-    ///     feuille fait alors comme si, ce qui permet de dérouler les trois
-    ///     étapes sans réseau.
-    ///   - record: enregistre un vote « cette réponse t'a-t-elle aidé ». `nil`
-    ///     quand rien n'écoute — le vote reste alors local.
+    /// - Parameter backend: les trois routes du support. `RootView` le pose
+    ///   à chaque compte (``connect(_:)``) : le modèle vit toute la session de
+    ///   l'app, l'API arrive avec le compte.
     public init(
         topics: [FaqCategory] = Faq.topics,
         contact: FaqCategory = Faq.contact,
         variables: FaqVariables = .current,
-        submit: ((String) async throws -> Void)? = nil,
-        record: ((String, Bool) async -> Void)? = nil
+        backend: SupportBackend? = nil
     ) {
         self.topics = topics
         self.contact = contact
         self.variables = variables
-        self.submit = submit
-        self.record = record
+        self.backend = backend
         visibleTopics = topics
         visibleContact = contact
+    }
+
+    /// Branche le support sur le compte qui vient d'entrer, et relit ses
+    /// votes. **Les votes du compte d'avant s'effacent** : ce ne sont pas
+    /// les siens.
+    public func connect(_ backend: SupportBackend?) async {
+        self.backend = backend
+        votes = [:]
+        pendingVotes = []
+        voteFailure = nil
+        sendState = .idle
+        await loadVotes()
+    }
+
+    /// Relit les votes déjà donnés. Un échec ne dit rien : les pouces restent,
+    /// et un vote de plus remplacera l'ancien côté serveur.
+    public func loadVotes() async {
+        guard let backend, let served = try? await backend.loadVotes() else { return }
+        for vote in served where pendingVotes.contains(vote.questionId) == false {
+            votes[vote.questionId] = vote.isHelpful
+        }
     }
 
     /// Range ce que la recherche retient. Appelé à chaque frappe, et là
@@ -125,38 +156,141 @@ public final class SupportModel {
         entry.answer(with: variables)
     }
 
-    public func vote(_ isHelpful: Bool, on entry: FaqEntry) {
-        guard votes[entry.id] == nil else { return }
-        votes[entry.id] = isHelpful
-        Task { await record?(entry.id, isHelpful) }
+    /// Vote « Est-ce utile ? » — et ne dit « Merci ! » qu'une fois le vote
+    /// reçu (T226). Hors ligne, les pouces reviennent avec une ligne qui le
+    /// dit : un merci pour un vote perdu fausserait la mesure qu'il sert.
+    public func vote(_ isHelpful: Bool, on entry: FaqEntry) async {
+        guard votes[entry.id] == nil, !pendingVotes.contains(entry.id) else { return }
+        guard let backend else {
+            votes[entry.id] = isHelpful
+            return
+        }
+
+        pendingVotes.insert(entry.id)
+        if voteFailure?.questionId == entry.id { voteFailure = nil }
+        defer { pendingVotes.remove(entry.id) }
+        do {
+            try await backend.vote(entry.id, isHelpful)
+            votes[entry.id] = isHelpful
+        } catch {
+            voteFailure = (entry.id, Self.isOffline(error) ? SupportCopy.Answer.voteOffline : SupportCopy.Answer.voteFailed)
+        }
     }
 
-    /// Envoie le message, et dit ce qu'il devient.
+    /// Envoie le message, et dit ce qu'il devient — **« envoyé » seulement
+    /// une fois que le serveur l'a reçu** (Hugo, 06/10/2026, T226).
     ///
-    /// Sans fonction d'envoi — les aperçus, et l'app tant que la route n'existe
-    /// pas —, la feuille marque une pause avant de confirmer plutôt que de
-    /// sauter à l'étape suivante : une confirmation instantanée se lit comme un
-    /// bouton qui n'a rien fait.
-    public func send(_ message: String) async {
+    /// Sans serveur — les aperçus —, la feuille marque une pause avant de
+    /// confirmer plutôt que de sauter à l'étape suivante : une confirmation
+    /// instantanée se lit comme un bouton qui n'a rien fait.
+    ///
+    /// - Parameters:
+    ///   - source: le formulaire du support, ou « Partager mes retours ».
+    ///   - topicId: la question de « Nous contacter » qui a ouvert le
+    ///     formulaire.
+    ///   - tripId: le voyage d'où l'on écrit.
+    public func send(
+        _ message: String,
+        source: SupportMessage.Source = .support,
+        topicId: String? = nil,
+        tripId: String? = nil
+    ) async {
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty, sendState != .sending else { return }
 
         sendState = .sending
         do {
-            if let submit {
-                try await submit(trimmed)
+            if let backend {
+                try await backend.send(
+                    SupportMessage(
+                        source: source,
+                        topicId: topicId,
+                        message: trimmed,
+                        tripId: tripId,
+                        appVersion: SupportDevice.appVersion,
+                        diagnostics: SupportDevice.diagnostics
+                    )
+                )
             } else {
                 try await Task.sleep(for: .milliseconds(600))
             }
             sendState = .sent
         } catch {
-            sendState = .failed(SupportCopy.Contact.sendFailed)
+            sendState = .failed(Self.sendFailure(for: error))
         }
+    }
+
+    /// Ce que le formulaire dit quand le message n'est pas parti : pas de
+    /// réseau, trop de messages aujourd'hui, ou le reste.
+    static func sendFailure(for error: any Error) -> String {
+        if isOffline(error) { return SupportCopy.Contact.sendOffline }
+        if (error as? APIError)?.code == "support_rate_limited" { return SupportCopy.Contact.sendRateLimited }
+        return SupportCopy.Contact.sendFailed
+    }
+
+    private static func isOffline(_ error: any Error) -> Bool {
+        if let api = error as? APIError { return api.isTransport }
+        return error is URLError
     }
 
     /// Remet le formulaire à zéro — à la fermeture de la feuille, pour que la
     /// suivante ne s'ouvre pas sur la confirmation de la précédente.
     public func resetSending() {
         sendState = .idle
+    }
+}
+
+/// Les trois routes du support (contrat du 06/10/2026, point 4), en
+/// fonctions — le modèle ne connaît pas l'API.
+public struct SupportBackend: Sendable {
+    /// `POST /v1/support/messages`.
+    public var send: @Sendable (SupportMessage) async throws -> Void
+    /// `PUT /v1/support/faq-votes/:questionId`.
+    public var vote: @Sendable (_ questionId: String, _ isHelpful: Bool) async throws -> Void
+    /// `GET /v1/support/faq-votes`.
+    public var loadVotes: @Sendable () async throws -> [FaqVote]
+
+    public init(
+        send: @escaping @Sendable (SupportMessage) async throws -> Void,
+        vote: @escaping @Sendable (String, Bool) async throws -> Void,
+        loadVotes: @escaping @Sendable () async throws -> [FaqVote]
+    ) {
+        self.send = send
+        self.vote = vote
+        self.loadVotes = loadVotes
+    }
+
+    /// Les trois routes, sur l'API du compte.
+    public init(api: any MemoBookAPI) {
+        self.init(
+            send: { try await api.sendSupportMessage($0) },
+            vote: { try await api.voteOnFaq(questionId: $0, isHelpful: $1, appVersion: SupportDevice.appVersion) },
+            loadVotes: { try await api.faqVotes() }
+        )
+    }
+}
+
+/// Ce que le diagnostic dit de l'appareil — et rien d'autre.
+enum SupportDevice {
+    /// « 0.1.0 (21) ».
+    static var appVersion: String? {
+        let info = Bundle.main.infoDictionary
+        guard let short = info?["CFBundleShortVersionString"] as? String else { return nil }
+        guard let build = info?["CFBundleVersion"] as? String else { return short }
+        return "\(short) (\(build))"
+    }
+
+    /// « iOS 26.0 », « iPhone17,1 », « fr_FR ».
+    @MainActor static var diagnostics: SupportDiagnostics {
+        var system = utsname()
+        uname(&system)
+        let model = withUnsafeBytes(of: &system.machine) { raw in
+            String(decoding: raw.prefix { $0 != 0 }, as: UTF8.self)
+        }
+        return SupportDiagnostics(
+            osVersion: "\(UIDevice.current.systemName) \(UIDevice.current.systemVersion)",
+            deviceModel: model,
+            locale: Locale.current.identifier
+        )
     }
 }

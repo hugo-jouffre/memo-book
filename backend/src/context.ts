@@ -42,7 +42,7 @@ export interface AppContext {
   structurer: Structurer;
   publisher: AssetPublisher;
   renderer: BookRenderer;
-  /** Encaissement Stripe : carnets imprimés et cagnotte. Jamais l'abonnement. */
+  /** Encaissement Stripe : carnets imprimés (la cagnotte est retirée). Jamais l'abonnement. */
   payments: PaymentGateway;
   /** L'abonnement : vérifie ce qu'Apple signe — voir `services/appStore.ts`. */
   appStore: AppStoreVerifier;

@@ -4,12 +4,10 @@ import MemoBookCore
 // Jeu d'essai du tunnel de commande.
 //
 // Il porte les chiffres de la maquette — 80 pages estimées — pour que les
-// aperçus SwiftUI soient comparables à Figma sans serveur. La cagnotte, elle,
-// part **vide** : c'est l'état d'un compte neuf, et un jeu d'essai qui
-// annoncerait une déduction que le registre n'a pas donnerait un total faux dès
-// qu'on le compare au serveur. Les montants du récapitulatif, eux, se recomposent à partir du
-// même barème que le serveur : un jeu d'essai qui annoncerait d'autres totaux
-// ne montrerait pas l'écran qu'on livre.
+// aperçus SwiftUI soient comparables à Figma sans serveur. Les montants du
+// récapitulatif se recomposent à partir du même barème que le serveur : un jeu
+// d'essai qui annoncerait d'autres totaux ne montrerait pas l'écran qu'on
+// livre.
 
 extension OrderContext {
     public static var fixture: OrderContext { fixture(pageCount: 80) }
@@ -32,7 +30,6 @@ extension OrderContext {
                 progress: TripProgress(memoryCount: 24, pageCount: pageCount, targetPageCount: pageCount),
                 isPrintable: true
             ),
-            wallet: .fixture,
             unitPrice: OrderPricing.unitPrice(pages: pageCount),
             expressPrice: OrderPricing.express,
             standardDays: DayRange(min: 5, max: 7),
@@ -63,7 +60,6 @@ extension OrderContext {
             bookTitle: base.bookTitle,
             pageCount: base.pageCount,
             trip: base.trip,
-            wallet: base.wallet,
             unitPrice: base.unitPrice,
             expressPrice: base.expressPrice,
             standardDays: base.standardDays,
@@ -118,21 +114,12 @@ extension OrderQuote {
     public static func fixture(
         copies: Int,
         speed: ShippingSpeed,
-        pageCount: Int = 80,
-        // Vide par défaut, comme ``Wallet/fixture`` : un récapitulatif qui
-        // annoncerait une déduction que la cagnotte n'a pas serait un total
-        // faux dès qu'on le compare au serveur.
-        walletBalance: Decimal = 0
+        pageCount: Int = 80
     ) -> OrderQuote {
         let unit = OrderPricing.unitPrice(pages: pageCount)
         let items = unit * Decimal(copies)
         let shipping = speed == .express ? OrderPricing.express : 0
         let due = items + shipping
-
-        // La cagnotte ne rend pas la monnaie : elle est plafonnée au montant dû.
-        // Une seule déduction : l'abonnement n'est plus déduit du carnet (Hugo,
-        // 03/10/2026).
-        let applied = min(walletBalance, due)
 
         return OrderQuote(
             bookTitle: "Rome et la Dolce Vita",
@@ -165,29 +152,16 @@ extension OrderQuote {
                     ),
                     OrderQuoteLine(
                         id: "shipping",
-                        label: speed == .express ? "Livraison Express" : "Livraison Standard",
+                        label: speed == .express ? "Livraison express" : "Livraison standard",
                         amount: shipping
                     ),
                 ],
                 subtotal: due
             ),
-            deductions: [
-                OrderDeduction(
-                    id: "wallet",
-                    label: "Déduction de ta cagnotte",
-                    amount: applied
-                )
-            ].filter { $0.amount > 0 },
-            total: max(due - applied, 0),
+            total: due,
             estimatedMinDays: speed == .express ? 2 : 5,
             estimatedMaxDays: speed == .express ? 3 : 7
         )
-    }
-
-    /// Le cas où la cagnotte couvre tout : l'étape 6 ne présente alors aucune
-    /// carte, elle fait valider.
-    public static var fullyCoveredFixture: OrderQuote {
-        fixture(copies: 1, speed: .standard, pageCount: 4, walletBalance: 500)
     }
 }
 
@@ -205,18 +179,27 @@ extension NewPrintOrderRequest {
 }
 
 extension PlacedPrintOrder {
-    /// Ce que le bac à sable rend : une commande **déjà réglée**.
+    /// Ce que le bac à sable rend : une commande à régler, et une intention
+    /// **factice** pour le faire.
     ///
-    /// `paidFromWallet` plutôt qu'un faux `clientSecret` : c'est le seul cas qui
-    /// n'ouvre aucune feuille. Une preview Xcode ne doit pas pouvoir appeler Stripe,
-    /// même par accident.
+    /// Elle n'atteint jamais Stripe : le modèle qui la reçoit dans le bac à
+    /// sable et les previews Xcode est monté avec la feuille de paiement par
+    /// défaut d'``OrderModel``, qui répond « payé » sans rien ouvrir. C'était
+    /// la cagnotte qui tenait ce rôle — une commande réglée sans feuille —
+    /// jusqu'à ce qu'elle parte (T230).
     public static func fixture(
         memoId: String,
         request: NewPrintOrderRequest
     ) -> PlacedPrintOrder {
-        PlacedPrintOrder(
-            order: .fixture(memoId: memoId, request: request),
-            payment: OrderPayment(paidFromWallet: true, amountCents: 0, currency: "eur")
+        let order = PrintOrder.fixture(memoId: memoId, request: request)
+        return PlacedPrintOrder(
+            order: order,
+            payment: OrderPayment(
+                amountCents: NSDecimalNumber(decimal: (order.total ?? 0) * 100).intValue,
+                currency: "eur",
+                clientSecret: "pi_preview_secret_preview",
+                publishableKey: "pk_test_preview"
+            )
         )
     }
 }
@@ -231,7 +214,7 @@ extension PrintOrder {
         return PrintOrder(
             id: UUID().uuidString,
             memoId: memoId,
-            renderId: request.renderId,
+            renderId: request.renderId ?? "render-rome",
             status: .draft,
             copies: request.copies,
             shippingSpeed: request.shippingSpeed,

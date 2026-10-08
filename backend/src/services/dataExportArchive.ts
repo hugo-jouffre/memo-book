@@ -1,7 +1,6 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { Readable, type PassThrough } from "node:stream";
 import { ZipFile } from "yazl";
-import type { Env } from "../env.js";
 import {
   fileDay,
   fileStamp,
@@ -12,6 +11,7 @@ import {
 import { visibleToAccount } from "./memoOwnership.js";
 import type { MediaStorage } from "./storage.js";
 import { contextVoiceOf } from "./tripContext.js";
+import { shareBaseUrl } from "./shareLink.js";
 
 /**
  * L'archive de « Exporter mes données » : ce qu'elle contient, et comment elle
@@ -94,6 +94,12 @@ const accountInclude = {
       transactions: { orderBy: { purchasedAt: "asc" } },
     },
   },
+  // Ce qu'on a écrit à l'équipe, et ses votes de la foire aux questions (T226).
+  supportMessages: {
+    orderBy: { createdAt: "asc" },
+    include: { memo: { select: { id: true, title: true } } },
+  },
+  faqVotes: { orderBy: { questionId: "asc" } },
   feedbackResponses: {
     orderBy: { shownAt: "asc" },
     include: {
@@ -154,7 +160,7 @@ type ExportedEntry = ExportedMemo["entries"][number];
  * annoncer l'archive, le téléchargement pour l'écrire.
  */
 export async function planDataExport(
-  context: { prisma: PrismaClient; env: Pick<Env, "SHARE_PUBLIC_BASE_URL"> },
+  context: { prisma: PrismaClient; env: Parameters<typeof shareBaseUrl>[0] },
   accountId: string,
   now: Date = new Date(),
 ): Promise<ExportPlan> {
@@ -266,7 +272,7 @@ export async function planDataExport(
     json(`${folder}/voyage.json`, tripDocument(memo, {
       accountId,
       isOwner,
-      shareBaseUrl: env.SHARE_PUBLIC_BASE_URL,
+      shareBaseUrl: shareBaseUrl(env),
       coverFiles,
       bookFiles,
     }));
@@ -301,18 +307,24 @@ export async function planDataExport(
   // --- Ce qui pend au compte ---------------------------------------------------
 
   json("commandes.json", account.printOrders.map(orderDocument));
-  json("cagnotte.json", {
-    balanceCents: account.walletBalanceCents,
-    currency: "EUR",
-    movements: account.walletEntries.map((entry) => ({
-      at: iso(entry.createdAt),
-      kind: entry.kind,
-      label: entry.label,
-      amountCents: entry.amountCents,
-      balanceAfterCents: entry.balanceAfterCents,
-      orderId: entry.printOrderId,
-    })),
-  });
+  // **L'ancienne cagnotte, seulement si elle a servi** (06/10/2026) : elle est
+  // retirée du produit, mais ses mouvements restent des données du compte —
+  // l'archive les rend tant qu'il y en a. Un compte qui n'y a jamais touché
+  // ne reçoit pas un fichier vide sur une fonction qu'il n'a jamais vue.
+  if (hasWalletHistory(account)) {
+    json("cagnotte.json", {
+      balanceCents: account.walletBalanceCents,
+      currency: "EUR",
+      movements: account.walletEntries.map((entry) => ({
+        at: iso(entry.createdAt),
+        kind: entry.kind,
+        label: entry.label,
+        amountCents: entry.amountCents,
+        balanceAfterCents: entry.balanceAfterCents,
+        orderId: entry.printOrderId,
+      })),
+    });
+  }
   json(
     "abonnements.json",
     account.subscriptions.map((subscription) => ({
@@ -386,6 +398,23 @@ export async function planDataExport(
       lastDownloadedAt: iso(dataExport.lastDownloadedAt),
     })),
   });
+  json("support.json", {
+    messages: account.supportMessages.map((message) => ({
+      at: iso(message.createdAt),
+      from: message.source === "founders_note" ? "Mot des fondateurs" : "Support et retours",
+      topic: message.topicId,
+      message: message.message,
+      trip: message.memo,
+      appVersion: message.appVersion,
+      diagnostics: message.diagnostics,
+      handledAt: iso(message.handledAt),
+    })),
+    faqVotes: account.faqVotes.map((vote) => ({
+      question: vote.questionId,
+      helpful: vote.isHelpful,
+      at: iso(vote.updatedAt),
+    })),
+  });
   json(
     "avis.json",
     account.feedbackResponses.map((response) => ({
@@ -411,7 +440,7 @@ export async function planDataExport(
     rootName,
     files: [...texts, ...media, ...books],
     summary,
-    readme: (missing) => readme(account.email, now, missing),
+    readme: (missing) => readme(account.email, now, missing, { wallet: hasWalletHistory(account) }),
   };
 }
 
@@ -461,7 +490,9 @@ function accountDocument(account: ExportedAccount, profilePhoto: string | null) 
         linkedAt: iso(identity.createdAt),
       })),
     },
-    wallet: { balanceCents: account.walletBalanceCents, currency: "EUR" },
+    ...(hasWalletHistory(account)
+      ? { wallet: { balanceCents: account.walletBalanceCents, currency: "EUR" } }
+      : {}),
     // Le fuseau du téléphone (`X-Time-Zone`) : c'est lui qui dit quand le
     // crédit du jour se recharge.
     timeZone: account.timeZone,
@@ -763,7 +794,17 @@ function story(memo: ExportedMemo, memoryFiles: Map<string, string>): string {
   return `${lines.join("\n")}\n`;
 }
 
-function readme(email: string | null, now: Date, missing: readonly string[]): string {
+/** Le compte a-t-il un jour eu un mouvement de cagnotte (retirée le 06/10/2026) ? */
+function hasWalletHistory(account: Pick<ExportedAccount, "walletBalanceCents" | "walletEntries">): boolean {
+  return account.walletEntries.length > 0 || account.walletBalanceCents !== 0;
+}
+
+function readme(
+  email: string | null,
+  now: Date,
+  missing: readonly string[],
+  has: { wallet: boolean },
+): string {
   const lines = [
     "MemoBook — tes données",
     "══════════════════════",
@@ -776,7 +817,7 @@ function readme(email: string | null, now: Date, missing: readonly string[]): st
     "Ce que contient l’archive",
     "─────────────────────────",
     "",
-    "compte.json               Ton compte : identité, coordonnées, adresse, moyens de connexion, cagnotte, réglages.",
+    "compte.json               Ton compte : identité, coordonnées, adresse, moyens de connexion, réglages.",
     "photo-de-profil.*         Ta photo de profil, si tu en as envoyé une.",
     "voyages/                  Un dossier par voyage — les tiens, et ceux où tu es co-voyageur :",
     "  voyage.json             le voyage, ses réglages, ses étapes, ses dépenses, ses voyageurs, et son crédit du jour : jour par jour, la durée des vocaux et le nombre de caractères écrits ;",
@@ -788,12 +829,13 @@ function readme(email: string | null, now: Date, missing: readonly string[]): st
     "  couvertures/            les photos importées pour la couverture ;",
     "  carnet*.pdf             le dernier carnet composé, et ceux que tu as commandés.",
     "commandes.json            Tes commandes de carnets imprimés.",
-    "cagnotte.json             Les mouvements de ta cagnotte.",
+    ...(has.wallet ? ["cagnotte.json             Les mouvements de ton ancienne cagnotte."] : []),
     "abonnements.json          Tes abonnements, et chaque période payée.",
     "moyens-de-paiement.json   Tes cartes : la marque, les quatre derniers chiffres, l’échéance. Jamais le numéro : nous ne l’avons pas.",
     "connecteurs.json          Les applications que tu as branchées.",
     "connexions.json           Tes appareils, tes sessions, tes demandes de mot de passe et d’export.",
     "avis.json                 Tes réponses à nos questionnaires.",
+    "support.json              Ce que tu as écrit à notre équipe, et tes votes « Est-ce utile ? » de la foire aux questions.",
     "",
     "",
     "Les formats",

@@ -25,7 +25,7 @@ public enum ChatCopy {
     // MARK: - La bannière « Aperçu en direct »
 
     /// « Votre Carnet » dans la maquette : tutoyé, comme tout le reste (R9).
-    public static let previewTitle = "Ton Carnet prend forme"
+    public static let previewTitle = "Ton carnet prend forme"
 
     /// « 5 Souvenirs - 10 pages composées ».
     ///

@@ -30,11 +30,13 @@ export async function renderBook(
       where: { id: renderId },
       data: { status: "failed", error: message },
     });
-    throw new Error(message);
+    logger.error({ renderId }, message);
+    return;
   }
 
   try {
     const result = await renderer.render(render.payload as BookPayload);
+    const pageCount = composedPageCount(render.payload);
 
     await prisma.render.update({
       where: { id: renderId },
@@ -42,17 +44,42 @@ export async function renderBook(
         status: "ready",
         pdfUrl: result.pdfUrl,
         apitemplateTransactionId: result.transactionId,
+        pageCount,
         error: null,
       },
     });
 
-    logger.info({ renderId, pdfUrl: result.pdfUrl }, "Carnet généré");
+    // **Le carnet existe, il s'imprime** (T228) : `isPrintable` n'était écrit
+    // que par le jeu d'essai, si bien que l'imprimante des voyages passés de
+    // l'accueil n'apparaissait jamais sur un vrai voyage. Et ses pages, que
+    // l'accueil et le prix lisent (`billablePages`) — seulement si aucun rendu
+    // plus récent n'a déjà parlé.
+    const newer = await prisma.render.count({
+      where: { memoId: render.memoId, status: "ready", createdAt: { gt: render.createdAt } },
+    });
+    await prisma.memo.update({
+      where: { id: render.memoId },
+      data: { isPrintable: true, ...(newer === 0 && pageCount !== null ? { pageCount } : {}) },
+    });
+
+    logger.info({ renderId, pdfUrl: result.pdfUrl, pageCount }, "Carnet généré");
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
     await prisma.render.update({
       where: { id: renderId },
       data: { status: "failed", error: message },
     });
-    throw cause;
+    // Pas de nouvel essai automatique : voir `jobs/structure.ts`.
+    logger.error({ err: cause, renderId }, "Composition du PDF échouée");
   }
+}
+
+/**
+ * Les pages du carnet composé : une par entrée de `days[]` — c'est l'unité de
+ * page du gabarit (`services/structuring.ts`). `null` pour un payload qui n'en
+ * a pas.
+ */
+export function composedPageCount(payload: unknown): number | null {
+  const days = (payload as { days?: unknown } | null)?.days;
+  return Array.isArray(days) ? days.length : null;
 }

@@ -64,6 +64,79 @@ extension BookPreviewStatus: Codable {
     }
 }
 
+/// Où en est **une** composition, telle que le serveur la mène
+/// (`render.phase`, 06/10/2026).
+///
+/// Plus fin que ``BookPreviewStatus``, qui ne dit que « ça compose » : une
+/// composition attend son tour, met les souvenirs en pages — en attendant ceux
+/// qui sont encore en rédaction —, puis fabrique le PDF. C'est ce que l'écran
+/// de composition dit sous sa page, pour qu'une attente de plusieurs minutes
+/// ne se lise pas comme un écran figé.
+public enum BookRenderPhase: Sendable, Hashable {
+    /// En file, pas encore commencée.
+    case queued
+    /// Les textes se mettent en page — et la composition attend, jusqu'à trois
+    /// minutes, les souvenirs encore en rédaction.
+    case writing
+    /// Le PDF se fabrique chez APITemplate.
+    case composing
+    case ready
+    case failed
+    /// Une phase ajoutée côté serveur après cette version : une attente, comme
+    /// tout ce qui n'est ni prêt ni en échec.
+    case unknown(String)
+}
+
+extension BookRenderPhase: Codable {
+    public init(from decoder: any Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self =
+            switch raw {
+            case "queued": .queued
+            case "writing": .writing
+            case "composing": .composing
+            case "ready": .ready
+            case "failed": .failed
+            default: .unknown(raw)
+            }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        let raw =
+            switch self {
+            case .queued: "queued"
+            case .writing: "writing"
+            case .composing: "composing"
+            case .ready: "ready"
+            case .failed: "failed"
+            case .unknown(let raw): raw
+            }
+        try container.encode(raw)
+    }
+}
+
+/// La **dernière** composition du carnet, quel que soit son état — le champ
+/// `render` de `GET /v1/memos/:id/preview`.
+///
+/// Elle distingue ce que ``BookPreviewStatus`` confond : « une composition
+/// tourne » et « rien n'a jamais été lancé ». Le serveur répond `composing`
+/// dans les deux cas ; seul ce champ, `nil` dans le second, permet à l'écran de
+/// ne pas attendre une composition qui ne viendra pas.
+public struct BookRenderProgress: Codable, Sendable, Hashable {
+    public let id: String
+    /// `nil` sur un serveur qui ne la sert pas encore : on lit alors une
+    /// attente, comme pour une phase inconnue.
+    public let phase: BookRenderPhase?
+    public let error: String?
+
+    public init(id: String, phase: BookRenderPhase? = nil, error: String? = nil) {
+        self.id = id
+        self.phase = phase
+        self.error = error
+    }
+}
+
 /// Les deux lignes que porte la carte de partage : ce que le carnet raconte, en
 /// deux phrases prises dedans.
 ///
@@ -110,6 +183,12 @@ public struct BookPreview: Codable, Sendable, Hashable {
 
     /// Le lien de prévisualisation en ligne, à partager. `nil` tant qu'il n'a
     /// pas été demandé — c'est un lien public, il ne se crée pas tout seul.
+    ///
+    /// **Seul le serveur le fabrique** (`POST /v1/memos/:id/share-link`) : une
+    /// page publique `/c/<jeton>` servie par l'API, avec sa vignette Open
+    /// Graph pour WhatsApp et iMessage. L'app ne compose jamais d'URL — celle
+    /// qu'elle fabriquait, `memo-book.com/c/<identifiant>`, ne menait nulle
+    /// part (06/10/2026).
     public let shareUrl: URL?
 
     /// La couverture, pour la carte de partage.
@@ -130,6 +209,24 @@ public struct BookPreview: Codable, Sendable, Hashable {
     /// elle se met juste par défaut.
     public let hasConfiguredCovers: Bool
 
+    /// La dernière composition — voir ``BookRenderProgress``. `nil` quand le
+    /// carnet n'a jamais été composé, **et** sur un serveur d'avant le
+    /// 06/10/2026 qui ne la sert pas.
+    public let render: BookRenderProgress?
+
+    /// Le rendu derrière ``pdfUrl`` : celui qu'on commande. `nil` tant
+    /// qu'aucune composition n'a abouti.
+    public let readyRenderId: String?
+
+    /// ``pdfUrl`` montre-t-il le contenu actuel ? Faux quand il n'y a pas de
+    /// PDF, ou que le récit a changé depuis — une composition va repartir.
+    /// `nil` sur un serveur qui ne le dit pas.
+    public let isUpToDate: Bool?
+
+    /// Combien de souvenirs sont encore en rédaction : la composition les
+    /// attend avant de mettre en page. `nil` sur un serveur qui ne le dit pas.
+    public let pendingMemoryCount: Int?
+
     public init(
         memoId: String,
         title: String,
@@ -140,7 +237,11 @@ public struct BookPreview: Codable, Sendable, Hashable {
         coverPhotoUrl: URL? = nil,
         tripDate: Date? = nil,
         excerpt: BookExcerpt? = nil,
-        hasConfiguredCovers: Bool = false
+        hasConfiguredCovers: Bool = false,
+        render: BookRenderProgress? = nil,
+        readyRenderId: String? = nil,
+        isUpToDate: Bool? = nil,
+        pendingMemoryCount: Int? = nil
     ) {
         self.memoId = memoId
         self.title = title
@@ -152,6 +253,18 @@ public struct BookPreview: Codable, Sendable, Hashable {
         self.tripDate = tripDate
         self.excerpt = excerpt
         self.hasConfiguredCovers = hasConfiguredCovers
+        self.render = render
+        self.readyRenderId = readyRenderId
+        self.isUpToDate = isUpToDate
+        self.pendingMemoryCount = pendingMemoryCount
+    }
+
+    /// Le lien des jeux d'essai — bac à sable, aperçus Xcode —, à la forme de
+    /// celui du serveur (`<hôte de l'API>/c/<jeton>`) mais sur un domaine
+    /// réservé aux exemples : il ne mène nulle part, et ne fait pas croire le
+    /// contraire. Un vrai jeton ne vient que de `POST /v1/memos/:id/share-link`.
+    public static func sampleShareLink(memoId: String) -> URL {
+        URL(string: "https://api.memobook.example/c/essai-\(memoId)")!
     }
 
     /// Les pages qui se **configurent** : la première et la dernière.
@@ -172,4 +285,14 @@ public struct BookPreview: Codable, Sendable, Hashable {
     /// une invitation à choisir sa couverture posée sur un aplat vide promet
     /// une page qui n'existe pas encore.
     public var hasDocument: Bool { status.isReady && pdfUrl != nil }
+
+    /// Une composition a déjà abouti : il y a un carnet à feuilleter et à
+    /// commander, **même si une autre tourne** pour le remettre à jour.
+    ///
+    /// Le PDF est celui du dernier rendu **prêt** (`pdfUrl` ne s'efface pas
+    /// pendant une recomposition), d'où le fait qu'il suffise. Le statut prêt
+    /// seul compte aussi : c'est le cas du jeu d'essai, qui n'a pas de PDF.
+    public var hasReadyRender: Bool {
+        readyRenderId != nil || pdfUrl != nil || status.isReady
+    }
 }

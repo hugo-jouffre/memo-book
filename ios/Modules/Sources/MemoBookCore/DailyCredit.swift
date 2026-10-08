@@ -135,6 +135,13 @@ public struct DailyCredit: Codable, Sendable, Hashable {
     }
 
     /// Ce qu'il resterait une fois le vocal en cours compté.
+    ///
+    /// **Une projection, jamais un décompte** (Hugo, 06/10/2026) : elle ne
+    /// sert qu'au bandeau et à l'arrêt net **pendant que le vocal existe** —
+    /// en cours ou en pause. Rien ne l'écrit dans un crédit : un vocal mis en
+    /// pause puis abandonné ne coûte rien, nulle part. Seul l'envoyé compte —
+    /// le serveur à sa réception, l'app entre-temps pour ce qui attend la file
+    /// (la conversation, l'accueil, les réglages du voyage).
     public func remainingMs(whileRecording elapsedMs: Int) -> Int {
         max(0, remainingMs - max(0, elapsedMs))
     }
@@ -346,6 +353,14 @@ public enum DailyCreditCopy {
     }
 
     public static let rowCaptionUnlimited = "Tu racontes sans limite grâce à ton abonnement"
+
+    /// La même légende, **renouvellement coupé** (06/10/2026) : l'illimité a
+    /// une date de fin, et la ligne la dit — « jusqu’au 12 octobre ». `day`
+    /// arrive formaté (jour et mois) ; `nil` rend la légende d'un abonné.
+    public static func rowCaptionUnlimited(until day: String?) -> String {
+        guard let day else { return rowCaptionUnlimited }
+        return "Tu racontes sans limite jusqu’au \(day) grâce à ton abonnement"
+    }
 
     /// « 3 min 20 / 5 min ».
     public static func rowValue(_ credit: DailyCredit) -> String {

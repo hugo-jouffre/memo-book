@@ -94,6 +94,14 @@ public final class TripSettingsModel {
 
     private let readThemes: @Sendable () async throws -> [TripTheme]
 
+    /// Les tours **envoyés** à ce voyage que le serveur n'a pas encore reçus —
+    /// ce que la file garde, hors ligne surtout. `nil` en aperçu.
+    private let waitingTurns: (() async -> [OutgoingTurn])?
+
+    /// Ce que ces tours coûteront au crédit d'aujourd'hui — relu après chaque
+    /// lecture des réglages, jamais mêlé au crédit servi. Voir ``dailyCredit``.
+    private var unreceivedCostMs = 0
+
     public init(
         tripId: String,
         source: @escaping (String) async throws -> TripSettings = { _ in .fixture },
@@ -103,7 +111,8 @@ public final class TripSettingsModel {
         delete: ((String) async throws -> Void)? = nil,
         clearConversation: ((String) async throws -> Void)? = nil,
         cached: CachedValue<TripSettings>? = nil,
-        themes: @escaping @Sendable () async throws -> [TripTheme] = { TripTheme.fixtures }
+        themes: @escaping @Sendable () async throws -> [TripTheme] = { TripTheme.fixtures },
+        waitingTurns: (() async -> [OutgoingTurn])? = nil
     ) {
         self.cached = cached
         self.tripId = tripId
@@ -114,6 +123,7 @@ public final class TripSettingsModel {
         self.remove = delete
         self.clearConversation = clearConversation
         self.readThemes = themes
+        self.waitingTurns = waitingTurns
     }
 
     // MARK: - Le crédit du jour
@@ -131,7 +141,18 @@ public final class TripSettingsModel {
     /// l'accueil. Les réglages s'ouvrent sur le cache : la ligne et la feuille
     /// y lisaient « Plus rien pour aujourd’hui » le lendemain d'un crédit
     /// épuisé, tant que le serveur n'avait pas répondu.
-    public var dailyCredit: DailyCredit? { settings?.dailyCredit?.refreshed(now: .now) }
+    ///
+    /// **Seul l'envoyé compte** (Hugo, 06/10/2026 : « il ne faut pas que
+    /// lorsqu'on va dans paramètres du voyage > crédits du jour ces derniers
+    /// soient marqués comme consommés »). Le crédit servi ne contient que ce
+    /// que le serveur a reçu ; on en retire ce qui a été **envoyé** et attend
+    /// encore dans la file (``unreceivedCostMs``) — la règle de la
+    /// conversation et de l'accueil, pour que les trois écrans disent le même
+    /// reste. Un vocal en cours, **ou en pause**, n'est envoyé nulle part :
+    /// il ne compte ici pour rien, et ne comptera qu'à son « Envoyer ».
+    public var dailyCredit: DailyCredit? {
+        settings?.dailyCredit?.refreshed(now: .now).consuming(unreceivedCostMs)
+    }
 
     #if DEBUG
         /// Les états du crédit que le panneau de bac à sable rejoue.
@@ -227,6 +248,23 @@ public final class TripSettingsModel {
         } catch {
             report(error)
         }
+        await countWaitingTurns()
+    }
+
+    /// Relit ce que la file garde pour ce voyage, et ce que ça coûtera au
+    /// crédit d'aujourd'hui. Ce qui attend l'illimité ou la recharge de
+    /// minuit prendra un autre crédit que celui-ci — même filtre que
+    /// l'accueil (``OutgoingTurn/isOnHold``).
+    private func countWaitingTurns(now: Date = .now) async {
+        guard let waitingTurns,
+              let credit = settings?.dailyCredit?.refreshed(now: now),
+              !credit.isUnlimited
+        else {
+            unreceivedCostMs = 0
+            return
+        }
+        let waiting = await waitingTurns().filter { !$0.waitingForUnlimited && !$0.isWaitingForCredit(at: now) }
+        unreceivedCostMs = waiting.reduce(0) { $0 + $1.creditCost(in: credit) }
     }
 
     // MARK: - Supprimer le voyage

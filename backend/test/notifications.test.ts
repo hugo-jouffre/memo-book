@@ -184,7 +184,7 @@ describe("la passe horaire", () => {
     expect(push.sent[0]?.destination).toEqual({ token: TOKEN, environment: "sandbox" });
     expect(push.sent[0]?.message).toMatchObject({
       title: "Ton voyage à Rome se termine aujourd’hui",
-      link: `memobook://trips/${memo.id}/wallet`,
+      link: `memobook://trips/${memo.id}/preview`,
       threadId: memo.id,
     });
 

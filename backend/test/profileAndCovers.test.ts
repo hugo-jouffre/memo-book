@@ -12,7 +12,7 @@ import {
 /**
  * Le lot du 29/09/2026 : ce que le profil sait faire de plus — changer son mot
  * de passe, retirer sa photo —, les couvertures qui tiennent enfin en base
- * (T88), l'estimation datée de la cagnotte (T127) et la feuille de bord (T72).
+ * (T88) et la feuille de bord (T72).
  */
 
 interface ProfileBody {
@@ -28,10 +28,6 @@ interface CoversBody {
   backStyles: { id: string }[];
   photos: { id: string; url: string | null }[];
   stats: { id: string; value: string; label: string }[];
-}
-
-interface WalletBody {
-  estimate: Record<string, unknown> | null;
 }
 
 let harness: TestHarness;
@@ -305,27 +301,6 @@ describe("les couvertures d'un carnet", () => {
       headers: { authorization: stranger.authorization },
     });
     expect(response.statusCode).toBe(404);
-  });
-});
-
-describe("l'estimation de la cagnotte", () => {
-  it("ne porte plus les dates ni les semaines d'abonnement à déduire", async () => {
-    // La feuille « Estimation » du paywall comptait les semaines du voyage pour
-    // les déduire du carnet. Il n'y a plus rien à déduire (Hugo, 03/10/2026).
-    const account = await registerAccount(harness.app);
-    const memo = await seedTrip(account.accountId);
-
-    const response = await harness.app.inject({
-      method: "GET",
-      url: `/v1/wallet?tripId=${memo.id}`,
-      headers: { authorization: account.authorization },
-    });
-    expect(response.statusCode).toBe(200);
-    const estimate = response.json<WalletBody>().estimate;
-    expect(estimate).toHaveProperty("pageCount");
-    expect(estimate).toHaveProperty("cost");
-    expect(estimate).not.toHaveProperty("weeks");
-    expect(estimate).not.toHaveProperty("startDate");
   });
 });
 

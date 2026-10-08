@@ -44,7 +44,7 @@ struct BookStatusCard: View {
             case .pending, .processing, .unknown:
                 HStack(spacing: MemoBookSpacing.xs) {
                     ProgressView()
-                    Text("Ton carnet est en train de s'écrire…")
+                    Text("Ton carnet est en train de s’écrire…")
                         .font(MemoBookFont.caption)
                         .foregroundStyle(MemoBookColor.inkMuted)
                 }

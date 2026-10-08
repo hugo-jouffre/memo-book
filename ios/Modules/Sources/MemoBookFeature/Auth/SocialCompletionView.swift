@@ -37,7 +37,7 @@ struct SocialCompletionView: View {
                         .textInputAutocapitalization(.words)
 
                     if model.completing?.email != nil {
-                        BrandTextField("Email", text: $model.email, field: .email, focus: focus)
+                        BrandTextField("E-mail", text: $model.email, field: .email, focus: focus)
                             .textContentType(.emailAddress)
                             .disabled(true)
                     }

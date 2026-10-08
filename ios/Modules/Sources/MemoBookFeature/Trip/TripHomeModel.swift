@@ -40,16 +40,29 @@ public final class TripHomeModel {
     /// motif que `TripSettingsModel.confirm(_:)`.
     public private(set) var confirmation: String?
 
+    /// Efface un souvenir — `DELETE /v1/entries/:id` (T235). `nil` en aperçu :
+    /// la croix ne paraît pas.
+    private let deleteEntry: ((String) async throws -> Void)?
+
+    /// L'étape dont on efface les souvenirs, le temps des requêtes.
+    public private(set) var deletingStepId: String?
+
+    /// Ce que le serveur a répondu si l'effacement a échoué — lu dans la
+    /// feuille de confirmation.
+    public private(set) var stepDeletionError: String?
+
     public init(
         tripId: String,
         source: @escaping (String) async throws -> TripDetail = { .fixture(id: $0) },
         cached: CachedValue<TripDetail>? = nil,
-        validateStep: ((String, String) async throws -> TripDetail)? = nil
+        validateStep: ((String, String) async throws -> TripDetail)? = nil,
+        deleteEntry: ((String) async throws -> Void)? = nil
     ) {
         self.tripId = tripId
         self.source = source
         self.cached = cached
         self.validateStepRemotely = validateStep
+        self.deleteEntry = deleteEntry
     }
 
     /// `true` tant qu'on n'a rien à montrer. L'écran ne dessine alors rien
@@ -137,6 +150,57 @@ public final class TripHomeModel {
                 await load()
             }
         }
+    }
+
+    // MARK: - Supprimer les souvenirs d'une étape
+
+    /// La croix s'offre sur cette étape : l'app sait l'effacer, et le serveur
+    /// a dit quels souvenirs elle porte (``TripStep/entryIds``).
+    public func canDeleteMemories(of step: TripStep) -> Bool {
+        deleteEntry != nil && step.hasDeletableMemories
+    }
+
+    /// Efface **tous** les souvenirs d'une étape — une étape est un lieu, elle
+    /// en porte souvent plusieurs : un vocal, un texte, des photos (T235).
+    ///
+    /// Un à un, parce que c'est la route qui existe ; un souvenir déjà parti
+    /// (un co-voyageur l'a effacé entre-temps) n'est pas un échec — la
+    /// fonction branchée par l'app avale ce 404. Au premier vrai refus, on
+    /// s'arrête et on relit le voyage : ce qui est parti est parti, la feuille
+    /// dit le reste.
+    ///
+    /// - Returns: `true` quand tout est effacé — la feuille se referme.
+    public func deleteMemories(of step: TripStep) async -> Bool {
+        guard let deleteEntry, let ids = step.entryIds, !ids.isEmpty, deletingStepId == nil else { return false }
+        deletingStepId = step.id
+        stepDeletionError = nil
+        defer { deletingStepId = nil }
+
+        do {
+            for id in ids { try await deleteEntry(id) }
+        } catch {
+            stepDeletionError = error.localizedDescription
+            await load()
+            return false
+        }
+
+        // L'étape quitte l'écran tout de suite ; la relecture dit ce que le
+        // serveur en a fait — une étape sans souvenir disparaît du voyage.
+        if let current = detail {
+            detail = TripDetail(
+                trip: current.trip,
+                prompt: current.prompt,
+                steps: current.steps.filter { $0.id != step.id }
+            )
+        }
+        confirm(DeleteStepCopy.done(count: ids.count))
+        await load()
+        return true
+    }
+
+    /// Oublie l'erreur d'un effacement, quand la feuille se referme.
+    public func dismissStepDeletionError() {
+        stepDeletionError = nil
     }
 
     /// Un mot qui s'efface tout seul, quatre secondes après une validation —

@@ -64,6 +64,26 @@ final class SubscriptionSession {
     /// choisit la version du paywall.
     private(set) var hasSubscribedBefore = false
 
+    /// **La fin annoncée de l'illimité** — un renouvellement coupé
+    /// (`ending`, contrat du 06/10/2026), lu sur l'accueil ou le profil, ou
+    /// posé par une résiliation faite dans l'app. `RootView` attend cette date
+    /// pour faire tomber l'illimité partout **sans attendre une relecture** :
+    /// quelqu'un qui garde l'app ouverte le soir où son mois payé s'achève
+    /// ne doit plus lire « Illimité » ni « Abonné(e) » (Hugo, 06/10/2026).
+    private(set) var endsAt: Date?
+
+    /// La période s'est achevée sous nos yeux (``expireIfDue(now:)``), et
+    /// aucun serveur ne l'a encore redit : un crédit du jour servi avant
+    /// l'échéance, qui dit encore « illimité », se relit sans (``applied(to:)``).
+    private(set) var hasLapsed = false
+
+    /// Monte à chaque fois que l'abonnement a pu changer **hors de l'écran
+    /// qui le montre** : une échéance passée, une transaction qu'Apple vient
+    /// de remettre (un renouvellement, un remboursement), un achat qu'Apple ne
+    /// tient plus. Le profil se relit quand il bouge — l'accueil, lui, a déjà
+    /// sa propre relecture (`homeReloadRequest`).
+    private(set) var revision = 0
+
     init() {}
 
     /// Le compte raconte-t-il sans limite ? Le geste de la session d'abord,
@@ -90,23 +110,72 @@ final class SubscriptionSession {
     /// abonné est un fait d'histoire, et un serveur plus ancien qui ne le sert
     /// pas encore ne doit pas faire revoir la découverte à qui vient d'acheter.
     /// Seul ``reset()`` l'efface, quand le compte change.
-    func learn(isUnlimited: Bool, hasSubscribedBefore: Bool) {
+    ///
+    /// `endsAt` : la fin de l'illimité quand le renouvellement est coupé —
+    /// voir ``endsAt``. Un « oui » sans date (abonnement qui se renouvelle)
+    /// efface celle d'avant ; un « non » aussi, il n'y a plus rien à attendre.
+    func learn(isUnlimited: Bool, hasSubscribedBefore: Bool, endsAt: Date? = nil) {
         if override == isUnlimited { override = nil }
         known = isUnlimited
         if hasSubscribedBefore || isUnlimited { self.hasSubscribedBefore = true }
+        // Une date déjà passée ne s'attend pas : `isUnlimited` l'a déjà dit.
+        self.endsAt = isUnlimited ? endsAt : nil
+        if isUnlimited { hasLapsed = false }
     }
 
-    /// L'accueil vient de lire son contenu.
-    func learn(_ traveller: Traveller) {
-        learn(isUnlimited: traveller.isUnlimited, hasSubscribedBefore: traveller.hasSubscribedBefore)
+    /// L'accueil vient de lire son contenu — **à l'heure qu'il est** : un
+    /// accueil gardé en cache depuis la veille ne fait pas revivre un
+    /// renouvellement coupé dont la date est passée.
+    func learn(_ traveller: Traveller, now: Date = .now) {
+        let until = traveller.unlimitedUntil
+        let isUnlimited = traveller.isUnlimited && (until.map { $0 > now } ?? true)
+        learn(
+            isUnlimited: isUnlimited,
+            hasSubscribedBefore: traveller.hasSubscribedBefore,
+            endsAt: until
+        )
     }
 
     /// Le profil vient de se charger.
     func learn(_ profile: TravellerProfile) {
         learn(
             isUnlimited: profile.isSubscriber,
-            hasSubscribedBefore: profile.subscription.hasEndedBefore
+            hasSubscribedBefore: profile.subscription.hasEndedBefore,
+            endsAt: profile.subscription.unlimitedUntil()
         )
+    }
+
+    /// **L'échéance est passée** : l'illimité tombe partout, tout de suite.
+    ///
+    /// Appelée par `RootView` à la date (``endsAt``) et au retour au premier
+    /// plan. Le serveur, relu juste après, le confirme — et un réabonnement
+    /// fait entre-temps ailleurs le contredit, ce qui le rétablit.
+    func expireIfDue(now: Date = .now) {
+        guard let endsAt, endsAt <= now else { return }
+        self.endsAt = nil
+        // Un geste « illimité jusqu'à la fin du mois payé » (une résiliation
+        // dans l'app) s'arrête avec le mois ; un achat, lui, n'a pas de date.
+        if override == true { override = nil }
+        if known == true { known = false }
+        hasLapsed = true
+        revision += 1
+    }
+
+    /// **Apple ne tient plus l'achat que le serveur n'a jamais confirmé**
+    /// (`Transaction.currentEntitlements` vide) : remboursé, révoqué, ou
+    /// expiré avant d'avoir atteint l'API. Le geste « acheté » rend la main —
+    /// sans quoi il disait « illimité » toute la session.
+    func withdrawUnconfirmedPurchase() {
+        guard override == true, known != true else { return }
+        override = nil
+        revision += 1
+    }
+
+    /// L'abonnement a pu changer ailleurs — une transaction remise par
+    /// StoreKit hors de l'écran d'achat. Les écrans qui le montrent se
+    /// relisent.
+    func noteOutsideChange() {
+        revision += 1
     }
 
     /// Souscrire ou résilier : l'interface bascule tout de suite.
@@ -115,9 +184,15 @@ final class SubscriptionSession {
     /// entamé est un mois payé, l'illimité reste ouvert jusqu'à sa fin. Les
     /// deux gestes disent aussi qu'il y a eu un abonnement — le prochain paywall
     /// sera celui du retour.
-    func record(isSubscribed: Bool) {
+    ///
+    /// `until` : la fin de la période payée qu'une résiliation laisse ouverte
+    /// — l'illimité tombera à cette date (``expireIfDue(now:)``). Un achat
+    /// n'en a pas.
+    func record(isSubscribed: Bool, until: Date? = nil) {
         override = isSubscribed
         hasSubscribedBefore = true
+        endsAt = isSubscribed ? until : nil
+        hasLapsed = false
     }
 
     /// Un crédit du jour servi **avant** le dernier geste, relu avec lui.
@@ -126,9 +201,17 @@ final class SubscriptionSession {
     /// le crédit que le serveur leur a rendu ; juste après un achat, il dit
     /// encore « 1 min 20 restante ». Sans geste dans la session, le crédit du
     /// serveur fait foi tel quel.
+    ///
+    /// **Une échéance passée sous nos yeux compte aussi** (06/10/2026) : le
+    /// crédit servi la veille disait « illimité », et le mois payé vient de
+    /// s'achever — il se relit sans, le temps que le serveur le redise.
     func applied(to credit: DailyCredit?) -> DailyCredit? {
-        guard var credit, let override else { return credit }
-        credit.isUnlimited = override
+        guard var credit else { return nil }
+        if let override {
+            credit.isUnlimited = override
+        } else if hasLapsed, known != true, credit.isUnlimited {
+            credit.isUnlimited = false
+        }
         return credit
     }
 
@@ -146,6 +229,9 @@ final class SubscriptionSession {
         override = nil
         known = nil
         hasSubscribedBefore = false
+        endsAt = nil
+        hasLapsed = false
+        revision += 1
     }
 
     #if DEBUG

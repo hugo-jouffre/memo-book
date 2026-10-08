@@ -9,6 +9,7 @@ import { createMemoFor, isTakenId, visibleToAccount } from "../services/memoOwne
 import { normalizeNarrationPace } from "../services/narrationPace.js";
 import { hasUnlimitedAccess } from "../services/subscriptions.js";
 import { effectiveStage, stageFromDates } from "../services/tripStage.js";
+import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import {
   serializeGalleryCategory,
   serializeGalleryTrip,
@@ -95,6 +96,17 @@ const newTrip = tripDraft.extend({
   id: z.string().regex(UUID_PATTERN, "identifiant de voyage invalide").optional(),
 });
 
+/**
+ * **Un voyage a une date de départ** (T238, 06/10/2026) : l'app ne laisse plus
+ * créer un voyage sans elle, et le serveur le refuse aussi — c'est d'elle que
+ * dépendent l'état du voyage (à venir, en cours), le crédit du jour, les
+ * notifications et les chiffres du carnet. Un code à lui, pour que l'app
+ * pointe le champ au lieu d'afficher « Requête invalide ».
+ */
+export function startDateRequired(): HttpError {
+  return HttpError.badRequest("Choisis la date de départ de ton voyage.", "start_date_required");
+}
+
 /** « Rejoins une aventure » : le code tel qu'il a été collé. */
 const joinBody = z.object({ code: z.string().trim().min(1).max(40) });
 
@@ -118,7 +130,10 @@ export async function loadTripDetail(context: AppContext, accountId: string, mem
     where: { id: memoId, ...visibleToAccount(accountId) },
     include: {
       ...tripInclude,
-      steps: { orderBy: { number: "asc" } },
+      steps: {
+        orderBy: { number: "asc" },
+        include: { entries: { select: { id: true }, orderBy: [{ capturedAt: "asc" }, { createdAt: "asc" }] } },
+      },
     },
   });
 
@@ -140,7 +155,7 @@ export async function loadTripDetail(context: AppContext, accountId: string, mem
     dailyCredit = credits.get(memo.id);
   }
 
-  const trip = serializeTrip(memo, dailyCredit);
+  const trip = serializeTrip(memo, { viewerAccountId: accountId, dailyCredit });
 
   return {
     trip,
@@ -206,7 +221,9 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
 
     return {
       traveller,
-      trips: memos.map((memo) => serializeTrip(memo, credits.get(memo.id))),
+      trips: memos.map((memo) =>
+        serializeTrip(memo, { viewerAccountId: accountId, dailyCredit: credits.get(memo.id) }),
+      ),
       showcase: showcase ? serializeShowcase(showcase) : null,
     };
   });
@@ -265,27 +282,40 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
       if (!id) return null;
       const existing = await context.prisma.memo.findUnique({
         where: { id },
-        select: { ownerAccountId: true },
+        select: { ownerAccountId: true, startDate: true },
       });
       if (!existing) return null;
       if (existing.ownerAccountId !== accountId) {
         throw HttpError.conflict("Ce voyage existe déjà.");
       }
+      // Un renvoi d'un voyage **déjà créé** sans date de départ (une file d'un
+      // build d'avant T238) ne l'efface pas : il garde celle qu'il a.
+      const replayed = draft.startDate
+        ? fields
+        : {
+            ...fields,
+            startDate: existing.startDate,
+            stage: stageFromDates(existing.startDate, draft.endDate ?? null),
+          };
       const memo = await context.prisma.memo.update({
         where: { id },
-        data: fields,
+        data: replayed,
         include: tripInclude,
       });
-      return reply.code(200).send({ trip: serializeTrip(memo), accessCode: memo.accessCode });
+      return reply
+        .code(200)
+        .send({ trip: serializeTrip(memo, { viewerAccountId: accountId }), accessCode: memo.accessCode });
     };
 
     const replayed = await replay();
     if (replayed) return replayed;
 
+    if (!draft.startDate) throw startDateRequired();
+
     try {
       const memo = await createMemoFor(context.prisma, accountId, { ...(id ? { id } : {}), ...fields });
       return reply.code(201).send({
-        trip: serializeTrip({ ...memo, members: [] }),
+        trip: serializeTrip({ ...memo, members: [] }, { viewerAccountId: accountId }),
         accessCode: memo.accessCode,
       });
     } catch (error) {
@@ -312,6 +342,9 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
     const draft = tripDraft.parse(request.body ?? {});
 
     if (!UUID_PATTERN.test(id)) throw HttpError.notFound("Voyage introuvable.");
+    // Les six champs repartent ensemble : un brouillon sans date de départ
+    // l'effacerait (T238).
+    if (!draft.startDate) throw startDateRequired();
 
     if (draft.startDate && draft.endDate && draft.endDate < draft.startDate) {
       throw HttpError.badRequest("La date de fin précède la date de début.");
@@ -323,7 +356,7 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
     });
     if (!existing) throw HttpError.notFound("Voyage introuvable.");
 
-    const memo = await context.prisma.memo.update({
+    await context.prisma.memo.update({
       where: { id },
       data: {
         title: draft.title,
@@ -334,10 +367,13 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
         ...(draft.photoTextRatio === undefined ? {} : { photoTextRatio: draft.photoTextRatio }),
         stage: stageFromDates(draft.startDate ?? null, draft.endDate ?? null),
       },
-      include: tripInclude,
     });
+    // Les jours du voyage se comptent sur ses dates (T227) : on recompte, puis
+    // on relit ce qu'on rend.
+    await refreshTripFactsQuietly(context, id);
+    const memo = await context.prisma.memo.findUniqueOrThrow({ where: { id }, include: tripInclude });
 
-    return { trip: serializeTrip(memo), accessCode: memo.accessCode };
+    return { trip: serializeTrip(memo, { viewerAccountId: accountId }), accessCode: memo.accessCode };
   });
 
   /**
@@ -411,7 +447,7 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
       where: { id: memo.id },
       include: tripInclude,
     });
-    return { trip: serializeTrip(joined), accessCode: joined.accessCode };
+    return { trip: serializeTrip(joined, { viewerAccountId: accountId }), accessCode: joined.accessCode };
   });
 
   /**

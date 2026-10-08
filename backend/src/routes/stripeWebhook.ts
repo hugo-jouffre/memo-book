@@ -126,6 +126,9 @@ async function handleEvent(
 
   // Une recharge de cagnotte n'a pas de commande : elle se reconnaît à son
   // `metadata.kind` et se traite à part, avant toute recherche de commande.
+  // **Héritage** (06/10/2026) : la cagnotte est retirée, plus aucune recharge
+  // ne s'ouvre ; ce chemin ne sert qu'aux intentions ouvertes avant, qu'on
+  // inscrit au registre plutôt que de perdre l'argent de vue.
   if (event.kind === PAYMENT_KIND.walletTopup && event.type.startsWith("payment_intent.")) {
     await handleTopup(context, event, log);
     return;
@@ -151,6 +154,30 @@ async function handleEvent(
     // Pas une erreur : le compte Stripe reçoit aussi les événements d'autres
     // produits.
     log.info("Webhook Stripe sans commande correspondante, ignoré");
+    return;
+  }
+
+  // **Une intention remplacée** (T232, 07/10/2026) : finaliser une commande
+  // abandonnée lui ouvre une intention neuve, et l'ancienne — annulée — peut
+  // encore envoyer ses événements, retrouvés par `metadata.orderId`. Ils ne
+  // parlent plus de la commande : un `canceled` tardif fermerait celle qu'on
+  // vient de rouvrir.
+  if (
+    event.type.startsWith("payment_intent.") &&
+    event.intentId &&
+    order.stripePaymentIntentId &&
+    event.intentId !== order.stripePaymentIntentId
+  ) {
+    if (event.type === "payment_intent.succeeded") {
+      // Ne devrait pas arriver : l'ancienne n'est remplacée qu'une fois
+      // annulée, et Stripe refuse d'annuler une intention payée.
+      log.error(
+        { orderId: order.id, intentId: event.intentId },
+        "Paiement reçu sur une ancienne intention d'une commande rouverte : à rembourser",
+      );
+    } else {
+      log.info({ orderId: order.id, intentId: event.intentId }, "Événement d'une intention remplacée, ignoré");
+    }
     return;
   }
 
@@ -261,7 +288,11 @@ async function handleEvent(
 }
 
 /**
- * Créditer une cagnotte après un encaissement réussi.
+ * Créditer une cagnotte après un encaissement réussi — **héritage** : la
+ * cagnotte est retirée du produit depuis le 06/10/2026. Une intention ouverte
+ * avant et payée après s'inscrit quand même au registre (l'argent est là, il
+ * doit se lire quelque part), et le journal le signale au support : c'est une
+ * recharge à rembourser.
  *
  * **Une seule fois par intention** (`topup:<intention>`), et plus seulement par
  * événement : Stripe peut envoyer deux événements distincts pour le même
@@ -300,9 +331,9 @@ async function handleTopup(
   }
 
   if (result.outcome === "written") {
-    log.info(
+    log.error(
       { accountId: event.accountId, amountCents: event.amountCents, balance: result.balanceCents },
-      "Cagnotte créditée",
+      "Recharge de cagnotte encaissée après le retrait de la cagnotte : à rembourser par le support",
     );
   }
 }

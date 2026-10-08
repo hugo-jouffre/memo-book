@@ -318,6 +318,78 @@ final class ProfileModelTests: XCTestCase {
 
     // MARK: - La session d'abonnement (03/10/2026)
 
+    /// **Renouvellement coupé** (Hugo, 06/10/2026) : abonné jusqu'à la date
+    /// de fin, puis plus du tout — partout, sans attendre une relecture.
+    func testTheSessionLetsTheUnlimitedLapseAtItsDate() {
+        let session = SubscriptionSession()
+        let end = Date.now.addingTimeInterval(3_600)
+        session.learn(isUnlimited: true, hasSubscribedBefore: true, endsAt: end)
+        XCTAssertTrue(session.isUnlimited)
+        XCTAssertEqual(session.endsAt, end)
+
+        // Avant l'heure, rien ne bouge.
+        session.expireIfDue(now: end.addingTimeInterval(-60))
+        XCTAssertTrue(session.isUnlimited)
+
+        let revision = session.revision
+        session.expireIfDue(now: end.addingTimeInterval(1))
+        XCTAssertFalse(session.isUnlimited)
+        XCTAssertNil(session.endsAt)
+        XCTAssertGreaterThan(session.revision, revision)
+        // Le crédit servi la veille, qui disait « illimité », se relit sans.
+        XCTAssertEqual(session.applied(to: DailyCredit(isUnlimited: true))?.isUnlimited, false)
+        // Le paywall de retour, puisqu'il a été abonné.
+        XCTAssertEqual(session.paywallVariant, .returning)
+
+        // Le serveur relu dit qu'il s'est réabonné ailleurs : il fait foi.
+        session.learn(isUnlimited: true, hasSubscribedBefore: true)
+        XCTAssertTrue(session.isUnlimited)
+        XCTAssertEqual(session.applied(to: DailyCredit(isUnlimited: true))?.isUnlimited, true)
+    }
+
+    /// Un accueil gardé en cache depuis la veille ne fait pas revivre un
+    /// renouvellement coupé dont la date est passée.
+    func testACachedHomeDoesNotReviveALapsedSubscription() {
+        let session = SubscriptionSession()
+        let traveller = Traveller(
+            id: "t",
+            firstName: "Camille",
+            isUnlimited: true,
+            hasSubscribedBefore: true,
+            subscriptionState: .ending,
+            subscriptionEndsAt: Date.now.addingTimeInterval(-60)
+        )
+        session.learn(traveller)
+        XCTAssertFalse(session.isUnlimited)
+        XCTAssertNil(session.endsAt)
+    }
+
+    /// Résilier dans l'app, avec un mois payé devant soi : l'illimité reste
+    /// ouvert jusqu'à sa fin, puis tombe.
+    func testACancellationGestureEndsWithThePaidMonth() {
+        let session = SubscriptionSession()
+        let end = Date.now.addingTimeInterval(86_400)
+        session.record(isSubscribed: true, until: end)
+        XCTAssertTrue(session.isUnlimited)
+
+        session.expireIfDue(now: end.addingTimeInterval(1))
+        XCTAssertFalse(session.isUnlimited)
+        XCTAssertNil(session.override)
+    }
+
+    /// Un achat que le serveur n'a jamais confirmé, et qu'Apple ne tient plus
+    /// (remboursé, révoqué) : le geste rend la main.
+    func testAnUnconfirmedPurchaseAppleNoLongerHoldsIsWithdrawn() {
+        let session = SubscriptionSession()
+        session.learn(isUnlimited: false, hasSubscribedBefore: false)
+        session.record(isSubscribed: true)
+        XCTAssertTrue(session.isUnlimited)
+
+        session.withdrawUnconfirmedPurchase()
+        XCTAssertFalse(session.isUnlimited)
+        XCTAssertNil(session.override)
+    }
+
     /// Déconnexion, session refusée, compte supprimé : ce que la session
     /// savait de A ne passe pas à B.
     func testTheSessionForgetsTheAccountItServed() {

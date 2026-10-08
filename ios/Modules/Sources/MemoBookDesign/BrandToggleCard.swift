@@ -129,8 +129,8 @@ public struct BrandToggleCard: View {
 
     return VStack(spacing: MemoBookSpacing.snug) {
         BrandToggleCard(
-            title: "Insérer des Fun facts",
-            detail: "Encarts de culture générale toutes les 3 pages pour agrémenter vos récits.",
+            title: "Insérer des fun facts",
+            detail: "Encarts de culture générale toutes les 3 pages pour agrémenter tes récits.",
             isOn: $isOn
         )
         BrandToggleCard(

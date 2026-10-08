@@ -133,6 +133,7 @@ struct ChatCallToActionCard: View {
         case .openPreview: "IconBook"
         case .importPhotos: "IconLucideCamera"
         case .openPhotoSettings: "IconPictureFrame"
+        case .enableNotifications: "IconRingtone"
         case .unknown: "IconArrowRight"
         }
     }

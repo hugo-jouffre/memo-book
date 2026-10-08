@@ -37,13 +37,13 @@ public enum RecordingError: Error, LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .permissionDenied:
-            "MemoBook a besoin du micro pour enregistrer tes souvenirs. Autorise l'accès dans Réglages."
+            "MemoBook a besoin du micro pour enregistrer tes souvenirs. Autorise l’accès dans Réglages."
         case .sessionUnavailable:
             "Le micro est occupé par une autre application."
         case .recorderUnavailable:
-            "L'enregistrement n'a pas pu démarrer."
+            "L’enregistrement n’a pas pu démarrer."
         case .emptyRecording:
-            "L'enregistrement est vide, réessaie."
+            "L’enregistrement est vide, réessaie."
         }
     }
 }

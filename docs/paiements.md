@@ -10,33 +10,47 @@ Ce que le dépôt encaisse, par quel rail, et comment le vérifier.
 > |---|---|---|
 > | Abonnement mensuel (récit illimité) | **StoreKit 2** | Service numérique → Apple impose l'achat intégré |
 > | Carnet imprimé | **Stripe** | Bien physique → l'achat intégré est **interdit** |
-> | Cagnotte | **Stripe** | Elle ne finance que du physique |
 
-La cagnotte ne doit **jamais** pouvoir payer l'abonnement : du crédit acheté par
-Stripe qui déverrouillerait une fonctionnalité numérique contournerait l'achat
-intégré. C'est pour ça qu'il n'existe aucune branche « cagnotte » sur le chemin
-d'abonnement, et que `PAYMENT_KIND` (`src/services/billing.ts`) ne porte que
-deux valeurs, toutes deux physiques.
+**La cagnotte est retirée** (Hugo, 06/10/2026 — « on supprime la cagnotte ») :
+plus de recharge, plus de déduction, plus de page de contribution. Une commande
+se paie **entièrement par Stripe**. Ce qui en reste en base — `wallet_entries`,
+`accounts.walletBalanceCents`, `print_orders.walletAppliedCents` — n'est plus
+écrit que pour les commandes et les recharges d'avant (voir « L'héritage de la
+cagnotte » plus bas), et part dans l'export des données des comptes qui l'ont
+utilisée. Les colonnes seront retirées par une seconde migration, une fois
+celle-ci déployée.
 
-## Les trois chemins d'encaissement
+`PAYMENT_KIND` (`src/services/billing.ts`) ne porte que des valeurs physiques :
+aucun crédit acheté par Stripe ne doit jamais déverrouiller une fonction
+numérique, ce qui contournerait l'achat intégré.
+
+## Le chemin d'encaissement
 
 ```
 POST /memos/:id/orders
-  └─ la cagnotte couvre ce qu'elle peut → WalletEntry (débit = réservation)
-       ├─ reste 0 € ─────────────────────────────────────────→ submitted
-       └─ reste > 0 € → PaymentIntent → feuille → webhook ────→ submitted
-                          │
-                          ├─ « Payer » à nouveau → POST /orders/:id/payment (même intention)
-                          └─ abandonnée, annulée, 24 h sans paiement
-                               → intention annulée → réservation rendue → cancelled
-
-POST /wallet/topup ──→ PaymentIntent ─→ feuille ─→ webhook ─→ WalletEntry + solde
+  └─ PaymentIntent (le total) → feuille → webhook ────────────→ submitted
+       │
+       ├─ « Payer » à nouveau → POST /orders/:id/payment (même intention)
+       └─ abandonnée, annulée, 24 h sans paiement
+            → intention annulée → cancelled (« paiement abandonné »)
+                 └─ « Finaliser ma commande » → POST /orders/:id/payment
+                      → rouverte en draft, intention neuve, même prix
 ```
 
-**La part de cagnotte est réservée à la création** — débitée tout de suite, pour
-qu'une seconde commande partie en parallèle ne dépense pas la même somme — et
-**elle revient toujours, une seule fois**, quand la commande n'est pas payée
-(`services/orderPayments.ts`) :
+**Une commande abandonnée se finalise** (T232, Hugo 06/10/2026). Le suivi des
+commandes du profil (`GET /v1/profile` → `orders[]`) montre, à côté des
+commandes en route (`status: "in_progress"`), **la dernière commande jamais
+payée de chaque voyage** de moins de 30 jours (`status: "payment_abandoned"`) :
+étiquette « Paiement abandonné, commande non finalisée », CTA « Finaliser ma
+commande ». Ce CTA appelle la reprise, qui rouvre la commande fermée (de
+nouveau `draft`, nouvelle intention, prix figé à la commande) au lieu de
+répondre `409 order_expired` comme avant. Une commande payée puis remboursée
+ne se rouvre pas (`409 order_refunded`). Le webhook ignore les événements de
+l'ancienne intention, remplacée ; le ménage des 24 h compte depuis la
+dernière écriture (`updatedAt`), pour ne pas refermer aussitôt une commande
+ancienne qu'on vient de rouvrir.
+
+Ce qui ferme une commande non payée (`services/orderPayments.ts`) :
 
 | Ce qui ferme la commande | Qui |
 |---|---|
@@ -46,18 +60,12 @@ qu'une seconde commande partie en parallèle ne dépense pas la même somme — 
 | Personne ne revient payer | la tâche horaire, au-delà de 24 h |
 | Remboursement **total** avant l'impression | le webhook `charge.refunded` |
 
-> ⚠️ **L'intention s'annule toujours avant que la réservation revienne.** Stripe
+> ⚠️ **L'intention s'annule toujours avant que la commande se ferme.** Stripe
 > refuse d'annuler une intention payée : c'est lui qui tranche la course entre
 > le ménage et un paiement validé à la même seconde.
 
-> ⚠️ **La cagnotte n'est pas un mode de paiement qu'on choisit.** Il n'y a pas
-> de drapeau `payWithWallet` : elle s'applique toujours, à hauteur de ce qu'elle
-> contient, et l'intention Stripe ne porte que le reste. Trente euros sur un
-> carnet à cent n'est donc pas un solde insuffisant — c'est un acompte, et la
-> carte paie les soixante-dix restants.
-
-**Une commande naît toujours en `draft`** et n'en sort que sur confirmation —
-webhook pour une carte, écriture de registre quand la cagnotte a tout couvert.
+**Une commande naît toujours en `draft`** et n'en sort que sur confirmation du
+webhook.
 
 > ⚠️ **Ne jamais faire passer une commande en `submitted` depuis le retour de
 > l'app.** L'app peut être tuée entre le paiement et son rappel. Stripe, lui,
@@ -100,20 +108,20 @@ carte ajoutée là faisait répondre 404 à la commande (T225). Il n'existe plus
 > (`StripeSDK.handle`). Sans ça, la feuille attendait indéfiniment.
 
 `OrderPayment.settlement` tranche en un seul endroit ce que l'app doit faire :
-`.wallet` (rien à encaisser), `.card` (feuille), ou `.unavailable`. Ce dernier
+`.card` (feuille) ou `.unavailable` (`.wallet`, rien à encaisser, ne peut plus
+arriver : `paidFromWallet` est toujours faux depuis le 06/10/2026). Le second
 n'est pas un cas d'usage mais **une panne de configuration** — l'API déployée
 n'a pas ses clés Stripe — et il affiche un message au lieu d'une confirmation :
 une commande non payée ne doit jamais ressembler à une commande passée.
 
 > ⚠️ **Une feuille qui rend `.succeeded` ne veut pas dire « commande validée ».**
 > Elle dit que Stripe a accepté, pas que notre serveur l'a appris. D'où la
-> relecture, côté commande comme côté cagnotte : le solde ne monte qu'une fois
-> le webhook écrit au registre, une seconde ou deux plus tard.
+> relecture de la commande, jusqu'à ce que le webhook l'ait passée.
 
 > ⚠️ Annuler la feuille **n'est pas une erreur** : la commande reste en
 > brouillon et « Payer » la reprend **sur la même intention**
-> (`POST /v1/orders/:id/payment`) — pas de seconde commande, pas de second
-> débit de cagnotte. Jusqu'au 01/10/2026, chaque « Payer » en créait une neuve.
+> (`POST /v1/orders/:id/payment`) — pas de seconde commande. Jusqu'au
+> 01/10/2026, chaque « Payer » en créait une neuve.
 
 ## Ce qui rend le rejeu inoffensif
 
@@ -142,14 +150,29 @@ rejouer, et un bug déterministe reviendrait toutes les heures pendant trois jou
 
 - **partiel** : inscrit, rien d'autre — un geste sur les frais de port n'annule
   pas un carnet ;
-- **total, avant l'impression** : la commande est annulée et sa part de cagnotte
-  revient ;
+- **total, avant l'impression** : la commande est annulée (et une ancienne
+  part de cagnotte revient) ;
 - **total, une fois imprimée ou expédiée** : le statut ne bouge pas, et le log
-  demande au support de trancher pour la cagnotte.
+  demande au support de trancher pour une ancienne part de cagnotte.
 
-Une **recharge** remboursée est reprise sur la cagnotte, plafonnée au solde ; si
-elle a déjà été dépensée, le log dit ce qui manque. Un litige
-(`charge.dispute.created`) est journalisé en erreur et posé sur la commande.
+Un litige (`charge.dispute.created`) est journalisé en erreur et posé sur la
+commande.
+
+### L'héritage de la cagnotte
+
+Retirée le 06/10/2026, elle laisse trois chemins **qui ne servent qu'aux
+données d'avant** :
+
+- une commande d'avant qui portait une part de cagnotte la **rend toujours, une
+  seule fois**, quand elle se ferme sans être payée ou est remboursée en entier
+  (`returnWalletShare`, clé `order-wallet-return:<commande>`) ;
+- une recharge ouverte avant et payée après est **inscrite au registre**, et le
+  journal la signale en erreur : elle est à rembourser à la main ;
+- une recharge remboursée est reprise sur le registre, plafonnée au solde.
+
+Les soldes restants (`accounts.walletBalanceCents <> 0`) ne s'affichent plus
+nulle part : ils sont à rembourser par le support, puis à solder par une
+écriture `adjustment`.
 
 ## Vérifier en local
 
@@ -181,8 +204,7 @@ cd backend && npm run stripe:gateway-check
 
 Le dernier déroule tout le parcours avec le **vrai** Stripe en mode test :
 compte, carnet, commande, paiement carte 4242, attente du webhook, contrôle
-d'idempotence, recharge de cagnotte, puis une seconde commande où la cagnotte
-paie une partie et la carte le reste. C'est le seul chemin qui exerce la vraie
+d'idempotence. C'est le seul chemin qui exerce la vraie
 signature de webhook — `test/payments.test.ts` passe par `FakePaymentGateway`
 et ne peut pas la couvrir.
 
@@ -272,7 +294,7 @@ Le serveur **refuse de démarrer** si les deux clés ne sont pas du même mode
 |---|---|---|
 | **Adresse du siège** | Tableau de bord → Tax → Settings | `status: pending` — **aucune taxe n'est calculée** |
 | **Immatriculation TVA** | Tax → Registrations | Stripe ne collecte rien, **et ne lève aucune erreur** |
-| **Identifiant marchand Apple Pay** | Portail Apple + Stripe | La feuille montre les cartes seules |
+| **Certificat Apple Pay, puis `APPLE_PAY_MERCHANT_ID`** | Stripe + portail Apple + Railway (voir *Apple Pay*) | La feuille montre les cartes seules |
 | **Événements du webhook** | Développeurs ▸ Webhooks (commande ci-dessus) | Une intention annulée à la main ne rend sa réservation qu'au ménage horaire |
 | **Reçus par e-mail** | Paramètres ▸ E-mails clients ▸ Paiements réussis | Les intentions portent `receipt_email`, mais Stripe n'envoie rien tant que la case n'est pas cochée — et jamais en mode test |
 | Clé restreinte (`rk_`) | Développeurs → Clés API | — (bonne pratique avant la production) |
@@ -308,24 +330,34 @@ défaut) compte **quinze** moyens actifs, dont `card`, `link`, `klarna`,
 `amazon_pay` et `apple_pay`. À relire avec
 `stripe get /v1/payment_method_configurations`.
 
-> ⚠️ **`apple_pay` est actif chez Stripe et n'apparaîtra pourtant pas.** Ce
-> n'est pas le tableau de bord qui bloque, c'est l'app : `StripePaymentSheetPresenter`
-> reçoit `applePayMerchantId: nil` et ne configure pas `configuration.applePay`
-> — la feuille montre alors les cartes seules.
->
-> L'identifiant marchand existe depuis le 02/10/2026 (`merchant.com.tonapp.memobook`),
-> et l'app le porte : capability Apple Pay déclarée dans `ios/project.yml`, profil
-> de développement régénéré avec lui. Il reste deux gestes, dans cet ordre : le
-> **certificat Apple Pay** de Stripe sur cet identifiant (tableau de bord Stripe ▸
-> Apple Pay ▸ la demande de certificat à signer dans le portail Apple), puis
-> passer l'identifiant à `StripePaymentSheetPresenter`. Dans l'autre ordre, le
-> bouton paraît et le paiement échoue.
+### Apple Pay
+
+**C'est le serveur qui l'allume** (05/10/2026) : chaque paiement de commande
+rend `applePayMerchantId`, lu dans la variable
+`APPLE_PAY_MERCHANT_ID` du service `api`. L'app ne propose Apple Pay que si
+elle le reçoit ; vide, la feuille montre les cartes seules. Allumer ou couper
+Apple Pay est donc une variable Railway, pas une livraison.
+
+L'identifiant marchand existe depuis le 02/10/2026 (`merchant.com.tonapp.memobook`),
+et l'app le porte : capability Apple Pay déclarée dans `ios/project.yml`. Dans
+cet ordre, **pour chaque compte Stripe** (le sandbox et la production ont
+chacun le leur) :
+
+1. Tableau de bord Stripe ▸ *Paramètres ▸ Moyens de paiement ▸ Apple Pay* ▸
+   *Ajouter une nouvelle application* : télécharger la demande de certificat
+   (CSR).
+2. Portail Apple ▸ *Identifiers ▸ Merchant IDs* ▸ `merchant.com.tonapp.memobook`
+   ▸ *Apple Pay Payment Processing Certificate* ▸ *Create* : déposer la CSR,
+   télécharger le `.cer`, le rendre à Stripe.
+3. Railway ▸ `api` ▸ `APPLE_PAY_MERCHANT_ID=merchant.com.tonapp.memobook`.
+
+Dans l'autre ordre, le bouton paraît et le paiement échoue après Face ID.
 
 ## Le prix
 
-Une seule formule, dans `src/lib/pricing.ts`, pour deux lecteurs : l'estimation
-affichée sur la carte de cagnotte et le montant réellement débité. Un test
-vérifie qu'ils sont égaux au centime.
+Une seule formule, dans `src/services/printPricing.ts`, pour deux lecteurs :
+l'estimation de la notification de fin de voyage et le montant réellement
+débité.
 
 > ⚠️ **Le prix est à trancher avec l'imprimeur.** 1,798 € la page, frais fixes
 > et port compris — ce qui est faux dès qu'on s'éloigne de cinquante pages. Et
@@ -505,6 +537,30 @@ l'ancien produit).
 | nouvelle tentative de prélèvement | `expired` | non |
 | expiré | `expired` | non |
 | remboursé, révoqué | `expired` | non, dès la révocation |
+
+### Ce que l'app en dit : un état, en un mot (07/10/2026)
+
+Hugo, 06/10/2026 : « quand quelqu'un se désabonne, tous les endroits qui
+indiquaient « abonné » ne doivent plus l'indiquer ». Le statut en base ne
+suffisait pas — chaque écran le relisait à sa façon, et une ligne restée
+`active` après un `EXPIRED` perdu disait « abonné » pour toujours.
+`subscriptionStateOf` / `accountSubscriptionOf` (`services/subscriptions.ts`)
+en tirent **un** état, d'où tout le reste dérive :
+
+| État | Ce que c'est | Illimité | « Abonné » (`isActive`) |
+|---|---|---|---|
+| `active` | renouvellement armé | oui | oui |
+| `grace` | prélèvement en échec, délai de grâce d'Apple | oui | oui |
+| `ending` | renouvellement coupé : la période payée court encore | jusqu'à `endsAt` | non |
+| `ended` | expiré, remboursé, révoqué — ou sans nouvelles d'Apple 3 jours après l'échéance | non | non |
+| `none` | jamais abonné | non | non |
+
+Il sort dans `GET /v1/profile` → `subscription.state`, `autoRenews`,
+`renewsAt` (prochain prélèvement, `active` seulement), `endsAt` ; et dans
+`GET /v1/home` → `traveller.subscriptionState`, `subscriptionEndsAt` (pour
+`ending`). `subscriptionOutlivesTrip`, `subscriptionEndedOn`,
+`hasEndedBefore` et les notifications (`armedAppleRenewal`) le lisent aussi :
+plus rien n'invite à couper un abonnement qui ne se renouvellera pas.
 
 ### Ce qui rend le rejeu inoffensif, ici aussi
 

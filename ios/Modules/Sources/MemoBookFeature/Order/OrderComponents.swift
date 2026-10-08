@@ -44,8 +44,6 @@ struct OrderPriceRow: View {
     /// `nil` tant que le montant n'est pas arrivé : un squelette tient sa place.
     var amount: Decimal?
     var isProminent = false
-    /// Le montant est une déduction : il s'écrit en négatif.
-    var isNegative = false
 
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -89,7 +87,7 @@ struct OrderPriceRow: View {
     @ViewBuilder
     private var value: some View {
         if let amount {
-            Text(isNegative ? "- \(amount.euros)" : amount.euros)
+            Text(amount.euros)
                 .font(isProminent ? MemoBookFont.figure : MemoBookFont.bodySemibold)
                 .foregroundStyle(MemoBookColor.ink)
                 .monospacedDigit()
@@ -99,111 +97,6 @@ struct OrderPriceRow: View {
                 .minimumScaleFactor(0.7)
         } else {
             BrandSkeleton(width: 64, height: isProminent ? 20 : 14)
-        }
-    }
-}
-
-// MARK: - La carte de la cagnotte
-
-/// Ce qu'il y a sur la cagnotte, et ce que le carnet coûtera. La carte d'en
-/// haut de l'étape 1.
-///
-/// Elle **ne disparaît jamais** pendant le chargement : c'est le propre du
-/// squelette de cette app — la page se dessine tout de suite, seules les
-/// valeurs attendent. Voir ``BrandSkeleton``.
-struct OrderHeroCard: View {
-    let wallet: Wallet?
-    let isLoading: Bool
-
-    @Environment(\.dynamicTypeSize) private var typeSize
-
-    var body: some View {
-        let shape = RoundedRectangle(cornerRadius: MemoBookSpacing.galleryCornerRadius)
-
-        return VStack(spacing: MemoBookSpacing.sectionGap) {
-            balance
-            estimate
-        }
-        .padding(MemoBookSpacing.m)
-        .frame(maxWidth: .infinity)
-        .background(MemoBookColor.surface, in: shape)
-        .overlay { shape.strokeBorder(MemoBookColor.hairline, lineWidth: 1) }
-        .brandShadow(.soft)
-    }
-
-    private var balance: some View {
-        VStack(spacing: MemoBookSpacing.xs / 2 + 2) {
-            Text(BookCopy.Order.Start.balance)
-                .font(MemoBookFont.sectionOverline)
-                .foregroundStyle(MemoBookColor.inkMuted)
-                .textCase(.uppercase)
-
-            if isLoading {
-                BrandSkeleton(width: 160, height: 48, cornerRadius: MemoBookSpacing.snug)
-            } else {
-                Text(wallet?.balance.roundedEuros ?? "")
-                    .font(MemoBookFont.balance)
-                    // Vert dès qu'il y a quelque chose dessus, gris à zéro —
-                    // la même règle que l'écran de la cagnotte. Une cagnotte
-                    // vide ne doit pas avoir l'air d'une réussite.
-                    .foregroundStyle(
-                        (wallet?.balance ?? 0) > 0 ? MemoBookColor.action : MemoBookColor.inkMuted
-                    )
-                    .contentTransition(.numericText())
-                    .monospacedDigit()
-                    .minimumScaleFactor(0.6)
-                    .lineLimit(1)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
-    }
-
-    @ViewBuilder
-    private var estimate: some View {
-        if isLoading {
-            VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
-                BrandSkeleton()
-                BrandSkeleton(
-                    height: MemoBookSpacing.progressBarHeight,
-                    cornerRadius: MemoBookSpacing.progressBarHeight / 2
-                )
-            }
-        } else if let wallet, let estimate = wallet.estimate {
-            VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
-                estimateLine(estimate)
-                BrandProgressTrack(
-                    fraction: estimate.coverage(of: wallet.balance),
-                    tone: .tinted
-                )
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(
-                "\(BookCopy.Order.Start.estimate(pages: estimate.pageCount)), environ \(estimate.cost.euros)"
-            )
-        }
-    }
-
-    @ViewBuilder
-    private func estimateLine(_ estimate: WalletEstimate) -> some View {
-        let pages = Text(BookCopy.Order.Start.estimate(pages: estimate.pageCount))
-            .font(MemoBookFont.label)
-            .foregroundColor(MemoBookColor.ink)
-        let cost = Text("environ \(estimate.cost.roundedEuros)")
-            .font(MemoBookFont.label)
-            .foregroundColor(MemoBookColor.inkMuted)
-
-        if typeSize.isAccessibilitySize {
-            VStack(alignment: .leading, spacing: 2) {
-                pages
-                cost
-            }
-        } else {
-            HStack(spacing: MemoBookSpacing.xs) {
-                pages
-                Spacer(minLength: MemoBookSpacing.xs)
-                cost
-            }
         }
     }
 }

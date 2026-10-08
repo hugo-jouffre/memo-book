@@ -718,7 +718,7 @@ public enum BrandRowBuilder {
             }
 
             BrandRowGroup {
-                BrandRow("Ma cagnotte", value: "67,88 €", valueTone: .prominent) {}
+                BrandRow("Dernière commande", value: "129,50 €", valueTone: .prominent) {}
                 BrandRow("Adresse postale", value: "Ajouter une adresse", valueTone: .invitation) {}
                 BrandRow("Mon abonnement") {}
                 BrandRow("Partager sur la galerie", isOn: .constant(false))

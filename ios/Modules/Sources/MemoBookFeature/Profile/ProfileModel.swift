@@ -497,7 +497,7 @@ public final class ProfileModel {
         acknowledgeAppStoreRenewal(renews)
         // Le mois payé garde l'illimité, même renouvellement coupé : la
         // session retient l'accès réel, pas le geste.
-        session?.record(isSubscribed: subscriptionGrantsAccess)
+        session?.record(isSubscribed: subscriptionGrantsAccess, until: subscriptionUnlimitedUntil)
         return false
     }
 
@@ -516,6 +516,12 @@ public final class ProfileModel {
     /// recalcul local qui répond (``Subscription/isUnlimited``).
     public var subscriptionGrantsAccess: Bool {
         profile?.subscription.isUnlimited ?? false
+    }
+
+    /// Jusqu'où l'illimité court encore après une résiliation — la date à
+    /// laquelle la session le fera tomber partout. `nil` s'il se renouvelle.
+    var subscriptionUnlimitedUntil: Date? {
+        profile?.subscription.unlimitedUntil()
     }
 
     // MARK: - L'envoi

@@ -328,8 +328,10 @@ describe("le profil", () => {
     });
 
     const body = response.json<ProfileBody>();
-    // Les centimes deviennent des euros à la frontière, et nulle part avant.
-    expect(body.walletBalance).toBe(67.88);
+    // **Gelé à zéro** (06/10/2026) : la cagnotte est retirée, et un ancien
+    // solde ne s'affiche plus — le champ ne reste que pour les builds
+    // installés qui le décodent.
+    expect(body.walletBalance).toBe(0);
     expect(body.address).toEqual({
       street: "",
       postalCode: "",
@@ -371,6 +373,12 @@ describe("le profil", () => {
       // Aucun abonnement, donc aucun voyage rattaché (T71).
       tripTitle: null,
       tripDestination: null,
+      // L'état en un mot (07/10/2026) : `none`, rien qui se renouvelle ni qui
+      // s'arrête — voir `accountSubscriptionOf`.
+      state: "none",
+      autoRenews: false,
+      renewsAt: null,
+      endsAt: null,
     });
     expect(body.orders).toEqual([]);
   });
@@ -850,7 +858,7 @@ describe("un co-voyageur", () => {
     expect([200, 202]).toContain(generated.statusCode);
 
     // Commander — et la commande retient que c'est lui, pas le propriétaire :
-    // chacun a sa cagnotte.
+    // c'est dans son suivi à lui qu'elle se montre.
     const render = await harness.prisma.render.create({
       data: { memoId: memo.id, status: "ready", pdfUrl: "https://pdf.test/rome.pdf" },
     });
@@ -892,6 +900,35 @@ describe("un co-voyageur", () => {
     expect(refused.statusCode).toBe(404);
     expect(await harness.prisma.memo.findUnique({ where: { id: memo.id } })).not.toBeNull();
   });
+  it("ne se voit même pas proposer de le supprimer (`canDelete`, T233)", async () => {
+    const owner = await registerAccount(harness.app, "proprietaire@memobook.app");
+    const coTraveller = await registerAccount(harness.app, "covoyageur@memobook.app");
+    const memo = await sharedTrip(owner.accountId, coTraveller.accountId);
+
+    const read = async (url: string, authorization: string) =>
+      (await harness.app.inject({ method: "GET", url, headers: { authorization } })).json<
+        Record<string, unknown> & { trip?: { canDelete: boolean }; trips?: { id: string; canDelete: boolean }[] }
+      >();
+
+    for (const [who, authorization, expected] of [
+      ["propriétaire", owner.authorization, true],
+      ["co-voyageur", coTraveller.authorization, false],
+    ] as const) {
+      const home = await read("/v1/home", authorization);
+      expect(home.trips?.find((trip) => trip.id === memo.id)?.canDelete, `accueil, ${who}`).toBe(expected);
+
+      const detail = await read(`/v1/trips/${memo.id}`, authorization);
+      expect(detail.trip?.canDelete, `voyage, ${who}`).toBe(expected);
+
+      const settings = await read(`/v1/trips/${memo.id}/settings`, authorization);
+      expect(settings["canDelete"], `réglages, ${who}`).toBe(expected);
+      // Même règle que « Supprimer la conversation ».
+      expect(settings["canClearConversation"], `réglages, ${who}`).toBe(expected);
+
+      const order = await read(`/v1/memos/${memo.id}/order-context`, authorization);
+      expect(order.trip?.canDelete, `commande, ${who}`).toBe(expected);
+    }
+  });
 });
 
 describe("créer un voyage", () => {
@@ -902,7 +939,7 @@ describe("créer un voyage", () => {
     const account = await registerAccount(harness.app);
     const id = "5b0f7c1e-2a4d-4c7e-9f3a-1d2e3f4a5b6c";
 
-    const response = await create(account.authorization, { id, title: "Lisbonne" });
+    const response = await create(account.authorization, { id, title: "Lisbonne", startDate: "2026-11-02" });
 
     expect(response.statusCode).toBe(201);
     const body = response.json<{ trip: TripBody; accessCode: string }>();
@@ -914,9 +951,13 @@ describe("créer un voyage", () => {
     const account = await registerAccount(harness.app);
     const id = "6c1a8d2f-3b5e-4d8f-8a4b-2e3f4a5b6c7d";
 
-    const first = await create(account.authorization, { id, title: "Lisbonne" });
+    const first = await create(account.authorization, { id, title: "Lisbonne", startDate: "2026-11-02" });
     // La réponse s'est perdue, et on a corrigé le titre avant le retour du réseau.
-    const replayed = await create(account.authorization, { id, title: "Lisbonne et Porto" });
+    const replayed = await create(account.authorization, {
+      id,
+      title: "Lisbonne et Porto",
+      startDate: "2026-11-02",
+    });
 
     expect(replayed.statusCode).toBe(200);
     const body = replayed.json<{ trip: TripBody; accessCode: string }>();
@@ -930,7 +971,7 @@ describe("créer un voyage", () => {
     const stranger = await registerAccount(harness.app, "inconnu@memobook.app");
     const memo = await seedTrip(owner.accountId);
 
-    const response = await create(stranger.authorization, { id: memo.id, title: "Pris" });
+    const response = await create(stranger.authorization, { id: memo.id, title: "Pris", startDate: "2026-11-02" });
 
     expect(response.statusCode).toBe(409);
     expect(response.json<{ accessCode?: string }>().accessCode).toBeUndefined();
@@ -941,8 +982,48 @@ describe("créer un voyage", () => {
   it("tire un identifiant quand l'app n'en donne pas, et refuse un identifiant mal formé", async () => {
     const account = await registerAccount(harness.app);
 
-    expect((await create(account.authorization, { title: "Sans identifiant" })).statusCode).toBe(201);
-    expect((await create(account.authorization, { id: "pas-un-uuid", title: "Rome" })).statusCode).toBe(400);
+    expect(
+      (await create(account.authorization, { title: "Sans identifiant", startDate: "2026-11-02" })).statusCode,
+    ).toBe(201);
+    expect(
+      (await create(account.authorization, { id: "pas-un-uuid", title: "Rome", startDate: "2026-11-02" })).statusCode,
+    ).toBe(400);
+  });
+
+  it("exige une date de départ (T238), sans effacer celle d'un voyage déjà créé", async () => {
+    const account = await registerAccount(harness.app);
+    const id = "7d2b9e3a-4c6f-4e9a-9b5c-3f4a5b6c7d8e";
+
+    const refused = await create(account.authorization, { id, title: "Sans date" });
+    expect(refused.statusCode).toBe(400);
+    expect(refused.json<{ error: string }>().error).toBe("start_date_required");
+    expect(await harness.prisma.memo.count({ where: { ownerAccountId: account.accountId } })).toBe(0);
+
+    // Créé avec sa date, puis rejoué par une ancienne file qui ne l'envoie pas.
+    expect((await create(account.authorization, { id, title: "Rome", startDate: "2026-11-02" })).statusCode).toBe(201);
+    const replayed = await create(account.authorization, { id, title: "Rome !" });
+    expect(replayed.statusCode).toBe(200);
+    const stored = await harness.prisma.memo.findUniqueOrThrow({ where: { id } });
+    expect(stored.startDate?.toISOString().slice(0, 10)).toBe("2026-11-02");
+    expect(stored.title).toBe("Rome !");
+
+    // Les réglages la corrigent, ils ne l'effacent pas.
+    const cleared = await harness.app.inject({
+      method: "PATCH",
+      url: `/v1/trips/${id}/settings`,
+      headers: { authorization: account.authorization },
+      payload: { startDate: null },
+    });
+    expect(cleared.statusCode).toBe(400);
+    expect(cleared.json<{ error: string }>().error).toBe("start_date_required");
+
+    const corrected = await harness.app.inject({
+      method: "PATCH",
+      url: `/v1/trips/${id}`,
+      headers: { authorization: account.authorization },
+      payload: { title: "Rome", startDate: null },
+    });
+    expect(corrected.statusCode).toBe(400);
   });
 });
 
@@ -1024,38 +1105,6 @@ describe("rejoindre un voyage par son code", () => {
     expect(refused.statusCode).toBe(403);
     const row = await harness.prisma.memoMember.findFirstOrThrow({ where: { memoId: memo.id } });
     expect(row.status).toBe("removed");
-  });
-});
-
-describe("la cagnotte, depuis le profil", () => {
-  it("nomme le carnet du moment, pour que « Prévisualiser » et « Partager » aient un voyage", async () => {
-    const account = await registerAccount(harness.app);
-    const day = 24 * 60 * 60 * 1000;
-    const finished = await seedTrip(account.accountId, {
-      title: "Lisbonne",
-      startDate: new Date(Date.now() - 30 * day),
-      endDate: new Date(Date.now() - 20 * day),
-    });
-    const current = await seedTrip(account.accountId, {
-      title: "Rome",
-      startDate: new Date(Date.now() - 2 * day),
-      endDate: new Date(Date.now() + 5 * day),
-    });
-
-    const fromProfile = await harness.app.inject({
-      method: "GET",
-      url: "/v1/wallet",
-      headers: { authorization: account.authorization },
-    });
-    expect(fromProfile.json<{ tripId: string | null }>().tripId).toBe(current.id);
-
-    // Depuis un voyage, c'est ce voyage-là, même fini.
-    const fromTrip = await harness.app.inject({
-      method: "GET",
-      url: `/v1/wallet?tripId=${finished.id}`,
-      headers: { authorization: account.authorization },
-    });
-    expect(fromTrip.json<{ tripId: string | null }>().tripId).toBe(finished.id);
   });
 });
 

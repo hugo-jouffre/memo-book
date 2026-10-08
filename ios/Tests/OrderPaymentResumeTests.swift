@@ -4,8 +4,8 @@ import MemoBookPayments
 import XCTest
 
 /// **« Payer » reprend la commande déjà passée** (01/10/2026). Il en créait une
-/// seconde à chaque tapotis — une nouvelle intention, et un second débit de
-/// cagnotte. Sans simulateur : le modèle reçoit ses fonctions, comme l'app les
+/// seconde à chaque tapotis — une nouvelle intention, et un second débit. Sans
+/// simulateur : le modèle reçoit ses fonctions, comme l'app les
 /// lui branche, et on compte ce qu'il appelle.
 @MainActor
 final class OrderPaymentResumeTests: XCTestCase {
@@ -17,7 +17,6 @@ final class OrderPaymentResumeTests: XCTestCase {
     }
 
     private let ticket = OrderPayment(
-        paidFromWallet: false,
         amountCents: 4_990,
         currency: "eur",
         clientSecret: "pi_test_secret_test",
@@ -45,6 +44,34 @@ final class OrderPaymentResumeTests: XCTestCase {
                 return .fixture(memoId: "memo-1", request: calls.submitted.last!)
             }
         )
+    }
+
+    /// Apple Pay arrive du serveur, avec le paiement : la feuille ne le montre
+    /// que s'il est là — un serveur sans certificat Apple Pay n'en envoie pas.
+    func testApplePayComesFromTheServerWithThePayment() throws {
+        let withApplePay = try JSONDecoder().decode(OrderPayment.self, from: Data("""
+        {"amountCents":4990,"currency":"eur","clientSecret":"pi_x_secret_y",\
+        "publishableKey":"pk_test_x","applePayMerchantId":"merchant.com.tonapp.memobook"}
+        """.utf8))
+        guard case .card(let ticket) = withApplePay.settlement else { return XCTFail("carte attendue") }
+        XCTAssertEqual(ticket.applePayMerchantId, "merchant.com.tonapp.memobook")
+
+        guard case .card(let cardsOnly) = self.ticket.settlement else { return XCTFail("carte attendue") }
+        XCTAssertNil(cardsOnly.applePayMerchantId)
+    }
+
+    /// « Payer » sur un carnet qu'aucune composition n'a rendu (T224) : le
+    /// serveur répond `409 no_render`, et l'étape le dit au lieu de ne rien
+    /// faire. Le jeu d'essai du modèle répond comme le serveur.
+    func testPayingWithoutARenderSaysSo() async {
+        let model = OrderModel(memoId: "memo-1", context: { _ in .notComposedFixture })
+        await model.load()
+
+        await model.pay()
+
+        XCTAssertTrue(model.isMissingRender)
+        XCTAssertNil(model.paymentError, "Ce n'est pas une panne : pas de bandeau d'erreur.")
+        XCTAssertNotEqual(model.step, .confirmation)
     }
 
     func testAClosedSheetResumesTheSameOrder() async {

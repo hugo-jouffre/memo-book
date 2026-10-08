@@ -86,6 +86,11 @@ public enum SupportCopy {
         /// deux fois.
         public static let thanks = "Merci !"
 
+        /// Le vote n'est pas parti : les pouces reviennent, et cette ligne
+        /// dit pourquoi (T226).
+        public static let voteOffline = "Pas de réseau : ton avis n’est pas parti. Réessaie une fois connecté."
+        public static let voteFailed = "Ton avis n’a pas pu partir. Réessaie dans un instant."
+
         public static let stillStuck = "J’ai encore une question"
         public static let understood = "Compris"
     }
@@ -140,6 +145,15 @@ public enum SupportCopy {
         /// Le message n'est pas parti. L'écrire là où le formulaire était, et
         /// garder le texte saisi : le perdre serait pire que l'échec.
         public static let sendFailed =
-            "Ton message n’a pas pu partir. Vérifie ta connexion et réessaie."
+            "Ton message n’a pas pu partir. Réessaie dans un instant."
+
+        /// Pas de réseau : le message reste dans le champ (T226).
+        public static let sendOffline =
+            "Pas de réseau : ton message n’est pas parti. Il reste ici, réessaie une fois connecté."
+
+        /// Plus de vingt messages en vingt-quatre heures
+        /// (`429 support_rate_limited`).
+        public static let sendRateLimited =
+            "Tu nous as déjà beaucoup écrit aujourd’hui. On lit tout : réessaie demain si tu as encore quelque chose à nous dire."
     }
 }

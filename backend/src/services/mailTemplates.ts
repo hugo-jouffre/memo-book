@@ -137,7 +137,7 @@ const DATA_EXPORT_SUBJECT = "Tes données MemoBook sont prêtes";
 
 /** Ce que l'archive contient, en une phrase — l'e-mail, la page et l'app disent la même. */
 export const DATA_EXPORT_CONTENTS =
-  "ton compte, tes voyages et leurs récits, chaque souvenir tel que tu l’as raconté et tel que MEMO l’a écrit, tes photos et tes vocaux d’origine, tes carnets en PDF, tes commandes, ta cagnotte et ton abonnement";
+  "ton compte, tes voyages et leurs récits, chaque souvenir tel que tu l’as raconté et tel que MEMO l’a écrit, tes photos et tes vocaux d’origine, tes carnets en PDF, tes commandes et ton abonnement";
 
 /**
  * « Tes données MemoBook sont prêtes » — `account.data_export`, niveau 1 de

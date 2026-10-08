@@ -289,7 +289,11 @@ export interface SerializeThreadOptions {
   messages: ChatMessageRow[];
   viewer: Pick<Account, "id" | "firstName" | "lastName" | "avatarStorageKey" | "avatarUrl">;
   activeStep: MemoStep | null;
-  /** `count(entries kind ≠ photo)` — `memos.memoryCount` n'est écrit que par le seed. */
+  /**
+   * `count(entries kind ≠ photo)`, compté à la lecture : `memos.memoryCount`
+   * (`services/tripFacts.ts`) n'avance qu'à la fin de la rédaction, et le fil
+   * veut le souvenir qu'on vient d'envoyer.
+   */
   memoryCount: number;
   hasReadyRender: boolean;
   turn: ChatTurnStatus;

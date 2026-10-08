@@ -87,6 +87,17 @@ public struct TripStep: Codable, Sendable, Hashable, Identifiable {
     /// n'est pas fait.
     public let validatedAt: Date?
 
+    /// **Les souvenirs rattachés à cette étape** — ce que la croix de son
+    /// tiroir efface (T235, Hugo, 06/10/2026), un `DELETE /v1/entries/:id`
+    /// chacun.
+    ///
+    /// Une étape est un **lieu** ; elle peut porter plusieurs souvenirs — un
+    /// vocal, un texte, des photos (`entries.stepId`, plusieurs lignes pour
+    /// une étape). « Le souvenir de l'étape », c'est donc tout ce qu'on y a
+    /// raconté. `nil` d'un serveur qui ne le sert pas encore : la croix ne
+    /// paraît pas, faute de savoir quoi effacer.
+    public let entryIds: [String]?
+
     public init(
         id: String,
         number: Int,
@@ -97,7 +108,8 @@ public struct TripStep: Codable, Sendable, Hashable, Identifiable {
         companions: [Companion] = [],
         photoUrl: URL? = nil,
         transport: TripTransport? = nil,
-        validatedAt: Date? = nil
+        validatedAt: Date? = nil,
+        entryIds: [String]? = nil
     ) {
         self.id = id
         self.number = number
@@ -109,7 +121,11 @@ public struct TripStep: Codable, Sendable, Hashable, Identifiable {
         self.photoUrl = photoUrl
         self.transport = transport
         self.validatedAt = validatedAt
+        self.entryIds = entryIds
     }
+
+    /// La croix du tiroir s'offre : on sait quels souvenirs effacer.
+    public var hasDeletableMemories: Bool { !(entryIds ?? []).isEmpty }
 
     /// Cette étape, validée. Sert la mise à jour optimiste de « Valider cette
     /// étape » côté app, et les jeux d'essai qui simulent la même réponse.
@@ -124,7 +140,8 @@ public struct TripStep: Codable, Sendable, Hashable, Identifiable {
             companions: companions,
             photoUrl: photoUrl,
             transport: transport,
-            validatedAt: date
+            validatedAt: date,
+            entryIds: entryIds
         )
     }
 }

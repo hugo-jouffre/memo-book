@@ -2,7 +2,7 @@ import Foundation
 import MemoBookCore
 
 // Mise en forme des valeurs du profil. Les règles vivent ici, pas dans les
-// vues : un montant s'écrit pareil dans la ligne « Ma cagnotte » et sur l'offre
+// vues : un montant s'écrit pareil dans le tunnel de commande et sur l'offre
 // du paywall.
 
 extension Decimal {

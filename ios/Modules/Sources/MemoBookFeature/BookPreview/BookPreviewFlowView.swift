@@ -90,7 +90,13 @@ public struct BookPreviewFlowView: View {
             // raison d'ouvrir autre chose.
             .brandSheet(isPresented: $showsFeedback) {
                 if let support = sessionSupport ?? previewSupport {
-                    SupportSheet(model: support, route: .contact(about: nil))
+                    // « Partager mes retours » part comme tel (T226).
+                    SupportSheet(
+                        model: support,
+                        route: .contact(about: nil),
+                        source: .foundersNote,
+                        tripId: model.preview?.memoId
+                    )
                 }
             }
             .task(id: showsFeedback) {
@@ -124,8 +130,7 @@ public struct BookPreviewFlowView: View {
             BookCompositionView(
                 model: model,
                 onIntent: onIntent,
-                onShare: openShare,
-                onShareWallet: shareWallet
+                onShare: openShare
             )
                 // La composition s'efface **en montant** d'un cheveu, et
                 // l'aperçu arrive de la même façon : la page qui vient de se
@@ -142,8 +147,7 @@ public struct BookPreviewFlowView: View {
                     BookReaderView(
                         model: model,
                         onIntent: onIntent,
-                        onShare: openShare,
-                        onShareWallet: shareWallet
+                        onShare: openShare
                     )
                     .transition(.opacity)
                 }
@@ -156,20 +160,6 @@ public struct BookPreviewFlowView: View {
         showsShareChoice = true
     }
 
-    /// « Partager ma cagnotte » : **directement** la feuille du système, avec
-    /// le message et le lien (Clara, 26/09/2026). Le choix PDF ou lien reste
-    /// derrière le bouton de partage de l'en-tête ; demander de l'aide, c'est
-    /// toujours le lien.
-    private func shareWallet() {
-        Task {
-            guard let wallet = await model.prepareWalletShare() else { return }
-            showsShareChoice = false
-            // La cagnotte ne sait pas où en est le récit : le message ne compte
-            // pas les étapes.
-            systemShare = payload(title: wallet.title, steps: nil, file: nil, link: wallet.link)
-        }
-    }
-
     /// Ouvre la feuille de partage du système avec ce qu'il faut dedans.
     ///
     /// La feuille de choix se referme **d'abord** : sans ça, on retrouverait
@@ -177,31 +167,32 @@ public struct BookPreviewFlowView: View {
     /// faudrait la fermer deux fois.
     private func share(_ kind: BookShareKind) async {
         let title = model.preview?.title ?? ""
-        let steps = model.preview?.pageCount ?? 0
+        // Les pages que l'en-tête annonce — celles du PDF quand il est là.
+        let pages = model.sheetCount
 
         switch kind {
         case .pdf:
             guard let file = model.exportPdf() else { return }
-            // Le lien de la cagnotte accompagne **aussi** le PDF : c'est le
-            // message qui demande un coup de main, pas la pièce jointe.
+            // Le lien accompagne **aussi** le PDF : c'est le message qui dit
+            // où suivre le carnet, pas la pièce jointe.
             let link = await model.prepareShareLink()
             showsShareChoice = false
-            systemShare = payload(title: title, steps: steps, file: file, link: link)
+            systemShare = payload(title: title, pages: pages, file: file, link: link)
 
         case .link:
             guard let link = await model.prepareShareLink() else { return }
             showsShareChoice = false
-            systemShare = payload(title: title, steps: steps, file: nil, link: link)
+            systemShare = payload(title: title, pages: pages, file: nil, link: link)
         }
     }
 
     /// Le partage, habillé comme la maquette `3551:26331` : la photo et le
     /// titre du voyage en tête, « Commander » et « Partager sur Whatsapp » sous
     /// les apps.
-    private func payload(title: String, steps: Int?, file: URL?, link: URL?) -> BookSharePayload {
+    private func payload(title: String, pages: Int, file: URL?, link: URL?) -> BookSharePayload {
         var share = BookSharePayload(
             title: title,
-            steps: steps,
+            pages: pages,
             file: file,
             link: link,
             coverPhotoUrl: model.preview?.coverPhotoUrl
@@ -249,8 +240,6 @@ public enum BookPreviewIntent: Sendable, Hashable {
     case customise
     /// « Commander ce carnet ».
     case order
-    /// « Voir ma cagnotte ».
-    case openWallet
     /// Configurer la première ou la quatrième de couverture.
     case configureCovers
     /// « Partager mes retours », depuis le mot des fondateurs.
@@ -262,14 +251,13 @@ public enum BookPreviewIntent: Sendable, Hashable {
 /// L'attente : une page de carnet qui se monte sous les yeux.
 ///
 /// Elle occupe exactement la place de l'aperçu qui va suivre — même en-tête,
-/// mêmes boutons, même carte de cagnotte —, et c'est ce qui fait que le
+/// mêmes boutons —, et c'est ce qui fait que le
 /// passage de l'un à l'autre ne saute pas. Seule la page change, et c'est bien
 /// la seule chose qui ait changé.
 private struct BookCompositionView: View {
     let model: BookPreviewModel
     let onIntent: (BookPreviewIntent) -> Void
     let onShare: () -> Void
-    let onShareWallet: () -> Void
 
     var body: some View {
         ScrollView {
@@ -299,12 +287,29 @@ private struct BookCompositionView: View {
                     BookCompositionPage(progress: model.compositionProgress)
                 }
 
-                // L'indicateur de pages tient sa place pendant la composition,
-                // en barre d'attente : c'est ce qui évite que les boutons du
-                // dessous sautent de 43 pt quand l'aperçu arrive.
-                BrandSkeleton(width: 96)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, MemoBookSpacing.snug)
+                // **Où en est la composition**, à la place de l'indicateur de
+                // pages (06/10/2026) : elle dure des minutes, et une page
+                // montée puis immobile se lirait comme un écran figé. La ligne
+                // tient au moins la hauteur de l'indicateur — c'est ce qui
+                // évite que les boutons du dessous sautent quand l'aperçu
+                // arrive. Un échec la retire : c'est le bandeau qui parle.
+                Group {
+                    if model.errorMessage == nil {
+                        Text(
+                            BookCopy.Composition.phase(
+                                model.compositionPhase,
+                                pendingMemories: model.pendingMemoryCount
+                            )
+                        )
+                        .font(MemoBookFont.caption)
+                        .foregroundStyle(MemoBookColor.inkMuted)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .contentTransition(.opacity)
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: MemoBookSpacing.minimumTapTarget)
+                .animation(.easeInOut(duration: 0.25), value: model.compositionPhase)
 
                 BookActionsBlock(
                     // La composition est en cours : il n'y a rien à commander
@@ -312,11 +317,6 @@ private struct BookCompositionView: View {
                     isComposed: false,
                     onCustomise: { onIntent(.customise) },
                     onOrder: { onIntent(.order) }
-                )
-
-                BookOfferCard(
-                    onShare: onShareWallet,
-                    onSeeWallet: { onIntent(.openWallet) }
                 )
 
                 if let message = model.errorMessage {
@@ -349,7 +349,6 @@ private struct BookReaderView: View {
     let model: BookPreviewModel
     let onIntent: (BookPreviewIntent) -> Void
     let onShare: () -> Void
-    let onShareWallet: () -> Void
 
     /// Tourner la page au doigt : vers la gauche on avance, vers la droite on
     /// revient (Hugo, 19/09/2026).
@@ -429,10 +428,8 @@ private struct BookReaderView: View {
                     onOrder: { onIntent(.order) }
                 )
 
-                BookOfferCard(
-                    onShare: onShareWallet,
-                    onSeeWallet: { onIntent(.openWallet) }
-                )
+                // « Fais-toi offrir ce carnet », la carte qui menait à la
+                // cagnotte, est partie avec elle (Hugo, 06/10/2026, T230).
 
                 if model.renderer.didFail {
                     ErrorBanner(message: BookCopy.Preview.loadFailed) {
@@ -501,7 +498,9 @@ struct BookSheetView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            BookSheetImage(renderer: model.renderer, index: model.sheetIndex)
+            // La page du PDF, ou le plat choisi sur la première et la dernière
+            // — voir ``BookSheetFace``.
+            BookSheetFace(model: model, index: model.sheetIndex)
                 .clipShape(.rect(cornerRadius: MemoBookSpacing.pageCornerRadius))
                 .overlay {
                     RoundedRectangle(cornerRadius: MemoBookSpacing.pageCornerRadius)

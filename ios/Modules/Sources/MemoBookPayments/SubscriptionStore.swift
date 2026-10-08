@@ -150,6 +150,12 @@ public protocol SubscriptionStore: AnyObject, Sendable {
     /// abonnements — sans attendre la notification du serveur. `nil` quand on
     /// ne sait pas.
     func willAutoRenew() async -> Bool?
+
+    /// **Apple tient-il un abonnement en cours pour cet identifiant Apple ?**
+    /// Lu sur `Transaction.currentEntitlements` — sans réseau, sans demander
+    /// de mot de passe. Un remboursement ou une révocation l'en retirent.
+    /// `nil` quand on ne sait pas (un aperçu, le bac à sable).
+    func hasCurrentEntitlement() async -> Bool?
 }
 
 /// Le vrai StoreKit 2.
@@ -270,6 +276,17 @@ public final class StoreKitSubscriptionStore: SubscriptionStore {
         for await verification in StoreKit.Transaction.unfinished {
             _ = await settle(verification, deliver: deliver)
         }
+    }
+
+    public func hasCurrentEntitlement() async -> Bool? {
+        for await verification in StoreKit.Transaction.currentEntitlements {
+            guard case .verified(let transaction) = verification,
+                acceptedProductIds.contains(transaction.productID),
+                transaction.revocationDate == nil
+            else { continue }
+            return true
+        }
+        return false
     }
 
     public func willAutoRenew() async -> Bool? {
@@ -395,4 +412,8 @@ public final class StubSubscriptionStore: SubscriptionStore {
     public func deliverUnfinished(deliver: @escaping TransactionDelivery) async {}
 
     public func willAutoRenew() async -> Bool? { renewsAfterManagement }
+
+    /// `nil` : le bac à sable n'a pas d'App Store à interroger, et la session
+    /// garde ce que ses gestes ont dit.
+    public func hasCurrentEntitlement() async -> Bool? { nil }
 }
