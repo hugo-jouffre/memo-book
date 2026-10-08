@@ -160,10 +160,11 @@ seul pays fait de plusieurs lieux :
     pays qui touchent le cadre, coupés au bord et effacés en fondu. Sans ces
     fichiers, la carte retombe sur le pays entier.
 
-  Dessin : `MemoBook Generator/public/carte.js`. La carte du pays entier y est
-  une recopie de `mapSvg.ts`, gardée identique par
-  `backend/test/carteAtelier.test.ts` ; le back-end, lui, cadre encore sur le
-  pays.
+  Dessin : `MemoBook Generator/public/carte.js`, recopie de `mapSvg.ts` —
+  cadrage et contours compris — gardée identique par
+  `backend/test/carteAtelier.test.ts`. Seule différence : l'atelier connaît
+  les lieux par l'analyse d'étape, l'app par les `points` que l'agent pose sur
+  chaque carte (§ « Les cartes »).
 
 ## Les cartes
 
@@ -179,14 +180,39 @@ L'agent **décrit** la carte, il ne la dessine pas :
 }
 ```
 
-- `regions` : codes **ISO 3166-1 alpha-2**. Le premier cadre la vue, les
-  suivants n'ajoutent que du contexte. 175 pays disponibles.
-- `points` : 6 maximum. Les coordonnées doivent être justes au dixième de
-  degré — un point mal placé se voit immédiatement quand on connaît le pays.
+- `regions` : codes **ISO 3166-1 alpha-2**. Le premier est le pays du
+  chapitre ; les suivants ne servent plus qu'au repli (voir plus bas). 175 pays
+  disponibles.
+- `points` : 6 maximum. **Les lieux où les récits du chapitre emmènent le
+  voyageur** — l'île où il arrive, le village visité, la plage d'excursion —
+  pas ceux qui sont seulement cités (la ville de départ du vol). Les
+  coordonnées doivent être justes au centième de degré : un point mal placé se
+  voit immédiatement, et à l'échelle d'un archipel un dixième de degré, c'est
+  une île voisine.
 
-Le back-end projette le contour et les points avec **la même** transformation
-(Mercator), puis insère le SVG dans `map_svg`. Ils ne peuvent donc pas diverger.
-Voir `backend/src/services/mapSvg.ts`.
+**Le cadrage suit ce que racontent les récits, pas les frontières.** La carte
+ne montre pas le pays entier, mais la zone que le voyage y parcourt : un voyage
+aux Cyclades se cadre sur les Cyclades, pas sur le continent grec avec les
+épingles en pleine mer. Le back-end (`expandMaps`, `voyageFrame`) :
+
+- réunit les `points` de **toutes** les cartes du carnet dans le même pays ;
+- les entoure avec 20 % de marge de chaque côté et **un degré de côté au
+  moins** (~110 km), sans dépasser le pays : un tour de la Grèce garde la
+  carte de la Grèce ;
+- garde **le même cadre** pour tous les chapitres du pays : d'une carte à
+  l'autre, on voit le trajet avancer ;
+- dessine les contours de Natural Earth 10 m (`assets/maps/detail/`, qui a les
+  petites îles) de tous les pays qui touchent le cadre, coupés au bord et
+  effacés en fondu.
+
+C'est pourquoi les `points` comptent plus que `regions` : ce sont eux qui
+disent où le voyage se passe. Sans contour détaillé pour le pays, la carte
+retombe sur le pays entier, cadré sur le premier code de `regions`.
+
+Le back-end projette les contours et les points avec **la même**
+transformation (Mercator), puis insère le SVG dans `map_svg`. Ils ne peuvent
+donc pas diverger. Voir `backend/src/services/mapSvg.ts` ; l'atelier en a une
+recopie (`carte.js`), gardée identique par `backend/test/carteAtelier.test.ts`.
 
 ## Quand il manque des photos, ou du texte
 
