@@ -560,9 +560,18 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
     //
     // Fermer d'abord, par le chemin de toujours : l'intention s'annule (Stripe
     // tranche si elle vient d'être payée) et une ancienne part de cagnotte
-    // revient. Puis rouvrir sur une intention neuve. La clé d'idempotence
-    // porte l'instant de la dernière écriture : deux appuis simultanés sur
-    // « Finaliser » obtiennent la même intention, pas deux.
+    // revient. Puis rouvrir sur une intention neuve.
+    //
+    // **La clé d'idempotence nomme l'intention qu'on remplace**, lue avant
+    // tout (08/10/2026). Elle portait l'instant de la dernière écriture, relu
+    // après la fermeture : deux appuis simultanés sur « Finaliser » ne
+    // relisaient pas toujours le même instant — le second arrivait après
+    // l'écriture du premier — et ouvraient deux intentions, la commande ne
+    // gardant que la seconde (vu en CI, `stripeLifecycle.test.ts`). L'intention
+    // remplacée, elle, est la même pour les deux appuis ; la fermeture la
+    // garde sur la commande, et la réouverture suivante en remplacera une
+    // autre — donc une clé neuve.
+    const reopenKey = `order:${order.id}:reopen-after:${order.stripePaymentIntentId ?? "none"}`;
     if (order.status === "draft") {
       const outcome = await releaseUnpaidOrder(context, order.id, "Paiement rouvert.");
       if (outcome === "paid") return settled();
@@ -575,7 +584,7 @@ export function registerOrderRoutes(app: FastifyInstance, context: AppContext): 
       accountId,
       title: order.memo.bookTitle?.trim() || order.memo.title,
       amountCents,
-      idempotencyKey: `order:${order.id}:reopen:${closed.updatedAt.getTime()}`,
+      idempotencyKey: reopenKey,
     });
 
     await context.prisma.printOrder.updateMany({
