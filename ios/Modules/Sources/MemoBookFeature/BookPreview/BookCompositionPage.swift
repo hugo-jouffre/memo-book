@@ -1,3 +1,4 @@
+import MemoBookCore
 import MemoBookDesign
 import SwiftUI
 
@@ -282,6 +283,124 @@ struct BookCompositionPiece: Identifiable, Sendable {
 
         return pieces
     }()
+}
+
+/// La page qui se monte, **puis la suivante, et ainsi de suite** tant que le
+/// carnet se compose (Hugo, 08/10/2026).
+///
+/// Une composition dure des minutes ; la cascade, quelques secondes. Une page
+/// montée puis immobile pendant tout le reste « semble cassée ». Une fois la
+/// première page posée, celle-ci s'en va donc comme on tourne une page — vers
+/// la gauche, en pâlissant —, et une page blanche se monte à sa place, en
+/// miroir pour que deux pages de suite ne se ressemblent pas. C'est ce qui se
+/// passe pour de vrai : le carnet se compose page après page.
+///
+/// La **première** page suit l'avancement du modèle (`firstPass`) : c'est lui
+/// qui décide du plancher de l'attente — voir
+/// ``BookPreviewModel/compositionProgress``. Les suivantes sont à la vue
+/// seule : elles n'ont rien à dire au modèle, et s'arrêtent avec elle.
+///
+/// Sous « Réduire les animations », une seule page, posée : la boucle se tait,
+/// et c'est la ligne d'état par-dessus (``BookCompositionStatus``) qui dit que
+/// ça travaille.
+struct BookCompositionLoop: View {
+    /// L'avancement de la première page, tenu par le modèle.
+    let firstPass: Double
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Le rang de la page en cours de montage. Zéro : la première.
+    @State private var page = 0
+    /// L'avancement des pages suivantes.
+    @State private var progress: Double = 0
+
+    /// Combien de temps une page posée reste sous les yeux avant de tourner.
+    private static let hold: Duration = .seconds(1.6)
+    /// Combien de temps une page suivante met à se monter : celui de la
+    /// première, pour garder le même rythme.
+    static let assembly: Double = 4.2
+    /// Le temps de tourner la page.
+    private static let turn: Double = 0.6
+
+    var body: some View {
+        ZStack {
+            BookCompositionPage(progress: page == 0 ? firstPass : progress)
+                // Une page sur deux en miroir : ses morceaux arrivent de
+                // l'autre côté, et la page suivante ne rejoue pas la même.
+                .scaleEffect(x: page.isMultiple(of: 2) ? 1 : -1)
+                .id(page)
+                .transition(
+                    .asymmetric(
+                        insertion: .identity,
+                        removal: .offset(x: -40).combined(with: .opacity).combined(with: .scale(scale: 0.94))
+                    )
+                )
+        }
+        .task(id: firstPass >= 1) {
+            guard firstPass >= 1, !reduceMotion else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: Self.hold)
+                if Task.isCancelled { return }
+                // La page blanche arrive à zéro, sans animation : c'est
+                // l'ancienne qui s'en va, pas la nouvelle qui se fond.
+                progress = 0
+                withAnimation(.easeInOut(duration: Self.turn)) { page += 1 }
+                try? await Task.sleep(for: .seconds(Self.turn * 0.5))
+                if Task.isCancelled { return }
+                withAnimation(.easeOut(duration: Self.assembly)) { progress = 1 }
+                try? await Task.sleep(for: .seconds(Self.assembly))
+            }
+        }
+    }
+}
+
+/// Ce que fait la composition **en ce moment**, posé sur la page qui se monte
+/// (Hugo, 08/10/2026 : « agrandir le texte qui explique que la création est
+/// en cours, le mettre peut-être par-dessus l'animation, un loader »).
+///
+/// Une carte crème, un sablier qui tourne, la phrase de la phase en corps de
+/// texte — et non plus en légende grise sous la page, où on ne la lisait pas.
+/// La seconde ligne dit le temps que ça prend : sans elle, une page qui se
+/// remonte pour la troisième fois se lirait encore comme une boucle cassée.
+struct BookCompositionStatus: View {
+    let phase: BookRenderPhase?
+    let pendingMemories: Int
+
+    var body: some View {
+        HStack(alignment: .center, spacing: MemoBookSpacing.snug) {
+            ProgressView()
+                .controlSize(.regular)
+                .tint(MemoBookColor.action)
+
+            VStack(alignment: .leading, spacing: 2) {
+                // La phrase change d'un coup : en fondu, l'ancienne et la
+                // nouvelle se superposaient le temps du passage, illisibles
+                // quand elles n'ont pas le même nombre de lignes.
+                Text(BookCopy.Composition.phase(phase, pendingMemories: pendingMemories))
+                    .font(MemoBookFont.bodySemibold)
+                    .foregroundStyle(MemoBookColor.ink)
+                Text(BookCopy.Composition.patience)
+                    .font(MemoBookFont.caption)
+                    .foregroundStyle(MemoBookColor.inkMuted)
+            }
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, MemoBookSpacing.s)
+        .padding(.vertical, MemoBookSpacing.snug)
+        .background(
+            MemoBookColor.surface.opacity(0.94),
+            in: .rect(cornerRadius: MemoBookSpacing.largeCornerRadius)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: MemoBookSpacing.largeCornerRadius)
+                .strokeBorder(MemoBookColor.hairline, lineWidth: 1)
+        }
+        .brandShadow(.soft)
+        .transaction { $0.animation = nil }
+        .accessibilityElement(children: .combine)
+    }
 }
 
 #Preview("Page en composition") {

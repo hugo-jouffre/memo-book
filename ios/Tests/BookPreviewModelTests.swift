@@ -38,7 +38,7 @@ final class BookPreviewModelTests: XCTestCase {
         await model.run()
 
         XCTAssertEqual(model.stage, .preview)
-        // Le plancher de la cascade est de 2,6 s : rester bien en dessous
+        // Le plancher de la cascade est de 4,2 s : rester bien en dessous
         // prouve qu'il n'a pas été traversé pour rien.
         XCTAssertLessThan(ContinuousClock.now - started, .seconds(1))
     }

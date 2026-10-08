@@ -283,33 +283,35 @@ private struct BookCompositionView: View {
                     .disabled(true)
                 }
 
+                // **La page se monte, puis la suivante** (Hugo, 08/10/2026),
+                // et ce qui se passe s'écrit **par-dessus**, en corps de texte,
+                // avec un sablier : en légende grise sous la page, la phrase
+                // ne se lisait pas, et une page montée puis immobile pendant
+                // des minutes semblait cassée. Un échec retire la carte :
+                // c'est le bandeau qui parle.
                 BookPageStage {
-                    BookCompositionPage(progress: model.compositionProgress)
+                    BookCompositionLoop(firstPass: model.compositionProgress)
                 }
-
-                // **Où en est la composition**, à la place de l'indicateur de
-                // pages (06/10/2026) : elle dure des minutes, et une page
-                // montée puis immobile se lirait comme un écran figé. La ligne
-                // tient au moins la hauteur de l'indicateur — c'est ce qui
-                // évite que les boutons du dessous sautent quand l'aperçu
-                // arrive. Un échec la retire : c'est le bandeau qui parle.
-                Group {
+                .overlay(alignment: .bottom) {
                     if model.errorMessage == nil {
-                        Text(
-                            BookCopy.Composition.phase(
-                                model.compositionPhase,
-                                pendingMemories: model.pendingMemoryCount
-                            )
+                        BookCompositionStatus(
+                            phase: model.compositionPhase,
+                            pendingMemories: model.pendingMemoryCount
                         )
-                        .font(MemoBookFont.caption)
-                        .foregroundStyle(MemoBookColor.inkMuted)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .contentTransition(.opacity)
+                        .padding(.horizontal, MemoBookSpacing.xs)
+                        .offset(y: MemoBookSpacing.m)
+                        .transition(.opacity)
                     }
                 }
-                .frame(maxWidth: .infinity, minHeight: MemoBookSpacing.minimumTapTarget)
-                .animation(.easeInOut(duration: 0.25), value: model.compositionPhase)
+                .animation(.easeInOut(duration: 0.25), value: model.errorMessage == nil)
+
+                // La place de l'indicateur de pages qui viendra avec l'aperçu
+                // — et celle de la carte d'état, qui déborde du bas de la
+                // page : les boutons du dessous ne sautent pas quand l'aperçu
+                // arrive.
+                Color.clear
+                    .frame(maxWidth: .infinity, minHeight: MemoBookSpacing.minimumTapTarget)
+                    .accessibilityHidden(true)
 
                 BookActionsBlock(
                     // La composition est en cours : il n'y a rien à commander

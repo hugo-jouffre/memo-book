@@ -185,6 +185,11 @@ public enum BookCopy {
         public static let photoSubtitle = "Changer la photo de couverture"
         public static let textsSubtitle = "Modifier le titre et sous-titre"
 
+        /// Le titre du dos « Dessin » : celui de la maquette de Hugo
+        /// (`assets/covers`, 08/10/2026). Le dos n'a pas de titre qu'on écrit
+        /// — seulement son texte de quatrième.
+        public static let drawingBackHeading = "La route continue…"
+
         /// Les trois lignes de l'écran d'accueil des couvertures. La première
         /// dit « Changer **de** style », la ligne de l'en-tête « Changer **le**
         /// style » : c'est la maquette, et les deux se lisent bien.
@@ -263,8 +268,13 @@ public enum BookCopy {
         /// morceau par morceau ne dirait rien de plus que cette phrase.
         public static let voiceOverStatus = "Composition du carnet en cours"
 
-        /// Ce que la composition fait en ce moment, sous la page qui se monte
-        /// (06/10/2026). Une composition dure plusieurs minutes — la mise en
+        /// Sous la phrase de la phase, sur la page qui se monte (08/10/2026) :
+        /// sans elle, une page qui se remonte pour la troisième fois se lirait
+        /// comme une boucle cassée. **Sans maquette** : à relire (T253).
+        public static let patience = "Ça peut prendre quelques minutes."
+
+        /// Ce que la composition fait en ce moment, sur la page qui se monte
+        /// (06/10/2026 ; en carte par-dessus la page depuis le 08/10/2026). Une composition dure plusieurs minutes — la mise en
         /// page attend jusqu'à trois minutes les souvenirs encore en
         /// rédaction —, et une page montée en 2,6 s puis immobile se lirait
         /// comme un écran figé. **Sans maquette** : à relire par Clara (T143).
