@@ -123,6 +123,39 @@
     return Number(String(texte).replace(",", "."));
   }
 
+  /**
+   * La largeur du dos d'un relié Pumbo, d'après le nombre de pages
+   * intérieures (barème Pumbo du 08/10/2026) : 8,0 mm de 16 à 56 pages ; au-delà,
+   * 3 mm + 0,09 mm par page, arrondi au dixième, 8 mm au moins. 100 pages font
+   * 12,0 mm, 200 pages 21,0 mm.
+   */
+  const DOS_MIN = 8;
+  const PAGES_MIN = 16;
+  function dosPumbo(pages) {
+    const n = Math.max(0, Math.round(Number(pages) || 0));
+    if (n <= 56) return DOS_MIN;
+    return Math.max(DOS_MIN, Math.round((3 + 0.09 * n) * 10) / 10);
+  }
+
+  /**
+   * La fiche de la commande : les plats, le fond perdu et les marges de la
+   * fiche Pumbo (importée, ou celle par défaut), le dos tiré du nombre de pages
+   * du carnet. Sans nombre de pages connu, la fiche telle quelle.
+   */
+  function ficheDuCarnet(fiche, pages) {
+    if (!pages) return fiche;
+    const dos = dosPumbo(pages);
+    return {
+      ...fiche,
+      dos,
+      pages,
+      // Le dos ne dépend plus de la fiche : il n'y a plus rien à signaler.
+      parDefaut: false,
+      source: `${fiche.source} ; dos de ${String(dos).replace(".", ",")} mm pour ${pages} pages (barème Pumbo)`,
+      tropCourt: pages < PAGES_MIN,
+    };
+  }
+
   /** Toutes les cotes de la feuille, en millimètres, origine en haut à gauche du fond perdu. */
   function geometrie(fiche) {
     const f = fiche.fondPerdu;
@@ -1205,13 +1238,18 @@ var ELEMENTS = ${litteral(elements)};
       "4. Double-cliquer sur « Couverture MemoBook.jsx » dans le panneau Scripts : le document se construit.",
       "5. Fichier > Enregistrer sous… pour garder le .indd, puis Fichier > Exporter en PDF (PDF/X-4) pour Pumbo.",
       "",
-      "Le dos dépend du nombre de pages : vérifier que la fiche Pumbo utilisée correspond à la commande.",
+      fiche.pages
+        ? `Dos de ${String(fiche.dos).replace(".", ",")} mm pour ${fiche.pages} pages intérieures (barème Pumbo : 8 mm jusqu'à 56 pages, puis 3 mm + 0,09 mm par page). Si le carnet change de nombre de pages, refaire le fichier.`
+        : "Le dos dépend du nombre de pages : vérifier qu'il correspond à la commande.",
       "",
     ].join("\r\n");
   }
 
   const api = {
     FICHE_DEFAUT,
+    PAGES_MIN,
+    dosPumbo,
+    ficheDuCarnet,
     CHARNIERE,
     SEUILS,
     COULEURS,

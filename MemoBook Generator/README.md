@@ -365,10 +365,11 @@ Deux sorties de la même maquette :
   construit le document dans InDesign (sur le modèle de la fiche Pumbo, en
   objets modifiables), la photo et le logo dans `Liens/`, et le mode d'emploi.
 
-**La fiche Pumbo** (le `.jsx` de leur outil de couverture) s'importe dans les
-réglages. Elle seule donne la largeur du dos, qui dépend du nombre de pages :
-une fiche par commande. Sans elle, l'atelier prend celle d'un relié de 48 pages
-(dos de 8 mm) et le signale.
+**Le dos** se calcule d'après le nombre de pages du carnet, selon le barème
+Pumbo : 8 mm de 16 à 56 pages, puis 3 mm + 0,09 mm par page, arrondi au dixième
+(100 pages → 12 mm, 200 pages → 21 mm). **La fiche Pumbo** (le `.jsx` de leur
+outil de couverture) s'importe dans les réglages pour les plats, le fond perdu et
+les marges ; sans elle, l'atelier prend celle du relié 154 × 216 mm.
 
 Règles et cotes : `LAYOUT_KB.md`, § « Couverture imprimée (Pumbo) ».
 

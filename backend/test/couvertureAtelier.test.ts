@@ -23,6 +23,8 @@ type Evaluation = { score: number; dpi: number; alertes: string[]; suffisante: b
 type Photo = { id: string; largeur: number; hauteur: number; groupe?: boolean; mesure?: unknown; analyse?: unknown };
 const C = require("../../MemoBook Generator/public/couverture.js") as {
   FICHE_DEFAUT: Record<string, unknown>;
+  dosPumbo: (pages: number) => number;
+  ficheDuCarnet: (fiche: Record<string, unknown>, pages: number) => Record<string, unknown>;
   evaluerPhoto: (photo: Photo, options?: Record<string, unknown>) => Evaluation;
   proposerPhotos: (photos: Photo[]) => {
     recto: { photo: Photo }[];
@@ -90,6 +92,25 @@ describe("couverture : les photos", () => {
     ]);
     expect(recto).toEqual([]);
     expect(meilleure?.photo.id).toBe("petite");
+  });
+});
+
+describe("couverture : le dos", () => {
+  it("suit le barème Pumbo : 8 mm jusqu'à 56 pages, puis 3 mm + 0,09 mm par page", () => {
+    expect(C.dosPumbo(16)).toBe(8);
+    expect(C.dosPumbo(56)).toBe(8);
+    expect(C.dosPumbo(58)).toBe(8.2);
+    expect(C.dosPumbo(100)).toBe(12);
+    expect(C.dosPumbo(200)).toBe(21);
+    expect(C.dosPumbo(137)).toBe(15.3);
+  });
+
+  it("élargit la planche du dos du carnet, plats de la fiche inchangés", () => {
+    const fiche = C.ficheDuCarnet(C.FICHE_DEFAUT, 100);
+    expect(fiche).toMatchObject({ dos: 12, pages: 100, largeurPlat: 178, hauteurPlat: 260, parDefaut: false });
+    const m = C.maquette({ fiche, textes: { titre: "Cyclades" } });
+    expect(m.largeur).toBe(2 * 178 + 12);
+    expect(C.ficheDuCarnet(C.FICHE_DEFAUT, 12)["tropCourt"]).toBe(true);
   });
 });
 

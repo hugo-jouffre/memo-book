@@ -940,25 +940,37 @@ largeur dépend du nombre de pages. Elle ne passe donc pas par ce gabarit ni par
 APITemplate : l'atelier la compose (`MemoBook Generator/public/couverture.js`)
 et la livre en aperçu PDF au format exact et en fichier InDesign.
 
-**Les dimensions viennent de la fiche Pumbo, jamais d'un calcul.** L'outil de
-couverture de Pumbo produit, pour une commande donnée, un script InDesign
-(`.jsx`) qui donne tout ; l'atelier le lit (*Réglages → Fiche couverture
-Pumbo*). Pumbo ne publie pas de barème : la largeur du dos dépend du nombre de
-pages **et** du papier, et la seule valeur connue est celle-ci :
+**Les plats viennent de la fiche Pumbo, le dos du nombre de pages.** L'outil
+de couverture de Pumbo produit, pour une commande donnée, un script InDesign
+(`.jsx`) ; l'atelier le lit (*Réglages → Fiche couverture Pumbo*) pour les
+plats, le fond perdu et les marges. Sans fiche importée, il prend celle-ci :
 
-| Fiche du 07/10/2026 — relié 154 × 216 mm, 48 pages | mm |
+| Fiche du 07/10/2026 — relié 154 × 216 mm | mm |
 |---|---|
-| Feuille complète, fond perdu compris | 370 × 266 |
 | Fond perdu, sur les quatre bords | 3 |
 | Plat verso et plat recto (chacun) | 178 × 260 |
-| Dos | 8 |
 | Zone sûre : marge haut, bas et bord extérieur des plats | 19 |
 | Côté dos (charnière) : marge imposée par MemoBook, pas par la fiche | 12 |
 
 Les plats sont plus grands que la page (178 × 260 contre 154 × 216) : le carton
 déborde du bloc et le papier se rabat dessus. D'où la zone sûre de 19 mm, qui
-couvre ce rabat. Sans fiche importée, l'atelier part de celle-ci **et le dit** :
-un dos de 8 mm sur un carnet de 80 pages serait faux. Une fiche par commande.
+couvre ce rabat.
+
+**Le dos suit le barème Pumbo** (08/10/2026, récapitulatif tenu dans le
+tableur de l'équipe), d'après le nombre de **pages intérieures** du carnet —
+colophon compris, arrondi au nombre pair qui part chez l'imprimeur :
+
+| Pages | Dos |
+|---|---|
+| 16 à 56 | **8,0 mm** (le minimum) |
+| au-delà | **3 mm + 0,09 mm par page**, arrondi au dixième, 8 mm au moins |
+| exemples | 100 pages → 12,0 mm ; 200 pages → 21,0 mm |
+
+La planche fait donc `2 × 178 + dos` mm de large, plus le fond perdu (370 × 266
+pour 48 pages). L'atelier compte les pages de sa propre mise en page
+(`Couverture.dosPumbo`, `ficheDuCarnet`) et le dit au voyageur ; sous 16 pages,
+il prévient que Pumbo ne relie pas un carnet aussi mince. Le carnet change de
+nombre de pages : la couverture se refait.
 
 **Le style par défaut** (`assets/covers/… cover_style par défaut.png`), seul
 développé pour l'instant. Rien du modèle n'est écrit en dur : ni la photo, ni

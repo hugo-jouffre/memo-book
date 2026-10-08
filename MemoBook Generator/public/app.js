@@ -1512,10 +1512,24 @@ const recitDe = (etape) => etape.souvenirs.map((s) => s.texte.trim()).filter(Boo
 
 /**
  * Pages du livre imprimé : le colophon, puis les pages d'étape — la couverture
- * et la quatrième sont imprimées à part sur un relié. C'est ce nombre qu'il
- * faut donner à l'outil de couverture Pumbo pour obtenir la bonne fiche.
+ * et la quatrième sont imprimées à part sur un relié. C'est ce nombre qui fixe
+ * la largeur du dos (`Couverture.dosPumbo`).
  */
 const pagesInterieures = (jours) => 1 + jours.length;
+
+/**
+ * Les pages intérieures du livre tel qu'il partira chez Pumbo, en nombre pair
+ * (une page blanche finale au besoin) : la mise en page de l'atelier, comptée
+ * comme pour la version imprimeur.
+ */
+function pagesDuLivre() {
+  if (!etat.etapes.length) return 0;
+  const n = pagesInterieures(construirePayloadCarnet((data) => data).days);
+  return n + (n % 2);
+}
+
+/** La fiche de la couverture : les plats de la fiche Pumbo, le dos tiré du nombre de pages. */
+const ficheCouverture = () => Couverture.ficheDuCarnet(fichePumbo(), pagesDuLivre());
 
 function construirePayloadCarnet(photoDe = (data) => data) {
   // La même photo que sur la couverture imprimée : le carnet s'ouvre sur ce
@@ -1859,7 +1873,7 @@ const extensionDe = (dataUrl) => (/^data:image\/png/.test(dataUrl) ? "png" : "jp
 
 /** La maquette de la couverture, dans le style par défaut. */
 function maquetteCouverture() {
-  const fiche = fichePumbo();
+  const fiche = ficheCouverture();
   const recto = photoDuPlat("recto");
   const lieux = Voyage.itineraire(etapesPourMiseEnPage(() => ""));
   const detail =
@@ -1885,8 +1899,11 @@ function maquetteCouverture() {
 
 /** Ce qu'il faut dire avant d'envoyer la couverture. */
 function alertesCouverture() {
-  const fiche = fichePumbo();
+  const fiche = ficheCouverture();
   const alertes = [];
+  if (fiche.tropCourt) {
+    alertes.push(`Pumbo relie ${Couverture.PAGES_MIN} pages au moins : le carnet n'en a que ${fiche.pages}.`);
+  }
   if (fiche.parDefaut) {
     alertes.push(
       `Dimensions de la ${fiche.source} (dos de ${fiche.dos} mm). Le dos dépend du nombre de pages : ` +
@@ -2088,7 +2105,15 @@ function rendreCouverture() {
         "div",
         { class: "rangee entete-couv" },
         h("h2", {}, "Couverture du livre"),
-        h("span", { class: "aide" }, `Style par défaut · plats ${fiche.largeurPlat} × ${fiche.hauteurPlat} mm, dos ${fiche.dos} mm`),
+        (() => {
+          const f = ficheCouverture();
+          return h(
+            "span",
+            { class: "aide" },
+            `Style par défaut · plats ${f.largeurPlat} × ${f.hauteurPlat} mm · dos ${String(f.dos).replace(".", ",")} mm` +
+              (f.pages ? ` pour ${f.pages} pages (barème Pumbo)` : ""),
+          );
+        })(),
         bouton("Fermer", {
           petit: true,
           surClic: () => {
@@ -2394,12 +2419,14 @@ async function genererCarnet(bouton) {
     }
 
     etat.pdf = { url: donnees.download_url, quand: new Date() };
-    // Le nombre de pages intérieures est celui qu'il faut donner à l'outil de
-    // couverture Pumbo : c'est lui qui fixe la largeur du dos.
+    // Le nombre de pages intérieures fixe la largeur du dos de la couverture.
     const pages = pagesInterieures(payload.days) + (payload.page_blanche_finale ? 1 : 0);
+    const pagesPaires = pages + (pages % 2);
     etat.carnetStatut = {
       type: "info",
-      texte: `${pages} pages intérieures${etat.reglages.versionImprimeur ? "" : " (hors couverture et quatrième)"} : c'est le nombre à donner à l'outil de couverture Pumbo pour la fiche du dos.`,
+      texte:
+        `${pages} pages intérieures${etat.reglages.versionImprimeur ? "" : " (hors couverture et quatrième)"} : ` +
+        `dos de ${String(Couverture.dosPumbo(pagesPaires)).replace(".", ",")} mm (barème Pumbo), repris par la couverture.`,
     };
     if (onglet && !onglet.closed) onglet.location.href = donnees.download_url;
   } catch (erreur) {
@@ -3029,7 +3056,7 @@ function rendreReglages() {
         const f = fichePumbo();
         return (
           `Couverture : plats ${f.largeurPlat} × ${f.hauteurPlat} mm, dos ${f.dos} mm, fond perdu ${f.fondPerdu} mm — ${f.source}. ` +
-          "Le dos dépend du nombre de pages : une fiche par commande, tirée de l'outil de couverture Pumbo."
+          "Le dos, lui, se calcule d'après le nombre de pages du carnet (barème Pumbo : 8 mm jusqu'à 56 pages, puis 3 mm + 0,09 mm par page)."
         );
       })(),
     ),
