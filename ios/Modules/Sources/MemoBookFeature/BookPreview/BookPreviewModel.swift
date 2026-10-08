@@ -110,7 +110,11 @@ public final class BookPreviewModel {
     /// pour faire joli — une page qui se monte et disparaît avant d'être finie
     /// donne l'impression d'un bogue, et l'aperçu qui suit arrive alors sans
     /// qu'on ait compris ce qui venait de se passer.
-    private static let compositionDuration: Duration = .seconds(2.6)
+    ///
+    /// **4,2 s et non plus 2,6** (Hugo, 08/10/2026) : la cascade était courte
+    /// pour l'attente qui suit, et le rythme est désormais celui de chaque
+    /// page de la boucle — voir ``BookCompositionLoop``.
+    private static let compositionDuration: Duration = .seconds(BookCompositionLoop.assembly)
 
     /// Le pas entre deux relevés de l'avancement. 1/60 s : la cascade se joue
     /// dans une animation SwiftUI, ce rythme ne sert qu'à savoir **quand elle

@@ -31,8 +31,34 @@ struct ChatMessageRow: View {
             authorCaption
             row
             deliveryNotice
+            deliveryTicks
         }
         .frame(maxWidth: .infinity, alignment: horizontalAlignment)
+    }
+
+    /// **Les coches, à la manière de WhatsApp** (Hugo, 08/10/2026), sous les
+    /// messages qu'on a dits soi-même : une coche grise, il est **gardé sur
+    /// le téléphone** — dans la file, il partira tout seul ; deux, il est
+    /// **arrivé chez nous**, et la retranscription a commencé.
+    ///
+    /// Rien sous une bulle qui attend le crédit ou l'illimité, ni sous un
+    /// échec : la mention dessous (``deliveryNotice``) dit déjà où il en est,
+    /// et une coche à côté se contredirait avec elle. Rien sous les bulles
+    /// d'un co-voyageur : ce n'est pas notre envoi.
+    @ViewBuilder
+    private var deliveryTicks: some View {
+        if isTraveller, message.authorName == nil {
+            switch message.delivery {
+            case .sending:
+                ChatDeliveryTicks(isDelivered: false)
+                    .padding(.horizontal, MemoBookSpacing.snug)
+            case .sent:
+                ChatDeliveryTicks(isDelivered: true)
+                    .padding(.horizontal, MemoBookSpacing.snug)
+            case .failed, .waitingForCredit, .waitingForUnlimited:
+                EmptyView()
+            }
+        }
     }
 
     /// Le prénom de l'autre voyageur, au-dessus de sa bulle, dans un fil à
@@ -289,6 +315,43 @@ extension ChatMessageRow {
     }
 }
 
+/// Une coche ou deux, sous un message à soi — voir
+/// ``ChatMessageRow/deliveryTicks``.
+///
+/// Grises dans les deux cas, comme les commandes à côté des bulles : elles
+/// renseignent, elles ne demandent rien. La seconde arrive en glissant sous
+/// la première, de la largeur d'un trait : c'est ce mouvement qui se remarque
+/// quand le réseau revient.
+struct ChatDeliveryTicks: View {
+    let isDelivered: Bool
+
+    @ScaledMetric(relativeTo: .caption) private var side: CGFloat = 13
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: -side * 0.55) {
+            tick
+            if isDelivered {
+                tick.transition(
+                    reduceMotion ? .opacity : .move(edge: .leading).combined(with: .opacity)
+                )
+            }
+        }
+        .animation(reduceMotion ? nil : .snappy(duration: 0.3), value: isDelivered)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(isDelivered ? ChatCopy.Voice.delivered : ChatCopy.Voice.storedOnPhone)
+    }
+
+    private var tick: some View {
+        Image(brand: "IconLucideCheck")
+            .resizable()
+            .renderingMode(.template)
+            .scaledToFit()
+            .frame(width: side, height: side)
+            .foregroundStyle(MemoBookColor.inkMuted)
+    }
+}
+
 /// Ce qu'on peut faire d'un message.
 enum ChatMessageAction: Hashable {
     case readAloud
@@ -322,6 +385,14 @@ enum ChatMessageAction: Hashable {
 /// Grise et non colorée : ce sont des services rendus au message, pas des
 /// actions de l'écran. La seule qui s'allume est la lecture à voix haute, parce
 /// qu'elle a un état — quelque chose est en train de parler.
+///
+/// **Toutes à la taille du crayon** (Hugo, 08/10/2026 : « un peu plus petites
+/// et discrètes, le crayon garde sa taille, les autres descendent à la
+/// sienne »). Le crayon du jeu de marque n'encre que 70 % de sa boîte de 24 ;
+/// les icônes Lucide, 92 %. À boîte égale, copier et écouter paraissaient donc
+/// un tiers plus gros. Elles se dessinent dans une boîte plus petite
+/// (``lucideSide``), et les quatre ont la même encre. La cible, elle, reste
+/// de 2.75 rem : plus discret ne veut pas dire plus difficile à toucher.
 private struct ChatActionButton: View {
     let action: ChatMessageAction
     let isActive: Bool
@@ -333,7 +404,11 @@ private struct ChatActionButton: View {
     let perform: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @ScaledMetric(relativeTo: .body) private var side: CGFloat = MemoBookSpacing.sectionGap
+    /// La boîte du crayon, inchangée.
+    @ScaledMetric(relativeTo: .body) private var penSide: CGFloat = MemoBookSpacing.sectionGap
+    /// La boîte des icônes Lucide : celle du crayon, ramenée de 92 % à 70 %
+    /// d'encre.
+    @ScaledMetric(relativeTo: .body) private var lucideSide: CGFloat = MemoBookSpacing.sectionGap * 0.76
 
     /// Ce que le bouton montre : la coche s'il vient de servir, l'arrêt s'il
     /// parle, son icône sinon.
@@ -342,9 +417,17 @@ private struct ChatActionButton: View {
         return isActive ? "IconLucideStop" : action.icon
     }
 
+    /// Seul le crayon vient du jeu de marque ; la coche et l'arrêt sont des
+    /// Lucide, comme copier et écouter.
+    private var side: CGFloat {
+        icon == ChatMessageAction.edit.icon ? penSide : lucideSide
+    }
+
     private var tint: Color {
         if isConfirmed { return MemoBookColor.valid }
-        return isActive ? MemoBookColor.action : MemoBookColor.inkMuted
+        // Au repos, un cran sous le gris du texte secondaire : elles se
+        // devinent à côté de la bulle sans lui disputer le regard.
+        return isActive ? MemoBookColor.action : MemoBookColor.inkMuted.opacity(0.75)
     }
 
     var body: some View {
@@ -446,7 +529,7 @@ struct ChatPhotosBubble: View {
             .frame(height: side)
             .frame(maxWidth: .infinity)
             .overlay {
-                if let image = url.flatMap({ model.images[$0] }) {
+                if let image = url.flatMap({ model.image(at: $0) }) {
                     Image(uiImage: image).resizable().scaledToFill()
                 } else {
                     // La même trame que les vignettes d'étape : une image qui
@@ -578,7 +661,7 @@ struct ChatVoiceBubble: View {
             if let portrait {
                 ChatPortraitDisc(
                     portrait: portrait,
-                    image: portrait.url.flatMap { model.images[$0] },
+                    image: portrait.url.flatMap { model.image(at: $0) },
                     side: markSide
                 )
                 .task(id: portrait.url) {

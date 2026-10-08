@@ -5,6 +5,7 @@ import {
   composeBeats,
   dayKeyOf,
   fallbackResponder,
+  isTooShortToKeep,
   nextConversationState,
   pauseBeforeTranscript,
   scriptedReply,
@@ -20,6 +21,7 @@ import {
   fallbackPrompt,
   photosToValidate,
   photosWanted,
+  tooShort,
 } from "../services/conversationCopy.js";
 import { DAILY_CREDIT_CALL_TO_ACTION, DAILY_CREDIT_EXHAUSTED } from "../services/dailyCredit.js";
 import { photoBudgetFor } from "../services/photoBudget.js";
@@ -336,6 +338,26 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
   else if (kind !== "text") disposition = "memory";
   else if (reply.disposition === "context" && !currentEntry) disposition = "memory";
   else disposition = reply.disposition;
+
+  // **Trop court pour être un souvenir** (Hugo, 08/10/2026) : « ok »,
+  // « super », deux lettres tapées par erreur. Le classer `memory` créait un
+  // souvenir que la rédaction étoffait, puis « Il te convient ? » — MEMO
+  // faisait comme s'il avait compris. Il le dit à la place, en recopiant ce
+  // qu'il a reçu, et rien n'entre dans le carnet. Une précision du souvenir en
+  // cours (`context`) n'est pas concernée : « avec Clara » se comprend avec
+  // lui. Quel que soit le répondeur — le modèle comme le repli.
+  if (!message.suggestionId && kind === "text" && disposition === "memory" && isTooShortToKeep(text ?? "")) {
+    disposition = "command";
+    const alreadySaid = new Set(history.filter((turn) => turn.author === "memo").map((turn) => turn.text));
+    const lines = tooShort(text ?? "");
+    reply = {
+      ...reply,
+      beats: composeBeats(text ?? "", [lines.find((line) => !alreadySaid.has(line)) ?? lines[0]!]),
+      suggestionIds: [...SUGGESTION_SETS.neutral],
+      asksRoseEpineGraine: false,
+      callToActionId: null,
+    };
+  }
 
   // Le déroulé d'un souvenir (Hugo, 01/10/2026) : un souvenir raconté ne
   // reçoit **aucune** bulle tout de suite — « Il te convient ? » viendra du job

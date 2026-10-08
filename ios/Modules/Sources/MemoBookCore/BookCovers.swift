@@ -24,6 +24,9 @@ public enum CoverFace: String, Codable, Sendable, Hashable, Identifiable, CaseIt
 
     public var id: String { rawValue }
 
+    /// Le plat d'en face.
+    public var opposite: CoverFace { self == .front ? .back : .front }
+
     /// « 1ère de couverture » et « 4e de couverture », les deux onglets.
     ///
     /// « 1ère » et non « 1re » : c'est l'abréviation que la maquette emploie
@@ -91,6 +94,71 @@ public enum CoverTint: String, Codable, Sendable, Hashable {
     case ink
 }
 
+/// **Les sept gabarits de couverture** de `assets/covers` (Hugo, 08/10/2026 :
+/// « intégrer les visuels de cover en associant correctement la front cover et
+/// la back cover »).
+///
+/// Chaque famille a **sa** 1ère et **sa** 4e de couverture : les fichiers de
+/// Hugo vont par paires, nommés pareil à la fin — « front cover_style dessin »
+/// et « back cover_style dessin ». C'est la famille qui fait la paire, et donc
+/// la pastille « Assortie à ta 1ère de couverture » (``CoverStyle/matches(_:)``).
+///
+/// L'app **redessine** chaque gabarit avec la photo et les mots du voyageur
+/// (`CoverTemplates.swift`) : ni le titre « PHILIPPINES » ni la photo de la
+/// maquette n'y restent. Une famille inconnue — un serveur plus récent — se
+/// décode en `nil`, et le plat retombe sur sa composition (``CoverTreatment``).
+public enum CoverFamily: String, Codable, Sendable, Hashable, CaseIterable {
+    /// La photo pleine page, le titre en capitales à empattements dessus ; au
+    /// dos, le trajet et les chiffres.
+    case `default`
+    /// Un bandeau crème et son titre noir, la photo comme une aquarelle ; au
+    /// dos, le récit en trois temps, chacun avec son image.
+    case watercolor
+    /// Le bleu de la marque, le titre vert, une palme ; au dos, le récit et
+    /// les chiffres sur le même bleu.
+    case assouline
+    /// Le papier crème, l'écriture à la main et des dessins au trait.
+    case drawing
+    /// La photo pleine page, des courbes de niveau tracées à la main par-dessus
+    /// et le titre manuscrit ; au dos, un aplat d'eau claire et un mot.
+    case photoDrawing = "photo-drawing"
+    /// Le carnet de bord : des timbres, un tampon, le vert de la marque ; au
+    /// dos, une photo dans un cadre déchiré.
+    case travelBook = "travel-book"
+    /// Le titre fin à empattements, la photo comme un tirage ; au dos, un
+    /// paysage en bandeau et quelques lignes.
+    case elegant
+
+    /// Ce plat de cette famille **porte-t-il une photo** — celle qu'on choisit
+    /// dans le carrousel des photos ?
+    public func carriesPhoto(on face: CoverFace) -> Bool {
+        switch (self, face) {
+        case (.default, .front), (.watercolor, _), (.photoDrawing, .front), (.travelBook, _), (.elegant, _):
+            true
+        case (.default, .back), (.assouline, _), (.drawing, _), (.photoDrawing, .back):
+            false
+        }
+    }
+
+    /// Ce plat porte-t-il **un texte qu'on écrit** — le titre et la signature
+    /// devant, le texte de quatrième au dos ?
+    public func carriesText(on face: CoverFace) -> Bool {
+        switch (self, face) {
+        case (_, .front): true
+        case (.default, .back), (.travelBook, .back): false
+        case (.watercolor, .back), (.assouline, .back), (.drawing, .back), (.photoDrawing, .back),
+            (.elegant, .back):
+            true
+        }
+    }
+
+    /// Ce plat imprime-t-il **les chiffres du voyage** ? Au dos seulement, et
+    /// pas sur tous : deux maquettes les posent.
+    public func carriesStats(on face: CoverFace) -> Bool {
+        face == .back && (self == .default || self == .assouline)
+    }
+}
+
 /// Un style graphique de couverture.
 public struct CoverStyle: Codable, Sendable, Hashable, Identifiable {
     public let id: String
@@ -100,26 +168,54 @@ public struct CoverStyle: Codable, Sendable, Hashable, Identifiable {
     public let name: String
     public let treatment: CoverTreatment
     public let tint: CoverTint
+    /// Le gabarit — voir ``CoverFamily``. `nil` pour un style d'avant le
+    /// 08/10/2026, ou d'une famille que cette app ne connaît pas encore : le
+    /// plat se dessine alors d'après ``treatment`` et ``tint``, que le serveur
+    /// sert toujours pour les apps installées.
+    public let family: CoverFamily?
 
     public init(
         id: String,
         name: String,
         treatment: CoverTreatment,
-        tint: CoverTint
+        tint: CoverTint,
+        family: CoverFamily? = nil
     ) {
         self.id = id
         self.name = name
         self.treatment = treatment
         self.tint = tint
+        self.family = family
     }
 
-    /// Ce style **s'accorde** à un autre : même composition, même aplat. C'est
-    /// ce que la pastille « Assortie à ta 1ère de couverture » veut dire, et
-    /// elle se calcule sur le plat d'en face **tel qu'il est choisi** — un
-    /// drapeau figé dans le catalogue ne suivait pas le devant quand on le
-    /// changeait (Clara, 17/09/2026).
+    private enum CodingKeys: String, CodingKey {
+        case id, name, treatment, tint, family
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            id: try container.decode(String.self, forKey: .id),
+            name: try container.decode(String.self, forKey: .name),
+            treatment: try container.decode(CoverTreatment.self, forKey: .treatment),
+            tint: try container.decode(CoverTint.self, forKey: .tint),
+            // Une famille inconnue ne fait pas tomber le catalogue : le plat
+            // retombe sur sa composition.
+            family: (try? container.decodeIfPresent(CoverFamily.self, forKey: .family)) ?? nil
+        )
+    }
+
+    /// Ce style **s'accorde** à un autre. C'est ce que la pastille « Assortie
+    /// à ta 1ère de couverture » veut dire, et elle se calcule sur le plat
+    /// d'en face **tel qu'il est choisi** — un drapeau figé dans le catalogue
+    /// ne suivait pas le devant quand on le changeait (Clara, 17/09/2026).
+    ///
+    /// **La même famille** depuis le 08/10/2026 : la 4e « dessin » va avec la
+    /// 1ère « dessin », comme les fichiers de Hugo. Sans famille des deux
+    /// côtés, même composition et même aplat, comme avant.
     public func matches(_ other: CoverStyle) -> Bool {
-        treatment == other.treatment && tint == other.tint
+        if let family, let otherFamily = other.family { return family == otherFamily }
+        return treatment == other.treatment && tint == other.tint
     }
 }
 
@@ -258,15 +354,29 @@ public struct BookCovers: Codable, Sendable, Hashable {
         style(id: self[face].styleId)?.treatment
     }
 
+    /// Le gabarit que ce plat porte en ce moment, s'il en a un.
+    public func family(of face: CoverFace) -> CoverFamily? {
+        style(id: self[face].styleId)?.family
+    }
+
     /// Ce plat accepte-t-il une photo ? **Oui par défaut** quand le style est
     /// inconnu : on n'interdit pas un geste parce qu'on n'a pas su lire.
     public func acceptsPhoto(on face: CoverFace) -> Bool {
-        treatment(of: face)?.carriesPhoto ?? true
+        if let family = family(of: face) { return family.carriesPhoto(on: face) }
+        return treatment(of: face)?.carriesPhoto ?? true
     }
 
     /// Ce plat accepte-t-il un texte ? Même règle de prudence.
     public func acceptsText(on face: CoverFace) -> Bool {
-        treatment(of: face)?.carriesText(on: face) ?? true
+        if let family = family(of: face) { return family.carriesText(on: face) }
+        return treatment(of: face)?.carriesText(on: face) ?? true
+    }
+
+    /// Ce plat imprime-t-il les chiffres du voyage ? Le dos seulement ; tous
+    /// les dos d'avant les gabarits les portaient.
+    public func acceptsStats(on face: CoverFace) -> Bool {
+        guard face == .back else { return false }
+        return family(of: face)?.carriesStats(on: face) ?? true
     }
 
     /// Les chiffres retenus pour le dos, dans l'ordre du catalogue.

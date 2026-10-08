@@ -196,13 +196,37 @@ struct ChatSuggestionRail: View {
             .padding(.vertical, MemoBookSpacing.xs / 2)
             .transition(.opacity)
         } else if model.reservesSuggestionRail {
-            // La place de la bande, vide, le temps que MEMO réponde — voir
-            // ``ChatModel/reservesSuggestionRail``.
-            Color.clear
+            // La place de la bande le temps que MEMO réponde — voir
+            // ``ChatModel/reservesSuggestionRail``. **Des puces grises qui
+            // chargent**, et non une ligne vide (Hugo, 08/10/2026) : la bande
+            // dit qu'elle attend les prochaines propositions.
+            pendingChips
                 .frame(height: railHeight)
                 .padding(.vertical, MemoBookSpacing.xs / 2)
+                .transition(.opacity)
                 .accessibilityHidden(true)
         }
+    }
+
+    /// Les largeurs des puces d'attente : trois propositions de longueurs
+    /// différentes, comme les vraies — trois barres égales se liraient comme
+    /// un motif, pas comme des phrases qui arrivent.
+    private static let pendingChipWidths: [CGFloat] = [132, 176, 112]
+
+    /// Trois puces de la forme et de la hauteur des vraies, en
+    /// ``BrandSkeleton`` : le reflet qui les traverse dit que ça charge, et la
+    /// place qu'elles tiennent est celle que les propositions prendront.
+    private var pendingChips: some View {
+        HStack(spacing: MemoBookSpacing.xs) {
+            ForEach(Self.pendingChipWidths, id: \.self) { width in
+                BrandSkeleton(width: width, height: chipHeight)
+            }
+        }
+        .padding(.horizontal, MemoBookSpacing.snug)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // La bande ne défile pas : la dernière puce sort par le bord, comme
+        // une vraie proposition trop longue pour l'écran.
+        .clipped()
     }
 
     private func chip(_ suggestion: ChatSuggestion) -> some View {
@@ -292,6 +316,19 @@ struct ChatSendingBar: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @ScaledMetric(relativeTo: .body) private var glyph: CGFloat = MemoBookSpacing.sectionGap
+
+    /// La hauteur des boutons ronds de la barre — celle d'un ``BrandButton``
+    /// rond. Le champ de saisie la prend aussi, à une ligne.
+    @ScaledMetric(relativeTo: .body) private var barHeight: CGFloat = MemoBookSpacing.controlHeight
+
+    /// Ce qui sépare la cible de l'avion du bord droit du champ, pour que son
+    /// rond soit **aussi loin du bord que du haut et du bas** : il se pose
+    /// dans le champ comme dans une capsule.
+    private var sendInset: CGFloat {
+        let margin = (barHeight - MemoBookSpacing.contentIcon) / 2
+        let targetPadding = (MemoBookSpacing.minimumTapTarget - MemoBookSpacing.contentIcon) / 2
+        return max(0, margin - targetPadding)
+    }
 
     /// Le ressort de la barre.
     ///
@@ -496,20 +533,29 @@ struct ChatSendingBar: View {
                 // aux puces « à la main » : elles ouvraient le champ, et il
                 // fallait encore le toucher pour écrire dedans.
                 .onAppear { isWriting = true }
+                // La marge du texte, et **elle seule** : c'est elle qui fait
+                // grandir le champ ligne après ligne.
+                .padding(.vertical, MemoBookSpacing.xs)
+                .frame(minHeight: barHeight)
 
+            // L'avion garde sa cible de 2.75 rem en largeur, et prend la
+            // hauteur d'une ligne du champ : son rond se centre sur la
+            // première ligne, puis reste en bas quand le texte grandit.
             sendButton
+                .frame(height: barHeight)
         }
-        .padding(.horizontal, MemoBookSpacing.s)
+        .padding(.leading, MemoBookSpacing.s)
+        .padding(.trailing, sendInset)
         // Pâli, comme le micro, quand le crédit est épuisé : on peut encore y
         // toucher, le bandeau au-dessus dit pourquoi rien ne partira.
         .opacity(creditOpacity)
         .accessibilityValue(creditAccessibilityValue)
-        // 8 pt et non 12 : à 21 pt de corps, douze points en haut et en bas
-        // faisaient un champ d'une ligne haut de 49 pt — plus haut que la
-        // cible tactile qui le borne, donc plus haut que tout le reste de la
-        // barre. La hauteur d'une ligne est désormais celle de la cible.
-        .padding(.vertical, MemoBookSpacing.xs)
-        .frame(minHeight: MemoBookSpacing.minimumTapTarget)
+        // **À la hauteur des boutons de la barre, une ligne écrite**
+        // (Hugo, 08/10/2026). Le champ ajoutait 8 pt en haut et en bas
+        // **autour** d'un avion haut de 44 : 60 pt, plus haut que le micro
+        // d'à côté (50), sans rien de plus à montrer. La marge ne borde plus
+        // que le texte, et le champ ne grandit que s'il y a des lignes.
+        .frame(minHeight: barHeight)
         .background(MemoBookColor.surface, in: Self.fieldShape)
         .overlay { Self.fieldShape.strokeBorder(MemoBookColor.hairline, lineWidth: 1) }
         .brandShadow(.raised)
@@ -540,12 +586,12 @@ struct ChatSendingBar: View {
     /// dès qu'il grandit.
     ///
     /// `Capsule()` seule donnait une **ellipse** haute de six lignes en taille
-    /// accessible : un rayon égal à la moitié d'une cible tactile se comporte
+    /// accessible : un rayon égal à la moitié d'un bouton de la barre se comporte
     /// comme une capsule à la hauteur d'origine, et cesse de gonfler ensuite.
     /// C'est aussi ce qui rapproche le champ du rayon 25 que la maquette donne à
     /// l'état « modification d'une retranscription ».
     private static let fieldShape = RoundedRectangle(
-        cornerRadius: MemoBookSpacing.minimumTapTarget / 2,
+        cornerRadius: MemoBookSpacing.controlHeight / 2,
         style: .continuous
     )
 

@@ -296,24 +296,25 @@ public struct TripSettingsView: View {
                 )
             }
 
-            #if DEBUG
-                // Comme la carte des connecteurs du profil : en Debug seulement
-                // tant que rien ne se branche (Hugo, 29/09/2026 ; T76).
-                TricountCallout(
-                    connected: settings?.tricountLabel,
-                    isLoading: isLoading,
-                    action: { onIntent(.connectTricount) }
-                )
-            #endif
+            // **À venir** (Hugo, 08/10/2026), comme les connecteurs du
+            // profil : rien ne se branche encore (T76). La carte se montre
+            // dans la version livrée — elle ne vivait qu'en Debug depuis le
+            // 29/09 —, pâlie, sa pastille sur le coin, et ne répond pas au
+            // doigt.
+            TricountCallout(
+                connected: settings?.tricountLabel,
+                isLoading: isLoading,
+                action: { onIntent(.connectTricount) }
+            )
+            .brandComingSoon()
+            .padding(.top, MemoBookSpacing.xs)
         }
     }
 
     // MARK: - Accès rapide
 
     private var quickAccessSection: some View {
-        let settings = model.settings
-
-        return VStack(alignment: .leading, spacing: MemoBookSpacing.snug) {
+        VStack(alignment: .leading, spacing: MemoBookSpacing.snug) {
             sectionTitle(BookCopy.Settings.quickAccessSection)
 
             PdfPreviewRow(action: { onIntent(.openBookPreview) })
@@ -499,10 +500,11 @@ public enum TripSettingsIntent: Sendable, Hashable {
 /// restait de la marge, parce qu'elle n'était qu'un garde-fou de coût. Le
 /// crédit du jour, lui, est ce que l'abonnement lève — un non-abonné doit
 /// pouvoir le lire d'un regard, à 4 min comme à 30 s. La jauge est donc
-/// toujours là : elle montre **ce qui reste**, comme le chiffre — pleine au
-/// matin, elle se vide, verte, et rougit à zéro (``BrandGauge`` n'a que ces
-/// deux couleurs). Un abonné lit « Illimité », sans jauge : il n'a rien à
-/// compter.
+/// toujours là : vide et grise au matin, le vert y avance à mesure qu'on
+/// raconte, et rougit quand tout est dit (Hugo, 08/10/2026 ; ``BrandGauge``
+/// n'a que ces deux couleurs). Le chiffre, lui, dit **ce qui reste** —
+/// « 3 min 20 restantes ». Un abonné lit « Illimité », sans jauge : il n'a
+/// rien à compter.
 ///
 /// Ce n'est pas une ``BrandRow`` : celle-ci porte un intitulé et une valeur,
 /// et n'a pas de place pour une barre qui pousse sous elle. Elle en reprend la
@@ -556,12 +558,13 @@ private struct DailyCreditRow: View {
                 }
 
                 if !credit.isUnlimited {
-                    // Ce qui **reste**, comme le chiffre d'à côté : pleine au
-                    // matin, elle se vide, et rougit à zéro (recette du
-                    // 03/10/2026). VoiceOver lit déjà le reste dans le libellé
-                    // de la ligne ; la jauge ne le redit pas.
+                    // Vide et grise au matin, le vert avance à mesure qu'on
+                    // raconte, et rougit quand tout est dit (Hugo,
+                    // 08/10/2026). Le chiffre d'à côté dit le reste. VoiceOver
+                    // le lit déjà dans le libellé de la ligne ; la jauge ne le
+                    // redit pas.
                     BrandGauge(
-                        fraction: credit.gaugeFraction,
+                        fraction: credit.fraction,
                         isExhausted: credit.isExhausted,
                         accessibilityLabel: DailyCreditCopy.title
                     )
@@ -636,11 +639,12 @@ private struct TricountCallout: View {
                 text
             }
         } else {
+            // Sans chevron tant que la carte est « À venir » : il promettait
+            // un écran derrière elle.
             HStack(spacing: MemoBookSpacing.snug) {
                 mark
                 text
                 Spacer(minLength: MemoBookSpacing.xs)
-                BrandChevron()
             }
         }
     }

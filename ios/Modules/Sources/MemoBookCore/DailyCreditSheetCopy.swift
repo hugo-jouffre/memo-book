@@ -24,11 +24,12 @@ extension DailyCreditCopy {
                 : "Il reste \(duration(credit.remainingMs)) aujourd’hui"
         }
 
-        /// Ce que VoiceOver lit sur la jauge, qui montre ce qui reste : « 3 min
-        /// 20 sur 5 min ». Un pourcentage nu, sous « Il reste… », se
-        /// comprenait de travers (03/10/2026).
+        /// Ce que VoiceOver lit sur la jauge : « 3 min 20 restantes sur
+        /// 5 min ». La barre se remplit avec ce qui est raconté (08/10/2026),
+        /// le reste se dit en mots. Un pourcentage nu se comprenait de
+        /// travers (03/10/2026).
         public static func gaugeAccessibilityValue(_ credit: DailyCredit) -> String {
-            "\(duration(credit.remainingMs)) sur \(duration(credit.limitMs))"
+            "\(DailyCreditCopy.rowValue(credit)) sur \(duration(credit.limitMs))"
         }
 
         /// Sous la jauge : ce que le reste vaut au clavier. Rien quand il n'y a

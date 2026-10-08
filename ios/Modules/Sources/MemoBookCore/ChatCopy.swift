@@ -236,10 +236,26 @@ public enum ChatCopy {
         l’impression : une odeur, un bruit, une phrase que quelqu’un a dite.
         """
 
-    public static let tooShort = [
-        "Je prends. Un détail de plus et j’en tire une page : c’était où, exactement ?",
-        "D’accord. Qui était avec toi à ce moment-là ?",
-    ]
+    /// Un message trop court : MEMO **dit** qu'il n'a pas compris, en
+    /// recopiant ce qu'il a reçu, et demande la suite sans en choisir le sujet
+    /// (Hugo, 08/10/2026) — le jumeau de `tooShort` dans
+    /// `backend/src/services/conversationCopy.ts`.
+    public static func tooShort(_ received: String) -> [String] {
+        let quote = shortQuote(received)
+        return [
+            "« \(quote) » : c’est un peu court, je n’ai pas compris ce que tu voulais me dire. Tu peux m’en dire un peu plus ?",
+            "Je n’ai pas réussi à en tirer un souvenir : « \(quote) », c’est trop court pour moi. Raconte-moi ce qui s’est passé, avec tes mots.",
+        ]
+    }
+
+    /// Quarante signes au plus, les espaces resserrés.
+    private static func shortQuote(_ received: String) -> String {
+        let trimmed = received
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+        guard trimmed.count > 40 else { return trimmed }
+        return String(trimmed.prefix(39)).trimmingCharacters(in: .whitespaces) + "…"
+    }
 
     public static let missingPlace = "Tu me dis où ça se passait ? Un quartier ou un nom de rue me suffit."
 
@@ -528,6 +544,11 @@ public enum ChatCopy {
         /// La bulle en retrait : ce que VoiceOver dit à la place de la
         /// transparence.
         public static let sending = "Envoi en cours"
+        /// La coche seule sous un message à soi : il est gardé sur le
+        /// téléphone, pas encore arrivé (08/10/2026).
+        public static let storedOnPhone = "Gardé sur ton téléphone"
+        /// Les deux coches : le serveur l'a reçu, la retranscription commence.
+        public static let delivered = "Bien reçu"
         /// La bulle « Partira demain », dite en entier.
         public static let leavesTomorrow =
             "Gardé sur ton téléphone : partira demain, quand le crédit du jour se rechargera"

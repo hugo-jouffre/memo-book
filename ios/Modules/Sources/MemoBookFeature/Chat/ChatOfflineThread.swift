@@ -11,10 +11,10 @@ extension ChatThread {
     /// la file et se pose en bulles « en cours d'envoi » — ``ChatModel`` les
     /// ajoute depuis ``ChatTransport/waiting``.
     ///
-    /// **Pas une copie de l'ancien fil**, et c'est voulu : la conversation
-    /// n'est pas gardée sur le téléphone, parce qu'un fil périmé se lit comme
-    /// un message perdu (`ios/CLAUDE.md`, « Le cache local »). L'écran dit
-    /// qu'il est hors ligne, et le vrai fil revient avec le réseau.
+    /// Un voyage déjà ouvert ici rouvre plutôt **ses derniers messages
+    /// gardés** (``offline(cached:trip:)``, 08/10/2026) ; celui-ci ne sert
+    /// qu'à un voyage dont le téléphone n'a encore rien lu. L'écran dit qu'il
+    /// est hors ligne, et le vrai fil revient avec le réseau.
     ///
     /// **Le crédit du jour** suit le voyage tel que l'accueil l'a gardé
     /// (``Trip/dailyCredit``) : dans le métro, la barre continue de compter
@@ -63,6 +63,58 @@ extension ChatThread {
                 : [],
             // Personne ne peut effacer un fil qu'on ne tient pas.
             canClear: false,
+            dailyCredit: trip.dailyCredit.flatMap { credit in
+                guard credit.resetsAt != nil else { return nil }
+                return credit.refreshed(now: .now)
+            }
+        )
+    }
+
+    /// Combien de messages le téléphone garde d'un fil : de quoi relire où on
+    /// en était — la dernière fiche, la question de MEMO —, pas de quoi
+    /// rejouer le voyage entier.
+    static let cachedMessageCount = 30
+
+    /// Ce que le téléphone garde du fil (08/10/2026) : ses
+    /// ``cachedMessageCount`` derniers messages **arrivés chez le serveur**.
+    ///
+    /// Ni ce qui est en route — la file des envois le garde déjà, et le
+    /// repose en bulles « en cours d'envoi » à l'ouverture —, ni les bulles
+    /// que l'app pose seule (le « reviens demain » hors ligne) : relues le
+    /// lendemain, elles mentiraient. Pas de puces non plus : sans le
+    /// serveur, rien ne répondrait à celle qu'on toucherait.
+    func forOfflineCache() -> ChatThread {
+        var copy = self
+        copy.messages = Array(
+            messages
+                .filter { $0.delivery == .sent && !$0.id.hasPrefix(ChatModel.localNoticePrefix) }
+                .suffix(Self.cachedMessageCount)
+        )
+        copy.suggestions = []
+        copy.turn = .idle
+        return copy
+    }
+
+    /// Le fil **gardé**, rouvert sans réseau (08/10/2026) : ses derniers
+    /// messages, sous le bandeau « hors ligne ». Le crédit du jour est celui
+    /// du voyage tel que l'accueil l'a gardé, comme pour ``offline(trip:traveller:isNew:)``
+    /// — celui du fil gardé date de sa dernière lecture.
+    static func offline(cached: ChatThread, trip: Trip) -> ChatThread {
+        ChatThread(
+            id: cached.id,
+            title: cached.title,
+            avatarUrl: cached.avatarUrl,
+            destination: cached.destination,
+            greeting: cached.greeting,
+            preview: cached.preview,
+            context: cached.context,
+            messages: cached.messages,
+            suggestions: [],
+            tripContext: cached.tripContext,
+            turn: .idle,
+            // Personne ne peut effacer un fil qu'on ne tient pas.
+            canClear: false,
+            now: cached.now,
             dailyCredit: trip.dailyCredit.flatMap { credit in
                 guard credit.resetsAt != nil else { return nil }
                 return credit.refreshed(now: .now)

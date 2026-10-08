@@ -34,8 +34,9 @@ Le détail et leurs raisons : § 1 du journal archivé.
 
 ## Tickets ouverts, écran par écran
 
-Réponses du 06/10/2026 traitées dans la PR `reponses-du-6-octobre` : tout ce
-qui y a été réglé, tranché ou validé a quitté ce fichier.
+Réponses du 06/10/2026 traitées dans la PR `reponses-du-6-octobre`, ajustements
+du 08/10/2026 dans `ajustements-du-8-octobre` : tout ce qui y a été réglé,
+tranché ou validé a quitté ce fichier.
 
 ### Entrée et comptes
 
@@ -61,7 +62,7 @@ Voir [`notifications.md`](notifications.md) pour les règles et les choix faits.
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
-| T144 | **Tes gabarits suffisent pour savoir qui porte une photo ou un texte, mais l'app ne les propose pas encore.** `assets/covers` (01/10) dessine 7 styles — par défaut, Assouline, Dessin, Photo-dessin, Aquarelle, Travel book, Élégant — alors que l'app et le serveur (`coverCatalogue.ts`) proposent toujours 6 styles provisoires : Aplat, Cadre, Photo pleine page, Sable, Kraft, Forêt. Pour les brancher, il manque : (1) ton accord pour remplacer les 6 par les 7 ; (2) les cadres Figma de chaque plat (polices, tailles, couleurs : les PNG ne les donnent pas au point près) ; (3) ce qui est **généré** (aquarelle, dessins, timbres, palme) et ce qui est un décor fixe ; (4) qui écrit les textes du dos (le voyageur, ou l'IA). La composition du PDF qui lit ces choix, elle, est la partie « pas encore développée » de T223 | Couvertures |
+| T256 | **Les sept gabarits de couverture sont dans l'app** (08/10/2026), redessinés d'après `assets/covers` avec la photo et les mots du voyageur ; la 4e « assortie » est celle de la même famille. Restent trois choix à valider : (1) **les ornements** — la palme d'Assouline, la moto, la route, le globe et le motard de Dessin, les courbes de Photo-dessin — sont **découpés tels quels** dans tes plats (`ios/Tools/import-cover-ornaments.py`), donc les mêmes pour tous les voyages ; les aquarelles et les timbres de ta maquette sont remplacés par les **photos du voyage**. Faut-il des ornements par voyage (générés) ? (2) le dos « Par défaut » montre un trajet stylisé à la place de la carte du pays (elle viendra du gabarit d'impression) ; (3) les polices sont approchées (empattements et grotesque du système, Gloria Hallelujah) : les cadres Figma de chaque plat les donneraient au point près. La composition du PDF qui lit ces choix reste à écrire (T223) | Couvertures |
 
 ### Aperçu PDF, partage, commande
 
@@ -94,7 +95,7 @@ Voir [`notifications.md`](notifications.md) pour les règles et les choix faits.
 
 | # | Sujet | Écran / parcours |
 |---|---|---|
-| T253 | **Textes écrits sans maquette, à relire** (06-07/10) : la bulle de MEMO pour les notifications (T246 : « Suggestions », « Active les notifications pour que je t’aide à tenir le rythme que tu t’es fixé : je te ferai signe quand il sera temps de raconter la suite. », et sa version « coupées… Active-les dans les Réglages… », boutons « Activer les notifications » / « Activer dans les Réglages ») ; l'abonnement au renouvellement coupé (« Jusqu’au 12 octobre », « Tu racontes sans limite jusqu’au … grâce à ton abonnement », « Ton abonnement ne se renouvellera pas : tu racontes sans limite jusqu’au …, puis tu retrouves les 5 minutes du jour. ») ; les échecs d'envoi du support et des votes (« Pas de réseau : ton message n’est pas parti… », « Tu nous as déjà beaucoup écrit aujourd’hui… ») ; « Paiement abandonné, commande non finalisée » / « Finaliser ma commande » ; une trentaine de réponses de la FAQ réécrites pour dire ce que l'app fait (T202) | Partout |
+| T253 | **Textes écrits sans maquette, à relire** (06-07/10) : la bulle de MEMO pour les notifications (T246 : « Suggestions », « Active les notifications pour que je t’aide à tenir le rythme que tu t’es fixé : je te ferai signe quand il sera temps de raconter la suite. », et sa version « coupées… Active-les dans les Réglages… », boutons « Activer les notifications » / « Activer dans les Réglages ») ; l'abonnement au renouvellement coupé (« Jusqu’au 12 octobre », « Tu racontes sans limite jusqu’au … grâce à ton abonnement », « Ton abonnement ne se renouvellera pas : tu racontes sans limite jusqu’au …, puis tu retrouves les 5 minutes du jour. ») ; les échecs d'envoi du support et des votes (« Pas de réseau : ton message n’est pas parti… », « Tu nous as déjà beaucoup écrit aujourd’hui… ») ; « Paiement abandonné, commande non finalisée » / « Finaliser ma commande » ; une trentaine de réponses de la FAQ réécrites pour dire ce que l'app fait (T202) ; **et du 08/10** : « Ça peut prendre quelques minutes. » sous l'étape de la composition, la pastille « À venir », « 3 min 20 restantes » / « Épuisé » sur la ligne du crédit du jour, les deux réponses de MEMO à un message trop court (« « ok » : c’est un peu court, je n’ai pas compris ce que tu voulais me dire. Tu peux m’en dire un peu plus ? » et « Je n’ai pas réussi à en tirer un souvenir : « … », c’est trop court pour moi. Raconte-moi ce qui s’est passé, avec tes mots. »), le titre du dos « Dessin » (« La route continue… », repris de ta maquette) | Partout |
 
 ### Hors de l'app : paiements, e-mails, site
 
@@ -112,4 +113,4 @@ Voir [`notifications.md`](notifications.md) pour les règles et les choix faits.
 | # | Sujet | Écran / parcours |
 |---|---|---|
 | T33 | La carte du voyage | Accueil d'un voyage |
-| T76 | « La carte » et « Connecte ton Tricount » des réglages : dessinées, n'ouvrent rien | Réglages du voyage |
+| T76 | « La carte » et « Connecte ton Tricount » des réglages, et les six connecteurs du profil : dessinés, ne branchent rien — affichés « À venir », pâlis, depuis le 08/10/2026 | Réglages du voyage, Profil |

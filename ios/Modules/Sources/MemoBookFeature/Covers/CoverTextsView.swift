@@ -74,7 +74,7 @@ struct CoverTextsView: View {
                     // tapable et pose l'explication.
                     CoverFaceTabs(
                         face: $model.face,
-                        isAvailable: acceptsText,
+                        isAvailable: hasSomethingToWrite,
                         onUnavailable: { blockedFace = $0 }
                     )
 
@@ -92,7 +92,7 @@ struct CoverTextsView: View {
                         commit()
                         dismiss()
                     }
-                    .disabled(model.covers == nil || !acceptsText(model.face))
+                    .disabled(model.covers == nil || !hasSomethingToWrite(model.face))
                 }
                 .padding(.horizontal, MemoBookSpacing.screenMargin)
                 .padding(.top, MemoBookSpacing.xs)
@@ -185,6 +185,8 @@ struct CoverTextsView: View {
                         photo: model.photo(of: cover),
                         face: model.face,
                         stats: model.face == .back ? model.covers?.statSelection ?? [] : [],
+                        companion: model.covers?[model.face.opposite],
+                        gallery: model.covers?.photos ?? [],
                         width: width,
                         titleBadge: model.face == .front
                             ? AnyView(pencil(BookCopy.Covers.Voice.editTitle) { open(.title) })
@@ -200,7 +202,9 @@ struct CoverTextsView: View {
                                 pencil(BookCopy.Covers.Voice.editSubtitle) { open(.subtitle) }
                             )
                             : nil,
-                        statsBadge: model.face == .back
+                        // Les chiffres, sur les dos qui les impriment : deux
+                        // gabarits sur sept (08/10/2026).
+                        statsBadge: acceptsStats(model.face)
                             ? AnyView(
                                 pencil(BookCopy.Covers.Voice.editStats) { isChoosingStats = true }
                             )
@@ -347,6 +351,18 @@ struct CoverTextsView: View {
     /// geste parce qu'on n'a pas encore lu les couvertures.
     private func acceptsText(_ face: CoverFace) -> Bool {
         model.covers?.acceptsText(on: face) ?? true
+    }
+
+    /// Ce plat imprime-t-il les chiffres du voyage ?
+    private func acceptsStats(_ face: CoverFace) -> Bool {
+        model.covers?.acceptsStats(on: face) ?? (face == .back)
+    }
+
+    /// Il y a quelque chose à écrire sur ce plat — un texte, ou le choix des
+    /// chiffres : le dos « Par défaut » n'a pas de texte de quatrième, mais
+    /// ses chiffres se choisissent ici.
+    private func hasSomethingToWrite(_ face: CoverFace) -> Bool {
+        acceptsText(face) || acceptsStats(face)
     }
 
     // MARK: - Le brouillon

@@ -318,7 +318,11 @@ public final class ChatModel {
             cursor = loaded.now
             errorMessage = nil
             // Ce que le serveur rend, il l'a reçu : son crédit le compte déjà.
-            if !isOffline { forgetCosts(of: loaded.messages) }
+            // Et le téléphone le garde, pour rouvrir le fil sans réseau.
+            if !isOffline {
+                forgetCosts(of: loaded.messages)
+                rememberThread()
+            }
             // Le crédit du serveur ; sans lui — un fil local —, **le plus
             // avancé** de ce qu'on sait : le dernier servi ici pour ce voyage,
             // et celui des caches de l'écran du voyage et de l'accueil, que le
@@ -391,6 +395,9 @@ public final class ChatModel {
     /// tour en vol, le sondage, l'écoute de la file et la collecte de niveaux.
     /// Un écran de chat laissé derrière soi ne doit ni parler ni enregistrer.
     public func teardown() {
+        // Ce qu'on vient de lire, gardé tel qu'on le quitte : les réponses de
+        // MEMO arrivées depuis l'ouverture comprises.
+        rememberThread()
         exchange?.cancel()
         exchange = nil
         poller?.cancel()
@@ -401,6 +408,14 @@ public final class ChatModel {
         player.stop()
         reader.stop()
         recorder.cancel()
+    }
+
+    /// Garde le fil sur le téléphone — voir ``ChatTransport/remember``. Rien
+    /// d'un fil local : il ne contient que ce qu'on avait déjà gardé.
+    private func rememberThread() {
+        guard !isOffline, let thread else { return }
+        let remember = transport.remember
+        Task { await remember(thread) }
     }
 
     // MARK: - Ce que la vue lit
@@ -538,7 +553,10 @@ public final class ChatModel {
     private func hideExhaustedNotice() {
         exhaustedNoticeTimer?.cancel()
         exhaustedNoticeTimer = nil
-        showsExhaustedNotice = false
+        // N'écrit que ce qui change : `@Observable` prévient à chaque
+        // écriture, même d'une valeur identique, et le sondage passe ici
+        // toutes les deux secondes.
+        if showsExhaustedNotice { showsExhaustedNotice = false }
     }
 
     /// Le micro de la barre au repos : il arme l'enregistrement, ou — crédit
@@ -578,7 +596,9 @@ public final class ChatModel {
     /// vive ; l'écran, lui, le lit décompté de ce qui n'est pas encore arrivé
     /// (``dailyCredit``).
     private func setServerCredit(_ served: DailyCredit?) {
-        servedCredit = served
+        // Le même crédit, relu à chaque sondage : ne rien réécrire, sans quoi
+        // la barre d'envoi se redessinait toutes les deux secondes.
+        if servedCredit != served { servedCredit = served }
         if let served, let tripId = thread?.context.tripId {
             Self.rememberedCredits[tripId] = served
         }
@@ -600,7 +620,9 @@ public final class ChatModel {
     /// Le serveur a ces bulles : leur coût est dans son crédit, plus dans le
     /// nôtre.
     private func forgetCosts(of messages: [ChatMessage]) {
-        for message in messages { unreceivedCosts[message.id] = nil }
+        for message in messages where unreceivedCosts[message.id] != nil {
+            unreceivedCosts[message.id] = nil
+        }
     }
 
     /// Le crédit d'un mot **rejoué** par la file (03/10/2026) : le reçu ou le
@@ -1037,8 +1059,13 @@ public final class ChatModel {
 
         for message in update.messages.sorted(by: Self.byRank) {
             if messages.contains(where: { $0.id == message.id }) {
-                replace(message)
-                changed = true
+                // Un message relu **à l'identique** ne change rien : le
+                // serveur rend tout ce qui a bougé depuis le curseur, et une
+                // fiche qui se rédige revient à chaque sondage. Réécrire le
+                // fil pour rien redessinait toute la conversation toutes les
+                // deux secondes (Hugo, 08/10/2026 : « mini latences, scroll
+                // pas toujours fluide »), et repoussait la fin du sondage.
+                if replace(message) { changed = true }
             } else if message.author.isTraveller {
                 insert(message)
                 changed = true
@@ -1056,7 +1083,7 @@ public final class ChatModel {
             changed = true
         }
 
-        if let preview = update.preview { thread?.preview = preview }
+        if let preview = update.preview, preview != thread?.preview { thread?.preview = preview }
         // Ce qu'un co-voyageur vient de raconter a pu entamer le pot commun.
         // Le chiffre servi ne compte pas ce qui est encore en route d'ici —
         // un vocal qui monte en 3G, un tour en file : ``dailyCredit`` le
@@ -1071,11 +1098,11 @@ public final class ChatModel {
         }
 
         if update.turn.isReplying {
-            turn = .thinking
+            if turn != .thinking { turn = .thinking }
         } else if turn == .thinking {
             thread?.suggestions = update.suggestions
             turn = .idle
-        } else if turn == .idle, !update.suggestions.isEmpty {
+        } else if turn == .idle, !update.suggestions.isEmpty, update.suggestions != thread?.suggestions {
             thread?.suggestions = update.suggestions
         }
 
@@ -1117,11 +1144,18 @@ public final class ChatModel {
     /// qu'il rend est un message qu'il a : une bulle restée « en cours
     /// d'envoi » parce qu'on a raté le mot de la file se répare au sondage
     /// suivant.
-    private func replace(_ message: ChatMessage) {
-        guard var thread, let index = thread.messages.firstIndex(where: { $0.id == message.id }) else { return }
-        thread.messages[index] = message.keepingLocalFiles(of: thread.messages[index])
+    ///
+    /// - Returns: vrai si le message a changé. Un message identique ne touche
+    ///   pas au fil : l'écrire quand même invaliderait tout ce qui le lit.
+    @discardableResult
+    private func replace(_ message: ChatMessage) -> Bool {
+        guard var thread, let index = thread.messages.firstIndex(where: { $0.id == message.id }) else { return false }
+        let merged = message.keepingLocalFiles(of: thread.messages[index])
+        guard merged != thread.messages[index] else { return false }
+        thread.messages[index] = merged
         thread.messages.sort(by: Self.byRank)
         self.thread = thread
+        return true
     }
 
     // MARK: - « À la main »
@@ -1606,13 +1640,33 @@ public final class ChatModel {
     /// `AsyncImage` n'envoie aucun en-tête — des `401`, et la bulle restait sur
     /// sa trame. Ici, une requête par adresse, qui survit aux recompositions,
     /// par le bon chemin, et un résultat gardé tant que l'écran est ouvert.
-    public private(set) var images: [URL: UIImage] = [:]
-    private var loadingImages: Set<URL> = []
+    ///
+    /// **Une case observée par image**, et non un dictionnaire observé
+    /// (08/10/2026) : chaque image arrivée réécrivait le dictionnaire entier,
+    /// et toutes les bulles qui en lisaient une — photos, portraits — se
+    /// redessinaient à chaque arrivée, pendant qu'on faisait défiler le fil.
+    /// Une bulle n'observe plus que la case de **son** image.
+    @ObservationIgnored private var imageSlots: [URL: ChatImageSlot] = [:]
+    @ObservationIgnored private var loadingImages: Set<URL> = []
+
+    /// L'image déjà chargée à cette adresse, ou `nil`. Lue dans le corps d'une
+    /// bulle : seule l'arrivée de **cette** image la redessine.
+    public func image(at url: URL) -> UIImage? {
+        slot(for: url).image
+    }
+
+    private func slot(for url: URL) -> ChatImageSlot {
+        if let slot = imageSlots[url] { return slot }
+        let slot = ChatImageSlot()
+        imageSlots[url] = slot
+        return slot
+    }
 
     /// Charge une image du fil, une fois. Un échec n'est pas retenu : la bulle
     /// garde sa trame ou ses initiales, et redemande en réapparaissant.
     public func loadImage(_ url: URL) {
-        guard images[url] == nil, !loadingImages.contains(url) else { return }
+        let slot = slot(for: url)
+        guard slot.image == nil, !loadingImages.contains(url) else { return }
         loadingImages.insert(url)
 
         Task { [weak self] in
@@ -1620,7 +1674,7 @@ public final class ChatModel {
             let data = await self.imageData(at: url)
             let image = await ChatImage.decode(data)
             self.loadingImages.remove(url)
-            if let image { self.images[url] = image }
+            if let image { slot.image = image }
         }
     }
 
@@ -1776,7 +1830,7 @@ public final class ChatModel {
 
     /// Le début de l'identifiant d'une bulle « reviens demain » posée par
     /// l'app — jamais par le serveur, qui tire des UUID.
-    static let localNoticePrefix = "local-daily-credit-"
+    nonisolated static let localNoticePrefix = "local-daily-credit-"
 
     /// Pose la bulle « reviens demain » **sans le serveur** : la limite vient
     /// de couper un vocal parti dans la file, et aucun reçu n'apportera celle

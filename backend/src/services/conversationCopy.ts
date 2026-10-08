@@ -198,10 +198,29 @@ export const POSITIVE_MOOD =
   "On sent que tu y étais. Donne-moi le détail qui rendra bien à l’impression : une " +
   "odeur, un bruit, une phrase que quelqu’un a dite.";
 
-export const TOO_SHORT = [
-  "Je prends. Un détail de plus et j’en tire une page : c’était où, exactement ?",
-  "D’accord. Qui était avec toi à ce moment-là ?",
-] as const;
+/**
+ * **Un message trop court pour qu'on en fasse quoi que ce soit** (Hugo,
+ * 08/10/2026 : « le chat doit indiquer lorsque le message était trop court et
+ * qu'il n'a rien compris, et ne pas inventer une question suivante direct »).
+ *
+ * MEMO **dit** qu'il n'a pas compris, en recopiant ce qu'il a reçu — la preuve
+ * qu'il a lu —, et demande la suite **sans en choisir le sujet** : « c'était
+ * où ? » sous un « ok » supposait un lieu que personne n'a évoqué. Deux
+ * tournures, pour ne pas se répéter au second « ok » de la soirée.
+ */
+export function tooShort(received: string): readonly string[] {
+  const quote = shortQuote(received);
+  return [
+    `« ${quote} » : c’est un peu court, je n’ai pas compris ce que tu voulais me dire. Tu peux m’en dire un peu plus ?`,
+    `Je n’ai pas réussi à en tirer un souvenir : « ${quote} », c’est trop court pour moi. Raconte-moi ce qui s’est passé, avec tes mots.`,
+  ];
+}
+
+/** Ce qu'on recopie d'un message reçu : quarante signes au plus, sans espaces autour. */
+function shortQuote(received: string): string {
+  const trimmed = received.trim().replace(/\s+/g, " ");
+  return trimmed.length > 40 ? `${trimmed.slice(0, 39).trimEnd()}…` : trimmed;
+}
 
 export const MISSING_PLACE =
   "Tu me dis où ça se passait ? Un quartier ou un nom de rue me suffit.";

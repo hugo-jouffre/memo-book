@@ -17,37 +17,87 @@ export type CoverFace = "front" | "back";
 export type CoverTreatment = "photo" | "framed" | "plain" | "kraft";
 export type CoverTint = "paper" | "sand" | "forest" | "slate" | "ink";
 
+/**
+ * Les sept gabarits de `assets/covers` (Hugo, 08/10/2026), par paires : la
+ * 1ère et la 4e d'une même famille portent le même nom de fichier à la fin
+ * (« front cover_style dessin », « back cover_style dessin »). C'est la
+ * famille qui fait la pastille « Assortie à ta 1ère de couverture » dans
+ * l'app, et le gabarit que l'app redessine (`CoverFamily`, `CoverTemplates`).
+ */
+export type CoverFamily =
+  | "default"
+  | "watercolor"
+  | "assouline"
+  | "drawing"
+  | "photo-drawing"
+  | "travel-book"
+  | "elegant";
+
 export interface CoverStyle {
   id: string;
   name: string;
+  /**
+   * La composition et l'aplat **des apps installées** avant les gabarits :
+   * elles ne lisent pas `family` et dessinent leur plat d'après ces deux-là.
+   * Choisis pour en être le plus proche.
+   */
   treatment: CoverTreatment;
   tint: CoverTint;
+  family: CoverFamily;
 }
 
 export const FRONT_COVER_STYLES: readonly CoverStyle[] = [
-  { id: "front-plain", name: "Aplat", treatment: "plain", tint: "slate" },
-  { id: "front-framed", name: "Cadre", treatment: "framed", tint: "paper" },
-  { id: "front-photo", name: "Photo pleine page", treatment: "photo", tint: "ink" },
-  { id: "front-sand", name: "Sable", treatment: "plain", tint: "sand" },
-  { id: "front-kraft", name: "Kraft", treatment: "kraft", tint: "sand" },
-  { id: "front-forest", name: "Forêt", treatment: "plain", tint: "forest" },
+  { id: "front-default", name: "Par défaut", treatment: "photo", tint: "ink", family: "default" },
+  { id: "front-watercolor", name: "Aquarelle", treatment: "framed", tint: "sand", family: "watercolor" },
+  { id: "front-assouline", name: "Assouline", treatment: "plain", tint: "slate", family: "assouline" },
+  { id: "front-drawing", name: "Dessin", treatment: "kraft", tint: "paper", family: "drawing" },
+  { id: "front-photo-drawing", name: "Photo-dessin", treatment: "photo", tint: "ink", family: "photo-drawing" },
+  { id: "front-travel-book", name: "Travel book", treatment: "framed", tint: "paper", family: "travel-book" },
+  { id: "front-elegant", name: "Élégant", treatment: "framed", tint: "paper", family: "elegant" },
 ];
 
 export const BACK_COVER_STYLES: readonly CoverStyle[] = [
-  { id: "back-sand", name: "Sable", treatment: "plain", tint: "sand" },
-  { id: "back-photo", name: "Photo pleine page", treatment: "photo", tint: "ink" },
-  { id: "back-framed", name: "Cadre", treatment: "framed", tint: "paper" },
-  { id: "back-forest", name: "Forêt", treatment: "plain", tint: "forest" },
-  { id: "back-kraft", name: "Kraft", treatment: "kraft", tint: "sand" },
+  { id: "back-default", name: "Par défaut", treatment: "plain", tint: "paper", family: "default" },
+  { id: "back-watercolor", name: "Aquarelle", treatment: "framed", tint: "sand", family: "watercolor" },
+  { id: "back-assouline", name: "Assouline", treatment: "plain", tint: "slate", family: "assouline" },
+  { id: "back-drawing", name: "Dessin", treatment: "kraft", tint: "paper", family: "drawing" },
+  { id: "back-photo-drawing", name: "Photo-dessin", treatment: "plain", tint: "paper", family: "photo-drawing" },
+  { id: "back-travel-book", name: "Travel book", treatment: "framed", tint: "paper", family: "travel-book" },
+  { id: "back-elegant", name: "Élégant", treatment: "framed", tint: "paper", family: "elegant" },
 ];
+
+/**
+ * Les six styles provisoires d'avant les gabarits, et celui qui les remplace
+ * au plus près. Un carnet réglé avant le 08/10/2026 garde ainsi une
+ * couverture qui lui ressemble, au lieu de retomber sur le défaut.
+ */
+const LEGACY_COVER_STYLES: Readonly<Record<string, string>> = {
+  "front-photo": "front-default",
+  "front-framed": "front-elegant",
+  "front-plain": "front-assouline",
+  "front-sand": "front-watercolor",
+  "front-kraft": "front-drawing",
+  "front-forest": "front-travel-book",
+  "back-photo": "back-travel-book",
+  "back-framed": "back-default",
+  "back-plain": "back-assouline",
+  "back-sand": "back-watercolor",
+  "back-kraft": "back-drawing",
+  "back-forest": "back-travel-book",
+};
+
+/** L'identifiant d'aujourd'hui d'un style, qu'on le reçoive neuf ou d'avant les gabarits. */
+export function currentCoverStyleId(id: string): string {
+  return LEGACY_COVER_STYLES[id] ?? id;
+}
 
 export function coverStylesFor(face: CoverFace): readonly CoverStyle[] {
   return face === "front" ? FRONT_COVER_STYLES : BACK_COVER_STYLES;
 }
 
-/** Le style par défaut d'un plat qu'on n'a jamais réglé. */
+/** Le style par défaut d'un plat qu'on n'a jamais réglé : la paire « par défaut ». */
 export function defaultCoverStyleId(face: CoverFace): string {
-  return face === "front" ? "front-photo" : "back-framed";
+  return face === "front" ? "front-default" : "back-default";
 }
 
 /**
@@ -68,10 +118,8 @@ export interface StoredCover {
 export function readStoredCover(face: CoverFace, value: unknown): StoredCover {
   const raw = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
   const styles = coverStylesFor(face);
-  const styleId =
-    typeof raw["styleId"] === "string" && styles.some((style) => style.id === raw["styleId"])
-      ? raw["styleId"]
-      : defaultCoverStyleId(face);
+  const stored = typeof raw["styleId"] === "string" ? currentCoverStyleId(raw["styleId"]) : null;
+  const styleId = stored && styles.some((style) => style.id === stored) ? stored : defaultCoverStyleId(face);
   return {
     styleId,
     photoId: typeof raw["photoId"] === "string" ? raw["photoId"] : null,

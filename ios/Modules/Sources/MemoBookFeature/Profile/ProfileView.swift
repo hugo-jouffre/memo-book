@@ -94,13 +94,12 @@ public struct ProfileView: View {
                 paymentGroup
                 legalGroup
 
-                #if DEBUG
-                    // **Chantier** : les connecteurs ne se branchent pas encore
-                    // au serveur, et Tricount attend son intégration (T76). La
-                    // carte reste visible en Debug, pas dans la version livrée
-                    // (Hugo, 29/09/2026).
-                    ConnectorsCallout { sheet = .connectors }
-                #endif
+                // **À venir** (Hugo, 08/10/2026) : les connecteurs ne se
+                // branchent pas encore au serveur (T76). La carte se montre
+                // désormais dans la version livrée aussi — elle ne vivait
+                // qu'en Debug depuis le 29/09 —, avec sa pastille, et ouvre la
+                // liste de ce qui arrive, pâli.
+                ConnectorsCallout { sheet = .connectors }
 
                 if let message = model.errorMessage {
                     ErrorBanner(message: message) {
@@ -1094,8 +1093,16 @@ private struct ConnectorsCallout: View {
             .contentShape(shape)
         }
         .buttonStyle(CardPressStyle())
+        // La carte reste une porte — elle ouvre la liste de ce qui arrive —,
+        // et sa pastille dit d'avance que rien ne s'y branche encore.
+        .overlay(alignment: .topTrailing) {
+            BrandComingSoonBadge()
+                .padding(.trailing, MemoBookSpacing.snug)
+                .offset(y: -MemoBookSpacing.xs)
+        }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
+        .accessibilityValue(BrandComingSoonBadge.defaultLabel)
     }
 
     @ViewBuilder

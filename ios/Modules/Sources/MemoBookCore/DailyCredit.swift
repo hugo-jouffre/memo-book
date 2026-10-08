@@ -362,10 +362,20 @@ public enum DailyCreditCopy {
         return "Tu racontes sans limite jusqu’au \(day) grâce à ton abonnement"
     }
 
-    /// « 3 min 20 / 5 min ».
+    /// **Ce qui reste**, en toutes lettres : « 3 min 20 restantes »
+    /// (Hugo, 08/10/2026). La jauge d'à côté se remplit avec ce qui est
+    /// raconté ; c'est le chiffre qui dit le reste, et il le dit sans
+    /// fraction à déchiffrer. « Épuisé » à zéro, en rouge à l'écran.
     public static func rowValue(_ credit: DailyCredit) -> String {
-        credit.isUnlimited
-            ? unlimited
-            : "\(duration(credit.remainingMs)) / \(duration(credit.limitMs))"
+        if credit.isUnlimited { return unlimited }
+        if credit.isExhausted { return exhaustedValue }
+        let seconds = credit.remainingMs / 1000
+        // Le singulier pour une unité seule — « 1 min restante », « 1 s
+        // restante » ; « 1 min 30 restantes » compte bien plus d'une minute.
+        let isSingular = seconds < 2 || seconds == 60
+        return "\(duration(credit.remainingMs)) \(isSingular ? "restante" : "restantes")"
     }
+
+    /// La valeur de la ligne quand il ne reste rien aujourd'hui.
+    public static let exhaustedValue = "Épuisé"
 }

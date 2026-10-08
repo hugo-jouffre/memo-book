@@ -6,6 +6,7 @@ import {
   PRECISION_NOTED,
   SUGGESTIONS,
   VALIDATION_QUESTION,
+  tooShort,
   PHOTOS_VALIDATED,
   photosToValidate,
   photosWanted,
@@ -343,6 +344,21 @@ describe("parler à MEMO", () => {
     const updated = await harness.prisma.memo.findUniqueOrThrow({ where: { id: memo.id } });
     expect(updated.prompt).toContain("Rome");
     expect(responder.calls).toBe(1);
+  });
+
+  it("dit qu'il n'a pas compris un « ok », et n'en fait pas un souvenir", async () => {
+    const memo = await seedTrip(owner.accountId);
+    const { id, response } = await say(memo.id, "ok");
+    expect(response.statusCode).toBe(201);
+
+    const thread = await readThread(memo.id);
+    const mine = thread.messages.find((message) => message.id === id);
+    // Le répondeur l'a classé souvenir ; le code le reprend (Hugo, 08/10/2026).
+    expect(mine?.disposition).toBe("command");
+    const replies = memoBubbles(thread).filter((message) => message.seq > (mine?.seq ?? 0));
+    expect(replies.map((message) => message.body)).toEqual([{ kind: "text", text: tooShort("ok")[0] }]);
+    expect(thread.messages.some((message) => message.body.kind === "transcript")).toBe(false);
+    expect(await harness.prisma.entry.count({ where: { memoId: memo.id } })).toBe(0);
   });
 
   it("cite dans la question ce que l'écrivain n'a pas compris", async () => {

@@ -265,13 +265,12 @@ public struct LocalMemoResponder: MemoResponder {
             }
         }
 
-        // 4. Deux mots ne font pas une page : on demande **un** détail précis,
-        //    pas « raconte-m'en plus ».
+        // 4. Deux mots ne font pas une page — et MEMO **le dit** (Hugo,
+        //    08/10/2026) au lieu d'enchaîner sur un lieu ou une date qu'il
+        //    aurait supposés : rien ne vient après.
         if signals.length == .tooShort {
-            for (index, text) in ChatCopy.tooShort.enumerated() {
-                candidates.append(
-                    Candidate(family: "short-\(index)", text: text, suggestions: Suggestions.neutral)
-                )
+            return ChatCopy.tooShort(turn.message.spokenText ?? "").enumerated().map { index, text in
+                Candidate(family: "short-\(index)", text: text, suggestions: Suggestions.neutral)
             }
         }
 

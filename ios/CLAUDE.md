@@ -312,11 +312,15 @@ police ou marge codée en dur ailleurs.
   `BrandTextField` : l'un filtre ce qui est en dessous, l'autre saisit une
   valeur dans un formulaire. `BrandGauge` est **la** jauge — elle se lit, elle
   ne se règle pas, et elle n'a que deux couleurs : le vert d'action, et le rouge
-  sémantique à zéro. Elle sert au crédit du jour (ligne et feuille des réglages
-  du voyage), toujours visible pour un non-abonné, et **montre ce qui reste** :
-  pleine le matin, elle se vide en racontant (`DailyCredit.gaugeFraction`) ; à
-  zéro, c'est son rail qui passe au rouge doux. L'avertissement des 30
-  dernières secondes vit dans la barre d'enregistrement, pas sur la jauge.
+  sémantique quand tout est dépensé. Elle sert au crédit du jour (ligne et
+  feuille des réglages du voyage), toujours visible pour un non-abonné : **vide
+  et grise au matin, le vert avance vers la droite** à mesure qu'on raconte
+  (`DailyCredit.fraction`, Hugo, 08/10/2026), et c'est le chiffre posé à côté
+  qui dit le reste — « 3 min 20 restantes ». Pleine, elle rougit.
+  L'avertissement des 30 dernières secondes vit dans la barre d'enregistrement,
+  pas sur la jauge. `.brandComingSoon()` est **le** traitement « À venir »
+  d'une carte : pâlie d'un bloc, sa pastille franche sur le coin, sans geste
+  (les connecteurs du profil, le Tricount des réglages du voyage).
 - `BrandDisclosureCard` est **la** carte qui se déplie — les chapitres des
   conditions d'utilisation et de la politique de confidentialité. Repliée,
   crème et filet, trois lignes ; dépliée, l'aplat bleu `outline` et tout le
@@ -553,9 +557,17 @@ ailleurs : c'est une copie de ce que le serveur sait, iOS peut la purger, on la
 redemande. Elle s'efface à la
 déconnexion (`AppDependencies.forgetAccountContent()`).
 
-Ce qu'on ne garde **pas**, et c'est délibéré : la conversation — elle change à
-chaque phrase, et un fil périmé se lit comme un message perdu ; les commandes
-— c'est de l'argent, et un état périmé est pire qu'un état absent.
+**La conversation y est entrée le 08/10/2026**, d'une façon à elle : elle ne
+s'ouvre pas sur le cache — elle relit toujours le serveur —, mais ses trente
+derniers messages arrivés sont gardés à chaque lecture et à la sortie du fil,
+et c'est **eux** qu'elle rouvre sans réseau (`ChatThread.forOfflineCache()`,
+`transport.remember`), sous le bandeau « hors ligne ». Rien de ce qui est en
+route : la file des envois le garde.
+
+Ce qu'on ne garde **pas**, et c'est délibéré : les commandes — c'est de
+l'argent, et un état périmé est pire qu'un état absent. Les photos passent par
+le cache d'URL de l'app, porté à 256 Mo au lancement (`MemoBookApp.init()`) :
+celui d'iOS ne gardait pas une photo de profil.
 
 Le modèle reçoit **deux** fonctions : `source` comme avant, et `cached`, qui
 rend ce qui est sur le disque tout de suite et sans pouvoir échouer. Il les

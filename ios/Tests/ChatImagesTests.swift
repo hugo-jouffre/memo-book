@@ -56,14 +56,14 @@ final class ChatImagesTests: XCTestCase {
         let url = try XCTUnwrap(URL(string: "https://api.test/v1/entries/souvenir-a/media"))
 
         model.loadImage(url)
-        try await until { model.images[url] != nil }
+        try await until { model.image(at: url) != nil }
 
         let asked = await downloads.urls
         XCTAssertEqual(asked, [url], "Par le transport, donc avec la session.")
 
         // Réduite au décodage : le fil ne garde pas les pixels d'une photo
         // d'iPhone pour une vignette.
-        let image = try XCTUnwrap(model.images[url])
+        let image = try XCTUnwrap(model.image(at: url))
         let longest = max(image.size.width * image.scale, image.size.height * image.scale)
         XCTAssertLessThanOrEqual(longest, ChatImage.maximumPixelSize)
 
@@ -81,7 +81,7 @@ final class ChatImagesTests: XCTestCase {
         try picture.write(to: file)
 
         model.loadImage(file)
-        try await until { model.images[file] != nil }
+        try await until { model.image(at: file) != nil }
 
         let asked = await downloads.urls
         XCTAssertTrue(asked.isEmpty, "Rien ne part au serveur pour une photo sur le disque.")
@@ -95,7 +95,7 @@ final class ChatImagesTests: XCTestCase {
 
         model.loadImage(file)
         try await Task.sleep(for: .milliseconds(200))
-        XCTAssertNil(model.images[file], "La bulle garde sa trame.")
+        XCTAssertNil(model.image(at: file), "La bulle garde sa trame.")
     }
 
     // MARK: -

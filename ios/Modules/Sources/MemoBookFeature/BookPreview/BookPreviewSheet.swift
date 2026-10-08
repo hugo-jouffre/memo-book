@@ -40,7 +40,9 @@ struct BookPreviewSheet: View {
                 BookPageStage {
                     switch model.stage {
                     case .composing:
-                        BookCompositionPage(progress: model.compositionProgress)
+                        // La même attente que l'écran de l'aperçu : la page qui
+                        // se monte, puis la suivante (08/10/2026).
+                        BookCompositionLoop(firstPass: model.compositionProgress)
                             .transition(.opacity)
                     case .preview:
                         // Pas de plein écran depuis la feuille : il faudrait en

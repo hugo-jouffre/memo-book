@@ -232,6 +232,11 @@ public struct ChatTransport: Sendable {
     /// train de partir. Rien sans file.
     public var discard: @Sendable (_ turnId: String) async -> Bool
 
+    /// Garde sur le téléphone ce que le fil vient de lire — ses derniers
+    /// messages arrivés —, pour le rouvrir sans réseau (08/10/2026). Rien
+    /// sans cache.
+    public var remember: @Sendable (ChatThread) async -> Void
+
     public init(
         load: @escaping @Sendable () async throws -> ChatThread,
         poll: @escaping @Sendable (Date) async throws -> ChatThreadUpdate,
@@ -241,7 +246,8 @@ public struct ChatTransport: Sendable {
         waiting: @escaping @Sendable () async -> [OutgoingTurn] = { [] },
         deliveries: @escaping @Sendable () async -> AsyncStream<ChatTurnDelivery> = { AsyncStream { $0.finish() } },
         offlineThread: @escaping @Sendable (any Error) async -> ChatThread? = { _ in nil },
-        discard: @escaping @Sendable (String) async -> Bool = { _ in false }
+        discard: @escaping @Sendable (String) async -> Bool = { _ in false },
+        remember: @escaping @Sendable (ChatThread) async -> Void = { _ in }
     ) {
         self.load = load
         self.poll = poll
@@ -252,6 +258,7 @@ public struct ChatTransport: Sendable {
         self.deliveries = deliveries
         self.offlineThread = offlineThread
         self.discard = discard
+        self.remember = remember
     }
 
     // MARK: - Le vrai serveur

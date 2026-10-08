@@ -8,7 +8,9 @@ import SwiftUI
 /// profil, réglages du voyage, commande, aperçu, support, accueil (T210). Hugo
 /// l'a voulu **sur tous les écrans**, photos pleine page comprises, et « de la
 /// hauteur de la barre d'état, dégradé sur le bord inférieur, similaire au
-/// bandeau derrière « Commencer à enregistrer » » (06/10/2026).
+/// bandeau derrière « Commencer à enregistrer » » (06/10/2026). **Sauf
+/// l'accueil d'un voyage** (08/10/2026) : sa photo pleine page reprend le haut
+/// de l'écran, et le dégradé crème s'y lisait comme une bande étrange.
 ///
 /// C'est donc le frère de ``BrandFooterScrim``, retourné, et il en reprend les
 /// deux règles :
@@ -72,12 +74,18 @@ extension View {
     ///
     /// La hauteur se lit sur la zone sûre du haut : 20 pt sur un iPhone SE,
     /// une soixantaine sur un iPhone à île, rien quand la barre est cachée.
-    public func brandStatusBarScrim() -> some View {
+    ///
+    /// - Parameter isVisible: faux sous un écran dont la photo monte, pleine
+    ///   page, jusque sous l'heure — l'accueil d'un voyage (Hugo, 08/10/2026).
+    ///   Le voile s'y efface en fondu, et revient de même à l'écran suivant.
+    public func brandStatusBarScrim(isVisible: Bool = true) -> some View {
         overlay(alignment: .top) {
             GeometryReader { proxy in
                 BrandStatusBarScrim(height: proxy.safeAreaInsets.top)
                     .ignoresSafeArea(edges: .top)
             }
+            .opacity(isVisible ? 1 : 0)
+            .animation(.easeInOut(duration: 0.25), value: isVisible)
             .allowsHitTesting(false)
         }
     }
