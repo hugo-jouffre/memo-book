@@ -308,7 +308,9 @@ mettre, déjà écrit dans le bandeau.
 6. **Chaque nouveau lieu ouvre un chapitre** sur une carte
    (`layout_chapter_map`), quand l'analyse a situé le lieu. La carte se cadre
    sur la zone que les récits parcourent (les îles visitées, pas tout le
-   pays), avec les contours détaillés de `assets/maps/detail/`.
+   pays), avec les contours détaillés de `assets/maps/detail/`. Un séjour
+   dans une seule ville s'ouvre sur le pays avec la ville située, puis chaque
+   étape qui va dans de nouveaux lieux montre la ville et le parcours.
 7. **Deux pages en vis-à-vis n'ont jamais la même composition**, quand une
    alternative existe.
 8. **Des fun facts tirés du récit**, si la case « Insérer des Fun facts » de

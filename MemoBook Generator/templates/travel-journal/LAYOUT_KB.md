@@ -80,7 +80,7 @@ dépend de la forme du voyage :
 
 | Forme du voyage | Chapitres | Carte à l'ouverture |
 |---|---|---|
-| Toujours la même ville (woofing, échange, stage) | Semaines / mois / années | Toujours la même carte de ville, enrichie de nouveaux points au fil du livre |
+| Toujours la même ville, ou la même île (city trip, woofing, échange, stage) | À chaque étape qui emmène le voyageur dans de nouveaux lieux de la ville ; semaines / mois / années pour un long séjour | **La première carte montre le pays et y situe la ville. Les suivantes zooment sur la ville** : la même carte, enrichie au fil du livre, qui trace les déplacements — voir § « Les cartes », séjour en un seul lieu |
 | Plusieurs villes, un seul pays | Semaines / mois / villes | Carte du pays au début du livre, puis une carte par sous-chapitre : par ville si ≥ 500 000 habitants, sinon par région traversée |
 | 2 pays et plus (itinérant) | Semaines / mois / villes / pays | Carte du pays concerné à chaque ouverture de chapitre, puis cartes de villes pour certains sous-chapitres |
 | 5 pays et plus (tour du monde) | Idem itinérant | Idem itinérant |
@@ -160,6 +160,13 @@ seul pays fait de plusieurs lieux :
     pays qui touchent le cadre, coupés au bord et effacés en fondu. Sans ces
     fichiers, la carte retombe sur le pays entier.
 
+- **séjour en un seul lieu** (tous les lieux tiennent dans ~30 km) : la
+  première ouverture de chapitre montre le pays et y situe la ville, puis
+  chaque étape qui emmène le voyageur dans de nouveaux lieux de la ville ouvre
+  un chapitre sur la carte de la ville et de son parcours (§ « Les cartes »).
+  Le parcours avance aussi aux étapes sans carte : leurs lieux reviennent en
+  petits points sur la carte suivante.
+
   Dessin : `MemoBook Generator/public/carte.js`, recopie de `mapSvg.ts` —
   cadrage et contours compris — gardée identique par
   `backend/test/carteAtelier.test.ts`. Seule différence : l'atelier connaît
@@ -208,6 +215,36 @@ aux Cyclades se cadre sur les Cyclades, pas sur le continent grec avec les
 C'est pourquoi les `points` comptent plus que `regions` : ce sont eux qui
 disent où le voyage se passe. Sans contour détaillé pour le pays, la carte
 retombe sur le pays entier, cadré sur le premier code de `regions`.
+
+### Séjour en un seul lieu : le pays, puis la ville
+
+Quand **tous les points du carnet dans un pays tiennent dans ~30 km** (0,3° de
+côté) — un city trip, une île —, les cartes changent de rôle :
+
+1. **La première carte du pays montre le pays entier et y situe la ville.**
+   Elle porte un seul point, **la ville elle-même** (« Paris », pas « Louvre ») :
+   c'est elle qui sera épinglée et nommée. Le pays, c'est son territoire
+   principal et les terres proches (la Corse), pas l'outre-mer.
+2. **Les suivantes zooment sur la ville** : le cadre entoure tous les lieux du
+   séjour, avec **3 km de côté au moins**. Chacune porte, dans l'ordre du
+   parcours, les lieux où le récit du chapitre emmène le voyageur — **3 au
+   plus**, situés **au millième de degré** : à cette échelle, un centième de
+   degré, c'est un kilomètre, la mauvaise rue. La carte :
+   - nomme les lieux du chapitre (épingles) ;
+   - garde ceux des chapitres précédents en petits points, nommés en petit ;
+   - **trace le parcours** qui les relie, dans l'ordre ;
+   - écrit le nom de la ville en tête et pose une barre d'échelle (« 1 km »).
+
+**Ni rue ni fleuve** : les données mondiales disponibles hors ligne (Natural
+Earth) sont trop grossières à cette échelle — la Seine y passait au nord de la
+tour Eiffel. Une carte qui place un monument sur la mauvaise rive se voit plus
+qu'une carte sobre. Seuls les points, exacts, s'y dessinent ; la côte reste
+quand la ville en a une.
+
+**Quand ouvrir un chapitre** dans un tel carnet : à chaque étape dont le récit
+emmène le voyageur dans des lieux de la ville où il n'était pas encore allé,
+quand le barème le permet (§ « Chapitre ou journée ordinaire »). Une journée
+sans nouveau lieu reste une page ordinaire.
 
 Le back-end projette les contours et les points avec **la même**
 transformation (Mercator), puis insère le SVG dans `map_svg`. Ils ne peuvent

@@ -32,6 +32,8 @@
   const OUTLINE = "#19532b";
   const FILL = "rgba(25, 83, 43, 0.05)";
   const PIN = "#f86015";
+  /** Un halo couleur papier sous les noms : le trajet pointillé passe dessous sans les barrer. */
+  const HALO = 'stroke="#fbf8f4" stroke-width="2.2" stroke-opacity="0.9" stroke-linejoin="round" paint-order="stroke"';
   const TENSION = 0.22;
 
   const mercatorX = (lon) => (lon * Math.PI) / 180;
@@ -253,9 +255,15 @@
    * `[ouest, sud, est, nord]` en degrés, élargi ici au format de la carte. Tous
    * les pays chargés se dessinent — une côte voisine aide à se situer — et ce
    * qui sort du cadre est coupé par le SVG lui-même.
+   *
+   * Pour une carte de ville : `trajet` relie les points dans l'ordre — les
+   * déplacements du séjour — même sans point secondaire, et `echelle` pose une
+   * barre d'échelle (« 1 km ») qui dit les distances parcourues. Pas de fleuve
+   * ni de rue : à cette échelle, Natural Earth mettait la tour Eiffel sur la
+   * mauvaise rive de la Seine. Seuls les points, exacts, s'y dessinent.
    */
   function renderCarteCadree(detail, request) {
-    const { cadre, points = [], widthPt = 200, heightPt = 260 } = request;
+    const { cadre, points = [], widthPt = 200, heightPt = 260, ville = false, titre = "" } = request;
     const padding = 10;
     // Le cadre en Mercator, élargi au format de la carte, centré.
     let minX = mercatorX(cadre[0]);
@@ -304,27 +312,75 @@
       }
     }
 
-    const trajet = points.some((p) => p.secondaire)
+    const trajet = ville || points.some((p) => p.secondaire)
       ? `<polyline points="${points
           .map((p) => project(frame, p.lon, p.lat).join(","))
           .join(" ")}" fill="none" stroke="${PIN}" stroke-width="0.9" stroke-dasharray="2 2" stroke-linecap="round"/>`
       : "";
+    // Sur une carte de ville, sans rue pour se repérer, les lieux déjà passés
+    // gardent leur nom, en petit : à droite du point, à gauche s'il y
+    // chevauche un autre nom, sinon tu.
+    const r = (v) => Math.round(v * 10) / 10;
+    const occupes = points
+      .filter((p) => !p.secondaire)
+      .map((p) => {
+        const [x, y] = project(frame, p.lon, p.lat);
+        const l = String(p.label).length * 4.1;
+        return [x - l / 2, y - 15, x + l / 2, y + 11];
+      });
+    if (titre) occupes.push([padding, padding, padding + 4 + String(titre).length * 7.5, padding + 12]);
+    const libre = (b) => !occupes.some((o) => b[0] < o[2] && o[0] < b[2] && b[1] < o[3] && o[1] < b[3]);
     const pins = points
       .map((point) => {
         const [x, y] = project(frame, point.lon, point.lat);
         if (point.secondaire) {
-          return `<circle cx="${x}" cy="${y}" r="2.2" fill="#fff" stroke="${PIN}" stroke-width="1.1"/>`;
+          const rond = `<circle cx="${x}" cy="${y}" r="2.2" fill="#fff" stroke="${PIN}" stroke-width="1.1"/>`;
+          if (!ville) return rond;
+          const l = String(point.label).length * 2.9;
+          const droite = [x + 4, y - 4, x + 4 + l, y + 3];
+          const gauche = [x - 4 - l, y - 4, x - 4, y + 3];
+          const place = libre(droite) ? ["start", droite[0], droite] : libre(gauche) ? ["end", gauche[2], gauche] : null;
+          if (!place) return rond;
+          occupes.push(place[2]);
+          return (
+            rond +
+            `<text x="${r(place[1])}" y="${r(y + 2)}" text-anchor="${place[0]}" fill="${OUTLINE}" ` +
+            `font-family="Playfair Display, serif" font-size="5.5" ${HALO}>${escapeXml(point.label)}</text>`
+          );
         }
         return (
           `<path d="M${x} ${y} c-3.4 -4.6 -5.2 -6.8 -5.2 -9.4 a5.2 5.2 0 1 1 10.4 0 ` +
           `c0 2.6 -1.8 4.8 -5.2 9.4Z" fill="${PIN}"/>` +
           `<circle cx="${x}" cy="${y - 9.4}" r="1.9" fill="#fff"/>` +
           `<text x="${x}" y="${y + 9}" text-anchor="middle" fill="${PIN}" ` +
-          `font-family="Playfair Display, serif" font-weight="900" font-size="7.5">` +
+          `font-family="Playfair Display, serif" font-weight="900" font-size="7.5" ${HALO}>` +
           `${escapeXml(point.label)}</text>`
         );
       })
       .join("");
+    // Le nom de la ville, en tête : c'est lui qui dit où l'on est.
+    const enTete = titre
+      ? `<text x="${padding + 2}" y="${padding + 9}" fill="${OUTLINE}" font-family="Playfair Display, serif" ` +
+        `font-weight="900" font-size="9" letter-spacing="1.6">${escapeXml(String(titre).toUpperCase())}</text>`
+      : "";
+
+    // Barre d'échelle, en bas à gauche : la plus longue longueur ronde qui
+    // tienne dans 60 pt. Un degré de longitude vaut R·cos(φ) : l'échelle se
+    // lit au centre du cadre.
+    let echelle = "";
+    if (ville) {
+      const latCentre = (((cadre[1] + cadre[3]) / 2) * Math.PI) / 180;
+      const ptParKm = scale / (6371.0088 * Math.cos(latCentre));
+      const km = [100, 50, 20, 10, 5, 2, 1, 0.5, 0.25, 0.2, 0.1].find((k) => k * ptParKm <= 60) ?? 0.1;
+      const l = Math.round(km * ptParKm * 10) / 10;
+      const x0 = padding + 2;
+      const y0 = heightPt - padding - 4;
+      const texte = km < 1 ? `${Math.round(km * 1000)} m` : `${km} km`;
+      echelle =
+        `<path d="M${x0} ${y0 - 3}v3h${l}v-3" fill="none" stroke="${OUTLINE}" stroke-width="0.9" stroke-linejoin="round"/>` +
+        `<text x="${x0 + l / 2}" y="${y0 - 5}" text-anchor="middle" fill="${OUTLINE}" ` +
+        `font-family="Playfair Display, serif" font-size="6.5">${texte}</text>`;
+    }
 
     // Les côtes coupées par le cadre s'effacent en fondu sur les bords : un
     // trait tranché net au bord de la carte se lit comme une erreur.
@@ -340,7 +396,7 @@
     return (
       `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${widthPt} ${heightPt}" ` +
       `width="${widthPt}" height="${heightPt}">${defs}` +
-      `<g mask="url(#mh)"><g mask="url(#mv)">${paths}</g></g>${trajet}${pins}</svg>`
+      `<g mask="url(#mh)"><g mask="url(#mv)">${paths}</g></g>${enTete}${echelle}${trajet}${pins}</svg>`
     );
   }
 

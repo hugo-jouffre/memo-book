@@ -177,6 +177,65 @@ describe("mise en page de l'atelier", () => {
     });
   });
 
+  describe("séjour dans une seule ville", () => {
+    const lieu = (nom: string, lat: number, lon: number) => ({ nom, pays: "FR", lat, lon });
+    const paris = lieu("Paris", 48.8566, 2.3522);
+    const jour = (lieux: ReturnType<typeof lieu>[], sujet: string) =>
+      etape(paragrapheDe(sujet, 1), [], { lieu: paris, lieux, photos: [] }, "Paris");
+    type Requete = {
+      cadre: [number, number, number, number];
+      points: { label: string; secondaire?: boolean }[];
+      ville?: boolean;
+      titre?: string;
+    };
+    const requetes = (etapes: unknown[]) => {
+      const liste: Requete[] = [];
+      M.composerJours(etapes, { contours, dessinerCarte: (r: Requete) => (liste.push(r), "data:image/svg+xml;base64,") });
+      return liste;
+    };
+
+    it("ouvre sur le pays avec la ville située, puis zoome sur la ville et trace les déplacements", () => {
+      const cartes = requetes([
+        jour([lieu("Tour Eiffel", 48.8584, 2.2945)], "la tour"),
+        jour([lieu("Louvre", 48.8606, 2.3376), lieu("Tuileries", 48.8635, 2.327)], "le musée"),
+        jour([], "un jour au lit"),
+        jour([lieu("Montmartre", 48.8867, 2.3431)], "la butte"),
+      ]);
+      expect(cartes).toHaveLength(3);
+
+      // Le pays entier, la ville seule.
+      const [o, s, e, n] = cartes[0]!.cadre;
+      expect(e - o).toBeGreaterThan(8);
+      expect(n - s).toBeGreaterThan(8);
+      expect(cartes[0]!.points.map((p) => p.label)).toEqual(["Paris"]);
+
+      // La ville : les lieux du jour nommés, la tour Eiffel déjà passée en petit point, le trajet.
+      const ville = cartes[1]!;
+      expect(ville.cadre[3] - ville.cadre[1]).toBeLessThan(0.3);
+      expect(ville.points.map((p) => [p.label, Boolean(p.secondaire)])).toEqual([
+        ["Tour Eiffel", true],
+        ["Louvre", false],
+        ["Tuileries", false],
+      ]);
+      expect(ville.ville).toBe(true);
+      expect(ville.titre).toBe("Paris");
+
+      // Le jour sans nouveau lieu n'ouvre pas de chapitre ; le suivant prolonge le parcours.
+      expect(cartes[2]!.points.map((p) => p.label)).toEqual(["Tour Eiffel", "Louvre", "Tuileries", "Montmartre"]);
+      expect(cartes[2]!.cadre).toEqual(ville.cadre);
+    });
+
+    it("ne prend pas un voyage de plusieurs villes pour un séjour", () => {
+      const cartes = requetes([
+        etape(paragrapheDe("le port", 1), [], { lieu: lieu("Marseille", 43.2965, 5.3698), photos: [] }, "Marseille"),
+        etape(paragrapheDe("la place", 1), [], { lieu: lieu("Lyon", 45.764, 4.8357), photos: [] }, "Lyon"),
+      ]);
+      expect(cartes[0]!.points.map((p) => p.label)).toEqual(["Marseille"]);
+      expect(cartes[0]!.cadre[2] - cartes[0]!.cadre[0]).toBeLessThan(5);
+      expect(cartes[1]!.ville).toBeUndefined();
+    });
+  });
+
   describe("fun facts", () => {
     const encart = (texte: string, pertinence: number, registre = "histoire") => ({
       photos: [],

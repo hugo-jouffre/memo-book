@@ -273,9 +273,11 @@ $defs:
             type: array
             maxItems: 6
             description: >
-              Les lieux où les récits du chapitre emmènent le voyageur. Ils
-              cadrent la carte : leurs coordonnées viennent de l'agent, justes
-              au centième de degré.
+              Les lieux où les récits du chapitre emmènent le voyageur, dans
+              l'ordre du parcours. Ils cadrent la carte : leurs coordonnées
+              viennent de l'agent, justes au centième de degré — au millième
+              dans une ville. Séjour en un seul lieu : la première carte porte
+              la ville seule, les suivantes au plus 3 lieux de la ville.
             items:
               type: object
               required: [label, lat, lon]

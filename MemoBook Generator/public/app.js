@@ -1771,7 +1771,7 @@ function cleAnalyse(etape) {
 }
 
 /** À changer quand `consigneAnalyseEtape` demande autre chose : les analyses gardées se refont. */
-const VERSION_ANALYSE = "3-lieux";
+const VERSION_ANALYSE = "4-lieux-en-ville";
 
 /** Vignette JPEG de 512 px au plus côté : assez pour reconnaître une scène, léger à envoyer. */
 async function vignette(dataUrl) {
@@ -1872,11 +1872,7 @@ const CONTOURS_DETAIL_URL =
  */
 async function chargerContoursDetail() {
   if (!etat.contoursCarte) return;
-  const etapes = etapesPourMiseEnPage(() => "");
-  const lieux = MiseEnPage.lieuxDuVoyage(etapes, etat.contoursCarte);
-  const cadres = [...new Set(lieux.map((l) => l.pays))]
-    .map((pays) => MiseEnPage.cadreDuVoyage(lieux, pays, etat.contoursCarte))
-    .filter(Boolean);
+  const cadres = MiseEnPage.cadresDesCartes(etapesPourMiseEnPage(() => ""), etat.contoursCarte);
   if (!cadres.length) return;
   etat.contoursDetail ||= {};
   try {

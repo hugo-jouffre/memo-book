@@ -2,7 +2,13 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { expandMaps, renderFramedMapSvg, renderMapSvg, voyageFrame } from "../src/services/mapSvg.js";
+import {
+  CADRE_MIN_VILLE,
+  expandMaps,
+  renderFramedMapSvg,
+  renderMapSvg,
+  voyageFrame,
+} from "../src/services/mapSvg.js";
 
 /**
  * L'atelier dessine ses cartes de chapitre lui-même (`MemoBook Generator/public/carte.js`),
@@ -109,6 +115,45 @@ describe("cartes de chapitre de l'app", () => {
     const iles = (svg: string) => svg.split("</g></g>")[0];
     expect(iles(seconde)).toBe(iles(premiere));
     expect(days[1]?.["map_svg"]).toBeUndefined();
+  });
+
+  it("pour un séjour dans une seule ville : le pays d'abord, puis la ville et le parcours", () => {
+    const point = (label: string, lat: number, lon: number) => ({ label, lat, lon });
+    const payload = expandMaps({
+      days: [
+        { map: { regions: ["FR"], points: [point("Paris", 48.8566, 2.3522)] } },
+        { map: { regions: ["FR"], points: [point("Louvre", 48.8606, 2.3376), point("Tuileries", 48.8635, 2.327)] } },
+        { map: { regions: ["FR"], points: [point("Montmartre", 48.8867, 2.3431)] } },
+      ],
+    });
+    const [pays, ville, suite] = (payload["days"] as Record<string, unknown>[]).map(svgDe);
+    // Le pays : la France entière, une seule épingle, ni trajet ni échelle.
+    expect(pays).toContain(">Paris<");
+    expect(pays).not.toContain("<polyline");
+    expect(pays).not.toMatch(/ km<| m</);
+    // La ville : les lieux nommés, le trajet, l'échelle.
+    expect(ville).toContain(">Louvre<");
+    expect(ville).toContain("<polyline");
+    expect(ville).toMatch(/>\d+ (m|km)</);
+    // La suite : le parcours précédent en petits points, nommés en petit.
+    expect(ville).toContain(">PARIS<");
+    expect(suite).toContain(">Montmartre<");
+    expect(suite).toMatch(/font-size="5.5"[^>]*>Louvre</);
+    expect((suite!.match(/<circle cx="[\d.]+" cy="[\d.]+" r="2.2"/g) ?? []).length).toBe(2);
+  });
+
+  it("dessine la carte de ville exactement comme l'atelier", () => {
+    const request = {
+      cadre: voyageFrame([{ lat: 48.8606, lon: 2.3376 }, { lat: 48.8867, lon: 2.3431 }], "FR", CADRE_MIN_VILLE)!,
+      points: [
+        { label: "Louvre", lat: 48.8606, lon: 2.3376, secondaire: true },
+        { label: "Montmartre", lat: 48.8867, lon: 2.3431 },
+      ],
+      ville: true,
+      titre: "Paris",
+    };
+    const pays = { FR: detail("FR") };
+    expect(carte.renderCarteCadree(pays, request)).toBe(renderFramedMapSvg(pays, request));
   });
 
   it("refuse toujours une région inconnue", () => {

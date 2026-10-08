@@ -142,6 +142,8 @@ function project(frame: Frame, lon: number, lat: number): [number, number] {
 const OUTLINE = "#19532b"; // Forest Green, palette MemoBook
 const FILL = "rgba(25, 83, 43, 0.05)"; // à peine posé, pour donner du corps
 const PIN = "#f86015"; // Carrot
+/** Un halo couleur papier sous les noms : le trajet pointillé passe dessous sans les barrer. */
+const HALO = 'stroke="#fbf8f4" stroke-width="2.2" stroke-opacity="0.9" stroke-linejoin="round" paint-order="stroke"';
 
 /**
  * Adoucit le contour.
@@ -327,7 +329,11 @@ const MARGE_CADRE = 0.2;
  * de chaque côté, un degré de côté au moins, jamais plus grand que le pays (un
  * tour de la Grèce retrouve la carte de la Grèce). `null` sans lieu.
  */
-export function voyageFrame(places: { lat: number; lon: number }[], region: string): Cadre | null {
+export function voyageFrame(
+  places: { lat: number; lon: number }[],
+  region: string,
+  minimum = CADRE_MIN_DEGRES,
+): Cadre | null {
   if (!places.length) return null;
   let o = Math.min(...places.map((l) => l.lon));
   let e = Math.max(...places.map((l) => l.lon));
@@ -341,8 +347,8 @@ export function voyageFrame(places: { lat: number; lon: number }[], region: stri
     const demi = Math.max(((b - a) * (1 + 2 * MARGE_CADRE)) / 2, min / 2);
     return [c - demi, c + demi];
   };
-  [s, n] = elargir(s, n, CADRE_MIN_DEGRES);
-  [o, e] = elargir(o, e, CADRE_MIN_DEGRES / cosLat);
+  [s, n] = elargir(s, n, minimum);
+  [o, e] = elargir(o, e, minimum / cosLat);
 
   const rings = countries()[region.toUpperCase()]?.rings;
   if (rings?.length) {
@@ -356,6 +362,64 @@ export function voyageFrame(places: { lat: number; lon: number }[], region: stri
   }
   const arrondi = (v: number): number => Math.round(v * 1000) / 1000;
   return [arrondi(o), arrondi(s), arrondi(e), arrondi(n)];
+}
+
+/**
+ * Un séjour en un seul lieu — une ville, une île : tous les lieux du carnet
+ * dans le pays tiennent dans ~30 km. Sa première carte montre le pays et y
+ * situe la ville ; les suivantes zooment sur la ville et y tracent les
+ * déplacements.
+ */
+const ETENDUE_SEJOUR = 0.3;
+/** Trois kilomètres de côté au moins pour une carte de ville. */
+export const CADRE_MIN_VILLE = 0.03;
+/** Lieux nommés sur une carte de ville : au-delà, les noms se chevauchent. */
+const MAX_NOUVEAUX_VILLE = 3;
+/** Six points au plus sur une carte. */
+const MAX_POINTS_CARTE = 6;
+
+export function isSingleStay(places: { lat: number; lon: number }[]): boolean {
+  if (!places.length) return false;
+  const lats = places.map((l) => l.lat);
+  const lons = places.map((l) => l.lon);
+  const cosLat = Math.max(0.2, Math.cos((((Math.min(...lats) + Math.max(...lats)) / 2) * Math.PI) / 180));
+  return (
+    Math.max(...lats) - Math.min(...lats) <= ETENDUE_SEJOUR &&
+    (Math.max(...lons) - Math.min(...lons)) * cosLat <= ETENDUE_SEJOUR
+  );
+}
+
+/**
+ * Le pays entier, avec la même marge que le plafond de `voyageFrame` — mais
+ * le pays tel qu'on le reconnaît : son plus grand territoire et les terres à
+ * moins de deux degrés (la Corse), pas l'outre-mer (la boîte de la France va
+ * jusqu'à la Guyane). Le lieu du séjour y est toujours.
+ */
+export function countryFrame(region: string, place: { lat: number; lon: number } | null = null): Cadre | null {
+  const tous = countries()[region.toUpperCase()]?.rings;
+  if (!tous?.length) return null;
+  const boite = (ring: [number, number][]): Cadre => [
+    Math.min(...ring.map((p) => p[0])),
+    Math.min(...ring.map((p) => p[1])),
+    Math.max(...ring.map((p) => p[0])),
+    Math.max(...ring.map((p) => p[1])),
+  ];
+  const aire = (b: Cadre): number => (b[2] - b[0]) * (b[3] - b[1]);
+  const boites = tous.map(boite);
+  const principal = boites.reduce((a, b) => (aire(b) > aire(a) ? b : a));
+  const proches = boites.filter(
+    (b) => b[0] <= principal[2] + 2 && principal[0] - 2 <= b[2] && b[1] <= principal[3] + 2 && principal[1] - 2 <= b[3],
+  );
+  const lons = proches.flatMap((b) => [b[0], b[2]]).concat(place ? [place.lon] : []);
+  const lats = proches.flatMap((b) => [b[1], b[3]]).concat(place ? [place.lat] : []);
+  const marge = 0.3;
+  const arrondi = (v: number): number => Math.round(v * 1000) / 1000;
+  return [
+    arrondi(Math.min(...lons) - marge),
+    arrondi(Math.min(...lats) - marge),
+    arrondi(Math.max(...lons) + marge),
+    arrondi(Math.max(...lats) + marge),
+  ];
 }
 
 /** Simplification Douglas-Peucker, en points de page : le trait ne garde que ce qui se voit. */
@@ -440,6 +504,13 @@ export interface FramedMapRequest {
   points?: MapPoint[];
   widthPt?: number;
   heightPt?: number;
+  /**
+   * Carte de ville : le trajet relie les points dans l'ordre, une barre
+   * d'échelle dit les distances, les lieux déjà passés gardent leur nom.
+   */
+  ville?: boolean;
+  /** Le nom de la ville, écrit en tête. */
+  titre?: string;
 }
 
 /**
@@ -448,7 +519,7 @@ export interface FramedMapRequest {
  * au bord, et effacés en fondu sur les bords.
  */
 export function renderFramedMapSvg(detail: Record<string, DetailCountry>, request: FramedMapRequest): string {
-  const { cadre, points = [], widthPt = 200, heightPt = 260 } = request;
+  const { cadre, points = [], widthPt = 200, heightPt = 260, ville = false, titre = "" } = request;
   const padding = 10;
   // Le cadre en Mercator, élargi au format de la carte, centré.
   let minX = mercatorX(cadre[0]);
@@ -496,27 +567,80 @@ export function renderFramedMapSvg(detail: Record<string, DetailCountry>, reques
     }
   }
 
-  const trajet = points.some((p) => p.secondaire)
-    ? `<polyline points="${points
+  const trajet =
+    ville || points.some((p) => p.secondaire)
+      ? `<polyline points="${points
         .map((p) => project(frame, p.lon, p.lat).join(","))
         .join(" ")}" fill="none" stroke="${PIN}" stroke-width="0.9" stroke-dasharray="2 2" stroke-linecap="round"/>`
     : "";
+  // Sur une carte de ville, sans rue pour se repérer, les lieux déjà passés
+  // gardent leur nom, en petit : à droite du point, à gauche s'il y chevauche
+  // un autre nom, sinon tu.
+  const r = (v: number): number => Math.round(v * 10) / 10;
+  const occupes: Cadre[] = points
+    .filter((p) => !p.secondaire)
+    .map((p) => {
+      const [x, y] = project(frame, p.lon, p.lat);
+      const l = String(p.label).length * 4.1;
+      return [x - l / 2, y - 15, x + l / 2, y + 11];
+    });
+  if (titre) occupes.push([padding, padding, padding + 4 + String(titre).length * 7.5, padding + 12]);
+  const libre = (b: Cadre): boolean => !occupes.some((o) => b[0] < o[2] && o[0] < b[2] && b[1] < o[3] && o[1] < b[3]);
   const pins = points
     .map((point) => {
       const [x, y] = project(frame, point.lon, point.lat);
       if (point.secondaire) {
-        return `<circle cx="${x}" cy="${y}" r="2.2" fill="#fff" stroke="${PIN}" stroke-width="1.1"/>`;
+        const rond = `<circle cx="${x}" cy="${y}" r="2.2" fill="#fff" stroke="${PIN}" stroke-width="1.1"/>`;
+        if (!ville) return rond;
+        const l = String(point.label).length * 2.9;
+        const droite: Cadre = [x + 4, y - 4, x + 4 + l, y + 3];
+        const gauche: Cadre = [x - 4 - l, y - 4, x - 4, y + 3];
+        const place: [string, number, Cadre] | null = libre(droite)
+          ? ["start", droite[0], droite]
+          : libre(gauche)
+            ? ["end", gauche[2], gauche]
+            : null;
+        if (!place) return rond;
+        occupes.push(place[2]);
+        return (
+          rond +
+          `<text x="${r(place[1])}" y="${r(y + 2)}" text-anchor="${place[0]}" fill="${OUTLINE}" ` +
+          `font-family="Playfair Display, serif" font-size="5.5" ${HALO}>${escapeXml(point.label)}</text>`
+        );
       }
       return (
         `<path d="M${x} ${y} c-3.4 -4.6 -5.2 -6.8 -5.2 -9.4 a5.2 5.2 0 1 1 10.4 0 ` +
         `c0 2.6 -1.8 4.8 -5.2 9.4Z" fill="${PIN}"/>` +
         `<circle cx="${x}" cy="${y - 9.4}" r="1.9" fill="#fff"/>` +
         `<text x="${x}" y="${y + 9}" text-anchor="middle" fill="${PIN}" ` +
-        `font-family="Playfair Display, serif" font-weight="900" font-size="7.5">` +
+        `font-family="Playfair Display, serif" font-weight="900" font-size="7.5" ${HALO}>` +
         `${escapeXml(point.label)}</text>`
       );
     })
     .join("");
+  // Le nom de la ville, en tête : c'est lui qui dit où l'on est.
+  const enTete = titre
+    ? `<text x="${padding + 2}" y="${padding + 9}" fill="${OUTLINE}" font-family="Playfair Display, serif" ` +
+      `font-weight="900" font-size="9" letter-spacing="1.6">${escapeXml(String(titre).toUpperCase())}</text>`
+    : "";
+
+  // Barre d'échelle, en bas à gauche : la plus longue longueur ronde qui
+  // tienne dans 60 pt. Un degré de longitude vaut R·cos(φ) : l'échelle se lit
+  // au centre du cadre.
+  let echelle = "";
+  if (ville) {
+    const latCentre = (((cadre[1] + cadre[3]) / 2) * Math.PI) / 180;
+    const ptParKm = scale / (6371.0088 * Math.cos(latCentre));
+    const km = [100, 50, 20, 10, 5, 2, 1, 0.5, 0.25, 0.2, 0.1].find((k) => k * ptParKm <= 60) ?? 0.1;
+    const l = Math.round(km * ptParKm * 10) / 10;
+    const x0 = padding + 2;
+    const y0 = heightPt - padding - 4;
+    const texte = km < 1 ? `${Math.round(km * 1000)} m` : `${km} km`;
+    echelle =
+      `<path d="M${x0} ${y0 - 3}v3h${l}v-3" fill="none" stroke="${OUTLINE}" stroke-width="0.9" stroke-linejoin="round"/>` +
+      `<text x="${x0 + l / 2}" y="${y0 - 5}" text-anchor="middle" fill="${OUTLINE}" ` +
+      `font-family="Playfair Display, serif" font-size="6.5">${texte}</text>`;
+  }
 
   // Les côtes coupées par le cadre s'effacent en fondu sur les bords : un
   // trait tranché net au bord de la carte se lit comme une erreur.
@@ -532,7 +656,7 @@ export function renderFramedMapSvg(detail: Record<string, DetailCountry>, reques
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${widthPt} ${heightPt}" ` +
     `width="${widthPt}" height="${heightPt}">${defs}` +
-    `<g mask="url(#mh)"><g mask="url(#mv)">${paths}</g></g>${trajet}${pins}</svg>`
+    `<g mask="url(#mh)"><g mask="url(#mv)">${paths}</g></g>${enTete}${echelle}${trajet}${pins}</svg>`
   );
 }
 
@@ -583,17 +707,71 @@ export function expandMaps(payload: Record<string, unknown>): Record<string, unk
     return cadres.get(region) ?? null;
   };
 
+  // Séjour en un seul lieu (une ville, une île) : la première carte du pays
+  // montre le pays et y situe la ville ; les suivantes zooment sur la ville,
+  // nomment les lieux du chapitre, gardent ceux des chapitres précédents en
+  // petits points et tracent le parcours qui les relie.
+  const sejours = new Map<string, { ville: string; titre: string; parcours: MapPoint[]; passes: Set<string> }>();
+  const pointsDe = (map: MapRequest) => (map.points ?? []).filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lon));
+  const enSejour = (region: string) =>
+    isSingleStay(maps.filter((m) => m.regions[0]!.toUpperCase() === region).flatMap(pointsDe));
+  const cle = (p: MapPoint) => p.label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
   const expanded = days.map((day) => {
     const entry = day as Record<string, unknown>;
     const map = entry["map"] as MapRequest | undefined;
     if (!map || !Array.isArray(map.regions) || map.regions.length === 0) return entry;
     const region = map.regions[0]!.toUpperCase();
-    const cadre = cadreDe(region);
-    const detail = cadre ? detailAround(region, cadre) : null;
-    const svg =
-      cadre && detail
-        ? enDataUri(renderFramedMapSvg(detail, { cadre, points: map.points ?? [], widthPt: map.widthPt, heightPt: map.heightPt }))
-        : renderMapDataUri(map);
+    const taille = { widthPt: map.widthPt, heightPt: map.heightPt };
+
+    let request: FramedMapRequest | null = null;
+    if (enSejour(region)) {
+      const sejour = sejours.get(region);
+      if (!sejour) {
+        // La ville est le premier point de la première carte ; les autres
+        // points de cette carte entrent dans le parcours.
+        const [ville, ...autres] = pointsDe(map);
+        const cadre = ville ? countryFrame(region, ville) : null;
+        if (ville && cadre) request = { ...taille, cadre, points: [{ ...ville, secondaire: false }] };
+        sejours.set(region, {
+          ville: ville ? cle(ville) : "",
+          titre: ville?.label ?? "",
+          parcours: autres,
+          passes: new Set(autres.map(cle)),
+        });
+      } else {
+        const places = maps.filter((m) => m.regions[0]!.toUpperCase() === region).flatMap(pointsDe);
+        const cadre = voyageFrame(places, region, CADRE_MIN_VILLE);
+        const vus = new Set([sejour.ville]);
+        const nouveaux = pointsDe(map).filter((p) => {
+          const k = cle(p);
+          if (!k || vus.has(k) || sejour.passes.has(k)) return false;
+          vus.add(k);
+          return true;
+        });
+        const montres = nouveaux.slice(0, MAX_NOUVEAUX_VILLE).map((p) => ({ ...p, secondaire: false }));
+        const passes = sejour.parcours.slice(-(MAX_POINTS_CARTE - montres.length));
+        if (cadre) {
+          request = {
+            ...taille,
+            cadre,
+            points: [...passes.map((p) => ({ ...p, secondaire: true })), ...montres],
+            ville: true,
+            titre: sejour.titre,
+          };
+        }
+        for (const p of nouveaux) {
+          sejour.parcours.push(p);
+          sejour.passes.add(cle(p));
+        }
+      }
+    } else {
+      const cadre = cadreDe(region);
+      if (cadre) request = { ...taille, cadre, points: map.points ?? [] };
+    }
+
+    const detail = request ? detailAround(region, request.cadre) : null;
+    const svg = request && detail ? enDataUri(renderFramedMapSvg(detail, request)) : renderMapDataUri(map);
     return { ...entry, map_svg: svg };
   });
 

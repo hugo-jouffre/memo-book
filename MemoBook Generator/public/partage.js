@@ -196,7 +196,7 @@ ${texte || "(pas de récit)"}
 Les photos de l'étape suivent, chacune précédée de son identifiant (${ids || "aucune"}).
 
 1. **Le lieu.** Le pays (code ISO 3166-1 alpha-2) et les coordonnées du lieu principal de l'étape, justes au centième de degré, et le nom court à écrire sur une carte (« Paros », pas « Paros, Cyclades, Grèce »). Si tu n'es pas sûr du lieu ou de ses coordonnées, mets null : une épingle mal placée se voit immédiatement.
-   "lieux" : les autres endroits où le récit emmène le voyageur pendant l'étape — une excursion, un village, une plage, une île d'escale — avec leur pays et leurs coordonnées. Pas ceux qui sont seulement cités (la ville de départ du vol, un pays dont on parle). Ils servent à cadrer la carte sur ce que raconte le voyage : n'en mets que ceux que tu sais situer, et une liste vide si aucun.
+   "lieux" : les autres endroits où le récit emmène le voyageur pendant l'étape — une excursion, un village, une plage, une île d'escale, et dans une ville le musée, le quartier, le marché — avec leur pays et leurs coordonnées, dans l'ordre où il y passe. Pas ceux qui sont seulement cités (la ville de départ du vol, un pays dont on parle). Ils cadrent la carte et y tracent ses déplacements : un lieu en ville se situe au millième de degré, sinon il tombe dans la mauvaise rue. N'en mets que ceux que tu sais situer, et une liste vide si aucun.
 
 2. **Chaque photo.** Pour chaque identifiant :
    - "paragraphe" : le numéro du paragraphe dont la photo illustre le contenu — la plage pour le passage sur la plage, le plat pour le passage sur le restaurant. Juge sur ce que montre la photo et ce que raconte le texte, pas sur l'ordre des photos. null si aucun paragraphe ne s'y rattache ;
