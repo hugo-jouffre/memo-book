@@ -19,7 +19,15 @@ import { renderTemplateToHtml } from "../src/services/bookPdf.js";
  */
 const require = createRequire(import.meta.url);
 type Element = Record<string, unknown> & { type: string };
-type Maquette = { elements: Element[]; largeur: number; hauteur: number; fondPerdu: number };
+type Zone = { x: number; y: number; l: number; h: number };
+type Maquette = {
+  elements: Element[];
+  largeur: number;
+  hauteur: number;
+  fondPerdu: number;
+  plats: Record<"verso" | "dos" | "recto", [number, number]>;
+  faces: Record<"verso" | "dos" | "recto", Zone>;
+};
 type Evaluation = { score: number; dpi: number; alertes: string[]; suffisante: boolean };
 type Photo = { id: string; largeur: number; hauteur: number; groupe?: boolean; mesure?: unknown; analyse?: unknown };
 const C = require("../../MemoBook Generator/public/couverture.js") as {
@@ -36,6 +44,10 @@ const C = require("../../MemoBook Generator/public/couverture.js") as {
   moisDuVoyage: (debut: string, fin: string) => string;
   textesParDefaut: (o: Record<string, unknown>) => { titre: string; voyageurs: string; dates: string };
   chiffresQuatrieme: (o: Record<string, unknown>) => { valeur: string; libelle: string }[];
+  estUneIle: (lieu: Record<string, unknown>, detail: unknown) => boolean;
+  lieuxDeQuatrieme: (lieux: unknown[], detail: unknown) => Record<string, unknown>[];
+  RETRAIT: number;
+  RETRAIT_DOS: number;
   maquette: (o: Record<string, unknown>) => Maquette;
   versJsx: (m: Maquette, o?: Record<string, unknown>) => string;
   versSvg: (m: Maquette) => string;
@@ -153,6 +165,31 @@ describe("couverture : textes et chiffres", () => {
     expect(valeurs({ jours: 15, km: 3817, pays: ["GR"], villes: ["Naoussa", "Chora"] })).toEqual(["15 jours", "3 817 km", "2 villes"]);
     expect(valeurs({ jours: 4, km: null, pays: ["FR"], villes: [] })).toEqual(["4 jours", "1 pays"]);
   });
+
+  it("compte les lieux de la carte, nommés comme elle les montre : îles, villes ou lieux", () => {
+    const libelles = (sejours: Record<string, unknown>[]) =>
+      C.chiffresQuatrieme({ jours: 15, km: 3817, pays: ["GR"], villes: ["Naoussa", "Chora"], sejours })[2]!.libelle.replace("\n", " ");
+    const valeur = (sejours: Record<string, unknown>[]) =>
+      C.chiffresQuatrieme({ jours: 15, km: 3817, pays: ["GR"], villes: [], sejours })[2]!.valeur;
+    const iles = ["Paros", "Naxos", "Ios", "Mykonos", "Paros"].map((nom) => ({ nom, ile: true, genre: "site" }));
+    // Paros revisitée compte une fois : 4 îles, comme sur la carte.
+    expect(valeur(iles)).toBe("4");
+    expect(libelles(iles)).toBe("îles visitées");
+    expect(libelles([{ nom: "Lyon", genre: "ville" }, { nom: "Marseille", genre: "ville" }])).toBe("villes visitées");
+    expect(libelles([{ nom: "Athènes", genre: "ville" }, { nom: "Paros", genre: "site", ile: true }])).toBe("lieux visités");
+    expect(libelles([{ nom: "Paros", genre: "ile", ile: true }])).toBe("île visitée");
+  });
+
+  it("reconnaît une île à l'analyse, ou à sa terre sur la carte quand l'analyse n'en dit rien", () => {
+    const gr = { GR: detail("GR") };
+    const lieu = (nom: string, lat: number, lon: number, genre: string) => ({ nom, pays: "GR", lat, lon, genre });
+    expect(C.estUneIle(lieu("Paros", 37.08, 25.15, "site"), gr)).toBe(true);
+    expect(C.estUneIle(lieu("Ios", 36.73, 25.28, "site"), gr)).toBe(true);
+    expect(C.estUneIle(lieu("Naxos", 0, 0, "ile"), {})).toBe(true);
+    // Delphes est sur le continent ; Chora est une ville, même sur une île.
+    expect(C.estUneIle(lieu("Delphes", 38.48, 22.5, "site"), gr)).toBe(false);
+    expect(C.estUneIle(lieu("Chora", 37.106, 25.374, "ville"), gr)).toBe(false);
+  });
 });
 
 const L = (nom: string, lat: number, lon: number) => ({ nom, pays: "GR", lat, lon });
@@ -185,11 +222,83 @@ describe("couverture : la maquette", () => {
     expect(JSON.stringify(m.elements)).not.toMatch(/Philippines|Margaux|Augustin|22k/);
   });
 
-  it("pose le dos sur le papier beige de la quatrième, le texte à l'encre", () => {
+  it("centre le titre de la première sur sa face visible, entre le dos et la zone de pliage", () => {
+    const m = mq();
+    const face = m.faces.recto;
+    // Face visible du relié 154 × 216 : 178 − 19 = 159 mm, mors compris.
+    expect(face).toMatchObject({ x: m.plats.recto[0], l: 159, y: 19, h: 222 });
+    for (const texte of ["Cyclades", "Lou, Sam et Noé\naoût 2026"]) {
+      const e = m.elements.find((x) => x["texte"] === texte)!;
+      const [x, y, l, h] = ["x", "y", "l", "h"].map((k) => e[k] as number) as [number, number, number, number];
+      expect(x + l / 2).toBeCloseTo(face.x + face.l / 2, 1);
+      // Ni sur le pli de tête, ni sur celui de pied.
+      expect(y).toBeGreaterThanOrEqual(face.y + C.RETRAIT - 0.01);
+      expect(y + h).toBeLessThanOrEqual(face.y + face.h - C.RETRAIT + 0.01);
+    }
+  });
+
+  it("pose le dos sur le papier beige, et y écrit les voyageurs, le titre et les dates, de bas en haut", () => {
     const m = mq();
     const dos = m.elements.find((e) => e.type === "rect" && e["l"] === 8)!;
     expect(dos["fond"]).toBe("papier");
-    expect(m.elements.find((e) => e.type === "texte" && e["rotation"] === 90)!["couleur"]).toBe("encre");
+    const textes = m.elements.filter((e) => e.type === "texte" && e["rotation"] === 90);
+    expect(textes.map((e) => e["couleur"])).toEqual(["encre", "encre", "encre"]);
+    const par = (t: string) => textes.find((e) => e["texte"] === t)!;
+    // Voyageurs calés en pied, dates en tête, titre au milieu du dos.
+    expect(par("Lou, Sam et Noé")["alignement"]).toBe("gauche");
+    expect(par("août 2026")["alignement"]).toBe("droite");
+    const titre = par("Cyclades");
+    const face = m.faces.dos;
+    expect((titre["y"] as number) + (titre["h"] as number) / 2).toBeCloseTo(face.y + face.h / 2, 1);
+    // Tous, une fois tournés, tiennent entre les zones de pliage de tête et de pied.
+    for (const e of textes) {
+      const centre = (e["y"] as number) + (e["h"] as number) / 2;
+      const demi = (e["l"] as number) / 2;
+      expect(centre - demi).toBeGreaterThanOrEqual(face.y + C.RETRAIT_DOS - 0.01);
+      expect(centre + demi).toBeLessThanOrEqual(face.y + face.h - C.RETRAIT_DOS + 0.01);
+      expect((e["x"] as number) + (e["l"] as number) / 2).toBeCloseTo(m.plats.dos[0] + 4, 1);
+    }
+  });
+
+  it("garde le titre du dos à l'écart des voyageurs et des dates, quitte à réduire le corps", () => {
+    const m = C.maquette({
+      textes: {
+        titre: "Road trip dans l'Ouest américain, de Seattle à San Diego",
+        voyageurs: "Margaux, Claire, Augustin, Pierre, Jeanne et Louis",
+        dates: "décembre 2025 – janvier 2026",
+      },
+    });
+    const textes = m.elements.filter((e) => e.type === "texte" && e["rotation"] === 90);
+    expect(textes).toHaveLength(3);
+    expect(textes[0]!["corps"]).toBeLessThan(10);
+  });
+
+  it("centre le cadre pointillé de la quatrième sur sa face visible, à l'écart du pli et du mors, et tout son contenu dedans", () => {
+    const m = mq();
+    const face = m.faces.verso;
+    const cadre = m.elements.find((e) => e.type === "rect" && (e["trait"] as { tirets?: unknown } | null)?.tirets)!;
+    const [x, y, l, h] = ["x", "y", "l", "h"].map((k) => cadre[k] as number) as [number, number, number, number];
+    expect(x - face.x).toBeCloseTo(C.RETRAIT, 5);
+    expect(face.x + face.l - (x + l)).toBeCloseTo(C.RETRAIT, 5);
+    expect(y - face.y).toBeCloseTo(C.RETRAIT, 5);
+    expect(face.y + face.h - (y + h)).toBeCloseTo(C.RETRAIT, 5);
+    const axe = x + l / 2;
+    const boite = m.elements.find((e) => e.type === "rect" && e["rayon"])!;
+    const logo = m.elements.find((e) => e["fichier"] === "Liens/logo-memobook.png")!;
+    for (const e of [boite, logo]) {
+      expect((e["x"] as number) + (e["l"] as number) / 2).toBeCloseTo(axe, 1);
+      expect(e["y"] as number).toBeGreaterThan(y);
+      expect((e["y"] as number) + (e["h"] as number)).toBeLessThan(y + h);
+    }
+    for (const e of m.elements.filter((z) => z.type === "chemin" || z.type === "cercle")) {
+      const pts = e.type === "cercle" ? [[e["cx"], e["cy"]]] : (e["points"] as number[][]);
+      for (const [px, py] of pts as number[][]) {
+        expect(px).toBeGreaterThan(x);
+        expect(px).toBeLessThan(x + l);
+        expect(py).toBeGreaterThan(y);
+        expect(py).toBeLessThan((boite["y"] as number));
+      }
+    }
   });
 
   it("dessine sur la quatrième les villes du séjour, reliées dans l'ordre de visite", () => {

@@ -61,6 +61,17 @@
    */
   const CHARNIERE = 12;
 
+  /**
+   * Distance minimale entre ce qui est posé sur un plat et le bord de sa face
+   * visible — la zone de pliage, où la couverture se rabat sur la tranche du
+   * carton, et le dos. Au-delà de la zone de pliage, rien ne se voit ; sur la
+   * ligne même, un trait passe sur l'arête et ne se voit plus de face.
+   */
+  const RETRAIT = CHARNIERE;
+
+  /** Sur le dos, la distance entre les textes et la zone de pliage, en tête et en pied. */
+  const RETRAIT_DOS = 10;
+
   /** Sous cette largeur de dos, pas de texte dessus : il ne tiendrait pas lisible. */
   const DOS_MIN_TEXTE = 6;
 
@@ -96,7 +107,7 @@
     }
     const fond = source.match(/documentBleed\w*Offset\s*:\s*"([\d.,]+)mm"/);
     // Les marges du recto (page 2) : haut, bas et bord extérieur. On garde la
-    // plus grande, c'est la zone sûre la plus prudente.
+    // plus grande, c'est la zone de pliage la plus prudente.
     const marges = source.match(
       /pages\.item\(2\)\.marginPreferences\.properties\s*=\s*\{([^}]*)\}/,
     );
@@ -351,24 +362,101 @@
     };
   }
 
+  /** Le point `[lon, lat]` est-il dans l'anneau ? (lancer de rayon) */
+  function dansAnneau([x, y], anneau) {
+    let dedans = false;
+    for (let i = 0, j = anneau.length - 1; i < anneau.length; j = i, i += 1) {
+      const [xi, yi] = anneau[i];
+      const [xj, yj] = anneau[j];
+      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) dedans = !dedans;
+    }
+    return dedans;
+  }
+
+  /**
+   * Le lieu est-il une île ? Oui si l'analyse le dit (`genre: "ile"`). Les
+   * analyses plus anciennes rangent les îles parmi les sites : un site posé
+   * sur une terre qui n'est pas la plus grande de son pays (Paros, pas le
+   * Péloponnèse) est alors une île. Une ville reste une ville, même en Corse.
+   */
+  function estUneIle(lieu, detail) {
+    if (lieu.genre === "ile") return true;
+    if (lieu.genre !== "site") return false;
+    const anneaux = detail?.[lieu.pays]?.rings;
+    if (!anneaux?.length) return false;
+    const aire = (r) => {
+      const [o, s, e, n] = Carte.outils.boiteDe(r);
+      return (e - o) * (n - s);
+    };
+    const principal = anneaux.reduce((a, r) => (aire(r) > aire(a) ? r : a));
+    const p = [lieu.lon, lieu.lat];
+    let terre = anneaux.find((r) => dansAnneau(p, r));
+    if (!terre) {
+      // Un port, une plage : le point tombe parfois juste à côté du trait de
+      // côte. La terre la plus proche, à 10 km près.
+      let meilleure = 0.1;
+      for (const r of anneaux) {
+        for (const [lon, lat] of r) {
+          const d = Math.hypot(lon - p[0], lat - p[1]);
+          if (d < meilleure) {
+            meilleure = d;
+            terre = r;
+          }
+        }
+      }
+    }
+    return Boolean(terre) && terre !== principal;
+  }
+
+  /**
+   * Les lieux de la carte de quatrième (`Voyage.lieuxDeSejour`), chacun marqué
+   * `ile` quand c'est une île : le chiffre « 4 îles visitées » compte ce que
+   * la carte montre.
+   */
+  function lieuxDeQuatrieme(lieux, detail) {
+    return (lieux || []).map((l) => ({ ...l, ile: estUneIle(l, detail) }));
+  }
+
+  /**
+   * Les lieux de la carte, comptés une fois chacun et nommés comme elle les
+   * montre : « 4 îles visitées », « 3 villes visitées », et « lieux » quand la
+   * carte mêle les deux.
+   */
+  function compteDesLieux(sejours) {
+    const uniques = [...new Map(sejours.map((l) => [Voyage.normaliser(l.nom), l])).values()];
+    const n = uniques.length;
+    if (!n) return null;
+    const iles = uniques.filter((l) => l.ile).length;
+    const [un, plusieurs] =
+      iles === n
+        ? ["île\nvisitée", "îles\nvisitées"]
+        : !iles && uniques.every((l) => l.genre !== "site")
+          ? ["ville\nvisitée", "villes\nvisitées"]
+          : ["lieu\nvisité", "lieux\nvisités"];
+    return { valeur: String(n), libelle: n > 1 ? plusieurs : un };
+  }
+
   /**
    * Les trois chiffres de la quatrième. Les jours d'abord, puis les
    * kilomètres quand le récit raconte des trajets, puis les pays quand il y en
-   * a plusieurs — sinon les villes : « 1 pays visité » ne dit rien d'un voyage
-   * en Grèce, « 4 villes visitées » si.
+   * a plusieurs — sinon les lieux : « 1 pays visité » ne dit rien d'un voyage
+   * en Grèce, « 4 îles visitées » si. Les lieux sont ceux de la carte
+   * (`sejours`, de `lieuxDeQuatrieme`) ; à défaut, les villes du récit.
    */
-  function chiffresQuatrieme({ jours, km, pays, villes }) {
+  function chiffresQuatrieme({ jours, km, pays, villes, sejours }) {
     const candidats = [];
     if (jours) candidats.push({ valeur: String(jours), libelle: jours > 1 ? "jours\nde voyage" : "jour\nde voyage" });
     if (km) candidats.push({ valeur: Voyage.nombreCourt(km), libelle: "km\nparcourus" });
     const nPays = pays?.length || 0;
     const nVilles = villes?.length || 0;
     const lieuxPays = nPays ? { valeur: String(nPays), libelle: nPays > 1 ? "pays\nvisités" : "pays\nvisité" } : null;
-    const lieuxVilles = nVilles
-      ? { valeur: String(nVilles), libelle: nVilles > 1 ? "villes\nvisitées" : "ville\nvisitée" }
-      : null;
-    if (nPays > 1) candidats.push(lieuxPays, lieuxVilles);
-    else candidats.push(lieuxVilles, lieuxPays);
+    const lieux = sejours?.length
+      ? compteDesLieux(sejours)
+      : nVilles
+        ? { valeur: String(nVilles), libelle: nVilles > 1 ? "villes\nvisitées" : "ville\nvisitée" }
+        : null;
+    if (nPays > 1) candidats.push(lieuxPays, lieux);
+    else candidats.push(lieux, lieuxPays);
     return candidats.filter(Boolean).slice(0, 3);
   }
 
@@ -586,13 +674,91 @@
   }
 
   /**
+   * Les faces visibles du livre fermé, en millimètres dans le repère de la
+   * planche : chaque plat entre sa zone de pliage (`fiche.marge`, où le
+   * papier se rabat sur les chants du carton) et le dos ; le dos entre ses
+   * zones de pliage de tête et de pied. C'est sur elles qu'on centre.
+   */
+  function facesVisibles(fiche) {
+    const { largeurPlat: L, dos: D, hauteurPlat: H, marge: m } = fiche;
+    return {
+      verso: { x: m, y: m, l: L - m, h: H - 2 * m },
+      dos: { x: L, y: m, l: D, h: H - 2 * m },
+      recto: { x: L + D, y: m, l: L - m, h: H - 2 * m },
+    };
+  }
+
+  /**
+   * Le dos, le même dans tous les styles : de bas en haut, à la française, les
+   * voyageurs en pied, le titre au milieu, les dates en tête. Le corps suit la
+   * largeur du dos (11 pt au plus) et se réduit si les trois ne tiennent pas
+   * dans la hauteur ; le titre quitte le milieu s'il y heurterait un voisin.
+   */
+  function elementsDos(fiche, textes, couleur) {
+    const { largeurPlat: L, dos: D } = fiche;
+    if (D < DOS_MIN_TEXTE) return [];
+    const face = facesVisibles(fiche).dos;
+    const voyageurs = String(textes?.voyageurs || "").trim();
+    const titre = String(textes?.titre || "").trim();
+    const dates = String(textes?.dates || "").trim();
+    const blocs = [voyageurs, titre, dates].filter(Boolean);
+    if (!blocs.length) return [];
+    // Le long du dos, `a` part du pied (0) et monte jusqu'en tête (`longueur`).
+    const longueur = face.h - 2 * RETRAIT_DOS;
+    const ECART = 6;
+    const FACTEUR = 0.58;
+    let corps = Math.min(11, (D * 0.45) / MM_PAR_PT);
+    const total = (c) => blocs.reduce((t, b) => t + largeurTexte(b, c, FACTEUR), 0) + ECART * (blocs.length - 1);
+    if (total(corps) > longueur) corps = Math.max(5, corps * ((longueur - ECART * (blocs.length - 1)) / (total(corps) - ECART * (blocs.length - 1))));
+    corps = arrondi2(corps);
+    const l = (t) => (t ? largeurTexte(t, corps, FACTEUR) : 0);
+
+    const pied = face.y + face.h - RETRAIT_DOS;
+    const element = (texte, a0, a1, alignement) => {
+      const lg = a1 - a0;
+      const centre = pied - (a0 + a1) / 2;
+      return {
+        type: "texte",
+        // Le cadre est posé à plat, centré sur son point du dos, puis tourné
+        // de 90° : sa gauche passe en pied.
+        x: arrondi2(L + D / 2 - lg / 2),
+        y: arrondi2(centre - D / 2),
+        l: arrondi2(lg),
+        h: D,
+        texte,
+        police: "Playfair Display",
+        style: "Bold",
+        corps,
+        couleur,
+        alignement,
+        vertical: "centre",
+        rotation: 90,
+      };
+    };
+    const el = [];
+    if (voyageurs) el.push(element(voyageurs, 0, longueur, "gauche"));
+    if (dates) el.push(element(dates, 0, longueur, "droite"));
+    if (titre) {
+      const bas = voyageurs ? l(voyageurs) + ECART : 0;
+      const haut = longueur - (dates ? l(dates) + ECART : 0);
+      const demi = l(titre) / 2;
+      let c = longueur / 2;
+      if (c - demi < bas || c + demi > haut) c = Math.min(Math.max((bas + haut) / 2, demi), longueur - demi);
+      const etendue = Math.min(c, longueur - c);
+      el.push(element(titre, c - etendue, c + etendue, "centre"));
+    }
+    return el;
+  }
+
+  /**
    * La couverture dans le style par défaut (`assets/covers/… par défaut.png`) :
    *
    * - **première** : la photo en pleine page, le titre en haut, les voyageurs
    *   et le mois du voyage en bas, en blanc ;
-   * - **dos** : le papier beige de la quatrième, le titre et les voyageurs à
-   *   l'encre, de bas en haut, à la française ;
-   * - **quatrième** : sur le papier, dans un cadre pointillé, la carte des
+   * - **dos** : le papier beige de la quatrième, les voyageurs, le titre et
+   *   les dates à l'encre, de bas en haut, à la française (`elementsDos`) ;
+   * - **quatrième** : sur le papier, dans un cadre pointillé centré sur la
+   *   face visible, la carte des
    *   villes (ou des îles) où le voyage a séjourné, reliées dans l'ordre de
    *   visite, « Mon voyage en quelques chiffres » et le logo. Pas de photo : le
    *   style par défaut n'en a pas en quatrième.
@@ -621,17 +787,23 @@
       el.push({ type: "rect", x: xRecto, y: -f, l: L + f, h: H + 2 * f, fond: "vert", trait: null });
     }
 
-    // Première : le titre, aussi grand que la largeur le permet (72 pt au plus).
-    const largeurUtile = L - m - CHARNIERE;
+    // Les faces visibles : chaque plat entre sa zone de pliage et le dos. Le
+    // mors n'est qu'un pli, il se voit : il compte dans la face.
+    const faces = facesVisibles(fiche);
+
+    // Première : le titre, aussi grand que la largeur le permet (72 pt au
+    // plus), centré sur la face visible, à l'écart du pli et du mors.
+    const premiere = faces.recto;
+    const largeurUtile = premiere.l - 2 * CHARNIERE;
     const titre = String(textes?.titre || "");
     const corpsTitre = Math.max(28, Math.min(72, (largeurUtile / largeurTexte(titre, 1, 0.55)) * 0.98));
     const lignesTitre = largeurTexte(titre, corpsTitre, 0.55) > largeurUtile ? 2 : 1;
     el.push({
       type: "texte",
-      x: xRecto + CHARNIERE,
-      y: m,
-      l: largeurUtile,
-      h: corpsTitre * MM_PAR_PT * 1.15 * lignesTitre,
+      x: arrondi2(premiere.x + CHARNIERE),
+      y: arrondi2(premiere.y + RETRAIT),
+      l: arrondi2(largeurUtile),
+      h: arrondi2(corpsTitre * MM_PAR_PT * 1.15 * lignesTitre),
       texte: titre,
       police: "Playfair Display",
       style: "Bold",
@@ -644,12 +816,12 @@
     const bas = [textes?.voyageurs, textes?.dates].filter(Boolean);
     if (bas.length) {
       const corpsBas = 15;
-      const h = corpsBas * MM_PAR_PT * 1.3 * bas.length;
+      const h = arrondi2(corpsBas * MM_PAR_PT * 1.3 * bas.length);
       el.push({
         type: "texte",
-        x: xRecto + CHARNIERE,
-        y: H - m - h,
-        l: largeurUtile,
+        x: arrondi2(premiere.x + CHARNIERE),
+        y: arrondi2(premiere.y + premiere.h - RETRAIT - h),
+        l: arrondi2(largeurUtile),
         h,
         texte: bas.join("\n"),
         police: "Playfair Display",
@@ -662,55 +834,40 @@
       });
     }
 
-    // Dos : de bas en haut, centré dans la largeur.
-    if (D >= DOS_MIN_TEXTE) {
-      const corpsDos = arrondi2(Math.min(11, (D * 0.45) / MM_PAR_PT));
-      const texteDos = [titre, textes?.voyageurs].filter(Boolean).join("  ·  ");
-      const longueur = H - 2 * m;
-      el.push({
-        type: "texte",
-        // Le cadre est posé à plat, centré sur le dos, puis tourné de 90°.
-        x: arrondi2(L + D / 2 - longueur / 2),
-        y: arrondi2(H / 2 - D / 2),
-        l: longueur,
-        h: D,
-        texte: texteDos,
-        police: "Playfair Display",
-        style: "Bold",
-        corps: corpsDos,
-        couleur: "encre",
-        alignement: "centre",
-        vertical: "centre",
-        rotation: 90,
-      });
-    }
+    el.push(...elementsDos(fiche, textes, "encre"));
 
-    // Quatrième : le cadre pointillé, dans la zone sûre.
-    const cx0 = m;
-    const cx1 = L - m;
-    el.push({
-      type: "rect",
-      x: cx0,
-      y: m,
-      l: cx1 - cx0,
-      h: H - 2 * m,
-      fond: null,
-      trait: { couleur: "vert", epaisseur: 0.5, tirets: [1.6, 1.6] },
-    });
-    const interieur = cx1 - cx0;
-    // La carte, sur un peu plus de la moitié haute.
-    const zoneCarte = { x: cx0 + 8, y: m + 8, l: interieur - 16, h: (H - 2 * m) * 0.5 };
+    // Quatrième : le cadre pointillé, centré sur la face visible, à l'écart
+    // de la zone de pliage et du mors — sur la ligne de pli, il passerait sur
+    // l'arête du carton et ne se verrait plus.
+    const quatrieme = faces.verso;
+    const cadre = {
+      x: quatrieme.x + RETRAIT,
+      y: quatrieme.y + RETRAIT,
+      l: quatrieme.l - 2 * RETRAIT,
+      h: quatrieme.h - 2 * RETRAIT,
+    };
+    el.push({ type: "rect", ...cadre, fond: null, trait: { couleur: "vert", epaisseur: 0.5, tirets: [1.6, 1.6] } });
+    // Dans le cadre, tout est centré sur son axe : la carte sur un peu plus de
+    // la moitié haute, les chiffres dessous, le logo en pied.
+    const axe = cadre.x + cadre.l / 2;
+    const pad = 8;
+    const hLogo = 16;
+    const logoH = logo?.px ? (hLogo * logo.px[1]) / logo.px[0] : hLogo;
+    const boite = { l: cadre.l - 2 * pad, h: 44 };
+    boite.x = axe - boite.l / 2;
+    const yLogo = cadre.y + cadre.h - pad - logoH;
+    boite.y = yLogo - 8 - boite.h;
+    const zoneCarte = { x: cadre.x + pad, y: cadre.y + pad, l: cadre.l - 2 * pad, h: boite.y - 8 - (cadre.y + pad) };
     if (carte?.lieux?.length) el.push(...elementsCarte(carte, zoneCarte));
 
     // « Mon voyage en quelques chiffres ».
-    const boite = { x: cx0 + 10, y: m + (H - 2 * m) * 0.6, l: interieur - 20, h: 46 };
     if (chiffres.length) {
-      el.push({ type: "rect", x: boite.x, y: boite.y, l: boite.l, h: boite.h, fond: null, rayon: 5, trait: { couleur: "vert", epaisseur: 0.75, tirets: null } });
+      el.push({ type: "rect", x: arrondi2(boite.x), y: arrondi2(boite.y), l: arrondi2(boite.l), h: boite.h, fond: null, rayon: 5, trait: { couleur: "vert", epaisseur: 0.75, tirets: null } });
       el.push({
         type: "texte",
-        x: boite.x,
-        y: boite.y + 5,
-        l: boite.l,
+        x: arrondi2(boite.x),
+        y: arrondi2(boite.y + 5),
+        l: arrondi2(boite.l),
         h: 6,
         texte: "Mon voyage en quelques chiffres",
         police: "Playfair Display",
@@ -726,7 +883,7 @@
         el.push({
           type: "texte",
           x: arrondi2(x),
-          y: boite.y + 14,
+          y: arrondi2(boite.y + 13),
           l: arrondi2(colonne),
           h: 12,
           texte: c.valeur,
@@ -740,7 +897,7 @@
         el.push({
           type: "texte",
           x: arrondi2(x),
-          y: boite.y + 27,
+          y: arrondi2(boite.y + 26),
           l: arrondi2(colonne),
           h: 12,
           texte: c.libelle,
@@ -756,9 +913,7 @@
 
     // Le logo, centré sous les chiffres.
     if (logo) {
-      const l = 16;
-      const h = logo.px ? (l * logo.px[1]) / logo.px[0] : l;
-      el.push({ type: "image", x: arrondi2(cx0 + interieur / 2 - l / 2), y: arrondi2(H - m - 6 - h), l, h, fichier: logo.fichier, src: logo.src, px: logo.px, focus: [0.5, 0.5], contenir: true });
+      el.push({ type: "image", x: arrondi2(axe - hLogo / 2), y: arrondi2(yLogo), l: hLogo, h: arrondi2(logoH), fichier: logo.fichier, src: logo.src, px: logo.px, focus: [0.5, 0.5], contenir: true });
     }
 
     return {
@@ -768,6 +923,7 @@
       fondPerdu: f,
       marge: m,
       plats: { verso: [0, L], dos: [L, L + D], recto: [xRecto, xRecto + L] },
+      faces,
       elements: el,
     };
   }
@@ -858,14 +1014,14 @@
     const W = mq.largeur + 2 * f;
     const H = mq.hauteur + 2 * f;
     const corps = mq.elements.map((e, i) => elementSvg(e, i, COULEURS)).join("\n");
-    const m = mq.marge;
     const reperesSvg = reperes
       ? `<g class="reperes" fill="none" stroke-width="0.3">` +
         `<rect x="0" y="0" width="${mq.largeur}" height="${mq.hauteur}" stroke="#e2342d" stroke-dasharray="1.5 1"/>` +
         `<line x1="${mq.plats.dos[0]}" y1="${-f}" x2="${mq.plats.dos[0]}" y2="${mq.hauteur + f}" stroke="#1f7a4d" stroke-dasharray="1.5 1"/>` +
         `<line x1="${mq.plats.dos[1]}" y1="${-f}" x2="${mq.plats.dos[1]}" y2="${mq.hauteur + f}" stroke="#1f7a4d" stroke-dasharray="1.5 1"/>` +
-        `<rect x="${m}" y="${m}" width="${mq.plats.verso[1] - 2 * m}" height="${mq.hauteur - 2 * m}" stroke="#1f5fd6" stroke-dasharray="0.6 0.8"/>` +
-        `<rect x="${mq.plats.recto[0] + CHARNIERE}" y="${m}" width="${mq.plats.recto[1] - mq.plats.recto[0] - m - CHARNIERE}" height="${mq.hauteur - 2 * m}" stroke="#1f5fd6" stroke-dasharray="0.6 0.8"/>` +
+        [mq.faces.verso, mq.faces.recto]
+          .map((z) => `<rect x="${arrondi2(z.x)}" y="${arrondi2(z.y)}" width="${arrondi2(z.l)}" height="${arrondi2(z.h)}" stroke="#1f5fd6" stroke-dasharray="0.6 0.8"/>`)
+          .join("") +
         `</g>`
       : "";
     return (
@@ -923,7 +1079,7 @@ body.sans-reperes .reperes { display: none; }
   (plats ${mq.fiche.largeurPlat} × ${mq.fiche.hauteurPlat} mm, dos ${mq.fiche.dos} mm, fond perdu ${f} mm ; ${echapper(mq.fiche.source)}).
   <ul>
     <li>Pour le PDF : <em>Imprimer</em> → <em>Enregistrer au format PDF</em>, Marges <em>Aucune</em>, <em>Graphiques d'arrière-plan</em> coché. Le fichier InDesign se télécharge depuis l'atelier.</li>
-    <li>Repères (à l'écran seulement) : <span style="color:#e2342d">coupe</span>, <span style="color:#1f7a4d">plis du dos</span>, <span style="color:#1f5fd6">zone sûre</span>.</li>
+    <li>Repères (à l'écran seulement) : <span style="color:#e2342d">coupe</span>, <span style="color:#1f7a4d">plis du dos</span>, <span style="color:#1f5fd6">faces visibles (entre la zone de pliage et le dos)</span>.</li>
     ${alertes.map((a) => `<li class="alerte">${echapper(a)}</li>`).join("\n    ")}
   </ul>
   <div style="margin-top:6px">
@@ -1274,6 +1430,8 @@ var ELEMENTS = ${litteral(elements)};
     ficheDuCarnet,
     pagesDuPdf,
     CHARNIERE,
+    RETRAIT,
+    RETRAIT_DOS,
     SEUILS,
     COULEURS,
     lireFichePumbo,
@@ -1284,8 +1442,12 @@ var ELEMENTS = ${litteral(elements)};
     moisDuVoyage,
     listeNoms,
     textesParDefaut,
+    estUneIle,
+    lieuxDeQuatrieme,
     chiffresQuatrieme,
     cadreQuatrieme,
+    facesVisibles,
+    elementsDos,
     couperPolyligne,
     maquette,
     placementImage,

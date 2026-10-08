@@ -1820,6 +1820,21 @@ function chiffresDuVoyage() {
   return { ...chiffres, jours: statistiquesVoyage().jours };
 }
 
+/** Les contours de la carte de quatrième : le détail chargé pour elle, à défaut ceux du monde. */
+function contoursQuatrieme() {
+  return etat.contoursDetail && Object.keys(etat.contoursDetail).length ? etat.contoursDetail : etat.contoursCarte;
+}
+
+/** Les villes (ou les îles) où le voyage a séjourné : ce que la carte de quatrième montre, et compte. */
+function lieuxQuatrieme() {
+  return Couverture.lieuxDeQuatrieme(Voyage.lieuxDeSejour(etapesPourMiseEnPage(() => "")), contoursQuatrieme());
+}
+
+/** Les chiffres de la quatrième : les lieux comptés sont ceux de sa carte. */
+function chiffresQuatrieme() {
+  return Couverture.chiffresQuatrieme({ ...chiffresDuVoyage(), sejours: lieuxQuatrieme() });
+}
+
 /** Les textes de la couverture : ceux que le voyageur a repris, sinon ceux tirés du carnet. */
 function textesCouverture() {
   const { premiere, derniere } = bornesDuVoyage();
@@ -1868,9 +1883,8 @@ function maquetteCouverture() {
   const fiche = ficheCouverture();
   const recto = photoDuPlat("recto");
   // Les villes (ou les îles) où le voyage a séjourné, pas chaque site visité.
-  const lieux = Voyage.lieuxDeSejour(etapesPourMiseEnPage(() => ""));
-  const detail =
-    etat.contoursDetail && Object.keys(etat.contoursDetail).length ? etat.contoursDetail : etat.contoursCarte;
+  const lieux = lieuxQuatrieme();
+  const detail = contoursQuatrieme();
   return Couverture.maquette({
     fiche,
     textes: textesCouverture(),
@@ -1882,7 +1896,7 @@ function maquetteCouverture() {
           focus: [0.5, 0.35],
         }
       : null,
-    chiffres: Couverture.chiffresQuatrieme(chiffresDuVoyage()),
+    chiffres: chiffresQuatrieme(),
     carte: lieux.length && detail ? { lieux, detail } : null,
     logo: etat.logoPng
       ? { fichier: "Liens/logo-memobook.png", src: etat.logoPng.data, px: etat.logoPng.px }
@@ -2087,7 +2101,7 @@ function rendreCouverture() {
     etat.couverture.textes = { ...etat.couverture.textes, [cle]: v };
   };
   const c = chiffresDuVoyage();
-  const quatrieme = Couverture.chiffresQuatrieme(c);
+  const quatrieme = chiffresQuatrieme();
 
   remplir(
     section,
@@ -3048,7 +3062,7 @@ function rendreReglages() {
         const f = fichePumbo();
         return (
           `Facultatif. Donne les plats (${f.largeurPlat} × ${f.hauteurPlat} mm), le fond perdu (${f.fondPerdu} mm) ` +
-          `et la zone sûre (${f.marge} mm) de la couverture — ${f.parDefaut ? "à défaut, ceux du relié 154 × 216 mm" : f.source}. ` +
+          `et la zone de pliage (${f.marge} mm) de la couverture — ${f.parDefaut ? "à défaut, ceux du relié 154 × 216 mm" : f.source}. ` +
           "À n'importer que pour un autre format de livre. Le dos, lui, se calcule tout seul d'après le nombre de pages " +
           "(barème Pumbo : 8 mm jusqu'à 56 pages, puis 3 mm + 0,09 mm par page)."
         );

@@ -6,7 +6,7 @@
  * Tout vient de l'analyse d'étape (`consigneAnalyseEtape`, `partage.js`) :
  *
  * - `lieu` et `lieux` : les endroits où le récit emmène le voyageur, avec leur
- *   `genre` (une ville ou un village, ou un site : une plage, un musée) ;
+ *   `genre` (une ville ou un village, une île, ou un site : une plage, un musée) ;
  * - `trajets` : les déplacements racontés, avec leur départ, leur arrivée et
  *   leur `mode` — avion, bateau ou terre.
  *
@@ -43,7 +43,7 @@
     if (!nom || !/^[A-Z]{2}$/.test(pays) || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
     if (lat === 0 && lon === 0) return null;
     if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
-    const genre = lieu.genre === "ville" || lieu.genre === "site" ? lieu.genre : null;
+    const genre = ["ville", "ile", "site"].includes(lieu.genre) ? lieu.genre : null;
     return { nom, pays, lat, lon, genre };
   }
 
