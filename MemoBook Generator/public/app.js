@@ -1867,7 +1867,8 @@ const extensionDe = (dataUrl) => (/^data:image\/png/.test(dataUrl) ? "png" : "jp
 function maquetteCouverture() {
   const fiche = ficheCouverture();
   const recto = photoDuPlat("recto");
-  const lieux = Voyage.itineraire(etapesPourMiseEnPage(() => ""));
+  // Les villes (ou les îles) où le voyage a séjourné, pas chaque site visité.
+  const lieux = Voyage.lieuxDeSejour(etapesPourMiseEnPage(() => ""));
   const detail =
     etat.contoursDetail && Object.keys(etat.contoursDetail).length ? etat.contoursDetail : etat.contoursCarte;
   return Couverture.maquette({
@@ -1908,7 +1909,7 @@ function alertesCouverture() {
     const p = photosPourCouverture().find((x) => x.id === recto.id);
     alertes.push(...Couverture.evaluerPhoto(p, { fiche, mesure: p.mesure, analyse: p.analyse }).alertes);
   }
-  if (!Voyage.itineraire(etapesPourMiseEnPage(() => "")).length) {
+  if (!Voyage.lieuxDeSejour(etapesPourMiseEnPage(() => "")).length) {
     alertes.push("Aucun lieu situé : la carte de la quatrième restera vide. Analyse les étapes (clé de modèle dans les réglages).");
   }
   return alertes;
@@ -2293,7 +2294,7 @@ async function chargerContoursDetail() {
   // Les cartes de chapitre, et celle de la quatrième de couverture.
   const cadres = [
     ...MiseEnPage.cadresDesCartes(etapes, etat.contoursCarte),
-    Couverture.cadreQuatrieme(Voyage.itineraire(etapes)),
+    Couverture.cadreQuatrieme(Voyage.lieuxDeSejour(etapes)),
   ].filter(Boolean);
   if (!cadres.length) return;
   etat.contoursDetail ||= {};
@@ -3046,8 +3047,10 @@ function rendreReglages() {
       (() => {
         const f = fichePumbo();
         return (
-          `Couverture : plats ${f.largeurPlat} × ${f.hauteurPlat} mm, dos ${f.dos} mm, fond perdu ${f.fondPerdu} mm — ${f.source}. ` +
-          "Le dos, lui, se calcule d'après le nombre de pages du carnet (barème Pumbo : 8 mm jusqu'à 56 pages, puis 3 mm + 0,09 mm par page)."
+          `Facultatif. Donne les plats (${f.largeurPlat} × ${f.hauteurPlat} mm), le fond perdu (${f.fondPerdu} mm) ` +
+          `et la zone sûre (${f.marge} mm) de la couverture — ${f.parDefaut ? "à défaut, ceux du relié 154 × 216 mm" : f.source}. ` +
+          "À n'importer que pour un autre format de livre. Le dos, lui, se calcule tout seul d'après le nombre de pages " +
+          "(barème Pumbo : 8 mm jusqu'à 56 pages, puis 3 mm + 0,09 mm par page)."
         );
       })(),
     ),

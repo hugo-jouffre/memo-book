@@ -461,8 +461,9 @@
   const arrondi2 = (v) => Math.round(v * 100) / 100;
 
   /**
-   * La carte de la quatrième : tous les lieux visités, reliés dans l'ordre de
-   * visite, chaque trajet au trait de son moyen de transport. Les côtes en
+   * La carte de la quatrième : les villes (ou les îles) où le voyage a
+   * séjourné, reliées dans l'ordre de visite, chaque trajet au trait de son
+   * moyen de transport — `lieux` vient de `Voyage.lieuxDeSejour`. Les côtes en
    * trait fin, sans fond ; les lieux en anneaux verts, leurs noms placés là où
    * ils ne chevauchent rien, au besoin au bout d'un filet.
    */
@@ -589,14 +590,15 @@
    *
    * - **première** : la photo en pleine page, le titre en haut, les voyageurs
    *   et le mois du voyage en bas, en blanc ;
-   * - **dos** : vert, le titre et les voyageurs de bas en haut, à la française ;
-   * - **quatrième** : sur le papier, dans un cadre pointillé, la carte de tous
-   *   les lieux visités reliés dans l'ordre, « Mon voyage en quelques
-   *   chiffres » et le logo. Pas de photo : le style par défaut n'en a pas en
-   *   quatrième.
+   * - **dos** : le papier beige de la quatrième, le titre et les voyageurs à
+   *   l'encre, de bas en haut, à la française ;
+   * - **quatrième** : sur le papier, dans un cadre pointillé, la carte des
+   *   villes (ou des îles) où le voyage a séjourné, reliées dans l'ordre de
+   *   visite, « Mon voyage en quelques chiffres » et le logo. Pas de photo : le
+   *   style par défaut n'en a pas en quatrième.
    *
    * `recto` : `{ fichier, src, px: [l, h], focus }` ou `null` (aplat vert) ;
-   * `carte` : `{ lieux, detail }` (`Voyage.itineraire`, contours détaillés) ;
+   * `carte` : `{ lieux, detail }` (`Voyage.lieuxDeSejour`, contours détaillés) ;
    * `logo` : `{ fichier, src, px }` ou `null`.
    */
   function maquette({ fiche = FICHE_DEFAUT, textes, recto = null, chiffres = [], carte = null, logo = null }) {
@@ -610,8 +612,8 @@
 
     // Quatrième : le papier, fond perdu compris.
     el.push({ type: "rect", x: -f, y: -f, l: L + f, h: H + 2 * f, fond: "papier", trait: null });
-    // Dos.
-    el.push({ type: "rect", x: L, y: -f, l: D, h: H + 2 * f, fond: "vert", trait: null });
+    // Dos : le papier de la quatrième, qui se prolonge jusqu'au pli de la première.
+    el.push({ type: "rect", x: L, y: -f, l: D, h: H + 2 * f, fond: "papier", trait: null });
     // Première : la photo, fond perdu compris, ou un aplat.
     if (recto) {
       el.push({ type: "image", x: xRecto, y: -f, l: L + f, h: H + 2 * f, fichier: recto.fichier, src: recto.src, px: recto.px, focus: recto.focus || [0.5, 0.35] });
@@ -676,7 +678,7 @@
         police: "Playfair Display",
         style: "Bold",
         corps: corpsDos,
-        couleur: "papier",
+        couleur: "encre",
         alignement: "centre",
         vertical: "centre",
         rotation: 90,

@@ -981,15 +981,19 @@ les textes, ni les chiffres, ni la carte.
   aussi grand que la largeur le permet (72 pt au plus) ; en bas, les voyageurs
   et le mois du voyage (« août – septembre 2026 »). Une ombre légère sous les
   textes, pour les ciels clairs.
-- **Dos** — aplat vert, titre et voyageurs en papier, **lisibles de bas en
-  haut** (à la française). Pas de texte sous 6 mm de dos. Corps : 45 % de la
+- **Dos** — le **papier beige de la quatrième**, qui s'y prolonge ; titre et
+  voyageurs à l'encre, **lisibles de bas en haut** (à la française). Pas de texte sous 6 mm de dos. Corps : 45 % de la
   largeur du dos, 11 pt au plus.
 - **Quatrième** — sur le papier, dans un cadre pointillé posé sur la zone sûre :
-  - **la carte de tous les lieux visités, reliés dans l'ordre de visite**,
-    chaque trajet au trait de son moyen de transport (§ « Les cartes ») ; les
-    côtes en trait fin, les lieux en anneaux verts, leurs noms placés là où ils
-    ne chevauchent rien, au besoin au bout d'un filet. Le cadre entoure tous les
-    lieux (une marge, un degré au moins), quel que soit le nombre de pays ;
+  - **la carte des villes visitées, reliées dans l'ordre de visite** — pour un
+    voyage d'île en île, les îles. Seulement les lieux de séjour, c'est-à-dire
+    le lieu principal de chaque étape (`Voyage.lieuxDeSejour`) : ni les sites
+    visités en chemin (une plage, un musée, un village d'excursion), ni les
+    escales de transit, ni la maison. Chaque trajet au trait de son moyen de
+    transport (§ « Les cartes ») ; les côtes en trait fin, les villes en
+    anneaux verts, leurs noms placés là où ils ne chevauchent rien, au besoin
+    au bout d'un filet. Le cadre entoure toutes ces villes (une marge, un degré
+    au moins), quel que soit le nombre de pays ;
   - **« Mon voyage en quelques chiffres »** : les jours, les kilomètres
     parcourus, puis les pays s'il y en a plusieurs — sinon les villes ;
   - le logo MemoBook. Pas de photo : le style par défaut n'en a pas en

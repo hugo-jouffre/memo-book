@@ -43,7 +43,7 @@ const C = require("../../MemoBook Generator/public/couverture.js") as {
   crc32: (o: Uint8Array) => number;
 };
 const V = require("../../MemoBook Generator/public/voyage.js") as {
-  itineraire: (etapes: unknown[]) => unknown[];
+  lieuxDeSejour: (etapes: unknown[]) => unknown[];
 };
 const detail = (code: string) =>
   JSON.parse(readFileSync(resolve(import.meta.dirname, `../../assets/maps/detail/${code}.json`), "utf8")) as unknown;
@@ -157,7 +157,7 @@ describe("couverture : textes et chiffres", () => {
 
 const L = (nom: string, lat: number, lon: number) => ({ nom, pays: "GR", lat, lon });
 const etapes = [
-  { analyse: { lieu: L("Paros", 37.08, 25.15), lieux: [], trajets: [{ depart: { nom: "Genève", pays: "CH", lat: 46.2, lon: 6.14 }, arrivee: L("Paros", 37.08, 25.15), mode: "avion" }] } },
+  { analyse: { lieu: L("Paros", 37.08, 25.15), lieux: [L("Kolymbithres", 37.13, 25.21)], trajets: [{ depart: { nom: "Genève", pays: "CH", lat: 46.2, lon: 6.14 }, arrivee: L("Paros", 37.08, 25.15), mode: "avion" }] } },
   { analyse: { lieu: L("Naxos", 37.1, 25.38), lieux: [], trajets: [{ depart: L("Paros", 37.08, 25.15), arrivee: L("Naxos", 37.1, 25.38), mode: "bateau" }] } },
   { analyse: { lieu: L("Ios", 36.73, 25.28), lieux: [], trajets: [] } },
 ];
@@ -166,7 +166,7 @@ const mq = () =>
     textes: { titre: "Cyclades", voyageurs: "Lou, Sam et Noé", dates: "août 2026" },
     recto: { fichier: "Liens/recto.jpg", src: "data:image/jpeg;base64,AAAA", px: [3000, 4000] },
     chiffres: C.chiffresQuatrieme({ jours: 15, km: 3817, pays: ["GR"], villes: ["Naoussa"] }),
-    carte: { lieux: V.itineraire(etapes), detail: { GR: detail("GR") } },
+    carte: { lieux: V.lieuxDeSejour(etapes), detail: { GR: detail("GR") } },
     logo: { fichier: "Liens/logo-memobook.png", src: "data:image/png;base64,AAAA", px: [1200, 1200] },
   });
 
@@ -185,9 +185,17 @@ describe("couverture : la maquette", () => {
     expect(JSON.stringify(m.elements)).not.toMatch(/Philippines|Margaux|Augustin|22k/);
   });
 
-  it("dessine sur la quatrième tous les lieux visités, reliés dans l'ordre de visite", () => {
+  it("pose le dos sur le papier beige de la quatrième, le texte à l'encre", () => {
+    const m = mq();
+    const dos = m.elements.find((e) => e.type === "rect" && e["l"] === 8)!;
+    expect(dos["fond"]).toBe("papier");
+    expect(m.elements.find((e) => e.type === "texte" && e["rotation"] === 90)!["couleur"]).toBe("encre");
+  });
+
+  it("dessine sur la quatrième les villes du séjour, reliées dans l'ordre de visite", () => {
     const m = mq();
     const noms = m.elements.filter((e) => e.type === "texte" && e["corps"] === 6.5).map((e) => e["texte"]);
+    // La plage visitée sur Paros n'est pas une étape du séjour : pas de nom, pas de point.
     expect(noms).toEqual(["Paros", "Naxos", "Ios"]);
     expect(m.elements.filter((e) => e.type === "cercle")).toHaveLength(3);
     // Paros → Naxos en bateau (pointillés), Naxos → Ios sans moyen connu.
