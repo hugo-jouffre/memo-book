@@ -15,6 +15,14 @@ final class BookFontComboTests: XCTestCase {
         XCTAssertEqual(BookFontCombo.matching(book)?.id, BookFontCombo.travelJournal.id)
     }
 
+    func testOnlyTheTravelJournalComboIsAvailableForNow() {
+        // La V1 n'imprime que « Carnet de voyage » (Hugo, 09/10/2026) : les
+        // deux autres restent sur la feuille, « À venir ».
+        XCTAssertEqual(BookFontCombo.all.filter(\.isAvailable).map(\.id), [BookFontCombo.travelJournal.id])
+        XCTAssertFalse(BookFontCombo.editorial.isAvailable)
+        XCTAssertFalse(BookFontCombo.handwritten.isAvailable)
+    }
+
     func testEveryComboCoversTheFourRoles() {
         for combo in BookFontCombo.all {
             for role in BookFontRole.allCases {

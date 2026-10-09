@@ -233,6 +233,22 @@ describe("parcours complet : raconter → transcrire → générer", () => {
     expect((await carnet(true)).days.flatMap((day) => day.fun_facts ?? [])).toEqual([encart]);
     expect((await carnet(false)).days.flatMap((day) => day.fun_facts ?? [])).toEqual([]);
   });
+
+  it("dit au gabarit les réglages « Pointillés » et « Décorations & stickers »", async () => {
+    const memoId = await createMemo();
+    await postAudio(memoId, "2026-01-05T09:00:00.000Z", "Guatapé");
+    await harness.prisma.memo.update({ where: { id: memoId }, data: { rulesEnabled: false, decorationQuota: 0 } });
+
+    const render = await harness.app.inject({
+      method: "POST",
+      url: `/v1/memos/${memoId}/renders`,
+      headers: { authorization },
+    });
+    const stored = await harness.prisma.render.findUniqueOrThrow({
+      where: { id: render.json<{ id: string }>().id },
+    });
+    expect(stored.payload).toMatchObject({ rules_enabled: false, decoration_quota: 0 });
+  });
 });
 
 describe("garde-fous de l'API", () => {

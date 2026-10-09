@@ -51,12 +51,12 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
 | Réglage | Valeurs | Défaut | Qui l'applique | État |
 |---|---|---|---|---|
 | **Couvertures (1re & 4e)** | Aperçu et personnalisation | — | Mise en page | Partiel : `cover_photo` et `back_cover` existent, l'éditeur non |
-| **Ratio photo / texte** | Échelle à arrêter | 50/50 | Mise en page — choix des layouts et fréquence des `layout_photo_page` | Rendu, via le catalogue de layouts |
+| **Ratio photo / texte** | 0 · 25 · 50 · 75 · 100 % | 50/50 | Mise en page — choix des layouts et fréquence des `layout_photo_page` | Partiel : **0 % = aucune photo dans le carnet** (atelier et app, `bookSettings.ts`) ; les autres paliers composent comme 50 % en attendant leur définition |
 | **Nombre de page cible** | Échelle à arrêter | 60 pages | Rédaction — niveau de détail des textes · Mise en page — regroupement des étapes | Rendu côté agents, sans garde-fou automatique |
-| **Fun facts** | ON / OFF | ON | Rédaction les écrit, mise en page les place | Rendu (`fun_facts`) — ⚠️ le réglage OFF n'est lu ni par la rédaction ni par la mise en page (02/10/2026) |
-| **Pointillés** | ON / OFF | ON | Gabarit (`.mb-note__rules`) | À construire : un booléen dans le payload |
-| **Décorations & stickers** | 0 · 1 · 2 · 3 · 4 par paragraphe ou par image | 2 | Mise en page | Partiel : seul le scotch est rendu, les stickers ne le sont pas |
-| **Typographies** | Quatre **assortiments** — voir plus bas | Carnet de voyage | Gabarit — `--mb-font-display`, `--mb-font-title`, `--mb-font-hand`, et `--mb-font-facts` à créer | À construire. Les quatre colonnes existent en base ; le gabarit ne les lit pas encore |
+| **Fun facts** | ON / OFF | ON | Rédaction les écrit, mise en page les place | Rendu (`fun_facts`) — OFF : aucun encart, dans l'atelier comme dans l'app |
+| **Pointillés** | ON / OFF | ON | Gabarit (`.mb-note__rules`) | Rendu : `rules_enabled` dans le payload |
+| **Décorations & stickers** | 0 · 1 · 2 · 3 · 4 par paragraphe ou par image | 2 | Mise en page | Partiel : `decoration_quota: 0` retire tracé, scotch et stickers ; les stickers ne sont pas encore imprimés |
+| **Typographies** | Trois **assortiments** — voir plus bas | Carnet de voyage | Gabarit — `--mb-font-display`, `--mb-font-title`, `--mb-font-hand` | **V1 : « Carnet de voyage » seul** (Hugo, 09/10/2026) — Éditorial et Manuscrit restent sur la feuille, pâlis, « À venir ». Les sous-titres tombent sur Gloria Hallelujah tant que Hansley n'est pas inlinée (licence à vérifier) |
 | **Quiz intégrés à l'histoire** | ON / OFF | ON | Mise en page les place ; **aucun agent ne les écrit** — règles en attente dans `agent-transcription-carnet.md` § 1 | Rendu (`quiz`), jamais rempli |
 | **Zones libres** | ON / OFF | ON | Mise en page | À construire : une zone blanche en fin d'étape, trois pages blanches en fin de carnet |
 | **Mot fléché à la fin du livre** | ON / OFF | ON | La grille se génère à la commande ; les mots du voyage, règles en attente dans `agent-transcription-carnet.md` § 1 | À construire |
