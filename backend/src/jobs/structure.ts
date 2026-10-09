@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import type { AppContext } from "../context.js";
+import { applyBookSettings, keepsPhotos } from "../services/bookSettings.js";
 import { validatePayload } from "../services/payloadValidator.js";
 import type { StructuringEntry } from "../services/structuring.js";
 import { parseTripContext } from "../services/tripContext.js";
@@ -95,6 +96,10 @@ export async function structureRender(
     // télécharge lui-même au moment de composer la page.
     const structuringEntries: StructuringEntry[] = [];
     for (const entry of memo.entries) {
+      // Ratio photo / texte à 0 % : « aucune photo dans tout le carnet ». Elles
+      // sont écartées avant la composition, pour que le récit prenne leur
+      // place au lieu d'y laisser des trous (`bookSettings.ts`).
+      if (entry.kind === "photo" && !keepsPhotos(memo)) continue;
       let photoUrl: string | null = null;
 
       if (entry.kind === "photo" && entry.media) {
@@ -154,7 +159,7 @@ export async function structureRender(
       );
     }
 
-    const payload = await structurer.structure({
+    const compose = await structurer.structure({
       title: memo.title,
       subtitle: memo.subtitle,
       authors: memo.authors,
@@ -163,6 +168,9 @@ export async function structureRender(
       entries: structuringEntries,
       tripContext: parseTripContext(memo.tripContext),
     });
+    // Les réglages de personnalisation qui touchent le gabarit : pointillés,
+    // décorations, et ce qui resterait de photos à 0 %.
+    const payload = applyBookSettings(compose, memo);
 
     const validation = validatePayload(payload);
     if (!validation.valid) {

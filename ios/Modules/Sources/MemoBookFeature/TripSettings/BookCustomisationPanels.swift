@@ -238,9 +238,13 @@ struct BookFontsPanel: View {
 
             BookPanelCard {
                 ForEach(BookFontCombo.all) { combo in
+                    // Éditorial et Manuscrit ne s'impriment pas encore : la
+                    // ligne reste, pâlie, sous la pastille des connecteurs, et
+                    // ne prend pas le geste (`isAvailable`).
                     BookFontComboRow(combo: combo, isSelected: isSelected(combo)) {
                         model.setFontCombo(combo)
                     }
+                    .brandComingSoon(!combo.isAvailable)
                 }
             }
 

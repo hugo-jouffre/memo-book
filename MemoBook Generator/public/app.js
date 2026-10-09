@@ -253,8 +253,23 @@ function chargerBoites() {
 }
 
 const etat = {
-  /** `funFacts` : le réglage « Insérer des Fun facts » de la personnalisation de l'app, allumé par défaut comme elle. */
-  carnet: { titre: "", destination: "", dateDebut: "", dateFin: "", voyageurs: "", funFacts: true },
+  /**
+   * Les réglages de personnalisation de l'app, avec ses défauts
+   * (`reglagesDuCarnet`) : `funFacts` (« Insérer des Fun facts »),
+   * `ratioPhotos` (ratio photo / texte, en %), `reglure` (« Pointillés »),
+   * `decorations` (« Décorations & stickers », par paragraphe ou par image).
+   */
+  carnet: {
+    titre: "",
+    destination: "",
+    dateDebut: "",
+    dateFin: "",
+    voyageurs: "",
+    funFacts: true,
+    ratioPhotos: 50,
+    reglure: true,
+    decorations: 2,
+  },
   /** Un champ touché à la main n'est plus jamais réécrit par la déduction. */
   carnetManuel: {},
   carnetDeduit: {},
@@ -1524,7 +1539,33 @@ function pagesDuLivre() {
 /** La fiche de la couverture : les plats de la fiche Pumbo, le dos tiré du nombre de pages. */
 const ficheCouverture = () => Couverture.ficheDuCarnet(fichePumbo(), pagesDuLivre());
 
+/**
+ * Les réglages de personnalisation du carnet, sous les noms du serveur
+ * (`backend/src/services/bookSettings.ts`), qui applique les mêmes au PDF de
+ * l'app :
+ *
+ * - **ratio photo / texte à 0 %** : aucune photo dans le carnet (la couverture
+ *   garde la sienne). 25, 50 et 75 % composent comme aujourd'hui, en
+ *   attendant leur définition ;
+ * - **pointillés** coupés : `rules_enabled: false`, pas de réglure ;
+ * - **décorations** à 0 : `decoration_quota: 0`, ni tracé pointillé ni scotch.
+ */
+function reglagesDuCarnet() {
+  const c = etat.carnet;
+  const ratio = Number(c.ratioPhotos);
+  const quota = Number(c.decorations);
+  return {
+    funFactsEnabled: c.funFacts !== false,
+    photoTextRatio: Number.isFinite(ratio) ? ratio : 50,
+    rulesEnabled: c.reglure !== false,
+    decorationQuota: Number.isFinite(quota) ? quota : 2,
+  };
+}
+
 function construirePayloadCarnet(photoDe = (data) => data, { imprimeur = Boolean(etat.reglages.versionImprimeur) } = {}) {
+  const reglages = reglagesDuCarnet();
+  // Ratio à 0 % : les photos sortent avant la composition, le récit prend leur place.
+  const etapes = etapesPourMiseEnPage(photoDe).map((e) => (reglages.photoTextRatio > 0 ? e : { ...e, photos: [] }));
   // La même photo que sur la couverture imprimée : le carnet s'ouvre sur ce
   // qu'on a vu en le prenant en main.
   const couverture = photoDeCouverture();
@@ -1546,13 +1587,15 @@ function construirePayloadCarnet(photoDe = (data) => data, { imprimeur = Boolean
     // Les pages d'étape : récit réparti sur ses pages, photos auprès du passage
     // qu'elles illustrent, chapitres sur une carte, doubles pages variées.
     // Voir `mise-en-page.js` et LAYOUT_KB.
-    days: MiseEnPage.composerJours(etapesPourMiseEnPage(photoDe), {
+    rules_enabled: reglages.rulesEnabled,
+    decoration_quota: reglages.decorationQuota,
+    days: MiseEnPage.composerJours(etapes, {
       contours: etat.contoursCarte,
       dessinerCarte: etat.contoursCarte ? dessinerCarteChapitre : null,
       // Le colophon est la page 1 du livre imprimé : la première page d'étape
       // est à gauche.
       pagesAvant: 1,
-      funFacts: etat.carnet.funFacts !== false,
+      funFacts: reglages.funFactsEnabled,
       journal: (texte) => {
         debugCarnet(texte);
         // Pourquoi un fun fact manque : dans le journal visible, une fois —
@@ -3402,28 +3445,74 @@ function rendreChampsCarnet() {
       puce: etat.carnetDeduit.voyageurs,
       surSaisie: poser("voyageurs"),
     }),
-    // Le même réglage que la personnalisation du carnet dans l'app.
+    // Les réglages de la personnalisation du carnet dans l'app : les mêmes,
+    // appliqués de la même façon au PDF de l'atelier et à celui de l'app
+    // (`reglagesDuCarnet`, `backend/src/services/bookSettings.ts`).
+    panneauPersonnalisation(),
+  );
+}
+
+/**
+ * Le panneau « Personnalisation » : un réglage par ligne, comme l'écran de
+ * l'app. Ceux que le carnet ne sait pas encore imprimer sont là, grisés et
+ * marqués « À venir » — on voit ce qui existera sans croire l'avoir réglé.
+ */
+function panneauPersonnalisation() {
+  const c = etat.carnet;
+  const poser = (cle, conv = (v) => v) => (ev) => {
+    c[cle] = conv(ev.target.type === "checkbox" ? ev.target.checked : ev.target.value);
+  };
+  const ligne = (libelle, controle, aide) =>
+    h("div", { class: "perso-ligne" }, h("label", {}, libelle, " ", controle), aide ? h("p", { class: "aide" }, aide) : null);
+  const aVenir = (libelle, aide) =>
     h(
       "div",
-      { style: { gridColumn: "1 / -1" } },
+      { class: "perso-ligne a-venir", title: "Pas encore imprimé dans le carnet" },
+      h("label", {}, h("input", { type: "checkbox", disabled: true }), " ", libelle, h("span", { class: "pastille-a-venir" }, "À venir")),
+      aide ? h("p", { class: "aide" }, aide) : null,
+    );
+  const options = (valeurs, actuelle, libelle = (v) => String(v)) =>
+    valeurs.map((v) => h("option", { value: String(v), selected: String(actuelle) === String(v) }, libelle(v)));
+
+  return h(
+    "fieldset",
+    { class: "perso", style: { gridColumn: "1 / -1" } },
+    h("legend", {}, "Personnalisation du carnet"),
+    ligne(
+      "Typographies",
       h(
-        "label",
-        { class: "case" },
-        h("input", {
-          type: "checkbox",
-          checked: etat.carnet.funFacts !== false,
-          onchange: (ev) => {
-            etat.carnet.funFacts = ev.target.checked;
-          },
-        }),
-        " Insérer des Fun facts",
+        "select",
+        {},
+        h("option", { selected: true }, "Carnet de voyage — Playfair Display · Gloria Hallelujah"),
+        h("option", { disabled: true }, "Éditorial — à venir"),
+        h("option", { disabled: true }, "Manuscrit — à venir"),
       ),
-      h(
-        "p",
-        { class: "aide" },
-        "Un encart tiré du récit, une page sur trois au plus, et seulement quand il en vaut la peine.",
-      ),
+      "Les sous-titres restent en Gloria Hallelujah tant que la licence de Hansley n'est pas vérifiée.",
     ),
+    ligne(
+      "Ratio photo / texte",
+      h("select", { onchange: poser("ratioPhotos", Number) }, options([0, 25, 50, 75, 100], c.ratioPhotos ?? 50, (v) => `${v} % de photos`)),
+      "0 % : aucune photo dans le carnet. Les autres paliers composent comme aujourd'hui, en attendant leur définition.",
+    ),
+    ligne(
+      "Fun facts",
+      h("input", { type: "checkbox", checked: c.funFacts !== false, onchange: poser("funFacts") }),
+      "Un encart tiré du récit, une page sur trois au plus, et seulement quand il en vaut la peine.",
+    ),
+    ligne(
+      "Pointillés",
+      h("input", { type: "checkbox", checked: c.reglure !== false, onchange: poser("reglure") }),
+      "La réglure sous le récit.",
+    ),
+    ligne(
+      "Décorations & stickers",
+      h("select", { onchange: poser("decorations", Number) }, options([0, 1, 2, 3, 4], c.decorations ?? 2, (v) => (v ? `${v} par paragraphe` : "Aucune"))),
+      "À 0, ni tracé pointillé ni scotch. Les stickers ne sont pas encore imprimés.",
+    ),
+    aVenir("Nombre de pages cible"),
+    aVenir("Quiz intégrés à l'histoire"),
+    aVenir("Zones libres"),
+    aVenir("Mot fléché à la fin du livre"),
   );
 }
 

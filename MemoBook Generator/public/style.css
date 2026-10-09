@@ -1007,3 +1007,48 @@ a.btn {
   margin: 0.25rem 0 0;
   padding-left: 1.125rem;
 }
+
+/* --- personnalisation du carnet --- */
+
+.perso {
+  display: grid;
+  gap: 0.625rem;
+  margin: 0;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--line);
+  border-radius: var(--rayon);
+}
+
+.perso legend {
+  padding: 0 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.perso-ligne label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4375rem;
+  font-size: 0.75rem;
+}
+
+.perso-ligne select,
+.perso-ligne input[type="checkbox"] {
+  width: auto;
+}
+
+/* Ce que le carnet n'imprime pas encore : pâli d'un bloc, sa pastille franche. */
+.perso-ligne.a-venir label {
+  opacity: 0.45;
+}
+
+.pastille-a-venir {
+  margin-left: auto;
+  padding: 0.0625rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  font-size: 0.625rem;
+  color: var(--ink);
+}

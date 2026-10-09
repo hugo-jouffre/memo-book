@@ -320,12 +320,12 @@ faire aujourd'hui.
 
 | Réglage | Défaut | Où ça agit | État |
 |---|---|---|---|
-| Ratio photo / texte | 50/50 | Choix des layouts par l'agent | Rendu |
+| Ratio photo / texte | 50/50 | **0 % : aucune photo dans le carnet** (la couverture garde la sienne) — les photos sortent avant la composition, le récit prend leur place | **Partiel** : 0 % rendu ; 25, 50, 75, 100 % composent comme 50 %, en attendant leur définition |
 | Nombre de page cible | 60 | Niveau de détail des textes, regroupement des étapes | Rendu |
 | Fun facts | ON | `fun_facts` — voir le dosage plus bas | Rendu |
 | Quiz | ON | `quiz` | Rendu |
-| Pointillés | ON | La **réglure** du papier, `.mb-note__rules` | **À construire** |
-| Décorations & stickers | 2 | Quota par paragraphe ou par image ; le scotch y est compté | **Partiel** : le scotch est rendu, les stickers non |
+| Pointillés | ON | La **réglure** du papier, `.mb-note__rules` — `rules_enabled: false` la retire (`body.sans-reglure`), le rythme vertical ne bouge pas | Rendu |
+| Décorations & stickers | 2 | Quota par paragraphe ou par image ; le scotch y est compté — `decoration_quota: 0` retire tracé pointillé, scotch et stickers (`body.sans-decor`) | **Partiel** : 0 rendu ; 1 à 4 laissent les décors tels quels, les stickers ne sont pas imprimés |
 | Typographies (assortiment) | Carnet de voyage | Les quatre tokens ci-dessous d'un bloc | **À construire** — l'app n'expose plus quatre réglages mais **quatre assortiments** (`docs/reglages-utilisateur.md`) : Carnet de voyage, Éditorial, Moderne, Manuscrit. Le payload, lui, reste quatre champs |
 | ↳ titres | Playfair | `--mb-font-display` | **À construire** |
 | ↳ sous-titres | Hansley | `--mb-font-title` | **À construire** — `Hansley.otf` versionné mais pas inliné, repli sur la manuscrite |
@@ -339,8 +339,11 @@ faire aujourd'hui.
 plus bas) est un décor de bas de page : il relève du quota de décorations, pas
 de ce booléen.
 
-**Rien de tout cela n'est encore dans le payload.** Les réglages marqués « à
-construire » demandent un champ au schéma, une lecture par le gabarit, et cette
+**Les mêmes réglages, les deux PDF.** L'atelier (`reglagesDuCarnet`,
+`app.js`) et l'app (`backend/src/services/bookSettings.ts`, appelé par
+`jobs/structure.ts`) appliquent les mêmes, au même endroit du payload :
+`rules_enabled`, `decoration_quota`, et les photos retirées à 0 %. Les réglages
+marqués « à construire » demandent un champ au schéma, une lecture par le gabarit, et cette
 table mise à jour dans le même commit. Tant que ce n'est pas fait, l'agent ne
 produit rien pour eux et l'app ne devrait pas les proposer.
 

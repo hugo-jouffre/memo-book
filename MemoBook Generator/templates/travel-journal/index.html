@@ -7,7 +7,7 @@
 
 <!-- `render_profile` vaut « print » (fond blanc pour l'imprimeur) ou « preview »
      (fond crème granulé pour l'aperçu in-app). Voir LAYOUT_KB.md. -->
-<body class="profile-{{ render_profile | default('preview') }}">
+<body class="profile-{{ render_profile | default('preview') }}{% if rules_enabled == false %} sans-reglure{% endif %}{% if decoration_quota == 0 %} sans-decor{% endif %}">
 
   <!-- ======================================================================
        Bibliothèque de formes. Dessinées en SVG plutôt qu'importées : le

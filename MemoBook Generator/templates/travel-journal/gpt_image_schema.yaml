@@ -107,6 +107,22 @@ properties:
           Fond du PDF. `print` : blanc, pour l'imprimeur — son papier est déjà crème.
           `preview` : crème granulé, pour l'aperçu partageable dans l'app. Une seule
           template, deux sorties : c'est ce champ qui décide.
+      rules_enabled:
+        type: boolean
+        default: true
+        description: >
+          Réglage « Pointillés » de la personnalisation. `false` : pas de
+          réglure sous le récit (`.mb-note__rules`). Absent : réglure.
+      decoration_quota:
+        type: integer
+        minimum: 0
+        maximum: 4
+        default: 2
+        description: >
+          Réglage « Décorations & stickers » (par paragraphe ou par image).
+          `0` : ni tracé pointillé du voyage, ni scotch, ni sticker. Les
+          autres valeurs laissent les décors du gabarit tels quels — seul le
+          tracé est rendu aujourd'hui.
       sans_couvertures:
         type: boolean
         description: >

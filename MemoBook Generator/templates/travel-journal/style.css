@@ -84,6 +84,18 @@
   --mb-line: calc(var(--mb-body-size) * var(--mb-body-lh));
 }
 
+/* --- Réglages du voyageur --------------------------------------------------
+   `rules_enabled: false` (réglage « Pointillés » de l'app) : pas de réglure
+   sous le récit. Le rythme vertical, lui, ne bouge pas — les lignes de texte
+   restent où elles étaient, seules les pointillés disparaissent.
+   `decoration_quota: 0` (« Décorations & stickers » à zéro) : ni tracé
+   pointillé du voyage, ni scotch, ni sticker. LAYOUT_KB § « Les réglages du
+   voyageur ». */
+body.sans-reglure .mb-note__rules { display: none; }
+body.sans-decor .mb-path,
+body.sans-decor .mb-photo__tape,
+body.sans-decor .mb-sticker { display: none; }
+
 /* --- Profils de sortie ----------------------------------------------------
    `preview` (défaut) : papier crème granulé, pour l'aperçu partageable in-app.
    `print`            : fond blanc, parce que le papier de l'imprimeur est déjà

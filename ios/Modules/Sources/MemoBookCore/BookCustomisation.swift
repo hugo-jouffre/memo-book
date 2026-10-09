@@ -346,6 +346,15 @@ public struct BookFontCombo: Sendable, Hashable, Identifiable {
         }
     }
 
+    /// L'assortiment se choisit-il aujourd'hui ?
+    ///
+    /// **La V1 n'imprime que « Carnet de voyage »** (Hugo, 09/10/2026) : les
+    /// deux autres restent sur la feuille, pâlis et marqués « À venir », et ne
+    /// se touchent pas. Le modèle sait toujours les poser — un carnet déjà
+    /// réglé dessus garde ses polices, et le jour où le gabarit les imprime,
+    /// il suffit de rouvrir ici.
+    public var isAvailable: Bool { id == BookFontCombo.travelJournal.id }
+
     // MARK: Les trois
 
     /// Le défaut, et celui que portent déjà les carnets existants : Playfair,
