@@ -156,7 +156,9 @@ function describePages(payload: Record<string, unknown>): PageMeta[] {
         ? "split_left"
         : day["layout_collage"]
           ? "collage"
-          : "story_opener";
+          : day["layout_trio_portrait"] || day["layout_trio_landscape"]
+            ? "trio"
+            : "story_opener";
     push(`Jour ${text(intro?.["day_number"], "—")}`, text(day["title"]), layout);
   }
 

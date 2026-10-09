@@ -1553,7 +1553,15 @@ function construirePayloadCarnet(photoDe = (data) => data, { imprimeur = Boolean
       // est à gauche.
       pagesAvant: 1,
       funFacts: etat.carnet.funFacts !== false,
-      journal: (texte) => debugCarnet(texte),
+      journal: (texte) => {
+        debugCarnet(texte);
+        // Pourquoi un fun fact manque : dans le journal visible, une fois —
+        // le payload se recompose souvent (nombre de pages, couverture).
+        if (/^fun facts non imprimés/.test(texte) && texte !== etat.rapportFunFacts) {
+          etat.rapportFunFacts = texte;
+          noter(texte);
+        }
+      },
     }),
     back_cover: {
       closing_text: "À suivre.",

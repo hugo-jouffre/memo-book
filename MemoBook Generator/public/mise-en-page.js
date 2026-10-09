@@ -112,6 +112,8 @@
     layout_hero_top: 1,
     layout_split_left: 2,
     layout_collage: 3,
+    layout_trio_portrait: 3,
+    layout_trio_landscape: 3,
     layout_photo_page: 5,
   };
 
@@ -131,6 +133,10 @@
   const CAPACITE_PAGE = {
     defaut: { bandeau: 560, suite: 880 },
     layout_hero_top: { bandeau: 380, suite: 680 },
+    // Pages de suite seulement : sous un bandeau, les trois photos n'ont plus
+    // leur hauteur. Mesuré le 08/10/2026 (`calibrate-lengths.ts --filtre
+    // trio`) : 440 signes en deux paragraphes avant que les photos cèdent.
+    layout_trio: { bandeau: 0, suite: 420, paragraphes: 2 },
   };
   const PARAGRAPHES_PAR_PAGE = { bandeau: 2, suite: 4 };
 
@@ -228,6 +234,9 @@
     layout_hero_top: { 1: [1.35] },
     layout_split_left: { 2: [0.9, 0.9] },
     layout_collage: { 2: [0.9, 0.9], 3: [0.56, 0.56, 0.56] },
+    // En haut, puis en bas à gauche et à droite (l'ordre de `photos[]`).
+    layout_trio_portrait: { 3: [0.6, 0.69, 0.65] },
+    layout_trio_landscape: { 3: [1.6, 0.64, 0.64] },
     layout_photo_page: {
       3: [0.73, 0.45, 1.65],
       4: [0.73, 0.45, 0.62, 0.99],
@@ -314,6 +323,8 @@
    */
   function layoutDeRecit(photosDeLaPage, texte, sorte, premiere) {
     const nbPhotos = photosDeLaPage.length;
+    const trio = nbPhotos === 3 ? trioDe(photosDeLaPage, texte, sorte) : null;
+    if (trio) return trio;
     const parDefaut = premiere ? "layout_story_opener" : "layout_story_facts";
     if (nbPhotos === 0) return parDefaut;
     if (nbPhotos === 1) {
@@ -327,6 +338,31 @@
   }
 
 
+
+  /**
+   * Le trio d'une page de suite à trois photos et récit court : une photo en
+   * haut, deux en bas (maquettes du 08/10/2026). La variante est celle où les
+   * trois photos se rognent le moins — la paysage en haut s'il y en a une —,
+   * à condition qu'aucune n'y dépasse le plafond de rognage : une photo
+   * réduite dans un trio, c'est un timbre-poste au milieu du collage. Sinon,
+   * `null` : la page reste un collage.
+   */
+  function trioDe(photos, texte, sorte) {
+    const cap = CAPACITE_PAGE.layout_trio;
+    if (sorte !== "suite" || signes(texte) > cap.suite || texte.length > cap.paragraphes) return null;
+    if (photos.some((p) => p.groupe)) return null;
+    let meilleur = null;
+    for (const layout of ["layout_trio_portrait", "layout_trio_landscape"]) {
+      const formats = FORMATS_EMPLACEMENTS[layout][3];
+      for (const ordre of permutations(photos)) {
+        const pertes = ordre.map((p, i) => (p.format ? rognage(p.format, formats[i]) : 0));
+        if (pertes.some((r) => r > MAX_ROGNAGE)) continue;
+        const cout = pertes.reduce((a, b) => a + b, 0);
+        if (!meilleur || cout < meilleur.cout) meilleur = { layout, cout };
+      }
+    }
+    return meilleur?.layout ?? null;
+  }
 
   /* --------------------------------------------------- ouverture de chapitre */
 
@@ -676,6 +712,7 @@
     const encart = plan.encart ? "+encart" : "";
     if (plan.layout === "layout_chapter_map") return `carte${encart}`;
     if (plan.layout === "layout_hero_top") return "hero";
+    if (plan.layout === "layout_trio_portrait" || plan.layout === "layout_trio_landscape") return plan.layout;
     const n = plan.photos.length;
     if (n === 0) return `texte${encart}`;
     if (n === 1) return `texte+photo${encart}`;
@@ -793,6 +830,16 @@
     };
   }
 
+  /** Ce qui a manqué au fun fact d'une étape pour être imprimé. */
+  function raisonSansEncart(analyse) {
+    const f = analyse?.funFact;
+    if (!analyse) return "étape pas encore analysée";
+    const texte = typeof f?.texte === "string" ? f.texte.replace(/\s+/g, " ").trim() : "";
+    if (!texte) return "l'analyse n'a proposé aucun fun fact";
+    if (texte.length > MAX_SIGNES_ENCART) return `fun fact trop long (${texte.length} signes, ${MAX_SIGNES_ENCART} au plus)`;
+    return `fun fact noté ${Number(f?.pertinence) || 0}/10, sous le seuil de ${SEUIL_PERTINENCE}`;
+  }
+
   /**
    * La page peut-elle porter l'encart sans perdre une ligne de récit ? Plafonds
    * relevés par `calibrate-lengths.ts` :
@@ -826,14 +873,20 @@
    *
    * Pose `plan.encart` sur les pages retenues et renvoie leur nombre.
    */
-  function placerEncarts(plans, etapes) {
+  function placerEncarts(plans, etapes, journal = () => {}) {
     const candidats = [];
+    // Pourquoi une étape n'a pas d'encart : le journal de l'atelier le dit.
+    const raisons = [];
     etapes.forEach((etape, e) => {
       const encart = encartDe(etape.analyse);
-      if (!encart) return;
+      if (!encart) {
+        raisons.push(`étape ${e + 1} : ${raisonSansEncart(etape.analyse)}`);
+        return;
+      }
       const pages = plans.map((plan, i) => ({ plan, i })).filter(({ plan }) => plan.etape === e && peutPorterEncart(plan));
       const hote = pages.find(({ plan }) => plan.paragraphes.includes(encart.paragraphe)) || pages[0];
-      if (hote) candidats.push({ i: hote.i, encart });
+      if (hote) candidats.push({ i: hote.i, encart, e });
+      else raisons.push(`étape ${e + 1} : aucune page n'a la place (trois photos, ou deux à côté d'un récit de plus de 240 signes)`);
     });
 
     // La meilleure somme des notes sous la contrainte d'écart : un choix
@@ -862,6 +915,11 @@
       return c.encart.pertinence > avant.encart.pertinence ? [...liste.slice(0, -1), c] : liste;
     }, []);
 
+    for (const c of candidats) {
+      if (!retenus.includes(c)) raisons.push(`étape ${c.e + 1} : écarté au profit d'un voisin mieux noté (trois pages d'écart, jamais deux du même registre)`);
+    }
+    if (raisons.length) journal(`fun facts non imprimés — ${raisons.join(" ; ")}.`);
+
     for (const { i, encart } of retenus) {
       const plan = plans[i];
       plan.encart = encart;
@@ -879,6 +937,8 @@
     layout_hero_top: actif === "layout_hero_top",
     layout_split_left: actif === "layout_split_left",
     layout_collage: actif === "layout_collage",
+    layout_trio_portrait: actif === "layout_trio_portrait",
+    layout_trio_landscape: actif === "layout_trio_landscape",
     layout_photo_page: actif === "layout_photo_page",
   });
 
@@ -1100,7 +1160,7 @@
     // Les encarts en dernier : ils se posent sur des pages déjà composées, sans
     // déplacer ni photo ni ligne de récit, et ne font que distinguer davantage
     // deux pages en vis-à-vis.
-    if (funFacts) journal(`${placerEncarts(plans, etapes)} encart(s) « fun fact » dans le carnet.`);
+    if (funFacts) journal(`${placerEncarts(plans, etapes, journal)} encart(s) « fun fact » dans le carnet.`);
 
     return plans.map((plan) => {
       if (plan.genre === "planche") {

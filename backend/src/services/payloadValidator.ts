@@ -95,7 +95,16 @@ export const LAYOUT_CAPACITY: Readonly<Record<string, { bandeau: number; suite: 
   layout_collage: { bandeau: 560, suite: 880 },
   layout_story_opener: { bandeau: 560, suite: 880 },
   layout_story_facts: { bandeau: 560, suite: 880 },
+  // Pages de suite seulement : sous un bandeau, les trois photos n'ont plus
+  // leur hauteur (mesuré le 08/10/2026 : 440 signes en deux paragraphes).
+  layout_trio_portrait: { bandeau: 0, suite: 420 },
+  layout_trio_landscape: { bandeau: 0, suite: 420 },
 };
+
+/** Les deux trios (récit court, une photo en haut, deux en bas). */
+export const TRIO_LAYOUTS = ["layout_trio_portrait", "layout_trio_landscape"] as const;
+/** Un trio tient deux paragraphes : au troisième, les photos cèdent. */
+export const TRIO_MAX_PARAGRAPHS = 2;
 
 /** Capacité par défaut : celle du layout de récit pleine largeur. */
 const DEFAULT_CAPACITY = { bandeau: 560, suite: 880 } as const;
@@ -449,6 +458,29 @@ function checkDay(
         `${activeLayouts.length} layouts activés (${activeLayouts.join(", ")}). ` +
         "LAYOUT_KB recommande un seul layout fort par jour.",
     });
+  }
+
+  const layout = mainLayout(day);
+  if ((TRIO_LAYOUTS as readonly string[]).includes(layout)) {
+    if (day["day_intro"]) {
+      errors.push({
+        path: `days[${index}]`,
+        message:
+          `\`${layout}\` est réservé aux pages de suite : sous le bandeau de la première ` +
+          "page d'une étape, les trois photos n'ont plus leur hauteur.",
+      });
+    }
+    const photos = Array.isArray(day["photos"]) ? day["photos"].length : 0;
+    if (photos < 3) {
+      errors.push({ path: at("photos"), message: `\`${layout}\` exige 3 photos (${photos} fournie(s)).` });
+    }
+    const paragraphs = typeof day["body_html"] === "string" ? splitParagraphs(day["body_html"]).length : 0;
+    if (paragraphs > TRIO_MAX_PARAGRAPHS) {
+      errors.push({
+        path: at("body_html"),
+        message: `${paragraphs} paragraphes — \`${layout}\` en tient ${TRIO_MAX_PARAGRAPHS} au plus.`,
+      });
+    }
   }
 
   for (const field of ["body_html", "opener_body_html"] as const) {

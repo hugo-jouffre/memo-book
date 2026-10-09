@@ -907,6 +907,39 @@ li { margin: 0; }
 
 .mb-gallery .mb-photo { flex: 1 1 0; height: 100%; }
 
+/* Trio : trois photos en cascade sous un récit court, sur une page de suite.
+   Une photo en haut — portrait (`--portrait`) ou paysage (`--landscape`) —,
+   deux portraits en bas, qui la chevauchent à peine. Positions en pourcentage
+   de la bande, relevées sur les deux maquettes du 08/10/2026 ; la bande a une
+   hauteur fixe pour que le format de chaque emplacement le soit aussi
+   (`FORMATS_EMPLACEMENTS`, `mise-en-page.js`). Comme `.mb-gallery`, elle
+   cède sous un récit trop long plutôt que de le tronquer, et le tracé
+   pointillé passe derrière ses photos, jamais derrière le texte. */
+.mb-trio {
+  position: relative;
+  flex: 0 1 auto;
+  height: 360pt;
+  min-height: 300pt;
+  margin-top: auto;
+  padding-top: 12pt;
+}
+
+/* Le récit d'un trio occupe toute la hauteur au-dessus des photos : sa réglure
+   continue sous le texte jusqu'à elles. */
+.mb-note--remplit { flex: 1 1 auto; }
+
+.mb-trio > .mb-path { z-index: 0; }
+.mb-trio > .mb-photo { position: absolute; z-index: 1; }
+.mb-trio > .mb-photo--trio-top { z-index: 2; }
+
+.mb-trio--portrait .mb-photo--trio-top { top: 12pt; left: 35%; width: 32%; height: 52%; transform: rotate(1.5deg); }
+.mb-trio--portrait .mb-photo--trio-left { bottom: 0; left: 4%; width: 38%; height: 54%; transform: rotate(-4deg); }
+.mb-trio--portrait .mb-photo--trio-right { bottom: 0; right: 0; width: 37%; height: 56%; transform: rotate(3deg); }
+
+.mb-trio--landscape .mb-photo--trio-top { top: 12pt; left: 29%; width: 58%; height: 37%; transform: rotate(1.5deg); }
+.mb-trio--landscape .mb-photo--trio-left { bottom: 6pt; left: 9%; width: 36%; height: 55%; transform: rotate(-3deg); }
+.mb-trio--landscape .mb-photo--trio-right { bottom: 0; left: 53%; width: 36%; height: 55%; transform: rotate(2deg); }
+
 /* Photo héro en haut de page. */
 .mb-hero {
   margin: 0 0 12pt;

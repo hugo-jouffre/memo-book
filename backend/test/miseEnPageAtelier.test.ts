@@ -127,6 +127,42 @@ describe("mise en page de l'atelier", () => {
     expect(sans.reduce((n, j) => n + j.photos.length, 0)).toBe(4);
   });
 
+  describe("trios (une photo en haut, deux en bas)", () => {
+    // Deux paragraphes courts sur la page à bandeau, un troisième sur la page de suite.
+    const recit = [paragrapheDe("la plage", 2), paragrapheDe("le port", 2), paragrapheDe("la ville", 2)].join(" ");
+    const layoutDe = (j: Jour) =>
+      j["layout_trio_portrait"] ? "trio_portrait" : j["layout_trio_landscape"] ? "trio_landscape" : j["layout_collage"] ? "collage" : "autre";
+
+    it("pose trois portraits d'une page de suite courte en trio portrait", () => {
+      const jours = M.composerJours([etape(recit, ["a", "b", "c", "d", "e", "f"].map((id) => photo(id)))]);
+      expect(jours).toHaveLength(2);
+      expect(jours[0]!["day_intro"]).toBeTruthy();
+      expect(layoutDe(jours[0]!)).toBe("collage");
+      expect(layoutDe(jours[1]!)).toBe("trio_portrait");
+    });
+
+    it("met la photo paysage en haut d'un trio paysage", () => {
+      const photos = ["a", "b", "c", "d", "e"].map((id) => photo(id)).concat(photo("large", 1.5));
+      const jours = M.composerJours([etape(recit, photos)]);
+      expect(layoutDe(jours[1]!)).toBe("trio_landscape");
+      expect(url(jours[1]!.photos[0]!)).toContain("/large.");
+    });
+
+    it("n'en fait jamais sur la première page d'une étape", () => {
+      const jours = M.composerJours([etape(paragrapheDe("la plage", 2), ["a", "b", "c"].map((id) => photo(id)))]);
+      expect(jours).toHaveLength(1);
+      expect(layoutDe(jours[0]!)).toBe("collage");
+    });
+
+    it("garde le collage quand une photo y serait trop rognée", () => {
+      // Deux paysages sur trois : l'une irait dans un emplacement portrait du bas.
+      const photos = ["a", "b", "c", "d"].map((id) => photo(id)).concat(photo("l1", 1.5), photo("l2", 1.5));
+      const jours = M.composerJours([etape(recit, photos)]);
+      expect(jours.map(layoutDe)).not.toContain("trio_landscape");
+      expect(jours.map(layoutDe)).not.toContain("trio_portrait");
+    });
+  });
+
   describe("cadre des cartes de chapitre", () => {
     const lieu = (nom: string, lat: number, lon: number, pays = "GR") => ({ nom, pays, lat, lon });
 
@@ -259,6 +295,22 @@ describe("mise en page de l'atelier", () => {
         { funFacts: true },
       );
       expect(encarts(jours)).toEqual([null, null]);
+    });
+
+    it("dit au journal pourquoi un fun fact n'est pas imprimé", () => {
+      const lignes: string[] = [];
+      M.composerJours(
+        [
+          etape(paragrapheDe("la plage", 1), [], encart("Un fait sans intérêt.", 4)),
+          etape(paragrapheDe("le port", 1), [], { photos: [] }),
+          etape(paragrapheDe("la ville", 1), ["a", "b", "c"].map((id) => photo(id)), encart("Un fait remarquable.", 9)),
+        ],
+        { funFacts: true, journal: (t: string) => lignes.push(t) },
+      );
+      const rapport = lignes.find((l) => l.startsWith("fun facts non imprimés")) ?? "";
+      expect(rapport).toContain("étape 1 : fun fact noté 4/10, sous le seuil de 7");
+      expect(rapport).toContain("étape 2 : l'analyse n'a proposé aucun fun fact");
+      expect(rapport).toContain("étape 3 : aucune page n'a la place");
     });
 
     it("en met un toutes les trois pages au plus, les mieux notés d'abord", () => {

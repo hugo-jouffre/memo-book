@@ -123,6 +123,7 @@ l'accepte** :
 | sous 200 | `layout_hero_top` (1 photo), `layout_chapter_map` (une carte), `layout_photo_page` (≥ 3 photos, le récit passe en légende) |
 | jusqu'à 240 | + `layout_split_left` **avec** un fun fact |
 | jusqu'à 380 | + `layout_hero_top`, `layout_chapter_map` avec deux photos |
+| jusqu'à 420, 2 paragraphes | + `layout_trio_portrait` / `layout_trio_landscape` (3 photos), **page de suite seulement** |
 | jusqu'à 560 | + `layout_story_*`, `layout_collage`, `layout_split_left` sans fun fact |
 | jusqu'à 880 | uniquement une **page de suite** : `title` vide, pas de `day_intro` |
 
