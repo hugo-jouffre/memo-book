@@ -7,7 +7,7 @@
 
 <!-- `render_profile` vaut « print » (fond blanc pour l'imprimeur) ou « preview »
      (fond crème granulé pour l'aperçu in-app). Voir LAYOUT_KB.md. -->
-<body class="profile-{{ render_profile | default('preview') }}{% if rules_enabled == false %} sans-reglure{% endif %}{% if decoration_quota == 0 %} sans-decor{% endif %}">
+<body class="profile-{{ render_profile | default('preview') }}{% if rules_enabled == false %} sans-reglure{% endif %}{% if decoration_quota == 0 %} sans-decor{% endif %}{% if fond_perdu %} fond-perdu{% endif %}">
 
   <!-- ======================================================================
        Bibliothèque de formes. Dessinées en SVG plutôt qu'importées : le
@@ -596,5 +596,10 @@
     </div>
   {% endif %}
 
+  {# Version imprimeur : la feuille grandit de 3 mm sur chaque bord. Ce style
+     vient après le CSS injecté dans le <head>, il l'emporte donc pour un rendu
+     qui suit `@page` (Chromium local). Chez APITemplate, c'est le panneau du
+     template imprimeur qui fixe la feuille : 154 × 216 mm (LAYOUT_KB). #}
+  {% if fond_perdu %}<style>@page { size: 437.01pt 612.01pt; margin: 0; }</style>{% endif %}
 </body>
 </html>

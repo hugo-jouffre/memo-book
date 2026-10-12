@@ -59,3 +59,63 @@ describe("gabarit — pages du livre relié", () => {
     expect(liste[3]).not.toContain("page--énorme");
   });
 });
+
+describe("gabarit — fond perdu de la version imprimeur", () => {
+  const payload = (fond: boolean) => ({
+    book_title: "Carnet",
+    sans_couvertures: true,
+    pages_libres_avant: 0,
+    days: [
+      jour("01"),
+      { title: "", body_html: "", photos: [photo], layout_photo_page: true, pleine_page: true },
+    ],
+    ...(fond ? { fond_perdu: true } : {}),
+  });
+
+  it("n'agrandit la feuille que sur demande", () => {
+    const avec = renderTemplateToHtml({ payload: payload(true), profile: "print" });
+    expect(avec).toMatch(/<body class="[^"]*\bfond-perdu\b/);
+    expect(avec).toContain("@page { size: 437.01pt 612.01pt");
+    const sans = renderTemplateToHtml({ payload: payload(false), profile: "print" });
+    expect(sans).not.toMatch(/<body class="[^"]*\bfond-perdu\b/);
+    expect(sans).not.toContain("437.01pt");
+  });
+
+  it("mesure sous Chromium : 3 mm autour de la page finie, colonne inchangée, pleine page bord à bord", async () => {
+    const { chromium } = await import("playwright-core");
+    const browser = await chromium.launch();
+    try {
+      const mesurer = async (fond: boolean) => {
+        const page = await browser.newPage();
+        await page.emulateMedia({ media: "print" });
+        await page.setContent(renderTemplateToHtml({ payload: payload(fond), profile: "print" }));
+        const mesure = await page.evaluate(`Array.from(document.querySelectorAll(".page--day")).map(function (p) {
+          var r = p.getBoundingClientRect();
+          var note = p.querySelector(".mb-note");
+          var pleine = p.querySelector(".mb-pleine-page");
+          return {
+            largeur: r.width * 0.75,
+            hauteur: r.height * 0.75,
+            colonne: note ? [(note.getBoundingClientRect().left - r.left) * 0.75, note.getBoundingClientRect().width * 0.75] : null,
+            pleine: pleine ? [pleine.getBoundingClientRect().width * 0.75, pleine.getBoundingClientRect().height * 0.75] : null
+          };
+        })`);
+        await page.close();
+        return mesure as { largeur: number; hauteur: number; colonne: [number, number] | null; pleine: [number, number] | null }[];
+      };
+      const [apercu, imprimeur] = [await mesurer(false), await mesurer(true)];
+      const bleed = 8.504;
+      // La page grandit de 2 × 3 mm, moins le jeu de 1,5 pt qui la fait tenir dans sa feuille.
+      expect(imprimeur[0]!.largeur).toBeCloseTo(420 + 2 * bleed - 1.5, 0);
+      expect(imprimeur[0]!.hauteur).toBeCloseTo(595 + 2 * bleed - 1.5, 0);
+      // La colonne garde sa largeur et se décale de 3 mm.
+      expect(imprimeur[0]!.colonne![1]).toBeCloseTo(apercu[0]!.colonne![1], 1);
+      expect(imprimeur[0]!.colonne![0]).toBeCloseTo(apercu[0]!.colonne![0] + bleed, 0);
+      // La photo en pleine page couvre toute la feuille, fond perdu compris.
+      expect(imprimeur[1]!.pleine![0]).toBeCloseTo(imprimeur[1]!.largeur, 0);
+      expect(imprimeur[1]!.pleine![1]).toBeCloseTo(imprimeur[1]!.hauteur, 0);
+    } finally {
+      await browser.close();
+    }
+  }, 60_000);
+});

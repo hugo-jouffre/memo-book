@@ -39,6 +39,9 @@ jobs:
         env:
           APITEMPLATE_API_KEY: ${{ secrets.APITEMPLATE_API_KEY }}
           APITEMPLATE_TEMPLATE_ID: ${{ secrets.APITEMPLATE_TEMPLATE_ID }}
+          # Le template de la version imprimeur : même gabarit, feuille de
+          # 154 x 216 mm (3 mm de fond perdu), réglée dans son panneau. Facultatif.
+          APITEMPLATE_TEMPLATE_ID_IMPRIMEUR: ${{ secrets.APITEMPLATE_TEMPLATE_ID_IMPRIMEUR }}
           # Le compte MemoBook est en région DE. Appeler rest.apitemplate.io
           # renverrait une erreur d'authentification difficile à diagnostiquer.
           APITEMPLATE_BASE_URL: ${{ vars.APITEMPLATE_BASE_URL || 'https://rest-de.apitemplate.io/v2' }}
@@ -55,22 +58,33 @@ jobs:
           HTML=$(jq -Rs . < "MemoBook Generator/templates/travel-journal/index.html")
           CSS=$(jq -Rs . < /tmp/memobook.css)
 
-          PAYLOAD=$(jq -n \
-            --arg template_id "$APITEMPLATE_TEMPLATE_ID" \
-            --argjson body "$HTML" \
-            --argjson css "$CSS" \
-            '{template_id: $template_id, body: $body, css: $css}')
-
-          RESPONSE_FILE=$(mktemp)
-          HTTP_STATUS=$(curl --show-error --silent --max-time 60 \
-            -X POST "${APITEMPLATE_BASE_URL}/update-template" \
-            -H "Content-Type: application/json" \
-            -H "X-API-KEY: $APITEMPLATE_API_KEY" \
-            -d "$PAYLOAD" \
-            -w "%{http_code}" \
-            -o "$RESPONSE_FILE")
-          echo "APITemplate response (HTTP ${HTTP_STATUS}):"
-          cat "$RESPONSE_FILE"
-          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
-            exit 1
+          # Le template d'aperçu, puis celui de la version imprimeur s'il est
+          # posé : les deux portent toujours le même gabarit.
+          IDS="$APITEMPLATE_TEMPLATE_ID"
+          if [ -n "${APITEMPLATE_TEMPLATE_ID_IMPRIMEUR:-}" ]; then
+            IDS="$IDS $APITEMPLATE_TEMPLATE_ID_IMPRIMEUR"
+          else
+            echo "::notice::APITEMPLATE_TEMPLATE_ID_IMPRIMEUR absent : seul le template d'aperçu est synchronisé."
           fi
+
+          for TEMPLATE_ID in $IDS; do
+            PAYLOAD=$(jq -n \
+              --arg template_id "$TEMPLATE_ID" \
+              --argjson body "$HTML" \
+              --argjson css "$CSS" \
+              '{template_id: $template_id, body: $body, css: $css}')
+
+            RESPONSE_FILE=$(mktemp)
+            HTTP_STATUS=$(curl --show-error --silent --max-time 60 \
+              -X POST "${APITEMPLATE_BASE_URL}/update-template" \
+              -H "Content-Type: application/json" \
+              -H "X-API-KEY: $APITEMPLATE_API_KEY" \
+              -d "$PAYLOAD" \
+              -w "%{http_code}" \
+              -o "$RESPONSE_FILE")
+            echo "APITemplate response for ${TEMPLATE_ID} (HTTP ${HTTP_STATUS}):"
+            cat "$RESPONSE_FILE"
+            if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
+              exit 1
+            fi
+          done

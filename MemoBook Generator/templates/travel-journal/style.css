@@ -23,6 +23,12 @@
      une feuille blanche derrière chaque page. `.page__content` le rend à sa
      marge, donc la colonne de texte n'en perd rien. */
   --mb-page-slack: 1pt;
+  /* Fond perdu : 0 dans l'aperçu, 3 mm sur les quatre bords dans la version
+     imprimeur (`fond_perdu`, classe `fond-perdu` sur le body). La page grandit
+     d'autant ; ce qui doit être coupé au massicot (papier, photo en pleine
+     page, ruban) va jusqu'au bord de la feuille, tout le reste se cale sur la
+     page finie, décalé de `--mb-bleed`. */
+  --mb-bleed: 0pt;
   /* Marges : 30 pt en haut et en bas ; sur les côtés, plus large côté
      reliure, où la page s'enfonce dans le pli (Hugo, 12/10/2026 : environ
      15 mm côté pli, 10 mm à l'extérieur). La colonne fait 349,2 pt de large
@@ -99,6 +105,15 @@
    est toujours complet (Hugo, 12/10/2026). LAYOUT_KB § « Les réglages du
    voyageur ». */
 body.sans-reglure .mb-note__rules { display: none; }
+
+/* Version imprimeur : 3 mm de fond perdu sur les quatre bords (feuille de
+   154 × 216 mm pour une page finie de 148 × 210). Le jeu passe à 1,5 pt : le
+   Chromium 97 d'APITemplate arrondit la feuille vers le bas, et la page doit
+   y tenir dans les deux sens (§ « Pas de marges blanches »). */
+body.fond-perdu {
+  --mb-bleed: 8.504pt;
+  --mb-page-slack: 1.5pt;
+}
 body.sans-decor .mb-path,
 body.sans-decor .mb-sticker { display: none; }
 
@@ -182,8 +197,8 @@ li { margin: 0; }
    varie selon les moteurs — ils ont la réputation de produire ce même bug. */
 .page {
   position: relative;
-  width: calc(var(--mb-page-w) - var(--mb-page-slack));
-  height: calc(var(--mb-page-h) - var(--mb-page-slack));
+  width: calc(var(--mb-page-w) + 2 * var(--mb-bleed) - var(--mb-page-slack));
+  height: calc(var(--mb-page-h) + 2 * var(--mb-bleed) - var(--mb-page-slack));
   overflow: hidden;
   background-color: var(--mb-paper-base);
   break-after: page;
@@ -231,7 +246,7 @@ li { margin: 0; }
    capacités vaut pour les deux côtés. */
 .page__content {
   position: absolute;
-  inset: 0;
+  inset: var(--mb-bleed);
   z-index: 2;
   display: flex;
   flex-direction: column;
@@ -263,7 +278,7 @@ li { margin: 0; }
    seul tout le reste. Ce sont ses enfants qui le captent, chacun sur sa boîte. */
 .page__decor {
   position: absolute;
-  inset: 0;
+  inset: var(--mb-bleed);
   z-index: 1;
   pointer-events: none;
 }
@@ -797,17 +812,17 @@ li { margin: 0; }
 .mb-sticker--bottom-right img,
 .mb-sticker--top-right img { transform: rotate(5deg); }
 
-.mb-sticker--top-left { top: 40pt; left: 24pt; width: 92pt; }
-.mb-sticker--top-right { top: 34pt; right: 22pt; width: 92pt; }
-.mb-sticker--bottom-left { bottom: 34pt; left: 24pt; width: 100pt; }
-.mb-sticker--bottom-right { bottom: 30pt; right: 22pt; width: 100pt; }
-.mb-sticker--center { bottom: 120pt; left: 50%; width: 110pt; transform: translateX(-50%); }
+.mb-sticker--top-left { top: calc(40pt + var(--mb-bleed)); left: calc(24pt + var(--mb-bleed)); width: 92pt; }
+.mb-sticker--top-right { top: calc(34pt + var(--mb-bleed)); right: calc(22pt + var(--mb-bleed)); width: 92pt; }
+.mb-sticker--bottom-left { bottom: calc(34pt + var(--mb-bleed)); left: calc(24pt + var(--mb-bleed)); width: 100pt; }
+.mb-sticker--bottom-right { bottom: calc(30pt + var(--mb-bleed)); right: calc(22pt + var(--mb-bleed)); width: 100pt; }
+.mb-sticker--center { bottom: calc(120pt + var(--mb-bleed)); left: 50%; width: 110pt; transform: translateX(-50%); }
 /* Jamais dans le pli : côté reliure, le sticker s'écarte de la marge
    intérieure (`page--gauche` a le pli à droite, `page--droite` à gauche). */
 .page--droite .mb-sticker--bottom-left,
-.page--droite .mb-sticker--top-left { left: var(--mb-margin-int); }
+.page--droite .mb-sticker--top-left { left: calc(var(--mb-margin-int) + var(--mb-bleed)); }
 .page--gauche .mb-sticker--bottom-right,
-.page--gauche .mb-sticker--top-right { right: var(--mb-margin-int); }
+.page--gauche .mb-sticker--top-right { right: calc(var(--mb-margin-int) + var(--mb-bleed)); }
 
 /* =============================================================================
    LAYOUTS
@@ -1089,7 +1104,7 @@ li { margin: 0; }
    reste du carnet. Mesuré, pas supposé. */
 .mb-photowall {
   position: absolute;
-  inset: 0;
+  inset: var(--mb-bleed);
   z-index: 2;
   display: flex;
   flex-direction: column;
@@ -1267,11 +1282,11 @@ li { margin: 0; }
   position: absolute;
   /* Calée sur la marge, donc sur la feuille : elle rend le point de jeu,
      comme `.page__content`. */
-  right: calc(var(--mb-margin-ext) - var(--mb-page-slack));
-  bottom: calc(12pt - var(--mb-page-slack));
+  right: calc(var(--mb-margin-ext) + var(--mb-bleed) - var(--mb-page-slack));
+  bottom: calc(12pt + var(--mb-bleed) - var(--mb-page-slack));
   z-index: 3;
 }
-.page--gauche .mb-ai-note--page { right: calc(var(--mb-margin-int) - var(--mb-page-slack)); }
+.page--gauche .mb-ai-note--page { right: calc(var(--mb-margin-int) + var(--mb-bleed) - var(--mb-page-slack)); }
 
 /* --- Ouverture de chapitre : la carte tient la page ------------------------ */
 .mb-chapter {
