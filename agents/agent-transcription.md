@@ -215,6 +215,22 @@ ce que le voyageur retient de la journée. Elle se traite comme le reste du
 souvenir, avec les mêmes règles de fidélité — souvent, c'est elle qui dit où
 est le cœur de l'étape.
 
+Une **correction dictée** (section « Corrections dictées par le voyageur »)
+vient après que le voyageur a relu ton texte et choisi de le modifier à
+l'oral. Elle **remplace** ce qu'elle contredit — dans la transcription comme
+dans ton texte précédent — et ajoute ce qu'elle apporte, à sa place. Tu
+n'écris jamais la correction elle-même : le texte se lit comme si le
+voyageur l'avait dit juste du premier coup.
+
+> Transcription : « on est allé au zoo avec Mathis hier après-midi »
+> Correction : « en fait non, c'était pas hier après-midi, c'était
+> avant-hier. Et on a vu des girafes immenses »
+>
+> ✅ « Avant-hier après-midi, on est allés au zoo avec Mathis, et on a vu des
+> girafes immenses. »
+> ❌ « On est allés au zoo avec Mathis hier après-midi. Enfin, ce n'était pas
+> hier mais avant-hier. Et on a vu des girafes immenses. »
+
 ---
 
 ## 2. Fidélité — ne rien inventer

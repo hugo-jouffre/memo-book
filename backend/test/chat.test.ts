@@ -2,8 +2,13 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeResponder } from "../src/services/conversation.js";
 import {
+  ACKNOWLEDGED_EARLIER,
+  LISTENING_FOR_REVISION,
   OPENING_TEXT,
+  PHOTOS_VALIDATED_BEFORE_RETURN,
   PRECISION_NOTED,
+  REVISION_NOTED,
+  returnToValidate,
   SUGGESTIONS,
   VALIDATION_QUESTION,
   tooShort,
@@ -12,7 +17,12 @@ import {
   photosWanted,
   validationQuestionFor,
 } from "../src/services/conversationCopy.js";
-import { FakeRedactor, type RedactionInput, type RedactionResult } from "../src/services/redaction.js";
+import {
+  FakeRedactor,
+  ORAL_CORRECTION_TOPIC,
+  type RedactionInput,
+  type RedactionResult,
+} from "../src/services/redaction.js";
 import { photoBudgetFor } from "../src/services/photoBudget.js";
 import {
   CONTEXT_COMPLETE,
@@ -69,6 +79,7 @@ interface ChatMessageJson {
       };
   sentAt: string;
   stepId: string | null;
+  entryId: string | null;
   disposition: string | null;
   pauseMilliseconds: number | null;
 }
@@ -80,6 +91,7 @@ interface ChatThreadJson {
   preview: { memoryCount: number; pageCount: number; isOpenable: boolean } | null;
   context: {
     tripId: string;
+    stepId: string | null;
     travellerFirstName: string | null;
     travellerInitials: string | null;
     travellerAvatarUrl: string | null;
@@ -489,6 +501,172 @@ describe("parler à MEMO", () => {
     const stranger = await registerAccount(harness.app, "inconnu@memobook.app");
     const { response: refused } = await say(memo.id, "Bonjour", { authorization: stranger.authorization });
     expect(refused.statusCode).toBe(404);
+  });
+});
+
+async function sendPhotos(memoId: string, count: number) {
+  const id = randomUUID();
+  const { payload, contentType } = multipartPhotos(id, count);
+  const response = await harness.app.inject({
+    method: "POST",
+    url: `/v1/trips/${memoId}/chat`,
+    headers: { authorization: owner.authorization, "content-type": contentType },
+    payload,
+  });
+  expect(response.statusCode).toBe(201);
+  return id;
+}
+
+async function readSteps(memoId: string) {
+  const response = await harness.app.inject({
+    method: "GET",
+    url: `/v1/trips/${memoId}`,
+    headers: { authorization: owner.authorization },
+  });
+  expect(response.statusCode).toBe(200);
+  return response.json<{ steps: { id: string; number: number; entryIds: string[]; photoUrl: string | null }[] }>()
+    .steps;
+}
+
+describe("modifier à l'oral (Hugo, 12/10/2026)", () => {
+  it("le vocal qui suit corrige la fiche au lieu de faire un souvenir de plus", async () => {
+    const memo = await seedTrip(owner.accountId);
+    await say(memo.id, "On est allés au zoo avec Mathis hier après-midi, il faisait beau.");
+    const entry = await harness.prisma.entry.findFirstOrThrow({ where: { memoId: memo.id } });
+
+    const { response: chip } = await say(memo.id, SUGGESTIONS["edit-voice"].label, { suggestionId: "edit-voice" });
+    expect(chip.statusCode).toBe(201);
+    expect(memoBubbles(await readThread(memo.id)).at(-1)?.body).toEqual({
+      kind: "text",
+      text: LISTENING_FOR_REVISION,
+    });
+
+    const { id, response } = await sendVoice(memo.id);
+    expect(response.statusCode).toBe(201);
+    // Ni souvenir ni fiche de plus : la correction vise la fiche d'avant.
+    const receipt = response.json<{ messages: ChatMessageJson[] }>();
+    expect(receipt.messages.map((message) => message.body.kind)).toEqual(["voice"]);
+    expect(await harness.prisma.entry.count({ where: { memoId: memo.id } })).toBe(1);
+
+    const thread = await readThread(memo.id);
+    const correction = thread.messages.find((message) => message.id === id);
+    expect(correction?.disposition).toBe("context");
+    // On réécoute **son** fichier, pas celui de la fiche.
+    expect(correction?.body.kind === "voice" && correction.body.voice.remoteUrl).toContain(
+      `/v1/chat-messages/${id}/media`,
+    );
+    expect(thread.messages.filter((message) => message.body.kind === "transcript")).toHaveLength(1);
+
+    // La rédaction a relu la correction comme telle, et la question revient.
+    const last = redactor.inputs.at(-1)!;
+    const heard = await harness.prisma.chatMessage.findUniqueOrThrow({ where: { id } });
+    expect(heard.text).toBeTruthy();
+    expect(last.entry.precisions).toEqual([{ text: heard.text, topic: ORAL_CORRECTION_TOPIC }]);
+    const replies = memoBubbles(thread).filter((message) => message.seq > (correction?.seq ?? 0));
+    expect(replies.map((message) => message.body)).toEqual([
+      { kind: "text", text: REVISION_NOTED },
+      { kind: "text", text: VALIDATION_QUESTION },
+    ]);
+    expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["accept", "edit-hand", "edit-voice"]);
+    const rewritten = await harness.prisma.entry.findUniqueOrThrow({ where: { id: entry.id } });
+    expect(rewritten.redactionStatus).toBe("ready");
+  });
+
+  it("un vocal qui ne suit pas la puce reste un souvenir de plus", async () => {
+    const memo = await seedTrip(owner.accountId);
+    await say(memo.id, "On est allés au zoo avec Mathis hier après-midi, il faisait beau.");
+    await sendVoice(memo.id);
+    expect(await harness.prisma.entry.count({ where: { memoId: memo.id } })).toBe(2);
+  });
+});
+
+describe("une étape par récit (Hugo, 12/10/2026)", () => {
+  it("chaque récit validé ajoute une carte d'étape, même au même endroit", async () => {
+    const memo = await seedTrip(owner.accountId);
+    await sendVoice(memo.id);
+    const [first] = await harness.prisma.entry.findMany({ where: { memoId: memo.id } });
+    await say(memo.id, SUGGESTIONS.accept.label, { suggestionId: "accept", entryId: first!.id });
+    expect(await readSteps(memo.id)).toHaveLength(1);
+
+    // L'app n'a plus d'étape « active » à joindre à ce qu'on raconte.
+    expect((await readThread(memo.id)).context.stepId).toBeNull();
+
+    await sendVoice(memo.id);
+    const steps = await readSteps(memo.id);
+    expect(steps.map((step) => step.number)).toEqual([1, 2]);
+
+    // Le fil dit l'étape de chaque récit : c'est ce qui l'ouvre sur lui.
+    const thread = await readThread(memo.id);
+    const stories = thread.messages.filter((message) => message.body.kind === "voice");
+    expect(stories.map((message) => message.stepId)).toEqual(steps.map((step) => step.id));
+  });
+
+  it("les photos rejoignent le récit dont MEMO les a demandées, et illustrent l'étape", async () => {
+    const memo = await seedTrip(owner.accountId);
+    await say(memo.id, "On a passé la matinée au Colisée, il y avait un monde fou devant l'entrée.");
+    const story = await harness.prisma.entry.findFirstOrThrow({ where: { memoId: memo.id } });
+    await say(memo.id, SUGGESTIONS.accept.label, { suggestionId: "accept", entryId: story.id });
+
+    await sendPhotos(memo.id, 1);
+    // Une seule photo : « la », pas « les ».
+    expect(memoBubbles(await readThread(memo.id)).at(-1)?.body).toEqual({
+      kind: "text",
+      text: "J’ai bien reçu ta photo. Si tu la valides, je crée la page de cette étape dans ton carnet, et tu pourras la prévisualiser. Tu la valides ?",
+    });
+
+    const [step] = await readSteps(memo.id);
+    const photo = await harness.prisma.entry.findFirstOrThrow({ where: { memoId: memo.id, kind: "photo" } });
+    expect(step?.entryIds).toEqual([story.id, photo.id]);
+    // La vignette et la photo du voyage, servies sans session.
+    expect(step?.photoUrl).toMatch(/\/v1\/trip-photos\/[0-9a-f-]{36}\.jpg$/);
+    const served = await harness.app.inject({ method: "GET", url: new URL(step!.photoUrl!).pathname });
+    expect(served.statusCode).toBe(200);
+    const home = await harness.app.inject({ method: "GET", url: "/v1/home", headers: { authorization: owner.authorization } });
+    expect(home.json<{ trips: { coverPhotoUrl: string | null }[] }>().trips[0]?.coverPhotoUrl).toBe(step?.photoUrl);
+  });
+});
+
+describe("revenir à l'étape sautée (Hugo, 12/10/2026)", () => {
+  it("une fois la seconde close, MEMO revient à la première pour la valider", async () => {
+    const memo = await seedTrip(owner.accountId);
+    await say(memo.id, "On a passé la matinée au Colisée, il y avait un monde fou devant l'entrée.");
+    // Le second récit, dans la foulée : le premier n'a été ni validé ni illustré.
+    await say(memo.id, "L'après-midi on a filé à Trastevere manger des supplì sur une petite place.");
+    const [first, second] = await harness.prisma.entry.findMany({
+      where: { memoId: memo.id },
+      orderBy: { createdAt: "asc" },
+    });
+
+    // « Ça me convient » vise le second, ses photos aussi.
+    await say(memo.id, SUGGESTIONS.accept.label, { suggestionId: "accept" });
+    expect((await harness.prisma.entry.findUniqueOrThrow({ where: { id: second!.id } })).validatedAt).not.toBeNull();
+    await sendPhotos(memo.id, 2);
+    await say(memo.id, SUGGESTIONS["photos-ok"].label, { suggestionId: "photos-ok" });
+
+    const thread = await readThread(memo.id);
+    const firstTitle = (await harness.prisma.entry.findUniqueOrThrow({ where: { id: first!.id } })).suggestedTitle;
+    const tail = thread.messages.slice(-4);
+    expect(tail.map((message) => message.body.kind)).toEqual(["text", "text", "transcript", "text"]);
+    expect(tail[0]?.body).toEqual({ kind: "text", text: PHOTOS_VALIDATED_BEFORE_RETURN });
+    expect(tail[1]?.body).toEqual({ kind: "text", text: returnToValidate(1, firstTitle) });
+    // La fiche reposée garde son numéro, et la question vise la première.
+    expect(tail[2]?.body.kind === "transcript" && tail[2].body.transcript.title).toBe("Retranscription étape 1");
+    expect(tail[3]?.entryId).toBe(first!.id);
+    expect(thread.suggestions.map((suggestion) => suggestion.id)).toEqual(["accept", "edit-hand", "edit-voice"]);
+
+    // Validée à son tour — elle était déjà comptée.
+    await say(memo.id, SUGGESTIONS.accept.label, { suggestionId: "accept" });
+    expect((await harness.prisma.entry.findUniqueOrThrow({ where: { id: first!.id } })).validatedAt).not.toBeNull();
+    const after = await readThread(memo.id);
+    expect(memoBubbles(after).at(-2)?.body).toEqual({ kind: "text", text: ACKNOWLEDGED_EARLIER });
+    expect(memoBubbles(after).at(-1)?.entryId).toBe(first!.id);
+
+    // Ses photos vont dans **son** étape, et MEMO n'y revient pas deux fois.
+    await sendPhotos(memo.id, 1);
+    await say(memo.id, SUGGESTIONS["photos-ok"].label, { suggestionId: "photos-ok" });
+    const steps = await readSteps(memo.id);
+    expect(steps.map((step) => step.entryIds.length)).toEqual([2, 3]);
+    expect(memoBubbles(await readThread(memo.id)).at(-1)?.body).toEqual({ kind: "text", text: PHOTOS_VALIDATED });
   });
 });
 

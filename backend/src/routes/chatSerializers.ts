@@ -105,6 +105,15 @@ function payloadField(payload: unknown, key: string): unknown {
   return payload && typeof payload === "object" ? (payload as Record<string, unknown>)[key] : undefined;
 }
 
+/** Le souvenir dont une bulle parle — voir `entryId` dans ``serializeChatMessage``. */
+function entryIdAbout(message: Pick<ChatMessageRow, "entryId" | "payload">): string | null {
+  for (const key of ["asksValidationFor", "asksPhotosFor"]) {
+    const value = payloadField(message.payload, key);
+    if (typeof value === "string") return value;
+  }
+  return message.entryId;
+}
+
 /**
  * Cette bulle est-elle pour ce lecteur ? Une bulle `audience: "limited"` — la
  * bulle « reviens demain » du crédit du jour — ne parle qu'à ceux qui
@@ -148,10 +157,28 @@ export interface SerializeMessageOptions {
  * « Retranscription étape N » : une fiche par souvenir, une étape par
  * souvenir — la N-ième fiche du fil est l'étape N. Calculé sur le fil entier,
  * jamais sur une page de messages.
+ *
+ * **Une fiche reposée garde son numéro** (12/10/2026) : quand MEMO revient à
+ * une étape laissée en plan, il repose sa fiche au bas du fil — c'est la même
+ * étape, pas une de plus.
  */
-export function stepNumbersOf(messages: readonly Pick<ChatMessageRow, "id" | "kind" | "seq">[]): Map<string, number> {
+export function stepNumbersOf(
+  messages: readonly Pick<ChatMessageRow, "id" | "kind" | "seq" | "entryId">[],
+): Map<string, number> {
   const cards = messages.filter((message) => message.kind === "transcript").sort((a, b) => a.seq - b.seq);
-  return new Map(cards.map((card, index) => [card.id, index + 1]));
+  const numbers = new Map<string, number>();
+  const numberOfEntry = new Map<string, number>();
+  let count = 0;
+  for (const card of cards) {
+    let number = card.entryId ? numberOfEntry.get(card.entryId) : undefined;
+    if (number === undefined) {
+      count += 1;
+      number = count;
+      if (card.entryId) numberOfEntry.set(card.entryId, number);
+    }
+    numbers.set(card.id, number);
+  }
+  return numbers;
 }
 
 function serializeBody(message: ChatMessageRow, publicBaseUrl: string, stepNumbers?: ReadonlyMap<string, number>) {
@@ -160,18 +187,21 @@ function serializeBody(message: ChatMessageRow, publicBaseUrl: string, stepNumbe
       return { kind: "text" as const, text: message.text ?? "" };
 
     case "voice": {
-      const entry = message.entry;
+      // Un vocal du contexte du voyage, ou une correction dictée, n'a pas de
+      // souvenir à lui : son fichier pend au message (`contextVoiceOf`). Une
+      // correction vise pourtant la fiche qu'elle corrige (`entryId`) — c'est
+      // son propre fichier qu'on réécoute, pas celui de la fiche.
+      const voice = contextVoiceOf(message.payload);
+      const entry = voice ? null : message.entry;
       return {
         kind: "voice" as const,
         voice: {
           id: message.id,
-          duration: entry?.media?.durationSeconds ?? contextVoiceOf(message.payload)?.durationSeconds ?? 0,
+          duration: entry?.media?.durationSeconds ?? voice?.durationSeconds ?? 0,
           levels: levelsOf(message.payload),
-          // Un vocal du contexte du voyage n'a pas de souvenir : son fichier
-          // pend au message (`contextVoiceOf`).
           remoteUrl: entry
             ? mediaUrlOf(publicBaseUrl, entry.id)
-            : contextVoiceOf(message.payload)
+            : voice
               ? `${publicBaseUrl}/v1/chat-messages/${message.id}/media`
               : null,
         },
@@ -235,7 +265,7 @@ export function serializeChatMessage(message: ChatMessageRow, options: Serialize
     message.accountId !== options.viewerAccountId;
 
   const sentAt =
-    message.author === "traveller" && message.entry && message.kind !== "text"
+    message.author === "traveller" && message.entry && message.kind !== "text" && !contextVoiceOf(message.payload)
       ? message.entry.capturedAt
       : message.createdAt;
 
@@ -263,7 +293,14 @@ export function serializeChatMessage(message: ChatMessageRow, options: Serialize
       message.author === "traveller" && message.account ? avatarUrlOf(message.account) : null,
     body,
     sentAt: sentAt.toISOString(),
-    stepId: message.stepId,
+    // **L'étape de son souvenir d'abord** (12/10/2026) : les étapes naissent
+    // des souvenirs après coup (`services/tripFacts.ts`), et c'est ce lien
+    // qui permet d'ouvrir le fil sur le récit d'une étape depuis sa carte.
+    stepId: message.entry?.stepId ?? message.stepId,
+    // Le souvenir dont parle la bulle : celui du voyageur, la fiche dont MEMO
+    // attend la validation, le récit dont il demande les photos. L'app s'en
+    // sert pour viser la bonne fiche quand MEMO revient à une étape d'avant.
+    entryId: entryIdAbout(message),
     disposition: message.disposition,
     pauseMilliseconds: message.pauseMilliseconds,
     ...(callToAction ? { callToAction } : {}),
@@ -395,7 +432,13 @@ export function serializeChatThread(options: SerializeThreadOptions) {
       travellerAvatarUrl: avatarUrlOf(viewer),
       placeName,
       stepNumber: activeStep?.number ?? null,
-      stepId: activeStep?.id ?? null,
+      // **Plus d'étape « active » à épingler** (12/10/2026). Les builds
+      // installés envoyaient cet identifiant avec chaque message, et tout ce
+      // qu'on racontait ensuite se rangeait dans la dernière étape : « ton
+      // carnet compte une étape de plus », et aucune carte de plus sur
+      // l'accueil. L'app n'envoie plus une étape que si on a ouvert le fil
+      // depuis sa carte.
+      stepId: null,
       prompt: memo.prompt,
       memberCount,
     },
@@ -469,7 +512,7 @@ export function serializeChatReceipt(options: {
   showsAuthors: boolean;
   publicBaseUrl: string;
   /** Les fiches du fil entier (`id`, `kind`, `seq`), pour numéroter celles du reçu. */
-  cards: Pick<ChatMessageRow, "id" | "kind" | "seq">[];
+  cards: Pick<ChatMessageRow, "id" | "kind" | "seq" | "entryId">[];
   turn: ChatTurnStatus;
   now: Date;
   dailyCredit: DailyCredit;

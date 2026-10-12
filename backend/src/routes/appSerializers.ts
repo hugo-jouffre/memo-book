@@ -17,6 +17,7 @@ import { serializeDailyCredit, type DailyCredit } from "../services/dailyCredit.
 import { unitPriceCents } from "../services/printPricing.js";
 import { findShippingCountry, SHIPPING_COUNTRIES } from "../services/shippingCountries.js";
 import { SUBSCRIPTION_MONTHLY_CENTS } from "../services/subscriptionCatalog.js";
+import { displayablePhotoUrl } from "./tripPhotos.js";
 import { accountSubscriptionOf, grantsUnlimitedAccess, subscriptionStateOf } from "../services/subscriptions.js";
 import { avatarUrlOf } from "../services/avatars.js";
 import { renderPhase } from "./serializers.js";
@@ -59,6 +60,8 @@ function iso(date: Date | null): string | null {
 
 type MemoForTrip = Memo & {
   members?: (MemoMember & { account?: Account | null })[];
+  /** La dernière photo racontée — la photo du voyage à défaut d'une photo choisie. */
+  entries?: { media: { storageKey: string; cdnUrl: string | null } | null }[];
 };
 
 /** Le nom affiché prime sur celui du compte : quelqu'un peut vouloir apparaître autrement sur un voyage donné. */
@@ -130,7 +133,7 @@ function serializeOwner(owner: Account) {
  */
 export function serializeTrip(
   memo: MemoForTrip,
-  options: { viewerAccountId: string; dailyCredit?: DailyCredit },
+  options: { viewerAccountId: string; dailyCredit?: DailyCredit; publicBaseUrl?: string },
 ) {
   const { dailyCredit } = options;
   // Les co-voyageurs sont les *autres* : le propriétaire est déjà le titulaire
@@ -158,7 +161,14 @@ export function serializeTrip(
     stage,
     startDate: iso(memo.startDate),
     endDate: iso(memo.endDate),
-    coverPhotoUrl: memo.coverPhotoUrl,
+    // **La photo du voyage** : celle qu'on a choisie, sinon la dernière
+    // envoyée dans la conversation (Hugo, 12/10/2026). Un voyage qu'on
+    // raconte en photos ne garde plus le motif de repli sur son accueil.
+    // Déduite, pas stockée : `coverPhotoUrl` reste la photo choisie, celle
+    // que le carnet imprime.
+    coverPhotoUrl:
+      memo.coverPhotoUrl ??
+      (options.publicBaseUrl ? displayablePhotoUrl(options.publicBaseUrl, memo.entries?.[0]?.media) : null),
     stats: {
       dayCount: memo.dayCount,
       distanceKilometres: memo.distanceKilometres,
@@ -391,13 +401,18 @@ function justEndedSubscription(subscriptions: Subscription[], at: Date): Date | 
 // ---------------------------------------------------------------------------
 
 type StepWithMembers = MemoStep & {
-  entries?: { id: string }[];
+  entries?: { id: string; kind?: string; media?: { storageKey: string; cdnUrl: string | null } | null }[];
 };
 
 export function serializeTripStep(
   step: StepWithMembers,
   companions: ReturnType<typeof serializeCompanion>[],
+  publicBaseUrl?: string,
 ) {
+  // La vignette : la photo publiée de l'étape, sinon sa première photo
+  // racontée — servie sans session (`routes/tripPhotos.ts`). Avant la
+  // composition du carnet, une étape illustrée n'avait pas d'image.
+  const firstPhoto = (step.entries ?? []).find((entry) => entry.kind === "photo" && entry.media);
   return {
     id: step.id,
     number: step.number,
@@ -411,7 +426,8 @@ export function serializeTripStep(
     // pas suivie étape par étape. Mieux vaut la liste du voyage qu'une liste
     // vide, qui ferait croire que personne n'y était.
     companions,
-    photoUrl: step.photoUrl,
+    photoUrl:
+      step.photoUrl ?? (publicBaseUrl ? displayablePhotoUrl(publicBaseUrl, firstPhoto?.media) : null),
     transport: step.transport,
     validatedAt: iso(step.validatedAt),
     // Les souvenirs que porte l'étape (T235) : un vocal, un texte, des photos.

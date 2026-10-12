@@ -1,4 +1,4 @@
-import type { ChatMessage, Entry, MediaAsset, Memo, MemoStep, Prisma, PrismaClient } from "@prisma/client";
+import { Prisma, type ChatMessage, type Entry, type MediaAsset, type Memo, type MemoStep, type PrismaClient } from "@prisma/client";
 import { finalTextOf } from "../jobs/redact.js";
 import {
   HISTORY_LIMIT,
@@ -14,6 +14,7 @@ import {
 } from "./conversation.js";
 import { OPENING_PAUSE_MS, SUGGESTION_SETS, validationQuestionFor } from "./conversationCopy.js";
 import type { RedactedNeighbour } from "./redaction.js";
+import { contextVoiceOf } from "./tripContext.js";
 
 /**
  * Le fil d'un carnet, vu du serveur : ce que les routes et le job `converse`
@@ -206,8 +207,10 @@ function truncateForHistory(text: string | null): string | null {
 export function historyTextOf(message: ChatMessageRow): string | null {
   if (message.kind === "photos") return null;
   if (message.kind === "text") return message.text;
-  // Un vocal du contexte du voyage n'a pas de souvenir : sa transcription est
+  // Un vocal du contexte du voyage n'a pas de souvenir, et une correction
+  // dictée vise celui d'une fiche sans en être un : leur transcription est
   // gardée sur le message lui-même.
+  if (contextVoiceOf(message.payload)) return message.text;
   return message.entry ? finalTextOf(message.entry) : message.text;
 }
 
@@ -268,6 +271,27 @@ export async function loadCurrentEntry(
     capturedAt: entry.capturedAt,
     placeLabel: entry.placeLabel,
   };
+}
+
+/**
+ * Le récit que des photos viennent illustrer : celui dont MEMO a demandé les
+ * photos en dernier (`payload.asksPhotosFor`). C'est ce qui les range dans la
+ * bonne étape — même quand MEMO est revenu à une étape laissée en plan
+ * (`services/tripFacts.ts`).
+ */
+export async function photosTargetEntryId(db: Db, memoId: string): Promise<string | null> {
+  const question = await db.chatMessage.findFirst({
+    where: { memoId, author: "memo", kind: "text", payload: { path: ["asksPhotosFor"], not: Prisma.AnyNull } },
+    orderBy: { seq: "desc" },
+    select: { payload: true },
+  });
+  const entryId = (question?.payload as { asksPhotosFor?: unknown } | null)?.asksPhotosFor;
+  if (typeof entryId !== "string") return null;
+  const entry = await db.entry.findFirst({
+    where: { id: entryId, memoId, kind: { not: "photo" } },
+    select: { id: true },
+  });
+  return entry?.id ?? null;
 }
 
 /** Les trois derniers souvenirs rédigés — exactement ce que reçoit la rédaction. */

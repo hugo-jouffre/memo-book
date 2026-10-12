@@ -46,18 +46,25 @@ import { updateByRules, type TripContext, type TripContextUpdate } from "./tripC
  */
 export interface ConversationState {
   roseEpineGraineAskedFor: string[];
+  /**
+   * Les souvenirs dont MEMO est revenu demander la fin — validation ou
+   * photos — après qu'on les a sautés pour raconter la suite (12/10/2026).
+   * Une fois chacun : MEMO n'insiste jamais.
+   */
+  closingAskedFor: string[];
 }
 
-export const EMPTY_CONVERSATION_STATE: ConversationState = { roseEpineGraineAskedFor: [] };
+export const EMPTY_CONVERSATION_STATE: ConversationState = { roseEpineGraineAskedFor: [], closingAskedFor: [] };
 
 /** Relecture défensive, comme `parseCoherenceSheet` : un JSON corrompu ne bloque pas un tour. */
 export function parseConversationState(value: unknown): ConversationState {
   if (!value || typeof value !== "object") return EMPTY_CONVERSATION_STATE;
   const candidate = value as Partial<ConversationState>;
+  const strings = (list: unknown) =>
+    Array.isArray(list) ? list.filter((item): item is string => typeof item === "string") : [];
   return {
-    roseEpineGraineAskedFor: Array.isArray(candidate.roseEpineGraineAskedFor)
-      ? candidate.roseEpineGraineAskedFor.filter((day): day is string => typeof day === "string")
-      : [],
+    roseEpineGraineAskedFor: strings(candidate.roseEpineGraineAskedFor),
+    closingAskedFor: strings(candidate.closingAskedFor),
   };
 }
 
@@ -390,7 +397,7 @@ export function nextConversationState(
   dayKey: string,
 ): ConversationState {
   if (!reply.asksRoseEpineGraine || state.roseEpineGraineAskedFor.includes(dayKey)) return state;
-  return { roseEpineGraineAskedFor: [...state.roseEpineGraineAskedFor, dayKey] };
+  return { ...state, roseEpineGraineAskedFor: [...state.roseEpineGraineAskedFor, dayKey] };
 }
 
 /** `AAAA-MM-JJ`, en UTC — la clé de journée que l'état retient. */

@@ -4,6 +4,7 @@ import type { AppContext } from "../context.js";
 import { normalizeAccessCode } from "../lib/accessCode.js";
 import { HttpError } from "../lib/httpError.js";
 import { accountIdOf } from "../plugins/auth.js";
+import { publicApiBaseUrl } from "../services/avatars.js";
 import { readDailyCredits, type DailyCredit } from "../services/dailyCredit.js";
 import { createMemoFor, isTakenId, visibleToAccount } from "../services/memoOwnership.js";
 import { normalizeNarrationPace } from "../services/narrationPace.js";
@@ -56,6 +57,14 @@ const tripInclude = {
     where: { status: { not: "removed" as const } },
     include: { account: true },
     orderBy: { invitedAt: "asc" as const },
+  },
+  // La dernière photo racontée : la photo du voyage quand aucune n'a été
+  // choisie (`serializeTrip`).
+  entries: {
+    where: { kind: "photo" as const, media: { isNot: null } },
+    orderBy: { capturedAt: "desc" as const },
+    take: 1,
+    select: { media: { select: { storageKey: true, cdnUrl: true } } },
   },
 } as const;
 
@@ -132,7 +141,12 @@ export async function loadTripDetail(context: AppContext, accountId: string, mem
       ...tripInclude,
       steps: {
         orderBy: { number: "asc" },
-        include: { entries: { select: { id: true }, orderBy: [{ capturedAt: "asc" }, { createdAt: "asc" }] } },
+        include: {
+          entries: {
+            select: { id: true, kind: true, media: { select: { storageKey: true, cdnUrl: true } } },
+            orderBy: [{ capturedAt: "asc" }, { createdAt: "asc" }],
+          },
+        },
       },
     },
   });
@@ -155,12 +169,13 @@ export async function loadTripDetail(context: AppContext, accountId: string, mem
     dailyCredit = credits.get(memo.id);
   }
 
-  const trip = serializeTrip(memo, { viewerAccountId: accountId, dailyCredit });
+  const publicBaseUrl = publicApiBaseUrl(context.env);
+  const trip = serializeTrip(memo, { viewerAccountId: accountId, dailyCredit, publicBaseUrl });
 
   return {
     trip,
     prompt: memo.prompt,
-    steps: memo.steps.map((step) => serializeTripStep(step, trip.companions)),
+    steps: memo.steps.map((step) => serializeTripStep(step, trip.companions, publicBaseUrl)),
   };
 }
 
@@ -222,7 +237,11 @@ export function registerHomeRoutes(app: FastifyInstance, context: AppContext): v
     return {
       traveller,
       trips: memos.map((memo) =>
-        serializeTrip(memo, { viewerAccountId: accountId, dailyCredit: credits.get(memo.id) }),
+        serializeTrip(memo, {
+          viewerAccountId: accountId,
+          dailyCredit: credits.get(memo.id),
+          publicBaseUrl: publicApiBaseUrl(context.env),
+        }),
       ),
       showcase: showcase ? serializeShowcase(showcase) : null,
     };
