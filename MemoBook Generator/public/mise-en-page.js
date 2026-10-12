@@ -244,6 +244,8 @@
     layout_trio_portrait: { 3: [0.6, 0.69, 0.65] },
     layout_trio_landscape: { 3: [1.6, 0.64, 0.64] },
     layout_recit_photo: { 1: [0.51] },
+    // Une seule photo en largeur sur la page d'album.
+    album_paysage: { 1: [1.39] },
     // La photo en pleine page, bord à bord : le format de la page.
     pleine_page: { 1: [420 / 595] },
     layout_photo_page: {
@@ -369,12 +371,23 @@
     return "";
   }
 
-  /** Sur `layout_recit_photo`, la grande photo porte son étiquette de titre. */
-  function etiqueter(plan, rendues) {
-    if (plan.layout !== "layout_recit_photo" || !plan.photos[0]?.legende) return rendues;
-    const [premiere, ...reste] = rendues;
-    const objet = typeof premiere === "string" ? { url: premiere } : premiere;
-    return [{ ...objet, label: plan.photos[0].legende }, ...reste];
+  /** Les coins où poser le scotch, tour à tour d'une photo à l'autre. */
+  const COINS_SCOTCH = ["top-left", "top-right", "top", "bottom-right", "bottom-left"];
+
+  /**
+   * L'habillage des photos rendues d'une page (Hugo, 12/10/2026 : « toujours
+   * tout ») : chaque photo a son scotch — sauf une photo réduite sans être
+   * rognée, dont le cadre épouse l'image, et la pleine page —, et la photo
+   * choisie pour la double page porte son étiquette de titre.
+   */
+  function habillerPhotos(plan, rendues, rangPage) {
+    const etiquetee = plan.photos.find((p) => p.id === plan.etiquette);
+    return rendues.map((item, k) => {
+      const objet = typeof item === "string" ? { url: item } : { ...item };
+      if (objet.fit !== "contain" && !plan.pleinePage) objet.tape_corner = COINS_SCOTCH[(rangPage + k) % COINS_SCOTCH.length];
+      if (etiquetee && objet.url === etiquetee.src) objet.label = etiquetee.legende;
+      return objet;
+    });
   }
 
   /**
@@ -1116,7 +1129,6 @@
   const SEUIL_PERTINENCE = 7;
   /** Un encart toutes les trois pages au plus — LAYOUT_KB, et le réglage de l'app. */
   const ECART_ENCARTS = 3;
-  const TITRES_ENCART = ["Fun fact", "Infos", "Culture générale", "Chiffres clés"];
 
   /** L'encart proposé par l'analyse d'étape, s'il est imprimable et assez pertinent. */
   function encartDe(analyse) {
@@ -1126,7 +1138,8 @@
     if (!texte || texte.length > MAX_SIGNES_ENCART || !(pertinence >= SEUIL_PERTINENCE)) return null;
     return {
       texte,
-      titre: TITRES_ENCART.includes(f.titre) ? f.titre : "Fun fact",
+      // Le fun fact est un post-it « Infos », partout (Hugo, 12/10/2026).
+      titre: "Infos",
       registre: normaliser(f.registre),
       paragraphe: Number.isInteger(f.paragraphe) ? f.paragraphe : null,
       pertinence,
@@ -1232,6 +1245,96 @@
     return retenus.length;
   }
 
+  /* ------------------------------------------------------------ les décors --- */
+
+  /** Les variantes du tracé pointillé du voyage, tour à tour d'une double page à l'autre. */
+  const TRACES = ["a", "b", "c"];
+
+  /** La page a-t-elle une bande de photos, derrière laquelle le tracé peut passer ? */
+  function porteUnTrace(plan) {
+    if (plan.genre === "planche") return !plan.pleinePage && plan.photos.length <= 2;
+    if (plan.layout === "layout_chapter_map") return plan.photos.length >= 2;
+    return ["layout_split_left", "layout_collage", "layout_trio_portrait", "layout_trio_landscape"].includes(plan.layout);
+  }
+
+  /**
+   * La page a-t-elle une place pour un sticker, en bas à gauche ? La page
+   * d'album, la colonne de `layout_recit_photo` et la zone du bas d'une page
+   * de récit ordinaire — tant qu'aucun post-it ne l'occupe.
+   */
+  function porteUnSticker(plan) {
+    if (plan.genre === "planche") return !plan.pleinePage && plan.photos.length <= 2;
+    if (plan.encart) return false;
+    return ["layout_recit_photo", "layout_story_opener", "layout_story_facts"].includes(plan.layout);
+  }
+
+  /**
+   * Les stickers de la bibliothèque qui vont à une étape : ceux dont un mot
+   * déclencheur apparaît dans son récit, son titre, son lieu ou les scènes de
+   * ses photos — un sticker de jeep pour un récit qui parle de jeepney.
+   */
+  function stickersDe(etape, bibliotheque) {
+    const texte = ` ${normaliser(
+      [etape.recit, etape.titre, etape.lieu, ...(etape.analyse?.photos || []).map((p) => p.scene)].join(" "),
+    ).replace(/[^a-z0-9]+/g, " ")} `;
+    return bibliotheque.filter((s) =>
+      (s.mots || []).some((mot) => {
+        const m = normaliser(mot).replace(/[^a-z0-9]+/g, " ").trim();
+        return m && texte.includes(` ${m}`);
+      }),
+    );
+  }
+
+  /**
+   * Les décors, double page par double page (Hugo, 12/10/2026) :
+   *
+   * - **une étiquette de titre** au plus, sur la photo la mieux notée qui en a
+   *   une — celle que le voyageur a écrite passe avant celles de l'IA ;
+   * - **un tracé pointillé** au plus, derrière une bande de photos, de
+   *   préférence sur la page de gauche ;
+   * - **deux stickers** au plus — autant que le réglage « Décorations » en
+   *   permet, aucun à 0 —, tirés de la bibliothèque d'après le récit, jamais
+   *   deux fois le même dans le carnet.
+   */
+  function decorerDoublesPages(plans, pagesAvant, etapes, { stickers = [], decorations = 2 } = {}) {
+    const gauche = (i) => (pagesAvant + 1 + i) % 2 === 0;
+    const quota = Math.max(0, Math.min(2, Math.round(Number(decorations) || 0)));
+    const dejaPoses = new Set();
+    let tour = 0;
+    for (let i = 0; i < plans.length; ) {
+      const double = gauche(i) && i + 1 < plans.length ? [plans[i], plans[i + 1]] : [plans[i]];
+      i += double.length;
+
+      // L'étiquette.
+      let meilleure = null;
+      for (const plan of double) {
+        if (plan.pleinePage) continue;
+        for (const photo of plan.photos) {
+          if (!photo.legende) continue;
+          const note = (photo.etiquetteVoyageur ? 100 : 0) + (Number.isFinite(photo.note) ? photo.note : 5);
+          if (!meilleure || note > meilleure.note) meilleure = { plan, photo, note };
+        }
+      }
+      if (meilleure) meilleure.plan.etiquette = meilleure.photo.id;
+
+      // Le tracé.
+      const porteur = double.find(porteUnTrace);
+      if (porteur) porteur.trace = TRACES[tour++ % TRACES.length];
+
+      // Les stickers.
+      let poses = 0;
+      for (const plan of double) {
+        if (poses >= quota || !porteUnSticker(plan)) continue;
+        const etape = etapes[plan.etape];
+        const choix = etape && stickersDe(etape, stickers).find((s) => !dejaPoses.has(s.fichier));
+        if (!choix) continue;
+        dejaPoses.add(choix.fichier);
+        plan.stickers = [{ url: choix.url || choix.fichier, place: "bottom-left" }];
+        poses += 1;
+      }
+    }
+  }
+
   /* ------------------------------------------------------------ le carnet --- */
 
   const drapeaux = (actif) => ({
@@ -1258,7 +1361,15 @@
    * aucun encart.
    */
   function composerJours(etapes, options = {}) {
-    const { contours = null, dessinerCarte = null, pagesAvant = 1, funFacts = false, journal = () => {} } = options;
+    const {
+      contours = null,
+      dessinerCarte = null,
+      pagesAvant = 1,
+      funFacts = false,
+      stickers = [],
+      decorations = 2,
+      journal = () => {},
+    } = options;
     const plans = [];
     const chapitresPasses = [];
     const lieux = lieuxDuVoyage(etapes, contours);
@@ -1285,7 +1396,10 @@
           ...photo,
           paragraphe: Number.isInteger(lu.paragraphe) ? lu.paragraphe : null,
           scene: lu.scene || "",
-          legende: etiquetteDe(lu),
+          // L'étiquette que le voyageur a écrite sous la photo l'emporte sur
+          // celle de l'IA.
+          legende: String(photo.etiquette || "").trim().slice(0, MAX_SIGNES_ETIQUETTE) || etiquetteDe(lu),
+          etiquetteVoyageur: Boolean(String(photo.etiquette || "").trim()),
           // La note « couverture » de l'analyse : ce que vaut la photo.
           note: typeof lu.couverture === "number" && Number.isFinite(lu.couverture) ? lu.couverture : null,
           // Trois visages ou plus : une photo de groupe, qui ne se rogne pas.
@@ -1470,27 +1584,41 @@
     // deux pages en vis-à-vis.
     if (funFacts) journal(`${placerEncarts(plans, etapes, journal)} encart(s) « fun fact » dans le carnet.`);
 
-    return plans.map((plan) => {
+    // Les décors, double page par double page : une étiquette de titre, un
+    // tracé pointillé, deux stickers au plus.
+    decorerDoublesPages(plans, pagesAvant, etapes, { stickers, decorations });
+
+    return plans.map((plan, rangPage) => {
+      const decors = {
+        trace: plan.trace || "aucun",
+        ...(plan.stickers?.length ? { stickers: plan.stickers } : {}),
+      };
       if (plan.genre === "planche") {
+        // Une photo seule en largeur : l'emplacement de la page d'album se couche.
+        const paysage = !plan.pleinePage && plan.photos.length === 1 && plan.photos[0].format > 1;
+        const gabarit = plan.pleinePage ? "pleine_page" : paysage ? "album_paysage" : "layout_photo_page";
         return {
           title: "",
           body_html: "",
           ...drapeaux("layout_photo_page"),
           ...(plan.pleinePage ? { pleine_page: true } : {}),
-          photos: placerPhotos(plan.pleinePage ? "pleine_page" : "layout_photo_page", plan.photos),
+          ...(paysage ? { album_paysage: true } : {}),
+          photos: habillerPhotos(plan, placerPhotos(gabarit, plan.photos), rangPage),
           fun_facts: [],
           sticker_groups: [],
+          ...decors,
         };
       }
       const jour = {
         ...drapeaux(plan.layout),
         body_html: paragraphesEnHtml(plan.texte),
-        photos: etiqueter(plan, placerPhotos(plan.layout, plan.photos)),
+        photos: habillerPhotos(plan, placerPhotos(plan.layout, plan.photos), rangPage),
         fun_facts: plan.encart ? [plan.encart.texte] : [],
         // L'encart est écrit par le modèle : la page le dit, en petit
         // (LAYOUT_KB § « La mention généré par IA »).
         ...(plan.encart ? { fun_facts_title: plan.encart.titre, ai_note: "Fun fact rédigé par IA" } : {}),
         sticker_groups: [],
+        ...decors,
         ...(plan.carte ? { map_svg: plan.carte } : {}),
       };
       if (!plan.bandeau) return { title: "", ...jour };
@@ -1517,6 +1645,8 @@
     placerPhotos,
     varierDoublesPages,
     placerEncarts,
+    decorerDoublesPages,
+    stickersDe,
     cadreDuVoyage,
     cadreDuPays,
     cadresDesCartes,

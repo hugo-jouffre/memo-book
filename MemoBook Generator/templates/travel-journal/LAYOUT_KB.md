@@ -325,7 +325,7 @@ faire aujourd'hui.
 | Fun facts | ON | `fun_facts` — voir le dosage plus bas | Rendu |
 | Quiz | ON | `quiz` | Rendu |
 | Pointillés | ON | La **réglure** du papier, `.mb-note__rules` — `rules_enabled: false` la retire (`body.sans-reglure`), le rythme vertical ne bouge pas | Rendu |
-| Décorations & stickers | 2 | Quota par paragraphe ou par image ; le scotch y est compté — `decoration_quota: 0` retire tracé pointillé, scotch et stickers (`body.sans-decor`) | **Partiel** : 0 rendu ; 1 à 4 laissent les décors tels quels, les stickers ne sont pas imprimés |
+| Décorations & stickers | 2 | Les **stickers** de la bibliothèque (2 par double page au plus, autant que le quota en permet) et le **tracé pointillé** — `decoration_quota: 0` retire les deux (`body.sans-decor`). Le scotch n'en dépend plus : l'habillage des photos est toujours complet | Rendu ; bibliothèque `assets/stickers/` encore vide |
 | Typographies (assortiment) | Carnet de voyage | Les quatre tokens ci-dessous d'un bloc | **À construire** — l'app n'expose plus quatre réglages mais **quatre assortiments** (`docs/reglages-utilisateur.md`) : Carnet de voyage, Éditorial, Moderne, Manuscrit. Le payload, lui, reste quatre champs |
 | ↳ titres | Playfair | `--mb-font-display` | **À construire** |
 | ↳ sous-titres | Hansley | `--mb-font-title` | **À construire** — `Hansley.otf` versionné mais pas inliné, repli sur la manuscrite |
@@ -411,7 +411,13 @@ pour le premier chapitre où un lieu est nommé.
 
 ## Le tracé pointillé du voyage
 
-Décor tiré au sort parmi quatre boucles. **Il ne passe que derrière des photos,
+**Un par double page au plus** (Hugo, 12/10/2026). L'atelier choisit la page —
+une page qui a une bande de photos, de préférence celle de gauche — et la
+variante, tour à tour (`day.trace` : `a`, `b`, `c` ou `aucun`,
+`decorerDoublesPages`). Sans `trace` dans le payload, le gabarit ne le pose que
+sur les pages de gauche, ce qui garde la même règle.
+
+Décor en trois boucles. **Il ne passe que derrière des photos,
 jamais derrière du texte**, qu'il rendrait illisible.
 
 Pour le garantir, le tracé est dessiné **dans la bande de photos** (macro
@@ -616,6 +622,24 @@ moins d'un tiers au format de la page et tient 200 dpi sur 154 × 216 mm
 (`pleine_page: true`). ⚠️ Elle s'arrête au bord de la page : à vérifier, le fond
 perdu que Pumbo demande pour les pages intérieures.
 
+**L'habillage des photos : toujours tout** (Hugo, 12/10/2026). Chaque photo a
+son cadre blanc, son inclinaison et son scotch — les planches aussi, moins
+inclinées (±1,2°). L'atelier pose le coin du scotch tour à tour
+(`habillerPhotos`). Seules exceptions : la photo réduite sans être rognée
+(`contain`), dont le cadre épouse l'image, et la pleine page.
+
+**L'étiquette de titre : une par double page au plus**, sur la photo la mieux
+notée qui en a une. Celle que le voyageur écrit sous la photo dans l'atelier
+(30 signes) passe avant la `legende` de l'IA.
+
+**Les stickers** viennent d'une **bibliothèque dessinée** (`assets/stickers/`,
+format dans `assets/README.md`) : un sticker est posé quand un de ses mots
+apparaît dans le récit, le titre, le lieu ou les scènes de l'étape — deux par
+double page au plus, autant que le réglage « Décorations » en permet, jamais
+deux fois le même. Places : la page d'album, le bas de la colonne de
+`layout_recit_photo`, la zone du bas d'une page de récit ordinaire — tant
+qu'aucun post-it ne l'occupe.
+
 **La page « photos + stickers ».** `layout_photo_page` accepte désormais une ou
 deux photos : une page d'album, les tirages inclinés et le tracé pointillé entre
 eux. Les stickers illustrés s'y poseront quand leur source sera décidée. De
@@ -710,6 +734,10 @@ Deux messages, aux deux bornes du barème, définis une seule fois dans
   aura les siennes. »
 
 ## Les fun facts — dosage et matière
+
+**Un post-it « Infos » partout** (Hugo, 12/10/2026) : papier, scotch, plus de
+pince ni de bord pointillé, et toujours le titre « Infos ». La fréquence ne
+change pas : un toutes les trois pages au plus.
 
 > Retour le plus unanime du panel de lecteurs : **6 sur 7** en parlent, tous
 > dans le même sens. Ce n'est pas un rejet — les fun facts sont aussi cités
@@ -949,7 +977,7 @@ cadre blanc), dans l'ordre où le gabarit lit `photos[]` :
 | `layout_split_left`, `layout_collage` | 2 | 0,90 · 0,90 |
 | `layout_collage` | 3 | 0,56 · 0,56 · 0,56 |
 | `layout_recit_photo` | 1 | 0,51 |
-| `layout_photo_page` (page d'album) | 1 | 0,84 |
+| `layout_photo_page` (page d'album) | 1 | 0,84 — 1,39 couchée pour une photo en largeur (`album_paysage`) |
 | `layout_photo_page` (page d'album) | 2 | 0,96 · 0,96 |
 | `layout_trio_portrait` | 3 | 0,60 (haut) · 0,69 · 0,65 |
 | `layout_trio_landscape` | 3 | 1,60 (haut) · 0,64 · 0,64 |

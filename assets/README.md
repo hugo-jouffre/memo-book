@@ -21,6 +21,34 @@ Une icône inlinée ne coûte rien au rendu et fonctionne hors ligne. Une
 illustration inlinée ferait grossir le template pour tout le monde alors qu'un
 carnet donné n'en utilise que trois.
 
+## `assets/stickers/` — la bibliothèque de stickers dessinés
+
+Les stickers illustrés du carnet (la jeep de la maquette de Banaue) : une
+**bibliothèque dessinée** (Hugo, 12/10/2026), pas une génération par IA.
+
+- **Fichiers** : un PNG transparent (ou un SVG) par sticker, environ 800 px de
+  large, bordure blanche et ombre comprises si le dessin en a, nommé en
+  minuscules sans espace (`jeep.png`, `ferry.png`).
+- **Index** : `stickers.json`, une entrée par fichier :
+
+  ```json
+  { "stickers": [
+    { "fichier": "jeep.png", "mots": ["jeep", "jeepney", "4x4"] },
+    { "fichier": "ferry.png", "mots": ["ferry", "bateau", "traversée"] }
+  ] }
+  ```
+
+  `mots` : ce qui, dans le récit, le titre, le lieu ou les scènes des photos
+  d'une étape, déclenche le sticker — sans accent ni majuscule à respecter, et
+  un mot peut en commencer un plus long (« jeep » prend « jeepney »).
+- **Dosage** : deux stickers par double page au plus, autant que le réglage
+  « Décorations & stickers » en permet (aucun à 0), jamais deux fois le même
+  dans le carnet (`decorerDoublesPages`, `mise-en-page.js`).
+- **Places** : la page d'album de fin d'étape (une ou deux photos), et le bas
+  de la colonne de `layout_recit_photo` quand elle n'a pas de post-it.
+- **Arrivée dans le PDF** : par URL publique (`raw.githubusercontent.com`,
+  branche `main`), comme les illustrations.
+
 ## `assets/icons/` — la librairie Figma
 
 Icônes **monochromes au trait**, exportées en SVG depuis Figma.

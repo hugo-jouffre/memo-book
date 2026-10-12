@@ -256,6 +256,81 @@ describe("mise en page de l'atelier", () => {
     });
   });
 
+  describe("habillage et décors (décisions du 12/10/2026)", () => {
+    const doubles = (jours: Jour[], pagesAvant = 1) => {
+      const liste: Jour[][] = [];
+      jours.forEach((j, i) => {
+        if ((pagesAvant + 1 + i) % 2 === 0 || !liste.length) liste.push([j]);
+        else liste[liste.length - 1]!.push(j);
+      });
+      return liste;
+    };
+    const objets = (j: Jour) => j.photos as unknown as Record<string, unknown>[];
+    const carnet = (stickers: unknown[] = [], decorations = 2) => {
+      const etapes = ["Paros", "Naxos", "Ios", "Mykonos"].map((lieu, n) =>
+        etape(
+          `${paragrapheDe(`le jeepney de ${lieu}`, 3)} ${paragrapheDe(`le ferry de ${lieu}`, 3)}`,
+          ["a", "b", "c", "d", "e"].map((x) => photo(`${lieu}-${x}`)),
+          { photos: ["a", "b", "c", "d", "e"].map((x, i) => ({ id: `${lieu}-${x}`, paragraphe: null, legende: `Vue ${n}${i}`, couverture: 5 + i })) },
+          lieu,
+        ),
+      );
+      return M.composerJours(etapes, { stickers, decorations });
+    };
+
+    it("habille chaque photo de son scotch, sauf la pleine page", () => {
+      for (const j of carnet()) {
+        if (j["pleine_page"]) continue;
+        for (const p of objets(j)) if (p["fit"] !== "contain") expect(p["tape_corner"]).toBeTruthy();
+      }
+    });
+
+    it("pose au plus une étiquette et un tracé par double page", () => {
+      const jours = carnet();
+      expect(jours.some((j) => objets(j).some((p) => p["label"]))).toBe(true);
+      for (const d of doubles(jours)) {
+        expect(d.flatMap(objets).filter((p) => p["label"]).length).toBeLessThanOrEqual(1);
+        expect(d.filter((j) => ["a", "b", "c"].includes(String(j["trace"]))).length).toBeLessThanOrEqual(1);
+      }
+    });
+
+    it("préfère l'étiquette du voyageur à celle de l'IA", () => {
+      const p = { ...photo("riz"), etiquette: "Nos rizières" };
+      const jours = M.composerJours([etape(paragrapheDe("les rizières", 4), [p], { photos: [{ id: "riz", legende: "Rizières de Banaue", couverture: 9 }] })]);
+      expect(jours.flatMap(objets).find((x) => x["label"])?.["label"]).toBe("Nos rizières");
+    });
+
+    it("pose les stickers d'après le récit, deux par double page au plus, aucun à 0", () => {
+      const bibliotheque = [
+        { fichier: "jeep.png", url: "https://exemple.test/jeep.png", mots: ["jeep"] },
+        { fichier: "ferry.png", url: "https://exemple.test/ferry.png", mots: ["ferry"] },
+        { fichier: "chameau.png", url: "https://exemple.test/chameau.png", mots: ["chameau"] },
+      ];
+      // Des étapes courtes : leurs pages de récit et d'album ont de la place.
+      const courtes = (decorations: number) =>
+        M.composerJours(
+          ["Paros", "Naxos", "Ios", "Mykonos"].map((lieu) =>
+            etape(paragrapheDe(`le jeepney et le ferry de ${lieu}`, 2), [photo(`${lieu}-a`), photo(`${lieu}-b`)], null, lieu),
+          ),
+          { stickers: bibliotheque, decorations },
+        );
+      const jours = courtes(4);
+      const poses = jours.flatMap((j) => (j["stickers"] as { url: string }[] | undefined) ?? []);
+      expect(poses.length).toBeGreaterThan(0);
+      expect(poses.map((s) => s.url)).not.toContain("https://exemple.test/chameau.png");
+      // Jamais deux fois le même.
+      expect(new Set(poses.map((s) => s.url)).size).toBe(poses.length);
+      for (const d of doubles(jours)) expect(d.flatMap((j) => (j["stickers"] as unknown[]) ?? []).length).toBeLessThanOrEqual(2);
+      expect(courtes(0).some((j) => j["stickers"])).toBe(false);
+    });
+
+    it("titre chaque fun fact « Infos »", () => {
+      const analyse = { photos: [], funFact: { texte: "Un fait.", titre: "Culture générale", registre: "histoire", paragraphe: 0, pertinence: 9 } };
+      const jours = M.composerJours([etape(paragrapheDe("la plage", 1), [], analyse)], { funFacts: true });
+      expect(jours.find((j) => (j["fun_facts"] as string[]).length)?.["fun_facts_title"]).toBe("Infos");
+    });
+  });
+
   describe("récit qui contourne une grande photo (maquette faite à la main)", () => {
     it("fait contourner au récit une photo en hauteur, avec son étiquette de titre", () => {
       const analyse = { photos: [{ id: "riz", paragraphe: 0, scene: "rizières en terrasses", legende: "Rizières de Banaue" }] };
@@ -481,7 +556,7 @@ describe("mise en page de l'atelier", () => {
       );
       // {1, 4} (17) l'emporte sur {0, 3} (14).
       expect(encarts(jours)).toEqual([null, "Fait n° 1.", null, null, "Fait n° 4."]);
-      expect(jours[1]?.["fun_facts_title"]).toBe("Fun fact");
+      expect(jours[1]?.["fun_facts_title"]).toBe("Infos");
       expect(jours[1]?.["ai_note"]).toBe("Fun fact rédigé par IA");
     });
 

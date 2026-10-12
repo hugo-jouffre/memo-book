@@ -150,6 +150,9 @@ l'accepte** :
   colophon et l'introduction font un nombre pair de pages ;
 - **pas de légende** (`title` vide) sur les pages de photos ; une photo
   exceptionnelle peut passer en `pleine_page`, une fois par chapitre ;
+- par **double page** : une étiquette de titre (`photos[].label`), un tracé
+  (`trace`), deux stickers au plus ; chaque photo a son scotch
+  (`tape_corner`) ; le fun fact est un post-it titré « Infos » ;
 - une page à une photo **en hauteur** : `layout_recit_photo`, le récit la
   contourne, avec l'étiquette de titre (`photos[0].label`) et le fun fact en
   post-it « Infos ».

@@ -1521,6 +1521,8 @@ function etapesPourMiseEnPage(photoDe) {
         largeur: p.largeur || 0,
         hauteur: p.hauteur || 0,
         groupe: Boolean(p.groupe),
+        // L'étiquette écrite sous la photo par le voyageur.
+        etiquette: p.legende || "",
         // Netteté et exposition mesurées dans le navigateur (`mesurerPhoto`) :
         // c'est d'elles que dépend l'ordre des photos écartées.
         mesure: p.mesure || null,
@@ -1610,6 +1612,8 @@ function construirePayloadCarnet(photoDe = (data) => data, { imprimeur = Boolean
       // est à gauche.
       pagesAvant: avant + libresAvant,
       funFacts: reglages.funFactsEnabled,
+      stickers: etat.stickers || [],
+      decorations: reglages.decorationQuota,
       journal: (texte) => {
         debugCarnet(texte);
         // Pourquoi un fun fact manque, quelles photos sont écartées : dans le
@@ -2363,6 +2367,29 @@ const CONTOURS_DETAIL_URL =
   "https://raw.githubusercontent.com/hugo-jouffre/memo-book/main/assets/maps/detail/";
 
 /**
+ * La bibliothèque de stickers dessinés (`assets/stickers/stickers.json`) : un
+ * sticker par fichier, et les mots du récit qui le déclenchent. Chaque fichier
+ * est servi par GitHub à une adresse publique, que le moteur PDF peut charger.
+ */
+const STICKERS_URL = "https://raw.githubusercontent.com/hugo-jouffre/memo-book/main/assets/stickers/";
+
+async function chargerStickers() {
+  if (etat.stickers) return;
+  try {
+    const reponse = await fetch(`${STICKERS_URL}stickers.json`);
+    if (!reponse.ok) throw new Error(`HTTP ${reponse.status}`);
+    const index = await reponse.json();
+    etat.stickers = (Array.isArray(index.stickers) ? index.stickers : []).map((s) => ({
+      ...s,
+      url: `${STICKERS_URL}${encodeURIComponent(s.fichier)}`,
+    }));
+  } catch (erreur) {
+    etat.stickers = [];
+    debugCarnet("bibliothèque de stickers indisponible", erreur);
+  }
+}
+
+/**
  * Les contours détaillés (Natural Earth 10 m, un fichier par pays) des pays
  * qui touchent le cadre d'une carte de chapitre : ceux de 110 m n'ont pas les
  * petites îles, et une carte cadrée sur les Cyclades n'y montrerait que la mer.
@@ -2412,7 +2439,7 @@ function dessinerCarteChapitre(requete) {
 
 /** Ce qui précède la mise en page : l'analyse des étapes et les contours de carte. */
 async function preparerMiseEnPage(statut) {
-  await Promise.all([analyserEtapes(statut), chargerContoursCarte()]);
+  await Promise.all([analyserEtapes(statut), chargerContoursCarte(), chargerStickers()]);
   await chargerContoursDetail();
   // La netteté et l'exposition de chaque photo : quand une étape en a trop,
   // les floues et les sombres sont écartées les premières.
@@ -2943,7 +2970,11 @@ function cartePhoto(p, conteneurId) {
         ),
       h("input", {
         value: p.legende,
-        placeholder: "Légende",
+        placeholder: "Étiquette sur la photo (sinon l'IA)",
+        maxlength: 30,
+        title:
+          "Le titre posé sur la photo dans le carnet (« Rizières de Banaue »), 30 signes au plus. " +
+          "Une seule étiquette par double page : celle du voyageur passe avant celles de l'IA.",
         oninput: (ev) => modifier("photos", p.id, conteneurId, { legende: ev.target.value }),
       }),
       h(
