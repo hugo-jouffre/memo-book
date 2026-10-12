@@ -78,6 +78,8 @@ interface Config {
   /** Page de suite d'une étape : sans bandeau `day_intro`, comme le veut
       LAYOUT_KB pour la deuxième page d'une même étape. */
   suite?: boolean;
+  /** Corps ajusté d'un point : `day.taille_texte`. */
+  taille?: "serre" | "ample";
   note: string;
 }
 
@@ -108,6 +110,10 @@ const LAYOUTS: Config[] = [
   { flag: "layout_recit_photo", photos: 1, funFact: true, suite: true, note: "PAGE DE SUITE, récit autour d'une grande photo + post-it" },
   { flag: "layout_trio_portrait", photos: 3, funFact: false, suite: true, note: "PAGE DE SUITE, trio portrait" },
   { flag: "layout_trio_landscape", photos: 3, funFact: false, suite: true, note: "PAGE DE SUITE, trio paysage" },
+  { flag: "layout_story_opener", photos: 1, funFact: false, taille: "serre", note: "CORPS SERRÉ, récit + photo flottante" },
+  { flag: "layout_story_opener", photos: 1, funFact: false, suite: true, taille: "serre", note: "CORPS SERRÉ, PAGE DE SUITE" },
+  { flag: "layout_story_opener", photos: 0, funFact: false, taille: "ample", note: "CORPS AMPLE, récit seul" },
+  { flag: "layout_story_opener", photos: 0, funFact: false, suite: true, taille: "ample", note: "CORPS AMPLE, PAGE DE SUITE" },
 ];
 
 /** Plage balayée, réglable : `--from 80 --to 1200 --pas 20 --filtre suite`. */
@@ -140,7 +146,7 @@ for (const l of LAYOUTS) {
   if (FILTRE && !`${l.flag} ${l.note}`.toLowerCase().includes(FILTRE.toLowerCase())) continue;
   for (const chars of LONGUEURS) {
     for (const paragraphs of decoupes(chars)) {
-      variantes.push({ ...l, id: `${l.flag}|${l.photos}|${l.funFact}|${l.bloc ?? ""}|${chars}|${paragraphs}`, layout: l.flag, chars, paragraphs });
+      variantes.push({ ...l, id: `${l.flag}|${l.photos}|${l.funFact}|${l.bloc ?? ""}|${l.taille ?? ""}|${chars}|${paragraphs}`, layout: l.flag, chars, paragraphs });
     }
   }
 }
@@ -155,6 +161,7 @@ const payload: Record<string, unknown> = {
       photos: Array.from({ length: v.photos }, () => PHOTO),
       [v.layout]: true,
     };
+    if (v.taille) day["taille_texte"] = v.taille;
     if (!v.suite) {
       day["day_intro"] = {
         day_number: "01",

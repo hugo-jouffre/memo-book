@@ -256,6 +256,40 @@ describe("mise en page de l'atelier", () => {
     });
   });
 
+  describe("corps du récit ajusté d'un point (décisions du 12/10/2026)", () => {
+    // Quatorze phrases en paragraphes de trois : un peu plus que deux pages en
+    // 12 pt une fois les coupes faites sur des fins de phrase.
+    const recitDe = (phrases: number) => {
+      const liste = Array.from({ length: phrases }, (_, i) => phrase(`le lieu ${i}`));
+      const paragraphes: string[] = [];
+      for (let i = 0; i < liste.length; i += 3) paragraphes.push(liste.slice(i, i + 3).join(""));
+      return paragraphes.join("\n\n");
+    };
+
+    it("serre le récit en 11 pt plutôt que de lui ajouter des pages", () => {
+      const recit = recitDe(14);
+      const jours = M.composerJours([etape(recit, [])]);
+      expect(jours).toHaveLength(2);
+      expect(jours.map((j) => j["taille_texte"])).toEqual(["serre", "serre"]);
+      expect(normal(texteDes(jours))).toBe(normal(recit));
+    });
+
+    it("ne serre pas un récit qui tient déjà, ni un qui dépasse de plus de 8 %", () => {
+      for (const phrases of [12, 17]) {
+        const jours = M.composerJours([etape(recitDe(phrases), [])]);
+        expect(jours.every((j) => j["taille_texte"] === undefined)).toBe(true);
+      }
+    });
+
+    it("passe en 13 pt une étape trop courte pour remplir ses pages, sans photo pour combler", () => {
+      const court = M.composerJours([etape(paragrapheDe("la plage", 2), [])]);
+      expect(court.every((j) => j["taille_texte"] === "ample")).toBe(true);
+      // Une photo remplit la page : le corps ne bouge pas.
+      const illustre = M.composerJours([etape(paragrapheDe("la plage", 2), [photo("a")])]);
+      expect(illustre.every((j) => j["taille_texte"] === undefined)).toBe(true);
+    });
+  });
+
   describe("habillage et décors (décisions du 12/10/2026)", () => {
     const doubles = (jours: Jour[], pagesAvant = 1) => {
       const liste: Jour[][] = [];

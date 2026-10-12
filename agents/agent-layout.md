@@ -87,7 +87,9 @@ Les deux autres fichiers à connaître :
   couleur s'écrit (« en bleu », « à l'orange ») : consignes de coloriage,
   légendes, renvois à la carte. Une photocopie, une impression en noir et blanc
   ou un lecteur daltonien ne doivent rien perdre
-- Respecter les marges d'impression : le contenu reste dans les 30 pt de marge
+- Respecter les marges d'impression : 30 pt en haut et en bas ; sur les côtés,
+  **15 mm côté pli et 10 mm à l'extérieur** (marges miroir, Hugo, 12/10/2026).
+  Le gabarit les pose seul d'après la place de la page dans le livre
 
 ## Étapes et chapitres
 Une entrée de `days[]` est une **étape**, pas une page : une étape peut occuper
@@ -121,11 +123,22 @@ l'accepte** :
 | Le récit de la page fait | Layouts possibles |
 |---|---|
 | sous 200 | `layout_hero_top` (1 photo), `layout_chapter_map` (une carte), `layout_photo_page` (≥ 3 photos, le récit passe en légende) |
-| jusqu'à 240 | + `layout_split_left` **avec** un fun fact |
-| jusqu'à 380 | + `layout_hero_top`, `layout_chapter_map` avec deux photos |
-| jusqu'à 420, 2 paragraphes | + `layout_trio_portrait` / `layout_trio_landscape` (3 photos), **page de suite seulement** |
-| jusqu'à 560 | + `layout_story_*`, `layout_collage`, `layout_split_left` sans fun fact |
-| jusqu'à 880 | uniquement une **page de suite** : `title` vide, pas de `day_intro` |
+| jusqu'à 230 | + `layout_split_left` **avec** un fun fact |
+| jusqu'à 300 | + `layout_chapter_map` avec deux photos |
+| jusqu'à 380 | + `layout_hero_top` |
+| jusqu'à 410, 2 paragraphes | + `layout_trio_portrait` / `layout_trio_landscape` (3 photos), **page de suite seulement** |
+| jusqu'à 540 | + `layout_story_*`, `layout_collage`, `layout_split_left` sans fun fact |
+| jusqu'à 860 | uniquement une **page de suite** : `title` vide, pas de `day_intro` |
+
+Ces plafonds sont ceux de la colonne de 349 pt (marges de reliure, recalibrés
+le 12/10/2026). Le barème S / M / L / XL ci-dessus reste la cible de
+rédaction ; ce sont eux qui décident des coupes.
+
+**Le corps se règle d'un point** (`taille_texte`, sur toutes les pages de
+récit de l'étape) : `serre` (11 pt) quand le récit dépasse de 8 % au plus ce
+que ses pages tiennent — il évite une page de plus, et chaque plafond monte de
+8 % ; `ample` (13 pt) quand chaque page de récit est remplie à moins de 45 %,
+sans photo, sans encart ni carte pour combler. Sinon, rien : 12 pt.
 
 **La structure d'une étape** (LAYOUT_KB § « Structure d'une étape », Hugo,
 12/10/2026) — à tenir en plus du barème :
@@ -263,7 +276,7 @@ produit pas** — et l'app ne devrait pas les proposer.
 |---|---|
 | **Pointillés** (ON/OFF, ON par défaut) | Un booléen dans le payload, qui éteint la réglure `.mb-note__rules`. Le rythme vertical, lui, ne change pas |
 | **Quatre typographies** | Un champ par axe, branché sur `--mb-font-display`, `--mb-font-title`, `--mb-font-hand`, et un token d'encart à créer. Hansley est versionnée mais pas encore inlinée : le titre retombe sur la manuscrite |
-| **Zones libres** (ON/OFF, ON par défaut) | Une zone blanche en fin de chaque étape, pour écrire ou dessiner à la main, et trois pages blanches en fin de carnet |
+| **Zones libres** (ON/OFF, ON par défaut) | Les **trois pages réglées de fin de carnet** sont rendues (`pages_libres: 3`, posé par `bookSettings.ts` — l'agent n'a rien à faire). Reste à construire : une zone blanche en fin de chaque étape, pour écrire ou dessiner à la main |
 | **Mot fléché** (ON/OFF, ON par défaut) | Une grille générée au moment de la commande, à partir des mots que la rédaction tient déjà, et posée en fin de carnet |
 | **Quantité de décor** au-delà du scotch | Le rendu des stickers, absent de `index.html` malgré les classes CSS |
 | **Carte postale automatique** | Repoussée. Toujours demandée par deux foyers du panel sur trois : un layout recto-verso, photo pleine page d'un côté, message manuscrit, timbre et adresse de l'autre |

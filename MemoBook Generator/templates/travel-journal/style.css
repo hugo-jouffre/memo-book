@@ -23,7 +23,13 @@
      une feuille blanche derrière chaque page. `.page__content` le rend à sa
      marge, donc la colonne de texte n'en perd rien. */
   --mb-page-slack: 1pt;
+  /* Marges : 30 pt en haut et en bas ; sur les côtés, plus large côté
+     reliure, où la page s'enfonce dans le pli (Hugo, 12/10/2026 : environ
+     15 mm côté pli, 10 mm à l'extérieur). La colonne fait 349,2 pt de large
+     sur toutes les pages : seule sa place change d'une page à l'autre. */
   --mb-margin: 30pt;
+  --mb-margin-int: 42.5pt;
+  --mb-margin-ext: 28.3pt;
 
   /* --- Couleurs ----------------------------------------------------------- */
   --mb-ink: #0033a0;                       /* encre manuscrite bleue */
@@ -213,10 +219,16 @@ li { margin: 0; }
 }
 
 /* La marge de droite et celle du bas rendent le point de jeu que la page a
-   perdu (voir `.page`). La colonne garde ainsi exactement ses 360 × 535 pt, à
-   la même place sur la feuille : le jeu appartient à la marge, pas au texte.
+   perdu (voir `.page`). La colonne garde ainsi exactement ses 349,2 × 535 pt,
+   à la même place sur la feuille : le jeu appartient à la marge, pas au texte.
    Sans cette compensation, un point de colonne en moins suffit à renvoyer des
-   mots à la ligne — 13 lignes sur 317 dans les jeux de référence. */
+   mots à la ligne — 13 lignes sur 317 dans les jeux de référence.
+
+   Marges miroir : une page de droite (recto, le colophon est la page 1) a le
+   pli à sa gauche, une page de gauche (verso) à sa droite. Le gabarit pose
+   `page--gauche` sur les pages paires ; toute autre page est traitée en page
+   de droite, ce qui ne change pas la largeur de la colonne — le calibrage des
+   capacités vaut pour les deux côtés. */
 .page__content {
   position: absolute;
   inset: 0;
@@ -225,10 +237,14 @@ li { margin: 0; }
   flex-direction: column;
   padding:
     var(--mb-margin)
+    calc(var(--mb-margin-ext) - var(--mb-page-slack))
     calc(var(--mb-margin) - var(--mb-page-slack))
-    calc(var(--mb-margin) - var(--mb-page-slack))
-    var(--mb-margin);
+    var(--mb-margin-int);
   pointer-events: none;
+}
+.page--gauche .page__content {
+  padding-left: var(--mb-margin-ext);
+  padding-right: calc(var(--mb-margin-int) - var(--mb-page-slack));
 }
 
 /* Seuls les composants interceptent le clic ; les conteneurs qui les portent le
@@ -318,6 +334,18 @@ li { margin: 0; }
   height: 0;
   margin-bottom: calc(var(--mb-line) - 0.7pt);
   border-bottom: 0.7pt dashed var(--mb-rule);
+}
+
+/* Corps ajusté d'un point (`day.taille_texte`). L'interligne et la réglure
+   suivent : `--mb-line` est calculé là où il est déclaré, il faut donc le
+   redéclarer avec le corps. 40 lignes de réglure suffisent au 11 pt. */
+.page--serre .mb-note {
+  --mb-body-size: 11pt;
+  --mb-line: calc(11pt * var(--mb-body-lh));
+}
+.page--ample .mb-note {
+  --mb-body-size: 13pt;
+  --mb-line: calc(13pt * var(--mb-body-lh));
 }
 
 /* Le texte passe au-dessus de la réglure. */
@@ -1055,7 +1083,12 @@ li { margin: 0; }
   display: flex;
   flex-direction: column;
   gap: 5pt;
-  padding: 14pt;
+  /* 14 pt au bord, plus l'écart des marges côté pli : une photo ne s'y perd
+     pas. */
+  padding: 14pt 14pt 14pt calc(14pt + var(--mb-margin-int) - var(--mb-margin-ext));
+}
+.page--gauche .mb-photowall:not(.mb-photowall--libre) {
+  padding: 14pt calc(14pt + var(--mb-margin-int) - var(--mb-margin-ext)) 14pt 14pt;
 }
 
 .mb-photowall__row {
@@ -1223,10 +1256,11 @@ li { margin: 0; }
   position: absolute;
   /* Calée sur la marge, donc sur la feuille : elle rend le point de jeu,
      comme `.page__content`. */
-  right: calc(var(--mb-margin) - var(--mb-page-slack));
+  right: calc(var(--mb-margin-ext) - var(--mb-page-slack));
   bottom: calc(12pt - var(--mb-page-slack));
   z-index: 3;
 }
+.page--gauche .mb-ai-note--page { right: calc(var(--mb-margin-int) - var(--mb-page-slack)); }
 
 /* --- Ouverture de chapitre : la carte tient la page ------------------------ */
 .mb-chapter {

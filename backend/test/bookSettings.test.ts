@@ -6,7 +6,7 @@ import { renderTemplateToHtml } from "../src/services/bookPdf.js";
  * Les réglages de personnalisation appliqués au payload du carnet de l'app
  * (`services/bookSettings.ts`) — les mêmes que l'atelier applique au sien.
  */
-const reglages = { photoTextRatio: 50, rulesEnabled: true, decorationQuota: 2 };
+const reglages = { photoTextRatio: 50, rulesEnabled: true, decorationQuota: 2, freeZonesEnabled: true };
 const photo = "https://exemple.test/a.jpg";
 const payload = {
   book_title: "Carnet",
@@ -25,6 +25,13 @@ describe("réglages du carnet de l'app", () => {
       rules_enabled: false,
       decoration_quota: 0,
     });
+  });
+
+  it("ajoute trois pages libres en fin de carnet quand « Zones libres » est allumé", () => {
+    expect(applyBookSettings(payload, reglages)["pages_libres"]).toBe(3);
+    expect(applyBookSettings(payload, { ...reglages, freeZonesEnabled: false })["pages_libres"]).toBe(0);
+    const html = renderTemplateToHtml({ payload: applyBookSettings(payload, reglages), profile: "print" });
+    expect(html.match(/class="page page--libre/g)).toHaveLength(3);
   });
 
   it("garde les photos tant que le ratio n'est pas à 0 %", () => {

@@ -272,9 +272,11 @@ textes » et § « Structure d'une étape » :
 
 1. **Le récit se découpe en pages.** Paragraphes de 379 signes au plus (taille
    S), coupés sur une fin de phrase, ou sur une virgule quand un vocal enchaîne
-   sans point. La première page, qui porte le bandeau, tient 560 signes et
-   2 paragraphes ; chaque page de suite, sans bandeau ni titre, 880 signes et
-   4 paragraphes. Le récit se répartit à parts égales sur ses pages, à la
+   sans point. La première page, qui porte le bandeau, tient 540 signes et
+   2 paragraphes ; chaque page de suite, sans bandeau ni titre, 860 signes et
+   4 paragraphes (colonne de 349 pt, marges de reliure). Un récit qui dépasse
+   de 8 % au plus passe en 11 pt plutôt que de prendre une page de plus ; une
+   étape trop courte pour ses pages, sans photo, passe en 13 pt. Le récit se répartit à parts égales sur ses pages, à la
    mesure de ce que chacune tient.
 2. **L'étape a un nombre de pages pair, et son texte n'est jamais coupé** :
    les pages de photos seules viennent toujours après le récit. Deux
