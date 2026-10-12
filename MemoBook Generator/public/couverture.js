@@ -182,7 +182,9 @@
       couvertures +
       1 + // le colophon
       (payload.intro_text ? 1 : 0) +
+      (payload.pages_libres_avant || 0) +
       (payload.days?.length || 0) +
+      (payload.pages_libres || 0) +
       (payload.page_blanche_finale ? 1 : 0)
     );
   }

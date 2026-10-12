@@ -8,6 +8,7 @@ import {
   STEP_SIZES,
   groupSteps,
   pageCapacity,
+  pagesAvantEtapes,
   validatePayload,
   type ValidationIssue,
 } from "./payloadValidator.js";
@@ -200,6 +201,16 @@ function splitAt(text: string, max: number): [string, string] {
 
   if (coupe <= 0) return [text.slice(0, max), text.slice(max).trim()];
   return [text.slice(0, coupe).trim(), text.slice(coupe).trim()];
+}
+
+/**
+ * Une étape commence toujours sur une page de gauche : quand le colophon et
+ * l'introduction font un nombre pair de pages, une page libre les complète.
+ */
+export function premiereEtapeAGauche(payload: BookPayload): BookPayload {
+  const sans = { ...payload };
+  delete sans["pages_libres_avant"];
+  return pagesAvantEtapes(sans) % 2 === 0 ? { ...sans, pages_libres_avant: 1 } : sans;
 }
 
 /** Combien de photos chaque layout montre : au-delà, elles ne sont pas dessinées. */

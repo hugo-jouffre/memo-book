@@ -253,6 +253,8 @@ function chargerBoites() {
 }
 
 const etat = {
+  /** Les messages de la mise en page déjà portés au journal visible (fun facts, photos écartées). */
+  rapportsCarnet: new Set(),
   /**
    * Les réglages de personnalisation de l'app, avec ses défauts
    * (`reglagesDuCarnet`) : `funFacts` (« Insérer des Fun facts »),
@@ -1516,7 +1518,12 @@ function etapesPourMiseEnPage(photoDe) {
         id: p.id,
         src: photoDe(p.data),
         format: p.largeur && p.hauteur ? p.largeur / p.hauteur : 0,
+        largeur: p.largeur || 0,
+        hauteur: p.hauteur || 0,
         groupe: Boolean(p.groupe),
+        // Netteté et exposition mesurées dans le navigateur (`mesurerPhoto`) :
+        // c'est d'elles que dépend l'ordre des photos écartées.
+        mesure: p.mesure || null,
       }))
       .filter((p) => p.src),
     analyse: etape.analyse?.cle === cleAnalyse(etape) ? etape.analyse.resultat : null,
@@ -1566,6 +1573,10 @@ function construirePayloadCarnet(photoDe = (data) => data, { imprimeur = Boolean
   const reglages = reglagesDuCarnet();
   // Ratio à 0 % : les photos sortent avant la composition, le récit prend leur place.
   const etapes = etapesPourMiseEnPage(photoDe).map((e) => (reglages.photoTextRatio > 0 ? e : { ...e, photos: [] }));
+  // Le colophon, puis l'introduction s'il y en a une (l'atelier n'en écrit pas).
+  const intro = "";
+  const avant = 1 + (intro ? 1 : 0);
+  const libresAvant = avant % 2 === 0 ? 1 : 0;
   // La même photo que sur la couverture imprimée : le carnet s'ouvre sur ce
   // qu'on a vu en le prenant en main.
   const couverture = photoDeCouverture();
@@ -1583,7 +1594,10 @@ function construirePayloadCarnet(photoDe = (data) => data, { imprimeur = Boolean
     brand_name: "MemoBook",
     year: String(new Date().getFullYear()),
     footer_tagline: "Racontez. Revivez. Partagez.",
-    intro_text: "",
+    intro_text: intro,
+    // Une étape commence toujours sur une page de gauche : le colophon (page 1,
+    // à droite) et l'introduction doivent faire un nombre impair de pages.
+    pages_libres_avant: libresAvant,
     // Les pages d'étape : récit réparti sur ses pages, photos auprès du passage
     // qu'elles illustrent, chapitres sur une carte, doubles pages variées.
     // Voir `mise-en-page.js` et LAYOUT_KB.
@@ -1594,14 +1608,15 @@ function construirePayloadCarnet(photoDe = (data) => data, { imprimeur = Boolean
       dessinerCarte: etat.contoursCarte ? dessinerCarteChapitre : null,
       // Le colophon est la page 1 du livre imprimé : la première page d'étape
       // est à gauche.
-      pagesAvant: 1,
+      pagesAvant: avant + libresAvant,
       funFacts: reglages.funFactsEnabled,
       journal: (texte) => {
         debugCarnet(texte);
-        // Pourquoi un fun fact manque : dans le journal visible, une fois —
-        // le payload se recompose souvent (nombre de pages, couverture).
-        if (/^fun facts non imprimés/.test(texte) && texte !== etat.rapportFunFacts) {
-          etat.rapportFunFacts = texte;
+        // Pourquoi un fun fact manque, quelles photos sont écartées : dans le
+        // journal visible, une fois — le payload se recompose souvent (nombre
+        // de pages, couverture).
+        if (/^(fun facts non imprimés|photo\(s\) écartée\(s\))/.test(texte) && !etat.rapportsCarnet.has(texte)) {
+          etat.rapportsCarnet.add(texte);
           noter(texte);
         }
       },
@@ -2399,6 +2414,17 @@ function dessinerCarteChapitre(requete) {
 async function preparerMiseEnPage(statut) {
   await Promise.all([analyserEtapes(statut), chargerContoursCarte()]);
   await chargerContoursDetail();
+  // La netteté et l'exposition de chaque photo : quand une étape en a trop,
+  // les floues et les sombres sont écartées les premières.
+  const aMesurer = photosDesEtapes().filter((p) => p.data && !p.mesure);
+  for (const [i, p] of aMesurer.entries()) {
+    statut(`Mesure des photos… ${i + 1} / ${aMesurer.length}`);
+    try {
+      await mesurerPhoto(p);
+    } catch (erreur) {
+      debugCarnet("photo illisible pour la mesure", erreur);
+    }
+  }
 }
 
 async function genererCarnet(bouton) {

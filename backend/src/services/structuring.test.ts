@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { validatePayload } from "./payloadValidator.js";
 import {
   completerEtapesImpaires,
+  premiereEtapeAGauche,
   groupEntriesByDay,
   HeuristicStructurer,
   pickLayout,
@@ -232,6 +233,13 @@ describe("completerEtapesImpaires", () => {
     expect(completerEtapesImpaires(paire)).toHaveLength(2);
     const seule = [{ title: "Jour 1", day_intro: { day_number: "01" }, body_html: "<p>Récit.</p>", layout_story_opener: true }];
     expect(completerEtapesImpaires(seule)).toHaveLength(1);
+  });
+});
+
+describe("premiereEtapeAGauche", () => {
+  it("pose une page libre quand le colophon et l'introduction font un nombre pair de pages", () => {
+    expect(premiereEtapeAGauche({ book_title: "x", intro_text: "<p>Intro.</p>", days: [] })).toMatchObject({ pages_libres_avant: 1 });
+    expect(premiereEtapeAGauche({ book_title: "x", days: [] })["pages_libres_avant"]).toBeUndefined();
   });
 });
 

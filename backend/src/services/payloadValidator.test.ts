@@ -129,6 +129,14 @@ describe("validatePayload — règles éditoriales de LAYOUT_KB", () => {
     expect(result.valid).toBe(true);
   });
 
+  it("avertit quand la première étape commencerait sur une page de droite", () => {
+    const jour = { title: "Jour 1", day_intro: { day_number: "01" }, body_html: RECIT_S, layout_story_opener: true };
+    const avecIntro = validatePayload({ book_title: "Carnet", intro_text: "<p>Intro.</p>", days: [jour] });
+    expect(avecIntro.warnings.map((w) => w.message).join(" ")).toContain("page de droite");
+    const corrige = validatePayload({ book_title: "Carnet", intro_text: "<p>Intro.</p>", pages_libres_avant: 1, days: [jour] });
+    expect(corrige.warnings.map((w) => w.message).join(" ")).not.toContain("page de droite");
+  });
+
   it("refuse un récit coupé par une page de photos, et signale une étape au nombre de pages impair", () => {
     const photos = ["a", "b", "c"].map((id) => `https://exemple.test/${id}.jpg`);
     const page = (day: Record<string, unknown>) => ({ title: "", body_html: "<p>Un passage du récit.</p>", ...day });

@@ -1003,6 +1003,20 @@ li { margin: 0; }
 
 .mb-card--postit .mb-card__tape { top: -7pt; left: 50%; margin-left: -23pt; transform: rotate(2deg); }
 
+/* Page libre : la réglure sur toute la hauteur, rien d'autre. */
+.mb-note--libre { flex: 1 1 auto; }
+
+/* Photo en pleine page, bord à bord : elle couvre toute la feuille, jeu
+   compris, sans cadre ni ombre. */
+.mb-pleine-page { position: absolute; inset: 0; z-index: 2; }
+.mb-pleine-page .mb-photo--pleine-page {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  box-shadow: none;
+  transform: none;
+}
+
 /* Page d'album : une ou deux photos en fin d'étape, inclinées, le tracé
    pointillé entre elles. */
 .mb-photowall--libre { display: block; }

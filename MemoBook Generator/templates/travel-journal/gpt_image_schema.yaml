@@ -123,6 +123,14 @@ properties:
           `0` : ni tracé pointillé du voyage, ni scotch, ni sticker. Les
           autres valeurs laissent les décors du gabarit tels quels — seul le
           tracé est rendu aujourd'hui.
+      pages_libres_avant:
+        type: integer
+        minimum: 0
+        maximum: 1
+        description: >
+          Pages libres, réglées, posées après le colophon et l'introduction pour
+          que la première étape commence sur une page de gauche : 1 quand le
+          colophon et l'introduction font un nombre pair de pages.
       sans_couvertures:
         type: boolean
         description: >
@@ -188,6 +196,12 @@ $defs:
         description: >
           Étiquette manuscrite posée en haut de page (« Top départ », « Paliton Beach »).
           Trois mots maximum, sinon elle déborde de sa forme.
+      pleine_page:
+        type: boolean
+        description: >
+          Sur un `layout_photo_page` à une photo : la photo en pleine page, bord
+          à bord, sans cadre. Une fois par chapitre au plus, pour une photo
+          notée 9 et plus, assez définie pour la page.
       layout_photo_page:
         type: boolean
         description: >
