@@ -102,6 +102,10 @@ const LAYOUTS: Config[] = [
   { flag: "layout_split_left", photos: 2, funFact: false, suite: true, note: "PAGE DE SUITE, sans bandeau" },
   { flag: "layout_hero_top", photos: 1, funFact: false, suite: true, note: "PAGE DE SUITE, sans bandeau" },
   { flag: "layout_chapter_map", photos: 2, funFact: false, suite: true, note: "PAGE DE SUITE, sans bandeau" },
+  { flag: "layout_recit_photo", photos: 1, funFact: false, note: "récit autour d'une grande photo" },
+  { flag: "layout_recit_photo", photos: 1, funFact: true, note: "récit autour d'une grande photo + post-it" },
+  { flag: "layout_recit_photo", photos: 1, funFact: false, suite: true, note: "PAGE DE SUITE, récit autour d'une grande photo" },
+  { flag: "layout_recit_photo", photos: 1, funFact: true, suite: true, note: "PAGE DE SUITE, récit autour d'une grande photo + post-it" },
   { flag: "layout_trio_portrait", photos: 3, funFact: false, suite: true, note: "PAGE DE SUITE, trio portrait" },
   { flag: "layout_trio_landscape", photos: 3, funFact: false, suite: true, note: "PAGE DE SUITE, trio paysage" },
 ];

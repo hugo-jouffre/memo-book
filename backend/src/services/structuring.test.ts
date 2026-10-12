@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { validatePayload } from "./payloadValidator.js";
 import {
+  completerEtapesImpaires,
   groupEntriesByDay,
   HeuristicStructurer,
   pickLayout,
@@ -208,6 +209,29 @@ describe("HeuristicStructurer", () => {
 
     expect(payload["intro_title"]).toBeUndefined();
     expect(payload["intro_text"]).toBeUndefined();
+  });
+});
+
+describe("completerEtapesImpaires", () => {
+  const photos = ["a", "b", "c", "d"].map((id) => `https://exemple.test/${id}.jpg`);
+
+  it("ajoute en fin d'étape une page des photos que la première page ne montre pas", () => {
+    const days = completerEtapesImpaires([
+      { title: "Jour 1", day_intro: { day_number: "01" }, body_html: "<p>Récit.</p>", photos, layout_split_left: true },
+    ]);
+    expect(days).toHaveLength(2);
+    expect(days[0]!["photos"]).toEqual(photos.slice(0, 2));
+    expect(days[1]).toMatchObject({ layout_photo_page: true, photos: photos.slice(2) });
+  });
+
+  it("laisse une étape paire, ou sans photo de reste, telle quelle", () => {
+    const paire = [
+      { title: "Jour 1", day_intro: { day_number: "01" }, body_html: "<p>Récit.</p>", photos, layout_collage: true },
+      { title: "", body_html: "<p>Suite.</p>", layout_story_facts: true },
+    ];
+    expect(completerEtapesImpaires(paire)).toHaveLength(2);
+    const seule = [{ title: "Jour 1", day_intro: { day_number: "01" }, body_html: "<p>Récit.</p>", layout_story_opener: true }];
+    expect(completerEtapesImpaires(seule)).toHaveLength(1);
   });
 });
 

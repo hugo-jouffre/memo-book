@@ -6,6 +6,7 @@ import { loadLayoutKnowledgeBase, loadPayloadSchema } from "../lib/templates.js"
 import {
   EDITORIAL_LIMITS,
   STEP_SIZES,
+  groupSteps,
   pageCapacity,
   validatePayload,
   type ValidationIssue,
@@ -201,6 +202,40 @@ function splitAt(text: string, max: number): [string, string] {
   return [text.slice(0, coupe).trim(), text.slice(coupe).trim()];
 }
 
+/** Combien de photos chaque layout montre : au-delà, elles ne sont pas dessinées. */
+const PHOTOS_MONTREES: Readonly<Record<string, number>> = {
+  layout_hero_top: 1,
+  layout_split_left: 2,
+  layout_collage: 3,
+  layout_photo_page: 5,
+  layout_story_opener: 1,
+  layout_story_facts: 1,
+};
+
+/**
+ * Une étape compte un nombre de pages pair, et ses pages de photos seules
+ * viennent après son récit (LAYOUT_KB § « Structure d'une étape »). Le repli
+ * déterministe pose toutes les photos sur la première page : à une étape au
+ * nombre de pages impair, on ajoute une page de photos à la fin avec celles
+ * que la première page ne montre pas. Sans photo de reste, l'étape reste
+ * impaire — le validateur le signale.
+ */
+export function completerEtapesImpaires(days: Record<string, unknown>[]): Record<string, unknown>[] {
+  const sortie: Record<string, unknown>[] = [];
+  for (const etape of groupSteps(days)) {
+    sortie.push(...etape.days);
+    if (etape.days.length % 2 === 0) continue;
+    const premiere = etape.days[0] as Record<string, unknown>;
+    const photos = Array.isArray(premiere["photos"]) ? (premiere["photos"] as unknown[]) : [];
+    const layout = Object.keys(premiere).find((cle) => cle.startsWith("layout_") && premiere[cle] === true) ?? "";
+    const reste = photos.slice(PHOTOS_MONTREES[layout] ?? 1, (PHOTOS_MONTREES[layout] ?? 1) + 5);
+    if (!reste.length) continue;
+    premiere["photos"] = photos.slice(0, PHOTOS_MONTREES[layout] ?? 1);
+    sortie.push({ title: "", body_html: "", photos: reste, layout_photo_page: true });
+  }
+  return sortie;
+}
+
 /**
  * Structuration déterministe : une journée par date, un layout par heuristique,
  * aucun appel réseau. C'est ce que le smoke test et la CI utilisent, et c'est
@@ -286,7 +321,7 @@ export class HeuristicStructurer implements Structurer {
       authors: input.authors ?? "",
       date_range: formatDateRange(groups),
       brand_name: "MemoBook",
-      days,
+      days: completerEtapesImpaires(days),
     };
 
     if (input.subtitle) payload["book_subtitle"] = input.subtitle;

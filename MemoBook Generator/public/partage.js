@@ -208,6 +208,7 @@ Les photos de l'étape suivent, chacune précédée de son identifiant (${ids ||
    - "paragraphe" : le numéro du paragraphe dont la photo illustre le contenu — la plage pour le passage sur la plage, le plat pour le passage sur le restaurant. Juge sur ce que montre la photo et ce que raconte le texte, pas sur l'ordre des photos. null si aucun paragraphe ne s'y rattache ;
    - "scene" : un court libellé du lieu de prise de vue, identique pour toutes les photos prises au même endroit, devant le même arrière-plan (« terrasse du restaurant au port », « plage de sable blanc », « ruelle blanchie à la chaux »). Deux photos d'un même lieu portent exactement le même libellé ;
    - "sujet" : ce que montre la photo, en quelques mots ;
+   - "legende" : une étiquette de titre à poser sur la photo, comme on l'écrirait dans un carnet — un nom de lieu ou de moment, 30 signes au plus (« Rizières de Banaue », « Coucher de soleil à Oia »). Seulement si le récit ou la photo le dit clairement ; sinon une chaîne vide ;
    - "personnes" : le nombre de personnes dont on voit le visage ;
    - "couverture" : de 0 à 10, ce que vaudrait la photo en couverture du carnet. 8 et plus pour un paysage marquant du voyage ou une belle photo où l'on voit les voyageurs, nette, lumineuse, bien cadrée. Sous 4 : un plat, un document, un intérieur sombre, une photo floue ou de travers, un détail sans contexte.
 
@@ -224,7 +225,7 @@ Les photos de l'étape suivent, chacune précédée de son identifiant (${ids ||
    "funFact" vaut null s'il n'y a rien de sûr et de pertinent : c'est un résultat normal.
 
 Réponds uniquement par un objet JSON, sans texte autour :
-{"lieu":{"nom":"","pays":"","lat":0,"lon":0,"genre":"ville"},"lieux":[{"nom":"","pays":"","lat":0,"lon":0,"genre":"site"}],"trajets":[{"depart":{"nom":"","pays":"","lat":0,"lon":0},"arrivee":{"nom":"","pays":"","lat":0,"lon":0},"mode":"avion"}],"photos":[{"id":"","paragraphe":0,"scene":"","sujet":"","personnes":0,"couverture":0}],"funFact":{"texte":"","titre":"Fun fact","registre":"","paragraphe":0,"pertinence":0}}`;
+{"lieu":{"nom":"","pays":"","lat":0,"lon":0,"genre":"ville"},"lieux":[{"nom":"","pays":"","lat":0,"lon":0,"genre":"site"}],"trajets":[{"depart":{"nom":"","pays":"","lat":0,"lon":0},"arrivee":{"nom":"","pays":"","lat":0,"lon":0},"mode":"avion"}],"photos":[{"id":"","paragraphe":0,"scene":"","sujet":"","legende":"","personnes":0,"couverture":0}],"funFact":{"texte":"","titre":"Fun fact","registre":"","paragraphe":0,"pertinence":0}}`;
   }
 
   /**

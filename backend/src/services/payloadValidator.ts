@@ -97,6 +97,9 @@ export const LAYOUT_CAPACITY: Readonly<Record<string, { bandeau: number; suite: 
   layout_story_facts: { bandeau: 560, suite: 880 },
   // Pages de suite seulement : sous un bandeau, les trois photos n'ont plus
   // leur hauteur (mesuré le 08/10/2026 : 440 signes en deux paragraphes).
+  // Le récit qui contourne une grande photo (maquette faite à la main) : la
+  // capacité ordinaire ; avec le post-it « Infos », 800 en page de suite.
+  layout_recit_photo: { bandeau: 560, suite: 880 },
   layout_trio_portrait: { bandeau: 0, suite: 420 },
   layout_trio_landscape: { bandeau: 0, suite: 420 },
 };
@@ -154,7 +157,7 @@ export function carriedByImage(day: Record<string, unknown>): boolean {
     .filter(([key, value]) => key.startsWith("layout_") && value === true)
     .map(([key]) => key)[0];
 
-  if (layout === "layout_photo_page") return photos >= 3;
+  if (layout === "layout_photo_page") return photos >= 1;
   if (layout === "layout_hero_top") return photos >= 1;
   if (layout === "layout_chapter_map") return Boolean(day["map"] ?? day["map_svg"]);
   return false;
@@ -251,6 +254,8 @@ export function pageCapacity(day: Record<string, unknown>): number {
     capacity = funFact ? 120 : suite ? 500 : 320;
   } else if (layout === "layout_split_left" && funFact) {
     capacity = 240;
+  } else if (layout === "layout_recit_photo" && funFact && suite) {
+    capacity = 800;
   }
 
   const parDefaut = layout === "layout_story_opener" || layout === "layout_story_facts";
@@ -307,6 +312,31 @@ function checkStep(
   const recit = step.days.filter((day) => mainLayout(day) !== "layout_photo_page");
   const chars = recit.reduce((total, day) => total + bodyLength(day), 0);
   const at = `days[${step.start}]`;
+
+  // Le récit d'une étape se lit d'un seul tenant : ses pages de photos seules
+  // viennent après lui, jamais entre deux de ses pages (LAYOUT_KB § « Structure
+  // d'une étape »).
+  const premierePlanche = step.days.findIndex((day) => mainLayout(day) === "layout_photo_page");
+  const recitApres =
+    premierePlanche >= 0
+      ? step.days.slice(premierePlanche).findIndex((day) => mainLayout(day) !== "layout_photo_page")
+      : -1;
+  if (recitApres >= 0) {
+    errors.push({
+      path: `days[${step.start + premierePlanche + recitApres}]`,
+      message:
+        "page de récit après une page de photos de la même étape : le récit est coupé. " +
+        "Les pages de photos seules vont à la fin de l'étape.",
+    });
+  }
+  if (step.days.length % 2 === 1) {
+    warnings.push({
+      path: at,
+      message:
+        `${step.days.length} page(s) pour cette étape, un nombre impair. Une étape compte un nombre de ` +
+        "pages pair : répartis le récit sur une page de plus, ou ajoute une page de photos à la fin.",
+    });
+  }
 
   for (const [offset, day] of step.days.entries()) {
     const index = step.start + offset;

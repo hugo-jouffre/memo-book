@@ -381,7 +381,8 @@ tranche : le premier actif l'emporte.
 | `layout_collage` | Récit pleine largeur puis 2 ou 3 photos inclinées en bas | Journée dense visuellement | 2–3 | S, M |
 | `layout_trio_portrait` | **Page de suite seulement.** Récit court en tête, réglure prolongée jusqu'aux photos, puis trois photos en cascade : une portrait en haut, deux portraits en bas qui la chevauchent à peine, tracé pointillé derrière | Fin d'étape courte avec trois photos en portrait | 3 | sous S, S partiel — **420 en 2 paragraphes** |
 | `layout_trio_landscape` | Le même, avec une **photo paysage en haut** (format 1,6) ; les deux du bas restent des portraits | Fin d'étape courte avec une paysage et deux portraits | 3 | idem |
-| `layout_photo_page` | **Page pleine de photos**, sans récit ni bandeau. `title` devient une légende manuscrite en bas | Étape très visuelle. En placer régulièrement — mais **jamais deux de suite**, voir § « La répartition sur une étape à plusieurs pages » | 3–5 | aucune — le récit n'est pas rendu |
+| `layout_recit_photo` | **Maquette faite à la main (Banaue).** Quelques lignes pleine largeur, puis le récit en colonne à gauche d'une grande photo en hauteur qui flotte à droite, inclinée, avec son **étiquette de titre** (`label`). Un fun fact devient un **post-it « Infos »** en bas à gauche | Une page à une photo en portrait (format < 0,77) — bandeau ou suite | 1 | S, M ; 800 en page de suite avec le post-it |
+| `layout_photo_page` | **Page de photos seules**, sans récit ni bandeau. De 3 à 5, une planche bord à bord ; 1 ou 2, une page d'album (tirages inclinés, tracé pointillé). `title` devient une légende manuscrite en bas | **Toujours en fin d'étape**, après le récit — voir § « Structure d'une étape » | 1–5 | aucune — le récit n'est pas rendu |
 | *(par défaut)* | Récit, puis carte info et photo flottantes en bas de page | Ouverture de journée, cas le plus courant | 0–1 | S, M |
 
 Les tailles exactes, et le plafond mesuré de chaque configuration, sont en
@@ -480,6 +481,7 @@ relancer le script.
 | `layout_split_left` + fun fact | 240 | sous S, S partiel |
 | `layout_chapter_map` + ≥ 2 photos, sans fun fact | 320 | sous S, S partiel |
 | `layout_hero_top` | 380 | sous S, S |
+| `layout_recit_photo` avec le post-it « Infos », page de suite | 800 | S, M |
 | `layout_trio_portrait`, `layout_trio_landscape` — page de suite seulement | 420, **2 paragraphes** | sous S, S partiel |
 | `layout_story_*`, `layout_collage`, `layout_split_left` sans fun fact, `layout_chapter_map` sans photos | 560 | S, M |
 | `layout_story_*` portant un `prompt` | 760 | S, M |
@@ -530,53 +532,51 @@ consécutives de `days[]`** :
 C'est ce couple que le validateur reconnaît comme une étape unique : toute entrée
 sans `day_intro` prolonge la précédente.
 
-**On remplit la première page avant d'ouvrir la seconde.** Répartir 720
-caractères en 360 + 360 laisse deux pages à moitié pleines et un blanc au milieu
-de chacune ; 560 + 160 en laisse une pleine et une aérée, ce qui est le rythme
-d'un carnet. La coupe se fait sur une fin de phrase, jamais au milieu d'une idée.
+**Le récit se répartit à parts égales sur ses pages** (Hugo, 12/10/2026) :
+chaque page reçoit une part à la mesure de ce qu'elle tient — la colonne
+étroite d'une ouverture de chapitre en prend moins qu'une page de suite pleine
+largeur. Un récit qui dépassait à peine d'une page ne laisse plus une page pleine
+et une page presque vide (`repartirRecit`, atelier). La coupe se fait sur une
+fin de phrase, même un peu plus loin qu'une virgule ; jamais au milieu d'un mot.
 
-### La répartition sur une étape à plusieurs pages
+### Structure d'une étape
 
-Une étape qui couvre trois pages doit se lire comme **trois pages de carnet**,
-pas comme une page de texte suivie d'un album photo. C'est exactement ce qui
-arrivait : une étape à neuf photos sortait en une page de récit portant **une**
-image, puis deux planches de photos muettes à la suite. Le lecteur y voit deux
-objets différents collés l'un à l'autre, et le récit perd ses illustrations.
+Consignes de Hugo, 12/10/2026, après une étape sortie en « page de texte, page
+de photos, page de texte » sur trois pages :
 
-Trois règles, dans cet ordre de priorité.
+1. **Le texte d'une étape n'est jamais séparé.** Ses pages de récit se suivent ;
+   les pages de photos seules (`layout_photo_page`) viennent **toujours après le
+   texte**, jamais entre deux de ses pages. Le validateur le refuse.
+2. **Chaque étape a un nombre de pages pair** — une étape tient sur des doubles
+   pages. Le validateur avertit d'une étape impaire ; l'atelier ne laisse une
+   étape impaire que s'il n'a pas de quoi remplir une page de plus sans inventer
+   (une seule phrase, aucune photo).
+3. **Deux scénarios, en alternance** quand les deux donnent le même nombre de
+   pages :
+   - **A** — toutes les photos avec le texte, réparti à parts égales sur ses
+     pages ; pas de page de photos ;
+   - **B** — le texte avec une ou deux photos par page, puis une ou plusieurs
+     pages de photos en fin d'étape (deux à la suite forment une double page de
+     photos, ce qui est permis en fin d'étape).
 
-**1. Jamais deux `layout_photo_page` consécutifs.** Deux planches à la suite,
-c'est un album inséré au milieu du carnet : la respiration visuelle que ce
-gabarit apporte vient de ce qu'il **surprend**, et deux fois de suite il ne
-surprend plus. S'il reste assez de photos pour deux planches, c'est qu'elles
-devaient être réparties sur les pages de récit, ou que l'étape en porte plus que
-le carnet n'en demande — mieux vaut en laisser de côté qu'aligner les planches.
+   L'atelier alterne d'une étape à l'autre **dans la même situation** — récit
+   tenant sur une page, nombre de pages naturel impair, ou pair —, en
+   commençant par A (`structurerEtape`, `mise-en-page.js`).
+4. **Étape courte** (le récit tient sur une page) : la première fois, le récit se
+   partage sur **deux pages** (A) ; la fois suivante où la situation se
+   reproduit, tout le texte sur une page avec une ou deux photos, puis une page
+   « photos + stickers » (B) ; puis on alterne. Une étape courte sans photo
+   n'a que A.
 
-**2. Chaque page de récit prend ses photos avant qu'une planche s'ouvre.** Une
-page de récit en pose une à trois selon son gabarit ; on sert d'abord toutes les
-pages de récit de l'étape, et seule la **surabondance** va sur une planche. Garder
-les images pour la fin, c'est se retrouver avec un récit nu puis une pile
-d'images sans légende. Le cas à proscrire : **une page entièrement couverte de texte
-suivie d'une planche entièrement couverte de photos**. Deux pages qui mêlent
-chacune texte et images valent toujours mieux.
+**La page « photos + stickers ».** `layout_photo_page` accepte désormais une ou
+deux photos : une page d'album, les tirages inclinés et le tracé pointillé entre
+eux. Les stickers illustrés s'y poseront quand leur source sera décidée. De
+trois à cinq photos, c'est la planche bord à bord habituelle.
 
-**3. Le texte se répartit pour qu'aucune page de l'étape ne soit maigre.** La
-règle du « remplir la première d'abord » vaut tant qu'il reste de quoi tenir la
-suivante au-dessus du minimum de S. Trois pages à 400 caractères valent mieux
-que 560 + 560 + 80, où la dernière n'est qu'un reliquat.
-
-**Le cas qui a motivé ces règles.** L'étape du 22, neuf photos et 756 caractères,
-sortait ainsi :
-
-| | Rendu avant |
-|---|---|
-| page 1 | layout par défaut — récit entier, **1 photo** |
-| page 2 | `layout_photo_page` — 5 photos |
-| page 3 | `layout_photo_page` — 3 photos |
-
-Deux planches de suite, et huit photos sur neuf coupées du texte qu'elles
-illustrent. Ce qu'il fallait : deux pages de récit se partageant le texte **et**
-leurs photos, puis au plus une planche pour le surplus.
+**Ce qu'il faut éviter, par ordre de coût** : un nombre de pages impair ; une
+page de plus que nécessaire ; une page de récit sans photo quand l'étape en a ;
+une page de photos qui n'en porte qu'une (puis deux) ; un récit étiré d'une
+page pour une étape qui en a déjà deux ou plus — ce n'est qu'un recours.
 
 ### Associer les photos au récit
 
@@ -596,20 +596,17 @@ vignette de chaque photo, et rend, sans rien réécrire :
 | `photos[].paragraphe` | Le passage que la photo illustre : elle vise la page qui porte ce paragraphe |
 | `photos[].scene` | Le lieu de prise de vue, même libellé pour le même arrière-plan : ces photos restent ensemble |
 | `photos[].personnes` | Trois visages ou plus : photo de groupe, jamais rognée |
+| `photos[].legende` | L'étiquette de titre posée sur la photo de `layout_recit_photo` (« Rizières de Banaue »), 30 signes au plus ; à défaut, la `scene` si elle est assez courte |
 
 La répartition, dans cet ordre (`affecterPhotos`) :
 
 1. chaque groupe de scène vise la page que visent la majorité de ses photos,
    et ne se coupe que s'il dépasse ce qu'une page porte (deux ou trois photos) ;
 2. le surplus d'une page va d'abord sur la page de récit la plus proche qui a
-   de la place — la règle 2 ci-dessus : les pages de récit se servent avant
-   qu'une planche s'ouvre ;
-3. ce qui reste, à partir de trois photos, fait une planche posée **juste après
-   la page dont elles viennent** — à côté du passage qu'elles illustrent ;
-4. une ou deux photos sans place rejoignent la planche la plus proche ; sans
-   planche, les pages en cèdent pour en former une de trois, en gardant
-   chacune au moins une photo. Ce qui ne tient vraiment nulle part reste hors du
-   carnet, signalé — jamais deux planches de suite.
+   de la place ;
+3. ce qui reste va **en fin d'étape**, sur les pages de photos qui suivent le
+   récit, à parts égales, cinq au plus par page — § « Structure d'une étape ».
+   Aucune photo n'est perdue.
 
 Sans analyse (pas de clé de modèle, ou un échec), chaque photo vise la page qui
 correspond à son rang dans l'étape, et il n'y a pas de carte : le carnet se fait
@@ -903,6 +900,9 @@ cadre blanc), dans l'ordre où le gabarit lit `photos[]` :
 | `layout_hero_top` | 1 | 1,35 |
 | `layout_split_left`, `layout_collage` | 2 | 0,90 · 0,90 |
 | `layout_collage` | 3 | 0,56 · 0,56 · 0,56 |
+| `layout_recit_photo` | 1 | 0,51 |
+| `layout_photo_page` (page d'album) | 1 | 0,84 |
+| `layout_photo_page` (page d'album) | 2 | 0,96 · 0,96 |
 | `layout_trio_portrait` | 3 | 0,60 (haut) · 0,69 · 0,65 |
 | `layout_trio_landscape` | 3 | 1,60 (haut) · 0,64 · 0,64 |
 | `layout_photo_page` | 3 | 0,73 · 0,45 · 1,65 |

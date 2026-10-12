@@ -108,8 +108,9 @@
      Les cinq emplacements du carnet répétaient la même incantation, et deux
      d'entre eux l'avaient oubliée : la photo sortait en « [object Object] »
      dès qu'elle arrivait enrichie par l'analyse d'image.
-     `item` accepte une URL nue ou un objet {url, tape_corner, focus}. #}
-  {% macro mb_photo(item, modifier) %}<div class="mb-photo mb-photo--{{ modifier }}{% if item.fit == 'contain' %} mb-photo--contain{% endif %}{% if item.tape_corner and item.fit != 'contain' %} mb-photo--tape-{{ item.tape_corner }}{% endif %}">{% if item.tape_corner and item.fit != 'contain' %}<span class="mb-photo__tape"><svg viewBox="0 0 46 13" preserveAspectRatio="none"><use href="#mb-tape" /></svg></span>{% endif %}<img src="{{ item.url | default(item) }}" alt=""{% if item.focus %} style="object-position: {{ item.focus }}"{% endif %} /></div>{% endmacro %}
+     `item` accepte une URL nue ou un objet {url, tape_corner, focus, label}.
+     `label` : l'étiquette de titre posée sur la photo (« Rizières de Banaue »). #}
+  {% macro mb_photo(item, modifier) %}<div class="mb-photo mb-photo--{{ modifier }}{% if item.fit == 'contain' %} mb-photo--contain{% endif %}{% if item.tape_corner and item.fit != 'contain' %} mb-photo--tape-{{ item.tape_corner }}{% endif %}">{% if item.tape_corner and item.fit != 'contain' %}<span class="mb-photo__tape"><svg viewBox="0 0 46 13" preserveAspectRatio="none"><use href="#mb-tape" /></svg></span>{% endif %}<img src="{{ item.url | default(item) }}" alt=""{% if item.focus %} style="object-position: {{ item.focus }}"{% endif %} />{% if item.label %}<span class="mb-photo__label">{{ item.label }}</span>{% endif %}</div>{% endmacro %}
 
 
   {# Le tracé pointillé, dessiné derrière les photos d'une bande. `slot` vient
@@ -191,7 +192,7 @@
 
   <!-- ====================== JOURNÉES ====================== -->
   {% for day in days %}
-    {% if day.layout_photo_page and day.photos and day.photos | length >= 3 %}
+    {% if day.layout_photo_page and day.photos and day.photos | length >= 1 %}
       {# Page pleine de photos : ni récit, ni bandeau, ni décor. Quatre
          testeurs demandent que l'image prenne le pas sur le texte, et les
          pages déjà pleines de photos sont citées comme le point fort du
@@ -201,6 +202,16 @@
          pas dans Nunjucks, et une expression qui ne tourne que d'un côté ne se
          verrait qu'à l'impression. #}
       <div class="page page--day page--photos">
+        {% if day.photos | length <= 2 %}
+          {# Une ou deux photos seulement, en fin d'étape : une page d'album, les
+             tirages inclinés et le tracé pointillé entre eux — la place des
+             stickers, quand le carnet en aura. #}
+          <div class="mb-photowall mb-photowall--libre mb-photowall--{{ day.photos | length }}">
+            {{ mb_trace(loop.index0 % 4) }}
+            {{ mb_photo(day.photos[0], 'libre-a') }}
+            {% if day.photos | length == 2 %}{{ mb_photo(day.photos[1], 'libre-b') }}{% endif %}
+          </div>
+        {% else %}
         <div class="mb-photowall">
           {% if day.photos | length >= 5 %}
             <div class="mb-photowall__row mb-photowall__row--tall">
@@ -233,6 +244,7 @@
             </div>
           {% endif %}
         </div>
+        {% endif %}
         {% if day.title %}<span class="mb-photowall__caption">{{ day.title }}</span>{% endif %}
       </div>
 
@@ -398,6 +410,28 @@
             <div class="mb-gallery">{{ mb_trace(slot) }}
               {{ mb_photo(day.photos[0], 'tilt-left') }}
               {{ mb_photo(day.photos[1], 'tilt-right') }}
+            </div>
+          {% endif %}
+
+        {% elif day.layout_recit_photo %}
+          {# Le récit qui contourne une grande photo en hauteur (maquette faite
+             à la main, étape de Banaue) : quelques lignes pleine largeur, puis
+             la colonne de texte à gauche de la photo, qui flotte à droite. La
+             cale, un flottant sans largeur, la fait commencer plus bas. Le
+             fun fact, s'il y en a un, est un post-it posé en bas à gauche. #}
+          <div class="mb-note mb-note--contourne">{{ mb_rules(40) }}
+            {% if day.title %}<span class="mb-note__title">{{ day.title }}</span>{% endif %}
+            {% if day.photos and day.photos | length >= 1 %}
+              <span class="mb-contourne__cale" aria-hidden="true"></span>
+              {{ mb_photo(day.photos[0], 'contourne') }}
+            {% endif %}
+            {{ day.body_html | safe }}
+          </div>
+          {% if day.fun_facts and day.fun_facts | length >= 1 %}
+            <div class="mb-card mb-card--postit">
+              <span class="mb-photo__tape mb-card__tape"><svg viewBox="0 0 46 13" preserveAspectRatio="none"><use href="#mb-tape" /></svg></span>
+              <div class="mb-card__title"><span>{{ day.fun_facts_title | default('Infos') }}</span></div>
+              <div class="mb-card__body"><p>{{ day.fun_facts[0] }}</p></div>
             </div>
           {% endif %}
 
