@@ -37,6 +37,12 @@ const addFormats = addFormatsModule as unknown as typeof addFormatsModule.defaul
  * `paragraphes` est une **cible de rédaction**, pas un plafond : ce qui se
  * vérifie, c'est le nombre de paragraphes que chaque page peut porter
  * (`PARAGRAPHS_PER_PAGE`), parce que c'est lui qui a été mesuré.
+ *
+ * Les bornes datent de la colonne de 360 pt. Les marges de reliure
+ * (12/10/2026) ont retiré environ 3 % à chaque page (`LAYOUT_CAPACITY`), mais
+ * le barème reste une cible de rédaction : l'étape prend désormais autant de
+ * pages qu'il lui faut (six au plus), et c'est `LAYOUT_CAPACITY` qui décide
+ * des coupes.
  */
 export const STEP_SIZES = {
   /** Un souvenir, une page. Le cas le plus courant. */
@@ -83,25 +89,29 @@ export const EDITORIAL_LIMITS = {
  * Mesuré, layout par layout. `layout_photo_page` ne rend aucun récit : sa
  * capacité est nulle, ce n'est pas une erreur de barème.
  *
- * Les 880 de `suite` gardent 20 caractères de marge sur les 900 relevés : le
+ * Les 860 de `suite` gardent 20 caractères de marge sur les 880 relevés : le
  * balayage avance par pas de 20, et la dernière valeur qui passe n'est pas la
  * première qui casse. Arrondir vers le bas, jamais vers le haut.
  */
+// Recalibré le 12/10/2026 pour les marges de reliure (15 mm côté pli, 10 mm à
+// l'extérieur) : la colonne passe de 360 à 349 pt, environ 3 % de signes en
+// moins. Le récit qui contourne une grande photo n'en perd pas.
 export const LAYOUT_CAPACITY: Readonly<Record<string, { bandeau: number; suite: number }>> = {
   layout_photo_page: { bandeau: 0, suite: 0 },
-  layout_hero_top: { bandeau: 380, suite: 680 },
-  layout_chapter_map: { bandeau: 560, suite: 880 },
-  layout_split_left: { bandeau: 560, suite: 880 },
-  layout_collage: { bandeau: 560, suite: 880 },
-  layout_story_opener: { bandeau: 560, suite: 880 },
-  layout_story_facts: { bandeau: 560, suite: 880 },
+  layout_hero_top: { bandeau: 380, suite: 660 },
+  layout_chapter_map: { bandeau: 500, suite: 830 },
+  layout_split_left: { bandeau: 540, suite: 860 },
+  layout_collage: { bandeau: 540, suite: 860 },
+  layout_story_opener: { bandeau: 540, suite: 860 },
+  layout_story_facts: { bandeau: 540, suite: 860 },
   // Pages de suite seulement : sous un bandeau, les trois photos n'ont plus
-  // leur hauteur (mesuré le 08/10/2026 : 440 signes en deux paragraphes).
+  // leur hauteur (mesuré le 08/10/2026 : 440 signes en deux paragraphes ;
+  // 410 avec les marges de reliure).
   // Le récit qui contourne une grande photo (maquette faite à la main) : la
   // capacité ordinaire ; avec le post-it « Infos », 800 en page de suite.
   layout_recit_photo: { bandeau: 560, suite: 880 },
-  layout_trio_portrait: { bandeau: 0, suite: 420 },
-  layout_trio_landscape: { bandeau: 0, suite: 420 },
+  layout_trio_portrait: { bandeau: 0, suite: 410 },
+  layout_trio_landscape: { bandeau: 0, suite: 410 },
 };
 
 /** Les deux trios (récit court, une photo en haut, deux en bas). */
@@ -110,15 +120,15 @@ export const TRIO_LAYOUTS = ["layout_trio_portrait", "layout_trio_landscape"] as
 export const TRIO_MAX_PARAGRAPHS = 2;
 
 /** Capacité par défaut : celle du layout de récit pleine largeur. */
-const DEFAULT_CAPACITY = { bandeau: 560, suite: 880 } as const;
+const DEFAULT_CAPACITY = { bandeau: 540, suite: 860 } as const;
 
 /**
  * Combien de paragraphes une page porte, à sa capacité.
  *
  * Chaque `<p>` est suivi d'une ligne vide — c'est l'espace resté libre dans le
  * gabarit, et il se paie. Aux plafonds mesurés ci-dessus, un paragraphe de plus
- * fait passer le contenu sous la marge : 560 caractères tiennent en 2
- * paragraphes et débordent en 3, 880 tiennent en 4 et débordent en 5.
+ * fait passer le contenu sous la marge : 540 caractères tiennent en 2
+ * paragraphes et débordent en 3, 860 tiennent en 4 et débordent en 5.
  *
  * C'est donc bien un couple (caractères, paragraphes) qui a été mesuré, pas un
  * nombre de caractères seul.
@@ -250,7 +260,13 @@ function mainLayout(day: Record<string, unknown>): string {
  *   la carte *et* les photos ;
  * - un **bloc interactif** (`prompt`, `quiz`) remplace la zone flottante du bas
  *   et libère de la place — mais seul le layout par défaut en rend un.
+ *
+ * Et le **corps serré** (`taille_texte: "serre"`, 11 pt) accepte 8 % de plus :
+ * c'est la limite que s'impose le composeur, bien en deçà de ce que le 11 pt
+ * tient vraiment (+30 % mesuré le 12/10/2026).
  */
+export const SERRE_FACTOR = 1.08;
+
 export function pageCapacity(day: Record<string, unknown>): number {
   const layout = mainLayout(day);
   const suite = !day["day_intro"];
@@ -261,15 +277,17 @@ export function pageCapacity(day: Record<string, unknown>): number {
   const funFact = Array.isArray(day["fun_facts"]) && day["fun_facts"].length > 0;
 
   if (layout === "layout_chapter_map" && photos >= 2) {
-    capacity = funFact ? 120 : suite ? 500 : 320;
+    capacity = funFact ? 110 : suite ? 470 : 300;
   } else if (layout === "layout_split_left" && funFact) {
-    capacity = 240;
+    capacity = 230;
   } else if (layout === "layout_recit_photo" && funFact && suite) {
     capacity = 800;
   }
 
   const parDefaut = layout === "layout_story_opener" || layout === "layout_story_facts";
-  if (parDefaut && (day["prompt"] || day["quiz"])) capacity = Math.max(capacity, 760);
+  if (parDefaut && (day["prompt"] || day["quiz"])) capacity = Math.max(capacity, 740);
+
+  if (day["taille_texte"] === "serre") capacity = Math.floor((capacity * SERRE_FACTOR) / 10) * 10;
 
   return capacity;
 }
@@ -394,7 +412,7 @@ function checkStep(
           (repli
             ? `Bascule sur \`${repli}\`, ou scinde l'étape en deux entrées consécutives.`
             : "Scinde l'étape en deux entrées consécutives : la seconde n'a pas de " +
-              "bandeau et accepte 880 caractères."),
+              `bandeau et accepte ${DEFAULT_CAPACITY.suite} caractères.`),
       });
     }
   }

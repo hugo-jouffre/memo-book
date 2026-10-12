@@ -259,7 +259,8 @@ const etat = {
    * Les réglages de personnalisation de l'app, avec ses défauts
    * (`reglagesDuCarnet`) : `funFacts` (« Insérer des Fun facts »),
    * `ratioPhotos` (ratio photo / texte, en %), `reglure` (« Pointillés »),
-   * `decorations` (« Décorations & stickers », par paragraphe ou par image).
+   * `decorations` (« Décorations & stickers », par paragraphe ou par image),
+   * `zonesLibres` (« Zones libres » : trois pages réglées en fin de carnet).
    */
   carnet: {
     titre: "",
@@ -271,6 +272,7 @@ const etat = {
     ratioPhotos: 50,
     reglure: true,
     decorations: 2,
+    zonesLibres: true,
   },
   /** Un champ touché à la main n'est plus jamais réécrit par la déduction. */
   carnetManuel: {},
@@ -1557,7 +1559,10 @@ const ficheCouverture = () => Couverture.ficheDuCarnet(fichePumbo(), pagesDuLivr
  *   garde la sienne). 25, 50 et 75 % composent comme aujourd'hui, en
  *   attendant leur définition ;
  * - **pointillés** coupés : `rules_enabled: false`, pas de réglure ;
- * - **décorations** à 0 : `decoration_quota: 0`, ni tracé pointillé ni scotch.
+ * - **décorations** à 0 : `decoration_quota: 0`, ni tracé pointillé ni
+ *   sticker (le scotch des photos reste) ;
+ * - **zones libres** (allumé par défaut) : `pages_libres: 3`, trois pages
+ *   réglées après la dernière étape.
  */
 function reglagesDuCarnet() {
   const c = etat.carnet;
@@ -1568,8 +1573,12 @@ function reglagesDuCarnet() {
     photoTextRatio: Number.isFinite(ratio) ? ratio : 50,
     rulesEnabled: c.reglure !== false,
     decorationQuota: Number.isFinite(quota) ? quota : 2,
+    freeZonesEnabled: c.zonesLibres !== false,
   };
 }
+
+/** Les pages libres de fin de carnet, quand « Zones libres » est allumé (`bookSettings.ts`). */
+const PAGES_LIBRES_FIN = 3;
 
 function construirePayloadCarnet(photoDe = (data) => data, { imprimeur = Boolean(etat.reglages.versionImprimeur) } = {}) {
   const reglages = reglagesDuCarnet();
@@ -1605,6 +1614,8 @@ function construirePayloadCarnet(photoDe = (data) => data, { imprimeur = Boolean
     // Voir `mise-en-page.js` et LAYOUT_KB.
     rules_enabled: reglages.rulesEnabled,
     decoration_quota: reglages.decorationQuota,
+    // Après la dernière étape, avant la quatrième : de quoi écrire à la main.
+    pages_libres: reglages.freeZonesEnabled ? PAGES_LIBRES_FIN : 0,
     days: MiseEnPage.composerJours(etapes, {
       contours: etat.contoursCarte,
       dessinerCarte: etat.contoursCarte ? dessinerCarteChapitre : null,
@@ -3564,11 +3575,15 @@ function panneauPersonnalisation() {
     ligne(
       "Décorations & stickers",
       h("select", { onchange: poser("decorations", Number) }, options([0, 1, 2, 3, 4], c.decorations ?? 2, (v) => (v ? `${v} par paragraphe` : "Aucune"))),
-      "À 0, ni tracé pointillé ni scotch. Les stickers ne sont pas encore imprimés.",
+      "À 0, ni tracé pointillé ni sticker ; le scotch des photos reste. Les stickers viennent de la bibliothèque dessinée.",
+    ),
+    ligne(
+      "Zones libres",
+      h("input", { type: "checkbox", checked: c.zonesLibres !== false, onchange: poser("zonesLibres") }),
+      "Trois pages réglées en fin de carnet, pour écrire à la main.",
     ),
     aVenir("Nombre de pages cible"),
     aVenir("Quiz intégrés à l'histoire"),
-    aVenir("Zones libres"),
     aVenir("Mot fléché à la fin du livre"),
   );
 }

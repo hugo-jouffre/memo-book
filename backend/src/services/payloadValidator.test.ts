@@ -113,10 +113,10 @@ describe("validatePayload — règles éditoriales de LAYOUT_KB", () => {
   });
 
   it("accepte plusieurs paragraphes courts là où un seul long échoue", () => {
-    // 2 × 270 = 540 caractères, taille M : ça tient sur `layout_collage`, qui
-    // en accepte 560. Le même texte en un seul paragraphe dépasserait la
+    // 2 × 265 = 530 caractères, taille M : ça tient sur `layout_collage`, qui
+    // en accepte 540. Le même texte en un seul paragraphe dépasserait la
     // limite par paragraphe.
-    const paragraph = "a".repeat(270);
+    const paragraph = "a".repeat(265);
     const result = validatePayload(
       minimalPayload({
         layout_hero_top: false,
@@ -412,29 +412,35 @@ describe("groupSteps", () => {
 });
 
 describe("pageCapacity", () => {
-  it("plafonne `layout_split_left` à 240 quand la carte info rétrécit la colonne", () => {
+  it("plafonne `layout_split_left` à 230 quand la carte info rétrécit la colonne", () => {
     const base = { day_intro: {}, layout_split_left: true, photos: ["a", "b"] };
 
-    expect(pageCapacity(base)).toBe(560);
-    expect(pageCapacity({ ...base, fun_facts: ["un fait"] })).toBe(240);
+    expect(pageCapacity(base)).toBe(540);
+    expect(pageCapacity({ ...base, fun_facts: ["un fait"] })).toBe(230);
   });
 
   it("plafonne une ouverture de chapitre qui porte aussi une bande d'images", () => {
     const base = { day_intro: {}, layout_chapter_map: true };
 
-    expect(pageCapacity(base)).toBe(560);
-    expect(pageCapacity({ ...base, photos: ["a", "b"] })).toBe(320);
-    expect(pageCapacity({ ...base, photos: ["a", "b"], fun_facts: ["f"] })).toBe(120);
+    expect(pageCapacity(base)).toBe(500);
+    expect(pageCapacity({ ...base, photos: ["a", "b"] })).toBe(300);
+    expect(pageCapacity({ ...base, photos: ["a", "b"], fun_facts: ["f"] })).toBe(110);
   });
 
   it("ouvre la page de suite, qui n'a ni bandeau ni titre", () => {
-    expect(pageCapacity({ layout_story_opener: true })).toBe(880);
-    expect(pageCapacity({ day_intro: {}, layout_story_opener: true })).toBe(560);
+    expect(pageCapacity({ layout_story_opener: true })).toBe(860);
+    expect(pageCapacity({ day_intro: {}, layout_story_opener: true })).toBe(540);
+  });
+
+  it("accepte 8 % de plus en corps serré", () => {
+    expect(pageCapacity({ layout_story_opener: true, taille_texte: "serre" })).toBe(920);
+    expect(pageCapacity({ day_intro: {}, layout_story_opener: true, taille_texte: "serre" })).toBe(580);
+    expect(pageCapacity({ day_intro: {}, layout_story_opener: true, taille_texte: "ample" })).toBe(540);
   });
 
   it("rend sa place au récit quand un bloc interactif remplace la zone du bas", () => {
     expect(pageCapacity({ day_intro: {}, layout_story_opener: true, prompt: { label: "x" } })).toBe(
-      760,
+      740,
     );
   });
 

@@ -131,6 +131,14 @@ properties:
           Pages libres, réglées, posées après le colophon et l'introduction pour
           que la première étape commence sur une page de gauche : 1 quand le
           colophon et l'introduction font un nombre pair de pages.
+      pages_libres:
+        type: integer
+        minimum: 0
+        maximum: 3
+        description: >
+          Pages libres, réglées, posées après la dernière étape et avant la
+          quatrième, pour écrire à la main : 3 quand le réglage « Zones libres »
+          est allumé (par défaut), 0 sinon.
       sans_couvertures:
         type: boolean
         description: >
@@ -207,9 +215,18 @@ $defs:
         description: >
           Page de photos seules : ni récit, ni bandeau. 1 à 5 entrées dans `photos` —
           de 3 à 5, une planche bord à bord ; 1 ou 2, une page d'album (tirages
-          inclinés, tracé pointillé entre eux). `title` devient une légende manuscrite
-          en bas de page. Toujours **après** le récit de l'étape, jamais entre deux de
-          ses pages (LAYOUT_KB § « Structure d'une étape »).
+          inclinés, tracé pointillé entre eux). Jamais de légende. Toujours **après**
+          le récit de l'étape, jamais entre deux de ses pages (LAYOUT_KB § « Structure
+          d'une étape »).
+      taille_texte:
+        type: string
+        enum: [serre, ample]
+        description: >
+          Corps du récit ajusté d'un point, sur toutes les pages de l'étape :
+          `serre` (11 pt) quand le récit dépasse de 8 % au plus ce que ses pages
+          tiennent, pour éviter une page de plus ; `ample` (13 pt) quand chaque
+          page de récit est remplie à moins de 45 %, sans photo ni encart.
+          Absent : 12 pt.
       prompt:
         type: object
         description: >

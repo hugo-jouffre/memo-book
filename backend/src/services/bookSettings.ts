@@ -11,7 +11,8 @@
  * | Fun facts coupé | aucun encart (`structure.ts`, avant la composition) |
  * | Ratio photo / texte à 0 % | aucune photo dans le carnet — la couverture garde la sienne |
  * | Pointillés coupés | `rules_enabled: false` : pas de réglure sous le récit |
- * | Décorations à 0 | `decoration_quota: 0` : ni tracé pointillé, ni scotch, ni sticker |
+ * | Décorations à 0 | `decoration_quota: 0` : ni tracé pointillé, ni sticker (le scotch reste) |
+ * | Zones libres | `pages_libres: 3` : trois pages réglées après la dernière étape ; 0 si coupé |
  *
  * Les paliers 25, 50 et 75 % du ratio ne sont pas encore définis : ils
  * composent comme 50 %.
@@ -22,7 +23,11 @@ export interface BookSettings {
   photoTextRatio: number;
   rulesEnabled: boolean;
   decorationQuota: number;
+  freeZonesEnabled: boolean;
 }
+
+/** Les pages libres, réglées, de fin de carnet quand « Zones libres » est allumé. */
+export const FREE_PAGES_AT_END = 3;
 
 /** Le carnet garde-t-il ses photos ? Non à 0 % : « aucune photo dans tout le carnet ». */
 export function keepsPhotos(settings: Pick<BookSettings, "photoTextRatio">): boolean {
@@ -49,6 +54,7 @@ export function applyBookSettings(payload: BookPayload, settings: BookSettings):
     ...payload,
     rules_enabled: settings.rulesEnabled,
     decoration_quota: Math.max(0, Math.min(4, Math.round(settings.decorationQuota))),
+    pages_libres: settings.freeZonesEnabled ? FREE_PAGES_AT_END : 0,
   };
   if (keepsPhotos(settings)) return regle;
 

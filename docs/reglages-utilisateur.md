@@ -58,7 +58,7 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
 | **Décorations & stickers** | 0 · 1 · 2 · 3 · 4 par paragraphe ou par image | 2 | Mise en page | Rendu : les stickers de la bibliothèque dessinée (`assets/stickers/`, encore vide), deux par double page au plus, et le tracé pointillé ; à 0, ni l'un ni l'autre. Le scotch des photos n'en dépend plus (12/10/2026) |
 | **Typographies** | Trois **assortiments** — voir plus bas | Carnet de voyage | Gabarit — `--mb-font-display`, `--mb-font-title`, `--mb-font-hand` | **V1 : « Carnet de voyage » seul** (Hugo, 09/10/2026) — Éditorial et Manuscrit restent sur la feuille, pâlis, « À venir ». Les sous-titres tombent sur Gloria Hallelujah tant que Hansley n'est pas inlinée (licence à vérifier) |
 | **Quiz intégrés à l'histoire** | ON / OFF | ON | Mise en page les place ; **aucun agent ne les écrit** — règles en attente dans `agent-transcription-carnet.md` § 1 | Rendu (`quiz`), jamais rempli |
-| **Zones libres** | ON / OFF | ON | Mise en page | À construire : une zone blanche en fin d'étape, trois pages blanches en fin de carnet |
+| **Zones libres** | ON / OFF | ON | Mise en page | Rendu : trois pages réglées en fin de carnet (`pages_libres: 3`, 0 si coupé — atelier et `bookSettings.ts`). À construire : une zone blanche en fin d'étape |
 | **Mot fléché à la fin du livre** | ON / OFF | ON | La grille se génère à la commande ; les mots du voyage, règles en attente dans `agent-transcription-carnet.md` § 1 | À construire |
 
 ### Ce que chaque réglage veut dire, précisément
@@ -84,7 +84,10 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
 - **Quiz.** Un seul bloc interactif par page, et il remplace la zone flottante
   du bas. À OFF, l'agent n'en produit aucun.
 - **Zones libres.** Une zone blanche à la fin de chaque étape, pour écrire ou
-  dessiner à la main, et trois pages blanches à la fin du carnet. C'est aussi
+  dessiner à la main, et trois pages libres à la fin du carnet — réglées comme
+  le papier du récit (Hugo, 12/10/2026), après la dernière étape et avant la
+  quatrième. Les trois pages sont rendues ; la zone de fin d'étape reste à
+  construire. C'est aussi
   la réponse à « je ne dessine pas » : la zone n'impose rien, elle laisse la
   place.
 - **Mot fléché.** Généré au moment de la commande, à partir des récits, et placé

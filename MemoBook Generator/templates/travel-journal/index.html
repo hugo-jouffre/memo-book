@@ -121,8 +121,8 @@
   {% macro mb_stickers(day) %}{% for s in day.stickers or [] %}<div class="mb-sticker mb-sticker--{{ s.place | default('bottom-left') }}" aria-hidden="true"><img src="{{ s.url }}" alt="" /></div>{% endfor %}{% endmacro %}
 
   {# Une page libre : la réglure seule, sur toute la page, pour écrire à la
-     main. #}
-  {% macro mb_page_libre() %}<div class="page page--libre"><div class="page__content"><div class="mb-note mb-note--libre">{{ mb_rules(40) }}</div></div></div>{% endmacro %}
+     main. `gauche` : la page est un verso (marges miroir). #}
+  {% macro mb_page_libre(gauche) %}<div class="page page--libre {{ 'page--gauche' if gauche else 'page--droite' }}"><div class="page__content"><div class="mb-note mb-note--libre">{{ mb_rules(40) }}</div></div></div>{% endmacro %}
 
   {# La réglure du papier, en éléments plutôt qu'en image de fond : Chromium
      rastérise les images de fond à l'export PDF (mesuré à 148 dpi, période
@@ -158,7 +158,10 @@
   {% endif %}
 
   <!-- ====================== COLOPHON ====================== -->
-  <div class="page page--colophon">
+  {# Marges miroir : le colophon est la page 1, une page de droite ; les
+     pages paires sont des pages de gauche (`page--gauche`), le pli à leur
+     droite. #}
+  <div class="page page--colophon page--droite">
     <div class="page__content">
       <div class="mb-colophon__opening">Tout commence...</div>
       <div class="mb-colophon__closing">...par une feuille blanche.</div>
@@ -175,7 +178,7 @@
 
   <!-- ====================== INTRODUCTION ====================== -->
   {% if intro_text %}
-    <div class="page page--intro">
+    <div class="page page--intro page--gauche">
       <div class="page__content">
         {% if intro_photos and intro_photos | length >= 1 %}
           <div class="mb-intro__photos">
@@ -189,7 +192,7 @@
             {% endif %}
           </div>
         {% endif %}
-        <div class="mb-note mb-note--black-title">{{ mb_rules(36) }}
+        <div class="mb-note mb-note--black-title">{{ mb_rules(40) }}
           <span class="mb-note__title">{{ intro_title | default('Intro') }}</span>
           {{ intro_text | safe }}
         </div>
@@ -201,8 +204,9 @@
   {# Une étape commence toujours sur une page de gauche : quand le colophon et
      l'introduction font un nombre pair de pages, une page libre, réglée, les
      complète (`pages_libres_avant`). #}
+  {% set avant_libres = 1 + (1 if intro_text else 0) %}
   {% for _ in range(pages_libres_avant | default(0)) %}
-    {{ mb_page_libre() }}
+    {{ mb_page_libre((avant_libres + 1 + loop.index0) % 2 == 0) }}
   {% endfor %}
 
   <!-- ====================== JOURNÉES ====================== -->
@@ -223,7 +227,7 @@
          Les bandes sont écrites en clair plutôt que calculées : `min` n'existe
          pas dans Nunjucks, et une expression qui ne tourne que d'un côté ne se
          verrait qu'à l'impression. #}
-      <div class="page page--day page--photos">
+      <div class="page page--day page--photos {{ 'page--gauche' if gauche else 'page--droite' }}">
         {% if day.pleine_page %}
           {# Une photo exceptionnelle en pleine page, bord à bord : ni cadre, ni
              inclinaison, ni décor. Une fois par chapitre au plus. #}
@@ -276,7 +280,10 @@
       </div>
 
     {% else %}
-    <div class="page page--day">
+    {# `taille_texte` : le corps du récit, ajusté d'un point au plus — « serre »
+       (11 pt) pour éviter une page de plus, « ample » (13 pt) pour remplir une
+       étape trop courte. #}
+    <div class="page page--day {{ 'page--gauche' if gauche else 'page--droite' }}{% if day.taille_texte in ['serre', 'ample'] %} page--{{ day.taille_texte }}{% endif %}">
       {# Tracé pseudo-aléatoire : variante, position, ou rien du tout. Un motif
          identique sur chaque page se remarque immédiatement.
 
@@ -380,7 +387,7 @@
           {# Ouverture de chapitre : la carte de la région tient la page. #}
           <div class="mb-chapter">
             <div class="mb-chapter__side">
-              <div class="mb-note mb-note--ink-title">{{ mb_rules(36) }}
+              <div class="mb-note mb-note--ink-title">{{ mb_rules(40) }}
                 {% if day.title %}<span class="mb-note__title">{{ day.title }}</span>{% endif %}
                 {{ day.body_html | safe }}
               </div>
@@ -409,7 +416,7 @@
           {% if day.photos and day.photos | length >= 1 %}
             {{ mb_photo(day.photos[0], 'tilt-slight mb-hero') }}
           {% endif %}
-          <div class="mb-note">{{ mb_rules(36) }}
+          <div class="mb-note">{{ mb_rules(40) }}
             {% if day.title %}<span class="mb-note__title">{{ day.title }}</span>{% endif %}
             {{ day.body_html | safe }}
           </div>
@@ -426,7 +433,7 @@
               </div>
             {% endif %}
             <div class="mb-split__main">
-              <div class="mb-note">{{ mb_rules(36) }}
+              <div class="mb-note">{{ mb_rules(40) }}
                 {% if day.title %}<span class="mb-note__title">{{ day.title }}</span>{% endif %}
                 {{ day.body_html | safe }}
               </div>
@@ -468,7 +475,7 @@
              bandeau, et il ne resterait plus la hauteur des photos. La réglure
              descend jusqu'aux photos, comme sur la maquette : la page n'a pas
              de trou entre le récit et les images. #}
-          <div class="mb-note mb-note--remplit">{{ mb_rules(36) }}
+          <div class="mb-note mb-note--remplit">{{ mb_rules(40) }}
             {% if day.title %}<span class="mb-note__title">{{ day.title }}</span>{% endif %}
             {{ day.body_html | safe }}
           </div>
@@ -481,7 +488,7 @@
           {% endif %}
 
         {% elif day.layout_collage %}
-          <div class="mb-note">{{ mb_rules(36) }}
+          <div class="mb-note">{{ mb_rules(40) }}
             {% if day.title %}<span class="mb-note__title">{{ day.title }}</span>{% endif %}
             {{ day.body_html | safe }}
           </div>
@@ -497,7 +504,7 @@
 
         {% else %}
           {# story_opener / story_facts : récit puis carte info et photo flottantes #}
-          <div class="mb-note mb-day__body mb-note--ink-title">{{ mb_rules(36) }}
+          <div class="mb-note mb-day__body mb-note--ink-title">{{ mb_rules(40) }}
             {% if day.title %}<span class="mb-note__title">{{ day.title }}</span>{% endif %}
             {{ day.body_html | safe }}
           </div>
@@ -551,6 +558,14 @@
       {% endif %}
     </div>
     {% endif %}
+  {% endfor %}
+
+  <!-- ====================== PAGES LIBRES (FIN) ====================== -->
+  {# Réglage « Zones libres » : trois pages réglées après la dernière étape,
+     pour écrire à la main ce que le carnet n'a pas dit (`pages_libres`). #}
+  {% set avant_fin = avant_etapes + (days | length if days else 0) %}
+  {% for _ in range(pages_libres | default(0)) %}
+    {{ mb_page_libre((avant_fin + 1 + loop.index0) % 2 == 0) }}
   {% endfor %}
 
   <!-- ====================== QUATRIÈME DE COUVERTURE ====================== -->

@@ -27,8 +27,14 @@ Base de connaissance de l'agent qui produit le JSON envoyé au moteur PDF.
   **148 × 210 mm** : l'A5 exact vaut 419,53 × 595,28 pt, soit un demi-point
   d'écart. Les deux écritures désignent la même feuille, et doivent rester
   d'accord (voir § « Pas de marges blanches »).
-- Marge de contenu : 30 pt. Les décors (tracé pointillé, stickers) débordent
-  volontairement.
+- Marges de contenu : 30 pt en haut et en bas ; sur les côtés, **marges
+  miroir** pour la reliure (Hugo, 12/10/2026) : **42,5 pt (15 mm) côté pli**,
+  **28,3 pt (10 mm) à l'extérieur**. Le colophon est la page 1, une page de
+  droite ; le gabarit pose `page--gauche` sur les pages paires (le pli à leur
+  droite) et `page--droite` sur les autres (le pli à leur gauche). La colonne
+  fait **349,2 pt** de large sur toutes les pages, seule sa place change. Les
+  planches de photos gardent 14 pt au bord, plus l'écart des marges côté pli.
+  Les décors (tracé pointillé, stickers) débordent volontairement.
 - Une page de carnet = un élément `.page`. Une entrée de `days[]` = une page.
 - **La page remplit la feuille, bord à bord.** Pas de marge d'impression, pas
   de conteneur centré, pas de `padding` autour des `.page` : la couleur du
@@ -106,13 +112,13 @@ premier « non ».
 
    | Ouverture de chapitre | Plafond |
    |---|---|
-   | carte seule, pas de bande d'images | 560 |
-   | carte + 2 photos | 320 |
-   | carte + 2 photos + un `fun_facts` | 120 |
+   | carte seule, pas de bande d'images | 500 |
+   | carte + 2 photos | 300 |
+   | carte + 2 photos + un `fun_facts` | 110 |
 
    Si le récit dépasse, **on allège la page avant de renoncer à la carte**,
-   dans cet ordre : retirer le `fun_facts` (120 → 320), puis descendre sous
-   deux photos (320 → 560). Une ouverture de chapitre vaut mieux sans encart
+   dans cet ordre : retirer le `fun_facts` (110 → 300), puis descendre sous
+   deux photos (300 → 500). Une ouverture de chapitre vaut mieux sans encart
    que sans carte.
 4. **Si le récit ne tient toujours pas**, layout par défaut, et le chapitre
    s'ouvre sans carte. On ne scinde pas une ouverture de chapitre en deux pages
@@ -131,14 +137,14 @@ seul pays fait de plusieurs lieux :
   l'étape ;
 - **le lieu doit être situé** par l'analyse d'étape (pays, coordonnées) ; sinon,
   page ordinaire ;
-- **plafonds** : 540 signes avec la carte seule, 320 avec deux photos — dernier
-  palier sans débordement au calibrage. Une étape L ou XL se répartit déjà sur
+- **plafonds** : 500 signes avec la carte seule, 300 avec deux photos — dernier
+  palier sans débordement au calibrage (marges de reliure, 12/10/2026). Une étape L ou XL se répartit déjà sur
   deux pages : son ouverture prend la carte et la suite du récit continue sur
   la page d'après, ce n'est pas « scinder pour sauver la carte » ;
 - **une carte ne coûte jamais une photo**, ni une page de récit sans image à
   côté d'une planche : si l'ouverture de chapitre provoque l'un ou l'autre et
   que l'étape s'en passe sans carte, elle s'ouvre sans carte. Une étape d'une
-  seule page avec une ou deux photos et plus de 320 signes garde donc ses
+  seule page avec une ou deux photos et plus de 300 signes garde donc ses
   photos plutôt que la carte ;
 - **la carte** montre le lieu du chapitre avec son nom, et les lieux des
   chapitres précédents en petits points sans nom, reliés par le trajet ;
@@ -331,7 +337,7 @@ faire aujourd'hui.
 | ↳ sous-titres | Hansley | `--mb-font-title` | **À construire** — `Hansley.otf` versionné mais pas inliné, repli sur la manuscrite |
 | ↳ textes | Gloria Hallelujah | `--mb-font-hand` | **À construire** |
 | ↳ fun facts | Playfair | Pas de token dédié : partage `--mb-font-display` | **À construire** — créer `--mb-font-facts` |
-| Zones libres | ON | Zone blanche en fin d'étape + trois pages blanches en fin de carnet | **À construire** |
+| Zones libres | ON | **Trois pages réglées** après la dernière étape, avant la quatrième — `pages_libres: 3` (`mb_page_libre`), 0 si coupé. La zone blanche en fin d'étape reste à construire | Rendu (pages de fin) |
 | Mot fléché | ON | Grille générée à la commande, posée en fin de carnet | **À construire** |
 
 **Deux « pointillés » à ne pas confondre.** Le réglage porte sur la **réglure**
@@ -379,7 +385,7 @@ tranche : le premier actif l'emporte.
 | `layout_hero_top` | Grande photo en tête, récit dessous | Une photo iconique porte la journée | 1 | sous S, S |
 | `layout_split_left` | Carte info à gauche, récit en colonne à droite, puis deux photos en bas | Un fait à mettre en avant et deux belles images | 2 | S, M — **S seulement avec un fun fact** |
 | `layout_collage` | Récit pleine largeur puis 2 ou 3 photos inclinées en bas | Journée dense visuellement | 2–3 | S, M |
-| `layout_trio_portrait` | **Page de suite seulement.** Récit court en tête, réglure prolongée jusqu'aux photos, puis trois photos en cascade : une portrait en haut, deux portraits en bas qui la chevauchent à peine, tracé pointillé derrière | Fin d'étape courte avec trois photos en portrait | 3 | sous S, S partiel — **420 en 2 paragraphes** |
+| `layout_trio_portrait` | **Page de suite seulement.** Récit court en tête, réglure prolongée jusqu'aux photos, puis trois photos en cascade : une portrait en haut, deux portraits en bas qui la chevauchent à peine, tracé pointillé derrière | Fin d'étape courte avec trois photos en portrait | 3 | sous S, S partiel — **410 en 2 paragraphes** |
 | `layout_trio_landscape` | Le même, avec une **photo paysage en haut** (format 1,6) ; les deux du bas restent des portraits | Fin d'étape courte avec une paysage et deux portraits | 3 | idem |
 | `layout_recit_photo` | **Maquette faite à la main (Banaue).** Quelques lignes pleine largeur, puis le récit en colonne à gauche d'une grande photo en hauteur qui flotte à droite, inclinée, avec son **étiquette de titre** (`label`). Un fun fact devient un **post-it « Infos »** en bas à gauche | Une page à une photo en portrait (format < 0,77) — bandeau ou suite | 1 | S, M ; 800 en page de suite avec le post-it |
 | `layout_photo_page` | **Page de photos seules**, sans récit ni bandeau, **sans légende**. De 3 à 5, une planche bord à bord ; 1 ou 2, une page d'album (tirages inclinés, tracé pointillé). Avec `pleine_page`, une seule photo bord à bord, sans cadre | **Toujours en fin d'étape**, après le récit — voir § « Structure d'une étape » | 1–5 | aucune — le récit n'est pas rendu |
@@ -395,7 +401,7 @@ le validateur exige au moins un drapeau, n'importe lequel de ces deux convient.
 première page d'une étape** : elle porte le bandeau jour · lieu · date, et les
 trois photos n'auraient plus leur hauteur — le validateur le refuse. L'atelier
 les choisit seul (`trioDe`, `mise-en-page.js`) : page de suite, trois photos,
-420 signes en deux paragraphes au plus, pas de photo de groupe, et une variante
+410 signes en deux paragraphes au plus, pas de photo de groupe, et une variante
 où **aucune des trois ne dépasse le plafond de rognage** — sinon la page reste
 un collage. Entre les deux variantes, celle qui rogne le moins : la paysage va
 en haut s'il y en a une. Pas de fun fact sur un trio : il n'y a pas de place
@@ -469,9 +475,11 @@ d'un cran parce qu'il a ajouté trois mots. Elles sont contiguës et couvrent
 200 → 1440 sans trou.
 
 **1440 n'est pas un chiffre rond**, c'est 560 + 880 : la capacité d'une page à
-bandeau plus celle d'une page de suite. Les deux sont mesurées — 880 garde 20
-caractères de marge sur les 900 relevés, parce que la dernière valeur qui passe
-n'est pas la première qui casse. On arrondit vers le bas.
+bandeau plus celle d'une page de suite, mesurées sur la colonne de 360 pt.
+Les marges de reliure (12/10/2026) ont ramené ces deux pages à 540 et 860 ; le
+barème, lui, n'a pas bougé : c'est une **cible de rédaction**, et l'étape prend
+désormais autant de pages qu'il lui faut (six au plus). Ce sont les plafonds
+par page, ci-dessous, qui décident des coupes.
 
 ### Ce que chaque page accepte réellement
 
@@ -483,20 +491,46 @@ relancer le script.
 | Configuration | Plafond | Tailles acceptées |
 |---|---|---|
 | `layout_photo_page` | 0 — aucun récit rendu | — |
-| `layout_chapter_map` + fun fact + ≥ 2 photos | 120 | sous S |
-| `layout_split_left` + fun fact | 240 | sous S, S partiel |
-| `layout_chapter_map` + ≥ 2 photos, sans fun fact | 320 | sous S, S partiel |
-| `layout_hero_top` | 380 | sous S, S |
+| `layout_chapter_map` + fun fact + ≥ 2 photos | 110 | sous S |
+| `layout_split_left` + fun fact | 230 | sous S, S partiel |
+| `layout_chapter_map` + ≥ 2 photos, sans fun fact | 300 | sous S, S partiel |
+| `layout_hero_top` | 380 (660 en page de suite) | sous S, S |
+| `layout_recit_photo` | 560 (880 en page de suite) | S, M |
 | `layout_recit_photo` avec le post-it « Infos », page de suite | 800 | S, M |
-| `layout_trio_portrait`, `layout_trio_landscape` — page de suite seulement | 420, **2 paragraphes** | sous S, S partiel |
-| `layout_story_*`, `layout_collage`, `layout_split_left` sans fun fact, `layout_chapter_map` sans photos | 560 | S, M |
-| `layout_story_*` portant un `prompt` | 760 | S, M |
-| **page de suite** (sans `day_intro`), tout layout de récit | 880 | complète L et XL |
+| `layout_trio_portrait`, `layout_trio_landscape` — page de suite seulement | 410, **2 paragraphes** | sous S, S partiel |
+| `layout_chapter_map` sans photos | 500 | S, M partiel |
+| `layout_story_*`, `layout_collage`, `layout_split_left` sans fun fact | 540 | S, M |
+| `layout_story_*` portant un `prompt` | 740 | S, M |
+| **page de suite** (sans `day_intro`), tout layout de récit | 860 | complète L et XL |
+| **corps serré** (`taille_texte: "serre"`), tout layout | plafond × 1,08 | — |
+
+Recalibré le 12/10/2026 après les marges de reliure : la colonne passe de 360 à
+349 pt, soit environ 3 % de signes en moins par ligne pleine largeur et 5 % dans
+les colonnes étroites (carte, carte info). Le récit qui contourne une grande
+photo n'y perd presque rien : il garde ses plafonds.
 
 **Un couple, pas un nombre.** Ce n'est pas une longueur seule qui a été mesurée
 mais un couple (caractères, paragraphes) : chaque `<p>` est suivi d'une ligne
-vide, et celle de trop pousse le contenu sous la marge. 560 caractères tiennent
-en **2** paragraphes et débordent en 3 ; 880 tiennent en **4** et débordent en 5.
+vide, et celle de trop pousse le contenu sous la marge. 540 caractères tiennent
+en **2** paragraphes et débordent en 3 ; 860 tiennent en **4** et débordent en 5.
+
+### Corps ajusté d'un point
+
+Hugo, 12/10/2026 : le corps et l'interligne sont **légèrement ajustables**
+(±1 pt) pour remplir une page. Le composeur de l'atelier pose
+`taille_texte` sur **toutes les pages de récit de l'étape** — un récit ne change
+pas de corps en tournant la page :
+
+| `taille_texte` | Corps | Quand |
+|---|---|---|
+| *(absent)* | 12 pt | Le cas courant |
+| `serre` | 11 pt | Le récit dépasse de **8 % au plus** ce que ses pages tiennent : en 11 pt, il tient sur une page de moins, et l'étape reste paire avec moins de pages (`structurerEtape`). Le 11 pt tiendrait bien plus (+30 à +40 % mesurés) ; 8 % est la limite qu'on s'impose pour qu'il ne paraisse pas tassé |
+| `ample` | 13 pt | Chaque page de récit de l'étape est remplie à **moins de 45 %**, sans photo, sans encart, sans carte pour combler (`corpsAmple`) |
+
+L'interligne et la réglure suivent le corps : `.page--serre` et `.page--ample`
+redéclarent `--mb-body-size` **et** `--mb-line` (une variable CSS se calcule là
+où elle est déclarée). Le validateur accepte 8 % de plus sur une page serrée
+(`SERRE_FACTOR`, `pageCapacity`).
 D'où deux plafonds fermes :
 
 | Page | Paragraphes |
@@ -531,9 +565,9 @@ Au-dessus de 1440, refus : il faut **deux étapes**, pas une étape plus longue.
 L et XL ne tiennent pas sur une feuille. L'étape se scinde en **deux entrées
 consécutives de `days[]`** :
 
-- la première porte `day_intro` et le `title` — elle plafonne à 560 ;
+- la première porte `day_intro` et le `title` — elle plafonne à 540 ;
 - la seconde a un `title` **vide** et **pas de `day_intro`** : c'est ce qui lui
-  rend les 320 caractères du bandeau, et la porte à 880.
+  rend les 320 caractères du bandeau, et la porte à 860.
 
 C'est ce couple que le validateur reconnaît comme une étape unique : toute entrée
 sans `day_intro` prolonge la précédente.
@@ -558,7 +592,7 @@ de mise en page, gabarit) :
 | Photos de trop | On écarte d'abord les **floues ou sombres**, puis les **doublons d'une scène** (on garde la mieux notée), puis les **moins bien notées** |
 | Paragraphe sur deux pages | Oui, **coupé sur une fin de phrase** |
 | Page de suite | **Rien** ne rappelle l'étape : le texte continue |
-| Corps et interligne | **Légèrement ajustables** (±1 pt) pour remplir une page |
+| Corps et interligne | **Légèrement ajustables** (±1 pt) pour remplir une page — § « Corps ajusté d'un point » |
 | Étiquette de titre sur une photo | **Écrite par l'IA, une par double page au plus**, modifiable par le voyageur |
 | Habillage des photos | **Toujours** cadre blanc, inclinaison et scotch |
 | Légendes des pages de photos | **Jamais** |
@@ -568,8 +602,8 @@ de mise en page, gabarit) :
 | Fun fact | **Post-it « Infos » partout**, un toutes les trois pages au plus |
 | Rythme | Jamais deux fois le même design sur une double page |
 | Carte de chapitre | À chaque nouveau lieu |
-| Marges | **Plus large côté reliure** (~15 mm), ~10 mm à l'extérieur |
-| Fin du carnet | **3 pages libres réglées** pour écrire (réglage « Zones libres ») |
+| Marges | **Plus large côté reliure** : 15 mm côté pli, 10 mm à l'extérieur — § « Format » |
+| Fin du carnet | **3 pages libres réglées** pour écrire (réglage « Zones libres », `pages_libres`) |
 
 ### Structure d'une étape
 
@@ -787,10 +821,10 @@ un** encart tiré du récit, avec son registre, le paragraphe d'où il vient et 
   s'efface ;
 - **page hôte** : celle du paragraphe d'où vient l'encart, sinon la première
   page de l'étape qui peut le porter sans perdre une ligne. Récit avec 0 ou 1
-  photo : la zone flottante l'accueille sans rien coûter (mesuré : 560 signes
-  sous un bandeau, 880 sur une page de suite, comme sans encart), et une grande
-  photo en tête repasse en photo flottante. Deux photos : 240 signes au plus.
-  Ouverture de chapitre avec deux photos : 120. Trois photos : jamais ;
+  photo : la zone flottante l'accueille sans rien coûter (mesuré : 540 signes
+  sous un bandeau, 860 sur une page de suite, comme sans encart), et une grande
+  photo en tête repasse en photo flottante. Deux photos : 230 signes au plus.
+  Ouverture de chapitre avec deux photos : 110. Trois photos : jamais ;
 - **mention** : la page porte `ai_note` « Fun fact rédigé par IA ».
 
 Le réglage « Insérer des Fun facts » se coche dans la fiche du carnet de

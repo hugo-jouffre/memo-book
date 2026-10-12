@@ -131,13 +131,16 @@
    * `bandeau` : première page de l'étape ; `suite` : pages suivantes, sans
    * bandeau ni titre, qui gagnent la place de ceux-ci.
    */
+  // Recalibré le 12/10/2026 pour les marges de reliure (colonne de 349 pt au
+  // lieu de 360) : environ 3 % de signes en moins par page.
   const CAPACITE_PAGE = {
-    defaut: { bandeau: 560, suite: 880 },
-    layout_hero_top: { bandeau: 380, suite: 680 },
+    defaut: { bandeau: 540, suite: 860 },
+    layout_hero_top: { bandeau: 380, suite: 660 },
     // Pages de suite seulement : sous un bandeau, les trois photos n'ont plus
     // leur hauteur. Mesuré le 08/10/2026 (`calibrate-lengths.ts --filtre
-    // trio`) : 440 signes en deux paragraphes avant que les photos cèdent.
-    layout_trio: { bandeau: 0, suite: 420, paragraphes: 2 },
+    // trio`) : 440 signes en deux paragraphes avant que les photos cèdent,
+    // 410 avec les marges de reliure.
+    layout_trio: { bandeau: 0, suite: 410, paragraphes: 2 },
     // Le récit qui contourne une grande photo (maquette faite à la main) tient
     // la capacité ordinaire ; avec le post-it « Infos » en bas à gauche, 800
     // signes sur une page de suite avant que le texte ne passe dessous
@@ -435,10 +438,10 @@
   /**
    * Ce que tient une ouverture de chapitre : la carte prend 176 pt à droite et
    * la colonne de récit tombe à ~24 caractères par ligne (LAYOUT_KB § « Chapitre
-   * ou journée ordinaire »). 540 et non 560 : c'est le dernier palier où le
-   * calibrage du 07/10 ne relève aucun débordement.
+   * ou journée ordinaire »). 500 : c'est le dernier palier où le calibrage du
+   * 12/10 (marges de reliure) ne relève aucun débordement.
    */
-  const CAPACITE_CHAPITRE = { sansPhoto: 540, deuxPhotos: 320 };
+  const CAPACITE_CHAPITRE = { sansPhoto: 500, deuxPhotos: 300 };
 
   /** Six points au plus sur une carte (LAYOUT_KB § « Les cartes »). */
   const MAX_POINTS_CARTE = 6;
@@ -801,6 +804,21 @@
   const ETIRER = 10;
 
   /**
+   * Le corps du récit s'ajuste d'un point au plus (Hugo, 12/10/2026) :
+   *
+   * - **serré** (11 pt) : un récit qui dépasse de 8 % au plus ce que ses pages
+   *   tiennent passe en 11 pt plutôt que de prendre une page de plus. Le 11 pt
+   *   en tient bien davantage (mesuré au calibrage) ; 8 % est la limite qu'on
+   *   s'impose pour que le récit ne paraisse pas tassé ;
+   * - **ample** (13 pt) : une étape dont chaque page de récit est remplie à
+   *   moins de 45 %, sans photo ni encart pour combler, passe en 13 pt.
+   *
+   * Toujours l'étape entière : un récit ne change pas de corps en tournant la
+   * page.
+   */
+  const CORPS = { serre: 1.08, ample: 0.45 };
+
+  /**
    * Une photo digne d'une pleine page : notée 9 au moins par l'analyse, pas
    * une photo de groupe (elle serait rognée), au format de la page à un tiers
    * près, et assez définie pour 154 × 216 mm à 200 dpi.
@@ -887,12 +905,16 @@
    */
   function structurerEtape({ paragraphes, pagesNaturelles, photos: toutes, maxParPage, chapitre, memoire }) {
     const T = pagesNaturelles.length;
-    const capacites = (k) =>
-      Array.from({ length: k }, (_, i) =>
-        i === 0
-          ? { signes: chapitre ? CAPACITE_CHAPITRE.sansPhoto : CAPACITE_PAGE.defaut.bandeau, paragraphes: PARAGRAPHES_PAR_PAGE.bandeau }
-          : { signes: CAPACITE_PAGE.defaut.suite, paragraphes: PARAGRAPHES_PAR_PAGE.suite },
-      );
+    const capacites = (k, facteur = 1) =>
+      Array.from({ length: k }, (_, i) => ({
+        signes:
+          Math.floor(
+            ((i === 0 ? (chapitre ? CAPACITE_CHAPITRE.sansPhoto : CAPACITE_PAGE.defaut.bandeau) : CAPACITE_PAGE.defaut.suite) *
+              facteur) /
+              10,
+          ) * 10,
+        paragraphes: i === 0 ? PARAGRAPHES_PAR_PAGE.bandeau : PARAGRAPHES_PAR_PAGE.suite,
+      }));
     // Le récit à parts égales sur ses pages (à défaut, rempli page après
     // page) ; et sur une page de plus — pour une étape courte, c'est le
     // scénario A ; pour une plus longue, un recours qui coûte (`ETIRER`).
@@ -901,12 +923,15 @@
     ];
     const etale = repartirRecit(paragraphes, T + 1, capacites(T + 1));
     if (etale) decoupages.push({ pages: etale, plus: true });
+    // Et sur une page de moins, en corps serré : retenu seulement s'il fait
+    // gagner des pages (voir plus bas).
+    const serre = T > 1 ? repartirRecit(paragraphes, T - 1, capacites(T - 1, CORPS.serre)) : null;
 
-    const candidatsPour = (photos) => {
+    const candidatsPour = (photos, liste = decoupages) => {
     const N = photos.length;
     const candidats = [];
     const vus = new Set();
-    for (const d of decoupages) {
+    for (const d of liste) {
       const k = d.pages.length;
       const chapitreDeux = chapitre && signes(d.pages[0]) <= CAPACITE_CHAPITRE.deuxPhotos && N >= 2;
       const base = d.pages.map((_, i) => (i === 0 && chapitre ? (chapitreDeux ? 2 : 0) : maxParPage));
@@ -955,6 +980,7 @@
             total: k + q,
             scenario: q > 0 ? "B" : "A",
             cout,
+            ...(d.serre ? { serre: true } : {}),
           });
         }
       }
@@ -990,7 +1016,13 @@
     const ecartees = toutes.filter((p) => !gardees.includes(p));
 
     const pairs = candidats.filter(pair);
-    const valides = pairs.length ? pairs : candidats;
+    let valides = pairs.length ? pairs : candidats;
+    // Le corps serré, s'il donne une étape paire plus courte que tout le reste.
+    if (serre) {
+      const serres = candidatsPour(gardees, [{ pages: serre, plus: false, serre: true }]).filter(admis).filter(pair);
+      const plusCourt = Math.min(...valides.map((c) => c.total));
+      if (serres.some((c) => c.total < plusCourt) || (!pairs.length && serres.length)) valides = serres;
+    }
     const moins = Math.min(...valides.map((c) => c.total));
     let parmi = valides.filter((c) => c.total === moins);
     const situation = T <= 1 ? "court" : T % 2 ? "impair" : "pair";
@@ -1002,6 +1034,31 @@
       memoire.set(situation, voulu);
     }
     return { ...parmi.sort((a, b) => a.cout - b.cout)[0], ecartees };
+  }
+
+  /**
+   * Passe en corps ample (13 pt) les étapes dont chaque page de récit est
+   * remplie à moins de 45 %, sans photo, sans encart, sans carte (`CORPS`).
+   */
+  function corpsAmple(plans) {
+    const parEtape = new Map();
+    for (const plan of plans) {
+      if (plan.genre !== "recit") continue;
+      if (!parEtape.has(plan.etape)) parEtape.set(plan.etape, []);
+      parEtape.get(plan.etape).push(plan);
+    }
+    for (const pages of parEtape.values()) {
+      const maigres = pages.every(
+        (plan) =>
+          !plan.taille &&
+          !plan.photos.length &&
+          !plan.encart &&
+          !plan.carte &&
+          plan.texte.length &&
+          signes(plan.texte) < CAPACITE_PAGE.defaut[plan.sorte] * CORPS.ample,
+      );
+      if (maigres) for (const plan of pages) plan.taille = "ample";
+    }
   }
 
   /* ------------------------------------------- composition des doubles pages */
@@ -1161,20 +1218,20 @@
    * relevés par `calibrate-lengths.ts` :
    *
    * - récit avec 0 ou 1 photo : l'encart se pose dans la zone flottante, à côté
-   *   de la photo, sans rien coûter (560 / 2 paragraphes sous un bandeau, 880
+   *   de la photo, sans rien coûter (540 / 2 paragraphes sous un bandeau, 860
    *   sur une page de suite). Une grande photo en tête n'a pas cette zone : la
    *   page passe à la photo flottante ;
-   * - deux photos (`layout_split_left`) : la colonne de récit se rétrécit, 240 ;
-   * - ouverture de chapitre avec deux photos : 120 ;
+   * - deux photos (`layout_split_left`) : la colonne de récit se rétrécit, 230 ;
+   * - ouverture de chapitre avec deux photos : 110 ;
    * - trois photos (`layout_collage`) ou carte seule : pas de place prévue.
    */
   function peutPorterEncart(plan) {
     if (plan.genre !== "recit" || !plan.texte.length) return false;
     const n = signes(plan.texte);
-    if (plan.layout === "layout_chapter_map") return plan.photos.length === 2 && n <= 120;
+    if (plan.layout === "layout_chapter_map") return plan.photos.length === 2 && n <= 110;
     if (plan.layout === "layout_recit_photo") return n <= CAPACITE_PAGE.layout_recit_photo.postit[plan.sorte];
     if (plan.photos.length <= 1) return true;
-    return plan.photos.length === 2 && n <= 240;
+    return plan.photos.length === 2 && n <= 230;
   }
 
   /**
@@ -1203,7 +1260,7 @@
       const pages = plans.map((plan, i) => ({ plan, i })).filter(({ plan }) => plan.etape === e && peutPorterEncart(plan));
       const hote = pages.find(({ plan }) => plan.paragraphes.includes(encart.paragraphe)) || pages[0];
       if (hote) candidats.push({ i: hote.i, encart, e });
-      else raisons.push(`étape ${e + 1} : aucune page n'a la place (trois photos, ou deux à côté d'un récit de plus de 240 signes)`);
+      else raisons.push(`étape ${e + 1} : aucune page n'a la place (trois photos, ou deux à côté d'un récit de plus de 230 signes)`);
     });
 
     // La meilleure somme des notes sous la contrainte d'écart : un choix
@@ -1564,6 +1621,7 @@
           ouvreLeCarnet: index === 0 && p === 0,
           bandeau: p === 0 ? etape : null,
           carte: p === 0 && chapitre ? carte : "",
+          ...(structure.serre ? { taille: "serre" } : {}),
         };
         plan.layout = plan.carte ? "layout_chapter_map" : layoutDeRecit(plan.photos, texte, plan.sorte, plan.ouvreLeCarnet);
         plans.push(plan);
@@ -1583,6 +1641,10 @@
     // déplacer ni photo ni ligne de récit, et ne font que distinguer davantage
     // deux pages en vis-à-vis.
     if (funFacts) journal(`${placerEncarts(plans, etapes, journal)} encart(s) « fun fact » dans le carnet.`);
+
+    // Le corps ample, une fois les photos et les encarts à leur place : ce sont
+    // eux qui remplissent une page avant le texte.
+    corpsAmple(plans);
 
     // Les décors, double page par double page : une étiquette de titre, un
     // tracé pointillé, deux stickers au plus.
@@ -1619,6 +1681,7 @@
         ...(plan.encart ? { fun_facts_title: plan.encart.titre, ai_note: "Fun fact rédigé par IA" } : {}),
         sticker_groups: [],
         ...decors,
+        ...(plan.taille ? { taille_texte: plan.taille } : {}),
         ...(plan.carte ? { map_svg: plan.carte } : {}),
       };
       if (!plan.bandeau) return { title: "", ...jour };
@@ -1654,6 +1717,7 @@
     lieuxDuVoyage,
     composition,
     composerJours,
+    corpsAmple,
     paragraphesEnHtml,
     rognage,
   };
