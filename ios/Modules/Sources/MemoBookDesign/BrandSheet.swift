@@ -73,6 +73,7 @@ public struct BrandSheet<Content: View>: View {
     private let titleAlignment: TitleAlignment
     private let surface: Surface
     private let topOverflow: CGFloat
+    private let leadingArtwork: AnyView?
     private let content: Content
 
     /// - Parameter badge: la pastille qui se glisse **entre** le titre et le
@@ -117,8 +118,10 @@ public struct BrandSheet<Content: View>: View {
     /// - Parameter topOverflow: la hauteur **réservée au-dessus** de l'aplat de
     ///   la feuille, pour ce qui doit la dépasser par le haut.
     ///
-    ///   Zéro partout sauf au mot des fondateurs, dont la photo est collée à
-    ///   cheval sur le bord. Elle n'y arrivait pas : la feuille du système
+    ///   Zéro partout aujourd'hui. Le mot des fondateurs s'en servait pour sa
+    ///   photo collée à cheval sur le bord, jusqu'à la maquette du 12/10/2026
+    ///   qui la pose sur la ligne du titre (``init(_:leading:content:)``).
+    ///   Elle n'y arrivait pas sans elle : la feuille du système
     ///   **rogne son contenu à ses propres bords** — c'est le prix de
     ///   `presentationBackground`, qui lui confie le fond et la forme — et un
     ///   `overlay` posé par-dessus la feuille se faisait couper au ras du bord
@@ -146,6 +149,28 @@ public struct BrandSheet<Content: View>: View {
         self.titleAlignment = titleAlignment
         self.surface = surface
         self.topOverflow = topOverflow
+        self.leadingArtwork = nil
+        self.content = content()
+    }
+
+    /// Une illustration **posée devant le titre**, sur sa ligne, le rond de
+    /// fermeture au bout — la photo des fondateurs (maquette « Un mot des
+    /// fondateurs », `3709:17115`, Hugo, 12/10/2026). Le titre se centre sur
+    /// sa hauteur au lieu de s'aligner en haut ; en taille de texte
+    /// accessible, l'illustration prend sa propre ligne au-dessus.
+    public init<Leading: View>(
+        _ title: String,
+        @ViewBuilder leading: () -> Leading,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.icon = nil
+        self.badge = nil
+        self.paragraphs = []
+        self.titleAlignment = .leading
+        self.surface = .paper
+        self.topOverflow = 0
+        self.leadingArtwork = AnyView(leading())
         self.content = content()
     }
 
@@ -325,6 +350,25 @@ public struct BrandSheet<Content: View>: View {
     @ViewBuilder
     private var header: some View {
         switch titleAlignment {
+        case .leading where leadingArtwork != nil && typeSize.isAccessibilitySize:
+            VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
+                HStack(alignment: .top, spacing: 0) {
+                    leadingArtwork
+                    Spacer(minLength: 0)
+                    closeButton
+                }
+                titleBlock(alignment: .leading)
+            }
+            .padding(.top, MemoBookSpacing.xs)
+
+        case .leading where leadingArtwork != nil:
+            HStack(alignment: .center, spacing: MemoBookSpacing.snug) {
+                leadingArtwork
+                titleBlock(alignment: .leading)
+                closeButton
+            }
+            .padding(.top, MemoBookSpacing.xs)
+
         case .leading:
             HStack(alignment: .top, spacing: MemoBookSpacing.s) {
                 titleBlock(alignment: .leading)

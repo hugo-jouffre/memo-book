@@ -454,6 +454,14 @@ public struct ChatMessage: Sendable, Hashable, Identifiable {
     /// un abonné ne reçoit jamais « Raconter sans limite ».
     public let callToAction: ChatCallToAction?
 
+    /// Le souvenir dont parle cette bulle : celui du voyageur, la fiche dont
+    /// MEMO attend la validation, le récit dont il demande les photos (Hugo,
+    /// 12/10/2026). C'est ce qui fait viser la bonne fiche à « J'aimerais
+    /// faire des modifications à la main » quand MEMO revient à une étape
+    /// sautée, et ce qui retrouve le récit d'une étape depuis sa carte. `nil`
+    /// d'un serveur d'avant, et pour ce qui ne parle d'aucun souvenir.
+    public let entryId: String?
+
     public init(
         id: String,
         author: ChatAuthor,
@@ -467,7 +475,8 @@ public struct ChatMessage: Sendable, Hashable, Identifiable {
         seq: Int? = nil,
         pauseMilliseconds: Int? = nil,
         disposition: ChatDisposition? = nil,
-        callToAction: ChatCallToAction? = nil
+        callToAction: ChatCallToAction? = nil,
+        entryId: String? = nil
     ) {
         self.id = id
         self.author = author
@@ -482,6 +491,7 @@ public struct ChatMessage: Sendable, Hashable, Identifiable {
         self.pauseMilliseconds = pauseMilliseconds
         self.disposition = disposition
         self.callToAction = callToAction
+        self.entryId = entryId
     }
 
     /// Le texte qu'on peut copier ou faire lire à voix haute. `nil` pour un
@@ -572,7 +582,7 @@ extension ChatMessage: Codable {
     private enum CodingKeys: String, CodingKey {
         case id, author, body, sentAt, stepId
         case authorName, authorInitials, authorAvatarUrl, seq, pauseMilliseconds, disposition
-        case callToAction
+        case callToAction, entryId
     }
 
     /// L'acheminement n'est **pas** décodé : un message qui arrive du serveur
@@ -596,7 +606,8 @@ extension ChatMessage: Codable {
             disposition: try container.decodeIfPresent(ChatDisposition.self, forKey: .disposition),
             // Un bouton illisible ne fait jamais tomber la bulle : son texte
             // se suffit à lui-même, le bouton n'est qu'un raccourci.
-            callToAction: (try? container.decodeIfPresent(ChatCallToAction.self, forKey: .callToAction)) ?? nil
+            callToAction: (try? container.decodeIfPresent(ChatCallToAction.self, forKey: .callToAction)) ?? nil,
+            entryId: try container.decodeIfPresent(String.self, forKey: .entryId)
         )
     }
 
@@ -614,6 +625,7 @@ extension ChatMessage: Codable {
         try container.encodeIfPresent(pauseMilliseconds, forKey: .pauseMilliseconds)
         try container.encodeIfPresent(disposition, forKey: .disposition)
         try container.encodeIfPresent(callToAction, forKey: .callToAction)
+        try container.encodeIfPresent(entryId, forKey: .entryId)
     }
 }
 
@@ -1183,6 +1195,25 @@ public struct ChatThread: Codable, Sendable, Hashable, Identifiable {
     /// comme d'habitude.
     public func lastMessage(about stepId: String) -> ChatMessage? {
         messages.last { $0.stepId == stepId }
+    }
+
+    /// **Le récit d'une étape** : la bulle du voyageur qui l'a racontée — son
+    /// vocal ou son texte —, que la carte de l'étape ouvre (Hugo, 12/10/2026).
+    /// À défaut, sa fiche, puis le premier message qui en parle.
+    ///
+    /// Le premier et non le dernier : une étape se relit depuis son début, et
+    /// sa fiche suit juste dessous.
+    public func storyMessage(about stepId: String) -> ChatMessage? {
+        let about = messages.filter { $0.stepId == stepId }
+        return about.first { message in
+            guard message.author.isTraveller else { return false }
+            switch message.body {
+            case .voice, .text: return message.disposition == .memory || message.disposition == nil
+            case .transcript, .photos: return false
+            }
+        }
+            ?? about.first { if case .transcript = $0.body { true } else { false } }
+            ?? about.first
     }
 }
 
