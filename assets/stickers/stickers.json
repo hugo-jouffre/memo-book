@@ -1,4 +1,779 @@
 {
-  "commentaire": "Bibliothèque de stickers dessinés. Un sticker par fichier, posé dans le carnet quand un de ses mots apparaît dans le récit d'une étape. Format : voir assets/README.md § « assets/stickers/ ».",
-  "stickers": []
+  "commentaire": "Généré par backend/scripts/preparer-stickers.ts depuis source.json — ne pas modifier à la main. Format : voir assets/README.md § « assets/stickers/ ».",
+  "stickers": [
+    {
+      "fichier": "globe-1.png",
+      "nom": "Globe terrestre",
+      "famille": "globe",
+      "style": "sticker",
+      "mots": [
+        "tour du monde",
+        "globe",
+        "planisphere",
+        "autour du monde"
+      ],
+      "largeur": 192,
+      "hauteur": 249,
+      "maxPt": 92,
+      "notion": "37d401e7bdc1801fa042f41b035d0435"
+    },
+    {
+      "fichier": "globe-2.png",
+      "nom": "Globe terrestre (N&B)",
+      "famille": "globe",
+      "style": "trait",
+      "mots": [
+        "tour du monde",
+        "globe",
+        "planisphere",
+        "autour du monde"
+      ],
+      "largeur": 175,
+      "hauteur": 229,
+      "maxPt": 84,
+      "notion": "37d401e7bdc18072ac6ae6054f6e743f"
+    },
+    {
+      "fichier": "sac-a-dos-1.png",
+      "nom": "Sac à dos de voyage",
+      "famille": "sac-a-dos",
+      "style": "dessin",
+      "mots": [
+        "sac a dos",
+        "sacs a dos",
+        "backpack",
+        "backpacker",
+        "baroudeur",
+        "baroudeurs"
+      ],
+      "largeur": 136,
+      "hauteur": 181,
+      "maxPt": 65,
+      "notion": "37d401e7bdc18026bf40d81b6e9a8922"
+    },
+    {
+      "fichier": "sac-a-dos-2.png",
+      "nom": "Sac à dos de voyage",
+      "famille": "sac-a-dos",
+      "style": "dessin",
+      "mots": [
+        "sac a dos",
+        "sacs a dos",
+        "backpack",
+        "backpacker",
+        "baroudeur",
+        "baroudeurs"
+      ],
+      "largeur": 218,
+      "hauteur": 201,
+      "maxPt": 104,
+      "notion": "37d401e7bdc1807cacfff2cc0007ae95"
+    },
+    {
+      "fichier": "sac-a-dos-3.png",
+      "nom": "Sac à dos de voyage",
+      "famille": "sac-a-dos",
+      "style": "sticker",
+      "mots": [
+        "sac a dos",
+        "sacs a dos",
+        "backpack",
+        "backpacker",
+        "baroudeur",
+        "baroudeurs"
+      ],
+      "largeur": 179,
+      "hauteur": 229,
+      "maxPt": 85,
+      "notion": "37d401e7bdc180759443f1295fd43cc3"
+    },
+    {
+      "fichier": "sac-a-dos-4.png",
+      "nom": "Sac à dos de voyage",
+      "famille": "sac-a-dos",
+      "style": "sticker",
+      "mots": [
+        "sac a dos",
+        "sacs a dos",
+        "backpack",
+        "backpacker",
+        "baroudeur",
+        "baroudeurs"
+      ],
+      "largeur": 171,
+      "hauteur": 234,
+      "maxPt": 82,
+      "notion": "37d401e7bdc1807bbcc6f2bc93b031e5"
+    },
+    {
+      "fichier": "sac-a-dos-5.png",
+      "nom": "Sac à dos de voyage",
+      "famille": "sac-a-dos",
+      "style": "sticker",
+      "mots": [
+        "sac a dos",
+        "sacs a dos",
+        "backpack",
+        "backpacker",
+        "baroudeur",
+        "baroudeurs"
+      ],
+      "largeur": 219,
+      "hauteur": 239,
+      "maxPt": 105,
+      "notion": "37d401e7bdc1808fbf7dd94d5d8ceeee"
+    },
+    {
+      "fichier": "sac-a-dos-6.png",
+      "nom": "Sac à dos de voyage",
+      "famille": "sac-a-dos",
+      "style": "sticker",
+      "mots": [
+        "sac a dos",
+        "sacs a dos",
+        "backpack",
+        "backpacker",
+        "baroudeur",
+        "baroudeurs"
+      ],
+      "largeur": 202,
+      "hauteur": 230,
+      "maxPt": 96,
+      "notion": "37d401e7bdc180cf94fbd9eac27e8079"
+    },
+    {
+      "fichier": "sac-a-dos-7.png",
+      "nom": "Sac à dos de voyage",
+      "famille": "sac-a-dos",
+      "style": "sticker",
+      "mots": [
+        "sac a dos",
+        "sacs a dos",
+        "backpack",
+        "backpacker",
+        "baroudeur",
+        "baroudeurs"
+      ],
+      "largeur": 188,
+      "hauteur": 222,
+      "maxPt": 90,
+      "notion": "37d401e7bdc180e590c3ef05f97418a0"
+    },
+    {
+      "fichier": "sac-a-dos-8.png",
+      "nom": "Sac à dos de voyage",
+      "famille": "sac-a-dos",
+      "style": "sticker",
+      "mots": [
+        "sac a dos",
+        "sacs a dos",
+        "backpack",
+        "backpacker",
+        "baroudeur",
+        "baroudeurs"
+      ],
+      "largeur": 201,
+      "hauteur": 238,
+      "maxPt": 96,
+      "notion": "37d401e7bdc180e6a3a1cae79b9625a4"
+    },
+    {
+      "fichier": "appareil-photo-1.png",
+      "nom": "Appareil photo (polaroid)",
+      "famille": "appareil-photo",
+      "style": "sticker",
+      "mots": [
+        "appareil photo",
+        "appareils photo",
+        "appareil-photo",
+        "polaroid",
+        "instax",
+        "pellicule",
+        "argentique",
+        "reflex",
+        "photographe"
+      ],
+      "largeur": 239,
+      "hauteur": 244,
+      "maxPt": 114,
+      "notion": "37d401e7bdc1802c8eb6d85bbacad5e9"
+    },
+    {
+      "fichier": "appareil-photo-2.png",
+      "nom": "Appareil photo",
+      "famille": "appareil-photo",
+      "style": "sticker",
+      "mots": [
+        "appareil photo",
+        "appareils photo",
+        "appareil-photo",
+        "polaroid",
+        "instax",
+        "pellicule",
+        "argentique",
+        "reflex",
+        "photographe"
+      ],
+      "largeur": 267,
+      "hauteur": 193,
+      "maxPt": 128,
+      "notion": "37d401e7bdc1804d8b4eeb98afc4f374"
+    },
+    {
+      "fichier": "appareil-photo-3.png",
+      "nom": "Appareil photo",
+      "famille": "appareil-photo",
+      "style": "sticker",
+      "mots": [
+        "appareil photo",
+        "appareils photo",
+        "appareil-photo",
+        "polaroid",
+        "instax",
+        "pellicule",
+        "argentique",
+        "reflex",
+        "photographe"
+      ],
+      "largeur": 240,
+      "hauteur": 217,
+      "maxPt": 115,
+      "notion": "37d401e7bdc1807ab2d3ebce7d5b4500"
+    },
+    {
+      "fichier": "appareil-photo-4.png",
+      "nom": "Appareil photo",
+      "famille": "appareil-photo",
+      "style": "sticker",
+      "mots": [
+        "appareil photo",
+        "appareils photo",
+        "appareil-photo",
+        "polaroid",
+        "instax",
+        "pellicule",
+        "argentique",
+        "reflex",
+        "photographe"
+      ],
+      "largeur": 254,
+      "hauteur": 205,
+      "maxPt": 121,
+      "notion": "37d401e7bdc180eeaa1fd288c0eb0051"
+    },
+    {
+      "fichier": "appareil-photo-5.png",
+      "nom": "Appareil photo",
+      "famille": "appareil-photo",
+      "style": "dessin",
+      "mots": [
+        "appareil photo",
+        "appareils photo",
+        "appareil-photo",
+        "polaroid",
+        "instax",
+        "pellicule",
+        "argentique",
+        "reflex",
+        "photographe"
+      ],
+      "largeur": 254,
+      "hauteur": 221,
+      "maxPt": 121,
+      "notion": "37d401e7bdc18070aef0c35618bc5848"
+    },
+    {
+      "fichier": "appareil-photo-6.png",
+      "nom": "Appareil photo",
+      "famille": "appareil-photo",
+      "style": "dessin",
+      "mots": [
+        "appareil photo",
+        "appareils photo",
+        "appareil-photo",
+        "polaroid",
+        "instax",
+        "pellicule",
+        "argentique",
+        "reflex",
+        "photographe"
+      ],
+      "largeur": 264,
+      "hauteur": 198,
+      "maxPt": 126,
+      "notion": "37d401e7bdc180729065d19cd2c27794"
+    },
+    {
+      "fichier": "appareil-photo-7.png",
+      "nom": "Appareil photo",
+      "famille": "appareil-photo",
+      "style": "dessin",
+      "mots": [
+        "appareil photo",
+        "appareils photo",
+        "appareil-photo",
+        "polaroid",
+        "instax",
+        "pellicule",
+        "argentique",
+        "reflex",
+        "photographe"
+      ],
+      "largeur": 260,
+      "hauteur": 178,
+      "maxPt": 124,
+      "notion": "37d401e7bdc18096a53ec9cb9bf146e0"
+    },
+    {
+      "fichier": "appareil-photo-8.png",
+      "nom": "Appareil photo (polaroid)",
+      "famille": "appareil-photo",
+      "style": "dessin",
+      "mots": [
+        "appareil photo",
+        "appareils photo",
+        "appareil-photo",
+        "polaroid",
+        "instax",
+        "pellicule",
+        "argentique",
+        "reflex",
+        "photographe"
+      ],
+      "largeur": 244,
+      "hauteur": 249,
+      "maxPt": 117,
+      "notion": "37d401e7bdc180febd8ec6913802148b"
+    },
+    {
+      "fichier": "boussole-1.png",
+      "nom": "Rose des vents",
+      "famille": "boussole",
+      "style": "sticker",
+      "mots": [
+        "boussole",
+        "rose des vents",
+        "randonnee",
+        "rando",
+        "trek",
+        "trekking",
+        "sentier",
+        "orientation"
+      ],
+      "largeur": 243,
+      "hauteur": 250,
+      "maxPt": 116,
+      "notion": "37d401e7bdc18044b880d0b9c5967f67"
+    },
+    {
+      "fichier": "boussole-2.png",
+      "nom": "Rose des vents",
+      "famille": "boussole",
+      "style": "sticker",
+      "mots": [
+        "boussole",
+        "rose des vents",
+        "randonnee",
+        "rando",
+        "trek",
+        "trekking",
+        "sentier",
+        "orientation"
+      ],
+      "largeur": 250,
+      "hauteur": 252,
+      "maxPt": 120,
+      "notion": "37d401e7bdc180e3918dc0fd5464787d"
+    },
+    {
+      "fichier": "boussole-3.png",
+      "nom": "Rose des vents (N&B)",
+      "famille": "boussole",
+      "style": "trait",
+      "mots": [
+        "boussole",
+        "rose des vents",
+        "randonnee",
+        "rando",
+        "trek",
+        "trekking",
+        "sentier",
+        "orientation"
+      ],
+      "largeur": 186,
+      "hauteur": 186,
+      "maxPt": 89,
+      "notion": "37d401e7bdc1809a8572d3ee868ffb06"
+    },
+    {
+      "fichier": "boussole-4.png",
+      "nom": "Boussole",
+      "famille": "boussole",
+      "style": "dessin",
+      "mots": [
+        "boussole",
+        "rose des vents",
+        "randonnee",
+        "rando",
+        "trek",
+        "trekking",
+        "sentier",
+        "orientation"
+      ],
+      "largeur": 197,
+      "hauteur": 230,
+      "maxPt": 94,
+      "notion": "387401e7bdc180bb8086ff1bb5062bb0"
+    },
+    {
+      "fichier": "repere-1.png",
+      "nom": "Point de position",
+      "famille": "repere",
+      "style": "sticker",
+      "mots": [
+        "gps",
+        "google maps",
+        "maps me",
+        "perdus",
+        "egares",
+        "point de rendez-vous"
+      ],
+      "largeur": 155,
+      "hauteur": 215,
+      "maxPt": 74,
+      "notion": "37d401e7bdc180a0a0c6d2b90ac46e63"
+    },
+    {
+      "fichier": "repere-2.png",
+      "nom": "Point de position",
+      "famille": "repere",
+      "style": "sticker",
+      "mots": [
+        "gps",
+        "google maps",
+        "maps me",
+        "perdus",
+        "egares",
+        "point de rendez-vous"
+      ],
+      "largeur": 190,
+      "hauteur": 232,
+      "maxPt": 91,
+      "notion": "37d401e7bdc180b0b065ec046682da4d"
+    },
+    {
+      "fichier": "drone-1.png",
+      "nom": "Drone",
+      "famille": "drone",
+      "style": "sticker",
+      "mots": [
+        "drone"
+      ],
+      "largeur": 260,
+      "hauteur": 178,
+      "maxPt": 124,
+      "notion": "37d401e7bdc180c8bbbdfb3ff3ce71e1"
+    },
+    {
+      "fichier": "carte-postale-1.png",
+      "nom": "Carte postale paysage mer",
+      "famille": "carte-postale",
+      "style": "sticker",
+      "mots": [
+        "carte postale",
+        "cartes postales"
+      ],
+      "largeur": 280,
+      "hauteur": 258,
+      "maxPt": 134,
+      "notion": "387401e7bdc180a59303e93a03e9240b"
+    },
+    {
+      "fichier": "carte-1.png",
+      "nom": "Carte",
+      "famille": "carte",
+      "style": "dessin",
+      "mots": [
+        "itineraire",
+        "explorer",
+        "exploration",
+        "plan de la ville",
+        "carte routiere",
+        "road book"
+      ],
+      "largeur": 365,
+      "hauteur": 353,
+      "maxPt": 175,
+      "notion": "387401e7bdc180ea9ad5fb45179af27e"
+    },
+    {
+      "fichier": "passeport-1.png",
+      "nom": "Carte + passeport",
+      "famille": "passeport",
+      "style": "dessin",
+      "mots": [
+        "passeport",
+        "visa",
+        "frontiere",
+        "douane",
+        "douanier"
+      ],
+      "largeur": 356,
+      "hauteur": 251,
+      "maxPt": 170,
+      "notion": "387401e7bdc180fe8662dde83ea27083"
+    },
+    {
+      "fichier": "palmier-1.png",
+      "nom": "Palmiers",
+      "famille": "palmier",
+      "style": "dessin",
+      "mots": [
+        "palmier",
+        "cocotier",
+        "tropical",
+        "tropicale",
+        "tropique"
+      ],
+      "largeur": 280,
+      "hauteur": 492,
+      "maxPt": 134,
+      "notion": "387401e7bdc18061acb1ff4f072773bd"
+    },
+    {
+      "fichier": "taxi-1.png",
+      "nom": "Voiture / taxi",
+      "famille": "taxi",
+      "style": "dessin",
+      "mots": [
+        "taxi",
+        "tuk tuk",
+        "tuktuk",
+        "chauffeur",
+        "voiture",
+        "road trip",
+        "roadtrip"
+      ],
+      "largeur": 382,
+      "hauteur": 192,
+      "maxPt": 183,
+      "notion": "387401e7bdc18078b3c1fc87e0f13bb2"
+    },
+    {
+      "fichier": "avion-1.png",
+      "nom": "Avion",
+      "famille": "avion",
+      "style": "dessin",
+      "mots": [
+        "avion",
+        "aeroport",
+        "decollage",
+        "decolle",
+        "atterrissage",
+        "atterri",
+        "escale",
+        "en vol"
+      ],
+      "largeur": 364,
+      "hauteur": 172,
+      "maxPt": 174,
+      "notion": "387401e7bdc18080bb76cccfe6b4fba5"
+    },
+    {
+      "fichier": "billet-avion-1.png",
+      "nom": "Billets d'avion",
+      "famille": "billet-avion",
+      "style": "trait",
+      "mots": [
+        "billet d avion",
+        "billets d avion",
+        "embarquement",
+        "carte d embarquement",
+        "check in",
+        "enregistrement des bagages"
+      ],
+      "largeur": 325,
+      "hauteur": 231,
+      "maxPt": 156,
+      "notion": "387401e7bdc180e29abbccfd609fbdcf"
+    },
+    {
+      "fichier": "scooter-1.png",
+      "nom": "Moto avec 2 passagers",
+      "famille": "scooter",
+      "style": "dessin",
+      "mots": [
+        "scooter",
+        "moto",
+        "motos",
+        "vespa",
+        "deux roues",
+        "mobylette"
+      ],
+      "largeur": 482,
+      "hauteur": 415,
+      "maxPt": 231,
+      "notion": "387401e7bdc1800cb5afcef630f20020"
+    },
+    {
+      "fichier": "scooter-2.png",
+      "nom": "Moto",
+      "famille": "scooter",
+      "style": "dessin",
+      "mots": [
+        "scooter",
+        "moto",
+        "motos",
+        "vespa",
+        "deux roues",
+        "mobylette"
+      ],
+      "largeur": 308,
+      "hauteur": 167,
+      "maxPt": 147,
+      "notion": "387401e7bdc180138883f34ed1bc3499"
+    },
+    {
+      "fichier": "plage-1.png",
+      "nom": "Panneau vers la plage",
+      "famille": "plage",
+      "style": "trait",
+      "mots": [
+        "plage",
+        "plages",
+        "crique",
+        "beach"
+      ],
+      "largeur": 242,
+      "hauteur": 335,
+      "maxPt": 116,
+      "notion": "387401e7bdc18040b59fe848d8a50bc2"
+    },
+    {
+      "fichier": "tongs-1.png",
+      "nom": "Tongs",
+      "famille": "tongs",
+      "style": "trait",
+      "mots": [
+        "tongs",
+        "sandales",
+        "pieds nus",
+        "sable"
+      ],
+      "largeur": 285,
+      "hauteur": 208,
+      "maxPt": 136,
+      "notion": "387401e7bdc180f3b0c8d8b60f83b1c1"
+    },
+    {
+      "fichier": "cocktail-1.png",
+      "nom": "Cocktail",
+      "famille": "cocktail",
+      "style": "trait",
+      "mots": [
+        "cocktail",
+        "mojito",
+        "margarita",
+        "pina colada",
+        "spritz",
+        "apero",
+        "aperitif",
+        "happy hour"
+      ],
+      "largeur": 194,
+      "hauteur": 272,
+      "maxPt": 93,
+      "notion": "387401e7bdc18044888cdc7fdf89fda8"
+    },
+    {
+      "fichier": "biere-1.png",
+      "nom": "Bouteilles de bière",
+      "famille": "biere",
+      "style": "trait",
+      "mots": [
+        "biere",
+        "bieres",
+        "pinte",
+        "brasserie",
+        "trinque",
+        "trinquer"
+      ],
+      "largeur": 435,
+      "hauteur": 341,
+      "maxPt": 208,
+      "notion": "387401e7bdc180d0840ffbf03bcb493c"
+    },
+    {
+      "fichier": "personnage-1.png",
+      "nom": "Couple de dos, femme blonde et homme brun",
+      "famille": "personnage",
+      "style": "dessin",
+      "mots": [],
+      "largeur": 145,
+      "hauteur": 283,
+      "maxPt": 69,
+      "reserve": "voyageurs",
+      "notion": "37d401e7bdc180f9a468d92da5cbf6f4"
+    },
+    {
+      "fichier": "personnage-2.png",
+      "nom": "Femme de dos, brune",
+      "famille": "personnage",
+      "style": "dessin",
+      "mots": [],
+      "largeur": 82,
+      "hauteur": 241,
+      "maxPt": 39,
+      "reserve": "voyageurs",
+      "notion": "37d401e7bdc180c1af81d4c3478809c8"
+    },
+    {
+      "fichier": "personnage-3.png",
+      "nom": "Homme de dos, blond",
+      "famille": "personnage",
+      "style": "dessin",
+      "mots": [],
+      "largeur": 96,
+      "hauteur": 266,
+      "maxPt": 46,
+      "reserve": "voyageurs",
+      "notion": "37d401e7bdc180ebbf14dc5499e08884"
+    },
+    {
+      "fichier": "personnage-4.png",
+      "nom": "Fille de dos",
+      "famille": "personnage",
+      "style": "dessin",
+      "mots": [],
+      "largeur": 305,
+      "hauteur": 1010,
+      "maxPt": 146,
+      "reserve": "voyageurs",
+      "notion": "387401e7bdc180318f60ec50a902d177"
+    },
+    {
+      "fichier": "personnage-5.png",
+      "nom": "Fille de dos, sac à dos",
+      "famille": "personnage",
+      "style": "dessin",
+      "mots": [],
+      "largeur": 310,
+      "hauteur": 1020,
+      "maxPt": 148,
+      "reserve": "voyageurs",
+      "notion": "388401e7bdc1809ca15aec91a527a342"
+    },
+    {
+      "fichier": "personnage-6.png",
+      "nom": "Garçon de dos, sac à dos",
+      "famille": "personnage",
+      "style": "dessin",
+      "mots": [],
+      "largeur": 336,
+      "hauteur": 1018,
+      "maxPt": 161,
+      "reserve": "voyageurs",
+      "notion": "388401e7bdc1802096fbe7a85774b013"
+    }
+  ]
 }

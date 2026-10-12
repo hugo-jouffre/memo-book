@@ -117,8 +117,10 @@
      de la page : 0 à 3 choisit une variante, 4 n'en met pas. #}
   {% macro mb_trace(trace) %}{% if trace in ['a', 'b', 'c'] %}<div class="mb-path mb-path--{{ trace }}" aria-hidden="true"><svg viewBox="0 0 500 60" preserveAspectRatio="none"><use href="#mb-path-{{ {'a': 1, 'b': 2, 'c': 3}[trace] }}" /></svg></div>{% endif %}{% endmacro %}
 
-  {# Les stickers de la bibliothèque posés sur la page. #}
-  {% macro mb_stickers(day) %}{% for s in day.stickers or [] %}<div class="mb-sticker mb-sticker--{{ s.place | default('bottom-left') }}" aria-hidden="true"><img src="{{ s.url }}" alt="" /></div>{% endfor %}{% endmacro %}
+  {# Les stickers de la bibliothèque posés sur la page. `largeur` (pt) vient du
+     composeur, qui ne dépasse jamais la définition du dessin ; sans elle, la
+     largeur de la place. #}
+  {% macro mb_stickers(day) %}{% for s in day.stickers or [] %}<div class="mb-sticker mb-sticker--{{ s.place | default('bottom-left') }}"{% if s.largeur %} style="width: {{ s.largeur }}pt"{% endif %} aria-hidden="true"><img src="{{ s.url }}" alt="" /></div>{% endfor %}{% endmacro %}
 
   {# Une page libre : la réglure seule, sur toute la page, pour écrire à la
      main. `gauche` : la page est un verso (marges miroir). #}

@@ -1630,7 +1630,7 @@ function construirePayloadCarnet(photoDe = (data) => data, { imprimeur = Boolean
         // Pourquoi un fun fact manque, quelles photos sont écartées : dans le
         // journal visible, une fois — le payload se recompose souvent (nombre
         // de pages, couverture).
-        if (/^(fun facts non imprimés|photo\(s\) écartée\(s\))/.test(texte) && !etat.rapportsCarnet.has(texte)) {
+        if (/^(fun facts non imprimés|photo\(s\) écartée\(s\)|stickers :)/.test(texte) && !etat.rapportsCarnet.has(texte)) {
           etat.rapportsCarnet.add(texte);
           noter(texte);
         }
@@ -2384,6 +2384,11 @@ const CONTOURS_DETAIL_URL =
  */
 const STICKERS_URL = "https://raw.githubusercontent.com/hugo-jouffre/memo-book/main/assets/stickers/";
 
+/**
+ * La bibliothèque de stickers (`assets/stickers/stickers.json`), celle de
+ * `main` : APITemplate rend le PDF à partir d'adresses publiques, une
+ * bibliothèque n'apparaît donc dans le carnet qu'une fois fusionnée.
+ */
 async function chargerStickers() {
   if (etat.stickers) return;
   try {

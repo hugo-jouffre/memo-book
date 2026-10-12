@@ -331,7 +331,7 @@ faire aujourd'hui.
 | Fun facts | ON | `fun_facts` — voir le dosage plus bas | Rendu |
 | Quiz | ON | `quiz` | Rendu |
 | Pointillés | ON | La **réglure** du papier, `.mb-note__rules` — `rules_enabled: false` la retire (`body.sans-reglure`), le rythme vertical ne bouge pas | Rendu |
-| Décorations & stickers | 2 | Les **stickers** de la bibliothèque (2 par double page au plus, autant que le quota en permet) et le **tracé pointillé** — `decoration_quota: 0` retire les deux (`body.sans-decor`). Le scotch n'en dépend plus : l'habillage des photos est toujours complet | Rendu ; bibliothèque `assets/stickers/` encore vide |
+| Décorations & stickers | 2 | Les **stickers** de la bibliothèque (2 par double page au plus, autant que le quota en permet) et le **tracé pointillé** — `decoration_quota: 0` retire les deux (`body.sans-decor`). Le scotch n'en dépend plus : l'habillage des photos est toujours complet | Rendu ; bibliothèque de 44 dessins importée de Notion (`assets/stickers/`) |
 | Typographies (assortiment) | Carnet de voyage | Les quatre tokens ci-dessous d'un bloc | **À construire** — l'app n'expose plus quatre réglages mais **quatre assortiments** (`docs/reglages-utilisateur.md`) : Carnet de voyage, Éditorial, Moderne, Manuscrit. Le payload, lui, reste quatre champs |
 | ↳ titres | Playfair | `--mb-font-display` | **À construire** |
 | ↳ sous-titres | Hansley | `--mb-font-title` | **À construire** — `Hansley.otf` versionné mais pas inliné, repli sur la manuscrite |
@@ -666,18 +666,25 @@ inclinées (±1,2°). L'atelier pose le coin du scotch tour à tour
 notée qui en a une. Celle que le voyageur écrit sous la photo dans l'atelier
 (30 signes) passe avant la `legende` de l'IA.
 
-**Les stickers** viennent d'une **bibliothèque dessinée** (`assets/stickers/`,
-format dans `assets/README.md`) : un sticker est posé quand un de ses mots
-apparaît dans le récit, le titre, le lieu ou les scènes de l'étape — deux par
-double page au plus, autant que le réglage « Décorations » en permet, jamais
-deux fois le même. Places : la page d'album, le bas de la colonne de
-`layout_recit_photo`, la zone du bas d'une page de récit ordinaire — tant
-qu'aucun post-it ne l'occupe.
+**Les stickers** viennent d'une **bibliothèque dessinée** : la base Notion
+« Éléments graphiques », copiée et préparée dans `assets/stickers/` (44 dessins,
+19 familles ; format et procédure d'ajout dans `assets/README.md`). Un sticker
+est posé quand un de ses mots apparaît, en **mot entier**, dans le titre ou le
+lieu de l'étape (lien fort), sinon dans son récit ou les scènes de ses photos
+— deux par double page au plus, autant que le réglage « Décorations » en
+permet, **jamais deux fois la même famille** dans le carnet (un seul sac à
+dos, quelle que soit la variante). Trois styles se mêlent — sticker découpé,
+dessin, trait —, qui ne règlent que la taille : 90 à 140 pt, jamais plus que
+150 dpi ne le permet. Places : la page d'album, le bas de la colonne de
+`layout_recit_photo` quand le récit laisse la place du post-it, la zone du bas
+d'une page de récit ordinaire — tant qu'aucun post-it ne l'occupe — et jamais
+dans le pli. Les **personnages de dos** sont réservés : ils se choisiront
+d'après l'apparence des voyageurs, pas d'après le récit.
 
 **La page « photos + stickers ».** `layout_photo_page` accepte désormais une ou
 deux photos : une page d'album, les tirages inclinés et le tracé pointillé entre
-eux. Les stickers illustrés s'y poseront quand leur source sera décidée. De
-trois à cinq photos, c'est la planche bord à bord habituelle.
+eux, et un sticker dans le blanc que laissent les photos. De trois à cinq
+photos, c'est la planche bord à bord habituelle.
 
 **Ce qu'il faut éviter, par ordre de coût** : un nombre de pages impair ; une
 page de plus que nécessaire ; une page de récit sans photo quand l'étape en a ;
