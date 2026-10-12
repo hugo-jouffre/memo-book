@@ -115,7 +115,10 @@
 
   {# Le tracé pointillé, dessiné derrière les photos d'une bande. `slot` vient
      de la page : 0 à 3 choisit une variante, 4 n'en met pas. #}
-  {% macro mb_trace(slot) %}{% if slot < 4 %}<div class="mb-path mb-path--{{ ['a', 'b', 'c', 'a'][slot] }}" aria-hidden="true"><svg viewBox="0 0 500 60" preserveAspectRatio="none"><use href="#mb-path-{{ slot + 1 }}" /></svg></div>{% endif %}{% endmacro %}
+  {% macro mb_trace(trace) %}{% if trace in ['a', 'b', 'c'] %}<div class="mb-path mb-path--{{ trace }}" aria-hidden="true"><svg viewBox="0 0 500 60" preserveAspectRatio="none"><use href="#mb-path-{{ {'a': 1, 'b': 2, 'c': 3}[trace] }}" /></svg></div>{% endif %}{% endmacro %}
+
+  {# Les stickers de la bibliothèque posés sur la page. #}
+  {% macro mb_stickers(day) %}{% for s in day.stickers or [] %}<div class="mb-sticker mb-sticker--{{ s.place | default('bottom-left') }}" aria-hidden="true"><img src="{{ s.url }}" alt="" /></div>{% endfor %}{% endmacro %}
 
   {# Une page libre : la réglure seule, sur toute la page, pour écrire à la
      main. #}
@@ -203,7 +206,14 @@
   {% endfor %}
 
   <!-- ====================== JOURNÉES ====================== -->
+  {# Le tracé pointillé du voyage : un par double page au plus. L'atelier le
+     pose lui-même (`day.trace` : a, b, c ou « aucun ») ; sans cette
+     indication, il ne va que sur les pages de gauche — le colophon est la
+     page 1, à droite. #}
+  {% set avant_etapes = 1 + (1 if intro_text else 0) + (pages_libres_avant | default(0)) %}
   {% for day in days %}
+    {% set gauche = ((avant_etapes + 1 + loop.index0) % 2 == 0) %}
+    {% set trace = day.trace if day.trace else (['a', 'b', 'c'][loop.index0 % 3] if gauche else 'aucun') %}
     {% if day.layout_photo_page and day.photos and day.photos | length >= 1 %}
       {# Page pleine de photos : ni récit, ni bandeau, ni décor. Quatre
          testeurs demandent que l'image prenne le pas sur le texte, et les
@@ -222,8 +232,8 @@
           {# Une ou deux photos seulement, en fin d'étape : une page d'album, les
              tirages inclinés et le tracé pointillé entre eux — la place des
              stickers, quand le carnet en aura. #}
-          <div class="mb-photowall mb-photowall--libre mb-photowall--{{ day.photos | length }}">
-            {{ mb_trace(loop.index0 % 4) }}
+          <div class="mb-photowall mb-photowall--libre mb-photowall--{{ day.photos | length }}{% if day.album_paysage %} mb-photowall--paysage{% endif %}">
+            {{ mb_trace(trace) }}
             {{ mb_photo(day.photos[0], 'libre-a') }}
             {% if day.photos | length == 2 %}{{ mb_photo(day.photos[1], 'libre-b') }}{% endif %}
           </div>
@@ -231,37 +241,38 @@
         <div class="mb-photowall">
           {% if day.photos | length >= 5 %}
             <div class="mb-photowall__row mb-photowall__row--tall">
-              {{ mb_photo(day.photos[0], 'flat') }}
+              {{ mb_photo(day.photos[0], 'planche-a') }}
             </div>
             <div class="mb-photowall__row">
-              {{ mb_photo(day.photos[1], 'flat mb-photo--wide') }}
-              {{ mb_photo(day.photos[2], 'flat') }}
+              {{ mb_photo(day.photos[1], 'planche-b mb-photo--wide') }}
+              {{ mb_photo(day.photos[2], 'planche-a') }}
             </div>
             <div class="mb-photowall__row">
-              {{ mb_photo(day.photos[3], 'flat') }}
-              {{ mb_photo(day.photos[4], 'flat mb-photo--wide') }}
+              {{ mb_photo(day.photos[3], 'planche-b') }}
+              {{ mb_photo(day.photos[4], 'planche-a mb-photo--wide') }}
             </div>
           {% elif day.photos | length == 4 %}
             <div class="mb-photowall__row mb-photowall__row--tall">
-              {{ mb_photo(day.photos[0], 'flat mb-photo--wide') }}
-              {{ mb_photo(day.photos[1], 'flat') }}
+              {{ mb_photo(day.photos[0], 'planche-a mb-photo--wide') }}
+              {{ mb_photo(day.photos[1], 'planche-b') }}
             </div>
             <div class="mb-photowall__row">
-              {{ mb_photo(day.photos[2], 'flat') }}
-              {{ mb_photo(day.photos[3], 'flat mb-photo--wide') }}
+              {{ mb_photo(day.photos[2], 'planche-a') }}
+              {{ mb_photo(day.photos[3], 'planche-b mb-photo--wide') }}
             </div>
           {% else %}
             <div class="mb-photowall__row mb-photowall__row--tall">
-              {{ mb_photo(day.photos[0], 'flat mb-photo--wide') }}
-              {{ mb_photo(day.photos[1], 'flat') }}
+              {{ mb_photo(day.photos[0], 'planche-a mb-photo--wide') }}
+              {{ mb_photo(day.photos[1], 'planche-b') }}
             </div>
             <div class="mb-photowall__row">
-              {{ mb_photo(day.photos[2], 'flat') }}
+              {{ mb_photo(day.photos[2], 'planche-a') }}
             </div>
           {% endif %}
         </div>
         {% endif %}
         {# Pas de légende sur les pages de photos (Hugo, 12/10/2026). #}
+        {% if not day.pleine_page %}{{ mb_stickers(day) }}{% endif %}
       </div>
 
     {% else %}
@@ -279,7 +290,6 @@
          Il était autrefois posé à hauteur fixe sur la page (24, 48 ou 96 pt du
          bas), en supposant la bande toujours en bas : dès qu'un récit trop long
          repoussait ou écrasait la bande, le pointillé passait sous le texte. #}
-      {% set slot = (loop.index0 * 3 + 1) % 5 %}
       <div class="page__content">
 
         {% if day.day_intro %}
@@ -376,8 +386,8 @@
               </div>
               {% if day.fun_facts and day.fun_facts | length >= 1 %}
                 <div class="mb-card mb-card--left">
-                  <svg class="mb-card__clip" viewBox="0 0 30 26"><use href="#mb-clip" /></svg>
-                  <div class="mb-card__title"><span>{{ day.fun_facts_title | default('Fun fact') }}</span></div>
+                  <span class="mb-photo__tape mb-card__tape"><svg viewBox="0 0 46 13" preserveAspectRatio="none"><use href="#mb-tape" /></svg></span>
+                  <div class="mb-card__title"><span>{{ day.fun_facts_title | default('Infos') }}</span></div>
                   <div class="mb-card__body"><p>{{ day.fun_facts[0] }}</p></div>
                 </div>
               {% endif %}
@@ -389,7 +399,7 @@
             {% endif %}
           </div>
           {% if day.photos and day.photos | length >= 2 %}
-            <div class="mb-gallery">{{ mb_trace(slot) }}
+            <div class="mb-gallery">{{ mb_trace(trace) }}
               {{ mb_photo(day.photos[0], 'tilt-left') }}
               {{ mb_photo(day.photos[1], 'tilt-right') }}
             </div>
@@ -409,8 +419,8 @@
             {% if day.fun_facts and day.fun_facts | length >= 1 %}
               <div class="mb-split__aside">
                 <div class="mb-card mb-card--left">
-                  <svg class="mb-card__clip" viewBox="0 0 30 26"><use href="#mb-clip" /></svg>
-                  <div class="mb-card__title"><span>{{ day.fun_facts_title | default('Fun fact') }}</span></div>
+                  <span class="mb-photo__tape mb-card__tape"><svg viewBox="0 0 46 13" preserveAspectRatio="none"><use href="#mb-tape" /></svg></span>
+                  <div class="mb-card__title"><span>{{ day.fun_facts_title | default('Infos') }}</span></div>
                   <div class="mb-card__body"><p>{{ day.fun_facts[0] }}</p></div>
                 </div>
               </div>
@@ -423,7 +433,7 @@
             </div>
           </div>
           {% if day.photos and day.photos | length >= 2 %}
-            <div class="mb-gallery">{{ mb_trace(slot) }}
+            <div class="mb-gallery">{{ mb_trace(trace) }}
               {{ mb_photo(day.photos[0], 'tilt-left') }}
               {{ mb_photo(day.photos[1], 'tilt-right') }}
             </div>
@@ -463,7 +473,7 @@
             {{ day.body_html | safe }}
           </div>
           {% if day.photos and day.photos | length >= 3 %}
-            <div class="mb-trio {% if day.layout_trio_landscape %}mb-trio--landscape{% else %}mb-trio--portrait{% endif %}">{{ mb_trace(slot) }}
+            <div class="mb-trio {% if day.layout_trio_landscape %}mb-trio--landscape{% else %}mb-trio--portrait{% endif %}">{{ mb_trace(trace) }}
               {{ mb_photo(day.photos[1], 'trio-left') }}
               {{ mb_photo(day.photos[2], 'trio-right') }}
               {{ mb_photo(day.photos[0], 'trio-top') }}
@@ -476,7 +486,7 @@
             {{ day.body_html | safe }}
           </div>
           {% if day.photos and day.photos | length >= 2 %}
-            <div class="mb-gallery{% if day.photos | length >= 3 %} mb-gallery--three{% endif %}">{{ mb_trace(slot) }}
+            <div class="mb-gallery{% if day.photos | length >= 3 %} mb-gallery--three{% endif %}">{{ mb_trace(trace) }}
               {{ mb_photo(day.photos[0], 'tilt-left') }}
               {{ mb_photo(day.photos[1], 'tilt-right') }}
               {% if day.photos | length >= 3 %}
@@ -521,8 +531,8 @@
             <div class="mb-day__floats">
               {% if day.fun_facts and day.fun_facts | length >= 1 %}
                 <div class="mb-card">
-                  <svg class="mb-card__clip" viewBox="0 0 30 26"><use href="#mb-clip" /></svg>
-                  <div class="mb-card__title"><span>{{ day.fun_facts_title | default('Fun fact') }}</span></div>
+                  <span class="mb-photo__tape mb-card__tape"><svg viewBox="0 0 46 13" preserveAspectRatio="none"><use href="#mb-tape" /></svg></span>
+                  <div class="mb-card__title"><span>{{ day.fun_facts_title | default('Infos') }}</span></div>
                   <div class="mb-card__body"><p>{{ day.fun_facts[0] }}</p></div>
                 </div>
               {% endif %}
@@ -534,6 +544,7 @@
         {% endif %}
 
       </div>
+      {{ mb_stickers(day) }}
       {# Dire ce qui vient de la machine, en petit, sans s'en excuser. #}
       {% if day.ai_note %}
         <span class="mb-ai-note mb-ai-note--page">{{ day.ai_note }}</span>

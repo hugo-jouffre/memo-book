@@ -55,7 +55,7 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
 | **Nombre de page cible** | Échelle à arrêter | 60 pages | Rédaction — niveau de détail des textes · Mise en page — regroupement des étapes | Rendu côté agents, sans garde-fou automatique |
 | **Fun facts** | ON / OFF | ON | Rédaction les écrit, mise en page les place | Rendu (`fun_facts`) — OFF : aucun encart, dans l'atelier comme dans l'app |
 | **Pointillés** | ON / OFF | ON | Gabarit (`.mb-note__rules`) | Rendu : `rules_enabled` dans le payload |
-| **Décorations & stickers** | 0 · 1 · 2 · 3 · 4 par paragraphe ou par image | 2 | Mise en page | Partiel : `decoration_quota: 0` retire tracé, scotch et stickers ; les stickers ne sont pas encore imprimés |
+| **Décorations & stickers** | 0 · 1 · 2 · 3 · 4 par paragraphe ou par image | 2 | Mise en page | Rendu : les stickers de la bibliothèque dessinée (`assets/stickers/`, encore vide), deux par double page au plus, et le tracé pointillé ; à 0, ni l'un ni l'autre. Le scotch des photos n'en dépend plus (12/10/2026) |
 | **Typographies** | Trois **assortiments** — voir plus bas | Carnet de voyage | Gabarit — `--mb-font-display`, `--mb-font-title`, `--mb-font-hand` | **V1 : « Carnet de voyage » seul** (Hugo, 09/10/2026) — Éditorial et Manuscrit restent sur la feuille, pâlis, « À venir ». Les sous-titres tombent sur Gloria Hallelujah tant que Hansley n'est pas inlinée (licence à vérifier) |
 | **Quiz intégrés à l'histoire** | ON / OFF | ON | Mise en page les place ; **aucun agent ne les écrit** — règles en attente dans `agent-transcription-carnet.md` § 1 | Rendu (`quiz`), jamais rempli |
 | **Zones libres** | ON / OFF | ON | Mise en page | À construire : une zone blanche en fin d'étape, trois pages blanches en fin de carnet |
@@ -73,8 +73,10 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
   « Personnalisé » n'est pas verrouillé. Voir `docs/apercu-personnalisation.md`
   § La contrainte.
 - **Décorations & stickers.** La quantité n'est plus un jugement de l'agent :
-  elle est réglée par le voyageur. **Le scotch des photos compte dans le
-  quota.** À 0, aucun décor — et la page se remplit autrement, ou pas du tout.
+  elle est réglée par le voyageur : les stickers (deux par double page au plus)
+  et le tracé pointillé. **Le scotch des photos n'en dépend plus** (Hugo,
+  12/10/2026 : cadre, inclinaison et scotch toujours). À 0, ni sticker ni
+  tracé.
 - **Typographies.** Quatre axes indépendants. L'agent n'en substitue jamais
   aucune, même s'il juge une page trop dense. Seules les polices réellement
   embarquées dans `MemoBook Generator/templates/travel-journal/assets/fonts/` peuvent être

@@ -89,11 +89,11 @@
    sous le récit. Le rythme vertical, lui, ne bouge pas — les lignes de texte
    restent où elles étaient, seules les pointillés disparaissent.
    `decoration_quota: 0` (« Décorations & stickers » à zéro) : ni tracé
-   pointillé du voyage, ni scotch, ni sticker. LAYOUT_KB § « Les réglages du
+   pointillé du voyage, ni sticker. Le scotch reste : l'habillage des photos
+   est toujours complet (Hugo, 12/10/2026). LAYOUT_KB § « Les réglages du
    voyageur ». */
 body.sans-reglure .mb-note__rules { display: none; }
 body.sans-decor .mb-path,
-body.sans-decor .mb-photo__tape,
 body.sans-decor .mb-sticker { display: none; }
 
 /* --- Profils de sortie ----------------------------------------------------
@@ -586,8 +586,10 @@ li { margin: 0; }
   width: 148pt;
   padding: 10pt;
   background-color: var(--mb-card-bg);
-  border: 1pt dashed var(--mb-black);
-  border-radius: 8pt;
+  /* Un post-it « Infos », partout (Hugo, 12/10/2026) : du papier, un morceau
+     de scotch, plus de pince ni de bord pointillé. */
+  border: none;
+  border-radius: 3pt;
   box-shadow: var(--mb-card-shadow);
   transform: rotate(6.5deg);
 }
@@ -1001,7 +1003,8 @@ li { margin: 0; }
   transform: rotate(-5deg);
 }
 
-.mb-card--postit .mb-card__tape { top: -7pt; left: 50%; margin-left: -23pt; transform: rotate(2deg); }
+/* Le scotch de tous les post-it, au milieu du bord haut. */
+.mb-card__tape { top: -7pt; left: 50%; margin-left: -23pt; transform: rotate(2deg); }
 
 /* Page libre : la réglure sur toute la hauteur, rien d'autre. */
 .mb-note--libre { flex: 1 1 auto; }
@@ -1023,6 +1026,8 @@ li { margin: 0; }
 .mb-photowall--libre .mb-photo { position: absolute; z-index: 1; padding: 5pt; }
 .mb-photowall--libre > .mb-path { z-index: 0; bottom: 210pt; left: -40pt; width: 500pt; }
 .mb-photowall--1 .mb-photo--libre-a { top: 16%; left: 14%; width: 72%; height: 60%; transform: rotate(-2.5deg); }
+/* La même, couchée, pour une photo en largeur (`album_paysage`). */
+.mb-photowall--1.mb-photowall--paysage .mb-photo--libre-a { top: 24%; left: 9%; width: 82%; height: 42%; }
 .mb-photowall--2 .mb-photo--libre-a { top: 7%; left: 7%; width: 60%; height: 44%; transform: rotate(-4deg); }
 .mb-photowall--2 .mb-photo--libre-b { bottom: 9%; right: 7%; width: 60%; height: 44%; transform: rotate(3.5deg); }
 
@@ -1075,6 +1080,12 @@ li { margin: 0; }
 /* À cette densité, l'inclinaison et les ombres feraient fouillis : la bordure
    blanche suffit à séparer les images. */
 .mb-photo--flat { transform: none; }
+
+/* Les photos d'une planche gardent leur cadre, s'inclinent un peu et ont leur
+   scotch, comme toutes les photos du carnet (Hugo, 12/10/2026 : « toujours
+   tout ») — moins qu'ailleurs, la planche est serrée. */
+.mb-photo--planche-a { transform: rotate(-1.2deg); }
+.mb-photo--planche-b { transform: rotate(1.2deg); }
 
 /* Sélecteur aussi spécifique que celui de la bande, sinon il perd et les deux
    photos ressortent à égalité — soit exactement la planche de contact qu'on
