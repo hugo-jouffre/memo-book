@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { renderTemplateToHtml } from "../src/services/bookPdf.js";
 
@@ -60,6 +61,17 @@ describe("gabarit — pages du livre relié", () => {
   });
 });
 
+/** Sans navigateur installé, la mesure se saute, comme `pdfVector.test.ts`. */
+async function chromiumDisponible(): Promise<boolean> {
+  try {
+    const { chromium } = await import("playwright-core");
+    return existsSync(chromium.executablePath());
+  } catch {
+    return false;
+  }
+}
+const avecChromium = await chromiumDisponible();
+
 describe("gabarit — fond perdu de la version imprimeur", () => {
   const payload = (fond: boolean) => ({
     book_title: "Carnet",
@@ -81,7 +93,7 @@ describe("gabarit — fond perdu de la version imprimeur", () => {
     expect(sans).not.toContain("437.01pt");
   });
 
-  it("mesure sous Chromium : 3 mm autour de la page finie, colonne inchangée, pleine page bord à bord", async () => {
+  it.runIf(avecChromium)("mesure sous Chromium : 3 mm autour de la page finie, colonne inchangée, pleine page bord à bord", async () => {
     const { chromium } = await import("playwright-core");
     const browser = await chromium.launch();
     try {
