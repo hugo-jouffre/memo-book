@@ -129,6 +129,31 @@ describe("validatePayload — règles éditoriales de LAYOUT_KB", () => {
     expect(result.valid).toBe(true);
   });
 
+  it("refuse un récit coupé par une page de photos, et signale une étape au nombre de pages impair", () => {
+    const photos = ["a", "b", "c"].map((id) => `https://exemple.test/${id}.jpg`);
+    const page = (day: Record<string, unknown>) => ({ title: "", body_html: "<p>Un passage du récit.</p>", ...day });
+    const coupe = validatePayload({
+      book_title: "Carnet",
+      days: [
+        page({ title: "Jour 1", day_intro: { day_number: "01" }, layout_story_opener: true }),
+        { title: "", body_html: "", photos, layout_photo_page: true },
+        page({ layout_story_facts: true }),
+      ],
+    });
+    expect(coupe.errors.map((e) => e.message).join(" ")).toContain("le récit est coupé");
+    expect(coupe.warnings.map((w) => w.message).join(" ")).toContain("nombre impair");
+
+    const enFin = validatePayload({
+      book_title: "Carnet",
+      days: [
+        page({ title: "Jour 1", day_intro: { day_number: "01" }, layout_story_opener: true }),
+        { title: "", body_html: "", photos: photos.slice(0, 1), layout_photo_page: true },
+      ],
+    });
+    expect(enFin.errors).toEqual([]);
+    expect(enFin.warnings.map((w) => w.message).join(" ")).not.toContain("nombre impair");
+  });
+
   it("n'accepte un trio que sur une page de suite, avec trois photos et deux paragraphes au plus", () => {
     const photos = ["a", "b", "c"].map((id) => `https://exemple.test/${id}.jpg`);
     const suite = (day: Record<string, unknown>) => ({
@@ -310,7 +335,7 @@ describe("barème S / M / L / XL", () => {
     const result = validatePayload(etape(150));
 
     expect(result.errors).toEqual([]);
-    expect(result.warnings[0]?.message).toContain("rien pour porter la page");
+    expect(result.warnings.map((w) => w.message).join(" ")).toContain("rien pour porter la page");
   });
 
   it("laisse passer une étape très courte que l'image porte", () => {

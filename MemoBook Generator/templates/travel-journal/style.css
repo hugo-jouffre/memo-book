@@ -952,6 +952,66 @@ li { margin: 0; }
 .mb-trio--landscape .mb-photo--trio-left { bottom: 6pt; left: 9%; width: 36%; height: 55%; transform: rotate(-3deg); }
 .mb-trio--landscape .mb-photo--trio-right { bottom: 0; left: 53%; width: 36%; height: 55%; transform: rotate(2deg); }
 
+/* Récit qui contourne une grande photo (maquette faite à la main, étape de
+   Banaue). La photo flotte à droite dans le bloc de récit : la colonne de texte
+   se resserre à côté d'elle, la réglure continue dessous. La cale — un
+   flottant sans largeur — fait commencer la photo après quelques lignes
+   pleine largeur. */
+.mb-contourne__cale { float: right; width: 0; height: calc(var(--mb-line) * 4); }
+
+.mb-note--contourne > .mb-photo--contourne {
+  float: right;
+  clear: right;
+  position: relative;
+  z-index: 2;
+  width: 42%;
+  height: 290pt;
+  margin: 4pt 0 10pt 14pt;
+  transform: rotate(2deg);
+}
+
+/* L'étiquette de titre posée sur la photo : « Rizières de Banaue ». */
+.mb-photo__label {
+  position: absolute;
+  top: 12pt;
+  right: -6pt;
+  z-index: 3;
+  max-width: 80%;
+  padding: 3pt 7pt;
+  background-color: #ffffff;
+  box-shadow: var(--mb-photo-shadow);
+  font-family: var(--mb-font-display);
+  font-weight: 700;
+  font-size: 12pt;
+  line-height: 1.1;
+  text-align: right;
+  color: var(--mb-black);
+  transform: rotate(-3deg);
+}
+
+/* Le fun fact en post-it, en bas à gauche de la page : papier, scotch, et il
+   mord un peu sur la photo d'à côté. */
+.mb-card--postit {
+  position: absolute;
+  left: 2pt;
+  bottom: 34pt;
+  z-index: 3;
+  width: 170pt;
+  border: none;
+  transform: rotate(-5deg);
+}
+
+.mb-card--postit .mb-card__tape { top: -7pt; left: 50%; margin-left: -23pt; transform: rotate(2deg); }
+
+/* Page d'album : une ou deux photos en fin d'étape, inclinées, le tracé
+   pointillé entre elles. */
+.mb-photowall--libre { display: block; }
+.mb-photowall--libre .mb-photo { position: absolute; z-index: 1; padding: 5pt; }
+.mb-photowall--libre > .mb-path { z-index: 0; bottom: 210pt; left: -40pt; width: 500pt; }
+.mb-photowall--1 .mb-photo--libre-a { top: 16%; left: 14%; width: 72%; height: 60%; transform: rotate(-2.5deg); }
+.mb-photowall--2 .mb-photo--libre-a { top: 7%; left: 7%; width: 60%; height: 44%; transform: rotate(-4deg); }
+.mb-photowall--2 .mb-photo--libre-b { bottom: 9%; right: 7%; width: 60%; height: 44%; transform: rotate(3.5deg); }
+
 /* Photo héro en haut de page. */
 .mb-hero {
   margin: 0 0 12pt;

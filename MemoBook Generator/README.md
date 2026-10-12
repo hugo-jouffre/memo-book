@@ -268,30 +268,35 @@ l'identifiant du template est prérempli avec celui du dépôt.
 
 La mise en page de chaque étape suit
 [`LAYOUT_KB.md`](templates/travel-journal/LAYOUT_KB.md) — § « Longueur des
-textes » et § « La répartition sur une étape à plusieurs pages » :
+textes » et § « Structure d'une étape » :
 
 1. **Le récit se découpe en pages.** Paragraphes de 379 signes au plus (taille
    S), coupés sur une fin de phrase, ou sur une virgule quand un vocal enchaîne
    sans point. La première page, qui porte le bandeau, tient 560 signes et
    2 paragraphes ; chaque page de suite, sans bandeau ni titre, 880 signes et
-   4 paragraphes. La dernière page ne reste jamais sous 200 signes si la
-   précédente peut lui en céder.
-2. **Les photos vont d'abord sur les pages de récit**, jusqu'à trois chacune,
+   4 paragraphes. Le récit se répartit à parts égales sur ses pages, à la
+   mesure de ce que chacune tient.
+2. **L'étape a un nombre de pages pair, et son texte n'est jamais coupé** :
+   les pages de photos seules viennent toujours après le récit. Deux
+   scénarios, en alternance d'une étape à l'autre : A, toutes les photos avec
+   le texte ; B, une ou deux photos par page de récit puis des pages de photos.
+   Une étape courte se partage sur deux pages la première fois (A), puis tient
+   sur une page suivie d'une page « photos + stickers » (B).
+3. **Les photos vont d'abord sur les pages de récit**, jusqu'à trois chacune,
    à parts égales. Le gabarit suit leur nombre :
 
    | Photos sur la page | Gabarit |
    |---|---|
    | 0 | `layout_story_opener` (première étape) ou `layout_story_facts` |
-   | 1 | `layout_hero_top` si le texte y tient (380 / 680 signes), sinon photo flottante sous le récit |
+   | 1 | en hauteur : `layout_recit_photo`, le récit contourne la photo (étiquette de titre, fun fact en post-it « Infos ») ; en largeur : `layout_hero_top` si le texte y tient (380 / 680 signes), sinon photo flottante sous le récit |
    | 2 | `layout_split_left` |
    | 3 | `layout_collage` — sur une **page de suite** de 420 signes et 2 paragraphes au plus, un **trio** : `layout_trio_portrait` (portrait en haut) ou `layout_trio_landscape` (paysage en haut), deux portraits en bas, si aucune photo n'y est trop rognée |
 
-3. **Le surplus va sur des planches** (`layout_photo_page`, 3 à 5 photos), une
-   au plus après chaque page de récit : **jamais deux planches de suite**. Ce
-   qui ne tient pas reste hors du carnet, et la console le signale
-   (`[carnet] étape N : … photo(s) laissée(s) hors du carnet`).
+4. **Le surplus va sur des pages de photos en fin d'étape** (`layout_photo_page`,
+   1 à 5 photos — une ou deux font une page d'album). Aucune photo n'est perdue.
+   Une étape qui reste impaire faute de matière est signalée dans la console.
 
-4. **Chaque photo va à l'emplacement qui la rogne le moins**, et n'est jamais
+5. **Chaque photo va à l'emplacement qui la rogne le moins**, et n'est jamais
    rognée de plus d'un tiers : au-delà, elle est réduite, entière. La case
    « Photo de groupe, ne pas rogner », sous chaque photo, la fait toujours
    réduire plutôt que rogner (LAYOUT_KB § « Rognage des photos »).
@@ -299,21 +304,21 @@ textes » et § « La répartition sur une étape à plusieurs pages » :
 Le bandeau ne porte pas d'étiquette (`tag`) : l'atelier n'avait que le lieu à y
 mettre, déjà écrit dans le bandeau.
 
-5. **Les photos suivent le récit.** Avant la mise en page, une analyse d'étape
+6. **Les photos suivent le récit.** Avant la mise en page, une analyse d'étape
    (même fournisseur et même modèle que le découpage) regarde les photos : le
    passage que chacune illustre, celles prises au même endroit, le nombre de
    visages. Chaque photo va sur la page de son passage, les photos d'une même
-   scène restent ensemble, et le surplus fait une planche juste après la page
-   dont il vient. Sans clé, les photos suivent l'ordre du voyage.
-6. **Chaque nouveau lieu ouvre un chapitre** sur une carte
+   scène restent ensemble, et le surplus va en fin d'étape. Sans clé, les
+   photos suivent l'ordre du voyage.
+7. **Chaque nouveau lieu ouvre un chapitre** sur une carte
    (`layout_chapter_map`), quand l'analyse a situé le lieu. La carte se cadre
    sur la zone que les récits parcourent (les îles visitées, pas tout le
    pays), avec les contours détaillés de `assets/maps/detail/`. Un séjour
    dans une seule ville s'ouvre sur le pays avec la ville située, puis chaque
    étape qui va dans de nouveaux lieux montre la ville et le parcours.
-7. **Deux pages en vis-à-vis n'ont jamais la même composition**, quand une
+8. **Deux pages en vis-à-vis n'ont jamais la même composition**, quand une
    alternative existe.
-8. **Des fun facts tirés du récit**, si la case « Insérer des Fun facts » de
+9. **Des fun facts tirés du récit**, si la case « Insérer des Fun facts » de
    la fiche du carnet est cochée (par défaut, comme dans l'app). La même
    analyse propose un encart par étape, noté sur 10. Seuls les mieux notés
    s'impriment, un toutes les trois pages au plus, sur une page où ils ne

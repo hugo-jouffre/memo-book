@@ -127,6 +127,26 @@ l'accepte** :
 | jusqu'à 560 | + `layout_story_*`, `layout_collage`, `layout_split_left` sans fun fact |
 | jusqu'à 880 | uniquement une **page de suite** : `title` vide, pas de `day_intro` |
 
+**La structure d'une étape** (LAYOUT_KB § « Structure d'une étape », Hugo,
+12/10/2026) — à tenir en plus du barème :
+
+- **le texte d'une étape n'est jamais séparé** : ses pages de récit se suivent,
+  et les `layout_photo_page` viennent **toujours après le texte** — le
+  validateur refuse une page de récit après une page de photos de la même
+  étape ;
+- **chaque étape compte un nombre de pages pair** — le validateur avertit ;
+- le récit se **répartit à parts égales** sur ses pages, pas une page pleine et
+  une presque vide ;
+- deux scénarios, à **alterner** d'une étape à l'autre quand les deux donnent
+  le même nombre de pages : **A**, toutes les photos avec le texte ; **B**, une
+  ou deux photos par page de récit, puis une page de photos (une ou deux photos
+  suffisent : page d'album) ;
+- **étape courte** (une page de récit) : la première fois, le récit sur deux
+  pages ; la suivante, le texte sur une page puis une page de photos ;
+- une page à une photo **en hauteur** : `layout_recit_photo`, le récit la
+  contourne, avec l'étiquette de titre (`photos[0].label`) et le fun fact en
+  post-it « Infos ».
+
 **Le piège, c'est la carte info.** Sur `layout_split_left` et
 `layout_chapter_map`, l'encart occupe 173 pt : la colonne de récit tombe de ~59 à
 ~24 caractères par ligne. Un `fun_facts` sur ces deux layouts **retire une

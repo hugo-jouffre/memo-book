@@ -191,10 +191,11 @@ $defs:
       layout_photo_page:
         type: boolean
         description: >
-          Page pleine de photos : ni récit, ni bandeau, ni décor. Exige 3 à 5 entrées dans
-          `photos`. `title` devient une légende manuscrite en bas de page. C'est la
-          respiration visuelle du carnet — les lecteurs citent ces pages comme le point
-          fort du livre et demandent qu'il y en ait davantage.
+          Page de photos seules : ni récit, ni bandeau. 1 à 5 entrées dans `photos` —
+          de 3 à 5, une planche bord à bord ; 1 ou 2, une page d'album (tirages
+          inclinés, tracé pointillé entre eux). `title` devient une légende manuscrite
+          en bas de page. Toujours **après** le récit de l'étape, jamais entre deux de
+          ses pages (LAYOUT_KB § « Structure d'une étape »).
       prompt:
         type: object
         description: >
@@ -333,6 +334,15 @@ $defs:
           mesuré : 560 caractères sur une page à bandeau. Sous 290 caractères la
           bande de photos décroche du récit et laisse un blanc au milieu de la
           page — préférer alors `layout_hero_top`.
+      layout_recit_photo:
+        type: boolean
+        description: >
+          Le récit qui contourne une grande photo en hauteur (maquette faite à la
+          main) : quelques lignes pleine largeur, puis la colonne de texte à gauche
+          de la photo, qui flotte à droite (format 0,51). `photos[0]` peut porter un
+          `label`, l'étiquette de titre posée dessus (30 signes au plus). Un
+          `fun_facts` devient un post-it « Infos » en bas à gauche. Bandeau ou suite :
+          560 / 880 caractères, 800 en page de suite avec le post-it.
       layout_trio_portrait:
         type: boolean
         description: >
@@ -423,6 +433,12 @@ $defs:
                     `contain` : la photo est seulement réduite, jamais rognée — photo de
                     groupe, ou rognage au-delà du plafond de LAYOUT_KB § « Rognage des
                     photos ». Absent ou `cover` : recadrage habituel, centré sur `focus`.
+                label:
+                  type: string
+                  maxLength: 30
+                  description: >
+                    Étiquette de titre posée sur la photo (« Rizières de Banaue »),
+                    rendue par `layout_recit_photo`. La `legende` de l'analyse d'étape.
       photo_captions:
         type: array
         description: Légendes alignées avec l'ordre des photos

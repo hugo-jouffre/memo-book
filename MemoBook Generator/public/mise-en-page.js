@@ -114,6 +114,7 @@
     layout_collage: 3,
     layout_trio_portrait: 3,
     layout_trio_landscape: 3,
+    layout_recit_photo: 1,
     layout_photo_page: 5,
   };
 
@@ -137,6 +138,11 @@
     // leur hauteur. Mesuré le 08/10/2026 (`calibrate-lengths.ts --filtre
     // trio`) : 440 signes en deux paragraphes avant que les photos cèdent.
     layout_trio: { bandeau: 0, suite: 420, paragraphes: 2 },
+    // Le récit qui contourne une grande photo (maquette faite à la main) tient
+    // la capacité ordinaire ; avec le post-it « Infos » en bas à gauche, 800
+    // signes sur une page de suite avant que le texte ne passe dessous
+    // (mesuré le 12/10/2026).
+    layout_recit_photo: { bandeau: 560, suite: 880, postit: { bandeau: 560, suite: 800 } },
   };
   const PARAGRAPHES_PAR_PAGE = { bandeau: 2, suite: 4 };
 
@@ -237,7 +243,11 @@
     // En haut, puis en bas à gauche et à droite (l'ordre de `photos[]`).
     layout_trio_portrait: { 3: [0.6, 0.69, 0.65] },
     layout_trio_landscape: { 3: [1.6, 0.64, 0.64] },
+    layout_recit_photo: { 1: [0.51] },
     layout_photo_page: {
+      // Une ou deux photos : la page d'album de fin d'étape.
+      1: [0.84],
+      2: [0.96, 0.96],
       3: [0.73, 0.45, 1.65],
       4: [0.73, 0.45, 0.62, 0.99],
       5: [1.76, 1.44, 0.9, 0.9, 1.44],
@@ -329,6 +339,8 @@
     if (nbPhotos === 0) return parDefaut;
     if (nbPhotos === 1) {
       const [photo] = photosDeLaPage;
+      // Une photo en hauteur : le récit la contourne (maquette faite à la main).
+      if (recitPhotoAdmis(photo, texte, sorte)) return "layout_recit_photo";
       const heroLisible =
         !photo.format || rognage(photo.format, FORMATS_EMPLACEMENTS.layout_hero_top[1][0]) <= MAX_ROGNAGE;
       return heroLisible && signes(texte) <= CAPACITE_PAGE.layout_hero_top[sorte] ? "layout_hero_top" : parDefaut;
@@ -338,6 +350,45 @@
   }
 
 
+
+  /** Une étiquette de titre posée sur une photo ne dépasse pas une ligne courte. */
+  const MAX_SIGNES_ETIQUETTE = 30;
+
+  /**
+   * L'étiquette de titre d'une photo (« Rizières de Banaue ») : la `legende`
+   * que l'analyse propose, à défaut sa `scene` avec une majuscule — si elle
+   * tient sur une ligne courte. Sinon, pas d'étiquette.
+   */
+  function etiquetteDe(lu) {
+    for (const brut of [lu?.legende, lu?.scene]) {
+      const t = typeof brut === "string" ? brut.replace(/\s+/g, " ").trim() : "";
+      if (t && t.length <= MAX_SIGNES_ETIQUETTE) return t[0].toUpperCase() + t.slice(1);
+    }
+    return "";
+  }
+
+  /** Sur `layout_recit_photo`, la grande photo porte son étiquette de titre. */
+  function etiqueter(plan, rendues) {
+    if (plan.layout !== "layout_recit_photo" || !plan.photos[0]?.legende) return rendues;
+    const [premiere, ...reste] = rendues;
+    const objet = typeof premiere === "string" ? { url: premiere } : premiere;
+    return [{ ...objet, label: plan.photos[0].legende }, ...reste];
+  }
+
+  /**
+   * Une photo en hauteur que le récit peut contourner : son emplacement est
+   * très étroit (format 0,51), une photo carrée ou en largeur y perdrait plus
+   * d'un tiers. Le texte, lui, tient la capacité ordinaire de la page.
+   */
+  function recitPhotoAdmis(photo, texte, sorte) {
+    if (!photo?.format || photo.groupe) return false;
+    const cap = CAPACITE_PAGE.layout_recit_photo;
+    return (
+      rognage(photo.format, FORMATS_EMPLACEMENTS.layout_recit_photo[1][0]) <= MAX_ROGNAGE &&
+      signes(texte) <= cap[sorte] &&
+      texte.length <= PARAGRAPHES_PAR_PAGE[sorte]
+    );
+  }
 
   /**
    * Le trio d'une page de suite à trois photos et récit court : une photo en
@@ -570,7 +621,10 @@
   }
 
   /**
-   * Répartit les photos d'une étape entre ses pages de récit et ses planches.
+   * Répartit les photos d'une étape entre ses pages de récit ; ce qui n'y tient
+   * pas va **en fin d'étape** (`fin`), sur les pages de photos qui suivent le
+   * récit — jamais entre deux pages de récit (LAYOUT_KB § « Structure d'une
+   * étape »).
    *
    * 1. **Chaque photo vise la page du passage qu'elle illustre** — le
    *    paragraphe que l'analyse lui a attribué. Sans analyse, ou sans
@@ -579,19 +633,15 @@
    * 2. **Les photos d'une même scène restent ensemble** (même arrière-plan,
    *    même libellé `scene`) : le groupe vise la page que vise la majorité de
    *    ses photos, et il ne se coupe que s'il dépasse ce qu'une page porte.
-   * 3. Une page porte au plus `maxParPage` photos ; l'ouverture de chapitre, 0
-   *    ou 2 (son gabarit n'en montre pas une seule).
-   * 4. **Le surplus d'une page** va, s'il fait au moins trois photos, sur une
-   *    planche posée **juste après elle** : ce sont les photos de son passage,
-   *    elles restent à côté de lui. Une ou deux photos en trop vont sur la page
-   *    la plus proche qui a de la place, à défaut sur la planche la plus proche.
-   * 5. **Jamais deux planches de suite** : il y a au plus une planche après
-   *    chaque page de récit. Ce qui ne tient nulle part reste hors du carnet
-   *    (`ecartees`), signalé.
+   * 3. La page `p` porte au plus `caps[p]` photos ; l'ouverture de chapitre à
+   *    deux photos (`chapitreDeux`), 0 ou 2 — son gabarit n'en montre pas une
+   *    seule.
+   * 4. Le surplus d'une page va sur la page de récit la plus proche qui a de la
+   *    place, puis en fin d'étape. Chaque liste garde l'ordre du voyage.
    */
-  function affecterPhotos({ pages, paragraphes, photos, maxParPage, capPremiere }) {
+  function affecterPhotos({ pages, paragraphes, photos, caps, chapitreDeux = false }) {
     const n = pages.length;
-    const cap = pages.map((_, p) => (p === 0 && capPremiere != null ? capPremiere : maxParPage));
+    const cap = caps;
     const pageDuParagraphe = pageDeChaqueParagraphe(paragraphes, pages);
 
     const cible = photos.map((photo, rang) => {
@@ -621,81 +671,236 @@
       g.membres.forEach((r, k) => (k < place ? poses[g.cible] : surplus[g.cible]).push(r));
     }
     // L'ouverture de chapitre montre 0 ou 2 photos, jamais une seule.
-    if (capPremiere === 2 && poses[0].length === 1) surplus[0].unshift(poses[0].pop());
+    if (chapitreDeux && poses[0].length === 1) surplus[0].unshift(poses[0].pop());
 
-    const planches = pages.map(() => null);
     const distance = (a, b) => Math.abs(a - b) + (a < b ? 0.5 : 0); // à égalité, après plutôt qu'avant
     const peutRecevoir = (q) =>
-      poses[q].length < cap[q] && !(q === 0 && capPremiere === 2 && poses[0].length === 0);
+      poses[q].length < cap[q] && !(q === 0 && chapitreDeux && poses[0].length === 0);
 
-    // a. Le surplus va d'abord sur les pages de récit qui ont de la place, la
-    //    plus proche du passage d'abord : chaque page de récit prend ses photos
-    //    avant qu'une planche s'ouvre (LAYOUT_KB, règle 2 de la répartition).
-    const restes = pages.map(() => []);
+    // Le surplus va d'abord sur les pages de récit qui ont de la place, la
+    // plus proche du passage d'abord ; le reste, en fin d'étape.
+    const fin = [];
     surplus.forEach((liste, p) => {
       for (const r of liste) {
         const q = pages.map((_, k) => k).filter(peutRecevoir).sort((a, b) => distance(p, a) - distance(p, b))[0];
-        if (q === undefined) restes[p].push(r);
+        if (q === undefined) fin.push(r);
         else poses[q].push(r);
       }
     });
+    if (chapitreDeux && poses[0].length === 1) fin.push(poses[0].pop());
 
-    // b. Ce qui reste fait une planche juste après sa page d'origine, s'il y a
-    //    de quoi (trois photos au moins) ; cinq au plus par planche.
-    const ecartees = [];
-    const orphelins = [];
-    restes.forEach((liste, p) => {
-      if (liste.length >= MIN_PAGE_PHOTOS) {
-        planches[p] = liste.slice(0, PHOTOS_RENDUES.layout_photo_page);
-        orphelins.push(...liste.slice(PHOTOS_RENDUES.layout_photo_page).map((r) => ({ r, p })));
-      } else {
-        orphelins.push(...liste.map((r) => ({ r, p })));
-      }
-    });
-
-    // c. Une ou deux photos sans place rejoignent la planche la plus proche ;
-    //    sans planche, les pages en cèdent pour en faire une de trois, juste
-    //    après la page d'origine — plutôt que de perdre une photo.
-    for (const { r, p } of orphelins) {
-      const q = planches
-        .map((pl, k) => ({ pl, k }))
-        .filter(({ pl }) => pl && pl.length < PHOTOS_RENDUES.layout_photo_page)
-        .sort((a, b) => distance(p, a.k) - distance(p, b.k))[0];
-      if (q) q.pl.push(r);
-      else ecartees.push({ r, p });
-    }
-    if (ecartees.length && ecartees.length < MIN_PAGE_PHOTOS) {
-      const origine = ecartees[0].p;
-      const manque = MIN_PAGE_PHOTOS - ecartees.length;
-      const donneuses = pages
-        .map((_, k) => k)
-        // Une page qui cède garde au moins une photo : vider une page de récit
-        // pour remplir une planche, c'est le « texte nu puis pile d'images »
-        // que LAYOUT_KB proscrit.
-        .filter((k) => poses[k].length > (k === 0 && capPremiere === 2 ? 2 : 1))
-        .sort((a, b) => distance(origine, a) - distance(origine, b));
-      const repris = [];
-      for (const k of donneuses) {
-        // Une ouverture de chapitre garde ses deux photos ou n'en garde aucune.
-        if (k === 0 && capPremiere === 2) continue;
-        while (repris.length < manque && poses[k].length > 1) repris.push(poses[k].pop());
-        if (repris.length === manque) break;
-      }
-      if (repris.length === manque && !planches[origine]) {
-        planches[origine] = [...ecartees.map((e) => e.r), ...repris];
-        ecartees.length = 0;
-      } else {
-        for (const r of repris.reverse()) poses[donneuses.find((k) => poses[k].length < cap[k]) ?? 0].push(r);
-      }
-    }
-
-    // Chaque page garde ses photos dans l'ordre du voyage.
     const ordre = (liste) => [...liste].sort((a, b) => a - b).map((r) => photos[r]);
-    return {
-      recit: poses.map(ordre),
-      planches: planches.map((pl) => (pl ? ordre(pl) : null)),
-      ecartees: ecartees.map((e) => photos[e.r]),
-    };
+    return { recit: poses.map(ordre), fin: ordre(fin) };
+  }
+
+  /**
+   * Les coupes possibles d'un paragraphe, de la meilleure à la pire : une fin
+   * de phrase (chaque morceau garde 40 signes au moins), une virgule (60), un
+   * espace (80) — et ce que chacune coûte de plus qu'une fin de phrase.
+   */
+  const COUPES = [
+    { motif: /[.!?…]\s/g, min: 40, cout: 0 },
+    { motif: /,\s/g, min: 60, cout: 25 },
+    { motif: / /g, min: 80, cout: 60 },
+  ];
+
+  /**
+   * Coupe un paragraphe au plus près de `cible` signes, sans dépasser `max` :
+   * de préférence sur une fin de phrase, même un peu plus loin qu'une virgule
+   * ou un espace. `null` s'il n'y a pas de coupe possible.
+   */
+  function couperPres(paragraphe, cible, max) {
+    let meilleure = null;
+    for (const { motif, min, cout } of COUPES) {
+      for (const m of paragraphe.matchAll(motif)) {
+        const c = m.index + m[0].length;
+        if (c < min || c > max || paragraphe.length - c < min) continue;
+        const note = Math.abs(c - cible) + cout;
+        if (!meilleure || note < meilleure.note) meilleure = { c, note };
+      }
+    }
+    if (!meilleure) return null;
+    return [paragraphe.slice(0, meilleure.c).trim(), paragraphe.slice(meilleure.c).trim()];
+  }
+
+  /**
+   * Répartit le récit sur exactement `k` pages, chacune remplie à peu près
+   * dans la même proportion de ce qu'elle tient —
+   * le scénario A : le texte qui dépassait à peine d'une page s'étale à parts
+   * égales sur deux. `capacites[i]` : `{ signes, paragraphes }` de la page `i`.
+   * Un paragraphe se coupe au besoin sur une fin de phrase (`couperAuPlus`).
+   * `null` si le récit ne se partage pas ainsi (trop court pour `k` pages, ou
+   * trop long pour leurs capacités).
+   */
+  function repartirRecit(paragraphes, k, capacites) {
+    if (!paragraphes.length || k < 1) return null;
+    const file = [...paragraphes];
+    const pages = [];
+    for (let i = 0; i < k; i += 1) {
+      const cap = capacites[i];
+      const page = [];
+      if (i === k - 1) {
+        page.push(...file.splice(0));
+      } else {
+        // Chaque page reçoit une part du reste à la mesure de ce qu'elle tient :
+        // la colonne étroite d'une ouverture de chapitre en prend moins
+        // qu'une page de suite pleine largeur.
+        const restantes = capacites.slice(i).reduce((t, c) => t + c.signes, 0);
+        const cible = ((signes(file) - (k - i - 1)) * cap.signes) / restantes;
+        while (file.length && page.length < cap.paragraphes) {
+          const actuel = page.length ? signes(page) + 1 : 0;
+          const p = file[0];
+          if (actuel + p.length <= Math.min(cap.signes, cible + 40)) {
+            page.push(file.shift());
+            continue;
+          }
+          // Trop long : on en coupe le début au plus près de la cible.
+          const coupe = couperPres(p, Math.round(cible) - actuel, cap.signes - actuel);
+          if (coupe) {
+            page.push(coupe[0]);
+            file[0] = coupe[1];
+          } else if (!page.length && p.length <= cap.signes) {
+            page.push(file.shift());
+          }
+          break;
+        }
+      }
+      if (!page.length) return null;
+      pages.push(page);
+    }
+    const derniere = pages[k - 1];
+    if (signes(derniere) > capacites[k - 1].signes || derniere.length > capacites[k - 1].paragraphes) return null;
+    return pages;
+  }
+
+  /** Répartit `n` photos sur `q` pages, au plus près de parts égales : 7 sur 2 → [4, 3]. */
+  function partsEgales(n, q) {
+    return Array.from({ length: q }, (_, i) => Math.floor(n / q) + (i < n % q ? 1 : 0));
+  }
+
+  /**
+   * Ce que coûte une page de récit de plus pour une étape qui en a déjà deux
+   * ou plus : un récit étiré laisse des pages à moitié vides. On ne le fait
+   * que si rien d'autre n'atteint un nombre pair.
+   */
+  const ETIRER = 10;
+
+  /** Une page de photos en porte cinq au plus (`layout_photo_page`). */
+  const MAX_PAGE_PHOTOS = 5;
+
+  /**
+   * La structure d'une étape (LAYOUT_KB § « Structure d'une étape ») :
+   *
+   * - le récit d'un seul tenant, sur ses pages qui se suivent ;
+   * - puis les pages de photos seules, **toujours après le texte** ;
+   * - un **nombre de pages pair**.
+   *
+   * Le récit se répartit **à parts égales** sur ses pages : un récit qui
+   * dépassait à peine d'une page ne laisse plus une page pleine et une page
+   * presque vide. Puis on énumère les structures possibles :
+   *
+   * - **A** : toutes les photos avec le texte, pas de page de photos ;
+   * - **B** : le texte avec une ou deux photos par page, puis une ou plusieurs
+   *   pages de photos en fin d'étape.
+   *
+   * Le récit peut prendre une page de plus — c'est le scénario A d'une étape
+   * courte, qui tient sur une page : son récit se partage en deux. Pour une
+   * étape plus longue, ce n'est qu'un recours (`ETIRER`).
+   *
+   * Parmi les structures au nombre de pages pair, on garde celles qui en ont le
+   * moins. Si A et B y sont toutes deux, on alterne d'une étape à l'autre dans
+   * la même situation (`court` : le récit tient sur une page ; `impair`, `pair`
+   * : son nombre de pages naturel), en commençant par A — `memoire` retient le
+   * dernier choix. Puis le moins de défauts : une page de récit sans photo
+   * quand l'étape en a, une page de photos qui n'en porte qu'une ou deux.
+   */
+  function structurerEtape({ paragraphes, pagesNaturelles, photos, maxParPage, chapitre, memoire }) {
+    const N = photos.length;
+    const T = pagesNaturelles.length;
+    const capacites = (k) =>
+      Array.from({ length: k }, (_, i) =>
+        i === 0
+          ? { signes: chapitre ? CAPACITE_CHAPITRE.sansPhoto : CAPACITE_PAGE.defaut.bandeau, paragraphes: PARAGRAPHES_PAR_PAGE.bandeau }
+          : { signes: CAPACITE_PAGE.defaut.suite, paragraphes: PARAGRAPHES_PAR_PAGE.suite },
+      );
+    // Le récit à parts égales sur ses pages (à défaut, rempli page après
+    // page) ; et sur une page de plus — pour une étape courte, c'est le
+    // scénario A ; pour une plus longue, un recours qui coûte (`ETIRER`).
+    const decoupages = [
+      { pages: repartirRecit(paragraphes, T, capacites(T)) || pagesNaturelles, plus: false },
+    ];
+    const etale = repartirRecit(paragraphes, T + 1, capacites(T + 1));
+    if (etale) decoupages.push({ pages: etale, plus: true });
+
+    const candidats = [];
+    const vus = new Set();
+    for (const d of decoupages) {
+      const k = d.pages.length;
+      const chapitreDeux = chapitre && signes(d.pages[0]) <= CAPACITE_CHAPITRE.deuxPhotos && N >= 2;
+      const base = d.pages.map((_, i) => (i === 0 && chapitre ? (chapitreDeux ? 2 : 0) : maxParPage));
+      const capTotal = base.reduce((a, b) => a + b, 0);
+      for (let garde = Math.min(N, capTotal); garde >= 0; garde -= 1) {
+        // Toute la place quand les pages de récit gardent tout ce qu'elles
+        // peuvent ; sinon on en retire une à une à la page qui en a le plus
+        // (la plus loin à égalité), pour qu'aucune ne reste sans photo avant
+        // les autres. Le chapitre passe de 2 à 0, jamais à 1, et en dernier.
+        const caps = [...base];
+        let exces = garde === Math.min(N, capTotal) ? 0 : capTotal - garde;
+        while (exces > 0) {
+          let i = -1;
+          caps.forEach((c, j) => {
+            if (j === 0 && chapitreDeux) return;
+            if (c > 0 && (i < 0 || c >= caps[i])) i = j;
+          });
+          if (i < 0) {
+            if (chapitreDeux && caps[0] === 2 && exces >= 2) {
+              caps[0] = 0;
+              exces -= 2;
+            }
+            break;
+          }
+          caps[i] -= 1;
+          exces -= 1;
+        }
+        const r = affecterPhotos({ pages: d.pages, paragraphes, photos, caps, chapitreDeux });
+        const signature = `${k}|${r.recit.map((l) => l.map((p) => p.id).join(",")).join(";")}`;
+        if (vus.has(signature)) continue;
+        vus.add(signature);
+        const qMin = Math.ceil(r.fin.length / MAX_PAGE_PHOTOS);
+        for (let q = qMin; q <= Math.min(r.fin.length, qMin + 1); q += 1) {
+          const tailles = partsEgales(r.fin.length, q);
+          const sansPhoto = N ? r.recit.filter((l, i) => !l.length && !(i === 0 && chapitre)).length : 0;
+          const cout =
+            sansPhoto * 15 +
+            tailles.reduce((c, t) => c + (t === 1 ? 8 : t === 2 ? 4 : 0), 0) +
+            (d.plus && T > 1 ? ETIRER : 0);
+          candidats.push({
+            pages: d.pages,
+            recit: r.recit,
+            fin: r.fin,
+            tailles,
+            chapitreDeux,
+            total: k + q,
+            scenario: q > 0 ? "B" : "A",
+            cout,
+          });
+        }
+      }
+    }
+
+    const pairs = candidats.filter((c) => c.total % 2 === 0);
+    const valides = pairs.length ? pairs : candidats;
+    const moins = Math.min(...valides.map((c) => c.total));
+    let parmi = valides.filter((c) => c.total === moins);
+    const situation = T <= 1 ? "court" : T % 2 ? "impair" : "pair";
+    // A et B possibles au même nombre de pages : on alterne d'une étape à
+    // l'autre dans la même situation, en commençant par A.
+    if (parmi.some((c) => c.scenario === "A") && parmi.some((c) => c.scenario === "B")) {
+      const voulu = memoire.get(situation) === "A" ? "B" : "A";
+      parmi = parmi.filter((c) => c.scenario === voulu);
+      memoire.set(situation, voulu);
+    }
+    return parmi.sort((a, b) => a.cout - b.cout)[0];
   }
 
   /* ------------------------------------------- composition des doubles pages */
@@ -712,6 +917,7 @@
     const encart = plan.encart ? "+encart" : "";
     if (plan.layout === "layout_chapter_map") return `carte${encart}`;
     if (plan.layout === "layout_hero_top") return "hero";
+    if (plan.layout === "layout_recit_photo") return `recit+photo${encart}`;
     if (plan.layout === "layout_trio_portrait" || plan.layout === "layout_trio_landscape") return plan.layout;
     const n = plan.photos.length;
     if (n === 0) return `texte${encart}`;
@@ -760,17 +966,26 @@
       if (composition(a) !== composition(b)) continue;
       if (a.genre !== "recit" || b.genre !== "recit") continue;
 
-      // 1. Grande photo en tête ↔ photo flottante.
+      // 1. Une page à une photo change de façon de la montrer : grande photo en
+      //    tête, récit qui contourne une photo en hauteur, photo flottante.
       let regle = false;
       for (const p of [b, a]) {
         if (p.photos.length !== 1 || p.layout === "layout_chapter_map") continue;
         const avant = p.layout;
-        if (p.layout === "layout_hero_top") p.layout = p.ouvreLeCarnet ? "layout_story_opener" : "layout_story_facts";
-        else if (heroAdmis(p)) p.layout = "layout_hero_top";
-        if (p.layout !== avant && composition(a) !== composition(b)) {
-          regle = true;
-          break;
+        const flottante = p.ouvreLeCarnet ? "layout_story_opener" : "layout_story_facts";
+        const autres = [
+          heroAdmis(p) ? "layout_hero_top" : null,
+          recitPhotoAdmis(p.photos[0], p.texte, p.sorte) ? "layout_recit_photo" : null,
+          flottante,
+        ].filter((l) => l && l !== avant);
+        for (const l of autres) {
+          p.layout = l;
+          if (composition(a) !== composition(b)) {
+            regle = true;
+            break;
+          }
         }
+        if (regle) break;
         p.layout = avant;
       }
       if (regle) continue;
@@ -856,6 +1071,7 @@
     if (plan.genre !== "recit" || !plan.texte.length) return false;
     const n = signes(plan.texte);
     if (plan.layout === "layout_chapter_map") return plan.photos.length === 2 && n <= 120;
+    if (plan.layout === "layout_recit_photo") return n <= CAPACITE_PAGE.layout_recit_photo.postit[plan.sorte];
     if (plan.photos.length <= 1) return true;
     return plan.photos.length === 2 && n <= 240;
   }
@@ -939,6 +1155,7 @@
     layout_collage: actif === "layout_collage",
     layout_trio_portrait: actif === "layout_trio_portrait",
     layout_trio_landscape: actif === "layout_trio_landscape",
+    layout_recit_photo: actif === "layout_recit_photo",
     layout_photo_page: actif === "layout_photo_page",
   });
 
@@ -965,6 +1182,8 @@
     const titreDuSejour = new Map();
     const dejaPasses = new Set();
     const parcoursEnVille = [];
+    // Le dernier scénario (A ou B) choisi dans chaque situation, pour alterner.
+    const memoire = new Map();
 
     etapes.forEach((etape, index) => {
       const analysePhotos = new Map((etape.analyse?.photos || []).map((ph) => [String(ph.id), ph]));
@@ -974,20 +1193,16 @@
           ...photo,
           paragraphe: Number.isInteger(lu.paragraphe) ? lu.paragraphe : null,
           scene: lu.scene || "",
+          legende: etiquetteDe(lu),
           // Trois visages ou plus : une photo de groupe, qui ne se rogne pas.
           groupe: Boolean(photo.groupe) || Number(lu.personnes) >= 3,
         };
       });
 
       const paragraphes = enParagraphes(etape.recit);
-      // Sans récit, une ou deux photos tiennent sur la page à bandeau ; de trois
-      // à cinq, l'étape devient une planche ; au-delà, la page à bandeau en
-      // porte aussi, pour ne rien perdre.
-      const pages = paragraphes.length
-        ? pagesDeRecit(paragraphes)
-        : photos.length < MIN_PAGE_PHOTOS || photos.length > PHOTOS_RENDUES.layout_photo_page
-          ? [[]]
-          : [];
+      // Sans récit, une ou deux photos tiennent sur la page à bandeau ; à partir
+      // de trois, l'étape n'est faite que de pages de photos.
+      const pages = paragraphes.length ? pagesDeRecit(paragraphes) : photos.length < MIN_PAGE_PHOTOS ? [[]] : [];
 
       // Chapitre : la première étape, puis chaque arrivée dans un nouveau lieu.
       // Pour un séjour en un seul lieu, chaque étape qui emmène le voyageur
@@ -1020,41 +1235,26 @@
         nouveauLieu = !sejoursOuverts.has(situe.pays) || nouveauxEnVille.length > 0;
       }
       let chapitre = Boolean(nouveauLieu && situe && dessinerCarte && pages.length && paragraphes.length);
-      let capPremiere = null;
-      if (chapitre) {
-        const texte0 = signes(pages[0]);
-        const deuxPhotos = texte0 <= CAPACITE_CHAPITRE.deuxPhotos && photos.length >= 2;
-        // Une étape d'une seule page ne sacrifie pas ses photos à la carte :
-        // ses photos n'auraient nulle part où aller, sauf une planche collée à
-        // une page de texte nu — ce que LAYOUT_KB proscrit.
-        if (texte0 > CAPACITE_CHAPITRE.sansPhoto) chapitre = false;
-        else if (pages.length === 1 && photos.length > 0 && !deuxPhotos) chapitre = false;
-        else capPremiere = deuxPhotos ? 2 : 0;
-      }
+      // La carte prend la place d'une colonne : le récit de l'ouverture doit y
+      // tenir. Elle ne coûte plus de photo — ce qui n'a pas de place sur les
+      // pages de récit va sur les pages de photos de fin d'étape.
+      if (chapitre && signes(pages[0]) > CAPACITE_CHAPITRE.sansPhoto) chapitre = false;
 
       const maxParPage = photosParPageDeRecit(photos);
-      let repartition = pages.length
-        ? affecterPhotos({ pages, paragraphes, photos, maxParPage, capPremiere })
-        : { recit: [], planches: [photos.slice(0, PHOTOS_RENDUES.layout_photo_page)], ecartees: photos.slice(PHOTOS_RENDUES.layout_photo_page) };
-      // Une carte ne coûte jamais une photo, ni une page de récit sans image à
-      // côté d'une planche : si l'ouverture de chapitre fait l'un ou l'autre et
-      // que l'étape s'en passe sans carte, elle s'ouvre sans carte.
-      const defauts = (r) =>
-        r.ecartees.length * 10 +
-        (r.planches.some(Boolean) ? r.recit.filter((liste, p) => !liste.length && !(p === 0 && chapitre)).length : 0);
-      if (chapitre && defauts(repartition) > 0) {
-        const sansCarte = affecterPhotos({ pages, paragraphes, photos, maxParPage, capPremiere: null });
-        if (defauts(sansCarte) < defauts(repartition)) {
-          chapitre = false;
-          capPremiere = null;
-          repartition = sansCarte;
-        }
+      // La structure de l'étape : récit d'un seul tenant, photos en fin
+      // d'étape, nombre de pages pair (`structurerEtape`).
+      let structure;
+      if (paragraphes.length) {
+        structure = structurerEtape({ paragraphes, pagesNaturelles: pages, photos, maxParPage, chapitre, memoire });
+      } else if (pages.length) {
+        structure = { pages, recit: [photos], fin: [], tailles: [], chapitreDeux: false, total: 1 };
+      } else {
+        let q = Math.ceil(photos.length / MAX_PAGE_PHOTOS);
+        if (q % 2 && q < photos.length) q += 1;
+        structure = { pages: [], recit: [], fin: photos, tailles: partsEgales(photos.length, q), chapitreDeux: false, total: q };
       }
-      if (repartition.ecartees.length) {
-        journal(
-          `étape ${index + 1} : ${repartition.ecartees.length} photo(s) laissée(s) hors du carnet — ` +
-            "plus de photos que ses pages ne peuvent en porter sans aligner deux planches.",
-        );
+      if (structure.total % 2) {
+        journal(`étape ${index + 1} : ${structure.total} page(s), un nombre impair — l'étape n'a pas de quoi en remplir une de plus.`);
       }
 
       let carte = "";
@@ -1119,8 +1319,9 @@
         }
       }
 
-      const paragraphesDeLaPage = pages.map(() => []);
-      const pageDuParagraphe = pageDeChaqueParagraphe(paragraphes, pages);
+      const pagesEtape = structure.pages;
+      const paragraphesDeLaPage = pagesEtape.map(() => []);
+      const pageDuParagraphe = pageDeChaqueParagraphe(paragraphes, pagesEtape);
       pageDuParagraphe.forEach((p, i) => paragraphesDeLaPage[p]?.push(i));
 
       let premierePlanche = true;
@@ -1130,28 +1331,29 @@
         return plan;
       };
 
-      if (!pages.length) {
-        for (const liste of repartition.planches) if (liste?.length) plans.push(planche(liste));
-        return;
-      }
-      pages.forEach((texte, p) => {
+      pagesEtape.forEach((texte, p) => {
         const plan = {
           genre: "recit",
           etape: index,
           rang: p,
           sorte: p === 0 ? "bandeau" : "suite",
           texte,
-          photos: repartition.recit[p],
+          photos: structure.recit[p],
           paragraphes: paragraphesDeLaPage[p],
-          capPhotos: p === 0 && capPremiere != null ? capPremiere : maxParPage,
+          capPhotos: p === 0 && chapitre ? (structure.chapitreDeux ? 2 : 0) : maxParPage,
           ouvreLeCarnet: index === 0 && p === 0,
           bandeau: p === 0 ? etape : null,
           carte: p === 0 && chapitre ? carte : "",
         };
         plan.layout = plan.carte ? "layout_chapter_map" : layoutDeRecit(plan.photos, texte, plan.sorte, plan.ouvreLeCarnet);
         plans.push(plan);
-        if (repartition.planches[p]?.length) plans.push(planche(repartition.planches[p]));
       });
+      // Les pages de photos seules, toujours après le récit.
+      let debut = 0;
+      for (const taille of structure.tailles) {
+        plans.push(planche(structure.fin.slice(debut, debut + taille)));
+        debut += taille;
+      }
     });
 
     const restants = varierDoublesPages(plans, pagesAvant);
@@ -1176,7 +1378,7 @@
       const jour = {
         ...drapeaux(plan.layout),
         body_html: paragraphesEnHtml(plan.texte),
-        photos: placerPhotos(plan.layout, plan.photos),
+        photos: etiqueter(plan, placerPhotos(plan.layout, plan.photos)),
         fun_facts: plan.encart ? [plan.encart.texte] : [],
         // L'encart est écrit par le modèle : la page le dit, en petit
         // (LAYOUT_KB § « La mention généré par IA »).
@@ -1202,7 +1404,9 @@
     MAX_ROGNAGE,
     enParagraphes,
     pagesDeRecit,
+    repartirRecit,
     affecterPhotos,
+    structurerEtape,
     placerPhotos,
     varierDoublesPages,
     placerEncarts,

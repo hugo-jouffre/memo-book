@@ -103,8 +103,10 @@ describe("mise en page de l'atelier", () => {
       ],
       options,
     );
-    expect(jours.map((j) => Boolean(j["layout_chapter_map"]))).toEqual([true, false, true]);
-    expect(String(jours[2]!["map_svg"])).toMatch(/^data:image\/svg\+xml;base64,/);
+    // La carte ouvre la première page de l'étape (celle qui porte le bandeau).
+    const ouvertures = jours.filter((j) => j["day_intro"]);
+    expect(ouvertures.map((j) => Boolean(j["layout_chapter_map"]))).toEqual([true, false, true]);
+    expect(String(ouvertures[2]!["map_svg"])).toMatch(/^data:image\/svg\+xml;base64,/);
   });
 
   it("n'ouvre pas de chapitre sans lieu situé avec certitude", () => {
@@ -125,6 +127,100 @@ describe("mise en page de l'atelier", () => {
     // Page 0 à gauche (pagesAvant = 1 : le colophon est la page 1), page 1 à droite.
     expect(comp(sans[0]!)).not.toBe(comp(sans[1]!));
     expect(sans.reduce((n, j) => n + j.photos.length, 0)).toBe(4);
+  });
+
+  describe("structure d'une étape", () => {
+    // Les pages d'une étape : de sa page à bandeau à la suivante.
+    const etapesDe = (jours: Jour[]) =>
+      jours.reduce<Jour[][]>((liste, j) => {
+        if (j["day_intro"] || !liste.length) liste.push([j]);
+        else liste[liste.length - 1]!.push(j);
+        return liste;
+      }, []);
+    const estPlanche = (j: Jour) => Boolean(j["layout_photo_page"]);
+    const toutesLesPhotos = (jours: Jour[]) => jours.flatMap((j) => j.photos.map(url));
+
+    it("ne coupe jamais le récit par une page de photos, et compte un nombre de pages pair", () => {
+      // L'étape 1 de Paros : ouverture sur la carte, ~770 signes, six photos.
+      const recit = [paragrapheDe("le port", 2), paragrapheDe("la plage", 2), paragrapheDe("la ville", 2), paragrapheDe("le soir", 2)].join(" ");
+      const photos = ["a", "b", "c", "d", "e", "f"].map((id) => photo(id));
+      const jours = M.composerJours([etape(recit, photos, { lieu: { nom: "Paros", pays: "GR", lat: 37.08, lon: 25.15 }, photos: [] })], {
+        contours,
+        dessinerCarte: (r: unknown) => carte.renderMapDataUri(contours, r),
+      });
+      expect(jours[0]!["layout_chapter_map"]).toBe(true);
+      expect(jours.length % 2).toBe(0);
+      const premiere = jours.findIndex(estPlanche);
+      if (premiere >= 0) expect(jours.slice(premiere).every(estPlanche)).toBe(true);
+      expect(toutesLesPhotos(jours).sort()).toEqual(photos.map((p) => p.src).sort());
+      expect(normal(texteDes(jours))).toBe(normal(recit));
+    });
+
+    it("alterne les deux scénarios d'une étape courte : récit sur deux pages, puis texte et page de photos", () => {
+      const courte = (lieu: string) => etape(paragrapheDe(lieu, 3), ["1", "2", "3"].map((id) => photo(`${lieu}-${id}`)), null, lieu);
+      const etapes = etapesDe(M.composerJours([courte("Paros"), courte("Naxos"), courte("Ios")]));
+      expect(etapes.map((e) => e.length)).toEqual([2, 2, 2]);
+      // A : deux pages de récit ; B : une page de récit, puis une page de photos ; puis A.
+      expect(etapes.map((e) => e.map((j) => (estPlanche(j) ? "photos" : "récit")).join("+"))).toEqual([
+        "récit+récit",
+        "récit+photos",
+        "récit+récit",
+      ]);
+      // Dans B, la page de récit garde une ou deux photos.
+      expect(etapes[1]![0]!.photos.length).toBeGreaterThanOrEqual(1);
+      expect(etapes[1]![0]!.photos.length).toBeLessThanOrEqual(2);
+    });
+
+    it("répartit le récit d'une étape courte sans photo sur deux pages", () => {
+      const recit = paragrapheDe("la plage", 3);
+      const jours = M.composerJours([etape(recit, [])]);
+      expect(jours).toHaveLength(2);
+      expect(normal(texteDes(jours))).toBe(normal(recit));
+      const longueurs = jours.map((j) => j.body_html.replace(/<[^>]+>/g, "").length);
+      expect(Math.abs(longueurs[0]! - longueurs[1]!)).toBeLessThan(120);
+    });
+
+    it("garde un nombre de pages pair et les photos en fin d'étape, quelle que soit la matière", () => {
+      for (let n = 1; n <= 10; n += 1) {
+        for (const nbPhotos of [0, 1, 2, 3, 5, 7, 9]) {
+          const recit = Array.from({ length: n }, (_, i) => paragrapheDe(`le lieu ${i}`, 2)).join(" ");
+          const photos = Array.from({ length: nbPhotos }, (_, i) => photo(`p${n}-${i}`, i % 3 ? 0.75 : 1.4));
+          const jours = M.composerJours([etape(recit, photos)]);
+          const cas = `${n} paragraphe(s), ${nbPhotos} photo(s)`;
+          expect(jours.length % 2, cas).toBe(0);
+          const premiere = jours.findIndex(estPlanche);
+          if (premiere >= 0) expect(jours.slice(premiere).every(estPlanche), cas).toBe(true);
+          expect(toutesLesPhotos(jours).sort(), cas).toEqual(photos.map((p) => p.src).sort());
+          expect(normal(texteDes(jours)), cas).toBe(normal(recit));
+        }
+      }
+    });
+  });
+
+  describe("récit qui contourne une grande photo (maquette faite à la main)", () => {
+    it("fait contourner au récit une photo en hauteur, avec son étiquette de titre", () => {
+      const analyse = { photos: [{ id: "riz", paragraphe: 0, scene: "rizières en terrasses", legende: "Rizières de Banaue" }] };
+      const jours = M.composerJours([etape(paragrapheDe("les rizières", 4), [photo("riz", 0.75)], analyse, "Banaue")]);
+      const page = jours.find((j) => j["layout_recit_photo"])!;
+      expect(page).toBeTruthy();
+      expect(page.photos[0]).toMatchObject({ label: "Rizières de Banaue" });
+    });
+
+    it("garde la grande photo en tête pour une photo en largeur", () => {
+      const jours = M.composerJours([etape(paragrapheDe("la baie", 2), [photo("baie", 1.5)])]);
+      expect(jours.some((j) => j["layout_recit_photo"])).toBe(false);
+    });
+
+    it("pose le fun fact en post-it à côté de la photo quand le récit laisse la place", () => {
+      const analyse = {
+        photos: [{ id: "riz", paragraphe: 0, scene: "rizières" }],
+        funFact: { texte: "Les rizières de Banaue ont deux mille ans.", titre: "Infos", registre: "histoire", paragraphe: 0, pertinence: 9 },
+      };
+      const jours = M.composerJours([etape(paragrapheDe("les rizières", 4), [photo("riz", 0.75)], analyse, "Banaue")], { funFacts: true });
+      const page = jours.find((j) => (j["fun_facts"] as string[]).length)!;
+      expect(page["layout_recit_photo"]).toBe(true);
+      expect(page["fun_facts_title"]).toBe("Infos");
+    });
   });
 
   describe("trios (une photo en haut, deux en bas)", () => {
@@ -150,8 +246,9 @@ describe("mise en page de l'atelier", () => {
 
     it("n'en fait jamais sur la première page d'une étape", () => {
       const jours = M.composerJours([etape(paragrapheDe("la plage", 2), ["a", "b", "c"].map((id) => photo(id)))]);
-      expect(jours).toHaveLength(1);
-      expect(layoutDe(jours[0]!)).toBe("collage");
+      expect(jours.length % 2).toBe(0);
+      expect(jours[0]!["day_intro"]).toBeTruthy();
+      expect(layoutDe(jours[0]!)).not.toMatch(/^trio/);
     });
 
     it("garde le collage quand une photo y serait trop rognée", () => {
@@ -303,7 +400,12 @@ describe("mise en page de l'atelier", () => {
         [
           etape(paragrapheDe("la plage", 1), [], encart("Un fait sans intérêt.", 4)),
           etape(paragrapheDe("le port", 1), [], { photos: [] }),
-          etape(paragrapheDe("la ville", 1), ["a", "b", "c"].map((id) => photo(id)), encart("Un fait remarquable.", 9)),
+          // Deux pages de récit chargées, trois photos sur chacune : pas de place.
+          etape(
+            Array.from({ length: 4 }, (_, i) => paragrapheDe(`la ville ${i}`, 2)).join(" "),
+            ["a", "b", "c", "d", "e", "f"].map((id) => photo(id)),
+            encart("Un fait remarquable.", 9),
+          ),
         ],
         { funFacts: true, journal: (t: string) => lignes.push(t) },
       );
@@ -330,12 +432,15 @@ describe("mise en page de l'atelier", () => {
     });
 
     it("pose l'encart à côté de la photo flottante plutôt que sous une grande photo en tête", () => {
-      const jours = M.composerJours([etape(paragrapheDe("la plage", 1), [photo("p", 1.4)], encart("Fait.", 9))], {
+      // Un récit court, réparti sur deux pages ; la photo et l'encart sur la première.
+      const jours = M.composerJours([etape(paragrapheDe("la plage", 4), [photo("p", 1.4)], encart("Fait.", 9))], {
         funFacts: true,
       });
-      expect(jours[0]?.["layout_hero_top"]).toBe(false);
-      expect(jours[0]?.["layout_story_opener"]).toBe(true);
-      expect(encarts(jours)).toEqual(["Fait."]);
+      const hote = jours.find((j) => (j["fun_facts"] as string[]).length)!;
+      expect(hote["layout_hero_top"]).toBe(false);
+      expect(hote["layout_story_opener"]).toBe(true);
+      expect(hote.photos).toHaveLength(1);
+      expect(encarts(jours).filter(Boolean)).toEqual(["Fait."]);
     });
   });
 });
