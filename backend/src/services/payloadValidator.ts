@@ -208,6 +208,16 @@ export function splitParagraphs(html: string): string[] {
 
 const LAYOUT_FLAG_PREFIX = "layout_";
 
+/**
+ * Les pages du livre avant la première étape : le colophon (page 1, à droite),
+ * l'introduction s'il y en a une, et les pages libres posées pour que la
+ * première étape s'ouvre à gauche.
+ */
+export function pagesAvantEtapes(payload: Record<string, unknown>): number {
+  const libres = Number(payload["pages_libres_avant"]);
+  return 1 + (payload["intro_text"] ? 1 : 0) + (Number.isInteger(libres) && libres > 0 ? libres : 0);
+}
+
 /** Longueur du récit d'une journée, en caractères de texte brut. */
 export function bodyLength(day: Record<string, unknown>): number {
   const body = day["body_html"];
@@ -605,6 +615,18 @@ function checkEditorialRules(payload: Record<string, unknown>): {
       (day): day is Record<string, unknown> => Boolean(day) && typeof day === "object",
     );
     for (const step of groupSteps(objets)) checkStep(step, errors, warnings);
+
+    // Une étape commence toujours sur une page de gauche (Hugo, 12/10/2026) :
+    // le colophon est la page 1, à droite ; ce qui le suit avant la première
+    // étape doit donc faire un nombre pair de pages.
+    if (pagesAvantEtapes(payload) % 2 === 0) {
+      warnings.push({
+        path: "pages_libres_avant",
+        message:
+          "La première étape commencerait sur une page de droite : le colophon et l'introduction font " +
+          "un nombre pair de pages. Ajoute `pages_libres_avant: 1`.",
+      });
+    }
   }
 
   return { errors, warnings };

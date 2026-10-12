@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import type { AppContext } from "../context.js";
 import { applyBookSettings, keepsPhotos } from "../services/bookSettings.js";
 import { validatePayload } from "../services/payloadValidator.js";
-import type { StructuringEntry } from "../services/structuring.js";
+import { premiereEtapeAGauche, type StructuringEntry } from "../services/structuring.js";
 import { parseTripContext } from "../services/tripContext.js";
 import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import { JOB_NAMES } from "./queue.js";
@@ -170,7 +170,8 @@ export async function structureRender(
     });
     // Les réglages de personnalisation qui touchent le gabarit : pointillés,
     // décorations, et ce qui resterait de photos à 0 %.
-    const payload = applyBookSettings(compose, memo);
+    // Et la première étape s'ouvre sur une page de gauche.
+    const payload = premiereEtapeAGauche(applyBookSettings(compose, memo));
 
     const validation = validatePayload(payload);
     if (!validation.valid) {

@@ -143,6 +143,13 @@ l'accepte** :
   suffisent : page d'album) ;
 - **étape courte** (une page de récit) : la première fois, le récit sur deux
   pages ; la suivante, le texte sur une page puis une page de photos ;
+- **six pages au plus** par étape, dont **deux de photos** ; les photos de trop
+  s'écartent dans l'ordre : floues ou sombres, doublons d'une scène, moins
+  bien notées ;
+- la première étape commence **à gauche** : `pages_libres_avant: 1` quand le
+  colophon et l'introduction font un nombre pair de pages ;
+- **pas de légende** (`title` vide) sur les pages de photos ; une photo
+  exceptionnelle peut passer en `pleine_page`, une fois par chapitre ;
 - une page à une photo **en hauteur** : `layout_recit_photo`, le récit la
   contourne, avec l'étiquette de titre (`photos[0].label`) et le fun fact en
   post-it « Infos ».

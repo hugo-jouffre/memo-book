@@ -197,6 +197,65 @@ describe("mise en page de l'atelier", () => {
     });
   });
 
+  describe("plafonds d'une étape et photos écartées (décisions du 12/10/2026)", () => {
+    const etapesDe = (jours: Jour[]) =>
+      jours.reduce<Jour[][]>((liste, j) => {
+        if (j["day_intro"] || !liste.length) liste.push([j]);
+        else liste[liste.length - 1]!.push(j);
+        return liste;
+      }, []);
+    const nette = { nettete: 600, luminance: 128, ecretage: 0.02 };
+
+    it("ne dépasse jamais six pages, dont deux de photos, et écarte d'abord la floue, puis le doublon, puis la moins bien notée", () => {
+      const recit = Array.from({ length: 4 }, (_, i) => paragrapheDe(`le lieu ${i}`, 2)).join(" ");
+      const photos = Array.from({ length: 24 }, (_, i) => ({ ...photo(`p${i}`), mesure: nette }));
+      photos[3] = { ...photos[3]!, mesure: { ...nette, nettete: 10 } }; // floue
+      const analyse = {
+        photos: photos.map((p, i) => ({
+          id: p.id,
+          paragraphe: null,
+          // p5 et p6 : même scène, p6 mieux notée ; les autres, une scène chacune.
+          scene: i === 5 || i === 6 ? "port" : `scène ${i}`,
+          couverture: i === 6 ? 9 : i === 7 ? 1 : 6,
+        })),
+      };
+      const lignes: string[] = [];
+      const jours = M.composerJours([etape(recit, photos, analyse)], { journal: (t: string) => lignes.push(t) });
+      expect(jours.length).toBeLessThanOrEqual(6);
+      expect(jours.length % 2).toBe(0);
+      expect(jours.filter((j) => j["layout_photo_page"]).length).toBeLessThanOrEqual(2);
+      const imprimees = new Set(jours.flatMap((j) => j.photos.map(url)));
+      const ecartees = photos.filter((p) => !imprimees.has(p.src)).map((p) => p.id);
+      expect(ecartees.length).toBeGreaterThanOrEqual(3);
+      // Dans l'ordre : la floue, le doublon moins bien noté, la plus mal notée.
+      expect(ecartees.slice(0, 3).sort()).toEqual(["p3", "p5", "p7"]);
+      expect(lignes.some((l) => l.startsWith("photo(s) écartée(s)"))).toBe(true);
+    });
+
+    it("n'écrit plus de légende sur les pages de photos", () => {
+      const jours = M.composerJours([etape(paragrapheDe("la plage", 2), ["a", "b", "c", "d", "e", "f", "g"].map((id) => photo(id)))]);
+      for (const j of jours.filter((x) => x["layout_photo_page"])) expect(j["title"]).toBe("");
+    });
+
+    it("imprime une photo exceptionnelle en pleine page, une fois par chapitre au plus", () => {
+      const grande = (id: string) => ({ ...photo(id, 0.75), largeur: 3000, hauteur: 4000, mesure: nette });
+      const etapePleine = (lieu: string) =>
+        etape(paragrapheDe(lieu, 2), [grande(`${lieu}-a`), grande(`${lieu}-b`)], {
+          photos: ["a", "b"].map((x) => ({ id: `${lieu}-${x}`, paragraphe: null, couverture: 10 })),
+        }, lieu);
+      const pleines = (jours: Jour[]) => jours.filter((j) => j["pleine_page"]).length;
+      // Quatre étapes courtes au même lieu (A, B, A, B) : deux pages de photos
+      // à une photo, mais un seul chapitre, donc une seule pleine page.
+      const memeLieu = M.composerJours(["Paros", "Paros", "Paros", "Paros"].map(etapePleine));
+      expect(pleines(memeLieu)).toBe(1);
+      // Un nouveau lieu ouvre un nouveau chapitre, qui a droit à la sienne.
+      const deuxLieux = M.composerJours(["Paros", "Paros", "Naxos", "Naxos"].map(etapePleine));
+      expect(pleines(deuxLieux)).toBe(2);
+      for (const j of memeLieu.filter((x) => x["pleine_page"])) expect(j.photos).toHaveLength(1);
+      expect(etapesDe(memeLieu).every((e) => e.length % 2 === 0)).toBe(true);
+    });
+  });
+
   describe("récit qui contourne une grande photo (maquette faite à la main)", () => {
     it("fait contourner au récit une photo en hauteur, avec son étiquette de titre", () => {
       const analyse = { photos: [{ id: "riz", paragraphe: 0, scene: "rizières en terrasses", legende: "Rizières de Banaue" }] };

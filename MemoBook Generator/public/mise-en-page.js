@@ -244,6 +244,8 @@
     layout_trio_portrait: { 3: [0.6, 0.69, 0.65] },
     layout_trio_landscape: { 3: [1.6, 0.64, 0.64] },
     layout_recit_photo: { 1: [0.51] },
+    // La photo en pleine page, bord à bord : le format de la page.
+    pleine_page: { 1: [420 / 595] },
     layout_photo_page: {
       // Une ou deux photos : la page d'album de fin d'étape.
       1: [0.84],
@@ -785,6 +787,62 @@
    */
   const ETIRER = 10;
 
+  /**
+   * Une photo digne d'une pleine page : notée 9 au moins par l'analyse, pas
+   * une photo de groupe (elle serait rognée), au format de la page à un tiers
+   * près, et assez définie pour 154 × 216 mm à 200 dpi.
+   */
+  function pleinePageAdmise(photo) {
+    if (!(photo.note >= 9) || photo.groupe || !photo.largeur || !photo.hauteur) return false;
+    if (rognage(photo.format, FORMATS_EMPLACEMENTS.pleine_page[1][0]) > MAX_ROGNAGE) return false;
+    const dpi = Math.min(photo.largeur / (154 / 25.4), photo.hauteur / (216 / 25.4));
+    return dpi >= 200;
+  }
+
+  /** Une étape tient sur six pages au plus (Hugo, 12/10/2026)… */
+  const MAX_PAGES_ETAPE = 6;
+  /** …dont une double page de photos au plus en fin d'étape. */
+  const MAX_PAGES_PHOTOS = 2;
+
+  /**
+   * Les seuils du contrôle qualité, ceux de `couverture.js` (`SEUILS`) : une
+   * photo plus floue, plus sombre ou plus brûlée s'écarte la première.
+   */
+  const QUALITE = { nettete: 40, sombre: 45, clair: 215, ecretage: 0.25 };
+
+  const defautDeQualite = (photo) => {
+    const m = photo.mesure;
+    if (!m) return false;
+    return m.nettete < QUALITE.nettete || m.luminance < QUALITE.sombre || m.luminance > QUALITE.clair || m.ecretage > QUALITE.ecretage;
+  };
+
+  /**
+   * Les photos d'une étape, de la première à écarter à la dernière (Hugo,
+   * 12/10/2026) : les floues ou sombres, puis les doublons d'une même scène
+   * (on garde la mieux notée), puis les moins bien notées. À note égale, la
+   * plus tardive part d'abord.
+   */
+  function trierPourEcarter(photos) {
+    const note = (p) => (Number.isFinite(p.note) ? p.note : 5);
+    const meilleureDeScene = new Map();
+    for (const p of photos) {
+      const cle = normaliser(p.scene);
+      if (!cle || defautDeQualite(p)) continue;
+      const deja = meilleureDeScene.get(cle);
+      if (!deja || note(p) > note(deja)) meilleureDeScene.set(cle, p);
+    }
+    const rang = (p) => {
+      if (defautDeQualite(p)) return 0;
+      const cle = normaliser(p.scene);
+      if (cle && meilleureDeScene.get(cle) !== p) return 1;
+      return 2;
+    };
+    return photos
+      .map((p, i) => ({ p, i }))
+      .sort((a, b) => rang(a.p) - rang(b.p) || note(a.p) - note(b.p) || b.i - a.i)
+      .map(({ p }) => p);
+  }
+
   /** Une page de photos en porte cinq au plus (`layout_photo_page`). */
   const MAX_PAGE_PHOTOS = 5;
 
@@ -814,8 +872,7 @@
    * dernier choix. Puis le moins de défauts : une page de récit sans photo
    * quand l'étape en a, une page de photos qui n'en porte qu'une ou deux.
    */
-  function structurerEtape({ paragraphes, pagesNaturelles, photos, maxParPage, chapitre, memoire }) {
-    const N = photos.length;
+  function structurerEtape({ paragraphes, pagesNaturelles, photos: toutes, maxParPage, chapitre, memoire }) {
     const T = pagesNaturelles.length;
     const capacites = (k) =>
       Array.from({ length: k }, (_, i) =>
@@ -832,6 +889,8 @@
     const etale = repartirRecit(paragraphes, T + 1, capacites(T + 1));
     if (etale) decoupages.push({ pages: etale, plus: true });
 
+    const candidatsPour = (photos) => {
+    const N = photos.length;
     const candidats = [];
     const vus = new Set();
     for (const d of decoupages) {
@@ -887,8 +946,37 @@
         }
       }
     }
+    return candidats;
+    };
 
-    const pairs = candidats.filter((c) => c.total % 2 === 0);
+    // Six pages au plus, dont deux de photos (une double page) — à moins que
+    // le récit seul n'en demande davantage. Quand les photos n'y tiennent pas,
+    // on en écarte, la pire d'abord (`trierPourEcarter`), jusqu'à trouver une
+    // structure au nombre de pages pair.
+    const maxPages = Math.max(MAX_PAGES_ETAPE, T + (T % 2));
+    const admis = (c) => c.total <= maxPages && c.tailles.length <= MAX_PAGES_PHOTOS;
+    const pair = (c) => c.total % 2 === 0;
+    let gardees = toutes;
+    let candidats = candidatsPour(toutes).filter(admis);
+    if (!candidats.some(pair)) {
+      let essai = toutes;
+      for (const pire of trierPourEcarter(toutes)) {
+        essai = essai.filter((p) => p !== pire);
+        const c = candidatsPour(essai).filter(admis);
+        if (c.some(pair)) {
+          gardees = essai;
+          candidats = c;
+          break;
+        }
+        if (!candidats.length && c.length) {
+          gardees = essai;
+          candidats = c;
+        }
+      }
+    }
+    const ecartees = toutes.filter((p) => !gardees.includes(p));
+
+    const pairs = candidats.filter(pair);
     const valides = pairs.length ? pairs : candidats;
     const moins = Math.min(...valides.map((c) => c.total));
     let parmi = valides.filter((c) => c.total === moins);
@@ -900,7 +988,7 @@
       parmi = parmi.filter((c) => c.scenario === voulu);
       memoire.set(situation, voulu);
     }
-    return parmi.sort((a, b) => a.cout - b.cout)[0];
+    return { ...parmi.sort((a, b) => a.cout - b.cout)[0], ecartees };
   }
 
   /* ------------------------------------------- composition des doubles pages */
@@ -1184,6 +1272,10 @@
     const parcoursEnVille = [];
     // Le dernier scénario (A ou B) choisi dans chaque situation, pour alterner.
     const memoire = new Map();
+    // Les chapitres — une suite d'étapes au même lieu — qui ont déjà leur
+    // photo en pleine page.
+    let numeroChapitre = 0;
+    const pleinesPages = new Set();
 
     etapes.forEach((etape, index) => {
       const analysePhotos = new Map((etape.analyse?.photos || []).map((ph) => [String(ph.id), ph]));
@@ -1194,6 +1286,8 @@
           paragraphe: Number.isInteger(lu.paragraphe) ? lu.paragraphe : null,
           scene: lu.scene || "",
           legende: etiquetteDe(lu),
+          // La note « couverture » de l'analyse : ce que vaut la photo.
+          note: typeof lu.couverture === "number" && Number.isFinite(lu.couverture) ? lu.couverture : null,
           // Trois visages ou plus : une photo de groupe, qui ne se rogne pas.
           groupe: Boolean(photo.groupe) || Number(lu.personnes) >= 3,
         };
@@ -1234,6 +1328,7 @@
           });
         nouveauLieu = !sejoursOuverts.has(situe.pays) || nouveauxEnVille.length > 0;
       }
+      if (nouveauLieu) numeroChapitre += 1;
       let chapitre = Boolean(nouveauLieu && situe && dessinerCarte && pages.length && paragraphes.length);
       // La carte prend la place d'une colonne : le récit de l'ouverture doit y
       // tenir. Elle ne coûte plus de photo — ce qui n'a pas de place sur les
@@ -1252,6 +1347,12 @@
         let q = Math.ceil(photos.length / MAX_PAGE_PHOTOS);
         if (q % 2 && q < photos.length) q += 1;
         structure = { pages: [], recit: [], fin: photos, tailles: partsEgales(photos.length, q), chapitreDeux: false, total: q };
+      }
+      if (structure.ecartees?.length) {
+        journal(
+          `photo(s) écartée(s) — étape ${index + 1} : ${structure.ecartees.length} photo(s) de trop pour six pages ` +
+            "(les floues ou sombres d'abord, puis les doublons d'une scène, puis les moins bien notées).",
+        );
       }
       if (structure.total % 2) {
         journal(`étape ${index + 1} : ${structure.total} page(s), un nombre impair — l'étape n'a pas de quoi en remplir une de plus.`);
@@ -1324,10 +1425,15 @@
       const pageDuParagraphe = pageDeChaqueParagraphe(paragraphes, pagesEtape);
       pageDuParagraphe.forEach((p, i) => paragraphesDeLaPage[p]?.push(i));
 
-      let premierePlanche = true;
+      // Les pages de photos n'ont pas de légende (Hugo, 12/10/2026). Une
+      // photo exceptionnelle, seule sur sa page, s'imprime en pleine page —
+      // une fois par chapitre au plus.
       const planche = (liste) => {
-        const plan = { genre: "planche", etape: index, photos: liste, titre: premierePlanche ? etape.titre || "" : "" };
-        premierePlanche = false;
+        const plan = { genre: "planche", etape: index, photos: liste };
+        if (liste.length === 1 && !pleinesPages.has(numeroChapitre) && pleinePageAdmise(liste[0])) {
+          plan.pleinePage = true;
+          pleinesPages.add(numeroChapitre);
+        }
         return plan;
       };
 
@@ -1367,10 +1473,11 @@
     return plans.map((plan) => {
       if (plan.genre === "planche") {
         return {
-          title: plan.titre,
+          title: "",
           body_html: "",
           ...drapeaux("layout_photo_page"),
-          photos: placerPhotos("layout_photo_page", plan.photos),
+          ...(plan.pleinePage ? { pleine_page: true } : {}),
+          photos: placerPhotos(plan.pleinePage ? "pleine_page" : "layout_photo_page", plan.photos),
           fun_facts: [],
           sticker_groups: [],
         };

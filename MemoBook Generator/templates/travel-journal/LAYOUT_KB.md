@@ -382,7 +382,7 @@ tranche : le premier actif l'emporte.
 | `layout_trio_portrait` | **Page de suite seulement.** Récit court en tête, réglure prolongée jusqu'aux photos, puis trois photos en cascade : une portrait en haut, deux portraits en bas qui la chevauchent à peine, tracé pointillé derrière | Fin d'étape courte avec trois photos en portrait | 3 | sous S, S partiel — **420 en 2 paragraphes** |
 | `layout_trio_landscape` | Le même, avec une **photo paysage en haut** (format 1,6) ; les deux du bas restent des portraits | Fin d'étape courte avec une paysage et deux portraits | 3 | idem |
 | `layout_recit_photo` | **Maquette faite à la main (Banaue).** Quelques lignes pleine largeur, puis le récit en colonne à gauche d'une grande photo en hauteur qui flotte à droite, inclinée, avec son **étiquette de titre** (`label`). Un fun fact devient un **post-it « Infos »** en bas à gauche | Une page à une photo en portrait (format < 0,77) — bandeau ou suite | 1 | S, M ; 800 en page de suite avec le post-it |
-| `layout_photo_page` | **Page de photos seules**, sans récit ni bandeau. De 3 à 5, une planche bord à bord ; 1 ou 2, une page d'album (tirages inclinés, tracé pointillé). `title` devient une légende manuscrite en bas | **Toujours en fin d'étape**, après le récit — voir § « Structure d'une étape » | 1–5 | aucune — le récit n'est pas rendu |
+| `layout_photo_page` | **Page de photos seules**, sans récit ni bandeau, **sans légende**. De 3 à 5, une planche bord à bord ; 1 ou 2, une page d'album (tirages inclinés, tracé pointillé). Avec `pleine_page`, une seule photo bord à bord, sans cadre | **Toujours en fin d'étape**, après le récit — voir § « Structure d'une étape » | 1–5 | aucune — le récit n'est pas rendu |
 | *(par défaut)* | Récit, puis carte info et photo flottantes en bas de page | Ouverture de journée, cas le plus courant | 0–1 | S, M |
 
 Les tailles exactes, et le plafond mesuré de chaque configuration, sont en
@@ -539,6 +539,32 @@ largeur. Un récit qui dépassait à peine d'une page ne laisse plus une page pl
 et une page presque vide (`repartirRecit`, atelier). La coupe se fait sur une
 fin de phrase, même un peu plus loin qu'une virgule ; jamais au milieu d'un mot.
 
+### Décisions de design du 12/10/2026
+
+Les réponses de Hugo aux questions de design, à tenir partout (atelier, agent
+de mise en page, gabarit) :
+
+| Sujet | Décision |
+|---|---|
+| Pages par étape | **6 au plus** — sauf si le récit seul en demande davantage |
+| Début d'étape | **Toujours sur une page de gauche** |
+| Pages de photos en fin d'étape | **Une double page au plus** (2 pages, 10 photos) |
+| Photos de trop | On écarte d'abord les **floues ou sombres**, puis les **doublons d'une scène** (on garde la mieux notée), puis les **moins bien notées** |
+| Paragraphe sur deux pages | Oui, **coupé sur une fin de phrase** |
+| Page de suite | **Rien** ne rappelle l'étape : le texte continue |
+| Corps et interligne | **Légèrement ajustables** (±1 pt) pour remplir une page |
+| Étiquette de titre sur une photo | **Écrite par l'IA, une par double page au plus**, modifiable par le voyageur |
+| Habillage des photos | **Toujours** cadre blanc, inclinaison et scotch |
+| Légendes des pages de photos | **Jamais** |
+| Photo en pleine page | **De temps en temps** : une par chapitre au plus |
+| Stickers | **Bibliothèque dessinée**, liés au récit, selon le réglage « Décorations », 2 par double page au plus |
+| Tracé pointillé | **Un par double page au plus**, derrière des photos |
+| Fun fact | **Post-it « Infos » partout**, un toutes les trois pages au plus |
+| Rythme | Jamais deux fois le même design sur une double page |
+| Carte de chapitre | À chaque nouveau lieu |
+| Marges | **Plus large côté reliure** (~15 mm), ~10 mm à l'extérieur |
+| Fin du carnet | **3 pages libres réglées** pour écrire (réglage « Zones libres ») |
+
 ### Structure d'une étape
 
 Consignes de Hugo, 12/10/2026, après une étape sortie en « page de texte, page
@@ -567,6 +593,28 @@ de photos, page de texte » sur trois pages :
    reproduit, tout le texte sur une page avec une ou deux photos, puis une page
    « photos + stickers » (B) ; puis on alterne. Une étape courte sans photo
    n'a que A.
+
+**Plafonds.** Une étape tient sur **six pages au plus**, dont **deux pages de
+photos** (une double page) — à moins que le récit seul n'en demande
+davantage. Quand ses photos n'y tiennent pas, l'atelier en écarte, la pire
+d'abord (`trierPourEcarter`) : celles qui échouent au contrôle qualité (netteté
+sous 40, luminance sous 45 ou au-dessus de 215, plus d'un quart de pixels
+brûlés — les seuils de la couverture), puis, dans une même `scene`, toutes sauf
+la mieux notée, puis par note `couverture` croissante. Le journal de l'atelier
+le dit.
+
+**Début d'étape à gauche.** Le colophon est la page 1, à droite : ce qui le
+suit avant la première étape (introduction) doit faire un nombre pair de
+pages. Sinon, une page libre réglée les complète (`pages_libres_avant: 1`). Avec
+des étapes au nombre de pages pair, chacune commence alors à gauche. Le
+validateur avertit d'une première étape à droite.
+
+**Photo en pleine page**, une fois par chapitre (une suite d'étapes au même
+lieu) au plus : sur une page de photos de fin d'étape qui n'en porte qu'une,
+si la photo est notée 9 au moins, n'est pas une photo de groupe, se rogne de
+moins d'un tiers au format de la page et tient 200 dpi sur 154 × 216 mm
+(`pleine_page: true`). ⚠️ Elle s'arrête au bord de la page : à vérifier, le fond
+perdu que Pumbo demande pour les pages intérieures.
 
 **La page « photos + stickers ».** `layout_photo_page` accepte désormais une ou
 deux photos : une page d'album, les tirages inclinés et le tracé pointillé entre
