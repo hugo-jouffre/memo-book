@@ -5,6 +5,13 @@
   "widthPt": 420,
   "heightPt": 595,
   "bleedPt": 0,
+  "imprimeur": {
+    "$comment": "Version imprimeur (payload `fond_perdu: true`) : 3 mm de fond perdu sur les quatre bords. La feuille se règle dans le panneau du template APITemplate imprimeur (copie du template d'aperçu) : Custom 154 x 216 mm, Portrait, marges 0. Voir LAYOUT_KB § « Fond perdu ».",
+    "bleedMm": 3,
+    "bleedPt": 8.504,
+    "sheetMm": [154, 216],
+    "sheetPt": [437.01, 612.01]
+  },
   "marginPt": { "top": 0, "right": 0, "bottom": 0, "left": 0 },
   "printBackground": true,
   "preferCSSPageSize": true,

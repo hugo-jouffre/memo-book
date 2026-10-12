@@ -329,7 +329,10 @@ mettre, déjà écrit dans le bandeau.
 La case **« Version imprimeur »**, dans les réglages, produit l'intérieur du
 livre relié : sans couverture ni quatrième (imprimées sur la couverture
 rigide), avec un nombre de pages pair. Le nombre de pages intérieures s'affiche
-après le rendu : c'est celui à donner à l'outil de couverture Pumbo.
+après le rendu : c'est celui à donner à l'outil de couverture Pumbo. Avec le
+réglage **« Template imprimeur (fond perdu 3 mm) »** renseigné — une copie du
+template APITemplate dont la feuille fait 154 × 216 mm —, l'intérieur sort avec
+3 mm de fond perdu sur chaque bord (`LAYOUT_KB.md` § « Fond perdu »).
 
 **Ces règles sont recopiées en code** dans `public/mise-en-page.js` (testé par
 `backend/test/miseEnPageAtelier.test.ts`). L'atelier ne lit

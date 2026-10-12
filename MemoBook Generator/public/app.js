@@ -210,6 +210,14 @@ const REGLAGES_DEFAUT = {
   dossierDisque: "",
   cleApitemplate: "",
   templateApitemplate: "7a177b23210099d6",
+  /**
+   * Le template APITemplate de la version imprimeur : une copie du premier
+   * dont la feuille fait 154 × 216 mm, soit 3 mm de fond perdu sur chaque bord
+   * (LAYOUT_KB § « Fond perdu »). Le format de la feuille se règle dans le
+   * panneau d'APITemplate, pas dans le code : un même template ne peut pas
+   * sortir l'aperçu en A5 et l'intérieur à imprimer avec fond perdu.
+   */
+  templateApitemplateImprimeur: "",
   /** Rendu pour l'imprimeur (Pumbo) : sans couverture ni quatrième, nombre de pages pair. */
   versionImprimeur: false,
   baseApitemplate: "https://rest-de.apitemplate.io/v2",
@@ -1580,6 +1588,11 @@ function reglagesDuCarnet() {
 /** Les pages libres de fin de carnet, quand « Zones libres » est allumé (`bookSettings.ts`). */
 const PAGES_LIBRES_FIN = 3;
 
+/** Le template de la version imprimeur, s'il est renseigné. */
+function templateImprimeur() {
+  return (etat.reglages.templateApitemplateImprimeur || "").trim();
+}
+
 function construirePayloadCarnet(photoDe = (data) => data, { imprimeur = Boolean(etat.reglages.versionImprimeur) } = {}) {
   const reglages = reglagesDuCarnet();
   // Ratio à 0 % : les photos sortent avant la composition, le récit prend leur place.
@@ -1597,6 +1610,10 @@ function construirePayloadCarnet(photoDe = (data) => data, { imprimeur = Boolean
     // Version imprimeur : le relié a sa couverture à part (`couverture.js`), et
     // s'imprime en feuillets — un nombre de pages pair.
     ...(imprimeur ? { sans_couvertures: true } : {}),
+    // Et avec 3 mm de fond perdu, dès qu'un template imprimeur (feuille de
+    // 154 × 216 mm) est renseigné : sur le template A5, la page ne tiendrait
+    // plus dans sa feuille.
+    ...(imprimeur && templateImprimeur() ? { fond_perdu: true } : {}),
     book_title: etat.carnet.titre || "Carnet de voyage",
     book_subtitle: SOUS_TITRE,
     authors: listeVoyageurs().join(" et "),
@@ -2526,7 +2543,14 @@ async function genererCarnet(bouton) {
     rendreResultatPdf();
 
     const url = new URL(`${base}/create-pdf`);
-    url.searchParams.set("template_id", etat.reglages.templateApitemplate || "7a177b23210099d6");
+    const imprimeur = Boolean(etat.reglages.versionImprimeur);
+    if (imprimeur && !templateImprimeur()) {
+      noter("version imprimeur sans fond perdu : renseigne le template imprimeur (feuille 154 × 216 mm) dans les réglages.");
+    }
+    url.searchParams.set(
+      "template_id",
+      (imprimeur && templateImprimeur()) || etat.reglages.templateApitemplate || "7a177b23210099d6",
+    );
 
     const debut = performance.now();
     const reponse = await fetch(url, {
@@ -2649,19 +2673,26 @@ async function synchroniserTemplate(bouton) {
     bouton.textContent = "Envoi à APITemplate…";
     ecrire("Envoi à APITemplate…");
     const base = (etat.reglages.baseApitemplate || "https://rest-de.apitemplate.io/v2").replace(/\/$/, "");
-    const reponse = await fetch(`${base}/update-template`, {
-      method: "POST",
-      headers: { "content-type": "application/json", "X-API-KEY": cle },
-      body: JSON.stringify({ template_id: templateId, body: html, css: `${fonts}\n${style}` }),
-    });
-    const donnees = await reponse.json().catch(() => null);
-    // Ce point de terminaison ne renvoie pas de champ `status` : le 2xx fait foi,
-    // exactement comme le vérifie déjà le workflow de synchronisation.
-    if (!reponse.ok) {
-      throw new Error(donnees?.message || `APITemplate a refusé la mise à jour (HTTP ${reponse.status})`);
+    // Le template d'aperçu, puis celui de la version imprimeur s'il existe :
+    // les deux portent toujours le même gabarit, seule leur feuille diffère.
+    const cibles = [templateId, templateImprimeur()].filter(Boolean);
+    for (const cible of cibles) {
+      const reponse = await fetch(`${base}/update-template`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "X-API-KEY": cle },
+        body: JSON.stringify({ template_id: cible, body: html, css: `${fonts}\n${style}` }),
+      });
+      const donnees = await reponse.json().catch(() => null);
+      // Ce point de terminaison ne renvoie pas de champ `status` : le 2xx fait foi,
+      // exactement comme le vérifie déjà le workflow de synchronisation.
+      if (!reponse.ok) {
+        throw new Error(donnees?.message || `APITemplate a refusé la mise à jour de ${cible} (HTTP ${reponse.status})`);
+      }
     }
 
-    ecrire(`Gabarit synchronisé avec APITemplate à ${new Date().toLocaleTimeString("fr-FR")}.`);
+    ecrire(
+      `Gabarit synchronisé avec APITemplate (${cibles.length} template${cibles.length > 1 ? "s" : ""}) à ${new Date().toLocaleTimeString("fr-FR")}.`,
+    );
   } catch (erreur) {
     console.error("[template] échec de synchronisation", erreur);
     ecrire(`Échec : ${erreur.message}`, true);
@@ -3150,6 +3181,15 @@ function rendreReglages() {
       placeholder: "7a177b23210099d6",
       surSaisie: (v) => {
         r.templateApitemplate = v;
+        sauverReglages();
+      },
+    }),
+    champ({
+      label: "Template imprimeur (fond perdu 3 mm)",
+      valeur: r.templateApitemplateImprimeur,
+      placeholder: "copie du template, feuille 154 × 216 mm",
+      surSaisie: (v) => {
+        r.templateApitemplateImprimeur = v;
         sauverReglages();
       },
     }),

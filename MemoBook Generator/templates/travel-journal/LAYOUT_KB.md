@@ -21,7 +21,9 @@ Base de connaissance de l'agent qui produit le JSON envoyé au moteur PDF.
 
 ## Format
 
-- Page **A5 : 420 × 595 pt** (1 unité Figma = 1 pt), sans fond perdu.
+- Page **A5 : 420 × 595 pt** (1 unité Figma = 1 pt). L'aperçu sort sans fond
+  perdu ; la **version imprimeur** ajoute **3 mm de fond perdu** sur les quatre
+  bords — voir § « Fond perdu ».
   Géométrie dans `print.json`, maquette Figma `geIpjYxG3WCkGrgJFpkuVC`.
   En millimètres — l'unité que demande le panneau d'APITemplate — c'est
   **148 × 210 mm** : l'A5 exact vaut 419,53 × 595,28 pt, soit un demi-point
@@ -1257,6 +1259,43 @@ erreur.
 Conséquence sur `style.css` : ce n'est pas du CSS nu mais un **fragment HTML**
 — un `<meta name="viewport">` puis exactement une paire `<style>…</style>`, le
 tout injecté verbatim. `npm run template:lint` refuse toute autre forme.
+
+### Fond perdu
+
+Le standard d'imprimerie : **3 mm sur les quatre bords**. La version
+imprimeur (Pumbo) sort sur une feuille de **154 × 216 mm** (437 × 612 pt) pour
+une page finie de 148 × 210 mm. Le payload porte `fond_perdu: true`, qui pose
+la classe `fond-perdu` sur le `body` et règle `--mb-bleed` à 8,504 pt.
+
+| Va jusqu'au bord de la feuille, coupé au massicot | Se cale sur la page finie, décalé de `--mb-bleed` |
+|---|---|
+| La teinte et le grain du papier (`.page::before/::after`) | La colonne de texte et toutes les marges (`.page__content`, `inset: var(--mb-bleed)`) — capacités inchangées |
+| La photo en pleine page (`.mb-pleine-page`) | Les décors (`.page__decor`) |
+| Le ruban « jour », qui dépassait déjà du haut | Les planches et pages d'album (`.mb-photowall`) |
+| Le tracé pointillé, qui déborde volontairement | Les stickers, la mention « généré par IA » |
+
+Sans `fond_perdu`, `--mb-bleed` vaut 0 et rien ne bouge : l'aperçu reste en A5
+exact. Le jeu (`--mb-page-slack`) passe à 1,5 pt en fond perdu, pour que la page
+tienne dans la feuille de 154 × 216 mm qu'arrondit le Chromium d'APITemplate
+(§ suivant).
+
+**Un template APITemplate à part.** Le format de la feuille se règle dans le
+panneau *Settings* du template, que la synchronisation ne touche pas (§
+suivant) : un même template ne peut pas sortir l'aperçu en A5 et l'intérieur à
+imprimer avec fond perdu. D'où un **template imprimeur**, copie du premier, à
+mettre en place une fois :
+
+1. dans APITemplate, **dupliquer** le template du carnet ;
+2. dans le panneau *Settings* de la copie : Paper Size `Custom`, **154 mm ×
+   216 mm**, `Portrait`, Print background `Yes`, marges `0 / 0 / 0 / 0` ;
+3. copier son identifiant dans l'atelier, réglage **« Template imprimeur (fond
+   perdu 3 mm) »** — la version imprimeur l'utilise et envoie `fond_perdu` ;
+4. le poser aussi en secret GitHub `APITEMPLATE_TEMPLATE_ID_IMPRIMEUR` : le
+   workflow de synchronisation (et le bouton de l'atelier) poussent alors le
+   gabarit vers les deux templates.
+
+Tant que le template imprimeur n'est pas renseigné, la version imprimeur sort
+comme avant, sans fond perdu, et l'atelier le signale dans son journal.
 
 ### Pas de marges blanches : les deux moitiés du réglage
 

@@ -139,6 +139,13 @@ properties:
           Pages libres, réglées, posées après la dernière étape et avant la
           quatrième, pour écrire à la main : 3 quand le réglage « Zones libres »
           est allumé (par défaut), 0 sinon.
+      fond_perdu:
+        type: boolean
+        description: >
+          Version imprimeur : 3 mm de fond perdu sur les quatre bords (feuille de
+          154 × 216 mm). Le papier, la photo en pleine page et le ruban vont
+          jusqu'au bord de la feuille ; tout le reste se cale sur la page finie.
+          À n'envoyer qu'au template imprimeur, dont la feuille a ce format.
       sans_couvertures:
         type: boolean
         description: >
