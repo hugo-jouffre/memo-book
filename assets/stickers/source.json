@@ -1,0 +1,412 @@
+{
+  "commentaire": "Manifeste de la bibliothèque de stickers : une entrée par image de la base Notion « Éléments graphiques » (https://app.notion.com/p/37d401e7bdc1808da074d389128778f8). `backend/scripts/preparer-stickers.ts` le lit, prépare les PNG et écrit stickers.json. Les mots déclencheurs se règlent par famille, ici : sans accent, en minuscules, mot entier (le pluriel en s ou x est accepté).",
+  "familles": {
+    "globe": [
+      "tour du monde",
+      "globe",
+      "planisphere",
+      "autour du monde"
+    ],
+    "sac-a-dos": [
+      "sac a dos",
+      "sacs a dos",
+      "backpack",
+      "backpacker",
+      "baroudeur",
+      "baroudeurs"
+    ],
+    "appareil-photo": [
+      "appareil photo",
+      "appareils photo",
+      "appareil-photo",
+      "polaroid",
+      "instax",
+      "pellicule",
+      "argentique",
+      "reflex",
+      "photographe"
+    ],
+    "boussole": [
+      "boussole",
+      "rose des vents",
+      "randonnee",
+      "rando",
+      "trek",
+      "trekking",
+      "sentier",
+      "orientation"
+    ],
+    "repere": [
+      "gps",
+      "google maps",
+      "maps me",
+      "perdus",
+      "egares",
+      "point de rendez-vous"
+    ],
+    "drone": [
+      "drone"
+    ],
+    "carte-postale": [
+      "carte postale",
+      "cartes postales"
+    ],
+    "carte": [
+      "itineraire",
+      "explorer",
+      "exploration",
+      "plan de la ville",
+      "carte routiere",
+      "road book"
+    ],
+    "passeport": [
+      "passeport",
+      "visa",
+      "frontiere",
+      "douane",
+      "douanier"
+    ],
+    "palmier": [
+      "palmier",
+      "cocotier",
+      "tropical",
+      "tropicale",
+      "tropique"
+    ],
+    "taxi": [
+      "taxi",
+      "tuk tuk",
+      "tuktuk",
+      "chauffeur",
+      "voiture",
+      "road trip",
+      "roadtrip"
+    ],
+    "avion": [
+      "avion",
+      "aeroport",
+      "decollage",
+      "decolle",
+      "atterrissage",
+      "atterri",
+      "escale",
+      "en vol"
+    ],
+    "billet-avion": [
+      "billet d avion",
+      "billets d avion",
+      "embarquement",
+      "carte d embarquement",
+      "check in",
+      "enregistrement des bagages"
+    ],
+    "scooter": [
+      "scooter",
+      "moto",
+      "motos",
+      "vespa",
+      "deux roues",
+      "mobylette"
+    ],
+    "plage": [
+      "plage",
+      "plages",
+      "crique",
+      "beach"
+    ],
+    "tongs": [
+      "tongs",
+      "sandales",
+      "pieds nus",
+      "sable"
+    ],
+    "cocktail": [
+      "cocktail",
+      "mojito",
+      "margarita",
+      "pina colada",
+      "spritz",
+      "apero",
+      "aperitif",
+      "happy hour"
+    ],
+    "biere": [
+      "biere",
+      "bieres",
+      "pinte",
+      "brasserie",
+      "trinque",
+      "trinquer"
+    ],
+    "personnage": []
+  },
+  "reserves": {
+    "personnage": "voyageurs"
+  },
+  "images": [
+    {
+      "notion": "37d401e7bdc1801fa042f41b035d0435",
+      "nom": "Globe terrestre",
+      "famille": "globe",
+      "style": "sticker"
+    },
+    {
+      "notion": "37d401e7bdc18072ac6ae6054f6e743f",
+      "nom": "Globe terrestre (N&B)",
+      "famille": "globe",
+      "style": "trait"
+    },
+    {
+      "notion": "37d401e7bdc18026bf40d81b6e9a8922",
+      "nom": "Sac à dos de voyage",
+      "famille": "sac-a-dos",
+      "style": "dessin"
+    },
+    {
+      "notion": "37d401e7bdc1807cacfff2cc0007ae95",
+      "nom": "Sac à dos de voyage",
+      "famille": "sac-a-dos",
+      "style": "dessin"
+    },
+    {
+      "notion": "37d401e7bdc180759443f1295fd43cc3",
+      "nom": "Sac à dos de voyage",
+      "famille": "sac-a-dos",
+      "style": "sticker"
+    },
+    {
+      "notion": "37d401e7bdc1807bbcc6f2bc93b031e5",
+      "nom": "Sac à dos de voyage",
+      "famille": "sac-a-dos",
+      "style": "sticker"
+    },
+    {
+      "notion": "37d401e7bdc1808fbf7dd94d5d8ceeee",
+      "nom": "Sac à dos de voyage",
+      "famille": "sac-a-dos",
+      "style": "sticker"
+    },
+    {
+      "notion": "37d401e7bdc180cf94fbd9eac27e8079",
+      "nom": "Sac à dos de voyage",
+      "famille": "sac-a-dos",
+      "style": "sticker"
+    },
+    {
+      "notion": "37d401e7bdc180e590c3ef05f97418a0",
+      "nom": "Sac à dos de voyage",
+      "famille": "sac-a-dos",
+      "style": "sticker"
+    },
+    {
+      "notion": "37d401e7bdc180e6a3a1cae79b9625a4",
+      "nom": "Sac à dos de voyage",
+      "famille": "sac-a-dos",
+      "style": "sticker"
+    },
+    {
+      "notion": "37d401e7bdc1802c8eb6d85bbacad5e9",
+      "nom": "Appareil photo (polaroid)",
+      "famille": "appareil-photo",
+      "style": "sticker"
+    },
+    {
+      "notion": "37d401e7bdc1804d8b4eeb98afc4f374",
+      "nom": "Appareil photo",
+      "famille": "appareil-photo",
+      "style": "sticker"
+    },
+    {
+      "notion": "37d401e7bdc1807ab2d3ebce7d5b4500",
+      "nom": "Appareil photo",
+      "famille": "appareil-photo",
+      "style": "sticker"
+    },
+    {
+      "notion": "37d401e7bdc180eeaa1fd288c0eb0051",
+      "nom": "Appareil photo",
+      "famille": "appareil-photo",
+      "style": "sticker"
+    },
+    {
+      "notion": "37d401e7bdc18070aef0c35618bc5848",
+      "nom": "Appareil photo",
+      "famille": "appareil-photo",
+      "style": "dessin"
+    },
+    {
+      "notion": "37d401e7bdc180729065d19cd2c27794",
+      "nom": "Appareil photo",
+      "famille": "appareil-photo",
+      "style": "dessin"
+    },
+    {
+      "notion": "37d401e7bdc18096a53ec9cb9bf146e0",
+      "nom": "Appareil photo",
+      "famille": "appareil-photo",
+      "style": "dessin"
+    },
+    {
+      "notion": "37d401e7bdc180febd8ec6913802148b",
+      "nom": "Appareil photo (polaroid)",
+      "famille": "appareil-photo",
+      "style": "dessin"
+    },
+    {
+      "notion": "37d401e7bdc18044b880d0b9c5967f67",
+      "nom": "Rose des vents",
+      "famille": "boussole",
+      "style": "sticker"
+    },
+    {
+      "notion": "37d401e7bdc180e3918dc0fd5464787d",
+      "nom": "Rose des vents",
+      "famille": "boussole",
+      "style": "sticker"
+    },
+    {
+      "notion": "37d401e7bdc1809a8572d3ee868ffb06",
+      "nom": "Rose des vents (N&B)",
+      "famille": "boussole",
+      "style": "trait"
+    },
+    {
+      "notion": "387401e7bdc180bb8086ff1bb5062bb0",
+      "nom": "Boussole",
+      "famille": "boussole",
+      "style": "dessin"
+    },
+    {
+      "notion": "37d401e7bdc180a0a0c6d2b90ac46e63",
+      "nom": "Point de position",
+      "famille": "repere",
+      "style": "sticker"
+    },
+    {
+      "notion": "37d401e7bdc180b0b065ec046682da4d",
+      "nom": "Point de position",
+      "famille": "repere",
+      "style": "sticker"
+    },
+    {
+      "notion": "37d401e7bdc180c8bbbdfb3ff3ce71e1",
+      "nom": "Drone",
+      "famille": "drone",
+      "style": "sticker"
+    },
+    {
+      "notion": "387401e7bdc180a59303e93a03e9240b",
+      "nom": "Carte postale paysage mer",
+      "famille": "carte-postale",
+      "style": "sticker"
+    },
+    {
+      "notion": "387401e7bdc180ea9ad5fb45179af27e",
+      "nom": "Carte",
+      "famille": "carte",
+      "style": "dessin"
+    },
+    {
+      "notion": "387401e7bdc180fe8662dde83ea27083",
+      "nom": "Carte + passeport",
+      "famille": "passeport",
+      "style": "dessin"
+    },
+    {
+      "notion": "387401e7bdc18061acb1ff4f072773bd",
+      "nom": "Palmiers",
+      "famille": "palmier",
+      "style": "dessin"
+    },
+    {
+      "notion": "387401e7bdc18078b3c1fc87e0f13bb2",
+      "nom": "Voiture / taxi",
+      "famille": "taxi",
+      "style": "dessin"
+    },
+    {
+      "notion": "387401e7bdc18080bb76cccfe6b4fba5",
+      "nom": "Avion",
+      "famille": "avion",
+      "style": "dessin"
+    },
+    {
+      "notion": "387401e7bdc180e29abbccfd609fbdcf",
+      "nom": "Billets d'avion",
+      "famille": "billet-avion",
+      "style": "trait"
+    },
+    {
+      "notion": "387401e7bdc1800cb5afcef630f20020",
+      "nom": "Moto avec 2 passagers",
+      "famille": "scooter",
+      "style": "dessin"
+    },
+    {
+      "notion": "387401e7bdc180138883f34ed1bc3499",
+      "nom": "Moto",
+      "famille": "scooter",
+      "style": "dessin"
+    },
+    {
+      "notion": "387401e7bdc18040b59fe848d8a50bc2",
+      "nom": "Panneau vers la plage",
+      "famille": "plage",
+      "style": "trait"
+    },
+    {
+      "notion": "387401e7bdc180f3b0c8d8b60f83b1c1",
+      "nom": "Tongs",
+      "famille": "tongs",
+      "style": "trait"
+    },
+    {
+      "notion": "387401e7bdc18044888cdc7fdf89fda8",
+      "nom": "Cocktail",
+      "famille": "cocktail",
+      "style": "trait"
+    },
+    {
+      "notion": "387401e7bdc180d0840ffbf03bcb493c",
+      "nom": "Bouteilles de bière",
+      "famille": "biere",
+      "style": "trait"
+    },
+    {
+      "notion": "37d401e7bdc180f9a468d92da5cbf6f4",
+      "nom": "Couple de dos, femme blonde et homme brun",
+      "famille": "personnage",
+      "style": "dessin"
+    },
+    {
+      "notion": "37d401e7bdc180c1af81d4c3478809c8",
+      "nom": "Femme de dos, brune",
+      "famille": "personnage",
+      "style": "dessin"
+    },
+    {
+      "notion": "37d401e7bdc180ebbf14dc5499e08884",
+      "nom": "Homme de dos, blond",
+      "famille": "personnage",
+      "style": "dessin"
+    },
+    {
+      "notion": "387401e7bdc180318f60ec50a902d177",
+      "nom": "Fille de dos",
+      "famille": "personnage",
+      "style": "dessin"
+    },
+    {
+      "notion": "388401e7bdc1809ca15aec91a527a342",
+      "nom": "Fille de dos, sac à dos",
+      "famille": "personnage",
+      "style": "dessin"
+    },
+    {
+      "notion": "388401e7bdc1802096fbe7a85774b013",
+      "nom": "Garçon de dos, sac à dos",
+      "famille": "personnage",
+      "style": "dessin"
+    }
+  ]
+}

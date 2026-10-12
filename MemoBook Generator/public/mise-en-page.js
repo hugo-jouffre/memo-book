@@ -1322,24 +1322,61 @@
   function porteUnSticker(plan) {
     if (plan.genre === "planche") return !plan.pleinePage && plan.photos.length <= 2;
     if (plan.encart) return false;
-    return ["layout_recit_photo", "layout_story_opener", "layout_story_facts"].includes(plan.layout);
+    // Le bas de la colonne qui contourne la grande photo n'est libre que si le
+    // récit laisse la place du post-it.
+    if (plan.layout === "layout_recit_photo") {
+      return signes(plan.texte) <= CAPACITE_PAGE.layout_recit_photo.postit[plan.sorte];
+    }
+    return ["layout_story_opener", "layout_story_facts"].includes(plan.layout);
+  }
+
+  /** Un texte réduit à ses mots : minuscules, sans accent, une espace entre chaque. */
+  const enMots = (texte) => ` ${normaliser(texte).replace(/[^a-z0-9]+/g, " ").trim()} `;
+
+  /**
+   * Les stickers de la bibliothèque qui vont à une étape, un par famille, le
+   * plus lié d'abord : ceux dont un mot déclencheur apparaît en mot entier
+   * (pluriel en s ou x accepté) dans le titre ou le lieu de l'étape (lien
+   * fort), sinon dans son récit ou les scènes de ses photos. Les stickers
+   * réservés (les personnages de dos, à choisir d'après les voyageurs) ne
+   * sont jamais tirés ainsi. Dans une famille, la variante dépend du rang de
+   * l'étape : deux carnets n'ont pas tous le même sac à dos.
+   */
+  function stickersDe(etape, bibliotheque, rang = 0) {
+    const fort = enMots([etape.titre, etape.lieu].join(" "));
+    const faible = enMots([etape.recit, ...(etape.analyse?.photos || []).map((p) => p.scene)].join(" "));
+    const familles = new Map();
+    for (const s of bibliotheque) {
+      if (s.reserve) continue;
+      const famille = s.famille || s.fichier;
+      if (!familles.has(famille)) familles.set(famille, { variantes: [], force: 0 });
+      const f = familles.get(famille);
+      f.variantes.push(s);
+      for (const mot of s.mots || []) {
+        // Lettres, chiffres et espaces seulement : rien à échapper.
+        const m = enMots(mot).trim();
+        if (!m) continue;
+        const motif = new RegExp(` ${m}[sx]? `);
+        if (motif.test(fort)) f.force = Math.max(f.force, 2);
+        else if (motif.test(faible)) f.force = Math.max(f.force, 1);
+      }
+    }
+    return [...familles.values()]
+      .filter((f) => f.force > 0)
+      .sort((a, b) => b.force - a.force)
+      .map((f) => f.variantes[rang % f.variantes.length]);
   }
 
   /**
-   * Les stickers de la bibliothèque qui vont à une étape : ceux dont un mot
-   * déclencheur apparaît dans son récit, son titre, son lieu ou les scènes de
-   * ses photos — un sticker de jeep pour un récit qui parle de jeepney.
+   * La largeur d'un sticker sur la page, en points : un sticker découpé reste
+   * petit, un dessin peut prendre plus de place dans le blanc d'une page
+   * d'album. Jamais plus que sa définition ne le permet (`maxPt`, 150 dpi).
    */
-  function stickersDe(etape, bibliotheque) {
-    const texte = ` ${normaliser(
-      [etape.recit, etape.titre, etape.lieu, ...(etape.analyse?.photos || []).map((p) => p.scene)].join(" "),
-    ).replace(/[^a-z0-9]+/g, " ")} `;
-    return bibliotheque.filter((s) =>
-      (s.mots || []).some((mot) => {
-        const m = normaliser(mot).replace(/[^a-z0-9]+/g, " ").trim();
-        return m && texte.includes(` ${m}`);
-      }),
-    );
+  const LARGEUR_STICKER = { sticker: 90, trait: 105, dessin: 120 };
+  const LARGEUR_STICKER_ALBUM = { sticker: 100, trait: 120, dessin: 140 };
+  function largeurSticker(sticker, album) {
+    const voulu = (album ? LARGEUR_STICKER_ALBUM : LARGEUR_STICKER)[sticker.style] || LARGEUR_STICKER.sticker;
+    return Math.round(Number.isFinite(sticker.maxPt) ? Math.min(voulu, sticker.maxPt) : voulu);
   }
 
   /**
@@ -1378,15 +1415,25 @@
       const porteur = double.find(porteUnTrace);
       if (porteur) porteur.trace = TRACES[tour++ % TRACES.length];
 
-      // Les stickers.
+      // Les stickers : un par page au plus, jamais deux fois la même famille
+      // dans le carnet. Sur une page d'album, dans le blanc que laissent les
+      // photos ; sur une page de récit, à la place de l'encart.
       let poses = 0;
       for (const plan of double) {
         if (poses >= quota || !porteUnSticker(plan)) continue;
         const etape = etapes[plan.etape];
-        const choix = etape && stickersDe(etape, stickers).find((s) => !dejaPoses.has(s.fichier));
+        const choix = etape && stickersDe(etape, stickers, plan.etape).find((s) => !dejaPoses.has(s.famille || s.fichier));
         if (!choix) continue;
-        dejaPoses.add(choix.fichier);
-        plan.stickers = [{ url: choix.url || choix.fichier, place: "bottom-left" }];
+        dejaPoses.add(choix.famille || choix.fichier);
+        const album = plan.genre === "planche";
+        plan.stickers = [
+          {
+            url: choix.url || choix.fichier,
+            place: album && plan.photos.length === 1 ? "bottom-right" : "bottom-left",
+            largeur: largeurSticker(choix, album),
+            famille: choix.famille || choix.fichier,
+          },
+        ];
         poses += 1;
       }
     }
@@ -1649,11 +1696,15 @@
     // Les décors, double page par double page : une étiquette de titre, un
     // tracé pointillé, deux stickers au plus.
     decorerDoublesPages(plans, pagesAvant, etapes, { stickers, decorations });
+    if (stickers.length) {
+      const poses = plans.flatMap((plan) => (plan.stickers || []).map((s) => s.famille));
+      journal(`stickers : ${poses.length ? `${poses.length} — ${poses.join(", ")}` : "aucun, aucun mot du récit ne les appelle"}.`);
+    }
 
     return plans.map((plan, rangPage) => {
       const decors = {
         trace: plan.trace || "aucun",
-        ...(plan.stickers?.length ? { stickers: plan.stickers } : {}),
+        ...(plan.stickers?.length ? { stickers: plan.stickers.map(({ famille, ...s }) => s) } : {}),
       };
       if (plan.genre === "planche") {
         // Une photo seule en largeur : l'emplacement de la page d'album se couche.

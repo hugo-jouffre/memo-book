@@ -358,6 +358,50 @@ describe("mise en page de l'atelier", () => {
       expect(courtes(0).some((j) => j["stickers"])).toBe(false);
     });
 
+    describe("bibliothèque de stickers (Notion, 12/10/2026)", () => {
+      const index = JSON.parse(
+        readFileSync(resolve(import.meta.dirname, "../../assets/stickers/stickers.json"), "utf8"),
+      ) as { stickers: { fichier: string; famille: string; style: string; mots: string[]; maxPt: number; reserve?: string }[] };
+      const bibliotheque = index.stickers.map((s) => ({ ...s, url: `https://exemple.test/${s.fichier}` }));
+      const posesDe = (jours: Jour[]) =>
+        jours.flatMap((j) => (j["stickers"] as { url: string; largeur: number }[] | undefined) ?? []);
+      const familleDe = (url: string) => bibliotheque.find((s) => s.url === url)?.famille;
+      const voyage = (recits: string[]) =>
+        M.composerJours(
+          recits.map((recit, n) => etape(recit, [photo(`e${n}-a`), photo(`e${n}-b`)], null, `Lieu ${n}`)),
+          { stickers: bibliotheque, decorations: 4 },
+        );
+
+      it("pose le sticker dont le récit parle, une famille une fois, jamais un personnage", () => {
+        const jours = voyage([
+          paragrapheDe("la ville en scooter", 2),
+          paragrapheDe("l'aéroport avant notre avion", 2),
+          paragrapheDe("la plage de sable blanc", 2),
+          paragrapheDe("le marché du matin", 2),
+        ]);
+        const familles = posesDe(jours).map((s) => familleDe(s.url));
+        expect(familles).toContain("scooter");
+        expect(familles).toContain("avion");
+        expect(familles).not.toContain("personnage");
+        expect(new Set(familles).size).toBe(familles.length);
+        for (const d of doubles(jours)) expect(posesDe(d).length).toBeLessThanOrEqual(2);
+      });
+
+      it("ne pose rien quand aucun mot entier du récit n'appelle un sticker", () => {
+        // « vanille » ne déclenche pas « van », « visage » pas « visa ».
+        expect(posesDe(voyage([paragrapheDe("un visage, une glace à la vanille", 2)]))).toHaveLength(0);
+      });
+
+      it("ne dépasse jamais la définition du dessin", () => {
+        const jours = voyage([paragrapheDe("la ville en scooter", 2), paragrapheDe("la randonnée avec boussole", 2)]);
+        for (const s of posesDe(jours)) {
+          const sticker = bibliotheque.find((b) => b.url === s.url)!;
+          expect(s.largeur).toBeGreaterThan(0);
+          expect(s.largeur).toBeLessThanOrEqual(sticker.maxPt);
+        }
+      });
+    });
+
     it("titre chaque fun fact « Infos »", () => {
       const analyse = { photos: [], funFact: { texte: "Un fait.", titre: "Culture générale", registre: "histoire", paragraphe: 0, pertinence: 9 } };
       const jours = M.composerJours([etape(paragrapheDe("la plage", 1), [], analyse)], { funFacts: true });

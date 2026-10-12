@@ -790,13 +790,24 @@ li { margin: 0; }
   z-index: 3;
 }
 
-.mb-sticker img { width: 100%; height: auto; }
+/* Posé à la main : jamais tout à fait droit. L'inclinaison va sur l'image, pour
+   ne pas défaire la translation de `--center`. Pas d'ombre : le contour blanc
+   des stickers découpés suffit, et un flou ne s'imprime pas en vectoriel. */
+.mb-sticker img { display: block; width: 100%; height: auto; transform: rotate(-4deg); }
+.mb-sticker--bottom-right img,
+.mb-sticker--top-right img { transform: rotate(5deg); }
 
 .mb-sticker--top-left { top: 40pt; left: 24pt; width: 92pt; }
 .mb-sticker--top-right { top: 34pt; right: 22pt; width: 92pt; }
 .mb-sticker--bottom-left { bottom: 34pt; left: 24pt; width: 100pt; }
 .mb-sticker--bottom-right { bottom: 30pt; right: 22pt; width: 100pt; }
 .mb-sticker--center { bottom: 120pt; left: 50%; width: 110pt; transform: translateX(-50%); }
+/* Jamais dans le pli : côté reliure, le sticker s'écarte de la marge
+   intérieure (`page--gauche` a le pli à droite, `page--droite` à gauche). */
+.page--droite .mb-sticker--bottom-left,
+.page--droite .mb-sticker--top-left { left: var(--mb-margin-int); }
+.page--gauche .mb-sticker--bottom-right,
+.page--gauche .mb-sticker--top-right { right: var(--mb-margin-int); }
 
 /* =============================================================================
    LAYOUTS

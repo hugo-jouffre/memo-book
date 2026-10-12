@@ -23,31 +23,64 @@ carnet donné n'en utilise que trois.
 
 ## `assets/stickers/` — la bibliothèque de stickers dessinés
 
-Les stickers illustrés du carnet (la jeep de la maquette de Banaue) : une
-**bibliothèque dessinée** (Hugo, 12/10/2026), pas une génération par IA.
+Les stickers illustrés du carnet : une **bibliothèque dessinée** (Hugo,
+12/10/2026), pas une génération par IA. La source de dessin est la base Notion
+**« Éléments graphiques »**
+(<https://app.notion.com/p/37d401e7bdc1808da074d389128778f8>) ; le dépôt en
+garde une copie préparée, que le carnet lit sans jamais appeler Notion.
 
-- **Fichiers** : un PNG transparent (ou un SVG) par sticker, environ 800 px de
-  large, bordure blanche et ombre comprises si le dessin en a, nommé en
-  minuscules sans espace (`jeep.png`, `ferry.png`).
-- **Index** : `stickers.json`, une entrée par fichier :
+| Fichier | Rôle |
+|---|---|
+| `source.json` | Le manifeste, **écrit à la main** : une entrée par image Notion (`notion` : id de la page, `nom`, `famille`, `style`), les **mots déclencheurs par famille** (`familles`) et les familles réservées (`reserves`) |
+| `<famille>-<n>.png` | Les images, rognées de leurs marges transparentes, à leur définition d'origine |
+| `stickers.json` | L'index que lit l'atelier, **généré** par `backend/scripts/preparer-stickers.ts` — ne pas le modifier à la main |
 
-  ```json
-  { "stickers": [
-    { "fichier": "jeep.png", "mots": ["jeep", "jeepney", "4x4"] },
-    { "fichier": "ferry.png", "mots": ["ferry", "bateau", "traversée"] }
-  ] }
-  ```
+Une entrée de l'index :
 
-  `mots` : ce qui, dans le récit, le titre, le lieu ou les scènes des photos
-  d'une étape, déclenche le sticker — sans accent ni majuscule à respecter, et
-  un mot peut en commencer un plus long (« jeep » prend « jeepney »).
-- **Dosage** : deux stickers par double page au plus, autant que le réglage
-  « Décorations & stickers » en permet (aucun à 0), jamais deux fois le même
-  dans le carnet (`decorerDoublesPages`, `mise-en-page.js`).
-- **Places** : la page d'album de fin d'étape (une ou deux photos), et le bas
-  de la colonne de `layout_recit_photo` quand elle n'a pas de post-it.
-- **Arrivée dans le PDF** : par URL publique (`raw.githubusercontent.com`,
-  branche `main`), comme les illustrations.
+```json
+{ "fichier": "scooter-1.png", "nom": "Moto avec 2 passagers", "famille": "scooter",
+  "style": "dessin", "mots": ["scooter", "moto", "vespa"],
+  "largeur": 482, "hauteur": 415, "maxPt": 231, "notion": "387401e7…" }
+```
+
+- **`famille`** regroupe les variantes d'un même objet (huit sacs à dos, huit
+  appareils photo, quatre boussoles). « Jamais deux fois le même » se compte
+  par famille ; la variante change d'une étape à l'autre.
+- **`style`** : `sticker` (découpé, contour blanc), `dessin` (illustration
+  sans contour) ou `trait` (dessin au trait noir). Il ne règle que la taille —
+  les trois se mêlent dans un carnet (Hugo, 12/10/2026).
+- **`mots`** : sans accent, en minuscules, **mot entier** (pluriel en s ou x
+  accepté) — « visa » ne prend pas « visage ». Jamais un mot que presque tout
+  récit contient (« photo », « voyage », « ville ») : le sticker serait partout.
+  Un mot du titre ou du lieu de l'étape l'emporte sur un mot du récit.
+- **`maxPt`** : la largeur maximale à l'impression, à **150 dpi**. Les exports
+  Notion font 300 px pour la plupart (140 à 280 px une fois rognés) : des
+  stickers de 2 à 4 cm. Des exports de 600 px et plus permettraient de les
+  agrandir.
+- **`reserve: "voyageurs"`** : les personnages de dos (couple, femme brune,
+  homme blond…). Importés, jamais tirés d'après le récit : il faudra les
+  choisir d'après l'apparence des voyageurs.
+
+**Ajouter ou remplacer un sticker** :
+
+1. le dessiner dans Notion (PNG transparent, 600 px de large ou plus) ;
+2. télécharger les images de la base dans un dossier de travail, chacune
+   nommée `<id de la page Notion>.png` ;
+3. compléter `source.json` (l'image, et les mots de sa famille si elle est
+   nouvelle) ;
+4. `cd backend && npx tsx scripts/preparer-stickers.ts --brut <dossier>` ;
+5. `npx vitest run test/stickers.test.ts` vérifie l'index.
+
+**Dosage et places** (`decorerDoublesPages`, `mise-en-page.js`) : deux
+stickers par double page au plus, autant que le réglage « Décorations &
+stickers » en permet (aucun à 0). Sur une page de récit, à la place de
+l'encart (bas de la zone flottante, ou bas de la colonne de
+`layout_recit_photo` quand le récit laisse la place du post-it) ; sur une page
+d'album, dans le blanc que laissent les photos. Jamais dans le pli.
+
+**Arrivée dans le PDF** : par URL publique (`raw.githubusercontent.com`,
+branche `main`), comme les illustrations — une bibliothèque n'apparaît dans le
+carnet qu'une fois fusionnée.
 
 ## `assets/icons/` — la librairie Figma
 
