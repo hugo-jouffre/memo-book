@@ -292,7 +292,16 @@ const etat = {
   /** Contours des pays (`assets/maps/countries.json`), chargés à la première carte. */
   contoursCarte: null,
   /** Le panneau « Couverture du livre » : ouvert ou non, textes repris par le voyageur. */
-  couverture: { ouverte: false, statut: "", textes: {}, autre: { recto: false, verso: false } },
+  couverture: {
+    ouverte: false,
+    statut: "",
+    textes: {},
+    autre: { recto: false, verso: false },
+    // Le style de couverture (`CouvertureStyles.STYLES`), et les textes de
+    // chaque style : rédigés par l'IA, repris par le voyageur.
+    style: "default",
+    textesStyle: {},
+  },
   /** Le logo rastérisé pour le fichier InDesign. */
   logoPng: null,
   /** Contours détaillés par pays (`assets/maps/detail/`), chargés pour les cartes cadrées sur le voyage. */
@@ -1990,10 +1999,25 @@ function textesCouverture() {
   };
 }
 
-/** Le logo en PNG haute définition : InDesign place mal le SVG selon les versions. */
-async function logoEnPng() {
+/**
+ * Le logo en PNG haute définition : InDesign place mal le SVG selon les
+ * versions. `couleur` : une autre teinte que le vert de la marque — le style
+ * Élégant le veut en beige foncé.
+ */
+async function logoEnPng(couleur = null) {
+  if (couleur) {
+    etat.logosPng ??= {};
+    if (etat.logosPng[couleur]) return etat.logosPng[couleur];
+    const svg = (await (await fetch("./logo-memobook.svg")).text()).replace(/#28654b/gi, couleur);
+    etat.logosPng[couleur] = await svgEnPng(svg);
+    return etat.logosPng[couleur];
+  }
   if (etat.logoPng) return etat.logoPng;
-  const svg = await (await fetch("./logo-memobook.svg")).text();
+  etat.logoPng = await svgEnPng(await (await fetch("./logo-memobook.svg")).text());
+  return etat.logoPng;
+}
+
+async function svgEnPng(svg) {
   const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
   try {
     const img = new Image();
@@ -2005,39 +2029,158 @@ async function logoEnPng() {
     toile.width = largeur;
     toile.height = hauteur;
     toile.getContext("2d").drawImage(img, 0, 0, largeur, hauteur);
-    etat.logoPng = { data: toile.toDataURL("image/png"), px: [largeur, hauteur] };
+    return { data: toile.toDataURL("image/png"), px: [largeur, hauteur] };
   } finally {
     URL.revokeObjectURL(url);
   }
-  return etat.logoPng;
 }
 
 const extensionDe = (dataUrl) => (/^data:image\/png/.test(dataUrl) ? "png" : "jpg");
 
-/** La maquette de la couverture, dans le style par défaut. */
+/** Le voyage tel que le lisent les textes de couverture. */
+function voyagePourCouverture() {
+  const { premiere, derniere } = bornesDuVoyage();
+  return {
+    destination: etat.carnet.destination,
+    titre: etat.carnet.titre,
+    voyageurs: listeVoyageurs(),
+    debut: premiere,
+    fin: derniere,
+  };
+}
+
+/**
+ * Les textes d'un style : ceux tirés du carnet, puis ceux que l'IA a rédigés
+ * ou que le voyageur a repris (`etat.couverture.textesStyle`). Le dos garde
+ * les trois textes du style par défaut — titre, voyageurs, dates.
+ */
+function textesDuStyle(style) {
+  const base = textesCouverture();
+  const defaut = CouvertureStyles.textesParDefaut(style, voyagePourCouverture());
+  return {
+    ...defaut,
+    dosTitre: base.titre,
+    dosVoyageurs: base.voyageurs,
+    dosDates: base.dates,
+    ...(etat.couverture.textesStyle[style] || {}),
+    defaut,
+  };
+}
+
+/** Le logo du style : beige foncé pour Élégant, vert de la marque ailleurs. */
+function logoDuStyle(style) {
+  const png = style === "elegant" ? etat.logosPng?.[Couverture.COULEURS.beigeFonce.hex] : etat.logoPng;
+  return png
+    ? { fichier: `Liens/logo-memobook${style === "elegant" ? "-beige" : ""}.png`, src: png.data, px: png.px }
+    : { fichier: "Liens/logo-memobook.png", src: "./logo-memobook.svg", px: [160, 160] };
+}
+
+/**
+ * Faute de photo qui passe le contrôle qualité pour la quatrième : la plus
+ * grande photo en largeur du carnet, autre que celle de la première. Le
+ * contrôle qualité s'affiche quand même dans le panneau.
+ */
+function photoDeRepli(recto) {
+  return (
+    photosDesEtapes()
+      .filter((p) => p.data && p.id !== recto?.id && p.largeur >= p.hauteur)
+      .sort((a, b) => b.largeur * b.hauteur - a.largeur * a.hauteur)[0] || null
+  );
+}
+
+/** Une photo de plat, prête pour la maquette. */
+function photoPourMaquette(photo, nom, focus) {
+  return photo
+    ? { fichier: `Liens/${nom}.${extensionDe(photo.data)}`, src: photo.data, px: [photo.largeur, photo.hauteur], focus }
+    : null;
+}
+
+/** La maquette de la couverture, dans le style choisi. */
 function maquetteCouverture() {
   const fiche = ficheCouverture();
-  const recto = photoDuPlat("recto");
+  const style = etat.couverture.style;
   // Les villes (ou les îles) où le voyage a séjourné, pas chaque site visité.
   const lieux = lieuxQuatrieme();
   const detail = contoursQuatrieme();
-  return Couverture.maquette({
+  return CouvertureStyles.maquette(style, {
     fiche,
-    textes: textesCouverture(),
-    recto: recto
-      ? {
-          fichier: `Liens/recto.${extensionDe(recto.data)}`,
-          src: recto.data,
-          px: [recto.largeur, recto.hauteur],
-          focus: [0.5, 0.35],
-        }
-      : null,
+    textes: style === "default" ? textesCouverture() : textesDuStyle(style),
+    recto: photoPourMaquette(photoDuPlat("recto"), "recto", style === "default" ? [0.5, 0.35] : [0.5, 0.45]),
+    verso: photoPourMaquette(photoDuPlat("verso") || photoDeRepli(photoDuPlat("recto")), "verso", [0.5, 0.5]),
+    dessins: etat.dessinsCouverture || [],
     chiffres: chiffresQuatrieme(),
     carte: lieux.length && detail ? { lieux, detail } : null,
-    logo: etat.logoPng
-      ? { fichier: "Liens/logo-memobook.png", src: etat.logoPng.data, px: etat.logoPng.px }
-      : { fichier: "Liens/logo-memobook.png", src: "./logo-memobook.svg", px: [160, 160] },
+    logo: logoDuStyle(style),
   });
+}
+
+/**
+ * Les trois dessins du style Dessin : ceux de la bibliothèque que les récits
+ * du voyage appellent, complétés par des dessins de voyage — chargés en
+ * données pour partir dans le dossier InDesign.
+ */
+async function preparerDessinsCouverture() {
+  await chargerStickers();
+  const etapes = etapesPourMiseEnPage(() => "");
+  const voyage = {
+    titre: etat.carnet.titre,
+    lieu: etat.carnet.destination,
+    recit: etapes.map((e) => e.recit).join(" "),
+    analyse: { photos: etapes.flatMap((e) => e.analyse?.photos || []) },
+  };
+  const appeles = MiseEnPage.stickersDe(voyage, etat.stickers || []);
+  const choisis = CouvertureStyles.dessinsDuVoyage(etat.stickers || [], appeles);
+  etat.dessinsCouverture = await Promise.all(
+    choisis.map(async (d) => {
+      const blob = await (await fetch(d.url)).blob();
+      const data = await new Promise((resolu, rejete) => {
+        const lecteur = new FileReader();
+        lecteur.onload = () => resolu(lecteur.result);
+        lecteur.onerror = () => rejete(lecteur.error);
+        lecteur.readAsDataURL(blob);
+      });
+      return { fichier: `Liens/${d.fichier}`, src: data, px: [d.largeur, d.hauteur], famille: d.famille };
+    }),
+  );
+}
+
+/**
+ * Les textes du style, rédigés par l'IA d'après les récits
+ * (`CouvertureStyles.consigneTextes`), avec le modèle et la clé de l'analyse
+ * des étapes. Le voyageur les reprend ensuite à la main.
+ */
+async function redigerTextesCouverture(style) {
+  const etapes = etapesPourMiseEnPage(() => "");
+  const voyage = {
+    ...voyagePourCouverture(),
+    voyageurs: listeVoyageurs().join(", "),
+    dates: textesCouverture().dates,
+    etapes: etapes.map((e) => ({ titre: e.titre, lieu: e.lieu, extrait: e.recit })),
+  };
+  const consigne = CouvertureStyles.consigneTextes(style, voyage);
+  if (!consigne) return;
+  etat.couverture.statut = "Rédaction des textes de la couverture…";
+  rendreCouverture();
+  try {
+    const reponse = await appelAnalyse({
+      fournisseur: etat.reglages.fournisseurDecoupage,
+      modele: etat.reglages.modeleDecoupage,
+      cleOpenai: etat.reglages.cleOpenai,
+      cleAnthropic: etat.reglages.cleAnthropic,
+      consigne,
+      images: [],
+    });
+    etat.couverture.textesStyle = {
+      ...etat.couverture.textesStyle,
+      [style]: { ...(etat.couverture.textesStyle[style] || {}), ...CouvertureStyles.lireTextes(style, reponse) },
+    };
+    etat.couverture.statut = "";
+  } catch (erreur) {
+    etat.couverture.statut = `Rédaction impossible (${erreur.message}) : les textes tirés du carnet restent en place.`;
+    debugCarnet("rédaction des textes de couverture impossible", erreur);
+  }
+  apresChangement();
+  rendreCouverture();
 }
 
 /** Ce qu'il faut dire avant d'envoyer la couverture. */
@@ -2090,6 +2233,8 @@ async function ouvrirCouverture() {
       }
     }
     await logoEnPng().catch((erreur) => debugCarnet("logo indisponible", erreur));
+    await logoEnPng(Couverture.COULEURS.beigeFonce.hex).catch((erreur) => debugCarnet("logo beige indisponible", erreur));
+    await preparerDessinsCouverture().catch((erreur) => debugCarnet("dessins de couverture indisponibles", erreur));
   } finally {
     etat.couverture.statut = "";
     apresChangement();
@@ -2117,6 +2262,8 @@ async function apercuCouverture() {
   } catch (erreur) {
     debugCarnet("polices du gabarit indisponibles pour la couverture", erreur);
   }
+  // Et celles des styles de couverture (Cormorant, Manrope…), servies par l'atelier.
+  polices += `\n<style>${CouvertureStyles.cssPolices(new URL("./fonts/couvertures/", location.href).href)}</style>`;
   const html = Couverture.versHtml(maquetteCouverture(), {
     polices,
     alertes: alertesCouverture(),
@@ -2141,13 +2288,25 @@ const octetsDe = (dataUrl) => {
  */
 async function fichierInDesign() {
   await logoEnPng().catch((erreur) => debugCarnet("logo indisponible", erreur));
+  await logoEnPng(Couverture.COULEURS.beigeFonce.hex).catch((erreur) => debugCarnet("logo beige indisponible", erreur));
   const mq = maquetteCouverture();
   const textes = textesCouverture();
+  const style = CouvertureStyles.styleDe(etat.couverture.style);
   const dossier = "Couverture MemoBook";
   const enc = new TextEncoder();
   const fichiers = [
     { nom: `${dossier}/Couverture MemoBook.jsx`, octets: enc.encode(Couverture.versJsx(mq, { titre: textes.titre })) },
-    { nom: `${dossier}/LISEZMOI.txt`, octets: enc.encode(Couverture.lisezmoi({ titre: textes.titre, fiche: mq.fiche })) },
+    {
+      nom: `${dossier}/LISEZMOI.txt`,
+      octets: enc.encode(
+        Couverture.lisezmoi({
+          titre: textes.titre,
+          fiche: mq.fiche,
+          polices: [...new Set(CouvertureStyles.POLICES[style.id] || ["Playfair Display"])],
+          style: style.id === "default" ? "" : style.nom,
+        }),
+      ),
+    },
   ];
   for (const e of mq.elements) {
     if (e.type === "image" && e.src?.startsWith("data:") && !fichiers.some((f) => f.nom === `${dossier}/${e.fichier}`)) {
@@ -2238,6 +2397,83 @@ function rendreCouverture() {
   };
   const c = chiffresDuVoyage();
   const quatrieme = chiffresQuatrieme();
+  const style = CouvertureStyles.styleDe(etat.couverture.style);
+
+  // Le choix du style : les sept du catalogue de l'app, avec leur première de
+  // référence. Ceux qui demandent des images générées sont « À venir ».
+  const choixDuStyle = h(
+    "div",
+    { class: "styles-couv" },
+    CouvertureStyles.STYLES.map((s) =>
+      h(
+        "button",
+        {
+          class: `style-couv${s.id === style.id ? " choisi" : ""}${s.dispo ? "" : " a-venir"}`,
+          disabled: !s.dispo,
+          title: s.dispo ? `Style ${s.nom}` : "Pas encore disponible : ce style demande des images générées",
+          onclick: () => {
+            etat.couverture.style = s.id;
+            apresChangement();
+            rendreCouverture();
+          },
+        },
+        h("img", { src: s.recto, alt: "", loading: "lazy" }),
+        h("span", { class: "nom-style-couv" }, s.nom),
+        s.dispo ? null : h("span", { class: "pastille-a-venir" }, "À venir"),
+      ),
+    ),
+  );
+
+  // Les textes du style : rédigés par l'IA, puis modifiables.
+  const textesStyle = () => {
+    if (style.id === "default") return null;
+    const valeurs = textesDuStyle(style.id);
+    const poserStyle = (cle) => (v) => {
+      etat.couverture.textesStyle = {
+        ...etat.couverture.textesStyle,
+        [style.id]: { ...(etat.couverture.textesStyle[style.id] || {}), [cle]: v },
+      };
+    };
+    const champs = CouvertureStyles.CHAMPS[style.id] || [];
+    return [
+      h(
+        "div",
+        { class: "rangee" },
+        h("h3", {}, `Textes — ${style.nom}`),
+        champs.some((ch) => ch.ia)
+          ? bouton("Rédiger avec l'IA", { petit: true, surClic: () => redigerTextesCouverture(style.id) })
+          : null,
+      ),
+      h(
+        "p",
+        { class: "aide" },
+        "Rédigés d'après les récits (✦), puis à reprendre à la main : ce que tu écris ici passe avant. Un paragraphe par bloc séparé d'une ligne vide.",
+      ),
+      h(
+        "div",
+        { class: "grille-champs" },
+        champs.map((ch) =>
+          ch.lignes
+            ? h(
+                "label",
+                { class: "champ champ-large" },
+                h("span", {}, ch.label, ch.ia ? h("span", { class: "puce-ia", title: "Rédigé par l'IA" }, "✦") : null),
+                h("textarea", { rows: 5, value: valeurs[ch.cle] ?? "", oninput: (ev) => poserStyle(ch.cle)(ev.target.value) }),
+              )
+            : champ({ label: ch.label, valeur: valeurs[ch.cle], placeholder: valeurs.defaut?.[ch.cle], puce: ch.ia, surSaisie: poserStyle(ch.cle) }),
+        ),
+      ),
+    ];
+  };
+  const notes = {
+    default: { recto: null, verso: "Le style par défaut n'a pas de photo en quatrième (la carte et les chiffres) : ce choix servira aux styles qui en ont une." },
+    elegant: { recto: "Une photo de paysage, en grand sous le titre.", verso: "Une photo de paysage, en bande panoramique en tête de la quatrième." },
+    drawing: {
+      recto: "Le style Dessin n'a pas de photo : des dessins de la bibliothèque, choisis d'après les récits" +
+        (etat.dessinsCouverture?.length ? ` (${etat.dessinsCouverture.map((d) => d.famille).join(", ")}).` : "."),
+      verso: null,
+    },
+  }[style.id] || {};
 
   remplir(
     section,
@@ -2253,7 +2489,7 @@ function rendreCouverture() {
           return h(
             "span",
             { class: "aide" },
-            `Style par défaut · plats ${f.largeurPlat} × ${f.hauteurPlat} mm · dos ${String(f.dos).replace(".", ",")} mm` +
+            `Style ${style.nom} · plats ${f.largeurPlat} × ${f.hauteurPlat} mm · dos ${String(f.dos).replace(".", ",")} mm` +
               (f.pages ? ` pour ${f.pages} pages (barème Pumbo)` : ""),
           );
         })(),
@@ -2266,13 +2502,12 @@ function rendreCouverture() {
         }),
       ),
       etat.couverture.statut ? h("p", { class: "aide accent" }, etat.couverture.statut) : null,
-      plat("recto", "1re de couverture"),
-      plat(
-        "verso",
-        "4e de couverture",
-        "Le style par défaut n'a pas de photo en quatrième (la carte et les chiffres) : ce choix servira aux styles qui en ont une.",
-      ),
-      h("h3", {}, "Textes"),
+      h("h3", {}, "Style"),
+      choixDuStyle,
+      style.id === "drawing" ? h("p", { class: "aide" }, notes.recto) : plat("recto", "1re de couverture", notes.recto),
+      style.id === "drawing" ? null : plat("verso", "4e de couverture", notes.verso),
+      textesStyle(),
+      h("h3", {}, style.id === "default" ? "Textes" : "Dos"),
       h(
         "div",
         { class: "grille-champs" },
@@ -2763,6 +2998,7 @@ function construireAvancement() {
       rencontres: etat.rencontres,
       texteGroupe: etat.texteGroupe,
       couverture: etat.couverture.textes,
+      couvertureStyle: { style: etat.couverture.style, textes: etat.couverture.textesStyle },
       etapes: etat.etapes.map((e) => ({
         ...e,
         souvenirs: e.souvenirs.map(({ audioUrl, fichier, ...reste }) => reste),
@@ -2803,6 +3039,8 @@ async function ouvrirAvancement(fichier) {
     etat.rencontres = lu.rencontres || [];
     etat.texteGroupe = lu.texteGroupe || "";
     etat.couverture.textes = lu.couverture || {};
+    etat.couverture.style = lu.couvertureStyle?.style || "default";
+    etat.couverture.textesStyle = lu.couvertureStyle?.textes || {};
     etat.etapes = (lu.etapes || []).map((e) => ({
       ...e,
       souvenirs: (e.souvenirs || []).map((s) => ({ ...s, audioUrl: null, fichier: null })),

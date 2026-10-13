@@ -1008,6 +1008,36 @@ a.btn {
   padding-left: 1.125rem;
 }
 
+/* --- styles de couverture --- */
+
+.styles-couv {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 0.5rem;
+}
+
+.style-couv {
+  position: relative;
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.375rem;
+  border: 1px solid var(--line);
+  border-radius: var(--rayon);
+  background: var(--paper);
+  font: inherit;
+  font-size: 0.6875rem;
+  cursor: pointer;
+}
+.style-couv img { width: 100%; aspect-ratio: 417 / 607; object-fit: cover; border-radius: 3px; }
+.style-couv.choisi { border-color: var(--ink); box-shadow: 0 0 0 2px var(--ink) inset; }
+.style-couv.a-venir { cursor: not-allowed; }
+.style-couv.a-venir img,
+.style-couv.a-venir .nom-style-couv { opacity: 0.45; }
+.style-couv .pastille-a-venir { position: absolute; top: 0.25rem; right: 0.25rem; }
+
+.champ-large { grid-column: 1 / -1; }
+.champ-large textarea { width: 100%; font: inherit; }
+
 /* --- personnalisation du carnet --- */
 
 .perso {
