@@ -40,9 +40,16 @@ reste la règle. Ce chantier ne touche pas à ce prompt.
 
 ## 2. Un fil par voyage
 
-- **Un seul fil par voyage.** Les messages portent leur étape (`stepId`), ils
-  ne sont pas rangés par étape. Ouvrir une carte d'étape se pose sur le dernier
-  message de cette journée ; ce qu'on raconte ensuite s'y rattache.
+- **Un seul fil par voyage.** Les messages portent leur étape (`stepId` — celle
+  de leur souvenir, servie par le serveur), ils ne sont pas rangés par étape.
+  **Un récit, une étape** (Hugo, 12/10/2026) : chaque vocal ou texte raconté
+  ouvre sa propre carte sur l'accueil du voyage, même deux fois au même
+  endroit — c'est la règle de la fiche « Retranscription étape N » et de
+  « Ton carnet compte une étape de plus » (`services/tripFacts.ts`). Les
+  photos rejoignent le récit dont MEMO les a demandées
+  (`payload.asksPhotosFor` → `payload.forEntryId`), ou l'étape dont on a ouvert
+  la carte. **Ouvrir une carte d'étape se pose sur son récit** — la bulle qui
+  l'a racontée, en haut de l'écran, sa fiche dessous.
 - **Le fil vit sur le serveur.** On le retrouve d'un autre téléphone, et un
   co-voyageur le voit. L'app le relit toujours au serveur ; elle ne garde que
   ses trente derniers messages, pour le rouvrir **sans réseau** sous le
@@ -153,6 +160,15 @@ un déroulé fixe, écrit par le code, sans modèle :
    « Valider cette étape »). MEMO le dit ; puces : « Voir ma page » (ouvre
    l'aperçu, n'envoie rien — intention `open_preview`), raconter à l'oral, à
    l'écrit. **L'étape suivante ne vient qu'ici.**
+7. **L'étape sautée** (Hugo, 12/10/2026). Si l'on a raconté une étape puis la
+   suivante dans la foulée, la première n'est ni validée ni illustrée. Au
+   « Je valide mes photos » de la seconde, MEMO revient au récit raconté
+   **juste avant** elle : pas validé → « Revenons à ton étape N « titre » : on
+   ne l'a pas terminée. La voici. », sa fiche reposée au bas du fil (elle garde
+   son numéro) et le trio de validation ; validé mais sans les photos demandées
+   → il les redemande. Une fois par récit (`conversationState.closingAskedFor`) :
+   MEMO n'insiste jamais. « Ça me convient » y répond « C'est enregistré : cette
+   étape est validée elle aussi. » — elle était déjà comptée.
 
 **La fiche** s'intitule « Retranscription étape N » — la N-ième fiche du fil
 est l'étape N — et le récit prêt porte au-dessus de lui le titre que la
@@ -259,7 +275,7 @@ Sous une fiche prête, trois puces :
 |---|---|
 | **Ça me convient** 👌 | Le souvenir est **validé** (`validatedAt`). MEMO : « C'est enregistré. Ton carnet compte une étape de plus. », puis le nombre exact de photos à ajouter (§ 3) |
 | **J'aimerais faire des modifications à la main** ✍️ | Le texte de la fiche est déjà dans le champ, qui prend toute la barre. Envoyer **corrige le souvenir** (`editedText`) : la fiche change, MEMO dit « Je te laisse la main. Ta version fait autorité sur la mienne, je n'y retouche plus. » Un texte corrigé est intouchable (ADR-007) |
-| **J'aimerais faire des modifications à l'oral** 🎙 | **Phase 2.** Aujourd'hui MEMO dit « Je t'écoute » et le vocal suivant est un **nouveau** souvenir, pas une révision. Le dire, pour que personne ne le prenne pour un bug |
+| **J'aimerais faire des modifications à l'oral** 🎙 | MEMO : « Je t'écoute : dis-moi ce qu'il faut changer ou ajouter, je corrige le texte avec. » Le vocal suivant **corrige la fiche** (Hugo, 12/10/2026) : pas de souvenir de plus, une précision marquée `correction_orale` que la rédaction applique en **remplaçant** ce qu'elle contredit — « hier après-midi… en fait non, avant-hier » donne « avant-hier après-midi », jamais la correction écrite à la suite (`agent-transcription.md` § 1.6). Puis « Il te convient ? » revient avec le texte corrigé |
 
 **Le carnet n'attend pas la validation.** Il se compose avec tous les
 souvenirs ; l'aperçu signale ceux qui n'ont pas été relus. Un voyageur qui
@@ -476,7 +492,6 @@ attend donc son voyage au lieu d'être refusé — et perdu.
 - **Proposer des photos** au souvenir (Agent Photo).
 - **L'interview avant le départ**, au-delà du contexte du voyage (§ 2 bis) :
   le rythme, ce qu'on attend du voyage, le ton voulu pour le carnet.
-- **« À l'oral » comme révision** d'un souvenir existant.
 - **La notification** de relance, cadencée par le rythme du récit.
 - Une **seconde réponse** quand le modèle finit après le repli.
 
@@ -638,3 +653,7 @@ exactement ce que le modèle doit faire mieux.
 | 03/10/2026 | La bulle « reviens demain » est posée par le serveur, une fois par voyage et par jour, avec le bouton `daily_credit_subscribe` ; un abonné ne la voit pas | Hugo |
 | 03/10/2026 | MEMO dit les faits du crédit et de l'abonnement quand on les lui demande, jamais de lui-même, sans culpabiliser | Hugo |
 | 03/10/2026 | Un bouton au plus sous une bulle, pris dans un catalogue fermé ; l'IA ne choisit que parmi ceux que le code autorise au tour, le code jette le reste | Hugo |
+| 12/10/2026 | Un récit, une étape : chaque récit fait sa carte sur l'accueil du voyage, les photos suivent le récit qu'elles illustrent ; la carte d'une étape ouvre le fil sur son récit | Hugo |
+| 12/10/2026 | « À l'oral » corrige la fiche au lieu d'ajouter un souvenir ; la correction remplace ce qu'elle contredit | Hugo |
+| 12/10/2026 | Une étape sautée se clôt après la suivante : MEMO y revient une fois, validation ou photos | Hugo |
+| 12/10/2026 | La relance de l'accueil suit la dernière étape racontée quand son lieu est connu ; la photo du voyage est, à défaut d'une photo choisie, la dernière envoyée dans le fil | Hugo |

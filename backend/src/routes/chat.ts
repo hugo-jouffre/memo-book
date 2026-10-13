@@ -28,10 +28,13 @@ import {
   dailyTurnCount,
   ensureOpening,
   findTurnInFlight,
+  loadCurrentEntry,
   lockThread,
+  photosTargetEntryId,
   materializeEntriesWithoutMessages,
   type ChatMessageRow,
 } from "../services/conversationThread.js";
+import { ORAL_CORRECTION_TOPIC } from "../services/redaction.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
 import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import { MAX_PHOTOS_PER_STEP } from "../services/photoBudget.js";
@@ -170,6 +173,44 @@ async function pendingValidationEntryId(context: AppContext, memoId: string): Pr
   if (typeof entryId !== "string") return null;
   const entry = await context.prisma.entry.findFirst({
     where: { id: entryId, memoId, validatedAt: null },
+    select: { id: true },
+  });
+  return entry?.id ?? null;
+}
+
+/** Plus grand que tout `seq` du fil : « avant la fin » veut dire « tout le fil ». */
+const END_OF_THREAD = 2_147_483_647;
+
+/**
+ * La fiche que vise une puce de validation — « J'aimerais faire des
+ * modifications à l'oral » : celle dont MEMO attend la réponse, sinon le
+ * dernier souvenir raconté.
+ */
+async function cardEntryId(context: AppContext, memoId: string): Promise<string | null> {
+  return (
+    (await pendingValidationEntryId(context, memoId)) ??
+    (await loadCurrentEntry(context.prisma, memoId, END_OF_THREAD))?.id ??
+    null
+  );
+}
+
+/**
+ * **Le vocal qui suit « J'aimerais faire des modifications à l'oral » corrige
+ * la fiche** (Hugo, 12/10/2026) — il ne fait pas un souvenir de plus, et son
+ * texte ne s'ajoute pas à la suite. C'est le cas quand le dernier tour du
+ * voyageur est cette puce : elle a retenu la fiche qu'elle visait.
+ *
+ * @returns le souvenir à corriger, ou `null` pour un vocal ordinaire.
+ */
+async function oralRevisionTarget(context: AppContext, memoId: string): Promise<string | null> {
+  const last = await context.prisma.chatMessage.findFirst({
+    where: { memoId, author: "traveller" },
+    orderBy: { seq: "desc" },
+    select: { suggestionId: true, entryId: true },
+  });
+  if (last?.suggestionId !== "edit-voice" || !last.entryId) return null;
+  const entry = await context.prisma.entry.findFirst({
+    where: { id: last.entryId, memoId, kind: { not: "photo" } },
     select: { id: true },
   });
   return entry?.id ?? null;
@@ -413,7 +454,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
         publicBaseUrl,
         cards: await context.prisma.chatMessage.findMany({
           where: { memoId, kind: "transcript" },
-          select: { id: true, kind: true, seq: true },
+          select: { id: true, kind: true, seq: true, entryId: true },
         }),
         turn,
         now,
@@ -485,6 +526,10 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
         validatedEntryId = entry.id;
       }
 
+      // « À l'oral » retient la fiche qu'elle vise : c'est elle que le vocal
+      // suivant corrigera (`oralRevisionTarget`).
+      const revisedEntryId = suggestionId === "edit-voice" ? await cardEntryId(context, memoId) : null;
+
       // Une puce envoyée telle quelle ne coûte rien ; un texte, 75 ms par
       // caractère — même déguisé en puce (`isFreeChatText`).
       const characters = isFreeChatText(text, suggestionId) ? 0 : countCharacters(text);
@@ -515,7 +560,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
               accountId,
               text: command ? (text.length > 0 ? text : null) : text,
               suggestionId,
-              entryId: validatedEntryId ?? body.entryId ?? null,
+              entryId: validatedEntryId ?? revisedEntryId ?? body.entryId ?? null,
               disposition: command ? "command" : null,
               stepId: body.stepId ?? null,
             },
@@ -625,12 +670,17 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
     // Un vocal du contexte du voyage : pas de souvenir, pas de fiche. Des
     // photos restent des souvenirs, contexte ou non.
     const contextVoice = isAudio && gatheringContext;
+    // Un vocal qui corrige une fiche : pas de souvenir non plus — son texte
+    // ira réécrire celui de la fiche.
+    const revisedEntryId = isAudio && !gatheringContext ? await oralRevisionTarget(context, memoId) : null;
+    // Des photos : le récit qu'elles illustrent, quand MEMO les a demandées.
+    const illustratedEntryId = isImages ? await photosTargetEntryId(context.prisma, memoId) : null;
 
     const stored = await Promise.all(
       files.map((file) => context.storage.put(isAudio ? "audio" : "photo", file.filename, file.buffer, file.mimeType)),
     );
 
-    if (contextVoice) {
+    if (contextVoice || revisedEntryId) {
       const [object] = stored;
       if (!object) throw new Error("Aucun vocal enregistré.");
       const written = await withDailyCredit(context.prisma, memoId, refusal, () =>
@@ -646,15 +696,21 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
               author: "traveller",
               kind: "voice",
               accountId,
-              disposition: "trip_context",
+              // Une correction est une précision de la fiche qu'elle vise :
+              // c'est ainsi que la rédaction la relit.
+              disposition: revisedEntryId ? "context" : "trip_context",
+              entryId: revisedEntryId,
               stepId,
               payload: {
                 levels,
+                // Le fichier pend au message dans les deux cas : il n'a pas
+                // de souvenir à lui (`contextVoiceOf`).
                 contextVoice: {
                   storageKey: object.storageKey,
                   mimeType: object.mimeType,
                   durationSeconds: duration,
                 },
+                ...(revisedEntryId ? { revises: revisedEntryId, topic: ORAL_CORRECTION_TOPIC } : {}),
               },
             },
           });
@@ -711,7 +767,10 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
 
         const payload: Prisma.InputJsonObject = isAudio
           ? { levels }
-          : { entryIds: entries.map((entry) => entry.id) };
+          : {
+              entryIds: entries.map((entry) => entry.id),
+              ...(illustratedEntryId ? { forEntryId: illustratedEntryId } : {}),
+            };
 
         const message = await tx.chatMessage.create({
           data: {

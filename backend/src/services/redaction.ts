@@ -55,9 +55,17 @@ export interface RedactedNeighbour {
 }
 
 /**
+ * Le sujet d'une précision qui **corrige** le texte : le vocal dicté après
+ * « J'aimerais faire des modifications à l'oral » (Hugo, 12/10/2026). Elle
+ * remplace ce qu'elle contredit au lieu de s'ajouter à la suite.
+ */
+export const ORAL_CORRECTION_TOPIC = "correction_orale";
+
+/**
  * Une précision donnée dans la conversation à propos de ce souvenir — la
  * réponse à une question de MEMO. `topic` nomme la question quand elle a un
- * sens pour la rédaction : `rose_epine_graine` (`docs/conversation.md` § 3).
+ * sens pour la rédaction : `rose_epine_graine` (`docs/conversation.md` § 3),
+ * ou ``ORAL_CORRECTION_TOPIC`` pour une correction dictée.
  */
 export interface RedactionPrecision {
   text: string;
@@ -749,7 +757,9 @@ export function buildRedactionPrompt(input: RedactionInput): string {
     "```",
   );
 
-  const precisions = entry.precisions ?? [];
+  const all = entry.precisions ?? [];
+  const precisions = all.filter((precision) => precision.topic !== ORAL_CORRECTION_TOPIC);
+  const corrections = all.filter((precision) => precision.topic === ORAL_CORRECTION_TOPIC);
   if (precisions.length > 0) {
     // Les réponses aux questions de MEMO, et aux doutes de l'écrivain. Elles
     // ne sont pas un second récit à côté du premier : elles complètent
@@ -763,6 +773,21 @@ export function buildRedactionPrompt(input: RedactionInput): string {
     for (const precision of precisions) {
       lines.push(`- ${precision.topic ? `[${precision.topic}] ` : ""}${precision.text}`);
     }
+  }
+
+  if (corrections.length > 0) {
+    // Dictées après avoir relu ton texte : elles le **corrigent**. Le texte
+    // final se lit comme si le voyageur l'avait dit juste du premier coup.
+    lines.push(
+      "",
+      "## Corrections dictées par le voyageur après avoir relu ton texte",
+      "Elles **remplacent** ce qu'elles contredisent dans la transcription et dans ton texte",
+      "précédent — une date, un lieu, une personne, un détail — et ajoutent ce qu'elles apportent,",
+      "à sa place dans le récit. N'écris jamais la correction elle-même (« enfin non, ce n'était",
+      "pas… ») : ne garde que la version corrigée (§ 1.6). Dans l'ordre où elles ont été dites ;",
+      "la dernière l'emporte.",
+    );
+    for (const correction of corrections) lines.push(`- ${correction.text}`);
   }
 
   lines.push(

@@ -9,11 +9,14 @@ import SwiftUI
 /// chercher un mot des fondateurs dans un menu ; il n'a de valeur que s'il
 /// arrive au moment où l'on vient de voir ce que l'app sait faire.
 ///
-/// Trois choses la distinguent de toutes les autres feuilles de l'app, et
-/// aucune n'est décorative :
+/// **La maquette du 12/10/2026** (« Claude Import », `3709:17115`) : la photo
+/// ne dépasse plus au-dessus de la feuille, elle se pose **sur la ligne du
+/// titre**, penchée, cerclée de blanc ; la lettre passe au corps de 14. Trois
+/// choses la distinguent toujours des autres feuilles de l'app, et aucune
+/// n'est décorative :
 ///
-/// 1. **La photo dépasse en haut**, penchée, cerclée de blanc. C'est une photo
-///    collée sur une page, pas un avatar dans une liste.
+/// 1. **La photo est penchée**, cerclée de blanc, avec deux ombres. C'est une
+///    photo collée sur une page, pas un avatar dans une liste.
 /// 2. **Une ligne est écrite à la main**, en vert. C'est la promesse de
 ///    MemoBook, et c'est la seule phrase manuscrite de l'app.
 /// 3. **La signature est un dessin**, pas du texte. Un nom tapé sous un mot
@@ -27,45 +30,25 @@ struct FoundersNoteSheet: View {
     /// bonjour.
     @Environment(\.travellerFirstName) private var firstName
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    /// La photo flotte : elle monte et descend d'un cheveu, sans fin.
-    ///
-    /// Deux points d'amplitude et six secondes de cycle — assez pour qu'on le
-    /// remarque au bout d'un moment, pas assez pour que ça attire l'œil pendant
-    /// la lecture. Elle s'arrête sous « Réduire les animations ».
-    @State private var isFloating = false
 
     /// Le diamètre de la photo. **Fixe, hors Dynamic Type** : une photo n'est
-    /// pas du texte, et celle-ci dépasse d'un bord — la faire grandir la
-    /// pousserait hors de l'écran.
-    private static let photoSide: CGFloat = 112
+    /// pas du texte, et elle partage sa ligne avec le titre.
+    private static let photoSide: CGFloat = 84
 
-    /// Ce que la feuille réserve au-dessus de son aplat.
-    ///
-    /// La moitié de la photo — c'est la part qui dépasse — plus huit points
-    /// pour l'inclinaison et l'ombre portée, qui débordent du cercle.
-    private static var overflow: CGFloat { photoSide / 2 + 8 }
+    /// Le carré que la photo penchée occupe sur la ligne : ses coins tournés
+    /// débordent du cercle (93,7 pt dans la maquette).
+    private static let photoSlot: CGFloat = 94
 
     var body: some View {
-        // La feuille réserve de quoi laisser dépasser la photo : la moitié de
-        // son diamètre, plus le peu que l'inclinaison et l'ombre ajoutent.
-        BrandSheet(BookCopy.Founders.title, topOverflow: Self.overflow) {
-            VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
-                letter
-                signature
+        BrandSheet(BookCopy.Founders.title, leading: { photo }) {
+            VStack(alignment: .leading, spacing: MemoBookSpacing.m) {
+                VStack(alignment: .leading, spacing: MemoBookSpacing.s) {
+                    letter
+                    signature
+                }
                 actions
             }
         }
-        // La photo est posée **par-dessus** la feuille et dépasse en haut.
-        //
-        // Un `overlay` ne suffisait pas : la feuille du système rogne à ses
-        // propres bords, et la moitié haute de la photo disparaissait — quelle
-        // que soit sa place dans la hiérarchie. C'est ``BrandSheet/topOverflow``
-        // qui règle ça, en ouvrant une bande transparente **dans** la
-        // présentation ; la photo y tient entière.
-        .overlay(alignment: .top) { photo }
-        .onAppear { isFloating = true }
     }
 
     // MARK: La photo
@@ -76,61 +59,46 @@ struct FoundersNoteSheet: View {
             .scaledToFill()
             .frame(width: Self.photoSide, height: Self.photoSide)
             .clipShape(.circle)
-            .overlay { Circle().strokeBorder(MemoBookColor.onAction, lineWidth: 1) }
+            .overlay { Circle().strokeBorder(MemoBookColor.surface, lineWidth: 0.75) }
             // Les deux ombres de la maquette : une large et diffuse qui la
             // détache du fond, une courte et décalée qui la pose. C'est le seul
             // endroit de l'app où deux ombres se superposent, parce que c'est le
-            // seul objet qui *flotte* vraiment.
-            .shadow(color: Color(red: 0.106, green: 0.165, blue: 0.212).opacity(0.2), radius: 16)
+            // seul objet qui est *collé* sur la page.
+            .shadow(color: Color(red: 0.106, green: 0.165, blue: 0.212).opacity(0.2), radius: 12)
             .shadow(
                 color: Color(red: 0.106, green: 0.165, blue: 0.212).opacity(0.2),
-                radius: 4,
-                x: 2,
-                y: 4
+                radius: 3,
+                x: 1.5,
+                y: 3
             )
             .rotationEffect(.degrees(7.1))
-            // L'alignement `.top` la pose au sommet de la **présentation**,
-            // c'est-à-dire en haut de la bande réservée. Il ne reste qu'à la
-            // descendre des huit points de marge : son centre tombe alors
-            // exactement sur le bord de l'aplat, et elle le chevauche de moitié
-            // comme la maquette le dessine.
-            .offset(
-                x: Self.photoSide * 0.55,
-                y: Self.overflow - Self.photoSide / 2
-                    + (isFloating && !reduceMotion ? -2 : 2)
-            )
-            .animation(
-                reduceMotion
-                    ? nil
-                    : .easeInOut(duration: 3).repeatForever(autoreverses: true),
-                value: isFloating
-            )
+            .frame(width: Self.photoSlot, height: Self.photoSlot)
             .accessibilityLabel(BookCopy.Founders.signatureVoice)
     }
 
     // MARK: La lettre
 
+    /// Le corps de 14 de la maquette, paragraphe après paragraphe — un blanc
+    /// de 8 entre chacun, la ligne manuscrite prise dans le même pas.
     private var letter: some View {
         VStack(alignment: .leading, spacing: MemoBookSpacing.xs) {
-            Text(BookCopy.Founders.hello(firstName))
-                .font(MemoBookFont.h3)
-                .foregroundStyle(MemoBookColor.ink)
-
-            Text(BookCopy.Founders.intro)
-                .font(MemoBookFont.h3)
-                .foregroundStyle(MemoBookColor.ink)
+            paragraph(BookCopy.Founders.hello(firstName))
+            paragraph(BookCopy.Founders.intro)
 
             handwrittenPromise
 
-            ForEach(BookCopy.Founders.body, id: \.self) { paragraph in
-                Text(paragraph)
-                    .font(MemoBookFont.h3)
-                    .foregroundStyle(MemoBookColor.ink)
-            }
+            ForEach(BookCopy.Founders.body, id: \.self, content: paragraph)
         }
         .multilineTextAlignment(.leading)
-        .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func paragraph(_ text: String) -> some View {
+        Text(text)
+            .font(MemoBookFont.taglineRegular)
+            .foregroundStyle(MemoBookColor.ink)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// La ligne manuscrite, légèrement de travers.
@@ -146,7 +114,6 @@ struct FoundersNoteSheet: View {
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
             .rotationEffect(.degrees(-1))
-            .padding(.vertical, MemoBookSpacing.xs / 2)
     }
 
     private var signature: some View {
@@ -162,7 +129,7 @@ struct FoundersNoteSheet: View {
                 .accessibilityHidden(true)
 
             Text(BookCopy.Founders.signature)
-                .font(MemoBookFont.h3)
+                .font(MemoBookFont.taglineRegular)
                 .foregroundStyle(MemoBookColor.inkMuted)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -170,11 +137,14 @@ struct FoundersNoteSheet: View {
         .accessibilityLabel("\(BookCopy.Founders.signatureVoice), \(BookCopy.Founders.signature)")
     }
 
+    /// Les deux boutons de 16 sur 48 pt de la maquette (`medium`), l'un
+    /// sous l'autre.
     private var actions: some View {
         VStack(spacing: MemoBookSpacing.snug) {
             BrandButton(
                 BookCopy.Founders.feedback,
                 style: .secondary,
+                size: .medium,
                 fillsWidth: true
             ) {
                 sendFeedback()
@@ -183,13 +153,13 @@ struct FoundersNoteSheet: View {
             BrandButton(
                 BookCopy.Founders.carryOn,
                 style: .primary,
+                size: .medium,
                 fillsWidth: true
             ) {
                 dismiss()
                 onContinue()
             }
         }
-        .padding(.top, MemoBookSpacing.xs)
     }
 
     /// **Le formulaire de l'app, et non un courrier** (Hugo, 19/09/2026).

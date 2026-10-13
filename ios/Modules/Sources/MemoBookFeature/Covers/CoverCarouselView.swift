@@ -195,10 +195,12 @@ struct CoverCarouselView: View {
             case .style(let style):
                 plate(style: style, photo: model.cover.flatMap(model.photo(of:)))
                     .accessibilityLabel(BookCopy.Covers.Voice.style(style.name))
-                    // « Assortie à ta 1ère de couverture » : sur le plat qui
-                    // reprend le style **choisi** de l'autre côté — et c'est la
+                    // « Assortie à ta 1ère de couverture » : sur la 4e qui
+                    // reprend le style **choisi** au devant — et c'est la
                     // seule chose que le carrousel dise avec des mots. Elle
-                    // suit le devant quand on le change (Clara, 17/09/2026).
+                    // suit le devant quand on le change (Clara, 17/09/2026),
+                    // et ne paraît jamais sur les styles de la 1ère (Hugo,
+                    // 12/10/2026) : ``BookCovers/isMatched(_:on:)``.
                     .overlay(alignment: .top) {
                         if isSelected, model.covers?.isMatched(style, on: model.face) == true {
                             MatchedStyleTag().offset(y: -MemoBookSpacing.snug)

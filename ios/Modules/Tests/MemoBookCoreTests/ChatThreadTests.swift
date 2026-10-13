@@ -37,6 +37,30 @@ final class ChatThreadTests: XCTestCase {
         XCTAssertEqual(thread.lastMessage(about: "step-1")?.id, "a")
     }
 
+    /// La carte d'une étape ouvre **son récit** — la bulle du voyageur qui
+    /// l'a racontée, pas MEMO, pas les photos, pas une précision (Hugo,
+    /// 12/10/2026).
+    func testFindsTheStoryOfAStep() {
+        let date = Date(timeIntervalSince1970: 0)
+        let messages = [
+            ChatMessage(id: "photos", author: .traveller, body: .photos([]), sentAt: date, stepId: "step-2"),
+            ChatMessage(id: "memo", author: .memo, body: .text("Il te convient ?"), sentAt: date, stepId: "step-2"),
+            ChatMessage(
+                id: "precision", author: .traveller, body: .text("Avec Clara."), sentAt: date, stepId: "step-2",
+                disposition: .context
+            ),
+            ChatMessage(
+                id: "story", author: .traveller,
+                body: .voice(VoiceNote(id: "story", duration: 30, levels: [])),
+                sentAt: date, stepId: "step-2", disposition: .memory
+            ),
+        ]
+        let thread = ChatThread(id: "t", title: "Rome", context: context, messages: messages)
+
+        XCTAssertEqual(thread.storyMessage(about: "step-2")?.id, "story")
+        XCTAssertNil(thread.storyMessage(about: "step-9"))
+    }
+
     // MARK: - La ville du voyage
 
     /// La ville est une donnée à part entière, distincte du pays : c'est elle

@@ -47,16 +47,29 @@ public struct ChatView: View {
     /// On est au bas du fil. C'est cette seule question qui décide si une
     /// nouvelle bulle fait défiler l'écran, et si « Retourner en bas »
     /// apparaît.
+    ///
+    /// **Seul le doigt la fait passer à faux** (Hugo, 12/10/2026 : « si on
+    /// scrolle pas beaucoup vers le haut, il y a un sursaut qui nous ramène en
+    /// bas »). Elle se lisait sur l'apparition d'un repère au bas d'une liste
+    /// paresseuse — qui suit la **création** de la rangée, pas sa visibilité :
+    /// un petit défilement la laissait vraie, ou la faisait basculer avec un
+    /// temps de retard ; la pastille « Retourner en bas » qui paraissait
+    /// alors agrandissait le pied, et ``keepPinned(_:footerHeight:)``
+    /// ramenait le fil en bas. Elle se lit maintenant sur l'`UIScrollView`,
+    /// pendant le geste seulement — ce qui reste à défiler sous l'écran
+    /// (``bottomTolerance``) — et repasse à vrai quand on redescend, ou qu'on
+    /// est ramené en bas. Un pied qui grandit, une bulle qui arrive ne la
+    /// changent pas : on n'a pas bougé.
     @State private var isAtBottom = true
 
-    /// L'instant où le bas du fil a quitté l'écran. Le pied qui grandit le
-    /// recouvre **dans la même passe** que celle où sa hauteur est relevée :
-    /// sans ce souvenir, ``keepPinned(_:footerHeight:)`` croyait qu'on avait
-    /// remonté le fil, et le bandeau du crédit cachait la dernière bulle d'un
-    /// fil long (recette du 03/10/2026).
-    @State private var bottomLeftAt: Date?
+    /// Ce qui peut rester sous l'écran en étant encore « en bas » : le rebond
+    /// d'un doigt qui s'arrête ne fait pas paraître la pastille.
+    private static let bottomTolerance: CGFloat = 32
 
     @FocusState private var isWriting: Bool
+
+    /// Le clavier gardé levé pendant un vocal — voir ``ChatSendingBar``.
+    @FocusState private var holdsKeyboard: Bool
 
     /// Le parcours d'ajout de photos : autorisation, feuille de choix,
     /// photothèque ou appareil photo. Voir ``PhotoFlow``.
@@ -81,6 +94,17 @@ public struct ChatView: View {
     /// Le haut de la barre d'envoi, en coordonnées globales : c'est là que la
     /// puce en vol atterrit, juste au-dessus.
     @State private var footerTop: CGFloat = 0
+
+    /// Le défilement du fil, pour ce qui le pilote hors de son `ScrollViewReader`
+    /// — le vol d'une puce. Gardé dans une boîte **non observée** : le poser
+    /// pendant le calcul du corps ne redessine rien.
+    @State private var scrollProxyBox = ScrollProxyBox()
+
+    private var scrollProxy: ScrollViewProxy? { scrollProxyBox.proxy }
+
+    private func rememberScrollProxy(_ proxy: ScrollViewProxy) {
+        scrollProxyBox.proxy = proxy
+    }
     @Environment(\.subscriptionSession) private var subscriptionSession
 
     /// L'étape sur laquelle il reste à se poser en arrivant. Consommée **une
@@ -240,6 +264,16 @@ public struct ChatView: View {
         }
         // Un écran de chat laissé derrière soi ne doit ni parler ni enregistrer.
         .onDisappear { model.teardown() }
+        // **La barre quitte le champ, le clavier part avec elle — dans le
+        // même temps** (Hugo, 12/10/2026). Une puce, des photos, un vocal
+        // parti : le champ sortait en transition et gardait le clavier
+        // jusqu'au bout, qui ne se baissait qu'après. Sauf pour un vocal
+        // commencé clavier levé, qui le garde (``ChatSendingBar``).
+        .onChange(of: model.composer) { _, composer in
+            guard composer != .writing, !model.returnsToWritingAfterRecording else { return }
+            if isWriting { isWriting = false }
+            if holdsKeyboard { holdsKeyboard = false }
+        }
         // L'autorisation des notifications, pour la bulle qui les propose :
         // relue au retour au premier plan — des Réglages, souvent.
         .task(id: scenePhase) {
@@ -270,6 +304,7 @@ public struct ChatView: View {
 
     private func conversation(_ thread: ChatThread) -> some View {
         ScrollViewReader { proxy in
+            let _ = rememberScrollProxy(proxy)
             ScrollView {
                 LazyVStack(spacing: ChatMetrics.messageSpacing) {
                     notices
@@ -310,14 +345,6 @@ public struct ChatView: View {
                     Color.clear
                         .frame(height: 1)
                         .id(Self.bottomAnchor)
-                        .onAppear {
-                            isAtBottom = true
-                            bottomLeftAt = nil
-                        }
-                        .onDisappear {
-                            isAtBottom = false
-                            bottomLeftAt = .now
-                        }
                 }
                 .padding(.horizontal, MemoBookSpacing.snug)
                 .padding(.vertical, MemoBookSpacing.s)
@@ -340,9 +367,12 @@ public struct ChatView: View {
                 // Seul le doigt compte : la liste qui se cale en bas à
                 // l'ouverture remontait d'assez pour rappeler la bannière, qui
                 // ne repartait plus.
-                .brandScrollOffset { top, byUser in
+                .brandScrollOffset { top, bottomGap, byUser in
                     if byUser {
                         trackScroll(to: top)
+                        // N'écrit que ce qui change — voir ``revealBanner``.
+                        let atBottom = bottomGap <= Self.bottomTolerance
+                        if atBottom != isAtBottom { isAtBottom = atBottom }
                     } else {
                         scroll.lastContentTop = top
                     }
@@ -536,13 +566,23 @@ public struct ChatView: View {
 
         flight = SuggestionFlight(suggestion: suggestion, from: frame)
         // « Ajouter des photos » ne devient pas une bulle : rien à lever pour
-        // elle. Et on ne lève que le bas du fil : remonté dans les anciens
-        // messages, c'est ``follow(_:)`` qui ramène en bas à l'arrivée.
-        let lifts = suggestion.intent != .importPhotos && isAtBottom
+        // elle.
+        let lifts = suggestion.intent != .importPhotos
+        // **Remonté dans les anciens messages, le fil redescend d'abord**
+        // (Hugo, 12/10/2026) : la bulle se pose au bas du fil, et sans ça
+        // elle atterrissait par-dessus les derniers messages qu'on lisait. Il
+        // redescend pendant qu'elle décolle, et se lève dans le même geste.
+        if lifts, !isAtBottom, let proxy = scrollProxy {
+            withAnimation(.snappy(duration: 0.25)) {
+                proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
+            }
+            isAtBottom = true
+        }
         Task { @MainActor in
-            // Un tour de boucle pour que la bulle en vol soit mesurée et
-            // posée sur la puce avant de partir.
-            try? await Task.sleep(for: .milliseconds(30))
+            // Une image pour que la bulle en vol soit mesurée et posée sur la
+            // puce avant de partir — pas plus : le creux doit s'ouvrir **dès**
+            // l'appui, comme si le message était déjà dans le fil.
+            try? await Task.sleep(for: .milliseconds(16))
             // **Le creux s'ouvre avant que la bulle arrive** (Hugo,
             // 30/09/2026 : « pas suffisamment tôt »). Il se lève en un quart
             // de seconde, vif, pendant que la bulle part doucement et met une
@@ -681,6 +721,7 @@ public struct ChatView: View {
             ChatComposer(
                 model: model,
                 isWriting: $isWriting,
+                holdsKeyboard: $holdsKeyboard,
                 onAddPhotos: photos.begin,
                 onSubscribe: openPaywall,
                 flyingSuggestionId: flight?.suggestion.id,
@@ -750,12 +791,19 @@ public struct ChatView: View {
         scrollToBottom(proxy)
     }
 
-    /// Se pose sur le dernier message de l'étape qu'on est venu voir.
+    /// Se pose sur **le récit** de l'étape qu'on est venu voir : la bulle qui
+    /// l'a racontée, et sa fiche juste dessous (Hugo, 12/10/2026 — « quand on
+    /// clique sur une carte d'étape, ça doit mener directement au message de
+    /// récit de cette étape »). Sans étape à viser — ou si elle n'a rien
+    /// encore —, le fil s'ouvre sur sa fin, comme d'habitude.
     ///
-    /// **Le dernier, et pas le premier** : on ne rouvre pas une journée pour
-    /// relire son début, on la rouvre pour voir où on en était. Sans étape à
-    /// viser — ou si elle n'a rien encore —, le fil s'ouvre sur sa fin, comme
-    /// d'habitude.
+    /// ⚠️ **Le bas de la fiche, et non le haut du récit.** Ancré par le haut,
+    /// le récit d'une étape récente ne pouvait pas monter jusqu'en haut de
+    /// l'écran — il n'y a pas assez de fil sous lui — et la liste paresseuse
+    /// redemandait ce défilement impossible à chaque passe de mise en page :
+    /// l'app à 100 % d'un cœur, l'écran figé en pleine transition (recette du
+    /// 12/10/2026). Le bas de la fiche, lui, est toujours atteignable, et le
+    /// récit se lit juste au-dessus d'elle.
     ///
     /// ⚠️ **Trois tentatives, et c'est nécessaire.** Le fil s'ouvre ancré en
     /// bas dans une `LazyVStack` : les rangées du haut n'existent pas encore, et
@@ -767,12 +815,21 @@ public struct ChatView: View {
     /// L'ancre est consommée **une fois** : se replacer à chaque nouveau
     /// message empêcherait de lire la suite.
     private func settleOnFocusedStep(_ proxy: ScrollViewProxy) async {
-        guard let stepId = pendingFocus,
-            let target = model.thread?.lastMessage(about: stepId)
+        guard let stepId = pendingFocus, let thread = model.thread,
+            let story = thread.storyMessage(about: stepId)
         else {
             pendingFocus = nil
             return
         }
+        // La fiche qui suit le récit — sinon le récit lui-même.
+        let target =
+            thread.messages
+            .drop { $0.id != story.id }
+            .dropFirst()
+            .prefix(3)
+            .first { message in
+                if case .transcript = message.body { return message.stepId == stepId } else { return false }
+            } ?? story
 
         for attempt in 0..<3 {
             if attempt > 0 { try? await Task.sleep(for: .milliseconds(90)) }
@@ -781,6 +838,9 @@ public struct ChatView: View {
             proxy.scrollTo(target.id, anchor: .bottom)
         }
 
+        // Posé ailleurs qu'en bas : la pastille « Retourner en bas » le dit,
+        // et une réponse de MEMO ne vient pas l'en arracher.
+        if target.id != model.messages.last?.id { isAtBottom = false }
         pendingFocus = nil
     }
 
@@ -796,11 +856,9 @@ public struct ChatView: View {
         scroll.footerHeight = height
         // Le premier relevé n'est pas un changement ; une puce en vol et
         // l'arrivée sur une étape tiennent déjà le défilement ; un fil vide
-        // n'a pas de bas, il a un centre.
-        // « En bas », ou à l'instant encore : le pied qui vient de grandir a
-        // pu recouvrir le repère du bas avant ce relevé.
-        let leftJustNow = bottomLeftAt.map { Date.now.timeIntervalSince($0) < 0.5 } ?? false
-        guard previous > 0, abs(height - previous) > 0.5, isAtBottom || leftJustNow, pendingFocus == nil,
+        // n'a pas de bas, il a un centre. « En bas » ne change qu'au doigt
+        // (``isAtBottom``) : le pied qui grandit ne le fait pas mentir.
+        guard previous > 0, abs(height - previous) > 0.5, isAtBottom, pendingFocus == nil,
             flight == nil, !model.messages.isEmpty
         else { return }
         // **Une image plus tard** : ce relevé arrive pendant la mise en page,
@@ -816,6 +874,7 @@ public struct ChatView: View {
     }
 
     private func scrollToBottom(_ proxy: ScrollViewProxy) {
+        if !isAtBottom { isAtBottom = true }
         // Quand une puce vient d'atterrir, le fil est **déjà** à sa place : le
         // décalage qui l'avait levé retombe dans l'image où le vrai message
         // arrive. Animer ce défilement-là le faisait plonger de la hauteur de
@@ -860,6 +919,7 @@ public struct ChatView: View {
     /// sinon ouvert derrière l'offre, et au retour.
     private func openPaywall() {
         isWriting = false
+        holdsKeyboard = false
         showsPaywall = true
     }
 
@@ -990,6 +1050,12 @@ public enum ChatIntent: Sendable, Hashable {
     /// voulu : la bannière se voit quand on lit le fil, l'icône quand on ne
     /// l'a pas sous les yeux.
     case openBookPreview(memoId: String)
+}
+
+/// Le ``ScrollViewProxy`` du fil, hors de son `ScrollViewReader` — voir
+/// ``ChatView/launch(_:from:)``.
+final class ScrollProxyBox {
+    var proxy: ScrollViewProxy?
 }
 
 /// Une puce de suggestion en vol vers le fil — voir ``ChatView/launch(_:from:)``.

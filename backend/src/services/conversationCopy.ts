@@ -101,6 +101,21 @@ export function validationQuestionFor(doubts: readonly string[]): string {
 export const PRECISION_NOTED = "C’est noté, je reprends le texte avec ça.";
 
 /**
+ * « J'aimerais faire des modifications à l'oral » : le vocal qui suit **corrige**
+ * le texte de la fiche, il ne s'y ajoute pas (Hugo, 12/10/2026). MEMO demande
+ * donc ce qu'il faut changer, pas de tout redire.
+ */
+export const LISTENING_FOR_REVISION =
+  "Je t’écoute : dis-moi ce qu’il faut changer ou ajouter, je corrige le texte avec.";
+
+/** La correction orale entendue : le texte se réécrit, la question reviendra avec lui. */
+export const REVISION_NOTED = "C’est noté, je corrige le texte avec ce que tu viens de me dire.";
+
+/** La correction orale qu'on n'a pas réussi à entendre. */
+export const REVISION_UNHEARD =
+  "Je n’ai pas réussi à écouter ta correction. Tu peux me la redire, ou faire la modification à la main ?";
+
+/**
  * Une fois le texte validé : le nombre **exact** de photos qui remplit l'étape,
  * calculé par `photoBudgetFor` sur le texte validé.
  */
@@ -124,6 +139,12 @@ export const REFUSAL =
   "voudras.";
 
 export const ACKNOWLEDGED = "C’est enregistré. Ton carnet compte une étape de plus.";
+
+/**
+ * « Ça me convient » sur une étape d'avant, quand MEMO y est revenu : elle
+ * était déjà comptée, le carnet n'a pas une étape de plus.
+ */
+export const ACKNOWLEDGED_EARLIER = "C’est enregistré : cette étape est validée elle aussi.";
 
 /**
  * La bulle de MEMO quand le crédit du jour du voyage tombe à zéro
@@ -253,9 +274,15 @@ export function figure(value: string): string {
  * L'étape suivante ne vient qu'après (Hugo, 01/10/2026).
  */
 export function photosToValidate(count: number): string {
-  const photos = count === 1 ? "ta photo" : `tes ${count} photos`;
+  // Une seule photo : « la », jamais « les » (Hugo, 12/10/2026).
+  if (count === 1) {
+    return (
+      "J’ai bien reçu ta photo. Si tu la valides, je crée la page de cette étape dans " +
+      "ton carnet, et tu pourras la prévisualiser. Tu la valides ?"
+    );
+  }
   return (
-    `J’ai bien reçu ${photos}. Si tu les valides, je crée la page de cette étape dans ` +
+    `J’ai bien reçu tes ${count} photos. Si tu les valides, je crée la page de cette étape dans ` +
     "ton carnet, et tu pourras la prévisualiser. Tu les valides ?"
   );
 }
@@ -264,6 +291,30 @@ export function photosToValidate(count: number): string {
 export const PHOTOS_VALIDATED =
   "C’est fait : je crée la page de cette étape dans ton carnet. Tu peux la " +
   "prévisualiser, puis me raconter l’étape suivante.";
+
+/** Les photos validées, quand MEMO revient ensuite à une étape laissée en plan. */
+export const PHOTOS_VALIDATED_BEFORE_RETURN = "C’est fait : je crée la page de cette étape dans ton carnet.";
+
+/** « Ton étape 2 « Le zoo avec Mathis » » — ou « ton étape 2 » sans titre. */
+function stepLabel(number: number, title: string | null): string {
+  const trimmed = title?.trim();
+  return trimmed ? `ton étape ${number} « ${trimmed} »` : `ton étape ${number}`;
+}
+
+/**
+ * **MEMO revient à l'étape qu'on a sautée** (Hugo, 12/10/2026). On a raconté
+ * une étape, puis la suivante dans la foulée : la première n'a été ni validée
+ * ni illustrée. Une fois la seconde close, MEMO y revient — une fois, sans
+ * insister. Sa fiche est reposée juste après cette bulle.
+ */
+export function returnToValidate(number: number, title: string | null): string {
+  return `Revenons à ${stepLabel(number, title)} : on ne l’a pas terminée. La voici.`;
+}
+
+/** Même retour, pour une étape validée dont les photos ne sont jamais venues. */
+export function returnForPhotos(number: number, title: string | null, count: number, pages: number): string {
+  return `Revenons à ${stepLabel(number, title)} : il lui manque ses photos. ${photosWanted(count, pages)}`;
+}
 
 /** Une app trop ancienne pour ouvrir l'aperçu depuis la puce : MEMO dit où il est. */
 export const WHERE_IS_PREVIEW =
@@ -315,6 +366,16 @@ export const ROSE_EPINE_GRAINE =
 /** La relance du voyage, écrite sans modèle : le lieu suffit à la rendre vraie. */
 export function fallbackPrompt(placeName: string | null): string | null {
   return placeName ? `Comment ça se passe à ${placeName} ?` : null;
+}
+
+/**
+ * La relance de l'accueil du voyage quand une nouvelle étape vient d'être
+ * racontée (`services/tripFacts.ts`) : elle demande la suite, à partir du lieu
+ * de cette étape. Elle se lit seule, et vaut pendant comme après le voyage.
+ */
+export function promptAfterStep(placeName: string | null): string {
+  const place = placeName?.trim();
+  return place ? `Et après ${place}, quelle est la suite ?` : "Quelle est la suite de ton voyage ?";
 }
 
 // ---------------------------------------------------------------------------
@@ -509,7 +570,7 @@ export const SCRIPTED_ANSWERS: Partial<
   accept: { text: ACKNOWLEDGED, suggestions: "afterAccept" },
   "edit-hand": { text: HANDING_OVER, suggestions: "none" },
   rewrite: { text: HANDING_OVER, suggestions: "none" },
-  "edit-voice": { text: LISTENING, suggestions: "none" },
+  "edit-voice": { text: LISTENING_FOR_REVISION, suggestions: "none" },
   "record-again": { text: LISTENING, suggestions: "none" },
   write: { text: HANDING_OVER, suggestions: "none" },
   voice: { text: LISTENING, suggestions: "none" },

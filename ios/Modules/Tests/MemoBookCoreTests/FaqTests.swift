@@ -299,10 +299,9 @@ struct BookCoversTests {
         let matched = covers.backStyles.filter { covers.isMatched($0, on: .back) }
         #expect(matched.map(\.id) == ["back-sand"])
 
-        // Et dans l'autre sens, le devant en sable s'annonce assorti au dos
-        // en sable.
+        // Jamais dans l'autre sens : les styles de la 1ère ne portent pas la
+        // pastille, même quand l'un va avec le dos choisi (Hugo, 12/10/2026).
         covers.back.styleId = "back-sand"
-        #expect(covers.isMatched(covers.frontStyles[1], on: .front))
-        #expect(!covers.isMatched(covers.frontStyles[0], on: .front))
+        #expect(covers.frontStyles.filter { covers.isMatched($0, on: .front) }.isEmpty)
     }
 }

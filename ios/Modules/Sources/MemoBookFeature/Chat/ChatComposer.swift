@@ -22,6 +22,9 @@ import SwiftUI
 struct ChatComposer: View {
     @Bindable var model: ChatModel
     @FocusState.Binding var isWriting: Bool
+    /// Le champ invisible qui garde le clavier levé pendant un vocal — voir
+    /// ``ChatSendingBar``.
+    @FocusState.Binding var holdsKeyboard: Bool
     let onAddPhotos: () -> Void
 
     /// Ce que fait le bandeau « Crédit du jour épuisé » : ouvrir l'offre.
@@ -39,6 +42,16 @@ struct ChatComposer: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Un message vient de partir dans la file faute de réseau : la
+            // barre le dit, et dit qu'on peut continuer (Hugo, 12/10/2026).
+            // **Dans la pile**, comme le bandeau du crédit.
+            if model.showsQueuedNotice, !model.recorder.isRecording {
+                BrandNotice(ChatCopy.queuedOffline)
+                    .padding(.horizontal, MemoBookSpacing.snug)
+                    .padding(.top, MemoBookSpacing.xs)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+
             aboveTheBar
 
             if case .reminder(let reminder) = model.creditTextNotice {
@@ -51,7 +64,12 @@ struct ChatComposer: View {
                     .transition(.opacity)
             }
 
-            ChatSendingBar(model: model, isWriting: $isWriting, onAddPhotos: onAddPhotos)
+            ChatSendingBar(
+                model: model,
+                isWriting: $isWriting,
+                holdsKeyboard: $holdsKeyboard,
+                onAddPhotos: onAddPhotos
+            )
         }
         // La place gardée de la bande se rend en douceur quand MEMO a répondu
         // sans nouvelles puces — voir ``ChatModel/reservesSuggestionRail``.
@@ -60,6 +78,7 @@ struct ChatComposer: View {
         // son compte à rebours, qui change chaque seconde.
         .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: bannerState)
         .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: model.creditTextNotice)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: model.showsQueuedNotice)
         .background(ChatMetrics.barMaterial)
     }
 
@@ -223,7 +242,15 @@ struct ChatSuggestionRail: View {
             }
         }
         .padding(.horizontal, MemoBookSpacing.snug)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        // ⚠️ **`minWidth: 0`, et pas seulement `maxWidth`** (Hugo,
+        // 12/10/2026 : « les skeleton loader élargissent la page du chat »).
+        // Les trois puces font ~450 pt, plus que l'écran : un cadre qui n'a
+        // qu'un maximum prend la largeur de son contenu quand celui-ci
+        // déborde, et la barre entière s'élargissait avec lui — le fil
+        // glissait de côté le temps que MEMO réponde. Bornée des deux côtés,
+        // la bande prend la largeur de l'écran, et c'est la dernière puce qui
+        // sort par le bord.
+        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
         // La bande ne défile pas : la dernière puce sort par le bord, comme
         // une vraie proposition trop longue pour l'écran.
         .clipped()
@@ -310,6 +337,14 @@ struct ChatSuggestionRail: View {
 struct ChatSendingBar: View {
     @Bindable var model: ChatModel
     @FocusState.Binding var isWriting: Bool
+
+    /// **Le clavier levé pendant un vocal** (Hugo, 12/10/2026). Le clavier
+    /// appartient à un champ : quand le micro remplace le champ, il se
+    /// baissait au milieu de l'enregistrement. Un champ invisible
+    /// (``keyboardHolder``) le prend des mains du vrai juste avant — UIKit
+    /// passe le clavier d'un champ à l'autre sans le baisser —, et le rend au
+    /// champ quand la barre y revient.
+    @FocusState.Binding var holdsKeyboard: Bool
     let onAddPhotos: () -> Void
 
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -343,6 +378,11 @@ struct ChatSendingBar: View {
         HStack(spacing: MemoBookSpacing.snug) {
             leadingControl
             controls
+        }
+        .background(alignment: .bottomLeading) {
+            if model.composer == .writing || model.returnsToWritingAfterRecording {
+                keyboardHolder
+            }
         }
         .padding(.horizontal, MemoBookSpacing.snug)
         .padding(.vertical, MemoBookSpacing.xs)
@@ -393,14 +433,62 @@ struct ChatSendingBar: View {
         if !isAtRest { closeButton }
     }
 
+    /// **Un seul temps** (Hugo, 12/10/2026) : le clavier se baisse pendant
+    /// que la barre revient à ses trois boutons. Sans le focus rendu tout de
+    /// suite, le champ gardait le clavier le temps de sa transition de sortie,
+    /// et le clavier ne se baissait qu'après — le champ disparaissait, puis le
+    /// clavier partait.
     private var closeButton: some View {
         barGlyph(
             "IconLucideClose",
             label: ChatCopy.Voice.collapse,
-            tint: MemoBookColor.ink,
-            action: model.collapseComposer
-        )
+            tint: MemoBookColor.ink
+        ) {
+            isWriting = false
+            holdsKeyboard = false
+            model.collapseComposer()
+        }
         .transition(.scale(scale: 0.6).combined(with: .opacity))
+    }
+
+    /// Donne le clavier au champ **une image après** qu'il est posé. Le
+    /// focus demandé dans la même passe que l'apparition du champ ne prenait
+    /// qu'une fois sur deux (Hugo, 12/10/2026) : le champ n'existait pas
+    /// encore quand SwiftUI l'appliquait — et quand le focus était resté à
+    /// vrai depuis la fois d'avant, le redemander ne changeait rien.
+    private func focusField() {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(20))
+            isWriting = true
+        }
+    }
+
+    /// Le champ qui tient le clavier pendant un vocal commencé au clavier —
+    /// voir ``holdsKeyboard``. Invisible, sans geste ni voix : il ne fait que
+    /// garder le clavier, et ce qu'on y taperait ne va nulle part.
+    private var keyboardHolder: some View {
+        TextField("", text: .constant(""))
+            .focused($holdsKeyboard)
+            .frame(width: 1, height: 1)
+            .opacity(0)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+
+    /// Le micro, touché clavier levé : le clavier **reste** levé pendant qu'on
+    /// parle. Le champ invisible le prend d'abord, puis le micro s'arme — une
+    /// image plus tard, pour que le clavier ait changé de mains avant que le
+    /// champ visible parte.
+    private func tapMicrophone() {
+        guard isWriting, !model.isCreditExhausted else {
+            model.tapMicrophone()
+            return
+        }
+        holdsKeyboard = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(20))
+            model.tapMicrophone(keepingKeyboard: true)
+        }
     }
 
     // MARK: Les dispositions
@@ -532,7 +620,7 @@ struct ChatSendingBar: View {
                 // Le champ qui apparaît prend le clavier. C'est ce qui manquait
                 // aux puces « à la main » : elles ouvraient le champ, et il
                 // fallait encore le toucher pour écrire dedans.
-                .onAppear { isWriting = true }
+                .onAppear(perform: focusField)
                 // La marge du texte, et **elle seule** : c'est elle qui fait
                 // grandir le champ ligne après ligne.
                 .padding(.vertical, MemoBookSpacing.xs)
@@ -688,7 +776,7 @@ struct ChatSendingBar: View {
             style: .raised,
             fills: fills
         ) {
-            if model.tapKeyboard() { isWriting = true }
+            if model.tapKeyboard() { focusField() }
         }
         .opacity(creditOpacity)
         .accessibilityValue(creditAccessibilityValue)
@@ -717,7 +805,7 @@ struct ChatSendingBar: View {
                 label: ChatCopy.Voice.microphone,
                 style: .secondary,
                 fills: fills,
-                action: model.tapMicrophone
+                action: tapMicrophone
             )
             .opacity(creditOpacity)
             .accessibilityValue(creditAccessibilityValue)
@@ -925,9 +1013,10 @@ private struct ChatCreditGallery: View {
     private struct PreviewComposer: View {
         @Bindable var model: ChatModel
         @FocusState private var isWriting: Bool
+        @FocusState private var holdsKeyboard: Bool
 
         var body: some View {
-            ChatComposer(model: model, isWriting: $isWriting, onAddPhotos: {})
+            ChatComposer(model: model, isWriting: $isWriting, holdsKeyboard: $holdsKeyboard, onAddPhotos: {})
         }
     }
 }
@@ -981,9 +1070,10 @@ private struct ChatSendingBarGallery: View {
     private struct PreviewBar: View {
         @Bindable var model: ChatModel
         @FocusState private var isWriting: Bool
+        @FocusState private var holdsKeyboard: Bool
 
         var body: some View {
-            ChatSendingBar(model: model, isWriting: $isWriting, onAddPhotos: {})
+            ChatSendingBar(model: model, isWriting: $isWriting, holdsKeyboard: $holdsKeyboard, onAddPhotos: {})
                 .background(ChatMetrics.barMaterial)
         }
     }

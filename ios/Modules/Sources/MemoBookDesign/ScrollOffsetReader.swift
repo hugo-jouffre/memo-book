@@ -19,19 +19,21 @@ extension View {
     /// ``SwiftUI/View/brandScrollWithoutBounce()`` : la sonde remonte ses
     /// parents jusqu'à la trouver.
     ///
-    /// - Parameter onChange: le haut du contenu, et **si c'est le doigt** qui
-    ///   fait défiler — pendant le glissé ou l'élan qui le suit. Une liste qui
-    ///   se cale en bas à l'ouverture, un `scrollTo` à l'arrivée d'un message
-    ///   bougent aussi le contenu, et ce ne sont pas des gestes.
+    /// - Parameter onChange: le haut du contenu ; ce qui reste à défiler
+    ///   **sous** l'écran (`bottomGap`, zéro ou moins tout en bas) ; et **si
+    ///   c'est le doigt** qui fait défiler — pendant le glissé ou l'élan qui le
+    ///   suit. Une liste qui se cale en bas à l'ouverture, un `scrollTo` à
+    ///   l'arrivée d'un message bougent aussi le contenu, et ce ne sont pas des
+    ///   gestes.
     public func brandScrollOffset(
-        _ onChange: @escaping @MainActor (_ top: CGFloat, _ byUser: Bool) -> Void
+        _ onChange: @escaping @MainActor (_ top: CGFloat, _ bottomGap: CGFloat, _ byUser: Bool) -> Void
     ) -> some View {
         background(ScrollOffsetProbe(onChange: onChange).frame(width: 0, height: 0))
     }
 }
 
 private struct ScrollOffsetProbe: UIViewRepresentable {
-    let onChange: @MainActor (CGFloat, Bool) -> Void
+    let onChange: @MainActor (CGFloat, CGFloat, Bool) -> Void
 
     func makeUIView(context: Context) -> Probe { Probe(onChange: onChange) }
 
@@ -40,10 +42,10 @@ private struct ScrollOffsetProbe: UIViewRepresentable {
     }
 
     final class Probe: UIView {
-        var onChange: @MainActor (CGFloat, Bool) -> Void
+        var onChange: @MainActor (CGFloat, CGFloat, Bool) -> Void
         private var observation: NSKeyValueObservation?
 
-        init(onChange: @escaping @MainActor (CGFloat, Bool) -> Void) {
+        init(onChange: @escaping @MainActor (CGFloat, CGFloat, Bool) -> Void) {
             self.onChange = onChange
             super.init(frame: .zero)
             isUserInteractionEnabled = false
@@ -66,8 +68,12 @@ private struct ScrollOffsetProbe: UIViewRepresentable {
                 // elles aussi.
                 MainActor.assumeIsolated {
                     let top = -(scrollView.contentOffset.y + scrollView.adjustedContentInset.top)
+                    // Ce qui dépasse sous le bas visible — l'encart du bas
+                    // compris : c'est la barre d'envoi qui le pose.
+                    let bottomGap = scrollView.contentSize.height + scrollView.adjustedContentInset.bottom
+                        - (scrollView.contentOffset.y + scrollView.bounds.height)
                     let byUser = scrollView.isDragging || scrollView.isDecelerating
-                    self?.onChange(top, byUser)
+                    self?.onChange(top, bottomGap, byUser)
                 }
             }
         }

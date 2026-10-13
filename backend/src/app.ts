@@ -32,6 +32,7 @@ import { registerBookPreviewRoutes } from "./routes/bookPreview.js";
 import { registerChatRoutes } from "./routes/chat.js";
 import { registerTripSettingsRoutes } from "./routes/tripSettings.js";
 import { registerCoverPhotoRoutes, registerCoverRoutes } from "./routes/covers.js";
+import { registerTripPhotoRoutes } from "./routes/tripPhotos.js";
 
 /** Combien de temps un fuseau confirmé dispense de le réécrire. */
 const TIME_ZONE_MEMO_MS = 10 * 60 * 1000;
@@ -207,6 +208,8 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
   // session, et un avatar se montre à ceux qui partagent le voyage.
   registerAvatarRoutes(app, context);
   registerCoverPhotoRoutes(app, context);
+  // Les photos de la conversation, pour la photo du voyage et ses étapes.
+  registerTripPhotoRoutes(app, context);
 
   return app;
 }

@@ -1,5 +1,6 @@
 import type { MemoStep, Prisma, PrismaClient, TripTransport } from "@prisma/client";
 import type { AppContext } from "../context.js";
+import { promptAfterStep } from "./conversationCopy.js";
 import { parseInsights, type EntryInsights, type TransportKind } from "./redaction.js";
 
 /**
@@ -123,54 +124,87 @@ export function dayCountOf(
 }
 
 /**
- * Découpe les souvenirs en étapes : **une par lieu successif**.
+ * Ce qui rattache une photo à une étape, lu dans le fil.
  *
- * - Dans l'ordre où ils ont été vécus (`capturedAt`). Un souvenir dont le lieu
- *   change ouvre une nouvelle étape ; revenir à Rome après Florence en ouvre
- *   une troisième — c'est un itinéraire, pas un index des villes.
- * - Un souvenir sans lieu (une photo, un vocal pas encore rédigé, un récit qui
- *   ne dit pas où il se passe) rejoint l'étape en cours ; avant le premier
- *   lieu, il rejoint la première étape. Aucun lieu du tout : une seule étape,
- *   sans nom — c'est elle qui porte la croix de l'accueil (T235).
- * - **Un souvenir raconté depuis une étape** (« Raconter » sur la carte d'une
- *   étape : l'app envoie son `stepId` avec le message) y reste, quel que soit
- *   le lieu que la rédaction y lit. C'est le geste du voyageur ; il gagne.
+ * - `stepOf` : l'étape que le voyageur a choisie — il a ouvert le fil depuis
+ *   la carte d'une étape, et l'app a envoyé son `stepId` avec les photos.
+ * - `illustrates` : le récit que les photos illustrent — celui dont MEMO
+ *   venait de demander les photos (`payload.forEntryId` du message de photos).
  */
-export function groupIntoSteps(entries: FactEntry[], pinnedStepOf: Map<string, string>): StepGroup[] {
-  const pinned = new Map<string, StepGroup>();
-  const auto: StepGroup[] = [];
-  const leading: FactEntry[] = [];
+export interface StepPins {
+  stepOf: Map<string, string>;
+  illustrates: Map<string, string>;
+}
+
+/**
+ * Découpe les souvenirs en étapes : **un récit, une étape** (Hugo,
+ * 12/10/2026 — « c'est enregistré, ton carnet compte une étape de plus »
+ * doit se voir sur l'accueil du voyage).
+ *
+ * C'est la règle du fil : la N-ième fiche « Retranscription étape N » est
+ * l'étape N, MEMO compose « la page de cette étape » à chaque récit validé,
+ * et le dos de couverture compte ces étapes. Le découpage par lieu successif
+ * d'avant (T227) rangeait deux récits du même lieu dans une seule carte :
+ * le chat annonçait une étape de plus, l'accueil n'en montrait aucune.
+ *
+ * - Un **récit** — un vocal, un texte — ouvre toujours sa propre étape, dans
+ *   l'ordre où il a été vécu (`capturedAt`). Un `stepId` envoyé avec lui ne
+ *   le range pas ailleurs : ce n'était, le plus souvent, que l'étape où le
+ *   voyage en était.
+ * - Une **photo** rejoint l'étape choisie par le voyageur s'il y en a une,
+ *   sinon le récit qu'elle illustre, sinon le dernier récit vécu avant elle
+ *   (le premier, si elle les précède tous). Sans aucun récit, les photos
+ *   font une seule étape, sans nom — c'est elle qui porte la croix de
+ *   l'accueil (T235).
+ */
+export function groupIntoSteps(
+  entries: FactEntry[],
+  pins: StepPins = { stepOf: new Map(), illustrates: new Map() },
+): StepGroup[] {
+  const stories: StepGroup[] = [];
+  const storyOf = new Map<string, StepGroup>();
+  const photos: FactEntry[] = [];
 
   for (const entry of entries) {
-    const pin = pinnedStepOf.get(entry.id);
+    if (entry.kind === "photo") {
+      photos.push(entry);
+      continue;
+    }
+    const group: StepGroup = { place: placeOf(entry), entries: [entry], stepId: null, pinned: false };
+    stories.push(group);
+    storyOf.set(entry.id, group);
+  }
+
+  // Une étape choisie qui n'a plus son récit (effacé) garde ses photos.
+  const pinnedOnly = new Map<string, StepGroup>();
+  const loose: FactEntry[] = [];
+
+  for (const photo of photos) {
+    const pin = pins.stepOf.get(photo.id);
     if (pin) {
-      const group = pinned.get(pin) ?? { place: null, entries: [], stepId: pin, pinned: true };
-      group.entries.push(entry);
-      pinned.set(pin, group);
+      const story = stories.find((group) => group.entries[0]?.stepId === pin);
+      if (story) {
+        story.entries.push(photo);
+      } else {
+        const group = pinnedOnly.get(pin) ?? { place: null, entries: [], stepId: pin, pinned: true };
+        group.entries.push(photo);
+        pinnedOnly.set(pin, group);
+      }
       continue;
     }
 
-    const place = placeOf(entry);
-    const current = auto.at(-1);
-    if (!place) {
-      if (current) current.entries.push(entry);
-      else leading.push(entry);
-      continue;
-    }
-    if (current && current.place !== null && placeKey(current.place) === placeKey(place)) {
-      current.entries.push(entry);
-      continue;
-    }
-    auto.push({ place, entries: [entry], stepId: null, pinned: false });
+    const illustrated = pins.illustrates.get(photo.id);
+    const target =
+      (illustrated ? storyOf.get(illustrated) : undefined) ??
+      stories.findLast((group) => group.entries[0]!.capturedAt.getTime() <= photo.capturedAt.getTime()) ??
+      stories[0];
+    if (target) target.entries.push(photo);
+    else loose.push(photo);
   }
 
-  if (leading.length > 0) {
-    const first = auto[0];
-    if (first) first.entries.unshift(...leading);
-    else auto.push({ place: null, entries: leading, stepId: null, pinned: false });
-  }
-
-  return [...pinned.values(), ...auto];
+  const groups = [...stories, ...pinnedOnly.values()];
+  if (loose.length > 0) groups.push({ place: null, entries: loose, stepId: null, pinned: false });
+  return groups;
 }
 
 /**
@@ -198,6 +232,7 @@ export async function refreshTripFacts(prisma: PrismaClient, memoId: string, now
           photoCount: true,
           dayCount: true,
           distanceKilometres: true,
+          prompt: true,
           steps: true,
         },
       });
@@ -226,8 +261,10 @@ export async function refreshTripFacts(prisma: PrismaClient, memoId: string, now
         cdnUrl: row.media?.cdnUrl ?? null,
       }));
 
-      await writeSteps(tx, memoId, memo.steps, entries);
+      const before = [...memo.steps].sort((a, b) => b.number - a.number)[0] ?? null;
+      const steps = await writeSteps(tx, memoId, memo.steps, entries);
       await writeFigures(tx, memoId, memo, entries, now);
+      await writePrompt(tx, memoId, memo.prompt, before, steps.at(-1) ?? null);
     },
     { timeout: 20_000 },
   );
@@ -249,58 +286,75 @@ export async function refreshTripFactsQuietly(context: Pick<AppContext, "prisma"
 type Tx = Prisma.TransactionClient;
 type ExistingStep = MemoStep;
 
-/** Les souvenirs que le voyageur a racontés depuis une étape précise. */
-async function pinnedSteps(tx: Tx, memoId: string, steps: ExistingStep[]): Promise<Map<string, string>> {
+/**
+ * Ce que le fil dit des photos : l'étape choisie depuis sa carte, et le récit
+ * que MEMO venait d'illustrer — voir ``StepPins``. Seules les photos sont
+ * rattachées ainsi : un récit fait toujours sa propre étape.
+ */
+async function pinnedSteps(tx: Tx, memoId: string, steps: ExistingStep[]): Promise<StepPins> {
   const known = new Set(steps.map((step) => step.id));
   const messages = await tx.chatMessage.findMany({
-    where: { memoId, author: "traveller", stepId: { not: null } },
+    where: { memoId, author: "traveller", kind: "photos" },
     select: { stepId: true, entryId: true, payload: true },
   });
 
-  const pinned = new Map<string, string>();
+  const pins: StepPins = { stepOf: new Map(), illustrates: new Map() };
   for (const message of messages) {
-    if (!message.stepId || !known.has(message.stepId)) continue;
+    // Un message de photos en porte plusieurs (`payload.entryIds`).
+    const payload = message.payload as { entryIds?: unknown; forEntryId?: unknown } | null;
     const ids = new Set<string>();
     if (message.entryId) ids.add(message.entryId);
-    // Un message de photos en porte plusieurs (`payload.entryIds`).
-    const payload = message.payload as { entryIds?: unknown } | null;
     if (payload && Array.isArray(payload.entryIds)) {
       for (const id of payload.entryIds) if (typeof id === "string") ids.add(id);
     }
-    for (const id of ids) pinned.set(id, message.stepId);
+    const forEntryId = typeof payload?.forEntryId === "string" ? payload.forEntryId : null;
+    for (const id of ids) {
+      if (message.stepId && known.has(message.stepId)) pins.stepOf.set(id, message.stepId);
+      if (forEntryId) pins.illustrates.set(id, forEntryId);
+    }
   }
-  return pinned;
+  return pins;
 }
 
-async function writeSteps(tx: Tx, memoId: string, existing: ExistingStep[], entries: FactEntry[]) {
+/** Une étape telle qu'elle est écrite : de quoi suivre la dernière. */
+interface WrittenStep {
+  id: string;
+  placeName: string | null;
+}
+
+async function writeSteps(
+  tx: Tx,
+  memoId: string,
+  existing: ExistingStep[],
+  entries: FactEntry[],
+): Promise<WrittenStep[]> {
   const byId = new Map(existing.map((step) => [step.id, step]));
   const groups = groupIntoSteps(entries, await pinnedSteps(tx, memoId, existing));
 
   // --- Chaque groupe reprend une étape existante, si possible ---------------
   //
-  // Celle où la plupart de ses souvenirs sont déjà rangés, puis une étape libre
-  // du même lieu. Garder l'identifiant garde ce qui y est attaché : la
-  // validation (« Valider cette étape »), la photo, les messages du fil.
+  // Celle de son récit d'abord, puis celle où la plupart de ses photos sont
+  // déjà rangées, puis une étape libre du même lieu. Garder l'identifiant
+  // garde ce qui y est attaché : la validation (« Valider cette étape »), la
+  // photo, les messages du fil. Les récits passent dans l'ordre du voyage :
+  // deux récits qu'une ancienne étape réunissait, c'est le premier qui la
+  // garde, l'autre en ouvre une.
   const claimed = new Set(groups.filter((group) => group.pinned).map((group) => group.stepId!));
-  const pinnedById = new Map(groups.filter((group) => group.pinned).map((group) => [group.stepId!, group]));
   const kept: StepGroup[] = groups.filter((group) => group.pinned);
 
   for (const group of groups) {
     if (group.pinned) continue;
+    const free = (id: string | null | undefined): id is string => Boolean(id) && byId.has(id!) && !claimed.has(id!);
+
+    const own = group.entries[0]?.kind === "photo" ? null : group.entries[0]?.stepId;
     const vote = mostCommon(
-      group.entries.flatMap((entry) => (entry.stepId && byId.has(entry.stepId) ? [entry.stepId] : [])),
+      group.entries.flatMap((entry) => (free(entry.stepId) ? [entry.stepId] : [])),
       (id) => id,
     );
 
-    const pinnedTarget = vote ? pinnedById.get(vote) : undefined;
-    if (pinnedTarget) {
-      // Le même lieu que celui où le voyageur a raconté : une seule étape.
-      pinnedTarget.entries.push(...group.entries);
-      pinnedTarget.place ??= group.place;
-      continue;
-    }
-
-    if (vote && !claimed.has(vote)) {
+    if (free(own)) {
+      group.stepId = own;
+    } else if (vote) {
       group.stepId = vote;
     } else if (group.place) {
       const key = placeKey(group.place);
@@ -337,6 +391,7 @@ async function writeSteps(tx: Tx, memoId: string, existing: ExistingStep[], entr
     await tx.memoStep.update({ where: { id }, data: { number: -number } });
   }
 
+  const written: WrittenStep[] = [];
   for (const [index, group] of kept.entries()) {
     const number = index + 1;
     const step = group.stepId ? byId.get(group.stepId) : undefined;
@@ -365,7 +420,9 @@ async function writeSteps(tx: Tx, memoId: string, existing: ExistingStep[], entr
     if (moved.length > 0) {
       await tx.entry.updateMany({ where: { id: { in: moved } }, data: { stepId: group.stepId } });
     }
+    written.push({ id: group.stepId!, placeName: fields.placeName });
   }
+  return written;
 }
 
 /** Ce qu'une étape dit d'elle-même, tiré de ses souvenirs. */
@@ -398,6 +455,34 @@ function stepFields(group: StepGroup, step: ExistingStep | undefined) {
     transport: transport ? STEP_TRANSPORT[transport.kind] : (step?.transport ?? null),
     photoUrl: photo?.cdnUrl ?? step?.photoUrl ?? null,
   };
+}
+
+/**
+ * **La relance de l'accueil du voyage suit la dernière étape racontée**
+ * (Hugo, 12/10/2026 — « le chat doit mieux alimenter le texte d'accroche »).
+ *
+ * Elle n'était écrite qu'au tour de MEMO, et la plupart des tours sont
+ * maintenant écrits par le code, avant que la rédaction ait lu le lieu : la
+ * relance restait sur l'étape d'avant, ou vide. Elle se réécrit donc ici dès
+ * qu'une étape **nouvelle** devient la dernière — ou que la dernière change de
+ * lieu — et que ce lieu est connu. Le reste du temps, elle garde ce que MEMO a
+ * écrit entre deux étapes.
+ */
+async function writePrompt(
+  tx: Tx,
+  memoId: string,
+  current: string | null,
+  before: Pick<MemoStep, "id" | "placeName"> | null,
+  latest: WrittenStep | null,
+) {
+  if (!latest) return;
+  const moved = before?.id !== latest.id || before.placeName !== latest.placeName;
+  // Sans lieu, la nouvelle étape n'apprend rien de plus que la relance que
+  // MEMO vient d'écrire en lisant le récit : elle ne remplace qu'une relance
+  // absente.
+  if (current && (!moved || !latest.placeName)) return;
+  const prompt = promptAfterStep(latest.placeName);
+  if (prompt !== current) await tx.memo.update({ where: { id: memoId }, data: { prompt } });
 }
 
 type MemoFigures = {

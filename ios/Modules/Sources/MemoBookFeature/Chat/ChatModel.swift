@@ -79,6 +79,17 @@ public final class ChatModel {
     /// Le vrai fil est en cours de relecture, après un fil local.
     private var isReloading = false
 
+    /// Les tours partis d'ici que la file garde **faute de réseau** — envoyés
+    /// hors ligne depuis un fil ouvert en ligne. Tant qu'il y en a, la barre
+    /// d'envoi le dit (``showsQueuedNotice``).
+    private var queuedTurnIds: Set<String> = []
+
+    /// « Tu es hors ligne, mais tu peux continuer » au-dessus de la barre :
+    /// un message vient de partir dans la file au lieu du serveur (Hugo,
+    /// 12/10/2026). Pas sur un fil local — sa boîte en tête du fil le dit
+    /// déjà, depuis l'ouverture.
+    public var showsQueuedNotice: Bool { !queuedTurnIds.isEmpty && !isOffline }
+
     /// L'enregistrement a été refusé par iOS. La demande ne se présente qu'une
     /// fois : le seul recours est l'app Réglages, et l'écran doit le dire au
     /// lieu de redemander en boucle.
@@ -278,10 +289,15 @@ public final class ChatModel {
     public private(set) var focusStepId: String?
 
     /// L'étape à laquelle rattacher un nouveau message : celle qu'on est venu
-    /// voir, ou à défaut celle où le voyage en est.
-    private var activeStepId: String? {
-        focusStepId ?? thread?.context.stepId
-    }
+    /// voir depuis sa carte, **et elle seule** (Hugo, 12/10/2026).
+    ///
+    /// Elle retombait sur l'étape où le voyage en était
+    /// (`thread.context.stepId`) : chaque récit partait épinglé sur la
+    /// dernière étape, et « ton carnet compte une étape de plus » n'en ajoutait
+    /// aucune sur l'accueil du voyage. Le serveur ne la sert plus, et ne range
+    /// de toute façon un récit nulle part ailleurs que dans sa propre étape —
+    /// seules les photos suivent l'étape choisie.
+    private var activeStepId: String? { focusStepId }
 
     /// Le silence minimal avant une bulle de MEMO. Sans lui, une réponse
     /// arriverait dans la même image que le message du voyageur : c'est le
@@ -559,15 +575,34 @@ public final class ChatModel {
         if showsExhaustedNotice { showsExhaustedNotice = false }
     }
 
-    /// Le micro de la barre au repos : il arme l'enregistrement, ou — crédit
-    /// épuisé — dit pourquoi il ne le fait pas.
-    public func tapMicrophone() {
+    /// Le micro de la barre : il arme l'enregistrement, ou — crédit épuisé —
+    /// dit pourquoi il ne le fait pas.
+    ///
+    /// - Parameter keepingKeyboard: le clavier était levé au moment de
+    ///   l'appui. **Il le reste** pendant qu'on parle (Hugo, 12/10/2026 — il
+    ///   se baissait au milieu du vocal), et le vocal parti, la barre revient
+    ///   au champ de saisie qu'on avait sous les doigts. C'est l'écran qui
+    ///   tient le clavier (``ChatSendingBar``) ; le modèle retient seulement
+    ///   où revenir.
+    public func tapMicrophone(keepingKeyboard: Bool = false) {
         guard !isCreditExhausted else {
             showExhaustedNotice()
             return
         }
+        returnsToWritingAfterRecording = keepingKeyboard
         composer = .speaking
         startRecording()
+    }
+
+    /// Le vocal en cours a été commencé clavier levé : à sa fin, la barre
+    /// revient au champ — voir ``tapMicrophone(keepingKeyboard:)``.
+    public private(set) var returnsToWritingAfterRecording = false
+
+    /// La disposition où revenir quand un vocal se termine, et l'oubli du
+    /// clavier qu'on tenait pour lui.
+    private func composerAfterRecording() -> ChatComposerMode {
+        defer { returnsToWritingAfterRecording = false }
+        return returnsToWritingAfterRecording ? .writing : .tools
     }
 
     /// Le clavier de la barre au repos : il ouvre le champ, ou — crédit
@@ -687,6 +722,7 @@ public final class ChatModel {
         if recorder.isRecording {
             cancelRecording()
         }
+        returnsToWritingAfterRecording = false
         draft = ""
         isEditingTranscript = false
         editingEntryId = nil
@@ -910,6 +946,9 @@ public final class ChatModel {
                 // rouvre, et c'est la file qui la terminera — par son
                 // identifiant, voir ``markDelivery(_:)``.
                 turn = .idle
+                // Et l'écran **le dit** (Hugo, 12/10/2026) : sans ça, on
+                // envoyait hors ligne sans savoir que c'était gardé.
+                queuedTurnIds.insert(outgoing.id)
                 // Le vocal que la limite a coupé, parti dans la file : pas de
                 // reçu pour apporter la bulle de MEMO, l'app pose la sienne.
                 if limitTurnId == outgoing.id {
@@ -1308,6 +1347,10 @@ public final class ChatModel {
     public func markDelivery(_ delivery: ChatTurnDelivery) {
         latestDelivery = delivery
         guard let thread, delivery.tripId == thread.context.tripId else { return }
+        // Parti, refusé ou en attente de crédit : plus « en attente du réseau ».
+        if case .sending = delivery.state {} else if queuedTurnIds.contains(delivery.id) {
+            queuedTurnIds.remove(delivery.id)
+        }
 
         switch delivery.state {
         case .sending:
@@ -1439,7 +1482,7 @@ public final class ChatModel {
                 localVoiceUrls[id] = url
             }
 
-            composer = .tools
+            composer = composerAfterRecording()
             send(
                 .voice(
                     RecordedTurnAudio(
@@ -1473,7 +1516,7 @@ public final class ChatModel {
         levelSampler?.cancel()
         capturedLevels = []
         recorder.cancel()
-        composer = .tools
+        composer = composerAfterRecording()
     }
 
     /// Onze relevés par seconde : assez pour dessiner le grain d'une voix,
@@ -1883,13 +1926,19 @@ public final class ChatModel {
     /// La dernière fiche remplie du fil — celle que le trio « Ça me convient /
     /// à la main / à l'oral » suit. La dernière et non la première : on
     /// corrige ce qu'on vient d'entendre, pas la fiche d'hier.
+    /// La fiche que visent les puces de validation : celle dont MEMO vient
+    /// de demander « Il te convient ? » quand il le dit (``ChatMessage/entryId``
+    /// — il revient parfois à une étape sautée, 12/10/2026), sinon la
+    /// dernière fiche remplie du fil.
     private var latestTranscriptCard: TranscriptCard? {
+        let asked = messages.last { $0.author == .memo && $0.entryId != nil }?.entryId
+        var latest: TranscriptCard?
         for message in messages.reversed() {
-            if case .transcript(let card) = message.body, let text = card.text, !text.isEmpty {
-                return card
-            }
+            guard case .transcript(let card) = message.body, let text = card.text, !text.isEmpty else { continue }
+            if asked == nil || card.entryId == asked { return card }
+            latest = latest ?? card
         }
-        return nil
+        return latest
     }
 
     // MARK: -

@@ -47,6 +47,12 @@ public enum ChatCopy {
     public static let offline =
         "Tu sembles hors ligne. **Ce que tu racontes est gardé sur ton téléphone**, et partira dès ta reconnexion."
 
+    /// Au-dessus de la barre d'envoi, dès qu'un message part dans la file au
+    /// lieu du serveur (Hugo, 12/10/2026) : on peut continuer, rien n'est
+    /// perdu, et ça partira tout seul.
+    public static let queuedOffline =
+        "Tu es hors ligne, mais tu peux continuer à raconter : **tes messages sont gardés sur ton téléphone**, et partiront dès que la connexion reviendra."
+
     // MARK: - La mention de confidentialité
 
     /// Le premier mot du fil, en gris au-dessus de toute bulle (01/10/2026) :

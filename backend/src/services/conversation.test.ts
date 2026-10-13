@@ -429,7 +429,9 @@ describe("les commandes et les garde-fous", () => {
     expect(parseConversationState(null)).toEqual(EMPTY_CONVERSATION_STATE);
     expect(parseConversationState({ roseEpineGraineAskedFor: ["2026-09-21", 3] })).toEqual({
       roseEpineGraineAskedFor: ["2026-09-21"],
+      closingAskedFor: [],
     });
+    expect(parseConversationState({ closingAskedFor: ["entry-1", null] }).closingAskedFor).toEqual(["entry-1"]);
     const next = nextConversationState(
       EMPTY_CONVERSATION_STATE,
       { ...scriptedReply("accept", "")!, asksRoseEpineGraine: true },

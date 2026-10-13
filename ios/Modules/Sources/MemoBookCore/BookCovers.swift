@@ -387,9 +387,13 @@ public struct BookCovers: Codable, Sendable, Hashable {
     /// Ce style, proposé pour `face`, reprend-il le style **choisi** sur
     /// l'autre plat ? C'est lui que le carrousel coiffe de la pastille
     /// « Assortie à ta 1ère de couverture ».
+    ///
+    /// **Au dos seulement** (Hugo, 12/10/2026) : la pastille dit quelle 4e va
+    /// avec la 1ère qu'on a choisie. Sur les styles de la 1ère, elle n'a rien
+    /// à dire — c'est elle qu'on choisit d'abord, et « assortie à ta 1ère »
+    /// s'y lisait comme une contradiction.
     public func isMatched(_ style: CoverStyle, on face: CoverFace) -> Bool {
-        let other: CoverFace = face == .front ? .back : .front
-        guard let chosen = self.style(id: self[other].styleId) else { return false }
+        guard face == .back, let chosen = self.style(id: front.styleId) else { return false }
         return style.matches(chosen)
     }
 }

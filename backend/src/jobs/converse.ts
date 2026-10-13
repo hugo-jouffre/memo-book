@@ -7,21 +7,30 @@ import {
   fallbackResponder,
   isTooShortToKeep,
   nextConversationState,
+  pauseBeforeSaying,
   pauseBeforeTranscript,
   scriptedReply,
   type ConversationHistoryTurn,
+  type ConversationState,
   type ConversationInput,
   type ConversationReply,
 } from "../services/conversation.js";
 import {
   ACKNOWLEDGED,
+  ACKNOWLEDGED_EARLIER,
+  PHOTOS_VALIDATED_BEFORE_RETURN,
   PRECISION_NOTED,
+  REVISION_NOTED,
+  REVISION_UNHEARD,
   ROSE_EPINE_GRAINE,
   SUGGESTION_SETS,
   fallbackPrompt,
   photosToValidate,
   photosWanted,
+  returnForPhotos,
+  returnToValidate,
   tooShort,
+  validationQuestionFor,
 } from "../services/conversationCopy.js";
 import { DAILY_CREDIT_CALL_TO_ACTION, DAILY_CREDIT_EXHAUSTED } from "../services/dailyCredit.js";
 import { photoBudgetFor } from "../services/photoBudget.js";
@@ -48,8 +57,11 @@ import {
   loadCurrentEntry,
   loadHistory,
   loadRecentEntries,
+  photosTargetEntryId,
   REPLY_TIMEOUT_MS,
+  type Db,
 } from "../services/conversationThread.js";
+import { stepNumbersOf } from "../routes/chatSerializers.js";
 import { finalTextOf, parseCoherenceSheet, type RedactJob } from "./redact.js";
 import { JOB_NAMES } from "./queue.js";
 
@@ -126,6 +138,14 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
   }
 
   await waitForOlderUnansweredTurns(context, message.memoId, message.seq);
+
+  // Le vocal qui suit « à l'oral » corrige une fiche : un tour à part, sans
+  // souvenir ni modèle — `converseOralRevision`.
+  const revised = revisedEntryOf(message.payload);
+  if (message.kind === "voice" && revised) {
+    await converseOralRevision(context, message, revised);
+    return;
+  }
 
   const now = new Date();
   const memo = message.memo;
@@ -308,10 +328,18 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
   // dans un silence.
   let reply: ConversationReply | null =
     message.suggestionId === "accept"
-      ? await acceptReply(context, message.entryId, text ?? "")
+      ? await acceptReply(
+          context,
+          message.entryId,
+          text ?? "",
+          message.entryId !== null && currentEntry !== null && message.entryId !== currentEntry.id,
+        )
       : scriptedReply(message.suggestionId, text ?? "");
+  // Un vocal raconté : rien à dire tout de suite, et pas de relance non plus —
+  // le lieu de cette nouvelle étape n'est pas encore lu. C'est la rédaction
+  // qui la réécrira, en recalculant les étapes (`tripFacts.ts`).
   if (!reply && !message.suggestionId && kind === "voice" && !transcriptFailed) {
-    reply = flowReply([], [], "memory", step?.placeName ?? memo.destinationCity);
+    reply = flowReply([], [], "memory", null);
   }
   if (!reply && !message.suggestionId && kind === "photos") {
     reply = flowReply(
@@ -380,6 +408,27 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
     };
   }
 
+  // « Ça me convient » : les photos se demandent pour **ce** récit — c'est ce
+  // qui rangera les photos qui suivent dans son étape (`photosTargetEntryId`).
+  const photosFor =
+    message.suggestionId === "accept" && message.entryId && reply.beats.length > 1 ? message.entryId : null;
+
+  // « Je valide mes photos » clôt une étape : si on avait sauté celle d'avant
+  // pour raconter celle-ci, MEMO y revient (Hugo, 12/10/2026).
+  const closing = message.suggestionId === "photos-ok" ? await stepToClose(context, memo.id, message.seq, state) : null;
+  if (closing) {
+    reply = {
+      ...reply,
+      beats: composeBeats(text ?? "", [
+        PHOTOS_VALIDATED_BEFORE_RETURN,
+        closing.reason === "validation"
+          ? returnToValidate(closing.number, closing.title)
+          : returnForPhotos(closing.number, closing.title, closing.budget.photos, closing.budget.pages),
+      ]),
+      suggestionIds: closing.reason === "validation" ? [] : [...SUGGESTION_SETS.askPhotos],
+    };
+  }
+
   const answersRoseEpineGraine =
     disposition === "context" &&
     [...history].reverse().find((turn) => turn.author === "memo")?.text === ROSE_EPINE_GRAINE;
@@ -445,6 +494,7 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
     // chaque lecteur (`resolveCallToAction` — un abonné ne voit pas l'offre).
     for (const [index, beat] of reply.beats.entries()) {
       const isLast = index === reply.beats.length - 1;
+      const asksPhotosFor = photosFor ?? (closing?.reason === "photos" ? closing.entryId : null);
       await tx.chatMessage.create({
         data: {
           memoId: memo.id,
@@ -459,8 +509,40 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
             ? {
                 suggestions: reply.suggestionIds,
                 ...(reply.callToActionId ? { callToAction: { id: reply.callToActionId } } : {}),
+                ...(asksPhotosFor ? { asksPhotosFor } : {}),
               }
             : undefined,
+        },
+      });
+    }
+
+    // L'étape sautée n'est pas validée : sa fiche revient au bas du fil, et la
+    // question avec elle — c'est elle que « Ça me convient » validera.
+    if (closing?.reason === "validation") {
+      await tx.chatMessage.create({
+        data: {
+          memoId: memo.id,
+          author: "memo",
+          kind: "transcript",
+          entryId: closing.entryId,
+          replyToId: message.id,
+          stepId: closing.stepId,
+          pauseMilliseconds: pauseBeforeTranscript(null),
+          model: "scripted",
+        },
+      });
+      const question = validationQuestionFor([]);
+      await tx.chatMessage.create({
+        data: {
+          memoId: memo.id,
+          author: "memo",
+          kind: "text",
+          text: question,
+          replyToId: message.id,
+          stepId: closing.stepId,
+          pauseMilliseconds: pauseBeforeSaying(question),
+          model: "scripted",
+          payload: { suggestions: [...SUGGESTION_SETS.trio], asksValidationFor: closing.entryId },
         },
       });
     }
@@ -480,10 +562,9 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
       data: {
         ...(reply.prompt ? { prompt: reply.prompt } : {}),
         ...contextChangeFor(message.suggestionId, tripContext),
-        conversationState: nextConversationState(
-          state,
-          reply,
-          currentDay,
+        conversationState: withClosingAsked(
+          nextConversationState(state, reply, currentDay),
+          closing?.entryId ?? null,
         ) as unknown as Prisma.InputJsonObject,
       },
     });
@@ -506,6 +587,192 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
     },
     "MEMO a répondu",
   );
+}
+
+/** Le souvenir qu'un vocal corrige — `payload.revises`, posé par la route. */
+function revisedEntryOf(payload: Prisma.JsonValue | null): string | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  return typeof payload.revises === "string" ? payload.revises : null;
+}
+
+/**
+ * **Une correction dictée** (Hugo, 12/10/2026). Après « J'aimerais faire des
+ * modifications à l'oral », le vocal suivant ne fait pas un souvenir de plus :
+ * MEMO l'écoute, le range comme une précision de la fiche visée — marquée
+ * `correction_orale` — et la rédaction réécrit le texte avec, en remplaçant ce
+ * que la correction contredit. « Il te convient ? » revient avec le nouveau
+ * texte (`askValidation`).
+ *
+ * Une correction l'emporte sur une version tapée à la main, si la fiche en
+ * avait une : c'est le dernier mot du voyageur.
+ */
+async function converseOralRevision(
+  context: AppContext,
+  message: NonNullable<Awaited<ReturnType<typeof loadTurn>>>,
+  entryId: string,
+): Promise<void> {
+  const { prisma, logger, queue } = context;
+
+  let text = "";
+  const voice = contextVoiceOf(message.payload);
+  if (voice) {
+    try {
+      const audio = await context.storage.get(voice.storageKey);
+      const result = await context.transcriber.transcribe({
+        audio,
+        filename: voice.storageKey.split("/").pop() ?? "correction.m4a",
+        mimeType: voice.mimeType,
+      });
+      text = result.text.trim();
+    } catch (cause) {
+      logger.warn({ messageId: message.id, err: cause }, "Correction orale non transcrite");
+    }
+  }
+
+  const entry = await prisma.entry.findUnique({
+    where: { id: entryId },
+    select: { id: true, transcript: true },
+  });
+  const heard = text.length > 0;
+  const rewrites = heard && Boolean(entry?.transcript);
+  const beats = composeBeats(text, [rewrites ? REVISION_NOTED : REVISION_UNHEARD]);
+
+  await prisma.$transaction(async (tx) => {
+    for (const [index, beat] of beats.entries()) {
+      await tx.chatMessage.create({
+        data: {
+          memoId: message.memoId,
+          author: "memo",
+          kind: "text",
+          text: beat.text,
+          replyToId: message.id,
+          stepId: message.stepId,
+          pauseMilliseconds: beat.pauseMilliseconds,
+          model: "scripted",
+          payload:
+            index === beats.length - 1 ? { suggestions: rewrites ? [] : ["edit-voice", "edit-hand"] } : undefined,
+        },
+      });
+    }
+    await tx.chatMessage.update({
+      where: { id: message.id },
+      // Sa transcription reste sur lui : c'est elle que la rédaction relit.
+      data: { repliedAt: new Date(), ...(heard ? { text } : {}) },
+    });
+    if (rewrites) {
+      await tx.entry.update({
+        where: { id: entryId },
+        data: {
+          redactionStatus: "pending",
+          redactionError: null,
+          editedText: null,
+          editedAt: null,
+          validatedAt: null,
+        },
+      });
+    }
+  });
+
+  if (rewrites) await queue.publish<RedactJob>(JOB_NAMES.redact, { entryId });
+  logger.info({ messageId: message.id, entryId, heard }, "MEMO a écouté une correction orale");
+}
+
+/** Une étape à clore, et de quoi le dire. */
+interface StepToClose {
+  entryId: string;
+  stepId: string | null;
+  number: number;
+  title: string | null;
+  reason: "validation" | "photos";
+  budget: ReturnType<typeof photoBudgetFor>;
+}
+
+/**
+ * **L'étape qu'on a sautée** (Hugo, 12/10/2026) : on a raconté une étape, puis
+ * la suivante dans la foulée — la première n'a été ni validée ni illustrée.
+ * Quand « Je valide mes photos » clôt une étape, MEMO regarde le récit raconté
+ * **juste avant** elle dans le fil : pas encore validé, ou validé sans que les
+ * photos demandées soient jamais venues. Une fois par récit
+ * (`closingAskedFor`) : on ne revient pas deux fois sur un refus.
+ */
+async function stepToClose(
+  context: AppContext,
+  memoId: string,
+  beforeSeq: number,
+  state: ConversationState,
+): Promise<StepToClose | null> {
+  const { prisma } = context;
+  const closed = (await photosTargetEntryId(prisma, memoId)) ?? (await loadCurrentEntry(prisma, memoId, beforeSeq))?.id;
+  if (!closed) return null;
+
+  const stories = await prisma.chatMessage.findMany({
+    where: { memoId, author: "traveller", disposition: "memory", kind: { not: "photos" }, entryId: { not: null } },
+    orderBy: { seq: "asc" },
+    select: { entryId: true },
+  });
+  const order = [...new Set(stories.map((story) => story.entryId!))];
+  const index = order.indexOf(closed);
+  const previousId = index > 0 ? order[index - 1]! : null;
+  if (!previousId || state.closingAskedFor.includes(previousId)) return null;
+
+  const previous = await prisma.entry.findUnique({ where: { id: previousId } });
+  const text = previous ? finalTextOf(previous) : null;
+  if (!previous || previous.kind === "photo" || !text?.trim()) return null;
+
+  let reason: StepToClose["reason"];
+  if (!previous.validatedAt) {
+    // Le texte doit être là : une rédaction en cours posera sa question elle-même.
+    if (previous.redactionStatus === "pending" || previous.redactionStatus === "processing") return null;
+    reason = "validation";
+  } else if (await photosAskedButMissing(prisma, memoId, previous)) {
+    reason = "photos";
+  } else {
+    return null;
+  }
+
+  const cards = await prisma.chatMessage.findMany({
+    where: { memoId, kind: "transcript" },
+    select: { id: true, kind: true, seq: true, entryId: true },
+  });
+  const card = cards.find((candidate) => candidate.entryId === previousId);
+  const number = card ? stepNumbersOf(cards).get(card.id) : undefined;
+  if (!number) return null;
+
+  return {
+    entryId: previousId,
+    stepId: previous.stepId,
+    number,
+    title: previous.suggestedTitle,
+    reason,
+    budget: photoBudgetFor(text.trim().length),
+  };
+}
+
+/** MEMO a demandé les photos de ce récit, et aucune n'est venue. */
+async function photosAskedButMissing(
+  db: Db,
+  memoId: string,
+  entry: { id: string; stepId: string | null },
+): Promise<boolean> {
+  const asked = await db.chatMessage.findFirst({
+    where: { memoId, author: "memo", payload: { path: ["asksPhotosFor"], equals: entry.id } },
+    select: { id: true },
+  });
+  if (!asked) return false;
+  const [illustrated, inStep] = await Promise.all([
+    db.chatMessage.findFirst({
+      where: { memoId, kind: "photos", payload: { path: ["forEntryId"], equals: entry.id } },
+      select: { id: true },
+    }),
+    entry.stepId ? db.entry.count({ where: { stepId: entry.stepId, kind: "photo" } }) : 0,
+  ]);
+  return !illustrated && inStep === 0;
+}
+
+/** L'état de la conversation, avec le récit auquel MEMO vient de revenir. */
+function withClosingAsked(state: ConversationState, entryId: string | null): ConversationState {
+  if (!entryId || state.closingAskedFor.includes(entryId)) return state;
+  return { ...state, closingAskedFor: [...state.closingAskedFor, entryId] };
 }
 
 /**
@@ -562,15 +829,18 @@ async function acceptReply(
   context: AppContext,
   entryId: string | null,
   received: string,
+  isEarlierStep: boolean,
 ): Promise<ConversationReply> {
   const entry = entryId ? await context.prisma.entry.findUnique({ where: { id: entryId } }) : null;
   const validated = entry ? finalTextOf(entry) : null;
+  // Une étape d'avant, à laquelle MEMO est revenu : elle était déjà comptée.
+  const acknowledged = isEarlierStep ? ACKNOWLEDGED_EARLIER : ACKNOWLEDGED;
   if (!validated) {
-    return flowReply(composeBeats(received, [ACKNOWLEDGED]), [...SUGGESTION_SETS.afterAccept], "command", null);
+    return flowReply(composeBeats(received, [acknowledged]), [...SUGGESTION_SETS.afterAccept], "command", null);
   }
   const budget = photoBudgetFor(validated.trim().length);
   return flowReply(
-    composeBeats(received, [ACKNOWLEDGED, photosWanted(budget.photos, budget.pages)]),
+    composeBeats(received, [acknowledged, photosWanted(budget.photos, budget.pages)]),
     [
       ...SUGGESTION_SETS.askPhotos,
       ...(context.env.NODE_ENV === "production" ? [] : (["photos-sample"] as const)),
@@ -600,8 +870,10 @@ async function attachSamplePhotos(
     return;
   }
 
-  const current = await loadCurrentEntry(prisma, message.memoId, message.seq);
-  const count = photoBudgetFor((current?.text ?? "").trim().length).photos;
+  const targetId = await photosTargetEntryId(prisma, message.memoId);
+  const target = targetId ? await prisma.entry.findUnique({ where: { id: targetId } }) : null;
+  const current = target ? null : await loadCurrentEntry(prisma, message.memoId, message.seq);
+  const count = photoBudgetFor(((target ? finalTextOf(target) : current?.text) ?? "").trim().length).photos;
   const jpegs = await samplePhotoJpegs(count);
   const stored = await Promise.all(
     jpegs.map((jpeg, index) => storage.put("photo", `test-${index + 1}.jpg`, jpeg, "image/jpeg")),
@@ -638,7 +910,10 @@ async function attachSamplePhotos(
         entryId: entries[0]!.id,
         disposition: "memory",
         stepId: message.stepId,
-        payload: { entryIds: entries.map((entry) => entry.id) },
+        payload: {
+          entryIds: entries.map((entry) => entry.id),
+          ...(targetId ? { forEntryId: targetId } : {}),
+        },
       },
     });
     return photos.id;

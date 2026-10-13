@@ -66,7 +66,7 @@ async function readTrip(authorization: string, memoId: string): Promise<TripBody
 }
 
 describe("les étapes d'un voyage", () => {
-  it("naissent des souvenirs, une par lieu successif, avec leurs souvenirs (T227, T235)", async () => {
+  it("naissent des récits, un récit par étape — même deux fois au même endroit (Hugo, 12/10/2026)", async () => {
     const { authorization } = await registerAccount(harness.app);
     const memoId = await createTrip(authorization);
 
@@ -76,10 +76,34 @@ describe("les étapes d'un voyage", () => {
 
     const { steps, trip } = await readTrip(authorization, memoId);
     expect(steps.map((step) => [step.number, step.placeName, step.entryIds])).toEqual([
-      [1, "Rome", [colisee, trastevere]],
-      [2, "Florence", [duomo]],
+      [1, "Rome", [colisee]],
+      [2, "Rome", [trastevere]],
+      [3, "Florence", [duomo]],
     ]);
     expect(trip.progress?.memoryCount).toBe(3);
+
+    // La relance de l'accueil suit la dernière étape racontée.
+    const memo = await harness.prisma.memo.findUniqueOrThrow({ where: { id: memoId } });
+    expect(memo.prompt).toBe("Et après Florence, quelle est la suite ?");
+  });
+
+  it("partage une ancienne étape à deux récits : le premier la garde, l'autre en ouvre une", async () => {
+    const { authorization } = await registerAccount(harness.app);
+    const memoId = await createTrip(authorization);
+    const colisee = await tell(authorization, memoId, "Colisée, Rome", "2026-01-05T10:00:00.000Z");
+    const trastevere = await tell(authorization, memoId, "Trastevere, Rome", "2026-01-06T10:00:00.000Z");
+    const [first] = (await readTrip(authorization, memoId)).steps;
+    // L'ancien découpage par lieu : les deux récits dans une seule étape, validée.
+    await harness.prisma.entry.updateMany({ where: { id: { in: [colisee, trastevere] } }, data: { stepId: first!.id } });
+    await harness.prisma.memoStep.deleteMany({ where: { memoId, id: { not: first!.id } } });
+    await harness.prisma.memoStep.update({ where: { id: first!.id }, data: { validatedAt: new Date() } });
+
+    await refreshTripFacts(harness.prisma, memoId);
+    const { steps } = await readTrip(authorization, memoId);
+    expect(steps.map((step) => [step.id === first!.id, step.entryIds])).toEqual([
+      [true, [colisee]],
+      [false, [trastevere]],
+    ]);
   });
 
   it("disparaît quand la croix a effacé son dernier souvenir, et les chiffres reculent", async () => {
@@ -107,21 +131,37 @@ describe("les étapes d'un voyage", () => {
     expect(kept.validatedAt).not.toBeNull();
   });
 
-  it("garde un souvenir raconté depuis une étape sur cette étape-là", async () => {
+  it("range des photos sur l'étape choisie ou sur le récit qu'elles illustrent — jamais un récit", async () => {
     const { authorization, accountId } = await registerAccount(harness.app);
     const memoId = await createTrip(authorization);
-    await tell(authorization, memoId, "Colisée, Rome", "2026-01-05T10:00:00.000Z");
-    const later = await tell(authorization, memoId, "Duomo, Florence", "2026-01-08T10:00:00.000Z");
+    const colisee = await tell(authorization, memoId, "Colisée, Rome", "2026-01-05T10:00:00.000Z");
+    const duomo = await tell(authorization, memoId, "Duomo, Florence", "2026-01-08T10:00:00.000Z");
     const [rome] = (await readTrip(authorization, memoId)).steps;
 
-    // « Raconter » sur la carte de Rome : l'app a envoyé l'étape avec le message.
+    const photo = (capturedAt: string) =>
+      harness.prisma.entry.create({ data: { memoId, kind: "photo", status: "ready", capturedAt: new Date(capturedAt) } });
+    const chosen = await photo("2026-01-09T10:00:00.000Z");
+    const illustrating = await photo("2026-01-09T11:00:00.000Z");
+    const loose = await photo("2026-01-09T12:00:00.000Z");
+
+    // Envoyées depuis la carte de Rome ; puis pour le récit du Colisée ; puis sans rien.
     await harness.prisma.chatMessage.create({
-      data: { memoId, author: "traveller", kind: "text", accountId, entryId: later, stepId: rome!.id, seq: 1_000 },
+      data: { memoId, author: "traveller", kind: "photos", accountId, entryId: chosen.id, stepId: rome!.id, seq: 1_000, payload: { entryIds: [chosen.id] } },
+    });
+    await harness.prisma.chatMessage.create({
+      data: { memoId, author: "traveller", kind: "photos", accountId, entryId: illustrating.id, seq: 1_001, payload: { entryIds: [illustrating.id], forEntryId: colisee } },
+    });
+    // Un récit envoyé depuis la carte de Rome fait quand même sa propre étape.
+    await harness.prisma.chatMessage.create({
+      data: { memoId, author: "traveller", kind: "text", accountId, entryId: duomo, stepId: rome!.id, seq: 1_002 },
     });
     await refreshTripFacts(harness.prisma, memoId);
 
     const { steps } = await readTrip(authorization, memoId);
-    expect(steps.map((step) => [step.placeName, step.entryIds.length])).toEqual([["Rome", 2]]);
+    expect(steps.map((step) => step.entryIds)).toEqual([
+      [colisee, chosen.id, illustrating.id],
+      [duomo, loose.id],
+    ]);
   });
 });
 
