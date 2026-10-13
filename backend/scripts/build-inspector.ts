@@ -16,6 +16,13 @@ import { existsSync, readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { TEMPLATE_DIR, loadTemplateCss } from "../src/lib/templates.js";
+import {
+  COLLECTEUR_SOURCE,
+  RATIO_TOLERANCE,
+  etapesDe,
+  getPhotoRatio,
+  photosRequired,
+} from "../src/services/photoRatio.js";
 import { renderBookPdf, renderTemplateToHtml, type RenderProfile } from "../src/services/bookPdf.js";
 
 const OFFLINE_DIR = resolve(import.meta.dirname, "../test/fixtures/offline");
@@ -169,6 +176,57 @@ function describePages(payload: Record<string, unknown>): PageMeta[] {
 }
 
 /**
+ * Le bilan de ratio texte / photo d'une étape, pour le panneau de l'inspecteur.
+ *
+ * Le ratio **cible** et le nombre de photos **demandé** sortent du calcul
+ * (`photosRequired`) ; le ratio **mesuré** et le nombre **placé** sont relevés
+ * dans le navigateur, sur le rendu — c'est le seul moyen de savoir si le
+ * gabarit a tenu la cible. `pages` dit sur combien de feuilles l'étape court,
+ * et `premiere` à quelle page du carnet elle commence : c'est ce qui permet au
+ * panneau de mesurer les bons `.page--day`.
+ */
+interface RatioMeta {
+  etape: number;
+  titre: string;
+  premiere: number;
+  pages: number;
+  ratioCible: number;
+  photosDemandees: number;
+  depassementAssume: boolean;
+  raison: string;
+}
+
+/** Un bilan par étape du carnet affiché. */
+function describeRatios(payload: Record<string, unknown>): RatioMeta[] {
+  const days = (payload["days"] as Record<string, unknown>[] | undefined) ?? [];
+  const ratio = getPhotoRatio(null, payload);
+  const bilans: RatioMeta[] = [];
+  let curseur = 0;
+  for (const [index, etape] of etapesDe(days).entries()) {
+    const recit = etape
+      .map((jour) => (typeof jour["body_html"] === "string" ? jour["body_html"] : ""))
+      .join("");
+    const plan = photosRequired({ body_html: recit }, ratio, "a5", {
+      funFacts: etape.some((jour) => Array.isArray(jour["fun_facts"]) && jour["fun_facts"].length > 0),
+      decorations: Number(payload["decoration_quota"] ?? 2) > 0,
+      ouvreChapitre: Boolean(etape[0]?.["map"] ?? etape[0]?.["map_svg"]),
+    });
+    bilans.push({
+      etape: index + 1,
+      titre: text(etape[0]?.["title"], `Étape ${index + 1}`),
+      premiere: curseur,
+      pages: etape.length,
+      ratioCible: plan.ratioCible,
+      photosDemandees: plan.photos,
+      depassementAssume: plan.depassementAssume,
+      raison: plan.raison,
+    });
+    curseur += etape.length;
+  }
+  return bilans;
+}
+
+/**
  * Transporte le document du carnet jusqu'au navigateur.
  *
  * Le contenu d'un <script> n'est PAS décodé par le parseur HTML : y déposer du
@@ -221,6 +279,9 @@ ${loadTemplateCss()}
   const html = template
     .replace("__PARTS__", JSON.stringify(PARTS))
     .replace("__PAGES__", JSON.stringify(pages))
+    .replace("__RATIOS__", JSON.stringify(describeRatios(payload)))
+    .replace("__RATIO_TOLERANCE__", String(RATIO_TOLERANCE))
+    .replace("__COLLECTEUR__", COLLECTEUR_SOURCE)
     .replace("__PDFS__", asJsonPayload(JSON.stringify(pdfs)))
     .replace("__DOCUMENT__", asJsonPayload(document));
 

@@ -113,6 +113,18 @@ properties:
         description: >
           Réglage « Pointillés » de la personnalisation. `false` : pas de
           réglure sous le récit (`.mb-note__rules`). Absent : réglure.
+      photo_ratio:
+        type: integer
+        enum: [0, 25, 50, 75, 100]
+        default: 50
+        description: >
+          Réglage « Ratio photo / texte » de la personnalisation : la part de surface
+          qu'occupent les photos, mesurée sur l'ensemble des pages d'une étape
+          (cadres `mb-photo` / cadres + `mb-note`), à ±5 points. `0` : aucune photo
+          dans le carnet, la couverture garde la sienne. `100` : aucun récit imprimé —
+          bandeau, fun facts et légendes seulement. C'est le **nombre de photos et de
+          pages** qui s'adapte, jamais le texte du voyageur.
+          Calcul : `backend/src/services/photoRatio.ts`, repris tel quel par l'atelier.
       decoration_quota:
         type: integer
         minimum: 0
@@ -225,6 +237,26 @@ $defs:
           inclinés, tracé pointillé entre eux). Jamais de légende. Toujours **après**
           le récit de l'étape, jamais entre deux de ses pages (LAYOUT_KB § « Structure
           d'une étape »).
+      layout_photo_wall_intro:
+        type: boolean
+        description: >
+          La planche qui **ouvre** une étape à 100 % de photos : elle garde le bandeau
+          jour · lieu · date et la carte `fun_facts`, mais n'imprime aucun récit. Le
+          récit du voyageur sert de matière au fun fact ; il n'apparaît pas tel quel.
+      layout_story_full:
+        type: boolean
+        description: >
+          Récit pleine page, réglure jusqu'en bas, **aucune photo** : le palier 0 % du
+          ratio texte / photo. Plafonds : 1140 caractères sur une page à bandeau, 1640
+          sur une page de suite — le récit occupe la place que les photos auraient eue.
+          La carte `fun_facts` reste possible.
+      band_scale:
+        type: number
+        description: >
+          Échelle de la bande de photos de la page : 1 = la hauteur de conception du
+          gabarit, 0,78 le plancher, 1,27 le plafond. **Calculée, jamais choisie à la
+          main** (`backend/src/services/photoRatio.ts`) : c'est elle qui fait atteindre le
+          ratio texte / photo demandé par le voyageur sans jamais toucher à son texte.
       taille_texte:
         type: string
         enum: [serre, ample]

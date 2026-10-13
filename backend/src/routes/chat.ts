@@ -630,7 +630,11 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
       );
     }
     if (isAudio && files.length > 1) throw HttpError.badRequest("Un seul vocal par message.");
-    if (isImages && files.length > MAX_PHOTOS) throw HttpError.badRequest("Six photos au plus par message.");
+    // Le chiffre suit `photoBudget.ts` : une étape à 100 % de photos en demande
+    // plus que les six de l'ancienne table, et un message figé mentirait.
+    if (isImages && files.length > MAX_PHOTOS) {
+      throw HttpError.badRequest(`${MAX_PHOTOS} photos au plus par message.`);
+    }
 
     const rawCapturedAt = fieldOf(fields, "capturedAt");
     const capturedAt = rawCapturedAt ? new Date(rawCapturedAt) : now;

@@ -117,12 +117,23 @@ export const REVISION_UNHEARD =
 
 /**
  * Une fois le texte validé : le nombre **exact** de photos qui remplit l'étape,
- * calculé par `photoBudgetFor` sur le texte validé.
+ * calculé par `photoBudgetFor` sur le texte validé **et sur le ratio texte /
+ * photo réglé par le voyageur**.
+ *
+ * Le chiffre n'est pas une constante : il suit la longueur du récit et le
+ * réglage. À 0 %, il n'y a pas de photo à demander, et cette phrase ne part
+ * pas (`converse.ts`).
  */
 export function photosWanted(count: number, pages: number): string {
   const photos = count === 1 ? "une photo" : `${count} photos`;
-  const where = pages > 1 ? "ses deux pages" : "sa page";
-  return `Illustre ce souvenir avec ${photos} : c’est ce qu’il faut pour remplir ${where}.`;
+  return `Illustre ce souvenir avec ${photos} : c’est ce qu’il faut pour remplir ${sesPages(pages)}.`;
+}
+
+/** « sa page », « ses deux pages »… — une étape peut désormais en compter plus de deux. */
+function sesPages(pages: number): string {
+  if (pages <= 1) return "sa page";
+  const nombres = ["", "", "deux", "trois", "quatre", "cinq", "six"];
+  return `ses ${nombres[pages] ?? pages} pages`;
 }
 
 export const TRANSCRIPT_UNAVAILABLE =

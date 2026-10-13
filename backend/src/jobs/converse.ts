@@ -33,7 +33,7 @@ import {
   validationQuestionFor,
 } from "../services/conversationCopy.js";
 import { DAILY_CREDIT_CALL_TO_ACTION, DAILY_CREDIT_EXHAUSTED } from "../services/dailyCredit.js";
-import { photoBudgetFor } from "../services/photoBudget.js";
+import { photoBudgetFor, type PhotoBudgetSettings } from "../services/photoBudget.js";
 import { ensureRenderInProgress } from "../services/renderTrigger.js";
 import { samplePhotoJpegs } from "../services/samplePhotos.js";
 import { hasUnlimitedAccess } from "../services/subscriptions.js";
@@ -744,7 +744,7 @@ async function stepToClose(
     number,
     title: previous.suggestedTitle,
     reason,
-    budget: photoBudgetFor(text.trim().length),
+    budget: photoBudgetFor(text.trim(), await reglagesDuCarnet(context, memoId)),
   };
 }
 
@@ -821,6 +821,23 @@ async function hasReadyRender(context: AppContext, memoId: string): Promise<bool
 }
 
 /**
+ * Les réglages du carnet qui entrent dans le calcul du nombre de photos : le
+ * ratio texte / photo, les fun facts, les décorations. Lus au moment où la
+ * question se pose — le voyageur peut changer son ratio à tout moment, et
+ * l'étape suivante doit en tenir compte.
+ */
+async function reglagesDuCarnet(
+  context: AppContext,
+  memoId: string,
+): Promise<PhotoBudgetSettings> {
+  const memo = await context.prisma.memo.findUnique({
+    where: { id: memoId },
+    select: { photoTextRatio: true, funFactsEnabled: true, decorationQuota: true },
+  });
+  return memo ?? {};
+}
+
+/**
  * « Ça me convient » : c'est enregistré, et MEMO demande le nombre **exact**
  * de photos qui remplit l'étape, calculé sur le texte validé — la correction
  * à la main si elle existe, sinon le texte rédigé (`photoBudget.ts`).
@@ -835,10 +852,15 @@ async function acceptReply(
   const validated = entry ? finalTextOf(entry) : null;
   // Une étape d'avant, à laquelle MEMO est revenu : elle était déjà comptée.
   const acknowledged = isEarlierStep ? ACKNOWLEDGED_EARLIER : ACKNOWLEDGED;
-  if (!validated) {
+  if (!entry || !validated) {
     return flowReply(composeBeats(received, [acknowledged]), [...SUGGESTION_SETS.afterAccept], "command", null);
   }
-  const budget = photoBudgetFor(validated.trim().length);
+  const budget = photoBudgetFor(validated.trim(), await reglagesDuCarnet(context, entry.memoId));
+  // À 0 % de photos, le carnet n'en porte aucune : on ne réclame pas au
+  // voyageur des images que le gabarit jettera.
+  if (budget.photos === 0) {
+    return flowReply(composeBeats(received, [acknowledged]), [...SUGGESTION_SETS.afterAccept], "command", null);
+  }
   return flowReply(
     composeBeats(received, [acknowledged, photosWanted(budget.photos, budget.pages)]),
     [
@@ -873,7 +895,10 @@ async function attachSamplePhotos(
   const targetId = await photosTargetEntryId(prisma, message.memoId);
   const target = targetId ? await prisma.entry.findUnique({ where: { id: targetId } }) : null;
   const current = target ? null : await loadCurrentEntry(prisma, message.memoId, message.seq);
-  const count = photoBudgetFor(((target ? finalTextOf(target) : current?.text) ?? "").trim().length).photos;
+  const count = photoBudgetFor(
+    ((target ? finalTextOf(target) : current?.text) ?? "").trim(),
+    await reglagesDuCarnet(context, message.memoId),
+  ).photos;
   const jpegs = await samplePhotoJpegs(count);
   const stored = await Promise.all(
     jpegs.map((jpeg, index) => storage.put("photo", `test-${index + 1}.jpg`, jpeg, "image/jpeg")),

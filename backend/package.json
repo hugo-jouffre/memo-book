@@ -33,6 +33,7 @@
     "render:offline": "tsx scripts/render-local.ts --offline --png",
     "render:watch": "tsx scripts/render-local.ts --watch --png",
     "template:lint": "tsx scripts/lint-template.ts",
+    "ratio:build": "tsx scripts/build-ratio-photos.ts",
     "conversation:eval": "tsx --env-file-if-exists=.env scripts/conversation-eval.ts",
     "redaction:eval": "tsx --env-file-if-exists=.env scripts/redaction-eval.ts",
     "emails:assets": "tsx scripts/publish-email-assets.ts",

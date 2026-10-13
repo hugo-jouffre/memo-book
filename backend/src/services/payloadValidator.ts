@@ -98,12 +98,22 @@ export const EDITORIAL_LIMITS = {
 // moins. Le récit qui contourne une grande photo n'en perd pas.
 export const LAYOUT_CAPACITY: Readonly<Record<string, { bandeau: number; suite: number }>> = {
   layout_photo_page: { bandeau: 0, suite: 0 },
+  // La planche qui ouvre une étape à 100 % de photos : bandeau, fun fact et
+  // légendes, aucun récit imprimé.
+  layout_photo_wall_intro: { bandeau: 0, suite: 0 },
   layout_hero_top: { bandeau: 380, suite: 660 },
   layout_chapter_map: { bandeau: 500, suite: 830 },
   layout_split_left: { bandeau: 540, suite: 860 },
   layout_collage: { bandeau: 540, suite: 860 },
   layout_story_opener: { bandeau: 540, suite: 860 },
   layout_story_facts: { bandeau: 540, suite: 860 },
+  // Palier 0 % du ratio texte / photo : aucune photo, le récit prend la feuille
+  // entière et la réglure descend jusqu'en bas. C'est la seule configuration où
+  // `mb-note` occupe toute la page — d'où des plafonds sans rapport avec les
+  // autres. Calculés sur le budget de lignes : 26 lignes sur une page à
+  // bandeau, 34 sur une page de suite, à 57 signes la ligne depuis les marges
+  // de reliure, moins les lignes vides entre paragraphes.
+  layout_story_full: { bandeau: 1140, suite: 1640 },
   // Pages de suite seulement : sous un bandeau, les trois photos n'ont plus
   // leur hauteur (mesuré le 08/10/2026 : 440 signes en deux paragraphes ;
   // 410 avec les marges de reliure).
@@ -136,6 +146,22 @@ const DEFAULT_CAPACITY = { bandeau: 540, suite: 860 } as const;
 export const PARAGRAPHS_PER_PAGE = { bandeau: 2, suite: 4 } as const;
 
 /**
+ * Le même plafond, quand un layout n'a pas la géométrie du cas général.
+ *
+ * `layout_story_full` (palier 0 % du ratio texte / photo) n'a ni zone flottante
+ * ni bande de photos : le récit occupe la feuille, et la réglure descend
+ * jusqu'en bas. Son budget n'est donc pas 2 paragraphes mais le nombre de
+ * lignes de la page — 26 sur une page à bandeau, 34 sur une page de suite, à
+ * 15,6 pt l'interligne. À sa capacité en caractères (1180 / 1700), cinq
+ * paragraphes tiennent et le sixième pousse le contenu sous la marge.
+ */
+export const LAYOUT_PARAGRAPHS: Readonly<
+  Record<string, { bandeau: number; suite: number }>
+> = {
+  layout_story_full: { bandeau: 5, suite: 5 },
+};
+
+/**
  * Layouts qui restent beaux sous le minimum de S : la grande photo ou la carte
  * tiennent la hauteur à eux seuls, un récit court n'y creuse pas de trou.
  * Vérifié à l'œil sur le rendu, pas seulement au décamètre.
@@ -144,7 +170,12 @@ export const PARAGRAPHS_PER_PAGE = { bandeau: 2, suite: 4 } as const;
  * `layout_hero_top` sans photo, c'est le layout par défaut avec un trou en
  * plus — d'où le prédicat `portéeParImage` plutôt qu'une simple appartenance.
  */
-export const SUB_S_LAYOUTS = ["layout_hero_top", "layout_chapter_map", "layout_photo_page"] as const;
+export const SUB_S_LAYOUTS = [
+  "layout_hero_top",
+  "layout_chapter_map",
+  "layout_photo_page",
+  "layout_photo_wall_intro",
+] as const;
 
 /**
  * Les deux messages que l'app affiche pendant que l'utilisateur écrit. Ils
@@ -160,6 +191,16 @@ export const LENGTH_HINTS = {
     "soit deux pages de carnet. Coupe-le en deux étapes, chacune aura les siennes.",
 } as const;
 
+/**
+ * Les layouts qui n'impriment aucun récit : les deux planches du palier 100 %
+ * du ratio texte / photo. Leur texte ne compte ni dans la longueur de l'étape,
+ * ni dans son nombre de pages de récit.
+ */
+export const PHOTO_WALL_LAYOUTS = ["layout_photo_page", "layout_photo_wall_intro"] as const;
+
+/** Les layouts qui calent une bande de photos en bas de page. */
+export const GALLERY_LAYOUTS = ["layout_collage", "layout_split_left"] as const;
+
 /** La page tient-elle debout toute seule, sans récit pour la remplir ? */
 export function carriedByImage(day: Record<string, unknown>): boolean {
   const photos = Array.isArray(day["photos"]) ? day["photos"].length : 0;
@@ -168,8 +209,17 @@ export function carriedByImage(day: Record<string, unknown>): boolean {
     .map(([key]) => key)[0];
 
   if (layout === "layout_photo_page") return photos >= 1;
+  if (layout === "layout_photo_wall_intro") return photos >= 1;
   if (layout === "layout_hero_top") return photos >= 1;
   if (layout === "layout_chapter_map") return Boolean(day["map"] ?? day["map_svg"]);
+  // Une bande de photos **à sa hauteur de conception ou au-dessus** tient la
+  // page elle aussi : 260 pt de photos sur 535, c'est la moitié de la feuille.
+  // C'est le cas d'un souvenir court à ratio élevé — le module de ratio a
+  // délibérément haussé la bande pour occuper le blanc (`band_scale`), et
+  // refuser la page ici reviendrait à refuser ce qu'on vient de composer.
+  if (GALLERY_LAYOUTS.includes(layout as (typeof GALLERY_LAYOUTS)[number])) {
+    return photos >= 2 && Number(day["band_scale"] ?? 1) >= 1;
+  }
   return false;
 }
 
@@ -319,7 +369,9 @@ function fallbackLayout(chars: number, day: Record<string, unknown>): string {
     return day["map"] ? "layout_chapter_map" : "layout_hero_top";
   }
   const candidat = Object.entries(LAYOUT_CAPACITY).find(
-    ([flag, capacity]) => flag !== "layout_photo_page" && capacity.bandeau >= chars,
+    ([flag, capacity]) =>
+      !PHOTO_WALL_LAYOUTS.includes(flag as (typeof PHOTO_WALL_LAYOUTS)[number]) &&
+      capacity.bandeau >= chars,
   );
   // Au-delà de la plus grande capacité d'une page, aucun layout ne sauve
   // l'étape : c'est le découpage qui doit changer, pas le drapeau.
@@ -335,9 +387,11 @@ function checkStep(
   errors: ValidationIssue[],
   warnings: ValidationIssue[],
 ): void {
-  // `layout_photo_page` ne rend pas de récit : ces pages ne comptent ni dans la
+  // Les planches ne rendent pas de récit : ces pages ne comptent ni dans la
   // longueur de l'étape, ni dans son nombre de pages.
-  const recit = step.days.filter((day) => mainLayout(day) !== "layout_photo_page");
+  const recit = step.days.filter(
+    (day) => !PHOTO_WALL_LAYOUTS.includes(mainLayout(day) as (typeof PHOTO_WALL_LAYOUTS)[number]),
+  );
   const chars = recit.reduce((total, day) => total + bodyLength(day), 0);
   const at = `days[${step.start}]`;
 
@@ -372,12 +426,12 @@ function checkStep(
     const capacity = pageCapacity(day);
     const layout = mainLayout(day);
 
-    if (layout === "layout_photo_page") {
+    if (PHOTO_WALL_LAYOUTS.includes(layout as (typeof PHOTO_WALL_LAYOUTS)[number])) {
       if (longueur > 0) {
         warnings.push({
           path: `days[${index}].body_html`,
           message:
-            `${longueur} caractères sur un \`layout_photo_page\`, qui ne rend aucun récit — ` +
+            `${longueur} caractères sur un \`${layout}\`, qui ne rend aucun récit — ` +
             "le texte serait perdu. Déplace-le sur la page précédente ou change de layout.",
         });
       }
@@ -386,9 +440,10 @@ function checkStep(
 
     const body = day["body_html"];
     const paragraphes = typeof body === "string" ? splitParagraphs(body).length : 0;
+    const tableParagraphes = LAYOUT_PARAGRAPHS[layout] ?? PARAGRAPHS_PER_PAGE;
     const plafondParagraphes = day["day_intro"]
-      ? PARAGRAPHS_PER_PAGE.bandeau
-      : PARAGRAPHS_PER_PAGE.suite;
+      ? tableParagraphes.bandeau
+      : tableParagraphes.suite;
 
     if (paragraphes > plafondParagraphes) {
       errors.push({
