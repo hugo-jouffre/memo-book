@@ -131,3 +131,48 @@ describe("gabarit — fond perdu de la version imprimeur", () => {
     }
   }, 60_000);
 });
+
+describe("gabarit — retouches du 13/10/2026", () => {
+  /** Le corps seul : la feuille de style, en tête, nomme toutes les classes. */
+  const html = (days: Record<string, unknown>[]) => {
+    const rendu = renderTemplateToHtml({ payload: { book_title: "Carnet", sans_couvertures: true, pages_libres_avant: 0, days }, profile: "print" });
+    return rendu.slice(rendu.indexOf("<body"));
+  };
+  const photos = (n: number) => Array.from({ length: n }, (_, i) => `https://exemple.test/${i}.jpg`);
+  const planche = (extra: Record<string, unknown>) => ({ title: "", body_html: "", layout_photo_page: true, ...extra });
+
+  it("entoure chaque photo d'un contour dessiné, sauf la pleine page", () => {
+    const rendu = html([jour("01"), planche({ photos: photos(3) })]);
+    const cadres = rendu.match(/class="mb-photo__cadre mb-photo__cadre--[abc]"/g) ?? [];
+    const photosRendues = rendu.match(/<div class="mb-photo mb-photo--/g) ?? [];
+    expect(cadres.length).toBe(photosRendues.length);
+    expect(cadres.length).toBe(4);
+    const pleine = html([planche({ photos: photos(1), pleine_page: true })]);
+    expect(pleine).toContain("mb-photo--pleine-page");
+    expect(pleine).not.toContain('class="mb-photo__cadre');
+  });
+
+  it("donne au contour d'une photo réduite la taille du tirage", () => {
+    const rendu = html([planche({ photos: [{ url: photos(1)[0], fit: "contain", tirage: [100, 62] }, ...photos(2)] })]);
+    expect(rendu).toMatch(/<span class="mb-photo__tirage" style="width: 100%; height: 62%"><img[^>]*\/><svg class="mb-photo__cadre/);
+  });
+
+  it("rend la planche de cinq photos en colonnes quand on la demande", () => {
+    const colonnes = html([planche({ photos: photos(5), planche_colonnes: true })]);
+    expect(colonnes).toContain("mb-photowall--colonnes");
+    expect(colonnes.match(/mb-photo--colonne-[ab]/g)).toHaveLength(5);
+    const rangees = html([planche({ photos: photos(5) })]);
+    expect(rangees).not.toContain("mb-photowall--colonnes");
+  });
+
+  it("pose une photo seule au-dessus de la carte de chapitre, deux en bande", () => {
+    const chapitre = (n: number) =>
+      html([{ ...jour("01"), layout_story_opener: false, layout_chapter_map: true, map_svg: "data:image/svg+xml;base64,", photos: photos(n) }]);
+    const une = chapitre(1);
+    expect(une).toMatch(/class="mb-chapter__aside">\s*<div class="mb-photo mb-photo--chapitre/);
+    expect(une).not.toContain('class="mb-gallery"');
+    const deux = chapitre(2);
+    expect(deux).not.toContain("mb-photo--chapitre");
+    expect(deux).toContain('class="mb-gallery"');
+  });
+});

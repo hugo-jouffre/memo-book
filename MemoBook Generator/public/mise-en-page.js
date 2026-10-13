@@ -232,33 +232,37 @@
   /**
    * Le format (largeur / hauteur) de chaque emplacement photo, gabarit par
    * gabarit, dans l'ordre où le gabarit lit `photos[]`. Mesuré sur le rendu de
-   * `templates/travel-journal/index.html`, image seule, sans le cadre blanc —
-   * à remesurer si la géométrie d'un gabarit change (LAYOUT_KB § « Rognage des
-   * photos »).
+   * `templates/travel-journal/index.html` : l'image remplit son emplacement,
+   * le contour dessiné déborde autour sans compter (13/10/2026) — à remesurer
+   * si la géométrie d'un gabarit change (LAYOUT_KB § « Rognage des photos »).
    */
   const FORMATS_EMPLACEMENTS = {
-    layout_chapter_map: { 2: [0.93, 0.93] },
+    // Une photo au-dessus de la carte, ou deux en bande sous un récit court.
+    layout_chapter_map: { 1: [0.69], 2: [0.89, 0.89] },
     layout_story_opener: { 1: [1.02] },
     layout_story_facts: { 1: [1.02] },
-    layout_hero_top: { 1: [1.35] },
-    layout_split_left: { 2: [0.9, 0.9] },
-    layout_collage: { 2: [0.9, 0.9], 3: [0.56, 0.56, 0.56] },
+    layout_hero_top: { 1: [1.31] },
+    layout_split_left: { 2: [0.86, 0.86] },
+    layout_collage: { 2: [0.86, 0.86], 3: [0.55, 0.55, 0.55] },
     // En haut, puis en bas à gauche et à droite (l'ordre de `photos[]`).
-    layout_trio_portrait: { 3: [0.6, 0.69, 0.65] },
-    layout_trio_landscape: { 3: [1.6, 0.64, 0.64] },
+    layout_trio_portrait: { 3: [0.6, 0.68, 0.64] },
+    layout_trio_landscape: { 3: [1.52, 0.64, 0.64] },
     layout_recit_photo: { 1: [0.51] },
     // Une seule photo en largeur sur la page d'album.
-    album_paysage: { 1: [1.39] },
+    album_paysage: { 1: [1.38] },
     // La photo en pleine page, bord à bord : le format de la page.
     pleine_page: { 1: [420 / 595] },
     layout_photo_page: {
       // Une ou deux photos : la page d'album de fin d'étape.
-      1: [0.84],
+      1: [0.85],
       2: [0.96, 0.96],
-      3: [0.73, 0.45, 1.65],
-      4: [0.73, 0.45, 0.62, 0.99],
-      5: [1.76, 1.44, 0.9, 0.9, 1.44],
+      3: [0.71, 0.44, 1.59],
+      4: [0.71, 0.44, 0.6, 0.95],
+      5: [1.72, 1.38, 0.87, 0.87, 1.38],
     },
+    // Cinq photos en deux colonnes décalées : deux portraits à gauche, puis
+    // trois tirages à droite, celui du milieu plus étroit.
+    planche_colonnes: { 5: [0.77, 0.77, 0.94, 0.77, 0.94] },
   };
 
   /**
@@ -299,6 +303,15 @@
    *    emplacement garde le haut de l'image (`focus` à 30 %) : c'est là que sont
    *    les visages, sur la plupart des photos prises à hauteur d'homme.
    */
+  /**
+   * La place d'une photo réduite dans son emplacement, en pourcentages de
+   * largeur et de hauteur : c'est le tirage qui porte le contour dessiné, pour
+   * qu'il épouse l'image et non l'emplacement vide autour d'elle.
+   */
+  function tirageReduit(format, cadre) {
+    return format > cadre ? [100, Math.round((cadre / format) * 100)] : [Math.round((format / cadre) * 100), 100];
+  }
+
   function placerPhotos(layout, photos) {
     const formats = FORMATS_EMPLACEMENTS[layout]?.[photos.length];
     const cout = (ordre) =>
@@ -310,7 +323,9 @@
 
     return ordre.map((photo, i) => {
       const cadre = formats?.[i];
-      if (photo.groupe || rognage(photo.format, cadre) > MAX_ROGNAGE) return { url: photo.src, fit: "contain" };
+      if (photo.groupe || rognage(photo.format, cadre) > MAX_ROGNAGE) {
+        return { url: photo.src, fit: "contain", ...(photo.format && cadre ? { tirage: tirageReduit(photo.format, cadre) } : {}) };
+      }
       if (photo.format && cadre && photo.format < cadre) return { url: photo.src, focus: "50% 30%" };
       return photo.src;
     });
@@ -651,13 +666,13 @@
    * 2. **Les photos d'une même scène restent ensemble** (même arrière-plan,
    *    même libellé `scene`) : le groupe vise la page que vise la majorité de
    *    ses photos, et il ne se coupe que s'il dépasse ce qu'une page porte.
-   * 3. La page `p` porte au plus `caps[p]` photos ; l'ouverture de chapitre à
-   *    deux photos (`chapitreDeux`), 0 ou 2 — son gabarit n'en montre pas une
-   *    seule.
+   * 3. La page `p` porte au plus `caps[p]` photos. L'ouverture de chapitre en
+   *    porte une au-dessus de sa carte, ou deux en bande sous un récit court
+   *    (`chapitreDeux`).
    * 4. Le surplus d'une page va sur la page de récit la plus proche qui a de la
    *    place, puis en fin d'étape. Chaque liste garde l'ordre du voyage.
    */
-  function affecterPhotos({ pages, paragraphes, photos, caps, chapitreDeux = false }) {
+  function affecterPhotos({ pages, paragraphes, photos, caps }) {
     const n = pages.length;
     const cap = caps;
     const pageDuParagraphe = pageDeChaqueParagraphe(paragraphes, pages);
@@ -688,12 +703,8 @@
       const place = Math.max(0, cap[g.cible] - poses[g.cible].length);
       g.membres.forEach((r, k) => (k < place ? poses[g.cible] : surplus[g.cible]).push(r));
     }
-    // L'ouverture de chapitre montre 0 ou 2 photos, jamais une seule.
-    if (chapitreDeux && poses[0].length === 1) surplus[0].unshift(poses[0].pop());
-
     const distance = (a, b) => Math.abs(a - b) + (a < b ? 0.5 : 0); // à égalité, après plutôt qu'avant
-    const peutRecevoir = (q) =>
-      poses[q].length < cap[q] && !(q === 0 && chapitreDeux && poses[0].length === 0);
+    const peutRecevoir = (q) => poses[q].length < cap[q];
 
     // Le surplus va d'abord sur les pages de récit qui ont de la place, la
     // plus proche du passage d'abord ; le reste, en fin d'étape.
@@ -705,8 +716,6 @@
         else poses[q].push(r);
       }
     });
-    if (chapitreDeux && poses[0].length === 1) fin.push(poses[0].pop());
-
     const ordre = (liste) => [...liste].sort((a, b) => a - b).map((r) => photos[r]);
     return { recit: poses.map(ordre), fin: ordre(fin) };
   }
@@ -934,54 +943,65 @@
     for (const d of liste) {
       const k = d.pages.length;
       const chapitreDeux = chapitre && signes(d.pages[0]) <= CAPACITE_CHAPITRE.deuxPhotos && N >= 2;
-      const base = d.pages.map((_, i) => (i === 0 && chapitre ? (chapitreDeux ? 2 : 0) : maxParPage));
+      const base = d.pages.map((_, i) => (i === 0 && chapitre ? (chapitreDeux ? 2 : 1) : maxParPage));
       const capTotal = base.reduce((a, b) => a + b, 0);
       for (let garde = Math.min(N, capTotal); garde >= 0; garde -= 1) {
         // Toute la place quand les pages de récit gardent tout ce qu'elles
         // peuvent ; sinon on en retire une à une à la page qui en a le plus
         // (la plus loin à égalité), pour qu'aucune ne reste sans photo avant
-        // les autres. Le chapitre passe de 2 à 0, jamais à 1, et en dernier.
+        // les autres. La page de chapitre cède en dernier : sa carte tient la
+        // page sans photo.
         const caps = [...base];
         let exces = garde === Math.min(N, capTotal) ? 0 : capTotal - garde;
         while (exces > 0) {
           let i = -1;
           caps.forEach((c, j) => {
-            if (j === 0 && chapitreDeux) return;
+            if (j === 0 && chapitre) return;
             if (c > 0 && (i < 0 || c >= caps[i])) i = j;
           });
-          if (i < 0) {
-            if (chapitreDeux && caps[0] === 2 && exces >= 2) {
-              caps[0] = 0;
-              exces -= 2;
-            }
-            break;
-          }
+          if (i < 0 && chapitre && caps[0] > 0) i = 0;
+          if (i < 0) break;
           caps[i] -= 1;
           exces -= 1;
         }
-        const r = affecterPhotos({ pages: d.pages, paragraphes, photos, caps, chapitreDeux });
-        const signature = `${k}|${r.recit.map((l) => l.map((p) => p.id).join(",")).join(";")}`;
-        if (vus.has(signature)) continue;
-        vus.add(signature);
-        const qMin = Math.ceil(r.fin.length / MAX_PAGE_PHOTOS);
-        for (let q = qMin; q <= Math.min(r.fin.length, qMin + 1); q += 1) {
-          const tailles = partsEgales(r.fin.length, q);
-          const sansPhoto = N ? r.recit.filter((l, i) => !l.length && !(i === 0 && chapitre)).length : 0;
-          const cout =
-            sansPhoto * 15 +
-            tailles.reduce((c, t) => c + (t === 1 ? 8 : t === 2 ? 4 : 0), 0) +
-            (d.plus && T > 1 ? ETIRER : 0);
-          candidats.push({
-            pages: d.pages,
-            recit: r.recit,
-            fin: r.fin,
-            tailles,
-            chapitreDeux,
-            total: k + q,
-            scenario: q > 0 ? "B" : "A",
-            cout,
-            ...(d.serre ? { serre: true } : {}),
-          });
+        const affectee = affecterPhotos({ pages: d.pages, paragraphes, photos, caps });
+        // Les photos suivent leur passage : un récit d'un seul paragraphe les
+        // envoie toutes après la page de chapitre, qui resterait sans la photo
+        // posée au-dessus de sa carte. Variante : la première photo de la page
+        // suivante y remonte.
+        const variantes = [affectee];
+        const suivante = affectee.recit.findIndex((l, i) => i > 0 && l.length >= 2);
+        if (chapitre && caps[0] > 0 && !affectee.recit[0].length && suivante > 0) {
+          const recit = affectee.recit.map((l) => [...l]);
+          recit[0].push(recit[suivante].shift());
+          variantes.push({ recit, fin: affectee.fin });
+        }
+        for (const r of variantes) {
+          const signature = `${k}|${r.recit.map((l) => l.map((p) => p.id).join(",")).join(";")}`;
+          if (vus.has(signature)) continue;
+          vus.add(signature);
+          const qMin = Math.ceil(r.fin.length / MAX_PAGE_PHOTOS);
+          for (let q = qMin; q <= Math.min(r.fin.length, qMin + 1); q += 1) {
+            const tailles = partsEgales(r.fin.length, q);
+            // La page de chapitre compte comme les autres : depuis le 13/10/2026
+            // elle porte une photo au-dessus de sa carte.
+            const sansPhoto = N ? r.recit.filter((l) => !l.length).length : 0;
+            const cout =
+              sansPhoto * 15 +
+              tailles.reduce((c, t) => c + (t === 1 ? 8 : t === 2 ? 4 : 0), 0) +
+              (d.plus && T > 1 ? ETIRER : 0);
+            candidats.push({
+              pages: d.pages,
+              recit: r.recit,
+              fin: r.fin,
+              tailles,
+              chapitreDeux,
+              total: k + q,
+              scenario: q > 0 ? "B" : "A",
+              cout,
+              ...(d.serre ? { serre: true } : {}),
+            });
+          }
         }
       }
     }
@@ -1070,7 +1090,7 @@
    * largeur, deux photos dessous).
    */
   function composition(plan) {
-    if (plan.genre === "planche") return "planche";
+    if (plan.genre === "planche") return plan.colonnes ? "planche+colonnes" : "planche";
     // Un encart change la page : la carte info se voit avant le texte.
     const encart = plan.encart ? "+encart" : "";
     if (plan.layout === "layout_chapter_map") return `carte${encart}`;
@@ -1491,6 +1511,10 @@
     // photo en pleine page.
     let numeroChapitre = 0;
     const pleinesPages = new Set();
+    // Les planches de cinq photos alternent entre les rangées et les deux
+    // colonnes décalées (maquette du 13/10/2026), en commençant par les
+    // colonnes.
+    let planchesDeCinq = 0;
 
     etapes.forEach((etape, index) => {
       const analysePhotos = new Map((etape.analyse?.photos || []).map((ph) => [String(ph.id), ph]));
@@ -1652,6 +1676,7 @@
           plan.pleinePage = true;
           pleinesPages.add(numeroChapitre);
         }
+        if (liste.length === 5 && planchesDeCinq++ % 2 === 0) plan.colonnes = true;
         return plan;
       };
 
@@ -1664,7 +1689,7 @@
           texte,
           photos: structure.recit[p],
           paragraphes: paragraphesDeLaPage[p],
-          capPhotos: p === 0 && chapitre ? (structure.chapitreDeux ? 2 : 0) : maxParPage,
+          capPhotos: p === 0 && chapitre ? (structure.chapitreDeux ? 2 : 1) : maxParPage,
           ouvreLeCarnet: index === 0 && p === 0,
           bandeau: p === 0 ? etape : null,
           carte: p === 0 && chapitre ? carte : "",
@@ -1709,13 +1734,20 @@
       if (plan.genre === "planche") {
         // Une photo seule en largeur : l'emplacement de la page d'album se couche.
         const paysage = !plan.pleinePage && plan.photos.length === 1 && plan.photos[0].format > 1;
-        const gabarit = plan.pleinePage ? "pleine_page" : paysage ? "album_paysage" : "layout_photo_page";
+        const gabarit = plan.pleinePage
+          ? "pleine_page"
+          : paysage
+            ? "album_paysage"
+            : plan.colonnes
+              ? "planche_colonnes"
+              : "layout_photo_page";
         return {
           title: "",
           body_html: "",
           ...drapeaux("layout_photo_page"),
           ...(plan.pleinePage ? { pleine_page: true } : {}),
           ...(paysage ? { album_paysage: true } : {}),
+          ...(plan.colonnes ? { planche_colonnes: true } : {}),
           photos: habillerPhotos(plan, placerPhotos(gabarit, plan.photos), rangPage),
           fun_facts: [],
           sticker_groups: [],

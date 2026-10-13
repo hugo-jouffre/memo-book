@@ -87,8 +87,9 @@ const PARTS: Record<string, Part> = {
   "mb-card__title": { kind: "composant", name: "Bandeau de carte", role: "Fond menthe, contour plein puis liseré pointillé interne, pivoté de −1°.", fields: ["day.fun_facts_title"], vars: ["--mb-mint"] },
   "mb-card__body": { kind: "composant", name: "Texte de carte", role: "Playfair Display 12 pt. 140 caractères maximum, refusés au-delà par le validateur.", fields: ["day.fun_facts[0]"] },
   "mb-card__clip": { kind: "composant", name: "Pince", role: "Pince métallique posée sur le bord haut de la carte. SVG dessiné, pas une image." },
-  "mb-photo": { kind: "composant", name: "Photo scotchée", role: "Bord blanc, rotation légère, ombre portée. Recadrage en object-fit: cover, centré sur focus, jamais plus d'un tiers de l'image perdu.", fields: ["day.photos[]"], vars: ["--mb-photo-shadow"] },
-  "mb-photo--contain": { kind: "composant", name: "Photo réduite, non rognée", role: "Photo de groupe, ou rognage au-delà d'un tiers : réduite entière, cadre blanc ajusté à l'image, sans scotch.", fields: ["day.photos[].fit"] },
+  "mb-photo": { kind: "composant", name: "Photo scotchée", role: "Contour noir tracé à la main, tourné de 2° par rapport à la photo, rotation légère, scotch. Recadrage en object-fit: cover, centré sur focus, jamais plus d'un tiers de l'image perdu.", fields: ["day.photos[]"] },
+  "mb-photowall--colonnes": { kind: "composant", name: "Planche en colonnes", role: "Cinq photos en deux colonnes décalées, sans inclinaison : deux portraits à gauche, trois tirages à droite. Alterne avec la planche en rangées.", fields: ["day.planche_colonnes"] },
+  "mb-photo--contain": { kind: "composant", name: "Photo réduite, non rognée", role: "Photo de groupe, ou rognage au-delà d'un tiers : réduite entière, contour dessiné ajusté à l'image (`tirage`), sans scotch.", fields: ["day.photos[].fit"] },
   "mb-hero": { kind: "composant", name: "Photo héro", role: "Grande photo en tête de page, layout hero_top.", fields: ["day.photos[0]"] },
 
   // --- Couverture et dos ---------------------------------------------------

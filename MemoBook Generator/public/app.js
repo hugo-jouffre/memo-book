@@ -3608,11 +3608,29 @@ function rendreChampsCarnet() {
  * Le panneau « Personnalisation » : un réglage par ligne, comme l'écran de
  * l'app. Ceux que le carnet ne sait pas encore imprimer sont là, grisés et
  * marqués « À venir » — on voit ce qui existera sans croire l'avoir réglé.
+ *
+ * Il se replie (Hugo, 13/10/2026 : ouvert, il prenait presque tout l'écran) :
+ * fermé par défaut, sa ligne de titre résume les réglages en cours, et son
+ * état ouvert ou fermé est retenu comme celui des boîtes (`etat.boites`).
  */
+function resumePersonnalisation(c) {
+  return [
+    `${c.ratioPhotos ?? 50} % de photos`,
+    c.funFacts !== false ? "fun facts" : "sans fun facts",
+    c.reglure !== false ? "pointillés" : "sans pointillés",
+    (c.decorations ?? 2) ? `${c.decorations ?? 2} décor(s)` : "sans décor",
+    c.zonesLibres !== false ? "zones libres" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 function panneauPersonnalisation() {
   const c = etat.carnet;
+  let resume;
   const poser = (cle, conv = (v) => v) => (ev) => {
     c[cle] = conv(ev.target.type === "checkbox" ? ev.target.checked : ev.target.value);
+    resume.textContent = resumePersonnalisation(c);
   };
   const ligne = (libelle, controle, aide) =>
     h("div", { class: "perso-ligne" }, h("label", {}, libelle, " ", controle), aide ? h("p", { class: "aide" }, aide) : null);
@@ -3626,10 +3644,23 @@ function panneauPersonnalisation() {
   const options = (valeurs, actuelle, libelle = (v) => String(v)) =>
     valeurs.map((v) => h("option", { value: String(v), selected: String(actuelle) === String(v) }, libelle(v)));
 
+  resume = h("span", { class: "perso-resume" }, resumePersonnalisation(c));
   return h(
-    "fieldset",
-    { class: "perso", style: { gridColumn: "1 / -1" } },
-    h("legend", {}, "Personnalisation du carnet"),
+    "details",
+    {
+      class: "perso",
+      style: { gridColumn: "1 / -1" },
+      open: etat.boites.perso === true,
+      ontoggle: (ev) => {
+        etat.boites.perso = ev.target.open;
+        try {
+          localStorage.setItem("atelier-boites", JSON.stringify(etat.boites));
+        } catch {
+          /* pas grave : le panneau s'ouvrira fermé au prochain lancement */
+        }
+      },
+    },
+    h("summary", {}, h("span", { class: "perso-titre" }, "Personnalisation du carnet"), resume),
     ligne(
       "Typographies",
       h(

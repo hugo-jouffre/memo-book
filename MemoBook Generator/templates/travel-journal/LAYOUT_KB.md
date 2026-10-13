@@ -449,14 +449,14 @@ tranche : le premier actif l'emporte.
 
 | Drapeau | Rendu | Quand le choisir | Photos | Tailles |
 |---|---|---|---|---|
-| `layout_chapter_map` | Carte de la région à droite, récit et carte info à gauche, photos en bas | Ouverture d'un chapitre, **quand un lieu est nommé dans le récit** — voir la table plus haut | 0–2 | sous S à M, **selon la carte info et les photos** |
+| `layout_chapter_map` | Carte de la région à droite, récit et carte info à gauche ; une photo au-dessus de la carte, ou deux en bas sous un récit court | Ouverture d'un chapitre, **quand un lieu est nommé dans le récit** — voir la table plus haut | 0–2 | sous S à M, **selon la carte info et les photos** |
 | `layout_hero_top` | Grande photo en tête, récit dessous | Une photo iconique porte la journée | 1 | sous S, S |
 | `layout_split_left` | Carte info à gauche, récit en colonne à droite, puis deux photos en bas | Un fait à mettre en avant et deux belles images | 2 | S, M — **S seulement avec un fun fact** |
 | `layout_collage` | Récit pleine largeur puis 2 ou 3 photos inclinées en bas | Journée dense visuellement | 2–3 | S, M |
 | `layout_trio_portrait` | **Page de suite seulement.** Récit court en tête, réglure prolongée jusqu'aux photos, puis trois photos en cascade : une portrait en haut, deux portraits en bas qui la chevauchent à peine, tracé pointillé derrière | Fin d'étape courte avec trois photos en portrait | 3 | sous S, S partiel — **410 en 2 paragraphes** |
 | `layout_trio_landscape` | Le même, avec une **photo paysage en haut** (format 1,6) ; les deux du bas restent des portraits | Fin d'étape courte avec une paysage et deux portraits | 3 | idem |
 | `layout_recit_photo` | **Maquette faite à la main (Banaue).** Quelques lignes pleine largeur, puis le récit en colonne à gauche d'une grande photo en hauteur qui flotte à droite, inclinée, avec son **étiquette de titre** (`label`). Un fun fact devient un **post-it « Infos »** en bas à gauche | Une page à une photo en portrait (format < 0,77) — bandeau ou suite | 1 | S, M ; 800 en page de suite avec le post-it |
-| `layout_photo_page` | **Page de photos seules**, sans récit ni bandeau, **sans légende**. De 3 à 5, une planche bord à bord ; 1 ou 2, une page d'album (tirages inclinés, tracé pointillé). Avec `pleine_page`, une seule photo bord à bord, sans cadre | **Toujours en fin d'étape**, après le récit — voir § « Structure d'une étape » | 1–5 | aucune — le récit n'est pas rendu |
+| `layout_photo_page` | **Page de photos seules**, sans récit ni bandeau, **sans légende**. De 3 à 5, une planche bord à bord — à 5, en rangées ou en deux colonnes décalées (`planche_colonnes`), tour à tour ; 1 ou 2, une page d'album (tirages inclinés, tracé pointillé). Avec `pleine_page`, une seule photo bord à bord, sans cadre | **Toujours en fin d'étape**, après le récit — voir § « Structure d'une étape » | 1–5 | aucune — le récit n'est pas rendu |
 | `layout_photo_wall_intro` | **La planche qui ouvre une étape** : bandeau en tête, photos sur le reste de la feuille, carte fun fact. Pas de légende non plus | Première page d'une étape à 100 % de photos | 1–4 | aucune — le récit n'est pas rendu |
 | `layout_story_full` | Récit pleine page, réglure jusqu'en bas, **aucune photo** | Palier 0 % du ratio texte / photo | 0 | jusqu'à 1140 (bandeau) / 1640 (suite) |
 | *(par défaut)* | Récit, puis carte info et photo flottantes en bas de page | Ouverture de journée, cas le plus courant | 0–1 | S, M |
@@ -568,7 +568,7 @@ relancer le script.
 | `layout_recit_photo` | 560 (880 en page de suite) | S, M |
 | `layout_recit_photo` avec le post-it « Infos », page de suite | 800 | S, M |
 | `layout_trio_portrait`, `layout_trio_landscape` — page de suite seulement | 410, **2 paragraphes** | sous S, S partiel |
-| `layout_chapter_map` sans photos | 500 | S, M partiel |
+| `layout_chapter_map` sans photos, ou une photo au-dessus de la carte | 500 | S, M partiel |
 | `layout_story_*`, `layout_collage`, `layout_split_left` sans fun fact | 540 | S, M |
 | `layout_story_*` portant un `prompt` | 740 | S, M |
 | **page de suite** (sans `day_intro`), tout layout de récit | 860 | complète L et XL |
@@ -665,7 +665,7 @@ de mise en page, gabarit) :
 | Page de suite | **Rien** ne rappelle l'étape : le texte continue |
 | Corps et interligne | **Légèrement ajustables** (±1 pt) pour remplir une page — § « Corps ajusté d'un point » |
 | Étiquette de titre sur une photo | **Écrite par l'IA, une par double page au plus**, modifiable par le voyageur |
-| Habillage des photos | **Toujours** cadre blanc, inclinaison et scotch |
+| Habillage des photos | **Toujours** contour dessiné, inclinaison et scotch (le cadre blanc est remplacé par un contour noir le 13/10/2026) |
 | Légendes des pages de photos | **Jamais** |
 | Photo en pleine page | **De temps en temps** : une par chapitre au plus |
 | Stickers | **Bibliothèque dessinée**, liés au récit, selon le réglage « Décorations », 2 par double page au plus |
@@ -675,6 +675,22 @@ de mise en page, gabarit) :
 | Carte de chapitre | À chaque nouveau lieu |
 | Marges | **Plus large côté reliure** : 15 mm côté pli, 10 mm à l'extérieur — § « Format » |
 | Fin du carnet | **3 pages libres réglées** pour écrire (réglage « Zones libres », `pages_libres`) |
+
+### Retouches du 13/10/2026
+
+Hugo a relu son PDF (175d5716). Ce qui change, et où :
+
+| Sujet | Décision | Où |
+|---|---|---|
+| Page de garde | « …par une feuille blanche » descend dans le dernier tiers de la page, au-dessus des mentions | `.mb-colophon__closing` |
+| Ruban « jour » | **Plus court** (70 pt visibles au lieu de 88) et **#F7E5E1**. L'encombrement du bandeau, lui, ne change pas : les capacités de récit en dépendent | `.mb-ribbon__shape`, `--mb-ribbon-fill` |
+| Encarts lieu / date | Un **2ᵉ contour intérieur**, surlignage #FDE5D1 à 70 % | `.mb-field::after`, `--mb-field-highlight` |
+| Aplats colorés en version imprimeur | Le ruban et le surlignage **gardent leur couleur** : ce sont des choix de couleur, pas des fonds qui imitent le papier (règle des aplats, `style.css`) | — |
+| Cadre des photos | **Plus de passe-partout blanc** : un contour noir tracé à la main, tourné de 2° par rapport à la photo, qui déborde de 3,5 pt — § « L'habillage des photos » | `mb_cadre`, `.mb-photo__cadre` |
+| Texte et réglure | Le récit **se pose sur la ligne** : la réglure remonte de 0,185 em (~0,5 pt sous la ligne de base), l'interligne et les capacités ne changent pas | `--mb-rule-lift` |
+| Planche de cinq photos | Une **variante en deux colonnes décalées**, sans inclinaison, en alternance avec les rangées | `planche_colonnes` |
+| Carte de chapitre | **Une photo au-dessus de la carte** quand la page en porte une ; deux photos restent dans la bande du bas, sous un récit court | `.mb-chapter__aside` |
+| Pages de photos | Toujours **après** le récit de l'étape (déjà le cas depuis le 12/10) | § « Structure d'une étape » |
 
 ### Structure d'une étape
 
@@ -728,10 +744,19 @@ moins d'un tiers au format de la page et tient 200 dpi sur 154 × 216 mm
 perdu que Pumbo demande pour les pages intérieures.
 
 **L'habillage des photos : toujours tout** (Hugo, 12/10/2026). Chaque photo a
-son cadre blanc, son inclinaison et son scotch — les planches aussi, moins
-inclinées (±1,2°). L'atelier pose le coin du scotch tour à tour
-(`habillerPhotos`). Seules exceptions : la photo réduite sans être rognée
-(`contain`), dont le cadre épouse l'image, et la pleine page.
+son contour, son inclinaison et son scotch — les planches aussi, moins
+inclinées (±1,2°), sauf la planche en colonnes, droite. L'atelier pose le coin
+du scotch tour à tour (`habillerPhotos`). Seules exceptions : la photo réduite
+sans être rognée (`contain`), sans scotch, dont le contour épouse l'image
+(`tirage`), et la pleine page, sans rien.
+
+**Le contour** (13/10/2026, d'après le carnet de Maylis) : pas de passe-partout
+blanc, la photo remplit son emplacement ; un trait noir tracé à la main (trois
+tracés, `#mb-cadre-a|b|c`, choisis d'après l'URL) l'entoure à 3,5 pt, tourné de
+±2° par rapport à elle. Il ne prend aucune place : l'emplacement — et la
+surface que compte le ratio photo / texte — est celui de la photo seule. Entre
+deux photos d'une planche, 11 pt, et 14 pt dans une bande (où elles
+tournent davantage), pour que deux contours ne se croisent pas.
 
 **L'étiquette de titre : une par double page au plus**, sur la photo la mieux
 notée qui en a une. Celle que le voyageur écrit sous la photo dans l'atelier
@@ -1069,8 +1094,9 @@ Trois règles, appliquées dans cet ordre :
    cinq photos) et on garde celle dont le rognage total est le plus faible : la
    paysage dans l'emplacement large, la portrait dans la colonne.
 2. **Au-delà d'un tiers, on réduit au lieu de rogner** — `fit: "contain"`. La
-   photo entre entière dans son emplacement, et le cadre blanc l'épouse : c'est
-   un petit tirage, pas une image coupée. **Une photo de groupe n'est jamais
+   photo entre entière dans son emplacement, et le contour l'épouse (`tirage`,
+   la taille de l'image réduite en % de l'emplacement) : c'est un petit
+   tirage, pas une image coupée. **Une photo de groupe n'est jamais
    rognée**, quel que soit le rognage : elle passe toujours en `contain`.
 3. **Les visages restent dans le cadre.** Une photo plus haute que son
    emplacement est rognée en haut et en bas : on garde le haut (`focus`
@@ -1079,23 +1105,27 @@ Trois règles, appliquées dans cet ordre :
    le cadre doit contenir au moins chaque visage entier, et une photo dont les
    visages ne tiennent pas dans le cadre passe en `contain`.
 
-**Les formats des emplacements**, mesurés sur le rendu (image seule, sans le
-cadre blanc), dans l'ordre où le gabarit lit `photos[]` :
+**Les formats des emplacements**, mesurés sur le rendu (l'image remplit son
+emplacement, le contour déborde sans compter), dans l'ordre où le gabarit lit
+`photos[]` — remesurés le 13/10/2026 :
 
 | Layout | Photos | Formats |
 |---|---|---|
 | par défaut (photo flottante) | 1 | 1,02 |
-| `layout_hero_top` | 1 | 1,35 |
-| `layout_split_left`, `layout_collage` | 2 | 0,90 · 0,90 |
-| `layout_collage` | 3 | 0,56 · 0,56 · 0,56 |
+| `layout_hero_top` | 1 | 1,31 |
+| `layout_split_left`, `layout_collage` | 2 | 0,86 · 0,86 |
+| `layout_collage` | 3 | 0,55 · 0,55 · 0,55 |
 | `layout_recit_photo` | 1 | 0,51 |
-| `layout_photo_page` (page d'album) | 1 | 0,84 — 1,39 couchée pour une photo en largeur (`album_paysage`) |
+| `layout_chapter_map` | 1 | 0,69 — au-dessus de la carte |
+| `layout_chapter_map` | 2 | 0,89 · 0,89 — en bande |
+| `layout_photo_page` (page d'album) | 1 | 0,85 — 1,38 couchée pour une photo en largeur (`album_paysage`) |
 | `layout_photo_page` (page d'album) | 2 | 0,96 · 0,96 |
-| `layout_trio_portrait` | 3 | 0,60 (haut) · 0,69 · 0,65 |
-| `layout_trio_landscape` | 3 | 1,60 (haut) · 0,64 · 0,64 |
-| `layout_photo_page` | 3 | 0,73 · 0,45 · 1,65 |
-| `layout_photo_page` | 4 | 0,73 · 0,45 · 0,62 · 0,99 |
-| `layout_photo_page` | 5 | 1,76 · 1,44 · 0,90 · 0,90 · 1,44 |
+| `layout_trio_portrait` | 3 | 0,60 (haut) · 0,68 · 0,64 |
+| `layout_trio_landscape` | 3 | 1,52 (haut) · 0,64 · 0,64 |
+| `layout_photo_page` | 3 | 0,71 · 0,44 · 1,59 |
+| `layout_photo_page` | 4 | 0,71 · 0,44 · 0,60 · 0,95 |
+| `layout_photo_page` | 5 | 1,72 · 1,38 · 0,87 · 0,87 · 1,38 |
+| `layout_photo_page` + `planche_colonnes` | 5 | 0,77 · 0,77 (gauche) · 0,94 · 0,77 · 0,94 (droite) |
 
 Ils sont recopiés dans `FORMATS_EMPLACEMENTS` (atelier, `mise-en-page.js`) : **à
 remesurer si la géométrie d'un layout change**.

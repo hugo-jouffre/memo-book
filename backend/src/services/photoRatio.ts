@@ -23,7 +23,8 @@
  *
  * - **surface texte** : ce que `mb-note` occupe réellement, lignes × `--mb-line`
  *   × largeur de colonne ;
- * - **surface photo** : les cadres `mb-photo`, **bord blanc compris** ;
+ * - **surface photo** : les emplacements `mb-photo` (le contour dessiné,
+ *   qui déborde autour, ne compte pas) ;
  * - **exclus** : bandeau, titre, étiquette, météo, carte fun fact, carte de
  *   chapitre, décor. Ce sont des éléments fixes : les compter ferait varier le
  *   ratio sans qu'aucun réglage du voyageur n'ait changé.
@@ -127,9 +128,9 @@ export const A5: Format = {
   bandeau: 88,
   titre: 31.2,
   encart: 148 * 86,
-  gapGalerie: 10,
+  gapGalerie: 14,
   margeGaleriePleine: 14,
-  gapGaleriePleine: 5,
+  gapGaleriePleine: 11,
 };
 
 export const FORMATS: Readonly<Record<string, Format>> = { a5: A5 };
@@ -164,7 +165,7 @@ export function surfaceUtile(f: Format = A5): number {
  *   ses bornes. **C'est le seul réglage continu du système** : c'est lui qui
  *   permet d'atterrir dans la tolérance sans toucher au texte ni au nombre de
  *   photos. Les planchers viennent du CSS (`mb-gallery` jamais sous 160 pt) ;
- * - `surfacePhotos(n, hauteur, f)` : la surface des cadres, bord blanc compris ;
+ * - `surfacePhotos(n, hauteur, f)` : la surface des emplacements de photos ;
  * - `capacite` / `capaciteAvecEncart` : les plafonds de texte mesurés
  *   (`LAYOUT_CAPACITY`, `payloadValidator.ts`), **à la hauteur de bande de
  *   conception**. `bandeau` pour la première page d'une étape, `suite` pour les
@@ -198,6 +199,15 @@ export interface Gabarit {
 function galerie(n: number, hauteur: number, f: Format): number {
   if (n <= 0) return 0;
   return (f.colonnes.pleine - f.gapGalerie * (n - 1)) * hauteur;
+}
+
+/**
+ * Ouverture de chapitre : une photo seule se pose au-dessus de la carte, à
+ * taille fixe (136 × 196 pt, `.mb-photo--chapitre`) ; deux photos forment la
+ * bande du bas, comme une galerie.
+ */
+function chapitre(n: number, hauteur: number, f: Format): number {
+  return n === 1 ? 136 * 196 : galerie(n, hauteur, f);
 }
 
 /**
@@ -344,13 +354,14 @@ export const GABARITS: Readonly<Record<string, Gabarit>> = {
   },
 
   // Ouverture de chapitre : carte de la région à droite, récit en colonne
-  // étroite, photos en bas. La carte est un élément fixe, hors du ratio.
+  // étroite ; une photo au-dessus de la carte, ou deux en bas. La carte est un
+  // élément fixe, hors du ratio.
   layout_chapter_map: {
     colonne: "etroite",
     porteParImage: true,
     photos: { min: 0, max: 2 },
     bande: { hauteur: 206, min: 160, max: 206 },
-    surfacePhotos: galerie,
+    surfacePhotos: chapitre,
     capacite: { bandeau: 500, suite: 830 },
     capaciteAvecEncart: { bandeau: 110, suite: 300 },
     bandeau: true,
@@ -1266,7 +1277,7 @@ export interface Rect {
 }
 
 export interface MesureEtape {
-  /** Surface des cadres `mb-photo`, bord blanc compris. */
+  /** Surface des emplacements `mb-photo`. */
   surfacePhoto: number;
   /** Surface réellement occupée par les `mb-note`. */
   surfaceTexte: number;
