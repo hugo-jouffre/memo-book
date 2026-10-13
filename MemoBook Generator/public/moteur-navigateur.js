@@ -249,5 +249,17 @@
     return globalThis.extraireJson(brut);
   }
 
-  globalThis.MoteurNavigateur = { transcrire, decouper, analyser };
+  /** Une illustration de couverture, directement depuis la page (`genererImage`, `partage.js`). */
+  function image(corps) {
+    return globalThis.genererImage({
+      cle: (corps.cleOpenai || "").trim(),
+      base: BASE_OPENAI,
+      prompt: corps.prompt,
+      taille: corps.taille,
+      transparent: corps.transparent,
+      references: corps.references || [],
+    });
+  }
+
+  globalThis.MoteurNavigateur = { transcrire, decouper, analyser, image };
 })();

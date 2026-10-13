@@ -250,8 +250,54 @@ Réponds uniquement par un objet JSON, sans texte autour :
     return contenu;
   }
 
+  /** Une image en data URL, en Blob pour un envoi multipart. */
+  function dataUrlEnBlob(dataUrl) {
+    const [entete, base64] = String(dataUrl).split(",");
+    const type = (entete.match(/data:([^;]+)/) || [])[1] || "image/png";
+    const binaire = atob(base64 || "");
+    const octets = new Uint8Array(binaire.length);
+    for (let i = 0; i < binaire.length; i += 1) octets[i] = binaire.charCodeAt(i);
+    return new Blob([octets], { type });
+  }
+
+  /**
+   * Une illustration de couverture, générée par OpenAI (`gpt-image-1`, le
+   * modèle de `docs/sticker-generation.yaml`) — le même appel depuis le
+   * serveur local et depuis la page.
+   *
+   * `references` : des images (data URLs) que le modèle reçoit en entrée — la
+   * couverture de référence du style, pour en tenir le style, ou la silhouette
+   * d'un pays pour un tampon. Avec elles, l'appel passe par `images/edits`.
+   * `transparent` : un PNG sans fond, pour une image posée sur un aplat.
+   * Renvoie `{ data }`, l'image en data URL PNG.
+   */
+  async function genererImage({ cle, base = "https://api.openai.com/v1", prompt, taille = "1024x1536", transparent = false, qualite = "high", references = [] }) {
+    if (!cle) throw new Error("Aucune clé OpenAI");
+    const commun = { model: "gpt-image-1", prompt, size: taille, quality: qualite, ...(transparent ? { background: "transparent" } : {}) };
+    let reponse;
+    if (references.length) {
+      const formulaire = new FormData();
+      for (const [cle2, valeur] of Object.entries(commun)) formulaire.append(cle2, valeur);
+      references.forEach((r, i) => formulaire.append("image[]", dataUrlEnBlob(r.data || r), r.nom || `reference-${i + 1}.png`));
+      reponse = await fetch(`${base}/images/edits`, { method: "POST", headers: { authorization: `Bearer ${cle}` }, body: formulaire });
+    } else {
+      reponse = await fetch(`${base}/images/generations`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${cle}`, "content-type": "application/json" },
+        body: JSON.stringify({ ...commun, output_format: "png" }),
+      });
+    }
+    const donnees = await reponse.json().catch(() => ({}));
+    if (!reponse.ok) throw new Error(donnees?.error?.message || `OpenAI a refusé l'image (HTTP ${reponse.status})`);
+    const b64 = donnees?.data?.[0]?.b64_json;
+    if (!b64) throw new Error("OpenAI n'a renvoyé aucune image");
+    return { data: `data:image/png;base64,${b64}` };
+  }
+
   const api = {
     MAX_OCTETS,
+    dataUrlEnBlob,
+    genererImage,
     normaliserNomAudio,
     decouperTexteGroupe,
     construireTexteGroupe,

@@ -19,8 +19,10 @@
  * ses textes la police et la couleur du corps de texte de la quatrième — ou,
  * s'il n'y en a pas, de son titre.
  *
- * Les styles qui demandent des images générées (Assouline, Aquarelle, Travel
- * book, Photo-dessin) sont listés mais pas encore disponibles : `dispo: false`.
+ * Les styles Assouline, Aquarelle et Travel book font générer leurs
+ * illustrations (`imagesDuStyle`, OpenAI `gpt-image-1`, la couverture de
+ * référence du style en entrée) ; Photo-dessin fait tracer le contour des
+ * voyageurs sur la photo par un appel « vision » (`CONSIGNE_CONTOUR`).
  */
 (function (racine) {
   "use strict";
@@ -41,11 +43,11 @@
    */
   const STYLES = [
     { id: "default", nom: "Par défaut", ref: "par défaut", dispo: true },
-    { id: "watercolor", nom: "Aquarelle", ref: "aquarelle", dispo: false },
-    { id: "assouline", nom: "Assouline", ref: "assouline", dispo: false },
+    { id: "watercolor", nom: "Aquarelle", ref: "aquarelle", dispo: true },
+    { id: "assouline", nom: "Assouline", ref: "assouline", dispo: true },
     { id: "drawing", nom: "Dessin", ref: "dessin", dispo: true },
-    { id: "photo-drawing", nom: "Photo-dessin", ref: "photo-dessin", dispo: false },
-    { id: "travel-book", nom: "Travel book", ref: "travel book", dispo: false },
+    { id: "photo-drawing", nom: "Photo-dessin", ref: "photo-dessin", dispo: true },
+    { id: "travel-book", nom: "Travel book", ref: "travel book", dispo: true },
     { id: "elegant", nom: "Élégant", ref: "élégant", dispo: true },
   ].map((s) => ({ ...s, recto: reference("front", s.ref), verso: reference("back", s.ref) }));
 
@@ -63,6 +65,10 @@
     default: ["Playfair Display"],
     elegant: ["Cormorant Garamond", "Cormorant Infant"],
     drawing: [POLICE_TITRE_DESSIN, "Gloria Hallelujah"],
+    assouline: ["Black Han Sans", "Playfair Display"],
+    watercolor: ["Black Han Sans", "Manrope"],
+    "travel-book": ["Lilita One"],
+    "photo-drawing": ["Caveat Brush"],
   };
 
   /**
@@ -130,7 +136,48 @@
       { cle: "titreVerso", label: "Titre de la 4e", ia: true, max: 28, consigne: "le titre de la quatrième, une courte phrase qui dit que le voyage continue, 28 signes au plus, terminée par des points de suspension (« La route continue… »)" },
       { cle: "texteVerso", label: "Texte de la 4e", ia: false, lignes: true },
     ],
+    assouline: [
+      { cle: "titre", label: "Titre (1re)", ia: true, max: 16, consigne: "le titre de la première, en majuscules : la destination, en un ou deux mots (« PHILIPPINES »)" },
+      { cle: "annee", label: "Année (1re)", ia: false },
+      { cle: "titreVerso", label: "Titre de la 4e (les voyageurs)", ia: false },
+      {
+        cle: "resume",
+        label: "Texte de la 4e",
+        ia: true,
+        lignes: true,
+        max: 820,
+        consigne:
+          "le texte de la quatrième, à la première personne du pluriel, comme la préface du carnet : une courte accroche (« Notre aventure commence ici »), puis trois paragraphes, chacun séparé par une ligne vide, 820 signes en tout au plus — l'envie de partir, ce que fut le voyage (lieux, paysages), ce que garde le carnet ; mets en gras, entre **doubles astérisques**, trois ou quatre groupes de mots forts",
+      },
+    ],
+    watercolor: [
+      { cle: "titre", label: "Titre (1re)", ia: true, max: 16, consigne: "le titre de la première, en majuscules : la destination, en un ou deux mots (« ÉCOSSE »)" },
+      { cle: "date", label: "Date (4e)", ia: false },
+      {
+        cle: "resume",
+        label: "Les trois paragraphes de la 4e",
+        ia: true,
+        lignes: true,
+        max: 540,
+        consigne:
+          "les trois paragraphes de la quatrième, séparés par une ligne vide, 180 signes chacun au plus : trois moments marquants du voyage, dans l'ordre, chacun avec son lieu — une illustration accompagnera chacun",
+      },
+    ],
+    "travel-book": [
+      { cle: "titre", label: "Titre (1re)", ia: false },
+      { cle: "dates", label: "Dates (1re)", ia: false },
+      { cle: "voyageurs", label: "Voyageurs (1re)", ia: false },
+    ],
+    "photo-drawing": [
+      { cle: "titre", label: "Titre (1re)", ia: true, max: 14, consigne: "le titre de la première, en majuscules : le pays ou la région du voyage, en un mot si possible (« ISLANDE »)" },
+      { cle: "voyageurs", label: "Voyageurs (1re)", ia: false },
+      { cle: "annee", label: "Année (1re)", ia: false },
+      { cle: "texteVerso", label: "Texte de la 4e", ia: false },
+    ],
   };
+
+  /** Le texte fixe de la quatrième de Photo-dessin (Hugo, 09/10/2026), modifiable. */
+  const MERCI_PHOTO_DESSIN = "Merci d'avoir suivi mon aventure !";
 
   /** Les textes de chaque style quand rien n'est encore rédigé : tirés du carnet. */
   function textesParDefaut(styleId, voyage) {
@@ -155,6 +202,33 @@
           (base.voyageurs ? `Merci à ${base.voyageurs} de nous avoir emmenés avec eux.` : "Merci de nous avoir emmenés avec vous."),
         ...dos(base),
       };
+    }
+    if (styleId === "assouline") {
+      return {
+        titre: destination.toUpperCase(),
+        annee: annees(voyage.debut, voyage.fin),
+        titreVerso: (base.voyageurs || destination).toUpperCase(),
+        resume: `Un voyage ${destination ? `en **${destination}**` : ""} raconté au fil des étapes.\n\nUn carnet fait de paysages, de rencontres et de petits moments que l'on aurait aimé ne jamais oublier.`.replace("  ", " "),
+        ...dos(base),
+      };
+    }
+    if (styleId === "watercolor") {
+      return {
+        titre: destination.toUpperCase(),
+        date: base.dates.toUpperCase(),
+        resume: (voyage.etapes || [])
+          .slice(0, 3)
+          .map((e) => [e.titre, e.lieu].filter(Boolean).join(", "))
+          .filter(Boolean)
+          .join("\n\n"),
+        ...dos(base),
+      };
+    }
+    if (styleId === "travel-book") {
+      return { titre: destination, dates: base.dates, voyageurs: base.voyageurs, ...dos(base) };
+    }
+    if (styleId === "photo-drawing") {
+      return { titre: destination.toUpperCase(), voyageurs: base.voyageurs, annee: annees(voyage.debut, voyage.fin), texteVerso: MERCI_PHOTO_DESSIN, ...dos(base) };
     }
     return base;
   }
@@ -461,17 +535,512 @@ En français, sans emoji, sans guillemets autour des textes. Réponds uniquement
     return p.enveloppe(el, COULEURS_DESSIN());
   }
 
+  /* ------------------------------------------------------- les couleurs --- */
+
+  const versRvb = (hex) => {
+    const v = String(hex).replace("#", "");
+    return [0, 2, 4].map((i) => parseInt(v.slice(i, i + 2), 16) || 0);
+  };
+  const versHex = (rvb) => `#${rvb.map((c) => Math.max(0, Math.min(255, Math.round(c))).toString(16).padStart(2, "0")).join("")}`;
+
+  /** La luminance relative (WCAG 2) d'une couleur. */
+  function luminance(hex) {
+    const [r, g, b] = versRvb(hex).map((c) => {
+      const s = c / 255;
+      return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+
+  /** Le contraste (WCAG 2) entre deux couleurs : 1 à 21. */
+  function contraste(a, b) {
+    const [l1, l2] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (l1 + 0.05) / (l2 + 0.05);
+  }
+
+  /** Teinte (0–360), saturation et lumière (0–1). */
+  function tsl(hex) {
+    const [r, g, b] = versRvb(hex).map((c) => c / 255);
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const l = (max + min) / 2;
+    if (max === min) return [0, 0, l];
+    const d = max - min;
+    const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    const t = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return [t * 60, s, l];
+  }
+
+  function depuisTsl(t, s, l) {
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs(((t / 60) % 2) - 1));
+    const m = l - c / 2;
+    const [r, g, b] = t < 60 ? [c, x, 0] : t < 120 ? [x, c, 0] : t < 180 ? [0, c, x] : t < 240 ? [0, x, c] : t < 300 ? [x, 0, c] : [c, 0, x];
+    return versHex([(r + m) * 255, (g + m) * 255, (b + m) * 255]);
+  }
+
+  /** La même teinte, plus sombre, jusqu'à tenir `minimum` de contraste sur `fond`. */
+  function assombrirJusqua(hex, fond, minimum = 3) {
+    let [t, s, l] = tsl(hex);
+    let c = hex;
+    while (contraste(c, fond) < minimum && l > 0.08) {
+      l -= 0.04;
+      c = depuisTsl(t, s, l);
+    }
+    return c;
+  }
+
+  /**
+   * **Assouline** : le fond « qui s'accorde le mieux » avec l'illustration,
+   * entre le vert, le bleu et le beige de la marque. Une illustration verte
+   * se pose sur le bleu (l'exemple des Philippines), une bleue sur le beige ;
+   * une chaude sur le beige, ou sur le vert si elle y manque de contraste.
+   * Les titres prennent la couleur dominante de l'illustration, assombrie au
+   * besoin pour se lire (contraste 3 au moins).
+   */
+  function couleursAssouline(dominante) {
+    const P = moteur().COULEURS;
+    const [t, s] = tsl(dominante || P.vertMarque.hex);
+    let fond = "beige";
+    if (s > 0.12 && t >= 70 && t < 175) fond = "bleu";
+    else if (s > 0.12 && t >= 175 && t < 265) fond = "beige";
+    else if (contraste(dominante, P.beige.hex) < 2.5) fond = "vertMarque";
+    const titre = assombrirJusqua(dominante || P.vertMarque.hex, P[fond].hex, 3);
+    return { fond, titre };
+  }
+
+  /**
+   * **Photo-dessin** : la couleur des textes et du contour vient de la
+   * palette de la photo — sa teinte dominante, très claire, ou très sombre si
+   * la photo est claire —, avec un contraste suffisant sur la photo. La
+   * quatrième prend cette couleur en fond ; ses textes, la teinte de la marque
+   * la plus lisible dessus.
+   */
+  function couleursPhotoDessin(dominante, luminanceMoyenne = 0.3) {
+    const P = moteur().COULEURS;
+    const [t, s] = tsl(dominante || "#4aa3a0");
+    const fondPhoto = versHex([luminanceMoyenne * 255, luminanceMoyenne * 255, luminanceMoyenne * 255]);
+    let texte = depuisTsl(t, Math.min(0.75, Math.max(0.35, s)), 0.86);
+    if (contraste(texte, fondPhoto) < 2.2) texte = depuisTsl(t, Math.min(0.7, Math.max(0.35, s)), 0.2);
+    const candidats = ["vertMarque", "bleu", "beige", "blancMarque"];
+    const ecriture = candidats.reduce((a, b) => (contraste(P[b].hex, texte) > contraste(P[a].hex, texte) ? b : a));
+    return { texte, ecriture };
+  }
+
+  /* ---------------------------------------------- les images générées --- */
+
+  /**
+   * Les images que chaque style fait générer (`genererImage`, OpenAI
+   * `gpt-image-1`), avec la couverture de référence du style en entrée pour en
+   * tenir le style. `pour` : la face où l'image se pose. Le coût est estimé
+   * au tarif « high » de `gpt-image-1` (≈ 0,17 $ en carré, 0,25 $ en
+   * portrait ou paysage).
+   */
+  function imagesDuStyle(styleId, voyage, textes = {}) {
+    const lieu = voyage.destination || "le pays du voyage";
+    const motifs = (voyage.etapes || [])
+      .map((e) => [e.titre, e.lieu].filter(Boolean).join(" à "))
+      .filter(Boolean)
+      .slice(0, 10)
+      .join(" ; ");
+    const S0 = styleDe(styleId);
+    if (styleId === "assouline") {
+      return [
+        {
+          cle: "illustration",
+          pour: "recto",
+          taille: "1024x1024",
+          transparent: true,
+          reference: S0.recto,
+          prompt:
+            `Une seule illustration centrale, emblématique de ${lieu} et du voyage raconté (${motifs || lieu}) : une plante, un animal ou un objet ` +
+            "typique du lieu. Exactement le style de l'illustration centrale de l'image de référence (la feuille de palmier) : aplats peints, " +
+            "léger grain, formes nettes, deux ou trois tons d'une même couleur. Centrée, entière, sans texte, sans cadre, fond transparent.",
+        },
+      ];
+    }
+    if (styleId === "watercolor") {
+      const paras = paragraphes(textes.resume).slice(0, 3);
+      return [
+        {
+          cle: "recto",
+          pour: "recto",
+          taille: "1024x1536",
+          transparent: false,
+          reference: S0.recto,
+          prompt:
+            `Une illustration à l'aquarelle, en hauteur, d'un paysage marquant de ${lieu} tiré du voyage (${motifs || lieu}), avec quelques ` +
+            "petits personnages. Exactement le style de l'image de référence : aquarelle lumineuse, traits d'encre légers, papier visible. Sans texte.",
+        },
+        ...[0, 1, 2].map((i) => ({
+          cle: `vignette${i + 1}`,
+          pour: "verso",
+          taille: "1024x1024",
+          transparent: true,
+          reference: S0.verso,
+          prompt:
+            `Une petite vignette à l'aquarelle illustrant : ${paras[i] || motifs || lieu}. Comme peinte directement sur un papier beige : ` +
+            "pas de contour net, les bords bavent et se fondent dans le papier, comme les vignettes de l'image de référence. Sans texte, fond transparent.",
+        })),
+      ];
+    }
+    if (styleId === "travel-book") {
+      return [
+        {
+          cle: "timbres",
+          pour: "recto",
+          taille: "1536x1024",
+          transparent: true,
+          reference: S0.recto,
+          prompt:
+            `Un collage de cinq ou six timbres-poste et autocollants vintage, qui se chevauchent légèrement, illustrant le voyage en ${lieu} : ` +
+            `${motifs || lieu}. Exactement le style des timbres de l'image de référence : bords dentelés, couleurs douces, illustrations rétro, ` +
+            "un ou deux autocollants à bord blanc. Fond transparent, aucun cadre autour du collage.",
+        },
+        {
+          cle: "tampon",
+          pour: "recto",
+          taille: "1024x1024",
+          transparent: true,
+          reference: "silhouette",
+          prompt:
+            `Un tampon postal rond à l'encre bordeaux, comme celui de l'image de référence de couverture : le nom « ${String(lieu).toUpperCase()} » ` +
+            "écrit deux fois en arc dans l'anneau, des étoiles, et au centre la silhouette du pays fournie en image. Encre un peu irrégulière. Fond transparent.",
+        },
+      ];
+    }
+    return [];
+  }
+
+  /** Le coût estimé des images d'un style, en dollars. */
+  const coutImages = (images) => images.reduce((s, i) => s + (i.taille === "1024x1024" ? 0.17 : 0.25), 0);
+
+  /**
+   * La consigne de l'appel « vision » du style Photo-dessin : le contour
+   * approximatif des personnes sur la photo, pour les entourer d'un trait.
+   */
+  const CONSIGNE_CONTOUR =
+    "Sur cette photo de voyage, repère les personnes (les voyageurs). Donne le contour approximatif du groupe qu'elles forment, " +
+    "avec une petite marge autour : 16 à 24 points, dans le sens des aiguilles d'une montre, en coordonnées normalisées (0 à 1, " +
+    "x de gauche à droite, y de haut en bas). Sans personne visible, renvoie une liste vide. Réponds uniquement par un objet JSON, " +
+    'sans texte autour : {"contour":[[0.4,0.3],[0.6,0.3]]}';
+
+  /** Le contour lu, ou une ellipse au centre de la photo si l'appel n'a rien donné. */
+  function lireContour(reponse) {
+    const points = (Array.isArray(reponse?.contour) ? reponse.contour : [])
+      .filter((p) => Array.isArray(p) && p.length === 2 && p.every((v) => Number.isFinite(v)))
+      .map(([x, y]) => [Math.max(0, Math.min(1, x)), Math.max(0, Math.min(1, y))]);
+    if (points.length >= 6) return points;
+    return Array.from({ length: 18 }, (_, i) => {
+      const a = (i / 18) * 2 * Math.PI;
+      return [0.5 + 0.2 * Math.cos(a), 0.58 + 0.16 * Math.sin(a)];
+    });
+  }
+
+  /**
+   * Les anneaux à main levée autour des personnes (Photo-dessin), comme sur la
+   * référence : le contour, puis d'autres à pas réguliers (`pas` mm), un peu
+   * irréguliers, en mm dans le cadre `zone` de la photo. L'ensemble tient dans
+   * `cadre` (la face visible, moins la place du titre au-dessus) : un contour
+   * trop large est resserré autour de son centre, puis l'ensemble est ramené
+   * dans le cadre. Renvoie les anneaux, du plus serré au plus large.
+   */
+  function anneauxAutour(contour, zone, { n = 4, pas = 8, cadre = null, reserveHaut = 0 } = {}) {
+    const pts = contour.map(([x, y]) => [zone.x + x * zone.l, zone.y + y * zone.h]);
+    const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+    const cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+    const construire = (f, d) =>
+      Array.from({ length: n }, (_, k) =>
+        pts.map(([x, y], i) => {
+          const dx = (x - cx) * f;
+          const dy = (y - cy) * f;
+          const r = Math.hypot(dx, dy) || 1;
+          const ecart = k * d * (1 + 0.12 * Math.sin(i * 2.3 + k * 1.7));
+          return [cx + dx + (dx / r) * ecart, cy + dy + (dy / r) * ecart];
+        }),
+      );
+    const boite = (anneau) => {
+      const xs = anneau.map((p) => p[0]);
+      const ys = anneau.map((p) => p[1]);
+      return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+    };
+    let anneaux = construire(1, pas);
+    if (cadre) {
+      const H = cadre.h - reserveHaut;
+      for (let f = 1, d = pas; f > 0.2; f -= 0.05, d = Math.max(pas * 0.6, d - 0.25)) {
+        anneaux = construire(f, d);
+        const b = boite(anneaux[n - 1]);
+        if (b.x1 - b.x0 <= cadre.l && b.y1 - b.y0 <= H) break;
+      }
+      // Ramené dans le cadre, titre compris.
+      const b = boite(anneaux[n - 1]);
+      const dx = Math.max(0, cadre.x - b.x0) - Math.max(0, b.x1 - (cadre.x + cadre.l));
+      const dy = Math.max(0, cadre.y + reserveHaut - b.y0) - Math.max(0, b.y1 - (cadre.y + cadre.h));
+      anneaux = anneaux.map((a) => a.map(([x, y]) => [x + dx, y + dy]));
+    }
+    return anneaux.map((a) => a.map(([x, y]) => [arrondi2(x), arrondi2(y)]));
+  }
+
+  /** L'arc du haut d'un anneau, de gauche à droite : le tracé qui porte le titre. */
+  function arcDuHaut(anneau) {
+    const cy = anneau.reduce((s, p) => s + p[1], 0) / anneau.length;
+    return anneau.filter((p) => p[1] <= cy).sort((a, b) => a[0] - b[0]);
+  }
+
+  /* ---------------------------------------------------- style Assouline --- */
+
+  /**
+   * **Assouline** (Hugo, 09/10/2026) : fond choisi entre le vert, le bleu et
+   * le beige selon l'illustration ; titres de la première et de la quatrième
+   * en Black Han Sans, couleur dominante de l'illustration ; résumé et
+   * chiffres en Playfair Display, noir typo ; encadré des chiffres blanc,
+   * bordé de la couleur des titres. Tout est rédigé par l'IA.
+   */
+  function maquetteAssouline({ fiche, textes, images = {}, chiffres = [] }) {
+    const p = planche(fiche);
+    const P = moteur().COULEURS;
+    const { fond, titre: couleurTitre } = couleursAssouline(images.illustration?.dominante);
+    const couleurs = { [fond]: P[fond], noir: P.noir, blanc: P.blanc, accent: { nom: "MemoBook accent", hex: couleurTitre } };
+    const el = fonds(p, { verso: fond, recto: fond });
+    const face = p.faces.recto;
+    const marge = moteur().CHARNIERE;
+    const largeur = face.l - 2 * marge;
+    const titre = String(textes.titre || "").toUpperCase();
+    const corps = corpsQuiTient(titre, largeur, 0.72, { min: 24, max: 58 });
+    const hT = arrondi2(corps * MM_PAR_PT * 1.1);
+    el.push({ type: "texte", x: face.x + marge, y: arrondi2(face.y + 10), l: largeur, h: hT, texte: titre, police: "Black Han Sans", style: "Regular", corps, couleur: "accent", alignement: "centre", vertical: "centre" });
+    if (images.illustration) {
+      const cote = Math.min(largeur, face.h * 0.62);
+      el.push({ type: "image", x: arrondi2(face.x + face.l / 2 - cote / 2), y: arrondi2(face.y + 10 + hT + 8), l: arrondi2(cote), h: arrondi2(cote), fichier: images.illustration.fichier, src: images.illustration.src, px: images.illustration.px, focus: [0.5, 0.5], contenir: true });
+    }
+    el.push({ type: "texte", x: face.x + marge, y: arrondi2(face.y + face.h - moteur().RETRAIT - 9), l: largeur, h: 9, texte: String(textes.annee || ""), police: "Black Han Sans", style: "Regular", corps: 20, couleur: "accent", alignement: "centre", vertical: "centre" });
+
+    // Quatrième : les voyageurs en titre, le résumé, l'encadré des chiffres.
+    const q = p.faces.verso;
+    const xV = q.x + marge;
+    const lV = q.l - 2 * marge;
+    const titreV = String(textes.titreVerso || "").toUpperCase();
+    const corpsV = corpsQuiTient(titreV, lV, 0.68, { min: 16, max: 26, lignes: 2 });
+    const lignesV = couperLignes(titreV, corpsV, lV, 0.68, 2);
+    const hV = arrondi2(corpsV * MM_PAR_PT * 1.2 * lignesV.length);
+    el.push({ type: "texte", x: xV, y: arrondi2(q.y + 8), l: lV, h: hV, texte: lignesV.join("\n"), police: "Black Han Sans", style: "Regular", corps: corpsV, couleur: "accent", alignement: "centre", vertical: "centre" });
+    const hBoite = chiffres.length ? 42 : 0;
+    const yBoite = q.y + q.h - moteur().RETRAIT - hBoite;
+    const yResume = q.y + 8 + hV + 8;
+    el.push({ type: "bloc", nom: "Résumé de la 4e", x: xV, y: arrondi2(yResume), l: lV, h: arrondi2(yBoite - 8 - yResume), paragraphes: paragraphes(textes.resume), police: "Playfair Display", style: "Regular", styleGras: "Bold", corps: 10, interligne: 1.4, espace: 3.5, couleur: "noir", alignement: "centre", vertical: "haut" });
+    if (chiffres.length) {
+      el.push({ type: "rect", x: xV, y: arrondi2(yBoite), l: lV, h: hBoite, fond: "blanc", rayon: 5, trait: { couleur: "accent", epaisseur: 0.9, tirets: null } });
+      el.push({ type: "texte", x: xV, y: arrondi2(yBoite + 5), l: lV, h: 6, texte: "Notre voyage en quelques chiffres", police: "Playfair Display", style: "Bold", corps: 10, couleur: "noir", alignement: "centre", vertical: "centre" });
+      const col = lV / chiffres.length;
+      chiffres.forEach((c, i) => {
+        el.push({ type: "texte", x: arrondi2(xV + i * col), y: arrondi2(yBoite + 13), l: arrondi2(col), h: 12, texte: c.valeur, police: "Playfair Display", style: "Black", corps: 26, couleur: "noir", alignement: "centre", vertical: "bas" });
+        el.push({ type: "texte", x: arrondi2(xV + i * col), y: arrondi2(yBoite + 26), l: arrondi2(col), h: 12, texte: c.libelle, police: "Playfair Display", style: "Regular", corps: 9, couleur: "noir", alignement: "centre", vertical: "haut" });
+      });
+    }
+    // Dos : le fond de la quatrième, la police et la couleur de son corps de texte.
+    el.push(...moteur().elementsDos(fiche, texteDuDos(textes), "noir", { police: "Playfair Display", style: "Bold" }));
+    return p.enveloppe(el, couleurs);
+  }
+
+  /* ---------------------------------------------------- style Aquarelle --- */
+
+  /**
+   * **Aquarelle** (Hugo, 09/10/2026) : fonds beige ; titres en Black Han
+   * Sans, le reste en Manrope, en noir typo ; sur la quatrième, le motif M de
+   * MemoBook en beige foncé à 20 % et le logo en beige foncé. Les illustrations
+   * sont générées d'après les récits, celles de la quatrième sans contour net.
+   */
+  function maquetteAquarelle({ fiche, textes, images = {}, logo }) {
+    const p = planche(fiche);
+    const el = fonds(p, { verso: "beige", recto: "beige" });
+    const face = p.faces.recto;
+    const marge = moteur().CHARNIERE;
+    const titre = String(textes.titre || "").toUpperCase();
+    const corps = corpsQuiTient(titre, face.l - 2 * marge, 0.72, { min: 24, max: 56 });
+    const hBande = arrondi2(corps * MM_PAR_PT * 1.1 + 14);
+    // L'illustration, bord à bord sous la bande du titre, fond perdu compris.
+    if (images.recto) {
+      el.push({ type: "image", x: p.xRecto, y: arrondi2(face.y + hBande), l: arrondi2(p.L + p.f), h: arrondi2(p.H + p.f - face.y - hBande), fichier: images.recto.fichier, src: images.recto.src, px: images.recto.px, focus: [0.5, 0.5] });
+    }
+    el.push({ type: "texte", x: face.x + marge, y: arrondi2(face.y + 4), l: face.l - 2 * marge, h: arrondi2(hBande - 6), texte: titre, police: "Black Han Sans", style: "Regular", corps, couleur: "noir", alignement: "centre", vertical: "centre" });
+
+    // Quatrième : le motif M, la date, trois vignettes et leurs paragraphes, le logo.
+    const q = p.faces.verso;
+    if (logo) {
+      const cote = q.l * 1.05;
+      el.push({ type: "image", x: arrondi2(q.x - cote * 0.12), y: arrondi2(q.y + q.h * 0.18), l: arrondi2(cote), h: arrondi2(cote), fichier: logo.fichier, src: logo.src, px: logo.px, focus: [0.5, 0.5], contenir: true, opacite: 0.2 });
+    }
+    const xV = q.x + marge;
+    const lV = q.l - 2 * marge;
+    el.push({ type: "texte", x: xV, y: arrondi2(q.y + 8), l: lV, h: 10, texte: String(textes.date || ""), police: "Black Han Sans", style: "Regular", corps: 18, couleur: "noir", alignement: "centre", vertical: "centre" });
+    const paras = paragraphes(textes.resume).slice(0, 3);
+    const hLogo = 14;
+    const logoH = logo?.px ? (hLogo * logo.px[1]) / logo.px[0] : hLogo;
+    const yLogo = q.y + q.h - moteur().RETRAIT - logoH;
+    const haut = q.y + 24;
+    const pas = (yLogo - 8 - haut) / 3;
+    const lImg = lV * 0.34;
+    paras.forEach((texte, i) => {
+      const gauche = i % 2 === 0;
+      const y = haut + i * pas;
+      const vignette = images[`vignette${i + 1}`];
+      if (vignette) {
+        el.push({ type: "image", x: arrondi2(gauche ? xV : xV + lV - lImg), y: arrondi2(y + 2), l: arrondi2(lImg), h: arrondi2(pas - 6), fichier: vignette.fichier, src: vignette.src, px: vignette.px, focus: [0.5, 0.5], contenir: true });
+      }
+      el.push({ type: "bloc", nom: `Paragraphe ${i + 1} de la 4e`, x: arrondi2(gauche ? xV + lImg + 5 : xV), y: arrondi2(y), l: arrondi2(lV - lImg - 5), h: arrondi2(pas - 2), paragraphes: [texte], police: "Manrope", style: "Regular", corps: 9, interligne: 1.4, couleur: "noir", alignement: "gauche", vertical: "centre" });
+    });
+    if (logo) {
+      el.push({ type: "image", x: arrondi2(q.x + q.l / 2 - hLogo / 2), y: arrondi2(yLogo), l: hLogo, h: arrondi2(logoH), fichier: logo.fichier, src: logo.src, px: logo.px, focus: [0.5, 0.5], contenir: true });
+    }
+    el.push(...moteur().elementsDos(fiche, texteDuDos(textes), "noir", { police: "Manrope", style: "SemiBold" }));
+    const P = moteur().COULEURS;
+    return p.enveloppe(el, { beige: P.beige, noir: P.noir, beigeFonce: P.beigeFonce });
+  }
+
+  /* -------------------------------------------------- style Travel book --- */
+
+  /** Un cadre au bord déchiré, autour de la zone : un trait épais et irrégulier. */
+  function cadreDechire(zone, couleur) {
+    const pts = [];
+    const pas = 2.2;
+    const bord = (x0, y0, x1, y1) => {
+      const n = Math.max(2, Math.round(Math.hypot(x1 - x0, y1 - y0) / pas));
+      for (let i = 0; i < n; i += 1) {
+        const t = i / n;
+        const j = Math.sin(i * 7.1 + x0 * 0.3 + y0 * 0.7) * 0.7;
+        pts.push([arrondi2(x0 + (x1 - x0) * t + (y1 !== y0 ? j : 0)), arrondi2(y0 + (y1 - y0) * t + (x1 !== x0 ? j : 0))]);
+      }
+    };
+    const { x, y, l, h } = zone;
+    bord(x, y, x + l, y);
+    bord(x + l, y, x + l, y + h);
+    bord(x + l, y + h, x, y + h);
+    bord(x, y + h, x, y);
+    return { type: "chemin", points: pts, ferme: true, fond: null, trait: { couleur, epaisseur: 5, tirets: null } };
+  }
+
+  /**
+   * **Travel book** (Hugo, 09/10/2026) : Lilita One, texte vert sur fond
+   * beige ; sur la première, un tampon du pays et des timbres et autocollants
+   * générés d'après les récits ; sur la quatrième, une photo dans un cadre
+   * vert déchiré, choisie comme pour le style par défaut, et le logo.
+   */
+  function maquetteTravelBook({ fiche, textes, images = {}, verso, logo }) {
+    const p = planche(fiche);
+    const el = fonds(p, { verso: "beige", recto: "beige" });
+    const face = p.faces.recto;
+    const marge = moteur().CHARNIERE;
+    const lignes = [String(textes.titre || "").toUpperCase(), String(textes.dates || "").toUpperCase()].filter(Boolean);
+    const lT = face.l * 0.62;
+    const corps = Math.min(...lignes.map((l) => corpsQuiTient(l, lT, 0.6, { min: 14, max: 24 })));
+    el.push({ type: "texte", x: face.x + marge, y: arrondi2(face.y + 14), l: arrondi2(lT), h: arrondi2(corps * MM_PAR_PT * 1.2 * lignes.length), texte: lignes.join("\n"), police: "Lilita One", style: "Regular", corps, couleur: "vertMarque", alignement: "gauche", vertical: "haut" });
+    if (images.tampon) {
+      const cote = face.l * 0.26;
+      el.push({ type: "image", x: arrondi2(face.x + face.l - marge - cote), y: arrondi2(face.y + 6), l: arrondi2(cote), h: arrondi2(cote), fichier: images.tampon.fichier, src: images.tampon.src, px: images.tampon.px, focus: [0.5, 0.5], contenir: true });
+    }
+    if (images.timbres) {
+      const l = face.l - 2 * marge;
+      el.push({ type: "image", x: face.x + marge, y: arrondi2(face.y + face.h * 0.26), l: arrondi2(l), h: arrondi2(face.h * 0.52), fichier: images.timbres.fichier, src: images.timbres.src, px: images.timbres.px, focus: [0.5, 0.5], contenir: true });
+    }
+    if (textes.voyageurs) {
+      el.push({ type: "texte", x: face.x + marge, y: arrondi2(face.y + face.h - moteur().RETRAIT - 8), l: face.l - 2 * marge, h: 8, texte: String(textes.voyageurs).toUpperCase(), police: "Lilita One", style: "Regular", corps: 15, couleur: "vertMarque", alignement: "centre", vertical: "centre" });
+    }
+
+    const q = p.faces.verso;
+    const zone = { x: q.x + marge, y: q.y + 10, l: q.l - 2 * marge, h: (q.h - 2 * marge) * 0.78 };
+    if (verso) el.push({ type: "image", ...zone, fichier: verso.fichier, src: verso.src, px: verso.px, focus: verso.focus || [0.5, 0.4] });
+    el.push(cadreDechire(zone, "vertMarque"));
+    if (logo) {
+      const hLogo = 16;
+      const logoH = logo.px ? (hLogo * logo.px[1]) / logo.px[0] : hLogo;
+      el.push({ type: "image", x: arrondi2(q.x + q.l / 2 - hLogo / 2), y: arrondi2(q.y + q.h - moteur().RETRAIT - logoH), l: hLogo, h: arrondi2(logoH), fichier: logo.fichier, src: logo.src, px: logo.px, focus: [0.5, 0.5], contenir: true });
+    }
+    // La quatrième n'a pas de corps de texte : le dos prend la police et la couleur du titre.
+    el.push(...moteur().elementsDos(fiche, texteDuDos(textes), "vertMarque", { police: "Lilita One", style: "Regular" }));
+    const P = moteur().COULEURS;
+    return p.enveloppe(el, { beige: P.beige, vertMarque: P.vertMarque, blanc: P.blanc });
+  }
+
+  /* ------------------------------------------------- style Photo-dessin --- */
+
+  /**
+   * **Photo-dessin** (Hugo, 09/10/2026) : sur la première, une photo où l'on
+   * voit les voyageurs, entourés d'un contour grossier, et le nom du pays qui
+   * suit la plus large ligne du contour ; Caveat Brush partout ; la couleur des
+   * textes et du contour vient de la photo. La quatrième prend cette couleur
+   * en fond, ses textes (fixes) la teinte de la marque la plus lisible.
+   */
+  function maquettePhotoDessin({ fiche, textes, recto, contour, couleurPhoto = null, luminancePhoto = 0.35, logo }) {
+    const p = planche(fiche);
+    const P = moteur().COULEURS;
+    const { texte: couleurTexte, ecriture } = couleursPhotoDessin(couleurPhoto, luminancePhoto);
+    const couleurs = { encre: { nom: "MemoBook encre photo", hex: couleurTexte }, [ecriture]: P[ecriture] };
+    const el = fonds(p, { verso: "encre", recto: "encre" });
+    const face = p.faces.recto;
+    const plat = { x: p.xRecto, y: -p.f, l: p.L + p.f, h: p.H + 2 * p.f };
+    if (recto) el.push({ type: "image", ...plat, fichier: recto.fichier, src: recto.src, px: recto.px, focus: recto.focus || [0.5, 0.5] });
+    // Le contour : sur la photo telle qu'elle est cadrée — l'image remplit le plat.
+    const place = recto ? moteur().placementImage({ ...plat, px: recto.px, focus: recto.focus || [0.5, 0.5] }) : plat;
+    const titre = String(textes.titre || "").toUpperCase();
+    // Le corps du titre : il couvre à peu près la largeur de la face, sans dépasser 54 pt.
+    const corps = arrondi2(Math.max(24, Math.min(54, (face.l * 0.85) / Math.max(4, titre.length) / (0.5 * MM_PAR_PT))));
+    const hTitre = corps * MM_PAR_PT;
+    const cadre = { x: face.x + 4, y: face.y + 14, l: face.l - 8, h: face.h - 14 - 16 };
+    const anneaux = anneauxAutour(lireContour({ contour }), place, { cadre, reserveHaut: hTitre + 4 });
+    for (const a of anneaux) el.push({ type: "courbe", ancres: moteur().lisser(a, true, 0.9), ferme: true, fond: null, trait: { couleur: "encre", epaisseur: 1.6, tirets: null } });
+    // Le titre suit l'arc du haut de l'anneau le plus large, juste au-dessus.
+    const arc = arcDuHaut(anneaux[anneaux.length - 1]).map(([x, y]) => [x, arrondi2(y - 3)]);
+    if (arc.length >= 3 && titre) {
+      // Le titre tient sur l'arc : sinon le texte sur tracé serait coupé.
+      const longueur = arc.slice(1).reduce((t, q2, i) => t + Math.hypot(q2[0] - arc[i][0], q2[1] - arc[i][1]), 0);
+      const largeurA = (c) => moteur().largeurTexte(titre, c, 0.55) + titre.length * 0.04 * c * MM_PAR_PT;
+      let corpsArc = corps;
+      while (corpsArc > 14 && largeurA(corpsArc) > longueur * 0.92) corpsArc -= 1;
+      el.push({ type: "texteChemin", ancres: moteur().lisser(arc, false), texte: titre, police: "Caveat Brush", style: "Regular", corps: arrondi2(corpsArc), couleur: "encre", approche: 40, x: face.x, y: face.y, l: face.l, h: 20 });
+    }
+    if (textes.voyageurs) {
+      el.push({ type: "texte", x: face.x + 10, y: arrondi2(face.y + 4), l: face.l - 20, h: 9, texte: String(textes.voyageurs).toUpperCase(), police: "Caveat Brush", style: "Regular", corps: 15, couleur: "encre", alignement: "centre", vertical: "centre" });
+    }
+    if (textes.annee) {
+      el.push({ type: "texte", x: arrondi2(face.x + face.l - 50), y: arrondi2(face.y + face.h - 12), l: 40, h: 11, texte: String(textes.annee), police: "Caveat Brush", style: "Regular", corps: 26, couleur: "encre", alignement: "droite", vertical: "centre" });
+    }
+
+    // Quatrième : des vagues dans le coin haut gauche, le merci, le logo.
+    const q = p.faces.verso;
+    for (let k = 0; k < 4; k += 1) {
+      const d = k * 7;
+      el.push({ type: "courbe", ancres: moteur().lisser([[-p.f, 14 + d], [20, 26 + d * 1.1], [44, 20 + d], [64, 8 + d * 0.8], [80 + d * 0.6, -p.f]], false), ferme: false, fond: null, trait: { couleur: ecriture, epaisseur: 1.6, tirets: null } });
+    }
+    const merci = String(textes.texteVerso || "").toUpperCase();
+    const lMerci = Math.min(q.l - 2 * moteur().CHARNIERE - 16, 78);
+    const lignesMerci = couperLignes(merci, 19, lMerci, 0.5, 3);
+    el.push({ type: "texte", x: arrondi2(q.x + q.l / 2 - lMerci / 2), y: arrondi2(q.y + q.h * 0.4), l: arrondi2(lMerci), h: arrondi2(19 * MM_PAR_PT * 1.6 * lignesMerci.length), texte: lignesMerci.join("\n"), police: "Caveat Brush", style: "Regular", corps: 19, couleur: ecriture, alignement: "centre", vertical: "centre" });
+    if (logo) {
+      const hLogo = 16;
+      const logoH = logo.px ? (hLogo * logo.px[1]) / logo.px[0] : hLogo;
+      el.push({ type: "image", x: arrondi2(q.x + q.l / 2 - hLogo / 2), y: arrondi2(q.y + q.h - moteur().RETRAIT - logoH), l: hLogo, h: arrondi2(logoH), fichier: logo.fichier, src: logo.src, px: logo.px, focus: [0.5, 0.5], contenir: true });
+    }
+    el.push(...moteur().elementsDos(fiche, texteDuDos(textes), ecriture, { police: "Caveat Brush", style: "Regular" }));
+    return p.enveloppe(el, couleurs);
+  }
+
   /* ---------------------------------------------------------- l'entrée --- */
 
   /**
    * La maquette d'une couverture dans un style. `contexte` : ce que la
    * maquette par défaut reçoit (`fiche`, `textes`, `recto`, `chiffres`,
-   * `carte`, `logo`), plus `verso` (la photo de la quatrième) et `dessins`
-   * (les dessins de la bibliothèque retenus pour le voyage).
+   * `carte`, `logo`), plus `verso` (la photo de la quatrième), `dessins`
+   * (les dessins de la bibliothèque retenus pour le voyage), `images` (les
+   * illustrations générées, `{ cle: { fichier, src, px, dominante } }`) et,
+   * pour Photo-dessin, `contour`, `couleurPhoto` et `luminancePhoto`.
    */
   function maquette(styleId, contexte) {
     if (styleId === "elegant") return maquetteElegant(contexte);
     if (styleId === "drawing") return maquetteDessin(contexte);
+    if (styleId === "assouline") return maquetteAssouline(contexte);
+    if (styleId === "watercolor") return maquetteAquarelle(contexte);
+    if (styleId === "travel-book") return maquetteTravelBook(contexte);
+    if (styleId === "photo-drawing") return maquettePhotoDessin(contexte);
     return moteur().maquette(contexte);
   }
 
@@ -513,6 +1082,14 @@ En français, sans emoji, sans guillemets autour des textes. Réponds uniquement
     corpsQuiTient,
     dessinsDuVoyage,
     maquette,
+    MERCI_PHOTO_DESSIN,
+    contraste,
+    couleursAssouline,
+    couleursPhotoDessin,
+    imagesDuStyle,
+    coutImages,
+    CONSIGNE_CONTOUR,
+    lireContour,
   };
 
   if (enNode) module.exports = api;
