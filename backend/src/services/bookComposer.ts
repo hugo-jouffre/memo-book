@@ -1,0 +1,178 @@
+/**
+ * La composition du carnet de l'app, par **le même composeur que l'atelier**.
+ *
+ * Hugo, 13/10/2026 : « le composeur compose, le ratio dit combien de photos ».
+ * Jusqu'ici l'app recomposait chaque étape avec le module de ratio
+ * (`appliquerRatio`), qui choisissait seul ses layouts : ni étapes paires, ni
+ * photos en fin d'étape, ni planches, ni décors. Désormais :
+ *
+ * 1. le **module de ratio** (`photoRatio.ts`, `photosRequired`) dit combien de
+ *    photos chaque étape garde, selon le palier du voyageur ;
+ * 2. le **composeur de l'atelier** (`MemoBook Generator/public/mise-en-page.js`,
+ *    `composerJours`) met en page — structure de l'étape, layouts, cartes de
+ *    chapitre, fun facts, tracé, étiquettes, stickers — exactement comme pour
+ *    le PDF de l'atelier.
+ *
+ * Le composeur est chargé tel quel (`createRequire`), pas recopié : c'est un
+ * module UMD sans dépendance, que les tests chargent déjà de la même façon.
+ * L'image Docker le copie à côté des gabarits (`backend/Dockerfile`).
+ *
+ * Ce qui vient de l'Agent Mise en page et que le composeur ne sait pas
+ * deviner — le bandeau (météo, nuit, hôte), l'étiquette de section, le champ à
+ * remplir, le quiz, la carte du chapitre — est repris sur la première page de
+ * l'étape. **Le récit ne perd ni ne gagne un mot** : ses paragraphes passent
+ * tels quels, au pire coupés sur une fin de phrase entre deux pages.
+ */
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { resolve } from "node:path";
+import { etapesDe, layoutDe, paragraphesDe, PLANCHES, photosRequired, type PhotoRatio } from "./photoRatio.js";
+
+type Jour = Record<string, unknown>;
+
+interface Sticker {
+  fichier: string;
+  famille?: string;
+  url?: string;
+  [cle: string]: unknown;
+}
+
+interface Composeur {
+  composerJours: (etapes: unknown[], options: Record<string, unknown>) => Jour[];
+  paragraphesEnHtml: (paragraphes: string[]) => string;
+}
+
+const require = createRequire(import.meta.url);
+const ATELIER = resolve(import.meta.dirname, "../../../MemoBook Generator/public/mise-en-page.js");
+const STICKERS = resolve(import.meta.dirname, "../../../assets/stickers/stickers.json");
+
+/**
+ * Les fichiers de stickers, servis par GitHub à une adresse publique que le
+ * moteur PDF peut charger — la même que l'atelier (`STICKERS_URL`, `app.js`).
+ */
+export const STICKERS_URL = "https://raw.githubusercontent.com/hugo-jouffre/memo-book/main/assets/stickers/";
+
+let composeur: Composeur | undefined;
+function charger(): Composeur {
+  composeur ??= require(ATELIER) as Composeur;
+  return composeur;
+}
+
+let bibliotheque: Sticker[] | undefined;
+/** La bibliothèque de stickers (`assets/stickers/stickers.json`), avec l'adresse de chaque fichier. */
+export function stickersDuCarnet(): Sticker[] {
+  if (!bibliotheque) {
+    try {
+      const index = JSON.parse(readFileSync(STICKERS, "utf8")) as { stickers?: Sticker[] };
+      bibliotheque = (index.stickers ?? []).map((s) => ({ ...s, url: `${STICKERS_URL}${encodeURIComponent(s.fichier)}` }));
+    } catch {
+      // Sans bibliothèque, le carnet n'a pas de stickers : rien d'autre ne change.
+      bibliotheque = [];
+    }
+  }
+  return bibliotheque;
+}
+
+/** Ce que l'agent pose sur la première page d'une étape et que le composeur reprend tel quel. */
+const CHAMPS_DU_BANDEAU = ["title", "date", "city", "country", "day_intro", "tag", "prompt", "quiz"] as const;
+
+/** Les pages qui précèdent la première étape : colophon, introduction, et la page libre qui la met à gauche. */
+function pagesAvant(payload: Record<string, unknown>): number {
+  const avant = 1 + (payload["intro_text"] ? 1 : 0);
+  return avant + (avant % 2 === 0 ? 1 : 0);
+}
+
+const texte = (valeur: unknown): string => (typeof valeur === "string" ? valeur : "");
+const urlDe = (photo: unknown): string =>
+  typeof photo === "string" ? photo : texte((photo as Record<string, unknown> | null)?.["url"]);
+
+/** Une étape du payload de l'app, dans la forme que le composeur lit (`composerJours`). */
+function etapeDuPayload(pages: Jour[], rang: number, funFacts: boolean) {
+  const premiere = pages[0] ?? {};
+  const intro = (premiere["day_intro"] ?? {}) as Record<string, unknown>;
+  const paragraphes = pages
+    .filter((page) => !(PLANCHES as readonly string[]).includes(layoutDe(page)))
+    .flatMap((page) => paragraphesDe(texte(page["body_html"])));
+  const photos = pages
+    .flatMap((page) => (Array.isArray(page["photos"]) ? (page["photos"] as unknown[]) : []))
+    .filter((p) => urlDe(p))
+    .map((p, i) => {
+      const objet = typeof p === "string" ? {} : (p as Record<string, unknown>);
+      return {
+        id: `${rang}-${i}`,
+        src: urlDe(p),
+        // Le format et la photo de groupe, quand l'analyse d'image les a donnés.
+        ...(typeof objet["format"] === "number" ? { format: objet["format"] } : {}),
+        groupe: objet["fit"] === "contain",
+      };
+    });
+  const funFact = pages.map((page) => page["fun_facts"]).find((f) => Array.isArray(f) && f.length) as string[] | undefined;
+  return {
+    titre: texte(premiere["title"]),
+    lieu: texte(premiere["city"]) || texte(intro["location"]),
+    destination: texte(premiere["country"]),
+    numero: texte(intro["day_number"]),
+    lieuComplet: texte(intro["location"]),
+    dateLongue: texte(intro["date"]) || texte(premiere["date"]),
+    paragraphes,
+    recit: paragraphes.join(" "),
+    photos,
+    // La carte que l'agent a choisie pour ouvrir le chapitre.
+    carte: premiere["map"] ?? premiere["map_svg"] ?? null,
+    // Le fun fact déjà rédigé et borné à 140 signes par la rédaction : il a
+    // passé son tri, il est imprimable.
+    analyse:
+      funFacts && funFact?.[0]
+        ? { funFact: { texte: funFact[0], pertinence: 8 } }
+        : null,
+    premiere,
+  };
+}
+
+export interface ComposerOptions {
+  ratio: PhotoRatio;
+  funFacts: boolean;
+  decorations: number;
+}
+
+/**
+ * Les `days[]` de l'app, recomposés par le composeur de l'atelier, au palier
+ * de photos du voyageur.
+ */
+export function composerCarnet(payload: Record<string, unknown>, options: ComposerOptions): Jour[] {
+  const days = Array.isArray(payload["days"]) ? (payload["days"] as Jour[]) : [];
+  const etapes = etapesDe(days).map((pages, rang) => etapeDuPayload(pages, rang, options.funFacts));
+  const { composerJours, paragraphesEnHtml } = charger();
+
+  const sortie: Jour[] = [];
+  let etapeCourante = -1;
+  const jours = composerJours(
+    etapes.map(({ premiere: _premiere, ...etape }) => etape),
+    {
+      pagesAvant: pagesAvant(payload),
+      funFacts: options.funFacts,
+      stickers: options.decorations > 0 ? stickersDuCarnet() : [],
+      decorations: options.decorations,
+      ratio: options.ratio,
+      budgetPhotos: (etape: { paragraphes: string[] }) =>
+        photosRequired({ body_html: paragraphesEnHtml(etape.paragraphes) }, options.ratio, "a5", {
+          funFacts: options.funFacts,
+          decorations: options.decorations > 0,
+        }).photos,
+    },
+  );
+
+  // Le bandeau de l'agent revient sur la page qui ouvre chaque étape : c'est
+  // elle qui porte `day_intro` en sortie du composeur.
+  for (const jour of jours) {
+    if (jour["day_intro"]) {
+      etapeCourante += 1;
+      const premiere = etapes[etapeCourante]?.premiere ?? {};
+      for (const champ of CHAMPS_DU_BANDEAU) {
+        if (premiere[champ] !== undefined) jour[champ] = premiere[champ];
+      }
+    }
+    sortie.push(jour);
+  }
+  return sortie;
+}

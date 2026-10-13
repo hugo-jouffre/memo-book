@@ -24,7 +24,12 @@ ios
 MemoBook Generator/atelier.sh
 MemoBook Generator/transcribe-whatsapp.sh
 MemoBook Generator/server.mjs
-MemoBook Generator/public
+# L'atelier n'a rien à faire dans l'image… sauf son composeur de mise en
+# page, que l'app utilise aussi (`backend/src/services/bookComposer.ts`). Un
+# joker sur le contenu et non le dossier : le dossier exclu, son fichier ne
+# pourrait plus être ré-inclus.
+MemoBook Generator/public/*
+!MemoBook Generator/public/mise-en-page.js
 MemoBook Generator/*.md
 
 # Les exports Figma des aperçus de personnalisation : 146 Mo que le serveur ne

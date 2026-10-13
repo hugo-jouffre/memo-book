@@ -369,32 +369,35 @@ contrat de mise en page.
 > pages** et le **nombre de photos** qui s'adaptent au texte. Jamais l'inverse.
 
 **Ce qui se mesure** : `ratio = surface photo / (surface photo + surface
-texte)`, sur **l'ensemble des pages d'une étape**. Surface photo = les cadres
-`mb-photo`, bord blanc compris. Surface texte = ce que `mb-note` occupe
+texte)`, sur **l'ensemble des pages d'une étape**. Surface photo = les
+emplacements `mb-photo` (le contour dessiné ne compte pas). Surface texte = ce que `mb-note` occupe
 réellement. Les éléments fixes sont hors du calcul — bandeau, titre, étiquette,
 météo, carte fun fact, carte de chapitre, décor. Tolérance ±5 points.
 
 | Ratio | Corps de texte | Photos minimum | Layouts |
 |---|---|---|---|
 | **0 %** | intégral | 0 | `layout_story_full` (récit pleine page, réglure jusqu'en bas), `layout_chapter_map` aux ouvertures — une carte n'est pas une photo |
-| **25 %** | intégral | 1 | `layout_story_opener` / `layout_story_facts` avec leur photo flottante ; `layout_collage` au besoin |
-| **50 %** | intégral | 2 | `layout_collage`, `layout_split_left`, `layout_hero_top`, les trios. L'équilibre, et ce que le carnet faisait déjà |
-| **75 %** | intégral | 3 | `layout_hero_top`, `layout_collage` à bande haussée, les trios, une planche pour le reliquat |
-| **100 %** | **aucun** | selon les pages | `layout_photo_wall_intro` puis `layout_photo_page` |
+| **25 %** | intégral | 1 | Une photo par page de récit au plus |
+| **50 %** | intégral | 2 | Le composeur choisit : collage, bande, trios, récit autour d'une grande photo, planches en fin d'étape |
+| **75 %** | intégral | 3 | Idem, avec plus de photos — celles qui ne tiennent pas à côté du récit vont sur les planches de fin d'étape |
+| **100 %** | **aucun** | selon les pages | `layout_photo_wall_intro` (bandeau, fun fact, 4 photos au plus) puis `layout_photo_page` |
 
-**Le réglage continu, c'est la hauteur de bande.** `band_scale` sur la page
-(`--mb-band` dans le CSS) multiplie la hauteur de conception : `mb-gallery` 206
-pt, `mb-hero` 268, `mb-trio` 360, la photo flottante 162. Deux bornes, toujours :
-le plancher du CSS — `mb-gallery` jamais sous 160 pt — et **ce que le texte de la
-page laisse libre**. Une bande ne vole jamais une ligne au récit. `band_scale`
-est **calculé, jamais choisi** : l'agent ne le produit pas.
+**Qui compose (Hugo, 13/10/2026).** Le module de ratio dit **combien de photos**
+chaque étape garde (`photosRequired`) ; le **composeur** (`mise-en-page.js`,
+`composerJours`) met en page ces photos avec toutes ses règles — structure de
+l'étape, pages paires, planches, carte de chapitre, décors, fun facts. Les
+photos de trop s'écartent dans l'ordre habituel (floues ou sombres, doublons
+d'une scène, moins bien notées). **L'atelier et l'app composent avec le même
+code** : l'app charge le composeur de l'atelier (`backend/src/services/bookComposer.ts`).
+Jusqu'au 13/10, le module de ratio recomposait lui-même chaque étape après le
+composeur, et effaçait tout son travail ; la hauteur de bande (`band_scale`)
+qu'il calculait n'est plus posée.
 
 **À 100 %, aucun `mb-note` n'est émis.** La première page de l'étape
 (`layout_photo_wall_intro`) garde le bandeau jour · lieu · date et la carte
 `fun_facts` si le carnet les a allumés — une étape sans bandeau ne se lit plus
-comme une étape. Les autres pages sont des planches nues. Le récit du voyageur
-**sert de matière** au fun fact : il n'apparaît pas tel quel. Le nombre de pages
-de l'étape est celui qu'occuperait le texte seul à 0 %, au moins une.
+comme une étape. Les autres pages sont des planches. Le récit du voyageur
+**sert de matière** au fun fact : il n'apparaît pas tel quel.
 
 **Pas de légende**, ni de page ni par photo (Hugo, 12/10/2026) — y compris à
 100 %, où la spécification du ratio en demandait. Les deux décisions ne peuvent
@@ -409,8 +412,8 @@ pas tenir ensemble ; celle du gabarit l'emporte. Voir
   le texte leur laisse, et une bande à sa hauteur de conception ou au-dessus
   « porte la page » au sens de § « Les deux bornes basses ». L'inspecteur marque
   le cas « dépassement assumé », pas « erreur ».
-- **Le nombre de photos ne change pas pour remplir** : c'est leur taille qui
-  s'adapte, pour rester cohérent avec le nombre annoncé dans le chat.
+- **Le nombre de photos ne change pas pour remplir**, pour rester cohérent avec
+  le nombre annoncé dans le chat.
 - **Le texte ne tombe jamais sur une page sans place prévue** : si `mb-note`
   déborde, on ajoute une page, on ne coupe pas.
 - **Un palier ne demande jamais moins de photos que le palier d'en dessous** :

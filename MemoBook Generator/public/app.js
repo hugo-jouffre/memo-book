@@ -1638,7 +1638,7 @@ function construirePayloadCarnet(photoDe = (data) => data, { imprimeur = Boolean
     decoration_quota: reglages.decorationQuota,
     // Après la dernière étape, avant la quatrième : de quoi écrire à la main.
     pages_libres: reglages.freeZonesEnabled ? PAGES_LIBRES_FIN : 0,
-    days: appliquerRatioAuxJours(MiseEnPage.composerJours(etapes, {
+    days: MiseEnPage.composerJours(etapes, {
       contours: etat.contoursCarte,
       dessinerCarte: etat.contoursCarte ? dessinerCarteChapitre : null,
       // Le colophon est la page 1 du livre imprimé : la première page d'étape
@@ -1647,6 +1647,8 @@ function construirePayloadCarnet(photoDe = (data) => data, { imprimeur = Boolean
       funFacts: reglages.funFactsEnabled,
       stickers: etat.stickers || [],
       decorations: reglages.decorationQuota,
+      ratio: RatioPhotos.normaliserRatio(reglages.photoTextRatio),
+      budgetPhotos: budgetDuRatio(reglages, plansDeRatio),
       journal: (texte) => {
         debugCarnet(texte);
         // Pourquoi un fun fact manque, quelles photos sont écartées : dans le
@@ -1657,7 +1659,7 @@ function construirePayloadCarnet(photoDe = (data) => data, { imprimeur = Boolean
           noter(texte);
         }
       },
-    }), reglages, plansDeRatio),
+    }),
     back_cover: {
       closing_text: "À suivre.",
       // Pas de `closing_subtext` : « Carnet composé avec MemoBook Generator,
@@ -1674,35 +1676,32 @@ function construirePayloadCarnet(photoDe = (data) => data, { imprimeur = Boolean
 }
 
 /**
- * Le ratio texte / photo appliqué aux pages que `composerJours` vient de
- * composer.
+ * Le nombre de photos que le ratio texte / photo demande pour chaque étape.
  *
- * Deux étages, comme dans l'app : l'atelier compose d'abord à sa façon —
- * chapitres, cartes, photos auprès du passage qu'elles illustrent, doubles
- * pages variées —, puis le module de ratio tranche le nombre de pages, le
- * layout de chacune et la taille des photos. Le texte du voyageur, lui, ne
- * bouge pas : au pire un paragraphe passe à la page suivante.
+ * Le composeur compose, le ratio dit combien de photos (Hugo, 13/10/2026) :
+ * `composerJours` garde, étape par étape, les `photosRequired(...).photos`
+ * meilleures photos et les met en page avec ses propres règles — étapes
+ * paires, photos en fin d'étape, planches, décors. L'app fait exactement la
+ * même chose (`backend/src/services/bookComposer.ts`).
  *
  * `RatioPhotos` est **généré** depuis `backend/src/services/photoRatio.ts`
  * (`npm run ratio:build`) : c'est le même code que celui qui annonce au
- * voyageur, dans le chat de l'app, le nombre de photos qu'il lui faut.
+ * voyageur, dans le chat de l'app, le nombre de photos qu'il lui faut. Les
+ * plans calculés vont à l'inspecteur (`plans`).
  */
-function appliquerRatioAuxJours(jours, reglages, plans) {
-  const journal = [];
-  const sortie = RatioPhotos.appliquerRatio(jours, reglages.photoTextRatio, {
-    funFacts: reglages.funFactsEnabled,
-    decorations: reglages.decorationQuota > 0,
-    plans,
-    journal: (message, details) => journal.push(details ? `${message} — ${JSON.stringify(details)}` : message),
-  });
-  for (const ligne of journal) debugCarnet(ligne);
-  for (const [index, plan] of plans.entries()) {
+function budgetDuRatio(reglages, plans) {
+  const ratio = RatioPhotos.normaliserRatio(reglages.photoTextRatio);
+  return (etape) => {
+    const plan = RatioPhotos.photosRequired({ body_html: MiseEnPage.paragraphesEnHtml(MiseEnPage.enParagraphes(etape.recit)) }, ratio, "a5", {
+      funFacts: reglages.funFactsEnabled,
+      decorations: reglages.decorationQuota > 0,
+    });
+    plans.push(plan);
     debugCarnet(
-      `ratio étape ${index + 1} : cible ${plan.ratioCible} %, estimé ${plan.ratioEstime} %, ` +
-        `${plan.photos} photo(s) sur ${plan.pages} page(s) — ${plan.raison}`,
+      `ratio étape ${plans.length} : cible ${plan.ratioCible} %, ${plan.photos} photo(s) demandée(s) — ${plan.raison}`,
     );
-  }
-  return sortie;
+    return plan.photos;
+  };
 }
 
 /* ------------------------------------------------ envoi vers APITemplate --- */
