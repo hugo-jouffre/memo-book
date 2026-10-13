@@ -50,8 +50,13 @@
      forme reste lisible par son contour, qui lui s'imprime.
      Tout élément à venir de la même famille doit utiliser ces deux tokens
      plutôt qu'une couleur en dur. */
-  --mb-paper-fill: #fdeee2;                /* ruban, étiquette de section */
+  --mb-paper-fill: #fdeee2;                /* étiquette de section */
   --mb-label-solid: #fde5d1;               /* pastilles « lieu » / « date » */
+  /* Hors de la règle des aplats : le ruban « jour » et le surlignage des
+     encarts lieu / date sont un choix de couleur, pas un fond qui imite le
+     papier (Hugo, 13/10/2026). Ils s'impriment dans les deux profils. */
+  --mb-ribbon-fill: #f7e5e1;               /* ruban « jour NN » */
+  --mb-field-highlight: rgba(253, 229, 209, 0.7); /* #fde5d1 à 70 % */
   /* Lignes réglées : gris chaud, pointillé léger. Deux testeurs sur la même
      remarque — « trop marqué », « tester un gris pointillé plus léger ». La
      réglure doit se deviner sous le texte, pas se lire avant lui.
@@ -304,6 +309,14 @@ li { margin: 0; }
   line-height: var(--mb-body-lh);
   letter-spacing: 0.017em;
   color: var(--mb-ink);
+  /* Le texte se pose SUR la ligne. Gloria Hallelujah a une grande descente
+     (0,58 em) : au bas de la boîte de ligne, le trait passait 2,8 pt sous la
+     ligne de base, et le récit semblait flotter au-dessus (Hugo, 13/10/2026).
+     Mesuré au canevas (ascente 1,41 em, descente 0,58 em, interligne 1,3) :
+     remonter la réglure de 0,185 em la met à ~0,5 pt sous la ligne de base,
+     à 11, 12 et 13 pt — les jambages la croisent, comme à la main.
+     Déclaré ici, il suit `--mb-body-size` quand le corps est ajusté. */
+  --mb-rule-lift: calc(var(--mb-body-size) * 0.185);
 }
 
 /* --- La réglure, et pourquoi elle est faite d'éléments ----------------------
@@ -332,7 +345,7 @@ li { margin: 0; }
   overflow: hidden;
   pointer-events: none;
   /* La première ligne tombe sous la première ligne de texte, pas au-dessus. */
-  padding-top: calc(var(--mb-line) - 0.7pt);
+  padding-top: calc(var(--mb-line) - 0.7pt - var(--mb-rule-lift));
 }
 
 /* Une bordure `dashed`, et surtout PAS un dégradé à arrêts `transparent`.
@@ -387,6 +400,11 @@ li { margin: 0; }
   font-size: 15pt;
   line-height: var(--mb-line);     /* un interligne pile, comme le corps */
   letter-spacing: 0.01em;
+  /* À 15 pt, la ligne de base de Gloria Hallelujah tombe 0,7 pt sous la
+     réglure remontée (voir `--mb-rule-lift`) : on remonte le titre pour qu'il
+     s'y pose comme le récit. Hansley, plus courte de descente, n'en aura plus
+     besoin quand elle sera déposée — à remesurer ce jour-là. */
+  top: -1.2pt;
 }
 
 .mb-note--ink-title .mb-note__title { color: var(--mb-ink); }
@@ -425,23 +443,29 @@ li { margin: 0; }
 .mb-ribbon {
   position: relative;
   flex: 0 0 71pt;
+  /* L'encombrement reste celui du premier ruban : c'est lui qui donne sa
+     hauteur au bandeau (88 pt visibles, `A5.bandeau` de `photoRatio.ts`), et
+     toutes les capacités de récit en dépendent. Seul le dessin raccourcit
+     (`.mb-ribbon__shape`). */
   height: 128pt;
   /* Le ruban dépasse du bord haut : `.page` étant en overflow hidden, il est
      coupé net, comme un signet glissé dans le carnet. */
   margin-top: -40pt;
-  padding-top: 50pt;
+  padding-top: 43pt;
   text-align: center;
 }
 
 .mb-ribbon__shape {
-  /* `currentColor` porte l'aplat : c'est ce qui permet au profil
-     imprimeur de le passer au blanc sans toucher au contour. */
-  color: var(--mb-paper-fill);
+  /* `currentColor` porte l'aplat. */
+  color: var(--mb-ribbon-fill);
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
   z-index: 0;
   width: 100%;
-  height: 100%;
+  /* 70 pt visibles au lieu de 88 : le ruban descendait trop bas dans la page
+     (Hugo, 13/10/2026). */
+  height: 110pt;
 }
 
 .mb-ribbon__label,
@@ -469,15 +493,27 @@ li { margin: 0; }
   text-align: center;
 }
 
-/* Un seul contour. Le double trait précédent lisait comme une erreur
-   d'impression, pas comme un tracé à main levée. */
-.mb-field::before {
+/* Un contour noir, et en dedans un trait de surligneur pêche : le double
+   trait noir d'avant lisait comme une erreur d'impression, un surlignage
+   coloré se lit comme un geste (Hugo, 13/10/2026). L'opacité est dans la
+   couleur, pas sur l'élément : pas de groupe de transparence dans le PDF. */
+.mb-field::before,
+.mb-field::after {
   content: "";
   position: absolute;
+  transform: rotate(-0.4deg);
+}
+
+.mb-field::before {
   inset: 0;
   border: 0.8pt solid var(--mb-black);
   border-radius: 6pt;
-  transform: rotate(-0.4deg);
+}
+
+.mb-field::after {
+  inset: 2.6pt;
+  border: 3pt solid var(--mb-field-highlight);
+  border-radius: 4pt;
 }
 
 .mb-field__value {
@@ -682,49 +718,53 @@ li { margin: 0; }
   transform: rotate(-0.7deg);
 }
 
-/* --- Photo ------------------------------------------------------------------ */
+/* --- Photo ------------------------------------------------------------------
+   Ni passe-partout blanc ni ombre : la photo remplit son emplacement, et un
+   contour noir tracé à la main flotte autour d'elle, tourné de 2° (Hugo,
+   13/10/2026, d'après le carnet de Maylis). Le contour déborde de 3,5 pt sans
+   rien occuper : l'emplacement — donc la surface comptée par le ratio photo /
+   texte — est celui de la photo seule. */
 .mb-photo {
   position: relative;
-  background-color: #ffffff;
-  padding: 4pt;
-  box-shadow: var(--mb-photo-shadow);
 }
 
 .mb-photo img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
+.mb-photo__cadre {
+  position: absolute;
+  top: -3.5pt;
+  left: -3.5pt;
+  z-index: 2;
+  width: calc(100% + 7pt);
+  height: calc(100% + 7pt);
+  overflow: visible;
+  pointer-events: none;
+}
+.mb-photo__cadre--a { transform: rotate(2deg); }
+.mb-photo__cadre--b { transform: rotate(-2deg); }
+.mb-photo__cadre--c { transform: rotate(1.6deg); }
+
 /* Photo à ne pas rogner — une photo de groupe, ou une image dont le rognage
    dépasserait le plafond (LAYOUT_KB § « Rognage des photos »). Elle est
-   seulement réduite, proportionnellement : le cadre blanc absorbe la
-   différence de format, comme le passe-partout d'un tirage. */
+   seulement réduite, proportionnellement, et centrée dans son emplacement. */
 .mb-photo--contain {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
-  background: none;
-  box-shadow: none;
 }
 
-/* Le cadre épouse l'image réduite, au lieu de laisser deux bandes blanches de
-   part et d'autre : une photo paysage dans une colonne étroite reste un petit
-   tirage paysage, centré dans son emplacement. */
-.mb-photo--contain img {
-  box-sizing: border-box;
-  width: auto;
-  height: auto;
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  padding: 4pt;
-  background-color: #ffffff;
-  box-shadow: var(--mb-photo-shadow);
-}
+/* Le contour épouse l'image réduite : le composeur donne la taille du tirage
+   dans l'emplacement (`tirage`, en %), qui porte l'image et son contour. */
+.mb-photo__tirage { position: relative; display: block; }
 
-.mb-photowall__row .mb-photo--contain img { padding: 3pt; box-shadow: none; }
+/* Sans `tirage` (payload écrit à la main), l'image est réduite dans tout
+   l'emplacement, et le contour l'entoure. */
+.mb-photo--contain > img { object-fit: contain; }
 
 .mb-photo--tilt-left { transform: rotate(-6.5deg); }
 .mb-photo--tilt-right { transform: rotate(5deg); }
@@ -902,13 +942,15 @@ li { margin: 0; }
 .page--colophon .page__content {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
 }
 
+/* « …par une feuille blanche » dans le dernier tiers de la page, et non au
+   milieu : la phrase se lit après un blanc, comme une page qu'on tourne
+   (Hugo, 13/10/2026). */
 .mb-colophon__opening { font-size: 12pt; }
-.mb-colophon__closing { align-self: flex-end; font-size: 12pt; }
-
+.mb-colophon__closing { align-self: flex-end; margin-top: auto; font-size: 12pt; }
 .mb-colophon__credits {
+  margin-top: 110pt;
   font-size: 10pt;
   line-height: 1.4;
   text-align: center;
@@ -990,7 +1032,9 @@ li { margin: 0; }
   height: calc(206pt * var(--mb-band, 1));
   justify-content: center;
   align-items: stretch;
-  gap: 10pt;
+  /* 14 pt : chaque photo a son contour dessiné, qui déborde de 3,5 pt et
+     tourne avec elle. Même valeur dans `A5.gapGalerie` (`photoRatio.ts`). */
+  gap: 14pt;
   margin-top: auto;            /* poussée vers le bas de la page */
   padding-top: 12pt;
 }
@@ -1091,15 +1135,13 @@ li { margin: 0; }
 .mb-pleine-page .mb-photo--pleine-page {
   width: 100%;
   height: 100%;
-  padding: 0;
-  box-shadow: none;
   transform: none;
 }
 
 /* Page d'album : une ou deux photos en fin d'étape, inclinées, le tracé
    pointillé entre elles. */
 .mb-photowall--libre { display: block; }
-.mb-photowall--libre .mb-photo { position: absolute; z-index: 1; padding: 5pt; }
+.mb-photowall--libre .mb-photo { position: absolute; z-index: 1; }
 .mb-photowall--libre > .mb-path { z-index: 0; bottom: 210pt; left: -40pt; width: 500pt; }
 .mb-photowall--1 .mb-photo--libre-a { top: 16%; left: 14%; width: 72%; height: 60%; transform: rotate(-2.5deg); }
 /* La même, couchée, pour une photo en largeur (`album_paysage`). */
@@ -1135,7 +1177,10 @@ li { margin: 0; }
   z-index: 2;
   display: flex;
   flex-direction: column;
-  gap: 5pt;
+  /* 11 pt entre deux photos : chacune a son contour dessiné, qui déborde de
+     3,5 pt — à 5 pt, les contours voisins se croisaient. Même valeur dans
+     `A5.gapGaleriePleine` (`photoRatio.ts`). */
+  gap: 11pt;
   /* 14 pt au bord, plus l'écart des marges côté pli : une photo ne s'y perd
      pas. */
   padding: 14pt 14pt 14pt calc(14pt + var(--mb-margin-int) - var(--mb-margin-ext));
@@ -1148,8 +1193,31 @@ li { margin: 0; }
   display: flex;
   flex: 1 1 0;
   min-height: 0;
-  gap: 5pt;
+  gap: 11pt;
 }
+
+/* Planche en deux colonnes décalées (maquette du 13/10/2026) : deux portraits
+   à gauche, trois tirages plus petits à droite, qui commencent plus haut et
+   finissent plus bas. Pas d'inclinaison : c'est le décalage des colonnes qui
+   fait le mouvement. Formats des emplacements dans `FORMATS_EMPLACEMENTS`
+   (`planche_colonnes`, `mise-en-page.js`). */
+.mb-photowall--colonnes {
+  flex-direction: row;
+  gap: 20pt;
+  padding-top: 18pt;
+  padding-bottom: 18pt;
+}
+.mb-photowall__col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.mb-photowall__col--gauche { flex: 1.12 1 0; gap: 22pt; padding: 22pt 0 36pt; }
+.mb-photowall__col--droite { flex: 1 1 0; gap: 14pt; }
+.mb-photowall__col .mb-photo { flex: 1 1 0; min-height: 0; }
+/* Le tirage du milieu est plus étroit, centré : la colonne ne se lit pas
+   comme une pile régulière. */
+.mb-photowall__col .mb-photo--colonne-etroite { width: 82%; align-self: center; }
 
 /* La bande du haut respire un peu plus : deux bandes égales donneraient une
    planche de contact, pas une page de carnet. */
@@ -1159,8 +1227,6 @@ li { margin: 0; }
   flex: 1 1 0;
   min-width: 0;
   height: 100%;
-  padding: 3pt;
-  box-shadow: none;
 }
 
 /* À cette densité, l'inclinaison et les ombres feraient fouillis : la bordure
@@ -1327,8 +1393,27 @@ li { margin: 0; }
 
 .mb-chapter__side { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 10pt; }
 
-.mb-chapter__map { flex: 0 0 176pt; align-self: stretch; display: flex; align-items: center; }
-.mb-chapter__map img { width: 100%; height: auto; }
+/* La colonne de droite : la carte, et au-dessus d'elle une photo inclinée
+   quand l'étape en a une (maquette du 13/10/2026). La carte prend la place
+   qui reste ; la colonne de récit, elle, ne change pas de largeur — donc
+   `CAPACITE_CHAPITRE` non plus. */
+.mb-chapter__aside {
+  flex: 0 0 176pt;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 16pt;
+  min-height: 0;
+}
+.mb-chapter__aside > .mb-photo--chapitre {
+  flex: 0 0 auto;
+  width: 136pt;
+  height: 196pt;
+  margin: 6pt 0 0 22pt;
+  transform: rotate(3deg);
+}
+.mb-chapter__map { flex: 1 1 auto; min-height: 0; display: flex; align-items: center; }
+.mb-chapter__map img { width: 100%; height: auto; max-height: 100%; object-fit: contain; }
 
 /* --- Quatrième de couverture --------------------------------------------------
    Deux variantes. La photo pleine page était la seule jusqu'ici, et personne

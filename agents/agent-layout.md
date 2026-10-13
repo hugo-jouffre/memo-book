@@ -122,7 +122,7 @@ l'accepte** :
 
 | Le récit de la page fait | Layouts possibles |
 |---|---|
-| sous 200 | `layout_hero_top` (1 photo), `layout_chapter_map` (une carte), `layout_photo_page` (≥ 3 photos, le récit passe en légende) |
+| sous 200 | `layout_hero_top` (1 photo), `layout_chapter_map` (une carte, et une photo au-dessus si l'étape en a), `layout_photo_page` (≥ 3 photos, le récit passe en légende) |
 | jusqu'à 230 | + `layout_split_left` **avec** un fun fact |
 | jusqu'à 300 | + `layout_chapter_map` avec deux photos |
 | jusqu'à 380 | + `layout_hero_top` |
@@ -162,7 +162,12 @@ sans photo, sans encart ni carte pour combler. Sinon, rien : 12 pt.
 - la première étape commence **à gauche** : `pages_libres_avant: 1` quand le
   colophon et l'introduction font un nombre pair de pages ;
 - **pas de légende** (`title` vide) sur les pages de photos ; une photo
-  exceptionnelle peut passer en `pleine_page`, une fois par chapitre ;
+  exceptionnelle peut passer en `pleine_page`, une fois par chapitre ; une
+  planche de cinq photos alterne les rangées et les deux colonnes décalées
+  (`planche_colonnes: true`), en commençant par les colonnes ;
+- l'**ouverture de chapitre** (`layout_chapter_map`) porte une photo au-dessus
+  de sa carte (de préférence en hauteur), ou deux photos en bande sous un
+  récit de 300 signes au plus ;
 - par **double page** : une étiquette de titre (`photos[].label`), un tracé
   (`trace`), deux stickers au plus ; chaque photo a son scotch
   (`tape_corner`) ; le fun fact est un post-it titré « Infos » ;

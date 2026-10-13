@@ -97,6 +97,7 @@ const LAYOUTS: Config[] = [
   { flag: "layout_chapter_map", photos: 2, funFact: true, note: "carte + carte info + 2 photos" },
   { flag: "layout_chapter_map", photos: 2, funFact: false, note: "carte + 2 photos" },
   { flag: "layout_chapter_map", photos: 0, funFact: false, note: "carte seule, pas de bande d'images" },
+  { flag: "layout_chapter_map", photos: 1, funFact: false, note: "carte + photo au-dessus, pas de bande d'images" },
   { flag: "layout_story_opener", photos: 1, funFact: false, suite: true, note: "PAGE DE SUITE, sans bandeau" },
   { flag: "layout_story_opener", photos: 1, funFact: true, suite: true, note: "PAGE DE SUITE, carte info et photo flottantes" },
   { flag: "layout_story_opener", photos: 0, funFact: true, suite: true, note: "PAGE DE SUITE, carte info seule" },

@@ -256,6 +256,47 @@ describe("mise en page de l'atelier", () => {
     });
   });
 
+  describe("retouches du 13/10/2026", () => {
+    const options = { contours, dessinerCarte: (r: unknown) => carte.renderMapDataUri(contours, r) };
+    const situe = (ids: string[]) => ({
+      lieu: { nom: "Paros", pays: "GR", lat: 37.08, lon: 25.15 },
+      photos: ids.map((id) => ({ id, paragraphe: 0 })),
+    });
+
+    it("pose une photo au-dessus de la carte de chapitre", () => {
+      // Un récit trop long pour la bande de deux photos (plus de 300 signes) :
+      // la page de chapitre garde une photo, au-dessus de sa carte.
+      const ids = ["a", "b", "c"];
+      const jours = M.composerJours([etape(paragrapheDe("le port", 4), ids.map((id) => photo(id)), situe(ids))], options);
+      const chapitre = jours.find((j) => j["layout_chapter_map"]);
+      expect(chapitre).toBeDefined();
+      expect(chapitre!.photos).toHaveLength(1);
+      // Les autres photos de l'étape ne sont pas perdues.
+      expect(jours.flatMap((j) => j.photos)).toHaveLength(ids.length);
+    });
+
+    it("alterne les planches de cinq photos entre colonnes et rangées", () => {
+      const photos = Array.from({ length: 16 }, (_, i) => photo(`p${i}`));
+      const jours = M.composerJours([etape(paragrapheDe("la plage", 2), photos)]);
+      const planches = jours.filter((j) => j["layout_photo_page"] && j.photos.length === 5);
+      expect(planches.map((j) => Boolean(j["planche_colonnes"]))).toEqual([true, false]);
+    });
+
+    it("donne au contour d'une photo réduite la taille de l'image, pas de l'emplacement", () => {
+      // Une photo de groupe n'est jamais rognée : réduite, son tirage occupe
+      // une part de l'emplacement, à son format.
+      const groupe = { ...photo("groupe", 1.5), groupe: true };
+      const jours = M.composerJours([etape(paragrapheDe("le marché", 2), [groupe])]);
+      const reduite = jours.flatMap((j) => j.photos).find((p) => typeof p !== "string" && p["fit" as "url"] === "contain") as
+        | { tirage?: [number, number] }
+        | undefined;
+      expect(reduite?.tirage).toBeDefined();
+      const [l, h] = reduite!.tirage!;
+      expect(Math.max(l, h)).toBe(100);
+      expect(Math.min(l, h)).toBeLessThan(100);
+    });
+  });
+
   describe("corps du récit ajusté d'un point (décisions du 12/10/2026)", () => {
     // Quatorze phrases en paragraphes de trois : un peu plus que deux pages en
     // 12 pt une fois les coupes faites sur des fins de phrase.

@@ -1019,11 +1019,26 @@ a.btn {
   border-radius: var(--rayon);
 }
 
-.perso legend {
-  padding: 0 0.25rem;
+.perso > summary {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.625rem;
+  cursor: pointer;
   font-size: 0.75rem;
-  font-weight: 600;
+  list-style: none;
 }
+.perso > summary::-webkit-details-marker { display: none; }
+.perso > summary::before {
+  content: "▶";
+  font-size: 0.625rem;
+  transition: transform 0.15s;
+}
+.perso[open] > summary::before { transform: rotate(90deg); }
+.perso:not([open]) { gap: 0; }
+
+.perso-titre { font-weight: 600; }
+.perso-resume { color: var(--muted); }
 
 .perso-ligne label {
   display: flex;

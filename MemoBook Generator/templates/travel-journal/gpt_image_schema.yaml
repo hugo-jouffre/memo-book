@@ -229,6 +229,13 @@ $defs:
           Sur un `layout_photo_page` à une photo : la photo en pleine page, bord
           à bord, sans cadre. Une fois par chapitre au plus, pour une photo
           notée 9 et plus, assez définie pour la page.
+      planche_colonnes:
+        type: boolean
+        description: >
+          Sur un `layout_photo_page` à cinq photos : deux colonnes décalées, sans
+          inclinaison — deux portraits à gauche, trois tirages plus petits à
+          droite. Alterne avec la planche en rangées d'une planche de cinq à
+          l'autre.
       layout_photo_page:
         type: boolean
         description: >
@@ -337,7 +344,8 @@ $defs:
         type: boolean
         description: >
           Ouverture de chapitre : carte de la région à droite, récit et carte info
-          à gauche, photos en bas. Exige `map`. Plafonds mesurés : 560 caractères
+          à gauche. Une photo seule se pose au-dessus de la carte, inclinée ;
+          deux photos vont dans la bande du bas. Exige `map`. Plafonds mesurés : 560 caractères
           sans bande d'images, 320 avec deux photos, 120 avec deux photos ET un
           `fun_facts` — la carte info y rétrécit la colonne comme sur
           `layout_split_left`.
@@ -503,6 +511,15 @@ $defs:
                     `contain` : la photo est seulement réduite, jamais rognée — photo de
                     groupe, ou rognage au-delà du plafond de LAYOUT_KB § « Rognage des
                     photos ». Absent ou `cover` : recadrage habituel, centré sur `focus`.
+                tirage:
+                  type: array
+                  items: { type: number }
+                  minItems: 2
+                  maxItems: 2
+                  description: >
+                    Avec `contain` : largeur et hauteur de l'image réduite, en % de son
+                    emplacement (`[100, 62]`). C'est elle qui porte le contour dessiné ;
+                    sans ce champ, le contour entoure tout l'emplacement.
                 label:
                   type: string
                   maxLength: 30

@@ -80,9 +80,9 @@ var RatioPhotos = (() => {
     bandeau: 88,
     titre: 31.2,
     encart: 148 * 86,
-    gapGalerie: 10,
+    gapGalerie: 14,
     margeGaleriePleine: 14,
-    gapGaleriePleine: 5
+    gapGaleriePleine: 11
   };
   var FORMATS = { a5: A5 };
   function surfaceUtile(f = A5) {
@@ -91,6 +91,9 @@ var RatioPhotos = (() => {
   function galerie(n, hauteur, f) {
     if (n <= 0) return 0;
     return (f.colonnes.pleine - f.gapGalerie * (n - 1)) * hauteur;
+  }
+  function chapitre(n, hauteur, f) {
+    return n === 1 ? 136 * 196 : galerie(n, hauteur, f);
   }
   function trio(parts) {
     return (n, hauteur, f) => parts.slice(0, n).reduce((somme, [l, h]) => somme + f.colonnes.pleine * l * hauteur * h, 0);
@@ -203,13 +206,14 @@ var RatioPhotos = (() => {
       encart: false
     },
     // Ouverture de chapitre : carte de la région à droite, récit en colonne
-    // étroite, photos en bas. La carte est un élément fixe, hors du ratio.
+    // étroite ; une photo au-dessus de la carte, ou deux en bas. La carte est un
+    // élément fixe, hors du ratio.
     layout_chapter_map: {
       colonne: "etroite",
       porteParImage: true,
       photos: { min: 0, max: 2 },
       bande: { hauteur: 206, min: 160, max: 206 },
-      surfacePhotos: galerie,
+      surfacePhotos: chapitre,
       capacite: { bandeau: 500, suite: 830 },
       capaciteAvecEncart: { bandeau: 110, suite: 300 },
       bandeau: true,

@@ -81,7 +81,7 @@ Sans ces champs, le gabarit retombe sur un centrage neutre et un scotch en haut
 Le recadrage `cover` est borné (`LAYOUT_KB.md`, § « Rognage des photos ») :
 
 - **jamais plus d'un tiers de l'image perdu** — au-delà, la photo passe en
-  `fit: "contain"` : réduite, entière, le cadre blanc ajusté à elle ;
+  `fit: "contain"` : réduite, entière, le contour dessiné ajusté à elle ;
 - **une photo de groupe n'est jamais rognée** — trois visages ou plus, ou la
   case « Photo de groupe » cochée dans l'atelier ;
 - **chaque visage reste entier dans le cadre** — sinon `contain`.

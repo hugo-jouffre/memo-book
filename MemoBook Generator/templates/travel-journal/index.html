@@ -69,6 +69,30 @@
               stroke-linecap="round" stroke-dasharray="9 13" />
       </symbol>
 
+      <!-- Cadre des photos : un contour noir tracé à la main, qui flotte autour
+           du tirage, légèrement tourné par rapport à lui — pas de passe-partout
+           blanc (Hugo, 13/10/2026). Trois tracés, pour qu'aucune page ne
+           répète le même. Le trait garde son épaisseur quelle que soit la
+           taille de la photo (`vector-effect`), le reste s'étire. -->
+      <symbol id="mb-cadre-a" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <path d="M3.2 1.1 C24 0.3 52 1.9 76 0.8 C86 0.4 94 1.2 99.1 0.6 C98.6 22 99.6 48 98.9 71 C98.6 84 99.3 93 98.8 99.2
+                 C76 98.6 51 99.7 27 98.9 C16 98.6 7 99.4 0.9 99.1 C1.4 77 0.4 52 1.2 29 C1.5 17 0.7 8 1.4 -0.8"
+              fill="none" stroke="#2b231b" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"
+              vector-effect="non-scaling-stroke" />
+      </symbol>
+      <symbol id="mb-cadre-b" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <path d="M0.6 1.6 C21 0.7 47 2.1 70 1.0 C83 0.5 92 1.5 99.4 1.1 C99.0 25 99.8 47 99.2 68 C98.9 82 99.6 92 99.0 98.6
+                 C80 99.4 57 98.5 33 99.2 C19 99.6 9 98.8 1.3 99.4 C0.8 81 1.6 57 0.9 34 C0.6 19 1.4 9 0.7 3.4 L2.2 0.4"
+              fill="none" stroke="#2b231b" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"
+              vector-effect="non-scaling-stroke" />
+      </symbol>
+      <symbol id="mb-cadre-c" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <path d="M1.8 0.9 C29 1.6 55 0.4 81 1.3 C90 1.6 96 0.9 99.6 1.4 C98.9 21 99.7 44 99.1 66 C98.8 80 99.5 91 98.6 99.4
+                 C73 98.7 48 99.6 24 98.8 C14 98.5 6 99.2 0.6 98.7 C1.3 79 0.5 55 1.1 31 C1.4 18 0.6 8 1.0 0.2 L4.6 1.5"
+              fill="none" stroke="#2b231b" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"
+              vector-effect="non-scaling-stroke" />
+      </symbol>
+
       <!-- Rayures du scotch. En SVG et non en dégradé CSS : Chromium écrit un
            dégradé répété en `shading`, que certains lecteurs PDF ne rendent pas
            — le scotch sortait alors en bande blanche. Un tracé passe partout. -->
@@ -110,7 +134,8 @@
      dès qu'elle arrivait enrichie par l'analyse d'image.
      `item` accepte une URL nue ou un objet {url, tape_corner, focus, label}.
      `label` : l'étiquette de titre posée sur la photo (« Rizières de Banaue »). #}
-  {% macro mb_photo(item, modifier) %}<div class="mb-photo mb-photo--{{ modifier }}{% if item.fit == 'contain' %} mb-photo--contain{% endif %}{% if item.tape_corner and item.fit != 'contain' %} mb-photo--tape-{{ item.tape_corner }}{% endif %}">{% if item.tape_corner and item.fit != 'contain' %}<span class="mb-photo__tape"><svg viewBox="0 0 46 13" preserveAspectRatio="none"><use href="#mb-tape" /></svg></span>{% endif %}<img src="{{ item.url | default(item) }}" alt=""{% if item.focus %} style="object-position: {{ item.focus }}"{% endif %} />{% if item.label %}<span class="mb-photo__label">{{ item.label }}</span>{% endif %}</div>{% endmacro %}
+  {% macro mb_cadre(item, modifier) %}{% if modifier != 'pleine-page' %}{% set v = ['a', 'b', 'c'][(item.url | default(item) | length) % 3] %}<svg class="mb-photo__cadre mb-photo__cadre--{{ v }}" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><use href="#mb-cadre-{{ v }}" /></svg>{% endif %}{% endmacro %}
+  {% macro mb_photo(item, modifier) %}<div class="mb-photo mb-photo--{{ modifier }}{% if item.fit == 'contain' %} mb-photo--contain{% endif %}{% if item.tape_corner and item.fit != 'contain' %} mb-photo--tape-{{ item.tape_corner }}{% endif %}">{% if item.tape_corner and item.fit != 'contain' %}<span class="mb-photo__tape"><svg viewBox="0 0 46 13" preserveAspectRatio="none"><use href="#mb-tape" /></svg></span>{% endif %}{% if item.fit == 'contain' and item.tirage %}<span class="mb-photo__tirage" style="width: {{ item.tirage[0] }}%; height: {{ item.tirage[1] }}%"><img src="{{ item.url | default(item) }}" alt="" />{{ mb_cadre(item, modifier) }}</span>{% else %}<img src="{{ item.url | default(item) }}" alt=""{% if item.focus %} style="object-position: {{ item.focus }}"{% endif %} />{{ mb_cadre(item, modifier) }}{% endif %}{% if item.label %}<span class="mb-photo__label">{{ item.label }}</span>{% endif %}</div>{% endmacro %}
 
 
   {# Le tracé pointillé, dessiné derrière les photos d'une bande. `slot` vient
@@ -184,14 +209,8 @@
       <div class="page__content">
         {% if intro_photos and intro_photos | length >= 1 %}
           <div class="mb-intro__photos">
-            <div class="mb-photo mb-photo--tilt-slight">
-              <img src="{{ intro_photos[0] }}" alt="" />
-            </div>
-            {% if intro_photos | length >= 2 %}
-              <div class="mb-photo mb-photo--tilt-right">
-                <img src="{{ intro_photos[1] }}" alt="" />
-              </div>
-            {% endif %}
+            {{ mb_photo(intro_photos[0], 'tilt-slight') }}
+            {% if intro_photos | length >= 2 %}{{ mb_photo(intro_photos[1], 'tilt-right') }}{% endif %}
           </div>
         {% endif %}
         <div class="mb-note mb-note--black-title">{{ mb_rules(40) }}
@@ -272,6 +291,21 @@
             {{ mb_trace(trace) }}
             {{ mb_photo(day.photos[0], 'libre-a') }}
             {% if day.photos | length == 2 %}{{ mb_photo(day.photos[1], 'libre-b') }}{% endif %}
+          </div>
+        {% elif day.planche_colonnes and day.photos | length == 5 %}
+          {# Cinq photos en deux colonnes décalées, sans inclinaison : deux
+             portraits à gauche, trois tirages plus petits à droite, qui
+             commencent plus haut et finissent plus bas (maquette du 13/10/2026). #}
+          <div class="mb-photowall mb-photowall--colonnes">
+            <div class="mb-photowall__col mb-photowall__col--gauche">
+              {{ mb_photo(day.photos[0], 'colonne-a') }}
+              {{ mb_photo(day.photos[1], 'colonne-a') }}
+            </div>
+            <div class="mb-photowall__col mb-photowall__col--droite">
+              {{ mb_photo(day.photos[2], 'colonne-b') }}
+              {{ mb_photo(day.photos[3], 'colonne-b mb-photo--colonne-etroite') }}
+              {{ mb_photo(day.photos[4], 'colonne-b') }}
+            </div>
           </div>
         {% else %}
         <div class="mb-photowall">
@@ -447,9 +481,19 @@
                 </div>
               {% endif %}
             </div>
-            {% if day.map_svg %}
-              <div class="mb-chapter__map">
-                <img src="{{ day.map_svg }}" alt="" />
+            {# Une photo seule va au-dessus de la carte (maquette du
+               13/10/2026) ; deux photos, sous un récit court, vont dans la
+               bande du bas, comme avant. Pas les deux à la fois : la carte n'y
+               garde plus que le tiers de sa hauteur. #}
+            {% set photo_carte = day.photos and day.photos | length == 1 %}
+            {% if day.map_svg or photo_carte %}
+              <div class="mb-chapter__aside">
+                {% if photo_carte %}{{ mb_photo(day.photos[0], 'chapitre') }}{% endif %}
+                {% if day.map_svg %}
+                  <div class="mb-chapter__map">
+                    <img src="{{ day.map_svg }}" alt="" />
+                  </div>
+                {% endif %}
               </div>
             {% endif %}
           </div>
