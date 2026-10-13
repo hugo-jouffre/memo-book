@@ -1035,6 +1035,24 @@ a.btn {
 .style-couv.a-venir .nom-style-couv { opacity: 0.45; }
 .style-couv .pastille-a-venir { position: absolute; top: 0.25rem; right: 0.25rem; }
 
+.illustrations-couv {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 0.5rem;
+}
+.illustration-couv { display: grid; gap: 0.25rem; margin: 0; }
+.illustration-couv img,
+.illustration-couv .illustration-vide {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: repeating-conic-gradient(#f2eee8 0% 25%, #fff 0% 50%) 50% / 16px 16px;
+}
+.illustration-couv .illustration-vide { display: grid; place-items: center; font-size: 0.75rem; color: var(--muted, #777); }
+.illustration-couv figcaption { display: flex; justify-content: space-between; align-items: center; gap: 0.25rem; font-size: 0.6875rem; }
+
 .champ-large { grid-column: 1 / -1; }
 .champ-large textarea { width: 100%; font: inherit; }
 
