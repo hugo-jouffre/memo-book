@@ -315,6 +315,23 @@
   #export-note-close:hover { background: rgb(0 0 0 / .06); color: var(--ink); }
 
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+  /* --- Bilan du ratio texte / photo ------------------------------------- */
+  #ratio { margin: 0 10px 8px; font-size: 11px; border: 1px solid rgba(43,35,27,.14);
+    border-radius: 6px; background: rgba(255,255,255,.6); }
+  #ratio summary { padding: 6px 9px; cursor: pointer; font-weight: 600; letter-spacing: .01em; }
+  #ratio-resume { font-weight: 400; opacity: .7; }
+  #ratio-table { width: 100%; border-collapse: collapse; }
+  #ratio-table th, #ratio-table td { padding: 3px 9px; text-align: left; white-space: nowrap; }
+  #ratio-table th { font-weight: 600; opacity: .6; font-size: 10px; }
+  #ratio-table tbody tr { border-top: 1px solid rgba(43,35,27,.08); }
+  #ratio-table td.num { font-variant-numeric: tabular-nums; }
+  /* Hors tolérance : signalé, pas dramatisé. Un dépassement assumé — le
+     minimum de photos d'un palier sur un récit très court — n'est pas une
+     erreur, et il ne porte donc pas la même couleur. */
+  .ratio-hors { color: #b3261e; font-weight: 600; }
+  .ratio-assume { color: #8a6116; }
+  .ratio-ok { opacity: .45; }
 </style>
 
 <header>
@@ -353,6 +370,23 @@
   <button type="button" id="export-note-close" aria-label="Fermer">×</button>
 </div>
 
+<!-- Bilan du ratio texte / photo, étape par étape. Replié par défaut : il ne
+     doit pas manger la page, mais il répond à la seule question qu'on se pose
+     après un changement de réglage — « est-ce que le carnet a tenu la cible ? ». -->
+<details id="ratio">
+  <summary>Ratio texte / photo <span id="ratio-resume"></span></summary>
+  <table id="ratio-table">
+    <thead>
+      <tr>
+        <th>Étape</th><th>Cible</th><th>Mesuré</th>
+        <th title="Photos demandées par le calcul / photos réellement placées">Photos</th>
+        <th>Pages</th><th></th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</details>
+
 <div class="stage">
   <div class="stage-inner" id="stage-inner">
     <iframe id="frame" title="Carnet rendu" scrolling="no"></iframe>
@@ -374,6 +408,12 @@
 <script>
   const PARTS = __PARTS__;
   const PAGES = __PAGES__;
+  /** Le bilan de ratio par étape, calculé à la fabrication (`build-inspector.ts`). */
+  const RATIOS = __RATIOS__;
+  /** La tolérance du ratio, en points — la même constante que le module de calcul. */
+  const RATIO_TOLERANCE = __RATIO_TOLERANCE__;
+  /** Le collecteur de rectangles, livré par le module de calcul lui-même. */
+  const COLLECTEUR = __COLLECTEUR__;
 </script>
 <script type="application/json" id="doc-source">__DOCUMENT__</script>
 <script type="application/json" id="pdf-source">__PDFS__</script>
@@ -760,6 +800,66 @@
       copyText(selector, copy, body.querySelector("#fallback"), body.querySelector("#fallback-text")));
   }
 
+  // --- Bilan du ratio texte / photo ---------------------------------------
+  /**
+   * Le ratio **mesuré** de chaque étape, relevé sur le rendu, en regard du ratio
+   * **cible** que le calcul avait visé.
+   *
+   * La mesure ne refait pas le calcul : elle somme les cadres `.mb-photo` et la
+   * hauteur réellement peinte des `.mb-note` des pages de l'étape, exactement
+   * comme `mesurerRatio` côté back-end. Les éléments fixes — bandeau, titre,
+   * carte info, carte de chapitre, décor — n'y entrent pas : ils ne dépendent
+   * d'aucun réglage du voyageur.
+   */
+  function remplirRatios() {
+    const tbody = document.querySelector("#ratio-table tbody");
+    const resume = document.getElementById("ratio-resume");
+    if (!tbody || !RATIOS.length) {
+      document.getElementById("ratio").hidden = true;
+      return;
+    }
+    const jours = Array.from(doc.querySelectorAll(".page--day"));
+    const collecter = COLLECTEUR;
+    let horsTolerance = 0;
+
+    tbody.textContent = "";
+    for (const bilan of RATIOS) {
+      const pages = jours.slice(bilan.premiere, bilan.premiere + bilan.pages);
+      const { photos, notes } = collecter(pages);
+      const surfacePhoto = photos.reduce((s, p) => s + p.largeur * p.hauteur, 0);
+      const surfaceTexte = notes.reduce((s, n) => s + n.largeur * n.hauteur, 0);
+      const total = surfacePhoto + surfaceTexte;
+      const mesure = total > 0 ? Math.round((surfacePhoto / total) * 1000) / 10 : 0;
+      const ecart = Math.abs(mesure - bilan.ratioCible);
+      const hors = ecart > RATIO_TOLERANCE;
+      if (hors && !bilan.depassementAssume) horsTolerance += 1;
+
+      const tr = document.createElement("tr");
+      const cellule = (contenu, classe) => {
+        const td = document.createElement("td");
+        td.textContent = contenu;
+        if (classe) td.className = classe;
+        tr.appendChild(td);
+      };
+      cellule(bilan.titre || "Étape " + bilan.etape);
+      cellule(bilan.ratioCible + " %", "num");
+      cellule(mesure + " %", "num");
+      cellule(photos.length + " / " + bilan.photosDemandees, "num");
+      cellule(String(pages.length), "num");
+      // L'indicateur : « dépassement assumé » quand c'est le minimum de photos
+      // du palier qui déborde sur un récit très court — ce n'est pas une erreur.
+      cellule(
+        hors ? (bilan.depassementAssume ? "dépassement assumé" : "hors tolérance") : "dans la tolérance",
+        hors ? (bilan.depassementAssume ? "ratio-assume" : "ratio-hors") : "ratio-ok",
+      );
+      tr.title = bilan.raison;
+      tbody.appendChild(tr);
+    }
+    resume.textContent = horsTolerance
+      ? "— " + horsTolerance + " étape(s) hors tolérance"
+      : "— toutes les étapes dans la tolérance";
+  }
+
   // --- Chargement ----------------------------------------------------------
   frame.addEventListener("load", () => {
     doc = frame.contentDocument;
@@ -780,6 +880,8 @@
       tag.textContent = `${i + 1} / ${pageEls.length}`;
       page.appendChild(tag);
     });
+
+    remplirRatios();
 
     fitZoom();
     applyZoom();

@@ -937,7 +937,23 @@ li { margin: 0; }
 }
 
 .mb-day__floats .mb-card { position: absolute; bottom: 24pt; left: 4pt; }
-.mb-day__floats .mb-photo { position: absolute; bottom: 30pt; right: 0; width: 165pt; height: 162pt; }
+/* La photo de la zone flottante grandit, elle aussi, avec le ratio : c'est
+   elle qui porte le palier 25 %, et c'est elle qui remplit la page quand une
+   étape très courte n'a ni fun fact ni décor pour le faire. Format conservé
+   (165/162), hauteur bornée par la zone. */
+.mb-day__floats .mb-photo {
+  position: absolute;
+  bottom: 30pt;
+  right: 0;
+  width: calc(165pt * var(--mb-band, 1));
+  height: calc(162pt * var(--mb-band, 1));
+  max-width: 100%;
+}
+
+/* Étape à 0 % : la zone du bas ne porte plus que la carte fun fact. Sans photo
+   à côté, elle n'a pas besoin de sa hauteur de conception — le récit l'a déjà
+   prise. */
+.mb-day__floats--sans-photo { min-height: 0; }
 
 /* Texte à gauche, carte info à droite (ou l'inverse). */
 .mb-split {
@@ -965,7 +981,13 @@ li { margin: 0; }
                                   lanières, rognées jusqu'à l'illisible. Le
                                   récit trop long se découpe en amont (barème),
                                   il ne se loge pas en écrasant les images. */
-  height: 206pt;
+  /* `--mb-band` est l'échelle de bande du **ratio texte / photo** : 1 = la
+     hauteur de conception, 0,78 le plancher de 160 pt, 1,26 le plafond. Elle
+     est calculée par étape (`photoRatio.ts`, `band_scale`) et posée sur
+     `.page__content`. C'est le seul réglage continu du carnet, et il ne prend
+     jamais une ligne au texte : la table des gabarits borne la hausse à ce que
+     le récit de la page laisse libre. */
+  height: calc(206pt * var(--mb-band, 1));
   justify-content: center;
   align-items: stretch;
   gap: 10pt;
@@ -986,7 +1008,7 @@ li { margin: 0; }
 .mb-trio {
   position: relative;
   flex: 0 1 auto;
-  height: 360pt;
+  height: calc(360pt * var(--mb-band, 1));
   min-height: 300pt;
   margin-top: auto;
   padding-top: 12pt;
@@ -1085,10 +1107,15 @@ li { margin: 0; }
 .mb-photowall--2 .mb-photo--libre-a { top: 7%; left: 7%; width: 60%; height: 44%; transform: rotate(-4deg); }
 .mb-photowall--2 .mb-photo--libre-b { bottom: 9%; right: 7%; width: 60%; height: 44%; transform: rotate(3.5deg); }
 
-/* Photo héro en haut de page. */
+/* Photo héro en haut de page. Hauteur réglée par le ratio texte / photo
+   (`--mb-band`) : 268 pt de conception, de 200 à 330 selon le ratio demandé.
+   Les bornes ne sont **pas** répétées ici en `min-height` / `max-height` :
+   c'est la table des gabarits qui borne `band_scale`, et les poser aussi en
+   CSS empêchait la héro de se comprimer comme elle le fait depuis toujours
+   quand un récit long la pousse. */
 .mb-hero {
   margin: 0 0 12pt;
-  height: 268pt;
+  height: calc(268pt * var(--mb-band, 1));
 }
 
 /* --- Page pleine de photos --------------------------------------------------
@@ -1382,4 +1409,38 @@ li { margin: 0; }
 
 .page--back--text .mb-back__footer { color: var(--mb-black); }
 .page--back--text .mb-back__logo { filter: invert(1); }
+
+/* --- Planche de photos : légendes et bandeau -------------------------------
+   Le palier **100 %** du ratio texte / photo. Aucun `mb-note` n'est imprimé :
+   il reste le bandeau d'étape et la carte fun fact si le carnet l'a allumée.
+   Le récit du voyageur a servi de matière à celle-ci — il ne disparaît pas du
+   carnet, il change de forme.
+
+   Les légendes par photo que prévoyait la spécification ne sont pas rendues :
+   « Pas de légende sur les pages de photos » (Hugo, 12/10/2026). À trancher,
+   voir `docs/ratio-texte-photo.md`. */
+
+/* La planche qui ouvre une étape : le bandeau garde sa hauteur en haut de
+   page, les photos occupent ce qui reste. Même géométrie que la table des
+   gabarits (`layout_photo_wall_intro`), sans quoi le ratio mesuré ne
+   correspondrait pas au ratio calculé. */
+.page--photos-intro .mb-photowall { top: 88pt; }
+
+.mb-photowall__header {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 3;
+  padding: 14pt 30pt 0;
+}
+
+/* La carte fun fact posée sur la planche, en bas à gauche : le seul endroit où
+   elle ne couvre pas le sujet des photos de la rangée du haut. */
+.mb-card--planche {
+  position: absolute;
+  bottom: 22pt;
+  left: 22pt;
+  z-index: 4;
+}
 </style>

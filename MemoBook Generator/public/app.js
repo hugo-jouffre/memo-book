@@ -1563,9 +1563,11 @@ const ficheCouverture = () => Couverture.ficheDuCarnet(fichePumbo(), pagesDuLivr
  * (`backend/src/services/bookSettings.ts`), qui applique les mêmes au PDF de
  * l'app :
  *
- * - **ratio photo / texte à 0 %** : aucune photo dans le carnet (la couverture
- *   garde la sienne). 25, 50 et 75 % composent comme aujourd'hui, en
- *   attendant leur définition ;
+ * - **ratio photo / texte** : les cinq paliers. C'est `RatioPhotos`
+ *   (`ratio-photos.js`, généré depuis `backend/src/services/photoRatio.ts`)
+ *   qui recompose chaque étape — nombre de pages, layout, répartition des
+ *   photos, hauteur des bandes. Le même module que l'app : un carnet composé
+ *   ici et un carnet composé par l'app doivent tomber sur le même PDF ;
  * - **pointillés** coupés : `rules_enabled: false`, pas de réglure ;
  * - **décorations** à 0 : `decoration_quota: 0`, ni tracé pointillé ni
  *   sticker (le scotch des photos reste) ;
@@ -1601,6 +1603,9 @@ function construirePayloadCarnet(photoDe = (data) => data, { imprimeur = Boolean
   const intro = "";
   const avant = 1 + (intro ? 1 : 0);
   const libresAvant = avant % 2 === 0 ? 1 : 0;
+  // Le bilan de ratio de chaque étape, rempli par `appliquerRatio` et lu par
+  // l'inspecteur de mise en page.
+  const plansDeRatio = [];
   // La même photo que sur la couverture imprimée : le carnet s'ouvre sur ce
   // qu'on a vu en le prenant en main.
   const couverture = photoDeCouverture();
@@ -1633,7 +1638,7 @@ function construirePayloadCarnet(photoDe = (data) => data, { imprimeur = Boolean
     decoration_quota: reglages.decorationQuota,
     // Après la dernière étape, avant la quatrième : de quoi écrire à la main.
     pages_libres: reglages.freeZonesEnabled ? PAGES_LIBRES_FIN : 0,
-    days: MiseEnPage.composerJours(etapes, {
+    days: appliquerRatioAuxJours(MiseEnPage.composerJours(etapes, {
       contours: etat.contoursCarte,
       dessinerCarte: etat.contoursCarte ? dessinerCarteChapitre : null,
       // Le colophon est la page 1 du livre imprimé : la première page d'étape
@@ -1652,7 +1657,7 @@ function construirePayloadCarnet(photoDe = (data) => data, { imprimeur = Boolean
           noter(texte);
         }
       },
-    }),
+    }), reglages, plansDeRatio),
     back_cover: {
       closing_text: "À suivre.",
       // Pas de `closing_subtext` : « Carnet composé avec MemoBook Generator,
@@ -1663,7 +1668,41 @@ function construirePayloadCarnet(photoDe = (data) => data, { imprimeur = Boolean
     },
   };
   if (imprimeur && Couverture.pagesDuPdf(payload) % 2 === 1) payload.page_blanche_finale = true;
+  // Le bilan par étape reste accessible à l'inspecteur après la construction.
+  etat.ratioParEtape = plansDeRatio;
   return payload;
+}
+
+/**
+ * Le ratio texte / photo appliqué aux pages que `composerJours` vient de
+ * composer.
+ *
+ * Deux étages, comme dans l'app : l'atelier compose d'abord à sa façon —
+ * chapitres, cartes, photos auprès du passage qu'elles illustrent, doubles
+ * pages variées —, puis le module de ratio tranche le nombre de pages, le
+ * layout de chacune et la taille des photos. Le texte du voyageur, lui, ne
+ * bouge pas : au pire un paragraphe passe à la page suivante.
+ *
+ * `RatioPhotos` est **généré** depuis `backend/src/services/photoRatio.ts`
+ * (`npm run ratio:build`) : c'est le même code que celui qui annonce au
+ * voyageur, dans le chat de l'app, le nombre de photos qu'il lui faut.
+ */
+function appliquerRatioAuxJours(jours, reglages, plans) {
+  const journal = [];
+  const sortie = RatioPhotos.appliquerRatio(jours, reglages.photoTextRatio, {
+    funFacts: reglages.funFactsEnabled,
+    decorations: reglages.decorationQuota > 0,
+    plans,
+    journal: (message, details) => journal.push(details ? `${message} — ${JSON.stringify(details)}` : message),
+  });
+  for (const ligne of journal) debugCarnet(ligne);
+  for (const [index, plan] of plans.entries()) {
+    debugCarnet(
+      `ratio étape ${index + 1} : cible ${plan.ratioCible} %, estimé ${plan.ratioEstime} %, ` +
+        `${plan.photos} photo(s) sur ${plan.pages} page(s) — ${plan.raison}`,
+    );
+  }
+  return sortie;
 }
 
 /* ------------------------------------------------ envoi vers APITemplate --- */
@@ -3605,7 +3644,7 @@ function panneauPersonnalisation() {
     ligne(
       "Ratio photo / texte",
       h("select", { onchange: poser("ratioPhotos", Number) }, options([0, 25, 50, 75, 100], c.ratioPhotos ?? 50, (v) => `${v} % de photos`)),
-      "0 % : aucune photo dans le carnet. Les autres paliers composent comme aujourd'hui, en attendant leur définition.",
+      "La part de surface qu'occupent les photos, sur l'ensemble des pages d'une étape. 0 % : aucune photo. 100 % : aucun récit imprimé — bandeau, fun facts et légendes. C'est le nombre de photos et de pages qui s'adapte, jamais ton texte.",
     ),
     ligne(
       "Fun facts",

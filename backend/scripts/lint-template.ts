@@ -131,6 +131,19 @@ if (!/^<meta\s+name="viewport"/.test(rawStyle.trimStart())) {
   fail("style.css", "la première ligne doit rester le <meta name=\"viewport\">.");
 }
 
+// Et la dernière doit rester le `</style>`. Une règle ajoutée **après** la
+// balise ne devient pas du CSS : APITemplate injecte le champ verbatim, et le
+// navigateur affiche le texte dans la page. C'est arrivé — un bloc de 30
+// lignes posé en fin de fichier sortait imprimé en clair, et le carnet gagnait
+// une feuille. Le rendu ne s'en plaint pas : seule la pagination le trahit.
+if (styleWithoutComments.trimEnd().split("\n").pop()?.trim() !== "</style>") {
+  fail(
+    "style.css",
+    "le fichier doit se terminer par `</style>`. Ce qui vient après n'est pas " +
+      "du CSS : c'est du texte imprimé dans le carnet.",
+  );
+}
+
 if (styleWithoutComments.includes("**")) {
   fail(
     "style.css",

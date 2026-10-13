@@ -220,7 +220,7 @@
   {% for day in days %}
     {% set gauche = ((avant_etapes + 1 + loop.index0) % 2 == 0) %}
     {% set trace = day.trace if day.trace else (['a', 'b', 'c'][loop.index0 % 3] if gauche else 'aucun') %}
-    {% if day.layout_photo_page and day.photos and day.photos | length >= 1 %}
+    {% if (day.layout_photo_page or day.layout_photo_wall_intro) and day.photos and day.photos | length >= 1 %}
       {# Page pleine de photos : ni récit, ni bandeau, ni décor. Quatre
          testeurs demandent que l'image prenne le pas sur le texte, et les
          pages déjà pleines de photos sont citées comme le point fort du
@@ -229,7 +229,37 @@
          Les bandes sont écrites en clair plutôt que calculées : `min` n'existe
          pas dans Nunjucks, et une expression qui ne tourne que d'un côté ne se
          verrait qu'à l'impression. #}
-      <div class="page page--day page--photos {{ 'page--gauche' if gauche else 'page--droite' }}">
+      <div class="page page--day page--photos {{ 'page--gauche' if gauche else 'page--droite' }}{% if day.layout_photo_wall_intro %} page--photos-intro{% endif %}">
+        {% if day.layout_photo_wall_intro and day.day_intro %}
+          {# La planche qui **ouvre** une étape à 100 % de photos : elle garde le
+             bandeau jour · lieu · date, et la carte fun fact si le carnet l'a
+             allumée. Une étape sans bandeau ne se lit plus comme une étape. Le
+             récit, lui, n'est pas imprimé — il a servi de matière aux fun facts
+             (LAYOUT_KB § « Le ratio texte / photo »). #}
+          <div class="mb-photowall__header">
+            <div class="mb-header mb-header--seul">
+              <div class="mb-ribbon">
+                <svg class="mb-ribbon__shape" viewBox="0 0 71 93" preserveAspectRatio="none">
+                  <use href="#mb-ribbon" />
+                </svg>
+                <span class="mb-ribbon__label">jour</span>
+                <span class="mb-ribbon__number">{{ day.day_intro.day_number | default('01') }}</span>
+              </div>
+              {% if day.day_intro.location %}
+                <div class="mb-field">
+                  <span class="mb-field__label">lieu</span>
+                  <span class="mb-field__value">{{ day.day_intro.location }}</span>
+                </div>
+              {% endif %}
+              {% if day.day_intro.date %}
+                <div class="mb-field">
+                  <span class="mb-field__label">date</span>
+                  <span class="mb-field__value">{{ day.day_intro.date }}</span>
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        {% endif %}
         {% if day.pleine_page %}
           {# Une photo exceptionnelle en pleine page, bord à bord : ni cadre, ni
              inclinaison, ni décor. Une fois par chapitre au plus. #}
@@ -277,6 +307,15 @@
           {% endif %}
         </div>
         {% endif %}
+        {% if day.layout_photo_wall_intro and day.fun_facts and day.fun_facts | length >= 1 %}
+          {# La carte posée sur la planche d'ouverture : c'est elle qui absorbe
+             le résidu d'une étape à 100 %, quand le carnet l'a allumée. #}
+          <div class="mb-card mb-card--planche">
+            <svg class="mb-card__clip" viewBox="0 0 30 26"><use href="#mb-clip" /></svg>
+            <div class="mb-card__title"><span>{{ day.fun_facts_title | default('Fun fact') }}</span></div>
+            <div class="mb-card__body"><p>{{ day.fun_facts[0] }}</p></div>
+          </div>
+        {% endif %}
         {# Pas de légende sur les pages de photos (Hugo, 12/10/2026). #}
         {% if not day.pleine_page %}{{ mb_stickers(day) }}{% endif %}
       </div>
@@ -299,7 +338,14 @@
          Il était autrefois posé à hauteur fixe sur la page (24, 48 ou 96 pt du
          bas), en supposant la bande toujours en bas : dès qu'un récit trop long
          repoussait ou écrasait la bande, le pointillé passait sous le texte. #}
-      <div class="page__content">
+      {# L'échelle de la bande de photos, calculée par le module de ratio
+         (`photoRatio.ts`, champ `band_scale`). 1 = la hauteur de conception du
+         CSS. C'est le seul réglage continu du carnet : il permet d'atteindre le
+         ratio texte / photo demandé **sans jamais toucher au texte**. Les
+         bornes sont dans le CSS (`.mb-gallery`, plancher 160 pt) et dans la
+         table des gabarits, qui ne laisse jamais la bande voler une ligne au
+         récit. #}
+      <div class="page__content"{% if day.band_scale %} style="--mb-band: {{ day.band_scale }}"{% endif %}>
 
         {% if day.day_intro %}
           <!-- Bandeau : ruban jour + lieu + date -->
@@ -501,6 +547,26 @@
               {% if day.photos | length >= 3 %}
                 {{ mb_photo(day.photos[2], 'tilt-slight') }}
               {% endif %}
+            </div>
+          {% endif %}
+
+        {% elif day.layout_story_full %}
+          {# Étape à 0 % de photos : le récit prend toute la feuille et la
+             réglure descend jusqu'en bas. Pas de zone flottante — les photos
+             n'existent pas dans ce carnet, et le texte occupe la place qu'elles
+             auraient eue. La carte fun fact reste possible : elle n'est pas une
+             photo, et c'est elle qui tient le bas de page. #}
+          <div class="mb-note mb-note--remplit mb-note--ink-title">{{ mb_rules(48) }}
+            {% if day.title %}<span class="mb-note__title">{{ day.title }}</span>{% endif %}
+            {{ day.body_html | safe }}
+          </div>
+          {% if day.fun_facts and day.fun_facts | length >= 1 %}
+            <div class="mb-day__floats mb-day__floats--sans-photo">
+              <div class="mb-card">
+                <svg class="mb-card__clip" viewBox="0 0 30 26"><use href="#mb-clip" /></svg>
+                <div class="mb-card__title"><span>{{ day.fun_facts_title | default('Fun fact') }}</span></div>
+                <div class="mb-card__body"><p>{{ day.fun_facts[0] }}</p></div>
+              </div>
             </div>
           {% endif %}
 

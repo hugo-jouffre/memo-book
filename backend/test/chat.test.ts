@@ -821,7 +821,7 @@ describe("valider", () => {
     const card = thread.messages.find((message) => message.body.kind === "transcript");
     expect(card?.body.kind === "transcript" && card.body.transcript.isValidated).toBe(true);
     // Validé : MEMO demande le nombre exact de photos qui remplit l'étape.
-    const budget = photoBudgetFor((validated.editedText ?? validated.redactedText ?? "").trim().length);
+    const budget = photoBudgetFor((validated.editedText ?? validated.redactedText ?? "").trim(), memo);
     expect(memoBubbles(thread).slice(-2).map((message) => message.body)).toEqual([
       { kind: "text", text: "C’est enregistré. Ton carnet compte une étape de plus." },
       { kind: "text", text: photosWanted(budget.photos, budget.pages) },

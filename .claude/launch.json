@@ -4,9 +4,21 @@
     {
       "name": "backend",
       "runtimeExecutable": "/bin/zsh",
-      "runtimeArgs": ["-c", "[ -s \"$HOME/.nvm/nvm.sh\" ] && . \"$HOME/.nvm/nvm.sh\"; exec npm run dev"],
+      "runtimeArgs": [
+        "-c",
+        "[ -s \"$HOME/.nvm/nvm.sh\" ] && . \"$HOME/.nvm/nvm.sh\"; exec npm run dev"
+      ],
       "cwd": "backend",
       "port": 3000
+    },
+    {
+      "name": "atelier",
+      "runtimeExecutable": "/bin/zsh",
+      "runtimeArgs": [
+        "-c",
+        "[ -s \"$HOME/.nvm/nvm.sh\" ] && . \"$HOME/.nvm/nvm.sh\"; exec node \"MemoBook Generator/server.mjs\""
+      ],
+      "port": 4173
     }
   ]
 }

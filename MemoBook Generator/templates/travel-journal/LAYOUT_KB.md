@@ -328,7 +328,7 @@ faire aujourd'hui.
 
 | Réglage | Défaut | Où ça agit | État |
 |---|---|---|---|
-| Ratio photo / texte | 50/50 | **0 % : aucune photo dans le carnet** (la couverture garde la sienne) — les photos sortent avant la composition, le récit prend leur place | **Partiel** : 0 % rendu ; 25, 50, 75, 100 % composent comme 50 %, en attendant leur définition |
+| Ratio photo / texte | 50 % | **Les cinq paliers**, voir § « Le ratio texte / photo » plus bas. C'est le nombre de pages et de photos qui s'adapte, jamais le texte | Rendu |
 | Nombre de page cible | 60 | Niveau de détail des textes, regroupement des étapes | Rendu |
 | Fun facts | ON | `fun_facts` — voir le dosage plus bas | Rendu |
 | Quiz | ON | `quiz` | Rendu |
@@ -350,10 +350,76 @@ de ce booléen.
 **Les mêmes réglages, les deux PDF.** L'atelier (`reglagesDuCarnet`,
 `app.js`) et l'app (`backend/src/services/bookSettings.ts`, appelé par
 `jobs/structure.ts`) appliquent les mêmes, au même endroit du payload :
-`rules_enabled`, `decoration_quota`, et les photos retirées à 0 %. Les réglages
+`rules_enabled`, `decoration_quota`, et le ratio texte / photo — par **le même
+code**, `photoRatio.ts`, dont l'atelier reçoit une copie générée
+(`public/ratio-photos.js`, `npm run ratio:build`). Les réglages
 marqués « à construire » demandent un champ au schéma, une lecture par le gabarit, et cette
 table mise à jour dans le même commit. Tant que ce n'est pas fait, l'agent ne
 produit rien pour eux et l'app ne devrait pas les proposer.
+
+## Le ratio texte / photo
+
+Le voyageur règle la part de surface qu'occupent les photos : **0, 25, 50, 75 ou
+100 %** (`photo_ratio` à la racine du payload). Le détail, les mesures et le
+rapport des cas limites sont dans **`docs/ratio-texte-photo.md`** ; ici, le
+contrat de mise en page.
+
+> **La règle absolue.** Le texte validé par le voyageur ne bouge jamais : ni
+> coupe, ni reformulation, ni troncature, ni corps réduit. C'est le **nombre de
+> pages** et le **nombre de photos** qui s'adaptent au texte. Jamais l'inverse.
+
+**Ce qui se mesure** : `ratio = surface photo / (surface photo + surface
+texte)`, sur **l'ensemble des pages d'une étape**. Surface photo = les cadres
+`mb-photo`, bord blanc compris. Surface texte = ce que `mb-note` occupe
+réellement. Les éléments fixes sont hors du calcul — bandeau, titre, étiquette,
+météo, carte fun fact, carte de chapitre, décor. Tolérance ±5 points.
+
+| Ratio | Corps de texte | Photos minimum | Layouts |
+|---|---|---|---|
+| **0 %** | intégral | 0 | `layout_story_full` (récit pleine page, réglure jusqu'en bas), `layout_chapter_map` aux ouvertures — une carte n'est pas une photo |
+| **25 %** | intégral | 1 | `layout_story_opener` / `layout_story_facts` avec leur photo flottante ; `layout_collage` au besoin |
+| **50 %** | intégral | 2 | `layout_collage`, `layout_split_left`, `layout_hero_top`, les trios. L'équilibre, et ce que le carnet faisait déjà |
+| **75 %** | intégral | 3 | `layout_hero_top`, `layout_collage` à bande haussée, les trios, une planche pour le reliquat |
+| **100 %** | **aucun** | selon les pages | `layout_photo_wall_intro` puis `layout_photo_page` |
+
+**Le réglage continu, c'est la hauteur de bande.** `band_scale` sur la page
+(`--mb-band` dans le CSS) multiplie la hauteur de conception : `mb-gallery` 206
+pt, `mb-hero` 268, `mb-trio` 360, la photo flottante 162. Deux bornes, toujours :
+le plancher du CSS — `mb-gallery` jamais sous 160 pt — et **ce que le texte de la
+page laisse libre**. Une bande ne vole jamais une ligne au récit. `band_scale`
+est **calculé, jamais choisi** : l'agent ne le produit pas.
+
+**À 100 %, aucun `mb-note` n'est émis.** La première page de l'étape
+(`layout_photo_wall_intro`) garde le bandeau jour · lieu · date et la carte
+`fun_facts` si le carnet les a allumés — une étape sans bandeau ne se lit plus
+comme une étape. Les autres pages sont des planches nues. Le récit du voyageur
+**sert de matière** au fun fact : il n'apparaît pas tel quel. Le nombre de pages
+de l'étape est celui qu'occuperait le texte seul à 0 %, au moins une.
+
+**Pas de légende**, ni de page ni par photo (Hugo, 12/10/2026) — y compris à
+100 %, où la spécification du ratio en demandait. Les deux décisions ne peuvent
+pas tenir ensemble ; celle du gabarit l'emporte. Voir
+`docs/ratio-texte-photo.md` § « Ce qui reste à construire ».
+
+**Les conflits, et comment ils sont tranchés.**
+
+- **Texte très court à ratio bas** (quelques lignes à 25 %) : le minimum de
+  photos gagne sur le ratio, et le dépassement est assumé. La page ne doit pas
+  laisser de grande zone blanche : les photos s'agrandissent jusqu'au plafond que
+  le texte leur laisse, et une bande à sa hauteur de conception ou au-dessus
+  « porte la page » au sens de § « Les deux bornes basses ». L'inspecteur marque
+  le cas « dépassement assumé », pas « erreur ».
+- **Le nombre de photos ne change pas pour remplir** : c'est leur taille qui
+  s'adapte, pour rester cohérent avec le nombre annoncé dans le chat.
+- **Le texte ne tombe jamais sur une page sans place prévue** : si `mb-note`
+  déborde, on ajoute une page, on ne coupe pas.
+- **Un palier ne demande jamais moins de photos que le palier d'en dessous** :
+  le réglage doit se lire comme un curseur.
+
+**Le nombre exact de photos** sort de `photosRequired`
+(`backend/src/services/photoRatio.ts`), **la même fonction** qui alimente le
+message du chat et la composition des deux PDF. Un écart entre le nombre annoncé
+au voyageur et le nombre posé dans le carnet est un bug.
 
 ## Champs d'une journée
 
@@ -391,6 +457,8 @@ tranche : le premier actif l'emporte.
 | `layout_trio_landscape` | Le même, avec une **photo paysage en haut** (format 1,6) ; les deux du bas restent des portraits | Fin d'étape courte avec une paysage et deux portraits | 3 | idem |
 | `layout_recit_photo` | **Maquette faite à la main (Banaue).** Quelques lignes pleine largeur, puis le récit en colonne à gauche d'une grande photo en hauteur qui flotte à droite, inclinée, avec son **étiquette de titre** (`label`). Un fun fact devient un **post-it « Infos »** en bas à gauche | Une page à une photo en portrait (format < 0,77) — bandeau ou suite | 1 | S, M ; 800 en page de suite avec le post-it |
 | `layout_photo_page` | **Page de photos seules**, sans récit ni bandeau, **sans légende**. De 3 à 5, une planche bord à bord ; 1 ou 2, une page d'album (tirages inclinés, tracé pointillé). Avec `pleine_page`, une seule photo bord à bord, sans cadre | **Toujours en fin d'étape**, après le récit — voir § « Structure d'une étape » | 1–5 | aucune — le récit n'est pas rendu |
+| `layout_photo_wall_intro` | **La planche qui ouvre une étape** : bandeau en tête, photos sur le reste de la feuille, carte fun fact. Pas de légende non plus | Première page d'une étape à 100 % de photos | 1–4 | aucune — le récit n'est pas rendu |
+| `layout_story_full` | Récit pleine page, réglure jusqu'en bas, **aucune photo** | Palier 0 % du ratio texte / photo | 0 | jusqu'à 1140 (bandeau) / 1640 (suite) |
 | *(par défaut)* | Récit, puis carte info et photo flottantes en bas de page | Ouverture de journée, cas le plus courant | 0–1 | S, M |
 
 Les tailles exactes, et le plafond mesuré de chaque configuration, sont en
@@ -504,6 +572,7 @@ relancer le script.
 | `layout_story_*`, `layout_collage`, `layout_split_left` sans fun fact | 540 | S, M |
 | `layout_story_*` portant un `prompt` | 740 | S, M |
 | **page de suite** (sans `day_intro`), tout layout de récit | 860 | complète L et XL |
+| `layout_story_full` — palier 0 %, aucune photo | 1140 (bandeau) / 1640 (suite), **5 paragraphes** | le récit occupe la feuille entière |
 | **corps serré** (`taille_texte: "serre"`), tout layout | plafond × 1,08 | — |
 
 Recalibré le 12/10/2026 après les marges de reliure : la colonne passe de 360 à
