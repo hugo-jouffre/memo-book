@@ -87,6 +87,15 @@
     vert: { nom: "MemoBook vert", hex: "#19532b" },
     papier: { nom: "MemoBook papier", hex: "#fbf8f1" },
     blanc: { nom: "MemoBook blanc", hex: "#ffffff" },
+    // La palette de la marque (`agents/design.md`), celle des autres styles :
+    // « notre vert, notre bleu, notre beige », le noir des textes (« black
+    // typo ») et le beige foncé du logo.
+    noir: { nom: "MemoBook noir typo", hex: "#2d231a" },
+    vertMarque: { nom: "MemoBook vert marque", hex: "#28654b" },
+    bleu: { nom: "MemoBook bleu", hex: "#afd2f0" },
+    beige: { nom: "MemoBook beige", hex: "#fcf2e9" },
+    beigeFonce: { nom: "MemoBook beige darker", hex: "#cfbbaa" },
+    blancMarque: { nom: "MemoBook blanc chaud", hex: "#fffcf8" },
   };
 
   /* ------------------------------------------------------- la fiche Pumbo --- */
@@ -696,7 +705,7 @@
    * largeur du dos (11 pt au plus) et se réduit si les trois ne tiennent pas
    * dans la hauteur ; le titre quitte le milieu s'il y heurterait un voisin.
    */
-  function elementsDos(fiche, textes, couleur) {
+  function elementsDos(fiche, textes, couleur, { police = "Playfair Display", style = "Bold" } = {}) {
     const { largeurPlat: L, dos: D } = fiche;
     if (D < DOS_MIN_TEXTE) return [];
     const face = facesVisibles(fiche).dos;
@@ -728,8 +737,8 @@
         l: arrondi2(lg),
         h: D,
         texte,
-        police: "Playfair Display",
-        style: "Bold",
+        police,
+        style,
         corps,
         couleur,
         alignement,
@@ -962,7 +971,79 @@
     return { lignes, interligne, debut };
   }
 
-  const POIDS = { Regular: 400, Bold: 700, Black: 900 };
+  const POIDS = { Light: 300, Regular: 400, Medium: 500, SemiBold: 600, Bold: 700, ExtraBold: 800, Black: 900 };
+
+  /** « Un **voyage** sans retour » → les morceaux, gras ou non. */
+  function segmentsGras(texte) {
+    return String(texte ?? "")
+      .split(/(\*\*[^*]+\*\*)/)
+      .filter(Boolean)
+      .map((m) => (/^\*\*[^*]+\*\*$/.test(m) ? { texte: m.slice(2, -2), gras: true } : { texte: m, gras: false }));
+  }
+
+  /** Le texte sans ses marques de gras. */
+  const sansMarques = (texte) => segmentsGras(texte).map((m) => m.texte).join("");
+
+  /**
+   * Une courbe lisse qui passe par `points`, en triplets InDesign
+   * `[direction gauche, ancre, direction droite]` (Catmull-Rom → Bézier).
+   * `ferme` : la courbe revient à son départ sans angle.
+   */
+  function lisser(points, ferme = true, tension = 1) {
+    const n = points.length;
+    return points.map((a, i) => {
+      const avant = points[ferme ? (i - 1 + n) % n : Math.max(0, i - 1)];
+      const apres = points[ferme ? (i + 1) % n : Math.min(n - 1, i + 1)];
+      const tx = ((apres[0] - avant[0]) / 6) * tension;
+      const ty = ((apres[1] - avant[1]) / 6) * tension;
+      return [
+        [arrondi2(a[0] - tx), arrondi2(a[1] - ty)],
+        [arrondi2(a[0]), arrondi2(a[1])],
+        [arrondi2(a[0] + tx), arrondi2(a[1] + ty)],
+      ];
+    });
+  }
+
+  /** Le `d` SVG d'une suite de triplets Bézier. */
+  function cheminBezier(ancres, ferme) {
+    const p = (q) => `${q[0]} ${q[1]}`;
+    let d = `M${p(ancres[0][1])}`;
+    for (let k = 1; k < ancres.length; k += 1) d += `C${p(ancres[k - 1][2])} ${p(ancres[k][0])} ${p(ancres[k][1])}`;
+    if (ferme) d += `C${p(ancres[ancres.length - 1][2])} ${p(ancres[0][0])} ${p(ancres[0][1])}Z`;
+    return d;
+  }
+
+  /**
+   * Le rendu SVG d'un bloc de paragraphes. SVG ne revient pas à la ligne :
+   * le bloc est du HTML dans un `foreignObject`, composé dix fois plus grand
+   * puis réduit — en millimètres, un corps de 10 pt ferait 3,5 px, et
+   * Chromium relève les corps trop petits.
+   */
+  function blocSvg(e, coul) {
+    const K = 10;
+    const justifie = { haut: "flex-start", centre: "center", bas: "flex-end" }[e.vertical] || "flex-start";
+    const aligne = { gauche: "left", droite: "right", centre: "center" }[e.alignement] || "left";
+    const gras = POIDS[e.styleGras || "Bold"] || 700;
+    const paragraphes = (e.paragraphes || [])
+      .map(
+        (texte, k, tous) =>
+          `<p style="margin:0 0 ${k === tous.length - 1 ? 0 : arrondi2((e.espace ?? 3) * K)}px">` +
+          segmentsGras(texte)
+            .map((m) => (m.gras ? `<strong style="font-weight:${gras}">${echapper(m.texte)}</strong>` : echapper(m.texte)))
+            .join("") +
+          "</p>",
+      )
+      .join("");
+    return (
+      `<foreignObject x="${e.x}" y="${e.y}" width="${e.l}" height="${e.h}" overflow="visible">` +
+      `<div xmlns="http://www.w3.org/1999/xhtml" class="bloc" data-nom="${echapper(e.nom || "")}" style="` +
+      `box-sizing:border-box;width:${arrondi2(e.l * K)}px;height:${arrondi2(e.h * K)}px;transform:scale(${1 / K});transform-origin:0 0;` +
+      `display:flex;flex-direction:column;justify-content:${justifie};font-family:'${e.police}',serif;` +
+      `font-weight:${POIDS[e.style] || 400};font-size:${arrondi2(e.corps * MM_PAR_PT * K)}px;` +
+      `line-height:${e.interligne ?? 1.35};color:${coul(e.couleur)};text-align:${aligne};` +
+      `letter-spacing:${((e.approche || 0) / 1000).toFixed(3)}em">${paragraphes}</div></foreignObject>`
+    );
+  }
 
   function elementSvg(e, i, couleurs) {
     const coul = (nom) => (nom ? couleurs[nom]?.hex || nom : "none");
@@ -972,42 +1053,60 @@
             t.tirets ? ` stroke-dasharray="${t.tirets.map((v) => arrondi2(v * MM_PAR_PT)).join(" ")}" stroke-linecap="round"` : ""
           }`
         : "";
-    if (e.type === "rect") {
-      return `<rect x="${e.x}" y="${e.y}" width="${e.l}" height="${e.h}"${e.rayon ? ` rx="${e.rayon}"` : ""} fill="${coul(e.fond)}"${trait(e.trait)}/>`;
+    const brut = (() => {
+      if (e.type === "rect") {
+        return `<rect x="${e.x}" y="${e.y}" width="${e.l}" height="${e.h}"${e.rayon ? ` rx="${e.rayon}"` : ""} fill="${coul(e.fond)}"${trait(e.trait)}/>`;
+      }
+      if (e.type === "image") {
+        const p = placementImage(e);
+        return (
+          `<clipPath id="c${i}"><rect x="${e.x}" y="${e.y}" width="${e.l}" height="${e.h}"/></clipPath>` +
+          `<image clip-path="url(#c${i})" href="${echapper(e.src || "")}" x="${arrondi2(p.x)}" y="${arrondi2(p.y)}" width="${arrondi2(p.l)}" height="${arrondi2(p.h)}" preserveAspectRatio="none"/>`
+        );
+      }
+      if (e.type === "cercle") {
+        return `<circle cx="${e.cx}" cy="${e.cy}" r="${e.r}" fill="${coul(e.fond)}"${trait(e.trait)}/>`;
+      }
+      if (e.type === "chemin") {
+        const [a, ...reste] = e.points;
+        const d = e.courbe
+          ? `M${a[0]} ${a[1]}Q${e.courbe[0]} ${e.courbe[1]} ${reste[0][0]} ${reste[0][1]}`
+          : `M${e.points.map((p) => p.join(" ")).join("L")}${e.ferme ? "Z" : ""}`;
+        return `<path d="${d}" fill="${coul(e.fond)}"${trait(e.trait)} stroke-linejoin="round"/>`;
+      }
+      if (e.type === "courbe") {
+        return `<path d="${cheminBezier(e.ancres, e.ferme)}" fill="${coul(e.fond)}"${trait(e.trait)} stroke-linejoin="round" stroke-linecap="round"/>`;
+      }
+      if (e.type === "bloc") return blocSvg(e, coul);
+      const lettres = e.approche ? ` letter-spacing="${arrondi2((e.approche / 1000) * e.corps * MM_PAR_PT)}"` : "";
+      const police = `font-family="'${e.police}', serif" font-weight="${POIDS[e.style] || 400}" font-size="${arrondi2(e.corps * MM_PAR_PT)}"`;
+      if (e.type === "texteChemin") {
+        return (
+          `<path id="tc${i}" d="${cheminBezier(e.ancres, false)}" fill="none"/>` +
+          `<text ${police} fill="${coul(e.couleur)}"${lettres}><textPath href="#tc${i}" startOffset="50%" text-anchor="middle">${echapper(e.texte)}</textPath></text>`
+        );
+      }
+      if (e.type === "texte") {
+        const { lignes, interligne, debut } = lignesDe(e);
+        const ancre = e.alignement === "gauche" ? "start" : e.alignement === "droite" ? "end" : "middle";
+        const x = e.alignement === "gauche" ? e.x : e.alignement === "droite" ? e.x + e.l : e.x + e.l / 2;
+        const tspans = lignes
+          .map((l, k) => `<tspan x="${arrondi2(x)}" y="${arrondi2(debut + k * interligne)}">${echapper(l)}</tspan>`)
+          .join("");
+        const rotation = e.rotation
+          ? ` transform="rotate(${-e.rotation} ${arrondi2(e.x + e.l / 2)} ${arrondi2(e.y + e.h / 2)})"`
+          : "";
+        return (
+          `<text ${police} fill="${coul(e.couleur)}" text-anchor="${ancre}"${lettres}${e.ombre ? ' filter="url(#ombre)"' : ""}${rotation}>${tspans}</text>`
+        );
+      }
+      return "";
+    })();
+    // Transparence et mode de fusion : un groupe autour de l'élément.
+    if (brut && (e.opacite != null || e.fusion)) {
+      return `<g${e.opacite != null ? ` opacity="${e.opacite}"` : ""}${e.fusion === "produit" ? ' style="mix-blend-mode:multiply"' : ""}>${brut}</g>`;
     }
-    if (e.type === "image") {
-      const p = placementImage(e);
-      return (
-        `<clipPath id="c${i}"><rect x="${e.x}" y="${e.y}" width="${e.l}" height="${e.h}"/></clipPath>` +
-        `<image clip-path="url(#c${i})" href="${echapper(e.src || "")}" x="${arrondi2(p.x)}" y="${arrondi2(p.y)}" width="${arrondi2(p.l)}" height="${arrondi2(p.h)}" preserveAspectRatio="none"/>`
-      );
-    }
-    if (e.type === "cercle") {
-      return `<circle cx="${e.cx}" cy="${e.cy}" r="${e.r}" fill="${coul(e.fond)}"${trait(e.trait)}/>`;
-    }
-    if (e.type === "chemin") {
-      const [a, ...reste] = e.points;
-      const d = e.courbe
-        ? `M${a[0]} ${a[1]}Q${e.courbe[0]} ${e.courbe[1]} ${reste[0][0]} ${reste[0][1]}`
-        : `M${e.points.map((p) => p.join(" ")).join("L")}${e.ferme ? "Z" : ""}`;
-      return `<path d="${d}" fill="${coul(e.fond)}"${trait(e.trait)} stroke-linejoin="round"/>`;
-    }
-    if (e.type === "texte") {
-      const { lignes, interligne, debut } = lignesDe(e);
-      const ancre = e.alignement === "gauche" ? "start" : e.alignement === "droite" ? "end" : "middle";
-      const x = e.alignement === "gauche" ? e.x : e.alignement === "droite" ? e.x + e.l : e.x + e.l / 2;
-      const tspans = lignes
-        .map((l, k) => `<tspan x="${arrondi2(x)}" y="${arrondi2(debut + k * interligne)}">${echapper(l)}</tspan>`)
-        .join("");
-      const rotation = e.rotation
-        ? ` transform="rotate(${-e.rotation} ${arrondi2(e.x + e.l / 2)} ${arrondi2(e.y + e.h / 2)})"`
-        : "";
-      return (
-        `<text font-family="'${e.police}', serif" font-weight="${POIDS[e.style] || 400}" font-size="${arrondi2(e.corps * MM_PAR_PT)}" ` +
-        `fill="${coul(e.couleur)}" text-anchor="${ancre}"${e.ombre ? ' filter="url(#ombre)"' : ""}${rotation}>${tspans}</text>`
-      );
-    }
-    return "";
+    return brut;
   }
 
   /** La maquette en SVG, en millimètres, fond perdu compris. */
@@ -1015,7 +1114,7 @@
     const f = mq.fondPerdu;
     const W = mq.largeur + 2 * f;
     const H = mq.hauteur + 2 * f;
-    const corps = mq.elements.map((e, i) => elementSvg(e, i, COULEURS)).join("\n");
+    const corps = mq.elements.map((e, i) => elementSvg(e, i, mq.couleurs || COULEURS)).join("\n");
     const reperesSvg = reperes
       ? `<g class="reperes" fill="none" stroke-width="0.3">` +
         `<rect x="0" y="0" width="${mq.largeur}" height="${mq.hauteur}" stroke="#e2342d" stroke-dasharray="1.5 1"/>` +
@@ -1090,6 +1189,21 @@ body.sans-reperes .reperes { display: none; }
   </div>
 </div>
 <div class="cadre-ecran"><div class="feuille">${versSvg(mq, { reperes: true })}</div></div>
+<script>
+// Un bloc de texte qui déborde de son cadre : l'écran le dit, l'impression
+// ne le montrerait pas. Mesuré une fois les polices chargées.
+document.fonts.ready.then(function () {
+  var liste = document.querySelector(".barre ul");
+  document.querySelectorAll(".bloc").forEach(function (b) {
+    if (b.scrollHeight > b.clientHeight + 2) {
+      var li = document.createElement("li");
+      li.className = "alerte";
+      li.textContent = "Texte trop long pour son cadre" + (b.dataset.nom ? " (" + b.dataset.nom + ")" : "") + " : raccourcis-le dans l'atelier.";
+      liste.appendChild(li);
+    }
+  });
+});
+</script>
 </body>
 </html>`;
   }
@@ -1125,12 +1239,29 @@ body.sans-reperes .reperes { display: none; }
    */
   function versJsx(mq, { titre = "" } = {}) {
     const fi = mq.fiche;
-    const couleurs = Object.fromEntries(Object.entries(COULEURS).map(([cle, c]) => [cle, { nom: c.nom, cmjn: cmjn(c.hex) }]));
+    const couleurs = Object.fromEntries(
+      Object.entries(mq.couleurs || COULEURS).map(([cle, c]) => [cle, { nom: c.nom, cmjn: cmjn(c.hex) }]),
+    );
     const elements = mq.elements.map((e) => {
+      if (e.type === "bloc") {
+        // Le texte tel qu'InDesign le reçoit — un paragraphe par retour —, et
+        // les plages à passer en gras, en indices de caractères.
+        let contenu = "";
+        const gras = [];
+        (e.paragraphes || []).forEach((p, k) => {
+          if (k) contenu += "\r";
+          for (const m of segmentsGras(p)) {
+            if (m.gras && m.texte) gras.push([contenu.length, contenu.length + m.texte.length - 1]);
+            contenu += m.texte;
+          }
+        });
+        return { ...e, contenu, gras };
+      }
       if (e.type !== "image") return e;
       const { src, ...reste } = e;
       return { ...reste, place: placementImage(e) };
     });
+    const polices = [...new Set(mq.elements.filter((e) => e.police).map((e) => e.police))];
     return `//@target indesign
 // Couverture MemoBook - ${litteral(titre).slice(1, -1)}
 // Produit par l'atelier MemoBook (https://hugo-jouffre.github.io/memo-book/).
@@ -1141,11 +1272,13 @@ body.sans-reperes .reperes { display: none; }
 
 var COULEURS = ${litteral(couleurs)};
 var ELEMENTS = ${litteral(elements)};
+var POLICES = ${litteral(polices)};
 
 (function () {
   var dossier = File($.fileName).parent;
   var manquantes = [];
   var absents = [];
+  var debordes = [];
 
   // --- La mise en place de la fiche Pumbo, a l'identique.
   var myDocument = app.documents.add({
@@ -1177,7 +1310,7 @@ var ELEMENTS = ${litteral(elements)};
 
   var calques = {
     fond: myDocument.layers.item(0),
-    carte: myDocument.layers.add({name: "Carte"}),
+    carte: myDocument.layers.add({name: "Carte et dessins"}),
     textes: myDocument.layers.add({name: "Textes"})
   };
   calques.fond.name = "Photo et fonds";
@@ -1206,7 +1339,13 @@ var ELEMENTS = ${litteral(elements)};
     return tirets[nom];
   }
 
+  function transparence(objet, e) {
+    if (e.opacite != null) objet.transparencySettings.blendingSettings.opacity = Math.round(e.opacite * 100);
+    if (e.fusion === "produit") objet.transparencySettings.blendingSettings.blendMode = BlendMode.MULTIPLY;
+  }
+
   function habiller(objet, e) {
+    transparence(objet, e);
     objet.fillColor = e.fond ? nuances[e.fond] : vide;
     if (e.trait) {
       objet.strokeWeight = e.trait.epaisseur + "pt";
@@ -1250,23 +1389,93 @@ var ELEMENTS = ${litteral(elements)};
     r.fit(e.contenir ? FitOptions.PROPORTIONALLY : FitOptions.FILL_PROPORTIONALLY);
     var gb = g.geometricBounds;
     g.move(undefined, [e.place.x - gb[1], e.place.y - gb[0]]);
+    transparence(r, e);
     return r;
+  }
+
+  function police(r, e, style) {
+    try { r.appliedFont = e.police; r.fontStyle = style || e.style; }
+    catch (erreur) { manquantes.push(e.police); }
+  }
+
+  function apprete(t, e) {
+    t.textFramePreferences.insetSpacing = [0, 0, 0, 0];
+    t.textFramePreferences.verticalJustification = e.vertical === "bas" ? VerticalJustification.BOTTOM_ALIGN
+      : e.vertical === "centre" ? VerticalJustification.CENTER_ALIGN : VerticalJustification.TOP_ALIGN;
+  }
+
+  function alignement(e) {
+    return e.alignement === "gauche" ? Justification.LEFT_ALIGN
+      : e.alignement === "droite" ? Justification.RIGHT_ALIGN : Justification.CENTER_ALIGN;
+  }
+
+  // Un bloc de paragraphes : InDesign revient a la ligne de lui-meme. Le gras
+  // se pose plage par plage ; un texte qui deborde de son cadre est signale.
+  function bloc(e) {
+    var t = planche.textFrames.add(calques.textes, undefined, undefined, {geometricBounds: bornes(e)});
+    t.contents = e.contenu;
+    var r = t.texts.item(0);
+    police(r, e);
+    r.pointSize = e.corps;
+    r.leading = e.corps * (e.interligne || 1.35);
+    r.fillColor = nuances[e.couleur];
+    r.justification = alignement(e);
+    r.spaceAfter = (e.espace == null ? 3 : e.espace) + "mm";
+    if (e.approche) r.tracking = e.approche;
+    for (var k = 0; k < e.gras.length; k++) {
+      var plage = t.characters.itemByRange(e.gras[k][0], e.gras[k][1]);
+      try { plage.fontStyle = e.styleGras || "Bold"; } catch (erreur) { manquantes.push(e.police + " " + (e.styleGras || "Bold")); }
+    }
+    apprete(t, e);
+    transparence(t, e);
+    if (t.overflows) debordes.push(e.nom || e.contenu.substr(0, 30));
+    return t;
+  }
+
+  // Une courbe lisse : des triplets [direction, ancre, direction].
+  function courbe(e) {
+    var objet = e.ferme ? planche.polygons.add(calques.carte) : planche.graphicLines.add(calques.carte);
+    objet.paths.item(0).entirePath = e.ancres;
+    if (e.ferme) objet.paths.item(0).pathType = PathType.CLOSED_PATH;
+    habiller(objet, e);
+    return objet;
+  }
+
+  // Un texte pose sur une courbe, centre sur elle. A defaut (version
+  // d'InDesign qui refuserait), un bloc ordinaire a la place.
+  function texteChemin(e) {
+    var ligne = planche.graphicLines.add(calques.textes);
+    ligne.paths.item(0).entirePath = e.ancres;
+    habiller(ligne, {fond: null, trait: null});
+    try {
+      var tp = ligne.textPaths.add(calques.textes);
+      tp.contents = e.texte;
+      var r = tp.texts.item(0);
+      police(r, e);
+      r.pointSize = e.corps;
+      r.fillColor = nuances[e.couleur];
+      r.justification = Justification.CENTER_ALIGN;
+      if (e.approche) r.tracking = e.approche;
+      if (tp.overflows) debordes.push(e.texte);
+      return tp;
+    } catch (erreur) {
+      ligne.remove();
+      return texte({type: "texte", x: e.x, y: e.y, l: e.l, h: e.h, texte: e.texte, police: e.police, style: e.style,
+        corps: e.corps, couleur: e.couleur, alignement: "centre", vertical: "centre"});
+    }
   }
 
   function texte(e) {
     var t = planche.textFrames.add(calques.textes, undefined, undefined, {geometricBounds: bornes(e)});
     t.contents = e.texte.split("\\n").join("\\r");
     var r = t.texts.item(0);
-    try { r.appliedFont = e.police; r.fontStyle = e.style; }
-    catch (erreur) { manquantes.push(e.police + " " + e.style); }
+    police(r, e);
     r.pointSize = e.corps;
     r.leading = e.corps * 1.2;
     r.fillColor = nuances[e.couleur];
-    r.justification = e.alignement === "gauche" ? Justification.LEFT_ALIGN
-      : e.alignement === "droite" ? Justification.RIGHT_ALIGN : Justification.CENTER_ALIGN;
-    t.textFramePreferences.insetSpacing = [0, 0, 0, 0];
-    t.textFramePreferences.verticalJustification = e.vertical === "bas" ? VerticalJustification.BOTTOM_ALIGN
-      : e.vertical === "centre" ? VerticalJustification.CENTER_ALIGN : VerticalJustification.TOP_ALIGN;
+    r.justification = alignement(e);
+    if (e.approche) r.tracking = e.approche;
+    apprete(t, e);
     if (e.ombre) {
       var ombre = t.transparencySettings.dropShadowSettings;
       ombre.mode = ShadowMode.DROP;
@@ -1311,6 +1520,9 @@ var ELEMENTS = ${litteral(elements)};
       else if (e.type === "texte") texte(e);
       else if (e.type === "chemin") chemin(e);
       else if (e.type === "cercle") cercle(e);
+      else if (e.type === "bloc") bloc(e);
+      else if (e.type === "courbe") courbe(e);
+      else if (e.type === "texteChemin") texteChemin(e);
     }
   }
 
@@ -1319,7 +1531,8 @@ var ELEMENTS = ${litteral(elements)};
 
   var messages = [];
   if (absents.length) messages.push("Images introuvables (le dossier Liens doit rester a cote du script) : " + absents.join(", "));
-  if (manquantes.length) messages.push("Polices a installer (Google Fonts, gratuites) : Playfair Display.");
+  if (manquantes.length) messages.push("Polices a installer (voir LISEZMOI.txt) : " + POLICES.join(", ") + ".");
+  if (debordes.length) messages.push("Textes trop longs pour leur cadre (a raccourcir) : " + debordes.join(" / "));
   if (messages.length) alert(messages.join("\\r\\r"));
 })();
 `;
@@ -1405,14 +1618,22 @@ var ELEMENTS = ${litteral(elements)};
     return tout;
   }
 
+  /** Où trouver chaque police d'un style, pour l'installer avant de lancer le script. */
+  const SOURCES_POLICES = {
+    Hansley: "fournie avec le gabarit : MemoBook Generator/templates/travel-journal/assets/fonts/Hansley.otf",
+  };
+  const sourcePolice = (nom) =>
+    SOURCES_POLICES[nom] || `gratuite, https://fonts.google.com/specimen/${nom.replace(/ /g, "+")}`;
+
   /** Le mode d'emploi du dossier InDesign. */
-  function lisezmoi({ titre, fiche }) {
+  function lisezmoi({ titre, fiche, polices = ["Playfair Display"], style = "" }) {
     return [
-      `Couverture MemoBook — ${titre}`,
+      `Couverture MemoBook — ${titre}${style ? ` (style ${style})` : ""}`,
       "",
       `Planche : plats ${fiche.largeurPlat} x ${fiche.hauteurPlat} mm, dos ${fiche.dos} mm, fond perdu ${fiche.fondPerdu} mm (${fiche.source}).`,
       "",
-      "1. Installer la police Playfair Display (gratuite) : https://fonts.google.com/specimen/Playfair+Display",
+      `1. Installer ${polices.length > 1 ? "les polices" : "la police"} :`,
+      ...polices.map((nom) => `   - ${nom} (${sourcePolice(nom)})`),
       "2. Dans InDesign : Fenêtre > Utilitaires > Scripts. Clic droit sur « Utilisateur » > Faire apparaître dans le Finder (ou l'Explorateur).",
       "3. Copier ce dossier entier (le script et le dossier Liens) dans le dossier qui s'ouvre.",
       "4. Double-cliquer sur « Couverture MemoBook.jsx » dans le panneau Scripts : le document se construit.",
@@ -1444,6 +1665,13 @@ var ELEMENTS = ${litteral(elements)};
     moisDuVoyage,
     listeNoms,
     textesParDefaut,
+    MM_PAR_PT,
+    largeurTexte,
+    segmentsGras,
+    sansMarques,
+    lisser,
+    cheminBezier,
+    sourcePolice,
     estUneIle,
     lieuxDeQuatrieme,
     chiffresQuatrieme,

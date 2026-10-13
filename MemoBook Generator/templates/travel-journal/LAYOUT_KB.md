@@ -1329,6 +1329,35 @@ couverture :
 L'aperçu et le script viennent de **la même maquette** (`maquette`, en
 millimètres) : ils ne peuvent pas diverger.
 
+### Les styles de couverture
+
+Le panneau de l'atelier propose **les sept styles du catalogue de l'app**
+(`coverCatalogue.ts`), avec leur première de référence (`assets/covers/`). Le
+moteur reste `couverture.js` ; un style ne fait que poser ses éléments
+(`couverture-styles.js`). Spécifications de Hugo du 09/10/2026 :
+
+| Style | Disponible | Polices | Couleurs | Images | Textes |
+|---|---|---|---|---|---|
+| Par défaut | oui | Playfair Display | photo, papier, encre | la photo de la première | titre, voyageurs, dates (tirés du carnet) |
+| Élégant | oui | Cormorant Garamond (titre), Cormorant Infant | fonds beige, noir typo, logo beige foncé | deux photos de paysage : grande sur la première, bande panoramique en tête de la quatrième | titre, date, texte de la quatrième — rédigés par l'IA |
+| Dessin | oui | Hansley (titres) — **Gloria Hallelujah tant que sa licence n'est pas vérifiée** —, Gloria Hallelujah | fonds beige, noir typo, disques bleu pâle | trois dessins de la bibliothèque (`assets/stickers/`, au trait ou dessinés), appelés par les récits | phrase-titre et titre de la quatrième rédigés par l'IA ; années, voyageurs et texte de la quatrième tirés du carnet |
+| Aquarelle, Assouline, Photo-dessin, Travel book | **à venir** | | | images générées | |
+
+- **Les textes** sont rédigés par l'IA d'après les récits (« Rédiger avec
+  l'IA », `consigneTextes`), puis **modifiables** dans le panneau ; ce que le
+  voyageur écrit passe avant. Ils sont gardés dans le fichier d'avancement
+  (`couvertureStyle`).
+- **Le dos, pour tous les styles** : le fond de la quatrième, et ses textes
+  (titre, voyageurs, dates) dans la police et la couleur du corps de texte de
+  la quatrième — à défaut, de son titre.
+- **Les polices** des styles (OFL) sont dans `public/fonts/couvertures/` ;
+  l'aperçu les charge, le `LISEZMOI.txt` du dossier InDesign dit lesquelles
+  installer.
+- **Les styles à images générées** attendent un lot à part (génération
+  d'images). Leur carte est grisée et marquée « À venir ».
+- **Le PDF de l'app** n'imprime encore que le style par défaut : le style
+  choisi dans l'app est enregistré, pas encore composé côté serveur.
+
 **L'intérieur, version imprimeur.** Le PDF du carnet contient sa propre
 couverture et sa quatrième (première et dernière pages) : pour un relié, elles
 seraient imprimées une seconde fois à l'intérieur. La **version imprimeur**
