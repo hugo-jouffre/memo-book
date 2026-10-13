@@ -1528,4 +1528,37 @@ li { margin: 0; }
   left: 22pt;
   z-index: 4;
 }
+
+/* Le post-it posé sur les photos (Hugo, 13/10/2026) : sur une planche, une
+   page d'album ou la bande de photos d'une page de récit. Il mord sur une
+   photo, côté extérieur de la page — jamais dans le pli —, sans couvrir plus
+   d'un cinquième d'une photo de planche. */
+.mb-card--postit-photos {
+  position: absolute;
+  z-index: 5;
+  width: 128pt;
+  padding: 8pt;
+  transform: rotate(-4deg);
+}
+.mb-card--postit-photos .mb-card__body p { font-size: 8.6pt; }
+/* Planche et page d'album : sur la feuille, calé sur la page finie. */
+.mb-card--postit-planche,
+.mb-card--postit-album {
+  bottom: calc(var(--mb-bleed) + 14pt);
+  right: calc(var(--mb-bleed) + 12pt);
+}
+.page--gauche .mb-card--postit-planche,
+.page--gauche .mb-card--postit-album {
+  right: auto;
+  left: calc(var(--mb-bleed) + 12pt);
+  transform: rotate(4deg);
+}
+/* La page d'album a du blanc : le post-it s'y pose, en bas, à l'opposé du
+   sticker. */
+.mb-card--postit-album { bottom: calc(var(--mb-bleed) + 40pt); }
+/* Page de récit : sur la bande de photos, en bas, côté extérieur, à cheval
+   sur la marge. `.page__content` porte les marges en padding : l'origine est
+   le bord de la page finie. */
+.mb-card--postit-bande { bottom: 22pt; right: calc(var(--mb-margin-ext) - 14pt); }
+.page--gauche .mb-card--postit-bande { right: auto; left: calc(var(--mb-margin-ext) - 14pt); transform: rotate(4deg); }
 </style>

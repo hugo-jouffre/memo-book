@@ -106,7 +106,11 @@ function etapeDuPayload(pages: Jour[], rang: number, funFacts: boolean) {
         groupe: objet["fit"] === "contain",
       };
     });
-  const funFact = pages.map((page) => page["fun_facts"]).find((f) => Array.isArray(f) && f.length) as string[] | undefined;
+  // Tous les fun facts de l'étape, de toutes ses pages : la mise en page en
+  // pose environ un toutes les trois pages (Hugo, 13/10/2026).
+  const funFactsDeLEtape = pages
+    .flatMap((page) => (Array.isArray(page["fun_facts"]) ? (page["fun_facts"] as unknown[]) : []))
+    .filter((f): f is string => typeof f === "string" && f.trim().length > 0);
   return {
     titre: texte(premiere["title"]),
     lieu: texte(premiere["city"]) || texte(intro["location"]),
@@ -119,12 +123,9 @@ function etapeDuPayload(pages: Jour[], rang: number, funFacts: boolean) {
     photos,
     // La carte que l'agent a choisie pour ouvrir le chapitre.
     carte: premiere["map"] ?? premiere["map_svg"] ?? null,
-    // Le fun fact déjà rédigé et borné à 140 signes par la rédaction : il a
-    // passé son tri, il est imprimable.
-    analyse:
-      funFacts && funFact?.[0]
-        ? { funFact: { texte: funFact[0], pertinence: 8 } }
-        : null,
+    // Les fun facts déjà rédigés et bornés à 140 signes par la rédaction : ils
+    // ont passé leur tri, ils sont imprimables.
+    analyse: funFacts && funFactsDeLEtape.length ? { funFacts: funFactsDeLEtape.map((texte) => ({ texte, pertinence: 8 })) } : null,
     premiere,
   };
 }

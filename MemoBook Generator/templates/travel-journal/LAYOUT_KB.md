@@ -673,7 +673,7 @@ de mise en page, gabarit) :
 | Photo en pleine page | **De temps en temps** : une par chapitre au plus |
 | Stickers | **Bibliothèque dessinée**, liés au récit, selon le réglage « Décorations », 2 par double page au plus |
 | Tracé pointillé | **Un par double page au plus**, derrière des photos |
-| Fun fact | **Post-it « Infos » partout**, un toutes les trois pages au plus |
+| Fun fact | **Post-it « Infos » partout**, à peu près un toutes les trois pages (13/10/2026) — § « Les fun facts » |
 | Rythme | Jamais deux fois le même design sur une double page |
 | Carte de chapitre | À chaque nouveau lieu |
 | Marges | **Plus large côté reliure** : 15 mm côté pli, 10 mm à l'extérieur — § « Format » |
@@ -876,8 +876,13 @@ Deux messages, aux deux bornes du barème, définis une seule fois dans
 ## Les fun facts — dosage et matière
 
 **Un post-it « Infos » partout** (Hugo, 12/10/2026) : papier, scotch, plus de
-pince ni de bord pointillé, et toujours le titre « Infos ». La fréquence ne
-change pas : un toutes les trois pages au plus.
+pince ni de bord pointillé, et toujours le titre « Infos ».
+
+**La promesse (Hugo, 13/10/2026) : à peu près un fun fact toutes les trois
+pages** quand le voyageur les allume. Avant, quatre règles cumulées — un par
+étape, 7/10 au moins, une page de récit qui ait la place, trois pages d'écart —
+plafonnaient un carnet chargé en photos à un encart toutes les cinq ou six
+pages, voire moins.
 
 > Retour le plus unanime du panel de lecteurs : **6 sur 7** en parlent, tous
 > dans le même sens. Ce n'est pas un rejet — les fun facts sont aussi cités
@@ -890,9 +895,10 @@ n'est produit. Les règles ci-dessous valent à ON.
 
 Quatre règles, à appliquer strictement :
 
-1. **Fréquence : un encart toutes les trois à quatre pages**, selon la
-   pertinence des faits disponibles. Jamais un par page.
-2. **Un seul « Le saviez-vous » par étape**, quelle que soit la longueur.
+1. **Fréquence : un encart toutes les trois pages**, deux au moins et quatre
+   au plus d'un encart au suivant. Jamais un par page.
+2. **Plusieurs par étape** quand l'étape est longue : autant que ses pages en
+   demandent.
 3. **La matière doit venir du récit.** Un fait drôle réellement vécu vaut mieux
    qu'une donnée encyclopédique. La culture générale reste possible, mais en
    minorité et seulement si elle éclaire ce qui est raconté.
@@ -915,23 +921,35 @@ voyageur qui rallume le réglage retrouve ses encarts sans tout relancer.
 
 L'atelier n'a pas d'étape de rédaction : l'encart vient de l'**analyse d'étape**
 (`consigneAnalyseEtape`, `partage.js`), le même appel que celui qui situe le
-lieu et rattache les photos. Le modèle y reçoit le récit et propose **au plus
-un** encart tiré du récit, avec son registre, le paragraphe d'où il vient et une
-**note de pertinence sur 10**. La mise en page (`placerEncarts`,
-`mise-en-page.js`) décide ensuite :
+lieu et rattache les photos. Le modèle y reçoit le récit et propose **plusieurs
+encarts** (`funFacts`, jusqu'à un pour 1 400 signes de récit, plus un), chacun
+avec son registre, le paragraphe d'où il vient et une **note de pertinence sur
+10**. Dans l'app, ce sont les fun facts de la rédaction, un par souvenir. La
+mise en page (`placerEncarts`, `mise-en-page.js`), la même pour les deux PDF,
+décide ensuite :
 
-- **seuil** : sous 7/10, rien ; au-delà de 140 caractères, rien ;
-- **écart** : trois pages au moins d'un encart au suivant. Parmi les candidats,
-  la combinaison retenue est celle dont la somme des notes est la plus haute ;
-- **registre** : deux encarts du même registre à la suite, le moins bien noté
-  s'efface ;
-- **page hôte** : celle du paragraphe d'où vient l'encart, sinon la première
-  page de l'étape qui peut le porter sans perdre une ligne. Récit avec 0 ou 1
-  photo : la zone flottante l'accueille sans rien coûter (mesuré : 540 signes
-  sous un bandeau, 860 sur une page de suite, comme sans encart), et une grande
-  photo en tête repasse en photo flottante. Deux photos : 230 signes au plus.
-  Ouverture de chapitre avec deux photos : 110. Trois photos : jamais ;
+- **cadence** : on avance page par page ; la place visée est trois pages après
+  le dernier encart (le premier, dans les trois premières pages), dans une
+  fenêtre de deux à quatre pages. **La place passe avant la note** : une page
+  d'écart coûte 2,5 points — un 9 à côté cède à un 7 pile à sa place ;
+- **seuil** : 7/10 d'abord ; une place restée vide se contente d'un 5 ou d'un
+  6 ; sous 5, jamais. Au-delà de 140 caractères, jamais ;
+- **registre** : deux encarts du même registre à la suite, seulement quand il
+  n'y a pas mieux ;
+- **page hôte, dans la page** : récit avec 0 ou 1 photo, la zone flottante
+  l'accueille sans rien coûter (540 signes sous un bandeau, 860 sur une page de
+  suite), et une grande photo en tête repasse en photo flottante ; deux photos,
+  230 signes au plus ; ouverture de chapitre avec deux photos, 110 ;
+- **page hôte, sur les photos** (Hugo, 13/10/2026 : « les fun facts peuvent
+  aussi aller sur les pages photos ») : un post-it posé dans un coin d'une
+  planche (`mb-card--postit-planche`), sur le blanc d'une page d'album, ou sur
+  la bande de photos d'une page de récit (`postit_bande`, collage, bande, trio,
+  chapitre) — il mord sur une photo sans prendre une ligne au texte, côté
+  extérieur de la page. Jamais sur la pleine page ;
 - **mention** : la page porte `ai_note` « Fun fact rédigé par IA ».
+
+Le journal de l'atelier donne la cadence obtenue (« 14 encarts, un toutes les
+3,0 pages ») et, étape par étape, pourquoi un fun fact manque.
 
 Le réglage « Insérer des Fun facts » se coche dans la fiche du carnet de
 l'atelier, allumé par défaut comme dans l'app.

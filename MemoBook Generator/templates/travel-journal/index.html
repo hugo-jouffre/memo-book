@@ -145,6 +145,11 @@
   {# Les stickers de la bibliothèque posés sur la page. `largeur` (pt) vient du
      composeur, qui ne dépasse jamais la définition du dessin ; sans elle, la
      largeur de la place. #}
+  {# Le post-it « Infos » posé sur les photos (Hugo, 13/10/2026 : « les fun
+     facts peuvent aussi aller sur les pages photos ») : dans un coin d'une
+     planche ou de la bande de photos d'une page de récit, il mord sur une
+     photo sans prendre une ligne au texte. #}
+  {% macro mb_postit_photos(day, ou) %}{% if day.fun_facts and day.fun_facts | length >= 1 %}<div class="mb-card mb-card--postit-photos mb-card--postit-{{ ou }}"><span class="mb-photo__tape mb-card__tape"><svg viewBox="0 0 46 13" preserveAspectRatio="none"><use href="#mb-tape" /></svg></span><div class="mb-card__title"><span>{{ day.fun_facts_title | default('Infos') }}</span></div><div class="mb-card__body"><p>{{ day.fun_facts[0] }}</p></div></div>{% endif %}{% endmacro %}
   {% macro mb_stickers(day) %}{% for s in day.stickers or [] %}<div class="mb-sticker mb-sticker--{{ s.place | default('bottom-left') }}"{% if s.largeur %} style="width: {{ s.largeur }}pt"{% endif %} aria-hidden="true"><img src="{{ s.url }}" alt="" /></div>{% endfor %}{% endmacro %}
 
   {# Une page libre : la réglure seule, sur toute la page, pour écrire à la
@@ -350,8 +355,14 @@
             <div class="mb-card__body"><p>{{ day.fun_facts[0] }}</p></div>
           </div>
         {% endif %}
+        {% if not day.layout_photo_wall_intro and not day.pleine_page %}
+          {{ mb_postit_photos(day, 'album' if day.photos | length <= 2 else 'planche') }}
+        {% endif %}
         {# Pas de légende sur les pages de photos (Hugo, 12/10/2026). #}
         {% if not day.pleine_page %}{{ mb_stickers(day) }}{% endif %}
+        {% if day.ai_note and day.fun_facts and day.fun_facts | length >= 1 %}
+          <span class="mb-ai-note mb-ai-note--page">{{ day.ai_note }}</span>
+        {% endif %}
       </div>
 
     {% else %}
@@ -473,7 +484,7 @@
                 {% if day.title %}<span class="mb-note__title">{{ day.title }}</span>{% endif %}
                 {{ day.body_html | safe }}
               </div>
-              {% if day.fun_facts and day.fun_facts | length >= 1 %}
+              {% if day.fun_facts and day.fun_facts | length >= 1 and not day.postit_bande %}
                 <div class="mb-card mb-card--left">
                   <span class="mb-photo__tape mb-card__tape"><svg viewBox="0 0 46 13" preserveAspectRatio="none"><use href="#mb-tape" /></svg></span>
                   <div class="mb-card__title"><span>{{ day.fun_facts_title | default('Infos') }}</span></div>
@@ -515,7 +526,7 @@
 
         {% elif day.layout_split_left %}
           <div class="mb-split">
-            {% if day.fun_facts and day.fun_facts | length >= 1 %}
+            {% if day.fun_facts and day.fun_facts | length >= 1 and not day.postit_bande %}
               <div class="mb-split__aside">
                 <div class="mb-card mb-card--left">
                   <span class="mb-photo__tape mb-card__tape"><svg viewBox="0 0 46 13" preserveAspectRatio="none"><use href="#mb-tape" /></svg></span>
@@ -662,6 +673,7 @@
           {% endif %}
         {% endif %}
 
+        {% if day.postit_bande %}{{ mb_postit_photos(day, 'bande') }}{% endif %}
       </div>
       {{ mb_stickers(day) }}
       {# Dire ce qui vient de la machine, en petit, sans s'en excuser. #}
