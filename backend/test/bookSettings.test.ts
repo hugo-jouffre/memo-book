@@ -8,10 +8,11 @@ import { groupSteps } from "../src/services/payloadValidator.js";
  * Les réglages de personnalisation appliqués au payload du carnet de l'app
  * (`services/bookSettings.ts`) — les mêmes que l'atelier applique au sien.
  *
- * Depuis le ratio texte / photo, `applyBookSettings` ne se contente plus de
- * retirer des champs : il **recompose chaque étape** sur le plan calculé par
- * `photoRatio.ts`. Ce que ces tests gardent, c'est donc surtout la règle
- * absolue : le récit du voyageur en sort identique, octet pour octet.
+ * `applyBookSettings` **recompose chaque étape** avec le composeur de
+ * l'atelier (`bookComposer.ts`), au nombre de photos que `photoRatio.ts`
+ * demande (Hugo, 13/10/2026). Ce que ces tests gardent : le récit du voyageur
+ * en sort intact, les paliers se voient, et les décors de l'atelier — tracé,
+ * stickers — arrivent dans le PDF de l'app.
  */
 const reglages = { photoTextRatio: 50, rulesEnabled: true, decorationQuota: 2, freeZonesEnabled: true };
 const photo = "https://exemple.test/a.jpg";
@@ -42,6 +43,14 @@ const payload = {
     },
   ],
 };
+
+/**
+ * Une étape compte un nombre de pages pair — sauf celle qui n'a pas de quoi en
+ * remplir une seconde : une seule page, sans photo (le composeur le signale).
+ */
+const paire = (etape: { days: Record<string, unknown>[] }): boolean =>
+  etape.days.length % 2 === 0 ||
+  (etape.days.length === 1 && !((etape.days[0]!["photos"] as unknown[] | undefined)?.length ?? 0));
 
 /** Le récit d'une étape, bout à bout — ce qui ne doit jamais changer. */
 const recitDesEtapes = (days: Record<string, unknown>[]): string[] =>
@@ -97,9 +106,11 @@ describe("réglages du carnet de l'app", () => {
     expect(days.flatMap((jour) => (jour["photos"] ?? []) as string[])).toEqual([]);
     // Le récit occupe la feuille : plus de zone flottante, plus de bande.
     // La carte de chapitre reste — elle n'est pas une photo.
-    expect(layoutsDe(days)).toEqual(["layout_story_full", "layout_chapter_map"]);
-    // Et les photos retirées libèrent des pages : deux étapes, deux pages.
-    expect(days).toHaveLength(2);
+    const layouts = layoutsDe(days);
+    expect(layouts).toContain("layout_chapter_map");
+    expect(layouts.filter((l) => l !== "layout_chapter_map").every((l) => l === "layout_story_full")).toBe(true);
+    // Chaque étape garde un nombre de pages pair (LAYOUT_KB § « Structure d'une étape »).
+    for (const etape of groupSteps(days)) expect(paire(etape)).toBe(true);
   });
 
   it("n'imprime aucun récit à 100 %, et garde le bandeau sur la première page", () => {
@@ -133,18 +144,44 @@ describe("réglages du carnet de l'app", () => {
     }
   });
 
-  it("n'écrit l'échelle de bande que quand elle s'écarte de la conception", () => {
+  it("garde un nombre de pages pair à chaque étape, et les photos seules après le récit", () => {
     for (const ratio of PHOTO_RATIOS) {
-      for (const jour of joursDe(ratio)) {
-        const echelle = jour["band_scale"];
-        if (echelle === undefined) continue;
-        expect(typeof echelle).toBe("number");
-        expect(echelle).not.toBe(1);
+      for (const etape of groupSteps(joursDe(ratio))) {
+        expect(paire(etape), `ratio ${ratio}`).toBe(true);
+        const recit = etape.days.map((jour) => Boolean(jour["body_html"]));
+        // Une page de récit ne vient jamais après une page sans récit.
+        expect(recit.indexOf(false) < 0 || !recit.slice(recit.indexOf(false)).includes(true), `ratio ${ratio}`).toBe(true);
       }
     }
   });
 
-  it("se lit dans le gabarit : la réglure, les décors et l'échelle de bande", () => {
+  it("pose les décors de l'atelier : un tracé, et des stickers tirés du récit", () => {
+    const plage = {
+      book_title: "Carnet",
+      days: [
+        {
+          title: "La plage",
+          day_intro: { day_number: "01", location: "Paros" },
+          body_html: "<p>Une journée entière à la plage, le sable chaud et la mer turquoise jusqu'au soir.</p>",
+          photos: Array.from({ length: 6 }, (_, i) => `https://exemple.test/${i}.jpg`),
+          layout_collage: true,
+        },
+      ],
+    };
+    const days = applyBookSettings(plage, { ...reglages, photoTextRatio: 75 })["days"] as Record<string, unknown>[];
+    expect(days.some((jour) => typeof jour["trace"] === "string" && jour["trace"] !== "aucun")).toBe(true);
+    const stickers = days.flatMap((jour) => (jour["stickers"] ?? []) as { url: string }[]);
+    expect(stickers.length).toBeGreaterThan(0);
+    expect(stickers[0]!.url).toMatch(/^https:\/\/raw\.githubusercontent\.com\/.+\/assets\/stickers\//);
+    // Décorations à 0 : ni tracé ni sticker.
+    const sans = applyBookSettings(plage, { ...reglages, photoTextRatio: 75, decorationQuota: 0 })["days"] as Record<
+      string,
+      unknown
+    >[];
+    expect(sans.flatMap((jour) => (jour["stickers"] ?? []) as unknown[])).toEqual([]);
+  });
+
+  it("se lit dans le gabarit : la réglure et les décors", () => {
     const html = (p: Record<string, unknown>) => renderTemplateToHtml({ payload: p, profile: "print" });
     const corps = (p: Record<string, unknown>) => /<body class="([^"]*)"/.exec(html(p))?.[1] ?? "";
     expect(corps(applyBookSettings(payload, reglages))).not.toMatch(/sans-reglure|sans-decor/);
@@ -154,8 +191,5 @@ describe("réglages du carnet de l'app", () => {
     expect(corps(applyBookSettings(payload, { ...reglages, decorationQuota: 0 }))).toContain(
       "sans-decor",
     );
-    // L'échelle de bande arrive dans la page par une variable CSS.
-    const avecEchelle = applyBookSettings(payload, { ...reglages, photoTextRatio: 25 });
-    expect(html(avecEchelle)).toContain("--mb-band:");
   });
 });

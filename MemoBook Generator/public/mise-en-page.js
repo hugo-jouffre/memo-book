@@ -885,6 +885,8 @@
 
   /** Une page de photos en porte cinq au plus (`layout_photo_page`). */
   const MAX_PAGE_PHOTOS = 5;
+  /** La planche qui ouvre une étape sans récit en porte quatre (`layout_photo_wall_intro`). */
+  const MAX_PHOTOS_OUVERTURE = 4;
 
   /**
    * La structure d'une étape (LAYOUT_KB § « Structure d'une étape ») :
@@ -1463,6 +1465,8 @@
 
   const drapeaux = (actif) => ({
     layout_chapter_map: actif === "layout_chapter_map",
+    layout_story_full: actif === "layout_story_full",
+    layout_photo_wall_intro: actif === "layout_photo_wall_intro",
     layout_story_opener: actif === "layout_story_opener",
     layout_story_facts: actif === "layout_story_facts",
     layout_hero_top: actif === "layout_hero_top",
@@ -1483,6 +1487,23 @@
    * `options` : `{ contours, dessinerCarte, pagesAvant, funFacts, journal }` —
    * `funFacts` est le réglage « Insérer des Fun facts » du carnet : coupé,
    * aucun encart.
+   *
+   * **Le ratio photo / texte** (Hugo, 13/10/2026 : le composeur compose, le
+   * ratio dit combien de photos) : `ratio` est le palier du carnet (0, 25, 50,
+   * 75 ou 100) et `budgetPhotos(etape, index)` le nombre de photos que le
+   * module de ratio (`ratio-photos.js` / `photoRatio.ts`, `photosRequired`)
+   * demande pour l'étape. Au-delà, les photos de trop s'écartent dans l'ordre
+   * habituel (`trierPourEcarter`). Le palier règle aussi la composition :
+   *
+   * - **0 %** : aucune photo, le récit prend la feuille (`layout_story_full`) ;
+   * - **25 %** : une photo par page de récit au plus ;
+   * - **100 %** : aucun récit imprimé — une planche d'ouverture avec le
+   *   bandeau et le fun fact (`layout_photo_wall_intro`), puis des planches.
+   *
+   * L'app compose avec le même code (`backend/src/services/bookComposer.ts`),
+   * à partir de son propre payload : une étape peut alors apporter ses
+   * `paragraphes` tels quels (au lieu d'un `recit` à découper) et sa `carte`
+   * de chapitre (l'objet `map` du gabarit), sans analyse ni contours.
    */
   function composerJours(etapes, options = {}) {
     const {
@@ -1492,6 +1513,8 @@
       funFacts = false,
       stickers = [],
       decorations = 2,
+      ratio = 50,
+      budgetPhotos = null,
       journal = () => {},
     } = options;
     const plans = [];
@@ -1518,7 +1541,7 @@
 
     etapes.forEach((etape, index) => {
       const analysePhotos = new Map((etape.analyse?.photos || []).map((ph) => [String(ph.id), ph]));
-      const photos = etape.photos.map((photo) => {
+      const toutesLesPhotos = etape.photos.map((photo) => {
         const lu = analysePhotos.get(String(photo.id)) || {};
         return {
           ...photo,
@@ -1535,10 +1558,26 @@
         };
       });
 
-      const paragraphes = enParagraphes(etape.recit);
+      // Le palier du carnet : à 0 %, aucune photo ; sinon, autant que le
+      // module de ratio en demande pour cette étape, les moins bonnes écartées.
+      let photos = ratio === 0 ? [] : toutesLesPhotos;
+      const budget = budgetPhotos ? budgetPhotos(etape, index) : null;
+      if (Number.isFinite(budget) && photos.length > budget) {
+        const enTrop = new Set(trierPourEcarter(photos).slice(0, photos.length - Math.max(0, budget)));
+        photos = photos.filter((p) => !enTrop.has(p));
+        journal(`ratio ${ratio} % — étape ${index + 1} : ${photos.length} photo(s) gardée(s) sur ${toutesLesPhotos.length}.`);
+      }
+
+      const paragraphes = Array.isArray(etape.paragraphes)
+        ? etape.paragraphes.map((p) => String(p).trim()).filter(Boolean)
+        : enParagraphes(etape.recit);
       // Sans récit, une ou deux photos tiennent sur la page à bandeau ; à partir
       // de trois, l'étape n'est faite que de pages de photos.
-      const pages = paragraphes.length ? pagesDeRecit(paragraphes) : photos.length < MIN_PAGE_PHOTOS ? [[]] : [];
+      // À 100 %, aucun récit n'est imprimé : l'étape n'est faite que de
+      // planches, la première portant le bandeau (`layout_photo_wall_intro`).
+      const sansRecit = ratio === 100 && photos.length > 0;
+      const pages =
+        paragraphes.length && !sansRecit ? pagesDeRecit(paragraphes) : photos.length < MIN_PAGE_PHOTOS && !sansRecit ? [[]] : [];
 
       // Chapitre : la première étape, puis chaque arrivée dans un nouveau lieu.
       // Pour un séjour en un seul lieu, chaque étape qui emmène le voyageur
@@ -1571,22 +1610,31 @@
         nouveauLieu = !sejoursOuverts.has(situe.pays) || nouveauxEnVille.length > 0;
       }
       if (nouveauLieu) numeroChapitre += 1;
-      let chapitre = Boolean(nouveauLieu && situe && dessinerCarte && pages.length && paragraphes.length);
+      // La carte que l'app apporte toute faite (`map`, choisie par l'Agent Mise
+      // en page) ouvre le chapitre sans analyse ni contours.
+      const carteImposee = etape.carte || null;
+      let chapitre = carteImposee
+        ? Boolean(pages.length && paragraphes.length)
+        : Boolean(nouveauLieu && situe && dessinerCarte && pages.length && paragraphes.length);
       // La carte prend la place d'une colonne : le récit de l'ouverture doit y
       // tenir. Elle ne coûte plus de photo — ce qui n'a pas de place sur les
       // pages de récit va sur les pages de photos de fin d'étape.
       if (chapitre && signes(pages[0]) > CAPACITE_CHAPITRE.sansPhoto) chapitre = false;
 
-      const maxParPage = photosParPageDeRecit(photos);
+      // À 25 %, une photo par page de récit au plus : le récit tient la page.
+      const maxParPage = ratio <= 25 ? Math.min(1, photosParPageDeRecit(photos)) : photosParPageDeRecit(photos);
       // La structure de l'étape : récit d'un seul tenant, photos en fin
       // d'étape, nombre de pages pair (`structurerEtape`).
       let structure;
-      if (paragraphes.length) {
+      if (paragraphes.length && pages.length) {
         structure = structurerEtape({ paragraphes, pagesNaturelles: pages, photos, maxParPage, chapitre, memoire });
       } else if (pages.length) {
         structure = { pages, recit: [photos], fin: [], tailles: [], chapitreDeux: false, total: 1 };
       } else {
+        // Que des photos : la première planche porte le bandeau, et quatre
+        // photos au plus (`layout_photo_wall_intro`).
         let q = Math.ceil(photos.length / MAX_PAGE_PHOTOS);
+        while (partsEgales(photos.length, q)[0] > MAX_PHOTOS_OUVERTURE) q += 1;
         if (q % 2 && q < photos.length) q += 1;
         structure = { pages: [], recit: [], fin: photos, tailles: partsEgales(photos.length, q), chapitreDeux: false, total: q };
       }
@@ -1601,7 +1649,9 @@
       }
 
       let carte = "";
-      if (chapitre) {
+      if (chapitre && carteImposee) {
+        carte = carteImposee;
+      } else if (chapitre) {
         let requete;
         if (sejour && !sejoursOuverts.has(situe.pays)) {
           // Première carte d'un séjour en un seul lieu : le pays entier, la
@@ -1695,13 +1745,27 @@
           carte: p === 0 && chapitre ? carte : "",
           ...(structure.serre ? { taille: "serre" } : {}),
         };
-        plan.layout = plan.carte ? "layout_chapter_map" : layoutDeRecit(plan.photos, texte, plan.sorte, plan.ouvreLeCarnet);
+        plan.layout = plan.carte
+          ? "layout_chapter_map"
+          : ratio === 0
+            ? "layout_story_full"
+            : layoutDeRecit(plan.photos, texte, plan.sorte, plan.ouvreLeCarnet);
         plans.push(plan);
       });
-      // Les pages de photos seules, toujours après le récit.
+      // Les pages de photos seules, toujours après le récit. Sans récit, la
+      // première ouvre l'étape : bandeau et fun fact.
       let debut = 0;
       for (const taille of structure.tailles) {
-        plans.push(planche(structure.fin.slice(debut, debut + taille)));
+        const plan = planche(structure.fin.slice(debut, debut + taille));
+        if (!pagesEtape.length && debut === 0) {
+          plan.ouverture = true;
+          plan.bandeau = etape;
+          delete plan.pleinePage;
+          delete plan.colonnes;
+          const encart = funFacts ? encartDe(etape.analyse) : null;
+          if (encart) plan.encart = encart;
+        }
+        plans.push(plan);
         debut += taille;
       }
     });
@@ -1731,6 +1795,23 @@
         trace: plan.trace || "aucun",
         ...(plan.stickers?.length ? { stickers: plan.stickers.map(({ famille, ...s }) => s) } : {}),
       };
+      if (plan.genre === "planche" && plan.ouverture) {
+        const e = plan.bandeau;
+        return {
+          title: e.titre,
+          date: e.dateLongue,
+          city: e.lieu || "",
+          country: e.destination || "",
+          day_intro: { day_number: e.numero, location: e.lieuComplet, date: e.dateLongue },
+          body_html: "",
+          ...drapeaux("layout_photo_wall_intro"),
+          photos: habillerPhotos(plan, placerPhotos("layout_photo_page", plan.photos), rangPage),
+          fun_facts: plan.encart ? [plan.encart.texte] : [],
+          ...(plan.encart ? { fun_facts_title: plan.encart.titre, ai_note: "Fun fact rédigé par IA" } : {}),
+          sticker_groups: [],
+          ...decors,
+        };
+      }
       if (plan.genre === "planche") {
         // Une photo seule en largeur : l'emplacement de la page d'album se couche.
         const paysage = !plan.pleinePage && plan.photos.length === 1 && plan.photos[0].format > 1;
@@ -1765,7 +1846,7 @@
         sticker_groups: [],
         ...decors,
         ...(plan.taille ? { taille_texte: plan.taille } : {}),
-        ...(plan.carte ? { map_svg: plan.carte } : {}),
+        ...(plan.carte ? (typeof plan.carte === "string" ? { map_svg: plan.carte } : { map: plan.carte }) : {}),
       };
       if (!plan.bandeau) return { title: "", ...jour };
       const e = plan.bandeau;

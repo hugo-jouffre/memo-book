@@ -81,6 +81,9 @@ COPY backend/certs ./certs
 # 30/09/2026 (« unexpected end of statement while looking for matching
 # double-quote »), et la production est restée sur la PR #61.
 COPY ["MemoBook Generator/templates", "/app/MemoBook Generator/templates"]
+# Le composeur de mise en page de l'atelier : l'app compose son carnet avec le
+# même code (`src/services/bookComposer.ts`, Hugo 13/10/2026).
+COPY ["MemoBook Generator/public/mise-en-page.js", "/app/MemoBook Generator/public/mise-en-page.js"]
 COPY agents /app/agents
 COPY assets /app/assets
 

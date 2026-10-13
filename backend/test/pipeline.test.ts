@@ -161,10 +161,13 @@ describe("parcours complet : raconter → transcrire → générer", () => {
       where: { id: render.json<{ id: string }>().id },
     });
 
-    const payload = stored.payload as { days: { photos?: string[] }[] };
-    expect(payload.days).toHaveLength(1);
-    expect(payload.days[0]?.photos).toHaveLength(1);
-    expect(payload.days[0]?.photos?.[0]).toMatch(/^https:\/\//);
+    // Une seule étape, sur un nombre de pages pair, et la photo publiée y est
+    // une fois — habillée par le composeur (scotch, contour).
+    const payload = stored.payload as { days: { photos?: (string | { url: string })[] }[] };
+    expect(payload.days.length % 2).toBe(0);
+    const photos = payload.days.flatMap((day) => day.photos ?? []).map((p) => (typeof p === "string" ? p : p.url));
+    expect(photos).toHaveLength(1);
+    expect(photos[0]).toMatch(/^https:\/\//);
   });
 
   it("accepte une note écrite sans passer par la transcription", async () => {

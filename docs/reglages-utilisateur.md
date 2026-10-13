@@ -51,7 +51,7 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
 | Réglage | Valeurs | Défaut | Qui l'applique | État |
 |---|---|---|---|---|
 | **Couvertures (1re & 4e)** | Aperçu et personnalisation | — | Mise en page | Partiel : `cover_photo` et `back_cover` existent, l'éditeur non |
-| **Ratio photo / texte** | 0 · 25 · 50 · 75 · 100 % | 50 % | Mise en page — nombre de pages, choix des layouts, taille des photos (`photoRatio.ts`, atelier et app) | Rendu, les cinq paliers. Détail et cas limites : **`docs/ratio-texte-photo.md`** |
+| **Ratio photo / texte** | 0 · 25 · 50 · 75 · 100 % | 50 % | Mise en page — le nombre de photos de chaque étape (`photoRatio.ts`), mises en page par le composeur de l'atelier, le même dans l'atelier et l'app (`bookComposer.ts`) | Rendu, les cinq paliers. Détail et cas limites : **`docs/ratio-texte-photo.md`** |
 | **Nombre de page cible** | Échelle à arrêter | 60 pages | Rédaction — niveau de détail des textes · Mise en page — regroupement des étapes | Rendu côté agents, sans garde-fou automatique |
 | **Fun facts** | ON / OFF | ON | Rédaction les écrit, mise en page les place | Rendu (`fun_facts`) — OFF : aucun encart, dans l'atelier comme dans l'app |
 | **Pointillés** | ON / OFF | ON | Gabarit (`.mb-note__rules`) | Rendu : `rules_enabled` dans le payload |
@@ -75,9 +75,9 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
 - **Ratio photo / texte.** La part de surface qu'occupent les photos, mesurée
   sur l'ensemble des pages d'une étape, à ±5 points. À **0 %**, aucune photo dans
   le carnet — la couverture garde la sienne — et le récit prend la place qu'elles
-  occupaient. À **100 %**, aucun récit imprimé : le bandeau de l'étape, les fun
-  facts si l'option est allumée, et des légendes sous environ une photo sur deux ;
-  le récit du voyageur sert de matière à ces deux-là. **C'est le nombre de pages
+  occupaient. À **25 %**, une photo par page de récit au plus. À **100 %**, aucun
+  récit imprimé : le bandeau de l'étape et le fun fact si l'option est allumée,
+  puis des planches ; le récit du voyageur sert de matière au fun fact. **C'est le nombre de pages
   et de photos qui s'adapte, jamais le texte** : un souvenir validé n'est ni
   coupé, ni raccourci, ni réduit de corps. Le chat annonce au voyageur le nombre
   exact de photos qu'il lui faut, calculé par la même fonction que celle qui
