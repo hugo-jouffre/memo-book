@@ -2339,7 +2339,7 @@ function cleAnalyse(etape) {
 }
 
 /** À changer quand `consigneAnalyseEtape` demande autre chose : les analyses gardées se refont. */
-const VERSION_ANALYSE = "5-trajets-couverture";
+const VERSION_ANALYSE = "6-plusieurs-fun-facts";
 
 /** Vignette JPEG de 512 px au plus côté : assez pour reconnaître une scène, léger à envoyer. */
 async function vignette(dataUrl) {
@@ -2393,6 +2393,9 @@ async function analyserEtapes(statut = () => {}) {
         destination: etat.carnet.destination,
         paragraphes: MiseEnPage.enParagraphes(recitDe(etape)),
         photos,
+        // De quoi tenir environ un fun fact toutes les trois pages : une étape
+        // fait à peu près une page par 700 signes de récit, plus ses planches.
+        maxEncarts: 1 + Math.ceil(recitDe(etape).length / 1400) + (photos.length > 6 ? 1 : 0),
       });
       const resultat = await appelAnalyse({
         fournisseur,
@@ -3679,7 +3682,7 @@ function panneauPersonnalisation() {
     ligne(
       "Fun facts",
       h("input", { type: "checkbox", checked: c.funFacts !== false, onchange: poser("funFacts") }),
-      "Un encart tiré du récit, une page sur trois au plus, et seulement quand il en vaut la peine.",
+      "Un encart tiré du récit, à peu près une page sur trois — dans la page, ou en post-it sur les photos —, et seulement quand il en vaut la peine.",
     ),
     ligne(
       "Pointillés",

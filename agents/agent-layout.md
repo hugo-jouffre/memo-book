@@ -199,10 +199,12 @@ complète est dans `LAYOUT_KB.md` § « Longueur des textes ».
 
 ## Les fun facts
 **Réglage du voyageur, ON ou OFF.** À OFF, aucune page ne porte d'encart. À ON :
-**un encart toutes les trois à quatre pages, un seul par étape**, et la matière
-doit venir du récit plutôt que d'une encyclopédie. Sous le seuil de pertinence,
-omettre `fun_facts` : un encart de remplissage coûte plus qu'il ne rapporte.
-Barème et cas limites dans `LAYOUT_KB.md`.
+**à peu près un encart toutes les trois pages** (Hugo, 13/10/2026), et la
+matière doit venir du récit plutôt que d'une encyclopédie. **Garde tous les fun
+facts des souvenirs d'une étape** dans le `fun_facts` de sa première page : le
+composeur (`bookComposer.ts`) choisit ensuite les pages qui les portent, y
+compris les pages de photos, pour tenir la cadence. Barème et cas limites dans
+`LAYOUT_KB.md`.
 
 L'agent ne les écrit pas, mais **il est le dernier à les voir côte à côte**.
 Deux encarts identiques, ou deux encarts du même registre à quelques pages

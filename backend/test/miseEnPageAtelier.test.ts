@@ -663,25 +663,63 @@ describe("mise en page de l'atelier", () => {
         { funFacts: true, journal: (t: string) => lignes.push(t) },
       );
       const rapport = lignes.find((l) => l.startsWith("fun facts non imprimés")) ?? "";
-      expect(rapport).toContain("étape 1 : fun fact noté 4/10, sous le seuil de 7");
+      expect(rapport).toContain("étape 1 : fun fact(s) noté(s) sous 5/10");
       expect(rapport).toContain("étape 2 : l'analyse n'a proposé aucun fun fact");
-      expect(rapport).toContain("étape 3 : aucune page n'a la place");
+      // Les pages de récit de l'étape 3 sont pleines, mais ses pages de photos
+      // portent le post-it (13/10/2026) : son fun fact s'imprime.
+      expect(rapport).not.toContain("étape 3");
     });
 
-    it("en met un toutes les trois pages au plus, les mieux notés d'abord", () => {
+    it("en met un toutes les trois pages, pile à sa place quand un fun fact y tient", () => {
       const jours = M.composerJours(
         etapes([[7, "histoire"], [9, "vecu"], [7, "cuisine"], [7, "record"], [8, "usage-local"]]),
         { funFacts: true },
       );
-      // {1, 4} (17) l'emporte sur {0, 3} (14).
-      expect(encarts(jours)).toEqual([null, "Fait n° 1.", null, null, "Fait n° 4."]);
-      expect(jours[1]?.["fun_facts_title"]).toBe("Infos");
-      expect(jours[1]?.["ai_note"]).toBe("Fun fact rédigé par IA");
+      // La promesse est une fréquence : le 7 de la page visée passe devant le
+      // 9 ou le 8 d'une page voisine.
+      expect(encarts(jours)).toEqual(["Fait n° 0.", null, null, "Fait n° 3.", null]);
+      expect(jours[0]?.["fun_facts_title"]).toBe("Infos");
+      expect(jours[0]?.["ai_note"]).toBe("Fun fact rédigé par IA");
     });
 
-    it("ne laisse pas deux encarts du même registre à la suite", () => {
-      const jours = M.composerJours(etapes([[8, "histoire"], [7], [7], [9, "histoire"]]), { funFacts: true });
-      expect(encarts(jours)).toEqual([null, null, null, "Fait n° 3."]);
+    it("évite deux encarts du même registre à la suite quand il y a mieux", () => {
+      const jours = M.composerJours(etapes([[8, "histoire"], [7, "vecu"], [7, "cuisine"], [7, "histoire"]]), {
+        funFacts: true,
+      });
+      // À la page visée, un fun fact du même registre que le précédent ; une
+      // page avant, un autre registre : il passe devant.
+      expect(encarts(jours)).toEqual(["Fait n° 0.", null, "Fait n° 2.", null]);
+    });
+
+    it("tient la promesse d'environ un toutes les trois pages, même dans un carnet chargé en photos", () => {
+      // Dix étapes, trois photos par page de récit (comme le carnet de Hugo du
+      // 13/10/2026), trois fun facts proposés par étape, notés 5 à 9.
+      const lourdes = Array.from({ length: 10 }, (_, e) =>
+        etape(
+          [paragrapheDe(`la ville ${e}`, 3), paragrapheDe(`le port ${e}`, 3)].join(" "),
+          Array.from({ length: 9 }, (_, k) => photo(`${e}-${k}`)),
+          {
+            photos: [],
+            funFacts: [9, 7, 5].map((note, k) => ({ texte: `Fait ${e}.${k}.`, registre: ["vecu", "histoire", "cuisine"][k], paragraphe: 0, pertinence: note })),
+          },
+          `Lieu ${e}`,
+        ),
+      );
+      const jours = M.composerJours(lourdes, { funFacts: true });
+      const poses = jours.map((j, i) => ((j["fun_facts"] as string[]).length ? i : -1)).filter((i) => i >= 0);
+      const attendus = Math.round(jours.length / 3);
+      expect(Math.abs(poses.length - attendus), `${poses.length} encarts pour ${jours.length} pages`).toBeLessThanOrEqual(1);
+      // Jamais plus près que deux pages, jamais au-delà de quatre tant qu'il reste de quoi.
+      for (let k = 1; k < poses.length; k += 1) {
+        expect(poses[k]! - poses[k - 1]!).toBeGreaterThanOrEqual(2);
+        expect(poses[k]! - poses[k - 1]!).toBeLessThanOrEqual(4);
+      }
+      // Des pages de photos en portent, le post-it posé sur la planche.
+      expect(poses.some((i) => jours[i]!["layout_photo_page"])).toBe(true);
+      // Ni photo perdue ni étape impaire.
+      expect(jours.flatMap((j) => j.photos)).toHaveLength(90);
+      const tailles = jours.reduce<number[]>((t, j) => (j["day_intro"] ? [...t, 1] : [...t.slice(0, -1), (t.at(-1) ?? 0) + 1]), []);
+      expect(tailles.every((n) => n % 2 === 0)).toBe(true);
     });
 
     it("pose l'encart à côté de la photo flottante plutôt que sous une grande photo en tête", () => {

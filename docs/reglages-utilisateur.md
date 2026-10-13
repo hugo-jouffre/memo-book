@@ -63,9 +63,10 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
 
 ### Ce que chaque réglage veut dire, précisément
 
-- **Fun facts.** À OFF, aucun encart, nulle part. À ON, **un encart toutes les
-  trois à quatre pages**, et seulement si le fait passe le seuil de pertinence :
-  le réglage autorise, il n'oblige pas. Une page sans encart reste normale.
+- **Fun facts.** À OFF, aucun encart, nulle part. À ON, **à peu près un encart
+  toutes les trois pages** (13/10/2026), posé dans la page ou, faute de place,
+  en post-it sur les photos — tant que l'étape a des faits qui passent le seuil
+  de pertinence. Un carnet sans matière en aura moins : on n'invente pas.
 - **Pointillés.** La réglure du papier, sous le texte. À OFF, la page reste
   blanche sous le récit ; le rythme vertical, lui, ne change pas.
   **Verrouillés à OFF sur *Manuscrit* et *Éditorial*** (02/10/2026) : ces deux
