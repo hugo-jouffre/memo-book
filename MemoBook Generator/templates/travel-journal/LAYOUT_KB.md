@@ -369,32 +369,35 @@ contrat de mise en page.
 > pages** et le **nombre de photos** qui s'adaptent au texte. Jamais l'inverse.
 
 **Ce qui se mesure** : `ratio = surface photo / (surface photo + surface
-texte)`, sur **l'ensemble des pages d'une étape**. Surface photo = les cadres
-`mb-photo`, bord blanc compris. Surface texte = ce que `mb-note` occupe
+texte)`, sur **l'ensemble des pages d'une étape**. Surface photo = les
+emplacements `mb-photo` (le contour dessiné ne compte pas). Surface texte = ce que `mb-note` occupe
 réellement. Les éléments fixes sont hors du calcul — bandeau, titre, étiquette,
 météo, carte fun fact, carte de chapitre, décor. Tolérance ±5 points.
 
 | Ratio | Corps de texte | Photos minimum | Layouts |
 |---|---|---|---|
 | **0 %** | intégral | 0 | `layout_story_full` (récit pleine page, réglure jusqu'en bas), `layout_chapter_map` aux ouvertures — une carte n'est pas une photo |
-| **25 %** | intégral | 1 | `layout_story_opener` / `layout_story_facts` avec leur photo flottante ; `layout_collage` au besoin |
-| **50 %** | intégral | 2 | `layout_collage`, `layout_split_left`, `layout_hero_top`, les trios. L'équilibre, et ce que le carnet faisait déjà |
-| **75 %** | intégral | 3 | `layout_hero_top`, `layout_collage` à bande haussée, les trios, une planche pour le reliquat |
-| **100 %** | **aucun** | selon les pages | `layout_photo_wall_intro` puis `layout_photo_page` |
+| **25 %** | intégral | 1 | Une photo par page de récit au plus |
+| **50 %** | intégral | 2 | Le composeur choisit : collage, bande, trios, récit autour d'une grande photo, planches en fin d'étape |
+| **75 %** | intégral | 3 | Idem, avec plus de photos — celles qui ne tiennent pas à côté du récit vont sur les planches de fin d'étape |
+| **100 %** | **aucun** | selon les pages | `layout_photo_wall_intro` (bandeau, fun fact, 4 photos au plus) puis `layout_photo_page` |
 
-**Le réglage continu, c'est la hauteur de bande.** `band_scale` sur la page
-(`--mb-band` dans le CSS) multiplie la hauteur de conception : `mb-gallery` 206
-pt, `mb-hero` 268, `mb-trio` 360, la photo flottante 162. Deux bornes, toujours :
-le plancher du CSS — `mb-gallery` jamais sous 160 pt — et **ce que le texte de la
-page laisse libre**. Une bande ne vole jamais une ligne au récit. `band_scale`
-est **calculé, jamais choisi** : l'agent ne le produit pas.
+**Qui compose (Hugo, 13/10/2026).** Le module de ratio dit **combien de photos**
+chaque étape garde (`photosRequired`) ; le **composeur** (`mise-en-page.js`,
+`composerJours`) met en page ces photos avec toutes ses règles — structure de
+l'étape, pages paires, planches, carte de chapitre, décors, fun facts. Les
+photos de trop s'écartent dans l'ordre habituel (floues ou sombres, doublons
+d'une scène, moins bien notées). **L'atelier et l'app composent avec le même
+code** : l'app charge le composeur de l'atelier (`backend/src/services/bookComposer.ts`).
+Jusqu'au 13/10, le module de ratio recomposait lui-même chaque étape après le
+composeur, et effaçait tout son travail ; la hauteur de bande (`band_scale`)
+qu'il calculait n'est plus posée.
 
 **À 100 %, aucun `mb-note` n'est émis.** La première page de l'étape
 (`layout_photo_wall_intro`) garde le bandeau jour · lieu · date et la carte
 `fun_facts` si le carnet les a allumés — une étape sans bandeau ne se lit plus
-comme une étape. Les autres pages sont des planches nues. Le récit du voyageur
-**sert de matière** au fun fact : il n'apparaît pas tel quel. Le nombre de pages
-de l'étape est celui qu'occuperait le texte seul à 0 %, au moins une.
+comme une étape. Les autres pages sont des planches. Le récit du voyageur
+**sert de matière** au fun fact : il n'apparaît pas tel quel.
 
 **Pas de légende**, ni de page ni par photo (Hugo, 12/10/2026) — y compris à
 100 %, où la spécification du ratio en demandait. Les deux décisions ne peuvent
@@ -409,8 +412,8 @@ pas tenir ensemble ; celle du gabarit l'emporte. Voir
   le texte leur laisse, et une bande à sa hauteur de conception ou au-dessus
   « porte la page » au sens de § « Les deux bornes basses ». L'inspecteur marque
   le cas « dépassement assumé », pas « erreur ».
-- **Le nombre de photos ne change pas pour remplir** : c'est leur taille qui
-  s'adapte, pour rester cohérent avec le nombre annoncé dans le chat.
+- **Le nombre de photos ne change pas pour remplir**, pour rester cohérent avec
+  le nombre annoncé dans le chat.
 - **Le texte ne tombe jamais sur une page sans place prévue** : si `mb-note`
   déborde, on ajoute une page, on ne coupe pas.
 - **Un palier ne demande jamais moins de photos que le palier d'en dessous** :
@@ -670,7 +673,7 @@ de mise en page, gabarit) :
 | Photo en pleine page | **De temps en temps** : une par chapitre au plus |
 | Stickers | **Bibliothèque dessinée**, liés au récit, selon le réglage « Décorations », 2 par double page au plus |
 | Tracé pointillé | **Un par double page au plus**, derrière des photos |
-| Fun fact | **Post-it « Infos » partout**, un toutes les trois pages au plus |
+| Fun fact | **Post-it « Infos » partout**, à peu près un toutes les trois pages (13/10/2026) — § « Les fun facts » |
 | Rythme | Jamais deux fois le même design sur une double page |
 | Carte de chapitre | À chaque nouveau lieu |
 | Marges | **Plus large côté reliure** : 15 mm côté pli, 10 mm à l'extérieur — § « Format » |
@@ -873,8 +876,13 @@ Deux messages, aux deux bornes du barème, définis une seule fois dans
 ## Les fun facts — dosage et matière
 
 **Un post-it « Infos » partout** (Hugo, 12/10/2026) : papier, scotch, plus de
-pince ni de bord pointillé, et toujours le titre « Infos ». La fréquence ne
-change pas : un toutes les trois pages au plus.
+pince ni de bord pointillé, et toujours le titre « Infos ».
+
+**La promesse (Hugo, 13/10/2026) : à peu près un fun fact toutes les trois
+pages** quand le voyageur les allume. Avant, quatre règles cumulées — un par
+étape, 7/10 au moins, une page de récit qui ait la place, trois pages d'écart —
+plafonnaient un carnet chargé en photos à un encart toutes les cinq ou six
+pages, voire moins.
 
 > Retour le plus unanime du panel de lecteurs : **6 sur 7** en parlent, tous
 > dans le même sens. Ce n'est pas un rejet — les fun facts sont aussi cités
@@ -887,9 +895,10 @@ n'est produit. Les règles ci-dessous valent à ON.
 
 Quatre règles, à appliquer strictement :
 
-1. **Fréquence : un encart toutes les trois à quatre pages**, selon la
-   pertinence des faits disponibles. Jamais un par page.
-2. **Un seul « Le saviez-vous » par étape**, quelle que soit la longueur.
+1. **Fréquence : un encart toutes les trois pages**, deux au moins et quatre
+   au plus d'un encart au suivant. Jamais un par page.
+2. **Plusieurs par étape** quand l'étape est longue : autant que ses pages en
+   demandent.
 3. **La matière doit venir du récit.** Un fait drôle réellement vécu vaut mieux
    qu'une donnée encyclopédique. La culture générale reste possible, mais en
    minorité et seulement si elle éclaire ce qui est raconté.
@@ -912,23 +921,35 @@ voyageur qui rallume le réglage retrouve ses encarts sans tout relancer.
 
 L'atelier n'a pas d'étape de rédaction : l'encart vient de l'**analyse d'étape**
 (`consigneAnalyseEtape`, `partage.js`), le même appel que celui qui situe le
-lieu et rattache les photos. Le modèle y reçoit le récit et propose **au plus
-un** encart tiré du récit, avec son registre, le paragraphe d'où il vient et une
-**note de pertinence sur 10**. La mise en page (`placerEncarts`,
-`mise-en-page.js`) décide ensuite :
+lieu et rattache les photos. Le modèle y reçoit le récit et propose **plusieurs
+encarts** (`funFacts`, jusqu'à un pour 1 400 signes de récit, plus un), chacun
+avec son registre, le paragraphe d'où il vient et une **note de pertinence sur
+10**. Dans l'app, ce sont les fun facts de la rédaction, un par souvenir. La
+mise en page (`placerEncarts`, `mise-en-page.js`), la même pour les deux PDF,
+décide ensuite :
 
-- **seuil** : sous 7/10, rien ; au-delà de 140 caractères, rien ;
-- **écart** : trois pages au moins d'un encart au suivant. Parmi les candidats,
-  la combinaison retenue est celle dont la somme des notes est la plus haute ;
-- **registre** : deux encarts du même registre à la suite, le moins bien noté
-  s'efface ;
-- **page hôte** : celle du paragraphe d'où vient l'encart, sinon la première
-  page de l'étape qui peut le porter sans perdre une ligne. Récit avec 0 ou 1
-  photo : la zone flottante l'accueille sans rien coûter (mesuré : 540 signes
-  sous un bandeau, 860 sur une page de suite, comme sans encart), et une grande
-  photo en tête repasse en photo flottante. Deux photos : 230 signes au plus.
-  Ouverture de chapitre avec deux photos : 110. Trois photos : jamais ;
+- **cadence** : on avance page par page ; la place visée est trois pages après
+  le dernier encart (le premier, dans les trois premières pages), dans une
+  fenêtre de deux à quatre pages. **La place passe avant la note** : une page
+  d'écart coûte 2,5 points — un 9 à côté cède à un 7 pile à sa place ;
+- **seuil** : 7/10 d'abord ; une place restée vide se contente d'un 5 ou d'un
+  6 ; sous 5, jamais. Au-delà de 140 caractères, jamais ;
+- **registre** : deux encarts du même registre à la suite, seulement quand il
+  n'y a pas mieux ;
+- **page hôte, dans la page** : récit avec 0 ou 1 photo, la zone flottante
+  l'accueille sans rien coûter (540 signes sous un bandeau, 860 sur une page de
+  suite), et une grande photo en tête repasse en photo flottante ; deux photos,
+  230 signes au plus ; ouverture de chapitre avec deux photos, 110 ;
+- **page hôte, sur les photos** (Hugo, 13/10/2026 : « les fun facts peuvent
+  aussi aller sur les pages photos ») : un post-it posé dans un coin d'une
+  planche (`mb-card--postit-planche`), sur le blanc d'une page d'album, ou sur
+  la bande de photos d'une page de récit (`postit_bande`, collage, bande, trio,
+  chapitre) — il mord sur une photo sans prendre une ligne au texte, côté
+  extérieur de la page. Jamais sur la pleine page ;
 - **mention** : la page porte `ai_note` « Fun fact rédigé par IA ».
+
+Le journal de l'atelier donne la cadence obtenue (« 14 encarts, un toutes les
+3,0 pages ») et, étape par étape, pourquoi un fun fact manque.
 
 Le réglage « Insérer des Fun facts » se coche dans la fiche du carnet de
 l'atelier, allumé par défaut comme dans l'app.
@@ -1307,6 +1328,53 @@ couverture :
 
 L'aperçu et le script viennent de **la même maquette** (`maquette`, en
 millimètres) : ils ne peuvent pas diverger.
+
+### Les styles de couverture
+
+Le panneau de l'atelier propose **les sept styles du catalogue de l'app**
+(`coverCatalogue.ts`), avec leur première de référence (`assets/covers/`). Le
+moteur reste `couverture.js` ; un style ne fait que poser ses éléments
+(`couverture-styles.js`). Spécifications de Hugo du 09/10/2026 :
+
+| Style | Disponible | Polices | Couleurs | Images | Textes |
+|---|---|---|---|---|---|
+| Par défaut | oui | Playfair Display | photo, papier, encre | la photo de la première | titre, voyageurs, dates (tirés du carnet) |
+| Élégant | oui | Cormorant Garamond (titre), Cormorant Infant | fonds beige, noir typo, logo beige foncé | deux photos de paysage : grande sur la première, bande panoramique en tête de la quatrième | titre, date, texte de la quatrième — rédigés par l'IA |
+| Dessin | oui | Hansley (titres) — **Gloria Hallelujah tant que sa licence n'est pas vérifiée** —, Gloria Hallelujah | fonds beige, noir typo, disques bleu pâle | trois dessins de la bibliothèque (`assets/stickers/`, au trait ou dessinés), appelés par les récits | phrase-titre et titre de la quatrième rédigés par l'IA ; années, voyageurs et texte de la quatrième tirés du carnet |
+| Assouline | oui | Black Han Sans (titres), Playfair Display | fond vert, bleu ou beige selon l'illustration ; titres dans sa couleur dominante (contraste 3 au moins) ; résumé et chiffres en noir typo ; encadré des chiffres blanc, bordé de la couleur des titres | une illustration générée, liée au lieu | titre et texte de la quatrième rédigés par l'IA ; année et voyageurs (titre de la quatrième) tirés du carnet |
+| Aquarelle | oui | Black Han Sans (titres), Manrope | fonds beige, noir typo ; motif M en beige foncé à 20 %, logo beige foncé | une aquarelle générée sur la première ; trois vignettes « qui bavent », sans contour net, sur la quatrième | titre et les trois paragraphes de la quatrième (un par vignette) rédigés par l'IA ; date tirée du carnet |
+| Travel book | oui | Lilita One | texte vert sur fond beige ; cadre vert déchiré | timbres et autocollants générés d'après les récits ; tampon du pays, généré à partir de sa silhouette (contours de carte) ; photo de la quatrième choisie comme dans le style par défaut | titre, dates, voyageurs tirés du carnet |
+| Photo-dessin | oui | Caveat Brush | textes et contour de la couleur de la photo ; la quatrième en prend la couleur en fond, ses textes la teinte de la marque la plus lisible | une photo où l'on voit les voyageurs, entourés de quatre anneaux à main levée ; le titre suit l'anneau le plus large | titre rédigé par l'IA ; voyageurs, année tirés du carnet ; « Merci d'avoir suivi mon aventure ! » en quatrième, modifiable |
+
+- **Les textes** sont rédigés par l'IA d'après les récits (« Rédiger avec
+  l'IA », `consigneTextes`), puis **modifiables** dans le panneau ; ce que le
+  voyageur écrit passe avant. Ils sont gardés dans le fichier d'avancement
+  (`couvertureStyle`).
+- **Le dos, pour tous les styles** : le fond de la quatrième, et ses textes
+  (titre, voyageurs, dates) dans la police et la couleur du corps de texte de
+  la quatrième — à défaut, de son titre.
+- **Les polices** des styles (OFL) sont dans `public/fonts/couvertures/` ;
+  l'aperçu les charge, le `LISEZMOI.txt` du dossier InDesign dit lesquelles
+  installer.
+- **Les illustrations générées** (Assouline, Aquarelle, Travel book) :
+  OpenAI `gpt-image-1`, avec la clé OpenAI de l'atelier (`/api/image` en
+  local, appel direct en mode navigateur — `genererImage`, `partage.js`). La
+  couverture de référence du style (`assets/covers/`) part en entrée pour en
+  tenir le style ; pour le tampon du Travel book, c'est la silhouette du pays
+  du voyage. PNG transparent pour ce qui se pose sur un fond. Le panneau
+  affiche le **coût estimé** avant de lancer (≈ 0,17 $ en carré, 0,25 $ en
+  portrait ou paysage), et un **« Régénérer »** par image. Les images sont
+  gardées dans le fichier d'avancement : rien n'est régénéré sans le demander.
+  Les prompts reprennent les textes du style — rédiger les textes d'abord.
+- **Photo-dessin** : la photo de la première est celle que le voyageur a
+  choisie, sinon la mieux notée où l'analyse d'étape voit des personnes. Un
+  appel « vision » (`CONSIGNE_CONTOUR`, le modèle de l'analyse) renvoie le
+  contour du groupe ; à défaut, une ellipse au centre. Un contour trop large
+  est resserré pour que les anneaux et le titre tiennent dans la face, et le
+  corps du titre se réduit pour tenir sur l'arc. Contour et couleurs sont
+  gardés par photo (« Repérer à nouveau » pour relancer).
+- **Le PDF de l'app** n'imprime encore que le style par défaut : le style
+  choisi dans l'app est enregistré, pas encore composé côté serveur.
 
 **L'intérieur, version imprimeur.** Le PDF du carnet contient sa propre
 couverture et sa quatrième (première et dernière pages) : pour un relié, elles

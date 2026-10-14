@@ -29,7 +29,7 @@ import partage from "./public/partage.js";
 // Le renommage des vocaux, le format du fichier groupé et la consigne de
 // découpage sont partagés avec le mode navigateur : une seule copie, une seule
 // vérité. Voir `public/partage.js`.
-const { normaliserNomAudio, decouperTexteGroupe, extraireJson, consigneDecoupage, messagesAnalyse } =
+const { normaliserNomAudio, decouperTexteGroupe, extraireJson, consigneDecoupage, messagesAnalyse, genererImage } =
   partage;
 
 const ICI = dirname(fileURLToPath(import.meta.url));
@@ -411,6 +411,32 @@ async function analyser(req, res) {
   repondreJson(res, 200, extraireJson(brut));
 }
 
+/**
+ * Une illustration de couverture (`genererImage`, `partage.js`) : la page
+ * envoie la consigne et ses images de référence, le serveur ajoute la clé.
+ */
+async function image(req, res) {
+  const corps = await lireJson(req);
+  const { cle } = await resoudreCle("OPENAI_API_KEY", corps.cleOpenai);
+  if (!cle) throw new ErreurHttp(400, "Aucune clé OpenAI");
+  try {
+    repondreJson(
+      res,
+      200,
+      await genererImage({
+        cle,
+        base: process.env.OPENAI_API_BASE || "https://api.openai.com/v1",
+        prompt: String(corps.prompt || ""),
+        taille: corps.taille,
+        transparent: Boolean(corps.transparent),
+        references: Array.isArray(corps.references) ? corps.references : [],
+      }),
+    );
+  } catch (erreur) {
+    throw new ErreurHttp(502, erreur.message);
+  }
+}
+
 /* --------------------------------------------------------------- routage --- */
 
 async function router(req, res) {
@@ -441,6 +467,7 @@ async function router(req, res) {
   if (req.method === "POST" && chemin === "/api/transcrire") return transcrire(req, res);
   if (req.method === "POST" && chemin === "/api/decouper") return decouper(req, res);
   if (req.method === "POST" && chemin === "/api/analyser") return analyser(req, res);
+  if (req.method === "POST" && chemin === "/api/image") return image(req, res);
 
   if (req.method === "GET") return servirStatique(res, chemin);
 

@@ -174,21 +174,23 @@ Réponds uniquement par un objet JSON, sans texte autour et sans balises de code
    *   page que le passage qui en parle ;
    * - quelles photos ont été prises au même endroit (même arrière-plan), pour
    *   qu'elles restent ensemble ;
-   * - un encart (« fun fact ») tiré du récit, noté sur 10, ou rien. C'est la
-   *   mise en page qui décide lesquels s'impriment : un toutes les trois pages
-   *   au plus, les mieux notés d'abord.
+   * - des encarts (« fun facts ») tirés du récit, notés sur 10 — jusqu'à
+   *   `maxEncarts`, de quoi tenir la promesse d'environ un toutes les trois
+   *   pages (Hugo, 13/10/2026). C'est la mise en page qui décide lesquels
+   *   s'impriment, les mieux notés d'abord.
    *
    * La mise en page reste un calcul de l'atelier (`mise-en-page.js`) : le
    * modèle décrit, il ne compose pas. Voir LAYOUT_KB § « Associer les photos au
    * récit » et § « Les fun facts — dosage et matière ».
    */
-  function consigneAnalyseEtape({ lieu, destination, paragraphes, photos }) {
+  function consigneAnalyseEtape({ lieu, destination, paragraphes, photos, maxEncarts = 2 }) {
+    const encarts = Math.max(1, Math.min(4, Math.round(maxEncarts) || 1));
     const texte = (paragraphes || [])
       .map((p, i) => `[${i}] ${String(p).replace(/\s+/g, " ").trim()}`)
       .join("\n");
     const ids = (photos || []).map((p) => p.id).join(", ");
 
-    return `Tu prépares la mise en page d'une étape de carnet de voyage. Tu ne réécris pas le récit et tu ne choisis aucune mise en page : tu décris, et tu proposes au plus un encart.
+    return `Tu prépares la mise en page d'une étape de carnet de voyage. Tu ne réécris pas le récit et tu ne choisis aucune mise en page : tu décris, et tu proposes des encarts.
 
 Lieu de l'étape : ${lieu || "non précisé"}
 Destination du voyage : ${destination || "non précisée"}
@@ -212,7 +214,7 @@ Les photos de l'étape suivent, chacune précédée de son identifiant (${ids ||
    - "personnes" : le nombre de personnes dont on voit le visage ;
    - "couverture" : de 0 à 10, ce que vaudrait la photo en couverture du carnet. 8 et plus pour un paysage marquant du voyage ou une belle photo où l'on voit les voyageurs, nette, lumineuse, bien cadrée. Sous 4 : un plat, un document, un intérieur sombre, une photo floue ou de travers, un détail sans contexte.
 
-3. **L'encart (« fun fact »).** Au plus un, et seulement s'il en vaut la peine :
+3. **Les encarts (« fun facts »).** Jusqu'à ${encarts}, chacun sur un sujet différent du récit et, autant que possible, d'un registre différent. Seulement ceux qui en valent la peine :
    - son sujet vient du récit. Le voyageur raconte un trajet en jeepney : l'encart parle des jeepneys, pas du PIB du pays ;
    - deux matières possibles. Le meilleur cas : un épisode cocasse réellement raconté, résumé en une phrase. Sinon, un fait sûr qui éclaire ce qui est raconté (histoire, origine d'un nom, usage local, tradition culinaire…), écrit à la troisième personne ;
    - 140 caractères au plus, texte nu, sans emoji ;
@@ -221,11 +223,11 @@ Les photos de l'étape suivent, chacune précédée de son identifiant (${ids ||
    - "titre" : « Fun fact », « Infos », « Culture générale » ou « Chiffres clés », selon le registre ;
    - "registre" : vecu, histoire, nom-de-lieu, record, usage-local, cuisine, litterature-cinema ou echelle ;
    - "paragraphe" : le numéro du paragraphe d'où vient le sujet ;
-   - "pertinence" : de 0 à 10. 8 et plus pour un fait qu'on a envie de raconter et qui tient directement au récit ; sous 5, ne propose rien.
-   "funFact" vaut null s'il n'y a rien de sûr et de pertinent : c'est un résultat normal.
+   - "pertinence" : de 0 à 10. 8 et plus pour un fait qu'on a envie de raconter et qui tient directement au récit ; sous 5, ne le propose pas.
+   "funFacts" est une liste, du meilleur au moins bon ; vide s'il n'y a rien de sûr et de pertinent : c'est un résultat normal.
 
 Réponds uniquement par un objet JSON, sans texte autour :
-{"lieu":{"nom":"","pays":"","lat":0,"lon":0,"genre":"ville"},"lieux":[{"nom":"","pays":"","lat":0,"lon":0,"genre":"site"}],"trajets":[{"depart":{"nom":"","pays":"","lat":0,"lon":0},"arrivee":{"nom":"","pays":"","lat":0,"lon":0},"mode":"avion"}],"photos":[{"id":"","paragraphe":0,"scene":"","sujet":"","legende":"","personnes":0,"couverture":0}],"funFact":{"texte":"","titre":"Fun fact","registre":"","paragraphe":0,"pertinence":0}}`;
+{"lieu":{"nom":"","pays":"","lat":0,"lon":0,"genre":"ville"},"lieux":[{"nom":"","pays":"","lat":0,"lon":0,"genre":"site"}],"trajets":[{"depart":{"nom":"","pays":"","lat":0,"lon":0},"arrivee":{"nom":"","pays":"","lat":0,"lon":0},"mode":"avion"}],"photos":[{"id":"","paragraphe":0,"scene":"","sujet":"","legende":"","personnes":0,"couverture":0}],"funFacts":[{"texte":"","titre":"Fun fact","registre":"","paragraphe":0,"pertinence":0}]}`;
   }
 
   /**
@@ -248,8 +250,54 @@ Réponds uniquement par un objet JSON, sans texte autour :
     return contenu;
   }
 
+  /** Une image en data URL, en Blob pour un envoi multipart. */
+  function dataUrlEnBlob(dataUrl) {
+    const [entete, base64] = String(dataUrl).split(",");
+    const type = (entete.match(/data:([^;]+)/) || [])[1] || "image/png";
+    const binaire = atob(base64 || "");
+    const octets = new Uint8Array(binaire.length);
+    for (let i = 0; i < binaire.length; i += 1) octets[i] = binaire.charCodeAt(i);
+    return new Blob([octets], { type });
+  }
+
+  /**
+   * Une illustration de couverture, générée par OpenAI (`gpt-image-1`, le
+   * modèle de `docs/sticker-generation.yaml`) — le même appel depuis le
+   * serveur local et depuis la page.
+   *
+   * `references` : des images (data URLs) que le modèle reçoit en entrée — la
+   * couverture de référence du style, pour en tenir le style, ou la silhouette
+   * d'un pays pour un tampon. Avec elles, l'appel passe par `images/edits`.
+   * `transparent` : un PNG sans fond, pour une image posée sur un aplat.
+   * Renvoie `{ data }`, l'image en data URL PNG.
+   */
+  async function genererImage({ cle, base = "https://api.openai.com/v1", prompt, taille = "1024x1536", transparent = false, qualite = "high", references = [] }) {
+    if (!cle) throw new Error("Aucune clé OpenAI");
+    const commun = { model: "gpt-image-1", prompt, size: taille, quality: qualite, ...(transparent ? { background: "transparent" } : {}) };
+    let reponse;
+    if (references.length) {
+      const formulaire = new FormData();
+      for (const [cle2, valeur] of Object.entries(commun)) formulaire.append(cle2, valeur);
+      references.forEach((r, i) => formulaire.append("image[]", dataUrlEnBlob(r.data || r), r.nom || `reference-${i + 1}.png`));
+      reponse = await fetch(`${base}/images/edits`, { method: "POST", headers: { authorization: `Bearer ${cle}` }, body: formulaire });
+    } else {
+      reponse = await fetch(`${base}/images/generations`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${cle}`, "content-type": "application/json" },
+        body: JSON.stringify({ ...commun, output_format: "png" }),
+      });
+    }
+    const donnees = await reponse.json().catch(() => ({}));
+    if (!reponse.ok) throw new Error(donnees?.error?.message || `OpenAI a refusé l'image (HTTP ${reponse.status})`);
+    const b64 = donnees?.data?.[0]?.b64_json;
+    if (!b64) throw new Error("OpenAI n'a renvoyé aucune image");
+    return { data: `data:image/png;base64,${b64}` };
+  }
+
   const api = {
     MAX_OCTETS,
+    dataUrlEnBlob,
+    genererImage,
     normaliserNomAudio,
     decouperTexteGroupe,
     construireTexteGroupe,

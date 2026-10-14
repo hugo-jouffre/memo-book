@@ -176,3 +176,34 @@ describe("gabarit — retouches du 13/10/2026", () => {
     expect(deux).toContain('class="mb-gallery"');
   });
 });
+
+describe("gabarit — fun facts sur les photos (13/10/2026)", () => {
+  const corps = (days: Record<string, unknown>[]) => {
+    const rendu = renderTemplateToHtml({ payload: { book_title: "Carnet", sans_couvertures: true, pages_libres_avant: 0, days }, profile: "print" });
+    return rendu.slice(rendu.indexOf("<body"));
+  };
+  const photos = (n: number) => Array.from({ length: n }, (_, i) => `https://exemple.test/${i}.jpg`);
+  const fait = { fun_facts: ["Un fait sûr, tiré du récit."], fun_facts_title: "Infos" };
+
+  it("pose le post-it sur une planche, une page d'album et une planche en colonnes", () => {
+    expect(corps([{ title: "", body_html: "", layout_photo_page: true, photos: photos(4), ...fait }])).toContain("mb-card--postit-planche");
+    expect(corps([{ title: "", body_html: "", layout_photo_page: true, photos: photos(2), ...fait }])).toContain("mb-card--postit-album");
+    expect(
+      corps([{ title: "", body_html: "", layout_photo_page: true, planche_colonnes: true, photos: photos(5), ...fait }]),
+    ).toContain("mb-card--postit-planche");
+    // Jamais sur la pleine page.
+    expect(corps([{ title: "", body_html: "", layout_photo_page: true, pleine_page: true, photos: photos(1), ...fait }])).not.toContain(
+      "mb-card--postit",
+    );
+  });
+
+  it("pose le post-it sur la bande d'une page de récit, sans rétrécir la colonne", () => {
+    const bande = corps([{ ...jour("01"), layout_story_opener: false, layout_split_left: true, photos: photos(2), ...fait, postit_bande: true }]);
+    expect(bande).toContain("mb-card--postit-bande");
+    expect(bande).not.toContain("mb-split__aside");
+    // Sans `postit_bande`, la carte reste dans sa colonne, comme avant.
+    const colonne = corps([{ ...jour("01"), layout_story_opener: false, layout_split_left: true, photos: photos(2), ...fait }]);
+    expect(colonne).toContain("mb-split__aside");
+    expect(colonne).not.toContain("mb-card--postit-bande");
+  });
+});

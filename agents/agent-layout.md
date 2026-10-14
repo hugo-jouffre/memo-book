@@ -199,10 +199,12 @@ complète est dans `LAYOUT_KB.md` § « Longueur des textes ».
 
 ## Les fun facts
 **Réglage du voyageur, ON ou OFF.** À OFF, aucune page ne porte d'encart. À ON :
-**un encart toutes les trois à quatre pages, un seul par étape**, et la matière
-doit venir du récit plutôt que d'une encyclopédie. Sous le seuil de pertinence,
-omettre `fun_facts` : un encart de remplissage coûte plus qu'il ne rapporte.
-Barème et cas limites dans `LAYOUT_KB.md`.
+**à peu près un encart toutes les trois pages** (Hugo, 13/10/2026), et la
+matière doit venir du récit plutôt que d'une encyclopédie. **Garde tous les fun
+facts des souvenirs d'une étape** dans le `fun_facts` de sa première page : le
+composeur (`bookComposer.ts`) choisit ensuite les pages qui les portent, y
+compris les pages de photos, pour tenir la cadence. Barème et cas limites dans
+`LAYOUT_KB.md`.
 
 L'agent ne les écrit pas, mais **il est le dernier à les voir côte à côte**.
 Deux encarts identiques, ou deux encarts du même registre à quelques pages
@@ -223,17 +225,25 @@ n'en place aucun et se rabat sur un `prompt`, ou laisse le blanc.
 Le panel se partageait exactement là-dessus — « moins de stickers » contre « un
 bon ratio ». C'est arbitré : **la quantité n'est plus un jugement de l'agent,
 c'est un réglage du voyageur**. Cinq valeurs, 0 à 4 décors par paragraphe ou par
-image, 2 par défaut. L'agent place, il ne dose pas.
+image, 2 par défaut.
+
+**L'agent ne pose plus aucun décor** (Hugo, 13/10/2026). Après lui, le carnet
+de l'app passe par le composeur de l'atelier (`backend/src/services/bookComposer.ts`,
+`MemoBook Generator/public/mise-en-page.js`), qui recompose chaque étape au
+nombre de photos du ratio et pose, double page par double page, le tracé
+pointillé, les étiquettes, le scotch et les stickers de la bibliothèque
+dessinée (`assets/stickers/`), d'après le récit. Les deux PDF ont ainsi les
+mêmes décors. `trace`, `stickers`, `sticker_groups` et `tape_corner` n'ont donc
+pas à être produits ici.
+
+Ce que l'agent garde, et que le composeur reprend tel quel sur la page qui
+ouvre l'étape : le bandeau (`day_intro`, météo, nuit, hôte), l'étiquette de
+section (`tag`), le champ à remplir (`prompt`), le quiz (`quiz`) et la carte du
+chapitre (`map`).
 
 - **À 0, aucun décor**, nulle part. La page se remplit autrement, ou pas du tout.
-- **Le scotch compte dans le quota.** `photos[].tape_corner` est aujourd'hui le
-  seul décor réellement imprimé, avec le tracé pointillé de bas de page.
-- **Les stickers ne sont pas rendus.** `sticker_groups` n'est consommé par aucun
-  layout : ne pas le produire tant que `LAYOUT_KB.md` ne le décrit pas.
 - Jamais de décor pour combler un vide : un blanc se remplit par un `prompt` ou
   un `quiz`, sinon il reste blanc. Une page qui respire n'est pas une page ratée.
-- Le quota est un plafond, pas une consigne de remplissage : une page qui n'a
-  pas besoin de ses deux décors n'en met qu'un.
 
 ## La typographie ne se panache pas
 

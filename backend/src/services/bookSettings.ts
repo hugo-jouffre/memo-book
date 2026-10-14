@@ -14,20 +14,20 @@
  * | Décorations à 0 | `decoration_quota: 0` : ni tracé pointillé, ni sticker (le scotch reste) |
  * | Zones libres | `pages_libres: 3` : trois pages réglées après la dernière étape ; 0 si coupé |
  *
- * ## Le ratio photo / texte
+ * ## Le ratio photo / texte, et la composition
  *
- * `applyBookSettings` **recompose chaque étape** selon le plan que
- * `photoRatio.ts` calcule : le nombre de pages, le layout de chacune, la part
- * de photos et la hauteur de leur bande. L'Agent Mise en page propose, le
- * module de ratio tranche — c'est le seul moyen que le PDF porte exactement le
- * nombre de photos que le chat a demandé au voyageur.
+ * `applyBookSettings` **recompose chaque étape** avec le composeur de
+ * l'atelier (`bookComposer.ts`) : le module de ratio (`photoRatio.ts`) dit
+ * combien de photos l'étape garde à ce palier — le nombre exact que le chat a
+ * demandé au voyageur —, le composeur met en page (Hugo, 13/10/2026). Les deux
+ * PDF sortent ainsi du même code.
  *
  * **Le texte ne bouge jamais.** La recomposition peut déplacer un paragraphe
- * d'une page à la suivante, mais le `body_html` de l'étape, bout à bout, reste
- * identique octet pour octet — c'est ce que vérifie `test/ratioPhotos.test.ts`
- * sur les quinze cas du barème croisés avec les cinq paliers.
+ * d'une page à la suivante, ou le couper sur une fin de phrase, mais aucun mot
+ * n'est ajouté, retiré ni changé (`test/bookSettings.test.ts`).
  */
-import { appliquerRatio, getPhotoRatio } from "./photoRatio.js";
+import { composerCarnet } from "./bookComposer.js";
+import { getPhotoRatio } from "./photoRatio.js";
 import type { BookPayload } from "./structuring.js";
 
 export interface BookSettings {
@@ -67,12 +67,13 @@ export function applyBookSettings(payload: BookPayload, settings: BookSettings):
   const days = Array.isArray(payload["days"]) ? (payload["days"] as Record<string, unknown>[]) : [];
   if (days.length === 0) return regle;
 
-  // La recomposition vit dans `photoRatio.ts` et non ici : l'atelier l'appelle
-  // aussi, sur son propre `days[]` (`app.js`, `reglagesDuCarnet`). Deux
-  // implémentations, c'étaient deux carnets différents pour un même réglage.
-  regle["days"] = appliquerRatio(days, ratio, {
+  // La composition vit dans le composeur de l'atelier (`mise-en-page.js`) et
+  // non ici : deux implémentations, c'étaient deux carnets différents pour un
+  // même réglage.
+  regle["days"] = composerCarnet(regle, {
+    ratio,
     funFacts: settings.funFactsEnabled !== false,
-    decorations: Math.round(settings.decorationQuota) > 0,
+    decorations: Math.max(0, Math.min(4, Math.round(settings.decorationQuota))),
   });
   return regle;
 }

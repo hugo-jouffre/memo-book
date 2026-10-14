@@ -885,6 +885,8 @@
 
   /** Une page de photos en porte cinq au plus (`layout_photo_page`). */
   const MAX_PAGE_PHOTOS = 5;
+  /** La planche qui ouvre une étape sans récit en porte quatre (`layout_photo_wall_intro`). */
+  const MAX_PHOTOS_OUVERTURE = 4;
 
   /**
    * La structure d'une étape (LAYOUT_KB § « Structure d'une étape ») :
@@ -1202,17 +1204,27 @@
 
   /** 140 caractères : la limite de `payloadValidator.ts` (`funFactChars`). */
   const MAX_SIGNES_ENCART = 140;
-  /** Sous cette note, aucun encart : un encart de remplissage coûte plus qu'il ne rapporte. */
-  const SEUIL_PERTINENCE = 7;
-  /** Un encart toutes les trois pages au plus — LAYOUT_KB, et le réglage de l'app. */
+  /**
+   * Les notes admises, dans l'ordre où on les essaie : d'abord les fun facts
+   * notés 7 et plus ; une place restée vide se contente d'un 5 ou d'un 6.
+   * Sous 5, jamais : un encart de remplissage coûte plus qu'il ne rapporte.
+   */
+  const SEUILS_PERTINENCE = [7, 5];
+  /**
+   * La promesse faite au voyageur qui allume les fun facts (Hugo, 13/10/2026) :
+   * **à peu près un toutes les trois pages**. Deux encarts sont séparés de
+   * trois pages, deux au moins et quatre au plus quand le carnet n'offre pas
+   * mieux.
+   */
   const ECART_ENCARTS = 3;
+  const ECART_MIN = 2;
+  const ECART_MAX = 4;
 
-  /** L'encart proposé par l'analyse d'étape, s'il est imprimable et assez pertinent. */
-  function encartDe(analyse) {
-    const f = analyse?.funFact;
+  /** Un fun fact proposé par l'analyse, s'il est imprimable. */
+  function lireEncart(f) {
     const texte = typeof f?.texte === "string" ? f.texte.replace(/\s+/g, " ").trim() : "";
     const pertinence = Number(f?.pertinence);
-    if (!texte || texte.length > MAX_SIGNES_ENCART || !(pertinence >= SEUIL_PERTINENCE)) return null;
+    if (!texte || texte.length > MAX_SIGNES_ENCART || !Number.isFinite(pertinence)) return null;
     return {
       texte,
       // Le fun fact est un post-it « Infos », partout (Hugo, 12/10/2026).
@@ -1223,103 +1235,153 @@
     };
   }
 
-  /** Ce qui a manqué au fun fact d'une étape pour être imprimé. */
+  /**
+   * Les fun facts d'une étape, du mieux noté au moins bon : la liste
+   * `funFacts` de l'analyse — ou l'unique `funFact` d'une analyse plus
+   * ancienne.
+   */
+  function encartsDe(analyse) {
+    const bruts = Array.isArray(analyse?.funFacts) ? analyse.funFacts : analyse?.funFact ? [analyse.funFact] : [];
+    return bruts
+      .map(lireEncart)
+      .filter((e) => e && e.pertinence >= SEUILS_PERTINENCE[SEUILS_PERTINENCE.length - 1])
+      .sort((a, b) => b.pertinence - a.pertinence);
+  }
+
+  /** Ce qui a manqué aux fun facts d'une étape pour être imprimés. */
   function raisonSansEncart(analyse) {
-    const f = analyse?.funFact;
     if (!analyse) return "étape pas encore analysée";
-    const texte = typeof f?.texte === "string" ? f.texte.replace(/\s+/g, " ").trim() : "";
-    if (!texte) return "l'analyse n'a proposé aucun fun fact";
-    if (texte.length > MAX_SIGNES_ENCART) return `fun fact trop long (${texte.length} signes, ${MAX_SIGNES_ENCART} au plus)`;
-    return `fun fact noté ${Number(f?.pertinence) || 0}/10, sous le seuil de ${SEUIL_PERTINENCE}`;
+    const bruts = Array.isArray(analyse.funFacts) ? analyse.funFacts : analyse.funFact ? [analyse.funFact] : [];
+    if (!bruts.length) return "l'analyse n'a proposé aucun fun fact";
+    const trop = bruts.filter((f) => String(f?.texte || "").trim().length > MAX_SIGNES_ENCART).length;
+    if (trop === bruts.length) return `fun fact trop long (${MAX_SIGNES_ENCART} signes au plus)`;
+    return `fun fact(s) noté(s) sous ${SEUILS_PERTINENCE[SEUILS_PERTINENCE.length - 1]}/10`;
   }
 
   /**
-   * La page peut-elle porter l'encart sans perdre une ligne de récit ? Plafonds
-   * relevés par `calibrate-lengths.ts` :
+   * La page peut-elle porter un encart sans perdre une ligne de récit ?
+   * Plafonds relevés par `calibrate-lengths.ts` :
    *
    * - récit avec 0 ou 1 photo : l'encart se pose dans la zone flottante, à côté
-   *   de la photo, sans rien coûter (540 / 2 paragraphes sous un bandeau, 860
-   *   sur une page de suite). Une grande photo en tête n'a pas cette zone : la
-   *   page passe à la photo flottante ;
+   *   de la photo, sans rien coûter. Une grande photo en tête n'a pas cette
+   *   zone : la page passe à la photo flottante ;
    * - deux photos (`layout_split_left`) : la colonne de récit se rétrécit, 230 ;
    * - ouverture de chapitre avec deux photos : 110 ;
-   * - trois photos (`layout_collage`) ou carte seule : pas de place prévue.
+   * - trois photos (`layout_collage`, trios) ou carte seule : pas de place
+   *   dans la page.
+   *
+   * Et **sur les photos** (Hugo, 13/10/2026 : « les fun facts peuvent aussi
+   * aller sur les pages photos ») : le post-it se pose dans un coin d'une
+   * planche, sur le blanc d'une page d'album, ou sur la bande de photos d'une
+   * page de récit — il mord sur une photo sans prendre une ligne au texte.
+   * Jamais sur la pleine page.
+   *
+   * Renvoie `"page"`, `"photos"` ou `null`.
    */
-  function peutPorterEncart(plan) {
-    if (plan.genre !== "recit" || !plan.texte.length) return false;
+  function placeEncart(plan) {
+    if (plan.genre === "planche") return plan.pleinePage ? null : "photos";
+    if (plan.genre !== "recit" || !plan.texte.length) return null;
     const n = signes(plan.texte);
-    if (plan.layout === "layout_chapter_map") return plan.photos.length === 2 && n <= 110;
-    if (plan.layout === "layout_recit_photo") return n <= CAPACITE_PAGE.layout_recit_photo.postit[plan.sorte];
-    if (plan.photos.length <= 1) return true;
-    return plan.photos.length === 2 && n <= 230;
+    const bande = plan.photos.length >= 2 ? "photos" : null;
+    if (plan.layout === "layout_chapter_map") return plan.photos.length === 2 ? (n <= 110 ? "page" : "photos") : null;
+    if (plan.layout === "layout_recit_photo") return n <= CAPACITE_PAGE.layout_recit_photo.postit[plan.sorte] ? "page" : null;
+    if (plan.layout === "layout_trio_portrait" || plan.layout === "layout_trio_landscape") return "photos";
+    if (plan.photos.length <= 1) return "page";
+    return plan.photos.length === 2 && n <= 230 ? "page" : bande;
   }
 
   /**
    * Quels encarts s'impriment, et sur quelle page (LAYOUT_KB § « Les fun facts
-   * — dosage et matière ») :
+   * — dosage et matière ») : **à peu près un toutes les trois pages**.
    *
-   * - un par étape au plus, sur la page du passage dont il vient quand elle peut
-   *   le porter, sinon sur la première page de l'étape qui le peut ;
-   * - trois pages au moins d'un encart au suivant : parmi les candidats, on
-   *   garde la combinaison la mieux notée qui respecte cet écart ;
-   * - jamais deux encarts du même registre à la suite : le moins bien noté
-   *   s'efface.
+   * On avance dans le carnet page par page. La prochaine place visée est trois
+   * pages après le dernier encart (le premier, dans les trois premières
+   * pages) ; parmi les pages qui peuvent le porter, de deux à quatre pages
+   * après, on retient le meilleur couple page × fun fact de l'étape de la
+   * page :
+   *
+   * - la page visée exactement, plutôt qu'une voisine — c'est la fréquence
+   *   qu'on a promise ;
+   * - la note — 7 et plus, puis 5 et 6 si rien d'autre ne tient ;
+   * - la page du passage dont vient le fun fact ;
+   * - une page de récit plutôt qu'une page de photos ;
+   * - jamais deux encarts du même registre à la suite quand on peut l'éviter.
+   *
+   * Une étape peut en porter plusieurs : une longue étape en a autant que ses
+   * pages en demandent. Faute de page pour le porter dans la fenêtre, on prend
+   * la première qui le peut après elle.
    *
    * Pose `plan.encart` sur les pages retenues et renvoie leur nombre.
    */
   function placerEncarts(plans, etapes, journal = () => {}) {
-    const candidats = [];
-    // Pourquoi une étape n'a pas d'encart : le journal de l'atelier le dit.
+    const restants = etapes.map((etape) => encartsDe(etape.analyse));
     const raisons = [];
     etapes.forEach((etape, e) => {
-      const encart = encartDe(etape.analyse);
-      if (!encart) {
-        raisons.push(`étape ${e + 1} : ${raisonSansEncart(etape.analyse)}`);
-        return;
-      }
-      const pages = plans.map((plan, i) => ({ plan, i })).filter(({ plan }) => plan.etape === e && peutPorterEncart(plan));
-      const hote = pages.find(({ plan }) => plan.paragraphes.includes(encart.paragraphe)) || pages[0];
-      if (hote) candidats.push({ i: hote.i, encart, e });
-      else raisons.push(`étape ${e + 1} : aucune page n'a la place (trois photos, ou deux à côté d'un récit de plus de 230 signes)`);
+      if (!restants[e].length) raisons.push(`étape ${e + 1} : ${raisonSansEncart(etape.analyse)}`);
     });
 
-    // La meilleure somme des notes sous la contrainte d'écart : un choix
-    // pondéré d'intervalles, les candidats étant déjà dans l'ordre des pages.
-    const meilleur = [0];
-    const pris = [];
-    candidats.forEach((c, k) => {
-      let j = k - 1;
-      while (j >= 0 && candidats[j].i > c.i - ECART_ENCARTS) j -= 1;
-      const avec = c.encart.pertinence + meilleur[j + 1];
-      pris[k] = { avec: avec > meilleur[k], j };
-      meilleur[k + 1] = Math.max(meilleur[k], avec);
-    });
-    let retenus = [];
-    for (let k = candidats.length - 1; k >= 0; ) {
-      if (pris[k].avec) {
-        retenus.unshift(candidats[k]);
-        k = pris[k].j;
-      } else k -= 1;
+    const hotes = plans
+      .map((plan, i) => ({ plan, i, place: placeEncart(plan) }))
+      .filter(({ place }) => place);
+    const choisir = (candidats, cible, precedent) => {
+      let meilleur = null;
+      for (const seuil of SEUILS_PERTINENCE) {
+        for (const { plan, i, place } of candidats) {
+          for (const encart of restants[plan.etape] || []) {
+            if (encart.pertinence < seuil) continue;
+            // La promesse est une fréquence : une page d'écart à la cible coûte
+            // 2,5 points de note — un 9 à côté cède à un 7 pile à sa place.
+            // Le passage et la page de récit départagent le reste.
+            const score =
+              encart.pertinence -
+              Math.abs(i - cible) * 2.5 +
+              (plan.genre === "recit" && plan.paragraphes?.includes(encart.paragraphe) ? 0.5 : 0) +
+              (place === "page" ? 0.2 : 0) -
+              (precedent && encart.registre && encart.registre === precedent.registre ? 3 : 0);
+            if (!meilleur || score > meilleur.score) meilleur = { plan, i, place, encart, score };
+          }
+        }
+        if (meilleur) return meilleur;
+      }
+      return null;
+    };
+
+    let dernier = -ECART_ENCARTS;
+    let precedent = null;
+    const poses = [];
+    for (;;) {
+      const cible = dernier + ECART_ENCARTS;
+      const fenetre = hotes.filter(({ i }) => i >= Math.max(0, dernier + ECART_MIN) && i <= dernier + ECART_MAX);
+      let choix = choisir(fenetre, cible, precedent);
+      if (!choix) {
+        // Rien dans la fenêtre : la première page qui peut porter un encart
+        // après elle.
+        const apres = hotes.filter(({ i }) => i > dernier + ECART_MAX);
+        for (const hote of apres) {
+          choix = choisir([hote], hote.i, precedent);
+          if (choix) break;
+        }
+      }
+      if (!choix) break;
+      choix.plan.encart = choix.encart;
+      if (choix.plan.genre === "recit" && choix.place === "photos") choix.plan.encartSurBande = true;
+      restants[choix.plan.etape] = restants[choix.plan.etape].filter((x) => x !== choix.encart);
+      poses.push(choix.i);
+      dernier = choix.i;
+      precedent = choix.encart;
     }
 
-    // Deux registres identiques à la suite : on garde le mieux noté.
-    retenus = retenus.reduce((liste, c) => {
-      const avant = liste[liste.length - 1];
-      if (!avant || !c.encart.registre || avant.encart.registre !== c.encart.registre) return [...liste, c];
-      return c.encart.pertinence > avant.encart.pertinence ? [...liste.slice(0, -1), c] : liste;
-    }, []);
-
-    for (const c of candidats) {
-      if (!retenus.includes(c)) raisons.push(`étape ${c.e + 1} : écarté au profit d'un voisin mieux noté (trois pages d'écart, jamais deux du même registre)`);
+    for (const { plan } of hotes) {
+      if (plan.encart && !plan.encartSurBande && plan.layout === "layout_hero_top") {
+        plan.layout = plan.ouvreLeCarnet ? "layout_story_opener" : "layout_story_facts";
+      }
     }
     if (raisons.length) journal(`fun facts non imprimés — ${raisons.join(" ; ")}.`);
-
-    for (const { i, encart } of retenus) {
-      const plan = plans[i];
-      plan.encart = encart;
-      if (plan.layout === "layout_hero_top") plan.layout = plan.ouvreLeCarnet ? "layout_story_opener" : "layout_story_facts";
+    if (poses.length > 1) {
+      const pages = poses[poses.length - 1] - poses[0];
+      journal(`fun facts : ${poses.length} encart(s), un toutes les ${(pages / (poses.length - 1)).toFixed(1).replace(".", ",")} pages.`);
     }
-    return retenus.length;
+    return poses.length;
   }
 
   /* ------------------------------------------------------------ les décors --- */
@@ -1340,8 +1402,8 @@
    * de récit ordinaire — tant qu'aucun post-it ne l'occupe.
    */
   function porteUnSticker(plan) {
-    if (plan.genre === "planche") return !plan.pleinePage && plan.photos.length <= 2;
     if (plan.encart) return false;
+    if (plan.genre === "planche") return !plan.pleinePage && plan.photos.length <= 2;
     // Le bas de la colonne qui contourne la grande photo n'est libre que si le
     // récit laisse la place du post-it.
     if (plan.layout === "layout_recit_photo") {
@@ -1463,6 +1525,8 @@
 
   const drapeaux = (actif) => ({
     layout_chapter_map: actif === "layout_chapter_map",
+    layout_story_full: actif === "layout_story_full",
+    layout_photo_wall_intro: actif === "layout_photo_wall_intro",
     layout_story_opener: actif === "layout_story_opener",
     layout_story_facts: actif === "layout_story_facts",
     layout_hero_top: actif === "layout_hero_top",
@@ -1483,6 +1547,23 @@
    * `options` : `{ contours, dessinerCarte, pagesAvant, funFacts, journal }` —
    * `funFacts` est le réglage « Insérer des Fun facts » du carnet : coupé,
    * aucun encart.
+   *
+   * **Le ratio photo / texte** (Hugo, 13/10/2026 : le composeur compose, le
+   * ratio dit combien de photos) : `ratio` est le palier du carnet (0, 25, 50,
+   * 75 ou 100) et `budgetPhotos(etape, index)` le nombre de photos que le
+   * module de ratio (`ratio-photos.js` / `photoRatio.ts`, `photosRequired`)
+   * demande pour l'étape. Au-delà, les photos de trop s'écartent dans l'ordre
+   * habituel (`trierPourEcarter`). Le palier règle aussi la composition :
+   *
+   * - **0 %** : aucune photo, le récit prend la feuille (`layout_story_full`) ;
+   * - **25 %** : une photo par page de récit au plus ;
+   * - **100 %** : aucun récit imprimé — une planche d'ouverture avec le
+   *   bandeau et le fun fact (`layout_photo_wall_intro`), puis des planches.
+   *
+   * L'app compose avec le même code (`backend/src/services/bookComposer.ts`),
+   * à partir de son propre payload : une étape peut alors apporter ses
+   * `paragraphes` tels quels (au lieu d'un `recit` à découper) et sa `carte`
+   * de chapitre (l'objet `map` du gabarit), sans analyse ni contours.
    */
   function composerJours(etapes, options = {}) {
     const {
@@ -1492,6 +1573,8 @@
       funFacts = false,
       stickers = [],
       decorations = 2,
+      ratio = 50,
+      budgetPhotos = null,
       journal = () => {},
     } = options;
     const plans = [];
@@ -1518,7 +1601,7 @@
 
     etapes.forEach((etape, index) => {
       const analysePhotos = new Map((etape.analyse?.photos || []).map((ph) => [String(ph.id), ph]));
-      const photos = etape.photos.map((photo) => {
+      const toutesLesPhotos = etape.photos.map((photo) => {
         const lu = analysePhotos.get(String(photo.id)) || {};
         return {
           ...photo,
@@ -1535,10 +1618,26 @@
         };
       });
 
-      const paragraphes = enParagraphes(etape.recit);
+      // Le palier du carnet : à 0 %, aucune photo ; sinon, autant que le
+      // module de ratio en demande pour cette étape, les moins bonnes écartées.
+      let photos = ratio === 0 ? [] : toutesLesPhotos;
+      const budget = budgetPhotos ? budgetPhotos(etape, index) : null;
+      if (Number.isFinite(budget) && photos.length > budget) {
+        const enTrop = new Set(trierPourEcarter(photos).slice(0, photos.length - Math.max(0, budget)));
+        photos = photos.filter((p) => !enTrop.has(p));
+        journal(`ratio ${ratio} % — étape ${index + 1} : ${photos.length} photo(s) gardée(s) sur ${toutesLesPhotos.length}.`);
+      }
+
+      const paragraphes = Array.isArray(etape.paragraphes)
+        ? etape.paragraphes.map((p) => String(p).trim()).filter(Boolean)
+        : enParagraphes(etape.recit);
       // Sans récit, une ou deux photos tiennent sur la page à bandeau ; à partir
       // de trois, l'étape n'est faite que de pages de photos.
-      const pages = paragraphes.length ? pagesDeRecit(paragraphes) : photos.length < MIN_PAGE_PHOTOS ? [[]] : [];
+      // À 100 %, aucun récit n'est imprimé : l'étape n'est faite que de
+      // planches, la première portant le bandeau (`layout_photo_wall_intro`).
+      const sansRecit = ratio === 100 && photos.length > 0;
+      const pages =
+        paragraphes.length && !sansRecit ? pagesDeRecit(paragraphes) : photos.length < MIN_PAGE_PHOTOS && !sansRecit ? [[]] : [];
 
       // Chapitre : la première étape, puis chaque arrivée dans un nouveau lieu.
       // Pour un séjour en un seul lieu, chaque étape qui emmène le voyageur
@@ -1571,22 +1670,31 @@
         nouveauLieu = !sejoursOuverts.has(situe.pays) || nouveauxEnVille.length > 0;
       }
       if (nouveauLieu) numeroChapitre += 1;
-      let chapitre = Boolean(nouveauLieu && situe && dessinerCarte && pages.length && paragraphes.length);
+      // La carte que l'app apporte toute faite (`map`, choisie par l'Agent Mise
+      // en page) ouvre le chapitre sans analyse ni contours.
+      const carteImposee = etape.carte || null;
+      let chapitre = carteImposee
+        ? Boolean(pages.length && paragraphes.length)
+        : Boolean(nouveauLieu && situe && dessinerCarte && pages.length && paragraphes.length);
       // La carte prend la place d'une colonne : le récit de l'ouverture doit y
       // tenir. Elle ne coûte plus de photo — ce qui n'a pas de place sur les
       // pages de récit va sur les pages de photos de fin d'étape.
       if (chapitre && signes(pages[0]) > CAPACITE_CHAPITRE.sansPhoto) chapitre = false;
 
-      const maxParPage = photosParPageDeRecit(photos);
+      // À 25 %, une photo par page de récit au plus : le récit tient la page.
+      const maxParPage = ratio <= 25 ? Math.min(1, photosParPageDeRecit(photos)) : photosParPageDeRecit(photos);
       // La structure de l'étape : récit d'un seul tenant, photos en fin
       // d'étape, nombre de pages pair (`structurerEtape`).
       let structure;
-      if (paragraphes.length) {
+      if (paragraphes.length && pages.length) {
         structure = structurerEtape({ paragraphes, pagesNaturelles: pages, photos, maxParPage, chapitre, memoire });
       } else if (pages.length) {
         structure = { pages, recit: [photos], fin: [], tailles: [], chapitreDeux: false, total: 1 };
       } else {
+        // Que des photos : la première planche porte le bandeau, et quatre
+        // photos au plus (`layout_photo_wall_intro`).
         let q = Math.ceil(photos.length / MAX_PAGE_PHOTOS);
+        while (partsEgales(photos.length, q)[0] > MAX_PHOTOS_OUVERTURE) q += 1;
         if (q % 2 && q < photos.length) q += 1;
         structure = { pages: [], recit: [], fin: photos, tailles: partsEgales(photos.length, q), chapitreDeux: false, total: q };
       }
@@ -1601,7 +1709,9 @@
       }
 
       let carte = "";
-      if (chapitre) {
+      if (chapitre && carteImposee) {
+        carte = carteImposee;
+      } else if (chapitre) {
         let requete;
         if (sejour && !sejoursOuverts.has(situe.pays)) {
           // Première carte d'un séjour en un seul lieu : le pays entier, la
@@ -1695,13 +1805,25 @@
           carte: p === 0 && chapitre ? carte : "",
           ...(structure.serre ? { taille: "serre" } : {}),
         };
-        plan.layout = plan.carte ? "layout_chapter_map" : layoutDeRecit(plan.photos, texte, plan.sorte, plan.ouvreLeCarnet);
+        plan.layout = plan.carte
+          ? "layout_chapter_map"
+          : ratio === 0
+            ? "layout_story_full"
+            : layoutDeRecit(plan.photos, texte, plan.sorte, plan.ouvreLeCarnet);
         plans.push(plan);
       });
-      // Les pages de photos seules, toujours après le récit.
+      // Les pages de photos seules, toujours après le récit. Sans récit, la
+      // première ouvre l'étape : bandeau et fun fact.
       let debut = 0;
       for (const taille of structure.tailles) {
-        plans.push(planche(structure.fin.slice(debut, debut + taille)));
+        const plan = planche(structure.fin.slice(debut, debut + taille));
+        if (!pagesEtape.length && debut === 0) {
+          plan.ouverture = true;
+          plan.bandeau = etape;
+          delete plan.pleinePage;
+          delete plan.colonnes;
+        }
+        plans.push(plan);
         debut += taille;
       }
     });
@@ -1731,6 +1853,23 @@
         trace: plan.trace || "aucun",
         ...(plan.stickers?.length ? { stickers: plan.stickers.map(({ famille, ...s }) => s) } : {}),
       };
+      if (plan.genre === "planche" && plan.ouverture) {
+        const e = plan.bandeau;
+        return {
+          title: e.titre,
+          date: e.dateLongue,
+          city: e.lieu || "",
+          country: e.destination || "",
+          day_intro: { day_number: e.numero, location: e.lieuComplet, date: e.dateLongue },
+          body_html: "",
+          ...drapeaux("layout_photo_wall_intro"),
+          photos: habillerPhotos(plan, placerPhotos("layout_photo_page", plan.photos), rangPage),
+          fun_facts: plan.encart ? [plan.encart.texte] : [],
+          ...(plan.encart ? { fun_facts_title: plan.encart.titre, ai_note: "Fun fact rédigé par IA" } : {}),
+          sticker_groups: [],
+          ...decors,
+        };
+      }
       if (plan.genre === "planche") {
         // Une photo seule en largeur : l'emplacement de la page d'album se couche.
         const paysage = !plan.pleinePage && plan.photos.length === 1 && plan.photos[0].format > 1;
@@ -1749,7 +1888,9 @@
           ...(paysage ? { album_paysage: true } : {}),
           ...(plan.colonnes ? { planche_colonnes: true } : {}),
           photos: habillerPhotos(plan, placerPhotos(gabarit, plan.photos), rangPage),
-          fun_facts: [],
+          // Le post-it « Infos » d'une page de photos (Hugo, 13/10/2026).
+          fun_facts: plan.encart ? [plan.encart.texte] : [],
+          ...(plan.encart ? { fun_facts_title: plan.encart.titre, ai_note: "Fun fact rédigé par IA" } : {}),
           sticker_groups: [],
           ...decors,
         };
@@ -1762,10 +1903,11 @@
         // L'encart est écrit par le modèle : la page le dit, en petit
         // (LAYOUT_KB § « La mention généré par IA »).
         ...(plan.encart ? { fun_facts_title: plan.encart.titre, ai_note: "Fun fact rédigé par IA" } : {}),
+        ...(plan.encartSurBande ? { postit_bande: true } : {}),
         sticker_groups: [],
         ...decors,
         ...(plan.taille ? { taille_texte: plan.taille } : {}),
-        ...(plan.carte ? { map_svg: plan.carte } : {}),
+        ...(plan.carte ? (typeof plan.carte === "string" ? { map_svg: plan.carte } : { map: plan.carte }) : {}),
       };
       if (!plan.bandeau) return { title: "", ...jour };
       const e = plan.bandeau;
