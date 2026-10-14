@@ -375,7 +375,7 @@ describe("mise en page de l'atelier", () => {
       expect(jours.flatMap(objets).find((x) => x["label"])?.["label"]).toBe("Nos rizières");
     });
 
-    it("pose autant de stickers par double page que le réglage, de 1 à 4, aucun à 0 (14/10/2026)", () => {
+    it("pose autant de stickers par étape que le réglage, de 1 à 4, aucun à 0 (14/10/2026)", () => {
       const bibliotheque = [
         { fichier: "jeep.png", famille: "jeep", url: "https://exemple.test/jeep.png", mots: ["jeep"] },
         { fichier: "ferry.png", famille: "ferry", url: "https://exemple.test/ferry.png", mots: ["ferry"] },
@@ -398,15 +398,26 @@ describe("mise en page de l'atelier", () => {
           ),
           { stickers: bibliotheque, decorations },
         );
-      const parDouble = (jours: Jour[]) => doubles(jours).map((d) => d.flatMap((j) => (j["stickers"] as unknown[]) ?? []).length);
-      const totaux = [0, 1, 2, 3, 4].map((d) => parDouble(voyage(d)).reduce((a, b) => a + b, 0));
+      /** Les pages de chaque étape : de sa page à bandeau à la suivante. */
+      const pagesParEtape = (jours: Jour[]) =>
+        jours.reduce<Jour[][]>((t, j) => (j["day_intro"] ? [...t, [j]] : [...t.slice(0, -1), [...(t.at(-1) ?? []), j]]), []);
+      const stickersDe = (j: Jour) => (j["stickers"] as { url: string }[] | undefined) ?? [];
+      const parEtape = (jours: Jour[]) => pagesParEtape(jours).map((pages) => pages.flatMap(stickersDe).length);
+      const totaux = [0, 1, 2, 3, 4].map((d) => parEtape(voyage(d)).reduce((a, b) => a + b, 0));
       // Chaque cran en pose davantage : « 1 » et « 4 » ne donnent plus le même carnet.
       expect(totaux[0]).toBe(0);
       for (let d = 1; d <= 4; d += 1) expect(totaux[d]!, `réglage ${d} : ${totaux.join(", ")}`).toBeGreaterThan(totaux[d - 1]!);
-      for (let d = 1; d <= 4; d += 1) for (const n of parDouble(voyage(d))) expect(n).toBeLessThanOrEqual(d);
-      // À 1 et à 2, chaque double page a son compte : les places ne manquent pas.
-      expect(parDouble(voyage(1)).every((n) => n === 1)).toBe(true);
-      expect(parDouble(voyage(2)).every((n) => n === 2)).toBe(true);
+      // Chaque étape a son compte : les places ne manquent pas.
+      for (let d = 1; d <= 4; d += 1) expect(parEtape(voyage(d)), `réglage ${d}`).toEqual([d, d, d, d]);
+      // Deux stickers sur une étape de plusieurs pages ne se serrent pas sur la même.
+      for (const [e, pages] of pagesParEtape(voyage(2)).entries()) {
+        expect(pages.filter((j) => stickersDe(j).length).length, `étape ${e}`).toBe(Math.min(2, pages.length));
+      }
+      // Jamais deux fois la même famille dans une étape.
+      for (const pages of pagesParEtape(voyage(4))) {
+        const familles = pages.flatMap(stickersDe).map((s) => s.url.replace(/-\d+\.png$/, ""));
+        expect(new Set(familles).size).toBe(familles.length);
+      }
 
       const jours = voyage(4);
       const poses = jours.flatMap((j) => (j["stickers"] as { url: string }[] | undefined) ?? []);

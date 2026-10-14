@@ -1477,7 +1477,7 @@
   /**
    * Les places libres d'une page pour un sticker, de la meilleure à la moins
    * bonne — deux au plus (Hugo, 14/10/2026 : le réglage « Décorations »
-   * donne le nombre de stickers de la double page, de 1 à 4). Chaque place
+   * donne le nombre de stickers de l'étape, de 1 à 4). Chaque place
    * est `{ place, album, max, maxH }` : `place`, la classe du gabarit
    * (`mb-sticker--…`), `max` et `maxH` la largeur et la hauteur les plus
    * grandes qu'elle tient, en pt.
@@ -1604,8 +1604,8 @@
    * Les familles qui vont à tout voyage — l'appareil photo, la carte postale,
    * la boussole, le globe, le repère, la carte —, quand le récit n'appelle pas
    * assez de stickers pour le réglage choisi. Sans elles, le récit d'un
-   * carnet n'en appelle souvent que trois ou quatre, et « 1 » ou « 4 » par
-   * double page donnaient le même carnet (Hugo, 14/10/2026).
+   * carnet n'en appelle souvent que trois ou quatre, et « 1 » ou « 4 »
+   * donnaient le même carnet (Hugo, 14/10/2026).
    */
   const STICKERS_DE_VOYAGE = ["appareil-photo", "carte-postale", "boussole", "globe", "repere", "carte"];
 
@@ -1627,17 +1627,17 @@
    * Le sticker d'une place : la famille la mieux liée à l'étape de la page —
    * son titre, puis son récit, puis le reste du voyage, puis les familles de
    * voyage —, moins elle a déjà servi, mieux elle vaut. Jamais deux fois la
-   * même famille sur une double page, jamais le même dessin sur deux doubles
-   * pages qui se suivent, et de préférence pas la même famille ; dans une
-   * famille, la variante qui a le moins servi.
+   * même famille dans une étape ni sur une double page, jamais le même
+   * dessin sur deux doubles pages qui se suivent, et de préférence pas la
+   * même famille ; dans une famille, la variante qui a le moins servi.
    */
   function choisirSticker(plan, contexte) {
-    const { familles, duVoyage, surLaDouble, poses, derniereDouble, derniereFamille, rangDouble } = contexte;
+    const { familles, duVoyage, exclues, poses, derniereDouble, derniereFamille, rangDouble } = contexte;
     const f = familles[plan.etape];
     if (!f) return null;
     let meilleur = null;
     for (const famille of f.values()) {
-      if (surLaDouble.has(famille.famille)) continue;
+      if (exclues.has(famille.famille)) continue;
       const force = famille.force || (duVoyage.has(famille.famille) ? 0.5 : STICKERS_DE_VOYAGE.includes(famille.famille) ? 0.25 : 0);
       if (!force) continue;
       const libres = famille.variantes.filter((v) => !(derniereDouble.get(v.fichier) >= rangDouble - 1));
@@ -1655,33 +1655,42 @@
   }
 
   /**
-   * Les décors, double page par double page (Hugo, 12/10/2026, et 14/10/2026
-   * pour le nombre de stickers) :
+   * L'ordre où l'on essaie les places d'une étape : la première place de
+   * pages réparties sur toute l'étape (la première page d'abord), puis les
+   * autres premières places, puis les secondes. Deux stickers sur une étape
+   * de six pages ne se serrent pas sur ses deux premières.
+   */
+  function ordreDesPlaces(pages, quota) {
+    const avecPlace = pages.filter((p) => p.places.length);
+    const n = avecPlace.length;
+    const reparties = [...new Set(Array.from({ length: Math.min(quota, n) }, (_, k) => Math.floor((k * n) / Math.min(quota, n))))];
+    const rangs = [...reparties, ...avecPlace.map((_, j) => j).filter((j) => !reparties.includes(j))];
+    return [0, 1].flatMap((r) => rangs.map((j) => avecPlace[j].places[r]).filter(Boolean));
+  }
+
+  /**
+   * Les décors (Hugo, 12/10/2026, et 14/10/2026 pour le nombre de stickers) :
    *
-   * - **une étiquette de titre** au plus, sur la photo la mieux notée qui en a
-   *   une — celle que le voyageur a écrite passe avant celles de l'IA ;
-   * - **un tracé pointillé** au plus, derrière une bande de photos, de
-   *   préférence sur la page de gauche ;
-   * - **autant de stickers que le réglage « Décorations »** (1 à 4 par double
-   *   page, aucun à 0), deux par page au plus, à leurs places
-   *   (`placesSticker`), répartis entre les deux pages ; tirés de la
-   *   bibliothèque d'après le récit, complétés par les familles de voyage
-   *   (`choisirSticker`).
+   * - **une étiquette de titre** au plus par double page, sur la photo la
+   *   mieux notée qui en a une — celle que le voyageur a écrite passe avant
+   *   celles de l'IA ;
+   * - **un tracé pointillé** au plus par double page, derrière une bande de
+   *   photos, de préférence sur la page de gauche ;
+   * - **autant de stickers par étape que le réglage « Décorations »** (1 à 4,
+   *   aucun à 0 ; 2 par défaut), deux par page au plus, à leurs places
+   *   (`placesSticker`), répartis sur les pages de l'étape (`ordreDesPlaces`) ;
+   *   tirés de la bibliothèque d'après le récit, complétés par les familles de
+   *   voyage (`choisirSticker`).
    */
   function decorerDoublesPages(plans, pagesAvant, etapes, { stickers = [], decorations = 2 } = {}) {
     const gauche = (i) => (pagesAvant + 1 + i) % 2 === 0;
     const quota = Math.max(0, Math.min(4, Math.round(Number(decorations) || 0)));
-    const familles = quota && stickers.length ? etapes.map((etape) => famillesDe(etape, stickers)) : [];
-    // Les familles que le récit appelle quelque part dans le voyage.
-    const duVoyage = new Set(familles.flatMap((f) => [...f.values()].filter((x) => x.force > 0).map((x) => x.famille)));
-    const poses = new Map();
-    const derniereDouble = new Map();
-    const derniereFamille = new Map();
+    // Le rang de la double page de chaque page.
+    const doubleDe = [];
     let tour = 0;
-    let rangDouble = 0;
-    for (let i = 0; i < plans.length; rangDouble += 1) {
-      const debut = i;
+    for (let i = 0, rangDouble = 0; i < plans.length; rangDouble += 1) {
       const double = gauche(i) && i + 1 < plans.length ? [plans[i], plans[i + 1]] : [plans[i]];
+      double.forEach((_, k) => (doubleDe[i + k] = rangDouble));
       i += double.length;
 
       // L'étiquette.
@@ -1699,29 +1708,45 @@
       // Le tracé.
       const porteur = double.find(porteUnTrace);
       if (porteur) porteur.trace = TRACES[tour++ % TRACES.length];
+    }
 
-      // Les stickers : la première place de chaque page, puis la seconde, tant
-      // que le quota de la double page n'est pas atteint.
-      if (!familles.length) continue;
-      const places = double.map((plan, k) => placesSticker(plan, gauche(debut + k)).map((p) => ({ ...p, plan })));
-      const ordre = [0, 1].flatMap((r) => places.map((liste) => liste[r]).filter(Boolean));
-      const surLaDouble = new Set();
-      for (const place of ordre.slice(0, quota)) {
-        const choix = choisirSticker(place.plan, { familles, duVoyage, surLaDouble, poses, derniereDouble, derniereFamille, rangDouble });
+    // Les stickers, étape par étape.
+    if (!quota || !stickers.length) return;
+    const familles = etapes.map((etape) => famillesDe(etape, stickers));
+    // Les familles que le récit appelle quelque part dans le voyage.
+    const duVoyage = new Set(familles.flatMap((f) => [...f.values()].filter((x) => x.force > 0).map((x) => x.famille)));
+    const poses = new Map();
+    const derniereDouble = new Map();
+    const derniereFamille = new Map();
+    const surLaDouble = new Map();
+    etapes.forEach((_, e) => {
+      const pages = plans
+        .map((plan, i) => ({ plan, i }))
+        .filter(({ plan }) => plan.etape === e)
+        .map(({ plan, i }) => ({ places: placesSticker(plan, gauche(i)).map((p) => ({ ...p, plan, rangDouble: doubleDe[i] })) }));
+      const surLEtape = new Set();
+      let posees = 0;
+      for (const place of ordreDesPlaces(pages, quota)) {
+        if (posees >= quota) break;
+        const deLaDouble = surLaDouble.get(place.rangDouble) ?? new Set();
+        const exclues = new Set([...surLEtape, ...deLaDouble]);
+        const choix = choisirSticker(place.plan, { familles, duVoyage, exclues, poses, derniereDouble, derniereFamille, rangDouble: place.rangDouble });
         if (!choix) continue;
         const famille = choix.famille || choix.fichier;
-        surLaDouble.add(famille);
+        surLEtape.add(famille);
+        surLaDouble.set(place.rangDouble, deLaDouble.add(famille));
         poses.set(famille, (poses.get(famille) || 0) + 1);
-        derniereDouble.set(choix.fichier, rangDouble);
-        derniereFamille.set(famille, rangDouble);
+        derniereDouble.set(choix.fichier, place.rangDouble);
+        derniereFamille.set(famille, place.rangDouble);
         (place.plan.stickers ??= []).push({
           url: choix.url || choix.fichier,
           place: place.place,
           largeur: largeurSticker(choix, place.album, place.max, place.maxH),
           famille,
         });
+        posees += 1;
       }
-    }
+    });
   }
 
   /* ------------------------------------------------------------ le carnet --- */
@@ -2043,8 +2068,8 @@
     // eux qui remplissent une page avant le texte.
     corpsAmple(plans);
 
-    // Les décors, double page par double page : une étiquette de titre, un
-    // tracé pointillé, deux stickers au plus.
+    // Les décors : une étiquette de titre et un tracé pointillé par double
+    // page, les stickers du réglage par étape.
     decorerDoublesPages(plans, pagesAvant, etapes, { stickers, decorations });
     if (stickers.length) {
       const poses = plans.flatMap((plan) => (plan.stickers || []).map((s) => s.famille));

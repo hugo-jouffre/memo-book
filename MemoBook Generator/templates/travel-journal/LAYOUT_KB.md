@@ -333,7 +333,7 @@ faire aujourd'hui.
 | Fun facts | ON | `fun_facts` — voir le dosage plus bas | Rendu |
 | Quiz | ON | `quiz` | Rendu |
 | Pointillés | ON | La **réglure** du papier, `.mb-note__rules` — `rules_enabled: false` la retire (`body.sans-reglure`), le rythme vertical ne bouge pas | Rendu |
-| Décorations & stickers | 2 | Les **stickers** de la bibliothèque (2 par double page au plus, autant que le quota en permet) et le **tracé pointillé** — `decoration_quota: 0` retire les deux (`body.sans-decor`). Le scotch n'en dépend plus : l'habillage des photos est toujours complet | Rendu ; bibliothèque de 44 dessins importée de Notion (`assets/stickers/`) |
+| Décorations & stickers | 2 | Les **stickers** de la bibliothèque (autant par étape que le réglage, 2 par défaut) et le **tracé pointillé** — `decoration_quota: 0` retire les deux (`body.sans-decor`). Le scotch n'en dépend plus : l'habillage des photos est toujours complet | Rendu ; bibliothèque de 44 dessins importée de Notion (`assets/stickers/`) |
 | Typographies (assortiment) | Carnet de voyage | Les quatre tokens ci-dessous d'un bloc | **À construire** — l'app n'expose plus quatre réglages mais **quatre assortiments** (`docs/reglages-utilisateur.md`) : Carnet de voyage, Éditorial, Moderne, Manuscrit. Le payload, lui, reste quatre champs |
 | ↳ titres | Playfair | `--mb-font-display` | **À construire** |
 | ↳ sous-titres | Hansley | `--mb-font-title` | **À construire** — `Hansley.otf` versionné mais pas inliné, repli sur la manuscrite |
@@ -671,7 +671,7 @@ de mise en page, gabarit) :
 | Habillage des photos | **Toujours** contour dessiné, inclinaison et scotch (le cadre blanc est remplacé par un contour noir le 13/10/2026) |
 | Légendes des pages de photos | **Jamais** |
 | Photo en pleine page | **De temps en temps** : une par chapitre au plus |
-| Stickers | **Bibliothèque dessinée**, liés au récit, selon le réglage « Décorations », 2 par double page au plus |
+| Stickers | **Bibliothèque dessinée**, liés au récit, autant par étape que le réglage « Décorations » (2 par défaut), deux par page au plus |
 | Tracé pointillé | **Un par double page au plus**, derrière des photos |
 | Fun fact | **Post-it « Infos » partout**, à peu près un toutes les trois pages (13/10/2026) — § « Les fun facts » |
 | Rythme | Jamais deux fois le même design sur une double page |
@@ -770,14 +770,17 @@ notée qui en a une. Celle que le voyageur écrit sous la photo dans l'atelier
 19 familles ; format et procédure d'ajout dans `assets/README.md`). Un sticker
 est posé quand un de ses mots apparaît, en **mot entier**, dans le titre ou le
 lieu de l'étape (lien fort), sinon dans son récit ou les scènes de ses photos
-— **autant par double page que le réglage « Décorations »** : 1, 2, 3 ou 4
-(Hugo, 14/10/2026 : « 1 » et « 4 » donnaient le même carnet), deux par page
-au plus, aucun à 0. Le récit d'un carnet n'appelle souvent que trois ou
+— **autant par étape que le réglage « Décorations »** : 1, 2, 3 ou 4, 2 par
+défaut (Hugo, 14/10/2026 : « 1 » et « 4 » donnaient le même carnet ; le
+réglage compte par étape, pas par paragraphe), deux par page au plus, aucun
+à 0. Ils se répartissent sur les pages de l'étape, la première d'abord
+(`ordreDesPlaces`). Le récit d'un carnet n'appelle souvent que trois ou
 quatre familles : les **familles de voyage** (appareil photo, carte postale,
 boussole, globe, repère, carte) complètent. Le choix (`choisirSticker`) : la
 famille la mieux liée à l'étape de la page — son titre, son récit, le reste du
 voyage, puis les familles de voyage —, moins elle a servi, mieux elle vaut ;
-**jamais deux fois la même famille sur une double page**, jamais le même
+**jamais deux fois la même famille dans une étape ni sur une double
+page**, jamais le même
 dessin sur deux doubles pages qui se suivent. Le récit se lit en entier : la
 recherche ne s'arrêtait qu'à la première virgule. Trois styles se mêlent —
 sticker découpé, dessin, trait —, qui ne règlent que la taille : 60 à 140 pt

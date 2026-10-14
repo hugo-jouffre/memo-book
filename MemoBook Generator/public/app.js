@@ -267,7 +267,8 @@ const etat = {
    * Les réglages de personnalisation de l'app, avec ses défauts
    * (`reglagesDuCarnet`) : `funFacts` (« Insérer des Fun facts »),
    * `ratioPhotos` (ratio photo / texte, en %), `reglure` (« Pointillés »),
-   * `decorations` (« Décorations & stickers », par paragraphe ou par image),
+   * `decorations` (« Décorations & stickers » : le nombre de stickers par
+   * étape, 2 par défaut — Hugo, 14/10/2026),
    * `zonesLibres` (« Zones libres » : trois pages réglées en fin de carnet).
    */
   carnet: {
@@ -4366,7 +4367,7 @@ function resumePersonnalisation(c) {
     `${c.ratioPhotos ?? 50} % de photos`,
     c.funFacts !== false ? "fun facts" : "sans fun facts",
     c.reglure !== false ? "pointillés" : "sans pointillés",
-    (c.decorations ?? 2) ? `${c.decorations ?? 2} décor(s)` : "sans décor",
+    (c.decorations ?? 2) ? `${c.decorations ?? 2} sticker(s) par étape` : "sans décor",
     c.zonesLibres !== false ? "zones libres" : null,
   ]
     .filter(Boolean)
@@ -4428,7 +4429,7 @@ function panneauPersonnalisation() {
     ligne(
       "Fun facts",
       h("input", { type: "checkbox", checked: c.funFacts !== false, onchange: poser("funFacts") }),
-      "Un encart tiré du récit, à peu près une page sur trois — dans la page, ou en post-it sur les photos —, et seulement quand il en vaut la peine.",
+      "Un encart tiré du récit, à peu près une page sur trois — dans la page, ou à la place d'une photo quand la page en a un emplacement libre —, et seulement quand il en vaut la peine.",
     ),
     ligne(
       "Pointillés",
@@ -4437,8 +4438,8 @@ function panneauPersonnalisation() {
     ),
     ligne(
       "Décorations & stickers",
-      h("select", { onchange: poser("decorations", Number) }, options([0, 1, 2, 3, 4], c.decorations ?? 2, (v) => (v ? `${v} par paragraphe` : "Aucune"))),
-      "À 0, ni tracé pointillé ni sticker ; le scotch des photos reste. Les stickers viennent de la bibliothèque dessinée.",
+      h("select", { onchange: poser("decorations", Number) }, options([0, 1, 2, 3, 4], c.decorations ?? 2, (v) => (v ? `${v} par étape` : "Aucune"))),
+      "Le nombre de stickers de chaque étape, répartis sur ses pages, jamais sur le récit. À 0, ni tracé pointillé ni sticker ; le scotch des photos reste. Les stickers viennent de la bibliothèque dessinée.",
     ),
     ligne(
       "Zones libres",

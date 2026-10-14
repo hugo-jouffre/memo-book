@@ -44,8 +44,8 @@ Une entrée de l'index :
 ```
 
 - **`famille`** regroupe les variantes d'un même objet (huit sacs à dos, huit
-  appareils photo, quatre boussoles). Jamais deux fois la même famille sur une
-  double page, jamais le même dessin sur deux doubles pages qui se suivent ;
+  appareils photo, quatre boussoles). Jamais deux fois la même famille dans une
+  étape ni sur une double page, jamais le même dessin sur deux doubles pages qui se suivent ;
   la variante qui a le moins servi passe d'abord.
 - **`style`** : `sticker` (découpé, contour blanc), `dessin` (illustration
   sans contour) ou `trait` (dessin au trait noir). Il ne règle que la taille —
@@ -73,8 +73,8 @@ Une entrée de l'index :
 5. `npx vitest run test/stickers.test.ts` vérifie l'index.
 
 **Dosage et places** (`decorerDoublesPages`, `mise-en-page.js`) : autant de
-stickers par double page que le réglage « Décorations & stickers » (1 à 4,
-aucun à 0), deux par page au plus, complétés par les familles de voyage quand
+stickers par étape que le réglage « Décorations & stickers » (1 à 4, 2 par
+défaut, aucun à 0), deux par page au plus, complétés par les familles de voyage quand
 le récit n'en appelle pas assez. Les places, jamais par-dessus le récit ni
 dans le pli : `LAYOUT_KB.md`, § « Les stickers ».
 

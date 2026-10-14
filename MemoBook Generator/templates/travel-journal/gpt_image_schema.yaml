@@ -133,7 +133,7 @@ properties:
         description: >
           Réglage « Décorations & stickers ». `0` : ni tracé pointillé du
           voyage, ni sticker (le scotch des photos reste). De 1 à 4 : le
-          nombre de stickers par double page, posés par le composeur
+          nombre de stickers par étape, posés par le composeur
           (`days[].stickers`).
       pages_libres_avant:
         type: integer

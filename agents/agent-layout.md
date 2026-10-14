@@ -169,7 +169,7 @@ sans photo, sans encart ni carte pour combler. Sinon, rien : 12 pt.
   de sa carte (de préférence en hauteur), ou deux photos en bande sous un
   récit de 300 signes au plus ;
 - par **double page** : une étiquette de titre (`photos[].label`), un tracé
-  (`trace`), autant de stickers que le réglage « Décorations » (1 à 4) ;
+  (`trace`), les stickers : autant par étape que le réglage « Décorations » (1 à 4) ;
   chaque photo a son scotch (`tape_corner`) ; le fun fact est un post-it
   titré « Infos », qui peut prendre l'emplacement libre d'une photo
   (`case_fun_fact`), jamais se poser dessus ;
