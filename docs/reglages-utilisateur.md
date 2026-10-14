@@ -55,7 +55,7 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
 | **Nombre de page cible** | Échelle à arrêter | 60 pages | Rédaction — niveau de détail des textes · Mise en page — regroupement des étapes | Rendu côté agents, sans garde-fou automatique |
 | **Fun facts** | ON / OFF | ON | Rédaction les écrit, mise en page les place | Rendu (`fun_facts`) — OFF : aucun encart, dans l'atelier comme dans l'app |
 | **Pointillés** | ON / OFF | ON | Gabarit (`.mb-note__rules`) | Rendu : `rules_enabled` dans le payload |
-| **Décorations & stickers** | 0 · 1 · 2 · 3 · 4 par paragraphe ou par image | 2 | Mise en page | Rendu : les stickers de la bibliothèque dessinée (44 dessins importés de Notion, `assets/stickers/`), liés au récit, deux par double page au plus, et le tracé pointillé ; à 0, ni l'un ni l'autre. Le scotch des photos n'en dépend plus (12/10/2026) |
+| **Décorations & stickers** | 0 · 1 · 2 · 3 · 4 par paragraphe ou par image | 2 | Mise en page | Rendu : les stickers de la bibliothèque dessinée (44 dessins importés de Notion, `assets/stickers/`), liés au récit puis complétés par des dessins de voyage, **autant par double page que le réglage** (14/10/2026), et le tracé pointillé ; à 0, ni l'un ni l'autre. Le scotch des photos n'en dépend plus (12/10/2026) |
 | **Typographies** | Trois **assortiments** — voir plus bas | Carnet de voyage | Gabarit — `--mb-font-display`, `--mb-font-title`, `--mb-font-hand` | **V1 : « Carnet de voyage » seul** (Hugo, 09/10/2026) — Éditorial et Manuscrit restent sur la feuille, pâlis, « À venir ». Les sous-titres tombent sur Gloria Hallelujah tant que Hansley n'est pas inlinée (licence à vérifier) |
 | **Quiz intégrés à l'histoire** | ON / OFF | ON | Mise en page les place ; **aucun agent ne les écrit** — règles en attente dans `agent-transcription-carnet.md` § 1 | Rendu (`quiz`), jamais rempli |
 | **Zones libres** | ON / OFF | ON | Mise en page | Rendu : trois pages réglées en fin de carnet (`pages_libres: 3`, 0 si coupé — atelier et `bookSettings.ts`). À construire : une zone blanche en fin d'étape |
@@ -65,7 +65,8 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
 
 - **Fun facts.** À OFF, aucun encart, nulle part. À ON, **à peu près un encart
   toutes les trois pages** (13/10/2026), posé dans la page ou, faute de place,
-  en post-it sur les photos — tant que l'étape a des faits qui passent le seuil
+  à la place d'une photo quand le gabarit de la page a un emplacement libre
+  (14/10/2026), jamais par-dessus — tant que l'étape a des faits qui passent le seuil
   de pertinence. Un carnet sans matière en aura moins : on n'invente pas.
 - **Pointillés.** La réglure du papier, sous le texte. À OFF, la page reste
   blanche sous le récit ; le rythme vertical, lui, ne change pas.
@@ -85,7 +86,8 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
   compose le PDF. Changer le réglage après coup recalcule l'étape et peut
   redemander des photos.
 - **Décorations & stickers.** La quantité n'est plus un jugement de l'agent :
-  elle est réglée par le voyageur : les stickers (deux par double page au plus)
+  elle est réglée par le voyageur : les stickers (1 à 4 par double page, deux
+  par page au plus)
   et le tracé pointillé. **Le scotch des photos n'en dépend plus** (Hugo,
   12/10/2026 : cadre, inclinaison et scotch toujours). À 0, ni sticker ni
   tracé.

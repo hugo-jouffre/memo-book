@@ -44,8 +44,9 @@ Une entrée de l'index :
 ```
 
 - **`famille`** regroupe les variantes d'un même objet (huit sacs à dos, huit
-  appareils photo, quatre boussoles). « Jamais deux fois le même » se compte
-  par famille ; la variante change d'une étape à l'autre.
+  appareils photo, quatre boussoles). Jamais deux fois la même famille sur une
+  double page, jamais le même dessin sur deux doubles pages qui se suivent ;
+  la variante qui a le moins servi passe d'abord.
 - **`style`** : `sticker` (découpé, contour blanc), `dessin` (illustration
   sans contour) ou `trait` (dessin au trait noir). Il ne règle que la taille —
   les trois se mêlent dans un carnet (Hugo, 12/10/2026).
@@ -71,12 +72,11 @@ Une entrée de l'index :
 4. `cd backend && npx tsx scripts/preparer-stickers.ts --brut <dossier>` ;
 5. `npx vitest run test/stickers.test.ts` vérifie l'index.
 
-**Dosage et places** (`decorerDoublesPages`, `mise-en-page.js`) : deux
-stickers par double page au plus, autant que le réglage « Décorations &
-stickers » en permet (aucun à 0). Sur une page de récit, à la place de
-l'encart (bas de la zone flottante, ou bas de la colonne de
-`layout_recit_photo` quand le récit laisse la place du post-it) ; sur une page
-d'album, dans le blanc que laissent les photos. Jamais dans le pli.
+**Dosage et places** (`decorerDoublesPages`, `mise-en-page.js`) : autant de
+stickers par double page que le réglage « Décorations & stickers » (1 à 4,
+aucun à 0), deux par page au plus, complétés par les familles de voyage quand
+le récit n'en appelle pas assez. Les places, jamais par-dessus le récit ni
+dans le pli : `LAYOUT_KB.md`, § « Les stickers ».
 
 **Arrivée dans le PDF** : par URL publique (`raw.githubusercontent.com`,
 branche `main`), comme les illustrations — une bibliothèque n'apparaît dans le

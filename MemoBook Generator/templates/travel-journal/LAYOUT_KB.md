@@ -770,15 +770,33 @@ notée qui en a une. Celle que le voyageur écrit sous la photo dans l'atelier
 19 familles ; format et procédure d'ajout dans `assets/README.md`). Un sticker
 est posé quand un de ses mots apparaît, en **mot entier**, dans le titre ou le
 lieu de l'étape (lien fort), sinon dans son récit ou les scènes de ses photos
-— deux par double page au plus, autant que le réglage « Décorations » en
-permet, **jamais deux fois la même famille** dans le carnet (un seul sac à
-dos, quelle que soit la variante). Trois styles se mêlent — sticker découpé,
-dessin, trait —, qui ne règlent que la taille : 90 à 140 pt, jamais plus que
-150 dpi ne le permet. Places : la page d'album, le bas de la colonne de
-`layout_recit_photo` quand le récit laisse la place du post-it, la zone du bas
-d'une page de récit ordinaire — tant qu'aucun post-it ne l'occupe — et jamais
-dans le pli. Les **personnages de dos** sont réservés : ils se choisiront
-d'après l'apparence des voyageurs, pas d'après le récit.
+— **autant par double page que le réglage « Décorations »** : 1, 2, 3 ou 4
+(Hugo, 14/10/2026 : « 1 » et « 4 » donnaient le même carnet), deux par page
+au plus, aucun à 0. Le récit d'un carnet n'appelle souvent que trois ou
+quatre familles : les **familles de voyage** (appareil photo, carte postale,
+boussole, globe, repère, carte) complètent. Le choix (`choisirSticker`) : la
+famille la mieux liée à l'étape de la page — son titre, son récit, le reste du
+voyage, puis les familles de voyage —, moins elle a servi, mieux elle vaut ;
+**jamais deux fois la même famille sur une double page**, jamais le même
+dessin sur deux doubles pages qui se suivent. Le récit se lit en entier : la
+recherche ne s'arrêtait qu'à la première virgule. Trois styles se mêlent —
+sticker découpé, dessin, trait —, qui ne règlent que la taille : 60 à 140 pt
+selon la place, jamais plus que 150 dpi ne le permet.
+
+Les places (`placesSticker`), jamais par-dessus le récit ni dans le pli :
+
+| Page | Places |
+|---|---|
+| Album (une ou deux photos) | les coins que les tirages laissent blancs |
+| Planche (trois photos et plus) | les coins extérieurs, à cheval sur une photo, en petit |
+| Récit, première page d'étape | à droite du titre s'il fait 28 signes au plus (`title`, dans le bloc de récit, 50 pt de haut au plus) |
+| Récit avec zone flottante | en bas à gauche, à la place de l'encart |
+| Récit court (60 % de la capacité au plus) | en bas, côté extérieur |
+| Récit avec bande de photos | les coins extérieurs de la bande, en bas (`band-*`) et en haut (`band-top-*`, dans la bande) |
+
+Le coin bas droit d'une page qui porte un fun fact reste à la mention
+« Fun fact rédigé par IA ». Les **personnages de dos** sont réservés : ils se
+choisiront d'après l'apparence des voyageurs, pas d'après le récit.
 
 **La page « photos + stickers ».** `layout_photo_page` accepte désormais une ou
 deux photos : une page d'album, les tirages inclinés et le tracé pointillé entre
@@ -940,12 +958,16 @@ décide ensuite :
   l'accueille sans rien coûter (540 signes sous un bandeau, 860 sur une page de
   suite), et une grande photo en tête repasse en photo flottante ; deux photos,
   230 signes au plus ; ouverture de chapitre avec deux photos, 110 ;
-- **page hôte, sur les photos** (Hugo, 13/10/2026 : « les fun facts peuvent
-  aussi aller sur les pages photos ») : un post-it posé dans un coin d'une
-  planche (`mb-card--postit-planche`), sur le blanc d'une page d'album, ou sur
-  la bande de photos d'une page de récit (`postit_bande`, collage, bande, trio,
-  chapitre) — il mord sur une photo sans prendre une ligne au texte, côté
-  extérieur de la page. Jamais sur la pleine page ;
+- **page hôte, à la place d'une photo** (Hugo, 14/10/2026) : le fun fact
+  compte comme une photo de plus. La page de k photos prend le gabarit de
+  k + 1 — la planche de quatre pour trois photos, la page d'album à deux pour
+  une seule, le collage de trois pour une bande de deux —, et le post-it
+  « Infos » occupe l'emplacement qu'aucune photo n'y tient (`case_fun_fact`,
+  son rang dans les emplacements). **Jamais par-dessus une photo** : un
+  emplacement déjà pris ne l'accueille pas. L'emplacement est celui qui rogne
+  le moins les photos ; si l'une d'elles y perdait plus d'un tiers, la page
+  n'accueille pas le fun fact. À coût égal, le dernier emplacement. Ni la
+  planche pleine (cinq photos, colonnes), ni le trio, ni la pleine page ;
 - **mention** : la page porte `ai_note` « Fun fact rédigé par IA ».
 
 Le journal de l'atelier donne la cadence obtenue (« 14 encarts, un toutes les
