@@ -711,6 +711,8 @@ public enum BookCopy {
 
         /// **Corrigée au tutoiement** — voir ``Customisation/intro``.
         public static let subtitle = "Détermine la quantité de décorations dans tes pages"
-        public static let sliderLabel = "Quantité de décorations par paragraphe ou image"
+        /// « par étape » et non plus « par paragraphe ou image » : c'est ce
+        /// que le carnet compte (Hugo, 14/10/2026).
+        public static let sliderLabel = "Quantité de décorations par étape"
     }
 }

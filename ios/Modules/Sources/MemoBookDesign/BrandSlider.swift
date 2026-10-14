@@ -252,7 +252,7 @@ private extension Comparable {
             in: 0...4,
             step: 1,
             ticks: ["0", "1", "2", "3", "4"],
-            leadingLabel: "Quantité de décorations par paragraphe ou image",
+            leadingLabel: "Quantité de décorations par étape",
             voiceLabel: "Quantité de décorations"
         )
     }

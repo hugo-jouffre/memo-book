@@ -29,7 +29,8 @@ public struct BookCustomisation: Codable, Sendable, Hashable {
     public var funFactsEnabled: Bool
     /// Les pointillés d'écriture, sur lesquels le récit se pose.
     public var rulesEnabled: Bool
-    /// Combien de décorations par paragraphe. Zéro laisse la page nue.
+    /// Combien de stickers par étape du carnet, de 0 à 4. Zéro laisse la page
+    /// nue : ni sticker ni tracé pointillé.
     public var decorationQuota: Int
 
     // MARK: Typographies
@@ -94,9 +95,9 @@ public struct BookCustomisation: Codable, Sendable, Hashable {
         targetPageCount <= 1 ? "\(targetPageCount) page" : "\(targetPageCount) pages"
     }
 
-    /// « 2 / paragraphe », ou « Aucune » quand le quota est nul.
+    /// « 2 / étape », ou « Aucune » quand le quota est nul.
     public var decorationLabel: String {
-        decorationQuota == 0 ? "Aucune" : "\(decorationQuota) / paragraphe"
+        decorationQuota == 0 ? "Aucune" : "\(decorationQuota) / étape"
     }
 }
 

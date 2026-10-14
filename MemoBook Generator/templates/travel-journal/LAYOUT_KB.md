@@ -1101,9 +1101,9 @@ gros. La variable n'est pas le nombre de pages mais le taux de compression par
   n'occupent qu'une fraction de la largeur.
 - Les photos sont recadrées en `object-fit: cover` et pivotées de quelques
   degrés : ne pas envoyer une image dont un visage touche déjà le bord.
-- **Le scotch entre dans le quota de décorations** réglé par le voyageur (0 à 4
-  par paragraphe ou par image, 2 par défaut). À 0, aucun `tape_corner`. Le quota
-  est un plafond : une photo qui n'a pas besoin de son scotch s'en passe.
+- **Le scotch ne dépend pas du réglage « Décorations »** (Hugo, 12/10/2026) :
+  chaque photo a le sien, sauf une photo réduite sans être rognée et la
+  pleine page. Le réglage ne compte que les stickers, par étape.
 - **Pas d'illustration qui occupe une page seule.** Une photo des voyageurs
   vaut mieux qu'un dessin de remplissage : deux lecteurs le disent séparément.
 
