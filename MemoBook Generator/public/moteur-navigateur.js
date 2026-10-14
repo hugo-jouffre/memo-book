@@ -256,6 +256,7 @@
       base: BASE_OPENAI,
       prompt: corps.prompt,
       taille: corps.taille,
+      ...(corps.qualite ? { qualite: corps.qualite } : {}),
       transparent: corps.transparent,
       references: corps.references || [],
     });

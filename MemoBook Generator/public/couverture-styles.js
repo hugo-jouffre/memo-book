@@ -68,13 +68,21 @@
   const POLICE_TITRE_LARGE = "Archivo Black";
   const APPROCHE_TITRE_LARGE = -70;
 
+  /**
+   * Les titres d'Aquarelle : Poppins Black, couleur #2D231A (Hugo,
+   * 14/10/2026, règles de la première). Le titre de la quatrième la suit, pour
+   * que les deux faces parlent la même langue.
+   */
+  const POLICE_TITRE_AQUARELLE = "Poppins";
+  const STYLE_TITRE_AQUARELLE = "Black";
+
   /** Les polices de chaque style : l'aperçu les charge, le mode d'emploi InDesign les nomme. */
   const POLICES = {
     default: ["Playfair Display"],
     elegant: ["Cormorant Garamond", "Cormorant Infant"],
     drawing: [POLICE_TITRE_DESSIN, "Gloria Hallelujah"],
     assouline: [POLICE_TITRE_LARGE, "Playfair Display"],
-    watercolor: [POLICE_TITRE_LARGE, "Manrope"],
+    watercolor: [POLICE_TITRE_AQUARELLE, "Manrope"],
     "travel-book": ["Lilita One"],
     "photo-drawing": ["Caveat Brush"],
   };
@@ -90,6 +98,8 @@
     { famille: "Manrope", fichier: "manrope", poids: "200 800" },
     { famille: "Caveat Brush", fichier: "caveat-brush", poids: "400" },
     { famille: "Lilita One", fichier: "lilita-one", poids: "400" },
+    // Poppins Black seule : Indian Type Foundry, OFL 1.1.
+    { famille: "Poppins", fichier: "poppins-black", poids: "900" },
   ];
 
   /** Le CSS `@font-face` des polices de couverture, d'après l'adresse du dossier `fonts/couvertures/`. */
@@ -159,7 +169,10 @@
       },
     ],
     watercolor: [
-      { cle: "titre", label: "Titre (1re)", ia: true, max: 16, consigne: "le titre de la première, en majuscules : la destination, en un ou deux mots (« ÉCOSSE »)" },
+      // Le nom du pays, en capitales accentuées, sans rien d'autre (Hugo,
+      // 14/10/2026) : une donnée, pas une rédaction. Une clé neuve, pour qu'un
+      // ancien titre rédigé (« CYCLADES, GRÈCE ») ne revienne pas.
+      { cle: "pays", label: "Pays (1re)", ia: false },
       { cle: "date", label: "Date (4e)", ia: false },
       {
         cle: "resume",
@@ -183,6 +196,25 @@
       { cle: "texteVerso", label: "Texte de la 4e", ia: false },
     ],
   };
+
+  /**
+   * Le nom du pays du voyage, en français : celui du code ISO où le voyage
+   * séjourne le plus (`voyage.pays`), sinon la dernière partie de la
+   * destination (« Cyclades, Grèce » → « Grèce »).
+   */
+  function nomDuPays(voyage = {}) {
+    const code = String(voyage.pays || "").trim().toUpperCase();
+    if (/^[A-Z]{2}$/.test(code) && typeof Intl !== "undefined" && Intl.DisplayNames) {
+      try {
+        const nom = new Intl.DisplayNames(["fr"], { type: "region" }).of(code);
+        if (nom && nom !== code) return nom;
+      } catch {
+        // Un code inconnu : la destination écrite.
+      }
+    }
+    const parties = String(voyage.destination || "").split(",").map((t) => t.trim()).filter(Boolean);
+    return parties[parties.length - 1] || "";
+  }
 
   /** Le texte fixe de la quatrième de Photo-dessin (Hugo, 09/10/2026), modifiable. */
   const MERCI_PHOTO_DESSIN = "Merci d'avoir suivi mon aventure !";
@@ -222,7 +254,7 @@
     }
     if (styleId === "watercolor") {
       return {
-        titre: destination.toUpperCase(),
+        pays: nomDuPays(voyage).toLocaleUpperCase("fr-FR"),
         date: base.dates.toUpperCase(),
         resume: (voyage.etapes || [])
           .slice(0, 3)
@@ -649,11 +681,114 @@ En français, sans emoji, sans guillemets autour des textes. Réponds uniquement
   /* ---------------------------------------------- les images générées --- */
 
   /**
+   * La consigne de la première d'Aquarelle (Hugo, 14/10/2026) : une aquarelle
+   * à fond perdu d'après le seul nom du pays. Le titre n'est pas dans
+   * l'image : c'est la maquette qui le pose, au-dessus.
+   */
+  function consigneAquarelle(pays) {
+    const lieu = pays || "le pays du voyage";
+    return [
+      `Une illustration à l'aquarelle, en hauteur, pour la première de couverture d'un carnet de voyage : ${lieu}.`,
+      "Technique : aquarelle sur papier à grain, avec des rehauts d'encre noire en traits fins et nerveux (feuillages, silhouettes, détails d'architecture). " +
+        "Lavis transparents, bords irréguliers, blancs du papier laissés en réserve dans l'image, aucune saturation numérique, aucun contour vectoriel.",
+      `Sujet : un paysage, une scène côtière, une scène urbaine ou une architecture immédiatement identifiable de ${lieu}, vue à hauteur d'homme. ` +
+        "Le pays doit se reconnaître au premier regard, sans aucun texte.",
+      "Composition : un premier plan lisible en bas, la ligne d'horizon dans la moitié basse, des éléments verticaux (arbres, mâts, colonnes, minarets…) " +
+        "qui montent jusqu'au bord haut de l'image.",
+      "Personnages : seulement quelques silhouettes lointaines et simplifiées, jamais de visage détaillé ni de personne reconnaissable.",
+      `Palette : la dominante naturelle propre à ${lieu}, avec des ombres colorées (violet, bleu, ocre) plutôt que grises.`,
+      "Cadrage : la peinture couvre toute l'image jusqu'aux quatre bords — aucune marge, aucun bord blanc, aucun vignettage : elle est imprimée à fond perdu.",
+      "Interdits : aucun texte, aucune lettre, aucun chiffre, aucun logo, aucun drapeau, aucun filtre photo ; ne reproduis aucune œuvre existante " +
+        "ni le style d'un artiste nommé. L'image fournie ne montre que la technique attendue : n'en reprends ni le sujet ni la composition.",
+    ].join("\n");
+  }
+
+  /**
+   * Les six tons des timbres du Travel book (Hugo, 14/10/2026 : six timbres,
+   * deux au plus dans les mêmes tons, et un ensemble qui reste beau). Six
+   * teintes rétro, aussi passées l'une que l'autre : deux rouges (terre cuite,
+   * vieux rose), deux bleus (canard, ardoise), un jaune, un vert — jamais
+   * plus de deux d'une même famille. Rangées pour qu'un ton chaud jouxte un
+   * ton froid sur le collage.
+   */
+  const TONS_TIMBRES = [
+    { nom: "terre cuite", famille: "rouge", hex: "#c4613d", consigne: "terre cuite et orangé brûlé" },
+    { nom: "canard", famille: "bleu", hex: "#2e7782", consigne: "bleu canard et turquoise passé" },
+    { nom: "moutarde", famille: "jaune", hex: "#cf9e36", consigne: "jaune moutarde et ocre doré" },
+    { nom: "ardoise", famille: "bleu", hex: "#4a6390", consigne: "bleu ardoise et bleu marine doux" },
+    { nom: "vieux rose", famille: "rouge", hex: "#c47a83", consigne: "vieux rose et corail passé" },
+    { nom: "sauge", famille: "vert", hex: "#6e9468", consigne: "vert sauge et vert olive doux" },
+  ];
+
+  /**
+   * Six sujets différents : six timbres qui ne racontent pas tous la même
+   * chose — les timbres générés d'un seul tenant montraient six fois les mêmes
+   * maisons blanches au bord de l'eau.
+   */
+  const SUJETS_TIMBRES = [
+    "une architecture ou un monument emblématique",
+    "un paysage naturel : montagne, côte, campagne ou désert",
+    "un plat, un fruit ou une spécialité qui se mange",
+    "un animal ou une plante typique",
+    "un moyen de transport typique : bateau, bus, train, scooter, tuk-tuk…",
+    "une scène de vie, une fête ou un artisanat local",
+  ];
+
+  /**
+   * Les six timbres de la première du Travel book : leur ton, leur sujet, leur
+   * légende — **de vrais mots**, le lieu d'une étape ou le pays, écrits par la
+   * maquette et jamais par le modèle d'image —, leur forme (dentelé blanc,
+   * dentelé de couleur, crème, étiquette autocollante), leur format, leur
+   * place et leur inclinaison sur le collage (fractions de la zone).
+   */
+  function planTimbres(voyage = {}) {
+    const pays = nomDuPays(voyage);
+    const lieux = [];
+    for (const e of voyage.etapes || []) {
+      const lieu = String(e.lieu || "").split(",")[0].trim();
+      if (lieu && !lieux.some((l) => l.toLowerCase() === lieu.toLowerCase())) lieux.push(lieu);
+    }
+    const formes = ["dentele-blanc", "dentele-couleur", "etiquette", "dentele-creme", "dentele-couleur", "dentele-blanc"];
+    const formats = [0.8, 1.26, 0.8, 1, 0.8, 1.26];
+    const places = [
+      { cx: 0.21, cy: 0.29, l: 0.34, rotation: -7 },
+      { cx: 0.53, cy: 0.24, l: 0.37, rotation: 4 },
+      { cx: 0.82, cy: 0.33, l: 0.29, rotation: 8 },
+      { cx: 0.2, cy: 0.72, l: 0.32, rotation: 5 },
+      { cx: 0.5, cy: 0.69, l: 0.3, rotation: -4 },
+      { cx: 0.8, cy: 0.73, l: 0.34, rotation: -8 },
+    ];
+    // Les lieux des étapes, puis le pays, tour à tour : jamais deux fois la
+    // même légende de suite, et le pays une fois au moins.
+    const noms = [...lieux.slice(0, 6), ...(pays && !lieux.some((l) => l.toLowerCase() === pays.toLowerCase()) ? [pays] : [])];
+    return TONS_TIMBRES.map((ton, i) => {
+      const nom = noms.length ? noms[i % noms.length] : "";
+      const lieu = nom && nom !== pays ? nom : "";
+      return { cle: `timbre${i + 1}`, ton, sujet: SUJETS_TIMBRES[i], lieu, legende: nom.toLocaleUpperCase("fr-FR"), forme: formes[i], format: formats[i], ...places[i] };
+    });
+  }
+
+  /** La consigne d'un timbre : l'illustration seule, sans rien d'écrit — la maquette dessine le timbre autour. */
+  function consigneTimbre(timbre, pays) {
+    const ou = timbre.lieu && pays && timbre.lieu.toLowerCase() !== pays.toLowerCase() ? `${timbre.lieu} (${pays})` : timbre.lieu || pays || "le pays du voyage";
+    return [
+      `L'illustration d'un timbre-poste vintage sur le voyage : ${ou}. Sujet : ${timbre.sujet}, typique de ce lieu.`,
+      "Style d'un vieux timbre imprimé : aplats de couleurs douces, léger grain, formes simples et nettes, comme une gravure ou une sérigraphie des années 1950.",
+      `Palette : une dominante ${timbre.ton.consigne}, avec du crème et un brun d'encre pour les traits. Aucune autre couleur dominante.`,
+      "Cadrage : la scène remplit tout le carré jusqu'aux bords, le sujet centré avec un peu d'air autour : elle sera recadrée dans la fenêtre du timbre.",
+      "Interdits : aucun texte, aucune lettre, aucun chiffre, aucune valeur faciale, aucun cadre, aucune dentelure, aucun bord de timbre — l'illustration seule.",
+    ].join("\n");
+  }
+
+  /**
    * Les images que chaque style fait générer (`genererImage`, OpenAI
-   * `gpt-image-1`), avec la couverture de référence du style en entrée pour en
-   * tenir le style. `pour` : la face où l'image se pose. Le coût est estimé
-   * au tarif « high » de `gpt-image-1` (≈ 0,17 $ en carré, 0,25 $ en
-   * portrait ou paysage).
+   * `gpt-image-1`), avec, quand elle sert, la couverture de référence du
+   * style en entrée pour en tenir le style. `pour` : la face où l'image se
+   * pose. `qualite` : « medium » pour les petites images (les timbres),
+   * « high » sinon. `detourer` : l'atelier retire le fond que le modèle a
+   * peint malgré la transparence demandée (`detourerFond`). `rognerReference` :
+   * la part de la référence à envoyer (x0, y0, x1, y1), sans le titre qu'elle
+   * porte. Le coût est estimé au tarif de `gpt-image-1` (`coutImages`).
    */
   function imagesDuStyle(styleId, voyage, textes = {}) {
     const lieu = voyage.destination || "le pays du voyage";
@@ -670,11 +805,13 @@ En français, sans emoji, sans guillemets autour des textes. Réponds uniquement
           pour: "recto",
           taille: "1024x1024",
           transparent: true,
+          detourer: true,
           reference: S0.recto,
           prompt:
             `Une seule illustration centrale, emblématique de ${lieu} et du voyage raconté (${motifs || lieu}) : une plante, un animal ou un objet ` +
             "typique du lieu. Exactement le style de l'illustration centrale de l'image de référence (la feuille de palmier) : aplats peints, " +
-            "léger grain, formes nettes, deux ou trois tons d'une même couleur. Centrée, entière, sans texte, sans cadre, fond transparent.",
+            "léger grain, formes nettes, deux ou trois tons d'une même couleur. Centrée, entière, sans texte. " +
+            "Aucun fond : ni carré, ni cadre, ni papier, ni vignette, ni ombre portée autour du sujet — seul le sujet est opaque, sur un fond transparent.",
         },
       ];
     }
@@ -687,15 +824,16 @@ En français, sans emoji, sans guillemets autour des textes. Réponds uniquement
           taille: "1024x1536",
           transparent: false,
           reference: S0.recto,
-          prompt:
-            `Une illustration à l'aquarelle, en hauteur, d'un paysage marquant de ${lieu} tiré du voyage (${motifs || lieu}), avec quelques ` +
-            "petits personnages. Exactement le style de l'image de référence : aquarelle lumineuse, traits d'encre légers, papier visible. Sans texte.",
+          // La référence sans sa bande de titre : le modèle n'en recopie pas les lettres.
+          rognerReference: [0, 0.14, 1, 1],
+          prompt: consigneAquarelle(nomDuPays(voyage)),
         },
         ...[0, 1, 2].map((i) => ({
           cle: `vignette${i + 1}`,
           pour: "verso",
           taille: "1024x1024",
           transparent: true,
+          detourer: true,
           reference: S0.verso,
           prompt:
             `Une petite vignette à l'aquarelle illustrant : ${paras[i] || motifs || lieu}. Comme peinte directement sur un papier beige : ` +
@@ -704,26 +842,28 @@ En français, sans emoji, sans guillemets autour des textes. Réponds uniquement
       ];
     }
     if (styleId === "travel-book") {
+      const pays = nomDuPays(voyage);
       return [
-        {
-          cle: "timbres",
+        ...planTimbres(voyage).map((t) => ({
+          cle: t.cle,
           pour: "recto",
-          taille: "1536x1024",
-          transparent: true,
-          reference: S0.recto,
-          prompt:
-            `Un collage de cinq ou six timbres-poste et autocollants vintage, qui se chevauchent légèrement, illustrant le voyage en ${lieu} : ` +
-            `${motifs || lieu}. Exactement le style des timbres de l'image de référence : bords dentelés, couleurs douces, illustrations rétro, ` +
-            "un ou deux autocollants à bord blanc. Fond transparent, aucun cadre autour du collage.",
-        },
+          taille: "1024x1024",
+          qualite: "medium",
+          transparent: false,
+          // Pas de référence : la couverture d'exemple porte des timbres écrits,
+          // et le modèle en recopiait les lettres.
+          reference: null,
+          prompt: consigneTimbre(t, pays),
+        })),
         {
           cle: "tampon",
           pour: "recto",
           taille: "1024x1024",
           transparent: true,
+          detourer: true,
           reference: "silhouette",
           prompt:
-            `Un tampon postal rond à l'encre bordeaux, comme celui de l'image de référence de couverture : le nom « ${String(lieu).toUpperCase()} » ` +
+            `Un tampon postal rond à l'encre bordeaux, comme celui de l'image de référence de couverture : le nom « ${String(pays || lieu).toUpperCase()} » ` +
             "écrit deux fois en arc dans l'anneau, des étoiles, et au centre la silhouette du pays fournie en image. Encre un peu irrégulière. Fond transparent.",
         },
       ];
@@ -731,8 +871,189 @@ En français, sans emoji, sans guillemets autour des textes. Réponds uniquement
     return [];
   }
 
-  /** Le coût estimé des images d'un style, en dollars. */
-  const coutImages = (images) => images.reduce((s, i) => s + (i.taille === "1024x1024" ? 0.17 : 0.25), 0);
+  /**
+   * Le coût estimé des images d'un style, en dollars : `gpt-image-1`, ≈ 0,17 $
+   * en carré et 0,25 $ en portrait ou paysage en qualité « high », ≈ 0,04 $ et
+   * 0,06 $ en « medium ».
+   */
+  const coutImages = (images) =>
+    images.reduce((s, i) => s + (i.qualite === "medium" ? (i.taille === "1024x1024" ? 0.04 : 0.06) : i.taille === "1024x1024" ? 0.17 : 0.25), 0);
+
+  /**
+   * Retire le fond qu'un modèle d'image peint autour du sujet malgré la
+   * transparence demandée : un carré de papier presque uni, qui laissait sur
+   * la couverture Assouline un cadre fin, discret mais visible (Hugo,
+   * 14/10/2026). On estime la couleur du fond sur le pourtour de l'image —
+   * bord, ou lisière de ce qui est déjà transparent — ; tout ce qui, de
+   * proche en proche depuis là, en a la couleur devient transparent, avec un
+   * fondu sur `fondu` niveaux pour ne pas laisser de liseré. Rien ne bouge si
+   * le pourtour n'est pas assez uni : c'est alors une image pleine, pas un
+   * fond.
+   *
+   * `rvba` : les pixels (`ImageData.data`), modifiés sur place. Renvoie la
+   * part des pixels rendus transparents.
+   */
+  function detourerFond(rvba, l, h, { tolerance = 24, fondu = 20, uni = 0.6 } = {}) {
+    const n = l * h;
+    const opaque = (i) => rvba[i * 4 + 3] > 200;
+    // Le pourtour : les pixels opaques du bord, ou ceux qui touchent du transparent.
+    const pourtour = [];
+    for (let y = 0; y < h; y += 1) {
+      for (let x = 0; x < l; x += 1) {
+        const i = y * l + x;
+        if (!opaque(i)) continue;
+        const bord = x === 0 || y === 0 || x === l - 1 || y === h - 1;
+        const lisiere = !bord && (!opaque(i - 1) || !opaque(i + 1) || !opaque(i - l) || !opaque(i + l));
+        if (bord || lisiere) pourtour.push(i);
+      }
+    }
+    if (pourtour.length < 8) return 0;
+    const mediane = [0, 1, 2].map((c) => {
+      const v = pourtour.map((i) => rvba[i * 4 + c]).sort((a, b) => a - b);
+      return v[Math.floor(v.length / 2)];
+    });
+    const ecart = (i) => Math.max(...[0, 1, 2].map((c) => Math.abs(rvba[i * 4 + c] - mediane[c])));
+    if (pourtour.filter((i) => ecart(i) <= tolerance).length < pourtour.length * uni) return 0;
+
+    const vu = new Uint8Array(n);
+    const file = pourtour.filter((i) => ecart(i) <= tolerance + fondu);
+    for (const i of file) vu[i] = 1;
+    let retires = 0;
+    while (file.length) {
+      const i = file.pop();
+      const d = ecart(i);
+      if (d <= tolerance) {
+        rvba[i * 4 + 3] = 0;
+        retires += 1;
+      } else {
+        // Le fondu : la lisière du sujet garde une partie de son opacité.
+        rvba[i * 4 + 3] = Math.round(rvba[i * 4 + 3] * Math.min(1, (d - tolerance) / fondu));
+        continue;
+      }
+      const x = i % l;
+      for (const j of [x > 0 ? i - 1 : -1, x < l - 1 ? i + 1 : -1, i - l, i + l]) {
+        if (j < 0 || j >= n || vu[j]) continue;
+        vu[j] = 1;
+        if (rvba[j * 4 + 3] > 0 && ecart(j) <= tolerance + fondu) file.push(j);
+      }
+    }
+    return retires / n;
+  }
+
+  /* ----------------------------------------------- les timbres dessinés --- */
+
+  /**
+   * Le contour dentelé d'un timbre de `l` × `h` (mm), son coin en haut à
+   * gauche à l'origine : des demi-cercles de rayon `r` mordent chaque bord, au
+   * pas de `pas`, jamais sur un coin.
+   */
+  function contourDentele(l, h, r = 1.05, pas = 3.1) {
+    const f = (v) => arrondi2(v);
+    let d = `M0 0`;
+    const bord = (x0, y0, x1, y1) => {
+      const longueur = Math.hypot(x1 - x0, y1 - y0);
+      const trous = Math.max(1, Math.round(longueur / pas) - 1);
+      const ecartement = longueur / (trous + 1);
+      const [ux, uy] = [(x1 - x0) / longueur, (y1 - y0) / longueur];
+      for (let k = 1; k <= trous; k += 1) {
+        const c = k * ecartement;
+        d += `L${f(x0 + ux * (c - r))} ${f(y0 + uy * (c - r))}`;
+        // Le demi-cercle mord vers l'intérieur du timbre.
+        d += `A${r} ${r} 0 0 0 ${f(x0 + ux * (c + r))} ${f(y0 + uy * (c + r))}`;
+      }
+      d += `L${f(x1)} ${f(y1)}`;
+    };
+    bord(0, 0, l, 0);
+    bord(l, 0, l, h);
+    bord(l, h, 0, h);
+    bord(0, h, 0, 0);
+    return `${d}Z`;
+  }
+
+  /**
+   * Le collage des six timbres du Travel book, en SVG (mm) : le timbre — sa
+   * dentelure, son cadre de couleur, son papier —, l'illustration générée
+   * dans sa fenêtre, et sa légende écrite en Lilita One. L'atelier le
+   * rastérise en PNG pour la maquette (`timbres`), comme l'image unique
+   * d'avant. `zone` : la taille du collage (mm) ; `illustrations` : par clé,
+   * `{ src }` ; `police` : la règle `@font-face` de Lilita One, en data URL
+   * pour que l'image rastérisée l'embarque.
+   */
+  function svgTimbres(plan, illustrations = {}, { zone = { l: 135, h: 115 }, police = "", pxParMm = 20 } = {}) {
+    const papier = { "dentele-blanc": "#fffdf8", "dentele-couleur": null, etiquette: "#ffffff", "dentele-creme": "#f6ecd8" };
+    const morceaux = plan.map((t, i) => {
+      const l = arrondi2(t.l * zone.l);
+      const h = arrondi2(l / t.format);
+      const cx = arrondi2(t.cx * zone.l);
+      const cy = arrondi2(t.cy * zone.h);
+      const couleur = t.ton.hex;
+      const fond = papier[t.forme] ?? couleur;
+      const marge = t.forme === "dentele-couleur" ? l * 0.09 : l * 0.07;
+      const bandeau = l * 0.17;
+      const fenetre = { x: marge, y: marge, l: l - 2 * marge, h: h - 2 * marge - bandeau };
+      const src = illustrations[t.cle]?.src;
+      const corps = Math.min(bandeau * 0.62, ((fenetre.l * 0.92) / Math.max(4, t.legende.length)) / 0.56);
+      const contour =
+        t.forme === "etiquette"
+          ? `<rect x="0" y="0" width="${l}" height="${h}" rx="${arrondi2(l * 0.08)}" fill="${fond}" stroke="${couleur}" stroke-width="0.5"/>`
+          : `<path d="${contourDentele(l, h)}" fill="${fond}"/>`;
+      const filet =
+        t.forme === "dentele-blanc"
+          ? `<rect x="${arrondi2(marge * 0.55)}" y="${arrondi2(marge * 0.55)}" width="${arrondi2(l - marge * 1.1)}" height="${arrondi2(h - marge * 1.1)}" fill="none" stroke="${couleur}" stroke-width="0.6"/>`
+          : t.forme === "dentele-creme"
+            ? `<rect x="${arrondi2(marge * 0.5)}" y="${arrondi2(marge * 0.5)}" width="${arrondi2(l - marge)}" height="${arrondi2(h - marge)}" fill="none" stroke="${couleur}" stroke-width="0.45" stroke-dasharray="1.2 0.8"/>`
+            : "";
+      // La légende : en blanc sur un bandeau de la couleur du timbre, ou dans la couleur du timbre sur son papier.
+      const surBandeau = t.forme !== "dentele-creme";
+      const yBandeau = arrondi2(h - marge - bandeau);
+      const legende =
+        (surBandeau && t.forme !== "dentele-couleur"
+          ? `<rect x="${arrondi2(marge)}" y="${yBandeau}" width="${arrondi2(fenetre.l)}" height="${arrondi2(bandeau)}" fill="${couleur}"/>`
+          : "") +
+        `<text x="${arrondi2(l / 2)}" y="${arrondi2(yBandeau + bandeau / 2 + corps * 0.36)}" text-anchor="middle" font-family="'Lilita One', sans-serif" font-size="${arrondi2(corps)}" letter-spacing="${arrondi2(corps * 0.04)}" fill="${surBandeau ? "#fffdf8" : couleur}">${echapperXml(t.legende)}</text>`;
+      const image = src
+        ? `<clipPath id="f${i}"><rect x="${arrondi2(fenetre.x)}" y="${arrondi2(fenetre.y)}" width="${arrondi2(fenetre.l)}" height="${arrondi2(fenetre.h)}"/></clipPath>` +
+          `<image href="${echapperXml(src)}" x="${arrondi2(fenetre.x)}" y="${arrondi2(fenetre.y)}" width="${arrondi2(fenetre.l)}" height="${arrondi2(fenetre.h)}" preserveAspectRatio="xMidYMid slice" clip-path="url(#f${i})"/>`
+        : `<rect x="${arrondi2(fenetre.x)}" y="${arrondi2(fenetre.y)}" width="${arrondi2(fenetre.l)}" height="${arrondi2(fenetre.h)}" fill="${couleur}" opacity="0.35"/>`;
+      return (
+        `<g transform="translate(${arrondi2(cx)} ${arrondi2(cy)}) rotate(${t.rotation}) translate(${arrondi2(-l / 2)} ${arrondi2(-h / 2)})" filter="url(#ombre-timbre)">` +
+        contour +
+        filet +
+        image +
+        legende +
+        `</g>`
+      );
+    });
+    return (
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${Math.round(zone.l * pxParMm)}" height="${Math.round(zone.h * pxParMm)}" viewBox="0 0 ${zone.l} ${zone.h}">` +
+      `<defs>${police ? `<style>${police}</style>` : ""}<filter id="ombre-timbre" x="-10%" y="-10%" width="120%" height="125%"><feDropShadow dx="0.25" dy="0.45" stdDeviation="0.45" flood-color="#3a2a1a" flood-opacity="0.28"/></filter></defs>` +
+      morceaux.join("") +
+      `</svg>`
+    );
+  }
+
+  /** Un texte sûr dans un attribut ou un nœud XML. */
+  const echapperXml = (t) =>
+    String(t ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+
+  /**
+   * Les coins d'un timbre du plan une fois tourné, en mm dans la zone du
+   * collage : de quoi vérifier qu'aucun ne sort de la zone.
+   */
+  function coinsDuTimbre(t, zone) {
+    const l = t.l * zone.l;
+    const h = l / t.format;
+    const a = (t.rotation * Math.PI) / 180;
+    const [cx, cy] = [t.cx * zone.l, t.cy * zone.h];
+    return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => {
+      const [x, y] = [(sx * l) / 2, (sy * h) / 2];
+      return [cx + x * Math.cos(a) - y * Math.sin(a), cy + x * Math.sin(a) + y * Math.cos(a)];
+    });
+  }
 
   /**
    * La consigne de l'appel « vision » du style Photo-dessin : le tracé qui
@@ -964,34 +1285,166 @@ En français, sans emoji, sans guillemets autour des textes. Réponds uniquement
   /* ---------------------------------------------------- style Aquarelle --- */
 
   /**
-   * **Aquarelle** (Hugo, 09/10/2026) : fonds beige ; titres en Archivo
-   * Black, le reste en Manrope, en noir typo ; sur la quatrième, le motif M de
-   * MemoBook en beige foncé à 20 % et le logo en beige foncé. Les illustrations
-   * sont générées d'après les récits, celles de la quatrième sans contour net.
+   * Le gabarit de la première d'Aquarelle (Hugo, 14/10/2026), en px d'une face
+   * visible de 420 × 595 : le bloc du titre fait 396 × 79, en haut de la face,
+   * à 12 de chaque bord ; les capitales du titre montent à 75 au plus. La face
+   * visible de la fiche Pumbo n'a pas tout à fait ces proportions : le
+   * gabarit s'y pose à l'échelle de sa largeur.
    */
-  function maquetteAquarelle({ fiche, textes, images = {}, logo }) {
+  const GABARIT_AQUARELLE = { face: 420, bloc: [396, 79], marge: 12, capitales: 75 };
+
+  /**
+   * Les chasses de Poppins Black (pour 1 000 unités, `poppins-black-*.woff2`),
+   * et la hauteur de ses capitales : de quoi caler le titre à sa largeur
+   * exacte. La police n'a pas d'approche de paires pour le latin : la largeur
+   * d'un mot est la somme de ses chasses.
+   */
+  const POPPINS_BLACK = {
+    capitales: 0.713,
+    // Le haut et le bas du dessin des signes qui sortent des capitales : les
+    // accents montent jusqu'à 1 007, la cédille descend à −278.
+    haut: {"C":715,"G":715,"O":720,"Q":720,"S":720,"À":1007,"Â":968,"Ä":939,"Á":1007,"Ã":926,"Å":1004,"Ç":715,"É":1007,"È":1007,"Ê":968,"Ë":939,"Í":1007,"Ì":1007,"Î":968,"Ï":939,"Ñ":926,"Ó":1007,"Ò":1007,"Ô":968,"Ö":939,"Õ":926,"Ú":1007,"Ù":1007,"Û":968,"Ü":939,"Ý":1007,"Ÿ":939,"Œ":720,"0":747,"1":731,"2":747,"3":747,"4":720,"5":731,"6":744,"7":731,"8":747,"9":747,"'":803,"(":895,")":895},
+    bas: {"C":-5,"G":-5,"J":-7,"O":-7,"Q":-115,"S":-7,"U":-7,"Ç":-278,"Ó":-7,"Ò":-7,"Ô":-7,"Ö":-7,"Õ":-7,"Ú":-7,"Ù":-7,"Û":-7,"Ü":-7,"Œ":-12,"3":-7,"6":-7,"8":-11,"9":-7,",":-161,"&":-10,"(":-229,")":-229},
+    hautCapitale: 708,
+    chasses: {"A":773,"B":684,"C":753,"D":743,"E":556,"F":575,"G":752,"H":755,"I":322,"J":590,"K":755,"L":506,"M":951,"N":779,"O":788,"P":649,"Q":788,"R":670,"S":625,"T":616,"U":719,"V":763,"W":1100,"X":764,"Y":730,"Z":630,"À":773,"Â":773,"Ä":773,"Á":773,"Ã":773,"Å":773,"Ç":753,"É":556,"È":556,"Ê":556,"Ë":556,"Í":322,"Ì":322,"Î":322,"Ï":322,"Ñ":779,"Ó":788,"Ò":788,"Ô":788,"Ö":788,"Õ":788,"Ú":719,"Ù":719,"Û":719,"Ü":719,"Ý":730,"Ÿ":730,"Œ":1049,"Æ":986,"0":662,"1":399,"2":566,"3":615,"4":704,"5":660,"6":633,"7":512,"8":657,"9":597," ":170,"-":576,"'":265,"’":378,",":348,".":319,"&":831,"(":463,")":463},
+    defaut: 700,
+  };
+
+  /** La largeur d'un texte en Poppins Black, en corps (em). */
+  const emPoppinsBlack = (texte) => [...String(texte)].reduce((t, c) => t + (POPPINS_BLACK.chasses[c] ?? POPPINS_BLACK.defaut), 0) / 1000;
+
+  /** Le haut et le bas du dessin d'un texte en Poppins Black, en corps (em), accents et cédilles compris. */
+  function encrePoppinsBlack(texte) {
+    const signes = [...String(texte)].filter((c) => c.trim());
+    if (!signes.length) return { haut: POPPINS_BLACK.hautCapitale / 1000, bas: 0 };
+    return {
+      haut: Math.max(...signes.map((c) => POPPINS_BLACK.haut[c] ?? POPPINS_BLACK.hautCapitale)) / 1000,
+      bas: Math.min(0, ...signes.map((c) => POPPINS_BLACK.bas[c] ?? 0)) / 1000,
+    };
+  }
+
+  /**
+   * Le titre d'Aquarelle, calé dans l'ordre des règles : le corps qui fait
+   * occuper au titre toute la largeur du bloc ; plafonné si ses capitales
+   * dépasseraient 75 px (les noms courts), le titre restant alors centré,
+   * plus étroit. Toujours sur une ligne. `face` : la face visible du recto.
+   *
+   * Et le titre **tient dans son bloc, accents compris** : le bloc est en
+   * haut de la face visible, au-dessus commence la zone de pliage, où rien de
+   * lisible ne doit aller. À 75 px de capitales, l'accent de « PÉROU » monte
+   * à 107 px : il sortirait du bloc de 79 et passerait dans le pli. Un nom
+   * court à capitale accentuée est donc plafonné un peu plus bas, à la
+   * hauteur où son dessin entier tient dans le bloc ; il y est centré sur son
+   * dessin réel (`ligneDeBase`).
+   *
+   * Renvoie le bloc (mm), le corps (pt), la largeur et la hauteur des
+   * capitales du titre (mm), et sa ligne de base sous le haut du bloc (mm).
+   */
+  function titreAquarelle(texte, face) {
+    const k = face.l / GABARIT_AQUARELLE.face;
+    const bloc = {
+      x: arrondi2(face.x + GABARIT_AQUARELLE.marge * k),
+      y: arrondi2(face.y),
+      l: arrondi2(GABARIT_AQUARELLE.bloc[0] * k),
+      h: arrondi2(GABARIT_AQUARELLE.bloc[1] * k),
+    };
+    const em = emPoppinsBlack(texte) || 1;
+    const encre = encrePoppinsBlack(texte);
+    const plafond = Math.min((GABARIT_AQUARELLE.capitales * k) / POPPINS_BLACK.capitales, bloc.h / (encre.haut - encre.bas));
+    const corps = Math.round((Math.min(bloc.l / em, plafond) / MM_PAR_PT) * 100) / 100;
+    const corpsMm = corps * MM_PAR_PT;
+    return {
+      bloc,
+      corps,
+      largeur: arrondi2(corpsMm * em),
+      capitales: arrondi2(corpsMm * POPPINS_BLACK.capitales),
+      encre: arrondi2(corpsMm * (encre.haut - encre.bas)),
+      ligneDeBase: arrondi2((bloc.h - corpsMm * (encre.haut - encre.bas)) / 2 + corpsMm * encre.haut),
+      plafonne: corpsMm < bloc.l / em - 0.01,
+    };
+  }
+
+  /**
+   * Les contrôles avant livraison de la première d'Aquarelle (Hugo,
+   * 14/10/2026), sur la maquette : la liste de ce qui ne va pas, vide si tout
+   * passe. Le septième — le pays reconnaissable sans texte — ne se mesure
+   * pas : c'est la consigne de l'illustration qui le porte.
+   */
+  function controleAquarelle(mq) {
+    const fautes = [];
+    const face = mq.faces.recto;
+    const titre = mq.elements.find((e) => e.nom === "Titre de la 1re");
+    const illustration = mq.elements.find((e) => e.nom === "Illustration de la 1re");
+    if (!titre) return ["La première n'a pas de titre."];
+    const attendu = titreAquarelle(titre.texte, face);
+    const k = face.l / GABARIT_AQUARELLE.face;
+    if (/\n/.test(titre.texte)) fautes.push("Le titre tient sur plus d'une ligne.");
+    if (Math.abs(titre.x - attendu.bloc.x) > 0.05 || Math.abs(titre.l - attendu.bloc.l) > 0.05 || titre.alignement !== "centre" || titre.vertical !== "centre") {
+      fautes.push("Le titre n'est pas centré dans son bloc de 396 × 79 px.");
+    }
+    if (attendu.capitales > GABARIT_AQUARELLE.capitales * k + 0.01) fautes.push("Les capitales du titre dépassent 75 px.");
+    if (attendu.encre > attendu.bloc.h + 0.01) fautes.push("Le titre, accents compris, sort de son bloc.");
+    if (Math.abs((titre.ligneDeBase ?? -1) - attendu.ligneDeBase) > 0.01) fautes.push("Le titre n'est pas centré verticalement dans son bloc.");
+    if (!attendu.plafonne && Math.abs(attendu.largeur - attendu.bloc.l) > 0.1) fautes.push("Le titre n'occupe pas les 396 px du bloc.");
+    if (Math.abs(titre.corps - attendu.corps) > 0.01) fautes.push("Le corps du titre n'est pas celui que demande sa largeur.");
+    const noir = mq.couleurs[titre.couleur]?.hex;
+    if (String(noir).toLowerCase() !== "#2d231a" || titre.police !== POLICE_TITRE_AQUARELLE || titre.style !== STYLE_TITRE_AQUARELLE) {
+      fautes.push("Le titre n'est pas en Poppins Black #2D231A.");
+    }
+    if (!illustration) fautes.push("La première n'a pas d'illustration.");
+    else {
+      const droite = mq.plats.recto[1] + mq.fondPerdu;
+      const bas = mq.hauteur + mq.fondPerdu;
+      if (illustration.x > mq.plats.recto[0] + 0.01 || illustration.x + illustration.l < droite - 0.01 || illustration.y + illustration.h < bas - 0.01) {
+        fautes.push("L'illustration ne couvre pas le fond perdu.");
+      }
+      if (illustration.y > attendu.bloc.y + attendu.bloc.h + 0.01) fautes.push("L'illustration ne démarre pas juste sous le bloc du titre.");
+    }
+    // Rien de lisible dans la zone de pliage : le titre reste dans la face visible.
+    if (titre.y < face.y - 0.01 || titre.x < face.x - 0.01 || titre.x + titre.l > face.x + face.l + 0.01) {
+      fautes.push("Le titre déborde dans la zone de pliage.");
+    }
+    return fautes;
+  }
+
+  /**
+   * **Aquarelle** (Hugo, 09/10/2026, et 14/10/2026 pour la première et le
+   * motif) :
+   *
+   * - **première** : le nom du pays, en capitales accentuées, en Poppins
+   *   Black #2D231A, sur une ligne, calé dans son bloc (`titreAquarelle`), sur
+   *   le papier ; l'aquarelle démarre juste sous le bloc et file à fond perdu
+   *   jusqu'au dos, au bord droit et en pied ;
+   * - **quatrième** : le motif M de MemoBook en beige foncé à 20 %, centré sur
+   *   la face, aussi grand qu'elle ; la date, trois vignettes et leurs
+   *   paragraphes en Manrope noir typo, le logo en beige foncé.
+   */
+  function maquetteAquarelle({ fiche, textes, images = {}, logo, motif }) {
     const p = planche(fiche);
     const el = fonds(p, { verso: "beige", recto: "beige" });
     const face = p.faces.recto;
     const marge = moteur().CHARNIERE;
-    const titre = String(textes.titre || "").toUpperCase();
-    const corps = corpsQuiTient(titre, face.l - 2 * marge, 0.72, { min: 24, max: 56 });
-    const hBande = arrondi2(corps * MM_PAR_PT * 1.1 + 14);
-    // L'illustration, bord à bord sous la bande du titre, fond perdu compris.
+    const titre = String(textes.pays ?? textes.titre ?? "").toLocaleUpperCase("fr-FR");
+    const { bloc, corps, ligneDeBase } = titreAquarelle(titre, face);
+    // L'illustration, du dos au bord droit, du bloc du titre au pied, fond perdu compris.
     if (images.recto) {
-      el.push({ type: "image", x: p.xRecto, y: arrondi2(face.y + hBande), l: arrondi2(p.L + p.f), h: arrondi2(p.H + p.f - face.y - hBande), fichier: images.recto.fichier, src: images.recto.src, px: images.recto.px, focus: [0.5, 0.5] });
+      const y = arrondi2(bloc.y + bloc.h);
+      el.push({ type: "image", nom: "Illustration de la 1re", x: p.xRecto, y, l: arrondi2(p.L + p.f), h: arrondi2(p.H + p.f - y), fichier: images.recto.fichier, src: images.recto.src, px: images.recto.px, focus: [0.5, 0.5] });
     }
-    el.push({ type: "texte", x: face.x + marge, y: arrondi2(face.y + 4), l: face.l - 2 * marge, h: arrondi2(hBande - 6), texte: titre, police: POLICE_TITRE_LARGE, style: "Regular", approche: APPROCHE_TITRE_LARGE, corps, couleur: "noir", alignement: "centre", vertical: "centre" });
+    el.push({ type: "texte", nom: "Titre de la 1re", ...bloc, texte: titre, police: POLICE_TITRE_AQUARELLE, style: STYLE_TITRE_AQUARELLE, corps, couleur: "noir", alignement: "centre", vertical: "centre", ligneDeBase });
 
     // Quatrième : le motif M, la date, trois vignettes et leurs paragraphes, le logo.
     const q = p.faces.verso;
-    if (logo) {
-      const cote = q.l * 1.05;
-      el.push({ type: "image", x: arrondi2(q.x - cote * 0.12), y: arrondi2(q.y + q.h * 0.18), l: arrondi2(cote), h: arrondi2(cote), fichier: logo.fichier, src: logo.src, px: logo.px, focus: [0.5, 0.5], contenir: true, opacite: 0.2 });
+    if (motif) {
+      const [ml, mh] = motif.px || [1, 1];
+      const echelle = Math.min(q.l / ml, q.h / mh);
+      const l = ml * echelle;
+      const h = mh * echelle;
+      el.push({ type: "image", nom: "Motif M", x: arrondi2(q.x + (q.l - l) / 2), y: arrondi2(q.y + (q.h - h) / 2), l: arrondi2(l), h: arrondi2(h), fichier: motif.fichier, src: motif.src, px: motif.px, focus: [0.5, 0.5], contenir: true, opacite: 0.2 });
     }
     const xV = q.x + marge;
     const lV = q.l - 2 * marge;
-    el.push({ type: "texte", x: xV, y: arrondi2(q.y + 8), l: lV, h: 10, texte: String(textes.date || ""), police: POLICE_TITRE_LARGE, style: "Regular", approche: APPROCHE_TITRE_LARGE, corps: 18, couleur: "noir", alignement: "centre", vertical: "centre" });
+    el.push({ type: "texte", x: xV, y: arrondi2(q.y + 8), l: lV, h: 10, texte: String(textes.date || ""), police: POLICE_TITRE_AQUARELLE, style: STYLE_TITRE_AQUARELLE, corps: 18, couleur: "noir", alignement: "centre", vertical: "centre" });
     const paras = paragraphes(textes.resume).slice(0, 3);
     const hLogo = 14;
     const logoH = logo?.px ? (hLogo * logo.px[1]) / logo.px[0] : hLogo;
@@ -1038,10 +1491,19 @@ En français, sans emoji, sans guillemets autour des textes. Réponds uniquement
     return { type: "chemin", points: pts, ferme: true, fond: null, trait: { couleur, epaisseur: 5, tirets: null } };
   }
 
+  /** La zone du collage de timbres sur la première du Travel book, en mm. */
+  function zoneDesTimbres(fiche) {
+    const face = moteur().facesVisibles(fiche).recto;
+    const marge = moteur().CHARNIERE;
+    return { x: face.x + marge, y: arrondi2(face.y + face.h * 0.26), l: arrondi2(face.l - 2 * marge), h: arrondi2(face.h * 0.52) };
+  }
+
   /**
    * **Travel book** (Hugo, 09/10/2026) : Lilita One, texte vert sur fond
-   * beige ; sur la première, un tampon du pays et des timbres et autocollants
-   * générés d'après les récits ; sur la quatrième, une photo dans un cadre
+   * beige ; sur la première, un tampon du pays et six timbres (Hugo,
+   * 14/10/2026) — six illustrations générées sans un mot, chacune dans son
+   * ton, que l'atelier met en timbres avec leurs vraies légendes
+   * (`planTimbres`, `svgTimbres`) ; sur la quatrième, une photo dans un cadre
    * vert déchiré, choisie comme pour le style par défaut, et le logo.
    */
   function maquetteTravelBook({ fiche, textes, images = {}, verso, logo }) {
@@ -1058,8 +1520,8 @@ En français, sans emoji, sans guillemets autour des textes. Réponds uniquement
       el.push({ type: "image", x: arrondi2(face.x + face.l - marge - cote), y: arrondi2(face.y + 6), l: arrondi2(cote), h: arrondi2(cote), fichier: images.tampon.fichier, src: images.tampon.src, px: images.tampon.px, focus: [0.5, 0.5], contenir: true });
     }
     if (images.timbres) {
-      const l = face.l - 2 * marge;
-      el.push({ type: "image", x: face.x + marge, y: arrondi2(face.y + face.h * 0.26), l: arrondi2(l), h: arrondi2(face.h * 0.52), fichier: images.timbres.fichier, src: images.timbres.src, px: images.timbres.px, focus: [0.5, 0.5], contenir: true });
+      const zone = zoneDesTimbres(fiche);
+      el.push({ type: "image", nom: "Timbres", ...zone, fichier: images.timbres.fichier, src: images.timbres.src, px: images.timbres.px, focus: [0.5, 0.5], contenir: true });
     }
     if (textes.voyageurs) {
       el.push({ type: "texte", x: face.x + marge, y: arrondi2(face.y + face.h - moteur().RETRAIT - 8), l: face.l - 2 * marge, h: 8, texte: String(textes.voyageurs).toUpperCase(), police: "Lilita One", style: "Regular", corps: 15, couleur: "vertMarque", alignement: "centre", vertical: "centre" });
@@ -1231,6 +1693,19 @@ En français, sans emoji, sans guillemets autour des textes. Réponds uniquement
     couleursPhotoDessin,
     imagesDuStyle,
     coutImages,
+    nomDuPays,
+    titreAquarelle,
+    controleAquarelle,
+    POPPINS_BLACK,
+    emPoppinsBlack,
+    encrePoppinsBlack,
+    detourerFond,
+    TONS_TIMBRES,
+    planTimbres,
+    svgTimbres,
+    coinsDuTimbre,
+    zoneDesTimbres,
+    contourDentele,
     CONSIGNE_CONTOUR,
     lireContour,
     focusSurSujet,

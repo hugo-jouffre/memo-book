@@ -187,7 +187,7 @@ struct BookPagesPanel: View {
 
 // MARK: - Décorations & stickers
 
-/// « Décorations & stickers » — de zéro à quatre par paragraphe (`3595:23965`).
+/// « Décorations & stickers » — de zéro à quatre stickers par étape (`3595:23965`).
 struct BookDecorationsPanel: View {
     let model: BookCustomisationModel
 
@@ -202,7 +202,7 @@ struct BookDecorationsPanel: View {
                 ticks: ["0", "1", "2", "3", "4"],
                 leadingLabel: BookCopy.Decorations.sliderLabel,
                 voiceLabel: BookCopy.Decorations.sliderLabel,
-                voiceValue: { $0 == 0 ? "Aucune" : "\($0) par paragraphe" }
+                voiceValue: { $0 == 0 ? "Aucune" : "\($0) par étape" }
             )
         }
         .disabled(model.customisation == nil)

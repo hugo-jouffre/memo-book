@@ -312,12 +312,13 @@
     return format > cadre ? [100, Math.round((cadre / format) * 100)] : [Math.round((format / cadre) * 100), 100];
   }
 
-  function placerPhotos(layout, photos) {
-    const formats = FORMATS_EMPLACEMENTS[layout]?.[photos.length];
+  function placerPhotos(layout, photos, imposes = null) {
+    const formats = imposes || FORMATS_EMPLACEMENTS[layout]?.[photos.length];
     const cout = (ordre) =>
       ordre.reduce((total, photo, i) => total + rognage(photo.format, formats[i]), 0);
+    // Des emplacements imposés viennent avec leur ordre, déjà le meilleur.
     const ordre =
-      formats && photos.every((p) => p.format)
+      !imposes && formats && photos.every((p) => p.format)
         ? permutations(photos).reduce((meilleur, essai) => (cout(essai) < cout(meilleur) ? essai : meilleur))
         : photos;
 
@@ -329,6 +330,19 @@
       if (photo.format && cadre && photo.format < cadre) return { url: photo.src, focus: "50% 30%" };
       return photo.src;
     });
+  }
+
+  /**
+   * Les photos rendues d'une page. Quand le fun fact y prend l'emplacement
+   * d'une photo (`plan.caseEncart`), les photos vont, dans l'ordre retenu,
+   * dans les emplacements qu'il laisse : le gabarit les lit dans l'ordre des
+   * emplacements, en sautant celui du fun fact.
+   */
+  function photosRendues(plan, gabarit) {
+    if (!plan.caseEncart) return placerPhotos(gabarit, plan.photos);
+    const { c, ordre, gabarit: avecCase } = plan.caseEncart;
+    const formats = FORMATS_EMPLACEMENTS[avecCase][plan.photos.length + 1].filter((_, i) => i !== c);
+    return placerPhotos(avecCase, ordre.map((k) => plan.photos[k]), formats);
   }
 
   /**
@@ -1270,25 +1284,72 @@
    * - trois photos (`layout_collage`, trios) ou carte seule : pas de place
    *   dans la page.
    *
-   * Et **sur les photos** (Hugo, 13/10/2026 : « les fun facts peuvent aussi
-   * aller sur les pages photos ») : le post-it se pose dans un coin d'une
-   * planche, sur le blanc d'une page d'album, ou sur la bande de photos d'une
-   * page de récit — il mord sur une photo sans prendre une ligne au texte.
-   * Jamais sur la pleine page.
+   * Et **à la place d'une photo** (Hugo, 14/10/2026) : le fun fact compte
+   * alors comme une photo de plus. La page de k photos prend le gabarit de
+   * k + 1, et l'encart occupe l'emplacement qu'aucune photo n'y tient
+   * (`caseLibre`) — jamais par-dessus une photo. La planche d'ouverture d'une
+   * étape a sa propre carte ; la pleine page, rien.
    *
-   * Renvoie `"page"`, `"photos"` ou `null`.
+   * Renvoie `"page"`, `"case"` ou `null`.
    */
   function placeEncart(plan) {
-    if (plan.genre === "planche") return plan.pleinePage ? null : "photos";
+    if (plan.genre === "planche") {
+      if (plan.ouverture) return "page";
+      return caseLibre(plan) ? "case" : null;
+    }
     if (plan.genre !== "recit" || !plan.texte.length) return null;
     const n = signes(plan.texte);
-    const bande = plan.photos.length >= 2 ? "photos" : null;
-    if (plan.layout === "layout_chapter_map") return plan.photos.length === 2 ? (n <= 110 ? "page" : "photos") : null;
+    if (plan.layout === "layout_chapter_map") return plan.photos.length === 2 && n <= 110 ? "page" : null;
     if (plan.layout === "layout_recit_photo") return n <= CAPACITE_PAGE.layout_recit_photo.postit[plan.sorte] ? "page" : null;
-    if (plan.layout === "layout_trio_portrait" || plan.layout === "layout_trio_landscape") return "photos";
+    if (plan.layout === "layout_trio_portrait" || plan.layout === "layout_trio_landscape") return null;
     if (plan.photos.length <= 1) return "page";
-    return plan.photos.length === 2 && n <= 230 ? "page" : bande;
+    if (plan.photos.length === 2 && n <= 230) return "page";
+    return caseLibre(plan) ? "case" : null;
   }
+
+  /**
+   * Le gabarit d'une page quand le fun fact y prend la place d'une photo : la
+   * planche de k + 1 photos, ou, sur une page de récit à deux photos, le
+   * collage de trois. `null` si la page n'en a pas.
+   */
+  function gabaritAvecCase(plan) {
+    if (plan.genre === "planche") {
+      if (plan.pleinePage || plan.colonnes || plan.ouverture) return null;
+      return FORMATS_EMPLACEMENTS.layout_photo_page[plan.photos.length + 1] ? "layout_photo_page" : null;
+    }
+    if (plan.genre === "recit" && plan.layout === "layout_split_left" && plan.photos.length === 2) return "layout_collage";
+    return null;
+  }
+
+  /**
+   * Les photos de la page dans le gabarit de k + 1 emplacements, l'encart
+   * dans celui qui les rogne le moins : `{ rendues, caseEncart }`, où
+   * `caseEncart` est le rang de l'emplacement de l'encart. `null` si une photo
+   * y serait rognée au-delà du plafond — le fun fact ne prend pas une place
+   * qui abîmerait une photo.
+   */
+  function photosAvecCase(plan) {
+    const gabarit = gabaritAvecCase(plan);
+    if (!gabarit) return null;
+    const formats = FORMATS_EMPLACEMENTS[gabarit][plan.photos.length + 1];
+    let meilleur = null;
+    // À coût égal, le dernier emplacement : le fun fact ferme la bande ou la planche.
+    for (let c = formats.length - 1; c >= 0; c -= 1) {
+      const reste = formats.filter((_, i) => i !== c);
+      const pertes = plan.photos.map((p) => (p.format && !p.groupe ? p.format : null));
+      // Le meilleur ordre des photos dans les emplacements restants.
+      for (const ordre of permutations(plan.photos.map((_, i) => i))) {
+        const rognages = ordre.map((k, i) => (pertes[k] ? rognage(pertes[k], reste[i]) : 0));
+        if (rognages.some((r) => r > MAX_ROGNAGE)) continue;
+        const cout = rognages.reduce((a, b) => a + b, 0);
+        if (!meilleur || cout < meilleur.cout) meilleur = { cout, c, ordre, gabarit };
+      }
+    }
+    return meilleur;
+  }
+
+  /** La page a-t-elle un emplacement de photo libre pour le fun fact ? */
+  const caseLibre = (plan) => photosAvecCase(plan) !== null;
 
   /**
    * Quels encarts s'impriment, et sur quelle page (LAYOUT_KB § « Les fun facts
@@ -1364,7 +1425,11 @@
       }
       if (!choix) break;
       choix.plan.encart = choix.encart;
-      if (choix.plan.genre === "recit" && choix.place === "photos") choix.plan.encartSurBande = true;
+      if (choix.place === "case") {
+        const avecCase = photosAvecCase(choix.plan);
+        choix.plan.caseEncart = avecCase;
+        if (choix.plan.genre === "recit") choix.plan.layout = avecCase.gabarit;
+      }
       restants[choix.plan.etape] = restants[choix.plan.etape].filter((x) => x !== choix.encart);
       poses.push(choix.i);
       dernier = choix.i;
@@ -1372,7 +1437,7 @@
     }
 
     for (const { plan } of hotes) {
-      if (plan.encart && !plan.encartSurBande && plan.layout === "layout_hero_top") {
+      if (plan.encart && !plan.caseEncart && plan.layout === "layout_hero_top") {
         plan.layout = plan.ouvreLeCarnet ? "layout_story_opener" : "layout_story_facts";
       }
     }
@@ -1389,49 +1454,122 @@
   /** Les variantes du tracé pointillé du voyage, tour à tour d'une double page à l'autre. */
   const TRACES = ["a", "b", "c"];
 
+  /** Les emplacements de photos d'une planche : ses photos, et le fun fact qui en prend un. */
+  const casesDe = (plan) => plan.photos.length + (plan.caseEncart ? 1 : 0);
+
   /** La page a-t-elle une bande de photos, derrière laquelle le tracé peut passer ? */
   function porteUnTrace(plan) {
-    if (plan.genre === "planche") return !plan.pleinePage && plan.photos.length <= 2;
+    if (plan.genre === "planche") return !plan.pleinePage && casesDe(plan) <= 2;
     if (plan.layout === "layout_chapter_map") return plan.photos.length >= 2;
     return ["layout_split_left", "layout_collage", "layout_trio_portrait", "layout_trio_landscape"].includes(plan.layout);
   }
 
   /**
-   * La page a-t-elle une place pour un sticker, en bas à gauche ? La page
-   * d'album, la colonne de `layout_recit_photo` et la zone du bas d'une page
-   * de récit ordinaire — tant qu'aucun post-it ne l'occupe.
+   * La part de la page qu'un récit laisse libre en bas pour un sticker : au
+   * plus 60 % de la capacité de la page, il reste une centaine de points sous
+   * le texte.
    */
-  function porteUnSticker(plan) {
-    if (plan.encart) return false;
-    if (plan.genre === "planche") return !plan.pleinePage && plan.photos.length <= 2;
-    // Le bas de la colonne qui contourne la grande photo n'est libre que si le
-    // récit laisse la place du post-it.
-    if (plan.layout === "layout_recit_photo") {
-      return signes(plan.texte) <= CAPACITE_PAGE.layout_recit_photo.postit[plan.sorte];
-    }
-    return ["layout_story_opener", "layout_story_facts"].includes(plan.layout);
-  }
+  const PART_LIBRE_STICKER = 0.6;
 
-  /** Un texte réduit à ses mots : minuscules, sans accent, une espace entre chaque. */
-  const enMots = (texte) => ` ${normaliser(texte).replace(/[^a-z0-9]+/g, " ").trim()} `;
+  /** Un titre d'étape assez court pour laisser, à sa droite, la place d'un petit sticker. */
+  const MAX_SIGNES_TITRE_STICKER = 28;
 
   /**
-   * Les stickers de la bibliothèque qui vont à une étape, un par famille, le
-   * plus lié d'abord : ceux dont un mot déclencheur apparaît en mot entier
-   * (pluriel en s ou x accepté) dans le titre ou le lieu de l'étape (lien
-   * fort), sinon dans son récit ou les scènes de ses photos. Les stickers
-   * réservés (les personnages de dos, à choisir d'après les voyageurs) ne
-   * sont jamais tirés ainsi. Dans une famille, la variante dépend du rang de
-   * l'étape : deux carnets n'ont pas tous le même sac à dos.
+   * Les places libres d'une page pour un sticker, de la meilleure à la moins
+   * bonne — deux au plus (Hugo, 14/10/2026 : le réglage « Décorations »
+   * donne le nombre de stickers de l'étape, de 1 à 4). Chaque place
+   * est `{ place, album, max, maxH }` : `place`, la classe du gabarit
+   * (`mb-sticker--…`), `max` et `maxH` la largeur et la hauteur les plus
+   * grandes qu'elle tient, en pt.
+   * Jamais par-dessus le récit :
+   *
+   * - **page d'album** (une ou deux photos) : les coins que les tirages
+   *   laissent blancs ;
+   * - **planche** de trois photos et plus : les coins extérieurs, à cheval
+   *   sur une photo, en petit ;
+   * - **page de récit** : à la droite du titre de l'étape s'il est court ; en
+   *   bas à gauche, à la place de l'encart, dans la zone flottante ou sous un
+   *   récit qui laisse le bas libre ; sur les coins extérieurs de la bande de
+   *   photos.
+   *
+   * `gauche` : la page est une page de gauche (le pli à sa droite).
    */
-  function stickersDe(etape, bibliotheque, rang = 0) {
+  function placesSticker(plan, gauche) {
+    const ext = gauche ? "left" : "right";
+    if (plan.pleinePage || plan.ouverture) return [];
+    // La mention « Fun fact rédigé par IA » tient le coin bas droit de la page.
+    const sansMention = (places) => (plan.encart ? places.filter((p) => !/^(band|bottom)-right$/.test(p.place)) : places);
+    return sansMention(placesDeLaPage(plan, gauche, ext));
+  }
+
+  function placesDeLaPage(plan, gauche, ext) {
+    if (plan.genre === "planche") {
+      const n = casesDe(plan);
+      if (n === 1) return [{ place: `bottom-${ext}`, album: true }, { place: `bottom-${gauche ? "right" : "left"}`, album: true }];
+      if (n === 2) return [{ place: "top-right", album: true }, { place: "bottom-left", album: true }];
+      return [
+        { place: `band-${ext}`, album: false, max: 78, maxH: 90 },
+        { place: `top-${ext}`, album: false, max: 78, maxH: 90 },
+      ];
+    }
+    if (plan.genre !== "recit") return [];
+    const places = [];
+    const n = signes(plan.texte);
+    const titre = plan.bandeau?.titre || "";
+    const avecTitre = ["layout_story_opener", "layout_story_facts", "layout_hero_top", "layout_split_left", "layout_collage", "layout_recit_photo", "layout_story_full"];
+    if (plan.bandeau && titre && titre.length <= MAX_SIGNES_TITRE_STICKER && avecTitre.includes(plan.layout)) {
+      // Au plus la hauteur de la ligne du titre et de la ligne vide qui la
+      // suit, plus la marge au-dessus du bloc : un sticker plus haut mordrait
+      // sur le récit.
+      places.push({ place: "title", album: false, max: 60, maxH: 50 });
+    }
+    const libre = (capacite) => n <= capacite * PART_LIBRE_STICKER;
+    if (["layout_story_opener", "layout_story_facts"].includes(plan.layout)) {
+      // La zone flottante n'existe qu'avec une photo ; sans elle, le bas n'est
+      // libre que sous un récit court.
+      if (!plan.encart && (plan.photos.length === 1 || libre(CAPACITE_PAGE.defaut[plan.sorte]))) places.push({ place: "bottom-left", album: false });
+    } else if (plan.layout === "layout_recit_photo") {
+      if (!plan.encart && n <= CAPACITE_PAGE.layout_recit_photo.postit[plan.sorte]) places.push({ place: "bottom-left", album: false });
+    } else if (plan.layout === "layout_story_full" || plan.layout === "layout_hero_top") {
+      const capacite = (plan.layout === "layout_hero_top" ? CAPACITE_PAGE.layout_hero_top : CAPACITE_PAGE.defaut)[plan.sorte];
+      if (!plan.encart && libre(capacite)) places.push({ place: `bottom-${ext}`, album: false });
+    } else if (porteUnTrace(plan)) {
+      // Une bande de photos en bas de page : ses deux coins extérieurs, en bas
+      // de la page et en haut de la bande.
+      places.push({ place: `band-${ext}`, album: false, max: 78, maxH: 90 }, { place: `band-top-${ext}`, album: false, max: 70, maxH: 80 });
+    }
+    return places.slice(0, 2);
+  }
+
+  /**
+   * Un texte réduit à ses mots : minuscules, sans accent, une espace entre
+   * chaque. Tout le texte : `normaliser`, fait pour un nom de lieu, s'arrête à
+   * la première virgule — le composeur ne lisait que le début du récit, et la
+   * plupart des stickers qu'il appelait passaient inaperçus.
+   */
+  const enMots = (texte) =>
+    ` ${String(texte || "")
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim()} `;
+
+  /**
+   * Les familles de la bibliothèque et ce que le récit d'une étape en dit :
+   * `force` 2 si un mot déclencheur est dans le titre ou le lieu de l'étape,
+   * 1 dans son récit ou les scènes de ses photos, 0 sinon. Les stickers
+   * réservés (les personnages de dos, à choisir d'après les voyageurs) n'y
+   * sont pas.
+   */
+  function famillesDe(etape, bibliotheque) {
     const fort = enMots([etape.titre, etape.lieu].join(" "));
     const faible = enMots([etape.recit, ...(etape.analyse?.photos || []).map((p) => p.scene)].join(" "));
     const familles = new Map();
     for (const s of bibliotheque) {
       if (s.reserve) continue;
       const famille = s.famille || s.fichier;
-      if (!familles.has(famille)) familles.set(famille, { variantes: [], force: 0 });
+      if (!familles.has(famille)) familles.set(famille, { famille, variantes: [], force: 0 });
       const f = familles.get(famille);
       f.variantes.push(s);
       for (const mot of s.mots || []) {
@@ -1443,42 +1581,116 @@
         else if (motif.test(faible)) f.force = Math.max(f.force, 1);
       }
     }
-    return [...familles.values()]
+    return familles;
+  }
+
+  /**
+   * Les stickers de la bibliothèque qui vont à une étape, un par famille, le
+   * plus lié d'abord : ceux dont un mot déclencheur apparaît en mot entier
+   * (pluriel en s ou x accepté) dans le titre ou le lieu de l'étape (lien
+   * fort), sinon dans son récit ou les scènes de ses photos. Les stickers
+   * réservés (les personnages de dos, à choisir d'après les voyageurs) ne
+   * sont jamais tirés ainsi. Dans une famille, la variante dépend du rang de
+   * l'étape : deux carnets n'ont pas tous le même sac à dos.
+   */
+  function stickersDe(etape, bibliotheque, rang = 0) {
+    return [...famillesDe(etape, bibliotheque).values()]
       .filter((f) => f.force > 0)
       .sort((a, b) => b.force - a.force)
       .map((f) => f.variantes[rang % f.variantes.length]);
   }
 
   /**
+   * Les familles qui vont à tout voyage — l'appareil photo, la carte postale,
+   * la boussole, le globe, le repère, la carte —, quand le récit n'appelle pas
+   * assez de stickers pour le réglage choisi. Sans elles, le récit d'un
+   * carnet n'en appelle souvent que trois ou quatre, et « 1 » ou « 4 »
+   * donnaient le même carnet (Hugo, 14/10/2026).
+   */
+  const STICKERS_DE_VOYAGE = ["appareil-photo", "carte-postale", "boussole", "globe", "repere", "carte"];
+
+  /**
    * La largeur d'un sticker sur la page, en points : un sticker découpé reste
    * petit, un dessin peut prendre plus de place dans le blanc d'une page
-   * d'album. Jamais plus que sa définition ne le permet (`maxPt`, 150 dpi).
+   * d'album. Jamais plus que sa définition ne le permet (`maxPt`, 150 dpi), ni
+   * que sa place (`max`, et `maxH` d'après les proportions du dessin).
    */
   const LARGEUR_STICKER = { sticker: 90, trait: 105, dessin: 120 };
   const LARGEUR_STICKER_ALBUM = { sticker: 100, trait: 120, dessin: 140 };
-  function largeurSticker(sticker, album) {
+  function largeurSticker(sticker, album, max = Infinity, maxH = Infinity) {
     const voulu = (album ? LARGEUR_STICKER_ALBUM : LARGEUR_STICKER)[sticker.style] || LARGEUR_STICKER.sticker;
-    return Math.round(Number.isFinite(sticker.maxPt) ? Math.min(voulu, sticker.maxPt) : voulu);
+    const proportions = sticker.largeur > 0 && sticker.hauteur > 0 ? sticker.largeur / sticker.hauteur : 1;
+    return Math.round(Math.min(voulu, max, maxH * proportions, Number.isFinite(sticker.maxPt) ? sticker.maxPt : Infinity));
   }
 
   /**
-   * Les décors, double page par double page (Hugo, 12/10/2026) :
+   * Le sticker d'une place : la famille la mieux liée à l'étape de la page —
+   * son titre, puis son récit, puis le reste du voyage, puis les familles de
+   * voyage —, moins elle a déjà servi, mieux elle vaut. Jamais deux fois la
+   * même famille dans une étape ni sur une double page, jamais le même
+   * dessin sur deux doubles pages qui se suivent, et de préférence pas la
+   * même famille ; dans une famille, la variante qui a le moins servi.
+   */
+  function choisirSticker(plan, contexte) {
+    const { familles, duVoyage, exclues, poses, derniereDouble, derniereFamille, rangDouble } = contexte;
+    const f = familles[plan.etape];
+    if (!f) return null;
+    let meilleur = null;
+    for (const famille of f.values()) {
+      if (exclues.has(famille.famille)) continue;
+      const force = famille.force || (duVoyage.has(famille.famille) ? 0.5 : STICKERS_DE_VOYAGE.includes(famille.famille) ? 0.25 : 0);
+      if (!force) continue;
+      const libres = famille.variantes.filter((v) => !(derniereDouble.get(v.fichier) >= rangDouble - 1));
+      if (!libres.length) continue;
+      const score =
+        force - 0.6 * (poses.get(famille.famille) || 0) - (derniereFamille.get(famille.famille) === rangDouble - 1 ? 0.5 : 0);
+      if (!meilleur || score > meilleur.score) meilleur = { score, famille, libres };
+    }
+    if (!meilleur) return null;
+    // La variante qui a le moins servi, en partant du rang de l'étape.
+    const { libres } = meilleur;
+    const depart = plan.etape % libres.length;
+    const tour = [...libres.slice(depart), ...libres.slice(0, depart)];
+    return tour.reduce((a, b) => ((derniereDouble.get(b.fichier) ?? -99) < (derniereDouble.get(a.fichier) ?? -99) ? b : a));
+  }
+
+  /**
+   * L'ordre où l'on essaie les places d'une étape : la première place de
+   * pages réparties sur toute l'étape (la première page d'abord), puis les
+   * autres premières places, puis les secondes. Deux stickers sur une étape
+   * de six pages ne se serrent pas sur ses deux premières.
+   */
+  function ordreDesPlaces(pages, quota) {
+    const avecPlace = pages.filter((p) => p.places.length);
+    const n = avecPlace.length;
+    const reparties = [...new Set(Array.from({ length: Math.min(quota, n) }, (_, k) => Math.floor((k * n) / Math.min(quota, n))))];
+    const rangs = [...reparties, ...avecPlace.map((_, j) => j).filter((j) => !reparties.includes(j))];
+    return [0, 1].flatMap((r) => rangs.map((j) => avecPlace[j].places[r]).filter(Boolean));
+  }
+
+  /**
+   * Les décors (Hugo, 12/10/2026, et 14/10/2026 pour le nombre de stickers) :
    *
-   * - **une étiquette de titre** au plus, sur la photo la mieux notée qui en a
-   *   une — celle que le voyageur a écrite passe avant celles de l'IA ;
-   * - **un tracé pointillé** au plus, derrière une bande de photos, de
-   *   préférence sur la page de gauche ;
-   * - **deux stickers** au plus — autant que le réglage « Décorations » en
-   *   permet, aucun à 0 —, tirés de la bibliothèque d'après le récit, jamais
-   *   deux fois le même dans le carnet.
+   * - **une étiquette de titre** au plus par double page, sur la photo la
+   *   mieux notée qui en a une — celle que le voyageur a écrite passe avant
+   *   celles de l'IA ;
+   * - **un tracé pointillé** au plus par double page, derrière une bande de
+   *   photos, de préférence sur la page de gauche ;
+   * - **autant de stickers par étape que le réglage « Décorations »** (1 à 4,
+   *   aucun à 0 ; 2 par défaut), deux par page au plus, à leurs places
+   *   (`placesSticker`), répartis sur les pages de l'étape (`ordreDesPlaces`) ;
+   *   tirés de la bibliothèque d'après le récit, complétés par les familles de
+   *   voyage (`choisirSticker`).
    */
   function decorerDoublesPages(plans, pagesAvant, etapes, { stickers = [], decorations = 2 } = {}) {
     const gauche = (i) => (pagesAvant + 1 + i) % 2 === 0;
-    const quota = Math.max(0, Math.min(2, Math.round(Number(decorations) || 0)));
-    const dejaPoses = new Set();
+    const quota = Math.max(0, Math.min(4, Math.round(Number(decorations) || 0)));
+    // Le rang de la double page de chaque page.
+    const doubleDe = [];
     let tour = 0;
-    for (let i = 0; i < plans.length; ) {
+    for (let i = 0, rangDouble = 0; i < plans.length; rangDouble += 1) {
       const double = gauche(i) && i + 1 < plans.length ? [plans[i], plans[i + 1]] : [plans[i]];
+      double.forEach((_, k) => (doubleDe[i + k] = rangDouble));
       i += double.length;
 
       // L'étiquette.
@@ -1496,29 +1708,45 @@
       // Le tracé.
       const porteur = double.find(porteUnTrace);
       if (porteur) porteur.trace = TRACES[tour++ % TRACES.length];
-
-      // Les stickers : un par page au plus, jamais deux fois la même famille
-      // dans le carnet. Sur une page d'album, dans le blanc que laissent les
-      // photos ; sur une page de récit, à la place de l'encart.
-      let poses = 0;
-      for (const plan of double) {
-        if (poses >= quota || !porteUnSticker(plan)) continue;
-        const etape = etapes[plan.etape];
-        const choix = etape && stickersDe(etape, stickers, plan.etape).find((s) => !dejaPoses.has(s.famille || s.fichier));
-        if (!choix) continue;
-        dejaPoses.add(choix.famille || choix.fichier);
-        const album = plan.genre === "planche";
-        plan.stickers = [
-          {
-            url: choix.url || choix.fichier,
-            place: album && plan.photos.length === 1 ? "bottom-right" : "bottom-left",
-            largeur: largeurSticker(choix, album),
-            famille: choix.famille || choix.fichier,
-          },
-        ];
-        poses += 1;
-      }
     }
+
+    // Les stickers, étape par étape.
+    if (!quota || !stickers.length) return;
+    const familles = etapes.map((etape) => famillesDe(etape, stickers));
+    // Les familles que le récit appelle quelque part dans le voyage.
+    const duVoyage = new Set(familles.flatMap((f) => [...f.values()].filter((x) => x.force > 0).map((x) => x.famille)));
+    const poses = new Map();
+    const derniereDouble = new Map();
+    const derniereFamille = new Map();
+    const surLaDouble = new Map();
+    etapes.forEach((_, e) => {
+      const pages = plans
+        .map((plan, i) => ({ plan, i }))
+        .filter(({ plan }) => plan.etape === e)
+        .map(({ plan, i }) => ({ places: placesSticker(plan, gauche(i)).map((p) => ({ ...p, plan, rangDouble: doubleDe[i] })) }));
+      const surLEtape = new Set();
+      let posees = 0;
+      for (const place of ordreDesPlaces(pages, quota)) {
+        if (posees >= quota) break;
+        const deLaDouble = surLaDouble.get(place.rangDouble) ?? new Set();
+        const exclues = new Set([...surLEtape, ...deLaDouble]);
+        const choix = choisirSticker(place.plan, { familles, duVoyage, exclues, poses, derniereDouble, derniereFamille, rangDouble: place.rangDouble });
+        if (!choix) continue;
+        const famille = choix.famille || choix.fichier;
+        surLEtape.add(famille);
+        surLaDouble.set(place.rangDouble, deLaDouble.add(famille));
+        poses.set(famille, (poses.get(famille) || 0) + 1);
+        derniereDouble.set(choix.fichier, place.rangDouble);
+        derniereFamille.set(famille, place.rangDouble);
+        (place.plan.stickers ??= []).push({
+          url: choix.url || choix.fichier,
+          place: place.place,
+          largeur: largeurSticker(choix, place.album, place.max, place.maxH),
+          famille,
+        });
+        posees += 1;
+      }
+    });
   }
 
   /* ------------------------------------------------------------ le carnet --- */
@@ -1840,8 +2068,8 @@
     // eux qui remplissent une page avant le texte.
     corpsAmple(plans);
 
-    // Les décors, double page par double page : une étiquette de titre, un
-    // tracé pointillé, deux stickers au plus.
+    // Les décors : une étiquette de titre et un tracé pointillé par double
+    // page, les stickers du réglage par étape.
     decorerDoublesPages(plans, pagesAvant, etapes, { stickers, decorations });
     if (stickers.length) {
       const poses = plans.flatMap((plan) => (plan.stickers || []).map((s) => s.famille));
@@ -1872,7 +2100,7 @@
       }
       if (plan.genre === "planche") {
         // Une photo seule en largeur : l'emplacement de la page d'album se couche.
-        const paysage = !plan.pleinePage && plan.photos.length === 1 && plan.photos[0].format > 1;
+        const paysage = !plan.pleinePage && !plan.caseEncart && plan.photos.length === 1 && plan.photos[0].format > 1;
         const gabarit = plan.pleinePage
           ? "pleine_page"
           : paysage
@@ -1887,8 +2115,10 @@
           ...(plan.pleinePage ? { pleine_page: true } : {}),
           ...(paysage ? { album_paysage: true } : {}),
           ...(plan.colonnes ? { planche_colonnes: true } : {}),
-          photos: habillerPhotos(plan, placerPhotos(gabarit, plan.photos), rangPage),
-          // Le post-it « Infos » d'une page de photos (Hugo, 13/10/2026).
+          photos: habillerPhotos(plan, photosRendues(plan, gabarit), rangPage),
+          // Le fun fact d'une page de photos prend l'emplacement d'une photo
+          // (Hugo, 14/10/2026) : `case_fun_fact` en dit le rang.
+          ...(plan.caseEncart ? { case_fun_fact: plan.caseEncart.c } : {}),
           fun_facts: plan.encart ? [plan.encart.texte] : [],
           ...(plan.encart ? { fun_facts_title: plan.encart.titre, ai_note: "Fun fact rédigé par IA" } : {}),
           sticker_groups: [],
@@ -1898,12 +2128,12 @@
       const jour = {
         ...drapeaux(plan.layout),
         body_html: paragraphesEnHtml(plan.texte),
-        photos: habillerPhotos(plan, placerPhotos(plan.layout, plan.photos), rangPage),
+        photos: habillerPhotos(plan, photosRendues(plan, plan.layout), rangPage),
+        ...(plan.caseEncart ? { case_fun_fact: plan.caseEncart.c } : {}),
         fun_facts: plan.encart ? [plan.encart.texte] : [],
         // L'encart est écrit par le modèle : la page le dit, en petit
         // (LAYOUT_KB § « La mention généré par IA »).
         ...(plan.encart ? { fun_facts_title: plan.encart.titre, ai_note: "Fun fact rédigé par IA" } : {}),
-        ...(plan.encartSurBande ? { postit_bande: true } : {}),
         sticker_groups: [],
         ...decors,
         ...(plan.taille ? { taille_texte: plan.taille } : {}),

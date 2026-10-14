@@ -857,6 +857,22 @@ li { margin: 0; }
 .mb-sticker--bottom-left { bottom: calc(34pt + var(--mb-bleed)); left: calc(24pt + var(--mb-bleed)); width: 100pt; }
 .mb-sticker--bottom-right { bottom: calc(30pt + var(--mb-bleed)); right: calc(22pt + var(--mb-bleed)); width: 100pt; }
 .mb-sticker--center { bottom: calc(120pt + var(--mb-bleed)); left: 50%; width: 110pt; transform: translateX(-50%); }
+/* Sur le coin extérieur d'une bande de photos ou d'une planche, à cheval sur
+   la dernière photo et la marge (Hugo, 14/10/2026). */
+.mb-sticker--band-left { bottom: calc(12pt + var(--mb-bleed)); left: calc(10pt + var(--mb-bleed)); width: 78pt; }
+.mb-sticker--band-right { bottom: calc(12pt + var(--mb-bleed)); right: calc(10pt + var(--mb-bleed)); width: 78pt; }
+.mb-sticker--band-right img { transform: rotate(5deg); }
+/* En haut de la bande, dans la bande : le sticker suit les photos, et le
+   récit au-dessus reste à sa place. */
+.mb-sticker--band-top-left { top: 4pt; left: -12pt; width: 70pt; }
+.mb-sticker--band-top-right { top: 4pt; right: -12pt; width: 70pt; }
+.mb-sticker--band-top-right img { transform: rotate(6deg); }
+/* À droite du titre de l'étape, à cheval sur le haut du bloc de récit : il
+   n'y couvre que la ligne du titre et la ligne vide qui la suit — le
+   composeur ne l'y pose que sous un titre court. */
+/* `.mb-note > *` remet ses enfants dans le flux : le sticker en sort. */
+.mb-note > .mb-sticker--title { position: absolute; z-index: 3; top: -24pt; right: -4pt; width: 60pt; }
+.mb-sticker--title img { transform: rotate(6deg); }
 /* Jamais dans le pli : côté reliure, le sticker s'écarte de la marge
    intérieure (`page--gauche` a le pli à droite, `page--droite` à gauche). */
 .page--droite .mb-sticker--bottom-left,
@@ -1529,36 +1545,19 @@ li { margin: 0; }
   z-index: 4;
 }
 
-/* Le post-it posé sur les photos (Hugo, 13/10/2026) : sur une planche, une
-   page d'album ou la bande de photos d'une page de récit. Il mord sur une
-   photo, côté extérieur de la page — jamais dans le pli —, sans couvrir plus
-   d'un cinquième d'une photo de planche. */
-.mb-card--postit-photos {
-  position: absolute;
-  z-index: 5;
-  width: 128pt;
-  padding: 8pt;
-  transform: rotate(-4deg);
+/* Le fun fact à la place d'une photo (Hugo, 14/10/2026) : l'emplacement
+   (`.mb-photo--…`) garde sa place et son inclinaison dans le gabarit, le
+   post-it « Infos » s'y pose à sa taille, centré. Pas de contour dessiné ni
+   d'image : ce n'est pas une photo, et aucune photo n'est dessous. */
+.mb-photo--fun-fact {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.mb-card--postit-photos .mb-card__body p { font-size: 8.6pt; }
-/* Planche et page d'album : sur la feuille, calé sur la page finie. */
-.mb-card--postit-planche,
-.mb-card--postit-album {
-  bottom: calc(var(--mb-bleed) + 14pt);
-  right: calc(var(--mb-bleed) + 12pt);
+.mb-card--case {
+  width: auto;
+  max-width: min(100%, 150pt);
+  transform: rotate(-3deg);
 }
-.page--gauche .mb-card--postit-planche,
-.page--gauche .mb-card--postit-album {
-  right: auto;
-  left: calc(var(--mb-bleed) + 12pt);
-  transform: rotate(4deg);
-}
-/* La page d'album a du blanc : le post-it s'y pose, en bas, à l'opposé du
-   sticker. */
-.mb-card--postit-album { bottom: calc(var(--mb-bleed) + 40pt); }
-/* Page de récit : sur la bande de photos, en bas, côté extérieur, à cheval
-   sur la marge. `.page__content` porte les marges en padding : l'origine est
-   le bord de la page finie. */
-.mb-card--postit-bande { bottom: 22pt; right: calc(var(--mb-margin-ext) - 14pt); }
-.page--gauche .mb-card--postit-bande { right: auto; left: calc(var(--mb-margin-ext) - 14pt); transform: rotate(4deg); }
+.mb-card--case .mb-card__body p { font-size: 9pt; }
 </style>

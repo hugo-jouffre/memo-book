@@ -428,6 +428,7 @@ async function image(req, res) {
         base: process.env.OPENAI_API_BASE || "https://api.openai.com/v1",
         prompt: String(corps.prompt || ""),
         taille: corps.taille,
+        ...(corps.qualite ? { qualite: String(corps.qualite) } : {}),
         transparent: Boolean(corps.transparent),
         references: Array.isArray(corps.references) ? corps.references : [],
       }),

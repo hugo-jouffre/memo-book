@@ -267,7 +267,8 @@ const etat = {
    * Les réglages de personnalisation de l'app, avec ses défauts
    * (`reglagesDuCarnet`) : `funFacts` (« Insérer des Fun facts »),
    * `ratioPhotos` (ratio photo / texte, en %), `reglure` (« Pointillés »),
-   * `decorations` (« Décorations & stickers », par paragraphe ou par image),
+   * `decorations` (« Décorations & stickers » : le nombre de stickers par
+   * étape, 2 par défaut — Hugo, 14/10/2026),
    * `zonesLibres` (« Zones libres » : trois pages réglées en fin de carnet).
    */
   carnet: {
@@ -2022,13 +2023,12 @@ async function logoEnPng(couleur = null) {
   return etat.logoPng;
 }
 
-async function svgEnPng(svg) {
+async function svgEnPng(svg, largeur = 1200) {
   const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
   try {
     const img = new Image();
     img.src = url;
     await img.decode();
-    const largeur = 1200;
     const hauteur = Math.round((largeur * (img.naturalHeight || 1)) / (img.naturalWidth || 1));
     const toile = document.createElement("canvas");
     toile.width = largeur;
@@ -2051,6 +2051,9 @@ function voyagePourCouverture() {
     voyageurs: listeVoyageurs(),
     debut: premiere,
     fin: derniere,
+    // Le code ISO du pays où le voyage séjourne le plus : le titre d'Aquarelle
+    // et les légendes des timbres du Travel book en tirent son nom.
+    pays: paysDuVoyage(),
     // Les étapes : les paragraphes par défaut du style Aquarelle en partent.
     etapes: etat.etapes.map((e) => ({ titre: e.titre, lieu: e.lieu })),
   };
@@ -2145,7 +2148,20 @@ function maquetteCouverture() {
     chiffres: chiffresQuatrieme(),
     carte: lieux.length && detail ? { lieux, detail } : null,
     logo: logoDuStyle(style),
+    motif: etat.motifPng ? { fichier: "Liens/motif-memobook-beige.png", src: etat.motifPng.data, px: etat.motifPng.px } : null,
   });
+}
+
+/**
+ * Le motif M de MemoBook, en beige foncé, tourné d'un quart de tour comme sur
+ * la quatrième d'Aquarelle (« MemoBook — Product », `3792:5773`), en PNG haute
+ * définition pour InDesign. La maquette lui donne ses 20 %.
+ */
+async function motifEnPng() {
+  if (etat.motifPng) return etat.motifPng;
+  const svg = (await (await fetch("./motif-memobook.svg")).text()).replace(/#28654b/gi, Couverture.COULEURS.beigeFonce.hex);
+  etat.motifPng = await svgEnPng(svg, 2400);
+  return etat.motifPng;
 }
 
 /**
@@ -2225,18 +2241,78 @@ async function appelImage(corps) {
   return appelJson("/api/image", corps);
 }
 
-/** Une image (data URL ou adresse) en PNG data URL de `max` px au plus côté, avec ses dimensions. */
-async function imageEnPng(source, max = 1024) {
+/**
+ * Une image (data URL ou adresse) en PNG data URL de `max` px au plus côté,
+ * avec ses dimensions. `rogner` : la part à garder, `[x0, y0, x1, y1]` en
+ * fractions de l'image.
+ */
+async function imageEnPng(source, max = 1024, rogner = null) {
   const img = new Image();
   img.crossOrigin = "anonymous";
   img.src = source;
   await img.decode();
-  const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+  const [x0, y0, x1, y1] = rogner || [0, 0, 1, 1];
+  const sl = img.naturalWidth * (x1 - x0);
+  const sh = img.naturalHeight * (y1 - y0);
+  const k = Math.min(1, max / Math.max(sl, sh));
   const toile = document.createElement("canvas");
-  toile.width = Math.max(1, Math.round(img.naturalWidth * k));
-  toile.height = Math.max(1, Math.round(img.naturalHeight * k));
-  toile.getContext("2d").drawImage(img, 0, 0, toile.width, toile.height);
+  toile.width = Math.max(1, Math.round(sl * k));
+  toile.height = Math.max(1, Math.round(sh * k));
+  toile.getContext("2d").drawImage(img, img.naturalWidth * x0, img.naturalHeight * y0, sl, sh, 0, 0, toile.width, toile.height);
   return { data: toile.toDataURL("image/png"), px: [toile.width, toile.height] };
+}
+
+/**
+ * Retire d'une illustration générée le fond que le modèle a peint autour du
+ * sujet (`CouvertureStyles.detourerFond`) : sur Assouline, il laissait un
+ * cadre fin autour de l'illustration. Renvoie la nouvelle data URL.
+ */
+async function detourerIllustration(source) {
+  const img = new Image();
+  img.src = source;
+  await img.decode();
+  const toile = document.createElement("canvas");
+  toile.width = img.naturalWidth;
+  toile.height = img.naturalHeight;
+  const ctx = toile.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(img, 0, 0);
+  const pixels = ctx.getImageData(0, 0, toile.width, toile.height);
+  const part = CouvertureStyles.detourerFond(pixels.data, toile.width, toile.height);
+  if (!part) return source;
+  ctx.putImageData(pixels, 0, 0);
+  debugCarnet(`fond retiré : ${Math.round(part * 100)} % de l'illustration`);
+  return toile.toDataURL("image/png");
+}
+
+/**
+ * Le collage des six timbres du Travel book (`CouvertureStyles.svgTimbres`) :
+ * les illustrations générées, mises en timbres avec leurs légendes, en PNG
+ * pour la maquette et le dossier InDesign. Refait quand une illustration ou
+ * une légende change.
+ */
+async function composerTimbres() {
+  const plan = CouvertureStyles.planTimbres(voyagePourCouverture());
+  const gardees = etat.couverture.images["travel-book"] || {};
+  if (!plan.some((t) => gardees[t.cle])) return null;
+  const signature = JSON.stringify(plan.map((t) => [t.cle, t.legende, gardees[t.cle]?.data?.length || 0]));
+  if (etat.timbresComposes?.signature === signature) return etat.timbresComposes;
+  etat.policeTimbres ??= await (async () => {
+    const blob = await (await fetch("./fonts/couvertures/lilita-one-latin.woff2")).blob();
+    const data = await new Promise((resolu, rejete) => {
+      const lecteur = new FileReader();
+      lecteur.onload = () => resolu(lecteur.result);
+      lecteur.onerror = () => rejete(lecteur.error);
+      lecteur.readAsDataURL(blob);
+    });
+    return `@font-face { font-family: "Lilita One"; src: url("${data}") format("woff2"); }`;
+  })();
+  const zone = CouvertureStyles.zoneDesTimbres(ficheCouverture());
+  const illustrations = Object.fromEntries(plan.filter((t) => gardees[t.cle]).map((t) => [t.cle, { src: gardees[t.cle].data }]));
+  const svg = CouvertureStyles.svgTimbres(plan, illustrations, { zone, police: etat.policeTimbres, pxParMm: 1 });
+  // 24 px par mm : 600 dpi pour les légendes.
+  const png = await svgEnPng(svg, Math.round(zone.l * 24));
+  etat.timbresComposes = { signature, ...png };
+  return etat.timbresComposes;
 }
 
 /**
@@ -2337,7 +2413,13 @@ async function silhouetteDuPays() {
 
 /** Les illustrations d'un style, telles que la maquette les lit. */
 function imagesCouverture(style) {
-  const gardees = etat.couverture.images[style] || {};
+  const gardees = { ...(etat.couverture.images[style] || {}) };
+  if (style === "travel-book") {
+    // L'ancien collage généré d'un seul tenant (des mots qui n'existent pas)
+    // cède la place aux timbres composés.
+    delete gardees.timbres;
+    if (etat.timbresComposes) gardees.timbres = etat.timbresComposes;
+  }
   return Object.fromEntries(
     Object.entries(gardees).map(([cle, img]) => [cle, { fichier: `Liens/${style}-${cle}.png`, src: img.data, px: img.px, dominante: img.dominante }]),
   );
@@ -2369,23 +2451,29 @@ async function genererIllustrations(style, cle = null) {
     etat.couverture.statut = `Génération des illustrations… ${faites + 1} / ${aFaire.length} (une minute environ chacune)`;
     rendreCouverture();
     try {
-      if (!(image.reference in references)) {
-        references[image.reference] =
-          image.reference === "silhouette" ? await silhouetteDuPays() : await imageEnPng(await enDataUrl(image.reference));
+      const cleReference = `${image.reference}|${image.rognerReference || ""}`;
+      if (image.reference && !(cleReference in references)) {
+        references[cleReference] =
+          image.reference === "silhouette"
+            ? await silhouetteDuPays()
+            : await imageEnPng(await enDataUrl(image.reference), 1024, image.rognerReference || null);
       }
-      const reference = references[image.reference];
-      const { data } = await appelImage({
+      const reference = image.reference ? references[cleReference] : null;
+      const silhouetteManquante = image.reference === "silhouette" && !reference;
+      const brute = await appelImage({
         cleOpenai: etat.reglages.cleOpenai,
         // Sans contours de carte pour le pays, le modèle dessine la silhouette lui-même.
-        prompt: reference ? image.prompt : `${image.prompt} (Aucune image fournie : dessine toi-même la silhouette du pays.)`,
+        prompt: silhouetteManquante ? `${image.prompt} (Aucune image fournie : dessine toi-même la silhouette du pays.)` : image.prompt,
         taille: image.taille,
+        qualite: image.qualite,
         transparent: image.transparent,
         references: reference ? [{ data: reference.data, nom: `${image.reference === "silhouette" ? "silhouette" : "reference"}.png` }] : [],
       });
+      const data = image.detourer ? await detourerIllustration(brute.data) : brute.data;
       const { dominante, px } = await couleursDe(data);
       etat.couverture.images = {
         ...etat.couverture.images,
-        [style]: { ...(etat.couverture.images[style] || {}), [image.cle]: { data, px, dominante } },
+        [style]: { ...(etat.couverture.images[style] || {}), [image.cle]: { data, px, dominante, ...(image.detourer ? { detouree: true } : {}) } },
       };
       faites += 1;
     } catch (erreur) {
@@ -2396,9 +2484,32 @@ async function genererIllustrations(style, cle = null) {
       return;
     }
   }
+  if (style === "travel-book") await composerTimbres().catch((erreur) => debugCarnet("timbres impossibles à composer", erreur));
   etat.couverture.statut = "";
   apresChangement();
   rendreCouverture();
+}
+
+/**
+ * Les illustrations déjà générées qui gardent leur fond peint (avant le
+ * détourage) : on le leur retire une fois, sans rien régénérer.
+ */
+async function detourerIllustrationsGardees(style) {
+  const aDetourer = CouvertureStyles.imagesDuStyle(style, voyagePourCouverture(), textesDuStyle(style)).filter((i) => i.detourer);
+  const gardees = etat.couverture.images[style] || {};
+  let change = false;
+  for (const image of aDetourer) {
+    const img = gardees[image.cle];
+    if (!img || img.detouree) continue;
+    const data = await detourerIllustration(img.data);
+    const { dominante, px } = await couleursDe(data);
+    gardees[image.cle] = { data, px, dominante, detouree: true };
+    change = true;
+  }
+  if (change) {
+    etat.couverture.images = { ...etat.couverture.images, [style]: { ...gardees } };
+    apresChangement();
+  }
 }
 
 /**
@@ -2469,6 +2580,11 @@ async function preparerStyle(style) {
   if (couleur) await logoEnPng(couleur).catch((erreur) => debugCarnet("logo indisponible", erreur));
   if (style === "drawing" && !etat.dessinsCouverture) await preparerDessinsCouverture().catch((erreur) => debugCarnet("dessins de couverture indisponibles", erreur));
   if (style === "photo-drawing") await preparerPhotoDessin();
+  if (style === "watercolor") await motifEnPng().catch((erreur) => debugCarnet("motif M indisponible", erreur));
+  if (["assouline", "watercolor", "travel-book"].includes(style)) {
+    await detourerIllustrationsGardees(style).catch((erreur) => debugCarnet("détourage impossible", erreur));
+  }
+  if (style === "travel-book") await composerTimbres().catch((erreur) => debugCarnet("timbres impossibles à composer", erreur));
 }
 
 /** Ce qu'il faut dire avant d'envoyer la couverture. */
@@ -2492,6 +2608,10 @@ function alertesCouverture() {
   }
   if (!Voyage.lieuxDeSejour(etapesPourMiseEnPage(() => "")).length) {
     alertes.push("Aucun lieu situé : la carte de la quatrième restera vide. Analyse les étapes (clé de modèle dans les réglages).");
+  }
+  if (etat.couverture.style === "watercolor") {
+    if (!textesDuStyle("watercolor").pays) alertes.push("Aquarelle : aucun pays pour le titre de la première. Écris-le dans les textes du style.");
+    alertes.push(...CouvertureStyles.controleAquarelle(maquetteCouverture()).map((f) => `Aquarelle : ${f[0].toLowerCase()}${f.slice(1)}`));
   }
   return alertes;
 }
@@ -2782,8 +2902,8 @@ function rendreCouverture() {
       h(
         "p",
         { class: "aide" },
-        "Générées par OpenAI (gpt-image-1, clé OpenAI des réglages) d'après les récits et les textes ci-dessus, avec la couverture de référence du style en entrée. " +
-          `Coût estimé : ${dollars(CouvertureStyles.coutImages(prevues))} pour les ${prevues.length}, ${dollars(0.17)} à ${dollars(0.25)} par image régénérée. ` +
+        "Générées par OpenAI (gpt-image-1, clé OpenAI des réglages) d'après les récits et les textes ci-dessus, avec la couverture de référence du style en entrée quand elle sert. " +
+          `Coût estimé : ${dollars(CouvertureStyles.coutImages(prevues))} pour les ${prevues.length}, ${dollars(0.04)} à ${dollars(0.25)} par image régénérée. ` +
           "Elles sont gardées dans l'avancement.",
       ),
       h(
@@ -2816,8 +2936,16 @@ function rendreCouverture() {
       verso: null,
     },
     assouline: { recto: "Pas de photo sur la première : l'illustration générée, et le fond choisi d'après sa couleur.", verso: null },
-    watercolor: { recto: "Pas de photo : une aquarelle générée sur la première, trois vignettes sur la quatrième.", verso: null },
-    "travel-book": { recto: "Pas de photo sur la première : timbres et tampon du pays générés.", verso: "La photo de la quatrième, dans le cadre vert déchiré." },
+    watercolor: {
+      recto: "Pas de photo : une aquarelle générée d'après le pays, sous son nom en Poppins Black ; trois vignettes sur la quatrième, sur le motif M.",
+      verso: null,
+    },
+    "travel-book": {
+      recto:
+        "Pas de photo sur la première : six timbres — six illustrations générées sans un mot, chacune dans son ton, mises en timbres avec " +
+        "les lieux du voyage pour légendes — et le tampon du pays.",
+      verso: "La photo de la quatrième, dans le cadre vert déchiré.",
+    },
     "photo-drawing": {
       recto:
         "Une photo où l'on voit les voyageurs (ou ce qui domine la photo) : des traits au feutre épousent le sujet de cette photo-là, " +
@@ -4239,7 +4367,7 @@ function resumePersonnalisation(c) {
     `${c.ratioPhotos ?? 50} % de photos`,
     c.funFacts !== false ? "fun facts" : "sans fun facts",
     c.reglure !== false ? "pointillés" : "sans pointillés",
-    (c.decorations ?? 2) ? `${c.decorations ?? 2} décor(s)` : "sans décor",
+    (c.decorations ?? 2) ? `${c.decorations ?? 2} sticker(s) par étape` : "sans décor",
     c.zonesLibres !== false ? "zones libres" : null,
   ]
     .filter(Boolean)
@@ -4301,7 +4429,7 @@ function panneauPersonnalisation() {
     ligne(
       "Fun facts",
       h("input", { type: "checkbox", checked: c.funFacts !== false, onchange: poser("funFacts") }),
-      "Un encart tiré du récit, à peu près une page sur trois — dans la page, ou en post-it sur les photos —, et seulement quand il en vaut la peine.",
+      "Un encart tiré du récit, à peu près une page sur trois — dans la page, ou à la place d'une photo quand la page en a un emplacement libre —, et seulement quand il en vaut la peine.",
     ),
     ligne(
       "Pointillés",
@@ -4310,8 +4438,8 @@ function panneauPersonnalisation() {
     ),
     ligne(
       "Décorations & stickers",
-      h("select", { onchange: poser("decorations", Number) }, options([0, 1, 2, 3, 4], c.decorations ?? 2, (v) => (v ? `${v} par paragraphe` : "Aucune"))),
-      "À 0, ni tracé pointillé ni sticker ; le scotch des photos reste. Les stickers viennent de la bibliothèque dessinée.",
+      h("select", { onchange: poser("decorations", Number) }, options([0, 1, 2, 3, 4], c.decorations ?? 2, (v) => (v ? `${v} par étape` : "Aucune"))),
+      "Le nombre de stickers de chaque étape, répartis sur ses pages, jamais sur le récit. À 0, ni tracé pointillé ni sticker ; le scotch des photos reste. Les stickers viennent de la bibliothèque dessinée.",
     ),
     ligne(
       "Zones libres",

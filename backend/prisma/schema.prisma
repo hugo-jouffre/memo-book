@@ -766,8 +766,8 @@ model Memo {
   /// voyage tenus dans la fiche de cohérence.
   crosswordEnabled Boolean @default(true)
 
-  /// Décorations et stickers par paragraphe ou par image, de 0 à 4. **Le scotch
-  /// des photos compte dans le quota.** À 0, aucun décor.
+  /// Le nombre de stickers par étape du carnet, de 0 à 4 (Hugo, 14/10/2026).
+  /// À 0, ni sticker ni tracé pointillé ; le scotch des photos n'en dépend pas.
   decorationQuota Int @default(2)
 
   /// Les quatre axes typographiques, indépendants. Des chaînes et non une

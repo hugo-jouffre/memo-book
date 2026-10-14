@@ -482,7 +482,10 @@
    * - `{ type: "rect", x, y, l, h, fond, trait, rayon }`
    * - `{ type: "image", x, y, l, h, fichier, src, px: [l, h], focus: [fx, fy] }`
    * - `{ type: "texte", x, y, l, h, texte, police, style, corps, couleur,
-   *     alignement, vertical, rotation, ombre, approche }`
+   *     alignement, vertical, rotation, ombre, approche, ligneDeBase }` —
+   *     `ligneDeBase` (mm sous le haut du cadre) place la première ligne de
+   *     base au lieu de `vertical`, quand la maquette connaît le dessin de la
+   *     police (le titre d'Aquarelle, accents compris)
    * - `{ type: "chemin", points, ferme, trait, fond, courbe }`
    * - `{ type: "cercle", cx, cy, r, fond, trait }`
    *
@@ -965,9 +968,10 @@
     const interligne = corps * 1.2;
     const hauteurBloc = interligne * (lignes.length - 1) + corps * 0.72;
     const debut =
-      e.vertical === "bas" ? e.y + e.h - hauteurBloc + corps * 0.72 - corps * 0.2
-        : e.vertical === "centre" ? e.y + (e.h - hauteurBloc) / 2 + corps * 0.72
-          : e.y + corps * 0.95;
+      e.ligneDeBase != null ? e.y + e.ligneDeBase
+        : e.vertical === "bas" ? e.y + e.h - hauteurBloc + corps * 0.72 - corps * 0.2
+          : e.vertical === "centre" ? e.y + (e.h - hauteurBloc) / 2 + corps * 0.72
+            : e.y + corps * 0.95;
     return { lignes, interligne, debut };
   }
 
@@ -1476,6 +1480,12 @@ var POLICES = ${litteral(polices)};
     r.justification = alignement(e);
     if (e.approche) r.tracking = e.approche;
     apprete(t, e);
+    // Une ligne de base imposee : la premiere ligne s'y pose, cadre cale en haut.
+    if (e.ligneDeBase != null) {
+      t.textFramePreferences.verticalJustification = VerticalJustification.TOP_ALIGN;
+      t.textFramePreferences.firstBaselineOffset = FirstBaseline.FIXED_HEIGHT;
+      t.textFramePreferences.minimumFirstBaselineOffset = e.ligneDeBase + "mm";
+    }
     if (e.ombre) {
       var ombre = t.transparencySettings.dropShadowSettings;
       ombre.mode = ShadowMode.DROP;

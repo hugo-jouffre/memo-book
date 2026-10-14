@@ -177,33 +177,46 @@ describe("gabarit — retouches du 13/10/2026", () => {
   });
 });
 
-describe("gabarit — fun facts sur les photos (13/10/2026)", () => {
+describe("gabarit — le fun fact à la place d'une photo (14/10/2026)", () => {
   const corps = (days: Record<string, unknown>[]) => {
     const rendu = renderTemplateToHtml({ payload: { book_title: "Carnet", sans_couvertures: true, pages_libres_avant: 0, days }, profile: "print" });
     return rendu.slice(rendu.indexOf("<body"));
   };
   const photos = (n: number) => Array.from({ length: n }, (_, i) => `https://exemple.test/${i}.jpg`);
   const fait = { fun_facts: ["Un fait sûr, tiré du récit."], fun_facts_title: "Infos" };
-
-  it("pose le post-it sur une planche, une page d'album et une planche en colonnes", () => {
-    expect(corps([{ title: "", body_html: "", layout_photo_page: true, photos: photos(4), ...fait }])).toContain("mb-card--postit-planche");
-    expect(corps([{ title: "", body_html: "", layout_photo_page: true, photos: photos(2), ...fait }])).toContain("mb-card--postit-album");
-    expect(
-      corps([{ title: "", body_html: "", layout_photo_page: true, planche_colonnes: true, photos: photos(5), ...fait }]),
-    ).toContain("mb-card--postit-planche");
-    // Jamais sur la pleine page.
-    expect(corps([{ title: "", body_html: "", layout_photo_page: true, pleine_page: true, photos: photos(1), ...fait }])).not.toContain(
-      "mb-card--postit",
+  /** Les emplacements de la page, dans l'ordre : l'URL de la photo, ou « fun fact ». */
+  const emplacements = (html: string) =>
+    [...html.matchAll(/<div class="mb-photo mb-photo--([^"]*)"[^>]*>(?:<span[^]*?<\/span>)?(?:<img src="([^"]+)")?/g)].map((m) =>
+      m[1]!.includes("mb-photo--fun-fact") ? "fun fact" : (m[2] ?? "?"),
     );
+
+  it("donne à la planche de k photos le gabarit de k + 1, le fun fact dans l'emplacement laissé libre", () => {
+    // Trois photos et le fun fact au deuxième rang : la planche de quatre.
+    const planche = corps([{ title: "", body_html: "", layout_photo_page: true, photos: photos(3), case_fun_fact: 1, ...fait }]);
+    expect(emplacements(planche)).toEqual(["https://exemple.test/0.jpg", "fun fact", "https://exemple.test/1.jpg", "https://exemple.test/2.jpg"]);
+    expect((planche.match(/<div class="mb-photowall__row/g) ?? []).length).toBe(2);
+    // Une photo seule : la page d'album à deux emplacements.
+    const album = corps([{ title: "", body_html: "", layout_photo_page: true, photos: photos(1), case_fun_fact: 1, ...fait }]);
+    expect(album).toContain("mb-photowall--2");
+    expect(emplacements(album)).toEqual(["https://exemple.test/0.jpg", "fun fact"]);
   });
 
-  it("pose le post-it sur la bande d'une page de récit, sans rétrécir la colonne", () => {
-    const bande = corps([{ ...jour("01"), layout_story_opener: false, layout_split_left: true, photos: photos(2), ...fait, postit_bande: true }]);
-    expect(bande).toContain("mb-card--postit-bande");
-    expect(bande).not.toContain("mb-split__aside");
-    // Sans `postit_bande`, la carte reste dans sa colonne, comme avant.
+  it("pose le fun fact dans le troisième emplacement d'un collage, jamais par-dessus une photo", () => {
+    const recit = corps([{ ...jour("01"), layout_story_opener: false, layout_collage: true, photos: photos(2), case_fun_fact: 2, ...fait }]);
+    expect(recit).toContain("mb-gallery--three");
+    expect(emplacements(recit)).toEqual(["https://exemple.test/0.jpg", "https://exemple.test/1.jpg", "fun fact"]);
+    // Plus de post-it posé sur les photos.
+    expect(recit).not.toContain("mb-card--postit-");
+  });
+
+  it("garde la planche telle quelle sans `case_fun_fact` : le fun fact n'y a pas de place", () => {
+    const pleine = corps([{ title: "", body_html: "", layout_photo_page: true, photos: photos(4), ...fait }]);
+    expect(emplacements(pleine)).toHaveLength(4);
+    expect(pleine).not.toContain("mb-photo--fun-fact");
+    expect(pleine).not.toContain("Un fait sûr");
+    // Sur une page de récit, la carte reste dans sa colonne, comme avant.
     const colonne = corps([{ ...jour("01"), layout_story_opener: false, layout_split_left: true, photos: photos(2), ...fait }]);
     expect(colonne).toContain("mb-split__aside");
-    expect(colonne).not.toContain("mb-card--postit-bande");
+    expect(colonne).not.toContain("mb-photo--fun-fact");
   });
 });

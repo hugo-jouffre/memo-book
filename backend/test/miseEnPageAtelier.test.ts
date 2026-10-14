@@ -375,28 +375,93 @@ describe("mise en page de l'atelier", () => {
       expect(jours.flatMap(objets).find((x) => x["label"])?.["label"]).toBe("Nos rizières");
     });
 
-    it("pose les stickers d'après le récit, deux par double page au plus, aucun à 0", () => {
+    it("pose autant de stickers par étape que le réglage, de 1 à 4, aucun à 0 (14/10/2026)", () => {
       const bibliotheque = [
-        { fichier: "jeep.png", url: "https://exemple.test/jeep.png", mots: ["jeep"] },
-        { fichier: "ferry.png", url: "https://exemple.test/ferry.png", mots: ["ferry"] },
-        { fichier: "chameau.png", url: "https://exemple.test/chameau.png", mots: ["chameau"] },
+        { fichier: "jeep.png", famille: "jeep", url: "https://exemple.test/jeep.png", mots: ["jeep"] },
+        { fichier: "ferry.png", famille: "ferry", url: "https://exemple.test/ferry.png", mots: ["ferry"] },
+        { fichier: "chameau.png", famille: "chameau", url: "https://exemple.test/chameau.png", mots: ["chameau"] },
+        // Les familles de voyage, qui complètent quand le récit n'en appelle
+        // pas assez, en trois variantes chacune.
+        ...["appareil-photo", "carte-postale", "boussole", "globe"].flatMap((famille) =>
+          [1, 2, 3].map((v) => ({ fichier: `${famille}-${v}.png`, famille, url: `https://exemple.test/${famille}-${v}.png`, mots: [famille] })),
+        ),
       ];
-      // Des étapes courtes : leurs pages de récit et d'album ont de la place.
-      const courtes = (decorations: number) =>
+      const voyage = (decorations: number) =>
         M.composerJours(
           ["Paros", "Naxos", "Ios", "Mykonos"].map((lieu) =>
-            etape(paragrapheDe(`le jeepney et le ferry de ${lieu}`, 2), [photo(`${lieu}-a`), photo(`${lieu}-b`)], null, lieu),
+            etape(
+              `${paragrapheDe(`la jeep et le ferry de ${lieu}`, 2)} ${paragrapheDe(`le port de ${lieu}`, 3)}`,
+              ["a", "b", "c", "d", "e"].map((x) => photo(`${lieu}-${x}`)),
+              null,
+              lieu,
+            ),
           ),
           { stickers: bibliotheque, decorations },
         );
-      const jours = courtes(4);
+      /** Les pages de chaque étape : de sa page à bandeau à la suivante. */
+      const pagesParEtape = (jours: Jour[]) =>
+        jours.reduce<Jour[][]>((t, j) => (j["day_intro"] ? [...t, [j]] : [...t.slice(0, -1), [...(t.at(-1) ?? []), j]]), []);
+      const stickersDe = (j: Jour) => (j["stickers"] as { url: string }[] | undefined) ?? [];
+      const parEtape = (jours: Jour[]) => pagesParEtape(jours).map((pages) => pages.flatMap(stickersDe).length);
+      const totaux = [0, 1, 2, 3, 4].map((d) => parEtape(voyage(d)).reduce((a, b) => a + b, 0));
+      // Chaque cran en pose davantage : « 1 » et « 4 » ne donnent plus le même carnet.
+      expect(totaux[0]).toBe(0);
+      for (let d = 1; d <= 4; d += 1) expect(totaux[d]!, `réglage ${d} : ${totaux.join(", ")}`).toBeGreaterThan(totaux[d - 1]!);
+      // Chaque étape a son compte : les places ne manquent pas.
+      for (let d = 1; d <= 4; d += 1) expect(parEtape(voyage(d)), `réglage ${d}`).toEqual([d, d, d, d]);
+      // Deux stickers sur une étape de plusieurs pages ne se serrent pas sur la même.
+      for (const [e, pages] of pagesParEtape(voyage(2)).entries()) {
+        expect(pages.filter((j) => stickersDe(j).length).length, `étape ${e}`).toBe(Math.min(2, pages.length));
+      }
+      // Jamais deux fois la même famille dans une étape.
+      for (const pages of pagesParEtape(voyage(4))) {
+        const familles = pages.flatMap(stickersDe).map((s) => s.url.replace(/-\d+\.png$/, ""));
+        expect(new Set(familles).size).toBe(familles.length);
+      }
+
+      const jours = voyage(4);
       const poses = jours.flatMap((j) => (j["stickers"] as { url: string }[] | undefined) ?? []);
-      expect(poses.length).toBeGreaterThan(0);
+      // Le récit ne parle jamais de chameau.
       expect(poses.map((s) => s.url)).not.toContain("https://exemple.test/chameau.png");
-      // Jamais deux fois le même.
-      expect(new Set(poses.map((s) => s.url)).size).toBe(poses.length);
-      for (const d of doubles(jours)) expect(d.flatMap((j) => (j["stickers"] as unknown[]) ?? []).length).toBeLessThanOrEqual(2);
-      expect(courtes(0).some((j) => j["stickers"])).toBe(false);
+      // Le récit d'abord : la jeep et le ferry sont posés.
+      expect(poses.map((s) => s.url)).toContain("https://exemple.test/jeep.png");
+      expect(poses.map((s) => s.url)).toContain("https://exemple.test/ferry.png");
+      for (const [k, d] of doubles(jours).entries()) {
+        const urls = d.flatMap((j) => ((j["stickers"] as { url: string }[] | undefined) ?? []).map((s) => s.url));
+        // Jamais deux fois le même sur une double page…
+        expect(new Set(urls).size).toBe(urls.length);
+        // … ni d'une double page à la suivante.
+        const suivante = doubles(jours)[k + 1];
+        const urlsSuivantes = (suivante ?? []).flatMap((j) => ((j["stickers"] as { url: string }[] | undefined) ?? []).map((s) => s.url));
+        for (const u of urls) expect(urlsSuivantes).not.toContain(u);
+        // Deux par page au plus.
+        for (const j of d) expect(((j["stickers"] as unknown[]) ?? []).length).toBeLessThanOrEqual(2);
+      }
+    });
+
+    it("ne pose jamais un sticker par-dessus la mention « Fun fact rédigé par IA »", () => {
+      const bibliotheque = ["appareil-photo", "carte-postale", "boussole", "globe"].map((famille) => ({
+        fichier: `${famille}.png`,
+        famille,
+        url: `https://exemple.test/${famille}.png`,
+        mots: [famille],
+      }));
+      const jours = M.composerJours(
+        ["Paros", "Naxos", "Ios"].map((lieu, n) =>
+          etape(
+            paragrapheDe(`le port de ${lieu}`, 4),
+            ["a", "b", "c", "d"].map((x) => photo(`${lieu}-${x}`)),
+            { photos: [], funFacts: [{ texte: `Fait ${n}.`, registre: "histoire", paragraphe: 0, pertinence: 9 }] },
+            lieu,
+          ),
+        ),
+        { stickers: bibliotheque, decorations: 4, funFacts: true },
+      );
+      const avecMention = jours.filter((j) => j["ai_note"]);
+      expect(avecMention.length).toBeGreaterThan(0);
+      for (const j of avecMention) {
+        for (const s of (j["stickers"] as { place: string }[] | undefined) ?? []) expect(s.place).not.toMatch(/^(band|bottom)-right$/);
+      }
     });
 
     describe("bibliothèque de stickers (Notion, 12/10/2026)", () => {
@@ -413,7 +478,7 @@ describe("mise en page de l'atelier", () => {
           { stickers: bibliotheque, decorations: 4 },
         );
 
-      it("pose le sticker dont le récit parle, une famille une fois, jamais un personnage", () => {
+      it("pose le sticker dont le récit parle, une famille une fois par double page, jamais un personnage", () => {
         const jours = voyage([
           paragrapheDe("la ville en scooter", 2),
           paragrapheDe("l'aéroport avant notre avion", 2),
@@ -424,13 +489,25 @@ describe("mise en page de l'atelier", () => {
         expect(familles).toContain("scooter");
         expect(familles).toContain("avion");
         expect(familles).not.toContain("personnage");
-        expect(new Set(familles).size).toBe(familles.length);
-        for (const d of doubles(jours)) expect(posesDe(d).length).toBeLessThanOrEqual(2);
+        for (const d of doubles(jours)) {
+          const sur = posesDe(d).map((s) => familleDe(s.url));
+          expect(new Set(sur).size).toBe(sur.length);
+          expect(sur.length).toBeLessThanOrEqual(4);
+        }
       });
 
-      it("ne pose rien quand aucun mot entier du récit n'appelle un sticker", () => {
-        // « vanille » ne déclenche pas « van », « visage » pas « visa ».
-        expect(posesDe(voyage([paragrapheDe("un visage, une glace à la vanille", 2)]))).toHaveLength(0);
+      it("lit tout le récit, pas seulement sa première proposition", () => {
+        // Le scooter n'arrive qu'après une virgule : on ne lisait que le début.
+        const jours = voyage([paragrapheDe("la ville, puis le port en scooter", 2)]);
+        expect(posesDe(jours).map((s) => familleDe(s.url))).toContain("scooter");
+      });
+
+      it("complète par les familles de voyage quand aucun mot entier du récit n'appelle un sticker", () => {
+        // « vanille » ne déclenche pas « van », « visage » pas « visa » : le
+        // carnet a ses stickers quand même, mais seulement des familles de voyage.
+        const familles = posesDe(voyage([paragrapheDe("un visage, une glace à la vanille", 2)])).map((s) => familleDe(s.url));
+        expect(familles.length).toBeGreaterThan(0);
+        for (const f of familles) expect(["appareil-photo", "carte-postale", "boussole", "globe", "repere", "carte"]).toContain(f);
       });
 
       it("ne dépasse jamais la définition du dessin", () => {
@@ -665,8 +742,8 @@ describe("mise en page de l'atelier", () => {
       const rapport = lignes.find((l) => l.startsWith("fun facts non imprimés")) ?? "";
       expect(rapport).toContain("étape 1 : fun fact(s) noté(s) sous 5/10");
       expect(rapport).toContain("étape 2 : l'analyse n'a proposé aucun fun fact");
-      // Les pages de récit de l'étape 3 sont pleines, mais ses pages de photos
-      // portent le post-it (13/10/2026) : son fun fact s'imprime.
+      // Les pages de récit de l'étape 3 sont pleines, mais une de ses planches
+      // a un emplacement libre (14/10/2026) : son fun fact s'imprime.
       expect(rapport).not.toContain("étape 3");
     });
 
@@ -714,12 +791,65 @@ describe("mise en page de l'atelier", () => {
         expect(poses[k]! - poses[k - 1]!).toBeGreaterThanOrEqual(2);
         expect(poses[k]! - poses[k - 1]!).toBeLessThanOrEqual(4);
       }
-      // Des pages de photos en portent, le post-it posé sur la planche.
-      expect(poses.some((i) => jours[i]!["layout_photo_page"])).toBe(true);
+      // Des pages de photos en portent, dans un emplacement de la planche.
+      expect(poses.some((i) => jours[i]!["layout_photo_page"] && Number.isInteger(jours[i]!["case_fun_fact"]))).toBe(true);
       // Ni photo perdue ni étape impaire.
       expect(jours.flatMap((j) => j.photos)).toHaveLength(90);
       const tailles = jours.reduce<number[]>((t, j) => (j["day_intro"] ? [...t, 1] : [...t.slice(0, -1), (t.at(-1) ?? 0) + 1]), []);
       expect(tailles.every((n) => n % 2 === 0)).toBe(true);
+    });
+
+    it("met le fun fact à la place d'une photo, jamais par-dessus (14/10/2026)", () => {
+      // Des étapes chargées de photos : leurs pages de récit n'ont plus la
+      // place d'une carte, leurs planches ont un emplacement libre.
+      const lourdes = Array.from({ length: 6 }, (_, e) =>
+        etape(
+          [paragrapheDe(`la ville ${e}`, 3), paragrapheDe(`le port ${e}`, 3)].join(" "),
+          Array.from({ length: 9 }, (_, k) => photo(`${e}-${k}`)),
+          { photos: [], funFacts: [9, 8, 7].map((note, k) => ({ texte: `Fait ${e}.${k}.`, registre: ["vecu", "histoire", "cuisine"][k], paragraphe: 0, pertinence: note })) },
+          `Lieu ${e}`,
+        ),
+      );
+      const jours = M.composerJours(lourdes, { funFacts: true });
+      const enCase = jours.filter((j) => j["case_fun_fact"] !== undefined);
+      expect(enCase.some((j) => j["layout_photo_page"])).toBe(true);
+      for (const j of enCase) {
+        // La page de k photos prend le gabarit de k + 1 : l'emplacement existe,
+        // et c'est l'encart de la page qui l'occupe.
+        const k = j.photos.length;
+        expect((j["fun_facts"] as string[]).length).toBe(1);
+        expect(k + 1).toBeLessThanOrEqual(j["layout_photo_page"] ? 5 : 3);
+        expect(j["case_fun_fact"]).toBeGreaterThanOrEqual(0);
+        expect(j["case_fun_fact"]).toBeLessThanOrEqual(k);
+        expect(j["planche_colonnes"] || j["pleine_page"]).toBeFalsy();
+      }
+      // Plus de post-it posé sur une bande de photos.
+      expect(jours.some((j) => j["postit_bande"])).toBe(false);
+      // Aucune photo perdue.
+      expect(jours.flatMap((j) => j.photos)).toHaveLength(54);
+    });
+
+    it("prend le troisième emplacement d'un collage quand la bande de deux photos n'a plus de place dans la page", () => {
+      // Un récit trop long pour la carte à côté des deux photos (plus de 230
+      // signes) : le fun fact entre dans la bande, si les photos tiennent dans
+      // les colonnes du collage.
+      const recit = Array.from({ length: 4 }, (_, i) => paragrapheDe(`la ville ${i}`, 2)).join(" ");
+      const jours = M.composerJours(
+        [etape(recit, Array.from({ length: 9 }, (_, k) => photo(`p${k}`)), encart("Un fait.", 9))],
+        { funFacts: true },
+      );
+      const hote = jours.find((j) => (j["fun_facts"] as string[]).length)!;
+      expect(hote["layout_collage"]).toBe(true);
+      expect(hote["layout_split_left"]).toBe(false);
+      expect(hote.photos).toHaveLength(2);
+      // À coût égal, le dernier emplacement : le fun fact ferme la bande.
+      expect(hote["case_fun_fact"]).toBe(2);
+      // Jamais sur une bande de photos paysage, qui s'y rogneraient au-delà du plafond.
+      const paysages = M.composerJours(
+        [etape(recit, Array.from({ length: 9 }, (_, k) => photo(`p${k}`, 1.5)), encart("Un fait.", 9))],
+        { funFacts: true },
+      );
+      expect(paysages.some((j) => j["layout_collage"] && j["case_fun_fact"] !== undefined)).toBe(false);
     });
 
     it("pose l'encart à côté de la photo flottante plutôt que sous une grande photo en tête", () => {
