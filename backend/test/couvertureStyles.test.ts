@@ -52,7 +52,8 @@ const S = require("../../MemoBook Generator/public/couverture-styles.js") as {
   ) => { cle: string; pour: string; taille: string; transparent: boolean; reference: string; prompt: string }[];
   coutImages: (images: { taille: string }[]) => number;
   CONSIGNE_CONTOUR: string;
-  lireContour: (reponse: unknown) => [number, number][];
+  lireContour: (reponse: unknown) => { forme: "ligne" | "anneau"; points: [number, number][]; centre: [number, number]; trouve: boolean };
+  focusSurSujet: (cadre: Zone, px: [number, number], centre: [number, number]) => [number, number];
 };
 const P = require("../../MemoBook Generator/public/partage.js") as {
   genererImage: (o: Record<string, unknown>) => Promise<{ data: string }>;
@@ -247,6 +248,28 @@ describe("styles de couverture", () => {
     expect(titre["texte"]).toBe("PHILIPPINES");
   });
 
+  it("Élégant : le titre mord le haut de la photo d'un quart de la hauteur de ses capitales, par-dessus", () => {
+    const m = maquette("elegant");
+    const photo = sur(m, "recto").find((e) => e.type === "image")!;
+    const titre = m.elements.find((e) => e.type === "texte" && e["police"] === "Cormorant Garamond")!;
+    const corps = (titre["corps"] as number) * (25.4 / 72);
+    const ligneDeBase = (titre["y"] as number) + (titre["h"] as number) - 0.2 * corps;
+    const capitales = 0.63 * corps;
+    expect(ligneDeBase - (photo["y"] as number)).toBeCloseTo(capitales / 4, 1);
+    // Le titre vient après la photo : il est dessiné dessus.
+    expect(m.elements.indexOf(titre)).toBeGreaterThan(m.elements.indexOf(photo));
+  });
+
+  it("Assouline et Aquarelle : titres en Archivo Black, approche −7 %, plus de Black Han Sans", () => {
+    for (const style of ["assouline", "watercolor"]) {
+      const larges = maquette(style).elements.filter((e) => e["police"] === "Archivo Black");
+      expect(larges.length).toBeGreaterThanOrEqual(2);
+      expect(larges.every((e) => e["approche"] === -70)).toBe(true);
+      expect(S.POLICES[style]).toContain("Archivo Black");
+    }
+    expect(JSON.stringify(S.POLICES)).not.toContain("Black Han Sans");
+  });
+
   it("Dessin : trois dessins de la bibliothèque, aucun réservé, titres en Gloria Hallelujah tant que Hansley attend sa licence", () => {
     expect(S.POLICE_TITRE_DESSIN).toBe("Gloria Hallelujah");
     const choisis = S.dessinsDuVoyage(bibliotheque);
@@ -319,7 +342,9 @@ describe("styles de couverture", () => {
       }
       const m = maquette("assouline");
       expect(m.elements[0]!["fond"]).toBe("bleu");
-      const titre = m.elements.find((e) => e.type === "texte" && e["police"] === "Black Han Sans")!;
+      const titre = m.elements.find((e) => e.type === "texte" && e["police"] === "Archivo Black")!;
+      // Archivo Black, approche −7 % : elle a les lettres accentuées, que Black Han Sans n'avait pas.
+      expect(titre["approche"]).toBe(-70);
       expect(titre["couleur"]).toBe("accent");
       expect(titre["texte"]).toBe("PHILIPPINES");
       // L'encadré des chiffres : blanc, bordé de la couleur des titres ; le résumé en noir typo.
@@ -379,11 +404,78 @@ describe("styles de couverture", () => {
       expect(Math.max(...xs)).toBeLessThanOrEqual(face.x + face.l + 0.5);
     });
 
-    it("Photo-dessin : un contour illisible devient une ellipse au centre ; les textes restent lisibles sur la photo", () => {
-      expect(S.lireContour({ contour: [[0.2, 0.2], [2, -1], "x", [0.4, 0.5], [0.5, 0.5], [0.6, 0.5], [0.7, 0.5], [0.8, 0.5]] })[1]).toEqual([1, 0]);
-      expect(S.lireContour(null)).toHaveLength(18);
-      expect(S.lireContour({ contour: [[0.1, 0.1]] })).toHaveLength(18);
-      expect(S.CONSIGNE_CONTOUR).toContain('"contour"');
+    it("Photo-dessin : le trait épouse le sujet de la photo — au-dessus de sa silhouette, d'un bord à l'autre", () => {
+      // Un couple attablé, comme l'exemple de Hugo : la ligne passe au-dessus des deux têtes et redescend entre elles.
+      const couple = {
+        forme: "ligne",
+        points: [[0, 0.62], [0.22, 0.47], [0.3, 0.45], [0.38, 0.47], [0.52, 0.57], [0.68, 0.47], [0.76, 0.46], [0.92, 0.56], [1, 0.6]],
+        centre: [0.55, 0.75],
+      };
+      const m = maquette("photo-drawing", { contour: S.lireContour(couple), recto: { ...photo("recto"), px: [1200, 1700] } });
+      const traits = m.elements.filter((e) => e.type === "courbe" && !e["ferme"] && (e["trait"] as { couleur: string }).couleur === "encre");
+      expect(traits).toHaveLength(3);
+      expect(m.elements.some((e) => e.type === "courbe" && e["ferme"])).toBe(false);
+      const ancres = traits.map((t) => (t["ancres"] as number[][][]).map((a) => a[1]!));
+      // D'un bord à l'autre de la première, fond perdu compris.
+      const [x0, x1] = m.plats.recto;
+      for (const a of ancres) {
+        expect(a[0]![0]).toBeCloseTo(x0, 1);
+        expect(a[a.length - 1]![0]).toBeCloseTo(x1 + m.fondPerdu, 1);
+      }
+      // Des parallèles, de plus en plus haut.
+      for (let k = 1; k < ancres.length; k += 1) {
+        ancres[k]!.forEach(([x, y], i) => {
+          expect(x).toBe(ancres[0]![i]![0]);
+          expect(y).toBeLessThan(ancres[k - 1]![i]![1]!);
+        });
+      }
+      // La ligne redescend entre les deux têtes.
+      const bas = ancres[0]!;
+      const yA = (fx: number) => bas.reduce((meilleur, p) => (Math.abs(p[0]! - (x0 + fx * (x1 - x0))) < Math.abs(meilleur[0]! - (x0 + fx * (x1 - x0))) ? p : meilleur))[1]!;
+      expect(yA(0.5)).toBeGreaterThan(yA(0.25));
+      expect(yA(0.5)).toBeGreaterThan(yA(0.75));
+      // Le titre passe au-dessus du trait le plus haut, sous les voyageurs.
+      const titre = m.elements.find((e) => e.type === "texteChemin")!;
+      const haut = ancres[ancres.length - 1]!;
+      for (const [, [x, y]] of titre["ancres"] as [number[], [number, number], number[]][]) {
+        const proche = haut.reduce((meilleur, p) => (Math.abs(p[0]! - x) < Math.abs(meilleur[0]! - x) ? p : meilleur));
+        expect(y).toBeLessThan(proche[1]! + 3);
+        expect(y).toBeGreaterThan(m.faces.recto.y + 14);
+      }
+      // La photo est cadrée sur le sujet.
+      expect((m.elements.find((e) => e.type === "image")!["focus"] as number[])[0]).toBeGreaterThan(0.5);
+    });
+
+    it("Photo-dessin : deux photos, deux tracés différents", () => {
+      const eglise = S.lireContour({ forme: "ligne", points: [[0, 0.5], [0.15, 0.4], [0.3, 0.47], [0.48, 0.29], [0.6, 0.38], [0.8, 0.37], [1, 0.48]] });
+      const couple = S.lireContour({ forme: "ligne", points: [[0, 0.62], [0.3, 0.45], [0.52, 0.57], [0.76, 0.46], [1, 0.6]] });
+      const traits = (contour: unknown) =>
+        JSON.stringify(maquette("photo-drawing", { contour }).elements.filter((e) => e.type === "courbe" && (e["trait"] as { couleur: string }).couleur === "encre"));
+      expect(traits(eglise)).not.toBe(traits(couple));
+    });
+
+    it("Photo-dessin : lit le tracé sous ses différentes formes, et dit quand il n'a rien trouvé", () => {
+      const lu = S.lireContour({ forme: "ligne", points: [{ x: 100, y: 40 }, { x: 0, y: 60 }, [50, 30], [0.25, 0.5]] });
+      expect(lu).toMatchObject({ forme: "ligne", trouve: true });
+      // Triée de gauche à droite ; les pourcentages ramenés à 0–1.
+      expect(lu.points).toEqual([[0, 0.6], [0.25, 0.5], [0.5, 0.3], [1, 0.4]]);
+      // Sans forme dite : une ligne d'un bord à l'autre, un anneau sinon.
+      expect(S.lireContour({ points: [[0, 0.5], [0.3, 0.4], [0.6, 0.45], [1, 0.5]] }).forme).toBe("ligne");
+      expect(S.lireContour({ contour: [[0.4, 0.3], [0.6, 0.3], [0.65, 0.5], [0.6, 0.7], [0.4, 0.7], [0.35, 0.5]] }).forme).toBe("anneau");
+      // Rien d'utilisable : une ellipse au centre, signalée.
+      for (const reponse of [null, {}, { points: [[0.1, 0.1]] }, { contour: "aucun" }]) {
+        const repli = S.lireContour(reponse);
+        expect(repli.trouve).toBe(false);
+        expect(repli.points).toHaveLength(18);
+      }
+      expect(S.CONSIGNE_CONTOUR).toContain('"forme"');
+      expect(S.CONSIGNE_CONTOUR).toContain('"anneau"');
+      // Le cadrage : un sujet à droite d'une photo en largeur pousse le point focal à droite.
+      expect(S.focusSurSujet({ x: 0, y: 0, l: 170, h: 250 }, [3000, 2000], [0.8, 0.5])[0]).toBeGreaterThan(0.75);
+      expect(S.focusSurSujet({ x: 0, y: 0, l: 170, h: 250 }, [3000, 2000], [0.5, 0.5])).toEqual([0.5, 0.5]);
+    });
+
+    it("Photo-dessin : les textes restent lisibles sur la photo", () => {
       for (const [dominante, lum] of [["#2f8f9d", 0.4], ["#e8d9c0", 0.85], ["#1b2a49", 0.12], [null, 0.3]] as const) {
         const { texte, ecriture } = S.couleursPhotoDessin(dominante, lum);
         const gris = Math.round(lum * 255).toString(16).padStart(2, "0");

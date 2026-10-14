@@ -2135,11 +2135,11 @@ function maquetteCouverture() {
   return CouvertureStyles.maquette(style, {
     fiche,
     textes: style === "default" ? textesCouverture() : textesDuStyle(style),
-    recto: photoPourMaquette(recto, "recto", style === "default" ? [0.5, 0.35] : style === "photo-drawing" ? [0.5, 0.5] : [0.5, 0.45]),
+    recto: photoPourMaquette(recto, "recto", style === "default" ? [0.5, 0.35] : style === "photo-drawing" ? null : [0.5, 0.45]),
     verso: photoPourMaquette(photoDuPlat("verso") || photoDeRepli(recto), "verso", [0.5, 0.5]),
     dessins: etat.dessinsCouverture || [],
     images: imagesCouverture(style),
-    contour: photoDessin.contour || null,
+    contour: photoDessin.trace || null,
     couleurPhoto: photoDessin.couleurs?.dominante || null,
     luminancePhoto: photoDessin.couleurs?.luminance ?? 0.35,
     chiffres: chiffresQuatrieme(),
@@ -2425,8 +2425,11 @@ async function preparerPhotoDessin({ force = false } = {}) {
   etat.couverture.photosDessin ??= {};
   const garde = etat.couverture.photosDessin[photo.id] || {};
   if (!garde.couleurs) garde.couleurs = await couleursDe(photo.data);
-  if (!garde.contour || force) {
-    etat.couverture.statut = "Repérage des voyageurs sur la photo…";
+  // `trace` : la forme lue (`CouvertureStyles.lireContour`). Les anciens
+  // `contour` (une liste de points, souvent l'ellipse de repli) sont refaits.
+  delete garde.contour;
+  if (!garde.trace || force) {
+    etat.couverture.statut = "Repérage du sujet de la photo…";
     rendreCouverture();
     try {
       const reponse = await appelAnalyse({
@@ -2437,11 +2440,21 @@ async function preparerPhotoDessin({ force = false } = {}) {
         consigne: CouvertureStyles.CONSIGNE_CONTOUR,
         images: [{ id: "recto", data: await vignette(photo.data) }],
       });
-      garde.contour = CouvertureStyles.lireContour(reponse);
-      etat.couverture.statut = "";
+      const trace = CouvertureStyles.lireContour(reponse);
+      if (trace.trouve) {
+        garde.trace = trace;
+        etat.couverture.statut = "";
+      } else {
+        // Le repli (une ellipse au centre) n'est pas gardé : on retentera.
+        delete garde.trace;
+        debugCarnet("tracé de Photo-dessin illisible", reponse);
+        etat.couverture.statut =
+          "Le modèle n'a pas rendu de tracé utilisable pour cette photo : un cercle au centre en attendant. « Repérer à nouveau » pour réessayer.";
+      }
     } catch (erreur) {
-      debugCarnet("contour des voyageurs impossible", erreur);
-      etat.couverture.statut = `Repérage des voyageurs impossible (${erreur.message}) : un contour au centre de la photo en attendant.`;
+      delete garde.trace;
+      debugCarnet("tracé de Photo-dessin impossible", erreur);
+      etat.couverture.statut = `Repérage du sujet impossible (${erreur.message}) : un cercle au centre en attendant. « Repérer à nouveau » pour réessayer.`;
     }
   }
   etat.couverture.photosDessin[photo.id] = garde;
@@ -2807,8 +2820,8 @@ function rendreCouverture() {
     "travel-book": { recto: "Pas de photo sur la première : timbres et tampon du pays générés.", verso: "La photo de la quatrième, dans le cadre vert déchiré." },
     "photo-drawing": {
       recto:
-        "Une photo où l'on voit les voyageurs : ils sont entourés d'un trait à main levée, le titre suit le contour. " +
-        "Les couleurs des textes viennent de la photo.",
+        "Une photo où l'on voit les voyageurs (ou ce qui domine la photo) : des traits au feutre épousent le sujet de cette photo-là, " +
+        "le titre suit le trait du haut. La photo est cadrée sur le sujet ; les couleurs des textes viennent d'elle.",
       verso: null,
     },
   }[style.id] || {};
@@ -2850,7 +2863,18 @@ function rendreCouverture() {
         ? h(
             "div",
             { class: "rangee" },
-            h("span", { class: "aide" }, couleursPhotoDessin() ? "Voyageurs repérés sur la photo." : "Voyageurs pas encore repérés."),
+            h(
+              "span",
+              { class: "aide" },
+              (() => {
+                const photo = photoAvecVoyageurs();
+                const trace = photo && etat.couverture.photosDessin?.[photo.id]?.trace;
+                if (!trace) return "Sujet pas encore repéré sur la photo : le tracé est un cercle au centre.";
+                return trace.forme === "ligne"
+                  ? "Sujet repéré : les traits passent au-dessus de sa silhouette, d'un bord à l'autre."
+                  : "Sujet repéré : petit et entier, il est entouré d'anneaux.";
+              })(),
+            ),
             bouton("Repérer à nouveau", { petit: true, surClic: () => preparerPhotoDessin({ force: true }) }),
           )
         : null,
