@@ -26,6 +26,7 @@ type Maquette = {
 };
 const C = require("../../MemoBook Generator/public/couverture.js") as {
   FICHE_DEFAUT: Record<string, unknown>;
+  facesVisibles: (fiche: Record<string, unknown>) => Record<"verso" | "dos" | "recto", Zone>;
   COULEURS: Record<string, { hex: string }>;
   ficheDuCarnet: (fiche: Record<string, unknown>, pages: number) => Record<string, unknown>;
   versJsx: (m: Maquette, o?: Record<string, unknown>) => string;
@@ -50,7 +51,31 @@ const S = require("../../MemoBook Generator/public/couverture-styles.js") as {
     voyage: Record<string, unknown>,
     textes?: Record<string, string>,
   ) => { cle: string; pour: string; taille: string; transparent: boolean; reference: string; prompt: string }[];
-  coutImages: (images: { taille: string }[]) => number;
+  coutImages: (images: { taille: string; qualite?: string }[]) => number;
+  nomDuPays: (voyage: Record<string, unknown>) => string;
+  titreAquarelle: (
+    texte: string,
+    face: Zone,
+  ) => { bloc: Zone; corps: number; largeur: number; capitales: number; encre: number; ligneDeBase: number; plafonne: boolean };
+  controleAquarelle: (m: Maquette) => string[];
+  detourerFond: (rvba: Uint8ClampedArray, l: number, h: number, options?: Record<string, number>) => number;
+  TONS_TIMBRES: { nom: string; famille: string; hex: string }[];
+  planTimbres: (voyage: Record<string, unknown>) => {
+    cle: string;
+    ton: { nom: string; famille: string; hex: string };
+    sujet: string;
+    lieu: string;
+    legende: string;
+    forme: string;
+    format: number;
+    cx: number;
+    cy: number;
+    l: number;
+    rotation: number;
+  }[];
+  svgTimbres: (plan: unknown[], illustrations?: Record<string, { src: string }>, options?: Record<string, unknown>) => string;
+  coinsDuTimbre: (t: unknown, zone: { l: number; h: number }) => [number, number][];
+  zoneDesTimbres: (fiche: Record<string, unknown>) => Zone;
   CONSIGNE_CONTOUR: string;
   lireContour: (reponse: unknown) => { forme: "ligne" | "anneau"; points: [number, number][]; centre: [number, number]; trouve: boolean };
   focusSurSujet: (cadre: Zone, px: [number, number], centre: [number, number]) => [number, number];
@@ -110,6 +135,7 @@ const maquette = (style: string, contexte: Record<string, unknown> = {}) => {
       { valeur: "7", libelle: "îles" },
     ],
     logo: { fichier: "Liens/logo-memobook-beige.png", src: "data:image/png;base64,", px: [1200, 1200] },
+    motif: { fichier: "Liens/motif-memobook-beige.png", src: "data:image/png;base64,", px: [2400, 3110] },
     ...contexte,
   });
 };
@@ -213,7 +239,7 @@ describe("styles de couverture", () => {
               "PageOrientation", "LocationOptions", "MeasurementUnits", "RulerOrigin", "ColorModel", "ColorSpace",
               "EndCap", "CornerOptions", "FitOptions", "Justification", "VerticalJustification", "ShadowMode",
               "CoordinateSpaces", "AnchorPoint", "ScriptLanguage", "UndoModes", "ZoomOptions", "BlendMode",
-              "PathType", "TextPathEffects", "StrokeAlignment",
+              "PathType", "TextPathEffects", "StrokeAlignment", "FirstBaseline",
             ].map((nom) => [nom, enumeration]),
           ),
         };
@@ -260,14 +286,86 @@ describe("styles de couverture", () => {
     expect(m.elements.indexOf(titre)).toBeGreaterThan(m.elements.indexOf(photo));
   });
 
-  it("Assouline et Aquarelle : titres en Archivo Black, approche −7 %, plus de Black Han Sans", () => {
-    for (const style of ["assouline", "watercolor"]) {
-      const larges = maquette(style).elements.filter((e) => e["police"] === "Archivo Black");
-      expect(larges.length).toBeGreaterThanOrEqual(2);
-      expect(larges.every((e) => e["approche"] === -70)).toBe(true);
-      expect(S.POLICES[style]).toContain("Archivo Black");
-    }
+  it("Assouline : titres en Archivo Black, approche −7 %, plus de Black Han Sans", () => {
+    const larges = maquette("assouline").elements.filter((e) => e["police"] === "Archivo Black");
+    expect(larges.length).toBeGreaterThanOrEqual(2);
+    expect(larges.every((e) => e["approche"] === -70)).toBe(true);
+    expect(S.POLICES["assouline"]).toContain("Archivo Black");
     expect(JSON.stringify(S.POLICES)).not.toContain("Black Han Sans");
+  });
+
+  describe("Aquarelle : la première (règles du 14/10/2026)", () => {
+    const face = C.facesVisibles(C.ficheDuCarnet(C.FICHE_DEFAUT, 60)).recto;
+    const k = face.l / 420;
+
+    it("écrit le nom du pays en capitales accentuées, sans rien d'autre", () => {
+      expect(S.nomDuPays({ pays: "PE" })).toBe("Pérou");
+      expect(S.nomDuPays({ pays: "US" })).toBe("États-Unis");
+      expect(S.nomDuPays({ destination: "Cyclades, Grèce" })).toBe("Grèce");
+      expect(S.textesParDefaut("watercolor", { ...voyage, destination: "Cyclades, Grèce", pays: "EC" })["pays"]).toBe("ÉQUATEUR");
+      // Un ancien titre rédigé (« CYCLADES, GRÈCE ») ne revient pas : le pays a sa propre clé.
+      const m = maquette("watercolor", { textes: { ...S.textesParDefaut("watercolor", voyage), titre: "CYCLADES, GRÈCE" } });
+      expect(m.elements.find((e) => e["nom"] === "Titre de la 1re")!["texte"]).toBe("PHILIPPINES");
+      // Plus rien à rédiger pour la première : seulement les paragraphes de la quatrième.
+      expect(S.consigneTextes("watercolor", voyage)).toContain('{"resume":""}');
+    });
+
+    it("cale le titre dans son bloc de 396 × 79 px : toute la largeur, 75 px de capitales au plus, accents compris", () => {
+      for (const nom of ["PHILIPPINES", "ÉTATS-UNIS", "RÉPUBLIQUE DÉMOCRATIQUE DU CONGO"]) {
+        const t = S.titreAquarelle(nom, face);
+        // Un nom long occupe les 396 px.
+        expect(t.largeur / k, nom).toBeCloseTo(396, 0);
+        expect(t.capitales / k).toBeLessThanOrEqual(75);
+      }
+      // Un nom court : capitales plafonnées à 75 px, titre plus étroit, centré.
+      const italie = S.titreAquarelle("ITALIE", face);
+      expect(italie.capitales / k).toBeCloseTo(75, 1);
+      expect(italie.largeur / k).toBeLessThan(396);
+      // Un nom court à capitale accentuée : son accent reste dans le bloc,
+      // jamais dans la zone de pliage au-dessus.
+      for (const nom of ["PÉROU", "GRÈCE", "ÉQUATEUR", "FRANÇA"]) {
+        const t = S.titreAquarelle(nom, face);
+        expect(t.encre, nom).toBeLessThanOrEqual(t.bloc.h + 0.01);
+        expect(t.capitales / k).toBeLessThan(75);
+      }
+      // Le bloc : en haut de la face visible, à 12 px des bords.
+      const t = S.titreAquarelle("PÉROU", face);
+      expect(t.bloc.y).toBe(face.y);
+      expect((t.bloc.x - face.x) / k).toBeCloseTo(12, 1);
+      expect(t.bloc.h / k).toBeCloseTo(79, 1);
+    });
+
+    it("pose le titre en Poppins Black #2D231A, sur une ligne, l'aquarelle juste dessous, à fond perdu", () => {
+      const m = maquette("watercolor", { textes: { ...S.textesParDefaut("watercolor", { ...voyage, pays: "PE" }), resume: AQUARELLE } });
+      const titre = m.elements.find((e) => e["nom"] === "Titre de la 1re")!;
+      expect(titre["texte"]).toBe("PÉROU");
+      expect([titre["police"], titre["style"]]).toEqual(["Poppins", "Black"]);
+      expect(m.couleurs[titre["couleur"] as string]!.hex.toLowerCase()).toBe("#2d231a");
+      expect(String(titre["texte"])).not.toContain("\n");
+      const illustration = m.elements.find((e) => e["nom"] === "Illustration de la 1re")!;
+      expect(illustration["y"]).toBeCloseTo((titre["y"] as number) + (titre["h"] as number), 2);
+      expect(illustration["x"]).toBe(m.plats.recto[0]);
+      expect((illustration["x"] as number) + (illustration["l"] as number)).toBeCloseTo(m.plats.recto[1] + m.fondPerdu, 2);
+      expect((illustration["y"] as number) + (illustration["h"] as number)).toBeCloseTo(m.hauteur + m.fondPerdu, 2);
+      // Les contrôles avant livraison passent.
+      expect(S.controleAquarelle(m)).toEqual([]);
+      // Et disent ce qui ne va pas.
+      const abime = { ...m, elements: m.elements.map((e) => (e["nom"] === "Titre de la 1re" ? { ...e, corps: 140, texte: "PÉ\nROU" } : e)) };
+      expect(S.controleAquarelle(abime).length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("rédige l'illustration d'après le pays, à fond perdu, sans texte, d'après les règles", () => {
+      const [recto] = S.imagesDuStyle("watercolor", { ...voyage, pays: "PE" }, { resume: AQUARELLE }) as unknown as {
+        prompt: string;
+        rognerReference: number[];
+      }[];
+      expect(recto!.prompt).toContain("Pérou");
+      for (const regle of ["rehauts d'encre noire", "premier plan lisible en bas", "silhouettes lointaines", "ombres colorées", "aucun bord blanc", "aucun texte", "aucun drapeau"]) {
+        expect(recto!.prompt).toContain(regle);
+      }
+      // La référence part sans sa bande de titre.
+      expect(recto!.rognerReference[1]).toBeGreaterThan(0);
+    });
   });
 
   it("Dessin : trois dessins de la bibliothèque, aucun réservé, titres en Gloria Hallelujah tant que Hansley attend sa licence", () => {
@@ -323,10 +421,18 @@ describe("styles de couverture", () => {
 
       const travel = S.imagesDuStyle("travel-book", { ...voyage, etapes });
       expect(travel.map((i) => [i.cle, i.reference === "silhouette"])).toEqual([
-        ["timbres", false],
+        ...[1, 2, 3, 4, 5, 6].map((n) => [`timbre${n}`, false]),
         ["tampon", true],
       ]);
-      expect(travel[1]!.prompt).toContain("PHILIPPINES");
+      expect(travel[6]!.prompt).toContain("PHILIPPINES");
+      // Les timbres : petits, en qualité « medium », sans référence (la couverture
+      // d'exemple porte des timbres écrits), et rien d'écrit dessus.
+      for (const t of travel.slice(0, 6)) {
+        expect(t.reference).toBeNull();
+        expect((t as unknown as { qualite: string }).qualite).toBe("medium");
+        expect(t.prompt).toContain("aucun texte, aucune lettre, aucun chiffre");
+      }
+      expect(S.coutImages(travel)).toBeCloseTo(6 * 0.04 + 0.17);
 
       expect(S.imagesDuStyle("photo-drawing", voyage)).toEqual([]);
       expect(S.imagesDuStyle("elegant", voyage)).toEqual([]);
@@ -362,7 +468,13 @@ describe("styles de couverture", () => {
       const blocs = m.elements.filter((e) => e.type === "bloc");
       expect(blocs.map((b) => (b["paragraphes"] as string[])[0])).toEqual(AQUARELLE.split("\n\n"));
       expect(blocs.every((b) => b["police"] === "Manrope" && b["couleur"] === "noir")).toBe(true);
-      expect(m.elements.find((e) => e["opacite"] === 0.2)?.["fichier"]).toBe("Liens/logo-memobook-beige.png");
+      // Le motif M de la DA, à 20 %, centré sur la face, aussi grand qu'elle.
+      const motif = m.elements.find((e) => e["opacite"] === 0.2)!;
+      expect(motif["fichier"]).toBe("Liens/motif-memobook-beige.png");
+      const q = m.faces.verso;
+      expect((motif["x"] as number) + (motif["l"] as number) / 2).toBeCloseTo(q.x + q.l / 2, 1);
+      expect((motif["y"] as number) + (motif["h"] as number) / 2).toBeCloseTo(q.y + q.h / 2, 1);
+      expect(Math.max((motif["l"] as number) / q.l, (motif["h"] as number) / q.h)).toBeCloseTo(1, 2);
     });
 
     it("Travel book : timbres et tampon sur la première, la photo de la quatrième dans un cadre vert déchiré", () => {
@@ -488,8 +600,96 @@ describe("styles de couverture", () => {
       expect(S.textesParDefaut("photo-drawing", voyage)["texteVerso"]).toBe("Merci d'avoir suivi mon aventure !");
       expect(S.textesParDefaut("travel-book", voyage)).toMatchObject({ titre: "Philippines", voyageurs: "Margaux, Claire et Augustin" });
       expect(S.consigneTextes("travel-book", voyage)).toBeNull();
-      expect(S.consigneTextes("watercolor", voyage)).toContain('{"titre":"","resume":""}');
+      expect(S.consigneTextes("watercolor", voyage)).toContain('{"resume":""}');
       expect(S.textesParDefaut("watercolor", { ...voyage, etapes }).resume).toBe("Arrivée, Manille\n\nPlongée, Coron");
+    });
+  });
+
+  describe("Assouline : l'illustration sans fond (14/10/2026)", () => {
+    /** Une image `l` × `l` : un fond presque blanc, un disque orange au centre. */
+    const image = (l: number, fond: [number, number, number], opaciteFond = 255) => {
+      const px = new Uint8ClampedArray(l * l * 4);
+      for (let y = 0; y < l; y += 1) {
+        for (let x = 0; x < l; x += 1) {
+          const i = (y * l + x) * 4;
+          const sujet = Math.hypot(x - l / 2, y - l / 2) < l / 4;
+          px.set(sujet ? [200, 100, 59, 255] : [...fond, opaciteFond], i);
+        }
+      }
+      return px;
+    };
+
+    it("retire le carré de papier peint autour du sujet, et garde le sujet", () => {
+      const px = image(64, [251, 247, 241]);
+      const part = S.detourerFond(px, 64, 64);
+      expect(part).toBeGreaterThan(0.7);
+      expect(px[3]).toBe(0); // le coin
+      expect(px[(32 * 64 + 32) * 4 + 3]).toBe(255); // le centre du sujet
+    });
+
+    it("retire aussi un carré posé dans une image déjà transparente sur ses bords", () => {
+      const px = image(64, [251, 247, 241]);
+      for (let y = 0; y < 64; y += 1) for (let x = 0; x < 64; x += 1) if (x < 4 || y < 4 || x > 59 || y > 59) px[(y * 64 + x) * 4 + 3] = 0;
+      expect(S.detourerFond(px, 64, 64)).toBeGreaterThan(0.5);
+      expect(px[(10 * 64 + 10) * 4 + 3]).toBe(0);
+    });
+
+    it("ne touche pas une image pleine, dont le pourtour n'est pas uni", () => {
+      const px = new Uint8ClampedArray(32 * 32 * 4).map((_, i) => (i % 4 === 3 ? 255 : (i * 37) % 256));
+      const avant = px.slice();
+      expect(S.detourerFond(px, 32, 32)).toBe(0);
+      expect(px).toEqual(avant);
+    });
+
+    it("demande une illustration sans fond, et la fait détourer", () => {
+      const [assouline] = S.imagesDuStyle("assouline", voyage) as unknown as { prompt: string; detourer: boolean }[];
+      expect(assouline!.detourer).toBe(true);
+      expect(assouline!.prompt).toContain("ni carré, ni cadre");
+      // La maquette ne dessine aucun cadre autour de l'illustration.
+      const m = maquette("assouline");
+      const illustration = sur(m, "recto").find((e) => e.type === "image")!;
+      const autour = sur(m, "recto").filter((e) => (e.type === "rect" || e.type === "chemin") && e !== illustration && (e["h"] as number) < m.hauteur);
+      expect(autour).toEqual([]);
+    });
+  });
+
+  describe("Travel book : six timbres (14/10/2026)", () => {
+    const plan = S.planTimbres({ ...voyage, destination: "Cyclades, Grèce", pays: "GR", etapes: [{ lieu: "Paros" }, { lieu: "Naxos" }, { lieu: "Milos, Cyclades" }] });
+
+    it("en pose six, deux au plus dans les mêmes tons, six sujets différents", () => {
+      expect(plan).toHaveLength(6);
+      const familles = plan.map((t) => t.ton.famille);
+      for (const f of new Set(familles)) expect(familles.filter((x) => x === f).length).toBeLessThanOrEqual(2);
+      expect(new Set(plan.map((t) => t.ton.hex)).size).toBe(6);
+      expect(new Set(plan.map((t) => t.sujet)).size).toBe(6);
+      // Deux timbres voisins ne sont jamais de la même famille de tons.
+      for (let i = 1; i < plan.length; i += 1) expect(plan[i]!.ton.famille).not.toBe(plan[i - 1]!.ton.famille);
+      // Des formes et des formats variés.
+      expect(new Set(plan.map((t) => t.forme)).size).toBeGreaterThanOrEqual(3);
+      expect(new Set(plan.map((t) => t.format)).size).toBeGreaterThanOrEqual(2);
+    });
+
+    it("écrit de vrais mots : les lieux du voyage et le pays, jamais deux fois de suite", () => {
+      expect(plan.map((t) => t.legende)).toEqual(["PAROS", "NAXOS", "MILOS", "GRÈCE", "PAROS", "NAXOS"]);
+      for (let i = 1; i < plan.length; i += 1) expect(plan[i]!.legende).not.toBe(plan[i - 1]!.legende);
+      // Le modèle d'image n'écrit rien : la légende est dans le SVG, en Lilita One.
+      const svg = S.svgTimbres(plan, { timbre1: { src: "data:image/png;base64,QUJD" } });
+      for (const t of plan) expect(svg).toContain(`>${t.legende}</text>`);
+      expect(svg).toContain("Lilita One");
+      expect((svg.match(/<g transform=/g) ?? []).length).toBe(6);
+      expect(svg).toContain('href="data:image/png;base64,QUJD"');
+    });
+
+    it("tient le collage dans sa zone, chaque timbre tourné compris", () => {
+      const zone = S.zoneDesTimbres(C.ficheDuCarnet(C.FICHE_DEFAUT, 60));
+      for (const t of plan) {
+        for (const [x, y] of S.coinsDuTimbre(t, zone)) {
+          expect(x).toBeGreaterThanOrEqual(0);
+          expect(x).toBeLessThanOrEqual(zone.l);
+          expect(y).toBeGreaterThanOrEqual(0);
+          expect(y).toBeLessThanOrEqual(zone.h);
+        }
+      }
     });
   });
 

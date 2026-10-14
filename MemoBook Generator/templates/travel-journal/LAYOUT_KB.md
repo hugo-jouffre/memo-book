@@ -1363,9 +1363,9 @@ moteur reste `couverture.js` ; un style ne fait que poser ses éléments
 | Par défaut | oui | Playfair Display | photo, papier, encre | la photo de la première | titre, voyageurs, dates (tirés du carnet) |
 | Élégant | oui | Cormorant Garamond (titre), Cormorant Infant | fonds beige, noir typo, logo beige foncé | deux photos de paysage : grande sur la première — le titre en mord le haut d'un quart de la hauteur de ses capitales —, bande panoramique en tête de la quatrième | titre, date, texte de la quatrième — rédigés par l'IA |
 | Dessin | oui | Hansley (titres) — **Gloria Hallelujah tant que sa licence n'est pas vérifiée** —, Gloria Hallelujah | fonds beige, noir typo, disques bleu pâle | trois dessins de la bibliothèque (`assets/stickers/`, au trait ou dessinés), appelés par les récits | phrase-titre et titre de la quatrième rédigés par l'IA ; années, voyageurs et texte de la quatrième tirés du carnet |
-| Assouline | oui | Archivo Black (titres, approche −7 %), Playfair Display | fond vert, bleu ou beige selon l'illustration ; titres dans sa couleur dominante (contraste 3 au moins) ; résumé et chiffres en noir typo ; encadré des chiffres blanc, bordé de la couleur des titres | une illustration générée, liée au lieu | titre et texte de la quatrième rédigés par l'IA ; année et voyageurs (titre de la quatrième) tirés du carnet |
-| Aquarelle | oui | Archivo Black (titres, approche −7 %), Manrope | fonds beige, noir typo ; motif M en beige foncé à 20 %, logo beige foncé | une aquarelle générée sur la première ; trois vignettes « qui bavent », sans contour net, sur la quatrième | titre et les trois paragraphes de la quatrième (un par vignette) rédigés par l'IA ; date tirée du carnet |
-| Travel book | oui | Lilita One | texte vert sur fond beige ; cadre vert déchiré | timbres et autocollants générés d'après les récits ; tampon du pays, généré à partir de sa silhouette (contours de carte) ; photo de la quatrième choisie comme dans le style par défaut | titre, dates, voyageurs tirés du carnet |
+| Assouline | oui | Archivo Black (titres, approche −7 %), Playfair Display | fond vert, bleu ou beige selon l'illustration ; titres dans sa couleur dominante (contraste 3 au moins) ; résumé et chiffres en noir typo ; encadré des chiffres blanc, bordé de la couleur des titres | une illustration générée, liée au lieu, **sans fond** : posée à même le fond de la couverture (voir « le détourage ») | titre et texte de la quatrième rédigés par l'IA ; année et voyageurs (titre de la quatrième) tirés du carnet |
+| Aquarelle | oui | Poppins Black (titres, #2D231A), Manrope | fonds beige, noir typo ; sur la quatrième, le **motif M** (`motif-memobook.svg`, tourné d'un quart de tour, `3792:5773`) en beige foncé à 20 %, centré, aussi grand que la face ; logo beige foncé | une aquarelle générée d'après le pays, à fond perdu sous le titre (règles plus bas) ; trois vignettes « qui bavent », sans contour net, sur la quatrième | le **nom du pays** en capitales accentuées (tiré du carnet, modifiable) ; les trois paragraphes de la quatrième (un par vignette) rédigés par l'IA ; date tirée du carnet |
+| Travel book | oui | Lilita One | texte vert sur fond beige ; cadre vert déchiré ; six tons pour les timbres | **six timbres** (voir plus bas) ; tampon du pays, généré à partir de sa silhouette (contours de carte) ; photo de la quatrième choisie comme dans le style par défaut | titre, dates, voyageurs tirés du carnet ; les légendes des timbres, les lieux du voyage et le pays |
 | Photo-dessin | oui | Caveat Brush | textes et contour de la couleur de la photo ; la quatrième en prend la couleur en fond, ses textes la teinte de la marque la plus lisible | une photo où l'on voit les voyageurs, cadrée sur eux ; des traits au feutre qui épousent le sujet de cette photo-là (voir plus bas) ; le titre suit le trait du haut | titre rédigé par l'IA ; voyageurs, année tirés du carnet ; « Merci d'avoir suivi mon aventure ! » en quatrième, modifiable |
 
 - **Les textes** sont rédigés par l'IA d'après les récits (« Rédiger avec
@@ -1385,9 +1385,60 @@ moteur reste `couverture.js` ; un style ne fait que poser ses éléments
   tenir le style ; pour le tampon du Travel book, c'est la silhouette du pays
   du voyage. PNG transparent pour ce qui se pose sur un fond. Le panneau
   affiche le **coût estimé** avant de lancer (≈ 0,17 $ en carré, 0,25 $ en
-  portrait ou paysage), et un **« Régénérer »** par image. Les images sont
+  portrait ou paysage, 0,04 $ pour un timbre en qualité « medium »), et un
+  **« Régénérer »** par image. Les images sont
   gardées dans le fichier d'avancement : rien n'est régénéré sans le demander.
   Les prompts reprennent les textes du style — rédiger les textes d'abord.
+- **La première d'Aquarelle** (Hugo, 14/10/2026). Le gabarit, en px d'une
+  face visible de 420 × 595, posé à l'échelle de la largeur de la face
+  Pumbo : le **bloc du titre** fait 396 × 79, en haut de la face visible, à 12
+  de chaque bord ; le titre — le nom du pays, en capitales accentuées, sans
+  sous-titre — y est en Poppins Black #2D231A, sur une ligne. Son corps
+  (`titreAquarelle`) : celui qui lui fait occuper les 396 px, plafonné à
+  75 px de capitales pour les noms courts. **Et le titre tient dans son bloc,
+  accents compris** : au-dessus du bloc commence la zone de pliage, où rien de
+  lisible ne va. À 75 px de capitales, l'accent de « PÉROU » monterait à
+  107 px ; un nom court à capitale accentuée est donc plafonné là où son
+  dessin entier tient dans les 79 px (« GRÈCE » : 56 px de capitales, 257 px
+  de large), centré sur son dessin réel. Les chasses et le dessin des signes
+  de Poppins Black sont dans `POPPINS_BLACK` (la police n'a pas d'approche de
+  paires pour le latin). Le papier derrière le titre ; l'aquarelle démarre
+  juste sous le bloc et file au dos, au bord droit et en pied, fond perdu
+  compris. Les **contrôles avant livraison** (`controleAquarelle`) passent à
+  chaque aperçu : une ligne, centré dans le bloc, capitales à 75 px au plus,
+  396 px de large sauf nom court, Poppins Black #2D231A, fond perdu couvert,
+  rien dans le pli — ce qui manque s'affiche dans les alertes de l'aperçu. Le
+  septième, le pays reconnaissable sans texte, est la consigne de
+  l'illustration (`consigneAquarelle`), qui reprend les règles : aquarelle
+  sur papier à grain, rehauts d'encre, lavis, blancs en réserve ; un paysage,
+  une scène côtière ou urbaine, une architecture identifiable, à hauteur
+  d'homme ; premier plan en bas, horizon dans la moitié basse, verticales
+  jusqu'au bord haut ; silhouettes lointaines seulement ; ombres colorées ;
+  peinture jusqu'aux quatre bords ; ni texte, ni chiffre, ni logo, ni
+  drapeau. La référence du style part **sans sa bande de titre**, pour que le
+  modèle n'en recopie pas les lettres.
+- **Les timbres du Travel book** (Hugo, 14/10/2026 : trop semblables, et des
+  mots qui n'existent pas). Le modèle ne génère plus le collage d'un seul
+  tenant : **six illustrations**, une par timbre, en qualité « medium », sans
+  référence et **sans un mot** — six sujets différents (architecture,
+  paysage, spécialité, animal ou plante, transport, scène de vie), chacun
+  dans son ton (`TONS_TIMBRES` : terre cuite, canard, moutarde, ardoise,
+  vieux rose, sauge — deux familles de tons au plus deux fois, deux voisins
+  jamais de la même). L'atelier les met en timbres (`planTimbres`,
+  `svgTimbres`) : dentelés blancs, dentelés de couleur, crème, étiquette
+  autocollante, en portrait, en largeur ou carrés, inclinés, qui se
+  chevauchent un peu ; la **légende** — les lieux des étapes puis le pays,
+  jamais deux fois de suite — est écrite en Lilita One par la maquette. Le
+  collage est rastérisé à 600 dpi (`composerTimbres`) et posé comme l'image
+  d'avant.
+- **Le détourage** (Hugo, 14/10/2026 : un cadre fin autour de l'illustration
+  d'Assouline). Malgré la transparence demandée, le modèle peint souvent un
+  carré de papier presque uni autour du sujet. Les images posées sur un fond
+  (`detourer` : l'illustration d'Assouline, les vignettes d'Aquarelle, le
+  tampon) passent par `detourerFond` : la couleur du pourtour, si elle est
+  unie, devient transparente de proche en proche, avec un fondu sur la
+  lisière du sujet. Les illustrations déjà gardées sont détourées une fois, à
+  l'ouverture du style, sans rien régénérer.
 - **Photo-dessin** : la photo de la première est celle que le voyageur a
   choisie, sinon la mieux notée où l'analyse d'étape voit des personnes. Un
   appel « vision » (`CONSIGNE_CONTOUR`, le modèle de l'analyse) dit comment
