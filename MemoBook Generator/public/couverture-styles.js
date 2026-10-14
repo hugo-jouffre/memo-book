@@ -60,13 +60,21 @@
    */
   const POLICE_TITRE_DESSIN = "Gloria Hallelujah";
 
+  /**
+   * Les titres d'Assouline et d'Aquarelle : Archivo Black, approche −7 %
+   * (Hugo, 14/10/2026). Black Han Sans, prévue d'abord, n'a pas les lettres
+   * accentuées : « FÉVRIER » sortait avec un É d'une autre police.
+   */
+  const POLICE_TITRE_LARGE = "Archivo Black";
+  const APPROCHE_TITRE_LARGE = -70;
+
   /** Les polices de chaque style : l'aperçu les charge, le mode d'emploi InDesign les nomme. */
   const POLICES = {
     default: ["Playfair Display"],
     elegant: ["Cormorant Garamond", "Cormorant Infant"],
     drawing: [POLICE_TITRE_DESSIN, "Gloria Hallelujah"],
-    assouline: ["Black Han Sans", "Playfair Display"],
-    watercolor: ["Black Han Sans", "Manrope"],
+    assouline: [POLICE_TITRE_LARGE, "Playfair Display"],
+    watercolor: [POLICE_TITRE_LARGE, "Manrope"],
     "travel-book": ["Lilita One"],
     "photo-drawing": ["Caveat Brush"],
   };
@@ -78,7 +86,7 @@
   const FICHIERS_POLICES = [
     { famille: "Cormorant Garamond", fichier: "cormorant-garamond", poids: "300 700" },
     { famille: "Cormorant Infant", fichier: "cormorant-infant", poids: "300 700" },
-    { famille: "Black Han Sans", fichier: "black-han-sans", poids: "400", sansExt: true },
+    { famille: "Archivo Black", fichier: "archivo-black", poids: "400" },
     { famille: "Manrope", fichier: "manrope", poids: "200 800" },
     { famille: "Caveat Brush", fichier: "caveat-brush", poids: "400" },
     { famille: "Lilita One", fichier: "lilita-one", poids: "400" },
@@ -359,6 +367,11 @@ En français, sans emoji, sans guillemets autour des textes. Réponds uniquement
     return { beige: C0.beige, noir: C0.noir, beigeFonce: C0.beigeFonce, blanc: C0.blanc };
   };
 
+  /** La part de la hauteur des capitales du titre d'Élégant qui chevauche la photo. */
+  const CHEVAUCHEMENT_TITRE = 0.25;
+  /** La hauteur des capitales de Cormorant Garamond, en corps. */
+  const HAUTEUR_CAPITALES = 0.63;
+
   /**
    * **Élégant** (Hugo, 09/10/2026) : fonds beige, titre en Cormorant Garamond,
    * le reste en Cormorant Infant, tout en noir typo, logo en beige foncé. Deux
@@ -377,20 +390,26 @@ En français, sans emoji, sans guillemets autour des textes. Réponds uniquement
     const titre = String(textes.titre || "").toUpperCase();
     const corpsTitre = corpsQuiTient(titre, largeur, 0.62, { min: 20, max: 46 });
     const hTitre = arrondi2(corpsTitre * MM_PAR_PT * 1.15);
-    el.push({ type: "texte", x, y: arrondi2(face.y + 6), l: largeur, h: hTitre, texte: titre, police: "Cormorant Garamond", style: "Regular", corps: corpsTitre, couleur: "noir", alignement: "centre", vertical: "bas", approche: 40 });
+    const yTitre = face.y + 6;
     // La date, en pied.
     const date = String(textes.date || "").toUpperCase();
     const hDate = 7;
     const yDate = face.y + face.h - moteur().RETRAIT - hDate;
     el.push({ type: "texte", x, y: arrondi2(yDate), l: largeur, h: hDate, texte: date, police: "Cormorant Infant", style: "Medium", corps: 13, couleur: "noir", alignement: "centre", vertical: "centre", approche: 80 });
-    // La photo, entre les deux.
-    const yPhoto = face.y + 6 + hTitre + 5;
+    // La photo, entre les deux. Le titre en mord le haut d'un quart de la
+    // hauteur de ses capitales (Hugo, 14/10/2026) : sa ligne de base est à
+    // 0,2 corps du bas de son cadre (calé en bas), ses capitales font 0,63 corps.
+    const corpsMm = corpsTitre * MM_PAR_PT;
+    const ligneDeBase = yTitre + hTitre - 0.2 * corpsMm;
+    const yPhoto = ligneDeBase - CHEVAUCHEMENT_TITRE * HAUTEUR_CAPITALES * corpsMm;
     const hPhoto = yDate - 6 - yPhoto;
     if (recto) {
       el.push({ type: "image", x, y: arrondi2(yPhoto), l: arrondi2(largeur), h: arrondi2(hPhoto), fichier: recto.fichier, src: recto.src, px: recto.px, focus: recto.focus || [0.5, 0.45] });
     } else {
       el.push({ type: "rect", x, y: arrondi2(yPhoto), l: arrondi2(largeur), h: arrondi2(hPhoto), fond: "beigeFonce", trait: null });
     }
+    // Le titre après la photo : il passe dessus.
+    el.push({ type: "texte", x, y: arrondi2(yTitre), l: largeur, h: hTitre, texte: titre, police: "Cormorant Garamond", style: "Regular", corps: corpsTitre, couleur: "noir", alignement: "centre", vertical: "bas", approche: 40 });
 
     // Quatrième : la bande panoramique, le texte au centre, le logo en pied.
     const quatrieme = p.faces.verso;
@@ -716,24 +735,124 @@ En français, sans emoji, sans guillemets autour des textes. Réponds uniquement
   const coutImages = (images) => images.reduce((s, i) => s + (i.taille === "1024x1024" ? 0.17 : 0.25), 0);
 
   /**
-   * La consigne de l'appel « vision » du style Photo-dessin : le contour
-   * approximatif des personnes sur la photo, pour les entourer d'un trait.
+   * La consigne de l'appel « vision » du style Photo-dessin : le tracé qui
+   * épouse le sujet principal de la photo choisie (Hugo, 14/10/2026 : « il
+   * doit s'adapter à la photo »). Deux formes :
+   *
+   * - **ligne** — le cas courant, un sujet grand ou coupé par un bord : la
+   *   ligne du haut de sa silhouette (têtes, toits, clochers), d'un bord à
+   *   l'autre, qui redescend entre deux sujets ;
+   * - **anneau** — un sujet petit, entier, entouré de décor (vu de loin ou
+   *   d'en haut, comme la référence des Philippines) : son contour fermé.
    */
   const CONSIGNE_CONTOUR =
-    "Sur cette photo de voyage, repère les personnes (les voyageurs). Donne le contour approximatif du groupe qu'elles forment, " +
-    "avec une petite marge autour : 16 à 24 points, dans le sens des aiguilles d'une montre, en coordonnées normalisées (0 à 1, " +
-    "x de gauche à droite, y de haut en bas). Sans personne visible, renvoie une liste vide. Réponds uniquement par un objet JSON, " +
-    'sans texte autour : {"contour":[[0.4,0.3],[0.6,0.3]]}';
+    "Cette photo de voyage sera la première de couverture d'un carnet. On va dessiner par-dessus, à main levée, trois ou quatre traits " +
+    "parallèles qui épousent le sujet principal : les voyageurs s'ils sont sur la photo, sinon ce qui la domine (un monument, une église, " +
+    "un arbre, une montagne…). Choisis la forme du tracé :\n" +
+    '- "ligne" (le cas le plus courant) : le sujet est grand, ou coupé par un bord de la photo. Donne la ligne qui passe juste au-dessus ' +
+    "de sa silhouette (têtes, épaules, toits, clochers), avec une petite marge, d'un bord à l'autre de la photo : 12 à 24 points, de gauche " +
+    "à droite (x croissant de 0 à 1). Entre deux sujets (deux personnes, deux clochers), la ligne redescend ; là où il n'y a plus de sujet, " +
+    "elle rejoint le bord en douceur.\n" +
+    '- "anneau" : le sujet est petit, entièrement visible et entouré de décor (vu de loin ou d\'en haut). Donne son contour fermé, ' +
+    "avec une petite marge : 16 à 24 points, dans le sens des aiguilles d'une montre.\n" +
+    'Donne aussi "centre", le centre du sujet. Coordonnées normalisées : x de 0 (gauche) à 1 (droite), y de 0 (haut) à 1 (bas). ' +
+    "Réponds uniquement par un objet JSON, sans texte autour :\n" +
+    '{"forme":"ligne","points":[[0,0.62],[0.3,0.4],[0.5,0.55],[0.7,0.42],[1,0.6]],"centre":[0.5,0.7]}';
 
-  /** Le contour lu, ou une ellipse au centre de la photo si l'appel n'a rien donné. */
+  /** Un point lu de la réponse : `[x, y]` ou `{ x, y }`, en 0–1 ou en pourcentage. */
+  function pointLu(p) {
+    const brut = Array.isArray(p) ? p : p && typeof p === "object" ? [p.x, p.y] : null;
+    if (!brut || brut.length < 2) return null;
+    let [x, y] = brut.map(Number);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    if (x > 1.5 || y > 1.5) [x, y] = [x / 100, y / 100];
+    return [Math.max(0, Math.min(1, x)), Math.max(0, Math.min(1, y))];
+  }
+
+  /**
+   * Le tracé lu : `{ forme, points, centre, trouve }`. `trouve` est faux quand
+   * la réponse est inutilisable : la maquette se rabat alors sur une ellipse
+   * au centre, et l'atelier le dit au lieu de garder ce repli.
+   */
   function lireContour(reponse) {
-    const points = (Array.isArray(reponse?.contour) ? reponse.contour : [])
-      .filter((p) => Array.isArray(p) && p.length === 2 && p.every((v) => Number.isFinite(v)))
-      .map(([x, y]) => [Math.max(0, Math.min(1, x)), Math.max(0, Math.min(1, y))]);
-    if (points.length >= 6) return points;
-    return Array.from({ length: 18 }, (_, i) => {
-      const a = (i / 18) * 2 * Math.PI;
-      return [0.5 + 0.2 * Math.cos(a), 0.58 + 0.16 * Math.sin(a)];
+    const liste = Array.isArray(reponse) ? reponse : reponse?.points ?? reponse?.contour ?? reponse?.ligne ?? [];
+    const points = (Array.isArray(liste) ? liste : []).map(pointLu).filter(Boolean);
+    let forme = reponse?.forme === "anneau" || reponse?.forme === "ligne" ? reponse.forme : null;
+    // Sans forme dite : une ligne va d'un bord à l'autre, un anneau non.
+    if (!forme && points.length) {
+      const xs = points.map((p) => p[0]);
+      forme = Math.min(...xs) < 0.08 && Math.max(...xs) > 0.92 ? "ligne" : "anneau";
+    }
+    const centreLu = pointLu(reponse?.centre);
+    const assez = forme === "ligne" ? points.length >= 4 : points.length >= 6;
+    if (assez) {
+      const tries = forme === "ligne" ? [...points].sort((a, b) => a[0] - b[0]) : points;
+      const centre = centreLu || [tries.reduce((t, p) => t + p[0], 0) / tries.length, tries.reduce((t, p) => t + p[1], 0) / tries.length];
+      return { forme, points: tries, centre, trouve: true };
+    }
+    return {
+      forme: "anneau",
+      points: Array.from({ length: 18 }, (_, i) => {
+        const a = (i / 18) * 2 * Math.PI;
+        return [0.5 + 0.2 * Math.cos(a), 0.58 + 0.16 * Math.sin(a)];
+      }),
+      centre: centreLu || [0.5, 0.58],
+      trouve: false,
+    };
+  }
+
+  /**
+   * Le point focal qui met le sujet au milieu de la face visible, autant que
+   * le cadrage le permet : la photo remplit le plat et en déborde d'un côté.
+   */
+  function focusSurSujet(cadre, px, centre) {
+    const [pl, ph] = px || [1, 1];
+    const echelle = Math.max(cadre.l / pl, cadre.h / ph);
+    const l = pl * echelle;
+    const h = ph * echelle;
+    const axe = (c, plein, vu) => (plein - vu > 0.01 ? Math.max(0, Math.min(1, (c * plein - vu / 2) / (plein - vu))) : 0.5);
+    return [arrondi2(axe(centre[0], l, cadre.l)), arrondi2(axe(centre[1], h, cadre.h))];
+  }
+
+  /** La hauteur d'une ligne (points triés par x) à l'abscisse `x`, par interpolation. */
+  function hauteurA(points, x) {
+    if (x <= points[0][0]) return points[0][1];
+    for (let i = 1; i < points.length; i += 1) {
+      if (x <= points[i][0]) {
+        const [x0, y0] = points[i - 1];
+        const [x1, y1] = points[i];
+        return y0 + ((y1 - y0) * (x - x0)) / Math.max(1e-6, x1 - x0);
+      }
+    }
+    return points[points.length - 1][1];
+  }
+
+  /**
+   * Les traits parallèles au-dessus du sujet (forme « ligne ») : la ligne lue,
+   * en mm sur la photo cadrée, prolongée jusqu'aux bords du plat (fond perdu
+   * compris), puis recopiée `n` fois vers le haut, au pas de `pas` mm — des
+   * parallèles lisses, comme les exemples de Hugo. Du plus bas au plus haut.
+   */
+  function lignesAuDessus(points, place, bornes, { n = 3, pas = 11 } = {}) {
+    const enMm = points.map(([x, y]) => [place.x + x * place.l, place.y + y * place.h]);
+    const dedans = enMm.filter(([x]) => x > bornes.x0 + 2 && x < bornes.x1 - 2);
+    const base = [[bornes.x0, hauteurA(enMm, bornes.x0)], ...dedans, [bornes.x1, hauteurA(enMm, bornes.x1)]];
+    return Array.from({ length: n }, (_, k) => base.map(([x, y]) => [arrondi2(x), arrondi2(y - k * pas)]));
+  }
+
+  /**
+   * Le tracé du titre au-dessus de la ligne la plus haute : en chaque point,
+   * le plus haut de la ligne alentour (le titre ne la coupe pas), lissé, et
+   * jamais plus haut que `plafond` (sous les voyageurs).
+   */
+  function cheminDuTitre(ligne, ecart, plafond, fenetre = 4) {
+    const hauts = ligne.map(([x], i) => {
+      const voisins = ligne.slice(Math.max(0, i - fenetre), i + fenetre + 1).map((p) => p[1]);
+      return [x, Math.min(...voisins) - ecart];
+    });
+    return hauts.map(([x], i) => {
+      const voisins = hauts.slice(Math.max(0, i - 2), i + 3).map((p) => p[1]);
+      return [x, arrondi2(Math.max(plafond, voisins.reduce((t, v) => t + v, 0) / voisins.length))];
     });
   }
 
@@ -792,7 +911,7 @@ En français, sans emoji, sans guillemets autour des textes. Réponds uniquement
   /**
    * **Assouline** (Hugo, 09/10/2026) : fond choisi entre le vert, le bleu et
    * le beige selon l'illustration ; titres de la première et de la quatrième
-   * en Black Han Sans, couleur dominante de l'illustration ; résumé et
+   * en Archivo Black, couleur dominante de l'illustration ; résumé et
    * chiffres en Playfair Display, noir typo ; encadré des chiffres blanc,
    * bordé de la couleur des titres. Tout est rédigé par l'IA.
    */
@@ -808,12 +927,12 @@ En français, sans emoji, sans guillemets autour des textes. Réponds uniquement
     const titre = String(textes.titre || "").toUpperCase();
     const corps = corpsQuiTient(titre, largeur, 0.72, { min: 24, max: 58 });
     const hT = arrondi2(corps * MM_PAR_PT * 1.1);
-    el.push({ type: "texte", x: face.x + marge, y: arrondi2(face.y + 10), l: largeur, h: hT, texte: titre, police: "Black Han Sans", style: "Regular", corps, couleur: "accent", alignement: "centre", vertical: "centre" });
+    el.push({ type: "texte", x: face.x + marge, y: arrondi2(face.y + 10), l: largeur, h: hT, texte: titre, police: POLICE_TITRE_LARGE, style: "Regular", approche: APPROCHE_TITRE_LARGE, corps, couleur: "accent", alignement: "centre", vertical: "centre" });
     if (images.illustration) {
       const cote = Math.min(largeur, face.h * 0.62);
       el.push({ type: "image", x: arrondi2(face.x + face.l / 2 - cote / 2), y: arrondi2(face.y + 10 + hT + 8), l: arrondi2(cote), h: arrondi2(cote), fichier: images.illustration.fichier, src: images.illustration.src, px: images.illustration.px, focus: [0.5, 0.5], contenir: true });
     }
-    el.push({ type: "texte", x: face.x + marge, y: arrondi2(face.y + face.h - moteur().RETRAIT - 9), l: largeur, h: 9, texte: String(textes.annee || ""), police: "Black Han Sans", style: "Regular", corps: 20, couleur: "accent", alignement: "centre", vertical: "centre" });
+    el.push({ type: "texte", x: face.x + marge, y: arrondi2(face.y + face.h - moteur().RETRAIT - 9), l: largeur, h: 9, texte: String(textes.annee || ""), police: POLICE_TITRE_LARGE, style: "Regular", approche: APPROCHE_TITRE_LARGE, corps: 20, couleur: "accent", alignement: "centre", vertical: "centre" });
 
     // Quatrième : les voyageurs en titre, le résumé, l'encadré des chiffres.
     const q = p.faces.verso;
@@ -823,7 +942,7 @@ En français, sans emoji, sans guillemets autour des textes. Réponds uniquement
     const corpsV = corpsQuiTient(titreV, lV, 0.68, { min: 16, max: 26, lignes: 2 });
     const lignesV = couperLignes(titreV, corpsV, lV, 0.68, 2);
     const hV = arrondi2(corpsV * MM_PAR_PT * 1.2 * lignesV.length);
-    el.push({ type: "texte", x: xV, y: arrondi2(q.y + 8), l: lV, h: hV, texte: lignesV.join("\n"), police: "Black Han Sans", style: "Regular", corps: corpsV, couleur: "accent", alignement: "centre", vertical: "centre" });
+    el.push({ type: "texte", x: xV, y: arrondi2(q.y + 8), l: lV, h: hV, texte: lignesV.join("\n"), police: POLICE_TITRE_LARGE, style: "Regular", approche: APPROCHE_TITRE_LARGE, corps: corpsV, couleur: "accent", alignement: "centre", vertical: "centre" });
     const hBoite = chiffres.length ? 42 : 0;
     const yBoite = q.y + q.h - moteur().RETRAIT - hBoite;
     const yResume = q.y + 8 + hV + 8;
@@ -845,8 +964,8 @@ En français, sans emoji, sans guillemets autour des textes. Réponds uniquement
   /* ---------------------------------------------------- style Aquarelle --- */
 
   /**
-   * **Aquarelle** (Hugo, 09/10/2026) : fonds beige ; titres en Black Han
-   * Sans, le reste en Manrope, en noir typo ; sur la quatrième, le motif M de
+   * **Aquarelle** (Hugo, 09/10/2026) : fonds beige ; titres en Archivo
+   * Black, le reste en Manrope, en noir typo ; sur la quatrième, le motif M de
    * MemoBook en beige foncé à 20 % et le logo en beige foncé. Les illustrations
    * sont générées d'après les récits, celles de la quatrième sans contour net.
    */
@@ -862,7 +981,7 @@ En français, sans emoji, sans guillemets autour des textes. Réponds uniquement
     if (images.recto) {
       el.push({ type: "image", x: p.xRecto, y: arrondi2(face.y + hBande), l: arrondi2(p.L + p.f), h: arrondi2(p.H + p.f - face.y - hBande), fichier: images.recto.fichier, src: images.recto.src, px: images.recto.px, focus: [0.5, 0.5] });
     }
-    el.push({ type: "texte", x: face.x + marge, y: arrondi2(face.y + 4), l: face.l - 2 * marge, h: arrondi2(hBande - 6), texte: titre, police: "Black Han Sans", style: "Regular", corps, couleur: "noir", alignement: "centre", vertical: "centre" });
+    el.push({ type: "texte", x: face.x + marge, y: arrondi2(face.y + 4), l: face.l - 2 * marge, h: arrondi2(hBande - 6), texte: titre, police: POLICE_TITRE_LARGE, style: "Regular", approche: APPROCHE_TITRE_LARGE, corps, couleur: "noir", alignement: "centre", vertical: "centre" });
 
     // Quatrième : le motif M, la date, trois vignettes et leurs paragraphes, le logo.
     const q = p.faces.verso;
@@ -872,7 +991,7 @@ En français, sans emoji, sans guillemets autour des textes. Réponds uniquement
     }
     const xV = q.x + marge;
     const lV = q.l - 2 * marge;
-    el.push({ type: "texte", x: xV, y: arrondi2(q.y + 8), l: lV, h: 10, texte: String(textes.date || ""), police: "Black Han Sans", style: "Regular", corps: 18, couleur: "noir", alignement: "centre", vertical: "centre" });
+    el.push({ type: "texte", x: xV, y: arrondi2(q.y + 8), l: lV, h: 10, texte: String(textes.date || ""), police: POLICE_TITRE_LARGE, style: "Regular", approche: APPROCHE_TITRE_LARGE, corps: 18, couleur: "noir", alignement: "centre", vertical: "centre" });
     const paras = paragraphes(textes.resume).slice(0, 3);
     const hLogo = 14;
     const logoH = logo?.px ? (hLogo * logo.px[1]) / logo.px[0] : hLogo;
@@ -963,11 +1082,16 @@ En français, sans emoji, sans guillemets autour des textes. Réponds uniquement
 
   /* ------------------------------------------------- style Photo-dessin --- */
 
+  /** L'épaisseur des traits de Photo-dessin, en pt : un feutre, comme sur les exemples de Hugo. */
+  const EPAISSEUR_TRACE = 4;
+
   /**
-   * **Photo-dessin** (Hugo, 09/10/2026) : sur la première, une photo où l'on
-   * voit les voyageurs, entourés d'un contour grossier, et le nom du pays qui
-   * suit la plus large ligne du contour ; Caveat Brush partout ; la couleur des
-   * textes et du contour vient de la photo. La quatrième prend cette couleur
+   * **Photo-dessin** (Hugo, 09/10/2026 et 14/10/2026) : sur la première, une
+   * photo où l'on voit les voyageurs, cadrée sur eux ; des traits au feutre
+   * qui épousent le sujet de cette photo-là (`CONSIGNE_CONTOUR` : au-dessus
+   * de sa silhouette d'un bord à l'autre, ou en anneaux autour d'un petit
+   * sujet), et le nom du pays qui suit le trait du haut ; Caveat Brush
+   * partout ; la couleur des textes et du trait vient de la photo. La quatrième prend cette couleur
    * en fond, ses textes (fixes) la teinte de la marque la plus lisible.
    */
   function maquettePhotoDessin({ fiche, textes, recto, contour, couleurPhoto = null, luminancePhoto = 0.35, logo }) {
@@ -978,25 +1102,44 @@ En français, sans emoji, sans guillemets autour des textes. Réponds uniquement
     const el = fonds(p, { verso: "encre", recto: "encre" });
     const face = p.faces.recto;
     const plat = { x: p.xRecto, y: -p.f, l: p.L + p.f, h: p.H + 2 * p.f };
-    if (recto) el.push({ type: "image", ...plat, fichier: recto.fichier, src: recto.src, px: recto.px, focus: recto.focus || [0.5, 0.5] });
-    // Le contour : sur la photo telle qu'elle est cadrée — l'image remplit le plat.
-    const place = recto ? moteur().placementImage({ ...plat, px: recto.px, focus: recto.focus || [0.5, 0.5] }) : plat;
+    const trace = Array.isArray(contour) ? lireContour({ contour }) : contour?.points ? contour : lireContour(contour);
+    // La photo est cadrée sur le sujet, puis le tracé posé sur la photo cadrée.
+    const focus = recto?.focus || (recto ? focusSurSujet(plat, recto.px, trace.centre) : [0.5, 0.5]);
+    if (recto) el.push({ type: "image", ...plat, fichier: recto.fichier, src: recto.src, px: recto.px, focus });
+    const place = recto ? moteur().placementImage({ ...plat, px: recto.px, focus }) : plat;
     const titre = String(textes.titre || "").toUpperCase();
     // Le corps du titre : il couvre à peu près la largeur de la face, sans dépasser 54 pt.
     const corps = arrondi2(Math.max(24, Math.min(54, (face.l * 0.85) / Math.max(4, titre.length) / (0.5 * MM_PAR_PT))));
     const hTitre = corps * MM_PAR_PT;
-    const cadre = { x: face.x + 4, y: face.y + 14, l: face.l - 8, h: face.h - 14 - 16 };
-    const anneaux = anneauxAutour(lireContour({ contour }), place, { cadre, reserveHaut: hTitre + 4 });
-    for (const a of anneaux) el.push({ type: "courbe", ancres: moteur().lisser(a, true, 0.9), ferme: true, fond: null, trait: { couleur: "encre", epaisseur: 1.6, tirets: null } });
-    // Le titre suit l'arc du haut de l'anneau le plus large, juste au-dessus.
-    const arc = arcDuHaut(anneaux[anneaux.length - 1]).map(([x, y]) => [x, arrondi2(y - 3)]);
-    if (arc.length >= 3 && titre) {
-      // Le titre tient sur l'arc : sinon le texte sur tracé serait coupé.
-      const longueur = arc.slice(1).reduce((t, q2, i) => t + Math.hypot(q2[0] - arc[i][0], q2[1] - arc[i][1]), 0);
-      const largeurA = (c) => moteur().largeurTexte(titre, c, 0.55) + titre.length * 0.04 * c * MM_PAR_PT;
-      let corpsArc = corps;
-      while (corpsArc > 14 && largeurA(corpsArc) > longueur * 0.92) corpsArc -= 1;
-      el.push({ type: "texteChemin", ancres: moteur().lisser(arc, false), texte: titre, police: "Caveat Brush", style: "Regular", corps: arrondi2(corpsArc), couleur: "encre", approche: 40, x: face.x, y: face.y, l: face.l, h: 20 });
+    const largeurA = (c) => moteur().largeurTexte(titre, c, 0.55) + titre.length * 0.04 * c * MM_PAR_PT;
+    const trait = { couleur: "encre", epaisseur: EPAISSEUR_TRACE, tirets: null };
+    let cheminTitre = null;
+    if (trace.forme === "ligne") {
+      // Des traits d'un bord à l'autre de la première, au-dessus du sujet.
+      const lignes = lignesAuDessus(trace.points, place, { x0: plat.x, x1: plat.x + plat.l });
+      for (const l of lignes) el.push({ type: "courbe", ancres: moteur().lisser(l, false, 0.9), ferme: false, fond: null, trait });
+      const plafond = face.y + 14 + hTitre * 0.75;
+      const haute = lignes[lignes.length - 1];
+      const dense = Array.from({ length: 41 }, (_, i) => {
+        const x = face.x + 4 + ((face.l - 8) * i) / 40;
+        return [x, hauteurA(haute, x)];
+      });
+      const chemin = cheminDuTitre(dense, 5, plafond, 6);
+      if (chemin.length >= 3) cheminTitre = chemin;
+    } else {
+      const cadre = { x: face.x + 4, y: face.y + 14, l: face.l - 8, h: face.h - 14 - 16 };
+      const anneaux = anneauxAutour(trace.points, place, { cadre, reserveHaut: hTitre + 4 });
+      for (const a of anneaux) el.push({ type: "courbe", ancres: moteur().lisser(a, true, 0.9), ferme: true, fond: null, trait });
+      // Le titre suit l'arc du haut de l'anneau le plus large, juste au-dessus.
+      const arc = arcDuHaut(anneaux[anneaux.length - 1]).map(([x, y]) => [x, arrondi2(y - 3)]);
+      if (arc.length >= 3) cheminTitre = arc;
+    }
+    if (cheminTitre && titre) {
+      // Le titre tient sur son tracé : sinon le texte sur tracé serait coupé.
+      const longueur = cheminTitre.slice(1).reduce((t, q2, i) => t + Math.hypot(q2[0] - cheminTitre[i][0], q2[1] - cheminTitre[i][1]), 0);
+      let corpsTitre = corps;
+      while (corpsTitre > 14 && largeurA(corpsTitre) > longueur * 0.92) corpsTitre -= 1;
+      el.push({ type: "texteChemin", ancres: moteur().lisser(cheminTitre, false), texte: titre, police: "Caveat Brush", style: "Regular", corps: arrondi2(corpsTitre), couleur: "encre", approche: 40, x: face.x, y: face.y, l: face.l, h: 20 });
     }
     if (textes.voyageurs) {
       el.push({ type: "texte", x: face.x + 10, y: arrondi2(face.y + 4), l: face.l - 20, h: 9, texte: String(textes.voyageurs).toUpperCase(), police: "Caveat Brush", style: "Regular", corps: 15, couleur: "encre", alignement: "centre", vertical: "centre" });
@@ -1009,7 +1152,7 @@ En français, sans emoji, sans guillemets autour des textes. Réponds uniquement
     const q = p.faces.verso;
     for (let k = 0; k < 4; k += 1) {
       const d = k * 7;
-      el.push({ type: "courbe", ancres: moteur().lisser([[-p.f, 14 + d], [20, 26 + d * 1.1], [44, 20 + d], [64, 8 + d * 0.8], [80 + d * 0.6, -p.f]], false), ferme: false, fond: null, trait: { couleur: ecriture, epaisseur: 1.6, tirets: null } });
+      el.push({ type: "courbe", ancres: moteur().lisser([[-p.f, 14 + d], [20, 26 + d * 1.1], [44, 20 + d], [64, 8 + d * 0.8], [80 + d * 0.6, -p.f]], false), ferme: false, fond: null, trait: { couleur: ecriture, epaisseur: EPAISSEUR_TRACE, tirets: null } });
     }
     const merci = String(textes.texteVerso || "").toUpperCase();
     const lMerci = Math.min(q.l - 2 * moteur().CHARNIERE - 16, 78);
@@ -1090,6 +1233,7 @@ En français, sans emoji, sans guillemets autour des textes. Réponds uniquement
     coutImages,
     CONSIGNE_CONTOUR,
     lireContour,
+    focusSurSujet,
   };
 
   if (enNode) module.exports = api;

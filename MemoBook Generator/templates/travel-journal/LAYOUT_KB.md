@@ -1339,12 +1339,12 @@ moteur reste `couverture.js` ; un style ne fait que poser ses éléments
 | Style | Disponible | Polices | Couleurs | Images | Textes |
 |---|---|---|---|---|---|
 | Par défaut | oui | Playfair Display | photo, papier, encre | la photo de la première | titre, voyageurs, dates (tirés du carnet) |
-| Élégant | oui | Cormorant Garamond (titre), Cormorant Infant | fonds beige, noir typo, logo beige foncé | deux photos de paysage : grande sur la première, bande panoramique en tête de la quatrième | titre, date, texte de la quatrième — rédigés par l'IA |
+| Élégant | oui | Cormorant Garamond (titre), Cormorant Infant | fonds beige, noir typo, logo beige foncé | deux photos de paysage : grande sur la première — le titre en mord le haut d'un quart de la hauteur de ses capitales —, bande panoramique en tête de la quatrième | titre, date, texte de la quatrième — rédigés par l'IA |
 | Dessin | oui | Hansley (titres) — **Gloria Hallelujah tant que sa licence n'est pas vérifiée** —, Gloria Hallelujah | fonds beige, noir typo, disques bleu pâle | trois dessins de la bibliothèque (`assets/stickers/`, au trait ou dessinés), appelés par les récits | phrase-titre et titre de la quatrième rédigés par l'IA ; années, voyageurs et texte de la quatrième tirés du carnet |
-| Assouline | oui | Black Han Sans (titres), Playfair Display | fond vert, bleu ou beige selon l'illustration ; titres dans sa couleur dominante (contraste 3 au moins) ; résumé et chiffres en noir typo ; encadré des chiffres blanc, bordé de la couleur des titres | une illustration générée, liée au lieu | titre et texte de la quatrième rédigés par l'IA ; année et voyageurs (titre de la quatrième) tirés du carnet |
-| Aquarelle | oui | Black Han Sans (titres), Manrope | fonds beige, noir typo ; motif M en beige foncé à 20 %, logo beige foncé | une aquarelle générée sur la première ; trois vignettes « qui bavent », sans contour net, sur la quatrième | titre et les trois paragraphes de la quatrième (un par vignette) rédigés par l'IA ; date tirée du carnet |
+| Assouline | oui | Archivo Black (titres, approche −7 %), Playfair Display | fond vert, bleu ou beige selon l'illustration ; titres dans sa couleur dominante (contraste 3 au moins) ; résumé et chiffres en noir typo ; encadré des chiffres blanc, bordé de la couleur des titres | une illustration générée, liée au lieu | titre et texte de la quatrième rédigés par l'IA ; année et voyageurs (titre de la quatrième) tirés du carnet |
+| Aquarelle | oui | Archivo Black (titres, approche −7 %), Manrope | fonds beige, noir typo ; motif M en beige foncé à 20 %, logo beige foncé | une aquarelle générée sur la première ; trois vignettes « qui bavent », sans contour net, sur la quatrième | titre et les trois paragraphes de la quatrième (un par vignette) rédigés par l'IA ; date tirée du carnet |
 | Travel book | oui | Lilita One | texte vert sur fond beige ; cadre vert déchiré | timbres et autocollants générés d'après les récits ; tampon du pays, généré à partir de sa silhouette (contours de carte) ; photo de la quatrième choisie comme dans le style par défaut | titre, dates, voyageurs tirés du carnet |
-| Photo-dessin | oui | Caveat Brush | textes et contour de la couleur de la photo ; la quatrième en prend la couleur en fond, ses textes la teinte de la marque la plus lisible | une photo où l'on voit les voyageurs, entourés de quatre anneaux à main levée ; le titre suit l'anneau le plus large | titre rédigé par l'IA ; voyageurs, année tirés du carnet ; « Merci d'avoir suivi mon aventure ! » en quatrième, modifiable |
+| Photo-dessin | oui | Caveat Brush | textes et contour de la couleur de la photo ; la quatrième en prend la couleur en fond, ses textes la teinte de la marque la plus lisible | une photo où l'on voit les voyageurs, cadrée sur eux ; des traits au feutre qui épousent le sujet de cette photo-là (voir plus bas) ; le titre suit le trait du haut | titre rédigé par l'IA ; voyageurs, année tirés du carnet ; « Merci d'avoir suivi mon aventure ! » en quatrième, modifiable |
 
 - **Les textes** sont rédigés par l'IA d'après les récits (« Rédiger avec
   l'IA », `consigneTextes`), puis **modifiables** dans le panneau ; ce que le
@@ -1368,11 +1368,22 @@ moteur reste `couverture.js` ; un style ne fait que poser ses éléments
   Les prompts reprennent les textes du style — rédiger les textes d'abord.
 - **Photo-dessin** : la photo de la première est celle que le voyageur a
   choisie, sinon la mieux notée où l'analyse d'étape voit des personnes. Un
-  appel « vision » (`CONSIGNE_CONTOUR`, le modèle de l'analyse) renvoie le
-  contour du groupe ; à défaut, une ellipse au centre. Un contour trop large
-  est resserré pour que les anneaux et le titre tiennent dans la face, et le
-  corps du titre se réduit pour tenir sur l'arc. Contour et couleurs sont
-  gardés par photo (« Repérer à nouveau » pour relancer).
+  appel « vision » (`CONSIGNE_CONTOUR`, le modèle de l'analyse) dit comment
+  tracer **sur cette photo-là** (Hugo, 14/10/2026) :
+  - **ligne** (le cas courant : un sujet grand ou coupé par un bord) : la
+    ligne juste au-dessus de sa silhouette — têtes, toits, clochers —, d'un
+    bord à l'autre ; elle redescend entre deux sujets. Trois parallèles
+    lisses, au pas de 11 mm, de bord à bord du plat ;
+  - **anneau** (un petit sujet entier, vu de loin ou d'en haut, comme la
+    référence des Philippines) : son contour fermé, et quatre anneaux autour,
+    resserrés pour tenir dans la face.
+
+  Les traits font 4 pt, comme un feutre. La photo est cadrée pour mettre le
+  sujet au milieu de la face. Le titre suit le trait du haut, sans le couper,
+  jamais plus haut que les voyageurs, et son corps se réduit pour tenir sur
+  le tracé. Une réponse inutilisable n'est **pas** gardée : la maquette
+  dessine en attendant un cercle au centre, et le panneau le dit (« Repérer
+  à nouveau » pour relancer). Le tracé et les couleurs sont gardés par photo.
 - **Le PDF de l'app** n'imprime encore que le style par défaut : le style
   choisi dans l'app est enregistré, pas encore composé côté serveur.
 
