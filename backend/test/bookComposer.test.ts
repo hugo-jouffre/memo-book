@@ -95,4 +95,29 @@ describe("composition du carnet de l'app", () => {
       expect(posees.length, `ratio ${ratio}`).toBe(Math.min(demandees, photos.length));
     }
   });
+
+  describe("quiz", () => {
+    const quiz = { question: "Qui a renversé le café ?", choices: ["Clara", "Hugo", "Le serveur"], answer: "Hugo" };
+    // Une étape courte, sans photo : sa première page peut porter le quiz.
+    const sansPhoto = { ...payload, days: [{ ...payload.days[0]!, photos: [], layout_collage: false, layout_story_opener: true, quiz }] };
+
+    it("pose le quiz rédigé sur une page sans photo, au réglage allumé", () => {
+      const days = composerCarnet(sansPhoto, { ratio: 50, funFacts: false, quiz: true, decorations: 2 });
+      const hotes = days.filter((j) => j["quiz"]);
+      expect(hotes).toHaveLength(1);
+      expect(hotes[0]!["quiz"]).toEqual(quiz);
+      expect(hotes[0]!["photos"]).toEqual([]);
+    });
+
+    it("n'en pose aucun au réglage coupé", () => {
+      const days = composerCarnet(sansPhoto, { ratio: 50, funFacts: false, quiz: false, decorations: 2 });
+      expect(days.some((j) => j["quiz"])).toBe(false);
+    });
+
+    it("ne le recopie jamais sur une page qui a des photos", () => {
+      const avecPhotos = { ...payload, days: [{ ...payload.days[0]!, quiz }] };
+      const days = composerCarnet(avecPhotos, { ratio: 50, funFacts: false, quiz: true, decorations: 2 });
+      for (const jour of days.filter((j) => j["quiz"])) expect(jour["photos"]).toEqual([]);
+    });
+  });
 });

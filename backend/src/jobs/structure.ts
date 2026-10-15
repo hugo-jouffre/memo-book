@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import type { AppContext } from "../context.js";
 import { applyBookSettings, keepsPhotos } from "../services/bookSettings.js";
 import { validatePayload } from "../services/payloadValidator.js";
-import { premiereEtapeAGauche, type StructuringEntry } from "../services/structuring.js";
+import { premiereEtapeAGauche, quizForBook, type StructuringEntry } from "../services/structuring.js";
 import { parseTripContext } from "../services/tripContext.js";
 import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import { JOB_NAMES } from "./queue.js";
@@ -130,6 +130,8 @@ export async function structureRender(
         // pour qu'un réglage rallumé les retrouve sans tout relancer.
         funFact: memo.funFactsEnabled ? entry.funFact : null,
         funFactTitle: memo.funFactsEnabled ? entry.funFactTitle : null,
+        // Même chose pour « Quiz intégrés à l'histoire » : coupé, aucun quiz.
+        quiz: memo.quizEnabled ? quizForBook(entry) : null,
         weatherKey: entry.weatherKey,
         capturedAt: entry.capturedAt,
         placeLabel: entry.placeLabel,

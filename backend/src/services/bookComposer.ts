@@ -19,8 +19,10 @@
  *
  * Ce qui vient de l'Agent Mise en page et que le composeur ne sait pas
  * deviner — le bandeau (météo, nuit, hôte), l'étiquette de section, le champ à
- * remplir, le quiz, la carte du chapitre — est repris sur la première page de
- * l'étape. **Le récit ne perd ni ne gagne un mot** : ses paragraphes passent
+ * remplir, la carte du chapitre — est repris sur la première page de
+ * l'étape. Le quiz, lui, est placé par le composeur (`placerQuiz`) : il
+ * remplace la zone flottante du bas, et la première page n'a pas toujours de
+ * quoi le porter sans perdre une photo. **Le récit ne perd ni ne gagne un mot** : ses paragraphes passent
  * tels quels, au pire coupés sur une fin de phrase entre deux pages.
  */
 import { readFileSync } from "node:fs";
@@ -73,8 +75,13 @@ export function stickersDuCarnet(): Sticker[] {
   return bibliotheque;
 }
 
-/** Ce que l'agent pose sur la première page d'une étape et que le composeur reprend tel quel. */
-const CHAMPS_DU_BANDEAU = ["title", "date", "city", "country", "day_intro", "tag", "prompt", "quiz"] as const;
+/**
+ * Ce que l'agent pose sur la première page d'une étape et que le composeur
+ * reprend tel quel. Pas le quiz : le composeur le place lui-même, et un quiz
+ * recopié ici reviendrait sur une page qui a peut-être des photos — le gabarit
+ * les remplacerait par lui.
+ */
+const CHAMPS_DU_BANDEAU = ["title", "date", "city", "country", "day_intro", "tag", "prompt"] as const;
 
 /** Les pages qui précèdent la première étape : colophon, introduction, et la page libre qui la met à gauche. */
 function pagesAvant(payload: Record<string, unknown>): number {
@@ -87,7 +94,7 @@ const urlDe = (photo: unknown): string =>
   typeof photo === "string" ? photo : texte((photo as Record<string, unknown> | null)?.["url"]);
 
 /** Une étape du payload de l'app, dans la forme que le composeur lit (`composerJours`). */
-function etapeDuPayload(pages: Jour[], rang: number, funFacts: boolean) {
+function etapeDuPayload(pages: Jour[], rang: number, funFacts: boolean, quiz: boolean) {
   const premiere = pages[0] ?? {};
   const intro = (premiere["day_intro"] ?? {}) as Record<string, unknown>;
   const paragraphes = pages
@@ -111,6 +118,8 @@ function etapeDuPayload(pages: Jour[], rang: number, funFacts: boolean) {
   const funFactsDeLEtape = pages
     .flatMap((page) => (Array.isArray(page["fun_facts"]) ? (page["fun_facts"] as unknown[]) : []))
     .filter((f): f is string => typeof f === "string" && f.trim().length > 0);
+  // Le quiz de l'étape, où que le metteur en page l'ait posé — un seul.
+  const quizDeLEtape = pages.find((page) => page["quiz"] && typeof page["quiz"] === "object")?.["quiz"] ?? null;
   return {
     titre: texte(premiere["title"]),
     lieu: texte(premiere["city"]) || texte(intro["location"]),
@@ -126,6 +135,10 @@ function etapeDuPayload(pages: Jour[], rang: number, funFacts: boolean) {
     // Les fun facts déjà rédigés et bornés à 140 signes par la rédaction : ils
     // ont passé leur tri, ils sont imprimables.
     analyse: funFacts && funFactsDeLEtape.length ? { funFacts: funFactsDeLEtape.map((texte) => ({ texte, pertinence: 8 })) } : null,
+    // Le quiz déjà rédigé, déjà filtré par le réglage (`structure.ts`).
+    quiz: quiz ? quizDeLEtape : null,
+    // Le champ à remplir revient sur la première page : le quiz ne s'y pose pas.
+    promptEnTete: Boolean(premiere["prompt"]),
     premiere,
   };
 }
@@ -133,6 +146,8 @@ function etapeDuPayload(pages: Jour[], rang: number, funFacts: boolean) {
 export interface ComposerOptions {
   ratio: PhotoRatio;
   funFacts: boolean;
+  /** « Quiz intégrés à l'histoire ». Absent : allumé, comme le défaut du carnet. */
+  quiz?: boolean;
   decorations: number;
 }
 
@@ -142,7 +157,8 @@ export interface ComposerOptions {
  */
 export function composerCarnet(payload: Record<string, unknown>, options: ComposerOptions): Jour[] {
   const days = Array.isArray(payload["days"]) ? (payload["days"] as Jour[]) : [];
-  const etapes = etapesDe(days).map((pages, rang) => etapeDuPayload(pages, rang, options.funFacts));
+  const quiz = options.quiz !== false;
+  const etapes = etapesDe(days).map((pages, rang) => etapeDuPayload(pages, rang, options.funFacts, quiz));
   const { composerJours, paragraphesEnHtml } = charger();
 
   const sortie: Jour[] = [];
@@ -152,6 +168,7 @@ export function composerCarnet(payload: Record<string, unknown>, options: Compos
     {
       pagesAvant: pagesAvant(payload),
       funFacts: options.funFacts,
+      quiz,
       stickers: options.decorations > 0 ? stickersDuCarnet() : [],
       decorations: options.decorations,
       ratio: options.ratio,

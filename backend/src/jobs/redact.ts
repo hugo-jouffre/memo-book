@@ -1,9 +1,10 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import type { AppContext } from "../context.js";
 import {
   EMPTY_COHERENCE_SHEET,
   parseInsights,
   type CoherenceSheet,
+  type QuizHistory,
   type RedactedNeighbour,
   type RedactionInput,
   type RedactionPrecision,
@@ -15,6 +16,11 @@ import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 
 export interface RedactJob {
   entryId: string;
+  /**
+   * Une réécriture après un changement de cible (`jobs/rewriteTrip.ts`) : le
+   * souvenir a déjà été validé, MEMO ne le repropose pas dans le fil.
+   */
+  rewrite?: boolean;
 }
 
 /** Le texte qui fait foi pour une entrée : la correction de l'utilisateur d'abord. */
@@ -81,7 +87,7 @@ export type EntryForRedaction = Prisma.EntryGetPayload<{ include: typeof ENTRY_F
  */
 export async function redactEntry(
   context: AppContext,
-  { entryId }: RedactJob,
+  { entryId, rewrite = false }: RedactJob,
 ): Promise<void> {
   const { prisma, redactor, logger } = context;
 
@@ -153,6 +159,7 @@ export async function redactEntry(
       return [{ text: row.text, topic: typeof rawTopic === "string" && rawTopic ? rawTopic : null }];
     });
 
+    const quizzes = quizHistoryOf(earlier, entry);
     const narrator = await narratorOf(context, entry);
     const memo = entry.memo;
     const result = await redactor.redact({
@@ -167,6 +174,9 @@ export async function redactEntry(
         endDate: memo.endDate,
         destination: [...new Set([memo.destinationCity, memo.destinationName].filter(Boolean))].join(", ") || null,
         narrationPace: memo.narrationPace,
+        // La cible du moment : un changement en cours de voyage vaut pour les
+        // étapes suivantes, et pour celles qu'on réécrit (`rewriteTrip.ts`).
+        targetPageCount: memo.targetPageCount,
       },
       narrator,
       entry: {
@@ -191,7 +201,10 @@ export async function redactEntry(
         titles: earlier.flatMap((neighbour) => (neighbour.suggestedTitle ? [neighbour.suggestedTitle] : [])),
         funFacts: earlier.flatMap((neighbour) => (neighbour.funFact ? [neighbour.funFact] : [])),
       },
+      quizzes,
     });
+    // Un seul quiz par étape : la règle ne dépend pas de l'écrivain.
+    const quiz = quizzes.thisStepHasOne ? null : result.quiz;
 
     // La fiche et le texte sont écrits ensemble : une fiche mise à jour pour
     // un texte qui n'a pas été enregistré ferait dériver toutes les étapes
@@ -205,6 +218,11 @@ export async function redactEntry(
           weatherKey: result.weatherKey,
           funFact: result.funFact,
           funFactTitle: result.funFactTitle,
+          // Écrit même quand le réglage Quiz est coupé, comme le fun fact :
+          // c'est la composition qui l'écarte (`structure.ts`).
+          quizQuestion: quiz?.question ?? null,
+          quizAnswers: quiz ? quiz.choices : Prisma.DbNull,
+          quizAnswerIndex: quiz?.answerIndex ?? null,
           // Le relevé part avec le texte : c'est lui que le profil additionne,
           // et c'est à cet instant que les statistiques bougent.
           insights: parseInsights(result.insights) as unknown as Prisma.InputJsonObject,
@@ -227,7 +245,7 @@ export async function redactEntry(
     // Le relevé est là : le lieu, le pays, les kilomètres — les étapes et les
     // chiffres du voyage suivent (T227).
     await refreshTripFactsQuietly(context, entry.memoId);
-    await askValidation(prisma, entryId, result.doubts);
+    if (!rewrite) await askValidation(prisma, entryId, result.doubts);
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
     await prisma.entry.update({
@@ -237,9 +255,34 @@ export async function redactEntry(
     // Sans relevé, le souvenir compte quand même (T227).
     await refreshTripFactsQuietly(context, entry.memoId);
     // La fiche garde le texte brut : il se valide quand même.
-    await askValidation(prisma, entryId).catch(() => false);
+    if (!rewrite) await askValidation(prisma, entryId).catch(() => false);
     throw cause;
   }
+}
+
+/**
+ * Où en est le carnet de ses quiz, vu du souvenir à rédiger : les questions
+ * déjà posées, et combien d'étapes le séparent du dernier quiz — environ un
+ * toutes les trois étapes (Hugo, 15/10/2026).
+ *
+ * Une étape se reconnaît à son `stepId` ; un souvenir hors étape compte pour
+ * une étape à lui seul. Seuls comptent les souvenirs enregistrés avant
+ * celui-ci : une rédaction relancée ne se compte pas elle-même.
+ */
+export function quizHistoryOf(
+  earlier: { id: string; stepId: string | null; quizQuestion: string | null }[],
+  entry: { id: string; stepId: string | null },
+): QuizHistory {
+  const stepOf = (row: { id: string; stepId: string | null }) => row.stepId ?? row.id;
+  const steps = [...new Set([...earlier.map(stepOf), stepOf(entry)])];
+  const withQuiz = earlier.filter((row) => row.quizQuestion);
+  const last = withQuiz[withQuiz.length - 1];
+  const current = stepOf(entry);
+  return {
+    asked: withQuiz.map((row) => row.quizQuestion as string),
+    stepsSinceLast: last ? steps.indexOf(current) - steps.indexOf(stepOf(last)) : null,
+    thisStepHasOne: withQuiz.some((row) => stepOf(row) === current),
+  };
 }
 
 /**

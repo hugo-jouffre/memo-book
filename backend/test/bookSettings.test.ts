@@ -192,4 +192,19 @@ describe("réglages du carnet de l'app", () => {
       "sans-decor",
     );
   });
+
+  it("n'imprime aucun quiz quand le réglage est coupé, et le pose quand il est allumé", () => {
+    const quiz = { question: "Qui a renversé le café ?", choices: ["Clara", "Hugo", "Le serveur"], answer: "Hugo" };
+    const sansPhoto = {
+      book_title: "Carnet",
+      days: [{ title: "Jour 1", day_intro: { day_number: "01" }, body_html: "<p>Un récit court, sans photo.</p>", layout_story_opener: true, quiz }],
+    };
+    const quizDe = (quizEnabled?: boolean) =>
+      (applyBookSettings(sansPhoto, { ...reglages, ...(quizEnabled === undefined ? {} : { quizEnabled }) })["days"] as Record<string, unknown>[])
+        .map((jour) => jour["quiz"])
+        .filter(Boolean);
+    expect(quizDe(false)).toEqual([]);
+    expect(quizDe()).toEqual([quiz]);
+    expect(quizDe(true)).toEqual([quiz]);
+  });
 });

@@ -1691,3 +1691,86 @@ describe("la galerie de la communauté", () => {
     expect(response.statusCode).toBe(401);
   });
 });
+
+describe("le nombre de pages cible", () => {
+  async function patchTarget(memoId: string, authorization: string, targetPageCount: number) {
+    return harness.app.inject({
+      method: "PATCH",
+      url: `/v1/trips/${memoId}/settings`,
+      headers: { authorization },
+      payload: { targetPageCount },
+    });
+  }
+
+  async function writeStory(memoId: string) {
+    await harness.prisma.entry.create({
+      data: {
+        memoId,
+        kind: "text",
+        status: "ready",
+        transcript: "On a marché jusqu'au Colisée, il faisait une chaleur folle.",
+        redactedText: "Le Colisée sous le soleil de midi.",
+        redactionStatus: "ready",
+      },
+    });
+  }
+
+  it("se change librement tant qu'aucune étape n'est écrite", async () => {
+    const owner = await registerAccount(harness.app, "cible-libre@memobook.app");
+    const memo = await seedTrip(owner.accountId);
+
+    for (const pages of [40, 80, 60]) {
+      expect((await patchTarget(memo.id, owner.authorization, pages)).statusCode).toBe(200);
+    }
+    const body = (await patchTarget(memo.id, owner.authorization, 80)).json<Record<string, unknown>>();
+    expect(body["pageTarget"]).toEqual({
+      changesLeft: 2,
+      changeLimit: 2,
+      changesCount: false,
+      rewriteAvailable: false,
+    });
+  });
+
+  it("ne se change que deux fois une fois le récit commencé, et la réécriture se prend une fois par changement", async () => {
+    const owner = await registerAccount(harness.app, "cible-comptee@memobook.app");
+    const memo = await seedTrip(owner.accountId);
+    await writeStory(memo.id);
+
+    const first = await patchTarget(memo.id, owner.authorization, 80);
+    expect(first.json<Record<string, unknown>>()["pageTarget"]).toMatchObject({
+      changesLeft: 1,
+      changesCount: true,
+      rewriteAvailable: true,
+    });
+
+    // Le même nombre renvoyé n'est pas un changement.
+    const replay = await patchTarget(memo.id, owner.authorization, 80);
+    expect(replay.json<Record<string, unknown>>()["pageTarget"]).toMatchObject({ changesLeft: 1 });
+
+    const rewrite = await harness.app.inject({
+      method: "POST",
+      url: `/v1/trips/${memo.id}/page-target/rewrite`,
+      headers: { authorization: owner.authorization },
+    });
+    expect(rewrite.statusCode).toBe(202);
+    expect(rewrite.json<Record<string, unknown>>()["pageTarget"]).toMatchObject({ rewriteAvailable: false });
+
+    const again = await harness.app.inject({
+      method: "POST",
+      url: `/v1/trips/${memo.id}/page-target/rewrite`,
+      headers: { authorization: owner.authorization },
+    });
+    expect(again.statusCode).toBe(409);
+    expect(again.json<{ error: string }>().error).toBe("page_target_rewrite_unavailable");
+
+    expect((await patchTarget(memo.id, owner.authorization, 40)).statusCode).toBe(200);
+    const refused = await patchTarget(memo.id, owner.authorization, 60);
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json<{ error: string; pageTargetChangesLeft: number }>()).toMatchObject({
+      error: "page_target_limit_reached",
+      pageTargetChangesLeft: 0,
+    });
+    const memoAfter = await harness.prisma.memo.findUniqueOrThrow({ where: { id: memo.id } });
+    expect(memoAfter.targetPageCount).toBe(40);
+  });
+});

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Env } from "../env.js";
-import { finalTextOf, parseCoherenceSheet } from "../jobs/redact.js";
+import { finalTextOf, parseCoherenceSheet, quizHistoryOf } from "../jobs/redact.js";
 import { loadWritingRules } from "../lib/templates.js";
 import {
   DOUBT_MAX_CHARS,
@@ -10,6 +10,7 @@ import {
   createRedactor,
   parseDoubts,
   withinFunFactLimit,
+  withinQuizLimits,
   type RedactionInput,
 } from "./redaction.js";
 import { STEP_SIZES } from "./payloadValidator.js";
@@ -225,6 +226,18 @@ describe("buildRedactionPrompt", () => {
     expect(prompt).toContain("Avec lui sur le carnet : Fanny");
   });
 
+  it("règle la densité du récit sur le nombre de pages cible", () => {
+    // 26 août – 5 septembre : 11 jours, donc un palier « Par défaut » à 10
+    // pages, borné à 30 ; 20 pages, c'est un récit compact.
+    const compact = buildRedactionPrompt({ ...input, memo: { ...input.memo, targetPageCount: 20 } });
+    expect(compact).toContain("Nombre de pages cible du carnet : 20 (entre 16 et 25)");
+    expect(compact).toContain("récit **compact**");
+
+    const detailed = buildRedactionPrompt({ ...input, memo: { ...input.memo, targetPageCount: 40 } });
+    expect(detailed).toContain("récit **détaillé**");
+    expect(buildRedactionPrompt(input)).not.toContain("Nombre de pages cible");
+  });
+
   it("donne la date d'envoi pour ce qu'elle est, pas pour le jour raconté", () => {
     const prompt = buildRedactionPrompt(input);
 
@@ -272,6 +285,63 @@ describe("withinFunFactLimit", () => {
       funFact: null,
       funFactTitle: null,
     });
+  });
+});
+
+describe("quiz", () => {
+  const quiz = { question: "Qui a renversé le café ?", choices: ["Clara", "Hugo", "Le serveur"], answerIndex: 1 };
+
+  it("garde un quiz bien formé", () => {
+    expect(withinQuizLimits({ ...quiz, question: "  Qui a renversé   le café ? " })).toEqual(quiz);
+  });
+
+  it("fait sauter un quiz mal formé plutôt que de le réparer", () => {
+    expect(withinQuizLimits(null)).toBeNull();
+    expect(withinQuizLimits({ ...quiz, answerIndex: 3 })).toBeNull();
+    expect(withinQuizLimits({ ...quiz, answerIndex: 0.5 })).toBeNull();
+    expect(withinQuizLimits({ ...quiz, choices: ["Hugo"], answerIndex: 0 })).toBeNull();
+    expect(withinQuizLimits({ ...quiz, choices: ["Hugo", "hugo", "Clara"] })).toBeNull();
+    expect(withinQuizLimits({ ...quiz, choices: ["a", "b", "c", "d", "e"] })).toBeNull();
+    expect(withinQuizLimits({ ...quiz, question: "x".repeat(121) })).toBeNull();
+    expect(withinQuizLimits({ ...quiz, choices: ["x".repeat(41), "b", "c"] })).toBeNull();
+  });
+
+  it("compte les étapes depuis le dernier quiz, et n'en veut qu'un par étape", () => {
+    const row = (id: string, stepId: string | null, quizQuestion: string | null = null) => ({ id, stepId, quizQuestion });
+    expect(quizHistoryOf([], row("e1", "s1"))).toEqual({ asked: [], stepsSinceLast: null, thisStepHasOne: false });
+
+    const earlier = [row("e1", "s1", "Q1 ?"), row("e2", "s1"), row("e3", "s2"), row("e4", null)];
+    expect(quizHistoryOf(earlier, row("e5", "s3"))).toEqual({ asked: ["Q1 ?"], stepsSinceLast: 3, thisStepHasOne: false });
+    expect(quizHistoryOf(earlier, row("e5", "s1"))).toMatchObject({ stepsSinceLast: 0, thisStepHasOne: true });
+  });
+
+  it("dit à l'écrivain où en est le carnet de ses quiz", () => {
+    const base: RedactionInput = {
+      memo: { title: "Carnet", subtitle: null, authors: null, theme: null, styleKey: null, tripContext: [], startDate: null, endDate: null, destination: null, narrationPace: null },
+      entry: { transcript: "On a fait du kayak.", capturedAt: new Date("2026-10-01T07:44:53Z"), placeLabel: null, precisions: [], step: null },
+      coherenceSheet: EMPTY_COHERENCE_SHEET,
+      previous: [],
+    };
+    expect(buildRedactionPrompt(base)).toContain("Aucun quiz encore dans le carnet.");
+    const proche = buildRedactionPrompt({ ...base, quizzes: { asked: ["Q1 ?"], stepsSinceLast: 1, thisStepHasOne: false } });
+    expect(proche).toContain("trop près, `quiz` est `null`");
+    expect(proche).toContain("- Q1 ?");
+    expect(buildRedactionPrompt({ ...base, quizzes: { asked: [], stepsSinceLast: 3, thisStepHasOne: false } })).toContain(
+      "Le dernier quiz remonte à 3 étapes.",
+    );
+    expect(buildRedactionPrompt({ ...base, quizzes: { asked: ["Q1 ?"], stepsSinceLast: 0, thisStepHasOne: true } })).toContain(
+      "porte déjà son quiz",
+    );
+  });
+
+  it("le faux rédacteur n'en pose pas", async () => {
+    const result = await new FakeRedactor().redact({
+      memo: { title: "Carnet", subtitle: null, authors: null, theme: null, styleKey: null, tripContext: [], startDate: null, endDate: null, destination: null, narrationPace: null },
+      entry: { transcript: "On a fait du kayak.", capturedAt: new Date(), placeLabel: null, precisions: [], step: null },
+      coherenceSheet: EMPTY_COHERENCE_SHEET,
+      previous: [],
+    });
+    expect(result.quiz).toBeNull();
   });
 });
 

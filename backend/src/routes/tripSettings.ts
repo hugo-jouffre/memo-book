@@ -6,8 +6,13 @@ import { accountIdOf } from "../plugins/auth.js";
 import { readDailyCredit } from "../services/dailyCredit.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
 import { normalizeNarrationPace } from "../services/narrationPace.js";
+import {
+  hasWrittenStory,
+  pageTargetChangesLeft,
+} from "../services/pageTarget.js";
 import { stageFromDates } from "../services/tripStage.js";
 import { refreshTripFactsQuietly } from "../services/tripFacts.js";
+import { JOB_NAMES, type RewriteTripJob } from "../jobs/index.js";
 import { serializeTripSettings } from "./appSerializers.js";
 import { startDateRequired } from "./home.js";
 
@@ -126,9 +131,12 @@ async function readSettings(context: AppContext, accountId: string, memoId: stri
 
   // Le crédit du jour **du voyage** — partagé entre ses co-voyageurs —, vu par
   // celui qui lit : illimité s'il est abonné.
-  const dailyCredit = await readDailyCredit(context.prisma, { memoId: memo.id, viewer: account });
+  const [dailyCredit, storyStarted] = await Promise.all([
+    readDailyCredit(context.prisma, { memoId: memo.id, viewer: account }),
+    hasWrittenStory(context.prisma, memo.id),
+  ]);
 
-  return serializeTripSettings(memo, dailyCredit, accountId);
+  return serializeTripSettings(memo, dailyCredit, accountId, storyStarted);
 }
 
 export function registerTripSettingsRoutes(app: FastifyInstance, context: AppContext) {
@@ -168,6 +176,12 @@ export function registerTripSettingsRoutes(app: FastifyInstance, context: AppCon
     const nextStart = body.startDate !== undefined ? body.startDate : current?.startDate;
     const nextEnd = body.endDate !== undefined ? body.endDate : current?.endDate;
 
+    // La cible ne change que deux fois une fois le récit commencé
+    // (`services/pageTarget.ts`). L'app prévient avant ; le serveur tranche.
+    const pageTarget = body.targetPageCount !== undefined
+      ? await countPageTargetChange(context, id, body.targetPageCount)
+      : null;
+
     await context.prisma.memo.update({
       where: { id },
       data: {
@@ -193,6 +207,9 @@ export function registerTripSettingsRoutes(app: FastifyInstance, context: AppCon
         ...(body.isPublicGallery !== undefined ? { isPublicGallery: body.isPublicGallery } : {}),
         ...(body.photoTextRatio !== undefined ? { photoTextRatio: body.photoTextRatio } : {}),
         ...(body.targetPageCount !== undefined ? { targetPageCount: body.targetPageCount } : {}),
+        ...(pageTarget?.counts
+          ? { pageTargetChanges: { increment: 1 }, pageTargetRewriteAvailable: true }
+          : {}),
         ...(body.funFactsEnabled !== undefined ? { funFactsEnabled: body.funFactsEnabled } : {}),
         ...(body.rulesEnabled !== undefined ? { rulesEnabled: body.rulesEnabled } : {}),
         ...(body.decorationQuota !== undefined ? { decorationQuota: body.decorationQuota } : {}),
@@ -220,6 +237,35 @@ export function registerTripSettingsRoutes(app: FastifyInstance, context: AppCon
     // est ce que l'app garde à l'écran, et une réponse partielle effacerait le
     // reste de la page. Même règle que `PATCH /v1/profile`.
     return readSettings(context, accountId, id);
+  });
+
+  /**
+   * Réécrit les étapes déjà écrites à la cible en cours : « Étoffer » ou
+   * « Condenser » le début du carnet après un changement de cible.
+   *
+   * **Une fois par changement** : le drapeau tombe avant l'envoi, pour que deux
+   * touches ne lancent pas deux passages payés. Les souvenirs corrigés à la
+   * main ne sont pas touchés — `redactEntry` les laisse, comme toujours.
+   */
+  app.post("/v1/trips/:id/page-target/rewrite", async (request, reply) => {
+    const { id } = params.parse(request.params);
+    const accountId = accountIdOf(request);
+    await assertVisible(context, accountId, id);
+
+    const claimed = await context.prisma.memo.updateMany({
+      where: { id, pageTargetRewriteAvailable: true },
+      data: { pageTargetRewriteAvailable: false },
+    });
+    if (claimed.count === 0) {
+      throw new HttpError(
+        409,
+        "Les étapes déjà écrites ont déjà été réécrites pour ce changement de cible.",
+        "page_target_rewrite_unavailable",
+      );
+    }
+
+    await context.queue.publish<RewriteTripJob>(JOB_NAMES.rewriteTrip, { memoId: id });
+    return reply.code(202).send(await readSettings(context, accountId, id));
   });
 
   /**
@@ -304,4 +350,29 @@ async function assertVisible(context: AppContext, accountId: string, memoId: str
     select: { id: true },
   });
   if (!visible) throw new HttpError(404, "Ce voyage n’existe pas.");
+}
+
+/**
+ * Un changement de cible : compte-t-il, et reste-t-il de quoi le faire ?
+ *
+ * La même valeur renvoyée n'est pas un changement (un `PATCH` rejoué), et un
+ * changement avant la première étape écrite ne compte pas. Au-delà de la
+ * limite, 409 `page_target_limit_reached` — l'app l'a déjà dit en orange.
+ */
+async function countPageTargetChange(context: AppContext, memoId: string, next: number) {
+  const memo = await context.prisma.memo.findUniqueOrThrow({
+    where: { id: memoId },
+    select: { targetPageCount: true, pageTargetChanges: true },
+  });
+  if (memo.targetPageCount === next) return { counts: false };
+  if (!(await hasWrittenStory(context.prisma, memoId))) return { counts: false };
+  if (pageTargetChangesLeft(memo.pageTargetChanges) === 0) {
+    throw new HttpError(
+      409,
+      "Tu as déjà changé deux fois le nombre de pages cible de ce voyage.",
+      "page_target_limit_reached",
+      { pageTargetChangesLeft: 0 },
+    );
+  }
+  return { counts: true };
 }

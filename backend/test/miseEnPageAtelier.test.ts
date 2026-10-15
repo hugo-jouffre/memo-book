@@ -864,4 +864,93 @@ describe("mise en page de l'atelier", () => {
       expect(encarts(jours).filter(Boolean)).toEqual(["Fait."]);
     });
   });
+
+  describe("quiz (Hugo, 15/10/2026)", () => {
+    const quizSur = (i: number, reponse = `Réponse ${i}`) => ({
+      question: `Question n° ${i} ?`,
+      choix: [reponse, `Leurre ${i}a`, `Leurre ${i}b`],
+      reponse,
+    });
+    // Une étape d'un paragraphe court, sans photo : ses pages peuvent porter un quiz.
+    const etapes = (n: number, analyse = (i: number): unknown => ({ photos: [], quiz: quizSur(i) })) =>
+      Array.from({ length: n }, (_, i) => etape(paragrapheDe(`le lieu ${i}`, 1), [], analyse(i), `Lieu ${i}`));
+    const etapeDe = (jours: Jour[]) =>
+      jours.reduce<number[]>((rangs, j) => [...rangs, (rangs.at(-1) ?? -1) + (j["day_intro"] ? 1 : 0)], []);
+    const quizPoses = (jours: Jour[]) => {
+      const rangs = etapeDe(jours);
+      return jours.flatMap((j, i) => (j["quiz"] ? [{ etape: rangs[i]!, page: i, quiz: j["quiz"] as Record<string, unknown> }] : []));
+    };
+
+    it("n'en met aucun quand le réglage du carnet est coupé", () => {
+      expect(quizPoses(M.composerJours(etapes(4), { quiz: false }))).toEqual([]);
+      expect(quizPoses(M.composerJours(etapes(4)))).toEqual([]);
+    });
+
+    it("en pose environ un toutes les trois étapes, un par étape au plus, sur sa première page", () => {
+      const jours = M.composerJours(etapes(10), { quiz: true });
+      const poses = quizPoses(jours);
+      expect(poses.map((q) => q.etape)).toEqual([0, 3, 6, 9]);
+      for (const { etape: e, page, quiz } of poses) {
+        // La première page de l'étape, dans la forme du gabarit.
+        expect(jours[page]!["day_intro"]).toBeTruthy();
+        expect(quiz).toEqual({ question: `Question n° ${e} ?`, choices: [`Réponse ${e}`, `Leurre ${e}a`, `Leurre ${e}b`], answer: `Réponse ${e}` });
+        expect(jours[page]!["ai_note"]).toBe("Quiz rédigé par IA");
+      }
+    });
+
+    it("reprend tel quel le quiz déjà rédigé que l'app apporte", () => {
+      const quiz = { question: "Qui a renversé le café ?", choices: ["Clara", "Hugo", "Le serveur"], answer: "Hugo" };
+      const [premiere] = M.composerJours([{ ...etape(paragrapheDe("le port", 1), []), quiz }], { quiz: true });
+      expect(premiere!["quiz"]).toEqual(quiz);
+    });
+
+    it("ne prend jamais la place d'une photo, d'un fun fact ni d'une carte", () => {
+      const lourdes = Array.from({ length: 6 }, (_, e) =>
+        etape(
+          [paragrapheDe(`la ville ${e}`, 2), paragrapheDe(`le port ${e}`, 2)].join(" "),
+          Array.from({ length: e % 2 ? 6 : 1 }, (_, k) => photo(`${e}-${k}`)),
+          {
+            photos: [],
+            quiz: quizSur(e),
+            funFacts: [{ texte: `Fait ${e}.`, registre: "histoire", paragraphe: 0, pertinence: 9 }],
+          },
+          `Lieu ${e}`,
+        ),
+      );
+      const jours = M.composerJours(lourdes, { quiz: true, funFacts: true });
+      expect(jours.some((jour) => jour["quiz"])).toBe(true);
+      for (const j of jours.filter((jour) => jour["quiz"])) {
+        expect(j.photos).toHaveLength(0);
+        expect(j["fun_facts"]).toEqual([]);
+        expect(j["map"] ?? j["map_svg"]).toBeUndefined();
+        expect(j["layout_story_opener"] || j["layout_story_facts"]).toBe(true);
+      }
+      expect(jours.flatMap((j) => j.photos)).toHaveLength(3 + 3 * 6);
+    });
+
+    it("ne se pose pas sur la page dont le récit donne la réponse", () => {
+      // Le récit se répartit sur deux pages ; la réponse n'est que sur la première.
+      const recit = [paragrapheDe("la crique", 2), paragrapheDe("le port", 2)].join(" ");
+      const jours = M.composerJours([etape(recit, [], { photos: [], quiz: quizSur(0, "la crique") })], { quiz: true });
+      expect(jours).toHaveLength(2);
+      const poses = quizPoses(jours);
+      expect(poses.map((q) => q.page)).toEqual([1]);
+      expect(texteDes([jours[1]!])).not.toContain("la crique");
+    });
+
+    it("n'imprime pas un quiz mal formé", () => {
+      const malFormes = [
+        { question: "", choix: ["a", "b"], reponse: "a" },
+        { question: "Une seule proposition ?", choix: ["a"], reponse: "a" },
+        { question: "La réponse manque ?", choix: ["a", "b", "c"], reponse: "d" },
+        { question: "Deux fois la même ?", choix: ["a", "A", "b"], reponse: "b" },
+        { question: "x".repeat(121), choix: ["a", "b"], reponse: "a" },
+      ];
+      const jours = M.composerJours(
+        malFormes.map((quiz, i) => etape(paragrapheDe(`le lieu ${i}`, 1), [], { photos: [], quiz }, `Lieu ${i}`)),
+        { quiz: true },
+      );
+      expect(quizPoses(jours)).toEqual([]);
+    });
+  });
 });

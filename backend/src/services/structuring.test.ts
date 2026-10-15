@@ -6,7 +6,9 @@ import {
   groupEntriesByDay,
   HeuristicStructurer,
   pickLayout,
+  quizForBook,
   type StructuringEntry,
+  withToldQuizzesOnly,
   withToldWeatherOnly,
 } from "./structuring.js";
 
@@ -267,5 +269,51 @@ describe("withToldWeatherOnly", () => {
   it("laisse intactes les pages sans bandeau", () => {
     const suite = { title: "", layout_photo_page: true };
     expect(withToldWeatherOnly({ days: [suite] }, [entry()])).toEqual({ days: [suite] });
+  });
+});
+
+describe("quiz", () => {
+  const quiz = { question: "Qui a renversé le café ?", choices: ["Clara", "Hugo", "Le serveur"], answer: "Hugo" };
+
+  it("passe des colonnes de l'entrée à la forme du gabarit", () => {
+    expect(
+      quizForBook({ quizQuestion: "Qui a renversé le café ?", quizAnswers: ["Clara", "Hugo", "Le serveur"], quizAnswerIndex: 1 }),
+    ).toEqual(quiz);
+  });
+
+  it("ne fait pas un quiz d'un rang hors des propositions ni d'une colonne vide", () => {
+    expect(quizForBook({ quizQuestion: "Q ?", quizAnswers: ["a", "b"], quizAnswerIndex: 2 })).toBeNull();
+    expect(quizForBook({ quizQuestion: "Q ?", quizAnswers: null, quizAnswerIndex: 0 })).toBeNull();
+    expect(quizForBook({ quizQuestion: null, quizAnswers: ["a", "b"], quizAnswerIndex: 0 })).toBeNull();
+  });
+
+  it("pose le quiz de la journée sur la première page de son étape, et nulle part ailleurs", async () => {
+    const payload = await new HeuristicStructurer().structure({
+      title: "Carnet",
+      subtitle: null,
+      authors: null,
+      theme: null,
+      coverPhotoUrl: null,
+      entries: [entry({ quiz }), entry({ capturedAt: new Date("2026-04-13T09:00:00Z") })],
+      tripContext: null,
+    });
+    const days = payload["days"] as Record<string, unknown>[];
+    expect(days[0]?.["quiz"]).toEqual(quiz);
+    expect(days.slice(1).some((day) => day["quiz"])).toBe(false);
+  });
+
+  it("retire le quiz que le metteur en page aurait inventé, remet tel quel celui de la rédaction", () => {
+    const payload = withToldQuizzesOnly(
+      {
+        days: [
+          { title: "A", quiz: { ...quiz, choices: ["Clara", "Hugo"] } },
+          { title: "B", quiz: { question: "Combien de temples à Kyoto ?", choices: ["1", "2"], answer: "1" } },
+        ],
+      },
+      [entry({ quiz })],
+    );
+    const days = payload["days"] as Record<string, unknown>[];
+    expect(days[0]?.["quiz"]).toEqual(quiz);
+    expect(days[1]).not.toHaveProperty("quiz");
   });
 });

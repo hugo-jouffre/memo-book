@@ -9,6 +9,7 @@
  * | Réglage | Effet |
  * |---|---|
  * | Fun facts coupé | aucun encart (`structure.ts`, avant la composition) |
+ * | Quiz coupé | aucun quiz (`structure.ts`, et le composeur n'en place aucun) |
  * | Ratio photo / texte | les cinq paliers, voir plus bas |
  * | Pointillés coupés | `rules_enabled: false` : pas de réglure sous le récit |
  * | Décorations à 0 | `decoration_quota: 0` : ni tracé pointillé, ni sticker (le scotch reste) |
@@ -37,6 +38,8 @@ export interface BookSettings {
   freeZonesEnabled: boolean;
   /** Les fun facts du voyageur. Absent : allumés, comme le défaut du carnet. */
   funFactsEnabled?: boolean;
+  /** « Quiz intégrés à l'histoire ». Absent : allumés, comme le défaut du carnet. */
+  quizEnabled?: boolean;
 }
 
 /** Les pages libres, réglées, de fin de carnet quand « Zones libres » est allumé. */
@@ -73,6 +76,9 @@ export function applyBookSettings(payload: BookPayload, settings: BookSettings):
   regle["days"] = composerCarnet(regle, {
     ratio,
     funFacts: settings.funFactsEnabled !== false,
+    // Coupé, le composeur ne place aucun quiz — même un quiz resté dans le
+    // payload de la structuration n'atteint pas le PDF.
+    quiz: settings.quizEnabled !== false,
     decorations: Math.max(0, Math.min(4, Math.round(settings.decorationQuota))),
   });
   return regle;

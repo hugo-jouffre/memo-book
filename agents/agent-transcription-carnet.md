@@ -2,13 +2,18 @@
 
 > Ces règles faisaient partie de `agent-transcription.md` jusqu'au 02/10/2026.
 > Elles en sont sorties parce que **la rédaction ne les applique pas** : elle
-> écrit une étape à la fois, et ne produit ni quiz, ni question du jour, ni mot
-> fléché, ni intro, ni quatrième de couverture, ni chiffres du voyage. Les
-> garder dans son prompt lui faisait relire, à chaque étape, plusieurs pages de
-> consignes sans objet — et diluait celles qui comptent.
+> écrit une étape à la fois, et ne produit ni question du jour, ni mot fléché,
+> ni intro, ni quatrième de couverture, ni chiffres du voyage. Les garder dans
+> son prompt lui faisait relire, à chaque étape, plusieurs pages de consignes
+> sans objet — et diluait celles qui comptent.
+>
+> **Le quiz fait exception depuis le 15/10/2026** : la rédaction l'écrit, étape
+> par étape, selon les règles ci-dessous reprises dans
+> `agent-transcription.md` § 6 (« Le quiz »), et l'atelier selon les mêmes,
+> dans l'analyse d'étape (`consigneAnalyseEtape`, `partage.js`).
 >
 > **Aucun agent ne charge ce fichier aujourd'hui.** Il reviendra dans le prompt
-> de celui qui écrira ces textes, le jour où il existera.
+> de celui qui écrira les autres textes, le jour où il existera.
 
 ---
 
@@ -24,7 +29,7 @@ ne les écrit pas.
 | Bloc | Ce que l'agent écrit | Champ | Réglage |
 |---|---|---|---|
 | **Question du jour** | Une demande courte, liée à ce que le voyageur vient de raconter | `prompt` | — |
-| **Quiz** | Une question sur le voyage, deux à quatre propositions, et la réponse, imprimée à l'envers | `quiz` | « Quiz intégrés à l'histoire », ON par défaut. À OFF, aucun quiz |
+| **Quiz** | Une question sur le voyage, deux à quatre propositions (trois de préférence), et la réponse, imprimée à l'envers. Environ une étape sur trois, jamais deux de suite, une par étape au plus | `quiz` | « Quiz intégrés à l'histoire », ON par défaut. À OFF, aucun quiz |
 
 Règles communes :
 
