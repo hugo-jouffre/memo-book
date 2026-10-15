@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { describe, expect, it } from "vitest";
 import { composerCarnet, stickersDuCarnet } from "../src/services/bookComposer.js";
+import { PAGE_TARGET_TOLERANCE } from "../src/services/pageTarget.js";
 import { photosRequired } from "../src/services/photoRatio.js";
 
 /**
@@ -11,6 +12,7 @@ const require = createRequire(import.meta.url);
 const M = require("../../MemoBook Generator/public/mise-en-page.js") as {
   composerJours: (etapes: unknown[], options: Record<string, unknown>) => Record<string, unknown>[];
   paragraphesEnHtml: (paragraphes: string[]) => string;
+  TOLERANCE_PAGES_CIBLE: number;
 };
 
 const phrase = (sujet: string) => `Le matin nous sommes allés voir ${sujet} et nous y sommes restés longtemps, ravis de la plage. `;
@@ -118,6 +120,86 @@ describe("composition du carnet de l'app", () => {
       const avecPhotos = { ...payload, days: [{ ...payload.days[0]!, quiz }] };
       const days = composerCarnet(avecPhotos, { ratio: 50, funFacts: false, quiz: true, decorations: 2 });
       for (const jour of days.filter((j) => j["quiz"])) expect(jour["photos"]).toEqual([]);
+    });
+  });
+
+  describe("nombre de pages cible", () => {
+    // Dix étapes au récit de six paragraphes, douze photos chacune : le ratio
+    // en garde autant qu'il en demande, la cible se lit sur tout le carnet.
+    const long = [...paragraphes, phrase("le phare").repeat(2).trim(), phrase("la chapelle").repeat(2).trim(), phrase("le moulin").repeat(2).trim()];
+    const voyage = {
+      ...payload,
+      pages_libres: 3,
+      days: Array.from({ length: 10 }, (_, e) => ({
+        ...payload.days[0]!,
+        title: `Étape ${e}`,
+        city: `Lieu ${e}`,
+        day_intro: { day_number: String(e + 1), location: `Lieu ${e}, Grèce`, date: "22 août 2026" },
+        body_html: M.paragraphesEnHtml(long),
+        photos: Array.from({ length: 12 }, (_, i) => `https://exemple.test/${e}-${i}.jpg`),
+      })),
+    };
+    // Le colophon, et trois pages libres de fin.
+    const fixes = 1 + 3;
+    const photosPosees = (days: Record<string, unknown>[]) => pages(days).flatMap((p) => p.photos).sort();
+    const recit = (days: Record<string, unknown>[]) => pages(days).map((p) => p.texte).join("");
+
+    it("tolère le même écart que la règle produit (`PAGE_TARGET_TOLERANCE`)", () => {
+      expect(M.TOLERANCE_PAGES_CIBLE).toBe(PAGE_TARGET_TOLERANCE);
+    });
+
+    // À 100 %, les planches font déjà 44 pages : la cible est plus haute.
+    for (const [ratio, cible] of [[50, 40], [75, 40], [100, 60]] as const) {
+      it(`fait tenir un carnet à cible ${cible} entre ${cible - 5} et ${cible + 5} pages, au palier ${ratio} %`, () => {
+        const sans = composerCarnet(voyage, { ratio, funFacts: false, decorations: 2 });
+        expect(sans.length + fixes).toBeLessThan(cible - 5);
+        const days = composerCarnet(voyage, { ratio, funFacts: false, decorations: 2, pagesCible: cible });
+        expect(days.length + fixes).toBeGreaterThanOrEqual(cible - 5);
+        expect(days.length + fixes).toBeLessThanOrEqual(cible + 5);
+        // Exactement les photos que `photosRequired` a dites : le ratio tient.
+        expect(photosPosees(days)).toEqual(photosPosees(sans));
+        for (let e = 0; e < 10; e += 1) {
+          const demandees = photosRequired({ body_html: M.paragraphesEnHtml(long) }, ratio, "a5", { decorations: true }).photos;
+          expect(photosPosees(days).filter((url) => url.includes(`/${e}-`)).length).toBe(Math.min(demandees, 12));
+        }
+        expect(recit(days)).toBe(recit(sans));
+      });
+    }
+
+    it("ne force rien quand le ratio ne laisse pas assez de photos, et le dit", () => {
+      const sans = composerCarnet(voyage, { ratio: 25, funFacts: false, decorations: 2 });
+      const journal: string[] = [];
+      const days = composerCarnet(voyage, { ratio: 25, funFacts: false, decorations: 2, pagesCible: 40, journal: (t) => journal.push(t) });
+      expect(pages(days)).toEqual(pages(sans));
+      expect(journal.filter((t) => t.startsWith("pages cible"))).toEqual([expect.stringMatching(/hors d'atteinte.*pas assez de photos/)]);
+    });
+
+    it("donne les mêmes pages que l'atelier", () => {
+      const app = composerCarnet(voyage, { ratio: 50, funFacts: false, decorations: 2, pagesCible: 40 });
+      const atelier = M.composerJours(
+        voyage.days.map((jour, e) => ({
+          titre: jour.title,
+          lieu: jour.city,
+          destination: "Grèce",
+          numero: jour.day_intro.day_number,
+          lieuComplet: jour.day_intro.location,
+          dateLongue: jour.day_intro.date,
+          paragraphes: long,
+          recit: long.join(" "),
+          photos: jour.photos.map((src, i) => ({ id: `${e}-${i}`, src, groupe: false })),
+          analyse: null,
+        })),
+        {
+          pagesAvant: 1,
+          pagesFixes: fixes,
+          pagesCible: 40,
+          ratio: 50,
+          stickers: stickersDuCarnet(),
+          decorations: 2,
+          budgetPhotos: () => photosRequired({ body_html: M.paragraphesEnHtml(long) }, 50, "a5", { decorations: true }).photos,
+        },
+      );
+      expect(pages(app)).toEqual(pages(atelier));
     });
   });
 });

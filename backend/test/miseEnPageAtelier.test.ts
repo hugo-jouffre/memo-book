@@ -953,4 +953,88 @@ describe("mise en page de l'atelier", () => {
       expect(quizPoses(jours)).toEqual([]);
     });
   });
+
+  describe("nombre de pages cible (Hugo, 15/10/2026)", () => {
+    // Dix étapes d'un paragraphe, six photos chacune : le récit en fait peu,
+    // les photos de quoi allonger. Avec le colophon et les pages libres
+    // (`pagesFixes`), le carnet composé seul fait 25 pages.
+    const voyage = (photos = 6) =>
+      Array.from({ length: 10 }, (_, e) =>
+        etape(paragrapheDe(`le lieu ${e}`, 2), Array.from({ length: photos }, (_, k) => photo(`${e}-${k}`)), null, `Lieu ${e}`),
+      );
+    const pagesParEtape = (jours: Jour[]) =>
+      jours.reduce<number[]>((n, j) => (j["day_intro"] ? [...n, 1] : [...n.slice(0, -1), (n.at(-1) ?? 0) + 1]), []);
+    const photosDe = (jours: Jour[]) => jours.flatMap((j) => j.photos.map(url)).sort();
+    const recalage = (jours: string[]) => jours.filter((t) => t.startsWith("pages cible"));
+
+    it("fait tenir un carnet à cible 40 entre 35 et 45 pages, par ses seules planches", () => {
+      const sans = M.composerJours(voyage(), { ratio: 50, pagesFixes: 5 });
+      expect(sans.length + 5).toBeLessThan(35);
+      const journal: string[] = [];
+      const jours = M.composerJours(voyage(), { ratio: 50, pagesFixes: 5, pagesCible: 40, journal: (t: string) => journal.push(t) });
+      expect(jours.length + 5).toBeGreaterThanOrEqual(35);
+      expect(jours.length + 5).toBeLessThanOrEqual(45);
+      // Le récit n'a pas bougé d'un mot, et aucune page de récit n'est apparue.
+      expect(normal(texteDes(jours))).toBe(normal(texteDes(sans)));
+      expect(jours.filter((j) => j.body_html).length).toBe(sans.filter((j) => j.body_html).length);
+      // Les mêmes photos, ni plus ni moins : le ratio en a dit le nombre.
+      expect(photosDe(jours)).toEqual(photosDe(sans));
+      // Ce qui s'ajoute, ce sont des planches, en fin d'étape, et chaque étape reste paire.
+      const ajoutees = jours.filter((j) => j["layout_photo_page"]).length - sans.filter((j) => j["layout_photo_page"]).length;
+      expect(ajoutees).toBe(jours.length - sans.length);
+      for (const n of pagesParEtape(jours)) expect(n % 2).toBe(0);
+      expect(recalage(journal)).toEqual([expect.stringContaining("35 après 10 page(s) de photos ajoutée(s)")]);
+    });
+
+    it("compte les pages libres de fin dans le carnet", () => {
+      const avecLibres = M.composerJours(voyage(), { ratio: 50, pagesFixes: 5, pagesCible: 40 });
+      const sansLibres = M.composerJours(voyage(), { ratio: 50, pagesFixes: 2, pagesCible: 40 });
+      expect(sansLibres.length).toBeGreaterThan(avecLibres.length);
+      expect(sansLibres.length + 2).toBeGreaterThanOrEqual(35);
+    });
+
+    it("ne touche à rien quand le carnet est déjà dans sa fourchette", () => {
+      const sans = M.composerJours(voyage(), { ratio: 50, pagesFixes: 5 });
+      const journal: string[] = [];
+      const avec = M.composerJours(voyage(), { ratio: 50, pagesFixes: 5, pagesCible: 28, journal: (t: string) => journal.push(t) });
+      expect(avec).toEqual(sans);
+      expect(recalage(journal)).toEqual([]);
+    });
+
+    it("raccourcit en resserrant les planches, sans perdre une photo", () => {
+      // À 100 %, des étapes de quatre planches à deux ou trois photos : 45 pages.
+      const sans = M.composerJours(voyage(9), { ratio: 100, pagesFixes: 5 });
+      expect(sans.length + 5).toBe(45);
+      const jours = M.composerJours(voyage(9), { ratio: 100, pagesFixes: 5, pagesCible: 30 });
+      expect(jours.length + 5).toBe(35);
+      expect(photosDe(jours)).toEqual(photosDe(sans));
+      for (const n of pagesParEtape(jours)) expect(n % 2).toBe(0);
+      // La planche qui ouvre l'étape garde son bandeau et quatre photos au plus.
+      for (const j of jours.filter((jour) => jour["day_intro"])) {
+        expect(j["layout_photo_wall_intro"]).toBe(true);
+        expect(j.photos.length).toBeLessThanOrEqual(4);
+      }
+      for (const j of jours) expect(j.photos.length).toBeLessThanOrEqual(5);
+    });
+
+    it("ne force rien quand les photos manquent, et le dit", () => {
+      const sans = M.composerJours(voyage(0), { ratio: 50, pagesFixes: 5 });
+      const journal: string[] = [];
+      const jours = M.composerJours(voyage(0), { ratio: 50, pagesFixes: 5, pagesCible: 40, journal: (t: string) => journal.push(t) });
+      expect(jours).toEqual(sans);
+      expect(recalage(journal)).toEqual([expect.stringMatching(/hors d'atteinte, 25 pages .*pas assez de photos/)]);
+    });
+
+    it("ne force rien quand le récit seul dépasse la cible, et le dit", () => {
+      const long = Array.from({ length: 6 }, (_, e) =>
+        etape([0, 1, 2, 3].map((k) => paragrapheDe(`le lieu ${e}-${k}`)).join(" "), [photo(`${e}`)], null, `Lieu ${e}`),
+      );
+      const sans = M.composerJours(long, { ratio: 25, pagesFixes: 5 });
+      const journal: string[] = [];
+      const jours = M.composerJours(long, { ratio: 25, pagesFixes: 5, pagesCible: 10, journal: (t: string) => journal.push(t) });
+      expect(normal(texteDes(jours))).toBe(normal(texteDes(sans)));
+      expect(jours.length).toBe(sans.length);
+      expect(recalage(journal)).toEqual([expect.stringMatching(/hors d'atteinte.*le récit seul en fait/)]);
+    });
+  });
 });

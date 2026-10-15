@@ -173,7 +173,15 @@ export async function structureRender(
     // Les réglages de personnalisation qui touchent le gabarit : pointillés,
     // décorations, et ce qui resterait de photos à 0 %.
     // Et la première étape s'ouvre sur une page de gauche.
-    const payload = premiereEtapeAGauche(applyBookSettings(compose, memo));
+    // Et le carnet tient dans sa cible de pages, à ± 5 pages, quand ses photos
+    // le permettent : hors d'atteinte, le composeur ne force rien et le dit.
+    const payload = premiereEtapeAGauche(
+      applyBookSettings(compose, memo, (texte) => {
+        if (!texte.startsWith("pages cible")) return;
+        if (texte.includes("hors d'atteinte")) logger.warn({ renderId, memoId: memo.id }, texte);
+        else logger.info({ renderId, memoId: memo.id }, texte);
+      }),
+    );
 
     const validation = validatePayload(payload);
     if (!validation.valid) {

@@ -52,7 +52,7 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
 |---|---|---|---|---|
 | **Couvertures (1re & 4e)** | Aperçu et personnalisation | — | Mise en page | Partiel : `cover_photo` et `back_cover` existent, l'éditeur non |
 | **Ratio photo / texte** | 0 · 25 · 50 · 75 · 100 % | 50 % | Mise en page — le nombre de photos de chaque étape (`photoRatio.ts`), mises en page par le composeur de l'atelier, le même dans l'atelier et l'app (`bookComposer.ts`) | Rendu, les cinq paliers. Détail et cas limites : **`docs/ratio-texte-photo.md`** |
-| **Nombre de page cible** | Compact · Par défaut · Détaillé · Personnalisé (30 à 180) | Par défaut — 60 pages sans date de fin | Rédaction — la taille des étapes (`services/pageTarget.ts`, ligne de consigne de `redaction.ts`) | Rendu côté rédaction, deux changements par voyage une fois le récit commencé. Le carnet composé n'est pas encore recalé sur la cible à ± 5 pages |
+| **Nombre de page cible** | Compact · Par défaut · Détaillé · Personnalisé (30 à 180) | Par défaut — 60 pages sans date de fin | Rédaction — la taille des étapes (`services/pageTarget.ts`, ligne de consigne de `redaction.ts`) · Mise en page — les planches de photos (`recalerSurLaCible`, `mise-en-page.js`), la même dans l'atelier et l'app | Rendu : la rédaction règle la densité, deux changements par voyage une fois le récit commencé ; la composition recale le carnet sur la cible à ± 5 pages par ses planches de photos, quand les photos le permettent (15/10/2026) |
 | **Fun facts** | ON / OFF | ON | Rédaction les écrit, mise en page les place | Rendu (`fun_facts`) — OFF : aucun encart, dans l'atelier comme dans l'app |
 | **Pointillés** | ON / OFF | ON | Gabarit (`.mb-note__rules`) | Rendu : `rules_enabled` dans le payload |
 | **Décorations & stickers** | 0 · 1 · 2 · 3 · 4 par étape | 2 | Mise en page | Rendu : les stickers de la bibliothèque dessinée (44 dessins importés de Notion, `assets/stickers/`), liés au récit puis complétés par des dessins de voyage, **autant par étape que le réglage** (14/10/2026 ; le curseur de l'app le dit : « Quantité de décorations par étape »), et le tracé pointillé ; à 0, ni l'un ni l'autre. Le scotch des photos n'en dépend plus (12/10/2026) |
@@ -80,7 +80,31 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
   40 / 60 / 80 pages.** Le carnet final vise sa cible à **± 5 pages** (un
   Compact de 40 pages fait 35 à 45 pages). La cible règle la **densité de la
   rédaction** — la taille d'étape vers laquelle on tire, jamais au-delà de ce
-  que le vocal raconte : on ne gonfle pas. Changer de cible en cours de voyage :
+  que le vocal raconte : on ne gonfle pas. Puis la **composition recale** le
+  carnet (`recalerSurLaCible`, `mise-en-page.js` — le même code dans l'atelier
+  et l'app, donc le même PDF) :
+  - on compte **le carnet entier hors couvertures** : colophon, introduction,
+    page libre d'avant, pages d'étape, pages libres de fin. Les pages fixes
+    comptent mais ne bougent jamais ;
+  - la mise en page n'invente pas de texte : elle n'ajoute ou ne retire que
+    des **planches** (pages de photos de fin d'étape). Aucun récit n'est coupé,
+    raccourci ni réduit, aucune page de récit n'apparaît ni ne disparaît ;
+  - **le ratio photo / texte tient** : chaque étape garde exactement le nombre
+    de photos que le ratio lui donne (celui que le chat a demandé). Trop court,
+    ces photos s'étalent sur deux planches de plus (celles que les six pages
+    avaient écartées reviennent ; à 50 % et au-delà, une page de récit à
+    plusieurs photos en cède — elle garde toujours la sienne), jusqu'à deux
+    doubles pages de photos par étape, et six pages par étape au plus ; trop long, elles se resserrent sur
+    moins de planches (cinq par page) ou remontent sur les pages de récit qui
+    ont encore une place ;
+  - chaque étape garde un **nombre pair de pages** : deux planches à la fois,
+    ou une seule pour rendre paire une étape impaire ;
+  - **hors d'atteinte**, on ne force rien : pas assez de photos (le cas courant
+    à 0 et 25 %, ou d'un récit court qui n'en demande que deux), ou trop de
+    récit (la cible est sous ce que le texte seul occupe). Le carnet reste au
+    plus près, et le journal le dit — `pages cible : … hors d'atteinte`, en
+    avertissement dans les journaux de l'API, dans le journal de l'atelier.
+  Changer de cible en cours de voyage :
   - **deux changements au plus**, comptés seulement une fois qu'une étape est
     écrite (avant, rien à homogénéiser). L'app le dit avant de changer —
     « Changer le nombre de pages cible » / « Annuler » —, puis « il ne te reste

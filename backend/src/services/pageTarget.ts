@@ -21,7 +21,12 @@ import type { PrismaClient } from "@prisma/client";
 
 export const PAGE_TARGET_CHANGE_LIMIT = 2;
 
-/** L'écart toléré entre le carnet composé et sa cible, dans chaque sens. */
+/**
+ * L'écart toléré entre le carnet composé et sa cible, dans chaque sens. La
+ * composition y recale le carnet par ses planches de photos
+ * (`recalerSurLaCible`, `MemoBook Generator/public/mise-en-page.js`, qui en
+ * recopie la valeur : `TOLERANCE_PAGES_CIBLE`).
+ */
 export const PAGE_TARGET_TOLERANCE = 5;
 
 /** Sans durée connue — pas de date de fin —, le palier « Par défaut » vise 60 pages. */

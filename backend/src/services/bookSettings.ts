@@ -14,6 +14,7 @@
  * | Pointillés coupés | `rules_enabled: false` : pas de réglure sous le récit |
  * | Décorations à 0 | `decoration_quota: 0` : ni tracé pointillé, ni sticker (le scotch reste) |
  * | Zones libres | `pages_libres: 3` : trois pages réglées après la dernière étape ; 0 si coupé |
+ * | Nombre de pages cible | le carnet tient dans la cible à ± 5 pages, par ses planches de photos (`pageTarget.ts`) |
  *
  * ## Le ratio photo / texte, et la composition
  *
@@ -40,6 +41,12 @@ export interface BookSettings {
   funFactsEnabled?: boolean;
   /** « Quiz intégrés à l'histoire ». Absent : allumés, comme le défaut du carnet. */
   quizEnabled?: boolean;
+  /**
+   * Le nombre de pages cible du voyage. Le composeur ajoute ou retire des
+   * planches de photos pour que le carnet y tienne à ± 5 pages ; il ne touche
+   * jamais au récit. Absent : aucun recalage.
+   */
+  targetPageCount?: number;
 }
 
 /** Les pages libres, réglées, de fin de carnet quand « Zones libres » est allumé. */
@@ -57,7 +64,11 @@ export function keepsPhotos(settings: Pick<BookSettings, "photoTextRatio">): boo
  * (`structure.ts`) à 0 % ; ce qui en resterait part ici, puisque
  * `appliquerRatio` ne distribue aucune photo à ce palier.
  */
-export function applyBookSettings(payload: BookPayload, settings: BookSettings): BookPayload {
+export function applyBookSettings(
+  payload: BookPayload,
+  settings: BookSettings,
+  journal?: (texte: string) => void,
+): BookPayload {
   const ratio = getPhotoRatio(null, { photo_ratio: settings.photoTextRatio });
   const regle: BookPayload = {
     ...payload,
@@ -80,6 +91,8 @@ export function applyBookSettings(payload: BookPayload, settings: BookSettings):
     // payload de la structuration n'atteint pas le PDF.
     quiz: settings.quizEnabled !== false,
     decorations: Math.max(0, Math.min(4, Math.round(settings.decorationQuota))),
+    ...(settings.targetPageCount ? { pagesCible: settings.targetPageCount } : {}),
+    ...(journal ? { journal } : {}),
   });
   return regle;
 }

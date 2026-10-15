@@ -270,7 +270,9 @@ const etat = {
    * `decorations` (« Décorations & stickers » : le nombre de stickers par
    * étape, 2 par défaut — Hugo, 14/10/2026),
    * `zonesLibres` (« Zones libres » : trois pages réglées en fin de carnet),
-   * `quiz` (« Quiz intégrés à l'histoire » : environ un toutes les trois étapes).
+   * `quiz` (« Quiz intégrés à l'histoire » : environ un toutes les trois étapes),
+   * `pagesCible` (« Nombre de pages cible » : le carnet y tient à ± 5 pages
+   * par ses planches de photos ; vide, aucun recalage).
    */
   carnet: {
     titre: "",
@@ -284,6 +286,7 @@ const etat = {
     decorations: 2,
     zonesLibres: true,
     quiz: true,
+    pagesCible: null,
   },
   /** Un champ touché à la main n'est plus jamais réécrit par la déduction. */
   carnetManuel: {},
@@ -1591,7 +1594,10 @@ const ficheCouverture = () => Couverture.ficheDuCarnet(fichePumbo(), pagesDuLivr
  * - **zones libres** (allumé par défaut) : `pages_libres: 3`, trois pages
  *   réglées après la dernière étape ;
  * - **quiz** (allumé par défaut) : le composeur en place environ un toutes les
- *   trois étapes (`placerQuiz`) ; coupé, aucun.
+ *   trois étapes (`placerQuiz`) ; coupé, aucun ;
+ * - **nombre de pages cible** (vide par défaut) : le carnet entier — colophon et
+ *   pages libres compris — y tient à ± 5 pages, par ses seules planches de
+ *   photos (`recalerSurLaCible`) ; hors d'atteinte, le journal le dit.
  */
 function reglagesDuCarnet() {
   const c = etat.carnet;
@@ -1604,6 +1610,7 @@ function reglagesDuCarnet() {
     rulesEnabled: c.reglure !== false,
     decorationQuota: Number.isFinite(quota) ? quota : 2,
     freeZonesEnabled: c.zonesLibres !== false,
+    targetPageCount: Number(c.pagesCible) > 0 ? Math.round(Number(c.pagesCible)) : null,
   };
 }
 
@@ -1670,12 +1677,20 @@ function construirePayloadCarnet(photoDe = (data) => data, { imprimeur = Boolean
       decorations: reglages.decorationQuota,
       ratio: RatioPhotos.normaliserRatio(reglages.photoTextRatio),
       budgetPhotos: budgetDuRatio(reglages, plansDeRatio),
+      // Les pages hors des étapes comptent dans la cible : colophon,
+      // introduction, page libre d'avant, pages libres de fin.
+      ...(reglages.targetPageCount
+        ? {
+            pagesCible: reglages.targetPageCount,
+            pagesFixes: avant + libresAvant + (reglages.freeZonesEnabled ? PAGES_LIBRES_FIN : 0),
+          }
+        : {}),
       journal: (texte) => {
         debugCarnet(texte);
         // Pourquoi un fun fact manque, quelles photos sont écartées : dans le
         // journal visible, une fois — le payload se recompose souvent (nombre
         // de pages, couverture).
-        if (/^(fun facts non imprimés|quiz :|photo\(s\) écartée\(s\)|stickers :)/.test(texte) && !etat.rapportsCarnet.has(texte)) {
+        if (/^(fun facts non imprimés|quiz :|photo\(s\) écartée\(s\)|stickers :|pages cible :)/.test(texte) && !etat.rapportsCarnet.has(texte)) {
           etat.rapportsCarnet.add(texte);
           noter(texte);
         }
@@ -4376,6 +4391,7 @@ function resumePersonnalisation(c) {
     c.reglure !== false ? "pointillés" : "sans pointillés",
     (c.decorations ?? 2) ? `${c.decorations ?? 2} sticker(s) par étape` : "sans décor",
     c.zonesLibres !== false ? "zones libres" : null,
+    Number(c.pagesCible) > 0 ? `${c.pagesCible} pages visées` : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -4453,7 +4469,20 @@ function panneauPersonnalisation() {
       h("input", { type: "checkbox", checked: c.zonesLibres !== false, onchange: poser("zonesLibres") }),
       "Trois pages réglées en fin de carnet, pour écrire à la main.",
     ),
-    aVenir("Nombre de pages cible"),
+    ligne(
+      "Nombre de pages cible",
+      h("input", {
+        type: "number",
+        min: 16,
+        max: 400,
+        step: 2,
+        placeholder: "libre",
+        value: c.pagesCible ?? "",
+        style: { width: "6em" },
+        onchange: poser("pagesCible", (v) => (Number(v) > 0 ? Math.round(Number(v)) : null)),
+      }),
+      "Le carnet entier, colophon et pages libres compris, tient dans la cible à ± 5 pages : la mise en page ajoute ou retire des planches de photos, sans jamais toucher au récit ni au nombre de photos du ratio. Hors d'atteinte — pas assez de photos, ou trop de récit —, le journal le dit. Vide : aucun recalage.",
+    ),
     ligne(
       "Quiz intégrés à l'histoire",
       h("input", { type: "checkbox", checked: c.quiz !== false, onchange: poser("quiz") }),
