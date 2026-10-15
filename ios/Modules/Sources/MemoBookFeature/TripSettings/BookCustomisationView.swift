@@ -105,6 +105,13 @@ public struct BookCustomisationView: View {
                     proxy.scrollTo(BookExtrasPanel.lockedNoticeAnchor, anchor: .bottom)
                 }
             }
+            // Et pour la note orange de la cible verrouillée, sous les paliers.
+            .onChange(of: model.showsPageTargetLimitNotice) { _, isShown in
+                guard isShown else { return }
+                withAnimation(reduceMotion ? nil : .smooth(duration: 0.3)) {
+                    proxy.scrollTo(BookPagesPanel.limitNoticeAnchor, anchor: .bottom)
+                }
+            }
             }
 
             header
@@ -116,6 +123,19 @@ public struct BookCustomisationView: View {
         // `MemoBookColor`.
         .environment(\.colorScheme, .light)
         .task { await model.load() }
+        // Le changement de nombre de pages cible, quand il compte : une seule
+        // feuille, dont le modèle fait avancer le contenu. La refermer au
+        // glissé, c'est « Annuler » ou « OK ».
+        .brandSheet(item: pageTargetChange) { _ in
+            PageTargetChangeSheet(model: model)
+        }
+    }
+
+    private var pageTargetChange: Binding<PageTargetChange?> {
+        Binding(
+            get: { model.pageTargetChange },
+            set: { if $0 == nil { model.dismissPageTargetChange() } }
+        )
     }
 
     // MARK: - La tête fixe
