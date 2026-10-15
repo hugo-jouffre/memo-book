@@ -634,6 +634,15 @@
       .filter(Boolean);
   }
 
+  /** Les cadres des cartes de ville (séjour en un seul lieu) : ceux qui prennent les rues d'OpenStreetMap. */
+  function cadresDesVilles(etapes, contours) {
+    const lieux = lieuxDuVoyage(etapes, contours);
+    return [...new Set(lieux.map((l) => l.pays))]
+      .filter((pays) => sejourUnique(lieux, pays))
+      .map((pays) => cadreDuVoyage(lieux, pays, contours, CADRE_MIN_VILLE))
+      .filter(Boolean);
+  }
+
   /* ----------------------------------------------- photos ↔ passages du récit */
 
   /**
@@ -2491,6 +2500,7 @@
     cadreDuVoyage,
     cadreDuPays,
     cadresDesCartes,
+    cadresDesVilles,
     sejourUnique,
     lieuxDuVoyage,
     composition,

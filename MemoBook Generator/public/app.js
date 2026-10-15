@@ -318,6 +318,8 @@ const etat = {
   /** Contours détaillés par pays (`assets/maps/detail/`), chargés pour les cartes cadrées sur le voyage. */
   contoursDetail: null,
   indexDetail: null,
+  /** Les rues et l'eau des cartes de ville (OpenStreetMap), par clé de vue (`Carte.cleDeVue`). */
+  ruesDesVilles: {},
   /** Message sous « Générer le carnet » : { type: "info" | "erreur", texte }. */
   carnetStatut: null,
   etapes: [],
@@ -3261,9 +3263,48 @@ async function chargerContoursDetail() {
   }
 }
 
+/**
+ * L'API Overpass : les grands axes et les cours d'eau des cartes de ville,
+ * tirés d'OpenStreetMap. Le back-end lit la sienne dans `OVERPASS_URL`.
+ */
+const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
+
+/**
+ * Les rues et l'eau des cartes de ville, demandées une fois par vue. Overpass
+ * en panne ou trop lent (une minute) : la carte de ville reste sobre.
+ */
+async function chargerRuesDesVilles() {
+  if (!etat.contoursCarte) return;
+  const etapes = etapesPourMiseEnPage(() => "");
+  const vues = MiseEnPage.cadresDesVilles(etapes, etat.contoursCarte).map((cadre) => Carte.vueDeVille(cadre));
+  await Promise.all(
+    vues
+      .filter((vue) => !etat.ruesDesVilles[Carte.cleDeVue(vue)])
+      .map(async (vue) => {
+        try {
+          const reponse = await fetch(OVERPASS_URL, {
+            method: "POST",
+            body: new URLSearchParams({ data: Carte.requeteOverpass(vue) }),
+            signal: AbortSignal.timeout(60_000),
+          });
+          if (!reponse.ok) throw new Error(`HTTP ${reponse.status}`);
+          const json = await reponse.json();
+          if (json.remark && /error/i.test(json.remark)) throw new Error(json.remark);
+          etat.ruesDesVilles[Carte.cleDeVue(vue)] = Carte.ruesDOverpass(json, vue);
+        } catch (erreur) {
+          debugCarnet("rues OpenStreetMap indisponibles : carte de ville sobre", erreur);
+        }
+      }),
+  );
+}
+
 /** La carte d'un chapitre : cadrée sur le voyage si les contours détaillés de son pays sont là. */
 function dessinerCarteChapitre(requete) {
   if (requete.cadre && etat.contoursDetail?.[requete.regions[0]]) {
+    if (requete.ville) {
+      const vue = Carte.vueDeVille(requete.cadre, requete.widthPt, requete.heightPt);
+      requete = { ...requete, rues: etat.ruesDesVilles[Carte.cleDeVue(vue)] || null };
+    }
     return Carte.renderCarteCadreeDataUri(etat.contoursDetail, requete);
   }
   return Carte.renderMapDataUri(etat.contoursCarte, requete);
@@ -3272,7 +3313,7 @@ function dessinerCarteChapitre(requete) {
 /** Ce qui précède la mise en page : l'analyse des étapes et les contours de carte. */
 async function preparerMiseEnPage(statut) {
   await Promise.all([analyserEtapes(statut), chargerContoursCarte(), chargerStickers()]);
-  await chargerContoursDetail();
+  await Promise.all([chargerContoursDetail(), chargerRuesDesVilles()]);
   // La netteté et l'exposition de chaque photo : quand une étape en a trop,
   // les floues et les sombres sont écartées les premières.
   const aMesurer = photosDesEtapes().filter((p) => p.data && !p.mesure);
