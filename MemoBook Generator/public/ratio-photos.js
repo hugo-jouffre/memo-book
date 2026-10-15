@@ -95,8 +95,8 @@ var RatioPhotos = (() => {
   function chapitre(n, hauteur, f) {
     return n === 1 ? 136 * 196 : galerie(n, hauteur, f);
   }
-  function trio(parts) {
-    return (n, hauteur, f) => parts.slice(0, n).reduce((somme, [l, h]) => somme + f.colonnes.pleine * l * hauteur * h, 0);
+  function trio(emplacements) {
+    return (n) => emplacements.slice(0, n).reduce((somme, [l, h]) => somme + l * h, 0);
   }
   function flottante(n, hauteur) {
     if (n <= 0) return 0;
@@ -175,18 +175,19 @@ var RatioPhotos = (() => {
       bandeau: true,
       encart: false
     },
-    // Trois photos en cascade sous un récit court. Page de suite seulement : la
-    // première page porte le bandeau, et les photos n'auraient plus leur hauteur.
+    // Le récit en colonne à côté d'une grande photo, deux photos dessous. Page
+    // de suite seulement : la première page porte le bandeau, et les photos
+    // n'auraient plus leur hauteur.
     layout_trio_portrait: {
       colonne: "pleine",
       photos: { min: 3, max: 3 },
-      bande: { hauteur: 360, min: 300, max: 360 },
+      bande: { hauteur: 360, min: 360, max: 360 },
       surfacePhotos: trio([
-        [0.32, 0.52],
-        [0.38, 0.54],
-        [0.37, 0.56]
+        [146, 250],
+        [145, 194],
+        [136, 182]
       ]),
-      capacite: { bandeau: 0, suite: 410 },
+      capacite: { bandeau: 0, suite: 450 },
       suiteSeulement: true,
       bandeau: false,
       encart: false
@@ -194,13 +195,13 @@ var RatioPhotos = (() => {
     layout_trio_landscape: {
       colonne: "pleine",
       photos: { min: 3, max: 3 },
-      bande: { hauteur: 360, min: 300, max: 360 },
+      bande: { hauteur: 360, min: 360, max: 360 },
       surfacePhotos: trio([
-        [0.58, 0.37],
-        [0.36, 0.55],
-        [0.36, 0.55]
+        [146, 250],
+        [128, 172],
+        [196, 138]
       ]),
-      capacite: { bandeau: 0, suite: 410 },
+      capacite: { bandeau: 0, suite: 450 },
       suiteSeulement: true,
       bandeau: false,
       encart: false

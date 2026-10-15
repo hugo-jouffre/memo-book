@@ -168,7 +168,13 @@ function describePages(payload: Record<string, unknown>): PageMeta[] {
             ? "trio"
             : day["layout_recit_photo"]
               ? "recit_photo"
-              : "story_opener";
+              : day["layout_recit_deux_photos"]
+                ? "recit_deux_photos"
+                : day["layout_photos_en_tete"]
+                  ? "photos_en_tete"
+                  : day["layout_recit_encart_milieu"]
+                    ? "recit_encart_milieu"
+                    : "story_opener";
     push(`Jour ${text(intro?.["day_number"], "—")}`, text(day["title"]), layout);
   }
 

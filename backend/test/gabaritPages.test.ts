@@ -38,12 +38,20 @@ describe("gabarit — pages du livre relié", () => {
     expect(avecIntro[3]).toContain("page--gauche");
   });
 
-  it("ajoute les pages libres de fin après la dernière étape, du bon côté", () => {
+  it("n'imprime plus de pages libres en fin de carnet, même demandées (15/10/2026)", () => {
     const liste = pages({ book_title: "Carnet", days: [jour("01"), jour("02")], pages_libres: 3 });
-    const libres = liste.slice(-3);
-    expect(libres.every((c) => c.includes("page--libre"))).toBe(true);
-    // Colophon (D), deux étapes (G, D), puis G, D, G.
-    expect(libres.map(cote).join("")).toBe("GDG");
+    // Colophon (D), deux étapes (G, D), et rien après.
+    expect(liste.map(cote).join("")).toBe("DGD");
+    expect(liste.some((c) => c.includes("page--libre"))).toBe(false);
+  });
+
+  it("met la première étape à gauche par une page blanche, sans réglure", () => {
+    const html = renderTemplateToHtml({
+      payload: { sans_couvertures: true, book_title: "Carnet", intro_text: "<p>Intro.</p>", pages_libres_avant: 1, days: [jour("01")] },
+      profile: "print",
+    });
+    const blanche = html.match(/<div class="page page--libre[^"]*"><\/div>/);
+    expect(blanche).not.toBeNull();
   });
 
   it("donne au récit le corps demandé par `taille_texte`", () => {

@@ -211,14 +211,12 @@ function chapitre(n: number, hauteur: number, f: Format): number {
 }
 
 /**
- * Trio : trois cadres posés en absolu dans une bande carrée, en pourcentages
- * relevés sur les maquettes du 08/10/2026 (`style.css`).
+ * Trio (maquettes du 15/10/2026) : trois emplacements de taille fixe, en
+ * points (`style.css`, `.mb-photo--trio-*`) — la grande photo à côté du récit,
+ * puis les deux du bas.
  */
-function trio(parts: readonly (readonly [number, number])[]) {
-  return (n: number, hauteur: number, f: Format): number =>
-    parts
-      .slice(0, n)
-      .reduce((somme, [l, h]) => somme + f.colonnes.pleine * l * hauteur * h, 0);
+function trio(emplacements: readonly (readonly [number, number])[]) {
+  return (n: number): number => emplacements.slice(0, n).reduce((somme, [l, h]) => somme + l * h, 0);
 }
 
 /**
@@ -322,18 +320,19 @@ export const GABARITS: Readonly<Record<string, Gabarit>> = {
     encart: false,
   },
 
-  // Trois photos en cascade sous un récit court. Page de suite seulement : la
-  // première page porte le bandeau, et les photos n'auraient plus leur hauteur.
+  // Le récit en colonne à côté d'une grande photo, deux photos dessous. Page
+  // de suite seulement : la première page porte le bandeau, et les photos
+  // n'auraient plus leur hauteur.
   layout_trio_portrait: {
     colonne: "pleine",
     photos: { min: 3, max: 3 },
-    bande: { hauteur: 360, min: 300, max: 360 },
+    bande: { hauteur: 360, min: 360, max: 360 },
     surfacePhotos: trio([
-      [0.32, 0.52],
-      [0.38, 0.54],
-      [0.37, 0.56],
+      [146, 250],
+      [145, 194],
+      [136, 182],
     ]),
-    capacite: { bandeau: 0, suite: 410 },
+    capacite: { bandeau: 0, suite: 450 },
     suiteSeulement: true,
     bandeau: false,
     encart: false,
@@ -341,13 +340,13 @@ export const GABARITS: Readonly<Record<string, Gabarit>> = {
   layout_trio_landscape: {
     colonne: "pleine",
     photos: { min: 3, max: 3 },
-    bande: { hauteur: 360, min: 300, max: 360 },
+    bande: { hauteur: 360, min: 360, max: 360 },
     surfacePhotos: trio([
-      [0.58, 0.37],
-      [0.36, 0.55],
-      [0.36, 0.55],
+      [146, 250],
+      [128, 172],
+      [196, 138],
     ]),
-    capacite: { bandeau: 0, suite: 410 },
+    capacite: { bandeau: 0, suite: 450 },
     suiteSeulement: true,
     bandeau: false,
     encart: false,

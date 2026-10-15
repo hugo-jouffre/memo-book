@@ -34,9 +34,20 @@ Base de connaissance de l'agent qui produit le JSON envoyé au moteur PDF.
   **28,3 pt (10 mm) à l'extérieur**. Le colophon est la page 1, une page de
   droite ; le gabarit pose `page--gauche` sur les pages paires (le pli à leur
   droite) et `page--droite` sur les autres (le pli à leur gauche). La colonne
-  fait **349,2 pt** de large sur toutes les pages, seule sa place change. Les
-  planches de photos gardent 14 pt au bord, plus l'écart des marges côté pli.
-  Les décors (tracé pointillé, stickers) débordent volontairement.
+  fait **349,2 pt** de large sur toutes les pages, seule sa place change.
+- **Marges de sécurité** (Hugo, 15/10/2026, après un post-it collé au bord) :
+  rien d'important — photo, post-it, carte, texte — à moins de **6 mm (17 pt)
+  du bord coupé** ni de **12 mm (34 pt) du pli** (`--mb-safe`,
+  `--mb-safe-int`). Les planches de photos s'y tiennent (c'était 5 et 10 mm),
+  et les éléments posés en `position: absolute` s'y calent — ⚠ un tel élément
+  se cale sur le bord de la feuille, pas sur la marge : le post-it à
+  `left: 2pt` touchait le massicot. Seuls les décors (tracé pointillé,
+  stickers) débordent volontairement : ils ne portent rien qui se lise.
+- **Entre une photo et le texte, 3 pt au moins de blanc**, contour dessiné et
+  inclinaison compris : les marges des photos inclinées comptent ce que leur
+  coin et leur contour (3,5 pt, tourné de 2° de plus) font sortir de leur boîte
+  — 21 pt à côté du récit qui contourne une photo, 22 pt au-dessus d'une bande,
+  18 pt sous une grande photo en tête.
 - Une page de carnet = un élément `.page`. Une entrée de `days[]` = une page.
 - **La page remplit la feuille, bord à bord.** Pas de marge d'impression, pas
   de conteneur centré, pas de `padding` autour des `.page` : la couleur du
@@ -58,7 +69,7 @@ Base de connaissance de l'agent qui produit le JSON envoyé au moteur PDF.
 | `intro_title`, `intro_text` | optionnels | Page d'introduction (`intro_text` en HTML) |
 | `intro_photos[]` | 0 à 2 | Photos scotchées en haut de l'introduction |
 | `days[]` | requis | **Une entrée = un bloc de récit, pas une page** — voir ci-dessous |
-| `back_cover` | optionnel | Quatrième de couverture. **Sans `image`, variante typographique** — c'est le défaut souhaité. `closing_subtext` s'adresse au lecteur : jamais le nom d'un outil interne (« MemoBook Generator ») ni un compteur de l'atelier ; sans texte à y mettre, on l'omet |
+| `back_cover` | optionnel | Quatrième de couverture. **Sans `image`, la page « Le voyage continue en dehors du livre »** (15/10/2026) : invitation à suivre le compte Instagram, QR code, tampon, compte et logo — la même pour tous les carnets, ses champs de texte n'y sont plus lus. Avec `image`, la variante photo, inchangée |
 
 Pages toujours produites, dans l'ordre : **couverture → colophon →
 introduction (si `intro_text`) → étapes → quatrième de couverture**.
@@ -339,7 +350,7 @@ faire aujourd'hui.
 | ↳ sous-titres | Hansley | `--mb-font-title` | **À construire** — `Hansley.otf` versionné mais pas inliné, repli sur la manuscrite |
 | ↳ textes | Gloria Hallelujah | `--mb-font-hand` | **À construire** |
 | ↳ fun facts | Playfair | Pas de token dédié : partage `--mb-font-display` | **À construire** — créer `--mb-font-facts` |
-| Zones libres | ON | **Trois pages réglées** après la dernière étape, avant la quatrième — `pages_libres: 3` (`mb_page_libre`), 0 si coupé. La zone blanche en fin d'étape reste à construire | Rendu (pages de fin) |
+| Zones libres | ON | **Sans effet depuis le 15/10/2026** : les pages réglées de fin de carnet sont retirées (« nous avons décidé de retirer ces pages pour le moment »). `pages_libres` vaut 0 et le gabarit l'ignore | Retiré |
 | Mot fléché | ON | Grille générée à la commande, posée en fin de carnet | **À construire** |
 
 **Deux « pointillés » à ne pas confondre.** Le réglage porte sur la **réglure**
@@ -456,9 +467,12 @@ tranche : le premier actif l'emporte.
 | `layout_hero_top` | Grande photo en tête, récit dessous | Une photo iconique porte la journée | 1 | sous S, S |
 | `layout_split_left` | Carte info à gauche, récit en colonne à droite, puis deux photos en bas | Un fait à mettre en avant et deux belles images | 2 | S, M — **S seulement avec un fun fact** |
 | `layout_collage` | Récit pleine largeur puis 2 ou 3 photos inclinées en bas | Journée dense visuellement | 2–3 | S, M |
-| `layout_trio_portrait` | **Page de suite seulement.** Récit court en tête, réglure prolongée jusqu'aux photos, puis trois photos en cascade : une portrait en haut, deux portraits en bas qui la chevauchent à peine, tracé pointillé derrière | Fin d'étape courte avec trois photos en portrait | 3 | sous S, S partiel — **410 en 2 paragraphes** |
-| `layout_trio_landscape` | Le même, avec une **photo paysage en haut** (format 1,6) ; les deux du bas restent des portraits | Fin d'étape courte avec une paysage et deux portraits | 3 | idem |
-| `layout_recit_photo` | **Maquette faite à la main (Banaue).** Quelques lignes pleine largeur, puis le récit en colonne à gauche d'une grande photo en hauteur qui flotte à droite, inclinée, avec son **étiquette de titre** (`label`). Un fun fact devient un **post-it « Infos »** en bas à gauche | Une page à une photo en portrait (format < 0,77) — bandeau ou suite | 1 | S, M ; 800 en page de suite avec le post-it |
+| `layout_trio_portrait` | **Page de suite seulement.** Maquettes du 15/10/2026 : le récit en colonne à côté d'une grande photo en hauteur, puis deux portraits en bas, tracé pointillé derrière. Le récit passe à gauche, puis à droite, tour à tour (`trio_cote`) | Fin d'étape courte avec trois photos en hauteur | 3 | sous S, S — **450 en 2 paragraphes** |
+| `layout_trio_landscape` | Le même, avec en bas un portrait et une **photo en largeur** (format 1,42), sous la grande photo | Fin d'étape courte avec deux portraits et une paysage | 3 | idem |
+| `layout_recit_photo` | **Maquette faite à la main (Banaue).** Quelques lignes pleine largeur, puis le récit en colonne à gauche d'une grande photo en hauteur qui flotte à droite, inclinée, avec son **étiquette de titre** (`label`). Un fun fact devient un **post-it** en bas à gauche | Une page à une photo en portrait (format < 0,77) — bandeau ou suite | 1 | S, M ; 760 en page de suite avec le post-it |
+| `layout_recit_deux_photos` | **Maquette du 15/10/2026 (« Trek vers Patpat »).** Ouverture d'étape : une photo en hauteur à gauche que le récit contourne, puis en bas le post-it du fun fact et la seconde photo | Une ouverture d'étape à deux photos qui reçoit un fun fact ; ou pour varier une double page | 2 | sous S, S — **340 en 2 paragraphes** |
+| `layout_photos_en_tete` | **Maquette du 15/10/2026 (« Après-midi à Manille »).** Page de suite : deux photos en tête, le récit pleine largeur, le post-it pincé en bas à droite | Une page de suite à deux photos qui reçoit un fun fact ; ou pour varier une double page | 2 | 780 en 3 paragraphes, **300 avec le post-it** |
+| `layout_recit_encart_milieu` | **Maquette du 15/10/2026 (« Tagaytay »).** Page de suite : le récit coupé par une bande — une photo inclinée et le post-it pincé côte à côte — puis la suite du récit (`body_html_apres`) | Une page de suite à une photo qui reçoit un fun fact, au récit d'au moins 260 signes | 1 | 260 à **800**, 4 paragraphes |
 | `layout_photo_page` | **Page de photos seules**, sans récit ni bandeau, **sans légende**. De 3 à 5, une planche bord à bord — à 5, en rangées ou en deux colonnes décalées (`planche_colonnes`), tour à tour ; 1 ou 2, une page d'album (tirages inclinés, tracé pointillé). Avec `pleine_page`, une seule photo bord à bord, sans cadre | **Toujours en fin d'étape**, après le récit — voir § « Structure d'une étape » | 1–5 | aucune — le récit n'est pas rendu |
 | `layout_photo_wall_intro` | **La planche qui ouvre une étape** : bandeau en tête, photos sur le reste de la feuille, carte fun fact. Pas de légende non plus | Première page d'une étape à 100 % de photos | 1–4 | aucune — le récit n'est pas rendu |
 | `layout_story_full` | Récit pleine page, réglure jusqu'en bas, **aucune photo** | Palier 0 % du ratio texte / photo | 0 | jusqu'à 1140 (bandeau) / 1640 (suite) |
@@ -470,15 +484,35 @@ Les tailles exactes, et le plafond mesuré de chaque configuration, sont en
 Le cas par défaut couvre aussi `layout_story_opener` et `layout_story_facts` :
 le validateur exige au moins un drapeau, n'importe lequel de ces deux convient.
 
-**Les trios** (maquettes du 08/10/2026) ne s'emploient **jamais sur la
-première page d'une étape** : elle porte le bandeau jour · lieu · date, et les
-trois photos n'auraient plus leur hauteur — le validateur le refuse. L'atelier
-les choisit seul (`trioDe`, `mise-en-page.js`) : page de suite, trois photos,
-410 signes en deux paragraphes au plus, pas de photo de groupe, et une variante
-où **aucune des trois ne dépasse le plafond de rognage** — sinon la page reste
-un collage. Entre les deux variantes, celle qui rogne le moins : la paysage va
-en haut s'il y en a une. Pas de fun fact sur un trio : il n'y a pas de place
-prévue.
+**Les trios** (maquettes du 15/10/2026, qui remplacent celles du 08/10) ne
+s'emploient **jamais sur la première page d'une étape** : elle porte le
+bandeau jour · lieu · date, et les trois photos n'auraient plus leur hauteur —
+le validateur le refuse. L'atelier les choisit seul (`trioDe`,
+`mise-en-page.js`) : page de suite, trois photos, 450 signes en deux
+paragraphes au plus, pas de photo de groupe, et une variante où **aucune des
+trois ne dépasse le plafond de rognage** — sinon la page reste un collage.
+Entre les deux variantes, celle qui rogne le moins : la grande photo à côté du
+récit est en hauteur (0,58), une photo en largeur va en bas, sous elle. Le
+récit change de côté d'un trio à l'autre (`trio_cote`). Pas de fun fact sur un
+trio : il n'y a pas de place prévue.
+
+**Les trois layouts du 15/10/2026** (`layout_recit_deux_photos`,
+`layout_photos_en_tete`, `layout_recit_encart_milieu`) mettent le post-it du
+fun fact en scène avec le récit et les photos. Le composeur y passe une page
+quand il y pose un fun fact et que le récit y tient (`layoutAvecEncart`) ; les
+deux premiers servent aussi, sans fun fact, à varier une double page dont les
+deux côtés ont deux photos en bande (`varierDoublesPages`). Le module de ratio
+ne les choisit pas : il compte la page sur son gabarit d'origine.
+
+**La bande ajustée** (15/10/2026, « PDF 9 » : une photo réduite à un
+timbre-poste au milieu d'une bande, un grand blanc entre le récit et les
+photos). Sur `layout_split_left`, `layout_collage` et la bande d'une ouverture
+de chapitre, chaque photo prend une largeur à la mesure de son format
+(`poids`) et la bande **suit le récit** au lieu d'être poussée en bas de page :
+elle grandit dans la place qu'il laisse, jusqu'à `bande_max`, la hauteur où ses
+photos se rogneraient de plus d'un quart (`bandeAjustee`). Ce qui reste de la
+page va sous la bande, où se posent les stickers. Une photo de groupe, ou des
+photos trop larges pour une rangée, gardent les emplacements fixes.
 
 **La condition du lieu sur `layout_chapter_map`.** Ce layout se choisit à
 l'ouverture d'un chapitre, mais seulement **si le récit nomme un lieu** : c'est
@@ -504,8 +538,9 @@ Pour le garantir, le tracé est dessiné **dans la bande de photos** (macro
 par rapport à la page. Où que la bande se trouve, il la suit, et il ne monte
 jamais au-dessus de 112 pt quand la bande en fait au moins 160. Seuls les
 layouts qui ont une bande en portent donc un : `layout_split_left`,
-`layout_collage`, les deux trios (`.mb-trio`) et `layout_chapter_map` avec deux
-photos ou plus. Le layout par
+`layout_collage`, les deux trios (`.mb-trio__bas`), `layout_chapter_map` avec
+deux photos ou plus, et les layouts du 15/10/2026 dans leur bas de page
+(`.mb-bas`, `.mb-milieu` ; les photos en tête, seulement à côté du post-it). Le layout par
 défaut (photo flottante), `layout_hero_top` et les pages à `prompt` ou `quiz`
 n'en ont pas.
 
@@ -568,9 +603,12 @@ relancer le script.
 | `layout_split_left` + fun fact | 230 | sous S, S partiel |
 | `layout_chapter_map` + ≥ 2 photos, sans fun fact | 300 | sous S, S partiel |
 | `layout_hero_top` | 380 (660 en page de suite) | sous S, S |
-| `layout_recit_photo` | 560 (880 en page de suite) | S, M |
-| `layout_recit_photo` avec le post-it « Infos », page de suite | 800 | S, M |
-| `layout_trio_portrait`, `layout_trio_landscape` — page de suite seulement | 410, **2 paragraphes** | sous S, S partiel |
+| `layout_recit_photo` | 560 (860 en page de suite) | S, M |
+| `layout_recit_photo` avec le post-it, page de suite | 760 | S, M |
+| `layout_trio_portrait`, `layout_trio_landscape` — page de suite seulement | 450, **2 paragraphes** | sous S, S |
+| `layout_recit_deux_photos` — ouverture d'étape | 340, **2 paragraphes** | sous S, S |
+| `layout_photos_en_tete` — page de suite seulement | 780 en **3 paragraphes**, 300 avec le post-it | S, M |
+| `layout_recit_encart_milieu` — page de suite seulement | 260 à 800, **4 paragraphes** (`body_html` + `body_html_apres`) | S, M |
 | `layout_chapter_map` sans photos, ou une photo au-dessus de la carte | 500 | S, M partiel |
 | `layout_story_*`, `layout_collage`, `layout_split_left` sans fun fact | 540 | S, M |
 | `layout_story_*` portant un `prompt` | 740 | S, M |
@@ -667,17 +705,17 @@ de mise en page, gabarit) :
 | Paragraphe sur deux pages | Oui, **coupé sur une fin de phrase** |
 | Page de suite | **Rien** ne rappelle l'étape : le texte continue |
 | Corps et interligne | **Légèrement ajustables** (±1 pt) pour remplir une page — § « Corps ajusté d'un point » |
-| Étiquette de titre sur une photo | **Écrite par l'IA, une par double page au plus**, modifiable par le voyageur |
+| Étiquette de titre sur une photo | **Écrite par l'IA, une par double page au plus**, modifiable par le voyageur ; un sticker centré en haut de la photo, en Playfair Display Bold (15/10/2026) |
 | Habillage des photos | **Toujours** contour dessiné, inclinaison et scotch (le cadre blanc est remplacé par un contour noir le 13/10/2026) |
 | Légendes des pages de photos | **Jamais** |
 | Photo en pleine page | **De temps en temps** : une par chapitre au plus |
 | Stickers | **Bibliothèque dessinée**, liés au récit, autant par étape que le réglage « Décorations » (2 par défaut), deux par page au plus |
 | Tracé pointillé | **Un par double page au plus**, derrière des photos |
-| Fun fact | **Post-it « Infos » partout**, à peu près un toutes les trois pages (13/10/2026) — § « Les fun facts » |
+| Fun fact | **Un post-it partout**, à peu près un toutes les trois pages (13/10/2026), au titre varié et sans mention « rédigé par IA » (15/10/2026) — § « Les fun facts » |
 | Rythme | Jamais deux fois le même design sur une double page |
 | Carte de chapitre | À chaque nouveau lieu |
 | Marges | **Plus large côté reliure** : 15 mm côté pli, 10 mm à l'extérieur — § « Format » |
-| Fin du carnet | **3 pages libres réglées** pour écrire (réglage « Zones libres », `pages_libres`) |
+| Fin du carnet | ~~3 pages libres réglées~~ — **retirées le 15/10/2026** ; le carnet finit sur « Le voyage continue en dehors du livre » |
 
 ### Retouches du 13/10/2026
 
@@ -735,7 +773,7 @@ le dit.
 
 **Début d'étape à gauche.** Le colophon est la page 1, à droite : ce qui le
 suit avant la première étape (introduction) doit faire un nombre pair de
-pages. Sinon, une page libre réglée les complète (`pages_libres_avant: 1`). Avec
+pages. Sinon, une page blanche les complète (`pages_libres_avant: 1` ; elle n'est plus réglée depuis le 15/10/2026). Avec
 des étapes au nombre de pages pair, chacune commence alors à gauche. Le
 validateur avertit d'une première étape à droite.
 
@@ -763,7 +801,11 @@ tournent davantage), pour que deux contours ne se croisent pas.
 
 **L'étiquette de titre : une par double page au plus**, sur la photo la mieux
 notée qui en a une. Celle que le voyageur écrit sous la photo dans l'atelier
-(30 signes) passe avant la `legende` de l'IA.
+(30 signes) passe avant la `legende` de l'IA. Elle se pose en **sticker
+centré** en haut de la photo (Hugo, 15/10/2026, d'après la page « Tagaytay ») :
+papier blanc aux coins arrondis, cerné d'un trait, liseré blanc d'autocollant
+découpé, Playfair Display Bold, un coup de feutre bleu sous le mot ; un cran
+plus petit et sur deux lignes au-delà de 18 signes.
 
 **Les stickers** viennent d'une **bibliothèque dessinée** : la base Notion
 « Éléments graphiques », copiée et préparée dans `assets/stickers/` (44 dessins,
@@ -797,8 +839,7 @@ Les places (`placesSticker`), jamais par-dessus le récit ni dans le pli :
 | Récit court (60 % de la capacité au plus) | en bas, côté extérieur |
 | Récit avec bande de photos | les coins extérieurs de la bande, en bas (`band-*`) et en haut (`band-top-*`, dans la bande) |
 
-Le coin bas droit d'une page qui porte un fun fact reste à la mention
-« Fun fact rédigé par IA ». Les **personnages de dos** sont réservés : ils se
+Les **personnages de dos** sont réservés : ils se
 choisiront d'après l'apparence des voyageurs, pas d'après le récit.
 
 **La page « photos + stickers ».** `layout_photo_page` accepte désormais une ou
@@ -896,8 +937,20 @@ Deux messages, aux deux bornes du barème, définis une seule fois dans
 
 ## Les fun facts — dosage et matière
 
-**Un post-it « Infos » partout** (Hugo, 12/10/2026) : papier, scotch, plus de
-pince ni de bord pointillé, et toujours le titre « Infos ».
+**Un post-it partout** (Hugo, 12/10/2026) : papier, scotch, plus de bord
+pointillé ; la pince revient sur les maquettes du 15/10/2026 (photos en tête,
+encart au milieu, planche d'ouverture). « Fun fact » et « post-it Infos »
+désignent **le même encart** (Hugo, 15/10/2026) : seul son **titre varie** pour
+que le carnet ne répète pas le même mot — « Infos », « Le saviez-vous ? »,
+« Fun fact », « Culture générale ». Le titre proposé par l'analyse ou la
+rédaction est gardé ; sinon il se déduit du registre (`TITRE_PAR_REGISTRE`) ;
+jamais le même titre deux encarts de suite.
+
+**Où le poser, par ordre de préférence** (Hugo, 15/10/2026) : une page de
+**texte seul**, puis une page de **texte et de photos**, puis une page de
+**photos seules**. Le composeur l'ajoute à la note de chaque page candidate
+(`preferenceEncart` : +3, +1,5, 0) : une page de texte seul à une page de la
+place visée l'emporte encore sur une page de photos pile à sa place.
 
 **La promesse (Hugo, 13/10/2026) : à peu près un fun fact toutes les trois
 pages** quand le voyageur les allume. Avant, quatre règles cumulées — un par
@@ -971,7 +1024,13 @@ décide ensuite :
   le moins les photos ; si l'une d'elles y perdait plus d'un tiers, la page
   n'accueille pas le fun fact. À coût égal, le dernier emplacement. Ni la
   planche pleine (cinq photos, colonnes), ni le trio, ni la pleine page ;
-- **mention** : la page porte `ai_note` « Fun fact rédigé par IA ».
+- **mise en scène** : une page de récit à deux photos, ou une page de suite à
+  une photo, passe sur un layout du 15/10/2026 quand le récit y tient
+  (`layoutAvecEncart`, § « Catalogue des layouts ») ;
+- **pas de mention** : « Fun fact rédigé par IA » n'est plus imprimé (Hugo,
+  15/10/2026 : « il n'est pas nécessaire d'indiquer au lecteur que ce contenu
+  a été rédigé par une intelligence artificielle »). C'est aussi ce qui
+  laissait la mention sur une page sans fun fact.
 
 Le journal de l'atelier donne la cadence obtenue (« 14 encarts, un toutes les
 3,0 pages ») et, étape par étape, pourquoi un fun fact manque.
@@ -1011,9 +1070,10 @@ page le dit en petit : « Quiz rédigé par IA ».
 
 ## La mention « généré par IA »
 
-`ai_note` s'imprime en petit gris, en bas de page. À renseigner **dès qu'un
-élément de la page vient de la machine** — c'est une demande explicite, pas une
-option. Exemple : « Fun fact et illustration générés par IA ».
+`ai_note` s'imprime en petit gris, en bas de page — **seulement sur une page
+qui porte un quiz** (« Quiz rédigé par IA »). Le fun fact ne porte plus de
+mention (Hugo, 15/10/2026), et le gabarit ne l'imprime plus ailleurs : une
+mention sans l'élément qu'elle décrit était orpheline.
 
 ## La météo du jour
 
@@ -1079,6 +1139,16 @@ toutes les lignes suivantes, et l'écart texte/ligne dérive le long de la page.
 
 Chaque paragraphe est suivi d'**une ligne vide** : elle montre l'emplacement
 resté libre dans le gabarit, comme sur un carnet où l'on n'a pas rempli la page.
+
+**La réglure s'arrête au texte** (Hugo, 15/10/2026 : « éviter d'avoir
+plusieurs lignes pointillées consécutives sans aucun contenu écrit »). Elle
+vit dans `.mb-note__texte`, qui n'est haut que de ses lignes écrites : une
+photo flottante (récit qui contourne une photo) n'allonge plus la réglure
+jusqu'à son pied, et un récit court ne laisse plus une page de pointillés
+vides — y compris sur les trios et au palier 0 %, où elle descendait jusqu'en
+bas. Après la dernière ligne, **une ligne courte** (34 % de la colonne) : le
+léger dépassement des maquettes, qui laisse la page ouverte sans la laisser
+vide.
 
 La réglure est un **pointillé gris clair**, pas un trait plein : deux lecteurs
 la trouvaient trop marquée. Elle doit se deviner sous le texte, jamais se lire
@@ -1179,8 +1249,12 @@ emplacement, le contour déborde sans compter), dans l'ordre où le gabarit lit
 | `layout_chapter_map` | 2 | 0,89 · 0,89 — en bande |
 | `layout_photo_page` (page d'album) | 1 | 0,85 — 1,38 couchée pour une photo en largeur (`album_paysage`) |
 | `layout_photo_page` (page d'album) | 2 | 0,96 · 0,96 |
-| `layout_trio_portrait` | 3 | 0,60 (haut) · 0,68 · 0,64 |
-| `layout_trio_landscape` | 3 | 1,52 (haut) · 0,64 · 0,64 |
+| `layout_trio_portrait` | 3 | 0,58 (à côté du récit) · 0,75 · 0,75 |
+| `layout_trio_landscape` | 3 | 0,58 (à côté du récit) · 0,74 · 1,42 |
+| `layout_recit_deux_photos` | 2 | 0,61 (contournée) · 0,69 (en bas) |
+| `layout_photos_en_tete` | 2 | 0,71 · 0,71 |
+| `layout_recit_encart_milieu` | 1 | 0,74 |
+| bande ajustée (`bande_max`) | 2–3 | le format de chaque photo, à un quart près |
 | `layout_photo_page` | 3 | 0,71 · 0,44 · 1,59 |
 | `layout_photo_page` | 4 | 0,71 · 0,44 · 0,60 · 0,95 |
 | `layout_photo_page` | 5 | 1,72 · 1,38 · 0,87 · 0,87 · 1,38 |

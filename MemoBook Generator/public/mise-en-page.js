@@ -115,6 +115,9 @@
     layout_trio_portrait: 3,
     layout_trio_landscape: 3,
     layout_recit_photo: 1,
+    layout_recit_deux_photos: 2,
+    layout_photos_en_tete: 2,
+    layout_recit_encart_milieu: 1,
     layout_photo_page: 5,
   };
 
@@ -137,15 +140,24 @@
     defaut: { bandeau: 540, suite: 860 },
     layout_hero_top: { bandeau: 380, suite: 660 },
     // Pages de suite seulement : sous un bandeau, les trois photos n'ont plus
-    // leur hauteur. Mesuré le 08/10/2026 (`calibrate-lengths.ts --filtre
-    // trio`) : 440 signes en deux paragraphes avant que les photos cèdent,
-    // 410 avec les marges de reliure.
-    layout_trio: { bandeau: 0, suite: 410, paragraphes: 2 },
+    // leur hauteur. Le trio des maquettes du 15/10/2026 (récit en colonne à
+    // côté d'une grande photo) : 500 signes en deux paragraphes mesurés avant
+    // que les photos du bas ne passent la marge, 450 retenus.
+    layout_trio: { bandeau: 0, suite: 450, paragraphes: 2 },
     // Le récit qui contourne une grande photo (maquette faite à la main) tient
-    // la capacité ordinaire ; avec le post-it « Infos » en bas à gauche, 800
+    // la capacité ordinaire ; avec le post-it « Infos » en bas à gauche, 760
     // signes sur une page de suite avant que le texte ne passe dessous
-    // (mesuré le 12/10/2026).
-    layout_recit_photo: { bandeau: 560, suite: 880, postit: { bandeau: 560, suite: 800 } },
+    // (remesuré le 15/10/2026, photo écartée du texte de 22 pt).
+    layout_recit_photo: { bandeau: 560, suite: 860, postit: { bandeau: 560, suite: 760 } },
+    // Les layouts du 15/10/2026, mesurés le jour même (balayage de 160 à
+    // 1060 signes, aucune ligne sur une photo ni sous la marge) : l'ouverture
+    // à deux photos (360 mesurés en deux paragraphes), la page de suite à
+    // deux photos en tête (320 avec le post-it, 820 sans, en trois
+    // paragraphes), le récit coupé par une photo et un post-it (840 en quatre
+    // paragraphes).
+    layout_recit_deux_photos: { bandeau: 340, suite: 340, paragraphes: 2 },
+    layout_photos_en_tete: { bandeau: 0, suite: 780, paragraphes: 3, postit: { bandeau: 0, suite: 300 } },
+    layout_recit_encart_milieu: { bandeau: 0, suite: 800, paragraphes: 4, min: 260 },
   };
   const PARAGRAPHES_PAR_PAGE = { bandeau: 2, suite: 4 };
 
@@ -244,10 +256,16 @@
     layout_hero_top: { 1: [1.31] },
     layout_split_left: { 2: [0.86, 0.86] },
     layout_collage: { 2: [0.86, 0.86], 3: [0.55, 0.55, 0.55] },
-    // En haut, puis en bas à gauche et à droite (l'ordre de `photos[]`).
-    layout_trio_portrait: { 3: [0.6, 0.68, 0.64] },
-    layout_trio_landscape: { 3: [1.52, 0.64, 0.64] },
+    // La grande photo à côté du récit, puis les deux du bas (l'ordre de
+    // `photos[]`) : deux portraits, ou un portrait et la photo en largeur
+    // (maquettes du 15/10/2026).
+    layout_trio_portrait: { 3: [0.58, 0.75, 0.75] },
+    layout_trio_landscape: { 3: [0.58, 0.74, 1.42] },
     layout_recit_photo: { 1: [0.51] },
+    // La photo que le récit contourne à gauche, puis celle du bas.
+    layout_recit_deux_photos: { 2: [0.61, 0.69] },
+    layout_photos_en_tete: { 2: [0.71, 0.71] },
+    layout_recit_encart_milieu: { 1: [0.74] },
     // Une seule photo en largeur sur la page d'album.
     album_paysage: { 1: [1.38] },
     // La photo en pleine page, bord à bord : le format de la page.
@@ -412,11 +430,20 @@
    * rognée, dont le cadre épouse l'image, et la pleine page —, et la photo
    * choisie pour la double page porte son étiquette de titre.
    */
+  /**
+   * Le coin du scotch d'une photo que le récit contourne : jamais celui qui
+   * longe la ligne de texte au-dessus d'elle ou la colonne à côté — il
+   * mordait sur les dernières lettres (carnet du 15/10/2026).
+   */
+  const COIN_IMPOSE = { layout_recit_photo: "bottom-right", layout_recit_deux_photos: "top-left" };
+
   function habillerPhotos(plan, rendues, rangPage) {
     const etiquetee = plan.photos.find((p) => p.id === plan.etiquette);
     return rendues.map((item, k) => {
       const objet = typeof item === "string" ? { url: item } : { ...item };
-      if (objet.fit !== "contain" && !plan.pleinePage) objet.tape_corner = COINS_SCOTCH[(rangPage + k) % COINS_SCOTCH.length];
+      if (objet.fit !== "contain" && !plan.pleinePage) {
+        objet.tape_corner = (k === 0 && COIN_IMPOSE[plan.layout]) || COINS_SCOTCH[(rangPage + k) % COINS_SCOTCH.length];
+      }
       if (etiquetee && objet.url === etiquetee.src) objet.label = etiquetee.legende;
       return objet;
     });
@@ -1114,6 +1141,9 @@
     if (plan.layout === "layout_hero_top") return "hero";
     if (plan.layout === "layout_recit_photo") return `recit+photo${encart}`;
     if (plan.layout === "layout_trio_portrait" || plan.layout === "layout_trio_landscape") return plan.layout;
+    if (plan.layout === "layout_recit_deux_photos") return `recit+deux-photos${encart}`;
+    if (plan.layout === "layout_photos_en_tete") return `photos-en-tete${encart}`;
+    if (plan.layout === "layout_recit_encart_milieu") return "recit+milieu";
     const n = plan.photos.length;
     if (n === 0) return `texte${encart}`;
     if (n === 1) return `texte+photo${encart}`;
@@ -1185,6 +1215,22 @@
       }
       if (regle) continue;
 
+      // 1 bis. Une page à deux photos en bande passe au gabarit à deux photos
+      //    des maquettes du 15/10/2026 : photo contournée à l'ouverture,
+      //    photos en tête sur une page de suite.
+      for (const p of [b, a]) {
+        const l = layoutADeuxPhotos(p);
+        if (!l || p.layout === l) continue;
+        const avant = p.layout;
+        p.layout = l;
+        if (composition(a) !== composition(b)) {
+          regle = true;
+          break;
+        }
+        p.layout = avant;
+      }
+      if (regle) continue;
+
       // 2. Une photo passe d'une page à l'autre, dans la même étape.
       if (a.etape === b.etape && a.layout !== "layout_chapter_map" && b.layout !== "layout_chapter_map") {
         for (const [donne, recoit] of [[a, b], [b, a]]) {
@@ -1235,16 +1281,49 @@
   const ECART_MIN = 2;
   const ECART_MAX = 4;
 
+  /**
+   * Les titres du post-it (Hugo, 15/10/2026) : « Fun fact » et « Infos »
+   * désignent le même encart, le titre varie pour que le carnet ne répète pas
+   * le même mot de page en page.
+   */
+  const TITRES_ENCART = ["Infos", "Le saviez-vous ?", "Fun fact", "Culture générale"];
+  const TITRE_PAR_REGISTRE = {
+    vecu: "Fun fact",
+    histoire: "Culture générale",
+    "nom-de-lieu": "Le saviez-vous ?",
+    "litterature-cinema": "Culture générale",
+    record: "Le saviez-vous ?",
+    echelle: "Le saviez-vous ?",
+    "usage-local": "Infos",
+    cuisine: "Infos",
+  };
+
+  /**
+   * L'ordre de préférence des pages pour un fun fact (Hugo, 15/10/2026) : une
+   * page de texte seul, puis une page de texte et de photos, puis une page
+   * de photos seules. Le bonus s'ajoute à la note : une page de texte seul à
+   * une page de la place visée l'emporte encore sur une page de photos
+   * pile à sa place.
+   */
+  function preferenceEncart(plan) {
+    if (plan.genre !== "recit") return 0;
+    return plan.photos.length ? 1.5 : 3;
+  }
+
   /** Un fun fact proposé par l'analyse, s'il est imprimable. */
   function lireEncart(f) {
     const texte = typeof f?.texte === "string" ? f.texte.replace(/\s+/g, " ").trim() : "";
     const pertinence = Number(f?.pertinence);
     if (!texte || texte.length > MAX_SIGNES_ENCART || !Number.isFinite(pertinence)) return null;
+    const registre = normaliser(f.registre);
     return {
       texte,
-      // Le fun fact est un post-it « Infos », partout (Hugo, 12/10/2026).
-      titre: "Infos",
-      registre: normaliser(f.registre),
+      // Le fun fact est un post-it partout (Hugo, 12/10/2026) ; son titre
+      // varie d'un encart à l'autre (15/10/2026) — celui de l'analyse ou de
+      // la rédaction s'il est connu, sinon d'après le registre. `placerEncarts`
+      // évite le même titre deux fois de suite.
+      titre: TITRES_ENCART.includes(String(f.titre || "").trim()) ? String(f.titre).trim() : TITRE_PAR_REGISTRE[registre] || "",
+      registre,
       paragraphe: Number.isInteger(f.paragraphe) ? f.paragraphe : null,
       pertinence,
     };
@@ -1306,8 +1385,63 @@
     if (plan.layout === "layout_recit_photo") return n <= CAPACITE_PAGE.layout_recit_photo.postit[plan.sorte] ? "page" : null;
     if (plan.layout === "layout_trio_portrait" || plan.layout === "layout_trio_landscape") return null;
     if (plan.photos.length <= 1) return "page";
-    if (plan.photos.length === 2 && n <= 230) return "page";
+    if (plan.photos.length === 2 && (n <= 230 || layoutAvecEncart(plan))) return "page";
     return caseLibre(plan) ? "case" : null;
+  }
+
+  /** Les emplacements d'un gabarit prennent-ils ces photos sans en rogner aucune au-delà du plafond ? */
+  function photosAdmises(layout, photos) {
+    const formats = FORMATS_EMPLACEMENTS[layout]?.[photos.length];
+    if (!formats || photos.some((p) => p.groupe)) return false;
+    return permutations(photos).some((ordre) => ordre.every((p, i) => !p.format || rognage(p.format, formats[i]) <= MAX_ROGNAGE));
+  }
+
+  /**
+   * Le gabarit d'une page de récit qui reçoit un fun fact, quand une maquette
+   * du 15/10/2026 le met en scène mieux que la zone flottante ordinaire —
+   * le récit, les photos et le post-it y sont pensés ensemble :
+   *
+   * - **ouverture d'étape à deux photos** : une photo que le récit contourne,
+   *   le post-it et la seconde photo en bas (`layout_recit_deux_photos`) ;
+   * - **page de suite à deux photos** : les photos en tête, le récit, le
+   *   post-it pincé en bas (`layout_photos_en_tete`) ;
+   * - **page de suite à une photo** : le récit coupé par une bande — la photo
+   *   et le post-it côte à côte (`layout_recit_encart_milieu`).
+   *
+   * Seulement si le récit y tient (plafonds mesurés, `CAPACITE_PAGE`) et que
+   * les photos y gardent les deux tiers de leur image. `null` : la page garde
+   * son gabarit.
+   */
+  function layoutAvecEncart(plan) {
+    if (plan.genre !== "recit" || plan.layout === "layout_chapter_map" || plan.layout === "layout_recit_photo") return null;
+    const n = signes(plan.texte);
+    const p = plan.texte.length;
+    if (plan.photos.length === 2) {
+      const l = plan.sorte === "bandeau" ? "layout_recit_deux_photos" : "layout_photos_en_tete";
+      const cap = CAPACITE_PAGE[l];
+      const max = cap.postit ? cap.postit[plan.sorte] : cap[plan.sorte];
+      return n <= max && p <= cap.paragraphes && photosAdmises(l, plan.photos) ? l : null;
+    }
+    if (plan.photos.length === 1 && plan.sorte === "suite") {
+      const cap = CAPACITE_PAGE.layout_recit_encart_milieu;
+      return n >= cap.min && n <= cap.suite && p <= cap.paragraphes && photosAdmises("layout_recit_encart_milieu", plan.photos)
+        ? "layout_recit_encart_milieu"
+        : null;
+    }
+    return null;
+  }
+
+  /**
+   * Le gabarit à deux photos des maquettes du 15/10/2026, **sans** fun fact :
+   * il varie une double page dont les deux côtés ont deux photos en bande
+   * (`varierDoublesPages`). L'ouverture d'étape garde la photo contournée et
+   * la photo du bas ; la page de suite, les deux photos en tête.
+   */
+  function layoutADeuxPhotos(plan) {
+    if (plan.genre !== "recit" || plan.photos.length !== 2 || plan.layout === "layout_chapter_map") return null;
+    const l = plan.sorte === "bandeau" ? "layout_recit_deux_photos" : "layout_photos_en_tete";
+    const cap = CAPACITE_PAGE[l];
+    return signes(plan.texte) <= cap[plan.sorte] && plan.texte.length <= cap.paragraphes && photosAdmises(l, plan.photos) ? l : null;
   }
 
   /**
@@ -1400,7 +1534,8 @@
               encart.pertinence -
               Math.abs(i - cible) * 2.5 +
               (plan.genre === "recit" && plan.paragraphes?.includes(encart.paragraphe) ? 0.5 : 0) +
-              (place === "page" ? 0.2 : 0) -
+              (place === "page" ? 0.2 : 0) +
+              preferenceEncart(plan) -
               (precedent && encart.registre && encart.registre === precedent.registre ? 3 : 0);
             if (!meilleur || score > meilleur.score) meilleur = { plan, i, place, encart, score };
           }
@@ -1412,6 +1547,7 @@
 
     let dernier = -ECART_ENCARTS;
     let precedent = null;
+    let titrePrecedent = "";
     const poses = [];
     for (;;) {
       const cible = dernier + ECART_ENCARTS;
@@ -1427,11 +1563,20 @@
         }
       }
       if (!choix) break;
-      choix.plan.encart = choix.encart;
+      // Le titre : celui de l'encart, sinon le suivant de la liste ; jamais
+      // deux fois le même titre de suite.
+      let titre = choix.encart.titre || TITRES_ENCART[(poses.length + 1) % TITRES_ENCART.length];
+      if (titre === titrePrecedent) titre = TITRES_ENCART[(TITRES_ENCART.indexOf(titre) + 1) % TITRES_ENCART.length];
+      titrePrecedent = titre;
+      choix.plan.encart = { ...choix.encart, titre };
       if (choix.place === "case") {
         const avecCase = photosAvecCase(choix.plan);
         choix.plan.caseEncart = avecCase;
         if (choix.plan.genre === "recit") choix.plan.layout = avecCase.gabarit;
+      } else {
+        // Une maquette qui met le post-it en scène avec le récit et les photos.
+        const mise = layoutAvecEncart(choix.plan);
+        if (mise) choix.plan.layout = mise;
       }
       restants[choix.plan.etape] = restants[choix.plan.etape].filter((x) => x !== choix.encart);
       poses.push(choix.i);
@@ -1563,7 +1708,18 @@
   function porteUnTrace(plan) {
     if (plan.genre === "planche") return !plan.pleinePage && casesDe(plan) <= 2;
     if (plan.layout === "layout_chapter_map") return plan.photos.length >= 2;
-    return ["layout_split_left", "layout_collage", "layout_trio_portrait", "layout_trio_landscape"].includes(plan.layout);
+    // Les layouts du 15/10/2026 ont leur tracé dans le bas de page, derrière
+    // la photo et le post-it ; la page aux photos en tête, seulement à côté
+    // du post-it.
+    if (plan.layout === "layout_photos_en_tete") return Boolean(plan.encart);
+    return [
+      "layout_split_left",
+      "layout_collage",
+      "layout_trio_portrait",
+      "layout_trio_landscape",
+      "layout_recit_deux_photos",
+      "layout_recit_encart_milieu",
+    ].includes(plan.layout);
   }
 
   /**
@@ -1599,9 +1755,7 @@
   function placesSticker(plan, gauche) {
     const ext = gauche ? "left" : "right";
     if (plan.pleinePage || plan.ouverture) return [];
-    // La mention « Fun fact rédigé par IA » tient le coin bas droit de la page.
-    const sansMention = (places) => (plan.encart ? places.filter((p) => !/^(band|bottom)-right$/.test(p.place)) : places);
-    return sansMention(placesDeLaPage(plan, gauche, ext));
+    return placesDeLaPage(plan, gauche, ext);
   }
 
   function placesDeLaPage(plan, gauche, ext) {
@@ -1632,6 +1786,13 @@
       if (!plan.encart && (plan.photos.length === 1 || libre(CAPACITE_PAGE.defaut[plan.sorte]))) places.push({ place: "bottom-left", album: false });
     } else if (plan.layout === "layout_recit_photo") {
       if (!plan.encart && n <= CAPACITE_PAGE.layout_recit_photo.postit[plan.sorte]) places.push({ place: "bottom-left", album: false });
+    } else if (plan.layout === "layout_recit_deux_photos") {
+      // La place du post-it, à gauche de la photo du bas, quand il n'y en a pas.
+      if (!plan.encart) places.push({ place: "bottom-left", album: false, max: 110, maxH: 120 });
+    } else if (plan.layout === "layout_photos_en_tete") {
+      if (!plan.encart && libre(CAPACITE_PAGE.layout_photos_en_tete.suite)) places.push({ place: `bottom-${ext}`, album: false });
+    } else if (plan.layout === "layout_recit_encart_milieu") {
+      // Le récit occupe le haut et le bas de la page : pas de place sûre.
     } else if (plan.layout === "layout_story_full" || plan.layout === "layout_hero_top") {
       const capacite = (plan.layout === "layout_hero_top" ? CAPACITE_PAGE.layout_hero_top : CAPACITE_PAGE.defaut)[plan.sorte];
       if (!plan.encart && libre(capacite)) places.push({ place: `bottom-${ext}`, album: false });
@@ -2061,8 +2222,80 @@
     layout_trio_portrait: actif === "layout_trio_portrait",
     layout_trio_landscape: actif === "layout_trio_landscape",
     layout_recit_photo: actif === "layout_recit_photo",
+    layout_recit_deux_photos: actif === "layout_recit_deux_photos",
+    layout_photos_en_tete: actif === "layout_photos_en_tete",
+    layout_recit_encart_milieu: actif === "layout_recit_encart_milieu",
     layout_photo_page: actif === "layout_photo_page",
   });
+
+  /* ------------------------------------------------------ la bande ajustée --- */
+
+  /** La colonne de récit, en points : 349,2 pt (LAYOUT_KB § « Format »). */
+  const LARGEUR_COLONNE = 349;
+  /** L'écart entre deux photos d'une bande (`.mb-gallery`, `gap`). */
+  const ECART_BANDE = 14;
+  /** Ce que l'inclinaison des photos d'une bande prend sur la largeur. */
+  const JEU_BANDE = 10;
+  /** Le haut de la bande, au-dessus des photos (`.mb-gallery`, `padding-top`). */
+  const HAUT_BANDE = 22;
+  /** La bande la plus haute, padding compris. */
+  const BANDE_MAX = 322;
+  /** Le poids d'un post-it posé dans une bande, à la place d'une photo. */
+  const POIDS_ENCART = 0.85;
+  /** Le format supposé d'une photo dont on ne connaît pas les dimensions. */
+  const FORMAT_INCONNU = 0.8;
+
+  /** Les gabarits dont la bande de photos s'ajuste (`.mb-gallery--ajustee`). */
+  const BANDES_AJUSTABLES = ["layout_split_left", "layout_collage", "layout_chapter_map"];
+
+  const poidsDe = (format) => Math.round(Math.min(2, Math.max(0.5, format || FORMAT_INCONNU)) * 100) / 100;
+
+  /**
+   * La bande de photos ajustée (Hugo, 15/10/2026, « PDF 9 ») : chaque photo y
+   * prend une largeur à la mesure de son format (`poids`), et la bande grandit
+   * dans la place que le récit laisse, jusqu'à la hauteur où ses photos se
+   * rogneraient de plus d'un quart (`bandeMax`). Une photo en largeur n'est
+   * plus réduite à un timbre-poste au milieu de deux portraits, et la bande
+   * suit le récit au lieu de s'en éloigner.
+   *
+   * À hauteur `h`, la photo de format `f` et de poids `f` a pour emplacement
+   * `f × u / h`, où `u` est la largeur utile divisée par la somme des poids :
+   * toutes les photos se rognent dans la même proportion, `1 − h / u` ou
+   * `1 − u / h`. `null` quand la bande ne s'y prête pas — une photo de groupe,
+   * qui ne se rogne pas, ou des photos trop larges pour une seule rangée :
+   * la bande garde alors ses emplacements fixes.
+   */
+  function bandeAjustee(photos, avecEncart) {
+    if (photos.some((p) => p.groupe)) return null;
+    const poids = photos.map((p) => poidsDe(p.format));
+    const n = photos.length + (avecEncart ? 1 : 0);
+    const somme = poids.reduce((a, b) => a + b, 0) + (avecEncart ? POIDS_ENCART : 0);
+    const u = (LARGEUR_COLONNE - ECART_BANDE * (n - 1) - JEU_BANDE) / somme;
+    // À 160 pt de bande, la plus basse que tolère le gabarit (138 pt de
+    // photo), elles se rogneraient de plus de 30 % : un portrait, une photo en
+    // largeur et un portrait (u ≈ 104) passent encore.
+    if (u < 96) return null;
+    return { poids, bandeMax: Math.round(Math.min(BANDE_MAX, u * 1.33 + HAUT_BANDE)) };
+  }
+
+  /**
+   * Le récit d'une page coupée par une bande (`layout_recit_encart_milieu`),
+   * en deux morceaux de longueur voisine : entre deux paragraphes, ou, d'un
+   * seul paragraphe, sur la fin de phrase la plus proche du milieu.
+   */
+  function couperEnDeux(texte) {
+    if (texte.length >= 2) {
+      let meilleur = 1;
+      for (let k = 1; k < texte.length; k += 1) {
+        const ecart = Math.abs(signes(texte.slice(0, k)) - signes(texte.slice(k)));
+        if (ecart < Math.abs(signes(texte.slice(0, meilleur)) - signes(texte.slice(meilleur)))) meilleur = k;
+      }
+      return [texte.slice(0, meilleur), texte.slice(meilleur)];
+    }
+    const [seul] = texte;
+    const coupe = seul ? couperPres(seul, Math.round(seul.length / 2), seul.length - 40) : null;
+    return coupe ? [[coupe[0]], [coupe[1]]] : [texte, []];
+  }
 
   /**
    * Les pages d'étape du carnet, prêtes pour `days[]`.
@@ -2396,6 +2629,9 @@
       journal(`stickers : ${poses.length ? `${poses.length} — ${poses.join(", ")}` : "aucun, aucun mot du récit ne les appelle"}.`);
     }
 
+    // Le trio met son récit à gauche, puis à droite, tour à tour (maquettes du
+    // 15/10/2026).
+    let trios = 0;
     return plans.map((plan, rangPage) => {
       const decors = {
         trace: plan.trace || "aucun",
@@ -2413,7 +2649,8 @@
           ...drapeaux("layout_photo_wall_intro"),
           photos: habillerPhotos(plan, placerPhotos("layout_photo_page", plan.photos), rangPage),
           fun_facts: plan.encart ? [plan.encart.texte] : [],
-          ...(plan.encart ? { fun_facts_title: plan.encart.titre, ai_note: "Fun fact rédigé par IA" } : {}),
+          // Plus de mention « rédigé par IA » sous un fun fact (Hugo, 15/10/2026).
+          ...(plan.encart ? { fun_facts_title: plan.encart.titre } : {}),
           sticker_groups: [],
           ...decors,
         };
@@ -2440,21 +2677,32 @@
           // (Hugo, 14/10/2026) : `case_fun_fact` en dit le rang.
           ...(plan.caseEncart ? { case_fun_fact: plan.caseEncart.c } : {}),
           fun_facts: plan.encart ? [plan.encart.texte] : [],
-          ...(plan.encart ? { fun_facts_title: plan.encart.titre, ai_note: "Fun fact rédigé par IA" } : {}),
+          ...(plan.encart ? { fun_facts_title: plan.encart.titre } : {}),
           sticker_groups: [],
           ...decors,
         };
       }
+      // Une bande de photos ajustée au format de chacune (`bandeAjustee`).
+      const bande = BANDES_AJUSTABLES.includes(plan.layout) && casesDe(plan) >= 2 ? bandeAjustee(plan.photos, Boolean(plan.caseEncart)) : null;
+      const photos = bande
+        ? (plan.caseEncart ? plan.caseEncart.ordre.map((k) => plan.photos[k]) : plan.photos).map((p) => ({ url: p.src, poids: poidsDe(p.format) }))
+        : photosRendues(plan, plan.layout);
+      // Le récit coupé par la bande du milieu, en deux morceaux.
+      const [avant, apres] = plan.layout === "layout_recit_encart_milieu" ? couperEnDeux(plan.texte) : [plan.texte, []];
+      const trio = plan.layout === "layout_trio_portrait" || plan.layout === "layout_trio_landscape";
       const jour = {
         ...drapeaux(plan.layout),
-        body_html: paragraphesEnHtml(plan.texte),
-        photos: habillerPhotos(plan, photosRendues(plan, plan.layout), rangPage),
+        body_html: paragraphesEnHtml(avant),
+        ...(apres.length ? { body_html_apres: paragraphesEnHtml(apres) } : {}),
+        photos: habillerPhotos(plan, photos, rangPage),
+        ...(bande ? { bande_max: bande.bandeMax, ...(plan.caseEncart ? { poids_fun_fact: POIDS_ENCART } : {}) } : {}),
+        ...(trio ? { trio_cote: trios++ % 2 ? "droite" : "gauche" } : {}),
         ...(plan.caseEncart ? { case_fun_fact: plan.caseEncart.c } : {}),
         fun_facts: plan.encart ? [plan.encart.texte] : [],
-        // L'encart est écrit par le modèle : la page le dit, en petit
-        // (LAYOUT_KB § « La mention généré par IA »).
-        ...(plan.encart ? { fun_facts_title: plan.encart.titre, ai_note: "Fun fact rédigé par IA" } : {}),
-        // Le quiz est écrit par le modèle, lui aussi.
+        // Le titre du post-it varie d'un encart à l'autre ; plus de mention
+        // « rédigé par IA » sous un fun fact (Hugo, 15/10/2026).
+        ...(plan.encart ? { fun_facts_title: plan.encart.titre } : {}),
+        // Le quiz est écrit par le modèle : la page le dit, en petit.
         ...(plan.quiz ? { quiz: plan.quiz, ai_note: "Quiz rédigé par IA" } : {}),
         sticker_groups: [],
         ...decors,
@@ -2500,6 +2748,9 @@
     corpsAmple,
     paragraphesEnHtml,
     rognage,
+    layoutAvecEncart,
+    bandeAjustee,
+    couperEnDeux,
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;

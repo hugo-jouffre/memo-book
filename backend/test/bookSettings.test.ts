@@ -79,11 +79,12 @@ describe("réglages du carnet de l'app", () => {
     ).toMatchObject({ rules_enabled: false, decoration_quota: 0 });
   });
 
-  it("ajoute trois pages libres en fin de carnet quand « Zones libres » est allumé", () => {
-    expect(applyBookSettings(payload, reglages)["pages_libres"]).toBe(3);
+  it("n'ajoute plus de pages libres en fin de carnet, même « Zones libres » allumé (15/10/2026)", () => {
+    expect(applyBookSettings(payload, reglages)["pages_libres"]).toBe(0);
     expect(applyBookSettings(payload, { ...reglages, freeZonesEnabled: false })["pages_libres"]).toBe(0);
-    const html = renderTemplateToHtml({ payload: applyBookSettings(payload, reglages), profile: "print" });
-    expect(html.match(/class="page page--libre/g)).toHaveLength(3);
+    // Le gabarit ignore aussi un ancien payload qui en demandait trois.
+    const html = renderTemplateToHtml({ payload: { ...applyBookSettings(payload, reglages), pages_libres: 3 }, profile: "print" });
+    expect(html.match(/class="page page--libre/g)).toBeNull();
   });
 
   // L'ancien « garde les photos tant que le ratio n'est pas à 0 % » comparait
