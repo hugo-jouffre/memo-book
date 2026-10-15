@@ -9,9 +9,13 @@ import SwiftUI
 /// la pose, une à la fois. Un appui ouvre la fiche — ce que MEMO a compris,
 /// ligne à ligne, et ce qui manque encore.
 ///
-/// Même dessin que la bannière de l'aperçu (``ChatPreviewBanner``) — capsule
-/// bleue sur verre dépoli —, pour que les deux se lisent comme la même famille
-/// d'objets : un état du carnet, pas un message.
+/// Capsule bleue sur verre dépoli : c'était aussi, jusqu'au 15/10/2026, le
+/// dessin de la bannière de l'aperçu (``ChatPreviewBanner``), pour que les deux
+/// se lisent comme la même famille d'objets — un état du carnet, pas un message.
+/// L'autre est passée au verre crème, parce qu'elle **flotte sur le fil** et s'y
+/// fondait ; celle-ci est posée dans la marge de l'en-tête, sur le verre de
+/// l'en-tête, et le bleu n'y concurrence aucune bulle. Les deux ne paraissent
+/// jamais ensemble.
 struct ChatTripContextBanner: View {
     let context: ChatTripContext
     let onOpen: () -> Void
