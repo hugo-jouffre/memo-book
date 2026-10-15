@@ -331,7 +331,7 @@ faire aujourd'hui.
 | Ratio photo / texte | 50 % | **Les cinq paliers**, voir § « Le ratio texte / photo » plus bas. C'est le nombre de pages et de photos qui s'adapte, jamais le texte | Rendu |
 | Nombre de page cible | 60 | Niveau de détail des textes, regroupement des étapes | Rendu |
 | Fun facts | ON | `fun_facts` — voir le dosage plus bas | Rendu |
-| Quiz | ON | `quiz` | Rendu |
+| Quiz | ON | `quiz` — environ un toutes les trois étapes, écrit par la rédaction (app) ou l'analyse d'étape (atelier), placé par le composeur (`placerQuiz`) | Rendu et rempli (15/10/2026) |
 | Pointillés | ON | La **réglure** du papier, `.mb-note__rules` — `rules_enabled: false` la retire (`body.sans-reglure`), le rythme vertical ne bouge pas | Rendu |
 | Décorations & stickers | 2 | Les **stickers** de la bibliothèque (autant par étape que le réglage, 2 par défaut) et le **tracé pointillé** — `decoration_quota: 0` retire les deux (`body.sans-decor`). Le scotch n'en dépend plus : l'habillage des photos est toujours complet | Rendu ; bibliothèque de 44 dessins importée de Notion (`assets/stickers/`) |
 | Typographies (assortiment) | Carnet de voyage | Les quatre tokens ci-dessous d'un bloc | **À construire** — l'app n'expose plus quatre réglages mais **quatre assortiments** (`docs/reglages-utilisateur.md`) : Carnet de voyage, Éditorial, Moderne, Manuscrit. Le payload, lui, reste quatre champs |
@@ -995,6 +995,19 @@ page **habitable** :
 
 Le `quiz` est **réglable par le voyageur**, ON par défaut : à OFF, aucun n'est
 produit, et le blanc se remplit par un `prompt` ou reste blanc.
+
+**Qui l'écrit, où il va** (Hugo, 15/10/2026). L'IA l'écrit à partir des
+récits — ce que le voyageur a raconté, ou un fait vérifiable du lieu, jamais
+inventé : la rédaction dans l'app (`quiz` de `redaction.ts`), l'analyse
+d'étape dans l'atelier (`consigneAnalyseEtape`). Le composeur (`placerQuiz`,
+`mise-en-page.js`, le même pour les deux PDF) en imprime **environ un toutes
+les trois étapes**, fenêtre de deux à quatre, un par étape au plus, sur la
+première page de l'étape qui le porte sans rien perdre : layout par défaut,
+ni photo, ni encart, ni carte, ni `prompt`, et un récit qui ne donne pas la
+réponse. Les quiz se placent avant les encarts. Faute de page — étape
+chargée de photos, ou palier 0 % dont le récit pleine page ne rend pas de
+quiz —, il ne s'imprime pas : on ne déplace ni photo ni ligne pour lui. La
+page le dit en petit : « Quiz rédigé par IA ».
 
 ## La mention « généré par IA »
 

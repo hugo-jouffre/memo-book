@@ -742,6 +742,15 @@ model Memo {
   /// regroupement des étapes.
   targetPageCount Int @default(60)
 
+  /// Combien de fois la cible a changé **après** qu'une étape a été écrite
+  /// (`services/pageTarget.ts`) : deux au plus par voyage, parce que chacun
+  /// ouvre une réécriture de tout le carnet.
+  pageTargetChanges Int @default(0)
+
+  /// Un changement de cible attend sa réécriture : les étapes déjà écrites
+  /// peuvent être étoffées ou condensées une fois, à la demande du voyageur.
+  pageTargetRewriteAvailable Boolean @default(false)
+
   /// Part de photo dans la page, en pourcentage. 50 = l'équilibre de la
   /// maquette. Pilote le choix des layouts et la fréquence des pages photo.
   photoTextRatio Int @default(50)

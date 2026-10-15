@@ -192,4 +192,35 @@ describe("réglages du carnet de l'app", () => {
       "sans-decor",
     );
   });
+
+  it("n'imprime aucun quiz quand le réglage est coupé, et le pose quand il est allumé", () => {
+    const quiz = { question: "Qui a renversé le café ?", choices: ["Clara", "Hugo", "Le serveur"], answer: "Hugo" };
+    const sansPhoto = {
+      book_title: "Carnet",
+      days: [{ title: "Jour 1", day_intro: { day_number: "01" }, body_html: "<p>Un récit court, sans photo.</p>", layout_story_opener: true, quiz }],
+    };
+    const quizDe = (quizEnabled?: boolean) =>
+      (applyBookSettings(sansPhoto, { ...reglages, ...(quizEnabled === undefined ? {} : { quizEnabled }) })["days"] as Record<string, unknown>[])
+        .map((jour) => jour["quiz"])
+        .filter(Boolean);
+    expect(quizDe(false)).toEqual([]);
+    expect(quizDe()).toEqual([quiz]);
+    expect(quizDe(true)).toEqual([quiz]);
+  });
+
+  it("recale le carnet sur sa cible de pages, pages libres de fin comprises, et le journalise", () => {
+    // Une étape de six paragraphes, douze photos dont le ratio en garde
+    // quatre : deux pages ; le colophon et les trois pages libres en font 6.
+    const long = Array.from({ length: 6 }, (_, k) => `<p>${`Le matin nous sommes allés voir le lieu ${k} et nous y sommes restés longtemps. `.repeat(2).trim()}</p>`).join("");
+    const etape = { title: "Jour 1", day_intro: { day_number: "01" }, body_html: long, photos: Array.from({ length: 12 }, (_, i) => `https://exemple.test/${i}.jpg`), layout_collage: true };
+    const voyage = { book_title: "Carnet", days: [etape] };
+    const sans = applyBookSettings(voyage, reglages)["days"] as unknown[];
+    const journal: string[] = [];
+    const avec = applyBookSettings(voyage, { ...reglages, targetPageCount: 12 }, (t) => journal.push(t))["days"] as unknown[];
+    expect(sans.length + 4).toBeLessThan(7);
+    expect(avec.length + 4).toBeGreaterThanOrEqual(7);
+    expect(avec.length % 2).toBe(0);
+    expect(recitDesEtapes(avec as Record<string, unknown>[])).toEqual(recitDesEtapes(sans as Record<string, unknown>[]));
+    expect(journal.filter((t) => t.startsWith("pages cible"))).toHaveLength(1);
+  });
 });

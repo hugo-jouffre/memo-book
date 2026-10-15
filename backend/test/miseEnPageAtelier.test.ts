@@ -864,4 +864,177 @@ describe("mise en page de l'atelier", () => {
       expect(encarts(jours).filter(Boolean)).toEqual(["Fait."]);
     });
   });
+
+  describe("quiz (Hugo, 15/10/2026)", () => {
+    const quizSur = (i: number, reponse = `Réponse ${i}`) => ({
+      question: `Question n° ${i} ?`,
+      choix: [reponse, `Leurre ${i}a`, `Leurre ${i}b`],
+      reponse,
+    });
+    // Une étape d'un paragraphe court, sans photo : ses pages peuvent porter un quiz.
+    const etapes = (n: number, analyse = (i: number): unknown => ({ photos: [], quiz: quizSur(i) })) =>
+      Array.from({ length: n }, (_, i) => etape(paragrapheDe(`le lieu ${i}`, 1), [], analyse(i), `Lieu ${i}`));
+    const etapeDe = (jours: Jour[]) =>
+      jours.reduce<number[]>((rangs, j) => [...rangs, (rangs.at(-1) ?? -1) + (j["day_intro"] ? 1 : 0)], []);
+    const quizPoses = (jours: Jour[]) => {
+      const rangs = etapeDe(jours);
+      return jours.flatMap((j, i) => (j["quiz"] ? [{ etape: rangs[i]!, page: i, quiz: j["quiz"] as Record<string, unknown> }] : []));
+    };
+
+    it("n'en met aucun quand le réglage du carnet est coupé", () => {
+      expect(quizPoses(M.composerJours(etapes(4), { quiz: false }))).toEqual([]);
+      expect(quizPoses(M.composerJours(etapes(4)))).toEqual([]);
+    });
+
+    it("en pose environ un toutes les trois étapes, un par étape au plus, sur sa première page", () => {
+      const jours = M.composerJours(etapes(10), { quiz: true });
+      const poses = quizPoses(jours);
+      expect(poses.map((q) => q.etape)).toEqual([0, 3, 6, 9]);
+      for (const { etape: e, page, quiz } of poses) {
+        // La première page de l'étape, dans la forme du gabarit.
+        expect(jours[page]!["day_intro"]).toBeTruthy();
+        expect(quiz).toEqual({ question: `Question n° ${e} ?`, choices: [`Réponse ${e}`, `Leurre ${e}a`, `Leurre ${e}b`], answer: `Réponse ${e}` });
+        expect(jours[page]!["ai_note"]).toBe("Quiz rédigé par IA");
+      }
+    });
+
+    it("reprend tel quel le quiz déjà rédigé que l'app apporte", () => {
+      const quiz = { question: "Qui a renversé le café ?", choices: ["Clara", "Hugo", "Le serveur"], answer: "Hugo" };
+      const [premiere] = M.composerJours([{ ...etape(paragrapheDe("le port", 1), []), quiz }], { quiz: true });
+      expect(premiere!["quiz"]).toEqual(quiz);
+    });
+
+    it("ne prend jamais la place d'une photo, d'un fun fact ni d'une carte", () => {
+      const lourdes = Array.from({ length: 6 }, (_, e) =>
+        etape(
+          [paragrapheDe(`la ville ${e}`, 2), paragrapheDe(`le port ${e}`, 2)].join(" "),
+          Array.from({ length: e % 2 ? 6 : 1 }, (_, k) => photo(`${e}-${k}`)),
+          {
+            photos: [],
+            quiz: quizSur(e),
+            funFacts: [{ texte: `Fait ${e}.`, registre: "histoire", paragraphe: 0, pertinence: 9 }],
+          },
+          `Lieu ${e}`,
+        ),
+      );
+      const jours = M.composerJours(lourdes, { quiz: true, funFacts: true });
+      expect(jours.some((jour) => jour["quiz"])).toBe(true);
+      for (const j of jours.filter((jour) => jour["quiz"])) {
+        expect(j.photos).toHaveLength(0);
+        expect(j["fun_facts"]).toEqual([]);
+        expect(j["map"] ?? j["map_svg"]).toBeUndefined();
+        expect(j["layout_story_opener"] || j["layout_story_facts"]).toBe(true);
+      }
+      expect(jours.flatMap((j) => j.photos)).toHaveLength(3 + 3 * 6);
+    });
+
+    it("ne se pose pas sur la page dont le récit donne la réponse", () => {
+      // Le récit se répartit sur deux pages ; la réponse n'est que sur la première.
+      const recit = [paragrapheDe("la crique", 2), paragrapheDe("le port", 2)].join(" ");
+      const jours = M.composerJours([etape(recit, [], { photos: [], quiz: quizSur(0, "la crique") })], { quiz: true });
+      expect(jours).toHaveLength(2);
+      const poses = quizPoses(jours);
+      expect(poses.map((q) => q.page)).toEqual([1]);
+      expect(texteDes([jours[1]!])).not.toContain("la crique");
+    });
+
+    it("n'imprime pas un quiz mal formé", () => {
+      const malFormes = [
+        { question: "", choix: ["a", "b"], reponse: "a" },
+        { question: "Une seule proposition ?", choix: ["a"], reponse: "a" },
+        { question: "La réponse manque ?", choix: ["a", "b", "c"], reponse: "d" },
+        { question: "Deux fois la même ?", choix: ["a", "A", "b"], reponse: "b" },
+        { question: "x".repeat(121), choix: ["a", "b"], reponse: "a" },
+      ];
+      const jours = M.composerJours(
+        malFormes.map((quiz, i) => etape(paragrapheDe(`le lieu ${i}`, 1), [], { photos: [], quiz }, `Lieu ${i}`)),
+        { quiz: true },
+      );
+      expect(quizPoses(jours)).toEqual([]);
+    });
+  });
+
+  describe("nombre de pages cible (Hugo, 15/10/2026)", () => {
+    // Dix étapes d'un paragraphe, six photos chacune : le récit en fait peu,
+    // les photos de quoi allonger. Avec le colophon et les pages libres
+    // (`pagesFixes`), le carnet composé seul fait 25 pages.
+    const voyage = (photos = 6) =>
+      Array.from({ length: 10 }, (_, e) =>
+        etape(paragrapheDe(`le lieu ${e}`, 2), Array.from({ length: photos }, (_, k) => photo(`${e}-${k}`)), null, `Lieu ${e}`),
+      );
+    const pagesParEtape = (jours: Jour[]) =>
+      jours.reduce<number[]>((n, j) => (j["day_intro"] ? [...n, 1] : [...n.slice(0, -1), (n.at(-1) ?? 0) + 1]), []);
+    const photosDe = (jours: Jour[]) => jours.flatMap((j) => j.photos.map(url)).sort();
+    const recalage = (jours: string[]) => jours.filter((t) => t.startsWith("pages cible"));
+
+    it("fait tenir un carnet à cible 40 entre 35 et 45 pages, par ses seules planches", () => {
+      const sans = M.composerJours(voyage(), { ratio: 50, pagesFixes: 5 });
+      expect(sans.length + 5).toBeLessThan(35);
+      const journal: string[] = [];
+      const jours = M.composerJours(voyage(), { ratio: 50, pagesFixes: 5, pagesCible: 40, journal: (t: string) => journal.push(t) });
+      expect(jours.length + 5).toBeGreaterThanOrEqual(35);
+      expect(jours.length + 5).toBeLessThanOrEqual(45);
+      // Le récit n'a pas bougé d'un mot, et aucune page de récit n'est apparue.
+      expect(normal(texteDes(jours))).toBe(normal(texteDes(sans)));
+      expect(jours.filter((j) => j.body_html).length).toBe(sans.filter((j) => j.body_html).length);
+      // Les mêmes photos, ni plus ni moins : le ratio en a dit le nombre.
+      expect(photosDe(jours)).toEqual(photosDe(sans));
+      // Ce qui s'ajoute, ce sont des planches, en fin d'étape, et chaque étape reste paire.
+      const ajoutees = jours.filter((j) => j["layout_photo_page"]).length - sans.filter((j) => j["layout_photo_page"]).length;
+      expect(ajoutees).toBe(jours.length - sans.length);
+      for (const n of pagesParEtape(jours)) expect(n % 2).toBe(0);
+      expect(recalage(journal)).toEqual([expect.stringContaining("35 après 10 page(s) de photos ajoutée(s)")]);
+    });
+
+    it("compte les pages libres de fin dans le carnet", () => {
+      const avecLibres = M.composerJours(voyage(), { ratio: 50, pagesFixes: 5, pagesCible: 40 });
+      const sansLibres = M.composerJours(voyage(), { ratio: 50, pagesFixes: 2, pagesCible: 40 });
+      expect(sansLibres.length).toBeGreaterThan(avecLibres.length);
+      expect(sansLibres.length + 2).toBeGreaterThanOrEqual(35);
+    });
+
+    it("ne touche à rien quand le carnet est déjà dans sa fourchette", () => {
+      const sans = M.composerJours(voyage(), { ratio: 50, pagesFixes: 5 });
+      const journal: string[] = [];
+      const avec = M.composerJours(voyage(), { ratio: 50, pagesFixes: 5, pagesCible: 28, journal: (t: string) => journal.push(t) });
+      expect(avec).toEqual(sans);
+      expect(recalage(journal)).toEqual([]);
+    });
+
+    it("raccourcit en resserrant les planches, sans perdre une photo", () => {
+      // À 100 %, des étapes de quatre planches à deux ou trois photos : 45 pages.
+      const sans = M.composerJours(voyage(9), { ratio: 100, pagesFixes: 5 });
+      expect(sans.length + 5).toBe(45);
+      const jours = M.composerJours(voyage(9), { ratio: 100, pagesFixes: 5, pagesCible: 30 });
+      expect(jours.length + 5).toBe(35);
+      expect(photosDe(jours)).toEqual(photosDe(sans));
+      for (const n of pagesParEtape(jours)) expect(n % 2).toBe(0);
+      // La planche qui ouvre l'étape garde son bandeau et quatre photos au plus.
+      for (const j of jours.filter((jour) => jour["day_intro"])) {
+        expect(j["layout_photo_wall_intro"]).toBe(true);
+        expect(j.photos.length).toBeLessThanOrEqual(4);
+      }
+      for (const j of jours) expect(j.photos.length).toBeLessThanOrEqual(5);
+    });
+
+    it("ne force rien quand les photos manquent, et le dit", () => {
+      const sans = M.composerJours(voyage(0), { ratio: 50, pagesFixes: 5 });
+      const journal: string[] = [];
+      const jours = M.composerJours(voyage(0), { ratio: 50, pagesFixes: 5, pagesCible: 40, journal: (t: string) => journal.push(t) });
+      expect(jours).toEqual(sans);
+      expect(recalage(journal)).toEqual([expect.stringMatching(/hors d'atteinte, 25 pages .*pas assez de photos/)]);
+    });
+
+    it("ne force rien quand le récit seul dépasse la cible, et le dit", () => {
+      const long = Array.from({ length: 6 }, (_, e) =>
+        etape([0, 1, 2, 3].map((k) => paragrapheDe(`le lieu ${e}-${k}`)).join(" "), [photo(`${e}`)], null, `Lieu ${e}`),
+      );
+      const sans = M.composerJours(long, { ratio: 25, pagesFixes: 5 });
+      const journal: string[] = [];
+      const jours = M.composerJours(long, { ratio: 25, pagesFixes: 5, pagesCible: 10, journal: (t: string) => journal.push(t) });
+      expect(normal(texteDes(jours))).toBe(normal(texteDes(sans)));
+      expect(jours.length).toBe(sans.length);
+      expect(recalage(journal)).toEqual([expect.stringMatching(/hors d'atteinte.*le récit seul en fait/)]);
+    });
+  });
 });

@@ -32,12 +32,43 @@ export interface StructuringEntry {
   /** Encart déjà rédigé et déjà borné à 140 caractères. */
   funFact: string | null;
   funFactTitle: string | null;
+  /**
+   * Le quiz déjà rédigé, dans la forme du gabarit (`quizForBook`). Absent ou
+   * `null` quand l'étape n'en a pas, ou que le réglage Quiz est coupé.
+   */
+  quiz?: BookQuiz | null;
   /** Icône météo déjà choisie par la rédaction. */
   weatherKey: string | null;
   capturedAt: Date;
   placeLabel: string | null;
   /** URL publique de la photo, quand l'entrée en porte une. */
   photoUrl: string | null;
+}
+
+/** Le quiz tel que le gabarit le lit (`day.quiz`, `index.html`). */
+export interface BookQuiz {
+  question: string;
+  choices: string[];
+  answer: string;
+}
+
+/**
+ * Le quiz d'une entrée, des colonnes de `Entry` à la forme du gabarit. Relu
+ * de façon défensive : `quizAnswers` est du JSON libre, et un rang qui ne
+ * tombe sur aucune proposition ne fait pas un quiz.
+ */
+export function quizForBook(entry: {
+  quizQuestion: string | null;
+  quizAnswers: unknown;
+  quizAnswerIndex: number | null;
+}): BookQuiz | null {
+  const question = entry.quizQuestion?.trim();
+  const choices = Array.isArray(entry.quizAnswers)
+    ? entry.quizAnswers.filter((choice): choice is string => typeof choice === "string" && choice.trim().length > 0)
+    : [];
+  const answer = entry.quizAnswerIndex === null ? undefined : choices[entry.quizAnswerIndex];
+  if (!question || choices.length < 2 || answer === undefined) return null;
+  return { question, choices, answer };
 }
 
 export interface StructuringInput {
@@ -277,6 +308,9 @@ export class HeuristicStructurer implements Structurer {
       const redactedTitle = group.entries.find((entry) => entry.title)?.title ?? null;
       const weatherKey = group.entries.find((entry) => entry.weatherKey)?.weatherKey ?? null;
       const withFunFact = group.entries.find((entry) => entry.funFact);
+      // Un quiz par étape au plus : le premier de la journée. Le composeur
+      // choisit ensuite sa page, et la cadence du carnet (`bookComposer.ts`).
+      const withQuiz = group.entries.find((entry) => entry.quiz);
 
       // Le récit se déverse page après page. Une étape occupe au plus deux
       // pages — la première porte le bandeau, la seconde enchaîne sans lui.
@@ -320,6 +354,9 @@ export class HeuristicStructurer implements Structurer {
         // quadruple.
         const [page, suite] = splitAt(reste, pageCapacity(day));
         day["body_html"] = toBodyHtml(page);
+        // Posé après la coupe : un quiz élargit la page par défaut
+        // (`pageCapacity`), mais c'est le composeur qui lui trouve sa page.
+        if (premierePage && withQuiz?.quiz) day["quiz"] = withQuiz.quiz;
 
         days.push(day);
         reste = suite;
@@ -379,7 +416,7 @@ export class LlmStructurer implements Structurer {
       "les règles de rédaction de la maison, et le voyageur l'a relu et corrigé au",
       "clavier. Le réécrire effacerait son travail.",
       "",
-      "- Reprends `title`, le récit, `fun_facts` et `weather_key` **au mot près**.",
+      "- Reprends `title`, le récit, `fun_facts`, `weather_key` et `quiz` **au mot près**.",
       "- Tu peux **découper** un texte en `<p>` et **répartir** une étape trop dense",
       "  sur plusieurs entrées consécutives de `days[]`. Découper n'est pas réécrire :",
       "  aucun mot n'est ajouté, retiré ni remplacé.",
@@ -437,6 +474,9 @@ export class LlmStructurer implements Structurer {
             `Encart « ${entry.funFactTitle ?? "Fun fact"} » (à reprendre tel quel) : ${entry.funFact}`,
           );
         }
+        if (entry.quiz) {
+          lines.push(`Quiz (à reprendre tel quel, \`quiz\` de la première page de l'étape) : ${JSON.stringify(entry.quiz)}`);
+        }
         if (entry.transcript) {
           lines.push(
             entry.editedByUser
@@ -455,7 +495,8 @@ export class LlmStructurer implements Structurer {
       "complètes pas. N'invente aucun lieu, aucune date et aucune photo : n'utilise",
       "que les URLs listées ci-dessus. N'ajoute pas de `fun_facts` : ceux qui devaient",
       "exister sont déjà donnés ci-dessus. N'ajoute pas non plus de `weather_key` : seule",
-      "une étape dont la météo est donnée ci-dessus en porte une.",
+      "une étape dont la météo est donnée ci-dessus en porte une. Même chose pour `quiz` :",
+      "seuls ceux donnés ci-dessus existent, et tu n'en écris aucun.",
     );
 
     return lines.join("\n");
@@ -500,7 +541,9 @@ export class LlmStructurer implements Structurer {
           : candidate;
 
       const result = validatePayload(payload);
-      if (result.valid) return withToldWeatherOnly(payload as BookPayload, input.entries);
+      if (result.valid) {
+        return withToldQuizzesOnly(withToldWeatherOnly(payload as BookPayload, input.entries), input.entries);
+      }
 
       if (attempt === 2) break;
 
@@ -533,6 +576,27 @@ export function withToldWeatherOnly(payload: BookPayload, entries: StructuringEn
     if (!intro || typeof intro !== "object") continue;
     const fields = intro as Record<string, unknown>;
     if ("weather_key" in fields && !told.has(fields["weather_key"] as string)) delete fields["weather_key"];
+  }
+  return payload;
+}
+
+/**
+ * Même garde pour les quiz : seul un quiz que la rédaction a écrit, et que le
+ * réglage laisse passer, s'imprime. Celui que le metteur en page aurait
+ * inventé — ou recopié de travers — saute ; un quiz reconnu à sa question est
+ * remis tel que la rédaction l'a écrit.
+ */
+export function withToldQuizzesOnly(payload: BookPayload, entries: StructuringEntry[]): BookPayload {
+  const told = new Map(entries.flatMap((entry) => (entry.quiz ? [[entry.quiz.question, entry.quiz] as const] : [])));
+  const days = payload["days"];
+  if (!Array.isArray(days)) return payload;
+  for (const day of days) {
+    if (!day || typeof day !== "object" || !("quiz" in day)) continue;
+    const fields = day as Record<string, unknown>;
+    const question = (fields["quiz"] as { question?: unknown } | null)?.question;
+    const quiz = typeof question === "string" ? told.get(question.trim()) : undefined;
+    if (quiz) fields["quiz"] = quiz;
+    else delete fields["quiz"];
   }
   return payload;
 }

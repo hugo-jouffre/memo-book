@@ -40,9 +40,28 @@ public final class BookCustomisationModel {
     public var showsRulesLockNotice: Bool { isExplainingRulesLock && isRulesSwitchLocked }
     private var isExplainingRulesLock = false
 
+    /// Le changement de nombre de pages cible que la feuille raconte, d'étape
+    /// en étape — voir ``PageTargetChange``. `nil` quand elle est fermée.
+    public private(set) var pageTargetChange: PageTargetChange?
+
+    /// On vient de toucher un palier alors que la cible ne bouge plus : le
+    /// panneau le dit à l'orange, sous les paliers pâlis. Comme la note du
+    /// verrou des pointillés, elle répond à un appui, pas à un état.
+    public var showsPageTargetLimitNotice: Bool { isExplainingPageTargetLimit && isPageTargetLocked }
+    private var isExplainingPageTargetLimit = false
+
+    /// La réécriture des étapes déjà écrites part — le lien du panneau
+    /// attend sa réponse.
+    public private(set) var isRewritingWrittenSteps = false
+
+    /// La réécriture est lancée : le panneau le dit, à la place du lien.
+    public private(set) var hasStartedRewrite = false
+
     private let tripId: String
     private let source: (String) async throws -> TripSettings
     private let persist: ((String, BookCustomisationEdit) async throws -> TripSettings)?
+    private let rewrite: ((String) async throws -> TripSettings)?
+    private let today: () -> Date
     private let rulesMemory: BookRulesMemory
 
     /// Les réglages qui attendent leur tour, envoyés **un par un**, dans
@@ -59,11 +78,15 @@ public final class BookCustomisationModel {
         tripId: String,
         source: @escaping (String) async throws -> TripSettings = { _ in .fixture },
         persist: ((String, BookCustomisationEdit) async throws -> TripSettings)? = nil,
+        rewrite: ((String) async throws -> TripSettings)? = nil,
+        today: @escaping () -> Date = { .now },
         rulesMemory: BookRulesMemory = .inMemory()
     ) {
         self.tripId = tripId
         self.source = source
         self.persist = persist
+        self.rewrite = rewrite
+        self.today = today
         self.rulesMemory = rulesMemory
     }
 
@@ -73,12 +96,16 @@ public final class BookCustomisationModel {
     /// ses intitulés et ses groupes appartiennent à l'app.
     public var isLoading: Bool { settings == nil && errorMessage == nil }
 
-    /// Combien de jours dure le voyage, bornes comprises. `nil` quand les dates
-    /// manquent — les paliers de pages retombent alors sur le défaut de la base
-    /// plutôt que d'annoncer une projection qu'on n'a pas de quoi faire.
+    /// Combien de jours dure le voyage, bornes comprises. `nil` quand une des
+    /// deux dates manque — les paliers de pages retombent alors sur le défaut
+    /// de la base (40 / 60 / 80) plutôt que d'annoncer une projection qu'on
+    /// n'a pas de quoi faire.
+    ///
+    /// **Sans date de fin, on ne sait pas** (15/10/2026) : la date de début
+    /// servait de fin, le voyage durait un jour, et le palier « Par défaut »
+    /// tombait à 30 pages pour un voyage qui commence à peine.
     public var tripDays: Int? {
-        guard let settings, let start = settings.startDate else { return nil }
-        let end = settings.endDate ?? start
+        guard let settings, let start = settings.startDate, let end = settings.endDate else { return nil }
         let days = Calendar.current.dateComponents([.day], from: start, to: end).day ?? 0
         return max(1, days + 1)
     }
@@ -147,8 +174,30 @@ public final class BookCustomisationModel {
 
     public func setPhotoTextRatio(_ ratio: Int) { edit(.photoTextRatio(ratio)) { $0.photoTextRatio = ratio } }
 
+    /// Change le nombre de pages cible — ou ouvre la feuille qui le fait.
+    ///
+    /// **Tant qu'aucune étape n'est écrite, le changement est libre** et part
+    /// au geste, comme tout réglage. Ensuite, il compte (Hugo, 15/10/2026) :
+    /// la feuille prévient d'abord de ce qui reste, et rien ne change avant
+    /// qu'on confirme — l'écran garde l'ancien palier coché. Les deux
+    /// changements faits, rien ne part : le panneau dit pourquoi, à l'orange.
     public func setTargetPageCount(_ pages: Int) {
-        edit(.targetPageCount(pages)) { $0.targetPageCount = pages }
+        guard let current = customisation?.targetPageCount, pages != current else { return }
+        let allowance = pageTargetAllowance
+        guard allowance.changesCount else {
+            edit(.targetPageCount(pages)) { $0.targetPageCount = pages }
+            return
+        }
+        guard allowance.changesLeft > 0 else {
+            explainPageTargetLimit()
+            return
+        }
+        pageTargetChange = PageTargetChange(
+            from: current,
+            to: pages,
+            tripDays: tripDays,
+            step: .confirm(changesLeft: allowance.changesLeft)
+        )
     }
 
     public func setFunFacts(_ isOn: Bool) { edit(.funFacts(isOn)) { $0.funFactsEnabled = isOn } }
@@ -287,7 +336,14 @@ public final class BookCustomisationModel {
             } catch {
                 isAwaitingResponse = false
                 revision += 1
-                report(error)
+                // Le troisième changement de cible, refusé : ce n'est pas une
+                // panne. Le panneau le dit à l'orange, et la relecture
+                // ci-dessous fait pâlir les paliers.
+                if (error as? APIError)?.code == APIError.pageTargetLimitReachedCode {
+                    explainPageTargetLimit()
+                } else {
+                    report(error)
+                }
                 // D'autres réglages attendent : ils partent, et la réponse du
                 // dernier remettra l'écran d'accord avec le serveur.
                 guard queue.isEmpty else { continue }
@@ -295,6 +351,185 @@ public final class BookCustomisationModel {
                 // a vraiment. Un geste fait pendant cette relecture entre dans
                 // la file — la boucle l'envoie au lieu de l'y laisser.
                 await reload()
+            }
+        }
+    }
+
+    // MARK: - Le changement de nombre de pages cible
+
+    /// Ce que le serveur dit des changements de cible — rien de compté tant
+    /// qu'il ne l'a pas dit.
+    public var pageTargetAllowance: PageTargetAllowance {
+        settings?.pageTargetAllowance ?? .unrestricted
+    }
+
+    /// Les paliers doivent-ils pâlir ? Les deux changements sont faits.
+    public var isPageTargetLocked: Bool { pageTargetAllowance.isExhausted }
+
+    /// Le lien « Mettre les étapes déjà écrites à la nouvelle cible » : la
+    /// réécriture reste ouverte — on a répondu « Plus tard » — et la feuille
+    /// est fermée.
+    public var offersRewrite: Bool {
+        pageTargetAllowance.rewriteAvailable && pageTargetChange == nil && !hasStartedRewrite
+    }
+
+    /// L'appui sur un palier pâli : poser la note orange.
+    public func explainPageTargetLimit() { isExplainingPageTargetLimit = true }
+
+    /// « Changer le nombre de pages cible ». Avec une date de fin, les dates
+    /// disent où en est le voyage ; sans elle, la feuille le demande.
+    public func confirmPageTargetChange() {
+        guard var change = pageTargetChange, case .confirm = change.step else { return }
+        let stage = PageTargetTripStage.from(
+            startDate: settings?.startDate,
+            endDate: settings?.endDate,
+            today: today()
+        )
+        guard let stage else {
+            change.step = .stage
+            pageTargetChange = change
+            return
+        }
+        Task { await commitPageTarget(at: stage) }
+    }
+
+    /// La réponse à « À quel stade de ton voyage en es-tu ? ».
+    public func choosePageTargetStage(_ stage: PageTargetTripStage) {
+        guard pageTargetChange?.step == .stage else { return }
+        Task { await commitPageTarget(at: stage) }
+    }
+
+    /// Ferme la feuille — « Annuler », « Plus tard », « OK », « Compris » ou
+    /// le glissé. Annulé avant l'envoi, rien n'a changé : l'écran n'avait pas
+    /// bougé.
+    public func dismissPageTargetChange() {
+        guard pageTargetChange?.isWorking != true else { return }
+        pageTargetChange = nil
+    }
+
+    /// Envoie la nouvelle cible, et passe la feuille à son étape suivante.
+    ///
+    /// **Hors de la file des réglages**, et attendu : la feuille doit savoir
+    /// si ce changement-ci est passé — un 409 la fait passer à l'orange de
+    /// la limite (un co-voyageur a pu faire le dernier changement entre-temps),
+    /// une autre erreur reste sur l'étape avec son message.
+    private func commitPageTarget(at stage: PageTargetTripStage) async {
+        guard var change = pageTargetChange, !change.isWorking else { return }
+        change.isWorking = true
+        change.errorMessage = nil
+        pageTargetChange = change
+        revision += 1
+        // Un cran du curseur personnalisé qui attendrait encore ne doit pas
+        // repartir derrière celui-ci.
+        queue.removeAll { $0.field == BookCustomisationEdit.targetPageCount(0).field }
+
+        guard let persist else {
+            // Les aperçus travaillent en mémoire : le changement compte, et la
+            // réécriture s'ouvre, comme au serveur.
+            if var current = settings, var customisation = current.customisation {
+                customisation.targetPageCount = change.to
+                current.customisation = customisation
+                var allowance = current.pageTargetAllowance
+                allowance.changesLeft = max(0, allowance.changesLeft - 1)
+                allowance.rewriteAvailable = true
+                current.pageTarget = allowance
+                settings = current
+            }
+            hasStartedRewrite = false
+            advance(change, to: .done(stage))
+            return
+        }
+
+        isAwaitingResponse = true
+        do {
+            let updated = try await persist(tripId, .targetPageCount(change.to))
+            isAwaitingResponse = false
+            revision += 1
+            accept(updated)
+            // Un nouveau changement rouvre la réécriture : la phrase « on
+            // réécrit » du précédent ne vaut plus.
+            hasStartedRewrite = false
+            advance(change, to: .done(stage))
+        } catch {
+            isAwaitingResponse = false
+            revision += 1
+            if (error as? APIError)?.code == APIError.pageTargetLimitReachedCode {
+                advance(change, to: .limitReached)
+                await reload()
+            } else {
+                change.isWorking = false
+                change.errorMessage = error.localizedDescription
+                if pageTargetChange?.id == change.id { pageTargetChange = change }
+            }
+        }
+    }
+
+    /// Ce que le serveur rend d'un changement de cible. La réponse remplace
+    /// l'écran quand rien d'autre n'est en route ; sinon, seules la cible et
+    /// sa règle en sont reprises — la réponse du dernier réglage en file
+    /// remettra le reste d'accord.
+    private func accept(_ updated: TripSettings) {
+        guard queue.isEmpty, !isSending else {
+            guard var current = settings else { return }
+            if let pages = updated.customisation?.targetPageCount {
+                current.customisation?.targetPageCount = pages
+            }
+            current.pageTarget = updated.pageTarget
+            settings = current
+            return
+        }
+        settings = updated
+        clearError()
+    }
+
+    /// Passe la feuille à l'étape suivante — si elle est encore ouverte sur
+    /// ce changement-là : refermée entre-temps, elle ne se rouvre pas.
+    private func advance(_ change: PageTargetChange, to step: PageTargetChange.Step) {
+        guard pageTargetChange?.id == change.id else { return }
+        var next = change
+        next.step = step
+        next.isWorking = false
+        next.errorMessage = nil
+        pageTargetChange = next
+    }
+
+    /// « Étoffer / Condenser les étapes déjà écrites », sur la feuille ou
+    /// par le lien du panneau — `POST /v1/trips/:id/page-target/rewrite`.
+    ///
+    /// Un 409 dit que c'est déjà fait (un co-voyageur, un autre téléphone) :
+    /// le lien s'en va, sans erreur — ce qu'on demandait est en route.
+    public func rewriteWrittenSteps() async {
+        guard !isRewritingWrittenSteps else { return }
+        isRewritingWrittenSteps = true
+        defer { isRewritingWrittenSteps = false }
+        let change = pageTargetChange
+        if var working = change {
+            working.isWorking = true
+            working.errorMessage = nil
+            pageTargetChange = working
+        }
+
+        do {
+            if let rewrite {
+                let updated = try await rewrite(tripId)
+                settings?.pageTarget = updated.pageTarget
+            } else {
+                settings?.pageTarget?.rewriteAvailable = false
+            }
+            hasStartedRewrite = true
+            if pageTargetChange?.id == change?.id { pageTargetChange = nil }
+        } catch {
+            if (error as? APIError)?.code == APIError.pageTargetRewriteUnavailableCode {
+                settings?.pageTarget?.rewriteAvailable = false
+                if pageTargetChange?.id == change?.id { pageTargetChange = nil }
+                return
+            }
+            if var failed = change, pageTargetChange?.id == failed.id {
+                failed.isWorking = false
+                failed.errorMessage = error.localizedDescription
+                pageTargetChange = failed
+            } else {
+                report(error)
             }
         }
     }
@@ -327,6 +562,61 @@ public final class BookCustomisationModel {
         guard let customisation, !BookRulesLock.isLocked(customisation) else { return }
         rulesMemory.write(tripId, nil)
     }
+}
+
+/// Un changement de nombre de pages cible, tel que sa feuille le raconte.
+///
+/// **Une seule feuille, dont le contenu change** (`ios/CLAUDE.md`, « un
+/// enchaînement de feuilles ne s'empile pas ») : l'identifiant reste le même
+/// d'une étape à l'autre, si bien que la présentation ne se refait pas.
+///
+/// ```
+/// palier touché ─→ .confirm  (ce qui reste de changements)
+///                     │ Changer le nombre de pages cible
+///                     ▼
+///                  .stage    (sans date de fin seulement)
+///                     │ début · moitié · fin
+///                     ▼
+///                  .done(stage) ─→ fin : étoffer / condenser l'écrit
+///
+/// 409 à l'envoi ─→ .limitReached (l'orange)
+/// ```
+public struct PageTargetChange: Identifiable, Hashable, Sendable {
+    public enum Step: Hashable, Sendable {
+        /// L'avertissement, avant tout envoi.
+        case confirm(changesLeft: Int)
+        /// « À quel stade de ton voyage en es-tu ? »
+        case stage
+        /// Le serveur a refusé : les deux changements sont faits.
+        case limitReached
+        /// C'est fait. Vers la fin, la feuille propose de réécrire l'écrit.
+        case done(PageTargetTripStage)
+    }
+
+    public let id: UUID
+    /// La cible d'avant, et celle qu'on demande.
+    public let from: Int
+    public let to: Int
+    /// La durée du voyage au moment du geste : c'est elle qui nomme les
+    /// récits (« récit compact »), comme les paliers du panneau.
+    public let tripDays: Int?
+    public var step: Step
+    /// Un envoi part — le bouton de l'étape attend.
+    public var isWorking = false
+    /// L'envoi a raté pour une autre raison que la limite : dit sur la
+    /// feuille, qui reste à son étape.
+    public var errorMessage: String?
+
+    public init(from: Int, to: Int, tripDays: Int?, step: Step) {
+        self.id = UUID()
+        self.from = from
+        self.to = to
+        self.tripDays = tripDays
+        self.step = step
+    }
+
+    /// La cible monte : le récit s'étoffe. Sinon il se condense.
+    public var isLonger: Bool { to > from }
 }
 
 private extension BookCustomisationEdit {

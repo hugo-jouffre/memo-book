@@ -473,18 +473,23 @@ public enum BookPageTarget: String, Sendable, Hashable, CaseIterable, Identifiab
 
     /// Combien de pages ce palier vise pour un voyage de `days` jours.
     ///
-    /// Une page par jour au palier courant, arrondie à la dizaine, bornée entre
-    /// un carnet minimal et ce qu'une reliure accepte : c'est la règle qui rend
-    /// 30 / 60 / 90 sur les deux mois de la maquette. `nil` pour
-    /// ``BookPageTarget/custom``, qui ne projette rien — c'est le voyageur qui
-    /// pose le nombre.
+    /// Une page par jour au palier « Par défaut », arrondie à la dizaine,
+    /// bornée entre un carnet minimal et ce qu'une reliure accepte. Les deux
+    /// autres paliers en sont les **deux tiers et les quatre tiers** (Hugo,
+    /// 15/10/2026) — et non plus la moitié et une fois et demie : un compact à
+    /// moitié perdait trop du récit, un détaillé à 150 % le gonflait. Sans date
+    /// de fin, cela fait 40 / 60 / 80. `nil` pour ``BookPageTarget/custom``,
+    /// qui ne projette rien — c'est le voyageur qui pose le nombre.
+    ///
+    /// Le serveur fait le même calcul (`backend/src/services/pageTarget.ts`) :
+    /// c'est lui qui lit la densité du récit dans la cible.
     public func pageCount(forTripDays days: Int?) -> Int? {
         guard self != .custom else { return nil }
         let standard = Self.standardPageCount(forTripDays: days)
         return switch self {
-        case .compact: Self.roundedToTen(Double(standard) * 0.5)
+        case .compact: Self.roundedToTen(Double(standard) * 2 / 3)
         case .standard: standard
-        case .detailed: Self.roundedToTen(Double(standard) * 1.5)
+        case .detailed: Self.roundedToTen(Double(standard) * 4 / 3)
         case .custom: nil
         }
     }
@@ -505,5 +510,99 @@ public enum BookPageTarget: String, Sendable, Hashable, CaseIterable, Identifiab
 
     private static func roundedToTen(_ value: Double) -> Int {
         Int((value / 10).rounded()) * 10
+    }
+}
+
+// MARK: - Changer le nombre de pages cible
+
+/// Combien de fois le nombre de pages cible peut encore changer — le bloc
+/// `pageTarget` de `GET /v1/trips/:id/settings`.
+///
+/// **Deux changements par voyage** (Hugo, 15/10/2026) : chacun peut faire
+/// réécrire tout le carnet par l'IA, ce qui coûte. Un changement ne compte
+/// qu'une fois une étape écrite (``changesCount``) : avant, il n'y a rien à
+/// homogénéiser, et régler sa cible le premier soir n'en est pas un.
+///
+/// Décodage tolérant, et défaut **libre** : une API déployée avant cette règle
+/// ne la sert pas, et l'app ne doit alors ni compter ni bloquer — c'est le
+/// serveur qui décide, et il ne décide encore rien.
+public struct PageTargetAllowance: Codable, Sendable, Hashable {
+    /// Ce qui reste, de 0 à ``changeLimit``.
+    public var changesLeft: Int
+    /// Combien de changements un voyage a en tout — 2.
+    public var changeLimit: Int
+    /// Une étape au moins est écrite : un changement compte, et l'app
+    /// demande confirmation avant de le faire.
+    public var changesCount: Bool
+    /// Le dernier changement ouvre encore le droit de réécrire les étapes
+    /// déjà écrites à la nouvelle cible — `POST /v1/trips/:id/page-target/rewrite`.
+    public var rewriteAvailable: Bool
+
+    public init(
+        changesLeft: Int = 2,
+        changeLimit: Int = 2,
+        changesCount: Bool = false,
+        rewriteAvailable: Bool = false
+    ) {
+        self.changesLeft = changesLeft
+        self.changeLimit = changeLimit
+        self.changesCount = changesCount
+        self.rewriteAvailable = rewriteAvailable
+    }
+
+    /// Ce qu'on lit quand le serveur ne dit rien : rien n'est compté.
+    public static let unrestricted = PageTargetAllowance()
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        changesLeft = try container.decodeIfPresent(Int.self, forKey: .changesLeft) ?? 2
+        changeLimit = try container.decodeIfPresent(Int.self, forKey: .changeLimit) ?? 2
+        changesCount = try container.decodeIfPresent(Bool.self, forKey: .changesCount) ?? false
+        rewriteAvailable = try container.decodeIfPresent(Bool.self, forKey: .rewriteAvailable) ?? false
+    }
+
+    /// Les deux changements sont faits, et ils comptaient : la cible ne
+    /// bouge plus. Les paliers pâlissent, et l'appui dit pourquoi.
+    public var isExhausted: Bool { changesCount && changesLeft <= 0 }
+}
+
+/// Où en est le voyage quand la cible change — c'est ce qui décide de
+/// proposer, ou non, de réécrire les étapes déjà écrites.
+///
+/// Au début ou au milieu, la suite du carnet pèse plus que ce qui est écrit :
+/// on change la cible des prochaines étapes et on ne touche à rien. Vers la
+/// fin, presque tout est déjà écrit à l'ancienne densité — le carnet serait
+/// coupé en deux —, et l'app propose d'étoffer ou de condenser ce qui l'est.
+public enum PageTargetTripStage: Sendable, Hashable {
+    case beginningOrMiddle
+    case end
+
+    /// La part du voyage écoulée à partir de laquelle on est « vers la fin » :
+    /// les deux tiers. Au-delà, il reste trop peu d'étapes à venir pour que
+    /// le carnet devienne homogène tout seul.
+    public static let endThreshold = 2.0 / 3.0
+
+    /// Le stade d'après les dates, ou `nil` quand il faut le demander — sans
+    /// date de fin, on ne sait pas quelle part du voyage est passée.
+    ///
+    /// Le voyage dure ses jours bornes comprises, comme ailleurs dans l'app ;
+    /// sont écoulés les jours **entiers** avant aujourd'hui — celui qu'on vit
+    /// n'est pas encore raconté. Un voyage terminé est à la fin.
+    public static func from(
+        startDate: Date?,
+        endDate: Date?,
+        today: Date = .now,
+        calendar: Calendar = .current
+    ) -> PageTargetTripStage? {
+        guard let endDate else { return nil }
+        let todayStart = calendar.startOfDay(for: today)
+        let end = calendar.startOfDay(for: endDate)
+        if todayStart > end { return .end }
+        guard let startDate else { return nil }
+        let start = calendar.startOfDay(for: startDate)
+        if todayStart < start { return .beginningOrMiddle }
+        let total = (calendar.dateComponents([.day], from: start, to: end).day ?? 0) + 1
+        let elapsed = calendar.dateComponents([.day], from: start, to: todayStart).day ?? 0
+        return Double(elapsed) / Double(max(total, 1)) >= endThreshold ? .end : .beginningOrMiddle
     }
 }

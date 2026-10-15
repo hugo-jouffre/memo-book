@@ -1,5 +1,6 @@
 import MemoBookCore
 @testable import MemoBookFeature
+import MemoBookNetworking
 import XCTest
 
 /// Le **verrou des pointillés** dans l'écran des personnalisations : ce que le
@@ -513,4 +514,208 @@ final class BookCustomisationModelTests: XCTestCase {
     }
 
     private struct TimedOut: Error {}
+}
+
+/// Le **changement de nombre de pages cible** (Hugo, 15/10/2026) : libre tant
+/// qu'aucune étape n'est écrite, puis deux fois par voyage, chaque fois à
+/// travers la feuille ``PageTargetChangeSheet`` — avertissement, stade du
+/// voyage, puis ce qui est fait.
+@MainActor
+final class BookPageTargetChangeTests: XCTestCase {
+    // MARK: La durée du voyage
+
+    func testWithoutEndDateTheTripHasNoDuration() async {
+        let (model, _) = await open(PageServer(allowance: nil, endDate: nil))
+        XCTAssertNil(model.tripDays, "sans date de fin, le voyage durait un jour et le palier par défaut tombait à 30")
+        XCTAssertEqual(BookPageTarget.standard.pageCount(forTripDays: model.tripDays), 60)
+    }
+
+    // MARK: Avant la première étape écrite
+
+    func testAChangeBeforeAnyStoryIsSentSilently() async throws {
+        let (model, server) = await open(PageServer(allowance: PageTargetAllowance(changesCount: false)))
+
+        model.setTargetPageCount(80)
+
+        XCTAssertNil(model.pageTargetChange)
+        XCTAssertEqual(model.customisation?.targetPageCount, 80)
+        try await waitUntil { server.patches == [80] }
+    }
+
+    // MARK: Un changement qui compte
+
+    func testACountedChangeAsksFirstAndCancellingChangesNothing() async throws {
+        let (model, server) = await open(PageServer(allowance: PageTargetAllowance(changesLeft: 2, changesCount: true)))
+
+        model.setTargetPageCount(80)
+
+        XCTAssertEqual(model.pageTargetChange?.step, .confirm(changesLeft: 2))
+        XCTAssertEqual(model.customisation?.targetPageCount, 60, "la cible a bougé avant la confirmation")
+
+        model.dismissPageTargetChange()
+
+        XCTAssertNil(model.pageTargetChange)
+        XCTAssertEqual(model.customisation?.targetPageCount, 60)
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertTrue(server.patches.isEmpty)
+    }
+
+    func testConfirmingNearTheEndSavesAndOffersTheRewrite() async throws {
+        // Le jeu d'essai finit le 15/09/2026 : le 15/10, le voyage est fini.
+        let (model, server) = await open(
+            PageServer(allowance: PageTargetAllowance(changesLeft: 2, changesCount: true)),
+            today: Self.day(15, 10)
+        )
+        model.setTargetPageCount(80)
+
+        model.confirmPageTargetChange()
+
+        try await waitUntil { model.pageTargetChange?.step == .done(.end) }
+        XCTAssertEqual(server.patches, [80])
+        XCTAssertEqual(model.customisation?.targetPageCount, 80)
+        XCTAssertEqual(model.pageTargetAllowance.changesLeft, 1)
+        XCTAssertTrue(model.pageTargetChange?.isLonger == true)
+
+        await model.rewriteWrittenSteps()
+
+        XCTAssertEqual(server.rewrites, 1)
+        XCTAssertNil(model.pageTargetChange)
+        XCTAssertTrue(model.hasStartedRewrite)
+        XCTAssertFalse(model.offersRewrite)
+    }
+
+    func testEarlyInTheTripTheSheetEndsWithoutRewrite() async throws {
+        let (model, _) = await open(
+            PageServer(allowance: PageTargetAllowance(changesLeft: 1, changesCount: true)),
+            today: Self.day(28, 8)
+        )
+        model.setTargetPageCount(40)
+        XCTAssertEqual(model.pageTargetChange?.step, .confirm(changesLeft: 1))
+
+        model.confirmPageTargetChange()
+
+        try await waitUntil { model.pageTargetChange?.step == .done(.beginningOrMiddle) }
+        XCTAssertEqual(model.pageTargetChange?.isLonger, false)
+    }
+
+    func testWithoutEndDateTheSheetAsksTheStage() async throws {
+        let (model, server) = await open(
+            PageServer(allowance: PageTargetAllowance(changesLeft: 2, changesCount: true), endDate: nil)
+        )
+        model.setTargetPageCount(80)
+
+        model.confirmPageTargetChange()
+
+        XCTAssertEqual(model.pageTargetChange?.step, .stage)
+        XCTAssertTrue(server.patches.isEmpty, "on envoie avant de savoir où en est le voyage")
+
+        model.choosePageTargetStage(.end)
+
+        try await waitUntil { model.pageTargetChange?.step == .done(.end) }
+        XCTAssertEqual(server.patches, [80])
+    }
+
+    // MARK: La limite
+
+    func testNoChangeLeftSendsNothingAndExplains() async throws {
+        let (model, server) = await open(PageServer(allowance: PageTargetAllowance(changesLeft: 0, changesCount: true)))
+        XCTAssertTrue(model.isPageTargetLocked)
+
+        model.setTargetPageCount(80)
+
+        XCTAssertNil(model.pageTargetChange)
+        XCTAssertTrue(model.showsPageTargetLimitNotice)
+        XCTAssertEqual(model.customisation?.targetPageCount, 60)
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertTrue(server.patches.isEmpty)
+    }
+
+    func testARefusalMovesTheSheetToTheLimit() async throws {
+        // L'écran croit qu'il reste un changement ; un co-voyageur l'a pris.
+        let server = PageServer(allowance: PageTargetAllowance(changesLeft: 1, changesCount: true))
+        let (model, _) = await open(server, today: Self.day(15, 10))
+        server.refusesWithLimit = true
+        model.setTargetPageCount(80)
+
+        model.confirmPageTargetChange()
+
+        try await waitUntil { model.pageTargetChange?.step == .limitReached }
+        try await waitUntil { model.isPageTargetLocked }
+        XCTAssertEqual(model.customisation?.targetPageCount, 60)
+        XCTAssertNil(model.errorMessage, "un refus de la limite n'est pas une panne")
+    }
+
+    // MARK: Outils
+
+    private func open(
+        _ server: PageServer,
+        today: Date = BookPageTargetChangeTests.day(15, 10)
+    ) async -> (BookCustomisationModel, PageServer) {
+        let model = BookCustomisationModel(
+            tripId: "trip-rome",
+            source: { _ in server.settings },
+            persist: { _, edit in try server.patch(edit) },
+            rewrite: { _ in try server.rewrite() },
+            today: { today }
+        )
+        await model.load()
+        return (model, server)
+    }
+
+    private static func day(_ day: Int, _ month: Int) -> Date {
+        Calendar.current.date(from: DateComponents(year: 2026, month: month, day: day, hour: 12)) ?? .now
+    }
+
+    /// Le serveur de la règle des deux changements, en mémoire — comme
+    /// `services/pageTarget.ts`.
+    @MainActor
+    private final class PageServer {
+        var settings: TripSettings
+        private(set) var patches: [Int] = []
+        private(set) var rewrites = 0
+        var refusesWithLimit = false
+
+        init(allowance: PageTargetAllowance?, endDate: Date? = TripSettings.fixture.endDate) {
+            settings = .fixture
+            settings.endDate = endDate
+            settings.pageTarget = allowance
+            settings.customisation?.targetPageCount = 60
+        }
+
+        func patch(_ edit: BookCustomisationEdit) throws -> TripSettings {
+            guard case .targetPageCount(let pages) = edit else { return settings }
+            var allowance = settings.pageTargetAllowance
+            if allowance.changesCount {
+                if refusesWithLimit {
+                    allowance.changesLeft = 0
+                    settings.pageTarget = allowance
+                    throw APIError.server(statusCode: 409, code: APIError.pageTargetLimitReachedCode, message: "Limite")
+                }
+                allowance.changesLeft -= 1
+                allowance.rewriteAvailable = true
+                settings.pageTarget = allowance
+            }
+            patches.append(pages)
+            settings.customisation?.targetPageCount = pages
+            return settings
+        }
+
+        func rewrite() throws -> TripSettings {
+            rewrites += 1
+            settings.pageTarget?.rewriteAvailable = false
+            return settings
+        }
+    }
+
+    private func waitUntil(timeout: Duration = .seconds(2), _ condition: () -> Bool) async throws {
+        let clock = ContinuousClock()
+        let deadline = clock.now + timeout
+        while !condition() {
+            if clock.now > deadline {
+                XCTFail("Condition non remplie en \(timeout)")
+                return
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+    }
 }

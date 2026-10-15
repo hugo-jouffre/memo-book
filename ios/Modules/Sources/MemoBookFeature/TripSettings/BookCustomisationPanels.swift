@@ -78,8 +78,18 @@ struct BookRatioPanel: View {
 
 /// « Nombre de pages » — quatre paliers, dont les projections suivent la durée
 /// du voyage (`3595:23917`).
+///
+/// **Deux changements par voyage, une fois une étape écrite** (Hugo,
+/// 15/10/2026). Avant, le palier part au geste ; ensuite, le geste ouvre
+/// ``PageTargetChangeSheet`` et rien ne bouge avant qu'on confirme. Les deux
+/// changements faits, les paliers pâlissent sans se désactiver : l'appui pose
+/// la note orange qui dit pourquoi.
 struct BookPagesPanel: View {
     let model: BookCustomisationModel
+
+    /// Le repère de la note orange : sous la carte, souvent sous le bas de
+    /// l'écran, et l'écran défile jusqu'à elle.
+    static let limitNoticeAnchor = "page-target-limit"
 
     /// Le nombre saisi à la main, quand on choisit « Personnalisé ».
     @State private var customPages: Double = 60
@@ -122,13 +132,52 @@ struct BookPagesPanel: View {
 
                 if isCustomising { customPageStepper }
             }
+            // Pâlie, pas désactivée : chaque ligne garde son geste, et c'est
+            // le modèle qui répond par la note orange.
+            .opacity(model.isPageTargetLocked ? 0.45 : 1)
+
+            if model.showsPageTargetLimitNotice {
+                BrandNotice(BookCopy.Pages.limitReached, tone: .warning)
+                    .id(Self.limitNoticeAnchor)
+                    .transition(.opacity)
+            }
+
+            rewrite
         }
         .animation(.snappy(duration: 0.25), value: isCustomising)
+        .animation(.snappy(duration: 0.25), value: model.showsPageTargetLimitNotice)
+        .animation(.snappy(duration: 0.25), value: model.offersRewrite)
         .disabled(model.customisation == nil)
         .onAppear {
             guard let pages = model.customisation?.targetPageCount else { return }
             customPages = Double(pages)
             isCustomising = BookPageTarget.matching(pageCount: pages, tripDays: days) == .custom
+        }
+        // La feuille refermée sans changement — « Annuler », ou un refus — :
+        // le curseur revient sur la cible qui tient toujours.
+        .onChange(of: model.pageTargetChange == nil) { _, isClosed in
+            if isClosed { resyncCustomPages() }
+        }
+    }
+
+    /// La réécriture laissée « Plus tard » : un lien sous les paliers, tant
+    /// que le serveur la garde ouverte. Une fois partie, une phrase la
+    /// remplace.
+    @ViewBuilder
+    private var rewrite: some View {
+        if model.hasStartedRewrite {
+            BrandNotice(BookCopy.Pages.rewriteStarted)
+                .transition(.opacity)
+        } else if model.offersRewrite {
+            BrandButton(
+                BookCopy.Pages.rewriteLink,
+                style: .link,
+                isLoading: model.isRewritingWrittenSteps
+            ) {
+                Task { await model.rewriteWrittenSteps() }
+            }
+            .padding(.horizontal, MemoBookSpacing.xs)
+            .transition(.opacity)
         }
     }
 
@@ -162,7 +211,7 @@ struct BookPagesPanel: View {
                 step: 10,
                 onEditingChanged: { isEditing in
                     guard !isEditing else { return }
-                    model.setTargetPageCount(Int(customPages))
+                    request(Int(customPages))
                 }
             )
             .tint(MemoBookColor.action)
@@ -174,6 +223,11 @@ struct BookPagesPanel: View {
     }
 
     private func choose(_ target: BookPageTarget) {
+        // La cible ne bouge plus : pas même le curseur ne s'ouvre.
+        guard !model.isPageTargetLocked else {
+            model.explainPageTargetLimit()
+            return
+        }
         isCustomising = target == .custom
         guard let pages = target.pageCount(forTripDays: days) else {
             // « Personnalisé » n'a pas de valeur à lui : on garde celle qui est
@@ -181,7 +235,19 @@ struct BookPagesPanel: View {
             return
         }
         customPages = Double(pages)
+        request(pages)
+    }
+
+    /// Demande la cible au modèle. Rien n'a bougé et aucune feuille ne s'est
+    /// ouverte — la cible verrouillée — : le curseur revient où il était.
+    private func request(_ pages: Int) {
         model.setTargetPageCount(pages)
+        if model.pageTargetChange == nil { resyncCustomPages() }
+    }
+
+    private func resyncCustomPages() {
+        guard let pages = model.customisation?.targetPageCount else { return }
+        customPages = Double(pages)
     }
 }
 

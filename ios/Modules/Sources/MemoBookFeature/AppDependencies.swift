@@ -602,6 +602,9 @@ public final class AppDependencies {
             persist: { [api] id, edit in
                 try await api.updateBookCustomisation(tripId: id, edit: edit)
             },
+            // `POST /v1/trips/:id/page-target/rewrite` : réécrire les étapes
+            // déjà écrites au nombre de pages cible qu'on vient de changer.
+            rewrite: { [api] id in try await api.rewritePageTarget(tripId: id) },
             // Les pointillés d'avant le verrou, gardés sur le téléphone : ils
             // doivent survivre à la fermeture de l'écran (Hugo, 02/10/2026).
             rulesMemory: .device()

@@ -52,12 +52,12 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
 |---|---|---|---|---|
 | **Couvertures (1re & 4e)** | Aperçu et personnalisation | — | Mise en page | Partiel : `cover_photo` et `back_cover` existent, l'éditeur non |
 | **Ratio photo / texte** | 0 · 25 · 50 · 75 · 100 % | 50 % | Mise en page — le nombre de photos de chaque étape (`photoRatio.ts`), mises en page par le composeur de l'atelier, le même dans l'atelier et l'app (`bookComposer.ts`) | Rendu, les cinq paliers. Détail et cas limites : **`docs/ratio-texte-photo.md`** |
-| **Nombre de page cible** | Échelle à arrêter | 60 pages | Rédaction — niveau de détail des textes · Mise en page — regroupement des étapes | Rendu côté agents, sans garde-fou automatique |
+| **Nombre de page cible** | Compact · Par défaut · Détaillé · Personnalisé (30 à 180) | Par défaut — 60 pages sans date de fin | Rédaction — la taille des étapes (`services/pageTarget.ts`, ligne de consigne de `redaction.ts`) · Mise en page — les planches de photos (`recalerSurLaCible`, `mise-en-page.js`), la même dans l'atelier et l'app | Rendu : la rédaction règle la densité, deux changements par voyage une fois le récit commencé ; la composition recale le carnet sur la cible à ± 5 pages par ses planches de photos, quand les photos le permettent (15/10/2026) |
 | **Fun facts** | ON / OFF | ON | Rédaction les écrit, mise en page les place | Rendu (`fun_facts`) — OFF : aucun encart, dans l'atelier comme dans l'app |
 | **Pointillés** | ON / OFF | ON | Gabarit (`.mb-note__rules`) | Rendu : `rules_enabled` dans le payload |
 | **Décorations & stickers** | 0 · 1 · 2 · 3 · 4 par étape | 2 | Mise en page | Rendu : les stickers de la bibliothèque dessinée (44 dessins importés de Notion, `assets/stickers/`), liés au récit puis complétés par des dessins de voyage, **autant par étape que le réglage** (14/10/2026 ; le curseur de l'app le dit : « Quantité de décorations par étape »), et le tracé pointillé ; à 0, ni l'un ni l'autre. Le scotch des photos n'en dépend plus (12/10/2026) |
 | **Typographies** | Trois **assortiments** — voir plus bas | Carnet de voyage | Gabarit — `--mb-font-display`, `--mb-font-title`, `--mb-font-hand` | **V1 : « Carnet de voyage » seul** (Hugo, 09/10/2026) — Éditorial et Manuscrit restent sur la feuille, pâlis, « À venir ». Les sous-titres tombent sur Gloria Hallelujah tant que Hansley n'est pas inlinée (licence à vérifier) |
-| **Quiz intégrés à l'histoire** | ON / OFF | ON | Mise en page les place ; **aucun agent ne les écrit** — règles en attente dans `agent-transcription-carnet.md` § 1 | Rendu (`quiz`), jamais rempli |
+| **Quiz intégrés à l'histoire** | ON / OFF | ON | Rédaction les écrit (app : `redaction.ts` ; atelier : l'analyse d'étape), le composeur les place (`placerQuiz`, `mise-en-page.js`) | Rendu (`quiz`) et rempli depuis le 15/10/2026 — OFF : aucun quiz, dans l'atelier comme dans l'app |
 | **Zones libres** | ON / OFF | ON | Mise en page | Rendu : trois pages réglées en fin de carnet (`pages_libres: 3`, 0 si coupé — atelier et `bookSettings.ts`). À construire : une zone blanche en fin d'étape |
 | **Mot fléché à la fin du livre** | ON / OFF | ON | La grille se génère à la commande ; les mots du voyage, règles en attente dans `agent-transcription-carnet.md` § 1 | À construire |
 
@@ -74,6 +74,53 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
   assortiments n'ont pas d'aperçu avec pointillés, ils les éteignent. Un carnet
   « Personnalisé » n'est pas verrouillé. Voir `docs/apercu-personnalisation.md`
   § La contrainte.
+- **Nombre de pages cible** (Hugo, 15/10/2026). Les paliers se calculent sur
+  la durée du voyage : « Par défaut » vise une page par jour, à la dizaine,
+  entre 30 et 180 ; « Compact » ×2/3 et « Détaillé » ×4/3. **Sans date de fin :
+  40 / 60 / 80 pages.** Le carnet final vise sa cible à **± 5 pages** (un
+  Compact de 40 pages fait 35 à 45 pages). La cible règle la **densité de la
+  rédaction** — la taille d'étape vers laquelle on tire, jamais au-delà de ce
+  que le vocal raconte : on ne gonfle pas. Puis la **composition recale** le
+  carnet (`recalerSurLaCible`, `mise-en-page.js` — le même code dans l'atelier
+  et l'app, donc le même PDF) :
+  - on compte **le carnet entier hors couvertures** : colophon, introduction,
+    page libre d'avant, pages d'étape, pages libres de fin. Les pages fixes
+    comptent mais ne bougent jamais ;
+  - la mise en page n'invente pas de texte : elle n'ajoute ou ne retire que
+    des **planches** (pages de photos de fin d'étape). Aucun récit n'est coupé,
+    raccourci ni réduit, aucune page de récit n'apparaît ni ne disparaît ;
+  - **le ratio photo / texte tient** : chaque étape garde exactement le nombre
+    de photos que le ratio lui donne (celui que le chat a demandé). Trop court,
+    ces photos s'étalent sur deux planches de plus (celles que les six pages
+    avaient écartées reviennent ; à 50 % et au-delà, une page de récit à
+    plusieurs photos en cède — elle garde toujours la sienne), jusqu'à deux
+    doubles pages de photos par étape, et six pages par étape au plus ; trop long, elles se resserrent sur
+    moins de planches (cinq par page) ou remontent sur les pages de récit qui
+    ont encore une place ;
+  - chaque étape garde un **nombre pair de pages** : deux planches à la fois,
+    ou une seule pour rendre paire une étape impaire ;
+  - **hors d'atteinte**, on ne force rien : pas assez de photos (le cas courant
+    à 0 et 25 %, ou d'un récit court qui n'en demande que deux), ou trop de
+    récit (la cible est sous ce que le texte seul occupe). Le carnet reste au
+    plus près, et le journal le dit — `pages cible : … hors d'atteinte`, en
+    avertissement dans les journaux de l'API, dans le journal de l'atelier.
+  Changer de cible en cours de voyage :
+  - **deux changements au plus**, comptés seulement une fois qu'une étape est
+    écrite (avant, rien à homogénéiser). L'app le dit avant de changer —
+    « Changer le nombre de pages cible » / « Annuler » —, puis « il ne te reste
+    plus qu'un changement », puis, en orange, que la cible ne peut plus changer.
+    Le serveur refuse au-delà (409 `page_target_limit_reached`) ;
+  - **début ou milieu du voyage** : « C'est noté, on passe d'un récit compact à
+    un récit détaillé. Les prochaines étapes seront donc plus étoffées. » Ce qui
+    est déjà écrit n'est pas retouché ;
+  - **fin du voyage** (les deux derniers tiers écoulés, ou voyage terminé) : le
+    même message, plus l'offre d'étoffer — ou de condenser — les étapes déjà
+    écrites. Une fois par changement : `POST /v1/trips/:id/page-target/rewrite`
+    réécrit, une à une et dans l'ordre, les étapes que le voyageur n'a pas
+    corrigées à la main (`jobs/rewriteTrip.ts`) ;
+  - **sans date de fin**, l'app demande « À quel stade de ton voyage en
+    es-tu ? » — plutôt au début, environ à la moitié, plutôt à la fin — et
+    retombe sur l'un des cas ci-dessus.
 - **Ratio photo / texte.** La part de surface qu'occupent les photos, mesurée
   sur l'ensemble des pages d'une étape, à ±5 points. À **0 %**, aucune photo dans
   le carnet — la couverture garde la sienne — et le récit prend la place qu'elles
@@ -95,8 +142,18 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
   aucune, même s'il juge une page trop dense. Seules les polices réellement
   embarquées dans `MemoBook Generator/templates/travel-journal/assets/fonts/` peuvent être
   proposées dans la liste.
-- **Quiz.** Un seul bloc interactif par page, et il remplace la zone flottante
-  du bas. À OFF, l'agent n'en produit aucun.
+- **Quiz.** Écrits par l'IA à partir des récits (Hugo, 15/10/2026) : une
+  question, trois propositions, la réponse imprimée à l'envers. **Environ un
+  quiz toutes les trois étapes**, jamais deux étapes de suite, un par étape au
+  plus — tant que l'étape offre de quoi : une question sur ce que le voyageur
+  a raconté, ou un fait vérifiable du lieu. Jamais inventé ; un carnet sans
+  matière en aura moins. Un seul bloc interactif par page, et il remplace la
+  zone flottante du bas : le composeur le pose sur la première page de
+  l'étape qui n'a ni photo, ni encart, ni carte, et dont le récit ne donne pas
+  la réponse — faute de page, il ne s'imprime pas (à 0 % de photos, le récit
+  pleine page n'en rend aucun). La rédaction l'écrit même quand le réglage
+  est coupé, comme le fun fact : à OFF, aucun quiz n'entre au carnet, et le
+  rallumer les retrouve sans rien relancer.
 - **Zones libres.** Une zone blanche à la fin de chaque étape, pour écrire ou
   dessiner à la main, et trois pages libres à la fin du carnet — réglées comme
   le papier du récit (Hugo, 12/10/2026), après la dernière étape et avant la
