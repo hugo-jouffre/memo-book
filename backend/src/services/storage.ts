@@ -4,6 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import {
   DeleteObjectsCommand,
   GetObjectCommand,
+  NoSuchKey,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -225,14 +226,15 @@ export function createMediaStorage(env: Env): MediaStorage {
     return new DiskMediaStorage(root);
   }
 
-  const client = new S3Client({
-    endpoint: S3_ENDPOINT,
+  return new MediaStorage(s3Client(env, S3_ENDPOINT, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY), S3_BUCKET);
+}
+
+function s3Client(env: Env, endpoint: string, accessKeyId: string, secretAccessKey: string): S3Client {
+  return new S3Client({
+    endpoint,
     region: env.S3_REGION,
     forcePathStyle: env.S3_FORCE_PATH_STYLE,
-    credentials: {
-      accessKeyId: S3_ACCESS_KEY_ID,
-      secretAccessKey: S3_SECRET_ACCESS_KEY,
-    },
+    credentials: { accessKeyId, secretAccessKey },
     // Depuis la version 3.729, le SDK AWS pose de lui-même un
     // `x-amz-checksum-crc32` sur chaque écriture. C'est du S3 non standard :
     // seul le vrai S3 le comprend, et plusieurs fournisseurs compatibles le
@@ -251,6 +253,74 @@ export function createMediaStorage(env: Env): MediaStorage {
     requestChecksumCalculation: "WHEN_REQUIRED",
     responseChecksumValidation: "WHEN_REQUIRED",
   });
+}
 
-  return new MediaStorage(client, S3_BUCKET);
+// ---------------------------------------------------------------------------
+// Bucket public
+// ---------------------------------------------------------------------------
+
+/**
+ * Le bucket public (`memobook-public`) : des fichiers à clé fixe, les mêmes
+ * pour tout le monde, lus sans URL signée. Sert ici de cache — les rues des
+ * cartes de ville (`osmCity.ts`) ne sont demandées qu'une fois par zone.
+ * Jamais pour un média de voyageur : ceux-là vont dans `MediaStorage`, privé.
+ */
+export interface PublicAssetStore {
+  /** Le contenu de `key`, ou `null` s'il n'existe pas encore. */
+  read(key: string): Promise<Buffer | null>;
+  write(key: string, body: Buffer, contentType: string): Promise<void>;
+}
+
+class S3PublicAssetStore implements PublicAssetStore {
+  constructor(
+    private readonly client: S3Client,
+    private readonly bucket: string,
+  ) {}
+
+  async read(key: string): Promise<Buffer | null> {
+    try {
+      const response = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+      return response.Body ? Buffer.from(await response.Body.transformToByteArray()) : null;
+    } catch (error) {
+      if (error instanceof NoSuchKey) return null;
+      throw error;
+    }
+  }
+
+  async write(key: string, body: Buffer, contentType: string): Promise<void> {
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+        // La clé dit le contenu : il ne change jamais.
+        CacheControl: "public, max-age=31536000, immutable",
+      }),
+    );
+  }
+}
+
+/** En mémoire : les tests, et `npm run dev` sans S3 (le cache dure le temps du processus). */
+export class InMemoryPublicAssetStore implements PublicAssetStore {
+  readonly objects = new Map<string, Buffer>();
+
+  async read(key: string): Promise<Buffer | null> {
+    return this.objects.get(key) ?? null;
+  }
+
+  async write(key: string, body: Buffer): Promise<void> {
+    this.objects.set(key, body);
+  }
+}
+
+export function createPublicAssetStore(env: Env): PublicAssetStore {
+  const { S3_ENDPOINT, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY } = env;
+  if (env.NODE_ENV === "test" || !S3_ENDPOINT || !S3_ACCESS_KEY_ID || !S3_SECRET_ACCESS_KEY) {
+    return new InMemoryPublicAssetStore();
+  }
+  return new S3PublicAssetStore(
+    s3Client(env, S3_ENDPOINT, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY),
+    env.PUBLIC_ASSETS_BUCKET,
+  );
 }

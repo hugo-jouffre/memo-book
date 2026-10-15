@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import nunjucks from "nunjucks";
-import { expandMaps } from "./mapSvg.js";
+import { expandMaps, type Rues } from "./mapSvg.js";
 import type { Browser, BrowserContext, Page, Route } from "playwright-core";
 import {
   loadPrintSettings,
@@ -78,27 +78,35 @@ export function assertNoNullValues(value: unknown, path = "payload"): void {
  * cesse de prédire la production — et c'est précisément ce qui était arrivé :
  * seul le rendu local dépliait les cartes, APITemplate recevait un chapitre
  * sans `map_svg` et sortait une page d'ouverture vide.
+ *
+ * `rues` : les rues et l'eau des cartes de ville, récupérées avant
+ * (`osmCity.ts`) — le gabarit, lui, ne fait aucun appel réseau.
  */
-export function preparePayload(payload: Record<string, unknown>): Record<string, unknown> {
+export function preparePayload(
+  payload: Record<string, unknown>,
+  rues?: ReadonlyMap<string, Rues>,
+): Record<string, unknown> {
   // Jinja2 imprime `None` là où l'on attend une chaîne vide : un null qui
   // passe ici écrirait le mot « None » dans le carnet imprimé.
   assertNoNullValues(payload);
 
   // L'agent décrit la carte (« Philippines, Manille, Visayas ») ; la géométrie
   // est un calcul déterministe, elle se fait ici et pas dans un prompt.
-  return expandMaps(payload);
+  return expandMaps(payload, rues);
 }
 
 export interface RenderHtmlOptions {
   payload: Record<string, unknown>;
   profile?: RenderProfile;
+  /** Les rues des cartes de ville (`preparePayload`). */
+  rues?: ReadonlyMap<string, Rues>;
 }
 
 /** Applique le payload au gabarit et injecte la feuille de style verbatim. */
-export function renderTemplateToHtml({ payload, profile = "preview" }: RenderHtmlOptions): string {
+export function renderTemplateToHtml({ payload, profile = "preview", rues }: RenderHtmlOptions): string {
   const environment = createTemplateEnvironment();
   const rendered = environment.renderString(loadTemplateHtml(), {
-    ...preparePayload(payload),
+    ...preparePayload(payload, rues),
     render_profile: profile,
   });
 
@@ -269,6 +277,7 @@ export async function renderBookPdf({
   profile = "preview",
   offline = false,
   browser: existingBrowser,
+  rues,
 }: RenderPdfOptions): Promise<RenderedBookPdf> {
   const { chromium } = await import("playwright-core").catch(() => {
     throw new Error(
@@ -277,7 +286,7 @@ export async function renderBookPdf({
     );
   });
 
-  const html = renderTemplateToHtml({ payload, profile });
+  const html = renderTemplateToHtml({ payload, profile, rues });
   const print = loadPrintSettings();
   const box = pageBox(print);
 

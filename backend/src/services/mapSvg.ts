@@ -560,29 +560,48 @@ const boiteDe = (ring: [number, number][]): Cadre => {
   return [o, s, e, n];
 };
 
-export interface FramedMapRequest {
-  cadre: Cadre;
-  points?: MapPoint[];
-  widthPt?: number;
-  heightPt?: number;
-  /**
-   * Carte de ville : le trajet relie les points dans l'ordre, une barre
-   * d'échelle dit les distances, les lieux déjà passés gardent leur nom.
-   */
-  ville?: boolean;
-  /** Le nom de la ville, écrit en tête. */
-  titre?: string;
-}
+// ---------------------------------------------------------------------------
+// Rues et cours d'eau des cartes de ville (OpenStreetMap)
+// ---------------------------------------------------------------------------
 
 /**
- * La carte cadrée sur `request.cadre`, élargi au format de la carte. Tous les
- * pays de `detail` se dessinent — une côte voisine aide à se situer —, coupés
- * au bord, et effacés en fondu sur les bords.
+ * À l'échelle d'une ville, Natural Earth ne suffit plus : son tracé de la
+ * Seine passait du mauvais côté de la tour Eiffel. Les cartes de ville — et
+ * elles seules — prennent donc leurs grands axes et leurs cours d'eau dans
+ * OpenStreetMap. `services/osmCity.ts` les demande à Overpass avant le rendu
+ * (le moteur PDF ne fait aucun appel réseau) et les garde en cache ; les
+ * cartes de pays et de région restent sur Natural Earth.
+ *
+ * La licence ODbL oblige à créditer les contributeurs : toute carte qui
+ * dessine une de ces données porte `MENTION_OSM`.
+ *
+ * **Recopie dans `carte.js`**, comme le reste : `test/carteAtelier.test.ts`
+ * garde les deux identiques.
  */
-export function renderFramedMapSvg(detail: Record<string, DetailCountry>, request: FramedMapRequest): string {
-  const { cadre, points = [], widthPt = 200, heightPt = 260, ville = false, titre = "" } = request;
-  const padding = 10;
-  // Le cadre en Mercator, élargi au format de la carte, centré.
+export interface Rues {
+  /** Rang 0 : autoroutes et voies rapides ; 1 : grands axes ; 2 : axes secondaires ; 3 : rues de quartier. */
+  routes: { rang: number; trace: [number, number][] }[];
+  /** Fleuves, rivières et canaux : leur ligne médiane, `[lon, lat]`. */
+  coursDEau: { canal: boolean; trace: [number, number][] }[];
+  /** Lacs, étangs, bassins : des contours fermés. */
+  plansDEau: [number, number][][];
+}
+
+export const MENTION_OSM = "© les contributeurs d’OpenStreetMap";
+
+const RANGS_ROUTE: Record<string, number> = { motorway: 0, trunk: 0, primary: 1, secondary: 2, tertiary: 3 };
+/** Épaisseur et opacité des routes, par rang : sous le trajet (0,9 pt, orange), jamais par-dessus. */
+const STYLE_ROUTE: [number, number][] = [
+  [1.1, 0.45],
+  [0.9, 0.38],
+  [0.6, 0.3],
+  [0.45, 0.25],
+];
+/** La couleur du papier : l'eau d'une ville s'y découpe comme la mer sur les autres cartes. */
+const PAPIER = "#fbf8f4";
+
+/** Le cadre en Mercator, élargi au format de la carte, centré. */
+function cadreElargi(cadre: Cadre, widthPt: number, heightPt: number, padding: number): Frame {
   let minX = mercatorX(cadre[0]);
   let maxX = mercatorX(cadre[2]);
   let minY = mercatorY(cadre[1]);
@@ -596,7 +615,184 @@ export function renderFramedMapSvg(detail: Record<string, DetailCountry>, reques
   maxX += manqueX;
   minY -= manqueY;
   maxY += manqueY;
-  const frame: Frame = { minX, maxX, minY, maxY, scale, width: widthPt, height: heightPt, padding };
+  return { minX, maxX, minY, maxY, scale, width: widthPt, height: heightPt, padding };
+}
+
+/**
+ * Ce qu'une carte de ville montre, arrondi au centième de degré vers
+ * l'extérieur (~1 km) : la zone demandée à Overpass, et la clé de son cache —
+ * deux carnets dans le même quartier partagent la même réponse.
+ */
+export function vueDeVille(cadre: Cadre, widthPt = 200, heightPt = 260): Cadre {
+  const { minX, maxX, minY, maxY } = cadreElargi(cadre, widthPt, heightPt, 10);
+  const lat = (y: number): number => ((2 * Math.atan(Math.exp(y)) - Math.PI / 2) * 180) / Math.PI;
+  const bas = (v: number): number => Math.floor(v * 100) / 100;
+  const haut = (v: number): number => Math.ceil(v * 100) / 100;
+  return [bas((minX * 180) / Math.PI), bas(lat(minY)), haut((maxX * 180) / Math.PI), haut(lat(maxY))];
+}
+
+/**
+ * La requête Overpass d'une vue : les grands axes, les fleuves et canaux, les
+ * plans d'eau. Plus la vue est grande, moins on descend dans les rangs — une
+ * agglomération entière en rues de quartier serait une tache grise, et une
+ * réponse de plusieurs mégaoctets.
+ */
+export function requeteOverpass(vue: Cadre): string {
+  const [o, s, e, n] = vue;
+  const etendue = Math.max(e - o, n - s);
+  const types = ["motorway", "trunk", "primary"];
+  if (etendue <= 0.15) types.push("secondary");
+  if (etendue <= 0.06) types.push("tertiary");
+  const bbox = [s, o, n, e].map((v) => v.toFixed(2)).join(",");
+  return (
+    `[out:json][timeout:50][bbox:${bbox}];` +
+    `(way["highway"~"^(${types.join("|")})$"];way["waterway"~"^(river|canal)$"];way["natural"="water"];);` +
+    `out geom qt;`
+  );
+}
+
+/**
+ * Les morceaux d'une ligne qui passent dans `boite`, avec un point de part et
+ * d'autre : un boulevard qui traverse Paris n'a rien à faire dans le cache
+ * d'une carte du Marais.
+ */
+function rogner(trace: [number, number][], b: Cadre): [number, number][][] {
+  const dedans = (p: [number, number] | undefined): boolean =>
+    Boolean(p) && p![0] >= b[0] && p![0] <= b[2] && p![1] >= b[1] && p![1] <= b[3];
+  const morceaux: [number, number][][] = [];
+  let morceau: [number, number][] = [];
+  for (let i = 0; i < trace.length; i += 1) {
+    if (dedans(trace[i]) || dedans(trace[i - 1]) || dedans(trace[i + 1])) morceau.push(trace[i]!);
+    else {
+      if (morceau.length > 1) morceaux.push(morceau);
+      morceau = [];
+    }
+  }
+  if (morceau.length > 1) morceaux.push(morceau);
+  return morceaux;
+}
+
+/** La réponse d'Overpass (`out geom`), réduite à ce que la carte dessine. */
+export function ruesDOverpass(reponse: unknown, vue: Cadre): Rues {
+  const elements = (reponse as { elements?: unknown } | null)?.elements;
+  const rues: Rues = { routes: [], coursDEau: [], plansDEau: [] };
+  if (!Array.isArray(elements)) return rues;
+  // Un dixième de marge : un axe qui sort du cadre passe encore sous le fondu.
+  const mx = (vue[2] - vue[0]) * 0.1;
+  const my = (vue[3] - vue[1]) * 0.1;
+  const boite: Cadre = [vue[0] - mx, vue[1] - my, vue[2] + mx, vue[3] + my];
+  const r5 = (v: number): number => Math.round(v * 1e5) / 1e5;
+  for (const element of elements as { type?: string; tags?: Record<string, string>; geometry?: unknown }[]) {
+    if (element?.type !== "way" || !Array.isArray(element.geometry)) continue;
+    const tags = element.tags ?? {};
+    const trace = (element.geometry as ({ lat?: number; lon?: number } | null)[])
+      .filter((p): p is { lat: number; lon: number } => Number.isFinite(p?.lat) && Number.isFinite(p?.lon))
+      .map((p): [number, number] => [r5(p.lon), r5(p.lat)]);
+    if (trace.length < 2) continue;
+    const rang = RANGS_ROUTE[tags["highway"] ?? ""];
+    if (rang !== undefined) {
+      for (const t of rogner(trace, boite)) rues.routes.push({ rang, trace: t });
+    } else if (tags["waterway"] === "river" || tags["waterway"] === "canal") {
+      for (const t of rogner(trace, boite)) rues.coursDEau.push({ canal: tags["waterway"] === "canal", trace: t });
+    } else if (tags["natural"] === "water") {
+      const [a, z] = [trace[0]!, trace[trace.length - 1]!];
+      // Seuls les contours fermés : un bout de rive, membre d'un grand plan
+      // d'eau, ne se remplit pas.
+      if (trace.length >= 4 && a[0] === z[0] && a[1] === z[1] && seCroisent(boiteDe(trace), boite)) {
+        rues.plansDEau.push(trace);
+      }
+    }
+  }
+  return rues;
+}
+
+const rueVide = (rues: Rues | null | undefined): boolean =>
+  !rues || (!rues.routes.length && !rues.coursDEau.length && !rues.plansDEau.length);
+
+/**
+ * Les rues et l'eau en SVG, sous le trajet : les plans d'eau, puis les
+ * fleuves — un ruban couleur papier entre deux rives vertes, de la largeur
+ * d'un fleuve de ville (~120 m) à l'échelle —, puis les routes, des plus
+ * petites aux plus grandes. Un trait par rang : un `<path>` par rue pèserait
+ * des centaines de balises.
+ */
+function ruesSvg(rues: Rues, frame: Frame, ptParKm: number): string {
+  const r = (v: number): number => Math.round(v * 10) / 10;
+  const projeter = (trace: [number, number][]): [number, number][] =>
+    simplifier(
+      trace.map(([lon, lat]) => project(frame, lon, lat)),
+      0.3,
+    );
+  const chemin = (pts: [number, number][]): string => pts.map(([x, y], i) => `${i ? "L" : "M"}${x} ${y}`).join("");
+  const borne = (v: number, min: number, max: number): number => r(Math.min(max, Math.max(min, v)));
+  let svg = "";
+
+  const plans = rues.plansDEau.map(projeter).filter((pts) => {
+    const [o, s, e, n] = boiteDe(pts);
+    // Moins de 4 pt : une fontaine, un bassin — une tache, pas un repère.
+    return pts.length >= 4 && (e - o >= 4 || n - s >= 4);
+  });
+  if (plans.length) {
+    svg +=
+      `<path d="${plans.map((p) => `${chemin(p)}Z`).join("")}" fill="${PAPIER}" stroke="${OUTLINE}" ` +
+      `stroke-width="0.5" stroke-opacity="0.6" stroke-linejoin="round"/>`;
+  }
+  for (const canal of [false, true]) {
+    const traces = rues.coursDEau.filter((c) => c.canal === canal).map((c) => projeter(c.trace));
+    const d = traces.filter((p) => p.length > 1).map(chemin).join("");
+    if (!d) continue;
+    const largeur = canal ? borne(0.03 * ptParKm, 0.8, 2.5) : borne(0.12 * ptParKm, 1.6, 7);
+    const trait = `fill="none" stroke-linecap="round" stroke-linejoin="round"`;
+    svg +=
+      `<path d="${d}" ${trait} stroke="${OUTLINE}" stroke-opacity="0.55" stroke-width="${r(largeur + 1)}"/>` +
+      `<path d="${d}" ${trait} stroke="${PAPIER}" stroke-width="${largeur}"/>`;
+  }
+  for (let rang = STYLE_ROUTE.length - 1; rang >= 0; rang -= 1) {
+    const d = rues.routes
+      .filter((route) => route.rang === rang)
+      .map((route) => projeter(route.trace))
+      .filter((p) => p.length > 1)
+      .map(chemin)
+      .join("");
+    if (!d) continue;
+    const [epaisseur, opacite] = STYLE_ROUTE[rang]!;
+    svg +=
+      `<path d="${d}" fill="none" stroke="${OUTLINE}" stroke-width="${epaisseur}" stroke-opacity="${opacite}" ` +
+      `stroke-linecap="round" stroke-linejoin="round"/>`;
+  }
+  return svg;
+}
+
+export interface FramedMapRequest {
+  cadre: Cadre;
+  points?: MapPoint[];
+  widthPt?: number;
+  heightPt?: number;
+  /**
+   * Carte de ville : le trajet relie les points dans l'ordre, une barre
+   * d'échelle dit les distances, les lieux déjà passés gardent leur nom.
+   */
+  ville?: boolean;
+  /** Le nom de la ville, écrit en tête. */
+  titre?: string;
+  /**
+   * Carte de ville : ses grands axes et ses cours d'eau, tirés
+   * d'OpenStreetMap (`ruesDOverpass`). Sans eux, la carte reste sobre : le
+   * contour, les points et le trajet.
+   */
+  rues?: Rues | null;
+}
+
+/**
+ * La carte cadrée sur `request.cadre`, élargi au format de la carte. Tous les
+ * pays de `detail` se dessinent — une côte voisine aide à se situer —, coupés
+ * au bord, et effacés en fondu sur les bords.
+ */
+export function renderFramedMapSvg(detail: Record<string, DetailCountry>, request: FramedMapRequest): string {
+  const { cadre, points = [], widthPt = 200, heightPt = 260, ville = false, titre = "", rues = null } = request;
+  const padding = 10;
+  const frame = cadreElargi(cadre, widthPt, heightPt, padding);
+  const { minX, maxX, minY, maxY, scale } = frame;
   const vue: Cadre = [
     (minX * 180) / Math.PI - 0.5,
     ((2 * Math.atan(Math.exp(minY)) - Math.PI / 2) * 180) / Math.PI - 0.5,
@@ -628,6 +824,11 @@ export function renderFramedMapSvg(detail: Record<string, DetailCountry>, reques
     }
   }
 
+  // Un degré de longitude vaut R·cos(φ) : l'échelle se lit au centre du cadre.
+  const latCentre = (((cadre[1] + cadre[3]) / 2) * Math.PI) / 180;
+  const ptParKm = scale / (6371.0088 * Math.cos(latCentre));
+  const osm = ville && !rueVide(rues) ? ruesSvg(rues!, frame, ptParKm) : "";
+
   const trajet =
     ville || points.some((p) => p.secondaire || p.mode)
       ? trajetSvg(
@@ -641,9 +842,8 @@ export function renderFramedMapSvg(detail: Record<string, DetailCountry>, reques
           PIN,
         )
       : "";
-  // Sur une carte de ville, sans rue pour se repérer, les lieux déjà passés
-  // gardent leur nom, en petit : à droite du point, à gauche s'il y chevauche
-  // un autre nom, sinon tu.
+  // Sur une carte de ville, les lieux déjà passés gardent leur nom, en petit :
+  // à droite du point, à gauche s'il y chevauche un autre nom, sinon tu.
   const r = (v: number): number => Math.round(v * 10) / 10;
   const occupes: Cadre[] = points
     .filter((p) => !p.secondaire)
@@ -693,12 +893,9 @@ export function renderFramedMapSvg(detail: Record<string, DetailCountry>, reques
     : "";
 
   // Barre d'échelle, en bas à gauche : la plus longue longueur ronde qui
-  // tienne dans 60 pt. Un degré de longitude vaut R·cos(φ) : l'échelle se lit
-  // au centre du cadre.
+  // tienne dans 60 pt.
   let echelle = "";
   if (ville) {
-    const latCentre = (((cadre[1] + cadre[3]) / 2) * Math.PI) / 180;
-    const ptParKm = scale / (6371.0088 * Math.cos(latCentre));
     const km = [100, 50, 20, 10, 5, 2, 1, 0.5, 0.25, 0.2, 0.1].find((k) => k * ptParKm <= 60) ?? 0.1;
     const l = Math.round(km * ptParKm * 10) / 10;
     const x0 = padding + 2;
@@ -709,6 +906,11 @@ export function renderFramedMapSvg(detail: Record<string, DetailCountry>, reques
       `<text x="${x0 + l / 2}" y="${y0 - 5}" text-anchor="middle" fill="${OUTLINE}" ` +
       `font-family="Playfair Display, serif" font-size="6.5">${texte}</text>`;
   }
+  // La mention qu'exige la licence ODbL, en bas à droite, face à l'échelle.
+  const mention = osm
+    ? `<text x="${widthPt - padding - 2}" y="${heightPt - padding - 1}" text-anchor="end" fill="${OUTLINE}" ` +
+      `fill-opacity="0.8" font-family="Playfair Display, serif" font-size="4.2">${escapeXml(MENTION_OSM)}</text>`
+    : "";
 
   // Les côtes coupées par le cadre s'effacent en fondu sur les bords : un
   // trait tranché net au bord de la carte se lit comme une erreur.
@@ -724,7 +926,7 @@ export function renderFramedMapSvg(detail: Record<string, DetailCountry>, reques
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${widthPt} ${heightPt}" ` +
     `width="${widthPt}" height="${heightPt}">${defs}` +
-    `<g mask="url(#mh)"><g mask="url(#mv)">${paths}</g></g>${enTete}${echelle}${trajet}${pins}</svg>`
+    `<g mask="url(#mh)"><g mask="url(#mv)">${paths}${osm}</g></g>${enTete}${echelle}${mention}${trajet}${pins}</svg>`
   );
 }
 
@@ -744,6 +946,13 @@ function detailAround(region: string, cadre: Cadre): Record<string, DetailCountr
   return detail;
 }
 
+interface CarteDuChapitre {
+  map: MapRequest;
+  region: string;
+  /** La carte cadrée ; `null` : le pays entier (`renderMapSvg`). */
+  request: FramedMapRequest | null;
+}
+
 /**
  * Complète le payload : chaque chapitre portant un objet `map` reçoit un
  * `map_svg` prêt à afficher.
@@ -751,11 +960,57 @@ function detailAround(region: string, cadre: Cadre): Record<string, DetailCountr
  * L'agent décrit la carte (« Philippines, avec Manille et les Visayas »), il ne
  * la dessine pas. La géométrie est un travail déterministe, elle n'a rien à
  * faire dans un prompt.
+ *
+ * `rues` : les rues et l'eau des cartes de ville, par clé de vue
+ * (`cleDeVue(vueDeVille(…))`), récupérées avant (`osmCity.ts`). Une ville
+ * absente garde sa carte sobre.
  */
-export function expandMaps(payload: Record<string, unknown>): Record<string, unknown> {
+export function expandMaps(
+  payload: Record<string, unknown>,
+  rues: ReadonlyMap<string, Rues> = new Map(),
+): Record<string, unknown> {
   const days = payload["days"];
   if (!Array.isArray(days)) return payload;
 
+  const cartes = planifierCartes(days);
+  const expanded = (days as Record<string, unknown>[]).map((day, index) => {
+    const carte = cartes[index];
+    if (!carte) return day;
+    const { map, region } = carte;
+    let { request } = carte;
+    if (request?.ville) {
+      const trouvees = rues.get(cleDeVue(vueDeVille(request.cadre, request.widthPt, request.heightPt)));
+      if (trouvees) request = { ...request, rues: trouvees };
+    }
+    const detail = request ? detailAround(region, request.cadre) : null;
+    const svg = request && detail ? enDataUri(renderFramedMapSvg(detail, request)) : renderMapDataUri(map);
+    return { ...day, map_svg: svg };
+  });
+
+  return { ...payload, days: expanded };
+}
+
+/** La clé d'une vue, pour le cache et pour `expandMaps` : `<sud>_<ouest>_<nord>_<est>`. */
+export function cleDeVue(vue: Cadre): string {
+  return [vue[1], vue[0], vue[3], vue[2]].map((v) => v.toFixed(2)).join("_");
+}
+
+/** Les vues des cartes de ville du carnet, sans doublon : ce qu'il faut demander à OpenStreetMap. */
+export function vuesDesVilles(payload: Record<string, unknown>): Cadre[] {
+  const days = payload["days"];
+  if (!Array.isArray(days)) return [];
+  const vues = new Map<string, Cadre>();
+  for (const carte of planifierCartes(days)) {
+    const request = carte?.request;
+    if (!request?.ville) continue;
+    const vue = vueDeVille(request.cadre, request.widthPt, request.heightPt);
+    vues.set(cleDeVue(vue), vue);
+  }
+  return [...vues.values()];
+}
+
+/** Ce que chaque jour dessinera : sa carte cadrée, ou `null` sans carte. */
+function planifierCartes(days: unknown[]): (CarteDuChapitre | null)[] {
   const maps = days
     .map((day) => (day as Record<string, unknown>)["map"] as MapRequest | undefined)
     .filter((map): map is MapRequest => Boolean(map && Array.isArray(map.regions) && map.regions.length > 0));
@@ -785,10 +1040,9 @@ export function expandMaps(payload: Record<string, unknown>): Record<string, unk
     isSingleStay(maps.filter((m) => m.regions[0]!.toUpperCase() === region).flatMap(pointsDe));
   const cle = (p: MapPoint) => p.label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 
-  const expanded = days.map((day) => {
-    const entry = day as Record<string, unknown>;
-    const map = entry["map"] as MapRequest | undefined;
-    if (!map || !Array.isArray(map.regions) || map.regions.length === 0) return entry;
+  return days.map((day): CarteDuChapitre | null => {
+    const map = (day as Record<string, unknown>)["map"] as MapRequest | undefined;
+    if (!map || !Array.isArray(map.regions) || map.regions.length === 0) return null;
     const region = map.regions[0]!.toUpperCase();
     const taille = { widthPt: map.widthPt, heightPt: map.heightPt };
 
@@ -838,10 +1092,6 @@ export function expandMaps(payload: Record<string, unknown>): Record<string, unk
       if (cadre) request = { ...taille, cadre, points: map.points ?? [] };
     }
 
-    const detail = request ? detailAround(region, request.cadre) : null;
-    const svg = request && detail ? enDataUri(renderFramedMapSvg(detail, request)) : renderMapDataUri(map);
-    return { ...entry, map_svg: svg };
+    return { map, region, request };
   });
-
-  return { ...payload, days: expanded };
 }
