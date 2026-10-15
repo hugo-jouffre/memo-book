@@ -392,7 +392,7 @@ public struct ChatView: View {
                 guard isThinking else { return }
                 follow(proxy)
             }
-            // **La bannière, par-dessus le fil**, juste sous l'en-tête. Elle
+            // **La bannière, par-dessus le fil**, sous l'imprimante. Elle
             // glisse vers le haut avec un rebond quand elle s'en va, et revient
             // de la même façon. En Reduce Motion, un fondu.
             .overlay(alignment: .top) {
@@ -401,7 +401,21 @@ public struct ChatView: View {
                 if showsPreviewBanner, !isGatheringContext, let preview = thread.preview {
                     GeometryReader { proxy in
                         ChatPreviewBanner(preview: preview) { openFromServer(.openBookPreview(memoId: tripId)) }
-                            .frame(maxWidth: .infinity)
+                            // À l'aplomb de l'imprimante de l'en-tête, qui ouvre
+                            // le même aperçu (Hugo, 15/10/2026).
+                            //
+                            // La marge de l'app, et non celle de l'en-tête
+                            // (``xs``) : une commande de l'en-tête est une cible
+                            // de 44 pt pour 32 pt de dessin, et c'est son
+                            // **encre** qu'on aligne, pas sa boîte — elle tombe
+                            // à 14 pt du bord, soit ``screenMargin`` à deux
+                            // points près (R2). Sur le bord de la boîte, la
+                            // capsule débordait de l'imprimante de huit points.
+                            // À gauche, la même marge arrête une capsule
+                            // élargie par une grande taille de texte avant le
+                            // bord de la dalle.
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                            .padding(.horizontal, MemoBookSpacing.screenMargin)
                             .padding(.top, max(0, headerBottom - proxy.frame(in: .global).minY) + MemoBookSpacing.xs)
                     }
                     .transition(

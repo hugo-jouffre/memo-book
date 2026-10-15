@@ -162,9 +162,18 @@ export function serializeTrip(
     stage,
     startDate: iso(memo.startDate),
     endDate: iso(memo.endDate),
-    // **La photo du voyage** : celle qu'on a choisie, sinon la dernière
-    // envoyée dans la conversation (Hugo, 12/10/2026). Un voyage qu'on
-    // raconte en photos ne garde plus le motif de repli sur son accueil.
+    // **La photo du voyage** : celle qu'on a choisie, sinon la plus récente
+    // des photos **paysage** de la conversation (Hugo, 12/10/2026, restreint
+    // aux paysages le 15/10). Un voyage qu'on raconte en photos ne garde le
+    // motif de repli que s'il n'a aucune photo paysage — cette couverture est
+    // la carte du voyage, large, où un portrait se recadre en bande.
+    //
+    // C'est la requête qui porte la règle (`tripInclude`, `home.ts`) : elle ne
+    // passe ici qu'une photo, déjà élue. Sans `publicBaseUrl` — les routes de
+    // création et de commande — il n'y a pas d'adresse à fabriquer, et seule
+    // la photo choisie répond ; ces écrans-là n'ont de toute façon pas encore
+    // de photo.
+    //
     // Déduite, pas stockée : `coverPhotoUrl` reste la photo choisie, celle
     // que le carnet imprime.
     coverPhotoUrl:

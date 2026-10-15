@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { Jimp } from "jimp";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeResponder } from "../src/services/conversation.js";
 import {
@@ -231,18 +232,32 @@ async function sendVoice(memoId: string, id = randomUUID()) {
   return { id, response };
 }
 
-function multipartPhotos(id: string, count: number) {
+/**
+ * De **vraies** images, et non le texte `jpeg-0` qui tenait lieu de photo
+ * jusqu'au 15/10/2026.
+ *
+ * Depuis que la couverture d'un voyage est sa photo paysage la plus récente,
+ * le serveur mesure chaque photo à l'arrivée : un octet qui n'est pas une
+ * image ne se mesure pas, ne vaut donc jamais couverture, et le test qui
+ * vérifiait qu'une photo du fil devient la photo du voyage tombait — sur son
+ * brin de ficelle, pas sur le code. Petites (120 × 90) pour rester rapides, et
+ * **paysage**, qui est le cas dont ces tests parlent.
+ */
+async function multipartPhotos(id: string, count: number) {
   const boundary = `----memobookphotos${Date.now()}`;
   const parts: Buffer[] = [
     Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="id"\r\n\r\n${id}\r\n`),
   ];
   for (let index = 0; index < count; index += 1) {
+    const image = Buffer.from(
+      await new Jimp({ width: 120, height: 90, color: 0x3fa7d6ff + index }).getBuffer("image/jpeg"),
+    );
     parts.push(
       Buffer.from(
         `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="photo-${index}.jpg"\r\n` +
           `Content-Type: image/jpeg\r\n\r\n`,
       ),
-      Buffer.from(`jpeg-${index}`),
+      image,
       Buffer.from("\r\n"),
     );
   }
@@ -451,7 +466,7 @@ describe("parler à MEMO", () => {
   it("reçoit des photos : un souvenir par image, une seule bulle", async () => {
     const memo = await seedTrip(owner.accountId);
     const id = randomUUID();
-    const { payload, contentType } = multipartPhotos(id, 2);
+    const { payload, contentType } = await multipartPhotos(id, 2);
     const response = await harness.app.inject({
       method: "POST",
       url: `/v1/trips/${memo.id}/chat`,
@@ -506,7 +521,7 @@ describe("parler à MEMO", () => {
 
 async function sendPhotos(memoId: string, count: number) {
   const id = randomUUID();
-  const { payload, contentType } = multipartPhotos(id, count);
+  const { payload, contentType } = await multipartPhotos(id, count);
   const response = await harness.app.inject({
     method: "POST",
     url: `/v1/trips/${memoId}/chat`,

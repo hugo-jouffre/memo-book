@@ -1083,6 +1083,29 @@ model Entry {
   photoWidthPx  Int?
   photoHeightPx Int?
 
+  /// **La photo est au format paysage** — largeur ≥ hauteur, carré compris.
+  /// C'est elle qui décide de la couverture d'un voyage : la plus récente des
+  /// paysages, et le motif de la marque s'il n'y en a aucune (Hugo,
+  /// 15/10/2026).
+  ///
+  /// Paysage, parce que la couverture dont il s'agit est **la carte du
+  /// voyage**, large : une photo verticale s'y recadre en une bande prise au
+  /// milieu. La couverture *imprimée* du carnet, elle, est verticale — mais
+  /// elle ne suit pas cette règle, elle a son parcours à elle
+  /// (`routes/covers.ts`).
+  ///
+  /// Déduite de `photoWidthPx` et `photoHeightPx`, et stockée quand même :
+  /// Prisma ne sait pas comparer deux colonnes dans un `where`, et la
+  /// couverture se lit à chaque ouverture de l'accueil, pour chaque voyage.
+  /// Pas de seconde vérité à tenir d'accord pour autant — les trois champs
+  /// sont écrits ensemble, d'une seule mesure (`services/photoOrientation.ts`),
+  /// et aucun chemin ne les met à jour séparément.
+  ///
+  /// `null` veut dire **pas mesurée** — un format que `jimp` ne décode pas,
+  /// ou une photo antérieure à la mesure que le rattrapage n'a pas encore
+  /// vue. Une photo non mesurée n'est jamais couverture : on ne devine pas.
+  photoIsLandscape Boolean?
+
   /// Le contrôle arrive **avant** la mise en page : une photo de 73 dpi est
   /// irrattrapable une fois le livre imprimé.
   photoVerdict PhotoVerdict?
@@ -1148,6 +1171,10 @@ model Entry {
   updatedAt DateTime @updatedAt
 
   @@index([memoId, capturedAt])
+  // La couverture d'un voyage : sa photo paysage la plus récente. Sans cet
+  // index, l'accueil balaie toutes les photos de chaque voyage à chaque
+  // ouverture.
+  @@index([memoId, photoIsLandscape, capturedAt])
   @@index([stepId])
   @@map("entries")
 }

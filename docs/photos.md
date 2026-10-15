@@ -1,7 +1,43 @@
 # Photos : qualité, recadrage, scotch
 
 Ce que le pipeline doit garantir avant qu'une photo arrive dans un carnet.
-Rien de ce document n'est encore implémenté — c'est la spécification.
+Les sections 1 à 4 sont une **spécification** : rien n'en est encore
+implémenté. La section 0, elle, tourne.
+
+## 0. La photo de couverture d'un voyage — *implémentée*
+
+⚠️ **De quelle couverture on parle.** Celle-ci est **la carte du voyage** — la
+vignette de l'accueil et l'image en tête de l'écran du voyage. Elle est
+**large**. La couverture *imprimée* du carnet est verticale, et ne suit **pas**
+cette règle : elle a son parcours à elle, où l'on dépose ses photos exprès
+(`routes/covers.ts`). Les deux ont porté le même mot et on s'y est repris à
+deux fois le 15/10/2026 — d'où ce rappel en tête.
+
+**La couverture d'un voyage est la plus récente de ses photos paysage.** Une
+photo verticale posée sur une carte large s'y recadre en une bande prise au
+milieu. Un voyage qui n'a aucune photo paysage garde donc le motif de la
+marque — plutôt pas de photo qu'une photo coupée (Hugo, 15/10/2026).
+
+| | |
+|---|---|
+| Paysage | largeur ≥ hauteur, **carré compris** |
+| Le plus récent | `capturedAt`, puis `createdAt`, puis `id` — six photos d'un même message partagent leur date à la milliseconde, et sans ces deux derniers la couverture changeait d'une requête à l'autre |
+| Toujours prioritaire | la couverture choisie à la main (`memos.coverPhotoUrl`) |
+| Jamais couverture | une photo non mesurée (`photoIsLandscape` à `null`) |
+
+⚠️ **Les pixels ne disent pas le sens.** Une photo prise à la verticale avec
+un iPhone est stockée en pixels *horizontaux*, avec un drapeau EXIF qui dit de
+la tourner à l'affichage. `jimp` applique ce drapeau au décodage, donc
+`services/photoOrientation.ts` ne corrige rien par-dessus — mais c'est un
+comportement implicite, qu'une montée de version peut retirer sans bruit : les
+tests de ce service l'épinglent avec des JPEG dont ils écrivent l'EXIF à la
+main.
+
+**Où ça vit.** La mesure est écrite à l'arrivée de la photo
+(`routes/chat.ts`, trois champs de `entries`) ; le choix est la requête
+`tripInclude` de `routes/home.ts`, et non une fonction — l'accueil lit la
+couverture de chaque voyage à chaque ouverture. Les photos d'avant la mesure se
+rattrapent avec `npm run photos:mesurer`.
 
 ## 1. Contrôle de qualité
 
