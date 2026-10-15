@@ -160,10 +160,22 @@ private struct ChatHeaderButton: View {
 /// **Une capsule, pas une carte** (Hugo, 18/09/2026). La version d'avant
 /// tenait trois lignes et toute la largeur du fil : elle se lisait comme un
 /// message de plus, et un message qui revient toutes les dix secondes agace.
-/// Celle-ci tient sur une ligne, au milieu, en verre teinté du bleu du
-/// voyageur : elle se pose sur le fil sans le couvrir. Le compte de souvenirs
-/// et de pages n'est plus écrit — il est dit à VoiceOver, et l'aperçu le
-/// montre.
+/// Celle-ci tient sur une ligne : elle se pose sur le fil sans le couvrir. Le
+/// compte de souvenirs et de pages n'est plus écrit — il est dit à VoiceOver,
+/// et l'aperçu le montre.
+///
+/// **Elle se détache par l'ombre, pas par la couleur** (Hugo, 15/10/2026).
+/// Elle était en verre teinté du bleu du voyageur — c'est-à-dire de la couleur
+/// des bulles qui défilent dessous : un calque ne porte pas la teinte de ce
+/// qu'il survole, sinon il s'y fond. Verre crème, filet bleu et ``.raised``
+/// désormais, l'ombre que la marque réserve à ce qui flotte au-dessus du fil.
+/// Le filet et l'ombre sont aussi ce qui la distingue d'une bulle de MEMO, en
+/// ``surface`` elle aussi, mais posée à plat sur la page.
+///
+/// **Et à droite, sous l'imprimante de l'en-tête** plutôt qu'au milieu (même
+/// jour) : les deux ouvrent le même aperçu, et deux portes alignées se lisent
+/// comme une seule. Au milieu, elle coupait en plus la première bulle — voir
+/// l'``overlay`` de ``ChatView``, qui tient sa place.
 struct ChatPreviewBanner: View {
     let preview: ChatBookPreview
     let onOpen: () -> Void
@@ -194,9 +206,10 @@ struct ChatPreviewBanner: View {
             .foregroundStyle(MemoBookColor.ink)
             .padding(.horizontal, MemoBookSpacing.s)
             .padding(.vertical, MemoBookSpacing.xs + 2)
-            .background(MemoBookColor.bubbleTraveller.opacity(0.75), in: .capsule)
+            .background(MemoBookColor.surface.opacity(0.75), in: .capsule)
             .background(.ultraThinMaterial, in: .capsule)
             .overlay { Capsule().strokeBorder(MemoBookColor.outline, lineWidth: 1) }
+            .brandShadow(.raised)
             .contentShape(.capsule)
         }
         .buttonStyle(CardPressStyle())
