@@ -764,9 +764,9 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
                 placeLabel,
                 ...(measures[index]
                   ? {
-                      photoWidthPx: measures[index]!.widthPx,
-                      photoHeightPx: measures[index]!.heightPx,
-                      photoIsLandscape: measures[index]!.isLandscape,
+                      photoWidthPx: measures[index].widthPx,
+                      photoHeightPx: measures[index].heightPx,
+                      photoIsLandscape: measures[index].isLandscape,
                     }
                   : {}),
                 ...(stepId ? { step: { connect: { id: stepId } } } : {}),
