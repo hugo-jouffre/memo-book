@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { RenderProfile } from "./bookPdf.js";
 import type { BookRenderer, RenderedBook } from "./apitemplate.js";
+import type { CityStreetSource } from "./osmCity.js";
 import type { BookPayload } from "./structuring.js";
 
 /**
@@ -18,6 +19,7 @@ export class LocalChromiumRenderer implements BookRenderer {
     private readonly outputDir: string,
     private readonly publicBaseUrl: string,
     private readonly profile: RenderProfile,
+    private readonly streets: CityStreetSource | null = null,
   ) {}
 
   async render(payload: BookPayload): Promise<RenderedBook> {
@@ -33,6 +35,7 @@ export class LocalChromiumRenderer implements BookRenderer {
     const { pdf } = await renderBookPdf({
       payload,
       profile: this.profile,
+      rues: await this.streets?.forPayload(payload),
     });
 
     const dir = resolve(this.outputDir);

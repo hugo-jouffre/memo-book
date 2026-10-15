@@ -294,6 +294,165 @@
     return [o, s, e, n];
   };
 
+  /* ------------------------------------- rues et cours d'eau (OpenStreetMap) */
+
+  /*
+   * À l'échelle d'une ville, Natural Earth ne suffit plus : son tracé de la
+   * Seine passait du mauvais côté de la tour Eiffel. Les cartes de ville — et
+   * elles seules — prennent leurs grands axes et leurs cours d'eau dans
+   * OpenStreetMap, demandés à Overpass avant la mise en page (`app.js`,
+   * `chargerRuesDesVilles`). La licence ODbL oblige à créditer les
+   * contributeurs : toute carte qui en dessine une donnée porte `MENTION_OSM`.
+   * Recopie de `mapSvg.ts`.
+   */
+  const MENTION_OSM = "© les contributeurs d’OpenStreetMap";
+  const RANGS_ROUTE = { motorway: 0, trunk: 0, primary: 1, secondary: 2, tertiary: 3 };
+  /** Épaisseur et opacité des routes, par rang : sous le trajet (0,9 pt, orange), jamais par-dessus. */
+  const STYLE_ROUTE = [
+    [1.1, 0.45],
+    [0.9, 0.38],
+    [0.6, 0.3],
+    [0.45, 0.25],
+  ];
+  /** La couleur du papier : l'eau d'une ville s'y découpe comme la mer sur les autres cartes. */
+  const PAPIER = "#fbf8f4";
+
+  /**
+   * Ce qu'une carte de ville montre, arrondi au centième de degré vers
+   * l'extérieur (~1 km) : la zone demandée à Overpass, et la clé de son cache.
+   */
+  function vueDeVille(cadre, widthPt = 200, heightPt = 260) {
+    const { minX, maxX, minY, maxY } = cadrer(cadre, widthPt, heightPt, 10).frame;
+    const lat = (y) => ((2 * Math.atan(Math.exp(y)) - Math.PI / 2) * 180) / Math.PI;
+    const bas = (v) => Math.floor(v * 100) / 100;
+    const haut = (v) => Math.ceil(v * 100) / 100;
+    return [bas((minX * 180) / Math.PI), bas(lat(minY)), haut((maxX * 180) / Math.PI), haut(lat(maxY))];
+  }
+
+  /** La clé d'une vue : `<sud>_<ouest>_<nord>_<est>`. */
+  const cleDeVue = (vue) => [vue[1], vue[0], vue[3], vue[2]].map((v) => v.toFixed(2)).join("_");
+
+  /**
+   * La requête Overpass d'une vue : les grands axes, les fleuves et canaux,
+   * les plans d'eau. Plus la vue est grande, moins on descend dans les rangs.
+   */
+  function requeteOverpass(vue) {
+    const [o, s, e, n] = vue;
+    const etendue = Math.max(e - o, n - s);
+    const types = ["motorway", "trunk", "primary"];
+    if (etendue <= 0.15) types.push("secondary");
+    if (etendue <= 0.06) types.push("tertiary");
+    const bbox = [s, o, n, e].map((v) => v.toFixed(2)).join(",");
+    return (
+      `[out:json][timeout:50][bbox:${bbox}];` +
+      `(way["highway"~"^(${types.join("|")})$"];way["waterway"~"^(river|canal)$"];way["natural"="water"];);` +
+      `out geom qt;`
+    );
+  }
+
+  /** Les morceaux d'une ligne qui passent dans `b`, avec un point de part et d'autre. */
+  function rogner(trace, b) {
+    const dedans = (p) => Boolean(p) && p[0] >= b[0] && p[0] <= b[2] && p[1] >= b[1] && p[1] <= b[3];
+    const morceaux = [];
+    let morceau = [];
+    for (let i = 0; i < trace.length; i += 1) {
+      if (dedans(trace[i]) || dedans(trace[i - 1]) || dedans(trace[i + 1])) morceau.push(trace[i]);
+      else {
+        if (morceau.length > 1) morceaux.push(morceau);
+        morceau = [];
+      }
+    }
+    if (morceau.length > 1) morceaux.push(morceau);
+    return morceaux;
+  }
+
+  /** La réponse d'Overpass (`out geom`), réduite à ce que la carte dessine. */
+  function ruesDOverpass(reponse, vue) {
+    const elements = reponse?.elements;
+    const rues = { routes: [], coursDEau: [], plansDEau: [] };
+    if (!Array.isArray(elements)) return rues;
+    // Un dixième de marge : un axe qui sort du cadre passe encore sous le fondu.
+    const mx = (vue[2] - vue[0]) * 0.1;
+    const my = (vue[3] - vue[1]) * 0.1;
+    const boite = [vue[0] - mx, vue[1] - my, vue[2] + mx, vue[3] + my];
+    const r5 = (v) => Math.round(v * 1e5) / 1e5;
+    for (const element of elements) {
+      if (element?.type !== "way" || !Array.isArray(element.geometry)) continue;
+      const tags = element.tags ?? {};
+      const trace = element.geometry
+        .filter((p) => Number.isFinite(p?.lat) && Number.isFinite(p?.lon))
+        .map((p) => [r5(p.lon), r5(p.lat)]);
+      if (trace.length < 2) continue;
+      const rang = RANGS_ROUTE[tags["highway"] ?? ""];
+      if (rang !== undefined) {
+        for (const t of rogner(trace, boite)) rues.routes.push({ rang, trace: t });
+      } else if (tags["waterway"] === "river" || tags["waterway"] === "canal") {
+        for (const t of rogner(trace, boite)) rues.coursDEau.push({ canal: tags["waterway"] === "canal", trace: t });
+      } else if (tags["natural"] === "water") {
+        const [a, z] = [trace[0], trace[trace.length - 1]];
+        // Seuls les contours fermés : un bout de rive ne se remplit pas.
+        if (trace.length >= 4 && a[0] === z[0] && a[1] === z[1] && seCroisent(boiteDe(trace), boite)) {
+          rues.plansDEau.push(trace);
+        }
+      }
+    }
+    return rues;
+  }
+
+  const rueVide = (rues) => !rues || (!rues.routes.length && !rues.coursDEau.length && !rues.plansDEau.length);
+
+  /**
+   * Les rues et l'eau en SVG, sous le trajet : les plans d'eau, les fleuves
+   * (un ruban couleur papier entre deux rives vertes), puis les routes, des
+   * plus petites aux plus grandes, un trait par rang.
+   */
+  function ruesSvg(rues, frame, ptParKm) {
+    const r = (v) => Math.round(v * 10) / 10;
+    const projeter = (trace) =>
+      simplifier(
+        trace.map(([lon, lat]) => project(frame, lon, lat)),
+        0.3,
+      );
+    const chemin = (pts) => pts.map(([x, y], i) => `${i ? "L" : "M"}${x} ${y}`).join("");
+    const borne = (v, min, max) => r(Math.min(max, Math.max(min, v)));
+    let svg = "";
+
+    const plans = rues.plansDEau.map(projeter).filter((pts) => {
+      const [o, s, e, n] = boiteDe(pts);
+      // Moins de 4 pt : une fontaine, un bassin — une tache, pas un repère.
+      return pts.length >= 4 && (e - o >= 4 || n - s >= 4);
+    });
+    if (plans.length) {
+      svg +=
+        `<path d="${plans.map((p) => `${chemin(p)}Z`).join("")}" fill="${PAPIER}" stroke="${OUTLINE}" ` +
+        `stroke-width="0.5" stroke-opacity="0.6" stroke-linejoin="round"/>`;
+    }
+    for (const canal of [false, true]) {
+      const traces = rues.coursDEau.filter((c) => c.canal === canal).map((c) => projeter(c.trace));
+      const d = traces.filter((p) => p.length > 1).map(chemin).join("");
+      if (!d) continue;
+      const largeur = canal ? borne(0.03 * ptParKm, 0.8, 2.5) : borne(0.12 * ptParKm, 1.6, 7);
+      const trait = `fill="none" stroke-linecap="round" stroke-linejoin="round"`;
+      svg +=
+        `<path d="${d}" ${trait} stroke="${OUTLINE}" stroke-opacity="0.55" stroke-width="${r(largeur + 1)}"/>` +
+        `<path d="${d}" ${trait} stroke="${PAPIER}" stroke-width="${largeur}"/>`;
+    }
+    for (let rang = STYLE_ROUTE.length - 1; rang >= 0; rang -= 1) {
+      const d = rues.routes
+        .filter((route) => route.rang === rang)
+        .map((route) => projeter(route.trace))
+        .filter((p) => p.length > 1)
+        .map(chemin)
+        .join("");
+      if (!d) continue;
+      const [epaisseur, opacite] = STYLE_ROUTE[rang];
+      svg +=
+        `<path d="${d}" fill="none" stroke="${OUTLINE}" stroke-width="${epaisseur}" stroke-opacity="${opacite}" ` +
+        `stroke-linecap="round" stroke-linejoin="round"/>`;
+    }
+    return svg;
+  }
+
   /**
    * La carte d'un chapitre cadrée sur la zone que le voyage parcourt, et non
    * sur le pays entier : un voyage dans les Cyclades montre les Cyclades, pas
@@ -307,28 +466,17 @@
    *
    * Pour une carte de ville : `trajet` relie les points dans l'ordre — les
    * déplacements du séjour — même sans point secondaire, et `echelle` pose une
-   * barre d'échelle (« 1 km ») qui dit les distances parcourues. Pas de fleuve
-   * ni de rue : à cette échelle, Natural Earth mettait la tour Eiffel sur la
-   * mauvaise rive de la Seine. Seuls les points, exacts, s'y dessinent.
+   * barre d'échelle (« 1 km ») qui dit les distances parcourues, et
+   * `request.rues` (`ruesDOverpass`) y ajoute les grands axes et les cours
+   * d'eau d'OpenStreetMap — Natural Earth, à cette échelle, mettait la tour
+   * Eiffel sur la mauvaise rive de la Seine. Sans elles, la carte reste sobre.
    */
   function renderCarteCadree(detail, request) {
-    const { cadre, points = [], widthPt = 200, heightPt = 260, ville = false, titre = "" } = request;
+    const { cadre, points = [], widthPt = 200, heightPt = 260, ville = false, titre = "", rues = null } = request;
     const padding = 10;
     // Le cadre en Mercator, élargi au format de la carte, centré.
-    let minX = mercatorX(cadre[0]);
-    let maxX = mercatorX(cadre[2]);
-    let minY = mercatorY(cadre[1]);
-    let maxY = mercatorY(cadre[3]);
-    const largeurUtile = widthPt - padding * 2;
-    const hauteurUtile = heightPt - padding * 2;
-    const scale = Math.min(largeurUtile / (maxX - minX || 1e-6), hauteurUtile / (maxY - minY || 1e-6));
-    const manqueX = (largeurUtile / scale - (maxX - minX)) / 2;
-    const manqueY = (hauteurUtile / scale - (maxY - minY)) / 2;
-    minX -= manqueX;
-    maxX += manqueX;
-    minY -= manqueY;
-    maxY += manqueY;
-    const frame = { minX, maxX, minY, maxY, scale, width: widthPt, height: heightPt, padding };
+    const { frame } = cadrer(cadre, widthPt, heightPt, padding);
+    const { minX, maxX, minY, maxY, scale } = frame;
     const vue = [
       (minX * 180) / Math.PI - 0.5,
       ((2 * Math.atan(Math.exp(minY)) - Math.PI / 2) * 180) / Math.PI - 0.5,
@@ -361,6 +509,11 @@
       }
     }
 
+    // Un degré de longitude vaut R·cos(φ) : l'échelle se lit au centre du cadre.
+    const latCentre = (((cadre[1] + cadre[3]) / 2) * Math.PI) / 180;
+    const ptParKm = scale / (6371.0088 * Math.cos(latCentre));
+    const osm = ville && !rueVide(rues) ? ruesSvg(rues, frame, ptParKm) : "";
+
     const trajet =
       ville || points.some((p) => p.secondaire || p.mode)
         ? trajetSvg(
@@ -374,9 +527,9 @@
             PIN,
           )
         : "";
-    // Sur une carte de ville, sans rue pour se repérer, les lieux déjà passés
-    // gardent leur nom, en petit : à droite du point, à gauche s'il y
-    // chevauche un autre nom, sinon tu.
+    // Sur une carte de ville, les lieux déjà passés gardent leur nom, en
+    // petit : à droite du point, à gauche s'il y chevauche un autre nom, sinon
+    // tu.
     const r = (v) => Math.round(v * 10) / 10;
     const occupes = points
       .filter((p) => !p.secondaire)
@@ -422,12 +575,9 @@
       : "";
 
     // Barre d'échelle, en bas à gauche : la plus longue longueur ronde qui
-    // tienne dans 60 pt. Un degré de longitude vaut R·cos(φ) : l'échelle se
-    // lit au centre du cadre.
+    // tienne dans 60 pt.
     let echelle = "";
     if (ville) {
-      const latCentre = (((cadre[1] + cadre[3]) / 2) * Math.PI) / 180;
-      const ptParKm = scale / (6371.0088 * Math.cos(latCentre));
       const km = [100, 50, 20, 10, 5, 2, 1, 0.5, 0.25, 0.2, 0.1].find((k) => k * ptParKm <= 60) ?? 0.1;
       const l = Math.round(km * ptParKm * 10) / 10;
       const x0 = padding + 2;
@@ -438,6 +588,11 @@
         `<text x="${x0 + l / 2}" y="${y0 - 5}" text-anchor="middle" fill="${OUTLINE}" ` +
         `font-family="Playfair Display, serif" font-size="6.5">${texte}</text>`;
     }
+    // La mention qu'exige la licence ODbL, en bas à droite, face à l'échelle.
+    const mention = osm
+      ? `<text x="${widthPt - padding - 2}" y="${heightPt - padding - 1}" text-anchor="end" fill="${OUTLINE}" ` +
+        `fill-opacity="0.8" font-family="Playfair Display, serif" font-size="4.2">${escapeXml(MENTION_OSM)}</text>`
+      : "";
 
     // Les côtes coupées par le cadre s'effacent en fondu sur les bords : un
     // trait tranché net au bord de la carte se lit comme une erreur.
@@ -453,7 +608,7 @@
     return (
       `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${widthPt} ${heightPt}" ` +
       `width="${widthPt}" height="${heightPt}">${defs}` +
-      `<g mask="url(#mh)"><g mask="url(#mv)">${paths}</g></g>${enTete}${echelle}${trajet}${pins}</svg>`
+      `<g mask="url(#mh)"><g mask="url(#mv)">${paths}${osm}</g></g>${enTete}${echelle}${mention}${trajet}${pins}</svg>`
     );
   }
 
@@ -510,7 +665,18 @@
 
   const outils = { cadrer, simplifier, boiteDe, seCroisent, segmentsDuTrajet };
 
-  const api = { renderMapSvg, renderMapDataUri, renderCarteCadree, renderCarteCadreeDataUri, outils };
+  const api = {
+    renderMapSvg,
+    renderMapDataUri,
+    renderCarteCadree,
+    renderCarteCadreeDataUri,
+    vueDeVille,
+    cleDeVue,
+    requeteOverpass,
+    ruesDOverpass,
+    MENTION_OSM,
+    outils,
+  };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else racine.Carte = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

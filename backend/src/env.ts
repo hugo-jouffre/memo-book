@@ -48,6 +48,12 @@ const schema = z.object({
     .enum(["true", "false"])
     .default("true")
     .transform((value) => value === "true"),
+  /**
+   * Le bucket public, mêmes identifiants S3 : des fichiers lus sans URL
+   * signée (images d'e-mail, aperçus), et le cache des rues des cartes de
+   * ville (`osm/`).
+   */
+  PUBLIC_ASSETS_BUCKET: z.string().min(1).default("memobook-public"),
 
   /**
    * Audiences attendues dans les jetons d'identité. Un jeton signé par Apple
@@ -115,6 +121,16 @@ const schema = z.object({
   RENDER_OUTPUT_DIR: z.string().default(".render-out"),
   RENDER_PUBLIC_BASE_URL: z.string().default(""),
   RENDER_PROFILE: z.enum(["print", "preview"]).default("preview"),
+  /**
+   * L'API Overpass qui fournit les rues et les cours d'eau des cartes de
+   * ville (OpenStreetMap, `services/osmCity.ts`). Par défaut l'instance
+   * publique, gratuite et sans clé mais sans garantie de service : une
+   * instance payante se branche ici, sans toucher au code.
+   */
+  OVERPASS_URL: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.string().url().default("https://overpass-api.de/api/interpreter"),
+  ),
 
   /**
    * La racine des liens de prévisualisation publics, **forcée**. Vide — le

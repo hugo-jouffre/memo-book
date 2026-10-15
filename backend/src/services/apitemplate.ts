@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { Env } from "../env.js";
 import { preparePayload, type RenderProfile } from "./bookPdf.js";
 import { LocalChromiumRenderer } from "./localRenderer.js";
+import { createCityStreetSource, type CityStreetSource } from "./osmCity.js";
 import type { BookPayload } from "./structuring.js";
 
 export interface RenderedBook {
@@ -24,13 +25,16 @@ export class ApiTemplateRenderer implements BookRenderer {
     private readonly templateId: string,
     private readonly baseUrl = "https://rest-de.apitemplate.io/v2",
     private readonly profile: RenderProfile = "preview",
+    private readonly streets: CityStreetSource | null = null,
   ) {}
 
   async render(payload: BookPayload): Promise<RenderedBook> {
     // Exactement la même préparation que le rendu local : validation des nulls
     // et dépliage des cartes de chapitre. Ce que l'aperçu montre est ce que
-    // l'imprimeur recevra.
-    const prepared = preparePayload(payload);
+    // l'imprimeur recevra. Les rues des cartes de ville se demandent avant :
+    // APITemplate ne reçoit que des SVG finis.
+    const rues = await this.streets?.forPayload(payload);
+    const prepared = preparePayload(payload, rues);
 
     const url = new URL(`${this.baseUrl}/create-pdf`);
     url.searchParams.set("template_id", this.templateId);
@@ -92,6 +96,7 @@ function apiTemplateRenderer(env: Env): ApiTemplateRenderer {
     env.APITEMPLATE_TEMPLATE_ID,
     env.APITEMPLATE_BASE_URL,
     env.RENDER_PROFILE,
+    createCityStreetSource(env),
   );
 }
 
@@ -106,6 +111,7 @@ export function createBookRenderer(env: Env): BookRenderer {
         env.RENDER_OUTPUT_DIR,
         env.RENDER_PUBLIC_BASE_URL || `http://localhost:${env.PORT}/v1/local-renders`,
         env.RENDER_PROFILE,
+        createCityStreetSource(env),
       );
     default:
       // `auto` : APITemplate quand le pipeline est réel et que sa clé est là,
