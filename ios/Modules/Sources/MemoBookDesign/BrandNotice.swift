@@ -9,9 +9,10 @@ import SwiftUI
 /// continuer » — pas de rouge, pas d'action. Il disparaît tout seul quand la
 /// situation qu'il décrit a changé.
 ///
-/// Il a **deux tons** — voir ``Tone`` : le beige de l'état des choses, et le
+/// Il a **trois tons** — voir ``Tone`` : le beige de l'état des choses, le
 /// bleu d'information pour ce qu'on vient d'expliquer à quelqu'un qui a tapé
-/// quelque part où ça ne mène pas encore.
+/// quelque part où ça ne mène pas encore, et l'orange d'une porte qui ne
+/// s'ouvrira plus.
 ///
 /// **Le gras n'est pas une décoration** : chaque message porte une phrase qui
 /// compte — ce que la personne peut faire malgré la panne, ou ce qui est
@@ -32,6 +33,15 @@ public struct BrandNotice<Footer: View>: View {
         /// clair — parce qu'elle répond à un geste au lieu de décrire un fond
         /// de situation, et qu'il faut la distinguer d'une erreur.
         case information
+
+        /// **Une limite atteinte, définitive** : ce qu'on a demandé ne se
+        /// fera pas, et ce n'est pas une panne — la seconde fois qu'on change
+        /// le nombre de pages cible d'un voyage, par exemple (Hugo,
+        /// 15/10/2026). Même dessin que ``information``, à l'orange
+        /// sémantique (``MemoBookColor/warning``) : le bleu dit « pas encore »
+        /// ou « voilà pourquoi », l'orange « plus jamais pour ce voyage ». Ce
+        /// n'est pas le rouge d'``ErrorBanner`` : rien n'a raté.
+        case warning
     }
 
     private let message: AttributedString
@@ -64,18 +74,18 @@ public struct BrandNotice<Footer: View>: View {
     public var body: some View {
         VStack(spacing: MemoBookSpacing.xs) {
             content
-                .multilineTextAlignment(tone == .information ? .leading : .center)
+                .multilineTextAlignment(tone == .neutral ? .center : .leading)
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: tone == .information ? .leading : .center)
+                .frame(maxWidth: .infinity, alignment: tone == .neutral ? .center : .leading)
 
             footer
         }
             .padding(MemoBookSpacing.s)
             .background { backdrop }
             .overlay {
-                if tone == .information {
+                if let accent {
                     RoundedRectangle(cornerRadius: MemoBookSpacing.largeCornerRadius)
-                        .strokeBorder(MemoBookColor.information, lineWidth: 1)
+                        .strokeBorder(accent, lineWidth: 1)
                 }
             }
             .accessibilityElement(children: .combine)
@@ -96,8 +106,18 @@ public struct BrandNotice<Footer: View>: View {
                 .fill(.ultraThinMaterial)
                 .overlay { shape.fill(MemoBookColor.noticeBeige.opacity(0.7)) }
                 .overlay { shape.strokeBorder(.white.opacity(0.45), lineWidth: 1) }
-        case .information:
+        case .information, .warning:
             shape.fill(background)
+        }
+    }
+
+    /// La couleur du filet et du pictogramme. `nil` pour le ton neutre, qui
+    /// n'a ni l'un ni l'autre.
+    private var accent: Color? {
+        switch tone {
+        case .neutral: nil
+        case .information: MemoBookColor.information
+        case .warning: MemoBookColor.warning
         }
     }
 
@@ -106,13 +126,13 @@ public struct BrandNotice<Footer: View>: View {
         switch tone {
         case .neutral:
             text
-        case .information:
+        case .information, .warning:
             // Le pictogramme se cale sur la **première ligne** du texte et non
             // sur le milieu du bloc : sur trois lignes, un centrage vertical le
             // faisait descendre au milieu de la phrase.
             HStack(alignment: .firstTextBaseline, spacing: MemoBookSpacing.xs) {
-                Image(systemName: "info.circle.fill")
-                    .foregroundStyle(MemoBookColor.information)
+                Image(systemName: tone == .warning ? "exclamationmark.circle.fill" : "info.circle.fill")
+                    .foregroundStyle(accent ?? MemoBookColor.information)
                     .accessibilityHidden(true)
                 text
             }
@@ -135,6 +155,9 @@ public struct BrandNotice<Footer: View>: View {
         // qui portent la couleur, pas l'aplat — un fond bleu franc sous du
         // texte encre tombe sous le contraste demandé.
         case .information: MemoBookColor.information.opacity(0.12)
+        // L'orange, dilué de même : sur du texte encre, un aplat franc ne se
+        // lirait plus.
+        case .warning: MemoBookColor.warning.opacity(0.12)
         }
     }
 

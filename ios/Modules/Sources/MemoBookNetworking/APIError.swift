@@ -63,6 +63,15 @@ public enum APIError: Error, LocalizedError, Sendable {
     /// attend l'illimité.
     public static let dailyCreditTooLongCode = "daily_credit_too_long"
 
+    /// Le refus d'un troisième changement de nombre de pages cible — `409`
+    /// (Hugo, 15/10/2026, `services/pageTarget.ts`). L'écran ne l'affiche pas
+    /// en erreur : il dit, à l'orange, que la cible ne bouge plus.
+    public static let pageTargetLimitReachedCode = "page_target_limit_reached"
+
+    /// La réécriture des étapes déjà écrites a déjà été faite pour ce
+    /// changement — `409`.
+    public static let pageTargetRewriteUnavailableCode = "page_target_rewrite_unavailable"
+
     public var errorDescription: String? {
         switch self {
         case .notAuthenticated:

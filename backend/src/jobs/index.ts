@@ -10,6 +10,7 @@ import { sendNotifications, type SendNotificationsJob } from "./sendNotification
 import { syncSchoolHolidays, type SyncSchoolHolidaysJob } from "./syncSchoolHolidays.js";
 import { redactEntry, type RedactJob } from "./redact.js";
 import { renderBook, type RenderJob } from "./render.js";
+import { rewriteTrip, type RewriteTripJob } from "./rewriteTrip.js";
 import { structureRender, type StructureJob } from "./structure.js";
 import { transcribeEntry, type TranscribeJob } from "./transcribe.js";
 
@@ -51,6 +52,9 @@ export function registerJobs(context: AppContext): void {
   context.queue.register<RedactJob>(JOB_NAMES.redact, (payload) =>
     redactEntry(context, payload),
   );
+  context.queue.register<RewriteTripJob>(JOB_NAMES.rewriteTrip, (payload) =>
+    rewriteTrip(context, payload),
+  );
   context.queue.register<ConverseJob>(JOB_NAMES.converse, (payload) =>
     converseTurn(context, payload),
   );
@@ -86,6 +90,7 @@ export type {
   RedactJob,
   ReleaseAbandonedOrdersJob,
   RenderJob,
+  RewriteTripJob,
   SendNotificationsJob,
   StructureJob,
   SyncSchoolHolidaysJob,

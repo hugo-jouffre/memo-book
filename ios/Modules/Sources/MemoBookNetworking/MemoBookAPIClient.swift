@@ -782,6 +782,10 @@ public actor MemoBookAPIClient: MemoBookAPI {
         )
     }
 
+    public func rewritePageTarget(tripId: String) async throws -> TripSettings {
+        try await send(method: "POST", path: "/v1/trips/\(tripId)/page-target/rewrite")
+    }
+
     public func removeCompanion(tripId: String, companionId: String) async throws -> TripSettings {
         try await send(method: "DELETE", path: "/v1/trips/\(tripId)/members/\(companionId)")
     }

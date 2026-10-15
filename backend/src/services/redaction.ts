@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { pageDensityInstruction, tripDays as pageTargetTripDays } from "./pageTarget.js";
 import type { Env } from "../env.js";
 import { loadWritingRules } from "../lib/templates.js";
 import { EDITORIAL_LIMITS, STEP_SIZES } from "./payloadValidator.js";
@@ -92,6 +93,12 @@ export interface RedactionInput {
     destination?: string | null;
     /** La clé du rythme de récit (`narrationPace.ts`) : `daily`, `by_place`… */
     narrationPace?: string | null;
+    /**
+     * Le nombre de pages cible du carnet (`services/pageTarget.ts`) : il règle
+     * la densité du récit — la taille d'étape vers laquelle on tire. Absent,
+     * la taille suit la seule matière du vocal.
+     */
+    targetPageCount?: number | null;
   };
   /**
    * Qui raconte. Sans lui, l'écrivain prend le voyageur qui parle de lui à la
@@ -131,7 +138,50 @@ export interface RedactionInput {
    * l'écrivain n'a aucun moyen de tenir.
    */
   earlier?: { titles: string[]; funFacts: string[] };
+  /**
+   * Les quiz du carnet : les questions déjà posées, qui ne se reposent pas,
+   * et la distance au dernier, qui règle la cadence — environ un quiz toutes
+   * les trois étapes (Hugo, 15/10/2026). Absent : aucun quiz encore.
+   */
+  quizzes?: QuizHistory;
 }
+
+/**
+ * Où en est le carnet de ses quiz, vu de l'étape à rédiger. Calculé par le
+ * job (`quizHistoryOf`, `jobs/redact.ts`) : l'écrivain ne voit que les trois
+ * dernières étapes, il ne saurait pas compter.
+ */
+export interface QuizHistory {
+  /** Les questions déjà posées dans le carnet, dans l'ordre. */
+  asked: string[];
+  /** Étapes passées depuis le dernier quiz ; `null` s'il n'y en a encore aucun. */
+  stepsSinceLast: number | null;
+  /** Un autre souvenir de la même étape porte déjà un quiz : un seul par étape. */
+  thisStepHasOne: boolean;
+}
+
+/**
+ * Un quiz tel que la rédaction le rend : une question, des propositions, et
+ * le rang de la bonne. C'est la forme des colonnes de `Entry`
+ * (`quizQuestion`, `quizAnswers`, `quizAnswerIndex`) ; le gabarit, lui, lit
+ * `{ question, choices, answer }` (`quizForBook`, `structuring.ts`).
+ */
+export interface RedactionQuiz {
+  question: string;
+  choices: string[];
+  answerIndex: number;
+}
+
+/**
+ * Les bornes d'un quiz imprimable : le bloc remplace la zone flottante du bas
+ * de page, il ne doit pas la dépasser (LAYOUT_KB § « Occuper les blancs »).
+ * Deux à quatre propositions (`agent-transcription-carnet.md` § 1), trois de
+ * préférence.
+ */
+export const QUIZ_LIMITS = { questionChars: 120, choiceChars: 40, minChoices: 2, maxChoices: 4 } as const;
+
+/** Un quiz toutes les trois étapes environ : jamais à moins de deux du précédent. */
+export const QUIZ_MIN_STEPS_APART = 2;
 
 /**
  * Les moyens de transport que la rédaction sait nommer. Fermée, parce que
@@ -300,6 +350,8 @@ export interface RedactionResult {
   weatherKey: "sun" | "sun-wind" | "cloud" | "rain" | "snow" | null;
   funFact: string | null;
   funFactTitle: string | null;
+  /** Le quiz de l'étape, ou `null` — le plus souvent. Voir `withinQuizLimits`. */
+  quiz: RedactionQuiz | null;
   coherenceSheet: CoherenceSheet;
   /** Le relevé pour les statistiques — voir `EntryInsights`. */
   insights: EntryInsights;
@@ -466,6 +518,33 @@ const REDACTION_SCHEMA = {
       ],
       description: "Titre de l'encart. null quand funFact est null.",
     },
+    quiz: {
+      anyOf: [
+        {
+          type: "object",
+          properties: {
+            question: {
+              type: "string",
+              description: `La question, ${QUIZ_LIMITS.questionChars} caractères au plus, terminée par un point d'interrogation.`,
+            },
+            choices: {
+              type: "array",
+              items: { type: "string" },
+              description:
+                `Trois propositions (deux à quatre), ${QUIZ_LIMITS.choiceChars} caractères au plus chacune, ` +
+                "une seule juste, les autres plausibles.",
+            },
+            answerIndex: { type: "integer", description: "Le rang de la bonne proposition dans choices, à partir de 0." },
+          },
+          required: ["question", "choices", "answerIndex"],
+          additionalProperties: false,
+        },
+        { type: "null" },
+      ],
+      description:
+        "Un petit quiz imprimé dans la page, sur ce que le voyageur a raconté ou sur un fait vérifiable " +
+        "du lieu — jamais inventé. Environ une étape sur trois, jamais deux étapes de suite : null le plus souvent.",
+    },
     coherenceSheet: {
       type: "object",
       description:
@@ -612,6 +691,7 @@ const REDACTION_SCHEMA = {
     "weatherKey",
     "funFact",
     "funFactTitle",
+    "quiz",
     "coherenceSheet",
     "insights",
     "doubts",
@@ -635,6 +715,57 @@ export function withinFunFactLimit(result: Pick<RedactionResult, "funFact" | "fu
     : { funFact: null, funFactTitle: null };
 }
 
+/**
+ * Un quiz hors bornes fait déborder sa page, et le schéma ne sait ni compter
+ * les caractères ni vérifier un rang. Comme l'encart, le quiz est facultatif :
+ * mal formé, il saute — rien n'en est réparé à l'aveugle.
+ */
+export function withinQuizLimits(quiz: RedactionQuiz | null | undefined): RedactionQuiz | null {
+  if (!quiz || typeof quiz !== "object") return null;
+  const question = typeof quiz.question === "string" ? quiz.question.replace(/\s+/g, " ").trim() : "";
+  const choices = Array.isArray(quiz.choices)
+    ? quiz.choices.map((choice) => (typeof choice === "string" ? choice.replace(/\s+/g, " ").trim() : ""))
+    : [];
+  const distinct = new Set(choices.map((choice) => choice.toLocaleLowerCase("fr")));
+  const valid =
+    question.length > 0 &&
+    question.length <= QUIZ_LIMITS.questionChars &&
+    choices.length >= QUIZ_LIMITS.minChoices &&
+    choices.length <= QUIZ_LIMITS.maxChoices &&
+    choices.every((choice) => choice.length > 0 && choice.length <= QUIZ_LIMITS.choiceChars) &&
+    distinct.size === choices.length &&
+    Number.isInteger(quiz.answerIndex) &&
+    quiz.answerIndex >= 0 &&
+    quiz.answerIndex < choices.length;
+  return valid ? { question, choices, answerIndex: quiz.answerIndex } : null;
+}
+
+/** La cadence des quiz, dite à l'écrivain : où en est le carnet, et ce qu'il peut faire ici. */
+function quizLines(quizzes: QuizHistory | undefined): string[] {
+  const asked = quizzes?.asked.filter(Boolean) ?? [];
+  const lines = ["", "## Les quiz du carnet"];
+  if (quizzes?.thisStepHasOne) {
+    lines.push("Un autre souvenir de cette étape porte déjà son quiz : `quiz` est `null`.");
+  } else if (quizzes?.stepsSinceLast == null) {
+    lines.push("Aucun quiz encore dans le carnet. Vise environ une étape sur trois.");
+  } else if (quizzes.stepsSinceLast < QUIZ_MIN_STEPS_APART) {
+    lines.push(
+      `Le dernier quiz est à ${quizzes.stepsSinceLast} étape${quizzes.stepsSinceLast > 1 ? "s" : ""} : ` +
+        "trop près, `quiz` est `null`.",
+    );
+  } else {
+    lines.push(
+      `Le dernier quiz remonte à ${quizzes.stepsSinceLast} étapes. Vise environ une étape sur trois — ` +
+        "et seulement si l'étape en offre un bon.",
+    );
+  }
+  if (asked.length > 0) {
+    lines.push("Questions déjà posées — aucune ne se repose, même reformulée :");
+    lines.push(...asked.map((question) => `- ${question}`));
+  }
+  return lines;
+}
+
 /** « jeudi 1er octobre 2026 » — l'ordinal que `Intl` ne met pas. */
 function longDate(date: Date): string {
   return DATE_FORMATTER.format(date).replace(/^(\S+) 1 /, "$1 1er ");
@@ -656,7 +787,7 @@ function sizeScale(): string {
  * échouer aucun appel, elle fait seulement écrire plus mal.
  */
 export function buildRedactionPrompt(input: RedactionInput): string {
-  const { memo, narrator, entry, coherenceSheet, previous, earlier } = input;
+  const { memo, narrator, entry, coherenceSheet, previous, earlier, quizzes } = input;
 
   const lines: string[] = ["## Le carnet", `Titre : ${memo.title}`];
   if (memo.subtitle) lines.push(`Sous-titre : ${memo.subtitle}`);
@@ -668,6 +799,11 @@ export function buildRedactionPrompt(input: RedactionInput): string {
   if (tripDays) lines.push(`Dates du voyage : ${tripDays}`);
   const pace = memo.narrationPace ? (PACE_LABELS[memo.narrationPace] ?? memo.narrationPace) : null;
   if (pace) lines.push(`Rythme de récit choisi : ${pace}`);
+  if (memo.targetPageCount) {
+    lines.push(
+      pageDensityInstruction(memo.targetPageCount, pageTargetTripDays(memo.startDate ?? null, memo.endDate ?? null)),
+    );
+  }
 
   lines.push("", "## Qui raconte");
   if (narrator?.firstName) {
@@ -715,6 +851,8 @@ export function buildRedactionPrompt(input: RedactionInput): string {
       lines.push(...funFacts.map((funFact) => `- ${funFact}`));
     }
   }
+
+  lines.push(...quizLines(quizzes));
 
   if (previous.length > 0) {
     // Les trois dernières suffisent : au-delà, la fiche de cohérence porte
@@ -800,6 +938,9 @@ export function buildRedactionPrompt(input: RedactionInput): string {
     "- Texte nu dans `text` : ni HTML, ni Markdown, ni emoji.",
     "- Tout ce que tu écris dans `text` se retrouve dans la transcription ou les précisions. La",
     "  culture générale va dans `funFact` (140 caractères, ou `null`), jamais dans le récit.",
+    "- `quiz` : `null` le plus souvent. Sinon une question sur ce que le voyageur a raconté — ici ou",
+    "  dans une étape précédente — ou sur un fait sûr du lieu, trois propositions dont une juste,",
+    "  `answerIndex` pour la bonne. Rien d'inventé, rien de deviné (§ 6).",
     "- Un mot que tu n'as pas compris ne s'imprime pas et n'entre pas dans la fiche : il va dans",
     "  `doubts`, que tu laisses vide quand tout est clair.",
     "- `insights` : ce que **cette étape** apporte aux statistiques du profil. Un relevé, pas un",
@@ -888,7 +1029,13 @@ export class AnthropicRedactor implements Redactor {
     }
 
     const parsed = JSON.parse(text) as Omit<RedactionResult, "model">;
-    return { ...parsed, ...withinFunFactLimit(parsed), doubts: parseDoubts(parsed.doubts), model: this.model };
+    return {
+      ...parsed,
+      ...withinFunFactLimit(parsed),
+      quiz: withinQuizLimits(parsed.quiz),
+      doubts: parseDoubts(parsed.doubts),
+      model: this.model,
+    };
   }
 }
 
@@ -928,6 +1075,8 @@ export class FakeRedactor implements Redactor {
       weatherKey: null,
       funFact: null,
       funFactTitle: null,
+      // Ni fait du lieu ni mémoire du carnet : le faux rédacteur ne pose pas de quiz.
+      quiz: null,
       // La fiche est propagée telle quelle : le faux rédacteur ne prétend pas
       // tenir une cohérence, mais il ne la détruit pas non plus.
       coherenceSheet: input.coherenceSheet,

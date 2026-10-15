@@ -4,6 +4,11 @@ export const JOB_NAMES = {
   transcribe: "memobook.transcribe",
   redact: "memobook.redact",
   /**
+   * La réécriture des étapes déjà écrites après un changement de nombre de
+   * pages cible — une à une, dans l'ordre du récit (`jobs/rewriteTrip.ts`).
+   */
+  rewriteTrip: "memobook.rewrite-trip",
+  /**
    * La réponse de MEMO à un tour du voyageur — `docs/conversation.md`. Un job
    * par message, enfilé par la route du chat (texte, photos) ou par la
    * transcription (vocal), pour que MEMO parle après avoir écouté.

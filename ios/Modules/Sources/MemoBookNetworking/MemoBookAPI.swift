@@ -399,6 +399,13 @@ public protocol MemoBookAPI: Sendable {
         edit: BookCustomisationEdit
     ) async throws -> TripSettings
 
+    /// Réécrit les étapes déjà écrites au nombre de pages cible actuel —
+    /// `POST /v1/trips/:id/page-target/rewrite`, sans corps. Le serveur
+    /// répond `202` avec les réglages relus et fait le travail en arrière-plan ;
+    /// il refuse (`409 page_target_rewrite_unavailable`) une seconde
+    /// réécriture pour le même changement.
+    func rewritePageTarget(tripId: String) async throws -> TripSettings
+
     /// Retire un co-voyageur du voyage, et relit les réglages.
     ///
     /// **Le propriétaire ne se retire pas** : le serveur refuse, et l'app ne le

@@ -1089,6 +1089,7 @@
           !plan.taille &&
           !plan.photos.length &&
           !plan.encart &&
+          !plan.quiz &&
           !plan.carte &&
           plan.texte.length &&
           signes(plan.texte) < CAPACITE_PAGE.defaut[plan.sorte] * CORPS.ample,
@@ -1298,6 +1299,8 @@
       return caseLibre(plan) ? "case" : null;
     }
     if (plan.genre !== "recit" || !plan.texte.length) return null;
+    // Le quiz a pris la zone flottante du bas : un seul bloc par page.
+    if (plan.quiz) return null;
     const n = signes(plan.texte);
     if (plan.layout === "layout_chapter_map") return plan.photos.length === 2 && n <= 110 ? "page" : null;
     if (plan.layout === "layout_recit_photo") return n <= CAPACITE_PAGE.layout_recit_photo.postit[plan.sorte] ? "page" : null;
@@ -1447,6 +1450,105 @@
       journal(`fun facts : ${poses.length} encart(s), un toutes les ${(pages / (poses.length - 1)).toFixed(1).replace(".", ",")} pages.`);
     }
     return poses.length;
+  }
+
+  /* --------------------------------------------------------------- les quiz --- */
+
+  /**
+   * « Quiz intégrés à l'histoire » (Hugo, 15/10/2026) : **environ un quiz
+   * toutes les trois étapes**, jamais deux étapes de suite, un par étape au
+   * plus. Même mécanique que les encarts, à l'échelle des étapes : la
+   * prochaine étape visée est trois étapes après le dernier quiz, et la
+   * fenêtre va de deux à quatre.
+   */
+  const ECART_QUIZ = 3;
+  const ECART_QUIZ_MIN = 2;
+  const ECART_QUIZ_MAX = 4;
+
+  /** Les bornes d'un quiz imprimable — celles de la rédaction (`QUIZ_LIMITS`, `redaction.ts`). */
+  const MAX_SIGNES_QUESTION = 120;
+  const MAX_SIGNES_CHOIX = 40;
+
+  /** Pour comparer une réponse et un récit : sans accents, sans casse, espaces simples. */
+  const aPlat = (t) =>
+    String(t || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+
+  /**
+   * Le quiz d'une étape, s'il est imprimable, dans la forme du gabarit
+   * (`{ question, choices, answer }`) : celui que l'app apporte déjà rédigé
+   * (`etape.quiz`), sinon celui de l'analyse d'étape de l'atelier
+   * (`analyse.quiz`, `{ question, choix, reponse }`, `consigneAnalyseEtape`).
+   */
+  function quizDe(etape) {
+    const brut = etape?.quiz || etape?.analyse?.quiz;
+    if (!brut || typeof brut !== "object") return null;
+    const propre = (t) => (typeof t === "string" ? t.replace(/\s+/g, " ").trim() : "");
+    const question = propre(brut.question);
+    const choices = (Array.isArray(brut.choices) ? brut.choices : Array.isArray(brut.choix) ? brut.choix : []).map(propre);
+    const answer = propre(brut.answer ?? brut.reponse);
+    const valide =
+      question &&
+      question.length <= MAX_SIGNES_QUESTION &&
+      choices.length >= 2 &&
+      choices.length <= 4 &&
+      choices.every((c) => c && c.length <= MAX_SIGNES_CHOIX) &&
+      new Set(choices.map(aPlat)).size === choices.length &&
+      choices.includes(answer);
+    return valide ? { question, choices, answer } : null;
+  }
+
+  /**
+   * La page peut-elle porter le quiz ? Le gabarit ne rend le quiz que sur la
+   * page de récit par défaut, **à la place** de la zone flottante du bas
+   * (photo et carte info) : seule une page sans photo, sans encart, sans
+   * carte et sans champ à remplir l'accueille sans rien perdre. Et jamais la
+   * page dont le récit donne la réponse (`agent-transcription-carnet.md` § 1).
+   */
+  function accueilleQuiz(plan, etape, quiz) {
+    if (plan.genre !== "recit" || !plan.texte.length) return false;
+    if (plan.layout !== "layout_story_opener" && plan.layout !== "layout_story_facts") return false;
+    if (plan.photos.length || plan.encart || plan.carte || plan.quiz) return false;
+    if (plan.rang === 0 && etape.promptEnTete) return false;
+    return !aPlat(plan.texte.join(" ")).includes(aPlat(quiz.answer));
+  }
+
+  /**
+   * Quels quiz s'impriment, et sur quelle page : la première page de l'étape
+   * qui peut le porter (`accueilleQuiz`), à la cadence d'environ un toutes les
+   * trois étapes. Faute de page, ou hors cadence, le quiz ne s'imprime pas —
+   * on ne déplace ni photo ni ligne de récit pour lui.
+   *
+   * Pose `plan.quiz` sur les pages retenues et renvoie leur nombre.
+   */
+  function placerQuiz(plans, etapes, journal = () => {}) {
+    const hotes = etapes.map((etape, e) => {
+      const quiz = quizDe(etape);
+      const plan = quiz && plans.find((p) => p.etape === e && accueilleQuiz(p, etape, quiz));
+      return plan ? { e, plan, quiz } : null;
+    }).filter(Boolean);
+    const sansPage = etapes.filter((etape, e) => quizDe(etape) && !hotes.some((h) => h.e === e)).length;
+
+    let dernier = -ECART_QUIZ;
+    let poses = 0;
+    for (;;) {
+      const cible = dernier + ECART_QUIZ;
+      const dansLaFenetre = hotes.filter(({ e }) => e >= dernier + ECART_QUIZ_MIN && e <= dernier + ECART_QUIZ_MAX);
+      // L'étape visée plutôt qu'une voisine ; à égalité, la plus tôt.
+      const choix =
+        dansLaFenetre.sort((a, b) => Math.abs(a.e - cible) - Math.abs(b.e - cible) || a.e - b.e)[0] ||
+        hotes.find(({ e }) => e > dernier + ECART_QUIZ_MAX);
+      if (!choix) break;
+      choix.plan.quiz = choix.quiz;
+      poses += 1;
+      dernier = choix.e;
+    }
+    if (sansPage) journal(`quiz : ${sansPage} étape(s) sans page qui puisse le porter (photo, encart ou carte sur chacune).`);
+    return poses;
   }
 
   /* ------------------------------------------------------------ les décors --- */
@@ -1772,9 +1874,11 @@
    * `etapes` : `{ titre, lieu, dateLongue, numero, lieuComplet, recit,
    * photos: [{ id, src, format, groupe }], analyse }` — `analyse` est la réponse
    * de l'analyse d'étape (`consigneAnalyseEtape`), ou `null`.
-   * `options` : `{ contours, dessinerCarte, pagesAvant, funFacts, journal }` —
+   * `options` : `{ contours, dessinerCarte, pagesAvant, funFacts, quiz, journal }` —
    * `funFacts` est le réglage « Insérer des Fun facts » du carnet : coupé,
-   * aucun encart.
+   * aucun encart ; `quiz`, « Quiz intégrés à l'histoire » : coupé, aucun quiz
+   * (`placerQuiz`). Une étape apporte son quiz rédigé (`quiz`) ou l'analyse
+   * en propose un (`analyse.quiz`).
    *
    * **Le ratio photo / texte** (Hugo, 13/10/2026 : le composeur compose, le
    * ratio dit combien de photos) : `ratio` est le palier du carnet (0, 25, 50,
@@ -1799,6 +1903,7 @@
       dessinerCarte = null,
       pagesAvant = 1,
       funFacts = false,
+      quiz = false,
       stickers = [],
       decorations = 2,
       ratio = 50,
@@ -2059,9 +2164,10 @@
     const restants = varierDoublesPages(plans, pagesAvant);
     if (restants) journal(`${restants} double(s) page(s) gardent la même composition faute d'alternative.`);
 
-    // Les encarts en dernier : ils se posent sur des pages déjà composées, sans
-    // déplacer ni photo ni ligne de récit, et ne font que distinguer davantage
-    // deux pages en vis-à-vis.
+    // Les quiz, puis les encarts : ils se posent sur des pages déjà composées,
+    // sans déplacer ni photo ni ligne de récit. Le quiz d'abord, parce qu'il
+    // ne tient que sur une page sans rien en bas, quand l'encart en a d'autres.
+    if (quiz) journal(`${placerQuiz(plans, etapes, journal)} quiz dans le carnet.`);
     if (funFacts) journal(`${placerEncarts(plans, etapes, journal)} encart(s) « fun fact » dans le carnet.`);
 
     // Le corps ample, une fois les photos et les encarts à leur place : ce sont
@@ -2134,6 +2240,8 @@
         // L'encart est écrit par le modèle : la page le dit, en petit
         // (LAYOUT_KB § « La mention généré par IA »).
         ...(plan.encart ? { fun_facts_title: plan.encart.titre, ai_note: "Fun fact rédigé par IA" } : {}),
+        // Le quiz est écrit par le modèle, lui aussi.
+        ...(plan.quiz ? { quiz: plan.quiz, ai_note: "Quiz rédigé par IA" } : {}),
         sticker_groups: [],
         ...decors,
         ...(plan.taille ? { taille_texte: plan.taille } : {}),
@@ -2163,6 +2271,7 @@
     placerPhotos,
     varierDoublesPages,
     placerEncarts,
+    placerQuiz,
     decorerDoublesPages,
     stickersDe,
     cadreDuVoyage,

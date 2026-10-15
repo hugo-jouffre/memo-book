@@ -888,7 +888,29 @@ public actor PreviewAPI: MemoBookAPI {
         tripId: String,
         edit: BookCustomisationEdit
     ) async throws -> TripSettings {
-        await Self.settingsBox.apply { settings in
+        // La règle des deux changements, comme le serveur : un changement qui
+        // compte en consomme un, ouvre la réécriture, et le troisième est
+        // refusé en 409.
+        if case .targetPageCount(let value) = edit {
+            let current = await Self.settingsBox.read()
+            let allowance = current.pageTargetAllowance
+            if allowance.changesCount, value != current.customisation?.targetPageCount {
+                guard allowance.changesLeft > 0 else {
+                    throw APIError.server(
+                        statusCode: 409,
+                        code: APIError.pageTargetLimitReachedCode,
+                        message: "Tu as déjà changé deux fois le nombre de pages cible de ce voyage."
+                    )
+                }
+                _ = await Self.settingsBox.apply { settings in
+                    var next = allowance
+                    next.changesLeft -= 1
+                    next.rewriteAvailable = true
+                    settings.pageTarget = next
+                }
+            }
+        }
+        return await Self.settingsBox.apply { settings in
             var customisation = settings.customisation ?? .fixture
             switch edit {
             case .photoTextRatio(let value): customisation.photoTextRatio = value
@@ -911,6 +933,19 @@ public actor PreviewAPI: MemoBookAPI {
             case .crossword(let isOn): customisation.crosswordEnabled = isOn
             }
             settings.customisation = customisation
+        }
+    }
+
+    public func rewritePageTarget(tripId: String) async throws -> TripSettings {
+        guard await Self.settingsBox.read().pageTargetAllowance.rewriteAvailable else {
+            throw APIError.server(
+                statusCode: 409,
+                code: APIError.pageTargetRewriteUnavailableCode,
+                message: "Les étapes déjà écrites sont déjà réécrites pour ce changement."
+            )
+        }
+        return await Self.settingsBox.apply { settings in
+            settings.pageTarget?.rewriteAvailable = false
         }
     }
 
@@ -1308,7 +1343,16 @@ extension Traveller {
 /// Un acteur et non une variable statique : `PreviewAPI` est `Sendable`, et une
 /// boîte mutable partagée entre deux aperçus ne peut l'être qu'isolée.
 private actor SettingsBox {
-    private var settings: TripSettings = .fixture
+    /// Le jeu d'essai, avec **une** étape écrite et un seul changement de
+    /// cible restant : c'est ce qui fait voir, au premier palier touché,
+    /// l'avertissement, puis — le voyage étant fini — l'offre de réécrire ; au
+    /// second, l'orange de la limite. Sans date de fin (« Dates du voyage »),
+    /// la feuille demande où l'on en est.
+    private var settings: TripSettings = {
+        var settings = TripSettings.fixture
+        settings.pageTarget = PageTargetAllowance(changesLeft: 1, changesCount: true)
+        return settings
+    }()
 
     func read() -> TripSettings { settings }
 

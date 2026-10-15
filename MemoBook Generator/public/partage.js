@@ -177,7 +177,10 @@ Réponds uniquement par un objet JSON, sans texte autour et sans balises de code
    * - des encarts (« fun facts ») tirés du récit, notés sur 10 — jusqu'à
    *   `maxEncarts`, de quoi tenir la promesse d'environ un toutes les trois
    *   pages (Hugo, 13/10/2026). C'est la mise en page qui décide lesquels
-   *   s'impriment, les mieux notés d'abord.
+   *   s'impriment, les mieux notés d'abord ;
+   * - un quiz tiré du récit ou d'un fait sûr du lieu, ou `null`. La mise en
+   *   page en imprime environ un toutes les trois étapes (`placerQuiz`) : le
+   *   modèle propose, il ne règle pas la cadence (Hugo, 15/10/2026).
    *
    * La mise en page reste un calcul de l'atelier (`mise-en-page.js`) : le
    * modèle décrit, il ne compose pas. Voir LAYOUT_KB § « Associer les photos au
@@ -190,7 +193,7 @@ Réponds uniquement par un objet JSON, sans texte autour et sans balises de code
       .join("\n");
     const ids = (photos || []).map((p) => p.id).join(", ");
 
-    return `Tu prépares la mise en page d'une étape de carnet de voyage. Tu ne réécris pas le récit et tu ne choisis aucune mise en page : tu décris, et tu proposes des encarts.
+    return `Tu prépares la mise en page d'une étape de carnet de voyage. Tu ne réécris pas le récit et tu ne choisis aucune mise en page : tu décris, et tu proposes des encarts et un quiz.
 
 Lieu de l'étape : ${lieu || "non précisé"}
 Destination du voyage : ${destination || "non précisée"}
@@ -226,8 +229,16 @@ Les photos de l'étape suivent, chacune précédée de son identifiant (${ids ||
    - "pertinence" : de 0 à 10. 8 et plus pour un fait qu'on a envie de raconter et qui tient directement au récit ; sous 5, ne le propose pas.
    "funFacts" est une liste, du meilleur au moins bon ; vide s'il n'y a rien de sûr et de pertinent : c'est un résultat normal.
 
+4. **Le quiz.** Un petit jeu imprimé dans la page, réponse à l'envers. Au plus un, et seulement s'il en vaut la peine :
+   - la question porte sur **ce que le récit raconte** — un lieu, un plat, une rencontre, un chiffre que le voyageur donne — ou sur un fait sûr et vérifiable du lieu de l'étape. Jamais sur un sujet générique, jamais sur un détail que le récit ne dit pas : rien ne s'invente, rien ne se devine ;
+   - "question" : une ligne, 120 caractères au plus, terminée par un point d'interrogation ;
+   - "choix" : trois propositions courtes (40 caractères au plus), une seule juste, les deux autres plausibles et fausses sans ambiguïté. Une couleur se nomme en toutes lettres ;
+   - "reponse" : la bonne proposition, recopiée à l'identique ;
+   - rien de polémique, de morbide ou de moralisateur, rien qui contredise le voyageur.
+   "quiz" est null quand l'étape n'offre rien de sûr ou d'amusant à demander : c'est un résultat normal.
+
 Réponds uniquement par un objet JSON, sans texte autour :
-{"lieu":{"nom":"","pays":"","lat":0,"lon":0,"genre":"ville"},"lieux":[{"nom":"","pays":"","lat":0,"lon":0,"genre":"site"}],"trajets":[{"depart":{"nom":"","pays":"","lat":0,"lon":0},"arrivee":{"nom":"","pays":"","lat":0,"lon":0},"mode":"avion"}],"photos":[{"id":"","paragraphe":0,"scene":"","sujet":"","legende":"","personnes":0,"couverture":0}],"funFacts":[{"texte":"","titre":"Fun fact","registre":"","paragraphe":0,"pertinence":0}]}`;
+{"lieu":{"nom":"","pays":"","lat":0,"lon":0,"genre":"ville"},"lieux":[{"nom":"","pays":"","lat":0,"lon":0,"genre":"site"}],"trajets":[{"depart":{"nom":"","pays":"","lat":0,"lon":0},"arrivee":{"nom":"","pays":"","lat":0,"lon":0},"mode":"avion"}],"photos":[{"id":"","paragraphe":0,"scene":"","sujet":"","legende":"","personnes":0,"couverture":0}],"funFacts":[{"texte":"","titre":"Fun fact","registre":"","paragraphe":0,"pertinence":0}],"quiz":{"question":"","choix":["","",""],"reponse":""}}`;
   }
 
   /**

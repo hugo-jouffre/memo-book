@@ -293,12 +293,15 @@ police ou marge codée en dur ailleurs.
   (`help:`) en plus de « Réessayer » : `APIError.recoveryAdvice` donne le
   conseil par famille d'erreur. Un bandeau qui ne propose rien laisse chercher
   ce qu'on a mal fait.
-- `BrandNotice` a **deux tons**. Le beige — `noticeBeige`, sur un verre
+- `BrandNotice` a **deux tons**, plus un. Le beige — `noticeBeige`, sur un verre
   dépoli, plus doux que `Beige Darker` (Hugo, 17/09/2026) — dit l'état des
   choses ; `.information`
   — filet, pictogramme et aplat en `MemoBookColor.information` — répond à un
   geste : pourquoi cette ligne ne mène nulle part, pourquoi ce réglage n'est pas
-  ouvert. Il ne remplace pas `ErrorBanner` : rien n'a raté.
+  ouvert. Il ne remplace pas `ErrorBanner` : rien n'a raté. Un troisième ton,
+  `.warning` — même dessin, à l'orange `MemoBookColor.warning` —, dit une
+  limite **définitive** : la cible de pages qui ne peut plus changer (Hugo,
+  15/10/2026).
 - **Ce qu'on ne peut pas faire pâlit, ça ne se désactive pas.** Un `disabled`
   avale le geste et n'explique rien ; l'app passe le contrôle à 40–45 %, le
   laisse **tapable**, et l'appui pose un `BrandNotice(tone: .information)` qui

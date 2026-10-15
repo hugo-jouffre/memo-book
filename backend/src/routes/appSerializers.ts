@@ -12,6 +12,7 @@ import type {
   Subscription,
   TripTheme,
 } from "@prisma/client";
+import { PAGE_TARGET_CHANGE_LIMIT, pageTargetChangesLeft } from "../services/pageTarget.js";
 import { CONNECTOR_CATALOG } from "../services/connectorCatalog.js";
 import { serializeDailyCredit, type DailyCredit } from "../services/dailyCredit.js";
 import { unitPriceCents } from "../services/printPricing.js";
@@ -720,6 +721,8 @@ export function serializeTripSettings(
   memo: MemoForSettings,
   dailyCredit: DailyCredit,
   viewerAccountId: string,
+  /** Une étape au moins est écrite : un changement de cible compte (`services/pageTarget.ts`). */
+  storyStarted = false,
 ) {
   const isOwner = memo.ownerAccountId === viewerAccountId;
   return {
@@ -774,6 +777,15 @@ export function serializeTripSettings(
     bookPdfUrl: memo.renders?.[0]?.pdfUrl ?? null,
     isPrintable: memo.isPrintable,
     customisation: serializeBookCustomisation(memo),
+    // Le nombre de pages cible se change deux fois une fois le récit commencé.
+    // L'app le dit **avant** le changement, et propose ensuite de réécrire les
+    // étapes déjà écrites — une fois par changement.
+    pageTarget: {
+      changesLeft: pageTargetChangesLeft(memo.pageTargetChanges),
+      changeLimit: PAGE_TARGET_CHANGE_LIMIT,
+      changesCount: storyStarted,
+      rewriteAvailable: memo.pageTargetRewriteAvailable,
+    },
     // « Supprimer la conversation » n'appartient qu'au propriétaire, comme
     // supprimer le voyage (`docs/conversation.md` § 7). L'app pâlit le lien et
     // explique ; le serveur refuse quand même (`DELETE /v1/trips/:id/chat`).

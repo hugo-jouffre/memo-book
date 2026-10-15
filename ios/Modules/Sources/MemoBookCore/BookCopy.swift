@@ -648,6 +648,93 @@ public enum BookCopy {
 
         public static let customTitle = "Nombre de pages cible"
         public static let validate = "Valider"
+
+        // MARK: Changer la cible (Hugo, 15/10/2026)
+
+        /// Le titre de la feuille qui accompagne un changement de cible — une
+        /// seule feuille, dont le contenu change d'étape en étape.
+        public static let changeTitle = "Nombre de pages cible"
+
+        /// Ce qu'on dit **avant** de changer, quand le changement compte. Les
+        /// deux phrases de Hugo : la règle quand on a encore les deux, et ce
+        /// qui reste quand il n'y en a plus qu'un. Sans balisage : c'est le
+        /// chapeau d'une ``BrandSheet``, qui ne lit pas le gras.
+        public static func changeWarning(changesLeft: Int) -> String {
+            changesLeft <= 1
+                ? "Il ne te reste plus qu’un seul changement de nombre de pages cible pour ce voyage."
+                : "Tu peux changer le nombre de pages cible deux fois pendant ce voyage : chaque changement peut réécrire tout ton carnet."
+        }
+
+        public static let confirmChange = "Changer le nombre de pages cible"
+        public static let cancelChange = "Annuler"
+
+        /// Les deux changements sont faits. Dit à l'orange, sur la feuille
+        /// comme sous les paliers pâlis.
+        public static let limitReached =
+            "Tu as utilisé tes deux changements : **le nombre de pages cible ne peut plus changer** pour ce voyage."
+        public static let understood = "Compris"
+
+        /// Sans date de fin, l'app ne sait pas où en est le voyage : elle le
+        /// demande.
+        public static let stageTitle = "À quel stade de ton voyage en es-tu ?"
+        public static let stageBeginning = "Plutôt au début"
+        public static let stageMiddle = "Environ à la moitié"
+        public static let stageEnd = "Plutôt à la fin"
+
+        public static let doneTitle = "C’est noté"
+
+        /// « récit compact », « récit de 70 pages » — le nom du récit qu'une
+        /// cible donne, pour la phrase de ``doneSummary(from:to:)``.
+        ///
+        /// `withPageCount` ajoute le nombre au palier nommé (« récit détaillé
+        /// de 40 pages ») : face à une cible personnalisée, le nom seul peut
+        /// contredire le sens — 60 pages vers « Détaillé » sur un voyage de
+        /// trois semaines, c'est condenser.
+        public static func storyName(pageCount: Int, tripDays: Int?, withPageCount: Bool = false) -> String {
+            let name: String
+            switch BookPageTarget.matching(pageCount: pageCount, tripDays: tripDays) {
+            case .compact: name = "récit compact"
+            case .standard: name = "récit standard"
+            case .detailed: name = "récit détaillé"
+            case .custom: return "récit de \(pageCount) pages"
+            }
+            return withPageCount ? "\(name) de \(pageCount) pages" : name
+        }
+
+        /// « On passe d'un récit compact à un récit détaillé. Les prochaines
+        /// étapes seront donc plus étoffées. » Le sens se lit dans les
+        /// nombres, pas dans les noms : deux cibles personnalisées n'ont pas
+        /// d'ordre à elles.
+        public static func doneSummary(from: Int, to: Int, tripDays: Int?) -> String {
+            let custom = [from, to].contains { BookPageTarget.matching(pageCount: $0, tripDays: tripDays) == .custom }
+            let before = storyName(pageCount: from, tripDays: tripDays, withPageCount: custom)
+            let after = storyName(pageCount: to, tripDays: tripDays, withPageCount: custom)
+            let next = to > from ? "plus étoffées" : "moins étoffées"
+            return "On passe d’un \(before) à un \(after). Les prochaines étapes seront donc \(next)."
+        }
+
+        /// Vers la fin du voyage seulement : ce qui est écrit pèse plus que
+        /// ce qui reste, et le carnet serait coupé en deux.
+        public static func rewriteOffer(isLonger: Bool) -> String {
+            let verb = isLonger ? "étoffe" : "condense"
+            return "Si tu veux que l’on \(verb) le récit des étapes déjà écrites pour qu’il soit homogène avec la suite de ton carnet, c’est juste en dessous."
+        }
+
+        public static func rewriteAction(isLonger: Bool) -> String {
+            isLonger ? "Étoffer les étapes déjà écrites" : "Condenser les étapes déjà écrites"
+        }
+
+        public static let later = "Plus tard"
+        public static let ok = "OK"
+
+        /// Le lien sous les paliers, tant que la réécriture reste ouverte —
+        /// pour qui a répondu « Plus tard ». Il ne sait plus dans quel sens la
+        /// cible a bougé : il dit ce qu'il fait, sans le sens.
+        public static let rewriteLink = "Mettre les étapes déjà écrites à la nouvelle cible"
+
+        /// Ce que dit le panneau une fois la réécriture lancée.
+        public static let rewriteStarted =
+            "**On réécrit les étapes déjà écrites** à ton nouveau nombre de pages. Ça se fait en arrière-plan : tu peux continuer."
     }
 
     /// « Fun Facts » — `3443:10105`.

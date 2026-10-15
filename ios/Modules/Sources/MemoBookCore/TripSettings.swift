@@ -264,6 +264,15 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
     /// et c'est le serveur qui refuse. Un co-voyageur ne voit pas la ligne.
     public var canDelete: Bool?
 
+    /// Combien de fois le nombre de pages cible peut encore changer — le bloc
+    /// `pageTarget` de la route (Hugo, 15/10/2026). Optionnel parce que l'API
+    /// de production peut être en retard sur l'app : on lit alors
+    /// ``pageTargetAllowance``, qui ne compte rien et ne bloque rien.
+    public var pageTarget: PageTargetAllowance?
+
+    /// Ce que l'écran lit : ce que le serveur a servi, ou rien de compté.
+    public var pageTargetAllowance: PageTargetAllowance { pageTarget ?? .unrestricted }
+
     public init(
         tripId: String,
         name: String,
@@ -282,7 +291,8 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
         previewCoverUrl: URL? = nil,
         bookPdfUrl: URL? = nil,
         isPrintable: Bool = false,
-        customisation: BookCustomisation? = nil
+        customisation: BookCustomisation? = nil,
+        pageTarget: PageTargetAllowance? = nil
     ) {
         self.tripId = tripId
         self.name = name
@@ -302,6 +312,7 @@ public struct TripSettings: Codable, Sendable, Hashable, Identifiable {
         self.bookPdfUrl = bookPdfUrl
         self.isPrintable = isPrintable
         self.customisation = customisation
+        self.pageTarget = pageTarget
     }
 
     /// « @clara_prn, @ana.prn » — les co-voyageurs en bout de ligne.
