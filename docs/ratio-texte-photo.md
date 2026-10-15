@@ -157,6 +157,17 @@ barème refuse déjà pour une autre raison — une page aux trois quarts vide.
    table des gabarits). Une carte « allumée » dans les réglages ne remplit donc
    rien sur ces pages, et le résidu passe directement aux photos.
 
+### Le nombre de pages cible
+
+Le recalage sur la cible (`recalerSurLaCible`, voir
+`docs/reglages-utilisateur.md` § Nombre de pages cible) **ne change jamais le
+nombre de photos** d'une étape : il répartit autrement celles que
+`photosRequired` lui a données, sur plus ou moins de planches. Le compte
+annoncé par le chat reste donc celui du PDF. La surface, elle, bouge : deux
+planches de plus, ce sont des photos plus grandes, donc un ratio mesuré plus
+haut que le palier — c'est le prix d'une cible plus longue que ce que le récit
+et les photos demandaient.
+
 ### Ce qui reste à construire
 
 - **Les légendes des planches à 100 % ne sont pas rendues.** La spécification

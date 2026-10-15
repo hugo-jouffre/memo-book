@@ -89,6 +89,12 @@ function pagesAvant(payload: Record<string, unknown>): number {
   return avant + (avant % 2 === 0 ? 1 : 0);
 }
 
+/** Les pages du carnet hors des étapes : celles d'avant, et les pages libres de fin. */
+function pagesFixes(payload: Record<string, unknown>): number {
+  const libres = Number(payload["pages_libres"]);
+  return pagesAvant(payload) + (Number.isFinite(libres) && libres > 0 ? libres : 0);
+}
+
 const texte = (valeur: unknown): string => (typeof valeur === "string" ? valeur : "");
 const urlDe = (photo: unknown): string =>
   typeof photo === "string" ? photo : texte((photo as Record<string, unknown> | null)?.["url"]);
@@ -149,6 +155,16 @@ export interface ComposerOptions {
   /** « Quiz intégrés à l'histoire ». Absent : allumé, comme le défaut du carnet. */
   quiz?: boolean;
   decorations: number;
+  /**
+   * Le nombre de pages cible du voyage (`Memo.targetPageCount`). Le carnet
+   * entier — étapes, et les pages fixes autour : colophon, introduction, pages
+   * libres — tient alors dans la cible à ± `PAGE_TARGET_TOLERANCE` pages, par
+   * ses seules planches de photos (`recalerSurLaCible`, `mise-en-page.js`).
+   * Absent : aucun recalage.
+   */
+  pagesCible?: number;
+  /** Ce que le composeur note en chemin : photos écartées, cible hors d'atteinte. */
+  journal?: (texte: string) => void;
 }
 
 /**
@@ -172,6 +188,8 @@ export function composerCarnet(payload: Record<string, unknown>, options: Compos
       stickers: options.decorations > 0 ? stickersDuCarnet() : [],
       decorations: options.decorations,
       ratio: options.ratio,
+      ...(options.pagesCible ? { pagesCible: options.pagesCible, pagesFixes: pagesFixes(payload) } : {}),
+      ...(options.journal ? { journal: options.journal } : {}),
       budgetPhotos: (etape: { paragraphes: string[] }) =>
         photosRequired({ body_html: paragraphesEnHtml(etape.paragraphes) }, options.ratio, "a5", {
           funFacts: options.funFacts,

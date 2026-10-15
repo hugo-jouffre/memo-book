@@ -1851,6 +1851,202 @@
     });
   }
 
+  /* ------------------------------------------- le nombre de pages cible --- */
+
+  /**
+   * L'écart toléré entre le carnet et sa cible, dans chaque sens : la
+   * constante `PAGE_TARGET_TOLERANCE` de `backend/src/services/pageTarget.ts`,
+   * recopiée ici (l'atelier n'importe rien du serveur).
+   */
+  const TOLERANCE_PAGES_CIBLE = 5;
+  /**
+   * Au recalage, une étape peut porter deux doubles pages de photos en fin
+   * d'étape au lieu d'une (`MAX_PAGES_PHOTOS`) — toujours dans ses six pages
+   * (`MAX_PAGES_ETAPE`).
+   */
+  const MAX_PLANCHES_RECALAGE = 4;
+
+  /**
+   * Fait tenir le carnet dans sa cible à ± 5 pages (Hugo, 15/10/2026), en
+   * n'ajoutant ou ne retirant que des **planches** — les pages de photos de fin
+   * d'étape. La mise en page n'invente pas de texte : aucun récit n'est coupé,
+   * raccourci ni réduit, aucune page de récit n'apparaît ni ne disparaît.
+   *
+   * **Le ratio photo / texte tient** : chaque étape garde exactement les photos
+   * que le module de ratio lui a données (`budgetPhotos`) — le nombre que le
+   * chat a demandé au voyageur. Le recalage ne fait que les répartir
+   * autrement :
+   *
+   * - **trop court** : les photos de fin d'étape s'étalent sur deux planches de
+   *   plus, celles que les six pages avaient fait écarter reviennent, et à
+   *   50 % et au-delà une page de récit à plusieurs photos en cède à la fin de
+   *   l'étape — elle garde toujours la sienne. On commence par l'étape dont les
+   *   planches restent les plus fournies ;
+   * - **trop long** : les photos de deux planches se resserrent sur les autres
+   *   (cinq par planche, quatre sur celle qui ouvre une étape sans récit), ou
+   *   remontent sur les pages de récit qui ont encore une place. On commence
+   *   par l'étape qui a le moins de photos à resserrer.
+   *
+   * Une étape garde un **nombre pair de pages** : on ajoute ou retire deux
+   * planches, ou une seule à une étape impaire, qui devient paire. Les pages
+   * hors des étapes (colophon, introduction, pages libres de fin) comptent
+   * dans le total (`pagesFixes`) mais ne bougent pas.
+   *
+   * Si la fourchette est hors d'atteinte — pas assez de photos pour allonger,
+   * trop de récit pour raccourcir —, on s'arrête au plus près sans rien
+   * forcer, et le journal le dit.
+   */
+  function recalerSurLaCible(plans, { pagesCible, pagesFixes = 0, ratio = 50, ecarteesParEtape = [], journal = () => {} }) {
+    const total = () => pagesFixes + plans.length;
+    const min = Math.max(1, pagesCible - TOLERANCE_PAGES_CIBLE);
+    const max = pagesCible + TOLERANCE_PAGES_CIBLE;
+    const avant = total();
+    const bilan = { cible: pagesCible, min, max, avant, apres: avant, ajoutees: 0, retirees: 0, atteinte: avant >= min && avant <= max };
+    if (bilan.atteinte) return bilan;
+
+    const etapes = [...new Set(plans.map((p) => p.etape))];
+    const pagesDe = (e) => ({
+      recits: plans.filter((p) => p.genre === "recit" && p.etape === e),
+      planches: plans.filter((p) => p.genre === "planche" && p.etape === e),
+    });
+    // Les pages de récit qui peuvent céder une photo, de la dernière à la
+    // première : à 50 % et au-delà, celles qui en ont plusieurs. La page de
+    // chapitre garde la sienne, au-dessus de sa carte.
+    const cedables = (recits) =>
+      ratio > 25
+        ? recits
+            .filter((p) => !p.carte)
+            .reverse()
+            .flatMap((p) => p.photos.slice(1).reverse().map((photo) => ({ plan: p, photo })))
+        : [];
+
+    const allonger = (e) => {
+      const { recits, planches } = pagesDe(e);
+      const delta = (recits.length + planches.length) % 2 ? 1 : 2;
+      const q = planches.length + delta;
+      if (recits.length + q > MAX_PAGES_ETAPE || (recits.length && q > MAX_PLANCHES_RECALAGE)) return null;
+      const fin = planches.flatMap((p) => p.photos);
+      const revenues = (ecarteesParEtape[e] || []).filter((p) => !defautDeQualite(p));
+      const cedees = cedables(recits);
+      // Deux photos par planche si l'étape les a, une au moins.
+      const voulu = Math.max(q, Math.min(2 * q, fin.length + revenues.length + cedees.length));
+      const reprises = revenues.slice(0, Math.max(0, voulu - fin.length));
+      const prises = cedees.slice(0, Math.max(0, voulu - fin.length - reprises.length));
+      const n = fin.length + reprises.length + prises.length;
+      if (n < q) return null;
+      return {
+        e,
+        delta,
+        q,
+        densite: n / q,
+        appliquer: () => {
+          ecarteesParEtape[e] = (ecarteesParEtape[e] || []).filter((p) => !reprises.includes(p));
+          // Dans l'ordre du récit : ce que ses pages cèdent, puis la fin d'étape.
+          recomposer(e, [...prises.map((x) => x.photo).reverse(), ...fin, ...reprises], q, prises, []);
+        },
+      };
+    };
+
+    const raccourcir = (e) => {
+      const { recits, planches } = pagesDe(e);
+      if (!planches.length) return null;
+      const delta = (recits.length + planches.length) % 2 ? 1 : 2;
+      const q = planches.length - delta;
+      if (q < (recits.length ? 0 : 1)) return null;
+      const fin = planches.flatMap((p) => p.photos);
+      const place = q ? (recits.length ? q * MAX_PAGE_PHOTOS : MAX_PHOTOS_OUVERTURE + (q - 1) * MAX_PAGE_PHOTOS) : 0;
+      const enTrop = Math.max(0, fin.length - place);
+      // Ce qui ne tient plus sur les planches remonte sur les pages de récit
+      // qui ont encore une place, de la dernière à la première.
+      const remontees = [];
+      if (enTrop) {
+        let reste = enTrop;
+        for (const p of [...recits].reverse()) {
+          if (p.carte || ratio === 0) continue;
+          const libre = Math.max(0, Math.min(p.capPhotos, MAX_PHOTOS_RECIT) - p.photos.length);
+          for (let i = 0; i < libre && reste > 0; i += 1, reste -= 1) remontees.push(p);
+        }
+        if (reste > 0) return null;
+      }
+      return {
+        e,
+        delta,
+        q,
+        densite: fin.length,
+        appliquer: () => recomposer(e, fin.slice(0, fin.length - enTrop), q, [], remontees.map((p, i) => ({ plan: p, photo: fin[fin.length - enTrop + i] }))),
+      };
+    };
+
+    // Recompose les planches de l'étape `e` : `photos` sur `q` planches ;
+    // `prises` quittent leur page de récit, `remontees` y montent.
+    const recomposer = (e, photos, q, prises, remontees) => {
+      const { recits, planches } = pagesDe(e);
+      const ouverture = planches.find((p) => p.ouverture);
+      const pleines = new Set(planches.filter((p) => p.pleinePage).flatMap((p) => p.photos));
+      for (const { plan, photo } of prises) plan.photos = plan.photos.filter((p) => p !== photo);
+      for (const { plan, photo } of remontees) plan.photos = [...plan.photos, photo];
+      for (const plan of new Set([...prises, ...remontees].map((x) => x.plan))) {
+        plan.layout = plan.carte ? "layout_chapter_map" : layoutDeRecit(plan.photos, plan.texte, plan.sorte, plan.ouvreLeCarnet);
+      }
+      const nouvelles = [];
+      let debut = 0;
+      // La planche qui ouvre une étape sans récit en porte quatre au plus.
+      const premiere = ouverture ? Math.min(MAX_PHOTOS_OUVERTURE, Math.ceil(photos.length / q)) : 0;
+      const tailles = ouverture ? [premiere, ...partsEgales(photos.length - premiere, q - 1)] : partsEgales(photos.length, q);
+      for (const taille of tailles) {
+        const plan = { genre: "planche", etape: e, photos: photos.slice(debut, debut + taille) };
+        if (ouverture && debut === 0) {
+          plan.ouverture = true;
+          plan.bandeau = ouverture.bandeau;
+        } else if (taille === 1 && pleines.has(plan.photos[0])) {
+          plan.pleinePage = true;
+        }
+        nouvelles.push(plan);
+        debut += taille;
+      }
+      // Les planches de cinq photos continuent d'alterner rangées et colonnes.
+      for (const plan of nouvelles.filter((p) => p.photos.length === 5 && !p.ouverture)) {
+        const precedente = plans.filter((p) => p.genre === "planche" && p.photos.length === 5 && !p.ouverture && p.etape < e).at(-1);
+        plan.colonnes = !precedente?.colonnes;
+      }
+      const ou = planches.length ? plans.indexOf(planches[0]) : plans.indexOf(recits.at(-1)) + 1;
+      for (const p of planches) plans.splice(plans.indexOf(p), 1);
+      plans.splice(ou, 0, ...nouvelles);
+    };
+
+    for (let tour = 0; tour < 4 * plans.length + 8 && (total() < min || total() > max); tour += 1) {
+      const court = total() < min;
+      // Deux pages à la fois au plus, dans une fourchette de onze : on ne saute
+      // jamais par-dessus.
+      const coups = etapes.map(court ? allonger : raccourcir).filter(Boolean);
+      if (!coups.length) break;
+      coups.sort((a, b) => (court ? b.densite - a.densite : a.densite - b.densite) || a.e - b.e);
+      coups[0].appliquer();
+      if (court) bilan.ajoutees += coups[0].delta;
+      else bilan.retirees += coups[0].delta;
+    }
+
+    bilan.apres = total();
+    bilan.atteinte = bilan.apres >= min && bilan.apres <= max;
+    const fourchette = `${pagesCible} visées, de ${min} à ${max}`;
+    if (bilan.atteinte) {
+      journal(
+        `pages cible : ${fourchette} — ${avant} composées, ${bilan.apres} après ` +
+          `${bilan.ajoutees ? `${bilan.ajoutees} page(s) de photos ajoutée(s)` : `${bilan.retirees} page(s) de photos retirée(s)`}.`,
+      );
+    } else {
+      const recit = pagesFixes + plans.filter((p) => p.genre === "recit").length;
+      const raison =
+        bilan.apres < min
+          ? "pas assez de photos pour de nouvelles planches"
+          : recit > max
+            ? `le récit seul en fait ${recit}, et le texte ne se coupe pas`
+            : "les photos du ratio n'ont plus où se resserrer, et le texte ne se coupe pas";
+      journal(`pages cible : ${fourchette} — hors d'atteinte, ${bilan.apres} pages (${avant} composées) : ${raison}.`);
+    }
+    return bilan;
+  }
+
   /* ------------------------------------------------------------ le carnet --- */
 
   const drapeaux = (actif) => ({
@@ -1892,6 +2088,12 @@
    * - **100 %** : aucun récit imprimé — une planche d'ouverture avec le
    *   bandeau et le fun fact (`layout_photo_wall_intro`), puis des planches.
    *
+   * **Le nombre de pages cible** : `pagesCible` (absent : aucun recalage) et
+   * `pagesFixes`, les pages du carnet hors des étapes — colophon,
+   * introduction, page libre avant la première étape, pages libres de fin.
+   * Le carnet entier tient alors dans la cible à ± 5 pages, par ses seules
+   * planches (`recalerSurLaCible`).
+   *
    * L'app compose avec le même code (`backend/src/services/bookComposer.ts`),
    * à partir de son propre payload : une étape peut alors apporter ses
    * `paragraphes` tels quels (au lieu d'un `recit` à découper) et sa `carte`
@@ -1908,6 +2110,8 @@
       decorations = 2,
       ratio = 50,
       budgetPhotos = null,
+      pagesCible = null,
+      pagesFixes = 0,
       journal = () => {},
     } = options;
     const plans = [];
@@ -1931,6 +2135,9 @@
     // colonnes décalées (maquette du 13/10/2026), en commençant par les
     // colonnes.
     let planchesDeCinq = 0;
+    // Les photos que les six pages d'une étape ont fait écarter : le recalage
+    // sur la cible peut les reprendre, elles sont dans le budget du ratio.
+    const ecarteesParEtape = [];
 
     etapes.forEach((etape, index) => {
       const analysePhotos = new Map((etape.analyse?.photos || []).map((ph) => [String(ph.id), ph]));
@@ -2031,6 +2238,7 @@
         if (q % 2 && q < photos.length) q += 1;
         structure = { pages: [], recit: [], fin: photos, tailles: partsEgales(photos.length, q), chapitreDeux: false, total: q };
       }
+      ecarteesParEtape[index] = structure.ecartees || [];
       if (structure.ecartees?.length) {
         journal(
           `photo(s) écartée(s) — étape ${index + 1} : ${structure.ecartees.length} photo(s) de trop pour six pages ` +
@@ -2161,6 +2369,12 @@
       }
     });
 
+    // Le nombre de pages cible, avant tout ce qui se pose sur les pages
+    // composées : doubles pages, quiz, encarts et décors suivent les planches.
+    if (Number.isFinite(pagesCible) && pagesCible > 0) {
+      recalerSurLaCible(plans, { pagesCible, pagesFixes, ratio, ecarteesParEtape, journal });
+    }
+
     const restants = varierDoublesPages(plans, pagesAvant);
     if (restants) journal(`${restants} double(s) page(s) gardent la même composition faute d'alternative.`);
 
@@ -2281,6 +2495,8 @@
     lieuxDuVoyage,
     composition,
     composerJours,
+    recalerSurLaCible,
+    TOLERANCE_PAGES_CIBLE,
     corpsAmple,
     paragraphesEnHtml,
     rognage,
