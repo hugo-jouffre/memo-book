@@ -38,6 +38,7 @@ import { ORAL_CORRECTION_TOPIC } from "../services/redaction.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
 import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import { MAX_PHOTOS_PER_STEP } from "../services/photoBudget.js";
+import { measurePhoto } from "../services/photoOrientation.js";
 import { hasUnlimitedAccess } from "../services/subscriptions.js";
 import { contextVoiceOf, isGathering, parseTripContext } from "../services/tripContext.js";
 import {
@@ -684,6 +685,14 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
       files.map((file) => context.storage.put(isAudio ? "audio" : "photo", file.filename, file.buffer, file.mimeType)),
     );
 
+    // **Le sens de chaque photo, mesuré à l'arrivée** (Hugo, 15/10/2026) : la
+    // couverture du voyage est la plus récente de ses photos paysage, et ce
+    // sont ces trois champs qui le disent. Ici et pas plus tard — le fichier
+    // est déjà en mémoire, le relire depuis S3 coûterait un aller-retour par
+    // photo. Une mesure impossible (HEIC) laisse les champs à `null` : la
+    // photo ne sera pas couverture, et c'est tout.
+    const measures = isImages ? await Promise.all(files.map((file) => measurePhoto(file.buffer))) : [];
+
     if (contextVoice || revisedEntryId) {
       const [object] = stored;
       if (!object) throw new Error("Aucun vocal enregistré.");
@@ -745,7 +754,7 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
         if (opening) ids.push(opening.id);
 
         const entries = await Promise.all(
-          stored.map((object) =>
+          stored.map((object, index) =>
             tx.entry.create({
               data: {
                 memo: { connect: { id: memoId } },
@@ -753,6 +762,13 @@ export function registerChatRoutes(app: FastifyInstance, context: AppContext): v
                 status: isAudio ? "pending" : "ready",
                 capturedAt,
                 placeLabel,
+                ...(measures[index]
+                  ? {
+                      photoWidthPx: measures[index]!.widthPx,
+                      photoHeightPx: measures[index]!.heightPx,
+                      photoIsLandscape: measures[index]!.isLandscape,
+                    }
+                  : {}),
                 ...(stepId ? { step: { connect: { id: stepId } } } : {}),
                 media: {
                   create: {
