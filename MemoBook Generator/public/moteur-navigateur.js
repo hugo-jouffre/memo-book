@@ -178,7 +178,7 @@
           },
           body: JSON.stringify({
             model: modele,
-            max_tokens: 4000,
+            max_tokens: 8000,
             messages: [{ role: "user", content: consigne }],
           }),
         })
@@ -229,7 +229,7 @@
             "anthropic-dangerous-direct-browser-access": "true",
             "content-type": "application/json",
           },
-          body: JSON.stringify({ model: modele, max_tokens: 3000, messages: [{ role: "user", content: contenu }] }),
+          body: JSON.stringify({ model: modele, max_tokens: 8000, messages: [{ role: "user", content: contenu }] }),
         })
       : await fetch(`${BASE_OPENAI}/chat/completions`, {
           method: "POST",

@@ -703,13 +703,47 @@
   }
 
   /**
+   * Sur le dos, la graisse la plus forte que chaque police connaît : le dos se
+   * lit de loin, sur une étagère (Hugo, 16/10/2026).
+   */
+  const GRAISSE_MAX_DOS = { "Playfair Display": "Black", Manrope: "ExtraBold", "Cormorant Infant": "Bold", "Cormorant Garamond": "Bold" };
+  /**
+   * Les polices sans graisse plus forte s'épaississent d'un contour de leur
+   * propre couleur, en fraction du corps (0,05 → 0,7 pt sur un corps de 14).
+   */
+  const CONTOUR_DOS = { "Cormorant Infant": 0.035, "Cormorant Garamond": 0.035, "Gloria Hallelujah": 0.05, "Caveat Brush": 0.045, "Lilita One": 0.02 };
+  /**
+   * La hauteur d'em du texte du dos, en part de sa largeur : les capitales
+   * (≈ 0,7 em) occupent alors à peu près 45 % du dos, et il reste un bon
+   * millimètre de chaque côté pour l'écart de rainage.
+   */
+  const EM_DOS = 0.62;
+  /**
+   * La chasse moyenne de chaque police du dos, en em : [bas de casse, capitales].
+   * Relevée sur les fichiers des polices (fontTools, graisse du dos), au pire
+   * de textes de dos typiques, plus 4 % pour le contour. Une estimation unique
+   * à 0,58 em rétrécissait le dos d'un quart pour rien.
+   */
+  const CHASSE_DOS = {
+    "Playfair Display": [0.53, 0.63],
+    "Gloria Hallelujah": [0.58, 0.66],
+    "Cormorant Infant": [0.5, 0.65],
+    "Cormorant Garamond": [0.5, 0.65],
+    Manrope: [0.58, 0.65],
+    "Lilita One": [0.51, 0.57],
+    "Caveat Brush": [0.42, 0.46],
+  };
+
+  /**
    * Le dos, le même dans tous les styles : de bas en haut, à la française, les
-   * voyageurs en pied, le titre au milieu, les dates en tête. Le corps suit la
-   * largeur du dos (11 pt au plus) et se réduit si les trois ne tiennent pas
-   * dans la hauteur ; le titre quitte le milieu s'il y heurterait un voisin.
+   * voyageurs en pied, le titre au milieu, les dates en tête. Le corps prend
+   * toute la largeur utile du dos (`EM_DOS`) et ne se réduit que si les trois
+   * ne tiennent pas dans la hauteur ; le titre quitte le milieu s'il y
+   * heurterait un voisin. Toujours dans la graisse la plus forte de la police.
    */
   function elementsDos(fiche, textes, couleur, { police = "Playfair Display", style = "Bold" } = {}) {
     const { largeurPlat: L, dos: D } = fiche;
+    style = GRAISSE_MAX_DOS[police] || style;
     if (D < DOS_MIN_TEXTE) return [];
     const face = facesVisibles(fiche).dos;
     const voyageurs = String(textes?.voyageurs || "").trim();
@@ -719,13 +753,18 @@
     if (!blocs.length) return [];
     // Le long du dos, `a` part du pied (0) et monte jusqu'en tête (`longueur`).
     const longueur = face.h - 2 * RETRAIT_DOS;
-    const ECART = 6;
-    const FACTEUR = 0.58;
-    let corps = Math.min(11, (D * 0.45) / MM_PAR_PT);
-    const total = (c) => blocs.reduce((t, b) => t + largeurTexte(b, c, FACTEUR), 0) + ECART * (blocs.length - 1);
+    const ECART = 5;
+    const [bdc, capitales] = CHASSE_DOS[police] || [0.58, 0.66];
+    const largeur = (t, c) => {
+      const lettres = String(t).replace(/[^\p{L}]/gu, "");
+      const enCapitales = lettres && lettres === lettres.toUpperCase();
+      return largeurTexte(t, c, enCapitales ? capitales : bdc);
+    };
+    let corps = Math.min(30, (D * EM_DOS) / MM_PAR_PT);
+    const total = (c) => blocs.reduce((t, b) => t + largeur(b, c), 0) + ECART * (blocs.length - 1);
     if (total(corps) > longueur) corps = Math.max(5, corps * ((longueur - ECART * (blocs.length - 1)) / (total(corps) - ECART * (blocs.length - 1))));
     corps = arrondi2(corps);
-    const l = (t) => (t ? largeurTexte(t, corps, FACTEUR) : 0);
+    const l = (t) => (t ? largeur(t, corps) : 0);
 
     const pied = face.y + face.h - RETRAIT_DOS;
     const element = (texte, a0, a1, alignement) => {
@@ -747,6 +786,7 @@
         alignement,
         vertical: "centre",
         rotation: 90,
+        ...(CONTOUR_DOS[police] ? { graisse: arrondi2(corps * CONTOUR_DOS[police]) } : {}),
       };
     };
     const el = [];
@@ -1100,8 +1140,13 @@
         const rotation = e.rotation
           ? ` transform="rotate(${-e.rotation} ${arrondi2(e.x + e.l / 2)} ${arrondi2(e.y + e.h / 2)})"`
           : "";
+        // `graisse` : un contour de la couleur du texte, sous le remplissage,
+        // pour épaissir une police qui n'a pas de graisse plus forte.
+        const graisse = e.graisse
+          ? ` stroke="${coul(e.couleur)}" stroke-width="${arrondi2(2 * e.graisse * MM_PAR_PT)}" stroke-linejoin="round" paint-order="stroke"`
+          : "";
         return (
-          `<text ${police} fill="${coul(e.couleur)}" text-anchor="${ancre}"${lettres}${e.ombre ? ' filter="url(#ombre)"' : ""}${rotation}>${tspans}</text>`
+          `<text ${police} fill="${coul(e.couleur)}"${graisse} text-anchor="${ancre}"${lettres}${e.ombre ? ' filter="url(#ombre)"' : ""}${rotation}>${tspans}</text>`
         );
       }
       return "";
@@ -1479,6 +1524,10 @@ var POLICES = ${litteral(polices)};
     r.fillColor = nuances[e.couleur];
     r.justification = alignement(e);
     if (e.approche) r.tracking = e.approche;
+    if (e.graisse) {
+      r.strokeColor = nuances[e.couleur];
+      r.strokeWeight = (2 * e.graisse) + "pt";
+    }
     apprete(t, e);
     // Une ligne de base imposee : la premiere ligne s'y pose, cadre cale en haut.
     if (e.ligneDeBase != null) {

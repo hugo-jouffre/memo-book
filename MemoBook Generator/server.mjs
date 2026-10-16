@@ -74,6 +74,19 @@ async function cleServeur(nom) {
   return { cle: null, source: null };
 }
 
+/**
+ * Une erreur de fournisseur dit d'où venait la clé : « plus de crédit » sur
+ * la clé de `backend/.env` alors que celle de la page est créditée, c'est une
+ * heure perdue si l'erreur ne le dit pas.
+ */
+function erreurAvecSource(erreur, source, code = 502) {
+  const origine = source === "la page" ? "clé collée dans la page" : `clé lue dans ${source}`;
+  const quota = /credit|quota|billing/i.test(erreur.message)
+    ? " Cette clé n'a plus de crédit : colle dans « Clé API OpenAI » une clé de l'organisation créditée."
+    : "";
+  return new ErreurHttp(erreur.code || code, `${erreur.message} (${origine}).${quota}`);
+}
+
 /** La clé du navigateur gagne ; sinon on retombe sur celle de la machine. */
 async function resoudreCle(nom, fournieParLaPage) {
   const depuisLaPage = (fournieParLaPage || "").trim();
@@ -326,7 +339,9 @@ async function appelerAnthropic(cle, modele, consigne) {
     },
     body: JSON.stringify({
       model: modele,
-      max_tokens: 4000,
+      // L'analyse d'une étape chargée de photos dépasse 4 000 jetons : un JSON
+      // tronqué fait perdre toute l'analyse — lieux, cartes et fun facts.
+      max_tokens: 8000,
       messages: [{ role: "user", content: consigne }],
     }),
   });
@@ -374,9 +389,12 @@ async function decouper(req, res) {
   const modele =
     corps.modele || (veutAnthropic ? DEFAUTS.modeleAnthropic : DEFAUTS.modeleOpenai);
   const consigne = consigneDecoupage(blocs, corps.indications, corps.dejaTitrees, corps.dejaConnus);
-  const brut = veutAnthropic
-    ? await appelerAnthropic(cle, modele, consigne)
-    : await appelerOpenai(cle, modele, consigne);
+  const brut = await (veutAnthropic
+    ? appelerAnthropic(cle, modele, consigne)
+    : appelerOpenai(cle, modele, consigne)
+  ).catch((erreur) => {
+    throw erreurAvecSource(erreur, source);
+  });
 
   const donnees = extraireJson(brut);
   const etapes = Array.isArray(donnees) ? donnees : donnees.etapes || [];
@@ -399,15 +417,18 @@ async function analyser(req, res) {
   const corps = await lireJson(req);
   const veutAnthropic = corps.fournisseur === "anthropic";
   const nomCle = veutAnthropic ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY";
-  const { cle } = await resoudreCle(nomCle, veutAnthropic ? corps.cleAnthropic : corps.cleOpenai);
+  const { cle, source } = await resoudreCle(nomCle, veutAnthropic ? corps.cleAnthropic : corps.cleOpenai);
   if (!cle) throw new ErreurHttp(400, `Aucune clé ${veutAnthropic ? "Anthropic" : "OpenAI"}`);
 
   const modele =
     corps.modele || (veutAnthropic ? DEFAUTS.modeleAnthropic : DEFAUTS.modeleOpenai);
   const contenu = messagesAnalyse(String(corps.consigne || ""), corps.images || [], veutAnthropic);
-  const brut = veutAnthropic
-    ? await appelerAnthropic(cle, modele, contenu)
-    : await appelerOpenai(cle, modele, contenu);
+  const brut = await (veutAnthropic
+    ? appelerAnthropic(cle, modele, contenu)
+    : appelerOpenai(cle, modele, contenu)
+  ).catch((erreur) => {
+    throw erreurAvecSource(erreur, source);
+  });
   repondreJson(res, 200, extraireJson(brut));
 }
 
@@ -417,7 +438,7 @@ async function analyser(req, res) {
  */
 async function image(req, res) {
   const corps = await lireJson(req);
-  const { cle } = await resoudreCle("OPENAI_API_KEY", corps.cleOpenai);
+  const { cle, source } = await resoudreCle("OPENAI_API_KEY", corps.cleOpenai);
   if (!cle) throw new ErreurHttp(400, "Aucune clé OpenAI");
   try {
     repondreJson(
@@ -434,7 +455,7 @@ async function image(req, res) {
       }),
     );
   } catch (erreur) {
-    throw new ErreurHttp(502, erreur.message);
+    throw erreurAvecSource(erreur, source);
   }
 }
 
