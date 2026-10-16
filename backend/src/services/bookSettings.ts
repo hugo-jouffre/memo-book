@@ -13,7 +13,7 @@
  * | Ratio photo / texte | les cinq paliers, voir plus bas |
  * | Pointillés coupés | `rules_enabled: false` : pas de réglure sous le récit |
  * | Décorations à 0 | `decoration_quota: 0` : ni tracé pointillé, ni sticker (le scotch reste) |
- * | Zones libres | `pages_libres: 3` : trois pages réglées après la dernière étape ; 0 si coupé |
+ * | Zones libres | **sans effet depuis le 15/10/2026** : les pages réglées de fin de carnet sont retirées (`pages_libres: 0`), le réglage reste dans l'app en attendant d'en sortir |
  * | Nombre de pages cible | le carnet tient dans la cible à ± 5 pages, par ses planches de photos (`pageTarget.ts`) |
  *
  * ## Le ratio photo / texte, et la composition
@@ -49,8 +49,12 @@ export interface BookSettings {
   targetPageCount?: number;
 }
 
-/** Les pages libres, réglées, de fin de carnet quand « Zones libres » est allumé. */
-export const FREE_PAGES_AT_END = 3;
+/**
+ * Les pages libres, réglées, de fin de carnet : aucune. Hugo, 15/10/2026 :
+ * « Nous avons décidé de retirer ces pages pour le moment. » Le réglage
+ * « Zones libres » ne les rallume plus ; le gabarit ignore `pages_libres`.
+ */
+export const FREE_PAGES_AT_END = 0;
 
 /** Le carnet garde-t-il ses photos ? Non à 0 % : « aucune photo dans tout le carnet ». */
 export function keepsPhotos(settings: Pick<BookSettings, "photoTextRatio">): boolean {
@@ -74,7 +78,7 @@ export function applyBookSettings(
     ...payload,
     rules_enabled: settings.rulesEnabled,
     decoration_quota: Math.max(0, Math.min(4, Math.round(settings.decorationQuota))),
-    pages_libres: settings.freeZonesEnabled ? FREE_PAGES_AT_END : 0,
+    pages_libres: FREE_PAGES_AT_END,
     photo_ratio: ratio,
   };
 

@@ -83,16 +83,18 @@ export function stickersDuCarnet(): Sticker[] {
  */
 const CHAMPS_DU_BANDEAU = ["title", "date", "city", "country", "day_intro", "tag", "prompt"] as const;
 
-/** Les pages qui précèdent la première étape : colophon, introduction, et la page libre qui la met à gauche. */
+/** Les pages qui précèdent la première étape : colophon, introduction, et la page blanche qui la met à gauche. */
 function pagesAvant(payload: Record<string, unknown>): number {
   const avant = 1 + (payload["intro_text"] ? 1 : 0);
   return avant + (avant % 2 === 0 ? 1 : 0);
 }
 
-/** Les pages du carnet hors des étapes : celles d'avant, et les pages libres de fin. */
+/**
+ * Les pages du carnet hors des étapes : celles d'avant. Les pages libres de
+ * fin ne sont plus imprimées (15/10/2026) : `pages_libres` ne compte plus.
+ */
 function pagesFixes(payload: Record<string, unknown>): number {
-  const libres = Number(payload["pages_libres"]);
-  return pagesAvant(payload) + (Number.isFinite(libres) && libres > 0 ? libres : 0);
+  return pagesAvant(payload);
 }
 
 const texte = (valeur: unknown): string => (typeof valeur === "string" ? valeur : "");
@@ -121,9 +123,13 @@ function etapeDuPayload(pages: Jour[], rang: number, funFacts: boolean, quiz: bo
     });
   // Tous les fun facts de l'étape, de toutes ses pages : la mise en page en
   // pose environ un toutes les trois pages (Hugo, 13/10/2026).
-  const funFactsDeLEtape = pages
-    .flatMap((page) => (Array.isArray(page["fun_facts"]) ? (page["fun_facts"] as unknown[]) : []))
-    .filter((f): f is string => typeof f === "string" && f.trim().length > 0);
+  // Chacun avec le titre que la rédaction lui a donné (« Infos », « Culture
+  // générale »…) : le composeur le garde, et varie les autres.
+  const funFactsDeLEtape = pages.flatMap((page) =>
+    (Array.isArray(page["fun_facts"]) ? (page["fun_facts"] as unknown[]) : [])
+      .filter((f): f is string => typeof f === "string" && f.trim().length > 0)
+      .map((texte) => ({ texte, titre: typeof page["fun_facts_title"] === "string" ? page["fun_facts_title"] : "" })),
+  );
   // Le quiz de l'étape, où que le metteur en page l'ait posé — un seul.
   const quizDeLEtape = pages.find((page) => page["quiz"] && typeof page["quiz"] === "object")?.["quiz"] ?? null;
   return {
@@ -140,7 +146,7 @@ function etapeDuPayload(pages: Jour[], rang: number, funFacts: boolean, quiz: bo
     carte: premiere["map"] ?? premiere["map_svg"] ?? null,
     // Les fun facts déjà rédigés et bornés à 140 signes par la rédaction : ils
     // ont passé leur tri, ils sont imprimables.
-    analyse: funFacts && funFactsDeLEtape.length ? { funFacts: funFactsDeLEtape.map((texte) => ({ texte, pertinence: 8 })) } : null,
+    analyse: funFacts && funFactsDeLEtape.length ? { funFacts: funFactsDeLEtape.map((f) => ({ ...f, pertinence: 8 })) } : null,
     // Le quiz déjà rédigé, déjà filtré par le réglage (`structure.ts`).
     quiz: quiz ? quizDeLEtape : null,
     // Le champ à remplir revient sur la première page : le quiz ne s'y pose pas.

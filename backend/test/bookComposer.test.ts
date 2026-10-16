@@ -139,8 +139,9 @@ describe("composition du carnet de l'app", () => {
         photos: Array.from({ length: 12 }, (_, i) => `https://exemple.test/${e}-${i}.jpg`),
       })),
     };
-    // Le colophon, et trois pages libres de fin.
-    const fixes = 1 + 3;
+    // Le colophon. Les pages libres de fin ne comptent plus, même demandées par
+    // un ancien payload : le gabarit ne les imprime plus (15/10/2026).
+    const fixes = 1;
     const photosPosees = (days: Record<string, unknown>[]) => pages(days).flatMap((p) => p.photos).sort();
     const recit = (days: Record<string, unknown>[]) => pages(days).map((p) => p.texte).join("");
 

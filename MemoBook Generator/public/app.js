@@ -1593,8 +1593,8 @@ const ficheCouverture = () => Couverture.ficheDuCarnet(fichePumbo(), pagesDuLivr
  * - **pointillés** coupés : `rules_enabled: false`, pas de réglure ;
  * - **décorations** à 0 : `decoration_quota: 0`, ni tracé pointillé ni
  *   sticker (le scotch des photos reste) ;
- * - **zones libres** (allumé par défaut) : `pages_libres: 3`, trois pages
- *   réglées après la dernière étape ;
+ * - **zones libres** : sans effet depuis le 15/10/2026 — les pages réglées de
+ *   fin de carnet sont retirées (`pages_libres: 0`) ;
  * - **quiz** (allumé par défaut) : le composeur en place environ un toutes les
  *   trois étapes (`placerQuiz`) ; coupé, aucun ;
  * - **nombre de pages cible** (vide par défaut) : le carnet entier — colophon et
@@ -1616,8 +1616,8 @@ function reglagesDuCarnet() {
   };
 }
 
-/** Les pages libres de fin de carnet, quand « Zones libres » est allumé (`bookSettings.ts`). */
-const PAGES_LIBRES_FIN = 3;
+/** Les pages libres de fin de carnet : aucune depuis le 15/10/2026 (`bookSettings.ts`). */
+const PAGES_LIBRES_FIN = 0;
 
 /** Le template de la version imprimeur, s'il est renseigné. */
 function templateImprimeur() {
@@ -1665,8 +1665,9 @@ function construirePayloadCarnet(photoDe = (data) => data, { imprimeur = Boolean
     // Voir `mise-en-page.js` et LAYOUT_KB.
     rules_enabled: reglages.rulesEnabled,
     decoration_quota: reglages.decorationQuota,
-    // Après la dernière étape, avant la quatrième : de quoi écrire à la main.
-    pages_libres: reglages.freeZonesEnabled ? PAGES_LIBRES_FIN : 0,
+    // Plus de pages réglées pour écrire à la main en fin de carnet (Hugo,
+    // 15/10/2026).
+    pages_libres: PAGES_LIBRES_FIN,
     days: MiseEnPage.composerJours(etapes, {
       contours: etat.contoursCarte,
       dessinerCarte: etat.contoursCarte ? dessinerCarteChapitre : null,
@@ -1684,7 +1685,7 @@ function construirePayloadCarnet(photoDe = (data) => data, { imprimeur = Boolean
       ...(reglages.targetPageCount
         ? {
             pagesCible: reglages.targetPageCount,
-            pagesFixes: avant + libresAvant + (reglages.freeZonesEnabled ? PAGES_LIBRES_FIN : 0),
+            pagesFixes: avant + libresAvant + PAGES_LIBRES_FIN,
           }
         : {}),
       journal: (texte) => {

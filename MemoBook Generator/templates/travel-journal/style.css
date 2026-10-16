@@ -36,6 +36,13 @@
   --mb-margin: 30pt;
   --mb-margin-int: 42.5pt;
   --mb-margin-ext: 28.3pt;
+  /* Marges de sécurité des éléments posés hors de la colonne — post-it,
+     photos des planches, cartes (Hugo, 15/10/2026 : un post-it collé au bord
+     risque le massicot et la reliure). Rien d'important à moins de 6 mm du
+     bord coupé, ni à moins de 12 mm du pli. Les décors (tracé pointillé,
+     stickers) peuvent déborder : ils ne portent rien qui se lise. */
+  --mb-safe: 17pt;
+  --mb-safe-int: 34pt;
 
   /* --- Couleurs ----------------------------------------------------------- */
   --mb-ink: #0033a0;                       /* encre manuscrite bleue */
@@ -109,7 +116,8 @@
    pointillé du voyage, ni sticker. Le scotch reste : l'habillage des photos
    est toujours complet (Hugo, 12/10/2026). LAYOUT_KB § « Les réglages du
    voyageur ». */
-body.sans-reglure .mb-note__rules { display: none; }
+body.sans-reglure .mb-note__rules,
+body.sans-reglure .mb-note__texte::after { display: none; }
 
 /* Version imprimeur : 3 mm de fond perdu sur les quatre bords (feuille de
    154 × 216 mm pour une page finie de 148 × 210). Le jeu passe à 1,5 pt : le
@@ -376,8 +384,32 @@ li { margin: 0; }
   --mb-line: calc(13pt * var(--mb-body-lh));
 }
 
+/* La réglure s'arrête au texte (Hugo, 15/10/2026 : « éviter d'avoir
+   plusieurs lignes pointillées consécutives sans aucun contenu écrit »).
+   `.mb-note__texte` porte le récit et sa réglure ; il n'établit pas de
+   contexte de formatage, si bien que :
+   - une photo flottante (récit qui contourne une photo) déborde de lui sans
+     l'agrandir — c'est `.mb-note`, un contexte à lui seul, qui la contient ;
+   - la marge du dernier paragraphe le traverse aussi.
+   Sa hauteur est donc celle des lignes écrites, et la réglure, qui le
+   remplit, s'y arrête. Puis une ligne plus courte (`::after`) : le léger
+   dépassement des maquettes, qui laisse la page ouverte sans la laisser
+   vide. Seul un `<p>` vide entre deux paragraphes reste une ligne sans
+   texte. */
+.mb-note__texte { position: relative; }
+.mb-note__texte::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: calc(100% + var(--mb-line) - 0.7pt - var(--mb-rule-lift));
+  width: 34%;
+  height: 0;
+  border-bottom: 0.7pt dashed var(--mb-rule);
+  pointer-events: none;
+}
+
 /* Le texte passe au-dessus de la réglure. */
-.mb-note > *:not(.mb-note__rules) { position: relative; z-index: 1; }
+.mb-note__texte > *:not(.mb-note__rules) { position: relative; z-index: 1; }
 
 /* Une ligne vide après chaque paragraphe, y compris le dernier : elle montre
    l'emplacement resté libre dans le gabarit, comme sur un vrai carnet. */
@@ -870,8 +902,8 @@ li { margin: 0; }
 /* À droite du titre de l'étape, à cheval sur le haut du bloc de récit : il
    n'y couvre que la ligne du titre et la ligne vide qui la suit — le
    composeur ne l'y pose que sous un titre court. */
-/* `.mb-note > *` remet ses enfants dans le flux : le sticker en sort. */
-.mb-note > .mb-sticker--title { position: absolute; z-index: 3; top: -24pt; right: -4pt; width: 60pt; }
+/* `.mb-note__texte > *` remet ses enfants dans le flux : le sticker en sort. */
+.mb-note__texte > .mb-sticker--title { position: absolute; z-index: 3; top: -24pt; right: -4pt; width: 60pt; }
 .mb-sticker--title img { transform: rotate(6deg); }
 /* Jamais dans le pli : côté reliure, le sticker s'écarte de la marge
    intérieure (`page--gauche` a le pli à droite, `page--droite` à gauche). */
@@ -1052,43 +1084,89 @@ li { margin: 0; }
      tourne avec elle. Même valeur dans `A5.gapGalerie` (`photoRatio.ts`). */
   gap: 14pt;
   margin-top: auto;            /* poussée vers le bas de la page */
-  padding-top: 12pt;
+  /* 22 pt sous le récit : une photo inclinée de 6,5° lève un coin d'une
+     dizaine de points, contour compris. À 12 pt, il touchait la dernière
+     ligne (carnet du 15/10/2026). */
+  padding-top: 22pt;
+}
+
+/* La bande ajustée (Hugo, 15/10/2026, « PDF 9 ») : quand le composeur donne
+   à chaque photo un poids à la mesure de son format (`poids`, `flex-grow`),
+   la bande suit le récit au lieu d'être poussée en bas de page, et grandit
+   dans la place qu'il laisse, jusqu'à `--mb-bande-max` — la hauteur où ses
+   photos se rogneraient trop, calculée par le composeur. Plus de photo
+   réduite à un timbre-poste dans une colonne trop étroite pour elle, plus de
+   grand blanc entre le récit et les images. */
+.mb-gallery--ajustee {
+  flex: 1 1 calc(206pt * var(--mb-band, 1));
+  height: auto;
+  max-height: var(--mb-bande-max, 300pt);
+  margin-top: auto;
+}
+/* Et quand la bande a atteint sa hauteur sous un récit très court, le blanc
+   qui reste se partage : un tiers entre le récit et les photos, deux tiers
+   sous elles — trois marges `auto`, celle de la bande et les deux de cette
+   cale. Ni les photos loin du récit, ni une demi-page vide en bas. */
+.page__content--bande::after {
+  content: "";
+  flex: 0 0 0;
+  margin: auto 0;
 }
 
 .mb-gallery .mb-photo { flex: 1 1 0; height: 100%; }
 
-/* Trio : trois photos en cascade sous un récit court, sur une page de suite.
-   Une photo en haut — portrait (`--portrait`) ou paysage (`--landscape`) —,
-   deux portraits en bas, qui la chevauchent à peine. Positions en pourcentage
-   de la bande, relevées sur les deux maquettes du 08/10/2026 ; la bande a une
-   hauteur fixe pour que le format de chaque emplacement le soit aussi
-   (`FORMATS_EMPLACEMENTS`, `mise-en-page.js`). Comme `.mb-gallery`, elle
-   cède sous un récit trop long plutôt que de le tronquer, et le tracé
-   pointillé passe derrière ses photos, jamais derrière le texte. */
+/* Trio (maquettes du 15/10/2026, « Philippines ») : en haut, le récit en
+   colonne à côté d'une grande photo en hauteur ; en bas, deux photos — deux
+   portraits (`--portrait`), ou un portrait et une photo en largeur
+   (`--landscape`), celle-ci sous la grande photo. `--texte-droite` met le
+   récit à droite et retourne la page. Les emplacements ont des tailles fixes,
+   pour que leur format le soit aussi (`FORMATS_EMPLACEMENTS`,
+   `mise-en-page.js`) ; le tracé pointillé passe derrière les photos du bas,
+   jamais derrière le texte. Le tout tient dans la colonne de 349 × 535 pt,
+   marges de sécurité comprises. */
 .mb-trio {
-  position: relative;
-  flex: 0 1 auto;
-  height: calc(360pt * var(--mb-band, 1));
-  min-height: 300pt;
-  margin-top: auto;
-  padding-top: 12pt;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
 }
+.mb-trio__haut {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  gap: 20pt;
+  min-height: 286pt;
+}
+.mb-trio--texte-droite .mb-trio__haut { flex-direction: row-reverse; }
+.mb-trio__recit { flex: 1 1 0; min-width: 0; }
+.mb-photo--trio-haut {
+  flex: 0 0 146pt;
+  height: 250pt;
+  margin: 12pt 6pt 0 0;
+  transform: rotate(3.5deg);
+}
+.mb-trio--texte-droite .mb-photo--trio-haut { margin: 18pt 0 0 6pt; transform: rotate(-3deg); }
 
-/* Le récit d'un trio occupe toute la hauteur au-dessus des photos : sa réglure
-   continue sous le texte jusqu'à elles. */
-.mb-note--remplit { flex: 1 1 auto; }
+.mb-trio__bas {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-end;
+  justify-content: space-between;
+  height: 212pt;
+  margin-top: auto;
+  padding: 0 6pt 6pt;
+}
+.mb-trio--texte-droite .mb-trio__bas { flex-direction: row-reverse; }
+.mb-trio__bas > .mb-path { z-index: 0; }
+.mb-trio__bas > .mb-photo { z-index: 1; }
 
-.mb-trio > .mb-path { z-index: 0; }
-.mb-trio > .mb-photo { position: absolute; z-index: 1; }
-.mb-trio > .mb-photo--trio-top { z-index: 2; }
-
-.mb-trio--portrait .mb-photo--trio-top { top: 12pt; left: 35%; width: 32%; height: 52%; transform: rotate(1.5deg); }
-.mb-trio--portrait .mb-photo--trio-left { bottom: 0; left: 4%; width: 38%; height: 54%; transform: rotate(-4deg); }
-.mb-trio--portrait .mb-photo--trio-right { bottom: 0; right: 0; width: 37%; height: 56%; transform: rotate(3deg); }
-
-.mb-trio--landscape .mb-photo--trio-top { top: 12pt; left: 29%; width: 58%; height: 37%; transform: rotate(1.5deg); }
-.mb-trio--landscape .mb-photo--trio-left { bottom: 6pt; left: 9%; width: 36%; height: 55%; transform: rotate(-3deg); }
-.mb-trio--landscape .mb-photo--trio-right { bottom: 0; left: 53%; width: 36%; height: 55%; transform: rotate(2deg); }
+/* Deux portraits : 145 × 194 et 134 × 180, inclinés en sens contraires. */
+.mb-trio--portrait .mb-photo--trio-bas-a { width: 145pt; height: 194pt; transform: rotate(3deg); }
+.mb-trio--portrait .mb-photo--trio-bas-b { width: 136pt; height: 182pt; margin-bottom: 8pt; transform: rotate(-4deg); }
+/* Un portrait et une photo en largeur, celle-ci sous la grande photo. */
+.mb-trio--landscape .mb-photo--trio-bas-a { width: 128pt; height: 172pt; transform: rotate(-3deg); }
+.mb-trio--landscape .mb-photo--trio-bas-b { width: 196pt; height: 138pt; margin-bottom: 16pt; transform: rotate(4deg); }
 
 /* Récit qui contourne une grande photo (maquette faite à la main, étape de
    Banaue). La photo flotte à droite dans le bloc de récit : la colonne de texte
@@ -1097,53 +1175,89 @@ li { margin: 0; }
    pleine largeur. */
 .mb-contourne__cale { float: right; width: 0; height: calc(var(--mb-line) * 4); }
 
-.mb-note--contourne > .mb-photo--contourne {
+/* Les marges de la photo comptent ce que son inclinaison et son contour
+   dessiné (3,5 pt, tourné de 2° de plus) font sortir de sa boîte : ≈ 10 pt
+   au coin. À 14 pt de marge, le contour touchait les lettres (carnet du
+   15/10/2026) ; à 21 pt, il reste 3 pt au moins entre le trait et le texte.
+   La largeur, elle, ne bouge pas : à 42 % (format 0,51), une photo en hauteur
+   3:4 garde les deux tiers de son image ; à 40 %, elle ne les gardait plus. */
+.mb-note--contourne .mb-photo--contourne {
   float: right;
   clear: right;
   position: relative;
   z-index: 2;
   width: 42%;
   height: 290pt;
-  margin: 4pt 0 10pt 14pt;
+  margin: 12pt 0 12pt 21pt;
   transform: rotate(2deg);
 }
 
-/* L'étiquette de titre posée sur la photo : « Rizières de Banaue ». */
+/* L'étiquette de titre posée sur la photo : « Rizières de Banaue ». Un
+   sticker centré en haut de la photo (Hugo, 15/10/2026, d'après la page
+   « Tagaytay ») : papier blanc aux coins arrondis, cerné d'un trait, un liseré
+   blanc autour comme un autocollant découpé, Playfair Display Bold, et un
+   coup de feutre bleu sous le mot. Une étiquette longue (plus de 18 signes) passe un cran plus petit et peut
+   tenir sur deux lignes, sans jamais dépasser la photo. */
 .mb-photo__label {
   position: absolute;
-  top: 12pt;
-  right: -6pt;
-  z-index: 3;
-  max-width: 80%;
-  padding: 3pt 7pt;
+  top: 9pt;
+  left: 50%;
+  z-index: 5;
+  width: max-content;
+  max-width: 86%;
+  padding: 4pt 9pt 6pt;
   background-color: #ffffff;
-  box-shadow: var(--mb-photo-shadow);
+  border: 1pt solid var(--mb-black);
+  border-radius: 7pt;
+  box-shadow: 0 0 0 2.2pt #ffffff, var(--mb-photo-shadow);
   font-family: var(--mb-font-display);
   font-weight: 700;
-  font-size: 12pt;
+  font-size: 14pt;
   line-height: 1.1;
-  text-align: right;
+  text-align: center;
   color: var(--mb-black);
-  transform: rotate(-3deg);
+  transform: translateX(-50%) rotate(-2deg);
+}
+.mb-photo__label--long { font-size: 11.5pt; padding: 4pt 8pt 5pt; }
+.mb-photo__label-texte { position: relative; z-index: 1; display: block; }
+.mb-photo__label-trait {
+  position: absolute;
+  left: 12%;
+  bottom: 3pt;
+  width: 76%;
+  height: 5pt;
+  overflow: visible;
+}
+.mb-photo__label-trait path {
+  fill: none;
+  stroke: var(--mb-ink);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
 }
 
 /* Le fun fact en post-it, en bas à gauche de la page : papier, scotch, et il
-   mord un peu sur la photo d'à côté. */
+   mord un peu sur la photo d'à côté.
+   ⚠ Un élément en `position: absolute` se cale sur la boîte de remplissage
+   de `.page__content`, c'est-à-dire sur le bord de la feuille, pas sur la
+   marge : `left: 2pt` posait le post-it à 2 pt du massicot (carnet du
+   15/10/2026). Il se cale désormais sur la marge de sécurité, avec ce que
+   son inclinaison fait sortir de sa boîte (≈ 8 pt à −5°). */
 .mb-card--postit {
   position: absolute;
-  left: 2pt;
-  bottom: 34pt;
+  left: calc(var(--mb-safe) + 8pt);
+  bottom: calc(var(--mb-safe) + 22pt);
   z-index: 3;
   width: 170pt;
   border: none;
   transform: rotate(-5deg);
 }
+.page--droite .mb-card--postit { left: calc(var(--mb-safe-int) + 8pt); }
 
 /* Le scotch de tous les post-it, au milieu du bord haut. */
 .mb-card__tape { top: -7pt; left: 50%; margin-left: -23pt; transform: rotate(2deg); }
-
-/* Page libre : la réglure sur toute la hauteur, rien d'autre. */
-.mb-note--libre { flex: 1 1 auto; }
+/* La pince, au milieu du bord haut elle aussi (maquettes du 15/10/2026). */
+.mb-card .mb-card__clip { left: 50%; margin-left: -13pt; z-index: 2; }
 
 /* Photo en pleine page, bord à bord : elle couvre toute la feuille, jeu
    compris, sans cadre ni ombre. */
@@ -1172,7 +1286,9 @@ li { margin: 0; }
    CSS empêchait la héro de se comprimer comme elle le fait depuis toujours
    quand un récit long la pousse. */
 .mb-hero {
-  margin: 0 0 12pt;
+  /* 18 pt : la photo inclinée de 2° et son contour lèvent un coin de ~12 pt
+     au-dessus du récit qui suit. */
+  margin: 0 0 18pt;
   height: calc(268pt * var(--mb-band, 1));
 }
 
@@ -1197,12 +1313,13 @@ li { margin: 0; }
      3,5 pt — à 5 pt, les contours voisins se croisaient. Même valeur dans
      `A5.gapGaleriePleine` (`photoRatio.ts`). */
   gap: 11pt;
-  /* 14 pt au bord, plus l'écart des marges côté pli : une photo ne s'y perd
-     pas. */
-  padding: 14pt 14pt 14pt calc(14pt + var(--mb-margin-int) - var(--mb-margin-ext));
+  /* Les marges de sécurité : 6 mm au bord coupé, 12 mm côté pli — une photo
+     ne s'y perd ni au massicot ni dans la reliure (15/10/2026 ; c'était 5 et
+     10 mm). */
+  padding: var(--mb-safe) var(--mb-safe) var(--mb-safe) var(--mb-safe-int);
 }
 .page--gauche .mb-photowall:not(.mb-photowall--libre) {
-  padding: 14pt calc(14pt + var(--mb-margin-int) - var(--mb-margin-ext)) 14pt 14pt;
+  padding: var(--mb-safe) var(--mb-safe-int) var(--mb-safe) var(--mb-safe);
 }
 
 .mb-photowall__row {
@@ -1490,27 +1607,6 @@ li { margin: 0; }
 .page--back--text::before { display: block; }
 .page--back--text::after { display: block; }
 
-.page--back--text .mb-back__text {
-  top: 132pt;
-  width: 268pt;
-  font-size: 21pt;
-  line-height: 1.35;
-  color: var(--mb-black);
-}
-
-/* Un filet court sous le texte, comme sur un dos de livre. */
-.page--back--text .mb-back__text::after {
-  content: "";
-  display: block;
-  width: 46pt;
-  height: 0.9pt;
-  margin: 18pt auto 0;
-  background-color: var(--mb-carrot);
-}
-
-.page--back--text .mb-back__footer { color: var(--mb-black); }
-.page--back--text .mb-back__logo { filter: invert(1); }
-
 /* --- Planche de photos : légendes et bandeau -------------------------------
    Le palier **100 %** du ratio texte / photo. Aucun `mb-note` n'est imprimé :
    il reste le bandeau d'étape et la carte fun fact si le carnet l'a allumée.
@@ -1540,10 +1636,11 @@ li { margin: 0; }
    elle ne couvre pas le sujet des photos de la rangée du haut. */
 .mb-card--planche {
   position: absolute;
-  bottom: 22pt;
-  left: 22pt;
+  bottom: calc(var(--mb-safe) + 10pt + var(--mb-bleed));
+  left: calc(var(--mb-safe) + 8pt + var(--mb-bleed));
   z-index: 4;
 }
+.page--droite .mb-card--planche { left: calc(var(--mb-safe-int) + 8pt + var(--mb-bleed)); }
 
 /* Le fun fact à la place d'une photo (Hugo, 14/10/2026) : l'emplacement
    (`.mb-photo--…`) garde sa place et son inclinaison dans le gabarit, le
@@ -1560,4 +1657,198 @@ li { margin: 0; }
   transform: rotate(-3deg);
 }
 .mb-card--case .mb-card__body p { font-size: 9pt; }
+
+/* --- Layouts du 15/10/2026 (maquettes « Philippines », Figma 3822) ---------
+   Trois pages où le récit, les photos et le post-it du fun fact sont pensés
+   ensemble. Les tailles des emplacements sont fixes, pour que leur format le
+   soit aussi (`FORMATS_EMPLACEMENTS`, `mise-en-page.js`). */
+
+/* Ouverture d'étape à deux photos (« Trek vers Patpat ») : une photo en
+   hauteur à gauche, que le récit contourne ; en bas, le post-it et la seconde
+   photo. Les marges de la photo comptent son inclinaison et son contour,
+   comme celles du récit qui contourne une photo à droite. */
+.mb-note--entoure .mb-photo--entoure {
+  float: left;
+  position: relative;
+  z-index: 2;
+  width: 108pt;
+  height: 176pt;
+  margin: 6pt 22pt 12pt 4pt;
+  transform: rotate(-3deg);
+}
+
+/* Le bas de page des nouveaux layouts : le post-it d'un côté, une photo de
+   l'autre, le tracé pointillé derrière. Il suit le récit et ne le comprime
+   jamais : un récit trop long se coupe en amont (capacités du composeur). */
+.mb-bas {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-end;
+  justify-content: space-between;
+  min-height: 182pt;
+  margin-top: auto;
+  padding: 16pt 6pt 2pt;
+}
+.mb-bas > .mb-path { z-index: 0; }
+.mb-bas > .mb-photo,
+.mb-bas > .mb-card { z-index: 1; }
+.mb-card--bas { width: 168pt; margin: 0 0 8pt 4pt; transform: rotate(5deg); }
+.mb-photo--bas { width: 122pt; height: 178pt; margin-left: auto; transform: rotate(-4deg); }
+.mb-bas--encart-seul { justify-content: flex-end; min-height: 150pt; }
+.mb-bas--encart-seul .mb-card--bas { margin: 0 6pt 12pt 0; transform: rotate(-6deg); }
+
+/* Page de suite à deux photos en tête (« Après-midi à Manille »). */
+.mb-tete {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 22pt;
+  height: 226pt;
+  margin-bottom: 24pt;
+  padding-top: 4pt;
+}
+.mb-photo--tete-a { width: 150pt; height: 212pt; transform: rotate(2deg); }
+.mb-photo--tete-b { width: 142pt; height: 200pt; margin-top: 14pt; transform: rotate(-5deg); }
+
+/* Page de suite coupée par une bande (« Tagaytay ») : une photo inclinée et
+   le post-it côte à côte, entre deux morceaux de récit. */
+.mb-milieu {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 26pt;
+  height: 204pt;
+  margin: 8pt 0 22pt;
+  padding: 0 4pt;
+}
+.mb-milieu > .mb-path { z-index: 0; }
+.mb-milieu > .mb-photo,
+.mb-milieu > .mb-card { z-index: 1; }
+.mb-photo--milieu { flex: 0 0 auto; width: 134pt; height: 180pt; transform: rotate(5deg); }
+.mb-card--milieu { flex: 1 1 auto; width: auto; max-width: 196pt; transform: rotate(2deg); }
+
+/* --- La dernière page : « Le voyage continue en dehors du livre » ----------
+   Maquette du 15/10/2026. Tout est posé sur la page finie (`inset` du fond
+   perdu), dans les marges de sécurité. */
+.mb-suite { position: absolute; inset: var(--mb-bleed); z-index: 2; }
+.mb-suite__trace {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.mb-suite__trace path {
+  fill: none;
+  stroke: #d4883b;
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-dasharray: 12 11;
+}
+body.sans-decor .mb-suite__trace { display: none; }
+.mb-suite__titre {
+  position: absolute;
+  top: 58pt;
+  left: 0;
+  right: 0;
+  margin: 0;
+  font-family: var(--mb-font-display);
+  font-weight: 700;
+  font-size: 23pt;
+  line-height: 1.22;
+  text-align: center;
+  color: var(--mb-black);
+}
+.mb-suite__invite {
+  position: absolute;
+  top: 166pt;
+  left: 150pt;
+  width: 230pt;
+  margin: 0;
+  font-family: var(--mb-font-hand);
+  font-size: 11.5pt;
+  line-height: 1.45;
+  text-align: center;
+  color: #2e7d5b;
+  transform: rotate(-3deg);
+}
+.mb-suite__fleche {
+  position: absolute;
+  top: 206pt;
+  left: 238pt;
+  width: 64pt;
+  height: 56pt;
+  overflow: visible;
+}
+.mb-suite__fleche path {
+  fill: none;
+  stroke: #2e7d5b;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.mb-suite__qr {
+  position: absolute;
+  top: 262pt;
+  left: 169pt;
+  width: 82pt;
+  height: 82pt;
+}
+.mb-suite__qr-code { display: block; width: 100%; height: 100%; }
+.mb-suite__qr-cadre {
+  position: absolute;
+  top: -6pt;
+  left: -6pt;
+  width: calc(100% + 12pt);
+  height: calc(100% + 12pt);
+  overflow: visible;
+  transform: rotate(-1.5deg);
+}
+.mb-suite__tampon {
+  position: absolute;
+  top: 322pt;
+  left: 74pt;
+  width: 80pt;
+  height: 80pt;
+  overflow: visible;
+  transform: rotate(-14deg);
+}
+.mb-suite__tampon circle,
+.mb-suite__tampon .mb-suite__tampon-bande { fill: none; stroke: #3f8f7c; stroke-width: 2.2; }
+.mb-suite__tampon .mb-suite__tampon-fin { stroke-width: 1; }
+/* Le tampon est encré sur le papier : le tracé pointillé ne passe pas au travers. */
+.mb-suite__tampon .mb-suite__tampon-fond { fill: var(--mb-sheet); }
+.mb-suite__tampon .mb-suite__tampon-bande { fill: #fbfaf6; stroke-width: 1.4; }
+.mb-suite__tampon text {
+  fill: #3f8f7c;
+  font-family: var(--mb-font-display);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.mb-suite__tampon-arc { font-size: 10.5px; }
+.mb-suite__tampon-arc--bas { font-size: 8px; letter-spacing: 0.5em; }
+.mb-suite__tampon-mot { font-size: 8.4px; }
+.mb-suite__compte {
+  position: absolute;
+  top: 452pt;
+  left: 0;
+  right: 0;
+  margin: 0;
+  font-family: var(--mb-font-display);
+  font-size: 13pt;
+  text-align: center;
+  color: var(--mb-black);
+}
+.mb-suite__logo {
+  position: absolute;
+  top: 484pt;
+  left: 50%;
+  width: 70pt;
+  height: 70pt;
+  margin-left: -35pt;
+  color: var(--mb-carrot);
+}
 </style>

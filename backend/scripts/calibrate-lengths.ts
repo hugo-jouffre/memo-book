@@ -111,6 +111,12 @@ const LAYOUTS: Config[] = [
   { flag: "layout_recit_photo", photos: 1, funFact: true, suite: true, note: "PAGE DE SUITE, récit autour d'une grande photo + post-it" },
   { flag: "layout_trio_portrait", photos: 3, funFact: false, suite: true, note: "PAGE DE SUITE, trio portrait" },
   { flag: "layout_trio_landscape", photos: 3, funFact: false, suite: true, note: "PAGE DE SUITE, trio paysage" },
+  // Les layouts du 15/10/2026. `layout_recit_encart_milieu` coupe son récit en
+  // deux (`body_html_apres`) : il se mesure à la main, voir LAYOUT_KB.
+  { flag: "layout_recit_deux_photos", photos: 2, funFact: true, note: "ouverture à deux photos + post-it" },
+  { flag: "layout_recit_deux_photos", photos: 2, funFact: false, note: "ouverture à deux photos" },
+  { flag: "layout_photos_en_tete", photos: 2, funFact: true, suite: true, note: "PAGE DE SUITE, deux photos en tête + post-it" },
+  { flag: "layout_photos_en_tete", photos: 2, funFact: false, suite: true, note: "PAGE DE SUITE, deux photos en tête" },
   { flag: "layout_story_opener", photos: 1, funFact: false, taille: "serre", note: "CORPS SERRÉ, récit + photo flottante" },
   { flag: "layout_story_opener", photos: 1, funFact: false, suite: true, taille: "serre", note: "CORPS SERRÉ, PAGE DE SUITE" },
   { flag: "layout_story_opener", photos: 0, funFact: false, taille: "ample", note: "CORPS AMPLE, récit seul" },
@@ -208,7 +214,7 @@ const mesures = await page.evaluate(() => {
     ".mb-hero": 268 * PT,
     ".mb-day__floats": 175 * PT,
     ".mb-chapter__map": 176 * PT,
-    ".mb-trio": 360 * PT,
+    ".mb-trio__bas": 212 * PT,
   };
 
   const pages = Array.from(document.querySelectorAll(".page--day"));
@@ -246,7 +252,7 @@ const mesures = await page.evaluate(() => {
        une boîte flex clampée garde sa hauteur pendant que son texte déborde
        par-dessous, et ce débordement-là est celui qui s'imprime. */
     let bas = content.getBoundingClientRect().top + parseFloat(style.paddingTop);
-    for (const noeud of Array.from(p.querySelectorAll(".mb-note p, .mb-note ul, .mb-note__title, .mb-card, .mb-photo, .mb-gallery, .mb-trio, .mb-prompt, .mb-quiz"))) {
+    for (const noeud of Array.from(p.querySelectorAll(".mb-note p, .mb-note ul, .mb-note__title, .mb-card, .mb-photo, .mb-gallery, .mb-trio, .mb-bas, .mb-tete, .mb-milieu, .mb-prompt, .mb-quiz"))) {
       const r = (noeud as HTMLElement).getBoundingClientRect();
       if (r.height > 0) bas = Math.max(bas, r.bottom);
     }

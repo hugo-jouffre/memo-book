@@ -69,8 +69,8 @@ Les deux autres fichiers à connaître :
 - Jamais un mur de texte. Une page qui laisse la photo dominer est un bon
   résultat ; l'inverse ne l'est pas
 - Toujours prévoir : une couverture, une page d'intro, les pages de contenu,
-  une quatrième de couverture. Les **pages libres de fin** et la **carte postale**
-  sont demandées par le panel mais ne sont pas encore rendues (voir plus bas)
+  une quatrième de couverture. Les **pages libres de fin** ont été retirées le
+  15/10/2026 ; la **carte postale** reste à construire
 - Garder une cohérence visuelle stricte sur tout le carnet une fois un style
   choisi (pas de mélange de styles)
 - Gérer les débordements : si un texte dépasse les limites de `LAYOUT_KB.md`,
@@ -293,7 +293,7 @@ produit pas** — et l'app ne devrait pas les proposer.
 |---|---|
 | **Pointillés** (ON/OFF, ON par défaut) | Un booléen dans le payload, qui éteint la réglure `.mb-note__rules`. Le rythme vertical, lui, ne change pas |
 | **Quatre typographies** | Un champ par axe, branché sur `--mb-font-display`, `--mb-font-title`, `--mb-font-hand`, et un token d'encart à créer. Hansley est versionnée mais pas encore inlinée : le titre retombe sur la manuscrite |
-| **Zones libres** (ON/OFF, ON par défaut) | Les **trois pages réglées de fin de carnet** sont rendues (`pages_libres: 3`, posé par `bookSettings.ts` — l'agent n'a rien à faire). Reste à construire : une zone blanche en fin de chaque étape, pour écrire ou dessiner à la main |
+| **Zones libres** (ON/OFF, ON par défaut) | **Sans effet depuis le 15/10/2026** : les pages réglées de fin de carnet sont retirées (`pages_libres: 0`, posé par `bookSettings.ts` — l'agent n'a rien à faire) |
 | **Mot fléché** (ON/OFF, ON par défaut) | Une grille générée au moment de la commande, à partir des mots que la rédaction tient déjà, et posée en fin de carnet |
 | **Quantité de décor** au-delà du scotch | Le rendu des stickers, absent de `index.html` malgré les classes CSS |
 | **Carte postale automatique** | Repoussée. Toujours demandée par deux foyers du panel sur trois : un layout recto-verso, photo pleine page d'un côté, message manuscrit, timbre et adresse de l'autre |

@@ -111,9 +111,15 @@ describe("la table des gabarits et celle du validateur", () => {
 
   it("couvrent les mêmes layouts, pour qu'aucun ne passe entre les deux", () => {
     const manquants = Object.keys(LAYOUT_CAPACITY).filter((nom) => !GABARITS[nom]);
-    // `layout_recit_photo` est une maquette faite à la main : le ratio ne le
-    // choisit pas, il recompose la page sur un gabarit qu'il connaît.
-    expect(manquants).toEqual(["layout_recit_photo"]);
+    // `layout_recit_photo` est une maquette faite à la main, et les trois
+    // layouts du 15/10/2026 mettent en scène un fun fact : le ratio ne les
+    // choisit pas, c'est le composeur qui y passe une page déjà comptée.
+    expect(manquants).toEqual([
+      "layout_recit_photo",
+      "layout_recit_deux_photos",
+      "layout_photos_en_tete",
+      "layout_recit_encart_milieu",
+    ]);
   });
 });
 

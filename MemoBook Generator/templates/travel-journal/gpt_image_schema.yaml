@@ -140,17 +140,17 @@ properties:
         minimum: 0
         maximum: 1
         description: >
-          Pages libres, réglées, posées après le colophon et l'introduction pour
-          que la première étape commence sur une page de gauche : 1 quand le
-          colophon et l'introduction font un nombre pair de pages.
+          Une page blanche posée après le colophon et l'introduction pour que la
+          première étape commence sur une page de gauche : 1 quand le colophon et
+          l'introduction font un nombre pair de pages. Elle n'est plus réglée
+          (15/10/2026).
       pages_libres:
         type: integer
         minimum: 0
         maximum: 3
         description: >
-          Pages libres, réglées, posées après la dernière étape et avant la
-          quatrième, pour écrire à la main : 3 quand le réglage « Zones libres »
-          est allumé (par défaut), 0 sinon.
+          **Ignoré depuis le 15/10/2026** : les pages réglées de fin de carnet
+          sont retirées. Toujours 0 ; gardé pour les payloads existants.
       fond_perdu:
         type: boolean
         description: >
@@ -419,22 +419,63 @@ $defs:
           main) : quelques lignes pleine largeur, puis la colonne de texte à gauche
           de la photo, qui flotte à droite (format 0,51). `photos[0]` peut porter un
           `label`, l'étiquette de titre posée dessus (30 signes au plus). Un
-          `fun_facts` devient un post-it « Infos » en bas à gauche. Bandeau ou suite :
-          560 / 880 caractères, 800 en page de suite avec le post-it.
+          `fun_facts` devient un post-it en bas à gauche. Bandeau ou suite :
+          560 / 860 caractères, 760 en page de suite avec le post-it.
       layout_trio_portrait:
         type: boolean
         description: >
-          Page de suite seulement (jamais sous `day_intro`). Récit court en
-          tête, réglure prolongée jusqu'aux photos, puis trois photos en
-          cascade : une portrait en haut, deux portraits en bas, tracé
-          pointillé derrière. Exige 3 photos. Plafond mesuré : 420 caractères
+          Page de suite seulement (jamais sous `day_intro`). Maquettes du
+          15/10/2026 : le récit en colonne à côté d'une grande photo en hauteur
+          (`photos[0]`, format 0,58), puis deux portraits en bas, tracé
+          pointillé derrière. Exige 3 photos. Plafond mesuré : 450 caractères
           en 2 paragraphes au plus.
       layout_trio_landscape:
         type: boolean
         description: >
-          Comme `layout_trio_portrait`, mais la photo du haut est une paysage
-          (format 1,6) ; les deux du bas restent des portraits. `photos[0]` va
-          en haut. Exige 3 photos ; 420 caractères en 2 paragraphes au plus.
+          Comme `layout_trio_portrait`, mais en bas un portrait (`photos[1]`)
+          et une photo en largeur (`photos[2]`, format 1,42), celle-ci sous la
+          grande photo. Exige 3 photos ; 450 caractères en 2 paragraphes au plus.
+      trio_cote:
+        type: string
+        enum: [gauche, droite]
+        description: >
+          Le côté du récit sur un trio : à gauche (défaut) ou à droite, la page
+          retournée. Le composeur alterne d'un trio à l'autre.
+      layout_recit_deux_photos:
+        type: boolean
+        description: >
+          Maquette du 15/10/2026. Ouverture d'étape à deux photos : une photo en
+          hauteur à gauche (`photos[0]`, format 0,61) que le récit contourne, puis,
+          en bas, le post-it du fun fact à gauche et `photos[1]` à droite (0,69).
+          340 caractères en 2 paragraphes au plus.
+      layout_photos_en_tete:
+        type: boolean
+        description: >
+          Maquette du 15/10/2026, page de suite seulement. Deux photos en tête
+          (format 0,71), le récit pleine largeur, le post-it du fun fact pincé en
+          bas à droite. 780 caractères en 3 paragraphes, 300 avec le post-it.
+      layout_recit_encart_milieu:
+        type: boolean
+        description: >
+          Maquette du 15/10/2026, page de suite seulement. Le récit coupé par une
+          bande : une photo inclinée (format 0,74) et le post-it du fun fact pincé,
+          côte à côte. Le récit se répartit entre `body_html` et `body_html_apres`
+          (800 caractères à eux deux, 4 paragraphes).
+      body_html_apres:
+        type: string
+        description: >
+          La suite du récit sous la bande du milieu de `layout_recit_encart_milieu`.
+          Ignoré par les autres layouts.
+      bande_max:
+        type: number
+        description: >
+          Hauteur maximale de la bande de photos ajustée, en points, padding
+          compris. **Calculée par le composeur** (`bandeAjustee`) : la bande grandit
+          dans la place que le récit laisse, jusqu'à la hauteur où ses photos se
+          rogneraient de plus d'un quart. Chaque photo porte alors son `poids`.
+      poids_fun_fact:
+        type: number
+        description: Le poids du post-it posé dans une bande ajustée, à la place d'une photo.
       layout_story_opener:
         type: boolean
         description: "Layout #5bis : pleine page d'ouverture de jour avec 1-3 photos (kicker + récit)."
@@ -524,8 +565,14 @@ $defs:
                   type: string
                   maxLength: 30
                   description: >
-                    Étiquette de titre posée sur la photo (« Rizières de Banaue »),
-                    rendue par `layout_recit_photo`. La `legende` de l'analyse d'étape.
+                    Étiquette de titre posée sur la photo (« Rizières de Banaue ») : un
+                    sticker centré en haut de la photo, en Playfair Display Bold. La
+                    `legende` de l'analyse d'étape.
+                poids:
+                  type: number
+                  description: >
+                    Dans une bande ajustée (`bande_max`) : la part de largeur de la
+                    photo, son format borné à [0,5 ; 2]. Calculé par le composeur.
       photo_captions:
         type: array
         description: Légendes alignées avec l'ordre des photos

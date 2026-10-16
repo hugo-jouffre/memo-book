@@ -115,14 +115,25 @@ export const LAYOUT_CAPACITY: Readonly<Record<string, { bandeau: number; suite: 
   // de reliure, moins les lignes vides entre paragraphes.
   layout_story_full: { bandeau: 1140, suite: 1640 },
   // Pages de suite seulement : sous un bandeau, les trois photos n'ont plus
-  // leur hauteur (mesuré le 08/10/2026 : 440 signes en deux paragraphes ;
-  // 410 avec les marges de reliure).
+  // leur hauteur. Trio des maquettes du 15/10/2026 (récit en colonne à côté
+  // d'une grande photo) : 500 signes mesurés en deux paragraphes, 450 retenus.
   // Le récit qui contourne une grande photo (maquette faite à la main) : la
-  // capacité ordinaire ; avec le post-it « Infos », 800 en page de suite.
-  layout_recit_photo: { bandeau: 560, suite: 880 },
-  layout_trio_portrait: { bandeau: 0, suite: 410 },
-  layout_trio_landscape: { bandeau: 0, suite: 410 },
+  // capacité ordinaire ; avec le post-it « Infos », 760 en page de suite
+  // (remesuré le 15/10/2026, photo écartée du texte).
+  layout_recit_photo: { bandeau: 560, suite: 860 },
+  layout_trio_portrait: { bandeau: 0, suite: 450 },
+  layout_trio_landscape: { bandeau: 0, suite: 450 },
+  // Les layouts du 15/10/2026 (`mise-en-page.js`, `CAPACITE_PAGE`) :
+  // ouverture à deux photos (360 mesurés), deux photos en tête d'une page de
+  // suite (820 mesurés, 320 avec le post-it), récit coupé par une photo et un
+  // post-it (840 mesurés, `body_html` et `body_html_apres` additionnés).
+  layout_recit_deux_photos: { bandeau: 340, suite: 340 },
+  layout_photos_en_tete: { bandeau: 0, suite: 780 },
+  layout_recit_encart_milieu: { bandeau: 0, suite: 800 },
 };
+
+/** Les layouts réservés aux pages de suite : sous un bandeau, leurs photos n'ont plus leur hauteur. */
+export const SUITE_LAYOUTS = ["layout_photos_en_tete", "layout_recit_encart_milieu"] as const;
 
 /** Les deux trios (récit court, une photo en haut, deux en bas). */
 export const TRIO_LAYOUTS = ["layout_trio_portrait", "layout_trio_landscape"] as const;
@@ -159,6 +170,8 @@ export const LAYOUT_PARAGRAPHS: Readonly<
   Record<string, { bandeau: number; suite: number }>
 > = {
   layout_story_full: { bandeau: 5, suite: 5 },
+  layout_recit_deux_photos: { bandeau: 2, suite: 2 },
+  layout_photos_en_tete: { bandeau: 3, suite: 3 },
 };
 
 /**
@@ -278,11 +291,20 @@ export function pagesAvantEtapes(payload: Record<string, unknown>): number {
   return 1 + (payload["intro_text"] ? 1 : 0) + (Number.isInteger(libres) && libres > 0 ? libres : 0);
 }
 
+/**
+ * Le récit d'une journée, en paragraphes : `body_html`, puis `body_html_apres`
+ * — la suite du récit sous la bande du milieu (`layout_recit_encart_milieu`).
+ */
+function paragraphsOf(day: Record<string, unknown>): string[] {
+  return (["body_html", "body_html_apres"] as const).flatMap((champ) => {
+    const valeur = day[champ];
+    return typeof valeur === "string" ? splitParagraphs(valeur) : [];
+  });
+}
+
 /** Longueur du récit d'une journée, en caractères de texte brut. */
 export function bodyLength(day: Record<string, unknown>): number {
-  const body = day["body_html"];
-  if (typeof body !== "string") return 0;
-  return splitParagraphs(body).join(" ").length;
+  return paragraphsOf(day).join(" ").length;
 }
 
 /** Les `layout_*` à `true` sur une journée, dans l'ordre du catalogue. */
@@ -331,7 +353,9 @@ export function pageCapacity(day: Record<string, unknown>): number {
   } else if (layout === "layout_split_left" && funFact) {
     capacity = 230;
   } else if (layout === "layout_recit_photo" && funFact && suite) {
-    capacity = 800;
+    capacity = 760;
+  } else if (layout === "layout_photos_en_tete" && funFact) {
+    capacity = 300;
   }
 
   const parDefaut = layout === "layout_story_opener" || layout === "layout_story_facts";
@@ -438,8 +462,7 @@ function checkStep(
       continue;
     }
 
-    const body = day["body_html"];
-    const paragraphes = typeof body === "string" ? splitParagraphs(body).length : 0;
+    const paragraphes = paragraphsOf(day).length;
     const tableParagraphes = LAYOUT_PARAGRAPHS[layout] ?? PARAGRAPHS_PER_PAGE;
     const plafondParagraphes = day["day_intro"]
       ? tableParagraphes.bandeau
@@ -574,6 +597,14 @@ function checkDay(
   }
 
   const layout = mainLayout(day);
+  if ((SUITE_LAYOUTS as readonly string[]).includes(layout) && day["day_intro"]) {
+    errors.push({
+      path: `days[${index}]`,
+      message:
+        `\`${layout}\` est réservé aux pages de suite : sous le bandeau de la première ` +
+        "page d'une étape, ses photos n'ont plus leur hauteur.",
+    });
+  }
   if ((TRIO_LAYOUTS as readonly string[]).includes(layout)) {
     if (day["day_intro"]) {
       errors.push({

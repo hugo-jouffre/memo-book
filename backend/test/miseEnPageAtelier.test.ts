@@ -14,6 +14,9 @@ const M = require("../../MemoBook Generator/public/mise-en-page.js") as {
   composerJours: (etapes: unknown[], options?: Record<string, unknown>) => Jour[];
   cadreDuVoyage: (lieux: unknown[], pays: string, contours: unknown) => [number, number, number, number] | null;
   composition: (plan: unknown) => string;
+  layoutAvecEncart: (plan: unknown) => string | null;
+  bandeAjustee: (photos: unknown[], avecEncart: boolean) => { poids: number[]; bandeMax: number } | null;
+  couperEnDeux: (texte: string[]) => [string[], string[]];
 };
 const carte = require("../../MemoBook Generator/public/carte.js") as {
   renderMapDataUri: (contours: unknown, requete: unknown) => string;
@@ -122,8 +125,20 @@ describe("mise en page de l'atelier", () => {
     const recit = Array.from({ length: 4 }, (_, i) => paragrapheDe(`le lieu ${i}`, 2)).join(" ");
     const photos = ["a", "b", "c", "d"].map((id) => photo(id));
     const sans = M.composerJours([etape(recit, photos)], { pagesAvant: 1 });
+    // Les gabarits à deux photos des maquettes du 15/10/2026 (photo contournée,
+    // photos en tête) ne sont pas une bande : ils varient la double page.
     const comp = (j: Jour) =>
-      j["layout_hero_top"] ? "hero" : j.photos.length === 0 ? "texte" : j.photos.length === 1 ? "texte+photo" : `bande${j.photos.length}`;
+      j["layout_hero_top"]
+        ? "hero"
+        : j["layout_recit_deux_photos"]
+          ? "recit+deux-photos"
+          : j["layout_photos_en_tete"]
+            ? "photos-en-tete"
+            : j.photos.length === 0
+              ? "texte"
+              : j.photos.length === 1
+                ? "texte+photo"
+                : `bande${j.photos.length}`;
     // Page 0 à gauche (pagesAvant = 1 : le colophon est la page 1), page 1 à droite.
     expect(comp(sans[0]!)).not.toBe(comp(sans[1]!));
     expect(sans.reduce((n, j) => n + j.photos.length, 0)).toBe(4);
@@ -439,7 +454,7 @@ describe("mise en page de l'atelier", () => {
       }
     });
 
-    it("ne pose jamais un sticker par-dessus la mention « Fun fact rédigé par IA »", () => {
+    it("n'imprime plus la mention « Fun fact rédigé par IA » (15/10/2026), et les stickers reprennent son coin", () => {
       const bibliotheque = ["appareil-photo", "carte-postale", "boussole", "globe"].map((famille) => ({
         fichier: `${famille}.png`,
         famille,
@@ -457,11 +472,9 @@ describe("mise en page de l'atelier", () => {
         ),
         { stickers: bibliotheque, decorations: 4, funFacts: true },
       );
-      const avecMention = jours.filter((j) => j["ai_note"]);
-      expect(avecMention.length).toBeGreaterThan(0);
-      for (const j of avecMention) {
-        for (const s of (j["stickers"] as { place: string }[] | undefined) ?? []) expect(s.place).not.toMatch(/^(band|bottom)-right$/);
-      }
+      const avecEncart = jours.filter((j) => (j["fun_facts"] as string[]).length);
+      expect(avecEncart.length).toBeGreaterThan(0);
+      for (const j of jours) expect(j["ai_note"] ?? "").not.toMatch(/fun fact/i);
     });
 
     describe("bibliothèque de stickers (Notion, 12/10/2026)", () => {
@@ -520,10 +533,23 @@ describe("mise en page de l'atelier", () => {
       });
     });
 
-    it("titre chaque fun fact « Infos »", () => {
+    it("garde le titre proposé pour le fun fact, et ne répète jamais le même titre deux encarts de suite", () => {
       const analyse = { photos: [], funFact: { texte: "Un fait.", titre: "Culture générale", registre: "histoire", paragraphe: 0, pertinence: 9 } };
       const jours = M.composerJours([etape(paragrapheDe("la plage", 1), [], analyse)], { funFacts: true });
-      expect(jours.find((j) => (j["fun_facts"] as string[]).length)?.["fun_facts_title"]).toBe("Infos");
+      expect(jours.find((j) => (j["fun_facts"] as string[]).length)?.["fun_facts_title"]).toBe("Culture générale");
+
+      // Six étapes aux fun facts du même registre, sans titre : « Infos »,
+      // « Le saviez-vous ? »… varient.
+      const tous = M.composerJours(
+        ["Paros", "Naxos", "Ios", "Milos", "Sifnos", "Syros"].map((lieu) =>
+          etape(paragrapheDe(`le port de ${lieu}`, 2), [], { photos: [], funFact: { texte: `Le port de ${lieu}.`, registre: "cuisine", paragraphe: 0, pertinence: 9 } }, lieu),
+        ),
+        { funFacts: true },
+      );
+      const titres = tous.filter((j) => (j["fun_facts"] as string[]).length).map((j) => j["fun_facts_title"] as string);
+      expect(titres.length).toBeGreaterThan(1);
+      for (const t of titres) expect(["Infos", "Le saviez-vous ?", "Fun fact", "Culture générale"]).toContain(t);
+      titres.slice(1).forEach((t, k) => expect(t).not.toBe(titres[k]));
     });
   });
 
@@ -567,11 +593,12 @@ describe("mise en page de l'atelier", () => {
       expect(layoutDe(jours[1]!)).toBe("trio_portrait");
     });
 
-    it("met la photo paysage en haut d'un trio paysage", () => {
+    it("met la photo paysage en bas d'un trio paysage, sous la grande photo (maquettes du 15/10/2026)", () => {
       const photos = ["a", "b", "c", "d", "e"].map((id) => photo(id)).concat(photo("large", 1.5));
       const jours = M.composerJours([etape(recit, photos)]);
       expect(layoutDe(jours[1]!)).toBe("trio_landscape");
-      expect(url(jours[1]!.photos[0]!)).toContain("/large.");
+      expect(url(jours[1]!.photos[2]!)).toContain("/large.");
+      expect(jours[1]!["trio_cote"]).toBe("gauche");
     });
 
     it("n'en fait jamais sur la première page d'une étape", () => {
@@ -755,8 +782,8 @@ describe("mise en page de l'atelier", () => {
       // La promesse est une fréquence : le 7 de la page visée passe devant le
       // 9 ou le 8 d'une page voisine.
       expect(encarts(jours)).toEqual(["Fait n° 0.", null, null, "Fait n° 3.", null]);
-      expect(jours[0]?.["fun_facts_title"]).toBe("Infos");
-      expect(jours[0]?.["ai_note"]).toBe("Fun fact rédigé par IA");
+      expect(["Infos", "Le saviez-vous ?", "Fun fact", "Culture générale"]).toContain(jours[0]?.["fun_facts_title"]);
+      expect(jours[0]?.["ai_note"]).toBeUndefined();
     });
 
     it("évite deux encarts du même registre à la suite quand il y a mieux", () => {
@@ -1035,6 +1062,91 @@ describe("mise en page de l'atelier", () => {
       expect(normal(texteDes(jours))).toBe(normal(texteDes(sans)));
       expect(jours.length).toBe(sans.length);
       expect(recalage(journal)).toEqual([expect.stringMatching(/hors d'atteinte.*le récit seul en fait/)]);
+    });
+  });
+
+  describe("lot 12 : layouts du 15/10/2026, fun facts, bandes ajustées", () => {
+    const plan = (sorte: "bandeau" | "suite", texte: string[], photos: ReturnType<typeof photo>[]) => ({
+      genre: "recit",
+      sorte,
+      texte,
+      photos,
+      layout: photos.length === 2 ? "layout_split_left" : "layout_story_facts",
+    });
+    const court = [paragrapheDe("le port", 2).trim()];
+
+    it("met en scène le fun fact d'une page à deux photos : photo contournée à l'ouverture, photos en tête ensuite", () => {
+      expect(M.layoutAvecEncart(plan("bandeau", court, [photo("a"), photo("b")]))).toBe("layout_recit_deux_photos");
+      expect(M.layoutAvecEncart(plan("suite", court, [photo("a"), photo("b")]))).toBe("layout_photos_en_tete");
+      // Un récit trop long pour la maquette garde son gabarit.
+      const long = [paragrapheDe("le port", 4).trim()];
+      expect(M.layoutAvecEncart(plan("bandeau", long, [photo("a"), photo("b")]))).toBeNull();
+      // Une photo en largeur ne tient pas dans un emplacement en hauteur.
+      expect(M.layoutAvecEncart(plan("suite", court, [photo("a", 1.6), photo("b", 1.6)]))).toBeNull();
+    });
+
+    it("coupe le récit d'une page de suite à une photo par la photo et le post-it", () => {
+      const texte = [paragrapheDe("le port", 2).trim(), paragrapheDe("la plage", 2).trim()];
+      expect(M.layoutAvecEncart(plan("suite", texte, [photo("a")]))).toBe("layout_recit_encart_milieu");
+      // Trop court pour être coupé en deux : la zone flottante suffit.
+      expect(M.layoutAvecEncart(plan("suite", [phrase("le port").trim()], [photo("a")]))).toBeNull();
+      const [avant, apres] = M.couperEnDeux(texte);
+      expect(avant).toEqual([texte[0]]);
+      expect(apres).toEqual([texte[1]]);
+      // Un seul paragraphe se coupe sur une fin de phrase, sans perdre un mot.
+      const seul = paragrapheDe("le marché", 4).trim();
+      const [a1, a2] = M.couperEnDeux([seul]);
+      expect(a1).toHaveLength(1);
+      expect(a2).toHaveLength(1);
+      expect(`${a1[0]} ${a2[0]}`).toBe(seul);
+      expect(a1[0]).toMatch(/\.$/);
+    });
+
+    it("pose le fun fact sur une page de texte seul plutôt que sur une page de photos", () => {
+      const jours = M.composerJours(
+        [
+          etape([paragrapheDe("le port", 3), paragrapheDe("la plage", 3), paragrapheDe("la ville", 3)].join(" "), [], {
+            photos: [],
+            funFacts: [{ texte: "Un fait.", registre: "histoire", paragraphe: 0, pertinence: 7 }],
+          }),
+          etape(paragrapheDe("Naxos", 2), [photo("n1"), photo("n2")], {
+            photos: [],
+            funFacts: [{ texte: "Un autre.", registre: "vecu", paragraphe: 0, pertinence: 9 }],
+          }, "Naxos"),
+        ],
+        { funFacts: true, pagesAvant: 1 },
+      );
+      const premier = jours.find((j) => (j["fun_facts"] as string[]).length)!;
+      expect(premier.photos).toHaveLength(0);
+      expect(premier["fun_facts"]).toEqual(["Un fait."]);
+    });
+
+    it("ajuste la bande de photos au format de chacune, sans timbre-poste", () => {
+      const bande = M.bandeAjustee([photo("a"), photo("b", 1.5), photo("c")], false)!;
+      expect(bande.poids).toEqual([0.75, 1.5, 0.75]);
+      // Elle ne grandit pas au point de rogner ses photos de plus d'un quart.
+      expect(bande.bandeMax).toBeLessThanOrEqual(322);
+      expect(bande.bandeMax).toBeGreaterThanOrEqual(160);
+      // Une photo de groupe ne se rogne pas : la bande garde ses emplacements.
+      expect(M.bandeAjustee([photo("a"), { ...photo("b"), groupe: true }], false)).toBeNull();
+
+      const jours = M.composerJours(
+        [etape(`${paragrapheDe("le port", 3)} ${paragrapheDe("la plage", 2)}`, [photo("a"), photo("b", 1.5), photo("c"), photo("d")])],
+        { pagesAvant: 1 },
+      );
+      const page = jours.find((j) => j["layout_split_left"] || j["layout_collage"])!;
+      expect(page["bande_max"]).toBeGreaterThan(0);
+      const poids = page.photos.map((p) => (p as { poids?: number }).poids);
+      expect(poids.every((x) => x !== undefined && x >= 0.5 && x <= 2)).toBe(true);
+    });
+
+    it("alterne le côté du récit d'un trio à l'autre", () => {
+      const recit = [paragrapheDe("la plage", 2), paragrapheDe("le port", 2), paragrapheDe("la ville", 2)].join(" ");
+      const jours = M.composerJours(
+        ["Paros", "Naxos"].map((lieu) => etape(recit, ["a", "b", "c", "d", "e", "f"].map((id) => photo(`${lieu}-${id}`)), null, lieu)),
+      );
+      const trios = jours.filter((j) => j["layout_trio_portrait"] || j["layout_trio_landscape"]);
+      expect(trios.map((j) => j["trio_cote"])).toEqual(["gauche", "droite"]);
     });
   });
 });
