@@ -73,7 +73,6 @@ npm run test:visual                         # diff pixel contre les captures de 
 npm run test:visual:update                  # régénère les captures après un changement voulu
 npm run fonts:build                         # régénère fonts.css depuis Google Fonts
 npm run inspector                           # inspecteur HTML : nomme chaque élément au survol
-npm run inspector:catalogue                 # le même, une variante de layout par page
 npm run icons:build                         # embarque assets/icons/ dans index.html
 npm run icons:check                         # échoue si le sprite est périmé
 ```
@@ -83,20 +82,8 @@ carnet rendu et, au survol de n'importe quel élément, donne son nom, son séle
 champs JSON qui l'alimentent et les variables CSS en jeu. Elle sert à formuler des demandes de
 retouche précises plutôt que « le bloc avec la pince est trop haut ». Le dictionnaire des
 composants vit dans `scripts/build-inspector.ts` : il se met à jour en même temps que le
-template, et `MemoBook Generator/templates/travel-journal/samples/showcase.json` est le carnet
-d'exemple qu'il rend.
-
-`npm run inspector:catalogue` fabrique l'autre vue, `.render-out/inspecteur-layouts.html` : une
-page par variante du § « Catalogue des layouts » de `LAYOUT_KB.md`, depuis
-`samples/layouts.json`, avec sous la barre la fiche du layout affiché — quand le choisir, combien
-de photos il prend, quel plafond de récit il accepte. C'est la vue à regarder pour comparer deux
-mises en page ou vérifier qu'un changement de CSS ne casse rien ailleurs ; le bilan de ratio
-texte / photo, lui, n'est rendu que sur le carnet, dont toutes les étapes visent la même cible.
-
-Le PDF du profil aperçu est écarté de la page quand les deux dépasseraient la limite de 16 Mio
-du visualiseur d'artefacts : Chromium rastérise le grain du papier page après page, et il pèse
-à lui seul 16 Mo sur le carnet, 47 Mo sur le catalogue. Le bouton d'export le dit, et le profil
-imprimeur reste embarqué.
+template, et `MemoBook Generator/templates/travel-journal/samples/showcase.json` est le payload qui exerce tous
+les layouts d'un coup.
 
 Les sorties atterrissent dans `.render-out/` (ignoré par Git).
 

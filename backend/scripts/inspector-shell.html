@@ -316,34 +316,6 @@
 
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 
-  /* --- Fiche du layout ---------------------------------------------------
-     Ce qu'on veut savoir de la page qu'on regarde : quel drapeau l'a produite,
-     ce qui la distingue des autres pages du même layout, et ce que LAYOUT_KB
-     dit de son emploi. Repliée, elle tient sur une ligne ; c'est la page qui
-     doit occuper l'écran, pas sa notice. */
-  /* Collée sous la barre : la notice doit rester lisible pendant qu'on fait
-     défiler la page qu'elle décrit. */
-  #fiche { position: sticky; top: var(--bar); z-index: 30;
-    margin: 8px 10px 0; font-size: 11.5px; border: 1px solid var(--line);
-    border-radius: 7px; background: color-mix(in srgb, var(--surface) 94%, transparent);
-    backdrop-filter: blur(12px); box-shadow: var(--shadow); }
-  #fiche summary { display: flex; align-items: center; gap: 7px; padding: 6px 9px;
-    cursor: pointer; list-style: none; }
-  #fiche summary::-webkit-details-marker { display: none; }
-  #fiche summary::after { content: "+"; margin-left: auto; color: var(--ink-faint);
-    font: 600 13px/1 var(--mono); }
-  #fiche[open] summary::after { content: "−"; }
-  #fiche-nom { font-weight: 620; letter-spacing: -.01em; white-space: nowrap; }
-  #fiche-flag { flex: 0 0 auto; }
-  #fiche-flag:empty { display: none; }
-  #fiche-variante { color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis;
-    white-space: nowrap; }
-  #fiche-corps { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px;
-    margin: 0; padding: 0 9px 9px; border-top: 1px solid var(--line); padding-top: 7px; }
-  #fiche-corps dt { font-family: var(--mono); font-size: 9.5px; letter-spacing: .1em;
-    text-transform: uppercase; color: var(--ink-faint); padding-top: 2px; }
-  #fiche-corps dd { margin: 0; color: var(--ink); }
-
   /* --- Bilan du ratio texte / photo ------------------------------------- */
   #ratio { margin: 0 10px 8px; font-size: 11px; border: 1px solid rgba(43,35,27,.14);
     border-radius: 6px; background: rgba(255,255,255,.6); }
@@ -398,17 +370,6 @@
   <button type="button" id="export-note-close" aria-label="Fermer">×</button>
 </div>
 
-<!-- La fiche du layout de la page à l'écran, recopiée du catalogue de
-     LAYOUT_KB par `build-inspector.ts`. Elle suit le défilement. -->
-<details id="fiche">
-  <summary>
-    <span id="fiche-nom">Page</span>
-    <code id="fiche-flag"></code>
-    <span id="fiche-variante"></span>
-  </summary>
-  <dl id="fiche-corps"></dl>
-</details>
-
 <!-- Bilan du ratio texte / photo, étape par étape. Replié par défaut : il ne
      doit pas manger la page, mais il répond à la seule question qu'on se pose
      après un changement de réglage — « est-ce que le carnet a tenu la cible ? ». -->
@@ -447,8 +408,6 @@
 <script>
   const PARTS = __PARTS__;
   const PAGES = __PAGES__;
-  /** Une fiche par drapeau `layout_*`, telle que LAYOUT_KB la décrit. */
-  const LAYOUTS = __LAYOUTS__;
   /** Le bilan de ratio par étape, calculé à la fabrication (`build-inspector.ts`). */
   const RATIOS = __RATIOS__;
   /** La tolérance du ratio, en points — la même constante que le module de calcul. */
@@ -521,53 +480,6 @@
     select.value = String(index);
     document.getElementById("prev").disabled = index === 0;
     document.getElementById("next").disabled = index === PAGES.length - 1;
-    remplirFiche(index);
-  }
-
-  // --- Fiche du layout -----------------------------------------------------
-  /**
-   * La notice de la page à l'écran.
-   *
-   * Elle répond à la question qu'on se pose devant un catalogue : « celle-là,
-   * c'est laquelle, et quand est-ce qu'on la choisit ? » Les pages de carnet
-   * qui ne sortent pas d'un drapeau `layout_*` — couverture, garde,
-   * introduction, page libre, quatrième — n'ont pas de fiche : la ligne le dit
-   * au lieu de rester vide.
-   */
-  const ficheNom = document.getElementById("fiche-nom");
-  const ficheFlag = document.getElementById("fiche-flag");
-  const ficheVariante = document.getElementById("fiche-variante");
-  const ficheCorps = document.getElementById("fiche-corps");
-
-  const LIGNES = [
-    ["rendu", "Rendu"],
-    ["quand", "Quand le choisir"],
-    ["photos", "Photos"],
-    ["plafond", "Plafond du récit"],
-    ["tailles", "Tailles acceptées"],
-  ];
-
-  function remplirFiche(index) {
-    const page = PAGES[index];
-    if (!page) return;
-    const fiche = page.fiche ? LAYOUTS[page.fiche] : null;
-
-    ficheNom.textContent = fiche ? fiche.name : page.label;
-    ficheFlag.textContent = page.fiche ?? "";
-    ficheVariante.textContent = page.variante || (fiche ? "" : page.detail);
-
-    ficheCorps.textContent = "";
-    const lignes = fiche
-      ? LIGNES.map(([cle, label]) => [label, fiche[cle]])
-      : [["Page", "Une page de carnet, hors du catalogue des layouts."]];
-    for (const [label, valeur] of lignes) {
-      if (!valeur) continue;
-      const dt = document.createElement("dt");
-      dt.textContent = label;
-      const dd = document.createElement("dd");
-      dd.textContent = valeur;
-      ficheCorps.append(dt, dd);
-    }
   }
 
   // --- Échelle -------------------------------------------------------------
@@ -626,17 +538,7 @@
 
   function pdfBlob(profile) {
     const base64 = pdfs()[profile];
-    // Un profil peut manquer : le PDF d'aperçu, où Chromium rastérise le grain
-    // du papier page après page, dépasse à lui seul la limite du visualiseur
-    // sur un carnet un peu long. `build-inspector.ts` l'écarte alors et le dit
-    // ici, plutôt que de laisser un bouton muet.
-    if (!base64) {
-      throw new Error(
-        `le PDF du profil « ${profile} » n'est pas embarqué : la page dépasserait ` +
-          `la limite de 16 Mio du visualiseur. Régénère-le en local avec ` +
-          `<code>npm run render:local</code>.`,
-      );
-    }
+    if (!base64) throw new Error(`aucun PDF embarqué pour le profil « ${profile} ».`);
     const binary = atob(base64);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);

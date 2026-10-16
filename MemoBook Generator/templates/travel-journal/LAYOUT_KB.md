@@ -1929,11 +1929,4 @@ cd backend
 npm run template:lint                      # dialecte Jinja + invariants CSS
 npm run render:local -- --offline --png    # PDF + un PNG par page
 npm run render:local -- --data mon.json --validate --png
-npm run inspector:catalogue                # une page par variante du catalogue ci-dessus
 ```
-
-`npm run inspector:catalogue` rend `samples/layouts.json` : chaque layout de la table, et
-chacune de ses variantes, sur une page, avec sa fiche sous la barre — c'est là qu'on regarde à
-quoi ressemble vraiment une ligne de ce tableau. Le payload est écrit aux plafonds mesurés :
-si une page déborde après un changement de CSS, c'est que le plafond a bougé et que
-`calibrate-lengths.ts` doit être relancé.
