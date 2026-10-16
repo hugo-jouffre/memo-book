@@ -1,0 +1,521 @@
+{
+  "_lisez_moi": "Catalogue des layouts — une page par variante du § « Catalogue des layouts » de LAYOUT_KB.md, dans l'ordre du tableau. Ce n'est pas un carnet modèle : il met côte à côte des compositions qu'un vrai carnet ne mettrait jamais à la suite, et chaque récit est écrit à la longueur du plafond mesuré pour sa configuration. Pour un carnet d'exemple, voir showcase.json. Fabrique la page : npm run inspector:catalogue Le validateur l'accepte, avec des avertissements attendus : chaque variante y est une étape d'une seule page, donc d'un nombre de pages impair.",
+  "render_profile": "preview",
+  "book_title": "Catalogue",
+  "book_subtitle": "Toutes les mises en page du carnet, une par page",
+  "authors": "Gabarit travel-journal",
+  "date_range": "octobre 2026",
+  "cover_photo": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-cover.jpg",
+  "brand_name": "MemoBook",
+  "year": "2026",
+  "intro_title": "Mode d'emploi",
+  "intro_text": "<p>Chaque page qui suit montre une mise en page du gabarit, dans l'ordre du catalogue de LAYOUT_KB. Le sélecteur de la barre nomme le drapeau actif, et la fiche sous la barre rappelle quand le choisir, combien de photos il prend et quelle longueur de récit il accepte.</p><p>Les récits sont écrits à la longueur du plafond mesuré pour chaque configuration : c'est la page la plus remplie que le layout accepte sans déborder. Un récit plus long demande une page de plus, jamais une coupe.</p><p>Ce carnet n'est pas un modèle de composition. Deux pages en vis-à-vis y portent souvent la même famille de layout, ce qu'un vrai carnet évite.</p>",
+  "intro_photos": [
+    "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-intro-1.jpg",
+    "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-intro-2.jpg"
+  ],
+  "days": [
+    {
+      "title": "Ouverture de chapitre",
+      "day_intro": {
+        "day_number": "01",
+        "location": "Philippines",
+        "date": "février 2026",
+        "stay": "Casa Miranda",
+        "host": "Lito et Bea"
+      },
+      "layout_chapter_map": true,
+      "body_html": "<p>Trois semaines d'archipel, de Manille aux Visayas, en ferry et en scooter.</p>",
+      "fun_facts": [
+        "Les Philippines comptent plus de 7000 îles. Oui oui."
+      ],
+      "fun_facts_title": "Infos",
+      "map": {
+        "regions": [
+          "PH"
+        ],
+        "points": [
+          {
+            "label": "Manille",
+            "lat": 14.5995,
+            "lon": 120.9842
+          },
+          {
+            "label": "Visayas",
+            "lat": 10.3157,
+            "lon": 123.8854
+          }
+        ]
+      },
+      "photos": [
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-02a.jpg",
+          "tape_corner": "bottom-left",
+          "focus": "50% 50%"
+        },
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-02b.jpg",
+          "tape_corner": "bottom-right",
+          "focus": "17% 50%"
+        }
+      ],
+      "trace": "a"
+    },
+    {
+      "title": "",
+      "layout_recit_photo": true,
+      "body_html": "<p>La suite de la même étape, sur la maquette faite à la main : quelques lignes pleine largeur, puis le récit en colonne à gauche de la grande photo en hauteur. Elle flotte à droite, inclinée, avec son étiquette de titre.</p><p>C'est la page qui tient le plus de texte avec une seule photo : 800 signes en page de suite, post-it compris. Le récit contourne l'image au lieu de s'arrêter au-dessus, et la réglure ne se rompt pas une seule fois.</p><p>Le fun fact devient un post-it « Infos » posé en bas à gauche, dans le blanc que la colonne laisse. Sans fun fact, c'est la place d'un sticker.</p>",
+      "fun_facts": [
+        "Les rizières en terrasses de Banaue ont plus de 2000 ans et sont encore cultivées à la main."
+      ],
+      "fun_facts_title": "Infos",
+      "photos": [
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-01.jpg",
+          "label": "Rizières de Banaue",
+          "focus": "50% 30%"
+        }
+      ]
+    },
+    {
+      "title": "Ouverture de journée",
+      "day_intro": {
+        "day_number": "02",
+        "location": "De Barcelone à Cebu",
+        "date": "22-23 fev 2026",
+        "weather_key": "sun"
+      },
+      "tag": "Top départ",
+      "layout_story_opener": true,
+      "body_html": "<p>Le cas le plus courant, et celui par défaut : le récit pleine largeur, puis la carte info et la photo flottantes en bas de page.</p><p>Départ de Barcelone, sac sur le dos, direction les Philippines. Six heures jusqu'à Abu Dhabi, deux heures d'escale à marcher dans l'aéroport en mode semi-zombie, puis onze heures de plus.</p>",
+      "fun_facts": [
+        "Manille est la ville la plus densément peuplée au monde : 43 000 habitants au kilomètre carré."
+      ],
+      "fun_facts_title": "Fun fact",
+      "photos": [
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-05.jpg",
+          "tape_corner": "bottom-right",
+          "focus": "50% 50%"
+        }
+      ]
+    },
+    {
+      "title": "Bandeau seul, et un bloc à remplir",
+      "day_intro": {
+        "day_number": "03",
+        "location": "Siquijor",
+        "date": "24 fev 2026"
+      },
+      "layout_story_opener": true,
+      "body_html": "<p>Sans nuit, hôte, météo ni étiquette, le bandeau reste seul : une ligne de réglure le sépare du titre pour que le récit ne colle pas au ruban. C'est le seul cas où il garde une ligne vide sous le ruban, et le récit monte à 740 signes avec un bloc à remplir.</p><p>En bas, ce bloc prend la place de la zone flottante. Il occupe le blanc restant au lieu de le combler d'emoji et d'illustrations décoratives, et le voyageur écrit dessus à la main. Un seul bloc interactif par page : prompt ou quiz, jamais les deux empilés.</p>",
+      "prompt": {
+        "label": "Ton état d'esprit ce jour-là"
+      }
+    },
+    {
+      "title": "Le quiz, et la mention IA",
+      "day_intro": {
+        "day_number": "04",
+        "location": "Lazi",
+        "date": "25 fev 2026",
+        "weather_key": "sun-wind"
+      },
+      "layout_story_facts": true,
+      "body_html": "<p>L'autre bloc à remplir : un petit jeu, dont la réponse est imprimée à l'envers sous les propositions.</p><p>En bas de page, en petit et sans s'en excuser, la mention de ce qui vient de la machine. Elle s'affiche dès qu'un élément de la page a été généré.</p>",
+      "quiz": {
+        "question": "Combien d'îles comptent les Philippines ?",
+        "choices": [
+          "environ 700",
+          "environ 7000",
+          "environ 70 000"
+        ],
+        "answer": "environ 7641"
+      },
+      "ai_note": "Fun fact et illustration générés par IA"
+    },
+    {
+      "title": "La grande photo en tête",
+      "day_intro": {
+        "day_number": "05",
+        "location": "Paliton Beach",
+        "date": "26 fev 2026",
+        "weather_key": "sun"
+      },
+      "layout_hero_top": true,
+      "body_html": "<p>Une photo iconique porte la journée : elle prend la tête de la page, le récit passe dessous. Plafond court — 380 signes sous un bandeau — parce que l'image occupe la moitié haute de la feuille.</p>",
+      "photos": [
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-02a.jpg",
+          "tape_corner": "bottom-left",
+          "focus": "50% 50%"
+        }
+      ]
+    },
+    {
+      "title": "Carte info à gauche",
+      "day_intro": {
+        "day_number": "06",
+        "location": "Île de Siquijor",
+        "date": "27 fev 2026",
+        "weather_key": "cloud"
+      },
+      "tag": "Paliton Beach",
+      "layout_split_left": true,
+      "body_html": "<p>Un fait à mettre en avant et deux belles images. L'encart coûte la moitié de la page : 230 signes.</p>",
+      "fun_facts": [
+        "Paliton Beach est l'une des plus belles plages de l'île, surtout au coucher du soleil."
+      ],
+      "fun_facts_title": "Fun fact",
+      "photos": [
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-03b.jpg",
+          "tape_corner": "bottom-left",
+          "focus": "50% 50%"
+        },
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-02b.jpg",
+          "tape_corner": "bottom-right",
+          "focus": "17% 50%"
+        }
+      ],
+      "trace": "b"
+    },
+    {
+      "title": "Deux photos en bande",
+      "day_intro": {
+        "day_number": "07",
+        "location": "Coral Triangle",
+        "date": "28 fev 2026",
+        "weather_key": "sun-wind"
+      },
+      "layout_collage": true,
+      "body_html": "<p>Récit pleine largeur, puis la bande de photos calée en bas de page. À deux photos, la page a la même composition qu'un split_left sans carte info : elles comptent pour une en vis-à-vis.</p><p>La bande cède avant le texte. Si le récit s'allonge, elle se comprime — jamais sous 160 pt — et c'est elle qui porte le tracé pointillé du voyage.</p>",
+      "fun_facts": [
+        "Les Philippines font partie du Coral Triangle, l'une des zones marines les plus riches au monde."
+      ],
+      "fun_facts_title": "Culture générale",
+      "photos": [
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-03a.jpg",
+          "tape_corner": "bottom-right",
+          "focus": "50% 30%"
+        },
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-05.jpg",
+          "tape_corner": "bottom-left",
+          "focus": "50% 50%"
+        }
+      ],
+      "trace": "c"
+    },
+    {
+      "title": "Trois photos en bande",
+      "day_intro": {
+        "day_number": "08",
+        "location": "Apo Island",
+        "date": "29 fev 2026",
+        "weather_key": "rain"
+      },
+      "layout_collage": true,
+      "body_html": "<p>La même page, à trois photos : la journée dense visuellement. La bande se divise en trois cadres au lieu de deux, le récit garde son plafond de 540 signes en deux paragraphes.</p><p>En sortant, on croise Anne. Elle connaissait l'endroit pour y être venue dix ans plus tôt et trouve que les coraux ont perdu en couleur. Nous, avec nos yeux neufs, on trouve ça sublime.</p>",
+      "photos": [
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-02a.jpg",
+          "tape_corner": "bottom-left",
+          "focus": "50% 50%"
+        },
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-03c.jpg",
+          "tape_corner": "bottom-right",
+          "focus": "50% 30%"
+        },
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-02b.jpg",
+          "tape_corner": "bottom-left",
+          "focus": "50% 50%"
+        }
+      ],
+      "trace": "a"
+    },
+    {
+      "title": "Avant les trios",
+      "day_intro": {
+        "day_number": "09",
+        "location": "Siquijor",
+        "date": "01 mars 2026",
+        "stay": "Coco Grove"
+      },
+      "layout_story_opener": true,
+      "body_html": "<p>Les deux trios ne s'emploient jamais sur la première page d'une étape : elle porte le bandeau, et les trois photos n'auraient plus leur hauteur. Le validateur le refuse.</p><p>Cette page ouvre donc l'étape, et les deux suivantes sont ses pages de suite. Rien n'y rappelle l'étape : le texte continue, et le bandeau ne revient pas.</p>",
+      "photos": [
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-03a.jpg",
+          "fit": "contain",
+          "focus": "50% 50%"
+        }
+      ]
+    },
+    {
+      "title": "",
+      "layout_trio_portrait": true,
+      "body_html": "<p>Trois portraits en cascade : une photo en haut, deux en bas qui la chevauchent à peine, le tracé pointillé derrière.</p><p>Fin d'étape courte — 410 signes en deux paragraphes au plus, et la réglure descend jusqu'aux photos pour que la page n'ait pas de trou.</p>",
+      "photos": [
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-01.jpg",
+          "tape_corner": "bottom-left",
+          "focus": "50% 30%"
+        },
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-intro-1.jpg",
+          "tape_corner": "bottom-right",
+          "focus": "50% 50%"
+        },
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-03c.jpg",
+          "tape_corner": "bottom-left",
+          "focus": "50% 50%"
+        }
+      ],
+      "trace": "b"
+    },
+    {
+      "title": "",
+      "layout_trio_landscape": true,
+      "body_html": "<p>Le même trio, avec une photo paysage en haut : les deux du bas restent des portraits.</p><p>Entre les deux variantes, l'atelier choisit celle qui rogne le moins. S'il y a une paysage dans les trois, elle va en haut. Pas de fun fact sur un trio : il n'y a pas de place prévue.</p>",
+      "photos": [
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-02b.jpg",
+          "tape_corner": "bottom-right",
+          "focus": "50% 50%"
+        },
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-intro-2.jpg",
+          "tape_corner": "bottom-left",
+          "focus": "50% 50%"
+        },
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-03a.jpg",
+          "tape_corner": "bottom-right",
+          "focus": "50% 30%"
+        }
+      ],
+      "trace": "c"
+    },
+    {
+      "title": "Le récit qui contourne la photo",
+      "day_intro": {
+        "day_number": "10",
+        "location": "Banaue",
+        "date": "02 mars 2026",
+        "weather_key": "cloud"
+      },
+      "layout_recit_photo": true,
+      "body_html": "<p>La même maquette que tout à l'heure, cette fois en page d'ouverture : le bandeau en tête, puis les quelques lignes pleine largeur avant que la colonne ne se resserre.</p><p>C'est le layout d'une page à une seule photo en portrait, format sous 0,77. Avec le bandeau, il tient 560 signes.</p>",
+      "photos": [
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-03c.jpg",
+          "label": "Le col au petit matin",
+          "focus": "50% 40%"
+        }
+      ]
+    },
+    {
+      "title": "Le récit pleine page",
+      "day_intro": {
+        "day_number": "11",
+        "location": "En mer",
+        "date": "03 mars 2026"
+      },
+      "layout_story_full": true,
+      "body_html": "<p>Le palier 0 % du ratio texte / photo : aucune photo, le récit prend la feuille entière et la réglure descend jusqu'en bas.</p><p>C'est la seule configuration où le bloc de texte occupe toute la page. Les plafonds n'ont donc rien à voir avec les autres layouts : 1140 signes sous un bandeau, 1640 en page de suite, cinq paragraphes.</p><p>Le ferry part à six heures. On embarque dans le noir, au milieu des cageots et des familles qui dorment déjà sur les bancs du pont supérieur.</p><p>Le jour se lève sur une mer parfaitement plate. Personne ne parle, le moteur couvre tout, et on reste là deux heures à regarder les îles défiler sans savoir laquelle est laquelle.</p><p>La carte info reste possible : elle n'est pas une photo, et c'est elle qui tient le bas de page quand le récit s'arrête plus haut.</p>",
+      "fun_facts": [
+        "Le ferry de nuit entre Dumaguete et Siquijor met une heure et quart, pour moins de cinq euros."
+      ],
+      "fun_facts_title": "Infos"
+    },
+    {
+      "title": "La planche qui ouvre une étape",
+      "day_intro": {
+        "day_number": "12",
+        "location": "Siquijor, du matin au soir",
+        "date": "04 mars 2026"
+      },
+      "layout_photo_wall_intro": true,
+      "_note": "À 100 %, le récit du voyageur sert de matière au fun fact et n'est pas imprimé.",
+      "body_html": "",
+      "fun_facts": [
+        "Siquijor était surnommée l'île des sorciers : on y vient encore consulter les guérisseurs."
+      ],
+      "fun_facts_title": "Infos",
+      "photos": [
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-02a.jpg",
+          "tape_corner": "bottom-left",
+          "focus": "50% 50%"
+        },
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-01.jpg",
+          "tape_corner": "bottom-right",
+          "focus": "50% 30%"
+        },
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-03b.jpg",
+          "tape_corner": "bottom-left",
+          "focus": "50% 50%"
+        },
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-03c.jpg",
+          "tape_corner": "bottom-right",
+          "focus": "50% 30%"
+        }
+      ]
+    },
+    {
+      "title": "",
+      "layout_photo_page": true,
+      "_note": "La planche de cinq photos ne porte ni récit ni légende.",
+      "body_html": "",
+      "photos": [
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-03a.jpg",
+          "tape_corner": "bottom-left",
+          "focus": "50% 30%"
+        },
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-02b.jpg",
+          "tape_corner": "bottom-right",
+          "focus": "50% 50%"
+        },
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-intro-1.jpg",
+          "tape_corner": "bottom-left",
+          "focus": "50% 50%"
+        },
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-intro-2.jpg",
+          "tape_corner": "bottom-right",
+          "focus": "50% 50%"
+        },
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-05.jpg",
+          "tape_corner": "bottom-left",
+          "focus": "50% 50%"
+        }
+      ]
+    },
+    {
+      "title": "Une étape, puis ses planches",
+      "day_intro": {
+        "day_number": "13",
+        "location": "Dumaguete",
+        "date": "05 mars 2026",
+        "stay": "Harold's Mansion"
+      },
+      "layout_story_opener": true,
+      "body_html": "<p>Les pages de photos viennent toujours après le texte d'une étape, jamais entre deux de ses pages de récit. Le validateur le refuse.</p><p>Celle-ci ouvre l'étape avec sa photo flottante ; les trois pages suivantes montrent les autres formes de la planche.</p>",
+      "photos": [
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-02a.jpg",
+          "tape_corner": "bottom-right",
+          "focus": "50% 50%"
+        }
+      ]
+    },
+    {
+      "title": "",
+      "layout_photo_page": true,
+      "_note": "Le récit n'est pas imprimé sur une page de photos.",
+      "body_html": "",
+      "photos": [
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-03b.jpg",
+          "tape_corner": "bottom-left",
+          "focus": "50% 50%"
+        },
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-01.jpg",
+          "tape_corner": "bottom-right",
+          "focus": "50% 30%"
+        },
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-02b.jpg",
+          "tape_corner": "bottom-left",
+          "focus": "50% 50%"
+        }
+      ]
+    },
+    {
+      "title": "",
+      "layout_photo_page": true,
+      "_note": "Le récit n'est pas imprimé sur une page de photos.",
+      "body_html": "",
+      "photos": [
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-intro-1.jpg",
+          "tape_corner": "bottom-left",
+          "focus": "50% 50%"
+        },
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-03c.jpg",
+          "tape_corner": "bottom-right",
+          "focus": "50% 30%"
+        }
+      ],
+      "trace": "a"
+    },
+    {
+      "title": "",
+      "layout_photo_page": true,
+      "_note": "Le récit n'est pas imprimé sur une page de photos.",
+      "body_html": "",
+      "photos": [
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-05.jpg",
+          "tape_corner": "bottom-right",
+          "focus": "50% 50%"
+        }
+      ],
+      "album_paysage": true,
+      "trace": "b"
+    },
+    {
+      "title": "La photo en pleine page",
+      "day_intro": {
+        "day_number": "14",
+        "location": "Apo Island",
+        "date": "06 mars 2026",
+        "weather_key": "sun"
+      },
+      "layout_story_opener": true,
+      "body_html": "<p>Une photo en pleine page se mérite : notée 9 au moins, pas une photo de groupe, rognée de moins d'un tiers au format de la feuille, et 200 dpi tenus sur 154 × 216 mm.</p><p>Une par chapitre au plus, sur une page de photos de fin d'étape qui n'en porte qu'une. La page suivante est celle-là.</p>",
+      "photos": [
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-jour-03b.jpg",
+          "tape_corner": "bottom-left",
+          "focus": "50% 50%"
+        }
+      ]
+    },
+    {
+      "title": "",
+      "layout_photo_page": true,
+      "pleine_page": true,
+      "_note": "Le récit n'est pas imprimé sur une page de photos.",
+      "body_html": "",
+      "photos": [
+        {
+          "url": "https://cdn.prod.website-files.com/68827087b5bebc3702bf1a54/sample-cover.jpg",
+          "focus": "50% 50%"
+        }
+      ]
+    }
+  ],
+  "pages_libres_avant": 1,
+  "pages_libres": 1,
+  "back_cover": {
+    "closing_text": "Et voilà toutes les pages que le gabarit sait faire.",
+    "closing_subtext": "Catalogue fabriqué depuis samples/layouts.json par npm run inspector:catalogue.",
+    "cta": "MemoBook Generator/templates/travel-journal/LAYOUT_KB.md"
+  }
+}
