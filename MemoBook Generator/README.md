@@ -31,11 +31,12 @@ tourner » plus bas.
 
 ## La boucle de travail
 
-1. **Clé API OpenAI** — dans la boîte « Clés et réglages ». Elle reste dans le
-   navigateur (décoche « Retenir » pour ne pas la garder) et n'est envoyée
+1. **Clé API OpenAI** — dans la boîte « Clés et réglages ». Elle est retenue
+   dans le navigateur (l'œil du champ l'affiche ou la masque) et n'est envoyée
    qu'au serveur local, qui la passe au script. Champ laissé vide : le serveur
    cherche `OPENAI_API_KEY` dans l'environnement, puis `.env`, puis
-   `backend/.env` — la même résolution que le script.
+   `backend/.env` — la même résolution que le script. Quand OpenAI refuse un
+   appel, l'erreur dit quelle clé a servi (« clé lue dans backend/.env »).
 2. **Dépose les vocaux.** Les `Voice message.ogg.oga` sont acceptés tels
    quels ; ils sont **renommés en `.ogg`** avant d'être envoyés à Whisper, et
    la liste affiche le nom réellement transcrit.
@@ -64,19 +65,34 @@ tourner » plus bas.
 8. **Génère le carnet** *(Beta)* — le JSON part chez APITemplate, sur le
    template de `templates/travel-journal/`, et le PDF s'ouvre dans un onglet.
 
+### La console
+
+La languette « Console », au bord droit de la page, ouvre au survol un panneau
+qui raconte tout : chaque appel réseau (OpenAI, Anthropic, APITemplate,
+GitHub, OpenStreetMap, serveur local) avec son statut, sa durée, ce qui est
+parti et ce qui est revenu ; les clics et les fichiers déposés ; les messages
+de la mise en page ; les erreurs, y compris celles qui étaient rattrapées sans
+bruit. Un badge rouge compte les erreurs non lues. Filtres (API, Actions,
+Erreurs, Debug), recherche, **Copier** pour partager le journal entier, 📌 pour
+le garder ouvert, `Alt + J` au clavier. Les clés n'y apparaissent jamais (ni
+en-têtes, ni champ dont le nom évoque une clé) et les images sont résumées à
+leur poids. Code : `public/console-journal.js`, chargé avant tous les autres
+scripts — il double `fetch` et `console`, sans rien demander aux modules.
+
 ### Garder le gabarit à jour côté APITemplate
 
 APITemplate ne lit pas `templates/travel-journal/` directement : il garde sa
 propre copie de `index.html` et `style.css`, poussée par
-`POST /update-template`. Deux façons de la mettre à jour :
+`POST /update-template`. Deux mises à jour :
 
 - **`.github/workflows/sync-apitemplate.yml`**, automatiquement à chaque
   `push` sur `main` qui touche le template — s'il porte le secret
   `APITEMPLATE_API_KEY`.
-- **Le bouton « Synchroniser le gabarit depuis GitHub »**, dans « Clés et
-  réglages ». Il récupère `index.html`, `style.css` et `fonts.css` sur GitHub
-  (branche `main`) et les pousse avec la clé déjà collée dans les réglages —
-  utile si le secret côté CI n'est pas posé.
+- **Avant chaque « Générer le carnet »**, obligatoirement : l'atelier
+  récupère `index.html`, `style.css` et `fonts.css` sur GitHub (branche
+  `main`) et les pousse avec la clé des réglages. Si la synchronisation
+  échoue, rien n'est rendu — un carnet sur un gabarit périmé se tromperait
+  sans le dire.
 
 Dans les deux cas, `templates/travel-journal/` reste l'unique source de
 vérité : ce qu'il contient est ce qui part chez APITemplate, tel quel.
@@ -247,9 +263,11 @@ voyageur est repris au mot près, comme dans le reste de la chaîne.
 | Dossier sur le disque | Transcrit un dossier existant sans rien déposer dans le navigateur |
 | Refaire les vocaux déjà transcrits | Le `--force` du script : ignore le cache |
 
-Tout est retenu dans le `localStorage` du navigateur, y compris l'état ouvert
-ou replié de chaque boîte. Les clés aussi, tant que la case « Retenir » est
-cochée — c'est un outil de poste de travail, pas un service exposé.
+Tout est retenu dans le `localStorage` du navigateur, clés comprises, ainsi
+que l'état ouvert ou replié de chaque boîte — c'est un outil de poste de
+travail, pas un service exposé. Le `localStorage` dépend de l'adresse : les
+clés collées sur `127.0.0.1:4173` ne se retrouvent pas sur `localhost:4173`
+ni sur la version GitHub Pages.
 
 ## Marque
 
@@ -320,7 +338,13 @@ mettre, déjà écrit dans le bandeau.
    étape qui va dans de nouveaux lieux montre la ville et le parcours.
 8. **Deux pages en vis-à-vis n'ont jamais la même composition**, quand une
    alternative existe.
-9. **Des fun facts tirés du récit**, si la case « Insérer des Fun facts » de
+9. **Le nombre de pages** suit l'app iOS (`BookCustomisation.swift`) : le
+   format standard vaut la durée du voyage arrondie à la dizaine, entre 30 et
+   180 pages ; compact en fait les deux tiers, détaillé les quatre tiers.
+   Sans date de retour : 40, 60 ou 80 pages. « Personnalisé » prend de 30 à
+   180 pages. La mise en page tient la cible à ± 5 pages en ajoutant ou en
+   retirant des planches de photos ; hors d'atteinte, la console le dit.
+10. **Des fun facts tirés du récit**, si la case « Insérer des Fun facts » de
    la fiche du carnet est cochée (par défaut, comme dans l'app). La même
    analyse propose un encart par étape, noté sur 10. Seuls les mieux notés
    s'impriment, un toutes les trois pages au plus, sur une page où ils ne

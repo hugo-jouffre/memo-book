@@ -112,6 +112,26 @@ describe("mise en page de l'atelier", () => {
     expect(String(ouvertures[2]!["map_svg"])).toMatch(/^data:image\/svg\+xml;base64,/);
   });
 
+  it("garde la carte du chapitre quand le récit dépasse ce que tient la page à carte", () => {
+    // La page à bandeau tient 540 signes, la page à carte 500 : un récit long
+    // se redécoupe pour l'ouverture au lieu de perdre sa carte.
+    const situe = (nom: string, lat: number, lon: number) => ({ lieu: { nom, pays: "GR", lat, lon }, photos: [] });
+    // Un vocal d'un seul tenant : coupé en paragraphes de 379 signes au plus,
+    // la page à bandeau en prend deux, au-delà des 500 de la page à carte.
+    const long = (sujet: string) =>
+      Array.from({ length: 12 }, (_, i) => `Phrase ${i} sur ${sujet}, avec un peu de matière pour remplir la page du récit.`).join(" ");
+    const jours = M.composerJours(
+      [
+        etape(long("Paros"), [], situe("Paros", 37.08, 25.15), "Paros"),
+        etape(long("Naxos"), [], situe("Naxos", 37.1, 25.38), "Naxos"),
+      ],
+      { contours, dessinerCarte: (r: unknown) => carte.renderMapDataUri(contours, r) },
+    );
+    const ouvertures = jours.filter((j) => j["day_intro"]);
+    expect(ouvertures.map((j) => Boolean(j["layout_chapter_map"]))).toEqual([true, true]);
+    expect(normal(texteDes(jours))).toContain("Phrase 11 sur Naxos");
+  });
+
   it("n'ouvre pas de chapitre sans lieu situé avec certitude", () => {
     const jours = M.composerJours([etape(paragrapheDe("quelque part", 2), [], { lieu: null, photos: [] })], {
       contours,

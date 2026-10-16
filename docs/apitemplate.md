@@ -88,10 +88,11 @@ Pousse le template. Deux appelants :
 - `.github/workflows/sync-apitemplate.yml`, à chaque `push` vers `main`
   touchant le template — mais gardé par le secret `APITEMPLATE_API_KEY`, qui
   n'est pas toujours posé (voir « Secrets » plus haut).
-- Le bouton « Synchroniser le gabarit depuis GitHub » de l'atelier
+- L'atelier, avant chaque « Générer le carnet »
   (`MemoBook Generator/public/app.js`, `synchroniserTemplate()`), qui refait
   le même appel depuis le navigateur avec la clé déjà présente dans les
-  réglages. Utile quand le secret CI n'est pas configuré.
+  réglages. Obligatoire : si la synchronisation échoue, le carnet n'est pas
+  rendu.
 
 ```json
 { "template_id": "...", "body": "<html>…", "css": "<style>…" }

@@ -1115,3 +1115,284 @@ a.btn {
   font-size: 0.625rem;
   color: var(--ink);
 }
+
+/* --- champs de clé : l'œil pour afficher ou masquer --- */
+
+.champ-secret {
+  position: relative;
+  display: block;
+}
+
+.champ-secret input {
+  width: 100%;
+  padding-right: 2.25rem;
+}
+
+.oeil {
+  position: absolute;
+  top: 50%;
+  right: 0.375rem;
+  transform: translateY(-50%);
+  display: inline-flex;
+  padding: 0.25rem;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 0;
+  border-radius: 0.375rem;
+}
+
+.oeil:hover {
+  color: var(--ink);
+  background: var(--cream);
+}
+
+.oeil svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* --- console de l'atelier : languette à droite, panneau en survol --- */
+
+.journal-languette {
+  position: fixed;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.75rem 0.3rem;
+  border: 1px solid var(--line);
+  border-right: 0;
+  border-radius: 0.5rem 0 0 0.5rem;
+  background: var(--paper);
+  color: var(--ink);
+  font: 600 0.6875rem/1 var(--texte);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  box-shadow: var(--ombre);
+}
+
+.journal-languette-texte {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+
+.journal-languette.en-cours::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--forest);
+  animation: journal-pouls 1s ease-in-out infinite;
+}
+
+@keyframes journal-pouls {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.journal-badge {
+  min-width: 1.1rem;
+  padding: 0.15rem 0.25rem;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.625rem;
+  text-align: center;
+}
+
+.journal-panneau {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 950;
+  width: min(36rem, 100vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  border-left: 1px solid var(--line);
+  box-shadow: -12px 0 32px -16px rgba(45, 35, 26, 0.35);
+  transform: translateX(100%);
+  transition: transform 0.18s ease;
+  font-size: 0.75rem;
+}
+
+.journal-panneau.ouvert {
+  transform: translateX(0);
+}
+
+/* Épinglé, le panneau ne cache plus la page : elle lui laisse sa place. */
+body.journal-epingle {
+  margin-right: min(36rem, 100vw);
+}
+
+.journal-entete,
+.journal-barre {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.journal-entete strong {
+  font-family: var(--titre);
+  font-size: 0.875rem;
+}
+
+.journal-compteurs {
+  color: var(--muted);
+  font-size: 0.6875rem;
+}
+
+.journal-espace {
+  flex: 1;
+}
+
+.journal-outil,
+.journal-filtre {
+  font: 500 0.6875rem var(--texte);
+  padding: 0.2rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 0.375rem;
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.journal-outil.actif,
+.journal-filtre.actif {
+  background: var(--forest);
+  border-color: var(--forest);
+  color: var(--cream);
+}
+
+.journal-filtres {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.journal-recherche {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  padding: 0.2rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 0.375rem;
+  background: var(--cream);
+}
+
+.journal-liste {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.25rem 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.6875rem;
+}
+
+.journal-vide {
+  color: var(--muted);
+  padding: 1rem 0.75rem;
+  margin: 0;
+}
+
+.journal-entree {
+  border-bottom: 1px solid rgba(227, 214, 198, 0.5);
+}
+
+.journal-entree > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.journal-entree > summary::-webkit-details-marker {
+  display: none;
+}
+
+.journal-entree > summary .journal-msg::after {
+  content: " ▸";
+  color: var(--muted);
+}
+
+.journal-entree[open] > summary .journal-msg::after {
+  content: " ▾";
+}
+
+.journal-tete {
+  display: grid;
+  grid-template-columns: auto auto 3.75rem 1fr;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.3rem 0.75rem;
+}
+
+.journal-entree:hover {
+  background: var(--cream);
+}
+
+.journal-heure {
+  color: var(--muted);
+}
+
+.journal-puce {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--line);
+  align-self: center;
+}
+
+.journal-puce.niveau-info {
+  background: var(--sky);
+}
+
+.journal-puce.niveau-succes {
+  background: var(--forest);
+}
+
+.journal-puce.niveau-avert {
+  background: #e8a33d;
+}
+
+.journal-puce.niveau-erreur {
+  background: var(--danger);
+}
+
+.journal-cat {
+  color: var(--muted);
+  text-transform: uppercase;
+  font-size: 0.5625rem;
+  letter-spacing: 0.05em;
+}
+
+.journal-msg {
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.journal-entree.niveau-erreur .journal-msg {
+  color: var(--danger);
+}
+
+.journal-entree.niveau-debug .journal-msg {
+  color: var(--muted);
+}
+
+.journal-details {
+  margin: 0 0.75rem 0.5rem;
+  padding: 0.5rem;
+  max-height: 22rem;
+  overflow: auto;
+  background: var(--cream);
+  border: 1px solid var(--line);
+  border-radius: 0.375rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

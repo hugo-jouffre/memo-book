@@ -201,7 +201,6 @@ const MODELE_PAR_FOURNISSEUR = { openai: "gpt-4o", anthropic: "claude-opus-5" };
 const REGLAGES_DEFAUT = {
   cleOpenai: "",
   cleAnthropic: "",
-  retenirCles: true,
   modeleTranscription: "gpt-4o-transcribe",
   langue: "fr",
   vocabulaire: "",
@@ -230,6 +229,9 @@ function chargerReglages() {
   } catch {
     /* réglages illisibles : on repart des défauts */
   }
+  // Les clés sont toujours retenues : l'ancienne case « Retenir sur ce
+  // navigateur » décochée n'a plus d'effet.
+  delete reglages.retenirCles;
   // Un réglage vide vaut « pas de choix », pas « champ vide » : une session
   // enregistrée avant que le modèle ait un défaut ne doit pas rester creuse.
   if (!reglages.modeleDecoupage?.trim()) {
@@ -238,17 +240,16 @@ function chargerReglages() {
   return reglages;
 }
 
+/**
+ * Tout est retenu, clés comprises : c'est un outil de poste de travail, et
+ * une clé perdue au rechargement fait retomber le serveur local sur celle de
+ * `backend/.env` — qui n'est pas forcément la bonne.
+ */
 function sauverReglages() {
-  const aGarder = { ...etat.reglages };
-  if (!aGarder.retenirCles) {
-    aGarder.cleOpenai = "";
-    aGarder.cleAnthropic = "";
-    aGarder.cleApitemplate = "";
-  }
   try {
-    localStorage.setItem("atelier-reglages", JSON.stringify(aGarder));
-  } catch {
-    /* navigation privée : tant pis, les réglages ne survivront pas */
+    localStorage.setItem("atelier-reglages", JSON.stringify(etat.reglages));
+  } catch (erreur) {
+    console.warn("[atelier] réglages non enregistrés (navigation privée ?)", erreur);
   }
 }
 
@@ -271,8 +272,10 @@ const etat = {
    * étape, 2 par défaut — Hugo, 14/10/2026),
    * `zonesLibres` (« Zones libres » : trois pages réglées en fin de carnet),
    * `quiz` (« Quiz intégrés à l'histoire » : environ un toutes les trois étapes),
-   * `pagesCible` (« Nombre de pages cible » : le carnet y tient à ± 5 pages
-   * par ses planches de photos ; vide, aucun recalage).
+   * `formatPages` (« Nombre de pages » : compact, standard, détaillé — tirés
+   * de la durée du voyage comme dans l'app, `pagesDuFormat` — ou perso) et
+   * `pagesCible` (le nombre choisi en perso). Le carnet tient la cible à
+   * ± 5 pages par ses planches de photos.
    */
   carnet: {
     titre: "",
@@ -286,6 +289,7 @@ const etat = {
     decorations: 2,
     zonesLibres: true,
     quiz: true,
+    formatPages: "standard",
     pagesCible: null,
   },
   /** Un champ touché à la main n'est plus jamais réécrit par la déduction. */
@@ -348,6 +352,9 @@ const etat = {
    */
   mode: "local",
 };
+
+/** La fiche du carnet d'un voyage neuf : ce que reprend un avancement qui ne dit rien. */
+const CARNET_DEFAUT = structuredClone(etat.carnet);
 
 /* --------------------------------------------------- déplacer et modifier --- */
 
@@ -606,6 +613,7 @@ async function appelJson(url, corps) {
 }
 
 function noter(texte, canal = "out") {
+  Journal.log(canal === "err" ? "erreur" : "info", "atelier", texte);
   etat.journal.push({ texte, canal });
   majJournal();
 }
@@ -1361,6 +1369,9 @@ const TRACES = {
   monter: "m6 15 6-6 6 6",
   descendre: "m6 9 6 6 6-6",
   supprimer: "M4 7h16M10 11v6m4-6v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3",
+  oeil: "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Zm10-3a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z",
+  oeilBarre:
+    "M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.2M6.6 6.6C3.9 8.3 2 12 2 12s3.5 7 10 7c1.8 0 3.4-.5 4.8-1.3M9.9 9.9a3 3 0 0 0 4.2 4.2",
 };
 
 function icone(nom) {
@@ -1601,6 +1612,58 @@ const ficheCouverture = () => Couverture.ficheDuCarnet(fichePumbo(), pagesDuLivr
  *   pages libres compris — y tient à ± 5 pages, par ses seules planches de
  *   photos (`recalerSurLaCible`) ; hors d'atteinte, le journal le dit.
  */
+/**
+ * Le nombre de pages du carnet, comme l'app iOS (`BookCustomisation.swift`,
+ * `pageCount(forTripDays:)`, et `backend/src/services/pageTarget.ts`) : le
+ * format standard vaut la durée du voyage arrondie à la dizaine, entre 30 et
+ * 180 pages ; sans date de retour, 60. Compact en fait les deux tiers,
+ * détaillé les quatre tiers — 40 / 60 / 80 sans date de fin.
+ */
+const FORMATS_PAGES = {
+  compact: { libelle: "Compact", facteur: 2 / 3 },
+  standard: { libelle: "Standard", facteur: 1 },
+  detaille: { libelle: "Détaillé", facteur: 4 / 3 },
+};
+const PAGES_PERSO = { min: 30, max: 180, pas: 10, defaut: 60 };
+
+const arrondiDizaine = (v) => Math.round(v / 10) * 10;
+
+/** La durée du voyage en jours, bornes comprises ; `null` sans date de départ ou de retour. */
+function joursDuVoyage(c = etat.carnet) {
+  if (!c.dateDebut || !c.dateFin) return null;
+  const debut = Date.parse(`${c.dateDebut}T00:00:00Z`);
+  const fin = Date.parse(`${c.dateFin}T00:00:00Z`);
+  if (!Number.isFinite(debut) || !Number.isFinite(fin)) return null;
+  return Math.max(1, Math.round((fin - debut) / 86400000) + 1);
+}
+
+function pagesStandard(jours) {
+  if (!jours || jours <= 0) return 60;
+  return Math.min(Math.max(arrondiDizaine(jours), 30), 180);
+}
+
+function pagesDuFormat(c = etat.carnet, format = c.formatPages || "standard") {
+  if (format === "perso") {
+    const n = Number(c.pagesCible);
+    return n > 0 ? Math.round(n) : PAGES_PERSO.defaut;
+  }
+  const standard = pagesStandard(joursDuVoyage(c));
+  return arrondiDizaine(standard * (FORMATS_PAGES[format] || FORMATS_PAGES.standard).facteur);
+}
+
+/**
+ * Un avancement enregistré avant les formats n'avait qu'un `pagesCible`, et
+ * souvent un 16 venu du minimum de l'ancien champ, pas d'un choix : sous le
+ * minimum de l'app (30), on repart du format standard.
+ */
+function migrerFormatPages(carnet) {
+  if (carnet.formatPages) return carnet;
+  const n = Number(carnet.pagesCible);
+  return n >= PAGES_PERSO.min
+    ? { ...carnet, formatPages: "perso", pagesCible: Math.round(n) }
+    : { ...carnet, formatPages: "standard", pagesCible: null };
+}
+
 function reglagesDuCarnet() {
   const c = etat.carnet;
   const ratio = Number(c.ratioPhotos);
@@ -1612,7 +1675,7 @@ function reglagesDuCarnet() {
     rulesEnabled: c.reglure !== false,
     decorationQuota: Number.isFinite(quota) ? quota : 2,
     freeZonesEnabled: c.zonesLibres !== false,
-    targetPageCount: Number(c.pagesCible) > 0 ? Math.round(Number(c.pagesCible)) : null,
+    targetPageCount: pagesDuFormat(c),
   };
 }
 
@@ -1870,6 +1933,7 @@ async function preparerEnvoi() {
 /** Traduit les erreurs réseau opaques en quelque chose d'actionnable. */
 function messageLisible(erreur, statut) {
   const brut = String(erreur?.message || erreur || "");
+  if (brut.startsWith("synchronisation du gabarit")) return brut;
   if (/failed to fetch|networkerror|load failed/i.test(brut)) {
     return "APITemplate n'a pas répondu (charge trop lourde, délai dépassé ou coupure réseau). Relance ; si ça persiste, retire des photos.";
   }
@@ -2501,7 +2565,7 @@ async function genererIllustrations(style, cle = null) {
       };
       faites += 1;
     } catch (erreur) {
-      debugCarnet(`illustration « ${image.cle} » impossible`, erreur);
+      console.error(`[couverture] illustration « ${image.cle} » impossible`, erreur);
       etat.couverture.statut = `Illustration « ${image.cle} » impossible (${erreur.message}).`;
       apresChangement();
       rendreCouverture();
@@ -3140,11 +3204,13 @@ async function analyserEtapes(statut = () => {}) {
   if (!aFaire.length) return { faites: 0, echecs: 0 };
   if (!avecCle) {
     statut("Pas de clé de modèle : photos placées dans l'ordre du voyage, ni carte de chapitre ni fun fact.");
+    noter("Pas de clé de modèle : aucune étape analysée — ni carte de chapitre, ni kilomètres, ni fun fact.", "err");
     return { faites: 0, echecs: aFaire.length };
   }
 
   let faites = 0;
   let echecs = 0;
+  let premiereErreur = null;
   const unePasse = async (etape) => {
     const photos = etape.photos.filter((p) => p.data);
     try {
@@ -3170,6 +3236,7 @@ async function analyserEtapes(statut = () => {}) {
       faites += 1;
     } catch (erreur) {
       echecs += 1;
+      premiereErreur ||= erreur;
       debugCarnet(`analyse de l'étape « ${etape.titre || etape.lieu} » impossible`, erreur);
     }
     statut(`Analyse des étapes et des photos… ${faites + echecs} / ${aFaire.length}`);
@@ -3178,6 +3245,14 @@ async function analyserEtapes(statut = () => {}) {
   // Trois à la fois : assez pour aller vite, pas assez pour se faire limiter.
   statut(`Analyse des étapes et des photos… 0 / ${aFaire.length}`);
   for (let i = 0; i < aFaire.length; i += 3) await Promise.all(aFaire.slice(i, i + 3).map(unePasse));
+  // Sans analyse, pas de lieux situés (cartes, kilomètres), pas de fun facts,
+  // et les photos suivent l'ordre du voyage : ça doit se voir.
+  if (echecs) {
+    noter(
+      `Analyse impossible pour ${echecs} étape(s) sur ${aFaire.length} — sans elle, ni cartes, ni kilomètres, ni fun facts : ${premiereErreur?.message || premiereErreur}`,
+      "err",
+    );
+  }
   return { faites, echecs };
 }
 
@@ -3278,25 +3353,25 @@ async function chargerRuesDesVilles() {
   if (!etat.contoursCarte) return;
   const etapes = etapesPourMiseEnPage(() => "");
   const vues = MiseEnPage.cadresDesVilles(etapes, etat.contoursCarte).map((cadre) => Carte.vueDeVille(cadre));
-  await Promise.all(
-    vues
-      .filter((vue) => !etat.ruesDesVilles[Carte.cleDeVue(vue)])
-      .map(async (vue) => {
-        try {
-          const reponse = await fetch(OVERPASS_URL, {
-            method: "POST",
-            body: new URLSearchParams({ data: Carte.requeteOverpass(vue) }),
-            signal: AbortSignal.timeout(60_000),
-          });
-          if (!reponse.ok) throw new Error(`HTTP ${reponse.status}`);
-          const json = await reponse.json();
-          if (json.remark && /error/i.test(json.remark)) throw new Error(json.remark);
-          etat.ruesDesVilles[Carte.cleDeVue(vue)] = Carte.ruesDOverpass(json, vue);
-        } catch (erreur) {
-          debugCarnet("rues OpenStreetMap indisponibles : carte de ville sobre", erreur);
-        }
-      }),
-  );
+  // Une vue après l'autre : Overpass n'accorde que deux créneaux par adresse,
+  // et des requêtes en parallèle finissaient en 429 ou en délai dépassé.
+  const aCharger = vues.filter((vue) => !etat.ruesDesVilles[Carte.cleDeVue(vue)]);
+  if (aCharger.length) Journal.info("atelier", `OpenStreetMap : ${aCharger.length} carte(s) de ville à charger (jusqu'à une minute chacune)`);
+  for (const vue of aCharger) {
+    try {
+      const reponse = await fetch(OVERPASS_URL, {
+        method: "POST",
+        body: new URLSearchParams({ data: Carte.requeteOverpass(vue) }),
+        signal: AbortSignal.timeout(60_000),
+      });
+      if (!reponse.ok) throw new Error(`HTTP ${reponse.status}`);
+      const json = await reponse.json();
+      if (json.remark && /error/i.test(json.remark)) throw new Error(json.remark);
+      etat.ruesDesVilles[Carte.cleDeVue(vue)] = Carte.ruesDOverpass(json, vue);
+    } catch (erreur) {
+      debugCarnet("rues OpenStreetMap indisponibles : carte de ville sobre", erreur);
+    }
+  }
 }
 
 /** La carte d'un chapitre : cadrée sur le voyage si les contours détaillés de son pays sont là. */
@@ -3369,11 +3444,19 @@ async function genererCarnet(bouton) {
   rendreResultatPdf();
 
   let statut = 0;
+  const templateId = (etat.reglages.templateApitemplate || "").trim() || "7a177b23210099d6";
+  const annoncer = (texte) => {
+    etat.carnetStatut = { type: "info", texte };
+    Journal.info("atelier", texte);
+    rendreResultatPdf();
+  };
   try {
-    await preparerMiseEnPage((texte) => {
-      etat.carnetStatut = { type: "info", texte };
-      rendreResultatPdf();
-    });
+    try {
+      await synchroniserTemplate({ cle, templateId, statut: annoncer });
+    } catch (erreur) {
+      throw new Error(`synchronisation du gabarit impossible, rien n'a été envoyé — ${erreur.message}`);
+    }
+    await preparerMiseEnPage(annoncer);
     const { payload, poids, base, palier } = await preparerEnvoi();
     debugCarnet("envoi", { base, poids, palier });
 
@@ -3388,10 +3471,7 @@ async function genererCarnet(bouton) {
     if (imprimeur && !templateImprimeur()) {
       noter("version imprimeur sans fond perdu : renseigne le template imprimeur (feuille 154 × 216 mm) dans les réglages.");
     }
-    url.searchParams.set(
-      "template_id",
-      (imprimeur && templateImprimeur()) || etat.reglages.templateApitemplate || "7a177b23210099d6",
-    );
+    url.searchParams.set("template_id", (imprimeur && templateImprimeur()) || templateId);
 
     const debut = performance.now();
     const reponse = await fetch(url, {
@@ -3474,73 +3554,45 @@ async function recupererFichierTemplate(nom) {
  * que le rendu utilise exactement ces fichiers-là au lieu d'une version
  * éditée à la main dans leur tableau de bord.
  *
- * Même logique que `.github/workflows/sync-apitemplate.yml`, qui fait ce même
- * appel côté CI — mais celui-ci est gardé par un secret GitHub qui n'est pas
- * toujours posé. Ce bouton utilise la clé déjà présente dans les réglages, ce
- * qui marche même sans toucher à la configuration du dépôt.
+ * Appelé **avant chaque génération du carnet**, et bloquant : un carnet rendu
+ * sur un gabarit périmé se trompe sans le dire. Même logique que
+ * `.github/workflows/sync-apitemplate.yml`, qui fait ce même appel côté CI —
+ * mais celui-ci est gardé par un secret GitHub qui n'est pas toujours posé.
  *
  * `css` est la concaténation de `fonts.css` puis `style.css`, dans cet ordre
  * — comme `loadTemplateCss()` côté back-end. Envoyer `style.css` seul ferait
  * perdre toutes les polices, sans la moindre erreur visible.
  */
-async function synchroniserTemplate(bouton) {
-  if (bouton.disabled) return;
-  const cle = (etat.reglages.cleApitemplate || "").trim();
-  const templateId = (etat.reglages.templateApitemplate || "").trim();
-  const statut = $("statut-template");
-  const ecrire = (texte, erreur = false) => {
-    if (!statut) return;
-    statut.textContent = texte;
-    statut.classList.toggle("erreur", erreur);
-  };
+async function synchroniserTemplate({ cle, templateId, statut = () => {} }) {
+  statut("Synchronisation du gabarit : récupération sur GitHub…");
+  const [html, style, fonts] = await Promise.all([
+    recupererFichierTemplate("index.html"),
+    recupererFichierTemplate("style.css"),
+    recupererFichierTemplate("fonts.css"),
+  ]);
 
-  if (!cle || !templateId) {
-    ecrire("Clé APITemplate et identifiant du template requis avant de synchroniser.", true);
-    return;
-  }
-
-  const contenu = [...bouton.childNodes];
-  bouton.disabled = true;
-
-  try {
-    bouton.textContent = "Récupération sur GitHub…";
-    ecrire("Récupération de index.html, style.css et fonts.css depuis GitHub…");
-    const [html, style, fonts] = await Promise.all([
-      recupererFichierTemplate("index.html"),
-      recupererFichierTemplate("style.css"),
-      recupererFichierTemplate("fonts.css"),
-    ]);
-
-    bouton.textContent = "Envoi à APITemplate…";
-    ecrire("Envoi à APITemplate…");
-    const base = (etat.reglages.baseApitemplate || "https://rest-de.apitemplate.io/v2").replace(/\/$/, "");
-    // Le template d'aperçu, puis celui de la version imprimeur s'il existe :
-    // les deux portent toujours le même gabarit, seule leur feuille diffère.
-    const cibles = [templateId, templateImprimeur()].filter(Boolean);
-    for (const cible of cibles) {
-      const reponse = await fetch(`${base}/update-template`, {
-        method: "POST",
-        headers: { "content-type": "application/json", "X-API-KEY": cle },
-        body: JSON.stringify({ template_id: cible, body: html, css: `${fonts}\n${style}` }),
-      });
-      const donnees = await reponse.json().catch(() => null);
-      // Ce point de terminaison ne renvoie pas de champ `status` : le 2xx fait foi,
-      // exactement comme le vérifie déjà le workflow de synchronisation.
-      if (!reponse.ok) {
-        throw new Error(donnees?.message || `APITemplate a refusé la mise à jour de ${cible} (HTTP ${reponse.status})`);
-      }
+  statut("Synchronisation du gabarit : envoi à APITemplate…");
+  const base = (etat.reglages.baseApitemplate || "https://rest-de.apitemplate.io/v2").replace(/\/$/, "");
+  // Le template d'aperçu, puis celui de la version imprimeur s'il existe :
+  // les deux portent toujours le même gabarit, seule leur feuille diffère.
+  const cibles = [templateId, templateImprimeur()].filter(Boolean);
+  for (const cible of cibles) {
+    const reponse = await fetch(`${base}/update-template`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "X-API-KEY": cle },
+      body: JSON.stringify({ template_id: cible, body: html, css: `${fonts}\n${style}` }),
+    });
+    const donnees = await reponse.json().catch(() => null);
+    // Ce point de terminaison ne renvoie pas de champ `status` : le 2xx fait foi,
+    // exactement comme le vérifie déjà le workflow de synchronisation.
+    if (!reponse.ok) {
+      throw new Error(donnees?.message || `APITemplate a refusé la mise à jour de ${cible} (HTTP ${reponse.status})`);
     }
-
-    ecrire(
-      `Gabarit synchronisé avec APITemplate (${cibles.length} template${cibles.length > 1 ? "s" : ""}) à ${new Date().toLocaleTimeString("fr-FR")}.`,
-    );
-  } catch (erreur) {
-    console.error("[template] échec de synchronisation", erreur);
-    ecrire(`Échec : ${erreur.message}`, true);
-  } finally {
-    bouton.disabled = false;
-    bouton.replaceChildren(...contenu);
   }
+  const quand = new Date().toLocaleTimeString("fr-FR");
+  Journal.succes("atelier", `Gabarit synchronisé avec APITemplate (${cibles.join(", ")})`);
+  const aide = $("statut-template");
+  if (aide) aide.textContent = `Gabarit synchronisé avec APITemplate à ${quand} (${cibles.length} template${cibles.length > 1 ? "s" : ""}).`;
 }
 
 /* ---------------------------------------- sauvegarde et reprise du travail --- */
@@ -3603,7 +3655,9 @@ async function ouvrirAvancement(fichier) {
     if (lu.format !== "memobook-generator") {
       throw new Error("ce fichier n'est pas un avancement MemoBook");
     }
-    etat.carnet = { ...etat.carnet, ...(lu.carnet || {}) };
+    // Les défauts d'abord : un réglage absent du fichier ne garde pas la
+    // valeur de la session en cours.
+    etat.carnet = migrerFormatPages({ ...CARNET_DEFAUT, ...(lu.carnet || {}) });
     etat.carnetManuel = lu.carnetManuel || {};
     etat.carnetDeduit = lu.carnetDeduit || {};
     etat.rencontres = lu.rencontres || [];
@@ -3941,9 +3995,34 @@ function rendreColonne() {
   majBoiteWhatsapp();
 }
 
+/** Un champ de clé, avec son œil pour l'afficher ou la masquer. */
+function champSecret(input) {
+  const oeil = h(
+    "button",
+    {
+      type: "button",
+      class: "oeil",
+      title: "Afficher la clé",
+      "aria-label": "Afficher la clé",
+      onclick: () => {
+        const cache = input.type === "password";
+        input.type = cache ? "text" : "password";
+        oeil.title = cache ? "Masquer la clé" : "Afficher la clé";
+        oeil.setAttribute("aria-label", oeil.title);
+        oeil.replaceChildren(icone(cache ? "oeilBarre" : "oeil"));
+      },
+    },
+    icone("oeil"),
+  );
+  return h("span", { class: "champ-secret" }, input, oeil);
+}
+
 function rendreReglages() {
   const r = etat.reglages;
+  // `change` en plus d'`input` : un gestionnaire de mots de passe qui remplit
+  // le champ ne déclenche pas toujours le second.
   const enregistrer = (nom) => (ev) => {
+    if (r[nom] === ev.target.value) return;
     r[nom] = ev.target.value;
     sauverReglages();
   };
@@ -3958,6 +4037,7 @@ function rendreReglages() {
       enregistrer("cleOpenai")(ev);
       majBoiteVocaux();
     },
+    onchange: enregistrer("cleOpenai"),
   });
 
   const champCleApitemplate = h("input", {
@@ -3967,6 +4047,7 @@ function rendreReglages() {
     autocomplete: "off",
     spellcheck: false,
     oninput: enregistrer("cleApitemplate"),
+    onchange: enregistrer("cleApitemplate"),
   });
 
   const champCleAnthropic = h("input", {
@@ -3976,13 +4057,14 @@ function rendreReglages() {
     autocomplete: "off",
     spellcheck: false,
     oninput: enregistrer("cleAnthropic"),
+    onchange: enregistrer("cleAnthropic"),
   });
 
   const blocAnthropic = h(
     "label",
     { class: "champ", hidden: r.fournisseurDecoupage !== "anthropic" },
     h("span", {}, "Clé API Anthropic"),
-    champCleAnthropic,
+    champSecret(champCleAnthropic),
   );
 
   const champModele = h("input", {
@@ -4019,12 +4101,12 @@ function rendreReglages() {
 
   remplir(
     boiteReglages.contenu,
-    h("label", { class: "champ" }, h("span", {}, "Clé API OpenAI"), champCle),
+    h("label", { class: "champ" }, h("span", {}, "Clé API OpenAI"), champSecret(champCle)),
     h(
       "label",
       { class: "champ", style: { marginTop: "0.5rem" } },
       h("span", {}, "Clé API APITemplate"),
-      champCleApitemplate,
+      champSecret(champCleApitemplate),
     ),
     champ({
       label: "Identifiant du template",
@@ -4045,21 +4127,10 @@ function rendreReglages() {
       },
     }),
     h(
-      "div",
-      { class: "rangee" },
-      h(
-        "button",
-        {
-          class: "btn btn-petit",
-          id: "btn-sync-template",
-          "data-action": "sync-template",
-          title:
-            "Récupère index.html, style.css et fonts.css de templates/travel-journal (branche main) sur GitHub, et les pousse vers APITemplate",
-        },
-        "Synchroniser le gabarit depuis GitHub",
-      ),
+      "p",
+      { class: "aide", id: "statut-template" },
+      "Le gabarit (templates/travel-journal, branche main sur GitHub) est poussé vers APITemplate avant chaque génération du carnet.",
     ),
-    h("p", { class: "aide", id: "statut-template" }),
     h(
       "label",
       { class: "champ", style: { marginTop: "0.5rem" } },
@@ -4097,39 +4168,13 @@ function rendreReglages() {
       " Version imprimeur : sans couverture ni quatrième (imprimées sur la couverture rigide)",
     ),
     h(
-      "div",
-      { class: "rangee" },
-      bouton("Afficher", {
-        petit: true,
-        surClic: (ev) => {
-          const cache = champCle.type === "password";
-          champCle.type = cache ? "text" : "password";
-          champCleAnthropic.type = cache ? "text" : "password";
-          champCleApitemplate.type = cache ? "text" : "password";
-          ev.target.textContent = cache ? "Masquer" : "Afficher";
-        },
-      }),
-      h(
-        "label",
-        { class: "case" },
-        h("input", {
-          type: "checkbox",
-          checked: r.retenirCles,
-          onchange: (ev) => {
-            r.retenirCles = ev.target.checked;
-            sauverReglages();
-          },
-        }),
-        "Retenir sur ce navigateur",
-      ),
-    ),
-    h(
       "p",
       { class: "aide" },
+      "Les clés sont retenues dans ce navigateur. ",
       etat.mode === "navigateur"
-        ? "Ta clé reste dans ce navigateur et part directement chez OpenAI : elle ne transite par aucun serveur, et ce site n'en garde rien."
+        ? "Ta clé part directement chez OpenAI : elle ne transite par aucun serveur, et ce site n'en garde rien."
         : surServeur
-          ? `Une clé est déjà lue dans ${surServeur} : laisse le champ vide pour l'utiliser.`
+          ? `Champ OpenAI vide : le serveur prend la clé de ${surServeur}. Une clé collée ici passe devant.`
           : "Sans clé ici, le serveur cherche OPENAI_API_KEY dans l'environnement, .env puis backend/.env.",
     ),
     h("label", { class: "champ" }, h("span", {}, "Modèle de transcription"), selectModeleTranscription),
@@ -4433,7 +4478,7 @@ function resumePersonnalisation(c) {
     c.reglure !== false ? "pointillés" : "sans pointillés",
     (c.decorations ?? 2) ? `${c.decorations ?? 2} sticker(s) par étape` : "sans décor",
     c.zonesLibres !== false ? "zones libres" : null,
-    Number(c.pagesCible) > 0 ? `${c.pagesCible} pages visées` : null,
+    `${pagesDuFormat(c)} pages visées`,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -4511,20 +4556,49 @@ function panneauPersonnalisation() {
       h("input", { type: "checkbox", checked: c.zonesLibres !== false, onchange: poser("zonesLibres") }),
       "Trois pages réglées en fin de carnet, pour écrire à la main.",
     ),
-    ligne(
-      "Nombre de pages cible",
-      h("input", {
+    (() => {
+      const jours = joursDuVoyage(c);
+      const perso = h("input", {
         type: "number",
-        min: 16,
-        max: 400,
-        step: 2,
-        placeholder: "libre",
-        value: c.pagesCible ?? "",
-        style: { width: "6em" },
-        onchange: poser("pagesCible", (v) => (Number(v) > 0 ? Math.round(Number(v)) : null)),
-      }),
-      "Le carnet entier, colophon et pages libres compris, tient dans la cible à ± 5 pages : la mise en page ajoute ou retire des planches de photos, sans jamais toucher au récit ni au nombre de photos du ratio. Hors d'atteinte — pas assez de photos, ou trop de récit —, le journal le dit. Vide : aucun recalage.",
-    ),
+        min: PAGES_PERSO.min,
+        max: PAGES_PERSO.max,
+        step: PAGES_PERSO.pas,
+        value: pagesDuFormat(c, "perso"),
+        hidden: c.formatPages !== "perso",
+        style: { width: "5.5em" },
+        onchange: (ev) => {
+          const n = Math.round(Number(ev.target.value) / PAGES_PERSO.pas) * PAGES_PERSO.pas;
+          c.pagesCible = Math.min(Math.max(n || PAGES_PERSO.defaut, PAGES_PERSO.min), PAGES_PERSO.max);
+          ev.target.value = c.pagesCible;
+          resume.textContent = resumePersonnalisation(c);
+        },
+      });
+      const choix = h(
+        "select",
+        {
+          onchange: (ev) => {
+            c.formatPages = ev.target.value;
+            if (c.formatPages === "perso" && !(Number(c.pagesCible) > 0)) c.pagesCible = pagesDuFormat(c, "standard");
+            perso.value = pagesDuFormat(c, "perso");
+            perso.hidden = c.formatPages !== "perso";
+            resume.textContent = resumePersonnalisation(c);
+          },
+        },
+        Object.entries(FORMATS_PAGES).map(([cle, f]) =>
+          h("option", { value: cle, selected: (c.formatPages || "standard") === cle }, `${f.libelle} — ${pagesDuFormat(c, cle)} pages`),
+        ),
+        h("option", { value: "perso", selected: c.formatPages === "perso" }, "Personnalisé"),
+      );
+      return ligne(
+        "Nombre de pages",
+        h("span", { class: "rangee", style: { display: "inline-flex" } }, choix, perso),
+        `${
+          jours
+            ? `D'après la durée du voyage (${jours} jour${jours > 1 ? "s" : ""}), comme dans l'app.`
+            : "Sans date de retour, l'app propose 40, 60 ou 80 pages."
+        } Le carnet entier, colophon compris, tient dans la cible à ± 5 pages : la mise en page ajoute ou retire des planches de photos, sans jamais toucher au récit ni au nombre de photos du ratio. Hors d'atteinte — pas assez de photos, ou trop de récit —, le journal le dit.`,
+      );
+    })(),
     ligne(
       "Quiz intégrés à l'histoire",
       h("input", { type: "checkbox", checked: c.quiz !== false, onchange: poser("quiz") }),
@@ -4823,7 +4897,6 @@ document.addEventListener("click", (ev) => {
   if (action === "generer-couverture") ouvrirCouverture();
   if (action === "sauvegarder") sauvegarderAvancement(bouton);
   if (action === "ouvrir") $("fichier-avancement").click();
-  if (action === "sync-template") synchroniserTemplate(bouton);
 });
 
 /** Les boutons à icône de l'en-tête, garnis une fois le DOM prêt. */

@@ -205,14 +205,14 @@
    * - mais la dernière page ne doit pas être un reliquat : sous la taille S, elle
    *   reprend des paragraphes à la précédente tant que celle-ci reste au-dessus.
    */
-  function pagesDeRecit(paragraphes) {
+  function pagesDeRecit(paragraphes, premiere = CAPACITE_PAGE.defaut.bandeau) {
     const pages = [];
     const file = [...paragraphes];
     while (file.length) {
       const paragraphe = file.shift();
       const page = pages[pages.length - 1];
       const sorte = pages.length <= 1 ? "bandeau" : "suite";
-      const place = page ? CAPACITE_PAGE.defaut[sorte] - signes(page) - 1 : 0;
+      const place = page ? (pages.length === 1 ? premiere : CAPACITE_PAGE.defaut[sorte]) - signes(page) - 1 : 0;
       if (page && page.length < PARAGRAPHES_PAR_PAGE[sorte] && paragraphe.length <= place) {
         page.push(paragraphe);
         continue;
@@ -1321,8 +1321,9 @@
 
   /** Un fun fact proposé par l'analyse, s'il est imprimable. */
   function lireEncart(f) {
-    const texte = typeof f?.texte === "string" ? f.texte.replace(/\s+/g, " ").trim() : "";
-    const pertinence = Number(f?.pertinence);
+    const texte = raccourcirEncart(typeof f?.texte === "string" ? f.texte.replace(/\s+/g, " ").trim() : "");
+    // « 8/10 » ou « 8 » : le modèle n'écrit pas toujours un nombre nu.
+    const pertinence = Number.parseFloat(String(f?.pertinence ?? ""));
     if (!texte || texte.length > MAX_SIGNES_ENCART || !Number.isFinite(pertinence)) return null;
     const registre = normaliser(f.registre);
     return {
@@ -1336,6 +1337,18 @@
       paragraphe: Number.isInteger(f.paragraphe) ? f.paragraphe : null,
       pertinence,
     };
+  }
+
+  /**
+   * Un fun fact un peu trop long garde ses premières phrases quand elles
+   * tiennent seules (60 signes au moins) : le modèle déborde souvent d'une
+   * incise, et jeter l'encart entier vidait des carnets de tout fun fact.
+   */
+  function raccourcirEncart(texte) {
+    if (texte.length <= MAX_SIGNES_ENCART) return texte;
+    const tete = texte.slice(0, MAX_SIGNES_ENCART + 1);
+    const fin = Math.max(tete.lastIndexOf(". "), tete.lastIndexOf("! "), tete.lastIndexOf("? "));
+    return fin >= 60 ? texte.slice(0, fin + 1) : texte;
   }
 
   /**
@@ -1353,12 +1366,15 @@
 
   /** Ce qui a manqué aux fun facts d'une étape pour être imprimés. */
   function raisonSansEncart(analyse) {
-    if (!analyse) return "étape pas encore analysée";
+    if (!analyse) return "étape sans analyse (pas de clé, ou analyse en échec : voir la console)";
     const bruts = Array.isArray(analyse.funFacts) ? analyse.funFacts : analyse.funFact ? [analyse.funFact] : [];
     if (!bruts.length) return "l'analyse n'a proposé aucun fun fact";
-    const trop = bruts.filter((f) => String(f?.texte || "").trim().length > MAX_SIGNES_ENCART).length;
+    const trop = bruts.filter((f) => !lireEncart(f) && String(f?.texte || "").trim().length > MAX_SIGNES_ENCART).length;
     if (trop === bruts.length) return `fun fact trop long (${MAX_SIGNES_ENCART} signes au plus)`;
-    return `fun fact(s) noté(s) sous ${SEUILS_PERTINENCE[SEUILS_PERTINENCE.length - 1]}/10`;
+    const seuil = SEUILS_PERTINENCE[SEUILS_PERTINENCE.length - 1];
+    return trop
+      ? `${trop} fun fact(s) trop long(s), les autres notés sous ${seuil}/10`
+      : `fun fact(s) noté(s) sous ${seuil}/10`;
   }
 
   /**
@@ -2418,7 +2434,7 @@
       // À 100 %, aucun récit n'est imprimé : l'étape n'est faite que de
       // planches, la première portant le bandeau (`layout_photo_wall_intro`).
       const sansRecit = ratio === 100 && photos.length > 0;
-      const pages =
+      let pages =
         paragraphes.length && !sansRecit ? pagesDeRecit(paragraphes) : photos.length < MIN_PAGE_PHOTOS && !sansRecit ? [[]] : [];
 
       // Chapitre : la première étape, puis chaque arrivée dans un nouveau lieu.
@@ -2461,6 +2477,10 @@
       // La carte prend la place d'une colonne : le récit de l'ouverture doit y
       // tenir. Elle ne coûte plus de photo — ce qui n'a pas de place sur les
       // pages de récit va sur les pages de photos de fin d'étape.
+      // La page à carte tient 500 signes, la page à bandeau 540 : le récit se
+      // redécoupe pour l'ouverture plutôt que de perdre la carte (régression
+      // du 12/10/2026 — presque aucune étape réelle n'avait plus sa carte).
+      if (chapitre && signes(pages[0]) > CAPACITE_CHAPITRE.sansPhoto) pages = pagesDeRecit(paragraphes, CAPACITE_CHAPITRE.sansPhoto);
       if (chapitre && signes(pages[0]) > CAPACITE_CHAPITRE.sansPhoto) chapitre = false;
 
       // À 25 %, une photo par page de récit au plus : le récit tient la page.

@@ -220,7 +220,7 @@ Les photos de l'étape suivent, chacune précédée de son identifiant (${ids ||
 3. **Les encarts (« fun facts »).** Jusqu'à ${encarts}, chacun sur un sujet différent du récit et, autant que possible, d'un registre différent. Seulement ceux qui en valent la peine :
    - son sujet vient du récit. Le voyageur raconte un trajet en jeepney : l'encart parle des jeepneys, pas du PIB du pays ;
    - deux matières possibles. Le meilleur cas : un épisode cocasse réellement raconté, résumé en une phrase. Sinon, un fait sûr qui éclaire ce qui est raconté (histoire, origine d'un nom, usage local, tradition culinaire…), écrit à la troisième personne ;
-   - 140 caractères au plus, texte nu, sans emoji ;
+   - 120 caractères au plus (140 est la limite dure : au-delà, l'encart est jeté), texte nu, sans emoji ;
    - seulement des faits stables et sûrs : jamais de prix, d'horaire, de population à l'unité, de « plus grand du monde ». Rien qui contredise le voyageur, rien de polémique, de morbide ou de moralisateur ;
    - le test : le lecteur pourra-t-il le raconter à quelqu'un le soir même ? « Paros est une île grecque » échoue ;
    - "titre" : « Fun fact », « Infos », « Culture générale » ou « Chiffres clés », selon le registre ;
