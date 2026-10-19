@@ -284,6 +284,9 @@ public struct ChatView: View {
         // crédit du jour en illimité tout de suite — plus de bandeau, plus de
         // micro pâli —, sans attendre que le serveur le redise.
         .onAppear { model.subscription = subscriptionSession }
+        .fullScreenCover(item: $model.viewedPhotos) { viewing in
+            ChatPhotoViewer(viewing: viewing, model: model) { model.viewedPhotos = nil }
+        }
         .fullScreenCover(isPresented: $showsPaywall) {
             PaywallView(
                 subscription: .offer,

@@ -85,6 +85,13 @@ const schema = z.object({
   ANTHROPIC_API_KEY: z.string().default(""),
   ANTHROPIC_REDACTION_MODEL: z.string().default("claude-opus-5"),
   /**
+   * L'effort de réflexion de la rédaction — ce qui fait l'essentiel de son
+   * temps (Hugo, 18/10/2026 : « la retranscription des étapes est un peu trop
+   * longue »). Mesuré sur le banc (`npm run redaction:eval -- --effort …`),
+   * voir `docs/redaction.md` § Le temps d'une rédaction.
+   */
+  ANTHROPIC_REDACTION_EFFORT: z.enum(["low", "medium", "high"]).default("medium"),
+  /**
    * La voix de MEMO dans le chat — `docs/conversation.md`. Un modèle plus
    * rapide que la rédaction : un tour se joue en quelques secondes, sous les
    * yeux du voyageur. Sans clé, le moteur de règles répond.

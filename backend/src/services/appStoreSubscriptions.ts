@@ -91,6 +91,14 @@ export function storeKitState(input: {
   }
 }
 
+/** L'achat est postérieur au dernier état connu de la ligne : ce n'est pas un rejeu. */
+export function isNewPurchase(
+  transaction: Pick<AppStoreTransaction, "purchasedAt">,
+  existing: { providerUpdatedAt: Date | null } | null,
+): boolean {
+  return existing?.providerUpdatedAt != null && transaction.purchasedAt > existing.providerUpdatedAt;
+}
+
 export interface ApplyStoreKitInput {
   /** Le compte qui envoie la transaction ; absent quand c'est Apple qui notifie. */
   accountId?: string;
@@ -200,7 +208,14 @@ async function writeStoreKitTransaction(
     transaction,
     renewal: input.renewal,
     status: input.status,
-    previousAutoRenews: existing?.autoRenews ?? null,
+    // **Un achat plus récent que tout ce qu'on savait réarme le
+    // renouvellement** (Hugo, 18/10/2026). Se réabonner rouvre la même ligne
+    // (même `originalTransactionId`) : en gardant le `autoRenews: false` de la
+    // résiliation d'avant, le nouvel abonné lisait « S'inscrire à nouveau »
+    // dans « Mon abonnement ». Apple ne vend pas un abonnement au
+    // renouvellement coupé ; seul un vieux renouvellement rejoué garde ce
+    // qu'on savait.
+    previousAutoRenews: isNewPurchase(transaction, existing) ? null : (existing?.autoRenews ?? null),
     now: new Date(),
   });
 

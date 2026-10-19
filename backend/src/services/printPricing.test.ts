@@ -1,58 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { quote, unitPriceCents } from "./printPricing.js";
+import { billablePages } from "./printPricing.js";
+import { composedPageCount } from "../jobs/render.js";
 
-describe("le tarif d'un carnet", () => {
-  it("garde l'ancre commerciale : 50 pages font 89,90 €", () => {
-    expect(unitPriceCents(50)).toBe(8_990);
+describe("le prix suit le carnet composé", () => {
+  it("le nombre final de pages fait le prix, même sous la cible", () => {
+    expect(billablePages({ targetPageCount: 40, pageCount: 24 })).toBe(24);
+    expect(billablePages({ targetPageCount: 40, pageCount: 46 })).toBe(46);
   });
 
-  it("ne facture pas un carnet de dix pages au cinquième d'un carnet de cinquante", () => {
-    // C'est tout l'intérêt d'avoir sorti les frais fixes du taux à la page :
-    // la couverture et la reliure coûtent pareil quel que soit le nombre de
-    // pages.
-    expect(unitPriceCents(10)).toBeGreaterThan(unitPriceCents(50) / 5);
+  it("avant tout carnet composé, la cible sert d'estimation", () => {
+    expect(billablePages({ targetPageCount: 60, pageCount: 0 })).toBe(60);
   });
 
-  it("compte au moins une page, même sur un carnet vide", () => {
-    expect(unitPriceCents(0)).toBe(unitPriceCents(1));
-  });
-});
-
-describe("le récapitulatif", () => {
-  const base = {
-    bookTitle: "Rome et la Dolce Vita",
-    pageCount: 50,
-    copies: 2,
-    speed: "standard" as const,
-  };
-
-  it("multiplie le prix unitaire par le nombre d'exemplaires", () => {
-    const result = quote(base);
-    expect(result.itemsCents).toBe(2 * 8_990);
-    expect(result.totalCents).toBe(2 * 8_990);
-  });
-
-  it("n'ajoute rien pour l'acheminement standard, et le supplément pour l'express", () => {
-    expect(quote(base).shippingCents).toBe(0);
-    expect(quote({ ...base, speed: "express" }).shippingCents).toBe(990);
-  });
-
-  it("ne montre aucune déduction : la cagnotte est retirée (06/10/2026)", () => {
-    // « - 0,00 € » ferait croire à une réduction qui n'a pas eu lieu, et il n'y
-    // a plus rien à déduire : tout se paie par Stripe.
-    const result = quote({ ...base, speed: "express" });
-    expect(result.deductions).toEqual([]);
-    expect(result.walletAppliedCents).toBe(0);
-  });
-
-  it("boucle : total = articles + livraison", () => {
-    const result = quote({ ...base, speed: "express" });
-    expect(result.totalCents).toBe(result.itemsCents + result.shippingCents);
-    expect(result.totalCents).toBe(result.dueCents);
-  });
-
-  it("annonce les bornes du palier choisi", () => {
-    expect(quote(base).estimatedDays).toEqual({ min: 5, max: 7 });
-    expect(quote({ ...base, speed: "express" }).estimatedDays).toEqual({ min: 2, max: 3 });
+  it("le carnet compte ses pages d'avant, ses étapes et la page blanche finale", () => {
+    const days = Array.from({ length: 20 }, () => ({}));
+    // colophon + introduction + une page blanche pour ouvrir à gauche, 20 pages d'étape, une blanche finale.
+    expect(composedPageCount({ intro_text: "<p>…</p>", pages_libres_avant: 1, days, page_blanche_finale: true })).toBe(24);
+    expect(composedPageCount({ days })).toBe(21);
+    expect(composedPageCount({})).toBeNull();
   });
 });

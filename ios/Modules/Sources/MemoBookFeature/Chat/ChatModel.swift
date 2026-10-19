@@ -62,6 +62,13 @@ public enum ChatComposerMode: Sendable, Hashable {
 /// garde le message pour qu'on puisse le renvoyer, sous le **même**
 /// identifiant. Une vue qui aurait à orchestrer ça se remettrait à clignoter
 /// au premier refactoring.
+/// Les photos d'une bulle ouvertes en plein écran — ``ChatModel/viewedPhotos``.
+public struct ChatPhotoViewing: Identifiable, Equatable, Sendable {
+    public let attachments: [PhotoAttachment]
+    public let index: Int
+    public var id: String { attachments.map(\.id).joined(separator: "|") + "#\(index)" }
+}
+
 @MainActor
 @Observable
 public final class ChatModel {
@@ -1719,6 +1726,26 @@ public final class ChatModel {
             self.loadingImages.remove(url)
             if let image { slot.image = image }
         }
+    }
+
+    // MARK: La photo en plein écran
+
+    /// Les photos ouvertes en plein écran (Hugo, 18/10/2026 : « quand on
+    /// clique sur une photo qu'on a envoyée, elle s'affiche en plein écran »),
+    /// et celle par laquelle on est entré. `nil` : rien d'ouvert.
+    public var viewedPhotos: ChatPhotoViewing?
+
+    /// Ouvre les photos d'une bulle, sur celle qu'on a touchée.
+    public func viewPhotos(_ attachments: [PhotoAttachment], at index: Int) {
+        guard attachments.indices.contains(index) else { return }
+        viewedPhotos = ChatPhotoViewing(attachments: attachments, index: index)
+    }
+
+    /// La photo **à sa taille d'écran**, et non la vignette du fil : relue par
+    /// le même chemin (`imageData(at:)`), décodée plus grand. La vignette
+    /// reste en cache pour le fil ; celle-ci vit avec la vue qui la montre.
+    public func fullScreenImage(_ url: URL) async -> UIImage? {
+        await ChatImage.decode(await imageData(at: url), maximumPixelSize: ChatImage.fullScreenPixelSize)
     }
 
     /// Les octets d'une image, par le chemin qu'elle demande : le disque pour

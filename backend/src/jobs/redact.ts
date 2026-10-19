@@ -116,17 +116,33 @@ export async function redactEntry(
     data: { redactionStatus: "processing", redactionError: null },
   });
 
+  const started = Date.now();
   try {
-    // Les voisines : uniquement celles qui ont un texte abouti. Une étape en
-    // cours de transcription n'apprend rien sur la voix du voyageur.
-    const earlier = await prisma.entry.findMany({
-      where: {
-        memoId: entry.memoId,
-        kind: { not: "photo" },
-        capturedAt: { lt: entry.capturedAt },
-      },
-      orderBy: { capturedAt: "asc" },
-    });
+    // Trois lectures indépendantes, lancées ensemble : elles précédaient
+    // l'appel au modèle l'une après l'autre (Hugo, 18/10/2026 — « la
+    // retranscription des étapes est un peu trop longue »).
+    const [earlier, precisionRows, narrator] = await Promise.all([
+      // Les voisines : uniquement celles qui ont un texte abouti. Une étape en
+      // cours de transcription n'apprend rien sur la voix du voyageur.
+      prisma.entry.findMany({
+        where: {
+          memoId: entry.memoId,
+          kind: { not: "photo" },
+          capturedAt: { lt: entry.capturedAt },
+        },
+        orderBy: { capturedAt: "asc" },
+      }),
+      // Les précisions données dans la conversation — « c'était avec Clara, le
+      // mardi » — font partie du récit au même titre que la transcription. Le
+      // job `converse` les rattache au souvenir en cours (`disposition:
+      // context`) et relance cette rédaction pour qu'elles atteignent le texte.
+      prisma.chatMessage.findMany({
+        where: { entryId, author: "traveller", disposition: "context", text: { not: null } },
+        orderBy: { seq: "asc" },
+        select: { text: true, payload: true },
+      }),
+      narratorOf(context, entry),
+    ]);
 
     const previous: RedactedNeighbour[] = earlier.flatMap((neighbour) => {
       const text = neighbour.editedText ?? neighbour.redactedText;
@@ -141,15 +157,6 @@ export async function redactEntry(
       ];
     });
 
-    // Les précisions données dans la conversation — « c'était avec Clara, le
-    // mardi » — font partie du récit au même titre que la transcription. Le
-    // job `converse` les rattache au souvenir en cours (`disposition:
-    // context`) et relance cette rédaction pour qu'elles atteignent le texte.
-    const precisionRows = await prisma.chatMessage.findMany({
-      where: { entryId, author: "traveller", disposition: "context", text: { not: null } },
-      orderBy: { seq: "asc" },
-      select: { text: true, payload: true },
-    });
     const precisions: RedactionPrecision[] = precisionRows.flatMap((row) => {
       if (!row.text) return [];
       const rawTopic =
@@ -160,8 +167,8 @@ export async function redactEntry(
     });
 
     const quizzes = quizHistoryOf(earlier, entry);
-    const narrator = await narratorOf(context, entry);
     const memo = entry.memo;
+    const modelStarted = Date.now();
     const result = await redactor.redact({
       memo: {
         title: memo.title,
@@ -177,6 +184,7 @@ export async function redactEntry(
         // La cible du moment : un changement en cours de voyage vaut pour les
         // étapes suivantes, et pour celles qu'on réécrit (`rewriteTrip.ts`).
         targetPageCount: memo.targetPageCount,
+        photoTextRatio: memo.photoTextRatio,
       },
       narrator,
       entry: {
@@ -239,13 +247,21 @@ export async function redactEntry(
     ]);
 
     logger.info(
-      { entryId, model: result.model, characters: result.text.length },
+      {
+        entryId,
+        model: result.model,
+        characters: result.text.length,
+        modelMs: Date.now() - modelStarted,
+        totalMs: Date.now() - started,
+      },
       "Souvenir rédigé",
     );
-    // Le relevé est là : le lieu, le pays, les kilomètres — les étapes et les
-    // chiffres du voyage suivent (T227).
-    await refreshTripFactsQuietly(context, entry.memoId);
+    // « Il te convient ? » d'abord : c'est la bulle que le voyageur attend.
+    // Les étapes et les chiffres du voyage (T227) se recalculent ensuite — une
+    // transaction verrouillée qui la retardait sans rien lui apporter ; la
+    // fiche de l'étape se met à jour au tour de relecture suivant de l'app.
     if (!rewrite) await askValidation(prisma, entryId, result.doubts);
+    await refreshTripFactsQuietly(context, entry.memoId);
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
     await prisma.entry.update({

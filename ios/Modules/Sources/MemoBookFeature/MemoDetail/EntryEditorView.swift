@@ -136,7 +136,7 @@ private struct StepLengthHint: View {
     let text: String
 
     private enum Size: String, CaseIterable {
-        case s = "S", m = "M", l = "L", xl = "XL"
+        case s = "S", m = "M", l = "L", xl = "XL", xxl = "XXL"
 
         var range: ClosedRange<Int> {
             switch self {
@@ -144,6 +144,9 @@ private struct StepLengthHint: View {
             case .m: return 380...559
             case .l: return 560...899
             case .xl: return 900...1440
+            // Réservée à la cible « Détaillé » (18/10/2026) : la rédaction
+            // ne la prend qu'à cette cible, la main du voyageur peut y aller.
+            case .xxl: return 1441...2300
             }
         }
     }
@@ -158,7 +161,7 @@ private struct StepLengthHint: View {
     }
 
     private var isTooShort: Bool { length < Size.s.range.lowerBound }
-    private var isTooLong: Bool { length > Size.xl.range.upperBound }
+    private var isTooLong: Bool { length > Size.xxl.range.upperBound }
 
     private var message: String {
         if isTooShort {
@@ -168,7 +171,7 @@ private struct StepLengthHint: View {
         }
         if isTooLong {
             return "Ce souvenir dépasse ce qu’une étape peut contenir : "
-                + "\(Size.xl.range.upperBound) caractères, soit deux pages de carnet. "
+                + "\(Size.xxl.range.upperBound) caractères, soit trois pages de carnet. "
                 + "Coupe-le en deux étapes, chacune aura les siennes."
         }
         // Hors des deux bornes, le compteur informe sans alarmer : la taille

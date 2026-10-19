@@ -132,4 +132,36 @@ final class BookPageTargetTests: XCTestCase {
             "On passe d’un récit de 60 pages à un récit détaillé de 40 pages. Les prochaines étapes seront donc moins étoffées."
         )
     }
+
+    // MARK: Les paliers suivent le ratio, la cible hors d'atteinte (18/10/2026)
+
+    func testTheTiersFollowThePhotoRatio() {
+        XCTAssertEqual(BookPageTarget.standard.pageCount(forTripDays: nil, ratio: 0), 40)
+        XCTAssertEqual(BookPageTarget.standard.pageCount(forTripDays: nil, ratio: 50), 60)
+        XCTAssertEqual(BookPageTarget.standard.pageCount(forTripDays: nil, ratio: 100), 80)
+        XCTAssertEqual(BookPageTarget.detailed.pageCount(forTripDays: 40, ratio: 75), 70)
+        XCTAssertEqual(BookPageTarget.matching(pageCount: 50, tripDays: 40, ratio: 75), .standard)
+    }
+
+    func testAnUnreachableTargetSaysWhatTheBookCanDo() {
+        let allowance = PageTargetAllowance(reachableByRatio: [
+            25: PageRange(min: 24, max: 34),
+            50: PageRange(min: 24, max: 44),
+            75: PageRange(min: 24, max: 64),
+        ])
+        XCTAssertNil(allowance.reach(of: 38, ratio: 25), "à 5 pages de la fourchette, la cible passe")
+        let reach = allowance.reach(of: 60, ratio: 25)
+        XCTAssertEqual(reach?.range, PageRange(min: 24, max: 34))
+        XCTAssertEqual(reach?.closestTarget, 30)
+        XCTAssertEqual(reach?.ratioThatReaches, 75)
+        XCTAssertTrue(reach?.isTooLong == true)
+        XCTAssertNil(PageTargetAllowance().reach(of: 180, ratio: 50), "sans fourchette servie, rien n'est jugé")
+    }
+
+    func testTheReachableRangeDecodesFromTheServer() throws {
+        let json = #"{"changesLeft":2,"changeLimit":2,"changesCount":true,"rewriteAvailable":false,"reachableByRatio":{"0":{"min":24,"max":24},"50":{"min":24,"max":44}}}"#
+        let allowance = try JSONDecoder().decode(PageTargetAllowance.self, from: Data(json.utf8))
+        XCTAssertEqual(allowance.reachableByRatio[50], PageRange(min: 24, max: 44))
+        XCTAssertEqual(allowance.reachableByRatio.count, 2)
+    }
 }

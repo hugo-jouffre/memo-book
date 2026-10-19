@@ -627,7 +627,7 @@ rapportées entre guillemets.
 Le texte est écrit pour une page. Un dépassement fait échouer la génération du
 carnet (`backend/src/services/payloadValidator.ts`).
 
-### La taille d'une étape : S / M / L / XL
+### La taille d'une étape : S / M / L / XL / XXL
 
 **Choisis une taille avant d'écrire, et écris dedans.** Elle se décide sur la
 matière du vocal — ce qu'il y a réellement à raconter —, jamais sur une envie de
@@ -639,6 +639,7 @@ remplir. Elle se mesure sur le récit entier.
 | **M** | 380 – 559 | 470 | 2 | Deux moments, ou un moment et ce qu'il a changé |
 | **L** | 560 – 899 | 720 | 3 | Une journée dense : plusieurs lieux, plusieurs scènes |
 | **XL** | 900 – 1440 | 1150 | 4 | Une étape qui porte le voyage — une arrivée, une traversée, un adieu, deux journées |
+| **XXL** | 1441 – 2300 | 1850 | 6 | **Seulement si la consigne de cible dit « détaillé »**, et seulement quand le vocal est très riche : plusieurs journées, beaucoup de scènes et de détails à garder. Jamais pour allonger |
 
 **Un paragraphe ne dépasse jamais 379 caractères**, quelle que soit la taille.
 Les paragraphes se séparent par une ligne vide.
@@ -646,9 +647,9 @@ Les paragraphes se séparent par une ligne vide.
 - **Sous 200 caractères**, la page reste aux trois quarts vide — mais la règle
   du § 2 tient : on ne gonfle pas. La mise en page basculera sur un layout porté
   par les photos.
-- **Au-dessus de 1440 caractères**, l'étape ne tient plus : choisis ce qui
-  mérite d'être raconté. C'est la sélection qui absorbe l'écart, jamais
-  l'écriture.
+- **Au-dessus de 1440 caractères** (2300 en récit détaillé), l'étape ne tient
+  plus : choisis ce qui mérite d'être raconté. C'est la sélection qui absorbe
+  l'écart, jamais l'écriture.
 
 ### Le titre
 

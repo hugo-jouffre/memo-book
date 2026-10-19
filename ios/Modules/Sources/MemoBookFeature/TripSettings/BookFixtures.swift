@@ -37,7 +37,7 @@ extension TripSettings {
             // comme celle du voyage entier. Il en est retiré là où l'on compte
             // les autres — voir ``TripSettings/guests``.
             companions: [
-                Companion(id: "margaux", name: "Margaux Dupont", isOwner: true),
+                Companion(id: "margaux", name: "Margaux Dupont", isOwner: true, isViewer: true),
                 Companion(id: "tom", name: "Tom John", role: "Ton pote d’enfance"),
                 // Le troisième n'est jamais entré : c'est lui qui montre
                 // l'action « Renvoyer » du glissé.

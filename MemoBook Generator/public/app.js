@@ -1615,8 +1615,9 @@ const ficheCouverture = () => Couverture.ficheDuCarnet(fichePumbo(), pagesDuLivr
 /**
  * Le nombre de pages du carnet, comme l'app iOS (`BookCustomisation.swift`,
  * `pageCount(forTripDays:)`, et `backend/src/services/pageTarget.ts`) : le
- * format standard vaut la durée du voyage arrondie à la dizaine, entre 30 et
- * 180 pages ; sans date de retour, 60. Compact en fait les deux tiers,
+ * format standard vaut la durée du voyage, pondérée par le ratio photo / texte
+ * (`FACTEUR_RATIO_PAGES`), arrondie à la dizaine, entre 30 et 180 pages ; sans
+ * date de retour, 60 à 50 %. Compact en fait les deux tiers,
  * détaillé les quatre tiers — 40 / 60 / 80 sans date de fin.
  */
 const FORMATS_PAGES = {
@@ -1637,9 +1638,17 @@ function joursDuVoyage(c = etat.carnet) {
   return Math.max(1, Math.round((fin - debut) / 86400000) + 1);
 }
 
-function pagesStandard(jours) {
-  if (!jours || jours <= 0) return 60;
-  return Math.min(Math.max(arrondiDizaine(jours), 30), 180);
+/**
+ * Les paliers suivent aussi le ratio photo / texte (Hugo, 18/10/2026) :
+ * `RATIO_PAGE_FACTOR` de `backend/src/services/pageTarget.ts`, recopié. Sans
+ * date de fin : 40 / 50 / 60 / 70 / 80 pages de 0 à 100 %.
+ */
+const FACTEUR_RATIO_PAGES = { 0: 0.7, 25: 0.85, 50: 1, 75: 1.15, 100: 1.3 };
+
+function pagesStandard(jours, ratio = 50) {
+  const facteur = FACTEUR_RATIO_PAGES[ratio] ?? 1;
+  if (!jours || jours <= 0) return arrondiDizaine(60 * facteur);
+  return Math.min(Math.max(arrondiDizaine(jours * facteur), 30), 180);
 }
 
 function pagesDuFormat(c = etat.carnet, format = c.formatPages || "standard") {
@@ -1647,7 +1656,7 @@ function pagesDuFormat(c = etat.carnet, format = c.formatPages || "standard") {
     const n = Number(c.pagesCible);
     return n > 0 ? Math.round(n) : PAGES_PERSO.defaut;
   }
-  const standard = pagesStandard(joursDuVoyage(c));
+  const standard = pagesStandard(joursDuVoyage(c), Number(c.ratioPhotos ?? 50));
   return arrondiDizaine(standard * (FORMATS_PAGES[format] || FORMATS_PAGES.standard).facteur);
 }
 

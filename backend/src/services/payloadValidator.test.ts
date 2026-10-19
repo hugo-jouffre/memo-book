@@ -283,14 +283,15 @@ describe("barème S / M / L / XL", () => {
     expect(sizeForStep(470)).toBe("M");
     expect(sizeForStep(720)).toBe("L");
     expect(sizeForStep(1150)).toBe("XL");
+    expect(sizeForStep(1850)).toBe("XXL");
   });
 
   it("laisse les longueurs sous S sans taille", () => {
     expect(sizeForStep(STEP_SIZES.S.min - 1)).toBeUndefined();
   });
 
-  it("couvre 200 → 1440 sans trou entre deux tailles", () => {
-    for (let chars = STEP_SIZES.S.min; chars <= STEP_SIZES.XL.max; chars += 1) {
+  it("couvre 200 → 2300 sans trou entre deux tailles", () => {
+    for (let chars = STEP_SIZES.S.min; chars <= STEP_SIZES.XXL.max; chars += 1) {
       expect(sizeForStep(chars), `${chars} caractères`).toBeDefined();
     }
   });
@@ -358,7 +359,7 @@ describe("barème S / M / L / XL", () => {
     expect(result.errors).toEqual([]);
   });
 
-  it("refuse une étape au-dessus de XL", () => {
+  it("refuse une étape au-dessus de XXL", () => {
     const result = validatePayload({
       book_title: "Carnet",
       days: [
@@ -368,6 +369,7 @@ describe("barème S / M / L / XL", () => {
           body_html: recit(540, 2),
           layout_story_opener: true,
         },
+        { title: "Suite", body_html: recit(950, 4), layout_story_opener: true },
         { title: "Suite", body_html: recit(950, 4), layout_story_opener: true },
       ],
     });

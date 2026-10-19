@@ -622,8 +622,11 @@ struct TripAccessCode: View {
 
     @State private var hasCopied = false
 
+    /// Le message partagé : le lien d'invitation d'abord (18/10/2026) — il
+    /// ouvre l'app sur le voyage, ou l'App Store —, le code ensuite, pour
+    /// l'entrer à la main après l'installation.
     private var invitation: String {
-        "Rejoins-moi sur MemoBook pour raconter « \(tripTitle) ». Code d’accès : \(code ?? "")"
+        BookCopy.Invite.invitation(tripTitle: tripTitle, code: code ?? "", link: code.flatMap { InviteLink.url(code: $0) })
     }
 
     var body: some View {

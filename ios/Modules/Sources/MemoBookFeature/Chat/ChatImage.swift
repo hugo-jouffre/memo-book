@@ -22,15 +22,19 @@ enum ChatImage {
     /// vignette du fil, arrondi.
     static let maximumPixelSize: CGFloat = 1_024
 
+    /// Le plus grand côté d'une photo **ouverte en plein écran** : de quoi
+    /// remplir un 17 Pro Max à 3× et zoomer d'un cran sans flou.
+    static let fullScreenPixelSize: CGFloat = 2_800
+
     /// L'image réduite, ou `nil` si les octets ne sont pas une image.
-    static func decode(_ data: Data?) async -> UIImage? {
+    static func decode(_ data: Data?, maximumPixelSize: CGFloat = maximumPixelSize) async -> UIImage? {
         guard let data else { return nil }
         return await Task.detached(priority: .userInitiated) {
-            thumbnail(of: data)
+            thumbnail(of: data, maximumPixelSize: maximumPixelSize)
         }.value
     }
 
-    static func thumbnail(of data: Data) -> UIImage? {
+    static func thumbnail(of data: Data, maximumPixelSize: CGFloat = maximumPixelSize) -> UIImage? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,

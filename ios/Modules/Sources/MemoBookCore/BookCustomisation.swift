@@ -466,26 +466,27 @@ public enum BookPageTarget: String, Sendable, Hashable, CaseIterable, Identifiab
     }
 
     /// « Compact (≈ 30 pages) » — le titre, et sa projection pour ce voyage-ci.
-    public func label(forTripDays days: Int?) -> String {
-        guard let pages = pageCount(forTripDays: days) else { return title }
+    public func label(forTripDays days: Int?, ratio: Int = 50) -> String {
+        guard let pages = pageCount(forTripDays: days, ratio: ratio) else { return title }
         return "\(title) (≈ \(pages) pages)"
     }
 
-    /// Combien de pages ce palier vise pour un voyage de `days` jours.
+    /// Combien de pages ce palier vise pour un voyage de `days` jours, au
+    /// ratio photo / texte `ratio`.
     ///
-    /// Une page par jour au palier « Par défaut », arrondie à la dizaine,
-    /// bornée entre un carnet minimal et ce qu'une reliure accepte. Les deux
-    /// autres paliers en sont les **deux tiers et les quatre tiers** (Hugo,
-    /// 15/10/2026) — et non plus la moitié et une fois et demie : un compact à
-    /// moitié perdait trop du récit, un détaillé à 150 % le gonflait. Sans date
-    /// de fin, cela fait 40 / 60 / 80. `nil` pour ``BookPageTarget/custom``,
-    /// qui ne projette rien — c'est le voyageur qui pose le nombre.
+    /// Une page par jour au palier « Par défaut » à 50 %, **pondérée par le
+    /// ratio** (Hugo, 18/10/2026 — ``ratioFactor(_:)``), arrondie à la
+    /// dizaine, bornée entre un carnet minimal et ce qu'une reliure accepte.
+    /// Les deux autres paliers en sont les **deux tiers et les quatre tiers**
+    /// (Hugo, 15/10/2026). Sans date de fin, 40 / 60 / 80 à 50 %. `nil` pour
+    /// ``BookPageTarget/custom``, qui ne projette rien — c'est le voyageur qui
+    /// pose le nombre.
     ///
     /// Le serveur fait le même calcul (`backend/src/services/pageTarget.ts`) :
     /// c'est lui qui lit la densité du récit dans la cible.
-    public func pageCount(forTripDays days: Int?) -> Int? {
+    public func pageCount(forTripDays days: Int?, ratio: Int = 50) -> Int? {
         guard self != .custom else { return nil }
-        let standard = Self.standardPageCount(forTripDays: days)
+        let standard = Self.standardPageCount(forTripDays: days, ratio: ratio)
         return switch self {
         case .compact: Self.roundedToTen(Double(standard) * 2 / 3)
         case .standard: standard
@@ -496,16 +497,31 @@ public enum BookPageTarget: String, Sendable, Hashable, CaseIterable, Identifiab
 
     /// Le palier auquel un nombre de pages correspond, ou ``custom`` s'il ne
     /// tombe sur aucun.
-    public static func matching(pageCount: Int, tripDays: Int?) -> BookPageTarget {
+    public static func matching(pageCount: Int, tripDays: Int?, ratio: Int = 50) -> BookPageTarget {
         [.compact, .standard, .detailed]
-            .first { $0.pageCount(forTripDays: tripDays) == pageCount } ?? .custom
+            .first { $0.pageCount(forTripDays: tripDays, ratio: ratio) == pageCount } ?? .custom
+    }
+
+    /// **Les paliers suivent aussi le ratio** (Hugo, 18/10/2026) : un carnet
+    /// plus écrit vise moins de pages, un carnet plus photographique
+    /// davantage — c'est ce qu'il peut réellement atteindre. Recopie de
+    /// `RATIO_PAGE_FACTOR` (`backend/src/services/pageTarget.ts`).
+    public static func ratioFactor(_ ratio: Int) -> Double {
+        switch ratio {
+        case ..<13: 0.7
+        case ..<38: 0.85
+        case ..<63: 1
+        case ..<88: 1.15
+        default: 1.3
+        }
     }
 
     /// Un carnet de moins de 30 pages ne vaut pas une reliure, et au-delà de 180
-    /// le dos ne tient plus. Sans durée connue, on rend le défaut de la base.
-    private static func standardPageCount(forTripDays days: Int?) -> Int {
-        guard let days, days > 0 else { return 60 }
-        return min(max(roundedToTen(Double(days)), 30), 180)
+    /// le dos ne tient plus. Sans durée connue, 60 pages à 50 %.
+    private static func standardPageCount(forTripDays days: Int?, ratio: Int) -> Int {
+        let factor = ratioFactor(ratio)
+        guard let days, days > 0 else { return roundedToTen(60 * factor) }
+        return min(max(roundedToTen(Double(days) * factor), 30), 180)
     }
 
     private static func roundedToTen(_ value: Double) -> Int {
@@ -537,17 +553,23 @@ public struct PageTargetAllowance: Codable, Sendable, Hashable {
     /// Le dernier changement ouvre encore le droit de réécrire les étapes
     /// déjà écrites à la nouvelle cible — `POST /v1/trips/:id/page-target/rewrite`.
     public var rewriteAvailable: Bool
+    /// **Ce que le carnet peut atteindre**, pour chacun des cinq ratios
+    /// (Hugo, 18/10/2026) — `reachableByRatio`. Vide d'un serveur plus
+    /// ancien : l'app ne juge alors aucune cible.
+    public var reachableByRatio: [Int: PageRange]
 
     public init(
         changesLeft: Int = 2,
         changeLimit: Int = 2,
         changesCount: Bool = false,
-        rewriteAvailable: Bool = false
+        rewriteAvailable: Bool = false,
+        reachableByRatio: [Int: PageRange] = [:]
     ) {
         self.changesLeft = changesLeft
         self.changeLimit = changeLimit
         self.changesCount = changesCount
         self.rewriteAvailable = rewriteAvailable
+        self.reachableByRatio = reachableByRatio
     }
 
     /// Ce qu'on lit quand le serveur ne dit rien : rien n'est compté.
@@ -559,11 +581,81 @@ public struct PageTargetAllowance: Codable, Sendable, Hashable {
         changeLimit = try container.decodeIfPresent(Int.self, forKey: .changeLimit) ?? 2
         changesCount = try container.decodeIfPresent(Bool.self, forKey: .changesCount) ?? false
         rewriteAvailable = try container.decodeIfPresent(Bool.self, forKey: .rewriteAvailable) ?? false
+        // Un objet JSON a des clés textuelles : « 0 » à « 100 ».
+        let byKey = (try? container.decodeIfPresent([String: PageRange].self, forKey: .reachableByRatio)) ?? nil
+        reachableByRatio = Dictionary(
+            uniqueKeysWithValues: (byKey ?? [:]).compactMap { key, range in Int(key).map { ($0, range) } }
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case changesLeft, changeLimit, changesCount, rewriteAvailable, reachableByRatio
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(changesLeft, forKey: .changesLeft)
+        try container.encode(changeLimit, forKey: .changeLimit)
+        try container.encode(changesCount, forKey: .changesCount)
+        try container.encode(rewriteAvailable, forKey: .rewriteAvailable)
+        try container.encode(
+            Dictionary(uniqueKeysWithValues: reachableByRatio.map { (String($0.key), $0.value) }),
+            forKey: .reachableByRatio
+        )
+    }
+
+    /// **La cible est-elle atteignable ?** `nil` quand oui — ou quand le
+    /// serveur ne dit pas ce que le carnet peut atteindre. Sinon, ce que la
+    /// feuille ``PageTargetReach`` dit : la fourchette d'aujourd'hui, la cible
+    /// atteignable la plus proche, et le ratio qui ouvrirait la cible voulue.
+    /// Le carnet final tient à ± 5 pages de sa cible
+    /// (`PAGE_TARGET_TOLERANCE`) : une cible à 5 pages de la fourchette passe.
+    public func reach(of target: Int, ratio: Int) -> PageTargetReach? {
+        guard let range = reachableByRatio[ratio] else { return nil }
+        let tolerance = 5
+        guard target < range.min - tolerance || target > range.max + tolerance else { return nil }
+        let isTooLong = target > range.max
+        // La cible atteignable la plus proche, dans les bornes de la feuille.
+        let rounded = Int((Double(isTooLong ? range.max : range.min) / 10).rounded()) * 10
+        let closest = min(max(rounded, 30), 180)
+        let opening = isTooLong
+            ? reachableByRatio.keys.sorted().first { $0 > ratio && (reachableByRatio[$0]?.max ?? 0) + tolerance >= target }
+            : nil
+        return PageTargetReach(target: target, ratio: ratio, range: range, closestTarget: closest, ratioThatReaches: opening)
     }
 
     /// Les deux changements sont faits, et ils comptaient : la cible ne
     /// bouge plus. Les paliers pâlissent, et l'appui dit pourquoi.
     public var isExhausted: Bool { changesCount && changesLeft <= 0 }
+}
+
+/// Une fourchette de pages : ce que le carnet peut atteindre.
+public struct PageRange: Codable, Sendable, Hashable {
+    public var min: Int
+    public var max: Int
+
+    public init(min: Int, max: Int) {
+        self.min = min
+        self.max = max
+    }
+}
+
+/// **Une cible personnalisée hors d'atteinte** (Hugo, 18/10/2026) : ce que la
+/// feuille dit au voyageur — ce que le carnet peut faire avec ses réglages, et
+/// comment aller chercher la cible qu'il veut.
+public struct PageTargetReach: Sendable, Hashable, Identifiable {
+    public var target: Int
+    public var ratio: Int
+    public var range: PageRange
+    /// La cible atteignable la plus proche, à la dizaine.
+    public var closestTarget: Int
+    /// Le plus petit ratio au-dessus de l'actuel qui ouvrirait la cible ;
+    /// `nil` quand aucun ne suffit, ou quand la cible est trop courte.
+    public var ratioThatReaches: Int?
+
+    public var id: String { "\(target)-\(ratio)" }
+    /// Trop longue — sinon trop courte : le récit seul dépasse déjà la cible.
+    public var isTooLong: Bool { target > range.max }
 }
 
 /// Où en est le voyage quand la cible change — c'est ce qui décide de

@@ -37,8 +37,18 @@ public enum NotificationLink: Equatable, Sendable {
     /// l'aperçu est ce qu'il avait de plus proche à montrer : le carnet qu'on
     /// finançait.
     case bookPreview(tripId: String)
+    /// **L'invitation d'un co-voyageur** (Hugo, 18/10/2026) : rejoindre le
+    /// voyage par son code, puis ouvrir son écran d'accueil. Trois formes :
+    /// le lien universel `https://<l'API>/j/<code>` (``InviteLink``), et
+    /// `memobook://join?code=<code>` ou `memobook://j/<code>`, ceux de la page
+    /// de repli (`backend/src/routes/invitePage.ts`).
+    case join(code: String)
 
     public init?(url: URL) {
+        if let code = InviteLink.code(from: url) {
+            self = .join(code: code)
+            return
+        }
         guard url.scheme?.lowercased() == "memobook" else { return nil }
 
         // `memobook://trips/abc/chat` : « trips » est l'hôte, le reste le chemin.
@@ -118,5 +128,56 @@ public struct PushTokenRegistration: Equatable, Sendable {
         var body = ["token": token, "environment": environment.rawValue, "timeZone": timeZone]
         if let appVersion { body["appVersion"] = appVersion }
         return body
+    }
+}
+
+/// **Le lien d'invitation d'un co-voyageur** (Hugo, 18/10/2026).
+///
+/// `https://<l'API de production>/j/<code>` : un lien universel. L'app
+/// installée s'ouvre dessus et rejoint le voyage ; sinon, la page du serveur
+/// envoie sur l'App Store (`backend/src/routes/invitePage.ts`). Toujours
+/// l'adresse de **production** — c'est elle qui sert
+/// `apple-app-site-association` et que déclare l'*Associated Domain* —, même
+/// depuis un build de développement : un lien vers `localhost` ne mènerait
+/// nulle part sur le téléphone de l'invité.
+public enum InviteLink {
+    /// Le chemin que l'app revendique sur ce domaine (`INVITE_PATH`).
+    static let path = "j"
+
+    /// Le lien à partager, ou `nil` si l'app ne connaît pas l'adresse de production.
+    public static func url(code: String, base: URL? = productionBaseURL) -> URL? {
+        guard let base, !code.isEmpty else { return nil }
+        return base.appending(path: path).appending(path: code)
+    }
+
+    /// Le code d'un lien d'invitation, quelle que soit sa forme ; `nil` pour tout autre lien.
+    public static func code(from url: URL) -> String? {
+        let scheme = url.scheme?.lowercased()
+        let segments = url.pathComponents.filter { $0 != "/" }
+        let raw: String?
+        switch scheme {
+        case "https":
+            raw = segments.count == 2 && segments[0] == path ? segments[1] : nil
+        case "memobook":
+            if url.host == "join" {
+                raw = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                    .queryItems?.first { $0.name == "code" }?.value
+            } else if url.host == path, segments.count == 1 {
+                raw = segments[0]
+            } else {
+                raw = nil
+            }
+        default:
+            raw = nil
+        }
+        // La forme de la base : majuscules, sans espace ni tiret (`normalizeAccessCode`).
+        let code = (raw ?? "").uppercased().filter { $0.isLetter || $0.isNumber }
+        return code.isEmpty ? nil : code
+    }
+
+    /// L'adresse de production que l'app embarque (`MemoBookProductionAPIBaseURL`, `Base.xcconfig`).
+    public static var productionBaseURL: URL? {
+        (Bundle.main.object(forInfoDictionaryKey: "MemoBookProductionAPIBaseURL") as? String)
+            .flatMap { URL(string: $0.trimmingCharacters(in: .whitespaces)) }
     }
 }

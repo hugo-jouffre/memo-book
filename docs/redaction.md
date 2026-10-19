@@ -38,6 +38,40 @@ statistiques, et ses doutes.
 | La bulle qui cite ses doutes | `validationQuestionFor` dans `backend/src/services/conversationCopy.ts` |
 | Les noms soufflés au transcripteur | `transcriptionHintFor` dans `backend/src/services/transcription.ts` |
 | Le modèle | `ANTHROPIC_REDACTION_MODEL` dans `backend/.env` — voir [`modeles-ia.md`](modeles-ia.md) |
+| L'effort de réflexion | `ANTHROPIC_REDACTION_EFFORT` (`low`, `medium`, `high`) — voir § Le temps d'une rédaction |
+
+### Le temps d'une rédaction
+
+« La retranscription des étapes est un peu trop longue » (Hugo, 18/10/2026).
+Du vocal envoyé à « Il te convient ? », le chemin a été raccourci à chaque
+étape :
+
+| Où | Avant | Depuis le 18/10/2026 |
+|---|---|---|
+| Trois sauts de file (transcription, rédaction, MEMO) | pris toutes les 2 s | toutes les 0,5 s (`LIVE_JOBS`, `queue.ts`) |
+| Lectures avant l'appel au modèle | en série | ensemble (`Promise.all`, `redact.ts`, `transcribe.ts`) |
+| L'appel au modèle | effort `high` | effort **`medium`** par défaut |
+| « Il te convient ? » | après le recalcul des étapes du voyage | **avant** : le recalcul suit |
+
+L'effort est l'essentiel du temps (la réflexion compte dans la réponse). Il
+n'a **pas été mesuré** au banc le 18/10 : la clé Anthropic locale est vide.
+Pour trancher, poser la clé dans `backend/.env` puis :
+
+```bash
+npm run redaction:eval -- --label effort-high --effort high --until 13
+npm run redaction:eval -- --label effort-medium --effort medium --until 13
+npm run redaction:eval -- --compare effort-high effort-medium --judge
+```
+
+Chaque étape du rapport porte sa durée. Si `medium` écrit moins bien,
+`ANTHROPIC_REDACTION_EFFORT=high` sur Railway rétablit l'ancien réglage sans
+déploiement de code. Les journaux de l'API donnent désormais `modelMs` et
+`totalMs` à chaque « Souvenir rédigé », et `totalMs` à chaque « Entrée
+transcrite ».
+
+Un levier reste à prendre : le schéma fait réécrire **toute** la fiche de
+cohérence à chaque étape, ce qui allonge la réponse à mesure que le carnet
+grandit. N'en demander que les ajouts serait le prochain gain.
 
 Les règles des textes du **carnet entier** — quiz, mot fléché, intro, chiffres
 du voyage — sont dans `agents/agent-transcription-carnet.md`. **Aucun agent ne

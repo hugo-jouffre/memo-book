@@ -210,10 +210,11 @@ describe("réglages du carnet de l'app", () => {
   });
 
   it("recale le carnet sur sa cible de pages, pages libres de fin comprises, et le journalise", () => {
-    // Une étape de six paragraphes, douze photos dont le ratio en garde
-    // quatre : deux pages ; le colophon et les trois pages libres en font 6.
+    // Une étape de six paragraphes et les quatre photos que le ratio demande :
+    // deux pages ; le colophon et les trois pages libres en font 6. (Des
+    // photos en plus iraient sur des pages de photos, 18/10/2026.)
     const long = Array.from({ length: 6 }, (_, k) => `<p>${`Le matin nous sommes allés voir le lieu ${k} et nous y sommes restés longtemps. `.repeat(2).trim()}</p>`).join("");
-    const etape = { title: "Jour 1", day_intro: { day_number: "01" }, body_html: long, photos: Array.from({ length: 12 }, (_, i) => `https://exemple.test/${i}.jpg`), layout_collage: true };
+    const etape = { title: "Jour 1", day_intro: { day_number: "01" }, body_html: long, photos: Array.from({ length: 4 }, (_, i) => `https://exemple.test/${i}.jpg`), layout_collage: true };
     const voyage = { book_title: "Carnet", days: [etape] };
     const sans = applyBookSettings(voyage, reglages)["days"] as unknown[];
     const journal: string[] = [];

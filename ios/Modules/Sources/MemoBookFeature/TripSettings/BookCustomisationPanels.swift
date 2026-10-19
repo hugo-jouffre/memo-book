@@ -96,10 +96,12 @@ struct BookPagesPanel: View {
     @State private var isCustomising = false
 
     private var days: Int? { model.tripDays }
+    /// Les paliers suivent aussi le ratio (18/10/2026).
+    private var ratio: Int { model.customisation?.photoTextRatio ?? 50 }
 
     private var selection: BookPageTarget {
         guard let pages = model.customisation?.targetPageCount else { return .standard }
-        return isCustomising ? .custom : BookPageTarget.matching(pageCount: pages, tripDays: days)
+        return isCustomising ? .custom : BookPageTarget.matching(pageCount: pages, tripDays: days, ratio: ratio)
     }
 
     var body: some View {
@@ -122,7 +124,7 @@ struct BookPagesPanel: View {
             BookPanelCard {
                 ForEach(BookPageTarget.allCases) { target in
                     BrandOptionRow(
-                        target.label(forTripDays: days),
+                        target.label(forTripDays: days, ratio: ratio),
                         subtitle: target.detail,
                         isSelected: selection == target
                     ) {
@@ -151,12 +153,15 @@ struct BookPagesPanel: View {
         .onAppear {
             guard let pages = model.customisation?.targetPageCount else { return }
             customPages = Double(pages)
-            isCustomising = BookPageTarget.matching(pageCount: pages, tripDays: days) == .custom
+            isCustomising = BookPageTarget.matching(pageCount: pages, tripDays: days, ratio: ratio) == .custom
         }
         // La feuille refermée sans changement — « Annuler », ou un refus — :
         // le curseur revient sur la cible qui tient toujours.
         .onChange(of: model.pageTargetChange == nil) { _, isClosed in
             if isClosed { resyncCustomPages() }
+        }
+        .onChange(of: model.pageTargetReach == nil) { _, isClosed in
+            if isClosed, model.pageTargetChange == nil { resyncCustomPages() }
         }
     }
 
@@ -211,7 +216,10 @@ struct BookPagesPanel: View {
                 step: 10,
                 onEditingChanged: { isEditing in
                     guard !isEditing else { return }
-                    request(Int(customPages))
+                    // Un nombre posé à la main : hors d'atteinte, la feuille
+                    // le dit avant que rien ne change (18/10/2026).
+                    model.requestCustomTarget(Int(customPages))
+                    if model.pageTargetChange == nil, model.pageTargetReach == nil { resyncCustomPages() }
                 }
             )
             .tint(MemoBookColor.action)
@@ -229,7 +237,7 @@ struct BookPagesPanel: View {
             return
         }
         isCustomising = target == .custom
-        guard let pages = target.pageCount(forTripDays: days) else {
+        guard let pages = target.pageCount(forTripDays: days, ratio: ratio) else {
             // « Personnalisé » n'a pas de valeur à lui : on garde celle qui est
             // déjà posée et on ouvre le curseur dessous.
             return

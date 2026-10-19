@@ -52,7 +52,7 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
 |---|---|---|---|---|
 | **Couvertures (1re & 4e)** | Aperçu et personnalisation | — | Mise en page | Partiel : `cover_photo` et `back_cover` existent, l'éditeur non |
 | **Ratio photo / texte** | 0 · 25 · 50 · 75 · 100 % | 50 % | Mise en page — le nombre de photos de chaque étape (`photoRatio.ts`), mises en page par le composeur de l'atelier, le même dans l'atelier et l'app (`bookComposer.ts`) | Rendu, les cinq paliers. Détail et cas limites : **`docs/ratio-texte-photo.md`** |
-| **Nombre de page cible** | Compact · Par défaut · Détaillé · Personnalisé (30 à 180) | Par défaut — 60 pages sans date de fin | Rédaction — la taille des étapes (`services/pageTarget.ts`, ligne de consigne de `redaction.ts`) · Mise en page — les planches de photos (`recalerSurLaCible`, `mise-en-page.js`), la même dans l'atelier et l'app | Rendu : la rédaction règle la densité, deux changements par voyage une fois le récit commencé ; la composition recale le carnet sur la cible à ± 5 pages par ses planches de photos, quand les photos le permettent (15/10/2026) |
+| **Nombre de page cible** | Compact · Par défaut · Détaillé · Personnalisé (30 à 180) | Par défaut — 60 pages sans date de fin, à 50 % | Rédaction — la taille des étapes (`services/pageTarget.ts`, ligne de consigne de `redaction.ts`) · Mise en page — les planches de photos (`recalerSurLaCible`, `mise-en-page.js`), la même dans l'atelier et l'app | Rendu : la rédaction règle la densité, deux changements par voyage une fois le récit commencé ; la composition recale le carnet sur la cible à ± 5 pages par ses planches de photos, quand les photos le permettent (15/10/2026) |
 | **Fun facts** | ON / OFF | ON | Rédaction les écrit, mise en page les place | Rendu (`fun_facts`) — OFF : aucun encart, dans l'atelier comme dans l'app |
 | **Pointillés** | ON / OFF | ON | Gabarit (`.mb-note__rules`) | Rendu : `rules_enabled` dans le payload |
 | **Décorations & stickers** | 0 · 1 · 2 · 3 · 4 par étape | 2 | Mise en page | Rendu : les stickers de la bibliothèque dessinée (44 dessins importés de Notion, `assets/stickers/`), liés au récit puis complétés par des dessins de voyage, **autant par étape que le réglage** (14/10/2026 ; le curseur de l'app le dit : « Quantité de décorations par étape »), et le tracé pointillé ; à 0, ni l'un ni l'autre. Le scotch des photos n'en dépend plus (12/10/2026) |
@@ -74,36 +74,51 @@ Tous ne concernent pas les agents. Ceux qui les concernent :
   assortiments n'ont pas d'aperçu avec pointillés, ils les éteignent. Un carnet
   « Personnalisé » n'est pas verrouillé. Voir `docs/apercu-personnalisation.md`
   § La contrainte.
-- **Nombre de pages cible** (Hugo, 15/10/2026). Les paliers se calculent sur
-  la durée du voyage : « Par défaut » vise une page par jour, à la dizaine,
-  entre 30 et 180 ; « Compact » ×2/3 et « Détaillé » ×4/3. **Sans date de fin :
-  40 / 60 / 80 pages.** Le carnet final vise sa cible à **± 5 pages** (un
-  Compact de 40 pages fait 35 à 45 pages). La cible règle la **densité de la
-  rédaction** — la taille d'étape vers laquelle on tire, jamais au-delà de ce
-  que le vocal raconte : on ne gonfle pas. Puis la **composition recale** le
-  carnet (`recalerSurLaCible`, `mise-en-page.js` — le même code dans l'atelier
-  et l'app, donc le même PDF) :
-  - on compte **le carnet entier hors couvertures** : colophon, introduction,
-    page libre d'avant, pages d'étape, pages libres de fin. Les pages fixes
-    comptent mais ne bougent jamais ;
-  - la mise en page n'invente pas de texte : elle n'ajoute ou ne retire que
-    des **planches** (pages de photos de fin d'étape). Aucun récit n'est coupé,
-    raccourci ni réduit, aucune page de récit n'apparaît ni ne disparaît ;
-  - **le ratio photo / texte tient** : chaque étape garde exactement le nombre
-    de photos que le ratio lui donne (celui que le chat a demandé). Trop court,
-    ces photos s'étalent sur deux planches de plus (celles que les six pages
-    avaient écartées reviennent ; à 50 % et au-delà, une page de récit à
-    plusieurs photos en cède — elle garde toujours la sienne), jusqu'à deux
-    doubles pages de photos par étape, et six pages par étape au plus ; trop long, elles se resserrent sur
-    moins de planches (cinq par page) ou remontent sur les pages de récit qui
-    ont encore une place ;
-  - chaque étape garde un **nombre pair de pages** : deux planches à la fois,
-    ou une seule pour rendre paire une étape impaire ;
-  - **hors d'atteinte**, on ne force rien : pas assez de photos (le cas courant
-    à 0 et 25 %, ou d'un récit court qui n'en demande que deux), ou trop de
-    récit (la cible est sous ce que le texte seul occupe). Le carnet reste au
-    plus près, et le journal le dit — `pages cible : … hors d'atteinte`, en
-    avertissement dans les journaux de l'API, dans le journal de l'atelier.
+- **Nombre de pages cible** (Hugo, 15/10/2026, revu le 18/10/2026). Les
+  paliers se calculent sur **la durée du voyage et le ratio photo / texte** :
+  « Par défaut » vise une page par jour à 50 %, pondérée par le ratio — ×0,7 à
+  0 %, ×0,85 à 25 %, ×1,15 à 75 %, ×1,3 à 100 % (`RATIO_PAGE_FACTOR`,
+  `pageTarget.ts`, recopié dans l'app et l'atelier) —, à la dizaine, entre 30
+  et 180 ; « Compact » ×2/3 et « Détaillé » ×4/3. **Sans date de fin, à 50 % :
+  40 / 60 / 80 pages.** Pourquoi le ratio : une étape fait presque toujours
+  deux pages de récit, quel que soit le ratio ; ce qui allonge le carnet, ce
+  sont ses pages de photos, et un carnet très écrit en a peu. Le carnet final
+  vise sa cible à **± 5 pages**. Le prix, lui, se calcule sur le **nombre
+  final de pages du carnet composé** (couvertures exclues, `billablePages`).
+  - **La rédaction** : la cible règle la densité — la taille d'étape vers
+    laquelle on tire, jamais au-delà de ce que le vocal raconte. La taille
+    **XXL** (1441 à 2300 signes, trois à quatre pages de récit) n'est ouverte
+    qu'à la cible « Détaillé ».
+  - **Le chat** : quand la cible demande plus de pages que le récit n'en
+    donne, MEMO demande **plus de photos que le ratio**, trois par page de
+    photos manquante (`photosForTarget`) — une double page de plus par étape
+    jusqu'à 50 %, deux à 75 % et au-delà, aucune à 0 %, six pages par étape au
+    plus. La cible se répartit sur les étapes attendues, estimées sur la durée
+    et le rythme du récit.
+  - **La composition** : les photos au-delà du ratio — celles que la cible a
+    demandées, ou celles que le voyageur a envoyées en plus — vont sur des
+    **pages de photos** en fin d'étape, jamais sur les pages de récit
+    (`ajouterSurplus`, `mise-en-page.js`). Puis le recalage
+    (`recalerSurLaCible`) ajoute ou retire des planches pour tenir la
+    fourchette. Il ne coupe aucun récit, n'en raccourcit aucun et n'en réduit
+    aucun. Il compte **le carnet entier hors couvertures**, et les pages fixes
+    ne bougent jamais.
+  - **Hors d'atteinte**, on ne force rien, et le journal le dit
+    (`pages cible : … hors d'atteinte`).
+  - **Une cible personnalisée hors d'atteinte** : une feuille le dit avant
+    que rien ne change (`PageTargetReachSheet`). Elle donne la fourchette que
+    le carnet peut atteindre avec les réglages du moment
+    (`pageTarget.reachableByRatio` de `GET /v1/trips/:id/settings`), puis les
+    leviers : raconter plus de souvenirs, envoyer plus de photos, monter le
+    ratio. Elle propose trois réponses : « Choisir N pages » (la cible
+    atteignable la plus proche), « Passer à X % de photos » (quand un ratio
+    l'ouvre) et « Garder N pages quand même ». Une cible à 5 pages de la
+    fourchette passe sans feuille.
+  - **Le ratio change en cours de voyage** : il s'applique à **tout le
+    carnet** dès la prochaine mise en page — il ne touche pas au texte. Une
+    cible posée sur un palier passe au même palier du nouveau ratio, sans
+    compter comme un changement de cible. Une cible personnalisée ne bouge
+    pas ; si elle devient hors d'atteinte, la même feuille s'ouvre.
   Changer de cible en cours de voyage :
   - **deux changements au plus**, comptés seulement une fois qu'une étape est
     écrite (avant, rien à homogénéiser). L'app le dit avant de changer —

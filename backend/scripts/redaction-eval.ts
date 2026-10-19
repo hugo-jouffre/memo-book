@@ -36,6 +36,7 @@ import {
   type CoherenceSheet,
   type RedactedNeighbour,
   type RedactionInput,
+  type RedactionEffort,
   type RedactionResult,
 } from "../src/services/redaction.js";
 
@@ -50,6 +51,7 @@ const { values, positionals } = parseArgs({
     until: { type: "string" },
     scene: { type: "string", default: SCENE_PATH },
     model: { type: "string", default: process.env.ANTHROPIC_REDACTION_MODEL ?? "claude-opus-5" },
+    effort: { type: "string", default: process.env.ANTHROPIC_REDACTION_EFFORT ?? "high" },
     compare: { type: "boolean", default: false },
     judge: { type: "boolean", default: false },
     "judge-model": { type: "string", default: "claude-opus-5-5" },
@@ -154,7 +156,7 @@ function checksOf(result: RedactionResult): string[] {
 
 async function run(client: Anthropic): Promise<RunReport> {
   const scene = JSON.parse(await readFile(values.scene, "utf8")) as Scene;
-  const redactor = new AnthropicRedactor(client, values.model);
+  const redactor = new AnthropicRedactor(client, values.model, values.effort as RedactionEffort);
 
   let sheet: CoherenceSheet = EMPTY_COHERENCE_SHEET;
   const previous: RedactedNeighbour[] = [];

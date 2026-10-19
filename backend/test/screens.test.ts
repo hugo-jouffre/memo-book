@@ -1723,12 +1723,19 @@ describe("le nombre de pages cible", () => {
       expect((await patchTarget(memo.id, owner.authorization, pages)).statusCode).toBe(200);
     }
     const body = (await patchTarget(memo.id, owner.authorization, 80)).json<Record<string, unknown>>();
-    expect(body["pageTarget"]).toEqual({
+    expect(body["pageTarget"]).toMatchObject({
       changesLeft: 2,
       changeLimit: 2,
       changesCount: false,
       rewriteAvailable: false,
     });
+    // Ce que le carnet peut atteindre, pour chacun des cinq ratios (18/10/2026).
+    const reachable = (body["pageTarget"] as { reachableByRatio?: Record<string, { min: number; max: number }> })
+      .reachableByRatio;
+    if (reachable) {
+      expect(Object.keys(reachable).sort()).toEqual(["0", "100", "25", "50", "75"]);
+      expect(reachable["75"]!.max).toBeGreaterThanOrEqual(reachable["25"]!.max);
+    }
   });
 
   it("ne se change que deux fois une fois le récit commencé, et la réécriture se prend une fois par changement", async () => {

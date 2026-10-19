@@ -189,6 +189,15 @@ targets:
         # posé sur cet identifiant — voir `docs/paiements.md`.
         com.apple.developer.in-app-payments:
           - merchant.com.tonapp.memobook
+        # Le lien d'invitation d'un co-voyageur (Hugo, 18/10/2026) :
+        # `https://<l'API>/j/<code>` ouvre l'app quand elle est installée. Le
+        # domaine sert `apple-app-site-association`
+        # (`backend/src/routes/invitePage.ts`). Comme les autres, la capability
+        # « Associated Domains » doit être cochée sur l'App ID
+        # `com.memobook.app` dans le portail Apple Developer — la signature
+        # automatique la coche d'elle-même quand le compte en a le droit.
+        com.apple.developer.associated-domains:
+          - applinks:api-production-9f35a.up.railway.app
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.memobook.app

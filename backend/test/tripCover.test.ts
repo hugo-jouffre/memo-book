@@ -98,14 +98,18 @@ describe("la couverture d'un voyage", () => {
   });
 
   // Le cœur de la demande : plutôt pas de couverture qu'une couverture coupée.
-  it("garde le motif quand le voyage n'a que des portraits", async () => {
+  it("faute de paysage, prend le plus récent des portraits (18/10/2026)", async () => {
     const { authorization } = await registerAccount(harness.app);
     const memoId = await createTrip(authorization);
 
     await sendPhoto(authorization, memoId, { width: 900, height: 1200 }, "2026-01-06T09:00:00.000Z");
+    const premier = await coverOf(authorization, memoId);
+    expect(premier).not.toBeNull();
     await sendPhoto(authorization, memoId, { width: 900, height: 1600 }, "2026-01-07T09:00:00.000Z");
 
-    expect(await coverOf(authorization, memoId)).toBeNull();
+    const second = await coverOf(authorization, memoId);
+    expect(second).not.toBeNull();
+    expect(second).not.toBe(premier);
   });
 
   it("préfère la plus récente des paysages, et ignore un portrait plus récent", async () => {

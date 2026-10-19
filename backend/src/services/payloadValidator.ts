@@ -33,7 +33,7 @@ const addFormats = addFormatsModule as unknown as typeof addFormatsModule.defaul
  * photos se comprime ou le contenu passe sous la marge. Redériver le barème,
  * c'est relancer ce script — pas rouvrir cette table.
  *
- * `max` est inclusif ; les fourchettes sont contiguës et couvrent 200 → 1440.
+ * `max` est inclusif ; les fourchettes sont contiguës et couvrent 200 → 2300.
  * `paragraphes` est une **cible de rédaction**, pas un plafond : ce qui se
  * vérifie, c'est le nombre de paragraphes que chaque page peut porter
  * (`PARAGRAPHS_PER_PAGE`), parce que c'est lui qui a été mesuré.
@@ -53,11 +53,18 @@ export const STEP_SIZES = {
   L: { min: 560, max: 899, cible: 720, paragraphes: 3, pages: 2 },
   /** 1440 = 560 (page à bandeau) + 880 (page de suite). Les deux mesurés. */
   XL: { min: 900, max: 1440, cible: 1150, paragraphes: 4, pages: 2 },
+  /**
+   * **Réservée à la cible « Détaillé »** (Hugo, 18/10/2026) : un vocal très
+   * riche, trois pages de récit — quatre quand les photos de l'étape en
+   * prennent leur part. 2300 ≈ 560 (page à bandeau) + 2 × 860 (pages de
+   * suite). La rédaction ne la prend qu'à cette cible (`pageDensityInstruction`).
+   */
+  XXL: { min: 1441, max: 2300, cible: 1850, paragraphes: 6, pages: 3 },
 } as const;
 
 export type StepSize = keyof typeof STEP_SIZES;
 
-const SIZE_ORDER: readonly StepSize[] = ["S", "M", "L", "XL"];
+const SIZE_ORDER: readonly StepSize[] = ["S", "M", "L", "XL", "XXL"];
 
 /** Limites reprises de LAYOUT_KB.md § « Longueur des textes ». */
 export const EDITORIAL_LIMITS = {
@@ -71,8 +78,12 @@ export const EDITORIAL_LIMITS = {
   bodyHtmlCharsPerParagraph: STEP_SIZES.S.max,
   /** Plancher absolu : en dessous, ce n'est plus une étape, c'est une légende. */
   stepMinChars: 120,
-  /** Plafond absolu : au-delà, il faut deux étapes, pas une étape plus longue. */
-  stepMaxChars: STEP_SIZES.XL.max,
+  /**
+   * Plafond absolu : au-delà, il faut deux étapes, pas une étape plus longue.
+   * C'est celui de la taille XXL ; hors cible « Détaillé », la rédaction
+   * s'arrête au XL — une consigne d'écriture, pas un refus du carnet.
+   */
+  stepMaxChars: STEP_SIZES.XXL.max,
   funFactChars: 140,
   highlightChars: 80,
   maxHighlights: 3,
@@ -200,8 +211,8 @@ export const LENGTH_HINTS = {
     `Encore quelques lignes : sous ${STEP_SIZES.S.min} caractères, l'étape laisse une page ` +
     "aux trois quarts vide. Raconte un détail de plus — ce que tu as vu, mangé, entendu.",
   tropLong:
-    `Ce souvenir dépasse ce qu'une étape peut contenir : ${STEP_SIZES.XL.max} caractères, ` +
-    "soit deux pages de carnet. Coupe-le en deux étapes, chacune aura les siennes.",
+    `Ce souvenir dépasse ce qu'une étape peut contenir : ${STEP_SIZES.XXL.max} caractères, ` +
+    "soit trois pages de carnet. Coupe-le en deux étapes, chacune aura les siennes.",
 } as const;
 
 /**
@@ -503,7 +514,7 @@ function checkStep(
       path: at,
       message:
         `${chars} caractères pour l'étape — maximum ${EDITORIAL_LIMITS.stepMaxChars} ` +
-        `(taille XL, deux pages). ${LENGTH_HINTS.tropLong}`,
+        `(taille XXL, trois pages). ${LENGTH_HINTS.tropLong}`,
     });
     return;
   }

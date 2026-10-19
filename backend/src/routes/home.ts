@@ -57,6 +57,8 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
  * tableau figé en lecture seule ne rentre pas dans le type de Prisma.
  */
 const coverPhotoOrder: Prisma.EntryOrderByWithRelationInput[] = [
+  // Les paysages d'abord (`true` avant `false` et `null`), puis la plus récente.
+  { photoIsLandscape: { sort: "desc", nulls: "last" } },
   { capturedAt: "desc" },
   { createdAt: "desc" },
   { id: "desc" },
@@ -70,13 +72,15 @@ const tripInclude = {
     orderBy: { invitedAt: "asc" as const },
   },
   // **La photo du voyage quand aucune n'a été choisie** : la plus récente de
-  // ses photos **paysage** (`serializeTrip`).
+  // ses photos **paysage** (`serializeTrip`) — et, faute de paysage, la plus
+  // récente de ses photos tout court (Hugo, 18/10/2026 : « il faut que les
+  // photos envoyées dans le chat alimentent la photo qui illustre le
+  // voyage »). Un voyage raconté en portraits gardait son motif ; il prend
+  // désormais sa dernière photo, recadrée au centre.
   //
-  // Paysage seulement (Hugo, 15/10/2026) : cette couverture-là est la carte
-  // du voyage, large, et une photo verticale s'y recadre en une bande prise
-  // au milieu. Un voyage qui n'a que des portraits garde donc son motif
-  // plutôt qu'une photo coupée — et son voyageur peut toujours en choisir une
-  // à la main. ⚠️ À ne pas confondre avec la couverture **imprimée** du
+  // Paysage d'abord (Hugo, 15/10/2026) : cette couverture-là est la carte du
+  // voyage, large, et une photo verticale s'y recadre en une bande prise au
+  // milieu. Le voyageur peut toujours en choisir une à la main. ⚠️ À ne pas confondre avec la couverture **imprimée** du
   // carnet, qui est verticale et suit son propre parcours (`routes/covers.ts`).
   //
   // `photoIsLandscape` plutôt qu'une comparaison de deux colonnes, que Prisma
@@ -89,7 +93,7 @@ const tripInclude = {
   // couverture changeait d'une requête à l'autre. `createdAt` puis `id`
   // rendent le choix stable.
   entries: {
-    where: { kind: "photo" as const, photoIsLandscape: true, media: { isNot: null } },
+    where: { kind: "photo" as const, media: { isNot: null } },
     orderBy: coverPhotoOrder,
     take: 1,
     select: { media: { select: { storageKey: true, cdnUrl: true } } },

@@ -20,6 +20,7 @@ import { registerMemoRoutes } from "./routes/memos.js";
 import { registerNotificationRoutes } from "./routes/notifications.js";
 import { registerOrderRoutes } from "./routes/orders.js";
 import { registerPaymentMethodRoutes } from "./routes/paymentMethods.js";
+import { registerInvitePageRoutes } from "./routes/invitePage.js";
 import { registerPasswordResetPageRoutes } from "./routes/passwordResetPage.js";
 import { registerAvatarRoutes, registerProfileRoutes } from "./routes/profile.js";
 import { registerStepRoutes } from "./routes/steps.js";
@@ -164,6 +165,7 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
   // navigateur, et qui relaie vers l'app. Publique par nature : on y arrive
   // sans session, c'est pour en ouvrir une.
   registerPasswordResetPageRoutes(app);
+  registerInvitePageRoutes(app, context);
 
   // La page du lien « Télécharger mes données », et l'archive derrière son
   // bouton. Publiques aussi : on y arrive depuis une boîte mail, et c'est le
