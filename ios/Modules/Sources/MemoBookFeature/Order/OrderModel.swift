@@ -540,6 +540,10 @@ public final class OrderModel {
     /// n'y en a pas — l'écran le demande alors au lieu de le supposer.
     public var suggestedPhoneNumber: String? { context?.phoneNumber }
 
+    /// Le carnet commandé — ce que la carte « Envie de l'offrir ? » ouvre, et
+    /// la seule chose que la vue ait à savoir pour annoncer son intention.
+    public var orderedBookId: String { memoId }
+
     /// Le suivi est-il accepté ? C'est **la commande** qui le dit, pas un état
     /// d'écran : ce qui compte est ce que le serveur a enregistré.
     public var wantsWhatsApp: Bool { order?.notifyByWhatsApp ?? false }

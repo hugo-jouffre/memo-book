@@ -84,6 +84,7 @@ public struct OrderView: View {
                 OrderConfirmationStep(
                     model: model,
                     onShare: { Task { await share() } },
+                    onOpenBook: { onIntent(.openBook(memoId: model.orderedBookId)) },
                     onFinish: { onIntent(.finish) }
                 )
             }
@@ -143,6 +144,9 @@ public enum OrderIntent: Sendable, Hashable {
     case openHelp
     /// « Retour à l'accueil », une fois la commande passée.
     case finish
+    /// Le carnet qu'on vient de commander, ouvert par la carte « Envie de
+    /// l'offrir ? » : c'est de là qu'un exemplaire se recommande.
+    case openBook(memoId: String)
 }
 
 /// Les champs de l'étape 2. Le focus appartient à l'écran, pas au champ : c'est

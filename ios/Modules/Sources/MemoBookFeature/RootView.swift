@@ -907,6 +907,13 @@ public struct RootView: View {
             // voyage — reculer les rejouerait un par un, et le premier
             // ramènerait sur le paiement d'une commande déjà passée.
             path.removeAll()
+        case .openBook(let memoId):
+            // « Envie de l'offrir ? » mène au carnet, d'où un exemplaire se
+            // recommande. Même raison qu'au-dessus de vider la pile d'abord :
+            // le carnet se pose alors sur l'accueil, et sa flèche de retour y
+            // ramène au lieu de rouvrir le tunnel.
+            path.removeAll()
+            path.append(.bookPreview(memoId: memoId))
         }
     }
 
