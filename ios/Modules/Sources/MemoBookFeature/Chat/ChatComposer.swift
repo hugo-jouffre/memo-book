@@ -635,9 +635,11 @@ struct ChatSendingBar: View {
         .padding(.leading, MemoBookSpacing.s)
         .padding(.trailing, sendInset)
         // Pâli, comme le micro, quand le crédit est épuisé : on peut encore y
-        // toucher, le bandeau au-dessus dit pourquoi rien ne partira.
-        .opacity(creditOpacity)
-        .accessibilityValue(creditAccessibilityValue)
+        // toucher, le bandeau au-dessus dit pourquoi rien ne partira. Sauf
+        // pour corriger une fiche : les 200 caractères offerts passent encore
+        // (QA D8, 19/10/2026).
+        .opacity(model.isWritingCorrection ? 1 : creditOpacity)
+        .accessibilityValue(model.isWritingCorrection ? "" : creditAccessibilityValue)
         // **À la hauteur des boutons de la barre, une ligne écrite**
         // (Hugo, 08/10/2026). Le champ ajoutait 8 pt en haut et en bas
         // **autour** d'un avion haut de 44 : 60 pt, plus haut que le micro

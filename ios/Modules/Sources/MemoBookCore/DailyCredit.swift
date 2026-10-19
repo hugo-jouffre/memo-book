@@ -36,6 +36,12 @@ public struct DailyCredit: Codable, Sendable, Hashable {
     /// `EXHAUSTION_SLACK_MS` du serveur, qui arrondit à zéro un reste de
     /// quelques millisecondes après un tour. Voir ``isExhausted``.
     public var exhaustionSlackMs: Int
+    /// Les caractères de correction au clavier **offerts à chaque fiche**,
+    /// cumulés : 200 (Hugo, 19/10/2026, QA D8). Pot vide, une correction passe
+    /// tant qu'elle tient dedans — ce qu'il en reste pour une fiche voyage avec
+    /// elle (``TranscriptCard/freeCorrectionCharactersLeft``). Voir
+    /// ``CorrectionMeasure``.
+    public var correctionFreeCharacters: Int
     /// Le jour local du crédit, `AAAA-MM-JJ`.
     public var day: String?
     /// L'instant où le crédit se recharge — minuit, chez celui qui lit.
@@ -59,6 +65,9 @@ public struct DailyCredit: Codable, Sendable, Hashable {
         /// après un tour, l'app le lit de même — sans quoi elle ouvrirait le
         /// micro pour 400 ms, qu'elle refermerait aussitôt.
         public static let exhaustionSlackMs = 1_000
+        /// Les caractères de correction offerts par fiche
+        /// (`CORRECTION_FREE_CHARACTERS`).
+        public static let correctionFreeCharacters = 200
     }
 
     public init(
@@ -69,6 +78,7 @@ public struct DailyCredit: Codable, Sendable, Hashable {
         warningRemainingMs: Int = Catalog.warningRemainingMs,
         urgentRemainingMs: Int = Catalog.urgentRemainingMs,
         exhaustionSlackMs: Int = Catalog.exhaustionSlackMs,
+        correctionFreeCharacters: Int = Catalog.correctionFreeCharacters,
         day: String? = nil,
         resetsAt: Date? = nil
     ) {
@@ -79,13 +89,14 @@ public struct DailyCredit: Codable, Sendable, Hashable {
         self.warningRemainingMs = warningRemainingMs
         self.urgentRemainingMs = urgentRemainingMs
         self.exhaustionSlackMs = exhaustionSlackMs
+        self.correctionFreeCharacters = correctionFreeCharacters
         self.day = day
         self.resetsAt = resetsAt
     }
 
     private enum CodingKeys: String, CodingKey {
         case isUnlimited, limitMs, usedMs, textMsPerCharacter
-        case warningRemainingMs, urgentRemainingMs, exhaustionSlackMs, day, resetsAt
+        case warningRemainingMs, urgentRemainingMs, exhaustionSlackMs, correctionFreeCharacters, day, resetsAt
     }
 
     /// Décodage tolérant : un serveur qui ne sert pas encore un champ ne doit
@@ -109,6 +120,11 @@ public struct DailyCredit: Codable, Sendable, Hashable {
         exhaustionSlackMs =
             try container.decodeIfPresent(Int.self, forKey: .exhaustionSlackMs)
             ?? Catalog.exhaustionSlackMs
+        // Servi depuis le 19/10/2026 ; un serveur d'avant ne l'offre pas, mais
+        // l'app ne fait que prévenir — il tranchera.
+        correctionFreeCharacters =
+            try container.decodeIfPresent(Int.self, forKey: .correctionFreeCharacters)
+            ?? Catalog.correctionFreeCharacters
         day = try container.decodeIfPresent(String.self, forKey: .day)
         resetsAt = try? container.decodeIfPresent(Date.self, forKey: .resetsAt)
     }
@@ -250,6 +266,18 @@ public struct DailyCredit: Codable, Sendable, Hashable {
         isUnlimited || (!isExhausted && cost(ofText: text) <= remainingMs)
     }
 
+    /// Ce qu'une **correction au clavier** coûte au crédit (Hugo, 19/10/2026,
+    /// QA D8) : les caractères modifiés (``CorrectionMeasure``) au-delà de ce
+    /// qui reste des 200 offerts à la fiche, au barème d'un texte. `freeLeft`
+    /// inconnu — un serveur d'avant — vaut les 200 entiers : le serveur
+    /// tranchera.
+    public func cost(ofCorrection text: String, replacing original: String, freeLeft: Int?) -> Int {
+        guard !isUnlimited else { return 0 }
+        let changed = CorrectionMeasure.changedCharacters(from: original, to: text)
+        let offered = min(changed, max(0, freeLeft ?? correctionFreeCharacters))
+        return (changed - offered) * textMsPerCharacter
+    }
+
     /// Combien de caractères le reste du jour laisse écrire. Aucun sur un pot
     /// vide : « il te reste environ 5 caractères » sous « crédit épuisé »
     /// ferait deux phrases qui se contredisent.
@@ -340,6 +368,11 @@ public enum DailyCreditCopy {
             ? "Ce message dépasse le crédit du jour : il te reste environ \(characters(charactersLeft))."
             : "Le crédit du jour est épuisé : reviens demain pour écrire la suite."
     }
+
+    /// Une correction au-delà des 200 caractères offerts, pot vide — **la même
+    /// phrase que le refus du serveur** (`CORRECTION_BEYOND_FREE_MESSAGE`).
+    public static let correctionBeyondFree =
+        "Au-delà de 200 caractères modifiés, la correction passe par l’illimité."
 
     /// La bulle de MEMO quand le crédit tombe à zéro. **La même phrase que le
     /// serveur** (`DAILY_CREDIT_EXHAUSTED_MESSAGE`, `conversationCopy.ts`) :

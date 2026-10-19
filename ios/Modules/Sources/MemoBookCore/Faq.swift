@@ -416,7 +416,7 @@ public enum Faq {
                 question: "Je peux supprimer un souvenir que je regrette ?",
                 answer: [
                     "Oui. Dans l’accueil de ton voyage, fais glisser la carte de son étape vers la gauche, puis touche la croix.",
-                    "Le souvenir quitte ton carnet. Une commande déjà passée, elle, est imprimée telle que tu l’as validée.",
+                    "Le souvenir quitte ton carnet, et son vocal ou sa photo est effacé de nos serveurs. Une commande déjà passée, elle, est imprimée telle que tu l’as validée.",
                 ]
             ),
         ]
@@ -728,6 +728,7 @@ public enum Faq {
                 answer: [
                     "Chaque voyage dispose de {{credit_jour}} de récit par jour, à partager entre les co-voyageurs qui ne sont pas abonnés.",
                     "Un message vocal consomme sa durée, et {{caracteres_par_minute}} écrits valent une minute. Les photos ne consomment rien.",
+                    "Corriger une fiche à la main est offert jusqu’à 200 caractères modifiés par fiche, même quand le crédit est épuisé ; au-delà, la correction compte comme un texte, ou passe par l’illimité. Un vocal silencieux ne compte pas.",
                     "Tu suis ce qu’il reste dans les réglages du voyage, à la ligne « Crédit du jour ». Trente secondes avant la fin, un message te prévient au-dessus du micro, et ce que tu as déjà dit est toujours gardé.",
                     "Le crédit se recharge chaque nuit à minuit : tu reprends le lendemain, ou tu passes en illimité pour {{prix_abo_mensuel}} par mois et tu continues tout de suite.",
                 ]
