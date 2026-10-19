@@ -129,7 +129,12 @@ struct PageTargetChangeSheet: View {
     /// bouge pas. Vers la fin, la feuille propose d'étoffer ou de condenser ce
     /// qui est écrit.
     private func done(_ change: PageTargetChange, stage: PageTargetTripStage) -> some View {
-        var paragraphs = [BookCopy.Pages.doneSummary(from: change.from, to: change.to, tripDays: change.tripDays)]
+        var paragraphs = [BookCopy.Pages.doneSummary(
+            from: change.from,
+            to: change.to,
+            tripDays: change.tripDays,
+            ratio: model.customisation?.photoTextRatio ?? 50
+        )]
         if stage == .end { paragraphs.append(BookCopy.Pages.rewriteOffer(isLonger: change.isLonger)) }
 
         return BrandSheet(BookCopy.Pages.doneTitle, paragraphs: paragraphs) {

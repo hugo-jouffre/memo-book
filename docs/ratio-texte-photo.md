@@ -95,8 +95,8 @@ garde `ratioPhotosAtelier.test.ts`.
 
 | Cas | Ce qui se passe |
 |---|---|
-| Le voyageur envoie **moins** de photos que demandé | La page se compose avec ce qui est là, et le layout se replie sur celui que le nombre réel sait tenir. Aucune photo n'est inventée |
-| Il en envoie **plus** | Les N premières sont posées — l'ordre vient de l'analyse de détail existante |
+| Le voyageur envoie **moins** de photos que demandé | Le chat dit combien il en manque et propose d'en ajouter (18/10/2026). Validé quand même : la page se compose avec ce qui est là, et le layout se replie sur celui que le nombre réel sait tenir. Aucune photo n'est inventée |
+| Il en envoie **plus** | Les N du ratio vont sur les pages de récit ; les autres sur des **pages de photos** en fin d'étape, trois par page, dans les six pages de l'étape (`ajouterSurplus`, 18/10/2026). Le chat a prévenu que le carnet s'écarte un peu des réglages |
 | Il **change le ratio** après coup | L'étape est recalculée, le texte reste identique, le chat peut redemander des photos |
 
 ## Les cas où la tolérance n'a pas pu être tenue
@@ -159,11 +159,12 @@ barème refuse déjà pour une autre raison — une page aux trois quarts vide.
 
 ### Le nombre de pages cible
 
-Le recalage sur la cible (`recalerSurLaCible`, voir
-`docs/reglages-utilisateur.md` § Nombre de pages cible) **ne change jamais le
-nombre de photos** d'une étape : il répartit autrement celles que
-`photosRequired` lui a données, sur plus ou moins de planches. Le compte
-annoncé par le chat reste donc celui du PDF. La surface, elle, bouge : deux
+**Depuis le 18/10/2026, la cible peut demander des photos au-delà du ratio**
+(Hugo) : le chat en demande trois par page de photos qui manque
+(`photosForTarget`), et elles vont sur des pages de photos en fin d'étape,
+jamais sur les pages de récit. Le recalage (`recalerSurLaCible`, voir
+`docs/reglages-utilisateur.md` § Nombre de pages cible) répartit ensuite les
+photos de l'étape sur plus ou moins de planches, sans en retirer aucune. La surface, elle, bouge : deux
 planches de plus, ce sont des photos plus grandes, donc un ratio mesuré plus
 haut que le palier — c'est le prix d'une cible plus longue que ce que le récit
 et les photos demandaient.

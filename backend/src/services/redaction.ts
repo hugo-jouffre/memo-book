@@ -99,6 +99,8 @@ export interface RedactionInput {
      * la taille suit la seule matière du vocal.
      */
     targetPageCount?: number | null;
+    /** Le ratio photo / texte : les paliers de la cible en dépendent (`pageTarget.ts`). */
+    photoTextRatio?: number | null;
   };
   /**
    * Qui raconte. Sans lui, l'écrivain prend le voyageur qui parle de lui à la
@@ -775,7 +777,8 @@ function longDate(date: Date): string {
 function sizeScale(): string {
   return (Object.entries(STEP_SIZES) as [string, { min: number; max: number; paragraphes: number }][])
     .map(([name, size]) => `${name} ${size.min}–${size.max} (${size.paragraphes} paragraphe${size.paragraphes > 1 ? "s" : ""})`)
-    .join(", ");
+    .join(", ")
+    .concat(" ; XXL seulement si la consigne de cible dit « détaillé »");
 }
 
 /**
@@ -801,7 +804,11 @@ export function buildRedactionPrompt(input: RedactionInput): string {
   if (pace) lines.push(`Rythme de récit choisi : ${pace}`);
   if (memo.targetPageCount) {
     lines.push(
-      pageDensityInstruction(memo.targetPageCount, pageTargetTripDays(memo.startDate ?? null, memo.endDate ?? null)),
+      pageDensityInstruction(
+        memo.targetPageCount,
+        pageTargetTripDays(memo.startDate ?? null, memo.endDate ?? null),
+        memo.photoTextRatio ?? undefined,
+      ),
     );
   }
 
@@ -958,10 +965,14 @@ export function buildRedactionPrompt(input: RedactionInput): string {
  * comportement change au redémarrage suivant, sans toucher au code. C'est le
  * même contrat que `templates/` a déjà avec la mise en page.
  */
+/** L'effort de réflexion de la rédaction (`ANTHROPIC_REDACTION_EFFORT`). */
+export type RedactionEffort = "low" | "medium" | "high";
+
 export class AnthropicRedactor implements Redactor {
   constructor(
     private readonly client: Anthropic,
     private readonly model: string,
+    private readonly effort: RedactionEffort = "high",
   ) {}
 
   private buildSystemPrompt(): Anthropic.TextBlockParam[] {
@@ -999,7 +1010,7 @@ export class AnthropicRedactor implements Redactor {
       max_tokens: 16_000,
       thinking: { type: "adaptive" },
       output_config: {
-        effort: "high",
+        effort: this.effort,
         format: { type: "json_schema", schema: REDACTION_SCHEMA },
       },
       system: this.buildSystemPrompt(),
@@ -1125,5 +1136,6 @@ export function createRedactor(env: Env): Redactor {
   return new AnthropicRedactor(
     new Anthropic({ apiKey: env.ANTHROPIC_API_KEY }),
     env.ANTHROPIC_REDACTION_MODEL,
+    env.ANTHROPIC_REDACTION_EFFORT,
   );
 }

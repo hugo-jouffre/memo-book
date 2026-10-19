@@ -61,11 +61,12 @@ export async function transcribeEntry(
     data: { status: "processing", error: null },
   });
 
+  const started = Date.now();
   try {
-    const audio = await storage.get(entry.media.storageKey);
-    // Les noms que le carnet connaît déjà : la machine les épelle alors comme
-    // lui, au lieu d'écrire « Famine » pour Fanny.
-    const narrator = await narratorOf(context, entry);
+    // Le fichier et les noms que le carnet connaît déjà — la machine les
+    // épelle alors comme lui, au lieu d'écrire « Famine » pour Fanny —, lus
+    // ensemble : rien ne lie l'un à l'autre.
+    const [audio, narrator] = await Promise.all([storage.get(entry.media.storageKey), narratorOf(context, entry)]);
     const sheet = parseCoherenceSheet(entry.memo.coherenceSheet);
     const hint = transcriptionHintFor({
       narrator: narrator.firstName,
@@ -110,18 +111,20 @@ export async function transcribeEntry(
       });
     }
 
-    logger.info({ entryId, characters: transcript.length }, "Entrée transcrite");
+    logger.info({ entryId, characters: transcript.length, totalMs: Date.now() - started }, "Entrée transcrite");
 
     // Le filet du crédit du jour — **une fois** : un rejeu de ce job (une
     // publication ratée plus bas) trouve la transcription déjà posée, et ne
     // décompte pas l'écart une seconde fois.
     if (entry.transcript === null) await chargeTranscriptOverrunOf(context, entry, transcript);
 
-    await context.queue.publish<RedactJob>(JOB_NAMES.redact, { entryId });
     // MEMO répond sur la transcription brute, pendant que la rédaction écrit.
-    if (converseMessageId) {
-      await context.queue.publish<ConverseJob>(JOB_NAMES.converse, { messageId: converseMessageId });
-    }
+    await Promise.all([
+      context.queue.publish<RedactJob>(JOB_NAMES.redact, { entryId }),
+      converseMessageId
+        ? context.queue.publish<ConverseJob>(JOB_NAMES.converse, { messageId: converseMessageId })
+        : null,
+    ]);
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
     await prisma.entry.update({

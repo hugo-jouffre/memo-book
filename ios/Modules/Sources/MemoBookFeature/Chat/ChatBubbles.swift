@@ -493,7 +493,7 @@ struct ChatPhotosBubble: View {
         BrandChatBubble(author: author) {
             VStack(alignment: .leading, spacing: MemoBookSpacing.xs / 2) {
                 if attachments.count == 1 {
-                    photo(attachments[0], side: thumbnail * 2.4)
+                    photo(attachments[0], at: 0, side: thumbnail * 2.4)
                 } else {
                     // Deux colonnes, jamais plus : à trois, une vignette tombe
                     // sous la largeur d'un pouce sur un iPhone SE.
@@ -501,7 +501,9 @@ struct ChatPhotosBubble: View {
                         columns: [GridItem(.flexible()), GridItem(.flexible())],
                         spacing: MemoBookSpacing.xs / 2
                     ) {
-                        ForEach(shown) { photo($0, side: thumbnail * 1.4) }
+                        ForEach(Array(shown.enumerated()), id: \.element.id) { index, attachment in
+                            photo(attachment, at: index, side: thumbnail * 1.4)
+                        }
                     }
                 }
 
@@ -514,6 +516,9 @@ struct ChatPhotosBubble: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(ChatCopy.Voice.photos(count: attachments.count))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint(ChatCopy.PhotoViewer.hint)
+        .accessibilityAction { model.viewPhotos(attachments, at: 0) }
     }
 
     /// Une vignette : le fichier local tant qu'il est là, sinon le média du
@@ -522,7 +527,10 @@ struct ChatPhotosBubble: View {
     ///
     /// La photo se pose en calque d'un cadre vide : `scaledToFill` ne se laisse
     /// pas contraindre en largeur et ferait déborder la grille.
-    private func photo(_ attachment: PhotoAttachment, side: CGFloat) -> some View {
+    ///
+    /// Touchée, elle s'ouvre en plein écran (``ChatPhotoViewer``), avec les
+    /// autres photos de la bulle à portée de glissé.
+    private func photo(_ attachment: PhotoAttachment, at index: Int, side: CGFloat) -> some View {
         let url = attachment.displayUrl
 
         return Color.clear
@@ -538,6 +546,8 @@ struct ChatPhotosBubble: View {
                 }
             }
             .clipShape(.rect(cornerRadius: MemoBookSpacing.snug))
+            .contentShape(.rect(cornerRadius: MemoBookSpacing.snug))
+            .onTapGesture { model.viewPhotos(attachments, at: index) }
             .task(id: url) {
                 if let url { model.loadImage(url) }
             }

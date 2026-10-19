@@ -243,6 +243,14 @@ public struct TripSettingsView: View {
             // (un serveur plus ancien), la ligne se tait plutôt que d'inventer.
             if let credit = dailyCredit {
                 DailyCreditRow(credit: credit) { sheet = .dailyCredit }
+                // **Abonné : de quoi résilier, là où on lit « Illimité »**
+                // (Hugo, 18/10/2026). Hors de la ligne, qui est déjà un
+                // bouton : « Mon abonnement » du profil fait la suite.
+                if credit.isUnlimited {
+                    BrandButton(DailyCreditCopy.cancelSubscription, style: .destructive, fillsWidth: true) {
+                        onIntent(.manageSubscription)
+                    }
+                }
             }
 
             BrandRowGroup {
@@ -481,6 +489,9 @@ public enum TripSettingsIntent: Sendable, Hashable {
     /// « Style du carnet » — les personnalisations de la mise en page.
     case openCustomisation
     case connectTricount
+    /// « Résilier » sous la ligne « Crédit du jour » d'un abonné : « Mon
+    /// abonnement », là où se fait la résiliation (18/10/2026).
+    case manageSubscription
     case openBookPreview
     /// « Commander le carnet » — le tunnel de commande, en sept étapes.
     case orderBook
@@ -590,12 +601,23 @@ private struct DailyCreditRow: View {
             : DailyCreditCopy.rowCaption(limitMs: credit.limitMs)
     }
 
+    @ViewBuilder
     private var value: some View {
-        Text(DailyCreditCopy.rowValue(credit))
-            .font(MemoBookFont.label)
-            .foregroundStyle(credit.isExhausted ? MemoBookColor.error : MemoBookColor.inkMuted)
-            .monospacedDigit()
-            .fixedSize()
+        HStack(spacing: MemoBookSpacing.xs) {
+            // La pastille lime de l'abonné (18/10/2026) : la même que celle du
+            // profil — le lime ne dit que l'abonnement.
+            if credit.isUnlimited {
+                // Le genre du compte n'est pas lu ici : « Abonné(e) », comme
+                // à qui ne l'a pas dit.
+                BrandTagPill(SubscriptionCopy.currentBadge(for: .undisclosed), tone: .accentOutlined, isUppercased: true)
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+            }
+            Text(DailyCreditCopy.rowValue(credit))
+                .font(MemoBookFont.label)
+                .foregroundStyle(credit.isExhausted ? MemoBookColor.error : MemoBookColor.inkMuted)
+                .monospacedDigit()
+                .fixedSize()
+        }
     }
 }
 

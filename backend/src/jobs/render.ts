@@ -1,3 +1,4 @@
+import { pagesAvantEtapes } from "../services/payloadValidator.js";
 import type { AppContext } from "../context.js";
 import type { BookPayload } from "../services/structuring.js";
 
@@ -75,11 +76,16 @@ export async function renderBook(
 }
 
 /**
- * Les pages du carnet composé : une par entrée de `days[]` — c'est l'unité de
- * page du gabarit (`services/structuring.ts`). `null` pour un payload qui n'en
- * a pas.
+ * Les pages du carnet composé, **hors couvertures** — le même compte que la
+ * cible (`recalerSurLaCible`) : le colophon, l'introduction et les pages
+ * blanches d'avant (`pagesAvantEtapes`), une page par entrée de `days[]`, et
+ * la page blanche finale qui rend l'intérieur pair. C'est le nombre qui fait
+ * le prix (`billablePages`, Hugo, 18/10/2026) ; il ne comptait que les pages
+ * d'étape. `null` pour un payload qui n'en a pas.
  */
 export function composedPageCount(payload: unknown): number | null {
-  const days = (payload as { days?: unknown } | null)?.days;
-  return Array.isArray(days) ? days.length : null;
+  const record = payload as Record<string, unknown> | null;
+  const days = record?.["days"];
+  if (!Array.isArray(days)) return null;
+  return pagesAvantEtapes(record!) + days.length + (record!["page_blanche_finale"] ? 1 : 0);
 }

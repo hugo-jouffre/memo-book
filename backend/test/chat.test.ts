@@ -623,11 +623,11 @@ describe("une étape par récit (Hugo, 12/10/2026)", () => {
     await say(memo.id, SUGGESTIONS.accept.label, { suggestionId: "accept", entryId: story.id });
 
     await sendPhotos(memo.id, 1);
-    // Une seule photo : « la », pas « les ».
-    expect(memoBubbles(await readThread(memo.id)).at(-1)?.body).toEqual({
-      kind: "text",
-      text: "J’ai bien reçu ta photo. Si tu la valides, je crée la page de cette étape dans ton carnet, et tu pourras la prévisualiser. Tu la valides ?",
-    });
+    // Une seule photo : « la », pas « les » — et, MEMO en ayant demandé plus,
+    // il dit combien il en manque (18/10/2026).
+    const reply = memoBubbles(await readThread(memo.id)).at(-1)?.body as { kind: string; text: string };
+    expect(reply.kind).toBe("text");
+    expect(reply.text).toMatch(/^J’ai bien reçu ta photo\. Il m’en faudrait encore .* avec celle-ci,/);
 
     const [step] = await readSteps(memo.id);
     const photo = await harness.prisma.entry.findFirstOrThrow({ where: { memoId: memo.id, kind: "photo" } });

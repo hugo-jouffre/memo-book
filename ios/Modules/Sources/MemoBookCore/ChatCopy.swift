@@ -537,6 +537,15 @@ public enum ChatCopy {
     // Tout élément interactif sans libellé visible en porte un, en français et
     // en tutoiement (R7, R9).
 
+    /// La photo du fil en plein écran — ``ChatPhotoViewer``.
+    public enum PhotoViewer {
+        public static let close = "Fermer la photo"
+        public static let photo = "Photo envoyée dans le fil"
+        public static let hint = "Ouvre les photos en plein écran"
+        /// « 2 / 5 » — la photo regardée, parmi celles de la bulle.
+        public static func position(_ index: Int, of count: Int) -> String { "\(index) / \(count)" }
+    }
+
     public enum Voice {
         public static let back = "Revenir au voyage"
         public static let settings = "Paramètres du voyage"

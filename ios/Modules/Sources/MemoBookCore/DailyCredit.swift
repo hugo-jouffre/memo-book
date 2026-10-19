@@ -297,6 +297,8 @@ public struct DailyCredit: Codable, Sendable, Hashable {
 public enum DailyCreditCopy {
     public static let title = "Crédit du jour"
     public static let unlimited = "Illimité"
+    /// Sous la ligne d'un abonné, dans les réglages du voyage (18/10/2026).
+    public static let cancelSubscription = "Résilier"
 
     /// « 5 min », « 3 min 20 », « 45 s ». Arrondi à la seconde **inférieure**
     /// pendant un compte à rebours : annoncer 30 s quand il en reste 29,6

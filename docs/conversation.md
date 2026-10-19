@@ -153,8 +153,20 @@ un déroulé fixe, écrit par le code, sans modèle :
 5. **Les photos arrivent** → MEMO demande de les valider, et dit ce que ça
    fait : « Si tu les valides, je crée la page de cette étape dans ton carnet,
    et tu pourras la prévisualiser. » Puces : « Je valide mes photos », « Ajouter
-   d'autres photos ». Moins de photos que demandé : accepté sans redemander, la
-   mise en page s'adapte.
+   d'autres photos ». **MEMO compare ce qui est arrivé à ce qu'il a demandé**
+   (Hugo, 18/10/2026 — `photosReceivedFor`, `converse.ts`), toutes les photos
+   envoyées pour ce récit comprises :
+   - **il en manque** : « Il m'en faudrait encore 2 pour remplir cette étape
+     comme prévu : tu en ajoutes ? Si tu valides maintenant, je compose la page
+     avec celles-ci, et ton carnet aura un peu moins de photos et de pages que
+     tes réglages. » Puces : « Ajouter d'autres photos » d'abord, puis « Je
+     valide mes photos » ;
+   - **il y en a plus** : « j'en avais demandé 3. Je les garde toutes : les 2
+     en plus iront sur une page de photos à la fin de l'étape. Ton carnet
+     s'écartera un peu de tes réglages… » — elles sont imprimées, sur des
+     pages de photos (`ajouterSurplus`, `mise-en-page.js`) ;
+   - **le carnet est à 0 %** : elles se gardent avec le souvenir, mais
+     n'entrent pas dans le carnet tant que le ratio reste à 0 %.
 6. **« Je valide mes photos »** → les photos sont validées et le carnet se
    recompose en fond (`ensureRenderInProgress`, le même déclencheur que
    « Valider cette étape »). MEMO le dit ; puces : « Voir ma page » (ouvre
@@ -174,15 +186,17 @@ un déroulé fixe, écrit par le code, sans modèle :
 est l'étape N — et le récit prêt porte au-dessus de lui le titre que la
 rédaction lui a donné (`suggestedTitle`, celui de l'étape dans le carnet).
 
-**Le nombre de photos** (`backend/src/services/photoBudget.ts`) : le layout le
-plus riche en photos qui tient **tout** le texte validé, à son maximum. Un
-chiffre, jamais une fourchette.
+**Le nombre de photos** (`photoRequestFor`, `converse.ts`) : un chiffre,
+jamais une fourchette, rangé sur la bulle (`payload.photosAsked`) pour être
+comparé à ce qui arrive. Deux parts :
 
-| Texte validé | Mise en page | Photos |
-|---|---|---|
-| sous S (< 200 caractères) | 1 page `layout_hero_top` | **1** |
-| S ou M (200 → 559) | 1 page `layout_collage` | **3** |
-| L ou XL (560 → 1440) | 2 pages `layout_collage` (bandeau + suite) | **6** |
+1. **le ratio** — ce que le texte validé appelle au ratio photo / texte réglé
+   (`photoBudget.ts`, détail dans `docs/ratio-texte-photo.md`) ;
+2. **la cible** (Hugo, 18/10/2026) — quand le carnet n'atteindra pas son
+   nombre de pages cible avec le récit seul, des pages de photos de plus, trois
+   photos chacune (`photosForTarget`, `pageTarget.ts`). MEMO dit pourquoi :
+   « Illustre ce souvenir avec 9 photos : 3 pour sa page, et 6 de plus pour
+   deux pages de photos, afin que ton carnet atteigne ses 40 pages. »
 
 Le modèle ne sert plus, sur ces tours, qu'à **classer** un texte libre
 (souvenir, précision, commande). Le contexte du voyage (§ 2 bis) n'est pas

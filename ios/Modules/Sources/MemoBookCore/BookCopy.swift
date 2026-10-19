@@ -570,9 +570,23 @@ public enum BookCopy {
             "Invite tes proches à participer au récit, à ajouter leurs médias et à co-valider les étapes."
 
         public static let listTitle = "Co-voyageur(s) actuels"
+        /// Sous la ligne de **celui qui lit**, propriétaire ou non (18/10/2026).
         public static let me = "Moi"
+        /// Sous les autres lignes, propriétaire compris.
+        public static let companion = "Co-voyageur"
         public static let owner = "Propriétaire\ndu voyage"
         public static let pending = "Invitation envoyée"
+
+        /// Le message d'invitation : le lien, puis le code pour l'entrer à la main.
+        public static func invitation(tripTitle: String, code: String, link: URL?) -> String {
+            let intro = "Rejoins-moi sur MemoBook pour raconter « \(tripTitle) »."
+            guard let link else { return "\(intro) Code d’accès : \(code)" }
+            return "\(intro) \(link.absoluteString)\nCode d’accès : \(code)"
+        }
+
+        /// Un lien d'invitation dont le code ne mène à aucun voyage.
+        public static let linkNotFound =
+            "Ce lien d’invitation ne mène à aucun voyage. Demande à celui qui t’a invité de te le renvoyer."
 
         public static func accessCode(_ code: String) -> String { "Code d’accès : \(code)" }
         public static let copied = "Code copié"
@@ -631,6 +645,30 @@ public enum BookCopy {
 
     /// « Nombre de page » — `3443:10177`.
     public enum Pages {
+        // MARK: La cible hors d'atteinte (Hugo, 18/10/2026)
+
+        public static let reachTitle = "Cette cible est hors d’atteinte"
+
+        /// Ce que le carnet peut faire aujourd'hui, avec les réglages du moment.
+        public static func reachToday(_ reach: PageTargetReach) -> String {
+            "Avec tes réglages actuels (\(reach.ratio) % de photos), ton carnet peut faire entre "
+                + "\(reach.range.min) et \(reach.range.max) pages. \(reach.target) pages ne sont pas atteignables pour l’instant."
+        }
+
+        /// Comment aller chercher la cible voulue.
+        public static func reachLevers(_ reach: PageTargetReach) -> String {
+            if reach.isTooLong {
+                let ratio = reach.ratioThatReaches.map { ", ou monte le ratio photo / texte à \($0) %" } ?? ""
+                return "Pour atteindre \(reach.target) pages : raconte plus de souvenirs, envoie plus de photos quand je te les demande\(ratio)."
+            }
+            return "Pour descendre à \(reach.target) pages : raconte moins d’étapes, ou des souvenirs plus courts. "
+                + "Le texte que tu as validé n’est jamais coupé."
+        }
+
+        public static func chooseReachable(_ pages: Int) -> String { "Choisir \(pages) pages" }
+        public static func raiseRatio(_ ratio: Int) -> String { "Passer à \(ratio) % de photos" }
+        public static func keepAnyway(_ pages: Int) -> String { "Garder \(pages) pages quand même" }
+
         public static let title = "Nombre de page"
 
         /// La phrase de la V3 (`3595:23920`), telle quelle : elle tutoie
@@ -690,9 +728,9 @@ public enum BookCopy {
         /// de 40 pages ») : face à une cible personnalisée, le nom seul peut
         /// contredire le sens — 60 pages vers « Détaillé » sur un voyage de
         /// trois semaines, c'est condenser.
-        public static func storyName(pageCount: Int, tripDays: Int?, withPageCount: Bool = false) -> String {
+        public static func storyName(pageCount: Int, tripDays: Int?, ratio: Int = 50, withPageCount: Bool = false) -> String {
             let name: String
-            switch BookPageTarget.matching(pageCount: pageCount, tripDays: tripDays) {
+            switch BookPageTarget.matching(pageCount: pageCount, tripDays: tripDays, ratio: ratio) {
             case .compact: name = "récit compact"
             case .standard: name = "récit standard"
             case .detailed: name = "récit détaillé"
@@ -705,10 +743,10 @@ public enum BookCopy {
         /// étapes seront donc plus étoffées. » Le sens se lit dans les
         /// nombres, pas dans les noms : deux cibles personnalisées n'ont pas
         /// d'ordre à elles.
-        public static func doneSummary(from: Int, to: Int, tripDays: Int?) -> String {
-            let custom = [from, to].contains { BookPageTarget.matching(pageCount: $0, tripDays: tripDays) == .custom }
-            let before = storyName(pageCount: from, tripDays: tripDays, withPageCount: custom)
-            let after = storyName(pageCount: to, tripDays: tripDays, withPageCount: custom)
+        public static func doneSummary(from: Int, to: Int, tripDays: Int?, ratio: Int = 50) -> String {
+            let custom = [from, to].contains { BookPageTarget.matching(pageCount: $0, tripDays: tripDays, ratio: ratio) == .custom }
+            let before = storyName(pageCount: from, tripDays: tripDays, ratio: ratio, withPageCount: custom)
+            let after = storyName(pageCount: to, tripDays: tripDays, ratio: ratio, withPageCount: custom)
             let next = to > from ? "plus étoffées" : "moins étoffées"
             return "On passe d’un \(before) à un \(after). Les prochaines étapes seront donc \(next)."
         }

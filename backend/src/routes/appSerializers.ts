@@ -83,13 +83,17 @@ function companionName(member: MemoMember & { account?: Account | null }) {
  * actions au balayage dépendent de l'état — on ne retire pas le propriétaire, on
  * ne renvoie pas de lien à quelqu'un qui raconte déjà.
  */
-function serializeCompanion(member: MemoMember & { account?: Account | null }) {
+function serializeCompanion(member: MemoMember & { account?: Account | null }, viewerAccountId: string | null = null) {
   return {
     id: member.id,
     name: companionName(member),
     avatarUrl: member.account ? avatarUrlOf(member.account) : null,
     role: member.role ?? null,
     isOwner: false,
+    // **La ligne de celui qui lit** (Hugo, 18/10/2026) : c'est sous elle que
+    // la feuille écrit « Moi », et non sous le propriétaire. Dérivé — rien
+    // n'est stocké.
+    isViewer: viewerAccountId !== null && member.accountId === viewerAccountId,
     // `invited` : le lien est parti, personne n'est entré. `active` veut dire
     // que le compte a rejoint le voyage.
     isPending: member.status === "invited",
@@ -104,7 +108,7 @@ function serializeCompanion(member: MemoMember & { account?: Account | null }) {
  * qui fait lire la liste comme celle du voyage entier ; l'app le retire là où
  * elle compte les invités (`TripSettings.guests`).
  */
-function serializeOwner(owner: Account) {
+function serializeOwner(owner: Account, viewerAccountId: string | null = null) {
   const fullName = [owner.firstName, owner.lastName]
     .filter((part): part is string => Boolean(part?.trim()))
     .join(" ");
@@ -115,6 +119,7 @@ function serializeOwner(owner: Account) {
     avatarUrl: avatarUrlOf(owner),
     role: null,
     isOwner: true,
+    isViewer: owner.id === viewerAccountId,
     isPending: false,
   };
 }
@@ -142,7 +147,7 @@ export function serializeTrip(
   // d'ailleurs pas de ligne dans `memo_members`, qui ne porte que les autres.
   const companions = (memo.members ?? [])
     .filter((member) => member.status !== "removed")
-    .map(serializeCompanion);
+    .map((member) => serializeCompanion(member));
 
   // **L'état se lit sur les dates, pas sur la colonne** : un voyage fini hier
   // restait « en cours » tant que personne ne le rouvrait. Voir
@@ -723,6 +728,8 @@ export function serializeTripSettings(
   viewerAccountId: string,
   /** Une étape au moins est écrite : un changement de cible compte (`services/pageTarget.ts`). */
   storyStarted = false,
+  /** Ce que le carnet peut atteindre, ratio par ratio (`reachablePageRangeByRatio`). */
+  reachable: Record<number, { min: number; max: number }> | null = null,
 ) {
   const isOwner = memo.ownerAccountId === viewerAccountId;
   return {
@@ -751,8 +758,8 @@ export function serializeTripSettings(
     // conviés. C'est l'ordre de la feuille, et il n'est pas décoratif : la
     // première ligne dit qui tient le voyage.
     companions: [
-      ...(memo.owner ? [serializeOwner(memo.owner)] : []),
-      ...(memo.members ?? []).map(serializeCompanion),
+      ...(memo.owner ? [serializeOwner(memo.owner, viewerAccountId)] : []),
+      ...(memo.members ?? []).map((member) => serializeCompanion(member, viewerAccountId)),
     ],
     // Le code qu'on colle dans un message pour faire entrer quelqu'un.
     accessCode: memo.accessCode,
@@ -785,6 +792,11 @@ export function serializeTripSettings(
       changeLimit: PAGE_TARGET_CHANGE_LIMIT,
       changesCount: storyStarted,
       rewriteAvailable: memo.pageTargetRewriteAvailable,
+      // **Ce que le carnet peut atteindre** avec les réglages du moment, pour
+      // chacun des cinq ratios (Hugo, 18/10/2026) : la feuille d'une cible
+      // personnalisée irréalisable dit la fourchette, et le ratio qui
+      // ouvrirait la cible voulue. Clés « 0 » à « 100 ».
+      ...(reachable ? { reachableByRatio: reachable } : {}),
     },
     // « Supprimer la conversation » n'appartient qu'au propriétaire, comme
     // supprimer le voyage (`docs/conversation.md` § 7). L'app pâlit le lien et

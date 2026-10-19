@@ -44,6 +44,11 @@ public final class BookCustomisationModel {
     /// en étape — voir ``PageTargetChange``. `nil` quand elle est fermée.
     public private(set) var pageTargetChange: PageTargetChange?
 
+    /// **Une cible personnalisée hors d'atteinte** (Hugo, 18/10/2026) : la
+    /// feuille qui le dit, avant que rien ne change. Ouverte par un nombre
+    /// choisi à la main, ou par un ratio qui rend la cible posée irréalisable.
+    public private(set) var pageTargetReach: PageTargetReach?
+
     /// On vient de toucher un palier alors que la cible ne bouge plus : le
     /// panneau le dit à l'orange, sous les paliers pâlis. Comme la note du
     /// verrou des pointillés, elle répond à un appui, pas à un état.
@@ -172,7 +177,64 @@ public final class BookCustomisationModel {
 
     // MARK: - Ce qu'on change depuis les feuilles
 
-    public func setPhotoTextRatio(_ ratio: Int) { edit(.photoTextRatio(ratio)) { $0.photoTextRatio = ratio } }
+    /// Le ratio photo / texte. **S'applique à tout le carnet dès la prochaine
+    /// mise en page** (Hugo, 18/10/2026) : le ratio ne touche pas au texte.
+    ///
+    /// Une cible posée sur un palier suit le palier — les paliers dépendent du
+    /// ratio, le serveur fait de même sans compter de changement
+    /// (`presetTargetForRatio`). Une cible personnalisée ne bouge pas ; si
+    /// elle devient hors d'atteinte, la feuille ``PageTargetReach`` s'ouvre.
+    public func setPhotoTextRatio(_ ratio: Int) {
+        let before = customisation?.photoTextRatio ?? 50
+        let target = customisation?.targetPageCount
+        let tier = target.map { BookPageTarget.matching(pageCount: $0, tripDays: tripDays, ratio: before) }
+        edit(.photoTextRatio(ratio)) { customisation in
+            customisation.photoTextRatio = ratio
+            if let tier, tier != .custom, let pages = tier.pageCount(forTripDays: tripDays, ratio: ratio) {
+                customisation.targetPageCount = pages
+            }
+        }
+        if tier == .custom, let target, let reach = pageTargetAllowance.reach(of: target, ratio: ratio) {
+            pageTargetReach = reach
+        }
+    }
+
+    /// Demande une cible **personnalisée** : hors d'atteinte, la feuille le
+    /// dit avant que rien ne change ; sinon, le chemin de toujours.
+    public func requestCustomTarget(_ pages: Int) {
+        let ratio = customisation?.photoTextRatio ?? 50
+        if pages != customisation?.targetPageCount, let reach = pageTargetAllowance.reach(of: pages, ratio: ratio) {
+            pageTargetReach = reach
+            return
+        }
+        setTargetPageCount(pages)
+    }
+
+    /// « Choisir N pages » : la cible atteignable la plus proche.
+    public func chooseReachableTarget() {
+        guard let reach = pageTargetReach else { return }
+        pageTargetReach = nil
+        setTargetPageCount(reach.closestTarget)
+    }
+
+    /// « Passer à 75 % de photos » : le ratio qui ouvre la cible, puis la cible.
+    public func raiseRatioForTarget() {
+        guard let reach = pageTargetReach, let ratio = reach.ratioThatReaches else { return }
+        pageTargetReach = nil
+        edit(.photoTextRatio(ratio)) { $0.photoTextRatio = ratio }
+        setTargetPageCount(reach.target)
+    }
+
+    /// « Garder N pages quand même » : la cible part telle quelle. Le carnet
+    /// s'en approchera autant qu'il pourra, sans rien forcer.
+    public func keepUnreachableTarget() {
+        guard let reach = pageTargetReach else { return }
+        pageTargetReach = nil
+        setTargetPageCount(reach.target)
+    }
+
+    /// La feuille refermée d'un glissé : rien ne change.
+    public func dismissPageTargetReach() { pageTargetReach = nil }
 
     /// Change le nombre de pages cible — ou ouvre la feuille qui le fait.
     ///

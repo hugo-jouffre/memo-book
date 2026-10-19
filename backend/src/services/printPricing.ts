@@ -120,3 +120,17 @@ export function quote(input: QuoteInput) {
 }
 
 export type PrintQuote = ReturnType<typeof quote>;
+
+/**
+ * **Le nombre de pages qui fait le prix : celui du carnet composé** (Hugo,
+ * 18/10/2026 — « c'est le nombre final de pages du carnet qui doit être
+ * utilisé pour calculer son prix »). Couvertures exclues, comme la cible
+ * (`composedPageCount`, `jobs/render.ts`). Avant tout carnet composé, la cible
+ * en tient lieu d'estimation : le carnet final y tient à ± 5 pages.
+ *
+ * L'ancienne règle prenait le plus grand des deux : un carnet de 24 pages
+ * visé à 40 se payait 40.
+ */
+export function billablePages(memo: { targetPageCount: number; pageCount: number }): number {
+  return Math.max(memo.pageCount > 0 ? memo.pageCount : memo.targetPageCount, 1);
+}

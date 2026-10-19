@@ -2037,6 +2037,63 @@
     });
   }
 
+  /* ----------------------------------------------- les photos en surplus --- */
+
+  /** Les photos d'une page ajoutée pour le surplus : une page de photos pleine, pas une planche de cinq. */
+  const PHOTOS_PAR_PAGE_SURPLUS = 3;
+
+  /**
+   * **Les photos envoyées au-delà du ratio** (Hugo, 18/10/2026) : le voyageur
+   * en a envoyé plus que le chat n'en demandait — ou le chat en a demandé
+   * plus, pour que le carnet atteigne sa cible (`photosForTarget`,
+   * `backend/src/services/pageTarget.ts`). Elles ne sont plus écartées : elles
+   * vont sur des **pages de photos** en fin d'étape, trois par page, jamais
+   * sur les pages de récit, dont le ratio reste celui du réglage. Le chat a
+   * prévenu que le carnet s'écarte un peu des réglages.
+   *
+   * L'étape garde ses six pages au plus et un nombre pair de pages quand les
+   * photos le permettent ; ce qui ne tient pas rejoint les écartées, que le
+   * recalage peut encore reprendre. À 0 %, il n'y a pas de surplus : le
+   * carnet n'a aucune photo.
+   *
+   * Rend le nombre de pages ajoutées.
+   */
+  function ajouterSurplus(structure, surplus) {
+    if (!surplus.length) return 0;
+    const recits = structure.pages.length;
+    const avant = structure.tailles.length;
+    const libres = MAX_PAGES_ETAPE - recits - avant;
+    let fin = [...structure.fin, ...surplus];
+    if (libres <= 0) {
+      structure.ecartees = [...(structure.ecartees || []), ...surplus];
+      return 0;
+    }
+    let ajout = Math.min(libres, Math.max(1, Math.ceil(surplus.length / PHOTOS_PAR_PAGE_SURPLUS)));
+    if ((recits + avant + ajout) % 2) {
+      if (ajout < libres && fin.length >= avant + ajout + 1) ajout += 1;
+      else if (ajout > 1) ajout -= 1;
+      else if ((recits + avant) % 2 === 0) {
+        // Une seule page de plus rendrait impaire une étape paire : le surplus
+        // attend avec les écartées, que le recalage peut reprendre.
+        structure.ecartees = [...(structure.ecartees || []), ...surplus];
+        return 0;
+      }
+    }
+    const q = avant + ajout;
+    const ouverture = recits === 0;
+    const place = ouverture ? MAX_PHOTOS_OUVERTURE + (q - 1) * MAX_PAGE_PHOTOS : q * MAX_PAGE_PHOTOS;
+    if (fin.length > place) {
+      const enTrop = new Set(trierPourEcarter(surplus).slice(0, fin.length - place));
+      structure.ecartees = [...(structure.ecartees || []), ...surplus.filter((p) => enTrop.has(p))];
+      fin = fin.filter((p) => !enTrop.has(p));
+    }
+    const premiere = ouverture ? Math.min(MAX_PHOTOS_OUVERTURE, Math.ceil(fin.length / q)) : 0;
+    structure.fin = fin;
+    structure.tailles = ouverture ? [premiere, ...partsEgales(fin.length - premiere, q - 1)] : partsEgales(fin.length, q);
+    structure.total = (structure.total || recits + avant) + ajout;
+    return ajout;
+  }
+
   /* ------------------------------------------- le nombre de pages cible --- */
 
   /**
@@ -2419,11 +2476,16 @@
       // Le palier du carnet : à 0 %, aucune photo ; sinon, autant que le
       // module de ratio en demande pour cette étape, les moins bonnes écartées.
       let photos = ratio === 0 ? [] : toutesLesPhotos;
+      // Les photos envoyées au-delà de ce que le ratio demande : elles ne
+      // sont plus écartées, elles vont sur des pages de photos en fin d'étape
+      // (`ajouterSurplus`, Hugo, 18/10/2026).
+      let surplus = [];
       const budget = budgetPhotos ? budgetPhotos(etape, index) : null;
       if (Number.isFinite(budget) && photos.length > budget) {
         const enTrop = new Set(trierPourEcarter(photos).slice(0, photos.length - Math.max(0, budget)));
+        surplus = photos.filter((p) => enTrop.has(p));
         photos = photos.filter((p) => !enTrop.has(p));
-        journal(`ratio ${ratio} % — étape ${index + 1} : ${photos.length} photo(s) gardée(s) sur ${toutesLesPhotos.length}.`);
+        journal(`ratio ${ratio} % — étape ${index + 1} : ${photos.length} photo(s) dans le ratio sur ${toutesLesPhotos.length}.`);
       }
 
       const paragraphes = Array.isArray(etape.paragraphes)
@@ -2499,6 +2561,10 @@
         while (partsEgales(photos.length, q)[0] > MAX_PHOTOS_OUVERTURE) q += 1;
         if (q % 2 && q < photos.length) q += 1;
         structure = { pages: [], recit: [], fin: photos, tailles: partsEgales(photos.length, q), chapitreDeux: false, total: q };
+      }
+      const ajoutees = ajouterSurplus(structure, surplus);
+      if (ajoutees) {
+        journal(`étape ${index + 1} : ${surplus.length} photo(s) au-delà du ratio, sur ${ajoutees} page(s) de photos de plus.`);
       }
       ecarteesParEtape[index] = structure.ecartees || [];
       if (structure.ecartees?.length) {

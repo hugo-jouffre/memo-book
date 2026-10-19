@@ -12,7 +12,7 @@ import {
 } from "../services/billing.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
 import { releaseUnpaidOrder } from "../services/orderPayments.js";
-import { quote as computeQuote, shippingCents, SHIPPING_DAYS, unitPriceCents } from "../services/printPricing.js";
+import { billablePages, quote as computeQuote, shippingCents, SHIPPING_DAYS, unitPriceCents } from "../services/printPricing.js";
 import {
   SHIPPING_COUNTRIES,
   SHIPPING_COUNTRY_CODES,
@@ -110,15 +110,6 @@ const whatsappBody = z.discriminatedUnion("enabled", [
   }),
   z.object({ enabled: z.literal(false) }),
 ]);
-
-/**
- * Le nombre de pages qui fait foi pour le prix : celui que le voyageur vise,
- * ou celui déjà composé s'il est plus grand. Même règle que l'estimation de la
- * notification de fin de voyage — les deux doivent annoncer le même chiffre.
- */
-function billablePages(memo: { targetPageCount: number; pageCount: number }): number {
-  return Math.max(memo.targetPageCount, memo.pageCount, 1);
-}
 
 /**
  * Le refus d'une commande sans carnet composé (T224). Un code à lui, distinct

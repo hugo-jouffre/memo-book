@@ -25,6 +25,9 @@ import {
   ROSE_EPINE_GRAINE,
   SUGGESTION_SETS,
   fallbackPrompt,
+  photosAtZeroRatio,
+  photosBeyondAsked,
+  photosMissing,
   photosToValidate,
   photosWanted,
   returnForPhotos,
@@ -33,7 +36,9 @@ import {
   validationQuestionFor,
 } from "../services/conversationCopy.js";
 import { DAILY_CREDIT_CALL_TO_ACTION, DAILY_CREDIT_EXHAUSTED } from "../services/dailyCredit.js";
-import { photoBudgetFor, type PhotoBudgetSettings } from "../services/photoBudget.js";
+import { photoBudgetFor } from "../services/photoBudget.js";
+import { measurePhoto } from "../services/photoOrientation.js";
+import { photosForTarget, tripDays } from "../services/pageTarget.js";
 import { ensureRenderInProgress } from "../services/renderTrigger.js";
 import { samplePhotoJpegs } from "../services/samplePhotos.js";
 import { hasUnlimitedAccess } from "../services/subscriptions.js";
@@ -342,12 +347,28 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
     reply = flowReply([], [], "memory", null);
   }
   if (!reply && !message.suggestionId && kind === "photos") {
-    reply = flowReply(
-      composeBeats("", [photosToValidate(input.message.photoCount)]),
-      [...SUGGESTION_SETS.afterPhotos],
-      "memory",
-      step?.placeName ?? memo.destinationCity,
-    );
+    const tally = await photosReceivedFor(context, message);
+    const placeName = step?.placeName ?? memo.destinationCity;
+    const count = input.message.photoCount;
+    if (tally?.zeroRatio) {
+      reply = flowReply(composeBeats("", [photosAtZeroRatio(count)]), [...SUGGESTION_SETS.afterPhotos], "memory", placeName);
+    } else if (tally && tally.received < tally.asked) {
+      reply = flowReply(
+        composeBeats("", [photosMissing(tally.received, tally.asked)]),
+        [...SUGGESTION_SETS.photosMissing],
+        "memory",
+        placeName,
+      );
+    } else if (tally && tally.received > tally.asked) {
+      reply = flowReply(
+        composeBeats("", [photosBeyondAsked(tally.received, tally.asked)]),
+        [...SUGGESTION_SETS.afterPhotos],
+        "memory",
+        placeName,
+      );
+    } else {
+      reply = flowReply(composeBeats("", [photosToValidate(count)]), [...SUGGESTION_SETS.afterPhotos], "memory", placeName);
+    }
   }
   if (!reply) {
     try {
@@ -423,9 +444,16 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
         PHOTOS_VALIDATED_BEFORE_RETURN,
         closing.reason === "validation"
           ? returnToValidate(closing.number, closing.title)
-          : returnForPhotos(closing.number, closing.title, closing.budget.photos, closing.budget.pages),
+          : returnForPhotos(
+              closing.number,
+              closing.title,
+              closing.budget.photos,
+              closing.budget.pages,
+              forTargetOf(closing.budget),
+            ),
       ]),
       suggestionIds: closing.reason === "validation" ? [] : [...SUGGESTION_SETS.askPhotos],
+      ...(closing.reason === "photos" ? { photosAsked: closing.budget.photos } : {}),
     };
   }
 
@@ -510,6 +538,7 @@ export async function converseTurn(context: AppContext, { messageId }: ConverseJ
                 suggestions: reply.suggestionIds,
                 ...(reply.callToActionId ? { callToAction: { id: reply.callToActionId } } : {}),
                 ...(asksPhotosFor ? { asksPhotosFor } : {}),
+                ...(asksPhotosFor && reply.photosAsked ? { photosAsked: reply.photosAsked } : {}),
               }
             : undefined,
         },
@@ -684,7 +713,7 @@ interface StepToClose {
   number: number;
   title: string | null;
   reason: "validation" | "photos";
-  budget: ReturnType<typeof photoBudgetFor>;
+  budget: PhotoRequest;
 }
 
 /**
@@ -744,7 +773,7 @@ async function stepToClose(
     number,
     title: previous.suggestedTitle,
     reason,
-    budget: photoBudgetFor(text.trim(), await reglagesDuCarnet(context, memoId)),
+    budget: await photoRequestFor(context, memoId, text.trim()),
   };
 }
 
@@ -820,21 +849,107 @@ async function hasReadyRender(context: AppContext, memoId: string): Promise<bool
   return render !== null;
 }
 
+/** Ce que MEMO demande pour un souvenir : les photos du ratio, et celles que la cible exige en plus. */
+interface PhotoRequest {
+  /** Toutes les photos à demander. */
+  photos: number;
+  /** Les pages de l'étape, pages de photos de la cible comprises. */
+  pages: number;
+  /** Les pages de photos que la cible ajoute, et leurs photos (`photosForTarget`). */
+  extraPages: number;
+  extraPhotos: number;
+  targetPageCount: number;
+  /** Le carnet est à 0 % : aucune photo ne s'imprime. */
+  zeroRatio: boolean;
+}
+
 /**
- * Les réglages du carnet qui entrent dans le calcul du nombre de photos : le
- * ratio texte / photo, les fun facts, les décorations. Lus au moment où la
- * question se pose — le voyageur peut changer son ratio à tout moment, et
- * l'étape suivante doit en tenir compte.
+ * Le nombre de photos à demander pour un récit validé, lu au moment où la
+ * question se pose — le voyageur peut changer son ratio ou sa cible à tout
+ * moment, et l'étape suivante doit en tenir compte :
+ *
+ * 1. **le ratio** : la part de photos que le récit appelle (`photoBudget.ts`),
+ *    avec les fun facts et les décorations ;
+ * 2. **la cible** : les pages de photos qu'il manque pour que le carnet
+ *    l'atteigne, trois photos chacune (`photosForTarget`, Hugo, 18/10/2026).
  */
-async function reglagesDuCarnet(
-  context: AppContext,
-  memoId: string,
-): Promise<PhotoBudgetSettings> {
+async function photoRequestFor(context: AppContext, memoId: string, text: string): Promise<PhotoRequest> {
   const memo = await context.prisma.memo.findUnique({
     where: { id: memoId },
-    select: { photoTextRatio: true, funFactsEnabled: true, decorationQuota: true },
+    select: {
+      photoTextRatio: true,
+      funFactsEnabled: true,
+      decorationQuota: true,
+      targetPageCount: true,
+      startDate: true,
+      endDate: true,
+      narrationPace: true,
+      _count: { select: { steps: true } },
+    },
   });
-  return memo ?? {};
+  const budget = photoBudgetFor(text, memo ?? {});
+  const base = { photos: budget.photos, pages: budget.pages, extraPages: 0, extraPhotos: 0 };
+  const targetPageCount = memo?.targetPageCount ?? 0;
+  if (!memo || budget.photos === 0 || !text) return { ...base, targetPageCount, zeroRatio: budget.ratio === 0 };
+  const extra = photosForTarget({
+    targetPageCount,
+    ratio: budget.ratio,
+    days: tripDays(memo.startDate, memo.endDate),
+    pace: memo.narrationPace,
+    writtenSteps: memo._count.steps,
+    stepPages: budget.pages,
+  });
+  return {
+    photos: budget.photos + extra.extraPhotos,
+    pages: budget.pages + extra.extraPages,
+    ...extra,
+    targetPageCount,
+    zeroRatio: false,
+  };
+}
+
+/** Ce que `photosWanted` dit de la cible, quand elle demande des photos en plus. */
+function forTargetOf(request: PhotoRequest) {
+  return request.extraPhotos > 0
+    ? { photos: request.extraPhotos, pages: request.extraPages, target: request.targetPageCount }
+    : null;
+}
+
+/**
+ * **Ce qui est arrivé, comparé à ce qui a été demandé** (Hugo, 18/10/2026) :
+ * toutes les photos envoyées pour ce récit depuis la question, ce tour
+ * compris, face au nombre que la bulle a demandé (`payload.photosAsked`, ou
+ * recalculé pour une bulle d'avant le champ). `null` quand aucune question
+ * n'a été posée pour ces photos : rien à comparer.
+ */
+async function photosReceivedFor(
+  context: AppContext,
+  message: { memoId: string; payload: Prisma.JsonValue },
+): Promise<{ received: number; asked: number; zeroRatio: boolean } | null> {
+  const { prisma } = context;
+  const forEntryId = (message.payload as { forEntryId?: unknown } | null)?.forEntryId;
+  if (typeof forEntryId !== "string") {
+    const memo = await prisma.memo.findUnique({ where: { id: message.memoId }, select: { photoTextRatio: true } });
+    return memo?.photoTextRatio === 0 ? { received: 0, asked: 0, zeroRatio: true } : null;
+  }
+  const [question, batches, entry] = await Promise.all([
+    prisma.chatMessage.findFirst({
+      where: { memoId: message.memoId, author: "memo", payload: { path: ["asksPhotosFor"], equals: forEntryId } },
+      orderBy: { seq: "desc" },
+      select: { payload: true },
+    }),
+    prisma.chatMessage.findMany({
+      where: { memoId: message.memoId, kind: "photos", payload: { path: ["forEntryId"], equals: forEntryId } },
+      select: { payload: true },
+    }),
+    prisma.entry.findUnique({ where: { id: forEntryId } }),
+  ]);
+  const received = batches.reduce((total, batch) => total + entryIdsOf(batch.payload).length, 0);
+  const stored = (question?.payload as { photosAsked?: unknown } | null)?.photosAsked;
+  const request = await photoRequestFor(context, message.memoId, ((entry && finalTextOf(entry)) ?? "").trim());
+  if (request.zeroRatio) return { received, asked: 0, zeroRatio: true };
+  const asked = typeof stored === "number" && stored > 0 ? stored : request.photos;
+  return { received, asked, zeroRatio: false };
 }
 
 /**
@@ -855,21 +970,24 @@ async function acceptReply(
   if (!entry || !validated) {
     return flowReply(composeBeats(received, [acknowledged]), [...SUGGESTION_SETS.afterAccept], "command", null);
   }
-  const budget = photoBudgetFor(validated.trim(), await reglagesDuCarnet(context, entry.memoId));
+  const budget = await photoRequestFor(context, entry.memoId, validated.trim());
   // À 0 % de photos, le carnet n'en porte aucune : on ne réclame pas au
   // voyageur des images que le gabarit jettera.
   if (budget.photos === 0) {
     return flowReply(composeBeats(received, [acknowledged]), [...SUGGESTION_SETS.afterAccept], "command", null);
   }
-  return flowReply(
-    composeBeats(received, [acknowledged, photosWanted(budget.photos, budget.pages)]),
-    [
-      ...SUGGESTION_SETS.askPhotos,
-      ...(context.env.NODE_ENV === "production" ? [] : (["photos-sample"] as const)),
-    ],
-    "command",
-    null,
-  );
+  return {
+    ...flowReply(
+      composeBeats(received, [acknowledged, photosWanted(budget.photos, budget.pages, forTargetOf(budget))]),
+      [
+        ...SUGGESTION_SETS.askPhotos,
+        ...(context.env.NODE_ENV === "production" ? [] : (["photos-sample"] as const)),
+      ],
+      "command",
+      null,
+    ),
+    photosAsked: budget.photos,
+  };
 }
 
 /**
@@ -895,14 +1013,16 @@ async function attachSamplePhotos(
   const targetId = await photosTargetEntryId(prisma, message.memoId);
   const target = targetId ? await prisma.entry.findUnique({ where: { id: targetId } }) : null;
   const current = target ? null : await loadCurrentEntry(prisma, message.memoId, message.seq);
-  const count = photoBudgetFor(
-    ((target ? finalTextOf(target) : current?.text) ?? "").trim(),
-    await reglagesDuCarnet(context, message.memoId),
+  const count = (
+    await photoRequestFor(context, message.memoId, ((target ? finalTextOf(target) : current?.text) ?? "").trim())
   ).photos;
   const jpegs = await samplePhotoJpegs(count);
   const stored = await Promise.all(
     jpegs.map((jpeg, index) => storage.put("photo", `test-${index + 1}.jpg`, jpeg, "image/jpeg")),
   );
+  // Mesurées comme celles du voyageur (`routes/chat.ts`) : sans leur sens, les
+  // photos de test n'étaient jamais couverture du voyage.
+  const measures = await Promise.all(jpegs.map((jpeg) => measurePhoto(jpeg)));
 
   const photosMessageId = await prisma.$transaction(async (tx) => {
     const entries = [];
@@ -914,6 +1034,13 @@ async function attachSamplePhotos(
             kind: "photo",
             status: "ready",
             capturedAt: now,
+            ...(measures[entries.length]
+              ? {
+                  photoWidthPx: measures[entries.length]!.widthPx,
+                  photoHeightPx: measures[entries.length]!.heightPx,
+                  photoIsLandscape: measures[entries.length]!.isLandscape,
+                }
+              : {}),
             ...(message.stepId ? { step: { connect: { id: message.stepId } } } : {}),
             media: {
               create: { storageKey: object.storageKey, mimeType: object.mimeType, bytes: object.bytes },

@@ -183,6 +183,12 @@ export interface ConversationReply {
   callToActionId: CallToActionId | null;
   /** Qui a parlé : `claude-sonnet-5`, `heuristic`, `fake`. Tracé sur la bulle. */
   model: string;
+  /**
+   * Le nombre de photos que la bulle demande, quand elle en demande : rangé
+   * avec `asksPhotosFor`, c'est à lui que se compare ce qui arrive
+   * (`photosReceivedFor`, `converse.ts`).
+   */
+  photosAsked?: number;
 }
 
 /** Un tour du contexte du voyage, tel que le répondeur le lit. */

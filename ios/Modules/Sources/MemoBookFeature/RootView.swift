@@ -1,5 +1,6 @@
 import MemoBookCore
 import MemoBookDesign
+import MemoBookNetworking
 import MemoBookPayments
 import StoreKit
 import SwiftUI
@@ -86,6 +87,12 @@ public struct RootView: View {
 
     @State private var routingProblem: String?
 
+    /// **Le code d'un lien d'invitation** (``InviteLink``), en attendant une
+    /// session : un lien ouvert app fermée, ou par quelqu'un qui n'est pas
+    /// encore entré, rejoint le voyage dès l'entrée. Gardé ici et non dans
+    /// les notifications : le bac à sable n'en branche pas.
+    @State private var pendingInviteCode: String?
+
     /// Le secret d'un lien « Réinitialiser mon mot de passe » ouvert depuis
     /// l'e-mail, en attendant que l'écran d'entrée le consomme. Reçu ici, au
     /// seul niveau qui existe toujours : un lien ouvert à froid arrive avant
@@ -170,6 +177,11 @@ public struct RootView: View {
             // Les liens des notifications marchent aussi d'ailleurs : ils
             // passent par le même chemin que le toucher.
             if let link = NotificationLink(url: url) {
+                if case .join(let code) = link {
+                    pendingInviteCode = code
+                    openPendingInvite()
+                    return
+                }
                 push?.pendingLink = link
                 return
             }
@@ -194,6 +206,8 @@ public struct RootView: View {
                 pendingResetToken = nil
                 // Une notification touchée app fermée attendait l'accueil.
                 openPendingNotification()
+                // Une invitation aussi.
+                openPendingInvite()
             }
         }
         // `initial` : une notification touchée app fermée pose son lien avant
@@ -626,6 +640,9 @@ public struct RootView: View {
             managesSubscriptionFromNotification = true
         case .newTrip:
             path = [.tripCreation]
+        case .join(let code):
+            pendingInviteCode = code
+            openPendingInvite()
         case .chat(let tripId), .bookPreview(let tripId):
             // Même garde-fou que depuis l'accueil : un identifiant qui n'est
             // pas celui d'une ressource n'ouvre rien.
@@ -636,6 +653,31 @@ public struct RootView: View {
                 default: .chat(tripId: tripId, stepId: nil)
                 }
             path = [.trip(id: tripId), screen]
+        }
+    }
+
+    /// **Rejoint le voyage d'un lien d'invitation, puis ouvre son écran
+    /// d'accueil** (Hugo, 18/10/2026). Une pile neuve, comme une notification :
+    /// la flèche de retour ramène à l'accueil. Déjà membre, le serveur rend le
+    /// même voyage (`POST /v1/trips/join`) : le lien ouvre simplement le voyage.
+    /// Hors session, le code attend l'entrée.
+    private func openPendingInvite() {
+        guard case .signedIn = stage, let code = pendingInviteCode else { return }
+        pendingInviteCode = nil
+        Task {
+            do {
+                let joined = try await dependencies.api.joinTrip(code: code)
+                homeReloadRequest += 1
+                path = [.trip(id: joined.trip.id)]
+            } catch let error as APIError {
+                if case .server(let status, let reason, _) = error, status == 404 || reason == "trip_not_found" {
+                    routingProblem = BookCopy.Invite.linkNotFound
+                } else {
+                    routingProblem = error.localizedDescription
+                }
+            } catch {
+                routingProblem = error.localizedDescription
+            }
         }
     }
 
@@ -820,6 +862,8 @@ public struct RootView: View {
             path.removeAll()
         case .connectTricount:
             break
+        case .manageSubscription:
+            path.append(.manageSubscription)
         }
     }
 
@@ -957,7 +1001,7 @@ public struct RootView: View {
                 return id
             case .chat(let tripId, _):
                 return tripId
-            case .profile, .gallery, .tripCreation, .memos, .support, .legal:
+            case .profile, .manageSubscription, .gallery, .tripCreation, .memos, .support, .legal:
                 continue
             }
         }
@@ -967,10 +1011,11 @@ public struct RootView: View {
     @ViewBuilder
     private func destination(for route: HomeRoute) -> some View {
         switch route {
-        case .profile:
+        case .profile, .manageSubscription:
             ProfileView(
                 model: dependencies.profileModel(),
                 statistics: dependencies.statisticsModel(),
+                opening: route == .manageSubscription ? .subscription : nil,
                 onSignOut: signOut,
                 onIntent: handle
             )
@@ -1086,6 +1131,9 @@ enum SignedOutRoute: Hashable {
 /// Les destinations que l'accueil peut pousser.
 enum HomeRoute: Hashable {
     case profile
+    /// Le profil, « Mon abonnement » ouvert dessus — « Résilier » de la ligne
+    /// « Crédit du jour » des réglages d'un voyage (18/10/2026).
+    case manageSubscription
     case trip(id: String)
     /// La conversation avec MEMO. `stepId` la pose sur une étape précise ;
     /// `nil` la pose sur le voyage entier.

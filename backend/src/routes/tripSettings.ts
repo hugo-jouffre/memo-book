@@ -6,10 +6,18 @@ import { accountIdOf } from "../plugins/auth.js";
 import { readDailyCredit } from "../services/dailyCredit.js";
 import { visibleToAccount } from "../services/memoOwnership.js";
 import { normalizeNarrationPace } from "../services/narrationPace.js";
+import type { Memo } from "@prisma/client";
 import {
   hasWrittenStory,
+  pageDensity,
   pageTargetChangesLeft,
+  pageTargetTierOf,
+  pageTargetTiers,
+  reachablePageRange,
+  tripDays,
 } from "../services/pageTarget.js";
+import { photoBudgetFor } from "../services/photoBudget.js";
+import { PHOTO_RATIOS } from "../services/photoRatio.js";
 import { stageFromDates } from "../services/tripStage.js";
 import { refreshTripFactsQuietly } from "../services/tripFacts.js";
 import { JOB_NAMES, type RewriteTripJob } from "../jobs/index.js";
@@ -131,12 +139,47 @@ async function readSettings(context: AppContext, accountId: string, memoId: stri
 
   // Le crédit du jour **du voyage** — partagé entre ses co-voyageurs —, vu par
   // celui qui lit : illimité s'il est abonné.
-  const [dailyCredit, storyStarted] = await Promise.all([
+  const [dailyCredit, storyStarted, reachable] = await Promise.all([
     readDailyCredit(context.prisma, { memoId: memo.id, viewer: account }),
     hasWrittenStory(context.prisma, memo.id),
+    reachablePagesOf(context, memo),
   ]);
 
-  return serializeTripSettings(memo, dailyCredit, accountId, storyStarted);
+  return serializeTripSettings(memo, dailyCredit, accountId, storyStarted, reachable);
+}
+
+/**
+ * Ce que le carnet peut atteindre, pour chacun des cinq ratios : les étapes
+ * écrites à leurs vraies pages de récit (`photoBudgetFor` au ratio essayé),
+ * celles qui restent à raconter estimées sur la durée et le rythme
+ * (`reachablePageRange`).
+ */
+async function reachablePagesOf(
+  context: AppContext,
+  memo: Pick<
+    Memo,
+    "id" | "targetPageCount" | "photoTextRatio" | "startDate" | "endDate" | "narrationPace" | "funFactsEnabled" | "decorationQuota"
+  >,
+) {
+  const days = tripDays(memo.startDate, memo.endDate);
+  // Sans date de fin, le nombre d'étapes à venir est inconnu : l'app ne juge
+  // aucune cible plutôt que d'en refuser une sur une supposition.
+  if (!days) return null;
+  const written = await context.prisma.entry.findMany({
+    where: { memoId: memo.id, kind: { not: "photo" }, OR: [{ editedText: { not: null } }, { redactedText: { not: null } }] },
+    select: { editedText: true, redactedText: true },
+  });
+  const texts = written.map((entry) => (entry.editedText ?? entry.redactedText ?? "").trim()).filter(Boolean);
+  const density = pageDensity(memo.targetPageCount, days, memo.photoTextRatio);
+  return Object.fromEntries(
+    PHOTO_RATIOS.map((ratio) => {
+      const writtenStepPages = texts.map(
+        (text) => photoBudgetFor(text, { photoTextRatio: ratio, funFactsEnabled: memo.funFactsEnabled, decorationQuota: memo.decorationQuota }).pages,
+      );
+      const { min, max } = reachablePageRange({ ratio, density, days, pace: memo.narrationPace, writtenStepPages });
+      return [ratio, { min, max }];
+    }),
+  );
 }
 
 export function registerTripSettingsRoutes(app: FastifyInstance, context: AppContext) {
@@ -182,6 +225,16 @@ export function registerTripSettingsRoutes(app: FastifyInstance, context: AppCon
       ? await countPageTargetChange(context, id, body.targetPageCount)
       : null;
 
+    // **Le ratio change, le palier suit** (Hugo, 18/10/2026) : les paliers
+    // dépendent du ratio. Une cible posée sur un palier (« Compact »…) passe
+    // au même palier du nouveau ratio, sans compter comme un changement de
+    // cible — le voyageur n'a pas changé d'avis sur la longueur. Une cible
+    // personnalisée ne bouge pas : l'app vérifie qu'elle reste atteignable.
+    const retargeted =
+      body.photoTextRatio !== undefined && body.targetPageCount === undefined
+        ? await presetTargetForRatio(context, id, body.photoTextRatio, nextStart, nextEnd)
+        : null;
+
     await context.prisma.memo.update({
       where: { id },
       data: {
@@ -207,6 +260,7 @@ export function registerTripSettingsRoutes(app: FastifyInstance, context: AppCon
         ...(body.isPublicGallery !== undefined ? { isPublicGallery: body.isPublicGallery } : {}),
         ...(body.photoTextRatio !== undefined ? { photoTextRatio: body.photoTextRatio } : {}),
         ...(body.targetPageCount !== undefined ? { targetPageCount: body.targetPageCount } : {}),
+        ...(retargeted !== null ? { targetPageCount: retargeted } : {}),
         ...(pageTarget?.counts
           ? { pageTargetChanges: { increment: 1 }, pageTargetRewriteAvailable: true }
           : {}),
@@ -350,6 +404,29 @@ async function assertVisible(context: AppContext, accountId: string, memoId: str
     select: { id: true },
   });
   if (!visible) throw new HttpError(404, "Ce voyage n’existe pas.");
+}
+
+/**
+ * La cible d'un palier, recalculée pour un nouveau ratio ; `null` pour une
+ * cible personnalisée, ou un ratio qui ne change pas.
+ */
+async function presetTargetForRatio(
+  context: AppContext,
+  memoId: string,
+  nextRatio: number,
+  nextStart: Date | null | undefined,
+  nextEnd: Date | null | undefined,
+): Promise<number | null> {
+  const memo = await context.prisma.memo.findUniqueOrThrow({
+    where: { id: memoId },
+    select: { targetPageCount: true, photoTextRatio: true, startDate: true, endDate: true },
+  });
+  if (memo.photoTextRatio === nextRatio) return null;
+  const before = tripDays(memo.startDate, memo.endDate);
+  const tier = pageTargetTierOf(memo.targetPageCount, before, memo.photoTextRatio);
+  if (!tier) return null;
+  const days = tripDays(nextStart === undefined ? memo.startDate : nextStart, nextEnd === undefined ? memo.endDate : nextEnd);
+  return pageTargetTiers(days, nextRatio)[tier];
 }
 
 /**

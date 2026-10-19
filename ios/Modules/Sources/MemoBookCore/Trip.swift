@@ -187,13 +187,19 @@ public struct Companion: Codable, Sendable, Hashable, Identifiable {
     /// qui raconte déjà.
     public let isPending: Bool
 
+    /// **La ligne de celui qui lit** (Hugo, 18/10/2026) : c'est sous elle que
+    /// la feuille écrit « Moi », propriétaire ou non. Faux d'un serveur plus
+    /// ancien, qui ne le sert pas.
+    public let isViewer: Bool
+
     public init(
         id: String,
         name: String,
         avatarUrl: URL? = nil,
         role: String? = nil,
         isOwner: Bool = false,
-        isPending: Bool = false
+        isPending: Bool = false,
+        isViewer: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -201,6 +207,7 @@ public struct Companion: Codable, Sendable, Hashable, Identifiable {
         self.role = role
         self.isOwner = isOwner
         self.isPending = isPending
+        self.isViewer = isViewer
     }
 
     /// Décodage tolérant sur les trois champs ajoutés avec la feuille
@@ -219,6 +226,7 @@ public struct Companion: Codable, Sendable, Hashable, Identifiable {
         role = try container.decodeIfPresent(String.self, forKey: .role)
         isOwner = try container.decodeIfPresent(Bool.self, forKey: .isOwner) ?? false
         isPending = try container.decodeIfPresent(Bool.self, forKey: .isPending) ?? false
+        isViewer = try container.decodeIfPresent(Bool.self, forKey: .isViewer) ?? false
     }
 
     /// Repli quand la photo manque : une ou deux initiales, jamais plus.

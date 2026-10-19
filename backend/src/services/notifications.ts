@@ -34,7 +34,7 @@ import {
   type PlannerTrip,
   type PushKind,
 } from "./notificationPlanner.js";
-import { unitPriceCents } from "./printPricing.js";
+import { billablePages, unitPriceCents } from "./printPricing.js";
 import { schoolCalendarOf, type SchoolHolidayPeriod, type SchoolZone } from "./schoolHolidays.js";
 import { LIVING_SUBSCRIPTION_STATUSES, subscriptionStateOf } from "./subscriptions.js";
 
@@ -374,9 +374,9 @@ export async function loadPlannerAccount(
     lastStoryOn: day(latest(memo.id)),
     isOwner: memo.ownerAccountId === accountId,
     hasOrder: memo.orders.length > 0,
-    // Le prix d'un carnet aux pages visées — ou composées, si elles sont plus
-    // nombreuses : la règle du prix de la commande (`billablePages`).
-    estimateCents: unitPriceCents(Math.max(memo.targetPageCount, memo.pageCount)),
+    // Le prix du carnet composé — la cible avant tout carnet : la règle du
+    // prix de la commande (`billablePages`).
+    estimateCents: unitPriceCents(billablePages(memo)),
     memberCount: 1 + memo._count.members,
     newFromOthers: newFromOthers(memo.id),
     weekStories: weekCount(memo.id, false),

@@ -57,12 +57,32 @@ public struct ProfileView: View {
     /// Ce qui a empêché la feuille de Stripe de s'ouvrir.
     @State private var paymentMethodsError: String?
 
+    /// La feuille à ouvrir une fois le profil lu — « Mon abonnement », depuis
+    /// « Résilier » des réglages d'un voyage. Après la lecture : la feuille se
+    /// construit sur l'abonnement servi.
+    private let opening: ProfileSheet?
+
+    init(
+        model: ProfileModel = ProfileModel(),
+        statistics: StatisticsModel = StatisticsModel(),
+        opening: ProfileSheet?,
+        onSignOut: @escaping () -> Void,
+        onIntent: @escaping (ProfileIntent) -> Void = { _ in }
+    ) {
+        self.opening = opening
+        _model = State(initialValue: model)
+        _statistics = State(initialValue: statistics)
+        self.onSignOut = onSignOut
+        self.onIntent = onIntent
+    }
+
     public init(
         model: ProfileModel = ProfileModel(),
         statistics: StatisticsModel = StatisticsModel(),
         onSignOut: @escaping () -> Void,
         onIntent: @escaping (ProfileIntent) -> Void = { _ in }
     ) {
+        self.opening = nil
         _model = State(initialValue: model)
         _statistics = State(initialValue: statistics)
         self.onSignOut = onSignOut
@@ -154,7 +174,10 @@ public struct ProfileView: View {
         // Le crème de la marque ne se retourne pas en sombre — voir
         // `MemoBookColor`.
         .environment(\.colorScheme, .light)
-        .task { await loadProfile() }
+        .task {
+            await loadProfile()
+            if let opening, sheet == nil { sheet = opening }
+        }
         // Ce que le profil sait de l'abonnement sert aux autres écrans : la
         // version du paywall, et l'illimité, qu'on ouvre l'offre depuis la
         // conversation ou les réglages d'un voyage.

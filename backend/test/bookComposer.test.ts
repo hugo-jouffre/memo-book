@@ -90,12 +90,21 @@ describe("composition du carnet de l'app", () => {
     expect(premiere!["map"]).toEqual(map);
   });
 
-  it("ne garde, à chaque palier, que le nombre de photos que le ratio demande", () => {
-    for (const ratio of [25, 50, 75, 100] as const) {
+  it("pose sur les pages de récit les photos du ratio, et le surplus sur des pages de photos (18/10/2026)", () => {
+    for (const ratio of [25, 50, 75] as const) {
       const demandees = photosRequired({ body_html: payload.days[0]!.body_html }, ratio, "a5", { decorations: true }).photos;
-      const posees = composerCarnet(payload, { ratio, funFacts: false, decorations: 2 }).flatMap((j) => (j["photos"] ?? []) as unknown[]);
-      expect(posees.length, `ratio ${ratio}`).toBe(Math.min(demandees, photos.length));
+      const composees = pages(composerCarnet(payload, { ratio, funFacts: false, decorations: 2 }));
+      const surRecit = composees.filter((p) => p.layout !== "layout_photo_page").flatMap((p) => p.photos);
+      const toutes = composees.flatMap((p) => p.photos);
+      expect(surRecit.length, `ratio ${ratio}`).toBeLessThanOrEqual(demandees);
+      // Aucune photo envoyée n'est perdue : les sept tiennent dans les six pages.
+      expect(toutes.length, `ratio ${ratio}`).toBe(photos.length);
     }
+  });
+
+  it("à 0 %, ni photo du ratio ni surplus", () => {
+    const composees = pages(composerCarnet(payload, { ratio: 0, funFacts: false, decorations: 2 }));
+    expect(composees.flatMap((p) => p.photos)).toEqual([]);
   });
 
   describe("quiz", () => {
@@ -124,10 +133,13 @@ describe("composition du carnet de l'app", () => {
   });
 
   describe("nombre de pages cible", () => {
-    // Dix étapes au récit de six paragraphes, douze photos chacune : le ratio
-    // en garde autant qu'il en demande, la cible se lit sur tout le carnet.
+    // Dix étapes au récit de six paragraphes. Chacune reçoit **exactement** les
+    // photos que le ratio demande (`photosDuRatio`) : la cible se lit alors sur
+    // ce seul budget. Le surplus a son propre test, plus bas.
     const long = [...paragraphes, phrase("le phare").repeat(2).trim(), phrase("la chapelle").repeat(2).trim(), phrase("le moulin").repeat(2).trim()];
-    const voyage = {
+    const demandeesAu = (ratio: number) =>
+      photosRequired({ body_html: M.paragraphesEnHtml(long) }, ratio, "a5", { decorations: true }).photos;
+    const voyageAu = (ratio: number, parEtape = Math.min(demandeesAu(ratio), 12)) => ({
       ...payload,
       pages_libres: 3,
       days: Array.from({ length: 10 }, (_, e) => ({
@@ -136,9 +148,10 @@ describe("composition du carnet de l'app", () => {
         city: `Lieu ${e}`,
         day_intro: { day_number: String(e + 1), location: `Lieu ${e}, Grèce`, date: "22 août 2026" },
         body_html: M.paragraphesEnHtml(long),
-        photos: Array.from({ length: 12 }, (_, i) => `https://exemple.test/${e}-${i}.jpg`),
+        photos: Array.from({ length: parEtape }, (_, i) => `https://exemple.test/${e}-${i}.jpg`),
       })),
-    };
+    });
+    const voyage = voyageAu(50);
     // Le colophon. Les pages libres de fin ne comptent plus, même demandées par
     // un ancien payload : le gabarit ne les imprime plus (15/10/2026).
     const fixes = 1;
@@ -152,6 +165,7 @@ describe("composition du carnet de l'app", () => {
     // À 100 %, les planches font déjà 44 pages : la cible est plus haute.
     for (const [ratio, cible] of [[50, 40], [75, 40], [100, 60]] as const) {
       it(`fait tenir un carnet à cible ${cible} entre ${cible - 5} et ${cible + 5} pages, au palier ${ratio} %`, () => {
+        const voyage = voyageAu(ratio);
         const sans = composerCarnet(voyage, { ratio, funFacts: false, decorations: 2 });
         expect(sans.length + fixes).toBeLessThan(cible - 5);
         const days = composerCarnet(voyage, { ratio, funFacts: false, decorations: 2, pagesCible: cible });
@@ -160,14 +174,14 @@ describe("composition du carnet de l'app", () => {
         // Exactement les photos que `photosRequired` a dites : le ratio tient.
         expect(photosPosees(days)).toEqual(photosPosees(sans));
         for (let e = 0; e < 10; e += 1) {
-          const demandees = photosRequired({ body_html: M.paragraphesEnHtml(long) }, ratio, "a5", { decorations: true }).photos;
-          expect(photosPosees(days).filter((url) => url.includes(`/${e}-`)).length).toBe(Math.min(demandees, 12));
+          expect(photosPosees(days).filter((url) => url.includes(`/${e}-`)).length).toBe(Math.min(demandeesAu(ratio), 12));
         }
         expect(recit(days)).toBe(recit(sans));
       });
     }
 
     it("ne force rien quand le ratio ne laisse pas assez de photos, et le dit", () => {
+      const voyage = voyageAu(25);
       const sans = composerCarnet(voyage, { ratio: 25, funFacts: false, decorations: 2 });
       const journal: string[] = [];
       const days = composerCarnet(voyage, { ratio: 25, funFacts: false, decorations: 2, pagesCible: 40, journal: (t) => journal.push(t) });
@@ -201,6 +215,19 @@ describe("composition du carnet de l'app", () => {
         },
       );
       expect(pages(app)).toEqual(pages(atelier));
+    });
+
+    it("les photos envoyées au-delà du ratio — celles que la cible a demandées — portent le carnet à 25 %", () => {
+      // À 25 %, le ratio seul laisse le carnet sous sa cible (test d'avant). Le
+      // chat a demandé trois photos de plus par page de photos manquante
+      // (`photosForTarget`) : avec elles, la cible tient.
+      const avecSurplus = voyageAu(25, demandeesAu(25) + 6);
+      const days = composerCarnet(avecSurplus, { ratio: 25, funFacts: false, decorations: 2, pagesCible: 40 });
+      expect(days.length + fixes).toBeGreaterThanOrEqual(35);
+      expect(days.length + fixes).toBeLessThanOrEqual(45);
+      // Toutes les photos sont imprimées, et le récit n'a pas bougé.
+      expect(photosPosees(days).length).toBe(10 * (demandeesAu(25) + 6));
+      expect(recit(days)).toBe(recit(composerCarnet(voyageAu(25), { ratio: 25, funFacts: false, decorations: 2 })));
     });
   });
 });

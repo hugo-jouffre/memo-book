@@ -124,10 +124,27 @@ export const REVISION_UNHEARD =
  * réglage. À 0 %, il n'y a pas de photo à demander, et cette phrase ne part
  * pas (`converse.ts`).
  */
-export function photosWanted(count: number, pages: number): string {
+export function photosWanted(
+  count: number,
+  pages: number,
+  forTarget: { photos: number; pages: number; target: number } | null = null,
+): string {
+  if (forTarget && forTarget.photos > 0) {
+    // **La cible demande plus que le ratio** (Hugo, 18/10/2026) : MEMO dit
+    // pourquoi il en demande autant, et où iront celles d'en plus.
+    const ratioPhotos = count - forTarget.photos;
+    const page = forTarget.pages === 1 ? "une page de photos" : `${nombreEnLettres(forTarget.pages)} pages de photos`;
+    return (
+      `Illustre ce souvenir avec ${count} photos : ${ratioPhotos === 1 ? "une" : ratioPhotos} pour ${sesPages(pages - forTarget.pages)}, ` +
+      `et ${forTarget.photos} de plus pour ${page}, afin que ton carnet atteigne ses ${forTarget.target} pages.`
+    );
+  }
   const photos = count === 1 ? "une photo" : `${count} photos`;
   return `Illustre ce souvenir avec ${photos} : c’est ce qu’il faut pour remplir ${sesPages(pages)}.`;
 }
+
+const NOMBRES = ["zéro", "une", "deux", "trois", "quatre", "cinq", "six"];
+const nombreEnLettres = (n: number) => NOMBRES[n] ?? String(n);
 
 /** « sa page », « ses deux pages »… — une étape peut désormais en compter plus de deux. */
 function sesPages(pages: number): string {
@@ -298,6 +315,49 @@ export function photosToValidate(count: number): string {
   );
 }
 
+const tesPhotos = (count: number) => (count === 1 ? "ta photo" : `tes ${count} photos`);
+
+/**
+ * **Il en manque** (Hugo, 18/10/2026 : « le chat ne me relance pas pour avoir
+ * des photos supplémentaires ») : MEMO dit combien il en faudrait encore, et
+ * ce qui se passe si l'on valide quand même — la page se compose avec ce qui
+ * est là, rien n'est inventé.
+ */
+export function photosMissing(received: number, asked: number): string {
+  const missing = asked - received;
+  const encore = missing === 1 ? "encore une" : `encore ${missing}`;
+  return (
+    `J’ai bien reçu ${tesPhotos(received)}. Il m’en faudrait ${encore} pour remplir cette étape ` +
+    `comme prévu : tu en ajoutes ? Si tu valides maintenant, je compose la page avec ` +
+    `${received === 1 ? "celle-ci" : "celles-ci"}, et ton carnet aura un peu moins de photos et de pages que tes réglages.`
+  );
+}
+
+/**
+ * **Il y en a plus que demandé** (Hugo, 18/10/2026) : MEMO les garde toutes —
+ * celles d'en plus vont sur des pages de photos en fin d'étape
+ * (`ajouterSurplus`, `mise-en-page.js`) —, et prévient que le carnet s'écarte
+ * un peu de ses réglages.
+ */
+export function photosBeyondAsked(received: number, asked: number): string {
+  const extra = received - asked;
+  return (
+    `J’ai bien reçu tes ${received} photos, j’en avais demandé ${asked}. Je les garde toutes : ` +
+    `${extra === 1 ? "celle en plus ira" : `les ${extra} en plus iront`} sur une page de photos à la fin de l’étape. ` +
+    "Ton carnet s’écartera un peu de tes réglages — un peu plus de photos que ton ratio, et une ou deux pages " +
+    `de plus que ta cible. Tu ${received === 1 ? "la" : "les"} valides ?`
+  );
+}
+
+/** Des photos alors que le carnet est réglé à 0 % : elles se gardent, elles ne s'impriment pas. */
+export function photosAtZeroRatio(received: number): string {
+  return (
+    `J’ai bien reçu ${tesPhotos(received)}. Ton carnet est réglé sur 0 % de photos : je ${received === 1 ? "la" : "les"} garde avec ` +
+    "ce souvenir, mais elles n’entreront pas dans le carnet tant que le ratio photo / texte reste à 0 %. " +
+    `Tu ${received === 1 ? "la" : "les"} valides ?`
+  );
+}
+
 /** Les photos validées : la page se compose, l'étape suivante peut venir. */
 export const PHOTOS_VALIDATED =
   "C’est fait : je crée la page de cette étape dans ton carnet. Tu peux la " +
@@ -323,8 +383,14 @@ export function returnToValidate(number: number, title: string | null): string {
 }
 
 /** Même retour, pour une étape validée dont les photos ne sont jamais venues. */
-export function returnForPhotos(number: number, title: string | null, count: number, pages: number): string {
-  return `Revenons à ${stepLabel(number, title)} : il lui manque ses photos. ${photosWanted(count, pages)}`;
+export function returnForPhotos(
+  number: number,
+  title: string | null,
+  count: number,
+  pages: number,
+  forTarget: Parameters<typeof photosWanted>[2] = null,
+): string {
+  return `Revenons à ${stepLabel(number, title)} : il lui manque ses photos. ${photosWanted(count, pages, forTarget)}`;
 }
 
 /** Une app trop ancienne pour ouvrir l'aperçu depuis la puce : MEMO dit où il est. */
@@ -561,6 +627,8 @@ export const SUGGESTION_SETS = {
   /** Le texte validé, les photos demandées : les importer, ou passer à la suite. */
   askPhotos: ["photos", "dictate"],
   afterPhotos: ["photos-ok", "photos-more"],
+  /** Il en manque : en ajouter d'abord, valider quand même ensuite. */
+  photosMissing: ["photos-more", "photos-ok"],
   afterPhotosValidated: ["preview", "dictate", "write"],
   /** Après une correction au clavier : il reste à valider pour passer aux photos. */
   afterEdit: ["accept", "edit-hand"],

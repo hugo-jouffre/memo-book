@@ -438,8 +438,9 @@ private struct CompanionRow: View {
 
     @Environment(\.dynamicTypeSize) private var typeSize
 
-    /// Le propriétaire ne se retire pas — première règle de la note.
-    private var canRemove: Bool { !companion.isOwner }
+    /// Le propriétaire ne se retire pas — première règle de la note —, et on
+    /// ne se retire pas soi-même d'un glissé.
+    private var canRemove: Bool { !companion.isOwner && !companion.isViewer }
     /// On ne renvoie un lien qu'à quelqu'un qui n'est jamais entré.
     private var canResend: Bool { companion.isPending }
 
@@ -513,12 +514,14 @@ private struct CompanionRow: View {
         .contentShape(shape)
     }
 
-    /// La seconde ligne : « Moi » pour soi, le rôle déduit pour les autres,
-    /// « Invitation envoyée » tant que personne n'est entré.
+    /// La seconde ligne : « Moi » sous **le compte connecté** — et non plus
+    /// sous le propriétaire, qui n'est « moi » que pour lui (Hugo,
+    /// 18/10/2026) —, « Invitation envoyée » tant que personne n'est entré, le
+    /// rôle déduit s'il y en a un, sinon « Co-voyageur ».
     private var detail: String? {
-        if companion.isOwner { return BookCopy.Invite.me }
+        if companion.isViewer { return BookCopy.Invite.me }
         if companion.isPending { return BookCopy.Invite.pending }
-        return companion.role
+        return companion.role ?? BookCopy.Invite.companion
     }
 }
 

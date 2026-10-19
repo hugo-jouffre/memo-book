@@ -129,6 +129,17 @@ public struct BookCustomisationView: View {
         .brandSheet(item: pageTargetChange) { _ in
             PageTargetChangeSheet(model: model)
         }
+        // La cible personnalisée hors d'atteinte (18/10/2026).
+        .brandSheet(item: pageTargetReach) { reach in
+            PageTargetReachSheet(reach: reach, model: model)
+        }
+    }
+
+    private var pageTargetReach: Binding<PageTargetReach?> {
+        Binding(
+            get: { model.pageTargetReach },
+            set: { if $0 == nil { model.dismissPageTargetReach() } }
+        )
     }
 
     private var pageTargetChange: Binding<PageTargetChange?> {

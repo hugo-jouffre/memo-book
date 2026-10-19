@@ -1,5 +1,16 @@
 import PgBoss from "pg-boss";
 
+/**
+ * **Les jobs que le voyageur attend des yeux** : du vocal envoyé à « Il te
+ * convient ? », trois sauts de file (transcription, rédaction, réponse de
+ * MEMO). À l'intervalle par défaut de pg-boss — deux secondes —, chaque saut
+ * attendait en moyenne une seconde avant d'être pris (Hugo, 18/10/2026 : « la
+ * retranscription des étapes est un peu trop longue »). Une demi-seconde, le
+ * plancher de pg-boss : une requête de plus par file et par seconde, sur les
+ * deux connexions de la file, sans en ouvrir aucune.
+ */
+const LIVE_POLLING_SECONDS = 0.5;
+
 export const JOB_NAMES = {
   transcribe: "memobook.transcribe",
   redact: "memobook.redact",
@@ -25,6 +36,8 @@ export const JOB_NAMES = {
   /** Le calendrier scolaire du ministère, recopié chaque jour. */
   syncSchoolHolidays: "memobook.sync-school-holidays",
 } as const;
+
+const LIVE_JOBS: ReadonlySet<string> = new Set([JOB_NAMES.transcribe, JOB_NAMES.redact, JOB_NAMES.converse]);
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
 
@@ -159,7 +172,8 @@ export class PgBossQueue implements JobQueue {
 
     for (const [name, handler] of this.handlers) {
       await this.boss.createQueue(name);
-      await this.boss.work(name, async ([job]) => {
+      const options = LIVE_JOBS.has(name) ? { pollingIntervalSeconds: LIVE_POLLING_SECONDS } : {};
+      await this.boss.work(name, options, async ([job]) => {
         if (!job) return;
         await (handler as JobHandler<object>)(job.data as object);
       });
