@@ -892,6 +892,21 @@ public struct RootView: View {
         case .openStyle: path.append(.coverStyle(tripId: tripId))
         case .openPhoto: path.append(.coverPhoto(tripId: tripId))
         case .openTexts: path.append(.coverTexts(tripId: tripId))
+        case .openCustomisation: show(.bookCustomisation(tripId: tripId))
+        }
+    }
+
+    /// Pousse un écran, **ou revient dessus** s'il est déjà dans la pile.
+    ///
+    /// Les personnalisations et les couvertures mènent chacune à l'autre
+    /// (19/10/2026) : aller et revenir trois fois empilait six écrans, et la
+    /// flèche de retour les redéroulait tous. Revenir à celui qu'on a déjà
+    /// ouvert garde le chemin court, et ce qu'on y avait réglé.
+    private func show(_ route: HomeRoute) {
+        if let index = path.lastIndex(of: route) {
+            path.removeLast(path.count - index - 1)
+        } else {
+            path.append(route)
         }
     }
 
@@ -905,7 +920,7 @@ public struct RootView: View {
         if coversModel?.tripId != tripId {
             coversModel = dependencies.coversModel(tripId: tripId)
         }
-        path.append(.covers(tripId: tripId))
+        show(.covers(tripId: tripId))
     }
 
     /// Où mène chaque intention de l'aperçu du carnet.
