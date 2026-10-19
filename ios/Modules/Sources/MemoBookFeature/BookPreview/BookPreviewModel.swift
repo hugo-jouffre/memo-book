@@ -103,48 +103,125 @@ public final class BookPreviewModel {
     /// départ — la tâche de l'écran et celle d'un retour sur l'écran.
     private var isRunning = false
 
-    /// Combien de temps la cascade dure.
-    ///
-    /// **C'est aussi le plancher de l'attente** : même si le serveur répond en
-    /// 300 ms, l'écran tient ces secondes-là. Ce n'est pas une lenteur ajoutée
-    /// pour faire joli — une page qui se monte et disparaît avant d'être finie
-    /// donne l'impression d'un bogue, et l'aperçu qui suit arrive alors sans
-    /// qu'on ait compris ce qui venait de se passer.
-    ///
-    /// **4,2 s et non plus 2,6** (Hugo, 08/10/2026) : la cascade était courte
-    /// pour l'attente qui suit, et le rythme est désormais celui de chaque
-    /// page de la boucle — voir ``BookCompositionLoop``.
-    private static let compositionDuration: Duration = .seconds(BookCompositionLoop.assembly)
+    /// Le rythme du parcours : la cascade, les sondages, et quand cesser
+    /// d'attendre. Les valeurs de l'app sont ``Pacing/standard`` ; les tests
+    /// les resserrent pour ne pas attendre quatre minutes.
+    struct Pacing {
+        /// Combien de temps la cascade dure.
+        ///
+        /// **C'est aussi le plancher de l'attente** : même si le serveur répond
+        /// en 300 ms, l'écran tient ces secondes-là. Ce n'est pas une lenteur
+        /// ajoutée pour faire joli — une page qui se monte et disparaît avant
+        /// d'être finie donne l'impression d'un bogue, et l'aperçu qui suit
+        /// arrive alors sans qu'on ait compris ce qui venait de se passer.
+        ///
+        /// **4,2 s et non plus 2,6** (Hugo, 08/10/2026) : la cascade était
+        /// courte pour l'attente qui suit, et le rythme est désormais celui de
+        /// chaque page de la boucle — voir ``BookCompositionLoop``.
+        var compositionDuration: Duration
 
-    /// Le pas entre deux relevés de l'avancement. 1/60 s : la cascade se joue
-    /// dans une animation SwiftUI, ce rythme ne sert qu'à savoir **quand elle
-    /// est finie**.
-    private static let progressTick: Duration = .milliseconds(100)
+        /// Le pas entre deux relevés de l'avancement. La cascade se joue dans
+        /// une animation SwiftUI, ce rythme ne sert qu'à savoir **quand elle
+        /// est finie**.
+        var progressTick: Duration
 
-    /// L'intervalle entre deux questions au serveur pendant la composition.
-    ///
-    /// Deux secondes : une composition dure des dizaines de secondes, et
-    /// demander plus souvent ne ferait que payer des allers-retours pour la
-    /// même réponse.
-    private static let pollInterval: Duration = .seconds(2)
+        /// L'intervalle entre deux questions au serveur pendant la composition.
+        ///
+        /// Deux secondes : une composition dure des dizaines de secondes, et
+        /// demander plus souvent ne ferait que payer des allers-retours pour la
+        /// même réponse.
+        var pollInterval: Duration
 
-    /// L'intervalle entre deux sondages pendant une régénération en fond.
-    ///
-    /// Plus large que ``pollInterval`` : une régénération refait tout le
-    /// travail (LLM puis rendu), elle prend donc plus que quelques dizaines de
-    /// secondes — sonder aussi souvent que la première composition ne ferait
-    /// que payer des allers-retours pour la même réponse.
-    private static let recompositionPollInterval: Duration = .seconds(4)
+        /// Combien de sondages **sans changement** avant que la toute première
+        /// composition cesse d'être attendue — quatre minutes, à deux secondes
+        /// l'un (19/10/2026). Il n'y avait pas de borne : un rendu que personne
+        /// ne finit (worker tombé, job perdu) laissait la page se remonter
+        /// indéfiniment. La mise en page attend jusqu'à trois minutes les
+        /// souvenirs en rédaction, sans que rien ne bouge : quatre minutes la
+        /// laissent faire. Au-delà, l'écran dit que c'est long et propose de
+        /// réessayer — le serveur relance de lui-même une composition restée
+        /// en plan (`STALE_RENDER_MS`).
+        var maxUnchangedCompositionPolls: Int
 
-    /// Combien de sondages **sans changement** avant de laisser tomber —
-    /// quatre minutes, à quatre secondes l'un. Même raisonnement que
-    /// `StatisticsModel.maxUnchangedPolls` : un rendu peut rester bloqué pour
-    /// de mauvaises raisons, et l'écran ne doit pas sonder indéfiniment un
-    /// aperçu resté ouvert. Revenir sur l'écran relance un sondage.
-    ///
-    /// Quatre et non deux : la mise en page attend jusqu'à trois minutes les
-    /// souvenirs encore en rédaction, sans que rien ne bouge entre-temps.
-    private static let maxUnchangedRecompositionPolls = 60
+        /// L'intervalle entre deux sondages pendant une régénération en fond.
+        ///
+        /// Plus large que ``pollInterval`` : une régénération refait tout le
+        /// travail (LLM puis rendu), elle prend donc plus que quelques dizaines
+        /// de secondes — sonder aussi souvent que la première composition ne
+        /// ferait que payer des allers-retours pour la même réponse.
+        var recompositionPollInterval: Duration
+
+        /// Combien de sondages **sans changement** avant de laisser tomber —
+        /// quatre minutes, à quatre secondes l'un. Même raisonnement que
+        /// `StatisticsModel.maxUnchangedPolls` : un rendu peut rester bloqué
+        /// pour de mauvaises raisons, et l'écran ne doit pas sonder
+        /// indéfiniment un aperçu resté ouvert. Revenir sur l'écran relance un
+        /// sondage.
+        ///
+        /// Quatre et non deux : la mise en page attend jusqu'à trois minutes
+        /// les souvenirs encore en rédaction, sans que rien ne bouge
+        /// entre-temps.
+        var maxUnchangedRecompositionPolls: Int
+
+        #if DEBUG
+            /// En debug, combien de temps la première composition est attendue
+            /// avant d'ouvrir l'aperçu **en pages blanches** — la composition
+            /// continue derrière, et ses pages remplacent les blanches à
+            /// l'arrivée. Plus que les dix secondes de `-composeBook`, pour que
+            /// le bac à sable joue toujours sa composition entière.
+            var debugBlankPagesAfter: Duration
+        #endif
+
+        @MainActor static var standard: Pacing {
+            Pacing(
+                compositionDuration: .seconds(BookCompositionLoop.assembly),
+                progressTick: .milliseconds(100),
+                pollInterval: .seconds(2),
+                maxUnchangedCompositionPolls: 120,
+                recompositionPollInterval: .seconds(4),
+                maxUnchangedRecompositionPolls: 60
+            )
+        }
+
+        init(
+            compositionDuration: Duration,
+            progressTick: Duration,
+            pollInterval: Duration,
+            maxUnchangedCompositionPolls: Int,
+            recompositionPollInterval: Duration,
+            maxUnchangedRecompositionPolls: Int
+        ) {
+            self.compositionDuration = compositionDuration
+            self.progressTick = progressTick
+            self.pollInterval = pollInterval
+            self.maxUnchangedCompositionPolls = maxUnchangedCompositionPolls
+            self.recompositionPollInterval = recompositionPollInterval
+            self.maxUnchangedRecompositionPolls = maxUnchangedRecompositionPolls
+            #if DEBUG
+                debugBlankPagesAfter = .seconds(30)
+            #endif
+        }
+    }
+
+    /// `internal` et modifiable : les tests y posent un rythme serré.
+    var pacing = Pacing.standard
+
+    #if DEBUG
+        /// L'aperçu montre des pages **blanches** : rien n'a été composé — un
+        /// carnet sans souvenir, une composition qui n'aboutit pas ou qui
+        /// tarde. Debug seulement (Hugo, 19/10/2026) : « dans la version debug
+        /// il faut qu'on puisse prévisualiser sans qu'on ait du vrai contenu ».
+        /// L'app livrée garde l'écran de composition et son « Réessayer ».
+        public private(set) var showsBlankPages = false
+
+        /// Le repli en pages blanches est permis. Les tests de l'app livrée
+        /// l'éteignent : ils tournent en debug, et doivent voir l'écran de
+        /// composition et son « Réessayer ».
+        var opensBlankPages = true
+
+        /// Combien de pages blanches, quand le serveur n'en compte aucune.
+        static let blankPageCount = 8
+    #endif
 
     public init(
         memoId: String,
@@ -203,6 +280,9 @@ public final class BookPreviewModel {
             first = try await source(memoId)
         } catch {
             errorMessage = launchFailure ?? error.localizedDescription
+            #if DEBUG
+                openBlankPages()
+            #endif
             return
         }
         guard !Task.isCancelled else { return }
@@ -226,23 +306,52 @@ public final class BookPreviewModel {
         if let launchFailure, first.render == nil {
             await apply(first)
             errorMessage = launchFailure
+            #if DEBUG
+                openBlankPages()
+            #endif
             return
         }
 
         if case .failed(let message) = first.status {
             await apply(first)
             errorMessage = message
+            #if DEBUG
+                openBlankPages()
+            #endif
             return
         }
 
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { [weak self] in await self?.playComposition() }
+        let outcome = await withTaskGroup(of: CompositionOutcome?.self) { group in
+            group.addTask { [weak self] in
+                await self?.playComposition()
+                return nil
+            }
             group.addTask { [weak self] in await self?.followComposition(firstLoad: first) }
+
+            var outcome = CompositionOutcome.finished
+            for await result in group {
+                if let result { outcome = result }
+            }
+            return outcome
         }
 
         // Un écran quitté pendant la composition ne passe pas à l'aperçu : son
         // retour reprendra le suivi, sans rejouer la cascade.
         guard !Task.isCancelled else { return }
+
+        #if DEBUG
+            // Trop longue pour le debug : les pages blanches tout de suite, et
+            // la composition suivie derrière, comme une remise à jour.
+            if outcome == .debugTimedOut {
+                openBlankPages()
+                if isRecomposing { await watchRecomposition() }
+                return
+            }
+            if errorMessage != nil {
+                openBlankPages()
+                return
+            }
+        #endif
 
         // Un échec de composition laisse l'écran où il est : le message dit ce
         // qui s'est passé, et le bouton de reprise est dans la vue. Passer à un
@@ -250,6 +359,32 @@ public final class BookPreviewModel {
         guard errorMessage == nil else { return }
         stage = .preview
     }
+
+    /// Comment le suivi de la première composition s'est arrêté.
+    private enum CompositionOutcome {
+        /// Prête, en échec, ou l'écran quitté : ``errorMessage`` dit lequel.
+        case finished
+        #if DEBUG
+            /// Le debug a cessé d'attendre — voir
+            /// ``Pacing/debugBlankPagesAfter``.
+            case debugTimedOut
+        #endif
+    }
+
+    #if DEBUG
+        /// Ouvre l'aperçu sur des pages blanches : rien n'a été composé, et le
+        /// debug doit pouvoir feuilleter quand même. Le bandeau dit pourquoi,
+        /// s'il y a une raison.
+        private func openBlankPages() {
+            guard opensBlankPages, !Task.isCancelled else { return }
+            if preview == nil {
+                preview = BookPreview(memoId: memoId, title: BookCopy.Preview.blankTitle)
+            }
+            showsBlankPages = true
+            compositionProgress = 1
+            stage = .preview
+        }
+    #endif
 
     /// Demande la composition au serveur. Rend le message d'un refus, `nil`
     /// quand elle est partie — ou qu'il n'y a personne à qui la demander : la
@@ -274,12 +409,12 @@ public final class BookPreviewModel {
 
         // L'animation est posée d'un coup : c'est SwiftUI qui interpole, et la
         // boucle qui suit ne fait que mesurer le temps écoulé.
-        withAnimationCompat(duration: Self.compositionDuration) { self.compositionProgress = 1 }
+        withAnimationCompat(duration: pacing.compositionDuration) { self.compositionProgress = 1 }
 
         let started = ContinuousClock.now
-        while ContinuousClock.now - started < Self.compositionDuration {
+        while ContinuousClock.now - started < pacing.compositionDuration {
             if Task.isCancelled { return }
-            try? await Task.sleep(for: Self.progressTick)
+            try? await Task.sleep(for: pacing.progressTick)
         }
     }
 
@@ -289,8 +424,18 @@ public final class BookPreviewModel {
     /// - Parameter firstLoad: la réponse déjà en main, pour ne pas la
     ///   redemander — ``run()`` l'a lue pour décider s'il y avait une
     ///   composition à suivre.
-    private func followComposition(firstLoad: BookPreview? = nil) async {
+    ///
+    /// **Bornée** (19/10/2026) : après ``Pacing/maxUnchangedCompositionPolls``
+    /// sondages sans que rien ne bouge — ni la phase, ni les souvenirs
+    /// attendus —, elle cesse et pose ``BookCopy/Composition/tooLong``. Avant,
+    /// un rendu que personne ne finissait faisait tourner la page sans fin.
+    private func followComposition(firstLoad: BookPreview? = nil) async -> CompositionOutcome {
         var next = firstLoad
+        var previous: BookPreview?
+        var unchanged = 0
+        #if DEBUG
+            let started = ContinuousClock.now
+        #endif
 
         while !Task.isCancelled {
             do {
@@ -307,18 +452,30 @@ public final class BookPreviewModel {
 
                 switch loaded.status {
                 case .ready:
-                    return
+                    return .finished
                 case .failed(let message):
                     errorMessage = message
-                    return
+                    return .finished
                 case .composing:
-                    try? await Task.sleep(for: Self.pollInterval)
+                    unchanged = loaded == previous ? unchanged + 1 : 0
+                    previous = loaded
+                    if unchanged >= pacing.maxUnchangedCompositionPolls {
+                        errorMessage = BookCopy.Composition.tooLong
+                        return .finished
+                    }
+                    #if DEBUG
+                        if opensBlankPages, ContinuousClock.now - started >= pacing.debugBlankPagesAfter {
+                            return .debugTimedOut
+                        }
+                    #endif
+                    try? await Task.sleep(for: pacing.pollInterval)
                 }
             } catch {
                 errorMessage = error.localizedDescription
-                return
+                return .finished
             }
         }
+        return .finished
     }
 
     /// Le point unique où une réponse du serveur devient de l'état affiché.
@@ -409,8 +566,8 @@ public final class BookPreviewModel {
     /// rien ne change encore à l'écran.
     private func watchRecomposition() async {
         var unchanged = 0
-        while !Task.isCancelled, isRecomposing, unchanged < Self.maxUnchangedRecompositionPolls {
-            try? await Task.sleep(for: Self.recompositionPollInterval)
+        while !Task.isCancelled, isRecomposing, unchanged < pacing.maxUnchangedRecompositionPolls {
+            try? await Task.sleep(for: pacing.recompositionPollInterval)
             guard !Task.isCancelled else { return }
             do {
                 let previous = preview
@@ -445,6 +602,9 @@ public final class BookPreviewModel {
 
         stage = .composing
         compositionProgress = 0
+        #if DEBUG
+            showsBlankPages = false
+        #endif
         await run()
     }
 
@@ -492,7 +652,12 @@ public final class BookPreviewModel {
     /// serveur qui tient la place, pour que l'en-tête et l'indicateur
     /// n'affichent pas « Page 1 / 0 » le temps d'un transfert.
     public var sheetCount: Int {
-        renderer.sheetCount > 0 ? renderer.sheetCount : (preview?.pageCount ?? 0)
+        if renderer.sheetCount > 0 { return renderer.sheetCount }
+        let counted = preview?.pageCount ?? 0
+        #if DEBUG
+            if showsBlankPages, counted == 0 { return Self.blankPageCount }
+        #endif
+        return counted
     }
 
     public var canGoBack: Bool { sheetIndex > 0 }
@@ -653,6 +818,7 @@ public final class BookPreviewModel {
         func debugReplayComposition() {
             stage = .composing
             compositionProgress = 0
+            showsBlankPages = false
             Task { await run() }
         }
     #endif

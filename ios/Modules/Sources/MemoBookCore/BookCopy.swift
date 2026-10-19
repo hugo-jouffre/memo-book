@@ -273,6 +273,13 @@ public enum BookCopy {
         /// comme une boucle cassée. **Sans maquette** : à relire (T253).
         public static let patience = "Ça peut prendre quelques minutes."
 
+        /// La composition n'a pas bougé depuis plusieurs minutes : l'écran
+        /// cesse d'attendre et propose de réessayer (19/10/2026). Le serveur
+        /// relance de lui-même une composition restée en plan quand on
+        /// réessaie. **Sans maquette** : à relire par Clara.
+        public static let tooLong =
+            "La composition prend plus de temps que prévu. Réessaie dans un moment."
+
         /// Ce que la composition fait en ce moment, sur la page qui se monte
         /// (06/10/2026 ; en carte par-dessus la page depuis le 08/10/2026). Une composition dure plusieurs minutes — la mise en
         /// page attend jusqu'à trois minutes les souvenirs encore en
@@ -350,6 +357,13 @@ public enum BookCopy {
         /// voile de la première ou de la dernière page. La phrase reste, elle
         /// intitule l'invitation posée sur la page.
         public static let configureCovers = "Configurer mes couvertures"
+
+        #if DEBUG
+            /// Le titre d'un aperçu en pages blanches, quand le serveur n'a
+            /// rien dit du carnet — voir `BookPreviewModel.showsBlankPages`.
+            /// Debug seulement.
+            public static let blankTitle = "Carnet sans contenu"
+        #endif
 
         /// Sous l'en-tête de l'aperçu, tant qu'une étape validée recompose le
         /// carnet en fond — voir `BookPreviewModel.isRecomposing`. Léger et
