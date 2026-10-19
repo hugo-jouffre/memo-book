@@ -81,6 +81,7 @@ public struct BrandButton: View {
     private let alternate: Bool
     private let isLoading: Bool
     private let isSubdued: Bool
+    private let tint: Color?
     private let fillsWidth: Bool
     private let action: () -> Void
 
@@ -96,6 +97,12 @@ public struct BrandButton: View {
     ///     secondaire au lieu de la typographie des boutons. N'a de sens qu'avec
     ///     ``Style/link`` : partout ailleurs, un bouton qui n'attire pas l'œil
     ///     est un bouton raté.
+    ///   - tint: la teinte d'un ``Style/link``, libellé et icône ensemble,
+    ///     quand le lien n'est pas posé dans une phrase mais **dans une
+    ///     carte** qui a sa propre couleur d'action — « Être informé par
+    ///     whatsapp », au vert de la carte de livraison. Ignorée par les
+    ///     autres styles : ailleurs, c'est le style qui décide de la couleur,
+    ///     et un bouton teinté à la main serait un style de plus.
     ///   - fillsWidth: pour les appels à l'action pleine largeur en bas d'écran.
     public init(
         _ title: String? = nil,
@@ -107,6 +114,7 @@ public struct BrandButton: View {
         alternate: Bool = false,
         isLoading: Bool = false,
         isSubdued: Bool = false,
+        tint: Color? = nil,
         fillsWidth: Bool = false,
         action: @escaping () -> Void
     ) {
@@ -119,6 +127,7 @@ public struct BrandButton: View {
         self.alternate = alternate
         self.isLoading = isLoading
         self.isSubdued = isSubdued
+        self.tint = tint
         self.fillsWidth = fillsWidth
         self.action = action
     }
@@ -300,6 +309,7 @@ public struct BrandButton: View {
 
     private var foreground: Color {
         if isSubdued, isEnabled { return MemoBookColor.inkMuted }
+        if case .link = style, let tint, isEnabled { return tint }
 
         guard isEnabled else {
             return isFilled ? MemoBookColor.surface : MemoBookColor.disabled

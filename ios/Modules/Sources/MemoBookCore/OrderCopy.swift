@@ -175,6 +175,10 @@ extension BookCopy {
             public static let giftDetail =
                 "Tu peux recommander un exemplaire depuis ton carnet à tout moment"
 
+            /// Ce que la carte fait, pour VoiceOver : sa phrase dit où se
+            /// recommande un exemplaire, elle ne dit pas qu'elle y mène.
+            public static let giftHint = "Ouvre ton carnet"
+
             public static let share = "Partager le lien de prévisualisation"
             public static let home = "Retour à l’accueil"
 
@@ -184,8 +188,12 @@ extension BookCopy {
             /// L'adresse est optionnelle : un compte entré par Apple peut ne
             /// pas en avoir donné, et promettre un email qu'on n'enverra nulle
             /// part serait pire que de ne rien promettre.
+            /// Le titre du carnet y est en **gras** : la phrase est rendue en
+            /// Markdown, le seul endroit de l'app où un mot se détache au
+            /// milieu d'un paragraphe. C'est le nom du voyage qu'on vient de
+            /// commander — il se lit avant le reste.
             public static func detail(book: String, email: String?) -> String {
-                let opening = "Nous préparons \(book) avec soin."
+                let opening = "Nous préparons **\(book)** avec soin."
                 guard let email, !email.trimmed.isEmpty else {
                     return "\(opening) Tu recevras un email de confirmation."
                 }
